@@ -1,0 +1,451 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rahulnakmol/agentic-ayudha/internal/config/schema.json",
+  "properties": {
+    "version": {
+      "type": "integer",
+      "description": "Config schema version."
+    },
+    "seats": {
+      "additionalProperties": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "solo",
+              "paired"
+            ],
+            "description": "solo: agent twin only; paired: agent twin plus a human."
+          },
+          "human": {
+            "type": "string",
+            "description": "GitHub login of the paired human."
+          },
+          "page": {
+            "type": "string",
+            "description": "Where to page this seat (overrides [notify] target)."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "type": "object",
+      "description": "Seat modes keyed by seat slug (registry seats)."
+    },
+    "models": {
+      "properties": {
+        "gateway": {
+          "properties": {
+            "base_url": {
+              "type": "string",
+              "description": "Gateway endpoint including the version path, e.g. https://gateway.example/v1; empty disables the gateway."
+            },
+            "secret": {
+              "type": "string",
+              "description": "Name of the secret holding the gateway key (sent as Authorization: Bearer)."
+            },
+            "api_style": {
+              "type": "string",
+              "enum": [
+                "",
+                "messages",
+                "responses",
+                "chat"
+              ],
+              "description": "Wire format for every model without a styles entry: messages (Anthropic Messages), responses (OpenAI Responses), chat (OpenAI Chat Completions). Empty uses the family default."
+            },
+            "styles": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object",
+              "description": "Wire format per model ID or family, overriding api_style."
+            }
+          },
+          "additionalProperties": false,
+          "type": "object"
+        }
+      },
+      "additionalProperties": {
+        "additionalProperties": {
+          "properties": {
+            "model": {
+              "type": "string",
+              "description": "Model ID as the provider or gateway names it."
+            },
+            "family": {
+              "type": "string",
+              "enum": [
+                "",
+                "anthropic",
+                "openai",
+                "google",
+                "xai",
+                "host-managed"
+              ],
+              "description": "Model family; inferred from the model ID when empty."
+            }
+          },
+          "additionalProperties": false,
+          "type": "object"
+        },
+        "type": "object",
+        "description": "[models.\u003clane\u003e.\u003chost\u003e]: lane and host IDs from the verb registry."
+      },
+      "type": "object",
+      "description": "Model overrides per lane and host, and the optional AI gateway."
+    },
+    "lfs": {
+      "properties": {
+        "quota_warn_percent": {
+          "type": "integer",
+          "maximum": 100,
+          "minimum": 1,
+          "description": "doctor warns when LFS storage or bandwidth use reaches this percentage."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "proof": {
+      "properties": {
+        "media": {
+          "type": "string",
+          "description": "Private bucket for proof media; required on public repos (V3)."
+        },
+        "retention_days": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Days to keep proof media before purge; 0 keeps forever."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "beneficiaries": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "type": "object",
+      "description": "Beneficiary groups a Goal can name, keyed by slug, with a one-line description."
+    },
+    "autonomy": {
+      "properties": {
+        "streak": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Correction-free merges per layer footprint before agent lanes may self-ship."
+        },
+        "never": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Layers (L01-L09) that never run autonomously."
+        },
+        "approver": {
+          "type": "string",
+          "description": "GitHub login that approves when autonomy does not apply."
+        },
+        "budget": {
+          "properties": {
+            "wall_hours": {
+              "type": "number",
+              "minimum": 0
+            },
+            "cost_usd": {
+              "type": "number",
+              "minimum": 0
+            },
+            "attempts": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "decisions": {
+      "properties": {
+        "authority": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object",
+          "description": "Decision type or layer to the seat or login that may accept it."
+        },
+        "sla_hours": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Business hours before an open Decision pages its authority and escalates."
+        },
+        "provisional_after_hours": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Business hours before a reversible Decision's recommendation applies provisionally (V8)."
+        },
+        "escalate_to": {
+          "type": "string",
+          "description": "GitHub login mentioned on escalation (founder B)."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "notify": {
+      "properties": {
+        "channel": {
+          "type": "string",
+          "enum": [
+            "",
+            "slack",
+            "email",
+            "github"
+          ]
+        },
+        "target": {
+          "type": "string",
+          "description": "Slack webhook secret name, email address, or GitHub login, by channel."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "budget": {
+      "properties": {
+        "per_story_usd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "per_day_usd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "per_pr_inspect_max": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Model spend in USD for inspect on one PR across all its cycles."
+        },
+        "ci_minutes_month": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "mcp": {
+      "properties": {
+        "expose_writes": {
+          "type": "boolean",
+          "description": "Expose write verbs over MCP (WP3.3)."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "integrations": {
+      "additionalProperties": {
+        "properties": {
+          "secret": {
+            "type": "string",
+            "description": "Name of the secret holding the key (WP1.3); never the key itself."
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "read",
+              "write"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "type": "object",
+      "description": "External integrations keyed by name. Values name secrets; they never hold them."
+    },
+    "verify": {
+      "properties": {
+        "dast": {
+          "type": "boolean",
+          "description": "Run the ZAP baseline floor (WP4.6)."
+        },
+        "platforms": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Platforms the product ships on, e.g. web, ios, android."
+        },
+        "upstream_checks": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Existing product CI check names the merge gate also requires."
+        },
+        "floors": {
+          "properties": {
+            "coverage": {
+              "properties": {
+                "min_diff_percent": {
+                  "type": "number",
+                  "maximum": 100,
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "sast": {
+              "properties": {
+                "max_critical": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "max_high": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "secrets": {
+              "properties": {
+                "max_findings": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "deps": {
+              "properties": {
+                "max_critical": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "max_high": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "a11y": {
+              "properties": {
+                "standard": {
+                  "type": "string"
+                },
+                "max_critical": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "max_serious": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "keyboard_only": {
+                  "type": "boolean"
+                },
+                "reduced_motion": {
+                  "type": "boolean"
+                },
+                "text_scale_percent": {
+                  "type": "integer",
+                  "minimum": 100
+                },
+                "min_target_px": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "screen_reader": {
+              "properties": {
+                "layers": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "max_missing_phrases": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "dast": {
+              "properties": {
+                "max_high": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "mobile": {
+              "properties": {
+                "skipped_blocks_ship": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object",
+          "description": "Floor thresholds; CONSTRAINTS.md documents each one."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "time": {
+      "properties": {
+        "tz": {
+          "type": "string",
+          "description": "IANA time zone for business hours."
+        },
+        "business_hours": {
+          "type": "string",
+          "description": "Business days and hours, e.g. Mon-Fri 09:00-18:00."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "fleet": {
+      "properties": {
+        "repos": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "owner/name of each product repo."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "User-level only: the product repos that status --all and doctor --all iterate."
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "title": "aayudha config",
+  "description": "Code generated by go generate (internal/verbs/gen) from internal/config; DO NOT EDIT. Layered: user, .aayudha/config.toml, .aayudha/config.local.toml, AAYU_\u003cSECTION\u003e__\u003cKEY\u003e, --set."
+}

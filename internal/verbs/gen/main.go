@@ -7,6 +7,7 @@
 //   - LAYERS.md and docs/RACI.md: whole files
 //   - skills/<verb>/SKILL.md: only the YAML frontmatter; the body is hand-authored
 //   - internal/mcp/schemas/<verb>.json: whole files; stale schemas are deleted
+//   - internal/config/schema.json: the config JSON Schema, from the config structs (WP1.2)
 //
 // Output is deterministic so CI can fail on any difference after regeneration.
 package main
@@ -21,6 +22,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
@@ -42,7 +44,7 @@ func run() error {
 	if _, err := os.Stat("go.mod"); err != nil {
 		return errors.New("run from the repository root (go generate ./... does this)")
 	}
-	steps := []func() error{genReadme, genLayers, genRACI, genSkills, genSchemas}
+	steps := []func() error{genReadme, genLayers, genRACI, genSkills, genSchemas, genConfigSchema}
 	for _, step := range steps {
 		if err := step(); err != nil {
 			return err
@@ -370,12 +372,6 @@ func frontmatter(c verbs.Command) string {
 
 // ---- internal/mcp/schemas/<verb>.json --------------------------------------
 
-// Issue and pull request references: 123, #123, or a GitHub URL of the right kind.
-const (
-	issuePattern = `^(#?[1-9][0-9]*|https://github\.com/[^/]+/[^/]+/issues/[1-9][0-9]*)$`
-	prPattern    = `^(#?[1-9][0-9]*|https://github\.com/[^/]+/[^/]+/pull/[1-9][0-9]*)$`
-)
-
 func genSchemas() error {
 	want := map[string]bool{}
 	for _, c := range verbs.Verbs {
@@ -422,10 +418,10 @@ func schema(c verbs.Command) ([]byte, error) {
 			p["enum"] = in.Enum
 		case verbs.TypeIssue:
 			p["type"] = "string"
-			p["pattern"] = issuePattern
+			p["pattern"] = verbs.IssuePattern
 		case verbs.TypePR:
 			p["type"] = "string"
-			p["pattern"] = prPattern
+			p["pattern"] = verbs.PRPattern
 		default:
 			p["type"] = "string"
 		}
@@ -457,4 +453,14 @@ func schema(c verbs.Command) ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+// ---- internal/config/schema.json -------------------------------------------
+
+func genConfigSchema() error {
+	data, err := config.Schema()
+	if err != nil {
+		return err
+	}
+	return writeFile(config.SchemaPath, data)
 }

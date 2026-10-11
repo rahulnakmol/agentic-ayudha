@@ -199,7 +199,8 @@ generated from it by `go generate ./...`:
 - `LAYERS.md`;
 - `docs/RACI.md`;
 - the frontmatter of `skills/<verb>/SKILL.md` (the body below the frontmatter is hand-written);
-- `internal/mcp/schemas/*.json`.
+- `internal/mcp/schemas/*.json`;
+- `internal/config/schema.json`, the config JSON Schema, from the structs in `internal/config` (WP1.2).
 
 `CONSTRAINTS.md` is generated the same way from `internal/config/defaults.toml`, the default configuration
 embedded in the binary (WP0.5). The generator in `internal/config/gen` holds each key's meaning and plan source

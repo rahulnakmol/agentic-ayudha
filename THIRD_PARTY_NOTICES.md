@@ -5,14 +5,36 @@ third-party component the project includes, depends on, or shells out to.
 
 ## Included today
 
-The `aayudha` binary uses only the Go standard library, distributed with the Go toolchain under the
-BSD-3-Clause licence of The Go Authors (<https://go.dev/LICENSE>).
+The Go standard library is distributed with the Go toolchain under the BSD-3-Clause licence of The Go Authors
+(<https://go.dev/LICENSE>). These Go modules are linked into the binary. Direct dependencies are the ones the
+plan lists in §2; the rest are pulled in by them.
 
-### Go modules
+| Component | Version | Licence | Use | Source |
+|---|---|---|---|---|
+| `github.com/spf13/cobra` | v1.10.2 | Apache-2.0 | CLI frame (WP1.1), direct | <https://github.com/spf13/cobra> |
+| `github.com/spf13/pflag` | v1.0.9 | BSD-3-Clause | Flag parsing, via cobra | <https://github.com/spf13/pflag> |
+| `github.com/inconshreveable/mousetrap` | v1.1.0 | Apache-2.0 | Windows console detection, via cobra | <https://github.com/inconshreveable/mousetrap> |
+| `github.com/knadh/koanf/v2` | v2.3.8 | MIT | Config layering (WP1.2), direct | <https://github.com/knadh/koanf> |
+| `github.com/knadh/koanf/maps` | v0.1.2 | MIT | Via koanf | <https://github.com/knadh/koanf> |
+| `github.com/knadh/koanf/parsers/toml/v2` | v2.2.2 | MIT | TOML config files (WP1.2), direct | <https://github.com/knadh/koanf> |
+| `github.com/knadh/koanf/parsers/json` | v1.0.1 | MIT | JSON config files (WP1.2), direct | <https://github.com/knadh/koanf> |
+| `github.com/knadh/koanf/providers/confmap` | v1.0.1 | MIT | Env and `--set` layers (WP1.2), direct | <https://github.com/knadh/koanf> |
+| `github.com/go-viper/mapstructure/v2` | v2.4.0 | MIT | Strict decoding into config structs (with koanf) | <https://github.com/go-viper/mapstructure> |
+| `github.com/mitchellh/copystructure` | v1.2.0 | MIT | Via koanf | <https://github.com/mitchellh/copystructure> |
+| `github.com/mitchellh/reflectwalk` | v1.0.2 | MIT | Via copystructure | <https://github.com/mitchellh/reflectwalk> |
+| `github.com/pelletier/go-toml/v2` | v2.4.3 | MIT | TOML parsing (with koanf) and `config show` output | <https://github.com/pelletier/go-toml> |
+| `github.com/invopop/jsonschema` | v0.14.0 | MIT | Config JSON Schema from structs (WP1.2), direct | <https://github.com/invopop/jsonschema> |
+| `github.com/pb33f/ordered-map/v2` | v2.3.1 | Apache-2.0 | Via jsonschema | <https://github.com/pb33f/ordered-map> |
+| `github.com/bahlo/generic-list-go` | v0.2.0 | BSD-3-Clause | Via ordered-map | <https://github.com/bahlo/generic-list-go> |
+| `github.com/buger/jsonparser` | v1.1.2 | MIT | Via ordered-map | <https://github.com/buger/jsonparser> |
+| `go.yaml.in/yaml/v4` | v4.0.0-rc.2 | MIT and Apache-2.0 | Via ordered-map | <https://github.com/yaml/go-yaml> |
 
-| Component | Version | Licence | Use |
-|---|---|---|---|
-| [`github.com/pelletier/go-toml/v2`](https://github.com/pelletier/go-toml) | v2.4.3 | MIT | Build time only: `internal/config/gen` parses the embedded defaults to generate `CONSTRAINTS.md` (WP0.5). Not linked into the binary until WP1.2 loads TOML configuration. |
+### Shelled out by `self-update` (not bundled)
+
+| Component | Use | Licence |
+|---|---|---|
+| cosign | Verifies the keyless signature bundle over `checksums.txt` (WP1.1, Appendix B D-1.1a) | Apache-2.0 |
+| GitHub CLI (`gh`) | `gh attestation verify` checks the SLSA build provenance (WP1.1) | MIT |
 
 ### Run by `install.sh` (not bundled)
 
@@ -60,9 +82,6 @@ CI scan when the component is actually added.
 
 | Component | Use | Expected licence |
 |---|---|---|
-| `github.com/spf13/cobra` | CLI frame (WP1.1) | Apache-2.0 |
-| `github.com/knadh/koanf` | Config layering (WP1.2) | MIT |
-| `github.com/invopop/jsonschema` | Config schema from structs (WP1.2) | MIT |
 | `github.com/google/go-github` | GitHub REST client (WP2.3) | BSD-3-Clause |
 | `github.com/shurcooL/githubv4` | GitHub GraphQL, Projects v2 only (WP2.3) | MIT |
 | `github.com/modelcontextprotocol/go-sdk` | MCP server (WP3.3) | To be confirmed |

@@ -119,6 +119,13 @@ const (
 	TypeEnum   InputType = "enum"
 )
 
+// Issue and pull request references: 123, #123, or a GitHub URL of the right kind.
+// The CLI (WP1.1) and the MCP schemas validate TypeIssue and TypePR inputs against these.
+const (
+	IssuePattern = `^(#?[1-9][0-9]*|https://github\.com/[^/]+/[^/]+/issues/[1-9][0-9]*)$`
+	PRPattern    = `^(#?[1-9][0-9]*|https://github\.com/[^/]+/[^/]+/pull/[1-9][0-9]*)$`
+)
+
 // Input is one typed argument or flag of a command.
 type Input struct {
 	Name        string
