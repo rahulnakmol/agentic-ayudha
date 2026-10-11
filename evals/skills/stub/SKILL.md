@@ -26,10 +26,11 @@ criterion from evidence.
 
 - Write one criterion per requirement in the request, and none for anything the request does not ask for. Do not
   add metadata, ordering, formats, or limits the request does not state.
-- Each `expected` names a concrete, checkable observation: exact content, a count compared with the screen, or a
-  number with a limit (for example "no main-thread task longer than 200 ms").
+- Each `expected` names a concrete, checkable observation in the request's own terms: exact content, or a count
+  compared with what the product shows. Use a numeric limit only when the request gives one; otherwise state the
+  observable behaviour, such as "the list still scrolls while the file is prepared".
 - Pick the evidence that can actually show the observation:
-  - `api-trace`: request and response content, including a downloaded file's bytes (rows, columns, headers).
+  - `api-trace`: request and response content, including the bytes of a downloaded file (its rows and columns).
   - `screenshot`: what one screen shows at one moment.
   - `recording`: an interaction over time, such as clicking and seeing a result.
   - `metric`: a measured number against a limit, such as a duration.

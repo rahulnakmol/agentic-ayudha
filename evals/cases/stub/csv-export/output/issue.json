@@ -3,12 +3,19 @@
   "title": "Export the filtered claims list to CSV",
   "fields": {
     "summary": "As a caseworker, I want to export the claims list I am viewing to CSV, so that I can share it with my manager.",
-    "completion_goal": "1. [api-trace] state: claims list filtered by status Open; expected: the downloaded CSV holds exactly the rows the filtered list shows\n2. [api-trace] state: export with three visible columns; expected: the CSV header lists exactly those three columns\n3. [metric] state: export of 12,000 rows; expected: the page stays responsive, with no main-thread task longer than 200 ms",
+    "completion_goal": "1. [api-trace] state: claims list filtered by status Open across 3 pages; expected: the downloaded CSV holds every Open claim and no other\n2. [api-trace] state: export with the Region column hidden; expected: the CSV header lists exactly the visible columns, without Region\n3. [recording] state: claims list with 12,000 claims; expected: the list still scrolls and responds to clicks while the file is prepared",
     "measure": "criteria observed",
     "threshold": "3 of 3",
-    "scenario": "Filter the claims list, hide one column, export, and open the file; repeat with 12,000 seeded rows.",
+    "scenario": "Filter the claims list to Open, hide the Region column, export, and open the file; repeat with 12,000 seeded claims while scrolling.",
     "environment": "staging with seed data"
   },
-  "labels": ["type:story", "status:planned", "effort:M"],
-  "parent": {"number": 7, "type": "feature"}
+  "labels": [
+    "type:story",
+    "status:planned",
+    "effort:M"
+  ],
+  "parent": {
+    "number": 7,
+    "type": "feature"
+  }
 }
