@@ -78,3 +78,19 @@ explicit stable-release request; the absence of a human approval step does not m
   checked against a pinned SHA-256.
 - New dependencies: record the licence in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) in the same PR; the
   `security` job's licence scan must pass.
+
+<!-- BEGIN aayudha:work-items -->
+## Work items (aayudha)
+
+Work is tracked as GitHub issues of ten types (Goal, Initiative, Feature, Story, Bug, Decision, Experiment,
+Release, Feedback, Incident). File them with the `aayudha-<type>` issue forms. The `type:<type>` label is the type.
+
+- Priority, Effort, Risk, Health, and Horizon are labels (`priority:P1`, `effort:S`, …), one per prefix;
+  Delivery Status is the `status:<value>` label.
+- A Story or Bug needs a Completion Goal of numbered criteria, one per line:
+  `N. [screenshot|recording|sr-transcript|api-trace|metric] state: …; expected: …`.
+- Run `aayu ready <issue> --check` before asking for Ready; `aayu ready <issue>` posts the Ready snapshot. Do not
+  edit a Ready issue's body: the Ready guard strips `status:ready` when it drifts.
+- The `ledger` branch holds snapshots, proof, and actions segments. Never commit code to it or merge it.
+- Every GitHub write goes through `aayu`; agents never write with `gh` directly.
+<!-- END aayudha:work-items -->
