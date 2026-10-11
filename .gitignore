@@ -7,3 +7,9 @@ dist/
 # Node (pnpm workspace under packages/)
 node_modules/
 storybook-static/
+
+# Local aayudha runtime state (actions log, traces, ledger outbox, local config)
+.aayudha/telemetry/
+.aayudha/ledger-outbox/
+.aayudha/state/
+.aayudha/config.local.toml

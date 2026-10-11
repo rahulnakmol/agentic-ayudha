@@ -186,6 +186,15 @@ func TestRegistry(t *testing.T) {
 					if !ok || d.Model == "" || d.Family == "" {
 						return fmt.Errorf("lane %s has no default for host %s", l.ID, h.ID)
 					}
+					if d.Family != FamilyHostManaged && (d.ID == "" || FamilyOf(d.ID) != d.Family) {
+						return fmt.Errorf("lane %s on %s: model ID %q does not belong to family %s", l.ID, h.ID, d.ID, d.Family)
+					}
+					if d.EscalationID != "" && FamilyOf(d.EscalationID) != d.Family {
+						return fmt.Errorf("lane %s on %s: escalation %q changes family", l.ID, h.ID, d.EscalationID)
+					}
+					if slices.Contains(h.Excludes, d.Family) {
+						return fmt.Errorf("lane %s on %s: default family %s is excluded on that host", l.ID, h.ID, d.Family)
+					}
 					b, _ := defaultFor(build, h.ID)
 					if l.Adversarial && d.Family != FamilyHostManaged && d.Family == b.Family {
 						return fmt.Errorf("lane %s on %s uses builder family %s", l.ID, h.ID, d.Family)

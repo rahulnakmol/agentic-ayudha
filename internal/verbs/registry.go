@@ -65,6 +65,10 @@ type HostID string
 type Host struct {
 	ID   HostID
 	Name string
+	// Excludes lists model families the host cannot run. A lane configured with
+	// an excluded family on this host falls back to the lane's registry default
+	// for the host, and the model gateway logs the substitution (WP1.6).
+	Excludes []Family
 }
 
 // Family is a model vendor family. FamilyHostManaged means the host picks the
@@ -83,12 +87,17 @@ const (
 // ModelDefault is the settled default model for one lane on one host. It is
 // documentation data: [models.<lane>.<host>] in config overrides it (WP1.2).
 type ModelDefault struct {
-	Host          HostID
-	Model         string // display name, or the host mode (e.g. "Amp medium")
-	Family        Family
-	Escalation    string // what to use on escalation or for heavy work; empty if none
-	Alternative   string // an equally acceptable default; empty if none
-	ContextTokens int    // context window cap; 0 means the model default
+	Host             HostID
+	Model            string // display name, or the host mode (e.g. "Amp medium")
+	ID               string // model ID at the AI gateway or provider; empty for host-managed modes
+	Family           Family
+	Effort           string // reasoning effort to request; empty means the provider default
+	Escalation       string // what to use on escalation or for heavy work; empty if none
+	EscalationID     string // model ID of the escalation, when it is a model rather than a host mode
+	EscalationEffort string // reasoning effort for the escalation model
+	Alternative      string // an equally acceptable default; empty if none
+	ContextTokens    int    // context window cap; 0 means the model default
+	Note             string // e.g. a substitution the gateway forces
 }
 
 // LaneID identifies a model lane.
@@ -282,9 +291,9 @@ const (
 
 // Hosts lists the primary hosts.
 var Hosts = []Host{
-	{HostAmp, "Amp"},
-	{HostCursor, "Cursor"},
-	{HostClaude, "Claude Code"},
+	{ID: HostAmp, Name: "Amp"},
+	{ID: HostCursor, Name: "Cursor", Excludes: []Family{FamilyOpenAI}}, // GPT lanes fall back to Grok on Cursor
+	{ID: HostClaude, Name: "Claude Code"},
 }
 
 // Lane IDs.
@@ -297,12 +306,36 @@ const (
 	LaneChore    LaneID = "chore"
 )
 
+// Model IDs as the AI gateway lists them (GET /v1/models, verified 2026-10-11).
+const (
+	ModelClaudeOpus   = "claude-opus-5-5"
+	ModelClaudeSonnet = "claude-sonnet-5-5"
+	ModelClaudeHaiku  = "claude-haiku-5-5"
+	ModelClaudeFable  = "claude-fable-5-1"
+	ModelGPTSol       = "gpt-6.1-sol"
+	ModelGPTAstra     = "gpt-6-astra"
+	ModelGrok         = "grok-4.7"
+	ModelGeminiPro    = "gemini-3.1-pro-low"
+)
+
+const geminiNote = "the gateway serves only gemini-3.1-pro-low; there is no plain gemini-3.1-pro"
+
 func builderDefaults() []ModelDefault {
 	return []ModelDefault{
 		{Host: HostAmp, Model: "Amp medium", Family: FamilyHostManaged, Escalation: "Amp high"},
-		{Host: HostCursor, Model: "Claude Opus", Family: FamilyAnthropic, Alternative: "Claude Sonnet"},
-		{Host: HostClaude, Model: "Claude Opus", Family: FamilyAnthropic, Alternative: "Claude Sonnet"},
+		{Host: HostCursor, Model: "Claude Opus 5.5", ID: ModelClaudeOpus, Family: FamilyAnthropic, Alternative: "Claude Sonnet 5.5 (" + ModelClaudeSonnet + ")"},
+		{Host: HostClaude, Model: "Claude Opus 5.5", ID: ModelClaudeOpus, Family: FamilyAnthropic, Alternative: "Claude Sonnet 5.5 (" + ModelClaudeSonnet + ")"},
 	}
+}
+
+func reviewDefault(h HostID) ModelDefault {
+	return ModelDefault{Host: h, Model: "GPT-6.1 Sol", ID: ModelGPTSol, Family: FamilyOpenAI,
+		Escalation: "GPT-6 Astra at high reasoning effort for heavy reviews", EscalationID: ModelGPTAstra, EscalationEffort: "high"}
+}
+
+func geminiDefault(h HostID) ModelDefault {
+	return ModelDefault{Host: h, Model: "Gemini 3.1 Pro", ID: ModelGeminiPro, Family: FamilyGoogle,
+		Alternative: "Fable 5.1 (" + ModelClaudeFable + "; anthropic family, so only when the builder is not anthropic)", Note: geminiNote}
 }
 
 // Lanes lists the model lanes with their settled per-host defaults.
@@ -311,21 +344,26 @@ var Lanes = []Lane{
 	{ID: LaneSpec, Summary: "Authors specs, decisions, briefs, and copy.", Defaults: builderDefaults()},
 	{ID: LanePlan, Summary: "Slices and plans work.", Defaults: builderDefaults()},
 	{ID: LaneReview, Summary: "Adversarial code and spec review.", Adversarial: true, Defaults: []ModelDefault{
-		{Host: HostAmp, Model: "GPT-6.1 Sol", Family: FamilyOpenAI, Escalation: "GPT-6 Astra (high) for heavy reviews"},
-		{Host: HostCursor, Model: "Grok 4.7", Family: FamilyXAI},
-		{Host: HostClaude, Model: "GPT-6.1 Sol", Family: FamilyOpenAI, Escalation: "GPT-6 Astra (high) for heavy reviews"},
+		reviewDefault(HostAmp),
+		{Host: HostCursor, Model: "Grok 4.7", ID: ModelGrok, Family: FamilyXAI},
+		reviewDefault(HostClaude),
 	}},
 	{ID: LaneUIReview, Summary: "Visual and interaction critique of UI.", Adversarial: true, Defaults: []ModelDefault{
 		{Host: HostAmp, Model: "Amp high", Family: FamilyHostManaged},
-		{Host: HostCursor, Model: "Gemini 3.1 Pro", Family: FamilyGoogle, Alternative: "Fable 5.1"},
-		{Host: HostClaude, Model: "Gemini 3.1 Pro", Family: FamilyGoogle, Alternative: "Fable 5.1"},
+		geminiDefault(HostCursor),
+		geminiDefault(HostClaude),
 	}},
 	{ID: LaneChore, Summary: "Cheap mechanical work: triage, status, checks.", Defaults: []ModelDefault{
 		{Host: HostAmp, Model: "Amp low", Family: FamilyHostManaged},
-		{Host: HostCursor, Model: "Haiku 5.5", Family: FamilyAnthropic, ContextTokens: 100000},
-		{Host: HostClaude, Model: "Haiku 5.5", Family: FamilyAnthropic, ContextTokens: 100000},
+		{Host: HostCursor, Model: "Haiku 5.5", ID: ModelClaudeHaiku, Family: FamilyAnthropic, ContextTokens: 100000},
+		{Host: HostClaude, Model: "Haiku 5.5", ID: ModelClaudeHaiku, Family: FamilyAnthropic, ContextTokens: 100000},
 	}},
 }
+
+// DirectHost is the host whose defaults the binary uses when it calls a model
+// itself (ground rule 5: inspect, review lane A, eval judge, brief adversarial
+// pass, triage in Actions) and the current host's default is a host-managed mode.
+const DirectHost = HostClaude
 
 // Gate IDs.
 const (

@@ -55,11 +55,11 @@
               "description": "Wire format for every model without a styles entry: messages (Anthropic Messages), responses (OpenAI Responses), chat (OpenAI Chat Completions). Empty uses the family default."
             },
             "styles": {
-              "additionalProperties": {
+              "items": {
                 "type": "string"
               },
-              "type": "object",
-              "description": "Wire format per model ID or family, overriding api_style."
+              "type": "array",
+              "description": "Wire format overrides as \"\u003cmodel-id or family\u003e=\u003cstyle\u003e\", e.g. \"grok-4.7=chat\" (model IDs contain dots, so this is a list, not a table)."
             }
           },
           "additionalProperties": false,
@@ -209,7 +209,23 @@
         },
         "target": {
           "type": "string",
-          "description": "Slack webhook secret name, email address, or GitHub login, by channel."
+          "description": "slack: name of the secret holding the webhook URL; email: recipient address; github: login to mention."
+        },
+        "issue": {
+          "type": "string",
+          "description": "github channel: issue the mention comment is posted on, as owner/name#number."
+        },
+        "smtp_addr": {
+          "type": "string",
+          "description": "email channel: SMTP server as host:port (STARTTLS)."
+        },
+        "from": {
+          "type": "string",
+          "description": "email channel: sender address, also the SMTP user."
+        },
+        "smtp_secret": {
+          "type": "string",
+          "description": "email channel: name of the secret holding the SMTP password."
         }
       },
       "additionalProperties": false,

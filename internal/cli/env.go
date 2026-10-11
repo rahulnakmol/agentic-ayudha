@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
 )
@@ -62,7 +63,8 @@ type Env struct {
 	IO
 	Globals
 	Options
-	config *config.Loaded // loaded on first use by Config
+	config  *config.Loaded // loaded on first use by Config
+	actions *actions.Log   // opened on first use by Actions
 }
 
 func newEnv(io IO, opts Options) (*Env, error) {

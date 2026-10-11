@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"regexp"
 	"slices"
 	"strconv"
@@ -12,6 +13,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
+	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
@@ -90,6 +93,11 @@ Exit codes:
 			return Errorf(ExitUsage, "--repo %q: want owner/name", e.Repo)
 		}
 		c, ok := verbs.Find(cmd.Name())
+		if ok && e.Agent() && cmd.GroupID == "verbs" {
+			if _, err := os.Stat(e.PauseFile()); err == nil {
+				return Errorf(ExitBudget, "agent lanes are paused by the [budget] breaker (%s); a human must clear it", e.PauseFile())
+			}
+		}
 		declaresHost := ok && slices.ContainsFunc(c.Inputs, func(in verbs.Input) bool { return in.Name == "host" })
 		if e.Host != "" && !declaresHost && !slices.Contains(hosts, e.Host) {
 			return Errorf(ExitUsage, "--host %q: want one of %s", e.Host, strings.Join(hosts, ", "))
@@ -211,9 +219,20 @@ func newCommand(e *Env, c verbs.Command, group string) *cobra.Command {
 		if !ok {
 			return Errorf(ExitUsage, "%s: not implemented yet (lands in %s)", c.Name, c.WP)
 		}
-		return Wrap(ExitInternal, h(cmd.Context(), e, vals))
+		return classify(h(cmd.Context(), e, vals))
 	}
 	return cmd
+}
+
+// classify attaches exit codes to the sentinel errors of lower layers.
+func classify(err error) error {
+	switch {
+	case errors.Is(err, models.ErrBudget):
+		return Wrap(ExitBudget, err)
+	case errors.Is(err, actions.ErrCapability):
+		return Wrap(ExitBlocked, err)
+	}
+	return Wrap(ExitInternal, err)
 }
 
 func argCount(lo, hi int) string {

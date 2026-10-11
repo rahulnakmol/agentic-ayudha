@@ -202,12 +202,14 @@ Model calling: ` + code("none") + ` is deterministic; ` + code("host") + ` means
 ## Model lanes
 
 Settled defaults per host. Configuration (` + code("[models.<lane>.<host>]") + `, WP1.2) overrides them; the model gateway
-resolves them (WP1.6).
+resolves them (WP1.6). Model IDs are as the AI gateway lists them; the family belongs to the model, not the endpoint.
+Cursor cannot run the openai family, so a GPT model configured for Cursor falls back to the lane's Cursor default.
+When the binary calls a model itself and the host's default is a host-managed mode, it uses the Claude Code default.
 
 ` + verbs.ReviewerFamilyRule + `
 
-| Lane | Host | Default | Family | Escalation / alternative |
-|---|---|---|---|---|
+| Lane | Host | Default | Model ID | Family | Escalation / alternative |
+|---|---|---|---|---|---|
 `)
 	for _, l := range verbs.Lanes {
 		for _, d := range l.Defaults {
@@ -218,10 +220,17 @@ resolves them (WP1.6).
 			}
 			var extra []string
 			if d.Escalation != "" {
-				extra = append(extra, "escalation: "+d.Escalation)
+				esc := "escalation: " + d.Escalation
+				if d.EscalationID != "" {
+					esc += " (" + code(d.EscalationID) + ")"
+				}
+				extra = append(extra, esc)
 			}
 			if d.Alternative != "" {
 				extra = append(extra, "or "+d.Alternative)
+			}
+			if d.Note != "" {
+				extra = append(extra, "note: "+d.Note)
 			}
 			alt := "—"
 			if len(extra) > 0 {
@@ -231,7 +240,11 @@ resolves them (WP1.6).
 			if l.Adversarial {
 				name += " (adversarial)"
 			}
-			fmt.Fprintf(&b, "| %s | %s | %s | %s | %s |\n", name, h.Name, cell(model), d.Family, cell(alt))
+			id := "host-managed"
+			if d.ID != "" {
+				id = code(d.ID)
+			}
+			fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s |\n", name, h.Name, cell(model), id, d.Family, cell(alt))
 		}
 	}
 	return writeFile("docs/RACI.md", []byte(b.String()))

@@ -5,9 +5,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
+	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
@@ -56,6 +62,8 @@ func TestExitCodes(t *testing.T) {
 	withHandler(t, "status", func(context.Context, *Env, Values) error { return errors.New("unexpected nil map") })
 	withHandler(t, "audit", func(context.Context, *Env, Values) error { return Errorf(ExitExternal, "GitHub: 502") })
 	withHandler(t, "ready", func(context.Context, *Env, Values) error { return nil })
+	withHandler(t, "review", func(context.Context, *Env, Values) error { return fmt.Errorf("lane A: %w", models.ErrBudget) })
+	withHandler(t, "triage", func(context.Context, *Env, Values) error { return fmt.Errorf("edit body: %w", actions.ErrCapability) })
 
 	agent := map[string]string{"AAYU_AGENT": "1"}
 	tests := []struct {
@@ -89,6 +97,8 @@ func TestExitCodes(t *testing.T) {
 		{"self-update refused for agents", agent, []string{"self-update"}, ExitBlocked},
 		{"external error", nil, []string{"audit"}, ExitExternal},
 		{"budget", nil, []string{"inspect", "#4"}, ExitBudget},
+		{"budget breaker error from a lower layer", nil, []string{"review", "4"}, ExitBudget},
+		{"capability refusal from the actions layer", nil, []string{"triage", "4"}, ExitBlocked},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -145,5 +155,48 @@ func TestInputsReachHandler(t *testing.T) {
 	}
 	if got.String("host") != "all" || !got.Bool("apply") || got.Has("pin") {
 		t.Fatalf("values = %v", got)
+	}
+}
+
+func TestModelsShowAndActionsChain(t *testing.T) {
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	code, out, errs := run(t, nil, Options{Dir: repo}, "models", "show", "--host", "cursor", "--set", "models.review.cursor.model=gpt-6.1-sol")
+	if code != 0 || !regexp.MustCompile(`review\s+cursor\s+grok-4\.7\s+xai\s+fallback`).MatchString(out) || !strings.Contains(out, "gpt-6.1-sol (openai) is not available on Cursor") {
+		t.Fatalf("exit %d\n%s%s", code, out, errs)
+	}
+
+	// The actions log written through Env.Actions verifies, and a tampered copy does not.
+	e, _ := newEnv(IO{}, Options{Dir: repo, Getenv: func(string) string { return "" }})
+	log, err := e.Actions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, body := range []string{"a", "b"} {
+		if _, err := log.Do(context.Background(), actions.Action{Kind: "github.issue.comment", Payload: map[string]any{"body": body}},
+			func(context.Context) (actions.Outcome, error) { return actions.Outcome{}, nil }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if code, out, _ := run(t, nil, Options{Dir: repo}, "actions", "verify-chain"); code != 0 || !strings.Contains(out, "2 records, chain intact") {
+		t.Fatalf("verify-chain: exit %d: %s", code, out)
+	}
+	if code, out, _ := run(t, nil, Options{Dir: repo}, "actions", "grep", `"body":"b"`); code != 0 || strings.Count(out, "\n") != 1 {
+		t.Fatalf("grep: exit %d: %s", code, out)
+	}
+	path := e.ActionsPath()
+	b, _ := os.ReadFile(path)
+	_ = os.WriteFile(path, bytes.Replace(b, []byte(`"body":"a"`), []byte(`"body":"A"`), 1), 0o644)
+	if code, _, errs := run(t, nil, Options{Dir: repo}, "actions", "verify-chain"); code != ExitBlocked || !strings.Contains(errs, "line 1 (seq 1): content does not match") {
+		t.Fatalf("tampered: exit %d: %s", code, errs)
+	}
+
+	// An agent lane cannot run verbs while the breaker has paused agent lanes.
+	_ = os.MkdirAll(filepath.Dir(e.PauseFile()), 0o755)
+	_ = os.WriteFile(e.PauseFile(), []byte("budget"), 0o644)
+	if code, _, _ := run(t, map[string]string{"AAYU_AGENT": "1"}, Options{Dir: repo}, "status"); code != ExitBudget {
+		t.Fatalf("paused agent: exit %d", code)
 	}
 }

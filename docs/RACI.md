@@ -89,27 +89,29 @@ Model calling: `none` is deterministic; `host` means the host's model reasons in
 ## Model lanes
 
 Settled defaults per host. Configuration (`[models.<lane>.<host>]`, WP1.2) overrides them; the model gateway
-resolves them (WP1.6).
+resolves them (WP1.6). Model IDs are as the AI gateway lists them; the family belongs to the model, not the endpoint.
+Cursor cannot run the openai family, so a GPT model configured for Cursor falls back to the lane's Cursor default.
+When the binary calls a model itself and the host's default is a host-managed mode, it uses the Claude Code default.
 
 The reviewer model family must differ from the builder model family on every story (reviewer.family != builder.family).
 
-| Lane | Host | Default | Family | Escalation / alternative |
-|---|---|---|---|---|
-| `build` | Amp | Amp medium | host-managed | escalation: Amp high |
-| `build` | Cursor | Claude Opus | anthropic | or Claude Sonnet |
-| `build` | Claude Code | Claude Opus | anthropic | or Claude Sonnet |
-| `spec` | Amp | Amp medium | host-managed | escalation: Amp high |
-| `spec` | Cursor | Claude Opus | anthropic | or Claude Sonnet |
-| `spec` | Claude Code | Claude Opus | anthropic | or Claude Sonnet |
-| `plan` | Amp | Amp medium | host-managed | escalation: Amp high |
-| `plan` | Cursor | Claude Opus | anthropic | or Claude Sonnet |
-| `plan` | Claude Code | Claude Opus | anthropic | or Claude Sonnet |
-| `review` (adversarial) | Amp | GPT-6.1 Sol | openai | escalation: GPT-6 Astra (high) for heavy reviews |
-| `review` (adversarial) | Cursor | Grok 4.7 | xai | — |
-| `review` (adversarial) | Claude Code | GPT-6.1 Sol | openai | escalation: GPT-6 Astra (high) for heavy reviews |
-| `ui-review` (adversarial) | Amp | Amp high | host-managed | — |
-| `ui-review` (adversarial) | Cursor | Gemini 3.1 Pro | google | or Fable 5.1 |
-| `ui-review` (adversarial) | Claude Code | Gemini 3.1 Pro | google | or Fable 5.1 |
-| `chore` | Amp | Amp low | host-managed | — |
-| `chore` | Cursor | Haiku 5.5 (100k context) | anthropic | — |
-| `chore` | Claude Code | Haiku 5.5 (100k context) | anthropic | — |
+| Lane | Host | Default | Model ID | Family | Escalation / alternative |
+|---|---|---|---|---|---|
+| `build` | Amp | Amp medium | host-managed | host-managed | escalation: Amp high |
+| `build` | Cursor | Claude Opus 5.5 | `claude-opus-5-5` | anthropic | or Claude Sonnet 5.5 (claude-sonnet-5-5) |
+| `build` | Claude Code | Claude Opus 5.5 | `claude-opus-5-5` | anthropic | or Claude Sonnet 5.5 (claude-sonnet-5-5) |
+| `spec` | Amp | Amp medium | host-managed | host-managed | escalation: Amp high |
+| `spec` | Cursor | Claude Opus 5.5 | `claude-opus-5-5` | anthropic | or Claude Sonnet 5.5 (claude-sonnet-5-5) |
+| `spec` | Claude Code | Claude Opus 5.5 | `claude-opus-5-5` | anthropic | or Claude Sonnet 5.5 (claude-sonnet-5-5) |
+| `plan` | Amp | Amp medium | host-managed | host-managed | escalation: Amp high |
+| `plan` | Cursor | Claude Opus 5.5 | `claude-opus-5-5` | anthropic | or Claude Sonnet 5.5 (claude-sonnet-5-5) |
+| `plan` | Claude Code | Claude Opus 5.5 | `claude-opus-5-5` | anthropic | or Claude Sonnet 5.5 (claude-sonnet-5-5) |
+| `review` (adversarial) | Amp | GPT-6.1 Sol | `gpt-6.1-sol` | openai | escalation: GPT-6 Astra at high reasoning effort for heavy reviews (`gpt-6-astra`) |
+| `review` (adversarial) | Cursor | Grok 4.7 | `grok-4.7` | xai | — |
+| `review` (adversarial) | Claude Code | GPT-6.1 Sol | `gpt-6.1-sol` | openai | escalation: GPT-6 Astra at high reasoning effort for heavy reviews (`gpt-6-astra`) |
+| `ui-review` (adversarial) | Amp | Amp high | host-managed | host-managed | — |
+| `ui-review` (adversarial) | Cursor | Gemini 3.1 Pro | `gemini-3.1-pro-low` | google | or Fable 5.1 (claude-fable-5-1; anthropic family, so only when the builder is not anthropic); note: the gateway serves only gemini-3.1-pro-low; there is no plain gemini-3.1-pro |
+| `ui-review` (adversarial) | Claude Code | Gemini 3.1 Pro | `gemini-3.1-pro-low` | google | or Fable 5.1 (claude-fable-5-1; anthropic family, so only when the builder is not anthropic); note: the gateway serves only gemini-3.1-pro-low; there is no plain gemini-3.1-pro |
+| `chore` | Amp | Amp low | host-managed | host-managed | — |
+| `chore` | Cursor | Haiku 5.5 (100k context) | `claude-haiku-5-5` | anthropic | — |
+| `chore` | Claude Code | Haiku 5.5 (100k context) | `claude-haiku-5-5` | anthropic | — |
