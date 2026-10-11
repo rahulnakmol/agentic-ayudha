@@ -46,7 +46,7 @@ func Run(ctx context.Context, args []string, io IO, opts Options) int {
 
 // globalFlags are the names of the global flags; a registry input with the same
 // name reads the global flag instead of defining its own.
-var globalFlags = []string{"dry-run", "json", "repo", "host", "yes", "verbose", "set"}
+var globalFlags = []string{"dry-run", "json", "repo", "host", "yes", "verbose", "set", "ci"}
 
 func init() { cobra.EnableCommandSorting = false } // list commands in registry (plan) order
 
@@ -79,6 +79,7 @@ Exit codes:
 	pf.StringVar(&e.Host, "host", "", "host running aayudha: "+strings.Join(hosts, ", ")+" (default: detected)")
 	pf.BoolVar(&e.Yes, "yes", false, "answer yes to confirmations (human only; refused when AAYU_AGENT=1)")
 	pf.BoolVarP(&e.Verbose, "verbose", "v", false, "write diagnostics to stderr")
+	pf.BoolVar(&e.CI, "ci", false, "running in CI: accept GITHUB_TOKEN as the human token; bot writes need AAYU_BOT_TOKEN")
 	pf.StringArrayVar(&e.Set, "set", nil, "override a config value for this run, as key=value (repeatable)")
 
 	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {

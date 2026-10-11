@@ -1,0 +1,8 @@
+[
+  {"id": 1, "user": {"login": "aayudha-bot[bot]", "type": "Bot"}, "state": "APPROVED", "commit_id": "HEADSHA"},
+  {"id": 2, "user": {"login": "aayu-machine", "type": "User"}, "state": "APPROVED", "commit_id": "HEADSHA"},
+  {"id": 3, "user": {"login": "renovate", "type": "Bot"}, "state": "APPROVED", "commit_id": "HEADSHA"},
+  {"id": 4, "user": {"login": "rahulnakmol", "type": "User"}, "state": "APPROVED", "commit_id": "OLDSHA"},
+  {"id": 5, "user": {"login": "rahulnakmol", "type": "User"}, "state": "COMMENTED", "commit_id": "HEADSHA"},
+  {"id": 6, "user": {"login": "rahulnakmol", "type": "User"}, "state": "APPROVED", "commit_id": "HEADSHA"}
+]

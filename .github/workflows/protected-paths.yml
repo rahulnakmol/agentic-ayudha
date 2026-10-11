@@ -1,13 +1,16 @@
 name: protected-paths
 
-# Solo-mode gate (docs/BUILD-PLAN.md WP0.1, Appendix B D2). Fails when a PR changes a path listed in the base
-# branch's .github/CODEOWNERS. The protected-paths-codeowner-review ruleset requires this check and lets only the
-# repository admin bypass it, through a pull request, so every protected-path merge is an explicit bypass that
-# GitHub records in the rule-suite history. WP5.1 replaces this with native CODEOWNER review once a second
-# human exists.
+# Protected-path gate (docs/BUILD-PLAN.md WP0.1, extended by WP1.4; Appendix B D2). A PR that changes a path
+# listed in the base branch's .github/CODEOWNERS passes only when every such path has an approving review of
+# the head commit from one of its CODEOWNERs who is a human (type != Bot, not in [identity] bot_logins) and
+# not the PR author. That is the bot-authored PR flow; a PR the founder authors still fails and merges only
+# through the recorded admin bypass of the protected-paths-codeowner-review ruleset (solo mode,
+# CONTRIBUTING.md). WP5.1 replaces this with native CODEOWNER review once a second human exists.
 #
-# pull_request_target runs this file as it exists on the base branch, so a PR cannot weaken its own gate.
-# It never checks out or executes PR code; it only reads the PR's file list and the base CODEOWNERS via the API.
+# pull_request_target runs this file as it exists on the base branch, and the job checks out the base branch,
+# so a PR can weaken neither the workflow nor the gate code (internal/identity). It never checks out or runs PR
+# code; it reads the PR, its files, and its reviews through the API. A submitted or dismissed review re-runs
+# this check through protected-paths-review.yml and protected-paths-rerun.yml.
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review, edited]
@@ -22,32 +25,32 @@ jobs:
     name: protected-paths
     runs-on: ubuntu-latest
     steps:
-      - name: Fail when protected paths change
+      # pull_request_target checks out the base branch by default; never pass a PR ref here.
+      - name: Check out the base branch (never the PR)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.25.x"
+          cache: false
+      - name: Fetch the PR, its files, and its reviews
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
-          gh api "repos/$REPO/contents/.github/CODEOWNERS?ref=$BASE_SHA" --jq .content | base64 -d > codeowners
-          # Patterns are root-anchored: "/dir/" protects a directory, "/file" protects one file.
-          patterns=$(sed -e 's/#.*//' codeowners | awk 'NF { print $1 }')
-          gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[] | .filename, (.previous_filename // empty)' | sort -u > changed
-          hits=""
-          while IFS= read -r path; do
-            for p in $patterns; do
-              p="${p#/}"
-              case "$p" in
-                */) [[ "$path" == "$p"* ]] && hits+="$path (/$p)"$'\n' ;;
-                *)  [[ "$path" == "$p" ]] && hits+="$path (/$p)"$'\n' ;;
-              esac
-            done
-          done < changed
-          if [[ -n "$hits" ]]; then
-            echo "::error::This PR changes protected paths and needs a human CODEOWNER review."
-            echo "Solo mode: only the repository admin can merge it, through the recorded ruleset bypass (CONTRIBUTING.md)."
-            printf '%s' "$hits"
+          mkdir -p "$RUNNER_TEMP/gate"
+          gh api "repos/$REPO/pulls/$PR" > "$RUNNER_TEMP/gate/pr.json"
+          gh api --paginate "repos/$REPO/pulls/$PR/files" > "$RUNNER_TEMP/gate/files.json"
+          gh api --paginate "repos/$REPO/pulls/$PR/reviews" > "$RUNNER_TEMP/gate/reviews.json"
+      - name: Decide
+        run: |
+          go run ./internal/identity/cmd/protected-paths-gate \
+            -codeowners .github/CODEOWNERS -repo . \
+            -pr "$RUNNER_TEMP/gate/pr.json" -files "$RUNNER_TEMP/gate/files.json" -reviews "$RUNNER_TEMP/gate/reviews.json" || {
+            echo "::error::This PR changes protected paths without an approval of its head commit by a human CODEOWNER who is not the author."
+            echo "Bot-authored PRs: the founder approves the head commit. Founder-authored PRs (solo mode): only the repository admin can merge them, through the recorded ruleset bypass (CONTRIBUTING.md)."
             exit 1
-          fi
-          echo "No protected paths changed."
+          }

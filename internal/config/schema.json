@@ -429,6 +429,40 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "identity": {
+      "properties": {
+        "app_id": {
+          "type": "integer",
+          "description": "GitHub App ID of the bot identity (created by init --identity)."
+        },
+        "app_slug": {
+          "type": "string",
+          "description": "GitHub App slug; the App's login is \u003cslug\u003e[bot]."
+        },
+        "broker": {
+          "type": "string",
+          "description": "Token broker workflow file in this repo that mints App installation tokens for laptops."
+        },
+        "machine_user": {
+          "type": "string",
+          "description": "Machine-user login, the fallback bot identity."
+        },
+        "machine_user_secret": {
+          "type": "string",
+          "description": "Name of the secret holding the machine user's token."
+        },
+        "bot_logins": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Logins whose reviews never count as a human pass (machine users and other bots)."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Bot identity for agent lanes and CI (WP1.4)."
+    },
     "fleet": {
       "properties": {
         "repos": {

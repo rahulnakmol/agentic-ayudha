@@ -32,6 +32,7 @@ type Config struct {
 	Integrations  map[string]Integration `koanf:"integrations" jsonschema_description:"External integrations keyed by name. Values name secrets; they never hold them."`
 	Verify        Verify                 `koanf:"verify"`
 	Time          Time                   `koanf:"time"`
+	Identity      Identity               `koanf:"identity" jsonschema_description:"Bot identity for agent lanes and CI (WP1.4)."`
 	Fleet         Fleet                  `koanf:"fleet" jsonschema_description:"User-level only: the product repos that status --all and doctor --all iterate."`
 }
 
@@ -177,6 +178,17 @@ type Time struct {
 	BusinessHours string `koanf:"business_hours" jsonschema_description:"Business days and hours, e.g. Mon-Fri 09:00-18:00."`
 }
 
+// Identity is [identity] (WP1.4). With neither an App nor a machine user, every
+// verb runs under the human identity and its writes are tagged identity:human-fallback.
+type Identity struct {
+	AppID             int64    `koanf:"app_id" jsonschema_description:"GitHub App ID of the bot identity (created by init --identity)."`
+	AppSlug           string   `koanf:"app_slug" jsonschema_description:"GitHub App slug; the App's login is <slug>[bot]."`
+	Broker            string   `koanf:"broker" jsonschema_description:"Token broker workflow file in this repo that mints App installation tokens for laptops."`
+	MachineUser       string   `koanf:"machine_user" jsonschema_description:"Machine-user login, the fallback bot identity."`
+	MachineUserSecret string   `koanf:"machine_user_secret" jsonschema_description:"Name of the secret holding the machine user's token."`
+	BotLogins         []string `koanf:"bot_logins" jsonschema_description:"Logins whose reviews never count as a human pass (machine users and other bots)."`
+}
+
 // Fleet is [fleet] (user-level config only).
 type Fleet struct {
 	Repos []string `koanf:"repos" jsonschema_description:"owner/name of each product repo."`
@@ -262,6 +274,12 @@ func (c *Config) Validate() error {
 		if in.Scope != "read" && in.Scope != "write" {
 			bad("[integrations.%s] scope = %q: want read or write", name, in.Scope)
 		}
+	}
+	if id := c.Identity; id.MachineUser != "" && !secretName.MatchString(id.MachineUserSecret) {
+		bad("[identity] machine_user_secret = %q: want the name of a secret holding the machine user's token", id.MachineUserSecret)
+	}
+	if id := c.Identity; id.AppID != 0 && id.AppSlug == "" {
+		bad("[identity] app_id needs app_slug")
 	}
 	for _, r := range c.Fleet.Repos {
 		if !repoName.MatchString(r) {

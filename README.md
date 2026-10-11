@@ -79,7 +79,7 @@ fails on drift.
 | Command | Summary | Seat |
 |---|---|---|
 | `config` | Show, validate, or initialise layered configuration. | DevOps & DevEx Tinkerer |
-| `auth` | Show which human token and bot identity aayudha resolves, and their scopes. | DevOps & DevEx Tinkerer |
+| `auth` | Show the human token and bot identity aayudha resolves, with scope warnings; set, delete, or list named secrets. | DevOps & DevEx Tinkerer |
 | `actions` | Tail, search, or verify the hash chain of the actions log. | DevOps & DevEx Tinkerer |
 | `models` | Show the resolved model for each lane and host. | DevOps & DevEx Tinkerer |
 | `mcp` | Serve verbs as MCP tools over stdio. | DevOps & DevEx Tinkerer |

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
 )
 
 // IO is where a command reads and writes. Commands never touch os.Stdin,
@@ -39,6 +40,9 @@ type Options struct {
 	Now        func() time.Time
 	Executable func() (string, error)
 	SelfUpdate SelfUpdateOptions
+	GitHubAPI  string                                    // default https://api.github.com
+	GHToken    func(ctx context.Context) (string, error) // `gh auth token`; nil runs gh
+	Secrets    *secrets.Store                            // nil uses keychain, env, then the age file
 }
 
 // Globals are the global flags shared by every command.
@@ -49,6 +53,7 @@ type Globals struct {
 	Host    string
 	Yes     bool
 	Verbose bool
+	CI      bool     // running in CI: GITHUB_TOKEN may be the human token; bot writes need the App token
 	Set     []string // config overrides, key=value (the flags layer of WP1.2)
 }
 
