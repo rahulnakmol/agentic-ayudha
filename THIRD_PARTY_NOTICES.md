@@ -68,6 +68,32 @@ These run only in this repository's GitHub Actions workflows. Versions are pinne
 | [markdownlint-cli2](https://github.com/DavidAnson/markdownlint-cli2) | MIT | Markdown lint |
 | [lychee](https://github.com/lycheeverse/lychee) | Apache-2.0 OR MIT | Link check |
 
+### Design system (`packages/design-system/`, WP6.1–6.3)
+
+The package is private (not published) and ships as source; versions are pinned in `pnpm-lock.yaml`.
+`pnpm licenses list --prod` in `packages/design-system/` reports only MIT, Apache-2.0, and 0BSD for its runtime
+dependency tree (80 MIT packages, mostly Radix UI and Floating UI; `class-variance-authority` Apache-2.0;
+`tslib` 0BSD).
+
+| Component | Version | Licence | How it is used | Source |
+|---|---|---|---|---|
+| GSAP | peer `^3.13.0` (3.15.0 for local development) | GSAP Standard "No Charge" License (not OSI) | **peerDependency only, never vendored or bundled**: the consuming app installs it. Used by `@aayudha/design-system/motion`. The licence prohibits using GSAP in visual, no-code animation builders that compete with Webflow, so the Storybook motion controls only preview existing presets and tokens and are documented as not a visual builder. `test/package-policy.test.ts` fails if GSAP becomes a dependency or its source appears in the package (J3-19) | <https://gsap.com/standard-license> |
+| Phosphor Icons (`@phosphor-icons/react`) | 2.1.10 | MIT | Dependency. The icon set swapped into the shadcn/ui components in place of Lucide | <https://github.com/phosphor-icons/react> |
+| shadcn/ui | component source as of CLI 4.21.4 | MIT | Component source copied into `src/components/ui/` and modified (Phosphor icons, density tokens, status badge variants). Not a package dependency | <https://github.com/shadcn-ui/ui> |
+| OpenUI5 / SAP Horizon | n/a | OpenUI5 is Apache-2.0 | **Inspiration only** for semantic token naming (brand, shell, field, list, positive/negative/critical/informative) and the Fiori-shaped floorplans. Names, structure, and values are Aayudha's own; no SAP theme files, assets, icons, or fonts are included | <https://github.com/SAP/openui5> |
+| Radix UI (`radix-ui`) | 1.7.0 | MIT | Dependency. Accessible primitives under the shadcn/ui components | <https://github.com/radix-ui/primitives> |
+| `class-variance-authority` | 0.7.1 | Apache-2.0 | Dependency. Component variants | <https://github.com/joe-bell/cva> |
+| `clsx` | 2.1.1 | MIT | Dependency. Class name joining | <https://github.com/lukeed/clsx> |
+| `tailwind-merge` | 3.7.0 | MIT | Dependency. Class conflict resolution | <https://github.com/dcastil/tailwind-merge> |
+| `tw-animate-css` | 1.4.0 | MIT | Dependency. CSS enter/exit animations used by the shadcn/ui dialog and select | <https://github.com/Wombosvideo/tw-animate-css> |
+| Tailwind CSS | peer `^4.0.0` (4.3.3 for local development) | MIT | peerDependency: the consuming app compiles `styles.css` | <https://github.com/tailwindlabs/tailwindcss> |
+| React, React DOM | peer `^19.0.0` | MIT | peerDependency | <https://github.com/facebook/react> |
+
+Development only (never shipped; the static Storybook build is a CI check, not a release): Storybook and its
+addons (MIT), Vite (MIT), Vitest (MIT), Playwright (Apache-2.0), TypeScript (Apache-2.0), and axe-core
+(MPL-2.0, through `@storybook/addon-a11y`). The development tree also contains BSD-2-Clause, BSD-3-Clause,
+ISC, BlueOak-1.0.0, and CC-BY-4.0 (browser-support data) packages.
+
 ## Policy
 
 - A PR that adds a dependency adds its entry here in the same PR: name, version or range, licence, how it is
@@ -97,15 +123,6 @@ CI scan when the component is actually added.
 | `go.opentelemetry.io/otel` | Traces (WP1.8) | Apache-2.0 |
 | `github.com/go-git/go-git` | Read-only git access | Apache-2.0 |
 | `github.com/yuin/goldmark` | Markdown parsing | MIT |
-
-### Design system (`packages/design-system/`, WP6.1–6.3)
-
-| Component | Use | Expected licence |
-|---|---|---|
-| GSAP | Motion. Declared as a **peerDependency only, never vendored**; the product installs it. | GSAP's own licence (not OSI); confirm terms at inclusion |
-| Phosphor Icons | Icon set swapped into the shadcn components | MIT |
-| shadcn/ui | Component source copied into the package | MIT |
-| OpenUI5 / SAP Horizon | **Inspiration only** for semantic token names and Fiori-shaped floorplans. No SAP assets, icons, or fonts are included. | OpenUI5 is Apache-2.0; nothing is copied |
 
 ### Shelled out (not bundled)
 

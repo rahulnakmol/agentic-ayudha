@@ -1,0 +1,114 @@
+/*
+ * Aayudha design system stylesheet. Import once at the application root:
+ *   import "@aayudha/design-system/styles.css"
+ *
+ * Layering: tokens.css (generated, --ay-* semantic tokens) -> the Tailwind theme below, which maps the
+ * shadcn/ui variable names the components use onto those tokens. Components never use raw colours.
+ */
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "./tokens.css";
+
+/* Scan the package's own sources when a consumer imports this file. */
+@source "../";
+
+/* No dark theme yet: keep shadcn's dark: classes inert instead of following prefers-color-scheme. */
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: var(--ay-font-family-sans);
+  --font-mono: var(--ay-font-family-mono);
+
+  /* Type scale (Tailwind steps used by shadcn) -> token font sizes. */
+  --text-xs: var(--ay-font-size-small);
+  --text-sm: var(--ay-font-size-body);
+  --text-base: var(--ay-font-size-large);
+  --text-lg: var(--ay-font-size-large);
+  --text-xl: var(--ay-font-size-header-3);
+  --text-2xl: var(--ay-font-size-header-2);
+  --text-3xl: var(--ay-font-size-header-1);
+
+  --radius-sm: calc(var(--ay-radius-control) - 4px);
+  --radius-md: var(--ay-radius-control);
+  --radius-lg: var(--ay-radius-control);
+  --radius-xl: var(--ay-radius-container);
+
+  /* Density: h-control, h-row, size-icon, px-control-x, gap-stack, p-section, px-page. */
+  --spacing-control: var(--ay-size-control-height);
+  --spacing-row: var(--ay-size-row-height);
+  --spacing-icon: var(--ay-size-icon);
+  --spacing-control-x: var(--ay-space-control-inline);
+  --spacing-stack: var(--ay-space-gap);
+  --spacing-section: var(--ay-space-section);
+  --spacing-page: var(--ay-space-page);
+
+  /* shadcn/ui variable names -> semantic tokens. shadcn's "background" is the default surface that controls,
+     dialogs, and active tabs sit on; the grey page canvas behind surfaces is bg-page. */
+  --color-page: var(--ay-color-background);
+  --color-background: var(--ay-color-surface);
+  --color-foreground: var(--ay-color-text-default);
+  --color-card: var(--ay-color-surface);
+  --color-card-foreground: var(--ay-color-text-default);
+  --color-popover: var(--ay-color-surface);
+  --color-popover-foreground: var(--ay-color-text-default);
+  --color-primary: var(--ay-color-brand-default);
+  --color-primary-foreground: var(--ay-color-brand-contrast);
+  --color-secondary: var(--ay-color-accent-default);
+  --color-secondary-foreground: var(--ay-color-accent-contrast);
+  --color-muted: var(--ay-color-list-header);
+  --color-muted-foreground: var(--ay-color-text-label);
+  --color-accent: var(--ay-color-list-hover);
+  --color-accent-foreground: var(--ay-color-text-default);
+  --color-destructive: var(--ay-color-negative-default);
+  --color-border: var(--ay-color-border);
+  --color-input: var(--ay-color-field-border);
+  --color-ring: var(--ay-color-focus);
+
+  /* Aayudha semantic colours with no shadcn equivalent. */
+  --color-surface: var(--ay-color-surface);
+  --color-overlay: var(--ay-color-overlay);
+  --color-shell: var(--ay-color-shell-background);
+  --color-shell-border: var(--ay-color-shell-border);
+  --color-brand-hover: var(--ay-color-brand-hover);
+  --color-placeholder: var(--ay-color-text-placeholder);
+  --color-field: var(--ay-color-field-background);
+  --color-list-hover: var(--ay-color-list-hover);
+  --color-list-selected: var(--ay-color-list-selected);
+  --color-list-header: var(--ay-color-list-header);
+  --color-positive: var(--ay-color-positive-default);
+  --color-positive-background: var(--ay-color-positive-background);
+  --color-negative: var(--ay-color-negative-default);
+  --color-negative-background: var(--ay-color-negative-background);
+  --color-critical: var(--ay-color-critical-default);
+  --color-critical-background: var(--ay-color-critical-background);
+  --color-informative: var(--ay-color-informative-default);
+  --color-informative-background: var(--ay-color-informative-background);
+  --color-neutral: var(--ay-color-neutral-default);
+  --color-neutral-background: var(--ay-color-neutral-background);
+
+  --ease-standard: var(--ay-motion-easing-standard);
+  --ease-enter: var(--ay-motion-easing-enter);
+  --ease-exit: var(--ay-motion-easing-exit);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-page font-sans text-sm text-foreground antialiased;
+  }
+  ::placeholder {
+    color: var(--ay-color-text-placeholder);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
