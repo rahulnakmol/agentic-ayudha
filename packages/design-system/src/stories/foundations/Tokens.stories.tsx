@@ -20,7 +20,7 @@ const meta = {
     docs: {
       description: {
         component:
-          "Semantic tokens from tokens/tokens.json, emitted as --ay-* CSS variables. OpenUI5-inspired naming; no SAP assets, icons, or fonts.",
+          "Semantic tokens from tokens/tokens.json, emitted as --ay-* CSS variables and as SwiftUI and Compose constants with the same names. OpenUI5-inspired naming; no SAP assets, icons, or fonts.",
       },
     },
   },

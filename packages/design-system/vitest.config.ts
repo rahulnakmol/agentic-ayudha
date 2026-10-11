@@ -11,7 +11,7 @@ export default defineConfig({
   test: {
     projects: [
       {
-        // Node tests: package policy.
+        // Node tests: token parity (WP6.3) and package policy.
         test: { name: "unit", include: ["test/**/*.test.ts"], environment: "node" },
       },
       {
