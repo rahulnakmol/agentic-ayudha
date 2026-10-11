@@ -46,8 +46,16 @@ type Seat struct {
 // Models is [models]: [models.<lane>.<host>] overrides plus [models.gateway].
 type Models struct {
 	Gateway Gateway `koanf:"gateway"`
+	Prices  []Price `koanf:"prices" jsonschema_description:"USD per million tokens per model ID, for cost accounting and the [budget] breaker. A response that reports its own cost wins; an unpriced model is charged at the conservative fallback rate."`
 	// Lanes holds [models.<lane>.<host>] keyed by lane, then host.
 	Lanes map[string]map[string]ModelChoice `koanf:",remain"`
+}
+
+// Price is one [[models.prices]] entry.
+type Price struct {
+	Model         string  `koanf:"model"`
+	InputPerMTok  float64 `koanf:"input_usd_per_mtok" jsonschema:"minimum=0"`
+	OutputPerMTok float64 `koanf:"output_usd_per_mtok" jsonschema:"minimum=0"`
 }
 
 // ModelChoice is [models.<lane>.<host>].
@@ -58,14 +66,14 @@ type ModelChoice struct {
 
 // Gateway is [models.gateway]: when base_url is set, every lane's model calls go
 // through this one endpoint (WP1.6); direct provider clients remain the fallback
-// when it is unset. The wire format is chosen per model: styles.<model-id>, then
-// styles.<family>, then api_style, then the family default (anthropic: messages,
+// when it is unset. The wire format is chosen per model: a styles entry for the
+// model ID, then one for its family, then api_style, then the family default (anthropic: messages,
 // openai: responses, others: chat). The model family never depends on the endpoint.
 type Gateway struct {
-	BaseURL  string            `koanf:"base_url" jsonschema_description:"Gateway endpoint including the version path, e.g. https://gateway.example/v1; empty disables the gateway."`
-	Secret   string            `koanf:"secret" jsonschema_description:"Name of the secret holding the gateway key (sent as Authorization: Bearer)."`
-	APIStyle string            `koanf:"api_style" jsonschema:"enum=,enum=messages,enum=responses,enum=chat" jsonschema_description:"Wire format for every model without a styles entry: messages (Anthropic Messages), responses (OpenAI Responses), chat (OpenAI Chat Completions). Empty uses the family default."`
-	Styles   map[string]string `koanf:"styles" jsonschema_description:"Wire format per model ID or family, overriding api_style."`
+	BaseURL  string   `koanf:"base_url" jsonschema_description:"Gateway endpoint including the version path, e.g. https://gateway.example/v1; empty disables the gateway."`
+	Secret   string   `koanf:"secret" jsonschema_description:"Name of the secret holding the gateway key (sent as Authorization: Bearer)."`
+	APIStyle string   `koanf:"api_style" jsonschema:"enum=,enum=messages,enum=responses,enum=chat" jsonschema_description:"Wire format for every model without a styles entry: messages (Anthropic Messages), responses (OpenAI Responses), chat (OpenAI Chat Completions). Empty uses the family default."`
+	Styles   []string `koanf:"styles" jsonschema_description:"Wire format overrides as \"<model-id or family>=<style>\", e.g. \"grok-4.7=chat\" (model IDs contain dots, so this is a list, not a table)."`
 }
 
 // LFS is [lfs]. 0.1 supports GitHub LFS only (V6).
@@ -104,8 +112,12 @@ type Decisions struct {
 
 // Notify is [notify].
 type Notify struct {
-	Channel string `koanf:"channel" jsonschema:"enum=,enum=slack,enum=email,enum=github"`
-	Target  string `koanf:"target" jsonschema_description:"Slack webhook secret name, email address, or GitHub login, by channel."`
+	Channel    string `koanf:"channel" jsonschema:"enum=,enum=slack,enum=email,enum=github"`
+	Target     string `koanf:"target" jsonschema_description:"slack: name of the secret holding the webhook URL; email: recipient address; github: login to mention."`
+	Issue      string `koanf:"issue" jsonschema_description:"github channel: issue the mention comment is posted on, as owner/name#number."`
+	SMTPAddr   string `koanf:"smtp_addr" jsonschema_description:"email channel: SMTP server as host:port (STARTTLS)."`
+	From       string `koanf:"from" jsonschema_description:"email channel: sender address, also the SMTP user."`
+	SMTPSecret string `koanf:"smtp_secret" jsonschema_description:"email channel: name of the secret holding the SMTP password."`
 }
 
 // Budget is [budget].
@@ -200,6 +212,7 @@ func (c *Config) Clock() (Clock, error) { return NewClock(c.Time.TZ, c.Time.Busi
 var (
 	secretName = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
 	repoName   = regexp.MustCompile(`^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$`)
+	issueRef   = regexp.MustCompile(`^[A-Za-z0-9-]+/[A-Za-z0-9._-]+#[1-9][0-9]*$`)
 	apiStyles  = []string{"", "messages", "responses", "chat"}
 	families   = []string{"", string(verbs.FamilyAnthropic), string(verbs.FamilyOpenAI), string(verbs.FamilyGoogle), string(verbs.FamilyXAI), string(verbs.FamilyHostManaged)}
 )
@@ -246,9 +259,10 @@ func (c *Config) Validate() error {
 		if !slices.Contains(apiStyles, g.APIStyle) {
 			bad("[models.gateway] api_style = %q: want messages, responses, or chat", g.APIStyle)
 		}
-		for k, style := range g.Styles {
-			if style == "" || !slices.Contains(apiStyles, style) {
-				bad("[models.gateway.styles] %s = %q: want messages, responses, or chat", k, style)
+		for _, st := range g.Styles {
+			k, style, ok := strings.Cut(st, "=")
+			if !ok || k == "" || style == "" || !slices.Contains(apiStyles, style) {
+				bad("[models.gateway] styles entry %q: want \"<model-id or family>=messages|responses|chat\"", st)
 			}
 		}
 		if !secretName.MatchString(g.Secret) {
@@ -262,8 +276,20 @@ func (c *Config) Validate() error {
 			}
 		}
 	}
-	switch c.Notify.Channel {
-	case "", "slack", "email", "github":
+	switch n := c.Notify; n.Channel {
+	case "":
+	case "slack":
+		if !secretName.MatchString(n.Target) {
+			bad("[notify] channel = \"slack\" needs target = the name of the secret holding the webhook URL")
+		}
+	case "email":
+		if !strings.Contains(n.Target, "@") || n.SMTPAddr == "" || n.From == "" {
+			bad("[notify] channel = \"email\" needs target (recipient), smtp_addr, and from")
+		}
+	case "github":
+		if n.Target == "" || !issueRef.MatchString(n.Issue) {
+			bad("[notify] channel = \"github\" needs target (login) and issue = \"owner/name#number\"")
+		}
 	default:
 		bad("[notify] channel = %q: want slack, email, or github", c.Notify.Channel)
 	}

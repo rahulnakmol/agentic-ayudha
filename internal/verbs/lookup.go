@@ -90,3 +90,21 @@ func (l Layers) String() string {
 		return "none"
 	}
 }
+
+// FamilyOf infers a model's vendor family from its ID, the way the gateway's
+// owned_by reports it. The family is a property of the model, never of the
+// endpoint that serves it. It returns "" for an unrecognised ID.
+func FamilyOf(modelID string) Family {
+	id := strings.ToLower(modelID)
+	switch {
+	case strings.HasPrefix(id, "claude-"):
+		return FamilyAnthropic
+	case strings.HasPrefix(id, "gpt-"), strings.HasPrefix(id, "o1"), strings.HasPrefix(id, "o3"), strings.HasPrefix(id, "o4"):
+		return FamilyOpenAI
+	case strings.HasPrefix(id, "gemini-"):
+		return FamilyGoogle
+	case strings.HasPrefix(id, "grok-"):
+		return FamilyXAI
+	}
+	return ""
+}
