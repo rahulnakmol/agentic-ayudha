@@ -72,7 +72,8 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: false
-      # go test includes TestSkillLint (embed_test.go): the WP3.1 skill lint (internal/skills) over the embedded skills/.
+      # go test includes TestSkillLint (embed_test.go): the WP3.1 skill lint (internal/skills) over the embedded skills/,
+      # and tier 1 of the skill evals (internal/evals, TestTier1) over evals/cases (WP3.4).
       - name: Build, vet, test
         run: go build ./... && go vet ./... && go test ./...
       - name: Build matrix and binary size budget
@@ -363,7 +364,7 @@ jobs:
           retention-days: 7
 
   # ---- Promotion gates (workflow_dispatch only) -------------------------------------------------------
-  # rolling: the PR suite above + integration (race detector) + benchmarks.
+  # rolling: the PR suite above + integration (race detector) + benchmarks + evals-gate (tier-2 skill evals).
   # stable:  rolling + extended (live) integration + cross-OS smoke tests. Security scans run in `security`.
 
   integration:
@@ -401,6 +402,45 @@ jobs:
         with:
           name: benchmarks
           path: benchmarks.txt
+
+  # The commit being promoted (the promotion merge's second parent) must have tier-2 eval results that pass the
+  # WP3.4 bar and do not regress against main's baseline. Tier 2 itself runs in evals.yml, in the ai-gateway
+  # environment, which a promote/* branch cannot use; this job only reads the results artifacts.
+  evals-gate:
+    name: evals-gate
+    if: inputs.gate == 'rolling' || inputs.gate == 'stable'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      - name: Tier-2 results of the promoted commit against main's baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          src="$(git rev-parse HEAD^2 2>/dev/null || git rev-parse HEAD)"
+          main_sha="$(git rev-parse origin/main)"
+          fetch() { # fetch <sha>: download the eval-results-<sha> artifact of the latest evals.yml run on that commit
+            local run_id
+            run_id="$(gh run list --workflow evals.yml --commit "$1" --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+            [ -n "$run_id" ] && gh run download "$run_id" --name "eval-results-$1" --dir evals/results
+          }
+          [ -f "evals/results/$src.json" ] || fetch "$src" || true
+          if [ ! -f "evals/results/$src.json" ]; then
+            echo "::error::No tier-2 eval results for $src. Run 'gh workflow run evals.yml --ref <source branch>', wait for it, then re-run this gate."
+            exit 1
+          fi
+          [ -f "evals/results/$main_sha.json" ] || fetch "$main_sha" || echo "::notice::No tier-2 baseline for main ($main_sha); only the absolute bar applies."
+          go run ./internal/evals/cmd/eval -compare "evals/results/$src.json" -baseline "evals/results/$main_sha.json"
 
   extended-integration:
     name: extended-integration

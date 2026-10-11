@@ -1,0 +1,17 @@
+{
+  "number": 12,
+  "title": "Show empty-cart message",
+  "state": "open",
+  "body": "### summary\n\nAs a claimant, I want to see my empty list, so that I know where to start.\n\n### completion_goal\n\n1. [screenshot] state: cart is empty; expected: the \"Your cart is empty\" message and a Browse button\n2. [api-trace] state: POST /cart with no items; expected: 422 with code cart.empty\n\n### measure\n\ncriteria observed\n\n### threshold\n\n2 of 2\n\n### scenario\n\nOpen the list with no items.\n\n### environment\n\nstaging with seed data",
+  "labels": [
+    {
+      "name": "type:story"
+    },
+    {
+      "name": "status:planned"
+    },
+    {
+      "name": "effort:S"
+    }
+  ]
+}

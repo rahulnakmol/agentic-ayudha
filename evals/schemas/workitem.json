@@ -1,0 +1,19 @@
+{
+  "$comment": "A work item as internal/workitems.Item serialises it (WP2.1). Eval artifacts and tier-2 skill output validate against it.",
+  "type": "object",
+  "required": ["type", "title", "fields"],
+  "additionalProperties": false,
+  "properties": {
+    "type": {"type": "string", "enum": ["goal", "initiative", "feature", "story", "bug", "decision", "experiment", "release", "feedback", "incident"]},
+    "number": {"type": "integer", "minimum": 1},
+    "title": {"type": "string", "minLength": 1, "maxLength": 200},
+    "fields": {"type": "object", "additionalProperties": {"type": "string"}},
+    "labels": {"type": "array", "items": {"type": "string", "pattern": "^[a-z]+:[A-Za-z0-9-]+$"}},
+    "parent": {
+      "type": "object",
+      "required": ["number", "type"],
+      "additionalProperties": false,
+      "properties": {"number": {"type": "integer", "minimum": 1}, "type": {"type": "string"}}
+    }
+  }
+}

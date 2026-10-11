@@ -67,6 +67,8 @@ ts="$(date -u +%Y%m%dT%H%MZ)"; cand="promote/rolling-$ts"; wt="../wt-promote-rol
 git worktree add "$wt" -b "$cand" origin/rolling && cd "$wt"
 git merge --no-ff --signoff origin/dev -m "Rolling snapshot: $ts"
 git push origin "$cand"
+gh workflow run evals.yml --ref dev && sleep 15          # tier-2 skill evals of the dev tip, which evals-gate reads
+gh run watch "$(gh run list --workflow evals.yml --branch dev --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId')"
 gh workflow run ci.yml --ref "$cand" -f gate=rolling && sleep 15
 gh run watch "$(gh run list --workflow ci.yml --branch "$cand" --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId')" --exit-status
 git push origin HEAD:rolling                      # fast-forward to the gated commit
@@ -77,7 +79,9 @@ git push origin --delete "$cand" && cd - && git worktree remove "$wt" && git bra
 The rolling gate (`gate=rolling`) is the full PR suite (build matrix and size budget, unit tests, lint,
 generate drift, security scans, docs, and `release-snapshot`: a signed goreleaser snapshot that
 `install.sh` must accept while refusing tampered copies) plus `integration` (tests under the `integration` build
-tag, race detector) and `benchmarks`. A second promotion on the same day uses a `rolling-<date>.<n>` tag.
+tag, race detector), `benchmarks`, and `evals-gate`: the tier-2 skill eval results of the commit being promoted
+(from `evals.yml`, which runs on every push to `rolling` and `main` and nightly on `dev`) must pass the WP3.4 bar and
+not regress against `main`'s results. A second promotion on the same day uses a `rolling-<date>.<n>` tag.
 
 ### `rolling` → `main`
 

@@ -58,9 +58,9 @@ are never skipped. The full procedure, with commands, is in
 1. Build the candidate: a `promote/…` branch holding the exact non-fast-forward merge commit that will land
    (`Rolling snapshot: <timestamp>` or `Release: vX.Y.Z`, signed off).
 2. Gate it: `gh workflow run ci.yml --ref <candidate> -f gate=rolling` (unit, integration, benchmarks,
-   production validation) or `-f gate=stable` (all of that plus extended integration, security scans, and
-   cross-OS smoke tests). Wait with `gh run watch <id> --exit-status`. Any failure stops the promotion; fix it
-   through `dev`.
+   production validation, and `evals-gate`, which needs `evals.yml` results for the promoted commit) or
+   `-f gate=stable` (all of that plus extended integration, security scans, and cross-OS smoke tests). Wait with
+   `gh run watch <id> --exit-status`. Any failure stops the promotion; fix it through `dev`.
 3. Land it: push that same commit to `rolling` or `main` (a fast-forward), then tag: lightweight
    `rolling-<date>`, or annotated `vX.Y.Z` on `main`. Every commit on `main` is tagged and released.
 4. A `v*` tag push runs `release.yml` end to end (tag check, signed build, provenance, install check, smoke

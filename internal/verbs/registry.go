@@ -294,7 +294,7 @@ var LayerTable = []Layer{
 	{L02, "Interaction / API boundary", CodeArchitect, []string{"cmd/**", "internal/cli/**", "internal/mcp/**"}},
 	{L03, "Application / workflow", EngineeringManager, []string{"internal/verbs/**", "internal/workitems/**", "internal/loops/**", "loops/**", "work-items/**", "skills/**", "seats/**"}},
 	{L04, "Domain / policy", QualityArchitect, []string{"internal/verify/**", "internal/proof/**", "ops/**", "CONSTRAINTS.md"}},
-	{L05, "Intelligence", AINativeEngineer, []string{"internal/models/**", "evals/**"}},
+	{L05, "Intelligence", AINativeEngineer, []string{"internal/models/**", "internal/evals/**", "evals/**"}},
 	{L06, "Contracts / integration", CodeArchitect, []string{"internal/github/**", "internal/hosts/**", "internal/notify/**", "hosts/**"}},
 	{L07, "Operational data / state", AINativeEngineer, []string{"internal/ledger/**", "internal/config/**", "internal/secrets/**", "internal/identity/**", "internal/actions/**"}},
 	{L08, "Analytics / reporting", RevenueArchitect, []string{"internal/telemetry/**"}},

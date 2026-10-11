@@ -1,0 +1,11 @@
+# The stub skill drafts a Ready Story from a request. output/ is a recorded run (tier 1); tier 2 reruns it.
+skill = "stub"
+description = "Draft a Ready Story for a CSV export request."
+input = "input.txt"
+artifacts = ["output/issue.json"]
+schemas = [{ file = "output/issue.json", schema = "evals/schemas/workitem.json" }]
+ready = ["output/issue.json"]
+
+[tier2]
+rubric = "rubric.md"
+lane = "chore"
