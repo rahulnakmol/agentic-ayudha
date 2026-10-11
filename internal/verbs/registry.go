@@ -143,6 +143,13 @@ type Input struct {
 	Positional  bool     // positional argument (in declaration order) rather than --flag
 	Enum        []string // allowed values when Type == TypeEnum
 	Description string
+	// HumanOnly inputs act under the human identity (tell --publish, decide
+	// --accept); the MCP server never exposes them (WP3.3).
+	HumanOnly bool
+	// ReadOnlyValues pins the input of an ExposeRead command to the values that
+	// keep it read-only while [mcp] expose_writes is false (WP3.3), e.g.
+	// ready --check = "true". Bool inputs use "true" or "false".
+	ReadOnlyValues []string
 }
 
 // GateID identifies a precondition a command checks before it acts.
@@ -442,6 +449,10 @@ func flag(name string, t InputType, desc string) Input {
 	return Input{Name: name, Type: t, Description: desc}
 }
 
+func humanOnly(in Input) Input { in.HumanOnly = true; return in }
+
+func readOnlyWith(in Input, values ...string) Input { in.ReadOnlyValues = values; return in }
+
 func enumIn(name string, required, positional bool, desc string, values ...string) Input {
 	return Input{Name: name, Type: TypeEnum, Required: required, Positional: positional, Enum: values, Description: desc}
 }
@@ -484,7 +495,7 @@ var Verbs = []Command{
 		Seat:    Founder, Lane: LaneSpec, Layers: AllLayers(),
 		Inputs: []Input{
 			pos("decision", TypeIssue, "Decision issue."),
-			flag("accept", TypeString, "Option to accept (human identity only)."),
+			humanOnly(flag("accept", TypeString, "Option to accept (human identity only).")),
 			flag("waiver", TypeString, "Floor to waive; creates a floor-waiver Decision."),
 		},
 		Outputs:  []string{"decision", "waiver"},
@@ -559,7 +570,7 @@ var Verbs = []Command{
 		Summary: "Push, get, verify, list, or purge proof packs on the ledger branch.",
 		Seat:    QualityArchitect, Lane: LaneChore, Layers: AllLayers(),
 		Inputs: []Input{
-			enumIn("action", true, true, "Proof operation.", "push", "get", "verify", "list", "purge"),
+			readOnlyWith(enumIn("action", true, true, "Proof operation.", "push", "get", "verify", "list", "purge"), "get", "verify", "list"),
 			optPos("story", TypeIssue, "Story whose pack to operate on."),
 		},
 		Outputs:  []string{"pack", "verification-report"},
@@ -571,7 +582,7 @@ var Verbs = []Command{
 		Seat:    ProductStrategist, Lane: LaneChore, Layers: AllLayers(),
 		Inputs: []Input{
 			pos("issue", TypeIssue, "Work item to make Ready."),
-			flag("check", TypeBool, "Validate only; write nothing."),
+			readOnlyWith(flag("check", TypeBool, "Validate only; write nothing."), "true"),
 		},
 		Outputs:  []string{"status:ready", "ready-snapshot"},
 		Gates:    []GateID{GateValidator},
@@ -679,7 +690,7 @@ var Verbs = []Command{
 		Seat:    EngineeringManager, Lane: LaneChore, Layers: AllLayers(),
 		Inputs: []Input{
 			optPos("issue", TypeIssue, "Goal, Initiative, or Feature to roll up; defaults to all Goals."),
-			flag("digest", TypeBool, "Send the digest through [notify]."),
+			readOnlyWith(flag("digest", TypeBool, "Send the digest through [notify]."), "false"),
 			flag("all", TypeBool, "Iterate [fleet] repos."),
 		},
 		Outputs:  []string{"rollup", "goal-comment", "digest"},
@@ -739,7 +750,7 @@ var Verbs = []Command{
 		Seat:    Marketer, Lane: LaneSpec, Layers: OnlyLayers(L01),
 		Inputs: []Input{
 			enumIn("kind", true, true, "What to write.", "docs", "guide", "changelog", "release", "launch", "brand"),
-			flag("publish", TypeBool, "Publish (human identity only)."),
+			humanOnly(flag("publish", TypeBool, "Publish (human identity only).")),
 		},
 		Outputs:  []string{"draft", "published-content"},
 		Gates:    []GateID{GatePack, GateHumanIdentity},
@@ -778,7 +789,7 @@ var Verbs = []Command{
 		Summary: "Check tools, tokens, identity, config, host installs, and existing CI; --fix re-syncs copies after showing a diff.",
 		Seat:    DevOps, Lane: LaneChore, Layers: OnlyLayers(L09),
 		Inputs: []Input{
-			flag("fix", TypeBool, "Re-sync copies and adapters after showing a diff."),
+			readOnlyWith(flag("fix", TypeBool, "Re-sync copies and adapters after showing a diff."), "false"),
 			flag("all", TypeBool, "Iterate [fleet] repos."),
 		},
 		Outputs:  []string{"report"},

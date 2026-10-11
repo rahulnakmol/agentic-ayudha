@@ -302,3 +302,37 @@ func checkSkillCopies(_ context.Context, p *Probe) Result {
 	}
 	return Result{Status: Pass, Detail: fmt.Sprintf("%d skill(s) for %s in sync with %s (skills %s)", len(lock.Skills), strings.Join(lock.Hosts, ", "), hosts.LockPath, lock.SkillsVersion)}
 }
+
+// checkMCP checks each installed host's aayudha MCP registration: present, and
+// its absolute binary path runs and reports this aayu's version (WP3.3).
+func checkMCP(ctx context.Context, p *Probe) Result {
+	if p.Root == "" {
+		return Result{Status: Pass, Detail: "not in a repository"}
+	}
+	lock, ok, err := hosts.ReadLock(p.Root)
+	if err != nil || !ok {
+		return Result{Status: Pass, Detail: "no MCP registrations (skills are not installed; aayu install)"}
+	}
+	var problems, fine []string
+	for _, r := range hosts.Registrations(p.Root, p.Getenv("HOME"), lock.Hosts) {
+		switch {
+		case r.Err != nil:
+			problems = append(problems, fmt.Sprintf("%s: %s: %v", r.Host, r.File, r.Err))
+		case r.Command == "":
+			problems = append(problems, fmt.Sprintf("%s: no %q server in %s", r.Host, hosts.ServerName, r.File))
+		default:
+			out, err := p.Exec(ctx, "", r.Command, "version")
+			if err != nil {
+				problems = append(problems, fmt.Sprintf("%s: %s does not run (%v)", r.Host, r.Command, err))
+			} else if !strings.Contains(out, " "+p.Version) {
+				problems = append(problems, fmt.Sprintf("%s: %s reports %q; this aayu is %s", r.Host, r.Command, strings.TrimSpace(out), p.Version))
+			} else {
+				fine = append(fine, string(r.Host))
+			}
+		}
+	}
+	if len(problems) > 0 {
+		return Result{Status: Fail, Detail: "MCP registrations need aayu install --apply", Lines: problems}
+	}
+	return Result{Status: Pass, Detail: fmt.Sprintf("aayudha MCP server registered for %s at this aayu's version", strings.Join(fine, ", "))}
+}
