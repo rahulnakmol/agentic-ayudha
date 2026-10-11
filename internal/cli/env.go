@@ -46,6 +46,7 @@ type Options struct {
 	Executable func() (string, error)
 	SelfUpdate SelfUpdateOptions
 	GitHubAPI  string                                                                      // default https://api.github.com
+	GitHubGap  time.Duration                                                               // gap between GitHub writes; 0 is the client default (1s), negative none (tests)
 	GHToken    func(ctx context.Context) (string, error)                                   // `gh auth token`; nil runs gh
 	Secrets    *secrets.Store                                                              // nil uses keychain, env, then the age file
 	LookPath   func(string) (string, error)                                                // nil uses exec.LookPath (doctor)

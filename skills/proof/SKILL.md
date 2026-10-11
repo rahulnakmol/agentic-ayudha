@@ -27,6 +27,11 @@ aayu:
       required: false
       positional: true
       description: "Story whose pack to operate on."
+    - name: media
+      type: bool
+      required: false
+      positional: false
+      description: "Include proof media; on a public repository this needs a private bucket in [proof] media (V3)."
   outputs:
     - "pack"
     - "verification-report"

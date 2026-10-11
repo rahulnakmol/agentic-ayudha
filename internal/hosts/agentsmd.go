@@ -72,3 +72,20 @@ func lineIndex(s, line string, from int) int {
 	}
 	return -1
 }
+
+// RemoveAgentsSection returns existing without section id (both markers and
+// everything between them) and the blank lines before it; content outside the
+// markers is unchanged. uninit (WP2.5) uses it to take back init's section.
+func RemoveAgentsSection(existing []byte, id string) []byte {
+	s := string(existing)
+	i, j, ok := findSection(s, id)
+	if !ok {
+		return existing
+	}
+	head := strings.TrimRight(s[:i], "\n")
+	tail := strings.TrimLeft(s[j:], "\n")
+	if tail != "" {
+		head += "\n\n"
+	}
+	return []byte(strings.TrimRight(head+tail, "\n") + "\n")
+}

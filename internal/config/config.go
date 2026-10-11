@@ -35,6 +35,14 @@ type Config struct {
 	Identity      Identity               `koanf:"identity" jsonschema_description:"Bot identity for agent lanes and CI (WP1.4)."`
 	Telemetry     Telemetry              `koanf:"telemetry" jsonschema_description:"Traces of verb runs (WP1.8): a local file by default; nothing leaves the machine unless otlp_endpoint is set."`
 	Fleet         Fleet                  `koanf:"fleet" jsonschema_description:"User-level only: the product repos that status --all and doctor --all iterate."`
+	Branches      Branches               `koanf:"branches" jsonschema_description:"The product's branches that play dev, rolling, and main when they have other names (written by init; nothing is renamed)."`
+}
+
+// Branches is [branches] (WP2.5 coexistence). Empty means the branch of the same name.
+type Branches struct {
+	Dev     string `koanf:"dev" jsonschema_description:"Integration branch; pull requests target it."`
+	Rolling string `koanf:"rolling" jsonschema_description:"Canary snapshot branch; empty when the product has none."`
+	Main    string `koanf:"main" jsonschema_description:"Stable release branch."`
 }
 
 // Seat is [seats.<name>].

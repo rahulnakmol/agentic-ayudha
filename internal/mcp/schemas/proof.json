@@ -21,6 +21,11 @@
       ],
       "x-aayu-type": "enum"
     },
+    "media": {
+      "description": "Include proof media; on a public repository this needs a private bucket in [proof] media (V3).",
+      "type": "boolean",
+      "x-aayu-type": "bool"
+    },
     "story": {
       "description": "Story whose pack to operate on.",
       "pattern": "^(#?[1-9][0-9]*|https://github\\.com/[^/]+/[^/]+/issues/[1-9][0-9]*)$",

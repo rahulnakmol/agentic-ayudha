@@ -181,6 +181,9 @@ func failing(t *testing.T) map[string]func(*Probe) {
 		"mcp": func(p *Probe) {
 			overlay(p, map[string]string{"/usr/bin/aayu version": "aayu 1.1.0\n"})
 		},
+		"ledger-media": func(p *Probe) {
+			overlay(p, map[string]string{"git ls-tree --name-only origin/ledger": ".gitattributes\n.lfsconfig\nREADME.md\n"})
+		},
 		"skills-copies": func(p *Probe) {
 			p.Root = repoWith(t, map[string]string{".aayudha/config.toml": "version = 1\n",
 				".aayudha/lock.toml":             "version = 1\nhosts = [\"claude\"]\n[skills]\nready = { version = \"0.0.0\", sha256 = \"x\" }\nstatus = { version = \"0.0.0\", sha256 = \"x\" }\n",
@@ -243,7 +246,7 @@ func TestBlockingOnlyOnFloorFailures(t *testing.T) {
 	for id, f := range failing(t) {
 		p := healthy(t)
 		f(p)
-		want := id == "git" || id == "git-lfs" || id == "config" || id == "schema"
+		want := id == "git" || id == "git-lfs" || id == "config" || id == "schema" || id == "ledger-media"
 		if got := Blocking(Run(ctx, p)); got != want {
 			t.Errorf("%s failing: blocking = %v, want %v", id, got, want)
 		}

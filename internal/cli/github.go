@@ -16,7 +16,7 @@ func (e *Env) newGitHub(tok identity.Token, ident, capability string) (*github.C
 	if err != nil {
 		return nil, err
 	}
-	o := github.Options{Token: tok.Value, Log: log, Identity: ident, Capability: capability, Transport: e.HTTP.Transport}
+	o := github.Options{Token: tok.Value, Log: log, Identity: ident, Capability: capability, Transport: e.HTTP.Transport, WriteGap: e.GitHubGap}
 	if e.GitHubAPI != "" {
 		o.BaseURL = e.GitHubAPI
 	}

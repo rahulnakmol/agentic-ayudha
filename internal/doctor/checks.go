@@ -336,3 +336,35 @@ func checkMCP(ctx context.Context, p *Probe) Result {
 	}
 	return Result{Status: Pass, Detail: fmt.Sprintf("aayudha MCP server registered for %s at this aayu's version", strings.Join(fine, ", "))}
 }
+
+// checkLedgerMedia catches a visibility change after init (V3, WP2.5): a public
+// repository whose ledger tracks proof media in Git LFS is a floor-blocking
+// failure, because LFS objects cannot be purged from GitHub.
+func checkLedgerMedia(ctx context.Context, p *Probe) Result {
+	if p.Root == "" {
+		return Result{Status: Pass, Detail: "not in a repository"}
+	}
+	out, err := p.Exec(ctx, p.Root, "git", "ls-tree", "--name-only", "origin/ledger")
+	if err != nil {
+		return Result{Status: Pass, Detail: "no ledger branch fetched (origin/ledger)"}
+	}
+	names := strings.Fields(out)
+	if !slices.Contains(names, ".lfsconfig") && !slices.Contains(names, ".gitattributes") {
+		return Result{Status: Pass, Detail: "ledger stores no proof media in Git LFS"}
+	}
+	if p.API == nil || p.Repo == "" {
+		return Result{Status: Warn, Detail: "ledger tracks proof media in Git LFS; repository visibility unknown (no GitHub token or repository)"}
+	}
+	var repo struct {
+		Private bool `json:"private"`
+	}
+	if err := p.API(ctx, "/repos/"+p.Repo, &repo); err != nil {
+		return Result{Status: Warn, Detail: "ledger tracks proof media in Git LFS; repository visibility unknown: " + err.Error()}
+	}
+	if repo.Private {
+		return Result{Status: Pass, Detail: "private repository: ledger proof media in Git LFS"}
+	}
+	return Result{Status: Fail, Blocking: true,
+		Detail: "repository is public but its ledger tracks proof media in Git LFS (V3): LFS objects cannot be purged from GitHub",
+		Lines:  []string{"set [proof] media to a private bucket, remove .lfsconfig and the LFS lines of .gitattributes from ledger, and purge media already pushed"}}
+}
