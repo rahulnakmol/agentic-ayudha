@@ -1,0 +1,5 @@
+# Local aayudha runtime state (written by aayu init); never committed.
+telemetry/
+state/
+ledger-outbox/
+config.local.toml
