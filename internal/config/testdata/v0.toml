@@ -1,0 +1,11 @@
+# A config written before config versioning (plan v0.1): no `version` key, and
+# [lfs] server, which 0.1 removed (V6).
+[lfs]
+server = "github"
+
+[budget]
+per_story_usd = 12.5
+
+[time]
+tz = "Asia/Kolkata"
+business_hours = "Mon-Fri 10:00-19:00"

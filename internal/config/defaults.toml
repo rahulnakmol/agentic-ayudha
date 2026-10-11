@@ -64,3 +64,19 @@ ci_minutes_month = 2000
 [proof]
 media = ""
 retention_days = 90
+
+# Settings WP1.2 onward read that CONSTRAINTS.md does not render.
+
+# GitHub LFS storage (V6: GitHub LFS only in 0.1).
+[lfs]
+quota_warn_percent = 80 # doctor warns at 80 % of the LFS quota (WP1.7)
+
+# Decision SLAs, in business hours of [time] (V8, WP5.6).
+[decisions]
+sla_hours = 24
+provisional_after_hours = 48
+
+# Business hours for SLA clocks and paging windows (WP1.2). DST-aware through the IANA zone.
+[time]
+tz = "Europe/London"
+business_hours = "Mon-Fri 09:00-18:00"
