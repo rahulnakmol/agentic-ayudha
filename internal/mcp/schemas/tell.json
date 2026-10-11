@@ -20,6 +20,7 @@
     "publish": {
       "description": "Publish (human identity only).",
       "type": "boolean",
+      "x-aayu-human-only": true,
       "x-aayu-type": "bool"
     }
   },

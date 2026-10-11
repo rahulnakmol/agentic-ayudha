@@ -692,3 +692,54 @@ func Render(edits []Edit, unified func(old, new string) string) string {
 	}
 	return b.String()
 }
+
+// Registration is the aayudha MCP server entry install wrote for one host.
+type Registration struct {
+	Host    verbs.HostID
+	File    string // as shown to a human: repository-relative, or ~/ for home files
+	Command string // "" when the entry is missing
+	Err     error  // the file could not be read or parsed
+}
+
+// Registrations reads the aayudha MCP server entry of each host in the lock.
+func Registrations(root, home string, lockHosts []string) []Registration {
+	var out []Registration
+	for _, h := range lockHosts {
+		var rel, key string
+		isHome := false
+		switch verbs.HostID(h) {
+		case verbs.HostClaude:
+			rel, key = ClaudeMCP, "mcpServers"
+		case verbs.HostCursor:
+			rel, key = CursorMCP, "mcpServers"
+		case verbs.HostAmp:
+			rel, key, isHome = AmpSettings, "amp.mcpServers", true
+		default:
+			continue
+		}
+		r := Registration{Host: verbs.HostID(h), File: (Edit{Path: rel, Home: isHome}).Display()}
+		base := root
+		if isHome {
+			base = home
+		}
+		b, err := os.ReadFile(filepath.Join(base, filepath.FromSlash(rel)))
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			r.Err = err
+		} else if err == nil {
+			var raw map[string]json.RawMessage
+			var servers map[string]struct {
+				Command string `json:"command"`
+			}
+			if err := json.Unmarshal(b, &raw); err != nil {
+				r.Err = err
+			} else if v := raw[key]; len(v) > 0 {
+				if err := json.Unmarshal(v, &servers); err != nil {
+					r.Err = err
+				}
+				r.Command = servers[ServerName].Command
+			}
+		}
+		out = append(out, r)
+	}
+	return out
+}

@@ -441,6 +441,12 @@ func schema(c verbs.Command) ([]byte, error) {
 		default:
 			p["type"] = "string"
 		}
+		if in.HumanOnly {
+			p["x-aayu-human-only"] = true
+		}
+		if len(in.ReadOnlyValues) > 0 {
+			p["x-aayu-read-only-values"] = in.ReadOnlyValues
+		}
 		props[in.Name] = p
 		if in.Required {
 			required = append(required, in.Name)

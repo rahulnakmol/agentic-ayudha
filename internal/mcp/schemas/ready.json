@@ -7,6 +7,9 @@
     "check": {
       "description": "Validate only; write nothing.",
       "type": "boolean",
+      "x-aayu-read-only-values": [
+        "true"
+      ],
       "x-aayu-type": "bool"
     },
     "issue": {

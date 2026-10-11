@@ -12,6 +12,9 @@
     "digest": {
       "description": "Send the digest through [notify].",
       "type": "boolean",
+      "x-aayu-read-only-values": [
+        "false"
+      ],
       "x-aayu-type": "bool"
     },
     "issue": {
