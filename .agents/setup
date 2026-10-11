@@ -49,6 +49,16 @@ if [[ ! -x /usr/local/go/bin/go ]] || ! /usr/local/go/bin/go version | grep -q "
 fi
 go version
 
+# --- git-lfs -----------------------------------------------------------------
+# Required by ledger operations (BUILD-PLAN ground rule 2); `aayu doctor` fails its floor check without it.
+step "Checking git-lfs"
+if ! command -v git-lfs >/dev/null 2>&1; then
+  step "Installing git-lfs (apt)"
+  sudo apt-get update -qq
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git-lfs
+fi
+git lfs version
+
 # --- Dependencies ------------------------------------------------------------
 # Conditional so the script is correct before the first lockfile lands and
 # stays frozen-lockfile-true once it does.
