@@ -35,6 +35,14 @@ plan lists in §2; the rest are pulled in by them.
 | `filippo.io/hpke` | v0.4.0 | BSD-3-Clause | Via age | <https://github.com/FiloSottile/hpke> |
 | `golang.org/x/crypto` | v0.55.0 | BSD-3-Clause | Via age | <https://go.googlesource.com/crypto> |
 | `golang.org/x/sys` | v0.47.0 | BSD-3-Clause | Via go-keyring and age | <https://go.googlesource.com/sys> |
+| `go.opentelemetry.io/otel` | v1.46.0 | Apache-2.0 | Traces of verb runs (WP1.8), direct; with `otel/sdk` and `otel/trace` | <https://github.com/open-telemetry/opentelemetry-go> |
+| `go.opentelemetry.io/otel/sdk` | v1.46.0 | Apache-2.0 | Tracer provider (WP1.8), direct | <https://github.com/open-telemetry/opentelemetry-go> |
+| `go.opentelemetry.io/otel/trace` | v1.46.0 | Apache-2.0 | Trace API (WP1.8), direct | <https://github.com/open-telemetry/opentelemetry-go> |
+| `go.opentelemetry.io/otel/metric` | v1.46.0 | Apache-2.0 | Via otel | <https://github.com/open-telemetry/opentelemetry-go> |
+| `go.opentelemetry.io/auto/sdk` | v1.2.1 | Apache-2.0 | Via otel | <https://github.com/open-telemetry/opentelemetry-go-instrumentation> |
+| `github.com/go-logr/logr` | v1.4.4 | Apache-2.0 | Via otel | <https://github.com/go-logr/logr> |
+| `github.com/go-logr/stdr` | v1.2.2 | Apache-2.0 | Via otel | <https://github.com/go-logr/stdr> |
+| `github.com/cespare/xxhash/v2` | v2.3.0 | MIT | Via otel/sdk | <https://github.com/cespare/xxhash> |
 
 ### Shelled out by `self-update` (not bundled)
 
@@ -121,7 +129,6 @@ CI scan when the component is actually added.
 | `github.com/modelcontextprotocol/go-sdk` | MCP server (WP3.3) | To be confirmed |
 | `github.com/charmbracelet/bubbletea` | `grill` TUI (WP5.3) | MIT |
 | `modernc.org/sqlite` | `measure` snapshots, pure Go (WP7.2) | BSD-3-Clause |
-| `go.opentelemetry.io/otel` | Traces (WP1.8) | Apache-2.0 |
 | `github.com/go-git/go-git` | Read-only git access | Apache-2.0 |
 | `github.com/yuin/goldmark` | Markdown parsing | MIT |
 

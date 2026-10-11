@@ -1,0 +1,88 @@
+## binary pass
+PASS  binary  aayu 1.2.0 is the latest release
+## binary fail
+WARN  binary  aayu 1.1.0 is installed; v1.2.0 is available (aayu self-update)
+## git pass
+PASS  git  git 2.45 (>= 2.40 required)
+## git fail
+FAIL  git  git 2.39 is too old; git >= 2.40 is required for linked worktrees [blocking]
+## git-lfs pass
+PASS  git-lfs  git-lfs/3.5.1
+## git-lfs fail
+FAIL  git-lfs  git-lfs not found; it is required for ledger operations (https://git-lfs.com) [blocking]
+## gh pass
+PASS  gh  gh found (optional)
+## gh fail
+WARN  gh  gh not found (optional: token source via `gh auth token`, and release provenance checks in self-update)
+## token pass
+PASS  token  token from AAYU_GITHUB_TOKEN -> rahulnakmol (scopes: read:org, repo)
+## token fail
+WARN  token  token from AAYU_GITHUB_TOKEN -> rahulnakmol (scopes: admin:org, delete_repo, repo, workflow)
+               token has the admin:org scope: administrative access beyond what verbs need; only init needs admin, and it confirms on a TTY
+               token has the delete_repo scope: it can delete repositories; no aayudha verb needs it
+               token has the workflow scope: it can rewrite GitHub Actions workflows, including the gates; drop it unless you are running init --gates
+## bot-identity pass
+PASS  bot-identity  bot identity: GitHub App aayudha-bot[bot] (laptops mint tokens through the aayudha-token.yml broker)
+## bot-identity fail
+WARN  bot-identity  bot identity: not configured; agent writes run under the human identity, tagged identity:human-fallback
+## config pass
+PASS  config  config is valid
+## config fail
+FAIL  config  config is invalid [blocking]
+                config: .aayudha/config.toml: '' has invalid keys: colour
+## schema pass
+PASS  schema  repository schema current (config v1)
+## schema fail
+FAIL  schema  repository schema is newer than this aayu: .aayudha/config.toml is config schema v2, this aayu supports up to v1; run `aayu self-update` [blocking]
+## host pass
+PASS  host  host amp (from AMP_THREAD_ID)
+## host fail
+WARN  host  no host detected (Amp, Cursor, or Claude Code); pass --host when running outside one
+## secrets pass
+PASS  secrets  secrets backends: env, file
+                 unavailable: keychain (no Secret Service)
+## secrets fail
+WARN  secrets  secrets backends: env; no writable backend (secrets can come only from AAYU_SECRET_* variables)
+                 unavailable: keychain (no Secret Service)
+## skills-copies pass
+N/A  skills-copies  skill copies in .agents/skills and .claude/skills against lock.toml: not yet available (WP3.2)
+## mcp pass
+N/A  mcp  MCP registrations: not yet available (WP3.3)
+## lfs-quota pass
+N/A  lfs-quota  LFS quota on the ledger branch: not yet available (WP4.2)
+## issue-types pass
+PASS  issue-types  organization repository: GitHub issue types are available
+## issue-types fail
+WARN  issue-types  could not check issue-type support (no GitHub token or repository)
+## integrations pass
+PASS  integrations  1 integration(s); provider reachability and real key scope: not yet available (WP5.2)
+                      posthog: secret "posthog" in env, configured scope read
+## integrations fail
+WARN  integrations  1 integration(s); provider reachability and real key scope: not yet available (WP5.2)
+                      posthog: secret "posthog" is not set (aayu auth set-secret posthog, or AAYU_SECRET_POSTHOG)
+## optional-tools pass
+PASS  optional-tools  all optional tools found
+## optional-tools fail
+WARN  optional-tools  9 optional tool(s) missing; floors that need them are skipped: playwright, axe, gitleaks, osv-scanner, zap.sh, k6, lighthouse, guidepup, impeccable
+## worktrees pass
+PASS  worktrees  no leaked worktrees
+## worktrees fail
+WARN  worktrees  1 leaked worktree(s); remove them with git worktree prune (aayu gc, WP5.5)
+                   /tmp/wt-x (gitdir file points to non-existent location)
+## leases pass
+N/A  leases  stale story leases: not yet available (WP5.5)
+## coexistence pass
+PASS  coexistence  coexistence report: nothing to coexist with
+## coexistence fail
+WARN  coexistence  coexistence report: 2 name collision(s) init must resolve
+                     existing workflow aayudha-token.yml (checks: mint): init leaves it byte-identical and adds aayudha/* checks alongside
+                     existing workflow ci.yml (checks: build, aayudha/test): init leaves it byte-identical and adds aayudha/* checks alongside
+                     existing branches outside dev/rolling/main/ledger: master
+                     no dev branch: init writes [branches] dev = "master" to config instead of renaming anything
+                     existing rulesets: protect-master; init adds its own alongside
+                     workflow aayudha-token.yml already exists; init installs a file with that name
+                     check "aayudha/test" in ci.yml uses the aayudha/ prefix that init registers
+## telemetry pass
+PASS  telemetry  traces to .aayudha/telemetry/traces.jsonl; nothing leaves this machine
+## telemetry fail
+PASS  telemetry  traces disabled

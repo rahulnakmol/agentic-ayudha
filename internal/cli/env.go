@@ -9,9 +9,12 @@ import (
 	"os"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
+	"github.com/rahulnakmol/agentic-ayudha/internal/telemetry"
 )
 
 // IO is where a command reads and writes. Commands never touch os.Stdin,
@@ -41,9 +44,11 @@ type Options struct {
 	Now        func() time.Time
 	Executable func() (string, error)
 	SelfUpdate SelfUpdateOptions
-	GitHubAPI  string                                    // default https://api.github.com
-	GHToken    func(ctx context.Context) (string, error) // `gh auth token`; nil runs gh
-	Secrets    *secrets.Store                            // nil uses keychain, env, then the age file
+	GitHubAPI  string                                                                      // default https://api.github.com
+	GHToken    func(ctx context.Context) (string, error)                                   // `gh auth token`; nil runs gh
+	Secrets    *secrets.Store                                                              // nil uses keychain, env, then the age file
+	LookPath   func(string) (string, error)                                                // nil uses exec.LookPath (doctor)
+	Exec       func(ctx context.Context, dir, name string, args ...string) (string, error) // nil runs the command (doctor)
 }
 
 // Globals are the global flags shared by every command.
@@ -65,6 +70,9 @@ type Env struct {
 	Options
 	config  *config.Loaded // loaded on first use by Config
 	actions *actions.Log   // opened on first use by Actions
+
+	telemetry *telemetry.Telemetry
+	span      trace.Span
 }
 
 func newEnv(io IO, opts Options) (*Env, error) {
