@@ -48,16 +48,17 @@ type Comment struct {
 
 // Issue is an issue with its labels, comments, and sub-issues.
 type Issue struct {
-	ID       int64      `json:"id"`
-	Number   int        `json:"number"`
-	Title    string     `json:"title"`
-	Body     string     `json:"body"`
-	State    string     `json:"state"`
-	Labels   []Label    `json:"labels"`
-	Type     *IssueType `json:"type,omitempty"`
-	Comments []*Comment `json:"-"`
-	Subs     []int      `json:"-"`
-	Parent   int        `json:"-"`
+	ID        int64      `json:"id"`
+	Number    int        `json:"number"`
+	Title     string     `json:"title"`
+	Body      string     `json:"body"`
+	State     string     `json:"state"`
+	Labels    []Label    `json:"labels"`
+	Type      *IssueType `json:"type,omitempty"`
+	CreatedAt string     `json:"created_at"`
+	Comments  []*Comment `json:"-"`
+	Subs      []int      `json:"-"`
+	Parent    int        `json:"-"`
 }
 
 // Request is one recorded request.
@@ -137,7 +138,7 @@ func (g *GitHub) AddIssue(title, body string, labels ...string) *Issue {
 func (g *GitHub) addIssue(title, body string, labels []string) *Issue {
 	g.seq++
 	n := len(g.Issues) + 1
-	is := &Issue{ID: g.seq, Number: n, Title: title, Body: body, State: "open"}
+	is := &Issue{ID: g.seq, Number: n, Title: title, Body: body, State: "open", CreatedAt: "2026-10-12T09:00:00Z"}
 	for _, l := range labels {
 		is.Labels = append(is.Labels, g.label(l))
 	}
@@ -429,7 +430,9 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 	case m == "GET" && p == repo+"/issues":
 		out := []*Issue{}
 		for n := 1; n <= len(g.Issues); n++ {
-			if is := g.Issues[n]; is != nil && (r.URL.Query().Get("state") == "all" || is.State == "open") {
+			want := r.URL.Query().Get("labels")
+			if is := g.Issues[n]; is != nil && (r.URL.Query().Get("state") == "all" || is.State == "open") &&
+				(want == "" || slices.ContainsFunc(is.Labels, func(l Label) bool { return l.Name == want })) {
 				out = append(out, is)
 			}
 		}

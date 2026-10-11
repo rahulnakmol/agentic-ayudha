@@ -9,6 +9,14 @@
       "type": "boolean",
       "x-aayu-type": "bool"
     },
+    "apply": {
+      "description": "Post the replace-in-place Goal comments and close Features the parent-close rule allows.",
+      "type": "boolean",
+      "x-aayu-read-only-values": [
+        "false"
+      ],
+      "x-aayu-type": "bool"
+    },
     "digest": {
       "description": "Send the digest through [notify].",
       "type": "boolean",

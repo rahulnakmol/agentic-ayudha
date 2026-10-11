@@ -14,6 +14,8 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/models"
+	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
 	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
 	"github.com/rahulnakmol/agentic-ayudha/internal/telemetry"
 )
@@ -37,15 +39,17 @@ type BuildInfo struct {
 // Options are the process-level dependencies of a run. Zero values use the real
 // process environment; tests replace them.
 type Options struct {
-	Build      BuildInfo
-	Getenv     func(string) string
-	Environ    []string // KEY=value pairs for the config env layer; nil with a nil Getenv means os.Environ
-	Dir        string   // working directory; "" means os.Getwd
-	HTTP       *http.Client
-	Now        func() time.Time
-	Executable func() (string, error)
-	SelfUpdate SelfUpdateOptions
-	GitHubAPI  string // default https://api.github.com
+	Build       BuildInfo
+	Getenv      func(string) string
+	Environ     []string // KEY=value pairs for the config env layer; nil with a nil Getenv means os.Environ
+	Dir         string   // working directory; "" means os.Getwd
+	HTTP        *http.Client
+	Now         func() time.Time
+	Executable  func() (string, error)
+	SelfUpdate  SelfUpdateOptions
+	GitHubAPI   string                                             // default https://api.github.com
+	NotifySink  notify.Sink                                        // replaces the [notify] channel (tests)
+	ModelClient func(route models.Route, key string) models.Client // replaces the model provider (tests)
 	// AppManifestCode replaces the browser step of init --identity (tests).
 	AppManifestCode func(ctx context.Context, postURL string, manifest func(redirect string) string) (string, error)
 	GitHubGap       time.Duration                                                               // gap between GitHub writes; 0 is the client default (1s), negative none (tests)

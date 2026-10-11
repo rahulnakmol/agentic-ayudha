@@ -11,6 +11,7 @@ type LabelDef struct {
 const (
 	LabelIntake        = "intake"                  // filed through an intake form; triage reads only these (WP2.9)
 	LabelNeedsGrill    = "needs:grill"             // accepted Feedback waiting for grill to create its Feature
+	LabelNeedsBug      = "needs:bug"               // an Incident waiting for respond to file its linked Bug (WP5.6)
 	LabelHumanFallback = "identity:human-fallback" // written under the human identity because no bot exists (WP1.4)
 	LabelProvisional   = "decision:provisional"    // V8: a reversible Decision's recommendation applied after its SLA
 	LabelCorrection    = "aayu:correction"         // manual correction marker for the streak (WP5.7)
@@ -37,6 +38,7 @@ func Labels() []LabelDef {
 	return append(out,
 		LabelDef{LabelIntake, "fef2c0", "Filed through an intake form; triage classifies it"},
 		LabelDef{LabelNeedsGrill, "fef2c0", "Accepted Feedback waiting for grill to create its Feature"},
+		LabelDef{LabelNeedsBug, "fef2c0", "Incident waiting for its linked Bug (respond files it)"},
 		LabelDef{LabelHumanFallback, "e4e669", "Written under the human identity: no bot identity configured"},
 		LabelDef{LabelProvisional, "d93f0b", "Recommendation applied provisionally after the Decision SLA (V8)"},
 		LabelDef{LabelCorrection, "b60205", "A human corrected an agent's merge (resets the streak)"},
