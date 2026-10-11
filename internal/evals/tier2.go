@@ -31,13 +31,26 @@ const (
 
 // Run is one tier-2 run of a case.
 type Run struct {
-	Status  string `json:"status"`
-	Score   int    `json:"score"` // 1-5; a deterministic floor miss scores 1 without asking the judge (rule 7); 0 for an error
-	Pass    bool   `json:"pass"`
-	Floor   string `json:"floor,omitempty"`
-	Reason  string `json:"reason,omitempty"`
-	Error   string `json:"error,omitempty"`
-	Excerpt string `json:"excerpt,omitempty"` // start of the unusable reply, credentials redacted
+	Status  string    `json:"status"`
+	Score   int       `json:"score"` // 1-5; a deterministic floor miss scores 1 without asking the judge (rule 7); 0 for an error
+	Pass    bool      `json:"pass"`
+	Floor   string    `json:"floor,omitempty"`
+	Reason  string    `json:"reason,omitempty"`
+	Error   string    `json:"error,omitempty"`
+	Excerpt string    `json:"excerpt,omitempty"` // the unusable reply's start (and end, when truncated), credentials redacted
+	Calls   []CallLog `json:"calls,omitempty"`   // every model call the run made, in order
+}
+
+// CallLog is one model call of a run.
+type CallLog struct {
+	Role       string `json:"role"` // skill or judge
+	Model      string `json:"model"`
+	StopReason string `json:"stop_reason,omitempty"`
+	Truncated  bool   `json:"truncated,omitempty"`
+	TokensIn   int    `json:"tokens_in"`
+	TokensOut  int    `json:"tokens_out"`
+	MaxTokens  int    `json:"max_tokens"`
+	Error      string `json:"error,omitempty"`
 }
 
 // CaseResult is a case's k runs.
@@ -123,7 +136,7 @@ func (h *Harness) skillBody(skill string) (string, error) {
 	return strings.TrimSpace(s), nil
 }
 
-func (h *Harness) complete(lane verbs.LaneID) func(context.Context, models.Request) (models.Response, error) {
+func (h *Harness) complete(lane verbs.LaneID, role string, log *[]CallLog) func(context.Context, models.Request) (models.Response, error) {
 	return func(ctx context.Context, req models.Request) (models.Response, error) {
 		if h.spent >= h.Config.MaxUSD {
 			return models.Response{}, fmt.Errorf("%w: %.2f of %.2f USD", ErrBudget, h.spent, h.Config.MaxUSD)
@@ -131,6 +144,12 @@ func (h *Harness) complete(lane verbs.LaneID) func(context.Context, models.Reque
 		resp, m, err := h.Gateway.Do(ctx, models.Call{Story: "evals", Seat: string(verbs.AINativeEngineer), Lane: lane, Host: verbs.DirectHost, Req: req})
 		usd, _ := models.Cost(h.Gateway.Models.Prices, m.Model, resp)
 		h.spent += usd
+		l := CallLog{Role: role, Model: m.Model, StopReason: resp.StopReason, Truncated: resp.Truncated,
+			TokensIn: resp.TokensIn, TokensOut: resp.TokensOut, MaxTokens: req.MaxTokens}
+		if err != nil {
+			l.Error = clip(actions.RedactString(err.Error()), 200)
+		}
+		*log = append(*log, l)
 		return resp, err
 	}
 }
@@ -162,6 +181,7 @@ func (h *Harness) Tier2(ctx context.Context, cases []Case, sha, ref string, now 
 		return nil, err
 	}
 	var scores []int
+	var budgetErr error
 	for _, c := range cases {
 		if c.Tier2 == nil {
 			continue
@@ -192,12 +212,18 @@ func (h *Harness) Tier2(ctx context.Context, cases []Case, sha, ref string, now 
 		}
 		cr := CaseResult{Case: c.ID, Skill: c.Skill, Model: m.Model, Family: m.Family}
 		for i := 0; i < h.Config.K; i++ {
+			if budgetErr != nil { // the spend cap stops every later run: recorded, never silent
+				cr.Runs = append(cr.Runs, errorRun(budgetErr))
+				continue
+			}
 			run, err := h.run(ctx, c, lane, body, string(input), string(rubric), itemSchema)
 			if errors.Is(err, ErrBudget) || errors.Is(err, models.ErrBudget) {
-				return nil, err
+				budgetErr = err
 			}
 			if err != nil {
+				calls := run.Calls
 				run = errorRun(err)
+				run.Calls = calls
 			}
 			cr.Runs = append(cr.Runs, run)
 		}
@@ -236,16 +262,18 @@ type draft struct {
 	OpenQuestions []string `json:"open_questions"`
 }
 
-func (h *Harness) run(ctx context.Context, c Case, lane verbs.LaneID, body, input, rubric string, itemSchema []byte) (Run, error) {
+func (h *Harness) run(ctx context.Context, c Case, lane verbs.LaneID, body, input, rubric string, itemSchema []byte) (run Run, err error) {
+	var calls []CallLog
+	defer func() { run.Calls = calls }()
 	var d draft
 	req := models.Request{
 		System:    body + "\n\nReply with the work item you produce as JSON: {type, title, fields, labels, parent, open_questions}.",
 		Messages:  []models.Message{{Role: "user", Content: untrusted("eval-input", input)}},
 		MaxTokens: h.Config.MaxTokens.Skill,
 	}
-	if err := models.Structured(ctx, h.complete(lane), req, itemSchema, &d); err != nil {
+	if err := models.Structured(ctx, h.complete(lane, "skill", &calls), req, itemSchema, &d); err != nil {
 		var re *models.ReplyError
-		if errors.As(err, &re) && !re.Parse {
+		if errors.As(err, &re) && !re.Parse && !re.Truncated {
 			// JSON in the wrong shape is the skill's failure (rule 7).
 			return Run{Status: RunFail, Score: 1, Floor: "output is not a valid work item: " + err.Error()}, nil
 		}
@@ -280,10 +308,10 @@ func (h *Harness) run(ctx context.Context, c Case, lane verbs.LaneID, body, inpu
 		Format:    &models.Format{Name: "rubric_score", Schema: judgeSchema, Strict: true},
 	}
 	// Structured validates the judge's reply and retries the judgement once.
-	if err := models.Structured(ctx, h.complete(judgeLane), jreq, judgeSchema, &v); err != nil {
+	if err := models.Structured(ctx, h.complete(judgeLane, "judge", &calls), jreq, judgeSchema, &v); err != nil {
 		return Run{}, err
 	}
-	run := Run{Status: RunFail, Score: v.Score, Pass: v.Score >= h.Config.PassScore, Reason: clip(v.Reason, 600)}
+	run = Run{Status: RunFail, Score: v.Score, Pass: v.Score >= h.Config.PassScore, Reason: clip(v.Reason, 600)}
 	if run.Pass {
 		run.Status = RunPass
 	}
@@ -297,10 +325,19 @@ func errorRun(err error) Run {
 	var re *models.ReplyError
 	if errors.As(err, &re) {
 		excerpt := strings.Join(strings.Fields(re.Reply), " ")
-		if excerpt == "" {
+		switch {
+		case excerpt == "":
 			excerpt = "(empty reply)"
+		case re.Truncated && len([]rune(excerpt)) > 360:
+			rs := []rune(excerpt) // the end shows what filled the cap
+			excerpt = string(rs[:240]) + " … " + string(rs[len(rs)-120:])
+		default:
+			excerpt = clip(excerpt, 240)
 		}
-		r.Excerpt = clip(actions.RedactString(excerpt), 240)
+		r.Excerpt = actions.RedactString(excerpt)
+		if re.Truncated {
+			r.Error = "truncated: " + r.Error
+		}
 	}
 	return r
 }

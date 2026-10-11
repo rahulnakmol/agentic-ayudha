@@ -18,7 +18,11 @@ max_drop = 0.3
 # gateway's conservative fallback rate, so real spend is lower.
 max_usd = 1.5
 
-# Output caps per call. Reasoning models may spend part of the cap on reasoning; a cap is not a charge.
+# Output caps per call. Reasoning models may spend part of the cap on reasoning; a cap is not a charge. A reply that
+# stops at its cap is recorded as an error marked truncated, without a retry. The skill cap is sized from the drafts:
+# a complete csv-export draft is about 600 output tokens (estimated from the charged cost of runs 38183844440 and
+# 38185367907, which also fit two truncated replies at 2000 each); 3000 gives five times that, and five truncated
+# skill calls still stay under max_usd. Every call's stop reason and tokens are in the results file.
 [max_tokens]
-skill = 2000
+skill = 3000
 judge = 2000

@@ -8,9 +8,12 @@ can prove a CSV's rows and columns; `screenshot` shows one screen at one moment;
 time; `metric` is a measured number against a limit; `sr-transcript` is what a screen reader announces. Accept any
 evidence kind that can show its criterion by these meanings.
 
-Questions the skill lists under "open questions" are not requirements: they never lower the score. A requirement in the
-Story that the request does not state (a format, content type, encoding, ordering, file name, limit, or number) is an
-invented requirement.
+Questions the skill lists under "open questions" are not requirements: they never lower the score.
+
+Conventions that come with the format the request names are not invented requirements: a CSV file has a header row
+naming its columns, so a criterion that checks the header row is fine. Specifics the request does not state are
+invented requirements: an exact column order, a content type, an encoding, a file name, a size limit, a duration, or
+any other number of the skill's own.
 
 - 5: Each of (a), (b), (c) has an observable criterion with fitting evidence; nothing beyond the request is required;
   summary, scenario, and environment are concrete; parent is Feature #7; effort is plausible.

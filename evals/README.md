@@ -34,7 +34,10 @@ Ready, scores 1 without asking the judge (deterministic checks beat model judgem
 output (OpenAI `json_schema`, strict) and its reply is validated by the WP1.6 structured-output helper, which retries a
 judgement once. A run whose judge reply, or skill reply, still is not usable JSON is an `error`: it is not scored, and
 the results file keeps a short redacted excerpt of the reply. A case's pass^k is 1 when all its completed runs score at
-least `pass_score`, else 0; the suite's is the mean over cases. More than one errored run in a case fails the tier.
+least `pass_score`, else 0; the suite's is the mean over cases. More than one errored run in a case fails the tier. A
+reply that stops at its token cap is an `error` marked `truncated` and is not retried. Each run records every model
+call: role, model, stop reason, input and output tokens, and the cap. When `max_usd` is reached, the remaining runs
+are recorded as errors and the results file is still written.
 
 The bar: pass^k ≥ 0.8 and mean score ≥ 3.5. Against the baseline (the results for `main`'s commit), a mean more than
 0.3 lower, or any case's pass^k below its baseline, fails. Results go to `results/<sha>.json`, uploaded as the

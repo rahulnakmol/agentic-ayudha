@@ -27,6 +27,9 @@ criterion from evidence.
 
 - Every requirement in the Story must come from the request. Never add one the request does not state: no formats,
   content types, encodings, file names, orderings, limits, durations, or other numbers of your own.
+- Conventions that come with a format the request names are not new requirements and may be checked: a CSV file has
+  a header row naming its columns. Specifics beyond the convention (exact column order, content type, encoding, file
+  name, size limits, durations) are new requirements.
 - When the request leaves something open that a builder will need (for example a file detail, an ordering, or a time
   limit), do not decide it in the Story: write it as a question in `open_questions`. Open questions do not count
   against the Story; invented requirements do.

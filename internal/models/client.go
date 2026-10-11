@@ -48,6 +48,11 @@ type Response struct {
 	TokensIn  int
 	TokensOut int
 	CostUSD   float64 // reported by the endpoint, when it reports one; else 0
+	// StopReason is why the model stopped, as the endpoint reports it: Messages
+	// stop_reason, Responses status (with incomplete_details.reason), Chat
+	// finish_reason. Truncated is set when it stopped at the token cap.
+	StopReason string
+	Truncated  bool
 }
 
 // Client is one way of calling a model.
@@ -196,8 +201,13 @@ type usage struct {
 
 func decode(style string, raw []byte) (Response, error) {
 	var v struct {
-		Model   string `json:"model"`
-		Usage   usage  `json:"usage"`
+		Model             string `json:"model"`
+		Usage             usage  `json:"usage"`
+		StopReason        string `json:"stop_reason"` // messages
+		Status            string `json:"status"`      // responses
+		IncompleteDetails struct {
+			Reason string `json:"reason"`
+		} `json:"incomplete_details"` // responses
 		Content []struct {
 			Type string `json:"type"`
 			Text string `json:"text"`
@@ -214,6 +224,7 @@ func decode(style string, raw []byte) (Response, error) {
 			Message struct {
 				Content string `json:"content"`
 			} `json:"message"`
+			FinishReason string `json:"finish_reason"`
 		} `json:"choices"` // chat
 	}
 	if err := json.Unmarshal(raw, &v); err != nil {
@@ -226,12 +237,18 @@ func decode(style string, raw []byte) (Response, error) {
 	var sb strings.Builder
 	switch style {
 	case StyleMessages:
+		r.StopReason, r.Truncated = v.StopReason, v.StopReason == "max_tokens"
 		for _, c := range v.Content {
 			if c.Type == "text" {
 				sb.WriteString(c.Text)
 			}
 		}
 	case StyleResponses:
+		r.StopReason = v.Status
+		if v.IncompleteDetails.Reason != "" {
+			r.StopReason += ":" + v.IncompleteDetails.Reason
+		}
+		r.Truncated = v.Status == "incomplete" && v.IncompleteDetails.Reason == "max_output_tokens"
 		for _, o := range v.Output {
 			for _, c := range o.Content {
 				if c.Type == "output_text" {
@@ -245,6 +262,7 @@ func decode(style string, raw []byte) (Response, error) {
 	case StyleChat:
 		if len(v.Choices) > 0 {
 			sb.WriteString(v.Choices[0].Message.Content)
+			r.StopReason, r.Truncated = v.Choices[0].FinishReason, v.Choices[0].FinishReason == "length"
 		}
 	}
 	r.Text = sb.String()
