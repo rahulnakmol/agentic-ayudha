@@ -454,6 +454,12 @@ Rows are named by WP so that parallel work does not collide on numbers.
 | D-0.5a | WP0.5: `LAYERS.md` seat column reads "n/a until WP5.1" | WP0.3's registry already assigns each layer one owner seat | `LAYERS.md` keeps naming the owner seat; seat charters remain n/a until WP5.1 |
 | D-0.5b | WP0.5: `CONSTRAINTS.md` generated from the embedded default config | The plan fixes some defaults (coverage 90 %, zero critical/high SAST and dependency findings, zero secrets, axe zero serious/critical at WCAG 2.2 AA, 44 px targets, 200 % text, streak 20 from WP5.7's 19/20/21 test, DAST opt-in) and names others without a value (`autonomy.never`, `autonomy.budget`, `[budget]` amounts, proof retention). WP1.2 lists `[verify]` but no `[floors]` section | `internal/config/defaults.toml` (embedded, the base layer WP1.2 adopts) holds floors under `[verify.floors.<floor>]`, plus `[autonomy]`, `[budget]`, `[proof]`. Values the plan does not fix are marked "proposed (WP0.5)" in `CONSTRAINTS.md`: never-layers L04, L07, L09; per-story build budget 8 h, 25 USD, 3 attempts; 25 USD per story, 100 USD per day, 5 USD per PR for `inspect`, 2000 CI minutes per month; 90 days retention (`retention_days`). `defaults.toml` is a protected path. `internal/config/gen` fails when a key and its documentation row disagree |
 
+### Deviations and decisions recorded while implementing WP6.1–WP6.3
+
+| # | Plan assumption | Finding | Implemented instead |
+|---|---|---|---|
+| D-6.1a | WP0.4: npm licence scan (`security` job) with the allow list Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, MIT | The design system is a pnpm workspace with one root `pnpm-lock.yaml` (`.agents/setup` installs from it), so the scan's `npm ci` per `package.json` fails for lack of a `package-lock.json`. Radix UI, under the shadcn/ui components, depends on `tslib`, which is 0BSD | The npm step installs with `pnpm install --frozen-lockfile --ignore-scripts` and checks `pnpm licenses list --recursive --prod` against the allow list; dev tooling (Storybook, Playwright, axe-core MPL-2.0) is not distributed and not scanned. 0BSD (public-domain equivalent, no conditions) joins the allow list. GSAP stays out of the scan because it is a peer dependency only (J3-19) |
+
 ### Deviations recorded while implementing M1 (PR3–PR6)
 
 Rows are named by WP so parallel threads do not collide on numbers.

@@ -198,7 +198,7 @@ jobs:
       SEMGREP_VERSION: "1.180.0"
       GO_LICENSES_VERSION: "v2.0.1"
       # Licences compatible with redistributing a BSD-3-Clause binary (THIRD_PARTY_NOTICES.md, Policy).
-      ALLOWED_LICENSES: Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC,MIT
+      ALLOWED_LICENSES: 0BSD,Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC,MIT # 0BSD: Appendix B D-6.1a
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -229,17 +229,21 @@ jobs:
           "$RUNNER_TEMP/osv-scanner" scan source -r .
       - name: Licences (go-licenses)
         run: go run "github.com/google/go-licenses/v2@${GO_LICENSES_VERSION}" check ./... --allowed_licenses="$ALLOWED_LICENSES"
+      # The Node packages are one pnpm workspace with a single root pnpm-lock.yaml (WP6.1, Appendix B D-6.1a).
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - name: Licences (npm)
         run: |
           set -euo pipefail
-          found=0
-          while IFS= read -r pkg; do
-            found=1
-            dir="$(dirname "$pkg")"
-            echo "Scanning $dir"
-            (cd "$dir" && npm ci --ignore-scripts && npx --yes license-checker-rseidelsohn@5.0.1 --production --excludePrivatePackages --onlyAllow "${ALLOWED_LICENSES//,/;}")
-          done < <(git ls-files '*package.json' | grep -v node_modules || true)
-          if [ "$found" = 0 ]; then echo "No package.json yet (n/a until WP6.1)."; fi
+          pnpm install --frozen-lockfile --ignore-scripts
+          # Production dependency tree of every workspace package; dev tooling is not distributed.
+          found="$(pnpm licenses list --recursive --prod --json | jq -r 'keys[]')"
+          echo "Production licences: $(tr '\n' ' ' <<<"$found")"
+          bad="$(grep -vxF -f <(tr ',' '\n' <<<"$ALLOWED_LICENSES") <<<"$found" || true)"
+          if [ -n "$bad" ]; then
+            echo "::error::Licences not on the allow list: $(tr '\n' ' ' <<<"$bad")"
+            pnpm licenses list --recursive --prod
+            exit 1
+          fi
 
   docs:
     name: docs

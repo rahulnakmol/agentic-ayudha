@@ -3,3 +3,7 @@
 
 # goreleaser output (release.yml, ci.yml release-snapshot)
 dist/
+
+# Node (pnpm workspace under packages/)
+node_modules/
+storybook-static/
