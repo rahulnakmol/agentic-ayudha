@@ -1,0 +1,66 @@
+# Default configuration embedded in the aayudha binary (docs/BUILD-PLAN.md WP0.5).
+#
+# This is the base configuration layer. WP1.2 layers the user, repository, local, environment, and flag
+# layers on top of it. CONSTRAINTS.md is generated from this file by `go generate ./...`: change a value
+# here, regenerate, and commit both. The generator (internal/config/gen) holds the meaning and plan source
+# of every key it renders and fails when a key is added or removed without updating it.
+
+# Floors run by `verify` (rule 7: no model disposition can override a floor miss).
+[verify]
+dast = false # ZAP baseline runs only when a product opts in (WP4.6)
+
+[verify.floors.coverage]
+min_diff_percent = 90.0
+
+[verify.floors.sast]
+max_critical = 0
+max_high = 0
+
+[verify.floors.secrets]
+max_findings = 0
+
+[verify.floors.deps]
+max_critical = 0
+max_high = 0
+
+[verify.floors.a11y]
+standard = "WCAG 2.2 AA"
+max_critical = 0
+max_serious = 0
+keyboard_only = true
+reduced_motion = true
+text_scale_percent = 200
+min_target_px = 44
+
+[verify.floors.screen_reader]
+layers = ["L01"]
+max_missing_phrases = 0
+
+[verify.floors.dast]
+max_high = 0
+
+[verify.floors.mobile]
+skipped_blocks_ship = true
+
+# Autonomy: when an agent may merge without a human pass.
+[autonomy]
+streak = 20
+never = ["L04", "L07", "L09"]
+approver = ""
+
+[autonomy.budget]
+wall_hours = 8
+cost_usd = 25.0
+attempts = 3
+
+# Spend limits enforced by the model gateway's circuit breaker (WP1.6).
+[budget]
+per_story_usd = 25.0
+per_day_usd = 100.0
+per_pr_inspect_max = 5.0
+ci_minutes_month = 2000
+
+# Proof media and retention (V3, WP4.2).
+[proof]
+media = ""
+retention_days = 90

@@ -23,5 +23,8 @@
 /docs/RACI.md                 linguist-generated=true
 /internal/mcp/schemas/*.json  linguist-generated=true
 
+# Whole-file output of `go generate ./...` from internal/config/defaults.toml (internal/config/gen).
+/CONSTRAINTS.md               linguist-generated=true
+
 # No LFS rules here: LFS is decided per repository by `aayu init` and applies only on the
 # `ledger` branch (docs/BUILD-PLAN.md V3, WP2.5).

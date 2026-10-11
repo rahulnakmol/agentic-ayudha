@@ -1,2 +1,5 @@
 # Amp orb portal metadata (generated at runtime, never committed)
 .amp/portals/
+
+# goreleaser output (release.yml, ci.yml release-snapshot)
+dist/

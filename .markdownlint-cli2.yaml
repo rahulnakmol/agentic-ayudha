@@ -1,0 +1,11 @@
+# markdownlint-cli2 configuration (docs/BUILD-PLAN.md WP0.5). CI runs it in the `docs` job.
+config:
+  default: true
+  MD013: false # line length: prose wraps near 116 columns by convention; tables and URLs may not
+  MD033:
+    allowed_elements: [br] # line breaks inside generated table cells (LAYERS.md)
+  MD060: false # table column style: the repository writes compact `|---|` delimiter rows
+globs:
+  - "**/*.md"
+ignores:
+  - "**/node_modules/**"

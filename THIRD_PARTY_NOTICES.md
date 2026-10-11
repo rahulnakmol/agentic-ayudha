@@ -5,15 +5,47 @@ third-party component the project includes, depends on, or shells out to.
 
 ## Included today
 
-None. The Go module uses only the Go standard library. The Go standard library is distributed with the Go
-toolchain under the BSD-3-Clause licence of The Go Authors (<https://go.dev/LICENSE>).
+The `aayudha` binary uses only the Go standard library, distributed with the Go toolchain under the
+BSD-3-Clause licence of The Go Authors (<https://go.dev/LICENSE>).
+
+### Go modules
+
+| Component | Version | Licence | Use |
+|---|---|---|---|
+| [`github.com/pelletier/go-toml/v2`](https://github.com/pelletier/go-toml) | v2.4.3 | MIT | Build time only: `internal/config/gen` parses the embedded defaults to generate `CONSTRAINTS.md` (WP0.5). Not linked into the binary until WP1.2 loads TOML configuration. |
+
+### Run by `install.sh` (not bundled)
+
+| Component | Version | Licence | Use |
+|---|---|---|---|
+| [cosign](https://github.com/sigstore/cosign) | v3.1.3 | Apache-2.0 | Verifies the release signature. Used from `PATH`; if missing, `install.sh` downloads this pinned version and checks its SHA-256 first. |
+
+### CI and release tooling (not distributed)
+
+These run only in this repository's GitHub Actions workflows. Versions are pinned in the workflows.
+
+| Component | Licence | Use |
+|---|---|---|
+| [GoReleaser](https://github.com/goreleaser/goreleaser) | MIT | Builds, archives, and checksums releases and snapshots |
+| [cosign](https://github.com/sigstore/cosign) | Apache-2.0 | Keyless signing of `checksums.txt` |
+| [Syft](https://github.com/anchore/syft) | Apache-2.0 | SBOM per archive |
+| [actions/attest-build-provenance](https://github.com/actions/attest-build-provenance) | MIT | SLSA build provenance |
+| [golangci-lint](https://github.com/golangci/golangci-lint) | GPL-3.0 | Go lint (run as a tool, never linked) |
+| [gitleaks](https://github.com/gitleaks/gitleaks) | MIT | Secret scanning |
+| [Semgrep](https://github.com/semgrep/semgrep) | LGPL-2.1 | SAST (run as a tool, never linked) |
+| [OSV-Scanner](https://github.com/google/osv-scanner) | Apache-2.0 | Dependency vulnerabilities |
+| [go-licenses](https://github.com/google/go-licenses) | Apache-2.0 | Go licence scan |
+| [license-checker-rseidelsohn](https://github.com/RSeidelsohn/license-checker-rseidelsohn) | BSD-3-Clause | npm licence scan (once `package.json` exists) |
+| [markdownlint-cli2](https://github.com/DavidAnson/markdownlint-cli2) | MIT | Markdown lint |
+| [lychee](https://github.com/lycheeverse/lychee) | Apache-2.0 OR MIT | Link check |
 
 ## Policy
 
 - A PR that adds a dependency adds its entry here in the same PR: name, version or range, licence, how it is
   used (linked, peer dependency, or shelled out), and the source URL.
 - CI licence scanning gates new dependencies: `go-licenses` for the Go module and an npm licence scan for
-  `packages/design-system/` (n/a until WP0.4). `aayu audit` repeats the scan (n/a until WP7.6).
+  every `package.json` (the `security` job; allowed: Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, MIT).
+  `aayu audit` repeats the scan (n/a until WP7.6).
 - Licences must be compatible with redistributing the binary under BSD-3-Clause. Anything else needs a
   recorded decision before it is added.
 - Components that are shelled out to (run as a separate program) are not bundled; they are listed so users

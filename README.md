@@ -24,6 +24,10 @@ Amp, Cursor, and Claude Code are the primary hosts. Skills ship as real copies (
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the PR flow and DCO sign-off, and [SECURITY.md](SECURITY.md) for
 reporting vulnerabilities and the tool-incident plan.
 
+Governance: [ETHOS.md](ETHOS.md) (principles), [GLOSSARY.md](GLOSSARY.md) (terms), [CONSTRAINTS.md](CONSTRAINTS.md)
+(default floors, autonomy, budgets, and retention, generated), [LAYERS.md](LAYERS.md) (generated),
+[AGENTS.md](AGENTS.md) (guidance for coding agents), and [docs/threat-model.md](docs/threat-model.md).
+
 ## Verbs
 
 The table is generated from `internal/verbs/registry.go` by `go generate ./...`. Do not edit it by hand; CI
