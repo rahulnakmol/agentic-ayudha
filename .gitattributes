@@ -1,0 +1,27 @@
+# Normalise text to LF in the repository and in working trees on every OS.
+* text=auto eol=lf
+
+# Go
+*.go diff=golang
+
+# Binary files: no EOL conversion, no text diff.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.webp binary
+*.ico  binary
+*.pdf  binary
+*.mp4  binary
+*.webm binary
+*.zip  binary
+*.gz   binary
+
+# Whole-file outputs of `go generate ./...` from internal/verbs/registry.go.
+# README.md and skills/**/SKILL.md are only partly generated and are deliberately not listed.
+/LAYERS.md                    linguist-generated=true
+/docs/RACI.md                 linguist-generated=true
+/internal/mcp/schemas/*.json  linguist-generated=true
+
+# No LFS rules here: LFS is decided per repository by `aayu init` and applies only on the
+# `ledger` branch (docs/BUILD-PLAN.md V3, WP2.5).

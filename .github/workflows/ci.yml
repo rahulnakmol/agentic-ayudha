@@ -1,0 +1,51 @@
+name: ci
+
+on:
+  push:
+    branches: [dev, rolling, main]
+  pull_request:
+    branches: [dev, rolling, main]
+
+permissions:
+  contents: read
+
+jobs:
+  # Job ids and names are required status checks in the dev ruleset; do not rename.
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.25.x"
+          cache: false
+      - name: Build, vet, test
+        run: go build ./... && go vet ./... && go test ./...
+
+  generate-drift:
+    name: generate-drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.25.x"
+          cache: false
+      - name: Regenerate
+        run: go generate ./...
+      - name: Fail on drift
+        run: |
+          drift="$(git status --porcelain --untracked-files=all)"
+          if [ -n "$drift" ]; then
+            echo "::error::Generated files are out of date. Run 'go generate ./...' and commit the result; do not edit generated files by hand."
+            echo "Files changed, deleted, or created by go generate:"
+            echo "$drift"
+            git --no-pager diff
+            exit 1
+          fi
+          echo "No drift."
