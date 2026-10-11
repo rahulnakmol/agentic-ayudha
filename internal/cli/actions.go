@@ -12,6 +12,7 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 )
 
 func init() { register("actions", runActions) }
@@ -32,15 +33,15 @@ func (e *Env) stateDir() string {
 func (e *Env) ActionsPath() string { return filepath.Join(e.stateDir(), "telemetry", "actions.jsonl") }
 
 // Actions opens the actions log for this invocation. --dry-run makes every
-// action "planned". Segments go to a local ledger outbox until the ledger
-// writer exists (n/a until WP2.4).
+// action "planned". Checkpoint segments go to the ledger branch (WP2.4) when
+// run in a checkout whose remote has one, else to a local ledger outbox.
 func (e *Env) Actions() (*actions.Log, error) {
 	if e.actions != nil {
 		return e.actions, nil
 	}
 	l, err := actions.Open(e.ActionsPath(), actions.Options{
 		DryRun: e.DryRun, Host: e.Host, Now: e.Now,
-		Sink: actions.DirSink{Root: filepath.Join(e.stateDir(), "ledger-outbox")},
+		Sink: e.segmentSink(),
 	})
 	if err != nil {
 		return nil, Wrap(ExitInternal, err)
@@ -112,4 +113,28 @@ func printLines(e *Env, r io.Reader, keep func(string) bool, last int) error {
 		fmt.Fprintln(e.Out, l)
 	}
 	return nil
+}
+
+// segmentSink is the ledger when there is a checkout, falling back to the
+// local outbox when its remote has no ledger branch yet.
+func (e *Env) segmentSink() actions.SegmentSink {
+	outbox := actions.DirSink{Root: filepath.Join(e.stateDir(), "ledger-outbox")}
+	root := config.RepoRoot(e.Dir)
+	if root == "" {
+		return outbox
+	}
+	return fallbackSink{ledger.Sink{W: &ledger.Writer{Dir: root}}, outbox}
+}
+
+type fallbackSink struct {
+	primary  actions.SegmentSink
+	fallback actions.SegmentSink
+}
+
+func (f fallbackSink) Append(date, host, run string, lines [][]byte) error {
+	err := f.primary.Append(date, host, run, lines)
+	if errors.Is(err, ledger.ErrNoLedger) {
+		return f.fallback.Append(date, host, run, lines)
+	}
+	return err
 }
