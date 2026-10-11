@@ -584,6 +584,7 @@ var Verbs = []Command{
 		Inputs: []Input{
 			pos("issue", TypeIssue, "Work item to make Ready."),
 			readOnlyWith(flag("check", TypeBool, "Validate only; write nothing."), "true"),
+			flag("guard", TypeBool, "Ready guard (the aayudha-ready-guard workflow): strip status:ready when the issue no longer validates or drifted from its snapshot."),
 		},
 		Outputs:  []string{"status:ready", "ready-snapshot"},
 		Gates:    []GateID{GateValidator},

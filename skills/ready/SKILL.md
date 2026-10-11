@@ -21,6 +21,11 @@ aayu:
       required: false
       positional: false
       description: "Validate only; write nothing."
+    - name: guard
+      type: bool
+      required: false
+      positional: false
+      description: "Ready guard (the aayudha-ready-guard workflow): strip status:ready when the issue no longer validates or drifted from its snapshot."
   outputs:
     - "status:ready"
     - "ready-snapshot"

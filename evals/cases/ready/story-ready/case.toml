@@ -5,4 +5,4 @@ input = "input.txt"
 artifacts = ["output/issue.json"]
 schemas = [{ file = "output/issue.json", schema = "evals/schemas/workitem.json" }]
 ready = ["output/issue.json"] # the work item the run validated, as the WP2.7 parser builds it
-calls = [["ready", "12", "--check"]] # n/a until WP2.7; github/ serves issue #12 for it
+calls = [["ready", "12", "--check"]] # github/ serves issue #12 and its parent Feature for it

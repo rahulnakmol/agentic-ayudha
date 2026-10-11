@@ -207,3 +207,53 @@ func External(err error) bool {
 	return errors.As(err, &er) || errors.As(err, &rl) || errors.As(err, &ab) ||
 		errors.Is(err, ErrRateLimited) || errors.Is(err, ErrBudget)
 }
+
+// UpsertComment keeps one comment per marker on an issue, replaced in place:
+// it edits the comment whose body contains marker, or creates one, and does
+// nothing when the body is already current. It reports whether it wrote.
+func (c *Client) UpsertComment(ctx context.Context, repo string, number int, marker, body string, a actions.Action) (bool, error) {
+	owner, name, err := SplitRepo(repo)
+	if err != nil {
+		return false, err
+	}
+	comments, err := All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.IssueComment, *gh.Response, error) {
+		return c.REST.Issues.ListComments(ctx, owner, name, number, &gh.IssueListCommentsOptions{ListOptions: o})
+	})
+	if err != nil {
+		return false, err
+	}
+	a.Target = fmt.Sprintf("%s#%d", repo, number)
+	if a.Payload == nil {
+		a.Payload = map[string]any{}
+	}
+	a.Payload["marker"] = marker
+	for _, cm := range comments {
+		if !strings.Contains(cm.GetBody(), marker) {
+			continue
+		}
+		if cm.GetBody() == body {
+			return false, nil
+		}
+		a.Request = &actions.Request{Method: http.MethodPatch, Path: fmt.Sprintf("/repos/%s/issues/comments/%d", repo, cm.GetID())}
+		_, err := c.Write(ctx, a, func(ctx context.Context) (any, error) {
+			_, _, err := c.REST.Issues.EditComment(ctx, owner, name, cm.GetID(), &gh.IssueComment{Body: gh.Ptr(body)})
+			return cm.GetID(), err
+		})
+		return true, err
+	}
+	a.Request = &actions.Request{Method: http.MethodPost, Path: fmt.Sprintf("/repos/%s/issues/%d/comments", repo, number)}
+	_, err = c.Write(ctx, a, func(ctx context.Context) (any, error) {
+		cm, _, err := c.REST.Issues.CreateComment(ctx, owner, name, number, &gh.IssueComment{Body: gh.Ptr(body)})
+		return cm.GetID(), err
+	})
+	return true, err
+}
+
+// IssueLabels returns an issue's label names.
+func IssueLabels(is *gh.Issue) []string {
+	out := make([]string, 0, len(is.Labels))
+	for _, l := range is.Labels {
+		out = append(out, l.GetName())
+	}
+	return out
+}
