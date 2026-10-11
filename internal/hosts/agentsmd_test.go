@@ -29,4 +29,17 @@ func TestRenderAgentsMD(t *testing.T) {
 			t.Fatalf("second render differs:\n%q", again)
 		}
 	})
+
+	t.Run("remove a section, keep the rest", func(t *testing.T) {
+		product := "# Product agents\n\nOur rules.\n"
+		with := RenderAgentsMD([]byte(product), AgentsSection{ID: "work-items", Body: "## Work items"}, skills)
+		got := string(RemoveAgentsSection(with, "work-items"))
+		want := string(RenderAgentsMD([]byte(product), skills))
+		if got != want {
+			t.Fatalf("got:\n%q\nwant:\n%q", got, want)
+		}
+		if back := string(RemoveAgentsSection(RemoveAgentsSection(with, "work-items"), "skills")); back != product {
+			t.Fatalf("removing every section: %q, want the product's own text %q", back, product)
+		}
+	})
 }

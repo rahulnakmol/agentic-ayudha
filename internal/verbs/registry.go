@@ -572,6 +572,7 @@ var Verbs = []Command{
 		Inputs: []Input{
 			readOnlyWith(enumIn("action", true, true, "Proof operation.", "push", "get", "verify", "list", "purge"), "get", "verify", "list"),
 			optPos("story", TypeIssue, "Story whose pack to operate on."),
+			flag("media", TypeBool, "Include proof media; on a public repository this needs a private bucket in [proof] media (V3)."),
 		},
 		Outputs:  []string{"pack", "verification-report"},
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeNone, Exposure: ExposeRead,

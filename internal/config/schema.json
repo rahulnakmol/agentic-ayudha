@@ -507,6 +507,25 @@
       "additionalProperties": false,
       "type": "object",
       "description": "User-level only: the product repos that status --all and doctor --all iterate."
+    },
+    "branches": {
+      "properties": {
+        "dev": {
+          "type": "string",
+          "description": "Integration branch; pull requests target it."
+        },
+        "rolling": {
+          "type": "string",
+          "description": "Canary snapshot branch; empty when the product has none."
+        },
+        "main": {
+          "type": "string",
+          "description": "Stable release branch."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "The product's branches that play dev, rolling, and main when they have other names (written by init; nothing is renamed)."
     }
   },
   "additionalProperties": false,
