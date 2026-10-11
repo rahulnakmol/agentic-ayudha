@@ -12,10 +12,21 @@ aayu:
   layers: all
   inputs:
     - name: type
-      type: string
+      type: enum
       required: true
       positional: true
-      description: "Work-item type, e.g. goal or story (enum lands in WP2.1)."
+      enum:
+        - "goal"
+        - "initiative"
+        - "feature"
+        - "story"
+        - "bug"
+        - "decision"
+        - "experiment"
+        - "release"
+        - "feedback"
+        - "incident"
+      description: "Work-item type (internal/workitems)."
     - name: parent
       type: issue
       required: false

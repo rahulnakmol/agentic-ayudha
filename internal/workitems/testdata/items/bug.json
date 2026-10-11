@@ -1,0 +1,57 @@
+{
+  "create": {
+    "type": "bug",
+    "title": "Questionnaire loses answers on back",
+    "fields": {
+      "summary": "Answers vanish.",
+      "reproduce": "Answer two, press Back.",
+      "expected": "Answers kept.",
+      "actual": "Answers cleared."
+    },
+    "labels": [
+      "type:bug",
+      "status:backlog"
+    ]
+  },
+  "ready": {
+    "type": "bug",
+    "title": "Questionnaire loses answers on back",
+    "fields": {
+      "summary": "Answers vanish.",
+      "reproduce": "Answer two, press Back.",
+      "expected": "Answers kept.",
+      "actual": "Answers cleared.",
+      "completion_goal": "1. [recording] state: two answers given, Back pressed; expected: both answers still selected",
+      "measure": "answers kept",
+      "threshold": "100 %",
+      "scenario": "Back navigation",
+      "environment": "staging"
+    },
+    "labels": [
+      "type:bug",
+      "status:planned",
+      "effort:XS"
+    ]
+  },
+  "complete": {
+    "type": "bug",
+    "title": "Questionnaire loses answers on back",
+    "fields": {
+      "summary": "Answers vanish.",
+      "reproduce": "Answer two, press Back.",
+      "expected": "Answers kept.",
+      "actual": "Answers cleared.",
+      "completion_goal": "1. [recording] state: two answers given, Back pressed; expected: both answers still selected",
+      "measure": "answers kept",
+      "threshold": "100 %",
+      "scenario": "Back navigation",
+      "environment": "staging",
+      "outcome": "Fixed in #60."
+    },
+    "labels": [
+      "type:bug",
+      "status:done",
+      "effort:XS"
+    ]
+  }
+}

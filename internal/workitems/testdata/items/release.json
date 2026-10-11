@@ -1,0 +1,40 @@
+{
+  "create": {
+    "type": "release",
+    "title": "Rolling snapshot 2026-10-20",
+    "fields": {
+      "summary": "Eligibility questionnaire to rolling."
+    },
+    "labels": [
+      "type:release",
+      "status:backlog"
+    ]
+  },
+  "ready": {
+    "type": "release",
+    "title": "Rolling snapshot 2026-10-20",
+    "fields": {
+      "summary": "Eligibility questionnaire to rolling.",
+      "version": "rolling-2026-10-20",
+      "links": "includes #3\nincludes #4"
+    },
+    "labels": [
+      "type:release",
+      "status:planned"
+    ]
+  },
+  "complete": {
+    "type": "release",
+    "title": "Rolling snapshot 2026-10-20",
+    "fields": {
+      "summary": "Eligibility questionnaire to rolling.",
+      "version": "rolling-2026-10-20",
+      "links": "includes #3\nincludes #4",
+      "evidence": "Tag rolling-2026-10-20, run 123."
+    },
+    "labels": [
+      "type:release",
+      "status:done"
+    ]
+  }
+}

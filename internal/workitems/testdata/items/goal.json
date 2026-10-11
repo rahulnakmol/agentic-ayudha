@@ -1,0 +1,45 @@
+{
+  "create": {
+    "type": "goal",
+    "title": "Halve time to first benefit claim",
+    "fields": {
+      "summary": "Claimants get a decision faster.",
+      "beneficiaries": "claimants"
+    },
+    "labels": [
+      "type:goal",
+      "status:backlog"
+    ]
+  },
+  "ready": {
+    "type": "goal",
+    "title": "Halve time to first benefit claim",
+    "fields": {
+      "summary": "Claimants get a decision faster.",
+      "beneficiaries": "claimants",
+      "metric": "median days to first decision",
+      "baseline": "21 days (all claims, 2026-Q3, query q-17, fetched 2026-10-01)",
+      "target": "10 days by 2027-06-30"
+    },
+    "labels": [
+      "type:goal",
+      "status:planned"
+    ]
+  },
+  "complete": {
+    "type": "goal",
+    "title": "Halve time to first benefit claim",
+    "fields": {
+      "summary": "Claimants get a decision faster.",
+      "beneficiaries": "claimants",
+      "metric": "median days to first decision",
+      "baseline": "21 days (all claims, 2026-Q3, query q-17, fetched 2026-10-01)",
+      "target": "10 days by 2027-06-30",
+      "result": "12 days at 2027-06-30"
+    },
+    "labels": [
+      "type:goal",
+      "status:done"
+    ]
+  }
+}
