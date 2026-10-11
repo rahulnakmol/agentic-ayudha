@@ -30,4 +30,4 @@ aayu:
 
 Split a Feature into XS-L stories with observable criteria, dependencies, and a layer footprint; close XL items as split.
 
-Body lands in WP3.1 (skill format) and WP5.4 (the verb).
+Body lands in WP5.4 (the verb). Format and lint: skills/README.md.

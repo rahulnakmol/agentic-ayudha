@@ -72,7 +72,7 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: false
-      # go test includes TestSkillLint (embed_test.go), the WP0.4 skill lint; WP3.1 extends it.
+      # go test includes TestSkillLint (embed_test.go): the WP3.1 skill lint (internal/skills) over the embedded skills/.
       - name: Build, vet, test
         run: go build ./... && go vet ./... && go test ./...
       - name: Build matrix and binary size budget

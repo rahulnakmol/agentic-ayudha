@@ -29,4 +29,4 @@ aayu:
 
 Compare estimates with observed delivery, corrections, floor misses, and cost; file findings as Feedback issues.
 
-Body lands in WP3.1 (skill format) and WP7.6 (the verb).
+Body lands in WP7.6 (the verb). Format and lint: skills/README.md.

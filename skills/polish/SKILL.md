@@ -29,4 +29,4 @@ aayu:
 
 Apply a review critique to a PR's UI and re-run review.
 
-Body lands in WP3.1 (skill format) and WP6.6 (the verb).
+Body lands in WP6.6 (the verb). Format and lint: skills/README.md.

@@ -30,4 +30,4 @@ aayu:
 
 Adversarially review a PR against its plan, pack, and criteria; return a structured disposition: merge, fix, or rebuild.
 
-Body lands in WP3.1 (skill format) and WP4.8 (the verb).
+Body lands in WP4.8 (the verb). Format and lint: skills/README.md.

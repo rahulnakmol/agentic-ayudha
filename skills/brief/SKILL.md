@@ -49,4 +49,4 @@ aayu:
 
 Explain work to an audience in a chosen register and purpose as a grounded, accessible HTML brief.
 
-Body lands in WP3.1 (skill format) and WP7.3 (the verb).
+Body lands in WP7.3 (the verb). Format and lint: skills/README.md.

@@ -56,7 +56,7 @@ func Run(ctx context.Context, args []string, io IO, opts Options) int {
 
 // globalFlags are the names of the global flags; a registry input with the same
 // name reads the global flag instead of defining its own.
-var globalFlags = []string{"dry-run", "json", "repo", "host", "yes", "verbose", "set", "ci"}
+var globalFlags = verbs.GlobalFlags
 
 func init() { cobra.EnableCommandSorting = false } // list commands in registry (plan) order
 

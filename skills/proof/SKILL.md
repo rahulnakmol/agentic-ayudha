@@ -39,4 +39,4 @@ aayu:
 
 Push, get, verify, list, or purge proof packs on the ledger branch.
 
-Body lands in WP3.1 (skill format) and WP4.2 (the verb).
+Body lands in WP4.2 (the verb). Format and lint: skills/README.md.

@@ -37,4 +37,4 @@ aayu:
 
 Respond to an incident: propose an ops catalog action, execute it only through human approval, keep the timeline.
 
-Body lands in WP3.1 (skill format) and WP5.6 (the verb).
+Body lands in WP5.6 (the verb). Format and lint: skills/README.md.

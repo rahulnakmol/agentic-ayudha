@@ -40,4 +40,4 @@ aayu:
 
 Promote a Release along dev, rolling, main; stamp included stories released and trigger measurement.
 
-Body lands in WP3.1 (skill format) and WP7.8 (the verb).
+Body lands in WP7.8 (the verb). Format and lint: skills/README.md.

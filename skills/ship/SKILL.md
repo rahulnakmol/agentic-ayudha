@@ -31,4 +31,4 @@ aayu:
 
 Squash-merge a PR after a green merge gate and a human pass, write the Complete section, and clean up.
 
-Body lands in WP3.1 (skill format) and WP5.5 (the verb).
+Body lands in WP5.5 (the verb). Format and lint: skills/README.md.
