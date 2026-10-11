@@ -322,3 +322,56 @@ func TestSkillReplyErrors(t *testing.T) {
 		t.Fatalf("runs: %+v", runs)
 	}
 }
+
+// invented is the csv-export output with the two requirements the 2-scoring
+// live run added (evals.yml run 38184730879): a content type and a column order.
+func invented(t *testing.T) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(root, "evals", "cases", "stub", "csv-export", "output", "issue.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.Replace(string(b), "expected: the CSV header lists exactly the visible columns, without Region",
+		"expected: the response has Content-Type text/csv and the CSV header lists exactly the visible columns in the displayed order, without Region", 1)
+}
+
+// A recorded output that invents requirements fails tier 1 on the case's scope
+// rules, while it still passes the schema and Ready checks.
+func TestTier1InventedRequirement(t *testing.T) {
+	c := copyCase(t, "stub/csv-export")
+	if err := os.WriteFile(filepath.Join(c.Dir, "output", "issue.json"), []byte(invented(t)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r := Tier1(context.Background(), root, c, aayudha.Assets)
+	out := r.String()
+	if status(r, "scope") != Fail || status(r, "ready") != Pass || status(r, "schemas") != Pass ||
+		!strings.Contains(out, "adds a content type the request does not state") || !strings.Contains(out, "adds an ordering the request does not state") {
+		t.Fatalf("invented requirements not caught:\n%s", out)
+	}
+}
+
+// In tier 2 the same guard fails the run before the judge is asked; open
+// questions are not requirements and reach the judge as such.
+func TestTier2ScopeGuardAndOpenQuestions(t *testing.T) {
+	cases, _ := LoadCases(root)
+	withQuestions := strings.Replace(invented(t), `"parent"`, `"open_questions": ["Should the CSV keep the list's column order?"], "parent"`, 1)
+	good, _ := os.ReadFile(filepath.Join(root, "evals", "cases", "stub", "csv-export", "output", "issue.json"))
+	goodWithQuestions := strings.Replace(string(good), `"parent"`, `"open_questions": ["Is a UTF-8 byte order mark needed for Excel?"], "parent"`, 1)
+	fake := &models.Fake{Replies: []models.Response{{Text: withQuestions}, {Text: goodWithQuestions}, {Text: `{"score": 5, "reason": "ok"}`}}}
+	h := harness(t, fake, "gpt-6.1-sol")
+	h.Config.K = 2
+	res, err := h.Tier2(context.Background(), cases, "abc", "dev", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs := res.Cases[0].Runs
+	if runs[0].Status != RunFail || runs[0].Score != 1 || !strings.Contains(runs[0].Floor, "out of scope: adds a content type") {
+		t.Fatalf("invented requirement: %+v", runs[0])
+	}
+	if runs[1].Status != RunPass || len(fake.Requests) != 3 {
+		t.Fatalf("run 2 %+v after %d calls (the judge must be asked only for run 2)", runs[1], len(fake.Requests))
+	}
+	if j := fake.Requests[2].Messages[0].Content; !strings.Contains(j, "Open questions the skill left for a human") || !strings.Contains(j, "byte order mark") {
+		t.Fatalf("judge prompt lacks the open questions:\n%s", j)
+	}
+}

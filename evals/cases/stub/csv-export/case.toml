@@ -6,6 +6,15 @@ artifacts = ["output/issue.json"]
 schemas = [{ file = "output/issue.json", schema = "evals/schemas/workitem.json" }]
 ready = ["output/issue.json"]
 
+# Requirements the request does not state. A tier-2 run scored 2 for adding the first two (evals.yml run 38184730879);
+# the case keeps them as deterministic guards, checked before the judge.
+scope = [
+  { pattern = '(?i)content[- ]?type|\btext/csv\b|\bmime\b', why = "a content type the request does not state" },
+  { pattern = '(?i)\b(column|display(ed)?|list|same|screen)\s+order\b|\bordered\b|\bsorted\b', why = "an ordering the request does not state" },
+  { pattern = '(?i)\butf-?8\b|\bbom\b|\bdelimiter\b|\bfile ?name\b', why = "a file format detail the request does not state" },
+  { pattern = '(?i)\b\d+(\.\d+)?\s*(ms|milliseconds?|seconds?|s)\b', why = "a time limit the request does not state" },
+]
+
 [tier2]
 rubric = "rubric.md"
 lane = "chore"

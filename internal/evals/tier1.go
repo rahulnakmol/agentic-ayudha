@@ -118,6 +118,20 @@ func Tier1(ctx context.Context, root string, c Case, assets fs.FS) Tier1Result {
 	}
 	add("ready", bad, false)
 
+	if len(c.Scope) > 0 {
+		bad = nil
+		for _, f := range c.Ready {
+			var it workitems.Item
+			if err := readJSON(filepath.Join(c.Dir, filepath.FromSlash(f)), &it); err != nil {
+				continue // reported by the ready check
+			}
+			for _, l := range c.OutOfScope(it) {
+				bad = append(bad, f+": "+l)
+			}
+		}
+		add("scope", bad, false)
+	}
+
 	calls, writes, na := runCalls(ctx, c, assets)
 	if len(c.Calls) > 0 {
 		add("calls", calls, na)

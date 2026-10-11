@@ -21,11 +21,19 @@ criterion from evidence.
   `staging with seed data`.
 - `labels`: `type:story`, `status:planned`, and exactly one of `effort:XS`, `effort:S`, `effort:M`, `effort:L`.
 - `parent`: the Feature the request names, as `{"number": N, "type": "feature"}`.
+- `open_questions`: a list of questions for a human, one per entry; empty when nothing is open (see Scope).
+
+## Scope
+
+- Every requirement in the Story must come from the request. Never add one the request does not state: no formats,
+  content types, encodings, file names, orderings, limits, durations, or other numbers of your own.
+- When the request leaves something open that a builder will need (for example a file detail, an ordering, or a time
+  limit), do not decide it in the Story: write it as a question in `open_questions`. Open questions do not count
+  against the Story; invented requirements do.
 
 ## Criteria
 
-- Write one criterion per requirement in the request, and none for anything the request does not ask for. Do not
-  add metadata, ordering, formats, or limits the request does not state.
+- Write one criterion per requirement in the request, and none for anything the request does not ask for.
 - Each `expected` names a concrete, checkable observation in the request's own terms: exact content, or a count
   compared with what the product shows. Use a numeric limit only when the request gives one; otherwise state the
   observable behaviour, such as "the list still scrolls while the file is prepared".

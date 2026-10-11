@@ -157,7 +157,7 @@ const MaxErrors = 1
 func (h *Harness) Tier2(ctx context.Context, cases []Case, sha, ref string, now time.Time) (*Results, error) {
 	judgeFamily := verbs.FamilyOf(h.Config.Judge)
 	res := &Results{Version: ResultsVersion, SHA: sha, Ref: ref, Time: now.UTC(), Judge: h.Config.Judge, Family: judgeFamily, K: h.Config.K}
-	itemSchema, err := os.ReadFile(filepath.Join(h.Root, "evals", "schemas", "workitem.json"))
+	itemSchema, err := os.ReadFile(filepath.Join(h.Root, "evals", "schemas", "draft.json"))
 	if err != nil {
 		return nil, err
 	}
@@ -192,7 +192,7 @@ func (h *Harness) Tier2(ctx context.Context, cases []Case, sha, ref string, now 
 		}
 		cr := CaseResult{Case: c.ID, Skill: c.Skill, Model: m.Model, Family: m.Family}
 		for i := 0; i < h.Config.K; i++ {
-			run, err := h.run(ctx, lane, body, string(input), string(rubric), itemSchema)
+			run, err := h.run(ctx, c, lane, body, string(input), string(rubric), itemSchema)
 			if errors.Is(err, ErrBudget) || errors.Is(err, models.ErrBudget) {
 				return nil, err
 			}
@@ -229,14 +229,21 @@ func (h *Harness) Tier2(ctx context.Context, cases []Case, sha, ref string, now 
 	return res, nil
 }
 
-func (h *Harness) run(ctx context.Context, lane verbs.LaneID, body, input, rubric string, itemSchema []byte) (Run, error) {
-	var it workitems.Item
+// draft is a skill's tier-2 reply: the work item plus the questions the skill
+// left open instead of deciding them (evals/schemas/draft.json).
+type draft struct {
+	workitems.Item
+	OpenQuestions []string `json:"open_questions"`
+}
+
+func (h *Harness) run(ctx context.Context, c Case, lane verbs.LaneID, body, input, rubric string, itemSchema []byte) (Run, error) {
+	var d draft
 	req := models.Request{
-		System:    body + "\n\nReply with the work item you produce as JSON: {type, title, fields, labels, parent}.",
+		System:    body + "\n\nReply with the work item you produce as JSON: {type, title, fields, labels, parent, open_questions}.",
 		Messages:  []models.Message{{Role: "user", Content: untrusted("eval-input", input)}},
 		MaxTokens: h.Config.MaxTokens.Skill,
 	}
-	if err := models.Structured(ctx, h.complete(lane), req, itemSchema, &it); err != nil {
+	if err := models.Structured(ctx, h.complete(lane), req, itemSchema, &d); err != nil {
 		var re *models.ReplyError
 		if errors.As(err, &re) && !re.Parse {
 			// JSON in the wrong shape is the skill's failure (rule 7).
@@ -244,6 +251,7 @@ func (h *Harness) run(ctx context.Context, lane verbs.LaneID, body, input, rubri
 		}
 		return Run{}, err // no JSON at all, twice, or no reply: the run errors
 	}
+	it := d.Item
 	if ps := workitems.Validate(it, workitems.StageReady); len(ps) > 0 {
 		var msgs []string
 		for _, p := range ps {
@@ -251,7 +259,14 @@ func (h *Harness) run(ctx context.Context, lane verbs.LaneID, body, input, rubri
 		}
 		return Run{Status: RunFail, Score: 1, Floor: "fails Ready: " + strings.Join(msgs, "; ")}, nil
 	}
+	if bad := c.OutOfScope(it); len(bad) > 0 {
+		return Run{Status: RunFail, Score: 1, Floor: "out of scope: " + strings.Join(bad, "; ")}, nil
+	}
 	out, _ := json.MarshalIndent(it, "", "  ")
+	questions := "(none)"
+	if len(d.OpenQuestions) > 0 {
+		questions = "- " + strings.Join(d.OpenQuestions, "\n- ")
+	}
 	var v struct {
 		Score  int    `json:"score"`
 		Reason string `json:"reason"`
@@ -259,7 +274,8 @@ func (h *Harness) run(ctx context.Context, lane verbs.LaneID, body, input, rubri
 	jreq := models.Request{
 		System: judgeSystem + "\n\n## Rubric\n\n" + strings.TrimSpace(rubric),
 		Messages: []models.Message{{Role: "user", Content: "## Task given to the skill\n\n" + untrusted("eval-input", input) +
-			"\n\n## Skill output\n\n" + untrusted("skill-output", string(out))}},
+			"\n\n## Skill output\n\n" + untrusted("skill-output", string(out)) +
+			"\n\n## Open questions the skill left for a human\n\n" + untrusted("skill-questions", questions)}},
 		MaxTokens: h.Config.MaxTokens.Judge,
 		Format:    &models.Format{Name: "rubric_score", Schema: judgeSchema, Strict: true},
 	}
