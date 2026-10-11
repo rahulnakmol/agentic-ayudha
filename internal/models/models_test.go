@@ -134,6 +134,7 @@ func TestWireFormats(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got.path, got.auth, got.version = r.URL.Path, r.Header.Get("Authorization"), r.Header.Get("anthropic-version")
 		b, _ := io.ReadAll(r.Body)
+		got.body = nil
 		_ = json.Unmarshal(b, &got.body)
 		switch r.URL.Path {
 		case "/v1/messages":
@@ -162,6 +163,25 @@ func TestWireFormats(t *testing.T) {
 			msgs := b["messages"].([]any)
 			return msgs[0].(map[string]any)["role"] == "system" && b["reasoning_effort"] == "high"
 		}},
+	}
+	// Structured output: Responses text.format and Chat response_format; Messages has none.
+	sreq := req
+	sreq.Format = &Format{Name: "verdict", Schema: json.RawMessage(`{"type":"object"}`), Strict: true}
+	for style, check := range map[string]func(map[string]any) bool{
+		StyleResponses: func(b map[string]any) bool {
+			f, _ := b["text"].(map[string]any)["format"].(map[string]any)
+			return f["type"] == "json_schema" && f["name"] == "verdict" && f["strict"] == true && f["schema"] != nil
+		},
+		StyleChat: func(b map[string]any) bool {
+			f, _ := b["response_format"].(map[string]any)
+			return f["type"] == "json_schema" && f["json_schema"].(map[string]any)["name"] == "verdict"
+		},
+		StyleMessages: func(b map[string]any) bool { return b["text"] == nil && b["response_format"] == nil },
+	} {
+		c := HTTPClient{BaseURL: srv.URL + "/v1", Style: style, Key: "k", HTTP: srv.Client()}
+		if _, err := c.Complete(context.Background(), sreq); err != nil || !check(got.body) {
+			t.Errorf("%s structured output: %v, sent %v", style, err, got.body)
+		}
 	}
 	for _, tt := range tests {
 		c := HTTPClient{BaseURL: srv.URL + "/v1", Style: tt.style, Key: "k-123", HTTP: srv.Client()}
@@ -301,7 +321,44 @@ func TestStructured(t *testing.T) {
 		}
 	}
 	bad := &Fake{Replies: []Response{{Text: `{"disposition":"merge"}`}}}
-	if err := Structured(context.Background(), bad.Complete, Request{}, schema, &v); err == nil || !strings.Contains(err.Error(), "findings") {
+	var re *ReplyError
+	if err := Structured(context.Background(), bad.Complete, Request{}, schema, &v); !errors.As(err, &re) || re.Parse || !strings.Contains(err.Error(), "findings") {
 		t.Fatalf("invalid twice: %v", err)
+	}
+	if bad.Requests[0].Format == nil || string(bad.Requests[0].Format.Schema) != string(schema) {
+		t.Fatal("Structured did not ask for structured output")
+	}
+	// JSON inside prose and fences is found; an empty reply is retried with a non-empty assistant turn.
+	prose := &Fake{Replies: []Response{{Text: ""}, {Text: "Sure. The verdict is {\"disposition\":\"merge\",\"findings\":[]} as requested."}}}
+	if err := Structured(context.Background(), prose.Complete, Request{}, schema, &v); err != nil || v.Disposition != "merge" {
+		t.Fatalf("bare JSON in prose: %+v %v", v, err)
+	}
+	if prose.Requests[1].Messages[0].Content != "(empty reply)" {
+		t.Errorf("empty reply echoed as %q", prose.Requests[1].Messages[0].Content)
+	}
+	junk := &Fake{Replies: []Response{{Text: "I cannot comply."}}}
+	if err := Structured(context.Background(), junk.Complete, Request{}, schema, &v); !errors.As(err, &re) || !re.Parse || re.Reply != "I cannot comply." {
+		t.Fatalf("unparseable twice: %v", err)
+	}
+}
+
+// A gateway that rejects structured output gets the same call again without it.
+func TestFormatFallback(t *testing.T) {
+	var calls []bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var b map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&b)
+		calls = append(calls, b["text"] != nil)
+		if b["text"] != nil {
+			http.Error(w, `{"error":"unsupported parameter: text.format"}`, http.StatusBadRequest)
+			return
+		}
+		_, _ = w.Write([]byte(`{"output":[{"type":"message","content":[{"type":"output_text","text":"{}"}]}]}`))
+	}))
+	defer srv.Close()
+	c := HTTPClient{BaseURL: srv.URL, Style: StyleResponses, Key: "k", HTTP: srv.Client()}
+	r, err := c.Complete(context.Background(), Request{Format: &Format{Name: "x", Schema: json.RawMessage(`{}`)}})
+	if err != nil || r.Text != "{}" || len(calls) != 2 || !calls[0] || calls[1] {
+		t.Fatalf("fallback: %+v %v, calls with format %v", r, err, calls)
 	}
 }

@@ -214,3 +214,111 @@ func TestTier2SpendCap(t *testing.T) {
 		t.Fatalf("spend cap: %v after %d calls, want the cap after 3 (1.2 USD > 1.0)", err, len(fake.Requests))
 	}
 }
+
+// judgeReplies builds fake replies for k runs: a valid skill output, then the
+// judge's reply (or replies) for that run.
+func judgeReplies(t *testing.T, judge func(run int) []string) []models.Response {
+	t.Helper()
+	item, err := os.ReadFile(filepath.Join(root, "evals", "cases", "stub", "csv-export", "output", "issue.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []models.Response
+	for i := 0; i < 5; i++ {
+		out = append(out, models.Response{Text: string(item)})
+		for _, j := range judge(i) {
+			out = append(out, models.Response{Text: j})
+		}
+	}
+	return out
+}
+
+// A judge reply with prose around a fenced JSON block is scored, without a retry.
+func TestJudgeFencedReplyWithProse(t *testing.T) {
+	cases, _ := LoadCases(root)
+	fake := &models.Fake{Replies: judgeReplies(t, func(int) []string {
+		return []string{"Here is my assessment.\n\n```json\n{\"score\": 5, \"reason\": \"all three requirements covered\"}\n```\n\nLet me know if you need more."}
+	})}
+	res, err := harness(t, fake, "gpt-6.1-sol").Tier2(context.Background(), cases, "abc", "dev", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := res.Cases[0]
+	if len(fake.Requests) != 10 || c.Errors != 0 || c.PassK != 1 || c.Mean != 5 || c.Runs[0].Status != RunPass {
+		t.Fatalf("%d calls, case %+v", len(fake.Requests), c)
+	}
+	if f := fake.Requests[1].Format; f == nil || f.Name != "rubric_score" || !f.Strict {
+		t.Fatalf("judge was not asked for structured output: %+v", f)
+	}
+	if v, _ := Compare(res, nil, harness(t, fake, "gpt-6.1-sol").Config); v != Pass {
+		t.Fatalf("verdict %s", v)
+	}
+}
+
+// A judge reply that cannot be parsed twice makes the run an error, with a
+// redacted excerpt; more than one error in k fails the tier outright, while a
+// single error leaves pass^k and the mean to the completed runs.
+func TestJudgeUnparseableTwice(t *testing.T) {
+	cases, _ := LoadCases(root)
+	const leak = "ghp_abcdefghijklmnopqrstuvwxyz0123456789"
+	garbage := "I would rate this highly overall. " + leak
+	ok := `{"score": 4, "reason": "fine"}`
+	for _, tc := range []struct {
+		name      string
+		badRuns   int
+		verdict   string
+		passK     float64
+		completed int
+	}{
+		{"one of five", 1, Pass, 1, 4},
+		{"two of five", 2, Fail, 1, 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := &models.Fake{Replies: judgeReplies(t, func(run int) []string {
+				if run < tc.badRuns {
+					return []string{garbage, garbage} // the judgement and its one retry
+				}
+				return []string{ok}
+			})}
+			h := harness(t, fake, "gpt-6.1-sol")
+			res, err := h.Tier2(context.Background(), cases, "abc", "dev", time.Now())
+			if err != nil {
+				t.Fatal(err)
+			}
+			c := res.Cases[0]
+			bad := c.Runs[0]
+			if bad.Status != RunError || bad.Score != 0 || !strings.Contains(bad.Excerpt, "I would rate this highly") ||
+				strings.Contains(bad.Excerpt, leak) || !strings.Contains(bad.Excerpt, "[REDACTED]") {
+				t.Fatalf("errored run: %+v", bad)
+			}
+			if want := 5*2 + tc.badRuns; len(fake.Requests) != want {
+				t.Fatalf("%d model calls, want %d (one retry per bad judgement)", len(fake.Requests), want)
+			}
+			if c.Errors != tc.badRuns || c.PassK != tc.passK || c.Mean != 4 || len(c.Runs)-c.Errors != tc.completed {
+				t.Fatalf("case: %+v", c)
+			}
+			v, reasons := Compare(res, nil, h.Config)
+			if v != tc.verdict || (tc.verdict == Fail && !strings.Contains(strings.Join(reasons, "\n"), "2 of 5 runs errored")) {
+				t.Fatalf("verdict %s %v", v, reasons)
+			}
+		})
+	}
+}
+
+// The live failure on 35aea36: the skill model's reply was not JSON twice. That
+// is an error, not a score of 1; JSON of the wrong shape stays a skill failure.
+func TestSkillReplyErrors(t *testing.T) {
+	cases, _ := LoadCases(root)
+	fake := &models.Fake{Replies: []models.Response{{Text: ""}, {Text: "```json\n{\"type\": \"story\", \"title\""},
+		{Text: `{"type": "story"}`}, {Text: `{"type": "story"}`}}}
+	h := harness(t, fake, "gpt-6.1-sol")
+	h.Config.K = 2
+	res, err := h.Tier2(context.Background(), cases, "abc", "dev", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs := res.Cases[0].Runs
+	if runs[0].Status != RunError || runs[0].Excerpt == "" || runs[1].Status != RunFail || runs[1].Score != 1 {
+		t.Fatalf("runs: %+v", runs)
+	}
+}

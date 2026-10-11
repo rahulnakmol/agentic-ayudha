@@ -131,3 +131,7 @@ func secretKey(k string, extra []string) bool {
 }
 
 func redactString(s string) string { return credential.ReplaceAllString(s, redacted) }
+
+// RedactString replaces credential-shaped substrings, as payload redaction
+// does; the eval harness uses it on reply excerpts it records.
+func RedactString(s string) string { return redactString(s) }

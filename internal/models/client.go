@@ -27,7 +27,18 @@ type Request struct {
 	System    string
 	Messages  []Message
 	MaxTokens int
-	Effort    string // reasoning effort; empty for the provider default
+	Effort    string  // reasoning effort; empty for the provider default
+	Format    *Format // ask for JSON matching a schema where the wire format supports it; nil for free text
+}
+
+// Format asks the endpoint for structured output: OpenAI Responses
+// text.format and Chat Completions response_format (json_schema). Anthropic
+// Messages has no equivalent here, so the schema reaches it only through the
+// prompt (Structured puts it there for every style).
+type Format struct {
+	Name   string
+	Schema json.RawMessage
+	Strict bool // the endpoint must follow the schema exactly; the schema must use only keywords strict mode allows
 }
 
 // Response is a provider-neutral reply.
@@ -95,6 +106,9 @@ func (c HTTPClient) Complete(ctx context.Context, r Request) (Response, error) {
 		if r.Effort != "" {
 			b["reasoning"] = map[string]string{"effort": r.Effort}
 		}
+		if f := r.Format; f != nil {
+			b["text"] = map[string]any{"format": map[string]any{"type": "json_schema", "name": f.Name, "schema": f.Schema, "strict": f.Strict}}
+		}
 		body = b
 	case StyleChat:
 		path = "/chat/completions"
@@ -105,6 +119,9 @@ func (c HTTPClient) Complete(ctx context.Context, r Request) (Response, error) {
 		b := map[string]any{"model": r.Model, "messages": msgs, "max_tokens": r.MaxTokens}
 		if r.Effort != "" {
 			b["reasoning_effort"] = r.Effort
+		}
+		if f := r.Format; f != nil {
+			b["response_format"] = map[string]any{"type": "json_schema", "json_schema": map[string]any{"name": f.Name, "schema": f.Schema, "strict": f.Strict}}
 		}
 		body = b
 	default:
@@ -139,6 +156,12 @@ func (c HTTPClient) Complete(ctx context.Context, r Request) (Response, error) {
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
 	if err != nil {
 		return Response{}, err
+	}
+	if resp.StatusCode == http.StatusBadRequest && r.Format != nil && c.Style != StyleMessages {
+		// The endpoint (or a gateway in front of it) does not take structured
+		// output for this model: ask again with the schema in the prompt only.
+		r.Format = nil
+		return c.Complete(ctx, r)
 	}
 	if resp.StatusCode/100 != 2 {
 		return Response{}, &StatusError{Code: resp.StatusCode, Body: truncate(string(raw), 300)}
