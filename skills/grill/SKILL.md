@@ -36,3 +36,5 @@ aayu:
 Interview a human until a work item of the given type is complete and passes validation, then write it as an issue.
 
 Body lands in WP3.1 (skill format) and WP5.3 (the verb).
+
+Scratch edit: WP0.1 acceptance, unreviewed skills/ change against dev. Never merged.
