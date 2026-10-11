@@ -1,0 +1,271 @@
+package secrets
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+
+	"filippo.io/age"
+	"github.com/zalando/go-keyring"
+)
+
+// keyringService is the service name aayudha uses in the OS keychain.
+const keyringService = "aayudha"
+
+// Keychain is the OS keychain backend (macOS Keychain, Windows Credential
+// Manager, Secret Service over D-Bus on Linux).
+type Keychain struct{}
+
+func (Keychain) Name() string { return "keychain" }
+
+// Available probes the keychain; headless Linux without a Secret Service fails here.
+func (Keychain) Available() error {
+	_, err := keyring.Get(keyringService, "aayudha-probe")
+	if err == nil || errors.Is(err, keyring.ErrNotFound) {
+		return nil
+	}
+	return fmt.Errorf("OS keychain unavailable: %w", err)
+}
+
+func (Keychain) Get(name string) (string, error) {
+	v, err := keyring.Get(keyringService, name)
+	if errors.Is(err, keyring.ErrNotFound) {
+		return "", ErrNotFound
+	}
+	return v, err
+}
+
+func (Keychain) Set(name, value string) error { return keyring.Set(keyringService, name, value) }
+
+func (Keychain) Delete(name string) error {
+	err := keyring.Delete(keyringService, name)
+	if errors.Is(err, keyring.ErrNotFound) {
+		return ErrNotFound
+	}
+	return err
+}
+
+func (Keychain) Names() ([]string, error) { return nil, nil }
+
+// Env is the read-only AAYU_SECRET_<NAME> environment backend, for CI and
+// headless machines.
+type Env struct {
+	Getenv  func(string) string
+	Environ []string
+}
+
+func (Env) Name() string     { return "env" }
+func (Env) Available() error { return nil }
+
+func (e Env) Get(name string) (string, error) {
+	if v := e.Getenv(EnvVar(name)); v != "" {
+		return v, nil
+	}
+	return "", ErrNotFound
+}
+
+func (Env) Set(string, string) error { return ErrReadOnly }
+func (Env) Delete(string) error      { return ErrReadOnly }
+
+func (e Env) Names() ([]string, error) {
+	var out []string
+	for _, kv := range e.Environ {
+		k, v, _ := strings.Cut(kv, "=")
+		if strings.HasPrefix(k, "AAYU_SECRET_") && v != "" {
+			out = append(out, strings.ToLower(strings.TrimPrefix(k, "AAYU_SECRET_")))
+		}
+	}
+	return out, nil
+}
+
+// File is the age-encrypted file backend: secrets live as one encrypted JSON
+// object in Path, encrypted to the X25519 identity in IdentityPath. Both files
+// are created 0600 under the XDG directories.
+type File struct {
+	Path         string // e.g. $XDG_DATA_HOME/aayudha/secrets.age
+	IdentityPath string // e.g. $XDG_CONFIG_HOME/aayudha/age-identity.txt
+}
+
+func (File) Name() string { return "file" }
+
+func (f File) Available() error {
+	if f.Path == "" || f.IdentityPath == "" {
+		return errors.New("no XDG data or config directory")
+	}
+	return nil
+}
+
+func (f File) identity(create bool) (*age.X25519Identity, error) {
+	b, err := os.ReadFile(f.IdentityPath)
+	if errors.Is(err, os.ErrNotExist) && create {
+		id, err := age.GenerateX25519Identity()
+		if err != nil {
+			return nil, err
+		}
+		if err := writePrivate(f.IdentityPath, []byte(id.String()+"\n")); err != nil {
+			return nil, err
+		}
+		return id, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return age.ParseX25519Identity(strings.TrimSpace(string(b)))
+}
+
+func (f File) load() (map[string]string, error) {
+	b, err := os.ReadFile(f.Path)
+	if errors.Is(err, os.ErrNotExist) {
+		return map[string]string{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	id, err := f.identity(false)
+	if err != nil {
+		return nil, fmt.Errorf("age identity %s: %w", f.IdentityPath, err)
+	}
+	r, err := age.Decrypt(bytes.NewReader(b), id)
+	if err != nil {
+		return nil, fmt.Errorf("decrypt %s: %w", f.Path, err)
+	}
+	plain, err := io.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+	m := map[string]string{}
+	return m, json.Unmarshal(plain, &m)
+}
+
+func (f File) save(m map[string]string) error {
+	id, err := f.identity(true)
+	if err != nil {
+		return err
+	}
+	plain, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	var buf bytes.Buffer
+	w, err := age.Encrypt(&buf, id.Recipient())
+	if err != nil {
+		return err
+	}
+	if _, err := w.Write(plain); err != nil {
+		return err
+	}
+	if err := w.Close(); err != nil {
+		return err
+	}
+	return writePrivate(f.Path, buf.Bytes())
+}
+
+func (f File) Get(name string) (string, error) {
+	m, err := f.load()
+	if err != nil {
+		return "", err
+	}
+	if v, ok := m[name]; ok {
+		return v, nil
+	}
+	return "", ErrNotFound
+}
+
+func (f File) Set(name, value string) error {
+	m, err := f.load()
+	if err != nil {
+		return err
+	}
+	m[name] = value
+	return f.save(m)
+}
+
+func (f File) Delete(name string) error {
+	m, err := f.load()
+	if err != nil {
+		return err
+	}
+	if _, ok := m[name]; !ok {
+		return ErrNotFound
+	}
+	delete(m, name)
+	return f.save(m)
+}
+
+func (f File) Names() ([]string, error) {
+	if _, err := os.Stat(f.Path); errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	m, err := f.load()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(m))
+	for n := range m {
+		out = append(out, n)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// writePrivate atomically writes data with mode 0600 (directories 0700).
+func writePrivate(path string, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-*")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.Remove(tmp.Name()) }()
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
+}
+
+// Dirs returns the XDG config and data directories for aayudha from the environment.
+func Dirs(getenv func(string) string) (configDir, dataDir string) {
+	home := getenv("HOME")
+	if home == "" {
+		home = getenv("USERPROFILE")
+	}
+	configDir, dataDir = getenv("XDG_CONFIG_HOME"), getenv("XDG_DATA_HOME")
+	if configDir == "" && home != "" {
+		configDir = filepath.Join(home, ".config")
+	}
+	if dataDir == "" && home != "" {
+		dataDir = filepath.Join(home, ".local", "share")
+	}
+	if configDir != "" {
+		configDir = filepath.Join(configDir, "aayudha")
+	}
+	if dataDir != "" {
+		dataDir = filepath.Join(dataDir, "aayudha")
+	}
+	return configDir, dataDir
+}
+
+// Default returns the standard store: keychain, then env, then the age file.
+func Default(getenv func(string) string, environ []string) *Store {
+	cfg, data := Dirs(getenv)
+	f := File{}
+	if cfg != "" && data != "" {
+		f = File{Path: filepath.Join(data, "secrets.age"), IdentityPath: filepath.Join(cfg, "age-identity.txt")}
+	}
+	return New(Keychain{}, Env{Getenv: getenv, Environ: environ}, f)
+}

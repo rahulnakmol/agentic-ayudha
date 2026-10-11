@@ -28,6 +28,13 @@ plan lists in §2; the rest are pulled in by them.
 | `github.com/bahlo/generic-list-go` | v0.2.0 | BSD-3-Clause | Via ordered-map | <https://github.com/bahlo/generic-list-go> |
 | `github.com/buger/jsonparser` | v1.1.2 | MIT | Via ordered-map | <https://github.com/buger/jsonparser> |
 | `go.yaml.in/yaml/v4` | v4.0.0-rc.2 | MIT and Apache-2.0 | Via ordered-map | <https://github.com/yaml/go-yaml> |
+| `github.com/zalando/go-keyring` | v0.2.8 | MIT | OS keychain secrets backend (WP1.3), direct | <https://github.com/zalando/go-keyring> |
+| `github.com/godbus/dbus/v5` | v5.2.2 | BSD-2-Clause | Secret Service on Linux, via go-keyring | <https://github.com/godbus/dbus> |
+| `github.com/danieljoos/wincred` | v1.2.3 | MIT | Windows Credential Manager, via go-keyring | <https://github.com/danieljoos/wincred> |
+| `filippo.io/age` | v1.3.2 | BSD-3-Clause | Encrypted secrets file (WP1.3) and token broker hand-over (WP1.4), direct | <https://github.com/FiloSottile/age> |
+| `filippo.io/hpke` | v0.4.0 | BSD-3-Clause | Via age | <https://github.com/FiloSottile/hpke> |
+| `golang.org/x/crypto` | v0.55.0 | BSD-3-Clause | Via age | <https://go.googlesource.com/crypto> |
+| `golang.org/x/sys` | v0.47.0 | BSD-3-Clause | Via go-keyring and age | <https://go.googlesource.com/sys> |
 
 ### Shelled out by `self-update` (not bundled)
 
@@ -85,8 +92,6 @@ CI scan when the component is actually added.
 | `github.com/google/go-github` | GitHub REST client (WP2.3) | BSD-3-Clause |
 | `github.com/shurcooL/githubv4` | GitHub GraphQL, Projects v2 only (WP2.3) | MIT |
 | `github.com/modelcontextprotocol/go-sdk` | MCP server (WP3.3) | To be confirmed |
-| `github.com/zalando/go-keyring` | OS keychain secrets backend (WP1.3) | MIT |
-| `filippo.io/age` | Encrypted secrets file, token broker (WP1.3, WP1.4) | BSD-3-Clause |
 | `github.com/charmbracelet/bubbletea` | `grill` TUI (WP5.3) | MIT |
 | `modernc.org/sqlite` | `measure` snapshots, pure Go (WP7.2) | BSD-3-Clause |
 | `go.opentelemetry.io/otel` | Traces (WP1.8) | Apache-2.0 |

@@ -219,11 +219,21 @@ These paths need a human CODEOWNER review (see [.github/CODEOWNERS](.github/CODE
 ## Identities and approvals
 
 - Humans use their own GitHub account and token.
-- Agent lanes and CI use a bot identity: a GitHub App or a machine user (n/a until WP1.4). Until then agents
-  run under the human's identity (the WP1.4 day-one path) and their writes are tagged
-  `identity:human-fallback`.
+- Agent lanes and CI use a bot identity: a GitHub App (`[identity] app_id`, `app_slug`) or a machine user
+  (`[identity] machine_user`, `machine_user_secret`). Without one, agents run under the human's identity (the
+  WP1.4 day-one path) and their writes are tagged `identity:human-fallback`. `aayu auth status` shows which
+  token and bot identity resolve, and warns on over-scoped human tokens (`workflow`, `admin:*`, `delete_repo`).
+- The App private key never lives on a laptop. A laptop gets a short-lived (≤ 1 h) installation token from
+  the token broker workflow (`aayudha-token.yml`, installed by `aayu init --gates`), dispatched with the
+  human's own token and returned encrypted to a one-time age key.
+- CI writes as the bot with the App's installation token (`actions/create-github-app-token`, passed as
+  `AAYU_BOT_TOKEN`), never `GITHUB_TOKEN`; `aayu --ci` refuses bot and `ledger` writes without it
+  (Appendix B D1).
 - An approval counts only if it comes from an account with `type != Bot` that is not listed in
-  `[identity] bot_logins` (enforced by verbs from WP1.4).
+  `[identity] bot_logins`, and is not the PR author's.
+- Secrets are named in config and stored with `aayu auth set-secret <name>` (value read from stdin) in the
+  OS keychain, or the age-encrypted file under `$XDG_DATA_HOME/aayudha` on headless machines; CI passes them
+  as `AAYU_SECRET_<NAME>` variables.
 
 ## Solo-mode policy
 
@@ -254,8 +264,11 @@ gate instead (docs/BUILD-PLAN.md Appendix B, D2).
    that is not on the list is an incident (see [SECURITY.md](SECURITY.md#tool-incident-plan)).
 
 **When a bot identity exists (WP1.4)**: agent-authored PRs are opened by the bot, so the founder can approve
-them as a real review. WP1.4 extends the `protected-paths` gate to pass on an approving review of the head
-commit by a human CODEOWNER who is not the author. Bypasses then remain only for PRs the founder authors.
+them as a real review. The `protected-paths` gate passes when every protected path in the PR has an approving
+review of the head commit from one of its CODEOWNERs who is a human, not a bot login, and not the author
+(`internal/identity`, run from the base branch). Submitting or dismissing a review re-runs the check
+(`protected-paths-review.yml` → `protected-paths-rerun.yml`). Bypasses then remain only for PRs the founder
+authors.
 
 **When a second human seat is added** (`aayu seat add <seat> --human <login>`, WP5.1): the rule switches to
 true second-human review: the ruleset requires one approval with native CODEOWNER review, the gate and the
