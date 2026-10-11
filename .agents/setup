@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# Orb setup for agentic-ayudha (Node/pnpm + Go).
+# Runs once per fresh orb (before the snapshot is taken) and again on warm
+# snapshots; every step is idempotent and must terminate. Aim: seconds on a
+# warm filesystem.
+set -euo pipefail
+
+# Pinned toolchain versions. Bump these together with any go.mod / packageManager pin.
+GO_VERSION="1.27.2"
+GO_SHA256_LINUX_AMD64="ecbadb99091a3f46e31f5f934b068b1864eafa7995211b39eaddf76996045fe5"
+GO_SHA256_LINUX_ARM64="94f3e30b8e374bc285e7dadc11e0865726b9bc6e85b841ccceaabc0214c6b7c8"
+
+step() {
+  echo "==> [$(date +%H:%M:%S)] $*"
+}
+
+case "$(uname -m)" in
+  x86_64) GO_ARCH="amd64"; GO_SHA256="$GO_SHA256_LINUX_AMD64" ;;
+  aarch64) GO_ARCH="arm64"; GO_SHA256="$GO_SHA256_LINUX_ARM64" ;;
+  *) echo "Unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+esac
+
+# --- Node.js / pnpm ---------------------------------------------------------
+# The orb base template ships Node.js, npm, and pnpm; verify rather than
+# reinstall, and fall back to corepack only if pnpm is somehow missing.
+step "Checking Node.js and pnpm"
+node --version
+if ! command -v pnpm >/dev/null 2>&1; then
+  step "pnpm missing; enabling via corepack"
+  corepack enable
+fi
+pnpm --version
+
+# --- Go ----------------------------------------------------------------------
+# Not in the base template and Debian's apt package is too old; install the
+# pinned release from go.dev when the version on disk does not match.
+step "Checking Go ${GO_VERSION}"
+if [[ ! -x /usr/local/go/bin/go ]] || ! /usr/local/go/bin/go version | grep -q "go${GO_VERSION} "; then
+  step "Installing Go ${GO_VERSION} (${GO_ARCH})"
+  tarball="/tmp/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz"
+  url="https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz"
+  curl -fsSLo "$tarball" "$url"
+  echo "${GO_SHA256}  ${tarball}" | sha256sum -c -
+  sudo rm -rf /usr/local/go
+  sudo tar -C /usr/local -xzf "$tarball"
+  sudo ln -sf /usr/local/go/bin/go /usr/local/bin/go
+  sudo ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
+  rm -f "$tarball"
+fi
+go version
+
+# --- Dependencies ------------------------------------------------------------
+# Conditional so the script is correct before the first lockfile lands and
+# stays frozen-lockfile-true once it does.
+if [[ -f pnpm-lock.yaml ]]; then
+  step "Installing Node dependencies (pnpm, frozen lockfile)"
+  pnpm install --frozen-lockfile
+else
+  step "No pnpm-lock.yaml yet; skipping Node dependency install"
+fi
+
+if [[ -f go.mod ]]; then
+  step "Downloading Go modules"
+  go mod download
+else
+  step "No go.mod yet; skipping Go module download"
+fi
+
+# --- Environment templates ---------------------------------------------------
+if [[ -f .env.example ]]; then
+  step "Ensuring .env.local from .env.example"
+  [[ -f .env.local ]] || cp -- .env.example .env.local
+fi
+
+step "Setup complete"
