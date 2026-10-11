@@ -1,0 +1,14 @@
+{
+  "type": "story",
+  "title": "Export the filtered claims list to CSV",
+  "fields": {
+    "summary": "As a caseworker, I want to export the claims list I am viewing to CSV, so that I can share it with my manager.",
+    "completion_goal": "1. [recording] state: claims list filtered by status Open; expected: Export CSV downloads a file whose rows are exactly the visible filtered rows\n2. [api-trace] state: export with three visible columns; expected: the CSV header lists exactly those three columns\n3. [metric] state: export of 12,000 rows; expected: the page stays responsive, with no main-thread task longer than 200 ms",
+    "measure": "criteria observed",
+    "threshold": "3 of 3",
+    "scenario": "Filter the claims list, hide one column, export, and open the file; repeat with 12,000 seeded rows.",
+    "environment": "staging with seed data"
+  },
+  "labels": ["type:story", "status:planned", "effort:M"],
+  "parent": {"number": 7, "type": "feature"}
+}

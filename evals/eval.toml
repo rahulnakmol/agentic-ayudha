@@ -1,0 +1,24 @@
+# Skill eval harness (docs/BUILD-PLAN.md WP3.4; evals/README.md).
+#
+# Tier 2 runs each case with a [tier2] section k times on the skill's model and has a pinned judge from
+# another model family score every run against the case's rubric. The judge's family is inferred from its
+# model ID (as the model gateway does, WP1.6) and must differ from the skill model's.
+
+judge = "gpt-6.1-sol" # openai; the stub skill runs on the chore lane's direct model, claude-haiku-5-5 (anthropic)
+k = 5                 # runs per case
+pass_score = 4        # a run passes at this rubric score (1-5) or above
+
+# The bar (WP3.4): pass^k >= 0.8 and mean >= 3.5 to pass; on promotion, a mean more than 0.3 below the
+# baseline (evals/results/<main-sha>.json) or any case's pass^k below its baseline fails.
+min_pass_k = 0.8
+min_mean = 3.5
+max_drop = 0.3
+
+# Spend cap for one tier-2 run in USD, on top of the [budget] breaker. Unpriced models are charged at the
+# gateway's conservative fallback rate, so real spend is lower.
+max_usd = 1.5
+
+# Output caps per call. Reasoning models may spend part of the cap on reasoning; a cap is not a charge.
+[max_tokens]
+skill = 2000
+judge = 2000

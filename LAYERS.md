@@ -12,7 +12,7 @@ Each layer has exactly one owner seat. Seat charters land in WP5.1.
 | L02 | Interaction / API boundary | Code Architect | `cmd/**`<br>`internal/cli/**`<br>`internal/mcp/**` |
 | L03 | Application / workflow | Engineering Manager | `internal/verbs/**`<br>`internal/workitems/**`<br>`internal/loops/**`<br>`loops/**`<br>`work-items/**`<br>`skills/**`<br>`seats/**` |
 | L04 | Domain / policy | Quality Architect | `internal/verify/**`<br>`internal/proof/**`<br>`ops/**`<br>`CONSTRAINTS.md` |
-| L05 | Intelligence | AI Native Engineer (+SRE hat) | `internal/models/**`<br>`evals/**` |
+| L05 | Intelligence | AI Native Engineer (+SRE hat) | `internal/models/**`<br>`internal/evals/**`<br>`evals/**` |
 | L06 | Contracts / integration | Code Architect | `internal/github/**`<br>`internal/hosts/**`<br>`internal/notify/**`<br>`hosts/**` |
 | L07 | Operational data / state | AI Native Engineer (+SRE hat) | `internal/ledger/**`<br>`internal/config/**`<br>`internal/secrets/**`<br>`internal/identity/**`<br>`internal/actions/**` |
 | L08 | Analytics / reporting | Revenue Architect | `internal/telemetry/**` |

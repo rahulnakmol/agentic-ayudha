@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "sha": "2222222222222222222222222222222222222222",
+  "judge": "gpt-6.1-sol",
+  "judge_family": "openai",
+  "k": 5,
+  "cases": [
+    {
+      "case": "stub/csv-export",
+      "skill": "stub",
+      "model": "claude-haiku-5-5",
+      "family": "anthropic",
+      "runs": [
+        {
+          "score": 4,
+          "pass": true
+        },
+        {
+          "score": 4,
+          "pass": true
+        },
+        {
+          "score": 4,
+          "pass": true
+        },
+        {
+          "score": 4,
+          "pass": true
+        },
+        {
+          "score": 4,
+          "pass": true
+        }
+      ],
+      "pass_k": 1,
+      "mean": 4.0
+    }
+  ],
+  "pass_k": 1,
+  "mean": 4.0,
+  "verdict": "pass"
+}

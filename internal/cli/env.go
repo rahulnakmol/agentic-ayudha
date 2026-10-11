@@ -136,6 +136,10 @@ type Handler func(ctx context.Context, e *Env, in Values) error
 // without a handler reports "not implemented yet" with exit code 2.
 var handlers = map[string]Handler{}
 
+// Implemented reports whether this binary implements a registry command. The
+// eval harness (WP3.4) treats calls to unshipped verbs as "n/a" (rule 1a).
+func Implemented(name string) bool { _, ok := handlers[name]; return ok }
+
 func register(name string, h Handler) {
 	if _, dup := handlers[name]; dup {
 		panic("cli: duplicate handler " + name)
