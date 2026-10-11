@@ -15,5 +15,5 @@ Each layer has exactly one owner seat. Seat charters land in WP5.1.
 | L05 | Intelligence | AI Native Engineer (+SRE hat) | `internal/models/**`<br>`evals/**` |
 | L06 | Contracts / integration | Code Architect | `internal/github/**`<br>`internal/hosts/**`<br>`internal/notify/**`<br>`hosts/**` |
 | L07 | Operational data / state | AI Native Engineer (+SRE hat) | `internal/ledger/**`<br>`internal/config/**`<br>`internal/secrets/**`<br>`internal/identity/**`<br>`internal/actions/**` |
-| L08 | Analytics / reporting | Revenue Architect | `internal/telemetry/**` |
+| L08 | Analytics / reporting | Founder | `internal/telemetry/**` |
 | L09 | Platform / operations | DevOps & DevEx Tinkerer | `.github/**`<br>`.agents/**`<br>`embed.go`<br>`go.mod`<br>`go.sum` |
