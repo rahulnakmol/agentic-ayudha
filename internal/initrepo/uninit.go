@@ -90,6 +90,11 @@ func (in *Init) Uninit(ctx context.Context) error {
 				_, err := in.GH.REST.Git.DeleteRef(ctx, r.Owner, r.Name, "heads/ledger")
 				return err
 			})
+		case "secret", "variable":
+			path := "/repos/" + r.FullName + "/actions/" + o.Kind + "s/" + o.ID
+			err = in.del(ctx, o, "github."+o.Kind+".delete", path, func(ctx context.Context) error {
+				return in.rest(ctx, http.MethodDelete, path, nil, nil)
+			})
 		default:
 			in.note("uninit", o.Kind, o.Name, "kept", "uninit does not remove this kind")
 			continue

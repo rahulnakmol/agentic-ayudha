@@ -1,7 +1,12 @@
 package cli
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
+	"flag"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -9,10 +14,14 @@ import (
 	"strings"
 	"testing"
 
+	"golang.org/x/crypto/nacl/box"
+
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/initrepo"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
+
+var updateGolden = flag.Bool("update-golden", false, "rewrite internal/cli/testdata/gates")
 
 const ciYML = "name: ci\non: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: make test # the product's own CI\n"
 
@@ -235,5 +244,116 @@ func TestInitAdoptsLedgerAndUninit(t *testing.T) {
 				}
 			}
 		}))
+	}
+}
+
+// WP2.6 accept: --gates on this binary installs exactly two workflows (golden);
+// every extra is idempotent; uninit --external lists what init created outside
+// the repository.
+func TestInitExtras(t *testing.T) {
+	g := fake.New(t, "o/r", "User")
+	pub, _, _ := box.GenerateKey(rand.Reader)
+	g.PublicKey = base64.StdEncoding.EncodeToString(pub[:])
+	g.App = map[string]any{"id": 4242, "slug": "aayudha-r", "client_id": "Iv1.abc", "pem": "-----BEGIN RSA PRIVATE KEY-----\nMIIEsecret\n-----END RSA PRIVATE KEY-----\n"}
+	dir := checkout(t)
+	var manifest string
+	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, Build: BuildInfo{Version: "0.4.0"},
+		AppManifestCode: func(_ context.Context, post string, m func(string) string) (string, error) {
+			manifest = m("http://127.0.0.1:1/callback")
+			return "code-1", nil
+		}}
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}
+	args := []string{"init", "--yes", "--json", "--gates", "--projects", "--identity", "--integrations"}
+	code, out, errOut := run(t, env, opts, args...)
+	if code != 0 {
+		t.Fatalf("init with extras: exit %d: %s\n%s", code, errOut, out)
+	}
+	files := snapshot(t, dir)
+	var workflows []string
+	for p := range files {
+		if strings.HasPrefix(p, ".github/workflows/") {
+			workflows = append(workflows, strings.TrimPrefix(p, ".github/workflows/"))
+		}
+	}
+	slices.Sort(workflows)
+	if !slices.Equal(workflows, []string{"aayudha-ready-guard.yml", "aayudha-token.yml", "ci.yml"}) || files[".github/workflows/ci.yml"] != ciYML {
+		t.Fatalf("workflows after --gates: %v", workflows)
+	}
+	for _, wf := range []string{"aayudha-ready-guard.yml", "aayudha-token.yml"} {
+		golden := filepath.Join("testdata", "gates", wf)
+		if *updateGolden {
+			_ = os.MkdirAll(filepath.Dir(golden), 0o755)
+			_ = os.WriteFile(golden, []byte(files[".github/workflows/"+wf]), 0o644)
+		}
+		want, err := os.ReadFile(golden)
+		if err != nil || string(want) != files[".github/workflows/"+wf] {
+			t.Errorf("%s differs from %s (go test ./internal/cli -run TestInitExtras -update-golden)", wf, golden)
+		}
+	}
+	cfg := files[".aayudha/config.toml"]
+	for _, want := range []string{"[identity]\napp_id = 4242\napp_slug = \"aayudha-r\"\nbroker = \"aayudha-token.yml\"", "[integrations.posthog]", "[integrations.sentry]", "[integrations.growthbook]"} {
+		if !strings.Contains(cfg, want) {
+			t.Errorf("config lacks %q:\n%s", want, cfg)
+		}
+	}
+	g.Mu.Lock()
+	if len(g.Projects) != 3 || g.Variables["AAYUDHA_APP_CLIENT_ID"] != "Iv1.abc" || g.Secrets["AAYUDHA_APP_PRIVATE_KEY"] == "" || strings.Contains(g.Secrets["AAYUDHA_APP_PRIVATE_KEY"], "MIIE") {
+		t.Errorf("projects %d, variables %v, secret sealed %t", len(g.Projects), g.Variables, !strings.Contains(g.Secrets["AAYUDHA_APP_PRIVATE_KEY"], "MIIE"))
+	}
+	bypass := fmt.Sprint(g.Rulesets[0]["bypass_actors"])
+	g.Mu.Unlock()
+	if !strings.Contains(bypass, "Integration") || !strings.Contains(bypass, "4242") || strings.Contains(bypass, "RepositoryRole") {
+		t.Errorf("ledger ruleset bypass after --identity: %s", bypass)
+	}
+	if !strings.Contains(manifest, `"contents":"write"`) || !strings.Contains(manifest, "127.0.0.1:1/callback") {
+		t.Errorf("manifest: %s", manifest)
+	}
+	for _, leak := range []string{"MIIEsecret"} {
+		for p, body := range snapshot(t, dir) {
+			if strings.Contains(body, leak) {
+				t.Errorf("private key in %s", p)
+			}
+		}
+		if b, _ := os.ReadFile(filepath.Join(dir, ".aayudha", "telemetry", "actions.jsonl")); strings.Contains(string(b), leak) {
+			t.Error("private key in the actions log")
+		}
+	}
+
+	// Idempotent: the same flags again write nothing.
+	g.Reset()
+	if code, _, errOut := run(t, env, opts, args...); code != 0 || len(g.Writes()) != 0 {
+		t.Fatalf("second run with extras: exit %d, writes %v: %s", code, g.Writes(), errOut)
+	}
+	if again := snapshot(t, dir); !mapsEqual(files, again) {
+		for k := range again {
+			if files[k] != again[k] {
+				t.Errorf("second run changed %s:\n%s\n---\n%s", k, files[k], again[k])
+			}
+		}
+		t.Fatal("second run with extras changed files")
+	}
+
+	// uninit removes what lives in the repository and lists the rest.
+	if code, _, errOut := run(t, env, opts, "uninit", "--yes"); code != 0 {
+		t.Fatalf("uninit: %d %s", code, errOut)
+	}
+	code, out, _ = run(t, env, opts, "uninit", "--external", "--json")
+	var ext struct {
+		External []initrepo.Object `json:"external"`
+	}
+	_ = json.Unmarshal([]byte(out), &ext)
+	var kinds []string
+	for _, o := range ext.External {
+		kinds = append(kinds, o.Kind+":"+o.Name)
+	}
+	slices.Sort(kinds)
+	want := []string{"app:bot", "integration:growthbook", "integration:posthog", "integration:sentry", "project:r Delivery", "project:r Ops", "project:r Portfolio"}
+	if code != 0 || !slices.Equal(kinds, want) {
+		t.Errorf("uninit --external: exit %d, %v, want %v", code, kinds, want)
+	}
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+	if len(g.Secrets) != 0 || len(g.Variables) != 0 {
+		t.Errorf("uninit left secrets %v, variables %v", g.Secrets, g.Variables)
 	}
 }
