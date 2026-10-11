@@ -1,0 +1,9 @@
+{
+  "name": "agentic-ayudha-workspace",
+  "private": true,
+  "description": "pnpm workspace root for the Node packages under packages/. The Go module is built with the go tool, not pnpm.",
+  "packageManager": "pnpm@12.0.0",
+  "engines": {
+    "node": "^22.12.0 || ^24.0.0 || >=26.0.0"
+  }
+}

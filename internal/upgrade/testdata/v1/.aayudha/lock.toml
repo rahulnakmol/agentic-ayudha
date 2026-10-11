@@ -1,0 +1,5 @@
+version = 1
+
+[skills.ready]
+version = "0.1.0"
+sha256 = "abc"

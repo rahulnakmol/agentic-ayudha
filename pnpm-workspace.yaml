@@ -1,0 +1,7 @@
+packages:
+  - packages/*
+
+# Install scripts are denied unless listed here as true. esbuild works from its platform-specific optional
+# dependency without its postinstall step.
+allowBuilds:
+  esbuild: false

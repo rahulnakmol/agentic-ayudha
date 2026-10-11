@@ -1,0 +1,32 @@
+## over-scoped classic token, no bot identity (day one)
+human token: AAYU_GITHUB_TOKEN -> rahulnakmol (User)
+  scopes: admin:org, delete_repo, repo, workflow
+  warning: token has the admin:org scope: administrative access beyond what verbs need; only init needs admin, and it confirms on a TTY
+  warning: token has the delete_repo scope: it can delete repositories; no aayudha verb needs it
+  warning: token has the workflow scope: it can rewrite GitHub Actions workflows, including the gates; drop it unless you are running init --gates
+bot identity: not configured
+  warning: bot identity: not configured; agent writes run under the human identity, tagged identity:human-fallback
+secrets backends:
+  keychain unavailable: no Secret Service on this machine
+  env      available
+  file     available
+
+## fine-grained token, machine-user bot
+human token: AAYU_GITHUB_TOKEN -> rahulnakmol (User)
+  warning: scopes not listed (fine-grained or App token): verify its permissions in GitHub settings
+bot identity: machine-user aayu-machine
+secrets backends:
+  keychain unavailable: no Secret Service on this machine
+  env      available
+  file     available
+
+## right-sized classic token in CI without the App token
+human token: GITHUB_TOKEN (--ci) -> rahulnakmol (User)
+  scopes: read:org, repo
+bot identity: app aayudha-bot[bot]
+  warning: CI needs the bot App's installation token in AAYU_BOT_TOKEN (minted with actions/create-github-app-token); GITHUB_TOKEN is never used for bot or ledger writes
+secrets backends:
+  keychain unavailable: no Secret Service on this machine
+  env      available
+  file     available
+

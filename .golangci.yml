@@ -1,0 +1,29 @@
+# golangci-lint v2 configuration (docs/BUILD-PLAN.md WP0.4). CI runs it in the `lint` job.
+version: "2"
+
+run:
+  go: "1.25"
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused. SAST is semgrep's job (security job).
+  enable:
+    - bodyclose
+    - errorlint
+    - misspell
+    - unconvert
+  settings:
+    errcheck:
+      # Writes to the command's output writer; WP1.1's writer abstraction owns output errors.
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/rahulnakmol/agentic-ayudha

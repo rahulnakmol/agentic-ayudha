@@ -1,0 +1,10 @@
+#:schema https://example.invalid/schema.json
+# Repo config for the fixture product.
+version = 1
+
+[decisions]
+sla_hours = 24 # business hours
+escalate_to = "founder-b"
+
+[budget]
+per_day_usd = 50.0
