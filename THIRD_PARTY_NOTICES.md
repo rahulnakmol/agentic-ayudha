@@ -64,7 +64,7 @@ These run only in this repository's GitHub Actions workflows. Versions are pinne
 | [Semgrep](https://github.com/semgrep/semgrep) | LGPL-2.1 | SAST (run as a tool, never linked) |
 | [OSV-Scanner](https://github.com/google/osv-scanner) | Apache-2.0 | Dependency vulnerabilities |
 | [go-licenses](https://github.com/google/go-licenses) | Apache-2.0 | Go licence scan |
-| [license-checker-rseidelsohn](https://github.com/RSeidelsohn/license-checker-rseidelsohn) | BSD-3-Clause | npm licence scan (once `package.json` exists) |
+| [pnpm](https://github.com/pnpm/pnpm) | MIT | Installs the Node workspace and runs its licence scan (`pnpm licenses list`) |
 | [markdownlint-cli2](https://github.com/DavidAnson/markdownlint-cli2) | MIT | Markdown lint |
 | [lychee](https://github.com/lycheeverse/lychee) | Apache-2.0 OR MIT | Link check |
 
@@ -98,8 +98,9 @@ ISC, BlueOak-1.0.0, and CC-BY-4.0 (browser-support data) packages.
 
 - A PR that adds a dependency adds its entry here in the same PR: name, version or range, licence, how it is
   used (linked, peer dependency, or shelled out), and the source URL.
-- CI licence scanning gates new dependencies: `go-licenses` for the Go module and an npm licence scan for
-  every `package.json` (the `security` job; allowed: Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, MIT).
+- CI licence scanning gates new dependencies: `go-licenses` for the Go module and `pnpm licenses list --prod`
+  for the pnpm workspace (the `security` job; allowed: 0BSD, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, MIT;
+  0BSD per docs/BUILD-PLAN.md Appendix B D-6.1a).
   `aayu audit` repeats the scan (n/a until WP7.6).
 - Licences must be compatible with redistributing the binary under BSD-3-Clause. Anything else needs a
   recorded decision before it is added.
