@@ -151,7 +151,12 @@ func verdict(cur, base *evals.Results, cfg evals.Config) error {
 	}
 	fmt.Printf("tier 2 %s: pass^%d %.2f, mean %.2f (%s): %s\n", cur.SHA, cur.K, cur.PassK, cur.Mean, against, v)
 	for _, c := range cur.Cases {
-		fmt.Printf("  %s on %s (%s): pass^%d %.0f, mean %.2f\n", c.Case, c.Model, c.Family, cur.K, c.PassK, c.Mean)
+		fmt.Printf("  %s on %s (%s): pass^%d %.0f, mean %.2f over %d completed run(s), %d error(s)\n", c.Case, c.Model, c.Family, cur.K, c.PassK, c.Mean, len(c.Runs)-c.Errors, c.Errors)
+		for i, r := range c.Runs {
+			if r.Status == evals.RunError {
+				fmt.Printf("    run %d errored: %s; reply: %q\n", i+1, r.Error, r.Excerpt)
+			}
+		}
 	}
 	for _, r := range reasons {
 		fmt.Println("  FAIL:", r)

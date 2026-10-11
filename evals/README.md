@@ -27,9 +27,12 @@ runs it; `go run ./internal/evals/cmd/eval -tier 1` prints the same report.
 
 [`.github/workflows/evals.yml`](../.github/workflows/evals.yml) runs each `[tier2]` case `k` times on the skill's model
 (its lane on the direct host) and has the pinned `judge` score every run against the rubric. The judge's model family,
-inferred from its model ID, must differ from the skill model's. A run whose output is not a valid work item, or fails
-Ready, scores 1 without asking the judge (deterministic checks beat model judgement). A case's pass^k is 1 when all `k`
-runs score at least `pass_score`, else 0; the suite's is the mean over cases.
+inferred from its model ID, must differ from the skill model's. A run whose output is JSON of the wrong shape, or fails
+Ready, scores 1 without asking the judge (deterministic checks beat model judgement). The judge is asked for structured
+output (OpenAI `json_schema`, strict) and its reply is validated by the WP1.6 structured-output helper, which retries a
+judgement once. A run whose judge reply, or skill reply, still is not usable JSON is an `error`: it is not scored, and
+the results file keeps a short redacted excerpt of the reply. A case's pass^k is 1 when all its completed runs score at
+least `pass_score`, else 0; the suite's is the mean over cases. More than one errored run in a case fails the tier.
 
 The bar: pass^k ≥ 0.8 and mean score ≥ 3.5. Against the baseline (the results for `main`'s commit), a mean more than
 0.3 lower, or any case's pass^k below its baseline, fails. Results go to `results/<sha>.json`, uploaded as the
