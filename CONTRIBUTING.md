@@ -133,7 +133,7 @@ generated from it by `go generate ./...`:
 - `internal/mcp/schemas/*.json`.
 
 Do not edit generated output by hand. Change the registry, run `go generate ./...`, and commit both. The CI
-job `generate-drift` fails on any difference (n/a until WP0.4).
+job `generate-drift` fails on any difference.
 
 ## Protected paths
 
@@ -155,29 +155,36 @@ These paths need a human CODEOWNER review (see [.github/CODEOWNERS](.github/CODE
 > This policy changes as the project gains people. Change it by PR, together with the matching ruleset and
 > `.github/CODEOWNERS` changes.
 
-**Today**: there is one human, `rahulnakmol`. GitHub never lets a PR author approve their own PR, so a
-protected-path PR authored under the founder's identity cannot get the required CODEOWNER review.
+**Today**: there is one human, `rahulnakmol`. GitHub never lets a PR author approve their own PR, and native
+CODEOWNER review does not block a PR authored by the only code owner, so the CODEOWNER rule is enforced by a
+gate instead (docs/BUILD-PLAN.md Appendix B, D2).
 
 **Rule while there is one human**:
 
-1. Such a PR is merged by the repository admin through an explicit ruleset bypass. The bypass is allowed only
-   through a pull request, never by direct push.
-2. GitHub records each bypass in the ruleset rule-suite history:
+1. The `protected-paths` check ([.github/workflows/protected-paths.yml](.github/workflows/protected-paths.yml))
+   fails on any PR that changes a path in `.github/CODEOWNERS`. It runs from the default branch's copy of the
+   workflow, so a PR cannot weaken it.
+2. The `protected-paths-codeowner-review` ruleset requires that check on `dev`. Its only bypass is the
+   repository admin, and only through a pull request, never by direct push. So a protected-path PR merges
+   only when the founder deliberately merges it with "bypass rules" (`gh pr merge --admin`). Agents never
+   use the bypass on their own initiative.
+3. GitHub records each bypass in the ruleset rule-suite history:
 
    ```sh
-   gh api repos/rahulnakmol/agentic-ayudha/rulesets/rule-suites
+   gh api "repos/rahulnakmol/agentic-ayudha/rulesets/rule-suites?rule_suite_result=bypass&time_period=month"
    ```
 
-3. Every such bypass is listed as a solo-mode bypass by a hand-run reconciliation of that history against the
-   merged PRs, until `aayu audit` automates it (WP7.6). A bypass that is not on the list is an incident (see
-   [SECURITY.md](SECURITY.md#tool-incident-plan)).
+4. Every such bypass is listed as a solo-mode bypass by a hand-run reconciliation of that history against the
+   merged PRs, written to `ledger` under `audit/<date>/`, until `aayu audit` automates it (WP7.6). A bypass
+   that is not on the list is an incident (see [SECURITY.md](SECURITY.md#tool-incident-plan)).
 
-**When a bot identity exists (WP1.4)**: agent-authored PRs are opened by the bot, so the founder approves
-them as a real review and no bypass is needed for them. Bypasses remain only for PRs the founder authors.
+**When a bot identity exists (WP1.4)**: agent-authored PRs are opened by the bot, so the founder can approve
+them as a real review. WP1.4 extends the `protected-paths` gate to pass on an approving review of the head
+commit by a human CODEOWNER who is not the author. Bypasses then remain only for PRs the founder authors.
 
 **When a second human seat is added** (`aayu seat add <seat> --human <login>`, WP5.1): the rule switches to
-true second-human review. Bypasses for protected paths stop, and the second human is added to CODEOWNERS
-for their seat's layers.
+true second-human review: the ruleset requires one approval with native CODEOWNER review, the gate and the
+bypass are removed, and the second human is added to CODEOWNERS for their seat's layers.
 
 ## Third-party code
 
