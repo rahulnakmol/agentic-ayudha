@@ -43,6 +43,10 @@ plan lists in §2; the rest are pulled in by them.
 | `github.com/go-logr/logr` | v1.4.4 | Apache-2.0 | Via otel | <https://github.com/go-logr/logr> |
 | `github.com/go-logr/stdr` | v1.2.2 | Apache-2.0 | Via otel | <https://github.com/go-logr/stdr> |
 | `github.com/cespare/xxhash/v2` | v2.3.0 | MIT | Via otel/sdk | <https://github.com/cespare/xxhash> |
+| `github.com/google/go-github/v90` | v90.0.0 | BSD-3-Clause | GitHub REST client (WP2.3), direct | <https://github.com/google/go-github> |
+| `github.com/google/go-querystring` | v1.2.0 | BSD-3-Clause | Via go-github | <https://github.com/google/go-querystring> |
+| `github.com/shurcooL/githubv4` | v0.0.0-20260209031235-2402fdf4a9ed | MIT | GitHub GraphQL client for Projects v2 (WP2.3), direct | <https://github.com/shurcooL/githubv4> |
+| `github.com/shurcooL/graphql` | v0.0.0-20240915155400-7ee5256398cf | MIT | Via githubv4 | <https://github.com/shurcooL/graphql> |
 
 ### Shelled out by `self-update` (not bundled)
 
