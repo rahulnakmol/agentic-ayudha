@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"time"
 
 	aayudha "github.com/rahulnakmol/agentic-ayudha"
@@ -125,6 +126,13 @@ func run(ctx context.Context) error {
 	return errors.New("pass -tier 1, -tier 2, or -compare <file>")
 }
 
+func orDash(s string) string {
+	if s == "" {
+		return "-"
+	}
+	return s
+}
+
 func readResults(path string) (*evals.Results, error) {
 	if path == "" {
 		return nil, nil
@@ -153,8 +161,13 @@ func verdict(cur, base *evals.Results, cfg evals.Config) error {
 	for _, c := range cur.Cases {
 		fmt.Printf("  %s on %s (%s): pass^%d %.0f, mean %.2f over %d completed run(s), %d error(s)\n", c.Case, c.Model, c.Family, cur.K, c.PassK, c.Mean, len(c.Runs)-c.Errors, c.Errors)
 		for i, r := range c.Runs {
+			var calls []string
+			for _, l := range r.Calls {
+				calls = append(calls, fmt.Sprintf("%s %s stop=%s out=%d/%d in=%d", l.Role, l.Model, orDash(l.StopReason), l.TokensOut, l.MaxTokens, l.TokensIn))
+			}
+			fmt.Printf("    run %d %s score %d: %s\n", i+1, r.Status, r.Score, strings.Join(calls, "; "))
 			if r.Status == evals.RunError {
-				fmt.Printf("    run %d errored: %s; reply: %q\n", i+1, r.Error, r.Excerpt)
+				fmt.Printf("      %s; reply: %q\n", r.Error, r.Excerpt)
 			}
 		}
 	}

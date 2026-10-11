@@ -210,8 +210,16 @@ func TestTier2SpendCap(t *testing.T) {
 	fake := &models.Fake{Replies: []models.Response{{Text: string(item), CostUSD: 0.4}, {Text: `{"score": 5, "reason": "ok"}`, CostUSD: 0.4}}}
 	h := harness(t, fake, "gpt-6.1-sol")
 	h.Config.MaxUSD = 1.0
-	if _, err := h.Tier2(context.Background(), cases, "abc", "dev", time.Now()); err == nil || !strings.Contains(err.Error(), "eval spend cap reached") || len(fake.Requests) != 3 {
+	res, err := h.Tier2(context.Background(), cases, "abc", "dev", time.Now())
+	if err != nil || len(fake.Requests) != 3 {
 		t.Fatalf("spend cap: %v after %d calls, want the cap after 3 (1.2 USD > 1.0)", err, len(fake.Requests))
+	}
+	runs := res.Cases[0].Runs
+	if runs[0].Status != RunPass || runs[1].Status != RunError || !strings.Contains(runs[4].Error, "eval spend cap reached") || res.Cases[0].Errors != 4 {
+		t.Fatalf("runs after the cap: %+v", runs)
+	}
+	if v, _ := Compare(res, nil, h.Config); v != Fail {
+		t.Fatal("a capped run passed")
 	}
 }
 
@@ -373,5 +381,71 @@ func TestTier2ScopeGuardAndOpenQuestions(t *testing.T) {
 	}
 	if j := fake.Requests[2].Messages[0].Content; !strings.Contains(j, "Open questions the skill left for a human") || !strings.Contains(j, "byte order mark") {
 		t.Fatalf("judge prompt lacks the open questions:\n%s", j)
+	}
+}
+
+// Every call's stop reason and tokens land in the results; a skill reply that
+// stopped at the cap is an error marked truncated, without a retry.
+func TestTier2RecordsStopsAndTruncation(t *testing.T) {
+	cases, _ := LoadCases(root)
+	good, _ := os.ReadFile(filepath.Join(root, "evals", "cases", "stub", "csv-export", "output", "issue.json"))
+	long := `{"type": "story", "title": "Download", "fields": {"summary": "` + strings.Repeat("and the list ", 60)
+	fake := &models.Fake{Replies: []models.Response{
+		{Text: long, StopReason: "max_tokens", Truncated: true, TokensIn: 1800, TokensOut: 3000},
+		{Text: string(good), StopReason: "end_turn", TokensIn: 1800, TokensOut: 610},
+		{Text: `{"score": 5, "reason": "ok"}`, StopReason: "completed", TokensIn: 2600, TokensOut: 90},
+	}}
+	h := harness(t, fake, "gpt-6.1-sol")
+	h.Config.K = 2
+	res, err := h.Tier2(context.Background(), cases, "abc", "dev", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	r1, r2 := res.Cases[0].Runs[0], res.Cases[0].Runs[1]
+	if r1.Status != RunError || !strings.HasPrefix(r1.Error, "truncated: ") || len(r1.Calls) != 1 || !r1.Calls[0].Truncated ||
+		r1.Calls[0].StopReason != "max_tokens" || r1.Calls[0].TokensOut != 3000 || r1.Calls[0].MaxTokens != h.Config.MaxTokens.Skill ||
+		!strings.Contains(r1.Excerpt, " … ") || !strings.HasSuffix(r1.Excerpt, "and the list") {
+		t.Fatalf("truncated run: %+v", r1)
+	}
+	if r2.Status != RunPass || len(r2.Calls) != 2 || r2.Calls[0].Role != "skill" || r2.Calls[0].TokensOut != 610 ||
+		r2.Calls[1].Role != "judge" || r2.Calls[1].StopReason != "completed" || r2.Calls[1].Model != "gpt-6.1-sol" {
+		t.Fatalf("completed run calls: %+v", r2.Calls)
+	}
+}
+
+// The line between conventions of the requested format and invented specifics:
+// a CSV header row passes the csv-export scope rules; each invented specific fails.
+func TestScopeConventionVersusInvented(t *testing.T) {
+	const anchor = "expected: the CSV header lists exactly the visible columns, without Region"
+	for _, tc := range []struct {
+		name, expected, why string
+	}{
+		{"header row is a convention", "expected: the CSV starts with a header row naming exactly the visible columns, without Region", ""},
+		{"exact column order", "expected: the CSV columns follow the screen order exactly, without Region", "an ordering"},
+		{"content type", "expected: the response is served as text/csv with exactly the visible columns", "a content type"},
+		{"encoding", "expected: the file is UTF-8 and lists exactly the visible columns", "a file format detail"},
+		{"file name", "expected: the file name is claims-export.csv and it lists the visible columns", "a file format detail"},
+		{"size limit", "expected: the export holds at most 50,000 rows of the visible columns", "a size limit"},
+		{"duration", "expected: the CSV with the visible columns is ready within 5 seconds", "a time limit"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := copyCase(t, "stub/csv-export")
+			p := filepath.Join(c.Dir, "output", "issue.json")
+			b, _ := os.ReadFile(p)
+			if !strings.Contains(string(b), anchor) {
+				t.Fatal("fixture anchor moved")
+			}
+			_ = os.WriteFile(p, []byte(strings.Replace(string(b), anchor, tc.expected, 1)), 0o644)
+			r := Tier1(context.Background(), root, c, aayudha.Assets)
+			if tc.why == "" {
+				if !r.Passed() {
+					t.Fatalf("a convention was flagged:\n%s", r)
+				}
+				return
+			}
+			if status(r, "scope") != Fail || !strings.Contains(r.String(), "adds "+tc.why) {
+				t.Fatalf("invented %s not caught:\n%s", tc.name, r)
+			}
+		})
 	}
 }

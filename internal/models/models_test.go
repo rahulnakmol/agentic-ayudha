@@ -362,3 +362,31 @@ func TestFormatFallback(t *testing.T) {
 		t.Fatalf("fallback: %+v %v, calls with format %v", r, err, calls)
 	}
 }
+
+// Stop reasons per wire format; a reply that stopped at the token cap is
+// Truncated, and Structured reports it without retrying under the same cap.
+func TestStopReasons(t *testing.T) {
+	for _, tc := range []struct {
+		style, body, stop string
+		truncated         bool
+	}{
+		{StyleMessages, `{"content":[{"type":"text","text":"{\"a\":"}],"stop_reason":"max_tokens","usage":{"output_tokens":2000}}`, "max_tokens", true},
+		{StyleMessages, `{"content":[{"type":"text","text":"{}"}],"stop_reason":"end_turn"}`, "end_turn", false},
+		{StyleResponses, `{"status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[{"type":"message","content":[{"type":"output_text","text":"{"}]}]}`, "incomplete:max_output_tokens", true},
+		{StyleResponses, `{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"{}"}]}]}`, "completed", false},
+		{StyleChat, `{"choices":[{"message":{"content":"{\"a\""},"finish_reason":"length"}]}`, "length", true},
+		{StyleChat, `{"choices":[{"message":{"content":"{}"},"finish_reason":"stop"}]}`, "stop", false},
+	} {
+		r, err := decode(tc.style, []byte(tc.body))
+		if err != nil || r.StopReason != tc.stop || r.Truncated != tc.truncated {
+			t.Errorf("%s %s: %+v %v", tc.style, tc.stop, r, err)
+		}
+	}
+	fake := &Fake{Replies: []Response{{Text: `{"disposition": "mer`, StopReason: "max_tokens", Truncated: true}}}
+	var v map[string]any
+	var re *ReplyError
+	err := Structured(context.Background(), fake.Complete, Request{MaxTokens: 2000}, []byte(`{"type":"object"}`), &v)
+	if !errors.As(err, &re) || !re.Truncated || len(fake.Requests) != 1 || !strings.Contains(err.Error(), "2000-token cap (max_tokens)") {
+		t.Fatalf("truncated reply: %v after %d call(s)", err, len(fake.Requests))
+	}
+}

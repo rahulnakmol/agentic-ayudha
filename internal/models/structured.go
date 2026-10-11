@@ -34,6 +34,11 @@ func Structured(ctx context.Context, complete func(context.Context, Request) (Re
 		if err != nil {
 			return err
 		}
+		if resp.Truncated {
+			// A retry under the same cap would stop there again.
+			return &ReplyError{Reply: resp.Text, Truncated: true,
+				Err: fmt.Errorf("reply truncated: it stopped at the %d-token cap (%s)", req.MaxTokens, resp.StopReason)}
+		}
 		raw := extractJSON(resp.Text)
 		var v any
 		if err := json.Unmarshal([]byte(raw), &v); err != nil {
@@ -54,12 +59,14 @@ func Structured(ctx context.Context, complete func(context.Context, Request) (Re
 	return last
 }
 
-// ReplyError is a structured reply that failed twice: not JSON (Parse) or not
-// valid against the schema. Reply is the last reply, verbatim.
+// ReplyError is a structured reply that failed twice, not JSON (Parse) or not
+// valid against the schema, or once by stopping at the token cap (Truncated).
+// Reply is the last reply, verbatim.
 type ReplyError struct {
-	Reply string
-	Parse bool
-	Err   error
+	Reply     string
+	Parse     bool
+	Truncated bool
+	Err       error
 }
 
 func (e *ReplyError) Error() string { return e.Err.Error() }
