@@ -121,11 +121,6 @@ func (e *Env) initSetup(ctx context.Context) (*initrepo.Init, error) {
 }
 
 func runInit(ctx context.Context, e *Env, in Values) error {
-	for _, f := range []string{"projects", "gates", "identity", "integrations"} {
-		if in.Bool(f) {
-			return Errorf(ExitUsage, "init --%s lands in WP2.6", f)
-		}
-	}
 	it, err := e.initSetup(ctx)
 	if err != nil {
 		return err
@@ -145,6 +140,22 @@ func runInit(ctx context.Context, e *Env, in Values) error {
 		}
 	}
 	runErr := it.Run(ctx, resume)
+	if runErr == nil {
+		x := initrepo.Extras{
+			Projects: in.Bool("projects"), Gates: in.Bool("gates"), Identity: in.Bool("identity"), Integrations: in.Bool("integrations"),
+			Version: e.Build.Version,
+			Confirm: func(summary string) bool {
+				fmt.Fprintln(e.Err, summary)
+				return e.confirm("Continue? [y/N] ")
+			},
+			Ask:          e.askLine,
+			ManifestCode: e.manifestCode,
+		}
+		if e.AppManifestCode != nil {
+			x.ManifestCode = e.AppManifestCode
+		}
+		runErr = it.RunExtras(ctx, x)
+	}
 	if err := e.reportInit("init", it, runErr == nil); err != nil {
 		return err
 	}

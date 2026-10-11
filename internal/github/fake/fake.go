@@ -83,6 +83,11 @@ type GitHub struct {
 	Commits    map[string]map[string]any   // sha -> commit
 	Issues     map[int]*Issue
 	Requests   []Request
+	Projects   []map[string]any  // Projects v2: id, title
+	Secrets    map[string]string // Actions secret name -> encrypted value
+	Variables  map[string]string
+	PublicKey  string         // base64 Curve25519 key for Actions secrets
+	App        map[string]any // what /app-manifests/{code}/conversions returns
 	// Fail makes the request with this "METHOD /path" fail with a 500 once
 	// it has succeeded After times.
 	Fail      string
@@ -111,9 +116,10 @@ func (g *GitHub) Writes() []Request {
 	defer g.Mu.Unlock()
 	var out []Request
 	for _, r := range g.Requests {
-		if r.Method != http.MethodGet {
-			out = append(out, r)
+		if q, _ := r.Body["query"].(string); r.Method == http.MethodGet || r.Path == "/graphql" && strings.HasPrefix(q, "query") {
+			continue
 		}
+		out = append(out, r)
 	}
 	return out
 }
@@ -240,6 +246,65 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			out = append(out, map[string]any{"name": n})
 		}
 		reply(200, out)
+
+	// GraphQL: just Projects v2.
+	case m == "POST" && p == "/graphql":
+		q, _ := body["query"].(string)
+		if strings.Contains(q, "createProjectV2") {
+			in, _ := body["variables"].(map[string]any)["input"].(map[string]any)
+			g.seq++
+			pr := map[string]any{"id": fmt.Sprintf("PVT_%d", g.seq), "title": in["title"], "repository": in["repositoryId"]}
+			g.Projects = append(g.Projects, pr)
+			reply(200, map[string]any{"data": map[string]any{"createProjectV2": map[string]any{"projectV2": map[string]any{"id": pr["id"]}}}})
+			return
+		}
+		nodes := []any{}
+		for _, pr := range g.Projects {
+			nodes = append(nodes, map[string]any{"id": pr["id"], "title": pr["title"]})
+		}
+		reply(200, map[string]any{"data": map[string]any{
+			"repositoryOwner": map[string]any{"id": "OWNER_" + g.Owner, "projectsV2": map[string]any{"nodes": nodes}},
+			"repository":      map[string]any{"id": "REPO_" + g.Repo},
+		}})
+
+	// Apps, Actions secrets and variables.
+	case m == "POST" && strings.HasPrefix(p, "/app-manifests/") && strings.HasSuffix(p, "/conversions"):
+		if g.App == nil {
+			notFound()
+			return
+		}
+		reply(201, g.App)
+	case m == "GET" && p == repo+"/actions/secrets/public-key":
+		reply(200, map[string]any{"key_id": "k1", "key": g.PublicKey})
+	case m == "PUT" && strings.HasPrefix(p, repo+"/actions/secrets/"):
+		if g.Secrets == nil {
+			g.Secrets = map[string]string{}
+		}
+		g.Secrets[strings.TrimPrefix(p, repo+"/actions/secrets/")] = str("encrypted_value")
+		w.WriteHeader(201)
+	case m == "DELETE" && strings.HasPrefix(p, repo+"/actions/secrets/"):
+		delete(g.Secrets, strings.TrimPrefix(p, repo+"/actions/secrets/"))
+		w.WriteHeader(204)
+	case m == "POST" && p == repo+"/actions/variables":
+		if g.Variables == nil {
+			g.Variables = map[string]string{}
+		}
+		g.Variables[str("name")] = str("value")
+		w.WriteHeader(201)
+	case m == "DELETE" && strings.HasPrefix(p, repo+"/actions/variables/"):
+		delete(g.Variables, strings.TrimPrefix(p, repo+"/actions/variables/"))
+		w.WriteHeader(204)
+	case m == "PUT" && strings.HasPrefix(p, repo+"/rulesets/"):
+		for _, rs := range g.Rulesets {
+			if fmt.Sprint(rs["id"]) == strings.TrimPrefix(p, repo+"/rulesets/") {
+				for k, v := range body {
+					rs[k] = v
+				}
+				reply(200, rs)
+				return
+			}
+		}
+		notFound()
 
 	// Labels.
 	case m == "GET" && p == repo+"/labels":
