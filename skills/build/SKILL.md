@@ -38,3 +38,5 @@ aayu:
 Build a Ready story or bug in a worktree with checkpoint commits per layer, verify each checkpoint, and open a PR.
 
 Body lands in WP3.1 (skill format) and WP5.5 (the verb).
+
+Scratch edit for the WP0.1 CODEOWNERS live test; never merged into dev.
