@@ -11,9 +11,21 @@
       "x-aayu-type": "issue"
     },
     "type": {
-      "description": "Work-item type, e.g. goal or story (enum lands in WP2.1).",
+      "description": "Work-item type (internal/workitems).",
+      "enum": [
+        "goal",
+        "initiative",
+        "feature",
+        "story",
+        "bug",
+        "decision",
+        "experiment",
+        "release",
+        "feedback",
+        "incident"
+      ],
       "type": "string",
-      "x-aayu-type": "string"
+      "x-aayu-type": "enum"
     }
   },
   "required": [

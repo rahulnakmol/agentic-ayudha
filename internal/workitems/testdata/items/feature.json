@@ -1,0 +1,51 @@
+{
+  "create": {
+    "type": "feature",
+    "title": "Eligibility questionnaire",
+    "fields": {
+      "summary": "A five-question eligibility check.",
+      "problem": "Claimants apply without knowing they qualify."
+    },
+    "labels": [
+      "type:feature",
+      "status:backlog"
+    ]
+  },
+  "ready": {
+    "type": "feature",
+    "title": "Eligibility questionnaire",
+    "fields": {
+      "summary": "A five-question eligibility check.",
+      "problem": "Claimants apply without knowing they qualify.",
+      "scope": "In: questionnaire. Out: payments.",
+      "links": "depends-on #7"
+    },
+    "labels": [
+      "type:feature",
+      "status:planned"
+    ],
+    "parent": {
+      "number": 2,
+      "type": "initiative"
+    }
+  },
+  "complete": {
+    "type": "feature",
+    "title": "Eligibility questionnaire",
+    "fields": {
+      "summary": "A five-question eligibility check.",
+      "problem": "Claimants apply without knowing they qualify.",
+      "scope": "In: questionnaire. Out: payments.",
+      "links": "depends-on #7",
+      "result": "Released; readout #40."
+    },
+    "labels": [
+      "type:feature",
+      "status:done"
+    ],
+    "parent": {
+      "number": 2,
+      "type": "initiative"
+    }
+  }
+}

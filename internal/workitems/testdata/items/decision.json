@@ -1,0 +1,46 @@
+{
+  "create": {
+    "type": "decision",
+    "title": "Choose the questionnaire engine",
+    "fields": {
+      "summary": "Which engine renders the questionnaire?"
+    },
+    "labels": [
+      "type:decision",
+      "status:backlog"
+    ]
+  },
+  "ready": {
+    "type": "decision",
+    "title": "Choose the questionnaire engine",
+    "fields": {
+      "summary": "Which engine renders the questionnaire?",
+      "options": "A: in-house. B: SurveyJS.",
+      "evaluation": "A is cheaper to run; B is faster to build.",
+      "recommendation": "A",
+      "reversible": "true",
+      "links": "constrains #3"
+    },
+    "labels": [
+      "type:decision",
+      "status:planned"
+    ]
+  },
+  "complete": {
+    "type": "decision",
+    "title": "Choose the questionnaire engine",
+    "fields": {
+      "summary": "Which engine renders the questionnaire?",
+      "options": "A: in-house. B: SurveyJS.",
+      "evaluation": "A is cheaper to run; B is faster to build.",
+      "recommendation": "A",
+      "reversible": "true",
+      "links": "constrains #3",
+      "decision": "A, accepted by @founder on 2026-10-20."
+    },
+    "labels": [
+      "type:decision",
+      "status:done"
+    ]
+  }
+}

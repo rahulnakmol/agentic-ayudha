@@ -453,7 +453,7 @@ var Verbs = []Command{
 		Summary: "Interview a human until a work item of the given type is complete and passes validation, then write it as an issue.",
 		Seat:    ProductStrategist, Lane: LaneSpec, Layers: AllLayers(),
 		Inputs: []Input{
-			pos("type", TypeString, "Work-item type, e.g. goal or story (enum lands in WP2.1)."),
+			enumIn("type", true, true, "Work-item type (internal/workitems).", "goal", "initiative", "feature", "story", "bug", "decision", "experiment", "release", "feedback", "incident"),
 			flag("parent", TypeIssue, "Parent issue to link the new work item under."),
 		},
 		Outputs:  []string{"issue"},
