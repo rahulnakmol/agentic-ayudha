@@ -14,7 +14,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
+	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
+	"github.com/rahulnakmol/agentic-ayudha/internal/upgrade"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
@@ -29,10 +31,15 @@ func Run(ctx context.Context, args []string, io IO, opts Options) int {
 	root := newRoot(e)
 	root.SetArgs(args)
 	err = root.ExecuteContext(ctx)
+	code := CodeOf(err)
+	var ce *Error
+	if err != nil && !errors.As(err, &ce) {
+		code = ExitUsage
+	}
+	e.endTrace(code, err)
 	if err == nil {
 		return ExitOK
 	}
-	var ce *Error
 	if !errors.As(err, &ce) {
 		// Errors that reach here without a code come from cobra itself: unknown
 		// commands, unknown flags, or malformed flag values.
@@ -86,6 +93,7 @@ Exit codes:
 	pf.StringArrayVar(&e.Set, "set", nil, "override a config value for this run, as key=value (repeatable)")
 
 	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
+		e.startTrace(cmd)
 		if e.Yes && e.Agent() {
 			return Errorf(ExitBlocked, "--yes is for humans only and is refused when AAYU_AGENT=1")
 		}
@@ -96,6 +104,13 @@ Exit codes:
 		if ok && e.Agent() && cmd.GroupID == "verbs" {
 			if _, err := os.Stat(e.PauseFile()); err == nil {
 				return Errorf(ExitBudget, "agent lanes are paused by the [budget] breaker (%s); a human must clear it", e.PauseFile())
+			}
+		}
+		if ok && cmd.GroupID == "verbs" && !c.ReadOnly {
+			if root := config.RepoRoot(e.Dir); root != "" {
+				if err := upgrade.Check(root, upgrade.Current); err != nil {
+					return Errorf(ExitUsage, "%s: refused: %v (read-only commands still work)", c.Name, err)
+				}
 			}
 		}
 		declaresHost := ok && slices.ContainsFunc(c.Inputs, func(in verbs.Input) bool { return in.Name == "host" })

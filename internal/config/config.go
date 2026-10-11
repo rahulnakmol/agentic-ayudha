@@ -33,6 +33,7 @@ type Config struct {
 	Verify        Verify                 `koanf:"verify"`
 	Time          Time                   `koanf:"time"`
 	Identity      Identity               `koanf:"identity" jsonschema_description:"Bot identity for agent lanes and CI (WP1.4)."`
+	Telemetry     Telemetry              `koanf:"telemetry" jsonschema_description:"Traces of verb runs (WP1.8): a local file by default; nothing leaves the machine unless otlp_endpoint is set."`
 	Fleet         Fleet                  `koanf:"fleet" jsonschema_description:"User-level only: the product repos that status --all and doctor --all iterate."`
 }
 
@@ -199,6 +200,12 @@ type Identity struct {
 	MachineUser       string   `koanf:"machine_user" jsonschema_description:"Machine-user login, the fallback bot identity."`
 	MachineUserSecret string   `koanf:"machine_user_secret" jsonschema_description:"Name of the secret holding the machine user's token."`
 	BotLogins         []string `koanf:"bot_logins" jsonschema_description:"Logins whose reviews never count as a human pass (machine users and other bots)."`
+}
+
+// Telemetry is [telemetry].
+type Telemetry struct {
+	Disabled     bool   `koanf:"disabled" jsonschema_description:"Write no traces at all."`
+	OTLPEndpoint string `koanf:"otlp_endpoint" jsonschema_description:"Opt-in: also send traces as OTLP/HTTP JSON to this collector, e.g. https://collector.example:4318. Empty sends nothing."`
 }
 
 // Fleet is [fleet] (user-level config only).

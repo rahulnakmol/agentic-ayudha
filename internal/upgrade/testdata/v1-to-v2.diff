@@ -1,0 +1,34 @@
+--- a/.aayudha/config.toml (config schema v1)
++++ b/.aayudha/config.toml (config schema v2)
+@@ -1,9 +1,9 @@
+ #:schema https://example.invalid/schema.json
+ # Repo config for the fixture product.
+-version = 1
++version = 2
+ 
+ [decisions]
+-sla_hours = 24 # business hours
++page_after_hours = 24 # business hours
+ escalate_to = "founder-b"
+ 
+ [budget]
+--- a/.aayudha/lock.toml (lock schema v1)
++++ b/.aayudha/lock.toml (lock schema v2)
+@@ -1,4 +1,4 @@
+-version = 1
++version = 2
+ 
+ [skills.ready]
+ version = "0.1.0"
+--- a/.aayudha/state.json (state schema v1)
++++ b/.aayudha/state.json (state schema v2)
+@@ -1,7 +1,7 @@
+ {
+-  "labels": [
++  "label_ids": [
+     101,
+     102
+   ],
+-  "schema_version": 1
++  "schema_version": 2
+ }

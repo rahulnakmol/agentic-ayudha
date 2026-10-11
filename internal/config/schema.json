@@ -479,6 +479,21 @@
       "type": "object",
       "description": "Bot identity for agent lanes and CI (WP1.4)."
     },
+    "telemetry": {
+      "properties": {
+        "disabled": {
+          "type": "boolean",
+          "description": "Write no traces at all."
+        },
+        "otlp_endpoint": {
+          "type": "string",
+          "description": "Opt-in: also send traces as OTLP/HTTP JSON to this collector, e.g. https://collector.example:4318. Empty sends nothing."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Traces of verb runs (WP1.8): a local file by default; nothing leaves the machine unless otlp_endpoint is set."
+    },
     "fleet": {
       "properties": {
         "repos": {

@@ -212,6 +212,7 @@ type Command struct {
 	Mode     Mode
 	ModeNote string // qualifies Mode, e.g. where the direct pass runs
 	Exposure Exposure
+	ReadOnly bool // never writes; still runs on a repo whose schema is newer than the binary (WP1.9)
 }
 
 // Has reports whether c is exposed on surface s.
@@ -770,7 +771,7 @@ var Verbs = []Command{
 			flag("all", TypeBool, "Iterate [fleet] repos."),
 		},
 		Outputs:  []string{"report"},
-		Surfaces: cliSkillMCP, Identity: IdentityHuman, Mode: ModeNone, Exposure: ExposeRead,
+		Surfaces: cliSkillMCP, Identity: IdentityHuman, Mode: ModeNone, Exposure: ExposeRead, ReadOnly: true,
 	},
 }
 

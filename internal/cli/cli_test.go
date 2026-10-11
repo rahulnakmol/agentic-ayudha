@@ -38,6 +38,9 @@ func run(t *testing.T, env map[string]string, opts Options, args ...string) (cod
 	if opts.Dir == "" {
 		opts.Dir = t.TempDir()
 	}
+	if opts.GHToken == nil { // never pick up the developer's real gh login
+		opts.GHToken = func(context.Context) (string, error) { return "", errors.New("gh disabled in tests") }
+	}
 	code = Run(context.Background(), args, IO{In: strings.NewReader(""), Out: &out, Err: &errb}, opts)
 	return code, out.String(), errb.String()
 }
