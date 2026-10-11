@@ -73,7 +73,7 @@ var Checks = []Check{
 	{"schema", checkSchema},
 	{"host", checkHost},
 	{"secrets", checkSecrets},
-	{"skills-copies", notYet("skill copies in .agents/skills and .claude/skills against lock.toml", "WP3.2")},
+	{"skills-copies", checkSkillCopies},
 	{"mcp", notYet("MCP registrations", "WP3.3")},
 	{"lfs-quota", notYet("LFS quota on the ledger branch", "WP4.2")},
 	{"issue-types", checkIssueTypes},

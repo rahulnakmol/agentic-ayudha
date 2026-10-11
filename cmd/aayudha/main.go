@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 
+	aayudha "github.com/rahulnakmol/agentic-ayudha"
 	"github.com/rahulnakmol/agentic-ayudha/internal/cli"
 )
 
@@ -21,7 +22,7 @@ var (
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	code := cli.Run(ctx, os.Args[1:], cli.IO{In: os.Stdin, Out: os.Stdout, Err: os.Stderr},
-		cli.Options{Build: cli.BuildInfo{Version: version, Commit: commit, Date: date}})
+		cli.Options{Build: cli.BuildInfo{Version: version, Commit: commit, Date: date}, Assets: aayudha.Assets})
 	stop()
 	os.Exit(code)
 }

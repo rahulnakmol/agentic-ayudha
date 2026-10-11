@@ -45,7 +45,11 @@ PASS  secrets  secrets backends: env, file
 WARN  secrets  secrets backends: env; no writable backend (secrets can come only from AAYU_SECRET_* variables)
                  unavailable: keychain (no Secret Service)
 ## skills-copies pass
-N/A  skills-copies  skill copies in .agents/skills and .claude/skills against lock.toml: not yet available (WP3.2)
+PASS  skills-copies  0 skill(s) for amp, claude in sync with .aayudha/lock.toml (skills 0.0.0)
+## skills-copies fail
+FAIL  skills-copies  skill copies differ from .aayudha/lock.toml; aayu doctor --fix re-syncs them
+                       .claude/skills/ready is missing
+                       .claude/skills/status was edited or is stale
 ## mcp pass
 N/A  mcp  MCP registrations: not yet available (WP3.3)
 ## lfs-quota pass

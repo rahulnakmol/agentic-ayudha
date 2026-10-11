@@ -1,0 +1,20 @@
+{
+  "hooks": {
+    "beforeMCPExecution": [
+      {
+        "command": "\"/opt/aayudha/bin/aayu\" hook pre-tool --host cursor"
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "\"/opt/aayudha/bin/aayu\" hook pre-tool --host cursor"
+      }
+    ],
+    "sessionStart": [
+      {
+        "command": "\"/opt/aayudha/bin/aayu\" hook session-start --host cursor"
+      }
+    ]
+  },
+  "version": 1
+}

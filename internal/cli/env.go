@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"time"
@@ -48,7 +49,8 @@ type Options struct {
 	GHToken    func(ctx context.Context) (string, error)                                   // `gh auth token`; nil runs gh
 	Secrets    *secrets.Store                                                              // nil uses keychain, env, then the age file
 	LookPath   func(string) (string, error)                                                // nil uses exec.LookPath (doctor)
-	Exec       func(ctx context.Context, dir, name string, args ...string) (string, error) // nil runs the command (doctor)
+	Exec       func(ctx context.Context, dir, name string, args ...string) (string, error) // nil runs the command (doctor, install)
+	Assets     fs.FS                                                                       // embedded skills/ and hosts/ (root embed.go); install needs it
 }
 
 // Globals are the global flags shared by every command.

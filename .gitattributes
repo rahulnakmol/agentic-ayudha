@@ -33,3 +33,6 @@
 
 # No LFS rules here: LFS is decided per repository by `aayu init` and applies only on the
 # `ledger` branch (docs/BUILD-PLAN.md V3, WP2.5).
+
+# install golden trees (WP3.2) keep their exact bytes: the windows trees are CRLF on purpose.
+/internal/hosts/testdata/golden/** -text

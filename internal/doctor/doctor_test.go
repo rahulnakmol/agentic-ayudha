@@ -93,7 +93,8 @@ func healthy(t *testing.T) *Probe {
 	env := map[string]string{"AMP_THREAD_ID": "T-1", "AAYU_SECRET_POSTHOG": "phc"}
 	getenv := func(k string) string { return env[k] }
 	return &Probe{
-		Root:     repoWith(t, map[string]string{".aayudha/config.toml": "version = 1\n"}),
+		Root: repoWith(t, map[string]string{".aayudha/config.toml": "version = 1\n",
+			".aayudha/lock.toml": "version = 1\nskills_version = \"0.0.0\"\nhosts = [\"amp\", \"claude\"]\n[skills]\n"}),
 		Getenv:   getenv,
 		LookPath: func(string) (string, error) { return "/usr/bin/x", nil },
 		Exec: fakeExec(map[string]string{
@@ -175,6 +176,11 @@ func failing(t *testing.T) map[string]func(*Probe) {
 			p.API = fakeAPI(map[string]any{"/repos/o/r/rulesets": []any{map[string]any{"name": "protect-master"}}})
 		},
 		"telemetry": func(p *Probe) { p.Config = load(t, "telemetry.disabled=true") },
+		"skills-copies": func(p *Probe) {
+			p.Root = repoWith(t, map[string]string{".aayudha/config.toml": "version = 1\n",
+				".aayudha/lock.toml":             "version = 1\nhosts = [\"claude\"]\n[skills]\nready = { version = \"0.0.0\", sha256 = \"x\" }\nstatus = { version = \"0.0.0\", sha256 = \"x\" }\n",
+				".claude/skills/status/SKILL.md": "edited\n"})
+		},
 	}
 }
 
