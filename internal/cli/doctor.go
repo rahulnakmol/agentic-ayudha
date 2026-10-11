@@ -13,7 +13,9 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
+	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
+	"github.com/rahulnakmol/agentic-ayudha/internal/upgrade"
 )
 
 func init() { register("doctor", runDoctor) }
@@ -108,13 +110,14 @@ func runDoctor(ctx context.Context, e *Env, in Values) error {
 			return tw.Flush()
 		})
 	}
-	results := doctor.Run(ctx, p)
 	fix := ""
 	if in.Bool("fix") {
-		// --fix re-syncs skill copies and host adapters after showing a diff;
-		// both arrive with install (WP3.2), so there is nothing to change yet.
-		fix = "--fix: nothing to re-sync; skill copies and host adapters are not yet available (WP3.2)"
+		var err error
+		if fix, err = e.fixCopies(); err != nil {
+			return err
+		}
 	}
+	results := doctor.Run(ctx, p)
 	type report struct {
 		Results  []doctor.Result `json:"results"`
 		Blocking bool            `json:"blocking"`
@@ -136,4 +139,32 @@ func runDoctor(ctx context.Context, e *Env, in Values) error {
 		return Errorf(ExitFloor, "doctor: floor-blocking failures (see [blocking] above)")
 	}
 	return nil
+}
+
+// fixCopies re-syncs the skill copies and lock.toml with this binary's skills
+// after showing the diff (doctor --fix). Host adapters (hooks, MCP
+// registrations) are rewritten by aayu install, which a human runs.
+func (e *Env) fixCopies() (string, error) {
+	o, err := e.installOptions()
+	if err != nil {
+		return "--fix: nothing to re-sync (not in a repository)", nil
+	}
+	if _, ok, err := hosts.ReadLock(o.Root); err != nil || !ok {
+		return "--fix: nothing to re-sync (no " + hosts.LockPath + "; aayu install installs skills)", err
+	}
+	o.SkillsOnly = true
+	res, err := hosts.Plan(o)
+	if err != nil {
+		return "", Wrap(ExitBlocked, fmt.Errorf("doctor --fix: %w", err))
+	}
+	if len(res.Edits) == 0 {
+		return "--fix: nothing to re-sync; skill copies match " + hosts.LockPath, nil
+	}
+	if !e.JSON {
+		fmt.Fprint(e.Out, hosts.Render(res.Edits, upgrade.Unified))
+	}
+	if err := hosts.Apply(o, res.Edits, false); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("--fix: re-synced %d file(s) with %s", len(res.Edits), hosts.LockPath), nil
 }

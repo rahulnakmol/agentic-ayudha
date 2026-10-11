@@ -1,0 +1,20 @@
+{
+  "hooks": {
+    "beforeMCPExecution": [
+      {
+        "command": "\"C:\\Program Files\\aayudha\\aayu.exe\" hook pre-tool --host cursor"
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "\"C:\\Program Files\\aayudha\\aayu.exe\" hook pre-tool --host cursor"
+      }
+    ],
+    "sessionStart": [
+      {
+        "command": "\"C:\\Program Files\\aayudha\\aayu.exe\" hook session-start --host cursor"
+      }
+    ]
+  },
+  "version": 1
+}

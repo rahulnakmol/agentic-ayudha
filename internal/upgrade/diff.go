@@ -16,6 +16,10 @@ func Diff(changes []Change) string {
 	return b.String()
 }
 
+// Unified renders a unified diff (3 lines of context) between two texts, without
+// file headers. `aayu install` uses it to show its plan.
+func Unified(old, new string) string { return unified(splitLines(old), splitLines(new), 3) }
+
 func splitLines(s string) []string {
 	if s == "" {
 		return nil

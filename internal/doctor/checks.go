@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
 	"github.com/rahulnakmol/agentic-ayudha/internal/upgrade"
@@ -282,4 +283,22 @@ func checkTelemetry(_ context.Context, p *Probe) Result {
 		d = "traces to " + p.TracePath + " and, opted in, OTLP " + p.Config.Config.Telemetry.OTLPEndpoint
 	}
 	return Result{Status: Pass, Detail: d}
+}
+
+// checkSkillCopies compares the installed skill copies with lock.toml (WP3.2).
+func checkSkillCopies(_ context.Context, p *Probe) Result {
+	if p.Root == "" {
+		return Result{Status: Pass, Detail: "not in a repository"}
+	}
+	lock, ok, err := hosts.ReadLock(p.Root)
+	switch {
+	case err != nil:
+		return Result{Status: Fail, Detail: err.Error()}
+	case !ok:
+		return Result{Status: Warn, Detail: "skills are not installed here (aayu install shows the plan, --apply writes it)"}
+	}
+	if problems := hosts.CheckCopies(p.Root); len(problems) > 0 {
+		return Result{Status: Fail, Detail: fmt.Sprintf("skill copies differ from %s; aayu doctor --fix re-syncs them", hosts.LockPath), Lines: problems}
+	}
+	return Result{Status: Pass, Detail: fmt.Sprintf("%d skill(s) for %s in sync with %s (skills %s)", len(lock.Skills), strings.Join(lock.Hosts, ", "), hosts.LockPath, lock.SkillsVersion)}
 }
