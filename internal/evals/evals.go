@@ -13,10 +13,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
+
+	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
 // Config is evals/eval.toml.
@@ -47,7 +50,39 @@ type Case struct {
 	Schemas     []Schema   `toml:"schemas"`
 	Ready       []string   `toml:"ready"` // artifacts holding work items that must pass Ready
 	Calls       [][]string `toml:"calls"` // the recorded run's `aayu` calls, without the program name
+	Scope       []Scope    `toml:"scope"` // requirements the input does not state; a work item that adds one fails
 	Tier2       *Tier2Spec `toml:"tier2"`
+}
+
+// Scope is one known way a skill invents a requirement for this case's input,
+// as a pattern over the produced work item's title and fields. It is a per-case
+// deterministic guard for a defect the rubric already caught once (as WP7.7
+// evolve keeps a failing case); the judge remains the general check.
+type Scope struct {
+	Pattern string `toml:"pattern"`
+	Why     string `toml:"why"`
+	re      *regexp.Regexp
+}
+
+// OutOfScope returns one line per scope rule the item breaks.
+func (c Case) OutOfScope(it workitems.Item) []string {
+	keys := make([]string, 0, len(it.Fields))
+	for k := range it.Fields {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	texts := []string{it.Title}
+	for _, k := range keys {
+		texts = append(texts, it.Fields[k])
+	}
+	text := strings.Join(texts, "\n")
+	var out []string
+	for _, r := range c.Scope {
+		if m := r.re.FindString(text); m != "" {
+			out = append(out, fmt.Sprintf("adds %s (%q)", r.Why, m))
+		}
+	}
+	return out
 }
 
 // Schema ties an artifact to the JSON Schema it must validate against.
@@ -110,6 +145,16 @@ func LoadCase(dir string) (Case, error) {
 	}
 	c.Dir = dir
 	c.ID = filepath.Base(filepath.Dir(dir)) + "/" + filepath.Base(dir)
+	for i, r := range c.Scope {
+		re, err := regexp.Compile(r.Pattern)
+		if err != nil {
+			return c, fmt.Errorf("%s: scope rule %d: %w", c.ID, i+1, err)
+		}
+		if r.Why == "" {
+			return c, fmt.Errorf("%s: scope rule %d: why is required", c.ID, i+1)
+		}
+		c.Scope[i].re = re
+	}
 	if c.Skill == "" || c.Input == "" {
 		return c, fmt.Errorf("%s: skill and input are required", c.ID)
 	}

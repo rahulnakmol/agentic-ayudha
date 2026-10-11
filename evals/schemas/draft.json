@@ -1,0 +1,73 @@
+{
+  "$comment": "A skill's tier-2 reply (WP3.4): a work item as internal/workitems.Item serialises it, plus the questions the skill left open instead of deciding them.",
+  "type": "object",
+  "required": [
+    "type",
+    "title",
+    "fields"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": [
+        "goal",
+        "initiative",
+        "feature",
+        "story",
+        "bug",
+        "decision",
+        "experiment",
+        "release",
+        "feedback",
+        "incident"
+      ]
+    },
+    "number": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "fields": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "labels": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z]+:[A-Za-z0-9-]+$"
+      }
+    },
+    "parent": {
+      "type": "object",
+      "required": [
+        "number",
+        "type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "type": {
+          "type": "string"
+        }
+      }
+    },
+    "open_questions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

@@ -8,6 +8,10 @@ can prove a CSV's rows and columns; `screenshot` shows one screen at one moment;
 time; `metric` is a measured number against a limit; `sr-transcript` is what a screen reader announces. Accept any
 evidence kind that can show its criterion by these meanings.
 
+Questions the skill lists under "open questions" are not requirements: they never lower the score. A requirement in the
+Story that the request does not state (a format, content type, encoding, ordering, file name, limit, or number) is an
+invented requirement.
+
 - 5: Each of (a), (b), (c) has an observable criterion with fitting evidence; nothing beyond the request is required;
   summary, scenario, and environment are concrete; parent is Feature #7; effort is plausible.
 - 4: As 5, with one minor gap, such as one expectation that could be more precise.
