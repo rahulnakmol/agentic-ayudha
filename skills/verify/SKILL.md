@@ -34,4 +34,4 @@ aayu:
 
 Run the deterministic floors (coverage, SAST, secrets, deps, a11y, perf) and record results in a proof pack.
 
-Body lands in WP3.1 (skill format) and WP4.3 (the verb).
+Body lands in WP4.3 (the verb). Format and lint: skills/README.md.

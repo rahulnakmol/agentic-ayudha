@@ -165,6 +165,14 @@ const (
 	SurfacePlumbing Surface = "plumbing"
 )
 
+// GlobalFlags are the names of the CLI's global flags (WP1.1); GlobalValueFlags
+// are those that take a value. A registry input with a global flag's name reads
+// the global flag instead of defining its own.
+var (
+	GlobalFlags      = []string{"dry-run", "json", "repo", "host", "yes", "verbose", "set", "ci"}
+	GlobalValueFlags = []string{"repo", "host", "set"}
+)
+
 // Identity is the GitHub identity a command writes under (WP1.4).
 type Identity string
 
@@ -213,6 +221,9 @@ type Command struct {
 	ModeNote string // qualifies Mode, e.g. where the direct pass runs
 	Exposure Exposure
 	ReadOnly bool // never writes; still runs on a repo whose schema is newer than the binary (WP1.9)
+	// Paths are glob patterns that limit when a host loads the skill on its own
+	// (SKILL.md `paths`, WP3.1). Empty means no restriction and the key is omitted.
+	Paths []string
 }
 
 // Has reports whether c is exposed on surface s.

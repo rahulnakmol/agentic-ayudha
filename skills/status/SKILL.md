@@ -39,4 +39,4 @@ aayu:
 
 Roll up status, health, risk, proof coverage, decisions, and cost per Goal, Initiative, and Feature.
 
-Body lands in WP3.1 (skill format) and WP2.8 (the verb).
+Body lands in WP2.8 (the verb). Format and lint: skills/README.md.

@@ -260,7 +260,7 @@ func genSkills() error {
 		}
 		want[c.Name] = true
 		path := filepath.Join(skillsDir, c.Name, "SKILL.md")
-		body := fmt.Sprintf("\n# %s\n\n%s\n\nBody lands in WP3.1 (skill format) and %s (the verb).\n", c.Name, c.Summary, c.WP)
+		body := fmt.Sprintf("\n# %s\n\n%s\n\nBody lands in %s (the verb). Format and lint: skills/README.md.\n", c.Name, c.Summary, c.WP)
 		old, err := os.ReadFile(path)
 		switch {
 		case err == nil:
@@ -343,6 +343,9 @@ func frontmatter(c verbs.Command) string {
 	fmt.Fprintf(&b, "description: %s\n", q(c.Summary))
 	fmt.Fprintf(&b, "disable-model-invocation: %t\n", c.Exposure == verbs.ExposeNever)
 	b.WriteString("user-invocable: true\n")
+	if len(c.Paths) > 0 {
+		yamlList(&b, "", "paths", c.Paths)
+	}
 	fmt.Fprintf(&b, "version: %s\n", q(verbs.SkillVersion))
 	b.WriteString("aayu:\n")
 	fmt.Fprintf(&b, "  seat: %s\n", c.Seat)

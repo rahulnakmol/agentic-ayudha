@@ -27,4 +27,4 @@ aayu:
 
 Audit floors, proof coverage, waivers, decision SLAs, autonomy exceptions, and unlogged writes; write a reproducible report.
 
-Body lands in WP3.1 (skill format) and WP7.6 (the verb).
+Body lands in WP7.6 (the verb). Format and lint: skills/README.md.

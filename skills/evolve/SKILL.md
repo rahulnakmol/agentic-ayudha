@@ -31,4 +31,4 @@ aayu:
 
 Turn accepted retro Feedback into a failing eval case, then a skill diff that passes it, opened as an agent-authored PR.
 
-Body lands in WP3.1 (skill format) and WP7.7 (the verb).
+Body lands in WP7.7 (the verb). Format and lint: skills/README.md.

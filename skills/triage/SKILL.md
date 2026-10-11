@@ -29,4 +29,4 @@ aayu:
 
 Classify intake issues as Feedback, Bug, or Incident by label only; never edits bodies or touches non-intake issues.
 
-Body lands in WP3.1 (skill format) and WP2.9 (the verb).
+Body lands in WP2.9 (the verb). Format and lint: skills/README.md.

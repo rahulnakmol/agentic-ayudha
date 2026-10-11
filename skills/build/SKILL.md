@@ -37,4 +37,4 @@ aayu:
 
 Build a Ready story or bug in a worktree with checkpoint commits per layer, verify each checkpoint, and open a PR.
 
-Body lands in WP3.1 (skill format) and WP5.5 (the verb).
+Body lands in WP5.5 (the verb). Format and lint: skills/README.md.

@@ -28,4 +28,4 @@ aayu:
 
 Capture visual baselines for a commit SHA.
 
-Body lands in WP3.1 (skill format) and WP6.6 (the verb).
+Body lands in WP6.6 (the verb). Format and lint: skills/README.md.

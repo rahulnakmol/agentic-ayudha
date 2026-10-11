@@ -40,4 +40,4 @@ aayu:
 
 Record a Decision with options, evaluation, and recommendation; accept it, supersede it, or file a floor waiver.
 
-Body lands in WP3.1 (skill format) and WP5.6 (the verb).
+Body lands in WP5.6 (the verb). Format and lint: skills/README.md.
