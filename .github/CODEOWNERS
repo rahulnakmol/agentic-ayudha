@@ -8,6 +8,7 @@
 /ops/                    @rahulnakmol
 /seats/                  @rahulnakmol
 /CONSTRAINTS.md          @rahulnakmol
+/internal/config/defaults.toml  @rahulnakmol
 /.aayudha/config.toml    @rahulnakmol
 /.agents/                @rahulnakmol
 /.claude/                @rahulnakmol

@@ -173,7 +173,7 @@ func TestRegistry(t *testing.T) {
 					}
 				}
 				if err := unique(in); err != nil {
-					return fmt.Errorf("%s: %v", c.Name, err)
+					return fmt.Errorf("%s: %w", c.Name, err)
 				}
 			}
 			return nil

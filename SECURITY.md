@@ -2,8 +2,8 @@
 
 This file covers two things: how to report a vulnerability in `aayudha`, and what the maintainer does when
 the tool itself is compromised (the tool-incident plan, WP0.1). The threat model is
-[docs/BUILD-PLAN.md §0.1](docs/BUILD-PLAN.md#01-trust-model); `docs/threat-model.md` expands it (n/a until
-WP0.5).
+[docs/BUILD-PLAN.md §0.1](docs/BUILD-PLAN.md#01-trust-model), expanded in
+[docs/threat-model.md](docs/threat-model.md).
 
 Features marked "n/a until WPx.y" do not exist yet. Until then the manual step written next to them applies.
 
@@ -58,10 +58,26 @@ If a target slips, the maintainer says so in the advisory thread.
 
 ## Release integrity
 
-Releases will be built by goreleaser, signed with cosign (keyless), and carry SLSA build provenance and an
-SBOM; `install.sh` and `aayu self-update` verify the signature against the pinned release workflow identity
-(n/a until WP0.4 and WP1.1). Until then there are no releases, and nothing published under this repository's
-name should be trusted as one.
+Releases are built by goreleaser in [release.yml](.github/workflows/release.yml), only for an annotated `v*`
+tag whose commit is on `main`. Each release carries `checksums.txt` signed keylessly with cosign
+(`checksums.txt.sigstore.json`), an SPDX SBOM per archive, and SLSA build provenance. The signing certificate
+names `https://github.com/rahulnakmol/agentic-ayudha/.github/workflows/release.yml@refs/tags/<tag>`.
+
+[install.sh](install.sh) refuses to install unless that signature verifies for the exact tag requested and
+the archive matches its signed checksum; CI proves on every change that it refuses a flipped byte, a rewritten
+checksum, and a signature from any other workflow. `aayu self-update` will do the same (n/a until WP1.1). By
+hand:
+
+```sh
+cosign verify-blob --bundle checksums.txt.sigstore.json \
+  --certificate-identity "https://github.com/rahulnakmol/agentic-ayudha/.github/workflows/release.yml@refs/tags/vX.Y.Z" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt
+sha256sum --ignore-missing -c checksums.txt
+gh attestation verify aayudha_X.Y.Z_linux_amd64.tar.gz --repo rahulnakmol/agentic-ayudha
+```
+
+No release has been published yet. Anything published under this repository's name that does not verify this
+way is not a release.
 
 ## Tool-incident plan
 
@@ -77,7 +93,8 @@ act.
   `aayu audit` reconciliation, n/a until WP7.6; until then by hand).
 - `aayu actions verify-chain` reports a broken hash chain (n/a until WP1.5).
 - A skill copy differs from `.aayudha/lock.toml` (`aayu doctor`, n/a until WP3.2).
-- A release asset whose signature, provenance, or checksum does not verify (n/a until WP0.4).
+- A release asset whose signature, provenance, or checksum does not verify (see
+  [Release integrity](#release-integrity)).
 - Secret-scanning, gitleaks, or semgrep alerts; GitHub notices of token or App-key exposure.
 - A ruleset bypass in the rule-suite history that is not listed as a solo-mode bypass (see
   [CONTRIBUTING.md](CONTRIBUTING.md#solo-mode-policy)).
@@ -91,7 +108,8 @@ act.
    - revoke the tokens agents use (see [Leaked credentials](#leaked-credentials));
    - stop any running agent sessions.
 2. **Yank the release** if a release is affected: delete the GitHub release or mark it as compromised in its
-   notes, and pull the brew, Scoop, and winget manifests (n/a until WP0.4/WP8.2; no releases exist yet).
+   notes, and pull the brew, Scoop, and winget manifests (revert the commit in `homebrew-tap` and `scoop-bucket`;
+   close or revert the winget PR).
    Keep the artifacts and their hashes offline for the investigation.
 3. **Pull a bad skill**: revert it on `dev` and tell users to re-sync with `aayu install` or pin a good version
    with `aayu install --pin <version>` (n/a until WP3.2).
@@ -107,7 +125,7 @@ act.
 
 ### 3. Recover
 
-1. Ship a new signed release with the fix (cosign signature and SLSA provenance, n/a until WP0.4).
+1. Ship a new signed release with the fix (cosign signature and SLSA provenance, `release.yml`).
 2. Run `aayu resume` to clear the halt variable (n/a until WP5.7; until then re-enable workflows by hand and
    re-issue tokens).
 3. Publish the GitHub security advisory with affected versions, fixed version, and the steps users must take
