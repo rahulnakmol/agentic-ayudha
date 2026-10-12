@@ -6,6 +6,7 @@ package providers
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"slices"
 	"strings"
@@ -13,7 +14,11 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/aws"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/azure"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/cloud"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/figma"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/gcp"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/githubread"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/growthbook"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/mobbin"
@@ -29,6 +34,21 @@ type Deps struct {
 	Transport http.RoundTripper // nil means http.DefaultTransport; tests replay fixtures
 	Repo      string            // the current repository (owner/name), GitHub's default
 	Now       func() time.Time
+	// Cloud adapters (azure, aws, gcp): the environment (GitHub Actions
+	// OIDC variables), the az/aws/gcloud runner for auth = "cli", and the
+	// wait between polls. nil means the process's own.
+	Getenv func(string) string
+	Exec   cloud.Exec
+	Sleep  func(time.Duration)
+}
+
+func (d Deps) cloud() cloud.Env { return cloud.Env{Getenv: d.Getenv, Exec: d.Exec, Now: d.Now} }
+
+func (d Deps) sleep() func(time.Duration) {
+	if d.Sleep == nil {
+		return time.Sleep
+	}
+	return d.Sleep
 }
 
 func (d Deps) now() time.Time {
@@ -47,6 +67,12 @@ type scoper interface {
 type baseliner interface {
 	scoper
 	Baseline(ctx context.Context, q integrations.Query) (integrations.Baseline, error)
+}
+
+// exporter is what an adapter that pulls raw events for measure adds.
+type exporter interface {
+	scoper
+	Export(ctx context.Context, w integrations.Window, out io.Writer) (kind, query string, err error)
 }
 
 // Provider is one adapter.
@@ -80,6 +106,30 @@ var Known = []Provider{
 	{
 		Name: "growthbook", Purpose: "experiment results for readout and measure",
 		open: func(d Deps, c integrations.Conn) (scoper, error) { return growthbook.New(c, d.Transport, d.now), nil },
+	},
+	{
+		Name: "azure", Purpose: "Application Insights baselines and events (Log Analytics query API)", Need: azure.Need,
+		open: func(d Deps, c integrations.Conn) (scoper, error) { return azure.New(c, d.Transport, d.cloud()) },
+	},
+	{
+		Name: "aws", Purpose: "CloudWatch RUM baselines (Logs Insights) and events", Need: aws.Need,
+		open: func(d Deps, c integrations.Conn) (scoper, error) {
+			cl, err := aws.New(c, d.Transport, d.cloud())
+			if cl != nil {
+				cl.Sleep = d.sleep()
+			}
+			return cl, err
+		},
+	},
+	{
+		Name: "gcp", Purpose: "GA4 BigQuery export baselines and events", Need: gcp.Need,
+		open: func(d Deps, c integrations.Conn) (scoper, error) {
+			cl, err := gcp.New(c, d.Transport, d.cloud())
+			if cl != nil {
+				cl.Sleep = d.sleep()
+			}
+			return cl, err
+		},
 	},
 	{
 		Name: "figma", Purpose: "design files: nodes, rendered images, and variables",
@@ -131,6 +181,27 @@ func Baseline(ctx context.Context, d Deps, source string, q integrations.Query) 
 		return integrations.Baseline{}, fmt.Errorf("%w: %s gives no baselines", integrations.ErrQuery, source)
 	}
 	return b.Baseline(ctx, q)
+}
+
+// Exporters are the sources Export pulls events from (measure --live), each
+// with the export kind its events are read as.
+var Exporters = map[string]string{"azure": "appinsights", "aws": "aws", "gcp": "gcp"}
+
+// Export pulls the window's raw events from the named cloud source into out
+// as JSON lines in the format exports.Read parses as kind, so measure builds
+// cohorts from them exactly as from an export file. It returns the kind and
+// the exact query. Nothing is sent when the integration is missing,
+// incomplete, or write-scoped; the adapter refuses a write-capable
+// credential before the data call.
+func Export(ctx context.Context, d Deps, source string, w integrations.Window, out io.Writer) (string, string, error) {
+	if _, ok := Exporters[source]; !ok {
+		return "", "", fmt.Errorf("%w: %q pulls no events; want one of azure, aws, gcp", integrations.ErrQuery, source)
+	}
+	_, s, err := open(d, source)
+	if err != nil {
+		return "", "", err
+	}
+	return s.(exporter).Export(ctx, w, out)
 }
 
 // Check resolves the named integration and asks its provider who the key

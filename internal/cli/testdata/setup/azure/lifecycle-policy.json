@@ -1,0 +1,13 @@
+{
+  "rules": [
+    {
+      "enabled": true,
+      "name": "aayudhaproofretention964584196b5c",
+      "type": "Lifecycle",
+      "definition": {
+        "actions": {"baseBlob": {"delete": {"daysAfterCreationGreaterThan": 90}}},
+        "filters": {"blobTypes": ["blockBlob"], "prefixMatch": ["<container>/r/proof/o/r/"]}
+      }
+    }
+  ]
+}

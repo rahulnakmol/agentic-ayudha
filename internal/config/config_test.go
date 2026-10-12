@@ -102,6 +102,8 @@ func TestRejects(t *testing.T) {
 		{"decision authority key", nil, nil, []string{"decisions.authority.sprint=founder"}, "[decisions.authority] sprint"},
 		{"decision authority value", nil, nil, []string{"decisions.authority.story=not a login!"}, "want a seat slug or a GitHub login"},
 		{"escalation login", nil, nil, []string{"decisions.escalate_to=founder b"}, "escalate_to"},
+		{"auth on a non-cloud integration", nil, nil, []string{"integrations.posthog.secret=posthog", "integrations.posthog.scope=read", "integrations.posthog.auth=oidc"}, "only [integrations.azure]"},
+		{"cloud key auth without a secret", nil, nil, []string{"integrations.aws.scope=read", "integrations.aws.region=eu-west-1"}, `[integrations.aws] secret = ""`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

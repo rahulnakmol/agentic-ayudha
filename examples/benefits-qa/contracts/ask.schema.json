@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/contracts/ask.schema.json",
+  "$defs": {
+    "AskRequest": {
+      "properties": {
+        "question": {
+          "type": "string",
+          "maxLength": 500,
+          "minLength": 1,
+          "description": "The benefits question, in plain language."
+        },
+        "user_id": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9-]*$",
+          "description": "A pseudonymous ID for analytics; never a name or an email address."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "question"
+      ]
+    },
+    "AskResponse": {
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "answered",
+            "referred",
+            "refused"
+          ]
+        },
+        "answer": {
+          "type": "string",
+          "description": "The quoted plan text; only when answered."
+        },
+        "citations": {
+          "items": {
+            "$ref": "#/$defs/Citation"
+          },
+          "type": "array",
+          "description": "The passages the answer quotes; empty unless answered."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Why the question was referred or refused."
+        },
+        "message": {
+          "type": "string",
+          "description": "What to tell the asker when the question was referred or refused."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "status",
+        "citations"
+      ]
+    },
+    "Citation": {
+      "properties": {
+        "passage_id": {
+          "type": "string",
+          "description": "ID of the plan passage."
+        },
+        "plan": {
+          "type": "string",
+          "description": "The plan the passage belongs to."
+        },
+        "section": {
+          "type": "string",
+          "description": "The section of the plan."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "passage_id",
+        "plan",
+        "section"
+      ]
+    },
+    "Error": {
+      "properties": {
+        "error": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "error"
+      ]
+    }
+  },
+  "properties": {
+    "request": {
+      "$ref": "#/$defs/AskRequest"
+    },
+    "response": {
+      "$ref": "#/$defs/AskResponse"
+    },
+    "error": {
+      "$ref": "#/$defs/Error"
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "request",
+    "response",
+    "error"
+  ],
+  "title": "benefits-qa POST /api/ask"
+}

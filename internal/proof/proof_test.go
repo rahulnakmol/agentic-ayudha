@@ -3,6 +3,8 @@ package proof
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,7 +13,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/fixture"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
+	"github.com/rahulnakmol/agentic-ayudha/internal/proof/fakecloud"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof/fakes3"
 )
 
@@ -160,6 +164,43 @@ func TestParseMedia(t *testing.T) {
 	}
 }
 
+// WP7.2b.2: OpenMedia picks the store by scheme and refuses, before any
+// request, a value or credential it cannot use; with oidc or cli no secret
+// is needed.
+func TestOpenMedia(t *testing.T) {
+	const sas = "sv=2023-11-03&sp=rwdl&sig=abc%3D"
+	key := fixture.NewClouds(t, time.Now()).GCPKeyJSON()
+	for _, tt := range []struct {
+		in, secret, want string // want: the store's type, or text of the refusal
+	}{
+		{"azblob://acmeproof/proof/p?endpoint=http://127.0.0.1:10000/acmeproof", sas, "*proof.AzureBlob"},
+		{"azblob://acmeproof/proof?auth=cli", "", "*proof.AzureBlob"},
+		{"azblob://acmeproof/proof?auth=oidc&tenant=t1&client=5e6f7a8b-0000-4000-8000-00000000bbbb&subscription=0b1c2d3e-0000-4000-8000-000000000001&group=rg", "", "*proof.AzureBlob"},
+		{"gs://acme-proof/p", key, "*proof.GCS"},
+		{"gs://acme-proof?auth=oidc&provider=projects/1/locations/global/workloadIdentityPools/gh/providers/aayu&sa=media@acme.iam.gserviceaccount.com", "", "*proof.GCS"},
+		{"s3://b", "AK:SK", "*proof.Bucket"},
+		{"azblob://acmeproof/proof", "", `secret "proof-media" (a SAS token for the container) is not set`},
+		{"azblob://acmeproof/proof", "not-a-sas", "is not a SAS token"},
+		{"azblob://acmeproof/Proof_Media", sas, "container"},
+		{"azblob://acmeproof/proof?auth=key", "id:secret", "needs tenant="},
+		{"azblob://acmeproof/proof?auth=oidc&tenant=t1", "", "needs client="},
+		{"azblob://acmeproof/proof?auth=cli&subscription=0b1c2d3e-0000-4000-8000-000000000001", "", "subscription and group go together"},
+		{"gs://acme-proof", "", "a service account JSON key"},
+		{"gs://acme-proof", `{"type":"authorized_user"}`, "want a service account JSON key"},
+		{"gs://acme-proof?auth=oidc&sa=media@acme.iam.gserviceaccount.com", "", "needs provider="},
+		{"gcs://acme-proof", "", "not a bucket"},
+	} {
+		m, err := OpenMedia(tt.in, MediaOptions{Secret: func() string { return tt.secret }, SecretName: "proof-media"})
+		got := fmt.Sprintf("%T", m)
+		if err != nil {
+			got = err.Error()
+		}
+		if !strings.Contains(got, tt.want) {
+			t.Errorf("%s: %s, want %s", tt.in, got, tt.want)
+		}
+	}
+}
+
 func run(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 	cmd := exec.Command("git", args...)
@@ -208,96 +249,198 @@ func localPack(t *testing.T) (string, *Pack) {
 	return dir, p
 }
 
-// WP4.2: media go to the private bucket with a retention rule; data
-// artifacts and pack.json go to the ledger; the pack verifies from the
-// ledger; purge deletes the bucket objects and tombstones pack.json.
-func TestPushVerifyPurgeBucket(t *testing.T) {
-	ctx := context.Background()
+// backend is a media store under test with its fake.
+type backend struct {
+	name     string
+	media    Media
+	fake     func() (objects map[string][]byte, unlock func())
+	rule     func() string // the fake's lifecycle configuration
+	object   string        // where the screenshot lands in the fake ("<bucket>/<key>")
+	ruleHas  []string      // what the fake's lifecycle must hold after the push
+	keep     string        // a rule of the founder's that must survive aayudha's edits
+	note     bool          // lifecycle is unmanaged (Azure SAS): the push says so instead
+	rejected func() int
+}
+
+func backends(t *testing.T, now time.Time) []backend {
+	sha := sample2SHA()
 	s3 := fakes3.New(t, "sekret")
-	dir, bare := ledgerRemote(t, false)
 	b, err := ParseMedia("s3://proof/acme?endpoint=" + s3.Server.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
 	b.AccessKey, b.SecretKey = "AKID", "sekret"
+	out := []backend{{name: "s3", media: b,
+		fake:   func() (map[string][]byte, func()) { s3.Mu.Lock(); return s3.Objects, s3.Mu.Unlock },
+		rule:   func() string { s3.Mu.Lock(); defer s3.Mu.Unlock(); return string(s3.Lifecycle["proof"]) },
+		object: "proof/acme/proof/o/r/7/" + sha, ruleHas: []string{"<Prefix>acme/proof/o/r/</Prefix>", "<Days>90</Days>"},
+		rejected: func() int { return s3.Rejected }}}
+
+	// Azure Blob with an Entra app registration (client secret): blobs with
+	// a storage token, the lifecycle rule through Azure Resource Manager.
+	clouds := fixture.NewClouds(t, now)
+	az := fakecloud.NewAzure(t, "", fixture.EntraToken("https://storage.azure.com/.default"), fixture.EntraToken("https://management.azure.com/.default"))
+	az.Lifecycle = []byte(`{"properties":{"policy":{"rules":[{"enabled":true,"name":"keeplogs","type":"Lifecycle","definition":{"actions":{"baseBlob":{"tierToCool":{"daysAfterModificationGreaterThan":30}}},"filters":{"blobTypes":["blockBlob"],"prefixMatch":["logs/"]}}}]}}}`)
+	hc := &http.Client{Transport: clouds.Route(fakecloud.Rewrite(http.DefaultTransport, "management.azure.com", az.Server))}
+	m, err := OpenMedia("azblob://acmeproof/proof/acme?auth=key&tenant="+fixture.AzureTenant+"&subscription=0b1c2d3e-0000-4000-8000-000000000001&group=rg-proof&endpoint="+az.Server.URL,
+		MediaOptions{Secret: func() string { return fixture.AzureClient + ":" + fixture.AzureSecret }, SecretName: "proof-media", HTTP: hc, Now: func() time.Time { return now }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out = append(out, backend{name: "azblob entra", media: m,
+		fake:   func() (map[string][]byte, func()) { az.Mu.Lock(); return az.Objects, az.Mu.Unlock },
+		rule:   func() string { az.Mu.Lock(); defer az.Mu.Unlock(); return string(az.Lifecycle) },
+		object: "proof/acme/proof/o/r/7/" + sha,
+		// The founder's own rule is kept beside aayudha's.
+		keep: `"name":"keeplogs"`, ruleHas: []string{`"name":"keeplogs"`, `"prefixMatch":["proof/acme/proof/o/r/"]`, `"daysAfterCreationGreaterThan":90`, `"name":"aayudhaproofretention`},
+		rejected: func() int { return az.Rejected }})
+
+	// Azure Blob with a SAS token: objects only; the lifecycle is reported as unmanaged.
+	sas := "sv=2023-11-03&ss=b&srt=co&sp=rwdl&se=2026-12-31T00%3A00%3A00Z&sig=c2FzLXNpZ25hdHVyZQ%3D%3D"
+	azs := fakecloud.NewAzure(t, sas, "", "")
+	m, err = OpenMedia("azblob://acmeproof/proof?endpoint="+azs.Server.URL, MediaOptions{Secret: func() string { return "?" + sas }, SecretName: "proof-media", Now: func() time.Time { return now }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out = append(out, backend{name: "azblob sas", media: m,
+		fake:   func() (map[string][]byte, func()) { azs.Mu.Lock(); return azs.Objects, azs.Mu.Unlock },
+		rule:   func() string { return "" },
+		object: "proof/proof/o/r/7/" + sha, note: true, rejected: func() int { return azs.Rejected }})
+
+	// Cloud Storage with a service account key (signed JWT grant).
+	gclouds := fixture.NewClouds(t, now)
+	gclouds.GoogleScopes = "https://www.googleapis.com/auth/devstorage.full_control"
+	gs := fakecloud.NewGCS(t, fixture.GCPToken)
+	gs.Lifecycle = []byte(`{"lifecycle":{"rule":[{"action":{"type":"SetStorageClass","storageClass":"NEARLINE"},"condition":{"age":30}}]}}`)
+	m, err = OpenMedia("gs://acme-proof/acme?endpoint="+gs.Server.URL, MediaOptions{Secret: gclouds.GCPKeyJSON, SecretName: "proof-media",
+		HTTP: &http.Client{Transport: gclouds.Route(http.DefaultTransport)}, Now: func() time.Time { return now }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out = append(out, backend{name: "gcs key", media: m,
+		fake:   func() (map[string][]byte, func()) { gs.Mu.Lock(); return gs.Objects, gs.Mu.Unlock },
+		rule:   func() string { gs.Mu.Lock(); defer gs.Mu.Unlock(); return string(gs.Lifecycle) },
+		object: "acme-proof/acme/proof/o/r/7/" + sha,
+		keep:   `"SetStorageClass"`, ruleHas: []string{`"SetStorageClass"`, `{"action":{"type":"Delete"},"condition":{"age":90,"matchesPrefix":["acme/proof/o/r/"]}}`},
+		rejected: func() int { return gs.Rejected }})
+	return out
+}
+
+func sample2SHA() string {
+	p, _ := sample()
+	return p.Artifacts[1].SHA256
+}
+
+// WP4.2 (S3/R2) and WP7.2b.2 (Azure Blob, Cloud Storage): media go to the
+// private store with a retention rule merged into its others; data
+// artifacts and pack.json go to the ledger; the pack verifies from the
+// ledger; a swapped object is a hash mismatch; purge deletes the objects and
+// tombstones pack.json. Every request carries the store's credential.
+func TestPushVerifyPurgeBucket(t *testing.T) {
 	now := time.Date(2026, 10, 12, 12, 0, 0, 0, time.UTC)
-	st := &Store{Repo: "o/r", Ledger: &ledger.Writer{Dir: dir, Repo: "o/r"}, Bucket: b, RetentionDays: 90, Now: func() time.Time { return now }}
-	pdir, p := localPack(t)
+	for _, bk := range backends(t, now) {
+		t.Run(bk.name, func(t *testing.T) {
+			ctx := context.Background()
+			dir, bare := ledgerRemote(t, false)
+			st := &Store{Repo: "o/r", Ledger: &ledger.Writer{Dir: dir, Repo: "o/r"}, Bucket: bk.media, RetentionDays: 90, Now: func() time.Time { return now }}
+			pdir, p := localPack(t)
+			count := func() int { o, u := bk.fake(); defer u(); return len(o) }
 
-	// Without --media, only hashes of media are kept.
-	res, err := st.Push(ctx, pdir, false, Authority{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !slices.Contains(res.Stores, "screens/2-empty.png=none") || len(s3.Objects) != 0 || res.Authority != Advisory {
-		t.Fatalf("push without media: %+v, objects %d", res, len(s3.Objects))
-	}
-	res, err = st.Push(ctx, pdir, true, Authority{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	key := "proof/acme/proof/o/r/7/" + p.Artifacts[2].SHA256
-	if p.Artifacts[2].Path != "screens/2-empty.png" || s3.Objects[key] == nil {
-		t.Fatalf("bucket objects: %v (want %s)", keys(s3.Objects), key)
-	}
-	if lc := string(s3.Lifecycle["proof"]); !strings.Contains(lc, "<Prefix>acme/proof/o/r/</Prefix>") || !strings.Contains(lc, "<Days>90</Days>") {
-		t.Fatalf("lifecycle: %s", lc)
-	}
-	if got := run(t, bare, "show", "ledger:proof/7/"+head+"/advisory/artifacts/coverage/diff.json"); got != `{"covered":9,"total":10}` {
-		t.Fatalf("data artifact on ledger: %s", got)
-	}
-	if out := run(t, bare, "ls-tree", "-r", "--name-only", "ledger"); strings.Contains(out, ".png") {
-		t.Fatalf("media committed to the ledger:\n%s", out)
-	}
-	// Re-push is idempotent: no lifecycle change, no new commit.
-	again, err := st.Push(ctx, pdir, true, Authority{})
-	if err != nil || again.Commit != res.Commit || again.Lifecycle {
-		t.Fatalf("re-push: %+v %v (first %s)", again, err, res.Commit)
-	}
+			// Without --media, only hashes of media are kept.
+			res, err := st.Push(ctx, pdir, false, Authority{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Contains(res.Stores, "screens/2-empty.png=none") || count() != 0 || res.Authority != Advisory {
+				t.Fatalf("push without media: %+v, objects %d", res, count())
+			}
+			res, err = st.Push(ctx, pdir, true, Authority{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			objs, unlock := bk.fake()
+			got := objs[bk.object]
+			unlock()
+			if p.Artifacts[2].Path != "screens/2-empty.png" || got == nil {
+				t.Fatalf("store objects: want %s", bk.object)
+			}
+			if bk.note != (res.LifecycleNote != "") || bk.note && !strings.Contains(res.LifecycleNote, ".aayudha/setup/azure/") {
+				t.Fatalf("lifecycle note %q", res.LifecycleNote)
+			}
+			for _, w := range bk.ruleHas {
+				if lc := bk.rule(); !strings.Contains(lc, w) {
+					t.Fatalf("lifecycle lacks %s:\n%s", w, lc)
+				}
+			}
+			if r, err := bk.media.Lifecycle(ctx, "o/r"); !bk.note && (err != nil || r == "") {
+				t.Fatalf("Lifecycle: %q %v", r, err)
+			}
+			if got := run(t, bare, "show", "ledger:proof/7/"+head+"/advisory/artifacts/coverage/diff.json"); got != `{"covered":9,"total":10}` {
+				t.Fatalf("data artifact on ledger: %s", got)
+			}
+			if out := run(t, bare, "ls-tree", "-r", "--name-only", "ledger"); strings.Contains(out, ".png") {
+				t.Fatalf("media committed to the ledger:\n%s", out)
+			}
+			// Re-push is idempotent: no lifecycle change, no new commit.
+			again, err := st.Push(ctx, pdir, true, Authority{})
+			if err != nil || again.Commit != res.Commit || again.Lifecycle {
+				t.Fatalf("re-push: %+v %v (first %s)", again, err, res.Commit)
+			}
 
-	tree, err := st.Ledger.Read(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e, err := st.Best(ctx, tree, 7)
-	if err != nil {
-		t.Fatal(err)
-	}
-	exp := Expect{HeadSHA: head, CompletionGoalHash: cg, Criteria: []int{1, 2}}
-	if r := Verify(e.Pack, exp, st.Opener(ctx, tree, e)); !r.OK || r.Hashed != 3 {
-		t.Fatalf("verify from ledger and bucket: %+v", r)
-	}
-	// A tampered bucket object is a hash mismatch.
-	s3.Mu.Lock()
-	s3.Objects[key] = []byte("swapped")
-	s3.Mu.Unlock()
-	if r := Verify(e.Pack, exp, st.Opener(ctx, tree, e)); r.OK || !strings.Contains(strings.Join(r.Problems, ";"), "screens/2-empty.png: hash mismatch") {
-		t.Fatalf("tampered object: %+v", r)
-	}
-	tree.Close()
+			tree, err := st.Ledger.Read(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			e, err := st.Best(ctx, tree, 7)
+			if err != nil {
+				t.Fatal(err)
+			}
+			exp := Expect{HeadSHA: head, CompletionGoalHash: cg, Criteria: []int{1, 2}}
+			if r := Verify(e.Pack, exp, st.Opener(ctx, tree, e)); !r.OK || r.Hashed != 3 {
+				t.Fatalf("verify from ledger and store: %+v", r)
+			}
+			// A tampered object is a hash mismatch.
+			objs, unlock = bk.fake()
+			objs[bk.object] = []byte("swapped")
+			unlock()
+			if r := Verify(e.Pack, exp, st.Opener(ctx, tree, e)); r.OK || !strings.Contains(strings.Join(r.Problems, ";"), "screens/2-empty.png: hash mismatch") {
+				t.Fatalf("tampered object: %+v", r)
+			}
+			tree.Close()
 
-	// Retention purge leaves a fresh pack alone; a story purge removes its media.
-	tree, _ = st.Ledger.Read(ctx)
-	if pr, err := st.Purge(ctx, tree, 0, "retention"); err != nil || len(pr.Packs) != 0 {
-		t.Fatalf("retention purge of a fresh pack: %+v %v", pr, err)
-	}
-	pr, err := st.Purge(ctx, tree, 7, "on request")
-	tree.Close()
-	if err != nil || len(pr.Objects) != 1 || len(s3.Objects) != 0 {
-		t.Fatalf("purge: %+v %v, objects left %v", pr, err, keys(s3.Objects))
-	}
-	tree, _ = st.Ledger.Read(ctx)
-	defer tree.Close()
-	e, _ = st.Best(ctx, tree, 7)
-	a, _ := e.Pack.Artifact("screens/2-empty.png")
-	if a.Tombstone == nil || a.Tombstone.Reason != "on request" || a.SHA256 != p.Artifacts[2].SHA256 {
-		t.Fatalf("tombstone: %+v", a)
-	}
-	if r := Verify(e.Pack, exp, st.Opener(ctx, tree, e)); !r.OK || r.NotStored != 1 {
-		t.Fatalf("verify after purge: %+v", r)
-	}
-	if s3.Rejected != 0 {
-		t.Fatalf("%d requests failed signature checks", s3.Rejected)
+			// Retention purge leaves a fresh pack alone; a story purge removes its media.
+			tree, _ = st.Ledger.Read(ctx)
+			if pr, err := st.Purge(ctx, tree, 0, "retention"); err != nil || len(pr.Packs) != 0 {
+				t.Fatalf("retention purge of a fresh pack: %+v %v", pr, err)
+			}
+			pr, err := st.Purge(ctx, tree, 7, "on request")
+			tree.Close()
+			if err != nil || len(pr.Objects) != 1 || count() != 0 {
+				t.Fatalf("purge: %+v %v, objects left %d", pr, err, count())
+			}
+			tree, _ = st.Ledger.Read(ctx)
+			defer tree.Close()
+			e, _ = st.Best(ctx, tree, 7)
+			a, _ := e.Pack.Artifact("screens/2-empty.png")
+			if a.Tombstone == nil || a.Tombstone.Reason != "on request" || a.SHA256 != p.Artifacts[2].SHA256 {
+				t.Fatalf("tombstone: %+v", a)
+			}
+			if r := Verify(e.Pack, exp, st.Opener(ctx, tree, e)); !r.OK || r.NotStored != 1 {
+				t.Fatalf("verify after purge: %+v", r)
+			}
+			// retention_days 0 removes aayudha's rule and keeps the others.
+			if !bk.note {
+				if changed, err := bk.media.EnsureLifecycle(ctx, "o/r", 0); err != nil || !changed {
+					t.Fatalf("remove rule: %t %v", changed, err)
+				}
+				if r, _ := bk.media.Lifecycle(ctx, "o/r"); r != "" || !strings.Contains(bk.rule(), bk.keep) {
+					t.Fatalf("after removal: ours %q, store %s", r, bk.rule())
+				}
+			}
+			if n := bk.rejected(); n != 0 {
+				t.Fatalf("%d requests failed the credential check", n)
+			}
+		})
 	}
 }
 
@@ -350,12 +493,4 @@ func TestPrivateRepoMediaInLFS(t *testing.T) {
 	if out := run(t, bare, "ls-tree", "-r", "--name-only", "ledger"); strings.Contains(out, ".png") {
 		t.Fatalf("LFS file still on the ledger tip:\n%s", out)
 	}
-}
-
-func keys(m map[string][]byte) []string {
-	var ks []string
-	for k := range m {
-		ks = append(ks, k)
-	}
-	return ks
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/initrepo"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/cloud"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
@@ -26,7 +27,8 @@ const ProofMarker = "<!-- aayudha:proof -->"
 // MergeGateWorkflow is the workflow whose CI-written packs are authoritative (WP4.8).
 const MergeGateWorkflow = initrepo.MergeGateWorkflow
 
-// DefaultMediaSecret names the secret holding the bucket's "ACCESS_KEY_ID:SECRET_ACCESS_KEY".
+// DefaultMediaSecret names the secret holding the media store's credential
+// (proof.OpenMedia lists what each store takes).
 const DefaultMediaSecret = "proof-media"
 
 // visibility reports whether the repository is private: from init's state
@@ -65,22 +67,20 @@ func (e *Env) proofStore(ctx context.Context, c *github.Client, tok identity.Tok
 	}
 	s := &proof.Store{Repo: repo, Ledger: w, Private: e.private(ctx, c, repo), RetentionDays: l.Config.Proof.RetentionDays, Now: e.Now}
 	if m := l.Config.Proof.Media; m != "" {
-		if s.Bucket, err = proof.ParseMedia(m); err != nil {
-			return nil, Wrap(ExitUsage, err)
-		}
 		name := l.Config.Proof.MediaSecret
 		if name == "" {
 			name = DefaultMediaSecret
 		}
-		v, _, err := e.SecretStore().Get(name)
-		if err != nil || v == "" {
-			return nil, Errorf(ExitBlocked, "[proof] media is %s, but secret %q (ACCESS_KEY_ID:SECRET_ACCESS_KEY) is not set: `aayu auth set-secret %s`", m, name, name)
+		s.Bucket, err = proof.OpenMedia(m, proof.MediaOptions{
+			Secret:     func() string { v, _, _ := e.SecretStore().Get(name); return v },
+			SecretName: name, HTTP: e.HTTP, Now: e.Now, Env: cloud.Env{Getenv: e.Getenv, Now: e.Now},
+		})
+		if errors.Is(err, proof.ErrMediaSecret) {
+			return nil, Wrap(ExitBlocked, err)
 		}
-		ak, sk, ok := strings.Cut(strings.TrimSpace(v), ":")
-		if !ok {
-			return nil, Errorf(ExitUsage, "secret %q must be ACCESS_KEY_ID:SECRET_ACCESS_KEY", name)
+		if err != nil {
+			return nil, Wrap(ExitUsage, err)
 		}
-		s.Bucket.AccessKey, s.Bucket.SecretKey, s.Bucket.HTTP, s.Bucket.Now = ak, sk, e.HTTP, e.Now
 	}
 	return s, nil
 }
@@ -325,6 +325,9 @@ func (e *Env) proofPush(ctx context.Context, repo string, story int, media bool)
 		fmt.Fprintf(w, "#%d: %s pack for %s pushed to ledger %s (%s)\n", story, res.Authority, short(res.HeadSHA), res.Path, short(res.Commit))
 		for _, st := range res.Stores {
 			fmt.Fprintf(w, "  %s\n", st)
+		}
+		if res.LifecycleNote != "" {
+			fmt.Fprintf(w, "  retention: %s\n", res.LifecycleNote)
 		}
 		return nil
 	})

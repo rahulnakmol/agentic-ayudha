@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"net/http"
 	"os/exec"
 	"path/filepath"
 	"reflect"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/exports"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/fixture"
 	"github.com/rahulnakmol/agentic-ayudha/internal/measure"
 )
 
@@ -165,4 +167,52 @@ func TestMeasureDuckDB(t *testing.T) {
 		t.Fatalf("measure --engine duckdb: exit %d: %s", code, errOut)
 	}
 	checkCohorts(t, out)
+}
+
+// WP7.2b: --live pulls the same events from Application Insights,
+// CloudWatch RUM, and the GA4 BigQuery export that the export files hold
+// (the recording carries the files' rows inside the window), so the cohorts
+// and North Star are exactly those of the files; each pull keeps its JSON
+// lines file, SHA-256, and query.
+func TestMeasureLiveMatchesExports(t *testing.T) {
+	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC) // RUM serves the last 30 days
+	clouds := fixture.NewClouds(t, now)
+	r := &fixture.Replayer{T: t, Rec: fixture.Load(t, filepath.Join("testdata", "measure-live.json")), Check: func(req *http.Request, body []byte) error {
+		if strings.HasSuffix(req.URL.Host, ".amazonaws.com") {
+			return fixture.SigV4()(req, body)
+		}
+		return nil
+	}}
+	dir := t.TempDir()
+	env := map[string]string{"XDG_STATE_HOME": filepath.Join(dir, "state"),
+		"AAYU_SECRET_AZURE": fixture.AzureClient + ":" + fixture.AzureSecret, "AAYU_SECRET_AWS": fixture.AWSKeyID + ":" + fixture.AWSSecret, "AAYU_SECRET_GCP": clouds.GCPKeyJSON()}
+	opts := Options{HTTP: &http.Client{Transport: clouds.Route(r)}, Now: func() time.Time { return now }}
+	td := filepath.Join("..", "measure", "testdata")
+	args := []string{"measure", "--repo", "o/r", "--json", "--from", "2026-09-07", "--to", "2026-10-12", "--billing", filepath.Join(td, "billing.csv"), "--live", "azure,aws,gcp",
+		"--set", "measure.acquisition=signed_up", "--set", "measure.activation=created_project", "--set", "measure.referral=invited_user", "--set", "measure.north_star=created_project",
+		"--set", "integrations.azure.secret=azure", "--set", "integrations.azure.scope=read", "--set", "integrations.azure.org=" + fixture.AzureTenant,
+		"--set", "integrations.azure.project=/subscriptions/0b1c2d3e-0000-4000-8000-000000000001/resourceGroups/rg-benefits/providers/Microsoft.Insights/components/benefits-qa",
+		"--set", "integrations.aws.secret=aws", "--set", "integrations.aws.scope=read", "--set", "integrations.aws.region=eu-west-1", "--set", "integrations.aws.project=benefits-qa",
+		"--set", "integrations.gcp.secret=gcp", "--set", "integrations.gcp.scope=read", "--set", "integrations.gcp.project=acme-prod.analytics_123456789"}
+	code, out, errOut := run(t, env, opts, args...)
+	if code != 0 {
+		t.Fatalf("measure --live: exit %d: %s", code, errOut)
+	}
+	r.Done()
+	got := checkCohorts(t, out)
+	rows := map[string][3]int{}
+	for _, f := range got.Sources {
+		rows[f.Kind] = [3]int{f.Rows, f.Skipped, f.Excluded}
+		if f.Kind != "billing" && (f.Live == "" || f.Query == "" || !strings.HasSuffix(f.Path, "-"+f.Live+".jsonl") || len(f.SHA256) != 64) {
+			t.Errorf("live source %+v: want its cloud, query, JSON lines file, and SHA-256", f)
+		}
+	}
+	// Only rows inside the window come back (the classic Application Insights row and the
+	// GA4 row at 10-12 00:00 are outside it); RUM's two unusable events are skipped as in the file.
+	if want := map[string][3]int{"billing": {4, 1, 1}, "appinsights": {6, 0, 0}, "aws": {7, 2, 0}, "gcp": {7, 0, 0}}; !reflect.DeepEqual(rows, want) {
+		t.Errorf("sources rows/skipped/excluded = %v, want %v", rows, want)
+	}
+	if ex := clouds.Exchanges(); !slices.Equal(ex, []string{"entra client_secret https://management.azure.com/.default", "entra client_secret https://api.loganalytics.io/.default", "google jwt-bearer " + fixture.GCPServiceAccount}) {
+		t.Errorf("token exchanges %q", ex)
+	}
 }

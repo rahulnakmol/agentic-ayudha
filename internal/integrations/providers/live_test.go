@@ -1,8 +1,11 @@
 package providers
 
 import (
+	"bytes"
 	"context"
+	"maps"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -132,4 +135,89 @@ func TestLiveReadout(t *testing.T) {
 		}
 		t.Logf("arms %+v (%s)", arms, q)
 	})
+}
+
+// TestLiveCloud runs the cloud adapters (WP7.2b) against real accounts,
+// behind AAYU_LIVE=1, skipping each cloud whose settings are absent. Each
+// takes AAYU_LIVE_<CLOUD>_AUTH (key, the default; oidc inside a GitHub
+// Actions job with id-token: write; or cli with az, aws, or gcloud logged
+// in) and checks scope, one baseline, and a live event pull over the last
+// seven days:
+//
+//	azure: AAYU_LIVE_AZURE_RESOURCE; key and oidc need AAYU_LIVE_AZURE_TENANT; key AAYU_SECRET_AZURE
+//	       (<client-id>:<client-secret>); oidc AAYU_LIVE_AZURE_CLIENT
+//	aws:   AAYU_LIVE_AWS_MONITOR, AAYU_LIVE_AWS_REGION; key AAYU_SECRET_AWS (ACCESS_KEY_ID:SECRET);
+//	       oidc AAYU_LIVE_AWS_ROLE
+//	gcp:   AAYU_LIVE_GCP_DATASET (<project>.<dataset>); key AAYU_SECRET_GCP (service account JSON);
+//	       oidc AAYU_LIVE_GCP_PROVIDER and AAYU_LIVE_GCP_SA; optional AAYU_LIVE_GCP_SA with cli
+func TestLiveCloud(t *testing.T) {
+	if os.Getenv("AAYU_LIVE") != "1" {
+		t.Skip("set AAYU_LIVE=1 to call the real clouds")
+	}
+	now := time.Now().UTC().Truncate(24 * time.Hour)
+	week := integrations.Window{From: now.AddDate(0, 0, -7), To: now}
+	for _, tt := range []struct {
+		source string
+		sets   map[string]string // config key -> environment variable
+		byAuth map[string]map[string]string
+	}{
+		{"azure", map[string]string{"project": "AAYU_LIVE_AZURE_RESOURCE"}, map[string]map[string]string{
+			"key": {"org": "AAYU_LIVE_AZURE_TENANT", "": "AAYU_SECRET_AZURE"}, "oidc": {"org": "AAYU_LIVE_AZURE_TENANT", "identity": "AAYU_LIVE_AZURE_CLIENT"}}},
+		{"aws", map[string]string{"project": "AAYU_LIVE_AWS_MONITOR", "region": "AAYU_LIVE_AWS_REGION"}, map[string]map[string]string{
+			"key": {"": "AAYU_SECRET_AWS"}, "oidc": {"identity": "AAYU_LIVE_AWS_ROLE"}}},
+		{"gcp", map[string]string{"project": "AAYU_LIVE_GCP_DATASET"}, map[string]map[string]string{
+			"key": {"": "AAYU_SECRET_GCP"}, "oidc": {"federation": "AAYU_LIVE_GCP_PROVIDER", "identity": "AAYU_LIVE_GCP_SA"}}},
+	} {
+		t.Run(tt.source, func(t *testing.T) {
+			up := strings.ToUpper(tt.source)
+			auth := os.Getenv("AAYU_LIVE_" + up + "_AUTH")
+			if auth == "" {
+				auth = "key"
+			}
+			sets := []string{"integrations." + tt.source + ".scope=read", "integrations." + tt.source + ".auth=" + auth}
+			if auth == "key" {
+				sets = append(sets, "integrations."+tt.source+".secret="+tt.source)
+			}
+			if sa := os.Getenv("AAYU_LIVE_GCP_SA"); tt.source == "gcp" && auth == "cli" && sa != "" {
+				sets = append(sets, "integrations.gcp.identity="+sa)
+			}
+			env := map[string]string{}
+			need := map[string]string{}
+			maps.Copy(need, tt.sets)
+			maps.Copy(need, tt.byAuth[auth])
+			for k, v := range need {
+				if os.Getenv(v) == "" {
+					t.Skipf("%s is not set", v)
+				}
+				if k == "" {
+					env[v] = os.Getenv(v)
+					continue
+				}
+				sets = append(sets, "integrations."+tt.source+"."+k+"="+os.Getenv(v))
+			}
+			d := deps(t, nil, env, sets...)
+			d.Now, d.Getenv = nil, os.Getenv
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+			sc, err := Check(ctx, d, tt.source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(sc.Write) > 0 {
+				t.Fatalf("the live credential is write-capable (%v); use the read-only setup in .aayudha/setup/%s/", sc.Write, tt.source)
+			}
+			t.Logf("%s reachable as %s (verified %t: %v)", tt.source, sc.Account, sc.Verified, sc.Scopes)
+			b, err := Baseline(ctx, d, tt.source, integrations.Query{Metric: "users", Window: week})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("%s users = %v (%s)", tt.source, b.Value, b.Population)
+			var buf bytes.Buffer
+			kind, q, err := Export(ctx, d, tt.source, week, &buf)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("%s pulled %d bytes of %s events (%s)", tt.source, buf.Len(), kind, q)
+		})
+	}
 }

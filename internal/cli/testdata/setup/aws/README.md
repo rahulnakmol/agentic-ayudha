@@ -1,0 +1,45 @@
+# AWS for o/r (aayudha)
+
+Written by `aayu init --integrations` (WP7.2b). aayudha counts CloudWatch RUM events with CloudWatch Logs
+Insights and pulls raw RUM events, with a read-only IAM role. GitHub Actions assumes the role through OpenID
+Connect federation; no access key is stored.
+
+## Founder actions (read-only analytics)
+
+Run these with an account that may create IAM roles. Replace `<account-id>`, `<region>`, and `<monitor>` (the
+CloudWatch RUM app monitor name) in `trust-policy.json` and `read-policy.json` first.
+
+1. Turn on the app monitor's "Data storage" (copy events to CloudWatch Logs), so Logs Insights can count them.
+2. Once per account, register GitHub's OIDC provider:
+
+   ```sh
+   aws iam create-open-id-connect-provider --url https://token.actions.githubusercontent.com --client-id-list sts.amazonaws.com
+   ```
+
+3. Create the role that only this repository's `dev` branch may assume, and give it the read policy:
+
+   ```sh
+   aws iam create-role --role-name aayudha-read-r --assume-role-policy-document file://.aayudha/setup/aws/trust-policy.json
+   aws iam put-role-policy --role-name aayudha-read-r --policy-name aayudha-read --policy-document file://.aayudha/setup/aws/read-policy.json
+   ```
+
+   The policy allows `logs:StartQuery`, `logs:GetQueryResults`, `rum:GetAppMonitor`, `rum:GetAppMonitorData`,
+   and `iam:SimulatePrincipalPolicy` on the role itself, which aayudha uses before every query to prove the
+   role cannot write. Attach nothing else.
+
+4. Fill `[integrations.aws]` in `.aayudha/config.toml`: `project` = the app monitor name, `region`, and
+   `identity` = `arn:aws:iam::<account-id>:role/aayudha-read-r`. Commit it through a pull request.
+5. In each workflow job that runs `aayu` with it, add the snippet in `workflow.yml` (`id-token: write`).
+6. Check: `aayu doctor` reports `aws: reachable as …; read-only scope verified`.
+
+Locally, use an AWS CLI profile that assumes the same role (`role_arn` and `source_profile` in `~/.aws/config`):
+
+```sh
+AWS_PROFILE=aayudha-read AAYU_INTEGRATIONS__AWS__AUTH=cli aayu doctor
+```
+
+## Founder actions (proof media, optional)
+
+S3 proof media use an access key pair for a separate IAM user (WP4.2): attach `media-policy.json` (replace
+`<bucket>`), store `ACCESS_KEY_ID:SECRET_ACCESS_KEY` with `aayu auth set-secret proof-media`, and set
+`[proof] media = "s3://<bucket>/r?region=<region>"`. Keep the bucket's Block Public Access on.

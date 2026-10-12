@@ -54,9 +54,11 @@ type File struct {
 	Kind     string    `json:"kind"`
 	Path     string    `json:"path"`
 	SHA256   string    `json:"sha256"`
-	Rows     int       `json:"rows"`     // rows kept
-	Skipped  int       `json:"skipped"`  // rows that did not parse
-	Excluded int       `json:"excluded"` // rows that parsed but do not count (unpaid payments)
+	Rows     int       `json:"rows"`            // rows kept
+	Skipped  int       `json:"skipped"`         // rows that did not parse
+	Excluded int       `json:"excluded"`        // rows that parsed but do not count (unpaid payments)
+	Live     string    `json:"live,omitempty"`  // the cloud integration a live pull came from (WP7.2b)
+	Query    string    `json:"query,omitempty"` // the exact request of a live pull
 	Events   []Event   `json:"-"`
 	Payments []Payment `json:"-"`
 }
