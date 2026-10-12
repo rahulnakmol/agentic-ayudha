@@ -5,6 +5,8 @@
 // Outputs:
 //   - README.md: only the regions between the BEGIN/END GENERATED markers
 //   - LAYERS.md and docs/RACI.md: whole files
+//   - seats/<seat>/CHARTER.md: only the region between the BEGIN/END GENERATED: raci markers
+//   - AGENTS.md: only the aayudha:raci section (internal/hosts.RenderAgentsMD)
 //   - skills/<verb>/SKILL.md: only the YAML frontmatter; the body is hand-authored
 //   - internal/mcp/schemas/<verb>.json: whole files; stale schemas are deleted
 //   - internal/config/schema.json: the config JSON Schema, from the config structs (WP1.2)
@@ -23,6 +25,8 @@ import (
 	"strings"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
+	"github.com/rahulnakmol/agentic-ayudha/internal/seats"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
@@ -44,7 +48,10 @@ func run() error {
 	if _, err := os.Stat("go.mod"); err != nil {
 		return errors.New("run from the repository root (go generate ./... does this)")
 	}
-	steps := []func() error{genReadme, genLayers, genRACI, genSkills, genSchemas, genConfigSchema}
+	if err := verbs.LintRACI(); err != nil {
+		return fmt.Errorf("registry lint (WP5.1):\n%w", err)
+	}
+	steps := []func() error{genReadme, genLayers, genRACI, genCharters, genAgents, genSkills, genSchemas, genConfigSchema}
 	for _, step := range steps {
 		if err := step(); err != nil {
 			return err
@@ -100,7 +107,7 @@ func genReadme() error {
 		fmt.Fprintf(&v, "| %s | %s | %s | %s | %s | %s | %s |\n", code(c.Name), cell(c.Summary),
 			verbs.SeatName(c.Seat), c.Lane, c.Layers, c.Identity, surfaces(c))
 	}
-	if s, err = replaceRegion(s, "verbs", v.String()); err != nil {
+	if s, err = replaceRegion(path, s, "verbs", v.String()); err != nil {
 		return err
 	}
 
@@ -109,19 +116,19 @@ func genReadme() error {
 	for _, c := range verbs.Plumbing {
 		fmt.Fprintf(&p, "| %s | %s | %s |\n", code(c.Name), cell(c.Summary), verbs.SeatName(c.Seat))
 	}
-	if s, err = replaceRegion(s, "plumbing", p.String()); err != nil {
+	if s, err = replaceRegion(path, s, "plumbing", p.String()); err != nil {
 		return err
 	}
 	return writeFile(path, []byte(s))
 }
 
-func replaceRegion(s, name, body string) (string, error) {
+func replaceRegion(path, s, name, body string) (string, error) {
 	begin := "<!-- BEGIN GENERATED: " + name + " -->"
 	end := "<!-- END GENERATED: " + name + " -->"
 	i := strings.Index(s, begin)
 	j := strings.Index(s, end)
 	if i < 0 || j < 0 || j < i || strings.Count(s, begin) != 1 || strings.Count(s, end) != 1 {
-		return "", fmt.Errorf("README.md: need exactly one %q followed by one %q", begin, end)
+		return "", fmt.Errorf("%s: need exactly one %q followed by one %q", path, begin, end)
 	}
 	return s[:i+len(begin)] + "\n\n" + body + "\n" + s[j:], nil
 }
@@ -136,7 +143,7 @@ func genLayers() error {
 
 Generated from ` + code("internal/verbs/registry.go") + ` by ` + code("go generate ./...") + `. A changed path belongs to the
 layer whose glob matches it; ` + code("slice") + ` and the screen-reader floor compute story footprints from these globs.
-Each layer has exactly one owner seat. Seat charters land in WP5.1.
+Each layer has exactly one owner seat; its charter is ` + code("seats/<seat>/CHARTER.md") + `.
 
 | Layer | Name | Owner seat | Paths |
 |---|---|---|---|
@@ -159,23 +166,36 @@ func genRACI() error {
 	b.WriteString(`
 # RACI
 
-Generated from ` + code("internal/verbs/registry.go") + ` by ` + code("go generate ./...") + `. This is the WP0.3 stub: one
-Accountable seat per verb, plus the seat that owns thresholds or policy where it differs from the seat that executes.
-Full Responsible / Consulted / Informed columns land in WP5.1. Every seat runs solo (agent only) or paired (agent twin
-plus a human); the mode is configuration (` + code("[seats.<name>] mode") + `, WP1.2).
+Generated from ` + code("internal/verbs/registry.go") + ` and ` + code("internal/verbs/raci.go") + ` by ` + code("go generate ./...") + ` (WP5.1).
+Every verb has exactly one Accountable seat (A). The Responsible party (R) is always that seat's agent twin working in
+the verb's model lane, with the seat's paired human when it has one; the seat that owns the verb's thresholds or policy
+may differ (the AI Native Engineer executes ` + code("verify") + ` against floors the Quality Architect owns in
+` + code("CONSTRAINTS.md") + `; the Engineering Manager owns the ` + code("inspect") + ` policy that the review lane executes).
+Consulted seats (C) are asked before the verb acts and Informed seats (I) are told after. Every layer has exactly one
+owner seat (LAYERS.md). The registry lint (` + code("verbs.LintRACI") + `) fails generation otherwise. Each seat runs
+solo (agent only) or paired (agent twin plus a human): ` + code("[seats.<name>]") + `, set by ` + code("aayu seat add|remove") + `.
+Charters: ` + code("seats/<seat>/CHARTER.md") + `.
 
 ## Verbs
 
-| Verb | Accountable | Owns thresholds / policy | Lane | Layers | Identity | Model calling | MCP |
-|---|---|---|---|---|---|---|---|
+| Verb | A | R (executes) | Owns thresholds / policy | C | I | Layers | Identity | Model calling | MCP |
+|---|---|---|---|---|---|---|---|---|---|
 `)
-	for _, c := range verbs.Verbs {
-		owns := "—"
-		if c.Owns != "" {
-			owns = verbs.SeatName(c.Owns)
+	names := func(ids []verbs.SeatID) string {
+		if len(ids) == 0 {
+			return "—"
 		}
-		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s | %s | %s |\n", code(c.Name), verbs.SeatName(c.Seat), owns,
-			c.Lane, c.Layers, c.Identity, cell(mode(c)), c.Exposure)
+		out := make([]string, len(ids))
+		for i, id := range ids {
+			out[i] = verbs.SeatName(id)
+		}
+		return strings.Join(out, ", ")
+	}
+	for _, c := range verbs.Verbs {
+		r := verbs.RACI[c.Name]
+		fmt.Fprintf(&b, "| %s | %s | %s twin, %s lane | %s | %s | %s | %s | %s | %s | %s |\n", code(c.Name), verbs.SeatName(c.Seat),
+			verbs.SeatName(c.Seat), c.Lane, verbs.SeatName(verbs.PolicyOwner(c)), cell(names(r.Consulted)), cell(names(r.Informed)),
+			c.Layers, c.Identity, cell(mode(c)), c.Exposure)
 	}
 
 	b.WriteString(`
@@ -248,6 +268,46 @@ When the binary calls a model itself and the host's default is a host-managed mo
 		}
 	}
 	return writeFile("docs/RACI.md", []byte(b.String()))
+}
+
+// ---- seats/<seat>/CHARTER.md and AGENTS.md ----------------------------------
+
+func genCharters() error {
+	entries, err := os.ReadDir("seats")
+	if err != nil {
+		return err
+	}
+	want := map[string]bool{}
+	for _, st := range verbs.Seats {
+		want[string(st.ID)] = true
+		path := filepath.Join("seats", string(st.ID), "CHARTER.md")
+		old, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("every seat needs a hand-authored charter with a generated region (WP5.1): %w", err)
+		}
+		s, err := replaceRegion(path, string(old), "raci", seats.CharterRegion(st.ID))
+		if err != nil {
+			return err
+		}
+		if err := writeFile(path, []byte(s)); err != nil {
+			return err
+		}
+	}
+	for _, e := range entries {
+		if e.IsDir() && !want[e.Name()] {
+			return fmt.Errorf("seats/%s is not one of the twelve registry seats", e.Name())
+		}
+	}
+	return nil
+}
+
+func genAgents() error {
+	const path = "AGENTS.md"
+	old, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	return writeFile(path, hosts.RenderAgentsMD(old, seats.AgentsSection()))
 }
 
 // ---- skills/<verb>/SKILL.md ------------------------------------------------

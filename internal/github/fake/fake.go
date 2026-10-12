@@ -6,6 +6,7 @@ package fake
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -128,6 +129,9 @@ type GitHub struct {
 	Variables  map[string]string
 	PublicKey  string         // base64 Curve25519 key for Actions secrets
 	App        map[string]any // what /app-manifests/{code}/conversions returns
+
+	Files map[string]string // repository file path -> content, served by the contents API for any ref
+
 	// Fail makes the request with this "METHOD /path" fail with a 500 once
 	// it has succeeded After times.
 	Fail      string
@@ -357,6 +361,16 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		notFound()
+
+	// Repository contents.
+	case m == "GET" && strings.HasPrefix(p, repo+"/contents/"):
+		f := strings.TrimPrefix(p, repo+"/contents/")
+		content, ok := g.Files[f]
+		if !ok {
+			notFound()
+			return
+		}
+		reply(200, map[string]any{"type": "file", "path": f, "encoding": "base64", "content": base64.StdEncoding.EncodeToString([]byte(content))})
 
 	// Labels.
 	case m == "GET" && p == repo+"/labels":

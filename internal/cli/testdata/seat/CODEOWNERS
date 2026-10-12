@@ -1,0 +1,14 @@
+# Protected paths (docs/BUILD-PLAN.md §0.1 Trust model). Every change here needs a human CODEOWNER review.
+# Solo mode: rahulnakmol is the only human today, so these PRs merge through the recorded solo-mode
+# bypass described in CONTRIBUTING.md. `aayu seat add` (WP5.1) adds second humans per seat layer.
+# Order matters: the last matching pattern wins, so keep this list flat and specific.
+
+/.github/                @rahulnakmol
+/skills/                 @rahulnakmol
+/ops/                    @rahulnakmol
+/seats/                  @rahulnakmol
+/CONSTRAINTS.md          @rahulnakmol
+/internal/config/defaults.toml  @rahulnakmol
+/.aayudha/config.toml    @rahulnakmol
+/.agents/                @rahulnakmol
+/.claude/                @rahulnakmol
