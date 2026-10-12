@@ -109,3 +109,58 @@ func TestTier2PlanningReplyShapes(t *testing.T) {
 		}
 	}
 }
+
+// The plan case's scope rules run on the draft before the judge: the recorded
+// plan passes, a plan that adds a downgrade or refuses older configs fails, and
+// the same choice raised as an open question passes.
+func TestPlanScope(t *testing.T) {
+	c, err := LoadCase(filepath.Join(root, "evals", "cases", "plan", "config-migration"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	good, err := os.ReadFile(filepath.Join(c.Dir, "output", "plan.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	edit := func(f func(*planning.PlanDraft)) []byte {
+		var d planning.PlanDraft
+		if err := json.Unmarshal(good, &d); err != nil {
+			t.Fatal(err)
+		}
+		f(&d)
+		b, _ := json.Marshal(d)
+		return b
+	}
+	for _, tc := range []struct {
+		name, why string
+		raw       []byte
+	}{
+		{"recorded", "", good},
+		{"downgrade", "a downgrade path", edit(func(d *planning.PlanDraft) {
+			d.Checkpoints[0].Rollback += "; a downgrade collapses the per-kind values back into one scalar"
+		})},
+		{"rejects legacy", "refusing older configs", edit(func(d *planning.PlanDraft) {
+			d.Checkpoints[0].Contracts = append(d.Checkpoints[0].Contracts, "config load rejects legacy retention_days after the bump")
+		})},
+		{"asked instead", "", edit(func(d *planning.PlanDraft) {
+			d.OpenQuestions = append(d.OpenQuestions, "Should config load reject legacy retention_days, and is a downgrade needed?")
+		})},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			problems, _, err := CheckPlanningDraft(c, tc.raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := strings.Join(problems, "\n")
+			if tc.why == "" {
+				if got != "" {
+					t.Fatalf("flagged: %s", got)
+				}
+				return
+			}
+			if !strings.Contains(got, "out of scope: adds "+tc.why) {
+				t.Fatalf("not caught: %q", got)
+			}
+		})
+	}
+}

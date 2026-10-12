@@ -6,6 +6,12 @@ input = "input.txt"
 artifacts = ["output/plan.json"]
 schemas = [{ file = "output/plan.json", schema = "evals/schemas/plan.json" }]
 calls = [["plan", "41", "--draft", "{case}/output/plan.json"]]
+# Behaviour the story does not ask for. Tier-2 run 38230815198 scored 2 for a plan that also rejected legacy configs
+# and added a backup-free downgrade; checked before the judge, open questions excepted (TestPlanScope keeps both sides).
+scope = [
+  { pattern = '(?i)\bdowngrad(e|es|ed|ing)\b', why = "a downgrade path the story does not ask for" },
+  { pattern = '(?i)\b(reject|refus)\w*\s+(the\s+|any\s+|all\s+)?(legacy|old|older|previous|v1)\b', why = "refusing older configs, which the story does not ask for" },
+]
 
 [tier2]
 rubric = "rubric.md"
