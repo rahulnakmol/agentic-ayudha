@@ -1,0 +1,6915 @@
+{
+ "version": 1,
+ "inputs": {
+  "repo": "rahulnakmol/agentic-ayudha",
+  "since": "2026-10-12T05:27:42Z",
+  "until": "2026-10-12T06:12:48Z",
+  "ledger": "5804101204fb9d3bdb66a124fde788ddd9e4e79b",
+  "code": "beb4aa02df5cbf56d1827c333b5db9eb7337e1d1",
+  "config_hash": "sha256:ec631ea8bfdbea0b7e49a7da5865fbcf81102bb6dada0f96132fccf8d31fd2bf",
+  "segments": [
+   {
+    "path": "actions/2026-10-12/amp-20261012T023326Z.jsonl",
+    "sha256": "7eb4276a2f292863f8f900ddf7d6db826cf02526464a0ed739c0913695fbb319",
+    "records": 2
+   },
+   {
+    "path": "actions/2026-10-12/amp-20261012T030410Z.jsonl",
+    "sha256": "9fac1621d2cd1f7e2bd26c4721d7dae809e77cc4ee1165198baf8654948c220b",
+    "records": 1
+   },
+   {
+    "path": "actions/2026-10-12/amp-20261012T030441Z.jsonl",
+    "sha256": "ccd1852c72a50571bdd793aa6e5d54417d811cee9a48615dfa532f1b9cbb88a6",
+    "records": 6
+   },
+   {
+    "path": "actions/2026-10-12/cli-20261012T051631Z.jsonl",
+    "sha256": "9220b04f6aaf564295da9b577998d97244d263137df22de6884187a03868a7d5",
+    "records": 5
+   },
+   {
+    "path": "actions/2026-10-12/cli-20261012T052525Z.jsonl",
+    "sha256": "f0e7e510b38a55830accd6b7a9d7e3b6bc78b005dfd91934d4c51ad18e945bbd",
+    "records": 1
+   },
+   {
+    "path": "actions/2026-10-12/cli-20261012T052551Z.jsonl",
+    "sha256": "5bff7a095d26c3d46c73af6203e075514474b20ed8aaac534a8248cdd5ea0506",
+    "records": 9
+   },
+   {
+    "path": "actions/2026-10-12/cli-20261012T052603Z.jsonl",
+    "sha256": "ac757f527aa205986afb501d114140c358a64cb0cc8155a2fcace3de53b7b9d9",
+    "records": 39
+   },
+   {
+    "path": "actions/2026-10-12/cli-20261012T052742Z.jsonl",
+    "sha256": "0176cf7d19624ef2bb5ec2cbba2a96405aa2867d41bab87bc47a89cab0e2deb2",
+    "records": 1
+   }
+  ]
+ },
+ "merge_gate_since": "2026-10-12T02:37:03Z",
+ "rule_suites": [
+  {
+   "id": 4475630243,
+   "ref": "refs/heads/dev",
+   "actor": "rahulnakmol",
+   "before_sha": "2ddd4cbdd62812fdd1b1fa22863f233dedaca1b6",
+   "after_sha": "beb4aa02df5cbf56d1827c333b5db9eb7337e1d1",
+   "pushed_at": "2026-10-12T06:12:25Z",
+   "failed_rules": [
+    {
+     "ruleset": "protected-paths-codeowner-review",
+     "rule_type": "required_status_checks",
+     "details": "Required status check \"protected-paths\" is failing."
+    }
+   ]
+  },
+  {
+   "id": 4475553263,
+   "ref": "refs/heads/dev",
+   "actor": "rahulnakmol",
+   "before_sha": "967054be766e7ca80bff36c78906462840565ade",
+   "after_sha": "7175d3835d44d9144b48b86f67fe479e136d3b3b",
+   "pushed_at": "2026-10-12T06:05:10Z",
+   "failed_rules": [
+    {
+     "ruleset": "protected-paths-codeowner-review",
+     "rule_type": "required_status_checks",
+     "details": "Required status check \"protected-paths\" is failing."
+    }
+   ]
+  },
+  {
+   "id": 4475230342,
+   "ref": "refs/heads/ledger",
+   "actor": "rahulnakmol",
+   "before_sha": "cdf874d02fff2f5d2c28488c69c03ebde40faeef",
+   "after_sha": "5804101204fb9d3bdb66a124fde788ddd9e4e79b",
+   "pushed_at": "2026-10-12T05:29:03Z",
+   "failed_rules": [
+    {
+     "ruleset": "ledger-writers",
+     "rule_type": "update",
+     "details": "Cannot update this protected ref."
+    }
+   ]
+  },
+  {
+   "id": 4475230136,
+   "ref": "refs/heads/ledger",
+   "actor": "rahulnakmol",
+   "before_sha": "ac74622d2425e1729659c9d3e5ed6e9913fe7bd7",
+   "after_sha": "cdf874d02fff2f5d2c28488c69c03ebde40faeef",
+   "pushed_at": "2026-10-12T05:29:01Z",
+   "failed_rules": [
+    {
+     "ruleset": "ledger-writers",
+     "rule_type": "update",
+     "details": "Cannot update this protected ref."
+    }
+   ]
+  }
+ ],
+ "prs": [
+  {
+   "number": 1,
+   "title": "feat: bootstrap repo governance, Go layout and verb registry (WP0.1–WP0.3)",
+   "base": "dev",
+   "head": "feat/m0-bootstrap",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-11T19:42:31Z",
+   "merge_sha": "9ea71b741a056479831e66b2eaf4c95b145493ab"
+  },
+  {
+   "number": 2,
+   "title": "test: scratch skills/ change without review (WP0.1 acceptance, do not merge to dev)",
+   "base": "scratch/wp01-codeowners-base",
+   "head": "scratch/wp01-skills-change",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-11T19:36:35Z",
+   "merge_sha": "dd943b47fcb9a6e2484fe436960e165f8896a13c"
+  },
+  {
+   "number": 3,
+   "title": "test: unreviewed skills/ change (WP0.1 gate, scratch base)",
+   "base": "scratch/wp01-base-2",
+   "head": "scratch/wp01-protected",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-11T19:44:44Z",
+   "merge_sha": "12de9de4c76ca8ce0f7ce10089f26cfb9041d305"
+  },
+  {
+   "number": 4,
+   "title": "test: non-protected control change (WP0.1 gate, scratch base)",
+   "base": "scratch/wp01-base-2",
+   "head": "scratch/wp01-control",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-11T19:44:40Z",
+   "merge_sha": "50ae6985d01b0ed84ed141f9e58f56de467636e3"
+  },
+  {
+   "number": 7,
+   "title": "docs: correct rule-suite actor note in Appendix B D1",
+   "base": "dev",
+   "head": "docs/d1-rule-suite-actor",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-11T19:47:14Z",
+   "merge_sha": "8508961c469764775afcf16d3e39dc32c484761b"
+  },
+  {
+   "number": 8,
+   "title": "feat: CI suite, signed releases and governance docs (WP0.4–WP0.5)",
+   "base": "dev",
+   "head": "feat/wp0.4-0.5-ci-release-governance",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-11T21:23:37Z",
+   "merge_sha": "7bc80dd65cfedca0a6a27f37f93616eae882ed40"
+  },
+  {
+   "number": 9,
+   "title": "feat(design-system): tokens, density modes, shadcn primitives, Storybook with axe (WP6.1)",
+   "base": "dev",
+   "head": "feat/design-system-tokens",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-11T21:38:35Z",
+   "merge_sha": "f9d2050cf03eee76adfb8f070b07d45d83eaeee8"
+  },
+  {
+   "number": 10,
+   "title": "feat(design-system): seven floorplans and SwiftUI/Compose token parity (WP6.2, WP6.3)",
+   "base": "dev",
+   "head": "feat/design-system-floorplans",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-11T21:41:19Z",
+   "merge_sha": "afc1ab29f9414b8dfc3cd8b915b066a5e1ec5b05"
+  },
+  {
+   "number": 11,
+   "title": "feat(cli): CLI frame and layered config (WP1.1–WP1.2)",
+   "base": "dev",
+   "head": "feat/m1-cli-config",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-11T21:29:06Z",
+   "merge_sha": "5fcac2e10600ddaa02332f8fe06ca32143fcdb4f"
+  },
+  {
+   "number": 12,
+   "title": "feat(identity): secrets, identity, token broker, human-pass gate (WP1.3–WP1.4)",
+   "base": "dev",
+   "head": "feat/m1-secrets-identity",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-11T21:33:08Z",
+   "merge_sha": "d754dc544554213f7b71f5a9f3107ff92421c112"
+  },
+  {
+   "number": 14,
+   "title": "feat(models): actions log, model gateway, budget breaker, notify (WP1.5–WP1.6)",
+   "base": "dev",
+   "head": "feat/m1-actions-models",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-11T21:53:15Z",
+   "merge_sha": "3a42650c7477c9f91196d20b778eff6772b5943b"
+  },
+  {
+   "number": 15,
+   "title": "feat(doctor): doctor, telemetry, and upgrade (WP1.7–WP1.9)",
+   "base": "dev",
+   "head": "feat/m1-doctor-telemetry-upgrade",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-11T22:04:56Z",
+   "merge_sha": "34e6b92d2e0c293fb2b93c5a506ebdf1d7caca92"
+  },
+  {
+   "number": 16,
+   "title": "chore(setup): install git-lfs in orb setup",
+   "base": "dev",
+   "head": "chore/orb-setup-git-lfs",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-11T22:16:25Z",
+   "merge_sha": "d09608312589a7237c67093860f6db936b8e03d6"
+  },
+  {
+   "number": 17,
+   "title": "feat(skills): skill format and lint (WP3.1)",
+   "base": "dev",
+   "head": "feat/wp3.1-skill-lint",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-11T22:30:40Z",
+   "merge_sha": "862ae9e15c4138d65ae69dfc41b6a6b1bcec6188"
+  },
+  {
+   "number": 18,
+   "title": "feat(workitems): work-item schema, issue forms, and labels (WP2.1–WP2.2)",
+   "base": "dev",
+   "head": "feat/m2-workitems-schema",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-11T22:37:02Z",
+   "merge_sha": "2093d173607f3356a1900485932aa9ddc42aa69a"
+  },
+  {
+   "number": 19,
+   "title": "feat(install): skill copies, lock, MCP registrations, and hooks per host (WP3.2)",
+   "base": "dev",
+   "head": "feat/wp3.2-install-hosts",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-11T22:44:35Z",
+   "merge_sha": "9fc179b9cb63297ec2082010405eeb6d7ae03a30"
+  },
+  {
+   "number": 20,
+   "title": "feat(github): GitHub client and minimal ledger writer (WP2.3–WP2.4)",
+   "base": "dev",
+   "head": "feat/m2-github-ledger",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-11T22:52:41Z",
+   "merge_sha": "2745adcf87c1de57106b5ca06aa80e059a21f1d8"
+  },
+  {
+   "number": 21,
+   "title": "feat(mcp): stdio MCP server with registry-generated tools (WP3.3)",
+   "base": "dev",
+   "head": "feat/wp3.3-mcp-server",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-11T23:01:01Z",
+   "merge_sha": "6063ae872ec5f42656c926f275da54a6239a088e"
+  },
+  {
+   "number": 22,
+   "title": "feat(evals): two-tier skill eval harness (WP3.4)",
+   "base": "dev",
+   "head": "feat/wp3.4-eval-harness",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-11T23:06:44Z",
+   "merge_sha": "a1e32fa7fb4728d441687d9e3f2bb411b07b2f1e"
+  },
+  {
+   "number": 23,
+   "title": "feat(init): init core and uninit by stored IDs (WP2.5)",
+   "base": "dev",
+   "head": "feat/m2-init",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-11T23:22:18Z",
+   "merge_sha": "57f1a876631c760130182db55119b8a2779c6cb6"
+  },
+  {
+   "number": 24,
+   "title": "fix(evals): sharpen the stub skill's field and evidence rules (WP3.4)",
+   "base": "dev",
+   "head": "fix/evals-stub-skill",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-11T23:12:01Z",
+   "merge_sha": "354aa98b8485f1c8ac38b5430f7991c890db1923"
+  },
+  {
+   "number": 25,
+   "title": "fix(evals): state the CSV case's requirements and evidence meanings (WP3.4)",
+   "base": "dev",
+   "head": "fix/evals-stub-rubric",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-11T23:19:24Z",
+   "merge_sha": "35aea364a844917e95bb838dd1694afade95ed37"
+  },
+  {
+   "number": 26,
+   "title": "feat(init): init extras for projects, gates, bot App, and integrations (WP2.6)",
+   "base": "dev",
+   "head": "feat/m2-init-gates",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-11T23:31:13Z",
+   "merge_sha": "f7c761b36ce9e978c175571d3462aedf7a67f505"
+  },
+  {
+   "number": 27,
+   "title": "fix(evals): structured judge output; unusable replies are errors, not scores (WP3.4)",
+   "base": "dev",
+   "head": "fix/evals-judge-structured",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-11T23:32:57Z",
+   "merge_sha": "671d95f491c4f6e350baeb3f20d2105d3d7bc62b"
+  },
+  {
+   "number": 28,
+   "title": "chore(init): run aayu init on aayudha itself (WP2.5, ground rule 1)",
+   "base": "dev",
+   "head": "chore/aayu-init",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-11T23:39:00Z",
+   "merge_sha": "c728471ae8813b13ab9d647ac0e15da5be9e7dc9"
+  },
+  {
+   "number": 72,
+   "title": "fix(evals): stub skill must not invent requirements; per-case scope guard (WP3.4)",
+   "base": "dev",
+   "head": "fix/evals-stub-scope",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-11T23:43:21Z",
+   "merge_sha": "026fc44bdd11b988dbdba4a6ba02c07c6b495384"
+  },
+  {
+   "number": 73,
+   "title": "feat(ready): parser, ready snapshots, and the Ready guard (WP2.7)",
+   "base": "dev",
+   "head": "feat/m2-ready-guard",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-11T23:45:35Z",
+   "merge_sha": "d9c27e3e0559566e5d1556534fb0023cee7b77a9",
+   "story_mentions": [
+    38
+   ]
+  },
+  {
+   "number": 74,
+   "title": "fix(evals): record stop reasons and tokens, truncation errors, convention vs invented (WP3.4)",
+   "base": "dev",
+   "head": "fix/evals-truncation",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-11T23:53:41Z",
+   "merge_sha": "5ca6ab3fb264b5f382646f9a41fa557ca33edea3"
+  },
+  {
+   "number": 75,
+   "title": "feat(status): status rollups and digest, label-only triage (WP2.8–WP2.9)",
+   "base": "dev",
+   "head": "feat/m2-status-triage-pr",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T00:01:58Z",
+   "merge_sha": "f33dce430878bdb44dedc78b7cf766dcf6d4ea98",
+   "story_mentions": [
+    39,
+    40
+   ]
+  },
+  {
+   "number": 76,
+   "title": "fix(evals): skill model from the verb's registry lane, 4000-token cap, cached input counted (WP3.4)",
+   "base": "dev",
+   "head": "fix/evals-spec-lane",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T00:03:42Z",
+   "merge_sha": "13c2d666a01db44f96a39b5b82566fb9869aee36"
+  },
+  {
+   "number": 77,
+   "title": "fix(release): ignore rolling-* tags in goreleaser",
+   "base": "dev",
+   "head": "fix/goreleaser-ignore-rolling-tags",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T00:17:45Z",
+   "merge_sha": "c9ce20c1f755a4011ff3c6764ee74ad7b60644d9"
+  },
+  {
+   "number": 78,
+   "title": "feat(proof): pack format v1 and ledger ops with LFS and media bucket (WP4.1–WP4.2)",
+   "base": "dev",
+   "head": "feat/proof-pack-ledger",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T00:57:09Z",
+   "merge_sha": "68958022608b23b6f96ef413f8e2d7cf0306c480",
+   "refs": [
+    41,
+    42
+   ]
+  },
+  {
+   "number": 79,
+   "title": "feat(integrations): PostHog, Sentry, and GitHub read baseline adapters (WP5.2)",
+   "base": "dev",
+   "head": "feat/wp5.2-baseline-adapters",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T00:44:01Z",
+   "merge_sha": "143b6c93a374904a8a8879983edc2bb747c4278b",
+   "refs": [
+    52
+   ],
+   "story_mentions": [
+    52
+   ]
+  },
+  {
+   "number": 80,
+   "title": "feat(integrations): Figma REST with MCP opt-in, Mobbin references as URLs and IDs, repo-wide Mobbin image lint (WP6.4)",
+   "base": "dev",
+   "head": "feat/wp6.4-figma-mobbin",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T00:49:19Z",
+   "merge_sha": "b23510689505ce51fe7b59cc55831dd4e7760f10",
+   "refs": [
+    58
+   ],
+   "story_mentions": [
+    58
+   ]
+  },
+  {
+   "number": 81,
+   "title": "feat(verify): floors framework, diff coverage, SAST, secrets, and dependency floors (WP4.3–WP4.4)",
+   "base": "dev",
+   "head": "feat/verify-floors-2",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T01:23:45Z",
+   "merge_sha": "bdc166dc6b7d9720eb704e3da08520133897bbb9",
+   "refs": [
+    43,
+    44,
+    2
+   ]
+  },
+  {
+   "number": 82,
+   "title": "feat(experiment): experiment and readout on PostHog and GrowthBook with minimum sample size (WP6.7)",
+   "base": "dev",
+   "head": "feat/wp6.7-experiment-readout",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T01:47:53Z",
+   "merge_sha": "b89a4f1887f125ea8782341adeeff9c62cb1c1a0",
+   "refs": [
+    61
+   ]
+  },
+  {
+   "number": 83,
+   "title": "feat(seats): charters, generated RACI, and aayu seat add|remove|list (WP5.1)",
+   "base": "dev",
+   "head": "feat/seats-raci",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T02:03:48Z",
+   "merge_sha": "849f220d50f871b2f983dc05fe069ad5db6178b2",
+   "refs": [
+    51
+   ],
+   "story_mentions": [
+    51,
+    1
+   ]
+  },
+  {
+   "number": 84,
+   "title": "feat(verify): web accessibility, performance, DAST, and API floors with seed data and redaction (WP4.5–WP4.6)",
+   "base": "dev",
+   "head": "feat/web-dast-floors-2",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T01:31:56Z",
+   "merge_sha": "2acb297677d7aef83e07c0d56e4ca0edae2f5d69",
+   "refs": [
+    45,
+    46
+   ]
+  },
+  {
+   "number": 85,
+   "title": "feat(verify): screen-reader floor with VoiceOver and NVDA on label or nightly (WP4.7)",
+   "base": "dev",
+   "head": "feat/screen-reader-floor-2",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T01:40:39Z",
+   "merge_sha": "be39be03fa2b3beab13bc55037657dd4912a991b",
+   "refs": [
+    47
+   ]
+  },
+  {
+   "number": 86,
+   "title": "feat(inspect): merge gate, inspect, and mobile skip-and-block (WP4.8, WP4.9)",
+   "base": "dev",
+   "head": "feat/merge-gate-inspect-2",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T02:20:05Z",
+   "merge_sha": "110cf357e4dba2aa0d0d5dd0fd5599c567a1a8f3",
+   "refs": [
+    48,
+    49
+   ]
+  },
+  {
+   "number": 87,
+   "title": "feat(measure): SQLite snapshots of exports, AARRR cohorts and North Star, Results on Goals and Initiatives (WP7.2)",
+   "base": "dev",
+   "head": "feat/wp7.2-measure",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T01:55:14Z",
+   "merge_sha": "7683ca3f53df48707305c1b4dde7c25bd9f678fb",
+   "refs": [
+    63
+   ]
+  },
+  {
+   "number": 88,
+   "title": "feat(autonomy): streak workflow, corrections, and aayu halt/resume (WP5.7)",
+   "base": "dev",
+   "head": "feat/autonomy-halt",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T02:11:10Z",
+   "merge_sha": "345f831b5a39bbde755c888057a5417f81dba617",
+   "refs": [
+    57
+   ],
+   "story_mentions": [
+    57
+   ]
+  },
+  {
+   "number": 89,
+   "title": "feat(build): thin-slice grill story, build, and ship, with proof coverage in status (WP4.10)",
+   "base": "dev",
+   "head": "feat/thin-slice-verbs-2",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T02:29:29Z",
+   "merge_sha": "6be6f92ba1327114ffed117d888194374ede6225",
+   "refs": [
+    50
+   ]
+  },
+  {
+   "number": 90,
+   "title": "chore(init): install the merge gate, Ready guard, and triage workflows (aayu init --gates)",
+   "base": "dev",
+   "head": "chore/init-gates",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T02:37:01Z",
+   "merge_sha": "972d3963de4404283f471909d65ce70398dc5885",
+   "refs": [
+    37
+   ]
+  },
+  {
+   "number": 92,
+   "title": "feat: doctor names the floor each missing tool serves",
+   "base": "dev",
+   "head": "story/91-doctor-names-the-floor-each-missing-tool",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T03:04:44Z",
+   "merge_sha": "91058d60494cd1a0e937bc0dd697ea6eac1e7938",
+   "refs": [
+    91
+   ]
+  },
+  {
+   "number": 93,
+   "title": "fix(init): pass the halt variable to the merge gate's verbs",
+   "base": "dev",
+   "head": "fix/merge-gate-halt",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T02:51:26Z",
+   "merge_sha": "008ca4846c195d29f9eb0bfcd2e0c3afe3db5430",
+   "refs": [
+    48,
+    37
+   ]
+  },
+  {
+   "number": 94,
+   "title": "feat(design): research, wireframe, mockup, and prototype with pinned references and the figma-diff gate (WP6.5)",
+   "base": "dev",
+   "head": "feat/wp6.5-design-verbs",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T03:16:45Z",
+   "merge_sha": "6efb9b09bc9505464d6282e12274b4c35d57b8c2",
+   "refs": [
+    59
+   ]
+  },
+  {
+   "number": 95,
+   "title": "fix(verify): deps floor scans the lockfiles git tracks and honours osv-scanner's call analysis",
+   "base": "dev",
+   "head": "fix/deps-floor-lockfiles",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T02:57:33Z",
+   "merge_sha": "0089b756e5fcd0e75ae463b0d04a5ead50624b42",
+   "refs": [
+    44
+   ],
+   "story_mentions": [
+    91
+   ]
+  },
+  {
+   "number": 96,
+   "title": "feat(decide): decide, respond, and the ops catalog (WP5.6)",
+   "base": "dev",
+   "head": "feat/wp5.6-decide-respond",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T04:08:02Z",
+   "merge_sha": "0b0fab69fd1a6f072c2c3824ab24c60715e541a6",
+   "refs": [
+    56
+   ]
+  },
+  {
+   "number": 97,
+   "title": "feat(brief): registers, purposes, STE lint, grounded accessible HTML, and visuals (WP7.3–WP7.4)",
+   "base": "dev",
+   "head": "feat/brief-core-visuals",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T03:40:41Z",
+   "merge_sha": "41a8a56e86f7c6615e09bf6884dd4ed52350555c",
+   "refs": [
+    64,
+    65
+   ]
+  },
+  {
+   "number": 98,
+   "title": "fix(ship): checkpoint actions with the verb's token, on every exit, into one log per clone",
+   "base": "dev",
+   "head": "fix/actions-segments-after-m45",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T03:15:28Z",
+   "merge_sha": "ad24bfa7e34a1411f82f23a5121d3da2946e3893",
+   "refs": [
+    50,
+    37
+   ],
+   "story_mentions": [
+    91
+   ]
+  },
+  {
+   "number": 99,
+   "title": "feat(review): review lanes A and B, polish, and baseline (WP6.6)",
+   "base": "dev",
+   "head": "feat/wp6.6-review-polish-baseline",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T03:24:15Z",
+   "merge_sha": "8d4e22260b3b0e63e83fa84d9eb53e28f4b86e18",
+   "refs": [
+    60
+   ]
+  },
+  {
+   "number": 100,
+   "title": "fix(triage): run the triage job in the ai-gateway environment",
+   "base": "dev",
+   "head": "fix/triage-ai-gateway-env",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T03:26:42Z",
+   "merge_sha": "8434a61fd5e06ce5efea5df32e8f63eea67e3dce",
+   "refs": [
+    40
+   ]
+  },
+  {
+   "number": 101,
+   "title": "feat(grill): all ten work-item types, baselines, brand, and the TUI (WP5.3)",
+   "base": "dev",
+   "head": "feat/wp5.3-grill",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T04:31:04Z",
+   "merge_sha": "5752ac6a486a7083c2b2ce6d54a5df5f5df228ca",
+   "refs": [
+    53
+   ]
+  },
+  {
+   "number": 102,
+   "title": "feat(tell): brief, claims check, UTM tagging, and human-only publish (WP7.5)",
+   "base": "dev",
+   "head": "feat/wp7.5-tell",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T05:01:25Z",
+   "merge_sha": "bf15dfe241382c795dc0e9a16cab455a0ead4c4d",
+   "refs": [
+    66
+   ]
+  },
+  {
+   "number": 103,
+   "title": "fix(brief): keep each fact's unit and state, take STE names from the summary and Result, raise the skill cap",
+   "base": "dev",
+   "head": "fix/brief-tier2",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T04:03:36Z",
+   "merge_sha": "fec95a523acc50e9e096b590e706e419e6dde5cd",
+   "refs": [
+    64
+   ]
+  },
+  {
+   "number": 104,
+   "title": "feat(loops): scheduled loops for Amp, Cursor, and the Actions fallback (WP7.1)",
+   "base": "dev",
+   "head": "feat/wp7.1-loops",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T04:18:22Z",
+   "merge_sha": "1f8542d54179e4df157b8140826a01afdda43812",
+   "refs": [
+    62
+   ]
+  },
+  {
+   "number": 105,
+   "title": "feat(audit): audit and retro with reproducible reports reconciled against GitHub's event history (WP7.6)",
+   "base": "dev",
+   "head": "feat/wp7.6-audit-retro",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T05:23:38Z",
+   "merge_sha": "fa0ad2ef3021e6207d3dda9381c3313e759fc4d4",
+   "refs": [
+    67
+   ],
+   "story_mentions": [
+    67
+   ]
+  },
+  {
+   "number": 106,
+   "title": "docs(plan): record the second brief tier-2 run and the open grounding gap (D-7.3b)",
+   "base": "dev",
+   "head": "docs/brief-tier2-result",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T04:24:49Z",
+   "merge_sha": "24070563bb7d3d8efbdf3ae5273fc53206d5852d",
+   "refs": [
+    64
+   ]
+  },
+  {
+   "number": 107,
+   "title": "feat(slice): slice and plan with layer footprints, dependencies, and the EM plan review (WP5.4)",
+   "base": "dev",
+   "head": "feat/wp5.4-slice-plan",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T04:41:22Z",
+   "merge_sha": "a73790a0f5d1394a0a79d792c61c2eab29c8be98",
+   "refs": [
+    54
+   ]
+  },
+  {
+   "number": 108,
+   "title": "feat(brief): ground evidence in each pack's criterion map and inspect verdicts; brief tier 2 off dev pushes",
+   "base": "dev",
+   "head": "feat/brief-criteria-map",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T04:57:36Z",
+   "merge_sha": "bd7ad5c926141174fa3a5586cc976938136fa77f",
+   "refs": [
+    64
+   ]
+  },
+  {
+   "number": 109,
+   "title": "feat(build): leases, verified checkpoints, budget, resume, the ship pass rules, and gc (WP5.5)",
+   "base": "dev",
+   "head": "feat/wp5.5-build-ship",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T05:11:43Z",
+   "merge_sha": "bf0a83729e6b9aa30d5d17cd5628839b409777d6",
+   "refs": [
+    55
+   ]
+  },
+  {
+   "number": 111,
+   "title": "fix(slice): keep stories to the Feature's scope; extras become open questions",
+   "base": "dev",
+   "head": "fix/wp5.4-slice-scope",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T05:23:18Z",
+   "merge_sha": "87e2cf127050403cec3d2fbce3fd3cad6aa489ee",
+   "refs": [
+    54
+   ]
+  },
+  {
+   "number": 113,
+   "title": "feat: gc says how to free a build worktree it keeps",
+   "base": "dev",
+   "head": "story/112-gc-says-how-to-free-a-build-worktree-it",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T05:25:55Z",
+   "merge_sha": "967054be766e7ca80bff36c78906462840565ade",
+   "refs": [
+    112
+   ]
+  },
+  {
+   "number": 114,
+   "title": "feat(evolve): eval-first skill evolution from accepted retro Feedback, enforced by CI (WP7.7)",
+   "base": "dev",
+   "head": "feat/wp7.7-evolve",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T06:12:25Z",
+   "merge_sha": "beb4aa02df5cbf56d1827c333b5db9eb7337e1d1",
+   "refs": [
+    68
+   ],
+   "story_mentions": [
+    68
+   ]
+  },
+  {
+   "number": 115,
+   "title": "feat(brief): limits section, population wording, and no invented controls; tier 2 per group with its own cap",
+   "base": "dev",
+   "head": "feat/brief-limits-groups",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T06:05:10Z",
+   "merge_sha": "7175d3835d44d9144b48b86f67fe479e136d3b3b",
+   "refs": [
+    64
+   ]
+  },
+  {
+   "number": 116,
+   "title": "chore(evals): record the WP5.3 and WP5.4 tier-2 run (38207978439)",
+   "base": "dev",
+   "head": "chore/wp5.3-5.4-tier2-results",
+   "author": "rahulnakmol",
+   "merged_at": "2026-10-12T06:06:05Z",
+   "merge_sha": "2ddd4cbdd62812fdd1b1fa22863f233dedaca1b6",
+   "refs": [
+    53,
+    54
+   ]
+  }
+ ],
+ "items": [
+  {
+   "number": 1,
+   "title": "feat: bootstrap repo governance, Go layout and verb registry (WP0.1–WP0.3)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T19:35:51Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-11T19:42:31Z"
+  },
+  {
+   "number": 2,
+   "title": "test: scratch skills/ change without review (WP0.1 acceptance, do not merge to dev)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T19:36:17Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-11T19:36:35Z"
+  },
+  {
+   "number": 3,
+   "title": "test: unreviewed skills/ change (WP0.1 gate, scratch base)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T19:38:52Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-11T19:44:44Z"
+  },
+  {
+   "number": 4,
+   "title": "test: non-protected control change (WP0.1 gate, scratch base)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T19:38:57Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-11T19:44:41Z"
+  },
+  {
+   "number": 5,
+   "title": "test: unreviewed skills/ change against dev (WP0.1 acceptance, do not merge)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T19:43:08Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-11T19:45:49Z"
+  },
+  {
+   "number": 6,
+   "title": "test: hand-edited generated file (WP0.3 drift acceptance, do not merge)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T19:43:12Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-11T19:45:51Z"
+  },
+  {
+   "number": 7,
+   "title": "docs: correct rule-suite actor note in Appendix B D1",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T19:46:12Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-11T19:47:14Z"
+  },
+  {
+   "number": 8,
+   "title": "feat: CI suite, signed releases and governance docs (WP0.4–WP0.5)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T21:17:43Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-11T21:23:37Z"
+  },
+  {
+   "number": 9,
+   "title": "feat(design-system): tokens, density modes, shadcn primitives, Storybook with axe (WP6.1)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T21:24:26Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-11T21:38:35Z"
+  },
+  {
+   "number": 10,
+   "title": "feat(design-system): seven floorplans and SwiftUI/Compose token parity (WP6.2, WP6.3)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T21:24:45Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-11T21:41:19Z"
+  },
+  {
+   "number": 11,
+   "title": "feat(cli): CLI frame and layered config (WP1.1–WP1.2)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T21:26:37Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-11T21:29:06Z"
+  },
+  {
+   "number": 12,
+   "title": "feat(identity): secrets, identity, token broker, human-pass gate (WP1.3–WP1.4)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T21:30:45Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-11T21:33:08Z"
+  },
+  {
+   "number": 13,
+   "title": "test: WP1.4 protected-paths gate live check (do not merge)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T21:33:24Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-11T21:35:53Z"
+  },
+  {
+   "number": 14,
+   "title": "feat(models): actions log, model gateway, budget breaker, notify (WP1.5–WP1.6)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T21:47:32Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-11T21:53:15Z"
+  },
+  {
+   "number": 15,
+   "title": "feat(doctor): doctor, telemetry, and upgrade (WP1.7–WP1.9)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T22:02:22Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-11T22:04:56Z"
+  },
+  {
+   "number": 16,
+   "title": "chore(setup): install git-lfs in orb setup",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T22:13:46Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-11T22:16:25Z"
+  },
+  {
+   "number": 17,
+   "title": "feat(skills): skill format and lint (WP3.1)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T22:20:41Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-11T22:30:40Z"
+  },
+  {
+   "number": 18,
+   "title": "feat(workitems): work-item schema, issue forms, and labels (WP2.1–WP2.2)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T22:27:04Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-11T22:37:02Z"
+  },
+  {
+   "number": 19,
+   "title": "feat(install): skill copies, lock, MCP registrations, and hooks per host (WP3.2)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T22:33:43Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-11T22:44:35Z"
+  },
+  {
+   "number": 20,
+   "title": "feat(github): GitHub client and minimal ledger writer (WP2.3–WP2.4)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T22:45:19Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-11T22:52:41Z"
+  },
+  {
+   "number": 21,
+   "title": "feat(mcp): stdio MCP server with registry-generated tools (WP3.3)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T22:45:54Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-11T23:01:01Z"
+  },
+  {
+   "number": 22,
+   "title": "feat(evals): two-tier skill eval harness (WP3.4)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:02:36Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-11T23:06:44Z"
+  },
+  {
+   "number": 23,
+   "title": "feat(init): init core and uninit by stored IDs (WP2.5)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:06:38Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-11T23:22:18Z"
+  },
+  {
+   "number": 24,
+   "title": "fix(evals): sharpen the stub skill's field and evidence rules (WP3.4)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:09:33Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-11T23:12:01Z"
+  },
+  {
+   "number": 25,
+   "title": "fix(evals): state the CSV case's requirements and evidence meanings (WP3.4)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:15:40Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-11T23:19:24Z"
+  },
+  {
+   "number": 26,
+   "title": "feat(init): init extras for projects, gates, bot App, and integrations (WP2.6)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:26:52Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-11T23:31:13Z"
+  },
+  {
+   "number": 27,
+   "title": "fix(evals): structured judge output; unusable replies are errors, not scores (WP3.4)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:29:34Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-11T23:32:57Z"
+  },
+  {
+   "number": 28,
+   "title": "chore(init): run aayu init on aayudha itself (WP2.5, ground rule 1)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:34:35Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-11T23:39:00Z"
+  },
+  {
+   "number": 29,
+   "title": "Ship aayudha 0.1",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:35:01Z",
+   "labels": [
+    "type:goal",
+    "status:in-progress",
+    "priority:P0",
+    "horizon:now",
+    "identity:human-fallback"
+   ],
+   "events": null
+  },
+  {
+   "number": 30,
+   "title": "Dogfood the agentic delivery pod on aayudha itself",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:35:02Z",
+   "labels": [
+    "type:initiative",
+    "status:in-progress",
+    "priority:P0",
+    "horizon:now",
+    "identity:human-fallback"
+   ],
+   "events": null
+  },
+  {
+   "number": 31,
+   "title": "M2 Work items",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:35:05Z",
+   "labels": [
+    "type:feature",
+    "status:planned",
+    "priority:P1",
+    "horizon:now",
+    "identity:human-fallback"
+   ],
+   "events": null
+  },
+  {
+   "number": 32,
+   "title": "M4 Proof",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:35:08Z",
+   "labels": [
+    "type:feature",
+    "status:planned",
+    "priority:P1",
+    "horizon:next",
+    "identity:human-fallback"
+   ],
+   "events": null
+  },
+  {
+   "number": 33,
+   "title": "M5 Seats",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:35:12Z",
+   "labels": [
+    "type:feature",
+    "status:planned",
+    "priority:P1",
+    "horizon:later",
+    "identity:human-fallback"
+   ],
+   "events": null
+  },
+  {
+   "number": 34,
+   "title": "M6 UX",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:35:15Z",
+   "labels": [
+    "type:feature",
+    "status:planned",
+    "priority:P1",
+    "horizon:later",
+    "identity:human-fallback"
+   ],
+   "events": null
+  },
+  {
+   "number": 35,
+   "title": "M7 Loops and explain",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:35:18Z",
+   "labels": [
+    "type:feature",
+    "status:planned",
+    "priority:P1",
+    "horizon:later",
+    "identity:human-fallback"
+   ],
+   "events": null
+  },
+  {
+   "number": 36,
+   "title": "M8 0.1",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:35:21Z",
+   "labels": [
+    "type:feature",
+    "status:planned",
+    "priority:P1",
+    "horizon:later",
+    "identity:human-fallback"
+   ],
+   "events": null
+  },
+  {
+   "number": 37,
+   "title": "M4.5 Thin slice run",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:35:24Z",
+   "labels": [
+    "type:feature",
+    "status:backlog",
+    "priority:P1",
+    "horizon:next",
+    "identity:human-fallback"
+   ],
+   "events": null
+  },
+  {
+   "number": 38,
+   "title": "WP2.7 Parser and `ready`",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:35:28Z",
+   "labels": [
+    "effort:M",
+    "horizon:now",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:merged",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:29Z",
+     "label": "type:story",
+     "id": 33008711878
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:30Z",
+     "label": "status:planned",
+     "id": 33008711975
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:30Z",
+     "label": "priority:P1",
+     "id": 33008712084
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:30Z",
+     "label": "effort:M",
+     "id": 33008712225
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:30Z",
+     "label": "horizon:now",
+     "id": 33008712326
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:30Z",
+     "id": 33008712352
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:30Z",
+     "label": "identity:human-fallback",
+     "id": 33008712447
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:40:33Z",
+     "source": 73,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:45:36Z",
+     "id": 33009018575
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:46:18Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `c0991c9e430c7631a36994cc6dd7d02a7c378f34b21",
+     "id": 6115252171
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:46:18Z",
+     "id": 33009041024
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:46:20Z",
+     "label": "status:planned",
+     "id": 33009041890
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:46:22Z",
+     "label": "status:ready",
+     "id": 33009042764
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:05Z",
+     "label": "status:ready",
+     "id": 33020992586
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:07Z",
+     "label": "status:merged",
+     "id": 33020993745
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:08Z",
+     "body": "\u003c!-- aayudha:audit-pre-gate --\u003e\n**Merged without proof (pre-gate).** This story's change merged in #73 (`d9c27e3`, 2026-10-11T23:45:35Z), before the merge gate ",
+     "id": 6118306019
+    }
+   ]
+  },
+  {
+   "number": 39,
+   "title": "WP2.8 `status`",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:35:31Z",
+   "labels": [
+    "effort:M",
+    "horizon:now",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:merged",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:32Z",
+     "label": "type:story",
+     "id": 33008713206
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:32Z",
+     "label": "status:planned",
+     "id": 33008713344
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:32Z",
+     "label": "priority:P1",
+     "id": 33008713484
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:32Z",
+     "label": "effort:M",
+     "id": 33008713633
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:33Z",
+     "label": "horizon:now",
+     "id": 33008713784
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:33Z",
+     "label": "identity:human-fallback",
+     "id": 33008713915
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:33Z",
+     "id": 33008714227
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:46:33Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `7ce829ef3aeb7f5f3273141c307993374976b89cfa5",
+     "id": 6115254164
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:46:33Z",
+     "id": 33009048782
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:46:35Z",
+     "label": "status:planned",
+     "id": 33009049554
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:46:36Z",
+     "label": "status:ready",
+     "id": 33009050418
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:53:23Z",
+     "source": 75,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T00:01:59Z",
+     "id": 33009510856
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:10Z",
+     "label": "status:ready",
+     "id": 33020995909
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:12Z",
+     "label": "status:merged",
+     "id": 33020997105
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:13Z",
+     "body": "\u003c!-- aayudha:audit-pre-gate --\u003e\n**Merged without proof (pre-gate).** This story's change merged in #75 (`f33dce4`, 2026-10-12T00:01:58Z), before the merge gate ",
+     "id": 6118306798
+    }
+   ]
+  },
+  {
+   "number": 40,
+   "title": "WP2.9 `triage`",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:35:34Z",
+   "labels": [
+    "effort:S",
+    "horizon:now",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:merged",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:35Z",
+     "label": "type:story",
+     "id": 33008714997
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:35Z",
+     "label": "status:planned",
+     "id": 33008715098
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:35Z",
+     "label": "priority:P1",
+     "id": 33008715196
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:35Z",
+     "label": "effort:S",
+     "id": 33008715289
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:36Z",
+     "label": "horizon:now",
+     "id": 33008715367
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:36Z",
+     "label": "identity:human-fallback",
+     "id": 33008715471
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:37Z",
+     "id": 33008716490
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:46:39Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `cce7ea39ccd9dc424ed95bcf9c3bcb79c9ea5a2bf12",
+     "id": 6115255037
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:46:39Z",
+     "id": 33009051846
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:46:41Z",
+     "label": "status:planned",
+     "id": 33009052640
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:46:43Z",
+     "label": "status:ready",
+     "id": 33009053478
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:53:23Z",
+     "source": 75,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T00:01:59Z",
+     "id": 33009510923
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:20:53Z",
+     "source": 100,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:26:43Z",
+     "id": 33016557329
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:15Z",
+     "label": "status:ready",
+     "id": 33020999209
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:17Z",
+     "label": "status:merged",
+     "id": 33021000296
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:18Z",
+     "body": "\u003c!-- aayudha:audit-pre-gate --\u003e\n**Merged without proof (pre-gate).** This story's change merged in #75 (`f33dce4`, 2026-10-12T00:01:58Z), before the merge gate ",
+     "id": 6118307565
+    }
+   ]
+  },
+  {
+   "number": 41,
+   "title": "WP4.1 Pack format",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:35:37Z",
+   "labels": [
+    "effort:S",
+    "horizon:next",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:merged",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:38Z",
+     "label": "type:story",
+     "id": 33008716964
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:39Z",
+     "label": "status:planned",
+     "id": 33008717109
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:39Z",
+     "label": "priority:P1",
+     "id": 33008717189
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:39Z",
+     "label": "effort:S",
+     "id": 33008717277
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:39Z",
+     "label": "horizon:next",
+     "id": 33008717373
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:39Z",
+     "label": "identity:human-fallback",
+     "id": 33008717450
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:40Z",
+     "id": 33008717981
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:46:47Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `9604fb1a094d54b8c02c1e11e45e2c08d2d3b87c522",
+     "id": 6115256024
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:46:47Z",
+     "id": 33009055811
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:46:48Z",
+     "label": "status:planned",
+     "id": 33009056388
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:46:50Z",
+     "label": "status:ready",
+     "id": 33009057234
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T00:32:39Z",
+     "source": 78,
+     "source_pr": true
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:20Z",
+     "label": "status:ready",
+     "id": 33021002311
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:22Z",
+     "label": "status:merged",
+     "id": 33021003334
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:24Z",
+     "body": "\u003c!-- aayudha:audit-pre-gate --\u003e\n**Merged without proof (pre-gate).** This story's change merged in #78 (`6895802`, 2026-10-12T00:57:09Z), before the merge gate ",
+     "id": 6118308416
+    }
+   ]
+  },
+  {
+   "number": 42,
+   "title": "WP4.2 Ledger with LFS and media store",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:35:40Z",
+   "labels": [
+    "effort:M",
+    "horizon:next",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:merged",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:42Z",
+     "label": "type:story",
+     "id": 33008718747
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:42Z",
+     "label": "status:planned",
+     "id": 33008718891
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:42Z",
+     "label": "priority:P1",
+     "id": 33008719012
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:43Z",
+     "label": "effort:M",
+     "id": 33008719201
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:43Z",
+     "label": "horizon:next",
+     "id": 33008719313
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:43Z",
+     "label": "identity:human-fallback",
+     "id": 33008719432
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:43Z",
+     "id": 33008719923
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:46:53Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `94889fef4458bff22b4dba8af5d5357fb4036bf3f2d",
+     "id": 6115256879
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:46:53Z",
+     "id": 33009058986
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:46:55Z",
+     "label": "status:planned",
+     "id": 33009059848
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:46:56Z",
+     "label": "status:ready",
+     "id": 33009060781
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T00:32:39Z",
+     "source": 78,
+     "source_pr": true
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:25Z",
+     "label": "status:ready",
+     "id": 33021005534
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:27Z",
+     "label": "status:merged",
+     "id": 33021006547
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:28Z",
+     "body": "\u003c!-- aayudha:audit-pre-gate --\u003e\n**Merged without proof (pre-gate).** This story's change merged in #78 (`6895802`, 2026-10-12T00:57:09Z), before the merge gate ",
+     "id": 6118309257
+    }
+   ]
+  },
+  {
+   "number": 43,
+   "title": "WP4.3 Floors framework + coverage",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:35:43Z",
+   "labels": [
+    "effort:M",
+    "horizon:next",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:merged",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:44Z",
+     "label": "type:story",
+     "id": 33008720148
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:45Z",
+     "label": "status:planned",
+     "id": 33008720247
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:45Z",
+     "label": "priority:P1",
+     "id": 33008720339
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:45Z",
+     "label": "effort:M",
+     "id": 33008720414
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:45Z",
+     "label": "horizon:next",
+     "id": 33008720499
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:45Z",
+     "label": "identity:human-fallback",
+     "id": 33008720595
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:46Z",
+     "id": 33008720757
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:00Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `a4872096e3f8d01b55b3273b2c9144d4cd41df384ee",
+     "id": 6115257764
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:00Z",
+     "id": 33009062312
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:01Z",
+     "label": "status:planned",
+     "id": 33009063101
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:03Z",
+     "label": "status:ready",
+     "id": 33009064069
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T00:58:44Z",
+     "source": 81,
+     "source_pr": true
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:30Z",
+     "label": "status:ready",
+     "id": 33021008718
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:32Z",
+     "label": "status:merged",
+     "id": 33021009779
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:33Z",
+     "body": "\u003c!-- aayudha:audit-pre-gate --\u003e\n**Merged without proof (pre-gate).** This story's change merged in #81 (`bdc166d`, 2026-10-12T01:23:45Z), before the merge gate ",
+     "id": 6118310077
+    }
+   ]
+  },
+  {
+   "number": 44,
+   "title": "WP4.4 Floors: SAST, secrets, deps",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:35:46Z",
+   "labels": [
+    "effort:S",
+    "horizon:next",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:merged",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:48Z",
+     "label": "type:story",
+     "id": 33008722152
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:48Z",
+     "label": "status:planned",
+     "id": 33008722254
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:49Z",
+     "label": "priority:P1",
+     "id": 33008722351
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:49Z",
+     "label": "effort:S",
+     "id": 33008722444
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:49Z",
+     "label": "horizon:next",
+     "id": 33008722531
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:49Z",
+     "label": "identity:human-fallback",
+     "id": 33008722599
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:49Z",
+     "id": 33008722621
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:06Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `fc314a42f313652b268f0d4560aa437f3437831dbd4",
+     "id": 6115258669
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:06Z",
+     "id": 33009065495
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:08Z",
+     "label": "status:planned",
+     "id": 33009066292
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:10Z",
+     "label": "status:ready",
+     "id": 33009067011
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T00:58:44Z",
+     "source": 81,
+     "source_pr": true
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T02:50:58Z",
+     "source": 95,
+     "source_pr": true
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:35Z",
+     "label": "status:ready",
+     "id": 33021011868
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:37Z",
+     "label": "status:merged",
+     "id": 33021012948
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:38Z",
+     "body": "\u003c!-- aayudha:audit-pre-gate --\u003e\n**Merged without proof (pre-gate).** This story's change merged in #81 (`bdc166d`, 2026-10-12T01:23:45Z), before the merge gate ",
+     "id": 6118310911
+    }
+   ]
+  },
+  {
+   "number": 45,
+   "title": "WP4.5 Floors: web a11y + perf",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:35:50Z",
+   "labels": [
+    "effort:M",
+    "horizon:next",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:merged",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:51Z",
+     "label": "type:story",
+     "id": 33008723545
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:51Z",
+     "label": "status:planned",
+     "id": 33008723639
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:51Z",
+     "label": "priority:P1",
+     "id": 33008723728
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:52Z",
+     "label": "effort:M",
+     "id": 33008723814
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:52Z",
+     "label": "horizon:next",
+     "id": 33008723902
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:52Z",
+     "label": "identity:human-fallback",
+     "id": 33008723987
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:52Z",
+     "id": 33008724165
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:13Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `9fc3529d5bd71d6c2e2473d584e97d65fa461a483cd",
+     "id": 6115259583
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:13Z",
+     "id": 33009068562
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:15Z",
+     "label": "status:planned",
+     "id": 33009069470
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:17Z",
+     "label": "status:ready",
+     "id": 33009070252
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T01:25:58Z",
+     "source": 84,
+     "source_pr": true
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:40Z",
+     "label": "status:ready",
+     "id": 33021015201
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:42Z",
+     "label": "status:merged",
+     "id": 33021016405
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:43Z",
+     "body": "\u003c!-- aayudha:audit-pre-gate --\u003e\n**Merged without proof (pre-gate).** This story's change merged in #84 (`2acb297`, 2026-10-12T01:31:56Z), before the merge gate ",
+     "id": 6118311797
+    }
+   ]
+  },
+  {
+   "number": 46,
+   "title": "WP4.6 Floors: DAST + API",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:35:53Z",
+   "labels": [
+    "effort:S",
+    "horizon:next",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:merged",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:54Z",
+     "label": "type:story",
+     "id": 33008725132
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:54Z",
+     "label": "status:planned",
+     "id": 33008725242
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:55Z",
+     "label": "priority:P1",
+     "id": 33008725340
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:55Z",
+     "label": "effort:S",
+     "id": 33008725482
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:55Z",
+     "label": "horizon:next",
+     "id": 33008725582
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:55Z",
+     "label": "identity:human-fallback",
+     "id": 33008725679
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:55Z",
+     "id": 33008725922
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:20Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `5fcc1920886b5e040b0dfbc4513d55340e2a4686937",
+     "id": 6115260456
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:20Z",
+     "id": 33009071614
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:21Z",
+     "label": "status:planned",
+     "id": 33009072450
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:23Z",
+     "label": "status:ready",
+     "id": 33009073248
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T01:25:58Z",
+     "source": 84,
+     "source_pr": true
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:45Z",
+     "label": "status:ready",
+     "id": 33021018553
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:47Z",
+     "label": "status:merged",
+     "id": 33021019727
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:49Z",
+     "body": "\u003c!-- aayudha:audit-pre-gate --\u003e\n**Merged without proof (pre-gate).** This story's change merged in #84 (`2acb297`, 2026-10-12T01:31:56Z), before the merge gate ",
+     "id": 6118312581
+    }
+   ]
+  },
+  {
+   "number": 47,
+   "title": "WP4.7 Floors: screen reader",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:35:56Z",
+   "labels": [
+    "effort:M",
+    "horizon:next",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:merged",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:57Z",
+     "label": "type:story",
+     "id": 33008726653
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:57Z",
+     "label": "status:planned",
+     "id": 33008726787
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:57Z",
+     "label": "priority:P1",
+     "id": 33008726863
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:58Z",
+     "label": "effort:M",
+     "id": 33008726935
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:58Z",
+     "label": "horizon:next",
+     "id": 33008727011
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:58Z",
+     "label": "identity:human-fallback",
+     "id": 33008727074
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:35:58Z",
+     "id": 33008727621
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:27Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `3072f3f9eedf357207575a7a39cce0c6c807d81a58a",
+     "id": 6115261486
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:27Z",
+     "id": 33009074935
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:29Z",
+     "label": "status:planned",
+     "id": 33009075780
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:31Z",
+     "label": "status:ready",
+     "id": 33009076576
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T01:34:10Z",
+     "source": 85,
+     "source_pr": true
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:50Z",
+     "label": "status:ready",
+     "id": 33021021735
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:52Z",
+     "label": "status:merged",
+     "id": 33021022812
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:53Z",
+     "body": "\u003c!-- aayudha:audit-pre-gate --\u003e\n**Merged without proof (pre-gate).** This story's change merged in #85 (`be39be0`, 2026-10-12T01:40:39Z), before the merge gate ",
+     "id": 6118313338
+    }
+   ]
+  },
+  {
+   "number": 48,
+   "title": "WP4.8 Merge gate + `inspect`",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:35:59Z",
+   "labels": [
+    "effort:M",
+    "horizon:next",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:merged",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:00Z",
+     "label": "type:story",
+     "id": 33008728089
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:00Z",
+     "label": "status:planned",
+     "id": 33008728174
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:00Z",
+     "label": "priority:P1",
+     "id": 33008728257
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:01Z",
+     "label": "effort:M",
+     "id": 33008728350
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:01Z",
+     "label": "horizon:next",
+     "id": 33008728457
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:01Z",
+     "label": "identity:human-fallback",
+     "id": 33008728523
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:02Z",
+     "id": 33008729295
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:34Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `04e797c3241cd0fc89986955d5379f78625d3bfbb7c",
+     "id": 6115262457
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:34Z",
+     "id": 33009078025
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:36Z",
+     "label": "status:planned",
+     "id": 33009078944
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:38Z",
+     "label": "status:ready",
+     "id": 33009079748
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T01:48:30Z",
+     "source": 86,
+     "source_pr": true
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T02:43:50Z",
+     "source": 93,
+     "source_pr": true
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:55Z",
+     "label": "status:ready",
+     "id": 33021025015
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:57Z",
+     "label": "status:merged",
+     "id": 33021026084
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:59Z",
+     "body": "\u003c!-- aayudha:audit-pre-gate --\u003e\n**Merged without proof (pre-gate).** This story's change merged in #86 (`110cf35`, 2026-10-12T02:20:05Z), before the merge gate ",
+     "id": 6118314186
+    }
+   ]
+  },
+  {
+   "number": 49,
+   "title": "WP4.9 Floors: mobile",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:36:02Z",
+   "labels": [
+    "effort:M",
+    "horizon:next",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:merged",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:03Z",
+     "label": "type:story",
+     "id": 33008729635
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:04Z",
+     "label": "status:planned",
+     "id": 33008729718
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:04Z",
+     "label": "priority:P1",
+     "id": 33008729793
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:04Z",
+     "label": "effort:M",
+     "id": 33008729881
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:04Z",
+     "label": "horizon:next",
+     "id": 33008729979
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:04Z",
+     "label": "identity:human-fallback",
+     "id": 33008730111
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:05Z",
+     "id": 33008730960
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:41Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `a1542bf1b23cce8d386d159853a54b55a32e2564d88",
+     "id": 6115263287
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:41Z",
+     "id": 33009081151
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:42Z",
+     "label": "status:planned",
+     "id": 33009081962
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:44Z",
+     "label": "status:ready",
+     "id": 33009082888
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T01:48:30Z",
+     "source": 86,
+     "source_pr": true
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:27:00Z",
+     "label": "status:ready",
+     "id": 33021028417
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:27:02Z",
+     "label": "status:merged",
+     "id": 33021029523
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:27:04Z",
+     "body": "\u003c!-- aayudha:audit-pre-gate --\u003e\n**Merged without proof (pre-gate).** This story's change merged in #86 (`110cf35`, 2026-10-12T02:20:05Z), before the merge gate ",
+     "id": 6118314970
+    }
+   ]
+  },
+  {
+   "number": 50,
+   "title": "WP4.10 Thin-slice verbs",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:36:06Z",
+   "labels": [
+    "effort:M",
+    "horizon:next",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:merged",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:08Z",
+     "label": "type:story",
+     "id": 33008731579
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:08Z",
+     "label": "status:planned",
+     "id": 33008731676
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:08Z",
+     "label": "priority:P1",
+     "id": 33008731774
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:08Z",
+     "label": "effort:M",
+     "id": 33008731851
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:08Z",
+     "label": "horizon:next",
+     "id": 33008731936
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:09Z",
+     "label": "identity:human-fallback",
+     "id": 33008732024
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:09Z",
+     "id": 33008732433
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:47Z",
+     "id": 33009084640
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:48Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `ac43c0699048ebb2bc0af5ec003fc4d1b6cad29d598",
+     "id": 6115264156
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:49Z",
+     "label": "status:planned",
+     "id": 33009085444
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:51Z",
+     "label": "status:ready",
+     "id": 33009086263
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T02:24:07Z",
+     "source": 89,
+     "source_pr": true
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:10:14Z",
+     "source": 98,
+     "source_pr": true
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:27:05Z",
+     "label": "status:ready",
+     "id": 33021031612
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:27:07Z",
+     "label": "status:merged",
+     "id": 33021032725
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:27:09Z",
+     "body": "\u003c!-- aayudha:audit-pre-gate --\u003e\n**Merged without proof (pre-gate).** This story's change merged in #89 (`6be6f92`, 2026-10-12T02:29:29Z), before the merge gate ",
+     "id": 6118315788
+    }
+   ]
+  },
+  {
+   "number": 51,
+   "title": "WP5.1 Seats, charters, RACI",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:36:09Z",
+   "labels": [
+    "effort:M",
+    "horizon:later",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:ready",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:10Z",
+     "label": "type:story",
+     "id": 33008732646
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:10Z",
+     "label": "status:planned",
+     "id": 33008732721
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:10Z",
+     "label": "priority:P1",
+     "id": 33008732800
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:10Z",
+     "label": "effort:M",
+     "id": 33008732879
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:11Z",
+     "label": "horizon:later",
+     "id": 33008732995
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:11Z",
+     "label": "identity:human-fallback",
+     "id": 33008733081
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:12Z",
+     "id": 33008733799
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:54Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `2c36ce7b3dc77b4fcc6db0b5db3e565063b148359d6",
+     "id": 6115265003
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:54Z",
+     "id": 33009087894
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:56Z",
+     "label": "status:planned",
+     "id": 33009088639
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:47:57Z",
+     "label": "status:ready",
+     "id": 33009089500
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T01:19:50Z",
+     "source": 83,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T01:32:34Z",
+     "id": 33012542513
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T01:40:51Z",
+     "id": 33012843496
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T01:46:20Z",
+     "id": 33013033922
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T01:53:35Z",
+     "id": 33013281864
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T01:58:21Z",
+     "id": 33013443035
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T02:03:49Z",
+     "id": 33013636382
+    }
+   ]
+  },
+  {
+   "number": 52,
+   "title": "WP5.2 Baseline adapters",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:36:12Z",
+   "labels": [
+    "effort:M",
+    "horizon:later",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:ready",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:14Z",
+     "label": "type:story",
+     "id": 33008734423
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:14Z",
+     "label": "status:planned",
+     "id": 33008734513
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:14Z",
+     "label": "priority:P1",
+     "id": 33008734588
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:14Z",
+     "label": "effort:M",
+     "id": 33008734672
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:14Z",
+     "label": "horizon:later",
+     "id": 33008734741
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:15Z",
+     "label": "identity:human-fallback",
+     "id": 33008734837
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:15Z",
+     "id": 33008735219
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:00Z",
+     "id": 33009091079
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:01Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `d051eca9da6517e035c914c46885986af277ee5ed8c",
+     "id": 6115265871
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:02Z",
+     "label": "status:planned",
+     "id": 33009092132
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:04Z",
+     "label": "status:ready",
+     "id": 33009092879
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T00:33:18Z",
+     "source": 79,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T00:37:49Z",
+     "id": 33010690485
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T00:44:03Z",
+     "id": 33010893749
+    }
+   ]
+  },
+  {
+   "number": 53,
+   "title": "WP5.3 `grill`",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:36:15Z",
+   "labels": [
+    "effort:L",
+    "horizon:later",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:ready",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:17Z",
+     "label": "type:story",
+     "id": 33008735875
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:17Z",
+     "label": "status:planned",
+     "id": 33008735960
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:17Z",
+     "label": "priority:P1",
+     "id": 33008736077
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:17Z",
+     "label": "effort:L",
+     "id": 33008736168
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:18Z",
+     "label": "horizon:later",
+     "id": 33008736274
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:18Z",
+     "label": "identity:human-fallback",
+     "id": 33008736383
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:18Z",
+     "id": 33008736801
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:07Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `3dabe05b08759e4cb30a73b326bc58f33bafaf3565d",
+     "id": 6115266736
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:07Z",
+     "id": 33009094316
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:09Z",
+     "label": "status:planned",
+     "id": 33009095089
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:11Z",
+     "label": "status:ready",
+     "id": 33009095930
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:44:46Z",
+     "source": 101,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:50:09Z",
+     "id": 33017390152
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:59:14Z",
+     "id": 33017731035
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:06:22Z",
+     "id": 33017994068
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:06:22Z",
+     "id": 33017994182
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:14:08Z",
+     "id": 33018293766
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:14:08Z",
+     "id": 33018294053
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:21:05Z",
+     "id": 33018554324
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:21:05Z",
+     "id": 33018554396
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:31:05Z",
+     "id": 33018922085
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:55:55Z",
+     "id": 33019829040
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:04:30Z",
+     "id": 33020150433
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:11:46Z",
+     "id": 33020429118
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:59:26Z",
+     "source": 116,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T06:06:06Z",
+     "id": 33022689147
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T06:11:52Z",
+     "source": 117,
+     "source_pr": true
+    }
+   ]
+  },
+  {
+   "number": 54,
+   "title": "WP5.4 `slice`, `plan`",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:36:19Z",
+   "labels": [
+    "effort:M",
+    "horizon:later",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:ready",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:19Z",
+     "label": "type:story",
+     "id": 33008737145
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:20Z",
+     "label": "status:planned",
+     "id": 33008737233
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:20Z",
+     "label": "priority:P1",
+     "id": 33008737325
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:20Z",
+     "label": "effort:M",
+     "id": 33008737420
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:20Z",
+     "label": "horizon:later",
+     "id": 33008737510
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:20Z",
+     "label": "identity:human-fallback",
+     "id": 33008737596
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:21Z",
+     "id": 33008738002
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:13Z",
+     "id": 33009097473
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:14Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `45956e43fb7f7d31dfa72a8644d396a1bff1de34990",
+     "id": 6115267511
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:15Z",
+     "label": "status:planned",
+     "id": 33009098347
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:17Z",
+     "label": "status:ready",
+     "id": 33009099194
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:34:15Z",
+     "source": 107,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:41:23Z",
+     "id": 33019296311
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:14:07Z",
+     "source": 111,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:23:20Z",
+     "id": 33020882732
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:59:26Z",
+     "source": 116,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T06:06:06Z",
+     "id": 33022689227
+    }
+   ]
+  },
+  {
+   "number": 55,
+   "title": "WP5.5 `build`, `ship`",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:36:22Z",
+   "labels": [
+    "effort:L",
+    "horizon:later",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:ready",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:23Z",
+     "label": "type:story",
+     "id": 33008738824
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:23Z",
+     "label": "status:planned",
+     "id": 33008738912
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:23Z",
+     "label": "priority:P1",
+     "id": 33008738997
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:23Z",
+     "label": "effort:L",
+     "id": 33008739085
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:24Z",
+     "label": "horizon:later",
+     "id": 33008739150
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:24Z",
+     "label": "identity:human-fallback",
+     "id": 33008739216
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:24Z",
+     "id": 33008740165
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:20Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `dfb259eaae9cffc5354fca85a96cb909567f701bfae",
+     "id": 6115268368
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:20Z",
+     "id": 33009100684
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:22Z",
+     "label": "status:planned",
+     "id": 33009101690
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:24Z",
+     "label": "status:ready",
+     "id": 33009102620
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:42:01Z",
+     "source": 109,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:45:15Z",
+     "id": 33019437367
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:04:30Z",
+     "id": 33020150232
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:04:30Z",
+     "id": 33020150364
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:11:45Z",
+     "id": 33020428797
+    }
+   ]
+  },
+  {
+   "number": 56,
+   "title": "WP5.6 `decide`, `respond`, ops catalog",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:36:25Z",
+   "labels": [
+    "effort:M",
+    "horizon:later",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:ready",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:26Z",
+     "label": "type:story",
+     "id": 33008740257
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:26Z",
+     "label": "status:planned",
+     "id": 33008740349
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:26Z",
+     "label": "priority:P1",
+     "id": 33008740427
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:26Z",
+     "label": "effort:M",
+     "id": 33008740535
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:27Z",
+     "label": "horizon:later",
+     "id": 33008740616
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:27Z",
+     "label": "identity:human-fallback",
+     "id": 33008740684
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:28Z",
+     "id": 33008741536
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:27Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `500ae8841efd847537514290c1f270d951b56605ea7",
+     "id": 6115269197
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:27Z",
+     "id": 33009104314
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:28Z",
+     "label": "status:planned",
+     "id": 33009104946
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:30Z",
+     "label": "status:ready",
+     "id": 33009105721
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T02:57:08Z",
+     "source": 96,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:32:34Z",
+     "id": 33016767451
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:39:37Z",
+     "id": 33017017755
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:56:34Z",
+     "id": 33017630896
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:08:03Z",
+     "id": 33018056286
+    }
+   ]
+  },
+  {
+   "number": 57,
+   "title": "WP5.7 Autonomy, notify, halt",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:36:28Z",
+   "labels": [
+    "effort:S",
+    "horizon:later",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:ready",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:29Z",
+     "label": "type:story",
+     "id": 33008741670
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:29Z",
+     "label": "status:planned",
+     "id": 33008741740
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:29Z",
+     "label": "priority:P1",
+     "id": 33008741820
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:29Z",
+     "label": "effort:S",
+     "id": 33008741920
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:30Z",
+     "label": "horizon:later",
+     "id": 33008742016
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:30Z",
+     "label": "identity:human-fallback",
+     "id": 33008742087
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:31Z",
+     "id": 33008742535
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:33Z",
+     "id": 33009107332
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:34Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `9297204049ccac100cd49b0edf2a37ff6803385d3ce",
+     "id": 6115270063
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:35Z",
+     "label": "status:planned",
+     "id": 33009108123
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:37Z",
+     "label": "status:ready",
+     "id": 33009109071
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T02:05:26Z",
+     "source": 88,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T02:11:11Z",
+     "id": 33013898227
+    }
+   ]
+  },
+  {
+   "number": 58,
+   "title": "WP6.4 Figma + Mobbin",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:36:31Z",
+   "labels": [
+    "effort:M",
+    "horizon:later",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:ready",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:33Z",
+     "label": "type:story",
+     "id": 33008743395
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:33Z",
+     "label": "status:planned",
+     "id": 33008743483
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:33Z",
+     "label": "priority:P1",
+     "id": 33008743544
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:33Z",
+     "label": "effort:M",
+     "id": 33008743622
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:33Z",
+     "label": "horizon:later",
+     "id": 33008743703
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:34Z",
+     "label": "identity:human-fallback",
+     "id": 33008743795
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:34Z",
+     "id": 33008744695
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:41Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `28bfd9d724a00618442ffd64005c0b49bb1be04488a",
+     "id": 6115270992
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:41Z",
+     "id": 33009111001
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:42Z",
+     "label": "status:planned",
+     "id": 33009111626
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:44Z",
+     "label": "status:ready",
+     "id": 33009112417
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T00:45:43Z",
+     "source": 80,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T00:49:20Z",
+     "id": 33011069452
+    }
+   ]
+  },
+  {
+   "number": 59,
+   "title": "WP6.5 `research`, `wireframe`, `mockup`, `prototype`",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:36:35Z",
+   "labels": [
+    "effort:L",
+    "horizon:later",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:ready",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:36Z",
+     "label": "type:story",
+     "id": 33008744787
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:36Z",
+     "label": "status:planned",
+     "id": 33008744865
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:36Z",
+     "label": "priority:P1",
+     "id": 33008744928
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:36Z",
+     "label": "effort:L",
+     "id": 33008744996
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:36Z",
+     "label": "horizon:later",
+     "id": 33008745080
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:37Z",
+     "label": "identity:human-fallback",
+     "id": 33008745140
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:37Z",
+     "id": 33008745748
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:47Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `aebe12f217a7ee5eb0dfddaf47f517bc1618faaf1a7",
+     "id": 6115271877
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:47Z",
+     "id": 33009113808
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:49Z",
+     "label": "status:planned",
+     "id": 33009114683
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:51Z",
+     "label": "status:ready",
+     "id": 33009115517
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T02:50:19Z",
+     "source": 94,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:09:22Z",
+     "id": 33015951752
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:16:46Z",
+     "id": 33016205644
+    }
+   ]
+  },
+  {
+   "number": 60,
+   "title": "WP6.6 `review`, `polish`, `baseline`",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:36:38Z",
+   "labels": [
+    "effort:M",
+    "horizon:later",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:ready",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:39Z",
+     "label": "type:story",
+     "id": 33008746259
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:39Z",
+     "label": "status:planned",
+     "id": 33008746345
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:39Z",
+     "label": "priority:P1",
+     "id": 33008746451
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:39Z",
+     "label": "effort:M",
+     "id": 33008746512
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:39Z",
+     "label": "horizon:later",
+     "id": 33008746600
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:40Z",
+     "label": "identity:human-fallback",
+     "id": 33008746676
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:40Z",
+     "id": 33008747030
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:54Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `6baa33740e96bae931dfed423b7ae3254199299d253",
+     "id": 6115272716
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:54Z",
+     "id": 33009117047
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:55Z",
+     "label": "status:planned",
+     "id": 33009117846
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:48:57Z",
+     "label": "status:ready",
+     "id": 33009118756
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:18:49Z",
+     "source": 99,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:24:17Z",
+     "id": 33016470060
+    }
+   ]
+  },
+  {
+   "number": 61,
+   "title": "WP6.7 `experiment`, `readout`",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:36:41Z",
+   "labels": [
+    "effort:M",
+    "horizon:later",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:ready",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:42Z",
+     "label": "type:story",
+     "id": 33008747670
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:42Z",
+     "label": "status:planned",
+     "id": 33008747752
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:42Z",
+     "label": "priority:P1",
+     "id": 33008747860
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:42Z",
+     "label": "effort:M",
+     "id": 33008747944
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:42Z",
+     "label": "horizon:later",
+     "id": 33008748029
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:42Z",
+     "label": "identity:human-fallback",
+     "id": 33008748122
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:43Z",
+     "id": 33008748908
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:00Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `ea9d8067d0e7d3c186cbaddd7c8cee6de197f6bc78a",
+     "id": 6115273653
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:00Z",
+     "id": 33009120304
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:02Z",
+     "label": "status:planned",
+     "id": 33009121123
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:04Z",
+     "label": "status:ready",
+     "id": 33009121980
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T01:17:15Z",
+     "source": 82,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T01:36:45Z",
+     "id": 33012693451
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T01:42:30Z",
+     "id": 33012900452
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T01:47:54Z",
+     "id": 33013088635
+    }
+   ]
+  },
+  {
+   "number": 62,
+   "title": "WP7.1 Loops",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:36:44Z",
+   "labels": [
+    "effort:M",
+    "horizon:later",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:ready",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:45Z",
+     "label": "type:story",
+     "id": 33008749405
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:45Z",
+     "label": "status:planned",
+     "id": 33008749510
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:45Z",
+     "label": "priority:P1",
+     "id": 33008749608
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:46Z",
+     "label": "effort:M",
+     "id": 33008749695
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:46Z",
+     "label": "horizon:later",
+     "id": 33008749808
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:46Z",
+     "label": "identity:human-fallback",
+     "id": 33008749885
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:47Z",
+     "id": 33008750216
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:08Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `f1f7d9b7dd1c5c5f1a8f978d0bec20fff1f13d1ac63",
+     "id": 6115274599
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:08Z",
+     "id": 33009123782
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:09Z",
+     "label": "status:planned",
+     "id": 33009124458
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:11Z",
+     "label": "status:ready",
+     "id": 33009125225
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:09:48Z",
+     "id": 33018127640
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:09:50Z",
+     "source": 104,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:18:24Z",
+     "id": 33018456733
+    }
+   ]
+  },
+  {
+   "number": 63,
+   "title": "WP7.2 `measure`",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:36:47Z",
+   "labels": [
+    "effort:M",
+    "horizon:later",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:ready",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:48Z",
+     "label": "type:story",
+     "id": 33008751123
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:48Z",
+     "label": "status:planned",
+     "id": 33008751233
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:49Z",
+     "label": "priority:P1",
+     "id": 33008751309
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:49Z",
+     "label": "effort:M",
+     "id": 33008751405
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:49Z",
+     "label": "horizon:later",
+     "id": 33008751480
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:49Z",
+     "label": "identity:human-fallback",
+     "id": 33008751555
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:50Z",
+     "id": 33008752008
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:14Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `f64128b3c1a6a3a40168b03d6bea01377a5ddaf50ef",
+     "id": 6115275367
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:14Z",
+     "id": 33009126446
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:15Z",
+     "label": "status:planned",
+     "id": 33009127288
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:17Z",
+     "label": "status:ready",
+     "id": 33009128224
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T01:49:48Z",
+     "source": 87,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T01:55:15Z",
+     "id": 33013337064
+    }
+   ]
+  },
+  {
+   "number": 64,
+   "title": "WP7.3 `brief` core",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:36:50Z",
+   "labels": [
+    "effort:M",
+    "horizon:later",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:ready",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:52Z",
+     "label": "type:story",
+     "id": 33008752856
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:52Z",
+     "label": "status:planned",
+     "id": 33008752956
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:52Z",
+     "label": "priority:P1",
+     "id": 33008753030
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:52Z",
+     "label": "effort:M",
+     "id": 33008753132
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:53Z",
+     "label": "horizon:later",
+     "id": 33008753216
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:53Z",
+     "label": "identity:human-fallback",
+     "id": 33008753301
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:53Z",
+     "id": 33008753447
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:21Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `1e5a075f74f29f1222fb0940576a6b311c2895f9b7f",
+     "id": 6115276275
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:21Z",
+     "id": 33009130201
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:22Z",
+     "label": "status:planned",
+     "id": 33009130882
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:24Z",
+     "label": "status:ready",
+     "id": 33009131685
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:02:32Z",
+     "source": 97,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:04:14Z",
+     "id": 33015767654
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:11:20Z",
+     "id": 33016019769
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:20:27Z",
+     "id": 33016335776
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:20:27Z",
+     "id": 33016336378
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:20:28Z",
+     "id": 33016336653
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:29:11Z",
+     "id": 33016641109
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:29:12Z",
+     "id": 33016641780
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:29:12Z",
+     "id": 33016642192
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:33:56Z",
+     "id": 33016814371
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:40:42Z",
+     "id": 33017054245
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:57:09Z",
+     "source": 103,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:03:37Z",
+     "id": 33017891432
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:19:40Z",
+     "source": 106,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:24:51Z",
+     "id": 33018694904
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:38:26Z",
+     "source": 108,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:41:18Z",
+     "id": 33019293469
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:52:13Z",
+     "id": 33019695547
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:57:38Z",
+     "id": 33019892309
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:58:56Z",
+     "source": 115,
+     "source_pr": true
+    }
+   ]
+  },
+  {
+   "number": 65,
+   "title": "WP7.4 `brief` visuals",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:36:53Z",
+   "labels": [
+    "effort:M",
+    "horizon:later",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:ready",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:54Z",
+     "label": "type:story",
+     "id": 33008754148
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:55Z",
+     "label": "status:planned",
+     "id": 33008754233
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:55Z",
+     "label": "priority:P1",
+     "id": 33008754356
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:55Z",
+     "label": "effort:M",
+     "id": 33008754455
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:55Z",
+     "label": "horizon:later",
+     "id": 33008754565
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:55Z",
+     "label": "identity:human-fallback",
+     "id": 33008754665
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:56Z",
+     "id": 33008754834
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:27Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `fb12bd34900c2084236c408a1413c1e19b816deba74",
+     "id": 6115277164
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:27Z",
+     "id": 33009133019
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:29Z",
+     "label": "status:planned",
+     "id": 33009134027
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:31Z",
+     "label": "status:ready",
+     "id": 33009134907
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:02:32Z",
+     "source": 97,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:11:20Z",
+     "id": 33016019840
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:20:27Z",
+     "id": 33016336056
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:20:28Z",
+     "id": 33016336935
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:29:11Z",
+     "id": 33016641461
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:29:13Z",
+     "id": 33016642523
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:40:42Z",
+     "id": 33017054315
+    }
+   ]
+  },
+  {
+   "number": 66,
+   "title": "WP7.5 `tell`",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:36:56Z",
+   "labels": [
+    "effort:M",
+    "horizon:later",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:ready",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:58Z",
+     "label": "type:story",
+     "id": 33008755618
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:58Z",
+     "label": "status:planned",
+     "id": 33008755738
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:58Z",
+     "label": "priority:P1",
+     "id": 33008755837
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:58Z",
+     "label": "effort:M",
+     "id": 33008755932
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:58Z",
+     "label": "horizon:later",
+     "id": 33008756032
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:59Z",
+     "label": "identity:human-fallback",
+     "id": 33008756110
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:36:59Z",
+     "id": 33008756932
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:34Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `a3c88ea13a8a1923b017469db403d82b446f7f6fc23",
+     "id": 6115278035
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:34Z",
+     "id": 33009136664
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:36Z",
+     "label": "status:planned",
+     "id": 33009137498
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:38Z",
+     "label": "status:ready",
+     "id": 33009138463
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:51:57Z",
+     "source": 102,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:11:48Z",
+     "id": 33018204338
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:14:40Z",
+     "id": 33018314925
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:14:41Z",
+     "id": 33018315075
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:33:26Z",
+     "id": 33019007580
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:51:51Z",
+     "id": 33019682160
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:51:52Z",
+     "id": 33019682449
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:01:27Z",
+     "id": 33020032858
+    }
+   ]
+  },
+  {
+   "number": 67,
+   "title": "WP7.6 `audit`, `retro`",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:37:00Z",
+   "labels": [
+    "effort:M",
+    "horizon:later",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:ready",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:01Z",
+     "label": "type:story",
+     "id": 33008757124
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:01Z",
+     "label": "status:planned",
+     "id": 33008757201
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:01Z",
+     "label": "priority:P1",
+     "id": 33008757273
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:01Z",
+     "label": "effort:M",
+     "id": 33008757351
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:01Z",
+     "label": "horizon:later",
+     "id": 33008757433
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:01Z",
+     "label": "identity:human-fallback",
+     "id": 33008757523
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:02Z",
+     "id": 33008757772
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:41Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `e0d23d20c8fcf0f8634cce2fe464b9ae349c5effefe",
+     "id": 6115278911
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:41Z",
+     "id": 33009140004
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:43Z",
+     "label": "status:planned",
+     "id": 33009140798
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:45Z",
+     "label": "status:ready",
+     "id": 33009141618
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:17:44Z",
+     "source": 105,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:30:08Z",
+     "id": 33018884612
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:54:59Z",
+     "id": 33019795546
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T04:58:54Z",
+     "id": 33019937978
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:08:10Z",
+     "id": 33020288235
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:17:08Z",
+     "id": 33020637145
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:23:40Z",
+     "id": 33020895811
+    }
+   ]
+  },
+  {
+   "number": 68,
+   "title": "WP7.7 `evolve`",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:37:03Z",
+   "labels": [
+    "effort:M",
+    "horizon:later",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:ready",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:04Z",
+     "label": "type:story",
+     "id": 33008758866
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:05Z",
+     "label": "status:planned",
+     "id": 33008758949
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:05Z",
+     "label": "priority:P1",
+     "id": 33008759028
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:05Z",
+     "label": "effort:M",
+     "id": 33008759100
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:05Z",
+     "label": "horizon:later",
+     "id": 33008759173
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:05Z",
+     "label": "identity:human-fallback",
+     "id": 33008759267
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:05Z",
+     "id": 33008759630
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:48Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `781366a6486bac093609936fddb389dbcb10b6fb695",
+     "id": 6115279718
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:48Z",
+     "id": 33009143301
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:49Z",
+     "label": "status:planned",
+     "id": 33009143916
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:51Z",
+     "label": "status:ready",
+     "id": 33009144827
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:25:19Z",
+     "source": 114,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:32:20Z",
+     "id": 33021238665
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:47:03Z",
+     "id": 33021855423
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:47:03Z",
+     "id": 33021855535
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:47:03Z",
+     "id": 33021855598
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:56:55Z",
+     "id": 33022278236
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T06:05:48Z",
+     "id": 33022674446
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T06:05:48Z",
+     "id": 33022674716
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T06:05:49Z",
+     "id": 33022674839
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T06:05:49Z",
+     "id": 33022675079
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T06:05:49Z",
+     "id": 33022675305
+    }
+   ]
+  },
+  {
+   "number": 69,
+   "title": "WP7.8 `release`",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:37:06Z",
+   "labels": [
+    "effort:M",
+    "horizon:later",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:ready",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:07Z",
+     "label": "type:story",
+     "id": 33008760260
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:07Z",
+     "label": "status:planned",
+     "id": 33008760363
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:08Z",
+     "label": "priority:P1",
+     "id": 33008760466
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:08Z",
+     "label": "effort:M",
+     "id": 33008760548
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:08Z",
+     "label": "horizon:later",
+     "id": 33008760649
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:08Z",
+     "label": "identity:human-fallback",
+     "id": 33008760739
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:09Z",
+     "id": 33008761220
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:54Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `e035e177ce2ed15c15951f1bbb09194beaf328825a0",
+     "id": 6115280588
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:54Z",
+     "id": 33009146294
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:56Z",
+     "label": "status:planned",
+     "id": 33009147212
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:49:58Z",
+     "label": "status:ready",
+     "id": 33009148106
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:04:04Z",
+     "source": 110,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:05:38Z",
+     "id": 33020193512
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:16:57Z",
+     "id": 33020629513
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:16:57Z",
+     "id": 33020629573
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:16:58Z",
+     "id": 33020629644
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:46:34Z",
+     "id": 33021835056
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:46:35Z",
+     "id": 33021835490
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:46:35Z",
+     "id": 33021835872
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:46:36Z",
+     "id": 33021836250
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:46:36Z",
+     "id": 33021836649
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T06:02:44Z",
+     "id": 33022537602
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T06:09:09Z",
+     "id": 33022832984
+    }
+   ]
+  },
+  {
+   "number": 70,
+   "title": "WP8.1 Dogfood",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:37:09Z",
+   "labels": [
+    "effort:L",
+    "horizon:later",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:ready",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:10Z",
+     "label": "type:story",
+     "id": 33008761435
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:10Z",
+     "label": "status:planned",
+     "id": 33008761528
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:10Z",
+     "label": "priority:P1",
+     "id": 33008761592
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:10Z",
+     "label": "effort:L",
+     "id": 33008761671
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:10Z",
+     "label": "horizon:later",
+     "id": 33008761744
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:11Z",
+     "label": "identity:human-fallback",
+     "id": 33008761824
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:12Z",
+     "id": 33008762253
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:50:02Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `e83abcff59bd03d28bf54e7a09057eef0380dd9d987",
+     "id": 6115281547
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:50:02Z",
+     "id": 33009149622
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:50:04Z",
+     "label": "status:planned",
+     "id": 33009150539
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:50:05Z",
+     "label": "status:ready",
+     "id": 33009151409
+    }
+   ]
+  },
+  {
+   "number": 71,
+   "title": "WP8.2 Docs and installers",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:37:12Z",
+   "labels": [
+    "effort:M",
+    "horizon:later",
+    "identity:human-fallback",
+    "priority:P1",
+    "status:ready",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:13Z",
+     "label": "type:story",
+     "id": 33008762913
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:13Z",
+     "label": "status:planned",
+     "id": 33008762987
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:13Z",
+     "label": "priority:P1",
+     "id": 33008763080
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:14Z",
+     "label": "effort:M",
+     "id": 33008763166
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:14Z",
+     "label": "horizon:later",
+     "id": 33008763252
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:14Z",
+     "label": "identity:human-fallback",
+     "id": 33008763358
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:37:15Z",
+     "id": 33008763960
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:40:33Z",
+     "source": 73,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:50:08Z",
+     "id": 33009153030
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:50:09Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `d47ee92898dec0f70a19d4a4d589e940d1e3dbe8f54",
+     "id": 6115282376
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:50:10Z",
+     "label": "status:planned",
+     "id": 33009153805
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-11T23:50:12Z",
+     "label": "status:ready",
+     "id": 33009154580
+    }
+   ]
+  },
+  {
+   "number": 72,
+   "title": "fix(evals): stub skill must not invent requirements; per-case scope guard (WP3.4)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:40:00Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-11T23:43:21Z"
+  },
+  {
+   "number": 73,
+   "title": "feat(ready): parser, ready snapshots, and the Ready guard (WP2.7)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:40:31Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-11T23:45:35Z"
+  },
+  {
+   "number": 74,
+   "title": "fix(evals): record stop reasons and tokens, truncation errors, convention vs invented (WP3.4)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:51:00Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-11T23:53:41Z"
+  },
+  {
+   "number": 75,
+   "title": "feat(status): status rollups and digest, label-only triage (WP2.8–WP2.9)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-11T23:53:22Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T00:01:58Z"
+  },
+  {
+   "number": 76,
+   "title": "fix(evals): skill model from the verb's registry lane, 4000-token cap, cached input counted (WP3.4)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T00:00:17Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T00:03:42Z"
+  },
+  {
+   "number": 77,
+   "title": "fix(release): ignore rolling-* tags in goreleaser",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T00:14:18Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T00:17:45Z"
+  },
+  {
+   "number": 78,
+   "title": "feat(proof): pack format v1 and ledger ops with LFS and media bucket (WP4.1–WP4.2)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T00:32:38Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T00:57:09Z"
+  },
+  {
+   "number": 79,
+   "title": "feat(integrations): PostHog, Sentry, and GitHub read baseline adapters (WP5.2)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T00:33:17Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T00:44:01Z"
+  },
+  {
+   "number": 80,
+   "title": "feat(integrations): Figma REST with MCP opt-in, Mobbin references as URLs and IDs, repo-wide Mobbin image lint (WP6.4)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T00:45:42Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T00:49:19Z"
+  },
+  {
+   "number": 81,
+   "title": "feat(verify): floors framework, diff coverage, SAST, secrets, and dependency floors (WP4.3–WP4.4)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T00:58:43Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T01:23:45Z"
+  },
+  {
+   "number": 82,
+   "title": "feat(experiment): experiment and readout on PostHog and GrowthBook with minimum sample size (WP6.7)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T01:17:14Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T01:47:53Z"
+  },
+  {
+   "number": 83,
+   "title": "feat(seats): charters, generated RACI, and aayu seat add|remove|list (WP5.1)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T01:19:49Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T02:03:48Z"
+  },
+  {
+   "number": 84,
+   "title": "feat(verify): web accessibility, performance, DAST, and API floors with seed data and redaction (WP4.5–WP4.6)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T01:25:57Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T01:31:56Z"
+  },
+  {
+   "number": 85,
+   "title": "feat(verify): screen-reader floor with VoiceOver and NVDA on label or nightly (WP4.7)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T01:34:09Z",
+   "labels": [
+    "aayudha:screen-reader"
+   ],
+   "events": null,
+   "closed_at": "2026-10-12T01:40:39Z"
+  },
+  {
+   "number": 86,
+   "title": "feat(inspect): merge gate, inspect, and mobile skip-and-block (WP4.8, WP4.9)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T01:48:29Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T02:20:05Z"
+  },
+  {
+   "number": 87,
+   "title": "feat(measure): SQLite snapshots of exports, AARRR cohorts and North Star, Results on Goals and Initiatives (WP7.2)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T01:49:47Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T01:55:14Z"
+  },
+  {
+   "number": 88,
+   "title": "feat(autonomy): streak workflow, corrections, and aayu halt/resume (WP5.7)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T02:05:25Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T02:11:10Z"
+  },
+  {
+   "number": 89,
+   "title": "feat(build): thin-slice grill story, build, and ship, with proof coverage in status (WP4.10)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T02:24:06Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T02:29:30Z"
+  },
+  {
+   "number": 90,
+   "title": "chore(init): install the merge gate, Ready guard, and triage workflows (aayu init --gates)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T02:30:52Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T02:37:01Z"
+  },
+  {
+   "number": 91,
+   "title": "doctor names the floor each missing tool serves",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T02:31:23Z",
+   "labels": [
+    "effort:XS",
+    "identity:human-fallback",
+    "priority:P2",
+    "status:merged",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T02:31:24Z",
+     "label": "type:story",
+     "id": 33014594881
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T02:31:24Z",
+     "label": "status:planned",
+     "id": 33014595036
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T02:31:24Z",
+     "label": "priority:P2",
+     "id": 33014595162
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T02:31:24Z",
+     "label": "effort:XS",
+     "id": 33014595253
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T02:31:25Z",
+     "label": "identity:human-fallback",
+     "id": 33014595343
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T02:31:26Z",
+     "id": 33014595820
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T02:31:38Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `12c10e7dde181f2aabf3c83a57ebae9831a924904ca",
+     "id": 6116694103
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T02:31:38Z",
+     "id": 33014603423
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T02:31:40Z",
+     "label": "status:planned",
+     "id": 33014604224
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T02:31:42Z",
+     "label": "status:ready",
+     "id": 33014605206
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T02:33:30Z",
+     "source": 92,
+     "source_pr": true
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T02:36:43Z",
+     "body": "\u003c!-- aayudha:proof --\u003e\n### Proof pack (advisory)\n\nHead `7fe14cb` · ledger `proof/91/7fe14cbfea8aa8b6a789bb837f13bb9d5814aa73/advisory/pack.json` at `c03aa6d`\n\n",
+     "id": 6116739492
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T02:36:43Z",
+     "id": 33014780743
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T02:37:20Z",
+     "id": 33014801746
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T02:50:58Z",
+     "source": 95,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T02:57:49Z",
+     "id": 33015536426
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:04:15Z",
+     "id": 33015768195
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:04:46Z",
+     "id": 33015786297
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:04:46Z",
+     "label": "status:ready",
+     "id": 33015786458
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:04:48Z",
+     "label": "status:merged",
+     "id": 33015787496
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:04:53Z",
+     "id": 33015790432
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:10:14Z",
+     "source": 98,
+     "source_pr": true
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T03:51:57Z",
+     "source": 102,
+     "source_pr": true
+    }
+   ]
+  },
+  {
+   "number": 92,
+   "title": "feat: doctor names the floor each missing tool serves",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T02:33:29Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T03:04:44Z"
+  },
+  {
+   "number": 93,
+   "title": "fix(init): pass the halt variable to the merge gate's verbs",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T02:43:49Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T02:51:26Z"
+  },
+  {
+   "number": 94,
+   "title": "feat(design): research, wireframe, mockup, and prototype with pinned references and the figma-diff gate (WP6.5)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T02:50:18Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T03:16:45Z"
+  },
+  {
+   "number": 95,
+   "title": "fix(verify): deps floor scans the lockfiles git tracks and honours osv-scanner's call analysis",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T02:50:56Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T02:57:33Z"
+  },
+  {
+   "number": 96,
+   "title": "feat(decide): decide, respond, and the ops catalog (WP5.6)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T02:57:07Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T04:08:02Z"
+  },
+  {
+   "number": 97,
+   "title": "feat(brief): registers, purposes, STE lint, grounded accessible HTML, and visuals (WP7.3–WP7.4)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T03:02:31Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T03:40:41Z"
+  },
+  {
+   "number": 98,
+   "title": "fix(ship): checkpoint actions with the verb's token, on every exit, into one log per clone",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T03:10:13Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T03:15:28Z"
+  },
+  {
+   "number": 99,
+   "title": "feat(review): review lanes A and B, polish, and baseline (WP6.6)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T03:18:48Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T03:24:15Z"
+  },
+  {
+   "number": 100,
+   "title": "fix(triage): run the triage job in the ai-gateway environment",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T03:20:52Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T03:26:42Z"
+  },
+  {
+   "number": 101,
+   "title": "feat(grill): all ten work-item types, baselines, brand, and the TUI (WP5.3)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T03:44:45Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T04:31:04Z"
+  },
+  {
+   "number": 102,
+   "title": "feat(tell): brief, claims check, UTM tagging, and human-only publish (WP7.5)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T03:51:56Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T05:01:25Z"
+  },
+  {
+   "number": 103,
+   "title": "fix(brief): keep each fact's unit and state, take STE names from the summary and Result, raise the skill cap",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T03:57:08Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T04:03:36Z"
+  },
+  {
+   "number": 104,
+   "title": "feat(loops): scheduled loops for Amp, Cursor, and the Actions fallback (WP7.1)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T04:09:49Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T04:18:22Z"
+  },
+  {
+   "number": 105,
+   "title": "feat(audit): audit and retro with reproducible reports reconciled against GitHub's event history (WP7.6)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T04:17:43Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T05:23:38Z"
+  },
+  {
+   "number": 106,
+   "title": "docs(plan): record the second brief tier-2 run and the open grounding gap (D-7.3b)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T04:19:38Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T04:24:50Z"
+  },
+  {
+   "number": 107,
+   "title": "feat(slice): slice and plan with layer footprints, dependencies, and the EM plan review (WP5.4)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T04:34:14Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T04:41:22Z"
+  },
+  {
+   "number": 108,
+   "title": "feat(brief): ground evidence in each pack's criterion map and inspect verdicts; brief tier 2 off dev pushes",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T04:38:25Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T04:57:36Z"
+  },
+  {
+   "number": 109,
+   "title": "feat(build): leases, verified checkpoints, budget, resume, the ship pass rules, and gc (WP5.5)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T04:42:00Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T05:11:43Z"
+  },
+  {
+   "number": 110,
+   "title": "feat(release): promotion ladder for a Release issue (WP7.8)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T05:04:03Z",
+   "labels": [],
+   "events": [
+    {
+     "kind": "head_ref_force_pushed",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:16:58Z",
+     "id": 33020629864
+    },
+    {
+     "kind": "head_ref_force_pushed",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:46:35Z",
+     "id": 33021835355
+    },
+    {
+     "kind": "deployed",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:51:46Z",
+     "id": 33022055747
+    },
+    {
+     "kind": "commented",
+     "actor": "github-actions[bot]",
+     "at": "2026-10-12T05:53:54Z",
+     "body": "\u003c!-- aayudha:inspect --\u003e\n### inspect: fix\n\nThe PR implements the release ladder and supplies passing synthetic acceptance tests, with live execution correctly g",
+     "id": 6118596245
+    },
+    {
+     "kind": "deployed",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T06:07:25Z",
+     "id": 33022751344
+    }
+   ]
+  },
+  {
+   "number": 111,
+   "title": "fix(slice): keep stories to the Feature's scope; extras become open questions",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T05:14:06Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T05:23:18Z"
+  },
+  {
+   "number": 112,
+   "title": "gc says how to free a build worktree it keeps",
+   "pr": false,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T05:15:07Z",
+   "labels": [
+    "effort:XS",
+    "identity:human-fallback",
+    "priority:P3",
+    "status:merged",
+    "type:story"
+   ],
+   "events": [
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:15:09Z",
+     "label": "type:story",
+     "id": 33020558015
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:15:09Z",
+     "label": "status:planned",
+     "id": 33020558195
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:15:09Z",
+     "label": "priority:P3",
+     "id": 33020558310
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:15:10Z",
+     "label": "effort:XS",
+     "id": 33020558410
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:15:10Z",
+     "label": "identity:human-fallback",
+     "id": 33020558524
+    },
+    {
+     "kind": "parent_issue_added",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:15:10Z",
+     "id": 33020558846
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:15:22Z",
+     "body": "\u003c!-- aayudha:ready-snapshot --\u003e\n### Ready snapshot\n\n| | |\n|---|---|\n| Schema | work items v1, story |\n| Body hash | `ee030f96d6a4977e7ed4db14549864b265ccd2a485c",
+     "id": 6118198040
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:15:22Z",
+     "id": 33020566192
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:15:24Z",
+     "label": "status:planned",
+     "id": 33020567286
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:15:26Z",
+     "label": "status:ready",
+     "id": 33020568343
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:15:36Z",
+     "body": "\u003c!-- aayudha:lease-released --\u003e\n**Lease released** (held by `rahulnakmol@e2b.local`, expiring 2026-10-12T09:16:32Z): shipped in #113.",
+     "id": 6118200257
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:15:37Z",
+     "label": "aayudha:leased",
+     "id": 33020575435
+    },
+    {
+     "kind": "assigned",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:15:40Z",
+     "id": 33020576845
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:15:43Z",
+     "body": "\u003c!-- aayudha:progress --\u003e\n**Build progress** (`aayu build`, branch `story/112-gc-says-how-to-free-a-build-worktree-it`, PR #113)\n\n| Checkpoint | Attempt | Layer",
+     "id": 6118201441
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:15:43Z",
+     "id": 33020579362
+    },
+    {
+     "kind": "cross-referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:17:33Z",
+     "source": 113,
+     "source_pr": true
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:17:35Z",
+     "id": 33020655279
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:25:30Z",
+     "id": 33020969361
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:25:56Z",
+     "id": 33020987138
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:25:57Z",
+     "label": "status:ready",
+     "id": 33020987780
+    },
+    {
+     "kind": "labeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:25:59Z",
+     "label": "status:merged",
+     "id": 33020988915
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:04Z",
+     "id": 33020991788
+    },
+    {
+     "kind": "unlabeled",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:07Z",
+     "label": "aayudha:leased",
+     "id": 33020993717
+    },
+    {
+     "kind": "unassigned",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:26:08Z",
+     "id": 33020994959
+    }
+   ]
+  },
+  {
+   "number": 113,
+   "title": "feat: gc says how to free a build worktree it keeps",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T05:17:32Z",
+   "labels": [],
+   "events": null,
+   "closed_at": "2026-10-12T05:25:55Z"
+  },
+  {
+   "number": 114,
+   "title": "feat(evolve): eval-first skill evolution from accepted retro Feedback, enforced by CI (WP7.7)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T05:25:18Z",
+   "labels": [],
+   "events": [
+    {
+     "kind": "head_ref_force_pushed",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:47:04Z",
+     "id": 33021855889
+    },
+    {
+     "kind": "deployed",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:51:31Z",
+     "id": 33022045469
+    },
+    {
+     "kind": "commented",
+     "actor": "github-actions[bot]",
+     "at": "2026-10-12T05:53:11Z",
+     "body": "\u003c!-- aayudha:inspect --\u003e\n### inspect: fix\n\nThe eval-first CI gate implements the numbered acceptance criterion, with synthetic rejection evidence and a pull-req",
+     "id": 6118588297
+    },
+    {
+     "kind": "referenced",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T05:56:55Z",
+     "id": 33022278180
+    },
+    {
+     "kind": "deployed",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T06:01:34Z",
+     "id": 33022485879
+    },
+    {
+     "kind": "head_ref_force_pushed",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T06:05:49Z",
+     "id": 33022674909
+    },
+    {
+     "kind": "deployed",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T06:10:22Z",
+     "id": 33022889511
+    },
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T06:12:21Z",
+     "body": "Solo-mode bypass: this PR changes the protected paths `.github/workflows/ci.yml` (the eval-first gate step in the required `build` job, the WP7.7 acceptance), `",
+     "id": 6118804240
+    },
+    {
+     "kind": "merged",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T06:12:25Z",
+     "id": 33022985002
+    },
+    {
+     "kind": "closed",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T06:12:25Z",
+     "id": 33022985146
+    },
+    {
+     "kind": "head_ref_deleted",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T06:12:28Z",
+     "id": 33022987230
+    }
+   ],
+   "closed_at": "2026-10-12T06:12:25Z"
+  },
+  {
+   "number": 115,
+   "title": "feat(brief): limits section, population wording, and no invented controls; tier 2 per group with its own cap",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T05:58:55Z",
+   "labels": [],
+   "events": [
+    {
+     "kind": "commented",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T06:05:07Z",
+     "body": "Solo-mode bypass: this PR touches the protected paths `skills/brief/` (the SKILL.md rules for limits, population wording, UI elements, and inferences; ste-words",
+     "id": 6118720967
+    },
+    {
+     "kind": "merged",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T06:05:10Z",
+     "id": 33022646318
+    },
+    {
+     "kind": "closed",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T06:05:11Z",
+     "id": 33022646433
+    },
+    {
+     "kind": "head_ref_deleted",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T06:05:13Z",
+     "id": 33022648146
+    }
+   ],
+   "closed_at": "2026-10-12T06:05:11Z"
+  },
+  {
+   "number": 116,
+   "title": "chore(evals): record the WP5.3 and WP5.4 tier-2 run (38207978439)",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T05:59:25Z",
+   "labels": [],
+   "events": [
+    {
+     "kind": "merged",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T06:06:05Z",
+     "id": 33022687989
+    },
+    {
+     "kind": "closed",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T06:06:05Z",
+     "id": 33022688080
+    },
+    {
+     "kind": "head_ref_deleted",
+     "actor": "rahulnakmol",
+     "at": "2026-10-12T06:06:07Z",
+     "id": 33022689596
+    }
+   ],
+   "closed_at": "2026-10-12T06:06:05Z"
+  },
+  {
+   "number": 117,
+   "title": "fix(grill): criteria state only what the request asks; scope rules for grill story",
+   "pr": true,
+   "author": "rahulnakmol",
+   "created_at": "2026-10-12T06:11:51Z",
+   "labels": [],
+   "events": []
+  }
+ ],
+ "runs": [
+  {
+   "id": 38175962428,
+   "workflow": ".github/workflows/release.yml",
+   "event": "push",
+   "actor": "rahulnakmol",
+   "head_branch": "v0.0.0-d4test.1",
+   "head_sha": "b5514b879259ff6bcc39f67e0b6e93ac225cf75f",
+   "conclusion": "failure",
+   "created_at": "2026-10-11T21:20:32Z"
+  },
+  {
+   "id": 38210971285,
+   "workflow": ".github/workflows/evals.yml",
+   "event": "workflow_dispatch",
+   "actor": "rahulnakmol",
+   "head_branch": "dev",
+   "head_sha": "2ddd4cbdd62812fdd1b1fa22863f233dedaca1b6",
+   "conclusion": "",
+   "created_at": "2026-10-12T06:06:50Z"
+  }
+ ],
+ "subjects": {},
+ "on_main": {},
+ "licence": {
+  "modules": [
+   {
+    "path": "charm.land/bubbletea/v2",
+    "version": "v2.0.9"
+   },
+   {
+    "path": "filippo.io/age",
+    "version": "v1.3.2"
+   },
+   {
+    "path": "github.com/go-viper/mapstructure/v2",
+    "version": "v2.4.0"
+   },
+   {
+    "path": "github.com/google/go-github/v90",
+    "version": "v90.0.0"
+   },
+   {
+    "path": "github.com/invopop/jsonschema",
+    "version": "v0.14.0"
+   },
+   {
+    "path": "github.com/knadh/koanf/parsers/json",
+    "version": "v1.0.1"
+   },
+   {
+    "path": "github.com/knadh/koanf/parsers/toml/v2",
+    "version": "v2.2.2"
+   },
+   {
+    "path": "github.com/knadh/koanf/providers/confmap",
+    "version": "v1.0.1"
+   },
+   {
+    "path": "github.com/knadh/koanf/v2",
+    "version": "v2.3.8"
+   },
+   {
+    "path": "github.com/modelcontextprotocol/go-sdk",
+    "version": "v1.8.0"
+   },
+   {
+    "path": "github.com/pelletier/go-toml/v2",
+    "version": "v2.4.3"
+   },
+   {
+    "path": "github.com/shurcooL/githubv4",
+    "version": "v0.0.0-20260209031235-2402fdf4a9ed"
+   },
+   {
+    "path": "github.com/spf13/cobra",
+    "version": "v1.10.2"
+   },
+   {
+    "path": "github.com/yuin/goldmark",
+    "version": "v1.8.6"
+   },
+   {
+    "path": "github.com/zalando/go-keyring",
+    "version": "v0.2.8"
+   },
+   {
+    "path": "go.opentelemetry.io/otel",
+    "version": "v1.46.0"
+   },
+   {
+    "path": "go.opentelemetry.io/otel/sdk",
+    "version": "v1.46.0"
+   },
+   {
+    "path": "go.opentelemetry.io/otel/trace",
+    "version": "v1.46.0"
+   },
+   {
+    "path": "go.yaml.in/yaml/v4",
+    "version": "v4.0.0-rc.2"
+   },
+   {
+    "path": "golang.org/x/crypto",
+    "version": "v0.55.0"
+   },
+   {
+    "path": "modernc.org/sqlite",
+    "version": "v1.59.0"
+   },
+   {
+    "path": "filippo.io/hpke",
+    "version": "v0.4.0"
+   },
+   {
+    "path": "github.com/bahlo/generic-list-go",
+    "version": "v0.2.0"
+   },
+   {
+    "path": "github.com/buger/jsonparser",
+    "version": "v1.1.2"
+   },
+   {
+    "path": "github.com/cespare/xxhash/v2",
+    "version": "v2.3.0"
+   },
+   {
+    "path": "github.com/charmbracelet/colorprofile",
+    "version": "v0.4.3"
+   },
+   {
+    "path": "github.com/charmbracelet/ultraviolet",
+    "version": "v0.0.0-20260703014108-f5a850f9c2b7"
+   },
+   {
+    "path": "github.com/charmbracelet/x/ansi",
+    "version": "v0.11.7"
+   },
+   {
+    "path": "github.com/charmbracelet/x/term",
+    "version": "v0.2.2"
+   },
+   {
+    "path": "github.com/charmbracelet/x/termios",
+    "version": "v0.1.1"
+   },
+   {
+    "path": "github.com/charmbracelet/x/windows",
+    "version": "v0.2.2"
+   },
+   {
+    "path": "github.com/clipperhouse/displaywidth",
+    "version": "v0.11.0"
+   },
+   {
+    "path": "github.com/clipperhouse/uax29/v2",
+    "version": "v2.7.0"
+   },
+   {
+    "path": "github.com/danieljoos/wincred",
+    "version": "v1.2.3"
+   },
+   {
+    "path": "github.com/dustin/go-humanize",
+    "version": "v1.0.1"
+   },
+   {
+    "path": "github.com/go-logr/logr",
+    "version": "v1.4.4"
+   },
+   {
+    "path": "github.com/go-logr/stdr",
+    "version": "v1.2.2"
+   },
+   {
+    "path": "github.com/godbus/dbus/v5",
+    "version": "v5.2.2"
+   },
+   {
+    "path": "github.com/google/go-querystring",
+    "version": "v1.2.0"
+   },
+   {
+    "path": "github.com/google/jsonschema-go",
+    "version": "v0.4.3"
+   },
+   {
+    "path": "github.com/google/uuid",
+    "version": "v1.6.0"
+   },
+   {
+    "path": "github.com/inconshreveable/mousetrap",
+    "version": "v1.1.0"
+   },
+   {
+    "path": "github.com/knadh/koanf/maps",
+    "version": "v0.1.2"
+   },
+   {
+    "path": "github.com/lucasb-eyer/go-colorful",
+    "version": "v1.4.0"
+   },
+   {
+    "path": "github.com/mattn/go-isatty",
+    "version": "v0.0.24"
+   },
+   {
+    "path": "github.com/mattn/go-runewidth",
+    "version": "v0.0.23"
+   },
+   {
+    "path": "github.com/mitchellh/copystructure",
+    "version": "v1.2.0"
+   },
+   {
+    "path": "github.com/mitchellh/reflectwalk",
+    "version": "v1.0.2"
+   },
+   {
+    "path": "github.com/muesli/cancelreader",
+    "version": "v0.2.2"
+   },
+   {
+    "path": "github.com/ncruces/go-strftime",
+    "version": "v1.0.0"
+   },
+   {
+    "path": "github.com/pb33f/ordered-map/v2",
+    "version": "v2.3.1"
+   },
+   {
+    "path": "github.com/remyoudompheng/bigfft",
+    "version": "v0.0.0-20230129092748-24d4a6f8daec"
+   },
+   {
+    "path": "github.com/rivo/uniseg",
+    "version": "v0.4.7"
+   },
+   {
+    "path": "github.com/segmentio/asm",
+    "version": "v1.1.3"
+   },
+   {
+    "path": "github.com/segmentio/encoding",
+    "version": "v0.5.4"
+   },
+   {
+    "path": "github.com/shurcooL/graphql",
+    "version": "v0.0.0-20240915155400-7ee5256398cf"
+   },
+   {
+    "path": "github.com/spf13/pflag",
+    "version": "v1.0.9"
+   },
+   {
+    "path": "github.com/xo/terminfo",
+    "version": "v0.0.0-20220910002029-abceb7e1c41e"
+   },
+   {
+    "path": "github.com/yosida95/uritemplate/v3",
+    "version": "v3.0.2"
+   },
+   {
+    "path": "go.opentelemetry.io/auto/sdk",
+    "version": "v1.2.1"
+   },
+   {
+    "path": "go.opentelemetry.io/otel/metric",
+    "version": "v1.46.0"
+   },
+   {
+    "path": "golang.org/x/oauth2",
+    "version": "v0.36.0"
+   },
+   {
+    "path": "golang.org/x/sync",
+    "version": "v0.22.0"
+   },
+   {
+    "path": "golang.org/x/sys",
+    "version": "v0.47.0"
+   },
+   {
+    "path": "golang.org/x/time",
+    "version": "v0.15.0"
+   },
+   {
+    "path": "modernc.org/libc",
+    "version": "v1.75.7"
+   },
+   {
+    "path": "modernc.org/mathutil",
+    "version": "v1.7.1"
+   },
+   {
+    "path": "modernc.org/memory",
+    "version": "v1.12.1"
+   }
+  ],
+  "notices": "# Third-party notices\n\n`aayudha` is licensed under BSD-3-Clause ([LICENSE](LICENSE)). This file records the licence of every\nthird-party component the project includes, depends on, or shells out to.\n\n## Included today\n\nThe Go standard library is distributed with the Go toolchain under the BSD-3-Clause licence of The Go Authors\n(\u003chttps://go.dev/LICENSE\u003e). These Go modules are linked into the binary. Direct dependencies are the ones the\nplan lists in §2; the rest are pulled in by them.\n\n| Component | Version | Licence | Use | Source |\n|---|---|---|---|---|\n| `github.com/spf13/cobra` | v1.10.2 | Apache-2.0 | CLI frame (WP1.1), direct | \u003chttps://github.com/spf13/cobra\u003e |\n| `github.com/spf13/pflag` | v1.0.9 | BSD-3-Clause | Flag parsing, via cobra | \u003chttps://github.com/spf13/pflag\u003e |\n| `github.com/inconshreveable/mousetrap` | v1.1.0 | Apache-2.0 | Windows console detection, via cobra | \u003chttps://github.com/inconshreveable/mousetrap\u003e |\n| `github.com/knadh/koanf/v2` | v2.3.8 | MIT | Config layering (WP1.2), direct | \u003chttps://github.com/knadh/koanf\u003e |\n| `github.com/knadh/koanf/maps` | v0.1.2 | MIT | Via koanf | \u003chttps://github.com/knadh/koanf\u003e |\n| `github.com/knadh/koanf/parsers/toml/v2` | v2.2.2 | MIT | TOML config files (WP1.2), direct | \u003chttps://github.com/knadh/koanf\u003e |\n| `github.com/knadh/koanf/parsers/json` | v1.0.1 | MIT | JSON config files (WP1.2), direct | \u003chttps://github.com/knadh/koanf\u003e |\n| `github.com/knadh/koanf/providers/confmap` | v1.0.1 | MIT | Env and `--set` layers (WP1.2), direct | \u003chttps://github.com/knadh/koanf\u003e |\n| `github.com/go-viper/mapstructure/v2` | v2.4.0 | MIT | Strict decoding into config structs (with koanf) | \u003chttps://github.com/go-viper/mapstructure\u003e |\n| `github.com/mitchellh/copystructure` | v1.2.0 | MIT | Via koanf | \u003chttps://github.com/mitchellh/copystructure\u003e |\n| `github.com/mitchellh/reflectwalk` | v1.0.2 | MIT | Via copystructure | \u003chttps://github.com/mitchellh/reflectwalk\u003e |\n| `github.com/pelletier/go-toml/v2` | v2.4.3 | MIT | TOML parsing (with koanf) and `config show` output | \u003chttps://github.com/pelletier/go-toml\u003e |\n| `github.com/invopop/jsonschema` | v0.14.0 | MIT | Config JSON Schema from structs (WP1.2), direct | \u003chttps://github.com/invopop/jsonschema\u003e |\n| `github.com/pb33f/ordered-map/v2` | v2.3.1 | Apache-2.0 | Via jsonschema | \u003chttps://github.com/pb33f/ordered-map\u003e |\n| `github.com/bahlo/generic-list-go` | v0.2.0 | BSD-3-Clause | Via ordered-map | \u003chttps://github.com/bahlo/generic-list-go\u003e |\n| `github.com/buger/jsonparser` | v1.1.2 | MIT | Via ordered-map | \u003chttps://github.com/buger/jsonparser\u003e |\n| `go.yaml.in/yaml/v4` | v4.0.0-rc.2 | MIT and Apache-2.0 | Via ordered-map; tests also parse the generated issue forms with it (WP2.2) | \u003chttps://github.com/yaml/go-yaml\u003e |\n| `github.com/zalando/go-keyring` | v0.2.8 | MIT | OS keychain secrets backend (WP1.3), direct | \u003chttps://github.com/zalando/go-keyring\u003e |\n| `github.com/godbus/dbus/v5` | v5.2.2 | BSD-2-Clause | Secret Service on Linux, via go-keyring | \u003chttps://github.com/godbus/dbus\u003e |\n| `github.com/danieljoos/wincred` | v1.2.3 | MIT | Windows Credential Manager, via go-keyring | \u003chttps://github.com/danieljoos/wincred\u003e |\n| `filippo.io/age` | v1.3.2 | BSD-3-Clause | Encrypted secrets file (WP1.3) and token broker hand-over (WP1.4), direct | \u003chttps://github.com/FiloSottile/age\u003e |\n| `filippo.io/hpke` | v0.4.0 | BSD-3-Clause | Via age | \u003chttps://github.com/FiloSottile/hpke\u003e |\n| `golang.org/x/crypto` | v0.55.0 | BSD-3-Clause | Via age | \u003chttps://go.googlesource.com/crypto\u003e |\n| `golang.org/x/sys` | v0.47.0 | BSD-3-Clause | Via go-keyring and age | \u003chttps://go.googlesource.com/sys\u003e |\n| `go.opentelemetry.io/otel` | v1.46.0 | Apache-2.0 | Traces of verb runs (WP1.8), direct; with `otel/sdk` and `otel/trace` | \u003chttps://github.com/open-telemetry/opentelemetry-go\u003e |\n| `go.opentelemetry.io/otel/sdk` | v1.46.0 | Apache-2.0 | Tracer provider (WP1.8), direct | \u003chttps://github.com/open-telemetry/opentelemetry-go\u003e |\n| `go.opentelemetry.io/otel/trace` | v1.46.0 | Apache-2.0 | Trace API (WP1.8), direct | \u003chttps://github.com/open-telemetry/opentelemetry-go\u003e |\n| `go.opentelemetry.io/otel/metric` | v1.46.0 | Apache-2.0 | Via otel | \u003chttps://github.com/open-telemetry/opentelemetry-go\u003e |\n| `go.opentelemetry.io/auto/sdk` | v1.2.1 | Apache-2.0 | Via otel | \u003chttps://github.com/open-telemetry/opentelemetry-go-instrumentation\u003e |\n| `github.com/go-logr/logr` | v1.4.4 | Apache-2.0 | Via otel | \u003chttps://github.com/go-logr/logr\u003e |\n| `github.com/go-logr/stdr` | v1.2.2 | Apache-2.0 | Via otel | \u003chttps://github.com/go-logr/stdr\u003e |\n| `github.com/cespare/xxhash/v2` | v2.3.0 | MIT | Via otel/sdk | \u003chttps://github.com/cespare/xxhash\u003e |\n| `github.com/google/go-github/v90` | v90.0.0 | BSD-3-Clause | GitHub REST client (WP2.3), direct | \u003chttps://github.com/google/go-github\u003e |\n| `github.com/google/go-querystring` | v1.2.0 | BSD-3-Clause | Via go-github | \u003chttps://github.com/google/go-querystring\u003e |\n| `github.com/shurcooL/githubv4` | v0.0.0-20260209031235-2402fdf4a9ed | MIT | GitHub GraphQL client for Projects v2 (WP2.3), direct | \u003chttps://github.com/shurcooL/githubv4\u003e |\n| `github.com/shurcooL/graphql` | v0.0.0-20240915155400-7ee5256398cf | MIT | Via githubv4 | \u003chttps://github.com/shurcooL/graphql\u003e |\n| `github.com/google/uuid` | v1.6.0 | BSD-3-Clause | Via otel/sdk (resource IDs) | \u003chttps://github.com/google/uuid\u003e |\n| `github.com/modelcontextprotocol/go-sdk` | v1.8.0 | Apache-2.0 (new code) and MIT | MCP stdio server (WP3.3) and the streamable-HTTP MCP clients for Mobbin and the Figma opt-in (WP6.4), direct | \u003chttps://github.com/modelcontextprotocol/go-sdk\u003e |\n| `github.com/google/jsonschema-go` | v0.4.3 | MIT | JSON Schema types, via go-sdk | \u003chttps://github.com/google/jsonschema-go\u003e |\n| `github.com/segmentio/encoding` | v0.5.4 | MIT | JSON codec, via go-sdk | \u003chttps://github.com/segmentio/encoding\u003e |\n| `github.com/segmentio/asm` | v1.1.3 | MIT | Via segmentio/encoding | \u003chttps://github.com/segmentio/asm\u003e |\n| `github.com/yosida95/uritemplate/v3` | v3.0.2 | BSD-3-Clause | Resource URI templates, via go-sdk | \u003chttps://github.com/yosida95/uritemplate\u003e |\n| `golang.org/x/oauth2` | v0.36.0 | BSD-3-Clause | Via go-sdk (its OAuth handler, which aayudha does not use; V5) and go-github | \u003chttps://go.googlesource.com/oauth2\u003e |\n| `golang.org/x/sync` | v0.22.0 | BSD-3-Clause | Via go-sdk and modernc.org/libc | \u003chttps://go.googlesource.com/sync\u003e |\n| `golang.org/x/time` | v0.15.0 | BSD-3-Clause | Rate limiting, via go-sdk | \u003chttps://go.googlesource.com/time\u003e |\n| `modernc.org/sqlite` | v1.59.0 | BSD-3-Clause (SQLite itself is public domain) | Pure-Go SQLite for `measure` snapshots (WP7.2, R7), direct; v1.60 needs Go 1.26 | \u003chttps://gitlab.com/cznic/sqlite\u003e |\n| `github.com/yuin/goldmark` | v1.8.6 | MIT | Markdown drafts of `brief` parsed and rendered to HTML (WP7.3), direct | \u003chttps://github.com/yuin/goldmark\u003e |\n| `modernc.org/libc` | v1.75.7 | BSD-3-Clause (includes MIT-licensed musl code) | C runtime for the transpiled SQLite, via sqlite | \u003chttps://gitlab.com/cznic/libc\u003e |\n| `modernc.org/mathutil` | v1.7.1 | BSD-3-Clause | Via sqlite and libc | \u003chttps://gitlab.com/cznic/mathutil\u003e |\n| `modernc.org/memory` | v1.12.1 | BSD-3-Clause | Allocator, via libc | \u003chttps://gitlab.com/cznic/memory\u003e |\n| `github.com/dustin/go-humanize` | v1.0.1 | MIT | Via libc | \u003chttps://github.com/dustin/go-humanize\u003e |\n| `github.com/remyoudompheng/bigfft` | v0.0.0-20230129092748-24d4a6f8daec | BSD-3-Clause | Via mathutil | \u003chttps://github.com/remyoudompheng/bigfft\u003e |\n| `charm.land/bubbletea/v2` | v2.0.9 | MIT | `grill` TUI on a terminal (WP5.3), direct; v2.0.10 needs Go 1.26 | \u003chttps://github.com/charmbracelet/bubbletea\u003e |\n| `github.com/charmbracelet/ultraviolet` | v0.0.0-20260703014108-f5a850f9c2b7 | MIT | Terminal input and rendering, via bubbletea | \u003chttps://github.com/charmbracelet/ultraviolet\u003e |\n| `github.com/charmbracelet/colorprofile` | v0.4.3 | MIT | Terminal colour detection, via bubbletea | \u003chttps://github.com/charmbracelet/colorprofile\u003e |\n| `github.com/charmbracelet/x/ansi` | v0.11.7 | MIT | ANSI sequences, via bubbletea | \u003chttps://github.com/charmbracelet/x\u003e |\n| `github.com/charmbracelet/x/term` | v0.2.2 | MIT | Terminal state, via bubbletea | \u003chttps://github.com/charmbracelet/x\u003e |\n| `github.com/charmbracelet/x/termios` | v0.1.1 | MIT | Terminal modes, via bubbletea | \u003chttps://github.com/charmbracelet/x\u003e |\n| `github.com/charmbracelet/x/windows` | v0.2.2 | MIT | Windows console, via bubbletea | \u003chttps://github.com/charmbracelet/x\u003e |\n| `github.com/clipperhouse/displaywidth` | v0.11.0 | MIT | Text width, via ultraviolet | \u003chttps://github.com/clipperhouse/displaywidth\u003e |\n| `github.com/clipperhouse/uax29/v2` | v2.7.0 | MIT | Text segmentation, via displaywidth | \u003chttps://github.com/clipperhouse/uax29\u003e |\n| `github.com/lucasb-eyer/go-colorful` | v1.4.0 | MIT | Colour conversion, via bubbletea | \u003chttps://github.com/lucasb-eyer/go-colorful\u003e |\n| `github.com/mattn/go-runewidth` | v0.0.23 | MIT | Text width, via ultraviolet | \u003chttps://github.com/mattn/go-runewidth\u003e |\n| `github.com/muesli/cancelreader` | v0.2.2 | MIT | Cancellable input, via bubbletea | \u003chttps://github.com/muesli/cancelreader\u003e |\n| `github.com/rivo/uniseg` | v0.4.7 | MIT | Grapheme clusters, via ultraviolet | \u003chttps://github.com/rivo/uniseg\u003e |\n| `github.com/xo/terminfo` | v0.0.0-20220910002029-abceb7e1c41e | MIT | Terminal capabilities, via colorprofile | \u003chttps://github.com/xo/terminfo\u003e |\n| `github.com/mattn/go-isatty` | v0.0.24 | MIT | Terminal detection, via libc (found missing here by `aayu audit`'s licence scan, WP7.6) | \u003chttps://github.com/mattn/go-isatty\u003e |\n| `github.com/ncruces/go-strftime` | v1.0.0 | MIT | Time formatting, via libc (found missing here by `aayu audit`'s licence scan, WP7.6) | \u003chttps://github.com/ncruces/go-strftime\u003e |\n\n### Shelled out by `self-update` (not bundled)\n\n| Component | Use | Licence |\n|---|---|---|\n| cosign | Verifies the keyless signature bundle over `checksums.txt` (WP1.1, Appendix B D-1.1a) | Apache-2.0 |\n| GitHub CLI (`gh`) | `gh attestation verify` checks the SLSA build provenance (WP1.1) | MIT |\n\n### Shelled out by `measure` when asked (not bundled)\n\n| Component | Use | Licence |\n|---|---|---|\n| [DuckDB](https://github.com/duckdb/duckdb) CLI (`duckdb`) | Optional query engine over the SQLite snapshot (`measure --engine duckdb`, WP7.2, R7); used only when found on `PATH` | MIT |\n\n### Run by `install.sh` (not bundled)\n\n| Component | Version | Licence | Use |\n|---|---|---|---|\n| [cosign](https://github.com/sigstore/cosign) | v3.1.3 | Apache-2.0 | Verifies the release signature. Used from `PATH`; if missing, `install.sh` downloads this pinned version and checks its SHA-256 first. |\n\n### CI and release tooling (not distributed)\n\nThese run only in this repository's GitHub Actions workflows. Versions are pinned in the workflows.\n\n| Component | Licence | Use |\n|---|---|---|\n| [GoReleaser](https://github.com/goreleaser/goreleaser) | MIT | Builds, archives, and checksums releases and snapshots |\n| [cosign](https://github.com/sigstore/cosign) | Apache-2.0 | Keyless signing of `checksums.txt` |\n| [Syft](https://github.com/anchore/syft) | Apache-2.0 | SBOM per archive |\n| [actions/attest-build-provenance](https://github.com/actions/attest-build-provenance) | MIT | SLSA build provenance |\n| [golangci-lint](https://github.com/golangci/golangci-lint) | GPL-3.0 | Go lint (run as a tool, never linked) |\n| [gitleaks](https://github.com/gitleaks/gitleaks) | MIT | Secret scanning |\n| [Semgrep](https://github.com/semgrep/semgrep) | LGPL-2.1 | SAST (run as a tool, never linked) |\n| [OSV-Scanner](https://github.com/google/osv-scanner) | Apache-2.0 | Dependency vulnerabilities |\n| [go-licenses](https://github.com/google/go-licenses) | Apache-2.0 | Go licence scan |\n| [pnpm](https://github.com/pnpm/pnpm) | MIT | Installs the Node workspace and runs its licence scan (`pnpm licenses list`) |\n| [markdownlint-cli2](https://github.com/DavidAnson/markdownlint-cli2) | MIT | Markdown lint |\n| [lychee](https://github.com/lycheeverse/lychee) | Apache-2.0 OR MIT | Link check |\n\n### Design system (`packages/design-system/`, WP6.1–6.3)\n\nThe package is private (not published) and ships as source; versions are pinned in `pnpm-lock.yaml`.\n`pnpm licenses list --prod` in `packages/design-system/` reports only MIT, Apache-2.0, and 0BSD for its runtime\ndependency tree (80 MIT packages, mostly Radix UI and Floating UI; `class-variance-authority` Apache-2.0;\n`tslib` 0BSD).\n\n| Component | Version | Licence | How it is used | Source |\n|---|---|---|---|---|\n| GSAP | peer `^3.13.0` (3.15.0 for local development) | GSAP Standard \"No Charge\" License (not OSI) | **peerDependency only, never vendored or bundled**: the consuming app installs it. Used by `@aayudha/design-system/motion`. The licence prohibits using GSAP in visual, no-code animation builders that compete with Webflow, so the Storybook motion controls only preview existing presets and tokens and are documented as not a visual builder. `test/package-policy.test.ts` fails if GSAP becomes a dependency or its source appears in the package (J3-19) | \u003chttps://gsap.com/standard-license\u003e |\n| Phosphor Icons (`@phosphor-icons/react`) | 2.1.10 | MIT | Dependency. The icon set swapped into the shadcn/ui components in place of Lucide | \u003chttps://github.com/phosphor-icons/react\u003e |\n| shadcn/ui | component source as of CLI 4.21.4 | MIT | Component source copied into `src/components/ui/` and modified (Phosphor icons, density tokens, status badge variants). Not a package dependency | \u003chttps://github.com/shadcn-ui/ui\u003e |\n| OpenUI5 / SAP Horizon | n/a | OpenUI5 is Apache-2.0 | **Inspiration only** for semantic token naming (brand, shell, field, list, positive/negative/critical/informative) and the Fiori-shaped floorplans. Names, structure, and values are Aayudha's own; no SAP theme files, assets, icons, or fonts are included | \u003chttps://github.com/SAP/openui5\u003e |\n| Radix UI (`radix-ui`) | 1.7.0 | MIT | Dependency. Accessible primitives under the shadcn/ui components | \u003chttps://github.com/radix-ui/primitives\u003e |\n| `class-variance-authority` | 0.7.1 | Apache-2.0 | Dependency. Component variants | \u003chttps://github.com/joe-bell/cva\u003e |\n| `clsx` | 2.1.1 | MIT | Dependency. Class name joining | \u003chttps://github.com/lukeed/clsx\u003e |\n| `tailwind-merge` | 3.7.0 | MIT | Dependency. Class conflict resolution | \u003chttps://github.com/dcastil/tailwind-merge\u003e |\n| `tw-animate-css` | 1.4.0 | MIT | Dependency. CSS enter/exit animations used by the shadcn/ui dialog and select | \u003chttps://github.com/Wombosvideo/tw-animate-css\u003e |\n| Tailwind CSS | peer `^4.0.0` (4.3.3 for local development) | MIT | peerDependency: the consuming app compiles `styles.css` | \u003chttps://github.com/tailwindlabs/tailwindcss\u003e |\n| React, React DOM | peer `^19.0.0` | MIT | peerDependency | \u003chttps://github.com/facebook/react\u003e |\n\nDevelopment only (never shipped; the static Storybook build is a CI check, not a release): Storybook and its\naddons (MIT), Vite (MIT), Vitest (MIT), Playwright (Apache-2.0), TypeScript (Apache-2.0), and axe-core\n(MPL-2.0, through `@storybook/addon-a11y`). The development tree also contains BSD-2-Clause, BSD-3-Clause,\nISC, BlueOak-1.0.0, and CC-BY-4.0 (browser-support data) packages.\n\n### Shelled out by `aayu verify`, the design verbs, and `aayu review` (not bundled)\n\nThe floors (docs/BUILD-PLAN.md WP4.3–WP4.6), the prototype capture (WP6.5), and review (WP6.6) run these as separate\nprograms in a scrubbed child process. Users install them; CI pins them (SHA-256 for binaries, a digest for the ZAP\nimage, `pnpm-lock.yaml` integrity hashes for the `@aayudha/floors` development package that holds Playwright,\naxe-core, Lighthouse, and impeccable for this repository's own tests).\n\n| Component | Version pinned in CI | Licence | Use | Source |\n|---|---|---|---|---|\n| semgrep | 1.180.0 | LGPL-2.1 | `sast` floor | \u003chttps://github.com/semgrep/semgrep\u003e |\n| gitleaks | 8.30.1 | MIT | `secrets` floor | \u003chttps://github.com/gitleaks/gitleaks\u003e |\n| osv-scanner | 2.6.0 | Apache-2.0 | `deps` floor | \u003chttps://github.com/google/osv-scanner\u003e |\n| Playwright | 1.64.0 | Apache-2.0 | `a11y` floors: drives Chromium through each Completion Goal state, and through the rendered `brief` page (WP7.3) | \u003chttps://github.com/microsoft/playwright\u003e |\n| axe-core | 4.14.0 | MPL-2.0 | `a11y` floor and the `brief` page check: injected into the page under test, unmodified | \u003chttps://github.com/dequelabs/axe-core\u003e |\n| Lighthouse | 13.5.0 | Apache-2.0 | `perf` floor | \u003chttps://github.com/GoogleChrome/lighthouse\u003e |\n| OWASP ZAP (`zaproxy/zap-stable` image) | 2.17.0, by digest | Apache-2.0 | `dast` floor | \u003chttps://github.com/zaproxy/zaproxy\u003e |\n| k6 | 2.3.0 | AGPL-3.0 | `api` floor; run as a program, never linked or distributed | \u003chttps://github.com/grafana/k6\u003e |\n| Guidepup (`@guidepup/guidepup`, `@guidepup/playwright`, `@guidepup/setup`) with `@playwright/test` | 0.35.0, 0.19.1, 0.29.2; 1.64.0 | MIT; Apache-2.0 | `screen-reader` floor: drives VoiceOver (macOS) and NVDA (Windows; NVDA itself is GPL-2.0, installed by `guidepup install` and run as a program) | \u003chttps://github.com/guidepup/guidepup\u003e |\n| Tesseract | user-installed, optional | Apache-2.0 | OCR in the redaction pass when present | \u003chttps://github.com/tesseract-ocr/tesseract\u003e |\n| impeccable (with its platform engine `@impeccable/cli-\u003cos\u003e-\u003carch\u003e`) | 4.5.2 (engine 0.1.14) | Apache-2.0 | `review` lane B (WP6.6): `detect --json` against each state's URL, shelled out | \u003chttps://github.com/pbakaus/impeccable\u003e |\n\n## Policy\n\n- A PR that adds a dependency adds its entry here in the same PR: name, version or range, licence, how it is\n  used (linked, peer dependency, or shelled out), and the source URL.\n- CI licence scanning gates new dependencies: `go-licenses` for the Go module and `pnpm licenses list --prod`\n  for the pnpm workspace (the `security` job; allowed: 0BSD, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, MIT;\n  0BSD per docs/BUILD-PLAN.md Appendix B D-6.1a).\n  `aayu audit` repeats the scan (n/a until WP7.6).\n- Licences must be compatible with redistributing the binary under BSD-3-Clause. Anything else needs a\n  recorded decision before it is added.\n- Components that are shelled out to (run as a separate program) are not bundled; they are listed so users\n  know what they are running.\n\n## Planned, not yet included\n\nLicences in this section are what the plan expects. Each is confirmed from the upstream licence file and the\nCI scan when the component is actually added.\n\n### Go modules (docs/BUILD-PLAN.md §2)\n\n| Component | Use | Expected licence |\n|---|---|---|\n| `github.com/google/go-github` | GitHub REST client (WP2.3) | BSD-3-Clause |\n| `github.com/shurcooL/githubv4` | GitHub GraphQL, Projects v2 only (WP2.3) | MIT |\n| `github.com/modelcontextprotocol/go-sdk` | MCP server (WP3.3) | To be confirmed |\n| `modernc.org/sqlite` | `measure` snapshots, pure Go (WP7.2) | BSD-3-Clause |\n| `github.com/go-git/go-git` | Read-only git access | Apache-2.0 |\n\nOther optional tools that `doctor` reports (git-lfs, gh, node, DuckDB) are installed by the user and\nrun as separate programs.\nEach is added to this file with its licence when the verb that calls it ships.\n",
+  "security": null
+ },
+ "corrections": null,
+ "never_merges": null,
+ "agent_prs": null,
+ "streaks": [
+  {
+   "layer": "L01",
+   "streak": 0,
+   "agent_merges": 0,
+   "never": false,
+   "autonomous": false
+  },
+  {
+   "layer": "L02",
+   "streak": 0,
+   "agent_merges": 0,
+   "never": false,
+   "autonomous": false
+  },
+  {
+   "layer": "L03",
+   "streak": 0,
+   "agent_merges": 0,
+   "never": false,
+   "autonomous": false
+  },
+  {
+   "layer": "L04",
+   "streak": 0,
+   "agent_merges": 0,
+   "never": true,
+   "autonomous": false
+  },
+  {
+   "layer": "L05",
+   "streak": 0,
+   "agent_merges": 0,
+   "never": false,
+   "autonomous": false
+  },
+  {
+   "layer": "L06",
+   "streak": 0,
+   "agent_merges": 0,
+   "never": false,
+   "autonomous": false
+  },
+  {
+   "layer": "L07",
+   "streak": 0,
+   "agent_merges": 0,
+   "never": true,
+   "autonomous": false
+  },
+  {
+   "layer": "L08",
+   "streak": 0,
+   "agent_merges": 0,
+   "never": false,
+   "autonomous": false
+  },
+  {
+   "layer": "L09",
+   "streak": 0,
+   "agent_merges": 0,
+   "never": true,
+   "autonomous": false
+  }
+ ]
+}
