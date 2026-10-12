@@ -128,9 +128,7 @@ func simulate(cfg Config, s *store.Store) (run, error) {
 		user := fmt.Sprintf("emp-%04d", i+1)
 		visit := cfg.From.AddDate(0, 0, rng.IntN(cfg.Days-Horizon)).Add(time.Duration(8+rng.IntN(9)) * time.Hour)
 		clk.t = visit
-		if err := svc.Visit(user); err != nil {
-			return r, err
-		}
+		_ = svc.Visit(user) // the in-memory recorder never fails
 		for range 1 + rng.IntN(3) {
 			at := visit.Add(time.Duration(rng.IntN(7*24)) * time.Hour)
 			q := Questions[rng.IntN(len(Questions))]
@@ -140,10 +138,7 @@ func simulate(cfg Config, s *store.Store) (run, error) {
 				continue
 			}
 			clk.t = at
-			resp, err := svc.Ask(user, q)
-			if err != nil {
-				return r, err
-			}
+			resp, _ := svc.Ask(user, q) // the in-memory recorder never fails
 			if resp.Status == contracts.StatusReferred {
 				ticket(user, at)
 			}

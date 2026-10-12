@@ -37,12 +37,9 @@ func (a *AppInsights) Record(e ask.Event) error {
 	if e.User == "" {
 		return nil
 	}
-	b, err := json.Marshal(Line{TimeGenerated: e.Time.UTC().Format(time.RFC3339), Name: e.Name, UserAuthenticatedId: e.User})
-	if err != nil {
-		return err
-	}
+	b, _ := json.Marshal(Line{TimeGenerated: e.Time.UTC().Format(time.RFC3339), Name: e.Name, UserAuthenticatedId: e.User}) // three strings always marshal
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	_, err = a.w.Write(append(b, '\n'))
+	_, err := a.w.Write(append(b, '\n'))
 	return err
 }

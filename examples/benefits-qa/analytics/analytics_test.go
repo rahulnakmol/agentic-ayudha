@@ -3,6 +3,7 @@ package analytics
 import (
 	"bytes"
 	"crypto/sha256"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -130,6 +131,21 @@ func TestSimulateUsesWorkflow(t *testing.T) {
 	}
 	if _, err := Simulate(Config{Channel: ChannelHRTicket, Days: Horizon, Users: 1}, s, &bytes.Buffer{}); err == nil {
 		t.Error("a window no longer than the horizon accepted")
+	}
+}
+
+type failingWriter struct{}
+
+func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("disk full") }
+
+// A write error reaches the caller, so a truncated export is never reported as written.
+func TestSimulateWriteError(t *testing.T) {
+	s, _ := store.Load()
+	if _, err := Simulate(Config{Channel: ChannelHRTicket, Seed: 1, From: day("2026-08-10"), Days: 28, Users: 2}, s, failingWriter{}); err == nil || err.Error() != "disk full" {
+		t.Errorf("write error: %v", err)
+	}
+	if err := NewAppInsights(failingWriter{}).Record(ask.Event{Name: ask.EventVisit, User: "emp-1"}); err == nil {
+		t.Error("recorder write error lost")
 	}
 }
 
