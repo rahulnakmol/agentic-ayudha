@@ -111,7 +111,11 @@
       "properties": {
         "media": {
           "type": "string",
-          "description": "Private bucket for proof media; required on public repos (V3)."
+          "description": "Private bucket for proof media; required on public repos (V3): s3://bucket[/prefix][?region=..\u0026endpoint=..] or r2://\u003caccount\u003e/bucket[/prefix]."
+        },
+        "media_secret": {
+          "type": "string",
+          "description": "Name of the secret holding the bucket's ACCESS_KEY_ID:SECRET_ACCESS_KEY; empty means proof-media."
         },
         "retention_days": {
           "type": "integer",

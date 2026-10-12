@@ -79,7 +79,7 @@ var Checks = []Check{
 	{"secrets", checkSecrets},
 	{"skills-copies", checkSkillCopies},
 	{"mcp", checkMCP},
-	{"lfs-quota", notYet("LFS quota on the ledger branch", "WP4.2")},
+	{"lfs-quota", checkLFSQuota},
 	{"ledger-media", checkLedgerMedia},
 	{"issue-types", checkIssueTypes},
 	{"integrations", checkIntegrations},

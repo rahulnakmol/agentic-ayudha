@@ -20,6 +20,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
+	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -60,7 +61,7 @@ type Init struct {
 }
 
 // Media extensions tracked by LFS on a private repository's ledger (V3).
-var mediaExts = []string{"png", "jpg", "jpeg", "gif", "webp", "mp4", "webm", "mov", "wav", "mp3", "pdf"}
+var mediaExts = proof.MediaExts
 
 // LedgerRuleset is the name of the ruleset init creates when no existing
 // ruleset already protects the ledger branch.
@@ -482,7 +483,7 @@ func (in *Init) config(context.Context) error {
 	} else if err := in.writeFile("config", ConfigPath, []byte(b.String())); err != nil {
 		return err
 	}
-	return in.writeFile("config", ".aayudha/.gitignore", []byte("# Local aayudha runtime state (written by aayu init); never committed.\ntelemetry/\nstate/\nledger-outbox/\nconfig.local.toml\n"))
+	return in.writeFile("config", ".aayudha/.gitignore", []byte("# Local aayudha runtime state (written by aayu init); never committed.\ntelemetry/\nstate/\nledger-outbox/\nproof/\nconfig.local.toml\n"))
 }
 
 // AgentsSectionID is the AGENTS.md section init owns.

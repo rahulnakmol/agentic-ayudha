@@ -269,3 +269,45 @@ func (r *Ready) Guard(ctx context.Context, n int) (Result, error) {
 	_, err = r.GH.UpsertComment(ctx, r.Repo, n, GuardMarker, msg, actions.Action{Kind: "github.comment.ready-guard"})
 	return res, err
 }
+
+// LedgerSnapshot is a Ready snapshot as written to the ledger (specs/<n>/ready.md):
+// what `proof verify`, the merge gate, and the screen-reader floor compare
+// against, rather than anything an agent says at run time.
+type LedgerSnapshot struct {
+	BodyHash           string                `json:"body_hash"`
+	CompletionGoalHash string                `json:"completion_goal_hash"`
+	Criteria           []workitems.Criterion `json:"criteria"`
+}
+
+var (
+	snapshotCGHash = regexp.MustCompile("\\| Completion Goal hash \\| `([0-9a-f]{64})` \\|")
+	snapshotBody   = regexp.MustCompile("(?s)\n## Body at Ready\n\n````markdown\n(.*)\n````\n?$")
+)
+
+// ParseSnapshot reads a ledger Ready snapshot. The criteria come from the
+// Completion Goal of the body at Ready.
+func ParseSnapshot(file string) (LedgerSnapshot, error) {
+	var s LedgerSnapshot
+	m := snapshotHash.FindStringSubmatch(file)
+	if m == nil {
+		return s, fmt.Errorf("not a Ready snapshot: no body hash")
+	}
+	s.BodyHash = m[1]
+	if m := snapshotCGHash.FindStringSubmatch(file); m != nil {
+		s.CompletionGoalHash = m[1]
+	}
+	if m := snapshotBody.FindStringSubmatch(file); m != nil {
+		_, values := workitems.Sections(m[1])
+		s.Criteria, _ = workitems.ParseCriteria(values["Completion Goal"])
+	}
+	return s, nil
+}
+
+// Numbers returns the snapshot's criterion numbers.
+func (s LedgerSnapshot) Numbers() []int {
+	ns := []int{}
+	for _, c := range s.Criteria {
+		ns = append(ns, c.N)
+	}
+	return ns
+}

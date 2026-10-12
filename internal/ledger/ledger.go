@@ -3,7 +3,8 @@
 // pushes it, fetching, re-applying, and retrying with bounded backoff when
 // another writer got there first. A per-repository file lock serializes writers
 // that share one clone; the fetch-rebase-retry loop serializes writers on
-// different machines. No LFS yet (WP4.2 extends this writer).
+// different machines. WP4.2 adds Git LFS for proof media on private
+// repositories (Writer.LFS), deletions, and reads of the ledger tip.
 package ledger
 
 import (
@@ -40,6 +41,7 @@ type Commit struct {
 	Message string
 	Files   map[string][]byte // path -> full content (replaced)
 	Append  map[string][]byte // path -> bytes appended to the file at the tip (created when absent)
+	Delete  []string          // paths removed at the tip (absent paths are ignored)
 }
 
 // Writer writes commits to the ledger branch of the repository cloned at Dir.
@@ -53,6 +55,9 @@ type Writer struct {
 	Log      *actions.Log
 	Identity string // stamped on the action: bot, human, or human-fallback
 	Tag      string // e.g. identity:human-fallback, recorded as a commit trailer
+	// LFS runs the ledger's .gitattributes LFS filters on commit and pushes the
+	// LFS objects before the commit (proof media on private repositories, V3).
+	LFS bool
 
 	Attempts    int                           // push attempts before ErrContended; default 10
 	Backoff     func(n int) time.Duration     // wait before attempt n+1; default 100ms·2^n with jitter, capped at 5s
@@ -106,6 +111,11 @@ func (w *Writer) Write(ctx context.Context, c Commit) (string, error) {
 			}
 		}
 		for p := range c.Append {
+			if !yield(p) {
+				return
+			}
+		}
+		for _, p := range c.Delete {
 			if !yield(p) {
 				return
 			}
@@ -210,6 +220,11 @@ func (w *Writer) write(ctx context.Context, c Commit) (string, error) {
 		if err != nil {
 			return "", err
 		}
+		if w.LFS {
+			if _, err := w.git(ctx, wt, "lfs", "push", w.Remote, sha); err != nil {
+				return "", fmt.Errorf("ledger LFS push: %w", err)
+			}
+		}
 		_, err = w.git(ctx, wt, "push", "--quiet", "--porcelain", w.Remote, sha+":refs/heads/"+w.Branch)
 		if err == nil {
 			return sha, nil
@@ -235,6 +250,11 @@ func rejected(err error) bool {
 }
 
 func apply(wt string, c Commit) error {
+	for _, p := range c.Delete {
+		if err := os.Remove(filepath.Join(wt, filepath.FromSlash(p))); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
 	for p, b := range c.Files {
 		f := filepath.Join(wt, filepath.FromSlash(p))
 		if err := os.MkdirAll(filepath.Dir(f), 0o755); err != nil {
@@ -268,9 +288,27 @@ func apply(wt string, c Commit) error {
 // travels as an http.extraHeader in GIT_CONFIG_* variables, so it is never on
 // a command line.
 func (w *Writer) git(ctx context.Context, dir string, args ...string) (string, error) {
+	out, err := w.gitIn(ctx, dir, nil, args...)
+	return strings.TrimSpace(string(out)), err
+}
+
+// Exec runs git in dir with the writer's scrubbed environment and token
+// (clones and pushes of scratch repositories in live tests).
+func (w *Writer) Exec(ctx context.Context, dir string, args ...string) error {
+	_, err := w.git(ctx, dir, args...)
+	return err
+}
+
+func (w *Writer) gitIn(ctx context.Context, dir string, stdin []byte, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
-	env := []string{"GIT_TERMINAL_PROMPT=0", "GIT_LFS_SKIP_SMUDGE=1", "LC_ALL=C"}
+	if stdin != nil {
+		cmd.Stdin = bytes.NewReader(stdin)
+	}
+	env := []string{"GIT_TERMINAL_PROMPT=0", "LC_ALL=C"}
+	if len(args) < 2 || args[0] != "lfs" || args[1] != "smudge" {
+		env = append(env, "GIT_LFS_SKIP_SMUDGE=1") // checkouts never download media; Tree.Content does on request
+	}
 	for _, k := range []string{"PATH", "HOME", "SYSTEMROOT", "TMPDIR", "TEMP", "TMP", "XDG_CONFIG_HOME", "SSH_AUTH_SOCK", "GIT_SSH_COMMAND"} {
 		if v, ok := os.LookupEnv(k); ok {
 			env = append(env, k+"="+v)
@@ -293,14 +331,20 @@ func (w *Writer) git(ctx context.Context, dir string, args ...string) (string, e
 		cfg("user.email", "aayudha@users.noreply.github.com")
 	}
 	cfg("commit.gpgsign", "false")
+	if w.LFS {
+		cfg("filter.lfs.clean", "git-lfs clean -- %f")
+		cfg("filter.lfs.smudge", "git-lfs smudge --skip -- %f")
+		cfg("filter.lfs.process", "git-lfs filter-process --skip")
+		cfg("filter.lfs.required", "true")
+	}
 	env = append(env, "GIT_CONFIG_COUNT="+strconv.Itoa(n))
 	cmd.Env = env
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("git %s: %w: %s%s", args[0], err, strings.TrimSpace(stderr.String()), strings.TrimSpace(stdout.String()))
+		return nil, fmt.Errorf("git %s: %w: %s%s", args[0], err, strings.TrimSpace(stderr.String()), strings.TrimSpace(stdout.String()))
 	}
-	return strings.TrimSpace(stdout.String()), nil
+	return stdout.Bytes(), nil
 }
 
 func parseAuthor(a string) (name, email string, ok bool) {
@@ -341,6 +385,67 @@ func lock(path string, timeout time.Duration, sleep func(time.Duration)) (func()
 		}
 		sleep(50 * time.Millisecond)
 	}
+}
+
+// Tree is a read-only view of the ledger tip, fetched once.
+type Tree struct {
+	w   *Writer
+	ref string
+	Tip string
+}
+
+// Read fetches the ledger tip. Close releases the private ref.
+func (w *Writer) Read(ctx context.Context) (*Tree, error) {
+	w.defaults()
+	ref := "refs/aayudha/ledger-read/" + randID()
+	if _, err := w.git(ctx, w.Dir, "fetch", "--no-tags", "--quiet", w.Remote, "+refs/heads/"+w.Branch+":"+ref); err != nil {
+		if strings.Contains(err.Error(), "couldn't find remote ref") {
+			return nil, ErrNoLedger
+		}
+		return nil, err
+	}
+	tip, err := w.git(ctx, w.Dir, "rev-parse", ref)
+	if err != nil {
+		return nil, err
+	}
+	return &Tree{w: w, ref: ref, Tip: tip}, nil
+}
+
+// Close deletes the tree's private ref.
+func (t *Tree) Close() { _, _ = t.w.git(context.Background(), t.w.Dir, "update-ref", "-d", t.ref) }
+
+// File returns the bytes of p at the tip as stored in git (an LFS pointer for LFS files).
+func (t *Tree) File(ctx context.Context, p string) ([]byte, error) {
+	if err := checkPath(p); err != nil {
+		return nil, err
+	}
+	b, err := t.w.gitIn(ctx, t.w.Dir, nil, "cat-file", "blob", t.Tip+":"+p)
+	if err != nil && (strings.Contains(err.Error(), "does not exist") || strings.Contains(err.Error(), "Not a valid object name") || strings.Contains(err.Error(), "exists on disk, but not in")) {
+		return nil, fmt.Errorf("%s: %w", p, os.ErrNotExist)
+	}
+	return b, err
+}
+
+// Content returns the content of p, downloading it from LFS when the blob is an LFS pointer.
+func (t *Tree) Content(ctx context.Context, p string) ([]byte, error) {
+	b, err := t.File(ctx, p)
+	if err != nil || !bytes.HasPrefix(b, []byte("version https://git-lfs.github.com/spec/v1")) {
+		return b, err
+	}
+	w := *t.w
+	w.LFS = false
+	return w.gitIn(ctx, t.w.Dir, b, "lfs", "smudge", "--", p)
+}
+
+// List returns the paths of files under prefix at the tip, sorted.
+func (t *Tree) List(ctx context.Context, prefix string) ([]string, error) {
+	out, err := t.w.git(ctx, t.w.Dir, "ls-tree", "-r", "--name-only", t.Tip, "--", prefix)
+	if err != nil || out == "" {
+		return nil, err
+	}
+	ps := strings.Split(out, "\n")
+	slices.Sort(ps)
+	return ps, nil
 }
 
 // Sink is the ledger segment sink for the actions log (WP1.5): each checkpoint
