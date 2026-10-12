@@ -39,6 +39,9 @@ type Run struct {
 	// which TestEvidence maps to criteria.
 	TestEvents []byte
 
+	CI      bool // running in CI (the screen-reader floor runs there only on its label or nightly)
+	Nightly bool // a scheduled run
+
 	seeded bool // [verify] seed ran in this run
 
 	// Footprint is the set of layers the changed paths fall in.

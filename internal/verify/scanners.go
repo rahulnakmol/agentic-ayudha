@@ -347,7 +347,7 @@ func short(s string) string {
 
 // Standard is every floor, in the order verify runs them.
 func Standard() []Floor {
-	return []Floor{Coverage{}, SAST{}, Secrets{}, Deps{}, A11y{}, Perf{}, DAST{}, API{}}
+	return []Floor{Coverage{}, SAST{}, Secrets{}, Deps{}, A11y{}, Perf{}, ScreenReader{}, DAST{}, API{}}
 }
 
 // ByName selects one floor.

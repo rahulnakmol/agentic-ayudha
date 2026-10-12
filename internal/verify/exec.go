@@ -44,6 +44,9 @@ type Cmd struct {
 	Network bool              // the floor needs the network
 	Env     map[string]string // extra variables for this tool (never credentials)
 	Stdin   []byte
+	// KeepHome keeps the user's HOME and profile directories (the screen
+	// readers read their settings there); credential variables stay scrubbed.
+	KeepHome bool
 }
 
 // Out is what a child process produced.
@@ -60,6 +63,14 @@ func (s *Sandbox) Env(c Cmd, network string) []string {
 		get = os.Getenv
 	}
 	env := []string{"HOME=" + s.Home, "USERPROFILE=" + s.Home, "XDG_CONFIG_HOME=" + s.Home + "/.config", "XDG_CACHE_HOME=" + s.Home + "/.cache", "CI=true", "NO_COLOR=1"}
+	if c.KeepHome {
+		env = []string{"CI=true", "NO_COLOR=1"}
+		for _, k := range []string{"HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA", "PROGRAMFILES", "PROGRAMFILES(X86)", "USERNAME", "USER", "LOGNAME", "COMPUTERNAME", "NUMBER_OF_PROCESSORS", "PROCESSOR_ARCHITECTURE", "OS", "DISPLAY", "TMPDIR"} {
+			if v := get(k); v != "" {
+				env = append(env, k+"="+v)
+			}
+		}
+	}
 	for _, k := range passEnv {
 		if v := get(k); v != "" {
 			env = append(env, k+"="+v)

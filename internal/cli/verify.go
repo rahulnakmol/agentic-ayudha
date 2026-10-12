@@ -150,7 +150,8 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 	msg, _ := gitIn(ctx, root, "log", "-1", "--format=%B", head)
 	res.Story = StoryOf(body, msg, branch)
 
-	r := &verify.Run{Root: root, Base: res.Base, Head: head, Floors: l.Config.Verify.Floors, Verify: l.Config.Verify, Story: res.Story, Labels: labels, Now: e.Now, Env: e.Getenv}
+	r := &verify.Run{Root: root, Base: res.Base, Head: head, Floors: l.Config.Verify.Floors, Verify: l.Config.Verify, Story: res.Story, Labels: labels, Now: e.Now, Env: e.Getenv,
+		CI: e.CI, Nightly: e.Getenv("GITHUB_EVENT_NAME") == "schedule"}
 	if r.Changed, r.Lines, err = verify.Changes(ctx, root, res.Base, head); err != nil {
 		return Wrap(ExitUsage, err)
 	}
