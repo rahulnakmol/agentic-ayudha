@@ -1,0 +1,24 @@
+{
+  "type": "story",
+  "title": "Scheduled proof purge",
+  "fields": {
+    "summary": "As a quality architect, I want purge to run weekly in Actions, so that retention holds without anyone remembering it.",
+    "completion_goal": "1. [api-trace] state: the purge workflow dispatched on a scratch repository with an expired recording; expected: the run tombstones it and succeeds",
+    "measure": "Completion Goal criteria observed",
+    "threshold": "all 1 criteria",
+    "scenario": "Dispatch the workflow on a scratch repository and read the ledger after it.",
+    "environment": "local checkout with synthetic fixtures; never production",
+    "links": "depends-on #43\ndepends-on #44"
+  },
+  "labels": [
+    "type:story",
+    "status:planned",
+    "effort:S",
+    "priority:P2"
+  ],
+  "parent": {
+    "number": 40,
+    "type": "feature"
+  },
+  "number": 45
+}

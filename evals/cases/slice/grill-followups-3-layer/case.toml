@@ -1,0 +1,15 @@
+# Recorded run of the slice skill (WP5.4) on a fixture Feature whose expected paths span L02, L03, L05: the host model
+# sliced it, `aayu slice --draft --create` checked and wrote the stories, and github/ serves them so each recorded
+# `ready --check` sees what the run wrote.
+skill = "slice"
+description = "Slice a Feature over L02, L03, L05 into XS-L stories that each pass Ready."
+input = "input.txt"
+artifacts = ["output/slice.json"]
+schemas = [{ file = "output/slice.json", schema = "evals/schemas/slice.json" }]
+ready = ["output/stories/41.json", "output/stories/42.json", "output/stories/43.json"]
+calls = [
+  ["slice", "40", "--draft", "{case}/output/slice.json", "--create"],
+  ["ready", "41", "--check"],
+  ["ready", "42", "--check"],
+  ["ready", "43", "--check"],
+]

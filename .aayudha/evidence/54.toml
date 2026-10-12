@@ -1,0 +1,15 @@
+# Which tests prove story #54's Completion Goal (WP5.4; verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria). Criterion 3 (tier 2 at the WP3.4 bar) is proven after the merge by the
+# evals.yml run on dev, whose results file is committed as the baseline; no test in a PR run can show it.
+
+[[criterion]]
+id = 1 # the 3-layer and 6-layer (L07 migration) fixture Features: every story <= L and passes ready, tier 1 100 %
+tests = ["internal/evals:TestTier1", "internal/cli:TestSlice"]
+
+[[criterion]]
+id = 2 # one checkpoint per footprint layer, a rollback on every L07 checkpoint
+tests = ["internal/cli:TestPlan", "internal/evals:TestTier1"]
+
+[[criterion]]
+id = 4 # an XL input returns >= 2 stories and is closed "split into"
+tests = ["internal/cli:TestSlice"]

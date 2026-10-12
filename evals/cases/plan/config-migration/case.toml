@@ -1,0 +1,13 @@
+# Recorded run of the plan skill (WP5.4) on story #41, footprint L07: the host model planned it and
+# `aayu plan --draft` checked one checkpoint per layer and the L07 rollback. github/ serves the story and its Feature.
+skill = "plan"
+description = "Plan a story over L07: one checkpoint per layer, with a rollback for L07."
+input = "input.txt"
+artifacts = ["output/plan.json"]
+schemas = [{ file = "output/plan.json", schema = "evals/schemas/plan.json" }]
+calls = [["plan", "41", "--draft", "{case}/output/plan.json"]]
+
+[tier2]
+rubric = "rubric.md"
+draft = "plan"
+issue = 41

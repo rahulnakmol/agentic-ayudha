@@ -1,0 +1,20 @@
+{
+  "number": 43,
+  "title": "Eval cases for grill follow-ups",
+  "state": "open",
+  "body": "### Summary\n\nAs the AI native engineer, I want eval cases with vague answers, so that a skill change that drops follow-ups fails tier 1.\n\n### Completion Goal\n\n1. [api-trace] state: tier 1 over evals/cases/grill with a vague-answer case; expected: the case passes only when the recorded run asked a follow-up\n\n### Measure\n\nCompletion Goal criteria observed\n\n### Threshold\n\nall 1 criteria\n\n### Scenario\n\nRun `go run ./internal/evals/cmd/eval -tier 1` on the grill cases.\n\n### Environment\n\nlocal checkout with synthetic fixtures; never production\n\n### Links\n\ndepends-on #41\n",
+  "labels": [
+    {
+      "name": "type:story"
+    },
+    {
+      "name": "status:planned"
+    },
+    {
+      "name": "effort:S"
+    },
+    {
+      "name": "priority:P2"
+    }
+  ]
+}

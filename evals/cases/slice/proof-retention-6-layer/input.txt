@@ -1,0 +1,15 @@
+Slice Feature #40 (Proof retention per artifact kind).
+
+Summary: Teams keep screenshots and recordings for a shorter time than reports, by setting a retention per artifact kind; purge honours it on a schedule.
+
+Problem: Recordings fill the private media bucket: one retention for every kind keeps 90 days of video that nobody opens after a release, while auditors need reports for a year.
+
+Scope: In scope: per-kind retention in config (migrating the single retention_days), purge by kind, a `proof purge --kind` flag, listing ledger packs through the API, and a scheduled purge workflow. Out of scope: changing the pack format.
+
+Expected paths:
+internal/config/**
+internal/proof/**
+internal/cli/proof.go
+skills/proof/**
+internal/github/**
+.github/workflows/**

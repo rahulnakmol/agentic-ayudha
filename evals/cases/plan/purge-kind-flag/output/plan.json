@@ -1,0 +1,32 @@
+{
+  "story": 43,
+  "checkpoints": [
+    {
+      "layer": "L02",
+      "title": "proof purge --kind flag",
+      "contracts": [
+        "registry input kind on proof (enum screenshot, recording, report)"
+      ],
+      "tests": [
+        "internal/cli:TestProofPurgeKind"
+      ],
+      "instrumentation": [
+        "the purge actions record the kind"
+      ],
+      "criteria": [
+        1
+      ]
+    },
+    {
+      "layer": "L03",
+      "title": "proof skill documents --kind",
+      "tests": [
+        "internal/skills:TestSkillLint"
+      ],
+      "criteria": [
+        1
+      ]
+    }
+  ],
+  "open_questions": []
+}

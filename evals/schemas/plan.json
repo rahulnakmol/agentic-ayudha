@@ -1,0 +1,75 @@
+{
+  "$comment": "A plan draft (WP5.4): one checkpoint per layer of a story's footprint, checked by `aayu plan --draft`.",
+  "type": "object",
+  "required": [
+    "story",
+    "checkpoints"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "story": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "checkpoints": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "layer",
+          "title",
+          "tests"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "layer": {
+            "type": "string",
+            "pattern": "^L0[1-9]$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "contracts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tests": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "instrumentation": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rollback": {
+            "type": "string"
+          },
+          "criteria": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    },
+    "open_questions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

@@ -4,6 +4,19 @@
   "additionalProperties": false,
   "description": "Split a Feature into XS-L stories with observable criteria, dependencies, and a layer footprint; close XL items as split.",
   "properties": {
+    "create": {
+      "description": "Create the validated stories under the Feature (through the actions log) and close an XL story as split; without it slice only validates.",
+      "type": "boolean",
+      "x-aayu-read-only-values": [
+        "false"
+      ],
+      "x-aayu-type": "bool"
+    },
+    "draft": {
+      "description": "JSON file with the stories the host's model sliced (evals/schemas/slice.json); without it slice reports the footprint to slice within.",
+      "type": "string",
+      "x-aayu-type": "path"
+    },
     "feature": {
       "description": "Feature (or XL story) to slice.",
       "pattern": "^(#?[1-9][0-9]*|https://github\\.com/[^/]+/[^/]+/issues/[1-9][0-9]*)$",
