@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/analytics","Test":"TestSimulateUsesWorkflow"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/analytics","Test":"TestSimulateUsesWorkflow","Output":"=== RUN   TestSimulateUsesWorkflow\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/analytics","Test":"TestSimulateUsesWorkflow","Output":"--- PASS: TestSimulateUsesWorkflow (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/analytics","Test":"TestSimulateUsesWorkflow"}
