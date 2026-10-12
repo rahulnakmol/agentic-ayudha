@@ -1,0 +1,14 @@
+# Which tests prove story #133's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # recorded events are Log Analytics JSON lines that aayudha's Application Insights reader accepts with none skipped
+tests = ["examples/benefits-qa/analytics:TestRecorderExportReadable"]
+
+[[criterion]]
+id = 2 # both committed exports are exactly what the seeded simulation gives (SHA-256), also through the simulate command, and stay in their window
+tests = ["examples/benefits-qa/analytics:TestExportsReproducible", "examples/benefits-qa/analytics/simulate:TestRun", "examples/benefits-qa/analytics:TestExportStaysInWindow"]
+
+[[criterion]]
+id = 3 # through the product every question runs the ask workflow (one outcome each); the hr-ticket channel has no workflow event
+tests = ["examples/benefits-qa/analytics:TestSimulateUsesWorkflow"]
