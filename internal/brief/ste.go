@@ -117,9 +117,10 @@ func stems(w string) []string {
 	return out
 }
 
-// Names are the technical names a brief may use without approval: the words
-// of the titles of its subject and work items, and the floor names of its
-// packs (STE allows technical names).
+// Names are the technical names a brief may use without approval (STE
+// allows technical names): the words of the titles of its subject and work
+// items, of the subject's summary, and of the Result (so a metric keeps its
+// own nouns, such as "per reviewer"), and the floor names of its packs.
 func Names(g *Grounding) map[string]bool {
 	out := map[string]bool{}
 	add := func(s string) {
@@ -128,6 +129,10 @@ func Names(g *Grounding) map[string]bool {
 		}
 	}
 	add(g.Subject.Title)
+	add(g.Subject.Fields["summary"])
+	if g.Result != nil {
+		add(g.Result.Text)
+	}
 	for _, it := range g.Items {
 		add(it.Title)
 	}

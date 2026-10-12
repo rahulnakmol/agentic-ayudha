@@ -60,6 +60,12 @@ func TestSTELint(t *testing.T) {
 		{"a description is not an instruction", "The gate runs the floors and writes the pack.", nil},
 		{"technical names pass", "`aayu verify` runs the floors on the PR, and Playwright checks 12 pages of the CSV.", nil},
 	}
+	// A metric keeps its own nouns: words of the subject's summary and of the Result are technical names.
+	g := &Grounding{Subject: Issue{Title: "Export filtered claims", Fields: map[string]string{"summary": "Reviewers audit offline."}},
+		Result: &Result{Text: "Target met: CSV exports per reviewer per week = 4.2"}}
+	if got := LintSTE(units(t, "Each reviewer can audit the claims offline [R]."), w, Names(g)); len(got) != 0 {
+		t.Errorf("summary and Result words: %q", got)
+	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			got := LintSTE(units(t, c.text), w, names)
