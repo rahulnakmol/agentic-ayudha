@@ -442,9 +442,10 @@ func mean(xs []int) float64 {
 	return float64(sum) / float64(len(xs))
 }
 
-// Compare applies the WP3.4 bar to results and, when a baseline exists, the
-// promotion rule: fail when the mean falls more than max_drop below the
-// baseline or any case's pass^k falls below its baseline. A group whose
+// Compare applies the WP3.4 bar to results (suite pass^k and mean, plus the
+// mean per case) and, when a baseline exists, the promotion rule: fail when the
+// mean falls more than max_drop below the baseline or any case's pass^k falls
+// below its baseline. A group whose
 // pass_k is "advisory" (D-7.3g) is held to the mean bar and the drop rule
 // only; its pass^k findings are returned by Advisories instead.
 func Compare(cur, base *Results, cfg Config) (verdict string, reasons []string) {
@@ -471,9 +472,11 @@ func compare(cur, base *Results, cfg Config) (reasons, advisory []string) {
 		if c.Errors > MaxErrors {
 			reasons = append(reasons, fmt.Sprintf("%s: %d of %d runs errored (at most %d may)", c.Case, c.Errors, len(c.Runs), MaxErrors))
 		}
-		// The bar holds per case too, so one register or skill cannot hide behind the others (WP7.3: per register).
+		// WP3.4's pass^k bar is a suite bar: one case's pass^5 is 0 or 1, so a single off run in five would
+		// fail a promotion. Per case it is reported, never enforced (D-3.4e); the per-case mean bar, the
+		// suite pass^k, and the baseline rules below stay enforced, so a case cannot hide behind the others.
 		if c.PassK < cfg.MinPassK {
-			*passK = append(*passK, fmt.Sprintf("%s: pass^%d %.2f is below %.2f", c.Case, cur.K, c.PassK, cfg.MinPassK))
+			advisory = append(advisory, fmt.Sprintf("%s: pass^%d %.2f is below %.2f", c.Case, cur.K, c.PassK, cfg.MinPassK))
 		}
 		if c.Mean < cfg.MinMean {
 			reasons = append(reasons, fmt.Sprintf("%s: mean rubric score %.2f is below %.2f", c.Case, c.Mean, cfg.MinMean))
