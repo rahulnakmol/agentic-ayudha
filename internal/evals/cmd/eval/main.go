@@ -20,6 +20,8 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -50,6 +52,7 @@ func run(ctx context.Context) error {
 	compare := flag.String("compare", "", "results file to check against the bar and -baseline, without running anything")
 	baseline := flag.String("baseline", "", "baseline results file (evals/results/<main-sha>.json); a missing file means no baseline")
 	skip := flag.String("skip", "", "comma-separated case ID prefixes to leave out of tier 2 (evals.yml skips brief/ on pushes to dev)")
+	only := flag.String("cases", "", "tier 2: run only the cases whose ID (<skill>/<name>) matches this regular expression")
 	flag.Parse()
 
 	root, err := os.Getwd()
@@ -106,6 +109,13 @@ func run(ctx context.Context) error {
 		cases, skipped := evals.Skip(cases, *skip)
 		for _, id := range skipped {
 			fmt.Printf("skipped %s (-skip %s)\n", id, *skip)
+		}
+		if *only != "" {
+			re, err := regexp.Compile(*only)
+			if err != nil {
+				return fmt.Errorf("-cases: %w", err)
+			}
+			cases = slices.DeleteFunc(cases, func(c evals.Case) bool { return !re.MatchString(c.ID) })
 		}
 		res, err := h.Tier2(ctx, cases, *sha, *ref, time.Now())
 		if err != nil {

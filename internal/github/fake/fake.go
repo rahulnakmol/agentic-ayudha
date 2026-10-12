@@ -63,6 +63,7 @@ type Issue struct {
 	Comments    []*Comment `json:"-"`
 	Subs        []int      `json:"-"`
 	Parent      int        `json:"-"`
+	Assignees   []Account  `json:"assignees"`
 }
 
 // PR is a pull request; it shares its number with an Issue, as on GitHub.
@@ -291,6 +292,7 @@ var (
 	reComment   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/comments/([0-9]+)$`)
 	reSubs      = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/sub_issues$`)
 	reParent    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/parent$`)
+	reAssignees = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/assignees$`)
 )
 
 func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
@@ -745,6 +747,20 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		reply(200, is.Labels)
+	case reAssignees.MatchString(p) && (m == "POST" || m == "DELETE"):
+		is := g.Issues[atoi(reAssignees.FindStringSubmatch(p)[1])]
+		if is == nil {
+			notFound()
+			return
+		}
+		names, _ := body["assignees"].([]any)
+		for _, n := range names {
+			is.Assignees = slices.DeleteFunc(is.Assignees, func(a Account) bool { return a.Login == n })
+			if m == "POST" {
+				is.Assignees = append(is.Assignees, Account{Login: n.(string), Type: "User"})
+			}
+		}
+		reply(201, is)
 	case reLabel.MatchString(p) && m == "DELETE":
 		sm := reLabel.FindStringSubmatch(p)
 		is := g.Issues[atoi(sm[1])]

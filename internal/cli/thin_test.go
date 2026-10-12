@@ -3,6 +3,7 @@ package cli
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -24,7 +25,7 @@ func thinFixture(t *testing.T) (g *fake.GitHub, env map[string]string, opts Opti
 	git(t, dir, "config", "user.name", "Builder")
 	git(t, dir, "config", "user.email", "builder@example.com")
 	env = map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH"), "AAYU_MODEL": "claude-opus-5-5"}
-	opts = Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+	opts = Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, CheckpointVerify: holds}
 	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready: %s", errOut)
 	}
@@ -64,15 +65,18 @@ func thinFixture(t *testing.T) (g *fake.GitHub, env map[string]string, opts Opti
 	return g, env, opts, dir, bare, res.PR, head
 }
 
+// holds stands in for build's verify of a checkpoint: the floors hold.
+func holds(context.Context, string) (bool, string, error) { return true, "floors hold", nil }
+
 // gateRun records a green merge gate for head, with its pack as the run's
 // aayudha-pack artifact (no bot App: CI could not write the ledger).
-func gateRun(t *testing.T, g *fake.GitHub, dir string, prN int, head string, checks []proof.Check) {
+func gateRun(t *testing.T, g *fake.GitHub, dir string, prN int, head string, checks []proof.Check, footprint ...string) {
 	t.Helper()
 	b := git(t, dir, "show", "origin/ledger:"+ready.LedgerPath(2))
 	snap, _ := ready.ParseSnapshot(b)
 	files := map[string][]byte{}
 	p := &proof.Pack{Repo: "o/r", Story: 2, PR: prN, PRHeadSHA: head, Seat: "ai-native-engineer", Host: "cli", Identity: "ci",
-		CompletionGoalHash: snap.CompletionGoalHash, CreatedAt: "2026-10-12T10:00:00Z", Checks: checks}
+		CompletionGoalHash: snap.CompletionGoalHash, CreatedAt: "2026-10-12T10:00:00Z", Checks: checks, Footprint: footprint}
 	for _, c := range snap.Criteria {
 		rel := "evidence/criterion-" + strconv.Itoa(c.N) + ".jsonl"
 		files[rel] = []byte(`{"Action":"pass","Test":"TestEmpty"}` + "\n")

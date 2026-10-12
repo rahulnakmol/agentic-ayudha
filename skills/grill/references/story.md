@@ -52,5 +52,6 @@ Numbered, observable criteria; each one line: `N. [evidence] state: …; expecte
 
 ## Labels (not body sections)
 
-- Effort: XS, S, M, or L (an XL story must be sliced first). Passed as `--labels effort:<size>`.
+- Effort: XS, S, M, or L (an XL story must be sliced first). Passed as `--labels effort:<size>`. Required at Ready:
+  when the human has no view, propose your estimate from the criteria and confirm it; never leave it out.
 - Priority: P0 to P3. Passed as `--labels priority:<p>`.

@@ -97,8 +97,8 @@ func TestRateLimits(t *testing.T) {
 			t.Errorf("%s: %v", tt.name, err)
 			continue
 		}
-		if n != 2 || len(clk.sleeps) != 1 || clk.sleeps[0] != tt.wait || c.Stats().Retries != 1 {
-			t.Errorf("%s: %d requests, sleeps %v, want one wait of %v", tt.name, n, clk.sleeps, tt.wait)
+		if n != 2 || len(clk.sleeps) != 1 || !jittered(clk.sleeps[0], tt.wait) || c.Stats().Retries != 1 {
+			t.Errorf("%s: %d requests, sleeps %v, want one wait of %v plus up to a quarter", tt.name, n, clk.sleeps, tt.wait)
 		}
 	}
 
@@ -120,6 +120,37 @@ func TestRateLimits(t *testing.T) {
 	}, Options{})
 	if err := label(ctx, c); !External(err) || n != 1 || len(clk.sleeps) != 0 {
 		t.Errorf("hour-long limit: err %v, %d requests, sleeps %v", err, n, clk.sleeps)
+	}
+}
+
+// jittered reports whether got is want plus a jitter of less than a quarter.
+func jittered(got, want time.Duration) bool { return got >= want && got < want+want/4 }
+
+// WP5.5: a 5xx is retried with jittered exponential backoff when repeating
+// the request cannot write twice (a read, PUT, or DELETE), never for a POST,
+// which may have landed.
+func TestServerErrorRetries(t *testing.T) {
+	ctx := context.Background()
+	n := 0
+	c, clk := newTest(t, func(w http.ResponseWriter, r *http.Request) {
+		n++
+		if n <= 2 {
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		_, _ = w.Write([]byte(`[]`))
+	}, Options{WriteGap: -1})
+	if _, _, err := c.REST.Issues.ListLabels(ctx, "o", "r", nil); err != nil || n != 3 || len(clk.sleeps) != 2 ||
+		!jittered(clk.sleeps[0], time.Second) || !jittered(clk.sleeps[1], 2*time.Second) {
+		t.Fatalf("GET after two 502s: err %v, %d requests, sleeps %v", err, n, clk.sleeps)
+	}
+	n = 0
+	c, clk = newTest(t, func(w http.ResponseWriter, r *http.Request) {
+		n++
+		w.WriteHeader(http.StatusInternalServerError)
+	}, Options{WriteGap: -1})
+	if err := label(ctx, c); err == nil || n != 1 || len(clk.sleeps) != 0 {
+		t.Fatalf("POST after a 500: err %v, %d requests, sleeps %v", err, n, clk.sleeps)
 	}
 }
 

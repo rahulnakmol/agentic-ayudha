@@ -18,6 +18,11 @@ on:
   push:
     branches: [dev, rolling, main] # on dev, only when the push touches skills or the harness (first step)
   workflow_dispatch:
+    inputs:
+      cases:
+        description: "Run only the tier-2 cases whose ID (<skill>/<name>) matches this regular expression; empty runs every case"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -32,7 +37,7 @@ jobs:
     name: evals-tier2
     runs-on: ubuntu-latest
     environment: ai-gateway
-    timeout-minutes: 30
+    timeout-minutes: 60 # nine tier-2 cases of five runs each took about 30 minutes (WP5.4)
     env:
       AAYU_MODELS__GATEWAY__BASE_URL: ${{ vars.AAYU_AI_GATEWAY_URL }}
       AAYU_MODELS__GATEWAY__SECRET: ai-gateway
@@ -92,6 +97,7 @@ jobs:
           SHA: ${{ github.sha }}
           REF: ${{ github.ref_name }}
           EVENT: ${{ github.event_name }}
+          CASES: ${{ inputs.cases }}
         run: |
           set -euo pipefail
           if [ -z "$AAYU_SECRET_AI_GATEWAY" ] || [ -z "$AAYU_MODELS__GATEWAY__BASE_URL" ]; then
@@ -105,7 +111,7 @@ jobs:
             skip="brief/"
             echo "::notice::Push to dev: the brief cases are skipped (nightly, dispatch, and promotion run them)."
           fi
-          go run ./internal/evals/cmd/eval -tier 2 -sha "$SHA" -ref "$REF" -out "evals/results/$SHA.json" -baseline "$BASELINE" -skip "$skip"
+          go run ./internal/evals/cmd/eval -tier 2 -sha "$SHA" -ref "$REF" -out "evals/results/$SHA.json" -baseline "$BASELINE" -skip "$skip" -cases "$CASES"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:

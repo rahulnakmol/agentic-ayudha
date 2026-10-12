@@ -49,8 +49,11 @@ type Options struct {
 	WriteGap   time.Duration     // minimum gap between mutating calls; default 1s (GitHub's guidance), negative disables
 	MaxWait    time.Duration     // longest rate-limit wait before failing; default 2 minutes
 	Retries    int               // rate-limit retries per request; default 3
-	Sleep      func(ctx context.Context, d time.Duration) error
-	Now        func() time.Time
+	// ServerRetries are the retries of a 5xx on a request that cannot write
+	// twice (WP5.5); default 3, negative disables.
+	ServerRetries int
+	Sleep         func(ctx context.Context, d time.Duration) error
+	Now           func() time.Time
 }
 
 // Stats counts the calls of one run; verbs report it in --json.
@@ -89,6 +92,9 @@ func New(opts Options) (*Client, error) {
 	}
 	if opts.Retries == 0 {
 		opts.Retries = 3
+	}
+	if opts.ServerRetries == 0 {
+		opts.ServerRetries = 3
 	}
 	if opts.Now == nil {
 		opts.Now = time.Now
