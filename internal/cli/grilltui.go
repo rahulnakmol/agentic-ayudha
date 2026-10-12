@@ -243,6 +243,9 @@ func (e *Env) interactive() bool {
 	if e.Agent() || e.JSON {
 		return false
 	}
+	if e.TUI != nil {
+		return true
+	}
 	f, ok := e.In.(*os.File)
 	if !ok {
 		return false
@@ -254,7 +257,14 @@ func (e *Env) interactive() bool {
 // runGrillTUI runs the interview on the terminal and returns the answers and
 // whether the human chose to create (false when they quit).
 func (e *Env) runGrillTUI(m *grillModel) (vals map[string]string, create bool, err error) {
-	if _, err := tea.NewProgram(m, tea.WithInput(e.In), tea.WithOutput(e.Out)).Run(); err != nil {
+	run := e.TUI
+	if run == nil {
+		run = func(m tea.Model) error {
+			_, err := tea.NewProgram(m, tea.WithInput(e.In), tea.WithOutput(e.Out)).Run()
+			return err
+		}
+	}
+	if err := run(m); err != nil {
 		return nil, false, err
 	}
 	return m.values(), m.create, nil

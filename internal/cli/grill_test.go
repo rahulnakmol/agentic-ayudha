@@ -235,3 +235,53 @@ func TestGrillTUI(t *testing.T) {
 		t.Fatalf("body:\n%s", d.Body)
 	}
 }
+
+// scripted returns a TUI runner that types keys into the model, as a human
+// on a terminal would.
+func scripted(ks ...string) func(tea.Model) error {
+	return func(tm tea.Model) error {
+		keys(tm.(*grillModel), ks...)
+		return nil
+	}
+}
+
+// On a terminal, `grill brand` without --body interviews the human: a pair
+// below AA is shown on the review screen and cannot be created; fixing the
+// colour lets the human create design/brand.yaml.
+func TestGrillBrandTUI(t *testing.T) {
+	dir := gitInit(t, "dev", map[string]string{"README.md": "x\n"})
+	answers := func(primary string) []string {
+		return []string{"Benefits QA", "enter", "plain, warm", "enter", "enter",
+			"ink #1a1a1a", "enter", "surface #ffffff", "enter", "primary " + primary, "enter", "enter",
+			"ink on surface, text", "enter", "primary on surface, text", "enter", "enter"}
+	}
+	opts := Options{Dir: dir, TUI: scripted(append(answers("#777777"), "c", "q")...)}
+	if code, _, errOut := run(t, nil, opts, "grill", "brand"); code != ExitBlocked || !strings.Contains(errOut, "ended without writing") {
+		t.Fatalf("failing pair: %d %s", code, errOut)
+	}
+	m := &grillModel{name: "grill brand", steps: brandSteps(os.DirFS(filepath.Join("..", ".."))), check: brandCheck}
+	keys(m, answers("#777777")...)
+	if v := m.View().Content; !strings.Contains(v, "primary (#777777) on surface (#ffffff) for text: 4.47:1 fails AA") {
+		t.Fatalf("review:\n%s", v)
+	}
+	opts.TUI = scripted(append(answers("#767676"), "c")...)
+	if code, out, errOut := run(t, nil, opts, "grill", "brand"); code != 0 || !strings.Contains(out, "wrote design/brand.yaml") {
+		t.Fatalf("create: %d %s %s", code, out, errOut)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "design", "brand.yaml")); !strings.Contains(string(b), "primary: '#767676'") && !strings.Contains(string(b), `primary: "#767676"`) {
+		t.Fatalf("design/brand.yaml:\n%s", b)
+	}
+}
+
+// On a terminal, `grill <type>` without --title and --body runs the same
+// validation as the flag path and writes the issue when the human creates it.
+func TestGrillTUICreates(t *testing.T) {
+	g := fake.New(t, "o/r", "User")
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}
+	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1,
+		TUI: scripted("Export fails", "enter", "Copying claims by hand.", "enter", "enter", "ctrl+d", "ctrl+d", "enter", "c")}
+	code, out, errOut := run(t, env, opts, "grill", "feedback", "--repo", "o/r")
+	if code != 0 || !strings.Contains(out, "created #1") || !contains(g.LabelNames(1), "status:backlog") {
+		t.Fatalf("grill feedback on a terminal: %d %s %s", code, out, errOut)
+	}
+}

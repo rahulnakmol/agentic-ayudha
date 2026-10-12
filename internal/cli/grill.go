@@ -360,19 +360,22 @@ func brandFromAnswers(v map[string]string) (*design.Brand, []string) {
 	return br, ps
 }
 
+// brandCheck is the TUI's review of a brand: the answers as YAML, and every
+// line that did not parse plus the AA check's problems.
+func brandCheck(v map[string]string) (string, []string) {
+	br, ps := brandFromAnswers(v)
+	y, _ := br.Marshal()
+	_, probs := br.Check()
+	return string(y), append(ps, probs...)
+}
+
 // runGrillBrand is `grill brand`: the brand YAML from --body (the host's
 // draft) or the TUI, parsed strictly, every colour pair checked against
 // WCAG 2.2 AA, and with --create written to design/brand.yaml.
 func runGrillBrand(e *Env, in Values) error {
 	src, create := in.String("body"), in.Bool("create")
 	if strings.TrimSpace(src) == "" && e.interactive() {
-		m := &grillModel{name: "grill brand", steps: brandSteps(e.Assets)}
-		m.check = func(v map[string]string) (string, []string) {
-			br, ps := brandFromAnswers(v)
-			y, _ := br.Marshal()
-			_, probs := br.Check()
-			return string(y), append(ps, probs...)
-		}
+		m := &grillModel{name: "grill brand", steps: brandSteps(e.Assets), check: brandCheck}
 		vals, ok, err := e.runGrillTUI(m)
 		if err != nil {
 			return err
