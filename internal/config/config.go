@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
+	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
 // Version is the config schema version this binary reads and writes
@@ -49,7 +50,8 @@ type Design struct {
 
 // Review is [review] (WP6.5, WP6.6).
 type Review struct {
-	FigmaDiffMax float64 `koanf:"figma_diff_max" jsonschema:"minimum=0,maximum=100" jsonschema_description:"Largest share of pixels, in percent, a prototype screenshot may differ from its Figma frame after the anti-aliasing mask; colour and typography token mismatches must be zero regardless."`
+	FigmaDiffMax float64  `koanf:"figma_diff_max" jsonschema:"minimum=0,maximum=100" jsonschema_description:"Largest share of pixels, in percent, a prototype screenshot may differ from its Figma frame after the anti-aliasing mask; colour and typography token mismatches must be zero regardless."`
+	Baseline     []string `koanf:"baseline" jsonschema_description:"URL paths on the [verify.environments] target that baseline captures for each commit (WP6.6)."`
 }
 
 // Measure is [measure]: which exported events mark each AARRR stage. Event
@@ -150,8 +152,8 @@ type Decisions struct {
 
 // Notify is [notify].
 type Notify struct {
-	Channel    string `koanf:"channel" jsonschema:"enum=,enum=slack,enum=email,enum=github"`
-	Target     string `koanf:"target" jsonschema_description:"slack: name of the secret holding the webhook URL; email: recipient address; github: login to mention."`
+	Channel    string `koanf:"channel" jsonschema:"enum=,enum=slack,enum=email,enum=github,enum=file"`
+	Target     string `koanf:"target" jsonschema_description:"slack: name of the secret holding the webhook URL; email: recipient address; github: login to mention; file: path of the JSON-lines outbox (default .aayudha/state/notify-outbox.jsonl), which the Actions loops keep as an artifact."`
 	Issue      string `koanf:"issue" jsonschema_description:"github channel: issue the mention comment is posted on, as owner/name#number."`
 	SMTPAddr   string `koanf:"smtp_addr" jsonschema_description:"email channel: SMTP server as host:port (STARTTLS)."`
 	From       string `koanf:"from" jsonschema_description:"email channel: sender address, also the SMTP user."`
@@ -280,6 +282,7 @@ func (c *Config) Clock() (Clock, error) { return NewClock(c.Time.TZ, c.Time.Busi
 var (
 	secretName = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
 	repoName   = regexp.MustCompile(`^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$`)
+	loginName  = regexp.MustCompile(`^@?[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$`)
 	issueRef   = regexp.MustCompile(`^[A-Za-z0-9-]+/[A-Za-z0-9._-]+#[1-9][0-9]*$`)
 	apiStyles  = []string{"", "messages", "responses", "chat"}
 	families   = []string{"", string(verbs.FamilyAnthropic), string(verbs.FamilyOpenAI), string(verbs.FamilyGoogle), string(verbs.FamilyXAI), string(verbs.FamilyHostManaged)}
@@ -358,8 +361,21 @@ func (c *Config) Validate() error {
 		if n.Target == "" || !issueRef.MatchString(n.Issue) {
 			bad("[notify] channel = \"github\" needs target (login) and issue = \"owner/name#number\"")
 		}
+	case "file":
 	default:
-		bad("[notify] channel = %q: want slack, email, or github", c.Notify.Channel)
+		bad("[notify] channel = %q: want slack, email, github, or file", c.Notify.Channel)
+	}
+	for k, v := range c.Decisions.Authority {
+		_, isType := workitems.FindType(k)
+		if _, isLayer := verbs.FindLayer(verbs.LayerID(k)); !isType && !isLayer {
+			bad("[decisions.authority] %s: want a work-item type (the Decision's parent) or a layer L01-L09", k)
+		}
+		if _, isSeat := verbs.FindSeat(verbs.SeatID(v)); !isSeat && !loginName.MatchString(v) {
+			bad("[decisions.authority] %s = %q: want a seat slug or a GitHub login", k, v)
+		}
+	}
+	if e := c.Decisions.EscalateTo; e != "" && !loginName.MatchString(e) {
+		bad("[decisions] escalate_to = %q: want a GitHub login", e)
 	}
 	for name, in := range c.Integrations {
 		if !secretName.MatchString(in.Secret) {

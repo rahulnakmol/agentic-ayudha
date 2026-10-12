@@ -151,6 +151,11 @@ func runInit(ctx context.Context, e *Env, in Values) error {
 			Ask:          e.askLine,
 			ManifestCode: e.manifestCode,
 		}
+		if x.Gates {
+			if x.Loops, err = e.loopFiles(it); err != nil {
+				return err
+			}
+		}
 		if e.AppManifestCode != nil {
 			x.ManifestCode = e.AppManifestCode
 		}

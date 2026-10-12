@@ -23,6 +23,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
+	"github.com/rahulnakmol/agentic-ayudha/internal/planning"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
@@ -39,7 +40,7 @@ const SoloBypassPrefix = "Solo-mode bypass:"
 
 // HumanPass records how the human pass was met.
 type HumanPass struct {
-	Kind     string `json:"kind"` // review, or solo-bypass
+	Kind     string `json:"kind"` // review, autonomous, or solo-bypass
 	Login    string `json:"login"`
 	ReviewID int64  `json:"review_id,omitempty"`
 	Comment  string `json:"comment_url,omitempty"`
@@ -57,10 +58,16 @@ type ShipRecord struct {
 	Pack        string    `json:"pack"`
 	PackLanded  string    `json:"pack_landed,omitempty"` // how the authoritative pack reached the ledger
 	HumanPass   HumanPass `json:"human_pass"`
-	Waivers     []string  `json:"waivers,omitempty"`
-	Actions     string    `json:"actions_segment"`
-	ShippedAt   string    `json:"shipped_at"`
-	ShippedBy   string    `json:"shipped_by"`
+	// Who could give the human pass, the footprint's never layers, the
+	// autonomy streak, and the EM plan-time review (WP5.5).
+	Footprint  []string         `json:"footprint"`
+	Pass       PassRule         `json:"pass_rule"`
+	Streak     StreakState      `json:"streak"`
+	PlanReview *planning.Review `json:"plan_review,omitempty"`
+	Waivers    []string         `json:"waivers,omitempty"`
+	Actions    string           `json:"actions_segment"`
+	ShippedAt  string           `json:"shipped_at"`
+	ShippedBy  string           `json:"shipped_by"`
 }
 
 // ShipResult is what ship reports.
@@ -70,11 +77,14 @@ type ShipResult struct {
 	Branch string `json:"branch_deleted,omitempty"`
 }
 
-// runShip is the thin-slice ship (WP4.10): a green merge gate, an
-// authoritative pack that verifies and whose floors hold, one approving
-// review from a human who is not the author, then squash-merge, the Complete
-// section, status:merged, and cleanup. Autonomy, streaks, and CODEOWNER
-// rules for never-layers are WP5.5/WP5.7.
+// runShip (WP5.5, from the WP4.10 thin slice): a green merge gate, an
+// authoritative pack that verifies and whose floors hold, and the human pass:
+// an approval of the head by the seat's human (solo: the [autonomy]
+// approver), never a bot or the author, plus a CODEOWNER's approval and the
+// EM's plan-time review for a never layer, whatever the streak. Then
+// squash-merge, the Complete section, status:merged, the ship record (with
+// the approval, the pass rule, and the streak state) beside the pack, the
+// lease released, and cleanup.
 func runShip(ctx context.Context, e *Env, in Values) error {
 	if in.Bool("solo-bypass") && e.Agent() {
 		return Errorf(ExitBlocked, "ship --solo-bypass is a human's decision; it is refused for agents")
@@ -197,7 +207,33 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		}
 	}
 
-	// 3. One approving review from a human who is not the author, on the head.
+	// 3. The human pass (WP5.5): an approval of the head by the seat's human
+	// (solo: the [autonomy] approver), never a bot or the author; a never
+	// layer also needs a CODEOWNER's approval, whatever the streak, and the
+	// EM's plan-time review. A footprint the streak makes autonomous needs no
+	// review.
+	root := config.RepoRoot(e.Dir)
+	rec.Footprint = entry.Pack.Footprint
+	if rec.Footprint == nil {
+		rec.Footprint = []string{}
+	}
+	rec.Pass = passRule(&l.Config)
+	rec.Pass.Never = intersect(rec.Footprint, l.Config.Autonomy.Never)
+	if len(rec.Pass.Never) > 0 {
+		if err := rec.Pass.neverOwners(ctx, c, owner, name, pr, root); err != nil {
+			return Wrap(ExitExternal, err)
+		}
+		var plan PlanRecord
+		ok, err := readLedgerJSON(ctx, s.Ledger, PlanLedgerPath(story), &plan)
+		if err != nil {
+			return Wrap(ExitExternal, err)
+		}
+		if !ok || (plan.Review.ApprovedBy == "" && plan.Review.Bypass == nil) {
+			return Errorf(ExitBlocked, "ship #%d: the footprint touches never layer(s) %s, so the Engineering Manager's plan-time review is required: `aayu plan %d --draft <file> --create`, then a human runs `aayu plan %d --approve` (solo mode: `aayu plan %d --solo-bypass`)", n, strings.Join(rec.Pass.Never, ", "), story, story, story)
+		}
+		rec.PlanReview = &plan.Review
+	}
+	rec.Streak = e.shipStreak(ctx, c, repo, root, &l.Config, rec.Footprint, rec.Pass.Never)
 	reviews, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.PullRequestReview, *gh.Response, error) {
 		return c.REST.PullRequests.ListReviews(ctx, owner, name, n, &o)
 	})
@@ -216,8 +252,16 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 			why = append(why, err.Error())
 			continue
 		}
+		if err := rec.Pass.allows(r.User.Login); err != nil {
+			why = append(why, err.Error())
+			continue
+		}
 		rec.HumanPass = HumanPass{Kind: "review", Login: r.User.Login, ReviewID: ids[strings.ToLower(r.User.Login)], Commit: head}
 		break
+	}
+	if rec.HumanPass.Kind == "" && rec.Streak.Autonomous && !in.Bool("solo-bypass") {
+		rec.HumanPass = HumanPass{Kind: "autonomous", Login: me.Login, Commit: head,
+			Note: fmt.Sprintf("every layer of footprint %s has a streak of at least %d correction-free agent merges and none is a never layer (WP5.7)", strings.Join(rec.Footprint, ", "), rec.Streak.Threshold)}
 	}
 	if rec.HumanPass.Kind == "" {
 		if !in.Bool("solo-bypass") {
@@ -278,7 +322,10 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 			res.Branch = ref
 		}
 	}
-	if root := config.RepoRoot(e.Dir); root != "" {
+	if _, err := e.releaseLease(ctx, c, repo, story, fmt.Sprintf("shipped in #%d", n)); err != nil {
+		fmt.Fprintf(e.Err, "aayu: warning: the build lease on #%d was not released: %v\n", story, err)
+	}
+	if root != "" {
 		if wt := BuildWorktree(root, story); dirExists(wt) {
 			_, _ = run2(ctx, root, "git", "worktree", "remove", "--force", wt)
 			_, _ = run2(ctx, root, "git", "branch", "-D", pr.GetHead().GetRef())
@@ -425,30 +472,40 @@ var soloComment = regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(SoloBypassPrefix
 // the comment in the ship record, the Complete section, and the actions log,
 // where `audit` (WP7.6) reconciles it.
 func (e *Env) soloBypass(ctx context.Context, c *github.Client, owner, name string, n int, head, login string, cfg *config.Config) (HumanPass, error) {
-	if identity.Configured(cfg.Identity) != "" {
-		return HumanPass{}, Errorf(ExitBlocked, "ship --solo-bypass: this repository has a bot identity, so the agent can author and a human can approve; get an approving review")
+	url, err := soloModeComment(ctx, c, owner, name, n, login, cfg, "ship --solo-bypass", "a PR comment")
+	if err != nil {
+		return HumanPass{}, err
 	}
-	if len(cfg.Seats) > 0 {
-		for _, s := range cfg.Seats {
-			if s.Mode == "paired" && s.Human != "" && !strings.EqualFold(s.Human, login) {
-				return HumanPass{}, Errorf(ExitBlocked, "ship --solo-bypass: a second human (%s) holds a seat; ask them for an approving review", s.Human)
-			}
+	return HumanPass{Kind: "solo-bypass", Login: login, Comment: url, Commit: head,
+		Note: "solo mode: GitHub refuses self-approval and no bot App exists, so no second person could review (Appendix B D2)"}, nil
+}
+
+// soloModeComment checks that solo mode holds (no bot identity, no second
+// paired human) and finds login's comment on issue or PR n starting
+// "Solo-mode bypass:"; it returns the comment's URL. what names the command
+// in refusals and where the comment belongs.
+func soloModeComment(ctx context.Context, c *github.Client, owner, name string, n int, login string, cfg *config.Config, cmd, where string) (string, error) {
+	if identity.Configured(cfg.Identity) != "" {
+		return "", Errorf(ExitBlocked, "%s: this repository has a bot identity, so the agent can author and a human can approve; get an approving review", cmd)
+	}
+	for _, s := range cfg.Seats {
+		if s.Mode == "paired" && s.Human != "" && !strings.EqualFold(s.Human, login) {
+			return "", Errorf(ExitBlocked, "%s: a second human (%s) holds a seat; ask them for an approving review", cmd, s.Human)
 		}
 	}
 	comments, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.IssueComment, *gh.Response, error) {
 		return c.REST.Issues.ListComments(ctx, owner, name, n, &gh.IssueListCommentsOptions{ListOptions: o})
 	})
 	if err != nil {
-		return HumanPass{}, Wrap(ExitExternal, err)
+		return "", Wrap(ExitExternal, err)
 	}
 	i := slices.IndexFunc(comments, func(cm *gh.IssueComment) bool {
 		return strings.EqualFold(cm.GetUser().GetLogin(), login) && soloComment.MatchString(cm.GetBody())
 	})
 	if i < 0 {
-		return HumanPass{}, Errorf(ExitBlocked, "ship --solo-bypass: post a PR comment starting %q that says why, from your own account, first", SoloBypassPrefix)
+		return "", Errorf(ExitBlocked, "%s: post %s starting %q that says why, from your own account, first", cmd, where, SoloBypassPrefix)
 	}
-	return HumanPass{Kind: "solo-bypass", Login: login, Comment: comments[i].GetHTMLURL(), Commit: head,
-		Note: "solo mode: GitHub refuses self-approval and no bot App exists, so no second person could review (Appendix B D2)"}, nil
+	return comments[i].GetHTMLURL(), nil
 }
 
 // completeStory writes the story's Complete section (Outcome) and moves it to
@@ -493,9 +550,16 @@ func (e *Env) completeStory(ctx context.Context, c *github.Client, repo string, 
 	out.WriteString("\n")
 	switch rec.HumanPass.Kind {
 	case "review":
-		fmt.Fprintf(&out, "- Human pass: approving review %d by @%s on `%s`\n", rec.HumanPass.ReviewID, rec.HumanPass.Login, short(rec.HumanPass.Commit))
+		fmt.Fprintf(&out, "- Human pass: approving review %d by @%s on `%s` (%s)\n", rec.HumanPass.ReviewID, rec.HumanPass.Login, short(rec.HumanPass.Commit), rec.Pass.As)
+	case "autonomous":
+		fmt.Fprintf(&out, "- Human pass: not needed, autonomous footprint: %s\n", rec.HumanPass.Note)
 	default:
 		fmt.Fprintf(&out, "- Human pass: none possible; %s merged under a recorded solo-mode bypass (%s): %s\n", rec.HumanPass.Login, rec.HumanPass.Comment, rec.HumanPass.Note)
+	}
+	if r := rec.PlanReview; r != nil && r.Bypass != nil {
+		fmt.Fprintf(&out, "- Plan-time review: none; %s recorded a solo-mode plan-review bypass for layers %s (%s): %s\n", r.Bypass.RecordedBy, strings.Join(r.Layers, ", "), r.Bypass.Comment, r.Bypass.Note)
+	} else if r != nil && r.ApprovedBy != "" {
+		fmt.Fprintf(&out, "- Plan-time review: approved by @%s (%s) for layers %s\n", r.ApprovedBy, r.As, strings.Join(r.Layers, ", "))
 	}
 	for _, w := range rec.Waivers {
 		fmt.Fprintf(&out, "- Floor waived: %s\n", w)

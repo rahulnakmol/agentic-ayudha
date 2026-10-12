@@ -1,0 +1,20 @@
+{
+  "number": 45,
+  "title": "Scheduled proof purge",
+  "state": "open",
+  "body": "### Summary\n\nAs a quality architect, I want purge to run weekly in Actions, so that retention holds without anyone remembering it.\n\n### Completion Goal\n\n1. [api-trace] state: the purge workflow dispatched on a scratch repository with an expired recording; expected: the run tombstones it and succeeds\n\n### Measure\n\nCompletion Goal criteria observed\n\n### Threshold\n\nall 1 criteria\n\n### Scenario\n\nDispatch the workflow on a scratch repository and read the ledger after it.\n\n### Environment\n\nlocal checkout with synthetic fixtures; never production\n\n### Links\n\ndepends-on #43\ndepends-on #44\n",
+  "labels": [
+    {
+      "name": "type:story"
+    },
+    {
+      "name": "status:planned"
+    },
+    {
+      "name": "effort:S"
+    },
+    {
+      "name": "priority:P2"
+    }
+  ]
+}

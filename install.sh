@@ -109,12 +109,15 @@ if [ -z "$cosign" ]; then
   cosign="$tmp/cosign"
 fi
 
+# cosign is a native program. On Windows (Git Bash, MSYS2) the shell rewrites arguments that look like paths
+# before running one, which mangles the identity regexp's backslashes; pass native paths and turn that off.
+native() { if [ "$os" = windows ]; then cygpath -w "$1"; else printf '%s' "$1"; fi; }
 say "verifying the signature on checksums.txt"
-"$cosign" verify-blob \
-  --bundle "$tmp/checksums.txt.sigstore.json" \
+MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' "$cosign" verify-blob \
+  --bundle "$(native "$tmp/checksums.txt.sigstore.json")" \
   --certificate-identity-regexp "$identity_re" \
   --certificate-oidc-issuer "$ISSUER" \
-  "$tmp/checksums.txt" >/dev/null 2>"$tmp/cosign.log" || {
+  "$(native "$tmp/checksums.txt")" >/dev/null 2>"$tmp/cosign.log" || {
   cat "$tmp/cosign.log" >&2
   die "signature verification failed: checksums.txt was not signed by $REPO release.yml for $version"
 }

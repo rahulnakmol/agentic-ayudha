@@ -1,0 +1,14 @@
+{
+  "type": "incident",
+  "title": "A third of claimants cannot sign in",
+  "fields": {
+    "summary": "About a third of claimants get an error when they sign in; caseworkers are not affected.",
+    "severity": "Sev1",
+    "started": "2026-10-12 09:10 IST"
+  },
+  "labels": [
+    "type:incident",
+    "status:backlog"
+  ],
+  "number": 21
+}

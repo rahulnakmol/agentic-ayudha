@@ -1,0 +1,11 @@
+{
+  "number": 40,
+  "title": "Proof retention per artifact kind",
+  "state": "open",
+  "body": "### Summary\n\nTeams keep screenshots and recordings for a shorter time than reports, by setting a retention per artifact kind; purge honours it on a schedule.\n\n### Problem\n\nRecordings fill the private media bucket: one retention for every kind keeps 90 days of video that nobody opens after a release, while auditors need reports for a year.\n\n### Scope\n\nIn scope: per-kind retention in config (migrating the single retention_days), purge by kind, a `proof purge --kind` flag, listing ledger packs through the API, and a scheduled purge workflow. Out of scope: changing the pack format.\n\n### Expected paths\n\ninternal/config/**\ninternal/proof/**\ninternal/cli/proof.go\nskills/proof/**\ninternal/github/**\n.github/workflows/**\n",
+  "labels": [
+    {
+      "name": "type:feature"
+    }
+  ]
+}

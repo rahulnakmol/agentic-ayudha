@@ -213,12 +213,13 @@
             "",
             "slack",
             "email",
-            "github"
+            "github",
+            "file"
           ]
         },
         "target": {
           "type": "string",
-          "description": "slack: name of the secret holding the webhook URL; email: recipient address; github: login to mention."
+          "description": "slack: name of the secret holding the webhook URL; email: recipient address; github: login to mention; file: path of the JSON-lines outbox (default .aayudha/state/notify-outbox.jsonl), which the Actions loops keep as an artifact."
         },
         "issue": {
           "type": "string",
@@ -679,6 +680,13 @@
           "maximum": 100,
           "minimum": 0,
           "description": "Largest share of pixels, in percent, a prototype screenshot may differ from its Figma frame after the anti-aliasing mask; colour and typography token mismatches must be zero regardless."
+        },
+        "baseline": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "URL paths on the [verify.environments] target that baseline captures for each commit (WP6.6)."
         }
       },
       "additionalProperties": false,

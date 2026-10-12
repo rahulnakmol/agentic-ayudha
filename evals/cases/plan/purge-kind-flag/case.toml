@@ -1,0 +1,8 @@
+# Recorded run of the plan skill (WP5.4) on story #43, footprint L02, L03: the host model planned it and
+# `aayu plan --draft` checked one checkpoint per layer. github/ serves the story and its Feature.
+skill = "plan"
+description = "Plan a story over L02, L03: one checkpoint per layer."
+input = "input.txt"
+artifacts = ["output/plan.json"]
+schemas = [{ file = "output/plan.json", schema = "evals/schemas/plan.json" }]
+calls = [["plan", "43", "--draft", "{case}/output/plan.json"]]

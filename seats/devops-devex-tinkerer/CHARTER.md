@@ -33,7 +33,7 @@ remove devops-devex-tinkerer` returns it to solo and hands the human's open stor
 
 | Layer owned | Name | Paths |
 |---|---|---|
-| L09 | Platform / operations | `.github/**`, `.agents/**`, `embed.go`, `go.mod`, `go.sum` |
+| L09 | Platform / operations | `.github/**`, `.agents/**`, `embed.go`, `go.mod`, `go.sum`, `examples/benefits-qa/deploy/**` |
 
 | Verb | Role |
 |---|---|

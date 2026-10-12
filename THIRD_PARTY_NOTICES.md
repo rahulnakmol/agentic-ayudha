@@ -57,11 +57,28 @@ plan lists in §2; the rest are pulled in by them.
 | `golang.org/x/sync` | v0.22.0 | BSD-3-Clause | Via go-sdk and modernc.org/libc | <https://go.googlesource.com/sync> |
 | `golang.org/x/time` | v0.15.0 | BSD-3-Clause | Rate limiting, via go-sdk | <https://go.googlesource.com/time> |
 | `modernc.org/sqlite` | v1.59.0 | BSD-3-Clause (SQLite itself is public domain) | Pure-Go SQLite for `measure` snapshots (WP7.2, R7), direct; v1.60 needs Go 1.26 | <https://gitlab.com/cznic/sqlite> |
+| `github.com/yuin/goldmark` | v1.8.6 | MIT | Markdown drafts of `brief` parsed and rendered to HTML (WP7.3), direct | <https://github.com/yuin/goldmark> |
 | `modernc.org/libc` | v1.75.7 | BSD-3-Clause (includes MIT-licensed musl code) | C runtime for the transpiled SQLite, via sqlite | <https://gitlab.com/cznic/libc> |
 | `modernc.org/mathutil` | v1.7.1 | BSD-3-Clause | Via sqlite and libc | <https://gitlab.com/cznic/mathutil> |
 | `modernc.org/memory` | v1.12.1 | BSD-3-Clause | Allocator, via libc | <https://gitlab.com/cznic/memory> |
 | `github.com/dustin/go-humanize` | v1.0.1 | MIT | Via libc | <https://github.com/dustin/go-humanize> |
 | `github.com/remyoudompheng/bigfft` | v0.0.0-20230129092748-24d4a6f8daec | BSD-3-Clause | Via mathutil | <https://github.com/remyoudompheng/bigfft> |
+| `charm.land/bubbletea/v2` | v2.0.9 | MIT | `grill` TUI on a terminal (WP5.3), direct; v2.0.10 needs Go 1.26 | <https://github.com/charmbracelet/bubbletea> |
+| `github.com/charmbracelet/ultraviolet` | v0.0.0-20260703014108-f5a850f9c2b7 | MIT | Terminal input and rendering, via bubbletea | <https://github.com/charmbracelet/ultraviolet> |
+| `github.com/charmbracelet/colorprofile` | v0.4.3 | MIT | Terminal colour detection, via bubbletea | <https://github.com/charmbracelet/colorprofile> |
+| `github.com/charmbracelet/x/ansi` | v0.11.7 | MIT | ANSI sequences, via bubbletea | <https://github.com/charmbracelet/x> |
+| `github.com/charmbracelet/x/term` | v0.2.2 | MIT | Terminal state, via bubbletea | <https://github.com/charmbracelet/x> |
+| `github.com/charmbracelet/x/termios` | v0.1.1 | MIT | Terminal modes, via bubbletea | <https://github.com/charmbracelet/x> |
+| `github.com/charmbracelet/x/windows` | v0.2.2 | MIT | Windows console, via bubbletea | <https://github.com/charmbracelet/x> |
+| `github.com/clipperhouse/displaywidth` | v0.11.0 | MIT | Text width, via ultraviolet | <https://github.com/clipperhouse/displaywidth> |
+| `github.com/clipperhouse/uax29/v2` | v2.7.0 | MIT | Text segmentation, via displaywidth | <https://github.com/clipperhouse/uax29> |
+| `github.com/lucasb-eyer/go-colorful` | v1.4.0 | MIT | Colour conversion, via bubbletea | <https://github.com/lucasb-eyer/go-colorful> |
+| `github.com/mattn/go-runewidth` | v0.0.23 | MIT | Text width, via ultraviolet | <https://github.com/mattn/go-runewidth> |
+| `github.com/muesli/cancelreader` | v0.2.2 | MIT | Cancellable input, via bubbletea | <https://github.com/muesli/cancelreader> |
+| `github.com/rivo/uniseg` | v0.4.7 | MIT | Grapheme clusters, via ultraviolet | <https://github.com/rivo/uniseg> |
+| `github.com/xo/terminfo` | v0.0.0-20220910002029-abceb7e1c41e | MIT | Terminal capabilities, via colorprofile | <https://github.com/xo/terminfo> |
+| `github.com/mattn/go-isatty` | v0.0.24 | MIT | Terminal detection, via libc (found missing here by `aayu audit`'s licence scan, WP7.6) | <https://github.com/mattn/go-isatty> |
+| `github.com/ncruces/go-strftime` | v1.0.0 | MIT | Time formatting, via libc (found missing here by `aayu audit`'s licence scan, WP7.6) | <https://github.com/ncruces/go-strftime> |
 
 ### Shelled out by `self-update` (not bundled)
 
@@ -127,25 +144,26 @@ addons (MIT), Vite (MIT), Vitest (MIT), Playwright (Apache-2.0), TypeScript (Apa
 (MPL-2.0, through `@storybook/addon-a11y`). The development tree also contains BSD-2-Clause, BSD-3-Clause,
 ISC, BlueOak-1.0.0, and CC-BY-4.0 (browser-support data) packages.
 
-### Shelled out by `aayu verify` (not bundled)
+### Shelled out by `aayu verify`, the design verbs, and `aayu review` (not bundled)
 
-The floors (docs/BUILD-PLAN.md WP4.3–WP4.6) run these as separate programs in a scrubbed child process. Users
-install them; CI pins them (SHA-256 for binaries, a digest for the ZAP image, `pnpm-lock.yaml` integrity hashes for
-the `@aayudha/floors` development package that holds Playwright, axe-core, and Lighthouse for this repository's own
-floor tests).
+The floors (docs/BUILD-PLAN.md WP4.3–WP4.6), the prototype capture (WP6.5), and review (WP6.6) run these as separate
+programs in a scrubbed child process. Users install them; CI pins them (SHA-256 for binaries, a digest for the ZAP
+image, `pnpm-lock.yaml` integrity hashes for the `@aayudha/floors` development package that holds Playwright,
+axe-core, Lighthouse, and impeccable for this repository's own tests).
 
 | Component | Version pinned in CI | Licence | Use | Source |
 |---|---|---|---|---|
 | semgrep | 1.180.0 | LGPL-2.1 | `sast` floor | <https://github.com/semgrep/semgrep> |
 | gitleaks | 8.30.1 | MIT | `secrets` floor | <https://github.com/gitleaks/gitleaks> |
 | osv-scanner | 2.6.0 | Apache-2.0 | `deps` floor | <https://github.com/google/osv-scanner> |
-| Playwright | 1.64.0 | Apache-2.0 | `a11y` floors: drives Chromium through each Completion Goal state | <https://github.com/microsoft/playwright> |
-| axe-core | 4.14.0 | MPL-2.0 | `a11y` floor: injected into the page under test, unmodified | <https://github.com/dequelabs/axe-core> |
+| Playwright | 1.64.0 | Apache-2.0 | `a11y` floors: drives Chromium through each Completion Goal state, and through the rendered `brief` page (WP7.3) | <https://github.com/microsoft/playwright> |
+| axe-core | 4.14.0 | MPL-2.0 | `a11y` floor and the `brief` page check: injected into the page under test, unmodified | <https://github.com/dequelabs/axe-core> |
 | Lighthouse | 13.5.0 | Apache-2.0 | `perf` floor | <https://github.com/GoogleChrome/lighthouse> |
 | OWASP ZAP (`zaproxy/zap-stable` image) | 2.17.0, by digest | Apache-2.0 | `dast` floor | <https://github.com/zaproxy/zaproxy> |
 | k6 | 2.3.0 | AGPL-3.0 | `api` floor; run as a program, never linked or distributed | <https://github.com/grafana/k6> |
 | Guidepup (`@guidepup/guidepup`, `@guidepup/playwright`, `@guidepup/setup`) with `@playwright/test` | 0.35.0, 0.19.1, 0.29.2; 1.64.0 | MIT; Apache-2.0 | `screen-reader` floor: drives VoiceOver (macOS) and NVDA (Windows; NVDA itself is GPL-2.0, installed by `guidepup install` and run as a program) | <https://github.com/guidepup/guidepup> |
 | Tesseract | user-installed, optional | Apache-2.0 | OCR in the redaction pass when present | <https://github.com/tesseract-ocr/tesseract> |
+| impeccable (with its platform engine `@impeccable/cli-<os>-<arch>`) | 4.5.2 (engine 0.1.14) | Apache-2.0 | `review` lane B (WP6.6): `detect --json` against each state's URL, shelled out | <https://github.com/pbakaus/impeccable> |
 
 ## Policy
 
@@ -172,16 +190,8 @@ CI scan when the component is actually added.
 | `github.com/google/go-github` | GitHub REST client (WP2.3) | BSD-3-Clause |
 | `github.com/shurcooL/githubv4` | GitHub GraphQL, Projects v2 only (WP2.3) | MIT |
 | `github.com/modelcontextprotocol/go-sdk` | MCP server (WP3.3) | To be confirmed |
-| `github.com/charmbracelet/bubbletea` | `grill` TUI (WP5.3) | MIT |
 | `modernc.org/sqlite` | `measure` snapshots, pure Go (WP7.2) | BSD-3-Clause |
 | `github.com/go-git/go-git` | Read-only git access | Apache-2.0 |
-| `github.com/yuin/goldmark` | Markdown parsing | MIT |
-
-### Shelled out (not bundled)
-
-| Component | Use | Expected licence |
-|---|---|---|
-| impeccable | `review` lane B, `detect --json` (WP6.6) | Apache-2.0 |
 
 Other optional tools that `doctor` reports (git-lfs, gh, node, DuckDB) are installed by the user and
 run as separate programs.

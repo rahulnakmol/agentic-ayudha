@@ -15,7 +15,27 @@ aayu:
       type: string
       required: false
       positional: false
-      description: "Start of the retro window (date)."
+      description: "Window start (YYYY-MM-DD UTC or RFC 3339); default the cursor of the newest retro report on the ledger, else 7 days back."
+    - name: until
+      type: string
+      required: false
+      positional: false
+      description: "Window end (RFC 3339, exclusive); default now."
+    - name: ledger
+      type: string
+      required: false
+      positional: false
+      description: "Ledger commit to read; default the ledger tip."
+    - name: out
+      type: path
+      required: false
+      positional: false
+      description: "Also write the report to this file."
+    - name: replay
+      type: string
+      required: false
+      positional: false
+      description: "Regenerate a report from the GitHub inputs snapshot at this ledger path (retro/<date>/…inputs.json); files nothing."
   outputs:
     - "retro-report"
     - "feedback-issues"
@@ -29,4 +49,13 @@ aayu:
 
 Compare estimates with observed delivery, corrections, floor misses, and cost; file findings as Feedback issues.
 
-Body lands in WP7.6 (the verb). Format and lint: skills/README.md.
+1. Run `aayu retro` in a checkout (`--dry-run` first to see the findings). It writes the report under
+   `retro/<date>/` on the ledger with its inputs in the header, and files each new finding as a Feedback issue
+   on this repository. It never opens a PR: a change that a finding asks for goes through `aayu evolve` (for a
+   skill) or a Story, after a human accepts the Feedback.
+2. Read the report and add what the numbers cannot say as a comment on the Feedback issues it filed: why an
+   estimate missed, what the corrections have in common. Do not edit the report.
+
+Findings are deterministic: a story over its Effort's checkpoint budget (XS 1, S 2, M 3, L 5), cost over
+`[budget] per_story_usd`, a story merged without proof after the merge gate existed, a floor miss, and a
+correction rate above 20 % overall or per skill. A finding already filed (same title) is not filed again.

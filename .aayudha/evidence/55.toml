@@ -1,0 +1,11 @@
+# Which tests prove story #55's Completion Goal (WP5.5; verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria). Criterion 1 (a dogfood story from Ready to merged) is a run on this repository
+# after the merge, recorded on the ledger; no test in a PR run can show it.
+
+[[criterion]]
+id = 2 # a bot review is rejected as a pass
+tests = ["internal/cli:TestShipPassRules", "internal/cli:TestBuildAndShip"]
+
+[[criterion]]
+id = 3 # a stale lease is reclaimed by gc
+tests = ["internal/cli:TestGCReclaimsStaleLease"]

@@ -90,10 +90,14 @@ WARN  optional-tools  8 optional tool(s) missing: gitleaks (secrets floor), osv-
 ## worktrees pass
 PASS  worktrees  no leaked worktrees
 ## worktrees fail
-WARN  worktrees  1 leaked worktree(s); remove them with git worktree prune (aayu gc, WP5.5)
+WARN  worktrees  1 leaked worktree(s); `aayu gc` prunes them
                    /tmp/wt-x (gitdir file points to non-existent location)
 ## leases pass
-N/A  leases  stale story leases: not yet available (WP5.5)
+PASS  leases  1 live build lease(s)
+## leases fail
+WARN  leases  2 stale build lease(s); `aayu gc` reclaims them
+                #9: bot@ci, expired 2026-01-01T00:00:00Z
+                #10: labelled leased without a lock comment
 ## coexistence pass
 PASS  coexistence  coexistence report: nothing to coexist with
 ## coexistence fail

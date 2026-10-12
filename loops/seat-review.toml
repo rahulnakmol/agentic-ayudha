@@ -1,0 +1,7 @@
+# Monthly seat self-review (WP5.1 charters). It needs a host model to reason, so it has no Actions fallback.
+# The cron is in [time] tz.
+description = "Monthly seat self-review: each seat checks its charter and RACI against last month's work."
+command = ["seat", "list"]
+cron = "0 11 1 * *"
+hosts = ["amp", "cursor"]
+prompt = "For each seat listed, read seats/<seat>/CHARTER.md and its row in docs/RACI.md, compare them with the pull requests merged in the last month and `aayu status --streak`, and reply with one short paragraph per seat: what it owned, where the charter and practice differ, and one change to propose. Change no file and no issue."

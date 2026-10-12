@@ -1,0 +1,18 @@
+# Which tests prove story #67's Completion Goal (WP7.6 `audit`, `retro`; WP4.3: verify maps the go test -json events
+# of these tests, from the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # dogfood outputs match fixtures
+tests = ["internal/cli:TestAuditDogfoodFixture", "internal/cli:TestRetroFilesFeedback"]
+
+[[criterion]]
+id = 2 # a direct `gh` write outside `actions` is flagged
+tests = ["internal/cli:TestAuditFlagsUnloggedWrite"]
+
+[[criterion]]
+id = 3 # a solo-mode self-approval (WP0.1) and a human-fallback write (WP1.4) each appear in the report
+tests = ["internal/cli:TestAuditSoloBypassAndHumanFallback"]
+
+[[criterion]]
+id = 4 # re-running `audit` with the recorded inputs produces a byte-identical report
+tests = ["internal/cli:TestAuditRerunByteIdentical"]

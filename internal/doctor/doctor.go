@@ -85,7 +85,7 @@ var Checks = []Check{
 	{"integrations", checkIntegrations},
 	{"optional-tools", checkOptionalTools},
 	{"worktrees", checkWorktrees},
-	{"leases", notYet("stale story leases", "WP5.5")},
+	{"leases", checkLeases},
 	{"coexistence", checkCoexistence},
 	{"telemetry", checkTelemetry},
 }
@@ -125,10 +125,4 @@ func Render(w io.Writer, rs []Result) error {
 		}
 	}
 	return tw.Flush()
-}
-
-func notYet(what, wp string) func(context.Context, *Probe) Result {
-	return func(context.Context, *Probe) Result {
-		return Result{Status: NA, Detail: fmt.Sprintf("%s: not yet available (%s)", what, wp)}
-	}
 }

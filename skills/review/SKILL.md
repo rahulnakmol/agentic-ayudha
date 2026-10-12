@@ -34,4 +34,25 @@ aayu:
 
 Critique UI with a model lane and a deterministic lane; dispositions recapture, rebuild, fix, or ship.
 
-Body lands in WP6.6 (the verb). Format and lint: skills/README.md.
+Check out the PR head, start the app on the `[verify.environments]` target (`AAYU_ENV`, never production), then:
+
+```sh
+aayu review 57
+aayu review 57 --deep
+```
+
+The states are the screenshot and recording criteria of the story's Ready snapshot. Both lanes judge the same
+captures, apart from each other:
+
+- Lane A is the ui-review lane's model, called by the binary, never by you. It scores Nielsen's 10 heuristics
+  and walks the page as keyboard-only, screen-reader, low-vision, and first-time users. It runs 3 times per
+  state, and a finding counts only when 2 of the 3 runs report it at severity 2 or more. `--deep` runs it at
+  high effort.
+- Lane B is deterministic: impeccable's detector, axe, and the focus-indicator and target-size probes. No lane A
+  answer overrides a lane B finding.
+
+The critique goes to `.aayudha/review/<pr>/critique.json` and a replace-in-place PR comment. It exits 0 on
+`ship` and 4 otherwise. On `fix`, run polish. On `rebuild`, go back to mockup or prototype. On `recapture`,
+fix the app or the target and review again.
+
+Format and lint: skills/README.md.

@@ -88,6 +88,18 @@ jobs:
       # and tier 1 of the skill evals (internal/evals, TestTier1) over evals/cases (WP3.4).
       - name: Build, vet, test
         run: go build ./... && go vet ./... && go test ./...
+      # WP7.7: an evolve PR (an evolve/ head branch, or a commit with the Aayudha-Evolve trailer; both change only with a
+      # push, which re-runs this job) must add an eval case that reproduces its Feedback on the old skill and passes on the
+      # new one, before any skill diff (eval-first). The gate works from the PR's base and head SHAs (commits base..head,
+      # change base...head) and fetches them from origin itself, never from the checked-out test-merge commit, which
+      # GitHub can recompute while the run is going (then HEAD^1 cannot be fetched).
+      - name: Eval-first gate for evolve PRs (WP7.7)
+        if: github.event_name == 'pull_request'
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: go run ./internal/evals/cmd/eval -evolve-gate -base "$BASE_SHA" -head "$HEAD_SHA" -branch "$HEAD_REF"
       - name: Build matrix and binary size budget
         run: |
           set -euo pipefail
@@ -494,25 +506,33 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: false
-      - name: Tier-2 results of the promoted commit against main's baseline
+      - name: Tier-2 results of the promoted commit against main's baseline, every group (D-7.3d)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           src="$(git rev-parse HEAD^2 2>/dev/null || git rev-parse HEAD)"
           main_sha="$(git rev-parse origin/main)"
-          fetch() { # fetch <sha>: download the eval-results-<sha> artifact of the latest evals.yml run on that commit
+          fetch() { # fetch <sha> <group>: download eval-results-<sha>-<group> from the newest evals.yml run on that commit that has it
             local run_id
-            run_id="$(gh run list --workflow evals.yml --commit "$1" --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
-            [ -n "$run_id" ] && gh run download "$run_id" --name "eval-results-$1" --dir evals/results
+            for run_id in $(gh run list --workflow evals.yml --commit "$1" --limit 20 --json databaseId --jq '.[].databaseId'); do
+              gh run download "$run_id" --name "eval-results-$1-$2" --dir evals/results 2>/dev/null && return 0
+            done
+            return 1
           }
-          [ -f "evals/results/$src.json" ] || fetch "$src" || true
-          if [ ! -f "evals/results/$src.json" ]; then
-            echo "::error::No tier-2 eval results for $src. Run 'gh workflow run evals.yml --ref <source branch>', wait for it, then re-run this gate."
-            exit 1
-          fi
-          [ -f "evals/results/$main_sha.json" ] || fetch "$main_sha" || echo "::notice::No tier-2 baseline for main ($main_sha); only the absolute bar applies."
-          go run ./internal/evals/cmd/eval -compare "evals/results/$src.json" -baseline "evals/results/$main_sha.json"
+          failed=0
+          # Only gating groups: a group with gate = "advisory" (brief-plain, D-7.3h) is reported by evals.yml, never here.
+          for group in $(go run ./internal/evals/cmd/eval -groups -gating | tr -d '[]"' | tr ',' ' '); do
+            [ -f "evals/results/$src-$group.json" ] || fetch "$src" "$group" || true
+            if [ ! -f "evals/results/$src-$group.json" ]; then
+              echo "::error::No tier-2 eval results for $src, group $group. Run 'gh workflow run evals.yml --ref <source branch>', wait for it, then re-run this gate."
+              failed=1
+              continue
+            fi
+            [ -f "evals/results/$main_sha-$group.json" ] || fetch "$main_sha" "$group" || echo "::notice::No tier-2 baseline for main ($main_sha, group $group); only the absolute bar applies."
+            go run ./internal/evals/cmd/eval -compare "evals/results/$src-$group.json" -baseline "evals/results/$main_sha-$group.json" || failed=1
+          done
+          exit "$failed"
 
   extended-integration:
     name: extended-integration

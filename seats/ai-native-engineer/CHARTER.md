@@ -41,8 +41,8 @@ through a GitHub Environment.
 
 | Layer owned | Name | Paths |
 |---|---|---|
-| L05 | Intelligence | `internal/models/**`, `internal/evals/**`, `evals/**` |
-| L07 | Operational data / state | `internal/ledger/**`, `internal/config/**`, `internal/secrets/**`, `internal/identity/**`, `internal/actions/**` |
+| L05 | Intelligence | `internal/models/**`, `internal/evals/**`, `evals/**`, `examples/benefits-qa/answer/**` |
+| L07 | Operational data / state | `internal/ledger/**`, `internal/config/**`, `internal/secrets/**`, `internal/identity/**`, `internal/actions/**`, `examples/benefits-qa/store/**` |
 
 | Verb | Role |
 |---|---|

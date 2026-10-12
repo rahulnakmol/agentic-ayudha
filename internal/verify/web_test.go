@@ -83,6 +83,10 @@ func fixtureApp(t *testing.T) *httptest.Server {
 	mux.HandleFunc("/good", func(w http.ResponseWriter, _ *http.Request) {
 		fmt.Fprint(w, page(`<p>No orders yet. Seeded owner: jane@example.com</p><button type="button">Create order</button>`))
 	})
+	mux.HandleFunc("/strict-csp", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
+		fmt.Fprint(w, page(`<p>No orders yet.</p><button type="button">Create order</button>`))
+	})
 	mux.HandleFunc("/contrast", func(w http.ResponseWriter, _ *http.Request) {
 		fmt.Fprint(w, page(`<p style="color:#bbb">No orders yet.</p><button type="button">Create order</button>`))
 	})
@@ -155,6 +159,11 @@ func TestWebFloorsWithBrowser(t *testing.T) {
 	}
 	if !rep.Hold || !slices.ContainsFunc(rep.Artifacts, func(e Evidence) bool { return e.Path == "screens/1.png" && slices.Equal(e.Criteria, []int{1}) }) {
 		t.Fatalf("clean page: hold %t, artifacts %v", rep.Hold, paths(rep.Artifacts))
+	}
+
+	// A page whose own Content Security Policy forbids injected scripts is still checked by axe.
+	if c := checkOf(Execute(ctx, browserRun(t, app, "/strict-csp"), []Floor{A11y{}}), "a11y"); c.Result != proof.Pass {
+		t.Errorf("strict-CSP page: %+v", c)
 	}
 
 	rep = Execute(ctx, browserRun(t, app, "/good", "/contrast"), []Floor{A11y{}})

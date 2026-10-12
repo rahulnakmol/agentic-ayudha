@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -35,15 +36,19 @@ var streakTemplate string
 //go:embed aayudha-merge-gate.yml
 var mergeGateTemplate string
 
+//go:embed aayudha-ops.yml
+var opsTemplate string
+
 // Gate workflows `init --gates` installs: exactly the ones whose WP this binary
-// contains (rule 1a): the WP1.4 broker, the WP2.7 Ready guard, the WP2.9 triage, the WP4.8 merge gate, and the WP5.7 streak.
-// Loop workflows (WP7.1) join this list in their own WP.
+// contains (rule 1a): the WP1.4 broker, the WP2.7 Ready guard, the WP2.9 triage, the WP4.8 merge gate, the WP5.6 ops
+// executor, and the WP5.7 streak. The WP7.1 loops workflow is rendered from the checkout's loops/*.toml (Extras.Loops).
 const (
 	TokenWorkflow      = "aayudha-token.yml"
 	ReadyGuardWorkflow = "aayudha-ready-guard.yml"
 	TriageWorkflow     = "aayudha-triage.yml"
 	StreakWorkflow     = "aayudha-streak.yml"
 	MergeGateWorkflow  = "aayudha-merge-gate.yml"
+	OpsWorkflow        = "aayudha-ops.yml"
 )
 
 // GateWorkflows renders the workflows init --gates installs, by file name.
@@ -55,6 +60,7 @@ func GateWorkflows(version string) map[string][]byte {
 		TriageWorkflow:     []byte(strings.ReplaceAll(triageTemplate, "{{VERSION}}", GuardVersion(version))),
 		StreakWorkflow:     []byte(strings.ReplaceAll(streakTemplate, "{{VERSION}}", GuardVersion(version))),
 		MergeGateWorkflow:  []byte(strings.ReplaceAll(mergeGateTemplate, "{{VERSION}}", GuardVersion(version))),
+		OpsWorkflow:        []byte(strings.ReplaceAll(opsTemplate, "{{VERSION}}", GuardVersion(version))),
 	}
 }
 
@@ -73,6 +79,9 @@ func GuardVersion(v string) string {
 type Extras struct {
 	Projects, Gates, Identity, Integrations bool
 	Version                                 string
+	// Loops are the rendered loops/*.toml of the checkout (WP7.1), by path:
+	// the Actions fallback and the Amp and Cursor files; --gates writes them.
+	Loops map[string][]byte
 	// Confirm asks the human a yes/no question after showing a cost and scope
 	// summary; --yes answers it for a human, never for an agent.
 	Confirm func(summary string) bool
@@ -116,6 +125,11 @@ func (in *Init) gates(_ context.Context, x Extras) error {
 		}
 	}) {
 		if err := in.writeFile("gates", ".github/workflows/"+name, wfs[name]); err != nil {
+			return err
+		}
+	}
+	for _, p := range slices.Sorted(maps.Keys(x.Loops)) {
+		if err := in.writeFile("gates", p, x.Loops[p]); err != nil {
 			return err
 		}
 	}

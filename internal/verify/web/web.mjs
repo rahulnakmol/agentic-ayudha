@@ -61,7 +61,8 @@ export function scanPII(text) {
 const browser = await chromium.launch();
 const results = [];
 for (const st of input.states) {
-  const ctxOpts = { viewport: { width: 1280, height: 800 }, reducedMotion: c.reduced_motion ? "reduce" : "no-preference" };
+  // bypassCSP: axe-core is injected as a script tag, which a page's own Content Security Policy would block.
+  const ctxOpts = { viewport: { width: 1280, height: 800 }, reducedMotion: c.reduced_motion ? "reduce" : "no-preference", bypassCSP: true };
   if (st.video) ctxOpts.recordVideo = { dir: join(input.out, "video-" + st.n), size: { width: 1280, height: 800 } };
   const context = await browser.newContext(ctxOpts);
   const page = await context.newPage();

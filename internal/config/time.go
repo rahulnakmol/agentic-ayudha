@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	_ "time/tzdata" // Windows and minimal Linux images have no zoneinfo; [time] tz must load everywhere (WP8.2)
 )
 
 // Clock counts business hours in an IANA time zone ([time] tz business_hours).
@@ -115,4 +116,26 @@ func (c Clock) Within(t time.Time) bool {
 // Next returns t if it is inside business hours, else the start of the next window.
 func (c Clock) Next(t time.Time) time.Time {
 	return c.Add(t, 0)
+}
+
+// Between returns the business time from a to b; 0 when b is not after a.
+func (c Clock) Between(a, b time.Time) time.Duration {
+	var d time.Duration
+	for t := a.In(c.Loc); t.Before(b); {
+		if start, end, ok := c.window(t); ok {
+			from, to := t, end
+			if from.Before(start) {
+				from = start
+			}
+			if b.Before(to) {
+				to = b
+			}
+			if to.After(from) {
+				d += to.Sub(from)
+			}
+		}
+		y, m, day := t.Date()
+		t = time.Date(y, m, day+1, 0, 0, 0, 0, c.Loc)
+	}
+	return d
 }

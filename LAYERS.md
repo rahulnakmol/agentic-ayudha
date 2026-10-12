@@ -8,12 +8,12 @@ Each layer has exactly one owner seat; its charter is `seats/<seat>/CHARTER.md`.
 
 | Layer | Name | Owner seat | Paths |
 |---|---|---|---|
-| L01 | Experience | UX Researcher & Evolutionist | `packages/design-system/**` |
-| L02 | Interaction / API boundary | Code Architect | `cmd/**`<br>`internal/cli/**`<br>`internal/mcp/**` |
-| L03 | Application / workflow | Engineering Manager | `internal/verbs/**`<br>`internal/workitems/**`<br>`internal/loops/**`<br>`loops/**`<br>`work-items/**`<br>`skills/**`<br>`seats/**` |
-| L04 | Domain / policy | Quality Architect | `internal/verify/**`<br>`internal/proof/**`<br>`ops/**`<br>`CONSTRAINTS.md` |
-| L05 | Intelligence | AI Native Engineer (+SRE hat) | `internal/models/**`<br>`internal/evals/**`<br>`evals/**` |
-| L06 | Contracts / integration | Code Architect | `internal/github/**`<br>`internal/hosts/**`<br>`internal/notify/**`<br>`hosts/**` |
-| L07 | Operational data / state | AI Native Engineer (+SRE hat) | `internal/ledger/**`<br>`internal/config/**`<br>`internal/secrets/**`<br>`internal/identity/**`<br>`internal/actions/**` |
-| L08 | Analytics / reporting | Revenue Architect | `internal/telemetry/**` |
-| L09 | Platform / operations | DevOps & DevEx Tinkerer | `.github/**`<br>`.agents/**`<br>`embed.go`<br>`go.mod`<br>`go.sum` |
+| L01 | Experience | UX Researcher & Evolutionist | `packages/design-system/**`<br>`examples/benefits-qa/web/**` |
+| L02 | Interaction / API boundary | Code Architect | `cmd/**`<br>`internal/cli/**`<br>`internal/mcp/**`<br>`examples/benefits-qa/api/**`<br>`examples/benefits-qa/cmd/**` |
+| L03 | Application / workflow | Engineering Manager | `internal/verbs/**`<br>`internal/workitems/**`<br>`internal/loops/**`<br>`loops/**`<br>`work-items/**`<br>`skills/**`<br>`seats/**`<br>`examples/benefits-qa/ask/**` |
+| L04 | Domain / policy | Quality Architect | `internal/verify/**`<br>`internal/proof/**`<br>`ops/**`<br>`CONSTRAINTS.md`<br>`examples/benefits-qa/policy/**` |
+| L05 | Intelligence | AI Native Engineer (+SRE hat) | `internal/models/**`<br>`internal/evals/**`<br>`evals/**`<br>`examples/benefits-qa/answer/**` |
+| L06 | Contracts / integration | Code Architect | `internal/github/**`<br>`internal/hosts/**`<br>`internal/notify/**`<br>`hosts/**`<br>`examples/benefits-qa/contracts/**` |
+| L07 | Operational data / state | AI Native Engineer (+SRE hat) | `internal/ledger/**`<br>`internal/config/**`<br>`internal/secrets/**`<br>`internal/identity/**`<br>`internal/actions/**`<br>`examples/benefits-qa/store/**` |
+| L08 | Analytics / reporting | Revenue Architect | `internal/telemetry/**`<br>`examples/benefits-qa/analytics/**` |
+| L09 | Platform / operations | DevOps & DevEx Tinkerer | `.github/**`<br>`.agents/**`<br>`embed.go`<br>`go.mod`<br>`go.sum`<br>`examples/benefits-qa/deploy/**` |

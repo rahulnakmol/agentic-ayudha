@@ -12,6 +12,7 @@ import (
 	"time"
 
 	gh "github.com/google/go-github/v90/github"
+	"github.com/shurcooL/githubv4"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 )
@@ -97,8 +98,8 @@ func TestRateLimits(t *testing.T) {
 			t.Errorf("%s: %v", tt.name, err)
 			continue
 		}
-		if n != 2 || len(clk.sleeps) != 1 || clk.sleeps[0] != tt.wait || c.Stats().Retries != 1 {
-			t.Errorf("%s: %d requests, sleeps %v, want one wait of %v", tt.name, n, clk.sleeps, tt.wait)
+		if n != 2 || len(clk.sleeps) != 1 || !jittered(clk.sleeps[0], tt.wait) || c.Stats().Retries != 1 {
+			t.Errorf("%s: %d requests, sleeps %v, want one wait of %v plus up to a quarter", tt.name, n, clk.sleeps, tt.wait)
 		}
 	}
 
@@ -120,6 +121,37 @@ func TestRateLimits(t *testing.T) {
 	}, Options{})
 	if err := label(ctx, c); !External(err) || n != 1 || len(clk.sleeps) != 0 {
 		t.Errorf("hour-long limit: err %v, %d requests, sleeps %v", err, n, clk.sleeps)
+	}
+}
+
+// jittered reports whether got is want plus a jitter of less than a quarter.
+func jittered(got, want time.Duration) bool { return got >= want && got < want+want/4 }
+
+// WP5.5: a 5xx is retried with jittered exponential backoff when repeating
+// the request cannot write twice (a read, PUT, or DELETE), never for a POST,
+// which may have landed.
+func TestServerErrorRetries(t *testing.T) {
+	ctx := context.Background()
+	n := 0
+	c, clk := newTest(t, func(w http.ResponseWriter, r *http.Request) {
+		n++
+		if n <= 2 {
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		_, _ = w.Write([]byte(`[]`))
+	}, Options{WriteGap: -1})
+	if _, _, err := c.REST.Issues.ListLabels(ctx, "o", "r", nil); err != nil || n != 3 || len(clk.sleeps) != 2 ||
+		!jittered(clk.sleeps[0], time.Second) || !jittered(clk.sleeps[1], 2*time.Second) {
+		t.Fatalf("GET after two 502s: err %v, %d requests, sleeps %v", err, n, clk.sleeps)
+	}
+	n = 0
+	c, clk = newTest(t, func(w http.ResponseWriter, r *http.Request) {
+		n++
+		w.WriteHeader(http.StatusInternalServerError)
+	}, Options{WriteGap: -1})
+	if err := label(ctx, c); err == nil || n != 1 || len(clk.sleeps) != 0 {
+		t.Fatalf("POST after a 500: err %v, %d requests, sleeps %v", err, n, clk.sleeps)
 	}
 }
 
@@ -181,5 +213,114 @@ func TestBudgetDryRunAndCapability(t *testing.T) {
 		})
 	if !errors.Is(err, actions.ErrCapability) || hits != 0 {
 		t.Fatalf("labels-only: err %v, %d requests", err, hits)
+	}
+}
+
+// WP5.5: PUT and DELETE are idempotent, so a 5xx on them is retried like a
+// read; so is a GraphQL query, which is a POST that cannot write. A GraphQL
+// mutation is a POST like any other write and is not repeated.
+func TestServerErrorRetriesIdempotentWrites(t *testing.T) {
+	ctx := context.Background()
+	failFirst := func(n *int, body string) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			*n++
+			if *n == 1 {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+			_, _ = w.Write([]byte(body))
+		}
+	}
+	writes := []struct {
+		name    string
+		method  string
+		perform func(ctx context.Context, c *Client) error
+	}{
+		{"PUT", http.MethodPut, func(ctx context.Context, c *Client) error {
+			_, _, err := c.REST.Issues.ReplaceLabelsForIssue(ctx, "o", "r", 1, []string{"x"})
+			return err
+		}},
+		{"DELETE", http.MethodDelete, func(ctx context.Context, c *Client) error {
+			_, err := c.REST.Issues.RemoveLabelForIssue(ctx, "o", "r", 1, "x")
+			return err
+		}},
+	}
+	for _, tt := range writes {
+		n := 0
+		c, clk := newTest(t, failFirst(&n, `[]`), Options{WriteGap: -1})
+		_, err := c.Write(ctx, actions.Action{Kind: "github.issue.labels", Request: &actions.Request{Method: tt.method, Path: "/repos/o/r/issues/1/labels"}},
+			func(ctx context.Context) (any, error) { return nil, tt.perform(ctx, c) })
+		if err != nil || n != 2 || len(clk.sleeps) != 1 || !jittered(clk.sleeps[0], time.Second) {
+			t.Errorf("%s after a 503: err %v, %d requests, sleeps %v", tt.name, err, n, clk.sleeps)
+		}
+	}
+
+	n := 0
+	c, clk := newTest(t, failFirst(&n, `{"data":{"viewer":{"login":"octocat"}}}`), Options{WriteGap: -1})
+	var q struct {
+		Viewer struct{ Login string }
+	}
+	if err := c.GraphQL.Query(ctx, &q, nil); err != nil || q.Viewer.Login != "octocat" || n != 2 || len(clk.sleeps) != 1 || c.Stats().GraphQL != 2 {
+		t.Errorf("GraphQL query after a 503: err %v, %+v, %d requests, sleeps %v, stats %+v", err, q, n, clk.sleeps, c.Stats())
+	}
+
+	n = 0
+	c, clk = newTest(t, failFirst(&n, `{"data":{}}`), Options{WriteGap: -1})
+	var m struct {
+		AddStar struct{ ClientMutationID string } `graphql:"addStar(input: $input)"`
+	}
+	_, err := c.Write(ctx, actions.Action{Kind: "github.graphql.mutation", Request: &actions.Request{Method: http.MethodPost, Path: "/graphql"}},
+		func(ctx context.Context) (any, error) {
+			return nil, c.GraphQL.Mutate(ctx, &m, githubv4.AddStarInput{StarrableID: githubv4.ID("x")}, nil)
+		})
+	if err == nil || n != 1 || len(clk.sleeps) != 0 {
+		t.Errorf("GraphQL mutation after a 503: err %v, %d requests, sleeps %v", err, n, clk.sleeps)
+	}
+
+	// A cancelled run stops waiting for the retry and sends nothing more.
+	n = 0
+	c, _ = newTest(t, failFirst(&n, `[]`), Options{WriteGap: -1})
+	c.opts.Sleep = func(context.Context, time.Duration) error { return context.Canceled }
+	if _, _, err := c.REST.Issues.ListLabels(ctx, "o", "r", nil); !errors.Is(err, context.Canceled) || n != 1 {
+		t.Errorf("GET after a 503 when the wait is cancelled: err %v, %d requests", err, n)
+	}
+}
+
+// The backoff jitter is less than a quarter of the wait, and none for a wait
+// too short to split.
+func TestJitterWithinAQuarter(t *testing.T) {
+	for _, d := range []time.Duration{0, 3, 4, time.Second, time.Minute} {
+		for range 100 {
+			if j := jitter(d); j < 0 || (d >= 4 && j >= d/4) || (d < 4 && j != 0) {
+				t.Fatalf("jitter(%v) = %v", d, j)
+			}
+		}
+	}
+}
+
+// A capability-limited client (labels-only) sends GraphQL queries but
+// refuses GraphQL mutations, whose effect it cannot check.
+func TestCapabilityRefusesGraphQLMutations(t *testing.T) {
+	ctx := context.Background()
+	hits := 0
+	c, _ := newTest(t, func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		_, _ = w.Write([]byte(`{"data":{"viewer":{"login":"octocat"}}}`))
+	}, Options{Capability: actions.CapLabelsOnly})
+	var q struct {
+		Viewer struct{ Login string }
+	}
+	if err := c.GraphQL.Query(ctx, &q, nil); err != nil || hits != 1 {
+		t.Fatalf("labels-only GraphQL query: err %v, %d requests", err, hits)
+	}
+	var m struct {
+		AddStar struct{ ClientMutationID string } `graphql:"addStar(input: $input)"`
+	}
+	_, err := c.Write(ctx, actions.Action{Kind: "github.labels", Request: &actions.Request{Method: http.MethodPost, Path: "/repos/o/r/issues/1/labels"}},
+		func(ctx context.Context) (any, error) {
+			return nil, c.GraphQL.Mutate(ctx, &m, githubv4.AddStarInput{StarrableID: githubv4.ID("x")}, nil)
+		})
+	if !errors.Is(err, actions.ErrCapability) || hits != 1 {
+		t.Fatalf("labels-only GraphQL mutation: err %v, %d requests", err, hits)
 	}
 }

@@ -192,6 +192,33 @@ func (f *Fake) Deliver(_ context.Context, p Page) error {
 	return nil
 }
 
+// File appends each page as one JSON line to Path: the outbox of a
+// repository with no paging channel, kept as an artifact by the Actions loops (WP7.1).
+type File struct{ Path string }
+
+// Channel implements Sink.
+func (File) Channel() string { return "file" }
+
+// Deliver implements Sink.
+func (f File) Deliver(_ context.Context, p Page) error {
+	b, err := json.Marshal(p)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(f.Path), 0o755); err != nil {
+		return err
+	}
+	fh, err := os.OpenFile(f.Path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o644)
+	if err != nil {
+		return err
+	}
+	_, err = fh.Write(append(b, '\n'))
+	if cerr := fh.Close(); err == nil {
+		err = cerr
+	}
+	return err
+}
+
 // Slack posts to an incoming-webhook URL.
 type Slack struct {
 	WebhookURL string

@@ -40,4 +40,26 @@ aayu:
 
 Promote a Release along dev, rolling, main; stamp included stories released and trigger measurement.
 
-Body lands in WP7.8 (the verb). Format and lint: skills/README.md.
+A Release issue (`type:release`) climbs the ladder one rung at a time. It must pass Ready: a Version (`vX.Y.Z`
+before it can reach main) and `includes #N` links to the stories, bugs, or Features it ships. Each rung is
+CONTRIBUTING.md's promotion procedure, run by the binary under the human's own account:
+
+```sh
+aayu release 120 --to rolling --dry-run   # what would ship and which stories would be stamped
+aayu release 120 --to rolling --yes       # dev → rolling: Rolling snapshot: <ts>, tag rolling-<date>[.n]
+aayu release 120 --to main --yes          # rolling → main: Release: vX.Y.Z, annotated tag vX.Y.Z
+```
+
+Each rung builds a `promote/…` candidate holding the exact merge commit, runs the evals (rolling) and the
+`ci.yml` gate on it, re-runs failed gate jobs once, pushes that commit as a fast-forward, and tags it. For main,
+it then watches `release.yml`. A failing gate promotes nothing. After landing, the rung:
+
+- stamps every story the promoted range shipped `released`;
+- publishes release notes that cite only proven Features (`tell release`);
+- records the artifact identity and shipping evidence on the ledger and in the Release;
+- makes the Goals and Initiatives above those stories due for `measure`.
+
+Releasing is a human's act: agents are refused, and a terminal or `--yes` from the human confirms it. Never run
+it to work around a red gate; fix the cause through dev.
+
+Format and lint: skills/README.md.

@@ -1,0 +1,6 @@
+# Which tests prove story #68's Completion Goal (WP7.7 `evolve`; WP4.3: verify maps the go test -json events of these
+# tests, from the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # an `evolve` PR without a new eval case is rejected by CI
+tests = ["internal/evals/cmd/eval:TestEvolveGateCI", "internal/evals/cmd/eval:TestEvolveGateAfterTestMergeRecomputed", "internal/evals:TestEvolveVerb"]

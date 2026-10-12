@@ -11,3 +11,19 @@ calls = [
   ["grill", "story", "--parent", "30", "--title", "Show an empty claims list with a way to start a claim", "--body", "### Summary\n\nAs a new claimant, I want to see that I have no claims yet and how to start one, so that I know what to do first.\n\n### Completion Goal\n\n1. [screenshot] state: `/claims` signed in as a seeded claimant with no claims; expected: the message \"You have no claims yet\" and a \"Start a claim\" button\n2. [api-trace] state: GET /api/claims for a seeded claimant with no claims; expected: 200 with an empty list\n\n### Measure\n\nCompletion Goal criteria observed\n\n### Threshold\n\nall 2 criteria\n\n### Scenario\n\nSign in as the seeded claimant with no claims, open the claims list, then call GET /api/claims as that claimant.\n\n### Environment\n\nlocal app with the seeded synthetic claimant; never production", "--labels", "effort:S,priority:P2", "--create"],
   ["ready", "31", "--check"],
 ]
+
+# Unrequested criteria: the request asks only that the empty page say there are no claims and how to start one.
+# Floors (verify) cover accessibility and performance on every story, so criteria for them are invented scope. A
+# tier-2 run scored 2 for a screen-reader criterion and for one about claimants who already have claims (evals.yml
+# runs 38206893151 and 38207978439); the rules are checked before the judge (TestGrillStoryScope keeps both sides).
+scope = [
+  { pattern = '(?i)\[sr-transcript\]|screen[- ]?reader|\bvoiceover\b|\bnvda\b|\bannounce[sd]?\b|\baria-', why = "a screen-reader criterion the request does not ask for" },
+  { pattern = '(?i)\bkeyboard\b|\btab (key|order)\b|\bfocus(ed|able|es)?\b', why = "a keyboard or focus criterion the request does not ask for" },
+  { pattern = '(?i)\bwcag\b|\bcontrast\b|\baxe\b|\baccessib|\btap targets?\b|\b44 ?px\b', why = "an accessibility criterion the floors already enforce" },
+  { pattern = '(?i)\b\d+(\.\d+)?\s*(ms|milliseconds?|seconds?|s)\b|\blighthouse\b|\b(lcp|cls|tbt)\b|\bload(s|ing)? (time|within)\b|\bperformance\b', why = "a performance budget the request does not state" },
+  { pattern = '(?i)\b(with|has|have)\s+(one or more\s+|existing\s+|some\s+|[1-9][0-9]*\s+)?claims\b', why = "a criterion for claimants who already have claims, which the request does not ask about" },
+]
+
+[tier2]
+rubric = "rubric.md"
+references = ["story.md"]

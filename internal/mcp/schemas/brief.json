@@ -4,6 +4,11 @@
   "additionalProperties": false,
   "description": "Explain work to an audience in a chosen register and purpose as a grounded, accessible HTML brief.",
   "properties": {
+    "draft": {
+      "description": "Markdown draft to check and render; without it, print the grounding to write from.",
+      "type": "string",
+      "x-aayu-type": "path"
+    },
     "purpose": {
       "description": "Purpose of the brief.",
       "enum": [

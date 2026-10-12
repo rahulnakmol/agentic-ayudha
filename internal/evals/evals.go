@@ -30,11 +30,96 @@ type Config struct {
 	MinPassK  float64 `toml:"min_pass_k"` // suite pass^k bar
 	MinMean   float64 `toml:"min_mean"`   // suite mean rubric score bar
 	MaxDrop   float64 `toml:"max_drop"`   // largest allowed fall of the mean below the baseline
-	MaxUSD    float64 `toml:"max_usd"`    // spend cap for one tier-2 run, on top of [budget]
+	MaxUSD    float64 `toml:"-"`          // spend cap of the run: the selected group's max_usd (ForGroup)
+	Groups    []Group `toml:"groups"`     // tier-2 case groups, each run as its own job with its own spend cap
 	MaxTokens struct {
 		Skill int `toml:"skill"`
 		Judge int `toml:"judge"`
 	} `toml:"max_tokens"`
+}
+
+// Group is a set of tier-2 cases run together with their own spend cap, so
+// one group can never use up another's (D-7.3d). A case belongs to the first
+// group with a prefix of its ID, else to the one group without prefixes.
+type Group struct {
+	Name     string   `toml:"name"`
+	Prefixes []string `toml:"prefixes"` // case ID prefixes; none: every case no other group claims
+	MaxUSD   float64  `toml:"max_usd"`  // spend cap of one run of this group, on top of [budget]
+	// PassK is "required" (the default: the full WP3.4 bar) or "advisory": the
+	// group passes on the mean bar and the drop rule, and its pass^k findings
+	// are printed but do not fail it (D-7.3g).
+	PassK string `toml:"pass_k"`
+	// Gate is "enforced" (the default: a failing result fails evals-gate) or
+	// "advisory": results are computed and printed but never gate (D-7.3h).
+	Gate string `toml:"gate"`
+}
+
+// gate policies of a group.
+const (
+	GateEnforced = "enforced"
+	GateAdvisory = "advisory"
+)
+
+// Gates reports whether the group's results gate a promotion. An unknown
+// group gates, so a typo cannot open the gate.
+func (c Config) Gates(group string) bool {
+	g, ok := c.Group(group)
+	return !ok || g.Gate != GateAdvisory
+}
+
+// pass_k policies of a group.
+const (
+	PassKRequired = "required"
+	PassKAdvisory = "advisory"
+)
+
+// Group returns the group named name.
+func (c Config) Group(name string) (Group, bool) {
+	for _, g := range c.Groups {
+		if g.Name == name {
+			return g, true
+		}
+	}
+	return Group{}, false
+}
+
+// GroupOf returns the name of the group case ID id belongs to.
+func (c Config) GroupOf(id string) string {
+	rest := ""
+	for _, g := range c.Groups {
+		if len(g.Prefixes) == 0 {
+			rest = g.Name
+		}
+		for _, p := range g.Prefixes {
+			if strings.HasPrefix(id, p) {
+				return g.Name
+			}
+		}
+	}
+	return rest
+}
+
+// ForGroup returns the config for one group's run (MaxUSD is the group's cap)
+// and the cases that belong to it.
+func (c Config) ForGroup(name string, cases []Case) (Config, []Case, error) {
+	for _, g := range c.Groups {
+		if g.Name != name {
+			continue
+		}
+		c.MaxUSD = g.MaxUSD
+		var out []Case
+		for _, k := range cases {
+			if c.GroupOf(k.ID) == name {
+				out = append(out, k)
+			}
+		}
+		return c, out, nil
+	}
+	var names []string
+	for _, g := range c.Groups {
+		names = append(names, g.Name)
+	}
+	return c, nil, fmt.Errorf("no tier-2 group %q in evals/eval.toml; have %s", name, strings.Join(names, ", "))
 }
 
 // Case is evals/cases/<skill>/<name>/case.toml: a recorded run of a skill plus
@@ -51,7 +136,13 @@ type Case struct {
 	Ready       []string   `toml:"ready"` // artifacts holding work items that must pass Ready
 	Calls       [][]string `toml:"calls"` // the recorded run's `aayu` calls, without the program name
 	Scope       []Scope    `toml:"scope"` // requirements the input does not state; a work item that adds one fails
-	Tier2       *Tier2Spec `toml:"tier2"`
+	Brief       *BriefSpec `toml:"brief"` // a brief case: the input is the grounding, the output a Markdown draft
+	// Feedback and Reproduce make an evolve case (WP7.7): the accepted Feedback
+	// issue it reproduces, and the directory holding the old skill's recorded
+	// run (the output/ artifacts under that name), which must fail tier 1.
+	Feedback  int        `toml:"feedback"`
+	Reproduce string     `toml:"reproduce"`
+	Tier2     *Tier2Spec `toml:"tier2"`
 }
 
 // Scope is one known way a skill invents a requirement for this case's input,
@@ -75,7 +166,11 @@ func (c Case) OutOfScope(it workitems.Item) []string {
 	for _, k := range keys {
 		texts = append(texts, it.Fields[k])
 	}
-	text := strings.Join(texts, "\n")
+	return c.outOfScopeText(strings.Join(texts, "\n"))
+}
+
+// outOfScopeText returns one line per scope rule the text breaks.
+func (c Case) outOfScopeText(text string) []string {
 	var out []string
 	for _, r := range c.Scope {
 		if m := r.re.FindString(text); m != "" {
@@ -98,7 +193,19 @@ type Tier2Spec struct {
 	// itself a verb. The skill model is that verb's registry lane on the direct
 	// host (never a model named here), so evals run on the model the verb uses.
 	Verb string `toml:"verb"`
+	// References are files under the skill's references/ that the host reads
+	// for this case (the brief skill's ste-words.md for the ste register); they
+	// follow the skill body in the prompt.
+	References []string `toml:"references"`
+	// Draft is the shape of the skill's reply: empty for a work item, or
+	// "slice" or "plan" for those verbs' drafts (WP5.4), checked by
+	// internal/planning against Issue, the case's github/ fixture of the
+	// Feature or story the draft is for, before the judge is asked.
+	Draft string `toml:"draft"`
+	Issue int    `toml:"issue"`
 }
+
+var groupName = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 
 // LoadConfig reads evals/eval.toml under root.
 func LoadConfig(root string) (Config, error) {
@@ -112,6 +219,25 @@ func LoadConfig(root string) (Config, error) {
 	}
 	if c.Judge == "" || c.K < 1 || c.PassScore < 1 || c.PassScore > 5 {
 		return c, errors.New("evals/eval.toml: judge, k >= 1, and pass_score 1-5 are required")
+	}
+	seen, rest := map[string]bool{}, 0
+	for _, g := range c.Groups {
+		if !groupName.MatchString(g.Name) || seen[g.Name] || g.MaxUSD <= 0 {
+			return c, fmt.Errorf("evals/eval.toml: group %q: want a unique lowercase name and max_usd > 0", g.Name)
+		}
+		if g.PassK != "" && g.PassK != PassKRequired && g.PassK != PassKAdvisory {
+			return c, fmt.Errorf("evals/eval.toml: group %q: pass_k %q: want %q or %q", g.Name, g.PassK, PassKRequired, PassKAdvisory)
+		}
+		if g.Gate != "" && g.Gate != GateEnforced && g.Gate != GateAdvisory {
+			return c, fmt.Errorf("evals/eval.toml: group %q: gate %q: want %q or %q", g.Name, g.Gate, GateEnforced, GateAdvisory)
+		}
+		seen[g.Name] = true
+		if len(g.Prefixes) == 0 {
+			rest++
+		}
+	}
+	if rest != 1 {
+		return c, errors.New("evals/eval.toml: exactly one [[groups]] entry has no prefixes (it takes every other case)")
 	}
 	return c, nil
 }
@@ -160,6 +286,9 @@ func LoadCase(dir string) (Case, error) {
 	}
 	if c.Skill == "" || c.Input == "" {
 		return c, fmt.Errorf("%s: skill and input are required", c.ID)
+	}
+	if b := c.Brief; b != nil && (b.Register == "" || b.Purpose == "" || b.Draft == "") {
+		return c, fmt.Errorf("%s: [brief] needs register, purpose, and draft", c.ID)
 	}
 	return c, nil
 }

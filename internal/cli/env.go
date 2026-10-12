@@ -10,6 +10,7 @@ import (
 	"os"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
@@ -59,6 +60,21 @@ type Options struct {
 	Exec            func(ctx context.Context, dir, name string, args ...string) (string, error) // nil runs the command (doctor, install)
 	Assets          fs.FS                                                                       // embedded skills/ and hosts/ (root embed.go); install needs it
 	HaltPoll        time.Duration                                                               // how often a running verb re-reads the halt variable; 0 is DefaultHaltPoll (WP5.7)
+	TUI             func(m tea.Model) error                                                     // runs an interactive model in place of the terminal (tests); nil uses bubbletea on In/Out
+	// CheckpointVerify replaces build's verify run on a checkpoint (tests); nil runs `aayu verify` in the worktree.
+	CheckpointVerify func(ctx context.Context, worktree string) (hold bool, detail string, err error)
+	RunPoll          time.Duration // how often release polls a workflow run; 0 is DefaultRunPoll (WP7.8)
+	// EvolveGate is the eval-first gate (internal/evals.Gate) for `evolve`
+	// (WP7.7). The binary injects it: internal/evals replays CLI calls, so it
+	// imports this package and cannot be imported by it.
+	EvolveGate func(ctx context.Context, root, nameStatus string, assets fs.FS) ([]EvolveCase, []string)
+}
+
+// EvolveCase is a new eval case of an evolve change.
+type EvolveCase struct {
+	ID       string `json:"id"`
+	Skill    string `json:"skill"`
+	Feedback int    `json:"feedback"`
 }
 
 // Globals are the global flags shared by every command.

@@ -86,6 +86,7 @@ func TestSeatAddRemove(t *testing.T) {
 	}
 	wantBlock := seats.BlockBegin + `
 /packages/design-system/  @alice @rahulnakmol
+/examples/benefits-qa/web/  @alice @rahulnakmol
 /.github/  @rahulnakmol @alice
 /skills/  @rahulnakmol @alice
 /ops/  @rahulnakmol @alice

@@ -1,0 +1,5 @@
+# Ops action catalog (docs/BUILD-PLAN.md WP5.6), read by `aayu respond` only from the default branch at a
+# pinned commit. Protected path: edits need human CODEOWNER review. Schema: ops/README.md.
+#
+# aayudha is a command-line tool with no production service, so its own catalog has no actions.
+version = 1

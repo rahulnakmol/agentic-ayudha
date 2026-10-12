@@ -1,0 +1,10 @@
+{
+  "number": 20,
+  "title": "More claimants submit their first claim within a week",
+  "state": "open",
+  "labels": [
+    {
+      "name": "type:goal"
+    }
+  ]
+}

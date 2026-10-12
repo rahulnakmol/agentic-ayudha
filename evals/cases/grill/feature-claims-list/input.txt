@@ -1,0 +1,1 @@
+Under Initiative #20. Caseworkers and claimants need a claims list: claimants see their own claims with status, and an empty state when they have none. Support logged 140 tickets in September asking where a claim went. Out of scope: editing claims from the list. Expected to change internal/claims/** and web/src/claims/**.

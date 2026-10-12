@@ -59,6 +59,11 @@ Only the repository admin identity can move `rolling` and `main` or create `v*` 
 `rolling-main-promotion` and `release-tags`). The gate runs on the exact merge commit that will land, built on
 a throwaway `promote/…` branch, so what was tested is what ships.
 
+`aayu release <release-issue> --to rolling|main --yes` (WP7.8) runs exactly the steps below for a Release issue.
+It also re-runs failed gate jobs once, stamps the stories the promotion shipped `released`, publishes the release
+notes, records the shipping evidence on the ledger and in the Release, and makes the Goals above the stories due
+for `measure`. `--dry-run` shows what would ship. The commands below are the same procedure by hand.
+
 ### `dev` → `rolling`
 
 ```sh
@@ -263,9 +268,11 @@ gate instead (docs/BUILD-PLAN.md Appendix B, D2).
    gh api "repos/rahulnakmol/agentic-ayudha/rulesets/rule-suites?rule_suite_result=bypass&time_period=month"
    ```
 
-4. Every such bypass is listed as a solo-mode bypass by a hand-run reconciliation of that history against the
-   merged PRs, written to `ledger` under `audit/<date>/`, until `aayu audit` automates it (WP7.6). A bypass
-   that is not on the list is an incident (see [SECURITY.md](SECURITY.md#tool-incident-plan)).
+4. `aayu audit` (WP7.6; hand-run reconciliations until then) lists every such bypass as a solo-mode bypass
+   when a PR comment starting `Solo-mode bypass:` came before it and only the `protected-paths` check failed,
+   and writes its report to `ledger` under `audit/<date>/`. It runs with a repository admin token, since only
+   an admin can read rule suites. A bypass the report marks unexplained is an incident (see
+   [SECURITY.md](SECURITY.md#tool-incident-plan)).
 
 **When a bot identity exists (WP1.4)**: agent-authored PRs are opened by the bot, so the founder can approve
 them as a real review. The `protected-paths` gate passes when every protected path in the PR has an approving

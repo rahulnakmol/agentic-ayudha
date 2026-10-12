@@ -314,10 +314,17 @@ func (e *Env) gateProblems(ctx context.Context, repo string, res VerifyResult, s
 	return out
 }
 
-// waivers are the floor-waiver Decisions under a story (its sub-issues of
-// type decision; accepting them is WP5.6's, n/a here).
+// waivers are the accepted floor-waiver Decisions under a story: sub-issues
+// of type decision that a human accepted with `decide --accept waive`
+// (WP5.6), so they are closed as completed, by someone who is not a bot, with
+// "waive, accepted by @<login>" in their Decision section. A filed but
+// unaccepted waiver waives nothing (rule 7).
 func (e *Env) waivers(ctx context.Context, repo string, story int) ([]verify.Waiver, error) {
 	c, _, err := e.readClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	l, err := e.Config()
 	if err != nil {
 		return nil, err
 	}
@@ -335,6 +342,16 @@ func (e *Env) waivers(ctx context.Context, repo string, story int) ([]verify.Wai
 			continue
 		}
 		_, v := workitems.Sections(is.GetBody())
+		if is.GetState() != "closed" || is.GetStateReason() != "completed" || !strings.HasPrefix(strings.ToLower(strings.TrimSpace(v["Decision"])), "waive, accepted by @") {
+			continue
+		}
+		full, _, err := c.REST.Issues.Get(ctx, owner, name, is.GetNumber())
+		if err != nil {
+			return nil, err
+		}
+		if by := full.GetClosedBy(); by == nil || identity.IsBot(identity.Account{Login: by.GetLogin(), Type: by.GetType()}, l.Config.Identity.BotLogins) {
+			continue
+		}
 		out = append(out, verify.Waiver{Decision: is.GetNumber(), Title: is.GetTitle(), Body: is.GetBody(), Links: v["Links"]})
 	}
 	return out, nil

@@ -1,0 +1,13 @@
+# Recorded run of the grill skill (`grill release`, WP5.3): the host model interviewed with references/release.md, validated the
+# draft, and wrote it with --create. github/ serves the created issue (#21) and its parent so the recorded `ready --check` sees
+# what the run wrote.
+skill = "grill"
+description = "Grill a Release from a request; the issue it writes passes Ready."
+input = "input.txt"
+artifacts = ["output/issue.json"]
+schemas = [{ file = "output/issue.json", schema = "evals/schemas/workitem.json" }]
+ready = ["output/issue.json"]
+calls = [
+  ["grill", "release", "--parent", "20", "--title", "Claims list on rolling", "--body", "### Summary\n\nShip the claims list to early adopters on rolling.\n\n### Version\n\n2026-10-19T06:00Z", "--create"],
+  ["ready", "21", "--check"],
+]

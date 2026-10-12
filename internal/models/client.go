@@ -3,11 +3,13 @@ package models
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -17,8 +19,50 @@ import (
 
 // Message is one turn of a conversation.
 type Message struct {
-	Role    string `json:"role"` // user or assistant
-	Content string `json:"content"`
+	Role    string  `json:"role"` // user or assistant
+	Content string  `json:"content"`
+	Images  []Image `json:"-"` // user turns only; sent before the text in each wire format
+}
+
+// Image is an image attached to a user message.
+type Image struct {
+	MediaType string // image/png or image/jpeg
+	Data      []byte
+}
+
+// wire renders messages for a wire format: unchanged while no message has
+// images, else each message with images as a content array (images first,
+// then the text) in the format's own block types.
+func wire(style string, msgs []Message) any {
+	if !slices.ContainsFunc(msgs, func(m Message) bool { return len(m.Images) > 0 }) {
+		return msgs
+	}
+	out := make([]map[string]any, len(msgs))
+	for i, m := range msgs {
+		if len(m.Images) == 0 {
+			out[i] = map[string]any{"role": m.Role, "content": m.Content}
+			continue
+		}
+		var parts []map[string]any
+		for _, img := range m.Images {
+			b64 := base64.StdEncoding.EncodeToString(img.Data)
+			dataURL := "data:" + img.MediaType + ";base64," + b64
+			switch style {
+			case StyleMessages:
+				parts = append(parts, map[string]any{"type": "image", "source": map[string]any{"type": "base64", "media_type": img.MediaType, "data": b64}})
+			case StyleResponses:
+				parts = append(parts, map[string]any{"type": "input_image", "image_url": dataURL})
+			default:
+				parts = append(parts, map[string]any{"type": "image_url", "image_url": map[string]any{"url": dataURL}})
+			}
+		}
+		text := map[string]any{"type": "text", "text": m.Content}
+		if style == StyleResponses {
+			text["type"] = "input_text"
+		}
+		out[i] = map[string]any{"role": m.Role, "content": append(parts, text)}
+	}
+	return out
 }
 
 // Request is a provider-neutral model call.
@@ -97,14 +141,14 @@ func (c HTTPClient) Complete(ctx context.Context, r Request) (Response, error) {
 	switch c.Style {
 	case StyleMessages:
 		path = "/messages"
-		b := map[string]any{"model": r.Model, "max_tokens": r.MaxTokens, "messages": r.Messages}
+		b := map[string]any{"model": r.Model, "max_tokens": r.MaxTokens, "messages": wire(c.Style, r.Messages)}
 		if r.System != "" {
 			b["system"] = r.System
 		}
 		body = b
 	case StyleResponses:
 		path = "/responses"
-		b := map[string]any{"model": r.Model, "input": r.Messages, "max_output_tokens": r.MaxTokens}
+		b := map[string]any{"model": r.Model, "input": wire(c.Style, r.Messages), "max_output_tokens": r.MaxTokens}
 		if r.System != "" {
 			b["instructions"] = r.System
 		}
@@ -121,7 +165,7 @@ func (c HTTPClient) Complete(ctx context.Context, r Request) (Response, error) {
 		if r.System != "" {
 			msgs = append([]Message{{Role: "system", Content: r.System}}, msgs...)
 		}
-		b := map[string]any{"model": r.Model, "messages": msgs, "max_tokens": r.MaxTokens}
+		b := map[string]any{"model": r.Model, "messages": wire(c.Style, msgs), "max_tokens": r.MaxTokens}
 		if r.Effort != "" {
 			b["reasoning_effort"] = r.Effort
 		}

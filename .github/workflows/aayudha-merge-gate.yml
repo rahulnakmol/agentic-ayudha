@@ -92,6 +92,30 @@ jobs:
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
           # Unprivileged user and network namespaces for the no-network sandbox (Ubuntu restricts them by default).
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+      # Web floors (WP4.5) for this repository's example product (examples/benefits-qa, WP8.1, Appendix B D-8.1b).
+      # The template leaves these tools to each product; here they come from the base branch's packages/floors and
+      # pnpm-lock.yaml (trusted, never the PR's lockfile), with install scripts denied by pnpm-workspace.yaml, and
+      # verify resolves Playwright, axe-core, and Lighthouse through NODE_PATH. The PR's own app is started only by
+      # `[verify] seed` inside verify's scrubbed environment.
+      - name: Check out the base branch for the web floor tools (trusted; no PR code)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          path: floor-tools
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: floor-tools/package.json
+      - name: Web floor tools (frozen lockfile) and Chromium
+        working-directory: floor-tools
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile --filter @aayudha/floors
+          pnpm --filter @aayudha/floors exec playwright install --with-deps chromium
+          echo "NODE_PATH=$PWD/packages/floors/node_modules" >> "$GITHUB_ENV"
       - name: Fetch modules for the offline test run
         working-directory: head
         run: if [ -f go.mod ]; then go mod download; fi

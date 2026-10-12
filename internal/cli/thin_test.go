@@ -3,6 +3,7 @@ package cli
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -11,6 +12,8 @@ import (
 	"testing"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
+	"github.com/rahulnakmol/agentic-ayudha/internal/planning"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 )
@@ -24,7 +27,7 @@ func thinFixture(t *testing.T) (g *fake.GitHub, env map[string]string, opts Opti
 	git(t, dir, "config", "user.name", "Builder")
 	git(t, dir, "config", "user.email", "builder@example.com")
 	env = map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH"), "AAYU_MODEL": "claude-opus-5-5"}
-	opts = Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+	opts = Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, CheckpointVerify: holds}
 	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready: %s", errOut)
 	}
@@ -64,15 +67,18 @@ func thinFixture(t *testing.T) (g *fake.GitHub, env map[string]string, opts Opti
 	return g, env, opts, dir, bare, res.PR, head
 }
 
+// holds stands in for build's verify of a checkpoint: the floors hold.
+func holds(context.Context, string) (bool, string, error) { return true, "floors hold", nil }
+
 // gateRun records a green merge gate for head, with its pack as the run's
 // aayudha-pack artifact (no bot App: CI could not write the ledger).
-func gateRun(t *testing.T, g *fake.GitHub, dir string, prN int, head string, checks []proof.Check) {
+func gateRun(t *testing.T, g *fake.GitHub, dir string, prN int, head string, checks []proof.Check, footprint ...string) {
 	t.Helper()
 	b := git(t, dir, "show", "origin/ledger:"+ready.LedgerPath(2))
 	snap, _ := ready.ParseSnapshot(b)
 	files := map[string][]byte{}
 	p := &proof.Pack{Repo: "o/r", Story: 2, PR: prN, PRHeadSHA: head, Seat: "ai-native-engineer", Host: "cli", Identity: "ci",
-		CompletionGoalHash: snap.CompletionGoalHash, CreatedAt: "2026-10-12T10:00:00Z", Checks: checks}
+		CompletionGoalHash: snap.CompletionGoalHash, CreatedAt: "2026-10-12T10:00:00Z", Checks: checks, Footprint: footprint}
 	for _, c := range snap.Criteria {
 		rel := "evidence/criterion-" + strconv.Itoa(c.N) + ".jsonl"
 		files[rel] = []byte(`{"Action":"pass","Test":"TestEmpty"}` + "\n")
@@ -213,7 +219,14 @@ func TestShipMobileWaiverAndSoloBypass(t *testing.T) {
 	g.Mu.Lock()
 	g.Pulls[prN].Head.SHA = head
 	g.Mu.Unlock()
-	gateRun(t, g, dir, prN, head, []proof.Check{{Floor: "mobile", Result: proof.Waived, Tool: "aayudha", Version: "0.1", Detail: proof.SkippedMobile + " (waived by #9)", Waiver: "#9"}})
+	gateRun(t, g, dir, prN, head, []proof.Check{{Floor: "mobile", Result: proof.Waived, Tool: "aayudha", Version: "0.1", Detail: proof.SkippedMobile + " (waived by #9)", Waiver: "#9"}}, "L07")
+	// L07 is a never layer: the plan shipped with a solo-mode plan-review bypass, not an approval.
+	plan := PlanRecord{Story: 2, Footprint: []string{"L07"}, Review: planning.Review{Required: true, Layers: []string{"L07"},
+		Bypass: &planning.ReviewBypass{As: "solo-bypass", Reviewer: "none (solo mode)", RecordedBy: "founder", Comment: "https://example.test/o/r/issues/2#issuecomment-81", Note: "solo mode"}}}
+	pb, _ := json.Marshal(plan)
+	if _, err := (&ledger.Writer{Dir: dir}).Write(context.Background(), ledger.Commit{Message: "plan bypass", Files: map[string][]byte{PlanLedgerPath(2): pb}}); err != nil {
+		t.Fatal(err)
+	}
 	if code, out := ship("--solo-bypass"); code != ExitBlocked || !strings.Contains(out, `post a PR comment starting "Solo-mode bypass:"`) {
 		t.Fatalf("solo bypass without the comment: %d %s", code, out)
 	}
@@ -231,11 +244,12 @@ func TestShipMobileWaiverAndSoloBypass(t *testing.T) {
 	g.Mu.Lock()
 	body := g.Issues[2].Body
 	g.Mu.Unlock()
-	if !strings.Contains(body, "merged under a recorded solo-mode bypass") || !strings.Contains(body, "Floor waived: mobile by #9") {
+	if !strings.Contains(body, "merged under a recorded solo-mode bypass") || !strings.Contains(body, "Floor waived: mobile by #9") ||
+		!strings.Contains(body, "Plan-time review: none; founder recorded a solo-mode plan-review bypass for layers L07") {
 		t.Fatalf("Complete section:\n%s", body)
 	}
 	rec := git(t, bare, "show", "ledger:proof/2/"+head+"/authoritative/ship.json")
-	if !strings.Contains(rec, `"kind": "solo-bypass"`) || !strings.Contains(rec, `"mobile by #9"`) {
+	if !strings.Contains(rec, `"kind": "solo-bypass"`) || !strings.Contains(rec, `"mobile by #9"`) || !strings.Contains(rec, `"reviewer": "none (solo mode)"`) || strings.Contains(rec, `"approved_by"`) {
 		t.Fatalf("ship record: %s", rec)
 	}
 }
@@ -261,9 +275,16 @@ func TestGrillStory(t *testing.T) {
 	if code != 0 || !res.Pass || len(g.Issues) != before {
 		t.Fatalf("valid draft without --create: %d %+v %s", code, res, errOut)
 	}
+	// A human running grill writes under their own identity (WP5.3), untagged.
 	code, res, errOut = grill("--title", "Show empty list", "--body", body, "--parent", "1", "--labels", "effort:S,priority:P2", "--create")
-	if code != 0 || res.Issue == 0 || !contains(g.LabelNames(res.Issue), "identity:human-fallback") {
-		t.Fatalf("create: %d %+v %s", code, res, errOut)
+	if code != 0 || res.Issue == 0 || res.Identity != "human" || contains(g.LabelNames(res.Issue), "identity:human-fallback") {
+		t.Fatalf("create by a human: %d %+v %s", code, res, errOut)
+	}
+	// An agent lane writes under the bot; with no bot yet, the human fallback is tagged (WP1.4).
+	agent := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1"}
+	if code, out, errOut := run(t, agent, opts, "grill", "story", "--repo", "o/r", "--json", "--title", "Show empty list", "--body", body, "--parent", "1",
+		"--labels", "effort:S", "--create"); code != 0 || !strings.Contains(out, "identity:human-fallback") {
+		t.Fatalf("create by an agent: %d %s %s", code, out, errOut)
 	}
 	g.Mu.Lock()
 	parent := g.Issues[res.Issue].Parent

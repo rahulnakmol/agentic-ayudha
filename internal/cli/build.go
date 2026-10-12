@@ -1,7 +1,10 @@
 package cli
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -9,32 +12,82 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
+	"strconv"
 	"strings"
+	"time"
 
 	gh "github.com/google/go-github/v90/github"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
+	"github.com/rahulnakmol/agentic-ayudha/internal/autonomy"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
+	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
+	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
-	"github.com/rahulnakmol/agentic-ayudha/internal/verify"
 )
 
 func init() { register("build", runBuild) }
 
 // BuildResult is what build reports.
 type BuildResult struct {
-	Issue      int    `json:"issue"`
-	Worktree   string `json:"worktree"`
-	Branch     string `json:"branch"`
-	Created    bool   `json:"worktree_created,omitempty"`
-	Checkpoint string `json:"checkpoint,omitempty"` // n/N of the commit this run made
-	Commit     string `json:"commit,omitempty"`
-	PR         int    `json:"pr,omitempty"`
-	PRURL      string `json:"pr_url,omitempty"`
-	Next       string `json:"next"`
+	Issue      int      `json:"issue"`
+	Worktree   string   `json:"worktree"`
+	Branch     string   `json:"branch"`
+	Created    bool     `json:"worktree_created,omitempty"`
+	Resumed    string   `json:"resumed_from,omitempty"` // the last Aayudha-Checkpoint trailer --resume continued from
+	Lease      Lease    `json:"lease"`
+	Checkpoint string   `json:"checkpoint,omitempty"` // n/N of the commit this run made
+	Attempt    int      `json:"attempt,omitempty"`
+	Commit     string   `json:"commit,omitempty"`
+	Verify     string   `json:"verify,omitempty"` // hold, miss, or error: what verify said of the checkpoint
+	Budget     Usage    `json:"budget"`
+	PR         int      `json:"pr,omitempty"`
+	PRURL      string   `json:"pr_url,omitempty"`
+	Notes      []string `json:"notes,omitempty"`
+	Next       string   `json:"next"`
 }
+
+// Usage is a story's build budget use against [autonomy.budget].
+type Usage struct {
+	WallHours   float64 `json:"wall_hours"`
+	MaxWall     float64 `json:"max_wall_hours"`
+	CostUSD     float64 `json:"cost_usd"`
+	MaxCost     float64 `json:"max_cost_usd"`
+	Attempts    int     `json:"failed_attempts"`
+	MaxAttempts int     `json:"max_attempts"`
+}
+
+// BuildState is build/<story>/state.json on the ledger: when the build
+// started, its checkpoints with their verify results, and the failures the
+// budget counts.
+type BuildState struct {
+	Story       int                `json:"story"`
+	Branch      string             `json:"branch"`
+	StartedAt   string             `json:"started_at"`
+	Attempts    int                `json:"failed_attempts"`
+	Failures    map[string]int     `json:"failures_by_layer,omitempty"` // failed verifies per layer of the checkpoint
+	Checkpoints []CheckpointRecord `json:"checkpoints"`
+	Blocked     string             `json:"blocked,omitempty"`
+	Unblocked   []string           `json:"unblocked,omitempty"` // when a human made the story Ready again after a block
+}
+
+// CheckpointRecord is one checkpoint commit and what verify said of it.
+type CheckpointRecord struct {
+	K       int      `json:"k"`
+	N       int      `json:"n"`
+	Attempt int      `json:"attempt"`
+	Commit  string   `json:"commit"`
+	Layers  []string `json:"layers"`
+	Verify  string   `json:"verify"` // hold, miss, or error
+	Detail  string   `json:"detail,omitempty"`
+	At      string   `json:"at"`
+}
+
+// BuildLedgerPath is where a story's build state lives on the ledger.
+func BuildLedgerPath(n int) string { return fmt.Sprintf("build/%d/state.json", n) }
 
 var nonSlug = regexp.MustCompile(`[^a-z0-9]+`)
 
@@ -61,21 +114,49 @@ func run2(ctx context.Context, dir string, args ...string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-// runBuild is the thin-slice build (WP4.10): it refuses a story that is not
-// Ready or whose body drifted from its snapshot; the first run cuts a
-// worktree from origin/dev; each later run commits what the agent wrote as a
-// checkpoint (Aayudha-Story, Aayudha-Checkpoint, and Aayudha-Model trailers,
-// DCO sign-off), pushes the branch, and opens the PR. Leases, the budget
-// breaker, per-checkpoint verify, and --resume are WP5.5.
-func runBuild(ctx context.Context, e *Env, in Values) error {
-	if in.Bool("resume") {
-		return Errorf(ExitUsage, "build --resume is n/a until WP5.5")
+// readLedgerJSON reads a JSON file from the ledger; ok is false when the
+// ledger or the file does not exist yet.
+func readLedgerJSON(ctx context.Context, w *ledger.Writer, p string, v any) (bool, error) {
+	t, err := w.Read(ctx)
+	if errors.Is(err, ledger.ErrNoLedger) {
+		return false, nil
 	}
+	if err != nil {
+		return false, err
+	}
+	defer t.Close()
+	b, err := t.File(ctx, p)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, json.Unmarshal(b, v)
+}
+
+// runBuild (WP5.5) builds a Ready story in steps. It refuses a story that
+// is not Ready or whose body drifted from its snapshot, and one another
+// builder holds a live lease on; it takes or renews the lease, and checks the
+// [autonomy.budget] (wall time, spend, failed attempts) before any work. The
+// first run cuts .aayudha/worktrees/<n> from origin/dev (or, with --resume,
+// from the story branch at its last Aayudha-Checkpoint trailer). Each later
+// run commits what the agent wrote as checkpoint k/N (N from the plan when
+// one is on the ledger) and runs verify on it: a floor miss is a failed
+// attempt, and the attempts budget or a second miss on a never layer moves
+// the story to status:blocked and pages. A checkpoint that holds is pushed and
+// the PR opened. The progress comment and build/<n>/state.json on the ledger
+// record every run.
+func runBuild(ctx context.Context, e *Env, in Values) error {
 	root := config.RepoRoot(e.Dir)
 	if root == "" {
 		return Errorf(ExitUsage, "build runs in a checkout of the repository")
 	}
 	repo, err := e.RepoName(ctx)
+	if err != nil {
+		return err
+	}
+	l, err := e.Config()
 	if err != nil {
 		return err
 	}
@@ -89,39 +170,112 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return Wrap(ExitExternal, err)
 	}
-	if why := e.notReady(ctx, c, repo, n, chk, github.IssueLabels(is)); why != "" {
+	labels := github.IssueLabels(is)
+	why, err := e.notReady(ctx, c, repo, n, chk, labels)
+	if err != nil {
+		return Wrap(ExitExternal, fmt.Errorf("build #%d: reading the Ready snapshot: %w", n, err))
+	}
+	if why != "" {
 		return Errorf(ExitBlocked, "build #%d: %s", n, why)
 	}
 	res := BuildResult{Issue: n, Worktree: BuildWorktree(root, n), Branch: fmt.Sprintf("story/%d-%s", n, slug(chk.Title))}
 	dev := e.devBranch()
+	w, err := e.Ledger(ctx, bot.Token, c.Identity(), bot.Tag)
+	if err != nil {
+		return err
+	}
+	var st BuildState
+	if _, err := readLedgerJSON(ctx, w, BuildLedgerPath(n), &st); err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	now := e.Now().UTC()
+	if st.Blocked != "" {
+		// A human made the story Ready again after the block: the budget starts over.
+		st = BuildState{Unblocked: append(st.Unblocked, now.Format(time.RFC3339)+" after: "+st.Blocked), Checkpoints: st.Checkpoints}
+	}
+	if st.StartedAt == "" {
+		st.StartedAt = now.Format(time.RFC3339)
+	}
+	st.Story, st.Branch = n, res.Branch
+	if res.Lease, err = e.takeLease(ctx, c, repo, n, leaseHolder(bot.Login), labels); err != nil {
+		return err
+	}
+	b := l.Config.Autonomy.Budget
+	res.Budget = Usage{MaxWall: b.WallHours, MaxCost: b.CostUSD, MaxAttempts: b.Attempts, Attempts: st.Attempts, CostUSD: e.buildCost(repo, n)}
+	if started, err := time.Parse(time.RFC3339, st.StartedAt); err == nil {
+		res.Budget.WallHours = now.Sub(started).Hours()
+	}
+	block := func(why string) error { return e.blockBuild(ctx, c, w, repo, n, labels, &st, &res, why) }
+	switch {
+	case b.WallHours > 0 && res.Budget.WallHours > b.WallHours:
+		return block(fmt.Sprintf("wall-time budget breached: %.1f h since the build started, budget %.1f h", res.Budget.WallHours, b.WallHours))
+	case b.CostUSD > 0 && res.Budget.CostUSD > b.CostUSD:
+		return block(fmt.Sprintf("cost budget breached: %.2f USD spent, budget %.2f USD", res.Budget.CostUSD, b.CostUSD))
+	}
+
+	// The worktree: cut from origin/dev, or resumed from the story branch.
 	if _, err := os.Stat(res.Worktree); err != nil {
 		if _, err := run2(ctx, root, "git", "fetch", "--quiet", "origin", dev); err != nil {
 			return Wrap(ExitExternal, err)
 		}
-		if _, err := run2(ctx, root, "git", "worktree", "add", "--quiet", "-b", res.Branch, res.Worktree, "origin/"+dev); err != nil {
-			return Wrap(ExitExternal, err)
+		remote, _ := run2(ctx, root, "git", "ls-remote", "--heads", "origin", res.Branch)
+		switch {
+		case remote != "" && !in.Bool("resume"):
+			return Errorf(ExitBlocked, "build #%d: %s already exists on origin; `aayu build %d --resume` continues from its last checkpoint", n, res.Branch, n)
+		case remote != "":
+			if _, err := run2(ctx, root, "git", "fetch", "--quiet", "origin", "+refs/heads/"+res.Branch+":refs/remotes/origin/"+res.Branch); err != nil {
+				return Wrap(ExitExternal, err)
+			}
+			if _, err := run2(ctx, root, "git", "worktree", "add", "--quiet", "-B", res.Branch, res.Worktree, "origin/"+res.Branch); err != nil {
+				return Wrap(ExitExternal, err)
+			}
+			res.Resumed = lastTrailer(ctx, res.Worktree, dev)
+		default:
+			if _, err := run2(ctx, root, "git", "worktree", "add", "--quiet", "-B", res.Branch, res.Worktree, "origin/"+dev); err != nil {
+				return Wrap(ExitExternal, err)
+			}
 		}
 		res.Created = true
-		res.Next = fmt.Sprintf("write the change in %s (tests included; map criteria to tests in .aayudha/evidence/%d.toml), then run `aayu build %d` again to commit a checkpoint and open the PR", res.Worktree, n, n)
+		res.Next = fmt.Sprintf("write the change in %s (tests included; map criteria to tests in .aayudha/evidence/%d.toml), then run `aayu build %d` again to commit a checkpoint", res.Worktree, n, n)
+		if res.Resumed != "" {
+			res.Next = fmt.Sprintf("resumed after checkpoint %s; continue in %s, then run `aayu build %d` again", res.Resumed, res.Worktree, n)
+		}
+		if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
+			return err
+		}
 		return e.Emit(res, func(w io.Writer) error {
-			_, err := fmt.Fprintf(w, "#%d %s: worktree %s on %s from origin/%s\n  next: %s\n", n, chk.Title, res.Worktree, res.Branch, dev, res.Next)
+			_, err := fmt.Fprintf(w, "#%d %s: worktree %s on %s (leased by %s until %s)\n  next: %s\n", n, chk.Title, res.Worktree, res.Branch, res.Lease.Holder, res.Lease.Expires.UTC().Format(time.RFC3339), res.Next)
 			return err
 		})
 	}
+	if in.Bool("resume") {
+		res.Resumed = lastTrailer(ctx, res.Worktree, dev)
+	}
+
+	// A checkpoint: commit what the agent wrote, then verify it.
 	dirty, err := run2(ctx, res.Worktree, "git", "status", "--porcelain")
 	if err != nil {
 		return Wrap(ExitExternal, err)
 	}
 	if dirty != "" {
-		prior, _ := run2(ctx, res.Worktree, "git", "log", "--format=%(trailers:key=Aayudha-Checkpoint,valueonly)", "origin/"+dev+"..HEAD")
-		k := len(strings.Fields(prior)) + 1
 		if _, err := run2(ctx, res.Worktree, "git", "add", "--all"); err != nil {
 			return Wrap(ExitExternal, err)
 		}
-		names, _ := run2(ctx, res.Worktree, "git", "diff", "--cached", "--name-only", "origin/"+dev)
-		total := max(k, len(verify.ReadLayers(res.Worktree).Footprint(strings.Fields(names))))
-		res.Checkpoint = fmt.Sprintf("%d/%d", k, total)
+		names, _ := run2(ctx, res.Worktree, "git", "diff", "--cached", "--name-only", "HEAD")
+		lg := autonomy.ReadLayers(res.Worktree)
+		layers := lg.Footprint(strings.Fields(names))
+		var plan PlanRecord
+		hasPlan, _ := readLedgerJSON(ctx, w, PlanLedgerPath(n), &plan)
+		k, attempt := nextCheckpoint(ctx, st, res.Worktree, dev)
+		total := max(k, len(lg.Footprint(changedSince(ctx, res.Worktree, dev, names))))
+		if hasPlan && len(plan.Checkpoints) > 0 {
+			total = max(k, len(plan.Checkpoints))
+		}
+		res.Checkpoint, res.Attempt = fmt.Sprintf("%d/%d", k, total), attempt
 		msg := fmt.Sprintf("feat: %s (#%d, checkpoint %s)\n\nAayudha-Story: #%d\nAayudha-Checkpoint: %s", strings.ToLower(chk.Title[:1])+chk.Title[1:], n, res.Checkpoint, n, res.Checkpoint)
+		if attempt > 1 {
+			msg += fmt.Sprintf("\nAayudha-Attempt: %d", attempt)
+		}
 		if m := e.builderModel(); m != "" {
 			msg += "\nAayudha-Model: " + m
 		}
@@ -129,16 +283,92 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			return Wrap(ExitExternal, err)
 		}
 		res.Commit, _ = run2(ctx, res.Worktree, "git", "rev-parse", "HEAD")
+		rec := CheckpointRecord{K: k, N: total, Attempt: attempt, Commit: res.Commit, Layers: layers, At: now.Format(time.RFC3339)}
+		if rec.Layers == nil {
+			rec.Layers = []string{}
+		}
+		hold, detail, verr := e.checkpointVerify(ctx, res.Worktree)
+		switch {
+		case verr != nil:
+			rec.Verify, rec.Detail = "error", verr.Error()
+			res.Notes = append(res.Notes, "verify could not run on the checkpoint: "+verr.Error())
+		case hold:
+			rec.Verify, rec.Detail = "hold", detail
+		default:
+			rec.Verify, rec.Detail = "miss", detail
+		}
+		res.Verify = rec.Verify
+		st.Checkpoints = append(st.Checkpoints, rec)
+		if rec.Verify == "miss" {
+			st.Attempts++
+			res.Budget.Attempts = st.Attempts
+			if st.Failures == nil {
+				st.Failures = map[string]int{}
+			}
+			for _, x := range rec.Layers {
+				st.Failures[x]++
+			}
+			for _, x := range rec.Layers {
+				if slices.Contains(l.Config.Autonomy.Never, x) && st.Failures[x] >= 2 {
+					return block(fmt.Sprintf("second verify failure on never layer %s (checkpoint %s: %s)", x, res.Checkpoint, detail))
+				}
+			}
+			if b.Attempts > 0 && st.Attempts >= b.Attempts {
+				return block(fmt.Sprintf("attempts budget breached: %d failed checkpoint attempts, budget %d (last: %s)", st.Attempts, b.Attempts, detail))
+			}
+			if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
+				return err
+			}
+			res.Next = fmt.Sprintf("fix the floor miss in %s and run `aayu build %d` again (failed attempts %d of %d)", res.Worktree, n, st.Attempts, b.Attempts)
+			_ = e.Emit(res, func(w io.Writer) error {
+				_, err := fmt.Fprintf(w, "#%d: checkpoint %s (attempt %d) committed (%s); verify: floor miss: %s\n  next: %s\n", n, res.Checkpoint, attempt, short(res.Commit), detail, res.Next)
+				return err
+			})
+			return Errorf(ExitFloor, "checkpoint %s: floor miss: %s", res.Checkpoint, detail)
+		}
 	}
 	ahead, _ := run2(ctx, res.Worktree, "git", "rev-list", "--count", "origin/"+dev+"..HEAD")
 	if ahead == "0" {
+		if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
+			return err
+		}
 		return Errorf(ExitBlocked, "build #%d: nothing to commit yet in %s", n, res.Worktree)
 	}
-	w := &ledger.Writer{Dir: root, Token: bot.Token.Value}
+	if err := e.publishBuild(ctx, c, bot.Token.Value, root, repo, dev, n, chk, &res); err != nil {
+		// The checkpoint is committed: record it even though the push or the PR
+		// failed, so the next run (or --resume) continues after it.
+		if serr := e.saveBuild(ctx, c, w, repo, n, &st, &res); serr != nil {
+			fmt.Fprintf(e.Err, "aayu: warning: the build state did not reach the ledger: %v\n", serr)
+		}
+		return err
+	}
+	if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
+		return err
+	}
+	// The actions segment of this checkpoint goes to the ledger (WP1.5), pushed with the build's own token.
+	if err := e.checkpoint(bot.Token); err != nil {
+		fmt.Fprintf(e.Err, "aayu: warning: the actions segment did not reach the ledger: %v\n", err)
+	}
+	res.Next = fmt.Sprintf("the merge gate re-runs verify on PR #%d; `aayu ship %d` after a human pass", res.PR, res.PR)
+	return e.Emit(res, func(w io.Writer) error {
+		if res.Commit != "" {
+			fmt.Fprintf(w, "#%d: checkpoint %s committed (%s); verify: %s\n", n, res.Checkpoint, short(res.Commit), res.Verify)
+		}
+		for _, x := range res.Notes {
+			fmt.Fprintf(w, "  note: %s\n", x)
+		}
+		_, err := fmt.Fprintf(w, "#%d: branch %s pushed; PR #%d %s\n  next: %s\n", n, res.Branch, res.PR, res.PRURL, res.Next)
+		return err
+	})
+}
+
+// publishBuild pushes the story branch and finds or opens its PR.
+func (e *Env) publishBuild(ctx context.Context, c *github.Client, token, root, repo, dev string, n int, chk ready.Result, res *BuildResult) error {
+	gw := &ledger.Writer{Dir: root, Token: token}
 	if !c.DryRun() {
 		if _, err := c.Write(ctx, actions.Action{Kind: "git.push", Target: repo + "@" + res.Branch, Payload: map[string]any{"branch": res.Branch, "commit": res.Commit}},
 			func(ctx context.Context) (any, error) {
-				return nil, w.Exec(ctx, res.Worktree, "push", "--quiet", "--force-with-lease", "origin", "HEAD:refs/heads/"+res.Branch)
+				return nil, gw.Exec(ctx, res.Worktree, "push", "--quiet", "--force-with-lease", "origin", "HEAD:refs/heads/"+res.Branch)
 			}); err != nil {
 			return Wrap(ExitExternal, err)
 		}
@@ -152,7 +382,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		res.PR, res.PRURL = open[0].GetNumber(), open[0].GetHTMLURL()
 	} else {
 		title := "feat: " + strings.ToLower(chk.Title[:1]) + chk.Title[1:]
-		body := fmt.Sprintf("Refs #%d\n\nBuilt with `aayu build` (WP4.10) from the Ready snapshot of #%d (body hash `%s`). The merge gate verifies it on the base branch's definition; `aayu ship` merges it after a human pass.\n", n, n, chk.BodyHash[:12])
+		body := fmt.Sprintf("Refs #%d\n\nBuilt with `aayu build` (WP5.5) from the Ready snapshot of #%d (body hash `%s`), one verified checkpoint commit per layer. The merge gate verifies it on the base branch's definition; `aayu ship` merges it after a human pass.\n", n, n, chk.BodyHash[:12])
 		var pr *gh.PullRequest
 		if _, err := c.Write(ctx, actions.Action{Kind: "github.pull.create", Target: repo, Story: fmt.Sprintf("#%d", n),
 			Request: &actions.Request{Method: http.MethodPost, Path: "/repos/" + repo + "/pulls"}, Payload: map[string]any{"head": res.Branch, "base": dev, "title": title}},
@@ -167,37 +397,198 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			res.PR, res.PRURL = pr.GetNumber(), pr.GetHTMLURL()
 		}
 	}
-	// The actions segment of this checkpoint goes to the ledger (WP1.5), pushed with the build's own token.
-	if err := e.checkpoint(bot.Token); err != nil {
-		fmt.Fprintf(e.Err, "aayu: warning: the actions segment did not reach the ledger: %v\n", err)
-	}
-	res.Next = fmt.Sprintf("`aayu verify` in %s for an advisory pack; the merge gate re-runs it on PR #%d; then `aayu ship %d` after a human pass", res.Worktree, res.PR, res.PR)
-	return e.Emit(res, func(w io.Writer) error {
-		if res.Commit != "" {
-			fmt.Fprintf(w, "#%d: checkpoint %s committed (%s)\n", n, res.Checkpoint, short(res.Commit))
+	return nil
+}
+
+// changedSince lists the paths the branch changes against origin/dev plus the
+// staged ones.
+func changedSince(ctx context.Context, wt, dev, staged string) []string {
+	names, _ := run2(ctx, wt, "git", "diff", "--name-only", "origin/"+dev+"...HEAD")
+	return append(strings.Fields(names), strings.Fields(staged)...)
+}
+
+// lastTrailer is the newest Aayudha-Checkpoint trailer on the branch.
+func lastTrailer(ctx context.Context, wt, dev string) string {
+	out, _ := run2(ctx, wt, "git", "log", "-1", "--format=%(trailers:key=Aayudha-Checkpoint,valueonly)", "origin/"+dev+"..HEAD")
+	return strings.TrimSpace(out)
+}
+
+// nextCheckpoint numbers the commit this run makes: the next checkpoint
+// after the last one that held, or another attempt at one that missed. The
+// ledger state says which; without it the branch's trailers do (--resume on
+// another machine).
+func nextCheckpoint(ctx context.Context, st BuildState, wt, dev string) (k, attempt int) {
+	if len(st.Checkpoints) > 0 && st.Checkpoints[len(st.Checkpoints)-1].Commit != "" {
+		last := st.Checkpoints[len(st.Checkpoints)-1]
+		if last.Verify == "miss" {
+			return last.K, last.Attempt + 1
 		}
-		_, err := fmt.Fprintf(w, "#%d: branch %s pushed; PR #%d %s\n  next: %s\n", n, res.Branch, res.PR, res.PRURL, res.Next)
+		return last.K + 1, 1
+	}
+	if t := lastTrailer(ctx, wt, dev); t != "" {
+		k, _ := strconv.Atoi(strings.Split(t, "/")[0])
+		return k + 1, 1
+	}
+	return 1, 1
+}
+
+// buildCost is the story's model spend: the gateway's calls in the actions
+// log plus what the host reports in AAYU_COST_USD.
+func (e *Env) buildCost(repo string, n int) float64 {
+	cost := e.costs(repo)[n]
+	if v, err := strconv.ParseFloat(e.Getenv("AAYU_COST_USD"), 64); err == nil && v > 0 {
+		cost += v
+	}
+	return cost
+}
+
+// checkpointVerify runs verify on a checkpoint in its worktree. A floor that
+// fails only because its tool is not installed here does not count as a miss
+// (the merge gate runs it with the pinned tools); it is named in the detail.
+func (e *Env) checkpointVerify(ctx context.Context, wt string) (hold bool, detail string, err error) {
+	if e.CheckpointVerify != nil {
+		return e.CheckpointVerify(ctx, wt)
+	}
+	sub := *e
+	sub.Dir, sub.config, sub.JSON = wt, nil, true
+	var out bytes.Buffer
+	sub.Out, sub.Err = &out, io.Discard
+	verr := runVerify(ctx, &sub, Values{})
+	var res VerifyResult
+	if jerr := json.NewDecoder(&out).Decode(&res); jerr != nil {
+		if verr != nil {
+			return false, "", verr
+		}
+		return false, "", jerr
+	}
+	var miss, absent []string
+	for _, ck := range res.Checks {
+		if (&proof.Pack{Checks: []proof.Check{ck}}).FloorsHold() {
+			continue
+		}
+		if strings.Contains(ck.Detail, "is not installed") {
+			absent = append(absent, ck.Floor)
+			continue
+		}
+		miss = append(miss, ck.Floor+" "+ck.Result)
+	}
+	switch {
+	case len(miss) > 0:
+		detail = strings.Join(miss, ", ")
+	case len(absent) > 0:
+		detail = "floors hold; not run here (tool not installed; the merge gate runs them): " + strings.Join(absent, ", ")
+	default:
+		detail = "floors hold"
+	}
+	return len(miss) == 0, detail, nil
+}
+
+// blockBuild moves the story to status:blocked, pages, and records why.
+func (e *Env) blockBuild(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, n int, labels []string, st *BuildState, res *BuildResult, why string) error {
+	st.Blocked = why
+	if err := setStatus(ctx, c, repo, n, labels, "blocked"); err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	sent := e.page(ctx, notify.Page{Key: fmt.Sprintf("build:%s#%d", repo, n), Subject: fmt.Sprintf("aayu build blocked #%d", n),
+		Body: fmt.Sprintf("%s#%d is status:blocked: %s. A human looks at it and runs `aayu ready %d` to let the build continue.", repo, n, why, n)})
+	res.Notes = append(res.Notes, "page: "+sent)
+	if err := e.saveBuild(ctx, c, w, repo, n, st, res); err != nil {
+		return err
+	}
+	res.Next = fmt.Sprintf("a human looks at #%d; `aayu ready %d` lets the build continue with a fresh budget", n, n)
+	_ = e.Emit(res, func(w io.Writer) error {
+		_, err := fmt.Fprintf(w, "#%d: status:blocked: %s (page %s)\n  next: %s\n", n, why, sent, res.Next)
 		return err
 	})
+	return Errorf(ExitBlocked, "build #%d blocked: %s", n, why)
+}
+
+const progressMarker = "<!-- aayudha:progress -->"
+
+// saveBuild writes the build state to the ledger and the replace-in-place
+// progress comment on the story.
+func (e *Env) saveBuild(ctx context.Context, c *github.Client, w *ledger.Writer, repo string, n int, st *BuildState, res *BuildResult) error {
+	if c.DryRun() {
+		return nil
+	}
+	b, _ := json.MarshalIndent(st, "", "  ")
+	if _, err := w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("build: state of #%d", n), Files: map[string][]byte{BuildLedgerPath(n): append(b, '\n')}}); err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	var body strings.Builder
+	fmt.Fprintf(&body, "%s\n**Build progress** (`aayu build`, branch `%s`", progressMarker, st.Branch)
+	if res.PR > 0 {
+		fmt.Fprintf(&body, ", PR #%d", res.PR)
+	}
+	body.WriteString(")\n\n| Checkpoint | Attempt | Layers | Commit | Verify |\n|---|---|---|---|---|\n")
+	for _, cp := range st.Checkpoints {
+		fmt.Fprintf(&body, "| %d/%d | %d | %s | `%s` | %s: %s |\n", cp.K, cp.N, cp.Attempt, listOrNone(cp.Layers), short(cp.Commit), cp.Verify, cp.Detail)
+	}
+	u := res.Budget
+	fmt.Fprintf(&body, "\nBudget: %.1f of %.1f h, %.2f of %.2f USD, %d of %d failed attempts.", u.WallHours, u.MaxWall, u.CostUSD, u.MaxCost, u.Attempts, u.MaxAttempts)
+	if st.Blocked != "" {
+		fmt.Fprintf(&body, "\n\n**Blocked:** %s", st.Blocked)
+	}
+	return e.replaceComment(ctx, c, repo, n, progressMarker, body.String())
+}
+
+// replaceComment edits the story's comment that starts with marker, or posts it.
+func (e *Env) replaceComment(ctx context.Context, c *github.Client, repo string, n int, marker, body string) error {
+	owner, name, _ := github.SplitRepo(repo)
+	cs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.IssueComment, *gh.Response, error) {
+		return c.REST.Issues.ListComments(ctx, owner, name, n, &gh.IssueListCommentsOptions{ListOptions: o})
+	})
+	if err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	target := fmt.Sprintf("%s#%d", repo, n)
+	for _, cm := range cs {
+		if strings.HasPrefix(cm.GetBody(), marker) {
+			id := cm.GetID()
+			_, err := c.Write(ctx, actions.Action{Kind: "github.issue.comment.edit", Target: target,
+				Request: &actions.Request{Method: http.MethodPatch, Path: fmt.Sprintf("/repos/%s/issues/comments/%d", repo, id)}, Payload: map[string]any{"marker": marker}},
+				func(ctx context.Context) (any, error) {
+					_, _, err := c.REST.Issues.EditComment(ctx, owner, name, id, &gh.IssueComment{Body: &body})
+					return nil, err
+				})
+			return wrapExternal(err)
+		}
+	}
+	_, err = c.Write(ctx, actions.Action{Kind: "github.issue.comment", Target: target,
+		Request: &actions.Request{Method: http.MethodPost, Path: fmt.Sprintf("/repos/%s/issues/%d/comments", repo, n)}, Payload: map[string]any{"marker": marker}},
+		func(ctx context.Context) (any, error) {
+			_, _, err := c.REST.Issues.CreateComment(ctx, owner, name, n, &gh.IssueComment{Body: &body})
+			return nil, err
+		})
+	return wrapExternal(err)
+}
+
+func wrapExternal(err error) error {
+	if err == nil {
+		return nil
+	}
+	return Wrap(ExitExternal, err)
 }
 
 // notReady says why a story cannot be built: not labelled status:ready, not
 // passing Ready, or its body hash differs from the Ready snapshot's.
-func (e *Env) notReady(ctx context.Context, c *github.Client, repo string, n int, chk ready.Result, labels []string) string {
+// A failure to read the snapshot is an error, not a reason: the story may
+// well be Ready.
+func (e *Env) notReady(ctx context.Context, c *github.Client, repo string, n int, chk ready.Result, labels []string) (string, error) {
 	switch {
 	case !chk.Pass:
-		return fmt.Sprintf("it does not pass Ready (%d problem(s)); run `aayu ready %d --check`", len(chk.Problems), n)
+		return fmt.Sprintf("it does not pass Ready (%d problem(s)); run `aayu ready %d --check`", len(chk.Problems), n), nil
 	case !contains(labels, ready.LabelReady):
-		return "it is not labelled status:ready; run `aayu ready " + fmt.Sprint(n) + "`"
+		return "it is not labelled status:ready; run `aayu ready " + fmt.Sprint(n) + "`", nil
 	}
 	snap, err := ready.SnapshotHash(ctx, c, repo, n)
 	if err != nil {
-		return err.Error()
+		return "", err
 	}
 	if snap != chk.BodyHash {
-		return fmt.Sprintf("its body changed after Ready (snapshot %s, now %s); run `aayu ready %d` again", short(snap), short(chk.BodyHash), n)
+		return fmt.Sprintf("its body changed after Ready (snapshot %s, now %s); run `aayu ready %d` again", short(snap), short(chk.BodyHash), n), nil
 	}
-	return ""
+	return "", nil
 }
 
 func contains(xs []string, x string) bool {

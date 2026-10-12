@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "synthetic": true,
+  "employer": "Example Co",
+  "plan_year": 2026,
+  "note": "Synthetic plan text written for the benefits-qa example (docs/BUILD-PLAN.md WP8.1, V3). Example Co is fictional; no real plan, person, or employer is described.",
+  "passages": [
+    {"id": "medical-deductible", "plan": "Medical PPO", "section": "Deductible", "text": "The Medical PPO annual deductible is 750 dollars for an individual and 1,500 dollars for a family, for in-network care in plan year 2026."},
+    {"id": "medical-out-of-pocket", "plan": "Medical PPO", "section": "Out-of-pocket maximum", "text": "The Medical PPO out-of-pocket maximum is 3,500 dollars for an individual and 7,000 dollars for a family; after you reach it, covered in-network care is paid in full."},
+    {"id": "medical-preventive", "plan": "Medical PPO", "section": "Preventive care", "text": "Preventive care, such as an annual physical, routine vaccines, and screenings, is covered at 100 percent in network with no deductible."},
+    {"id": "medical-telehealth", "plan": "Medical PPO", "section": "Telehealth", "text": "Telehealth visits with the plan's virtual care partner cost a 10 dollar copay and are available at any hour."},
+    {"id": "dental-deductible", "plan": "Dental", "section": "Deductible", "text": "The Dental plan annual deductible is 50 dollars per person, and it does not apply to cleanings or other preventive dental care."},
+    {"id": "dental-orthodontia", "plan": "Dental", "section": "Orthodontia", "text": "Dental orthodontia, such as braces, is covered at 50 percent for children under 19, up to a lifetime maximum of 1,500 dollars."},
+    {"id": "vision-exam", "plan": "Vision", "section": "Eye exam and glasses", "text": "The Vision plan covers one eye exam every 12 months with a 10 dollar copay, and an allowance of 150 dollars for glasses frames or contact lenses."},
+    {"id": "hsa-contribution", "plan": "Health Savings Account", "section": "Employer contribution", "text": "Example Co contributes 600 dollars a year to your health savings account (HSA) if you enroll in the Medical PPO high-deductible option; you can add more through payroll."},
+    {"id": "fsa-limit", "plan": "Flexible Spending Account", "section": "Contribution limit", "text": "You can put up to 3,300 dollars a year into a health flexible spending account (FSA); up to 660 dollars of unused money carries over to the next plan year."},
+    {"id": "parental-leave", "plan": "Leave", "section": "Parental leave", "text": "Parental leave gives every new parent 16 weeks of fully paid leave, which can be taken within 12 months of the birth, adoption, or foster placement."},
+    {"id": "sick-leave", "plan": "Leave", "section": "Sick leave", "text": "Sick leave gives you 10 paid sick days a year for your own illness or to care for a family member."},
+    {"id": "retirement-match", "plan": "401(k)", "section": "Employer match", "text": "Example Co matches 100 percent of your 401(k) contributions up to 4 percent of your salary, and the match vests immediately."},
+    {"id": "retirement-enroll", "plan": "401(k)", "section": "Enrollment", "text": "New employees are enrolled in the 401(k) automatically at 3 percent of salary after 30 days; you can change or stop your contribution at any time."},
+    {"id": "life-insurance", "plan": "Life insurance", "section": "Basic life", "text": "Basic life insurance of two times your annual salary is provided at no cost, and you can buy supplemental life insurance during enrollment."},
+    {"id": "enrollment-window", "plan": "Enrollment", "section": "Open enrollment", "text": "Open enrollment runs each November; outside it, you can change your benefits within 30 days of a qualifying life event such as marriage or a birth."},
+    {"id": "wellness-stipend", "plan": "Wellness", "section": "Wellness stipend", "text": "The wellness stipend reimburses up to 300 dollars a year for gym memberships, fitness classes, or meditation apps."}
+  ]
+}

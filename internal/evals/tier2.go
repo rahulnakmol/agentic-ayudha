@@ -35,6 +35,7 @@ type Run struct {
 	Score   int       `json:"score"` // 1-5; a deterministic floor miss scores 1 without asking the judge (rule 7); 0 for an error
 	Pass    bool      `json:"pass"`
 	Floor   string    `json:"floor,omitempty"`
+	Revised bool      `json:"revised,omitempty"` // a brief draft revised once after aayu brief's checks
 	Reason  string    `json:"reason,omitempty"`
 	Error   string    `json:"error,omitempty"`
 	Excerpt string    `json:"excerpt,omitempty"` // the unusable reply's start (and end, when truncated), credentials redacted
@@ -81,12 +82,13 @@ type Results struct {
 	Mean     float64      `json:"mean"`   // mean rubric score over every completed run
 	Errors   int          `json:"errors"` // runs with status error, all cases
 	CostUSD  float64      `json:"cost_usd"`
+	Group    string       `json:"group,omitempty"`    // the tier-2 group this run covers (D-7.3d)
 	Baseline string       `json:"baseline,omitempty"` // SHA of the results compared against
 	Verdict  string       `json:"verdict"`            // pass or fail
 	Reasons  []string     `json:"reasons,omitempty"`
 }
 
-// ErrBudget means a tier-2 run reached evals/eval.toml max_usd.
+// ErrBudget means a tier-2 run reached its group's max_usd (evals/eval.toml).
 var ErrBudget = errors.New("eval spend cap reached")
 
 // Harness runs tier 2. Gateway carries the [budget] breaker and the actions log;
@@ -245,6 +247,9 @@ func (h *Harness) Tier2(ctx context.Context, cases []Case, sha, ref string, now 
 		if err != nil {
 			return nil, err
 		}
+		if body, err = h.skillReferences(c, body); err != nil {
+			return nil, err
+		}
 		lane, alt, err := h.skillLane(c)
 		if err != nil {
 			return nil, err
@@ -280,7 +285,15 @@ func (h *Harness) Tier2(ctx context.Context, cases []Case, sha, ref string, now 
 				cr.Runs = append(cr.Runs, errorRun(budgetErr))
 				continue
 			}
-			run, err := h.run(ctx, c, lane, body, string(input), string(rubric), itemSchema)
+			var run Run
+			switch {
+			case c.Brief != nil:
+				run, err = h.runBrief(ctx, c, lane, body, string(input), string(rubric))
+			case c.Tier2.Draft != "":
+				run, err = h.runPlanning(ctx, c, lane, body, string(input), string(rubric))
+			default:
+				run, err = h.run(ctx, c, lane, body, string(input), string(rubric), itemSchema)
+			}
 			if errors.Is(err, ErrBudget) || errors.Is(err, models.ErrBudget) {
 				budgetErr = err
 			}
@@ -355,9 +368,14 @@ func (h *Harness) run(ctx context.Context, c Case, lane verbs.LaneID, body, inpu
 		return Run{Status: RunFail, Score: 1, Floor: "out of scope: " + strings.Join(bad, "; ")}, nil
 	}
 	out, _ := json.MarshalIndent(it, "", "  ")
+	return h.judge(ctx, input, rubric, string(out), d.OpenQuestions, &calls)
+}
+
+// judge has the pinned judge score a skill's output against the rubric.
+func (h *Harness) judge(ctx context.Context, input, rubric, out string, open []string, calls *[]CallLog) (Run, error) {
 	questions := "(none)"
-	if len(d.OpenQuestions) > 0 {
-		questions = "- " + strings.Join(d.OpenQuestions, "\n- ")
+	if len(open) > 0 {
+		questions = "- " + strings.Join(open, "\n- ")
 	}
 	var v struct {
 		Score  int    `json:"score"`
@@ -366,16 +384,16 @@ func (h *Harness) run(ctx context.Context, c Case, lane verbs.LaneID, body, inpu
 	jreq := models.Request{
 		System: judgeSystem + "\n\n## Rubric\n\n" + strings.TrimSpace(rubric),
 		Messages: []models.Message{{Role: "user", Content: "## Task given to the skill\n\n" + untrusted("eval-input", input) +
-			"\n\n## Skill output\n\n" + untrusted("skill-output", string(out)) +
+			"\n\n## Skill output\n\n" + untrusted("skill-output", out) +
 			"\n\n## Open questions the skill left for a human\n\n" + untrusted("skill-questions", questions)}},
 		MaxTokens: h.Config.MaxTokens.Judge,
 		Format:    &models.Format{Name: "rubric_score", Schema: judgeSchema, Strict: true},
 	}
 	// Structured validates the judge's reply and retries the judgement once.
-	if err := models.Structured(ctx, h.complete(judgeLane, "judge", &calls), jreq, judgeSchema, &v); err != nil {
+	if err := models.Structured(ctx, h.complete(judgeLane, "judge", calls), jreq, judgeSchema, &v); err != nil {
 		return Run{}, err
 	}
-	run = Run{Status: RunFail, Score: v.Score, Pass: v.Score >= h.Config.PassScore, Reason: clip(v.Reason, 600)}
+	run := Run{Status: RunFail, Score: v.Score, Pass: v.Score >= h.Config.PassScore, Reason: clip(v.Reason, 600)}
 	if run.Pass {
 		run.Status = RunPass
 	}
@@ -424,17 +442,48 @@ func mean(xs []int) float64 {
 	return float64(sum) / float64(len(xs))
 }
 
-// Compare applies the WP3.4 bar to results and, when a baseline exists, the
-// promotion rule: fail when the mean falls more than max_drop below the
-// baseline or any case's pass^k falls below its baseline.
+// Compare applies the WP3.4 bar to results (suite pass^k and mean, plus the
+// mean per case) and, when a baseline exists, the promotion rule: fail when the
+// mean falls more than max_drop below the baseline or any case's pass^k falls
+// below its baseline. A group whose
+// pass_k is "advisory" (D-7.3g) is held to the mean bar and the drop rule
+// only; its pass^k findings are returned by Advisories instead.
 func Compare(cur, base *Results, cfg Config) (verdict string, reasons []string) {
+	reasons, _ = compare(cur, base, cfg)
+	if len(reasons) > 0 {
+		return Fail, reasons
+	}
+	return Pass, nil
+}
+
+// Advisories are the pass^k findings Compare does not fail on, for a group
+// whose pass_k is advisory; they are printed, never enforced.
+func Advisories(cur, base *Results, cfg Config) []string {
+	_, notes := compare(cur, base, cfg)
+	return notes
+}
+
+func compare(cur, base *Results, cfg Config) (reasons, advisory []string) {
+	passK := &reasons
+	if g, ok := cfg.Group(cur.Group); ok && g.PassK == PassKAdvisory {
+		passK = &advisory
+	}
 	for _, c := range cur.Cases {
 		if c.Errors > MaxErrors {
 			reasons = append(reasons, fmt.Sprintf("%s: %d of %d runs errored (at most %d may)", c.Case, c.Errors, len(c.Runs), MaxErrors))
 		}
+		// WP3.4's pass^k bar is a suite bar: one case's pass^5 is 0 or 1, so a single off run in five would
+		// fail a promotion. Per case it is reported, never enforced (D-3.4e); the per-case mean bar, the
+		// suite pass^k, and the baseline rules below stay enforced, so a case cannot hide behind the others.
+		if c.PassK < cfg.MinPassK {
+			advisory = append(advisory, fmt.Sprintf("%s: pass^%d %.2f is below %.2f", c.Case, cur.K, c.PassK, cfg.MinPassK))
+		}
+		if c.Mean < cfg.MinMean {
+			reasons = append(reasons, fmt.Sprintf("%s: mean rubric score %.2f is below %.2f", c.Case, c.Mean, cfg.MinMean))
+		}
 	}
 	if cur.PassK < cfg.MinPassK {
-		reasons = append(reasons, fmt.Sprintf("pass^%d %.2f is below %.2f", cur.K, cur.PassK, cfg.MinPassK))
+		*passK = append(*passK, fmt.Sprintf("pass^%d %.2f is below %.2f", cur.K, cur.PassK, cfg.MinPassK))
 	}
 	if cur.Mean < cfg.MinMean {
 		reasons = append(reasons, fmt.Sprintf("mean rubric score %.2f is below %.2f", cur.Mean, cfg.MinMean))
@@ -449,14 +498,11 @@ func Compare(cur, base *Results, cfg Config) (verdict string, reasons []string) 
 		}
 		for _, c := range cur.Cases {
 			if b, ok := baseCase[c.Case]; ok && c.PassK < b.PassK {
-				reasons = append(reasons, fmt.Sprintf("%s: pass^%d %.2f fell below the baseline %.2f", c.Case, cur.K, c.PassK, b.PassK))
+				*passK = append(*passK, fmt.Sprintf("%s: pass^%d %.2f fell below the baseline %.2f", c.Case, cur.K, c.PassK, b.PassK))
 			}
 		}
 	}
-	if len(reasons) > 0 {
-		return Fail, reasons
-	}
-	return Pass, nil
+	return reasons, advisory
 }
 
 func short(sha string) string {

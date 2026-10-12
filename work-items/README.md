@@ -42,6 +42,6 @@ Labels (one value per prefix; Priority, Effort, Risk, Health, and Horizon live o
 - Risk: `risk:` low, medium, high
 - Health: `health:` on-track, at-risk, off-track
 - Horizon: `horizon:` now, next, later
-- Fixed: `intake`, `needs:grill`, `needs:bug`, `identity:human-fallback`, `decision:provisional`, `aayu:correction`, `agent-authored`
+- Fixed: `intake`, `needs:grill`, `needs:bug`, `identity:human-fallback`, `decision:provisional`, `decision:waiver`, `aayu:correction`, `agent-authored`
 
 <!-- END GENERATED: work-items -->

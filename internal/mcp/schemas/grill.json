@@ -5,12 +5,12 @@
   "description": "Interview a human until a work item of the given type is complete and passes validation, then write it as an issue.",
   "properties": {
     "body": {
-      "description": "Drafted issue body in the issue-form layout (### <Field> sections).",
+      "description": "Drafted issue body in the issue-form layout (### <Field> sections), or the brand YAML for brand.",
       "type": "string",
       "x-aayu-type": "string"
     },
     "create": {
-      "description": "Write the validated draft as an issue (through the actions log); without it grill only validates.",
+      "description": "Write the validated draft: the issue (through the actions log), or design/brand.yaml; without it grill only validates.",
       "type": "boolean",
       "x-aayu-read-only-values": [
         "false"
@@ -34,7 +34,7 @@
       "x-aayu-type": "string"
     },
     "type": {
-      "description": "Work-item type (internal/workitems).",
+      "description": "Work-item type (internal/workitems), or brand for design/brand.yaml.",
       "enum": [
         "goal",
         "initiative",
@@ -45,7 +45,8 @@
         "experiment",
         "release",
         "feedback",
-        "incident"
+        "incident",
+        "brand"
       ],
       "type": "string",
       "x-aayu-type": "enum"
