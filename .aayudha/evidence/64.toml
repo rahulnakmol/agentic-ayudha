@@ -1,0 +1,22 @@
+# Which tests prove story #64's Completion Goal (WP7.3–WP7.4, `brief`; WP4.3: verify maps the go test -json events
+# of these tests, from the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # register evals: the four brief cases pass tier 1, and tier 2 revises once, floors a failing draft, and applies the bar per case (the live tier-2 run is evals.yml on dev)
+tests = ["internal/evals:TestTier1", "internal/evals:TestTier2BriefRevisesOnceThenJudges", "internal/brief:TestReadability"]
+
+[[criterion]]
+id = 2 # a planted 30-word sentence fails the STE lint, in the package and through the CLI (exit 3, no model call)
+tests = ["internal/brief:TestSTELint", "internal/cli:TestBriefCLI"]
+
+[[criterion]]
+id = 3 # the chart carries its query, and re-running it on the snapshot reproduces the golden rows
+tests = ["internal/brief:TestChartGolden"]
+
+[[criterion]]
+id = 4 # every image has alt text, and a serious axe finding fails the page; the real-browser axe run (0 serious, 0 critical) is TestBriefPageWithBrowser in the floors workflow
+tests = ["internal/brief:TestRenderSample", "internal/cli:TestBriefCLI"]
+
+[[criterion]]
+id = 5 # brief close on a story without an authoritative pack exits 4
+tests = ["internal/cli:TestBriefCLI", "internal/cli:TestBriefCloseFeature"]
