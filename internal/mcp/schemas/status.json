@@ -10,7 +10,7 @@
       "x-aayu-type": "bool"
     },
     "apply": {
-      "description": "Post the replace-in-place Goal comments and close Features the parent-close rule allows.",
+      "description": "Post the replace-in-place Goal comments and close Features the parent-close rule allows; with --streak, record new corrections on the ledger.",
       "type": "boolean",
       "x-aayu-read-only-values": [
         "false"
@@ -30,6 +30,11 @@
       "pattern": "^(#?[1-9][0-9]*|https://github\\.com/[^/]+/[^/]+/issues/[1-9][0-9]*)$",
       "type": "string",
       "x-aayu-type": "issue"
+    },
+    "streak": {
+      "description": "Compute the autonomy streak of every layer from merged-PR history instead of the rollups (WP5.7).",
+      "type": "boolean",
+      "x-aayu-type": "bool"
     }
   },
   "required": [],

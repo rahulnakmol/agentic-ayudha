@@ -17,7 +17,7 @@ import (
 // registers each of them with every host it installs for.
 var Hooks = []struct{ Name, Summary string }{
 	{"session-start", "Report skill copies that differ from .aayudha/lock.toml."},
-	{"pre-tool", "Block agent tool calls while the [budget] breaker has paused agent lanes."},
+	{"pre-tool", "Block agent tool calls while the repository is halted or the [budget] breaker has paused agent lanes."},
 }
 
 // HookResult is what a hook prints and its exit code. Exit code 2 blocks the
@@ -28,8 +28,8 @@ type HookResult struct {
 }
 
 // RunHook runs a hook for host in the repository at root ("" outside one).
-// pauseFile is the [budget] breaker's pause file. Halt (WP5.7) is not yet
-// available.
+// pauseFile is the [budget] breaker's pause file. The CLI checks halt (WP5.7)
+// before it runs pre-tool and answers with Deny itself when the repository is halted.
 func RunHook(name string, host verbs.HostID, root, pauseFile string) (HookResult, error) {
 	switch name {
 	case "pre-tool":
@@ -37,17 +37,7 @@ func RunHook(name string, host verbs.HostID, root, pauseFile string) (HookResult
 		if b, err := os.ReadFile(pauseFile); err == nil {
 			msg = fmt.Sprintf("aayudha: agent lanes are paused by the [budget] breaker (%s): %s. A human must clear it.", pauseFile, strings.TrimSpace(string(b)))
 		}
-		if host == verbs.HostCursor {
-			if msg == "" {
-				return HookResult{Stdout: `{"permission":"allow"}` + "\n"}, nil
-			}
-			out, _ := json.Marshal(map[string]string{"permission": "deny", "user_message": msg, "agent_message": msg})
-			return HookResult{Stdout: string(out) + "\n", Stderr: msg + "\n", Code: 2}, nil
-		}
-		if msg == "" {
-			return HookResult{}, nil
-		}
-		return HookResult{Stderr: msg + "\n", Code: 2}, nil
+		return Deny(host, msg), nil
 	case "session-start":
 		msg := ""
 		if root != "" {
@@ -68,6 +58,22 @@ func RunHook(name string, host verbs.HostID, root, pauseFile string) (HookResult
 		return HookResult{Stdout: msg + "\n"}, nil
 	}
 	return HookResult{}, fmt.Errorf("unknown hook %q", name)
+}
+
+// Deny is the pre-tool hook's answer for host: allow when msg is empty, else
+// block the tool call with msg (exit 2, and Cursor's JSON permission reply).
+func Deny(host verbs.HostID, msg string) HookResult {
+	if host == verbs.HostCursor {
+		if msg == "" {
+			return HookResult{Stdout: `{"permission":"allow"}` + "\n"}
+		}
+		out, _ := json.Marshal(map[string]string{"permission": "deny", "user_message": msg, "agent_message": msg})
+		return HookResult{Stdout: string(out) + "\n", Stderr: msg + "\n", Code: 2}
+	}
+	if msg == "" {
+		return HookResult{}
+	}
+	return HookResult{Stderr: msg + "\n", Code: 2}
 }
 
 // CheckCopies compares each installed skill copy with lock.toml. It returns one

@@ -115,6 +115,9 @@ type Autonomy struct {
 	Never    []string       `koanf:"never" jsonschema_description:"Layers (L01-L09) that never run autonomously."`
 	Approver string         `koanf:"approver" jsonschema_description:"GitHub login that approves when autonomy does not apply."`
 	Budget   AutonomyBudget `koanf:"budget"`
+	// CorrectionDays is how long after a merge a linked Bug or Incident still
+	// counts as a correction of that PR (WP5.7).
+	CorrectionDays int `koanf:"correction_days" jsonschema:"minimum=0" jsonschema_description:"Days after a merge in which a linked Bug or Incident counts as a correction of the PR."`
 }
 
 // AutonomyBudget is [autonomy.budget], the per-story build budget (WP5.5).

@@ -68,7 +68,7 @@ described in [SECURITY.md](../SECURITY.md).
 | T15 | Unlogged or unattributed writes | Every external write goes through `internal/actions`; `audit` reconciles it against GitHub's event history | n/a until WP1.5, WP7.6; hand-run reconciliation until then |
 | T16 | Runaway model or CI spend | `[budget]` breaker pauses agent lanes and pages once a day; per-PR inspect cap; expensive floors only where the footprint needs them | n/a until WP1.6 |
 | T17 | A promotion ships a regression without a human watching | Promotions need no human approval (founder policy, CONTRIBUTING.md), so the gate is the control: the candidate merge commit must pass the full rolling or stable suite before the branch moves, and only the admin identity can move `rolling`, `main`, or create `v*` tags | In place (WP0.4) |
-| T18 | The tool itself is compromised | Tool-incident plan: halt, yank the release, pull bad skills, rotate credentials ([SECURITY.md](../SECURITY.md#tool-incident-plan)) | Plan in place; `aayu halt` n/a until WP5.7 |
+| T18 | The tool itself is compromised | Tool-incident plan: halt, yank the release, pull bad skills, rotate credentials ([SECURITY.md](../SECURITY.md#tool-incident-plan)) | Plan in place; `aayu halt` (WP5.7) |
 
 ## Residual risks
 

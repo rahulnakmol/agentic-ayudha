@@ -24,7 +24,7 @@ import (
 // Not-yet-available columns (rule 1a).
 const (
 	ProofNA       = "n/a until M4"
-	StreakNA      = "n/a until M5"
+	StreakNA      = "per layer (status --streak)" // a streak belongs to a layer, not a work item (WP5.7)
 	ProvisionalNA = "n/a until WP5.6"
 )
 

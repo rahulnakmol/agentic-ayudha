@@ -128,6 +128,12 @@ func (e *Env) walker(ctx context.Context, c *github.Client, repo string) (*statu
 }
 
 func runStatus(ctx context.Context, e *Env, in Values) error {
+	if in.Bool("streak") {
+		if in.Bool("all") || in.Bool("digest") || in.Has("issue") {
+			return Errorf(ExitUsage, "status --streak takes no issue, --all, or --digest")
+		}
+		return runStreak(ctx, e, in.Bool("apply"))
+	}
 	if in.Bool("all") {
 		return statusAll(ctx, e)
 	}

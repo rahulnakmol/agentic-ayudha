@@ -715,9 +715,10 @@ var Verbs = []Command{
 			optPos("issue", TypeIssue, "Goal, Initiative, or Feature to roll up; defaults to all Goals."),
 			readOnlyWith(flag("digest", TypeBool, "Send the digest through [notify]."), "false"),
 			flag("all", TypeBool, "Iterate [fleet] repos."),
-			readOnlyWith(flag("apply", TypeBool, "Post the replace-in-place Goal comments and close Features the parent-close rule allows."), "false"),
+			readOnlyWith(flag("apply", TypeBool, "Post the replace-in-place Goal comments and close Features the parent-close rule allows; with --streak, record new corrections on the ledger."), "false"),
+			flag("streak", TypeBool, "Compute the autonomy streak of every layer from merged-PR history instead of the rollups (WP5.7)."),
 		},
-		Outputs:  []string{"rollup", "goal-comment", "digest"},
+		Outputs:  []string{"rollup", "goal-comment", "digest", "streaks"},
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeNone, Exposure: ExposeRead,
 	},
 	{
