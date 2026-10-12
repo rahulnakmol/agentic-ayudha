@@ -237,3 +237,36 @@ func TestDecideGitHubFailures(t *testing.T) {
 		}
 	}
 }
+
+// The remaining refusals of decide, each before any write.
+func TestDecideRefusals(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		want   int
+		args   []string
+		mutate func(g *fake.GitHub)
+	}{
+		{"a story is not a Decision", ExitUsage, []string{"decide", "6"}, nil},
+		{"accepting a closed Decision", ExitBlocked, []string{"decide", "3", "--accept", "A"}, func(g *fake.GitHub) { g.Issues[3].State = "closed" }},
+		{"accepting a Decision that is not Decision-ready", ExitBlocked, []string{"decide", "3", "--accept", "A"}, func(g *fake.GitHub) { g.Issues[3].Body = "### Question\n\nWhich?" }},
+		{"a waiver on a closed story", ExitBlocked, []string{"decide", "6", "--waiver", "deps"}, func(g *fake.GitHub) { g.Issues[6].State = "closed" }},
+		{"a floor that does not exist", ExitUsage, []string{"decide", "6", "--waiver", "vibes"}, nil},
+		{"an invalid time zone", ExitUsage, []string{"decide", "--set", "time.tz=Mars/Olympus"}, nil},
+	} {
+		g := decideTree(t)
+		if tt.mutate != nil {
+			tt.mutate(g)
+		}
+		code, _, errOut := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "t"}, Options{GitHubAPI: g.URL(), GitHubGap: -1}, append(tt.args, "--repo", "o/r")...)
+		if code != tt.want || len(g.Writes()) != 0 {
+			t.Errorf("%s: exit %d (want %d), writes %v: %s", tt.name, code, tt.want, g.Writes(), errOut)
+		}
+	}
+	g := decideTree(t)
+	if code, out, _ := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "t"}, Options{GitHubAPI: g.URL(), GitHubGap: -1}, "decide", "6", "--waiver", "deps", "--dry-run", "--repo", "o/r"); code != 0 || !strings.Contains(out, "planned (dry run)") || len(g.Writes()) != 0 {
+		t.Errorf("dry-run waiver: exit %d: %s", code, out)
+	}
+	if code, _, _ := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "t"}, Options{GitHubAPI: g.URL(), GitHubGap: -1}, "decide"); code != ExitUsage {
+		t.Errorf("no --repo outside a checkout: exit %d, want %d", code, ExitUsage)
+	}
+}
