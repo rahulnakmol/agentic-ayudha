@@ -7,7 +7,7 @@ measured release, with proof packs and human gates along the way.
 Status: **pre-0.1**. There is no `v*` release yet; v0.1.0 is the first. The build plan is
 [docs/BUILD-PLAN.md](docs/BUILD-PLAN.md); it is the source of truth for scope and sequencing.
 
-Documentation: the GitHub Pages site of this repository, built from `dev` by `aayu tell docs --site` (WP8.2).
+Documentation: <https://rahulnakmol.github.io/agentic-ayudha/>, built from `dev` by `aayu tell docs --site` (WP8.2).
 
 ## Install
 
