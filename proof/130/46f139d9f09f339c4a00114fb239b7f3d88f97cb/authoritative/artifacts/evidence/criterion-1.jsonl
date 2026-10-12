@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/store","Test":"TestLoadSeed"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/store","Test":"TestLoadSeed","Output":"=== RUN   TestLoadSeed\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/store","Test":"TestLoadSeed","Output":"--- PASS: TestLoadSeed (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/store","Test":"TestLoadSeed"}
