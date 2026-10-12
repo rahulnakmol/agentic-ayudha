@@ -54,6 +54,7 @@ jobs:
       - name: aayu tell docs --site
         env:
           GITHUB_TOKEN: ${{ github.token }} # read-only: lists Features; the ledger is fetched from the public remote
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }} # the halt gate, which GITHUB_TOKEN cannot read through the API
         run: |
           set -euo pipefail
           CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/aayu" ./cmd/aayudha

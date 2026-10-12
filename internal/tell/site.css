@@ -52,6 +52,8 @@ blockquote { margin: 1rem 0; padding: 0.25rem 1rem; border-left: 4px solid var(-
 footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.875rem; }
 @media (max-width: 52rem) {
   .layout { display: block; }
-  nav { position: static; max-height: none; border-right: 0; border-bottom: 1px solid var(--line); padding: 0.75rem 1.25rem; }
+  nav { position: static; max-height: none; border-right: 0; border-bottom: 1px solid var(--line); padding: 0.5rem 1rem; }
+  nav ul { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-bottom: 0.25rem; }
+  nav li a { padding: 0.35rem 0.6rem; border: 1px solid var(--line); min-height: 2.25rem; }
   main { padding: 1.25rem; }
 }

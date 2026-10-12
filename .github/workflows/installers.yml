@@ -13,7 +13,7 @@ name: installers
 #                 On Windows, install.sh runs in Git Bash, and the Scoop manifest goreleaser generates (with the
 #                 alias release.yml's `scoop` job adds) installs in PowerShell, from a local server because the
 #                 manifest's URL exists only for a real release; a manifest with the wrong hash must be refused.
-#   release       when a v* release exists: the documented `curl … install.sh | sh` from main, with no
+#   release       when a v* release exists: the documented install.sh from main, with no
 #                 overrides, against the latest release; and on Windows the Scoop bucket once it is published.
 #
 #   gh workflow run installers.yml --ref dev
@@ -172,7 +172,10 @@ jobs:
           AAYU_BASE_URL="$RUNNER_TEMP/assets" AAYU_VERSION="v$VERSION" AAYU_CERT_IDENTITY_REGEXP="$id_re" \
             sh install.sh 2>&1 | tee "$RUNNER_TEMP/install.log"
           grep -qF "signature and checksum verified" "$RUNNER_TEMP/install.log"
-          grep -qF "add $HOME/.local/bin to your PATH" "$RUNNER_TEMP/install.log" # the default directory, not yet on PATH
+          case ":$PATH:" in # the default directory; install.sh names it when it is not on PATH yet
+            *":$HOME/.local/bin:"*) ;;
+            *) grep -qF "add $HOME/.local/bin to your PATH" "$RUNNER_TEMP/install.log" ;;
+          esac
           dir="$HOME/.local/bin"
           if [ "$RUNNER_OS" = Windows ]; then dir="$(cygpath -w "$dir")"; fi
           echo "$dir" >> "$GITHUB_PATH"
@@ -304,7 +307,9 @@ jobs:
       - name: The documented install, with no overrides
         run: |
           set -euo pipefail
-          curl -fsSL https://raw.githubusercontent.com/rahulnakmol/agentic-ayudha/main/install.sh | sh 2>&1 | tee "$RUNNER_TEMP/install.log"
+          # The script the README pipes to sh, from main; saved first so the step log keeps what ran.
+          curl -fsSL -o "$RUNNER_TEMP/install.sh" https://raw.githubusercontent.com/rahulnakmol/agentic-ayudha/main/install.sh
+          sh "$RUNNER_TEMP/install.sh" 2>&1 | tee "$RUNNER_TEMP/install.log"
           grep -qF "signature and checksum verified" "$RUNNER_TEMP/install.log"
           dir="$HOME/.local/bin"
           if [ "$RUNNER_OS" = Windows ]; then dir="$(cygpath -w "$dir")"; fi
