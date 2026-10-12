@@ -7,6 +7,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"mime"
 	"net/http"
 	"regexp"
@@ -51,8 +52,9 @@ func Register(mux *http.ServeMux, svc *ask.Service) {
 			fail(w, http.StatusBadRequest, "the body is not an AskRequest: "+err.Error())
 			return
 		}
-		if dec.More() {
-			fail(w, http.StatusBadRequest, "the body holds more than one JSON value")
+		// Exactly one JSON value: anything after it (another value, a stray bracket, text) is refused.
+		if err := dec.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+			fail(w, http.StatusBadRequest, "the body holds something after its JSON object")
 			return
 		}
 		if strings.TrimSpace(req.Question) == "" {

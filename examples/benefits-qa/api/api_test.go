@@ -81,12 +81,17 @@ func TestAskRejects(t *testing.T) {
 		ct, body string
 		code     int
 	}{
-		"malformed":     {"application/json", `{"question":`, http.StatusBadRequest},
-		"empty":         {"application/json", `{"question":"  "}`, http.StatusBadRequest},
-		"unknown field": {"application/json", `{"question":"dental","name":"Asha"}`, http.StatusBadRequest},
-		"email user id": {"application/json", `{"question":"dental","user_id":"asha@example.com"}`, http.StatusBadRequest},
-		"form":          {"application/x-www-form-urlencoded", `question=dental`, http.StatusUnsupportedMediaType},
-		"too large":     {"application/json", `{"question":"` + strings.Repeat("a", MaxBody) + `"}`, http.StatusRequestEntityTooLarge},
+		"malformed":       {"application/json", `{"question":`, http.StatusBadRequest},
+		"empty":           {"application/json", `{"question":"  "}`, http.StatusBadRequest},
+		"unknown field":   {"application/json", `{"question":"dental","name":"Asha"}`, http.StatusBadRequest},
+		"email user id":   {"application/json", `{"question":"dental","user_id":"asha@example.com"}`, http.StatusBadRequest},
+		"form":            {"application/x-www-form-urlencoded", `question=dental`, http.StatusUnsupportedMediaType},
+		"too large":       {"application/json", `{"question":"` + strings.Repeat("a", MaxBody) + `"}`, http.StatusRequestEntityTooLarge},
+		"too long":        {"application/json", `{"question":"` + strings.Repeat("é", 501) + `"}`, http.StatusBadRequest},
+		"json look-alike": {"application/jsonx", `{"question":"dental"}`, http.StatusUnsupportedMediaType},
+		"second value":    {"application/json", `{"question":"dental"} {"question":"vision"}`, http.StatusBadRequest},
+		"stray bracket":   {"application/json", `{"question":"dental"}]`, http.StatusBadRequest},
+		"trailing text":   {"application/json", `{"question":"dental"} hello`, http.StatusBadRequest},
 	} {
 		code, _, body := post(t, srv, tc.ct, tc.body)
 		var e contracts.Error
