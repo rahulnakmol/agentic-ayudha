@@ -55,8 +55,10 @@ func singular(w string) string {
 
 // substitutes are everyday words a draft puts in place of a count's unit.
 // "files … saved" and "saved … files" match in either order with up to three
-// words between ("how many files were saved", "made more files").
-var substitutes = regexp.MustCompile(`(?i)\b(files?(?:\s+[\p{L}\p{N}'’-]+){0,3}?\s+(?:saved|made|created|downloaded)|(?:saved|made|created|downloaded)(?:\s+[\p{L}\p{N}'’-]+){0,3}?\s+files?|saves|downloads?)\b`)
+// words between ("how many files were saved", "made more files"). "saves" is
+// a substitute only as a counted noun ("4.2 saves", "counts saves", "how many
+// saves"), never the verb ("does not show that it saves time", D-7.3h).
+var substitutes = regexp.MustCompile(`(?i)\b(files?(?:\s+[\p{L}\p{N}'’-]+){0,3}?\s+(?:saved|made|created|downloaded)|(?:saved|made|created|downloaded)(?:\s+[\p{L}\p{N}'’-]+){0,3}?\s+files?|downloads?)\b|\b(?:\d+(?:\.\d+)?|counts?|number of|many)(?:\s+[\p{L}-]+)?\s+saves\b`)
 
 var wordTok = regexp.MustCompile(`[\p{L}\p{N}_-]+`)
 
@@ -97,6 +99,9 @@ func rateWording(d *Draft, g *Grounding) (population, unit []string) {
 		}
 		if noun != "" && !substitutes.MatchString(noun) {
 			if m := substitutes.FindString(u.Text); m != "" {
+				if strings.HasSuffix(strings.ToLower(m), " saves") {
+					m = m[len(m)-len("saves"):] // the counted noun, without the word that counts it
+				}
 				unit = append(unit, fmt.Sprintf("%s names the count %q; the Result counts %s: say %s: %q", where, m, noun, noun, clip(u.Text, 120)))
 			}
 		}

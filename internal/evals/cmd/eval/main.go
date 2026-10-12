@@ -56,6 +56,7 @@ func run(ctx context.Context) error {
 	baseline := flag.String("baseline", "", "baseline results file (evals/results/<main-sha>.json); a missing file means no baseline")
 	group := flag.String("group", "", "tier 2: the group to run ([[groups]] in evals/eval.toml), with its own max_usd")
 	groups := flag.Bool("groups", false, "print the tier-2 group names as a JSON array and exit")
+	gating := flag.Bool("gating", false, "with -groups: only the groups whose results gate a promotion (gate is not advisory, D-7.3h)")
 	only := flag.String("cases", "", "tier 2: run only the cases whose ID (<skill>/<name>) matches this regular expression")
 	gate := flag.Bool("evolve-gate", false, "eval-first gate (WP7.7): fail an evolve PR (evolve/ branch or Aayudha-Evolve commit) that adds no reproducing eval case")
 	baseRef := flag.String("base", "", "base commit of the PR (-evolve-gate)")
@@ -82,7 +83,9 @@ func run(ctx context.Context) error {
 	case *groups:
 		var names []string
 		for _, g := range cfg.Groups {
-			names = append(names, g.Name)
+			if !*gating || cfg.Gates(g.Name) {
+				names = append(names, g.Name)
+			}
 		}
 		b, _ := json.Marshal(names)
 		fmt.Println(string(b))
@@ -276,6 +279,10 @@ func verdict(cur, base *evals.Results, cfg evals.Config) error {
 	}
 	for _, r := range reasons {
 		fmt.Println("  FAIL:", r)
+	}
+	if v != evals.Pass && !cfg.Gates(cur.Group) {
+		fmt.Printf("  group %s is advisory (gate = \"advisory\", D-7.3h): its result is reported and does not gate\n", cur.Group)
+		return nil
 	}
 	if v != evals.Pass {
 		return errors.New("tier 2 failed")

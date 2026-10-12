@@ -17,14 +17,25 @@ max_drop = 0.3
 
 # Tier 2 runs per group, each in its own job with its own spend cap in USD (on top of the [budget] breaker), so one
 # group can never use up another's (D-7.3d); the promotion gate needs every group to pass. pass_k = "advisory" holds a
-# group to the mean bar and the drop rule only (D-7.3g); "required" (the default) is the full WP3.4 bar. A case belongs to the first
+# group to the mean bar and the drop rule only (D-7.3g); "required" (the default) is the full WP3.4 bar. gate = "advisory" reports a group's
+# results without gating promotion (D-7.3h); "enforced" is the default. A case belongs to the first
 # group with a prefix of its ID, else to the group without prefixes. Unpriced models are charged at the gateway's
 # conservative fallback rate, so real spend is lower. The four brief register cases were charged 6.21 (run 38200697472)
 # and about 7 USD (run 38207049608); the stub, grill, slice, and plan cases together about 4.5 in that run.
+# The plain registers (eli5, ste) do not gate (D-7.3h): their rubric asks for everyday restatement and STE phrasing
+# that the fact-fidelity bar marks down (Feedback in D-7.3h). Results are computed and printed; evals-gate skips them.
+# A case belongs to the first group with a matching prefix, so this group comes before brief.
+[[groups]]
+name = "brief-plain"
+prefixes = ["brief/eli5-", "brief/ste-"]
+max_usd = 6.0
+pass_k = "advisory"
+gate = "advisory"
+
 [[groups]]
 name = "brief"
 prefixes = ["brief/"]
-max_usd = 12.0
+max_usd = 6.0 # engineer-ideate and regulatory-close (the plain registers moved to brief-plain, D-7.3h)
 # The brief register bar is not met at pass^5 after five rounds (D-7.3g): the group passes on the mean bar (per case and
 # suite) and the drop rule; pass^5 is computed and printed, but advisory. Every other group keeps the full WP3.4 bar.
 pass_k = "advisory"

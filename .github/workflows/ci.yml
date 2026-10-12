@@ -521,7 +521,8 @@ jobs:
             return 1
           }
           failed=0
-          for group in $(go run ./internal/evals/cmd/eval -groups | tr -d '[]"' | tr ',' ' '); do
+          # Only gating groups: a group with gate = "advisory" (brief-plain, D-7.3h) is reported by evals.yml, never here.
+          for group in $(go run ./internal/evals/cmd/eval -groups -gating | tr -d '[]"' | tr ',' ' '); do
             [ -f "evals/results/$src-$group.json" ] || fetch "$src" "$group" || true
             if [ ! -f "evals/results/$src-$group.json" ]; then
               echo "::error::No tier-2 eval results for $src, group $group. Run 'gh workflow run evals.yml --ref <source branch>', wait for it, then re-run this gate."

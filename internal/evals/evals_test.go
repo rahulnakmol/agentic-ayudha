@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pelletier/go-toml/v2"
+
 	aayudha "github.com/rahulnakmol/agentic-ayudha"
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
@@ -715,16 +717,25 @@ func TestGroups(t *testing.T) {
 		t.Fatal(err)
 	}
 	b, brief, err := cfg.ForGroup("brief", all)
-	if err != nil || b.MaxUSD != 12 {
+	if err != nil || b.MaxUSD != 6 {
 		t.Fatalf("brief group: %v, cap %v", err, b.MaxUSD)
 	}
+	p, plain, err := cfg.ForGroup("brief-plain", all)
+	if err != nil || p.MaxUSD != 6 {
+		t.Fatalf("brief-plain group: %v, cap %v", err, p.MaxUSD)
+	}
 	o, other, err := cfg.ForGroup("skills", all)
-	if err != nil || o.MaxUSD != 6 || len(brief)+len(other) != len(all) {
-		t.Fatalf("skills group: %v, cap %v, %d+%d of %d cases", err, o.MaxUSD, len(brief), len(other), len(all))
+	if err != nil || o.MaxUSD != 6 || len(brief)+len(plain)+len(other) != len(all) {
+		t.Fatalf("skills group: %v, cap %v, %d+%d+%d of %d cases", err, o.MaxUSD, len(brief), len(plain), len(other), len(all))
 	}
 	for _, c := range brief {
-		if !strings.HasPrefix(c.ID, "brief/") {
+		if !strings.HasPrefix(c.ID, "brief/") || strings.HasPrefix(c.ID, "brief/eli5-") || strings.HasPrefix(c.ID, "brief/ste-") {
 			t.Errorf("%s in the brief group", c.ID)
+		}
+	}
+	for _, c := range plain {
+		if !strings.HasPrefix(c.ID, "brief/eli5-") && !strings.HasPrefix(c.ID, "brief/ste-") {
+			t.Errorf("%s in the brief-plain group", c.ID)
 		}
 	}
 	for _, c := range other {
@@ -757,6 +768,8 @@ func TestTier1BriefRules(t *testing.T) {
 		// The two forms run 38222172014 slipped past the unit check (D-7.3g).
 		{"brief/eli5-explain", "# Saving claims\n\nReviewers make 4.2 saves per reviewer per week [R].\n", "unit", `names the count "saves"; the Result counts exports`},
 		{"brief/eli5-explain", "# Saving claims\n\nThe count shows how many files were saved [R].\n", "unit", `names the count "files were saved"; the Result counts exports`},
+		// The false positive of run 38230815198 (ste, paragraph 8; D-7.3h): "saves" as a verb is not a count.
+		{"brief/ste-explain", "# Export of filtered claims\n\nThe screen-reader floor did not run [P1]. The count shows only CSV exports. The evidence does not show that the export saves time [R].\n", "", ""},
 		{"brief/ste-explain", "# Export of filtered claims\n\nThis story does not include PDF files, exports at set times, or exports of other lists [#7].\n", "absence", `says "does not include" of items the grounding marks out of scope`},
 		{"brief/ste-explain", "# Export of filtered claims\n\nThe Result shows 4.2 CSV exports per reviewer per week, against a target of 3 or more per reviewer per week [R].\n", "ste", "has 22 words (at most 20)"},
 	} {
@@ -769,6 +782,12 @@ func TestTier1BriefRules(t *testing.T) {
 			t.Fatal(err)
 		}
 		r := Tier1(context.Background(), root, c, aayudha.Assets)
+		if tc.check == "" { // a sentence that must pass
+			if status(r, "brief") != Pass {
+				t.Errorf("%s: a clean draft failed tier 1:\n%s", tc.id, r)
+			}
+			continue
+		}
 		if status(r, "brief") != Fail || !strings.Contains(r.String(), tc.check+": ") || !strings.Contains(r.String(), tc.want) {
 			t.Errorf("%s: planted %s defect did not fail tier 1 with %q:\n%s", tc.id, tc.check, tc.want, r)
 		}
@@ -1010,5 +1029,31 @@ func TestGroupPassKPolicy(t *testing.T) {
 	base := run("brief", map[string]float64{"brief/eli5-explain": 4.8, "brief/engineer-ideate": 5, "brief/regulatory-close": 5, "brief/ste-explain": 4.8}, passK)
 	if v, reasons := Compare(cur, base, cfg); v != Fail || !strings.Contains(strings.Join(reasons, "\n"), "below the baseline") {
 		t.Fatalf("a drop beyond max_drop: %s %v", v, reasons)
+	}
+}
+
+// gate = "advisory" (D-7.3h): brief-plain's results are reported but never
+// gate a promotion; brief and skills gate, and so does an unknown group.
+func TestGroupGatePolicy(t *testing.T) {
+	cfg, err := LoadConfig(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Gates("brief-plain") {
+		t.Error("brief-plain gates")
+	}
+	for _, g := range []string{"brief", "skills", "no-such-group"} {
+		if !cfg.Gates(g) {
+			t.Errorf("%s does not gate", g)
+		}
+	}
+	bad := cfg
+	bad.Groups = append([]Group{{Name: "x", Prefixes: []string{"x/"}, MaxUSD: 1, Gate: "maybe"}}, cfg.Groups...)
+	b, _ := toml.Marshal(map[string]any{"judge": cfg.Judge, "k": cfg.K, "pass_score": cfg.PassScore, "groups": bad.Groups})
+	dir := t.TempDir()
+	_ = os.MkdirAll(filepath.Join(dir, "evals"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "evals", "eval.toml"), b, 0o644)
+	if _, err := LoadConfig(dir); err == nil || !strings.Contains(err.Error(), `gate "maybe"`) {
+		t.Errorf("an unknown gate value: %v", err)
 	}
 }

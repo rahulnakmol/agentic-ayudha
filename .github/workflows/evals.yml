@@ -108,7 +108,7 @@ jobs:
           fi
           # The brief register cases cost about 6-7 USD a run: nightly, dispatch, and promotion run them, pushes to dev
           # do not (D-7.3c).
-          if [ "$EVENT" = push ] && [ "$REF" = dev ] && [ "$GROUP" = brief ]; then
+          if [ "$EVENT" = push ] && [ "$REF" = dev ] && { [ "$GROUP" = brief ] || [ "$GROUP" = brief-plain ]; }; then
             echo "::notice::Push to dev: the brief group runs nightly, on dispatch, and on promotion."
             run=false
           fi
