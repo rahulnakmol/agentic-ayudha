@@ -188,6 +188,9 @@ func (e *Env) confirm(question string) bool {
 // plugin hook protocols.
 func runHook(ctx context.Context, e *Env, in Values) error {
 	name := in.String("name")
+	if loop, ok := isLoopHook(name); ok {
+		return runLoopGuard(ctx, e, loop)
+	}
 	known := false
 	for _, h := range hosts.Hooks {
 		known = known || h.Name == name

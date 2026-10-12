@@ -1,0 +1,4 @@
+description = "Decision SLA sweep."
+command = ["decide"]
+cron = "15 9,13,17 * * 1-5"
+bot = true

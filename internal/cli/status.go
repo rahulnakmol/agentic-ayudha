@@ -66,6 +66,19 @@ func (e *Env) Notifier(ctx context.Context) (*notify.Sender, error) {
 			return nil, err
 		}
 		s.Sink = notify.Email{Addr: n.SMTPAddr, From: n.From, To: n.Target, Password: pw}
+	case "file":
+		path := n.Target
+		switch {
+		case path == "":
+			path = filepath.Join(e.stateDir(), "state", "notify-outbox.jsonl")
+		case !filepath.IsAbs(path):
+			base := config.RepoRoot(e.Dir)
+			if base == "" {
+				base = e.Dir
+			}
+			path = filepath.Join(base, path)
+		}
+		s.Sink = notify.File{Path: path}
 	case "github":
 		tok, err := e.Resolver().Human(ctx)
 		if err != nil {

@@ -5,3 +5,7 @@ version = 1
 
 [proof]
 media = "" # required: private bucket. Public repository: proof media never go to Git LFS (V3); `proof push` refuses media until this is set.
+
+# aayudha has no paging channel yet: pages go to a JSON-lines outbox, which the Actions loops keep as an artifact (WP7.1).
+[notify]
+channel = "file"
