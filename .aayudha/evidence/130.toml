@@ -1,0 +1,10 @@
+# Which tests prove story #130's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # the embedded synthetic seed loads: 16 passages, unique IDs, all fields, marked synthetic
+tests = ["examples/benefits-qa/store:TestLoadSeed"]
+
+[[criterion]]
+id = 2 # defective seeds are refused, naming the passage and the problem
+tests = ["examples/benefits-qa/store:TestParseRefuses"]
