@@ -1,0 +1,35 @@
+{
+  "story": 133,
+  "body_hash": "5a592146225a7e455f73ffa4b88d569d9c90158e11698f000621c308ae877b74",
+  "footprint": [
+    "L08"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L08",
+      "title": "Application Insights recorder and seeded synthetic simulation",
+      "contracts": [
+        "analytics.AppInsights implements ask.Recorder as Log Analytics JSON lines {TimeGenerated, Name, UserAuthenticatedId}; analytics.Simulate(Config{Channel, Seed, From, Days, Users}) writes a sorted export; simulate command"
+      ],
+      "tests": [
+        "examples/benefits-qa/analytics:TestRecorderExportReadable",
+        "examples/benefits-qa/analytics:TestExportsReproducible",
+        "examples/benefits-qa/analytics:TestSimulateUsesWorkflow",
+        "examples/benefits-qa/analytics/simulate:TestRun"
+      ],
+      "instrumentation": [
+        "the simulate command reports users, questions, and events per run"
+      ],
+      "criteria": [
+        1,
+        2,
+        3
+      ]
+    }
+  ],
+  "em_review": {
+    "required": false
+  },
+  "planned_at": "2026-10-12T07:29:45Z",
+  "planned_by": "human-fallback"
+}
