@@ -165,7 +165,9 @@ type Verify struct {
 // Floors is [verify.floors]: the deterministic floors (rule 7).
 type Floors struct {
 	Coverage struct {
-		MinDiffPercent float64 `koanf:"min_diff_percent" jsonschema:"minimum=0,maximum=100"`
+		MinDiffPercent float64  `koanf:"min_diff_percent" jsonschema:"minimum=0,maximum=100"`
+		Command        []string `koanf:"command" jsonschema_description:"Test command that writes the coverage report, as argv; empty runs go test -coverprofile in a Go module."`
+		Report         string   `koanf:"report" jsonschema_description:"Coverage report the command writes (lcov, Cobertura XML, or Go coverprofile), relative to the repository root."`
 	} `koanf:"coverage"`
 	SAST    MaxCriticalHigh `koanf:"sast"`
 	Secrets struct {

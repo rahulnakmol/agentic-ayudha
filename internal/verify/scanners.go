@@ -1,0 +1,363 @@
+package verify
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os/exec"
+	"slices"
+	"strconv"
+	"strings"
+
+	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
+)
+
+// Severity counts of a scanner's findings.
+type Severity struct {
+	Critical, High, Medium, Low int
+	Top                         []string // the first critical/high findings, for the pack detail
+}
+
+func (s *Severity) add(level, what string) {
+	switch level {
+	case "critical":
+		s.Critical++
+	case "high":
+		s.High++
+	case "medium":
+		s.Medium++
+	default:
+		s.Low++
+	}
+	if (level == "critical" || level == "high") && len(s.Top) < 5 {
+		s.Top = append(s.Top, what)
+	}
+}
+
+func (s Severity) detail() string {
+	d := fmt.Sprintf("%d critical, %d high, %d medium, %d low", s.Critical, s.High, s.Medium, s.Low)
+	if len(s.Top) > 0 {
+		d += ": " + strings.Join(s.Top, "; ")
+	}
+	return d
+}
+
+// severityCheck fails when critical or high findings exceed the floor.
+func severityCheck(s Severity, maxCritical, maxHigh int) proof.Check {
+	c := proof.Check{Value: float64(s.Critical + s.High), Threshold: float64(maxCritical + maxHigh), Detail: s.detail(), Result: proof.Pass}
+	if s.Critical > maxCritical || s.High > maxHigh {
+		c.Result = proof.Fail
+	}
+	return c
+}
+
+func need(tool string) error {
+	if _, err := exec.LookPath(tool); err != nil {
+		return fmt.Errorf("%s is not installed: the floor cannot run, so it does not pass (install the pinned version; `aayu doctor` lists optional tools)", tool)
+	}
+	return nil
+}
+
+// semgrepPacks are the registry rule packs per language present in the checkout.
+var semgrepPacks = []struct {
+	pack string
+	exts []string
+}{
+	{"p/golang", []string{".go"}},
+	{"p/javascript", []string{".js", ".jsx", ".mjs", ".cjs"}},
+	{"p/typescript", []string{".ts", ".tsx"}},
+	{"p/python", []string{".py"}},
+	{"p/java", []string{".java"}},
+	{"p/kotlin", []string{".kt"}},
+	{"p/ruby", []string{".rb"}},
+	{"p/php", []string{".php"}},
+	{"p/csharp", []string{".cs"}},
+	{"p/swift", []string{".swift"}},
+	{"p/rust", []string{".rs"}},
+}
+
+// SemgrepConfigs returns the rule packs for the languages of files tracked in root.
+func SemgrepConfigs(ctx context.Context, root string) []string {
+	files, _ := gitOut(ctx, root, "ls-files")
+	var packs []string
+	list := string(files)
+	for _, p := range semgrepPacks {
+		for _, e := range p.exts {
+			if strings.Contains(list, e+"\n") {
+				packs = append(packs, p.pack)
+				break
+			}
+		}
+	}
+	if strings.Contains(list, ".github/workflows/") {
+		packs = append(packs, "p/github-actions")
+	}
+	return packs
+}
+
+// SAST is the semgrep floor (WP4.4): zero critical and high findings.
+type SAST struct{}
+
+// Name implements Floor.
+func (SAST) Name() string { return "sast" }
+
+// Applies implements Floor.
+func (SAST) Applies(*Run) (bool, string) { return true, "" }
+
+// Run implements Floor.
+func (SAST) Run(ctx context.Context, r *Run) (Result, error) {
+	res := Result{Check: proof.Check{Tool: "semgrep"}}
+	if err := need("semgrep"); err != nil {
+		return res, err
+	}
+	res.Check.Version = version(ctx, r, "semgrep", "--version")
+	packs := SemgrepConfigs(ctx, r.Root)
+	if len(packs) == 0 {
+		res.Check.Result, res.Check.Detail = proof.Pass, "no language semgrep has rules for"
+		return res, nil
+	}
+	out := r.tempFile("semgrep.json")
+	args := []string{"scan", "--json", "--output", out, "--metrics=off", "--disable-version-check", "--quiet"}
+	for _, p := range packs {
+		args = append(args, "--config", p)
+	}
+	// The registry rule packs are downloaded, so this floor needs the network.
+	o, err := r.Sandbox.Run(ctx, Cmd{Dir: r.Root, Name: "semgrep", Args: args, Network: true})
+	if err != nil {
+		return res, err
+	}
+	b := readFile(out)
+	var doc struct {
+		Results []struct {
+			CheckID string `json:"check_id"`
+			Path    string `json:"path"`
+			Start   struct {
+				Line int `json:"line"`
+			} `json:"start"`
+			Extra struct {
+				Severity string `json:"severity"`
+				Metadata struct {
+					Impact string `json:"impact"`
+				} `json:"metadata"`
+			} `json:"extra"`
+		} `json:"results"`
+		Errors []json.RawMessage `json:"errors"`
+	}
+	if err := json.Unmarshal(b, &doc); err != nil {
+		return res, fmt.Errorf("semgrep exited %d without a JSON report: %s", o.Code, tail(o.Stderr))
+	}
+	var s Severity
+	for _, f := range doc.Results {
+		s.add(semgrepLevel(f.Extra.Severity, f.Extra.Metadata.Impact), fmt.Sprintf("%s %s:%d", f.CheckID, f.Path, f.Start.Line))
+	}
+	c := severityCheck(s, r.Floors.SAST.MaxCritical, r.Floors.SAST.MaxHigh)
+	c.Tool, c.Version, c.Network = res.Check.Tool, res.Check.Version, o.Network
+	c.Detail = strings.Join(packs, " ") + ": " + c.Detail
+	res.Check = c
+	res.Artifacts = append(res.Artifacts, Evidence{Path: "reports/semgrep.json", Kind: "report", Data: b})
+	return res, nil
+}
+
+// semgrepLevel maps a semgrep severity to the floor's levels: CRITICAL is
+// critical; ERROR and HIGH are high (ERROR is what semgrep --error blocks on);
+// WARNING and MEDIUM are medium; the rest low.
+func semgrepLevel(sev, impact string) string {
+	switch strings.ToUpper(sev) {
+	case "CRITICAL":
+		return "critical"
+	case "ERROR", "HIGH":
+		if strings.EqualFold(impact, "CRITICAL") {
+			return "critical"
+		}
+		return "high"
+	case "WARNING", "MEDIUM":
+		return "medium"
+	}
+	return "low"
+}
+
+// Secrets is the gitleaks floor (WP4.4): no secrets in the PR's commits.
+type Secrets struct{}
+
+// Name implements Floor.
+func (Secrets) Name() string { return "secrets" }
+
+// Applies implements Floor.
+func (Secrets) Applies(*Run) (bool, string) { return true, "" }
+
+// Run scans the commits between base and head (gitleaks git --log-opts).
+func (Secrets) Run(ctx context.Context, r *Run) (Result, error) {
+	res := Result{Check: proof.Check{Tool: "gitleaks", Threshold: float64(r.Floors.Secrets.MaxFindings)}}
+	if err := need("gitleaks"); err != nil {
+		return res, err
+	}
+	res.Check.Version = version(ctx, r, "gitleaks", "version")
+	out := r.tempFile("gitleaks.json")
+	args := []string{"git", "--no-banner", "--redact", "--exit-code", "0", "--report-format", "json", "--report-path", out}
+	if r.Base != "" {
+		args = append(args, "--log-opts", r.Base+".."+r.Head)
+	}
+	args = append(args, ".")
+	o, err := r.Sandbox.Run(ctx, Cmd{Dir: r.Root, Name: "gitleaks", Args: args})
+	if err != nil {
+		return res, err
+	}
+	b := readFile(out)
+	var findings []struct {
+		RuleID string `json:"RuleID"`
+		File   string `json:"File"`
+		Line   int    `json:"StartLine"`
+		Commit string `json:"Commit"`
+	}
+	if err := json.Unmarshal(b, &findings); err != nil {
+		return res, fmt.Errorf("gitleaks exited %d without a JSON report: %s", o.Code, tail(o.Stderr))
+	}
+	res.Check.Network = o.Network
+	res.Check.Value = float64(len(findings))
+	res.Check.Result = proof.Pass
+	var top []string
+	for _, f := range findings {
+		if len(top) < 5 {
+			top = append(top, fmt.Sprintf("%s %s:%d (%s)", f.RuleID, f.File, f.Line, short(f.Commit)))
+		}
+	}
+	res.Check.Detail = plural(len(findings), "finding")
+	if len(top) > 0 {
+		res.Check.Detail += ": " + strings.Join(top, "; ")
+	}
+	if len(findings) > r.Floors.Secrets.MaxFindings {
+		res.Check.Result = proof.Fail
+	}
+	res.Artifacts = append(res.Artifacts, Evidence{Path: "reports/gitleaks.json", Kind: "report", Data: b}) // --redact: no secret values
+	return res, nil
+}
+
+// Deps is the osv-scanner floor (WP4.4): zero critical and high
+// vulnerabilities in dependencies.
+type Deps struct{}
+
+// Name implements Floor.
+func (Deps) Name() string { return "deps" }
+
+// Applies implements Floor.
+func (Deps) Applies(*Run) (bool, string) { return true, "" }
+
+// Run implements Floor.
+func (Deps) Run(ctx context.Context, r *Run) (Result, error) {
+	res := Result{Check: proof.Check{Tool: "osv-scanner"}}
+	if err := need("osv-scanner"); err != nil {
+		return res, err
+	}
+	res.Check.Version = strings.TrimPrefix(version(ctx, r, "osv-scanner", "--version"), "osv-scanner version: ")
+	out := r.tempFile("osv.json")
+	// The OSV database is online, so this floor needs the network.
+	o, err := r.Sandbox.Run(ctx, Cmd{Dir: r.Root, Name: "osv-scanner", Args: []string{"scan", "source", "-r", "--format", "json", "--output", out, "."}, Network: true})
+	if err != nil {
+		return res, err
+	}
+	b := readFile(out)
+	s, err := ParseOSV(b)
+	if err != nil {
+		if o.Code == 128 { // no packages found
+			res.Check.Result, res.Check.Detail, res.Check.Network = proof.Pass, "no dependency manifests or lockfiles", o.Network
+			return res, nil
+		}
+		return res, fmt.Errorf("osv-scanner exited %d without a JSON report: %s", o.Code, tail(o.Stderr))
+	}
+	c := severityCheck(s, r.Floors.Deps.MaxCritical, r.Floors.Deps.MaxHigh)
+	c.Tool, c.Version, c.Network = res.Check.Tool, res.Check.Version, o.Network
+	res.Check = c
+	res.Artifacts = append(res.Artifacts, Evidence{Path: "reports/osv-scanner.json", Kind: "report", Data: b})
+	return res, nil
+}
+
+// ParseOSV counts osv-scanner findings by severity: one per vulnerability
+// group, from its CVSS max_severity score (≥ 9 critical, ≥ 7 high, ≥ 4
+// medium), else the advisory's database severity label.
+func ParseOSV(b []byte) (Severity, error) {
+	var doc struct {
+		Results []struct {
+			Packages []struct {
+				Package struct {
+					Name      string `json:"name"`
+					Version   string `json:"version"`
+					Ecosystem string `json:"ecosystem"`
+				} `json:"package"`
+				Groups []struct {
+					IDs         []string `json:"ids"`
+					MaxSeverity string   `json:"max_severity"`
+				} `json:"groups"`
+				Vulnerabilities []struct {
+					ID               string `json:"id"`
+					DatabaseSpecific struct {
+						Severity string `json:"severity"`
+					} `json:"database_specific"`
+				} `json:"vulnerabilities"`
+			} `json:"packages"`
+		} `json:"results"`
+	}
+	var s Severity
+	if err := json.Unmarshal(b, &doc); err != nil || b == nil {
+		return s, errors.Join(errors.New("osv-scanner report"), err)
+	}
+	for _, res := range doc.Results {
+		for _, p := range res.Packages {
+			for _, g := range p.Groups {
+				level := ""
+				if score, err := strconv.ParseFloat(g.MaxSeverity, 64); err == nil {
+					switch {
+					case score >= 9:
+						level = "critical"
+					case score >= 7:
+						level = "high"
+					case score >= 4:
+						level = "medium"
+					default:
+						level = "low"
+					}
+				} else {
+					rank := map[string]int{"": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
+					for _, v := range p.Vulnerabilities {
+						if !slices.Contains(g.IDs, v.ID) {
+							continue
+						}
+						l := map[string]string{"CRITICAL": "critical", "HIGH": "high", "MODERATE": "medium", "MEDIUM": "medium", "LOW": "low"}[strings.ToUpper(v.DatabaseSpecific.Severity)]
+						if rank[l] > rank[level] {
+							level = l
+						}
+					}
+					if level == "" {
+						level = "high" // unscored: treated as high until someone looks (rule 7 errs closed)
+					}
+				}
+				s.add(level, fmt.Sprintf("%s %s@%s (%s)", strings.Join(g.IDs, ","), p.Package.Name, p.Package.Version, p.Package.Ecosystem))
+			}
+		}
+	}
+	return s, nil
+}
+
+func short(s string) string {
+	if len(s) > 7 {
+		return s[:7]
+	}
+	return s
+}
+
+// Standard is the floor list for this WP set; later floors join it.
+func Standard() []Floor { return []Floor{Coverage{}, SAST{}, Secrets{}, Deps{}} }
+
+// ByName selects one floor.
+func ByName(floors []Floor, name string) ([]Floor, error) {
+	for _, f := range floors {
+		if f.Name() == name {
+			return []Floor{f}, nil
+		}
+	}
+	var names []string
+	for _, f := range floors {
+		names = append(names, f.Name())
+	}
+	return nil, fmt.Errorf("no floor %q (floors: %s)", name, strings.Join(names, ", "))
+}
