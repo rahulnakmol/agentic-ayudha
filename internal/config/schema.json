@@ -277,6 +277,18 @@
               "read",
               "write"
             ]
+          },
+          "url": {
+            "type": "string",
+            "description": "Provider base URL when not the adapter's default (EU region, self-hosted), e.g. https://eu.posthog.com."
+          },
+          "org": {
+            "type": "string",
+            "description": "Provider organization: the Sentry organization slug."
+          },
+          "project": {
+            "type": "string",
+            "description": "Provider project: the PostHog project ID, the Sentry project ID, or the owner/name GitHub baselines read (default: the current repository)."
           }
         },
         "additionalProperties": false,

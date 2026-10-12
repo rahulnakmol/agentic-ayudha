@@ -146,6 +146,10 @@ type MCP struct {
 type Integration struct {
 	Secret string `koanf:"secret" jsonschema_description:"Name of the secret holding the key (WP1.3); never the key itself."`
 	Scope  string `koanf:"scope" jsonschema:"enum=read,enum=write"`
+	// Provider details the adapters need (WP5.2, WP6.4).
+	URL     string `koanf:"url" jsonschema_description:"Provider base URL when not the adapter's default (EU region, self-hosted), e.g. https://eu.posthog.com."`
+	Org     string `koanf:"org" jsonschema_description:"Provider organization: the Sentry organization slug."`
+	Project string `koanf:"project" jsonschema_description:"Provider project: the PostHog project ID, the Sentry project ID, or the owner/name GitHub baselines read (default: the current repository)."`
 }
 
 // Verify is [verify].
@@ -314,6 +318,9 @@ func (c *Config) Validate() error {
 		}
 		if in.Scope != "read" && in.Scope != "write" {
 			bad("[integrations.%s] scope = %q: want read or write", name, in.Scope)
+		}
+		if in.URL != "" && !strings.HasPrefix(in.URL, "https://") && !strings.HasPrefix(in.URL, "http://localhost") && !strings.HasPrefix(in.URL, "http://127.0.0.1") {
+			bad("[integrations.%s] url = %q: want an https:// URL", name, in.URL)
 		}
 	}
 	if id := c.Identity; id.MachineUser != "" && !secretName.MatchString(id.MachineUserSecret) {

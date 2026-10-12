@@ -9,9 +9,13 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/providers"
 	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
 	"github.com/rahulnakmol/agentic-ayudha/internal/upgrade"
 )
@@ -212,24 +216,74 @@ func checkIssueTypes(ctx context.Context, p *Probe) Result {
 	return Result{Status: Pass, Detail: "personal repository: issue types are organization-only, so work-item types use the type:* label fallback (R1)"}
 }
 
-func checkIntegrations(_ context.Context, p *Probe) Result {
-	if p.Config == nil || len(p.Config.Config.Integrations) == 0 {
-		return Result{Status: Pass, Detail: "no integrations configured"}
+// checkIntegrations reports every adapter this binary carries and every
+// configured integration (WP1.3, WP5.2): an unconfigured adapter is "not
+// configured", never a failure; a configured one is resolved (a write-scoped
+// key is refused before any call) and its provider is asked who the key
+// belongs to and what it may do.
+func checkIntegrations(ctx context.Context, p *Probe) Result {
+	var configured map[string]config.Integration
+	if p.Config != nil {
+		configured = p.Config.Config.Integrations
 	}
-	names := make([]string, 0, len(p.Config.Config.Integrations))
-	for n := range p.Config.Config.Integrations {
-		names = append(names, n)
+	var names, extra []string
+	for _, k := range providers.Known {
+		names = append(names, k.Name)
 	}
-	sort.Strings(names)
-	r := Result{Status: Pass, Detail: fmt.Sprintf("%d integration(s); provider reachability and real key scope: not yet available (WP5.2)", len(names))}
-	for _, n := range names {
-		in := p.Config.Config.Integrations[n]
-		if _, backend, err := p.Secrets.Get(in.Secret); err != nil {
-			r.Status = Warn
-			r.Lines = append(r.Lines, fmt.Sprintf("%s: secret %q is not set (aayu auth set-secret %s, or %s)", n, in.Secret, in.Secret, secrets.EnvVar(in.Secret)))
-		} else {
-			r.Lines = append(r.Lines, fmt.Sprintf("%s: secret %q in %s, configured scope %s", n, in.Secret, backend, in.Scope))
+	for n := range configured {
+		if !slices.Contains(names, n) {
+			extra = append(extra, n)
 		}
+	}
+	sort.Strings(extra)
+	r := Result{Status: Pass}
+	worse := func(s Status) {
+		if s == Fail || (s == Warn && r.Status == Pass) {
+			r.Status = s
+		}
+	}
+	reachable := 0
+	for _, n := range append(names, extra...) {
+		in, ok := configured[n]
+		if !ok {
+			k, _ := providers.Find(n)
+			r.Lines = append(r.Lines, fmt.Sprintf("%s: not configured; set [integrations.%s] for %s", n, n, k.Purpose))
+			continue
+		}
+		if p.Integration == nil {
+			worse(Warn)
+			r.Lines = append(r.Lines, n+": not checked")
+			continue
+		}
+		cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		sc, err := p.Integration(cctx, n)
+		cancel()
+		switch {
+		case errors.Is(err, integrations.ErrNoAdapter):
+			r.Lines = append(r.Lines, fmt.Sprintf("%s: configured; no adapter in this binary yet, so not checked", n))
+		case errors.Is(err, secrets.ErrWriteScoped):
+			worse(Fail)
+			r.Lines = append(r.Lines, fmt.Sprintf("%s: scope = %q: read verbs refuse this key, so it was not sent; configure a read-only key", n, in.Scope))
+		case errors.Is(err, integrations.ErrNotConfigured):
+			worse(Warn)
+			r.Lines = append(r.Lines, fmt.Sprintf("%s: %v", n, err))
+		case err != nil:
+			worse(Fail)
+			r.Lines = append(r.Lines, fmt.Sprintf("%s: unreachable: %v", n, err))
+		case len(sc.Write) > 0:
+			worse(Fail)
+			r.Lines = append(r.Lines, fmt.Sprintf("%s: reachable, but the key is write-capable (%s per %s); read verbs refuse it", n, strings.Join(sc.Write, ", "), sc.Endpoint))
+		case sc.Verified:
+			reachable++
+			r.Lines = append(r.Lines, fmt.Sprintf("%s: reachable as %s; read-only scope verified (%s per %s)", n, sc.Account, strings.Join(sc.Scopes, ", "), sc.Endpoint))
+		default:
+			reachable++
+			r.Lines = append(r.Lines, fmt.Sprintf("%s: reachable as %s; the provider does not report this key's scope, so configured scope %s is trusted", n, sc.Account, in.Scope))
+		}
+	}
+	r.Detail = fmt.Sprintf("%d of %d configured integration(s) reachable with a read-only key", reachable, len(configured))
+	if len(configured) == 0 {
+		r.Detail = "no integrations configured"
 	}
 	return r
 }

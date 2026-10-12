@@ -16,8 +16,10 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
+	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
 	"github.com/rahulnakmol/agentic-ayudha/internal/upgrade"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
@@ -246,8 +248,12 @@ func classify(err error) error {
 	switch {
 	case errors.Is(err, models.ErrBudget):
 		return Wrap(ExitBudget, err)
-	case errors.Is(err, actions.ErrCapability):
+	case errors.Is(err, actions.ErrCapability), errors.Is(err, secrets.ErrWriteScoped):
 		return Wrap(ExitBlocked, err)
+	case errors.Is(err, integrations.ErrNotConfigured), errors.Is(err, integrations.ErrProvider), errors.Is(err, integrations.ErrNoAdapter):
+		return Wrap(ExitExternal, err)
+	case errors.Is(err, integrations.ErrQuery):
+		return Wrap(ExitUsage, err)
 	case github.External(err), errors.Is(err, ledger.ErrContended), errors.Is(err, ledger.ErrLocked):
 		return Wrap(ExitExternal, err)
 	case errors.Is(err, ledger.ErrNoLedger):
