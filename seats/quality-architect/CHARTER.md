@@ -34,7 +34,7 @@ remove quality-architect` returns it to solo and hands the human's open stories 
 
 | Layer owned | Name | Paths |
 |---|---|---|
-| L04 | Domain / policy | `internal/verify/**`, `internal/proof/**`, `ops/**`, `CONSTRAINTS.md` |
+| L04 | Domain / policy | `internal/verify/**`, `internal/proof/**`, `ops/**`, `CONSTRAINTS.md`, `examples/benefits-qa/policy/**` |
 
 | Verb | Role |
 |---|---|

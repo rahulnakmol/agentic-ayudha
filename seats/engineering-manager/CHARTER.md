@@ -35,7 +35,7 @@ remove engineering-manager` returns it to solo and hands the human's open storie
 
 | Layer owned | Name | Paths |
 |---|---|---|
-| L03 | Application / workflow | `internal/verbs/**`, `internal/workitems/**`, `internal/loops/**`, `loops/**`, `work-items/**`, `skills/**`, `seats/**` |
+| L03 | Application / workflow | `internal/verbs/**`, `internal/workitems/**`, `internal/loops/**`, `loops/**`, `work-items/**`, `skills/**`, `seats/**`, `examples/benefits-qa/ask/**` |
 
 | Verb | Role |
 |---|---|

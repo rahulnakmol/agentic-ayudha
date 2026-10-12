@@ -33,7 +33,7 @@ remove revenue-architect` returns it to solo and hands the human's open stories 
 
 | Layer owned | Name | Paths |
 |---|---|---|
-| L08 | Analytics / reporting | `internal/telemetry/**` |
+| L08 | Analytics / reporting | `internal/telemetry/**`, `examples/benefits-qa/analytics/**` |
 
 | Verb | Role |
 |---|---|

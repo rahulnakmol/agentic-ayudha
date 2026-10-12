@@ -33,7 +33,7 @@ remove ux-researcher-evolutionist` returns it to solo and hands the human's open
 
 | Layer owned | Name | Paths |
 |---|---|---|
-| L01 | Experience | `packages/design-system/**` |
+| L01 | Experience | `packages/design-system/**`, `examples/benefits-qa/web/**` |
 
 | Verb | Role |
 |---|---|

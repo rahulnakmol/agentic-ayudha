@@ -1,0 +1,218 @@
+name: aayudha-model-lanes
+
+# The binary's direct model lanes that a person runs by hand (docs/BUILD-PLAN.md ground rule 5): `review` lane A
+# and lane B on a PR's UI (WP6.6), and `brief` with its adversarial pass (WP7.3). On this repository the only model
+# key is the `ai-gateway` environment's secret (no key on the founder's machine or an agent's orb), so these run
+# here, dispatched from dev (the environment admits only dev, rolling, and main) by the human (Appendix B D-8.1c).
+# Dispatch only, because each run costs model spend: review is k = 3 ui-review calls per UI state, brief one review
+# call. The PR's code is built but never run as the runner user: the example app runs as `nobody`, so it cannot
+# read the environment of the process holding the key, and only the review or brief step sees the secret.
+on:
+  workflow_dispatch:
+    inputs:
+      verb:
+        description: "review (a PR's UI) or brief (an issue)"
+        type: choice
+        options: [review, brief]
+        required: true
+      pr:
+        description: "review: the pull request number"
+        type: string
+        default: ""
+      subject:
+        description: "brief: the issue number"
+        type: string
+        default: ""
+      register:
+        description: "brief: eli5, ste, engineer, or regulatory"
+        type: string
+        default: engineer
+      purpose:
+        description: "brief: explain, ideate, innovate, or close"
+        type: string
+        default: close
+      draft:
+        description: "brief: the Markdown draft, base64-encoded"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aayudha-model-lanes-${{ inputs.verb }}-${{ inputs.pr }}${{ inputs.subject }}
+  cancel-in-progress: false
+
+env:
+  AAYU_VERSION: "dev"
+  REPO: ${{ github.repository }}
+  AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+
+jobs:
+  review:
+    name: aayudha/review
+    if: inputs.verb == 'review'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ai-gateway
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - name: Check the input
+        env:
+          PR: ${{ inputs.pr }}
+        run: '[[ "$PR" =~ ^[0-9]+$ ]] || { echo "::error::pr must be a pull request number"; exit 2; }'
+      - name: Check out dev for the floor tools (trusted)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          path: tools
+      - name: Check out the PR head (built, never run as this user)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/pull/${{ inputs.pr }}/head
+          persist-credentials: false
+          path: head
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.25.x"
+          cache: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: tools/package.json
+      - name: Review tools (frozen lockfile) and Chromium
+        working-directory: tools
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile --filter @aayudha/floors
+          pnpm --filter @aayudha/floors exec playwright install --with-deps chromium
+          echo "NODE_PATH=$PWD/packages/floors/node_modules" >> "$GITHUB_ENV"
+      - name: Install aayudha dev
+        run: |
+          set -euo pipefail
+          if [ "$AAYU_VERSION" = dev ]; then export GOPROXY=direct GONOSUMDB=github.com/rahulnakmol/agentic-ayudha; fi
+          go install "github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@$AAYU_VERSION"
+      - name: Build the example app and start it as nobody on seeded data
+        working-directory: head
+        env:
+          CGO_ENABLED: "0"
+          GOTOOLCHAIN: local
+        run: |
+          set -euo pipefail
+          app=/tmp/benefits-qa
+          mkdir -p "$app"
+          go build -o "$app/benefits-qa" ./examples/benefits-qa/cmd/benefits-qa
+          cp packages/design-system/src/styles/tokens.css "$app/tokens.css"
+          chmod -R a+rX "$app"
+          sudo -u nobody env -i PATH=/usr/bin:/bin "$app/benefits-qa" -addr 127.0.0.1:8787 -tokens "$app/tokens.css" > /tmp/benefits-qa.log 2>&1 &
+          for _ in $(seq 1 50); do curl -fsS http://127.0.0.1:8787/healthz >/dev/null 2>&1 && exit 0; sleep 0.2; done
+          cat /tmp/benefits-qa.log; exit 1
+      - name: Review (lane A through the gateway, lane B)
+        working-directory: head
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR: ${{ inputs.pr }}
+          AAYU_MODELS__GATEWAY__BASE_URL: ${{ vars.AAYU_AI_GATEWAY_URL }}
+          AAYU_MODELS__GATEWAY__SECRET: ai-gateway
+          AAYU_SECRET_AI_GATEWAY: ${{ secrets.AAYU_SECRET_AI_GATEWAY }}
+        run: |
+          set +e
+          aayudha review "$PR" --ci --repo "$REPO"
+          code=$?
+          f=".aayudha/review/$PR/critique.json"
+          if [ -f "$f" ]; then
+            jq -r '"### aayudha review #\(env.PR): \(.disposition // "?")"' "$f" >> "$GITHUB_STEP_SUMMARY" || true
+          fi
+          exit "$code"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: aayudha-review-${{ inputs.pr }}-${{ github.run_id }}
+          path: head/.aayudha/review/
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
+
+  brief:
+    name: aayudha/brief
+    if: inputs.verb == 'brief'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: ai-gateway
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - name: Check the input
+        env:
+          SUBJECT: ${{ inputs.subject }}
+          REGISTER: ${{ inputs.register }}
+          PURPOSE: ${{ inputs.purpose }}
+        run: |
+          [[ "$SUBJECT" =~ ^[0-9]+$ ]] || { echo "::error::subject must be an issue number"; exit 2; }
+          [[ "$REGISTER" =~ ^(eli5|ste|engineer|regulatory)$ ]] || { echo "::error::bad register"; exit 2; }
+          [[ "$PURPOSE" =~ ^(explain|ideate|innovate|close)$ ]] || { echo "::error::bad purpose"; exit 2; }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.25.x"
+          cache: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - name: Page check tools (frozen lockfile) and Chromium
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile --filter @aayudha/floors
+          pnpm --filter @aayudha/floors exec playwright install --with-deps chromium
+          echo "NODE_PATH=$PWD/packages/floors/node_modules" >> "$GITHUB_ENV"
+      - name: Install aayudha dev
+        run: |
+          set -euo pipefail
+          if [ "$AAYU_VERSION" = dev ]; then export GOPROXY=direct GONOSUMDB=github.com/rahulnakmol/agentic-ayudha; fi
+          go install "github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@$AAYU_VERSION"
+      - name: Brief (deterministic checks, adversarial pass through the gateway, accessibility of the page)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SUBJECT: ${{ inputs.subject }}
+          REGISTER: ${{ inputs.register }}
+          PURPOSE: ${{ inputs.purpose }}
+          DRAFT: ${{ inputs.draft }}
+          AAYU_MODELS__GATEWAY__BASE_URL: ${{ vars.AAYU_AI_GATEWAY_URL }}
+          AAYU_MODELS__GATEWAY__SECRET: ai-gateway
+          AAYU_SECRET_AI_GATEWAY: ${{ secrets.AAYU_SECRET_AI_GATEWAY }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$DRAFT" | base64 -d > "$RUNNER_TEMP/draft.md"
+          set +e
+          aayudha brief "$SUBJECT" --register "$REGISTER" --purpose "$PURPOSE" --draft "$RUNNER_TEMP/draft.md" --ci --repo "$REPO" | tee "$RUNNER_TEMP/brief.txt"
+          code=${PIPESTATUS[0]}
+          set -e
+          { echo "### aayudha brief #$SUBJECT ($REGISTER, $PURPOSE): exit $code"; echo; echo '```'; cat "$RUNNER_TEMP/brief.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          cp "$RUNNER_TEMP/draft.md" "$RUNNER_TEMP/brief.txt" .aayudha/state/briefs/ 2>/dev/null || true
+          exit "$code"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: aayudha-brief-${{ inputs.subject }}-${{ github.run_id }}
+          path: .aayudha/state/briefs/
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 90
