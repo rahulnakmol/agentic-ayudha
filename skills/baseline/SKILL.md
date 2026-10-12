@@ -28,4 +28,16 @@ aayu:
 
 Capture visual baselines for a commit SHA.
 
-Body lands in WP6.6 (the verb). Format and lint: skills/README.md.
+Check out the commit, start the app on the `[verify.environments]` target, and run:
+
+```sh
+aayu baseline
+aayu baseline --sha 4f2c1a9
+```
+
+The binary captures every `[review] baseline` path and pins the screenshots in `baselines/<sha>/manifest.json`
+on the ledger. Screenshots go to the `[proof] media` bucket, or Git LFS on a private repository. On a public
+repository without a bucket, only their hashes are kept. It refuses (exit 4) when the checkout is not at
+`--sha`.
+
+Format and lint: skills/README.md.

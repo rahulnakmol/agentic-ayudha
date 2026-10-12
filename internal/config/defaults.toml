@@ -66,9 +66,10 @@ ci_minutes_month = 2000
 media = ""
 retention_days = 90
 
-# Design review tolerances (WP6.5, WP6.6).
+# Design review tolerances and baseline paths (WP6.5, WP6.6).
 [review]
 figma_diff_max = 2.0 # percent of pixels after the anti-aliasing mask
+baseline = ["/"]     # paths baseline captures per commit
 
 # Settings WP1.2 onward read that CONSTRAINTS.md does not render.
 

@@ -129,8 +129,8 @@ func TestHelpNamesAayuAndListsRegistry(t *testing.T) {
 }
 
 func TestNotImplementedNamesWP(t *testing.T) {
-	_, _, stderr := run(t, nil, Options{}, "polish", "12")
-	if !strings.Contains(stderr, "not implemented yet (lands in WP6.6)") {
+	_, _, stderr := run(t, nil, Options{}, "evolve")
+	if !strings.Contains(stderr, "not implemented yet (lands in WP7.7)") {
 		t.Errorf("stderr = %q", stderr)
 	}
 }

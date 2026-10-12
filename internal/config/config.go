@@ -49,7 +49,8 @@ type Design struct {
 
 // Review is [review] (WP6.5, WP6.6).
 type Review struct {
-	FigmaDiffMax float64 `koanf:"figma_diff_max" jsonschema:"minimum=0,maximum=100" jsonschema_description:"Largest share of pixels, in percent, a prototype screenshot may differ from its Figma frame after the anti-aliasing mask; colour and typography token mismatches must be zero regardless."`
+	FigmaDiffMax float64  `koanf:"figma_diff_max" jsonschema:"minimum=0,maximum=100" jsonschema_description:"Largest share of pixels, in percent, a prototype screenshot may differ from its Figma frame after the anti-aliasing mask; colour and typography token mismatches must be zero regardless."`
+	Baseline     []string `koanf:"baseline" jsonschema_description:"URL paths on the [verify.environments] target that baseline captures for each commit (WP6.6)."`
 }
 
 // Measure is [measure]: which exported events mark each AARRR stage. Event

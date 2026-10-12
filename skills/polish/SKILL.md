@@ -29,4 +29,17 @@ aayu:
 
 Apply a review critique to a PR's UI and re-run review.
 
-Body lands in WP6.6 (the verb). Format and lint: skills/README.md.
+1. Read `.aayudha/review/<pr>/critique.json` (written by `aayu review`) and fix every finding in both lanes,
+   using design-system tokens and components only. Fix the cause, not the measurement: never lower a floor,
+   hide an element from the capture, or waive a finding here (waivers are `decide --waiver` Decisions).
+2. Commit the fixes on the PR branch and restart the app on the review target.
+3. Re-run both lanes and compare:
+
+   ```sh
+   aayu polish 57
+   ```
+
+polish reports each finding of the critique as resolved or remaining, plus any new ones. It exits 0 when none
+remain and 4 otherwise; repeat from step 1 for what remains.
+
+Format and lint: skills/README.md.

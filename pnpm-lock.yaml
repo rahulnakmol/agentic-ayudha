@@ -208,6 +208,9 @@ importers:
       axe-core:
         specifier: 4.14.0
         version: 4.14.0
+      impeccable:
+        specifier: 4.5.2
+        version: 4.5.2
       lighthouse:
         specifier: 13.5.0
         version: 13.5.0(@opentelemetry/core@2.12.0(@opentelemetry/api@1.9.1))
@@ -516,6 +519,36 @@ packages:
 
   '@guidepup/setup@0.29.2':
     resolution: {integrity: sha512-RSAuCTd3LVTnxvv1+A33bu2y0h5Q6//Q+RoJI73JuVydRhpNd+jz62ElJT6oqgmzURKKEaM2tO572z33wyWcow==}
+    hasBin: true
+
+  '@impeccable/cli-darwin-arm64@0.1.14':
+    resolution: {integrity: sha512-GXT7Av5yaBcmj88xVtkABV9ftwkG8oWszAcIbb+s2C0mQiniskdZrTcqElAZ29iT3FcLMfQtkWlhwd9V41Qvcg==}
+    cpu: [arm64]
+    os: [darwin]
+    hasBin: true
+
+  '@impeccable/cli-darwin-x64@0.1.14':
+    resolution: {integrity: sha512-9YKJ6m331oF22EmJGvvatFezFj8Jec4OmL9QPg1emg6D6RpQ5hF2E0xou3tVRjDZoQ3tR9qazDBkyzJoR+wPbw==}
+    cpu: [x64]
+    os: [darwin]
+    hasBin: true
+
+  '@impeccable/cli-linux-arm64@0.1.14':
+    resolution: {integrity: sha512-vjd6MelytaV15RK5hUWZ0aZFqiuBmqNO6silgb5g9G3ivplvQLL2pBvjXOayUchH9//1xRu9LxpFiS5ApZboZA==}
+    cpu: [arm64]
+    os: [linux]
+    hasBin: true
+
+  '@impeccable/cli-linux-x64@0.1.14':
+    resolution: {integrity: sha512-f23x5t+pYPDkbt17oMAAcjmTSxexFfNYLZZ4ik/UeGLq1jiPCP6F17IWzBxOzj0C1lAHzOzSlrc7V8+57jMAtA==}
+    cpu: [x64]
+    os: [linux]
+    hasBin: true
+
+  '@impeccable/cli-windows-x64@0.1.14':
+    resolution: {integrity: sha512-dTM/MSNNf+lBL9ILxuT2fICAD6mfeSdKtCg7ubIDvK5Sapr3n3snkJQkBN8PUjwzyCZAQPZPcV7deXatStYTCA==}
+    cpu: [x64]
+    os: [win32]
     hasBin: true
 
   '@joshwooding/vite-plugin-react-docgen-typescript@0.7.0':
@@ -2427,6 +2460,11 @@ packages:
   image-ssim@0.2.0:
     resolution: {integrity: sha512-W7+sO6/yhxy83L0G7xR8YAc5Z5QFtYEXXRV6EaE8tuYBZJnA3gVgp3q7X7muhLZVodeb9UfvjSbwt9VJwjIYAg==}
 
+  impeccable@4.5.2:
+    resolution: {integrity: sha512-eTePiNIf0OgAXl2XHUcq+Dkd6DmCawj3UQdYKdNvoP4pdk0/0NBx1FqdG+7rDZUnrSNU3E9TodGAJWIST1X70A==}
+    engines: {node: '>=22.18.0'}
+    hasBin: true
+
   import-in-the-middle@3.5.2:
     resolution: {integrity: sha512-WseIA/4o56+GYO3RmlOPvejYi771OFeJEeK/ejROsr9bdjW+E5NXTOD1Di8TL40Qgg3JJX9aa97Hf8iiSVIKZw==}
     engines: {node: '>=18'}
@@ -3637,6 +3675,21 @@ snapshots:
       '@guidepup/record': 0.3.0(supports-color@7.2.0)
     transitivePeerDependencies:
       - supports-color
+
+  '@impeccable/cli-darwin-arm64@0.1.14':
+    optional: true
+
+  '@impeccable/cli-darwin-x64@0.1.14':
+    optional: true
+
+  '@impeccable/cli-linux-arm64@0.1.14':
+    optional: true
+
+  '@impeccable/cli-linux-x64@0.1.14':
+    optional: true
+
+  '@impeccable/cli-windows-x64@0.1.14':
+    optional: true
 
   '@joshwooding/vite-plugin-react-docgen-typescript@0.7.0(typescript@6.0.3)(vite@8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))':
     dependencies:
@@ -5429,6 +5482,14 @@ snapshots:
     optional: true
 
   image-ssim@0.2.0: {}
+
+  impeccable@4.5.2:
+    optionalDependencies:
+      '@impeccable/cli-darwin-arm64': 0.1.14
+      '@impeccable/cli-darwin-x64': 0.1.14
+      '@impeccable/cli-linux-arm64': 0.1.14
+      '@impeccable/cli-linux-x64': 0.1.14
+      '@impeccable/cli-windows-x64': 0.1.14
 
   import-in-the-middle@3.5.2:
     dependencies:
