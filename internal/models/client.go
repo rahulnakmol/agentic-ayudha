@@ -192,11 +192,16 @@ func truncate(s string, n int) string {
 }
 
 type usage struct {
-	InputTokens      int      `json:"input_tokens"`
-	OutputTokens     int      `json:"output_tokens"`
-	PromptTokens     int      `json:"prompt_tokens"`
-	CompletionTokens int      `json:"completion_tokens"`
-	Cost             *float64 `json:"cost"` // some gateways report the charge
+	InputTokens int `json:"input_tokens"`
+	// Anthropic Messages reports cached prompt input apart from input_tokens;
+	// both count as input (conservatively at the full input rate) for cost and
+	// the [budget] breaker.
+	CacheReadInputTokens     int      `json:"cache_read_input_tokens"`
+	CacheCreationInputTokens int      `json:"cache_creation_input_tokens"`
+	OutputTokens             int      `json:"output_tokens"`
+	PromptTokens             int      `json:"prompt_tokens"`
+	CompletionTokens         int      `json:"completion_tokens"`
+	Cost                     *float64 `json:"cost"` // some gateways report the charge
 }
 
 func decode(style string, raw []byte) (Response, error) {
@@ -230,7 +235,9 @@ func decode(style string, raw []byte) (Response, error) {
 	if err := json.Unmarshal(raw, &v); err != nil {
 		return Response{}, fmt.Errorf("decode %s reply: %w", style, err)
 	}
-	r := Response{Model: v.Model, TokensIn: v.Usage.InputTokens + v.Usage.PromptTokens, TokensOut: v.Usage.OutputTokens + v.Usage.CompletionTokens}
+	u := v.Usage
+	r := Response{Model: v.Model, TokensIn: u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens + u.PromptTokens,
+		TokensOut: u.OutputTokens + u.CompletionTokens}
 	if v.Usage.Cost != nil {
 		r.CostUSD = *v.Usage.Cost
 	}

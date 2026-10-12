@@ -17,7 +17,7 @@ adds a failing case here before any skill diff.
 | `calls` | The recorded run's `aayu` calls; each must exit 0 against a fake GitHub serving the case's `github/` files (`github/repos/o/r/issues/12.json` answers `GET /repos/o/r/issues/12`). A call to a verb this binary does not implement yet is "n/a" (ground rule 1a) |
 | `scope` | `{ pattern, why }` rules for requirements the input does not state (a regular expression over the work item's title and fields). A work item that matches one fails the `scope` check in tier 1 and scores 1 in tier 2 before the judge is asked. Add a rule when a run is caught inventing a requirement, as `evolve` keeps a failing case |
 | `injection` | The input carries a prompt injection: no recorded call may be a write or human-only verb, and nothing may write |
-| `[tier2]` | `rubric` (file) and `lane` (the skill model's lane; default the verb's registry lane) |
+| `[tier2]` | `rubric` (file) and `verb`: the registry verb the skill stands in for, when the skill is not itself a verb. The skill model is that verb's registry lane on the direct host, with the lane's registry alternative as the fallback |
 
 ## Tier 1: every PR
 
@@ -27,7 +27,7 @@ runs it; `go run ./internal/evals/cmd/eval -tier 1` prints the same report.
 ## Tier 2: nightly and on promotion
 
 [`.github/workflows/evals.yml`](../.github/workflows/evals.yml) runs each `[tier2]` case `k` times on the skill's model
-(its lane on the direct host) and has the pinned `judge` score every run against the rubric. The judge's model family,
+(the registry lane of its verb on the direct host) and has the pinned `judge` score every run against the rubric. The judge's model family,
 inferred from its model ID, must differ from the skill model's. A skill replies with the work item plus `open_questions`
 (`schemas/draft.json`): what the input leaves undecided goes there, never into the item as a requirement. A run whose output is JSON of the wrong shape, or fails
 Ready, scores 1 without asking the judge (deterministic checks beat model judgement). The judge is asked for structured
