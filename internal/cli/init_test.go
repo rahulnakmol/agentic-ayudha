@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -249,7 +250,8 @@ func TestInitAdoptsLedgerAndUninit(t *testing.T) {
 
 // WP2.6 accept: --gates installs exactly the workflows whose WP the binary has
 // (golden): two on the WP2.6 binary, three since WP2.9 added triage, four
-// since WP4.8 added the merge gate, five with the WP5.7 streak;
+// since WP4.8 added the merge gate, five with the WP5.7 streak, six with the
+// WP5.6 ops executor, and the WP7.1 loops workflow when the checkout has loops;
 // every extra is idempotent; uninit --external lists what init created outside
 // the repository.
 func TestInitExtras(t *testing.T) {
@@ -258,6 +260,8 @@ func TestInitExtras(t *testing.T) {
 	g.PublicKey = base64.StdEncoding.EncodeToString(pub[:])
 	g.App = map[string]any{"id": 4242, "slug": "aayudha-r", "client_id": "Iv1.abc", "pem": "-----BEGIN RSA PRIVATE KEY-----\nMIIEsecret\n-----END RSA PRIVATE KEY-----\n"}
 	dir := checkout(t)
+	_ = os.MkdirAll(filepath.Join(dir, "loops"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "loops", "digest.toml"), []byte("description = \"Digest.\"\ncommand = [\"status\", \"--digest\"]\ncron = \"5 9 * * 1-5\"\n"), 0o644)
 	var manifest string
 	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, Build: BuildInfo{Version: "0.4.0"},
 		AppManifestCode: func(_ context.Context, post string, m func(string) string) (string, error) {
@@ -278,7 +282,7 @@ func TestInitExtras(t *testing.T) {
 		}
 	}
 	slices.Sort(workflows)
-	if !slices.Equal(workflows, []string{"aayudha-merge-gate.yml", "aayudha-ops.yml", "aayudha-ready-guard.yml", "aayudha-streak.yml", "aayudha-token.yml", "aayudha-triage.yml", "ci.yml"}) || files[".github/workflows/ci.yml"] != ciYML {
+	if !slices.Equal(workflows, []string{"aayudha-loops.yml", "aayudha-merge-gate.yml", "aayudha-ops.yml", "aayudha-ready-guard.yml", "aayudha-streak.yml", "aayudha-token.yml", "aayudha-triage.yml", "ci.yml"}) || files[".github/workflows/ci.yml"] != ciYML {
 		t.Fatalf("workflows after --gates: %v", workflows)
 	}
 	for _, wf := range []string{"aayudha-merge-gate.yml", "aayudha-ops.yml", "aayudha-ready-guard.yml", "aayudha-streak.yml", "aayudha-token.yml", "aayudha-triage.yml"} {
@@ -295,6 +299,9 @@ func TestInitExtras(t *testing.T) {
 	// aayudha runs its own streak workflow: the template as a development build installs it.
 	if own, err := os.ReadFile(filepath.Join("..", "..", ".github", "workflows", "aayudha-streak.yml")); err != nil || string(own) != string(initrepo.GateWorkflows("dev")[initrepo.StreakWorkflow]) {
 		t.Errorf(".github/workflows/aayudha-streak.yml is not the WP5.7 template rendered for dev")
+	}
+	if !strings.Contains(files[".github/workflows/aayudha-loops.yml"], "aayudha@v0.4.0") || files["loops/amp/digest.json"] == "" || !strings.Contains(files["loops/cursor/aayudha-loops.tf"], `"5 8 * * 1-5"`) {
+		t.Errorf("loops rendered by --gates: %v", slices.Collect(maps.Keys(files)))
 	}
 	cfg := files[".aayudha/config.toml"]
 	for _, want := range []string{"[identity]\napp_id = 4242\napp_slug = \"aayudha-r\"\nbroker = \"aayudha-token.yml\"", "[integrations.posthog]", "[integrations.sentry]", "[integrations.growthbook]"} {

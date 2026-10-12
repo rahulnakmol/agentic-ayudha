@@ -1,0 +1,5 @@
+description = "Monthly review."
+command = ["seat", "list"]
+cron = "0 11 1 * *"
+hosts = ["amp", "cursor"]
+prompt = "Reply with one paragraph per seat; change nothing."

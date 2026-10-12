@@ -1,0 +1,4 @@
+description = "Quarterly status."
+command = ["status", "--json"]
+cron = "0 10 2 1,4,7,10 *"
+hosts = ["actions"]

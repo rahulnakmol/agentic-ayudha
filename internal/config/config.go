@@ -152,8 +152,8 @@ type Decisions struct {
 
 // Notify is [notify].
 type Notify struct {
-	Channel    string `koanf:"channel" jsonschema:"enum=,enum=slack,enum=email,enum=github"`
-	Target     string `koanf:"target" jsonschema_description:"slack: name of the secret holding the webhook URL; email: recipient address; github: login to mention."`
+	Channel    string `koanf:"channel" jsonschema:"enum=,enum=slack,enum=email,enum=github,enum=file"`
+	Target     string `koanf:"target" jsonschema_description:"slack: name of the secret holding the webhook URL; email: recipient address; github: login to mention; file: path of the JSON-lines outbox (default .aayudha/state/notify-outbox.jsonl), which the Actions loops keep as an artifact."`
 	Issue      string `koanf:"issue" jsonschema_description:"github channel: issue the mention comment is posted on, as owner/name#number."`
 	SMTPAddr   string `koanf:"smtp_addr" jsonschema_description:"email channel: SMTP server as host:port (STARTTLS)."`
 	From       string `koanf:"from" jsonschema_description:"email channel: sender address, also the SMTP user."`
@@ -361,8 +361,9 @@ func (c *Config) Validate() error {
 		if n.Target == "" || !issueRef.MatchString(n.Issue) {
 			bad("[notify] channel = \"github\" needs target (login) and issue = \"owner/name#number\"")
 		}
+	case "file":
 	default:
-		bad("[notify] channel = %q: want slack, email, or github", c.Notify.Channel)
+		bad("[notify] channel = %q: want slack, email, github, or file", c.Notify.Channel)
 	}
 	for k, v := range c.Decisions.Authority {
 		_, isType := workitems.FindType(k)

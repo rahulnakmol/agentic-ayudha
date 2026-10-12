@@ -1,0 +1,15 @@
+# Which tests prove story #62's Completion Goal (WP7.1; WP4.3 maps the go test -json events of these tests, from
+# the run verify makes, to the criteria). The live scratch run and the scheduled run on this repository are
+# recorded in Appendix B D-7.1a and on the pull request.
+
+[[criterion]]
+id = 1 # golden outputs per host, and the tz-converted crons
+tests = ["internal/loops:TestGolden", "internal/loops:TestUTCCrons"]
+
+[[criterion]]
+id = 2 # the Actions fallback's digest job on schedule pages one digest into the file sink
+tests = ["internal/cli:TestLoopDigestOnSchedule", "internal/loops:TestDue"]
+
+[[criterion]]
+id = 3 # halt makes the next scheduled run exit 4 with no writes
+tests = ["internal/cli:TestLoopDigestOnSchedule"]
