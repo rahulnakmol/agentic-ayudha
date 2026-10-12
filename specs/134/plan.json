@@ -1,0 +1,71 @@
+{
+  "story": 134,
+  "body_hash": "c740ce97b5a22ca38233fb6865ae9bea8a95b212ea28116dbe8cfef363b7928e",
+  "footprint": [
+    "L01",
+    "L02",
+    "L09"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L01",
+      "title": "Ask page from design-system tokens",
+      "contracts": [
+        "GET / renders the empty, answered, referred, and refused states from the q query parameter; /app.css uses only --ay-* tokens; /tokens.css serves the design system's tokens.css; CSP default-src 'self'"
+      ],
+      "tests": [
+        "examples/benefits-qa/web:TestAskPageStates",
+        "examples/benefits-qa/web:TestStylesUseTokens"
+      ],
+      "instrumentation": [
+        "the page records benefits_visit for a pseudonymous visitor cookie and asks through the workflow"
+      ],
+      "criteria": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "layer": "L02",
+      "title": "benefits-qa command serving page, API, and health check",
+      "contracts": [
+        "benefits-qa -addr -tokens -events: one mux with web, api, and /healthz; -events appends Application Insights lines; graceful shutdown on SIGTERM"
+      ],
+      "tests": [
+        "examples/benefits-qa/cmd/benefits-qa:TestRun",
+        "examples/benefits-qa/cmd/benefits-qa:TestRunRefuses"
+      ],
+      "instrumentation": [
+        "logs the serving address on start"
+      ],
+      "criteria": [
+        4
+      ]
+    },
+    {
+      "layer": "L09",
+      "title": "deploy/serve.sh, the [verify] seed command",
+      "contracts": [
+        "serve.sh builds the example, starts it detached on 127.0.0.1:$BQA_PORT (default 8787), replaces a previous instance by pid file, and waits for /healthz"
+      ],
+      "tests": [
+        "examples/benefits-qa/deploy:TestServeScript"
+      ],
+      "instrumentation": [
+        "prints the URL, pid, and log path; prints the log when /healthz never answers"
+      ],
+      "criteria": [
+        5
+      ]
+    }
+  ],
+  "em_review": {
+    "required": true,
+    "layers": [
+      "L09"
+    ]
+  },
+  "planned_at": "2026-10-12T07:29:57Z",
+  "planned_by": "human-fallback"
+}
