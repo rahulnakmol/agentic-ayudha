@@ -332,17 +332,25 @@ func requireReviewers(ctx context.Context, c *github.Client, owner, name, env st
 // rateLimit counts the action's runs of aayudha-ops.yml in the last hour,
 // other than self, that were not cancelled or skipped.
 func rateLimit(ctx context.Context, c *github.Client, owner, name string, a ops.Action, self int64, now time.Time) error {
-	runs, _, err := c.REST.Actions.ListWorkflowRunsByFileName(ctx, owner, name, initrepo.OpsWorkflow,
-		&gh.ListWorkflowRunsOptions{Event: "workflow_dispatch", ListOptions: gh.ListOptions{PerPage: 100}})
-	if github.NotFound(err) {
-		return Errorf(ExitBlocked, "respond: %s is not installed; run `aayu init --gates`", initrepo.OpsWorkflow)
-	}
-	if err != nil {
-		return err
-	}
 	since := now.Add(-time.Hour)
+	opts := &gh.ListWorkflowRunsOptions{Event: "workflow_dispatch", Created: ">=" + since.UTC().Format(time.RFC3339), ListOptions: gh.ListOptions{PerPage: 100}}
+	var all []*gh.WorkflowRun
+	for {
+		runs, resp, err := c.REST.Actions.ListWorkflowRunsByFileName(ctx, owner, name, initrepo.OpsWorkflow, opts)
+		if github.NotFound(err) {
+			return Errorf(ExitBlocked, "respond: %s is not installed; run `aayu init --gates`", initrepo.OpsWorkflow)
+		}
+		if err != nil {
+			return err
+		}
+		all = append(all, runs.WorkflowRuns...)
+		if resp == nil || resp.NextPage == 0 {
+			break
+		}
+		opts.Page = resp.NextPage
+	}
 	count := 0
-	for _, r := range runs.WorkflowRuns {
+	for _, r := range all {
 		m := runNameRE.FindStringSubmatch(r.GetName())
 		if r.GetID() == self || m == nil || m[1] != a.Name || r.GetCreatedAt().Before(since) {
 			continue
@@ -609,7 +617,6 @@ func respondClose(ctx context.Context, e *Env, c *github.Client, tok identity.To
 			rep.Bug, _ = strconv.Atoi(m[1])
 		}
 	}
-	var add []string
 	if rep.Bug == 0 {
 		t, _ := workitems.FindType("bug")
 		title := fmt.Sprintf("Fix the cause of incident #%d: %s", n, is.GetTitle())
@@ -630,7 +637,10 @@ func respondClose(ctx context.Context, e *Env, c *github.Client, tok identity.To
 		if err != nil {
 			return err
 		}
-		add = append(add, fmt.Sprintf("linked Bug #%d filed (caused-by #%d)", rep.Bug, n))
+		// Record the Bug at once, so a rerun after a later failure finds it instead of filing another.
+		if timeline, err = writeTimeline(ctx, c, repo, n, timeline, []string{fmt.Sprintf("linked Bug #%d filed (caused-by #%d)", rep.Bug, n)}, e.Now()); err != nil {
+			return err
+		}
 	}
 	entry, _ := json.Marshal(map[string]any{"incident": n, "repo": repo, "title": is.GetTitle(), "bug": rep.Bug, "opened": is.GetCreatedAt().UTC(), "closed": e.Now().UTC(), "timeline": timeline})
 	if !c.DryRun() {
@@ -642,9 +652,8 @@ func respondClose(ctx context.Context, e *Env, c *github.Client, tok identity.To
 			return err
 		}
 	}
-	add = append(add, "retro entry appended to ledger retro/incidents.jsonl; incident closed")
 	var err error
-	if rep.Timeline, err = writeTimeline(ctx, c, repo, n, timeline, add, e.Now()); err != nil {
+	if rep.Timeline, err = writeTimeline(ctx, c, repo, n, timeline, []string{"retro entry appended to ledger retro/incidents.jsonl; incident closed"}, e.Now()); err != nil {
 		return err
 	}
 	if err := removeLabel(ctx, c, repo, n, workitems.LabelNeedsBug); err != nil {

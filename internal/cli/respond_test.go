@@ -183,6 +183,11 @@ func TestRespondExecutes(t *testing.T) {
 
 func TestRespondClose(t *testing.T) {
 	g, env, opts := respondFixture(t)
+	// The first attempt files the Bug but cannot write the ledger (no checkout); the retry files no second Bug.
+	opts.Dir = t.TempDir()
+	if code, _, _ := run(t, env, opts, "respond", "1", "--repo", "o/r", "--close"); code == 0 {
+		t.Fatal("close without a checkout succeeded")
+	}
 	dir, bare := ledgerCheckout(t)
 	opts.Dir = dir
 	code, out, errOut := run(t, env, opts, "respond", "1", "--repo", "o/r", "--close")
@@ -192,6 +197,9 @@ func TestRespondClose(t *testing.T) {
 	g.Mu.Lock()
 	inc, bug := g.Issues[1], g.Issues[2]
 	g.Mu.Unlock()
+	if len(g.Issues) != 2 {
+		t.Errorf("%d issues: the retry filed another Bug", len(g.Issues))
+	}
 	if inc.State != "closed" || bug == nil || !strings.Contains(bug.Body, "caused-by #1") || strings.Contains(strings.Join(g.LabelNames(1), " "), "needs:bug") {
 		t.Errorf("incident %s, labels %v, bug %+v", inc.State, g.LabelNames(1), bug)
 	}
