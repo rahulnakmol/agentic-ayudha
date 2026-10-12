@@ -263,9 +263,11 @@ gate instead (docs/BUILD-PLAN.md Appendix B, D2).
    gh api "repos/rahulnakmol/agentic-ayudha/rulesets/rule-suites?rule_suite_result=bypass&time_period=month"
    ```
 
-4. Every such bypass is listed as a solo-mode bypass by a hand-run reconciliation of that history against the
-   merged PRs, written to `ledger` under `audit/<date>/`, until `aayu audit` automates it (WP7.6). A bypass
-   that is not on the list is an incident (see [SECURITY.md](SECURITY.md#tool-incident-plan)).
+4. `aayu audit` (WP7.6; hand-run reconciliations until then) lists every such bypass as a solo-mode bypass
+   when a PR comment starting `Solo-mode bypass:` came before it and only the `protected-paths` check failed,
+   and writes its report to `ledger` under `audit/<date>/`. It runs with a repository admin token, since only
+   an admin can read rule suites. A bypass the report marks unexplained is an incident (see
+   [SECURITY.md](SECURITY.md#tool-incident-plan)).
 
 **When a bot identity exists (WP1.4)**: agent-authored PRs are opened by the bot, so the founder can approve
 them as a real review. The `protected-paths` gate passes when every protected path in the PR has an approving

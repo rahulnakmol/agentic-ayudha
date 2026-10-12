@@ -89,8 +89,8 @@ act.
 
 - A private report or a public report from a user.
 - An unexpected write on GitHub: a commit, PR, comment, label, release, or workflow run that no human or
-  agent lane started. Compare GitHub's own event history with `telemetry/actions.jsonl` (automated by
-  `aayu audit` reconciliation, n/a until WP7.6; until then by hand).
+  agent lane started. `aayu audit` (WP7.6) compares GitHub's own event history with the actions segments
+  on the ledger and lists every write no segment holds.
 - `aayu actions verify-chain` reports a broken hash chain (n/a until WP1.5).
 - A skill copy differs from `.aayudha/lock.toml` (`aayu doctor`, n/a until WP3.2).
 - A release asset whose signature, provenance, or checksum does not verify (see

@@ -77,6 +77,8 @@ plan lists in §2; the rest are pulled in by them.
 | `github.com/muesli/cancelreader` | v0.2.2 | MIT | Cancellable input, via bubbletea | <https://github.com/muesli/cancelreader> |
 | `github.com/rivo/uniseg` | v0.4.7 | MIT | Grapheme clusters, via ultraviolet | <https://github.com/rivo/uniseg> |
 | `github.com/xo/terminfo` | v0.0.0-20220910002029-abceb7e1c41e | MIT | Terminal capabilities, via colorprofile | <https://github.com/xo/terminfo> |
+| `github.com/mattn/go-isatty` | v0.0.24 | MIT | Terminal detection, via libc (found missing here by `aayu audit`'s licence scan, WP7.6) | <https://github.com/mattn/go-isatty> |
+| `github.com/ncruces/go-strftime` | v1.0.0 | MIT | Time formatting, via libc (found missing here by `aayu audit`'s licence scan, WP7.6) | <https://github.com/ncruces/go-strftime> |
 
 ### Shelled out by `self-update` (not bundled)
 

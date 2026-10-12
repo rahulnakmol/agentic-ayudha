@@ -1,0 +1,174 @@
+# Audit report: o/r, 2026-10-11T00:00:00Z to 2026-10-12T04:00:00Z
+
+Written by `aayu audit` (docs/BUILD-PLAN.md WP7.6). GitHub's own event history is the source of record (ground rule 6);
+the actions segments on the ledger are reconciled against it.
+
+Regenerate this report byte for byte, with the same configuration, from the GitHub inputs snapshot written beside it
+(GitHub's history is mutable, and rule suites are listed for a month), or re-read GitHub with the same inputs:
+
+```sh
+aayu audit --repo o/r --replay audit/2026-10-12/audit-20261012T040000Z.inputs.json
+aayu audit --repo o/r --since 2026-10-11T00:00:00Z --until 2026-10-12T04:00:00Z --ledger 400b3e03532757bb74a5fa17ac5b6aa5011cd487
+```
+
+## Inputs
+
+| Input | Value |
+|---|---|
+| Repository | `o/r` |
+| Window | 2026-10-11T00:00:00Z to 2026-10-12T04:00:00Z (half-open) |
+| GitHub event cursor | until 2026-10-12T04:00:00Z; newest rule suite 4474099541 |
+| GitHub inputs snapshot | `audit/2026-10-12/audit-20261012T040000Z.inputs.json` (SHA-256 `1ecd96fb4efd12700c6b90891fafd5f4d144147fb111669366751d2f5ec12ebc`) |
+| Ledger commit | `400b3e03532757bb74a5fa17ac5b6aa5011cd487` |
+| Code commit (licence scan) | `c0dec0dec0dec0dec0dec0dec0dec0dec0dec0de` |
+| Config hash | `sha256:db3ba6032b0b3db7a4caa39ff54803b14867240023e4119ebdabaecda5403eb8` |
+| Actions segments | 1 |
+
+| Segment | SHA-256 | Records |
+|---|---|---|
+| `actions/2026-10-12/amp-20261012T030441Z.jsonl` | `060c7cb9d3400764c201c8424aa0efa60fc95ae8a77940c61dd1f313629d08bb` | 5 |
+
+## Summary
+
+- Rule-suite bypasses: 8; accounted for 6; **unexplained 2**
+  - solo-mode bypasses (protected-path merges): 2
+  - ledger writes under the founder identity (D1 day-one rule): 2
+  - promotions to rolling or main: 1
+  - tag ruleset bypasses: 1
+- Solo-mode human passes (`ship --solo-bypass`): 1
+- Human-fallback writes: 3
+- GitHub writes in the window: 35; in an actions segment 6; by workflows and Apps 1; **not in any actions segment 28**
+- Proof coverage: 1/2 delivered stories and bugs; merged without proof (pre-gate) 1; merged without proof 0
+- Floor misses in authoritative packs: 0; waived floors: 0
+- Decisions over their SLA: 1
+- Autonomy exceptions: 1 corrections; 1 agent merges on never-layers
+- Licence findings: 3 (4 go.mod modules); CI `security` job on the code commit: success
+
+## Rule-suite bypasses
+
+GitHub records every push that a ruleset would have refused but a bypass actor made (`rulesets/rule-suites`, result `bypass`).
+A protected-path merge is a solo-mode bypass when only the `protected-paths` check failed and a PR comment starting
+"Solo-mode bypass:" came first (WP0.1, Appendix B D2). A deploy-key push lists no actor and is identified from the
+ledger commit (D1).
+
+### Solo-mode bypasses (protected-path merges) (2)
+
+| Rule suite | Ref | Actor | After | Pushed at | Bypassed rules | Accounted | Explanation |
+|---|---|---|---|---|---|---|---|
+| 4471759694 | `refs/heads/dev` | founder | `8888888` | 2026-10-11T21:23:37Z | `required_status_checks` (protected-paths-codeowner-review) | yes | #8 merged into dev past only the protected-paths check, after a "Solo-mode bypass:" comment; #8 (comment 6113923044, 2026-10-11T21:23:34Z) |
+| 4473766681 | `refs/heads/dev` | founder | `8686868` | 2026-10-12T02:20:04Z | `required_status_checks` (protected-paths-codeowner-review) | **no** | #86 merged into dev past the protected-paths check with no prior "Solo-mode bypass:" comment |
+
+### Ledger writes under the founder identity (D1 day-one rule) (2)
+
+| Rule suite | Ref | Actor | After | Pushed at | Bypassed rules | Accounted | Explanation |
+|---|---|---|---|---|---|---|---|
+| 4472680925 | `refs/heads/ledger` | founder | `d6beaa0` | 2026-10-11T23:46:18Z | `update` (ledger-writers) | yes | founder-identity ledger write by founder: specs: Ready snapshot of #91; not in an actions segment |
+| 4474099541 | `refs/heads/ledger` | (none) | `a2c97cd` | 2026-10-12T03:04:52Z | `update` (ledger-writers) | yes | deploy-key push (no actor listed, D1), identified by ledger commit a2c97cd: proof: ship record of #91 (PR #92); in an actions segment |
+
+### Promotions to rolling or main (1)
+
+| Rule suite | Ref | Actor | After | Pushed at | Bypassed rules | Accounted | Explanation |
+|---|---|---|---|---|---|---|---|
+| 4472075201 | `refs/heads/rolling` | founder | `1111111` | 2026-10-11T22:14:02Z | `update` (rolling-main-promotion) | yes | agent-run promotion "Rolling snapshot: 20261011T2210Z" after gate run 38179325066 (promote/rolling-20261011T2210Z) passed |
+
+### Tag ruleset bypasses (1)
+
+| Rule suite | Ref | Actor | After | Pushed at | Bypassed rules | Accounted | Explanation |
+|---|---|---|---|---|---|---|---|
+| 4471739456 | `refs/tags/v0.0.0-d4test.1` | founder | `2222222` | 2026-10-11T21:20:30Z | `creation` (release-tags) | yes | tag v0.0.0-d4test.1 is not on main; release run 38175962428 refused it (failure), as rule 8 requires |
+
+### Other bypasses (2)
+
+| Rule suite | Ref | Actor | After | Pushed at | Bypassed rules | Accounted | Explanation |
+|---|---|---|---|---|---|---|---|
+| 4471059806 | `refs/heads/ledger-probe` | (none) | `e17ff0a` | 2026-10-11T19:34:07Z | `update` (ledger-writers) | yes | push to refs/heads/ledger-probe with no actor listed (a deploy key, D1) outside the ledger; accounted for by audit/2026-10-11/solo-mode-bypass-reconciliation.md |
+| 4471851556 | `refs/heads/dev` | founder | `9999999` | 2026-10-11T21:38:34Z | `required_status_checks` (protected-paths-codeowner-review) | **no** | #9 merged past failing rules other than the protected-paths check: required_status_checks (protected-paths-codeowner-review) Required status checks "build", "protected-paths" are failing. |
+
+## Solo-mode human passes (`ship --solo-bypass`)
+
+| Story | PR | Merge commit | Shipped at | By | Ship record | Comment |
+|---|---|---|---|---|---|---|
+| #91 | #92 | `9292929` | 2026-10-12T03:04:45Z | founder | `proof/91/44d18af847494eb1bb088fd27c568d22d270a9fb/authoritative/ship.json` | <https://github.com/o/r/pull/92#issuecomment-6116996259> |
+
+## Human-fallback writes
+
+Writes made under the human identity because the repository has no bot identity (WP1.4 day-one path).
+
+| At | Target | Write | Actor | Record |
+|---|---|---|---|---|
+| 2026-10-12T02:31:25Z | #91 | work item tagged identity:human-fallback | founder | issue timeline |
+| 2026-10-12T02:33:30Z | o/r | github.pull.create | human-fallback | `actions/2026-10-12/amp-20261012T030441Z.jsonl` |
+| 2026-10-11T23:46:18Z | ledger `d6beaa0` | specs: Ready snapshot of #91 | Amp | ledger commit trailer |
+
+## Writes not in any actions segment
+
+Each write in GitHub's event history (issue and PR timelines, creations, workflow dispatches, ledger commits) is
+matched to a record in an actions segment on the ledger (same request and target, within 10m0s). A write with no
+record is a direct `gh` or web write, or an `aayu` run whose segment never reached the ledger. Workflow and App
+writes are recorded by their runs.
+
+| Target | Actor | First | Last | Writes |
+|---|---|---|---|---|
+| ledger 3c377d2 | Amp | 2026-10-11T19:00:00Z | 2026-10-11T19:00:00Z | ledger push: docs(ledger): describe the ledger ×1 |
+| ledger 749d3c9 | Amp | 2026-10-11T19:45:35Z | 2026-10-11T19:45:35Z | ledger push: docs(audit): hand-run solo-mode bypass reconciliation for 2026-10-11 ×1 |
+| #8 | founder | 2026-10-11T21:17:43Z | 2026-10-11T21:23:37Z | commented ×1, merged ×1, opened PR ×1 |
+| #9 | founder | 2026-10-11T21:24:26Z | 2026-10-11T21:38:35Z | commented ×1, merged ×1, opened PR ×1 |
+| run 38179325066 (.github/workflows/ci.yml) | founder | 2026-10-11T22:10:05Z | 2026-10-11T22:10:05Z | workflow dispatch ×1 |
+| #48 | founder | 2026-10-11T23:35:00Z | 2026-10-12T01:00:00Z | labeled effort:M ×1, labeled priority:P0 ×1, labeled priority:P1 ×1, labeled status:ready ×1, labeled type:story ×1, opened issue ×1 |
+| ledger d6beaa0 | Amp | 2026-10-11T23:46:18Z | 2026-10-11T23:46:18Z | ledger push: specs: Ready snapshot of #91 ×1 |
+| #86 | founder | 2026-10-12T01:50:00Z | 2026-10-12T02:23:33Z | commented ×1, merged ×1, opened PR ×1 |
+| #91 | founder | 2026-10-12T02:31:00Z | 2026-10-12T02:31:40Z | labeled effort:XS ×1, labeled identity:human-fallback ×1, labeled status:ready ×1, labeled type:story ×1, opened issue ×1 |
+| #95 | founder | 2026-10-12T02:50:00Z | 2026-10-12T02:57:33Z | merged ×1, opened PR ×1 |
+| ledger 2b1daab | Amp | 2026-10-12T03:04:14Z | 2026-10-12T03:04:14Z | ledger push: proof: authoritative pack for #91 at 44d18af84749 ×1 |
+| #92 | founder | 2026-10-12T03:04:30Z | 2026-10-12T03:04:30Z | commented ×1 |
+
+Writes matched to a record: (the ledger commit itself) 1, `actions/2026-10-12/amp-20261012T030441Z.jsonl` 5.
+
+Workflow and App writes: `github-actions[bot]` 1.
+
+## Proof coverage
+
+Delivered stories and bugs (a done status at the cursor, or a merged PR into the dev branch that references them).
+A story is covered by an authoritative pack that maps every Ready criterion, matches its hashes, and whose floors
+hold. A story merged before the merge gate existed is "merged without proof (pre-gate)": done but unproven, and
+still uncovered. The merge gate (`aayudha-merge-gate.yml`) was registered at 2026-10-12T02:37:03Z.
+
+| Story | Status | Merged by | Merged at | Covered | Pack or reason |
+|---|---|---|---|---|---|
+| #48 WP4.8 Merge gate + `inspect` | ready | #86 | 2026-10-12T02:20:05Z | **no** | merged without proof (pre-gate) |
+| #91 doctor names the floor each missing tool serves | merged | #92 | 2026-10-12T03:04:44Z | yes | `proof/91/44d18af847494eb1bb088fd27c568d22d270a9fb/authoritative/pack.json` |
+
+## Floors and waivers
+
+| Pack | Kind | Floors held | Misses | Waived |
+|---|---|---|---|---|
+| `proof/48/8686868686868686868686868686868686868686/advisory/pack.json` | advisory | — | coverage: fail | — |
+| `proof/91/44d18af847494eb1bb088fd27c568d22d270a9fb/authoritative/pack.json` | authoritative | coverage | — | — |
+
+## Decision SLA
+
+| Decision | Open | Business hours | Over SLA | Provisional |
+|---|---|---|---|---|
+| #97 Engine choice | yes | 35.0 | yes | no |
+
+## Autonomy exceptions
+
+- correction of #92: non-bot-commit, commit bbbbbbb by founder at 2026-10-12T03:04:44Z (L04)
+- agent PR #92 merged on never-layers L04 at 2026-10-12T03:04:44Z
+
+## Licence scan
+
+Every go.mod requirement of the code commit needs a THIRD_PARTY_NOTICES.md row with the same version and an allowed
+licence; the CI `security` job runs go-licenses and the npm licence check on the same commit.
+
+- `github.com/b/missing` v0.1.0 is not in THIRD_PARTY_NOTICES.md
+- `github.com/c/copyleft` v2.0.0: licence "GPL-3.0" is not on the allow list (0BSD, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, MIT)
+- `github.com/d/old` is v1.2.0 in go.mod but v1.1.0 in THIRD_PARTY_NOTICES.md
+
+## Sources and retention
+
+- Rule suites: `GET /repos/{owner}/{repo}/rulesets/rule-suites` (repository admin), listed for at most the last month;
+  the GitHub inputs snapshot keeps them, so `--replay` reproduces this report after GitHub stops listing them.
+- Issue and pull request timelines, merged pull requests, and workflow runs: GitHub REST, read up to the cursor.
+- Ledger: proof packs, ship records, Ready snapshots, actions segments, and earlier audit reports at the ledger commit.
+- Earlier reports (hand-run or `aayu audit`) on the ledger account for bypasses they list by rule-suite ID.
