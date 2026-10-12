@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Schema | work items v1, goal |
-| Body hash | `88c1a9fc2c2bca6d745c8d9b862d5521bd4975d7688f1a2d9e52838b9f339baa` |
+| Body hash | `12c066ccdbf0875dc3bbe02638ae6abb1f39df68bf14de384ba3edd27197e66f` |
 | Completion Goal hash | n/a (no Completion Goal on this type) |
 | Technical Owner | the Code Architect twin |
 | Written by | rahulnakmol (`identity:human-fallback`) |
@@ -32,7 +32,7 @@ Activation as `aayu measure` computes it from an Application Insights export wit
 
 ### Baseline
 
-0.258 (31 of 120 synthetic employees activated, cohorts of 2026-08-10 and 2026-08-17, both complete) before the product: every question an HR ticket. Measured on 2026-10-12 with `aayu measure --appinsights examples/benefits-qa/analytics/testdata/hr-ticket-seed1-2026-08-10.jsonl --metric activation --from 2026-08-10 --to 2026-09-07`; the export (SHA-256 `013572375d8b3675824c3e52e7169610c9c81d8b76251d7f1441049180e4d5ae`) is the seeded HR-ticket simulation `simulate -channel hr-ticket -seed 1 -from 2026-08-10` (120 employees, 60 % of tickets answered after 1 to 10 days), committed with the analytics story so the baseline can be re-derived. Snapshot: `.aayudha/state/measure/all-20261012T072505Z.sqlite` (SHA-256 `dacf9df5116843f951f68cde98cfb84720366a61dad65337312df3520b21b61f`, kept on the measuring machine; rebuilt from the export by the same command).
+0.258 (31 of 120 synthetic employees activated, cohorts of 2026-08-10 and 2026-08-17, both complete) before the product: every question an HR ticket. Measured on 2026-10-12 with `aayu measure --appinsights examples/benefits-qa/analytics/testdata/hr-ticket-seed1-2026-08-10.jsonl --metric activation --from 2026-08-10 --to 2026-09-07`; the export (SHA-256 `7d4e1f62a2e4890c6848d6c6bb85305b2a6bee1b547f53d88c72f6552d0db804`) is the seeded HR-ticket simulation `simulate -channel hr-ticket -seed 1 -from 2026-08-10` (120 employees, 60 % of tickets answered after 1 to 10 days, answers after the window left out), committed with the analytics story so the baseline can be re-derived. Snapshot: `.aayudha/state/measure/all-20261012T125322Z.sqlite` (SHA-256 `81dafa37e0cb9b1950babad7be35aa459331a8011847ef8f3ddc691f80a82018`, kept on the measuring machine; rebuilt from the export by the same command).
 
 ### Target
 
