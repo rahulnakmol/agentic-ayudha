@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -110,15 +112,37 @@ func TestAskPageStates(t *testing.T) {
 	}
 }
 
-// The stylesheet uses design-system tokens only: no colour literal.
+// The stylesheet uses design-system tokens only: no colour literal, no
+// literal length or duration (only var(--ay-…) and calc() over one, with
+// unitless factors), no unitless line-height, and every token it names exists
+// in the design system's tokens.css.
 func TestStylesUseTokens(t *testing.T) {
 	b, err := static.ReadFile("static/app.css")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, bad := range []string{"#", "rgb(", "hsl("} {
-		if strings.Contains(string(b), bad) {
-			t.Errorf("app.css holds a colour literal (%s)", bad)
+	css := regexp.MustCompile(`(?s)/\*.*?\*/`).ReplaceAllString(string(b), "")
+	for _, bad := range []*regexp.Regexp{
+		regexp.MustCompile(`#[0-9a-fA-F]{3,8}\b|\b(rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color)\(`),
+		regexp.MustCompile(`\d(px|rem|em|ex|ch|%|vh|vw|vmin|vmax|pt|pc|cm|mm|in|ms|s)\b`),
+		regexp.MustCompile(`line-height:\s*[\d.]+\s*[;}]`),
+		regexp.MustCompile(`(?i)\b(white|black|red|green|blue|gray|grey)\b`),
+	} {
+		if m := bad.FindString(css); m != "" {
+			t.Errorf("app.css holds a literal value: %q", m)
+		}
+	}
+	tokens, err := os.ReadFile(filepath.Join("..", "..", "..", "packages", "design-system", "src", "styles", "tokens.css"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	used := regexp.MustCompile(`var\((--ay-[a-z0-9-]+)\)`).FindAllStringSubmatch(css, -1)
+	if len(used) < 20 {
+		t.Errorf("only %d token references", len(used))
+	}
+	for _, m := range used {
+		if !strings.Contains(string(tokens), m[1]+":") {
+			t.Errorf("app.css names %s, which tokens.css does not define", m[1])
 		}
 	}
 	for _, id := range []string{"", "x y", strings.Repeat("a", 65)} {

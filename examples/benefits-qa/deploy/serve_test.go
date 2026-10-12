@@ -4,6 +4,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -76,4 +77,26 @@ func TestServeScript(t *testing.T) {
 	if code, _ := get("/healthz"); code != 200 {
 		t.Errorf("/healthz after the second run: %d", code)
 	}
+}
+
+// Another server already answering /healthz on the port is not taken for the
+// new instance: serve.sh fails, says why, and leaves that server running.
+func TestServeScriptRefusesForeignServer(t *testing.T) {
+	if _, err := exec.LookPath("curl"); err != nil {
+		t.Skip("curl is not installed")
+	}
+	foreign := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "ok\n") }))
+	defer foreign.Close()
+	port := strconv.Itoa(foreign.Listener.Addr().(*net.TCPAddr).Port)
+	cmd := exec.Command("./serve.sh")
+	cmd.Env = append(os.Environ(), "BQA_PORT="+port, "TMPDIR="+t.TempDir())
+	out, err := cmd.CombinedOutput()
+	if err == nil || !strings.Contains(string(out), "did not answer /healthz on port "+port) {
+		t.Fatalf("serve.sh on a taken port: %v\n%s", err, out)
+	}
+	resp, err := http.Get(foreign.URL + "/healthz")
+	if err != nil {
+		t.Fatalf("the foreign server was stopped: %v", err)
+	}
+	_ = resp.Body.Close()
 }
