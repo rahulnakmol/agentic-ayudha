@@ -15,7 +15,6 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/audit"
-	"github.com/rahulnakmol/agentic-ayudha/internal/autonomy"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
@@ -34,7 +33,6 @@ type EvolveResult struct {
 	Cases    []EvolveCase `json:"cases,omitempty"`
 	Commit   string       `json:"commit,omitempty"`
 	PR       int          `json:"pr,omitempty"`
-	Rate     string       `json:"correction_rate_before,omitempty"`
 	Next     string       `json:"next,omitempty"`
 }
 
@@ -137,7 +135,6 @@ func runEvolve(ctx context.Context, e *Env, in Values) error {
 			return Wrap(ExitExternal, err)
 		}
 	}
-	res.Rate = e.skillRate(ctx, c, repo, skill)
 	if err := openEvolvePR(ctx, c, repo, dev, bot.Tag, &res); err != nil {
 		return Wrap(ExitExternal, err)
 	}
@@ -229,9 +226,9 @@ func openEvolvePR(ctx context.Context, c *github.Client, repo, dev, tag string, 
 		title := fmt.Sprintf("feat(skills): evolve %s for Feedback #%d (WP7.7)", res.Skill, res.Feedback)
 		body := fmt.Sprintf("Refs #%d\n\nOpened by `aayu evolve` (WP7.7), eval-first: %s reproduces the accepted Feedback on the current `%s` skill "+
 			"(its `before/` run fails tier 1) and passes with this skill diff. CI's eval-first gate re-checks it.\n\n"+
-			"- Correction rate of agent PRs that changed this skill, before: %s. `aayu retro` tracks it after.\n"+
+			"- Correction rate of agent PRs that changed this skill: the skills table of `aayu retro`, before and after this merges.\n"+
 			"- Never auto-merged: `skills/` is a protected path, so a human CODEOWNER reviews it. It ships through `rolling`.\n"+
-			"- Rollback: `aayu install --pin <previous version>`.\n", res.Feedback, strings.Join(ids, ", "), res.Skill, res.Rate)
+			"- Rollback: `aayu install --pin <previous version>`.\n", res.Feedback, strings.Join(ids, ", "), res.Skill)
 		var pr *gh.PullRequest
 		if _, err := c.Write(ctx, actions.Action{Kind: "github.pull.create", Target: repo, Story: fmt.Sprintf("#%d", res.Feedback),
 			Request: &actions.Request{Method: http.MethodPost, Path: "/repos/" + repo + "/pulls"}, Payload: map[string]any{"head": res.Branch, "base": dev, "title": title}},
@@ -255,34 +252,4 @@ func openEvolvePR(ctx context.Context, c *github.Client, repo, dev, tag string, 
 			return nil, err
 		})
 	return err
-}
-
-// skillRate is the correction rate of merged agent PRs that changed the
-// skill, from merged-PR history (WP5.7), as "k/n".
-func (e *Env) skillRate(ctx context.Context, c *github.Client, repo, skill string) string {
-	l, err := e.Config()
-	if err != nil {
-		return "unknown"
-	}
-	rules := autonomy.Rules{Bots: l.Config.Identity.BotLogins, Days: l.Config.Autonomy.CorrectionDays, Layers: autonomy.ReadLayers(config.RepoRoot(e.Dir))}
-	prs, issues, err := autonomy.Fetch(ctx, c, repo, rules, autonomy.MaxPRs)
-	if err != nil {
-		return "unknown (" + err.Error() + ")"
-	}
-	corrected := map[int]bool{}
-	for _, x := range rules.Detect(prs, issues) {
-		corrected[x.PR] = true
-	}
-	total, bad := 0, 0
-	for _, p := range prs {
-		if rules.Agent(p) && slices.ContainsFunc(p.Files, func(f string) bool {
-			return strings.HasPrefix(f, "skills/"+skill+"/") || strings.HasPrefix(f, "evals/skills/"+skill+"/")
-		}) {
-			total++
-			if corrected[p.Number] {
-				bad++
-			}
-		}
-	}
-	return fmt.Sprintf("%d/%d", bad, total)
 }

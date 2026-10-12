@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -74,18 +75,45 @@ func TestEvolveVerb(t *testing.T) {
 	for i := 1; i <= 4; i++ {
 		g.AddIssue("filler", "")
 	}
-	g.AddIssue("Feedback: retro: skill `stub` correction rate 2/3 above 20 %", "### What happened or what you need\n\nx\n", "type:feedback", "status:backlog", "intake", "needs:grill")
-	g.AddIssue("Feedback: retro: not accepted yet", "x", "type:feedback", "status:backlog", "intake")
 	home := t.TempDir()
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "HOME": home, "PATH": os.Getenv("PATH")}
-	run := func(args ...string) (int, string, string) {
+	gate := Gate
+	runEnv := func(env map[string]string, args ...string) (int, string, string) {
 		var out, errb bytes.Buffer
 		code := cli.Run(context.Background(), append([]string{"evolve", "--repo", "o/r"}, args...), cli.IO{In: strings.NewReader(""), Out: &out, Err: &errb}, cli.Options{
-			Dir: dir, GitHubAPI: g.URL(), GitHubGap: -1, Assets: aayudha.Assets, EvolveGate: Gate,
+			Dir: dir, GitHubAPI: g.URL(), GitHubGap: -1, Assets: aayudha.Assets, EvolveGate: gate,
 			Getenv: func(k string) string { return env[k] }, Environ: []string{"HOME=" + home},
 			GHToken: func(context.Context) (string, error) { return "", errors.New("no gh in tests") },
 		})
 		return code, out.String(), errb.String()
+	}
+	run := func(args ...string) (int, string, string) { return runEnv(env, args...) }
+	noToken := map[string]string{"HOME": home, "PATH": os.Getenv("PATH")}
+	if code, _, errOut := runEnv(noToken); code != cli.ExitBlocked {
+		t.Fatalf("listing without a token: %d %s", code, errOut)
+	}
+	if code, _, errOut := runEnv(noToken, "--skill", "stub", "--feedback", "5"); code != cli.ExitBlocked {
+		t.Fatalf("evolve without a token: %d %s", code, errOut)
+	}
+	g.Mu.Lock()
+	g.Fail, g.FailAfter = "GET /repos/o/r/issues", 0
+	g.Mu.Unlock()
+	if code, _, errOut := run(); code != cli.ExitExternal {
+		t.Fatalf("listing with GitHub failing: %d %s", code, errOut)
+	}
+	var ob, eb bytes.Buffer
+	if code := cli.Run(context.Background(), []string{"evolve", "--repo", "o/r"}, cli.IO{In: strings.NewReader(""), Out: &ob, Err: &eb},
+		cli.Options{Dir: t.TempDir(), Getenv: func(k string) string { return env[k] }}); code != cli.ExitUsage || !strings.Contains(eb.String(), "checkout") {
+		t.Fatalf("evolve outside a checkout: %d %s", code, eb.String())
+	}
+	if code, out, _ := run(); code != 0 || !strings.Contains(out, "no accepted Feedback from retro is waiting") {
+		t.Fatalf("listing with nothing accepted: %d %s", code, out)
+	}
+	g.AddIssue("Feedback: retro: skill `stub` correction rate 2/3 above 20 %", "### What happened or what you need\n\nx\n", "type:feedback", "status:backlog", "intake", "needs:grill")
+	g.AddIssue("Feedback: retro: not accepted yet", "x", "type:feedback", "status:backlog", "intake")
+	g.AddIssue("Feedback: retro: correction rate 3/4 above 20 %", "x", "type:feedback", "status:backlog", "intake", "needs:grill")
+	if code, out, errOut := run(); code != 0 || !strings.Contains(out, "aayu evolve --skill <skill> --feedback 7") {
+		t.Fatalf("a finding that names no skill: %d %s %s", code, out, errOut)
 	}
 	if code, out, errOut := run(); code != 0 || !strings.Contains(out, "#5 Feedback: retro: skill `stub`") || !strings.Contains(out, "aayu evolve --skill stub --feedback 5") || strings.Contains(out, "#6") {
 		t.Fatalf("listing accepted retro Feedback: %d %s %s", code, out, errOut)
@@ -93,6 +121,19 @@ func TestEvolveVerb(t *testing.T) {
 	if code, _, errOut := run("--skill", "Bad", "--feedback", "5"); code != cli.ExitUsage {
 		t.Fatalf("bad skill name: %d %s", code, errOut)
 	}
+	if code, _, errOut := run("--skill", "stub", "--feedback", "99"); code != cli.ExitExternal {
+		t.Fatalf("missing issue: %d %s", code, errOut)
+	}
+	g.Mu.Lock()
+	g.Issues[1].Title, g.Issues[1].State = "Feedback: retro: closed one", "closed"
+	g.Issues[1].Labels = append(g.Issues[1].Labels, fake.Label{Name: "type:feedback"})
+	g.Mu.Unlock()
+	if code, _, errOut := run("--skill", "stub", "--feedback", "1"); code != cli.ExitBlocked || !strings.Contains(errOut, "is closed") {
+		t.Fatalf("closed Feedback: %d %s", code, errOut)
+	}
+	g.Mu.Lock()
+	g.Issues[1].Title, g.Issues[1].Labels = "filler", nil
+	g.Mu.Unlock()
 	if code, _, errOut := run("--skill", "stub", "--feedback", "6"); code != cli.ExitBlocked || !strings.Contains(errOut, "not accepted") {
 		t.Fatalf("not accepted Feedback: %d %s", code, errOut)
 	}
@@ -111,6 +152,11 @@ func TestEvolveVerb(t *testing.T) {
 	if ahead := gitIn(t, wt, "rev-list", "--count", "origin/dev..HEAD"); ahead != "0" || len(g.Writes()) != 0 {
 		t.Fatalf("a refused change was committed (%s ahead) or written: %v", ahead, g.Writes())
 	}
+	gate = nil
+	if code, _, errOut := run("--skill", "stub", "--feedback", "5"); code != cli.ExitInternal || !strings.Contains(errOut, "eval harness") {
+		t.Fatalf("a binary without the gate: %d %s", code, errOut)
+	}
+	gate = Gate
 	before := strings.Replace(string(issue), `"title": "`, `"title": "Export as text/csv: `, 1)
 	writeTree(t, wt, map[string]string{
 		"evals/cases/stub/no-content-type/case.toml": "skill = \"stub\"\ndescription = \"Feedback #5\"\ninput = \"input.txt\"\nartifacts = [\"output/issue.json\"]\n" +
@@ -120,6 +166,13 @@ func TestEvolveVerb(t *testing.T) {
 		"evals/cases/stub/no-content-type/output/issue.json": string(issue),
 		"evals/cases/stub/no-content-type/before/issue.json": before,
 	})
+	caseFile := filepath.Join(wt, "evals", "cases", "stub", "no-content-type", "case.toml")
+	right, _ := os.ReadFile(caseFile)
+	_ = os.WriteFile(caseFile, []byte(strings.Replace(string(right), "feedback = 5", "feedback = 4", 1)), 0o644)
+	if code, _, errOut := run("--skill", "stub", "--feedback", "5"); code != cli.ExitBlocked || !strings.Contains(errOut, "no new case is for skill stub and Feedback #5") {
+		t.Fatalf("a case for another Feedback: %d %s", code, errOut)
+	}
+	_ = os.WriteFile(caseFile, right, 0o644)
 	code, out, errOut = run("--skill", "stub", "--feedback", "5")
 	if code != 0 || !strings.Contains(out, "eval case stub/no-content-type reproduces Feedback #5") || !strings.Contains(out, "evolve never merges") {
 		t.Fatalf("eval-first change: %d %s %s", code, out, errOut)
@@ -147,6 +200,22 @@ func TestEvolveVerb(t *testing.T) {
 	labels := strings.Join(g.LabelNames(prN), ",")
 	if !strings.Contains(labels, "agent-authored") || !strings.Contains(labels, "aayu:evolve") {
 		t.Fatalf("PR labels: %s", labels)
+	}
+	g.Mu.Lock()
+	g.Fail, g.FailAfter = "GET /repos/o/r/pulls", 0
+	g.Mu.Unlock()
+	if code, _, errOut := run("--skill", "stub", "--feedback", "5"); code != cli.ExitExternal {
+		t.Fatalf("re-run with GitHub failing: %d %s", code, errOut)
+	}
+	// A re-run finds the open PR instead of opening another.
+	g.Reset()
+	if code, out, errOut := run("--skill", "stub", "--feedback", "5"); code != 0 || !strings.Contains(out, fmt.Sprintf("PR #%d", prN)) {
+		t.Fatalf("re-run: %d %s %s", code, out, errOut)
+	}
+	for _, w := range g.Writes() {
+		if w.Path == "/repos/o/r/pulls" {
+			t.Fatalf("a re-run opened a second PR")
+		}
 	}
 	if pr := g.Pulls[prN]; pr == nil || !strings.Contains(pr.Body, "Refs #5") || !strings.Contains(pr.Body, "Never auto-merged") || pr.Head.Ref != "evolve/stub-5" {
 		t.Fatalf("PR: %+v", pr)

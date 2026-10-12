@@ -98,6 +98,15 @@ func TestEvolveGateCI(t *testing.T) {
 		{"labelled evolve PR with no eval case", "feat/stub", "agent-authored,aayu:evolve", []map[string]string{skillDiff}, "evolve gate"},
 		{"case whose old run passes does not reproduce", "evolve/stub-5", "", []map[string]string{evolveCase(t, "Export orders "), skillDiff}, "evolve gate"},
 		{"case without a skill diff", "evolve/stub-5", "", []map[string]string{evolveCase(t, "Export orders as text/csv ")}, "evolve gate"},
+		{"case naming no Feedback", "evolve/stub-5", "", []map[string]string{withCase(evolveCase(t, "Export orders as text/csv "), func(c string) string {
+			return strings.Replace(c, "feedback = 5\n", "", 1)
+		}), skillDiff}, "evolve gate"},
+		{"case without a reproduce run", "evolve/stub-5", "", []map[string]string{withCase(evolveCase(t, "Export orders as text/csv "), func(c string) string {
+			return strings.Replace(c, "reproduce = \"before\"\n", "", 1)
+		}), skillDiff}, "evolve gate"},
+		{"unreadable case", "evolve/stub-5", "", []map[string]string{{"evals/cases/stub/broken/case.toml": "skill = \"stub\"\nunknown = 1\n"}, skillDiff}, "evolve gate"},
+		{"new run fails tier 1", "evolve/stub-5", "", []map[string]string{evolveCase(t, "Export orders as text/csv "), skillDiff,
+			{"evals/cases/stub/no-content-type/output/issue.json": "{}"}}, "evolve gate"},
 		{"eval-first evolve PR", "evolve/stub-5", "agent-authored", []map[string]string{evolveCase(t, "Export orders as text/csv "), skillDiff}, ""},
 		{"not an evolve PR", "feat/stub", "", []map[string]string{skillDiff}, ""},
 	} {
@@ -113,4 +122,20 @@ func TestEvolveGateCI(t *testing.T) {
 	if err := evolveGate(ctx, root, "", "evolve/x", nil); err == nil {
 		t.Error("an evolve gate without -base passed")
 	}
+	if err := evolveGate(ctx, root, "no-such-commit", "evolve/x", nil); err == nil || !strings.Contains(err.Error(), "git diff") {
+		t.Errorf("an evolve gate against a missing base: %v", err)
+	}
+	// The command line CI runs.
+	branch("evolve/stub-5", skillDiff)
+	t.Chdir(root)
+	os.Args = []string{"eval", "-evolve-gate", "-base", base, "-branch", "evolve/stub-5", "-labels", ""}
+	if err := run(ctx); err == nil || !strings.Contains(err.Error(), "evolve gate") {
+		t.Errorf("eval -evolve-gate on an evolve PR without a case: %v", err)
+	}
+}
+
+func withCase(files map[string]string, edit func(string) string) map[string]string {
+	k := "evals/cases/stub/no-content-type/case.toml"
+	files[k] = edit(files[k])
+	return files
 }
