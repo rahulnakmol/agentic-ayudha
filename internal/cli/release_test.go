@@ -34,6 +34,7 @@ type ladderFixture struct {
 	gateFails  int  // ci.yml attempts that fail
 	tagRed     bool // release.yml stays red after its re-run
 	wrongSHA   bool // the dispatched gate runs on another commit
+	evalsRed   bool // evals.yml fails
 	dispatched []string
 }
 
@@ -76,6 +77,9 @@ func newLadderFixture(t *testing.T) *ladderFixture {
 			sha = strings.Repeat("d", 40)
 		}
 		run := fake.WorkflowRun{HeadSHA: sha, HeadBranch: ref, Status: "completed", Conclusion: "success", Attempt: 1}
+		if wf == "evals.yml" && f.evalsRed {
+			run.Conclusion = "failure"
+		}
 		if wf == "ci.yml" && f.gateFails > 0 {
 			f.gateFails--
 			run.Conclusion = "failure"
@@ -411,9 +415,20 @@ func TestReleaseFailsClosed(t *testing.T) {
 		if !tt.landed && (git(t, f.bare, "tag", "--list") != "" || !contains(f.g.LabelNames(2), "status:merged")) {
 			t.Errorf("%s: a failure before landing tagged or stamped", fail)
 		}
-		if tt.landed && !strings.Contains(errOut, "tagged rolling-2026-10-12, but the bookkeeping after landing failed") {
+		if tt.landed && !strings.Contains(errOut, `is on rolling as "Rolling snapshot: 20261012T0941Z", but finishing the promotion failed`) {
 			t.Errorf("%s: a failure after landing must say what landed: %s", fail, errOut)
 		}
+	}
+
+	// The remote refuses the tag (as the release-tags ruleset would) after rolling moved: the error says what is
+	// on rolling and that the tag and the bookkeeping are left to do.
+	f := newLadderFixture(t)
+	hook := filepath.Join(f.bare, "hooks", "pre-receive")
+	git(t, f.bare, "config", "core.hooksPath", "hooks") // over any global hooks path
+	_ = os.WriteFile(hook, []byte("#!/bin/sh\nwhile read old new ref; do case \"$ref\" in refs/tags/*) echo \"tags are restricted\" >&2; exit 1;; esac; done\n"), 0o755)
+	code, _, errOut := f.run(t, time.Date(2026, 10, 12, 9, 41, 0, 0, time.UTC), f.env, strconv.Itoa(f.release), "--to", "rolling", "--yes")
+	if code != ExitExternal || !strings.Contains(errOut, "finish it by hand: tag rolling-2026-10-12, then the stamps") || !contains(f.g.LabelNames(2), "status:merged") {
+		t.Fatalf("tag refused after landing: %d %s", code, errOut)
 	}
 }
 
@@ -460,9 +475,17 @@ func TestReleaseRefusesBeforeLanding(t *testing.T) {
 	}
 	_ = os.Remove(filepath.Join(f.dir, "design", "brand.yaml"))
 
+	// Red evals stop the promotion before the gate.
+	f.evalsRed = true
+	if code, _, errOut := f.run(t, at, f.env, rel, "--to", "rolling", "--yes"); code != ExitBlocked || !strings.Contains(errOut, "evals.yml ended failure") ||
+		strings.Contains(fmt.Sprint(f.dispatched), "ci.yml") {
+		t.Fatalf("red evals: %d %s %v", code, errOut, f.dispatched)
+	}
+	f.evalsRed = false
+
 	// The gate must have run on the candidate itself.
 	f.wrongSHA = true
-	if code, _, errOut := f.run(t, at, f.env, rel, "--to", "rolling", "--yes"); code != ExitExternal || !strings.Contains(errOut, "evals.yml run 901 is on ddddddd") {
+	if code, _, errOut := f.run(t, at, f.env, rel, "--to", "rolling", "--yes"); code != ExitExternal || !strings.Contains(errOut, "evals.yml run 90") || !strings.Contains(errOut, "is on ddddddd") {
 		t.Fatalf("a run on another commit: %d %s", code, errOut)
 	}
 	if git(t, f.bare, "rev-parse", "refs/heads/rolling") != rolling0 || git(t, f.bare, "tag", "--list") != "" {

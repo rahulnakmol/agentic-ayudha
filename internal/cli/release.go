@@ -311,6 +311,9 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 			if p.Evals, err = e.dispatchAndWait(ctx, c, repo, evalsWorkflow, src, srcSHA, nil, false); err != nil {
 				return err
 			}
+			if p.Evals.Conclusion != "success" {
+				return Errorf(ExitBlocked, "release: %s ended %s on %s (%s); nothing was promoted", evalsWorkflow, p.Evals.Conclusion, short(srcSHA), p.Evals.URL)
+			}
 		} else {
 			p.Notices = append(p.Notices, "no "+evalsWorkflow+": tier-2 evals not run")
 		}
@@ -329,50 +332,59 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 		p.Artifacts = append(p.Artifacts, Artifact{Name: a.GetName(), Digest: a.GetDigest(), Size: a.GetSizeInBytes()})
 	}
 
-	// 3. Land the gated commit (a fast-forward) and tag it.
+	// 3. Land the gated commit (a fast-forward), then tag it and record it.
 	if err := e.gitPush(ctx, g, wt, repo, dst, p.Commit+":refs/heads/"+dst); err != nil {
 		return err
 	}
-	if to == "main" {
-		_, err = gitOut(wt, "tag", "-a", p.Tag, "-m", fmt.Sprintf("Release %s: %s", p.Tag, is.GetTitle()), p.Commit)
-	} else {
-		_, err = gitOut(wt, "tag", p.Tag, p.Commit)
-	}
+	releaseErr, err := e.afterLanding(ctx, c, tok, g, wt, repo, is, &p, has[tagWorkflow], notes, utm, now)
 	if err != nil {
+		// The target already holds the commit: say what shipped and what is left.
+		return Errorf(ExitExternal, "release: %s is on %s as %q, but finishing the promotion failed: %v; finish it by hand: tag %s, then the stamps, notes, and Shipping evidence",
+			short(p.Commit), dst, p.Message, err, p.Tag)
+	}
+	if err := e.Emit(p, func(out io.Writer) error { return promotionText(out, p) }); err != nil {
 		return err
+	}
+	return releaseErr
+}
+
+// afterLanding runs once the gated commit is on the target: the tag, the
+// tag's release.yml (main), the artifact identity, and the bookkeeping. A
+// release.yml that stays red is reported, not returned as a failure of these
+// steps, since everything else still has to happen.
+func (e *Env) afterLanding(ctx context.Context, c *github.Client, tok identity.Token, g *ledger.Writer, wt, repo string, is *gh.Issue, p *Promotion,
+	hasTagRun bool, notes tell.Draft, utm tell.UTM, now time.Time) (releaseErr, err error) {
+	owner, name, _ := github.SplitRepo(repo)
+	main := strings.HasPrefix(p.Message, "Release: ")
+	args := []string{"tag", p.Tag, p.Commit}
+	if main {
+		args = []string{"tag", "-a", p.Tag, "-m", fmt.Sprintf("Release %s: %s", p.Tag, is.GetTitle()), p.Commit}
+	}
+	if _, err := g.Output(ctx, wt, args...); err != nil {
+		return nil, err
 	}
 	if err := e.gitPush(ctx, g, wt, repo, p.Tag, "refs/tags/"+p.Tag+":refs/tags/"+p.Tag); err != nil {
-		return err
+		return nil, err
 	}
-	var releaseErr error
-	if to == "main" {
-		if has[tagWorkflow] {
-			if p.ReleaseRun, err = e.waitPushRun(ctx, c, repo, tagWorkflow, p.Commit); err != nil {
-				return err
-			}
-			if p.ReleaseRun.Conclusion != "success" {
-				releaseErr = Errorf(ExitExternal, "release: %s is on %s and tagged %s, but %s ended %s (%s); resume it with `gh run rerun %d --failed`",
-					short(p.Commit), dst, p.Tag, tagWorkflow, p.ReleaseRun.Conclusion, p.ReleaseRun.URL, p.ReleaseRun.ID)
-			}
-		} else {
-			p.Notices = append(p.Notices, "no "+tagWorkflow+": nothing builds the tag")
+	if main && hasTagRun {
+		if p.ReleaseRun, err = e.waitPushRun(ctx, c, repo, tagWorkflow, p.Commit); err != nil {
+			return nil, err
 		}
+		if p.ReleaseRun.Conclusion != "success" {
+			releaseErr = Errorf(ExitExternal, "release: %s is on %s and tagged %s, but %s ended %s (%s); resume it with `gh run rerun %d --failed`",
+				short(p.Commit), p.Target, p.Tag, tagWorkflow, p.ReleaseRun.Conclusion, p.ReleaseRun.URL, p.ReleaseRun.ID)
+		}
+	} else if main {
+		p.Notices = append(p.Notices, "no "+tagWorkflow+": nothing builds the tag")
+	}
+	if main {
 		if rel, _, err := c.REST.Repositories.GetReleaseByTag(ctx, owner, name, p.Tag); err == nil {
 			for _, a := range rel.Assets {
 				p.Artifacts = append(p.Artifacts, Artifact{Name: a.GetName(), Digest: a.GetDigest(), Size: int64(a.GetSize())})
 			}
 		}
 	}
-
-	// 4. Stamp, tell, record, and make measure due.
-	if err := e.bookkeep(ctx, c, tok, repo, is, &p, notes, utm, now, to == "main"); err != nil {
-		return Errorf(ExitExternal, "release: %s is on %s as %q, tagged %s, but the bookkeeping after landing failed: %v; finish the stamps, notes, and Shipping evidence by hand",
-			short(p.Commit), dst, p.Message, p.Tag, err)
-	}
-	if err := e.Emit(p, func(out io.Writer) error { return promotionText(out, p) }); err != nil {
-		return err
-	}
-	return releaseErr
+	return releaseErr, e.bookkeep(ctx, c, tok, repo, is, p, notes, utm, now, main)
 }
 
 // bookkeep runs after the gated commit landed: it stamps the shipped stories
