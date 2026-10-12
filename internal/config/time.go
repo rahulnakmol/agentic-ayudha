@@ -116,3 +116,25 @@ func (c Clock) Within(t time.Time) bool {
 func (c Clock) Next(t time.Time) time.Time {
 	return c.Add(t, 0)
 }
+
+// Between returns the business time from a to b; 0 when b is not after a.
+func (c Clock) Between(a, b time.Time) time.Duration {
+	var d time.Duration
+	for t := a.In(c.Loc); t.Before(b); {
+		if start, end, ok := c.window(t); ok {
+			from, to := t, end
+			if from.Before(start) {
+				from = start
+			}
+			if b.Before(to) {
+				to = b
+			}
+			if to.After(from) {
+				d += to.Sub(from)
+			}
+		}
+		y, m, day := t.Date()
+		t = time.Date(y, m, day+1, 0, 0, 0, 0, c.Loc)
+	}
+	return d
+}

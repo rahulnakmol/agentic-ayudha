@@ -13,9 +13,9 @@ aayu:
   inputs:
     - name: decision
       type: issue
-      required: true
+      required: false
       positional: true
-      description: "Decision issue."
+      description: "Decision issue; without one, the SLA sweep over every open Decision. With --waiver, the story or bug to waive a floor on."
     - name: accept
       type: string
       required: false
@@ -40,4 +40,19 @@ aayu:
 
 Record a Decision with options, evaluation, and recommendation; accept it, supersede it, or file a floor waiver.
 
-Body lands in WP5.6 (the verb). Format and lint: skills/README.md.
+Who reasons: you (the host model) write the Question, Options, Evaluation, Recommendation, and
+`Reversible` of a Decision issue; the binary keeps the SLA and records acceptance.
+
+1. Write or refine the Decision through its issue form. `Reversible: true` lets the recommendation apply
+   provisionally when the SLA lapses (V8); say `false` when undoing it would be costly.
+2. `aayu decide` (all open Decisions) or `aayu decide <n>` runs the SLA sweep: after `[decisions] sla_hours`
+   business hours it pages the authority and posts an escalation comment that mentions
+   `[decisions] escalate_to`; after `provisional_after_hours` a reversible, Decision-ready recommendation
+   applies provisionally (`decision:provisional`, with a ratify-or-revert deadline in the body).
+3. A human accepts with `aayu decide <n> --accept <option>`: never as an agent, and only the authority
+   (`[decisions] authority.<parent type or layer>`, a seat's human, or `[autonomy] approver`). Accepting closes
+   the Decision, clears `decision:provisional`, and closes any Decision it `supersedes`.
+4. `aayu decide <story> --waiver <floor>` files a floor-waiver Decision (never reversible, never provisional).
+   Only a human's `--accept waive` waives the floor; the redaction floor cannot be waived.
+
+Open Decisions show the items they `constrains` as blocked in `aayu status`.

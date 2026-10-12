@@ -14,6 +14,7 @@ const (
 	LabelNeedsBug      = "needs:bug"               // an Incident waiting for respond to file its linked Bug (WP5.6)
 	LabelHumanFallback = "identity:human-fallback" // written under the human identity because no bot exists (WP1.4)
 	LabelProvisional   = "decision:provisional"    // V8: a reversible Decision's recommendation applied after its SLA
+	LabelWaiver        = "decision:waiver"         // a floor-waiver Decision (decide --waiver, WP5.6); audit counts them
 	LabelCorrection    = "aayu:correction"         // manual correction marker for the streak (WP5.7)
 	LabelAgentAuthored = "agent-authored"          // PRs opened by an agent lane (evolve, WP7.7)
 	LabelScreenReader  = "aayudha:screen-reader"   // runs the screen-reader floor on a PR (macOS and Windows runners, WP4.7)
@@ -42,6 +43,7 @@ func Labels() []LabelDef {
 		LabelDef{LabelNeedsBug, "fef2c0", "Incident waiting for its linked Bug (respond files it)"},
 		LabelDef{LabelHumanFallback, "e4e669", "Written under the human identity: no bot identity configured"},
 		LabelDef{LabelProvisional, "d93f0b", "Recommendation applied provisionally after the Decision SLA (V8)"},
+		LabelDef{LabelWaiver, "d93f0b", "Floor-waiver Decision (decide --waiver); never applied provisionally"},
 		LabelDef{LabelCorrection, "b60205", "A human corrected an agent's merge (resets the streak)"},
 		LabelDef{LabelAgentAuthored, "c5def5", "Opened by an agent lane"},
 		LabelDef{LabelScreenReader, "5319e7", "Run the VoiceOver and NVDA screen-reader floor on this PR"},

@@ -49,17 +49,20 @@ type Comment struct {
 
 // Issue is an issue with its labels, comments, and sub-issues.
 type Issue struct {
-	ID        int64      `json:"id"`
-	Number    int        `json:"number"`
-	Title     string     `json:"title"`
-	Body      string     `json:"body"`
-	State     string     `json:"state"`
-	Labels    []Label    `json:"labels"`
-	Type      *IssueType `json:"type,omitempty"`
-	CreatedAt string     `json:"created_at"`
-	Comments  []*Comment `json:"-"`
-	Subs      []int      `json:"-"`
-	Parent    int        `json:"-"`
+	ID     int64  `json:"id"`
+	Number int    `json:"number"`
+	Title  string `json:"title"`
+	Body   string `json:"body"`
+	State  string `json:"state"`
+	// StateReason and ClosedBy are set when the issue is closed through the fake.
+	StateReason string     `json:"state_reason,omitempty"`
+	ClosedBy    *Account   `json:"closed_by,omitempty"`
+	Labels      []Label    `json:"labels"`
+	Type        *IssueType `json:"type,omitempty"`
+	CreatedAt   string     `json:"created_at"`
+	Comments    []*Comment `json:"-"`
+	Subs        []int      `json:"-"`
+	Parent      int        `json:"-"`
 }
 
 // PR is a pull request; it shares its number with an Issue, as on GitHub.
@@ -158,6 +161,11 @@ type GitHub struct {
 	App        map[string]any // what /app-manifests/{code}/conversions returns
 
 	Files map[string]string // repository file path -> content, served by the contents API for any ref
+	// RefFiles serves the contents API for one ref (a commit SHA or branch)
+	// when a request names it: ref -> path -> content.
+	RefFiles map[string]map[string]string
+	// Dispatches records workflow_dispatch requests: the workflow file and the request body.
+	Dispatches []map[string]any
 	// Static answers GET requests the fake does not model (pull requests and
 	// their commits, files, and reviews), keyed by path without the query.
 	Static map[string]any
@@ -418,11 +426,22 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 	case m == "GET" && strings.HasPrefix(p, repo+"/contents/"):
 		f := strings.TrimPrefix(p, repo+"/contents/")
 		content, ok := g.Files[f]
+		if files, pinned := g.RefFiles[r.URL.Query().Get("ref")]; pinned {
+			content, ok = files[f]
+		}
 		if !ok {
 			notFound()
 			return
 		}
 		reply(200, map[string]any{"type": "file", "path": f, "encoding": "base64", "content": base64.StdEncoding.EncodeToString([]byte(content))})
+
+	// Workflow dispatch (with return_run_details).
+	case m == "POST" && strings.HasPrefix(p, repo+"/actions/workflows/") && strings.HasSuffix(p, "/dispatches"):
+		body["workflow"] = strings.TrimSuffix(strings.TrimPrefix(p, repo+"/actions/workflows/"), "/dispatches")
+		g.Dispatches = append(g.Dispatches, body)
+		id := 900 + len(g.Dispatches)
+		reply(200, map[string]any{"workflow_run_id": id, "run_url": fmt.Sprintf("%s%s/actions/runs/%d", g.Server.URL, repo, id),
+			"html_url": fmt.Sprintf("https://github.com/%s/%s/actions/runs/%d", g.Owner, g.Repo, id)})
 
 	// Labels.
 	case m == "GET" && p == repo+"/labels":
@@ -663,6 +682,11 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			}
 			if v, ok := body["state"].(string); ok {
 				is.State = v
+				is.StateReason, _ = body["state_reason"].(string)
+				is.ClosedBy = nil
+				if v == "closed" {
+					is.ClosedBy = &Account{Login: g.Viewer, Type: "User"}
+				}
 			}
 		}
 		reply(200, is)

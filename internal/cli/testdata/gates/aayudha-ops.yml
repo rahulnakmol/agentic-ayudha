@@ -1,0 +1,96 @@
+# aayudha ops actions (docs/BUILD-PLAN.md WP5.6). Installed into product repos by `aayu init --gates` as
+# .github/workflows/aayudha-ops.yml; the template is embedded in the aayudha binary. Protected path.
+#
+# `aayu respond <incident> --action <name>` dispatches this workflow on the default branch. The job runs in
+# the GitHub Environment the catalog action names, so an action with approval = "human" waits here until one
+# of the environment's required reviewers approves it; respond refuses to dispatch to an environment without
+# required reviewers. After approval, `aayudha respond --ci` checks again that the run is this workflow on the
+# default branch, that the catalog commit is on the default branch (ops/actions.toml is never read from a PR),
+# that the action and its typed parameters are in that catalog, that a human (not a bot) approved the
+# environment, and that the hourly cap holds; then it runs the action's argv with no shell and no GitHub token.
+#
+# Credential: the production credential lives only in the environment, never in an agent's environment.
+# Prefer OIDC: the action mints a token from ACTIONS_ID_TOKEN_REQUEST_URL/TOKEN (valid for minutes) and
+# exchanges it with the cloud for a short-lived credential. An environment secret AAYUDHA_OPS_CREDENTIAL is
+# passed when set.
+name: aayudha-ops
+run-name: "aayudha-ops ${{ inputs.action }} for #${{ inputs.incident }} (${{ inputs.request }})"
+
+on:
+  workflow_dispatch:
+    inputs:
+      incident:
+        description: Incident issue number
+        required: true
+        type: string
+      action:
+        description: Catalog action (ops/actions.toml)
+        required: true
+        type: string
+      params:
+        description: Action parameters, key=value pairs separated by commas
+        required: false
+        type: string
+        default: ""
+      environment:
+        description: GitHub Environment the action runs in
+        required: true
+        type: string
+      catalog_sha:
+        description: Default-branch commit the catalog was read at
+        required: true
+        type: string
+      request:
+        description: respond's request ID
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+concurrency:
+  group: aayudha-ops-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  execute:
+    name: aayudha/ops
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    timeout-minutes: 30
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.catalog_sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.25.x"
+          cache: false
+      - name: Install aayudha v0.4.0
+        run: go install github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@v0.4.0
+      - name: Execute the catalog action
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+          AAYUDHA_OPS_CATALOG_SHA: ${{ inputs.catalog_sha }}
+          AAYUDHA_OPS_ENVIRONMENT: ${{ inputs.environment }}
+          AAYUDHA_OPS_REQUEST: ${{ inputs.request }}
+          AAYUDHA_OPS_CREDENTIAL: ${{ secrets.AAYUDHA_OPS_CREDENTIAL }}
+          INCIDENT: ${{ inputs.incident }}
+          ACTION: ${{ inputs.action }}
+          PARAMS: ${{ inputs.params }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          args=(respond "$INCIDENT" --action "$ACTION" --ci --repo "$REPO")
+          if [[ -n "$PARAMS" ]]; then args+=(--params "$PARAMS"); fi
+          aayudha "${args[@]}" | tee -a "$GITHUB_STEP_SUMMARY"

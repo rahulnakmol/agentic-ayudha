@@ -151,11 +151,19 @@ func TestVerifyMobileSkipAndWaiver(t *testing.T) {
 	if c, _ := p.Check("mobile"); c.Result != proof.Skipped || c.Detail != proof.SkippedMobile || p.FloorsHold() {
 		t.Fatalf("mobile check: %+v", c)
 	}
-	d := g.AddIssue("Waive the mobile floor for #2 until XCUITest lands (0.2)", fixtureBody(t, "decision", func(f map[string]string) { f["links"] = "waives #2" }), "type:decision")
-	g.Mu.Lock()
-	g.Issues[2].Subs = append(g.Issues[2].Subs, d.Number)
-	d.Parent = 2
-	g.Mu.Unlock()
+	// A filed waiver waives nothing until a human accepts it (WP5.6).
+	code, out, errOut := run(t, env, opts, "decide", "2", "--waiver", "mobile", "--repo", "o/r", "--json")
+	var filed decideReport
+	if err := json.Unmarshal([]byte(out), &filed); code != 0 || err != nil {
+		t.Fatalf("decide --waiver: %d %s %s", code, out, errOut)
+	}
+	d := g.Issues[filed.Waiver.Decision]
+	if code, out = verifyMobile(); code != ExitFloor {
+		t.Fatalf("with an unaccepted waiver: %d %s", code, out)
+	}
+	if code, out, errOut := run(t, env, opts, "decide", strconv.Itoa(d.Number), "--accept", "waive", "--repo", "o/r"); code != 0 {
+		t.Fatalf("accept the waiver: %d %s %s", code, out, errOut)
+	}
 	if code, out = verifyMobile(); code != 0 || !strings.Contains(out, "waived: mobile by #"+strconv.Itoa(d.Number)) {
 		t.Fatalf("with a waiver: %d %s", code, out)
 	}
