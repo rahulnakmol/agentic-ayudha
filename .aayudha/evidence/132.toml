@@ -1,0 +1,18 @@
+# Which tests prove story #132's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # POST /api/ask answers the dental question: 200, answered, quoted passage and citation, strict AskResponse
+tests = ["examples/benefits-qa/api:TestAskAnswered"]
+
+[[criterion]]
+id = 2 # malformed, empty, unknown-field, email user_id, form, oversized, and GET requests get a 4xx with a JSON error
+tests = ["examples/benefits-qa/api:TestAskRejects"]
+
+[[criterion]]
+id = 3 # the workflow records question_asked and exactly one outcome event for the user at the service clock in UTC
+tests = ["examples/benefits-qa/ask:TestServiceRecordsEvents"]
+
+[[criterion]]
+id = 4 # the schema generated from the Go contract types equals the committed ask.schema.json
+tests = ["examples/benefits-qa/contracts:TestSchemaInSync"]
