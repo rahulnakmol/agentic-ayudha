@@ -7,6 +7,10 @@ floor result, an outcome. Before you see the brief, `aayu brief`'s deterministic
 the takeaway), every citation names a real source, the register's lint (below), and visuals. Do not re-check those; judge
 grounding, fit, and usefulness.
 
+Inferences: anything beyond what the floors, the criterion map, or the Result state is an inference. One the brief
+labels as such ("this suggests …") is not a claim when it follows from the sources; one stated as fact is an
+unsupported claim. A UI element, control, or step that no source names is an invented claim.
+
 - 5: Every claim matches what its cited source says, with nothing invented (no numbers, dates, names, causes, or
   outcomes beyond the grounding); the takeaway is first and correct; the register and purpose fit as described below.
 - 4: As 5, with one minor lapse: a citation that could be more precise, or one sentence slightly off register.

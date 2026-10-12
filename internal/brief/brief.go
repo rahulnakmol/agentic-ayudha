@@ -464,6 +464,18 @@ func Check(d *Draft, g *Grounding, o Options) []Finding {
 		}
 	}
 
+	if o.Purpose == "close" || o.Register == "regulatory" {
+		if n := unitsIn(d, LimitsSection); n == 0 {
+			add("limits", "a %s brief has a `## %s` section that states what the evidence and the measures do not show (for example, that usage does not show time saved)", map[bool]string{true: "close", false: "regulatory"}[o.Purpose == "close"], LimitsSection)
+		}
+	}
+	for _, p := range populationDrift(d, g) {
+		add("population", "%s", p)
+	}
+	for _, p := range uiDetails(d, g) {
+		add("ui", "%s", p)
+	}
+
 	switch o.Register {
 	case "eli5":
 		r := Readability(d.Units)
@@ -500,6 +512,19 @@ func kindOf(u Unit) string {
 		return "list item"
 	}
 	return "paragraph"
+}
+
+// LimitsSection is the section a close or regulatory brief must have.
+const LimitsSection = "Limits of this evidence"
+
+func unitsIn(d *Draft, section string) int {
+	n := 0
+	for _, u := range d.Units {
+		if strings.EqualFold(u.Section, section) && strings.TrimSpace(u.Text) != "" {
+			n++
+		}
+	}
+	return n
 }
 
 func itemsIn(d *Draft, section string) int {

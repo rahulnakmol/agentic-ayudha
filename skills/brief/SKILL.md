@@ -73,16 +73,22 @@ renders one accessible HTML page with the sources in its footer.
   `[D1]` a measure snapshot, `[P1.c3]` the evidence a pack maps to criterion 3. Say only what a source says. Never
   add numbers, dates, names, or outcomes of your own.
 - Simplify the words, never the facts. Every register keeps these exact:
-  - A number keeps its unit and what it counts. "4.2 exports per reviewer per week" is a rate per reviewer: say "on
-    average", never "each reviewer", and never drop "per reviewer".
+  - An aggregate keeps the grounding's own wording of its population. "4.2 exports per reviewer per week" stays "per
+    reviewer" wherever you state the number: never "each reviewer", "every reviewer", "users", or "an average across
+    reviewers". `aayu brief` refuses a number from the Result without its "per …" wording, and "each" or "every" with
+    it.
   - A state is only what a source records. "Released" is not "merged", and "out of scope" is not "not tested".
   - Evidence speaks only through the pack's criterion map. Each pack lists its criteria with the evidence mapped to
     each (and, when inspect judged the pack's head, its verdict per criterion). To say a criterion is proved, met, or
     shown, or that a recording, trace, or screenshot shows something, cite that criterion's entry: `[P1.c3]` is
     criterion 3 of pack P1. An artifact proves only the criterion it is mapped to. A criterion with no evidence in the
     map has no entry to cite: say it is not proved.
-  - Name no screen detail (a button, menu, or page) and no reason or effect (time saved, fewer errors) that no source
-    names.
+  - Name no UI element, control, or step (a button, menu, tab, click, press) that the grounding does not name;
+    `aayu brief` refuses one. Describe what the sources state ("they save the filtered claims to a CSV file"), not how
+    a user would do it.
+  - Anything beyond what the floors, the criterion map, or the Result state is an inference. Leave it out, or label
+    it ("This suggests …, an inference the evidence does not test") and keep it out of the takeaway. A skipped floor
+    means only that the floor did not run; a passing floor means only its own check passed.
 - Keep a metric's own words, such as "reviewer", in every register; they are technical names, also in `ste`.
 - Markdown only: no raw HTML and no `![…](…)` images. Pictures are visual blocks (below).
 
@@ -96,7 +102,7 @@ renders one accessible HTML page with the sources in its footer.
   the verb. Use the active voice.
 - `engineer`: precise and compact. Name the components, floors, values, and thresholds exactly as the sources do.
 - `regulatory`: formal and traceable. Every paragraph and list item carries a citation. Say what was tested, by which
-  floor, with what result, and what the evidence does not cover.
+  floor, with what result, and what the evidence does not cover, in a `## Limits of this evidence` section.
 
 ## Purposes
 
@@ -107,6 +113,11 @@ renders one accessible HTML page with the sources in its footer.
   it. Mark it as a proposal.
 - `close`: the outcome against its target, citing the Result `[R]` and the authoritative packs. `aayu brief` refuses
   `close` (exit 4) when the work item has no authoritative pack or no Result.
+
+A `close` brief in any register, and every `regulatory` brief, has a `## Limits of this evidence` section (`aayu
+brief` refuses one without it). It states what the evidence and the measures do not show: floors that were skipped,
+criteria without evidence, and what the Result's measure cannot tell. Usage of a feature does not show time saved,
+fewer errors, or the problem solved; say so when the work item names such a problem.
 
 ## Visuals
 

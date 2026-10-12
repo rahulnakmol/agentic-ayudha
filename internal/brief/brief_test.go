@@ -330,14 +330,59 @@ func TestCheckRules(t *testing.T) {
 			t.Errorf("%q: %v", md, f)
 		}
 	}
-	if f := check("# T\n\nIt shipped [P1, R].\n", "regulatory", "close"); len(f) > 0 {
+	// Limits: a close or regulatory brief states what its evidence does not show.
+	for _, rp := range [][2]string{{"engineer", "close"}, {"regulatory", "explain"}} {
+		if f := check("# T\n\nIt shipped [P1, R].\n", rp[0], rp[1]); !has(f, "`## Limits of this evidence` section") {
+			t.Errorf("%s/%s without limits: %v", rp[0], rp[1], f)
+		}
+	}
+	if f := check("# T\n\nIt shipped [P1].\n", "engineer", "explain"); has(f, "Limits") {
+		t.Errorf("an explain brief needs no limits: %v", f)
+	}
+	// Population: the Result states a rate per reviewer (rewritten here); a unit citing R keeps it.
+	pg := *g
+	pg.Result = &Result{Text: "Target met: CSV exports per reviewer per week = 4.2 against the target >= 3 (baseline 0). Window: 2026-09-14 to 2026-10-12."}
+	pcheck := func(md string) []Finding {
+		d, _ := Parse([]byte(md), "")
+		return Check(d, &pg, Options{Register: "engineer", Purpose: "explain"})
+	}
+	for md, want := range map[string]string{
+		"# T\n\nUsage is 4.2 exports a week [R].\n":                         `states 4.2 from the Result without its population: keep "per reviewer"`,
+		"# T\n\nEach reviewer exports 4.2 files per reviewer a week [R].\n": `says "each reviewer"`,
+		"# T\n\nUsage beat the target of 3 [R].\n":                          `states 3 from the Result without its population`,
+	} {
+		if f := pcheck(md); !has(f, want) {
+			t.Errorf("%q: %v, want %q", md, f, want)
+		}
+	}
+	for _, md := range []string{
+		"# T\n\nUsage is 4.2 CSV exports per reviewer per week, against a target of 3 [R].\n",
+		"# T\n\nThe window ran from 2026-09-14 to 2026-10-12 [R].\n",
+		"# T\n\nCriterion 3 is not proved; usage met its target [R].\n",
+		"# T\n\nEach reviewer story shipped 4.2 [P1].\n", // does not cite R
+	} {
+		if f := pcheck(md); has(f, "population") {
+			t.Errorf("%q: %v", md, f)
+		}
+	}
+	// UI details: a control no source names is invented; one the grounding names is fine.
+	if f := check("# T\n\nPress one button to export the claims [P1].\n", "engineer", "explain"); !has(f, `names "Press", an interface detail`) || !has(f, `names "button"`) {
+		t.Errorf("invented controls: %v", f)
+	}
+	ug := *g
+	ug.Subject.Fields = map[string]string{"summary": "Reviewers click Export CSV to download the filtered claims."}
+	d, _ := Parse([]byte("# T\n\nReviewers click Export CSV, and clicking it exports the claims [P1].\n"), "")
+	if f := Check(d, &ug, Options{Register: "engineer", Purpose: "explain"}); has(f, "interface detail") {
+		t.Errorf("a control the summary names: %v", f)
+	}
+	if f := check("# T\n\nIt shipped [P1, R].\n\n## Limits of this evidence\n\n- Usage does not show time saved [R].\n", "regulatory", "close"); len(f) > 0 {
 		t.Errorf("a cited close brief: %v", f)
 	}
 	// An image of Mobbin origin is refused when prepared (WP6.4).
 	dir := t.TempDir()
 	png, _ := os.ReadFile(filepath.Join("testdata", "sample", "illustration.png"))
 	_ = os.WriteFile(filepath.Join(dir, "mobbin-ref.png"), png, 0o644)
-	d, _ := Parse([]byte("# T\n\nIt shipped [P1].\n\n```illustration\nalt: Rows go in and a file comes out.\nsrc: mobbin-ref.png\ngenerator: Painter\n```\n"), dir)
+	d, _ = Parse([]byte("# T\n\nIt shipped [P1].\n\n```illustration\nalt: Rows go in and a file comes out.\nsrc: mobbin-ref.png\ngenerator: Painter\n```\n"), dir)
 	if _, f := Prepare(context.Background(), d, g, Sources{}); len(f) != 1 || !strings.Contains(f[0].Message, "Mobbin") {
 		t.Errorf("Mobbin image: %v", f)
 	}

@@ -2,11 +2,12 @@
 // entry point of .github/workflows/evals.yml and of the promotion gate:
 //
 //	go run ./internal/evals/cmd/eval -tier 1                                     # deterministic, no model calls
-//	go run ./internal/evals/cmd/eval -tier 2 -sha <sha> -out evals/results/<sha>.json [-baseline <file>]
+//	go run ./internal/evals/cmd/eval -tier 2 -group <group> -sha <sha> -out evals/results/<sha>-<group>.json [-baseline <file>]
+//	go run ./internal/evals/cmd/eval -groups                                     # the group names, as JSON
 //	go run ./internal/evals/cmd/eval -compare evals/results/<sha>.json [-baseline <file>]
 //
 // Tier 2 makes live model calls through [models.gateway] (AAYU_MODELS__GATEWAY__BASE_URL and
-// AAYU_MODELS__GATEWAY__SECRET, key in AAYU_SECRET_<NAME>), capped by [budget] and evals/eval.toml max_usd.
+// AAYU_MODELS__GATEWAY__SECRET, key in AAYU_SECRET_<NAME>), capped by [budget] and the -group's max_usd in evals/eval.toml.
 // It exits 1 when the results fail the bar or the baseline comparison.
 package main
 
@@ -51,7 +52,8 @@ func run(ctx context.Context) error {
 	out := flag.String("out", "", "results file to write (tier 2)")
 	compare := flag.String("compare", "", "results file to check against the bar and -baseline, without running anything")
 	baseline := flag.String("baseline", "", "baseline results file (evals/results/<main-sha>.json); a missing file means no baseline")
-	skip := flag.String("skip", "", "comma-separated case ID prefixes to leave out of tier 2 (evals.yml skips brief/ on pushes to dev)")
+	group := flag.String("group", "", "tier 2: the group to run ([[groups]] in evals/eval.toml), with its own max_usd")
+	groups := flag.Bool("groups", false, "print the tier-2 group names as a JSON array and exit")
 	only := flag.String("cases", "", "tier 2: run only the cases whose ID (<skill>/<name>) matches this regular expression")
 	flag.Parse()
 
@@ -68,6 +70,14 @@ func run(ctx context.Context) error {
 		return err
 	}
 	switch {
+	case *groups:
+		var names []string
+		for _, g := range cfg.Groups {
+			names = append(names, g.Name)
+		}
+		b, _ := json.Marshal(names)
+		fmt.Println(string(b))
+		return nil
 	case *compare != "":
 		cur, err := readResults(*compare)
 		if err != nil {
@@ -98,17 +108,16 @@ func run(ctx context.Context) error {
 		if *sha == "" || *out == "" {
 			return errors.New("tier 2 needs -sha and -out")
 		}
-		h, err := harness(root, cfg)
-		if err != nil {
-			return err
-		}
 		cases, err := evals.LoadCases(root)
 		if err != nil {
 			return err
 		}
-		cases, skipped := evals.Skip(cases, *skip)
-		for _, id := range skipped {
-			fmt.Printf("skipped %s (-skip %s)\n", id, *skip)
+		if cfg, cases, err = cfg.ForGroup(*group, cases); err != nil {
+			return fmt.Errorf("tier 2 needs -group: %w", err)
+		}
+		h, err := harness(root, cfg)
+		if err != nil {
+			return err
 		}
 		if *only != "" {
 			re, err := regexp.Compile(*only)
@@ -121,7 +130,7 @@ func run(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		res.Skipped = skipped
+		res.Group = *group
 		res.Verdict, res.Reasons = evals.Compare(res, base, cfg)
 		if base != nil {
 			res.Baseline = base.SHA

@@ -209,6 +209,7 @@ func harness(t *testing.T, fake *models.Fake, judge string) *Harness {
 		t.Fatal(err)
 	}
 	cfg.Judge = judge
+	cfg.MaxUSD = 6 // a group's cap; the fakes charge almost nothing
 	log, err := actions.Open(filepath.Join(t.TempDir(), "actions.jsonl"), actions.Options{})
 	if err != nil {
 		t.Fatal(err)
@@ -701,22 +702,64 @@ func TestTier1UnmappedCriterionClaim(t *testing.T) {
 	}
 }
 
-// Pushes to dev leave the brief tier-2 cases out (evals.yml -skip brief/);
-// tier-1-only cases and the stub stay.
-func TestSkipBriefCases(t *testing.T) {
+// Tier-2 groups (D-7.3d): the brief cases form their own group with a 12 USD
+// cap and every other case falls to the catch-all group with 6, so one
+// group cannot use up another's cap; an unknown group is refused.
+func TestGroups(t *testing.T) {
+	cfg, err := LoadConfig(root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	all, err := LoadCases(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	kept, skipped := Skip(all, " brief/ ,")
-	ids := map[string]bool{}
-	for _, c := range kept {
-		ids[c.ID] = true
+	b, brief, err := cfg.ForGroup("brief", all)
+	if err != nil || b.MaxUSD != 12 {
+		t.Fatalf("brief group: %v, cap %v", err, b.MaxUSD)
 	}
-	if len(skipped) != 4 || !ids["stub/csv-export"] || !ids["brief/unmapped-criterion"] || ids["brief/eli5-explain"] || len(kept)+len(skipped) != len(all) {
-		t.Fatalf("kept %v, skipped %v", ids, skipped)
+	o, other, err := cfg.ForGroup("skills", all)
+	if err != nil || o.MaxUSD != 6 || len(brief)+len(other) != len(all) {
+		t.Fatalf("skills group: %v, cap %v, %d+%d of %d cases", err, o.MaxUSD, len(brief), len(other), len(all))
 	}
-	if kept, skipped := Skip(all, ""); len(kept) != len(all) || skipped != nil {
-		t.Fatalf("no prefixes: %d kept, %v skipped", len(kept), skipped)
+	for _, c := range brief {
+		if !strings.HasPrefix(c.ID, "brief/") {
+			t.Errorf("%s in the brief group", c.ID)
+		}
+	}
+	for _, c := range other {
+		if strings.HasPrefix(c.ID, "brief/") {
+			t.Errorf("%s outside the brief group", c.ID)
+		}
+	}
+	if _, _, err := cfg.ForGroup("", all); err == nil {
+		t.Error("an empty group was accepted")
+	}
+}
+
+// WP7.3 brief rules, tier 1 (D-7.3d): planted drafts on the recorded cases
+// fail the deterministic checks the skill's lapses map to: a close brief
+// without its Limits section, a rate from the Result stated for "each
+// reviewer" or without "per reviewer", and an interface control no source
+// names.
+func TestTier1BriefRules(t *testing.T) {
+	for _, tc := range []struct{ id, draft, check, want string }{
+		{"brief/regulatory-close", "# Closure record\n\nFeature #7 met its target of 3, at 4.2 exports per reviewer per week [R].\n\n## Verification\n\n- The merge gate wrote the authoritative pack [P1].\n", "limits", "`## Limits of this evidence` section"},
+		{"brief/eli5-explain", "# Saving claims\n\nEach reviewer saves 4.2 files a week [R].\n", "population", `says "each reviewer"`},
+		{"brief/eli5-explain", "# Saving claims\n\nReviewers save files 4.2 times a week [R].\n", "population", `keep "per reviewer"`},
+		{"brief/eli5-explain", "# Saving claims\n\nPress one button to save the claims you picked [#12].\n", "ui", `names "Press", an interface detail no source names`},
+	} {
+		c := copyCase(t, tc.id)
+		g, err := os.ReadFile(filepath.Join(root, "evals", "cases", "brief", "grounding.json"))
+		if err != nil || os.WriteFile(filepath.Join(c.Dir, "..", "grounding.json"), g, 0o644) != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(c.Dir, "output", "brief.md"), []byte(tc.draft), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		r := Tier1(context.Background(), root, c, aayudha.Assets)
+		if status(r, "brief") != Fail || !strings.Contains(r.String(), tc.check+": ") || !strings.Contains(r.String(), tc.want) {
+			t.Errorf("%s: planted %s defect did not fail tier 1 with %q:\n%s", tc.id, tc.check, tc.want, r)
+		}
 	}
 }
