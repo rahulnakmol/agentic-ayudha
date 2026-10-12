@@ -47,6 +47,7 @@ func respondFixture(t *testing.T) (*fake.GitHub, map[string]string, Options) {
 			"deployment_branch_policy": map[string]any{"protected_branches": true, "custom_branch_policies": false}},
 		"/repos/o/r/environments/staging": map[string]any{"name": "staging", "protection_rules": []any{}},
 	}
+	g.Refs["heads/dev"] = headSHA
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "t"}
 	now := time.Date(2026, 10, 12, 10, 0, 0, 0, time.UTC)
 	return g, env, Options{GitHubAPI: g.URL(), GitHubGap: -1, Now: func() time.Time { return now }}
@@ -154,6 +155,22 @@ func TestRespondExecutes(t *testing.T) {
 	exec("no approval", ExitBlocked, nil)
 	approve("aayudha-r[bot]", "Bot")
 	exec("a bot's approval", ExitBlocked, nil)
+	exec("no run ID", ExitBlocked, func(e map[string]string) { delete(e, "GITHUB_RUN_ID") })
+	exec("a job in another environment", ExitBlocked, func(e map[string]string) { e["AAYUDHA_OPS_ENVIRONMENT"] = "staging" })
+	g.Mu.Lock()
+	g.Static["/repos/o/r/actions/runs/77"].(map[string]any)["event"] = "push"
+	g.Mu.Unlock()
+	exec("a run that is not a dispatch", ExitBlocked, nil)
+	g.Mu.Lock()
+	g.Static["/repos/o/r/actions/runs/77"].(map[string]any)["event"] = "workflow_dispatch"
+	g.Mu.Unlock()
+	for _, f := range []string{"GET /repos/o/r", "GET /repos/o/r/actions/runs/77", "GET /repos/o/r/actions/runs/77/approvals", "GET /repos/o/r/contents/ops/actions.toml"} {
+		approve("o", "User")
+		g.Mu.Lock()
+		g.Fail = f
+		g.Mu.Unlock()
+		exec(f+" failing", ExitExternal, nil)
+	}
 	approve("o", "User")
 	out := exec("a human's approval", 0, nil)
 	if !strings.Contains(out, "service=api cred=sekret token=none env=production") || !strings.Contains(out, "approved by @o") {
@@ -183,5 +200,67 @@ func TestRespondClose(t *testing.T) {
 	}
 	if entry := git(t, bare, "show", "ledger:retro/incidents.jsonl"); !strings.Contains(entry, `"incident":1`) || !strings.Contains(entry, `"bug":2`) {
 		t.Errorf("retro entry: %s", entry)
+	}
+}
+
+// A GitHub failure at any step of respond stops it with exit 5 (external).
+func TestRespondGitHubFailures(t *testing.T) {
+	tests := []struct {
+		args []string
+		fail []string
+	}{
+		{[]string{"--action", "restart", "--params", "service=api"}, []string{"GET /repos/o/r/issues/1", "GET /repos/o/r/issues/1/comments", "GET /repos/o/r", "GET /repos/o/r/git/ref/heads/dev",
+			"GET /repos/o/r/compare/" + headSHA + "...dev", "GET /repos/o/r/contents/ops/actions.toml", "GET /repos/o/r/commits", "GET /repos/o/r/actions/workflows/aayudha-ops.yml/runs",
+			"GET /repos/o/r/environments/production", "POST /repos/o/r/actions/workflows/aayudha-ops.yml/dispatches", "POST /repos/o/r/issues/1/comments"}},
+		{[]string{"--close"}, []string{"POST /repos/o/r/issues", "DELETE /repos/o/r/issues/1/labels/needs:bug", "PATCH /repos/o/r/issues/1"}},
+	}
+	for _, tt := range tests {
+		for _, f := range tt.fail {
+			g, env, opts := respondFixture(t)
+			g.Fail = f
+			if tt.args[0] == "--close" {
+				opts.Dir, _ = ledgerCheckout(t)
+			}
+			if code, _, errOut := run(t, env, opts, append([]string{"respond", "1", "--repo", "o/r"}, tt.args...)...); code != ExitExternal {
+				t.Errorf("%v with %s failing: exit %d, want %d: %s", tt.args, f, code, ExitExternal, errOut)
+			}
+		}
+	}
+}
+
+// The remaining refusals of respond, each before any write.
+func TestRespondRefusals(t *testing.T) {
+	type tc struct {
+		name   string
+		want   int
+		args   []string
+		mutate func(g *fake.GitHub)
+	}
+	for _, tt := range []tc{
+		{"--close with --action", ExitUsage, []string{"--close", "--action", "restart"}, nil},
+		{"not an incident", ExitUsage, nil, func(g *fake.GitHub) { g.Issues[1].Labels = []fake.Label{{Name: "type:story"}} }},
+		{"a closed incident", ExitBlocked, []string{"--action", "flush"}, func(g *fake.GitHub) { g.Issues[1].State = "closed" }},
+		{"no catalog on dev", ExitBlocked, []string{"--action", "flush"}, func(g *fake.GitHub) { delete(g.RefFiles[headSHA], ops.Path) }},
+		{"a missing environment", ExitBlocked, []string{"--action", "restart", "--params", "service=api"}, func(g *fake.GitHub) { delete(g.Static, "/repos/o/r/environments/production") }},
+		{"an environment any branch may deploy to", ExitBlocked, []string{"--action", "restart", "--params", "service=api"}, func(g *fake.GitHub) {
+			g.Static["/repos/o/r/environments/production"].(map[string]any)["deployment_branch_policy"] = nil
+		}},
+		{"malformed parameters", ExitUsage, []string{"--action", "restart", "--params", "service"}, nil},
+		{"an undeclared parameter", ExitUsage, []string{"--action", "flush", "--params", "x=1"}, nil},
+	} {
+		g, env, opts := respondFixture(t)
+		if tt.mutate != nil {
+			tt.mutate(g)
+		}
+		code, _, errOut := run(t, env, opts, append([]string{"respond", "1", "--repo", "o/r"}, tt.args...)...)
+		if code != tt.want || len(g.Writes()) != 0 {
+			t.Errorf("%s: exit %d (want %d), writes %v: %s", tt.name, code, tt.want, g.Writes(), errOut)
+		}
+	}
+	// Without a catalog, respond still shows the incident and says nothing may run.
+	g, env, opts := respondFixture(t)
+	delete(g.RefFiles[headSHA], ops.Path)
+	if code, out, _ := run(t, env, opts, "respond", "1", "--repo", "o/r"); code != 0 || !strings.Contains(out, "there is nothing respond may run") {
+		t.Errorf("no catalog: exit %d: %s", code, out)
 	}
 }

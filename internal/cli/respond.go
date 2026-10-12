@@ -179,17 +179,19 @@ func runRespond(ctx context.Context, e *Env, in Values) error {
 		return err
 	}
 	def := r.GetDefaultBranch()
-	br, _, err := c.REST.Repositories.GetBranch(ctx, owner, name, def, 0)
+	ref, _, err := c.REST.Git.GetRef(ctx, owner, name, "heads/"+def)
 	if err != nil {
 		return err
 	}
 	src := ghSource{c: c, owner: owner, name: name, def: def}
-	cat, err := ops.Load(ctx, src, br.GetCommit().GetSHA())
+	cat, err := ops.Load(ctx, src, ref.GetObject().GetSHA())
 	switch {
 	case errors.Is(err, ops.ErrNoCatalog) && !in.Has("action"):
 		rep.NoCatalog = true
 	case errors.Is(err, ops.ErrNoCatalog):
 		return Errorf(ExitBlocked, "respond: %v; respond executes catalog actions only", err)
+	case github.External(err):
+		return err
 	case err != nil:
 		return Wrap(ExitBlocked, err)
 	default:
@@ -432,8 +434,11 @@ func respondExec(ctx context.Context, e *Env, cfg *config.Config, repo string, n
 		return refuse("run %d (%q) does not match the request", id, run.GetName())
 	}
 	cat, err := ops.Load(ctx, ghSource{c: c, owner: owner, name: name, def: def}, e.Getenv(opsCatalogSHA))
-	if err != nil {
+	if err != nil && !github.External(err) {
 		return Wrap(ExitBlocked, err)
+	}
+	if err != nil {
+		return err
 	}
 	a, ok := cat.Find(in.String("action"))
 	if !ok {

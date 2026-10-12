@@ -46,6 +46,20 @@ func TestValidate(t *testing.T) {
 		{"reserved parameter", base + "[action.params.environment]\ntype = \"bool\"\n", "reserved"},
 		{"unknown key", strings.Replace(base, `max_per_hour = 2`, "max_per_hour = 2\nshell = true", 1), "shell"},
 		{"no environment", strings.Replace(base, `environments = ["production"]`, `environments = []`, 1), "at least one GitHub Environment"},
+		{"environment name", strings.Replace(base, `["production"]`, `["prod env"]`, 1), "not a GitHub Environment name"},
+		{"no hourly cap", strings.Replace(base, `max_per_hour = 2`, `max_per_hour = 0`, 1), "max_per_hour"},
+		{"rollback to itself", strings.Replace(base, `rollback = "none"`, `rollback = "restart"`, 1), "cannot be the action itself"},
+		{"approval", strings.Replace(base, `approval = "human"`, `approval = "maybe"`, 1), "want auto or human"},
+		{"blast radius", strings.Replace(base, `blast_radius = "service"`, `blast_radius = "planet"`, 1), "blast_radius"},
+		{"enum without values", strings.Replace(base, `values = ["api", "worker"]`, `values = []`, 1), "needs values"},
+		{"int bounds", strings.Replace(base, "min = 1\nmax = 5", "min = 6\nmax = 5", 1), "min > max"},
+		{"parameter type", strings.Replace(base, `type = "int"`, `type = "float"`, 1), "want string, int, enum, or bool"},
+		{"parameter name", base + "[action.params.Bad]\ntype = \"bool\"\n", "want lowercase"},
+		{"bad pattern", strings.Replace(base, `"^[a-z ]{1,40}$"`, `"^[a-z$"`, 1), "pattern"},
+		{"version", strings.Replace(base, "version = 1", "version = 2", 1), "version = 2"},
+		{"duplicate action", base + restart, "defined twice"},
+		{"bad name", strings.Replace(base, `name = "restart"`, `name = "Restart!"`, 1), "name must match"},
+		{"not TOML", "version = ", "ops/actions.toml"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -70,6 +84,26 @@ func TestRender(t *testing.T) {
 	if err != nil || !slices.Equal(argv, []string{"scripts/restart.sh", "--service=api", "3"}) {
 		t.Fatalf("render: %v %v", argv, err)
 	}
+	if _, err := ParseParams("service=api,service=worker"); !errors.Is(err, ErrParams) {
+		t.Errorf("duplicate parameter: %v", err)
+	}
+	if _, err := ParseParams("service"); !errors.Is(err, ErrParams) {
+		t.Errorf("parameter without a value: %v", err)
+	}
+	if p, err := ParseParams(" "); err != nil || len(p) != 0 {
+		t.Errorf("no parameters: %v %v", p, err)
+	}
+	multi := a
+	multi.Environments = []string{"staging", "production"}
+	if _, err := multi.Environment(map[string]string{}); !errors.Is(err, ErrParams) {
+		t.Errorf("two environments, none picked: %v", err)
+	}
+	if e, err := multi.Environment(map[string]string{"environment": "staging"}); err != nil || e != "staging" {
+		t.Errorf("picked environment: %s %v", e, err)
+	}
+	if _, err := multi.Environment(map[string]string{"environment": "dev"}); !errors.Is(err, ErrParams) {
+		t.Errorf("environment the action does not list: %v", err)
+	}
 	for name, params := range map[string]map[string]string{
 		"enum outside values":            {"service": "api; rm -rf /", "replicas": "3"},
 		"int out of range":               {"service": "api", "replicas": "9"},
@@ -78,6 +112,7 @@ func TestRender(t *testing.T) {
 		"undeclared parameter":           {"service": "api", "replicas": "3", "cmd": "x"},
 		"string starting with a dash":    {"service": "api", "replicas": "3", "note": "-rf"},
 		"string not matching its schema": {"service": "api", "replicas": "3", "note": "Robert'); DROP"},
+		"int that is not a number":       {"service": "api", "replicas": "three"},
 	} {
 		if _, err := a.Render(params); !errors.Is(err, ErrParams) {
 			t.Errorf("%s: %v, want ErrParams", name, err)

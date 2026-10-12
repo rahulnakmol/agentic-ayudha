@@ -99,6 +99,9 @@ func TestRejects(t *testing.T) {
 		{"fleet outside the user config", map[string]string{"repo/.aayudha/config.toml": "version = 1\n[fleet]\nrepos = [\"a/b\"]\n"}, nil, nil, "user-level only"},
 		{"bad time zone", nil, nil, []string{"time.tz=Mars/Olympus"}, "Mars/Olympus"},
 		{"newer schema", map[string]string{"repo/.aayudha/config.toml": "version = 2\n"}, nil, nil, "newer than this binary"},
+		{"decision authority key", nil, nil, []string{"decisions.authority.sprint=founder"}, "[decisions.authority] sprint"},
+		{"decision authority value", nil, nil, []string{"decisions.authority.story=not a login!"}, "want a seat slug or a GitHub login"},
+		{"escalation login", nil, nil, []string{"decisions.escalate_to=founder b"}, "escalate_to"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -176,5 +179,12 @@ func TestBusinessHoursSLA(t *testing.T) {
 	}
 	if _, err := NewClock("Europe/London", "weekdays"); err == nil {
 		t.Fatal("malformed business_hours accepted")
+	}
+	// Between counts business time only: Friday 17:00 to Monday 16:00 London is 8 hours (D-1.2a).
+	if got := c.Between(at(2026, 10, 16, 17, 0), at(2026, 10, 19, 16, 0)); got != 8*time.Hour {
+		t.Fatalf("Between Friday 17:00 and Monday 16:00 = %s, want 8h", got)
+	}
+	if got := c.Between(at(2026, 10, 19, 16, 0), at(2026, 10, 16, 17, 0)); got != 0 {
+		t.Fatalf("Between backwards = %s, want 0", got)
 	}
 }

@@ -121,6 +121,17 @@ func TestDecideSLA(t *testing.T) {
 		t.Errorf("no overdue page for #3: %+v", sink.Pages)
 	}
 
+	// The text report names each Decision's state and what it blocks.
+	if code, out, _ := run(t, env, opts, "decide", "--repo", "o/r", "--set", "decisions.escalate_to=founder-b"); code != 0 || !strings.Contains(out, `#2 "Choose the rules engine": provisional; ratify or revert by 2026-10-22T09:00:00Z`) ||
+		!strings.Contains(out, "blocks #6 while open") || !strings.Contains(out, "overdue (reversible: false; the lapse only re-pages)") {
+		t.Errorf("text report: exit %d:\n%s", code, out)
+	}
+	for _, args := range [][]string{{"decide", "--waiver", "coverage"}, {"decide", "--accept", "A"}, {"decide", "2", "--accept", "A", "--waiver", "coverage"}} {
+		if code, _, _ := run(t, env, opts, append(args, "--repo", "o/r")...); code != ExitUsage {
+			t.Errorf("%v: exit %d, want %d", args, code, ExitUsage)
+		}
+	}
+
 	// A rerun the same day writes nothing and pages nobody.
 	g.Reset()
 	pages := len(sink.Pages)
@@ -197,5 +208,32 @@ func TestDecideWaiver(t *testing.T) {
 	// Filing it again finds the open one.
 	if code, out, _ := run(t, env, opts, "decide", "6", "--repo", "o/r", "--waiver", "coverage"); code != 0 || !strings.Contains(out, "already open") {
 		t.Errorf("second waiver: exit %d: %s", code, out)
+	}
+}
+
+// A GitHub failure at any step of decide stops it with exit 5 (external).
+func TestDecideGitHubFailures(t *testing.T) {
+	at48 := time.Date(2026, 10, 19, 12, 0, 0, 0, time.UTC)
+	tests := []struct {
+		args []string
+		fail []string
+	}{
+		{[]string{"decide"}, []string{"GET /repos/o/r/issues", "GET /repos/o/r/issues/2/parent", "GET /repos/o/r/issues/2/comments", "POST /repos/o/r/issues/2/comments",
+			"DELETE /repos/o/r/issues/2/labels/status:ready", "POST /repos/o/r/issues/2/labels", "PATCH /repos/o/r/issues/2"}},
+		{[]string{"decide", "3"}, []string{"GET /repos/o/r/issues/3"}},
+		{[]string{"decide", "5", "--accept", "B"}, []string{"GET /user", "GET /repos/o/r/issues/5", "PATCH /repos/o/r/issues/5", "POST /repos/o/r/issues/5/labels",
+			"GET /repos/o/r/issues/3", "GET /repos/o/r/issues/3/comments", "POST /repos/o/r/issues/3/comments", "DELETE /repos/o/r/issues/3/labels/status:ready"}},
+		{[]string{"decide", "6", "--waiver", "coverage"}, []string{"GET /repos/o/r/issues/6", "GET /repos/o/r/issues/6/sub_issues", "POST /repos/o/r/issues", "POST /repos/o/r/issues/6/sub_issues"}},
+	}
+	for _, tt := range tests {
+		for _, f := range tt.fail {
+			g := decideTree(t)
+			g.Fail = f
+			env := map[string]string{"AAYU_GITHUB_TOKEN": "t", "XDG_STATE_HOME": t.TempDir()}
+			opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Now: func() time.Time { return at48 }, NotifySink: &notify.Fake{}}
+			if code, _, errOut := run(t, env, opts, append(tt.args, "--repo", "o/r")...); code != ExitExternal {
+				t.Errorf("%v with %s failing: exit %d, want %d: %s", tt.args, f, code, ExitExternal, errOut)
+			}
+		}
 	}
 }
