@@ -62,7 +62,7 @@ func (e *Env) probe(ctx context.Context) *doctor.Probe {
 // integrationDeps is what the integration adapters need from this run; repo
 // is the current repository, the GitHub adapter's default.
 func (e *Env) integrationDeps(repo string) providers.Deps {
-	d := providers.Deps{Secrets: e.SecretStore(), Transport: e.HTTP.Transport, Repo: repo, Now: e.Now}
+	d := providers.Deps{Secrets: e.SecretStore(), Transport: e.HTTP.Transport, Repo: repo, Now: e.Now, Getenv: e.Getenv}
 	if l, err := e.Config(); err == nil {
 		d.Config = &l.Config
 	}

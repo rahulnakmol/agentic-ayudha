@@ -294,11 +294,11 @@
           },
           "org": {
             "type": "string",
-            "description": "Provider organization: the Sentry organization slug."
+            "description": "Provider organization: the Sentry organization slug, or the Microsoft Entra tenant ID (azure)."
           },
           "project": {
             "type": "string",
-            "description": "Provider project: the PostHog project ID, the Sentry project ID, or the owner/name GitHub baselines read (default: the current repository)."
+            "description": "Provider project: the PostHog project ID, the Sentry project ID, the owner/name GitHub baselines read (default: the current repository), the Azure resource ID of the Log Analytics workspace or Application Insights component (azure), the CloudWatch RUM app monitor name (aws), or \u003cproject\u003e.\u003cdataset\u003e of the GA4 BigQuery export (gcp)."
           },
           "transport": {
             "type": "string",
@@ -307,6 +307,27 @@
               "mcp"
             ],
             "description": "Figma only: rest (personal access token, the default) or mcp (the remote MCP server, opt-in; the secret is an OAuth access token)."
+          },
+          "auth": {
+            "type": "string",
+            "enum": [
+              "key",
+              "oidc",
+              "cli"
+            ],
+            "description": "azure, aws, gcp: key (a credential in the secret, the default), oidc (GitHub Actions OIDC federation: short-lived tokens, no stored key), or cli (the az, aws, or gcloud login on this machine)."
+          },
+          "identity": {
+            "type": "string",
+            "description": "azure, aws, gcp with auth = \"oidc\": the Entra application (client) ID, the IAM role ARN, or the service account email to impersonate (optional for gcp)."
+          },
+          "federation": {
+            "type": "string",
+            "description": "gcp with auth = \"oidc\": the workload identity provider, projects/\u003cnumber\u003e/locations/global/workloadIdentityPools/\u003cpool\u003e/providers/\u003cprovider\u003e."
+          },
+          "region": {
+            "type": "string",
+            "description": "aws: the region of the app monitor and log group, e.g. eu-west-1; gcp: the BigQuery location when it is not US or EU."
           }
         },
         "additionalProperties": false,

@@ -73,12 +73,21 @@ func TestBaselinesGolden(t *testing.T) {
 		{"github", "Bearer ghp_test", []integrations.Query{{Metric: "prs_merged", Filter: "base:dev", Window: sept}}, []string{"github prs_merged"}},
 		// The control variation (first in the experiment) is read with the frequentist analysis.
 		{"growthbook", "Bearer secret_readonly_test", []integrations.Query{{Metric: "conversion_rate", Filter: "checkout-v2 met_signup", Window: sept}}, []string{"growthbook conversion_rate"}},
+		// WP7.2b: the cloud recordings pin each request's own bearer (or SigV4
+		// signature); the token exchanges run against fixture.Clouds.
+		{"azure", "", []integrations.Query{{Metric: "users", Filter: "Name == 'signed_up'", Window: sept}}, []string{"azure users"}},
+		{"aws", "", []integrations.Query{{Metric: "events", Filter: "event_type = 'signed_up'", Window: sept}}, []string{"aws events"}},
+		{"gcp", "", []integrations.Query{{Metric: "users", Filter: "event_name = 'sign_up'", Window: sept}}, []string{"gcp users"}},
 	}
 	seen := 0
 	for _, c := range cases {
 		t.Run(c.source, func(t *testing.T) {
 			r := &fixture.Replayer{T: t, Rec: fixture.Load(t, "testdata/"+c.source+".json"), AuthHeader: "Authorization", AuthValue: c.auth}
 			d := deps(t, r, keys, configured...)
+			if c.auth == "" {
+				r.AuthHeader = ""
+				d = cloudDeps(t, r, "key")
+			}
 			for i, q := range c.queries {
 				got, err := Baseline(context.Background(), d, c.source, q)
 				if err != nil {

@@ -179,10 +179,22 @@ type Integration struct {
 	Scope  string `koanf:"scope" jsonschema:"enum=read,enum=write"`
 	// Provider details the adapters need (WP5.2, WP6.4).
 	URL       string `koanf:"url" jsonschema_description:"Provider base URL when not the adapter's default (EU region, self-hosted), e.g. https://eu.posthog.com."`
-	Org       string `koanf:"org" jsonschema_description:"Provider organization: the Sentry organization slug."`
-	Project   string `koanf:"project" jsonschema_description:"Provider project: the PostHog project ID, the Sentry project ID, or the owner/name GitHub baselines read (default: the current repository)."`
+	Org       string `koanf:"org" jsonschema_description:"Provider organization: the Sentry organization slug, or the Microsoft Entra tenant ID (azure)."`
+	Project   string `koanf:"project" jsonschema_description:"Provider project: the PostHog project ID, the Sentry project ID, the owner/name GitHub baselines read (default: the current repository), the Azure resource ID of the Log Analytics workspace or Application Insights component (azure), the CloudWatch RUM app monitor name (aws), or <project>.<dataset> of the GA4 BigQuery export (gcp)."`
 	Transport string `koanf:"transport" jsonschema:"enum=rest,enum=mcp" jsonschema_description:"Figma only: rest (personal access token, the default) or mcp (the remote MCP server, opt-in; the secret is an OAuth access token)."`
+	// Cloud integrations (azure, aws, gcp; WP7.2b).
+	Auth       string `koanf:"auth" jsonschema:"enum=key,enum=oidc,enum=cli" jsonschema_description:"azure, aws, gcp: key (a credential in the secret, the default), oidc (GitHub Actions OIDC federation: short-lived tokens, no stored key), or cli (the az, aws, or gcloud login on this machine)."`
+	Identity   string `koanf:"identity" jsonschema_description:"azure, aws, gcp with auth = \"oidc\": the Entra application (client) ID, the IAM role ARN, or the service account email to impersonate (optional for gcp)."`
+	Federation string `koanf:"federation" jsonschema_description:"gcp with auth = \"oidc\": the workload identity provider, projects/<number>/locations/global/workloadIdentityPools/<pool>/providers/<provider>."`
+	Region     string `koanf:"region" jsonschema_description:"aws: the region of the app monitor and log group, e.g. eu-west-1; gcp: the BigQuery location when it is not US or EU."`
 }
+
+// CloudIntegrations take auth, identity, federation, and region (WP7.2b).
+var CloudIntegrations = []string{"azure", "aws", "gcp"}
+
+// StoredKey reports whether the integration reads its credential from its
+// secret: every integration but a cloud one with auth = "oidc" or "cli".
+func (in Integration) StoredKey() bool { return in.Auth == "" || in.Auth == "key" }
 
 // Verify is [verify].
 type Verify struct {
@@ -378,7 +390,14 @@ func (c *Config) Validate() error {
 		bad("[decisions] escalate_to = %q: want a GitHub login", e)
 	}
 	for name, in := range c.Integrations {
-		if !secretName.MatchString(in.Secret) {
+		cloud := slices.Contains(CloudIntegrations, name)
+		if in.Auth != "" && (!cloud || !slices.Contains([]string{"key", "oidc", "cli"}, in.Auth)) {
+			bad("[integrations.%s] auth = %q: only [integrations.azure], [integrations.aws], and [integrations.gcp] take auth, key, oidc, or cli", name, in.Auth)
+		}
+		if !cloud && (in.Identity != "" || in.Federation != "" || in.Region != "") {
+			bad("[integrations.%s]: identity, federation, and region are for the cloud integrations (azure, aws, gcp)", name)
+		}
+		if (in.Secret != "" || in.StoredKey()) && !secretName.MatchString(in.Secret) {
 			bad("[integrations.%s] secret = %q: want the name of a secret (lowercase letters, digits, - and _), never the key", name, in.Secret)
 		}
 		if in.Scope != "read" && in.Scope != "write" {

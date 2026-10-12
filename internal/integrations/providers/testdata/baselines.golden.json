@@ -38,5 +38,29 @@
     "value": 0.1,
     "source_query": "GET https://api.growthbook.io/api/v1/experiments?limit=2&trackingKey=checkout-v2; GET https://api.growthbook.io/api/v1/experiments/exp_19g61/results",
     "fetched_at": "2026-10-12T09:30:00Z"
+  },
+  "azure users": {
+    "metric": "users",
+    "population": "Azure Monitor benefits-qa: distinct users (UserAuthenticatedId, else UserId) with AppEvents events where Name == 'signed_up'",
+    "window": {"from": "2026-09-01T00:00:00Z", "to": "2026-10-01T00:00:00Z"},
+    "value": 812,
+    "source_query": "POST https://api.loganalytics.azure.com/v1/subscriptions/0b1c2d3e-0000-4000-8000-000000000001/resourceGroups/rg-benefits/providers/Microsoft.Insights/components/benefits-qa/query {\"query\":\"AppEvents\\n| where TimeGenerated >= datetime(2026-09-01T00:00:00Z) and TimeGenerated < datetime(2026-10-01T00:00:00Z)\\n| where Name == 'signed_up'\\n| extend User = iff(isnotempty(UserAuthenticatedId), UserAuthenticatedId, UserId)\\n| where isnotempty(User)\\n| summarize by User\\n| count\",\"timespan\":\"2026-09-01T00:00:00Z/2026-10-01T00:00:00Z\"}",
+    "fetched_at": "2026-10-12T09:30:00Z"
+  },
+  "aws events": {
+    "metric": "events",
+    "population": "CloudWatch RUM benefits-qa (eu-west-1, log group /aws/vendedlogs/RUMService_benefits-qa1a2b3c4d): RUM events where event_type = 'signed_up'",
+    "window": {"from": "2026-09-01T00:00:00Z", "to": "2026-10-01T00:00:00Z"},
+    "value": 3407,
+    "source_query": "POST https://logs.eu-west-1.amazonaws.com/ Logs_20140328.StartQuery {\"endTime\":1790816400,\"logGroupNames\":[\"/aws/vendedlogs/RUMService_benefits-qa1a2b3c4d\"],\"queryString\":\"filter event_timestamp >= 1788220800000 and event_timestamp < 1790812800000\\n| filter event_type = 'signed_up'\\n| stats count(*) as value\",\"startTime\":1788220800}",
+    "fetched_at": "2026-10-12T09:30:00Z"
+  },
+  "gcp users": {
+    "metric": "users",
+    "population": "BigQuery acme-prod.analytics_123456789: distinct users (user_id, else user_pseudo_id) with GA4 export events where event_name = 'sign_up'",
+    "window": {"from": "2026-09-01T00:00:00Z", "to": "2026-10-01T00:00:00Z"},
+    "value": 5120,
+    "source_query": "POST https://bigquery.googleapis.com/bigquery/v2/projects/acme-prod/queries {\"maxResults\":10000,\"query\":\"SELECT COUNT(DISTINCT COALESCE(user_id, user_pseudo_id)) AS value\\nFROM `acme-prod.analytics_123456789.events_*`\\nWHERE _TABLE_SUFFIX BETWEEN '20260831' AND '20261001'\\nAND event_timestamp >= 1788220800000000 AND event_timestamp < 1790812800000000\\nAND (event_name = 'sign_up'\\n)\",\"timeoutMs\":60000,\"useLegacySql\":false}",
+    "fetched_at": "2026-10-12T09:30:00Z"
   }
 }

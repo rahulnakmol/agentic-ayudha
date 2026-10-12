@@ -1,0 +1,128 @@
+{
+  "source": "Synthetic: written from the Resource Manager and BigQuery testIamPermissions, tables.list, jobs.query and jobs.getQueryResults references because no Google Cloud project exists yet; the service account JWT grant and the STS/impersonation exchanges are served by fixture.Clouds; the AAYU_LIVE=1 test sends the same requests to a real GA4 export",
+  "interactions": [
+    {
+      "method": "POST",
+      "url": "https://cloudresourcemanager.googleapis.com/v1/projects/acme-prod:testIamPermissions",
+      "auth": "Bearer gcp-service-account-token",
+      "body": {
+        "permissions": [
+          "bigquery.jobs.create",
+          "bigquery.tables.getData",
+          "bigquery.tables.list",
+          "bigquery.datasets.create",
+          "bigquery.datasets.update",
+          "bigquery.datasets.delete",
+          "bigquery.tables.create",
+          "bigquery.tables.update",
+          "bigquery.tables.updateData",
+          "bigquery.tables.delete",
+          "bigquery.routines.create",
+          "resourcemanager.projects.setIamPolicy",
+          "iam.serviceAccountKeys.create",
+          "storage.objects.create",
+          "storage.objects.delete"
+        ]
+      },
+      "status": 200,
+      "response": {
+        "permissions": [
+          "bigquery.jobs.create",
+          "bigquery.tables.getData",
+          "bigquery.tables.list"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://bigquery.googleapis.com/bigquery/v2/projects/acme-prod/datasets/analytics_123456789/tables?maxResults=1",
+      "auth": "Bearer gcp-service-account-token",
+      "status": 200,
+      "response": {
+        "kind": "bigquery#tableList",
+        "tables": [
+          {
+            "kind": "bigquery#table",
+            "id": "acme-prod:analytics_123456789.events_20260930",
+            "tableReference": {
+              "projectId": "acme-prod",
+              "datasetId": "analytics_123456789",
+              "tableId": "events_20260930"
+            },
+            "type": "TABLE"
+          }
+        ],
+        "totalItems": 31
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://bigquery.googleapis.com/bigquery/v2/projects/acme-prod/datasets/analytics_123456789/tables/events_20260930:testIamPermissions",
+      "auth": "Bearer gcp-service-account-token",
+      "body": {
+        "permissions": [
+          "bigquery.tables.update",
+          "bigquery.tables.updateData",
+          "bigquery.tables.delete"
+        ]
+      },
+      "status": 200,
+      "response": {}
+    },
+    {
+      "method": "POST",
+      "url": "https://bigquery.googleapis.com/bigquery/v2/projects/acme-prod/queries",
+      "auth": "Bearer gcp-service-account-token",
+      "body": {
+        "maxResults": 10000,
+        "query": "SELECT COUNT(DISTINCT COALESCE(user_id, user_pseudo_id)) AS value\nFROM `acme-prod.analytics_123456789.events_*`\nWHERE _TABLE_SUFFIX BETWEEN '20260831' AND '20261001'\nAND event_timestamp >= 1788220800000000 AND event_timestamp < 1790812800000000\nAND (event_name = 'sign_up'\n)",
+        "timeoutMs": 60000,
+        "useLegacySql": false
+      },
+      "status": 200,
+      "response": {
+        "kind": "bigquery#queryResponse",
+        "jobReference": {
+          "projectId": "acme-prod",
+          "jobId": "job_aayudha_0001",
+          "location": "US"
+        },
+        "jobComplete": false
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://bigquery.googleapis.com/bigquery/v2/projects/acme-prod/queries/job_aayudha_0001?location=US&maxResults=10000&timeoutMs=60000",
+      "auth": "Bearer gcp-service-account-token",
+      "status": 200,
+      "response": {
+        "kind": "bigquery#getQueryResultsResponse",
+        "jobReference": {
+          "projectId": "acme-prod",
+          "jobId": "job_aayudha_0001",
+          "location": "US"
+        },
+        "jobComplete": true,
+        "schema": {
+          "fields": [
+            {
+              "name": "value",
+              "type": "INTEGER",
+              "mode": "NULLABLE"
+            }
+          ]
+        },
+        "rows": [
+          {
+            "f": [
+              {
+                "v": "5120"
+              }
+            ]
+          }
+        ],
+        "totalRows": "1"
+      }
+    }
+  ]
+}

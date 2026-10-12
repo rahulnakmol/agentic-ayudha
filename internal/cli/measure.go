@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -91,6 +92,22 @@ func runMeasure(ctx context.Context, e *Env, in Values) error {
 		}
 		rep.Sources = append(rep.Sources, f)
 	}
+	scope := "all"
+	if in.Has("issue") {
+		rep.Issue = issueNumber(in.String("issue"))
+		scope = fmt.Sprint(rep.Issue)
+	}
+	stamp := now.Format("20060102T150405Z")
+	if live := strings.TrimSpace(in.String("live")); live != "" {
+		repo, _ := e.RepoName(ctx)
+		for _, src := range strings.Split(live, ",") {
+			f, err := pullLive(ctx, e, repo, strings.TrimSpace(src), w, filepath.Join(e.stateDir(), "state", "measure", scope+"-"+stamp+"-"+strings.TrimSpace(src)+".jsonl"))
+			if err != nil {
+				return err
+			}
+			rep.Sources = append(rep.Sources, f)
+		}
+	}
 	var eng measure.Engine = measure.SQLite{}
 	if in.String("engine") == "duckdb" {
 		d, err := measure.FindDuckDB(e.lookPath())
@@ -99,15 +116,10 @@ func runMeasure(ctx context.Context, e *Env, in Values) error {
 		}
 		eng = d
 	}
-	scope := "all"
-	if in.Has("issue") {
-		rep.Issue = issueNumber(in.String("issue"))
-		scope = fmt.Sprint(rep.Issue)
-	}
 	var nsValue int64
 	if len(rep.Sources) > 0 {
 		rep.Engine = eng.Name()
-		path := filepath.Join(e.stateDir(), "state", "measure", fmt.Sprintf("%s-%s.sqlite", scope, now.Format("20060102T150405Z")))
+		path := filepath.Join(e.stateDir(), "state", "measure", scope+"-"+stamp+".sqlite")
 		sha, err := measure.Snapshot(ctx, path, w, stages, rep.Sources, now)
 		if err != nil {
 			return measureErr(err)
@@ -131,7 +143,7 @@ func runMeasure(ctx context.Context, e *Env, in Values) error {
 			return err
 		}
 	} else if len(rep.Sources) == 0 {
-		return Errorf(ExitUsage, "measure: nothing to do: pass exports (--billing, --appinsights, --aws, --gcp) or a Goal or Initiative")
+		return Errorf(ExitUsage, "measure: nothing to do: pass exports (--billing, --appinsights, --aws, --gcp), --live, or a Goal or Initiative")
 	}
 	return e.Emit(rep, func(out io.Writer) error {
 		for _, f := range rep.Sources {
@@ -152,6 +164,42 @@ func runMeasure(ctx context.Context, e *Env, in Values) error {
 		}
 		return nil
 	})
+}
+
+// pullLive pulls the window's events from a cloud integration (azure, aws,
+// gcp) into a JSON-lines file in that source's export format, then reads it
+// back through the export reader, so a live pull and an export file give the
+// same rows and cohorts. The file stays beside the snapshot (git-ignored)
+// and its SHA-256 and query are recorded, so the Result can be rebuilt.
+func pullLive(ctx context.Context, e *Env, repo, src string, w measure.Window, path string) (*exports.File, error) {
+	kind, ok := providers.Exporters[src]
+	if !ok {
+		return nil, Errorf(ExitUsage, "measure --live %q: want a comma-separated list of azure, aws, gcp", src)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return nil, err
+	}
+	out, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	got, query, err := providers.Export(ctx, e.integrationDeps(repo), src, integrations.Window{From: w.From, To: w.To}, out)
+	if cerr := out.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		_ = os.Remove(path)
+		return nil, err
+	}
+	if got != kind {
+		return nil, fmt.Errorf("measure --live %s: pulled %s events, want %s", src, got, kind)
+	}
+	f, err := exports.Read(kind, path)
+	if err != nil {
+		return nil, Wrap(ExitExternal, fmt.Errorf("measure --live %s: %w", src, err))
+	}
+	f.Live, f.Query = src, query
+	return f, nil
 }
 
 func cohortTable(cs []measure.Cohort) string {
@@ -212,7 +260,7 @@ func measureIssue(ctx context.Context, e *Env, rep *measureReport, stages measur
 	m := measure.Measured{Spec: spec, Baseline: baseline, Target: target, Window: rep.Window}
 	if spec.Source == "" {
 		if rep.Snapshot == nil {
-			return Errorf(ExitUsage, "measure: %s is read from exports; pass --billing, --appinsights, --aws, or --gcp", spec.Metric)
+			return Errorf(ExitUsage, "measure: %s is read from exports; pass --billing, --appinsights, --aws, --gcp, or --live", spec.Metric)
 		}
 		if m.Value, m.Detail, err = measure.Value(spec.Metric, rep.Cohorts, nsValue, stages); err != nil {
 			return measureErr(err)
@@ -223,7 +271,11 @@ func measureIssue(ctx context.Context, e *Env, rep *measureReport, stages measur
 		}
 		m.Snapshot, m.SHA256, m.Engine = filepath.Base(rep.Snapshot.Path), rep.Snapshot.SHA256, rep.Engine
 		for _, f := range rep.Sources {
-			m.Sources = append(m.Sources, fmt.Sprintf("%s %s sha256 %s", f.Kind, filepath.Base(f.Path), f.SHA256))
+			src := fmt.Sprintf("%s %s sha256 %s", f.Kind, filepath.Base(f.Path), f.SHA256)
+			if f.Live != "" {
+				src += fmt.Sprintf(" (pulled live from %s: %s)", f.Live, strings.Join(strings.Fields(f.Query), " "))
+			}
+			m.Sources = append(m.Sources, src)
 		}
 	} else {
 		b, err := providers.Baseline(ctx, e.integrationDeps(repo), spec.Source, integrations.Query{Metric: spec.Metric, Filter: spec.Filter,

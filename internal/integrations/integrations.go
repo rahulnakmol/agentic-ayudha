@@ -80,6 +80,7 @@ type Baseline struct {
 type Field struct {
 	Key  string // "project", "org"
 	Want string // what to put there, for the error message
+	Auth string // needed only with this auth ("key", "oidc", "cli"); "" means always
 }
 
 // Conn is one configured integration resolved for a read verb.
@@ -102,7 +103,9 @@ func Resolve(cfg *config.Config, store *secrets.Store, name string, need ...Fiel
 	if !ok {
 		parts := []string{fmt.Sprintf("secret = %q", name), `scope = "read"`}
 		for _, f := range need {
-			parts = append(parts, fmt.Sprintf("%s = %q", f.Key, "<"+f.Want+">"))
+			if f.Auth == "" || f.Auth == "key" {
+				parts = append(parts, fmt.Sprintf("%s = %q", f.Key, "<"+f.Want+">"))
+			}
 		}
 		return Conn{}, fmt.Errorf("%w: [integrations.%s] is not set; add it to .aayudha/config.toml with %s, then store a read-only key with `aayu auth set-secret %s`",
 			ErrNotConfigured, name, strings.Join(parts, ", "), name)
@@ -110,10 +113,22 @@ func Resolve(cfg *config.Config, store *secrets.Store, name string, need ...Fiel
 	if err := secrets.CheckScope(name, in.Scope, false); err != nil {
 		return Conn{}, err
 	}
+	auth := in.Auth
+	if auth == "" {
+		auth = "key"
+	}
 	for _, f := range need {
+		if f.Auth != "" && f.Auth != auth {
+			continue
+		}
 		if field(in, f.Key) == "" {
 			return Conn{}, fmt.Errorf("%w: [integrations.%s] %s is not set; want %s", ErrNotConfigured, name, f.Key, f.Want)
 		}
+	}
+	if !in.StoredKey() {
+		// auth = "oidc" or "cli" (cloud integrations): the adapter mints a
+		// short-lived token; no secret is stored.
+		return Conn{Name: name, Integration: in}, nil
 	}
 	if store == nil {
 		return Conn{}, fmt.Errorf("%w: [integrations.%s] secret %q: no secrets store", ErrNotConfigured, name, in.Secret)
@@ -133,6 +148,12 @@ func field(in config.Integration, key string) string {
 		return in.Org
 	case "url":
 		return in.URL
+	case "identity":
+		return in.Identity
+	case "federation":
+		return in.Federation
+	case "region":
+		return in.Region
 	}
 	return ""
 }
@@ -164,10 +185,15 @@ func (s Scope) Check(name string) error {
 }
 
 // Allow is a non-GET request a read-only adapter may send: a query endpoint
-// that takes a POST body but changes nothing.
+// that takes a POST body but changes nothing, or a token exchange.
 type Allow struct {
 	Method string
 	Path   *regexp.Regexp
+	// Host, when set, is the only host the request may go to.
+	Host string
+	// Header and Value, when set, must be on the request: the operation of an
+	// AWS JSON protocol call (X-Amz-Target), which always posts to "/".
+	Header, Value string
 }
 
 // ReadOnly wraps a transport so an adapter can only read: GET and HEAD pass,
@@ -195,7 +221,8 @@ func (r readOnly) RoundTrip(req *http.Request) (*http.Response, error) {
 
 func (r readOnly) allowed(req *http.Request) bool {
 	for _, a := range r.allow {
-		if a.Method == req.Method && a.Path.MatchString(req.URL.Path) {
+		if a.Method == req.Method && a.Path.MatchString(req.URL.Path) && (a.Host == "" || a.Host == req.URL.Host) &&
+			(a.Header == "" || req.Header.Get(a.Header) == a.Value) {
 			return true
 		}
 	}
