@@ -1,0 +1,18 @@
+# Which tests prove story #56's Completion Goal (WP5.6; WP4.3 maps the go test -json events of these tests, from
+# the run verify makes, to the criteria). The live scratch-repository runs are recorded in Appendix B D-5.6a.
+
+[[criterion]]
+id = 1 # a command that is not in the catalog is refused
+tests = ["internal/cli:TestRespondProposes", "internal/ops:TestRender"]
+
+[[criterion]]
+id = 2 # a catalog edit in the same PR cannot be used: only the default branch's catalog, at a pinned commit
+tests = ["internal/cli:TestRespondProposes", "internal/cli:TestRespondExecutes", "internal/ops:TestAutoNeverOnFirstMerge"]
+
+[[criterion]]
+id = 3 # approval = human runs only after a human (not a bot) approves the environment
+tests = ["internal/cli:TestRespondExecutes", "internal/cli:TestRespondRefusals"]
+
+[[criterion]]
+id = 4 # 48 business hours: the reversible Decision gains decision:provisional with founder B's mention; the irreversible one does not
+tests = ["internal/cli:TestDecideSLA", "internal/decide:TestEvaluateAndTexts"]
