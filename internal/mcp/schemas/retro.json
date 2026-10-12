@@ -4,8 +4,28 @@
   "additionalProperties": false,
   "description": "Compare estimates with observed delivery, corrections, floor misses, and cost; file findings as Feedback issues.",
   "properties": {
+    "ledger": {
+      "description": "Ledger commit to read; default the ledger tip.",
+      "type": "string",
+      "x-aayu-type": "string"
+    },
+    "out": {
+      "description": "Also write the report to this file.",
+      "type": "string",
+      "x-aayu-type": "path"
+    },
+    "replay": {
+      "description": "Regenerate a report from the GitHub inputs snapshot at this ledger path (retro/<date>/…inputs.json); files nothing.",
+      "type": "string",
+      "x-aayu-type": "string"
+    },
     "since": {
-      "description": "Start of the retro window (date).",
+      "description": "Window start (YYYY-MM-DD UTC or RFC 3339); default the cursor of the newest retro report on the ledger, else 7 days back.",
+      "type": "string",
+      "x-aayu-type": "string"
+    },
+    "until": {
+      "description": "Window end (RFC 3339, exclusive); default now.",
       "type": "string",
       "x-aayu-type": "string"
     }
