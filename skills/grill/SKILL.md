@@ -120,6 +120,10 @@ decision it leaves open into `open_questions` instead of choosing for the human:
 numbers, APIs, dates, and exact wording the request does not give are open questions, not requirements. Quote the
 request's own words where a criterion needs wording.
 
+Effort is different: it is your estimate of the item's size, not a requirement of the request, and a Story or Bug
+cannot pass Ready without it. Estimate it (`effort:XS`, `S`, `M`, or `L`) from the criteria you wrote; never leave it
+open. Add `priority:` only when the request gives one.
+
 As JSON, a draft is `{type, title, fields, labels, parent, open_questions}`; `fields` is keyed by the field IDs in the
 question set (`summary`, `completion_goal`, …), only the fields the type has; `labels` with `type:<type>`,
 `status:planned`, and the label-held fields (`effort:S`, `priority:P2`); `parent` is `{"number": N, "type": "story"}`
