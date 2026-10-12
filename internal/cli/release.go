@@ -619,7 +619,8 @@ func (e *Env) sleep(ctx context.Context) error {
 
 func (e *Env) waitRun(ctx context.Context, c *github.Client, repo, workflow string, id int64, sha string, retry bool) (*RunRef, error) {
 	owner, name, _ := github.SplitRepo(repo)
-	ref := &RunRef{Workflow: workflow, ID: id, Attempts: 1}
+	ref := &RunRef{Workflow: workflow, ID: id}
+	want := 1 // the attempt whose result counts; after a re-run, a later one
 	for {
 		r, _, err := c.REST.Actions.GetWorkflowRunByID(ctx, owner, name, id)
 		if err != nil {
@@ -628,10 +629,10 @@ func (e *Env) waitRun(ctx context.Context, c *github.Client, repo, workflow stri
 		if r.GetHeadSHA() != "" && r.GetHeadSHA() != sha {
 			return nil, Errorf(ExitExternal, "release: %s run %d is on %s, not %s", workflow, id, short(r.GetHeadSHA()), short(sha))
 		}
-		ref.URL, ref.Attempts = r.GetHTMLURL(), max(ref.Attempts, r.GetRunAttempt())
-		if r.GetStatus() == "completed" {
+		ref.URL, ref.Attempts = r.GetHTMLURL(), max(1, r.GetRunAttempt())
+		if r.GetStatus() == "completed" && ref.Attempts >= want {
 			ref.Conclusion = r.GetConclusion()
-			if ref.Conclusion == "success" || !retry || ref.Attempts > 1 {
+			if ref.Conclusion == "success" || !retry || want > 1 {
 				return ref, nil
 			}
 			e.Logf("release: %s run %d ended %s; re-running its failed jobs once", workflow, id, ref.Conclusion)
@@ -643,8 +644,7 @@ func (e *Env) waitRun(ctx context.Context, c *github.Client, repo, workflow stri
 				}); err != nil {
 				return nil, Wrap(ExitExternal, err)
 			}
-			ref.Attempts = 2
-			ref.Conclusion = ""
+			want = ref.Attempts + 1
 		}
 		if err := e.sleep(ctx); err != nil {
 			return nil, err
