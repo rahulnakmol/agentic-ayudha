@@ -26,6 +26,11 @@ aayu:
       required: false
       positional: false
       description: "Iterate [fleet] repos."
+    - name: apply
+      type: bool
+      required: false
+      positional: false
+      description: "Post the replace-in-place Goal comments and close Features the parent-close rule allows."
   outputs:
     - "rollup"
     - "goal-comment"

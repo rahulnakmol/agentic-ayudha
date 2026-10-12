@@ -247,7 +247,8 @@ func TestInitAdoptsLedgerAndUninit(t *testing.T) {
 	}
 }
 
-// WP2.6 accept: --gates on this binary installs exactly two workflows (golden);
+// WP2.6 accept: --gates installs exactly the workflows whose WP the binary has
+// (golden): two on the WP2.6 binary, three since WP2.9 added triage;
 // every extra is idempotent; uninit --external lists what init created outside
 // the repository.
 func TestInitExtras(t *testing.T) {
@@ -276,10 +277,10 @@ func TestInitExtras(t *testing.T) {
 		}
 	}
 	slices.Sort(workflows)
-	if !slices.Equal(workflows, []string{"aayudha-ready-guard.yml", "aayudha-token.yml", "ci.yml"}) || files[".github/workflows/ci.yml"] != ciYML {
+	if !slices.Equal(workflows, []string{"aayudha-ready-guard.yml", "aayudha-token.yml", "aayudha-triage.yml", "ci.yml"}) || files[".github/workflows/ci.yml"] != ciYML {
 		t.Fatalf("workflows after --gates: %v", workflows)
 	}
-	for _, wf := range []string{"aayudha-ready-guard.yml", "aayudha-token.yml"} {
+	for _, wf := range []string{"aayudha-ready-guard.yml", "aayudha-token.yml", "aayudha-triage.yml"} {
 		golden := filepath.Join("testdata", "gates", wf)
 		if *updateGolden {
 			_ = os.MkdirAll(filepath.Dir(golden), 0o755)

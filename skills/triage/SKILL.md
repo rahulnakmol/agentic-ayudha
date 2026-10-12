@@ -16,6 +16,15 @@ aayu:
       required: true
       positional: true
       description: "Intake issue to classify."
+    - name: as
+      type: enum
+      required: false
+      positional: false
+      enum:
+        - "feedback"
+        - "bug"
+        - "incident"
+      description: "Class chosen by the host's model; without it the binary asks the triage lane's model."
   outputs:
     - "labels"
   gates:

@@ -506,7 +506,10 @@ var Verbs = []Command{
 		Name: "triage", WP: "WP2.9",
 		Summary: "Classify intake issues as Feedback, Bug, or Incident by label only; never edits bodies or touches non-intake issues.",
 		Seat:    ProductStrategist, Lane: LaneChore, Layers: NoLayers(),
-		Inputs:   []Input{pos("issue", TypeIssue, "Intake issue to classify.")},
+		Inputs: []Input{
+			pos("issue", TypeIssue, "Intake issue to classify."),
+			enumIn("as", false, false, "Class chosen by the host's model; without it the binary asks the triage lane's model.", "feedback", "bug", "incident"),
+		},
 		Outputs:  []string{"labels"},
 		Gates:    []GateID{GateLabelsOnly, GateHalt},
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHybrid, ModeNote: "direct in Actions", Exposure: ExposeWrite,
@@ -584,7 +587,7 @@ var Verbs = []Command{
 		Inputs: []Input{
 			pos("issue", TypeIssue, "Work item to make Ready."),
 			readOnlyWith(flag("check", TypeBool, "Validate only; write nothing."), "true"),
-			flag("guard", TypeBool, "Ready guard (the aayudha-ready-guard workflow): strip status:ready when the issue no longer validates or drifted from its snapshot."),
+			readOnlyWith(flag("guard", TypeBool, "Ready guard (the aayudha-ready-guard workflow): strip status:ready when the issue no longer validates or drifted from its snapshot."), "false"),
 		},
 		Outputs:  []string{"status:ready", "ready-snapshot"},
 		Gates:    []GateID{GateValidator},
@@ -694,6 +697,7 @@ var Verbs = []Command{
 			optPos("issue", TypeIssue, "Goal, Initiative, or Feature to roll up; defaults to all Goals."),
 			readOnlyWith(flag("digest", TypeBool, "Send the digest through [notify]."), "false"),
 			flag("all", TypeBool, "Iterate [fleet] repos."),
+			readOnlyWith(flag("apply", TypeBool, "Post the replace-in-place Goal comments and close Features the parent-close rule allows."), "false"),
 		},
 		Outputs:  []string{"rollup", "goal-comment", "digest"},
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeNone, Exposure: ExposeRead,
