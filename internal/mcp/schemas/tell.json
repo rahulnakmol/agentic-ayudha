@@ -4,6 +4,16 @@
   "additionalProperties": false,
   "description": "Write docs, guides, changelogs, release notes, launch copy, or brand copy that cite only proven Features; publish is human-only.",
   "properties": {
+    "campaign": {
+      "description": "UTM campaign; default the tag, else <kind>-<YYYY-MM-DD>.",
+      "type": "string",
+      "x-aayu-type": "string"
+    },
+    "from": {
+      "description": "Markdown draft the host wrote; tell checks its claims and tone and tags its links. Without it, tell prints the brief: tone, proven Features, and UTM tags.",
+      "type": "string",
+      "x-aayu-type": "path"
+    },
     "kind": {
       "description": "What to write.",
       "enum": [
@@ -18,10 +28,15 @@
       "x-aayu-type": "enum"
     },
     "publish": {
-      "description": "Publish (human identity only).",
+      "description": "Publish the checked copy to the ledger (and the tag's GitHub Release); human identity only, logged.",
       "type": "boolean",
       "x-aayu-human-only": true,
       "x-aayu-type": "bool"
+    },
+    "tag": {
+      "description": "Release tag the copy is about (release, changelog); publishing release notes also sets that GitHub Release's notes.",
+      "type": "string",
+      "x-aayu-type": "string"
     }
   },
   "required": [

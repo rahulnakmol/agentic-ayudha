@@ -1,0 +1,10 @@
+# Which tests prove story #66's (WP7.5 `tell`) Completion Goal (WP4.3: verify maps the go test -json events of
+# these tests, from the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # a guide references only proven Features
+tests = ["internal/cli:TestTellGuideCitesOnlyProvenFeatures", "internal/tell:TestCheckFences", "internal/tell:TestCheckRefs", "internal/tell:TestReleaseNotes"]
+
+[[criterion]]
+id = 2 # publish refuses a bot identity
+tests = ["internal/cli:TestTellPublishHumanOnly"]

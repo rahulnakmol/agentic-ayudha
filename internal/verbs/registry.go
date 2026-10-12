@@ -819,7 +819,10 @@ var Verbs = []Command{
 		Seat:    Marketer, Lane: LaneSpec, Layers: OnlyLayers(L01),
 		Inputs: []Input{
 			enumIn("kind", true, true, "What to write.", "docs", "guide", "changelog", "release", "launch", "brand"),
-			humanOnly(flag("publish", TypeBool, "Publish (human identity only).")),
+			flag("from", TypePath, "Markdown draft the host wrote; tell checks its claims and tone and tags its links. Without it, tell prints the brief: tone, proven Features, and UTM tags."),
+			flag("tag", TypeString, "Release tag the copy is about (release, changelog); publishing release notes also sets that GitHub Release's notes."),
+			flag("campaign", TypeString, "UTM campaign; default the tag, else <kind>-<YYYY-MM-DD>."),
+			humanOnly(flag("publish", TypeBool, "Publish the checked copy to the ledger (and the tag's GitHub Release); human identity only, logged.")),
 		},
 		Outputs:  []string{"draft", "published-content"},
 		Gates:    []GateID{GatePack, GateHumanIdentity},
