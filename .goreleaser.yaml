@@ -12,6 +12,12 @@ version: 2
 
 project_name: aayudha
 
+# rolling-<date> traceability tags are not versions. Without this, a promotion candidate built on top of a
+# rolling snapshot picks rolling-* as its current tag and the snapshot version template fails to parse it.
+git:
+  ignore_tags:
+    - "rolling-*"
+
 before:
   hooks:
     - go mod download
