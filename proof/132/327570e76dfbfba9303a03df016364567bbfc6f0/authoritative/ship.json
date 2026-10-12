@@ -1,0 +1,36 @@
+{
+  "repo": "rahulnakmol/agentic-ayudha",
+  "story": 132,
+  "pr": 155,
+  "pr_head_sha": "327570e76dfbfba9303a03df016364567bbfc6f0",
+  "merge_commit": "852457a94cb8787c91ae5ecada1f83c9f367d53a",
+  "pack": "proof/132/327570e76dfbfba9303a03df016364567bbfc6f0/authoritative/pack.json",
+  "pack_landed": "run 38242177983 of the base branch's aayudha-merge-gate.yml; landed by rahulnakmol through aayu ship because CI cannot write the ledger without a bot App (Appendix B D1, D-4.10a)",
+  "human_pass": {
+    "kind": "solo-bypass",
+    "login": "rahulnakmol",
+    "comment_url": "https://github.com/rahulnakmol/agentic-ayudha/pull/155#issuecomment-6123416675",
+    "commit": "327570e76dfbfba9303a03df016364567bbfc6f0",
+    "note": "solo mode: GitHub refuses self-approval and no bot App exists, so no second person could review (Appendix B D2)"
+  },
+  "footprint": [
+    "L02",
+    "L03",
+    "L06"
+  ],
+  "pass_rule": {
+    "as": "any-human"
+  },
+  "streak": {
+    "threshold": 20,
+    "layers": {
+      "L02": 0,
+      "L03": 0,
+      "L06": 0
+    },
+    "autonomous": false
+  },
+  "actions_segment": "actions/2026-10-12/cli-20261012T113241Z.jsonl",
+  "shipped_at": "2026-10-12T11:32:51Z",
+  "shipped_by": "rahulnakmol"
+}
