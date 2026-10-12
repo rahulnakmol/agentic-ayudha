@@ -89,6 +89,10 @@ renders one accessible HTML page with the sources in its footer.
   - Anything beyond what the floors, the criterion map, or the Result state is an inference. Leave it out, or label
     it ("This suggests …, an inference the evidence does not test") and keep it out of the takeaway. A skipped floor
     means only that the floor did not run; a passing floor means only its own check passed.
+  - Absence of evidence is written as "the evidence does not show …", never as "not done", "not possible",
+    "untested" or "can't" (`aayu brief` refuses those words unless a source says them). Out-of-scope items are
+    written as "outside this story's scope". A measure shows only what it counts: name the count ("4.2 CSV exports
+    per reviewer per week"), not the behaviour behind it ("reviewers use the files").
 - Keep a metric's own words, such as "reviewer", in every register; they are technical names, also in `ste`.
 - Markdown only: no raw HTML and no `![…](…)` images. Pictures are visual blocks (below).
 

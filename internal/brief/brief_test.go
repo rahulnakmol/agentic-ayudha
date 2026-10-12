@@ -375,6 +375,25 @@ func TestCheckRules(t *testing.T) {
 	if f := Check(d, &ug, Options{Register: "engineer", Purpose: "explain"}); has(f, "interface detail") {
 		t.Errorf("a control the summary names: %v", f)
 	}
+	// Absence: missing evidence is "the evidence does not show", never "untested" or "can't";
+	// a source's own wording ("cannot run", in a floor detail here) may be quoted.
+	ag := *g
+	ag.Packs = []Pack{g.Packs[0]}
+	ag.Packs[0].Checks = append([]Floor{}, g.Packs[0].Checks...)
+	ag.Packs[0].Checks = append(ag.Packs[0].Checks, Floor{Floor: "screen-reader", Result: "skipped", Detail: "skipped: the Linux merge gate cannot run a screen reader"})
+	for md, bad := range map[string]bool{
+		"# T\n\nOther lists can't be saved this way yet [#7].\n":                                    true,
+		"# T\n\nOther lists cannot be saved [#7].\n":                                                true,
+		"# T\n\nLarger lists are untested [P1].\n":                                                  true,
+		"# T\n\nA PDF export is not possible [#7].\n":                                               true,
+		"# T\n\nThe merge gate cannot run a screen reader [P1].\n":                                  false,
+		"# T\n\nThe evidence does not show larger lists; PDF is outside this story's scope [#7].\n": false,
+	} {
+		d, _ := Parse([]byte(md), "")
+		if f := Check(d, &ag, Options{Register: "engineer", Purpose: "explain"}); has(f, "absence:") != bad {
+			t.Errorf("%q: %v (want an absence finding: %v)", md, f, bad)
+		}
+	}
 	if f := check("# T\n\nIt shipped [P1, R].\n\n## Limits of this evidence\n\n- Usage does not show time saved [R].\n", "regulatory", "close"); len(f) > 0 {
 		t.Errorf("a cited close brief: %v", f)
 	}

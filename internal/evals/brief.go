@@ -55,6 +55,17 @@ func checkBrief(ctx context.Context, c Case, g *brief.Grounding, words *brief.Wo
 	}
 	var out []string
 	found := brief.Check(d, g, brief.Options{Register: c.Brief.Register, Purpose: c.Brief.Purpose, Words: words})
+	// Per-case scope guards (D-3.4c) apply to a brief's prose too: a known
+	// defect the rubric caught once stays caught by rule.
+	var prose []string
+	for _, u := range d.Units {
+		prose = append(prose, u.Text)
+	}
+	for _, r := range c.Scope {
+		if m := r.re.FindString(strings.Join(prose, "\n")); m != "" {
+			out = append(out, fmt.Sprintf("scope: adds %s (%q)", r.Why, m))
+		}
+	}
 	figs, more := brief.Prepare(ctx, d, g, brief.Sources{})
 	for _, f := range append(found, more...) {
 		out = append(out, f.String())

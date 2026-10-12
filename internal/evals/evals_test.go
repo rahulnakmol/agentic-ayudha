@@ -737,17 +737,21 @@ func TestGroups(t *testing.T) {
 	}
 }
 
-// WP7.3 brief rules, tier 1 (D-7.3d): planted drafts on the recorded cases
+// WP7.3 brief rules, tier 1 (D-7.3d, D-7.3e): planted drafts on the recorded cases
 // fail the deterministic checks the skill's lapses map to: a close brief
 // without its Limits section, a rate from the Result stated for "each
-// reviewer" or without "per reviewer", and an interface control no source
-// names.
+// reviewer" or without "per reviewer", an interface control no source
+// names, absence written as fact, and a count read as a behaviour.
 func TestTier1BriefRules(t *testing.T) {
 	for _, tc := range []struct{ id, draft, check, want string }{
 		{"brief/regulatory-close", "# Closure record\n\nFeature #7 met its target of 3, at 4.2 exports per reviewer per week [R].\n\n## Verification\n\n- The merge gate wrote the authoritative pack [P1].\n", "limits", "`## Limits of this evidence` section"},
 		{"brief/eli5-explain", "# Saving claims\n\nEach reviewer saves 4.2 files a week [R].\n", "population", `says "each reviewer"`},
 		{"brief/eli5-explain", "# Saving claims\n\nReviewers save files 4.2 times a week [R].\n", "population", `keep "per reviewer"`},
 		{"brief/eli5-explain", "# Saving claims\n\nPress one button to save the claims you picked [#12].\n", "ui", `names "Press", an interface detail no source names`},
+		// The three lapses of run 38210971285 (D-7.3e), each quoted from a judged draft.
+		{"brief/eli5-explain", "# Saving claims\n\nOther lists can't be saved this way yet [#7].\n", "absence", `says "can't be"`},
+		{"brief/eli5-explain", "# Saving claims\n\nThis count shows that people use the file [R].\n", "scope", "a behaviour behind the count the Result does not measure"},
+		{"brief/engineer-ideate", "# CSV export\n\nIts behaviour at larger sizes is untested [P1.c3].\n", "absence", `says "untested"`},
 	} {
 		c := copyCase(t, tc.id)
 		g, err := os.ReadFile(filepath.Join(root, "evals", "cases", "brief", "grounding.json"))
