@@ -1,0 +1,54 @@
+{
+  "story": 131,
+  "body_hash": "8cb726034148c5b09e52e62608a4e051745005556e9fd7c7ab7fea94bd1a02dc",
+  "footprint": [
+    "L04",
+    "L05"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L04",
+      "title": "Answer policy: screen questions, ground answers",
+      "contracts": [
+        "policy.Screen(question) refuses personal-data and advice questions, empty or over 500 bytes; policy.Ground(score, citations) answers at score \u003e= 0.5 with a citation, else refers to HR"
+      ],
+      "tests": [
+        "examples/benefits-qa/policy:TestScreenRefuses",
+        "examples/benefits-qa/policy:TestGroundThreshold"
+      ],
+      "instrumentation": [
+        "every non-answer verdict carries a reason code and the message shown to the asker"
+      ],
+      "criteria": [
+        2
+      ]
+    },
+    {
+      "layer": "L05",
+      "title": "BM25 retrieval of the best plan passage with a grounding score",
+      "contracts": [
+        "answer.New(passages).Answer(question) returns the top passage quoted in full with one citation {passage_id, plan, section} and Score = share of the question's terms it holds"
+      ],
+      "tests": [
+        "examples/benefits-qa/answer:TestAnswerCitesPassage",
+        "examples/benefits-qa/answer:TestGroundRefers",
+        "examples/benefits-qa/answer:TestTerms"
+      ],
+      "instrumentation": [
+        "Result.Score is returned for the workflow to record and policy to judge"
+      ],
+      "criteria": [
+        1,
+        3
+      ]
+    }
+  ],
+  "em_review": {
+    "required": true,
+    "layers": [
+      "L04"
+    ]
+  },
+  "planned_at": "2026-10-12T07:29:21Z",
+  "planned_by": "human-fallback"
+}
