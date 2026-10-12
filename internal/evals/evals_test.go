@@ -737,7 +737,7 @@ func TestGroups(t *testing.T) {
 	}
 }
 
-// WP7.3 brief rules, tier 1 (D-7.3d, D-7.3e): planted drafts on the recorded cases
+// WP7.3 brief rules, tier 1 (D-7.3d to D-7.3f): planted drafts on the recorded cases
 // fail the deterministic checks the skill's lapses map to: a close brief
 // without its Limits section, a rate from the Result stated for "each
 // reviewer" or without "per reviewer", an interface control no source
@@ -752,6 +752,10 @@ func TestTier1BriefRules(t *testing.T) {
 		{"brief/eli5-explain", "# Saving claims\n\nOther lists can't be saved this way yet [#7].\n", "absence", `says "can't be"`},
 		{"brief/eli5-explain", "# Saving claims\n\nThis count shows that people use the file [R].\n", "scope", "a behaviour behind the count the Result does not measure"},
 		{"brief/engineer-ideate", "# CSV export\n\nIts behaviour at larger sizes is untested [P1.c3].\n", "absence", `says "untested"`},
+		// The three causes of run 38216409539 (D-7.3f).
+		{"brief/eli5-explain", "# Saving claims\n\nThis number counts files saved [R].\n", "unit", `names the count "files saved"; the Result counts exports`},
+		{"brief/ste-explain", "# Export of filtered claims\n\nThis story does not include PDF files, exports at set times, or exports of other lists [#7].\n", "absence", `says "does not include" of items the grounding marks out of scope`},
+		{"brief/ste-explain", "# Export of filtered claims\n\nThe Result shows 4.2 CSV exports per reviewer per week, against a target of 3 or more per reviewer per week [R].\n", "ste", "has 22 words (at most 20)"},
 	} {
 		c := copyCase(t, tc.id)
 		g, err := os.ReadFile(filepath.Join(root, "evals", "cases", "brief", "grounding.json"))
@@ -765,6 +769,17 @@ func TestTier1BriefRules(t *testing.T) {
 		if status(r, "brief") != Fail || !strings.Contains(r.String(), tc.check+": ") || !strings.Contains(r.String(), tc.want) {
 			t.Errorf("%s: planted %s defect did not fail tier 1 with %q:\n%s", tc.id, tc.check, tc.want, r)
 		}
+	}
+	// The 22-word sentence split as the skill tells ste to: a rate and its target, one per sentence.
+	c := copyCase(t, "brief/ste-explain")
+	g, _ := os.ReadFile(filepath.Join(root, "evals", "cases", "brief", "grounding.json"))
+	_ = os.WriteFile(filepath.Join(c.Dir, "..", "grounding.json"), g, 0o644)
+	split := "# Export of filtered claims\n\nThe rate is 4.2 CSV exports per reviewer per week [R]. The target is 3 exports per reviewer per week [R].\n"
+	if err := os.WriteFile(filepath.Join(c.Dir, "output", "brief.md"), []byte(split), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if r := Tier1(context.Background(), root, c, aayudha.Assets); status(r, "brief") != Pass {
+		t.Errorf("the split rate and target did not pass tier 1:\n%s", r)
 	}
 }
 

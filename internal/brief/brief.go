@@ -469,8 +469,12 @@ func Check(d *Draft, g *Grounding, o Options) []Finding {
 			add("limits", "a %s brief has a `## %s` section that states what the evidence and the measures do not show (for example, that usage does not show time saved)", map[bool]string{true: "close", false: "regulatory"}[o.Purpose == "close"], LimitsSection)
 		}
 	}
-	for _, p := range populationDrift(d, g) {
+	population, unit := rateWording(d, g)
+	for _, p := range population {
 		add("population", "%s", p)
+	}
+	for _, p := range unit {
+		add("unit", "%s", p)
 	}
 	for _, p := range uiDetails(d, g) {
 		add("ui", "%s", p)

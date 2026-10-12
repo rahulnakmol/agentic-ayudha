@@ -32,45 +32,101 @@ func populations(r *Result) []string {
 	return out
 }
 
-// populationDrift is the population rule (deterministic part): a paragraph
-// or list item that cites the Result keeps the Result's own population
-// wording. Stating one of the Result's numbers needs "per <population>" in
-// the same unit, and "each <population>" or "every <population>" turns a rate
-// into a claim about every member, so it is refused.
-func populationDrift(d *Draft, g *Grounding) []string {
+// unitNoun is the noun the Result counts: the word before its first
+// "per <population>" ("CSV exports per reviewer" gives "exports").
+func unitNoun(r *Result, pops []string) string {
+	if r == nil || len(pops) == 0 {
+		return ""
+	}
+	m := regexp.MustCompile(`(?i)\b([a-z][a-z_-]*)\s+per\s+` + regexp.QuoteMeta(pops[0]) + `\b`).FindStringSubmatch(r.Text)
+	if m == nil {
+		return ""
+	}
+	return strings.ToLower(m[1])
+}
+
+func singular(w string) string {
+	w = strings.ToLower(w)
+	if strings.HasSuffix(w, "s") && !strings.HasSuffix(w, "ss") {
+		return w[:len(w)-1]
+	}
+	return w
+}
+
+// substitutes are everyday words a draft puts in place of a count's unit.
+var substitutes = regexp.MustCompile(`(?i)\b(files?\s+(?:saved|made|created|downloaded)|saved\s+files?|downloads?)\b`)
+
+var wordTok = regexp.MustCompile(`[\p{L}\p{N}_-]+`)
+
+// rateWording is the population and unit rule (deterministic part), sentence
+// by sentence in every paragraph or list item that cites the Result:
+//   - population: a sentence that states one of the Result's numbers has the
+//     Result's "per <population>" wording (once per sentence is enough), and
+//     "each/every <population>" is refused;
+//   - unit: each of the Result's numbers is followed, within four words, by
+//     the Result's own unit noun ("3 exports", "4.2 CSV exports"), and
+//     everyday substitutes for it ("files saved", "downloads") are refused.
+//
+// So a rate and its target fit in two short sentences ("The rate is 4.2
+// exports per reviewer per week. The target is 3 exports per reviewer per
+// week."), which keeps ste sentences under the 20-word limit.
+func rateWording(d *Draft, g *Grounding) (population, unit []string) {
 	pops := populations(g.Result)
 	if len(pops) == 0 {
-		return nil
+		return nil, nil
 	}
+	noun := unitNoun(g.Result, pops)
 	nums := map[string]bool{}
 	for _, n := range resultNum.FindAllString(datePart.ReplaceAllString(g.Result.Text, " "), -1) {
 		if n != "0" {
 			nums[n] = true
 		}
 	}
-	var out []string
 	for i, u := range d.Units {
 		if !slices.Contains(u.Cites, "R") {
 			continue
 		}
+		where := fmt.Sprintf("%s %d", kindOf(u), i+1)
 		text := strings.ToLower(u.Text)
 		for _, p := range pops {
 			if m := regexp.MustCompile(`\b(each|every) ` + regexp.QuoteMeta(p) + `\b`).FindString(text); m != "" {
-				out = append(out, fmt.Sprintf("%s %d says %q, but the Result states a rate per %s, not what each %s does: %q", kindOf(u), i+1, m, p, p, clip(u.Text, 120)))
+				population = append(population, fmt.Sprintf("%s says %q, but the Result states a rate per %s, not what each %s does: %q", where, m, p, p, clip(u.Text, 120)))
 			}
-			stated := ""
-			for _, n := range resultNum.FindAllString(datePart.ReplaceAllString(criterionN.ReplaceAllString(u.Text, " "), " "), -1) {
-				if nums[n] {
-					stated = n
-					break
+		}
+		if noun != "" && !substitutes.MatchString(noun) {
+			if m := substitutes.FindString(u.Text); m != "" {
+				unit = append(unit, fmt.Sprintf("%s names the count %q; the Result counts %s: say %s: %q", where, m, noun, noun, clip(u.Text, 120)))
+			}
+		}
+		for _, s := range Sentences([]Unit{u}) {
+			clean := datePart.ReplaceAllString(criterionN.ReplaceAllString(s.Text, " "), " ")
+			lower := strings.ToLower(clean)
+			stated := false
+			for _, loc := range resultNum.FindAllStringIndex(clean, -1) {
+				n := clean[loc[0]:loc[1]]
+				if !nums[n] {
+					continue
+				}
+				stated = true
+				if noun == "" {
+					continue
+				}
+				next := wordTok.FindAllString(clean[loc[1]:], 4)
+				if !slices.ContainsFunc(next, func(w string) bool { return singular(w) == singular(noun) }) {
+					unit = append(unit, fmt.Sprintf("%s states %s from the Result without its unit: write \"%s %s\" as the Result counts it: %q", where, n, n, noun, clip(s.Text, 120)))
 				}
 			}
-			if stated != "" && !strings.Contains(text, "per "+p) {
-				out = append(out, fmt.Sprintf("%s %d states %s from the Result without its population: keep \"per %s\" as the Result words it: %q", kindOf(u), i+1, stated, p, clip(u.Text, 120)))
+			if !stated {
+				continue
+			}
+			for _, p := range pops {
+				if !strings.Contains(lower, "per "+p) {
+					population = append(population, fmt.Sprintf("%s states a number from the Result without its population: keep \"per %s\" in the sentence as the Result words it: %q", where, p, clip(s.Text, 120)))
+				}
 			}
 		}
 	}
-	return out
+	return population, unit
 }
 
 // uiWords name interface elements and interactions. A brief may name one
@@ -118,6 +174,33 @@ func stem(w string) string {
 // out-of-scope items, with the word after them.
 var absenceRE = regexp.MustCompile(`(?i)\b(untested|not tested|not done|not possible|can't|can’t|cannot)\b(?:\s+([\p{L}\p{N}-]+))?`)
 
+// exclusionRE is "does not include" and its forms; an item the grounding
+// marks out of scope is "outside this story's scope" instead.
+var exclusionRE = regexp.MustCompile(`(?i)\b(does not include|doesn't include|doesn’t include|do not include|is not included|are not included)\b`)
+
+// outOfScope returns the out-of-scope items the subject's Scope field lists
+// ("Out of scope: PDF, scheduled exports, exports of other lists"), each as
+// its content words; a sentence names an item when it has all of them.
+func outOfScope(g *Grounding) [][]string {
+	m := regexp.MustCompile(`(?is)out of scope:?\s*([^.\n]*)`).FindStringSubmatch(g.Subject.Fields["scope"])
+	if m == nil {
+		return nil
+	}
+	var out [][]string
+	for _, item := range regexp.MustCompile(`(?i),|;|\band\b|\bor\b`).Split(m[1], -1) {
+		var words []string
+		for _, w := range wordTok.FindAllString(strings.ToLower(item), -1) {
+			if len(w) > 2 && !slices.Contains([]string{"the", "other", "for", "with", "any", "all"}, w) {
+				words = append(words, singular(w))
+			}
+		}
+		if len(words) > 0 {
+			out = append(out, words)
+		}
+	}
+	return out
+}
+
 // absenceClaims is the absence rule: missing evidence is written "the
 // evidence does not show …" and an excluded item "outside this story's scope",
 // never "untested", "not done", "not possible", or "can't". A source's own
@@ -134,6 +217,23 @@ func absenceClaims(d *Draft, g *Grounding) []string {
 				continue
 			}
 			out = append(out, fmt.Sprintf("%s %d says %q: write missing evidence as \"the evidence does not show …\" and an excluded item as \"outside this story's scope\": %q", kindOf(u), i+1, strings.TrimSpace(m[0]), clip(u.Text, 120)))
+		}
+		if items := outOfScope(g); len(items) > 0 {
+			for _, s := range Sentences([]Unit{u}) {
+				m := exclusionRE.FindString(s.Text)
+				if m == "" {
+					continue
+				}
+				var have []string
+				for _, w := range wordTok.FindAllString(s.Text, -1) {
+					have = append(have, singular(w))
+				}
+				if slices.ContainsFunc(items, func(item []string) bool {
+					return !slices.ContainsFunc(item, func(w string) bool { return !slices.Contains(have, w) })
+				}) {
+					out = append(out, fmt.Sprintf("%s %d says %q of items the grounding marks out of scope: write \"outside this story's scope\": %q", kindOf(u), i+1, m, clip(s.Text, 120)))
+				}
+			}
 		}
 	}
 	return out

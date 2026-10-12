@@ -14,6 +14,7 @@ Absence of evidence is written as "the evidence does not show …", never as "no
 "can't". Out-of-scope items are written as "outside this story's scope". A measure shows only what it counts: name
 the count, not the behaviour behind it. Writing absence as fact ("untested", "can't be saved") or a count as a behaviour ("this
 shows that people use the file") is an unsupported claim.
+A count keeps its own unit (exports, not "files saved"), and out-of-scope items are "outside this story's scope".
 
 - 5: Every claim matches what its cited source says, with nothing invented (no numbers, dates, names, causes, or
   outcomes beyond the grounding); the takeaway is first and correct; the register and purpose fit as described below.

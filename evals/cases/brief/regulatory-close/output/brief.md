@@ -1,6 +1,6 @@
 # Closure record: Feature #7, export of filtered claims
 
-Feature #7 met its target: 4.2 CSV exports per reviewer per week against a target of at least 3, measured from 2026-09-14 to 2026-10-12 [R].
+Feature #7 met its target: 4.2 CSV exports per reviewer per week against a target of at least 3 exports per reviewer per week, measured from 2026-09-14 to 2026-10-12 [R].
 
 ## Scope
 
