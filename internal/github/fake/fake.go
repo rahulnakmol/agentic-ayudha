@@ -120,6 +120,14 @@ type WorkflowRun struct {
 	Conclusion string `json:"conclusion"`
 }
 
+// Release is a GitHub Release, keyed by its tag.
+type Release struct {
+	ID      int64  `json:"id"`
+	TagName string `json:"tag_name"`
+	Body    string `json:"body"`
+	HTMLURL string `json:"html_url"`
+}
+
 // ArtifactZip is a run artifact with its zip bytes.
 type ArtifactZip struct {
 	ID   int64
@@ -142,6 +150,7 @@ type GitHub struct {
 	Private    bool
 	Default    string
 	Viewer     string
+	ViewerType string // GET /user type; default User
 	Labels     []*Label
 	IssueTypes []*IssueType
 	Rulesets   []map[string]any
@@ -153,6 +162,7 @@ type GitHub struct {
 	CheckRuns  map[string][]CheckRun   // commit SHA -> check runs, newest first
 	Runs       []WorkflowRun           // Actions workflow runs
 	Artifacts  map[int64][]ArtifactZip // run ID -> artifacts
+	Releases   map[string]*Release     // tag -> GitHub Release
 	Requests   []Request
 	Projects   []map[string]any  // Projects v2: id, title
 	Secrets    map[string]string // Actions secret name -> encrypted value
@@ -269,6 +279,8 @@ func (g *GitHub) nextSHA(v any) string {
 var (
 	reCheckRuns = regexp.MustCompile(`^/repos/[^/]+/[^/]+/commits/([^/]+)/check-runs$`)
 	reWfRuns    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/workflows/([^/]+)/runs$`)
+	reRelTag    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/releases/tags/(.+)$`)
+	reRelease   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/releases/([0-9]+)$`)
 	reRunArts   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/runs/([0-9]+)/artifacts$`)
 	reArtZip    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/artifacts/([0-9]+)/zip$`)
 	rePull      = regexp.MustCompile(`^/repos/[^/]+/[^/]+/pulls/([0-9]+)(/reviews|/files|/merge)?$`)
@@ -320,7 +332,11 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	switch m, p := r.Method, path; {
 	case m == "GET" && p == "/user":
-		reply(200, map[string]any{"login": g.Viewer, "type": "User"})
+		typ := g.ViewerType
+		if typ == "" {
+			typ = "User"
+		}
+		reply(200, map[string]any{"login": g.Viewer, "type": typ})
 	case m == "GET" && strings.HasPrefix(p, "/users/"):
 		typ := "User"
 		if strings.TrimPrefix(p, "/users/") == g.Owner {
@@ -594,6 +610,24 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		reply(200, map[string]any{"total_count": len(out), "workflow_runs": out})
+	case m == "GET" && reRelTag.MatchString(p):
+		if rel := g.Releases[reRelTag.FindStringSubmatch(p)[1]]; rel != nil {
+			reply(200, rel)
+			return
+		}
+		notFound()
+	case m == "PATCH" && reRelease.MatchString(p):
+		id := int64(atoi(reRelease.FindStringSubmatch(p)[1]))
+		for _, rel := range g.Releases {
+			if rel.ID == id {
+				if b, ok := body["body"].(string); ok {
+					rel.Body = b
+				}
+				reply(200, rel)
+				return
+			}
+		}
+		notFound()
 	case m == "GET" && reRunArts.MatchString(p):
 		out := []map[string]any{}
 		for _, a := range g.Artifacts[int64(atoi(reRunArts.FindStringSubmatch(p)[1]))] {

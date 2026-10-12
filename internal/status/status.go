@@ -63,6 +63,8 @@ type Rollup struct {
 	Provisional       []int          `json:"provisional_decisions"`
 	ProvisionalHours  string         `json:"provisional_hours"`
 	ProofCoverage     string         `json:"proof_coverage"`
+	ProofCovered      int            `json:"-"` // done stories and bugs covered by proof (with a Proof func)
+	ProofDone         int            `json:"-"` // done stories and bugs
 	Streak            string         `json:"streak"`
 	CostUSD           float64        `json:"cost_usd"`
 	// Closable (the parent-close rule): every child released (or later) or
@@ -293,6 +295,7 @@ func (w *Walker) count(ctx context.Context, r *Rollup) error {
 	}
 	if w.Proof != nil {
 		r.ProofCoverage = fmt.Sprintf("%d/%d", covered, done)
+		r.ProofCovered, r.ProofDone = covered, done
 	}
 	sort.Strings(hours)
 	r.ProvisionalHours = "none"
