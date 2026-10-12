@@ -5,7 +5,7 @@
 //	go run ./internal/evals/cmd/eval -tier 2 -group <group> -sha <sha> -out evals/results/<sha>-<group>.json [-baseline <file>]
 //	go run ./internal/evals/cmd/eval -groups                                     # the group names, as JSON
 //	go run ./internal/evals/cmd/eval -compare evals/results/<sha>.json [-baseline <file>]
-//	go run ./internal/evals/cmd/eval -evolve-gate -base <sha> -branch <head ref>   # CI build (WP7.7)
+//	go run ./internal/evals/cmd/eval -evolve-gate -base <sha> -head <sha> -branch <head ref>   # CI build (WP7.7)
 //
 // Tier 2 makes live model calls through [models.gateway] (AAYU_MODELS__GATEWAY__BASE_URL and
 // AAYU_MODELS__GATEWAY__SECRET, key in AAYU_SECRET_<NAME>), capped by [budget] and the -group's max_usd in evals/eval.toml.
@@ -59,6 +59,7 @@ func run(ctx context.Context) error {
 	only := flag.String("cases", "", "tier 2: run only the cases whose ID (<skill>/<name>) matches this regular expression")
 	gate := flag.Bool("evolve-gate", false, "eval-first gate (WP7.7): fail an evolve PR (evolve/ branch or Aayudha-Evolve commit) that adds no reproducing eval case")
 	baseRef := flag.String("base", "", "base commit of the PR (-evolve-gate)")
+	headRef := flag.String("head", "HEAD", "head commit of the PR (-evolve-gate); fetched from origin by SHA when missing")
 	branch := flag.String("branch", "", "head branch of the PR (-evolve-gate)")
 	flag.Parse()
 
@@ -67,7 +68,7 @@ func run(ctx context.Context) error {
 		return err
 	}
 	if *gate {
-		return evolveGate(ctx, root, *baseRef, *branch)
+		return evolveGate(ctx, root, *baseRef, *headRef, *branch)
 	}
 	cfg, err := evals.LoadConfig(root)
 	if err != nil {
@@ -159,21 +160,47 @@ func run(ctx context.Context) error {
 	return errors.New("pass -tier 1, -tier 2, or -compare <file>")
 }
 
-// evolveGate runs the eval-first gate on the diff from base to HEAD.
-func evolveGate(ctx context.Context, root, base, branch string) error {
+// evolveGate runs the eval-first gate on a PR given by its base and head
+// commits: its commits are base..head (their trailers mark an evolve PR) and
+// its change is base...head (from the merge base). It never uses the
+// checked-out test-merge commit, which GitHub may recompute after the run
+// started; a base or head the checkout lacks (it is one commit deep) is
+// fetched from origin by SHA, with its history, so the merge base is present.
+func evolveGate(ctx context.Context, root, base, head, branch string) error {
 	if base == "" {
 		return errors.New("-evolve-gate needs -base")
+	}
+	if head == "" {
+		head = "HEAD"
 	}
 	git := func(args ...string) (string, error) {
 		cmd := exec.CommandContext(ctx, "git", args...)
 		cmd.Dir = root
 		out, err := cmd.Output()
 		if err != nil {
+			var ee *exec.ExitError
+			if errors.As(err, &ee) && len(ee.Stderr) > 0 {
+				return "", fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(ee.Stderr)))
+			}
 			return "", fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
 		}
 		return string(out), nil
 	}
-	messages, err := git("log", "--format=%B", base+"..HEAD")
+	_, errB := git("cat-file", "-e", base+"^{commit}")
+	_, errH := git("cat-file", "-e", head+"^{commit}")
+	_, errM := git("merge-base", base, head)
+	if errB != nil || errH != nil || errM != nil {
+		args := []string{"fetch", "--no-tags", "--quiet", "origin"}
+		for _, c := range []string{base, head} {
+			if c != "HEAD" { // the checkout's own commit; origin's HEAD is another commit
+				args = append(args, c)
+			}
+		}
+		if _, err := git(args...); err != nil {
+			return err
+		}
+	}
+	messages, err := git("log", "--format=%B", base+".."+head)
 	if err != nil {
 		return err
 	}
@@ -181,7 +208,7 @@ func evolveGate(ctx context.Context, root, base, branch string) error {
 		fmt.Printf("evolve gate: %s is not an evolve PR (no %s branch prefix, no %s commit); nothing to check\n", orDash(branch), evals.EvolveBranchPrefix, evals.EvolveTrailer)
 		return nil
 	}
-	out, err := git("diff", "--name-status", "--no-renames", base, "HEAD")
+	out, err := git("diff", "--name-status", "--no-renames", base+"..."+head)
 	if err != nil {
 		return err
 	}

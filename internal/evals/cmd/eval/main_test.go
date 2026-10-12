@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -112,7 +113,7 @@ func TestEvolveGateCI(t *testing.T) {
 		{"not an evolve PR, whatever its labels", "feat/stub", "feat: x", []map[string]string{skillDiff}, ""},
 	} {
 		branch(tc.branch, tc.msg, tc.files...)
-		err := evolveGate(ctx, root, base, tc.branch)
+		err := evolveGate(ctx, root, base, "HEAD", tc.branch)
 		switch {
 		case tc.fail == "" && err != nil:
 			t.Errorf("%s: rejected: %v", tc.name, err)
@@ -120,18 +121,99 @@ func TestEvolveGateCI(t *testing.T) {
 			t.Errorf("%s: not rejected (%v)", tc.name, err)
 		}
 	}
-	if err := evolveGate(ctx, root, "", "evolve/x"); err == nil {
+	if err := evolveGate(ctx, root, "", "HEAD", "evolve/x"); err == nil {
 		t.Error("an evolve gate without -base passed")
 	}
-	if err := evolveGate(ctx, root, "no-such-commit", "evolve/x"); err == nil || !strings.Contains(err.Error(), "git log") {
+	if err := evolveGate(ctx, root, "no-such-commit", "HEAD", "evolve/x"); err == nil || !strings.Contains(err.Error(), "git fetch") {
 		t.Errorf("an evolve gate against a missing base: %v", err)
 	}
 	// The command line CI runs.
 	branch("evolve/stub-5", "x", skillDiff)
 	t.Chdir(root)
+	flag.CommandLine = flag.NewFlagSet("eval", flag.ExitOnError)
 	os.Args = []string{"eval", "-evolve-gate", "-base", base, "-branch", "evolve/stub-5"}
 	if err := run(ctx); err == nil || !strings.Contains(err.Error(), "evolve gate") {
 		t.Errorf("eval -evolve-gate on an evolve PR without a case: %v", err)
+	}
+}
+
+// CI's checkout is the PR's test-merge commit, one commit deep. When GitHub
+// recomputes that merge (the base moved) while the run is going, the checked-out
+// merge is no longer on any ref, so deepening it cannot fetch HEAD^1 ("git log
+// HEAD^1..HEAD: exit status 128", seen on #138). The gate works from the PR's
+// base and head SHAs instead and fetches them by SHA, so it does not depend on
+// the merge commit. This replays that sequence against a local origin.
+func TestEvolveGateAfterTestMergeRecomputed(t *testing.T) {
+	repo := filepath.Join("..", "..", "..", "..")
+	schema, err := os.ReadFile(filepath.Join(repo, "evals", "schemas", "workitem.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmp := t.TempDir()
+	bare := filepath.Join(tmp, "origin.git")
+	git(t, tmp, "init", "--quiet", "--bare", "-b", "dev", bare)
+	git(t, bare, "config", "uploadpack.allowReachableSHA1InWant", "true") // as GitHub allows
+	work := filepath.Join(tmp, "work")
+	git(t, tmp, "clone", "--quiet", bare, work)
+	git(t, work, "checkout", "--quiet", "-b", "dev")
+	write(t, work, map[string]string{"evals/schemas/workitem.json": string(schema), "evals/skills/stub/SKILL.md": "# stub\n"})
+	git(t, work, "add", ".")
+	git(t, work, "commit", "--quiet", "-m", "base")
+	base := git(t, work, "rev-parse", "HEAD")
+	git(t, work, "checkout", "--quiet", "-b", "evolve/stub-5")
+	write(t, work, evolveCase(t, "Export orders as text/csv "))
+	write(t, work, map[string]string{"evals/skills/stub/SKILL.md": "# stub\n\nNever add a content type.\n"})
+	git(t, work, "add", ".")
+	git(t, work, "commit", "--quiet", "-m", "feat(skills): evolve stub\n\nAayudha-Evolve: #5")
+	head := git(t, work, "rev-parse", "HEAD")
+	merge := func(onto string) string {
+		git(t, work, "checkout", "--quiet", "--detach", onto)
+		git(t, work, "merge", "--quiet", "--no-ff", "-m", "Merge "+head+" into "+onto, head)
+		return git(t, work, "rev-parse", "HEAD")
+	}
+	git(t, work, "push", "--quiet", "origin", "dev", "evolve/stub-5")
+	m1 := merge(base)
+	git(t, work, "push", "--quiet", "origin", m1+":refs/pull/1/merge")
+
+	// The run checks out the test merge, one commit deep, as actions/checkout does.
+	ci := filepath.Join(tmp, "ci")
+	git(t, tmp, "init", "--quiet", ci)
+	git(t, ci, "remote", "add", "origin", "file://"+bare)
+	git(t, ci, "fetch", "--quiet", "--no-tags", "--depth=1", "origin", "+refs/pull/1/merge:refs/remotes/pull/1/merge")
+	git(t, ci, "checkout", "--quiet", "refs/remotes/pull/1/merge")
+
+	// Meanwhile dev moves and GitHub recomputes the merge; the old one becomes unreachable and is pruned.
+	git(t, work, "checkout", "--quiet", "dev")
+	write(t, work, map[string]string{"README.md": "moved on\n"})
+	git(t, work, "add", ".")
+	git(t, work, "commit", "--quiet", "-m", "dev moves")
+	git(t, work, "push", "--quiet", "origin", "dev")
+	git(t, work, "push", "--quiet", "--force", "origin", merge("dev")+":refs/pull/1/merge")
+	git(t, bare, "reflog", "expire", "--expire=now", "--all")
+	git(t, bare, "gc", "--quiet", "--prune=now")
+
+	// The old step: deepen the merge commit, then read HEAD^1. It cannot.
+	old := exec.Command("sh", "-c", `git fetch --no-tags --quiet --deepen=2 origin; git log --format=%B HEAD^1..HEAD`)
+	old.Dir = ci
+	if out, err := old.CombinedOutput(); err == nil || !strings.Contains(string(out), "HEAD^1") {
+		t.Fatalf("the old step did not reproduce the failure: %v\n%s", err, out)
+	} else {
+		t.Logf("old step, as on #138: %v: %s", err, strings.TrimSpace(string(out)))
+	}
+	// The new step: base and head SHAs from the event, fetched by SHA.
+	t.Chdir(ci)
+	flag.CommandLine = flag.NewFlagSet("eval", flag.ExitOnError)
+	os.Args = []string{"eval", "-evolve-gate", "-base", base, "-head", head, "-branch", "evolve/stub-5"}
+	if err := run(context.Background()); err != nil {
+		t.Fatalf("evolve gate on base and head SHAs: %v", err)
+	}
+	// An evolve PR without a case is still refused this way (by its trailer, on a non-evolve branch).
+	git(t, work, "checkout", "--quiet", "-b", "feat/x", base)
+	write(t, work, map[string]string{"evals/skills/stub/SKILL.md": "# stub\n\nchanged\n"})
+	git(t, work, "commit", "--quiet", "-am", "feat: x\n\nAayudha-Evolve: #5")
+	git(t, work, "push", "--quiet", "origin", "feat/x")
+	if err := evolveGate(context.Background(), ci, base, git(t, work, "rev-parse", "HEAD"), "feat/x"); err == nil || !strings.Contains(err.Error(), "evolve gate") {
+		t.Fatalf("an evolve commit without a case: %v", err)
 	}
 }
 

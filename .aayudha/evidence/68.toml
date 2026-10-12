@@ -3,4 +3,4 @@
 
 [[criterion]]
 id = 1 # an `evolve` PR without a new eval case is rejected by CI
-tests = ["internal/evals/cmd/eval:TestEvolveGateCI", "internal/evals:TestEvolveVerb"]
+tests = ["internal/evals/cmd/eval:TestEvolveGateCI", "internal/evals/cmd/eval:TestEvolveGateAfterTestMergeRecomputed", "internal/evals:TestEvolveVerb"]
