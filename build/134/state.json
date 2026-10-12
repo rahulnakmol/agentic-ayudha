@@ -2,6 +2,26 @@
   "story": 134,
   "branch": "story/134-ask-page-shows-answers-with-their-source",
   "started_at": "2026-10-12T13:14:40Z",
-  "failed_attempts": 0,
-  "checkpoints": null
+  "failed_attempts": 1,
+  "failures_by_layer": {
+    "L01": 1,
+    "L02": 1,
+    "L09": 1
+  },
+  "checkpoints": [
+    {
+      "k": 1,
+      "n": 3,
+      "attempt": 1,
+      "commit": "976388944c4561e121fa8e35b0a6989de144d6b6",
+      "layers": [
+        "L01",
+        "L02",
+        "L09"
+      ],
+      "verify": "miss",
+      "detail": "a11y blocked",
+      "at": "2026-10-12T13:15:51Z"
+    }
+  ]
 }
