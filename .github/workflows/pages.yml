@@ -1,0 +1,85 @@
+name: pages
+
+# docs/BUILD-PLAN.md WP8.2: `tell docs` → GitHub Pages. Every action is pinned by full commit SHA.
+#
+# `aayu tell docs --site` builds the site from this checkout: README, docs/getting-started.md, CONTRIBUTING,
+# SECURITY, CONSTRAINTS, LAYERS, docs/RACI.md, the verbs reference from the registry, and a page per skill. Every
+# page passes tell's claims check against the ledger: a link to a work item must name a Feature whose shipped
+# stories all have authoritative packs, so one unproven claim fails the build and nothing is deployed.
+#
+# Pull requests build the site to catch a refused page early; pushes to dev (the default branch, which the
+# github-pages environment admits) and manual dispatches also deploy it (Appendix B D-8.2a). Deploying is not
+# `tell --publish`: the pages are Markdown already merged to dev, and nothing is written to the ledger.
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [dev]
+    paths:
+      - "**.md"
+      - "internal/tell/**"
+      - "internal/verbs/**"
+      - "skills/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  GO_VERSION: "1.25.x" # go.mod's language floor (Appendix B D5)
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      - name: aayu tell docs --site
+        env:
+          GITHUB_TOKEN: ${{ github.token }} # read-only: lists Features; the ledger is fetched from the public remote
+        run: |
+          set -euo pipefail
+          CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/aayu" ./cmd/aayudha
+          "$RUNNER_TEMP/aayu" --ci tell docs --site "$RUNNER_TEMP/site" --campaign docs-site | tee "$RUNNER_TEMP/tell.txt"
+          { echo '### aayu tell docs --site'; echo; cat "$RUNNER_TEMP/tell.txt"; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: ${{ runner.temp }}/site
+
+  deploy:
+    name: deploy
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write # deploy the Pages artifact
+      id-token: write # deploy-pages proves the deployment came from this workflow
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - id: deploy
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

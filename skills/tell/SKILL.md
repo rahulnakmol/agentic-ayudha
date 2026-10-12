@@ -38,6 +38,11 @@ aayu:
       required: false
       positional: false
       description: "UTM campaign; default the tag, else <kind>-<YYYY-MM-DD>."
+    - name: site
+      type: path
+      required: false
+      positional: false
+      description: "With docs: build the static docs site (README, getting started, verbs, skills, governance pages) into this new or empty directory; every page passes the claims check."
     - name: publish
       type: bool
       required: false
@@ -81,6 +86,15 @@ Write docs, guides, changelogs, release notes, launch copy, or brand copy that c
 
    ```sh
    aayu tell release --from notes.md --tag v0.2.0 --publish
+   ```
+
+5. The docs site is built, not drafted: it is the repository's own Markdown (README, `docs/getting-started.md`,
+   CONTRIBUTING, SECURITY, CONSTRAINTS, LAYERS, `docs/RACI.md`), the verbs reference from the registry, and a page
+   per skill. Every page passes the same check, and one refused page refuses the whole site. To change a page,
+   edit its Markdown source in a pull request; the Pages workflow rebuilds and deploys the site from `dev`:
+
+   ```sh
+   aayu tell docs --site _site
    ```
 
 Format and lint: skills/README.md.

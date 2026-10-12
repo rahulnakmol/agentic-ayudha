@@ -840,6 +840,7 @@ var Verbs = []Command{
 			flag("from", TypePath, "Markdown draft the host wrote; tell checks its claims and tone and tags its links. Without it, tell prints the brief: tone, proven Features, and UTM tags."),
 			flag("tag", TypeString, "Release tag the copy is about (release, changelog); publishing release notes also sets that GitHub Release's notes."),
 			flag("campaign", TypeString, "UTM campaign; default the tag, else <kind>-<YYYY-MM-DD>."),
+			flag("site", TypePath, "With docs: build the static docs site (README, getting started, verbs, skills, governance pages) into this new or empty directory; every page passes the claims check."),
 			humanOnly(flag("publish", TypeBool, "Publish the checked copy to the ledger (and the tag's GitHub Release); human identity only, logged.")),
 		},
 		Outputs:  []string{"draft", "published-content"},

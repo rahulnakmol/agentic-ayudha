@@ -33,6 +33,11 @@
       "x-aayu-human-only": true,
       "x-aayu-type": "bool"
     },
+    "site": {
+      "description": "With docs: build the static docs site (README, getting started, verbs, skills, governance pages) into this new or empty directory; every page passes the claims check.",
+      "type": "string",
+      "x-aayu-type": "path"
+    },
     "tag": {
       "description": "Release tag the copy is about (release, changelog); publishing release notes also sets that GitHub Release's notes.",
       "type": "string",

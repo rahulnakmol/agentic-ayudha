@@ -73,7 +73,8 @@ func TestReleaseNotes(t *testing.T) {
 
 // Only what renders as code is skipped: a fence closes on its own character,
 // at least as long, with nothing after it; a backtick run with a backtick in
-// its info string opens nothing.
+// its info string opens nothing; an inline code span closes only on a run of
+// the same length.
 func TestCheckFences(t *testing.T) {
 	for _, tt := range []struct {
 		name, md string
@@ -84,6 +85,10 @@ func TestCheckFences(t *testing.T) {
 		{"closing run with text", "```\n``` not a close\nSee #9.\n```\nSee #9.\n", true},
 		{"backtick in the info string", "``` a`b\nSee #9.\n", true},
 		{"unclosed fence", "~~~\nSee #9.\n", false},
+		{"code span", "Cite issues as `[#9]`.\n", false},
+		{"code span holding a shorter run", "``a ` #9`` is code.\n", false},
+		{"unmatched backtick run", "``a` #9\n", true},
+		{"after a code span", "`a` #9\n", true},
 	} {
 		_, probs := Check(tt.md, "o/r", nil, Default, UTM{})
 		if got := len(probs) > 0; got != tt.claims {
@@ -111,5 +116,13 @@ func TestCheckRefs(t *testing.T) {
 		if !reflect.DeepEqual(got, tt.want) {
 			t.Errorf("%s: claims %v, want %v", tt.line, got, tt.want)
 		}
+	}
+}
+
+// A URL in a code span is shown, not followed, so it keeps its text.
+func TestCheckLeavesCodeSpanLinks(t *testing.T) {
+	d, _ := Check("Run `curl https://a.example/x` or see https://b.example/y.", "o/r", nil, Default, UTM{Source: "r", Medium: "docs", Campaign: "c"})
+	if want := "Run `curl https://a.example/x` or see https://b.example/y?utm_campaign=c&utm_medium=docs&utm_source=r."; d.Copy != want || d.Tagged != 1 {
+		t.Fatalf("copy %q (%d tagged), want %q", d.Copy, d.Tagged, want)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -54,6 +55,9 @@ type tellReport struct {
 	Draft     *tell.Draft    `json:"draft,omitempty"`
 	Problems  []tell.Problem `json:"problems,omitempty"`
 	CopyPath  string         `json:"copy_path,omitempty"`
+	Site      string         `json:"site,omitempty"`
+	Pages     []string       `json:"pages,omitempty"`
+	Cited     []int          `json:"cited,omitempty"`
 	Published *Publication   `json:"published,omitempty"`
 	DryRun    bool           `json:"dry_run,omitempty"`
 }
@@ -69,6 +73,10 @@ var campaignRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$`)
 func runTell(ctx context.Context, e *Env, in Values) error {
 	kind := in.String("kind")
 	publish := in.Bool("publish")
+	site := in.String("site")
+	if site != "" && (kind != "docs" || in.Has("from") || publish) {
+		return Errorf(ExitUsage, "tell --site builds the docs site from the repository: use it with tell docs, without --from or --publish (the Pages workflow deploys it)")
+	}
 	if publish {
 		if err := e.refuseNonHuman("tell --publish"); err != nil {
 			return err
@@ -122,7 +130,11 @@ func runTell(ctx context.Context, e *Env, in Values) error {
 	}
 	rep.Proven = sortedFeatures(proven)
 
-	if draft != nil {
+	if site != "" {
+		if err := e.tellSite(ctx, &rep, root, repo, site, proven); err != nil {
+			return err
+		}
+	} else if draft != nil {
 		d, probs := tell.Check(string(draft), repo, proven, brand, rep.UTM)
 		rep.Draft, rep.Problems = &d, probs
 		if len(probs) == 0 {
@@ -143,6 +155,9 @@ func runTell(ctx context.Context, e *Env, in Values) error {
 	if err := e.Emit(rep, func(out io.Writer) error { return tellText(out, rep, draft != nil) }); err != nil {
 		return err
 	}
+	if len(rep.Problems) > 0 && site != "" {
+		return Errorf(ExitBlocked, "tell docs --site: the site is refused (%d problem(s)) and nothing was written; pages claim only proven Features, in the brand's words", len(rep.Problems))
+	}
 	if len(rep.Problems) > 0 {
 		return Errorf(ExitBlocked, "tell %s: the draft is refused (%d problem(s)); copy claims only proven Features, in the brand's words", kind, len(rep.Problems))
 	}
@@ -150,6 +165,15 @@ func runTell(ctx context.Context, e *Env, in Values) error {
 }
 
 func tellText(out io.Writer, rep tellReport, checked bool) error {
+	if rep.Site != "" {
+		for _, p := range rep.Problems {
+			fmt.Fprintf(out, "refused: %s\n", p)
+		}
+		if len(rep.Problems) == 0 {
+			fmt.Fprintf(out, "tell docs: site of %d file(s) written to %s; cites %s\n", len(rep.Pages), rep.Site, refsList(rep.Cited))
+		}
+		return nil
+	}
 	if !checked {
 		fmt.Fprintf(out, "tell %s brief\n\nVoice (%s): %s\nTone: %s\nNever use: %s\n\n", rep.Kind, rep.Brand.Source, rep.Brand.Voice,
 			strings.Join(rep.Brand.Tone, ", "), strings.Join(rep.Brand.Avoid, ", "))
@@ -187,6 +211,50 @@ func tellText(out io.Writer, rep tellReport, checked bool) error {
 			fmt.Fprintf(out, "; release notes set on %s", p.Release)
 		}
 		fmt.Fprintln(out)
+	}
+	return nil
+}
+
+// tellSite builds the docs site (WP8.2) from the checkout at root into dir,
+// which must be new or empty; a page that fails the claims check refuses the
+// whole site and nothing is written.
+func (e *Env) tellSite(ctx context.Context, rep *tellReport, root, repo, dir string, proven map[int]tell.Feature) error {
+	if root == "" {
+		return Errorf(ExitUsage, "tell docs --site builds from a checkout: run it inside one")
+	}
+	if e.Assets == nil {
+		return errors.New("this binary has no embedded skills")
+	}
+	if entries, err := os.ReadDir(dir); err == nil && len(entries) > 0 {
+		return Errorf(ExitUsage, "tell docs --site %s: the directory is not empty; give a new or empty one", dir)
+	}
+	head, err := e.exec()(ctx, root, "git", "log", "-1", "--format=%H %cs")
+	if err != nil {
+		return Wrap(ExitUsage, fmt.Errorf("tell docs --site: read the checkout's commit: %w", err))
+	}
+	ref, date, _ := strings.Cut(strings.TrimSpace(head), " ")
+	pages, err := tell.SitePages(root, e.Assets, proven)
+	if err != nil {
+		return err
+	}
+	s := tell.Site{Repo: repo, Ref: ref, Date: date, Proven: proven, Brand: rep.Brand, UTM: rep.UTM, Pages: pages}
+	files, cited, probs, err := s.Build()
+	if err != nil {
+		return err
+	}
+	rep.Site, rep.Cited, rep.Problems = dir, cited, probs
+	if len(probs) > 0 {
+		return nil
+	}
+	rep.Pages = tell.SiteFiles(files)
+	for _, f := range rep.Pages {
+		p := filepath.Join(dir, filepath.FromSlash(f))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(p, files[f], 0o644); err != nil {
+			return err
+		}
 	}
 	return nil
 }
