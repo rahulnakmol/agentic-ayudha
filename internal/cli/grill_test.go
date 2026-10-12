@@ -3,6 +3,8 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -97,6 +99,42 @@ func TestGrillGoalBaseline(t *testing.T) {
 	if it.Fields["target"] != ">= 45 by 2026-12-31" {
 		t.Fatalf("target changed: %q", it.Fields["target"])
 	}
+	// The text report shows the fetched baseline and the next step.
+	code, out, errOut := run(t, env, opts, "grill", "goal", "--repo", "o/r", "--title", "First claims without help", "--body", body,
+		"--set", "integrations.github.secret=github-read", "--set", "integrations.github.scope=read", "--set", "integrations.github.project=o/r")
+	if code != 0 || !strings.Contains(out, `goal draft "First claims without help": passes Create and Ready`) ||
+		!strings.Contains(out, "  baseline: prs_merged = 37 over ") || !strings.Contains(out, "2026-09-14T00:00:00Z to 2026-10-12T00:00:00Z (UTC, half-open)") ||
+		!strings.Contains(out, "run again with --create") {
+		t.Fatalf("text report: exit %d\n%s%s", code, out, errOut)
+	}
+
+	// A snapshot metric (activation) comes from `aayu measure` exports: the
+	// draft needs the measured value in Baseline. A metric neither snapshot
+	// nor <source>:<metric> is refused, and a missing one is a Create problem.
+	for _, tc := range []struct {
+		metric, baseline string
+		code             int
+		want             string
+	}{
+		{"activation", "", ExitBlocked, "baseline: no reachable baseline for metric \"activation\" (a Target needs a reproducible baseline first): activation is measured from exports by `aayu measure`"},
+		{"activation", "41% (snapshot 2026-10-01, all claimants)", 0, ""},
+		{"median days to first decision", "21 days", ExitBlocked, `metric: unreadable measure spec: metric "median days to first decision": want one of`},
+		{"", "", ExitBlocked, "metric:"},
+	} {
+		f := map[string]string{"summary": "Claimants finish their first claim without help.", "beneficiaries": "claimants", "metric": tc.metric, "baseline": tc.baseline, "target": ">= 45% by 2026-12-31"}
+		for k, v := range f {
+			if v == "" {
+				delete(f, k)
+			}
+		}
+		before := len(g.Issues)
+		code, out, errOut := run(t, env, opts, "grill", "goal", "--repo", "o/r", "--json", "--title", "Activation", "--body", workitems.Render(mustType(t, "goal"), f))
+		var res GrillResult
+		_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)
+		if code != tc.code || res.Pass != (tc.code == 0) || !strings.Contains(problemsText(res), tc.want) || res.Baseline != nil || len(g.Issues) != before {
+			t.Errorf("metric %q baseline %q: exit %d %+v %s; want %q", tc.metric, tc.baseline, code, res, errOut, tc.want)
+		}
+	}
 }
 
 func mustType(t *testing.T, id string) workitems.Type {
@@ -140,6 +178,41 @@ pairs:
 	if _, err := os.Stat(filepath.Join(dir, "design", "brand.yaml")); !os.IsNotExist(err) {
 		t.Fatal("written without --create")
 	}
+	if code, out, errOut := run(t, nil, opts, "grill", "brand", "--body", brand("#767676"), "--create", "--dry-run"); code != 0 || !strings.Contains(out, "--dry-run: design/brand.yaml is planned, not written") {
+		t.Fatalf("create --dry-run: %d %s %s", code, out, errOut)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "design", "brand.yaml")); !os.IsNotExist(err) {
+		t.Fatal("written with --dry-run")
+	}
+	// The text report lists every pair and the problems that are not pair results.
+	noTone := strings.Replace(brand("#777777"), "voice: {tone: [plain, warm]}\n", "", 1)
+	code, out, errOut := run(t, nil, opts, "grill", "brand", "--body", noTone)
+	if code != ExitBlocked || !strings.Contains(out, `brand "Benefits QA": does not pass yet`) || !strings.Contains(out, "primary (#777777) on surface (#ffffff) for text: 4.47:1 fails AA") ||
+		!strings.Contains(out, "  problem: voice.tone: name at least one tone word") || strings.Contains(out, "problem: AA") {
+		t.Fatalf("failing brand, text: %d\n%s%s", code, out, errOut)
+	}
+	if code, _, errOut := run(t, nil, Options{}, "grill", "brand", "--body", brand("#767676"), "--create"); code != ExitUsage || !strings.Contains(errOut, "runs in a checkout of the repository") {
+		t.Fatalf("create outside a checkout: %d %s", code, errOut)
+	}
+	// Without --body and without a terminal (stdin a pipe or a file, or --json) there is nothing to check.
+	if code, _, errOut := run(t, nil, opts, "grill", "brand"); code != ExitUsage || !strings.Contains(errOut, "grill brand needs --body") {
+		t.Fatalf("no body, no terminal: %d %s", code, errOut)
+	}
+	tui := Options{Dir: dir, TUI: func(tea.Model) error { t.Error("--json started the interview"); return nil }}
+	if code, _, errOut := run(t, nil, tui, "grill", "brand", "--json"); code != ExitUsage || !strings.Contains(errOut, "grill brand needs --body") {
+		t.Fatalf("--json, no body: %d %s", code, errOut)
+	}
+	f, err := os.CreateTemp(t.TempDir(), "stdin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	var stdout, stderr bytes.Buffer
+	home := t.TempDir()
+	if code := Run(t.Context(), []string{"grill", "brand"}, IO{In: f, Out: &stdout, Err: &stderr},
+		Options{Dir: dir, Getenv: func(k string) string { return map[string]string{"HOME": home}[k] }}); code != ExitUsage || !strings.Contains(stderr.String(), "grill brand needs --body") {
+		t.Fatalf("stdin from a file: %d %s", code, stderr.String())
+	}
 	if code, out, errOut := run(t, nil, opts, "grill", "brand", "--body", brand("#767676"), "--create"); code != 0 || !strings.Contains(out, "wrote design/brand.yaml") {
 		t.Fatalf("create: %d %s %s", code, out, errOut)
 	}
@@ -165,6 +238,10 @@ func keys(m *grillModel, ks ...string) {
 			msg = tea.KeyPressMsg{Code: 'd', Mod: tea.ModCtrl}
 		case "shift+tab":
 			msg = tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}
+		case "tab":
+			msg = tea.KeyPressMsg{Code: tea.KeyTab}
+		case "esc":
+			msg = tea.KeyPressMsg{Code: tea.KeyEscape}
 		default:
 			for _, r := range k {
 				m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
@@ -226,6 +303,21 @@ func TestGrillTUI(t *testing.T) {
 	if m.i != len(m.steps) || len(m.problems) != 0 {
 		t.Fatalf("review: step %d problems %v", m.i, m.problems)
 	}
+	if v := m.View().Content; !strings.Contains(v, "The draft passes validation.") || !strings.Contains(v, "[c] create") {
+		t.Fatalf("passing review:\n%s", v)
+	}
+	// shift+tab goes back from the review and from a question; pasted text is
+	// only ever an answer's text: on the review screen it is not a key.
+	keys(m, "shift+tab", "shift+tab")
+	if m.steps[m.i].ID != "links" {
+		t.Fatalf("shift+tab twice from the review: %s", m.steps[m.i].ID)
+	}
+	m.Update(tea.PasteMsg{Content: "becomes #12"})
+	keys(m, "tab", "tab")
+	m.Update(tea.PasteMsg{Content: "c"})
+	if got := m.values()["links"]; got != "becomes #12" || m.i != len(m.steps) || m.create {
+		t.Fatalf("pasted links %q, step %d, create %t", got, m.i, m.create)
+	}
 	keys(m, "c")
 	vals := m.values()
 	if !m.create || vals["title"] != "Export fails" {
@@ -237,9 +329,12 @@ func TestGrillTUI(t *testing.T) {
 }
 
 // scripted returns a TUI runner that types keys into the model, as a human
-// on a terminal would.
+// on a terminal would, after bubbletea's Init.
 func scripted(ks ...string) func(tea.Model) error {
 	return func(tm tea.Model) error {
+		if cmd := tm.Init(); cmd != nil {
+			return errors.New("grill's model starts with a command")
+		}
 		keys(tm.(*grillModel), ks...)
 		return nil
 	}
@@ -264,6 +359,18 @@ func TestGrillBrandTUI(t *testing.T) {
 	if v := m.View().Content; !strings.Contains(v, "primary (#777777) on surface (#ffffff) for text: 4.47:1 fails AA") {
 		t.Fatalf("review:\n%s", v)
 	}
+	// Pasted palette and pair lists: blank lines are skipped and a line that
+	// does not parse is named on the review screen.
+	m = &grillModel{name: "grill brand", steps: brandSteps(os.DirFS(filepath.Join("..", ".."))), check: brandCheck}
+	keys(m, "Benefits QA", "enter", "plain", "enter", "enter")
+	m.Update(tea.PasteMsg{Content: "ink #1a1a1a\n\nsurface: white\npaper #ffffff"})
+	keys(m, "ctrl+d")
+	m.Update(tea.PasteMsg{Content: "ink on paper, text\n\nink over paper"})
+	keys(m, "ctrl+d")
+	if v := m.View().Content; !strings.Contains(v, `palette: "surface: white": want `+"`name #rrggbb`") || !strings.Contains(v, `pairs: "ink over paper": want`) ||
+		!strings.Contains(v, "2 problem(s)") || !strings.Contains(v, "ink: '#1a1a1a'") {
+		t.Fatalf("review of pasted lists:\n%s", v)
+	}
 	opts.TUI = scripted(append(answers("#767676"), "c")...)
 	if code, out, errOut := run(t, nil, opts, "grill", "brand"); code != 0 || !strings.Contains(out, "wrote design/brand.yaml") {
 		t.Fatalf("create: %d %s %s", code, out, errOut)
@@ -283,5 +390,128 @@ func TestGrillTUICreates(t *testing.T) {
 	code, out, errOut := run(t, env, opts, "grill", "feedback", "--repo", "o/r")
 	if code != 0 || !strings.Contains(out, "created #1") || !contains(g.LabelNames(1), "status:backlog") {
 		t.Fatalf("grill feedback on a terminal: %d %s %s", code, out, errOut)
+	}
+}
+
+// The text report of grill <type>: the verdict, every Create and Ready
+// problem, and the next step: --create, the dry-run plan, or `aayu ready`
+// on the created issue. A missing draft without a terminal and an unknown
+// type are usage errors.
+func TestGrillText(t *testing.T) {
+	g := readyTree(t)
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}
+	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1}
+	body := fixtureBody(t, "story", nil)
+	before := len(g.Issues)
+	for _, tc := range []struct {
+		args []string
+		code int
+		want []string
+	}{
+		{[]string{"--title", "Show empty list", "--body", body, "--parent", "1"}, ExitBlocked, []string{`story draft "Show empty list": does not pass yet`, "  ready: effort"}},
+		{[]string{"--title", "Show empty list", "--body", "Just a sentence.", "--labels", "effort:S"}, ExitBlocked, []string{"  create: "}},
+		{[]string{"--title", "Show empty list", "--body", body, "--parent", "99", "--labels", "effort:S"}, ExitBlocked, []string{"  ready: parent: #99: "}},
+		{[]string{"--title", "Show empty list", "--body", body, "--parent", "1", "--labels", "effort:S"}, 0, []string{"passes Create and Ready", "run again with --create to write it as an issue"}},
+		{[]string{"--title", "Show empty list", "--body", body, "--parent", "1", "--labels", "effort:S", "--create", "--dry-run"}, 0, []string{"--dry-run: the issue is planned, not written"}},
+		{[]string{"--parent", "1"}, ExitUsage, nil},
+	} {
+		code, out, errOut := run(t, env, opts, append([]string{"grill", "story", "--repo", "o/r"}, tc.args...)...)
+		if code != tc.code {
+			t.Errorf("%v: exit %d, want %d\n%s%s", tc.args, code, tc.code, out, errOut)
+		}
+		for _, w := range tc.want {
+			if !strings.Contains(out, w) {
+				t.Errorf("%v: output lacks %q:\n%s", tc.args, w, out)
+			}
+		}
+		if tc.code == ExitUsage && !strings.Contains(errOut, "grill story needs --title and --body") {
+			t.Errorf("%v: %s", tc.args, errOut)
+		}
+	}
+	if len(g.Issues) != before {
+		t.Fatalf("%d issue(s) written without --create or with --dry-run", len(g.Issues)-before)
+	}
+	code, out, errOut := run(t, env, opts, "grill", "story", "--repo", "o/r", "--title", "Show empty list", "--body", body, "--parent", "1", "--labels", "effort:S", "--create")
+	n := before + 1
+	if code != 0 || !strings.Contains(out, fmt.Sprintf("created #%d ", n)) || !strings.Contains(out, fmt.Sprintf("; next: `aayu ready %d`", n)) {
+		t.Fatalf("create: %d\n%s%s", code, out, errOut)
+	}
+	if code, _, errOut := run(t, env, opts, "grill", "epic", "--repo", "o/r", "--title", "x", "--body", "y"); code != ExitUsage || !strings.Contains(errOut, "epic") {
+		t.Fatalf("unknown type: %d %s", code, errOut)
+	}
+}
+
+// On a terminal, `grill story --parent 1` asks for the parent (prefilled) and
+// the labels after the body: an unusable label and a missing effort are shown
+// on the review screen, e jumps to the labels, and once the draft passes the
+// story is created under its parent. esc quits without writing anything.
+func TestGrillTUIStory(t *testing.T) {
+	g := readyTree(t)
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}
+	fields := map[string]string{"title": "Show empty list"}
+	b, _ := os.ReadFile(filepath.Join("..", "workitems", "testdata", "items", "story.json"))
+	var items map[string]workitems.Item
+	if err := json.Unmarshal(b, &items); err != nil {
+		t.Fatal(err)
+	}
+	for k, v := range items["ready"].Fields {
+		fields[k] = v
+	}
+	var parentView string
+	var reviews []string
+	var afterE []string
+	backAt := ""
+	answer := func(tm tea.Model) error {
+		m := tm.(*grillModel)
+		for m.i < len(m.steps) && m.steps[m.i].ID != "labels" {
+			if m.steps[m.i].ID == "parent" {
+				parentView = m.View().Content
+			}
+			m.Update(tea.PasteMsg{Content: fields[m.steps[m.i].ID]}) // each answer pasted, as from a ticket
+			keys(m, "tab")
+		}
+		keys(m, "status:done", "tab")
+		reviews = append(reviews, m.View().Content)
+		keys(m, "e")
+		afterE = append(afterE, m.steps[m.i].ID)
+		for range len("status:done") {
+			keys(m, "backspace")
+		}
+		keys(m, "priority:P2", "tab")
+		reviews = append(reviews, m.View().Content)
+		keys(m, "e")
+		afterE = append(afterE, m.steps[m.i].ID)
+		keys(m, ",effort:S", "tab")
+		reviews = append(reviews, m.View().Content)
+		keys(m, "shift+tab")
+		backAt = m.steps[m.i].ID
+		keys(m, "tab", "c")
+		return nil
+	}
+	before := len(g.Issues)
+	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, TUI: scripted("Show empty list", "esc")}
+	if code, _, errOut := run(t, env, opts, "grill", "story", "--repo", "o/r", "--parent", "1"); code != ExitBlocked || !strings.Contains(errOut, "grill story: the interview ended without writing anything") || len(g.Issues) != before {
+		t.Fatalf("esc: %d %s, %d issue(s) written", code, errOut, len(g.Issues)-before)
+	}
+	opts.TUI = answer
+	code, out, errOut := run(t, env, opts, "grill", "story", "--repo", "o/r", "--parent", "1")
+	if code != 0 || !strings.Contains(out, fmt.Sprintf("created #%d", before+1)) {
+		t.Fatalf("grill story on a terminal: %d %s %s", code, out, errOut)
+	}
+	if !strings.Contains(parentView, "Parent (feature, issue number) (required)") || !strings.Contains(parentView, "> 1") {
+		t.Errorf("parent question:\n%s", parentView)
+	}
+	if len(reviews) != 3 || !strings.Contains(reviews[0], `labels: grill: label "status:done" is not a label-held field`) ||
+		!strings.Contains(reviews[1], "effort:") || !strings.Contains(reviews[2], "The draft passes validation.") {
+		t.Errorf("reviews:\n%s", strings.Join(reviews, "\n----\n"))
+	}
+	if strings.Join(afterE, ",") != "labels,labels" || backAt != "labels" {
+		t.Errorf("e jumped to %v; shift+tab went back to %s", afterE, backAt)
+	}
+	g.Mu.Lock()
+	created := g.Issues[before+1]
+	g.Mu.Unlock()
+	if created.Parent != 1 || !contains(g.LabelNames(before+1), "effort:S") || !contains(g.LabelNames(before+1), "priority:P2") {
+		t.Fatalf("created story: parent %d labels %v", created.Parent, g.LabelNames(before+1))
 	}
 }

@@ -3,8 +3,11 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -116,8 +119,12 @@ func TestBuildLeaseAttemptsResume(t *testing.T) {
 	}
 	opts.CheckpointVerify = holds
 	_ = os.WriteFile(filepath.Join(wt, "a.txt"), []byte("fixed\n"), 0o644)
-	if code, out := build(); code != 0 || !strings.Contains(out, "checkpoint 2/2 committed") {
-		t.Fatalf("after resume: %d %s", code, out)
+	// --resume on the existing worktree reports the checkpoint it continues from.
+	code, out, errOut = run(t, env, opts, "build", "2", "--resume", "--repo", "o/r", "--json")
+	res = BuildResult{}
+	_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)
+	if code != 0 || res.Resumed != "2/2" || res.Checkpoint != "2/2" || res.Verify != "hold" {
+		t.Fatalf("after resume: %d %+v %s", code, res, errOut)
 	}
 }
 
@@ -151,19 +158,38 @@ func TestBuildNeverLayerAndCost(t *testing.T) {
 }
 
 // WP5.5 accept: a stale lease is reclaimed by gc (comment, label, and
-// assignee), a live one is left alone, and the worktree of a closed story is
-// removed while an open story's is kept.
+// assignee), a stray lease label without a lock comment is removed, a live
+// lease is left alone, and the worktree of a closed story is removed while an
+// open story's is kept. --dry-run reports the same and changes nothing, and a
+// story gc cannot read keeps its worktree.
 func TestGCReclaimsStaleLease(t *testing.T) {
 	g, env, opts, dir, _, _, _ := thinFixture(t)
 	other := g.AddIssue("Other story", "x", "type:story", "status:ready", LeaseLabel) // a live lease
 	g.Mu.Lock()
 	other.Comments = append(other.Comments, &fake.Comment{ID: 501, Body: leaseBody("other@laptop", time.Now().Add(time.Hour))})
 	g.Mu.Unlock()
+	// A stray label: its lock comment's expiry does not parse, so it is no lock comment.
+	stray := g.AddIssue("Stray story", "x", "type:story", "status:ready", LeaseLabel)
+	g.Mu.Lock()
+	stray.Comments = append(stray.Comments, &fake.Comment{ID: 502, Body: "<!-- aayudha:lease holder=someone@box expires=tomorrow -->"})
+	g.Mu.Unlock()
 	setLease(g, 2, "founder@old-laptop", time.Now().Add(-2*time.Hour))
-	code, out, errOut := run(t, env, opts, "gc", "--repo", "o/r")
+	reclaimedStray := "lease #" + strconv.Itoa(stray.Number) + " reclaimed: labelled leased without a lock comment"
+	code, out, errOut := run(t, env, opts, "gc", "--repo", "o/r", "--dry-run")
+	if code != 0 || !strings.Contains(out, "lease #2 reclaimed: the lease of founder@old-laptop expired at") || !strings.Contains(out, reclaimedStray) ||
+		!strings.HasSuffix(out, "--dry-run: nothing was changed\n") {
+		t.Fatalf("gc --dry-run: %d %s %s", code, out, errOut)
+	}
+	if !contains(g.LabelNames(2), LeaseLabel) || !contains(g.LabelNames(stray.Number), LeaseLabel) || comment(g, 2, "<!-- aayudha:lease-released -->") != "" {
+		t.Fatalf("gc --dry-run changed the leases: %v %v", g.LabelNames(2), g.LabelNames(stray.Number))
+	}
+	code, out, errOut = run(t, env, opts, "gc", "--repo", "o/r")
 	if code != 0 || !strings.Contains(out, "lease #2 reclaimed: the lease of founder@old-laptop expired at") || !strings.Contains(out, "lease #"+strconv.Itoa(other.Number)+" live: other@laptop until") ||
-		!strings.Contains(out, "worktree #2 kept: the story is open") {
+		!strings.Contains(out, reclaimedStray) || !strings.Contains(out, "worktree #2 kept: the story is open") || strings.Contains(out, "--dry-run") {
 		t.Fatalf("gc: %d %s %s", code, out, errOut)
+	}
+	if contains(g.LabelNames(stray.Number), LeaseLabel) {
+		t.Fatalf("stray lease label left: %v", g.LabelNames(stray.Number))
 	}
 	g.Mu.Lock()
 	assignees := g.Issues[2].Assignees
@@ -177,6 +203,16 @@ func TestGCReclaimsStaleLease(t *testing.T) {
 	g.Mu.Lock()
 	g.Issues[2].State = "closed"
 	g.Mu.Unlock()
+	// --dry-run names the worktree it would remove and leaves it; a story gc cannot read keeps its worktree.
+	if code, out, errOut := run(t, env, opts, "gc", "--repo", "o/r", "--dry-run"); code != 0 || !strings.Contains(out, "worktree #2 removed: the story is closed") || !dirExists(BuildWorktree(dir, 2)) {
+		t.Fatalf("gc --dry-run of a closed story's worktree: %d %s %s", code, out, errOut)
+	}
+	g.Mu.Lock()
+	g.Fail = "GET /repos/o/r/issues/2"
+	g.Mu.Unlock()
+	if code, out, errOut := run(t, env, opts, "gc", "--repo", "o/r"); code != ExitExternal || !dirExists(BuildWorktree(dir, 2)) {
+		t.Fatalf("gc when the story cannot be read: %d %s %s", code, out, errOut)
+	}
 	if code, out, errOut := run(t, env, opts, "gc", "--repo", "o/r"); code != 0 || !strings.Contains(out, "worktree #2 removed: the story is closed") {
 		t.Fatalf("gc of a closed story's worktree: %d %s %s", code, out, errOut)
 	}
@@ -187,16 +223,17 @@ func TestGCReclaimsStaleLease(t *testing.T) {
 
 // WP5.5 ship: the human pass comes from the [autonomy] approver in solo mode
 // (a bot's approval is never one); a never layer needs the EM's plan-time
-// review and a CODEOWNER's approval, whatever the streak; the ship record
+// review and the approval of a login that is a CODEOWNER of every never-layer
+// path, whatever the streak; the ship record
 // keeps the pass rule, the approval, and the streak, and the lease is
 // released.
 func TestShipPassRules(t *testing.T) {
 	g, env, opts, dir, bare, prN, head := thinFixture(t)
 	gateRun(t, g, dir, prN, head, []proof.Check{{Floor: "coverage", Result: proof.Pass, Value: 100, Threshold: 90, Tool: "aayudha", Version: "1"}}, "L02", "L07")
 	g.Mu.Lock()
-	g.Pulls[prN].Files = []string{"internal/cli/x.go", "internal/config/x.go"}
+	g.Pulls[prN].Files = []string{"internal/cli/x.go", "internal/config/x.go", "internal/ledger/x.go"}
 	g.Files = map[string]string{}
-	g.Files[".github/CODEOWNERS"] = "/internal/config/ @owner1 @reviewer2\n"
+	g.Files[".github/CODEOWNERS"] = "/internal/config/ @owner1 @reviewer2\n/internal/ledger/ @reviewer2 @owner1\n"
 	g.Pulls[prN].Reviews = []fake.Review{review("aayudha-bot[bot]", "Bot", "APPROVED", head), review("reviewer", "User", "APPROVED", head)}
 	g.Mu.Unlock()
 	ship := func(args ...string) (int, string) {
@@ -226,14 +263,14 @@ func TestShipPassRules(t *testing.T) {
 		t.Fatalf("bot and non-approver reviews: %d %s", code, out)
 	}
 	g.Mu.Lock()
-	g.Files[".github/CODEOWNERS"] = "/internal/config/ @owner1\n"
+	g.Files[".github/CODEOWNERS"] = "/internal/config/ @owner1\n/internal/ledger/ @reviewer2 @owner1\n"
 	g.Pulls[prN].Reviews = append(g.Pulls[prN].Reviews, review("reviewer2", "User", "APPROVED", head))
 	g.Mu.Unlock()
-	if code, out := ship(); code != ExitBlocked || !strings.Contains(out, "does not cover never layer(s) L07: a CODEOWNER of internal/config/x.go must approve (owners: owner1), whatever the streak") {
+	if code, out := ship(); code != ExitBlocked || !strings.Contains(out, "does not cover never layer(s) L07: a CODEOWNER of internal/config/x.go, internal/ledger/x.go must approve (owners: owner1), whatever the streak") {
 		t.Fatalf("approver who is no CODEOWNER of the never layer: %d %s", code, out)
 	}
 	g.Mu.Lock()
-	g.Files[".github/CODEOWNERS"] = "/internal/config/ @owner1 @reviewer2\n"
+	g.Files[".github/CODEOWNERS"] = "/internal/config/ @owner1 @reviewer2\n/internal/ledger/ @reviewer2 @owner1\n"
 	g.Mu.Unlock()
 	if code, out := ship(); code != 0 || !strings.Contains(out, "human pass: review by reviewer2") {
 		t.Fatalf("ship: %d %s", code, out)
@@ -270,5 +307,284 @@ func TestGCKeepsBusyWorktree(t *testing.T) {
 	}
 	if _, err := os.Stat(wt); err != nil {
 		t.Fatalf("a busy worktree was removed: %v", err)
+	}
+}
+
+// buildSetup is story #2 Ready on a ledger checkout, before any build run.
+func buildSetup(t *testing.T) (g *fake.GitHub, env map[string]string, opts Options, dir, bare string) {
+	t.Helper()
+	g = readyTree(t)
+	dir, bare = ledgerCheckout(t)
+	git(t, dir, "config", "user.name", "Builder")
+	git(t, dir, "config", "user.email", "builder@example.com")
+	env = map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH")}
+	opts = Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, CheckpointVerify: holds}
+	return g, env, opts, dir, bare
+}
+
+// WP5.5 build as a person runs it: text output; a long title becomes a
+// branch slug of at most 40 characters; a body edited after Ready is refused;
+// --dry-run commits the checkpoint locally but writes nothing to GitHub or the
+// ledger; the plan on the ledger sets N; the next run numbers its checkpoint
+// after the branch's last trailer; a verify that cannot run is noted and is
+// not a failed attempt; the model comes from [models.build.<host>]; the
+// progress comment is edited in place; and a build past the wall-time budget
+// is blocked.
+func TestBuildTextDryRunPlanAndBudget(t *testing.T) {
+	g, env, opts, dir, bare := buildSetup(t)
+	g.Mu.Lock()
+	g.Issues[2].Title = "Show the empty list message when a cart has nothing in it"
+	g.Mu.Unlock()
+	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready: %s", errOut)
+	}
+	if code, _, errOut := run(t, env, opts, "build", "99", "--repo", "o/r"); code != ExitExternal || !strings.Contains(errOut, "404") {
+		t.Fatalf("build of an issue that does not exist: %d %s", code, errOut)
+	}
+	build := func(args ...string) (int, string) {
+		code, out, errOut := run(t, env, opts, append([]string{"build", "2", "--repo", "o/r", "--host", "amp", "--set", "models.build.amp.model=claude-build-1"}, args...)...)
+		return code, out + errOut
+	}
+
+	g.Mu.Lock()
+	body := g.Issues[2].Body
+	g.Issues[2].Body = body + "\nedited after Ready\n"
+	g.Mu.Unlock()
+	if code, out := build(); code != ExitBlocked || !strings.Contains(out, "its body changed after Ready (snapshot") {
+		t.Fatalf("build after a body edit: %d %s", code, out)
+	}
+	g.Mu.Lock()
+	g.Issues[2].Body = body
+	g.Mu.Unlock()
+
+	wt := BuildWorktree(dir, 2)
+	branch := "story/2-show-the-empty-list-message-when-a-cart"
+	code, out := build()
+	if code != 0 || !strings.Contains(out, "#2 Show the empty list message when a cart has nothing in it: worktree "+wt+" on "+branch+" (leased by founder@") ||
+		!strings.Contains(out, "next: write the change in "+wt) {
+		t.Fatalf("build (worktree): %d %s", code, out)
+	}
+
+	plan := PlanRecord{Story: 2, Checkpoints: make([]planning.Checkpoint, 3)}
+	b, _ := json.Marshal(plan)
+	if _, err := (&ledger.Writer{Dir: dir}).Write(context.Background(), ledger.Commit{Message: "plan", Files: map[string][]byte{PlanLedgerPath(2): b}}); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(wt, "empty.txt"), []byte("Your cart is empty\n"), 0o644)
+	g.Reset()
+	if code, out := build("--dry-run"); code != 0 || !strings.Contains(out, "#2: checkpoint 1/3 committed") {
+		t.Fatalf("build --dry-run: %d %s", code, out)
+	}
+	var st BuildState
+	if w := g.Writes(); len(w) != 0 {
+		t.Fatalf("--dry-run wrote to GitHub: %+v", w)
+	}
+	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &st); err != nil || len(st.Checkpoints) != 0 {
+		t.Fatalf("--dry-run changed the ledger state: %v %+v", err, st)
+	}
+	if out := git(t, bare, "branch", "--list", branch); out != "" {
+		t.Fatalf("--dry-run pushed the branch: %s", out)
+	}
+
+	opts.CheckpointVerify = func(context.Context, string) (bool, string, error) {
+		return false, "", errors.New("go: not found")
+	}
+	_ = os.WriteFile(filepath.Join(wt, "total.txt"), []byte("Total: 0\n"), 0o644)
+	code, out = build()
+	if code != 0 || !strings.Contains(out, "#2: checkpoint 2/3 committed") || !strings.Contains(out, "verify: error") ||
+		!strings.Contains(out, "note: verify could not run on the checkpoint: go: not found") || !strings.Contains(out, "#2: branch "+branch+" pushed; PR #") {
+		t.Fatalf("build with a verify error: %d %s", code, out)
+	}
+	if msg := git(t, wt, "log", "-1", "--format=%B"); !strings.Contains(msg, "Aayudha-Checkpoint: 2/3") || !strings.Contains(msg, "Aayudha-Model: claude-build-1") {
+		t.Fatalf("checkpoint commit:\n%s", msg)
+	}
+	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &st); err != nil || st.Attempts != 0 || len(st.Checkpoints) != 1 || st.Checkpoints[0].Verify != "error" {
+		t.Fatalf("ledger state after a verify error: %v %+v", err, st)
+	}
+
+	opts.CheckpointVerify = holds
+	_ = os.WriteFile(filepath.Join(wt, "total.txt"), []byte("Total: 0.00\n"), 0o644)
+	if code, out := build(); code != 0 || !strings.Contains(out, "#2: checkpoint 3/3 committed") {
+		t.Fatalf("third checkpoint: %d %s", code, out)
+	}
+	n := 0
+	g.Mu.Lock()
+	for _, c := range g.Issues[2].Comments {
+		if strings.HasPrefix(c.Body, progressMarker) {
+			n++
+		}
+	}
+	g.Mu.Unlock()
+	if p := comment(g, 2, progressMarker); n != 1 || !strings.Contains(p, "| 2/3 | 1 |") || !strings.Contains(p, "error: go: not found") || !strings.Contains(p, "| 3/3 | 1 |") {
+		t.Fatalf("%d progress comment(s):\n%s", n, p)
+	}
+
+	opts.Now = func() time.Time { return time.Now().Add(9 * time.Hour) }
+	if code, out := build(); code != ExitBlocked || !strings.Contains(out, "wall-time budget breached: 9.0 h since the build started, budget 8.0 h") {
+		t.Fatalf("build past the wall-time budget: %d %s", code, out)
+	}
+	if !contains(g.LabelNames(2), "status:blocked") {
+		t.Fatalf("labels after the wall-time breach: %v", g.LabelNames(2))
+	}
+}
+
+// WP5.5 build without a CheckpointVerify stand-in runs `aayu verify` in the
+// worktree: a floor that cannot run because nothing configures it is a floor
+// miss, and once it passes, a floor whose tool is not installed here does not
+// count as a miss (the merge gate runs it) but is named.
+func TestBuildRunsVerify(t *testing.T) {
+	_, env, opts, dir, bare := buildSetup(t)
+	opts.CheckpointVerify = nil
+	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready: %s", errOut)
+	}
+	if code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != 0 {
+		t.Fatalf("build (worktree): %d %s %s", code, out, errOut)
+	}
+	wt := BuildWorktree(dir, 2)
+	state := func() CheckpointRecord {
+		var st BuildState
+		if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &st); err != nil || len(st.Checkpoints) == 0 {
+			t.Fatalf("ledger state: %v %+v", err, st)
+		}
+		return st.Checkpoints[len(st.Checkpoints)-1]
+	}
+	_ = os.WriteFile(filepath.Join(wt, "empty.txt"), []byte("Your cart is empty\n"), 0o644)
+	if code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != ExitFloor || !strings.Contains(out+errOut, "floor miss: coverage blocked") {
+		t.Fatalf("build without a coverage command: %d %s %s", code, out, errOut)
+	}
+	if cp := state(); cp.Verify != "miss" || !strings.HasPrefix(cp.Detail, "coverage blocked") {
+		t.Fatalf("checkpoint record: %+v", cp)
+	}
+
+	report := filepath.Join(t.TempDir(), "cover.out")
+	_ = os.WriteFile(report, []byte("mode: set\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(wt, "empty.txt"), []byte("Your cart is empty.\n"), 0o644)
+	code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r", "--set", "verify.floors.coverage.command=true", "--set", "verify.floors.coverage.report="+report)
+	cp := state()
+	if strings.Contains(cp.Detail, "coverage") {
+		t.Fatalf("coverage still misses: %d %+v %s %s", code, cp, out, errOut)
+	}
+	var absent []string
+	for _, tool := range []string{"semgrep", "gitleaks", "osv-scanner"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			absent = append(absent, tool)
+		}
+	}
+	if len(absent) == 3 && (code != 0 || cp.Verify != "hold" || !strings.HasPrefix(cp.Detail, "floors hold; not run here (tool not installed; the merge gate runs them): ") ||
+		!strings.Contains(cp.Detail, "sast") || !strings.Contains(out, "verify: hold")) {
+		t.Fatalf("build with the scanners not installed: %d %+v %s %s", code, cp, out, errOut)
+	}
+
+	// A checkpoint that breaks the repository's config: verify cannot run, which is noted, not a miss.
+	_ = os.MkdirAll(filepath.Join(wt, ".aayudha"), 0o755)
+	_ = os.WriteFile(filepath.Join(wt, ".aayudha", "config.toml"), []byte("version = [\n"), 0o644)
+	code, out, errOut = run(t, env, opts, "build", "2", "--repo", "o/r")
+	if cp := state(); code != 0 || cp.Verify != "error" || !strings.Contains(out, "note: verify could not run on the checkpoint: ") || !strings.Contains(cp.Detail, "config.toml") {
+		t.Fatalf("build with a broken config: %d %+v %s %s", code, cp, out, errOut)
+	}
+}
+
+// build in a repository without a ledger branch stops with exit 5 and says
+// to run init.
+func TestBuildWithoutLedger(t *testing.T) {
+	_, env, opts, dir, _ := buildSetup(t)
+	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready: %s", errOut)
+	}
+	git(t, dir, "push", "--quiet", "origin", "--delete", "ledger")
+	if code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != ExitExternal || !strings.Contains(errOut, "run `aayu init` to create it") {
+		t.Fatalf("build without a ledger: %d %s %s", code, out, errOut)
+	}
+}
+
+// WP5.5 build under a bot App: the lease holder is the App's [bot] login,
+// which GitHub cannot assign, so the story gets the lock comment and label but
+// no assignee. Without the human's token the App's token broker cannot be
+// reached, and build exits 4.
+func TestBuildUnderBotApp(t *testing.T) {
+	g, env, opts, _, _ := buildSetup(t)
+	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready: %s", errOut)
+	}
+	app := []string{"build", "2", "--repo", "o/r", "--json", "--set", "identity.app_id=42", "--set", "identity.app_slug=aayudha-bot"}
+	if code, _, errOut := run(t, map[string]string{"AAYU_BOT_TOKEN": "bot-token", "PATH": os.Getenv("PATH")}, opts, app...); code != ExitBlocked {
+		t.Fatalf("build under the App without a human token: %d %s", code, errOut)
+	}
+	env["AAYU_BOT_TOKEN"] = "bot-token"
+	code, out, errOut := run(t, env, opts, app...)
+	var res BuildResult
+	_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)
+	g.Mu.Lock()
+	assignees := g.Issues[2].Assignees
+	g.Mu.Unlock()
+	if code != 0 || !strings.HasPrefix(res.Lease.Holder, "aayudha-bot[bot]@") || res.Lease.Assignee != "" || len(assignees) != 0 ||
+		!contains(g.LabelNames(2), LeaseLabel) || comment(g, 2, "<!-- aayudha:lease holder=aayudha-bot[bot]@") == "" {
+		t.Fatalf("build under the App: %d %+v assignees %v %s", code, res, assignees, errOut)
+	}
+}
+
+// WP5.5: build takes the lease before any work, so a lease call that GitHub
+// fails stops it with exit 5 and commits no checkpoint.
+func TestBuildStopsWhenTheLeaseFails(t *testing.T) {
+	g, env, opts, dir, _, _, head := thinFixture(t)
+	wt := BuildWorktree(dir, 2)
+	_ = os.WriteFile(filepath.Join(wt, "a.txt"), []byte("one\n"), 0o644)
+	lockID := func() int64 {
+		g.Mu.Lock()
+		defer g.Mu.Unlock()
+		for _, c := range g.Issues[2].Comments {
+			if leaseTag.MatchString(c.Body) {
+				return c.ID
+			}
+		}
+		return 0
+	}
+	tests := []struct {
+		name, fail string
+		after      int // successful calls before the failure
+		before     func()
+	}{
+		{"read the lock comment", "GET /repos/o/r/issues/2/comments", 1, nil}, // the first read is the Ready snapshot check
+		{"renew the lock comment", "PATCH /repos/o/r/issues/comments/" + strconv.FormatInt(lockID(), 10), 0, nil},
+		{"label the story", "POST /repos/o/r/issues/2/labels", 0, func() {
+			g.Mu.Lock()
+			g.Issues[2].Labels = slices.DeleteFunc(g.Issues[2].Labels, func(l fake.Label) bool { return l.Name == LeaseLabel })
+			g.Mu.Unlock()
+		}},
+		{"assign the new holder", "POST /repos/o/r/issues/2/assignees", 0, func() { setLease(g, 2, "other@laptop", time.Now().Add(-time.Minute)) }},
+		{"post the lock comment", "POST /repos/o/r/issues/2/comments", 0, func() {
+			g.Mu.Lock()
+			g.Issues[2].Comments = slices.DeleteFunc(g.Issues[2].Comments, func(c *fake.Comment) bool { return leaseTag.MatchString(c.Body) })
+			g.Mu.Unlock()
+		}},
+	}
+	for _, tt := range tests {
+		if tt.before != nil {
+			tt.before()
+		}
+		g.Mu.Lock()
+		g.Fail, g.FailAfter = tt.fail, tt.after
+		g.Mu.Unlock()
+		code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r")
+		if code != ExitExternal || git(t, wt, "rev-parse", "HEAD") != head {
+			t.Errorf("%s fails: %d %s %s", tt.name, code, out, errOut)
+		}
+	}
+}
+
+// gc with nothing to collect says so; it needs a repository and the human's
+// GitHub token.
+func TestGCNothingToCollect(t *testing.T) {
+	g := fake.New(t, "o/r", "User")
+	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1}
+	if code, out, errOut := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}, opts, "gc", "--repo", "o/r"); code != 0 || out != "gc: no leases or build worktrees\n" {
+		t.Fatalf("gc with nothing to collect: %d %q %s", code, out, errOut)
+	}
+	if code, _, errOut := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}, opts, "gc"); code != ExitUsage || !strings.Contains(errOut, "no repository") {
+		t.Fatalf("gc outside a checkout: %d %s", code, errOut)
+	}
+	if code, _, errOut := run(t, nil, opts, "gc", "--repo", "o/r"); code != ExitBlocked {
+		t.Fatalf("gc without a token: %d %s", code, errOut)
 	}
 }

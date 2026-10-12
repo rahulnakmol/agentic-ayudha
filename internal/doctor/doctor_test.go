@@ -344,3 +344,63 @@ func TestOptionalToolsNamesFloors(t *testing.T) {
 		t.Errorf("every tool found: %s %q", r.Status, r.Detail)
 	}
 }
+
+// The states a check reports beside the pass and fail of the golden file:
+// what doctor tells a user offline, outside a repository, with a machine-user
+// bot, a personal repository, an older schema, an unreadable lease, or a
+// ledger that keeps proof media in Git LFS.
+func TestCheckStates(t *testing.T) {
+	lfsLedger := map[string]string{"git ls-tree --name-only origin/ledger": ".gitattributes\n.lfsconfig\n"}
+	tests := []struct {
+		name   string
+		check  func(context.Context, *Probe) Result
+		change func(*Probe)
+		status Status
+		detail string
+	}{
+		{"offline", checkBinary, func(p *Probe) { p.Latest = nil }, Warn, "could not check for a newer release (offline)"},
+		{"no git", checkGit, func(p *Probe) { overlay(p, map[string]string{"git --version": "ERR"}) }, Fail, "git not found; git >= 2.40 is required"},
+		{"unreadable git version", checkGit, func(p *Probe) { overlay(p, map[string]string{"git --version": "hub version 2.14\n"}) }, Fail, `cannot read the git version from "hub version 2.14"`},
+		{"token refused", checkToken, func(p *Probe) {
+			p.WhoAmI = func(context.Context, identity.Token) (identity.User, error) {
+				return identity.User{}, errors.New("401 Bad credentials")
+			}
+		}, Warn, "token from AAYU_GITHUB_TOKEN did not authenticate: 401 Bad credentials"},
+		{"machine-user bot", checkBot, func(p *Probe) {
+			p.Config = load(t, "identity.machine_user=aayu-machine", "identity.machine_user_secret=machine")
+		}, Pass, "bot identity: machine user aayu-machine"},
+		{"older schema", checkSchema, func(p *Probe) { p.Root = repoWith(t, map[string]string{".aayudha/config.toml": "version = 0\n"}) }, Warn, "repository files are at an older schema; run aayu upgrade"},
+		{"host from --host", checkHost, func(p *Probe) { p.Host = "cursor" }, Pass, "host cursor (from --host)"},
+		{"personal repository", checkIssueTypes, func(p *Probe) {
+			p.API = fakeAPI(map[string]any{"/repos/o/r": map[string]any{"owner": map[string]any{"type": "User"}}})
+		}, Pass, "personal repository: issue types are organization-only"},
+		{"worktrees not listed", checkWorktrees, func(p *Probe) { overlay(p, map[string]string{"git worktree list --porcelain": "ERR"}) }, Warn, "could not list worktrees: git: not found"},
+		{"lease comment unreadable", checkLeases, func(p *Probe) {
+			p.API = fakeAPI(map[string]any{"/repos/o/r/issues?state=open&labels=aayudha:leased&per_page=100": []any{map[string]any{"number": 9}}})
+		}, Warn, "could not read #9's lease: 404 Not Found"},
+		{"OTLP opted in", checkTelemetry, func(p *Probe) { p.Config = load(t, "telemetry.otlp_endpoint=https://otel.example.com") }, Pass, "and, opted in, OTLP https://otel.example.com"},
+		{"ledger without LFS", checkLedgerMedia, func(p *Probe) { overlay(p, map[string]string{"git ls-tree --name-only origin/ledger": "README.md\n"}) }, Pass, "ledger stores no proof media in Git LFS"},
+		{"LFS ledger, no token", checkLedgerMedia, func(p *Probe) { overlay(p, lfsLedger); p.API = nil }, Warn, "repository visibility unknown (no GitHub token or repository)"},
+		{"LFS ledger, repository unreadable", checkLedgerMedia, func(p *Probe) { overlay(p, lfsLedger); p.API = fakeAPI(nil) }, Warn, "repository visibility unknown: 404 Not Found"},
+		{"LFS ledger, private repository", checkLedgerMedia, func(p *Probe) {
+			overlay(p, lfsLedger)
+			p.API = fakeAPI(map[string]any{"/repos/o/r": map[string]any{"private": true}})
+		}, Pass, "private repository: ledger proof media in Git LFS"},
+	}
+	for _, tt := range tests {
+		p := healthy(t)
+		tt.change(p)
+		if r := tt.check(context.Background(), p); r.Status != tt.status || !strings.Contains(r.Detail, tt.detail) {
+			t.Errorf("%s: %s %q, want %s %q", tt.name, r.Status, r.Detail, tt.status, tt.detail)
+		}
+	}
+
+	// Outside a repository the repository checks have nothing to look at.
+	p := healthy(t)
+	p.Root = ""
+	for _, c := range []func(context.Context, *Probe) Result{checkSchema, checkWorktrees, checkSkillCopies, checkMCP, checkLedgerMedia} {
+		if r := c(context.Background(), p); r.Status != Pass || r.Detail != "not in a repository" {
+			t.Errorf("outside a repository: %s %q", r.Status, r.Detail)
+		}
+	}
+}
