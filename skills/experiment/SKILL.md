@@ -15,7 +15,47 @@ aayu:
       type: issue
       required: true
       positional: true
-      description: "Feature to experiment on."
+      description: "Feature (or Initiative) to experiment on."
+    - name: hypothesis
+      type: string
+      required: true
+      positional: false
+      description: "If we do X, the metric moves by Z because W."
+    - name: metric
+      type: string
+      required: true
+      positional: false
+      description: "Conversion event the experiment moves (a PostHog event name)."
+    - name: flag
+      type: string
+      required: true
+      positional: false
+      description: "Feature-flag key that splits traffic: the PostHog flag key and GrowthBook tracking key."
+    - name: mde
+      type: string
+      required: true
+      positional: false
+      description: "Minimum detectable effect: an absolute rate change (0.02) or a relative one (10%)."
+    - name: exposure
+      type: string
+      required: false
+      positional: false
+      description: "HogQL predicate for the population the baseline counts; default every person with an event."
+    - name: alpha
+      type: string
+      required: false
+      positional: false
+      description: "Two-sided significance level; default 0.05."
+    - name: power
+      type: string
+      required: false
+      positional: false
+      description: "Statistical power; default 0.8."
+    - name: days
+      type: int
+      required: false
+      positional: false
+      description: "Baseline window in whole UTC days before today; default 28."
   outputs:
     - "experiment"
     - "feature-flag"
@@ -30,4 +70,16 @@ aayu:
 
 Design an experiment for a Feature: hypothesis, metric, flag, and minimum sample size.
 
-Body lands in WP6.7 (the verb). Format and lint: skills/README.md.
+Ask for, or work out with the human, the hypothesis, the conversion event (a PostHog event name), the
+feature-flag key, and the smallest change worth detecting, then run:
+
+```sh
+aayu experiment 42 --hypothesis "A one-page checkout lifts sign-ups" --metric signed_up --flag checkout-v2 --mde 10%
+```
+
+`--mde` is absolute (`0.02`) or relative (`10%`); `--exposure` narrows the population with a HogQL
+predicate; `--alpha`, `--power`, and `--days` default to 0.05, 0.8, and 28. The binary fetches the
+baseline rate from PostHog, computes the minimum sample per arm, and files the Experiment under the
+Feature. Create the flag in PostHog or GrowthBook yourself: integration keys are read-only.
+
+Format and lint: skills/README.md.

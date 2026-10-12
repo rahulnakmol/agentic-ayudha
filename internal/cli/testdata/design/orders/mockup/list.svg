@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+  <rect width="400" height="300" fill="#f5f6f8"/>
+  <rect x="20" y="20" width="360" height="260" rx="12" fill="#ffffff" stroke="#dde1e7"/>
+  <rect x="20" y="20" width="360" height="40" fill="#1b2330"/>
+  <text x="32" y="45" fill="#ffffff" font-size="20">Orders</text>
+  <text x="32" y="95" fill="#1b2330" font-size="14">#1042 · Delivered</text>
+  <text x="32" y="143" fill="#4f5a6b" font-size="14">#1041 · In transit</text>
+  <rect x="40" y="220" width="120" height="44" rx="8" fill="#1f5bd1"/>
+  <text x="60" y="247" fill="#ffffff" font-size="14">New order</text>
+</svg>

@@ -48,14 +48,20 @@ plan lists in §2; the rest are pulled in by them.
 | `github.com/shurcooL/githubv4` | v0.0.0-20260209031235-2402fdf4a9ed | MIT | GitHub GraphQL client for Projects v2 (WP2.3), direct | <https://github.com/shurcooL/githubv4> |
 | `github.com/shurcooL/graphql` | v0.0.0-20240915155400-7ee5256398cf | MIT | Via githubv4 | <https://github.com/shurcooL/graphql> |
 | `github.com/google/uuid` | v1.6.0 | BSD-3-Clause | Via otel/sdk (resource IDs) | <https://github.com/google/uuid> |
-| `github.com/modelcontextprotocol/go-sdk` | v1.8.0 | Apache-2.0 (new code) and MIT | MCP stdio server (WP3.3), direct | <https://github.com/modelcontextprotocol/go-sdk> |
+| `github.com/modelcontextprotocol/go-sdk` | v1.8.0 | Apache-2.0 (new code) and MIT | MCP stdio server (WP3.3) and the streamable-HTTP MCP clients for Mobbin and the Figma opt-in (WP6.4), direct | <https://github.com/modelcontextprotocol/go-sdk> |
 | `github.com/google/jsonschema-go` | v0.4.3 | MIT | JSON Schema types, via go-sdk | <https://github.com/google/jsonschema-go> |
 | `github.com/segmentio/encoding` | v0.5.4 | MIT | JSON codec, via go-sdk | <https://github.com/segmentio/encoding> |
 | `github.com/segmentio/asm` | v1.1.3 | MIT | Via segmentio/encoding | <https://github.com/segmentio/asm> |
 | `github.com/yosida95/uritemplate/v3` | v3.0.2 | BSD-3-Clause | Resource URI templates, via go-sdk | <https://github.com/yosida95/uritemplate> |
-| `golang.org/x/oauth2` | v0.36.0 | BSD-3-Clause | Via go-sdk (HTTP transports; unused by stdio) and go-github | <https://go.googlesource.com/oauth2> |
-| `golang.org/x/sync` | v0.20.0 | BSD-3-Clause | Via go-sdk | <https://go.googlesource.com/sync> |
+| `golang.org/x/oauth2` | v0.36.0 | BSD-3-Clause | Via go-sdk (its OAuth handler, which aayudha does not use; V5) and go-github | <https://go.googlesource.com/oauth2> |
+| `golang.org/x/sync` | v0.22.0 | BSD-3-Clause | Via go-sdk and modernc.org/libc | <https://go.googlesource.com/sync> |
 | `golang.org/x/time` | v0.15.0 | BSD-3-Clause | Rate limiting, via go-sdk | <https://go.googlesource.com/time> |
+| `modernc.org/sqlite` | v1.59.0 | BSD-3-Clause (SQLite itself is public domain) | Pure-Go SQLite for `measure` snapshots (WP7.2, R7), direct; v1.60 needs Go 1.26 | <https://gitlab.com/cznic/sqlite> |
+| `modernc.org/libc` | v1.75.7 | BSD-3-Clause (includes MIT-licensed musl code) | C runtime for the transpiled SQLite, via sqlite | <https://gitlab.com/cznic/libc> |
+| `modernc.org/mathutil` | v1.7.1 | BSD-3-Clause | Via sqlite and libc | <https://gitlab.com/cznic/mathutil> |
+| `modernc.org/memory` | v1.12.1 | BSD-3-Clause | Allocator, via libc | <https://gitlab.com/cznic/memory> |
+| `github.com/dustin/go-humanize` | v1.0.1 | MIT | Via libc | <https://github.com/dustin/go-humanize> |
+| `github.com/remyoudompheng/bigfft` | v0.0.0-20230129092748-24d4a6f8daec | BSD-3-Clause | Via mathutil | <https://github.com/remyoudompheng/bigfft> |
 
 ### Shelled out by `self-update` (not bundled)
 
@@ -63,6 +69,12 @@ plan lists in §2; the rest are pulled in by them.
 |---|---|---|
 | cosign | Verifies the keyless signature bundle over `checksums.txt` (WP1.1, Appendix B D-1.1a) | Apache-2.0 |
 | GitHub CLI (`gh`) | `gh attestation verify` checks the SLSA build provenance (WP1.1) | MIT |
+
+### Shelled out by `measure` when asked (not bundled)
+
+| Component | Use | Licence |
+|---|---|---|
+| [DuckDB](https://github.com/duckdb/duckdb) CLI (`duckdb`) | Optional query engine over the SQLite snapshot (`measure --engine duckdb`, WP7.2, R7); used only when found on `PATH` | MIT |
 
 ### Run by `install.sh` (not bundled)
 
@@ -115,6 +127,26 @@ addons (MIT), Vite (MIT), Vitest (MIT), Playwright (Apache-2.0), TypeScript (Apa
 (MPL-2.0, through `@storybook/addon-a11y`). The development tree also contains BSD-2-Clause, BSD-3-Clause,
 ISC, BlueOak-1.0.0, and CC-BY-4.0 (browser-support data) packages.
 
+### Shelled out by `aayu verify` (not bundled)
+
+The floors (docs/BUILD-PLAN.md WP4.3–WP4.6) run these as separate programs in a scrubbed child process. Users
+install them; CI pins them (SHA-256 for binaries, a digest for the ZAP image, `pnpm-lock.yaml` integrity hashes for
+the `@aayudha/floors` development package that holds Playwright, axe-core, and Lighthouse for this repository's own
+floor tests).
+
+| Component | Version pinned in CI | Licence | Use | Source |
+|---|---|---|---|---|
+| semgrep | 1.180.0 | LGPL-2.1 | `sast` floor | <https://github.com/semgrep/semgrep> |
+| gitleaks | 8.30.1 | MIT | `secrets` floor | <https://github.com/gitleaks/gitleaks> |
+| osv-scanner | 2.6.0 | Apache-2.0 | `deps` floor | <https://github.com/google/osv-scanner> |
+| Playwright | 1.64.0 | Apache-2.0 | `a11y` floors: drives Chromium through each Completion Goal state | <https://github.com/microsoft/playwright> |
+| axe-core | 4.14.0 | MPL-2.0 | `a11y` floor: injected into the page under test, unmodified | <https://github.com/dequelabs/axe-core> |
+| Lighthouse | 13.5.0 | Apache-2.0 | `perf` floor | <https://github.com/GoogleChrome/lighthouse> |
+| OWASP ZAP (`zaproxy/zap-stable` image) | 2.17.0, by digest | Apache-2.0 | `dast` floor | <https://github.com/zaproxy/zaproxy> |
+| k6 | 2.3.0 | AGPL-3.0 | `api` floor; run as a program, never linked or distributed | <https://github.com/grafana/k6> |
+| Guidepup (`@guidepup/guidepup`, `@guidepup/playwright`, `@guidepup/setup`) with `@playwright/test` | 0.35.0, 0.19.1, 0.29.2; 1.64.0 | MIT; Apache-2.0 | `screen-reader` floor: drives VoiceOver (macOS) and NVDA (Windows; NVDA itself is GPL-2.0, installed by `guidepup install` and run as a program) | <https://github.com/guidepup/guidepup> |
+| Tesseract | user-installed, optional | Apache-2.0 | OCR in the redaction pass when present | <https://github.com/tesseract-ocr/tesseract> |
+
 ## Policy
 
 - A PR that adds a dependency adds its entry here in the same PR: name, version or range, licence, how it is
@@ -151,6 +183,6 @@ CI scan when the component is actually added.
 |---|---|---|
 | impeccable | `review` lane B, `detect --json` (WP6.6) | Apache-2.0 |
 
-Other optional tools that `doctor` reports (git-lfs, gh, node, Playwright, axe, semgrep, gitleaks,
-osv-scanner, ZAP, k6, Lighthouse, Guidepup, DuckDB) are installed by the user and run as separate programs.
+Other optional tools that `doctor` reports (git-lfs, gh, node, DuckDB) are installed by the user and
+run as separate programs.
 Each is added to this file with its licence when the verb that calls it ships.

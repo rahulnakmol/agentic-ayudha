@@ -111,7 +111,11 @@
       "properties": {
         "media": {
           "type": "string",
-          "description": "Private bucket for proof media; required on public repos (V3)."
+          "description": "Private bucket for proof media; required on public repos (V3): s3://bucket[/prefix][?region=..\u0026endpoint=..] or r2://\u003caccount\u003e/bucket[/prefix]."
+        },
+        "media_secret": {
+          "type": "string",
+          "description": "Name of the secret holding the bucket's ACCESS_KEY_ID:SECRET_ACCESS_KEY; empty means proof-media."
         },
         "retention_days": {
           "type": "integer",
@@ -164,6 +168,11 @@
           },
           "additionalProperties": false,
           "type": "object"
+        },
+        "correction_days": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Days after a merge in which a linked Bug or Incident counts as a correction of the PR."
         }
       },
       "additionalProperties": false,
@@ -277,6 +286,26 @@
               "read",
               "write"
             ]
+          },
+          "url": {
+            "type": "string",
+            "description": "Provider base URL when not the adapter's default (EU region, self-hosted), e.g. https://eu.posthog.com."
+          },
+          "org": {
+            "type": "string",
+            "description": "Provider organization: the Sentry organization slug."
+          },
+          "project": {
+            "type": "string",
+            "description": "Provider project: the PostHog project ID, the Sentry project ID, or the owner/name GitHub baselines read (default: the current repository)."
+          },
+          "transport": {
+            "type": "string",
+            "enum": [
+              "rest",
+              "mcp"
+            ],
+            "description": "Figma only: rest (personal access token, the default) or mcp (the remote MCP server, opt-in; the secret is an OAuth access token)."
           }
         },
         "additionalProperties": false,
@@ -305,6 +334,31 @@
           "type": "array",
           "description": "Existing product CI check names the merge gate also requires."
         },
+        "seed": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Command (argv) that loads seeded, synthetic data into the app before the web floors capture (WP4.5); the product provides it, e.g. under .aayudha/seed/."
+        },
+        "environments": {
+          "additionalProperties": {
+            "properties": {
+              "url": {
+                "type": "string",
+                "description": "Base URL of the running app."
+              },
+              "production": {
+                "type": "boolean",
+                "description": "A production environment: verify refuses to capture it (exit 4), and any target on its host."
+              }
+            },
+            "additionalProperties": false,
+            "type": "object"
+          },
+          "type": "object",
+          "description": "Apps the web, DAST, and API floors run against, by name; AAYU_ENV picks one (default local). A production environment is never captured."
+        },
         "floors": {
           "properties": {
             "coverage": {
@@ -313,6 +367,17 @@
                   "type": "number",
                   "maximum": 100,
                   "minimum": 0
+                },
+                "command": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array",
+                  "description": "Test command that writes the coverage report, as argv; empty runs go test -coverprofile in a Go module."
+                },
+                "report": {
+                  "type": "string",
+                  "description": "Coverage report the command writes (lcov, Cobertura XML, or Go coverprofile), relative to the repository root."
                 }
               },
               "additionalProperties": false,
@@ -403,11 +468,45 @@
               "additionalProperties": false,
               "type": "object"
             },
+            "perf": {
+              "properties": {
+                "min_score": {
+                  "type": "number",
+                  "maximum": 1,
+                  "minimum": 0
+                },
+                "max_lcp_ms": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "max_cls": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "max_tbt_ms": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "type": "object",
+              "description": "Lighthouse budgets on every Completion Goal state (WP4.5)."
+            },
             "dast": {
               "properties": {
                 "max_high": {
                   "type": "integer",
                   "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "api": {
+              "properties": {
+                "script": {
+                  "type": "string",
+                  "description": "k6 script whose thresholds are the API and CLI contract (WP4.6); BASE_URL is the target environment's URL. Empty skips the floor."
                 }
               },
               "additionalProperties": false,
@@ -526,6 +625,65 @@
       "additionalProperties": false,
       "type": "object",
       "description": "The product's branches that play dev, rolling, and main when they have other names (written by init; nothing is renamed)."
+    },
+    "measure": {
+      "properties": {
+        "acquisition": {
+          "type": "string",
+          "description": "Event that acquires a user (e.g. signed_up); empty means a user's first event in the window."
+        },
+        "activation": {
+          "type": "string",
+          "description": "Event that activates an acquired user within activation_days."
+        },
+        "activation_days": {
+          "type": "integer",
+          "description": "Days after acquisition an activation counts; default 7."
+        },
+        "retention": {
+          "type": "string",
+          "description": "Event that counts as activity in days 7-13 after acquisition; empty means any event."
+        },
+        "referral": {
+          "type": "string",
+          "description": "Event by which an acquired user refers someone (e.g. invited_user)."
+        },
+        "north_star": {
+          "type": "string",
+          "description": "North Star: an event (distinct users who sent it in the window) or revenue (paid total in the window)."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "The events measure (WP7.2) reads as AARRR stages and the North Star."
+    },
+    "design": {
+      "properties": {
+        "tokens": {
+          "type": "string",
+          "description": "Design-token source (tokens.json in the W3C design-tokens format) whose colours and type scale mockups and prototypes must use."
+        },
+        "flags": {
+          "type": "string",
+          "description": "OpenFeature flag definitions (flagd JSON) that must declare each prototype's flag, off by default."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Where the design verbs (WP6.5) find the design tokens and the OpenFeature flag definitions."
+    },
+    "review": {
+      "properties": {
+        "figma_diff_max": {
+          "type": "number",
+          "maximum": 100,
+          "minimum": 0,
+          "description": "Largest share of pixels, in percent, a prototype screenshot may differ from its Figma frame after the anti-aliasing mask; colour and typography token mismatches must be zero regardless."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Tolerances of the prototype's Figma screenshot diff (WP6.5) and UI review (WP6.6)."
     }
   },
   "additionalProperties": false,

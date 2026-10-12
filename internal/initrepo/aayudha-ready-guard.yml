@@ -26,6 +26,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -38,6 +44,7 @@ jobs:
       - name: Guard
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
           ISSUE: ${{ github.event.issue.number }}
           REPO: ${{ github.repository }}
         run: aayudha ready "$ISSUE" --guard --ci --repo "$REPO"

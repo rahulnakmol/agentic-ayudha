@@ -11,7 +11,8 @@
     "ledger",
     "ruleset",
     "config",
-    "agents"
+    "agents",
+    "gates"
   ],
   "login": "rahulnakmol",
   "identity": "human-fallback",
@@ -258,6 +259,17 @@
       "name": "aayudha-ledger",
       "id": "24891281",
       "adopted": true
+    },
+    {
+      "kind": "label",
+      "name": "needs:bug",
+      "id": "12644399412"
+    },
+    {
+      "kind": "label",
+      "name": "aayudha:screen-reader",
+      "id": "12644022421",
+      "adopted": true
     }
   ],
   "files": [
@@ -326,6 +338,36 @@
       "sha256": "95c72b80a6d54280f429da2a1b7567276398a7e845c098004d0d5c905f9c807f",
       "created": false,
       "section": "work-items"
+    },
+    {
+      "path": ".aayudha/seed/README.md",
+      "sha256": "ac37acf083060aa2c2ab8e5af2f222d7c4abcba1d2dfc83cd2137125db10c2ea",
+      "created": true
+    },
+    {
+      "path": ".github/workflows/aayudha-merge-gate.yml",
+      "sha256": "b1d38ad0f0cb9c387db4bfe332a17ca3d6f7587206d0e629ee3c56789761b73b",
+      "created": true
+    },
+    {
+      "path": ".github/workflows/aayudha-ready-guard.yml",
+      "sha256": "fd7a9c26b6861735c72efd6f37a6c8f054dbba93489afd64c6e873bb5a93104d",
+      "created": true
+    },
+    {
+      "path": ".github/workflows/aayudha-streak.yml",
+      "sha256": "24ed4a2e86d41d81a4ca2604dec41741a1ee6d77d68b4df00f851ed89e40e098",
+      "created": false
+    },
+    {
+      "path": ".github/workflows/aayudha-token.yml",
+      "sha256": "3afebda06dbd223d67019d6b708b72288e0b7af667a8e3936fec22eef089879c",
+      "created": true
+    },
+    {
+      "path": ".github/workflows/aayudha-triage.yml",
+      "sha256": "a46d7c9fbb3c99c53bfc36d911fee9c5071f0d0cfd6b09f49044c37dae1486b9",
+      "created": true
     }
   ]
 }

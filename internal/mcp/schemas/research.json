@@ -9,6 +9,26 @@
       "pattern": "^(#?[1-9][0-9]*|https://github\\.com/[^/]+/[^/]+/issues/[1-9][0-9]*)$",
       "type": "string",
       "x-aayu-type": "issue"
+    },
+    "from": {
+      "description": "Directory with stage.json: the references the host gathered (URLs and IDs only) and Markdown research notes.",
+      "type": "string",
+      "x-aayu-type": "path"
+    },
+    "platform": {
+      "description": "Platform to search Mobbin on.",
+      "enum": [
+        "ios",
+        "android",
+        "web"
+      ],
+      "type": "string",
+      "x-aayu-type": "enum"
+    },
+    "query": {
+      "description": "Search Mobbin screens for this; needs [integrations.mobbin].",
+      "type": "string",
+      "x-aayu-type": "string"
     }
   },
   "required": [

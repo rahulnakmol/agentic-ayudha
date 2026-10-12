@@ -57,7 +57,7 @@ var sections = []section{
 			{"verify.floors.a11y.min_target_px", "Minimum touch target edge, in CSS pixels (44×44).", "WP4.5"},
 			{"verify.floors.screen_reader.layers", "Story footprints that run the VoiceOver and NVDA floor (on label or nightly).", "WP4.7"},
 			{"verify.floors.screen_reader.max_missing_phrases", "Expected phrases from the Ready snapshot that may be missing from the transcript.", "WP4.7"},
-			{"verify.floors.dast.max_high", "High ZAP baseline alerts allowed when DAST runs.", proposed},
+			{"verify.floors.dast.max_high", "High-risk ZAP alerts allowed when DAST runs (passive baseline plus the active cross-site scripting and injection rules).", proposed},
 			{"verify.floors.mobile.skipped_blocks_ship", "A `skipped: mobile` floor blocks `ship` unless a floor-waiver Decision exists.", "WP4.9"},
 		},
 		note: "Performance (Lighthouse CI) and API (k6) budgets are product-specific and have no default (WP4.5, WP4.6). " +
@@ -71,6 +71,7 @@ var sections = []section{
 			{"autonomy.streak", "Consecutive correction-free merges on a layer before agents may merge on it without a human pass. Computed by the protected streak workflow from merged-PR history, never stored where an agent can write it (V4).", "WP5.7"},
 			{"autonomy.never", "Layers that always need a human CODEOWNER approval and an EM plan-time review, whatever the streak: domain/policy, operational data/state, and platform.", proposed},
 			{"autonomy.approver", "GitHub login that gives the human pass in solo mode. Empty until `init` sets it.", "WP5.5"},
+			{"autonomy.correction_days", "Days after a merge in which a Bug or Incident that links the PR counts as a correction and resets the streak of every layer the PR touched.", "proposed (WP5.7)"},
 			{"autonomy.budget.wall_hours", "Wall-clock hours one `build` may run before the story is marked `status:blocked` and the owner is paged.", proposed},
 			{"autonomy.budget.cost_usd", "Model spend, in USD, one `build` may use before it is blocked.", proposed},
 			{"autonomy.budget.attempts", "Failed checkpoint attempts before a story is blocked. A second failure on a never-layer blocks regardless.", proposed},
@@ -86,6 +87,13 @@ var sections = []section{
 			{"budget.ci_minutes_month", "GitHub Actions minutes per month that agent-started workflows may use.", proposed},
 		},
 		note: "When a budget trips, the breaker pauses agent lanes and pages through `[notify]` once per day (WP1.6).",
+	},
+	{
+		heading: "Design review",
+		roots:   []string{"review"},
+		rows: []row{
+			{"review.figma_diff_max", "Largest share of pixels, in percent, a prototype screenshot may differ from its Figma frame after the anti-aliasing mask. Colour and typography token mismatches are counted separately and must be zero.", "WP6.5"},
+		},
 	},
 	{
 		heading: "Retention",

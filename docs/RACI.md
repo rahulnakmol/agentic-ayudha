@@ -2,47 +2,52 @@
 
 # RACI
 
-Generated from `internal/verbs/registry.go` by `go generate ./...`. This is the WP0.3 stub: one
-Accountable seat per verb, plus the seat that owns thresholds or policy where it differs from the seat that executes.
-Full Responsible / Consulted / Informed columns land in WP5.1. Every seat runs solo (agent only) or paired (agent twin
-plus a human); the mode is configuration (`[seats.<name>] mode`, WP1.2).
+Generated from `internal/verbs/registry.go` and `internal/verbs/raci.go` by `go generate ./...` (WP5.1).
+Every verb has exactly one Accountable seat (A). The Responsible party (R) is always that seat's agent twin working in
+the verb's model lane, with the seat's paired human when it has one; the seat that owns the verb's thresholds or policy
+may differ (the AI Native Engineer executes `verify` against floors the Quality Architect owns in
+`CONSTRAINTS.md`; the Engineering Manager owns the `inspect` policy that the review lane executes).
+Consulted seats (C) are asked before the verb acts and Informed seats (I) are told after. Every layer has exactly one
+owner seat (LAYERS.md). The registry lint (`verbs.LintRACI`) fails generation otherwise. Each seat runs
+solo (agent only) or paired (agent twin plus a human): `[seats.<name>]`, set by `aayu seat add|remove`.
+Charters: `seats/<seat>/CHARTER.md`.
 
 ## Verbs
 
-| Verb | Accountable | Owns thresholds / policy | Lane | Layers | Identity | Model calling | MCP |
-|---|---|---|---|---|---|---|---|
-| `grill` | Product Strategist | — | spec | all | bot | host | read |
-| `slice` | Product Strategist | — | plan | all | bot | host | read |
-| `plan` | Code Architect | — | plan | all | bot | host | read |
-| `decide` | Founder | — | spec | all | human | host | never |
-| `triage` | Product Strategist | — | chore | none | bot | hybrid (direct in Actions) | write |
-| `build` | AI Native Engineer (+SRE hat) | — | build | all | bot | host | write |
-| `verify` | AI Native Engineer (+SRE hat) | Quality Architect | chore | all | bot | none | write |
-| `inspect` | Engineering Manager | — | review | all | bot | direct | write |
-| `ship` | Engineering Manager | — | chore | all | human | none | never |
-| `release` | DevOps & DevEx Tinkerer | — | chore | L09 | human | none | never |
-| `proof` | Quality Architect | — | chore | all | bot | none | read |
-| `ready` | Product Strategist | — | chore | all | bot | none | read |
-| `research` | UX Researcher & Evolutionist | — | spec | L01 | bot | host | read |
-| `wireframe` | UX Researcher & Evolutionist | — | build | L01 | bot | host | write |
-| `mockup` | UX Researcher & Evolutionist | — | build | L01 | bot | host | write |
-| `prototype` | UX Researcher & Evolutionist | — | build | L01, L02 | bot | host | write |
-| `review` | UX Researcher & Evolutionist | — | ui-review | L01 | bot | hybrid (lane A direct) | write |
-| `polish` | UX Researcher & Evolutionist | — | build | L01 | bot | host | write |
-| `baseline` | UX Researcher & Evolutionist | — | chore | L01 | bot | none | write |
-| `experiment` | Revenue Architect | — | plan | L03, L08 | bot | host | write |
-| `readout` | Revenue Architect | — | spec | L08 | bot | host | write |
-| `respond` | AI Native Engineer (+SRE hat) | — | build | L07, L09 | human | host | never |
-| `status` | Engineering Manager | — | chore | all | bot | none | read |
-| `audit` | Auditor | — | review | all | bot | none | write |
-| `retro` | Engineering Manager | — | spec | all | bot | host | write |
-| `measure` | Revenue Architect | — | chore | L08 | bot | none | write |
-| `evolve` | AI Native Engineer (+SRE hat) | — | build | L05 | bot | host | write |
-| `brief` | Mentalist | — | spec | all | bot | hybrid (adversarial pass direct) | read |
-| `tell` | Marketer & Documenter | — | spec | L01 | human | host (publish requires the human identity) | write |
-| `init` | Founder | — | chore | L09 | human | none | never |
-| `install` | DevOps & DevEx Tinkerer | — | chore | L09 | human | none | never |
-| `doctor` | DevOps & DevEx Tinkerer | — | chore | L09 | human | none | read |
+| Verb | A | R (executes) | Owns thresholds / policy | C | I | Layers | Identity | Model calling | MCP |
+|---|---|---|---|---|---|---|---|---|---|
+| `grill` | Product Strategist | Product Strategist twin, spec lane | Product Strategist | Code Architect, UX Researcher & Evolutionist | Engineering Manager | all | bot | host | read |
+| `slice` | Product Strategist | Product Strategist twin, plan lane | Product Strategist | Code Architect, Engineering Manager | AI Native Engineer (+SRE hat) | all | bot | host | read |
+| `plan` | Code Architect | Code Architect twin, plan lane | Code Architect | Engineering Manager, Quality Architect | AI Native Engineer (+SRE hat) | all | bot | host | read |
+| `decide` | Founder | Founder twin, spec lane | Founder | Product Strategist, Code Architect | Engineering Manager, Auditor | all | human | host | never |
+| `triage` | Product Strategist | Product Strategist twin, chore lane | Product Strategist | — | Engineering Manager | none | bot | hybrid (direct in Actions) | write |
+| `build` | AI Native Engineer (+SRE hat) | AI Native Engineer (+SRE hat) twin, build lane | AI Native Engineer (+SRE hat) | Code Architect | Engineering Manager | all | bot | host | write |
+| `verify` | AI Native Engineer (+SRE hat) | AI Native Engineer (+SRE hat) twin, chore lane | Quality Architect | — | Engineering Manager | all | bot | none | write |
+| `inspect` | Engineering Manager | Engineering Manager twin, review lane | Engineering Manager | Quality Architect, Code Architect | AI Native Engineer (+SRE hat) | all | bot | direct | write |
+| `ship` | Engineering Manager | Engineering Manager twin, chore lane | Engineering Manager | Quality Architect | Product Strategist, Marketer & Documenter | all | human | none | never |
+| `release` | DevOps & DevEx Tinkerer | DevOps & DevEx Tinkerer twin, chore lane | DevOps & DevEx Tinkerer | Quality Architect, Engineering Manager | Marketer & Documenter, Founder | L09 | human | none | never |
+| `proof` | Quality Architect | Quality Architect twin, chore lane | Quality Architect | AI Native Engineer (+SRE hat) | Auditor | all | bot | none | read |
+| `ready` | Product Strategist | Product Strategist twin, chore lane | Product Strategist | Code Architect, Quality Architect | Engineering Manager | all | bot | none | read |
+| `research` | UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, spec lane | UX Researcher & Evolutionist | Product Strategist | Marketer & Documenter | L01 | bot | host | read |
+| `wireframe` | UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, build lane | UX Researcher & Evolutionist | Product Strategist | Engineering Manager | L01 | bot | host | write |
+| `mockup` | UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, build lane | UX Researcher & Evolutionist | Product Strategist | Engineering Manager | L01 | bot | host | write |
+| `prototype` | UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, build lane | UX Researcher & Evolutionist | Code Architect | Engineering Manager | L01, L02 | bot | host | write |
+| `review` | UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, ui-review lane | UX Researcher & Evolutionist | Quality Architect | Engineering Manager | L01 | bot | hybrid (lane A direct) | write |
+| `polish` | UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, build lane | UX Researcher & Evolutionist | — | Engineering Manager | L01 | bot | host | write |
+| `baseline` | UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, chore lane | UX Researcher & Evolutionist | Quality Architect | Engineering Manager | L01 | bot | none | write |
+| `experiment` | Revenue Architect | Revenue Architect twin, plan lane | Revenue Architect | Product Strategist, UX Researcher & Evolutionist | Founder | L03, L08 | bot | host | write |
+| `readout` | Revenue Architect | Revenue Architect twin, spec lane | Revenue Architect | Product Strategist | Founder, Marketer & Documenter | L08 | bot | host | write |
+| `respond` | AI Native Engineer (+SRE hat) | AI Native Engineer (+SRE hat) twin, build lane | AI Native Engineer (+SRE hat) | DevOps & DevEx Tinkerer | Engineering Manager, Founder | L07, L09 | human | host | never |
+| `status` | Engineering Manager | Engineering Manager twin, chore lane | Engineering Manager | — | Founder | all | bot | none | read |
+| `audit` | Auditor | Auditor twin, review lane | Auditor | Quality Architect | Founder | all | bot | none | write |
+| `retro` | Engineering Manager | Engineering Manager twin, spec lane | Engineering Manager | Auditor, AI Native Engineer (+SRE hat) | Founder | all | bot | host | write |
+| `measure` | Revenue Architect | Revenue Architect twin, chore lane | Revenue Architect | Product Strategist | Founder | L08 | bot | none | write |
+| `evolve` | AI Native Engineer (+SRE hat) | AI Native Engineer (+SRE hat) twin, build lane | AI Native Engineer (+SRE hat) | Quality Architect | Engineering Manager | L05 | bot | host | write |
+| `brief` | Mentalist | Mentalist twin, spec lane | Mentalist | Product Strategist | Marketer & Documenter | all | bot | hybrid (adversarial pass direct) | read |
+| `tell` | Marketer & Documenter | Marketer & Documenter twin, spec lane | Marketer & Documenter | Mentalist, Product Strategist | Founder | L01 | human | host (publish requires the human identity) | write |
+| `init` | Founder | Founder twin, chore lane | Founder | DevOps & DevEx Tinkerer | Engineering Manager | L09 | human | none | never |
+| `install` | DevOps & DevEx Tinkerer | DevOps & DevEx Tinkerer twin, chore lane | DevOps & DevEx Tinkerer | — | Engineering Manager | L09 | human | none | never |
+| `doctor` | DevOps & DevEx Tinkerer | DevOps & DevEx Tinkerer twin, chore lane | DevOps & DevEx Tinkerer | — | Engineering Manager | L09 | human | none | read |
 
 Model calling: `none` is deterministic; `host` means the host's model reasons inside the skill;
 `direct` means the binary calls a model itself; `hybrid` is host reasoning plus a direct pass

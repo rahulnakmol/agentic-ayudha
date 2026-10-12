@@ -1,0 +1,23 @@
+{
+  "source": "Synthetic: written from GrowthBook's REST API reference (GET /api/v1/experiments?trackingKey=, GET /api/v1/experiments/{id}/results) because no GrowthBook account exists yet; the AAYU_LIVE=1 test exercises the same requests",
+  "interactions": [
+    {
+      "method": "GET",
+      "url": "https://api.growthbook.io/api/v1/experiments?limit=2&trackingKey=checkout-v2",
+      "status": 200,
+      "response": {"experiments": [{"id": "exp_19g61", "trackingKey": "checkout-v2"}], "limit": 2, "offset": 0, "count": 1, "total": 1, "hasMore": false}
+    },
+    {
+      "method": "GET",
+      "url": "https://api.growthbook.io/api/v1/experiments/exp_19g61/results",
+      "status": 200,
+      "response": {"experiment": {"id": "exp_19g61", "trackingKey": "checkout-v2", "variations": [{"variationId": "var_c", "key": "control", "name": "Control"}, {"variationId": "var_t", "key": "treatment", "name": "Treatment"}]},
+        "result": {"id": "snp_1", "experimentId": "exp_19g61", "phase": "0", "dateStart": "2026-09-01T00:00:00Z", "dateEnd": "2026-09-29T00:00:00Z", "dimension": {"type": "none"}, "queryIds": [],
+          "results": [{"dimension": "All", "totalUsers": 9800, "checks": {"srm": 0.98},
+            "metrics": [{"metricId": "met_signup", "variations": [
+              {"variationId": "var_t", "analyses": [{"engine": "frequentist", "numerator": 552, "denominator": 4900, "mean": 0.1127, "stddev": 0.316, "percentChange": 0.15, "effectStandardError": 0.07, "ciLow": 0.01, "ciHigh": 0.29, "pValue": 0.03}]},
+              {"variationId": "var_c", "analyses": [{"engine": "bayesian", "numerator": 1, "denominator": 1, "mean": 1, "stddev": 0, "percentChange": 0, "effectStandardError": 0, "ciLow": 0, "ciHigh": 0}, {"engine": "frequentist", "numerator": 490, "denominator": 4900, "mean": 0.1, "stddev": 0.3, "percentChange": 0, "effectStandardError": 0, "ciLow": 0, "ciHigh": 0}]}
+            ]}]}]}}
+    }
+  ]
+}

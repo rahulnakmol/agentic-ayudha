@@ -233,20 +233,9 @@ func (r *Ready) Guard(ctx context.Context, n int) (Result, error) {
 	if !slices.Contains(github.IssueLabels(is), LabelReady) {
 		return res, nil
 	}
-	owner, name, _ := github.SplitRepo(r.Repo)
-	comments, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.IssueComment, *gh.Response, error) {
-		return r.GH.REST.Issues.ListComments(ctx, owner, name, n, &gh.IssueListCommentsOptions{ListOptions: o})
-	})
+	snapHash, err := SnapshotHash(ctx, r.GH, r.Repo, n)
 	if err != nil {
 		return res, err
-	}
-	snapHash := ""
-	for _, c := range comments {
-		if strings.Contains(c.GetBody(), SnapshotMarker) {
-			if m := snapshotHash.FindStringSubmatch(c.GetBody()); m != nil {
-				snapHash = m[1]
-			}
-		}
 	}
 	switch {
 	case !res.Pass:
@@ -268,4 +257,70 @@ func (r *Ready) Guard(ctx context.Context, n int) (Result, error) {
 	msg := GuardMarker + "\nRemoved `status:ready`: " + res.Stripped + "\n\nFix the issue, then run `aayu ready " + fmt.Sprint(n) + "` to snapshot it again.\n"
 	_, err = r.GH.UpsertComment(ctx, r.Repo, n, GuardMarker, msg, actions.Action{Kind: "github.comment.ready-guard"})
 	return res, err
+}
+
+// SnapshotHash returns the body hash in an issue's Ready snapshot comment, or
+// "" when it has none.
+func SnapshotHash(ctx context.Context, c *github.Client, repo string, n int) (string, error) {
+	owner, name, err := github.SplitRepo(repo)
+	if err != nil {
+		return "", err
+	}
+	comments, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.IssueComment, *gh.Response, error) {
+		return c.REST.Issues.ListComments(ctx, owner, name, n, &gh.IssueListCommentsOptions{ListOptions: o})
+	})
+	if err != nil {
+		return "", err
+	}
+	hash := ""
+	for _, cm := range comments {
+		if strings.Contains(cm.GetBody(), SnapshotMarker) {
+			if m := snapshotHash.FindStringSubmatch(cm.GetBody()); m != nil {
+				hash = m[1]
+			}
+		}
+	}
+	return hash, nil
+}
+
+// LedgerSnapshot is a Ready snapshot as written to the ledger (specs/<n>/ready.md):
+// what `proof verify`, the merge gate, and the screen-reader floor compare
+// against, rather than anything an agent says at run time.
+type LedgerSnapshot struct {
+	BodyHash           string                `json:"body_hash"`
+	CompletionGoalHash string                `json:"completion_goal_hash"`
+	Criteria           []workitems.Criterion `json:"criteria"`
+}
+
+var (
+	snapshotCGHash = regexp.MustCompile("\\| Completion Goal hash \\| `([0-9a-f]{64})` \\|")
+	snapshotBody   = regexp.MustCompile("(?s)\n## Body at Ready\n\n````markdown\n(.*)\n````\n?$")
+)
+
+// ParseSnapshot reads a ledger Ready snapshot. The criteria come from the
+// Completion Goal of the body at Ready.
+func ParseSnapshot(file string) (LedgerSnapshot, error) {
+	var s LedgerSnapshot
+	m := snapshotHash.FindStringSubmatch(file)
+	if m == nil {
+		return s, fmt.Errorf("not a Ready snapshot: no body hash")
+	}
+	s.BodyHash = m[1]
+	if m := snapshotCGHash.FindStringSubmatch(file); m != nil {
+		s.CompletionGoalHash = m[1]
+	}
+	if m := snapshotBody.FindStringSubmatch(file); m != nil {
+		_, values := workitems.Sections(m[1])
+		s.Criteria, _ = workitems.ParseCriteria(values["Completion Goal"])
+	}
+	return s, nil
+}
+
+// Numbers returns the snapshot's criterion numbers.
+func (s LedgerSnapshot) Numbers() []int {
+	ns := []int{}
+	for _, c := range s.Criteria {
+		ns = append(ns, c.N)
+	}
+	return ns
 }

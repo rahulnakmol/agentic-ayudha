@@ -1,0 +1,140 @@
+{
+  "source": "Synthetic: written from Mobbin's MCP documentation (https://mobbin.com/mcp, https://docs.mobbin.com/mcp/features: search_screens, search_flows, search_sections; results carry a low-res preview image plus image_url) and the REST Screen model (id, mobbin_url, app_name, platform, image) because no Mobbin account exists yet",
+  "server": {
+    "name": "mobbin",
+    "version": "2026.9"
+  },
+  "tools": [
+    {
+      "name": "search_screens",
+      "description": "Search individual mobile and web UI screens.",
+      "annotations": {
+        "readOnlyHint": true,
+        "title": "Search screens"
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "ios",
+              "web"
+            ]
+          },
+          "mode": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
+      "name": "search_flows",
+      "description": "Search ordered, multi-step user flows.",
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "platform": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
+      "name": "search_sections",
+      "description": "Search website sections.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    }
+  ],
+  "results": {
+    "search_screens": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"screens\": [{\"id\": \"3f2c1a9e-6b7d-4c1e-9a52-0d4f8e7b6c21\", \"mobbin_url\": \"https://mobbin.com/screens/3f2c1a9e-6b7d-4c1e-9a52-0d4f8e7b6c21\", \"app_name\": \"Monzo\", \"platform\": \"ios\", \"image\": {\"url\": \"https://bytescale.mobbin.com/FW25bBB/image/mobbin.com/prod/file.png\", \"width\": 1170, \"height\": 2532, \"url_expires_at\": \"2026-11-11T09:30:00Z\"}, \"image_url\": \"https://bytescale.mobbin.com/FW25bBB/image/mobbin.com/prod/file.png\", \"description\": \"Login with Face ID prompt\"}, {\"id\": \"a81d4e02-93c5-4f7b-b1e6-5c2a7d9f0e34\", \"mobbin_url\": \"https://mobbin.com/screens/a81d4e02-93c5-4f7b-b1e6-5c2a7d9f0e34\", \"app_name\": \"Revolut\", \"platform\": \"ios\", \"image\": {\"url\": \"https://bytescale.mobbin.com/FW25bBB/image/mobbin.com/prod/other.webp\", \"url_expires_at\": \"2026-11-11T09:30:00Z\"}, \"image_url\": \"https://bytescale.mobbin.com/FW25bBB/image/mobbin.com/prod/other.webp\"}, {\"id\": \"c0ffee00-1111-4222-8333-944445555666\", \"mobbin_url\": \"https://bytescale.mobbin.com/FW25bBB/image/mobbin.com/prod/third.png\", \"app_name\": \"Image-only result\", \"platform\": \"ios\", \"image_url\": \"https://bytescale.mobbin.com/FW25bBB/image/mobbin.com/prod/third.png\"}]}"
+        },
+        {
+          "type": "image",
+          "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+          "mimeType": "image/png"
+        },
+        {
+          "type": "image",
+          "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+          "mimeType": "image/png"
+        },
+        {
+          "type": "text",
+          "text": "Also see the Wise login flow: https://mobbin.com/flows/5e6f7a8b-9c0d-4e1f-a2b3-c4d5e6f7a8b9 (preview https://bytescale.mobbin.com/FW25bBB/image/mobbin.com/prod/flow.png)"
+        }
+      ],
+      "structuredContent": {
+        "screens": [
+          {
+            "id": "3f2c1a9e-6b7d-4c1e-9a52-0d4f8e7b6c21",
+            "mobbin_url": "https://mobbin.com/screens/3f2c1a9e-6b7d-4c1e-9a52-0d4f8e7b6c21",
+            "app_name": "Monzo",
+            "platform": "ios",
+            "image": {
+              "url": "https://bytescale.mobbin.com/FW25bBB/image/mobbin.com/prod/file.png",
+              "width": 1170,
+              "height": 2532,
+              "url_expires_at": "2026-11-11T09:30:00Z"
+            },
+            "image_url": "https://bytescale.mobbin.com/FW25bBB/image/mobbin.com/prod/file.png",
+            "description": "Login with Face ID prompt"
+          },
+          {
+            "id": "a81d4e02-93c5-4f7b-b1e6-5c2a7d9f0e34",
+            "mobbin_url": "https://mobbin.com/screens/a81d4e02-93c5-4f7b-b1e6-5c2a7d9f0e34",
+            "app_name": "Revolut",
+            "platform": "ios",
+            "image": {
+              "url": "https://bytescale.mobbin.com/FW25bBB/image/mobbin.com/prod/other.webp",
+              "url_expires_at": "2026-11-11T09:30:00Z"
+            },
+            "image_url": "https://bytescale.mobbin.com/FW25bBB/image/mobbin.com/prod/other.webp"
+          },
+          {
+            "id": "c0ffee00-1111-4222-8333-944445555666",
+            "mobbin_url": "https://bytescale.mobbin.com/FW25bBB/image/mobbin.com/prod/third.png",
+            "app_name": "Image-only result",
+            "platform": "ios",
+            "image_url": "https://bytescale.mobbin.com/FW25bBB/image/mobbin.com/prod/third.png"
+          }
+        ]
+      }
+    }
+  }
+}

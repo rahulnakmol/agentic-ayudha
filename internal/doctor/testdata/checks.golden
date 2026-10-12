@@ -56,7 +56,7 @@ PASS  mcp  aayudha MCP server registered for claude at this aayu's version
 FAIL  mcp  MCP registrations need aayu install --apply
              claude: /usr/bin/aayu reports "aayu 1.1.0"; this aayu is 1.2.0
 ## lfs-quota pass
-N/A  lfs-quota  LFS quota on the ledger branch: not yet available (WP4.2)
+N/A  lfs-quota  LFS quota: GitHub has no quota API for this account; watch Settings > Billing > Git LFS (warn at 80 %)
 ## ledger-media pass
 PASS  ledger-media  no ledger branch fetched (origin/ledger)
 ## ledger-media fail
@@ -67,15 +67,26 @@ PASS  issue-types  organization repository: GitHub issue types are available
 ## issue-types fail
 WARN  issue-types  could not check issue-type support (no GitHub token or repository)
 ## integrations pass
-PASS  integrations  1 integration(s); provider reachability and real key scope: not yet available (WP5.2)
-                      posthog: secret "posthog" in env, configured scope read
+PASS  integrations  1 of 1 configured integration(s) reachable with a read-only key
+                      posthog: reachable as personal API key aayudha; read-only scope verified (query:read per GET /api/personal_api_keys/@current/)
+                      sentry: not configured; set [integrations.sentry] for reliability baselines
+                      github: not configured; set [integrations.github] for delivery baselines from issues and pull requests
+                      growthbook: not configured; set [integrations.growthbook] for experiment results for readout and measure
+                      figma: not configured; set [integrations.figma] for design files: nodes, rendered images, and variables
+                      mobbin: not configured; set [integrations.mobbin] for design references as URLs and IDs
 ## integrations fail
-WARN  integrations  1 integration(s); provider reachability and real key scope: not yet available (WP5.2)
-                      posthog: secret "posthog" is not set (aayu auth set-secret posthog, or AAYU_SECRET_POSTHOG)
+FAIL  integrations  0 of 4 configured integration(s) reachable with a read-only key
+                      posthog: scope = "write": read verbs refuse this key, so it was not sent; configure a read-only key
+                      sentry: unreachable: provider error: GET https://sentry.io/api/0/: 401: {"detail":"Invalid token"}
+                      github: not configured: [integrations.github] secret "github-read" has no value: secret not found: github-read (set it with `aayu auth set-secret github-read`, or export AAYU_SECRET_GITHUB_READ)
+                      growthbook: not configured; set [integrations.growthbook] for experiment results for readout and measure
+                      figma: not configured; set [integrations.figma] for design files: nodes, rendered images, and variables
+                      mobbin: not configured; set [integrations.mobbin] for design references as URLs and IDs
+                      amplitude: configured; no adapter in this binary yet, so not checked
 ## optional-tools pass
 PASS  optional-tools  all optional tools found
 ## optional-tools fail
-WARN  optional-tools  9 optional tool(s) missing; floors that need them are skipped: playwright, axe, gitleaks, osv-scanner, zap.sh, k6, lighthouse, guidepup, impeccable
+WARN  optional-tools  8 optional tool(s) missing: gitleaks (secrets floor), osv-scanner (deps floor), docker (dast floor: ZAP), k6 (api floor), lighthouse (perf floor), tesseract (OCR in the redaction pass; without it the pass scans the DOM only), impeccable (review lane B), duckdb (measure, optional); a floor whose tool is missing blocks verify, it never passes
 ## worktrees pass
 PASS  worktrees  no leaked worktrees
 ## worktrees fail

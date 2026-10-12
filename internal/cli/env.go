@@ -58,6 +58,7 @@ type Options struct {
 	LookPath        func(string) (string, error)                                                // nil uses exec.LookPath (doctor)
 	Exec            func(ctx context.Context, dir, name string, args ...string) (string, error) // nil runs the command (doctor, install)
 	Assets          fs.FS                                                                       // embedded skills/ and hosts/ (root embed.go); install needs it
+	HaltPoll        time.Duration                                                               // how often a running verb re-reads the halt variable; 0 is DefaultHaltPoll (WP5.7)
 }
 
 // Globals are the global flags shared by every command.
@@ -79,6 +80,8 @@ type Env struct {
 	Options
 	config  *config.Loaded // loaded on first use by Config
 	actions *actions.Log   // opened on first use by Actions
+
+	haltWatch bool // checkHalt read the halt variable through the API, so a running verb re-reads it (WP5.7)
 
 	telemetry *telemetry.Telemetry
 	span      trace.Span

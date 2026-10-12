@@ -359,6 +359,36 @@ var (
 
 func isText(p string) bool { return slices.Contains(textExt, strings.ToLower(path.Ext(p))) }
 
+// MobbinImages applies the Mobbin-origin image rule to every file under root
+// (WP6.4: lint blocks Mobbin-origin images anywhere, not only in skills).
+// Directories named in skipDirs (for example .git, node_modules) are not
+// entered. Findings are sorted by path.
+func MobbinImages(fsys fs.FS, root string, skipDirs ...string) []Finding {
+	var out []Finding
+	add := func(p, rule, format string, args ...any) {
+		rel := strings.TrimPrefix(strings.TrimPrefix(p, root), "/")
+		out = append(out, Finding{Path: rel, Rule: rule, Msg: fmt.Sprintf(format, args...)})
+	}
+	_ = fs.WalkDir(fsys, root, func(p string, d fs.DirEntry, err error) error {
+		switch {
+		case err != nil:
+			add(p, RuleMobbin, "cannot read: %v", err)
+		case d.IsDir() && p != root && slices.Contains(skipDirs, d.Name()):
+			return fs.SkipDir
+		case d.Type().IsRegular():
+			b, err := fs.ReadFile(fsys, p)
+			if err != nil {
+				add(p, RuleMobbin, "cannot read: %v", err)
+				return nil
+			}
+			lintMobbin(p, b, add)
+		}
+		return nil
+	})
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Path < out[j].Path })
+	return out
+}
+
 // lintMobbin flags Mobbin-origin images (WP6.4: Mobbin gives URLs and IDs, never
 // pixels): an image file whose name or bytes (embedded metadata) mention Mobbin,
 // and an image embed in a text file whose URL points at Mobbin. Plain links to

@@ -36,6 +36,31 @@ type Config struct {
 	Telemetry     Telemetry              `koanf:"telemetry" jsonschema_description:"Traces of verb runs (WP1.8): a local file by default; nothing leaves the machine unless otlp_endpoint is set."`
 	Fleet         Fleet                  `koanf:"fleet" jsonschema_description:"User-level only: the product repos that status --all and doctor --all iterate."`
 	Branches      Branches               `koanf:"branches" jsonschema_description:"The product's branches that play dev, rolling, and main when they have other names (written by init; nothing is renamed)."`
+	Measure       Measure                `koanf:"measure" jsonschema_description:"The events measure (WP7.2) reads as AARRR stages and the North Star."`
+	Design        Design                 `koanf:"design" jsonschema_description:"Where the design verbs (WP6.5) find the design tokens and the OpenFeature flag definitions."`
+	Review        Review                 `koanf:"review" jsonschema_description:"Tolerances of the prototype's Figma screenshot diff (WP6.5) and UI review (WP6.6)."`
+}
+
+// Design is [design] (WP6.5). Paths are relative to the repository root.
+type Design struct {
+	Tokens string `koanf:"tokens" jsonschema_description:"Design-token source (tokens.json in the W3C design-tokens format) whose colours and type scale mockups and prototypes must use."`
+	Flags  string `koanf:"flags" jsonschema_description:"OpenFeature flag definitions (flagd JSON) that must declare each prototype's flag, off by default."`
+}
+
+// Review is [review] (WP6.5, WP6.6).
+type Review struct {
+	FigmaDiffMax float64 `koanf:"figma_diff_max" jsonschema:"minimum=0,maximum=100" jsonschema_description:"Largest share of pixels, in percent, a prototype screenshot may differ from its Figma frame after the anti-aliasing mask; colour and typography token mismatches must be zero regardless."`
+}
+
+// Measure is [measure]: which exported events mark each AARRR stage. Event
+// names match the exports' event names exactly.
+type Measure struct {
+	Acquisition    string `koanf:"acquisition" jsonschema_description:"Event that acquires a user (e.g. signed_up); empty means a user's first event in the window."`
+	Activation     string `koanf:"activation" jsonschema_description:"Event that activates an acquired user within activation_days."`
+	ActivationDays int    `koanf:"activation_days" jsonschema_description:"Days after acquisition an activation counts; default 7."`
+	Retention      string `koanf:"retention" jsonschema_description:"Event that counts as activity in days 7-13 after acquisition; empty means any event."`
+	Referral       string `koanf:"referral" jsonschema_description:"Event by which an acquired user refers someone (e.g. invited_user)."`
+	NorthStar      string `koanf:"north_star" jsonschema_description:"North Star: an event (distinct users who sent it in the window) or revenue (paid total in the window)."`
 }
 
 // Branches is [branches] (WP2.5 coexistence). Empty means the branch of the same name.
@@ -92,7 +117,8 @@ type LFS struct {
 
 // Proof is [proof].
 type Proof struct {
-	Media         string `koanf:"media" jsonschema_description:"Private bucket for proof media; required on public repos (V3)."`
+	Media         string `koanf:"media" jsonschema_description:"Private bucket for proof media; required on public repos (V3): s3://bucket[/prefix][?region=..&endpoint=..] or r2://<account>/bucket[/prefix]."`
+	MediaSecret   string `koanf:"media_secret" jsonschema_description:"Name of the secret holding the bucket's ACCESS_KEY_ID:SECRET_ACCESS_KEY; empty means proof-media."`
 	RetentionDays int    `koanf:"retention_days" jsonschema:"minimum=0" jsonschema_description:"Days to keep proof media before purge; 0 keeps forever."`
 }
 
@@ -102,6 +128,9 @@ type Autonomy struct {
 	Never    []string       `koanf:"never" jsonschema_description:"Layers (L01-L09) that never run autonomously."`
 	Approver string         `koanf:"approver" jsonschema_description:"GitHub login that approves when autonomy does not apply."`
 	Budget   AutonomyBudget `koanf:"budget"`
+	// CorrectionDays is how long after a merge a linked Bug or Incident still
+	// counts as a correction of that PR (WP5.7).
+	CorrectionDays int `koanf:"correction_days" jsonschema:"minimum=0" jsonschema_description:"Days after a merge in which a linked Bug or Incident counts as a correction of the PR."`
 }
 
 // AutonomyBudget is [autonomy.budget], the per-story build budget (WP5.5).
@@ -146,20 +175,35 @@ type MCP struct {
 type Integration struct {
 	Secret string `koanf:"secret" jsonschema_description:"Name of the secret holding the key (WP1.3); never the key itself."`
 	Scope  string `koanf:"scope" jsonschema:"enum=read,enum=write"`
+	// Provider details the adapters need (WP5.2, WP6.4).
+	URL       string `koanf:"url" jsonschema_description:"Provider base URL when not the adapter's default (EU region, self-hosted), e.g. https://eu.posthog.com."`
+	Org       string `koanf:"org" jsonschema_description:"Provider organization: the Sentry organization slug."`
+	Project   string `koanf:"project" jsonschema_description:"Provider project: the PostHog project ID, the Sentry project ID, or the owner/name GitHub baselines read (default: the current repository)."`
+	Transport string `koanf:"transport" jsonschema:"enum=rest,enum=mcp" jsonschema_description:"Figma only: rest (personal access token, the default) or mcp (the remote MCP server, opt-in; the secret is an OAuth access token)."`
 }
 
 // Verify is [verify].
 type Verify struct {
-	DAST           bool     `koanf:"dast" jsonschema_description:"Run the ZAP baseline floor (WP4.6)."`
-	Platforms      []string `koanf:"platforms" jsonschema_description:"Platforms the product ships on, e.g. web, ios, android."`
-	UpstreamChecks []string `koanf:"upstream_checks" jsonschema_description:"Existing product CI check names the merge gate also requires."`
-	Floors         Floors   `koanf:"floors" jsonschema_description:"Floor thresholds; CONSTRAINTS.md documents each one."`
+	DAST           bool                   `koanf:"dast" jsonschema_description:"Run the ZAP baseline floor (WP4.6)."`
+	Platforms      []string               `koanf:"platforms" jsonschema_description:"Platforms the product ships on, e.g. web, ios, android."`
+	UpstreamChecks []string               `koanf:"upstream_checks" jsonschema_description:"Existing product CI check names the merge gate also requires."`
+	Seed           []string               `koanf:"seed" jsonschema_description:"Command (argv) that loads seeded, synthetic data into the app before the web floors capture (WP4.5); the product provides it, e.g. under .aayudha/seed/."`
+	Environments   map[string]Environment `koanf:"environments" jsonschema_description:"Apps the web, DAST, and API floors run against, by name; AAYU_ENV picks one (default local). A production environment is never captured."`
+	Floors         Floors                 `koanf:"floors" jsonschema_description:"Floor thresholds; CONSTRAINTS.md documents each one."`
+}
+
+// Environment is [verify.environments.<name>].
+type Environment struct {
+	URL        string `koanf:"url" jsonschema_description:"Base URL of the running app."`
+	Production bool   `koanf:"production" jsonschema_description:"A production environment: verify refuses to capture it (exit 4), and any target on its host."`
 }
 
 // Floors is [verify.floors]: the deterministic floors (rule 7).
 type Floors struct {
 	Coverage struct {
-		MinDiffPercent float64 `koanf:"min_diff_percent" jsonschema:"minimum=0,maximum=100"`
+		MinDiffPercent float64  `koanf:"min_diff_percent" jsonschema:"minimum=0,maximum=100"`
+		Command        []string `koanf:"command" jsonschema_description:"Test command that writes the coverage report, as argv; empty runs go test -coverprofile in a Go module."`
+		Report         string   `koanf:"report" jsonschema_description:"Coverage report the command writes (lcov, Cobertura XML, or Go coverprofile), relative to the repository root."`
 	} `koanf:"coverage"`
 	SAST    MaxCriticalHigh `koanf:"sast"`
 	Secrets struct {
@@ -179,9 +223,18 @@ type Floors struct {
 		Layers            []string `koanf:"layers"`
 		MaxMissingPhrases int      `koanf:"max_missing_phrases" jsonschema:"minimum=0"`
 	} `koanf:"screen_reader"`
+	Perf struct {
+		MinScore float64 `koanf:"min_score" jsonschema:"minimum=0,maximum=1"`
+		MaxLCPMs float64 `koanf:"max_lcp_ms" jsonschema:"minimum=0"`
+		MaxCLS   float64 `koanf:"max_cls" jsonschema:"minimum=0"`
+		MaxTBTMs float64 `koanf:"max_tbt_ms" jsonschema:"minimum=0"`
+	} `koanf:"perf" jsonschema_description:"Lighthouse budgets on every Completion Goal state (WP4.5)."`
 	DAST struct {
 		MaxHigh int `koanf:"max_high" jsonschema:"minimum=0"`
 	} `koanf:"dast"`
+	API struct {
+		Script string `koanf:"script" jsonschema_description:"k6 script whose thresholds are the API and CLI contract (WP4.6); BASE_URL is the target environment's URL. Empty skips the floor."`
+	} `koanf:"api"`
 	Mobile struct {
 		SkippedBlocksShip bool `koanf:"skipped_blocks_ship"`
 	} `koanf:"mobile"`
@@ -314,6 +367,12 @@ func (c *Config) Validate() error {
 		}
 		if in.Scope != "read" && in.Scope != "write" {
 			bad("[integrations.%s] scope = %q: want read or write", name, in.Scope)
+		}
+		if in.URL != "" && !strings.HasPrefix(in.URL, "https://") && !strings.HasPrefix(in.URL, "http://localhost") && !strings.HasPrefix(in.URL, "http://127.0.0.1") {
+			bad("[integrations.%s] url = %q: want an https:// URL", name, in.URL)
+		}
+		if in.Transport != "" && (name != "figma" || (in.Transport != "rest" && in.Transport != "mcp")) {
+			bad("[integrations.%s] transport = %q: only [integrations.figma] takes transport, rest or mcp", name, in.Transport)
 		}
 	}
 	if id := c.Identity; id.MachineUser != "" && !secretName.MatchString(id.MachineUserSecret) {

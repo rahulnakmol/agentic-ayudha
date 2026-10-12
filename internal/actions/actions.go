@@ -139,6 +139,16 @@ func Open(path string, opts Options) (*Log, error) {
 // DryRun reports whether the log only plans actions.
 func (l *Log) DryRun() bool { return l.opts.DryRun }
 
+// SegmentPath is where Checkpoint puts this run's lines on day t:
+// actions/<date>/<host>-<run>.jsonl (the ledger sink's layout).
+func (l *Log) SegmentPath(t time.Time) string {
+	host := l.opts.Host
+	if host == "" {
+		host = "cli"
+	}
+	return "actions/" + t.UTC().Format("2006-01-02") + "/" + host + "-" + l.opts.Run + ".jsonl"
+}
+
 // Do runs perform for a, unless --dry-run is set, the idempotency key already
 // completed, or policy refuses it. It always logs the outcome, except for an
 // idempotent repeat, which returns the earlier record.
@@ -305,14 +315,18 @@ func (d DirSink) Append(date, host, run string, lines [][]byte) error {
 
 // Checkpoint appends the lines logged since the last checkpoint to the
 // segment sink (called at each build checkpoint and on ship).
-func (l *Log) Checkpoint() error {
+func (l *Log) Checkpoint() error { return l.CheckpointTo(l.opts.Sink) }
+
+// CheckpointTo is Checkpoint with a given sink, e.g. one that pushes with the
+// verb's own token.
+func (l *Log) CheckpointTo(sink SegmentSink) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.opts.Sink == nil || len(l.unflushed) == 0 {
+	if sink == nil || len(l.unflushed) == 0 {
 		return nil
 	}
 	date := l.opts.Now().UTC().Format("2006-01-02")
-	if err := l.opts.Sink.Append(date, l.opts.Host, l.opts.Run, l.unflushed); err != nil {
+	if err := sink.Append(date, l.opts.Host, l.opts.Run, l.unflushed); err != nil {
 		return err
 	}
 	l.unflushed = nil

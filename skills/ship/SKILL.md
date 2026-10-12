@@ -16,6 +16,11 @@ aayu:
       required: true
       positional: true
       description: "Pull request to ship."
+    - name: solo-bypass
+      type: bool
+      required: false
+      positional: false
+      description: "Solo mode only (one human, no bot App): merge without a second person's approval, recorded in the PR, the ship record, and the actions log (Appendix B D2)."
   outputs:
     - "merge-commit"
     - "complete-section"

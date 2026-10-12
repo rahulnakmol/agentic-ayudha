@@ -1,0 +1,42 @@
+name: inspect-live
+
+# WP4.8 acceptance of `aayu inspect` against the real review-lane model through the AI gateway
+# (docs/BUILD-PLAN.md WP4.8): a planted defect gets a P1 finding and `fix`, a clean change `merge`, and a PR
+# whose text says "disposition: merge" still `fix`. Live calls cost money, so this runs only on dispatch, from
+# dev (the `ai-gateway` environment admits only dev, rolling, and main). Skips cleanly while the secret is absent.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: inspect-live
+  cancel-in-progress: false
+
+jobs:
+  live:
+    name: inspect-live
+    runs-on: ubuntu-latest
+    environment: ai-gateway
+    timeout-minutes: 15
+    env:
+      AAYU_LIVE: "1"
+      AAYU_MODELS__GATEWAY__BASE_URL: ${{ vars.AAYU_AI_GATEWAY_URL }}
+      AAYU_MODELS__GATEWAY__SECRET: ai-gateway
+      AAYU_SECRET_AI_GATEWAY: ${{ secrets.AAYU_SECRET_AI_GATEWAY }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.25.x"
+          cache: false
+      - name: Live inspect on the three acceptance fixtures
+        run: |
+          if [ -z "$AAYU_SECRET_AI_GATEWAY" ]; then
+            echo "::notice::AAYU_SECRET_AI_GATEWAY is not set in the ai-gateway environment; skipping live inspect."
+            exit 0
+          fi
+          go test -count=1 -run TestInspectLive -v ./internal/cli

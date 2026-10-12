@@ -1,0 +1,14 @@
+{
+  "source": "Synthetic: written from Figma's remote MCP server documentation (https://mcp.figma.com/mcp; get_metadata and get_variable_defs take fileKey and nodeId) because no Figma account exists yet",
+  "server": {"name": "Figma Dev Mode MCP", "version": "1.0.0"},
+  "tools": [
+    {"name": "get_metadata", "annotations": {"readOnlyHint": true}, "inputSchema": {"type": "object", "properties": {"fileKey": {"type": "string"}, "nodeId": {"type": "string"}, "clientLanguages": {"type": "string"}}}},
+    {"name": "get_variable_defs", "annotations": {"readOnlyHint": true}, "inputSchema": {"type": "object", "properties": {"fileKey": {"type": "string"}, "nodeId": {"type": "string"}}}},
+    {"name": "get_screenshot", "inputSchema": {"type": "object", "properties": {"fileKey": {"type": "string"}, "nodeId": {"type": "string"}}}},
+    {"name": "whoami", "inputSchema": {"type": "object"}}
+  ],
+  "results": {
+    "get_metadata": {"content": [{"type": "text", "text": "<frame id=\"4:7\" name=\"Login\" x=\"0\" y=\"0\" width=\"390\" height=\"844\" />"}]},
+    "get_variable_defs": {"content": [{"type": "text", "text": "{\"color/brand/primary\":\"#1A66CC\",\"space/4\":\"16\"}"}]}
+  }
+}

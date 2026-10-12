@@ -248,7 +248,8 @@ func TestInitAdoptsLedgerAndUninit(t *testing.T) {
 }
 
 // WP2.6 accept: --gates installs exactly the workflows whose WP the binary has
-// (golden): two on the WP2.6 binary, three since WP2.9 added triage;
+// (golden): two on the WP2.6 binary, three since WP2.9 added triage, four
+// since WP4.8 added the merge gate, five with the WP5.7 streak;
 // every extra is idempotent; uninit --external lists what init created outside
 // the repository.
 func TestInitExtras(t *testing.T) {
@@ -277,10 +278,10 @@ func TestInitExtras(t *testing.T) {
 		}
 	}
 	slices.Sort(workflows)
-	if !slices.Equal(workflows, []string{"aayudha-ready-guard.yml", "aayudha-token.yml", "aayudha-triage.yml", "ci.yml"}) || files[".github/workflows/ci.yml"] != ciYML {
+	if !slices.Equal(workflows, []string{"aayudha-merge-gate.yml", "aayudha-ready-guard.yml", "aayudha-streak.yml", "aayudha-token.yml", "aayudha-triage.yml", "ci.yml"}) || files[".github/workflows/ci.yml"] != ciYML {
 		t.Fatalf("workflows after --gates: %v", workflows)
 	}
-	for _, wf := range []string{"aayudha-ready-guard.yml", "aayudha-token.yml", "aayudha-triage.yml"} {
+	for _, wf := range []string{"aayudha-merge-gate.yml", "aayudha-ready-guard.yml", "aayudha-streak.yml", "aayudha-token.yml", "aayudha-triage.yml"} {
 		golden := filepath.Join("testdata", "gates", wf)
 		if *updateGolden {
 			_ = os.MkdirAll(filepath.Dir(golden), 0o755)
@@ -290,6 +291,10 @@ func TestInitExtras(t *testing.T) {
 		if err != nil || string(want) != files[".github/workflows/"+wf] {
 			t.Errorf("%s differs from %s (go test ./internal/cli -run TestInitExtras -update-golden)", wf, golden)
 		}
+	}
+	// aayudha runs its own streak workflow: the template as a development build installs it.
+	if own, err := os.ReadFile(filepath.Join("..", "..", ".github", "workflows", "aayudha-streak.yml")); err != nil || string(own) != string(initrepo.GateWorkflows("dev")[initrepo.StreakWorkflow]) {
+		t.Errorf(".github/workflows/aayudha-streak.yml is not the WP5.7 template rendered for dev")
 	}
 	cfg := files[".aayudha/config.toml"]
 	for _, want := range []string{"[identity]\napp_id = 4242\napp_slug = \"aayudha-r\"\nbroker = \"aayudha-token.yml\"", "[integrations.posthog]", "[integrations.sentry]", "[integrations.growthbook]"} {

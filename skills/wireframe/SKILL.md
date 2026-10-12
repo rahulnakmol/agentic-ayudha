@@ -16,6 +16,11 @@ aayu:
       required: true
       positional: true
       description: "Feature to wireframe."
+    - name: from
+      type: path
+      required: true
+      positional: false
+      description: "Directory with stage.json and one wireframe per state (SVG, HTML, Markdown, or an image)."
   outputs:
     - "wireframes"
   gates:
@@ -29,4 +34,23 @@ aayu:
 
 Produce wireframes for a Feature's states from its research and criteria.
 
-Body lands in WP6.5 (the verb). Format and lint: skills/README.md.
+1. Read the research stage (`design/<feature>/research/` on the ledger) and the stories' Completion Goal states.
+2. Draw one low-fidelity wireframe per UI state: structure, content, and controls, no styling. Use SVG, HTML,
+   or Markdown (an image is accepted but cannot be checked). Never trace a Mobbin screen.
+3. List the states in `stage.json` in the same directory:
+
+   ```json
+   {"states": [{"id": "list", "title": "Orders list", "file": "list.svg"},
+               {"id": "empty", "title": "No orders yet", "file": "empty.md"}]}
+   ```
+
+4. Pin them on the ledger:
+
+   ```sh
+   aayu wireframe 42 --from .aayudha/design/42/wireframe
+   ```
+
+The binary refuses (exit 4) until the research stage is on the ledger, and pins the research manifest by its
+SHA-256 in `design/<feature>/wireframe/manifest.json`.
+
+Format and lint: skills/README.md.

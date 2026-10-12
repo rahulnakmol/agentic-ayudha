@@ -6,6 +6,7 @@ package fake
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -61,6 +62,68 @@ type Issue struct {
 	Parent    int        `json:"-"`
 }
 
+// PR is a pull request; it shares its number with an Issue, as on GitHub.
+type PR struct {
+	Number int     `json:"number"`
+	Title  string  `json:"title"`
+	Body   string  `json:"body"`
+	State  string  `json:"state"`
+	Draft  bool    `json:"draft"`
+	Merged bool    `json:"merged"`
+	User   Account `json:"user"`
+	Head   Branch  `json:"head"`
+	Base   Branch  `json:"base"`
+	// MergeCommitSHA is set when the PR merges through the fake.
+	MergeCommitSHA string   `json:"merge_commit_sha,omitempty"`
+	Reviews        []Review `json:"-"`
+	Files          []string `json:"-"`
+	Diff           string   `json:"-"`
+}
+
+// Account is a user or bot.
+type Account struct {
+	Login string `json:"login"`
+	Type  string `json:"type"`
+}
+
+// Branch is a PR head or base.
+type Branch struct {
+	Ref string `json:"ref"`
+	SHA string `json:"sha"`
+}
+
+// Review is a PR review.
+type Review struct {
+	ID       int64   `json:"id"`
+	User     Account `json:"user"`
+	State    string  `json:"state"`
+	CommitID string  `json:"commit_id"`
+}
+
+// CheckRun is a check run on a commit.
+type CheckRun struct {
+	Name       string `json:"name"`
+	Status     string `json:"status"`
+	Conclusion string `json:"conclusion"`
+}
+
+// WorkflowRun is an Actions run.
+type WorkflowRun struct {
+	ID         int64  `json:"id"`
+	Path       string `json:"path"`
+	HeadSHA    string `json:"head_sha"`
+	Event      string `json:"event"`
+	Status     string `json:"status"`
+	Conclusion string `json:"conclusion"`
+}
+
+// ArtifactZip is a run artifact with its zip bytes.
+type ArtifactZip struct {
+	ID   int64
+	Name string
+	Zip  []byte
+}
+
 // Request is one recorded request.
 type Request struct {
 	Method, Path string
@@ -83,12 +146,22 @@ type GitHub struct {
 	Trees      map[string][]map[string]any // sha -> entries
 	Commits    map[string]map[string]any   // sha -> commit
 	Issues     map[int]*Issue
+	Pulls      map[int]*PR
+	CheckRuns  map[string][]CheckRun   // commit SHA -> check runs, newest first
+	Runs       []WorkflowRun           // Actions workflow runs
+	Artifacts  map[int64][]ArtifactZip // run ID -> artifacts
 	Requests   []Request
 	Projects   []map[string]any  // Projects v2: id, title
 	Secrets    map[string]string // Actions secret name -> encrypted value
 	Variables  map[string]string
 	PublicKey  string         // base64 Curve25519 key for Actions secrets
 	App        map[string]any // what /app-manifests/{code}/conversions returns
+
+	Files map[string]string // repository file path -> content, served by the contents API for any ref
+	// Static answers GET requests the fake does not model (pull requests and
+	// their commits, files, and reviews), keyed by path without the query.
+	Static map[string]any
+
 	// Fail makes the request with this "METHOD /path" fail with a 500 once
 	// it has succeeded After times.
 	Fail      string
@@ -102,7 +175,7 @@ type GitHub struct {
 func New(t testing.TB, repo, ownerType string) *GitHub {
 	owner, name, _ := strings.Cut(repo, "/")
 	g := &GitHub{Owner: owner, OwnerType: ownerType, Repo: name, Default: "dev", Viewer: owner,
-		Refs: map[string]string{}, Trees: map[string][]map[string]any{}, Commits: map[string]map[string]any{}, Issues: map[int]*Issue{}, seq: 1000}
+		Refs: map[string]string{}, Trees: map[string][]map[string]any{}, Commits: map[string]map[string]any{}, Issues: map[int]*Issue{}, Pulls: map[int]*PR{}, CheckRuns: map[string][]CheckRun{}, Artifacts: map[int64][]ArtifactZip{}, seq: 1000}
 	g.Server = httptest.NewServer(http.HandlerFunc(g.serve))
 	t.Cleanup(g.Server.Close)
 	return g
@@ -156,6 +229,17 @@ func (g *GitHub) label(name string) Label {
 	return Label{ID: g.seq, Name: name}
 }
 
+// AddPR adds an open pull request from head (at headSHA) into base, authored by author.
+func (g *GitHub) AddPR(title, body, author, head, headSHA, base string) *PR {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+	is := g.addIssue(title, body, nil)
+	pr := &PR{Number: is.Number, Title: title, Body: body, State: "open", User: Account{Login: author, Type: "User"},
+		Head: Branch{Ref: head, SHA: headSHA}, Base: Branch{Ref: base, SHA: strings.Repeat("b", 40)}}
+	g.Pulls[is.Number] = pr
+	return pr
+}
+
 // LabelNames returns an issue's label names.
 func (g *GitHub) LabelNames(n int) []string {
 	g.Mu.Lock()
@@ -175,13 +259,18 @@ func (g *GitHub) nextSHA(v any) string {
 }
 
 var (
-	reIssue    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)$`)
-	reLabels   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/labels$`)
-	reLabel    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/labels/(.+)$`)
-	reComments = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/comments$`)
-	reComment  = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/comments/([0-9]+)$`)
-	reSubs     = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/sub_issues$`)
-	reParent   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/parent$`)
+	reCheckRuns = regexp.MustCompile(`^/repos/[^/]+/[^/]+/commits/([^/]+)/check-runs$`)
+	reWfRuns    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/workflows/([^/]+)/runs$`)
+	reRunArts   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/runs/([0-9]+)/artifacts$`)
+	reArtZip    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/artifacts/([0-9]+)/zip$`)
+	rePull      = regexp.MustCompile(`^/repos/[^/]+/[^/]+/pulls/([0-9]+)(/reviews|/files|/merge)?$`)
+	reIssue     = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)$`)
+	reLabels    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/labels$`)
+	reLabel     = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/labels/(.+)$`)
+	reComments  = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/comments$`)
+	reComment   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/comments/([0-9]+)$`)
+	reSubs      = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/sub_issues$`)
+	reParent    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/parent$`)
 )
 
 func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
@@ -217,6 +306,10 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 	notFound := func() { reply(http.StatusNotFound, map[string]any{"message": "Not Found"}) }
 	str := func(k string) string { s, _ := body[k].(string); return s }
 
+	if v, ok := g.Static[path]; ok && r.Method == "GET" {
+		reply(200, v)
+		return
+	}
 	switch m, p := r.Method, path; {
 	case m == "GET" && p == "/user":
 		reply(200, map[string]any{"login": g.Viewer, "type": "User"})
@@ -292,6 +385,20 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		g.Variables[str("name")] = str("value")
 		w.WriteHeader(201)
+	case (m == "GET" || m == "PATCH") && strings.HasPrefix(p, repo+"/actions/variables/"):
+		name := strings.TrimPrefix(p, repo+"/actions/variables/")
+		v, ok := g.Variables[name]
+		if !ok {
+			notFound()
+			return
+		}
+		if m == "PATCH" {
+			v = str("value")
+			g.Variables[name] = v
+			w.WriteHeader(204)
+			return
+		}
+		reply(200, map[string]any{"name": name, "value": v})
 	case m == "DELETE" && strings.HasPrefix(p, repo+"/actions/variables/"):
 		delete(g.Variables, strings.TrimPrefix(p, repo+"/actions/variables/"))
 		w.WriteHeader(204)
@@ -306,6 +413,16 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		notFound()
+
+	// Repository contents.
+	case m == "GET" && strings.HasPrefix(p, repo+"/contents/"):
+		f := strings.TrimPrefix(p, repo+"/contents/")
+		content, ok := g.Files[f]
+		if !ok {
+			notFound()
+			return
+		}
+		reply(200, map[string]any{"type": "file", "path": f, "encoding": "base64", "content": base64.StdEncoding.EncodeToString([]byte(content))})
 
 	// Labels.
 	case m == "GET" && p == repo+"/labels":
@@ -443,6 +560,94 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			labels = append(labels, l.(string))
 		}
 		reply(201, g.addIssue(str("title"), str("body"), labels))
+	case m == "GET" && reCheckRuns.MatchString(p):
+		runs := g.CheckRuns[reCheckRuns.FindStringSubmatch(p)[1]]
+		if runs == nil {
+			runs = []CheckRun{}
+		}
+		reply(200, map[string]any{"total_count": len(runs), "check_runs": runs})
+	case m == "GET" && reWfRuns.MatchString(p):
+		file, q := reWfRuns.FindStringSubmatch(p)[1], r.URL.Query()
+		out := []WorkflowRun{}
+		for _, run := range g.Runs {
+			if strings.HasSuffix(run.Path, "/"+file) && (q.Get("head_sha") == "" || q.Get("head_sha") == run.HeadSHA) && (q.Get("event") == "" || q.Get("event") == run.Event) {
+				out = append(out, run)
+			}
+		}
+		reply(200, map[string]any{"total_count": len(out), "workflow_runs": out})
+	case m == "GET" && reRunArts.MatchString(p):
+		out := []map[string]any{}
+		for _, a := range g.Artifacts[int64(atoi(reRunArts.FindStringSubmatch(p)[1]))] {
+			out = append(out, map[string]any{"id": a.ID, "name": a.Name, "expired": false})
+		}
+		reply(200, map[string]any{"total_count": len(out), "artifacts": out})
+	case m == "GET" && reArtZip.MatchString(p):
+		w.Header().Set("Location", g.Server.URL+"/blob/"+reArtZip.FindStringSubmatch(p)[1])
+		w.WriteHeader(http.StatusFound)
+	case m == "GET" && strings.HasPrefix(p, "/blob/"):
+		id := int64(atoi(strings.TrimPrefix(p, "/blob/")))
+		for _, arts := range g.Artifacts {
+			for _, a := range arts {
+				if a.ID == id {
+					_, _ = w.Write(a.Zip)
+					return
+				}
+			}
+		}
+		notFound()
+	case m == "POST" && p == repo+"/pulls":
+		is := g.addIssue(str("title"), str("body"), nil)
+		pr := &PR{Number: is.Number, Title: str("title"), Body: str("body"), State: "open", User: Account{Login: g.Viewer, Type: "User"},
+			Head: Branch{Ref: str("head")}, Base: Branch{Ref: str("base"), SHA: strings.Repeat("b", 40)}}
+		g.Pulls[is.Number] = pr
+		reply(201, pr)
+	case m == "GET" && p == repo+"/pulls":
+		out := []*PR{}
+		for _, pr := range g.Pulls {
+			if head := r.URL.Query().Get("head"); pr.State == "open" && (head == "" || head == g.Owner+":"+pr.Head.Ref) {
+				out = append(out, pr)
+			}
+		}
+		reply(200, out)
+	case rePull.MatchString(p):
+		sm := rePull.FindStringSubmatch(p)
+		pr := g.Pulls[atoi(sm[1])]
+		if pr == nil {
+			notFound()
+			return
+		}
+		switch {
+		case sm[2] == "" && m == "GET":
+			if r.Header.Get("Accept") == "application/vnd.github.v3.diff" {
+				w.WriteHeader(200)
+				_, _ = w.Write([]byte(pr.Diff))
+				return
+			}
+			reply(200, pr)
+		case sm[2] == "/reviews" && m == "GET":
+			out := []Review{}
+			out = append(out, pr.Reviews...)
+			reply(200, out)
+		case sm[2] == "/files" && m == "GET":
+			out := []map[string]any{}
+			for _, f := range pr.Files {
+				out = append(out, map[string]any{"filename": f, "status": "modified"})
+			}
+			reply(200, out)
+		case sm[2] == "/merge" && m == "PUT":
+			if sha, _ := body["sha"].(string); sha != "" && sha != pr.Head.SHA {
+				reply(409, map[string]any{"message": "Head branch was modified. Review and try the merge again."})
+				return
+			}
+			pr.Merged, pr.State = true, "closed"
+			pr.MergeCommitSHA = g.nextSHA(body)
+			if is := g.Issues[pr.Number]; is != nil {
+				is.State = "closed"
+			}
+			reply(200, map[string]any{"merged": true, "sha": pr.MergeCommitSHA, "message": "Pull Request successfully merged"})
+		default:
+			notFound()
+		}
 	case reIssue.MatchString(p):
 		is := g.Issues[atoi(reIssue.FindStringSubmatch(p)[1])]
 		if is == nil {

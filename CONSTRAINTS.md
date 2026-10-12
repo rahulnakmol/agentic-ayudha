@@ -30,7 +30,7 @@ its value, and WP0.5 chose it.
 | `verify.floors.a11y.min_target_px` | `44` | Minimum touch target edge, in CSS pixels (44×44). | WP4.5 |
 | `verify.floors.screen_reader.layers` | `["L01"]` | Story footprints that run the VoiceOver and NVDA floor (on label or nightly). | WP4.7 |
 | `verify.floors.screen_reader.max_missing_phrases` | `0` | Expected phrases from the Ready snapshot that may be missing from the transcript. | WP4.7 |
-| `verify.floors.dast.max_high` | `0` | High ZAP baseline alerts allowed when DAST runs. | proposed (WP0.5) |
+| `verify.floors.dast.max_high` | `0` | High-risk ZAP alerts allowed when DAST runs (passive baseline plus the active cross-site scripting and injection rules). | proposed (WP0.5) |
 | `verify.floors.mobile.skipped_blocks_ship` | `true` | A `skipped: mobile` floor blocks `ship` unless a floor-waiver Decision exists. | WP4.9 |
 
 Performance (Lighthouse CI) and API (k6) budgets are product-specific and have no default (WP4.5, WP4.6). Every floor miss blocks; no model disposition can override it (ground rule 7). A waiver is a recorded Decision (`decide --waiver <floor>`, WP5.6) that `audit` counts.
@@ -42,6 +42,7 @@ Performance (Lighthouse CI) and API (k6) budgets are product-specific and have n
 | `autonomy.streak` | `20` | Consecutive correction-free merges on a layer before agents may merge on it without a human pass. Computed by the protected streak workflow from merged-PR history, never stored where an agent can write it (V4). | WP5.7 |
 | `autonomy.never` | `["L04", "L07", "L09"]` | Layers that always need a human CODEOWNER approval and an EM plan-time review, whatever the streak: domain/policy, operational data/state, and platform. | proposed (WP0.5) |
 | `autonomy.approver` | `""` | GitHub login that gives the human pass in solo mode. Empty until `init` sets it. | WP5.5 |
+| `autonomy.correction_days` | `14` | Days after a merge in which a Bug or Incident that links the PR counts as a correction and resets the streak of every layer the PR touched. | proposed (WP5.7) |
 | `autonomy.budget.wall_hours` | `8` | Wall-clock hours one `build` may run before the story is marked `status:blocked` and the owner is paged. | proposed (WP0.5) |
 | `autonomy.budget.cost_usd` | `25.0` | Model spend, in USD, one `build` may use before it is blocked. | proposed (WP0.5) |
 | `autonomy.budget.attempts` | `3` | Failed checkpoint attempts before a story is blocked. A second failure on a never-layer blocks regardless. | proposed (WP0.5) |
@@ -56,6 +57,12 @@ Performance (Lighthouse CI) and API (k6) budgets are product-specific and have n
 | `budget.ci_minutes_month` | `2000` | GitHub Actions minutes per month that agent-started workflows may use. | proposed (WP0.5) |
 
 When a budget trips, the breaker pauses agent lanes and pages through `[notify]` once per day (WP1.6).
+
+## Design review
+
+| Key | Default | Meaning | Source |
+|---|---|---|---|
+| `review.figma_diff_max` | `2.0` | Largest share of pixels, in percent, a prototype screenshot may differ from its Figma frame after the anti-aliasing mask. Colour and typography token mismatches are counted separately and must be zero. | WP6.5 |
 
 ## Retention
 

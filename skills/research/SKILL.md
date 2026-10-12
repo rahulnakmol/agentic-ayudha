@@ -16,6 +16,25 @@ aayu:
       required: true
       positional: true
       description: "Feature to research."
+    - name: from
+      type: path
+      required: false
+      positional: false
+      description: "Directory with stage.json: the references the host gathered (URLs and IDs only) and Markdown research notes."
+    - name: query
+      type: string
+      required: false
+      positional: false
+      description: "Search Mobbin screens for this; needs [integrations.mobbin]."
+    - name: platform
+      type: enum
+      required: false
+      positional: false
+      enum:
+        - "ios"
+        - "android"
+        - "web"
+      description: "Platform to search Mobbin on."
   outputs:
     - "reference-set"
   gates:
@@ -28,4 +47,25 @@ aayu:
 
 Gather pinned design references (URLs and IDs only) and user research for a Feature.
 
-Body lands in WP6.5 (the verb). Format and lint: skills/README.md.
+1. Read the Feature and its stories. Collect references that show how others solve the same problem:
+   Mobbin screens, guidelines, competitor pages. Keep each as a page URL and an ID, never as an image:
+   do not download, screenshot, or paste Mobbin pixels anywhere (Mobbin's terms; the binary refuses them).
+2. Write what you learned from users (seeded or synthetic data only) as Markdown notes.
+3. Put both in a directory with a `stage.json`:
+
+   ```json
+   {"notes": "notes.md",
+    "references": [{"source": "mobbin", "kind": "screen", "id": "3f2c…", "url": "https://mobbin.com/screens/3f2c…"}]}
+   ```
+
+4. Pin them on the ledger. With `[integrations.mobbin]` set, `--query` also searches Mobbin screens:
+
+   ```sh
+   aayu research 42 --from .aayudha/design/42/research
+   aayu research 42 --from .aayudha/design/42/research --query "orders list" --platform ios
+   ```
+
+The binary checks every reference is an https page URL with an ID (never an image), and writes
+`design/<feature>/research/` on the ledger: the reference set, the notes, and a manifest.
+
+Format and lint: skills/README.md.

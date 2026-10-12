@@ -9,9 +9,13 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/providers"
 	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
 	"github.com/rahulnakmol/agentic-ayudha/internal/upgrade"
 )
@@ -212,42 +216,118 @@ func checkIssueTypes(ctx context.Context, p *Probe) Result {
 	return Result{Status: Pass, Detail: "personal repository: issue types are organization-only, so work-item types use the type:* label fallback (R1)"}
 }
 
-func checkIntegrations(_ context.Context, p *Probe) Result {
-	if p.Config == nil || len(p.Config.Config.Integrations) == 0 {
-		return Result{Status: Pass, Detail: "no integrations configured"}
+// checkIntegrations reports every adapter this binary carries and every
+// configured integration (WP1.3, WP5.2): an unconfigured adapter is "not
+// configured", never a failure; a configured one is resolved (a write-scoped
+// key is refused before any call) and its provider is asked who the key
+// belongs to and what it may do.
+func checkIntegrations(ctx context.Context, p *Probe) Result {
+	var configured map[string]config.Integration
+	if p.Config != nil {
+		configured = p.Config.Config.Integrations
 	}
-	names := make([]string, 0, len(p.Config.Config.Integrations))
-	for n := range p.Config.Config.Integrations {
-		names = append(names, n)
+	var names, extra []string
+	for _, k := range providers.Known {
+		names = append(names, k.Name)
 	}
-	sort.Strings(names)
-	r := Result{Status: Pass, Detail: fmt.Sprintf("%d integration(s); provider reachability and real key scope: not yet available (WP5.2)", len(names))}
-	for _, n := range names {
-		in := p.Config.Config.Integrations[n]
-		if _, backend, err := p.Secrets.Get(in.Secret); err != nil {
-			r.Status = Warn
-			r.Lines = append(r.Lines, fmt.Sprintf("%s: secret %q is not set (aayu auth set-secret %s, or %s)", n, in.Secret, in.Secret, secrets.EnvVar(in.Secret)))
-		} else {
-			r.Lines = append(r.Lines, fmt.Sprintf("%s: secret %q in %s, configured scope %s", n, in.Secret, backend, in.Scope))
+	for n := range configured {
+		if !slices.Contains(names, n) {
+			extra = append(extra, n)
 		}
+	}
+	sort.Strings(extra)
+	r := Result{Status: Pass}
+	worse := func(s Status) {
+		if s == Fail || (s == Warn && r.Status == Pass) {
+			r.Status = s
+		}
+	}
+	reachable := 0
+	for _, n := range append(names, extra...) {
+		in, ok := configured[n]
+		if !ok {
+			k, _ := providers.Find(n)
+			r.Lines = append(r.Lines, fmt.Sprintf("%s: not configured; set [integrations.%s] for %s", n, n, k.Purpose))
+			continue
+		}
+		if p.Integration == nil {
+			worse(Warn)
+			r.Lines = append(r.Lines, n+": not checked")
+			continue
+		}
+		cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		sc, err := p.Integration(cctx, n)
+		cancel()
+		switch {
+		case errors.Is(err, integrations.ErrNoAdapter):
+			r.Lines = append(r.Lines, fmt.Sprintf("%s: configured; no adapter in this binary yet, so not checked", n))
+		case errors.Is(err, secrets.ErrWriteScoped):
+			worse(Fail)
+			r.Lines = append(r.Lines, fmt.Sprintf("%s: scope = %q: read verbs refuse this key, so it was not sent; configure a read-only key", n, in.Scope))
+		case errors.Is(err, integrations.ErrNotConfigured):
+			worse(Warn)
+			r.Lines = append(r.Lines, fmt.Sprintf("%s: %v", n, err))
+		case err != nil:
+			worse(Fail)
+			r.Lines = append(r.Lines, fmt.Sprintf("%s: unreachable: %v", n, err))
+		case len(sc.Write) > 0:
+			worse(Fail)
+			r.Lines = append(r.Lines, fmt.Sprintf("%s: reachable, but the key is write-capable (%s per %s); read verbs refuse it", n, strings.Join(sc.Write, ", "), sc.Endpoint))
+		case sc.Verified:
+			reachable++
+			r.Lines = append(r.Lines, fmt.Sprintf("%s: reachable as %s; read-only scope verified (%s per %s)", n, sc.Account, strings.Join(sc.Scopes, ", "), sc.Endpoint))
+		default:
+			reachable++
+			r.Lines = append(r.Lines, fmt.Sprintf("%s: reachable as %s; the provider does not report this key's scope, so configured scope %s is trusted", n, sc.Account, in.Scope))
+		}
+	}
+	r.Detail = fmt.Sprintf("%d of %d configured integration(s) reachable with a read-only key", reachable, len(configured))
+	if len(configured) == 0 {
+		r.Detail = "no integrations configured"
 	}
 	return r
 }
 
-// OptionalTools are reported when missing; none is required.
-var OptionalTools = []string{"node", "playwright", "axe", "semgrep", "gitleaks", "osv-scanner", "zap.sh", "k6", "lighthouse", "guidepup", "impeccable"}
+// OptionalTool is a program doctor looks for on PATH and what needs it.
+type OptionalTool struct {
+	Name  string
+	Use   string
+	Floor bool // a verify floor runs it: without it the floor blocks, it never passes (WP4.3)
+}
+
+// OptionalTools are reported when missing; none is required to run aayudha.
+// Playwright, axe-core, Lighthouse's runtime, and Guidepup are npm packages
+// the web and screen-reader floors load through node.
+var OptionalTools = []OptionalTool{
+	{"node", "a11y, perf, and screen-reader floors: Playwright, axe-core, Guidepup", true},
+	{"semgrep", "sast floor", true},
+	{"gitleaks", "secrets floor", true},
+	{"osv-scanner", "deps floor", true},
+	{"docker", "dast floor: ZAP", true},
+	{"k6", "api floor", true},
+	{"lighthouse", "perf floor", true},
+	{"tesseract", "OCR in the redaction pass; without it the pass scans the DOM only", false},
+	{"impeccable", "review lane B", false},
+	{"duckdb", "measure, optional", false},
+}
 
 func checkOptionalTools(_ context.Context, p *Probe) Result {
 	var missing []string
+	floors := false
 	for _, t := range OptionalTools {
-		if _, err := p.LookPath(t); err != nil {
-			missing = append(missing, t)
+		if _, err := p.LookPath(t.Name); err != nil {
+			missing = append(missing, t.Name+" ("+t.Use+")")
+			floors = floors || t.Floor
 		}
 	}
 	if len(missing) == 0 {
 		return Result{Status: Pass, Detail: "all optional tools found"}
 	}
-	return Result{Status: Warn, Detail: fmt.Sprintf("%d optional tool(s) missing; floors that need them are skipped: %s", len(missing), strings.Join(missing, ", "))}
+	d := fmt.Sprintf("%d optional tool(s) missing: %s", len(missing), strings.Join(missing, ", "))
+	if floors {
+		d += "; a floor whose tool is missing blocks verify, it never passes"
+	}
+	return Result{Status: Warn, Detail: d}
 }
 
 func checkWorktrees(ctx context.Context, p *Probe) Result {
@@ -340,6 +420,19 @@ func checkMCP(ctx context.Context, p *Probe) Result {
 // checkLedgerMedia catches a visibility change after init (V3, WP2.5): a public
 // repository whose ledger tracks proof media in Git LFS is a floor-blocking
 // failure, because LFS objects cannot be purged from GitHub.
+// checkLFSQuota: GitHub publishes no LFS quota API for personal accounts
+// (Appendix B D-1.7a), so the check says where the media go and where to look.
+func checkLFSQuota(_ context.Context, p *Probe) Result {
+	if p.Config != nil && p.Config.Config.Proof.Media != "" {
+		return Result{Status: Pass, Detail: "proof media go to the bucket " + p.Config.Config.Proof.Media + "; the ledger keeps only hashes and data artifacts"}
+	}
+	warn := 80
+	if p.Config != nil && p.Config.Config.LFS.QuotaWarnPercent > 0 {
+		warn = p.Config.Config.LFS.QuotaWarnPercent
+	}
+	return Result{Status: NA, Detail: fmt.Sprintf("LFS quota: GitHub has no quota API for this account; watch Settings > Billing > Git LFS (warn at %d %%)", warn)}
+}
+
 func checkLedgerMedia(ctx context.Context, p *Probe) Result {
 	if p.Root == "" {
 		return Result{Status: Pass, Detail: "not in a repository"}

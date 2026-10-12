@@ -1,0 +1,10 @@
+{
+  "number": 30,
+  "title": "Claims list",
+  "state": "open",
+  "labels": [
+    {
+      "name": "type:feature"
+    }
+  ]
+}

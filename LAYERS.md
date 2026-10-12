@@ -4,7 +4,7 @@
 
 Generated from `internal/verbs/registry.go` by `go generate ./...`. A changed path belongs to the
 layer whose glob matches it; `slice` and the screen-reader floor compute story footprints from these globs.
-Each layer has exactly one owner seat. Seat charters land in WP5.1.
+Each layer has exactly one owner seat; its charter is `seats/<seat>/CHARTER.md`.
 
 | Layer | Name | Owner seat | Paths |
 |---|---|---|---|

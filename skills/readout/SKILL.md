@@ -16,6 +16,24 @@ aayu:
       required: true
       positional: true
       description: "Experiment to read out."
+    - name: source
+      type: enum
+      required: false
+      positional: false
+      enum:
+        - "posthog"
+        - "growthbook"
+      description: "Where the per-arm counts come from; default posthog."
+    - name: metric
+      type: string
+      required: false
+      positional: false
+      description: "GrowthBook metric ID (with --source growthbook); PostHog uses the Experiment's Metric."
+    - name: from
+      type: string
+      required: false
+      positional: false
+      description: "Start of the PostHog readout window (YYYY-MM-DD, UTC); default the Experiment's creation."
   outputs:
     - "result"
   gates:
@@ -28,4 +46,16 @@ aayu:
 
 Read out an experiment's lift once it reaches minimum sample and write the Result.
 
-Body lands in WP6.7 (the verb). Format and lint: skills/README.md.
+Run the readout once the experiment has run long enough:
+
+```sh
+aayu readout 57
+aayu readout 57 --source growthbook --metric met_signup
+```
+
+The binary refuses (exit 4, nothing written) while either arm is under the Experiment's minimum
+sample, or when the stated minimum disagrees with its own parameters. Otherwise it writes the lift,
+z-test, and confidence interval as the Result and sets `status:measured`. Report the Result as
+written; never restate a different number.
+
+Format and lint: skills/README.md.

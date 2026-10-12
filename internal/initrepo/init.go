@@ -20,6 +20,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
+	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -60,7 +61,7 @@ type Init struct {
 }
 
 // Media extensions tracked by LFS on a private repository's ledger (V3).
-var mediaExts = []string{"png", "jpg", "jpeg", "gif", "webp", "mp4", "webm", "mov", "wav", "mp3", "pdf"}
+var mediaExts = proof.MediaExts
 
 // LedgerRuleset is the name of the ruleset init creates when no existing
 // ruleset already protects the ledger branch.
@@ -482,8 +483,37 @@ func (in *Init) config(context.Context) error {
 	} else if err := in.writeFile("config", ConfigPath, []byte(b.String())); err != nil {
 		return err
 	}
-	return in.writeFile("config", ".aayudha/.gitignore", []byte("# Local aayudha runtime state (written by aayu init); never committed.\ntelemetry/\nstate/\nledger-outbox/\nconfig.local.toml\n"))
+	if err := in.writeFile("config", ".aayudha/.gitignore", []byte("# Local aayudha runtime state (written by aayu init); never committed.\ntelemetry/\nstate/\nledger-outbox/\nproof/\nworktrees/\nconfig.local.toml\n")); err != nil {
+		return err
+	}
+	return in.writeFile("config", SeedReadmePath, []byte(SeedReadme))
 }
+
+// SeedReadmePath is the seed-data scaffold init writes (WP4.5).
+const SeedReadmePath = ".aayudha/seed/README.md"
+
+// SeedReadme explains the seed-data contract of the web floors.
+const SeedReadme = `# Seed data for proof captures
+
+` + "`aayu verify`" + ` captures screenshots, recordings, and screen-reader transcripts of the running app. Those captures may
+only show seeded, synthetic data (docs/BUILD-PLAN.md V3, WP4.5). Put the command that loads it here and name it in
+` + "`.aayudha/config.toml`" + `:
+
+` + "```toml" + `
+[verify]
+seed = ["./.aayudha/seed/load.sh"]   # argv; runs once before the first capture
+
+[verify.environments.local]
+url = "http://localhost:3000"        # AAYU_ENV picks the environment (default local)
+
+[verify.environments.prod]
+url = "https://app.example.com"
+production = true                    # verify refuses to capture or seed it (exit 4)
+` + "```" + `
+
+Use reserved example domains (` + "`example.com`" + `, ` + "`*.test`" + `) for email addresses. The redaction pass blocks a pack
+whose captures show any other address, a payment card number, or a national ID number.
+`
 
 // AgentsSectionID is the AGENTS.md section init owns.
 const AgentsSectionID = "work-items"

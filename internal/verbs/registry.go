@@ -452,6 +452,8 @@ func flag(name string, t InputType, desc string) Input {
 
 func humanOnly(in Input) Input { in.HumanOnly = true; return in }
 
+func required(in Input) Input { in.Required = true; return in }
+
 func readOnlyWith(in Input, values ...string) Input { in.ReadOnlyValues = values; return in }
 
 func enumIn(name string, required, positional bool, desc string, values ...string) Input {
@@ -467,6 +469,10 @@ var Verbs = []Command{
 		Inputs: []Input{
 			enumIn("type", true, true, "Work-item type (internal/workitems).", "goal", "initiative", "feature", "story", "bug", "decision", "experiment", "release", "feedback", "incident"),
 			flag("parent", TypeIssue, "Parent issue to link the new work item under."),
+			flag("title", TypeString, "Title of the drafted work item."),
+			flag("body", TypeString, "Drafted issue body in the issue-form layout (### <Field> sections)."),
+			flag("labels", TypeString, "Comma-separated label-held fields, e.g. effort:S,priority:P2."),
+			readOnlyWith(flag("create", TypeBool, "Write the validated draft as an issue (through the actions log); without it grill only validates."), "false"),
 		},
 		Outputs:  []string{"issue"},
 		Gates:    []GateID{GateValidator, GateBaseline, GateHalt},
@@ -552,7 +558,10 @@ var Verbs = []Command{
 		Name: "ship", WP: "WP5.5",
 		Summary: "Squash-merge a PR after a green merge gate and a human pass, write the Complete section, and clean up.",
 		Seat:    EngineeringManager, Lane: LaneChore, Layers: AllLayers(),
-		Inputs:   []Input{pos("pr", TypePR, "Pull request to ship.")},
+		Inputs: []Input{
+			pos("pr", TypePR, "Pull request to ship."),
+			humanOnly(flag("solo-bypass", TypeBool, "Solo mode only (one human, no bot App): merge without a second person's approval, recorded in the PR, the ship record, and the actions log (Appendix B D2).")),
+		},
 		Outputs:  []string{"merge-commit", "complete-section", "status:merged"},
 		Gates:    []GateID{GateMergeGate, GateHumanPass},
 		Surfaces: cliSkill, Identity: IdentityHuman, Mode: ModeNone, Exposure: ExposeNever,
@@ -598,7 +607,12 @@ var Verbs = []Command{
 		Name: "research", WP: "WP6.5",
 		Summary: "Gather pinned design references (URLs and IDs only) and user research for a Feature.",
 		Seat:    UXResearcher, Lane: LaneSpec, Layers: OnlyLayers(L01),
-		Inputs:   []Input{pos("feature", TypeIssue, "Feature to research.")},
+		Inputs: []Input{
+			pos("feature", TypeIssue, "Feature to research."),
+			flag("from", TypePath, "Directory with stage.json: the references the host gathered (URLs and IDs only) and Markdown research notes."),
+			flag("query", TypeString, "Search Mobbin screens for this; needs [integrations.mobbin]."),
+			enumIn("platform", false, false, "Platform to search Mobbin on.", "ios", "android", "web"),
+		},
 		Outputs:  []string{"reference-set"},
 		Gates:    []GateID{GateHalt},
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeRead,
@@ -607,7 +621,10 @@ var Verbs = []Command{
 		Name: "wireframe", WP: "WP6.5",
 		Summary: "Produce wireframes for a Feature's states from its research and criteria.",
 		Seat:    UXResearcher, Lane: LaneBuild, Layers: OnlyLayers(L01),
-		Inputs:   []Input{pos("feature", TypeIssue, "Feature to wireframe.")},
+		Inputs: []Input{
+			pos("feature", TypeIssue, "Feature to wireframe."),
+			required(flag("from", TypePath, "Directory with stage.json and one wireframe per state (SVG, HTML, Markdown, or an image).")),
+		},
 		Outputs:  []string{"wireframes"},
 		Gates:    []GateID{GateHalt, GateBudget},
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeWrite,
@@ -616,7 +633,10 @@ var Verbs = []Command{
 		Name: "mockup", WP: "WP6.5",
 		Summary: "Produce design-system mockups for a Feature from its wireframes.",
 		Seat:    UXResearcher, Lane: LaneBuild, Layers: OnlyLayers(L01),
-		Inputs:   []Input{pos("feature", TypeIssue, "Feature to mock up.")},
+		Inputs: []Input{
+			pos("feature", TypeIssue, "Feature to mock up."),
+			required(flag("from", TypePath, "Directory with stage.json and one SVG or HTML mockup per wireframe state, coloured only with design tokens.")),
+		},
 		Outputs:  []string{"mockups"},
 		Gates:    []GateID{GateHalt, GateBudget},
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeWrite,
@@ -625,7 +645,11 @@ var Verbs = []Command{
 		Name: "prototype", WP: "WP6.5",
 		Summary: "Build a flagged, working prototype of a Feature with Code Connect mapping and a Figma screenshot diff.",
 		Seat:    UXResearcher, Lane: LaneBuild, Layers: OnlyLayers(L01, L02),
-		Inputs:   []Input{pos("feature", TypeIssue, "Feature to prototype.")},
+		Inputs: []Input{
+			pos("feature", TypeIssue, "Feature to prototype."),
+			required(flag("from", TypePath, "Directory with stage.json: the OpenFeature flag, Figma file, Code Connect sources, components, and each state's path and Figma frame.")),
+			flag("captures", TypePath, "Diff these captures (captures.json with PNGs and computed styles) instead of rendering the states."),
+		},
 		Outputs:  []string{"prototype", "feature-flag", "figma-diff"},
 		Gates:    []GateID{GateFigmaDiff, GateHalt, GateBudget},
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeWrite,
@@ -664,7 +688,17 @@ var Verbs = []Command{
 		Name: "experiment", WP: "WP6.7",
 		Summary: "Design an experiment for a Feature: hypothesis, metric, flag, and minimum sample size.",
 		Seat:    RevenueArchitect, Lane: LanePlan, Layers: OnlyLayers(L03, L08),
-		Inputs:   []Input{pos("feature", TypeIssue, "Feature to experiment on.")},
+		Inputs: []Input{
+			pos("feature", TypeIssue, "Feature (or Initiative) to experiment on."),
+			required(flag("hypothesis", TypeString, "If we do X, the metric moves by Z because W.")),
+			required(flag("metric", TypeString, "Conversion event the experiment moves (a PostHog event name).")),
+			required(flag("flag", TypeString, "Feature-flag key that splits traffic: the PostHog flag key and GrowthBook tracking key.")),
+			required(flag("mde", TypeString, "Minimum detectable effect: an absolute rate change (0.02) or a relative one (10%).")),
+			flag("exposure", TypeString, "HogQL predicate for the population the baseline counts; default every person with an event."),
+			flag("alpha", TypeString, "Two-sided significance level; default 0.05."),
+			flag("power", TypeString, "Statistical power; default 0.8."),
+			flag("days", TypeInt, "Baseline window in whole UTC days before today; default 28."),
+		},
 		Outputs:  []string{"experiment", "feature-flag"},
 		Gates:    []GateID{GateBaseline, GateHalt},
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeWrite,
@@ -673,7 +707,12 @@ var Verbs = []Command{
 		Name: "readout", WP: "WP6.7",
 		Summary: "Read out an experiment's lift once it reaches minimum sample and write the Result.",
 		Seat:    RevenueArchitect, Lane: LaneSpec, Layers: OnlyLayers(L08),
-		Inputs:   []Input{pos("experiment", TypeIssue, "Experiment to read out.")},
+		Inputs: []Input{
+			pos("experiment", TypeIssue, "Experiment to read out."),
+			enumIn("source", false, false, "Where the per-arm counts come from; default posthog.", "posthog", "growthbook"),
+			flag("metric", TypeString, "GrowthBook metric ID (with --source growthbook); PostHog uses the Experiment's Metric."),
+			flag("from", TypeString, "Start of the PostHog readout window (YYYY-MM-DD, UTC); default the Experiment's creation."),
+		},
 		Outputs:  []string{"result"},
 		Gates:    []GateID{GateMinSample},
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeWrite,
@@ -698,9 +737,10 @@ var Verbs = []Command{
 			optPos("issue", TypeIssue, "Goal, Initiative, or Feature to roll up; defaults to all Goals."),
 			readOnlyWith(flag("digest", TypeBool, "Send the digest through [notify]."), "false"),
 			flag("all", TypeBool, "Iterate [fleet] repos."),
-			readOnlyWith(flag("apply", TypeBool, "Post the replace-in-place Goal comments and close Features the parent-close rule allows."), "false"),
+			readOnlyWith(flag("apply", TypeBool, "Post the replace-in-place Goal comments and close Features the parent-close rule allows; with --streak, record new corrections on the ledger."), "false"),
+			flag("streak", TypeBool, "Compute the autonomy streak of every layer from merged-PR history instead of the rollups (WP5.7)."),
 		},
-		Outputs:  []string{"rollup", "goal-comment", "digest"},
+		Outputs:  []string{"rollup", "goal-comment", "digest", "streaks"},
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeNone, Exposure: ExposeRead,
 	},
 	{
@@ -724,7 +764,17 @@ var Verbs = []Command{
 		Name: "measure", WP: "WP7.2",
 		Summary: "Measure a Goal or Initiative against its baseline from analytics exports and write the Result.",
 		Seat:    RevenueArchitect, Lane: LaneChore, Layers: OnlyLayers(L08),
-		Inputs:   []Input{optPos("issue", TypeIssue, "Goal or Initiative to measure.")},
+		Inputs: []Input{
+			optPos("issue", TypeIssue, "Goal or Initiative to measure; without it, only the cohorts and North Star are reported."),
+			flag("metric", TypeString, "acquisition, activation, retention, referral, revenue, north_star, or <source>:<metric> [filter]; default the issue's Metric."),
+			flag("from", TypeString, "Window start (YYYY-MM-DD, UTC); default 28 days before --to."),
+			flag("to", TypeString, "Window end, exclusive (YYYY-MM-DD, UTC); default today."),
+			flag("billing", TypePath, "Billing export (CSV)."),
+			flag("appinsights", TypePath, "Application Insights events export (JSON lines)."),
+			flag("aws", TypePath, "AWS CloudWatch RUM events export (JSON lines)."),
+			flag("gcp", TypePath, "Google Analytics 4 / Firebase BigQuery events export (JSON lines)."),
+			enumIn("engine", false, false, "Query engine for the snapshot; duckdb is optional and shelled out.", "sqlite", "duckdb"),
+		},
 		Outputs:  []string{"result", "snapshot"},
 		Gates:    []GateID{GateBaseline},
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeNone, Exposure: ExposeWrite,

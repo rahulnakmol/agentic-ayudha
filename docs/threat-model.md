@@ -64,11 +64,11 @@ described in [SECURITY.md](../SECURITY.md).
 | T11 | A package-manager manifest is hijacked | brew, Scoop, and winget publishing run in separate jobs, each with a token scoped to its own GitHub environment; the build job never holds them | In place (WP0.4); tokens are a founder action |
 | T12 | A malicious dependency or licence problem | `osv-scanner`, `go-licenses`, npm licence scan, `gitleaks`, `semgrep` in CI; new dependencies recorded in THIRD_PARTY_NOTICES.md | In place (WP0.4) |
 | T13 | A malicious or compromised skill | Skills are protected paths; installed copies are hashed in `lock.toml` and checked by `doctor`; `install --pin` rolls back; hooks call only `aayu hook` | Protected path in place; lock and hook lint n/a until WP3.1, WP3.2 |
-| T14 | Personal data in proof media on a public repository | Public repos refuse LFS media and require a private bucket; captures use seeded data; redaction pass blocks the pack; retention and purge | n/a until WP2.5, WP4.2, WP4.5 |
+| T14 | Personal data in proof media on a public repository | Public repos refuse LFS media and require a private bucket; captures use seeded data; redaction pass blocks the pack; retention and purge | `init` and `proof push` refuse LFS media on public repositories, bucket lifecycle and `proof purge` (WP2.5, WP4.2); `[verify] seed`, refusal of production targets, and the redaction pass that blocks the pack (WP4.5) |
 | T15 | Unlogged or unattributed writes | Every external write goes through `internal/actions`; `audit` reconciles it against GitHub's event history | n/a until WP1.5, WP7.6; hand-run reconciliation until then |
 | T16 | Runaway model or CI spend | `[budget]` breaker pauses agent lanes and pages once a day; per-PR inspect cap; expensive floors only where the footprint needs them | n/a until WP1.6 |
 | T17 | A promotion ships a regression without a human watching | Promotions need no human approval (founder policy, CONTRIBUTING.md), so the gate is the control: the candidate merge commit must pass the full rolling or stable suite before the branch moves, and only the admin identity can move `rolling`, `main`, or create `v*` tags | In place (WP0.4) |
-| T18 | The tool itself is compromised | Tool-incident plan: halt, yank the release, pull bad skills, rotate credentials ([SECURITY.md](../SECURITY.md#tool-incident-plan)) | Plan in place; `aayu halt` n/a until WP5.7 |
+| T18 | The tool itself is compromised | Tool-incident plan: halt, yank the release, pull bad skills, rotate credentials ([SECURITY.md](../SECURITY.md#tool-incident-plan)) | Plan in place; `aayu halt` (WP5.7) |
 
 ## Residual risks
 
