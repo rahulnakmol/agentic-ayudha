@@ -779,3 +779,51 @@ func TestCaseBefore(t *testing.T) {
 		t.Fatalf("before: %+v %+v", b, b.Brief)
 	}
 }
+
+// The grill/story case's scope rules (WP5.3, D-5.3c): criteria the request
+// asks for pass, however they are worded; a criterion for a floor that verify
+// already enforces (screen reader, keyboard, accessibility, performance) or
+// for users the request does not mention fails tier 1, as it fails a tier-2
+// run before the judge.
+func TestGrillStoryScope(t *testing.T) {
+	const anchor, last = `expected: the message \"You have no claims yet\" and a \"Start a claim\" button`, `expected: 200 with an empty list`
+	for _, tc := range []struct {
+		name, criterion, added, why string
+	}{
+		{"recorded", "", "", ""},
+		{"requested, other words", `expected: the text \"You have no claims yet\" and a \"Start a claim\" button that opens the new claim form; a claimant with 0 claims sees nothing else`, "", ""},
+		{"screen reader", "", `\n3. [sr-transcript] state: the empty page; expected: the screen reader announces \"You have no claims yet\"`, "a screen-reader criterion"},
+		{"keyboard", `expected: the message \"You have no claims yet\" and a \"Start a claim\" button reachable with the keyboard`, "", "a keyboard or focus criterion"},
+		{"contrast", `expected: the message \"You have no claims yet\" in text meeting WCAG AA contrast`, "", "an accessibility criterion"},
+		{"performance", `expected: the message \"You have no claims yet\" within 2 seconds of sign-in`, "", "a performance budget"},
+		{"other claimants", "", `\n3. [screenshot] state: \u0060/claims\u0060 as a claimant with existing claims; expected: the list is unchanged`, "a criterion for claimants who already have claims"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := copyCase(t, "grill/story-empty-claims")
+			p := filepath.Join(c.Dir, "output", "issue.json")
+			b, _ := os.ReadFile(p)
+			if !strings.Contains(string(b), anchor) {
+				t.Fatal("fixture anchor moved")
+			}
+			out := string(b)
+			if tc.criterion != "" {
+				out = strings.Replace(out, anchor, tc.criterion, 1)
+			}
+			out = strings.Replace(out, last, last+tc.added, 1)
+			_ = os.WriteFile(p, []byte(out), 0o644)
+			r := Tier1(context.Background(), root, c, aayudha.Assets)
+			if status(r, "ready") != Pass {
+				t.Fatalf("the variant must pass Ready, so only scope can fail it:\n%s", r)
+			}
+			if tc.why == "" {
+				if status(r, "scope") != Pass {
+					t.Fatalf("a requested criterion was flagged:\n%s", r)
+				}
+				return
+			}
+			if status(r, "scope") != Fail || !strings.Contains(r.String(), "adds "+tc.why) {
+				t.Fatalf("unrequested %s not caught:\n%s", tc.name, r)
+			}
+		})
+	}
+}

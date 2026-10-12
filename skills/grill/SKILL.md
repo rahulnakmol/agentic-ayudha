@@ -113,6 +113,14 @@ you the question set. Types: `goal`, `initiative`, `feature`, `story`, `bug`, `d
   and UI 3:1); a failing pair is refused, so propose a darker or lighter shade and ask the human. With `--create` it
   writes `design/brand.yaml` in the checkout, to commit in a PR.
 
+## Criteria come from the request
+
+A Story's or Bug's Completion Goal states only what the request or its parent asks for. Accessibility (screen
+reader, keyboard, focus, contrast, targets), performance budgets, and security are floors that `verify` enforces on
+every story; they are not added as criteria unless the request or the parent asks for that outcome. Neither are
+checks for users or states the request does not mention (such as "unchanged for users who already have items").
+If you think one matters, ask the human, or list it in `open_questions`.
+
 ## Drafting without a human
 
 When you must draft from a written request alone (an eval, a ticket), keep to what the request states. Put every
