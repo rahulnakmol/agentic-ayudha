@@ -1,0 +1,56 @@
+{
+  "source": "Synthetic: written from the Microsoft.Authorization permissions API (2022-04-01) and the Log Analytics query API (resource-centric POST /v1/{resourceId}/query, response tables/columns/rows) because no Azure subscription exists yet; the Entra token exchanges are served by fixture.Clouds; the AAYU_LIVE=1 test sends the same requests to a real component",
+  "interactions": [
+    {
+      "method": "GET",
+      "url": "https://management.azure.com/subscriptions/0b1c2d3e-0000-4000-8000-000000000001/resourceGroups/rg-benefits/providers/Microsoft.Insights/components/benefits-qa/providers/Microsoft.Authorization/permissions?api-version=2022-04-01",
+      "auth": "Bearer entra:https://management.azure.com/.default",
+      "status": 200,
+      "response": {
+        "value": [
+          {
+            "actions": [
+              "*/read",
+              "Microsoft.OperationalInsights/workspaces/analytics/query/action",
+              "Microsoft.OperationalInsights/workspaces/search/action",
+              "Microsoft.Support/*"
+            ],
+            "notActions": [
+              "Microsoft.OperationalInsights/workspaces/sharedKeys/read"
+            ],
+            "dataActions": [],
+            "notDataActions": []
+          }
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://api.loganalytics.azure.com/v1/subscriptions/0b1c2d3e-0000-4000-8000-000000000001/resourceGroups/rg-benefits/providers/Microsoft.Insights/components/benefits-qa/query",
+      "auth": "Bearer entra:https://api.loganalytics.io/.default",
+      "body": {
+        "query": "AppEvents\n| where TimeGenerated >= datetime(2026-09-01T00:00:00Z) and TimeGenerated < datetime(2026-10-01T00:00:00Z)\n| where Name == 'signed_up'\n| extend User = iff(isnotempty(UserAuthenticatedId), UserAuthenticatedId, UserId)\n| where isnotempty(User)\n| summarize by User\n| count",
+        "timespan": "2026-09-01T00:00:00Z/2026-10-01T00:00:00Z"
+      },
+      "status": 200,
+      "response": {
+        "tables": [
+          {
+            "name": "PrimaryResult",
+            "columns": [
+              {
+                "name": "Count",
+                "type": "long"
+              }
+            ],
+            "rows": [
+              [
+                812
+              ]
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

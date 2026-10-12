@@ -18,12 +18,21 @@ import (
 
 // Interaction is one recorded request and its response.
 type Interaction struct {
-	Method   string            `json:"method"`
-	URL      string            `json:"url"`            // full URL, query included
-	Body     json.RawMessage   `json:"body,omitempty"` // request JSON body, compared semantically when set
-	Status   int               `json:"status"`
-	Header   map[string]string `json:"header,omitempty"`
-	Response json.RawMessage   `json:"response"`
+	Method string          `json:"method"`
+	URL    string          `json:"url"`            // full URL, query included
+	Body   json.RawMessage `json:"body,omitempty"` // request JSON body, compared semantically when set
+	// Auth is the request's Authorization header, when the recording pins it
+	// (cloud adapters, whose bearer differs per API).
+	Auth string `json:"auth,omitempty"`
+	// RequestHeader lists request headers that must have these values
+	// (an AWS JSON call's X-Amz-Target).
+	RequestHeader map[string]string `json:"request_header,omitempty"`
+	Status        int               `json:"status"`
+	Header        map[string]string `json:"header,omitempty"`
+	Response      json.RawMessage   `json:"response,omitempty"`
+	// Text is a non-JSON response body (the XML of AWS query APIs); it
+	// replaces Response when set.
+	Text string `json:"text,omitempty"`
 }
 
 // Recording is a fixture file.
@@ -56,6 +65,9 @@ type Replayer struct {
 	Rec        *Recording
 	AuthHeader string
 	AuthValue  string
+	// Check, when set, also inspects every request and its body: SigV4
+	// verification for the AWS adapter.
+	Check func(req *http.Request, body []byte) error
 
 	mu   sync.Mutex
 	next int
@@ -95,22 +107,37 @@ func (r *Replayer) RoundTrip(req *http.Request) (*http.Response, error) {
 	if r.AuthValue != "" && strings.Contains(req.URL.String(), r.AuthValue) {
 		r.T.Errorf("request %d: the key is in the URL", r.next)
 	}
-	if len(in.Body) > 0 {
-		var got []byte
-		if req.Body != nil {
-			got, _ = io.ReadAll(req.Body)
+	var got []byte
+	if req.Body != nil {
+		got, _ = io.ReadAll(req.Body)
+	}
+	if len(in.Body) > 0 && !sameJSON(got, in.Body) {
+		r.T.Errorf("request %d body:\ngot  %s\nwant %s", r.next, got, in.Body)
+	}
+	if in.Auth != "" && req.Header.Get("Authorization") != in.Auth {
+		r.T.Errorf("request %d (%s %s): Authorization %q, want %q", r.next, req.Method, req.URL.Host, req.Header.Get("Authorization"), in.Auth)
+	}
+	for k, v := range in.RequestHeader {
+		if req.Header.Get(k) != v {
+			r.T.Errorf("request %d: header %s = %q, want %q", r.next, k, req.Header.Get(k), v)
 		}
-		if !sameJSON(got, in.Body) {
-			r.T.Errorf("request %d body:\ngot  %s\nwant %s", r.next, got, in.Body)
+	}
+	if r.Check != nil {
+		if err := r.Check(req, got); err != nil {
+			r.T.Errorf("request %d (%s %s): %v", r.next, req.Method, req.URL, err)
 		}
 	}
 	h := http.Header{"Content-Type": []string{"application/json"}}
 	for k, v := range in.Header {
 		h.Set(k, v)
 	}
+	resp := []byte(in.Response)
+	if in.Text != "" {
+		resp = []byte(in.Text)
+	}
 	return &http.Response{
 		StatusCode: in.Status, Status: fmt.Sprintf("%d %s", in.Status, http.StatusText(in.Status)),
-		Header: h, Body: io.NopCloser(bytes.NewReader(in.Response)), Request: req,
+		Header: h, Body: io.NopCloser(bytes.NewReader(resp)), Request: req,
 	}, nil
 }
 

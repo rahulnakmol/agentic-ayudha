@@ -788,7 +788,7 @@ var Verbs = []Command{
 	},
 	{
 		Name: "measure", WP: "WP7.2",
-		Summary: "Measure a Goal or Initiative against its baseline from analytics exports and write the Result.",
+		Summary: "Measure a Goal or Initiative against its baseline from analytics exports or live cloud pulls and write the Result.",
 		Seat:    RevenueArchitect, Lane: LaneChore, Layers: OnlyLayers(L08),
 		Inputs: []Input{
 			optPos("issue", TypeIssue, "Goal or Initiative to measure; without it, only the cohorts and North Star are reported."),
@@ -799,6 +799,7 @@ var Verbs = []Command{
 			flag("appinsights", TypePath, "Application Insights events export (JSON lines)."),
 			flag("aws", TypePath, "AWS CloudWatch RUM events export (JSON lines)."),
 			flag("gcp", TypePath, "Google Analytics 4 / Firebase BigQuery events export (JSON lines)."),
+			flag("live", TypeString, "Pull the window's events live from configured cloud integrations instead of an export file: azure, aws, gcp, comma-separated."),
 			enumIn("engine", false, false, "Query engine for the snapshot; duckdb is optional and shelled out.", "sqlite", "duckdb"),
 		},
 		Outputs:  []string{"result", "snapshot"},
