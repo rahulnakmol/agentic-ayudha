@@ -113,3 +113,28 @@ func stem(w string) string {
 	}
 	return w
 }
+
+// absenceRE matches the wordings the skill forbids for missing evidence and
+// out-of-scope items, with the word after them.
+var absenceRE = regexp.MustCompile(`(?i)\b(untested|not tested|not done|not possible|can't|can’t|cannot)\b(?:\s+([\p{L}\p{N}-]+))?`)
+
+// absenceClaims is the absence rule: missing evidence is written "the
+// evidence does not show …" and an excluded item "outside this story's scope",
+// never "untested", "not done", "not possible", or "can't". A source's own
+// wording may be quoted: the phrase with the word after it ("cannot run")
+// passes when the grounding says it.
+func absenceClaims(d *Draft, g *Grounding) []string {
+	b, _ := json.Marshal(g)
+	src := strings.ToLower(strings.ReplaceAll(string(b), "’", "'"))
+	var out []string
+	for i, u := range d.Units {
+		for _, m := range absenceRE.FindAllStringSubmatch(u.Text, -1) {
+			quoted := strings.ToLower(strings.ReplaceAll(m[1]+" "+m[2], "’", "'"))
+			if m[2] != "" && strings.Contains(src, quoted) {
+				continue
+			}
+			out = append(out, fmt.Sprintf("%s %d says %q: write missing evidence as \"the evidence does not show …\" and an excluded item as \"outside this story's scope\": %q", kindOf(u), i+1, strings.TrimSpace(m[0]), clip(u.Text, 120)))
+		}
+	}
+	return out
+}

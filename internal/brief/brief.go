@@ -475,6 +475,9 @@ func Check(d *Draft, g *Grounding, o Options) []Finding {
 	for _, p := range uiDetails(d, g) {
 		add("ui", "%s", p)
 	}
+	for _, p := range absenceClaims(d, g) {
+		add("absence", "%s", p)
+	}
 
 	switch o.Register {
 	case "eli5":
