@@ -12,6 +12,9 @@
     "fix": {
       "description": "Re-sync copies and adapters after showing a diff.",
       "type": "boolean",
+      "x-aayu-read-only-values": [
+        "false"
+      ],
       "x-aayu-type": "bool"
     }
   },

@@ -1,0 +1,53 @@
+{
+  "create": {
+    "type": "initiative",
+    "title": "Self-service eligibility check",
+    "fields": {
+      "summary": "Let claimants check eligibility first.",
+      "hypothesis": "If claimants pre-check, incomplete claims drop by 30 %."
+    },
+    "labels": [
+      "type:initiative",
+      "status:backlog"
+    ]
+  },
+  "ready": {
+    "type": "initiative",
+    "title": "Self-service eligibility check",
+    "fields": {
+      "summary": "Let claimants check eligibility first.",
+      "hypothesis": "If claimants pre-check, incomplete claims drop by 30 %.",
+      "metric": "incomplete claim rate",
+      "baseline": "40 % (2026-Q3)",
+      "target": "28 %"
+    },
+    "labels": [
+      "type:initiative",
+      "status:planned"
+    ],
+    "parent": {
+      "number": 1,
+      "type": "goal"
+    }
+  },
+  "complete": {
+    "type": "initiative",
+    "title": "Self-service eligibility check",
+    "fields": {
+      "summary": "Let claimants check eligibility first.",
+      "hypothesis": "If claimants pre-check, incomplete claims drop by 30 %.",
+      "metric": "incomplete claim rate",
+      "baseline": "40 % (2026-Q3)",
+      "target": "28 %",
+      "result": "31 %"
+    },
+    "labels": [
+      "type:initiative",
+      "status:done"
+    ],
+    "parent": {
+      "number": 1,
+      "type": "goal"
+    }
+  }
+}

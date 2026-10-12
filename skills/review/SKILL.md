@@ -34,4 +34,4 @@ aayu:
 
 Critique UI with a model lane and a deterministic lane; dispositions recapture, rebuild, fix, or ship.
 
-Body lands in WP3.1 (skill format) and WP6.6 (the verb).
+Body lands in WP6.6 (the verb). Format and lint: skills/README.md.

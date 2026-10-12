@@ -28,4 +28,4 @@ aayu:
 
 Read out an experiment's lift once it reaches minimum sample and write the Result.
 
-Body lands in WP3.1 (skill format) and WP6.7 (the verb).
+Body lands in WP6.7 (the verb). Format and lint: skills/README.md.

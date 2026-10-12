@@ -27,6 +27,11 @@ aayu:
       required: false
       positional: true
       description: "Story whose pack to operate on."
+    - name: media
+      type: bool
+      required: false
+      positional: false
+      description: "Include proof media; on a public repository this needs a private bucket in [proof] media (V3)."
   outputs:
     - "pack"
     - "verification-report"
@@ -39,4 +44,4 @@ aayu:
 
 Push, get, verify, list, or purge proof packs on the ledger branch.
 
-Body lands in WP3.1 (skill format) and WP4.2 (the verb).
+Body lands in WP4.2 (the verb). Format and lint: skills/README.md.

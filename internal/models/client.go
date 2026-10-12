@@ -27,7 +27,18 @@ type Request struct {
 	System    string
 	Messages  []Message
 	MaxTokens int
-	Effort    string // reasoning effort; empty for the provider default
+	Effort    string  // reasoning effort; empty for the provider default
+	Format    *Format // ask for JSON matching a schema where the wire format supports it; nil for free text
+}
+
+// Format asks the endpoint for structured output: OpenAI Responses
+// text.format and Chat Completions response_format (json_schema). Anthropic
+// Messages has no equivalent here, so the schema reaches it only through the
+// prompt (Structured puts it there for every style).
+type Format struct {
+	Name   string
+	Schema json.RawMessage
+	Strict bool // the endpoint must follow the schema exactly; the schema must use only keywords strict mode allows
 }
 
 // Response is a provider-neutral reply.
@@ -37,6 +48,11 @@ type Response struct {
 	TokensIn  int
 	TokensOut int
 	CostUSD   float64 // reported by the endpoint, when it reports one; else 0
+	// StopReason is why the model stopped, as the endpoint reports it: Messages
+	// stop_reason, Responses status (with incomplete_details.reason), Chat
+	// finish_reason. Truncated is set when it stopped at the token cap.
+	StopReason string
+	Truncated  bool
 }
 
 // Client is one way of calling a model.
@@ -95,6 +111,9 @@ func (c HTTPClient) Complete(ctx context.Context, r Request) (Response, error) {
 		if r.Effort != "" {
 			b["reasoning"] = map[string]string{"effort": r.Effort}
 		}
+		if f := r.Format; f != nil {
+			b["text"] = map[string]any{"format": map[string]any{"type": "json_schema", "name": f.Name, "schema": f.Schema, "strict": f.Strict}}
+		}
 		body = b
 	case StyleChat:
 		path = "/chat/completions"
@@ -105,6 +124,9 @@ func (c HTTPClient) Complete(ctx context.Context, r Request) (Response, error) {
 		b := map[string]any{"model": r.Model, "messages": msgs, "max_tokens": r.MaxTokens}
 		if r.Effort != "" {
 			b["reasoning_effort"] = r.Effort
+		}
+		if f := r.Format; f != nil {
+			b["response_format"] = map[string]any{"type": "json_schema", "json_schema": map[string]any{"name": f.Name, "schema": f.Schema, "strict": f.Strict}}
 		}
 		body = b
 	default:
@@ -140,6 +162,12 @@ func (c HTTPClient) Complete(ctx context.Context, r Request) (Response, error) {
 	if err != nil {
 		return Response{}, err
 	}
+	if resp.StatusCode == http.StatusBadRequest && r.Format != nil && c.Style != StyleMessages {
+		// The endpoint (or a gateway in front of it) does not take structured
+		// output for this model: ask again with the schema in the prompt only.
+		r.Format = nil
+		return c.Complete(ctx, r)
+	}
 	if resp.StatusCode/100 != 2 {
 		return Response{}, &StatusError{Code: resp.StatusCode, Body: truncate(string(raw), 300)}
 	}
@@ -164,17 +192,27 @@ func truncate(s string, n int) string {
 }
 
 type usage struct {
-	InputTokens      int      `json:"input_tokens"`
-	OutputTokens     int      `json:"output_tokens"`
-	PromptTokens     int      `json:"prompt_tokens"`
-	CompletionTokens int      `json:"completion_tokens"`
-	Cost             *float64 `json:"cost"` // some gateways report the charge
+	InputTokens int `json:"input_tokens"`
+	// Anthropic Messages reports cached prompt input apart from input_tokens;
+	// both count as input (conservatively at the full input rate) for cost and
+	// the [budget] breaker.
+	CacheReadInputTokens     int      `json:"cache_read_input_tokens"`
+	CacheCreationInputTokens int      `json:"cache_creation_input_tokens"`
+	OutputTokens             int      `json:"output_tokens"`
+	PromptTokens             int      `json:"prompt_tokens"`
+	CompletionTokens         int      `json:"completion_tokens"`
+	Cost                     *float64 `json:"cost"` // some gateways report the charge
 }
 
 func decode(style string, raw []byte) (Response, error) {
 	var v struct {
-		Model   string `json:"model"`
-		Usage   usage  `json:"usage"`
+		Model             string `json:"model"`
+		Usage             usage  `json:"usage"`
+		StopReason        string `json:"stop_reason"` // messages
+		Status            string `json:"status"`      // responses
+		IncompleteDetails struct {
+			Reason string `json:"reason"`
+		} `json:"incomplete_details"` // responses
 		Content []struct {
 			Type string `json:"type"`
 			Text string `json:"text"`
@@ -191,24 +229,33 @@ func decode(style string, raw []byte) (Response, error) {
 			Message struct {
 				Content string `json:"content"`
 			} `json:"message"`
+			FinishReason string `json:"finish_reason"`
 		} `json:"choices"` // chat
 	}
 	if err := json.Unmarshal(raw, &v); err != nil {
 		return Response{}, fmt.Errorf("decode %s reply: %w", style, err)
 	}
-	r := Response{Model: v.Model, TokensIn: v.Usage.InputTokens + v.Usage.PromptTokens, TokensOut: v.Usage.OutputTokens + v.Usage.CompletionTokens}
+	u := v.Usage
+	r := Response{Model: v.Model, TokensIn: u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens + u.PromptTokens,
+		TokensOut: u.OutputTokens + u.CompletionTokens}
 	if v.Usage.Cost != nil {
 		r.CostUSD = *v.Usage.Cost
 	}
 	var sb strings.Builder
 	switch style {
 	case StyleMessages:
+		r.StopReason, r.Truncated = v.StopReason, v.StopReason == "max_tokens"
 		for _, c := range v.Content {
 			if c.Type == "text" {
 				sb.WriteString(c.Text)
 			}
 		}
 	case StyleResponses:
+		r.StopReason = v.Status
+		if v.IncompleteDetails.Reason != "" {
+			r.StopReason += ":" + v.IncompleteDetails.Reason
+		}
+		r.Truncated = v.Status == "incomplete" && v.IncompleteDetails.Reason == "max_output_tokens"
 		for _, o := range v.Output {
 			for _, c := range o.Content {
 				if c.Type == "output_text" {
@@ -222,6 +269,7 @@ func decode(style string, raw []byte) (Response, error) {
 	case StyleChat:
 		if len(v.Choices) > 0 {
 			sb.WriteString(v.Choices[0].Message.Content)
+			r.StopReason, r.Truncated = v.Choices[0].FinishReason, v.Choices[0].FinishReason == "length"
 		}
 	}
 	r.Text = sb.String()

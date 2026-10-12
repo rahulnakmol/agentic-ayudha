@@ -1,0 +1,52 @@
+{
+  "create": {
+    "type": "experiment",
+    "title": "Shorter questionnaire",
+    "fields": {
+      "summary": "Three questions convert better than five."
+    },
+    "labels": [
+      "type:experiment",
+      "status:backlog"
+    ]
+  },
+  "ready": {
+    "type": "experiment",
+    "title": "Shorter questionnaire",
+    "fields": {
+      "summary": "Three questions convert better than five.",
+      "metric": "completion rate",
+      "baseline": "62 %",
+      "flag": "elig-short",
+      "min_sample": "1 900 per arm (80 % power, MDE 4 pts)"
+    },
+    "labels": [
+      "type:experiment",
+      "status:planned"
+    ],
+    "parent": {
+      "number": 3,
+      "type": "feature"
+    }
+  },
+  "complete": {
+    "type": "experiment",
+    "title": "Shorter questionnaire",
+    "fields": {
+      "summary": "Three questions convert better than five.",
+      "metric": "completion rate",
+      "baseline": "62 %",
+      "flag": "elig-short",
+      "min_sample": "1 900 per arm (80 % power, MDE 4 pts)",
+      "result": "+3.1 pts, p=0.02"
+    },
+    "labels": [
+      "type:experiment",
+      "status:done"
+    ],
+    "parent": {
+      "number": 3,
+      "type": "feature"
+    }
+  }
+}

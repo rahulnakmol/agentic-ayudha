@@ -29,4 +29,4 @@ aayu:
 
 Measure a Goal or Initiative against its baseline from analytics exports and write the Result.
 
-Body lands in WP3.1 (skill format) and WP7.2 (the verb).
+Body lands in WP7.2 (the verb). Format and lint: skills/README.md.

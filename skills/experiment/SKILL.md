@@ -30,4 +30,4 @@ aayu:
 
 Design an experiment for a Feature: hypothesis, metric, flag, and minimum sample size.
 
-Body lands in WP3.1 (skill format) and WP6.7 (the verb).
+Body lands in WP6.7 (the verb). Format and lint: skills/README.md.

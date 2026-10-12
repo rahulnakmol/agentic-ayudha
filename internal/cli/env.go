@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"time"
@@ -13,6 +14,8 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/models"
+	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
 	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
 	"github.com/rahulnakmol/agentic-ayudha/internal/telemetry"
 )
@@ -36,19 +39,25 @@ type BuildInfo struct {
 // Options are the process-level dependencies of a run. Zero values use the real
 // process environment; tests replace them.
 type Options struct {
-	Build      BuildInfo
-	Getenv     func(string) string
-	Environ    []string // KEY=value pairs for the config env layer; nil with a nil Getenv means os.Environ
-	Dir        string   // working directory; "" means os.Getwd
-	HTTP       *http.Client
-	Now        func() time.Time
-	Executable func() (string, error)
-	SelfUpdate SelfUpdateOptions
-	GitHubAPI  string                                                                      // default https://api.github.com
-	GHToken    func(ctx context.Context) (string, error)                                   // `gh auth token`; nil runs gh
-	Secrets    *secrets.Store                                                              // nil uses keychain, env, then the age file
-	LookPath   func(string) (string, error)                                                // nil uses exec.LookPath (doctor)
-	Exec       func(ctx context.Context, dir, name string, args ...string) (string, error) // nil runs the command (doctor)
+	Build       BuildInfo
+	Getenv      func(string) string
+	Environ     []string // KEY=value pairs for the config env layer; nil with a nil Getenv means os.Environ
+	Dir         string   // working directory; "" means os.Getwd
+	HTTP        *http.Client
+	Now         func() time.Time
+	Executable  func() (string, error)
+	SelfUpdate  SelfUpdateOptions
+	GitHubAPI   string                                             // default https://api.github.com
+	NotifySink  notify.Sink                                        // replaces the [notify] channel (tests)
+	ModelClient func(route models.Route, key string) models.Client // replaces the model provider (tests)
+	// AppManifestCode replaces the browser step of init --identity (tests).
+	AppManifestCode func(ctx context.Context, postURL string, manifest func(redirect string) string) (string, error)
+	GitHubGap       time.Duration                                                               // gap between GitHub writes; 0 is the client default (1s), negative none (tests)
+	GHToken         func(ctx context.Context) (string, error)                                   // `gh auth token`; nil runs gh
+	Secrets         *secrets.Store                                                              // nil uses keychain, env, then the age file
+	LookPath        func(string) (string, error)                                                // nil uses exec.LookPath (doctor)
+	Exec            func(ctx context.Context, dir, name string, args ...string) (string, error) // nil runs the command (doctor, install)
+	Assets          fs.FS                                                                       // embedded skills/ and hosts/ (root embed.go); install needs it
 }
 
 // Globals are the global flags shared by every command.
@@ -133,6 +142,10 @@ type Handler func(ctx context.Context, e *Env, in Values) error
 // handlers maps registry command names to implementations. A registry command
 // without a handler reports "not implemented yet" with exit code 2.
 var handlers = map[string]Handler{}
+
+// Implemented reports whether this binary implements a registry command. The
+// eval harness (WP3.4) treats calls to unshipped verbs as "n/a" (rule 1a).
+func Implemented(name string) bool { _, ok := handlers[name]; return ok }
 
 func register(name string, h Handler) {
 	if _, dup := handlers[name]; dup {

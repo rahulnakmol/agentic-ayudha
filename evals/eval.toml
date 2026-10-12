@@ -1,0 +1,27 @@
+# Skill eval harness (docs/BUILD-PLAN.md WP3.4; evals/README.md).
+#
+# Tier 2 runs each case with a [tier2] section k times on the skill's model and has a pinned judge from
+# another model family score every run against the case's rubric. The judge's family is inferred from its
+# model ID (as the model gateway does, WP1.6) and must differ from the skill model's.
+
+judge = "gpt-6.1-sol" # openai; the stub skill runs on grill's spec lane, claude-opus-5-5 (anthropic) today
+k = 5                 # runs per case
+pass_score = 4        # a run passes at this rubric score (1-5) or above
+
+# The bar (WP3.4): pass^k >= 0.8 and mean >= 3.5 to pass; on promotion, a mean more than 0.3 below the
+# baseline (evals/results/<main-sha>.json) or any case's pass^k below its baseline fails.
+min_pass_k = 0.8
+min_mean = 3.5
+max_drop = 0.3
+
+# Spend cap for one tier-2 run in USD, on top of the [budget] breaker. Unpriced models are charged at the
+# gateway's conservative fallback rate, so real spend is lower.
+max_usd = 3.0 # five 4000-token drafts with their judgements cost about 1.85 at the fallback rate; 3.0 leaves headroom
+
+# Output caps per call. Reasoning models may spend part of the cap on reasoning; a cap is not a charge. A reply that
+# stops at its cap is recorded as an error marked truncated, without a retry. Complete drafts measured 1700-2430 output
+# tokens (run 38185993917); the skill cap of 4000 leaves about 65% headroom. Every call's stop reason and tokens are
+# in the results file.
+[max_tokens]
+skill = 4000
+judge = 2000

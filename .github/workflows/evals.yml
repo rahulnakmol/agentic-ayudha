@@ -1,0 +1,100 @@
+name: evals
+
+# Tier 2 of the skill eval harness (docs/BUILD-PLAN.md WP3.4, evals/README.md): each tier-2 case runs k times
+# on the skill's model and a pinned judge from another model family scores every run against the case's rubric.
+# Live model calls go through the AI gateway, so the job uses `environment: ai-gateway`, which only dev, rolling,
+# and main may use: tier 2 never runs on pull requests, and fork PRs never see the key. Tier 1 runs on every PR
+# inside `go test` (job `build`).
+#
+# Runs nightly on dev, after merges to dev that touch skills or the harness, on every push to rolling and main
+# (so each promoted commit has results, and main's are the baseline), and on dispatch. The results file
+# evals/results/<sha>.json is uploaded as the artifact eval-results-<sha>; the baseline is the results artifact of
+# main's commit. The promotion gate (ci.yml, job evals-gate) checks the results of the commit being promoted.
+# Skips cleanly (green) while the environment's secret is not set.
+on:
+  schedule:
+    - cron: "41 2 * * *"
+  push:
+    branches: [dev, rolling, main] # on dev, only when the push touches skills or the harness (first step)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read # download main's results artifact as the baseline
+
+concurrency:
+  group: evals-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  tier2:
+    name: evals-tier2
+    runs-on: ubuntu-latest
+    environment: ai-gateway
+    timeout-minutes: 30
+    env:
+      AAYU_MODELS__GATEWAY__BASE_URL: ${{ vars.AAYU_AI_GATEWAY_URL }}
+      AAYU_MODELS__GATEWAY__SECRET: ai-gateway
+      AAYU_SECRET_AI_GATEWAY: ${{ secrets.AAYU_SECRET_AI_GATEWAY }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.25.x"
+          cache: false
+      - name: Relevant change (pushes to dev only)
+        id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref_name }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          run=true
+          if [ "$EVENT" = push ] && [ "$REF" = dev ]; then
+            if ! git diff --name-only "$BEFORE" "$SHA" | grep -qE '^(skills|evals|internal/evals|internal/models)/|^\.github/workflows/evals\.yml$'; then
+              echo "::notice::This push to dev does not touch skills or the eval harness; tier 2 runs nightly."
+              run=false
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+      - name: Baseline (results for main's commit)
+        if: steps.scope.outputs.run == 'true'
+        id: baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          main_sha="$(git rev-parse origin/main)"
+          echo "file=evals/results/$main_sha.json" >> "$GITHUB_OUTPUT"
+          if [ -f "evals/results/$main_sha.json" ]; then echo "Committed baseline for $main_sha."; exit 0; fi
+          run_id="$(gh run list --workflow evals.yml --commit "$main_sha" --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+          if [ -n "$run_id" ] && gh run download "$run_id" --name "eval-results-$main_sha" --dir evals/results; then
+            echo "Baseline for $main_sha from run $run_id."
+          else
+            echo "::notice::No tier-2 results for main ($main_sha) yet; only the absolute bar applies."
+          fi
+      - name: Tier 2 (skips while the secret is absent)
+        if: steps.scope.outputs.run == 'true'
+        env:
+          BASELINE: ${{ steps.baseline.outputs.file }}
+          SHA: ${{ github.sha }}
+          REF: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ -z "$AAYU_SECRET_AI_GATEWAY" ] || [ -z "$AAYU_MODELS__GATEWAY__BASE_URL" ]; then
+            echo "::notice::The ai-gateway environment has no secret or URL; skipping tier 2."
+            exit 0
+          fi
+          go run ./internal/evals/cmd/eval -tier 2 -sha "$SHA" -ref "$REF" -out "evals/results/$SHA.json" -baseline "$BASELINE"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: eval-results-${{ github.sha }}
+          path: evals/results/${{ github.sha }}.json
+          if-no-files-found: ignore
+          retention-days: 90

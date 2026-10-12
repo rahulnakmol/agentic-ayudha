@@ -27,7 +27,7 @@ plan lists in §2; the rest are pulled in by them.
 | `github.com/pb33f/ordered-map/v2` | v2.3.1 | Apache-2.0 | Via jsonschema | <https://github.com/pb33f/ordered-map> |
 | `github.com/bahlo/generic-list-go` | v0.2.0 | BSD-3-Clause | Via ordered-map | <https://github.com/bahlo/generic-list-go> |
 | `github.com/buger/jsonparser` | v1.1.2 | MIT | Via ordered-map | <https://github.com/buger/jsonparser> |
-| `go.yaml.in/yaml/v4` | v4.0.0-rc.2 | MIT and Apache-2.0 | Via ordered-map | <https://github.com/yaml/go-yaml> |
+| `go.yaml.in/yaml/v4` | v4.0.0-rc.2 | MIT and Apache-2.0 | Via ordered-map; tests also parse the generated issue forms with it (WP2.2) | <https://github.com/yaml/go-yaml> |
 | `github.com/zalando/go-keyring` | v0.2.8 | MIT | OS keychain secrets backend (WP1.3), direct | <https://github.com/zalando/go-keyring> |
 | `github.com/godbus/dbus/v5` | v5.2.2 | BSD-2-Clause | Secret Service on Linux, via go-keyring | <https://github.com/godbus/dbus> |
 | `github.com/danieljoos/wincred` | v1.2.3 | MIT | Windows Credential Manager, via go-keyring | <https://github.com/danieljoos/wincred> |
@@ -43,6 +43,19 @@ plan lists in §2; the rest are pulled in by them.
 | `github.com/go-logr/logr` | v1.4.4 | Apache-2.0 | Via otel | <https://github.com/go-logr/logr> |
 | `github.com/go-logr/stdr` | v1.2.2 | Apache-2.0 | Via otel | <https://github.com/go-logr/stdr> |
 | `github.com/cespare/xxhash/v2` | v2.3.0 | MIT | Via otel/sdk | <https://github.com/cespare/xxhash> |
+| `github.com/google/go-github/v90` | v90.0.0 | BSD-3-Clause | GitHub REST client (WP2.3), direct | <https://github.com/google/go-github> |
+| `github.com/google/go-querystring` | v1.2.0 | BSD-3-Clause | Via go-github | <https://github.com/google/go-querystring> |
+| `github.com/shurcooL/githubv4` | v0.0.0-20260209031235-2402fdf4a9ed | MIT | GitHub GraphQL client for Projects v2 (WP2.3), direct | <https://github.com/shurcooL/githubv4> |
+| `github.com/shurcooL/graphql` | v0.0.0-20240915155400-7ee5256398cf | MIT | Via githubv4 | <https://github.com/shurcooL/graphql> |
+| `github.com/google/uuid` | v1.6.0 | BSD-3-Clause | Via otel/sdk (resource IDs) | <https://github.com/google/uuid> |
+| `github.com/modelcontextprotocol/go-sdk` | v1.8.0 | Apache-2.0 (new code) and MIT | MCP stdio server (WP3.3), direct | <https://github.com/modelcontextprotocol/go-sdk> |
+| `github.com/google/jsonschema-go` | v0.4.3 | MIT | JSON Schema types, via go-sdk | <https://github.com/google/jsonschema-go> |
+| `github.com/segmentio/encoding` | v0.5.4 | MIT | JSON codec, via go-sdk | <https://github.com/segmentio/encoding> |
+| `github.com/segmentio/asm` | v1.1.3 | MIT | Via segmentio/encoding | <https://github.com/segmentio/asm> |
+| `github.com/yosida95/uritemplate/v3` | v3.0.2 | BSD-3-Clause | Resource URI templates, via go-sdk | <https://github.com/yosida95/uritemplate> |
+| `golang.org/x/oauth2` | v0.36.0 | BSD-3-Clause | Via go-sdk (HTTP transports; unused by stdio) and go-github | <https://go.googlesource.com/oauth2> |
+| `golang.org/x/sync` | v0.20.0 | BSD-3-Clause | Via go-sdk | <https://go.googlesource.com/sync> |
+| `golang.org/x/time` | v0.15.0 | BSD-3-Clause | Rate limiting, via go-sdk | <https://go.googlesource.com/time> |
 
 ### Shelled out by `self-update` (not bundled)
 

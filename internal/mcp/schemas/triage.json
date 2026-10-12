@@ -4,6 +4,16 @@
   "additionalProperties": false,
   "description": "Classify intake issues as Feedback, Bug, or Incident by label only; never edits bodies or touches non-intake issues.",
   "properties": {
+    "as": {
+      "description": "Class chosen by the host's model; without it the binary asks the triage lane's model.",
+      "enum": [
+        "feedback",
+        "bug",
+        "incident"
+      ],
+      "type": "string",
+      "x-aayu-type": "enum"
+    },
     "issue": {
       "description": "Intake issue to classify.",
       "pattern": "^(#?[1-9][0-9]*|https://github\\.com/[^/]+/[^/]+/issues/[1-9][0-9]*)$",

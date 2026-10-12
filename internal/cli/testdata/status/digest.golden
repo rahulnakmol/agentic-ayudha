@@ -1,0 +1,8 @@
+aayudha status digest for o/r, 2026-10-15
+
+#1 goal "Halve time to benefit": 117 items (discovery 2, ready 105, in-progress 5, blocked 1, released 2, done 1, cancelled 1); blocked #8
+  done 3 of 117; ready 105; in progress 5; blocked 1
+  decision #117 "Choose the rules engine" overdue since 2026-10-14 16:00 BST
+  shipped but not measured: #7 #9
+  over budget: #8
+  provisional decisions: 1 (deadlines n/a until WP5.6); proof coverage n/a until M4; streak n/a until M5; cost $31.50

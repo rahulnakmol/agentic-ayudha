@@ -93,11 +93,14 @@ func healthy(t *testing.T) *Probe {
 	env := map[string]string{"AMP_THREAD_ID": "T-1", "AAYU_SECRET_POSTHOG": "phc"}
 	getenv := func(k string) string { return env[k] }
 	return &Probe{
-		Root:     repoWith(t, map[string]string{".aayudha/config.toml": "version = 1\n"}),
+		Root: repoWith(t, map[string]string{".aayudha/config.toml": "version = 1\n",
+			".aayudha/lock.toml": "version = 1\nskills_version = \"0.0.0\"\nhosts = [\"claude\"]\n[skills]\n",
+			".mcp.json":          `{"mcpServers": {"aayudha": {"command": "/usr/bin/aayu", "args": ["mcp"]}}}`}),
 		Getenv:   getenv,
 		LookPath: func(string) (string, error) { return "/usr/bin/x", nil },
 		Exec: fakeExec(map[string]string{
 			"git --version":                 "git version 2.45.1\n",
+			"/usr/bin/aayu version":         "aayu 1.2.0\n",
 			"git lfs version":               "git-lfs/3.5.1 (GitHub; linux amd64; go 1.22)\n",
 			"git worktree list --porcelain": "worktree /repo\nHEAD abc\nbranch refs/heads/dev\n",
 			"git for-each-ref --format=%(refname:short) refs/heads refs/remotes/origin": "dev\nmain\norigin/HEAD\norigin/dev\n",
@@ -175,6 +178,17 @@ func failing(t *testing.T) map[string]func(*Probe) {
 			p.API = fakeAPI(map[string]any{"/repos/o/r/rulesets": []any{map[string]any{"name": "protect-master"}}})
 		},
 		"telemetry": func(p *Probe) { p.Config = load(t, "telemetry.disabled=true") },
+		"mcp": func(p *Probe) {
+			overlay(p, map[string]string{"/usr/bin/aayu version": "aayu 1.1.0\n"})
+		},
+		"ledger-media": func(p *Probe) {
+			overlay(p, map[string]string{"git ls-tree --name-only origin/ledger": ".gitattributes\n.lfsconfig\nREADME.md\n"})
+		},
+		"skills-copies": func(p *Probe) {
+			p.Root = repoWith(t, map[string]string{".aayudha/config.toml": "version = 1\n",
+				".aayudha/lock.toml":             "version = 1\nhosts = [\"claude\"]\n[skills]\nready = { version = \"0.0.0\", sha256 = \"x\" }\nstatus = { version = \"0.0.0\", sha256 = \"x\" }\n",
+				".claude/skills/status/SKILL.md": "edited\n"})
+		},
 	}
 }
 
@@ -232,7 +246,7 @@ func TestBlockingOnlyOnFloorFailures(t *testing.T) {
 	for id, f := range failing(t) {
 		p := healthy(t)
 		f(p)
-		want := id == "git" || id == "git-lfs" || id == "config" || id == "schema"
+		want := id == "git" || id == "git-lfs" || id == "config" || id == "schema" || id == "ledger-media"
 		if got := Blocking(Run(ctx, p)); got != want {
 			t.Errorf("%s failing: blocking = %v, want %v", id, got, want)
 		}

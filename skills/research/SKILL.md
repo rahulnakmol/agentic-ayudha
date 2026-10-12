@@ -28,4 +28,4 @@ aayu:
 
 Gather pinned design references (URLs and IDs only) and user research for a Feature.
 
-Body lands in WP3.1 (skill format) and WP6.5 (the verb).
+Body lands in WP6.5 (the verb). Format and lint: skills/README.md.

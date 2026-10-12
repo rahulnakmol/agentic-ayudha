@@ -171,6 +171,17 @@ func TestRegistry(t *testing.T) {
 					if (i.Type == TypeEnum) != (len(i.Enum) > 0) {
 						return fmt.Errorf("%s input %s: enum values must be set exactly when type is enum", c.Name, i.Name)
 					}
+					if len(i.ReadOnlyValues) > 0 && c.Exposure != ExposeRead {
+						return fmt.Errorf("%s input %s: read-only values only make sense on a read-exposed command", c.Name, i.Name)
+					}
+					for _, v := range i.ReadOnlyValues {
+						if ok := (i.Type == TypeBool && (v == "true" || v == "false")) || (i.Type == TypeEnum && slices.Contains(i.Enum, v)); !ok {
+							return fmt.Errorf("%s input %s: read-only value %q is not a value of the input", c.Name, i.Name, v)
+						}
+					}
+					if i.HumanOnly && i.Required {
+						return fmt.Errorf("%s input %s: a human-only input cannot be required (MCP never exposes it)", c.Name, i.Name)
+					}
 				}
 				if err := unique(in); err != nil {
 					return fmt.Errorf("%s: %w", c.Name, err)

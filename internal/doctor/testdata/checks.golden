@@ -45,11 +45,23 @@ PASS  secrets  secrets backends: env, file
 WARN  secrets  secrets backends: env; no writable backend (secrets can come only from AAYU_SECRET_* variables)
                  unavailable: keychain (no Secret Service)
 ## skills-copies pass
-N/A  skills-copies  skill copies in .agents/skills and .claude/skills against lock.toml: not yet available (WP3.2)
+PASS  skills-copies  0 skill(s) for claude in sync with .aayudha/lock.toml (skills 0.0.0)
+## skills-copies fail
+FAIL  skills-copies  skill copies differ from .aayudha/lock.toml; aayu doctor --fix re-syncs them
+                       .claude/skills/ready is missing
+                       .claude/skills/status was edited or is stale
 ## mcp pass
-N/A  mcp  MCP registrations: not yet available (WP3.3)
+PASS  mcp  aayudha MCP server registered for claude at this aayu's version
+## mcp fail
+FAIL  mcp  MCP registrations need aayu install --apply
+             claude: /usr/bin/aayu reports "aayu 1.1.0"; this aayu is 1.2.0
 ## lfs-quota pass
 N/A  lfs-quota  LFS quota on the ledger branch: not yet available (WP4.2)
+## ledger-media pass
+PASS  ledger-media  no ledger branch fetched (origin/ledger)
+## ledger-media fail
+FAIL  ledger-media  repository is public but its ledger tracks proof media in Git LFS (V3): LFS objects cannot be purged from GitHub [blocking]
+                      set [proof] media to a private bucket, remove .lfsconfig and the LFS lines of .gitattributes from ledger, and purge media already pushed
 ## issue-types pass
 PASS  issue-types  organization repository: GitHub issue types are available
 ## issue-types fail

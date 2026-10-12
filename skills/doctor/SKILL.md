@@ -32,4 +32,4 @@ aayu:
 
 Check tools, tokens, identity, config, host installs, and existing CI; --fix re-syncs copies after showing a diff.
 
-Body lands in WP3.1 (skill format) and WP1.7 (the verb).
+Body lands in WP1.7 (the verb). Format and lint: skills/README.md.

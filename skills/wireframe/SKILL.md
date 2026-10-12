@@ -29,4 +29,4 @@ aayu:
 
 Produce wireframes for a Feature's states from its research and criteria.
 
-Body lands in WP3.1 (skill format) and WP6.5 (the verb).
+Body lands in WP6.5 (the verb). Format and lint: skills/README.md.

@@ -15,6 +15,8 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/github"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/upgrade"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
@@ -56,7 +58,7 @@ func Run(ctx context.Context, args []string, io IO, opts Options) int {
 
 // globalFlags are the names of the global flags; a registry input with the same
 // name reads the global flag instead of defining its own.
-var globalFlags = []string{"dry-run", "json", "repo", "host", "yes", "verbose", "set", "ci"}
+var globalFlags = verbs.GlobalFlags
 
 func init() { cobra.EnableCommandSorting = false } // list commands in registry (plan) order
 
@@ -245,6 +247,10 @@ func classify(err error) error {
 	case errors.Is(err, models.ErrBudget):
 		return Wrap(ExitBudget, err)
 	case errors.Is(err, actions.ErrCapability):
+		return Wrap(ExitBlocked, err)
+	case github.External(err), errors.Is(err, ledger.ErrContended), errors.Is(err, ledger.ErrLocked):
+		return Wrap(ExitExternal, err)
+	case errors.Is(err, ledger.ErrNoLedger):
 		return Wrap(ExitBlocked, err)
 	}
 	return Wrap(ExitInternal, err)

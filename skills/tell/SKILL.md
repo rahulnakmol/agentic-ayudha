@@ -42,4 +42,4 @@ aayu:
 
 Write docs, guides, changelogs, release notes, launch copy, or brand copy that cite only proven Features; publish is human-only.
 
-Body lands in WP3.1 (skill format) and WP7.5 (the verb).
+Body lands in WP7.5 (the verb). Format and lint: skills/README.md.

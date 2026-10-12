@@ -32,4 +32,4 @@ aayu:
 
 Build a flagged, working prototype of a Feature with Code Connect mapping and a Figma screenshot diff.
 
-Body lands in WP3.1 (skill format) and WP6.5 (the verb).
+Body lands in WP6.5 (the verb). Format and lint: skills/README.md.

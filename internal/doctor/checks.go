@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
 	"github.com/rahulnakmol/agentic-ayudha/internal/upgrade"
@@ -282,4 +283,88 @@ func checkTelemetry(_ context.Context, p *Probe) Result {
 		d = "traces to " + p.TracePath + " and, opted in, OTLP " + p.Config.Config.Telemetry.OTLPEndpoint
 	}
 	return Result{Status: Pass, Detail: d}
+}
+
+// checkSkillCopies compares the installed skill copies with lock.toml (WP3.2).
+func checkSkillCopies(_ context.Context, p *Probe) Result {
+	if p.Root == "" {
+		return Result{Status: Pass, Detail: "not in a repository"}
+	}
+	lock, ok, err := hosts.ReadLock(p.Root)
+	switch {
+	case err != nil:
+		return Result{Status: Fail, Detail: err.Error()}
+	case !ok:
+		return Result{Status: Warn, Detail: "skills are not installed here (aayu install shows the plan, --apply writes it)"}
+	}
+	if problems := hosts.CheckCopies(p.Root); len(problems) > 0 {
+		return Result{Status: Fail, Detail: fmt.Sprintf("skill copies differ from %s; aayu doctor --fix re-syncs them", hosts.LockPath), Lines: problems}
+	}
+	return Result{Status: Pass, Detail: fmt.Sprintf("%d skill(s) for %s in sync with %s (skills %s)", len(lock.Skills), strings.Join(lock.Hosts, ", "), hosts.LockPath, lock.SkillsVersion)}
+}
+
+// checkMCP checks each installed host's aayudha MCP registration: present, and
+// its absolute binary path runs and reports this aayu's version (WP3.3).
+func checkMCP(ctx context.Context, p *Probe) Result {
+	if p.Root == "" {
+		return Result{Status: Pass, Detail: "not in a repository"}
+	}
+	lock, ok, err := hosts.ReadLock(p.Root)
+	if err != nil || !ok {
+		return Result{Status: Pass, Detail: "no MCP registrations (skills are not installed; aayu install)"}
+	}
+	var problems, fine []string
+	for _, r := range hosts.Registrations(p.Root, p.Getenv("HOME"), lock.Hosts) {
+		switch {
+		case r.Err != nil:
+			problems = append(problems, fmt.Sprintf("%s: %s: %v", r.Host, r.File, r.Err))
+		case r.Command == "":
+			problems = append(problems, fmt.Sprintf("%s: no %q server in %s", r.Host, hosts.ServerName, r.File))
+		default:
+			out, err := p.Exec(ctx, "", r.Command, "version")
+			if err != nil {
+				problems = append(problems, fmt.Sprintf("%s: %s does not run (%v)", r.Host, r.Command, err))
+			} else if !strings.Contains(out, " "+p.Version) {
+				problems = append(problems, fmt.Sprintf("%s: %s reports %q; this aayu is %s", r.Host, r.Command, strings.TrimSpace(out), p.Version))
+			} else {
+				fine = append(fine, string(r.Host))
+			}
+		}
+	}
+	if len(problems) > 0 {
+		return Result{Status: Fail, Detail: "MCP registrations need aayu install --apply", Lines: problems}
+	}
+	return Result{Status: Pass, Detail: fmt.Sprintf("aayudha MCP server registered for %s at this aayu's version", strings.Join(fine, ", "))}
+}
+
+// checkLedgerMedia catches a visibility change after init (V3, WP2.5): a public
+// repository whose ledger tracks proof media in Git LFS is a floor-blocking
+// failure, because LFS objects cannot be purged from GitHub.
+func checkLedgerMedia(ctx context.Context, p *Probe) Result {
+	if p.Root == "" {
+		return Result{Status: Pass, Detail: "not in a repository"}
+	}
+	out, err := p.Exec(ctx, p.Root, "git", "ls-tree", "--name-only", "origin/ledger")
+	if err != nil {
+		return Result{Status: Pass, Detail: "no ledger branch fetched (origin/ledger)"}
+	}
+	names := strings.Fields(out)
+	if !slices.Contains(names, ".lfsconfig") && !slices.Contains(names, ".gitattributes") {
+		return Result{Status: Pass, Detail: "ledger stores no proof media in Git LFS"}
+	}
+	if p.API == nil || p.Repo == "" {
+		return Result{Status: Warn, Detail: "ledger tracks proof media in Git LFS; repository visibility unknown (no GitHub token or repository)"}
+	}
+	var repo struct {
+		Private bool `json:"private"`
+	}
+	if err := p.API(ctx, "/repos/"+p.Repo, &repo); err != nil {
+		return Result{Status: Warn, Detail: "ledger tracks proof media in Git LFS; repository visibility unknown: " + err.Error()}
+	}
+	if repo.Private {
+		return Result{Status: Pass, Detail: "private repository: ledger proof media in Git LFS"}
+	}
+	return Result{Status: Fail, Blocking: true,
+		Detail: "repository is public but its ledger tracks proof media in Git LFS (V3): LFS objects cannot be purged from GitHub",
+		Lines:  []string{"set [proof] media to a private bucket, remove .lfsconfig and the LFS lines of .gitattributes from ledger, and purge media already pushed"}}
 }

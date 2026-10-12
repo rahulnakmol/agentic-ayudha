@@ -134,6 +134,7 @@ func TestWireFormats(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got.path, got.auth, got.version = r.URL.Path, r.Header.Get("Authorization"), r.Header.Get("anthropic-version")
 		b, _ := io.ReadAll(r.Body)
+		got.body = nil
 		_ = json.Unmarshal(b, &got.body)
 		switch r.URL.Path {
 		case "/v1/messages":
@@ -162,6 +163,25 @@ func TestWireFormats(t *testing.T) {
 			msgs := b["messages"].([]any)
 			return msgs[0].(map[string]any)["role"] == "system" && b["reasoning_effort"] == "high"
 		}},
+	}
+	// Structured output: Responses text.format and Chat response_format; Messages has none.
+	sreq := req
+	sreq.Format = &Format{Name: "verdict", Schema: json.RawMessage(`{"type":"object"}`), Strict: true}
+	for style, check := range map[string]func(map[string]any) bool{
+		StyleResponses: func(b map[string]any) bool {
+			f, _ := b["text"].(map[string]any)["format"].(map[string]any)
+			return f["type"] == "json_schema" && f["name"] == "verdict" && f["strict"] == true && f["schema"] != nil
+		},
+		StyleChat: func(b map[string]any) bool {
+			f, _ := b["response_format"].(map[string]any)
+			return f["type"] == "json_schema" && f["json_schema"].(map[string]any)["name"] == "verdict"
+		},
+		StyleMessages: func(b map[string]any) bool { return b["text"] == nil && b["response_format"] == nil },
+	} {
+		c := HTTPClient{BaseURL: srv.URL + "/v1", Style: style, Key: "k", HTTP: srv.Client()}
+		if _, err := c.Complete(context.Background(), sreq); err != nil || !check(got.body) {
+			t.Errorf("%s structured output: %v, sent %v", style, err, got.body)
+		}
 	}
 	for _, tt := range tests {
 		c := HTTPClient{BaseURL: srv.URL + "/v1", Style: tt.style, Key: "k-123", HTTP: srv.Client()}
@@ -301,7 +321,104 @@ func TestStructured(t *testing.T) {
 		}
 	}
 	bad := &Fake{Replies: []Response{{Text: `{"disposition":"merge"}`}}}
-	if err := Structured(context.Background(), bad.Complete, Request{}, schema, &v); err == nil || !strings.Contains(err.Error(), "findings") {
+	var re *ReplyError
+	if err := Structured(context.Background(), bad.Complete, Request{}, schema, &v); !errors.As(err, &re) || re.Parse || !strings.Contains(err.Error(), "findings") {
 		t.Fatalf("invalid twice: %v", err)
+	}
+	if bad.Requests[0].Format == nil || string(bad.Requests[0].Format.Schema) != string(schema) {
+		t.Fatal("Structured did not ask for structured output")
+	}
+	// JSON inside prose and fences is found; an empty reply is retried with a non-empty assistant turn.
+	prose := &Fake{Replies: []Response{{Text: ""}, {Text: "Sure. The verdict is {\"disposition\":\"merge\",\"findings\":[]} as requested."}}}
+	if err := Structured(context.Background(), prose.Complete, Request{}, schema, &v); err != nil || v.Disposition != "merge" {
+		t.Fatalf("bare JSON in prose: %+v %v", v, err)
+	}
+	if prose.Requests[1].Messages[0].Content != "(empty reply)" {
+		t.Errorf("empty reply echoed as %q", prose.Requests[1].Messages[0].Content)
+	}
+	junk := &Fake{Replies: []Response{{Text: "I cannot comply."}}}
+	if err := Structured(context.Background(), junk.Complete, Request{}, schema, &v); !errors.As(err, &re) || !re.Parse || re.Reply != "I cannot comply." {
+		t.Fatalf("unparseable twice: %v", err)
+	}
+}
+
+// A gateway that rejects structured output gets the same call again without it.
+func TestFormatFallback(t *testing.T) {
+	var calls []bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var b map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&b)
+		calls = append(calls, b["text"] != nil)
+		if b["text"] != nil {
+			http.Error(w, `{"error":"unsupported parameter: text.format"}`, http.StatusBadRequest)
+			return
+		}
+		_, _ = w.Write([]byte(`{"output":[{"type":"message","content":[{"type":"output_text","text":"{}"}]}]}`))
+	}))
+	defer srv.Close()
+	c := HTTPClient{BaseURL: srv.URL, Style: StyleResponses, Key: "k", HTTP: srv.Client()}
+	r, err := c.Complete(context.Background(), Request{Format: &Format{Name: "x", Schema: json.RawMessage(`{}`)}})
+	if err != nil || r.Text != "{}" || len(calls) != 2 || !calls[0] || calls[1] {
+		t.Fatalf("fallback: %+v %v, calls with format %v", r, err, calls)
+	}
+}
+
+// Stop reasons per wire format; a reply that stopped at the token cap is
+// Truncated, and Structured reports it without retrying under the same cap.
+func TestStopReasons(t *testing.T) {
+	for _, tc := range []struct {
+		style, body, stop string
+		truncated         bool
+	}{
+		{StyleMessages, `{"content":[{"type":"text","text":"{\"a\":"}],"stop_reason":"max_tokens","usage":{"output_tokens":2000}}`, "max_tokens", true},
+		{StyleMessages, `{"content":[{"type":"text","text":"{}"}],"stop_reason":"end_turn"}`, "end_turn", false},
+		{StyleResponses, `{"status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[{"type":"message","content":[{"type":"output_text","text":"{"}]}]}`, "incomplete:max_output_tokens", true},
+		{StyleResponses, `{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"{}"}]}]}`, "completed", false},
+		{StyleChat, `{"choices":[{"message":{"content":"{\"a\""},"finish_reason":"length"}]}`, "length", true},
+		{StyleChat, `{"choices":[{"message":{"content":"{}"},"finish_reason":"stop"}]}`, "stop", false},
+	} {
+		r, err := decode(tc.style, []byte(tc.body))
+		if err != nil || r.StopReason != tc.stop || r.Truncated != tc.truncated {
+			t.Errorf("%s %s: %+v %v", tc.style, tc.stop, r, err)
+		}
+	}
+	fake := &Fake{Replies: []Response{{Text: `{"disposition": "mer`, StopReason: "max_tokens", Truncated: true}}}
+	var v map[string]any
+	var re *ReplyError
+	err := Structured(context.Background(), fake.Complete, Request{MaxTokens: 2000}, []byte(`{"type":"object"}`), &v)
+	if !errors.As(err, &re) || !re.Truncated || len(fake.Requests) != 1 || !strings.Contains(err.Error(), "2000-token cap (max_tokens)") {
+		t.Fatalf("truncated reply: %v after %d call(s)", err, len(fake.Requests))
+	}
+}
+
+// Anthropic's cached prompt input counts as input tokens, so cost and the
+// [budget] breaker see it. The usage block has the shape the gateway returns
+// for Messages calls (run 38185993917 recorded input_tokens 2 on every skill
+// call); the cache counts here are illustrative, since the harness did not keep raw replies.
+func TestCacheTokensCount(t *testing.T) {
+	body := `{"model":"claude-opus-5-5","content":[{"type":"text","text":"{}"}],"stop_reason":"end_turn",
+		"usage":{"input_tokens":2,"cache_creation_input_tokens":1548,"cache_read_input_tokens":310,"output_tokens":1696}}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(body)) }))
+	defer srv.Close()
+	r, err := decode(StyleMessages, []byte(body))
+	if err != nil || r.TokensIn != 1860 || r.TokensOut != 1696 {
+		t.Fatalf("decode: %+v %v", r, err)
+	}
+	want := (1860*FallbackInputPerMTok + 1696*FallbackOutputPerMTok) / 1e6 // 0.1551; 0.1272 without the cache
+	if usd, _ := Cost(nil, r.Model, r); usd < want-1e-9 || usd > want+1e-9 {
+		t.Fatalf("cost %.6f, want %.6f", usd, want)
+	}
+	// A per-story limit between the two costs trips only when cached input counts.
+	dir := t.TempDir()
+	log, _ := actions.Open(filepath.Join(dir, "actions.jsonl"), actions.Options{})
+	clock, _ := config.NewClock("Europe/London", "Mon-Fri 09:00-18:00")
+	br := &Breaker{Budget: config.Budget{PerStoryUSD: 0.14}, Clock: clock, Now: time.Now, PauseFile: filepath.Join(dir, "paused")}
+	gw := &Gateway{Resolver: Resolver{}, Actions: log, Breaker: br, Key: func(string) (string, error) { return "k", nil },
+		Client: func(Route, string) Client {
+			return HTTPClient{BaseURL: srv.URL, Style: StyleMessages, Key: "k", HTTP: srv.Client()}
+		}}
+	_, _, err = gw.Do(context.Background(), Call{Story: "#9", Lane: verbs.LaneSpec, Host: verbs.HostClaude, Req: Request{Messages: []Message{{Role: "user", Content: "draft"}}}})
+	if !errors.Is(err, ErrBudget) || !br.Paused() {
+		t.Fatalf("breaker did not trip on 0.155 USD against 0.14: %v", err)
 	}
 }

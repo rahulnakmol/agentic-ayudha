@@ -16,6 +16,15 @@ aayu:
       required: true
       positional: true
       description: "Intake issue to classify."
+    - name: as
+      type: enum
+      required: false
+      positional: false
+      enum:
+        - "feedback"
+        - "bug"
+        - "incident"
+      description: "Class chosen by the host's model; without it the binary asks the triage lane's model."
   outputs:
     - "labels"
   gates:
@@ -29,4 +38,4 @@ aayu:
 
 Classify intake issues as Feedback, Bug, or Incident by label only; never edits bodies or touches non-intake issues.
 
-Body lands in WP3.1 (skill format) and WP2.9 (the verb).
+Body lands in WP2.9 (the verb). Format and lint: skills/README.md.

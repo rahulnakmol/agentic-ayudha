@@ -21,6 +21,11 @@ aayu:
       required: false
       positional: false
       description: "Validate only; write nothing."
+    - name: guard
+      type: bool
+      required: false
+      positional: false
+      description: "Ready guard (the aayudha-ready-guard workflow): strip status:ready when the issue no longer validates or drifted from its snapshot."
   outputs:
     - "status:ready"
     - "ready-snapshot"
@@ -34,4 +39,4 @@ aayu:
 
 Validate a work item for Ready, label it status:ready, and post the Ready snapshot; --check is read-only.
 
-Body lands in WP3.1 (skill format) and WP2.7 (the verb).
+Body lands in WP2.7 (the verb). Format and lint: skills/README.md.

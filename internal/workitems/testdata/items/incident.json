@@ -1,0 +1,42 @@
+{
+  "create": {
+    "type": "incident",
+    "title": "Claims API returning 500",
+    "fields": {
+      "summary": "Claims cannot be submitted.",
+      "severity": "Sev1",
+      "started": "2026-10-20 09:12 Europe/London"
+    },
+    "labels": [
+      "type:incident",
+      "status:backlog"
+    ]
+  },
+  "ready": {
+    "type": "incident",
+    "title": "Claims API returning 500",
+    "fields": {
+      "summary": "Claims cannot be submitted.",
+      "severity": "Sev1",
+      "started": "2026-10-20 09:12 Europe/London"
+    },
+    "labels": [
+      "type:incident",
+      "status:planned"
+    ]
+  },
+  "complete": {
+    "type": "incident",
+    "title": "Claims API returning 500",
+    "fields": {
+      "summary": "Claims cannot be submitted.",
+      "severity": "Sev1",
+      "started": "2026-10-20 09:12 Europe/London",
+      "timeline": "09:12 alert; 09:30 rollback; 09:41 recovered."
+    },
+    "labels": [
+      "type:incident",
+      "status:done"
+    ]
+  }
+}

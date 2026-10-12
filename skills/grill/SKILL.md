@@ -12,10 +12,21 @@ aayu:
   layers: all
   inputs:
     - name: type
-      type: string
+      type: enum
       required: true
       positional: true
-      description: "Work-item type, e.g. goal or story (enum lands in WP2.1)."
+      enum:
+        - "goal"
+        - "initiative"
+        - "feature"
+        - "story"
+        - "bug"
+        - "decision"
+        - "experiment"
+        - "release"
+        - "feedback"
+        - "incident"
+      description: "Work-item type (internal/workitems)."
     - name: parent
       type: issue
       required: false
@@ -35,4 +46,4 @@ aayu:
 
 Interview a human until a work item of the given type is complete and passes validation, then write it as an issue.
 
-Body lands in WP3.1 (skill format) and WP5.3 (the verb).
+Body lands in WP5.3 (the verb). Format and lint: skills/README.md.
