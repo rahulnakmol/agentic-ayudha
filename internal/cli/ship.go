@@ -92,6 +92,14 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return err
 	}
+	// Whatever ship did reaches the ledger as a segment, also when it refuses
+	// after landing the gate's pack; the merged path checkpoints itself below.
+	checkpointed := false
+	defer func() {
+		if !checkpointed {
+			_ = e.checkpoint(tok)
+		}
+	}()
 	me, err := identity.WhoAmI(ctx, e.HTTP, e.githubAPI(), tok)
 	if err != nil {
 		return Wrap(ExitBlocked, err)
@@ -262,8 +270,8 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 			Request: &actions.Request{Method: http.MethodDelete, Path: fmt.Sprintf("/repos/%s/git/refs/heads/%s", repo, ref)}},
 			func(ctx context.Context) (any, error) {
 				_, err := c.REST.Git.DeleteRef(ctx, owner, name, "refs/heads/"+ref)
-				if github.NotFound(err) {
-					err = nil
+				if github.NotFound(err) || (err != nil && strings.Contains(err.Error(), "Reference does not exist")) {
+					err = nil // already gone: the repository deletes head branches on merge
 				}
 				return nil, err
 			}); err == nil {
@@ -276,7 +284,8 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 			_, _ = run2(ctx, root, "git", "branch", "-D", pr.GetHead().GetRef())
 		}
 	}
-	if err := log.Checkpoint(); err != nil {
+	checkpointed = true
+	if err := e.checkpoint(tok); err != nil {
 		return Wrap(ExitExternal, fmt.Errorf("merged, but the actions segment did not reach the ledger: %w", err))
 	}
 	return e.Emit(res, func(w io.Writer) error {

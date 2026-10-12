@@ -139,6 +139,18 @@ func TestBuildAndShip(t *testing.T) {
 	if got := git(t, bare, "show", "ledger:proof/2/"+head+"/authoritative/pack.json"); !strings.Contains(got, `"run_id": 9000`) || !strings.Contains(got, `"kind": "authoritative"`) {
 		t.Fatalf("landed pack: %s", got)
 	}
+	// The refused ship still checkpointed what it did (landing the pack) to the ledger.
+	if segs := git(t, bare, "ls-tree", "-r", "--name-only", "ledger", "actions/"); !strings.Contains(segs, ".jsonl") {
+		t.Fatalf("no actions segment after a refused ship:\n%s", segs)
+	} else if seg := git(t, bare, "show", "ledger:"+strings.Fields(segs)[len(strings.Fields(segs))-1]); !strings.Contains(seg, `"kind":"ledger.push"`) {
+		t.Fatalf("segment of the refused ship:\n%s", seg)
+	}
+	// Every worktree of the clone shares one actions log: the build worktree sees the PR it opened.
+	wtOpts := opts
+	wtOpts.Dir = BuildWorktree(dir, 2)
+	if code, out, errOut := run(t, env, wtOpts, "actions", "grep", "github.pull.create"); code != 0 || !strings.Contains(out, "github.pull.create") {
+		t.Fatalf("actions log from the build worktree: %d %s %s", code, out, errOut)
+	}
 	g.Mu.Lock()
 	g.Pulls[prN].Reviews = append(g.Pulls[prN].Reviews, review("founder", "User", "APPROVED", head))
 	g.Mu.Unlock()

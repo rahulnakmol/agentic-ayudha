@@ -9,9 +9,11 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 )
 
@@ -21,12 +23,52 @@ func init() { register("actions", runActions) }
 // else the XDG state directory.
 func (e *Env) stateDir() string {
 	if root := config.RepoRoot(e.Dir); root != "" {
-		return filepath.Join(root, ".aayudha")
+		return filepath.Join(mainCheckout(root), ".aayudha")
 	}
 	if d := e.Getenv("XDG_STATE_HOME"); d != "" {
 		return filepath.Join(d, "aayudha")
 	}
 	return filepath.Join(e.Getenv("HOME"), ".local", "state", "aayudha")
+}
+
+// mainCheckout maps a linked worktree (its .git is a file naming
+// <main>/.git/worktrees/<name>) to the main checkout, so every worktree of a
+// clone shares one actions log and runtime state: a build worktree that ship
+// removes takes nothing of the log with it.
+func mainCheckout(root string) string {
+	b, err := os.ReadFile(filepath.Join(root, ".git"))
+	if err != nil {
+		return root // a directory: the main checkout itself
+	}
+	gitdir, ok := strings.CutPrefix(strings.TrimSpace(string(b)), "gitdir: ")
+	if !ok {
+		return root
+	}
+	if !filepath.IsAbs(gitdir) {
+		gitdir = filepath.Join(root, gitdir)
+	}
+	i := strings.LastIndex(filepath.ToSlash(gitdir), "/.git/worktrees/")
+	if i < 0 {
+		return root // a submodule or a separate git dir
+	}
+	return filepath.FromSlash(filepath.ToSlash(gitdir)[:i])
+}
+
+// checkpoint appends this run's actions log lines to the ledger as a segment
+// (WP1.5), pushing with tok: the verb's own credentials, not whatever git
+// credential helper the clone has. Without a ledger the segment goes to the
+// local outbox.
+func (e *Env) checkpoint(tok identity.Token) error {
+	log, err := e.Actions()
+	if err != nil {
+		return err
+	}
+	outbox := actions.DirSink{Root: filepath.Join(e.stateDir(), "ledger-outbox")}
+	root := config.RepoRoot(e.Dir)
+	if root == "" {
+		return log.CheckpointTo(outbox)
+	}
+	return log.CheckpointTo(fallbackSink{ledger.Sink{W: &ledger.Writer{Dir: root, Token: tok.Value}}, outbox})
 }
 
 // ActionsPath is the local actions log, telemetry/actions.jsonl (WP1.5).
