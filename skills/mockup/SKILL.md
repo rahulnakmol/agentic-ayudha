@@ -16,6 +16,11 @@ aayu:
       required: true
       positional: true
       description: "Feature to mock up."
+    - name: from
+      type: path
+      required: true
+      positional: false
+      description: "Directory with stage.json and one SVG or HTML mockup per wireframe state, coloured only with design tokens."
   outputs:
     - "mockups"
   gates:
@@ -29,4 +34,17 @@ aayu:
 
 Produce design-system mockups for a Feature from its wireframes.
 
-Body lands in WP6.5 (the verb). Format and lint: skills/README.md.
+1. Read the wireframe stage (`design/<feature>/wireframe/` on the ledger).
+2. Make one mockup per wireframe state, with the same state IDs, in SVG or HTML. Use only the design system:
+   its components, its density modes, and its token colours and type scale (`[design] tokens`; on the web,
+   the `--ay-*` custom properties). A colour that is not a token fails the check.
+3. List the states in `stage.json` (`{"states": [{"id", "title", "file"}]}`) and pin them:
+
+   ```sh
+   aayu mockup 42 --from .aayudha/design/42/mockup
+   ```
+
+The binary refuses (exit 4) without the wireframe stage, fails (exit 3, nothing written) on a non-token colour
+or a missing state, and otherwise writes `design/<feature>/mockup/` pinned to the wireframes.
+
+Format and lint: skills/README.md.

@@ -1,0 +1,7 @@
+{
+  "notes": "notes.md",
+  "references": [
+    {"source": "web", "kind": "guideline", "id": "wcag-2.2-target-size", "url": "https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html"},
+    {"source": "mobbin", "kind": "screen", "id": "3f2c1a9e-6b7d-4c1e-9a52-0d4f8e7b6c21", "url": "https://mobbin.com/screens/3f2c1a9e-6b7d-4c1e-9a52-0d4f8e7b6c21"}
+  ]
+}

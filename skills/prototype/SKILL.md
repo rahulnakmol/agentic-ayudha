@@ -16,6 +16,16 @@ aayu:
       required: true
       positional: true
       description: "Feature to prototype."
+    - name: from
+      type: path
+      required: true
+      positional: false
+      description: "Directory with stage.json: the OpenFeature flag, Figma file, Code Connect sources, components, and each state's path and Figma frame."
+    - name: captures
+      type: path
+      required: false
+      positional: false
+      description: "Diff these captures (captures.json with PNGs and computed styles) instead of rendering the states."
   outputs:
     - "prototype"
     - "feature-flag"
@@ -32,4 +42,30 @@ aayu:
 
 Build a flagged, working prototype of a Feature with Code Connect mapping and a Figma screenshot diff.
 
-Body lands in WP6.5 (the verb). Format and lint: skills/README.md.
+1. Build the mockups as working UI in the product, from design-system components and tokens only.
+2. Put it behind an OpenFeature flag, off by default, declared in `[design] flags` (flagd JSON):
+   `{"flags": {"orders-v2": {"state": "ENABLED", "variants": {"on": true, "off": false}, "defaultVariant": "off"}}}`.
+   Turn it on only in the environment you capture (`[verify.environments.<AAYU_ENV>]`, never production).
+3. Map each Figma component the prototype uses to code with Code Connect (`figma.connect(Component, "<figma URL with node-id>")`).
+4. Write `stage.json`: the flag, the Figma file key, the Code Connect sources, the components, and each state's
+   URL path and Figma frame (the same state IDs as the mockups):
+
+   ```json
+   {"flag": "orders-v2", "figma_file": "AbCdEf123", "code_connect": ["src/orders/OrderList.figma.tsx"],
+    "components": ["1:2"],
+    "states": [{"id": "list", "title": "Orders list", "path": "/orders", "figma_node": "4:7"}]}
+   ```
+
+5. Run the gate:
+
+   ```sh
+   aayu prototype 42 --from .aayudha/design/42/prototype
+   ```
+
+The binary renders each state at its Figma frame's size and diffs it against Figma's render: at most
+`[review] figma_diff_max` (2 %) of pixels may differ after the anti-aliasing mask, and colour and typography
+token mismatches must be zero whatever the pixels say. A miss exits 3 and writes nothing; fix the UI, not the
+tolerance. On a pass it writes `design/<feature>/prototype/` pinned to the mockups. `--captures <dir>` diffs
+captures you already have (`captures.json` with PNGs and computed styles) instead of rendering.
+
+Format and lint: skills/README.md.

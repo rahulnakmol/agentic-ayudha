@@ -4,15 +4,26 @@
   "additionalProperties": false,
   "description": "Build a flagged, working prototype of a Feature with Code Connect mapping and a Figma screenshot diff.",
   "properties": {
+    "captures": {
+      "description": "Diff these captures (captures.json with PNGs and computed styles) instead of rendering the states.",
+      "type": "string",
+      "x-aayu-type": "path"
+    },
     "feature": {
       "description": "Feature to prototype.",
       "pattern": "^(#?[1-9][0-9]*|https://github\\.com/[^/]+/[^/]+/issues/[1-9][0-9]*)$",
       "type": "string",
       "x-aayu-type": "issue"
+    },
+    "from": {
+      "description": "Directory with stage.json: the OpenFeature flag, Figma file, Code Connect sources, components, and each state's path and Figma frame.",
+      "type": "string",
+      "x-aayu-type": "path"
     }
   },
   "required": [
-    "feature"
+    "feature",
+    "from"
   ],
   "title": "prototype",
   "type": "object",

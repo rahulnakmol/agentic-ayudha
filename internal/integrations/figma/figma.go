@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"net/http"
 	"net/url"
@@ -175,6 +176,34 @@ func (c *Client) Images(ctx context.Context, file, format string, scale float64,
 		out[id] = *u
 	}
 	return out, nil
+}
+
+// Render renders one node to PNG at scale (REST) and downloads the image.
+// The download goes to the rendered image's own host without the Figma
+// token, so the token never leaves api.figma.com.
+func (c *Client) Render(ctx context.Context, file, node string, scale float64) ([]byte, error) {
+	urls, err := c.Images(ctx, file, "png", scale, node)
+	if err != nil {
+		return nil, err
+	}
+	req, err := integrations.NewRequest(ctx, http.MethodGet, urls[node], nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "image/png")
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("%w: figma render of %s: %w", integrations.ErrProvider, node, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%w: figma render of %s: %s", integrations.ErrProvider, node, resp.Status)
+	}
+	b, err := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
+	if err != nil {
+		return nil, fmt.Errorf("%w: figma render of %s: %w", integrations.ErrProvider, node, err)
+	}
+	return b, nil
 }
 
 // Variables returns a file's variables sorted by name. REST returns every

@@ -89,6 +89,13 @@ var sections = []section{
 		note: "When a budget trips, the breaker pauses agent lanes and pages through `[notify]` once per day (WP1.6).",
 	},
 	{
+		heading: "Design review",
+		roots:   []string{"review"},
+		rows: []row{
+			{"review.figma_diff_max", "Largest share of pixels, in percent, a prototype screenshot may differ from its Figma frame after the anti-aliasing mask. Colour and typography token mismatches are counted separately and must be zero.", "WP6.5"},
+		},
+	},
+	{
 		heading: "Retention",
 		roots:   []string{"proof"},
 		rows: []row{

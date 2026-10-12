@@ -37,6 +37,19 @@ type Config struct {
 	Fleet         Fleet                  `koanf:"fleet" jsonschema_description:"User-level only: the product repos that status --all and doctor --all iterate."`
 	Branches      Branches               `koanf:"branches" jsonschema_description:"The product's branches that play dev, rolling, and main when they have other names (written by init; nothing is renamed)."`
 	Measure       Measure                `koanf:"measure" jsonschema_description:"The events measure (WP7.2) reads as AARRR stages and the North Star."`
+	Design        Design                 `koanf:"design" jsonschema_description:"Where the design verbs (WP6.5) find the design tokens and the OpenFeature flag definitions."`
+	Review        Review                 `koanf:"review" jsonschema_description:"Tolerances of the prototype's Figma screenshot diff (WP6.5) and UI review (WP6.6)."`
+}
+
+// Design is [design] (WP6.5). Paths are relative to the repository root.
+type Design struct {
+	Tokens string `koanf:"tokens" jsonschema_description:"Design-token source (tokens.json in the W3C design-tokens format) whose colours and type scale mockups and prototypes must use."`
+	Flags  string `koanf:"flags" jsonschema_description:"OpenFeature flag definitions (flagd JSON) that must declare each prototype's flag, off by default."`
+}
+
+// Review is [review] (WP6.5, WP6.6).
+type Review struct {
+	FigmaDiffMax float64 `koanf:"figma_diff_max" jsonschema:"minimum=0,maximum=100" jsonschema_description:"Largest share of pixels, in percent, a prototype screenshot may differ from its Figma frame after the anti-aliasing mask; colour and typography token mismatches must be zero regardless."`
 }
 
 // Measure is [measure]: which exported events mark each AARRR stage. Event

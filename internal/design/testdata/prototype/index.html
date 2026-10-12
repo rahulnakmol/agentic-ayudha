@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<title>Orders</title>
+<!-- Fixture prototype for WP6.5 (synthetic data). Colours and type come only from the design-system tokens. -->
+<link rel="stylesheet" href="/tokens.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ay-color-background); color: var(--ay-color-text-default);
+         font-family: var(--ay-font-family-sans); font-size: var(--ay-font-size-body); font-weight: var(--ay-font-weight-regular); }
+  header { height: 56px; display: flex; align-items: center; padding: 0 24px; background: var(--ay-color-shell-background);
+           border-bottom: 1px solid var(--ay-color-shell-border); }
+  header h1 { margin: 0; font-size: var(--ay-font-size-header-3); font-weight: var(--ay-font-weight-semibold); }
+  main { padding: 24px; }
+  .card { background: var(--ay-color-surface); border: 1px solid var(--ay-color-border); border-radius: var(--ay-radius-container);
+          padding: 16px 24px; height: 296px; position: relative; }
+  .row { display: flex; justify-content: space-between; align-items: center; height: 48px; border-bottom: 1px solid var(--ay-color-border); }
+  .row:last-of-type { border-bottom: 0; }
+  .label { color: var(--ay-color-text-label); }
+  .status { font-weight: var(--ay-font-weight-semibold); color: var(--ay-color-positive-default); }
+  .status.transit { color: var(--ay-color-informative-default); }
+  button { position: absolute; left: 24px; bottom: 16px; height: var(--ay-size-control-height); padding: 0 var(--ay-space-control-inline);
+           border: 0; border-radius: var(--ay-radius-control); background: var(--ay-color-brand-default); color: var(--ay-color-brand-contrast);
+           font: inherit; font-weight: var(--ay-font-weight-semibold); }
+  button:focus-visible { outline: 2px solid var(--ay-color-focus); outline-offset: 2px; }
+  .legacy { padding: 24px; }
+  .empty button { position: static; margin-top: 16px; }
+  .empty h2 { font-size: var(--ay-font-size-header-2); font-weight: var(--ay-font-weight-semibold); margin: 8px 0; }
+  .block { position: absolute; background: var(--ay-color-negative-default); }
+  .badge { color: #123456; }
+</style>
+</head>
+<body>
+<header><h1>Orders</h1></header>
+<main id="app"></main>
+<script type="module">
+  // OpenFeature flagd definitions: the prototype renders only when orders-v2 evaluates to true.
+  const defs = await (await fetch("/flags.flagd.json")).json();
+  const f = defs.flags["orders-v2"];
+  const on = f && f.state === "ENABLED" && f.variants[f.defaultVariant] === true;
+  const q = new URLSearchParams(location.search);
+  const app = document.getElementById("app");
+  if (!on) {
+    app.innerHTML = `<p class="legacy">Your orders are listed on the account page.</p>`;
+  } else if (q.get("seed") === "empty") {
+    app.innerHTML = `<section class="card empty"><h2>No orders yet</h2><p class="label">Orders you place appear here.</p><button>Place your first order</button></section>`;
+  } else {
+    const rows = [["#1042", "Delivered", ""], ["#1041", "In transit", "transit"], ["#1039", "Delivered", ""]]
+      .map(([n, s, c]) => `<div class="row"><span>Order ${n}</span><span class="status ${c}">${s}</span></div>`).join("");
+    const extra = {
+      block15: `<span class="block" style="right:24px;top:164px;width:64px;height:60px"></span>`,
+      block25: `<span class="block" style="right:24px;top:164px;width:80px;height:80px"></span>`,
+      offtoken: `<span class="badge">New</span>`,
+    }[q.get("variant")] || "";
+    app.innerHTML = `<section class="card">${rows}${extra}<button>New order</button></section>`;
+  }
+  document.body.dataset.ready = "1";
+</script>
+</body>
+</html>

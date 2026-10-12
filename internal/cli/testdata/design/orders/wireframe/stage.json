@@ -1,0 +1,6 @@
+{
+  "states": [
+    {"id": "list", "title": "Orders list with three orders", "file": "list.svg"},
+    {"id": "empty", "title": "No orders yet", "file": "empty.md"}
+  ]
+}
