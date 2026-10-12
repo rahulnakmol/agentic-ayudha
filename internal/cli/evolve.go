@@ -86,7 +86,7 @@ func runEvolve(ctx context.Context, e *Env, in Values) error {
 		return Errorf(ExitBlocked, "evolve: Feedback #%d is not accepted (a human accepts it with the %s label)", n, workitems.LabelNeedsGrill)
 	}
 	dev := e.devBranch()
-	res := EvolveResult{Feedback: n, Skill: skill, Worktree: filepath.Join(root, ".aayudha", "worktrees", fmt.Sprintf("evolve-%d", n)), Branch: fmt.Sprintf("%s%s-%d", EvolveBranchPrefix, skill, n)}
+	res := EvolveResult{Feedback: n, Skill: skill, Worktree: filepath.Join(root, ".aayudha", "worktrees", fmt.Sprintf("evolve-%s-%d", skill, n)), Branch: fmt.Sprintf("%s%s-%d", EvolveBranchPrefix, skill, n)}
 	if _, err := os.Stat(res.Worktree); err != nil {
 		if _, err := run2(ctx, root, "git", "fetch", "--quiet", "origin", dev); err != nil {
 			return Wrap(ExitExternal, err)

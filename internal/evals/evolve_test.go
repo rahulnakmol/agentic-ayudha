@@ -141,7 +141,7 @@ func TestEvolveVerb(t *testing.T) {
 		t.Fatalf("not retro Feedback: %d %s", code, errOut)
 	}
 	code, out, errOut := run("--skill", "stub", "--feedback", "5")
-	wt := filepath.Join(dir, ".aayudha", "worktrees", "evolve-5")
+	wt := filepath.Join(dir, ".aayudha", "worktrees", "evolve-stub-5")
 	if code != 0 || !strings.Contains(out, "evolve/stub-5") {
 		t.Fatalf("first run: %d %s %s", code, out, errOut)
 	}
@@ -206,6 +206,14 @@ func TestEvolveVerb(t *testing.T) {
 	g.Mu.Unlock()
 	if code, _, errOut := run("--skill", "stub", "--feedback", "5"); code != cli.ExitExternal {
 		t.Fatalf("re-run with GitHub failing: %d %s", code, errOut)
+	}
+	// Another skill for the same Feedback gets its own worktree and branch.
+	g.Reset()
+	if code, out, errOut := run("--skill", "grill", "--feedback", "5"); code != 0 || !strings.Contains(out, "evolve-grill-5") || !strings.Contains(out, "evolve/grill-5") {
+		t.Fatalf("another skill: %d %s %s", code, out, errOut)
+	}
+	if b := gitIn(t, wt, "rev-parse", "--abbrev-ref", "HEAD"); b != "evolve/stub-5" {
+		t.Fatalf("the stub worktree moved to %s", b)
 	}
 	// A re-run finds the open PR instead of opening another.
 	g.Reset()
