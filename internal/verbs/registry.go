@@ -96,6 +96,7 @@ type ModelDefault struct {
 	EscalationID     string // model ID of the escalation, when it is a model rather than a host mode
 	EscalationEffort string // reasoning effort for the escalation model
 	Alternative      string // an equally acceptable default; empty if none
+	AlternativeID    string // model ID of the alternative, used as a fallback when the default cannot be called
 	ContextTokens    int    // context window cap; 0 means the model default
 	Note             string // e.g. a substitution the gateway forces
 }
@@ -342,8 +343,8 @@ const geminiNote = "the gateway serves only gemini-3.1-pro-low; there is no plai
 func builderDefaults() []ModelDefault {
 	return []ModelDefault{
 		{Host: HostAmp, Model: "Amp medium", Family: FamilyHostManaged, Escalation: "Amp high"},
-		{Host: HostCursor, Model: "Claude Opus 5.5", ID: ModelClaudeOpus, Family: FamilyAnthropic, Alternative: "Claude Sonnet 5.5 (" + ModelClaudeSonnet + ")"},
-		{Host: HostClaude, Model: "Claude Opus 5.5", ID: ModelClaudeOpus, Family: FamilyAnthropic, Alternative: "Claude Sonnet 5.5 (" + ModelClaudeSonnet + ")"},
+		{Host: HostCursor, Model: "Claude Opus 5.5", ID: ModelClaudeOpus, Family: FamilyAnthropic, Alternative: "Claude Sonnet 5.5 (" + ModelClaudeSonnet + ")", AlternativeID: ModelClaudeSonnet},
+		{Host: HostClaude, Model: "Claude Opus 5.5", ID: ModelClaudeOpus, Family: FamilyAnthropic, Alternative: "Claude Sonnet 5.5 (" + ModelClaudeSonnet + ")", AlternativeID: ModelClaudeSonnet},
 	}
 }
 

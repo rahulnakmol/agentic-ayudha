@@ -188,7 +188,7 @@ func TestTier2WithFakeModels(t *testing.T) {
 		t.Fatalf("want one tier-2 case with 5 runs and 10 model calls, got %+v, %d calls", res.Cases, len(fake.Requests))
 	}
 	c := res.Cases[0]
-	if c.Model != "claude-haiku-5-5" || fake.Requests[1].Model != "gpt-6.1-sol" || c.PassK != 0 || c.Mean != 4.6 || res.CostUSD <= 0 {
+	if c.Model != "claude-opus-5-5" || c.Lane != "spec" || c.Fallback != "claude-sonnet-5-5" || fake.Requests[1].Model != "gpt-6.1-sol" || c.PassK != 0 || c.Mean != 4.6 || res.CostUSD <= 0 {
 		t.Fatalf("results: %+v cost %.4f, judge request model %s", c, res.CostUSD, fake.Requests[1].Model)
 	}
 	if !strings.Contains(fake.Requests[0].Messages[0].Content, `<untrusted source="eval-input">`) {
@@ -447,5 +447,46 @@ func TestScopeConventionVersusInvented(t *testing.T) {
 				t.Fatalf("invented %s not caught:\n%s", tc.name, r)
 			}
 		})
+	}
+}
+
+// flaky fails every call to one model with an endpoint error and answers the rest from a fake.
+type flaky struct {
+	down string
+	fake *models.Fake
+}
+
+func (f flaky) Complete(ctx context.Context, r models.Request) (models.Response, error) {
+	if r.Model == f.down {
+		return models.Response{}, &models.StatusError{Code: 404, Body: `{"error":"model not found"}`}
+	}
+	return f.fake.Complete(ctx, r)
+}
+
+// The skill model comes from the registry lane of the verb the stub stands in
+// for (grill: spec); when that model cannot be called, the lane's registry
+// alternative takes the call.
+func TestTier2SkillModelFromVerbLaneWithFallback(t *testing.T) {
+	cases, _ := LoadCases(root)
+	fake := &models.Fake{Replies: judgeReplies(t, func(int) []string { return []string{`{"score": 5, "reason": "ok"}`} })}
+	h := harness(t, fake, "gpt-6.1-sol")
+	h.Gateway.Client = func(models.Route, string) models.Client { return flaky{down: "claude-opus-5-5", fake: fake} }
+	res, err := h.Tier2(context.Background(), cases, "abc", "dev", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := res.Cases[0]
+	calls := c.Runs[0].Calls
+	if c.Model != "claude-opus-5-5" || c.PassK != 1 || len(calls) != 3 ||
+		calls[0].Model != "claude-opus-5-5" || calls[0].Error == "" || calls[1].Model != "claude-sonnet-5-5" || calls[2].Role != "judge" {
+		t.Fatalf("case %s pass^k %v, calls %+v", c.Model, c.PassK, calls)
+	}
+}
+
+func TestTier2NeedsAVerbLane(t *testing.T) {
+	c := copyCase(t, "stub/csv-export")
+	c.Tier2.Verb = ""
+	if _, err := harness(t, &models.Fake{}, "gpt-6.1-sol").Tier2(context.Background(), []Case{c}, "abc", "dev", time.Now()); err == nil || !strings.Contains(err.Error(), "set [tier2] verb") {
+		t.Fatalf("a stub without a verb: %v", err)
 	}
 }

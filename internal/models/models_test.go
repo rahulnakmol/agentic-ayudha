@@ -390,3 +390,35 @@ func TestStopReasons(t *testing.T) {
 		t.Fatalf("truncated reply: %v after %d call(s)", err, len(fake.Requests))
 	}
 }
+
+// Anthropic's cached prompt input counts as input tokens, so cost and the
+// [budget] breaker see it. The usage block has the shape the gateway returns
+// for Messages calls (run 38185993917 recorded input_tokens 2 on every skill
+// call); the cache counts here are illustrative, since the harness did not keep raw replies.
+func TestCacheTokensCount(t *testing.T) {
+	body := `{"model":"claude-opus-5-5","content":[{"type":"text","text":"{}"}],"stop_reason":"end_turn",
+		"usage":{"input_tokens":2,"cache_creation_input_tokens":1548,"cache_read_input_tokens":310,"output_tokens":1696}}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(body)) }))
+	defer srv.Close()
+	r, err := decode(StyleMessages, []byte(body))
+	if err != nil || r.TokensIn != 1860 || r.TokensOut != 1696 {
+		t.Fatalf("decode: %+v %v", r, err)
+	}
+	want := (1860*FallbackInputPerMTok + 1696*FallbackOutputPerMTok) / 1e6 // 0.1551; 0.1272 without the cache
+	if usd, _ := Cost(nil, r.Model, r); usd < want-1e-9 || usd > want+1e-9 {
+		t.Fatalf("cost %.6f, want %.6f", usd, want)
+	}
+	// A per-story limit between the two costs trips only when cached input counts.
+	dir := t.TempDir()
+	log, _ := actions.Open(filepath.Join(dir, "actions.jsonl"), actions.Options{})
+	clock, _ := config.NewClock("Europe/London", "Mon-Fri 09:00-18:00")
+	br := &Breaker{Budget: config.Budget{PerStoryUSD: 0.14}, Clock: clock, Now: time.Now, PauseFile: filepath.Join(dir, "paused")}
+	gw := &Gateway{Resolver: Resolver{}, Actions: log, Breaker: br, Key: func(string) (string, error) { return "k", nil },
+		Client: func(Route, string) Client {
+			return HTTPClient{BaseURL: srv.URL, Style: StyleMessages, Key: "k", HTTP: srv.Client()}
+		}}
+	_, _, err = gw.Do(context.Background(), Call{Story: "#9", Lane: verbs.LaneSpec, Host: verbs.HostClaude, Req: Request{Messages: []Message{{Role: "user", Content: "draft"}}}})
+	if !errors.Is(err, ErrBudget) || !br.Paused() {
+		t.Fatalf("breaker did not trip on 0.155 USD against 0.14: %v", err)
+	}
+}

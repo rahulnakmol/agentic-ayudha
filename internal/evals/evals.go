@@ -94,7 +94,10 @@ type Schema struct {
 // Tier2Spec configures a case's rubric run.
 type Tier2Spec struct {
 	Rubric string `toml:"rubric"` // file in the case directory
-	Lane   string `toml:"lane"`   // the skill model's lane; empty uses the verb's registry lane
+	// Verb is the registry verb the skill stands in for; empty when the skill is
+	// itself a verb. The skill model is that verb's registry lane on the direct
+	// host (never a model named here), so evals run on the model the verb uses.
+	Verb string `toml:"verb"`
 }
 
 // LoadConfig reads evals/eval.toml under root.

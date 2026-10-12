@@ -20,4 +20,4 @@ scope = [
 
 [tier2]
 rubric = "rubric.md"
-lane = "chore"
+verb = "grill" # the stub drafts a Story as `grill story` does, so it runs on grill's lane (spec)

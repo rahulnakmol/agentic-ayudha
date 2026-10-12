@@ -55,14 +55,16 @@ type CallLog struct {
 
 // CaseResult is a case's k runs.
 type CaseResult struct {
-	Case   string       `json:"case"`
-	Skill  string       `json:"skill"`
-	Model  string       `json:"model"`
-	Family verbs.Family `json:"family"`
-	Runs   []Run        `json:"runs"`
-	Errors int          `json:"errors"` // runs with status error, excluded from pass^k and the mean
-	PassK  float64      `json:"pass_k"` // over completed runs: 1 when all of them pass, else 0
-	Mean   float64      `json:"mean"`   // over completed runs
+	Case     string       `json:"case"`
+	Skill    string       `json:"skill"`
+	Lane     verbs.LaneID `json:"lane"`               // the registry lane of the verb the skill is or stands in for
+	Model    string       `json:"model"`              // the lane's model on the direct host
+	Fallback string       `json:"fallback,omitempty"` // the lane's registry alternative, called when Model's call fails
+	Family   verbs.Family `json:"family"`
+	Runs     []Run        `json:"runs"`
+	Errors   int          `json:"errors"` // runs with status error, excluded from pass^k and the mean
+	PassK    float64      `json:"pass_k"` // over completed runs: 1 when all of them pass, else 0
+	Mean     float64      `json:"mean"`   // over completed runs
 }
 
 // Results is evals/results/<sha>.json.
@@ -96,6 +98,49 @@ type Harness struct {
 	Gateway *models.Gateway
 	Assets  fs.FS // embedded skills/; stub skills live in evals/skills under Root
 	spent   float64
+
+	fallback string // the current case's skill-lane fallback model
+}
+
+// skillLane returns the registry lane of the verb the case's skill is, or
+// stands in for (tier2.verb), and that lane's registry alternative model on the
+// direct host.
+func (h *Harness) skillLane(c Case) (verbs.LaneID, string, error) {
+	name := c.Tier2.Verb
+	if name == "" {
+		name = c.Skill
+	}
+	cmd, ok := verbs.Find(name)
+	if !ok || cmd.Lane == "" {
+		return "", "", fmt.Errorf("%s: %q is not a registry verb with a lane; set [tier2] verb to the verb the skill stands in for", c.ID, name)
+	}
+	l, _ := verbs.FindLane(cmd.Lane)
+	for _, d := range l.Defaults {
+		if d.Host == verbs.DirectHost {
+			return cmd.Lane, d.AlternativeID, nil
+		}
+	}
+	return cmd.Lane, "", nil
+}
+
+// withModel is the gateway with lane pinned to model on the direct host.
+func (h *Harness) withModel(lane verbs.LaneID, model string) *models.Gateway {
+	g := *h.Gateway
+	m := g.Models
+	lanes := map[string]map[string]config.ModelChoice{}
+	for k, hosts := range m.Lanes {
+		lanes[k] = map[string]config.ModelChoice{}
+		for hh, c := range hosts {
+			lanes[k][hh] = c
+		}
+	}
+	if lanes[string(lane)] == nil {
+		lanes[string(lane)] = map[string]config.ModelChoice{}
+	}
+	lanes[string(lane)][string(verbs.DirectHost)] = config.ModelChoice{Model: model}
+	m.Lanes = lanes
+	g.Models, g.Resolver.Models = m, m
+	return &g
 }
 
 // JudgeModels returns m with the review lane on the direct host pinned to the
@@ -138,20 +183,30 @@ func (h *Harness) skillBody(skill string) (string, error) {
 
 func (h *Harness) complete(lane verbs.LaneID, role string, log *[]CallLog) func(context.Context, models.Request) (models.Response, error) {
 	return func(ctx context.Context, req models.Request) (models.Response, error) {
-		if h.spent >= h.Config.MaxUSD {
-			return models.Response{}, fmt.Errorf("%w: %.2f of %.2f USD", ErrBudget, h.spent, h.Config.MaxUSD)
+		resp, err := h.call(ctx, h.Gateway, lane, role, req, log)
+		var se *models.StatusError
+		if role == "skill" && h.fallback != "" && errors.As(err, &se) {
+			// The lane's default model could not be called: use its registry alternative.
+			resp, err = h.call(ctx, h.withModel(lane, h.fallback), lane, role, req, log)
 		}
-		resp, m, err := h.Gateway.Do(ctx, models.Call{Story: "evals", Seat: string(verbs.AINativeEngineer), Lane: lane, Host: verbs.DirectHost, Req: req})
-		usd, _ := models.Cost(h.Gateway.Models.Prices, m.Model, resp)
-		h.spent += usd
-		l := CallLog{Role: role, Model: m.Model, StopReason: resp.StopReason, Truncated: resp.Truncated,
-			TokensIn: resp.TokensIn, TokensOut: resp.TokensOut, MaxTokens: req.MaxTokens}
-		if err != nil {
-			l.Error = clip(actions.RedactString(err.Error()), 200)
-		}
-		*log = append(*log, l)
 		return resp, err
 	}
+}
+
+func (h *Harness) call(ctx context.Context, gw *models.Gateway, lane verbs.LaneID, role string, req models.Request, log *[]CallLog) (models.Response, error) {
+	if h.spent >= h.Config.MaxUSD {
+		return models.Response{}, fmt.Errorf("%w: %.2f of %.2f USD", ErrBudget, h.spent, h.Config.MaxUSD)
+	}
+	resp, m, err := gw.Do(ctx, models.Call{Story: "evals", Seat: string(verbs.AINativeEngineer), Lane: lane, Host: verbs.DirectHost, Req: req})
+	usd, _ := models.Cost(gw.Models.Prices, m.Model, resp)
+	h.spent += usd
+	l := CallLog{Role: role, Model: m.Model, StopReason: resp.StopReason, Truncated: resp.Truncated,
+		TokensIn: resp.TokensIn, TokensOut: resp.TokensOut, MaxTokens: req.MaxTokens}
+	if err != nil {
+		l.Error = clip(actions.RedactString(err.Error()), 200)
+	}
+	*log = append(*log, l)
+	return resp, err
 }
 
 // untrusted wraps eval input the way every model call wraps untrusted text
@@ -190,13 +245,16 @@ func (h *Harness) Tier2(ctx context.Context, cases []Case, sha, ref string, now 
 		if err != nil {
 			return nil, err
 		}
-		lane := verbs.LaneID(c.Tier2.Lane)
-		if cmd, ok := verbs.Find(c.Skill); ok && lane == "" {
-			lane = cmd.Lane
+		lane, alt, err := h.skillLane(c)
+		if err != nil {
+			return nil, err
 		}
 		m, err := h.Gateway.Resolver.ResolveDirect(lane, verbs.DirectHost, false)
 		if err != nil {
 			return nil, err
+		}
+		if m.Source == models.SourceConfig {
+			alt = "" // a configured model is the owner's choice; no registry fallback
 		}
 		// The judge must come from another family than the skill model (WP3.4).
 		if err := models.CheckFamilies(c.ID, m.Family, judgeFamily); err != nil {
@@ -210,7 +268,13 @@ func (h *Harness) Tier2(ctx context.Context, cases []Case, sha, ref string, now 
 		if err != nil {
 			return nil, err
 		}
-		cr := CaseResult{Case: c.ID, Skill: c.Skill, Model: m.Model, Family: m.Family}
+		if alt != "" {
+			if err := models.CheckFamilies(c.ID, verbs.FamilyOf(alt), judgeFamily); err != nil {
+				return nil, fmt.Errorf("judge %s against fallback %s: %w", h.Config.Judge, alt, err)
+			}
+		}
+		h.fallback = alt
+		cr := CaseResult{Case: c.ID, Skill: c.Skill, Lane: lane, Model: m.Model, Family: m.Family, Fallback: alt}
 		for i := 0; i < h.Config.K; i++ {
 			if budgetErr != nil { // the spend cap stops every later run: recorded, never silent
 				cr.Runs = append(cr.Runs, errorRun(budgetErr))
