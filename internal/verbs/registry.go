@@ -469,6 +469,10 @@ var Verbs = []Command{
 		Inputs: []Input{
 			enumIn("type", true, true, "Work-item type (internal/workitems).", "goal", "initiative", "feature", "story", "bug", "decision", "experiment", "release", "feedback", "incident"),
 			flag("parent", TypeIssue, "Parent issue to link the new work item under."),
+			flag("title", TypeString, "Title of the drafted work item."),
+			flag("body", TypeString, "Drafted issue body in the issue-form layout (### <Field> sections)."),
+			flag("labels", TypeString, "Comma-separated label-held fields, e.g. effort:S,priority:P2."),
+			readOnlyWith(flag("create", TypeBool, "Write the validated draft as an issue (through the actions log); without it grill only validates."), "false"),
 		},
 		Outputs:  []string{"issue"},
 		Gates:    []GateID{GateValidator, GateBaseline, GateHalt},
@@ -554,7 +558,10 @@ var Verbs = []Command{
 		Name: "ship", WP: "WP5.5",
 		Summary: "Squash-merge a PR after a green merge gate and a human pass, write the Complete section, and clean up.",
 		Seat:    EngineeringManager, Lane: LaneChore, Layers: AllLayers(),
-		Inputs:   []Input{pos("pr", TypePR, "Pull request to ship.")},
+		Inputs: []Input{
+			pos("pr", TypePR, "Pull request to ship."),
+			humanOnly(flag("solo-bypass", TypeBool, "Solo mode only (one human, no bot App): merge without a second person's approval, recorded in the PR, the ship record, and the actions log (Appendix B D2).")),
+		},
 		Outputs:  []string{"merge-commit", "complete-section", "status:merged"},
 		Gates:    []GateID{GateMergeGate, GateHumanPass},
 		Surfaces: cliSkill, Identity: IdentityHuman, Mode: ModeNone, Exposure: ExposeNever,

@@ -1,0 +1,23 @@
+{
+  "type": "story",
+  "title": "Show an empty claims list with a way to start a claim",
+  "fields": {
+    "summary": "As a new claimant, I want to see that I have no claims yet and how to start one, so that I know what to do first.",
+    "completion_goal": "1. [screenshot] state: `/claims` signed in as a seeded claimant with no claims; expected: the message \"You have no claims yet\" and a \"Start a claim\" button\n2. [api-trace] state: GET /api/claims for a seeded claimant with no claims; expected: 200 with an empty list",
+    "measure": "Completion Goal criteria observed",
+    "threshold": "all 2 criteria",
+    "scenario": "Sign in as the seeded claimant with no claims, open the claims list, then call GET /api/claims as that claimant.",
+    "environment": "local app with the seeded synthetic claimant; never production"
+  },
+  "labels": [
+    "type:story",
+    "status:planned",
+    "effort:S",
+    "priority:P2"
+  ],
+  "parent": {
+    "number": 30,
+    "type": "feature"
+  },
+  "number": 31
+}

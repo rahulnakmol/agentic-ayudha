@@ -139,6 +139,16 @@ func Open(path string, opts Options) (*Log, error) {
 // DryRun reports whether the log only plans actions.
 func (l *Log) DryRun() bool { return l.opts.DryRun }
 
+// SegmentPath is where Checkpoint puts this run's lines on day t:
+// actions/<date>/<host>-<run>.jsonl (the ledger sink's layout).
+func (l *Log) SegmentPath(t time.Time) string {
+	host := l.opts.Host
+	if host == "" {
+		host = "cli"
+	}
+	return "actions/" + t.UTC().Format("2006-01-02") + "/" + host + "-" + l.opts.Run + ".jsonl"
+}
+
 // Do runs perform for a, unless --dry-run is set, the idempotency key already
 // completed, or policy refuses it. It always logs the outcome, except for an
 // idempotent repeat, which returns the earlier record.

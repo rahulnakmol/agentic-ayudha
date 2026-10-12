@@ -233,20 +233,9 @@ func (r *Ready) Guard(ctx context.Context, n int) (Result, error) {
 	if !slices.Contains(github.IssueLabels(is), LabelReady) {
 		return res, nil
 	}
-	owner, name, _ := github.SplitRepo(r.Repo)
-	comments, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.IssueComment, *gh.Response, error) {
-		return r.GH.REST.Issues.ListComments(ctx, owner, name, n, &gh.IssueListCommentsOptions{ListOptions: o})
-	})
+	snapHash, err := SnapshotHash(ctx, r.GH, r.Repo, n)
 	if err != nil {
 		return res, err
-	}
-	snapHash := ""
-	for _, c := range comments {
-		if strings.Contains(c.GetBody(), SnapshotMarker) {
-			if m := snapshotHash.FindStringSubmatch(c.GetBody()); m != nil {
-				snapHash = m[1]
-			}
-		}
 	}
 	switch {
 	case !res.Pass:
@@ -268,6 +257,30 @@ func (r *Ready) Guard(ctx context.Context, n int) (Result, error) {
 	msg := GuardMarker + "\nRemoved `status:ready`: " + res.Stripped + "\n\nFix the issue, then run `aayu ready " + fmt.Sprint(n) + "` to snapshot it again.\n"
 	_, err = r.GH.UpsertComment(ctx, r.Repo, n, GuardMarker, msg, actions.Action{Kind: "github.comment.ready-guard"})
 	return res, err
+}
+
+// SnapshotHash returns the body hash in an issue's Ready snapshot comment, or
+// "" when it has none.
+func SnapshotHash(ctx context.Context, c *github.Client, repo string, n int) (string, error) {
+	owner, name, err := github.SplitRepo(repo)
+	if err != nil {
+		return "", err
+	}
+	comments, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.IssueComment, *gh.Response, error) {
+		return c.REST.Issues.ListComments(ctx, owner, name, n, &gh.IssueListCommentsOptions{ListOptions: o})
+	})
+	if err != nil {
+		return "", err
+	}
+	hash := ""
+	for _, cm := range comments {
+		if strings.Contains(cm.GetBody(), SnapshotMarker) {
+			if m := snapshotHash.FindStringSubmatch(cm.GetBody()); m != nil {
+				hash = m[1]
+			}
+		}
+	}
+	return hash, nil
 }
 
 // LedgerSnapshot is a Ready snapshot as written to the ledger (specs/<n>/ready.md):

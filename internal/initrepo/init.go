@@ -483,7 +483,7 @@ func (in *Init) config(context.Context) error {
 	} else if err := in.writeFile("config", ConfigPath, []byte(b.String())); err != nil {
 		return err
 	}
-	if err := in.writeFile("config", ".aayudha/.gitignore", []byte("# Local aayudha runtime state (written by aayu init); never committed.\ntelemetry/\nstate/\nledger-outbox/\nproof/\nconfig.local.toml\n")); err != nil {
+	if err := in.writeFile("config", ".aayudha/.gitignore", []byte("# Local aayudha runtime state (written by aayu init); never committed.\ntelemetry/\nstate/\nledger-outbox/\nproof/\nworktrees/\nconfig.local.toml\n")); err != nil {
 		return err
 	}
 	return in.writeFile("config", SeedReadmePath, []byte(SeedReadme))

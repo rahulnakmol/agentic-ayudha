@@ -153,6 +153,14 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 	}
 	msg, _ := gitIn(ctx, root, "log", "-1", "--format=%B", head)
 	res.Story = StoryOf(body, msg, branch)
+	if e.CI && res.PR > 0 && res.Story == 0 {
+		// The merge gate proves stories; a PR that serves none has nothing to prove.
+		res.Checks, res.Hold, res.Footprint = []proof.Check{}, true, []string{}
+		return e.Emit(res, func(w io.Writer) error {
+			_, err := fmt.Fprintf(w, "merge gate: PR #%d serves no story (no Refs #n, Aayudha-Story trailer, or story/<n>- branch); nothing to prove\n", res.PR)
+			return err
+		})
+	}
 
 	r := &verify.Run{Root: root, Base: res.Base, Head: head, Floors: l.Config.Verify.Floors, Verify: l.Config.Verify, Story: res.Story, Labels: labels, Now: e.Now, Env: e.Getenv,
 		CI: e.CI, Nightly: e.Getenv("GITHUB_EVENT_NAME") == "schedule"}

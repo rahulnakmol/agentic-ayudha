@@ -23,7 +23,7 @@ import (
 
 // Not-yet-available columns (rule 1a).
 const (
-	ProofNA       = "n/a until M4"
+	ProofNA       = "n/a (no checkout to read the ledger)"
 	StreakNA      = "per layer (status --streak)" // a streak belongs to a layer, not a work item (WP5.7)
 	ProvisionalNA = "n/a until WP5.6"
 )
@@ -92,6 +92,12 @@ type Walker struct {
 	Now      time.Time
 	Budget   float64         // [budget] per_story_usd; 0 disables over-budget
 	Cost     map[int]float64 // model and API spend per issue number, from the actions log
+	// Proof reports whether a done story's authoritative pack maps every
+	// criterion and its floors passed or were waived (WP2.8, M4); nil leaves
+	// proof coverage n/a (no checkout to read the ledger from).
+	Proof func(ctx context.Context, story int) (bool, error)
+
+	proofs map[int]bool
 }
 
 func fromIssue(is *gh.Issue) node {
@@ -148,7 +154,9 @@ func (w *Walker) roll(ctx context.Context, n node, depth int) (*Rollup, error) {
 			r.leaves = append(r.leaves, child.leaves...)
 		}
 	}
-	w.count(r)
+	if err := w.count(ctx, r); err != nil {
+		return nil, err
+	}
 	switch r.Type {
 	case "feature":
 		r.Closable = closable(n, subs)
@@ -203,8 +211,26 @@ func hasResult(n node) bool {
 	return !workitems.Empty(it.Fields[workitems.FieldResult])
 }
 
-func (w *Walker) count(r *Rollup) {
+func (w *Walker) count(ctx context.Context, r *Rollup) error {
+	covered, done := 0, 0
 	for _, c := range r.leaves {
+		if w.Proof != nil && (c.typ == "story" || c.typ == "bug") && (c.status == "merged" || slices.Contains(shipped, c.status)) {
+			done++
+			ok, seen := w.proofs[c.number]
+			if !seen {
+				var err error
+				if ok, err = w.Proof(ctx, c.number); err != nil {
+					return fmt.Errorf("proof coverage of #%d: %w", c.number, err)
+				}
+				if w.proofs == nil {
+					w.proofs = map[int]bool{}
+				}
+				w.proofs[c.number] = ok
+			}
+			if ok {
+				covered++
+			}
+		}
 		r.Items++
 		r.ByStatus[c.status]++
 		if c.health != "" {
@@ -237,11 +263,15 @@ func (w *Walker) count(r *Rollup) {
 			}
 		}
 	}
+	if w.Proof != nil {
+		r.ProofCoverage = fmt.Sprintf("%d/%d", covered, done)
+	}
 	r.CostUSD = float64(int(r.CostUSD*100+0.5)) / 100
 	for _, s := range [][]int{r.Blocked, r.OverBudget, r.ShippedUnmeasured, r.Provisional} {
 		sort.Ints(s)
 	}
 	sort.Slice(r.DecisionsNearSLA, func(i, j int) bool { return r.DecisionsNearSLA[i].Number < r.DecisionsNearSLA[j].Number })
+	return nil
 }
 
 // Goals lists the open Goals of the repository.

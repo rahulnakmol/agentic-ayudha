@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,8 +16,12 @@ import (
 	gh "github.com/google/go-github/v90/github"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
+	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
+	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/status"
 )
 
@@ -123,8 +128,61 @@ func (e *Env) walker(ctx context.Context, c *github.Client, repo string) (*statu
 	if err != nil {
 		return nil, Wrap(ExitUsage, err)
 	}
-	return &status.Walker{GH: c, Repo: repo, Clock: clock, SLAHours: l.Config.Decisions.SLAHours, Now: e.Now(),
-		Budget: l.Config.Budget.PerStoryUSD, Cost: e.costs(repo)}, nil
+	w := &status.Walker{GH: c, Repo: repo, Clock: clock, SLAHours: l.Config.Decisions.SLAHours, Now: e.Now(),
+		Budget: l.Config.Budget.PerStoryUSD, Cost: e.costs(repo)}
+	if config.RepoRoot(e.Dir) != "" {
+		w.Proof = e.proofCovered(c, repo)
+	}
+	return w, nil
+}
+
+// proofCovered reports whether a done story is covered by proof (WP2.8): an
+// authoritative pack on the ledger that maps every criterion of its Ready
+// snapshot, whose artifacts match their hashes, and whose floors held (or
+// were waived).
+func (e *Env) proofCovered(c *github.Client, repo string) func(ctx context.Context, story int) (bool, error) {
+	var (
+		s *proof.Store
+		t *ledger.Tree
+	)
+	return func(ctx context.Context, story int) (bool, error) {
+		if t == nil {
+			tok, err := e.Resolver().Human(ctx)
+			if err != nil {
+				return false, err
+			}
+			if s, err = e.proofStore(ctx, c, tok, "human", ""); err != nil {
+				return false, err
+			}
+			if t, err = s.Ledger.Read(ctx); errors.Is(err, ledger.ErrNoLedger) {
+				return false, nil
+			} else if err != nil {
+				return false, err
+			}
+		}
+		b, err := t.File(ctx, ready.LedgerPath(story))
+		if err != nil {
+			return false, nil
+		}
+		snap, err := ready.ParseSnapshot(string(b))
+		if err != nil {
+			return false, nil
+		}
+		es, err := s.Packs(ctx, t, story)
+		if err != nil {
+			return false, err
+		}
+		for _, x := range es {
+			if x.Pack.Authority.Kind != proof.Authoritative {
+				continue
+			}
+			rep := proof.Verify(x.Pack, proof.Expect{CompletionGoalHash: snap.CompletionGoalHash, Criteria: snap.Numbers()}, s.Opener(ctx, t, x))
+			if rep.OK && rep.FloorsHold {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
 }
 
 func runStatus(ctx context.Context, e *Env, in Values) error {
