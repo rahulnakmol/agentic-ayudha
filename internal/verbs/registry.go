@@ -289,17 +289,18 @@ const (
 	L09 LayerID = "L09"
 )
 
-// LayerTable maps this repository's paths to layers and owners.
+// LayerTable maps this repository's paths to layers and owners, including
+// the nine-layer example product examples/benefits-qa (WP8.1).
 var LayerTable = []Layer{
-	{L01, "Experience", UXResearcher, []string{"packages/design-system/**"}},
-	{L02, "Interaction / API boundary", CodeArchitect, []string{"cmd/**", "internal/cli/**", "internal/mcp/**"}},
-	{L03, "Application / workflow", EngineeringManager, []string{"internal/verbs/**", "internal/workitems/**", "internal/loops/**", "loops/**", "work-items/**", "skills/**", "seats/**"}},
-	{L04, "Domain / policy", QualityArchitect, []string{"internal/verify/**", "internal/proof/**", "ops/**", "CONSTRAINTS.md"}},
-	{L05, "Intelligence", AINativeEngineer, []string{"internal/models/**", "internal/evals/**", "evals/**"}},
-	{L06, "Contracts / integration", CodeArchitect, []string{"internal/github/**", "internal/hosts/**", "internal/notify/**", "hosts/**"}},
-	{L07, "Operational data / state", AINativeEngineer, []string{"internal/ledger/**", "internal/config/**", "internal/secrets/**", "internal/identity/**", "internal/actions/**"}},
-	{L08, "Analytics / reporting", RevenueArchitect, []string{"internal/telemetry/**"}},
-	{L09, "Platform / operations", DevOps, []string{".github/**", ".agents/**", "embed.go", "go.mod", "go.sum"}},
+	{L01, "Experience", UXResearcher, []string{"packages/design-system/**", "examples/benefits-qa/web/**"}},
+	{L02, "Interaction / API boundary", CodeArchitect, []string{"cmd/**", "internal/cli/**", "internal/mcp/**", "examples/benefits-qa/api/**", "examples/benefits-qa/cmd/**"}},
+	{L03, "Application / workflow", EngineeringManager, []string{"internal/verbs/**", "internal/workitems/**", "internal/loops/**", "loops/**", "work-items/**", "skills/**", "seats/**", "examples/benefits-qa/ask/**"}},
+	{L04, "Domain / policy", QualityArchitect, []string{"internal/verify/**", "internal/proof/**", "ops/**", "CONSTRAINTS.md", "examples/benefits-qa/policy/**"}},
+	{L05, "Intelligence", AINativeEngineer, []string{"internal/models/**", "internal/evals/**", "evals/**", "examples/benefits-qa/answer/**"}},
+	{L06, "Contracts / integration", CodeArchitect, []string{"internal/github/**", "internal/hosts/**", "internal/notify/**", "hosts/**", "examples/benefits-qa/contracts/**"}},
+	{L07, "Operational data / state", AINativeEngineer, []string{"internal/ledger/**", "internal/config/**", "internal/secrets/**", "internal/identity/**", "internal/actions/**", "examples/benefits-qa/store/**"}},
+	{L08, "Analytics / reporting", RevenueArchitect, []string{"internal/telemetry/**", "examples/benefits-qa/analytics/**"}},
+	{L09, "Platform / operations", DevOps, []string{".github/**", ".agents/**", "embed.go", "go.mod", "go.sum", "examples/benefits-qa/deploy/**"}},
 }
 
 // Host IDs.

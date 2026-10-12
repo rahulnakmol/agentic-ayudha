@@ -20,7 +20,7 @@ func TestRenderCodeowners(t *testing.T) {
 		{"no paired seat leaves the file alone", hand, nil, hand},
 		{"the only human pairs a seat: layer lines, no re-declarations", hand,
 			map[verbs.SeatID]string{verbs.DevOps: "founder"},
-			hand + "\n" + BlockBegin + "\n/.github/  @founder\n/.agents/  @founder\n/embed.go  @founder\n/go.mod  @founder\n/go.sum  @founder\n" + BlockEnd + "\n"},
+			hand + "\n" + BlockBegin + "\n/.github/  @founder\n/.agents/  @founder\n/embed.go  @founder\n/go.mod  @founder\n/go.sum  @founder\n/examples/benefits-qa/deploy/  @founder\n" + BlockEnd + "\n"},
 		{"a bot login is not a second human", hand,
 			map[verbs.SeatID]string{verbs.Mentalist: "founder", verbs.Auditor: "ci-bot"},
 			hand},
@@ -28,7 +28,7 @@ func TestRenderCodeowners(t *testing.T) {
 		// a second human makes every line name both, so neither is a sole owner.
 		{"product repo without CODEOWNERS, two humans", "",
 			map[verbs.SeatID]string{verbs.UXResearcher: "ann", verbs.RevenueArchitect: "bob"},
-			BlockBegin + "\n/packages/design-system/  @ann @bob\n/internal/telemetry/  @bob @ann\n" + BlockEnd + "\n"},
+			BlockBegin + "\n/packages/design-system/  @ann @bob\n/examples/benefits-qa/web/  @ann @bob\n/internal/telemetry/  @bob @ann\n/examples/benefits-qa/analytics/  @bob @ann\n" + BlockEnd + "\n"},
 		{"re-rendering replaces the old block", hand + "\n" + BlockBegin + "\n/stale/  @zed\n" + BlockEnd + "\n",
 			nil, hand},
 	}
