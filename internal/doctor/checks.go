@@ -288,20 +288,46 @@ func checkIntegrations(ctx context.Context, p *Probe) Result {
 	return r
 }
 
-// OptionalTools are reported when missing; none is required.
-var OptionalTools = []string{"node", "playwright", "axe", "semgrep", "gitleaks", "osv-scanner", "zap.sh", "k6", "lighthouse", "guidepup", "impeccable", "duckdb"}
+// OptionalTool is a program doctor looks for on PATH and what needs it.
+type OptionalTool struct {
+	Name  string
+	Use   string
+	Floor bool // a verify floor runs it: without it the floor blocks, it never passes (WP4.3)
+}
+
+// OptionalTools are reported when missing; none is required to run aayudha.
+// Playwright, axe-core, Lighthouse's runtime, and Guidepup are npm packages
+// the web and screen-reader floors load through node.
+var OptionalTools = []OptionalTool{
+	{"node", "a11y, perf, and screen-reader floors: Playwright, axe-core, Guidepup", true},
+	{"semgrep", "sast floor", true},
+	{"gitleaks", "secrets floor", true},
+	{"osv-scanner", "deps floor", true},
+	{"docker", "dast floor: ZAP", true},
+	{"k6", "api floor", true},
+	{"lighthouse", "perf floor", true},
+	{"tesseract", "OCR in the redaction pass; without it the pass scans the DOM only", false},
+	{"impeccable", "review lane B", false},
+	{"duckdb", "measure, optional", false},
+}
 
 func checkOptionalTools(_ context.Context, p *Probe) Result {
 	var missing []string
+	floors := false
 	for _, t := range OptionalTools {
-		if _, err := p.LookPath(t); err != nil {
-			missing = append(missing, t)
+		if _, err := p.LookPath(t.Name); err != nil {
+			missing = append(missing, t.Name+" ("+t.Use+")")
+			floors = floors || t.Floor
 		}
 	}
 	if len(missing) == 0 {
 		return Result{Status: Pass, Detail: "all optional tools found"}
 	}
-	return Result{Status: Warn, Detail: fmt.Sprintf("%d optional tool(s) missing; floors that need them are skipped: %s", len(missing), strings.Join(missing, ", "))}
+	d := fmt.Sprintf("%d optional tool(s) missing: %s", len(missing), strings.Join(missing, ", "))
+	if floors {
+		d += "; a floor whose tool is missing blocks verify, it never passes"
+	}
+	return Result{Status: Warn, Detail: d}
 }
 
 func checkWorktrees(ctx context.Context, p *Probe) Result {
