@@ -10,6 +10,8 @@ import (
 
 	aayudha "github.com/rahulnakmol/agentic-ayudha"
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
+	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
+	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
@@ -46,7 +48,7 @@ func writeDraft(t *testing.T, md string) string {
 // claim the pass cannot ground blocks the page (exit 4). Once the merge gate's
 // authoritative pack and an Outcome exist, `brief close` renders.
 func TestBriefCLI(t *testing.T) {
-	fgh, dir, _, env, opts, _ := proofFixture(t)
+	fgh, dir, _, env, opts, prN := proofFixture(t)
 	opts.Assets = aayudha.Assets
 	model := &models.Fake{Replies: []models.Response{{Text: `{"findings":[]}`}}}
 	opts.ModelClient = func(models.Route, string) models.Client { return model }
@@ -61,10 +63,36 @@ func TestBriefCLI(t *testing.T) {
 		t.Fatalf("brief close without an authoritative pack: exit %d: %s %s", code, out, errOut)
 	}
 
+	// inspect's comment on the PR: one for an older head (ignored) and one for the pack's head.
+	state := func(head, verdict string) string {
+		b, _ := json.Marshal(inspect.State{Result: &inspect.Result{Head: head, Disposition: "merge", Model: "gpt-6.1-sol", Criteria: []inspect.Verdict{{ID: 1, Verdict: verdict, Evidence: "the trace shows the message"}}}})
+		return inspect.Marker + "\n<!-- aayudha:inspect-state " + string(b) + " -->"
+	}
+	fgh.Mu.Lock()
+	for _, b := range []string{state(strings.Repeat("9", 40), "unmet"), state(headA, "met")} {
+		cm := &fake.Comment{ID: int64(len(fgh.Issues[prN].Comments) + 900), Body: b}
+		cm.User.Login = "aayudha-bot[bot]"
+		fgh.Issues[prN].Comments = append(fgh.Issues[prN].Comments, cm)
+	}
+	fgh.Mu.Unlock()
+
 	code, out, errOut = run(t, env, opts, "brief", "2", "--repo", "o/r", "--json")
 	var rep briefReport
 	if err := json.Unmarshal([]byte(out), &rep); code != 0 || err != nil || len(rep.Grounding.Packs) != 1 || rep.Grounding.Packs[0].ID != "P1" || rep.Grounding.Packs[0].Authority != proof.Advisory {
 		t.Fatalf("grounding: exit %d: %s %s", code, out, errOut)
+	}
+	// The criterion -> evidence map comes from the Ready snapshot and the pack; the verdicts from inspect on this head.
+	p1 := rep.Grounding.Packs[0]
+	if len(p1.Criteria) == 0 || p1.Inspect == nil || p1.Inspect.Head != headA || p1.Criteria[0].Verdict != "met" || len(p1.Criteria[0].Evidence) != 1 || p1.Criteria[0].Text == "" {
+		t.Fatalf("criteria map %+v, inspect %+v", p1.Criteria, p1.Inspect)
+	}
+	if code, out, _ := run(t, env, opts, "brief", "2", "--repo", "o/r"); code != 0 || !strings.Contains(out, "[P1.c1] criterion 1") || !strings.Contains(out, "inspect: met") {
+		t.Fatalf("grounding text: %s", out)
+	}
+	// Evidence is cited only through the map: a proof claim citing the pack alone fails before any model call.
+	claim := "# The empty list\n\nThe pack's evidence proves criterion 1 [P1].\n"
+	if code, out, _ := run(t, env, opts, "brief", "2", "--draft", writeDraft(t, claim), "--repo", "o/r"); code != ExitFloor || !strings.Contains(out, "without citing its evidence map entry (P1.c1)") || len(model.Requests) != 0 {
+		t.Fatalf("proof claim without the map: exit %d: %s", code, out)
 	}
 
 	thirty := "# Show the empty list\n\nThe user can open the list and see all the items that the filter shows, and the team can check each item in the same list before the export starts [P1].\n"
@@ -89,7 +117,7 @@ func TestBriefCLI(t *testing.T) {
 	if !strings.HasPrefix(rep.HTML, filepath.Join(dir, ".aayudha", "state", "briefs", "2")) || len(rep.SVGs) != 1 || rep.Review == nil || rep.Review.Model != "gpt-6.1-sol" {
 		t.Fatalf("report %+v", rep)
 	}
-	for _, want := range []string{`<li id="src-P1">`, "Advisory proof pack for #2", "Adversarial pass: gpt-6.1-sol (openai family)", "axe-core 4.14.0 found 0 critical and 0 serious issues"} {
+	for _, want := range []string{`<li id="src-P1">`, `<li id="src-P1.c1">`, "Inspect: <strong>merge</strong> by gpt-6.1-sol", "Advisory proof pack for #2", "Adversarial pass: gpt-6.1-sol (openai family)", "axe-core 4.14.0 found 0 critical and 0 serious issues"} {
 		if !strings.Contains(string(page), want) {
 			t.Errorf("page lacks %q", want)
 		}

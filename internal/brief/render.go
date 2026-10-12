@@ -189,8 +189,8 @@ func sourceLines(g *Grounding, figs []*Figure) []string {
 		if !pk.FloorsHold {
 			hold = "floors do not hold"
 		}
-		out = append(out, fmt.Sprintf("<li id=\"src-%s\"><span class=\"id\">%s</span> %s proof pack for #%d at <code>%s</code>, %s; %s: %s. Ledger <code>%s</code>, SHA-256 <code>%s</code>.</li>\n",
-			e(pk.ID), e(pk.ID), e(titleCase(pk.Authority)), pk.Story, e(short(pk.HeadSHA)), e(who), hold, e(orNone(floors)), e(pk.LedgerPath), e(short(pk.SHA256))))
+		out = append(out, fmt.Sprintf("<li id=\"src-%s\"><span class=\"id\">%s</span> %s proof pack for #%d at <code>%s</code>, %s; %s: %s. Ledger <code>%s</code>, SHA-256 <code>%s</code>.%s%s</li>\n",
+			e(pk.ID), e(pk.ID), e(titleCase(pk.Authority)), pk.Story, e(short(pk.HeadSHA)), e(who), hold, e(orNone(floors)), e(pk.LedgerPath), e(short(pk.SHA256)), inspectLine(pk), criteriaList(pk)))
 	}
 	if r := g.Result; r != nil {
 		first := strings.TrimSpace(strings.SplitN(strings.TrimSpace(r.Text), "\n", 2)[0])
@@ -212,6 +212,66 @@ func sourceLines(g *Grounding, figs []*Figure) []string {
 	return out
 }
 
+// inspectLine states the inspect disposition on the pack's head, if any.
+func inspectLine(pk Pack) string {
+	in := pk.Inspect
+	if in == nil {
+		return ""
+	}
+	s := fmt.Sprintf(" Inspect: <strong>%s</strong>", html.EscapeString(in.Disposition))
+	if in.Model != "" {
+		s += " by " + html.EscapeString(in.Model)
+	}
+	if in.By != "" {
+		s += ", posted by " + html.EscapeString(in.By)
+	}
+	return s + "."
+}
+
+// criteriaList is the pack's criterion -> evidence map, one citable entry per criterion.
+func criteriaList(pk Pack) string {
+	if len(pk.Criteria) == 0 {
+		return ""
+	}
+	e := html.EscapeString
+	var b strings.Builder
+	b.WriteString(`<ul class="criteria">`)
+	for _, c := range pk.Criteria {
+		id := c.Cite(pk.ID)
+		kind := ""
+		if c.Kind != "" {
+			kind = " [" + e(c.Kind) + "]"
+		}
+		fmt.Fprintf(&b, `<li id="src-%s"><span class="id">%s</span> Criterion %d%s: %s. `, e(id), e(id), c.ID, kind, e(strings.TrimRight(orDash(c.Text), ".")))
+		if len(c.Evidence) == 0 {
+			b.WriteString(`<strong>No evidence in the pack</strong>; not proved.`)
+		} else {
+			var ev []string
+			for _, a := range c.Evidence {
+				ev = append(ev, fmt.Sprintf("%s <code>%s</code> (SHA-256 <code>%s</code>)", e(a.Kind), e(a.Path), e(short(a.SHA256))))
+			}
+			b.WriteString("Evidence: " + strings.Join(ev, ", ") + ".")
+		}
+		if c.Verdict != "" {
+			fmt.Fprintf(&b, " Inspect: %s", e(c.Verdict))
+			if c.Judgment != "" {
+				b.WriteString(", “" + e(clip(c.Judgment, 200)) + "”")
+			}
+			b.WriteString(".")
+		}
+		b.WriteString("</li>")
+	}
+	b.WriteString("</ul>")
+	return b.String()
+}
+
+func orDash(s string) string {
+	if strings.TrimSpace(s) == "" {
+		return "(criterion text not on the ledger)"
+	}
+	return s
+}
+
 func titleCase(s string) string {
 	if s == "" {
 		return ""
@@ -219,7 +279,7 @@ func titleCase(s string) string {
 	return strings.ToUpper(s[:1]) + s[1:]
 }
 
-var citeHTML = regexp.MustCompile(`\[((?:#\d+|P\d+|R|D\d+)(?:\s*,\s*(?:#\d+|P\d+|R|D\d+))*)\]`)
+var citeHTML = citeRE
 
 // citeLinks turns citations in the rendered body into links to the footer.
 func citeLinks(s string) string {
@@ -227,7 +287,11 @@ func citeLinks(s string) string {
 		var links []string
 		for _, id := range strings.Split(strings.Trim(m, "[]"), ",") {
 			id = strings.TrimSpace(id)
-			links = append(links, fmt.Sprintf(`<a class="cite" href="#src-%s" aria-label="source %s">%s</a>`, strings.TrimPrefix(id, "#"), id, id))
+			label := "source " + id
+			if m := mapCite.FindStringSubmatch(id); m != nil {
+				label = id + ", evidence for criterion " + m[2] + " in " + m[1] // the visible text starts the name
+			}
+			links = append(links, fmt.Sprintf(`<a class="cite" href="#src-%s" aria-label="%s">%s</a>`, strings.TrimPrefix(id, "#"), label, id))
 		}
 		return "[" + strings.Join(links, ", ") + "]"
 	})
@@ -307,6 +371,8 @@ svg.focused .node:not(.on),svg.focused .edge:not(.on){opacity:.3}
 .sources{padding-left:0;list-style:none}
 .sources li{background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px 14px;margin:8px 0}
 .sources li:target{outline:3px solid var(--accent)}
+.sources .criteria{list-style:none;padding-left:0;margin:8px 0 0}
+.sources .criteria li{margin:6px 0;padding:6px 10px;border-color:var(--tint);background:var(--tint)}
 .sources .id{font:600 .85rem ui-monospace,Menlo,monospace;background:var(--ink);color:#fff;border-radius:4px;padding:1px 6px;margin-right:6px}
 .generated-by,.note{color:var(--muted)}
 @media (max-width:640px){article{padding:4px 18px 24px}.masthead,main,.grounding{padding:0 12px}}`

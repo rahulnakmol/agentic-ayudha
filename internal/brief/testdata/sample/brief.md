@@ -8,6 +8,9 @@ authoritative pack shows every floor held [P1].
 Story #12 adds an Export CSV action to the claims list [#12]. The file holds every claim that matches the applied
 filters and only the visible columns, and the list keeps responding while the file is prepared [P1].
 
+Criteria 1 and 2 are met by a screenshot and an API trace [P1.c1, P1.c2]. Criterion 3 has no evidence in the pack
+yet, so it is not proved [P1].
+
 ```screen
 alt: The Export CSV button sits beside the active filters, so an export follows them.
 pack: P1

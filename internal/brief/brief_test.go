@@ -144,7 +144,13 @@ func sampleGrounding(t *testing.T) *Grounding {
 		Packs: []Pack{{ID: "P1", Story: 12, Authority: "authoritative", RunID: 4242, HeadSHA: "0123456789abcdef0123456789abcdef01234567", PR: 30,
 			LedgerPath: "proof/12/0123456789abcdef0123456789abcdef01234567/authoritative/pack.json", SHA256: strings.Repeat("ab", 32), FloorsHold: true,
 			Checks:    []Floor{{Floor: "coverage", Result: "pass", Value: 94, Threshold: 90}, {Floor: "sast", Result: "pass"}, {Floor: "a11y", Result: "pass"}},
-			Artifacts: []Artifact{{Path: "screens/1.png", Kind: "screenshot", SHA256: hex.EncodeToString(h[:])}}}},
+			Artifacts: []Artifact{{Path: "screens/1.png", Kind: "screenshot", SHA256: hex.EncodeToString(h[:])}},
+			Criteria: []PackCriterion{
+				{ID: 1, Kind: "screenshot", Text: "state: a filtered list; expected: the export follows the filters", Evidence: []Artifact{{Path: "screens/1.png", Kind: "screenshot", SHA256: hex.EncodeToString(h[:])}}, Verdict: "met"},
+				{ID: 2, Kind: "api-trace", Text: "state: four of six columns; expected: only the visible columns", Evidence: []Artifact{{Path: "evidence/criterion-2.jsonl", Kind: "api-trace", SHA256: strings.Repeat("ef", 32)}}},
+				{ID: 3, Kind: "recording", Text: "state: over 10,000 claims; expected: the list keeps responding", Evidence: []Artifact{}},
+			},
+			Inspect: &Inspection{Disposition: "merge", Model: "gpt-6.1-sol", Head: "0123456789abcdef0123456789abcdef01234567"}}},
 		Result:    &Result{Issue: 7, Field: "result", Text: "Target met: activation = 0.4 against the target >= 0.35 (baseline 0.25, change +0.15).", SHA256: strings.Repeat("cd", 32)},
 		Snapshots: []Snapshot{{ID: "D1", File: filepath.Base(snap), SHA256: sha, Path: snap}},
 	}
@@ -238,6 +244,9 @@ func TestRenderSample(t *testing.T) {
 		`<strong class="generated">Generated illustration</strong> made with Painter`,
 		`<ol class="notes"><li>The applied filters decide which rows are written.</li>`,
 		`<li id="src-7">`, `<li id="src-12">`, `<li id="src-P1">`, `<li id="src-R">`, `<li id="src-D1">`,
+		`<li id="src-P1.c1"><span class="id">P1.c1</span> Criterion 1 [screenshot]: state: a filtered list; expected: the export follows the filters. Evidence: screenshot <code>screens/1.png</code>`,
+		`<li id="src-P1.c3"><span class="id">P1.c3</span> Criterion 3 [recording]: state: over 10,000 claims; expected: the list keeps responding. <strong>No evidence in the pack</strong>; not proved.</li>`,
+		"Inspect: <strong>merge</strong> by gpt-6.1-sol.",
 		`[<a class="cite" href="#src-P1" aria-label="source P1">P1</a>]`,
 		`tabindex="0" role="button" aria-label="Merge gate: Runs verify again on the head commit in CI."`,
 		`default-src 'none'`, A11yMarker,
@@ -299,6 +308,26 @@ func TestCheckRules(t *testing.T) {
 	for _, c := range cases {
 		if f := check(c.md, c.register, c.purpose); !has(f, c.want) {
 			t.Errorf("%s: findings %v, want one containing %q", c.name, f, c.want)
+		}
+	}
+	// Evidence is cited only through the pack's criterion -> evidence map (P1 maps criteria 1 and 2, not 3).
+	for md, want := range map[string]string{
+		"# T\n\nIt shipped [P1].\n\nThe recording proves criterion 3 [P1].\n":             "claims proof of criterion 3, but no pack maps evidence to it",
+		"# T\n\nIt shipped [P1].\n\nCriterion 1 is met [P1].\n":                           "without citing its evidence map entry (P1.c1)",
+		"# T\n\nIt shipped [P1].\n\nCriterion 3 holds [P1.c3].\n":                         "[P1.c3] is not a source",
+		"# T\n\nIt shipped [P1].\n\nThe recording shows the list keeps scrolling [P1].\n": "says what an artifact shows without citing the criterion",
+		"# T\n\nIt shipped [P1].\n\nCriteria 1 to 3 are met [P1.c1, P1.c2].\n":            "claims proof of criterion 3",
+	} {
+		if f := check(md, "engineer", "explain"); !has(f, want) {
+			t.Errorf("%q: findings %v, want %q", md, f, want)
+		}
+	}
+	for _, md := range []string{
+		"# T\n\nIt shipped [P1].\n\nCriteria 1 to 2 are met [P1.c1, P1.c2].\n",
+		"# T\n\nIt shipped [P1].\n\nCriterion 3 is not proved: the pack has no evidence for it [P1].\n",
+	} {
+		if f := check(md, "engineer", "explain"); len(f) > 0 {
+			t.Errorf("%q: %v", md, f)
 		}
 	}
 	if f := check("# T\n\nIt shipped [P1, R].\n", "regulatory", "close"); len(f) > 0 {
