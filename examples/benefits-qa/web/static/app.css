@@ -35,7 +35,7 @@ label { display: block; font-weight: var(--ay-font-weight-semibold); margin-bott
 .row { display: flex; flex-wrap: wrap; gap: var(--ay-space-gap); }
 input {
   flex: 1 1 calc(var(--ay-space-page) * 9);
-  min-height: var(--ay-size-control-height);
+  min-height: var(--ay-size-row-height);
   padding: 0 var(--ay-space-control-inline);
   font: inherit;
   color: var(--ay-color-text-default);
@@ -46,8 +46,8 @@ input {
 button, .try a {
   display: inline-flex;
   align-items: center;
-  min-height: var(--ay-size-control-height);
-  min-width: var(--ay-size-control-height);
+  min-height: var(--ay-size-row-height);
+  min-width: var(--ay-size-row-height);
   padding: 0 var(--ay-space-control-inline);
   font: inherit;
   border-radius: var(--ay-radius-control);
@@ -70,9 +70,10 @@ input:focus-visible, button:focus-visible, a:focus-visible {
   border-radius: var(--ay-radius-container);
   padding: var(--ay-space-control-inline);
 }
-.answered { border-left: thick solid var(--ay-color-positive-default); }
-.referred { border-left: thick solid var(--ay-color-informative-default); }
-.refused { border-left: thick solid var(--ay-color-critical-default); }
+/* The outcome is a tinted card with a matching border all round, and its heading says it in words. */
+.answered { border-color: var(--ay-color-positive-default); background: var(--ay-color-positive-background); }
+.referred { border-color: var(--ay-color-informative-default); background: var(--ay-color-informative-background); }
+.refused { border-color: var(--ay-color-critical-default); background: var(--ay-color-critical-background); }
 blockquote { margin: 0 0 var(--ay-space-gap); }
 .source { color: var(--ay-color-text-label); margin: 0; }
 .try { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: var(--ay-space-gap); }
