@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -304,5 +305,33 @@ func TestFleet(t *testing.T) {
 	rows := Fleet(context.Background(), []string{"o/a", "o/gone"}, api)
 	if len(rows) != 2 || rows[0].Status != Pass || !strings.Contains(rows[0].Detail, "1 workflow(s); default master, no dev") || rows[1].Status != Fail {
 		t.Fatalf("%+v", rows)
+	}
+}
+
+// Story #91: the optional-tools check names each missing tool with what it
+// serves, and says that a floor without its tool blocks verify; a missing
+// tool that no floor needs does not claim to block anything.
+func TestOptionalToolsNamesFloors(t *testing.T) {
+	probe := func(missing ...string) *Probe {
+		p := healthy(t)
+		p.LookPath = func(n string) (string, error) {
+			if slices.Contains(missing, n) {
+				return "", errors.New("not found")
+			}
+			return "/usr/bin/" + n, nil
+		}
+		return p
+	}
+	r := checkOptionalTools(context.Background(), probe("semgrep", "docker"))
+	want := "2 optional tool(s) missing: semgrep (sast floor), docker (dast floor: ZAP); a floor whose tool is missing blocks verify, it never passes"
+	if r.Status != Warn || r.Detail != want {
+		t.Errorf("semgrep and docker missing: %s %q, want warn %q", r.Status, r.Detail, want)
+	}
+	r = checkOptionalTools(context.Background(), probe("tesseract"))
+	if r.Status != Warn || strings.Contains(r.Detail, "blocks verify") || !strings.Contains(r.Detail, "tesseract (OCR in the redaction pass") {
+		t.Errorf("only tesseract missing: %s %q", r.Status, r.Detail)
+	}
+	if r = checkOptionalTools(context.Background(), probe()); r.Status != Pass || r.Detail != "all optional tools found" {
+		t.Errorf("every tool found: %s %q", r.Status, r.Detail)
 	}
 }

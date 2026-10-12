@@ -86,7 +86,7 @@ FAIL  integrations  0 of 4 configured integration(s) reachable with a read-only 
 ## optional-tools pass
 PASS  optional-tools  all optional tools found
 ## optional-tools fail
-WARN  optional-tools  10 optional tool(s) missing; floors that need them are skipped: playwright, axe, gitleaks, osv-scanner, zap.sh, k6, lighthouse, guidepup, impeccable, duckdb
+WARN  optional-tools  8 optional tool(s) missing: gitleaks (secrets floor), osv-scanner (deps floor), docker (dast floor: ZAP), k6 (api floor), lighthouse (perf floor), tesseract (OCR in the redaction pass; without it the pass scans the DOM only), impeccable (review lane B), duckdb (measure, optional); a floor whose tool is missing blocks verify, it never passes
 ## worktrees pass
 PASS  worktrees  no leaked worktrees
 ## worktrees fail
