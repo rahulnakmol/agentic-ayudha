@@ -1,0 +1,12 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/answer","Test":"TestGroundRefers"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/answer","Test":"TestGroundRefers","Output":"=== RUN   TestGroundRefers\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/answer","Test":"TestGroundRefers","Output":"--- PASS: TestGroundRefers (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/answer","Test":"TestGroundRefers"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/policy","Test":"TestGroundThreshold"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/policy","Test":"TestGroundThreshold","Output":"=== RUN   TestGroundThreshold\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/policy","Test":"TestGroundThreshold","Output":"--- PASS: TestGroundThreshold (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/policy","Test":"TestGroundThreshold"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/answer","Test":"TestRespondScreensFirst"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/answer","Test":"TestRespondScreensFirst","Output":"=== RUN   TestRespondScreensFirst\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/answer","Test":"TestRespondScreensFirst","Output":"--- PASS: TestRespondScreensFirst (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/answer","Test":"TestRespondScreensFirst"}

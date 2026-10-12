@@ -1,0 +1,8 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/policy","Test":"TestScreenRefuses"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/policy","Test":"TestScreenRefuses","Output":"=== RUN   TestScreenRefuses\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/policy","Test":"TestScreenRefuses","Output":"--- PASS: TestScreenRefuses (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/policy","Test":"TestScreenRefuses"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/answer","Test":"TestRespondScreensFirst"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/answer","Test":"TestRespondScreensFirst","Output":"=== RUN   TestRespondScreensFirst\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/answer","Test":"TestRespondScreensFirst","Output":"--- PASS: TestRespondScreensFirst (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/answer","Test":"TestRespondScreensFirst"}
