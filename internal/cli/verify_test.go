@@ -121,3 +121,86 @@ func TestVerifyRefusesProduction(t *testing.T) {
 		t.Fatal("the seed ran against production")
 	}
 }
+
+// WP4.9 (0.1 part): a story on a mobile platform gets "skipped: mobile",
+// which does not hold (the gate and ship refuse it); a floor-waiver Decision
+// under the story waives it and the pack records the Decision.
+func TestVerifyMobileSkipAndWaiver(t *testing.T) {
+	g := readyTree(t)
+	dir, _ := ledgerCheckout(t)
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH")}
+	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready: %s", errOut)
+	}
+	git(t, dir, "checkout", "--quiet", "-b", "story/2-mobile")
+	_ = os.WriteFile(filepath.Join(dir, "cov.info"), []byte("SF:x\nend_of_record\n"), 0o644)
+	git(t, dir, "add", "cov.info")
+	git(t, dir, "commit", "--quiet", "-m", "feat: mobile")
+	cfg := "version = 1\n[verify]\nplatforms = [\"web\", \"ios\"]\n[verify.floors.coverage]\ncommand = [\"true\"]\nreport = \"cov.info\"\n"
+	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte(cfg), 0o644)
+	verifyMobile := func() (int, string) {
+		code, out, errOut := run(t, env, opts, "verify", "--floor", "mobile", "--repo", "o/r")
+		return code, out + errOut
+	}
+	code, out := verifyMobile()
+	p, err := proof.LoadLocal(proof.LocalDir(dir, 2))
+	if code != ExitFloor || err != nil {
+		t.Fatalf("mobile story: %d %s %v", code, out, err)
+	}
+	if c, _ := p.Check("mobile"); c.Result != proof.Skipped || c.Detail != proof.SkippedMobile || p.FloorsHold() {
+		t.Fatalf("mobile check: %+v", c)
+	}
+	d := g.AddIssue("Waive the mobile floor for #2 until XCUITest lands (0.2)", fixtureBody(t, "decision", func(f map[string]string) { f["links"] = "waives #2" }), "type:decision")
+	g.Mu.Lock()
+	g.Issues[2].Subs = append(g.Issues[2].Subs, d.Number)
+	d.Parent = 2
+	g.Mu.Unlock()
+	if code, out = verifyMobile(); code != 0 || !strings.Contains(out, "waived: mobile by #"+strconv.Itoa(d.Number)) {
+		t.Fatalf("with a waiver: %d %s", code, out)
+	}
+	p, _ = proof.LoadLocal(proof.LocalDir(dir, 2))
+	if c, _ := p.Check("mobile"); c.Result != proof.Waived || c.Waiver != "#"+strconv.Itoa(d.Number) || !p.FloorsHold() {
+		t.Fatalf("waived check: %+v", c)
+	}
+}
+
+// WP4.8 merge gate (verify --ci on a PR): criteria without evidence from this
+// run fail the gate, and so does a story edited after Ready (Completion Goal
+// hash ≠ the Ready snapshot's).
+func TestVerifyGateCI(t *testing.T) {
+	g := readyTree(t)
+	dir, _ := ledgerCheckout(t)
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH")}
+	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready: %s", errOut)
+	}
+	base := git(t, dir, "rev-parse", "HEAD")
+	git(t, dir, "checkout", "--quiet", "-b", "story/2-gate")
+	_ = os.WriteFile(filepath.Join(dir, "cov.info"), []byte("SF:x\nend_of_record\n"), 0o644)
+	git(t, dir, "add", "cov.info")
+	git(t, dir, "commit", "--quiet", "-m", "feat: gate")
+	pr := g.AddPR("Gate", "Refs #2", "founder", "story/2-gate", git(t, dir, "rev-parse", "HEAD"), "dev")
+	g.Mu.Lock()
+	pr.Base.SHA = base
+	g.Mu.Unlock()
+	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte("version = 1\n[verify.floors.coverage]\ncommand = [\"true\"]\nreport = \"cov.info\"\n"), 0o644)
+	ci := map[string]string{"GITHUB_TOKEN": "workflow-token", "PATH": os.Getenv("PATH")}
+	gate := func() (int, VerifyResult, string) {
+		code, out, errOut := run(t, ci, opts, "verify", strconv.Itoa(pr.Number), "--floor", "coverage", "--ci", "--repo", "o/r", "--json")
+		var res VerifyResult
+		_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)
+		return code, res, errOut
+	}
+	code, res, errOut := gate()
+	if code != ExitBlocked || len(res.Gate) != 1 || !strings.Contains(res.Gate[0], "criteria without evidence from this run") {
+		t.Fatalf("unmapped criteria: %d %+v %s", code, res.Gate, errOut)
+	}
+	g.Mu.Lock()
+	g.Issues[2].Body = strings.Replace(g.Issues[2].Body, "expected:", "expected: (edited)", 1)
+	g.Mu.Unlock()
+	if code, res, _ = gate(); code != ExitBlocked || len(res.Gate) != 2 || !strings.Contains(res.Gate[1], "≠ Ready snapshot") {
+		t.Fatalf("drifted story: %d %+v", code, res.Gate)
+	}
+}

@@ -24,7 +24,7 @@ func init() { register("proof", runProof) }
 const ProofMarker = "<!-- aayudha:proof -->"
 
 // MergeGateWorkflow is the workflow whose CI-written packs are authoritative (WP4.8).
-const MergeGateWorkflow = "aayudha-merge-gate.yml"
+const MergeGateWorkflow = initrepo.MergeGateWorkflow
 
 // DefaultMediaSecret names the secret holding the bucket's "ACCESS_KEY_ID:SECRET_ACCESS_KEY".
 const DefaultMediaSecret = "proof-media"

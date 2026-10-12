@@ -1,0 +1,201 @@
+# aayudha merge gate (docs/BUILD-PLAN.md WP4.8). Installed into product repos by `aayu init --gates` as
+# .github/workflows/aayudha-merge-gate.yml; the template is embedded in the aayudha binary.
+#
+# pull_request_target runs this file as it is on the base branch, so a PR cannot weaken its own gate. The PR's
+# code is checked out and run only in the `gate` job, which holds no secrets (a read-only workflow token), and
+# only inside `aayu verify`'s sandbox (scrubbed environment, no network for the test run). The `inspect` job
+# holds the model key but never runs PR code: it reads the diff through the API and the pack the gate produced.
+#
+#   gate     re-runs `verify` on the PR head and fails when a floor misses, the pack does not prove the head,
+#            the story's Completion Goal drifted from its Ready snapshot, or a criterion has no evidence.
+#   inspect  the review lane's model judges the PR against the pack and criteria; fix or rebuild fails it.
+#   pack     writes the gate's pack to the ledger as the authoritative pack, with the bot App's token. Without an
+#            App (day one) the pack stays a run artifact and `aayu ship` lands it under the human's identity.
+#
+# Setup: model keys in the `ai-gateway` environment (AAYU_SECRET_AI_GATEWAY with variable AAYU_AI_GATEWAY_URL,
+# or a provider key such as AAYU_SECRET_OPENAI); the bot App (AAYUDHA_APP_CLIENT_ID, AAYUDHA_APP_PRIVATE_KEY)
+# from `aayu init --identity`.
+name: aayudha-merge-gate
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aayudha-merge-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  AAYU_VERSION: "{{VERSION}}"
+  PR: ${{ github.event.pull_request.number }}
+  REPO: ${{ github.repository }}
+
+jobs:
+  gate:
+    name: aayudha/merge-gate
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+    outputs:
+      story: ${{ steps.verify.outputs.story }}
+    env:
+      GITLEAKS_VERSION: "8.30.1"
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb # linux_x64
+      OSV_SCANNER_VERSION: "2.6.0"
+      OSV_SCANNER_SHA256: ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108 # linux_amd64
+      SEMGREP_VERSION: "1.180.0"
+    steps:
+      - name: Check out the PR head (run only inside aayu verify's sandbox)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+          path: head
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.25.x"
+          cache: false
+      - name: Install aayudha {{VERSION}}
+        run: |
+          set -euo pipefail
+          # dev is a branch, not a tag: fetch it from GitHub directly rather than a possibly stale proxy copy.
+          if [ "$AAYU_VERSION" = dev ]; then export GOPROXY=direct GONOSUMDB=github.com/rahulnakmol/agentic-ayudha; fi
+          go install "github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@$AAYU_VERSION"
+      - name: Floor tools (pinned, SHA-256 checked)
+        run: |
+          set -euo pipefail
+          curl -fsSLo "$RUNNER_TEMP/gitleaks.tgz" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/gitleaks.tgz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/bin"
+          tar -xzf "$RUNNER_TEMP/gitleaks.tgz" -C "$RUNNER_TEMP/bin" gitleaks
+          curl -fsSLo "$RUNNER_TEMP/bin/osv-scanner" "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64"
+          echo "${OSV_SCANNER_SHA256}  $RUNNER_TEMP/bin/osv-scanner" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/bin/osv-scanner"
+          pipx install "semgrep==${SEMGREP_VERSION}"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          # Unprivileged user and network namespaces for the no-network sandbox (Ubuntu restricts them by default).
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+      - name: Fetch modules for the offline test run
+        working-directory: head
+        run: if [ -f go.mod ]; then go mod download; fi
+      - name: Verify the PR head
+        id: verify
+        working-directory: head
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          aayudha verify "$PR" --ci --repo "$REPO" --json > "$RUNNER_TEMP/verify.json"
+          code=$?
+          set -e
+          echo "story=$(jq -s '.[0].story // 0' "$RUNNER_TEMP/verify.json")" >> "$GITHUB_OUTPUT"
+          jq -s -r '.[0] | "### aayudha verify: story #\(.story // "none"), head \(.head[0:7])\n\n| Floor | Result | Value | Threshold | Tool |\n|---|---|---|---|---|\n" + ([.checks[]? | "| \(.floor) | \(.result) | \(.value) | \(.threshold) | \(.tool) \(.version) |"] | join("\n")) + "\n\n" + ([(.gate_problems // [])[] | "- merge gate: " + .] | join("\n"))' "$RUNNER_TEMP/verify.json" >> "$GITHUB_STEP_SUMMARY"
+          jq -s -c '.' "$RUNNER_TEMP/verify.json"
+          exit "$code"
+      - name: Keep the pack
+        if: always() && steps.verify.outputs.story != '0' && steps.verify.outputs.story != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: aayudha-pack
+          path: head/.aayudha/proof/
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
+
+  inspect:
+    name: aayudha/inspect
+    needs: gate
+    if: needs.gate.outputs.story != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: ai-gateway
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+    steps:
+      - name: Check out the base branch (trusted configuration; no PR code)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.25.x"
+          cache: false
+      - name: Install aayudha {{VERSION}}
+        run: |
+          set -euo pipefail
+          if [ "$AAYU_VERSION" = dev ]; then export GOPROXY=direct GONOSUMDB=github.com/rahulnakmol/agentic-ayudha; fi
+          go install "github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@$AAYU_VERSION"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: aayudha-pack
+          path: .aayudha/proof/
+      - name: Inspect
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          AAYU_MODELS__GATEWAY__BASE_URL: ${{ vars.AAYU_AI_GATEWAY_URL }}
+          AAYU_MODELS__GATEWAY__SECRET: ai-gateway
+          AAYU_SECRET_AI_GATEWAY: ${{ secrets.AAYU_SECRET_AI_GATEWAY }}
+          AAYU_SECRET_OPENAI: ${{ secrets.AAYU_SECRET_OPENAI }}
+          AAYU_SECRET_ANTHROPIC: ${{ secrets.AAYU_SECRET_ANTHROPIC }}
+        run: aayudha inspect "$PR" --ci --repo "$REPO"
+
+  pack:
+    name: aayudha/pack
+    needs: gate
+    if: always() && needs.gate.outputs.story != '0' && needs.gate.outputs.story != '' && needs.gate.result != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: No bot App
+        if: vars.AAYUDHA_APP_CLIENT_ID == ''
+        run: echo "::notice::No bot App (aayu init --identity), so CI cannot write the ledger (Appendix B D1). The authoritative pack stays this run's aayudha-pack artifact; aayu ship lands it under the human identity (Appendix B D-4.8a)."
+      - name: Mint the bot token (ledger writer)
+        id: app
+        if: vars.AAYUDHA_APP_CLIENT_ID != ''
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.AAYUDHA_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AAYUDHA_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-issues: write
+          permission-pull-requests: write
+      - name: Check out the base branch
+        if: vars.AAYUDHA_APP_CLIENT_ID != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        if: vars.AAYUDHA_APP_CLIENT_ID != ''
+        with:
+          go-version: "1.25.x"
+          cache: false
+      - name: Install aayudha {{VERSION}}
+        if: vars.AAYUDHA_APP_CLIENT_ID != ''
+        run: |
+          set -euo pipefail
+          if [ "$AAYU_VERSION" = dev ]; then export GOPROXY=direct GONOSUMDB=github.com/rahulnakmol/agentic-ayudha; fi
+          go install "github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@$AAYU_VERSION"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: vars.AAYUDHA_APP_CLIENT_ID != ''
+        with:
+          name: aayudha-pack
+          path: .aayudha/proof/
+      - name: Write the authoritative pack to the ledger
+        if: vars.AAYUDHA_APP_CLIENT_ID != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          AAYU_BOT_TOKEN: ${{ steps.app.outputs.token }}
+          STORY: ${{ needs.gate.outputs.story }}
+        run: aayudha proof push "$STORY" --ci --repo "$REPO"
