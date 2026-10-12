@@ -1,0 +1,1 @@
+Under Goal #20 (activation 0.31 today, target 0.40). Bet: a guided first-claim checklist on the empty claims page lifts activation, because claimants abandon when they do not know which documents to gather. Same metric and baseline as the Goal; target 0.36 by 2026-12-31.

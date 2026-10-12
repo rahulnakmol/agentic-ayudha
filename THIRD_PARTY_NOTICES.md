@@ -63,6 +63,20 @@ plan lists in §2; the rest are pulled in by them.
 | `modernc.org/memory` | v1.12.1 | BSD-3-Clause | Allocator, via libc | <https://gitlab.com/cznic/memory> |
 | `github.com/dustin/go-humanize` | v1.0.1 | MIT | Via libc | <https://github.com/dustin/go-humanize> |
 | `github.com/remyoudompheng/bigfft` | v0.0.0-20230129092748-24d4a6f8daec | BSD-3-Clause | Via mathutil | <https://github.com/remyoudompheng/bigfft> |
+| `charm.land/bubbletea/v2` | v2.0.9 | MIT | `grill` TUI on a terminal (WP5.3), direct; v2.0.10 needs Go 1.26 | <https://github.com/charmbracelet/bubbletea> |
+| `github.com/charmbracelet/ultraviolet` | v0.0.0-20260703014108-f5a850f9c2b7 | MIT | Terminal input and rendering, via bubbletea | <https://github.com/charmbracelet/ultraviolet> |
+| `github.com/charmbracelet/colorprofile` | v0.4.3 | MIT | Terminal colour detection, via bubbletea | <https://github.com/charmbracelet/colorprofile> |
+| `github.com/charmbracelet/x/ansi` | v0.11.7 | MIT | ANSI sequences, via bubbletea | <https://github.com/charmbracelet/x> |
+| `github.com/charmbracelet/x/term` | v0.2.2 | MIT | Terminal state, via bubbletea | <https://github.com/charmbracelet/x> |
+| `github.com/charmbracelet/x/termios` | v0.1.1 | MIT | Terminal modes, via bubbletea | <https://github.com/charmbracelet/x> |
+| `github.com/charmbracelet/x/windows` | v0.2.2 | MIT | Windows console, via bubbletea | <https://github.com/charmbracelet/x> |
+| `github.com/clipperhouse/displaywidth` | v0.11.0 | MIT | Text width, via ultraviolet | <https://github.com/clipperhouse/displaywidth> |
+| `github.com/clipperhouse/uax29/v2` | v2.7.0 | MIT | Text segmentation, via displaywidth | <https://github.com/clipperhouse/uax29> |
+| `github.com/lucasb-eyer/go-colorful` | v1.4.0 | MIT | Colour conversion, via bubbletea | <https://github.com/lucasb-eyer/go-colorful> |
+| `github.com/mattn/go-runewidth` | v0.0.23 | MIT | Text width, via ultraviolet | <https://github.com/mattn/go-runewidth> |
+| `github.com/muesli/cancelreader` | v0.2.2 | MIT | Cancellable input, via bubbletea | <https://github.com/muesli/cancelreader> |
+| `github.com/rivo/uniseg` | v0.4.7 | MIT | Grapheme clusters, via ultraviolet | <https://github.com/rivo/uniseg> |
+| `github.com/xo/terminfo` | v0.0.0-20220910002029-abceb7e1c41e | MIT | Terminal capabilities, via colorprofile | <https://github.com/xo/terminfo> |
 
 ### Shelled out by `self-update` (not bundled)
 
@@ -174,7 +188,6 @@ CI scan when the component is actually added.
 | `github.com/google/go-github` | GitHub REST client (WP2.3) | BSD-3-Clause |
 | `github.com/shurcooL/githubv4` | GitHub GraphQL, Projects v2 only (WP2.3) | MIT |
 | `github.com/modelcontextprotocol/go-sdk` | MCP server (WP3.3) | To be confirmed |
-| `github.com/charmbracelet/bubbletea` | `grill` TUI (WP5.3) | MIT |
 | `modernc.org/sqlite` | `measure` snapshots, pure Go (WP7.2) | BSD-3-Clause |
 | `github.com/go-git/go-git` | Read-only git access | Apache-2.0 |
 

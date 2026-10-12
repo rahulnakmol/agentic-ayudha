@@ -1,0 +1,13 @@
+# Recorded run of the grill skill (`grill feedback`, WP5.3): the host model interviewed with references/feedback.md, validated the
+# draft, and wrote it with --create.
+# Feedback is intake: triage classifies it and `ready` refuses it by design, so the run ends at the Create-validated issue
+# (Appendix B D-5.3a); the ready check below is the schema's Ready validation of the recorded item.
+skill = "grill"
+description = "Grill a Feedback from a request; the issue it writes passes Ready validation (intake: never made Ready)."
+input = "input.txt"
+artifacts = ["output/issue.json"]
+schemas = [{ file = "output/issue.json", schema = "evals/schemas/workitem.json" }]
+ready = ["output/issue.json"]
+calls = [
+  ["grill", "feedback", "--title", "Send the open claims list to a manager", "--body", "### What happened or what you need\n\nA caseworker wrote: \"I need to send my manager the list of open claims every Monday and I copy them by hand.\"\n\n### Context\n\nShe uses the claims list on a laptop, weekly.", "--create"],
+]

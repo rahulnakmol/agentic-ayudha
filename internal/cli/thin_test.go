@@ -261,9 +261,16 @@ func TestGrillStory(t *testing.T) {
 	if code != 0 || !res.Pass || len(g.Issues) != before {
 		t.Fatalf("valid draft without --create: %d %+v %s", code, res, errOut)
 	}
+	// A human running grill writes under their own identity (WP5.3), untagged.
 	code, res, errOut = grill("--title", "Show empty list", "--body", body, "--parent", "1", "--labels", "effort:S,priority:P2", "--create")
-	if code != 0 || res.Issue == 0 || !contains(g.LabelNames(res.Issue), "identity:human-fallback") {
-		t.Fatalf("create: %d %+v %s", code, res, errOut)
+	if code != 0 || res.Issue == 0 || res.Identity != "human" || contains(g.LabelNames(res.Issue), "identity:human-fallback") {
+		t.Fatalf("create by a human: %d %+v %s", code, res, errOut)
+	}
+	// An agent lane writes under the bot; with no bot yet, the human fallback is tagged (WP1.4).
+	agent := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1"}
+	if code, out, errOut := run(t, agent, opts, "grill", "story", "--repo", "o/r", "--json", "--title", "Show empty list", "--body", body, "--parent", "1",
+		"--labels", "effort:S", "--create"); code != 0 || !strings.Contains(out, "identity:human-fallback") {
+		t.Fatalf("create by an agent: %d %s %s", code, out, errOut)
 	}
 	g.Mu.Lock()
 	parent := g.Issues[res.Issue].Parent

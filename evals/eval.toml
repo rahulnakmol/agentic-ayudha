@@ -20,8 +20,9 @@ max_drop = 0.3
 # The stub's five runs were charged 0.81 (run 38194797736). The four brief cases (WP7.3) add twenty runs of about the
 # same size, a few with one revision after aayu brief's checks, so a full run is about 4 USD charged; 9.0 leaves room
 # for revisions and the fallback rate. Run 38200697472 (four brief cases and the stub) was charged 6.21; 12.0 leaves
-# room for the higher skill cap below.
-max_usd = 12.0
+# room for the higher skill cap below. The two grill cases (WP5.3) add ten runs, about 1.5 USD per case,
+# so 15.0.
+max_usd = 15.0
 
 # Output caps per call. Reasoning models may spend part of the cap on reasoning; a cap is not a charge. A reply that
 # stops at its cap is recorded as an error marked truncated, without a retry. Complete drafts measured 1700-2430 output

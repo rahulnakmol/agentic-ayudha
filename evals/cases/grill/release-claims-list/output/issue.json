@@ -1,0 +1,17 @@
+{
+  "type": "release",
+  "title": "Claims list on rolling",
+  "fields": {
+    "summary": "Ship the claims list to early adopters on rolling.",
+    "version": "2026-10-19T06:00Z"
+  },
+  "labels": [
+    "type:release",
+    "status:planned"
+  ],
+  "parent": {
+    "number": 20,
+    "type": "goal"
+  },
+  "number": 21
+}

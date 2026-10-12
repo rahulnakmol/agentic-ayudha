@@ -1,0 +1,1 @@
+Under Feature #20: decide how the claims list pages through long lists. Options the team named: numbered pages, or a Load more button. Numbered pages let caseworkers return to a position; Load more is simpler for claimants with few claims. The team leans to numbered pages. The choice can be changed later.

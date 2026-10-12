@@ -161,12 +161,13 @@ func TestLabels(t *testing.T) {
 	}
 }
 
-// The grill verb's type input is the schema's type list (ground rule 4: the
-// registry stays the single source of the CLI surface).
+// The grill verb's type input is the schema's type list plus brand, the
+// brand file (ground rule 4: the registry stays the single source of the CLI
+// surface).
 func TestGrillTypesMatchSchema(t *testing.T) {
 	c, _ := verbs.Find("grill")
 	for _, in := range c.Inputs {
-		if in.Name == "type" && !slices.Equal(in.Enum, TypeIDs()) {
+		if in.Name == "type" && !slices.Equal(in.Enum, append(TypeIDs(), "brand")) {
 			t.Fatalf("grill type enum %v, schema types %v", in.Enum, TypeIDs())
 		}
 	}

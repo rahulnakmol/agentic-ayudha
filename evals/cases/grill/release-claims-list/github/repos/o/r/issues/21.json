@@ -1,0 +1,14 @@
+{
+  "number": 21,
+  "title": "Claims list on rolling",
+  "state": "open",
+  "body": "### Summary\n\nShip the claims list to early adopters on rolling.\n\n### Version\n\n2026-10-19T06:00Z",
+  "labels": [
+    {
+      "name": "type:release"
+    },
+    {
+      "name": "status:planned"
+    }
+  ]
+}

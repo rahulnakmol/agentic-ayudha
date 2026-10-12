@@ -1,0 +1,21 @@
+{
+  "type": "experiment",
+  "title": "First-claim checklist raises claim submissions",
+  "fields": {
+    "summary": "If new claimants see the first-claim checklist, the share who submit a claim rises from 0.10 to 0.12.",
+    "metric": "claim_submitted",
+    "baseline": "0.10 conversion to claim_submitted over the 28 days before 2026-10-12, from PostHog",
+    "flag": "first-claim-checklist",
+    "min_sample": "3841 per arm; two-sided two-proportion z-test, alpha 0.05, power 0.8, baseline rate 0.10, detectable rate 0.12"
+  },
+  "labels": [
+    "type:experiment",
+    "status:planned",
+    "priority:P2"
+  ],
+  "parent": {
+    "number": 20,
+    "type": "feature"
+  },
+  "number": 21
+}

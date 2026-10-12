@@ -1,0 +1,17 @@
+{
+  "number": 21,
+  "title": "More claimants submit their first claim within a week",
+  "state": "open",
+  "body": "### Summary\n\nClaimants submit their first claim within a week of signing up, so they get support sooner. It serves new claimants.\n\n### Beneficiaries\n\nclaimants\n\n### Metric\n\nactivation\n\n### Baseline\n\n0.31: activation (first claim submitted within 7 days) over the weekly cohorts of 2026-08-31 to 2026-09-28, from `aayu measure` snapshot all-20261005T060000Z.sqlite (sha256 3f2a9c…e17b)\n\n### Target\n\n>= 0.40 by 2027-03-31",
+  "labels": [
+    {
+      "name": "type:goal"
+    },
+    {
+      "name": "status:planned"
+    },
+    {
+      "name": "priority:P1"
+    }
+  ]
+}

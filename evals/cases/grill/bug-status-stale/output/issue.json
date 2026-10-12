@@ -1,0 +1,26 @@
+{
+  "type": "bug",
+  "title": "Claims list shows a stale status after approval",
+  "fields": {
+    "summary": "The claims list keeps showing a claim's old status after a caseworker changes it.",
+    "reproduce": "1. Sign in as the seeded claimant with one submitted claim.\n2. As the seeded caseworker, approve that claim.\n3. As the claimant, reload the claims list.",
+    "expected": "The claim shows \"Approved\".",
+    "actual": "The claim shows \"Submitted\" until the claimant signs out and back in.",
+    "completion_goal": "1. [screenshot] state: `/claims` as the seeded claimant after the caseworker approved the claim; expected: the claim shows \"Approved\" on the next page load\n2. [api-trace] state: GET /api/claims as the seeded claimant after the approval; expected: the claim's status is approved",
+    "measure": "Completion Goal criteria observed",
+    "threshold": "all 2 criteria",
+    "scenario": "Approve the seeded claimant's submitted claim as the caseworker, then reload the claimant's claims list and call GET /api/claims as the claimant.",
+    "environment": "local app with the seeded synthetic claimant and caseworker; never production"
+  },
+  "labels": [
+    "type:bug",
+    "status:planned",
+    "effort:S",
+    "priority:P1"
+  ],
+  "parent": {
+    "number": 20,
+    "type": "feature"
+  },
+  "number": 21
+}

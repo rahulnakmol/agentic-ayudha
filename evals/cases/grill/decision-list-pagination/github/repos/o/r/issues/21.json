@@ -1,0 +1,17 @@
+{
+  "number": 21,
+  "title": "How the claims list pages through long lists",
+  "state": "open",
+  "body": "### Question\n\nHow should the claims list page through long lists? The list is being built now (Feature #20).\n\n### Options\n\n1. Numbered pages\n2. A Load more button\n\n### Evaluation\n\nNumbered pages let caseworkers return to a position in a long list. Load more is simpler for claimants, who have few claims.\n\n### Recommendation\n\nNumbered pages, because caseworkers return to positions in long lists.\n\n### Reversible\n\ntrue",
+  "labels": [
+    {
+      "name": "type:decision"
+    },
+    {
+      "name": "status:planned"
+    },
+    {
+      "name": "priority:P2"
+    }
+  ]
+}
