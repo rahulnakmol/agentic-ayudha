@@ -70,8 +70,9 @@ func Register(mux *http.ServeMux, svc *ask.Service) {
 
 // decodeRequest reads exactly one JSON object whose keys are exactly the
 // contract's ("question", "user_id"; case-sensitive, each at most once) with
-// string or null values, and nothing after it. encoding/json alone would
-// match keys case-insensitively and keep the last of duplicate keys.
+// string values (null is not a string), and nothing after it. encoding/json
+// alone would match keys case-insensitively, keep the last of duplicate keys,
+// and read null as an empty string.
 func decodeRequest(body io.Reader) (contracts.AskRequest, error) {
 	var req contracts.AskRequest
 	dec := json.NewDecoder(body)
@@ -94,14 +95,18 @@ func decodeRequest(body io.Reader) (contracts.AskRequest, error) {
 			return req, fmt.Errorf("duplicate field %q", key)
 		}
 		seen[key] = true
-		var v *string
-		if err := dec.Decode(&v); err != nil {
-			return req, fmt.Errorf("field %q: want a string: %w", key, err)
+		var raw json.RawMessage
+		if err := dec.Decode(&raw); err != nil {
+			return req, err
 		}
-		if v != nil && key == "question" {
-			req.Question = *v
-		} else if v != nil {
-			req.UserID = *v
+		var v string
+		if len(raw) == 0 || raw[0] != '"' || json.Unmarshal(raw, &v) != nil {
+			return req, fmt.Errorf("field %q: want a string", key)
+		}
+		if key == "question" {
+			req.Question = v
+		} else {
+			req.UserID = v
 		}
 	}
 	if _, err := dec.Token(); err != nil { // the closing brace

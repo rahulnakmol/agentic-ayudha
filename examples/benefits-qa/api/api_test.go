@@ -97,6 +97,7 @@ func TestAskRejects(t *testing.T) {
 		"not a string":    {"application/json", `{"question":42}`, http.StatusBadRequest},
 		"not an object":   {"application/json", `["dental"]`, http.StatusBadRequest},
 		"null question":   {"application/json", `{"question":null}`, http.StatusBadRequest},
+		"null user id":    {"application/json", `{"question":"dental","user_id":null}`, http.StatusBadRequest},
 		"empty body":      {"application/json", ``, http.StatusBadRequest},
 	} {
 		code, _, body := post(t, srv, tc.ct, tc.body)
