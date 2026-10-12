@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path"
 	"slices"
 	"strconv"
 	"strings"
@@ -15,6 +16,7 @@ import (
 // Severity counts of a scanner's findings.
 type Severity struct {
 	Critical, High, Medium, Low int
+	Uncalled                    int      // osv-scanner call analysis: vulnerable code the module never calls (not counted)
 	Top                         []string // the first critical/high findings, for the pack detail
 }
 
@@ -36,6 +38,9 @@ func (s *Severity) add(level, what string) {
 
 func (s Severity) detail() string {
 	d := fmt.Sprintf("%d critical, %d high, %d medium, %d low", s.Critical, s.High, s.Medium, s.Low)
+	if s.Uncalled > 0 {
+		d += fmt.Sprintf(" (%d more not called, by osv-scanner's call analysis)", s.Uncalled)
+	}
 	if len(s.Top) > 0 {
 		d += ": " + strings.Join(s.Top, "; ")
 	}
@@ -251,30 +256,61 @@ func (Deps) Run(ctx context.Context, r *Run) (Result, error) {
 	}
 	res.Check.Version = strings.TrimPrefix(version(ctx, r, "osv-scanner", "--version"), "osv-scanner version: ")
 	out := r.tempFile("osv.json")
+	// The lockfiles git tracks are named one by one: a recursive scan follows
+	// .gitignore rules, which can hide the whole checkout (a build worktree
+	// inside an ignored directory) and turn the floor into a silent pass.
+	lockfiles := TrackedLockfiles(ctx, r.Root)
+	if len(lockfiles) == 0 {
+		res.Check.Result, res.Check.Detail, res.Check.Network = proof.Pass, "no dependency lockfiles tracked in git", NetAllowed
+		return res, nil
+	}
+	args := []string{"scan", "source", "--format", "json", "--output", out}
+	for _, l := range lockfiles {
+		args = append(args, "--lockfile", l)
+	}
 	// The OSV database is online, so this floor needs the network.
-	o, err := r.Sandbox.Run(ctx, Cmd{Dir: r.Root, Name: "osv-scanner", Args: []string{"scan", "source", "-r", "--format", "json", "--output", out, "."}, Network: true})
+	o, err := r.Sandbox.Run(ctx, Cmd{Dir: r.Root, Name: "osv-scanner", Args: args, Network: true})
 	if err != nil {
 		return res, err
 	}
 	b := readFile(out)
 	s, err := ParseOSV(b)
 	if err != nil {
-		if o.Code == 128 { // no packages found
-			res.Check.Result, res.Check.Detail, res.Check.Network = proof.Pass, "no dependency manifests or lockfiles", o.Network
-			return res, nil
-		}
-		return res, fmt.Errorf("osv-scanner exited %d without a JSON report: %s", o.Code, tail(o.Stderr))
+		return res, fmt.Errorf("osv-scanner exited %d without a JSON report for %s: %s", o.Code, strings.Join(lockfiles, ", "), tail(o.Stderr))
 	}
 	c := severityCheck(s, r.Floors.Deps.MaxCritical, r.Floors.Deps.MaxHigh)
 	c.Tool, c.Version, c.Network = res.Check.Tool, res.Check.Version, o.Network
+	c.Detail = strings.Join(lockfiles, " ") + ": " + c.Detail
 	res.Check = c
 	res.Artifacts = append(res.Artifacts, Evidence{Path: "reports/osv-scanner.json", Kind: "report", Data: b})
 	return res, nil
 }
 
+// lockfileNames are the dependency manifests and lockfiles osv-scanner reads.
+var lockfileNames = []string{"go.mod", "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock", "requirements.txt", "poetry.lock",
+	"Pipfile.lock", "uv.lock", "Cargo.lock", "Gemfile.lock", "composer.lock", "pom.xml", "gradle.lockfile", "packages.lock.json",
+	"pubspec.lock", "mix.lock", "renv.lock", "Package.resolved"}
+
+// TrackedLockfiles lists the lockfiles git tracks in root, outside vendored
+// and test-data trees.
+func TrackedLockfiles(ctx context.Context, root string) []string {
+	files, _ := gitOut(ctx, root, "ls-files")
+	var out []string
+	for _, f := range strings.Split(strings.TrimSpace(string(files)), "\n") {
+		if f == "" || strings.Contains("/"+f, "/testdata/") || strings.Contains("/"+f, "/vendor/") || strings.Contains("/"+f, "/node_modules/") {
+			continue
+		}
+		if slices.Contains(lockfileNames, path.Base(f)) {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
 // ParseOSV counts osv-scanner findings by severity: one per vulnerability
 // group, from its CVSS max_severity score (≥ 9 critical, ≥ 7 high, ≥ 4
-// medium), else the advisory's database severity label.
+// medium), else the advisory's database severity label. Groups the call
+// analysis reports as not called are counted apart and do not fail.
 func ParseOSV(b []byte) (Severity, error) {
 	var doc struct {
 		Results []struct {
@@ -287,6 +323,10 @@ func ParseOSV(b []byte) (Severity, error) {
 				Groups []struct {
 					IDs         []string `json:"ids"`
 					MaxSeverity string   `json:"max_severity"`
+					Analysis    map[string]struct {
+						Called      bool `json:"called"`
+						Unimportant bool `json:"unimportant"`
+					} `json:"experimental_analysis"`
 				} `json:"groups"`
 				Vulnerabilities []struct {
 					ID               string `json:"id"`
@@ -304,6 +344,18 @@ func ParseOSV(b []byte) (Severity, error) {
 	for _, res := range doc.Results {
 		for _, p := range res.Packages {
 			for _, g := range p.Groups {
+				// Call analysis (Go): a group whose every advisory is reported not
+				// called, or unimportant, does not fail the floor, as it does not
+				// fail osv-scanner itself.
+				quiet := len(g.Analysis) > 0
+				for _, id := range g.IDs {
+					a, ok := g.Analysis[id]
+					quiet = quiet && ok && (!a.Called || a.Unimportant)
+				}
+				if quiet {
+					s.Uncalled++
+					continue
+				}
 				level := ""
 				if score, err := strconv.ParseFloat(g.MaxSeverity, 64); err == nil {
 					switch {
