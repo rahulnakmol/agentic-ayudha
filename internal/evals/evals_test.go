@@ -597,7 +597,7 @@ func TestTier2BriefRevisesOnceThenJudges(t *testing.T) {
 	if judged.Model != "gpt-6.1-sol" || !strings.Contains(judged.Messages[0].Content, "STE lint") {
 		t.Errorf("judge request: %s %.200s", judged.Model, judged.Messages[0].Content)
 	}
-	if v, reasons := Compare(res, nil, h.Config); v != Fail || !strings.Contains(strings.Join(reasons, "\n"), "brief/ste-explain: pass^5 0.00 is below 0.80") {
+	if v, reasons := Compare(res, nil, h.Config); v != Fail || !strings.Contains(strings.Join(reasons, "\n"), "pass^5 0.00 is below 0.80") {
 		t.Errorf("compare: %s %v", v, reasons)
 	}
 }
@@ -1019,7 +1019,7 @@ func TestGroupPassKPolicy(t *testing.T) {
 	if a := strings.Join(Advisories(cur, nil, cfg), "\n"); !strings.Contains(a, "brief/eli5-explain: pass^5 0.00 is below 0.80") || !strings.Contains(a, "pass^5 0.50 is below 0.80") {
 		t.Fatalf("advisories: %s", a)
 	}
-	if v, reasons := Compare(run("skills", means, passK), nil, cfg); v != Fail || !strings.Contains(strings.Join(reasons, "\n"), "brief/ste-explain: pass^5 0.00 is below 0.80") {
+	if v, reasons := Compare(run("skills", means, passK), nil, cfg); v != Fail || !strings.Contains(strings.Join(reasons, "\n"), "pass^5 0.50 is below 0.80") {
 		t.Fatalf("the same numbers in the skills group: %s %v", v, reasons)
 	}
 	low := map[string]float64{"brief/eli5-explain": 3.4, "brief/engineer-ideate": 4.8, "brief/regulatory-close": 5, "brief/ste-explain": 4.2}
@@ -1055,5 +1055,51 @@ func TestGroupGatePolicy(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(dir, "evals", "eval.toml"), b, 0o644)
 	if _, err := LoadConfig(dir); err == nil || !strings.Contains(err.Error(), `gate "maybe"`) {
 		t.Errorf("an unknown gate value: %v", err)
+	}
+}
+
+// WP3.4's pass^k bar applies to the suite (D-3.4e): run 38235020071's skills
+// group, one case at pass^5 0 among five, passes at suite pass^5 0.80 with the
+// case reported; two such cases fail the suite, and a case mean under 3.5 or a
+// case falling below its baseline pass^k still fails on its own.
+func TestCompareSuitePassK(t *testing.T) {
+	cfg, err := LoadConfig(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := func(pk map[string]float64, mean map[string]float64) *Results {
+		r := &Results{SHA: "349d52c", Group: "skills", K: 5}
+		ids := []string{"grill/goal-first-claim", "grill/story-empty-claims", "plan/config-migration", "slice/proof-retention-6-layer", "stub/csv-export"}
+		for _, id := range ids {
+			p, m := 1.0, 5.0
+			if v, ok := pk[id]; ok {
+				p = v
+			}
+			if v, ok := mean[id]; ok {
+				m = v
+			}
+			r.Cases = append(r.Cases, CaseResult{Case: id, PassK: p, Mean: m})
+			r.PassK += p / float64(len(ids))
+			r.Mean += m / float64(len(ids))
+		}
+		return r
+	}
+	one := run(map[string]float64{"slice/proof-retention-6-layer": 0}, map[string]float64{"slice/proof-retention-6-layer": 4.2})
+	if v, reasons := Compare(one, nil, cfg); v != Pass {
+		t.Fatalf("one case at pass^5 0, suite 0.80: %s %v", v, reasons)
+	}
+	if a := strings.Join(Advisories(one, nil, cfg), "\n"); !strings.Contains(a, "slice/proof-retention-6-layer: pass^5 0.00 is below 0.80") {
+		t.Fatalf("the case is not reported: %q", a)
+	}
+	two := run(map[string]float64{"slice/proof-retention-6-layer": 0, "plan/config-migration": 0}, nil)
+	if v, reasons := Compare(two, nil, cfg); v != Fail || !strings.Contains(strings.Join(reasons, "\n"), "pass^5 0.60 is below 0.80") {
+		t.Fatalf("two cases at pass^5 0: %s %v", v, reasons)
+	}
+	low := run(nil, map[string]float64{"plan/config-migration": 3.4})
+	if v, reasons := Compare(low, nil, cfg); v != Fail || !strings.Contains(strings.Join(reasons, "\n"), "plan/config-migration: mean rubric score 3.40 is below 3.50") {
+		t.Fatalf("a case mean below 3.5: %s %v", v, reasons)
+	}
+	if v, reasons := Compare(one, run(nil, nil), cfg); v != Fail || !strings.Contains(strings.Join(reasons, "\n"), "fell below the baseline") {
+		t.Fatalf("a case falling below its baseline: %s %v", v, reasons)
 	}
 }
