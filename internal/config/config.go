@@ -156,10 +156,18 @@ type Integration struct {
 
 // Verify is [verify].
 type Verify struct {
-	DAST           bool     `koanf:"dast" jsonschema_description:"Run the ZAP baseline floor (WP4.6)."`
-	Platforms      []string `koanf:"platforms" jsonschema_description:"Platforms the product ships on, e.g. web, ios, android."`
-	UpstreamChecks []string `koanf:"upstream_checks" jsonschema_description:"Existing product CI check names the merge gate also requires."`
-	Floors         Floors   `koanf:"floors" jsonschema_description:"Floor thresholds; CONSTRAINTS.md documents each one."`
+	DAST           bool                   `koanf:"dast" jsonschema_description:"Run the ZAP baseline floor (WP4.6)."`
+	Platforms      []string               `koanf:"platforms" jsonschema_description:"Platforms the product ships on, e.g. web, ios, android."`
+	UpstreamChecks []string               `koanf:"upstream_checks" jsonschema_description:"Existing product CI check names the merge gate also requires."`
+	Seed           []string               `koanf:"seed" jsonschema_description:"Command (argv) that loads seeded, synthetic data into the app before the web floors capture (WP4.5); the product provides it, e.g. under .aayudha/seed/."`
+	Environments   map[string]Environment `koanf:"environments" jsonschema_description:"Apps the web, DAST, and API floors run against, by name; AAYU_ENV picks one (default local). A production environment is never captured."`
+	Floors         Floors                 `koanf:"floors" jsonschema_description:"Floor thresholds; CONSTRAINTS.md documents each one."`
+}
+
+// Environment is [verify.environments.<name>].
+type Environment struct {
+	URL        string `koanf:"url" jsonschema_description:"Base URL of the running app."`
+	Production bool   `koanf:"production" jsonschema_description:"A production environment: verify refuses to capture it (exit 4), and any target on its host."`
 }
 
 // Floors is [verify.floors]: the deterministic floors (rule 7).
@@ -187,9 +195,18 @@ type Floors struct {
 		Layers            []string `koanf:"layers"`
 		MaxMissingPhrases int      `koanf:"max_missing_phrases" jsonschema:"minimum=0"`
 	} `koanf:"screen_reader"`
+	Perf struct {
+		MinScore float64 `koanf:"min_score" jsonschema:"minimum=0,maximum=1"`
+		MaxLCPMs float64 `koanf:"max_lcp_ms" jsonschema:"minimum=0"`
+		MaxCLS   float64 `koanf:"max_cls" jsonschema:"minimum=0"`
+		MaxTBTMs float64 `koanf:"max_tbt_ms" jsonschema:"minimum=0"`
+	} `koanf:"perf" jsonschema_description:"Lighthouse budgets on every Completion Goal state (WP4.5)."`
 	DAST struct {
 		MaxHigh int `koanf:"max_high" jsonschema:"minimum=0"`
 	} `koanf:"dast"`
+	API struct {
+		Script string `koanf:"script" jsonschema_description:"k6 script whose thresholds are the API and CLI contract (WP4.6); BASE_URL is the target environment's URL. Empty skips the floor."`
+	} `koanf:"api"`
 	Mobile struct {
 		SkippedBlocksShip bool `koanf:"skipped_blocks_ship"`
 	} `koanf:"mobile"`

@@ -30,7 +30,7 @@ its value, and WP0.5 chose it.
 | `verify.floors.a11y.min_target_px` | `44` | Minimum touch target edge, in CSS pixels (44×44). | WP4.5 |
 | `verify.floors.screen_reader.layers` | `["L01"]` | Story footprints that run the VoiceOver and NVDA floor (on label or nightly). | WP4.7 |
 | `verify.floors.screen_reader.max_missing_phrases` | `0` | Expected phrases from the Ready snapshot that may be missing from the transcript. | WP4.7 |
-| `verify.floors.dast.max_high` | `0` | High ZAP baseline alerts allowed when DAST runs. | proposed (WP0.5) |
+| `verify.floors.dast.max_high` | `0` | High-risk ZAP alerts allowed when DAST runs (passive baseline plus the active cross-site scripting and injection rules). | proposed (WP0.5) |
 | `verify.floors.mobile.skipped_blocks_ship` | `true` | A `skipped: mobile` floor blocks `ship` unless a floor-waiver Decision exists. | WP4.9 |
 
 Performance (Lighthouse CI) and API (k6) budgets are product-specific and have no default (WP4.5, WP4.6). Every floor miss blocks; no model disposition can override it (ground rule 7). A waiver is a recorded Decision (`decide --waiver <floor>`, WP5.6) that `audit` counts.

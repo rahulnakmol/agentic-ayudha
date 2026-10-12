@@ -329,6 +329,31 @@
           "type": "array",
           "description": "Existing product CI check names the merge gate also requires."
         },
+        "seed": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Command (argv) that loads seeded, synthetic data into the app before the web floors capture (WP4.5); the product provides it, e.g. under .aayudha/seed/."
+        },
+        "environments": {
+          "additionalProperties": {
+            "properties": {
+              "url": {
+                "type": "string",
+                "description": "Base URL of the running app."
+              },
+              "production": {
+                "type": "boolean",
+                "description": "A production environment: verify refuses to capture it (exit 4), and any target on its host."
+              }
+            },
+            "additionalProperties": false,
+            "type": "object"
+          },
+          "type": "object",
+          "description": "Apps the web, DAST, and API floors run against, by name; AAYU_ENV picks one (default local). A production environment is never captured."
+        },
         "floors": {
           "properties": {
             "coverage": {
@@ -438,11 +463,45 @@
               "additionalProperties": false,
               "type": "object"
             },
+            "perf": {
+              "properties": {
+                "min_score": {
+                  "type": "number",
+                  "maximum": 1,
+                  "minimum": 0
+                },
+                "max_lcp_ms": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "max_cls": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "max_tbt_ms": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "type": "object",
+              "description": "Lighthouse budgets on every Completion Goal state (WP4.5)."
+            },
             "dast": {
               "properties": {
                 "max_high": {
                   "type": "integer",
                   "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "api": {
+              "properties": {
+                "script": {
+                  "type": "string",
+                  "description": "k6 script whose thresholds are the API and CLI contract (WP4.6); BASE_URL is the target environment's URL. Empty skips the floor."
                 }
               },
               "additionalProperties": false,

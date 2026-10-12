@@ -92,7 +92,7 @@ var (
 	goEnvVals map[string]string
 )
 
-// goEnv is the parent's resolved Go cache locations (`go env`), so a child
+// goEnv is the parent's resolved Go cache locations and Playwright browsers (`go env`), so a child
 // with a throwaway HOME still finds the module cache it may not download into.
 func goEnv() map[string]string {
 	goEnvOnce.Do(func() {
@@ -100,6 +100,12 @@ func goEnv() map[string]string {
 		out, err := exec.Command("go", "env", "-json", "GOPATH", "GOMODCACHE", "GOCACHE").Output()
 		if err == nil {
 			_ = json.Unmarshal(out, &goEnvVals)
+		}
+		// Playwright's browsers live in the user cache directory, which moves with HOME.
+		if d, err := os.UserCacheDir(); err == nil {
+			if st, err := os.Stat(filepath.Join(d, "ms-playwright")); err == nil && st.IsDir() {
+				goEnvVals["PLAYWRIGHT_BROWSERS_PATH"] = filepath.Join(d, "ms-playwright")
+			}
 		}
 	})
 	return goEnvVals

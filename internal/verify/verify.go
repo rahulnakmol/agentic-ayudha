@@ -39,6 +39,8 @@ type Run struct {
 	// which TestEvidence maps to criteria.
 	TestEvents []byte
 
+	seeded bool // [verify] seed ran in this run
+
 	// Footprint is the set of layers the changed paths fall in.
 	Footprint []string
 }
@@ -54,6 +56,7 @@ type Evidence struct {
 // Result is a floor's outcome.
 type Result struct {
 	Check     proof.Check
+	More      []proof.Check // further checks one tool run produces (e.g. the a11y sub-floors)
 	Artifacts []Evidence
 }
 
@@ -95,6 +98,7 @@ func Execute(ctx context.Context, r *Run, floors []Floor) Report {
 		}
 		res.Check.Floor = f.Name()
 		rep.Checks = append(rep.Checks, res.Check)
+		rep.Checks = append(rep.Checks, res.More...)
 		rep.Artifacts = append(rep.Artifacts, res.Artifacts...)
 	}
 	p := proof.Pack{Checks: rep.Checks}

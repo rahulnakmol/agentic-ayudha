@@ -115,6 +115,25 @@ addons (MIT), Vite (MIT), Vitest (MIT), Playwright (Apache-2.0), TypeScript (Apa
 (MPL-2.0, through `@storybook/addon-a11y`). The development tree also contains BSD-2-Clause, BSD-3-Clause,
 ISC, BlueOak-1.0.0, and CC-BY-4.0 (browser-support data) packages.
 
+### Shelled out by `aayu verify` (not bundled)
+
+The floors (docs/BUILD-PLAN.md WP4.3–WP4.6) run these as separate programs in a scrubbed child process. Users
+install them; CI pins them (SHA-256 for binaries, a digest for the ZAP image, `pnpm-lock.yaml` integrity hashes for
+the `@aayudha/floors` development package that holds Playwright, axe-core, and Lighthouse for this repository's own
+floor tests).
+
+| Component | Version pinned in CI | Licence | Use | Source |
+|---|---|---|---|---|
+| semgrep | 1.180.0 | LGPL-2.1 | `sast` floor | <https://github.com/semgrep/semgrep> |
+| gitleaks | 8.30.1 | MIT | `secrets` floor | <https://github.com/gitleaks/gitleaks> |
+| osv-scanner | 2.6.0 | Apache-2.0 | `deps` floor | <https://github.com/google/osv-scanner> |
+| Playwright | 1.64.0 | Apache-2.0 | `a11y` floors: drives Chromium through each Completion Goal state | <https://github.com/microsoft/playwright> |
+| axe-core | 4.14.0 | MPL-2.0 | `a11y` floor: injected into the page under test, unmodified | <https://github.com/dequelabs/axe-core> |
+| Lighthouse | 13.5.0 | Apache-2.0 | `perf` floor | <https://github.com/GoogleChrome/lighthouse> |
+| OWASP ZAP (`zaproxy/zap-stable` image) | 2.17.0, by digest | Apache-2.0 | `dast` floor | <https://github.com/zaproxy/zaproxy> |
+| k6 | 2.3.0 | AGPL-3.0 | `api` floor; run as a program, never linked or distributed | <https://github.com/grafana/k6> |
+| Tesseract | user-installed, optional | Apache-2.0 | OCR in the redaction pass when present | <https://github.com/tesseract-ocr/tesseract> |
+
 ## Policy
 
 - A PR that adds a dependency adds its entry here in the same PR: name, version or range, licence, how it is
@@ -151,6 +170,6 @@ CI scan when the component is actually added.
 |---|---|---|
 | impeccable | `review` lane B, `detect --json` (WP6.6) | Apache-2.0 |
 
-Other optional tools that `doctor` reports (git-lfs, gh, node, Playwright, axe, semgrep, gitleaks,
-osv-scanner, ZAP, k6, Lighthouse, Guidepup, DuckDB) are installed by the user and run as separate programs.
+Other optional tools that `doctor` reports (git-lfs, gh, node, Guidepup, DuckDB) are installed by the user and
+run as separate programs.
 Each is added to this file with its licence when the verb that calls it ships.

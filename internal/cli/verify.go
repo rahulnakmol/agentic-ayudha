@@ -183,6 +183,12 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 		res.NoSnapshot = snap.CompletionGoalHash == ""
 	}
 
+	// Captures never run against production (WP4.5, V3): refuse before
+	// seeding, capturing, or writing anything.
+	if _, err := verify.ResolveTarget(r); err != nil {
+		return Wrap(ExitBlocked, err)
+	}
+
 	home, err := os.MkdirTemp("", "aayudha-verify-home-")
 	if err != nil {
 		return err
