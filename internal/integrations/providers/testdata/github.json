@@ -1,0 +1,18 @@
+{
+  "source": "Synthetic: written from GitHub's REST API (GET /user with X-OAuth-Scopes, GET /search/issues) because no read-only key is configured yet; the AAYU_LIVE=1 test exercises the same requests against a real repository",
+  "interactions": [
+    {
+      "method": "GET",
+      "url": "https://api.github.com/user",
+      "status": 200,
+      "header": {"X-OAuth-Scopes": "read:org"},
+      "response": {"login": "aayu-reader", "id": 9001, "type": "User"}
+    },
+    {
+      "method": "GET",
+      "url": "https://api.github.com/search/issues?per_page=1&q=repo%3Arahulnakmol%2Fagentic-ayudha+is%3Apr+is%3Amerged+merged%3A%3E%3D2026-09-01T00%3A00%3A00Z+merged%3A%3C2026-10-01T00%3A00%3A00Z+base%3Adev",
+      "status": 200,
+      "response": {"total_count": 37, "incomplete_results": false, "items": [{"number": 76, "title": "fix(evals): skill model from the verb's registry lane", "state": "closed", "pull_request": {"merged_at": "2026-09-30T17:02:11Z"}}]}
+    }
+  ]
+}

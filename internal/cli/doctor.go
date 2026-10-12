@@ -15,6 +15,8 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
 	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/providers"
 	"github.com/rahulnakmol/agentic-ayudha/internal/upgrade"
 )
 
@@ -41,6 +43,9 @@ func (e *Env) probe(ctx context.Context) *doctor.Probe {
 			}
 		}
 	}
+	p.Integration = func(ctx context.Context, name string) (integrations.Scope, error) {
+		return providers.Check(ctx, e.integrationDeps(p.Repo), name)
+	}
 	if tok, err := r.Human(ctx); err == nil {
 		p.API = func(ctx context.Context, path string, out any) error { return e.githubGet(ctx, tok, path, out) }
 	}
@@ -52,6 +57,16 @@ func (e *Env) probe(ctx context.Context) *doctor.Probe {
 		return rel.TagName, err
 	}
 	return p
+}
+
+// integrationDeps is what the integration adapters need from this run; repo
+// is the current repository, the GitHub adapter's default.
+func (e *Env) integrationDeps(repo string) providers.Deps {
+	d := providers.Deps{Secrets: e.SecretStore(), Transport: e.HTTP.Transport, Repo: repo, Now: e.Now}
+	if l, err := e.Config(); err == nil {
+		d.Config = &l.Config
+	}
+	return d
 }
 
 func (e *Env) lookPath() func(string) (string, error) {

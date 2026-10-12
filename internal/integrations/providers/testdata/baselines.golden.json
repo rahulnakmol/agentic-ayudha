@@ -1,0 +1,34 @@
+{
+  "posthog users": {
+    "metric": "users",
+    "population": "PostHog project 12345: distinct persons with events where event = 'signed_up'",
+    "window": {"from": "2026-09-01T00:00:00Z", "to": "2026-10-01T00:00:00Z"},
+    "value": 4182,
+    "source_query": "POST https://us.posthog.com/api/projects/12345/query/ {\"name\":\"aayudha baseline users\",\"query\":{\"kind\":\"HogQLQuery\",\"query\":\"SELECT count(DISTINCT person_id) FROM events WHERE timestamp >= toDateTime('2026-09-01 00:00:00', 'UTC') AND timestamp < toDateTime('2026-10-01 00:00:00', 'UTC') AND (event = 'signed_up')\"}}",
+    "fetched_at": "2026-10-12T09:30:00Z"
+  },
+  "sentry crash_free_sessions": {
+    "metric": "crash_free_sessions",
+    "population": "Sentry acme project 4507: sessions where environment:production",
+    "window": {"from": "2026-09-01T00:00:00Z", "to": "2026-10-01T00:00:00Z"},
+    "value": 0.9934,
+    "source_query": "GET https://sentry.io/api/0/organizations/acme/sessions/?end=2026-10-01T00%3A00%3A00Z&field=crash_free_rate%28session%29&includeSeries=0&interval=1d&project=4507&query=environment%3Aproduction&start=2026-09-01T00%3A00%3A00Z",
+    "fetched_at": "2026-10-12T09:30:00Z"
+  },
+  "sentry errors": {
+    "metric": "errors",
+    "population": "Sentry acme project 4507: error events",
+    "window": {"from": "2026-09-01T00:00:00Z", "to": "2026-10-01T00:00:00Z"},
+    "value": 1287,
+    "source_query": "GET https://sentry.io/api/0/organizations/acme/events/?dataset=errors&end=2026-10-01T00%3A00%3A00Z&field=count%28%29&project=4507&start=2026-09-01T00%3A00%3A00Z",
+    "fetched_at": "2026-10-12T09:30:00Z"
+  },
+  "github prs_merged": {
+    "metric": "prs_merged",
+    "population": "GitHub rahulnakmol/agentic-ayudha: pull requests merged where base:dev",
+    "window": {"from": "2026-09-01T00:00:00Z", "to": "2026-10-01T00:00:00Z"},
+    "value": 37,
+    "source_query": "GET https://api.github.com/search/issues?q=repo%3Arahulnakmol%2Fagentic-ayudha+is%3Apr+is%3Amerged+merged%3A%3E%3D2026-09-01T00%3A00%3A00Z+merged%3A%3C2026-10-01T00%3A00%3A00Z+base%3Adev",
+    "fetched_at": "2026-10-12T09:30:00Z"
+  }
+}

@@ -7,6 +7,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +16,8 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/providers"
 	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
 )
 
@@ -92,7 +96,7 @@ func fakeAPI(responses map[string]any) func(context.Context, string, any) error 
 func healthy(t *testing.T) *Probe {
 	env := map[string]string{"AMP_THREAD_ID": "T-1", "AAYU_SECRET_POSTHOG": "phc"}
 	getenv := func(k string) string { return env[k] }
-	return &Probe{
+	p := &Probe{
 		Root: repoWith(t, map[string]string{".aayudha/config.toml": "version = 1\n",
 			".aayudha/lock.toml": "version = 1\nskills_version = \"0.0.0\"\nhosts = [\"claude\"]\n[skills]\n",
 			".mcp.json":          `{"mcpServers": {"aayudha": {"command": "/usr/bin/aayu", "args": ["mcp"]}}}`}),
@@ -106,7 +110,7 @@ func healthy(t *testing.T) *Probe {
 			"git for-each-ref --format=%(refname:short) refs/heads refs/remotes/origin": "dev\nmain\norigin/HEAD\norigin/dev\n",
 			"git symbolic-ref --short refs/remotes/origin/HEAD":                         "origin/dev\n",
 		}),
-		Config:  load(t, "identity.app_id=42", "identity.app_slug=aayudha-bot", "integrations.posthog.secret=posthog", "integrations.posthog.scope=read"),
+		Config:  load(t, "identity.app_id=42", "identity.app_slug=aayudha-bot", "integrations.posthog.secret=posthog", "integrations.posthog.scope=read", "integrations.posthog.project=12345"),
 		Secrets: secrets.New(down{}, secrets.Env{Getenv: getenv}, secrets.File{Path: "/tmp/s.age", IdentityPath: "/tmp/id"}),
 		Human: func(context.Context) (identity.Token, error) {
 			return identity.Token{Value: "t", Source: "AAYU_GITHUB_TOKEN"}, nil
@@ -122,6 +126,34 @@ func healthy(t *testing.T) *Probe {
 		Version:   "1.2.0",
 		Latest:    func(context.Context) (string, error) { return "v1.2.0", nil },
 		TracePath: ".aayudha/telemetry/traces.jsonl",
+	}
+	p.Integration = realIntegrations(p, providerAPI{
+		"https://us.posthog.com/api/personal_api_keys/@current/": `{"label":"aayudha","scopes":["query:read"]}`,
+	})
+	return p
+}
+
+// providerAPI answers integration providers' GETs by URL; a missing URL is a
+// 401, as a provider answers an unknown key.
+type providerAPI map[string]string
+
+func (a providerAPI) RoundTrip(req *http.Request) (*http.Response, error) {
+	body, ok := a[req.URL.String()]
+	status := http.StatusOK
+	if !ok {
+		status, body = http.StatusUnauthorized, `{"detail":"Invalid token"}`
+	}
+	return &http.Response{StatusCode: status, Status: fmt.Sprint(status), Header: http.Header{}, Body: io.NopCloser(strings.NewReader(body)), Request: req}, nil
+}
+
+// realIntegrations checks integrations with the real adapters against api.
+func realIntegrations(p *Probe, api providerAPI) func(context.Context, string) (integrations.Scope, error) {
+	return func(ctx context.Context, name string) (integrations.Scope, error) {
+		d := providers.Deps{Secrets: p.Secrets, Transport: api, Repo: p.Repo}
+		if p.Config != nil {
+			d.Config = &p.Config.Config
+		}
+		return providers.Check(ctx, d, name)
 	}
 }
 
@@ -153,8 +185,17 @@ func failing(t *testing.T) map[string]func(*Probe) {
 		"secrets": func(p *Probe) {
 			p.Secrets = secrets.New(down{}, secrets.Env{Getenv: func(string) string { return "" }})
 		},
-		"issue-types":  func(p *Probe) { p.API = nil },
-		"integrations": func(p *Probe) { p.Secrets = secrets.New(secrets.Env{Getenv: func(string) string { return "" }}) },
+		"issue-types": func(p *Probe) { p.API = nil },
+		// Each state a configured integration can be in: a write-scoped key
+		// (refused, not sent), an unreachable provider, an unset secret, and an
+		// integration this binary has no adapter for.
+		"integrations": func(p *Probe) {
+			p.Config = load(t, "integrations.posthog.secret=posthog", "integrations.posthog.scope=write", "integrations.posthog.project=12345",
+				"integrations.sentry.secret=posthog", "integrations.sentry.scope=read", "integrations.sentry.org=acme", "integrations.sentry.project=4507",
+				"integrations.github.secret=github-read", "integrations.github.scope=read",
+				"integrations.growthbook.secret=growthbook", "integrations.growthbook.scope=read")
+			p.Integration = realIntegrations(p, providerAPI{})
+		},
 		"optional-tools": func(p *Probe) {
 			p.LookPath = func(n string) (string, error) {
 				if n == "node" || n == "semgrep" {

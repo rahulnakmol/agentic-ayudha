@@ -67,11 +67,16 @@ PASS  issue-types  organization repository: GitHub issue types are available
 ## issue-types fail
 WARN  issue-types  could not check issue-type support (no GitHub token or repository)
 ## integrations pass
-PASS  integrations  1 integration(s); provider reachability and real key scope: not yet available (WP5.2)
-                      posthog: secret "posthog" in env, configured scope read
+PASS  integrations  1 of 1 configured integration(s) reachable with a read-only key
+                      posthog: reachable as personal API key aayudha; read-only scope verified (query:read per GET /api/personal_api_keys/@current/)
+                      sentry: not configured; set [integrations.sentry] for reliability baselines
+                      github: not configured; set [integrations.github] for delivery baselines from issues and pull requests
 ## integrations fail
-WARN  integrations  1 integration(s); provider reachability and real key scope: not yet available (WP5.2)
-                      posthog: secret "posthog" is not set (aayu auth set-secret posthog, or AAYU_SECRET_POSTHOG)
+FAIL  integrations  0 of 4 configured integration(s) reachable with a read-only key
+                      posthog: scope = "write": read verbs refuse this key, so it was not sent; configure a read-only key
+                      sentry: unreachable: provider error: GET https://sentry.io/api/0/: 401: {"detail":"Invalid token"}
+                      github: not configured: [integrations.github] secret "github-read" has no value: secret not found: github-read (set it with `aayu auth set-secret github-read`, or export AAYU_SECRET_GITHUB_READ)
+                      growthbook: configured; no adapter in this binary yet, so not checked
 ## optional-tools pass
 PASS  optional-tools  all optional tools found
 ## optional-tools fail

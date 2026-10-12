@@ -13,6 +13,7 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations"
 	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
 )
 
@@ -52,7 +53,10 @@ type Probe struct {
 	Version   string
 	Latest    func(ctx context.Context) (string, error)
 	Host      string // --host
-	TracePath string
+	// Integration resolves a configured integration and asks its provider for
+	// the key's account and scope (providers.Check); nil when unavailable.
+	Integration func(ctx context.Context, name string) (integrations.Scope, error)
+	TracePath   string
 }
 
 // Check is one named check.
