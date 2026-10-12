@@ -129,6 +129,10 @@ func TestHelpNamesAayuAndListsRegistry(t *testing.T) {
 }
 
 func TestNotImplementedNamesWP(t *testing.T) {
+	// Every verb has a handler since WP7.8; take one away to see the message.
+	h := handlers["release"]
+	delete(handlers, "release")
+	t.Cleanup(func() { handlers["release"] = h })
 	_, _, stderr := run(t, nil, Options{}, "release", "1", "--to", "rolling")
 	if !strings.Contains(stderr, "not implemented yet (lands in WP7.8)") {
 		t.Errorf("stderr = %q", stderr)

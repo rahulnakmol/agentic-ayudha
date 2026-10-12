@@ -59,6 +59,11 @@ Only the repository admin identity can move `rolling` and `main` or create `v*` 
 `rolling-main-promotion` and `release-tags`). The gate runs on the exact merge commit that will land, built on
 a throwaway `promote/…` branch, so what was tested is what ships.
 
+`aayu release <release-issue> --to rolling|main --yes` (WP7.8) runs exactly the steps below for a Release issue.
+It also re-runs failed gate jobs once, stamps the stories the promotion shipped `released`, publishes the release
+notes, records the shipping evidence on the ledger and in the Release, and makes the Goals above the stories due
+for `measure`. `--dry-run` shows what would ship. The commands below are the same procedure by hand.
+
 ### `dev` → `rolling`
 
 ```sh
