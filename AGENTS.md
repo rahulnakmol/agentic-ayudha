@@ -1,8 +1,8 @@
 # AGENTS.md
 
 Guidance for coding agents (Amp, Cursor, Claude Code, and others) working on the `aayudha` repository itself.
-Humans: read [CONTRIBUTING.md](CONTRIBUTING.md) first; this file adds what an agent needs. WP5.1 renders the
-seat RACI into this file (n/a until WP5.1).
+Humans: read [CONTRIBUTING.md](CONTRIBUTING.md) first; this file adds what an agent needs. The seat RACI section at
+the end is generated (WP5.1); the full table is [docs/RACI.md](docs/RACI.md).
 
 ## Source of truth
 
@@ -94,3 +94,28 @@ Release, Feedback, Incident). File them with the `aayudha-<type>` issue forms. T
 - The `ledger` branch holds snapshots, proof, and actions segments. Never commit code to it or merge it.
 - Every GitHub write goes through `aayu`; agents never write with `gh` directly.
 <!-- END aayudha:work-items -->
+
+<!-- BEGIN aayudha:raci -->
+## Seats and RACI (aayudha)
+
+Twelve seats share the work. Each verb has exactly one Accountable seat; that seat's agent twin executes it in the
+verb's model lane, and the seat that owns its thresholds or policy may differ (`verify` runs against the Quality
+Architect's floors). Each layer has exactly one owner seat. A seat runs solo (agent twin only) or paired with a human
+(`[seats.<slug>]`, set by `aayu seat add <slug> --human <login>`; `aayu seat list` shows them). Act as the Accountable
+seat's twin, consult the Consulted seats before acting, and leave paired humans' review to CODEOWNERS.
+
+| Seat | Layers owned | Accountable for |
+|---|---|---|
+| Product Strategist (`product-strategist`) | — | `grill`, `slice`, `triage`, `ready` |
+| Code Architect (`code-architect`) | L02, L06 | `plan` |
+| Engineering Manager (`engineering-manager`) | L03 | `inspect`, `ship`, `status`, `retro` |
+| AI Native Engineer (+SRE hat) (`ai-native-engineer`) | L05, L07 | `build`, `verify`, `respond`, `evolve` |
+| UX Researcher & Evolutionist (`ux-researcher-evolutionist`) | L01 | `research`, `wireframe`, `mockup`, `prototype`, `review`, `polish`, `baseline` |
+| DevOps & DevEx Tinkerer (`devops-devex-tinkerer`) | L09 | `release`, `install`, `doctor`, `config`, `auth`, `actions`, `models`, `mcp`, `self-update`, `upgrade`, `version`, `gc`, `uninit`, `hook`, `lfs-agent` |
+| Quality Architect (`quality-architect`) | L04 | `proof` |
+| Mentalist (`mentalist`) | — | `brief` |
+| Auditor (`auditor`) | — | `audit` |
+| Marketer & Documenter (`marketer-documenter`) | — | `tell` |
+| Revenue Architect (`revenue-architect`) | L08 | `experiment`, `readout`, `measure` |
+| Founder (`founder`) | — | `decide`, `init`, `halt`, `resume`, `seat` |
+<!-- END aayudha:raci -->

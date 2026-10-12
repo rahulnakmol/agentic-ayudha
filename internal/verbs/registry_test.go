@@ -243,3 +243,50 @@ func unique(xs []string) error {
 	}
 	return nil
 }
+
+// WP5.1 accept: the registry lint holds every verb to one Accountable seat
+// with distinct Consulted and Informed seats, and every layer to one owner.
+func TestLintRACI(t *testing.T) {
+	if err := LintRACI(); err != nil {
+		t.Fatalf("registry lint: %v", err)
+	}
+	breaks := []struct {
+		name    string
+		breakIt func() func()
+		want    string
+	}{
+		{"verb without a RACI entry", func() func() {
+			r := RACI["ship"]
+			delete(RACI, "ship")
+			return func() { RACI["ship"] = r }
+		}, "ship: no RACI entry"},
+		{"Accountable seat also Consulted", func() func() {
+			r := RACI["plan"]
+			RACI["plan"] = Roles{Consulted: []SeatID{CodeArchitect}}
+			return func() { RACI["plan"] = r }
+		}, "plan: code-architect is both Accountable and Consulted"},
+		{"threshold owner also Consulted", func() func() {
+			r := RACI["verify"]
+			RACI["verify"] = Roles{Consulted: []SeatID{QualityArchitect}}
+			return func() { RACI["verify"] = r }
+		}, "verify: quality-architect is both the threshold owner and Consulted"},
+		{"verb without an Accountable seat", func() func() {
+			s := Verbs[0].Seat
+			Verbs[0].Seat = ""
+			return func() { Verbs[0].Seat = s }
+		}, "grill: Accountable seat"},
+		{"layer without an owner", func() func() {
+			o := LayerTable[3].Owner
+			LayerTable[3].Owner = ""
+			return func() { LayerTable[3].Owner = o }
+		}, "layer L04: owner"},
+	}
+	for _, b := range breaks {
+		restore := b.breakIt()
+		err := LintRACI()
+		restore()
+		if err == nil || !strings.Contains(err.Error(), b.want) {
+			t.Errorf("%s: lint = %v, want an error containing %q", b.name, err, b.want)
+		}
+	}
+}

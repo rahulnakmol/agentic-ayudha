@@ -1,0 +1,7 @@
+# aayudha configuration for rahulnakmol/agentic-ayudha, written by `aayu init` (WP2.5). It layers on the defaults built into
+# the binary; `aayu config show --origin` shows where each value comes from. Protected path: changes need a
+# human CODEOWNER review.
+version = 1
+
+[proof]
+media = "" # required: private bucket. Public repository: proof media never go to Git LFS (V3); `proof push` refuses media until this is set.

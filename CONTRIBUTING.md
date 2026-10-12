@@ -275,8 +275,18 @@ review of the head commit from one of its CODEOWNERs who is a human, not a bot l
 authors.
 
 **When a second human seat is added** (`aayu seat add <seat> --human <login>`, WP5.1): the rule switches to
-true second-human review: the ruleset requires one approval with native CODEOWNER review, the gate and the
-bypass are removed, and the second human is added to CODEOWNERS for their seat's layers.
+true second-human review: the `protected-paths-codeowner-review` ruleset requires one approval with native
+CODEOWNER review, and its `protected-paths` check and admin bypass are removed. It takes two runs, because GitHub
+reads CODEOWNERS from the base branch and never lets an author approve their own PR:
+
+1. The first run writes `[seats.<seat>]`, the `aayudha:seats` block at the end of `.github/CODEOWNERS` (the seat's
+   layer paths, and with two humans every protected path names both, so each can review the other), and the RACI
+   section of `AGENTS.md`, and opens the onboarding issue. The founder merges these files with a solo-mode bypass.
+2. Running the same command again once that change is on `dev` switches the ruleset.
+
+`aayu seat remove <seat>` reverses it in one run: it returns the ruleset to solo mode first (gate check required,
+admin bypass back), so the founder can merge the CODEOWNERS change as before. Seat changes are recorded on
+`ledger` in `seats/changes.jsonl`.
 
 ## Third-party code
 
