@@ -39,8 +39,8 @@ func LocalDir(root string, story int) string {
 type Store struct {
 	Repo          string
 	Ledger        *ledger.Writer
-	Bucket        *Bucket // nil without [proof] media
-	Private       bool    // only a private repository may keep media in Git LFS
+	Bucket        Media // nil without [proof] media
+	Private       bool  // only a private repository may keep media in Git LFS
 	RetentionDays int
 	Now           func() time.Time
 }
@@ -86,6 +86,9 @@ type PushResult struct {
 	Commit    string   `json:"ledger_commit"`
 	Stores    []string `json:"stores"` // per artifact: path=store
 	Lifecycle bool     `json:"lifecycle_changed,omitempty"`
+	// LifecycleNote says why the store's retention rule is not managed here
+	// (ErrLifecycleUnmanaged); `proof purge` still enforces retention.
+	LifecycleNote string `json:"lifecycle_note,omitempty"`
 }
 
 // Push lands the pack in dir on the ledger. Data artifacts are committed to
@@ -145,7 +148,11 @@ func (s *Store) Push(ctx context.Context, dir string, media bool, auth Authority
 		return res, err
 	}
 	if s.Bucket != nil && media && hasMedia {
-		if res.Lifecycle, err = s.Bucket.EnsureLifecycle(ctx, s.Repo, s.RetentionDays); err != nil {
+		res.Lifecycle, err = s.Bucket.EnsureLifecycle(ctx, s.Repo, s.RetentionDays)
+		switch {
+		case errors.Is(err, ErrLifecycleUnmanaged):
+			res.LifecycleNote = err.Error()
+		case err != nil:
 			return res, fmt.Errorf("pack pushed, but the bucket's retention rule could not be set: %w", err)
 		}
 	}

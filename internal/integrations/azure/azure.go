@@ -15,7 +15,6 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/cloud"
@@ -23,14 +22,12 @@ import (
 
 // Endpoints (Azure public cloud).
 const (
-	LoginHost = "login.microsoftonline.com"
+	LoginHost = cloud.EntraHost
 	QueryHost = "api.loganalytics.azure.com"
 	ARMHost   = "management.azure.com"
 
 	queryScope = "https://api.loganalytics.io/.default"
 	armScope   = "https://management.azure.com/.default"
-	// OIDCAudience is the audience Entra expects on a federated GitHub token.
-	OIDCAudience = "api://AzureADTokenExchange"
 	// PermissionsAPI is the Microsoft.Authorization API version doctor reads.
 	PermissionsAPI = "2022-04-01"
 )
@@ -92,48 +89,11 @@ func New(c integrations.Conn, rt http.RoundTripper, env cloud.Env) (*Client, err
 // token returns an Entra access token for scope.
 func (c *Client) token(ctx context.Context, scope string) (string, error) {
 	return c.tokens.Get(scope, c.env.Clock(), func() (cloud.Token, error) {
-		now := c.env.Clock()
-		form := url.Values{"grant_type": {"client_credentials"}, "scope": {scope}}
-		switch c.conn.Auth {
-		case "cli":
-			args := []string{"account", "get-access-token", "--resource", strings.TrimSuffix(scope, ".default"), "--output", "json"}
-			if c.conn.Org != "" {
-				args = append(args, "--tenant", c.conn.Org)
-			}
-			out, err := c.env.CLI(ctx, "az", args...)
-			if err != nil {
-				return cloud.Token{}, err
-			}
-			var res struct {
-				AccessToken string `json:"accessToken"`
-				ExpiresOn   int64  `json:"expires_on"`
-			}
-			if json.Unmarshal(out, &res) != nil || res.AccessToken == "" {
-				return cloud.Token{}, fmt.Errorf("%w: `az account get-access-token` printed no accessToken", integrations.ErrProvider)
-			}
-			exp := time.Unix(res.ExpiresOn, 0)
-			if res.ExpiresOn == 0 {
-				exp = now.Add(5 * time.Minute) // older az prints only a local expiresOn
-			}
-			return cloud.Token{Value: res.AccessToken, Expires: exp}, nil
-		case "oidc":
-			assertion, err := c.env.GitHubOIDC(ctx, c.hc, OIDCAudience)
-			if err != nil {
-				return cloud.Token{}, err
-			}
-			form.Set("client_id", c.conn.Identity)
-			form.Set("client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer")
-			form.Set("client_assertion", assertion)
-		default:
-			id, secret, _ := strings.Cut(c.conn.Key, ":")
-			form.Set("client_id", id)
-			form.Set("client_secret", secret)
+		id := cloud.Entra{Auth: c.conn.Auth, Tenant: c.conn.Org, Client: c.conn.Identity}
+		if c.conn.StoredKey() {
+			id.Client, id.Secret, _ = strings.Cut(c.conn.Key, ":")
 		}
-		var res cloud.OAuth
-		if err := cloud.PostForm(ctx, c.hc, "https://"+LoginHost+"/"+url.PathEscape(c.conn.Org)+"/oauth2/v2.0/token", form, &res); err != nil {
-			return cloud.Token{}, err
-		}
-		return res.Token(now, "Microsoft Entra")
+		return c.env.Entra(ctx, c.hc, id, scope)
 	})
 }
 

@@ -18,10 +18,48 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof/sigv4"
 )
 
-// Bucket is the private proof media store named by [proof] media (V3): any
-// S3-compatible service (AWS S3, Cloudflare R2, MinIO), reached with SigV4.
-// No S3 SDK is on the plan's dependency list (§2), so the four calls the
-// store needs are signed here (Appendix B D-4.2a).
+// Media is the private proof media store named by [proof] media (V3):
+// content-addressed objects, and an expiration rule per repository from
+// [proof] retention_days. Bucket is the S3-compatible one (WP4.2);
+// AzureBlob and GCS are Azure Blob Storage and Google Cloud Storage
+// (WP7.2b.2).
+type Media interface {
+	// Key is the object key of an artifact.
+	Key(repo string, story int, sha string) string
+	Put(ctx context.Context, key string, data []byte) error
+	// Get returns ErrNoObject for a missing object.
+	Get(ctx context.Context, key string) ([]byte, error)
+	// Delete removes an object; a missing object is not an error.
+	Delete(ctx context.Context, key string) error
+	// EnsureLifecycle makes the store expire repo's objects after days
+	// (0 removes aayudha's rule), keeping every other rule. It returns
+	// ErrLifecycleUnmanaged when the credential cannot manage lifecycle.
+	EnsureLifecycle(ctx context.Context, repo string, days int) (changed bool, err error)
+	// Lifecycle returns aayudha's rule for repo ("" when none).
+	Lifecycle(ctx context.Context, repo string) (string, error)
+}
+
+// ErrLifecycleUnmanaged means the store's credential cannot read or set
+// lifecycle rules (an Azure SAS token, or no Azure Resource Manager scope):
+// the retention purge (`proof purge`) still applies, and the rule is set by
+// the founder from the setup files.
+var ErrLifecycleUnmanaged = errors.New("lifecycle not managed by aayudha")
+
+// objectKey is the object key of an artifact: content-addressed under the
+// prefix, grouped by repository and story so purge and lifecycle rules can
+// find it.
+func objectKey(prefix, repo string, story int, sha string) string {
+	return path.Join(prefix, "proof", repo, fmt.Sprint(story), sha)
+}
+
+// repoPrefix is the key prefix of one repository's objects, which its
+// lifecycle rule matches.
+func repoPrefix(prefix, repo string) string { return path.Join(prefix, "proof", repo) + "/" }
+
+// Bucket is an S3-compatible proof media store (AWS S3, Cloudflare R2,
+// MinIO), reached with SigV4. No S3 SDK is on the plan's dependency list
+// (§2), so the four calls the store needs are signed here (Appendix B
+// D-4.2a).
 type Bucket struct {
 	URL       string // the [proof] media value, for messages
 	Endpoint  string // scheme://host[:port]; path-style requests
@@ -68,7 +106,7 @@ func ParseMedia(v string) (*Bucket, error) {
 			b.Region = "auto"
 		}
 	default:
-		return nil, fmt.Errorf("[proof] media %q: scheme %q is not a bucket (want s3 or r2)", v, u.Scheme)
+		return nil, fmt.Errorf("[proof] media %q: scheme %q is not an S3-compatible bucket (want s3 or r2)", v, u.Scheme)
 	}
 	if e, err := url.Parse(b.Endpoint); err != nil || (e.Scheme != "https" && e.Scheme != "http") || e.Host == "" {
 		return nil, fmt.Errorf("[proof] media %q: endpoint %q is not an http(s) URL", v, b.Endpoint)
@@ -78,10 +116,9 @@ func ParseMedia(v string) (*Bucket, error) {
 	return b, nil
 }
 
-// Key is the object key of an artifact: content-addressed under the prefix,
-// grouped by repository and story so purge and lifecycle rules can find it.
+// Key implements Media.
 func (b *Bucket) Key(repo string, story int, sha string) string {
-	return path.Join(b.Prefix, "proof", repo, fmt.Sprint(story), sha)
+	return objectKey(b.Prefix, repo, story, sha)
 }
 
 // ErrNoObject means the bucket has no such object.
@@ -138,7 +175,7 @@ func (b *Bucket) EnsureLifecycle(ctx context.Context, repo string, days int) (ch
 			return false, fmt.Errorf("bucket lifecycle: %w", err)
 		}
 	}
-	prefix := path.Join(b.Prefix, "proof", repo) + "/"
+	prefix := repoPrefix(b.Prefix, repo)
 	id := LifecycleRuleID + "/" + repo
 	want := fmt.Sprintf("<ID>%s</ID><Filter><Prefix>%s</Prefix></Filter><Status>Enabled</Status><Expiration><Days>%d</Days></Expiration>", xmlEscape(id), xmlEscape(prefix), days)
 	var rules []string

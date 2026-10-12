@@ -111,11 +111,11 @@
       "properties": {
         "media": {
           "type": "string",
-          "description": "Private bucket for proof media; required on public repos (V3): s3://bucket[/prefix][?region=..\u0026endpoint=..] or r2://\u003caccount\u003e/bucket[/prefix]."
+          "description": "Private bucket for proof media; required on public repos (V3): s3://bucket[/prefix][?region=..\u0026endpoint=..], r2://\u003caccount\u003e/bucket[/prefix], azblob://\u003caccount\u003e/\u003ccontainer\u003e[/prefix][?auth=sas|key|oidc|cli\u0026tenant=..\u0026client=..\u0026subscription=..\u0026group=..], or gs://\u003cbucket\u003e[/prefix][?auth=key|oidc|cli\u0026provider=..\u0026sa=..]."
         },
         "media_secret": {
           "type": "string",
-          "description": "Name of the secret holding the bucket's ACCESS_KEY_ID:SECRET_ACCESS_KEY; empty means proof-media."
+          "description": "Name of the secret holding the bucket's credential (ACCESS_KEY_ID:SECRET_ACCESS_KEY for s3 and r2; a SAS token or \u003cclient-id\u003e:\u003cclient-secret\u003e for azblob; a service account JSON key for gs; none with auth oidc or cli); empty means proof-media."
         },
         "retention_days": {
           "type": "integer",

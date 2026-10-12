@@ -372,7 +372,7 @@ type Integration struct {
 
 // Integrations lists the external services init --integrations offers.
 var Integrations = []Integration{
-	{"bucket", "Proof media bucket (S3 or R2, private): required on public repositories (V3). Storage and egress are billed by your provider; aayudha sets lifecycle rules from [proof] retention_days (WP4.2)."},
+	{"bucket", "Proof media bucket (S3, R2, Azure Blob, or Cloud Storage; private): required on public repositories (V3). Storage and egress are billed by your provider; aayudha sets lifecycle rules from [proof] retention_days (WP4.2, WP7.2b.2)."},
 	{"posthog", "PostHog: product analytics read for baselines and measure. Read-only project API key; usage-based pricing on PostHog's side."},
 	{"sentry", "Sentry: error and performance read for baselines and respond. Read-only auth token (event:read, project:read); no extra cost."},
 	{"growthbook", "GrowthBook: experiment and flag read for experiment and readout. Read-only key; no extra cost on the open-source plan."},
@@ -391,13 +391,13 @@ func (in *Init) integrations(_ context.Context, x Extras) error {
 				in.note("integrations", "integration", "bucket", "kept", "not confirmed")
 				continue
 			}
-			url := strings.TrimSpace(x.Ask("Bucket URL for proof media (s3://… or r2://…; empty to skip): "))
+			url := strings.TrimSpace(x.Ask("Bucket URL for proof media (s3://…, r2://…, azblob://<account>/<container>, or gs://…; empty to skip): "))
 			if url == "" {
 				in.note("integrations", "integration", "bucket", "kept", "no bucket given; set [proof] media yourself")
 				continue
 			}
-			if !regexp.MustCompile(`^(s3|r2)://[a-z0-9][a-z0-9.-]{1,61}[a-z0-9](/.*)?$`).MatchString(url) {
-				return fmt.Errorf("bucket %q: want s3://<bucket> or r2://<bucket>", url)
+			if !regexp.MustCompile(`^(s3|r2|azblob|gs)://[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]([/?].*)?$`).MatchString(url) || strings.ContainsAny(url, "\"\n") {
+				return fmt.Errorf("bucket %q: want s3://<bucket>, r2://<account>/<bucket>, azblob://<account>/<container>, or gs://<bucket>", url)
 			}
 			next := regexp.MustCompile(`(?m)^media = "".*$`).ReplaceAll(cur, []byte(fmt.Sprintf("media = %q # private bucket (V3), set by init --integrations", url)))
 			if string(next) == string(cur) {
