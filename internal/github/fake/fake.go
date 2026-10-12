@@ -116,17 +116,21 @@ type WorkflowRun struct {
 	ID         int64  `json:"id"`
 	Path       string `json:"path"`
 	HeadSHA    string `json:"head_sha"`
+	HeadBranch string `json:"head_branch,omitempty"`
 	Event      string `json:"event"`
 	Status     string `json:"status"`
 	Conclusion string `json:"conclusion"`
+	Attempt    int    `json:"run_attempt,omitempty"`
+	HTMLURL    string `json:"html_url,omitempty"`
 }
 
 // Release is a GitHub Release, keyed by its tag.
 type Release struct {
-	ID      int64  `json:"id"`
-	TagName string `json:"tag_name"`
-	Body    string `json:"body"`
-	HTMLURL string `json:"html_url"`
+	ID      int64            `json:"id"`
+	TagName string           `json:"tag_name"`
+	Body    string           `json:"body"`
+	HTMLURL string           `json:"html_url"`
+	Assets  []map[string]any `json:"assets,omitempty"`
 }
 
 // ArtifactZip is a run artifact with its zip bytes.
@@ -164,6 +168,12 @@ type GitHub struct {
 	Runs       []WorkflowRun           // Actions workflow runs
 	Artifacts  map[int64][]ArtifactZip // run ID -> artifacts
 	Releases   map[string]*Release     // tag -> GitHub Release
+	Workflows  []string                // workflow file names GET actions/workflows lists
+	// OnDispatch, when set, describes the run a workflow_dispatch starts (the
+	// fake assigns its ID, path, and event). OnRerun re-runs a run's failed
+	// jobs. Both run with Mu held and must not lock it.
+	OnDispatch func(workflow, ref string, inputs map[string]any) WorkflowRun
+	OnRerun    func(run *WorkflowRun)
 	Requests   []Request
 	Projects   []map[string]any  // Projects v2: id, title
 	Secrets    map[string]string // Actions secret name -> encrypted value
@@ -280,6 +290,7 @@ func (g *GitHub) nextSHA(v any) string {
 var (
 	reCheckRuns = regexp.MustCompile(`^/repos/[^/]+/[^/]+/commits/([^/]+)/check-runs$`)
 	reWfRuns    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/workflows/([^/]+)/runs$`)
+	reRun       = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/runs/([0-9]+)(/rerun-failed-jobs)?$`)
 	reRelTag    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/releases/tags/(.+)$`)
 	reRelease   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/releases/([0-9]+)$`)
 	reRunArts   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/runs/([0-9]+)/artifacts$`)
@@ -455,9 +466,17 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 
 	// Workflow dispatch (with return_run_details).
 	case m == "POST" && strings.HasPrefix(p, repo+"/actions/workflows/") && strings.HasSuffix(p, "/dispatches"):
-		body["workflow"] = strings.TrimSuffix(strings.TrimPrefix(p, repo+"/actions/workflows/"), "/dispatches")
+		file := strings.TrimSuffix(strings.TrimPrefix(p, repo+"/actions/workflows/"), "/dispatches")
+		body["workflow"] = file
 		g.Dispatches = append(g.Dispatches, body)
 		id := 900 + len(g.Dispatches)
+		if g.OnDispatch != nil { // a run the test describes, which GET actions/runs/{id} then serves
+			inputs, _ := body["inputs"].(map[string]any)
+			run := g.OnDispatch(file, str("ref"), inputs)
+			run.ID, run.Path, run.Event = int64(id), ".github/workflows/"+file, "workflow_dispatch"
+			run.HTMLURL = fmt.Sprintf("https://github.com/%s/%s/actions/runs/%d", g.Owner, g.Repo, id)
+			g.Runs = append(g.Runs, run)
+		}
 		reply(200, map[string]any{"workflow_run_id": id, "run_url": fmt.Sprintf("%s%s/actions/runs/%d", g.Server.URL, repo, id),
 			"html_url": fmt.Sprintf("https://github.com/%s/%s/actions/runs/%d", g.Owner, g.Repo, id)})
 
@@ -612,6 +631,26 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		reply(200, map[string]any{"total_count": len(out), "workflow_runs": out})
+	case m == "GET" && p == repo+"/actions/workflows":
+		out := []map[string]any{}
+		for _, f := range g.Workflows {
+			out = append(out, map[string]any{"id": len(out) + 1, "path": ".github/workflows/" + f, "state": "active"})
+		}
+		reply(200, map[string]any{"total_count": len(out), "workflows": out})
+	case reRun.MatchString(p):
+		sm := reRun.FindStringSubmatch(p)
+		i := slices.IndexFunc(g.Runs, func(r WorkflowRun) bool { return r.ID == int64(atoi(sm[1])) })
+		switch {
+		case i < 0:
+			notFound()
+		case m == "GET" && sm[2] == "":
+			reply(200, g.Runs[i])
+		case m == "POST" && sm[2] != "" && g.OnRerun != nil:
+			g.OnRerun(&g.Runs[i])
+			w.WriteHeader(http.StatusCreated)
+		default:
+			notFound()
+		}
 	case m == "GET" && reRelTag.MatchString(p):
 		if rel := g.Releases[reRelTag.FindStringSubmatch(p)[1]]; rel != nil {
 			reply(200, rel)

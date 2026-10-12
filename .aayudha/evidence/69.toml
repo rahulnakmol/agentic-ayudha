@@ -1,0 +1,7 @@
+# Which tests prove story #69's (WP7.8 `release`) Completion Goal (WP4.3: verify maps the go test -json events of
+# these tests, from the run it makes, to the criteria). TestReleaseLive (AAYU_LIVE=1) runs the same ladder against
+# a scratch repository; CI skips it, so it is not listed.
+
+[[criterion]]
+id = 1 # dogfood rolling snapshot with stamped stories
+tests = ["internal/cli:TestReleaseLadder", "internal/cli:TestReleaseFailsClosed"]

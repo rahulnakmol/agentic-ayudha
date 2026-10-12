@@ -299,6 +299,12 @@ func (w *Writer) Exec(ctx context.Context, dir string, args ...string) error {
 	return err
 }
 
+// Output runs git in dir like Exec and returns its trimmed standard output
+// (release's promotion steps).
+func (w *Writer) Output(ctx context.Context, dir string, args ...string) (string, error) {
+	return w.git(ctx, dir, args...)
+}
+
 func (w *Writer) gitIn(ctx context.Context, dir string, stdin []byte, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
