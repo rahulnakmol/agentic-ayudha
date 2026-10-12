@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -556,5 +557,21 @@ func TestReleaseRedTagWorkflow(t *testing.T) {
 	if code, p, errOut := g.run(t, at.Add(time.Hour), g.env, rel, "--to", "main", "--yes"); code != 0 || p.ReleaseRun != nil ||
 		fmt.Sprint(p.Notices) != "[no release.yml: nothing builds the tag no GitHub Release for v0.1.0: no release assets to identify]" {
 		t.Fatalf("main without release.yml: %d %+v %s", code, p, errOut)
+	}
+}
+
+func TestStoriesOfEveryRefsLine(t *testing.T) {
+	for _, c := range []struct {
+		body, branch string
+		want         []int
+	}{
+		{"brief core and visuals.\n\nRefs #64\nRefs #65\n", "feat/brief", []int{64, 65}},
+		{"Refs #12\ncloses #12", "", []int{12}},
+		{"see #5 for context", "story/44-empty-list", []int{44}},
+		{"no ref", "feat/x", nil},
+	} {
+		if got := storiesOf(c.body, c.branch); !slices.Equal(got, c.want) {
+			t.Errorf("storiesOf(%q, %q) = %v, want %v", c.body, c.branch, got, c.want)
+		}
 	}
 }

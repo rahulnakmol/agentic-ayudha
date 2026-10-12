@@ -514,13 +514,32 @@ func rangeStories(ctx context.Context, c *github.Client, repo string, shas []str
 				continue
 			}
 			seenPR[pr.GetNumber()] = true
-			if s := StoryOf(pr.GetBody(), "", pr.GetHead().GetRef()); s != 0 && !slices.Contains(out, s) {
-				out = append(out, s)
+			for _, s := range storiesOf(pr.GetBody(), pr.GetHead().GetRef()) {
+				if !slices.Contains(out, s) {
+					out = append(out, s)
+				}
 			}
 		}
 	}
 	slices.Sort(out)
 	return out, nil
+}
+
+// storiesOf is every story a merged pull request serves: one PR may deliver several
+// (one Refs line each), and a release must stamp all of them, not only the first.
+func storiesOf(body, branch string) []int {
+	var out []int
+	for _, m := range storyRef.FindAllStringSubmatch(body, -1) {
+		if n := issueNumber(m[1]); n != 0 && !slices.Contains(out, n) {
+			out = append(out, n)
+		}
+	}
+	if len(out) == 0 {
+		if s := StoryOf(body, "", branch); s != 0 {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // includedStories expands a Release's `includes` links: a story or bug is
