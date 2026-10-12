@@ -3,4 +3,5 @@ telemetry/
 state/
 ledger-outbox/
 proof/
+worktrees/
 config.local.toml

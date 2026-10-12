@@ -1,0 +1,1 @@
+New claimants land on an empty claims page and do not know how to begin. Grill a story under Feature #30 (Claims list) so the page tells them they have no claims yet and how to start one.

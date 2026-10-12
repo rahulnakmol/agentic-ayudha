@@ -203,4 +203,15 @@ func TestVerifyGateCI(t *testing.T) {
 	if code, res, _ = gate(); code != ExitBlocked || len(res.Gate) != 2 || !strings.Contains(res.Gate[1], "≠ Ready snapshot") {
 		t.Fatalf("drifted story: %d %+v", code, res.Gate)
 	}
+	// A PR that serves no story passes the gate without running a floor.
+	g.Mu.Lock()
+	pr.Body, pr.Head.Ref = "Tidy the docs.", "docs/tidy"
+	g.Mu.Unlock()
+	git(t, dir, "commit", "--quiet", "--amend", "-m", "docs: tidy")
+	g.Mu.Lock()
+	pr.Head.SHA = git(t, dir, "rev-parse", "HEAD")
+	g.Mu.Unlock()
+	if code, res, errOut := gate(); code != 0 || len(res.Checks) != 0 || res.Story != 0 {
+		t.Fatalf("PR without a story: %d %+v %s", code, res, errOut)
+	}
 }
