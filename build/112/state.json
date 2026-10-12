@@ -3,5 +3,18 @@
   "branch": "story/112-gc-says-how-to-free-a-build-worktree-it",
   "started_at": "2026-10-12T05:15:35Z",
   "failed_attempts": 0,
-  "checkpoints": null
+  "checkpoints": [
+    {
+      "k": 1,
+      "n": 1,
+      "attempt": 1,
+      "commit": "55c6b8e7a8f466b5ec7ee1600ba425bcc805059e",
+      "layers": [
+        "L02"
+      ],
+      "verify": "hold",
+      "detail": "floors hold; not run here (tool not installed; the merge gate runs them): sast, secrets, deps",
+      "at": "2026-10-12T05:16:32Z"
+    }
+  ]
 }
