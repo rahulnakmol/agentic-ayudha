@@ -1,6 +1,6 @@
 // Package providers is the catalog of integration adapters this binary
-// carries: what each one is for, the metrics it answers, the config fields it
-// needs, and the entry points verbs (Baseline) and doctor (Check) use.
+// carries: what each one is for, the config fields it needs, and the entry
+// points verbs (Baseline, Figma, Mobbin) and doctor (Check) use.
 package providers
 
 import (
@@ -13,7 +13,9 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/figma"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/githubread"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/mobbin"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/posthog"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/sentry"
 	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
@@ -35,9 +37,14 @@ func (d Deps) now() time.Time {
 	return d.Now()
 }
 
-// baseliner is what every baseline adapter implements.
-type baseliner interface {
+// scoper is what every adapter implements: doctor's reachability and scope check.
+type scoper interface {
 	Scope(ctx context.Context) (integrations.Scope, error)
+}
+
+// baseliner is what a baseline adapter adds.
+type baseliner interface {
+	scoper
 	Baseline(ctx context.Context, q integrations.Query) (integrations.Baseline, error)
 }
 
@@ -46,28 +53,36 @@ type Provider struct {
 	Name    string
 	Purpose string
 	Need    []integrations.Field
-	open    func(d Deps, c integrations.Conn) (baseliner, error)
+	open    func(d Deps, c integrations.Conn) (scoper, error)
 }
 
 // Known lists the adapters in this binary, in the order doctor reports them.
 var Known = []Provider{
 	{
 		Name: "posthog", Purpose: "product analytics baselines", Need: posthog.Need,
-		open: func(d Deps, c integrations.Conn) (baseliner, error) { return posthog.New(c, d.Transport, d.now) },
+		open: func(d Deps, c integrations.Conn) (scoper, error) { return posthog.New(c, d.Transport, d.now) },
 	},
 	{
 		Name: "sentry", Purpose: "reliability baselines", Need: sentry.Need,
-		open: func(d Deps, c integrations.Conn) (baseliner, error) { return sentry.New(c, d.Transport, d.now) },
+		open: func(d Deps, c integrations.Conn) (scoper, error) { return sentry.New(c, d.Transport, d.now) },
 	},
 	{
 		Name: "github", Purpose: "delivery baselines from issues and pull requests",
-		open: func(d Deps, c integrations.Conn) (baseliner, error) {
+		open: func(d Deps, c integrations.Conn) (scoper, error) {
 			repo := c.Project
 			if repo == "" {
 				repo = d.Repo
 			}
 			return githubread.New(c, repo, d.Transport, d.now)
 		},
+	},
+	{
+		Name: "figma", Purpose: "design files: nodes, rendered images, and variables",
+		open: func(d Deps, c integrations.Conn) (scoper, error) { return figma.New(c, d.Transport) },
+	},
+	{
+		Name: "mobbin", Purpose: "design references as URLs and IDs",
+		open: func(d Deps, c integrations.Conn) (scoper, error) { return mobbin.New(c, d.Transport, d.now), nil },
 	},
 }
 
@@ -80,7 +95,7 @@ func Find(name string) (Provider, bool) {
 	return Known[i], true
 }
 
-func open(d Deps, name string) (Provider, baseliner, error) {
+func open(d Deps, name string) (Provider, scoper, error) {
 	p, ok := Find(name)
 	if !ok {
 		names := make([]string, len(Known))
@@ -102,9 +117,13 @@ func open(d Deps, name string) (Provider, baseliner, error) {
 // configured with scope = "write", or the query is invalid; the adapter then
 // refuses a key the provider reports as write-capable before the data call.
 func Baseline(ctx context.Context, d Deps, source string, q integrations.Query) (integrations.Baseline, error) {
-	_, b, err := open(d, source)
+	_, s, err := open(d, source)
 	if err != nil {
 		return integrations.Baseline{}, err
+	}
+	b, ok := s.(baseliner)
+	if !ok {
+		return integrations.Baseline{}, fmt.Errorf("%w: %s gives no baselines", integrations.ErrQuery, source)
 	}
 	return b.Baseline(ctx, q)
 }
@@ -114,9 +133,28 @@ func Baseline(ctx context.Context, d Deps, source string, q integrations.Query) 
 // returns the same errors as Baseline for a missing, write-scoped, or
 // unset integration, without calling the provider.
 func Check(ctx context.Context, d Deps, name string) (integrations.Scope, error) {
-	_, b, err := open(d, name)
+	_, s, err := open(d, name)
 	if err != nil {
 		return integrations.Scope{}, err
 	}
-	return b.Scope(ctx)
+	return s.Scope(ctx)
+}
+
+// Figma opens [integrations.figma] for a read verb (research, mockup,
+// prototype; WP6.5).
+func Figma(d Deps) (*figma.Client, error) {
+	_, s, err := open(d, "figma")
+	if err != nil {
+		return nil, err
+	}
+	return s.(*figma.Client), nil
+}
+
+// Mobbin opens [integrations.mobbin] for a read verb (research, WP6.5).
+func Mobbin(d Deps) (*mobbin.Client, error) {
+	_, s, err := open(d, "mobbin")
+	if err != nil {
+		return nil, err
+	}
+	return s.(*mobbin.Client), nil
 }

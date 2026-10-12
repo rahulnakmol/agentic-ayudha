@@ -147,9 +147,10 @@ type Integration struct {
 	Secret string `koanf:"secret" jsonschema_description:"Name of the secret holding the key (WP1.3); never the key itself."`
 	Scope  string `koanf:"scope" jsonschema:"enum=read,enum=write"`
 	// Provider details the adapters need (WP5.2, WP6.4).
-	URL     string `koanf:"url" jsonschema_description:"Provider base URL when not the adapter's default (EU region, self-hosted), e.g. https://eu.posthog.com."`
-	Org     string `koanf:"org" jsonschema_description:"Provider organization: the Sentry organization slug."`
-	Project string `koanf:"project" jsonschema_description:"Provider project: the PostHog project ID, the Sentry project ID, or the owner/name GitHub baselines read (default: the current repository)."`
+	URL       string `koanf:"url" jsonschema_description:"Provider base URL when not the adapter's default (EU region, self-hosted), e.g. https://eu.posthog.com."`
+	Org       string `koanf:"org" jsonschema_description:"Provider organization: the Sentry organization slug."`
+	Project   string `koanf:"project" jsonschema_description:"Provider project: the PostHog project ID, the Sentry project ID, or the owner/name GitHub baselines read (default: the current repository)."`
+	Transport string `koanf:"transport" jsonschema:"enum=rest,enum=mcp" jsonschema_description:"Figma only: rest (personal access token, the default) or mcp (the remote MCP server, opt-in; the secret is an OAuth access token)."`
 }
 
 // Verify is [verify].
@@ -321,6 +322,9 @@ func (c *Config) Validate() error {
 		}
 		if in.URL != "" && !strings.HasPrefix(in.URL, "https://") && !strings.HasPrefix(in.URL, "http://localhost") && !strings.HasPrefix(in.URL, "http://127.0.0.1") {
 			bad("[integrations.%s] url = %q: want an https:// URL", name, in.URL)
+		}
+		if in.Transport != "" && (name != "figma" || (in.Transport != "rest" && in.Transport != "mcp")) {
+			bad("[integrations.%s] transport = %q: only [integrations.figma] takes transport, rest or mcp", name, in.Transport)
 		}
 	}
 	if id := c.Identity; id.MachineUser != "" && !secretName.MatchString(id.MachineUserSecret) {
