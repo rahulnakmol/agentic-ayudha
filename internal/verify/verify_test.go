@@ -199,7 +199,7 @@ exit %d
 // WP4.4 thresholds and parsing, with stand-in tools that print recorded
 // reports: findings above zero critical/high fail, medium and low do not.
 func TestScannerFloorsFindings(t *testing.T) {
-	root, base, head := repo(t, map[string]string{"main.go": "package main\n"}, map[string]string{"main.go": "package main\n\nfunc main() {}\n"})
+	root, base, head := repo(t, map[string]string{"main.go": "package main\n", "go.mod": "module example.com/m\n\ngo 1.22\n"}, map[string]string{"main.go": "package main\n\nfunc main() {}\n"})
 	cases := []struct {
 		name    string
 		floor   Floor
@@ -297,5 +297,40 @@ func TestTestEvidence(t *testing.T) {
 	p, _ := Pack(r, Report{Artifacts: ev}, proof.Pack{})
 	if un := Unmapped(r, p); !slices.Equal(un, []int{2}) {
 		t.Fatalf("unmapped: %v", un)
+	}
+}
+
+// The deps floor names the lockfiles git tracks rather than scanning
+// recursively, so a checkout inside an ignored directory (a build worktree
+// under .aayudha/worktrees/) is still scanned instead of passing on nothing.
+func TestTrackedLockfiles(t *testing.T) {
+	root, _, _ := repo(t, map[string]string{".gitignore": "wt/\n", "go.mod": "module m\n", "web/pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
+		"internal/x/testdata/go.mod": "module fixture\n", "vendor/y/go.mod": "module y\n", "README.md": "x\n"}, nil)
+	if got := TrackedLockfiles(context.Background(), root); !slices.Equal(got, []string{"go.mod", "web/pnpm-lock.yaml"}) {
+		t.Fatalf("lockfiles: %v", got)
+	}
+	wt := filepath.Join(root, "wt", "1")
+	git(t, root, "worktree", "add", "--quiet", "--detach", wt)
+	if got := TrackedLockfiles(context.Background(), wt); !slices.Equal(got, []string{"go.mod", "web/pnpm-lock.yaml"}) {
+		t.Fatalf("lockfiles in a worktree under an ignored directory: %v", got)
+	}
+	if got := TrackedLockfiles(context.Background(), t.TempDir()); got != nil {
+		t.Fatalf("not a repository: %v", got)
+	}
+}
+
+// osv-scanner's Go call analysis: advisories in code the module never calls
+// do not fail the floor (osv-scanner itself exits 0 on them); a called one does.
+func TestParseOSVCallAnalysis(t *testing.T) {
+	report := func(called bool) []byte {
+		return []byte(fmt.Sprintf(`{"results":[{"packages":[{"package":{"name":"golang.org/x/crypto","version":"0.55.0","ecosystem":"Go"},
+"groups":[{"ids":["GO-2026-5932"],"max_severity":"","experimental_analysis":{"GO-2026-5932":{"called":%t,"unimportant":false}}}]}]}]}`, called))
+	}
+	s, err := ParseOSV(report(false))
+	if err != nil || s.High != 0 || s.Uncalled != 1 || !strings.Contains(s.detail(), "1 more not called") {
+		t.Fatalf("uncalled: %+v %v", s, err)
+	}
+	if s, err = ParseOSV(report(true)); err != nil || s.High != 1 || s.Uncalled != 0 {
+		t.Fatalf("called: %+v %v", s, err)
 	}
 }
