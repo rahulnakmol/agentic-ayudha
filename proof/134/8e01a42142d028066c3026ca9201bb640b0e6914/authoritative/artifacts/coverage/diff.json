@@ -1,0 +1,19 @@
+{
+  "covered": 86,
+  "executable": 93,
+  "percent": 92.47311827956989,
+  "threshold": 90,
+  "pass": true,
+  "uncovered": {
+    "examples/benefits-qa/cmd/benefits-qa/main.go": [
+      37,
+      38,
+      39,
+      57,
+      58,
+      97,
+      98
+    ]
+  },
+  "format": "go coverprofile"
+}

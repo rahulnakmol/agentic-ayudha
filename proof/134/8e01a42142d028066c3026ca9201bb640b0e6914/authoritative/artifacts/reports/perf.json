@@ -1,0 +1,23 @@
+[
+  {
+    "url": "http://127.0.0.1:8787/",
+    "score": 1,
+    "lcp_ms": 900.3842,
+    "cls": 0,
+    "tbt_ms": 0
+  },
+  {
+    "url": "http://127.0.0.1:8787/?q=What+is+the+dental+annual+deductible%3F",
+    "score": 1,
+    "lcp_ms": 900.8478,
+    "cls": 0,
+    "tbt_ms": 0
+  },
+  {
+    "url": "http://127.0.0.1:8787/?q=What+is+my+colleague%27s+claim+status%3F",
+    "score": 1,
+    "lcp_ms": 900.7354,
+    "cls": 0,
+    "tbt_ms": 0
+  }
+]

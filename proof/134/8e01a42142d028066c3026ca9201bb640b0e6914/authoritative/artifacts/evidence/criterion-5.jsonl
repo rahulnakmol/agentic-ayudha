@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/deploy","Test":"TestServeScript"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/deploy","Test":"TestServeScript","Output":"=== RUN   TestServeScript\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/deploy","Test":"TestServeScript","Output":"--- PASS: TestServeScript (10.01s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/deploy","Test":"TestServeScript"}
