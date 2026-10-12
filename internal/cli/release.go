@@ -61,8 +61,10 @@ type Artifact struct {
 	Size   int64  `json:"size"`
 }
 
-// MeasureDue is measure/due/<issue>.json on the ledger: a Goal or Initiative
-// that shipped work and is due for `measure` after Due.
+// MeasureDue is measure/due/<issue>/<tag>.json on the ledger: a Goal or
+// Initiative that shipped work in the release tagged Tag and is due for
+// `measure` after Due. One file per release, so a later release never erases
+// or postpones an earlier obligation.
 type MeasureDue struct {
 	Issue   int    `json:"issue"`
 	Type    string `json:"type"`
@@ -378,10 +380,15 @@ func (e *Env) afterLanding(ctx context.Context, c *github.Client, tok identity.T
 		p.Notices = append(p.Notices, "no "+tagWorkflow+": nothing builds the tag")
 	}
 	if main {
-		if rel, _, err := c.REST.Repositories.GetReleaseByTag(ctx, owner, name, p.Tag); err == nil {
-			for _, a := range rel.Assets {
-				p.Artifacts = append(p.Artifacts, Artifact{Name: a.GetName(), Digest: a.GetDigest(), Size: int64(a.GetSize())})
-			}
+		rel, _, err := c.REST.Repositories.GetReleaseByTag(ctx, owner, name, p.Tag)
+		switch {
+		case github.NotFound(err):
+			p.Notices = append(p.Notices, "no GitHub Release for "+p.Tag+": no release assets to identify")
+		case err != nil:
+			return releaseErr, err
+		}
+		for _, a := range rel.GetAssets() {
+			p.Artifacts = append(p.Artifacts, Artifact{Name: a.GetName(), Digest: a.GetDigest(), Size: int64(a.GetSize())})
 		}
 	}
 	return releaseErr, e.bookkeep(ctx, c, tok, repo, is, p, notes, utm, now, main)
@@ -414,7 +421,7 @@ func (e *Env) bookkeep(ctx context.Context, c *github.Client, tok identity.Token
 	files := map[string][]byte{rungPath(p.Release, p.Target): append(rec, '\n')}
 	for _, d := range due {
 		b, _ := json.MarshalIndent(d, "", "  ")
-		files[fmt.Sprintf("measure/due/%d.json", d.Issue)] = append(b, '\n')
+		files[fmt.Sprintf("measure/due/%d/%s.json", d.Issue, d.Tag)] = append(b, '\n')
 	}
 	lw, err := e.Ledger(ctx, tok, "human", "")
 	if err != nil {

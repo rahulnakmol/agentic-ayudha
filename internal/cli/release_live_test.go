@@ -253,7 +253,7 @@ func TestReleaseLive(t *testing.T) {
 		t.Fatalf("Shipping evidence:\n%s", b)
 	}
 	if out := gitDo("ls-tree", "-r", "--name-only", "origin/ledger"); !strings.Contains(out, fmt.Sprintf("releases/%d/rolling.json", rel)) ||
-		!strings.Contains(out, fmt.Sprintf("measure/due/%d.json", goal)) || !strings.Contains(out, "tell/release/"+tag+".md") {
+		!strings.Contains(out, fmt.Sprintf("measure/due/%d/%s.json", goal, tag)) || !strings.Contains(out, "tell/release/"+tag+".md") {
 		t.Fatalf("ledger:\n%s", out)
 	}
 	t.Logf("rolling: %s %s gate %s evals %s", p.Tag, short(p.Commit), p.Gate.URL, p.Evals.URL)

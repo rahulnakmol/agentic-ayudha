@@ -45,7 +45,8 @@ func newLadderFixture(t *testing.T) *ladderFixture {
 	goal := g.AddIssue("Grow enrolment", fixtureBody(t, "goal", nil), "type:goal", "status:in-progress")
 	pending := g.AddIssue("Upload progress", fixtureBody(t, "story", nil), "type:story", "status:in-progress", "effort:S")
 	g.Mu.Lock()
-	g.Issues[1].Parent = goal.Number
+	g.Issues[1].Parent, g.Issues[unproven].Parent = goal.Number, goal.Number
+	goal.Subs = []int{1, unproven}
 	g.Issues[other].Labels = []fake.Label{{Name: "type:story"}, {Name: "status:ready"}, {Name: "effort:S"}}
 	g.Issues[unproven].Subs = append(g.Issues[unproven].Subs, pending.Number)
 	pending.Parent = unproven
@@ -280,10 +281,11 @@ func TestReleaseLadder(t *testing.T) {
 		t.Fatalf("promotion record: %+v", p)
 	}
 	var due MeasureDue
-	_ = json.Unmarshal([]byte(git(t, f.bare, "show", fmt.Sprintf("ledger:measure/due/%d.json", f.goal))), &due)
-	if due.Type != "goal" || due.Due != "2026-11-09" || fmt.Sprint(due.Stories) != "[2]" || due.Tag != "rolling-2026-10-12" {
+	_ = json.Unmarshal([]byte(git(t, f.bare, "show", fmt.Sprintf("ledger:measure/due/%d/rolling-2026-10-12.json", f.goal))), &due)
+	if due.Type != "goal" || due.Due != "2026-11-09" || fmt.Sprint(due.Stories) != fmt.Sprintf("[2 %d]", f.other) || due.Tag != "rolling-2026-10-12" {
 		t.Fatalf("measure due: %+v", due)
 	}
+	dueFirst := git(t, f.bare, "show", fmt.Sprintf("ledger:measure/due/%d/rolling-2026-10-12.json", f.goal))
 	f.g.Mu.Lock()
 	body := f.g.Issues[f.release].Body
 	f.g.Mu.Unlock()
@@ -322,6 +324,15 @@ func TestReleaseLadder(t *testing.T) {
 	f.g.Mu.Unlock()
 	if !contains(f.g.LabelNames(f.pending), "status:released") || !strings.Contains(body, fmt.Sprintf("shipped but not listed here: #%d", f.pending)) || !strings.Contains(body, "- Note: no evals.yml") {
 		t.Fatalf("second snapshot's stamp and evidence: %v\n%s", f.g.LabelNames(f.pending), body)
+	}
+	// The Goal's first obligation stands; the second release adds its own.
+	if got := git(t, f.bare, "show", fmt.Sprintf("ledger:measure/due/%d/rolling-2026-10-12.json", f.goal)); got != dueFirst {
+		t.Fatalf("a later release changed the first measure obligation:\n%s", got)
+	}
+	if got := git(t, f.bare, "show", fmt.Sprintf("ledger:measure/due/%d/rolling-2026-10-12.2.json", f.goal)); !strings.Contains(got, fmt.Sprintf(`"stories": [
+    %d
+  ]`, f.pending)) {
+		t.Fatalf("second measure obligation:\n%s", got)
 	}
 
 	// Main needs this Release's rolling snapshot still on rolling.
@@ -515,6 +526,19 @@ func TestReleaseRedTagWorkflow(t *testing.T) {
 		t.Fatalf("after a red release.yml: tag %s, Release %s", git(t, f.bare, "cat-file", "-t", "v0.1.0"), state)
 	}
 
+	// The release assets cannot be read after main moved: exit 5, naming what landed.
+	h := newLadderFixture(t)
+	if code, _, errOut := h.run(t, at, h.env, strconv.Itoa(h.release), "--to", "rolling", "--yes"); code != 0 {
+		t.Fatalf("rolling: %d %s", code, errOut)
+	}
+	h.g.Mu.Lock()
+	h.g.Fail = "GET /repos/o/r/releases/tags/v0.1.0"
+	h.g.Mu.Unlock()
+	if code, _, errOut := h.run(t, at.Add(time.Hour), h.env, strconv.Itoa(h.release), "--to", "main", "--yes"); code != ExitExternal ||
+		!strings.Contains(errOut, `is on main as "Release: v0.1.0", but finishing the promotion failed`) {
+		t.Fatalf("release assets unreadable: %d %s", code, errOut)
+	}
+
 	// A product without a tag workflow: the tag lands, and the record says nothing built it.
 	g := newLadderFixture(t)
 	g.g.Mu.Lock()
@@ -524,7 +548,13 @@ func TestReleaseRedTagWorkflow(t *testing.T) {
 	if code, _, errOut := g.run(t, at, g.env, rel, "--to", "rolling", "--yes"); code != 0 {
 		t.Fatalf("rolling without evals.yml: %d %s", code, errOut)
 	}
-	if code, p, errOut := g.run(t, at.Add(time.Hour), g.env, rel, "--to", "main", "--yes"); code != 0 || p.ReleaseRun != nil || fmt.Sprint(p.Notices) != "[no release.yml: nothing builds the tag]" {
+	g.g.Mu.Lock()
+	g.g.OnDispatch = func(_, ref string, _ map[string]any) fake.WorkflowRun { // nothing publishes a GitHub Release either
+		return fake.WorkflowRun{HeadSHA: git(t, g.bare, "rev-parse", "refs/heads/"+ref), Status: "completed", Conclusion: "success", Attempt: 1}
+	}
+	g.g.Mu.Unlock()
+	if code, p, errOut := g.run(t, at.Add(time.Hour), g.env, rel, "--to", "main", "--yes"); code != 0 || p.ReleaseRun != nil ||
+		fmt.Sprint(p.Notices) != "[no release.yml: nothing builds the tag no GitHub Release for v0.1.0: no release assets to identify]" {
 		t.Fatalf("main without release.yml: %d %+v %s", code, p, errOut)
 	}
 }
