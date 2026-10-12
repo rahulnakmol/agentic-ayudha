@@ -18,15 +18,11 @@ import (
 	"strconv"
 	"strings"
 
-	"go.yaml.in/yaml/v4"
+	"github.com/rahulnakmol/agentic-ayudha/internal/design"
 )
 
 // Kinds are what tell writes.
 var Kinds = []string{"docs", "guide", "changelog", "release", "launch", "brand"}
-
-// BrandPath is where `grill brand` (WP5.3) writes the brand, relative to the
-// repository root.
-const BrandPath = "design/brand.yaml"
 
 // Brand is the part of design/brand.yaml that tell uses: the voice and tone
 // the host writes in, and what the copy must avoid. Single (or hyphenated)
@@ -36,7 +32,7 @@ type Brand struct {
 	Voice  string   `json:"voice"`
 	Tone   []string `json:"tone"`
 	Avoid  []string `json:"avoid"`
-	Source string   `json:"source"` // BrandPath, or "default" when it is absent
+	Source string   `json:"source"` // design/brand.yaml, or "default" when it is absent
 }
 
 // Default is the tone used when design/brand.yaml is absent, and for each key
@@ -49,40 +45,34 @@ var Default = Brand{
 	Source: "default",
 }
 
-// LoadBrand reads design/brand.yaml under root, as `grill brand` (WP5.3)
-// writes it: tell uses its name and `voice: {tone, avoid}` and ignores the
-// palette and pairs. A missing file gives Default; a missing tone or avoid
-// list, its default.
+// LoadBrand reads design/brand.yaml under root with grill brand's parser
+// (WP5.3): tell uses its name and voice and leaves the palette and pairs to
+// grill. A missing file gives Default; a missing tone or avoid list, its
+// default.
 func LoadBrand(root string) (Brand, error) {
 	b := Default
 	if root == "" {
 		return b, nil
 	}
-	data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(BrandPath)))
+	data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(design.BrandPath)))
 	if errors.Is(err, fs.ErrNotExist) {
 		return b, nil
 	} else if err != nil {
 		return b, err
 	}
-	var raw struct {
-		Name  string `yaml:"name"`
-		Voice struct {
-			Tone  []string `yaml:"tone"`
-			Avoid []string `yaml:"avoid"`
-		} `yaml:"voice"`
+	br, err := design.ParseBrand(data)
+	if err != nil {
+		return b, fmt.Errorf("%s: %w", design.BrandPath, err)
 	}
-	if err := yaml.Unmarshal(data, &raw); err != nil {
-		return b, fmt.Errorf("%s: %w", BrandPath, err)
-	}
-	b.Source = BrandPath
-	if name := strings.TrimSpace(raw.Name); name != "" {
+	b.Source = design.BrandPath
+	if name := strings.TrimSpace(br.Name); name != "" {
 		b.Voice = "Write as " + name + ". " + b.Voice
 	}
-	if len(raw.Voice.Tone) > 0 {
-		b.Tone = raw.Voice.Tone
+	if len(br.Voice.Tone) > 0 {
+		b.Tone = br.Voice.Tone
 	}
-	if raw.Voice.Avoid != nil {
-		b.Avoid = raw.Voice.Avoid
+	if br.Voice.Avoid != nil {
+		b.Avoid = br.Voice.Avoid
 	}
 	return b, nil
 }

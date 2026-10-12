@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/rahulnakmol/agentic-ayudha/internal/design"
 )
 
 // design/brand.yaml as grill brand (WP5.3) writes it sets the tone; keys it
@@ -21,7 +23,7 @@ func TestLoadBrand(t *testing.T) {
 	_ = os.MkdirAll(filepath.Join(root, "design"), 0o755)
 	_ = os.WriteFile(filepath.Join(root, "design", "brand.yaml"), []byte("version: 1\nname: Benefits QA\nvoice:\n  tone: [warm]\n  avoid: [simply, just, exclamation marks]\npalette:\n  primary: '#1f5bd1'\npairs:\n  - {fg: primary, bg: surface, use: ui}\n"), 0o644)
 	b, err := LoadBrand(root)
-	if err != nil || b.Source != BrandPath || !reflect.DeepEqual(b.Tone, []string{"warm"}) || b.Voice != "Write as Benefits QA. "+Default.Voice ||
+	if err != nil || b.Source != design.BrandPath || !reflect.DeepEqual(b.Tone, []string{"warm"}) || b.Voice != "Write as Benefits QA. "+Default.Voice ||
 		!reflect.DeepEqual(b.Avoid, []string{"simply", "just", "exclamation marks"}) {
 		t.Fatalf("brand: %+v %v", b, err)
 	}

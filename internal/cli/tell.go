@@ -98,7 +98,7 @@ func runTell(ctx context.Context, e *Env, in Values) error {
 	}
 	var draft []byte
 	if in.Has("from") {
-		if draft, err = readDraft(in.String("from")); err != nil {
+		if draft, err = readTellDraft(in.String("from")); err != nil {
 			return err
 		}
 	}
@@ -202,7 +202,7 @@ func refsList(ns []int) string {
 	return strings.Join(parts, ", ")
 }
 
-func readDraft(p string) ([]byte, error) {
+func readTellDraft(p string) ([]byte, error) {
 	fi, err := os.Stat(p)
 	if err != nil {
 		return nil, Wrap(ExitUsage, fmt.Errorf("tell --from: %w", err))
