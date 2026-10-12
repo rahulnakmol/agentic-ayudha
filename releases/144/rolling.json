@@ -1,0 +1,81 @@
+{
+  "repo": "rahulnakmol/agentic-ayudha",
+  "release": 144,
+  "version": "the next rolling snapshot (rolling-\u003cdate\u003e), promoted by the orchestrator with `aayu release`",
+  "source": "dev",
+  "target": "rolling",
+  "source_sha": "a631247bd29c6e3252bd82a9d4a07f796f594448",
+  "commit": "9991cd392d282692aa9f5309d67ecc5c3362627a",
+  "tree": "7882860ee0bcefcc483b575a69222900eb284e85",
+  "message": "Rolling snapshot: 20261012T1447Z",
+  "tag": "rolling-2026-10-12.4",
+  "candidate": "promote/rolling-20261012T1447Z",
+  "evals": {
+    "workflow": "evals.yml",
+    "id": 38265477551,
+    "url": "https://github.com/rahulnakmol/agentic-ayudha/actions/runs/38265477551",
+    "conclusion": "success",
+    "attempts": 1
+  },
+  "gate": {
+    "workflow": "ci.yml",
+    "id": 38266833172,
+    "url": "https://github.com/rahulnakmol/agentic-ayudha/actions/runs/38266833172",
+    "conclusion": "success",
+    "attempts": 1
+  },
+  "artifacts": [
+    {
+      "name": "benchmarks",
+      "digest": "sha256:3061714f9af4ec51e289e68631c71515a3db3636141402d65210e28232332fb5",
+      "size": 787
+    },
+    {
+      "name": "release-snapshot",
+      "digest": "sha256:00b9b8b4a19283114a1ceb9af13f62508b7cc80872eba64d3797f1fef57062c0",
+      "size": 65125205
+    }
+  ],
+  "stories_released": [
+    132,
+    133,
+    134
+  ],
+  "already_released": [
+    130,
+    131
+  ],
+  "shipped_not_listed": [],
+  "referenced_not_merged": [
+    70
+  ],
+  "release_notes": "tell/release/rolling-2026-10-12.4.md",
+  "measure_due": [
+    {
+      "issue": 125,
+      "type": "goal",
+      "due": "2026-11-09",
+      "release": 144,
+      "tag": "rolling-2026-10-12.4",
+      "stories": [
+        132,
+        133,
+        134
+      ]
+    },
+    {
+      "issue": 126,
+      "type": "initiative",
+      "due": "2026-11-09",
+      "release": 144,
+      "tag": "rolling-2026-10-12.4",
+      "stories": [
+        132,
+        133,
+        134
+      ]
+    }
+  ],
+  "promoted_by": "rahulnakmol",
+  "promoted_at": "2026-10-12T14:47:06Z"
+}
