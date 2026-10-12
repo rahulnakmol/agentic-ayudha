@@ -54,9 +54,13 @@ You (the host's model) slice; the binary checks and writes.
    - `paths`: the expected paths (or narrower globs under them) the story changes; the binary turns them into the
      story's layer footprint;
    - `depends_on`: the positions (1-based) of stories in this draft it needs first.
-   Cover every layer of the Feature's footprint with some story. Keep to the Feature's scope: what it leaves open goes
-   into `open_questions`, not into a criterion.
-4. Write the draft as JSON, `{"feature": N, "stories": [...], "open_questions": [...]}`, and check it (read-only):
+   Cover every layer of the Feature's footprint with some story.
+4. Keep to the Feature's scope. Every criterion restates something the Feature asks for; never require behaviour it
+   does not name: no extra flags or options (`--dry-run`, repeatable flags), retries or limits, workflow triggers
+   beyond the one it asks for, reports, counts, or outputs of your own. A builder will need such details; write each
+   as a question in `open_questions`, which never counts against the slice. Example values in a criterion's state
+   are fine when they are fixture values (`a recording 40 days old, recordings kept 30 days`).
+5. Write the draft as JSON, `{"feature": N, "stories": [...], "open_questions": [...]}`, and check it (read-only):
 
    `aayu slice <feature> --draft slice.json`
 
@@ -65,4 +69,4 @@ You (the host's model) slice; the binary checks and writes.
    `aayu slice <feature> --draft slice.json --create`
 
    The stories are created under the Feature in dependency order with `layer:Lxx` labels and `depends-on #N` links.
-5. Hand over: plan each story (`aayu plan <story>`), then `aayu ready <story>`.
+6. Hand over: plan each story (`aayu plan <story>`), then `aayu ready <story>`.
