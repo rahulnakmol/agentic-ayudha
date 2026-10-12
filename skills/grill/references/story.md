@@ -16,11 +16,15 @@ human leaves open goes into an open question, not into the story.
 
 ### Completion Goal (`completion_goal`, required)
 
-Numbered, observable criteria; each one line: `N. [evidence] state: …; expected: …`.
+Numbered, observable criteria; each one line: `N. [evidence] state: …; expected: …`. The criteria state only what
+the request or the parent Feature asks for. Accessibility (screen reader, keyboard, contrast, targets), performance,
+and security are floors `verify` enforces on every story; add a criterion for one only when the request or parent
+asks for that outcome itself, and otherwise leave it to the floors.
 
 - What state does someone have to be in to see the outcome? For a page, put its path in backticks
   (``state: `/settings` as the seeded admin``) so the web floors can find it.
-- What exactly do they see, hear, or measure there? Quote phrases a screen reader must speak.
+- What exactly do they see or measure there? When the request asks for a screen-reader outcome, quote the phrases
+  the screen reader must speak.
 - Which evidence proves it: `screenshot`, `recording`, `sr-transcript` (UI), `api-trace` (an API or CLI call and
   its result), or `metric` (a number)? Every criterion needs exactly one kind.
 - For `api-trace` and `metric` criteria: which tests will show it? (they go in `.aayudha/evidence/<story>.toml` when
