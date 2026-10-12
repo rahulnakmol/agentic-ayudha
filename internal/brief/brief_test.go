@@ -316,6 +316,9 @@ func TestBriefPageWithBrowser(t *testing.T) {
 		t.Skip("needs Playwright and axe-core: set AAYU_FLOOR_WEB=1 (floors workflow)")
 	}
 	page, _, _ := renderSample(t)
+	// axe skips closed <details>; open them so the data tables, queries, and text alternatives are checked too.
+	page = []byte(strings.ReplaceAll(string(page), "<details>", "<details open>"))
+	page = []byte(strings.ReplaceAll(string(page), `<details class="data">`, `<details class="data" open>`))
 	dir := t.TempDir()
 	file := filepath.Join(dir, "brief.html")
 	if err := os.WriteFile(file, page, 0o644); err != nil {

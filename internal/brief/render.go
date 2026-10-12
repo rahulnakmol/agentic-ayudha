@@ -277,7 +277,7 @@ h2{font-size:1.3rem;margin:32px 0 8px}
 a{color:var(--accent)}
 a.cite{font-size:.85em;font-weight:600;text-decoration:none;border-bottom:1px solid currentColor}
 code{font:.88em ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--tint);padding:1px 4px;border-radius:4px}
-pre{background:var(--tint);padding:12px;overflow:auto;border-radius:8px}
+pre{background:var(--tint);padding:12px;border-radius:8px;white-space:pre-wrap;overflow-wrap:anywhere}
 pre code{background:none;padding:0}
 figure.visual{margin:28px 0}
 .canvas{overflow-x:auto;background:#fff;border:1px solid var(--line);border-radius:8px;padding:12px}
