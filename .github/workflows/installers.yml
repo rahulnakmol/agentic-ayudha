@@ -1,0 +1,390 @@
+name: installers
+
+# docs/BUILD-PLAN.md WP8.2 accept: `install.sh` on clean macOS/Linux/Windows VMs; `aayu doctor` passes.
+# Every action is pinned by full commit SHA; downloaded tools are checked against a pinned SHA-256.
+#
+# GitHub-hosted runners are the clean machines: neither aayu nor (usually) cosign is installed, so install.sh
+# also bootstraps its pinned cosign. On each OS the job installs, puts the binary on PATH, runs `aayu version`,
+# and runs `aayu doctor` in a fresh checkout with git and git-lfs installed; doctor must exit 0 with no FAIL row.
+#
+#   snapshot      a goreleaser snapshot signed keylessly by this workflow (no v* release exists before v0.1.0).
+#                 install.sh accepts it only with AAYU_CERT_IDENTITY_REGEXP pinned to this exact workflow run's
+#                 identity, and must refuse a flipped byte and the default release.yml identity on every OS.
+#                 On Windows, install.sh runs in Git Bash, and the Scoop manifest goreleaser generates (with the
+#                 alias release.yml's `scoop` job adds) installs in PowerShell, from a local server because the
+#                 manifest's URL exists only for a real release; a manifest with the wrong hash must be refused.
+#   release       when a v* release exists: the documented install.sh from main, with no
+#                 overrides, against the latest release; and on Windows the Scoop bucket once it is published.
+#
+#   gh workflow run installers.yml --ref dev
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [dev]
+    paths:
+      - install.sh
+      - .goreleaser.yaml
+      - .github/workflows/installers.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: installers-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  GO_VERSION: "1.25.x" # go.mod's language floor (Appendix B D5)
+  # Scoop's installer at a pinned commit of ScoopInstaller/Install, checked before it runs. It fetches Scoop
+  # itself from ScoopInstaller/Scoop master: the Scoop client is what is under test here, as users get it.
+  SCOOP_INSTALLER_URL: https://raw.githubusercontent.com/ScoopInstaller/Install/1e2f334083d609986d8c8bc9e31ae8e87c39fab4/install.ps1
+  SCOOP_INSTALLER_SHA256: 94f983b190438311e006b957db7c8422709e0ba62a6c2ac04e278164108f2512
+  # release.yml's `scoop` job adds the aayu alias to the manifest goreleaser writes; keep the two filters equal.
+  SCOOP_ALIAS_FILTER: '.architecture |= map_values(.bin += [["aayudha.exe", "aayu"]])'
+
+jobs:
+  snapshot:
+    name: snapshot
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # keyless cosign signing
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      release: ${{ steps.meta.outputs.release }}
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.3
+      - uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          syft-version: v1.54.1
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          version: v2.18.3
+          args: release --snapshot --clean
+      - id: meta
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          echo "version=$(jq -r .version dist/metadata.json)" >> "$GITHUB_OUTPUT"
+          # The latest release, as install.sh resolves it (drafts and prereleases excluded).
+          release="$(gh api "repos/$REPO/releases/latest" --jq .tag_name 2>/dev/null || true)"
+          case "$release" in v[0-9]*) ;; *) release="" ;; esac
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+          echo "snapshot $(jq -r .version dist/metadata.json); latest v* release: ${release:-none}" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: installers-snapshot
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt
+            dist/checksums.txt.sigstore.json
+            dist/scoop/aayudha.json
+          retention-days: 7
+
+  install-sh-snapshot:
+    name: install.sh snapshot (${{ matrix.os }})
+    needs: snapshot
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash # Git Bash on Windows
+    env:
+      VERSION: ${{ needs.snapshot.outputs.version }}
+      IDENTITY: https://github.com/${{ github.workflow_ref }}
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: install.sh
+          sparse-checkout-cone-mode: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: installers-snapshot
+          path: ${{ runner.temp }}/assets
+      - name: git and git-lfs
+        run: |
+          set -euo pipefail
+          case "$RUNNER_OS" in
+            Linux) sudo apt-get update -q && sudo apt-get install -y -q git git-lfs ;;
+            macOS) HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 brew install git git-lfs ;;
+            Windows) ;; # Git for Windows ships git-lfs
+          esac
+          git --version && git lfs version
+          if command -v aayu >/dev/null 2>&1; then echo "::error::aayu is already on PATH; this is not a clean machine"; exit 1; fi
+          echo "cosign on PATH: $(command -v cosign || echo 'no (install.sh bootstraps its pinned cosign)')"
+      - name: install.sh refuses a flipped byte and a non-release signer
+        run: |
+          set -euo pipefail
+          case "$RUNNER_OS" in Linux) os=linux ext=tar.gz ;; macOS) os=darwin ext=tar.gz ;; Windows) os=windows ext=zip ;; esac
+          case "$(uname -m)" in x86_64) arch=amd64 ;; *) arch=arm64 ;; esac
+          archive="aayudha_${VERSION}_${os}_${arch}.${ext}"
+          assets="$RUNNER_TEMP/assets"
+          id_re="^$(printf '%s' "$IDENTITY" | sed 's/[][\.*^$+?(){}|]/\\&/g')\$"
+          t="$RUNNER_TEMP/refusals"; mkdir -p "$t"
+          # expect_refusal <case> <assets dir> <reason> [identity regexp]: install fails for that reason, installs nothing.
+          expect_refusal() {
+            if env AAYU_BASE_URL="$2" AAYU_VERSION="v$VERSION" AAYU_INSTALL_DIR="$t/$1-bin" ${4:+"AAYU_CERT_IDENTITY_REGEXP=$4"} \
+                 sh install.sh 2>"$t/$1.log"; then
+              cat "$t/$1.log"; echo "::error::$1: install.sh accepted it"; exit 1
+            fi
+            cat "$t/$1.log"
+            grep -qF "$3" "$t/$1.log" || { echo "::error::$1: refused for the wrong reason"; exit 1; }
+            if ls "$t/$1-bin"/aayu* >/dev/null 2>&1; then echo "::error::$1: a binary was installed"; exit 1; fi
+            echo "PASS $1: refused ($3)"
+          }
+          cp -r "$assets" "$t/flip"
+          perl -e 'open(F, "+<", $ARGV[0]) or die; binmode F; my $n = int((-s F) / 2); seek F, $n, 0; read F, my $c, 1;
+                   seek F, $n, 0; print F chr(ord($c) ^ 0xFF); close F' "$t/flip/$archive"
+          expect_refusal flipped-byte "$t/flip" "checksum mismatch" "$id_re"
+          expect_refusal non-release-signer "$assets" "signature verification failed"
+      - name: install.sh installs the signed snapshot
+        run: |
+          set -euo pipefail
+          id_re="^$(printf '%s' "$IDENTITY" | sed 's/[][\.*^$+?(){}|]/\\&/g')\$"
+          AAYU_BASE_URL="$RUNNER_TEMP/assets" AAYU_VERSION="v$VERSION" AAYU_CERT_IDENTITY_REGEXP="$id_re" \
+            sh install.sh 2>&1 | tee "$RUNNER_TEMP/install.log"
+          grep -qF "signature and checksum verified" "$RUNNER_TEMP/install.log"
+          case ":$PATH:" in # the default directory; install.sh names it when it is not on PATH yet
+            *":$HOME/.local/bin:"*) ;;
+            *) grep -qF "add $HOME/.local/bin to your PATH" "$RUNNER_TEMP/install.log" ;;
+          esac
+          dir="$HOME/.local/bin"
+          if [ "$RUNNER_OS" = Windows ]; then dir="$(cygpath -w "$dir")"; fi
+          echo "$dir" >> "$GITHUB_PATH"
+      - name: aayu is on PATH in a new shell
+        run: |
+          set -euo pipefail
+          command -v aayu && command -v aayudha
+          aayu version | tee "$RUNNER_TEMP/version.txt"
+          grep -qF "$VERSION" "$RUNNER_TEMP/version.txt"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          path: fresh
+      - name: aayu doctor passes in a fresh checkout
+        working-directory: fresh
+        run: |
+          set -uo pipefail
+          aayu doctor | tee "$RUNNER_TEMP/doctor.txt"; code=${PIPESTATUS[0]}
+          [ "$code" = 0 ] || { echo "::error::aayu doctor exited $code"; exit 1; }
+          if grep -q '^FAIL' "$RUNNER_TEMP/doctor.txt"; then echo "::error::aayu doctor reported a FAIL row"; exit 1; fi
+          grep -qE '^PASS +git ' "$RUNNER_TEMP/doctor.txt" && grep -qE '^PASS +git-lfs ' "$RUNNER_TEMP/doctor.txt"
+          { echo "### aayu doctor on $RUNNER_OS ($VERSION)"; echo '```text'; cat "$RUNNER_TEMP/doctor.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+  scoop-snapshot:
+    name: scoop snapshot (windows-latest)
+    needs: snapshot
+    runs-on: windows-latest
+    env:
+      VERSION: ${{ needs.snapshot.outputs.version }}
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: installers-snapshot
+          path: ${{ runner.temp }}/assets
+      - name: Install Scoop
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = Join-Path $env:RUNNER_TEMP 'scoop-install.ps1'
+          Invoke-WebRequest -Uri $env:SCOOP_INSTALLER_URL -OutFile $installer
+          if ((Get-FileHash $installer -Algorithm SHA256).Hash -ne $env:SCOOP_INSTALLER_SHA256) { throw 'Scoop installer checksum mismatch' }
+          & $installer -RunAsAdmin # runners are elevated; Scoop refuses an elevated install without this
+          Add-Content $env:GITHUB_PATH (Join-Path $env:USERPROFILE 'scoop\shims')
+      - name: Point the manifest at a local copy of the snapshot zip
+        shell: bash
+        run: |
+          set -euo pipefail
+          a="$RUNNER_TEMP/assets"
+          url="http://127.0.0.1:8765/aayudha_${VERSION}_windows_amd64.zip"
+          jq --arg url "$url" "$SCOOP_ALIAS_FILTER | .architecture[\"64bit\"].url = \$url" "$a/scoop/aayudha.json" > "$a/aayudha.json"
+          jq '.architecture["64bit"].hash = ("0" * 64)' "$a/aayudha.json" > "$a/aayudha-badhash.json"
+          cat "$a/aayudha.json"
+      - name: Scoop refuses a wrong hash, then installs the manifest
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $a = Join-Path $env:RUNNER_TEMP 'assets'
+          Start-Process python -ArgumentList '-m', 'http.server', '8765', '--bind', '127.0.0.1', '--directory', $a -WindowStyle Hidden
+          Start-Sleep -Seconds 3
+          $ErrorActionPreference = 'Continue'
+          $bad = scoop install (Join-Path $a 'aayudha-badhash.json') *>&1 | Out-String
+          Write-Output $bad
+          if ((Get-Command aayudha -ErrorAction SilentlyContinue) -or $bad -notmatch 'Hash check failed') { throw 'Scoop accepted a manifest with the wrong hash' }
+          Write-Output 'PASS wrong-hash: refused'
+          scoop uninstall aayudha *>&1 | Out-Null # clear whatever the refused install left behind
+          scoop cache rm aayudha *>&1 | Out-Null
+          $ErrorActionPreference = 'Stop'
+          scoop install (Join-Path $a 'aayudha.json')
+          if ($LASTEXITCODE -ne 0) { throw "scoop install exited $LASTEXITCODE" }
+      - name: aayu is on PATH in a new shell
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          (Get-Command aayu).Source; (Get-Command aayudha).Source
+          $v = aayu version
+          Write-Output $v
+          if (-not ($v -match [regex]::Escape($env:VERSION))) { throw "aayu version printed $v, want $env:VERSION" }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          path: fresh
+      - name: aayu doctor passes in a fresh checkout
+        shell: pwsh
+        working-directory: fresh
+        run: |
+          git --version; git lfs version
+          $out = aayu doctor
+          $code = $LASTEXITCODE
+          $out | Write-Output
+          if ($code -ne 0) { throw "aayu doctor exited $code" }
+          if ($out -match '^FAIL') { throw 'aayu doctor reported a FAIL row' }
+          "### aayu doctor via Scoop ($env:VERSION)`n``````text`n$($out -join "`n")`n``````" | Add-Content $env:GITHUB_STEP_SUMMARY
+
+  install-sh-release:
+    name: install.sh ${{ needs.snapshot.outputs.release }} (${{ matrix.os }})
+    needs: snapshot
+    if: needs.snapshot.outputs.release != ''
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash # Git Bash on Windows
+    env:
+      RELEASE: ${{ needs.snapshot.outputs.release }}
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - name: git and git-lfs
+        run: |
+          set -euo pipefail
+          case "$RUNNER_OS" in
+            Linux) sudo apt-get update -q && sudo apt-get install -y -q git git-lfs ;;
+            macOS) HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 brew install git git-lfs ;;
+            Windows) ;;
+          esac
+          git --version && git lfs version
+      - name: The documented install, with no overrides
+        run: |
+          set -euo pipefail
+          # The script the README pipes to sh, from main; saved first so the step log keeps what ran.
+          curl -fsSL -o "$RUNNER_TEMP/install.sh" https://raw.githubusercontent.com/rahulnakmol/agentic-ayudha/main/install.sh
+          sh "$RUNNER_TEMP/install.sh" 2>&1 | tee "$RUNNER_TEMP/install.log"
+          grep -qF "signature and checksum verified" "$RUNNER_TEMP/install.log"
+          dir="$HOME/.local/bin"
+          if [ "$RUNNER_OS" = Windows ]; then dir="$(cygpath -w "$dir")"; fi
+          echo "$dir" >> "$GITHUB_PATH"
+      - name: aayu is on PATH in a new shell
+        run: |
+          set -euo pipefail
+          aayu version | tee "$RUNNER_TEMP/version.txt"
+          grep -qF "${RELEASE#v}" "$RUNNER_TEMP/version.txt"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          path: fresh
+      - name: aayu doctor passes in a fresh checkout
+        working-directory: fresh
+        run: |
+          set -uo pipefail
+          aayu doctor | tee "$RUNNER_TEMP/doctor.txt"; code=${PIPESTATUS[0]}
+          [ "$code" = 0 ] || { echo "::error::aayu doctor exited $code"; exit 1; }
+          if grep -q '^FAIL' "$RUNNER_TEMP/doctor.txt"; then echo "::error::aayu doctor reported a FAIL row"; exit 1; fi
+          { echo "### aayu doctor on $RUNNER_OS ($RELEASE)"; echo '```text'; cat "$RUNNER_TEMP/doctor.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+  scoop-release:
+    name: scoop ${{ needs.snapshot.outputs.release }} (windows-latest)
+    needs: snapshot
+    if: needs.snapshot.outputs.release != ''
+    runs-on: windows-latest
+    env:
+      RELEASE: ${{ needs.snapshot.outputs.release }}
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - id: bucket
+        shell: bash
+        run: |
+          if curl -fsS -o /dev/null https://raw.githubusercontent.com/rahulnakmol/scoop-bucket/HEAD/aayudha.json; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::rahulnakmol/scoop-bucket has no aayudha.json yet (founder action, CONTRIBUTING.md); skipping the Scoop install."
+          fi
+      - name: Install Scoop
+        if: steps.bucket.outputs.published == 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = Join-Path $env:RUNNER_TEMP 'scoop-install.ps1'
+          Invoke-WebRequest -Uri $env:SCOOP_INSTALLER_URL -OutFile $installer
+          if ((Get-FileHash $installer -Algorithm SHA256).Hash -ne $env:SCOOP_INSTALLER_SHA256) { throw 'Scoop installer checksum mismatch' }
+          & $installer -RunAsAdmin
+          Add-Content $env:GITHUB_PATH (Join-Path $env:USERPROFILE 'scoop\shims')
+      - name: scoop install aayudha from the bucket
+        if: steps.bucket.outputs.published == 'true'
+        shell: pwsh
+        run: |
+          scoop bucket add rahulnakmol https://github.com/rahulnakmol/scoop-bucket
+          scoop install rahulnakmol/aayudha
+          if ($LASTEXITCODE -ne 0) { throw "scoop install exited $LASTEXITCODE" }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.bucket.outputs.published == 'true'
+        with:
+          persist-credentials: false
+          path: fresh
+      - name: aayu doctor passes in a fresh checkout
+        if: steps.bucket.outputs.published == 'true'
+        shell: pwsh
+        working-directory: fresh
+        run: |
+          $v = aayu version
+          if (-not ($v -match [regex]::Escape($env:RELEASE.TrimStart('v')))) { throw "aayu version printed $v, want $env:RELEASE" }
+          $out = aayu doctor
+          $code = $LASTEXITCODE
+          $out | Write-Output
+          if ($code -ne 0) { throw "aayu doctor exited $code" }
+          if ($out -match '^FAIL') { throw 'aayu doctor reported a FAIL row' }

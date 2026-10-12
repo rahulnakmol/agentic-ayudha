@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	_ "time/tzdata" // Windows and minimal Linux images have no zoneinfo; [time] tz must load everywhere (WP8.2)
 )
 
 // Clock counts business hours in an IANA time zone ([time] tz business_hours).

@@ -208,7 +208,8 @@ jobs:
           fi
           gh auth setup-git
           gh repo clone rahulnakmol/scoop-bucket bucket -- --depth 1
-          cp pkg/scoop/aayudha.json bucket/aayudha.json
+          # goreleaser cannot name a Scoop alias: add the aayu shim beside aayudha. installers.yml tests this filter.
+          jq '.architecture |= map_values(.bin += [["aayudha.exe", "aayu"]])' pkg/scoop/aayudha.json > bucket/aayudha.json
           cd bucket
           git config user.name "aayudha-release"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

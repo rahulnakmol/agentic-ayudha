@@ -4,8 +4,22 @@
 delivery pod: twelve seats, nine application layers, and 32 verbs that take work from a grilled idea to a
 measured release, with proof packs and human gates along the way.
 
-Status: **pre-0.1, bootstrap (M0)**. Nothing here is usable yet. The build plan is
+Status: **pre-0.1**. There is no `v*` release yet; v0.1.0 is the first. The build plan is
 [docs/BUILD-PLAN.md](docs/BUILD-PLAN.md); it is the source of truth for scope and sequencing.
+
+Documentation: the GitHub Pages site of this repository, built from `dev` by `aayu tell docs --site` (WP8.2).
+
+## Install
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rahulnakmol/agentic-ayudha/main/install.sh | sh
+aayu doctor
+```
+
+`install.sh` installs only a signed `v*` release: it checks the cosign signature of `checksums.txt` against this
+repository's `release.yml` workflow identity, then the archive's SHA-256. It runs on macOS, Linux, and Windows (Git
+Bash). [docs/getting-started.md](docs/getting-started.md) covers Scoop, Homebrew, and winget, and connecting Amp,
+Cursor, or Claude Code.
 
 ## Hosts
 

@@ -93,12 +93,18 @@ type UTM struct {
 
 // Problem is one reason a draft is refused.
 type Problem struct {
+	Page   string `json:"page,omitempty"` // the docs site page's source (tell docs --site)
 	Line   int    `json:"line"`
 	Ref    int    `json:"ref,omitempty"`
 	Reason string `json:"reason"`
 }
 
-func (p Problem) String() string { return fmt.Sprintf("line %d: %s", p.Line, p.Reason) }
+func (p Problem) String() string {
+	if p.Page != "" {
+		return fmt.Sprintf("%s line %d: %s", p.Page, p.Line, p.Reason)
+	}
+	return fmt.Sprintf("line %d: %s", p.Line, p.Reason)
+}
 
 // Draft is a checked draft.
 type Draft struct {
@@ -141,8 +147,10 @@ func refs(line, repo string) []int {
 // Check checks a Markdown draft for repo and returns it with UTM tags. Every
 // link to an issue or pull request of repo is a claim and must name a Feature
 // in proven (the claims rule); no word on the brand's avoid list may appear.
-// Fenced code blocks are not checked or tagged: a fence closes only on a run
-// of its own character at least as long, as CommonMark renders it.
+// Code is not checked or tagged, because GitHub renders no link in it: a
+// fenced block closes only on a run of its own character at least as long,
+// and an inline code span on the next backtick run of the same length, as
+// CommonMark renders them.
 func Check(md, repo string, proven map[int]Feature, b Brand, u UTM) (Draft, []Problem) {
 	var d Draft
 	var probs []Problem
@@ -167,30 +175,44 @@ func Check(md, repo string, proven map[int]Feature, b Brand, u UTM) (Draft, []Pr
 		if open != "" {
 			continue
 		}
-		for _, n := range refs(line, repo) {
+		spans := codeSpans(line)
+		prose := []byte(line)
+		for _, s := range spans {
+			for j := s[0]; j < s[1]; j++ {
+				prose[j] = ' '
+			}
+		}
+		for _, n := range refs(string(prose), repo) {
 			if _, ok := proven[n]; ok {
 				cited[n] = true
 				continue
 			}
 			probs = append(probs, Problem{Line: i + 1, Ref: n, Reason: fmt.Sprintf("#%d is not a Feature with authoritative packs; copy links only proven Features", n)})
 		}
-		for _, w := range word.FindAllString(linkURL.ReplaceAllString(line, " "), -1) {
+		for _, w := range word.FindAllString(linkURL.ReplaceAllString(string(prose), " "), -1) {
 			if avoid[strings.ToLower(w)] {
 				probs = append(probs, Problem{Line: i + 1, Reason: fmt.Sprintf("%q is on the brand's avoid list (%s)", w, b.Source)})
 			}
 		}
-		lines[i] = linkURL.ReplaceAllStringFunc(line, func(raw string) string {
-			trail := ""
-			for strings.ContainsAny(raw[len(raw)-1:], ".,;:!?") {
-				trail = raw[len(raw)-1:] + trail
-				raw = raw[:len(raw)-1]
-			}
-			tagged, ok := Tag(raw, u)
-			if ok {
-				d.Tagged++
-			}
-			return tagged + trail
-		})
+		var out strings.Builder
+		at := 0
+		for _, s := range append(spans, [2]int{len(line), len(line)}) {
+			out.WriteString(linkURL.ReplaceAllStringFunc(line[at:s[0]], func(raw string) string {
+				trail := ""
+				for strings.ContainsAny(raw[len(raw)-1:], ".,;:!?") {
+					trail = raw[len(raw)-1:] + trail
+					raw = raw[:len(raw)-1]
+				}
+				tagged, ok := Tag(raw, u)
+				if ok {
+					d.Tagged++
+				}
+				return tagged + trail
+			}))
+			out.WriteString(line[s[0]:s[1]])
+			at = s[1]
+		}
+		lines[i] = out.String()
 	}
 	for n := range cited {
 		d.Cited = append(d.Cited, n)
@@ -198,6 +220,44 @@ func Check(md, repo string, proven map[int]Feature, b Brand, u UTM) (Draft, []Pr
 	sort.Ints(d.Cited)
 	d.Copy = strings.Join(lines, "\n")
 	return d, probs
+}
+
+// codeSpans returns the byte ranges of a line's inline code spans: a run of n
+// backticks opens a span that the next run of exactly n closes; a run that
+// nothing closes is literal text (CommonMark).
+func codeSpans(line string) [][2]int {
+	run := func(i int) int {
+		j := i
+		for j < len(line) && line[j] == '`' {
+			j++
+		}
+		return j - i
+	}
+	var spans [][2]int
+	for i := 0; i < len(line); {
+		if line[i] != '`' {
+			i++
+			continue
+		}
+		n, closed := run(i), false
+		for j := i + n; j < len(line); {
+			if line[j] != '`' {
+				j++
+				continue
+			}
+			m := run(j)
+			if m == n {
+				spans = append(spans, [2]int{i, j + m})
+				i, closed = j+m, true
+				break
+			}
+			j += m
+		}
+		if !closed {
+			i += n
+		}
+	}
+	return spans
 }
 
 // Tag adds the UTM parameters to an absolute http(s) URL that has none; a URL

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	aayudha "github.com/rahulnakmol/agentic-ayudha"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 )
@@ -237,5 +238,51 @@ func TestTellPublishHumanOnly(t *testing.T) {
 	}
 	if code, out, _ := run(t, env, Options{Dir: dir}, "actions", "grep", "tell.publish"); code != 0 || !strings.Contains(out, `"login":"founder"`) {
 		t.Fatalf("actions log: %d %s", code, out)
+	}
+}
+
+// WP8.2: tell docs --site builds the docs site from the checkout, the
+// registry, and the embedded skills; a page that claims an unproven Feature
+// refuses the site and writes nothing.
+func TestTellDocsSite(t *testing.T) {
+	_, env, opts, dir, _, unproven, _ := shippedFixture(t)
+	opts.Assets = aayudha.Assets
+	readme := func(text string) { _ = os.WriteFile(filepath.Join(dir, "README.md"), []byte(text), 0o644) }
+	readme("# r\n\nThe [eligibility questionnaire](https://github.com/o/r/issues/1) ships with proof. See [CONSTRAINTS.md](CONSTRAINTS.md).\n")
+	_ = os.WriteFile(filepath.Join(dir, "CONSTRAINTS.md"), []byte("# Constraints\n"), 0o644)
+
+	site := filepath.Join(t.TempDir(), "site")
+	code, rep, errOut := tellRun(t, env, opts, "docs", "--site", site)
+	if code != 0 || len(rep.Cited) != 1 || rep.Cited[0] != 1 || len(rep.Problems) != 0 {
+		t.Fatalf("site: %d %+v %s", code, rep, errOut)
+	}
+	for file, want := range map[string]string{
+		"index.html":        `<a href="constraints.html">CONSTRAINTS.md</a>`,
+		"constraints.html":  `<h1 id="constraints">Constraints</h1>`,
+		"verbs.html":        `<h2 id="tell"><code>tell</code></h2>`,
+		"skills/tell.html":  `aayu tell docs --site _site`,
+		"skills/grill.html": `<a href="../verbs.html">Verbs</a>`,
+	} {
+		if b, err := os.ReadFile(filepath.Join(site, filepath.FromSlash(file))); err != nil || !strings.Contains(string(b), want) {
+			t.Errorf("%s lacks %s (%v)", file, want, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(site, "getting-started.html")); !os.IsNotExist(err) {
+		t.Errorf("a page without a source in the checkout was built: %v", err)
+	}
+
+	readme("# r\n\nBulk upload is next (#" + strconv.Itoa(unproven) + ").\n")
+	refused := filepath.Join(t.TempDir(), "refused")
+	code, out, _ := run(t, env, opts, "tell", "docs", "--repo", "o/r", "--site", refused)
+	if code != ExitBlocked || !strings.Contains(out, "refused: README.md line 3: #"+strconv.Itoa(unproven)+" is not a Feature") {
+		t.Fatalf("unproven claim: %d %s", code, out)
+	}
+	if _, err := os.Stat(refused); !os.IsNotExist(err) {
+		t.Fatalf("a refused site was written: %v", err)
+	}
+	for _, args := range [][]string{{"guide", "--site", refused}, {"docs", "--site", refused, "--from", "README.md"}, {"docs", "--site", site}} {
+		if code, _, errOut := run(t, env, opts, append([]string{"tell", "--repo", "o/r"}, args...)...); code != ExitUsage {
+			t.Errorf("%v: exit %d %s, want 2", args, code, errOut)
+		}
 	}
 }
