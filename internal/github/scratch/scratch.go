@@ -61,16 +61,8 @@ func Repo(t testing.TB, token string) string {
 	}
 	_ = json.Unmarshal(b, &r)
 	t.Cleanup(func() {
-		for i := 0; ; i++ { // 409 while another repository operation (a visibility change) is still running
-			code, b := call("DELETE", "/repos/"+r.FullName, nil)
-			if code == http.StatusConflict && i < 12 {
-				time.Sleep(5 * time.Second)
-				continue
-			}
-			if code != http.StatusNoContent {
-				t.Errorf("delete scratch repository %s: %d %s", r.FullName, code, b)
-			}
-			return
+		if code, b := call("DELETE", "/repos/"+r.FullName, nil); code != http.StatusNoContent {
+			t.Errorf("delete scratch repository %s: %d %s", r.FullName, code, b)
 		}
 	})
 	time.Sleep(2 * time.Second) // let the first commit and default labels settle

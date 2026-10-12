@@ -122,6 +122,10 @@ func TestReleaseLive(t *testing.T) {
 		admin = tok
 	}
 	repo := scratch.Repo(t, admin)
+	// Runs before scratch.Repo's delete: wait out a visibility change still in progress, which makes a delete 409.
+	t.Cleanup(func() {
+		liveAPI(t, admin, "PATCH", "/repos/"+repo, map[string]any{"description": "aayudha live test scratch repository; deleted by the test"})
+	})
 	api := func(token, method, path string, body any) map[string]any {
 		var out map[string]any
 		_ = json.Unmarshal(liveAPI(t, token, method, path, body), &out)

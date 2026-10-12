@@ -4,4 +4,4 @@
 
 [[criterion]]
 id = 1 # dogfood rolling snapshot with stamped stories
-tests = ["internal/cli:TestReleaseLadder", "internal/cli:TestReleaseFailsClosed"]
+tests = ["internal/cli:TestReleaseLadder", "internal/cli:TestReleaseFailsClosed", "internal/cli:TestReleaseRefusesBeforeLanding", "internal/cli:TestReleaseRedTagWorkflow"]

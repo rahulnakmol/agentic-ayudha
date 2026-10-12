@@ -641,11 +641,9 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		sm := reRun.FindStringSubmatch(p)
 		i := slices.IndexFunc(g.Runs, func(r WorkflowRun) bool { return r.ID == int64(atoi(sm[1])) })
 		switch {
-		case i < 0:
-			notFound()
-		case m == "GET" && sm[2] == "":
+		case i >= 0 && m == "GET" && sm[2] == "":
 			reply(200, g.Runs[i])
-		case m == "POST" && sm[2] != "" && g.OnRerun != nil:
+		case i >= 0 && m == "POST" && sm[2] != "" && g.OnRerun != nil:
 			g.OnRerun(&g.Runs[i])
 			w.WriteHeader(http.StatusCreated)
 		default:

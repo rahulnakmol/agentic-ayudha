@@ -177,20 +177,15 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 
 	g := &ledger.Writer{Dir: root, Repo: repo, Token: tok.Value}
 	gitOut := func(dir string, args ...string) (string, error) { return g.Output(ctx, dir, args...) }
-	if _, err := gitOut(root, "fetch", "--quiet", "--tags", "--force", "origin"); err != nil {
+	if _, err := gitOut(root, "fetch", "--quiet", "--prune", "origin"); err != nil {
 		return Wrap(ExitExternal, err)
 	}
-	srcSHA, err := gitOut(root, "rev-parse", "origin/"+src)
+	srcSHA, err := gitOut(root, "rev-parse", "origin/"+src, "origin/"+dst)
 	if err != nil {
-		return Errorf(ExitBlocked, "release: no %s branch on origin: %v", src, err)
+		return Errorf(ExitBlocked, "release: origin needs both %s and %s: %v", src, dst, err)
 	}
-	if _, err := gitOut(root, "rev-parse", "origin/"+dst); err != nil {
-		return Errorf(ExitBlocked, "release: no %s branch on origin: %v", dst, err)
-	}
-	revs, err := gitOut(root, "rev-list", "--no-merges", "origin/"+dst+"..origin/"+src)
-	if err != nil {
-		return Wrap(ExitExternal, err)
-	}
+	srcSHA, _, _ = strings.Cut(srcSHA, "\n")
+	revs, _ := gitOut(root, "rev-list", "--no-merges", "origin/"+dst+"..origin/"+src) // both refs exist; an empty range refuses below
 	now := e.Now().UTC()
 	ts := now.Format("20060102T1504Z")
 	p := Promotion{Repo: repo, Release: n, Version: version, Source: src, Target: dst, SourceSHA: srcSHA, PromotedBy: me.Login,
@@ -263,6 +258,10 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 			p.NotListed = append(p.NotListed, s)
 		}
 	}
+	notes, utm, err := e.releaseNotes(ctx, c, repo, &p, shipped)
+	if err != nil {
+		return err
+	}
 	if c.DryRun() {
 		p.DryRun = true
 		return e.Emit(p, func(out io.Writer) error { return promotionText(out, p) })
@@ -283,14 +282,10 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 	}
 
 	// 1. The candidate: the exact merge commit that will land.
-	tmp, err := os.MkdirTemp("", "aayu-promote-")
-	if err != nil {
-		return err
-	}
-	wt := filepath.Join(tmp, "wt")
+	wt := filepath.Join(e.stateDir(), "state", filepath.FromSlash(p.Candidate)) // git-ignored runtime state
 	defer func() {
 		_, _ = gitOut(root, "worktree", "remove", "--force", wt)
-		_ = os.RemoveAll(tmp)
+		_ = os.RemoveAll(wt)
 		_, _ = gitOut(root, "branch", "-D", p.Candidate)
 	}()
 	if _, err := gitOut(root, "worktree", "add", "--quiet", "-b", p.Candidate, wt, "origin/"+dst); err != nil {
@@ -326,10 +321,12 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 	if p.Gate.Conclusion != "success" {
 		return Errorf(ExitBlocked, "release: the %s gate failed on %s (%s); nothing was promoted", gateFor(to), short(p.Commit), p.Gate.URL)
 	}
-	if arts, _, err := c.REST.Actions.ListWorkflowRunArtifacts(ctx, owner, name, p.Gate.ID, &gh.ListOptions{PerPage: 100}); err == nil {
-		for _, a := range arts.Artifacts {
-			p.Artifacts = append(p.Artifacts, Artifact{Name: a.GetName(), Digest: a.GetDigest(), Size: a.GetSizeInBytes()})
-		}
+	arts, _, err := c.REST.Actions.ListWorkflowRunArtifacts(ctx, owner, name, p.Gate.ID, &gh.ListOptions{PerPage: 100})
+	if err != nil {
+		return err
+	}
+	for _, a := range arts.Artifacts {
+		p.Artifacts = append(p.Artifacts, Artifact{Name: a.GetName(), Digest: a.GetDigest(), Size: a.GetSizeInBytes()})
 	}
 
 	// 3. Land the gated commit (a fast-forward) and tag it.
@@ -368,7 +365,7 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 	}
 
 	// 4. Stamp, tell, record, and make measure due.
-	if err := e.bookkeep(ctx, c, tok, repo, is, &p, shipped, now, to == "main"); err != nil {
+	if err := e.bookkeep(ctx, c, tok, repo, is, &p, notes, utm, now, to == "main"); err != nil {
 		return Errorf(ExitExternal, "release: %s is on %s as %q, tagged %s, but the bookkeeping after landing failed: %v; finish the stamps, notes, and Shipping evidence by hand",
 			short(p.Commit), dst, p.Message, p.Tag, err)
 	}
@@ -381,7 +378,7 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 // bookkeep runs after the gated commit landed: it stamps the shipped stories
 // released, publishes the release notes, records the rung and the measure
 // due dates on the ledger, and writes the Release's Shipping evidence.
-func (e *Env) bookkeep(ctx context.Context, c *github.Client, tok identity.Token, repo string, is *gh.Issue, p *Promotion, shipped []int, now time.Time, final bool) error {
+func (e *Env) bookkeep(ctx context.Context, c *github.Client, tok identity.Token, repo string, is *gh.Issue, p *Promotion, notes tell.Draft, utm tell.UTM, now time.Time, final bool) error {
 	owner, name, _ := github.SplitRepo(repo)
 	for _, s := range p.Stories {
 		x, _, err := c.REST.Issues.Get(ctx, owner, name, s)
@@ -392,9 +389,11 @@ func (e *Env) bookkeep(ctx context.Context, c *github.Client, tok identity.Token
 			return err
 		}
 	}
-	if err := e.releaseNotes(ctx, c, tok, repo, p, shipped); err != nil {
+	pub, err := e.publishTell(ctx, c, tok, p.PromotedBy, repo, "release", p.Tag, p.Tag, notes, utm)
+	if err != nil {
 		return err
 	}
+	p.Notes = pub.Copy
 	due, err := e.measureDue(ctx, c, repo, p, now)
 	if err != nil {
 		return err
@@ -678,23 +677,29 @@ func parents(ctx context.Context, c *github.Client, repo string, n int) ([]*gh.I
 	return out, nil
 }
 
-// releaseNotes is `tell release`: notes for the shipped stories, citing only
-// proven Features, published on the ledger and the tag's GitHub Release.
-func (e *Env) releaseNotes(ctx context.Context, c *github.Client, tok identity.Token, repo string, p *Promotion, shipped []int) error {
+// releaseNotes is `tell release`: notes for the shipped stories that cite
+// only proven Features, checked by tell before anything lands (a story title
+// with an avoided word refuses the promotion, not its bookkeeping).
+func (e *Env) releaseNotes(ctx context.Context, c *github.Client, repo string, p *Promotion, shipped []int) (tell.Draft, tell.UTM, error) {
 	owner, name, _ := github.SplitRepo(repo)
+	utm := tell.UTM{Source: name, Medium: "release", Campaign: p.Tag}
+	brand, err := tell.LoadBrand(config.RepoRoot(e.Dir))
+	if err != nil {
+		return tell.Draft{}, utm, Wrap(ExitUsage, err)
+	}
 	proven, _, _, err := e.provenFeatures(ctx, c, repo)
 	if err != nil {
-		return err
+		return tell.Draft{}, utm, err
 	}
 	var stories []tell.Shipped
 	for _, s := range shipped {
 		x, _, err := c.REST.Issues.Get(ctx, owner, name, s)
 		if err != nil {
-			return Wrap(ExitExternal, err)
+			return tell.Draft{}, utm, err
 		}
 		ps, err := parents(ctx, c, repo, s)
 		if err != nil {
-			return Wrap(ExitExternal, err)
+			return tell.Draft{}, utm, err
 		}
 		st := tell.Shipped{Number: s, Title: x.GetTitle()}
 		for _, q := range ps {
@@ -709,23 +714,11 @@ func (e *Env) releaseNotes(ctx context.Context, c *github.Client, tok identity.T
 	if ts, ok := strings.CutPrefix(p.Message, "Rolling snapshot: "); ok {
 		title = "Rolling snapshot " + ts + " (" + p.Tag + ")"
 	}
-	notes := tell.ReleaseNotes(title, proven, stories)
-	root := config.RepoRoot(e.Dir)
-	brand, err := tell.LoadBrand(root)
-	if err != nil {
-		return Wrap(ExitUsage, err)
-	}
-	utm := tell.UTM{Source: name, Medium: "release", Campaign: p.Tag}
-	d, probs := tell.Check(notes, repo, proven, brand, utm)
+	d, probs := tell.Check(tell.ReleaseNotes(title, proven, stories), repo, proven, brand, utm)
 	if len(probs) > 0 {
-		return Errorf(ExitBlocked, "release notes fail tell's check: %s", probs[0])
+		return d, utm, Errorf(ExitBlocked, "release: the release notes fail tell's check (%s); fix the story title or the brand, then promote", probs[0])
 	}
-	pub, err := e.publishTell(ctx, c, tok, p.PromotedBy, repo, "release", p.Tag, p.Tag, d, utm)
-	if err != nil {
-		return err
-	}
-	p.Notes = pub.Copy
-	return nil
+	return d, utm, nil
 }
 
 // measureDue makes every Goal and Initiative above a released story due for
