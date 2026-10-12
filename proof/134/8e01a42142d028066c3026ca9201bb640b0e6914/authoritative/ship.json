@@ -1,0 +1,61 @@
+{
+  "repo": "rahulnakmol/agentic-ayudha",
+  "story": 134,
+  "pr": 160,
+  "pr_head_sha": "8e01a42142d028066c3026ca9201bb640b0e6914",
+  "merge_commit": "3f5336fdb956cd47916da8bb081c204fa174c69a",
+  "pack": "proof/134/8e01a42142d028066c3026ca9201bb640b0e6914/authoritative/pack.json",
+  "pack_landed": "run 38261374475 of the base branch's aayudha-merge-gate.yml; landed by rahulnakmol through aayu ship because CI cannot write the ledger without a bot App (Appendix B D1, D-4.10a)",
+  "human_pass": {
+    "kind": "solo-bypass",
+    "login": "rahulnakmol",
+    "comment_url": "https://github.com/rahulnakmol/agentic-ayudha/pull/160#issuecomment-6126293278",
+    "commit": "8e01a42142d028066c3026ca9201bb640b0e6914",
+    "note": "solo mode: GitHub refuses self-approval and no bot App exists, so no second person could review (Appendix B D2)"
+  },
+  "footprint": [
+    "L01",
+    "L02",
+    "L09"
+  ],
+  "pass_rule": {
+    "as": "any-human",
+    "never_layers": [
+      "L09"
+    ],
+    "never_paths": [
+      "examples/benefits-qa/deploy/doc.go",
+      "examples/benefits-qa/deploy/serve.sh",
+      "examples/benefits-qa/deploy/serve_test.go"
+    ]
+  },
+  "streak": {
+    "threshold": 20,
+    "layers": {
+      "L01": 0,
+      "L02": 0,
+      "L09": 0
+    },
+    "never_layers": [
+      "L09"
+    ],
+    "autonomous": false
+  },
+  "plan_review": {
+    "required": true,
+    "layers": [
+      "L09"
+    ],
+    "bypass": {
+      "as": "solo-bypass",
+      "reviewer": "none (solo mode)",
+      "recorded_by": "rahulnakmol",
+      "recorded_at": "2026-10-12T07:30:38Z",
+      "comment_url": "https://github.com/rahulnakmol/agentic-ayudha/issues/134#issuecomment-6119769819",
+      "note": "solo mode: no second person exists to review the plan, and no one reviewed it as the Engineering Manager (Appendix B D2)"
+    }
+  },
+  "actions_segment": "actions/2026-10-12/cli-20261012T142820Z.jsonl",
+  "shipped_at": "2026-10-12T14:28:31Z",
+  "shipped_by": "rahulnakmol"
+}
