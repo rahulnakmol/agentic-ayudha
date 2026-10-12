@@ -186,7 +186,7 @@ func (e *Env) confirm(question string) bool {
 // runHook is the single entry point for host hooks (`aayu hook <name> --host <host>`).
 // Exit code 2 blocks the host's action, per the Claude Code, Cursor, and Amp
 // plugin hook protocols.
-func runHook(_ context.Context, e *Env, in Values) error {
+func runHook(ctx context.Context, e *Env, in Values) error {
 	name := in.String("name")
 	known := false
 	for _, h := range hosts.Hooks {
@@ -203,6 +203,11 @@ func runHook(_ context.Context, e *Env, in Values) error {
 	r, err := hosts.RunHook(name, verbs.HostID(e.Host), config.RepoRoot(e.Dir), e.PauseFile())
 	if err != nil {
 		return Wrap(ExitUsage, err)
+	}
+	if name == "pre-tool" {
+		if reason := e.haltCached(ctx); reason != "" {
+			r = hosts.Deny(verbs.HostID(e.Host), fmt.Sprintf("aayudha: the repository is halted (%s): %s. A human clears it with `aayu resume`.", HaltVariable, reason))
+		}
 	}
 	fmt.Fprint(e.Out, r.Stdout)
 	if r.Code != 0 {

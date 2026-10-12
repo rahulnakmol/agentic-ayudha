@@ -71,6 +71,7 @@ var sections = []section{
 			{"autonomy.streak", "Consecutive correction-free merges on a layer before agents may merge on it without a human pass. Computed by the protected streak workflow from merged-PR history, never stored where an agent can write it (V4).", "WP5.7"},
 			{"autonomy.never", "Layers that always need a human CODEOWNER approval and an EM plan-time review, whatever the streak: domain/policy, operational data/state, and platform.", proposed},
 			{"autonomy.approver", "GitHub login that gives the human pass in solo mode. Empty until `init` sets it.", "WP5.5"},
+			{"autonomy.correction_days", "Days after a merge in which a Bug or Incident that links the PR counts as a correction and resets the streak of every layer the PR touched.", "proposed (WP5.7)"},
 			{"autonomy.budget.wall_hours", "Wall-clock hours one `build` may run before the story is marked `status:blocked` and the owner is paged.", proposed},
 			{"autonomy.budget.cost_usd", "Model spend, in USD, one `build` may use before it is blocked.", proposed},
 			{"autonomy.budget.attempts", "Failed checkpoint attempts before a story is blocked. A second failure on a never-layer blocks regardless.", proposed},

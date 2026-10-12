@@ -1,0 +1,73 @@
+# aayudha autonomy streak (docs/BUILD-PLAN.md WP5.7, V4). Installed into product repos by `aayu init --gates`
+# as .github/workflows/aayudha-streak.yml; the template is embedded in the aayudha binary. Protected path.
+#
+# Computes the streak of every layer from merged-PR history (`aayudha status --streak`): consecutive
+# correction-free agent merges since the newest correction (changes-requested review, a human's commit on the
+# PR, a post-pass fix or rebuild disposition, a revert, a linked Bug or Incident within [autonomy]
+# correction_days, or the aayu:correction label). Nothing stores the streak where an agent could write it.
+#
+# New corrections are appended to autonomy/corrections.jsonl on the ledger branch, which only the bot App
+# may push (Appendix B D1): the workflow token can never write it. Without the App (AAYUDHA_APP_CLIENT_ID and
+# AAYUDHA_APP_PRIVATE_KEY, set by `aayu init --identity`) the streak is still computed and shown in the job
+# summary, and the ledger write is skipped with a notice.
+name: aayudha-streak
+
+on:
+  push:
+    branches: [dev]
+  schedule:
+    - cron: "17 5 * * *" # daily: a Bug or Incident can link a PR days after it merged
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+
+concurrency:
+  group: aayudha-streak
+  cancel-in-progress: false
+
+jobs:
+  streak:
+    name: aayudha/streak
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Mint the bot token (ledger writes)
+        id: app
+        if: vars.AAYUDHA_APP_CLIENT_ID != ''
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.AAYUDHA_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AAYUDHA_APP_PRIVATE_KEY }}
+          permission-contents: write
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.25.x"
+          cache: false
+      - name: Install aayudha {{VERSION}}
+        run: go install github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@{{VERSION}}
+      - name: Streak
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          AAYU_BOT_TOKEN: ${{ steps.app.outputs.token }}
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$AAYU_BOT_TOKEN" ]]; then
+            aayudha status --streak --apply --ci --repo "$REPO" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::notice::No bot App (AAYUDHA_APP_CLIENT_ID): the streak is computed, but new corrections are not written to the ledger, which the workflow token cannot push (D1). Run aayu init --identity to create the App."
+            aayudha status --streak --ci --repo "$REPO" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi

@@ -30,11 +30,17 @@ aayu:
       type: bool
       required: false
       positional: false
-      description: "Post the replace-in-place Goal comments and close Features the parent-close rule allows."
+      description: "Post the replace-in-place Goal comments and close Features the parent-close rule allows; with --streak, record new corrections on the ledger."
+    - name: streak
+      type: bool
+      required: false
+      positional: false
+      description: "Compute the autonomy streak of every layer from merged-PR history instead of the rollups (WP5.7)."
   outputs:
     - "rollup"
     - "goal-comment"
     - "digest"
+    - "streaks"
   gates: []
   identity: bot
   mode: none

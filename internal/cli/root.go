@@ -111,6 +111,9 @@ Exit codes:
 			}
 		}
 		if ok && cmd.GroupID == "verbs" && !c.ReadOnly {
+			if err := e.checkHalt(cmd.Context()); err != nil {
+				return err
+			}
 			if root := config.RepoRoot(e.Dir); root != "" {
 				if err := upgrade.Check(root, upgrade.Current); err != nil {
 					return Errorf(ExitUsage, "%s: refused: %v (read-only commands still work)", c.Name, err)
@@ -238,7 +241,15 @@ func newCommand(e *Env, c verbs.Command, group string) *cobra.Command {
 		if !ok {
 			return Errorf(ExitUsage, "%s: not implemented yet (lands in %s)", c.Name, c.WP)
 		}
-		return classify(h(cmd.Context(), e, vals))
+		if group != "verbs" || c.ReadOnly {
+			return classify(h(cmd.Context(), e, vals))
+		}
+		ctx, stop := e.watchHalt(cmd.Context())
+		err := h(ctx, e, vals)
+		if herr := stop(); herr != nil {
+			return herr
+		}
+		return classify(err)
 	}
 	return cmd
 }

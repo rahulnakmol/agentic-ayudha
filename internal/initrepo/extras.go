@@ -29,13 +29,17 @@ var readyGuardTemplate string
 //go:embed aayudha-triage.yml
 var triageTemplate string
 
+//go:embed aayudha-streak.yml
+var streakTemplate string
+
 // Gate workflows `init --gates` installs: exactly the ones whose WP this binary
-// contains (rule 1a): the WP1.4 broker, the WP2.7 Ready guard, and the WP2.9 triage. The merge gate (WP4.8), streak (WP5.7), and loop
+// contains (rule 1a): the WP1.4 broker, the WP2.7 Ready guard, the WP2.9 triage, and the WP5.7 streak. The merge gate (WP4.8) and loop
 // workflows (WP7.1) join this list in their own WPs.
 const (
 	TokenWorkflow      = "aayudha-token.yml"
 	ReadyGuardWorkflow = "aayudha-ready-guard.yml"
 	TriageWorkflow     = "aayudha-triage.yml"
+	StreakWorkflow     = "aayudha-streak.yml"
 )
 
 // GateWorkflows renders the workflows init --gates installs, by file name.
@@ -45,6 +49,7 @@ func GateWorkflows(version string) map[string][]byte {
 		TokenWorkflow:      identity.BrokerWorkflow,
 		ReadyGuardWorkflow: []byte(strings.ReplaceAll(readyGuardTemplate, "{{VERSION}}", GuardVersion(version))),
 		TriageWorkflow:     []byte(strings.ReplaceAll(triageTemplate, "{{VERSION}}", GuardVersion(version))),
+		StreakWorkflow:     []byte(strings.ReplaceAll(streakTemplate, "{{VERSION}}", GuardVersion(version))),
 	}
 }
 

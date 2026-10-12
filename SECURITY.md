@@ -101,10 +101,12 @@ act.
 
 ### 1. Contain
 
-1. **Halt.** Run `aayu halt`. It sets a repository variable that every workflow and verb checks before it
-   writes (n/a until WP5.7). Until then, by hand:
-   - disable every GitHub Actions workflow (`gh workflow disable <name>` for each, or Settings → Actions →
-     Disable actions);
+1. **Halt.** Run `aayu halt --reason "<why>"`. It sets the repository variable `AAYUDHA_HALT`: the first step of
+   every aayudha workflow job fails while it is set, every verb refuses to start (exit 4), a running verb stops
+   within one poll (30 s), and the host pre-tool hook blocks agent tool calls. It does not cancel workflow runs
+   already past their first step and cannot stop a compromised binary that ignores it, so also:
+   - cancel in-progress runs (`gh run cancel <id>`) and, if the binary itself is suspect, disable workflows
+     (`gh workflow disable <name>`, or Settings → Actions → Disable actions);
    - revoke the tokens agents use (see [Leaked credentials](#leaked-credentials));
    - stop any running agent sessions.
 2. **Yank the release** if a release is affected: delete the GitHub release or mark it as compromised in its
@@ -126,8 +128,8 @@ act.
 ### 3. Recover
 
 1. Ship a new signed release with the fix (cosign signature and SLSA provenance, `release.yml`).
-2. Run `aayu resume` to clear the halt variable (n/a until WP5.7; until then re-enable workflows by hand and
-   re-issue tokens).
+2. Run `aayu resume` to clear the halt variable (and the `[budget]` breaker's pause), re-enable any workflows you
+   disabled by hand, and re-issue tokens.
 3. Publish the GitHub security advisory with affected versions, fixed version, and the steps users must take
    (upgrade, re-install skills, rotate their own tokens).
 

@@ -168,6 +168,11 @@
           },
           "additionalProperties": false,
           "type": "object"
+        },
+        "correction_days": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Days after a merge in which a linked Bug or Incident counts as a correction of the PR."
         }
       },
       "additionalProperties": false,

@@ -16,6 +16,12 @@ jobs:
   rerun:
     runs-on: ubuntu-latest
     steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
       - name: Re-run protected-paths for the reviewed head commit
         env:
           GH_TOKEN: ${{ github.token }}

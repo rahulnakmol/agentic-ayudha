@@ -47,6 +47,7 @@ skipped_blocks_ship = true
 streak = 20
 never = ["L04", "L07", "L09"]
 approver = ""
+correction_days = 14
 
 [autonomy.budget]
 wall_hours = 8

@@ -131,6 +131,9 @@ type GitHub struct {
 	App        map[string]any // what /app-manifests/{code}/conversions returns
 
 	Files map[string]string // repository file path -> content, served by the contents API for any ref
+	// Static answers GET requests the fake does not model (pull requests and
+	// their commits, files, and reviews), keyed by path without the query.
+	Static map[string]any
 
 	// Fail makes the request with this "METHOD /path" fail with a 500 once
 	// it has succeeded After times.
@@ -272,6 +275,10 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 	notFound := func() { reply(http.StatusNotFound, map[string]any{"message": "Not Found"}) }
 	str := func(k string) string { s, _ := body[k].(string); return s }
 
+	if v, ok := g.Static[path]; ok && r.Method == "GET" {
+		reply(200, v)
+		return
+	}
 	switch m, p := r.Method, path; {
 	case m == "GET" && p == "/user":
 		reply(200, map[string]any{"login": g.Viewer, "type": "User"})
@@ -347,6 +354,20 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		g.Variables[str("name")] = str("value")
 		w.WriteHeader(201)
+	case (m == "GET" || m == "PATCH") && strings.HasPrefix(p, repo+"/actions/variables/"):
+		name := strings.TrimPrefix(p, repo+"/actions/variables/")
+		v, ok := g.Variables[name]
+		if !ok {
+			notFound()
+			return
+		}
+		if m == "PATCH" {
+			v = str("value")
+			g.Variables[name] = v
+			w.WriteHeader(204)
+			return
+		}
+		reply(200, map[string]any{"name": name, "value": v})
 	case m == "DELETE" && strings.HasPrefix(p, repo+"/actions/variables/"):
 		delete(g.Variables, strings.TrimPrefix(p, repo+"/actions/variables/"))
 		w.WriteHeader(204)
