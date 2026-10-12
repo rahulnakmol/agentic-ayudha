@@ -106,12 +106,20 @@ type run struct {
 	st           Stats
 }
 
-func simulate(cfg Config, s *store.Store) (run, error) {
+// Validate checks a configuration before anything runs or is written.
+func (cfg Config) Validate() error {
 	if cfg.Channel != ChannelHRTicket && cfg.Channel != ChannelBenefitsQA {
-		return run{}, fmt.Errorf("unknown channel %q (want %s or %s)", cfg.Channel, ChannelHRTicket, ChannelBenefitsQA)
+		return fmt.Errorf("unknown channel %q (want %s or %s)", cfg.Channel, ChannelHRTicket, ChannelBenefitsQA)
 	}
 	if cfg.Days <= Horizon || cfg.Users <= 0 {
-		return run{}, fmt.Errorf("need more than %d days and at least one user", Horizon)
+		return fmt.Errorf("need more than %d days and at least one user", Horizon)
+	}
+	return nil
+}
+
+func simulate(cfg Config, s *store.Store) (run, error) {
+	if err := cfg.Validate(); err != nil {
+		return run{}, err
 	}
 	rng := rand.New(rand.NewPCG(cfg.Seed, cfg.Seed^0x5eed))
 	r := run{st: Stats{Users: cfg.Users}}

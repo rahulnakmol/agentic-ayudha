@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/analytics"
@@ -39,27 +40,42 @@ func run(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("-from: %w", err)
 	}
+	cfg := analytics.Config{Channel: *channel, Seed: *seed, From: start, Days: *days, Users: *users}
+	if err := cfg.Validate(); err != nil {
+		return err
+	}
 	s, err := store.Load()
 	if err != nil {
 		return err
 	}
-	w := stdout
-	var f *os.File
-	if *out != "" {
-		if f, err = os.Create(*out); err != nil {
-			return err
-		}
-		w = f
-	}
-	st, err := analytics.Simulate(analytics.Config{Channel: *channel, Seed: *seed, From: start, Days: *days, Users: *users}, s, w)
-	if f != nil {
-		if cerr := f.Close(); err == nil {
-			err = cerr // a failed close can lose the last writes
-		}
+	var st analytics.Stats
+	if *out == "" {
+		st, err = analytics.Simulate(cfg, s, stdout)
+	} else {
+		st, err = writeFile(*out, func(w io.Writer) (analytics.Stats, error) { return analytics.Simulate(cfg, s, w) })
 	}
 	if err != nil {
 		return err
 	}
 	_, err = fmt.Fprintf(stderr, "simulate: %s, seed %d: %d users, %d questions, %d events\n", *channel, *seed, st.Users, st.Questions, st.Events)
 	return err
+}
+
+// writeFile writes to a temporary file beside path and renames it over path
+// only when write and close succeed, so a failed run never truncates or
+// half-writes an existing export.
+func writeFile(path string, write func(io.Writer) (analytics.Stats, error)) (analytics.Stats, error) {
+	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return analytics.Stats{}, err
+	}
+	defer func() { _ = os.Remove(f.Name()) }() // a no-op after the rename
+	st, err := write(f)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Rename(f.Name(), path)
+	}
+	return st, err
 }

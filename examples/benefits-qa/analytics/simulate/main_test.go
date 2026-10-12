@@ -23,6 +23,18 @@ func TestRun(t *testing.T) {
 	if err := run([]string{"-from", "2026-09-14", "-users", "3"}, &stdout, &stderr); err != nil || !strings.Contains(stdout.String(), "benefits_visit") {
 		t.Errorf("stdout run: %v %q", err, stdout.String())
 	}
+	// A refused configuration leaves an existing file untouched.
+	keep := filepath.Join(t.TempDir(), "keep.jsonl")
+	_ = os.WriteFile(keep, []byte("committed export\n"), 0o644)
+	if err := run([]string{"-from", "2026-09-14", "-channel", "fax", "-out", keep}, &bytes.Buffer{}, &bytes.Buffer{}); err == nil {
+		t.Error("unknown channel accepted")
+	}
+	if b, _ := os.ReadFile(keep); string(b) != "committed export\n" {
+		t.Errorf("a refused run changed the output file: %q", b)
+	}
+	if entries, _ := os.ReadDir(filepath.Dir(keep)); len(entries) != 1 {
+		t.Errorf("a refused run left files behind: %v", entries)
+	}
 	for _, args := range [][]string{{"-from", "yesterday"}, {"-from", "2026-09-14", "-channel", "fax"}, {"-nope"}, {"-from", "2026-09-14", "-out", filepath.Join(t.TempDir(), "no", "dir", "x")}} {
 		if err := run(args, &bytes.Buffer{}, &bytes.Buffer{}); err == nil {
 			t.Errorf("%v accepted", args)
