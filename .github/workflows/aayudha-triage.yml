@@ -1,0 +1,66 @@
+# aayudha triage (docs/BUILD-PLAN.md WP2.9). Installed into product repos by `aayu init --gates` as
+# .github/workflows/aayudha-triage.yml; the template is embedded in the aayudha binary.
+#
+# Classifies a new intake issue (label `intake`) as Feedback, Bug, or Incident and records it in labels only.
+# This is the only aayudha workflow whose token can write issues and nothing else: the bot App token minted
+# here has issues: write alone, and without an App the workflow token is limited the same way by
+# `permissions`. aayudha also refuses any non-label write for triage (the labels-only capability), and the
+# issue text reaches the model only as untrusted data.
+#
+# Setup: the model key as a repository secret (AAYU_SECRET_AI_GATEWAY with [models.gateway] in
+# .aayudha/config.toml, or a provider key such as AAYU_SECRET_ANTHROPIC).
+name: aayudha-triage
+
+on:
+  issues:
+    types: [opened, labeled]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: aayudha-triage-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  triage:
+    name: aayudha/triage
+    if: contains(github.event.issue.labels.*.name, 'intake')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Mint the bot token (issues write only)
+        id: app
+        if: vars.AAYUDHA_APP_CLIENT_ID != ''
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.AAYUDHA_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AAYUDHA_APP_PRIVATE_KEY }}
+          permission-issues: write
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.25.x"
+          cache: false
+      - name: Install aayudha dev
+        run: go install github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@dev
+      - name: Triage
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          AAYU_BOT_TOKEN: ${{ steps.app.outputs.token }}
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+          AAYU_SECRET_AI_GATEWAY: ${{ secrets.AAYU_SECRET_AI_GATEWAY }}
+          AAYU_SECRET_ANTHROPIC: ${{ secrets.AAYU_SECRET_ANTHROPIC }}
+          AAYU_SECRET_OPENAI: ${{ secrets.AAYU_SECRET_OPENAI }}
+          ISSUE: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        run: aayudha triage "$ISSUE" --ci --repo "$REPO"
