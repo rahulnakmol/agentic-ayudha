@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/doctor","Test":"TestOptionalToolsNamesFloors"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/doctor","Test":"TestOptionalToolsNamesFloors","Output":"=== RUN   TestOptionalToolsNamesFloors\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/doctor","Test":"TestOptionalToolsNamesFloors","Output":"--- PASS: TestOptionalToolsNamesFloors (0.01s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/doctor","Test":"TestOptionalToolsNamesFloors"}
