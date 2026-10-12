@@ -10,14 +10,7 @@ package gcp
 
 import (
 	"context"
-	"crypto"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/sha256"
-	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
-	"encoding/pem"
 	"fmt"
 	"io"
 	"net/http"
@@ -32,11 +25,8 @@ import (
 
 // Endpoints.
 const (
-	TokenURL       = "https://oauth2.googleapis.com/token"
-	STSURL         = "https://sts.googleapis.com/v1/token"
-	IAMCredentials = "iamcredentials.googleapis.com"
-	BigQuery       = "bigquery.googleapis.com"
-	ResourceMgr    = "cloudresourcemanager.googleapis.com"
+	BigQuery    = "bigquery.googleapis.com"
+	ResourceMgr = "cloudresourcemanager.googleapis.com"
 )
 
 // Scopes are the OAuth scopes a minted token carries: read-only, so the
@@ -75,16 +65,6 @@ var (
 	location   = regexp.MustCompile(`^[A-Za-z0-9-]{2,30}$`)
 )
 
-// key is a service account JSON key.
-type key struct {
-	Type         string `json:"type"`
-	ClientEmail  string `json:"client_email"`
-	PrivateKey   string `json:"private_key"`
-	PrivateKeyID string `json:"private_key_id"`
-	TokenURI     string `json:"token_uri"`
-	rsa          *rsa.PrivateKey
-}
-
 // Client reads one GA4 BigQuery export dataset.
 type Client struct {
 	hc       *http.Client
@@ -92,7 +72,7 @@ type Client struct {
 	project  string
 	dataset  string
 	location string
-	key      *key
+	id       cloud.Google
 	env      cloud.Env
 	tokens   cloud.Cache
 	// Sleep waits between polls of an unfinished query; tests make it instant.
@@ -114,148 +94,29 @@ func New(c integrations.Conn, rt http.RoundTripper, env cloud.Env) (*Client, err
 	if (c.Auth == "oidc" || c.Identity != "") && !saEmail.MatchString(c.Identity) {
 		return nil, fmt.Errorf("%w: [integrations.%s] identity = %q: want the service account email (<name>@<project>.iam.gserviceaccount.com)", integrations.ErrNotConfigured, c.Name, c.Identity)
 	}
-	cl := &Client{conn: c, project: p, dataset: d, location: c.Region, env: env, Sleep: time.Sleep}
+	cl := &Client{conn: c, project: p, dataset: d, location: c.Region, env: env, Sleep: time.Sleep,
+		id: cloud.Google{Auth: c.Auth, Federation: c.Federation, ServiceAccount: c.Identity}}
 	if c.StoredKey() {
-		k, err := parseKey(c.Key)
+		k, err := cloud.ParseServiceAccountKey(c.Key)
 		if err != nil {
 			return nil, fmt.Errorf("%w: [integrations.%s] secret %q: %w", integrations.ErrNotConfigured, c.Name, c.Secret, err)
 		}
-		cl.key = k
+		cl.id.Key = k
 	}
 	path := regexp.MustCompile
 	cl.hc = integrations.Client(rt,
 		integrations.Allow{Method: http.MethodPost, Host: "oauth2.googleapis.com", Path: path(`^/token$`)},
 		integrations.Allow{Method: http.MethodPost, Host: "sts.googleapis.com", Path: path(`^/v1/token$`)},
-		integrations.Allow{Method: http.MethodPost, Host: IAMCredentials, Path: path(`^/v1/projects/-/serviceAccounts/[^/]+:generateAccessToken$`)},
+		integrations.Allow{Method: http.MethodPost, Host: cloud.IAMCredentials, Path: path(`^/v1/projects/-/serviceAccounts/[^/]+:generateAccessToken$`)},
 		integrations.Allow{Method: http.MethodPost, Host: ResourceMgr, Path: path(`^/v1/projects/[^/]+:testIamPermissions$`)},
 		integrations.Allow{Method: http.MethodPost, Host: BigQuery, Path: path(`^/bigquery/v2/projects/[^/]+/queries$`)},
 		integrations.Allow{Method: http.MethodPost, Host: BigQuery, Path: path(`^/bigquery/v2/projects/[^/]+/datasets/[^/]+/tables/[^/]+:testIamPermissions$`)})
 	return cl, nil
 }
 
-func parseKey(s string) (*key, error) {
-	var k key
-	if err := json.Unmarshal([]byte(s), &k); err != nil || k.Type != "service_account" || k.ClientEmail == "" {
-		return nil, fmt.Errorf("want a service account JSON key (type service_account)")
-	}
-	if k.TokenURI == "" {
-		k.TokenURI = TokenURL
-	}
-	if k.TokenURI != TokenURL {
-		return nil, fmt.Errorf("token_uri %q: only %s is trusted", k.TokenURI, TokenURL)
-	}
-	block, _ := pem.Decode([]byte(k.PrivateKey))
-	if block == nil {
-		return nil, fmt.Errorf("private_key is not PEM")
-	}
-	pk, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-	if err != nil {
-		pk1, err1 := x509.ParsePKCS1PrivateKey(block.Bytes)
-		if err1 != nil {
-			return nil, fmt.Errorf("private_key: %w", err)
-		}
-		pk = pk1
-	}
-	r, ok := pk.(*rsa.PrivateKey)
-	if !ok {
-		return nil, fmt.Errorf("private_key is not RSA")
-	}
-	k.rsa = r
-	return &k, nil
-}
-
-func b64(b []byte) string { return base64.RawURLEncoding.EncodeToString(b) }
-
-// assertion is the RS256 JWT a service account key signs to ask Google's
-// token endpoint for an access token (the JWT bearer grant).
-func (k *key) assertion(now time.Time) (string, error) {
-	h, _ := json.Marshal(map[string]string{"alg": "RS256", "typ": "JWT", "kid": k.PrivateKeyID})
-	c, _ := json.Marshal(map[string]any{"iss": k.ClientEmail, "scope": strings.Join(Scopes, " "), "aud": k.TokenURI,
-		"iat": now.Unix(), "exp": now.Add(time.Hour).Unix()})
-	signing := b64(h) + "." + b64(c)
-	sum := sha256.Sum256([]byte(signing))
-	sig, err := rsa.SignPKCS1v15(rand.Reader, k.rsa, crypto.SHA256, sum[:])
-	if err != nil {
-		return "", err
-	}
-	return signing + "." + b64(sig), nil
-}
-
-// token returns an access token for the identity.
+// token returns an access token for the identity, with read-only scopes.
 func (c *Client) token(ctx context.Context) (string, error) {
-	return c.tokens.Get("gcp", c.env.Clock(), func() (cloud.Token, error) {
-		now := c.env.Clock()
-		switch c.conn.Auth {
-		case "cli":
-			args := []string{"auth", "print-access-token"}
-			if c.conn.Identity != "" {
-				args = append(args, "--impersonate-service-account="+c.conn.Identity)
-			}
-			out, err := c.env.CLI(ctx, "gcloud", args...)
-			if err != nil {
-				return cloud.Token{}, err
-			}
-			t := strings.TrimSpace(string(out))
-			if t == "" || strings.ContainsAny(t, " \n") {
-				return cloud.Token{}, fmt.Errorf("%w: `gcloud auth print-access-token` printed no token", integrations.ErrProvider)
-			}
-			return cloud.Token{Value: t, Expires: now.Add(5 * time.Minute)}, nil
-		case "oidc":
-			jwt, err := c.env.GitHubOIDC(ctx, c.hc, "https://iam.googleapis.com/"+c.conn.Federation)
-			if err != nil {
-				return cloud.Token{}, err
-			}
-			var fed cloud.OAuth
-			if err := cloud.PostJSON(ctx, c.hc, STSURL, "", map[string]string{
-				"audience":           "//iam.googleapis.com/" + c.conn.Federation,
-				"grantType":          "urn:ietf:params:oauth:grant-type:token-exchange",
-				"requestedTokenType": "urn:ietf:params:oauth:token-type:access_token",
-				"scope":              "https://www.googleapis.com/auth/cloud-platform",
-				"subjectTokenType":   "urn:ietf:params:oauth:token-type:jwt",
-				"subjectToken":       jwt,
-			}, &fed); err != nil {
-				return cloud.Token{}, err
-			}
-			if fed.AccessToken == "" {
-				return cloud.Token{}, fmt.Errorf("%w: Google STS returned no access token", integrations.ErrProvider)
-			}
-			var sa struct {
-				AccessToken string `json:"accessToken"`
-				ExpireTime  string `json:"expireTime"`
-			}
-			u := "https://" + IAMCredentials + "/v1/projects/-/serviceAccounts/" + c.conn.Identity + ":generateAccessToken"
-			if err := cloud.PostJSON(ctx, c.hc, u, fed.AccessToken, map[string]any{"scope": Scopes, "lifetime": "3600s"}, &sa); err != nil {
-				return cloud.Token{}, err
-			}
-			exp, err := time.Parse(time.RFC3339, sa.ExpireTime)
-			if sa.AccessToken == "" || err != nil {
-				return cloud.Token{}, fmt.Errorf("%w: generateAccessToken returned no token", integrations.ErrProvider)
-			}
-			return cloud.Token{Value: sa.AccessToken, Expires: exp}, nil
-		default:
-			a, err := c.key.assertion(now)
-			if err != nil {
-				return cloud.Token{}, fmt.Errorf("%w: signing the service account assertion: %w", integrations.ErrNotConfigured, err)
-			}
-			var res cloud.OAuth
-			if err := cloud.PostForm(ctx, c.hc, c.key.TokenURI, url.Values{"grant_type": {"urn:ietf:params:oauth:grant-type:jwt-bearer"}, "assertion": {a}}, &res); err != nil {
-				return cloud.Token{}, err
-			}
-			return res.Token(now, "Google OAuth")
-		}
-	})
-}
-
-func (c *Client) account() string {
-	switch {
-	case c.conn.Auth == "cli" && c.conn.Identity != "":
-		return c.conn.Identity + " (impersonated through gcloud)"
-	case c.conn.Auth == "cli":
-		return "the gcloud login"
-	case c.conn.Auth == "oidc":
-		return c.conn.Identity + " (GitHub Actions workload identity federation)"
-	}
-	return c.key.ClientEmail
+	return c.tokens.Get("gcp", c.env.Clock(), func() (cloud.Token, error) { return c.env.Google(ctx, c.hc, c.id, Scopes) })
 }
 
 func (c *Client) post(ctx context.Context, u string, body, out any) error {
@@ -290,7 +151,7 @@ func (c *Client) Scope(ctx context.Context) (integrations.Scope, error) {
 	if err := c.post(ctx, "https://"+ResourceMgr+path, map[string]any{"permissions": append(append([]string{}, ReadPermissions...), WritePermissions...)}, &res); err != nil {
 		return integrations.Scope{}, err
 	}
-	s := integrations.Scope{Verified: true, Account: c.account(), Endpoint: "POST " + path + " and the dataset's first table"}
+	s := integrations.Scope{Verified: true, Account: c.id.Account(), Endpoint: "POST " + path + " and the dataset's first table"}
 	for _, p := range res.Permissions {
 		s.Scopes = append(s.Scopes, p)
 		for _, w := range WritePermissions {

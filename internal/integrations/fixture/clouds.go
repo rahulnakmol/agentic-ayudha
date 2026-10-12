@@ -60,12 +60,15 @@ func GitHubOIDC(aud string) string { return "gh-oidc:" + aud }
 // AssumeRoleWithWebIdentity, and the GitHub Actions OIDC endpoint. Each
 // exchange checks every parameter and is logged in Exchanges.
 type Clouds struct {
-	T        testing.TB
-	Server   *httptest.Server
-	Key      *rsa.PrivateKey // the service account key (GCPKeyJSON)
-	Now      time.Time
-	mu       sync.Mutex
-	exchange []string
+	T      testing.TB
+	Server *httptest.Server
+	Key    *rsa.PrivateKey // the service account key (GCPKeyJSON)
+	Now    time.Time
+	// GoogleScopes are the scopes Google tokens must be asked for (the
+	// read-only BigQuery pair unless a test sets others).
+	GoogleScopes string
+	mu           sync.Mutex
+	exchange     []string
 }
 
 // NewClouds starts the token server.
@@ -74,7 +77,7 @@ func NewClouds(t testing.TB, now time.Time) *Clouds {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c := &Clouds{T: t, Key: k, Now: now}
+	c := &Clouds{T: t, Key: k, Now: now, GoogleScopes: "https://www.googleapis.com/auth/bigquery.readonly https://www.googleapis.com/auth/cloud-platform.read-only"}
 	c.Server = httptest.NewServer(http.HandlerFunc(c.serve))
 	t.Cleanup(c.Server.Close)
 	return c
@@ -176,7 +179,7 @@ func (c *Clouds) serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		scope := form.Get("scope")
-		if scope != "https://api.loganalytics.io/.default" && scope != "https://management.azure.com/.default" {
+		if scope != "https://api.loganalytics.io/.default" && scope != "https://management.azure.com/.default" && scope != "https://storage.azure.com/.default" {
 			c.fail(w, "entra: scope %q", scope)
 			return
 		}
@@ -234,7 +237,7 @@ func (c *Clouds) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		_ = json.Unmarshal(body, &in)
 		if r.URL.Path != "/v1/projects/-/serviceAccounts/"+GCPServiceAccount+":generateAccessToken" || r.Header.Get("Authorization") != "Bearer "+GCPFederated ||
-			strings.Join(in.Scope, " ") != "https://www.googleapis.com/auth/bigquery.readonly https://www.googleapis.com/auth/cloud-platform.read-only" {
+			strings.Join(in.Scope, " ") != c.GoogleScopes {
 			c.fail(w, "generateAccessToken: %s auth %q scopes %v", r.URL.Path, r.Header.Get("Authorization"), in.Scope)
 			return
 		}
@@ -262,7 +265,7 @@ func (c *Clouds) serve(w http.ResponseWriter, r *http.Request) {
 
 // verifyJWT checks a service account assertion: RS256 over the server's
 // key, issued by the service account for Google's token endpoint with the
-// read-only scopes, valid for one hour from now.
+// scopes the server expects, valid for one hour from now.
 func (c *Clouds) verifyJWT(jwt string) error {
 	parts := strings.Split(jwt, ".")
 	if len(parts) != 3 {
@@ -284,7 +287,7 @@ func (c *Clouds) verifyJWT(jwt string) error {
 		return fmt.Errorf("assertion is not JSON")
 	}
 	if h["alg"] != "RS256" || h["kid"] != "k1" || cl["iss"] != GCPServiceAccount || cl["aud"] != "https://oauth2.googleapis.com/token" ||
-		cl["scope"] != "https://www.googleapis.com/auth/bigquery.readonly https://www.googleapis.com/auth/cloud-platform.read-only" ||
+		cl["scope"] != c.GoogleScopes ||
 		cl["iat"] != float64(c.Now.Unix()) || cl["exp"] != float64(c.Now.Add(time.Hour).Unix()) {
 		return fmt.Errorf("assertion header %v claims %v", h, cl)
 	}
