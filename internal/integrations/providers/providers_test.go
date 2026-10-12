@@ -42,12 +42,13 @@ var configured = []string{
 	"integrations.posthog.secret=posthog", "integrations.posthog.scope=read", "integrations.posthog.project=12345",
 	"integrations.sentry.secret=sentry", "integrations.sentry.scope=read", "integrations.sentry.org=acme", "integrations.sentry.project=4507",
 	"integrations.github.secret=github-read", "integrations.github.scope=read",
+	"integrations.growthbook.secret=growthbook", "integrations.growthbook.scope=read",
 }
 
-var keys = map[string]string{"AAYU_SECRET_POSTHOG": "phx_test", "AAYU_SECRET_SENTRY": "sntrys_test", "AAYU_SECRET_GITHUB_READ": "ghp_test"}
+var keys = map[string]string{"AAYU_SECRET_POSTHOG": "phx_test", "AAYU_SECRET_SENTRY": "sntrys_test", "AAYU_SECRET_GITHUB_READ": "ghp_test", "AAYU_SECRET_GROWTHBOOK": "secret_readonly_test"}
 
-// TestBaselinesGolden is the WP5.2 acceptance: recorded PostHog, Sentry, and
-// GitHub exchanges produce exactly the baseline tuples in
+// TestBaselinesGolden is the WP5.2 acceptance (GrowthBook added in WP7.2):
+// recorded PostHog, Sentry, GitHub, and GrowthBook exchanges produce exactly the baseline tuples in
 // testdata/baselines.golden.json, which were written by hand from the
 // fixtures, not generated from this code.
 func TestBaselinesGolden(t *testing.T) {
@@ -70,6 +71,8 @@ func TestBaselinesGolden(t *testing.T) {
 			{Metric: "errors", Window: sept},
 		}, []string{"sentry crash_free_sessions", "sentry errors"}},
 		{"github", "Bearer ghp_test", []integrations.Query{{Metric: "prs_merged", Filter: "base:dev", Window: sept}}, []string{"github prs_merged"}},
+		// The control variation (first in the experiment) is read with the frequentist analysis.
+		{"growthbook", "Bearer secret_readonly_test", []integrations.Query{{Metric: "conversion_rate", Filter: "checkout-v2 met_signup", Window: sept}}, []string{"growthbook conversion_rate"}},
 	}
 	seen := 0
 	for _, c := range cases {

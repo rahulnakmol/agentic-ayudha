@@ -1,0 +1,7 @@
+id,Created date (UTC),Amount,Amount Refunded,Currency,Status,Customer ID
+ch_01,2026-09-09 08:00:00,20.00,0.00,usd,Paid,u1
+ch_02,2026-09-13 10:00:00,15.50,0.00,usd,Failed,u3
+ch_03,2026-09-30 10:00:00,9.99,,usd,Paid,u3
+ch_04,2026-09-15 09:00:00,20.00,5.00,usd,Paid,u4
+ch_05,2026-09-20 11:00:00,50.00,0.00,usd,Paid,u0
+ch_06,2026-09-11 10:00:00,12.345,0.00,usd,Paid,u8

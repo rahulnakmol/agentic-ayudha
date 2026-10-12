@@ -1,6 +1,7 @@
-// Package growthbook is the GrowthBook adapter (WP6.7): it finds an
+// Package growthbook is the GrowthBook adapter (WP6.7, WP7.2): it finds an
 // experiment by its tracking key and reads one metric's per-variation users
-// and conversions from the latest results, for `aayu readout`. It only reads;
+// and conversions from the latest results, for `aayu readout`, and the
+// control rate as a baseline for `aayu measure`. It only reads;
 // GrowthBook's REST API reports no key role, so the configured read scope is
 // trusted (doctor says so).
 package growthbook
@@ -26,11 +27,12 @@ type Client struct {
 	hc   *http.Client
 	base string
 	key  string
+	now  func() time.Time
 }
 
 // New returns a client for a resolved [integrations.growthbook].
-func New(c integrations.Conn, rt http.RoundTripper) *Client {
-	return &Client{hc: integrations.Client(rt), base: c.BaseURL(DefaultURL), key: c.Key}
+func New(c integrations.Conn, rt http.RoundTripper, now func() time.Time) *Client {
+	return &Client{hc: integrations.Client(rt), base: c.BaseURL(DefaultURL), key: c.Key, now: now}
 }
 
 func (c *Client) get(ctx context.Context, path string, q url.Values, out any) (string, error) {
@@ -167,4 +169,33 @@ func (c *Client) Results(ctx context.Context, key, metric string) ([]Variation, 
 		return out, w, source, nil
 	}
 	return nil, w, "", fmt.Errorf("%w: GrowthBook results for %s have no metric %s (%s)", integrations.ErrQuery, key, metric, strings.TrimSpace(source))
+}
+
+// Metrics this adapter answers as a baseline (WP7.2). conversion_rate is the
+// control variation's rate for a conversion metric in an experiment's latest
+// results; the filter is "<tracking key> <metric ID>".
+var Metrics = []string{"conversion_rate"}
+
+// Baseline reads conversion_rate. The window is the results' own analysis
+// window, which GrowthBook sets; the query's window is not sent.
+func (c *Client) Baseline(ctx context.Context, q integrations.Query) (integrations.Baseline, error) {
+	f := strings.Fields(q.Filter)
+	if q.Metric != "conversion_rate" || len(f) != 2 {
+		return integrations.Baseline{}, fmt.Errorf("%w: growthbook metric %q with filter %q: want conversion_rate with the filter \"<tracking key> <metric ID>\"", integrations.ErrQuery, q.Metric, q.Filter)
+	}
+	vs, w, source, err := c.Results(ctx, f[0], f[1])
+	if err != nil {
+		return integrations.Baseline{}, err
+	}
+	if len(vs) == 0 || vs[0].Users == 0 {
+		return integrations.Baseline{}, fmt.Errorf("%w: GrowthBook results for %s have no users in the control variation", integrations.ErrProvider, f[0])
+	}
+	return integrations.Baseline{
+		Metric:      q.Metric,
+		Population:  fmt.Sprintf("GrowthBook experiment %s, control variation %s: %d users, %d converted on %s", f[0], vs[0].Key, vs[0].Users, vs[0].Converted, f[1]),
+		Window:      integrations.Window{From: w.From.UTC(), To: w.To.UTC()},
+		Value:       float64(vs[0].Converted) / float64(vs[0].Users),
+		SourceQuery: source,
+		FetchedAt:   c.now().UTC(),
+	}, nil
 }

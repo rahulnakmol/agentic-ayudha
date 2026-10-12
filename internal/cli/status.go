@@ -183,7 +183,7 @@ func runStatus(ctx context.Context, e *Env, in Values) error {
 			fmt.Fprintln(w, r.Line())
 		}
 		for _, n := range rep.Closed {
-			fmt.Fprintf(w, "closed Feature #%d (parent-close rule)\n", n)
+			fmt.Fprintf(w, "closed #%d (parent-close rule)\n", n)
 		}
 		if rep.Sent != "" {
 			fmt.Fprintf(w, "digest: %s\n", rep.Sent)
@@ -199,12 +199,24 @@ func applyStatus(ctx context.Context, e *Env, repo string, roots []*status.Rollu
 	if err != nil {
 		return nil, err
 	}
+	return parentClose(ctx, c, repo, roots, func(r *status.Rollup) error {
+		if r.Type != "goal" {
+			return nil
+		}
+		_, err := c.UpsertComment(ctx, repo, r.Number, status.CommentMarker, status.Comment(r, e.Now()), actions.Action{Kind: "github.comment.status", Payload: map[string]any{"tag": bot.Tag}})
+		return err
+	})
+}
+
+// parentClose walks rollup trees top-down, calls visit on each node, and
+// closes every node the parent-close rule allows (status.Rollup.Closable).
+func parentClose(ctx context.Context, c *github.Client, repo string, roots []*status.Rollup, visit func(r *status.Rollup) error) ([]int, error) {
 	owner, name, _ := github.SplitRepo(repo)
 	var closed []int
 	var walk func(r *status.Rollup) error
 	walk = func(r *status.Rollup) error {
-		if r.Type == "goal" {
-			if _, err := c.UpsertComment(ctx, repo, r.Number, status.CommentMarker, status.Comment(r, e.Now()), actions.Action{Kind: "github.comment.status", Payload: map[string]any{"tag": bot.Tag}}); err != nil {
+		if visit != nil {
+			if err := visit(r); err != nil {
 				return err
 			}
 		}

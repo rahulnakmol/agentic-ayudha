@@ -1,0 +1,9 @@
+{"event_timestamp": 1789473600000, "event_type": "viewed_dashboard", "user_details": {"userId": "u1", "sessionId": "s1"}}
+{"event_timestamp": 1789030800000, "event_type": "invited_user", "user_details": {"userId": "u2", "sessionId": "s2"}}
+{"event_timestamp": 1789254000000, "event_type": "signed_up", "user_details": {"userId": "u3", "sessionId": "s3"}}
+{"event_timestamp": 1789858740000, "event_type": "viewed_dashboard", "user_details": {"userId": "u3", "sessionId": "s4"}}
+{"event_timestamp": 1790856000000, "event_type": "signed_up", "user_details": {"userId": "u6", "sessionId": "s5"}}
+{"event_timestamp": 1791028800000, "event_type": "invited_user", "user_details": {"userId": "u6", "sessionId": "s6"}}
+{"event_timestamp": 1791194400000, "event_type": "created_project", "user_details": {"userId": "u7", "sessionId": "s7"}}
+{"event_timestamp": "not-a-number", "event_type": "signed_up", "user_details": {"userId": "u9"}}
+this is not json

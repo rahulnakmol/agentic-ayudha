@@ -289,7 +289,7 @@ func checkIntegrations(ctx context.Context, p *Probe) Result {
 }
 
 // OptionalTools are reported when missing; none is required.
-var OptionalTools = []string{"node", "playwright", "axe", "semgrep", "gitleaks", "osv-scanner", "zap.sh", "k6", "lighthouse", "guidepup", "impeccable"}
+var OptionalTools = []string{"node", "playwright", "axe", "semgrep", "gitleaks", "osv-scanner", "zap.sh", "k6", "lighthouse", "guidepup", "impeccable", "duckdb"}
 
 func checkOptionalTools(_ context.Context, p *Probe) Result {
 	var missing []string
