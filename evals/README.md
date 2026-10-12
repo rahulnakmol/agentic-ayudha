@@ -71,8 +71,9 @@ Pushes to `dev` do not run the `brief` group; it runs nightly, on dispatch (inpu
 pushes to `rolling` and `main`. Each group's results go to `results/<sha>-<group>.json`, uploaded as the artifact
 `eval-results-<sha>-<group>`; the promotion gate (`ci.yml` job `evals-gate`) fetches every group's results for the
 commit being promoted and for `main`, runs `eval -compare` on each, and fails when any group is missing or fails. A group with
-`pass_k = "advisory"` (only `brief`, D-7.3g) passes on the mean bar and the drop rule; its pass^k findings print as
-advisories.
+`pass_k = "advisory"` (`brief`, D-7.3g) passes on the mean bar and the drop rule; its pass^k findings print as
+advisories. A group with `gate = "advisory"` (`brief-plain`: the eli5 and ste cases, D-7.3h) is reported but never gates:
+`eval -compare` exits 0 for it, and `evals-gate` compares only `eval -groups -gating`.
 
 Tier 2 calls models through the AI gateway in the `ai-gateway` environment (dev, rolling, and main only), so it never
 runs on pull requests. Spend is capped by `[budget]` and by the group's `max_usd` in `eval.toml`.

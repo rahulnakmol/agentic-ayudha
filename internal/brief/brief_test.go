@@ -353,6 +353,7 @@ func TestCheckRules(t *testing.T) {
 		"# T\n\nReviewers do it 4.2 times per reviewer per week [R].\n":          `states 4.2 from the Result without its unit`,
 		"# T\n\nThe count shows how many files were saved [R].\n":                `names the count "files were saved"`,
 		"# T\n\nReviewers made more files this week [R].\n":                      `names the count "made more files"`,
+		"# T\n\nReviewers made how many saves per reviewer per week [R].\n":      `names the count "saves"`,
 		"# T\n\nThis number counts saves [R].\n":                                 `names the count "saves"`,
 		"# T\n\nThis number counts files saved [R].\n":                           `names the count "files saved"; the Result counts exports`,
 		"# T\n\nThe count is 4.2 downloads per reviewer per week [R].\n":         `names the count "downloads"`,
@@ -367,6 +368,8 @@ func TestCheckRules(t *testing.T) {
 		"# T\n\nThe rate is 4.2 exports per reviewer per week [R]. The target is 3 exports per reviewer per week [R].\n",
 		// One "per reviewer" covers both rates of one sentence; no second repetition is forced.
 		"# T\n\nUsage is 4.2 CSV exports per reviewer per week, against a target of 3 exports [R].\n",
+		// "saves" as a verb is not a count (D-7.3h, the false positive in run 38230815198).
+		"# T\n\nThe count shows only CSV exports. The evidence does not show that the export saves time [R].\n",
 		"# T\n\nThe window ran from 2026-09-14 to 2026-10-12 [R].\n",
 		"# T\n\nCriterion 3 is not proved; usage met its target [R].\n",
 		"# T\n\nEach reviewer story shipped 4.2 [P1].\n", // does not cite R

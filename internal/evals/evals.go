@@ -49,6 +49,22 @@ type Group struct {
 	// group passes on the mean bar and the drop rule, and its pass^k findings
 	// are printed but do not fail it (D-7.3g).
 	PassK string `toml:"pass_k"`
+	// Gate is "enforced" (the default: a failing result fails evals-gate) or
+	// "advisory": results are computed and printed but never gate (D-7.3h).
+	Gate string `toml:"gate"`
+}
+
+// gate policies of a group.
+const (
+	GateEnforced = "enforced"
+	GateAdvisory = "advisory"
+)
+
+// Gates reports whether the group's results gate a promotion. An unknown
+// group gates, so a typo cannot open the gate.
+func (c Config) Gates(group string) bool {
+	g, ok := c.Group(group)
+	return !ok || g.Gate != GateAdvisory
 }
 
 // pass_k policies of a group.
@@ -211,6 +227,9 @@ func LoadConfig(root string) (Config, error) {
 		}
 		if g.PassK != "" && g.PassK != PassKRequired && g.PassK != PassKAdvisory {
 			return c, fmt.Errorf("evals/eval.toml: group %q: pass_k %q: want %q or %q", g.Name, g.PassK, PassKRequired, PassKAdvisory)
+		}
+		if g.Gate != "" && g.Gate != GateEnforced && g.Gate != GateAdvisory {
+			return c, fmt.Errorf("evals/eval.toml: group %q: gate %q: want %q or %q", g.Name, g.Gate, GateEnforced, GateAdvisory)
 		}
 		seen[g.Name] = true
 		if len(g.Prefixes) == 0 {

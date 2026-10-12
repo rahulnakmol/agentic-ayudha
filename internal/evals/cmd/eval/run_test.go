@@ -53,8 +53,13 @@ const testdata = "internal/evals/testdata/"
 // The entry point prints the tier-2 group names for the workflow's matrix.
 func TestGroups(t *testing.T) {
 	out, err := evalIn(t, repoRoot, func() error { main(); return nil }, "-groups")
-	if err != nil || strings.TrimSpace(out) != `["brief","skills"]` {
+	if err != nil || strings.TrimSpace(out) != `["brief-plain","brief","skills"]` {
 		t.Fatalf("-groups: %v %q", err, out)
+	}
+	// evals-gate compares only the groups that gate (D-7.3h).
+	out, err = evalIn(t, repoRoot, func() error { main(); return nil }, "-groups", "-gating")
+	if err != nil || strings.TrimSpace(out) != `["brief","skills"]` {
+		t.Fatalf("-groups -gating: %v %q", err, out)
 	}
 }
 
@@ -255,5 +260,28 @@ func TestTier2FakeGateway(t *testing.T) {
 	before := calls["gpt-6.1-sol"]
 	if _, err := eval(t, "-tier", "2", "-group", "skills", "-cases", "^stub/csv-export$", "-sha", "abc", "-out", res); err == nil || !strings.Contains(err.Error(), "judge gpt-6.1-sol") || calls["gpt-6.1-sol"] != before {
 		t.Fatalf("same-family judge: %v after %d calls", err, calls["gpt-6.1-sol"]-before)
+	}
+}
+
+// A failing result of an advisory-gate group is reported and exits 0; the
+// same result in a gating group fails (D-7.3h).
+func TestCompareAdvisoryGate(t *testing.T) {
+	dir := t.TempDir()
+	for _, g := range []string{"brief-plain", "brief"} {
+		r := evals.Results{SHA: "662cd99", Group: g, K: 5, Mean: 3.1, Cases: []evals.CaseResult{{Case: "brief/eli5-explain", Mean: 3.2}, {Case: "brief/ste-explain", Mean: 3.0}}}
+		b, _ := json.Marshal(r)
+		f := filepath.Join(dir, g+".json")
+		_ = os.WriteFile(f, b, 0o644)
+		out, err := eval(t, "-compare", f)
+		switch g {
+		case "brief-plain":
+			if err != nil || !strings.Contains(out, ": fail") || !strings.Contains(out, "group brief-plain is advisory") {
+				t.Errorf("advisory group: %v\n%s", err, out)
+			}
+		default:
+			if err == nil || !strings.Contains(out, "mean rubric score 3.20 is below 3.50") {
+				t.Errorf("gating group: %v\n%s", err, out)
+			}
+		}
 	}
 }
