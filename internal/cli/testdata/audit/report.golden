@@ -18,7 +18,7 @@ aayu audit --repo o/r --since 2026-10-11T00:00:00Z --until 2026-10-12T04:00:00Z 
 | Repository | `o/r` |
 | Window | 2026-10-11T00:00:00Z to 2026-10-12T04:00:00Z (half-open) |
 | GitHub event cursor | until 2026-10-12T04:00:00Z; newest rule suite 4474099541 |
-| GitHub inputs snapshot | `audit/2026-10-12/audit-20261012T040000Z.inputs.json` (SHA-256 `1ecd96fb4efd12700c6b90891fafd5f4d144147fb111669366751d2f5ec12ebc`) |
+| GitHub inputs snapshot | `audit/2026-10-12/audit-20261012T040000Z.inputs.json` (SHA-256 `22183b8bf024742a8411c15ea95a49f93fe76ed7592944297491cb8198a564cb`) |
 | Ledger commit | `400b3e03532757bb74a5fa17ac5b6aa5011cd487` |
 | Code commit (licence scan) | `c0dec0dec0dec0dec0dec0dec0dec0dec0dec0de` |
 | Config hash | `sha256:db3ba6032b0b3db7a4caa39ff54803b14867240023e4119ebdabaecda5403eb8` |
@@ -37,8 +37,8 @@ aayu audit --repo o/r --since 2026-10-11T00:00:00Z --until 2026-10-12T04:00:00Z 
   - tag ruleset bypasses: 1
 - Solo-mode human passes (`ship --solo-bypass`): 1
 - Human-fallback writes: 3
-- GitHub writes in the window: 35; in an actions segment 6; by workflows and Apps 1; **not in any actions segment 28**
-- Proof coverage: 1/2 delivered stories and bugs; merged without proof (pre-gate) 1; merged without proof 0
+- GitHub writes in the window: 39; in an actions segment 6; by workflows and Apps 1; **not in any actions segment 32**
+- Proof coverage: 1/3 delivered stories and bugs; merged without proof (pre-gate) 1; merged without proof (post-gate) 1
 - Floor misses in authoritative packs: 0; waived floors: 0
 - Decisions over their SLA: 1
 - Autonomy exceptions: 1 corrections; 1 agent merges on never-layers
@@ -115,6 +115,7 @@ writes are recorded by their runs.
 | #9 | founder | 2026-10-11T21:24:26Z | 2026-10-11T21:38:35Z | commented ×1, merged ×1, opened PR ×1 |
 | run 38179325066 (.github/workflows/ci.yml) | founder | 2026-10-11T22:10:05Z | 2026-10-11T22:10:05Z | workflow dispatch ×1 |
 | #48 | founder | 2026-10-11T23:35:00Z | 2026-10-12T01:00:00Z | labeled effort:M ×1, labeled priority:P0 ×1, labeled priority:P1 ×1, labeled status:ready ×1, labeled type:story ×1, opened issue ×1 |
+| #60 | founder | 2026-10-11T23:36:40Z | 2026-10-11T23:49:33Z | labeled effort:M ×1, labeled status:ready ×1, labeled type:story ×1, opened issue ×1 |
 | ledger d6beaa0 | Amp | 2026-10-11T23:46:18Z | 2026-10-11T23:46:18Z | ledger push: specs: Ready snapshot of #91 ×1 |
 | #86 | founder | 2026-10-12T01:50:00Z | 2026-10-12T02:23:33Z | commented ×1, merged ×1, opened PR ×1 |
 | #91 | founder | 2026-10-12T02:31:00Z | 2026-10-12T02:31:40Z | labeled effort:XS ×1, labeled identity:human-fallback ×1, labeled status:ready ×1, labeled type:story ×1, opened issue ×1 |
@@ -131,11 +132,13 @@ Workflow and App writes: `github-actions[bot]` 1.
 Delivered stories and bugs (a done status at the cursor, or a merged PR into the dev branch that references them).
 A story is covered by an authoritative pack that maps every Ready criterion, matches its hashes, and whose floors
 hold. A story merged before the merge gate existed is "merged without proof (pre-gate)": done but unproven, and
-still uncovered. The merge gate (`aayudha-merge-gate.yml`) was registered at 2026-10-12T02:37:03Z.
+still uncovered; one merged after it without an authoritative pack is "merged without proof (post-gate)", also uncovered.
+The merge gate (`aayudha-merge-gate.yml`) was registered at 2026-10-12T02:37:03Z.
 
 | Story | Status | Merged by | Merged at | Covered | Pack or reason |
 |---|---|---|---|---|---|
 | #48 WP4.8 Merge gate + `inspect` | ready | #86 | 2026-10-12T02:20:05Z | **no** | merged without proof (pre-gate) |
+| #60 WP6.6 `review`, `polish`, `baseline` | ready | #99 | 2026-10-12T03:24:15Z | **no** | merged without proof (post-gate) |
 | #91 doctor names the floor each missing tool serves | merged | #92 | 2026-10-12T03:04:44Z | yes | `proof/91/44d18af847494eb1bb088fd27c568d22d270a9fb/authoritative/pack.json` |
 
 ## Floors and waivers

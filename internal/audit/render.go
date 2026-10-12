@@ -68,11 +68,14 @@ func (r *Report) Markdown() []byte {
 	p("- Rule-suite bypasses: %d; accounted for %d; **unexplained %d**\n", c.Bypasses, c.Bypasses-c.Unexplained, c.Unexplained)
 	p("  - solo-mode bypasses (protected-path merges): %d\n  - ledger writes under the founder identity (D1 day-one rule): %d\n  - promotions to rolling or main: %d\n  - tag ruleset bypasses: %d\n",
 		c.Solo, c.LedgerWrites, c.Promotions, c.Tags)
+	if c.SoloLate > 0 {
+		p("  - solo-mode bypasses whose record came after the merge (recorded late): %d\n", c.SoloLate)
+	}
 	p("- Solo-mode human passes (`ship --solo-bypass`): %d\n", c.SoloShips)
 	p("- Human-fallback writes: %d\n", c.Fallback)
 	p("- GitHub writes in the window: %d; in an actions segment %d; by workflows and Apps %d; **not in any actions segment %d**\n",
 		c.Writes, c.Writes-c.CI-c.Unlogged, c.CI, c.Unlogged)
-	p("- Proof coverage: %d/%d delivered stories and bugs; merged without proof (pre-gate) %d; merged without proof %d\n",
+	p("- Proof coverage: %d/%d delivered stories and bugs; merged without proof (pre-gate) %d; merged without proof (post-gate) %d\n",
 		c.Covered, c.Delivered, c.PreGate, c.PostGate)
 	p("- Floor misses in authoritative packs: %d; waived floors: %d\n", c.FloorMisses, c.Waivers)
 	p("- Decisions over their SLA: %d\n", c.OverSLA)
@@ -84,12 +87,15 @@ func (r *Report) Markdown() []byte {
 	p("A protected-path merge is a solo-mode bypass when only the `protected-paths` check failed and a PR comment starting\n")
 	p("\"Solo-mode bypass:\" came first (WP0.1, Appendix B D2). A deploy-key push lists no actor and is identified from the\n")
 	p("ledger commit (D1).\n\n")
-	for _, class := range []string{ClassSolo, ClassLedger, ClassPromotion, ClassTag, ClassOther} {
+	for _, class := range []string{ClassSolo, ClassSoloLate, ClassLedger, ClassPromotion, ClassTag, ClassOther} {
 		var rows []Bypass
 		for _, x := range r.Bypasses {
 			if x.Class == class {
 				rows = append(rows, x)
 			}
+		}
+		if class == ClassSoloLate && len(rows) == 0 {
+			continue // listed only when there is one, so reports written before the class existed replay unchanged
 		}
 		p("### %s (%d)\n\n", title(class), len(rows))
 		if len(rows) == 0 {
@@ -252,7 +258,8 @@ func (r *Report) renderProof(p printer) {
 	p("Delivered stories and bugs (a done status at the cursor, or a merged PR into the dev branch that references them).\n")
 	p("A story is covered by an authoritative pack that maps every Ready criterion, matches its hashes, and whose floors\n")
 	p("hold. A story merged before the merge gate existed is \"merged without proof (pre-gate)\": done but unproven, and\n")
-	p("still uncovered. The merge gate (`%s`) was registered at %s.\n\n", MergeGateWorkflow, or(stampOr(r.GateSince), "no time before the cursor"))
+	p("still uncovered; one merged after it without an authoritative pack is \"merged without proof (post-gate)\", also uncovered.\n")
+	p("The merge gate (`%s`) was registered at %s.\n\n", MergeGateWorkflow, or(stampOr(r.GateSince), "no time before the cursor"))
 	if len(r.Stories) == 0 {
 		p("No delivered stories or bugs.\n\n")
 	} else {
@@ -322,6 +329,8 @@ func title(class string) string {
 	switch class {
 	case ClassSolo:
 		return "Solo-mode bypasses (protected-path merges)"
+	case ClassSoloLate:
+		return "Solo-mode bypasses, recorded late (the comment or incident note came after the merge)"
 	case ClassLedger:
 		return "Ledger writes under the founder identity (D1 day-one rule)"
 	case ClassPromotion:

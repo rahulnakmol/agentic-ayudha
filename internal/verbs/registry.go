@@ -764,7 +764,7 @@ var Verbs = []Command{
 			flag("ledger", TypeString, "Ledger commit to read; default the ledger tip."),
 			flag("out", TypePath, "Also write the report to this file."),
 			flag("replay", TypeString, "Regenerate a report from the GitHub inputs snapshot at this ledger path (audit/<date>/…inputs.json); writes nothing."),
-			flag("mark-merged", TypeString, "Move these stories (e.g. 38-50) that merged without proof before the merge gate to status:merged, with a comment; no report."),
+			flag("mark-merged", TypeString, "Move these stories (e.g. 38-50) that merged without proof, before or after the merge gate, to status:merged with a comment saying which; no report."),
 		},
 		Outputs:  []string{"audit-report"},
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeNone, Exposure: ExposeWrite,

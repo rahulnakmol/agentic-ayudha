@@ -184,6 +184,12 @@ func (d *Data) fetchLedger(ctx context.Context, s Source, in *Inputs) error {
 		if err != nil {
 			return err
 		}
+		if strings.HasPrefix(path.Base(f), "incident-") {
+			if ids := SuiteIDs(string(b)); len(ids) > 0 {
+				d.Incidents = append(d.Incidents, PriorReport{Path: f, Suites: ids})
+			}
+			continue
+		}
 		if ids := PriorSuites(string(b)); len(ids) > 0 {
 			d.Prior = append(d.Prior, PriorReport{Path: f, Suites: ids})
 		}
@@ -210,6 +216,20 @@ func covers(ctx context.Context, s Source, e proof.Entry) (bool, string) {
 		return false, "floors do not hold"
 	}
 	return true, ""
+}
+
+var suiteID = regexp.MustCompile(`\b[0-9]{7,}\b`)
+
+// SuiteIDs returns every number in text long enough to be a rule-suite ID;
+// the audit matches them against the suites it classifies.
+func SuiteIDs(text string) []int64 {
+	var out []int64
+	for _, m := range suiteID.FindAllString(text, -1) {
+		if id, err := strconv.ParseInt(m, 10, 64); err == nil && !slices.Contains(out, id) {
+			out = append(out, id)
+		}
+	}
+	return out
 }
 
 var suiteRow = regexp.MustCompile(`^\|\s*([0-9]{6,})\s*\|`)
@@ -365,6 +385,9 @@ func (d *Data) fetchItems(ctx context.Context, s Source, in *Inputs, owner, name
 		it.Events, it.Labels, it.ClosedAt = []Event{}, []string{}, time.Time{}
 		for _, t := range tl {
 			e := Event{Kind: t.GetEvent(), Actor: t.GetActor().GetLogin(), At: t.GetCreatedAt().UTC(), Label: t.GetLabel().GetName(), Body: t.GetBody(), ID: t.GetID(), State: t.GetState()}
+			if e.Kind == "commented" && strings.HasPrefix(strings.TrimSpace(e.Body), "Solo-mode bypass") {
+				e.Suites = SuiteIDs(e.Body)
+			}
 			if len(e.Body) > MaxBody {
 				e.Body = strings.ToValidUTF8(e.Body[:MaxBody], "")
 			}
