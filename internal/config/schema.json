@@ -337,6 +337,17 @@
                   "type": "number",
                   "maximum": 100,
                   "minimum": 0
+                },
+                "command": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array",
+                  "description": "Test command that writes the coverage report, as argv; empty runs go test -coverprofile in a Go module."
+                },
+                "report": {
+                  "type": "string",
+                  "description": "Coverage report the command writes (lcov, Cobertura XML, or Go coverprofile), relative to the repository root."
                 }
               },
               "additionalProperties": false,

@@ -228,6 +228,12 @@ jobs:
           echo "${OSV_SCANNER_SHA256}  $RUNNER_TEMP/osv-scanner" | sha256sum -c -
           chmod +x "$RUNNER_TEMP/osv-scanner"
           "$RUNNER_TEMP/osv-scanner" scan source -r .
+      # WP4.4 accept with the pinned tools above: planted findings fail the sast, secrets, and deps floors and a
+      # clean fixture passes (internal/verify TestFloorsWithRealTools; fixtures are written at run time).
+      - name: Floors with the real tools (semgrep, gitleaks, osv-scanner)
+        env:
+          AAYU_FLOOR_TOOLS: "1"
+        run: PATH="$RUNNER_TEMP:$PATH" go test ./internal/verify -run TestFloorsWithRealTools -count=1 -v
       - name: Licences (go-licenses)
         run: go run "github.com/google/go-licenses/v2@${GO_LICENSES_VERSION}" check ./... --allowed_licenses="$ALLOWED_LICENSES"
       # The Node packages are one pnpm workspace with a single root pnpm-lock.yaml (WP6.1, Appendix B D-6.1a).
