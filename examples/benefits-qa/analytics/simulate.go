@@ -3,7 +3,11 @@ package analytics
 import (
 	"fmt"
 	"io"
-	"math/rand/v2"
+	// Synthetic, seed-reproducible randomness only: rand.NewPCG(cfg.Seed, …)
+	// makes every export reproduce exactly, which is the feature under test.
+	// Crypto-grade entropy is not a property this simulator needs, and
+	// crypto/rand cannot be seeded, so it cannot provide it.
+	"math/rand/v2" // nosemgrep: go.lang.security.audit.crypto.math_random.math-random-used
 	"sort"
 	"time"
 
