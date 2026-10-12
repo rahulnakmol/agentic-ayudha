@@ -32,6 +32,8 @@ env:
   AAYU_VERSION: "v0.4.0"
   PR: ${{ github.event.pull_request.number }}
   REPO: ${{ github.repository }}
+  # aayu halt (WP5.7): the verbs read the halt variable from here; the workflow token cannot read it through the API.
+  AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
 
 jobs:
   gate:
@@ -52,6 +54,9 @@ jobs:
       OSV_SCANNER_SHA256: ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108 # linux_amd64
       SEMGREP_VERSION: "1.180.0"
     steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
       # Checking out PR code under pull_request_target is what a base-branch gate must do to verify it. This job
       # holds no secrets and a read-only token, and the PR's code runs only inside aayu verify's sandbox: scrubbed
       # environment, no network, and its own PID namespace, so nothing it starts outlives the test run (D-4.8a).
