@@ -45,6 +45,26 @@ type Group struct {
 	Name     string   `toml:"name"`
 	Prefixes []string `toml:"prefixes"` // case ID prefixes; none: every case no other group claims
 	MaxUSD   float64  `toml:"max_usd"`  // spend cap of one run of this group, on top of [budget]
+	// PassK is "required" (the default: the full WP3.4 bar) or "advisory": the
+	// group passes on the mean bar and the drop rule, and its pass^k findings
+	// are printed but do not fail it (D-7.3g).
+	PassK string `toml:"pass_k"`
+}
+
+// pass_k policies of a group.
+const (
+	PassKRequired = "required"
+	PassKAdvisory = "advisory"
+)
+
+// Group returns the group named name.
+func (c Config) Group(name string) (Group, bool) {
+	for _, g := range c.Groups {
+		if g.Name == name {
+			return g, true
+		}
+	}
+	return Group{}, false
 }
 
 // GroupOf returns the name of the group case ID id belongs to.
@@ -184,6 +204,9 @@ func LoadConfig(root string) (Config, error) {
 	for _, g := range c.Groups {
 		if !groupName.MatchString(g.Name) || seen[g.Name] || g.MaxUSD <= 0 {
 			return c, fmt.Errorf("evals/eval.toml: group %q: want a unique lowercase name and max_usd > 0", g.Name)
+		}
+		if g.PassK != "" && g.PassK != PassKRequired && g.PassK != PassKAdvisory {
+			return c, fmt.Errorf("evals/eval.toml: group %q: pass_k %q: want %q or %q", g.Name, g.PassK, PassKRequired, PassKAdvisory)
 		}
 		seen[g.Name] = true
 		if len(g.Prefixes) == 0 {

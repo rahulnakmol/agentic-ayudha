@@ -444,22 +444,43 @@ func mean(xs []int) float64 {
 
 // Compare applies the WP3.4 bar to results and, when a baseline exists, the
 // promotion rule: fail when the mean falls more than max_drop below the
-// baseline or any case's pass^k falls below its baseline.
+// baseline or any case's pass^k falls below its baseline. A group whose
+// pass_k is "advisory" (D-7.3g) is held to the mean bar and the drop rule
+// only; its pass^k findings are returned by Advisories instead.
 func Compare(cur, base *Results, cfg Config) (verdict string, reasons []string) {
+	reasons, _ = compare(cur, base, cfg)
+	if len(reasons) > 0 {
+		return Fail, reasons
+	}
+	return Pass, nil
+}
+
+// Advisories are the pass^k findings Compare does not fail on, for a group
+// whose pass_k is advisory; they are printed, never enforced.
+func Advisories(cur, base *Results, cfg Config) []string {
+	_, notes := compare(cur, base, cfg)
+	return notes
+}
+
+func compare(cur, base *Results, cfg Config) (reasons, advisory []string) {
+	passK := &reasons
+	if g, ok := cfg.Group(cur.Group); ok && g.PassK == PassKAdvisory {
+		passK = &advisory
+	}
 	for _, c := range cur.Cases {
 		if c.Errors > MaxErrors {
 			reasons = append(reasons, fmt.Sprintf("%s: %d of %d runs errored (at most %d may)", c.Case, c.Errors, len(c.Runs), MaxErrors))
 		}
 		// The bar holds per case too, so one register or skill cannot hide behind the others (WP7.3: per register).
 		if c.PassK < cfg.MinPassK {
-			reasons = append(reasons, fmt.Sprintf("%s: pass^%d %.2f is below %.2f", c.Case, cur.K, c.PassK, cfg.MinPassK))
+			*passK = append(*passK, fmt.Sprintf("%s: pass^%d %.2f is below %.2f", c.Case, cur.K, c.PassK, cfg.MinPassK))
 		}
 		if c.Mean < cfg.MinMean {
 			reasons = append(reasons, fmt.Sprintf("%s: mean rubric score %.2f is below %.2f", c.Case, c.Mean, cfg.MinMean))
 		}
 	}
 	if cur.PassK < cfg.MinPassK {
-		reasons = append(reasons, fmt.Sprintf("pass^%d %.2f is below %.2f", cur.K, cur.PassK, cfg.MinPassK))
+		*passK = append(*passK, fmt.Sprintf("pass^%d %.2f is below %.2f", cur.K, cur.PassK, cfg.MinPassK))
 	}
 	if cur.Mean < cfg.MinMean {
 		reasons = append(reasons, fmt.Sprintf("mean rubric score %.2f is below %.2f", cur.Mean, cfg.MinMean))
@@ -474,14 +495,11 @@ func Compare(cur, base *Results, cfg Config) (verdict string, reasons []string) 
 		}
 		for _, c := range cur.Cases {
 			if b, ok := baseCase[c.Case]; ok && c.PassK < b.PassK {
-				reasons = append(reasons, fmt.Sprintf("%s: pass^%d %.2f fell below the baseline %.2f", c.Case, cur.K, c.PassK, b.PassK))
+				*passK = append(*passK, fmt.Sprintf("%s: pass^%d %.2f fell below the baseline %.2f", c.Case, cur.K, c.PassK, b.PassK))
 			}
 		}
 	}
-	if len(reasons) > 0 {
-		return Fail, reasons
-	}
-	return Pass, nil
+	return reasons, advisory
 }
 
 func short(sha string) string {

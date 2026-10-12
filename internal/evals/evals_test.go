@@ -754,6 +754,9 @@ func TestTier1BriefRules(t *testing.T) {
 		{"brief/engineer-ideate", "# CSV export\n\nIts behaviour at larger sizes is untested [P1.c3].\n", "absence", `says "untested"`},
 		// The three causes of run 38216409539 (D-7.3f).
 		{"brief/eli5-explain", "# Saving claims\n\nThis number counts files saved [R].\n", "unit", `names the count "files saved"; the Result counts exports`},
+		// The two forms run 38222172014 slipped past the unit check (D-7.3g).
+		{"brief/eli5-explain", "# Saving claims\n\nReviewers make 4.2 saves per reviewer per week [R].\n", "unit", `names the count "saves"; the Result counts exports`},
+		{"brief/eli5-explain", "# Saving claims\n\nThe count shows how many files were saved [R].\n", "unit", `names the count "files were saved"; the Result counts exports`},
 		{"brief/ste-explain", "# Export of filtered claims\n\nThis story does not include PDF files, exports at set times, or exports of other lists [#7].\n", "absence", `says "does not include" of items the grounding marks out of scope`},
 		{"brief/ste-explain", "# Export of filtered claims\n\nThe Result shows 4.2 CSV exports per reviewer per week, against a target of 3 or more per reviewer per week [R].\n", "ste", "has 22 words (at most 20)"},
 	} {
@@ -959,5 +962,53 @@ func TestTier2ConfiguredSkillModel(t *testing.T) {
 	}
 	if c := res.Cases[0]; c.Model != "claude-sonnet-5-5" || c.Fallback != "" || fake.Requests[0].Model != "claude-sonnet-5-5" {
 		t.Fatalf("case %+v, first call to %s", c, fake.Requests[0].Model)
+	}
+}
+
+// The brief group's pass_k is advisory (D-7.3g): run 38222172014's numbers
+// (pass^5 0 on eli5 and ste, every register's mean at least 3.5) pass it with
+// the pass^k findings reported as advisories; a register mean below 3.5 or a
+// mean drop beyond max_drop still fails. The same numbers fail the skills
+// group, which keeps the full WP3.4 bar.
+func TestGroupPassKPolicy(t *testing.T) {
+	cfg, err := LoadConfig(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g, _ := cfg.Group("brief"); g.PassK != PassKAdvisory {
+		t.Fatalf("brief pass_k = %q", g.PassK)
+	}
+	if g, _ := cfg.Group("skills"); g.PassK == PassKAdvisory {
+		t.Fatal("the skills group must keep the full bar")
+	}
+	run := func(group string, means map[string]float64, passK map[string]float64) *Results {
+		r := &Results{SHA: "88dddb9", Group: group, K: 5}
+		for _, id := range []string{"brief/eli5-explain", "brief/engineer-ideate", "brief/regulatory-close", "brief/ste-explain"} {
+			r.Cases = append(r.Cases, CaseResult{Case: id, Mean: means[id], PassK: passK[id]})
+			r.PassK += passK[id] / 4
+			r.Mean += means[id] / 4
+		}
+		return r
+	}
+	means := map[string]float64{"brief/eli5-explain": 3.8, "brief/engineer-ideate": 4.8, "brief/regulatory-close": 5, "brief/ste-explain": 4.2}
+	passK := map[string]float64{"brief/engineer-ideate": 1, "brief/regulatory-close": 1}
+
+	cur := run("brief", means, passK)
+	if v, reasons := Compare(cur, nil, cfg); v != Pass {
+		t.Fatalf("brief group on the mean: %s %v", v, reasons)
+	}
+	if a := strings.Join(Advisories(cur, nil, cfg), "\n"); !strings.Contains(a, "brief/eli5-explain: pass^5 0.00 is below 0.80") || !strings.Contains(a, "pass^5 0.50 is below 0.80") {
+		t.Fatalf("advisories: %s", a)
+	}
+	if v, reasons := Compare(run("skills", means, passK), nil, cfg); v != Fail || !strings.Contains(strings.Join(reasons, "\n"), "brief/ste-explain: pass^5 0.00 is below 0.80") {
+		t.Fatalf("the same numbers in the skills group: %s %v", v, reasons)
+	}
+	low := map[string]float64{"brief/eli5-explain": 3.4, "brief/engineer-ideate": 4.8, "brief/regulatory-close": 5, "brief/ste-explain": 4.2}
+	if v, reasons := Compare(run("brief", low, passK), nil, cfg); v != Fail || !strings.Contains(strings.Join(reasons, "\n"), "brief/eli5-explain: mean rubric score 3.40 is below 3.50") {
+		t.Fatalf("a register mean below 3.5: %s %v", v, reasons)
+	}
+	base := run("brief", map[string]float64{"brief/eli5-explain": 4.8, "brief/engineer-ideate": 5, "brief/regulatory-close": 5, "brief/ste-explain": 4.8}, passK)
+	if v, reasons := Compare(cur, base, cfg); v != Fail || !strings.Contains(strings.Join(reasons, "\n"), "below the baseline") {
+		t.Fatalf("a drop beyond max_drop: %s %v", v, reasons)
 	}
 }
