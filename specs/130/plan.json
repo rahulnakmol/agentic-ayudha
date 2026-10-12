@@ -1,0 +1,36 @@
+{
+  "story": 130,
+  "body_hash": "b32e4703a0373c59d075519104983f5633280fbe6dbc2e830c117e83dbc8f991",
+  "footprint": [
+    "L07"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L07",
+      "title": "Embedded, checked seed of synthetic Example Co plan passages",
+      "contracts": [
+        "store.Load/Parse: seed v1 {version, synthetic, employer, plan_year, passages[{id, plan, section, text}]}; refuses non-synthetic seeds, malformed or duplicate IDs, empty fields, and non-example.com email addresses"
+      ],
+      "tests": [
+        "examples/benefits-qa/store:TestLoadSeed",
+        "examples/benefits-qa/store:TestParseRefuses"
+      ],
+      "instrumentation": [
+        "Parse errors wrap ErrSeed and name the passage"
+      ],
+      "rollback": "The seed is embedded read-only data with no migration: revert the commit (git revert) and rebuild; nothing persisted outside the binary changes",
+      "criteria": [
+        1,
+        2
+      ]
+    }
+  ],
+  "em_review": {
+    "required": true,
+    "layers": [
+      "L07"
+    ]
+  },
+  "planned_at": "2026-10-12T07:29:09Z",
+  "planned_by": "human-fallback"
+}
