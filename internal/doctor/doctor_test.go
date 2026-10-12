@@ -122,6 +122,8 @@ func healthy(t *testing.T) *Probe {
 		API: fakeAPI(map[string]any{
 			"/repos/o/r":          map[string]any{"owner": map[string]any{"type": "Organization"}},
 			"/repos/o/r/rulesets": []any{},
+			"/repos/o/r/issues?state=open&labels=aayudha:leased&per_page=100": []any{map[string]any{"number": 9}},
+			"/repos/o/r/issues/9/comments?per_page=100":                       []any{map[string]any{"body": "<!-- aayudha:lease holder=bot@ci expires=2099-01-01T00:00:00Z -->"}},
 		}),
 		Repo:      "o/r",
 		Version:   "1.2.0",
@@ -187,6 +189,13 @@ func failing(t *testing.T) map[string]func(*Probe) {
 			p.Secrets = secrets.New(down{}, secrets.Env{Getenv: func(string) string { return "" }})
 		},
 		"issue-types": func(p *Probe) { p.API = nil },
+		"leases": func(p *Probe) {
+			p.API = fakeAPI(map[string]any{
+				"/repos/o/r/issues?state=open&labels=aayudha:leased&per_page=100": []any{map[string]any{"number": 9}, map[string]any{"number": 10}},
+				"/repos/o/r/issues/9/comments?per_page=100":                       []any{map[string]any{"body": "<!-- aayudha:lease holder=bot@ci expires=2026-01-01T00:00:00Z -->"}},
+				"/repos/o/r/issues/10/comments?per_page=100":                      []any{},
+			})
+		},
 		// Each state a configured integration can be in: a write-scoped key
 		// (refused, not sent), an unreachable provider, an unset secret, and an
 		// integration this binary has no adapter for.

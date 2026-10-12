@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"strconv"
 	"strings"
@@ -27,6 +28,25 @@ type transport struct {
 }
 
 func mutating(m string) bool { return m != http.MethodGet && m != http.MethodHead }
+
+// retryable reports whether repeating a request after a server error cannot
+// write twice: reads, GraphQL queries, and the idempotent PUT and DELETE. A
+// POST or PATCH may have landed before the error, so it is never repeated.
+func retryable(req *http.Request, graphql bool) bool {
+	switch req.Method {
+	case http.MethodGet, http.MethodHead, http.MethodPut, http.MethodDelete:
+		return true
+	}
+	return graphql && isQuery(req)
+}
+
+// jitter is up to a quarter of d, at random.
+func jitter(d time.Duration) time.Duration {
+	if d < 4 {
+		return 0
+	}
+	return time.Duration(rand.Int64N(int64(d / 4)))
+}
 
 func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	o := t.c.opts
@@ -90,6 +110,14 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		wait, limited, err := rateLimitWait(resp, o.Now())
 		if err != nil {
 			return nil, err
+		}
+		if !limited && resp.StatusCode >= 500 && attempt < o.ServerRetries && retryable(req, graphql) {
+			// A 5xx on a request that is safe to repeat (WP5.5): exponential
+			// backoff from one second.
+			wait, limited = time.Second<<attempt, true
+		}
+		if limited {
+			wait += jitter(wait) // spread the retries of parallel builders
 		}
 		if !limited {
 			if req.Method == http.MethodGet && resp.StatusCode == http.StatusOK && resp.Header.Get("ETag") != "" {

@@ -349,9 +349,56 @@ func checkWorktrees(ctx context.Context, p *Probe) Result {
 		}
 	}
 	if len(leaks) > 0 {
-		return Result{Status: Warn, Detail: fmt.Sprintf("%d leaked worktree(s); remove them with git worktree prune (aayu gc, WP5.5)", len(leaks)), Lines: leaks}
+		return Result{Status: Warn, Detail: fmt.Sprintf("%d leaked worktree(s); `aayu gc` prunes them", len(leaks)), Lines: leaks}
 	}
 	return Result{Status: Pass, Detail: "no leaked worktrees"}
+}
+
+// leaseTag is the lock comment `aayu build` keeps on a story it holds (WP5.5).
+var leaseTag = regexp.MustCompile(`<!-- aayudha:lease holder=(\S+) expires=(\S+) -->`)
+
+// checkLeases lists the open stories labelled aayudha:leased and warns about
+// leases whose lock comment has expired, which `aayu gc` reclaims.
+func checkLeases(ctx context.Context, p *Probe) Result {
+	if p.API == nil || p.Repo == "" {
+		return Result{Status: Warn, Detail: "could not check build leases (no GitHub token or repository)"}
+	}
+	var issues []struct {
+		Number int `json:"number"`
+	}
+	if err := p.API(ctx, "/repos/"+p.Repo+"/issues?state=open&labels=aayudha:leased&per_page=100", &issues); err != nil {
+		return Result{Status: Warn, Detail: "could not list leased stories: " + err.Error()}
+	}
+	var stale []string
+	for _, is := range issues {
+		var cs []struct {
+			Body string `json:"body"`
+		}
+		if err := p.API(ctx, fmt.Sprintf("/repos/%s/issues/%d/comments?per_page=100", p.Repo, is.Number), &cs); err != nil {
+			return Result{Status: Warn, Detail: fmt.Sprintf("could not read #%d's lease: %v", is.Number, err)}
+		}
+		lease := ""
+		for _, c := range cs {
+			if m := leaseTag.FindStringSubmatch(c.Body); m != nil {
+				if exp, err := time.Parse(time.RFC3339, m[2]); err == nil && exp.Before(time.Now()) {
+					lease = fmt.Sprintf("#%d: %s, expired %s", is.Number, m[1], m[2])
+				} else if err == nil {
+					lease = "live"
+				}
+			}
+		}
+		switch lease {
+		case "live":
+		case "":
+			stale = append(stale, fmt.Sprintf("#%d: labelled leased without a lock comment", is.Number))
+		default:
+			stale = append(stale, lease)
+		}
+	}
+	if len(stale) > 0 {
+		return Result{Status: Warn, Detail: fmt.Sprintf("%d stale build lease(s); `aayu gc` reclaims them", len(stale)), Lines: stale}
+	}
+	return Result{Status: Pass, Detail: fmt.Sprintf("%d live build lease(s)", len(issues))}
 }
 
 func checkTelemetry(_ context.Context, p *Probe) Result {
