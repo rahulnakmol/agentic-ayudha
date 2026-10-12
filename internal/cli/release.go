@@ -94,7 +94,8 @@ type Promotion struct {
 	Artifacts       []Artifact   `json:"artifacts"`
 	Stories         []int        `json:"stories_released"`
 	AlreadyReleased []int        `json:"already_released"`
-	NotListed       []int        `json:"shipped_not_listed"` // shipped in this range but not linked by the Release
+	NotListed       []int        `json:"shipped_not_listed"`    // shipped in this range but not linked by the Release
+	NotMerged       []int        `json:"referenced_not_merged"` // referenced by a PR in this range but not status:merged; not stamped
 	Notes           string       `json:"release_notes,omitempty"`
 	MeasureDue      []MeasureDue `json:"measure_due"`
 	PromotedBy      string       `json:"promoted_by"`
@@ -191,7 +192,7 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 	now := e.Now().UTC()
 	ts := now.Format("20060102T1504Z")
 	p := Promotion{Repo: repo, Release: n, Version: version, Source: src, Target: dst, SourceSHA: srcSHA, PromotedBy: me.Login,
-		PromotedAt: now.Format(time.RFC3339), Artifacts: []Artifact{}, Stories: []int{}, AlreadyReleased: []int{}, NotListed: []int{}, MeasureDue: []MeasureDue{}}
+		PromotedAt: now.Format(time.RFC3339), Artifacts: []Artifact{}, Stories: []int{}, AlreadyReleased: []int{}, NotListed: []int{}, NotMerged: []int{}, MeasureDue: []MeasureDue{}}
 	if to == "main" {
 		p.Candidate, p.Message, p.Tag = "promote/main-"+version, "Release: "+version, version
 		if out, _ := gitOut(root, "ls-remote", "--tags", "origin", "refs/tags/"+version); out != "" {
@@ -253,7 +254,14 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 		return Errorf(ExitBlocked, "release #%d includes work this promotion does not ship: %s", n, strings.Join(problems, "; "))
 	}
 	for _, s := range shipped {
-		if !slices.Contains(shippedStatus, status[s]) {
+		switch {
+		case slices.Contains(shippedStatus, status[s]):
+		case status[s] != "merged" && !slices.Contains(listed, s):
+			// A PR in the range refs it (an umbrella or partly delivered story), but the story
+			// itself has not merged: stamping it released would claim work that is not done.
+			p.NotMerged = append(p.NotMerged, s)
+			continue
+		default:
 			p.Stories = append(p.Stories, s)
 		}
 		if !slices.Contains(listed, s) {
@@ -817,6 +825,9 @@ func (e *Env) shippingEvidence(ctx context.Context, c *github.Client, repo strin
 	if len(p.NotListed) > 0 {
 		fmt.Fprintf(&b, "; shipped but not listed here: %s", refsList(p.NotListed))
 	}
+	if len(p.NotMerged) > 0 {
+		fmt.Fprintf(&b, "; referenced but not merged, not stamped: %s", refsList(p.NotMerged))
+	}
 	b.WriteString("\n")
 	fmt.Fprintf(&b, "- Release notes: `%s` on `ledger`; record `%s`\n", p.Notes, rungPath(p.Release, p.Target))
 	for _, d := range p.MeasureDue {
@@ -871,6 +882,9 @@ func promotionText(out io.Writer, p Promotion) error {
 	}
 	if len(p.NotListed) > 0 {
 		fmt.Fprintf(out, "  shipped but not listed by the Release: %s\n", refsList(p.NotListed))
+	}
+	if len(p.NotMerged) > 0 {
+		fmt.Fprintf(out, "  referenced but not merged (not stamped): %s\n", refsList(p.NotMerged))
 	}
 	if p.Notes != "" {
 		fmt.Fprintf(out, "  release notes: %s\n", p.Notes)
