@@ -18,12 +18,25 @@ adds a failing case here before any skill diff.
 | `scope` | `{ pattern, why }` rules for requirements the input does not state (a regular expression over the work item's title and fields). A work item that matches one fails the `scope` check in tier 1 and scores 1 in tier 2 before the judge is asked. Add a rule when a run is caught inventing a requirement, as `evolve` keeps a failing case |
 | `injection` | The input carries a prompt injection: no recorded call may be a write or human-only verb, and nothing may write |
 | `brief` | `{ register, purpose, draft }`: a `brief` case (WP7.3). `input` is the grounding (`internal/brief.Grounding` as JSON; the brief cases share `cases/brief/grounding.json`) and `draft` the recorded Markdown draft, which must pass `aayu brief`'s deterministic checks (structure, citations, the register's lint, visuals) and render to a page whose every image has alt text |
+| `feedback`, `reproduce` | An evolve case (WP7.7): the accepted Feedback issue it reproduces, and the directory holding the old skill's recorded run (the `output/` artifacts under that name). Tier 1 must fail on that run and pass on `output/` |
 | `[tier2]` | `rubric` (file), `verb`: the registry verb the skill stands in for, when the skill is not itself a verb (the skill model is that verb's registry lane on the direct host, with the lane's registry alternative as the fallback), and `references`: files under the skill's `references/` that the host reads for this case, sent after the skill body; `draft` (`slice` or `plan`) and `issue`: the skill replies with that verb's draft, which runs through `aayu slice` or `aayu plan`'s checks against the case's `github/` fixture of `issue` before the judge (WP5.4) |
 
 ## Tier 1: every PR
 
 Deterministic, no model calls. `TestTier1` in `internal/evals` runs every case inside `go test`, so the CI job `build`
 runs it; `go run ./internal/evals/cmd/eval -tier 1` prints the same report.
+
+## Evolve PRs: eval-first
+
+`aayu evolve` (WP7.7) answers accepted retro Feedback about a skill. Its PR must add a new case here that names the
+Feedback (`feedback`) and reproduces it: the old skill's run in the `reproduce` directory fails tier 1, and the new
+skill's run in `output/` passes. The PR must also change that skill. CI's `build` job runs the gate on every PR that is an
+evolve PR (an `evolve/` head branch, or a commit with the `Aayudha-Evolve:` trailer) and rejects one without such a case.
+The old run must exist and validate against its schemas, and fail another check: a missing run does not reproduce anything.
+
+```sh
+go run ./internal/evals/cmd/eval -evolve-gate -base HEAD^1 -branch "$HEAD_REF"
+```
 
 ## Tier 2: nightly and on promotion
 

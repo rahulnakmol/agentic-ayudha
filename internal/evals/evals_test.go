@@ -763,3 +763,15 @@ func TestTier1BriefRules(t *testing.T) {
 		}
 	}
 }
+
+// An evolve case's old run is its output/ artifacts read from the reproduce
+// directory, a brief draft included; other paths stay.
+func TestCaseBefore(t *testing.T) {
+	c := Case{ID: "brief/x", Reproduce: "before", Input: "in.json", Artifacts: []string{"output/a.json", "fixtures/b.json"}, Ready: []string{"output/a.json"},
+		Schemas: []Schema{{File: "output/a.json", Schema: "s.json"}}, Brief: &BriefSpec{Register: "ste", Purpose: "explain", Draft: "output/brief.md"}}
+	b := c.Before()
+	if strings.Join(b.Artifacts, ",") != "before/a.json,fixtures/b.json" || b.Ready[0] != "before/a.json" || b.Schemas[0].File != "before/a.json" ||
+		b.Brief.Draft != "before/brief.md" || c.Brief.Draft != "output/brief.md" || c.Artifacts[0] != "output/a.json" {
+		t.Fatalf("before: %+v %+v", b, b.Brief)
+	}
+}

@@ -63,6 +63,17 @@ type Options struct {
 	TUI             func(m tea.Model) error                                                     // runs an interactive model in place of the terminal (tests); nil uses bubbletea on In/Out
 	// CheckpointVerify replaces build's verify run on a checkpoint (tests); nil runs `aayu verify` in the worktree.
 	CheckpointVerify func(ctx context.Context, worktree string) (hold bool, detail string, err error)
+	// EvolveGate is the eval-first gate (internal/evals.Gate) for `evolve`
+	// (WP7.7). The binary injects it: internal/evals replays CLI calls, so it
+	// imports this package and cannot be imported by it.
+	EvolveGate func(ctx context.Context, root, nameStatus string, assets fs.FS) ([]EvolveCase, []string)
+}
+
+// EvolveCase is a new eval case of an evolve change.
+type EvolveCase struct {
+	ID       string `json:"id"`
+	Skill    string `json:"skill"`
+	Feedback int    `json:"feedback"`
 }
 
 // Globals are the global flags shared by every command.
