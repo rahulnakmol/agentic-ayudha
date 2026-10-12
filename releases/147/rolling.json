@@ -1,0 +1,138 @@
+{
+  "repo": "rahulnakmol/agentic-ayudha",
+  "release": 147,
+  "version": "v0.1.0",
+  "source": "dev",
+  "target": "rolling",
+  "source_sha": "89f0137cea1e161b08a7c67cc645d2850add239b",
+  "commit": "689ce9431cc2b1a9bd11757cae3aa429b166cf3c",
+  "tree": "5bdb57c06f0dde2bd6fd39804de814d7b799bafa",
+  "message": "Rolling snapshot: 20261012T1043Z",
+  "tag": "rolling-2026-10-12.3",
+  "candidate": "promote/rolling-20261012T1043Z",
+  "evals": {
+    "workflow": "evals.yml",
+    "id": 38238157806,
+    "url": "https://github.com/rahulnakmol/agentic-ayudha/actions/runs/38238157806",
+    "conclusion": "success",
+    "attempts": 1
+  },
+  "gate": {
+    "workflow": "ci.yml",
+    "id": 38240350947,
+    "url": "https://github.com/rahulnakmol/agentic-ayudha/actions/runs/38240350947",
+    "conclusion": "success",
+    "attempts": 1
+  },
+  "artifacts": [
+    {
+      "name": "benchmarks",
+      "digest": "sha256:ee408a792e7cd2440aaf4406565eb54b3dc162eab4a0608a0bfe958152df768f",
+      "size": 698
+    },
+    {
+      "name": "release-snapshot",
+      "digest": "sha256:3dda8a3da3ce9c8cd904a1023bb0403a0c0fc593c0e82b0905357b2aceeafe29",
+      "size": 64558707
+    }
+  ],
+  "stories_released": [
+    53,
+    54,
+    55,
+    56,
+    60,
+    62,
+    64,
+    65,
+    66,
+    67,
+    68,
+    69,
+    71,
+    112,
+    130,
+    131
+  ],
+  "already_released": [],
+  "shipped_not_listed": [
+    130,
+    131
+  ],
+  "referenced_not_merged": [
+    70
+  ],
+  "release_notes": "tell/release/rolling-2026-10-12.3.md",
+  "measure_due": [
+    {
+      "issue": 29,
+      "type": "goal",
+      "due": "2026-11-09",
+      "release": 147,
+      "tag": "rolling-2026-10-12.3",
+      "stories": [
+        53,
+        54,
+        55,
+        56,
+        60,
+        62,
+        64,
+        65,
+        66,
+        67,
+        68,
+        69,
+        71,
+        112
+      ]
+    },
+    {
+      "issue": 30,
+      "type": "initiative",
+      "due": "2026-11-09",
+      "release": 147,
+      "tag": "rolling-2026-10-12.3",
+      "stories": [
+        53,
+        54,
+        55,
+        56,
+        60,
+        62,
+        64,
+        65,
+        66,
+        67,
+        68,
+        69,
+        71,
+        112
+      ]
+    },
+    {
+      "issue": 125,
+      "type": "goal",
+      "due": "2026-11-09",
+      "release": 147,
+      "tag": "rolling-2026-10-12.3",
+      "stories": [
+        130,
+        131
+      ]
+    },
+    {
+      "issue": 126,
+      "type": "initiative",
+      "due": "2026-11-09",
+      "release": 147,
+      "tag": "rolling-2026-10-12.3",
+      "stories": [
+        130,
+        131
+      ]
+    }
+  ],
+  "promoted_by": "rahulnakmol",
+  "promoted_at": "2026-10-12T10:43:05Z"
+}
