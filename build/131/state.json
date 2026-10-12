@@ -3,5 +3,18 @@
   "branch": "story/131-answers-quote-the-best-plan-passage-poli",
   "started_at": "2026-10-12T09:04:42Z",
   "failed_attempts": 0,
-  "checkpoints": null
+  "checkpoints": [
+    {
+      "k": 1,
+      "n": 2,
+      "attempt": 1,
+      "commit": "1e7407b2cb4862c3febe8a4f1e988fad0ad64603",
+      "layers": [
+        "L04"
+      ],
+      "verify": "hold",
+      "detail": "floors hold; not run here (tool not installed; the merge gate runs them): secrets, deps",
+      "at": "2026-10-12T09:05:08Z"
+    }
+  ]
 }
