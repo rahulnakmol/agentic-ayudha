@@ -304,10 +304,44 @@ func TestInitExtras(t *testing.T) {
 		t.Errorf("loops rendered by --gates: %v", slices.Collect(maps.Keys(files)))
 	}
 	cfg := files[".aayudha/config.toml"]
-	for _, want := range []string{"[identity]\napp_id = 4242\napp_slug = \"aayudha-r\"\nbroker = \"aayudha-token.yml\"", "[integrations.posthog]", "[integrations.sentry]", "[integrations.growthbook]"} {
+	for _, want := range []string{"[identity]\napp_id = 4242\napp_slug = \"aayudha-r\"\nbroker = \"aayudha-token.yml\"", "[integrations.posthog]", "[integrations.sentry]", "[integrations.growthbook]",
+		"[integrations.azure]\nscope = \"read\"\nauth = \"oidc\"", "[integrations.aws]\nscope = \"read\"\nauth = \"oidc\"", "[integrations.gcp]\nscope = \"read\"\nauth = \"oidc\""} {
 		if !strings.Contains(cfg, want) {
 			t.Errorf("config lacks %q:\n%s", want, cfg)
 		}
+	}
+	// WP7.2b.3: each cloud's least-privilege setup is written under .aayudha/setup/<cloud>/
+	// (golden), its steps are printed, and the config it writes loads (no stored key).
+	var setup []string
+	for p := range files {
+		if strings.HasPrefix(p, ".aayudha/setup/") {
+			setup = append(setup, p)
+			golden := filepath.Join("testdata", "setup", strings.TrimPrefix(p, ".aayudha/setup/"))
+			if *updateGolden {
+				_ = os.MkdirAll(filepath.Dir(golden), 0o755)
+				_ = os.WriteFile(golden, []byte(files[p]), 0o644)
+			}
+			if want, err := os.ReadFile(golden); err != nil || string(want) != files[p] {
+				t.Errorf("%s differs from %s (go test ./internal/cli -run TestInitExtras -update-golden)", p, golden)
+			}
+			if strings.HasSuffix(p, ".json") && !json.Valid([]byte(strings.NewReplacer("<", "", ">", "").Replace(files[p]))) {
+				t.Errorf("%s is not JSON", p)
+			}
+		}
+	}
+	slices.Sort(setup)
+	if want := []string{".aayudha/setup/aws/README.md", ".aayudha/setup/aws/media-policy.json", ".aayudha/setup/aws/read-policy.json", ".aayudha/setup/aws/trust-policy.json", ".aayudha/setup/aws/workflow.yml",
+		".aayudha/setup/azure/README.md", ".aayudha/setup/azure/federated-credential.json", ".aayudha/setup/azure/lifecycle-policy.json", ".aayudha/setup/azure/workflow.yml",
+		".aayudha/setup/gcp/README.md", ".aayudha/setup/gcp/workflow.yml"}; !slices.Equal(setup, want) {
+		t.Errorf("setup files %v, want %v", setup, want)
+	}
+	for _, want := range []string{"# Azure for o/r (aayudha)", "# AWS for o/r (aayudha)", "# Google Cloud for o/r (aayudha)", `"repo:o/r:ref:refs/heads/`} {
+		if !strings.Contains(errOut+files[".aayudha/setup/azure/federated-credential.json"], want) {
+			t.Errorf("init did not print or write %q", want)
+		}
+	}
+	if code, _, errOut := run(t, env, opts, "config", "validate"); code != 0 {
+		t.Errorf("config with the cloud sections does not validate: %s", errOut)
 	}
 	g.Mu.Lock()
 	if len(g.Projects) != 3 || g.Variables["AAYUDHA_APP_CLIENT_ID"] != "Iv1.abc" || g.Secrets["AAYUDHA_APP_PRIVATE_KEY"] == "" || strings.Contains(g.Secrets["AAYUDHA_APP_PRIVATE_KEY"], "MIIE") {
@@ -360,7 +394,7 @@ func TestInitExtras(t *testing.T) {
 		kinds = append(kinds, o.Kind+":"+o.Name)
 	}
 	slices.Sort(kinds)
-	want := []string{"app:bot", "integration:growthbook", "integration:posthog", "integration:sentry", "project:r Delivery", "project:r Ops", "project:r Portfolio"}
+	want := []string{"app:bot", "integration:aws", "integration:azure", "integration:gcp", "integration:growthbook", "integration:posthog", "integration:sentry", "project:r Delivery", "project:r Ops", "project:r Portfolio"}
 	if code != 0 || !slices.Equal(kinds, want) {
 		t.Errorf("uninit --external: exit %d, %v, want %v", code, kinds, want)
 	}
