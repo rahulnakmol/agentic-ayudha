@@ -54,4 +54,20 @@ pairs:
 	if b2, err := ParseBrand(y); err != nil || b2.Name != "Acme" || len(b2.Pairs) != 4 {
 		t.Fatalf("round trip: %v\n%s", err, y)
 	}
+
+	// A brand of a future version with nothing filled in names every missing part.
+	empty, err := ParseBrand([]byte("version: 2\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, problems = empty.Check()
+	got = strings.Join(problems, "\n")
+	for _, want := range []string{"version: want 1", "name: required", "voice.tone: name at least one tone word", "palette: name at least two colours", "pairs: name at least one text pair"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("empty brand: problems lack %q:\n%s", want, got)
+		}
+	}
+	if len(res) != 0 {
+		t.Errorf("empty brand: results %+v", res)
+	}
 }

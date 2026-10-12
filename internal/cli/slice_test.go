@@ -238,3 +238,243 @@ func TestPlan(t *testing.T) {
 		t.Fatalf("bypass of a reviewed plan: %d %s", code, errOut)
 	}
 }
+
+// slice without --draft reports what to slice within: the Feature's footprint
+// from its expected paths. slice refuses what it cannot slice: a closed
+// issue, a story that is not XL, and an XL story without a Feature parent.
+func TestSliceSources(t *testing.T) {
+	g := fake.New(t, "o/r", "User")
+	const fixture = "slice/proof-retention-6-layer/github/repos/o/r/issues/40.json"
+	feature := featureIssue(t, g, fixture) // #1
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1"}
+	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1}
+
+	code, out, errOut := run(t, env, opts, "slice", "1", "--repo", "o/r")
+	if code != 0 || !strings.Contains(out, "#1: Feature #1, footprint L02, L03, L04, L06, L07, L09 from expected paths ") ||
+		!strings.Contains(out, "next: draft XS-L stories within these paths (skills/slice), then `aayu slice 1 --draft <file>`") {
+		t.Fatalf("slice without a draft: %d %s %s", code, out, errOut)
+	}
+	code, out, errOut = run(t, env, opts, "slice", "1", "--repo", "o/r", "--json")
+	var res SliceResult
+	if err := json.Unmarshal([]byte(out), &res); err != nil || code != 0 || res.Pass || res.Feature != 1 ||
+		strings.Join(res.Footprint, ",") != "L02,L03,L04,L06,L07,L09" || len(res.ExpectedPaths) == 0 || res.Stories == nil || len(res.Stories) != 0 {
+		t.Fatalf("slice --json without a draft: %d %v %s %s", code, err, out, errOut)
+	}
+	if len(g.Writes()) != 0 {
+		t.Fatalf("slice without a draft wrote: %v", g.Writes())
+	}
+
+	closed := featureIssue(t, g, fixture) // #2
+	closed.State = "closed"
+	story := g.AddIssue("A plain story", feature.Body, "type:story", "status:planned", "effort:M")     // #3
+	orphan := g.AddIssue("An XL story", feature.Body, "type:story", "status:planned", "effort:XL")     // #4
+	underStory := g.AddIssue("An XL story", feature.Body, "type:story", "status:planned", "effort:XL") // #5
+	underStory.Parent = story.Number
+	for _, tc := range []struct {
+		n, code int
+		want    string
+	}{
+		{closed.Number, ExitBlocked, "slice: #2 is closed"},
+		{story.Number, ExitUsage, `slice: #3 is a story (effort "M"); slice takes a Feature or an XL story`},
+		{orphan.Number, ExitBlocked, "slice: XL story #4 has no parent Feature to slice it under"},
+		{underStory.Number, ExitBlocked, "slice: XL story #5's parent #3 is a story, not a Feature"},
+	} {
+		if code, out, errOut := run(t, env, opts, "slice", strconv.Itoa(tc.n), "--repo", "o/r"); code != tc.code || !strings.Contains(errOut, tc.want) {
+			t.Errorf("slice #%d: exit %d, want %d with %q: %s %s", tc.n, code, tc.code, tc.want, out, errOut)
+		}
+	}
+
+	// A draft is decoded strictly: an unknown field is a usage error, as is a missing file.
+	bad := filepath.Join(t.TempDir(), "draft.json")
+	_ = os.WriteFile(bad, []byte(`{"feature": 1, "stories": [], "notes": "x"}`), 0o644)
+	if code, _, errOut := run(t, env, opts, "slice", "1", "--repo", "o/r", "--draft", bad); code != ExitUsage || !strings.Contains(errOut, `unknown field "notes"`) {
+		t.Errorf("draft with an unknown field: %d %s", code, errOut)
+	}
+	if code, _, errOut := run(t, env, opts, "slice", "1", "--repo", "o/r", "--draft", filepath.Join(t.TempDir(), "none.json")); code != ExitUsage {
+		t.Errorf("missing draft: %d %s", code, errOut)
+	}
+	if len(g.Writes()) != 0 {
+		t.Fatalf("a refused slice wrote: %v", g.Writes())
+	}
+}
+
+// The text report of a slice: per-story and whole-draft problems for a
+// draft that fails, the next step for one that passes, --dry-run --create
+// planning the stories without writing them, and the created issue numbers.
+func TestSliceText(t *testing.T) {
+	g := fake.New(t, "o/r", "User")
+	feature := featureIssue(t, g, "slice/proof-retention-6-layer/github/repos/o/r/issues/40.json") // #1
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1"}
+	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1}
+	draft := func(edit func(*planning.SliceDraft)) string {
+		return evalDraft(t, "slice/proof-retention-6-layer/output/slice.json", func(d *planning.SliceDraft) { d.Feature = feature.Number; edit(d) })
+	}
+	slice := func(path string, extra ...string) (int, string) {
+		code, out, errOut := run(t, env, opts, append([]string{"slice", "1", "--repo", "o/r", "--draft", path}, extra...)...)
+		return code, out + errOut
+	}
+
+	code, out := slice(draft(func(d *planning.SliceDraft) {
+		d.Stories[1].Labels = []string{"effort:XL"}
+		d.Stories[0].DependsOn = []int{5}
+	}), "--create")
+	if code != ExitBlocked || !strings.Contains(out, "5 stories, does not pass yet") || !strings.Contains(out, "     problem: ") ||
+		!strings.Contains(out, "  problem: depends_on forms a cycle") || len(g.Writes()) != 0 {
+		t.Fatalf("failing draft: %d %s", code, out)
+	}
+
+	good := draft(func(*planning.SliceDraft) {})
+	if code, out := slice(good); code != 0 || !strings.Contains(out, "5 stories, passes") || !strings.Contains(out, "run again with --create to write the stories") {
+		t.Fatalf("passing draft without --create: %d %s", code, out)
+	}
+	if code, out := slice(good, "--create", "--dry-run"); code != 0 || !strings.Contains(out, "--dry-run: the stories are planned, not written") || len(g.Writes()) != 0 || len(g.Issues) != 1 {
+		t.Fatalf("--dry-run --create: %d, %d writes, %d issues: %s", code, len(g.Writes()), len(g.Issues), out)
+	}
+	code, out = slice(good, "--create")
+	if code != 0 || len(g.Issues) != 6 {
+		t.Fatalf("--create: %d, %d issues: %s", code, len(g.Issues), out)
+	}
+	for n := 2; n <= 6; n++ {
+		if !strings.Contains(out, ") → #"+strconv.Itoa(n)+"\n") {
+			t.Errorf("the report does not name created story #%d:\n%s", n, out)
+		}
+	}
+}
+
+// plan without --draft reports what to plan within; plan refuses a story
+// that does not pass Ready; a story without layer labels takes the plan's
+// layers as its footprint, written as its labels; --dry-run writes nothing.
+func TestPlanFootprint(t *testing.T) {
+	g := fake.New(t, "o/r", "User")
+	feature := featureIssue(t, g, "plan/config-migration/github/repos/o/r/issues/41/parent.json") // #1
+	var fx struct{ Title, Body string }
+	b, _ := os.ReadFile(filepath.Join("..", "..", "evals", "cases", "plan", "config-migration", "github", "repos", "o", "r", "issues", "41.json"))
+	_ = json.Unmarshal(b, &fx)
+	story := g.AddIssue(fx.Title, fx.Body, "type:story", "status:ready", "effort:M", "layer:L07") // #2
+	unlabelled := g.AddIssue(fx.Title, fx.Body, "type:story", "status:ready", "effort:M")         // #3
+	unready := g.AddIssue("Half written", "", "type:story", "status:planned")                     // #4
+	for _, s := range []*fake.Issue{story, unlabelled, unready} {
+		s.Parent = feature.Number
+		feature.Subs = append(feature.Subs, s.Number)
+	}
+	dir, bare := ledgerCheckout(t)
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1"}
+	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+	draft := func(n int) string {
+		return evalDraft(t, "plan/config-migration/output/plan.json", func(d *planning.PlanDraft) { d.Story = n })
+	}
+
+	code, out, errOut := run(t, env, opts, "plan", "2", "--repo", "o/r")
+	if code != 0 || !strings.Contains(out, "#2 "+fx.Title+": footprint L07; 2 criteria; never layers L04, L07, L09") ||
+		!strings.Contains(out, "next: draft one checkpoint per footprint layer (skills/plan), then `aayu plan 2 --draft <file>`") {
+		t.Fatalf("plan without a draft: %d %s %s", code, out, errOut)
+	}
+	code, out, errOut = run(t, env, opts, "plan", "2", "--repo", "o/r", "--json")
+	var res PlanResult
+	if err := json.Unmarshal([]byte(out), &res); err != nil || code != 0 || res.Story != 2 || strings.Join(res.Footprint, ",") != "L07" ||
+		len(res.Criteria) != 2 || !contains(res.Never, "L07") || res.Pass || res.Next == "" {
+		t.Fatalf("plan --json without a draft: %d %v %s %s", code, err, out, errOut)
+	}
+
+	if code, _, errOut := run(t, env, opts, "plan", "4", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "a plan is for a story or bug that passes Ready; this story has") {
+		t.Fatalf("plan of a story that is not Ready: %d %s", code, errOut)
+	}
+
+	if code, out, errOut := run(t, env, opts, "plan", "2", "--repo", "o/r", "--draft", draft(2)); code != 0 || !strings.Contains(out, "run again with --create to write it to the ledger") {
+		t.Fatalf("passing plan without --create: %d %s %s", code, out, errOut)
+	}
+	if code, out, errOut := run(t, env, opts, "plan", "2", "--repo", "o/r", "--draft", draft(2), "--create", "--dry-run"); code != 0 ||
+		!strings.Contains(out, "--dry-run: the plan is planned, not written") || strings.Contains(git(t, bare, "ls-tree", "-r", "--name-only", "ledger"), "specs/") {
+		t.Fatalf("plan --dry-run --create: %d %s %s", code, out, errOut)
+	}
+
+	if code, _, errOut := run(t, env, opts, "plan", "99", "--repo", "o/r"); code != ExitExternal {
+		t.Fatalf("plan of an issue that does not exist: %d %s", code, errOut)
+	}
+
+	// The layer labels are written before the plan: when they fail, the
+	// ledger has no plan, and a retry writes both.
+	g.Fail = "POST /repos/o/r/issues/3/labels"
+	if code, _, errOut := run(t, env, opts, "plan", "3", "--repo", "o/r", "--draft", draft(3), "--create"); code != ExitExternal ||
+		strings.Contains(git(t, bare, "ls-tree", "-r", "--name-only", "ledger"), "specs/") {
+		t.Fatalf("plan whose label write fails: %d %s", code, errOut)
+	}
+	code, out, errOut = run(t, env, opts, "plan", "3", "--repo", "o/r", "--draft", draft(3), "--create", "--json")
+	res = PlanResult{}
+	if err := json.Unmarshal([]byte(out), &res); err != nil || code != 0 || !res.FromPlan || strings.Join(res.Footprint, ",") != "L07" || res.Ledger != "specs/3/plan.json" {
+		t.Fatalf("plan of a story without layer labels: %d %v %s %s", code, err, out, errOut)
+	}
+	if labels := g.LabelNames(3); !contains(labels, "layer:L07") {
+		t.Fatalf("the plan's layers were not written as labels: %v", labels)
+	}
+	if code, out, _ := run(t, env, opts, "plan", "3", "--repo", "o/r"); code != 0 || !strings.Contains(out, "footprint L07;") {
+		t.Fatalf("plan after the labels were written: %d %s", code, out)
+	}
+}
+
+// plan --approve records the EM plan-time review only for a plan on the
+// ledger that needs one, by the EM seat's paired human when there is one,
+// else the [autonomy] approver.
+func TestPlanApprove(t *testing.T) {
+	g := fake.New(t, "o/r", "User")
+	g.Viewer = "founder"
+	feature := featureIssue(t, g, "plan/config-migration/github/repos/o/r/issues/41/parent.json") // #1
+	var fx struct{ Title, Body string }
+	b, _ := os.ReadFile(filepath.Join("..", "..", "evals", "cases", "plan", "config-migration", "github", "repos", "o", "r", "issues", "41.json"))
+	_ = json.Unmarshal(b, &fx)
+	l07 := g.AddIssue(fx.Title, fx.Body, "type:story", "status:ready", "effort:M", "layer:L07") // #2
+	l02 := g.AddIssue(fx.Title, fx.Body, "type:story", "status:ready", "effort:M", "layer:L02") // #3
+	l07.Parent, l02.Parent, feature.Subs = feature.Number, feature.Number, []int{2, 3}
+	dir, bare := ledgerCheckout(t)
+	agent := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1"}
+	human := map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}
+	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+
+	// A review (--approve) and a solo-mode bypass of one (--solo-bypass) both need a plan, a ledger, and a human.
+	root := t.TempDir()
+	git(t, root, "init", "--quiet", "--bare", "origin.git")
+	git(t, root, "clone", "--quiet", "origin.git", "work")
+	noLedger := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: filepath.Join(root, "work")}
+	for _, flag := range []string{"--approve", "--solo-bypass"} {
+		if code, _, errOut := run(t, human, opts, "plan", "2", flag, "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "#2 has no plan on the ledger") {
+			t.Fatalf("%s without a plan: %d %s", flag, code, errOut)
+		}
+		if code, _, errOut := run(t, human, noLedger, "plan", "2", flag, "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "#2 has no plan on the ledger") {
+			t.Fatalf("%s without a ledger: %d %s", flag, code, errOut)
+		}
+		// It is a human's: without a human GitHub login it is refused.
+		if code, _, errOut := run(t, map[string]string{}, opts, "plan", "2", flag, "--repo", "o/r"); code != ExitBlocked {
+			t.Fatalf("%s without a human login: %d %s", flag, code, errOut)
+		}
+	}
+	for n, layer := range map[int]string{2: "L07", 3: "L02"} {
+		d := evalDraft(t, "plan/config-migration/output/plan.json", func(d *planning.PlanDraft) { d.Story, d.Checkpoints[0].Layer = n, layer })
+		if code, out, errOut := run(t, agent, opts, "plan", strconv.Itoa(n), "--repo", "o/r", "--draft", d, "--create"); code != 0 {
+			t.Fatalf("plan #%d: %d %s %s", n, code, out, errOut)
+		}
+	}
+	for _, flag := range []string{"--approve", "--solo-bypass"} {
+		if code, _, errOut := run(t, human, opts, "plan", "3", flag, "--repo", "o/r"); code != ExitUsage || !strings.Contains(errOut, "touches no [autonomy] never layer; no review is needed") {
+			t.Fatalf("%s on a plan that needs no review: %d %s", flag, code, errOut)
+		}
+	}
+
+	paired := func(login string) []string {
+		return []string{"--set", "seats.engineering-manager.mode=paired", "--set", "seats.engineering-manager.human=" + login}
+	}
+	if code, _, errOut := run(t, human, opts, append([]string{"plan", "2", "--approve", "--repo", "o/r"}, paired("alice")...)...); code != ExitBlocked ||
+		!strings.Contains(errOut, "the Engineering Manager seat's human is alice, not founder") {
+		t.Fatalf("approve by someone other than the EM's paired human: %d %s", code, errOut)
+	}
+	if code, out, errOut := run(t, human, opts, append([]string{"plan", "2", "--approve", "--repo", "o/r", "--set", "autonomy.approver=someone-else"}, paired("founder")...)...); code != 0 ||
+		!strings.Contains(out, "recorded by founder (as seat)") {
+		t.Fatalf("approve by the EM's paired human: %d %s %s", code, out, errOut)
+	}
+	var rec PlanRecord
+	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:specs/2/plan.json")), &rec); err != nil || rec.Review.ApprovedBy != "founder" || rec.Review.As != "seat" {
+		t.Fatalf("plan record after the seat's review: %v %+v", err, rec.Review)
+	}
+	if code, out, errOut := run(t, human, opts, "plan", "2", "--approve", "--repo", "o/r", "--set", "autonomy.approver=founder"); code != 0 || !strings.Contains(out, "recorded by founder (as approver)") {
+		t.Fatalf("approve by the [autonomy] approver: %d %s %s", code, out, errOut)
+	}
+}

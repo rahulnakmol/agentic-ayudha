@@ -827,3 +827,122 @@ func TestGrillStoryScope(t *testing.T) {
 		})
 	}
 }
+
+// evals/eval.toml is checked on load: a judge, k, and pass score; unique
+// lowercase group names with a positive cap; exactly one catch-all group.
+func TestLoadConfigRefuses(t *testing.T) {
+	const judge = "judge = \"gpt-6.1-sol\"\nk = 5\npass_score = 4\n"
+	const groups = "[[groups]]\nname = \"brief\"\nprefixes = [\"brief/\"]\nmax_usd = 12.0\n[[groups]]\nname = \"skills\"\nmax_usd = 6.0\n"
+	for name, tc := range map[string]struct{ toml, want string }{
+		"not toml":       {"judge = ", "evals/eval.toml: "},
+		"no judge":       {"k = 5\npass_score = 4\n" + groups, "judge, k >= 1, and pass_score 1-5 are required"},
+		"pass score 6":   {strings.Replace(judge, "4", "6", 1) + groups, "judge, k >= 1, and pass_score 1-5 are required"},
+		"upper case":     {judge + strings.Replace(groups, `"skills"`, `"Skills"`, 1), `group "Skills": want a unique lowercase name and max_usd > 0`},
+		"duplicate":      {judge + strings.Replace(groups, `"skills"`, `"brief"`, 1), `group "brief": want a unique lowercase name`},
+		"no cap":         {judge + strings.Replace(groups, "max_usd = 6.0", "max_usd = 0", 1), `group "skills": want a unique lowercase name and max_usd > 0`},
+		"two catch-alls": {judge + strings.Replace(groups, "prefixes = [\"brief/\"]\n", "", 1), "exactly one [[groups]] entry has no prefixes"},
+		"no catch-all":   {judge + strings.Replace(groups, "name = \"skills\"\n", "name = \"skills\"\nprefixes = [\"stub/\"]\n", 1), "exactly one [[groups]] entry has no prefixes"},
+	} {
+		dir := t.TempDir()
+		_ = os.MkdirAll(filepath.Join(dir, "evals"), 0o755)
+		_ = os.WriteFile(filepath.Join(dir, "evals", "eval.toml"), []byte(tc.toml), 0o644)
+		if _, err := LoadConfig(dir); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want %q", name, err, tc.want)
+		}
+	}
+	if _, err := LoadConfig(t.TempDir()); err == nil {
+		t.Error("a missing evals/eval.toml loaded")
+	}
+}
+
+// A case.toml is checked on load: known keys only, compilable scope rules
+// with a reason, a skill and an input, and a complete [brief] section; a bad
+// case stops LoadCases.
+func TestLoadCaseRefuses(t *testing.T) {
+	const base = "skill = \"stub\"\ninput = \"input.txt\"\n"
+	for name, tc := range map[string]struct{ toml, want string }{
+		"unknown key":   {base + "inputs = \"x\"\n", "case.toml: "},
+		"bad pattern":   {base + "scope = [{ pattern = '(', why = \"x\" }]\n", "scope rule 1: "},
+		"no why":        {base + "scope = [{ pattern = 'csv' }]\n", "scope rule 1: why is required"},
+		"no input":      {"skill = \"stub\"\n", "skill and input are required"},
+		"partial brief": {base + "[brief]\nregister = \"ste\"\n", "[brief] needs register, purpose, and draft"},
+	} {
+		dir := filepath.Join(t.TempDir(), "evals", "cases", "stub", "broken")
+		_ = os.MkdirAll(dir, 0o755)
+		_ = os.WriteFile(filepath.Join(dir, "case.toml"), []byte(tc.toml), 0o644)
+		if _, err := LoadCase(dir); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want %q", name, err, tc.want)
+		}
+		if _, err := LoadCases(filepath.Join(dir, "..", "..", "..", "..")); err == nil {
+			t.Errorf("%s: LoadCases accepted the case", name)
+		}
+	}
+	if _, err := LoadCase(t.TempDir()); err == nil {
+		t.Error("a directory without case.toml loaded")
+	}
+}
+
+// Tier 1 marks the calls check n/a when a recorded call needs a verb the
+// binary does not ship yet, and fails a case whose schema file is missing.
+func TestTier1UnshippedVerbAndMissingSchema(t *testing.T) {
+	c := copyCase(t, "stub/csv-export")
+	c.Calls = [][]string{{"config", "show", "--origin"}, {"lfs-agent"}} // lfs-agent is 0.2 (V6)
+	if r := Tier1(context.Background(), root, c, aayudha.Assets); status(r, "calls") != NA || !r.Passed() {
+		t.Fatalf("unshipped verb:\n%s", r)
+	}
+	c.Schemas[0].Schema = "evals/schemas/none.json"
+	if r := Tier1(context.Background(), root, c, aayudha.Assets); status(r, "schemas") != Fail || !strings.Contains(r.String(), "evals/schemas/none.json: ") {
+		t.Fatalf("missing schema:\n%s", r)
+	}
+}
+
+// An injection case whose recorded calls write fails no-writes with every
+// write the fake GitHub saw and every action the run's log records as done.
+func TestTier1InjectionWrites(t *testing.T) {
+	c := copyCase(t, "slice/xl-story")
+	c.Injection = true
+	r := Tier1(context.Background(), root, c, aayudha.Assets)
+	out := r.String()
+	if status(r, "no-writes") != Fail || !strings.Contains(out, "GitHub POST /repos/o/r/issues") || !strings.Contains(out, "action performed: github.issue.create o/r") {
+		t.Fatalf("writes of an injection case:\n%s", out)
+	}
+}
+
+// A tier-2 work item that validates against the schema but fails Ready
+// scores 1 without the judge.
+func TestTier2ReadyFloor(t *testing.T) {
+	cases, _ := stubCases(root)
+	item, _ := os.ReadFile(filepath.Join(root, "evals", "cases", "stub", "csv-export", "output", "issue.json"))
+	notReady := strings.ReplaceAll(string(item), "[api-trace]", "[vibes]")
+	fake := &models.Fake{Replies: []models.Response{{Text: notReady}}}
+	h := harness(t, fake, "gpt-6.1-sol")
+	h.Config.K = 1
+	res, err := h.Tier2(context.Background(), cases, "abc", "dev", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r := res.Cases[0].Runs[0]; r.Status != RunFail || r.Score != 1 || !strings.HasPrefix(r.Floor, "fails Ready: ") || len(fake.Requests) != 1 {
+		t.Fatalf("run %+v after %d calls", r, len(fake.Requests))
+	}
+}
+
+// A skill model the owner configured for the lane is used as is: no registry
+// fallback; JudgeModels keeps the configured lanes and pins only the judge.
+func TestTier2ConfiguredSkillModel(t *testing.T) {
+	cases, _ := stubCases(root)
+	configured := config.Models{Lanes: map[string]map[string]config.ModelChoice{"spec": {"claude": {Model: "claude-sonnet-5-5"}}}}
+	m := JudgeModels(configured, "gpt-6.1-sol")
+	if m.Lanes["spec"]["claude"].Model != "claude-sonnet-5-5" || m.Lanes["review"]["claude"].Model != "gpt-6.1-sol" || len(configured.Lanes) != 1 {
+		t.Fatalf("judge models: %+v (configured %+v)", m.Lanes, configured.Lanes)
+	}
+	fake := &models.Fake{Replies: judgeReplies(t, func(int) []string { return []string{`{"score": 5, "reason": "ok"}`} })}
+	h := harness(t, fake, "gpt-6.1-sol")
+	h.Gateway.Models, h.Gateway.Resolver.Models = m, m
+	res, err := h.Tier2(context.Background(), cases, "abc", "dev", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := res.Cases[0]; c.Model != "claude-sonnet-5-5" || c.Fallback != "" || fake.Requests[0].Model != "claude-sonnet-5-5" {
+		t.Fatalf("case %+v, first call to %s", c, fake.Requests[0].Model)
+	}
+}
