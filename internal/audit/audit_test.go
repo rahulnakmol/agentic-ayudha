@@ -27,7 +27,8 @@ func TestClassifyBypasses(t *testing.T) {
 			{ID: 4, Workflow: ".github/workflows/ci.yml", Event: "workflow_dispatch", HeadSHA: "r3", Conclusion: "success", CreatedAt: at(5)},
 			{ID: 2, Workflow: ".github/workflows/release.yml", Branch: "v1.0.0", Conclusion: "success"},
 			{ID: 3, Workflow: ".github/workflows/release.yml", Branch: "v9.9.9", Conclusion: "success"}},
-		Prior: []PriorReport{{Path: "audit/x.md", Suites: []int64{99}}}}
+		Prior:     []PriorReport{{Path: "audit/x.md", Suites: []int64{99}}},
+		Incidents: []PriorReport{{Path: "audit/y/incident-z.md", Suites: []int64{77}}}}
 	pp := []Rule{{Ruleset: "ppr", Type: "required_status_checks", Details: `Required status check "protected-paths" is failing.`}}
 	for _, tc := range []struct {
 		s         RuleSuite
@@ -47,6 +48,8 @@ func TestClassifyBypasses(t *testing.T) {
 		{RuleSuite{Ref: "refs/heads/dev", Actor: "founder", After: "direct"}, ClassOther, false, "a direct push"},
 		{RuleSuite{ID: 99, Ref: "refs/heads/dev", Actor: "founder", After: "direct"}, ClassOther, true, "accounted for by audit/x.md"},
 		{RuleSuite{Ref: "refs/heads/dev", Actor: "founder", After: "m5", Failed: pp}, ClassSolo, false, "no prior \"Solo-mode bypass:\" comment"},
+		{RuleSuite{ID: 78, Ref: "refs/heads/dev", Actor: "founder", After: "m5", Failed: pp}, ClassSolo, false, "no prior \"Solo-mode bypass:\" comment"},
+		{RuleSuite{ID: 77, Ref: "refs/heads/dev", Actor: "founder", After: "m5", Failed: pp}, ClassSoloLate, true, "record came after the merge"},
 		{RuleSuite{Ref: "refs/heads/dev", Actor: "founder", After: "m5", Failed: append(pp, Rule{Ruleset: "dev", Type: "pull_request"})}, ClassOther, false, "pull_request (dev)"},
 	} {
 		b := d.classify(tc.s)
@@ -98,7 +101,7 @@ func TestRetroFindings(t *testing.T) {
 			t.Errorf("findings name %q:\n%s", not, got)
 		}
 	}
-	if md := string(r.Markdown()); !strings.Contains(md, "| #1 Big | #11 | S | 2 | 3 | 1 | 30.50 | merged without proof |") || !strings.Contains(md, "| `grill` | 2 | 1 |") {
+	if md := string(r.Markdown()); !strings.Contains(md, "| #1 Big | #11 | S | 2 | 3 | 1 | 30.50 | merged without proof (post-gate) |") || !strings.Contains(md, "| `grill` | 2 | 1 |") {
 		t.Errorf("retro report:\n%s", md)
 	}
 	if body := r.FeedbackBody(r.Findings[0], "retro/x.md"); !strings.Contains(body, "### Context") || !strings.Contains(body, "`retro/x.md`") {

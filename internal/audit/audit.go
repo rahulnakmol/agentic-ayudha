@@ -100,7 +100,8 @@ type Event struct {
 	Label    string    `json:"label,omitempty"`
 	Source   int       `json:"source,omitempty"` // cross-referenced: the referencing issue or PR
 	SourcePR bool      `json:"source_pr,omitempty"`
-	Body     string    `json:"body,omitempty"` // commented
+	Body     string    `json:"body,omitempty"`        // commented
+	Suites   []int64   `json:"rule_suites,omitempty"` // rule-suite IDs a comment names (read before Body is cut)
 	ID       int64     `json:"id,omitempty"`
 	State    string    `json:"state,omitempty"` // reviewed
 }
@@ -199,6 +200,7 @@ type Data struct {
 	Ships        []Ship
 	Records      []Record
 	Prior        []PriorReport
+	Incidents    []PriorReport // ledger incident notes (audit/<date>/incident-*.md) and the rule suites they name
 	Corrections  []autonomy.Correction
 	NeverMerges  []NeverMerge
 	AgentPRs     []AgentPR
@@ -217,6 +219,7 @@ var doneStatus = []string{"merged", "released", "measured", "done"}
 // Bypass classes.
 const (
 	ClassSolo      = "solo-mode bypass"
+	ClassSoloLate  = "solo-mode bypass, recorded late"
 	ClassLedger    = "ledger write (D1 day-one rule)"
 	ClassPromotion = "promotion"
 	ClassTag       = "tag ruleset bypass"
@@ -289,10 +292,10 @@ type Report struct {
 
 // Counts summarise a report.
 type Counts struct {
-	Bypasses, Unexplained, Solo, SoloShips, LedgerWrites, Promotions, Tags int
-	Fallback, Writes, Unlogged, CI                                         int
-	Delivered, Covered, PreGate, PostGate                                  int
-	FloorMisses, Waivers, OverSLA, Corrections, NeverMerges, Licence       int
+	Bypasses, Unexplained, Solo, SoloLate, SoloShips, LedgerWrites, Promotions, Tags int
+	Fallback, Writes, Unlogged, CI                                                   int
+	Delivered, Covered, PreGate, PostGate                                            int
+	FloorMisses, Waivers, OverSLA, Corrections, NeverMerges, Licence                 int
 }
 
 // Counts computes the summary.
@@ -306,6 +309,8 @@ func (r *Report) Counts() Counts {
 		switch b.Class {
 		case ClassSolo:
 			c.Solo++
+		case ClassSoloLate:
+			c.SoloLate++
 		case ClassLedger:
 			c.LedgerWrites++
 		case ClassPromotion:
@@ -483,6 +488,10 @@ func (d *Data) classify(s RuleSuite) Bypass {
 			b.Class, b.Note = ClassOther, fmt.Sprintf("#%d merged past failing rules other than the %s check: %s", pr.Number, d.GateCheck, strings.Join(other, "; "))
 		case cm == "":
 			b.Note = fmt.Sprintf("#%d merged into %s past the %s check with no prior \"Solo-mode bypass:\" comment", pr.Number, pr.Base, d.GateCheck)
+			if late := d.lateRecord(pr.Number, s); late != "" {
+				b.Class, b.Accounted, b.Comment = ClassSoloLate, true, late
+				b.Note = fmt.Sprintf("#%d merged into %s past only the %s check; its \"Solo-mode bypass\" record came after the merge", pr.Number, pr.Base, d.GateCheck)
+			}
 		default:
 			b.Accounted, b.Comment = true, cm
 			b.Note = fmt.Sprintf("#%d merged into %s past only the %s check, after a \"Solo-mode bypass:\" comment", pr.Number, pr.Base, d.GateCheck)
@@ -595,6 +604,28 @@ func (d *Data) soloComment(n int, merged time.Time) string {
 	return ""
 }
 
+// lateRecord names the record of a solo-mode bypass made after the merge: a
+// later comment on PR n starting "Solo-mode bypass" that names the rule suite,
+// or a ledger incident note that names it. A late record never turns the
+// bypass into an ordinary one; it is listed in its own class.
+func (d *Data) lateRecord(n int, s RuleSuite) string {
+	var out []string
+	if it := d.item(n); it != nil {
+		for _, e := range it.Events {
+			if e.Kind == "commented" && e.At.After(s.PushedAt) && strings.HasPrefix(strings.TrimSpace(e.Body), "Solo-mode bypass") && slices.Contains(e.Suites, s.ID) {
+				out = append(out, fmt.Sprintf("#%d (comment %d, %s)", n, e.ID, stamp(e.At)))
+				break
+			}
+		}
+	}
+	for _, p := range d.Incidents {
+		if slices.Contains(p.Suites, s.ID) {
+			out = append(out, "incident note "+p.Path)
+		}
+	}
+	return strings.Join(out, "; ")
+}
+
 // stories lists the delivered stories and bugs: a done status at Until, or a
 // merged PR that serves them; each is covered by an authoritative
 // pack or not.
@@ -630,7 +661,7 @@ func (d *Data) stories(in Inputs) []Story {
 			case s.PR == 0:
 				s.Reason = "done without a merged PR or an authoritative pack"
 			default:
-				s.Reason = "merged without proof"
+				s.Reason = "merged without proof (post-gate)"
 			}
 		}
 		out = append(out, s)

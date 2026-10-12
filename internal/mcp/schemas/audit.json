@@ -10,7 +10,7 @@
       "x-aayu-type": "string"
     },
     "mark-merged": {
-      "description": "Move these stories (e.g. 38-50) that merged without proof before the merge gate to status:merged, with a comment; no report.",
+      "description": "Move these stories (e.g. 38-50) that merged without proof, before or after the merge gate, to status:merged with a comment saying which; no report.",
       "type": "string",
       "x-aayu-type": "string"
     },

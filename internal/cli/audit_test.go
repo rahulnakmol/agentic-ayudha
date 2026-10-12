@@ -45,6 +45,7 @@ const (
 	auditM86   = "8686868686868686868686868686868686868686"
 	auditM92   = "9292929292929292929292929292929292929292"
 	auditM95   = "9595959595959595959595959595959595959595"
+	auditM99   = "9999000099990000999900009999000099990000"
 	auditHead  = "44d18af847494eb1bb088fd27c568d22d270a9fb"
 	auditCG    = "a6abff0b46f34e6c923c4c125cc9f7a77ae6ef25c3aeb0d4bf4e632233e76a4c"
 )
@@ -198,6 +199,7 @@ func newAuditFixture(t *testing.T) *auditFixture {
 		pr(86, "feat(inspect): merge gate (WP4.8)", "feat/gate", "Refs #48", "2026-10-12T02:20:05Z", auditM86, ""),
 		pr(92, "feat: doctor names the floor each missing tool serves", "story/91-doctor-names-floors", "Refs #91", "2026-10-12T03:04:44Z", auditM92, `{"name":"identity:human-fallback"}`),
 		pr(95, "fix(verify): deps floor", "fix/deps", "Refs #44\n\nFound while running M4.5 (story #91, PR #92).", "2026-10-12T02:57:33Z", auditM95, ""),
+		pr(99, "feat(review): review lanes (WP6.6)", "feat/review", "Refs #60", "2026-10-12T03:24:15Z", auditM99, ""),
 	}, ",")+"]")
 	issue := func(n int, title, labels, created, updated string, isPR bool) string {
 		extra := ""
@@ -218,6 +220,7 @@ func newAuditFixture(t *testing.T) *auditFixture {
 		issue(8, "feat: CI suite (WP0.4)", "", "2026-10-11T21:17:43Z", "2026-10-11T21:23:37Z", true),
 		issue(9, "feat: design tokens", "", "2026-10-11T21:24:26Z", "2026-10-11T21:38:35Z", true),
 		issue(48, "WP4.8 Merge gate + `inspect`", lbl("type:story", "status:ready", "effort:M", "priority:P1", "priority:P0"), "2026-10-11T23:35:00Z", "2026-10-12T01:10:00Z", false),
+		issue(60, "WP6.6 `review`, `polish`, `baseline`", lbl("type:story", "status:ready", "effort:M"), "2026-10-11T23:36:40Z", "2026-10-11T23:49:33Z", false),
 		issue(86, "feat(inspect): merge gate (WP4.8)", "", "2026-10-12T01:50:00Z", "2026-10-12T02:23:33Z", true),
 		issue(91, "doctor names the floor each missing tool serves", lbl("type:story", "status:merged", "effort:XS", "identity:human-fallback"), "2026-10-12T02:31:00Z", "2026-10-12T03:04:49Z", false),
 		issue(92, "feat: doctor names the floor each missing tool serves", lbl("identity:human-fallback"), "2026-10-12T02:33:30Z", "2026-10-12T03:04:44Z", true),
@@ -251,6 +254,8 @@ func newAuditFixture(t *testing.T) *auditFixture {
 		92: {ev("commented", "founder", "2026-10-12T03:04:30Z", body(6116996259, "Solo-mode bypass: no second human (D2).")), ev("merged", "founder", "2026-10-12T03:04:44Z", "")},
 		95: {ev("merged", "founder", "2026-10-12T02:57:33Z", "")},
 		97: {ev("labeled", "founder", "2026-10-06T09:00:00Z", label("type:decision"))},
+		60: {ev("labeled", "founder", "2026-10-11T23:36:40Z", label("type:story")), ev("labeled", "founder", "2026-10-11T23:36:40Z", label("effort:M")),
+			ev("labeled", "founder", "2026-10-11T23:49:33Z", label("status:ready"))},
 	}
 	for n, es := range timelines {
 		g.Static[fmt.Sprintf("/repos/o/r/issues/%d/timeline", n)] = jsonOf(t, "["+strings.Join(es, ",")+"]")
@@ -274,6 +279,8 @@ func newAuditFixture(t *testing.T) *auditFixture {
 			"| `github.com/c/copyleft` | v2.0.0 | GPL-3.0 | x | y |\n| `github.com/d/old` | v1.1.0 | BSD-3-Clause | x | y |\n\n## Planned\n\n| Component | Use | Licence |\n|---|---|---|\n| `github.com/a/ok` | later | MIT |\n",
 	}
 	g.CheckRuns[auditCode] = []fake.CheckRun{{Name: "security", Status: "completed", Conclusion: "success"}}
+	g.Issues[60] = &fake.Issue{ID: 60060, Number: 60, Title: "WP6.6 `review`, `polish`, `baseline`", State: "open",
+		Labels: []fake.Label{{Name: "type:story"}, {Name: "status:ready"}, {Name: "effort:M"}}}
 	g.Issues[48] = &fake.Issue{ID: 48048, Number: 48, Title: "WP4.8 Merge gate + `inspect`", State: "open",
 		Labels: []fake.Label{{Name: "type:story"}, {Name: "status:ready"}, {Name: "effort:M"}, {Name: "priority:P1"}, {Name: "priority:P0"}}}
 	f.g = g
@@ -319,7 +326,8 @@ func TestAuditDogfoodFixture(t *testing.T) {
 		"agent-run promotion \"Rolling snapshot: 20261011T2210Z\" after gate run 38179325066",
 		"release run 38175962428 refused it (failure)",
 		"| #48 WP4.8 Merge gate + `inspect` | ready | #86 | 2026-10-12T02:20:05Z | **no** | merged without proof (pre-gate) |",
-		"- Proof coverage: 1/2 delivered stories and bugs; merged without proof (pre-gate) 1; merged without proof 0",
+		"- Proof coverage: 1/3 delivered stories and bugs; merged without proof (pre-gate) 1; merged without proof (post-gate) 1",
+		"| #60 WP6.6 `review`, `polish`, `baseline` | ready | #99 | 2026-10-12T03:24:15Z | **no** | merged without proof (post-gate) |",
 		"| #97 Engine choice | yes | 35.0 | yes | no |",
 		"- correction of #92: non-bot-commit, commit bbbbbbb by founder",
 		"- agent PR #92 merged on never-layers L04",
@@ -499,6 +507,25 @@ func TestAuditMarkMerged(t *testing.T) {
 	if !strings.HasPrefix(seg, "actions: segment ") {
 		t.Fatalf("the moves' actions segment is not on the ledger: %s", seg)
 	}
+	f.g.Reset()
+	code, out, errOut = f.audit(t, "--mark-merged", "60")
+	if code != 0 || !strings.Contains(out, "#60: status:merged (merged without proof, post-gate, in #99)") {
+		t.Fatalf("mark-merged post-gate: %d %s %s", code, out, errOut)
+	}
+	cm = f.g.Issues[60].Comments
+	if len(cm) != 1 || !strings.Contains(cm[0].Body, PostGateMarker) || !strings.Contains(cm[0].Body, "Merged without proof (post-gate)") ||
+		!strings.Contains(cm[0].Body, "merged in #99") || !strings.Contains(cm[0].Body, "no ship record is made") {
+		t.Fatalf("post-gate comment: %+v", cm)
+	}
+	for _, w := range f.g.Writes() {
+		if strings.Contains(w.Path, "/merge") || strings.Contains(w.Path, "/pulls") {
+			t.Fatalf("mark-merged wrote a PR: %v", w)
+		}
+	}
+	if !strings.Contains(git(t, f.bare, "log", "--format=%s", "ledger"), "actions: segment ") ||
+		strings.Contains(git(t, f.bare, "ls-tree", "-r", "--name-only", "ledger"), "proof/60/") {
+		t.Fatal("post-gate marking made a ship record or left no segment")
+	}
 	if code, _, errOut := f.audit(t, "--mark-merged", "4x"); code != ExitUsage {
 		t.Fatalf("bad list: %d %s", code, errOut)
 	}
@@ -521,7 +548,8 @@ func TestRetroFilesFeedback(t *testing.T) {
 			creates = append(creates, w.Body)
 		}
 	}
-	if len(creates) != 1 || creates[0]["title"] != "Feedback: retro: correction rate 1/1 above 20 %, 2026-10-11T00:00Z to 2026-10-12T04:00Z" {
+	if len(creates) != 2 || creates[0]["title"] != "Feedback: retro: #60 merged without proof after the merge gate existed" ||
+		creates[1]["title"] != "Feedback: retro: correction rate 1/1 above 20 %, 2026-10-11T00:00Z to 2026-10-12T04:00Z" {
 		t.Fatalf("feedback issues filed: %+v\n%s", creates, out)
 	}
 	if !strings.Contains(fmt.Sprint(creates[0]["labels"]), "type:feedback") || !strings.Contains(fmt.Sprint(creates[0]["body"]), "### What happened or what you need") {
@@ -542,6 +570,60 @@ func TestRetroFilesFeedback(t *testing.T) {
 		if !strings.Contains(rep, want) {
 			t.Errorf("retro report lacks %q:\n%s", want, rep)
 		}
+	}
+}
+
+// A protected-path merge whose "Solo-mode bypass" record came after the merge
+// is listed as recorded late, never as an ordinary solo-mode bypass, when the
+// late comment or a ledger incident note names its rule suite.
+func TestAuditBypassRecordedLate(t *testing.T) {
+	f := newAuditFixture(t)
+	late := `{"event":"commented","user":{"login":"founder"},"created_at":"2026-10-12T06:15:01Z","id":6118833687,` +
+		`"body":"Solo-mode bypass (recorded late, 2026-10-12T06:15Z, by the orchestrating agent): this PR was merged at 02:20:05Z through the admin bypass (rule suite %d) without the prior comment."}`
+	until := "2026-10-12T07:00:00Z"
+	report := func() string {
+		t.Helper()
+		out := filepath.Join(t.TempDir(), "r.md")
+		if code, _, errOut := f.audit(t, "--since", auditSince, "--until", until, "--dry-run", "--out", out); code != 0 {
+			t.Fatalf("audit: %s", errOut)
+		}
+		b, _ := os.ReadFile(out)
+		return string(b)
+	}
+	f.g.Mu.Lock()
+	f.g.Static["/repos/o/r/issues/120/timeline"] = jsonOf(t, `[]`)
+	f.g.Static["/repos/o/r/issues/86/timeline"] = jsonOf(t, `[{"event":"merged","actor":{"login":"founder"},"created_at":"2026-10-12T02:20:05Z"},`+fmt.Sprintf(late, 4473766680)+`]`)
+	f.g.Mu.Unlock()
+	if got := report(); !strings.Contains(got, "| 4473766681 | `refs/heads/dev` | founder | `8686868` | 2026-10-12T02:20:04Z | `required_status_checks` (protected-paths-codeowner-review) | **no** |") {
+		t.Fatalf("a late comment naming another rule suite accounted for the bypass:\n%s", got)
+	}
+	f.g.Mu.Lock()
+	f.g.Static["/repos/o/r/issues/86/timeline"] = jsonOf(t, `[{"event":"merged","actor":{"login":"founder"},"created_at":"2026-10-12T02:20:05Z"},`+fmt.Sprintf(late, 4473766681)+`]`)
+	f.g.Mu.Unlock()
+	got := report()
+	for _, want := range []string{
+		"  - solo-mode bypasses whose record came after the merge (recorded late): 1\n",
+		"### Solo-mode bypasses, recorded late (the comment or incident note came after the merge) (1)",
+		"| 4473766681 | `refs/heads/dev` | founder | `8686868` | 2026-10-12T02:20:04Z | `required_status_checks` (protected-paths-codeowner-review) | yes | #86 merged into dev past only the protected-paths check; its \"Solo-mode bypass\" record came after the merge; #86 (comment 6118833687, 2026-10-12T06:15:01Z) |",
+		"- Rule-suite bypasses: 8; accounted for 7; **unexplained 1**",
+		"### Solo-mode bypasses (protected-path merges) (1)",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("report lacks %q:\n%s", want, section(got, "## Rule-suite bypasses"))
+		}
+	}
+	// An incident note on the ledger that names the suite does the same without the comment.
+	f.g.Mu.Lock()
+	f.g.Static["/repos/o/r/issues/86/timeline"] = jsonOf(t, `[{"event":"merged","actor":{"login":"founder"},"created_at":"2026-10-12T02:20:05Z"}]`)
+	f.g.Mu.Unlock()
+	seed := filepath.Join(t.TempDir(), "seed")
+	git(t, filepath.Dir(seed), "clone", "--quiet", "--branch", "ledger", f.bare, seed)
+	writeFiles(t, seed, map[string]string{"audit/2026-10-12/incident-pr86-missing-bypass-comment.md": "# Incident\n\nRule suite 4473766681, PR #86: no prior comment.\n"})
+	git(t, seed, "add", ".")
+	git(t, seed, "commit", "--quiet", "-m", "audit: incident")
+	git(t, seed, "push", "--quiet", "origin", "ledger")
+	if got := report(); !strings.Contains(got, "came after the merge; incident note audit/2026-10-12/incident-pr86-missing-bypass-comment.md |") {
+		t.Fatalf("incident note not used:\n%s", section(got, "## Rule-suite bypasses"))
 	}
 }
 

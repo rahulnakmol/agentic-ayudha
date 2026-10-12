@@ -30,8 +30,12 @@ func init() { register("audit", runAudit) }
 // BSD-3-Clause binary (THIRD_PARTY_NOTICES.md, Policy; the CI security job).
 var AllowedLicences = []string{"0BSD", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "MIT"}
 
-// PreGateMarker marks the comment `audit --mark-merged` leaves on a story.
-const PreGateMarker = "<!-- aayudha:audit-pre-gate -->"
+// The comments `audit --mark-merged` leaves on a story merged without proof
+// before the merge gate existed, and after it.
+const (
+	PreGateMarker  = "<!-- aayudha:audit-pre-gate -->"
+	PostGateMarker = "<!-- aayudha:audit-post-gate -->"
+)
 
 // AuditResult is what audit reports.
 type AuditResult struct {
@@ -281,10 +285,10 @@ func runAudit(ctx context.Context, e *Env, in Values) error {
 	return e.Emit(res, func(w io.Writer) error {
 		c := rep.Counts()
 		fmt.Fprintf(w, "audit %s, %s to %s\n", a.repo, a.in.Since.Format(time.RFC3339), a.in.Until.Format(time.RFC3339))
-		fmt.Fprintf(w, "  bypasses %d (solo-mode %d, ledger %d, promotions %d, tags %d), unexplained %d; ship --solo-bypass %d\n",
-			c.Bypasses, c.Solo, c.LedgerWrites, c.Promotions, c.Tags, c.Unexplained, c.SoloShips)
+		fmt.Fprintf(w, "  bypasses %d (solo-mode %d, recorded late %d, ledger %d, promotions %d, tags %d), unexplained %d; ship --solo-bypass %d\n",
+			c.Bypasses, c.Solo, c.SoloLate, c.LedgerWrites, c.Promotions, c.Tags, c.Unexplained, c.SoloShips)
 		fmt.Fprintf(w, "  writes %d: unlogged %d, workflow/App %d; human-fallback writes %d\n", c.Writes, c.Unlogged, c.CI, c.Fallback)
-		fmt.Fprintf(w, "  proof coverage %d/%d; merged without proof (pre-gate) %d, after the gate %d; floor misses %d, waivers %d\n",
+		fmt.Fprintf(w, "  proof coverage %d/%d; merged without proof: pre-gate %d, post-gate %d; floor misses %d, waivers %d\n",
 			c.Covered, c.Delivered, c.PreGate, c.PostGate, c.FloorMisses, c.Waivers)
 		fmt.Fprintf(w, "  decisions over SLA %d; corrections %d; never-layer agent merges %d; licence findings %d\n", c.OverSLA, c.Corrections, c.NeverMerges, c.Licence)
 		switch {
@@ -300,10 +304,12 @@ func runAudit(ctx context.Context, e *Env, in Values) error {
 	})
 }
 
-// markMerged moves stories the audit lists as merged without proof (pre-gate)
-// to status:merged, each with a comment naming its merge PR and saying that no
-// authoritative pack exists. A story that is not pre-gate, is covered, or has no
-// merged PR is refused before anything is written.
+// markMerged moves stories the audit lists as merged without proof, before
+// the merge gate existed (pre-gate) or after it (post-gate), to status:merged,
+// each with a comment naming its merge PR, which of the two it is, and that no
+// authoritative pack exists; they stay uncovered. A story that is covered, has
+// no merged PR, or is already past merged is refused before anything is
+// written. No ship record is made.
 func (e *Env) markMerged(ctx context.Context, a *auditRun, spec string) error {
 	want, err := parseStories(spec)
 	if err != nil {
@@ -326,8 +332,10 @@ func (e *Env) markMerged(ctx context.Context, a *auditRun, spec string) error {
 			refuse = append(refuse, fmt.Sprintf("#%d: not a delivered story or bug (no merged PR into %s references it)", n, a.data.Dev))
 		case s.Covered:
 			refuse = append(refuse, fmt.Sprintf("#%d: covered by %s", n, s.Pack))
-		case !s.PreGate:
-			refuse = append(refuse, fmt.Sprintf("#%d: %s, not pre-gate (merged %s, gate since %s)", n, s.Reason, s.Merged.Format(time.RFC3339), gateText(a.data.GateSince)))
+		case s.PR == 0:
+			refuse = append(refuse, fmt.Sprintf("#%d: %s", n, s.Reason))
+		case slices.Contains([]string{"released", "measured", "done"}, s.Status):
+			refuse = append(refuse, fmt.Sprintf("#%d: already status:%s", n, s.Status))
 		case s.Status != "merged":
 			todo = append(todo, s)
 		}
@@ -347,12 +355,19 @@ func (e *Env) markMerged(ctx context.Context, a *auditRun, spec string) error {
 		if err := setStatus(ctx, a.c, a.repo, s.Number, labels, "merged"); err != nil {
 			return Wrap(ExitExternal, err)
 		}
-		body := fmt.Sprintf("%s\n**Merged without proof (pre-gate).** This story's change merged in #%d (`%s`, %s), before the merge gate "+
+		marker, body := PreGateMarker, fmt.Sprintf("%s\n**Merged without proof (pre-gate).** This story's change merged in #%d (`%s`, %s), before the merge gate "+
 			"(`%s`, registered %s) and `ship` existed. No authoritative pack exists for it and it had no human pass: it is done but "+
 			"unproven, and `aayu audit` counts it as uncovered in proof coverage.\n\nMoved to `status:merged` by `aayu audit --mark-merged` (WP7.6).\n",
 			PreGateMarker, pr.Number, short(pr.MergeSHA), pr.MergedAt.Format(time.RFC3339), audit.MergeGateWorkflow, gateText(a.data.GateSince))
-		if _, err := a.c.UpsertComment(ctx, a.repo, s.Number, PreGateMarker, body, actions.Action{Kind: "github.comment.audit", Story: fmt.Sprintf("#%d", s.Number),
-			Payload: map[string]any{"pr": pr.Number, "tag": a.bot.Tag}}); err != nil {
+		if !s.PreGate {
+			marker, body = PostGateMarker, fmt.Sprintf("%s\n**Merged without proof (post-gate).** This story's change merged in #%d (`%s`, %s), after the merge gate "+
+				"(`%s`, registered %s) existed, but without `aayu ship`: no authoritative pack exists for it on the ledger, and no ship record or human "+
+				"pass was made. It is done but unproven, and `aayu audit` counts it as uncovered in proof coverage.\n\n"+
+				"Moved to `status:merged` by `aayu audit --mark-merged` (WP7.6); no ship record is made after the fact.\n",
+				PostGateMarker, pr.Number, short(pr.MergeSHA), pr.MergedAt.Format(time.RFC3339), audit.MergeGateWorkflow, gateText(a.data.GateSince))
+		}
+		if _, err := a.c.UpsertComment(ctx, a.repo, s.Number, marker, body, actions.Action{Kind: "github.comment.audit", Story: fmt.Sprintf("#%d", s.Number),
+			Payload: map[string]any{"pr": pr.Number, "pre_gate": s.PreGate, "tag": a.bot.Tag}}); err != nil {
 			return Wrap(ExitExternal, err)
 		}
 		res.MarkedMerge = append(res.MarkedMerge, s.Number)
@@ -369,7 +384,8 @@ func (e *Env) markMerged(ctx context.Context, a *auditRun, spec string) error {
 			return err
 		}
 		for _, s := range todo {
-			fmt.Fprintf(w, "#%d: status:merged (merged without proof, pre-gate, in #%d)%s\n", s.Number, s.PR, map[bool]string{true: " --dry-run: planned", false: ""}[e.DryRun])
+			fmt.Fprintf(w, "#%d: status:merged (merged without proof, %s, in #%d)%s\n", s.Number, map[bool]string{true: "pre-gate", false: "post-gate"}[s.PreGate], s.PR,
+				map[bool]string{true: " --dry-run: planned", false: ""}[e.DryRun])
 		}
 		return nil
 	})
