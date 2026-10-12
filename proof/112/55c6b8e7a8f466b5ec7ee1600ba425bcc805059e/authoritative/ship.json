@@ -1,0 +1,31 @@
+{
+  "repo": "rahulnakmol/agentic-ayudha",
+  "story": 112,
+  "pr": 113,
+  "pr_head_sha": "55c6b8e7a8f466b5ec7ee1600ba425bcc805059e",
+  "merge_commit": "967054be766e7ca80bff36c78906462840565ade",
+  "pack": "proof/112/55c6b8e7a8f466b5ec7ee1600ba425bcc805059e/authoritative/pack.json",
+  "human_pass": {
+    "kind": "solo-bypass",
+    "login": "rahulnakmol",
+    "comment_url": "https://github.com/rahulnakmol/agentic-ayudha/pull/113#issuecomment-6118303163",
+    "commit": "55c6b8e7a8f466b5ec7ee1600ba425bcc805059e",
+    "note": "solo mode: GitHub refuses self-approval and no bot App exists, so no second person could review (Appendix B D2)"
+  },
+  "footprint": [
+    "L02"
+  ],
+  "pass_rule": {
+    "as": "any-human"
+  },
+  "streak": {
+    "threshold": 20,
+    "layers": {
+      "L02": 0
+    },
+    "autonomous": false
+  },
+  "actions_segment": "actions/2026-10-12/cli-20261012T052551Z.jsonl",
+  "shipped_at": "2026-10-12T05:25:56Z",
+  "shipped_by": "rahulnakmol"
+}
