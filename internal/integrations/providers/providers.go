@@ -15,6 +15,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/figma"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/githubread"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/growthbook"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/mobbin"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/posthog"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/sentry"
@@ -75,6 +76,10 @@ var Known = []Provider{
 			}
 			return githubread.New(c, repo, d.Transport, d.now)
 		},
+	},
+	{
+		Name: "growthbook", Purpose: "experiment results for readout",
+		open: func(d Deps, c integrations.Conn) (scoper, error) { return growthbook.New(c, d.Transport), nil },
 	},
 	{
 		Name: "figma", Purpose: "design files: nodes, rendered images, and variables",
@@ -138,6 +143,24 @@ func Check(ctx context.Context, d Deps, name string) (integrations.Scope, error)
 		return integrations.Scope{}, err
 	}
 	return s.Scope(ctx)
+}
+
+// PostHog opens [integrations.posthog] for experiment and readout (WP6.7).
+func PostHog(d Deps) (*posthog.Client, error) {
+	_, s, err := open(d, "posthog")
+	if err != nil {
+		return nil, err
+	}
+	return s.(*posthog.Client), nil
+}
+
+// GrowthBook opens [integrations.growthbook] for readout (WP6.7).
+func GrowthBook(d Deps) (*growthbook.Client, error) {
+	_, s, err := open(d, "growthbook")
+	if err != nil {
+		return nil, err
+	}
+	return s.(*growthbook.Client), nil
 }
 
 // Figma opens [integrations.figma] for a read verb (research, mockup,

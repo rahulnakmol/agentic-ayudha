@@ -40,6 +40,44 @@ func Sections(body string) (labels []string, values map[string]string) {
 	return labels, values
 }
 
+// SetSection returns body with the section headed label (case-insensitive,
+// level 2 or 3, outside code fences) holding value: an existing section's
+// value is replaced and the rest of the body kept byte for byte; otherwise
+// "### <label>" and value are appended. readout and measure write Result with it.
+func SetSection(body, label, value string) string {
+	lines := strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n")
+	start, end := -1, len(lines)
+	inFence := false
+	for i, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), "```") {
+			inFence = !inFence
+		}
+		m := heading.FindStringSubmatch(line)
+		if m == nil || inFence {
+			continue
+		}
+		if start >= 0 {
+			end = i
+			break
+		}
+		if strings.EqualFold(m[1], label) {
+			start = i
+		}
+	}
+	value = strings.TrimSpace(value)
+	if start < 0 {
+		return strings.TrimRight(body, "\n") + "\n\n### " + label + "\n\n" + value + "\n"
+	}
+	out := append([]string{}, lines[:start+1]...)
+	out = append(out, "", value)
+	if end < len(lines) {
+		out = append(out, "")
+		out = append(out, lines[end:]...)
+		return strings.Join(out, "\n")
+	}
+	return strings.Join(out, "\n") + "\n"
+}
+
 // TypeOf decides an issue's work-item type from its GitHub issue type name
 // and its type:<id> labels; both are one notion (R1). It returns "" when the
 // issue carries neither, and a problem when they disagree or name no type.

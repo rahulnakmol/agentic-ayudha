@@ -9,6 +9,25 @@
       "pattern": "^(#?[1-9][0-9]*|https://github\\.com/[^/]+/[^/]+/issues/[1-9][0-9]*)$",
       "type": "string",
       "x-aayu-type": "issue"
+    },
+    "from": {
+      "description": "Start of the PostHog readout window (YYYY-MM-DD, UTC); default the Experiment's creation.",
+      "type": "string",
+      "x-aayu-type": "string"
+    },
+    "metric": {
+      "description": "GrowthBook metric ID (with --source growthbook); PostHog uses the Experiment's Metric.",
+      "type": "string",
+      "x-aayu-type": "string"
+    },
+    "source": {
+      "description": "Where the per-arm counts come from; default posthog.",
+      "enum": [
+        "posthog",
+        "growthbook"
+      ],
+      "type": "string",
+      "x-aayu-type": "enum"
     }
   },
   "required": [

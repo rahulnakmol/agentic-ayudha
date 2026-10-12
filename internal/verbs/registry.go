@@ -452,6 +452,8 @@ func flag(name string, t InputType, desc string) Input {
 
 func humanOnly(in Input) Input { in.HumanOnly = true; return in }
 
+func required(in Input) Input { in.Required = true; return in }
+
 func readOnlyWith(in Input, values ...string) Input { in.ReadOnlyValues = values; return in }
 
 func enumIn(name string, required, positional bool, desc string, values ...string) Input {
@@ -664,7 +666,17 @@ var Verbs = []Command{
 		Name: "experiment", WP: "WP6.7",
 		Summary: "Design an experiment for a Feature: hypothesis, metric, flag, and minimum sample size.",
 		Seat:    RevenueArchitect, Lane: LanePlan, Layers: OnlyLayers(L03, L08),
-		Inputs:   []Input{pos("feature", TypeIssue, "Feature to experiment on.")},
+		Inputs: []Input{
+			pos("feature", TypeIssue, "Feature (or Initiative) to experiment on."),
+			required(flag("hypothesis", TypeString, "If we do X, the metric moves by Z because W.")),
+			required(flag("metric", TypeString, "Conversion event the experiment moves (a PostHog event name).")),
+			required(flag("flag", TypeString, "Feature-flag key that splits traffic: the PostHog flag key and GrowthBook tracking key.")),
+			required(flag("mde", TypeString, "Minimum detectable effect: an absolute rate change (0.02) or a relative one (10%).")),
+			flag("exposure", TypeString, "HogQL predicate for the population the baseline counts; default every person with an event."),
+			flag("alpha", TypeString, "Two-sided significance level; default 0.05."),
+			flag("power", TypeString, "Statistical power; default 0.8."),
+			flag("days", TypeInt, "Baseline window in whole UTC days before today; default 28."),
+		},
 		Outputs:  []string{"experiment", "feature-flag"},
 		Gates:    []GateID{GateBaseline, GateHalt},
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeWrite,
@@ -673,7 +685,12 @@ var Verbs = []Command{
 		Name: "readout", WP: "WP6.7",
 		Summary: "Read out an experiment's lift once it reaches minimum sample and write the Result.",
 		Seat:    RevenueArchitect, Lane: LaneSpec, Layers: OnlyLayers(L08),
-		Inputs:   []Input{pos("experiment", TypeIssue, "Experiment to read out.")},
+		Inputs: []Input{
+			pos("experiment", TypeIssue, "Experiment to read out."),
+			enumIn("source", false, false, "Where the per-arm counts come from; default posthog.", "posthog", "growthbook"),
+			flag("metric", TypeString, "GrowthBook metric ID (with --source growthbook); PostHog uses the Experiment's Metric."),
+			flag("from", TypeString, "Start of the PostHog readout window (YYYY-MM-DD, UTC); default the Experiment's creation."),
+		},
 		Outputs:  []string{"result"},
 		Gates:    []GateID{GateMinSample},
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeWrite,

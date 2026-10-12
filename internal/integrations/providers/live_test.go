@@ -75,3 +75,61 @@ func TestLive(t *testing.T) {
 		})
 	}
 }
+
+// TestLiveReadout runs the readout reads (WP6.7) against the real providers,
+// behind AAYU_LIVE=1, skipping each one whose settings are absent:
+//
+//	growthbook: AAYU_SECRET_GROWTHBOOK (a readonly secret key), optional AAYU_LIVE_GROWTHBOOK_URL;
+//	            with AAYU_LIVE_GROWTHBOOK_TRACKING_KEY and AAYU_LIVE_GROWTHBOOK_METRIC also reads results
+//	posthog:    AAYU_SECRET_POSTHOG, AAYU_LIVE_POSTHOG_PROJECT, AAYU_LIVE_POSTHOG_FLAG, AAYU_LIVE_POSTHOG_EVENT
+func TestLiveReadout(t *testing.T) {
+	if os.Getenv("AAYU_LIVE") != "1" {
+		t.Skip("set AAYU_LIVE=1 to call the real providers")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	need := func(t *testing.T, names ...string) {
+		for _, n := range names {
+			if os.Getenv(n) == "" {
+				t.Skipf("%s is not set", n)
+			}
+		}
+	}
+	t.Run("growthbook", func(t *testing.T) {
+		need(t, "AAYU_SECRET_GROWTHBOOK")
+		sets := []string{"integrations.growthbook.secret=growthbook", "integrations.growthbook.scope=read"}
+		if u := os.Getenv("AAYU_LIVE_GROWTHBOOK_URL"); u != "" {
+			sets = append(sets, "integrations.growthbook.url="+u)
+		}
+		d := deps(t, nil, map[string]string{"AAYU_SECRET_GROWTHBOOK": os.Getenv("AAYU_SECRET_GROWTHBOOK")}, sets...)
+		if _, err := Check(ctx, d, "growthbook"); err != nil {
+			t.Fatal(err)
+		}
+		need(t, "AAYU_LIVE_GROWTHBOOK_TRACKING_KEY", "AAYU_LIVE_GROWTHBOOK_METRIC")
+		gb, err := GrowthBook(d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		vs, w, q, err := gb.Results(ctx, os.Getenv("AAYU_LIVE_GROWTHBOOK_TRACKING_KEY"), os.Getenv("AAYU_LIVE_GROWTHBOOK_METRIC"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("%d variations over %s to %s: %+v (%s)", len(vs), w.From, w.To, vs, q)
+	})
+	t.Run("posthog", func(t *testing.T) {
+		need(t, "AAYU_SECRET_POSTHOG", "AAYU_LIVE_POSTHOG_PROJECT", "AAYU_LIVE_POSTHOG_FLAG", "AAYU_LIVE_POSTHOG_EVENT")
+		d := deps(t, nil, map[string]string{"AAYU_SECRET_POSTHOG": os.Getenv("AAYU_SECRET_POSTHOG")},
+			"integrations.posthog.secret=posthog", "integrations.posthog.scope=read", "integrations.posthog.project="+os.Getenv("AAYU_LIVE_POSTHOG_PROJECT"))
+		d.Now = nil
+		ph, err := PostHog(d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		now := time.Now().UTC().Truncate(24 * time.Hour)
+		arms, q, err := ph.Arms(ctx, os.Getenv("AAYU_LIVE_POSTHOG_FLAG"), os.Getenv("AAYU_LIVE_POSTHOG_EVENT"), integrations.Window{From: now.AddDate(0, 0, -28), To: now})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("arms %+v (%s)", arms, q)
+	})
+}

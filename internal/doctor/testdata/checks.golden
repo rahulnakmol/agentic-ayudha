@@ -71,6 +71,7 @@ PASS  integrations  1 of 1 configured integration(s) reachable with a read-only 
                       posthog: reachable as personal API key aayudha; read-only scope verified (query:read per GET /api/personal_api_keys/@current/)
                       sentry: not configured; set [integrations.sentry] for reliability baselines
                       github: not configured; set [integrations.github] for delivery baselines from issues and pull requests
+                      growthbook: not configured; set [integrations.growthbook] for experiment results for readout
                       figma: not configured; set [integrations.figma] for design files: nodes, rendered images, and variables
                       mobbin: not configured; set [integrations.mobbin] for design references as URLs and IDs
 ## integrations fail
@@ -78,9 +79,10 @@ FAIL  integrations  0 of 4 configured integration(s) reachable with a read-only 
                       posthog: scope = "write": read verbs refuse this key, so it was not sent; configure a read-only key
                       sentry: unreachable: provider error: GET https://sentry.io/api/0/: 401: {"detail":"Invalid token"}
                       github: not configured: [integrations.github] secret "github-read" has no value: secret not found: github-read (set it with `aayu auth set-secret github-read`, or export AAYU_SECRET_GITHUB_READ)
+                      growthbook: not configured; set [integrations.growthbook] for experiment results for readout
                       figma: not configured; set [integrations.figma] for design files: nodes, rendered images, and variables
                       mobbin: not configured; set [integrations.mobbin] for design references as URLs and IDs
-                      growthbook: configured; no adapter in this binary yet, so not checked
+                      amplitude: configured; no adapter in this binary yet, so not checked
 ## optional-tools pass
 PASS  optional-tools  all optional tools found
 ## optional-tools fail

@@ -61,8 +61,8 @@ type Rollup struct {
 	Streak            string         `json:"streak"`
 	CostUSD           float64        `json:"cost_usd"`
 	// Closable: a Feature whose children are all released (or later) and that
-	// has a Result (the parent-close rule); Initiatives and Goals close on
-	// measure (n/a until WP7.2).
+	// has a Result, or an Experiment child with a readout Result (the
+	// parent-close rule); Initiatives and Goals close on measure (n/a until WP7.2).
 	Closable bool      `json:"closable"`
 	Children []*Rollup `json:"children,omitempty"` // Initiatives and Features under it
 
@@ -160,13 +160,22 @@ func closable(n node, subs []*gh.SubIssue) bool {
 	if len(subs) == 0 || n.state == "closed" {
 		return false
 	}
+	readout := false
 	for _, s := range subs {
 		c := fromIssue((*gh.Issue)(s))
 		if c.status != "cancelled" && !slices.Contains(shipped, c.status) {
 			return false
 		}
+		if c.typ == "experiment" && hasResult(c) {
+			readout = true
+		}
 	}
-	it, _ := workitems.Parse(n.number, n.title, n.body, "", []string{"type:feature"})
+	return readout || hasResult(n)
+}
+
+// hasResult reports whether a Feature or Experiment body has a Result.
+func hasResult(n node) bool {
+	it, _ := workitems.Parse(n.number, n.title, n.body, "", []string{"type:" + n.typ})
 	return !workitems.Empty(it.Fields[workitems.FieldResult])
 }
 
