@@ -1,7 +1,7 @@
 # Saving the claims you picked
 
-Now a reviewer can save just the claims they picked into one file. On average, reviewers do it 4.2 times per reviewer
-per week [R].
+Now a reviewer can save just the claims they picked into one file. On average, there are 4.2 exports per reviewer per
+week [R].
 
 ## What it does
 
@@ -16,5 +16,5 @@ while the file is made, even with more than 10,000 claims [P1.c3].
 
 ## How we know it works
 
-Robot tests checked the change before it went in, and inspect said each part was met [P1]. The goal was 3 saves per
-reviewer per week, and the count is 4.2 per reviewer per week [R].
+Robot tests checked the change before it went in, and inspect said each part was met [P1]. The goal was 3 exports per
+reviewer per week [R]. The count is 4.2 exports per reviewer per week [R].

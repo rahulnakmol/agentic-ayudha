@@ -347,22 +347,43 @@ func TestCheckRules(t *testing.T) {
 		return Check(d, &pg, Options{Register: "engineer", Purpose: "explain"})
 	}
 	for md, want := range map[string]string{
-		"# T\n\nUsage is 4.2 exports a week [R].\n":                         `states 4.2 from the Result without its population: keep "per reviewer"`,
-		"# T\n\nEach reviewer exports 4.2 files per reviewer a week [R].\n": `says "each reviewer"`,
-		"# T\n\nUsage beat the target of 3 [R].\n":                          `states 3 from the Result without its population`,
+		"# T\n\nUsage is 4.2 exports a week [R].\n":                              `population: paragraph 1 states a number from the Result without its population: keep "per reviewer"`,
+		"# T\n\nEach reviewer exports 4.2 files per reviewer a week [R].\n":      `says "each reviewer"`,
+		"# T\n\nUsage beat the target of 3 [R].\n":                               `unit: paragraph 1 states 3 from the Result without its unit: write "3 exports"`,
+		"# T\n\nReviewers do it 4.2 times per reviewer per week [R].\n":          `states 4.2 from the Result without its unit`,
+		"# T\n\nThis number counts files saved [R].\n":                           `names the count "files saved"; the Result counts exports`,
+		"# T\n\nThe count is 4.2 downloads per reviewer per week [R].\n":         `names the count "downloads"`,
+		"# T\n\nThe rate is 4.2 exports per reviewer per week. It beat 3 [R].\n": `population: paragraph 1 states a number from the Result without its population`,
 	} {
 		if f := pcheck(md); !has(f, want) {
 			t.Errorf("%q: %v, want %q", md, f, want)
 		}
 	}
 	for _, md := range []string{
-		"# T\n\nUsage is 4.2 CSV exports per reviewer per week, against a target of 3 [R].\n",
+		// A rate and its target split into two sentences, each with its unit and population.
+		"# T\n\nThe rate is 4.2 exports per reviewer per week [R]. The target is 3 exports per reviewer per week [R].\n",
+		// One "per reviewer" covers both rates of one sentence; no second repetition is forced.
+		"# T\n\nUsage is 4.2 CSV exports per reviewer per week, against a target of 3 exports [R].\n",
 		"# T\n\nThe window ran from 2026-09-14 to 2026-10-12 [R].\n",
 		"# T\n\nCriterion 3 is not proved; usage met its target [R].\n",
 		"# T\n\nEach reviewer story shipped 4.2 [P1].\n", // does not cite R
 	} {
-		if f := pcheck(md); has(f, "population") {
+		if f := pcheck(md); has(f, "population") || has(f, "unit") {
 			t.Errorf("%q: %v", md, f)
+		}
+	}
+	// Exclusion: an item the Scope field puts out of scope is "outside this story's scope", not "does not include".
+	sg := *g
+	sg.Subject.Fields = map[string]string{"scope": "In scope: CSV export. Out of scope: PDF, scheduled exports, exports of other lists."}
+	for md, bad := range map[string]bool{
+		"# T\n\nThis story does not include PDF files, exports at set times, or exports of other lists [#7].\n": true,
+		"# T\n\nScheduled exports are not included [#7].\n":                                                     true,
+		"# T\n\nPDF and scheduled exports are outside this story's scope [#7].\n":                               false,
+		"# T\n\nThe export does not include hidden columns [P1].\n":                                             false, // not an out-of-scope item
+	} {
+		d, _ := Parse([]byte(md), "")
+		if f := Check(d, &sg, Options{Register: "engineer", Purpose: "explain"}); has(f, "of items the grounding marks out of scope") != bad {
+			t.Errorf("%q: %v (want an exclusion finding: %v)", md, f, bad)
 		}
 	}
 	// UI details: a control no source names is invented; one the grounding names is fine.

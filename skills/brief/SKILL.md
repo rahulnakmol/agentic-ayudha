@@ -75,8 +75,11 @@ renders one accessible HTML page with the sources in its footer.
 - Simplify the words, never the facts. Every register keeps these exact:
   - An aggregate keeps the grounding's own wording of its population. "4.2 exports per reviewer per week" stays "per
     reviewer" wherever you state the number: never "each reviewer", "every reviewer", "users", or "an average across
-    reviewers". `aayu brief` refuses a number from the Result without its "per …" wording, and "each" or "every" with
-    it.
+    reviewers". `aayu brief` refuses a number from the Result without its "per …" wording in the same sentence, and
+    "each" or "every" with it.
+  - A number from the Result is followed by the Result's own unit noun: "4.2 exports", "3 exports", never "4.2
+    times", "files saved", "files made", or "downloads". `aayu brief` refuses a number without it and those
+    substitutes.
   - A state is only what a source records. "Released" is not "merged", and "out of scope" is not "not tested".
   - Evidence speaks only through the pack's criterion map. Each pack lists its criteria with the evidence mapped to
     each (and, when inspect judged the pack's head, its verdict per criterion). To say a criterion is proved, met, or
@@ -91,7 +94,8 @@ renders one accessible HTML page with the sources in its footer.
     means only that the floor did not run; a passing floor means only its own check passed.
   - Absence of evidence is written as "the evidence does not show …", never as "not done", "not possible",
     "untested" or "can't" (`aayu brief` refuses those words unless a source says them). Out-of-scope items are
-    written as "outside this story's scope". A measure shows only what it counts: name the count ("4.2 CSV exports
+    written as "outside this story's scope", never "does not include" or "is not included" (refused for items the
+    Scope field lists as out of scope). A measure shows only what it counts: name the count ("4.2 CSV exports
     per reviewer per week"), not the behaviour behind it ("reviewers use the files").
 - Keep a metric's own words, such as "reviewer", in every register; they are technical names, also in `ste`.
 - Markdown only: no raw HTML and no `![…](…)` images. Pictures are visual blocks (below).
@@ -103,7 +107,8 @@ renders one accessible HTML page with the sources in its footer.
 - `ste`: Simplified Technical English. At most 20 words in a sentence. Use only words from
   `references/ste-words.md`, plus technical names: code in backticks, numbers, capitalised names, and words from the
   titles of the work items, the subject's summary, and the Result. One instruction in a sentence, and start it with
-  the verb. Use the active voice.
+  the verb. Use the active voice. Put one rate in a sentence: write a rate and its target as two sentences ("The rate
+  is 4.2 exports per reviewer per week. The target is 3 exports per reviewer per week.").
 - `engineer`: precise and compact. Name the components, floors, values, and thresholds exactly as the sources do.
 - `regulatory`: formal and traceable. Every paragraph and list item carries a citation. Say what was tested, by which
   floor, with what result, and what the evidence does not cover, in a `## Limits of this evidence` section.

@@ -9,4 +9,4 @@ criterion 3 is not proved because the pack has no evidence for it [P1].
 - Criterion 2, only the visible columns, is proved by an API trace [P1.c2].
 - Criterion 3, a responsive list past 10,000 claims, has no evidence in the pack, so it is not proved [P1].
 - Inspect disposed fix for that reason [P1].
-- Usage beat the target: 4.2 CSV exports per reviewer per week against at least 3 [R].
+- Usage beat the target: 4.2 CSV exports per reviewer per week against a target of 3 exports per reviewer per week [R].
