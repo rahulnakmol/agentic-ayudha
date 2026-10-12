@@ -3,5 +3,18 @@
   "branch": "story/132-post-api-ask-answers-within-its-json-sch",
   "started_at": "2026-10-12T09:53:06Z",
   "failed_attempts": 0,
-  "checkpoints": null
+  "checkpoints": [
+    {
+      "k": 1,
+      "n": 3,
+      "attempt": 1,
+      "commit": "5839eee30d4115c86b0fc1745bd60bde12da0ca8",
+      "layers": [
+        "L06"
+      ],
+      "verify": "hold",
+      "detail": "floors hold; not run here (tool not installed; the merge gate runs them): secrets, deps",
+      "at": "2026-10-12T09:53:17Z"
+    }
+  ]
 }
