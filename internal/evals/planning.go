@@ -67,8 +67,25 @@ func (h *Harness) runPlanning(ctx context.Context, c Case, lane verbs.LaneID, bo
 }
 
 // CheckPlanningDraft runs `aayu slice` or `aayu plan`'s checks on a draft for
-// the case's fixture issue, as the binary would against GitHub.
+// the case's fixture issue, as the binary would against GitHub, then the case's
+// scope rules over everything but the open questions (raising one is allowed).
 func CheckPlanningDraft(c Case, raw []byte) (problems, open []string, err error) {
+	problems, open, err = checkPlanningDraft(c, raw)
+	if err != nil || len(c.Scope) == 0 {
+		return problems, open, err
+	}
+	var m map[string]any
+	if json.Unmarshal(raw, &m) == nil {
+		delete(m, "open_questions")
+		text, _ := json.Marshal(m)
+		for _, l := range c.outOfScopeText(string(text)) {
+			problems = append(problems, "out of scope: "+l)
+		}
+	}
+	return problems, open, nil
+}
+
+func checkPlanningDraft(c Case, raw []byte) (problems, open []string, err error) {
 	is, err := fixtureIssue(c, strconv.Itoa(c.Tier2.Issue))
 	if err != nil {
 		return nil, nil, err

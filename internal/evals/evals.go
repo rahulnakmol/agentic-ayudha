@@ -150,7 +150,11 @@ func (c Case) OutOfScope(it workitems.Item) []string {
 	for _, k := range keys {
 		texts = append(texts, it.Fields[k])
 	}
-	text := strings.Join(texts, "\n")
+	return c.outOfScopeText(strings.Join(texts, "\n"))
+}
+
+// outOfScopeText returns one line per scope rule the text breaks.
+func (c Case) outOfScopeText(text string) []string {
 	var out []string
 	for _, r := range c.Scope {
 		if m := r.re.FindString(text); m != "" {

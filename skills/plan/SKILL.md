@@ -66,6 +66,10 @@ You (the host's model) plan; the binary checks the plan and records it on the le
      the restore step.
    When the story has no layer labels yet, the plan's layers become its footprint. Put what you cannot decide into
    `open_questions`.
+   Plan only what the Completion Goal needs. Do not add behaviour the story does not ask for: no downgrade paths,
+   no refusing or rejecting older inputs or configs, no new flags or modes. A rollback restores what was there
+   before (a backup, a down migration); it never drops data. If such a choice seems needed, ask it in
+   `open_questions` instead.
 4. Write the plan as JSON, `{"story": N, "checkpoints": [...], "open_questions": [...]}`, and check it (read-only):
 
    `aayu plan <story> --draft plan.json`
