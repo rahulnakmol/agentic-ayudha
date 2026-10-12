@@ -132,6 +132,10 @@ func Tier1(ctx context.Context, root string, c Case, assets fs.FS) Tier1Result {
 		add("scope", bad, false)
 	}
 
+	if c.Brief != nil {
+		add("brief", tier1Brief(ctx, c, assets), false)
+	}
+
 	calls, writes, na := runCalls(ctx, c, assets)
 	if len(c.Calls) > 0 {
 		add("calls", calls, na)

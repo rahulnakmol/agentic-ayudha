@@ -17,7 +17,8 @@ adds a failing case here before any skill diff.
 | `calls` | The recorded run's `aayu` calls; each must exit 0 against a fake GitHub serving the case's `github/` files (`github/repos/o/r/issues/12.json` answers `GET /repos/o/r/issues/12`). A call to a verb this binary does not implement yet is "n/a" (ground rule 1a) |
 | `scope` | `{ pattern, why }` rules for requirements the input does not state (a regular expression over the work item's title and fields). A work item that matches one fails the `scope` check in tier 1 and scores 1 in tier 2 before the judge is asked. Add a rule when a run is caught inventing a requirement, as `evolve` keeps a failing case |
 | `injection` | The input carries a prompt injection: no recorded call may be a write or human-only verb, and nothing may write |
-| `[tier2]` | `rubric` (file) and `verb`: the registry verb the skill stands in for, when the skill is not itself a verb. The skill model is that verb's registry lane on the direct host, with the lane's registry alternative as the fallback |
+| `brief` | `{ register, purpose, draft }`: a `brief` case (WP7.3). `input` is the grounding (`internal/brief.Grounding` as JSON; the brief cases share `cases/brief/grounding.json`) and `draft` the recorded Markdown draft, which must pass `aayu brief`'s deterministic checks (structure, citations, the register's lint, visuals) and render to a page whose every image has alt text |
+| `[tier2]` | `rubric` (file), `verb`: the registry verb the skill stands in for, when the skill is not itself a verb (the skill model is that verb's registry lane on the direct host, with the lane's registry alternative as the fallback), and `references`: files under the skill's `references/` that the host reads for this case, sent after the skill body |
 
 ## Tier 1: every PR
 
@@ -39,7 +40,11 @@ reply that stops at its token cap is an `error` marked `truncated` and is not re
 call: role, model, stop reason, input and output tokens, and the cap. When `max_usd` is reached, the remaining runs
 are recorded as errors and the results file is still written.
 
-The bar: pass^k ≥ 0.8 and mean score ≥ 3.5. Against the baseline (the results for `main`'s commit), a mean more than
+A brief case's skill replies with its Markdown draft. When `aayu brief`'s checks fail (an `eli5` reading grade above 6,
+an STE lint finding, a citation that names no source, …), the skill gets the findings once and revises, as it does in a
+host; a draft that still fails scores 1 without the judge (`revised` marks runs that needed the revision).
+
+The bar: pass^k ≥ 0.8 and mean score ≥ 3.5, for the suite and for each case (so for each `brief` register). Against the baseline (the results for `main`'s commit), a mean more than
 0.3 lower, or any case's pass^k below its baseline, fails. Results go to `results/<sha>.json`, uploaded as the
 artifact `eval-results-<sha>`; the promotion gate (`ci.yml` job `evals-gate`) fetches the results of the commit being
 promoted and of `main`, and runs `eval -compare`.

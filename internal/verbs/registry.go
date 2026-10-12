@@ -796,6 +796,7 @@ var Verbs = []Command{
 			pos("subject", TypeIssue, "Work item to brief on."),
 			enumIn("register", false, false, "Audience register.", "eli5", "ste", "engineer", "regulatory"),
 			enumIn("purpose", false, false, "Purpose of the brief.", "explain", "ideate", "innovate", "close"),
+			flag("draft", TypePath, "Markdown draft to check and render; without it, print the grounding to write from."),
 		},
 		Outputs:  []string{"html-brief"},
 		Gates:    []GateID{GatePack, GateResult},

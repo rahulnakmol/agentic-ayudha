@@ -1,7 +1,8 @@
 name: floors
 
 # Acceptance of the browser and runtime floors of `aayu verify` (docs/BUILD-PLAN.md WP4.5, WP4.6) and the
-# prototype capture behind the figma-diff gate (WP6.5) and review lane B (WP6.6) with the real
+# prototype capture behind the figma-diff gate (WP6.5) and review lane B (WP6.6), and of the accessibility of
+# the page `aayu brief` renders (WP7.3), with the real
 # tools: Playwright + axe-core + Lighthouse (pinned in packages/floors and pnpm-lock.yaml), the OWASP ZAP image
 # pinned by digest, and k6 pinned by SHA-256. Kept out of ci.yml so the required checks on dev are untouched;
 # path-filtered and not required.
@@ -13,6 +14,7 @@ on:
       - "internal/design/**"
       - "internal/uireview/**"
       - "internal/cli/review*.go"
+      - "internal/brief/**"
       - "packages/floors/**"
       - "pnpm-lock.yaml"
       - ".github/workflows/floors.yml"
@@ -23,6 +25,7 @@ on:
       - "internal/design/**"
       - "internal/uireview/**"
       - "internal/cli/review*.go"
+      - "internal/brief/**"
       - "packages/floors/**"
       - "pnpm-lock.yaml"
       - ".github/workflows/floors.yml"
@@ -72,6 +75,10 @@ jobs:
         env:
           AAYU_FLOOR_WEB: "1"
         run: go test ./internal/uireview ./internal/cli -run 'TestLaneBWithBrowser|TestReviewAndPolish|TestBaseline' -count=1 -v
+      - name: Brief page (axe on the rendered brief, WP7.3)
+        env:
+          AAYU_FLOOR_WEB: "1"
+        run: go test ./internal/brief -run TestBriefPageWithBrowser -count=1 -v
 
   floors-dast:
     name: floors-dast

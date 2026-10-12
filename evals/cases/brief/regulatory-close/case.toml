@@ -1,0 +1,11 @@
+# brief (WP7.3): the regulatory register with purpose close, on Feature #7. The grounding is shared by the brief cases.
+# output/brief.md is a recorded draft (tier 1); tier 2 has the skill write it again and the judge score it.
+skill = "brief"
+description = "A regulatory brief with purpose close on Feature #7 (CSV export of filtered claims)."
+input = "../grounding.json"
+artifacts = ["output/brief.md"]
+brief = { register = "regulatory", purpose = "close", draft = "output/brief.md" }
+
+[tier2]
+rubric = "rubric.md"
+

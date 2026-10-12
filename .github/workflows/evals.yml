@@ -62,7 +62,7 @@ jobs:
           set -euo pipefail
           run=true
           if [ "$EVENT" = push ] && [ "$REF" = dev ]; then
-            if ! git diff --name-only "$BEFORE" "$SHA" | grep -qE '^(skills|evals|internal/evals|internal/models)/|^\.github/workflows/evals\.yml$'; then
+            if ! git diff --name-only "$BEFORE" "$SHA" | grep -qE '^(skills|evals|internal/evals|internal/models|internal/brief)/|^\.github/workflows/evals\.yml$'; then
               echo "::notice::This push to dev does not touch skills or the eval harness; tier 2 runs nightly."
               run=false
             fi

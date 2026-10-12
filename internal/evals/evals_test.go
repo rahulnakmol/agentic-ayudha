@@ -31,6 +31,19 @@ func TestTier1(t *testing.T) {
 	}
 }
 
+// stubCases loads the stub skill's cases: the tier-2 tests below script
+// their fake model replies for exactly those.
+func stubCases(root string) ([]Case, error) {
+	all, err := LoadCases(root)
+	var out []Case
+	for _, c := range all {
+		if c.Skill == "stub" {
+			out = append(out, c)
+		}
+	}
+	return out, err
+}
+
 // copyCase copies a case directory so a test can break it.
 func copyCase(t *testing.T, id string) Case {
 	t.Helper()
@@ -166,7 +179,7 @@ func harness(t *testing.T, fake *models.Fake, judge string) *Harness {
 }
 
 func TestTier2WithFakeModels(t *testing.T) {
-	cases, err := LoadCases(root)
+	cases, err := stubCases(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +210,7 @@ func TestTier2WithFakeModels(t *testing.T) {
 }
 
 func TestTier2RefusesSameFamilyJudge(t *testing.T) {
-	cases, _ := LoadCases(root)
+	cases, _ := stubCases(root)
 	fake := &models.Fake{}
 	if _, err := harness(t, fake, "claude-sonnet-5-5").Tier2(context.Background(), cases, "abc", "dev", time.Now()); err == nil || len(fake.Requests) != 0 {
 		t.Fatalf("an anthropic judge for an anthropic skill model: err %v, %d calls", err, len(fake.Requests))
@@ -205,7 +218,7 @@ func TestTier2RefusesSameFamilyJudge(t *testing.T) {
 }
 
 func TestTier2SpendCap(t *testing.T) {
-	cases, _ := LoadCases(root)
+	cases, _ := stubCases(root)
 	item, _ := os.ReadFile(filepath.Join(root, "evals", "cases", "stub", "csv-export", "output", "issue.json"))
 	fake := &models.Fake{Replies: []models.Response{{Text: string(item), CostUSD: 0.4}, {Text: `{"score": 5, "reason": "ok"}`, CostUSD: 0.4}}}
 	h := harness(t, fake, "gpt-6.1-sol")
@@ -243,7 +256,7 @@ func judgeReplies(t *testing.T, judge func(run int) []string) []models.Response 
 
 // A judge reply with prose around a fenced JSON block is scored, without a retry.
 func TestJudgeFencedReplyWithProse(t *testing.T) {
-	cases, _ := LoadCases(root)
+	cases, _ := stubCases(root)
 	fake := &models.Fake{Replies: judgeReplies(t, func(int) []string {
 		return []string{"Here is my assessment.\n\n```json\n{\"score\": 5, \"reason\": \"all three requirements covered\"}\n```\n\nLet me know if you need more."}
 	})}
@@ -267,7 +280,7 @@ func TestJudgeFencedReplyWithProse(t *testing.T) {
 // redacted excerpt; more than one error in k fails the tier outright, while a
 // single error leaves pass^k and the mean to the completed runs.
 func TestJudgeUnparseableTwice(t *testing.T) {
-	cases, _ := LoadCases(root)
+	cases, _ := stubCases(root)
 	const leak = "ghp_abcdefghijklmnopqrstuvwxyz0123456789"
 	garbage := "I would rate this highly overall. " + leak
 	ok := `{"score": 4, "reason": "fine"}`
@@ -316,7 +329,7 @@ func TestJudgeUnparseableTwice(t *testing.T) {
 // The live failure on 35aea36: the skill model's reply was not JSON twice. That
 // is an error, not a score of 1; JSON of the wrong shape stays a skill failure.
 func TestSkillReplyErrors(t *testing.T) {
-	cases, _ := LoadCases(root)
+	cases, _ := stubCases(root)
 	fake := &models.Fake{Replies: []models.Response{{Text: ""}, {Text: "```json\n{\"type\": \"story\", \"title\""},
 		{Text: `{"type": "story"}`}, {Text: `{"type": "story"}`}}}
 	h := harness(t, fake, "gpt-6.1-sol")
@@ -361,7 +374,7 @@ func TestTier1InventedRequirement(t *testing.T) {
 // In tier 2 the same guard fails the run before the judge is asked; open
 // questions are not requirements and reach the judge as such.
 func TestTier2ScopeGuardAndOpenQuestions(t *testing.T) {
-	cases, _ := LoadCases(root)
+	cases, _ := stubCases(root)
 	withQuestions := strings.Replace(invented(t), `"parent"`, `"open_questions": ["Should the CSV keep the list's column order?"], "parent"`, 1)
 	good, _ := os.ReadFile(filepath.Join(root, "evals", "cases", "stub", "csv-export", "output", "issue.json"))
 	goodWithQuestions := strings.Replace(string(good), `"parent"`, `"open_questions": ["Is a UTF-8 byte order mark needed for Excel?"], "parent"`, 1)
@@ -387,7 +400,7 @@ func TestTier2ScopeGuardAndOpenQuestions(t *testing.T) {
 // Every call's stop reason and tokens land in the results; a skill reply that
 // stopped at the cap is an error marked truncated, without a retry.
 func TestTier2RecordsStopsAndTruncation(t *testing.T) {
-	cases, _ := LoadCases(root)
+	cases, _ := stubCases(root)
 	good, _ := os.ReadFile(filepath.Join(root, "evals", "cases", "stub", "csv-export", "output", "issue.json"))
 	long := `{"type": "story", "title": "Download", "fields": {"summary": "` + strings.Repeat("and the list ", 60)
 	fake := &models.Fake{Replies: []models.Response{
@@ -467,7 +480,7 @@ func (f flaky) Complete(ctx context.Context, r models.Request) (models.Response,
 // for (grill: spec); when that model cannot be called, the lane's registry
 // alternative takes the call.
 func TestTier2SkillModelFromVerbLaneWithFallback(t *testing.T) {
-	cases, _ := LoadCases(root)
+	cases, _ := stubCases(root)
 	fake := &models.Fake{Replies: judgeReplies(t, func(int) []string { return []string{`{"score": 5, "reason": "ok"}`} })}
 	h := harness(t, fake, "gpt-6.1-sol")
 	h.Gateway.Client = func(models.Route, string) models.Client { return flaky{down: "claude-opus-5-5", fake: fake} }
@@ -488,5 +501,57 @@ func TestTier2NeedsAVerbLane(t *testing.T) {
 	c.Tier2.Verb = ""
 	if _, err := harness(t, &models.Fake{}, "gpt-6.1-sol").Tier2(context.Background(), []Case{c}, "abc", "dev", time.Now()); err == nil || !strings.Contains(err.Error(), "set [tier2] verb") {
 		t.Fatalf("a stub without a verb: %v", err)
+	}
+}
+
+// WP7.3 register evals: a brief case gets its references in the prompt; a
+// draft that fails `aayu brief`'s checks (a planted 30-word sentence in the
+// ste register) is revised once with the findings, as the skill does, and is
+// judged only when it passes; a draft that fails twice scores 1 without the
+// judge (rule 7), and the per-case bar then fails the tier.
+func TestTier2BriefRevisesOnceThenJudges(t *testing.T) {
+	all, err := LoadCases(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []Case
+	for _, c := range all {
+		if c.ID == "brief/ste-explain" {
+			cases = append(cases, c)
+		}
+	}
+	good, err := os.ReadFile(filepath.Join(root, "evals", "cases", "brief", "ste-explain", "output", "brief.md"))
+	if err != nil || len(cases) != 1 {
+		t.Fatalf("case: %v", err)
+	}
+	bad := "# Export of filtered claims\n\nThe user can open the list and see all the items that the filter shows, and the team can check each item in the same list before the export starts [P1].\n"
+	judge := models.Response{Text: `{"score": 5, "reason": "grounded"}`}
+	replies := []models.Response{{Text: bad}, {Text: "```markdown\n" + string(good) + "```"}, judge}
+	for i := 0; i < 3; i++ {
+		replies = append(replies, models.Response{Text: string(good)}, judge)
+	}
+	replies = append(replies, models.Response{Text: bad}, models.Response{Text: bad}, judge)
+	fake := &models.Fake{Replies: replies}
+	h := harness(t, fake, "gpt-6.1-sol")
+	res, err := h.Tier2(context.Background(), cases, "abc", "dev", time.Unix(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs := res.Cases[0].Runs
+	if len(fake.Requests) != 11 || !runs[0].Revised || runs[0].Status != RunPass || runs[1].Revised || runs[4].Score != 1 || !strings.Contains(runs[4].Floor, "has 30 words") {
+		t.Fatalf("%d calls, runs %+v", len(fake.Requests), runs)
+	}
+	first, revise, judged := fake.Requests[0], fake.Requests[1], fake.Requests[2]
+	if !strings.Contains(first.System, "## references/ste-words.md") || !strings.Contains(first.Messages[0].Content, `<untrusted source="grounding">`) {
+		t.Error("the skill prompt lacks the word list or the wrapped grounding")
+	}
+	if len(revise.Messages) != 3 || !strings.Contains(revise.Messages[2].Content, "sentence 1 has 30 words (at most 20)") {
+		t.Errorf("revision request: %+v", revise.Messages)
+	}
+	if judged.Model != "gpt-6.1-sol" || !strings.Contains(judged.Messages[0].Content, "STE lint") {
+		t.Errorf("judge request: %s %.200s", judged.Model, judged.Messages[0].Content)
+	}
+	if v, reasons := Compare(res, nil, h.Config); v != Fail || !strings.Contains(strings.Join(reasons, "\n"), "brief/ste-explain: pass^5 0.00 is below 0.80") {
+		t.Errorf("compare: %s %v", v, reasons)
 	}
 }

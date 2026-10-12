@@ -1,0 +1,11 @@
+# brief (WP7.3): the ste register with purpose explain, on Feature #7. The grounding is shared by the brief cases.
+# output/brief.md is a recorded draft (tier 1); tier 2 has the skill write it again and the judge score it.
+skill = "brief"
+description = "A ste brief with purpose explain on Feature #7 (CSV export of filtered claims)."
+input = "../grounding.json"
+artifacts = ["output/brief.md"]
+brief = { register = "ste", purpose = "explain", draft = "output/brief.md" }
+
+[tier2]
+rubric = "rubric.md"
+references = ["ste-words.md"] # the host reads the word list for the ste register
