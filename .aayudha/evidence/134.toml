@@ -1,0 +1,23 @@
+# Which tests prove story #134's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria). Criteria 1-3 are screenshots: the web floors capture them from the running
+# example ([verify] seed = deploy/serve.sh), and these tests check the same states' markup.
+
+[[criterion]]
+id = 1 # the empty Ask page: heading, labelled field, Ask button, three suggestions, tokens only
+tests = ["examples/benefits-qa/web:TestAskPageStates", "examples/benefits-qa/web:TestStylesUseTokens"]
+
+[[criterion]]
+id = 2 # the dental question: the Answer card quotes the passage and names "Dental, Deductible"
+tests = ["examples/benefits-qa/web:TestAskPageStates"]
+
+[[criterion]]
+id = 3 # another person's claim: "We cannot answer this" with the reason
+tests = ["examples/benefits-qa/web:TestAskPageStates"]
+
+[[criterion]]
+id = 4 # the command serves /healthz, the page, and POST /api/ask, appends events, and stops cleanly
+tests = ["examples/benefits-qa/cmd/benefits-qa:TestRun", "examples/benefits-qa/cmd/benefits-qa:TestMainServesUntilInterrupt"]
+
+[[criterion]]
+id = 5 # serve.sh builds, starts detached, waits for /healthz, and a second run replaces the first
+tests = ["examples/benefits-qa/deploy:TestServeScript"]

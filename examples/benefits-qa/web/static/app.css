@@ -1,0 +1,81 @@
+/* benefits-qa Ask page. Every colour, size, radius, and font is a design-system token
+   (packages/design-system/src/styles/tokens.css, served as /tokens.css). */
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--ay-color-background);
+  color: var(--ay-color-text-default);
+  font-family: var(--ay-font-family-sans);
+  font-size: var(--ay-font-size-large);
+  line-height: 1.5;
+}
+.shell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ay-space-gap);
+  align-items: baseline;
+  justify-content: space-between;
+  padding: var(--ay-space-control-inline);
+  background: var(--ay-color-shell-background);
+  border-bottom: 1px solid var(--ay-color-shell-border);
+}
+.product { font-weight: var(--ay-font-weight-bold); font-size: var(--ay-font-size-header-3); }
+.year { color: var(--ay-color-text-label); }
+main { max-width: 46rem; margin: 0 auto; padding: var(--ay-space-control-inline); }
+h1 { font-size: var(--ay-font-size-header-1); line-height: 1.2; margin: 1.5rem 0 0.5rem; }
+h2 { font-size: var(--ay-font-size-header-3); margin: 0 0 0.5rem; }
+.lead { color: var(--ay-color-text-label); margin-top: 0; }
+form { margin: 1.5rem 0; }
+label { display: block; font-weight: var(--ay-font-weight-semibold); margin-bottom: 0.25rem; }
+.row { display: flex; flex-wrap: wrap; gap: var(--ay-space-gap); }
+input {
+  flex: 1 1 18rem;
+  min-height: var(--ay-size-control-height);
+  padding: 0 var(--ay-space-control-inline);
+  font: inherit;
+  color: var(--ay-color-text-default);
+  background: var(--ay-color-field-background);
+  border: 1px solid var(--ay-color-field-border);
+  border-radius: var(--ay-radius-control);
+}
+button, .try a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--ay-size-control-height);
+  min-width: var(--ay-size-control-height);
+  padding: 0 var(--ay-space-control-inline);
+  font: inherit;
+  border-radius: var(--ay-radius-control);
+}
+button {
+  font-weight: var(--ay-font-weight-semibold);
+  color: var(--ay-color-brand-contrast);
+  background: var(--ay-color-brand-default);
+  border: 1px solid var(--ay-color-brand-default);
+  cursor: pointer;
+}
+button:hover { background: var(--ay-color-brand-hover); }
+input:focus-visible, button:focus-visible, a:focus-visible {
+  outline: 3px solid var(--ay-color-focus);
+  outline-offset: 2px;
+}
+.card {
+  background: var(--ay-color-surface);
+  border: 1px solid var(--ay-color-border);
+  border-radius: var(--ay-radius-container);
+  padding: var(--ay-space-control-inline);
+}
+.answered { border-left: 4px solid var(--ay-color-positive-default); }
+.referred { border-left: 4px solid var(--ay-color-informative-default); }
+.refused { border-left: 4px solid var(--ay-color-critical-default); }
+blockquote { margin: 0 0 0.75rem; }
+.source { color: var(--ay-color-text-label); margin: 0; }
+.try { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: var(--ay-space-gap); }
+.try a {
+  color: var(--ay-color-accent-contrast);
+  background: var(--ay-color-accent-default);
+  text-decoration: none;
+}
+.try a:hover { text-decoration: underline; }
+footer { max-width: 46rem; margin: 2rem auto; padding: 0 var(--ay-space-control-inline); color: var(--ay-color-text-label); font-size: var(--ay-font-size-body); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
