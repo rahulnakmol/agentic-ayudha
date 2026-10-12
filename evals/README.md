@@ -31,10 +31,11 @@ runs it; `go run ./internal/evals/cmd/eval -tier 1` prints the same report.
 `aayu evolve` (WP7.7) answers accepted retro Feedback about a skill. Its PR must add a new case here that names the
 Feedback (`feedback`) and reproduces it: the old skill's run in the `reproduce` directory fails tier 1, and the new
 skill's run in `output/` passes. The PR must also change that skill. CI's `build` job runs the gate on every PR that is an
-evolve PR (an `evolve/` head branch, or the `aayu:evolve` label when it opens) and rejects one without such a case:
+evolve PR (an `evolve/` head branch, or a commit with the `Aayudha-Evolve:` trailer) and rejects one without such a case.
+The old run must exist and validate against its schemas, and fail another check: a missing run does not reproduce anything.
 
 ```sh
-go run ./internal/evals/cmd/eval -evolve-gate -base HEAD^1 -branch "$HEAD_REF" -labels "$LABELS"
+go run ./internal/evals/cmd/eval -evolve-gate -base HEAD^1 -branch "$HEAD_REF"
 ```
 
 ## Tier 2: nightly and on promotion

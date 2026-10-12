@@ -47,7 +47,8 @@ Eval-first, always in this order:
 3. Then change the skill (`skills/<skill>/`, or `evals/skills/<skill>/` for a stub) and record its run under
    `output/`; it must pass tier 1.
 4. Run `aayu evolve --skill <skill> --feedback <n>` again. It runs the eval-first gate, commits, pushes, and opens the
-   PR, labelled `agent-authored` and `aayu:evolve`. CI's `build` job runs the same gate and rejects an evolve PR without
+   PR, labelled `agent-authored` and `aayu:evolve`. CI's `build` job runs the same gate on every PR from an `evolve/`
+   branch or with an `Aayudha-Evolve:` commit, and rejects one without
    a new reproducing case.
 
 Never merge an evolve PR. `skills/` is a protected path, so a human CODEOWNER reviews it. It ships through `rolling`;

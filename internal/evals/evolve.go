@@ -16,7 +16,7 @@ import (
 // accepted Feedback finding on the old skill and passes on the new one.
 const (
 	EvolveBranchPrefix = cli.EvolveBranchPrefix
-	EvolveLabel        = cli.EvolveLabel
+	EvolveLabel        = cli.EvolveLabel // applied to evolve PRs for people; IsEvolvePR does not read it
 )
 
 // Change is one changed path of a diff (git diff --name-status): A, M, D, …
@@ -37,10 +37,15 @@ func ParseNameStatus(out string) []Change {
 	return cs
 }
 
+// EvolveTrailer marks a commit `aayu evolve` made.
+const EvolveTrailer = "Aayudha-Evolve:"
+
 // IsEvolvePR reports whether a PR is an evolve PR: its head branch starts
-// with evolve/ or it carries the aayu:evolve label.
-func IsEvolvePR(branch string, labels []string) bool {
-	return strings.HasPrefix(branch, EvolveBranchPrefix) || slices.Contains(labels, EvolveLabel)
+// with evolve/ or one of its commits carries the Aayudha-Evolve trailer. Both
+// change only with a push, which re-runs CI; a label (aayu:evolve is applied
+// for people) can change without one, so it does not decide.
+func IsEvolvePR(branch, messages string) bool {
+	return strings.HasPrefix(branch, EvolveBranchPrefix) || strings.Contains(messages, "\n"+EvolveTrailer) || strings.HasPrefix(messages, EvolveTrailer)
 }
 
 var newCase = regexp.MustCompile(`^evals/cases/([^/]+)/([^/]+)/case\.toml$`)
@@ -87,8 +92,9 @@ func Gate(ctx context.Context, root, nameStatus string, assets fs.FS) ([]EvolveC
 // at least one eval case (evals/cases/<skill>/<name>/case.toml) that names the
 // Feedback it reproduces and a reproduce directory holding the old skill's
 // recorded run, the change must touch that skill (skills/<skill>/ or
-// evals/skills/<skill>/), the old run must fail tier 1 (the case reproduces the
-// finding) and the new run must pass it (the skill diff fixes it). It returns
+// evals/skills/<skill>/), the old run must exist and validate against its
+// schemas yet fail another tier-1 check (the case reproduces the finding), and
+// the new run must pass tier 1 (the skill diff fixes it). It returns
 // the cases and every problem; no problem means the gate passes.
 func EvolveGate(ctx context.Context, root string, changes []Change, assets fs.FS) ([]EvolveCase, []string) {
 	var cases []EvolveCase
@@ -120,7 +126,21 @@ func EvolveGate(ctx context.Context, root string, changes []Change, assets fs.FS
 			bad("case.toml names no reproduce = <dir> (the old skill's recorded run, which must fail)")
 			continue
 		}
-		if r := Tier1(ctx, root, c.Before(), assets); r.Passed() {
+		r := Tier1(ctx, root, c.Before(), assets)
+		var broken, failed []string
+		for _, ch := range r.Checks {
+			switch {
+			case ch.Status != Fail:
+			case ch.Name == "artifacts" || ch.Name == "schemas":
+				broken = append(broken, ch.Name+": "+strings.Join(ch.Lines, "; "))
+			default:
+				failed = append(failed, ch.Name)
+			}
+		}
+		switch {
+		case len(broken) > 0:
+			bad("the old skill's recorded run in %s/ is missing or malformed (%s); it must be a real run that fails on the finding", c.Reproduce, strings.Join(broken, "; "))
+		case len(failed) == 0:
 			bad("the old skill's recorded run in %s/ passes tier 1, so the case does not reproduce the finding", c.Reproduce)
 		}
 	}

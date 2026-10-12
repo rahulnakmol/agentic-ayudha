@@ -88,17 +88,18 @@ jobs:
       # and tier 1 of the skill evals (internal/evals, TestTier1) over evals/cases (WP3.4).
       - name: Build, vet, test
         run: go build ./... && go vet ./... && go test ./...
-      # WP7.7: an evolve PR (an evolve/ head branch, or the aayu:evolve label when it opens) must add an eval case that
-      # reproduces its Feedback on the old skill and passes on the new one, before any skill diff (eval-first). The
-      # checkout is the PR's merge commit, one commit deep; its first parent is the base it merges into.
+      # WP7.7: an evolve PR (an evolve/ head branch, or a commit with the Aayudha-Evolve trailer; both change only with a
+      # push, which re-runs this job) must add an eval case that reproduces its Feedback on the old skill and passes on the
+      # new one, before any skill diff (eval-first). The checkout is the PR's merge commit; its first parent is the base
+      # and its second the head, so the PR's commits are fetched to read their trailers.
       - name: Eval-first gate for evolve PRs (WP7.7)
         if: github.event_name == 'pull_request'
         env:
           HEAD_REF: ${{ github.head_ref }}
-          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          COMMITS: ${{ github.event.pull_request.commits }}
         run: |
-          git fetch --no-tags --quiet --deepen=1 origin
-          go run ./internal/evals/cmd/eval -evolve-gate -base HEAD^1 -branch "$HEAD_REF" -labels "$LABELS"
+          git fetch --no-tags --quiet --deepen="$((COMMITS + 1))" origin
+          go run ./internal/evals/cmd/eval -evolve-gate -base HEAD^1 -branch "$HEAD_REF"
       - name: Build matrix and binary size budget
         run: |
           set -euo pipefail

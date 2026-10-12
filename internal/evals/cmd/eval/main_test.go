@@ -80,38 +80,39 @@ func TestEvolveGateCI(t *testing.T) {
 	git(t, root, "commit", "--quiet", "-m", "base")
 	base := git(t, root, "rev-parse", "HEAD")
 	skillDiff := map[string]string{"evals/skills/stub/SKILL.md": "# stub\n\nDraft a Story. Never add a content type the request does not state.\n"}
-	branch := func(name string, files ...map[string]string) {
+	branch := func(name, msg string, files ...map[string]string) {
 		git(t, root, "checkout", "--quiet", "-B", name, base)
 		for _, f := range files {
 			write(t, root, f)
 		}
 		git(t, root, "add", ".")
-		git(t, root, "commit", "--quiet", "--allow-empty", "-m", name)
+		git(t, root, "commit", "--quiet", "--allow-empty", "-m", msg)
 	}
 	ctx := context.Background()
 	for _, tc := range []struct {
-		name, branch, labels string
-		files                []map[string]string
-		fail                 string
+		name, branch, msg string
+		files             []map[string]string
+		fail              string
 	}{
-		{"evolve PR with a skill diff and no eval case", "evolve/stub-5", "", []map[string]string{skillDiff}, "evolve gate"},
-		{"labelled evolve PR with no eval case", "feat/stub", "agent-authored,aayu:evolve", []map[string]string{skillDiff}, "evolve gate"},
-		{"case whose old run passes does not reproduce", "evolve/stub-5", "", []map[string]string{evolveCase(t, "Export orders "), skillDiff}, "evolve gate"},
-		{"case without a skill diff", "evolve/stub-5", "", []map[string]string{evolveCase(t, "Export orders as text/csv ")}, "evolve gate"},
-		{"case naming no Feedback", "evolve/stub-5", "", []map[string]string{withCase(evolveCase(t, "Export orders as text/csv "), func(c string) string {
+		{"evolve PR with a skill diff and no eval case", "evolve/stub-5", "x", []map[string]string{skillDiff}, "evolve gate"},
+		{"evolve commit on another branch with no eval case", "feat/stub", "feat: x\n\nAayudha-Evolve: #5", []map[string]string{skillDiff}, "evolve gate"},
+		{"case whose old run is missing", "evolve/stub-5", "x", []map[string]string{withoutBefore(evolveCase(t, "Export orders as text/csv ")), skillDiff}, "evolve gate"},
+		{"case whose old run passes does not reproduce", "evolve/stub-5", "x", []map[string]string{evolveCase(t, "Export orders "), skillDiff}, "evolve gate"},
+		{"case without a skill diff", "evolve/stub-5", "x", []map[string]string{evolveCase(t, "Export orders as text/csv ")}, "evolve gate"},
+		{"case naming no Feedback", "evolve/stub-5", "x", []map[string]string{withCase(evolveCase(t, "Export orders as text/csv "), func(c string) string {
 			return strings.Replace(c, "feedback = 5\n", "", 1)
 		}), skillDiff}, "evolve gate"},
-		{"case without a reproduce run", "evolve/stub-5", "", []map[string]string{withCase(evolveCase(t, "Export orders as text/csv "), func(c string) string {
+		{"case without a reproduce run", "evolve/stub-5", "x", []map[string]string{withCase(evolveCase(t, "Export orders as text/csv "), func(c string) string {
 			return strings.Replace(c, "reproduce = \"before\"\n", "", 1)
 		}), skillDiff}, "evolve gate"},
-		{"unreadable case", "evolve/stub-5", "", []map[string]string{{"evals/cases/stub/broken/case.toml": "skill = \"stub\"\nunknown = 1\n"}, skillDiff}, "evolve gate"},
-		{"new run fails tier 1", "evolve/stub-5", "", []map[string]string{evolveCase(t, "Export orders as text/csv "), skillDiff,
+		{"unreadable case", "evolve/stub-5", "x", []map[string]string{{"evals/cases/stub/broken/case.toml": "skill = \"stub\"\nunknown = 1\n"}, skillDiff}, "evolve gate"},
+		{"new run fails tier 1", "evolve/stub-5", "x", []map[string]string{evolveCase(t, "Export orders as text/csv "), skillDiff,
 			{"evals/cases/stub/no-content-type/output/issue.json": "{}"}}, "evolve gate"},
-		{"eval-first evolve PR", "evolve/stub-5", "agent-authored", []map[string]string{evolveCase(t, "Export orders as text/csv "), skillDiff}, ""},
-		{"not an evolve PR", "feat/stub", "", []map[string]string{skillDiff}, ""},
+		{"eval-first evolve PR", "evolve/stub-5", "feat(skills): evolve stub\n\nAayudha-Evolve: #5", []map[string]string{evolveCase(t, "Export orders as text/csv "), skillDiff}, ""},
+		{"not an evolve PR, whatever its labels", "feat/stub", "feat: x", []map[string]string{skillDiff}, ""},
 	} {
-		branch(tc.branch, tc.files...)
-		err := evolveGate(ctx, root, base, tc.branch, strings.Split(tc.labels, ","))
+		branch(tc.branch, tc.msg, tc.files...)
+		err := evolveGate(ctx, root, base, tc.branch)
 		switch {
 		case tc.fail == "" && err != nil:
 			t.Errorf("%s: rejected: %v", tc.name, err)
@@ -119,19 +120,24 @@ func TestEvolveGateCI(t *testing.T) {
 			t.Errorf("%s: not rejected (%v)", tc.name, err)
 		}
 	}
-	if err := evolveGate(ctx, root, "", "evolve/x", nil); err == nil {
+	if err := evolveGate(ctx, root, "", "evolve/x"); err == nil {
 		t.Error("an evolve gate without -base passed")
 	}
-	if err := evolveGate(ctx, root, "no-such-commit", "evolve/x", nil); err == nil || !strings.Contains(err.Error(), "git diff") {
+	if err := evolveGate(ctx, root, "no-such-commit", "evolve/x"); err == nil || !strings.Contains(err.Error(), "git log") {
 		t.Errorf("an evolve gate against a missing base: %v", err)
 	}
 	// The command line CI runs.
-	branch("evolve/stub-5", skillDiff)
+	branch("evolve/stub-5", "x", skillDiff)
 	t.Chdir(root)
-	os.Args = []string{"eval", "-evolve-gate", "-base", base, "-branch", "evolve/stub-5", "-labels", ""}
+	os.Args = []string{"eval", "-evolve-gate", "-base", base, "-branch", "evolve/stub-5"}
 	if err := run(ctx); err == nil || !strings.Contains(err.Error(), "evolve gate") {
 		t.Errorf("eval -evolve-gate on an evolve PR without a case: %v", err)
 	}
+}
+
+func withoutBefore(files map[string]string) map[string]string {
+	delete(files, "evals/cases/stub/no-content-type/before/issue.json")
+	return files
 }
 
 func withCase(files map[string]string, edit func(string) string) map[string]string {

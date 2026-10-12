@@ -36,7 +36,8 @@ type EvolveResult struct {
 	Next     string       `json:"next,omitempty"`
 }
 
-// The evolve branch prefix and label (internal/evals.IsEvolvePR reads both).
+// The evolve branch prefix (internal/evals.IsEvolvePR reads it, with the
+// Aayudha-Evolve trailer) and the label applied to evolve PRs for people.
 const (
 	EvolveBranchPrefix = "evolve/"
 	EvolveLabel        = "aayu:evolve"
