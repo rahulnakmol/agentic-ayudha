@@ -307,7 +307,8 @@ func TestReleaseLadder(t *testing.T) {
 	if code, _, errOut := f.run(t, day.Add(time.Hour), f.env, rel, "--to", "rolling", "--yes"); code != ExitBlocked || !strings.Contains(errOut, "nothing to promote") {
 		t.Fatalf("empty range: %d %s", code, errOut)
 	}
-	// It ships a story the Release does not list (stamped all the same: the artifact holds it), without evals.yml.
+	// Its range refs a story the Release does not list and that never merged: it is reported, not stamped
+	// released (that would claim undone work), and the promotion still lands, without evals.yml.
 	f.commit(t, "feat: upload progress (#32)", 32, fmt.Sprintf("Refs #%d", f.pending), "feat/progress")
 	f.g.Mu.Lock()
 	f.g.Workflows = []string{"ci.yml", "release.yml"}
@@ -315,25 +316,24 @@ func TestReleaseLadder(t *testing.T) {
 	opts.Now = func() time.Time { return day.Add(time.Hour) }
 	code, out, errOut = run(t, f.env, opts, "release", rel, "--to", "rolling", "--yes", "--repo", "o/r")
 	if code != 0 || !strings.Contains(out, `to rolling as "Rolling snapshot: 20261012T1041Z" = `) || !strings.Contains(out, ", tag rolling-2026-10-12.2 (candidate promote/rolling-20261012T1041Z)") ||
-		!strings.Contains(out, fmt.Sprintf("  stories released: #%d\n", f.pending)) || !strings.Contains(out, fmt.Sprintf("  already released: #2, #%d\n", f.other)) ||
-		!strings.Contains(out, fmt.Sprintf("  shipped but not listed by the Release: #%d\n", f.pending)) || !strings.Contains(out, "  note: no evals.yml: tier-2 evals not run\n") {
+		!strings.Contains(out, "  stories released: none\n") || !strings.Contains(out, fmt.Sprintf("  already released: #2, #%d\n", f.other)) ||
+		!strings.Contains(out, fmt.Sprintf("  referenced but not merged (not stamped): #%d\n", f.pending)) || strings.Contains(out, "shipped but not listed") ||
+		!strings.Contains(out, "  note: no evals.yml: tier-2 evals not run\n") {
 		t.Fatalf("second snapshot: %d\n%s%s", code, out, errOut)
 	}
 	f.g.Mu.Lock()
 	f.g.Workflows = []string{"ci.yml", "evals.yml", "release.yml"}
 	body = f.g.Issues[f.release].Body
 	f.g.Mu.Unlock()
-	if !contains(f.g.LabelNames(f.pending), "status:released") || !strings.Contains(body, fmt.Sprintf("shipped but not listed here: #%d", f.pending)) || !strings.Contains(body, "- Note: no evals.yml") {
+	if contains(f.g.LabelNames(f.pending), "status:released") || !strings.Contains(body, fmt.Sprintf("referenced but not merged, not stamped: #%d", f.pending)) || !strings.Contains(body, "- Note: no evals.yml") {
 		t.Fatalf("second snapshot's stamp and evidence: %v\n%s", f.g.LabelNames(f.pending), body)
 	}
-	// The Goal's first obligation stands; the second release adds its own.
+	// The Goal's first obligation stands; a snapshot that stamps no story adds none.
 	if got := git(t, f.bare, "show", fmt.Sprintf("ledger:measure/due/%d/rolling-2026-10-12.json", f.goal)); got != dueFirst {
 		t.Fatalf("a later release changed the first measure obligation:\n%s", got)
 	}
-	if got := git(t, f.bare, "show", fmt.Sprintf("ledger:measure/due/%d/rolling-2026-10-12.2.json", f.goal)); !strings.Contains(got, fmt.Sprintf(`"stories": [
-    %d
-  ]`, f.pending)) {
-		t.Fatalf("second measure obligation:\n%s", got)
+	if got := git(t, f.bare, "ls-tree", "--name-only", "ledger", fmt.Sprintf("measure/due/%d/", f.goal)); strings.Contains(got, "rolling-2026-10-12.2.json") {
+		t.Fatalf("a snapshot that released nothing recorded a measure obligation:\n%s", got)
 	}
 
 	// Main needs this Release's rolling snapshot still on rolling.
