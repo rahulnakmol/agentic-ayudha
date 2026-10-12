@@ -30,11 +30,60 @@ type Config struct {
 	MinPassK  float64 `toml:"min_pass_k"` // suite pass^k bar
 	MinMean   float64 `toml:"min_mean"`   // suite mean rubric score bar
 	MaxDrop   float64 `toml:"max_drop"`   // largest allowed fall of the mean below the baseline
-	MaxUSD    float64 `toml:"max_usd"`    // spend cap for one tier-2 run, on top of [budget]
+	MaxUSD    float64 `toml:"-"`          // spend cap of the run: the selected group's max_usd (ForGroup)
+	Groups    []Group `toml:"groups"`     // tier-2 case groups, each run as its own job with its own spend cap
 	MaxTokens struct {
 		Skill int `toml:"skill"`
 		Judge int `toml:"judge"`
 	} `toml:"max_tokens"`
+}
+
+// Group is a set of tier-2 cases run together with their own spend cap, so
+// one group can never use up another's (D-7.3d). A case belongs to the first
+// group with a prefix of its ID, else to the one group without prefixes.
+type Group struct {
+	Name     string   `toml:"name"`
+	Prefixes []string `toml:"prefixes"` // case ID prefixes; none: every case no other group claims
+	MaxUSD   float64  `toml:"max_usd"`  // spend cap of one run of this group, on top of [budget]
+}
+
+// GroupOf returns the name of the group case ID id belongs to.
+func (c Config) GroupOf(id string) string {
+	rest := ""
+	for _, g := range c.Groups {
+		if len(g.Prefixes) == 0 {
+			rest = g.Name
+		}
+		for _, p := range g.Prefixes {
+			if strings.HasPrefix(id, p) {
+				return g.Name
+			}
+		}
+	}
+	return rest
+}
+
+// ForGroup returns the config for one group's run (MaxUSD is the group's cap)
+// and the cases that belong to it.
+func (c Config) ForGroup(name string, cases []Case) (Config, []Case, error) {
+	for _, g := range c.Groups {
+		if g.Name != name {
+			continue
+		}
+		c.MaxUSD = g.MaxUSD
+		var out []Case
+		for _, k := range cases {
+			if c.GroupOf(k.ID) == name {
+				out = append(out, k)
+			}
+		}
+		return c, out, nil
+	}
+	var names []string
+	for _, g := range c.Groups {
+		names = append(names, g.Name)
+	}
+	return c, nil, fmt.Errorf("no tier-2 group %q in evals/eval.toml; have %s", name, strings.Join(names, ", "))
 }
 
 // Case is evals/cases/<skill>/<name>/case.toml: a recorded run of a skill plus
@@ -111,6 +160,8 @@ type Tier2Spec struct {
 	Issue int    `toml:"issue"`
 }
 
+var groupName = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+
 // LoadConfig reads evals/eval.toml under root.
 func LoadConfig(root string) (Config, error) {
 	var c Config
@@ -123,6 +174,19 @@ func LoadConfig(root string) (Config, error) {
 	}
 	if c.Judge == "" || c.K < 1 || c.PassScore < 1 || c.PassScore > 5 {
 		return c, errors.New("evals/eval.toml: judge, k >= 1, and pass_score 1-5 are required")
+	}
+	seen, rest := map[string]bool{}, 0
+	for _, g := range c.Groups {
+		if !groupName.MatchString(g.Name) || seen[g.Name] || g.MaxUSD <= 0 {
+			return c, fmt.Errorf("evals/eval.toml: group %q: want a unique lowercase name and max_usd > 0", g.Name)
+		}
+		seen[g.Name] = true
+		if len(g.Prefixes) == 0 {
+			rest++
+		}
+	}
+	if rest != 1 {
+		return c, errors.New("evals/eval.toml: exactly one [[groups]] entry has no prefixes (it takes every other case)")
 	}
 	return c, nil
 }

@@ -148,7 +148,7 @@ func TestBriefCLI(t *testing.T) {
 	if _, err := s.Push(context.Background(), proof.LocalDir(dir, 2), false, proof.Authority{Kind: proof.Authoritative, Workflow: ".github/workflows/" + MergeGateWorkflow, RunID: 77}); err != nil {
 		t.Fatal(err)
 	}
-	closeDraft := writeDraft(t, "# Story 2 is complete\n\nThe merge gate's pack shows the coverage floor held, and the Outcome records the merge [P1, R].\n\n## Evidence\n\n- Coverage passed at 95 against a threshold of 90 [P1].\n- The Outcome says the PR merged [R].\n")
+	closeDraft := writeDraft(t, "# Story 2 is complete\n\nThe merge gate's pack shows the coverage floor held, and the Outcome records the merge [P1, R].\n\n## Evidence\n\n- Coverage passed at 95 against a threshold of 90 [P1].\n- The Outcome says the PR merged [R].\n\n## Limits of this evidence\n\n- The pack covers story 2 only; it says nothing about other stories [P1].\n")
 	if code, _, errOut := run(t, env, opts, "brief", "2", "--purpose", "close", "--register", "regulatory", "--draft", closeDraft, "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "#2 has no Result") || strings.Contains(errOut, "authoritative") {
 		t.Fatalf("close with the pack but no Outcome: exit %d: %s", code, errOut)
 	}

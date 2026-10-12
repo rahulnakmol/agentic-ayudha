@@ -9,7 +9,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"slices"
 	"strings"
 	"time"
 
@@ -83,13 +82,13 @@ type Results struct {
 	Mean     float64      `json:"mean"`   // mean rubric score over every completed run
 	Errors   int          `json:"errors"` // runs with status error, all cases
 	CostUSD  float64      `json:"cost_usd"`
-	Skipped  []string     `json:"skipped,omitempty"`  // tier-2 cases left out of this run (-skip)
+	Group    string       `json:"group,omitempty"`    // the tier-2 group this run covers (D-7.3d)
 	Baseline string       `json:"baseline,omitempty"` // SHA of the results compared against
 	Verdict  string       `json:"verdict"`            // pass or fail
 	Reasons  []string     `json:"reasons,omitempty"`
 }
 
-// ErrBudget means a tier-2 run reached evals/eval.toml max_usd.
+// ErrBudget means a tier-2 run reached its group's max_usd (evals/eval.toml).
 var ErrBudget = errors.New("eval spend cap reached")
 
 // Harness runs tier 2. Gateway carries the [budget] breaker and the actions log;
@@ -490,25 +489,4 @@ func short(sha string) string {
 		return sha[:12]
 	}
 	return sha
-}
-
-// Skip leaves out of tier 2 the cases whose ID starts with one of the
-// comma-separated prefixes, and returns the IDs of the tier-2 cases it left
-// out. The expensive brief cases run nightly, on dispatch, and on promotion,
-// not on every push to dev (D-7.3c).
-func Skip(cases []Case, prefixes string) (kept []Case, skipped []string) {
-	var ps []string
-	for _, p := range strings.Split(prefixes, ",") {
-		if p = strings.TrimSpace(p); p != "" {
-			ps = append(ps, p)
-		}
-	}
-	for _, c := range cases {
-		if c.Tier2 != nil && slices.ContainsFunc(ps, func(p string) bool { return strings.HasPrefix(c.ID, p) }) {
-			skipped = append(skipped, c.ID)
-			continue
-		}
-		kept = append(kept, c)
-	}
-	return kept, skipped
 }

@@ -13,10 +13,11 @@ The Feature covers CSV export of the filtered claims list with the visible colum
 - The accessibility floor reported 0 critical and 0 serious findings at WCAG 2.2 AA, and the keyboard floor passed [P1].
 - API traces evidence criteria 1 and 2 [P1.c1, P1.c2], and a recording evidences criterion 3 [P1.c3]; inspect judged each criterion met [P1].
 
-## Limitations
+## Limits of this evidence
 
 - The screen-reader floor was skipped because the Linux merge gate cannot run a screen reader, so no screen-reader evidence exists [P1].
 - The outcome measure counts export events by distinct reviewers over four weeks; it does not measure audit accuracy [R].
+- Export usage does not show that audits took less time or that fewer rows were lost, the problem the Feature names [#7, R].
 
 ## Conclusion
 
