@@ -30,5 +30,13 @@
     "value": 37,
     "source_query": "GET https://api.github.com/search/issues?q=repo%3Arahulnakmol%2Fagentic-ayudha+is%3Apr+is%3Amerged+merged%3A%3E%3D2026-09-01T00%3A00%3A00Z+merged%3A%3C2026-10-01T00%3A00%3A00Z+base%3Adev",
     "fetched_at": "2026-10-12T09:30:00Z"
+  },
+  "growthbook conversion_rate": {
+    "metric": "conversion_rate",
+    "population": "GrowthBook experiment checkout-v2, control variation control: 4900 users, 490 converted on met_signup",
+    "window": {"from": "2026-09-01T00:00:00Z", "to": "2026-09-29T00:00:00Z"},
+    "value": 0.1,
+    "source_query": "GET https://api.growthbook.io/api/v1/experiments?limit=2&trackingKey=checkout-v2; GET https://api.growthbook.io/api/v1/experiments/exp_19g61/results",
+    "fetched_at": "2026-10-12T09:30:00Z"
   }
 }

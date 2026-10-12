@@ -620,6 +620,37 @@
       "additionalProperties": false,
       "type": "object",
       "description": "The product's branches that play dev, rolling, and main when they have other names (written by init; nothing is renamed)."
+    },
+    "measure": {
+      "properties": {
+        "acquisition": {
+          "type": "string",
+          "description": "Event that acquires a user (e.g. signed_up); empty means a user's first event in the window."
+        },
+        "activation": {
+          "type": "string",
+          "description": "Event that activates an acquired user within activation_days."
+        },
+        "activation_days": {
+          "type": "integer",
+          "description": "Days after acquisition an activation counts; default 7."
+        },
+        "retention": {
+          "type": "string",
+          "description": "Event that counts as activity in days 7-13 after acquisition; empty means any event."
+        },
+        "referral": {
+          "type": "string",
+          "description": "Event by which an acquired user refers someone (e.g. invited_user)."
+        },
+        "north_star": {
+          "type": "string",
+          "description": "North Star: an event (distinct users who sent it in the window) or revenue (paid total in the window)."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "The events measure (WP7.2) reads as AARRR stages and the North Star."
     }
   },
   "additionalProperties": false,

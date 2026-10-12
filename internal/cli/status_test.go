@@ -138,7 +138,7 @@ func TestStatusRollupsAndDigest(t *testing.T) {
 
 	// --apply: the Goal comment, and the parent-close rule closes Feature #5.
 	code, out, errOut = run(t, env, opts, "status", "1", "--repo", "o/r", "--apply")
-	if code != 0 || !strings.Contains(out, "closed Feature #5") {
+	if code != 0 || !strings.Contains(out, "closed #5") {
 		t.Fatalf("status --apply: exit %d: %s %s", code, out, errOut)
 	}
 	g.Mu.Lock()

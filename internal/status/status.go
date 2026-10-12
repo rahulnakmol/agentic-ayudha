@@ -60,9 +60,10 @@ type Rollup struct {
 	ProofCoverage     string         `json:"proof_coverage"`
 	Streak            string         `json:"streak"`
 	CostUSD           float64        `json:"cost_usd"`
-	// Closable: a Feature whose children are all released (or later) and that
-	// has a Result, or an Experiment child with a readout Result (the
-	// parent-close rule); Initiatives and Goals close on measure (n/a until WP7.2).
+	// Closable (the parent-close rule): every child released (or later) or
+	// cancelled, and for a Feature a Result of its own or an Experiment child
+	// with a readout Result; for an Initiative or Goal a measure Result that
+	// met the target (TargetMet).
 	Closable bool      `json:"closable"`
 	Children []*Rollup `json:"children,omitempty"` // Initiatives and Features under it
 
@@ -148,10 +149,33 @@ func (w *Walker) roll(ctx context.Context, n node, depth int) (*Rollup, error) {
 		}
 	}
 	w.count(r)
-	if r.Type == "feature" {
+	switch r.Type {
+	case "feature":
 		r.Closable = closable(n, subs)
+	case "goal", "initiative":
+		r.Closable = measuredMet(n, subs)
 	}
 	return r, nil
+}
+
+// TargetMet starts a Result that measure (WP7.2) wrote with the target met.
+const TargetMet = "Target met:"
+
+// measuredMet is the parent-close rule for an open Goal or Initiative: every
+// child released (or later) or cancelled, and a measure Result that met the
+// target against the baseline.
+func measuredMet(n node, subs []*gh.SubIssue) bool {
+	if n.state == "closed" {
+		return false
+	}
+	for _, s := range subs {
+		c := fromIssue((*gh.Issue)(s))
+		if c.status != "cancelled" && !slices.Contains(shipped, c.status) {
+			return false
+		}
+	}
+	it, _ := workitems.Parse(n.number, n.title, n.body, "", []string{"type:" + n.typ})
+	return strings.HasPrefix(strings.TrimSpace(it.Fields[workitems.FieldResult]), TargetMet)
 }
 
 var shipped = []string{"released", "measured", "done"}

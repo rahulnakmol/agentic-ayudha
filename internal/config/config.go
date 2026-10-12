@@ -36,6 +36,18 @@ type Config struct {
 	Telemetry     Telemetry              `koanf:"telemetry" jsonschema_description:"Traces of verb runs (WP1.8): a local file by default; nothing leaves the machine unless otlp_endpoint is set."`
 	Fleet         Fleet                  `koanf:"fleet" jsonschema_description:"User-level only: the product repos that status --all and doctor --all iterate."`
 	Branches      Branches               `koanf:"branches" jsonschema_description:"The product's branches that play dev, rolling, and main when they have other names (written by init; nothing is renamed)."`
+	Measure       Measure                `koanf:"measure" jsonschema_description:"The events measure (WP7.2) reads as AARRR stages and the North Star."`
+}
+
+// Measure is [measure]: which exported events mark each AARRR stage. Event
+// names match the exports' event names exactly.
+type Measure struct {
+	Acquisition    string `koanf:"acquisition" jsonschema_description:"Event that acquires a user (e.g. signed_up); empty means a user's first event in the window."`
+	Activation     string `koanf:"activation" jsonschema_description:"Event that activates an acquired user within activation_days."`
+	ActivationDays int    `koanf:"activation_days" jsonschema_description:"Days after acquisition an activation counts; default 7."`
+	Retention      string `koanf:"retention" jsonschema_description:"Event that counts as activity in days 7-13 after acquisition; empty means any event."`
+	Referral       string `koanf:"referral" jsonschema_description:"Event by which an acquired user refers someone (e.g. invited_user)."`
+	NorthStar      string `koanf:"north_star" jsonschema_description:"North Star: an event (distinct users who sent it in the window) or revenue (paid total in the window)."`
 }
 
 // Branches is [branches] (WP2.5 coexistence). Empty means the branch of the same name.

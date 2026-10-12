@@ -54,8 +54,14 @@ plan lists in §2; the rest are pulled in by them.
 | `github.com/segmentio/asm` | v1.1.3 | MIT | Via segmentio/encoding | <https://github.com/segmentio/asm> |
 | `github.com/yosida95/uritemplate/v3` | v3.0.2 | BSD-3-Clause | Resource URI templates, via go-sdk | <https://github.com/yosida95/uritemplate> |
 | `golang.org/x/oauth2` | v0.36.0 | BSD-3-Clause | Via go-sdk (its OAuth handler, which aayudha does not use; V5) and go-github | <https://go.googlesource.com/oauth2> |
-| `golang.org/x/sync` | v0.20.0 | BSD-3-Clause | Via go-sdk | <https://go.googlesource.com/sync> |
+| `golang.org/x/sync` | v0.22.0 | BSD-3-Clause | Via go-sdk and modernc.org/libc | <https://go.googlesource.com/sync> |
 | `golang.org/x/time` | v0.15.0 | BSD-3-Clause | Rate limiting, via go-sdk | <https://go.googlesource.com/time> |
+| `modernc.org/sqlite` | v1.59.0 | BSD-3-Clause (SQLite itself is public domain) | Pure-Go SQLite for `measure` snapshots (WP7.2, R7), direct; v1.60 needs Go 1.26 | <https://gitlab.com/cznic/sqlite> |
+| `modernc.org/libc` | v1.75.7 | BSD-3-Clause (includes MIT-licensed musl code) | C runtime for the transpiled SQLite, via sqlite | <https://gitlab.com/cznic/libc> |
+| `modernc.org/mathutil` | v1.7.1 | BSD-3-Clause | Via sqlite and libc | <https://gitlab.com/cznic/mathutil> |
+| `modernc.org/memory` | v1.12.1 | BSD-3-Clause | Allocator, via libc | <https://gitlab.com/cznic/memory> |
+| `github.com/dustin/go-humanize` | v1.0.1 | MIT | Via libc | <https://github.com/dustin/go-humanize> |
+| `github.com/remyoudompheng/bigfft` | v0.0.0-20230129092748-24d4a6f8daec | BSD-3-Clause | Via mathutil | <https://github.com/remyoudompheng/bigfft> |
 
 ### Shelled out by `self-update` (not bundled)
 
@@ -63,6 +69,12 @@ plan lists in §2; the rest are pulled in by them.
 |---|---|---|
 | cosign | Verifies the keyless signature bundle over `checksums.txt` (WP1.1, Appendix B D-1.1a) | Apache-2.0 |
 | GitHub CLI (`gh`) | `gh attestation verify` checks the SLSA build provenance (WP1.1) | MIT |
+
+### Shelled out by `measure` when asked (not bundled)
+
+| Component | Use | Licence |
+|---|---|---|
+| [DuckDB](https://github.com/duckdb/duckdb) CLI (`duckdb`) | Optional query engine over the SQLite snapshot (`measure --engine duckdb`, WP7.2, R7); used only when found on `PATH` | MIT |
 
 ### Run by `install.sh` (not bundled)
 

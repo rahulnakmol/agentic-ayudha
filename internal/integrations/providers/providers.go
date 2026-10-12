@@ -78,8 +78,8 @@ var Known = []Provider{
 		},
 	},
 	{
-		Name: "growthbook", Purpose: "experiment results for readout",
-		open: func(d Deps, c integrations.Conn) (scoper, error) { return growthbook.New(c, d.Transport), nil },
+		Name: "growthbook", Purpose: "experiment results for readout and measure",
+		open: func(d Deps, c integrations.Conn) (scoper, error) { return growthbook.New(c, d.Transport, d.now), nil },
 	},
 	{
 		Name: "figma", Purpose: "design files: nodes, rendered images, and variables",
@@ -118,7 +118,7 @@ func open(d Deps, name string) (Provider, scoper, error) {
 }
 
 // Baseline fetches one baseline from the named source (posthog, sentry,
-// github; each adapter's Metrics lists what it answers). Nothing is sent when the integration is missing, incomplete,
+// github, growthbook; each adapter's Metrics lists what it answers). Nothing is sent when the integration is missing, incomplete,
 // configured with scope = "write", or the query is invalid; the adapter then
 // refuses a key the provider reports as write-capable before the data call.
 func Baseline(ctx context.Context, d Deps, source string, q integrations.Query) (integrations.Baseline, error) {

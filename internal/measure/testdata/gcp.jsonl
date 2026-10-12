@@ -1,0 +1,8 @@
+{"event_timestamp": "1788858000000000", "event_name": "created_project", "user_id": "u1", "user_pseudo_id": "p1"}
+{"event_timestamp": "1791763200000000", "event_name": "created_project", "user_id": "u1", "user_pseudo_id": "p1"}
+{"event_timestamp": "1788944400000000", "event_name": "signed_up", "user_id": "u2", "user_pseudo_id": "p2"}
+{"event_timestamp": 1789948740000000, "event_name": "created_project", "user_id": "u4", "user_pseudo_id": "p4"}
+{"event_timestamp": "1789545600000000", "event_name": "signed_up", "user_pseudo_id": "u5"}
+{"event_timestamp": "1790150400000000", "event_name": "created_project", "user_pseudo_id": "u5"}
+{"event_timestamp": "1789034400000000", "event_name": "created_project", "user_id": "u0", "user_pseudo_id": "p0"}
+{"event_timestamp": "1789034700000000", "event_name": "created_project", "user_id": "u0", "user_pseudo_id": "p0"}
