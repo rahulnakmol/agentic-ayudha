@@ -203,9 +203,11 @@ func TestReleaseLive(t *testing.T) {
 	time.Sleep(3 * time.Second)
 	merged := api(tok, "PUT", fmt.Sprintf("/repos/%s/pulls/%d/merge", repo, prN), map[string]any{"merge_method": "squash"})
 	gitDo("checkout", "--quiet", "dev")
-	for i := 0; i < 30; i++ { // GitHub links a fresh squash commit to its PR after a short delay
-		var pulls []any
-		if json.Unmarshal(liveAPI(t, tok, "GET", fmt.Sprintf("/repos/%s/commits/%s/pulls", repo, merged["sha"]), nil), &pulls) == nil && len(pulls) > 0 {
+	for i := 0; i < 30; i++ { // GitHub links a fresh squash commit to its merged PR after a short delay
+		var pulls []struct {
+			MergedAt *string `json:"merged_at"`
+		}
+		if json.Unmarshal(liveAPI(t, tok, "GET", fmt.Sprintf("/repos/%s/commits/%s/pulls", repo, merged["sha"]), nil), &pulls) == nil && len(pulls) > 0 && pulls[0].MergedAt != nil {
 			break
 		}
 		time.Sleep(2 * time.Second)
