@@ -164,13 +164,24 @@ func (d *Data) fetchLedger(ctx context.Context, s Source, in *Inputs) error {
 				Kind, Login string
 				CommentURL  string `json:"comment_url"`
 			} `json:"human_pass"`
-			ShippedAt time.Time `json:"shipped_at"`
+			ShippedAt  time.Time `json:"shipped_at"`
+			PlanReview *struct {
+				Layers []string
+				Bypass *struct {
+					RecordedBy string `json:"recorded_by"`
+					CommentURL string `json:"comment_url"`
+				}
+			} `json:"plan_review"`
 		}
 		if json.Unmarshal(b, &rec) != nil {
 			continue
 		}
-		d.Ships = append(d.Ships, Ship{Path: f, Story: rec.Story, PR: rec.PR, Merge: rec.MergeCommit, Pass: rec.HumanPass.Kind, Login: rec.HumanPass.Login,
-			Comment: rec.HumanPass.CommentURL, ShippedAt: rec.ShippedAt.UTC()})
+		sh := Ship{Path: f, Story: rec.Story, PR: rec.PR, Merge: rec.MergeCommit, Pass: rec.HumanPass.Kind, Login: rec.HumanPass.Login,
+			Comment: rec.HumanPass.CommentURL, ShippedAt: rec.ShippedAt.UTC()}
+		if pr := rec.PlanReview; pr != nil && pr.Bypass != nil {
+			sh.PlanBypass = &PlanBypass{Layers: pr.Layers, By: pr.Bypass.RecordedBy, Comment: pr.Bypass.CommentURL}
+		}
+		d.Ships = append(d.Ships, sh)
 	}
 	reports, err := s.Tree.List(ctx, "audit")
 	if err != nil {

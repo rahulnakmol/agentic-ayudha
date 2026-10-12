@@ -31,6 +31,11 @@ aayu:
       required: false
       positional: false
       description: "Record the Engineering Manager's plan-time review of a plan that touches an [autonomy] never layer (human identity only)."
+    - name: solo-bypass
+      type: bool
+      required: false
+      positional: false
+      description: "Solo mode only (one human, no bot App): record that a never-layer plan proceeds with no plan-time review, after your story comment starting \"Solo-mode bypass:\"; a bypass, never an approval."
   outputs:
     - "plan"
     - "footprint"

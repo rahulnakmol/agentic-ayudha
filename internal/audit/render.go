@@ -72,6 +72,9 @@ func (r *Report) Markdown() []byte {
 		p("  - solo-mode bypasses whose record came after the merge (recorded late): %d\n", c.SoloLate)
 	}
 	p("- Solo-mode human passes (`ship --solo-bypass`): %d\n", c.SoloShips)
+	if c.PlanBypasses > 0 {
+		p("- Solo-mode plan-review bypasses (`plan --solo-bypass`, no plan-time review): %d\n", c.PlanBypasses)
+	}
 	p("- Human-fallback writes: %d\n", c.Fallback)
 	p("- GitHub writes in the window: %d; in an actions segment %d; by workflows and Apps %d; **not in any actions segment %d**\n",
 		c.Writes, c.Writes-c.CI-c.Unlogged, c.CI, c.Unlogged)
@@ -124,6 +127,17 @@ func (r *Report) Markdown() []byte {
 		p("| Story | PR | Merge commit | Shipped at | By | Ship record | Comment |\n|---|---|---|---|---|---|---|\n")
 		for _, s := range r.SoloShips {
 			p("| #%d | #%d | `%s` | %s | %s | `%s` | %s |\n", s.Story, s.PR, short(s.Merge), stamp(s.ShippedAt), s.Login, s.Path, or(link(s.Comment), "—"))
+		}
+		p("\n")
+	}
+
+	// Listed only when present, so reports written before plan --solo-bypass replay unchanged.
+	if len(r.PlanBypass) > 0 {
+		p("## Solo-mode plan-review bypasses (`plan --solo-bypass`)\n\n")
+		p("Never-layer plans that shipped with no Engineering Manager plan-time review: these are bypasses, not approvals.\n\n")
+		p("| Story | PR | Never layers | Recorded by | Ship record | Comment |\n|---|---|---|---|---|---|\n")
+		for _, s := range r.PlanBypass {
+			p("| #%d | #%d | %s | %s | `%s` | %s |\n", s.Story, s.PR, strings.Join(s.PlanBypass.Layers, ", "), s.PlanBypass.By, s.Path, or(link(s.PlanBypass.Comment), "—"))
 		}
 		p("\n")
 	}

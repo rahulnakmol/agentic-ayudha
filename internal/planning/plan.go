@@ -38,6 +38,20 @@ type Review struct {
 	ApprovedBy string   `json:"approved_by,omitempty"`
 	ApprovedAt string   `json:"approved_at,omitempty"`
 	As         string   `json:"as,omitempty"` // seat (the EM's paired human), approver ([autonomy] approver), or solo
+	// Bypass records that no one reviewed the plan: solo mode, with the
+	// human's "Solo-mode bypass:" comment on the story (plan --solo-bypass).
+	// It is never an approval: ApprovedBy stays empty.
+	Bypass *ReviewBypass `json:"bypass,omitempty"`
+}
+
+// ReviewBypass is a solo-mode plan-review bypass.
+type ReviewBypass struct {
+	As         string `json:"as"`       // always "solo-bypass"
+	Reviewer   string `json:"reviewer"` // always "none (solo mode)"
+	RecordedBy string `json:"recorded_by"`
+	RecordedAt string `json:"recorded_at"`
+	Comment    string `json:"comment_url"`
+	Note       string `json:"note"`
 }
 
 // PlanReport is the check of a plan draft.

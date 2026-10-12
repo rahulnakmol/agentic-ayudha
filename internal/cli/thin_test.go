@@ -12,6 +12,8 @@ import (
 	"testing"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
+	"github.com/rahulnakmol/agentic-ayudha/internal/planning"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 )
@@ -217,7 +219,14 @@ func TestShipMobileWaiverAndSoloBypass(t *testing.T) {
 	g.Mu.Lock()
 	g.Pulls[prN].Head.SHA = head
 	g.Mu.Unlock()
-	gateRun(t, g, dir, prN, head, []proof.Check{{Floor: "mobile", Result: proof.Waived, Tool: "aayudha", Version: "0.1", Detail: proof.SkippedMobile + " (waived by #9)", Waiver: "#9"}})
+	gateRun(t, g, dir, prN, head, []proof.Check{{Floor: "mobile", Result: proof.Waived, Tool: "aayudha", Version: "0.1", Detail: proof.SkippedMobile + " (waived by #9)", Waiver: "#9"}}, "L07")
+	// L07 is a never layer: the plan shipped with a solo-mode plan-review bypass, not an approval.
+	plan := PlanRecord{Story: 2, Footprint: []string{"L07"}, Review: planning.Review{Required: true, Layers: []string{"L07"},
+		Bypass: &planning.ReviewBypass{As: "solo-bypass", Reviewer: "none (solo mode)", RecordedBy: "founder", Comment: "https://example.test/o/r/issues/2#issuecomment-81", Note: "solo mode"}}}
+	pb, _ := json.Marshal(plan)
+	if _, err := (&ledger.Writer{Dir: dir}).Write(context.Background(), ledger.Commit{Message: "plan bypass", Files: map[string][]byte{PlanLedgerPath(2): pb}}); err != nil {
+		t.Fatal(err)
+	}
 	if code, out := ship("--solo-bypass"); code != ExitBlocked || !strings.Contains(out, `post a PR comment starting "Solo-mode bypass:"`) {
 		t.Fatalf("solo bypass without the comment: %d %s", code, out)
 	}
@@ -235,11 +244,12 @@ func TestShipMobileWaiverAndSoloBypass(t *testing.T) {
 	g.Mu.Lock()
 	body := g.Issues[2].Body
 	g.Mu.Unlock()
-	if !strings.Contains(body, "merged under a recorded solo-mode bypass") || !strings.Contains(body, "Floor waived: mobile by #9") {
+	if !strings.Contains(body, "merged under a recorded solo-mode bypass") || !strings.Contains(body, "Floor waived: mobile by #9") ||
+		!strings.Contains(body, "Plan-time review: none; founder recorded a solo-mode plan-review bypass for layers L07") {
 		t.Fatalf("Complete section:\n%s", body)
 	}
 	rec := git(t, bare, "show", "ledger:proof/2/"+head+"/authoritative/ship.json")
-	if !strings.Contains(rec, `"kind": "solo-bypass"`) || !strings.Contains(rec, `"mobile by #9"`) {
+	if !strings.Contains(rec, `"kind": "solo-bypass"`) || !strings.Contains(rec, `"mobile by #9"`) || !strings.Contains(rec, `"reviewer": "none (solo mode)"`) || strings.Contains(rec, `"approved_by"`) {
 		t.Fatalf("ship record: %s", rec)
 	}
 }

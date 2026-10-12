@@ -185,3 +185,29 @@ func TestLoggedCommentIsNotReused(t *testing.T) {
 		t.Fatalf("a record naming comment 71 matched another: %+v", ws)
 	}
 }
+
+// A ship whose never-layer plan had a solo-mode plan-review bypass is listed
+// apart, with its own count; a report without one has no such section, so
+// earlier reports replay unchanged.
+func TestAuditPlanReviewBypass(t *testing.T) {
+	in := Inputs{Repo: "o/r", Since: at(0), Until: at(24)}
+	ship := Ship{Path: "proof/5/abc/authoritative/ship.json", Story: 5, PR: 6, Merge: "abc", Pass: "solo-bypass", Login: "founder", ShippedAt: at(3)}
+	md := string(Build(in, &Data{Dev: "dev", Ships: []Ship{ship}}).Markdown())
+	if strings.Contains(md, "plan-review bypass") {
+		t.Errorf("report without a plan-review bypass mentions one:\n%s", md)
+	}
+	ship.PlanBypass = &PlanBypass{Layers: []string{"L04", "L07"}, By: "founder", Comment: "https://example.test/c/9"}
+	r := Build(in, &Data{Dev: "dev", Ships: []Ship{ship}})
+	md = string(r.Markdown())
+	for _, want := range []string{
+		"- Solo-mode plan-review bypasses (`plan --solo-bypass`, no plan-time review): 1",
+		"| #5 | #6 | L04, L07 | founder | `proof/5/abc/authoritative/ship.json` |",
+	} {
+		if !strings.Contains(md, want) {
+			t.Errorf("report lacks %q:\n%s", want, md)
+		}
+	}
+	if c := r.Counts(); c.PlanBypasses != 1 || c.SoloShips != 1 {
+		t.Errorf("counts: %+v", c)
+	}
+}

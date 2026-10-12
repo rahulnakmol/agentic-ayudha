@@ -228,8 +228,8 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		if err != nil {
 			return Wrap(ExitExternal, err)
 		}
-		if !ok || plan.Review.ApprovedBy == "" {
-			return Errorf(ExitBlocked, "ship #%d: the footprint touches never layer(s) %s, so the Engineering Manager's plan-time review is required: `aayu plan %d --draft <file> --create`, then a human runs `aayu plan %d --approve`", n, strings.Join(rec.Pass.Never, ", "), story, story)
+		if !ok || (plan.Review.ApprovedBy == "" && plan.Review.Bypass == nil) {
+			return Errorf(ExitBlocked, "ship #%d: the footprint touches never layer(s) %s, so the Engineering Manager's plan-time review is required: `aayu plan %d --draft <file> --create`, then a human runs `aayu plan %d --approve` (solo mode: `aayu plan %d --solo-bypass`)", n, strings.Join(rec.Pass.Never, ", "), story, story, story)
 		}
 		rec.PlanReview = &plan.Review
 	}
@@ -472,30 +472,40 @@ var soloComment = regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(SoloBypassPrefix
 // the comment in the ship record, the Complete section, and the actions log,
 // where `audit` (WP7.6) reconciles it.
 func (e *Env) soloBypass(ctx context.Context, c *github.Client, owner, name string, n int, head, login string, cfg *config.Config) (HumanPass, error) {
-	if identity.Configured(cfg.Identity) != "" {
-		return HumanPass{}, Errorf(ExitBlocked, "ship --solo-bypass: this repository has a bot identity, so the agent can author and a human can approve; get an approving review")
+	url, err := soloModeComment(ctx, c, owner, name, n, login, cfg, "ship --solo-bypass", "a PR comment")
+	if err != nil {
+		return HumanPass{}, err
 	}
-	if len(cfg.Seats) > 0 {
-		for _, s := range cfg.Seats {
-			if s.Mode == "paired" && s.Human != "" && !strings.EqualFold(s.Human, login) {
-				return HumanPass{}, Errorf(ExitBlocked, "ship --solo-bypass: a second human (%s) holds a seat; ask them for an approving review", s.Human)
-			}
+	return HumanPass{Kind: "solo-bypass", Login: login, Comment: url, Commit: head,
+		Note: "solo mode: GitHub refuses self-approval and no bot App exists, so no second person could review (Appendix B D2)"}, nil
+}
+
+// soloModeComment checks that solo mode holds (no bot identity, no second
+// paired human) and finds login's comment on issue or PR n starting
+// "Solo-mode bypass:"; it returns the comment's URL. what names the command
+// in refusals and where the comment belongs.
+func soloModeComment(ctx context.Context, c *github.Client, owner, name string, n int, login string, cfg *config.Config, cmd, where string) (string, error) {
+	if identity.Configured(cfg.Identity) != "" {
+		return "", Errorf(ExitBlocked, "%s: this repository has a bot identity, so the agent can author and a human can approve; get an approving review", cmd)
+	}
+	for _, s := range cfg.Seats {
+		if s.Mode == "paired" && s.Human != "" && !strings.EqualFold(s.Human, login) {
+			return "", Errorf(ExitBlocked, "%s: a second human (%s) holds a seat; ask them for an approving review", cmd, s.Human)
 		}
 	}
 	comments, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.IssueComment, *gh.Response, error) {
 		return c.REST.Issues.ListComments(ctx, owner, name, n, &gh.IssueListCommentsOptions{ListOptions: o})
 	})
 	if err != nil {
-		return HumanPass{}, Wrap(ExitExternal, err)
+		return "", Wrap(ExitExternal, err)
 	}
 	i := slices.IndexFunc(comments, func(cm *gh.IssueComment) bool {
 		return strings.EqualFold(cm.GetUser().GetLogin(), login) && soloComment.MatchString(cm.GetBody())
 	})
 	if i < 0 {
-		return HumanPass{}, Errorf(ExitBlocked, "ship --solo-bypass: post a PR comment starting %q that says why, from your own account, first", SoloBypassPrefix)
+		return "", Errorf(ExitBlocked, "%s: post %s starting %q that says why, from your own account, first", cmd, where, SoloBypassPrefix)
 	}
-	return HumanPass{Kind: "solo-bypass", Login: login, Comment: comments[i].GetHTMLURL(), Commit: head,
-		Note: "solo mode: GitHub refuses self-approval and no bot App exists, so no second person could review (Appendix B D2)"}, nil
+	return comments[i].GetHTMLURL(), nil
 }
 
 // completeStory writes the story's Complete section (Outcome) and moves it to
@@ -545,6 +555,11 @@ func (e *Env) completeStory(ctx context.Context, c *github.Client, repo string, 
 		fmt.Fprintf(&out, "- Human pass: not needed, autonomous footprint: %s\n", rec.HumanPass.Note)
 	default:
 		fmt.Fprintf(&out, "- Human pass: none possible; %s merged under a recorded solo-mode bypass (%s): %s\n", rec.HumanPass.Login, rec.HumanPass.Comment, rec.HumanPass.Note)
+	}
+	if r := rec.PlanReview; r != nil && r.Bypass != nil {
+		fmt.Fprintf(&out, "- Plan-time review: none; %s recorded a solo-mode plan-review bypass for layers %s (%s): %s\n", r.Bypass.RecordedBy, strings.Join(r.Layers, ", "), r.Bypass.Comment, r.Bypass.Note)
+	} else if r != nil && r.ApprovedBy != "" {
+		fmt.Fprintf(&out, "- Plan-time review: approved by @%s (%s) for layers %s\n", r.ApprovedBy, r.As, strings.Join(r.Layers, ", "))
 	}
 	for _, w := range rec.Waivers {
 		fmt.Fprintf(&out, "- Floor waived: %s\n", w)

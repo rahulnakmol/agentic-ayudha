@@ -23,6 +23,12 @@
       "type": "string",
       "x-aayu-type": "path"
     },
+    "solo-bypass": {
+      "description": "Solo mode only (one human, no bot App): record that a never-layer plan proceeds with no plan-time review, after your story comment starting \"Solo-mode bypass:\"; a bypass, never an approval.",
+      "type": "boolean",
+      "x-aayu-human-only": true,
+      "x-aayu-type": "bool"
+    },
     "story": {
       "description": "Story or bug to plan.",
       "pattern": "^(#?[1-9][0-9]*|https://github\\.com/[^/]+/[^/]+/issues/[1-9][0-9]*)$",

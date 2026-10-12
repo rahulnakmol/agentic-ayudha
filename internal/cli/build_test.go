@@ -206,8 +206,18 @@ func TestShipPassRules(t *testing.T) {
 	if code, out := ship(); code != ExitBlocked || !strings.Contains(out, "plan-time review is required") {
 		t.Fatalf("never layer without the EM review: %d %s", code, out)
 	}
+	// A solo-mode plan-review bypass satisfies the plan check (the human pass is checked next).
+	bypass := PlanRecord{Story: 2, Footprint: []string{"L02", "L07"}, Review: planning.Review{Required: true, Layers: []string{"L07"},
+		Bypass: &planning.ReviewBypass{As: "solo-bypass", Reviewer: "none (solo mode)", RecordedBy: "founder", Comment: "https://example.test/c/1"}}}
+	b, _ := json.Marshal(bypass)
+	if _, err := (&ledger.Writer{Dir: dir}).Write(context.Background(), ledger.Commit{Message: "plan bypass", Files: map[string][]byte{PlanLedgerPath(2): b}}); err != nil {
+		t.Fatal(err)
+	}
+	if code, out := ship(); code != ExitBlocked || strings.Contains(out, "plan-time review is required") || !strings.Contains(out, "no human pass") {
+		t.Fatalf("never layer with a plan-review bypass: %d %s", code, out)
+	}
 	rec := PlanRecord{Story: 2, Footprint: []string{"L02", "L07"}, Review: planning.Review{Required: true, Layers: []string{"L07"}, ApprovedBy: "founder", As: "solo", ApprovedAt: "2026-10-12T10:00:00Z"}}
-	b, _ := json.Marshal(rec)
+	b, _ = json.Marshal(rec)
 	if _, err := (&ledger.Writer{Dir: dir}).Write(context.Background(), ledger.Commit{Message: "plan", Files: map[string][]byte{PlanLedgerPath(2): b}}); err != nil {
 		t.Fatal(err)
 	}

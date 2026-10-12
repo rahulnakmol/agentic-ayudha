@@ -198,6 +198,32 @@ func TestPlan(t *testing.T) {
 		t.Fatalf("approve by an agent: %d %s", code, errOut)
 	}
 	human := map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}
+
+	// Solo mode: --solo-bypass records that no one reviewed the plan, only
+	// after the human's own "Solo-mode bypass:" comment on the story, and
+	// never as an approval.
+	if code, _, errOut := run(t, human, opts, "plan", "2", "--approve", "--solo-bypass", "--repo", "o/r"); code != ExitUsage || !strings.Contains(errOut, "pass one") {
+		t.Fatalf("approve and bypass together: %d %s", code, errOut)
+	}
+	if code, _, errOut := run(t, env, opts, "plan", "2", "--solo-bypass", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "refused for agents") {
+		t.Fatalf("bypass by an agent: %d %s", code, errOut)
+	}
+	if code, _, errOut := run(t, human, opts, "plan", "2", "--solo-bypass", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, `post a comment on the story starting "Solo-mode bypass:"`) {
+		t.Fatalf("bypass without the comment: %d %s", code, errOut)
+	}
+	g.Mu.Lock()
+	cm := &fake.Comment{ID: 81, Body: "Solo-mode bypass: no second person reviewed this plan; L07 proceeds unreviewed."}
+	cm.User.Login, cm.User.Type = "founder", "User"
+	g.Issues[2].Comments = append(g.Issues[2].Comments, cm)
+	g.Mu.Unlock()
+	if code, out, errOut := run(t, human, opts, "plan", "2", "--solo-bypass", "--repo", "o/r"); code != 0 || !strings.Contains(out, "no plan-time review of layers L07; solo-mode bypass recorded by founder") {
+		t.Fatalf("bypass: %d %s %s", code, out, errOut)
+	}
+	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:specs/2/plan.json")), &rec)
+	if b := rec.Review.Bypass; b == nil || b.As != "solo-bypass" || b.Reviewer != "none (solo mode)" || b.RecordedBy != "founder" ||
+		rec.Review.ApprovedBy != "" || rec.Review.As != "" {
+		t.Fatalf("bypass record is not a bypass, or claims an approval: %+v %+v", rec.Review, rec.Review.Bypass)
+	}
 	if code, _, errOut := run(t, human, opts, "plan", "2", "--approve", "--repo", "o/r", "--set", "autonomy.approver=someone-else"); code != ExitBlocked || !strings.Contains(errOut, "the [autonomy] approver is someone-else") {
 		t.Fatalf("approve by a human who is not the approver: %d %s", code, errOut)
 	}
@@ -207,5 +233,8 @@ func TestPlan(t *testing.T) {
 	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:specs/2/plan.json")), &rec)
 	if rec.Review.ApprovedBy != "founder" || rec.Review.As != "solo" || rec.Review.ApprovedAt == "" {
 		t.Fatalf("approved plan record: %+v", rec.Review)
+	}
+	if code, _, errOut := run(t, human, opts, "plan", "2", "--solo-bypass", "--repo", "o/r"); code != ExitUsage || !strings.Contains(errOut, "already reviewed by founder") {
+		t.Fatalf("bypass of a reviewed plan: %d %s", code, errOut)
 	}
 }
