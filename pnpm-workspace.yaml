@@ -5,3 +5,4 @@ packages:
 # dependency without its postinstall step.
 allowBuilds:
   esbuild: false
+  ffmpeg-static: false

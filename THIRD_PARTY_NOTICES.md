@@ -132,6 +132,7 @@ floor tests).
 | Lighthouse | 13.5.0 | Apache-2.0 | `perf` floor | <https://github.com/GoogleChrome/lighthouse> |
 | OWASP ZAP (`zaproxy/zap-stable` image) | 2.17.0, by digest | Apache-2.0 | `dast` floor | <https://github.com/zaproxy/zaproxy> |
 | k6 | 2.3.0 | AGPL-3.0 | `api` floor; run as a program, never linked or distributed | <https://github.com/grafana/k6> |
+| Guidepup (`@guidepup/guidepup`, `@guidepup/playwright`, `@guidepup/setup`) with `@playwright/test` | 0.35.0, 0.19.1, 0.29.2; 1.64.0 | MIT; Apache-2.0 | `screen-reader` floor: drives VoiceOver (macOS) and NVDA (Windows; NVDA itself is GPL-2.0, installed by `guidepup install` and run as a program) | <https://github.com/guidepup/guidepup> |
 | Tesseract | user-installed, optional | Apache-2.0 | OCR in the redaction pass when present | <https://github.com/tesseract-ocr/tesseract> |
 
 ## Policy
@@ -170,6 +171,6 @@ CI scan when the component is actually added.
 |---|---|---|
 | impeccable | `review` lane B, `detect --json` (WP6.6) | Apache-2.0 |
 
-Other optional tools that `doctor` reports (git-lfs, gh, node, Guidepup, DuckDB) are installed by the user and
+Other optional tools that `doctor` reports (git-lfs, gh, node, DuckDB) are installed by the user and
 run as separate programs.
 Each is added to this file with its licence when the verb that calls it ships.

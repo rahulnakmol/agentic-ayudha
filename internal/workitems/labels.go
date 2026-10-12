@@ -16,6 +16,7 @@ const (
 	LabelProvisional   = "decision:provisional"    // V8: a reversible Decision's recommendation applied after its SLA
 	LabelCorrection    = "aayu:correction"         // manual correction marker for the streak (WP5.7)
 	LabelAgentAuthored = "agent-authored"          // PRs opened by an agent lane (evolve, WP7.7)
+	LabelScreenReader  = "aayudha:screen-reader"   // runs the screen-reader floor on a PR (macOS and Windows runners, WP4.7)
 )
 
 var labelColors = map[string]string{
@@ -43,6 +44,7 @@ func Labels() []LabelDef {
 		LabelDef{LabelProvisional, "d93f0b", "Recommendation applied provisionally after the Decision SLA (V8)"},
 		LabelDef{LabelCorrection, "b60205", "A human corrected an agent's merge (resets the streak)"},
 		LabelDef{LabelAgentAuthored, "c5def5", "Opened by an agent lane"},
+		LabelDef{LabelScreenReader, "5319e7", "Run the VoiceOver and NVDA screen-reader floor on this PR"},
 	)
 }
 

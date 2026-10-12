@@ -424,11 +424,7 @@ func (Perf) Run(ctx context.Context, r *Run) (Result, error) {
 		return res, err
 	}
 	lh := ""
-	dirs := []string{filepath.Join(r.Root, "node_modules")}
-	if r.Sandbox != nil && r.Sandbox.Getenv != nil {
-		dirs = append(dirs, filepath.SplitList(r.Sandbox.Getenv("NODE_PATH"))...)
-	}
-	for _, d := range dirs {
+	for _, d := range r.nodeDirs() {
 		if p := filepath.Join(d, ".bin", "lighthouse"); fileExists(p) {
 			lh = p
 			break
