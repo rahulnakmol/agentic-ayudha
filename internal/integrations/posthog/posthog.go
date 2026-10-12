@@ -113,18 +113,15 @@ func HogQL(q integrations.Query) (string, error) {
 	return "SELECT " + sel + " FROM events WHERE " + where, nil
 }
 
-// Baseline checks the key's scope, then runs the metric's HogQL query.
-func (c *Client) Baseline(ctx context.Context, q integrations.Query) (integrations.Baseline, error) {
-	hogql, err := HogQL(q)
-	if err != nil {
-		return integrations.Baseline{}, err
-	}
+// query checks the key's scope, then runs one HogQL query and returns its
+// rows and the exact request (the source query).
+func (c *Client) query(ctx context.Context, name, hogql string) ([][]any, string, error) {
 	scope, err := c.Scope(ctx)
 	if err != nil {
-		return integrations.Baseline{}, err
+		return nil, "", err
 	}
 	if err := scope.Check("posthog"); err != nil {
-		return integrations.Baseline{}, err
+		return nil, "", err
 	}
 	path := "/api/projects/" + c.project + "/query/"
 	var buf bytes.Buffer
@@ -132,25 +129,101 @@ func (c *Client) Baseline(ctx context.Context, q integrations.Query) (integratio
 	enc.SetEscapeHTML(false) // keep < and > readable in source_query
 	_ = enc.Encode(map[string]any{
 		"query": map[string]string{"kind": "HogQLQuery", "query": hogql},
-		"name":  "aayudha baseline " + q.Metric,
+		"name":  name,
 	})
 	body := bytes.TrimSpace(buf.Bytes())
 	req, err := c.request(ctx, http.MethodPost, path, body)
 	if err != nil {
-		return integrations.Baseline{}, err
+		return nil, "", err
 	}
 	var res struct {
 		Results [][]any `json:"results"`
 	}
 	if err := integrations.DoJSON(c.hc, req, &res); err != nil {
+		return nil, "", err
+	}
+	return res.Results, "POST " + c.base + path + " " + string(body), nil
+}
+
+// Flag keys and event names an experiment readout may put into HogQL. They
+// come from an issue body (untrusted, §0.1), so anything that could leave the
+// identifier or string literal is refused rather than escaped.
+var (
+	flagKey   = regexp.MustCompile(`^[A-Za-z0-9_-]{1,100}$`)
+	eventName = regexp.MustCompile(`^[A-Za-z0-9_$][A-Za-z0-9_$.: -]{0,199}$`)
+)
+
+// ArmsHogQL returns the query an experiment readout runs: per value of the
+// feature flag property PostHog sets on every event ($feature/<flag>), the
+// distinct persons with an event and those among them who sent the
+// conversion event, over the window.
+func ArmsHogQL(flag, event string, w integrations.Window) (string, error) {
+	if !flagKey.MatchString(flag) {
+		return "", fmt.Errorf("%w: flag key %q: want letters, digits, - and _", integrations.ErrQuery, flag)
+	}
+	if !eventName.MatchString(event) {
+		return "", fmt.Errorf("%w: event name %q: want letters, digits, $, _, ., :, - and spaces", integrations.ErrQuery, event)
+	}
+	if err := w.Check(); err != nil {
+		return "", err
+	}
+	const ts = "2006-01-02 15:04:05"
+	prop := "properties.`$feature/" + flag + "`"
+	return fmt.Sprintf("SELECT %s AS variant, count(DISTINCT person_id) AS users, count(DISTINCT if(event = '%s', person_id, NULL)) AS converted"+
+		" FROM events WHERE timestamp >= toDateTime('%s', 'UTC') AND timestamp < toDateTime('%s', 'UTC') AND %s IS NOT NULL GROUP BY variant ORDER BY variant",
+		prop, event, w.From.UTC().Format(ts), w.To.UTC().Format(ts), prop), nil
+}
+
+// Arm is one flag variant's persons and converted persons.
+type Arm struct {
+	Variant   string
+	Users     int64
+	Converted int64
+}
+
+// Arms runs ArmsHogQL and returns one Arm per variant, in variant order, with
+// the exact request.
+func (c *Client) Arms(ctx context.Context, flag, event string, w integrations.Window) ([]Arm, string, error) {
+	hogql, err := ArmsHogQL(flag, event, w)
+	if err != nil {
+		return nil, "", err
+	}
+	rows, source, err := c.query(ctx, "aayudha readout "+flag, hogql)
+	if err != nil {
+		return nil, "", err
+	}
+	var arms []Arm
+	for _, r := range rows {
+		if len(r) != 3 {
+			return nil, "", fmt.Errorf("%w: posthog readout row %v: want [variant, users, converted]", integrations.ErrProvider, r)
+		}
+		v, ok1 := r[0].(string)
+		u, ok2 := r[1].(float64)
+		k, ok3 := r[2].(float64)
+		if !ok1 || !ok2 || !ok3 {
+			return nil, "", fmt.Errorf("%w: posthog readout row %v: want [variant, users, converted]", integrations.ErrProvider, r)
+		}
+		arms = append(arms, Arm{Variant: v, Users: int64(u), Converted: int64(k)})
+	}
+	return arms, source, nil
+}
+
+// Baseline checks the key's scope, then runs the metric's HogQL query.
+func (c *Client) Baseline(ctx context.Context, q integrations.Query) (integrations.Baseline, error) {
+	hogql, err := HogQL(q)
+	if err != nil {
 		return integrations.Baseline{}, err
 	}
-	if len(res.Results) != 1 || len(res.Results[0]) != 1 {
-		return integrations.Baseline{}, fmt.Errorf("%w: posthog query returned %d rows; want one row with one value", integrations.ErrProvider, len(res.Results))
+	rows, source, err := c.query(ctx, "aayudha baseline "+q.Metric, hogql)
+	if err != nil {
+		return integrations.Baseline{}, err
 	}
-	v, ok := res.Results[0][0].(float64)
+	if len(rows) != 1 || len(rows[0]) != 1 {
+		return integrations.Baseline{}, fmt.Errorf("%w: posthog query returned %d rows; want one row with one value", integrations.ErrProvider, len(rows))
+	}
+	v, ok := rows[0][0].(float64)
 	if !ok {
-		return integrations.Baseline{}, fmt.Errorf("%w: posthog query returned %v; want a number", integrations.ErrProvider, res.Results[0][0])
+		return integrations.Baseline{}, fmt.Errorf("%w: posthog query returned %v; want a number", integrations.ErrProvider, rows[0][0])
 	}
 	who := "events"
 	if q.Metric == "users" {
@@ -164,7 +237,7 @@ func (c *Client) Baseline(ctx context.Context, q integrations.Query) (integratio
 		Population:  fmt.Sprintf("PostHog project %s: %s", c.project, who),
 		Window:      integrations.Window{From: q.Window.From.UTC(), To: q.Window.To.UTC()},
 		Value:       v,
-		SourceQuery: "POST " + c.base + path + " " + string(body),
+		SourceQuery: source,
 		FetchedAt:   c.now().UTC(),
 	}, nil
 }

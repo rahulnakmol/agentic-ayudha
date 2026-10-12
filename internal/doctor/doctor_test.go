@@ -193,7 +193,7 @@ func failing(t *testing.T) map[string]func(*Probe) {
 			p.Config = load(t, "integrations.posthog.secret=posthog", "integrations.posthog.scope=write", "integrations.posthog.project=12345",
 				"integrations.sentry.secret=posthog", "integrations.sentry.scope=read", "integrations.sentry.org=acme", "integrations.sentry.project=4507",
 				"integrations.github.secret=github-read", "integrations.github.scope=read",
-				"integrations.growthbook.secret=growthbook", "integrations.growthbook.scope=read")
+				"integrations.amplitude.secret=amplitude", "integrations.amplitude.scope=read")
 			p.Integration = realIntegrations(p, providerAPI{})
 		},
 		"optional-tools": func(p *Probe) {

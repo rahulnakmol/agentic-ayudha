@@ -35,7 +35,7 @@ var (
 	// empty window).
 	ErrQuery = errors.New("invalid baseline query")
 	// ErrNoAdapter means the integration is configured but this binary has no
-	// adapter for it (for example growthbook before WP6.7).
+	// adapter for it.
 	ErrNoAdapter = errors.New("no adapter for this integration in this binary")
 )
 
