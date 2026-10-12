@@ -667,3 +667,56 @@ func TestTier2PlanningDrafts(t *testing.T) {
 		}
 	}
 }
+
+// WP7.3 evidence rule, tier 1: in brief/unmapped-criterion the pack maps no
+// evidence to criterion 3. The recorded draft says it is not proved and
+// passes; a draft that claims the recording proves it fails, and so does one
+// that cites the missing map entry.
+func TestTier1UnmappedCriterionClaim(t *testing.T) {
+	for draft, want := range map[string]string{
+		"# Export\n\nTwo criteria are proved [P1.c1, P1.c2].\n\n- The recording proves criterion 3 [P1].\n": "claims proof of criterion 3, but no pack maps evidence to it",
+		"# Export\n\nTwo criteria are proved [P1.c1, P1.c2].\n\n- Criterion 3 holds [P1.c3].\n":             "[P1.c3] is not a source",
+	} {
+		c := copyCase(t, "brief/unmapped-criterion")
+		// The shared grounding sits beside the case directory, as in evals/cases/brief/.
+		g, err := os.ReadFile(filepath.Join(root, "evals", "cases", "brief", "grounding-unmapped.json"))
+		if err != nil || os.WriteFile(filepath.Join(c.Dir, "..", "grounding-unmapped.json"), g, 0o644) != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(c.Dir, "output", "brief.md"), []byte(draft), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		r := Tier1(context.Background(), root, c, aayudha.Assets)
+		if status(r, "brief") != Fail || !strings.Contains(r.String(), want) {
+			t.Errorf("planted claim did not fail tier 1 with %q:\n%s", want, r)
+		}
+	}
+	all, _ := LoadCases(root)
+	for _, c := range all {
+		if c.ID == "brief/unmapped-criterion" {
+			if r := Tier1(context.Background(), root, c, aayudha.Assets); !r.Passed() || c.Tier2 != nil {
+				t.Fatalf("recorded draft: %s (tier2 %v)", r, c.Tier2)
+			}
+		}
+	}
+}
+
+// Pushes to dev leave the brief tier-2 cases out (evals.yml -skip brief/);
+// tier-1-only cases and the stub stay.
+func TestSkipBriefCases(t *testing.T) {
+	all, err := LoadCases(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kept, skipped := Skip(all, " brief/ ,")
+	ids := map[string]bool{}
+	for _, c := range kept {
+		ids[c.ID] = true
+	}
+	if len(skipped) != 4 || !ids["stub/csv-export"] || !ids["brief/unmapped-criterion"] || ids["brief/eli5-explain"] || len(kept)+len(skipped) != len(all) {
+		t.Fatalf("kept %v, skipped %v", ids, skipped)
+	}
+	if kept, skipped := Skip(all, ""); len(kept) != len(all) || skipped != nil {
+		t.Fatalf("no prefixes: %d kept, %v skipped", len(kept), skipped)
+	}
+}

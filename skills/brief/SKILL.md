@@ -70,13 +70,17 @@ renders one accessible HTML page with the sources in its footer.
 - Start with `# Title`, then one paragraph that states the takeaway: what the reader must know if they read nothing
   else. Then `##` sections. Keep the prose between 150 and 350 words.
 - Cite each claim with the ID of its source in brackets: `[#12]` an issue, `[P1]` a proof pack, `[R]` the Result,
-  `[D1]` a measure snapshot. Say only what a source says. Never add numbers, dates, names, or outcomes of your own.
+  `[D1]` a measure snapshot, `[P1.c3]` the evidence a pack maps to criterion 3. Say only what a source says. Never
+  add numbers, dates, names, or outcomes of your own.
 - Simplify the words, never the facts. Every register keeps these exact:
   - A number keeps its unit and what it counts. "4.2 exports per reviewer per week" is a rate per reviewer: say "on
     average", never "each reviewer", and never drop "per reviewer".
   - A state is only what a source records. "Released" is not "merged", and "out of scope" is not "not tested".
-  - A pack lists evidence for each criterion. Do not claim what a recording or trace shows beyond the criterion it
-    proves.
+  - Evidence speaks only through the pack's criterion map. Each pack lists its criteria with the evidence mapped to
+    each (and, when inspect judged the pack's head, its verdict per criterion). To say a criterion is proved, met, or
+    shown, or that a recording, trace, or screenshot shows something, cite that criterion's entry: `[P1.c3]` is
+    criterion 3 of pack P1. An artifact proves only the criterion it is mapped to. A criterion with no evidence in the
+    map has no entry to cite: say it is not proved.
   - Name no screen detail (a button, menu, or page) and no reason or effect (time saved, fewer errors) that no source
     names.
 - Keep a metric's own words, such as "reviewer", in every register; they are technical names, also in `ste`.

@@ -1,0 +1,8 @@
+# brief (WP7.3): the grounding's pack maps no evidence to criterion 3 (grounding-unmapped.json), so a brief may claim
+# proof of criteria 1 and 2 through their map entries and must say criterion 3 is not proved. Tier 1 only: the
+# recorded draft passes `aayu brief`'s evidence rule; TestTier1UnmappedCriterionClaim plants a proof claim and fails.
+skill = "brief"
+description = "An engineer brief on Feature #7 whose pack lacks evidence for criterion 3."
+input = "../grounding-unmapped.json"
+artifacts = ["output/brief.md"]
+brief = { register = "engineer", purpose = "explain", draft = "output/brief.md" }

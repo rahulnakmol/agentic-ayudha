@@ -49,6 +49,7 @@ func run(ctx context.Context) error {
 	out := flag.String("out", "", "results file to write (tier 2)")
 	compare := flag.String("compare", "", "results file to check against the bar and -baseline, without running anything")
 	baseline := flag.String("baseline", "", "baseline results file (evals/results/<main-sha>.json); a missing file means no baseline")
+	skip := flag.String("skip", "", "comma-separated case ID prefixes to leave out of tier 2 (evals.yml skips brief/ on pushes to dev)")
 	flag.Parse()
 
 	root, err := os.Getwd()
@@ -102,10 +103,15 @@ func run(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		cases, skipped := evals.Skip(cases, *skip)
+		for _, id := range skipped {
+			fmt.Printf("skipped %s (-skip %s)\n", id, *skip)
+		}
 		res, err := h.Tier2(ctx, cases, *sha, *ref, time.Now())
 		if err != nil {
 			return err
 		}
+		res.Skipped = skipped
 		res.Verdict, res.Reasons = evals.Compare(res, base, cfg)
 		if base != nil {
 			res.Baseline = base.SHA

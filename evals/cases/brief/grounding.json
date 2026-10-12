@@ -100,7 +100,58 @@
           "sha256": "3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b"
         }
       ],
-      "created_at": "2026-10-02T14:20:00Z"
+      "created_at": "2026-10-02T14:20:00Z",
+      "criteria": [
+        {
+          "id": 1,
+          "evidence_kind": "api-trace",
+          "text": "state: a filtered claims list; expected: the CSV holds every claim matching the applied filters",
+          "evidence": [
+            {
+              "path": "evidence/criterion-1.jsonl",
+              "kind": "api-trace",
+              "sha256": "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f809"
+            }
+          ],
+          "inspect_verdict": "met",
+          "inspect_judgement": "The API trace's CSV body holds the 37 claims the filtered list shows."
+        },
+        {
+          "id": 2,
+          "evidence_kind": "api-trace",
+          "text": "state: four of six columns visible; expected: the CSV holds only the visible columns",
+          "evidence": [
+            {
+              "path": "evidence/criterion-2.jsonl",
+              "kind": "api-trace",
+              "sha256": "2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a"
+            }
+          ],
+          "inspect_verdict": "met",
+          "inspect_judgement": "The API trace's CSV header and rows hold the four visible columns only."
+        },
+        {
+          "id": 3,
+          "evidence_kind": "recording",
+          "text": "state: a list of more than 10,000 claims; expected: the list keeps responding while the file is prepared",
+          "evidence": [
+            {
+              "path": "recordings/3.webm",
+              "kind": "recording",
+              "sha256": "3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b"
+            }
+          ],
+          "inspect_verdict": "met",
+          "inspect_judgement": "The recording shows the list scrolling while the export is prepared on 12,480 claims."
+        }
+      ],
+      "inspect": {
+        "disposition": "merge",
+        "summary": "Every criterion is met by its mapped evidence; no P0 or P1 findings.",
+        "model": "gpt-6.1-sol",
+        "head": "0123456789abcdef0123456789abcdef01234567",
+        "by": "aayudha-bot[bot]"
+      }
     }
   ],
   "result": {

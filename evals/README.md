@@ -40,7 +40,10 @@ reply that stops at its token cap is an `error` marked `truncated` and is not re
 call: role, model, stop reason, input and output tokens, and the cap. When `max_usd` is reached, the remaining runs
 are recorded as errors and the results file is still written.
 
-A brief case's skill replies with its Markdown draft. When `aayu brief`'s checks fail (an `eli5` reading grade above 6,
+A brief case's skill replies with its Markdown draft. Its grounding gives each pack's criterion → evidence map (and
+inspect's verdicts when the pack's head has them), and a draft cites evidence only through it (`[P1.c3]`); a case
+whose map lacks an entry (`brief/unmapped-criterion`, tier 1 only) checks that no proof is claimed for it. Pushes to
+`dev` skip the brief cases (`-skip brief/`): they run nightly, on dispatch, and on promotion. When `aayu brief`'s checks fail (an `eli5` reading grade above 6,
 an STE lint finding, a citation that names no source, …), the skill gets the findings once and revises, as it does in a
 host; a draft that still fails scores 1 without the judge (`revised` marks runs that needed the revision).
 

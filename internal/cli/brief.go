@@ -23,9 +23,11 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
+	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verify"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
@@ -297,8 +299,91 @@ func (e *Env) briefGrounding(ctx context.Context, c *github.Client, repo string,
 		for _, a := range x.Pack.Artifacts {
 			p.Artifacts = append(p.Artifacts, brief.Artifact{Path: a.Path, Kind: a.Kind, SHA256: a.SHA256})
 		}
+		if p.Criteria, err = packCriteria(ctx, t, story, x.Pack); err != nil {
+			return err
+		}
+		if err := inspection(ctx, c, repo, x.Pack, &p); err != nil {
+			return err
+		}
 		g.Packs = append(g.Packs, p)
 		rep.entries[p.ID] = x
+	}
+	return nil
+}
+
+// packCriteria is a pack's criterion -> evidence map: every criterion of the
+// story's Ready snapshot on the ledger (the pack's own criteria when there is
+// no snapshot), each with the artifacts the pack maps to it.
+func packCriteria(ctx context.Context, t *ledger.Tree, story int, pk *proof.Pack) ([]brief.PackCriterion, error) {
+	var crit []workitems.Criterion
+	b, err := t.File(ctx, ready.LedgerPath(story))
+	switch {
+	case err == nil:
+		snap, err := ready.ParseSnapshot(string(b))
+		if err != nil {
+			return nil, err
+		}
+		crit = snap.Criteria
+	case !errors.Is(err, os.ErrNotExist):
+		return nil, err
+	default:
+		for _, c := range pk.Criteria {
+			crit = append(crit, workitems.Criterion{N: c.ID})
+		}
+	}
+	var out []brief.PackCriterion
+	for _, c := range crit {
+		pc := brief.PackCriterion{ID: c.N, Kind: c.Evidence, Evidence: []brief.Artifact{}}
+		if c.State != "" || c.Expected != "" {
+			pc.Text = fmt.Sprintf("state: %s; expected: %s", c.State, c.Expected)
+		}
+		for _, m := range pk.Criteria {
+			if m.ID != c.N {
+				continue
+			}
+			for _, ref := range m.Evidence {
+				if a, ok := pk.Artifact(ref); ok {
+					pc.Evidence = append(pc.Evidence, brief.Artifact{Path: a.Path, Kind: a.Kind, SHA256: a.SHA256})
+				}
+			}
+		}
+		out = append(out, pc)
+	}
+	return out, nil
+}
+
+// inspection adds the inspect result (WP4.8) for the pack's head: the
+// disposition and its per-criterion verdicts, from inspect's replace-in-place
+// comment on the pack's pull request. A result for another head is not this
+// pack's and is left out.
+func inspection(ctx context.Context, c *github.Client, repo string, pk *proof.Pack, p *brief.Pack) error {
+	if pk.PR <= 0 {
+		return nil
+	}
+	owner, name, _ := github.SplitRepo(repo)
+	comments, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.IssueComment, *gh.Response, error) {
+		return c.REST.Issues.ListComments(ctx, owner, name, pk.PR, &gh.IssueListCommentsOptions{ListOptions: o})
+	})
+	if err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	for _, cm := range comments {
+		if !strings.Contains(cm.GetBody(), inspect.Marker) {
+			continue
+		}
+		st := inspect.ParseState(cm.GetBody())
+		if st.Result == nil || st.Result.Head != pk.PRHeadSHA {
+			continue
+		}
+		r := st.Result
+		p.Inspect = &brief.Inspection{Disposition: r.Disposition, Summary: r.Summary, Model: r.Model, Head: r.Head, By: cm.GetUser().GetLogin()}
+		for i := range p.Criteria {
+			for _, v := range r.Criteria {
+				if v.ID == p.Criteria[i].ID {
+					p.Criteria[i].Verdict, p.Criteria[i].Judgment = v.Verdict, v.Evidence
+				}
+			}
+		}
 	}
 	return nil
 }
@@ -478,8 +563,23 @@ func groundingText(w io.Writer, rep *briefReport) error {
 			floors = append(floors, fmt.Sprintf("%s %s (%g against %g)", c.Floor, c.Result, c.Value, c.Threshold))
 		}
 		fmt.Fprintf(w, "[%s] %s pack for #%d at %s, floors hold: %t: %s\n", p.ID, p.Authority, p.Story, short(p.HeadSHA), p.FloorsHold, strings.Join(floors, "; "))
-		for _, a := range p.Artifacts {
-			fmt.Fprintf(w, "      %s %s\n", a.Kind, a.Path)
+		if p.Inspect != nil {
+			fmt.Fprintf(w, "      inspect: %s (%s) on %s\n", p.Inspect.Disposition, p.Inspect.Model, short(p.Inspect.Head))
+		}
+		for _, c := range p.Criteria {
+			ev := "no evidence in the pack: not proved"
+			if len(c.Evidence) > 0 {
+				var refs []string
+				for _, a := range c.Evidence {
+					refs = append(refs, a.Kind+" "+a.Path)
+				}
+				ev = "evidence " + strings.Join(refs, ", ")
+			}
+			v := ""
+			if c.Verdict != "" {
+				v = "; inspect: " + c.Verdict
+			}
+			fmt.Fprintf(w, "  [%s] criterion %d [%s] %s: %s%s\n", c.Cite(p.ID), c.ID, c.Kind, c.Text, ev, v)
 		}
 	}
 	if r := g.Result; r != nil {

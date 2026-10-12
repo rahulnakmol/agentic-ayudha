@@ -76,6 +76,33 @@ type Pack struct {
 	Checks     []Floor    `json:"checks,omitempty"`
 	Artifacts  []Artifact `json:"artifacts,omitempty"`
 	CreatedAt  string     `json:"created_at,omitempty"`
+	// Criteria is the pack's criterion -> evidence map: every criterion of the
+	// story's Ready snapshot, with the artifacts the pack maps to it (none when
+	// it is unmapped). A draft cites one entry as [P1.c3].
+	Criteria []PackCriterion `json:"criteria,omitempty"`
+	Inspect  *Inspection     `json:"inspect,omitempty"` // the inspect result for this pack's head, when one exists
+}
+
+// PackCriterion is one entry of a pack's criterion -> evidence map.
+type PackCriterion struct {
+	ID       int        `json:"id"`
+	Kind     string     `json:"evidence_kind,omitempty"` // the evidence kind the criterion asks for
+	Text     string     `json:"text,omitempty"`          // "state: …; expected: …" from the Ready snapshot
+	Evidence []Artifact `json:"evidence"`                // empty: the pack has no evidence for it
+	Verdict  string     `json:"inspect_verdict,omitempty"`
+	Judgment string     `json:"inspect_judgement,omitempty"`
+}
+
+// Cite is the citation of a map entry: P1.c3.
+func (c PackCriterion) Cite(pack string) string { return fmt.Sprintf("%s.c%d", pack, c.ID) }
+
+// Inspection is the inspect (WP4.8) disposition on a pack's head.
+type Inspection struct {
+	Disposition string `json:"disposition"`
+	Summary     string `json:"summary,omitempty"`
+	Model       string `json:"model,omitempty"`
+	Head        string `json:"head"`
+	By          string `json:"by,omitempty"` // who posted the inspect comment
 }
 
 // Floor is one floor result in a pack.
@@ -119,6 +146,11 @@ func (g *Grounding) IDs() []string {
 	}
 	for _, p := range g.Packs {
 		ids = append(ids, p.ID)
+		for _, c := range p.Criteria {
+			if len(c.Evidence) > 0 { // an unmapped criterion has nothing to cite
+				ids = append(ids, c.Cite(p.ID))
+			}
+		}
 	}
 	if g.Result != nil {
 		ids = append(ids, "R")
@@ -202,7 +234,8 @@ var visualKeys = map[string][]string{
 	"screen":       {"alt", "pack", "artifact", "caption"},
 }
 
-var citeRE = regexp.MustCompile(`\[((?:#\d+|P\d+|R|D\d+)(?:\s*,\s*(?:#\d+|P\d+|R|D\d+))*)\]`)
+// citeRE matches a citation: one or more source IDs in brackets.
+var citeRE = regexp.MustCompile(`\[((?:#\d+|P\d+(?:\.c\d+)?|R|D\d+)(?:\s*,\s*(?:#\d+|P\d+(?:\.c\d+)?|R|D\d+))*)\]`)
 
 func newMarkdown() goldmark.Markdown {
 	return goldmark.New(goldmark.WithExtensions(extension.Table, extension.Strikethrough))
@@ -403,6 +436,9 @@ func Check(d *Draft, g *Grounding, o Options) []Finding {
 	}
 	if len(cited) == 0 {
 		add("citations", "the brief cites no source; cite the evidence for each claim as [P1], [R], [#n], or [D1]")
+	}
+	for _, p := range proofClaims(d, g) {
+		add("evidence", "%s", p)
 	}
 	if o.Purpose == "close" {
 		if g.Result != nil && !cited["R"] {

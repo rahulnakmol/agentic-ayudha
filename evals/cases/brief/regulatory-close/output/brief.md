@@ -11,7 +11,7 @@ The Feature covers CSV export of the filtered claims list with the visible colum
 - The merge gate verified Story #12 in run 4242 and wrote the authoritative pack P1 for head commit 0123456 [P1].
 - Coverage was 94 against a threshold of 90; the SAST, secrets, and dependency floors reported 0 findings [P1].
 - The accessibility floor reported 0 critical and 0 serious findings at WCAG 2.2 AA, and the keyboard floor passed [P1].
-- API traces evidence criteria 1 and 2, and a recording evidences criterion 3 [P1, #12].
+- API traces evidence criteria 1 and 2 [P1.c1, P1.c2], and a recording evidences criterion 3 [P1.c3]; inspect judged each criterion met [P1].
 
 ## Limitations
 
