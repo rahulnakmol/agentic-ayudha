@@ -81,8 +81,14 @@ func runPlan(ctx context.Context, e *Env, in Values) error {
 		return err
 	}
 	n := issueNumber(in.String("story"))
+	if in.Bool("approve") && in.Bool("solo-bypass") {
+		return Errorf(ExitUsage, "plan: --approve records a review and --solo-bypass records that there was none; pass one")
+	}
 	if in.Bool("approve") {
 		return e.approvePlan(ctx, repo, n, &l.Config)
+	}
+	if in.Bool("solo-bypass") {
+		return e.bypassPlanReview(ctx, repo, n, &l.Config)
 	}
 	c, bot, err := e.BotGitHub(ctx, "")
 	if err != nil {
@@ -227,6 +233,58 @@ func (e *Env) approvePlan(ctx context.Context, repo string, n int, cfg *config.C
 	}
 	return e.Emit(p, func(w io.Writer) error {
 		_, err := fmt.Fprintf(w, "#%d: EM plan-time review of layers %s recorded by %s (as %s) in %s\n", n, strings.Join(p.Review.Layers, ", "), me.Login, as, PlanLedgerPath(n))
+		return err
+	})
+}
+
+// bypassPlanReview records, in solo mode, that a never-layer plan proceeds
+// with no plan-time review at all: no second person exists to review it, and
+// the one human did not review it as the Engineering Manager. It needs the
+// human's comment on the story starting "Solo-mode bypass:" and is written as
+// a bypass (em_review.bypass), never as an approval, so `ship` accepts it,
+// and the ship record and `audit` list it as a plan-review bypass.
+func (e *Env) bypassPlanReview(ctx context.Context, repo string, n int, cfg *config.Config) error {
+	if e.Agent() {
+		return Errorf(ExitBlocked, "plan --solo-bypass is a human's decision; it is refused for agents")
+	}
+	c, tok, err := e.HumanGitHub(ctx)
+	if err != nil {
+		return err
+	}
+	me, err := identity.WhoAmI(ctx, e.HTTP, e.githubAPI(), tok)
+	if err != nil {
+		return Wrap(ExitBlocked, err)
+	}
+	w, err := e.Ledger(ctx, tok, "human", "")
+	if err != nil {
+		return err
+	}
+	p, err := readPlan(ctx, w, n)
+	if errors.Is(err, ledger.ErrNoLedger) || errors.Is(err, os.ErrNotExist) {
+		return Errorf(ExitBlocked, "plan --solo-bypass: #%d has no plan on the ledger; `aayu plan %d --draft <file> --create` first", n, n)
+	}
+	if err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	if !p.Review.Required {
+		return Errorf(ExitUsage, "plan --solo-bypass: #%d's plan touches no [autonomy] never layer; no review is needed", n)
+	}
+	if p.Review.ApprovedBy != "" {
+		return Errorf(ExitUsage, "plan --solo-bypass: #%d's plan was already reviewed by %s; no bypass is needed", n, p.Review.ApprovedBy)
+	}
+	owner, name, _ := github.SplitRepo(repo)
+	url, err := soloModeComment(ctx, c, owner, name, n, me.Login, cfg, "plan --solo-bypass", "a comment on the story")
+	if err != nil {
+		return err
+	}
+	p.Review.Bypass = &planning.ReviewBypass{As: "solo-bypass", Reviewer: "none (solo mode)", RecordedBy: me.Login, RecordedAt: e.Now().UTC().Format(time.RFC3339), Comment: url,
+		Note: "solo mode: no second person exists to review the plan, and no one reviewed it as the Engineering Manager (Appendix B D2)"}
+	b, _ := json.MarshalIndent(p, "", "  ")
+	if _, err := w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("specs: solo-mode plan-review bypass of #%d recorded by %s (no review)", n, me.Login), Files: map[string][]byte{PlanLedgerPath(n): append(b, '\n')}}); err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	return e.Emit(p, func(w io.Writer) error {
+		_, err := fmt.Fprintf(w, "#%d: no plan-time review of layers %s; solo-mode bypass recorded by %s (%s) in %s\n", n, strings.Join(p.Review.Layers, ", "), me.Login, url, PlanLedgerPath(n))
 		return err
 	})
 }

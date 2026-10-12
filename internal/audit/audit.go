@@ -142,6 +142,16 @@ type Ship struct {
 	Login     string    `json:"login"`
 	Comment   string    `json:"comment_url,omitempty"`
 	ShippedAt time.Time `json:"shipped_at"`
+	// PlanBypass is set when the story's never-layer plan had no plan-time
+	// review (plan --solo-bypass): the layers and the bypass comment.
+	PlanBypass *PlanBypass `json:"plan_bypass,omitempty"`
+}
+
+// PlanBypass is a solo-mode plan-review bypass a ship record carries.
+type PlanBypass struct {
+	Layers  []string `json:"layers"`
+	By      string   `json:"recorded_by"`
+	Comment string   `json:"comment_url"`
 }
 
 // Record is an actions record from a segment.
@@ -277,6 +287,7 @@ type Report struct {
 	GateSince   time.Time             `json:"merge_gate_since,omitzero"`
 	Bypasses    []Bypass              `json:"bypasses"`
 	SoloShips   []Ship                `json:"solo_ships"`
+	PlanBypass  []Ship                `json:"plan_review_bypasses,omitempty"`
 	Fallback    []Write               `json:"human_fallback_writes"`
 	FallbackLdg []ledger.Entry        `json:"human_fallback_ledger_commits"`
 	Writes      []Write               `json:"writes"`
@@ -292,10 +303,10 @@ type Report struct {
 
 // Counts summarise a report.
 type Counts struct {
-	Bypasses, Unexplained, Solo, SoloLate, SoloShips, LedgerWrites, Promotions, Tags int
-	Fallback, Writes, Unlogged, CI                                                   int
-	Delivered, Covered, PreGate, PostGate                                            int
-	FloorMisses, Waivers, OverSLA, Corrections, NeverMerges, Licence                 int
+	Bypasses, Unexplained, Solo, SoloLate, SoloShips, PlanBypasses, LedgerWrites, Promotions, Tags int
+	Fallback, Writes, Unlogged, CI                                                                 int
+	Delivered, Covered, PreGate, PostGate                                                          int
+	FloorMisses, Waivers, OverSLA, Corrections, NeverMerges, Licence                               int
 }
 
 // Counts computes the summary.
@@ -320,6 +331,7 @@ func (r *Report) Counts() Counts {
 		}
 	}
 	c.SoloShips = len(r.SoloShips)
+	c.PlanBypasses = len(r.PlanBypass)
 	c.Fallback = len(r.Fallback) + len(r.FallbackLdg)
 	c.Writes = len(r.Writes)
 	for _, w := range r.Writes {
@@ -378,6 +390,9 @@ func Build(in Inputs, d *Data) *Report {
 	for _, s := range d.Ships {
 		if s.Pass == "solo-bypass" && d.in(in, s.ShippedAt) {
 			r.SoloShips = append(r.SoloShips, s)
+		}
+		if s.PlanBypass != nil && d.in(in, s.ShippedAt) {
+			r.PlanBypass = append(r.PlanBypass, s)
 		}
 	}
 	r.Writes = d.writes(in)

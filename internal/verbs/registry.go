@@ -500,6 +500,7 @@ var Verbs = []Command{
 			flag("draft", TypePath, "JSON file with the plan the host's model wrote (evals/schemas/plan.json); without it plan reports the footprint and criteria to plan."),
 			readOnlyWith(flag("create", TypeBool, "Write the validated plan to the ledger (specs/<story>/plan.json) and the story; without it plan only validates."), "false"),
 			humanOnly(flag("approve", TypeBool, "Record the Engineering Manager's plan-time review of a plan that touches an [autonomy] never layer (human identity only).")),
+			humanOnly(flag("solo-bypass", TypeBool, "Solo mode only (one human, no bot App): record that a never-layer plan proceeds with no plan-time review, after your story comment starting \"Solo-mode bypass:\"; a bypass, never an approval.")),
 		},
 		Outputs:  []string{"plan", "footprint", "em-review"},
 		Gates:    []GateID{GateValidator, GateHalt},
