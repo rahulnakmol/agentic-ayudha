@@ -13,6 +13,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/policy"
 	"github.com/rahulnakmol/agentic-ayudha/examples/benefits-qa/store"
 )
 
@@ -50,6 +51,8 @@ type Index struct {
 	docs []doc
 	df   map[string]int
 	avg  float64
+
+	retrievals int // Answer calls, so tests can prove Respond screens first
 }
 
 // New indexes the passages.
@@ -77,6 +80,7 @@ func New(passages []store.Passage) *Index {
 // Answer returns the best passage for the question; a question with no term
 // in any passage gets an empty Result.
 func (ix *Index) Answer(question string) Result {
+	ix.retrievals++
 	q := unique(Terms(question))
 	if len(q) == 0 {
 		return Result{}
@@ -124,6 +128,22 @@ func (ix *Index) Answer(question string) Result {
 		Citations: []Citation{{PassageID: best.p.ID, Plan: best.p.Plan, Section: best.p.Section}},
 		Score:     float64(hit) / float64(len(q)),
 	}
+}
+
+// Respond is the one path from a question to what may be shown: policy
+// screens the question before any retrieval (a refused question is never
+// looked up), then the best passage is retrieved and policy grounds it. Only
+// an answered question returns a passage; a refused or referred one returns
+// an empty Result with the verdict that says why.
+func (ix *Index) Respond(question string) (Result, policy.Verdict) {
+	if v := policy.Screen(question); v.Outcome == policy.Refuse {
+		return Result{}, v
+	}
+	r := ix.Answer(question)
+	if v := policy.Ground(r.Score, len(r.Citations)); v.Outcome != policy.Answer {
+		return Result{}, v
+	}
+	return r, policy.Verdict{Outcome: policy.Answer}
 }
 
 // stop words carry no meaning for retrieval.

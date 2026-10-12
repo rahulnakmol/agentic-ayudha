@@ -61,6 +61,31 @@ func TestGroundRefers(t *testing.T) {
 	}
 }
 
+// Respond screens before it retrieves: a refused question is never looked
+// up and quotes nothing; a referred one is looked up but quotes nothing; an
+// answered one quotes its passage.
+func TestRespondScreensFirst(t *testing.T) {
+	ix := index(t)
+	for q, reason := range map[string]string{
+		"What is my colleague's claim status?": policy.ReasonPersonal,
+		"Should I take ibuprofen for my back?": policy.ReasonAdvice,
+	} {
+		r, v := ix.Respond(q)
+		if v.Outcome != policy.Refuse || v.Reason != reason || v.Message == "" || r.Text != "" || len(r.Citations) != 0 {
+			t.Errorf("%q: %+v %+v, want refused (%s) with nothing quoted", q, v, r, reason)
+		}
+	}
+	if ix.retrievals != 0 {
+		t.Fatalf("refused questions were looked up %d time(s)", ix.retrievals)
+	}
+	if r, v := ix.Respond("Can I bring my dog to work?"); v.Outcome != policy.Refer || v.Reason != policy.ReasonNotInPlans || r.Text != "" || len(r.Citations) != 0 || ix.retrievals != 1 {
+		t.Errorf("referred: %+v %+v after %d lookup(s)", v, r, ix.retrievals)
+	}
+	if r, v := ix.Respond("What is the dental annual deductible?"); v.Outcome != policy.Answer || r.Citations[0].PassageID != "dental-deductible" || ix.retrievals != 2 {
+		t.Errorf("answered: %+v %+v", v, r)
+	}
+}
+
 func TestTerms(t *testing.T) {
 	if got := strings.Join(Terms("What are the Deductibles, and the glasses?"), " "); got != "deductible glass" {
 		t.Errorf("terms: %q", got)

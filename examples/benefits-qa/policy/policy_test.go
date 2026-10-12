@@ -27,7 +27,8 @@ func TestScreenRefuses(t *testing.T) {
 		t.Errorf("personal-data message: %q", v.Message)
 	}
 	for _, q := range []string{"What is the dental annual deductible?", "Does my spouse count for the family deductible?", "How do I file a claim?",
-		"What is my HSA balance?", "Does Example Co's 401(k) match my contributions?", "How many weeks of parental leave do I get?"} {
+		"What is my HSA balance?", "Does Example Co's 401(k) match my contributions?", "How many weeks of parental leave do I get?",
+		"What is the dental plan's claim limit?", "What is this year's claim deadline?"} {
 		if v := Screen(q); v.Outcome != Answer || v.Reason != "" {
 			t.Errorf("%q: %+v, want answer", q, v)
 		}

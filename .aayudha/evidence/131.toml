@@ -6,9 +6,9 @@ id = 1 # the dental question is answered from the dental-deductible passage, quo
 tests = ["examples/benefits-qa/answer:TestAnswerCitesPassage"]
 
 [[criterion]]
-id = 2 # questions about another person's records or asking for advice are refused before retrieval, with a reason and a message
-tests = ["examples/benefits-qa/policy:TestScreenRefuses"]
+id = 2 # questions about another person's records or asking for advice are refused before retrieval (never looked up), with a reason and a message
+tests = ["examples/benefits-qa/policy:TestScreenRefuses", "examples/benefits-qa/answer:TestRespondScreensFirst"]
 
 [[criterion]]
 id = 3 # a question the plan documents do not answer is referred to HR and quotes nothing
-tests = ["examples/benefits-qa/answer:TestGroundRefers", "examples/benefits-qa/policy:TestGroundThreshold"]
+tests = ["examples/benefits-qa/answer:TestGroundRefers", "examples/benefits-qa/policy:TestGroundThreshold", "examples/benefits-qa/answer:TestRespondScreensFirst"]

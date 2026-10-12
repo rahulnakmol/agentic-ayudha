@@ -3,10 +3,11 @@
 // another person's records and requests for medical or financial advice.
 // Another person's records are any record word (claim, salary, diagnosis,
 // prescription, balance, …) in a question that also refers to someone else:
-// a third-person pronoun, a person word, or a possessive other than the
-// employer's. After retrieval, Ground lets an answer through only when it quotes a plan
-// passage that covers enough of the question; otherwise the question is
-// referred to an HR specialist. The rules are deterministic.
+// a third-person pronoun, a person word, or a possessive other than that of a
+// thing (the employer, a plan, a period). After retrieval, Ground lets an
+// answer through only when it quotes a plan passage that covers enough of the
+// question; otherwise the question is referred to an HR specialist. The rules
+// are deterministic.
 package policy
 
 import (
@@ -49,9 +50,10 @@ var (
 	// recordWord names a personal record.
 	recordWord = regexp.MustCompile(`(?i)\b(claims?|records?|salary|salaries|pay|payslips?|diagnos[ie]s|prescriptions?|balances?|history|enrol(l)?ments?)\b`)
 	// thirdParty refers to someone other than the asker: a third-person
-	// pronoun, a person word, or any possessive except the employer's.
+	// pronoun, a person word, or a possessive (after notAPerson is removed).
 	thirdParty = regexp.MustCompile(`(?i)\b(his|her|hers|their|theirs|someone|somebody|anyone|anybody|another|others?|colleagues?|co-?workers?|managers?|boss|employees?|team ?mates?|spouses?|wife|husband|partners?|sons?|daughters?|child|children|kids?|parents?|mother|father|friends?)\b|\b\w+('s|’s|s')`)
-	employer   = regexp.MustCompile(`(?i)\bExample Co('s|’s)`)
+	// notAPerson are possessives of things, not people: the employer, a plan, a period.
+	notAPerson = regexp.MustCompile(`(?i)\b(Example Co|plan|policy|company|employer|insurer|provider|account|fund|today|tomorrow|year|month|week)('s|’s)`)
 	// Medical or financial advice the example must not give.
 	advice = regexp.MustCompile(`(?i)\b(should i (take|stop|start|buy|sell|invest|have|get|choose|pick|enrol|enroll|switch)|(which|what) (plan|option|fund|medication|medicine|dose|dosage) (should i|is (best|better))|is it (better|worth|safe)|do you recommend|what dose|dosage|diagnose)\b`)
 )
@@ -72,7 +74,7 @@ func Screen(question string) Verdict {
 		return refuse(ReasonEmpty)
 	case utf8.RuneCountInString(q) > MaxQuestion:
 		return refuse(ReasonTooLong)
-	case recordWord.MatchString(q) && thirdParty.MatchString(employer.ReplaceAllString(q, "")):
+	case recordWord.MatchString(q) && thirdParty.MatchString(notAPerson.ReplaceAllString(q, "")):
 		return refuse(ReasonPersonal)
 	case advice.MatchString(q):
 		return refuse(ReasonAdvice)
