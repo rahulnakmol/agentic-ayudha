@@ -11,3 +11,7 @@ calls = [
   ["grill", "story", "--parent", "30", "--title", "Show an empty claims list with a way to start a claim", "--body", "### Summary\n\nAs a new claimant, I want to see that I have no claims yet and how to start one, so that I know what to do first.\n\n### Completion Goal\n\n1. [screenshot] state: `/claims` signed in as a seeded claimant with no claims; expected: the message \"You have no claims yet\" and a \"Start a claim\" button\n2. [api-trace] state: GET /api/claims for a seeded claimant with no claims; expected: 200 with an empty list\n\n### Measure\n\nCompletion Goal criteria observed\n\n### Threshold\n\nall 2 criteria\n\n### Scenario\n\nSign in as the seeded claimant with no claims, open the claims list, then call GET /api/claims as that claimant.\n\n### Environment\n\nlocal app with the seeded synthetic claimant; never production", "--labels", "effort:S,priority:P2", "--create"],
   ["ready", "31", "--check"],
 ]
+
+[tier2]
+rubric = "rubric.md"
+references = ["story.md"]

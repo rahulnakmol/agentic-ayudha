@@ -10,6 +10,7 @@ import (
 	"os"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
@@ -59,6 +60,7 @@ type Options struct {
 	Exec            func(ctx context.Context, dir, name string, args ...string) (string, error) // nil runs the command (doctor, install)
 	Assets          fs.FS                                                                       // embedded skills/ and hosts/ (root embed.go); install needs it
 	HaltPoll        time.Duration                                                               // how often a running verb re-reads the halt variable; 0 is DefaultHaltPoll (WP5.7)
+	TUI             func(m tea.Model) error                                                     // runs an interactive model in place of the terminal (tests); nil uses bubbletea on In/Out
 }
 
 // Globals are the global flags shared by every command.

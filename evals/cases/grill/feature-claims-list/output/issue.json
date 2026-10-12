@@ -1,0 +1,20 @@
+{
+  "type": "feature",
+  "title": "Claims list",
+  "fields": {
+    "summary": "Claimants see their claims and each claim's status in one list, with an empty state when they have none.",
+    "problem": "Claimants cannot see what happened to a claim they submitted; support logged 140 tickets in September 2026 asking where a claim went.",
+    "scope": "In scope: the list of a claimant's own claims with status, and the empty state. Out of scope: editing claims from the list.",
+    "expected_paths": "internal/claims/**\nweb/src/claims/**"
+  },
+  "labels": [
+    "type:feature",
+    "status:planned",
+    "priority:P2"
+  ],
+  "parent": {
+    "number": 20,
+    "type": "initiative"
+  },
+  "number": 21
+}

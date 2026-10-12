@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
+	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
 const root = "../.."
@@ -28,6 +30,45 @@ func TestTier1(t *testing.T) {
 		if !r.Passed() {
 			t.Errorf("tier 1 failed:\n%s", r)
 		}
+	}
+}
+
+// WP5.3 accept: one grill case per work-item type (ten), each recording
+// `grill <type> … --create` and, except for intake types, which are never
+// made Ready (D-5.3a), `ready <issue> --check` on the issue it wrote; tier 1
+// passes on all ten.
+func TestTier1GrillEveryType(t *testing.T) {
+	cases, err := LoadCases(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	covered := map[string]bool{}
+	for _, c := range cases {
+		if c.Skill != "grill" || len(c.Calls) == 0 || len(c.Calls[0]) < 2 || c.Calls[0][0] != "grill" {
+			continue
+		}
+		typ := c.Calls[0][1]
+		ty, ok := workitems.FindType(typ)
+		if !ok || !slices.Contains(c.Calls[0], "--create") {
+			t.Errorf("%s: first call %v is not a grill --create of a work-item type", c.ID, c.Calls[0])
+			continue
+		}
+		readied := len(c.Calls) > 1 && c.Calls[len(c.Calls)-1][0] == "ready"
+		if readied == ty.Intake {
+			t.Errorf("%s: a %s case must %s end with ready --check", c.ID, typ, map[bool]string{true: "not", false: ""}[ty.Intake])
+		}
+		if r := Tier1(context.Background(), root, c, aayudha.Assets); !r.Passed() {
+			t.Errorf("tier 1 failed:\n%s", r)
+		}
+		covered[typ] = true
+	}
+	for _, id := range workitems.TypeIDs() {
+		if !covered[id] {
+			t.Errorf("no grill case for type %s", id)
+		}
+	}
+	if len(covered) != 10 {
+		t.Errorf("%d types covered; want 10", len(covered))
 	}
 }
 
@@ -553,5 +594,29 @@ func TestTier2BriefRevisesOnceThenJudges(t *testing.T) {
 	}
 	if v, reasons := Compare(res, nil, h.Config); v != Fail || !strings.Contains(strings.Join(reasons, "\n"), "brief/ste-explain: pass^5 0.00 is below 0.80") {
 		t.Errorf("compare: %s %v", v, reasons)
+	}
+}
+
+// The grill cases' tier 2 (WP5.3) runs the grill skill with its question set
+// appended, on grill's own lane: the recorded Goal scores against the rubric.
+func TestTier2GrillReferences(t *testing.T) {
+	c, err := LoadCase(filepath.Join(root, "evals", "cases", "grill", "goal-first-claim"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	item, _ := os.ReadFile(filepath.Join(c.Dir, "output", "issue.json"))
+	fake := &models.Fake{Replies: []models.Response{{Text: string(item)}, {Text: `{"score": 5, "reason": "ok"}`}}}
+	h := harness(t, fake, "gpt-6.1-sol")
+	h.Config.K = 1
+	res, err := h.Tier2(context.Background(), []Case{c}, "abc", "dev", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Cases[0].Lane != "spec" || res.Cases[0].Runs[0].Score != 5 {
+		t.Fatalf("results: %+v", res.Cases[0])
+	}
+	sys := fake.Requests[0].System
+	if !strings.Contains(sys, "# grill\n") || !strings.Contains(sys, "## references/goal.md") || !strings.Contains(sys, "### Baseline (`baseline`, required)") {
+		t.Fatalf("the skill model did not get the grill skill with references/goal.md:\n%s", sys)
 	}
 }

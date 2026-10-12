@@ -1,0 +1,17 @@
+{
+  "number": 21,
+  "title": "Claims list",
+  "state": "open",
+  "body": "### Summary\n\nClaimants see their claims and each claim's status in one list, with an empty state when they have none.\n\n### Problem\n\nClaimants cannot see what happened to a claim they submitted; support logged 140 tickets in September 2026 asking where a claim went.\n\n### Scope\n\nIn scope: the list of a claimant's own claims with status, and the empty state. Out of scope: editing claims from the list.\n\n### Expected paths\n\ninternal/claims/**\nweb/src/claims/**",
+  "labels": [
+    {
+      "name": "type:feature"
+    },
+    {
+      "name": "status:planned"
+    },
+    {
+      "name": "priority:P2"
+    }
+  ]
+}

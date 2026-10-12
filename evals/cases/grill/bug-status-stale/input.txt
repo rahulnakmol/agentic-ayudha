@@ -1,0 +1,1 @@
+Bug under Feature #20 (Claims list): after a caseworker approves a claim, the claimant's list still shows "Submitted" until they sign out and back in. It should show "Approved" on the next page load.

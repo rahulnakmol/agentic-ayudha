@@ -1,0 +1,17 @@
+{
+  "number": 21,
+  "title": "Guide new claimants through their first claim",
+  "state": "open",
+  "body": "### Summary\n\nShow new claimants a guided checklist for their first claim, to move Goal #20's activation.\n\n### Hypothesis\n\nIf new claimants see a checklist of the documents to gather before they start, activation rises from 0.31 to 0.36 because they no longer abandon the claim to look for documents.\n\n### Metric\n\nactivation\n\n### Baseline\n\n0.31: activation over the weekly cohorts of 2026-08-31 to 2026-09-28, from `aayu measure` snapshot all-20261005T060000Z.sqlite\n\n### Target\n\n>= 0.36 by 2026-12-31",
+  "labels": [
+    {
+      "name": "type:initiative"
+    },
+    {
+      "name": "status:planned"
+    },
+    {
+      "name": "priority:P1"
+    }
+  ]
+}

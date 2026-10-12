@@ -1,0 +1,10 @@
+{
+  "number": 20,
+  "title": "Guide new claimants through their first claim",
+  "state": "open",
+  "labels": [
+    {
+      "name": "type:initiative"
+    }
+  ]
+}
