@@ -27,7 +27,7 @@ import (
 type SitePage struct {
 	Out      string // output path in the site, e.g. "index.html" or "skills/grill.html"
 	Nav      string // sidebar label
-	Group    string // sidebar group: "", "Project", or "Skills"
+	Group    string // sidebar group: "", "Clouds", "Project", or "Skills"
 	Source   string // repository path the Markdown is read as; relative links resolve from it
 	Origin   string // repository path the page is generated from, linked in its footer
 	Markdown string
@@ -49,6 +49,9 @@ var sitePages = []SitePage{
 	{Out: "index.html", Nav: "Overview", Source: "README.md"},
 	{Out: "getting-started.html", Nav: "Getting started", Source: "docs/getting-started.md"},
 	{Out: "verbs.html", Nav: "Verbs", Origin: "internal/verbs/registry.go"},
+	{Out: "getting-started-azure.html", Nav: "Azure", Group: "Clouds", Source: "docs/getting-started-azure.md"},
+	{Out: "getting-started-aws.html", Nav: "AWS", Group: "Clouds", Source: "docs/getting-started-aws.md"},
+	{Out: "getting-started-gcp.html", Nav: "Google Cloud", Group: "Clouds", Source: "docs/getting-started-gcp.md"},
 	{Out: "contributing.html", Nav: "Contributing", Group: "Project", Source: "CONTRIBUTING.md"},
 	{Out: "security.html", Nav: "Security", Group: "Project", Source: "SECURITY.md"},
 	{Out: "constraints.html", Nav: "Constraints", Group: "Project", Source: "CONSTRAINTS.md"},

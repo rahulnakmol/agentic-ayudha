@@ -94,6 +94,8 @@ verbs; each skill's page explains its steps.
 
 ## Where to go next
 
+- Connect your cloud's analytics and proof media storage with read-only, keyless access from GitHub Actions:
+  [Azure](getting-started-azure.md), [AWS](getting-started-aws.md), or [Google Cloud](getting-started-gcp.md).
 - [CONTRIBUTING.md](../CONTRIBUTING.md): the branch model, pull request flow, and how releases are promoted.
 - [SECURITY.md](../SECURITY.md): reporting a vulnerability.
 - [CONSTRAINTS.md](../CONSTRAINTS.md): the default floors, autonomy, and budgets.

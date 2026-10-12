@@ -149,6 +149,7 @@ func runInit(ctx context.Context, e *Env, in Values) error {
 				return e.confirm("Continue? [y/N] ")
 			},
 			Ask:          e.askLine,
+			Print:        func(text string) { fmt.Fprintln(e.Err, text) },
 			ManifestCode: e.manifestCode,
 		}
 		if x.Gates {

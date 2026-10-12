@@ -1,25 +1,29 @@
 package initrepo
 
 import (
+	"bytes"
 	"context"
-	_ "embed"
+	"embed"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"maps"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+	"text/template"
 
 	"github.com/shurcooL/githubv4"
 	"golang.org/x/crypto/nacl/box"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
+	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 )
 
 // The Ready guard (WP2.7) and triage (WP2.9) templates init --gates installs.
@@ -87,6 +91,8 @@ type Extras struct {
 	Confirm func(summary string) bool
 	// Ask reads one line from the human (bucket URL); "" skips.
 	Ask func(prompt string) string
+	// Print shows the human a cloud's setup steps (.aayudha/setup/<cloud>/README.md).
+	Print func(text string)
 	// ManifestCode runs the GitHub App manifest flow in the human's browser and
 	// returns the code GitHub redirects back with.
 	ManifestCode func(ctx context.Context, postURL string, manifest func(redirect string) string) (string, error)
@@ -376,6 +382,83 @@ var Integrations = []Integration{
 	{"posthog", "PostHog: product analytics read for baselines and measure. Read-only project API key; usage-based pricing on PostHog's side."},
 	{"sentry", "Sentry: error and performance read for baselines and respond. Read-only auth token (event:read, project:read); no extra cost."},
 	{"growthbook", "GrowthBook: experiment and flag read for experiment and readout. Read-only key; no extra cost on the open-source plan."},
+	{"azure", "Azure: Application Insights read (Log Analytics query API) for grill baselines and measure --live. A read-only app registration (Monitoring Reader, Log Analytics Reader) that GitHub Actions reaches through OIDC federation, no stored key; Log Analytics bills per GB scanned, usually cents per run (WP7.2b)."},
+	{"aws", "AWS: CloudWatch RUM read (Logs Insights and GetAppMonitorData) for grill baselines and measure --live. A read-only IAM role that GitHub Actions assumes through OIDC, no stored key; Logs Insights bills per GB scanned (WP7.2b)."},
+	{"gcp", "Google Cloud: GA4 BigQuery export read for grill baselines and measure --live. A read-only service account (bigquery.dataViewer on the dataset, bigquery.jobUser) that GitHub Actions impersonates through workload identity federation, no stored key; BigQuery bills per TB scanned, with a free monthly tier (WP7.2b)."},
+}
+
+// cloudConfig is the [integrations.<cloud>] section init writes for a cloud:
+// GitHub Actions OIDC federation, with the identifiers the founder fills in
+// from .aayudha/setup/<cloud>/README.md.
+var cloudConfig = map[string]string{
+	"azure": `[integrations.azure]
+scope = "read"
+auth = "oidc"   # GitHub Actions federation; locally AAYU_INTEGRATIONS__AZURE__AUTH=cli (see .aayudha/setup/azure/README.md)
+org = ""        # Microsoft Entra tenant ID
+identity = ""   # application (client) ID of the read-only app registration
+project = ""    # resource ID of the Application Insights component
+`,
+	"aws": `[integrations.aws]
+scope = "read"
+auth = "oidc"   # GitHub Actions federation; locally AAYU_INTEGRATIONS__AWS__AUTH=cli (see .aayudha/setup/aws/README.md)
+identity = ""   # arn:aws:iam::<account-id>:role/<read-only role>
+region = ""     # region of the CloudWatch RUM app monitor
+project = ""    # CloudWatch RUM app monitor name
+`,
+	"gcp": `[integrations.gcp]
+scope = "read"
+auth = "oidc"   # GitHub Actions federation; locally AAYU_INTEGRATIONS__GCP__AUTH=cli (see .aayudha/setup/gcp/README.md)
+federation = "" # projects/<number>/locations/global/workloadIdentityPools/<pool>/providers/<provider>
+identity = ""   # read-only service account email
+project = ""    # <project>.<dataset> of the GA4 BigQuery export
+`,
+}
+
+//go:embed setup
+var setupFS embed.FS
+
+// SetupFiles renders the least-privilege setup for a cloud (azure, aws,
+// gcp) for repo r: the founder's steps, the role or policy documents, the
+// GitHub Actions OIDC federation, and the workflow permissions, keyed by
+// path under .aayudha/setup/<cloud>/.
+func SetupFiles(cloud string, r Repo, retentionDays int) (map[string][]byte, error) {
+	if retentionDays <= 0 {
+		retentionDays = 90
+	}
+	branch := r.Default
+	if branch == "" {
+		branch = "main"
+	}
+	data := map[string]any{"Repo": r.FullName, "Name": r.Name, "Branch": branch, "Cloud": cloud, "Retention": retentionDays,
+		"AzureRule": proof.AzureRuleName(r.FullName),
+		"Provider":  map[string]string{"azure": "Microsoft Entra", "aws": "AWS STS", "gcp": "Google STS"}[cloud]}
+	out := map[string][]byte{}
+	render := func(src, name string) error {
+		b, err := setupFS.ReadFile(src)
+		if err != nil {
+			return err
+		}
+		t, err := template.New(name).Option("missingkey=error").Parse(string(b))
+		if err != nil {
+			return err
+		}
+		var buf bytes.Buffer
+		if err := t.Execute(&buf, data); err != nil {
+			return err
+		}
+		out[path.Join(".aayudha", "setup", cloud, name)] = buf.Bytes()
+		return nil
+	}
+	entries, err := setupFS.ReadDir("setup/" + cloud)
+	if err != nil {
+		return nil, err
+	}
+	for _, e := range entries {
+		if err := render("setup/"+cloud+"/"+e.Name(), strings.TrimSuffix(e.Name(), ".tmpl")); err != nil {
+			return nil, err
+		}
+	}
+	return out, render("setup/workflow.yml.tmpl", "workflow.yml")
 }
 
 func (in *Init) integrations(_ context.Context, x Extras) error {
@@ -417,10 +500,44 @@ func (in *Init) integrations(_ context.Context, x Extras) error {
 			in.note("integrations", "integration", ig.Name, "kept", "not confirmed")
 			continue
 		}
-		if err := in.appendConfig("integrations."+ig.Name, fmt.Sprintf("[integrations.%s]\nsecret = %q # set the value with: aayu auth set-secret %s\nscope = \"read\"\n", ig.Name, ig.Name, ig.Name)); err != nil {
+		section := fmt.Sprintf("[integrations.%s]\nsecret = %q # set the value with: aayu auth set-secret %s\nscope = \"read\"\n", ig.Name, ig.Name, ig.Name)
+		if c, ok := cloudConfig[ig.Name]; ok {
+			section = c
+			if err := in.cloudSetup(ig.Name, cur, x); err != nil {
+				return err
+			}
+		}
+		if err := in.appendConfig("integrations."+ig.Name, section); err != nil {
 			return err
 		}
 		in.State.Put(Object{Kind: "integration", Name: ig.Name, ID: ig.Name, External: true})
+	}
+	return nil
+}
+
+// cloudSetup writes .aayudha/setup/<cloud>/ (files already there are left
+// alone, so the founder's edits survive a rerun) and prints its README: the
+// founder's steps to create the read-only identity.
+func (in *Init) cloudSetup(cloud string, cfg []byte, x Extras) error {
+	days := 90
+	if m := regexp.MustCompile(`(?m)^retention_days\s*=\s*([0-9]+)`).FindSubmatch(cfg); m != nil {
+		_, _ = fmt.Sscan(string(m[1]), &days)
+	}
+	files, err := SetupFiles(cloud, in.Repo, days)
+	if err != nil {
+		return err
+	}
+	for _, p := range slices.Sorted(maps.Keys(files)) {
+		if _, err := os.Stat(filepath.Join(in.Root, filepath.FromSlash(p))); err == nil {
+			in.note("integrations", "file", p, "unchanged", "already present")
+			continue
+		}
+		if err := in.updateFile("integrations", p, files[p]); err != nil {
+			return err
+		}
+	}
+	if x.Print != nil {
+		x.Print(string(files[path.Join(".aayudha", "setup", cloud, "README.md")]))
 	}
 	return nil
 }

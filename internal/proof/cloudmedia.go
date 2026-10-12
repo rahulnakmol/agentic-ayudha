@@ -299,9 +299,9 @@ func (a *AzureBlob) Delete(ctx context.Context, key string) error {
 	return err
 }
 
-// ruleName is aayudha's management policy rule for repo: alphanumeric, as
-// Azure requires, and stable per repository.
-func ruleName(repo string) string {
+// AzureRuleName is aayudha's management policy rule for repo: alphanumeric,
+// as Azure requires, and stable per repository.
+func AzureRuleName(repo string) string {
 	sum := sha256.Sum256([]byte(repo))
 	return "aayudhaproofretention" + hex.EncodeToString(sum[:6])
 }
@@ -361,7 +361,7 @@ func (a *AzureBlob) rules(ctx context.Context) ([]json.RawMessage, error) {
 }
 
 func (a *AzureBlob) rule(repo string, days int) json.RawMessage {
-	r, _ := json.Marshal(map[string]any{"enabled": true, "name": ruleName(repo), "type": "Lifecycle", "definition": map[string]any{
+	r, _ := json.Marshal(map[string]any{"enabled": true, "name": AzureRuleName(repo), "type": "Lifecycle", "definition": map[string]any{
 		"actions": map[string]any{"baseBlob": map[string]any{"delete": map[string]int{"daysAfterCreationGreaterThan": days}}},
 		"filters": map[string]any{"blobTypes": []string{"blockBlob"}, "prefixMatch": []string{a.Container + "/" + repoPrefix(a.Prefix, repo)}},
 	}})
@@ -391,7 +391,7 @@ func (a *AzureBlob) EnsureLifecycle(ctx context.Context, repo string, days int) 
 	if err != nil {
 		return false, err
 	}
-	name, want := ruleName(repo), a.rule(repo, days)
+	name, want := AzureRuleName(repo), a.rule(repo, days)
 	var rules []json.RawMessage
 	found := false
 	for _, r := range cur {
@@ -426,7 +426,7 @@ func (a *AzureBlob) Lifecycle(ctx context.Context, repo string) (string, error) 
 		return "", err
 	}
 	for _, r := range cur {
-		if ruleNamed(r) == ruleName(repo) {
+		if ruleNamed(r) == AzureRuleName(repo) {
 			return string(r), nil
 		}
 	}

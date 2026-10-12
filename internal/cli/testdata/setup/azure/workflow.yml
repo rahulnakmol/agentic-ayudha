@@ -1,0 +1,5 @@
+# Add to each job that runs aayu against [integrations.azure] (WP7.2b): GitHub mints a short-lived OIDC
+# token that Microsoft Entra exchanges for a read-only credential. No cloud key is stored in GitHub.
+permissions:
+  contents: read
+  id-token: write
