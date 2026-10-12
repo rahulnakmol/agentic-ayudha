@@ -252,10 +252,10 @@ func runStatus(ctx context.Context, e *Env, in Values) error {
 	rep.GitHub = c.Stats()
 	return e.Emit(rep, func(w io.Writer) error {
 		if len(rep.Roots) == 0 {
-			_, err := fmt.Fprintf(w, "%s: no open Goals (label type:goal); pass a Goal, Initiative, or Feature\n", repo)
-			return err
+			fmt.Fprintf(w, "%s: no open Goals (label type:goal); pass a Goal, Initiative, or Feature\n", repo)
+		} else {
+			fmt.Fprint(w, status.Table(rep.Roots))
 		}
-		fmt.Fprint(w, status.Table(rep.Roots))
 		for _, r := range rep.Roots {
 			fmt.Fprintln(w, r.Line())
 		}
