@@ -368,6 +368,51 @@ func (A11y) Run(ctx context.Context, r *Run) (Result, error) {
 	return res, nil
 }
 
+// PageCheck is the accessibility of one page checked outside a verify run
+// (the rendered brief of WP7.3).
+type PageCheck struct {
+	Tool        string   `json:"tool"`
+	Critical    int      `json:"critical"`
+	Serious     int      `json:"serious"`
+	Violations  []string `json:"violations,omitempty"`  // serious and critical axe rules
+	Unreachable []string `json:"unreachable,omitempty"` // controls Tab does not reach
+	Screenshot  string   `json:"-"`                     // full-page capture, in work
+}
+
+// CheckPage runs the web floor script on one page URL (a file:// page is
+// fine): axe-core with the WCAG 2.2 AA tags and Tab reachability, under
+// reduced motion. root is where Playwright and axe-core resolve from.
+func CheckPage(ctx context.Context, sb *Sandbox, root, work, url string) (PageCheck, error) {
+	r := &Run{Root: root, Work: work, Sandbox: sb}
+	o, err := runNode(ctx, r, map[string]any{"mode": "capture", "states": []State{{N: 1, Kind: "screenshot", URL: url}}, "out": work, "checks": map[string]any{
+		"axe_tags": []string{"wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"}, "keyboard": true, "reduced_motion": true,
+		"text_scale_percent": 100, "min_target_px": 0}})
+	if err != nil {
+		return PageCheck{}, err
+	}
+	var w webOut
+	if err := json.Unmarshal(o.Stdout, &w); err != nil || len(w.States) != 1 {
+		return PageCheck{}, fmt.Errorf("web floor script exited %d: %s", o.Code, tail(o.Stderr))
+	}
+	s := w.States[0]
+	if s.Error != "" {
+		return PageCheck{}, fmt.Errorf("could not load %s: %s", url, s.Error)
+	}
+	pc := PageCheck{Tool: "playwright " + w.Versions.Playwright + ", axe-core " + w.Versions.Axe, Unreachable: s.Unreachable, Screenshot: s.Screenshot}
+	for _, v := range s.Axe {
+		switch v.Impact {
+		case "critical":
+			pc.Critical++
+		case "serious":
+			pc.Serious++
+		default:
+			continue
+		}
+		pc.Violations = append(pc.Violations, fmt.Sprintf("%s (%s, %d node(s), %s): %s", v.ID, v.Impact, v.Nodes, v.Target, v.Help))
+	}
+	return pc, nil
+}
+
 // ocr reads a screenshot's text with tesseract when it is installed.
 func ocr(ctx context.Context, r *Run, png string) (string, bool) {
 	if _, err := exec.LookPath("tesseract"); err != nil {

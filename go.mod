@@ -15,6 +15,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/shurcooL/githubv4 v0.0.0-20260209031235-2402fdf4a9ed
 	github.com/spf13/cobra v1.10.2
+	github.com/yuin/goldmark v1.8.6
 	github.com/zalando/go-keyring v0.2.8
 	go.opentelemetry.io/otel v1.46.0
 	go.opentelemetry.io/otel/sdk v1.46.0

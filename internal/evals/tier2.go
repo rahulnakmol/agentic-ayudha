@@ -35,6 +35,7 @@ type Run struct {
 	Score   int       `json:"score"` // 1-5; a deterministic floor miss scores 1 without asking the judge (rule 7); 0 for an error
 	Pass    bool      `json:"pass"`
 	Floor   string    `json:"floor,omitempty"`
+	Revised bool      `json:"revised,omitempty"` // a brief draft revised once after aayu brief's checks
 	Reason  string    `json:"reason,omitempty"`
 	Error   string    `json:"error,omitempty"`
 	Excerpt string    `json:"excerpt,omitempty"` // the unusable reply's start (and end, when truncated), credentials redacted
@@ -245,6 +246,9 @@ func (h *Harness) Tier2(ctx context.Context, cases []Case, sha, ref string, now 
 		if err != nil {
 			return nil, err
 		}
+		if body, err = h.skillReferences(c, body); err != nil {
+			return nil, err
+		}
 		lane, alt, err := h.skillLane(c)
 		if err != nil {
 			return nil, err
@@ -280,7 +284,12 @@ func (h *Harness) Tier2(ctx context.Context, cases []Case, sha, ref string, now 
 				cr.Runs = append(cr.Runs, errorRun(budgetErr))
 				continue
 			}
-			run, err := h.run(ctx, c, lane, body, string(input), string(rubric), itemSchema)
+			var run Run
+			if c.Brief != nil {
+				run, err = h.runBrief(ctx, c, lane, body, string(input), string(rubric))
+			} else {
+				run, err = h.run(ctx, c, lane, body, string(input), string(rubric), itemSchema)
+			}
 			if errors.Is(err, ErrBudget) || errors.Is(err, models.ErrBudget) {
 				budgetErr = err
 			}
@@ -431,6 +440,13 @@ func Compare(cur, base *Results, cfg Config) (verdict string, reasons []string) 
 	for _, c := range cur.Cases {
 		if c.Errors > MaxErrors {
 			reasons = append(reasons, fmt.Sprintf("%s: %d of %d runs errored (at most %d may)", c.Case, c.Errors, len(c.Runs), MaxErrors))
+		}
+		// The bar holds per case too, so one register or skill cannot hide behind the others (WP7.3: per register).
+		if c.PassK < cfg.MinPassK {
+			reasons = append(reasons, fmt.Sprintf("%s: pass^%d %.2f is below %.2f", c.Case, cur.K, c.PassK, cfg.MinPassK))
+		}
+		if c.Mean < cfg.MinMean {
+			reasons = append(reasons, fmt.Sprintf("%s: mean rubric score %.2f is below %.2f", c.Case, c.Mean, cfg.MinMean))
 		}
 	}
 	if cur.PassK < cfg.MinPassK {

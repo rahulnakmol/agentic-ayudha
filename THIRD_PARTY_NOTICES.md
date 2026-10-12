@@ -57,6 +57,7 @@ plan lists in §2; the rest are pulled in by them.
 | `golang.org/x/sync` | v0.22.0 | BSD-3-Clause | Via go-sdk and modernc.org/libc | <https://go.googlesource.com/sync> |
 | `golang.org/x/time` | v0.15.0 | BSD-3-Clause | Rate limiting, via go-sdk | <https://go.googlesource.com/time> |
 | `modernc.org/sqlite` | v1.59.0 | BSD-3-Clause (SQLite itself is public domain) | Pure-Go SQLite for `measure` snapshots (WP7.2, R7), direct; v1.60 needs Go 1.26 | <https://gitlab.com/cznic/sqlite> |
+| `github.com/yuin/goldmark` | v1.8.6 | MIT | Markdown drafts of `brief` parsed and rendered to HTML (WP7.3), direct | <https://github.com/yuin/goldmark> |
 | `modernc.org/libc` | v1.75.7 | BSD-3-Clause (includes MIT-licensed musl code) | C runtime for the transpiled SQLite, via sqlite | <https://gitlab.com/cznic/libc> |
 | `modernc.org/mathutil` | v1.7.1 | BSD-3-Clause | Via sqlite and libc | <https://gitlab.com/cznic/mathutil> |
 | `modernc.org/memory` | v1.12.1 | BSD-3-Clause | Allocator, via libc | <https://gitlab.com/cznic/memory> |
@@ -139,8 +140,8 @@ axe-core, Lighthouse, and impeccable for this repository's own tests).
 | semgrep | 1.180.0 | LGPL-2.1 | `sast` floor | <https://github.com/semgrep/semgrep> |
 | gitleaks | 8.30.1 | MIT | `secrets` floor | <https://github.com/gitleaks/gitleaks> |
 | osv-scanner | 2.6.0 | Apache-2.0 | `deps` floor | <https://github.com/google/osv-scanner> |
-| Playwright | 1.64.0 | Apache-2.0 | `a11y` floors: drives Chromium through each Completion Goal state | <https://github.com/microsoft/playwright> |
-| axe-core | 4.14.0 | MPL-2.0 | `a11y` floor: injected into the page under test, unmodified | <https://github.com/dequelabs/axe-core> |
+| Playwright | 1.64.0 | Apache-2.0 | `a11y` floors: drives Chromium through each Completion Goal state, and through the rendered `brief` page (WP7.3) | <https://github.com/microsoft/playwright> |
+| axe-core | 4.14.0 | MPL-2.0 | `a11y` floor and the `brief` page check: injected into the page under test, unmodified | <https://github.com/dequelabs/axe-core> |
 | Lighthouse | 13.5.0 | Apache-2.0 | `perf` floor | <https://github.com/GoogleChrome/lighthouse> |
 | OWASP ZAP (`zaproxy/zap-stable` image) | 2.17.0, by digest | Apache-2.0 | `dast` floor | <https://github.com/zaproxy/zaproxy> |
 | k6 | 2.3.0 | AGPL-3.0 | `api` floor; run as a program, never linked or distributed | <https://github.com/grafana/k6> |
@@ -176,7 +177,6 @@ CI scan when the component is actually added.
 | `github.com/charmbracelet/bubbletea` | `grill` TUI (WP5.3) | MIT |
 | `modernc.org/sqlite` | `measure` snapshots, pure Go (WP7.2) | BSD-3-Clause |
 | `github.com/go-git/go-git` | Read-only git access | Apache-2.0 |
-| `github.com/yuin/goldmark` | Markdown parsing | MIT |
 
 Other optional tools that `doctor` reports (git-lfs, gh, node, DuckDB) are installed by the user and
 run as separate programs.

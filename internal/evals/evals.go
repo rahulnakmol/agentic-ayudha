@@ -51,6 +51,7 @@ type Case struct {
 	Ready       []string   `toml:"ready"` // artifacts holding work items that must pass Ready
 	Calls       [][]string `toml:"calls"` // the recorded run's `aayu` calls, without the program name
 	Scope       []Scope    `toml:"scope"` // requirements the input does not state; a work item that adds one fails
+	Brief       *BriefSpec `toml:"brief"` // a brief case: the input is the grounding, the output a Markdown draft
 	Tier2       *Tier2Spec `toml:"tier2"`
 }
 
@@ -98,6 +99,10 @@ type Tier2Spec struct {
 	// itself a verb. The skill model is that verb's registry lane on the direct
 	// host (never a model named here), so evals run on the model the verb uses.
 	Verb string `toml:"verb"`
+	// References are files under the skill's references/ that the host reads
+	// for this case (the brief skill's ste-words.md for the ste register); they
+	// follow the skill body in the prompt.
+	References []string `toml:"references"`
 }
 
 // LoadConfig reads evals/eval.toml under root.
@@ -160,6 +165,9 @@ func LoadCase(dir string) (Case, error) {
 	}
 	if c.Skill == "" || c.Input == "" {
 		return c, fmt.Errorf("%s: skill and input are required", c.ID)
+	}
+	if b := c.Brief; b != nil && (b.Register == "" || b.Purpose == "" || b.Draft == "") {
+		return c, fmt.Errorf("%s: [brief] needs register, purpose, and draft", c.ID)
 	}
 	return c, nil
 }

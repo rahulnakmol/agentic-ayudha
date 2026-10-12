@@ -8,15 +8,19 @@ judge = "gpt-6.1-sol" # openai; the stub skill runs on grill's spec lane, claude
 k = 5                 # runs per case
 pass_score = 4        # a run passes at this rubric score (1-5) or above
 
-# The bar (WP3.4): pass^k >= 0.8 and mean >= 3.5 to pass; on promotion, a mean more than 0.3 below the
-# baseline (evals/results/<main-sha>.json) or any case's pass^k below its baseline fails.
+# The bar (WP3.4): pass^k >= 0.8 and mean >= 3.5 to pass, for the suite and for every case (WP7.3 sets the bar per
+# brief register); on promotion, a mean more than 0.3 below the baseline (evals/results/<main-sha>.json) or any
+# case's pass^k below its baseline fails.
 min_pass_k = 0.8
 min_mean = 3.5
 max_drop = 0.3
 
 # Spend cap for one tier-2 run in USD, on top of the [budget] breaker. Unpriced models are charged at the
 # gateway's conservative fallback rate, so real spend is lower.
-max_usd = 3.0 # five 4000-token drafts with their judgements cost about 1.85 at the fallback rate; 3.0 leaves headroom
+# The stub's five runs were charged 0.81 (run 38194797736). The four brief cases (WP7.3) add twenty runs of about the
+# same size, a few with one revision after aayu brief's checks, so a full run is about 4 USD charged; 9.0 leaves room
+# for revisions and the fallback rate.
+max_usd = 9.0
 
 # Output caps per call. Reasoning models may spend part of the cap on reasoning; a cap is not a charge. A reply that
 # stops at its cap is recorded as an error marked truncated, without a retry. Complete drafts measured 1700-2430 output
