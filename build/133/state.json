@@ -2,6 +2,22 @@
   "story": 133,
   "branch": "story/133-product-events-export-to-application-ins",
   "started_at": "2026-10-12T11:33:22Z",
-  "failed_attempts": 0,
-  "checkpoints": null
+  "failed_attempts": 1,
+  "failures_by_layer": {
+    "L08": 1
+  },
+  "checkpoints": [
+    {
+      "k": 1,
+      "n": 1,
+      "attempt": 1,
+      "commit": "5d7f35766c324702ae7ff6750d540d593e526bbf",
+      "layers": [
+        "L08"
+      ],
+      "verify": "miss",
+      "detail": "coverage fail",
+      "at": "2026-10-12T11:33:36Z"
+    }
+  ]
 }
