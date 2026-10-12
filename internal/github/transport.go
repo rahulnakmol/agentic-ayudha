@@ -2,10 +2,11 @@ package github
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand/v2"
 	"net/http"
 	"strconv"
 	"strings"
@@ -45,7 +46,9 @@ func jitter(d time.Duration) time.Duration {
 	if d < 4 {
 		return 0
 	}
-	return time.Duration(rand.Int64N(int64(d / 4)))
+	var b [8]byte
+	_, _ = rand.Read(b[:])
+	return time.Duration(binary.LittleEndian.Uint64(b[:]) % uint64(d/4))
 }
 
 func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
