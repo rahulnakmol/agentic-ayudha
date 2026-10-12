@@ -25,7 +25,8 @@ const browser = await chromium.launch();
 const out = [];
 for (const st of input.states) {
   const r = { id: st.id, url: st.url, axe: [], focus_missing: [], small_targets: [] };
-  const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1, reducedMotion: "reduce" });
+  // bypassCSP: axe-core is injected as a script tag, which a page's own Content Security Policy would block.
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1, reducedMotion: "reduce", bypassCSP: true });
   const page = await context.newPage();
   try {
     const resp = await page.goto(st.url, { waitUntil: "networkidle", timeout: 30000 });
