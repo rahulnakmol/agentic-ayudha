@@ -1,0 +1,10 @@
+{
+  "flag": "orders-v2",
+  "figma_file": "AbCdEf123",
+  "code_connect": ["src/orders/OrderList.figma.tsx"],
+  "components": ["1:2"],
+  "states": [
+    {"id": "list", "title": "Orders list with three orders", "path": "/orders", "figma_node": "4:7"},
+    {"id": "empty", "title": "No orders yet", "path": "/orders?seed=empty", "figma_node": "4:9"}
+  ]
+}

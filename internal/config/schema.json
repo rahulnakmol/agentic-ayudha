@@ -656,6 +656,34 @@
       "additionalProperties": false,
       "type": "object",
       "description": "The events measure (WP7.2) reads as AARRR stages and the North Star."
+    },
+    "design": {
+      "properties": {
+        "tokens": {
+          "type": "string",
+          "description": "Design-token source (tokens.json in the W3C design-tokens format) whose colours and type scale mockups and prototypes must use."
+        },
+        "flags": {
+          "type": "string",
+          "description": "OpenFeature flag definitions (flagd JSON) that must declare each prototype's flag, off by default."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Where the design verbs (WP6.5) find the design tokens and the OpenFeature flag definitions."
+    },
+    "review": {
+      "properties": {
+        "figma_diff_max": {
+          "type": "number",
+          "maximum": 100,
+          "minimum": 0,
+          "description": "Largest share of pixels, in percent, a prototype screenshot may differ from its Figma frame after the anti-aliasing mask; colour and typography token mismatches must be zero regardless."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Tolerances of the prototype's Figma screenshot diff (WP6.5) and UI review (WP6.6)."
     }
   },
   "additionalProperties": false,

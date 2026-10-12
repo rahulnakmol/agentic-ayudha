@@ -1,6 +1,7 @@
 name: floors
 
-# Acceptance of the browser and runtime floors of `aayu verify` (docs/BUILD-PLAN.md WP4.5, WP4.6) with the real
+# Acceptance of the browser and runtime floors of `aayu verify` (docs/BUILD-PLAN.md WP4.5, WP4.6) and the
+# prototype capture behind the figma-diff gate (WP6.5) with the real
 # tools: Playwright + axe-core + Lighthouse (pinned in packages/floors and pnpm-lock.yaml), the OWASP ZAP image
 # pinned by digest, and k6 pinned by SHA-256. Kept out of ci.yml so the required checks on dev are untouched;
 # path-filtered and not required.
@@ -9,6 +10,7 @@ on:
     branches: [dev]
     paths:
       - "internal/verify/**"
+      - "internal/design/**"
       - "packages/floors/**"
       - "pnpm-lock.yaml"
       - ".github/workflows/floors.yml"
@@ -16,6 +18,7 @@ on:
     branches: [dev]
     paths:
       - "internal/verify/**"
+      - "internal/design/**"
       - "packages/floors/**"
       - "pnpm-lock.yaml"
       - ".github/workflows/floors.yml"
@@ -57,6 +60,10 @@ jobs:
         env:
           AAYU_FLOOR_WEB: "1"
         run: go test ./internal/verify -run TestWebFloorsWithBrowser -count=1 -v
+      - name: Prototype capture and figma-diff gate (WP6.5)
+        env:
+          AAYU_FLOOR_WEB: "1"
+        run: go test ./internal/design -run TestPrototypeCaptureWithBrowser -count=1 -v
 
   floors-dast:
     name: floors-dast

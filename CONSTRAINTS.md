@@ -58,6 +58,12 @@ Performance (Lighthouse CI) and API (k6) budgets are product-specific and have n
 
 When a budget trips, the breaker pauses agent lanes and pages through `[notify]` once per day (WP1.6).
 
+## Design review
+
+| Key | Default | Meaning | Source |
+|---|---|---|---|
+| `review.figma_diff_max` | `2.0` | Largest share of pixels, in percent, a prototype screenshot may differ from its Figma frame after the anti-aliasing mask. Colour and typography token mismatches are counted separately and must be zero. | WP6.5 |
+
 ## Retention
 
 | Key | Default | Meaning | Source |
