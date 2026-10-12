@@ -55,8 +55,8 @@ var ErrSeed = errors.New("benefits-qa seed")
 func Load() (*Store, error) { return Parse(seedJSON) }
 
 // Parse reads and checks a seed: the version, the synthetic flag, and every
-// passage (a unique slug ID, a plan, a section, and text that holds no email
-// address outside the reserved example.com domain).
+// passage (a unique slug ID, and a plan, a section, and text that hold no
+// email address outside the reserved example.com domain).
 func Parse(b []byte) (*Store, error) {
 	var s Seed
 	if err := json.Unmarshal(b, &s); err != nil {
@@ -82,7 +82,7 @@ func Parse(b []byte) (*Store, error) {
 		if _, dup := st.byID[p.ID]; dup {
 			return nil, fmt.Errorf("%w: passage %s: duplicate id", ErrSeed, p.ID)
 		}
-		for _, m := range emailRE.FindAllStringSubmatch(p.Text, -1) {
+		for _, m := range emailRE.FindAllStringSubmatch(p.Plan+"\n"+p.Section+"\n"+p.Text, -1) {
 			if !strings.EqualFold(m[1], "example.com") {
 				return nil, fmt.Errorf("%w: passage %s: an email address outside example.com is personal data", ErrSeed, p.ID)
 			}

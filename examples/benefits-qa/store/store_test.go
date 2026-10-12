@@ -54,6 +54,10 @@ func TestParseRefuses(t *testing.T) {
 		"duplicate":     {`{"version":1,"synthetic":true,"passages":[` + ok + `,` + ok + `]}`, "passage a-b: duplicate id"},
 		"personal email": {`{"version":1,"synthetic":true,"passages":[{"id":"x","plan":"P","section":"S","text":"Write to asha.rao@gmail.com"}]}`,
 			"passage x: an email address outside example.com is personal data"},
+		"email in a section": {`{"version":1,"synthetic":true,"passages":[{"id":"y","plan":"P","section":"Ask asha.rao@gmail.com","text":"t"}]}`,
+			"passage y: an email address outside example.com is personal data"},
+		"email in a plan": {`{"version":1,"synthetic":true,"passages":[{"id":"z","plan":"asha.rao@gmail.com","section":"S","text":"t"}]}`,
+			"passage z: an email address outside example.com is personal data"},
 	} {
 		_, err := Parse([]byte(tc.seed))
 		if !errors.Is(err, ErrSeed) || !strings.Contains(err.Error(), tc.want) {
