@@ -57,7 +57,7 @@ var sections = []section{
 			{"verify.floors.a11y.min_target_px", "Minimum touch target edge, in CSS pixels (44×44).", "WP4.5"},
 			{"verify.floors.screen_reader.layers", "Story footprints that run the VoiceOver and NVDA floor (on label or nightly).", "WP4.7"},
 			{"verify.floors.screen_reader.max_missing_phrases", "Expected phrases from the Ready snapshot that may be missing from the transcript.", "WP4.7"},
-			{"verify.floors.dast.max_high", "High ZAP baseline alerts allowed when DAST runs.", proposed},
+			{"verify.floors.dast.max_high", "High-risk ZAP alerts allowed when DAST runs (passive baseline plus the active cross-site scripting and injection rules).", proposed},
 			{"verify.floors.mobile.skipped_blocks_ship", "A `skipped: mobile` floor blocks `ship` unless a floor-waiver Decision exists.", "WP4.9"},
 		},
 		note: "Performance (Lighthouse CI) and API (k6) budgets are product-specific and have no default (WP4.5, WP4.6). " +

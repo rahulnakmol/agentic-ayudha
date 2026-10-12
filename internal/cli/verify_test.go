@@ -97,3 +97,27 @@ func TestStoryOf(t *testing.T) {
 		}
 	}
 }
+
+// WP4.5 accept: a capture against a URL whose config marks it production
+// exits 4 with no artifacts written (and seeds nothing).
+func TestVerifyRefusesProduction(t *testing.T) {
+	g := readyTree(t)
+	dir, _ := ledgerCheckout(t)
+	marker := filepath.Join(t.TempDir(), "seeded")
+	_ = os.MkdirAll(filepath.Join(dir, ".aayudha"), 0o755)
+	cfg := "version = 1\n[verify]\nseed = [\"touch\", \"" + marker + "\"]\n[verify.environments.prod]\nurl = \"https://app.example.com\"\nproduction = true\n"
+	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte(cfg), 0o644)
+	git(t, dir, "checkout", "--quiet", "-b", "story/2-x")
+	git(t, dir, "commit", "--quiet", "--allow-empty", "-m", "feat: x")
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH"), "AAYU_ENV": "prod"}
+	code, out, errOut := run(t, env, Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}, "verify", "--repo", "o/r")
+	if code != ExitBlocked || !strings.Contains(errOut, "production environment") {
+		t.Fatalf("verify against production: %d %s %s", code, out, errOut)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".aayudha", "proof")); !os.IsNotExist(err) {
+		t.Fatalf("artifacts written: %v", err)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatal("the seed ran against production")
+	}
+}

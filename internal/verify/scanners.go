@@ -345,8 +345,10 @@ func short(s string) string {
 	return s
 }
 
-// Standard is the floor list for this WP set; later floors join it.
-func Standard() []Floor { return []Floor{Coverage{}, SAST{}, Secrets{}, Deps{}} }
+// Standard is every floor, in the order verify runs them.
+func Standard() []Floor {
+	return []Floor{Coverage{}, SAST{}, Secrets{}, Deps{}, A11y{}, Perf{}, DAST{}, API{}}
+}
 
 // ByName selects one floor.
 func ByName(floors []Floor, name string) ([]Floor, error) {
