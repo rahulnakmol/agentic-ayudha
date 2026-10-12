@@ -1,0 +1,68 @@
+{
+  "story": 132,
+  "body_hash": "17db0c69d847275a4a59aba81fd66b07b953b0e5e03a9e2fc9a4c909bc32683c",
+  "footprint": [
+    "L02",
+    "L03",
+    "L06"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L06",
+      "title": "AskRequest/AskResponse contract and its generated JSON Schema",
+      "contracts": [
+        "contracts/ask.schema.json generated from the Go types (invopop/jsonschema); AskResponse.Check: answered quotes and cites, referred and refused explain and cite nothing"
+      ],
+      "tests": [
+        "examples/benefits-qa/contracts:TestSchemaInSync",
+        "examples/benefits-qa/contracts:TestCheck"
+      ],
+      "instrumentation": [
+        "Check errors wrap ErrContract"
+      ],
+      "criteria": [
+        4
+      ]
+    },
+    {
+      "layer": "L03",
+      "title": "Ask workflow: screen, retrieve, ground, respond, record",
+      "contracts": [
+        "ask.Service.Ask(user, question) returns a contract-valid AskResponse and records question_asked plus one outcome event through ask.Recorder; Visit records benefits_visit"
+      ],
+      "tests": [
+        "examples/benefits-qa/ask:TestServiceRecordsEvents",
+        "examples/benefits-qa/ask:TestRecorderFailureKeepsAnswer"
+      ],
+      "instrumentation": [
+        "product events benefits_visit, question_asked, answer_grounded, answer_referred, answer_refused (no question text)"
+      ],
+      "criteria": [
+        3
+      ]
+    },
+    {
+      "layer": "L02",
+      "title": "HTTP boundary: POST /api/ask and GET /healthz",
+      "contracts": [
+        "POST /api/ask: application/json AskRequest (unknown fields refused, 4 KiB cap) -\u003e 200 AskResponse or 4xx contracts.Error; GET /healthz -\u003e 200 ok"
+      ],
+      "tests": [
+        "examples/benefits-qa/api:TestAskAnswered",
+        "examples/benefits-qa/api:TestAskRejects"
+      ],
+      "instrumentation": [
+        "Cache-Control: no-store on API responses"
+      ],
+      "criteria": [
+        1,
+        2
+      ]
+    }
+  ],
+  "em_review": {
+    "required": false
+  },
+  "planned_at": "2026-10-12T07:29:33Z",
+  "planned_by": "human-fallback"
+}
