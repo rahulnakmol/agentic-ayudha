@@ -3,5 +3,18 @@
   "branch": "story/130-plan-documents-store-loads-the-synthetic",
   "started_at": "2026-10-12T07:31:14Z",
   "failed_attempts": 0,
-  "checkpoints": null
+  "checkpoints": [
+    {
+      "k": 1,
+      "n": 1,
+      "attempt": 1,
+      "commit": "40069d66ca1a6807798e9a4a5d0c8de1c1080b1d",
+      "layers": [
+        "L07"
+      ],
+      "verify": "hold",
+      "detail": "floors hold; not run here (tool not installed; the merge gate runs them): secrets, deps",
+      "at": "2026-10-12T07:31:43Z"
+    }
+  ]
 }
