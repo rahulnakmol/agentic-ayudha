@@ -136,3 +136,33 @@ func TestBriefCLI(t *testing.T) {
 		t.Fatalf("close grounding %+v", rep.Grounding)
 	}
 }
+
+// `brief close` on a Feature needs a Result and an authoritative pack for
+// every story under it: Feature #1 has stories #2, #3, and #4, and only #2
+// has a pack. The grounding text lists the items under the subject and wraps
+// the subject's text as untrusted.
+func TestBriefCloseFeature(t *testing.T) {
+	fgh, _, _, env, opts, _ := proofFixture(t)
+	opts.Assets = aayudha.Assets
+	if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--repo", "o/r"); code != 0 {
+		t.Fatalf("proof push: %s", errOut)
+	}
+	fgh.Mu.Lock()
+	fgh.Issues[1].Body += "\n\n### Result\n\nTarget met: questionnaire completions = 0.6 against the target >= 0.5.\n"
+	fgh.Mu.Unlock()
+	code, _, errOut := run(t, env, opts, "brief", "1", "--purpose", "close", "--repo", "o/r")
+	for _, want := range []string{"#2 has no authoritative pack (only an advisory one", "#3 has no proof pack on the ledger", "#4 has no proof pack on the ledger"} {
+		if code != ExitBlocked || !strings.Contains(errOut, want) {
+			t.Errorf("close on the Feature: exit %d, want %q in %s", code, want, errOut)
+		}
+	}
+	if strings.Contains(errOut, "no Result") {
+		t.Errorf("the Feature has a Result: %s", errOut)
+	}
+	code, out, errOut := run(t, env, opts, "brief", "1", "--repo", "o/r")
+	for _, want := range []string{`<untrusted source="issue #1">`, `[#2] story "Show empty list"`, `[#3] story "Rebuild everything"`, "[P1] advisory pack for #2", "[R] result on #1"} {
+		if code != 0 || !strings.Contains(out, want) {
+			t.Errorf("grounding text: exit %d, want %q in:\n%s%s", code, want, out, errOut)
+		}
+	}
+}

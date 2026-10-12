@@ -346,3 +346,33 @@ func TestBriefPageWithBrowser(t *testing.T) {
 		t.Fatalf("controls Tab does not reach: %v", pc.Unreachable)
 	}
 }
+
+// Shapes the sample does not reach: a cycle drawn left to right (its back
+// edge routed below), an explicit direction kept even when wide, and a line
+// chart of one row of zeros, all with finite coordinates.
+func TestDiagramAndChartShapes(t *testing.T) {
+	d, err := ParseDiagram("direction: right\na: Write the draft\nb: Run the checks\nc: Render the page\na -> b: draft\nb -> c: pass\nb -> a: findings\nc -> d -> e")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svg := d.SVG("fig-9", "The draft loops back until the checks pass.", false)
+	if strings.Contains(svg, "NaN") || !strings.Contains(svg, `data-from="b" data-to="a"`) || d.Down || len(d.Nodes) != 5 {
+		t.Fatalf("cycle diagram (down %v, %d nodes): %s", d.Down, len(d.Nodes), svg)
+	}
+	for _, bad := range []string{"a -> b -> c: label", "title -> a", "just text", "a:"} {
+		if _, err := ParseDiagram(bad); err == nil {
+			t.Errorf("ParseDiagram(%q) accepted", bad)
+		}
+	}
+	c := &ChartData{Columns: []string{"day", "n"}, Rows: [][]any{{"mon", int64(0)}}, Kind: "line"}
+	if err := c.axes("", ""); err != nil {
+		t.Fatal(err)
+	}
+	svg = c.SVG("fig-8", "Nothing happened on Monday.")
+	if strings.Contains(svg, "NaN") || strings.Contains(svg, "Inf") || !strings.Contains(svg, "<polyline") {
+		t.Fatalf("one-row line chart: %s", svg)
+	}
+	if err := (&ChartData{Columns: []string{"day", "who"}, Rows: [][]any{{"mon", "ana"}}}).axes("", ""); err == nil {
+		t.Error("a text series was accepted")
+	}
+}
