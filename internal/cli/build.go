@@ -171,7 +171,11 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		return Wrap(ExitExternal, err)
 	}
 	labels := github.IssueLabels(is)
-	if why := e.notReady(ctx, c, repo, n, chk, labels); why != "" {
+	why, err := e.notReady(ctx, c, repo, n, chk, labels)
+	if err != nil {
+		return Wrap(ExitExternal, fmt.Errorf("build #%d: reading the Ready snapshot: %w", n, err))
+	}
+	if why != "" {
 		return Errorf(ExitBlocked, "build #%d: %s", n, why)
 	}
 	res := BuildResult{Issue: n, Worktree: BuildWorktree(root, n), Branch: fmt.Sprintf("story/%d-%s", n, slug(chk.Title))}
@@ -330,7 +334,37 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		}
 		return Errorf(ExitBlocked, "build #%d: nothing to commit yet in %s", n, res.Worktree)
 	}
-	gw := &ledger.Writer{Dir: root, Token: bot.Token.Value}
+	if err := e.publishBuild(ctx, c, bot.Token.Value, root, repo, dev, n, chk, &res); err != nil {
+		// The checkpoint is committed: record it even though the push or the PR
+		// failed, so the next run (or --resume) continues after it.
+		if serr := e.saveBuild(ctx, c, w, repo, n, &st, &res); serr != nil {
+			fmt.Fprintf(e.Err, "aayu: warning: the build state did not reach the ledger: %v\n", serr)
+		}
+		return err
+	}
+	if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
+		return err
+	}
+	// The actions segment of this checkpoint goes to the ledger (WP1.5), pushed with the build's own token.
+	if err := e.checkpoint(bot.Token); err != nil {
+		fmt.Fprintf(e.Err, "aayu: warning: the actions segment did not reach the ledger: %v\n", err)
+	}
+	res.Next = fmt.Sprintf("the merge gate re-runs verify on PR #%d; `aayu ship %d` after a human pass", res.PR, res.PR)
+	return e.Emit(res, func(w io.Writer) error {
+		if res.Commit != "" {
+			fmt.Fprintf(w, "#%d: checkpoint %s committed (%s); verify: %s\n", n, res.Checkpoint, short(res.Commit), res.Verify)
+		}
+		for _, x := range res.Notes {
+			fmt.Fprintf(w, "  note: %s\n", x)
+		}
+		_, err := fmt.Fprintf(w, "#%d: branch %s pushed; PR #%d %s\n  next: %s\n", n, res.Branch, res.PR, res.PRURL, res.Next)
+		return err
+	})
+}
+
+// publishBuild pushes the story branch and finds or opens its PR.
+func (e *Env) publishBuild(ctx context.Context, c *github.Client, token, root, repo, dev string, n int, chk ready.Result, res *BuildResult) error {
+	gw := &ledger.Writer{Dir: root, Token: token}
 	if !c.DryRun() {
 		if _, err := c.Write(ctx, actions.Action{Kind: "git.push", Target: repo + "@" + res.Branch, Payload: map[string]any{"branch": res.Branch, "commit": res.Commit}},
 			func(ctx context.Context) (any, error) {
@@ -363,24 +397,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			res.PR, res.PRURL = pr.GetNumber(), pr.GetHTMLURL()
 		}
 	}
-	if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
-		return err
-	}
-	// The actions segment of this checkpoint goes to the ledger (WP1.5), pushed with the build's own token.
-	if err := e.checkpoint(bot.Token); err != nil {
-		fmt.Fprintf(e.Err, "aayu: warning: the actions segment did not reach the ledger: %v\n", err)
-	}
-	res.Next = fmt.Sprintf("the merge gate re-runs verify on PR #%d; `aayu ship %d` after a human pass", res.PR, res.PR)
-	return e.Emit(res, func(w io.Writer) error {
-		if res.Commit != "" {
-			fmt.Fprintf(w, "#%d: checkpoint %s committed (%s); verify: %s\n", n, res.Checkpoint, short(res.Commit), res.Verify)
-		}
-		for _, x := range res.Notes {
-			fmt.Fprintf(w, "  note: %s\n", x)
-		}
-		_, err := fmt.Fprintf(w, "#%d: branch %s pushed; PR #%d %s\n  next: %s\n", n, res.Branch, res.PR, res.PRURL, res.Next)
-		return err
-	})
+	return nil
 }
 
 // changedSince lists the paths the branch changes against origin/dev plus the
@@ -555,21 +572,23 @@ func wrapExternal(err error) error {
 
 // notReady says why a story cannot be built: not labelled status:ready, not
 // passing Ready, or its body hash differs from the Ready snapshot's.
-func (e *Env) notReady(ctx context.Context, c *github.Client, repo string, n int, chk ready.Result, labels []string) string {
+// A failure to read the snapshot is an error, not a reason: the story may
+// well be Ready.
+func (e *Env) notReady(ctx context.Context, c *github.Client, repo string, n int, chk ready.Result, labels []string) (string, error) {
 	switch {
 	case !chk.Pass:
-		return fmt.Sprintf("it does not pass Ready (%d problem(s)); run `aayu ready %d --check`", len(chk.Problems), n)
+		return fmt.Sprintf("it does not pass Ready (%d problem(s)); run `aayu ready %d --check`", len(chk.Problems), n), nil
 	case !contains(labels, ready.LabelReady):
-		return "it is not labelled status:ready; run `aayu ready " + fmt.Sprint(n) + "`"
+		return "it is not labelled status:ready; run `aayu ready " + fmt.Sprint(n) + "`", nil
 	}
 	snap, err := ready.SnapshotHash(ctx, c, repo, n)
 	if err != nil {
-		return err.Error()
+		return "", err
 	}
 	if snap != chk.BodyHash {
-		return fmt.Sprintf("its body changed after Ready (snapshot %s, now %s); run `aayu ready %d` again", short(snap), short(chk.BodyHash), n)
+		return fmt.Sprintf("its body changed after Ready (snapshot %s, now %s); run `aayu ready %d` again", short(snap), short(chk.BodyHash), n), nil
 	}
-	return ""
+	return "", nil
 }
 
 func contains(xs []string, x string) bool {

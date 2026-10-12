@@ -588,3 +588,63 @@ func TestGCNothingToCollect(t *testing.T) {
 		t.Fatalf("gc without a token: %d %s", code, errOut)
 	}
 }
+
+// When GitHub fails while build reads the Ready snapshot, the story may well
+// be Ready: build exits 5 (external), not 4 (blocked), and says what failed.
+func TestBuildSnapshotReadFailureIsExternal(t *testing.T) {
+	g, env, opts, _, _ := buildSetup(t)
+	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready: %s", errOut)
+	}
+	g.Mu.Lock()
+	g.Fail = "GET /repos/o/r/issues/2/comments" // the first comments read is the snapshot's
+	g.Mu.Unlock()
+	if code, _, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != ExitExternal || !strings.Contains(errOut, "reading the Ready snapshot") {
+		t.Fatalf("build with the snapshot read failing: exit %d %s; want %d", code, errOut, ExitExternal)
+	}
+}
+
+// When opening the PR fails after the checkpoint was committed and pushed,
+// the checkpoint is still recorded in build/<n>/state.json, so the next run
+// continues after it instead of retrying the checkpoint it already passed.
+func TestBuildRecordsCheckpointWhenPRCreationFails(t *testing.T) {
+	g, env, opts, dir, bare := buildSetup(t)
+	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready: %s", errOut)
+	}
+	build := func(file string) (int, BuildResult, string) {
+		if file != "" {
+			_ = os.WriteFile(filepath.Join(BuildWorktree(dir, 2), file), []byte(file+"\n"), 0o644)
+		}
+		code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r", "--json")
+		var res BuildResult
+		_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)
+		return code, res, errOut
+	}
+	if code, _, errOut := build(""); code != 0 {
+		t.Fatalf("build (worktree): %d %s", code, errOut)
+	}
+	opts.CheckpointVerify = misses
+	if code, _, errOut := build("a.txt"); code != ExitFloor {
+		t.Fatalf("checkpoint 1, attempt 1: %d %s", code, errOut)
+	}
+	opts.CheckpointVerify = holds
+	g.Mu.Lock()
+	g.Fail = "POST /repos/o/r/pulls"
+	g.Mu.Unlock()
+	if code, _, errOut := build("b.txt"); code != ExitExternal {
+		t.Fatalf("checkpoint 1, attempt 2, with the PR create failing: %d %s", code, errOut)
+	}
+	var st BuildState
+	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &st); err != nil {
+		t.Fatal(err)
+	}
+	last := st.Checkpoints[len(st.Checkpoints)-1]
+	if head := git(t, BuildWorktree(dir, 2), "rev-parse", "HEAD"); last.Commit != head || last.K != 1 || last.Attempt != 2 || last.Verify != "hold" {
+		t.Fatalf("ledger state after the failed PR create: last checkpoint %+v, head %s", last, head)
+	}
+	code, res, errOut := build("c.txt")
+	if code != 0 || res.Checkpoint != "2/2" || res.Attempt != 1 || res.PR == 0 {
+		t.Fatalf("next checkpoint: %d %+v %s", code, res, errOut)
+	}
+}
