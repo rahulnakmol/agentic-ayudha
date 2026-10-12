@@ -54,7 +54,9 @@ func singular(w string) string {
 }
 
 // substitutes are everyday words a draft puts in place of a count's unit.
-var substitutes = regexp.MustCompile(`(?i)\b(files?\s+(?:saved|made|created|downloaded)|saved\s+files?|downloads?)\b`)
+// "files … saved" and "saved … files" match in either order with up to three
+// words between ("how many files were saved", "made more files").
+var substitutes = regexp.MustCompile(`(?i)\b(files?(?:\s+[\p{L}\p{N}'’-]+){0,3}?\s+(?:saved|made|created|downloaded)|(?:saved|made|created|downloaded)(?:\s+[\p{L}\p{N}'’-]+){0,3}?\s+files?|saves|downloads?)\b`)
 
 var wordTok = regexp.MustCompile(`[\p{L}\p{N}_-]+`)
 

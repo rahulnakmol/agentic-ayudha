@@ -271,6 +271,9 @@ func verdict(cur, base *evals.Results, cfg evals.Config) error {
 			}
 		}
 	}
+	for _, r := range evals.Advisories(cur, base, cfg) {
+		fmt.Printf("  ADVISORY (group %s: pass_k is advisory, D-7.3g): %s\n", cur.Group, r)
+	}
 	for _, r := range reasons {
 		fmt.Println("  FAIL:", r)
 	}

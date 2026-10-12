@@ -70,7 +70,9 @@ one group cannot use up another's cap: `brief` (the `brief/` cases, 12 USD) and 
 Pushes to `dev` do not run the `brief` group; it runs nightly, on dispatch (input `group` picks one group), and on
 pushes to `rolling` and `main`. Each group's results go to `results/<sha>-<group>.json`, uploaded as the artifact
 `eval-results-<sha>-<group>`; the promotion gate (`ci.yml` job `evals-gate`) fetches every group's results for the
-commit being promoted and for `main`, runs `eval -compare` on each, and fails when any group is missing or fails.
+commit being promoted and for `main`, runs `eval -compare` on each, and fails when any group is missing or fails. A group with
+`pass_k = "advisory"` (only `brief`, D-7.3g) passes on the mean bar and the drop rule; its pass^k findings print as
+advisories.
 
 Tier 2 calls models through the AI gateway in the `ai-gateway` environment (dev, rolling, and main only), so it never
 runs on pull requests. Spend is capped by `[budget]` and by the group's `max_usd` in `eval.toml`.

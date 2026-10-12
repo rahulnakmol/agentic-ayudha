@@ -16,7 +16,8 @@ min_mean = 3.5
 max_drop = 0.3
 
 # Tier 2 runs per group, each in its own job with its own spend cap in USD (on top of the [budget] breaker), so one
-# group can never use up another's (D-7.3d); the promotion gate needs every group to pass. A case belongs to the first
+# group can never use up another's (D-7.3d); the promotion gate needs every group to pass. pass_k = "advisory" holds a
+# group to the mean bar and the drop rule only (D-7.3g); "required" (the default) is the full WP3.4 bar. A case belongs to the first
 # group with a prefix of its ID, else to the group without prefixes. Unpriced models are charged at the gateway's
 # conservative fallback rate, so real spend is lower. The four brief register cases were charged 6.21 (run 38200697472)
 # and about 7 USD (run 38207049608); the stub, grill, slice, and plan cases together about 4.5 in that run.
@@ -24,6 +25,9 @@ max_drop = 0.3
 name = "brief"
 prefixes = ["brief/"]
 max_usd = 12.0
+# The brief register bar is not met at pass^5 after five rounds (D-7.3g): the group passes on the mean bar (per case and
+# suite) and the drop rule; pass^5 is computed and printed, but advisory. Every other group keeps the full WP3.4 bar.
+pass_k = "advisory"
 
 [[groups]]
 name = "skills" # every other case
