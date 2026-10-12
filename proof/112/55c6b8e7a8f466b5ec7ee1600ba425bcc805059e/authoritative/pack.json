@@ -1,0 +1,188 @@
+{
+  "schema_version": 1,
+  "repo": "rahulnakmol/agentic-ayudha",
+  "story": 112,
+  "pr": 113,
+  "pr_head_sha": "55c6b8e7a8f466b5ec7ee1600ba425bcc805059e",
+  "base_sha": "bf0a83729e6b9aa30d5d17cd5628839b409777d6",
+  "checkpoint": "1/1",
+  "seat": "ai-native-engineer",
+  "host": "cli",
+  "model": "claude-fable-5-1",
+  "identity": "ci",
+  "authority": {
+    "kind": "authoritative",
+    "workflow": ".github/workflows/aayudha-merge-gate.yml",
+    "run_id": 38207305723,
+    "writer": "rahulnakmol (aayu ship)"
+  },
+  "completion_goal_hash": "3b5c8a2dbc72ffdfd61d5881cac0f282eca75793c5de1cdfdf26556bd74ee506",
+  "footprint": [
+    "L02"
+  ],
+  "criteria": [
+    {
+      "id": 1,
+      "evidence": [
+        "evidence/criterion-1.jsonl"
+      ]
+    },
+    {
+      "id": 2,
+      "evidence": [
+        "evidence/criterion-2.jsonl"
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "coverage/diff.json",
+      "kind": "metric",
+      "sha256": "ea3cc6ee88a33ce7caea83622994e19fd1716a77bd608e98dd907ff98d0aaa7e",
+      "size": 141,
+      "store": "git"
+    },
+    {
+      "path": "evidence/criterion-1.jsonl",
+      "kind": "api-trace",
+      "sha256": "d89d20a12392e1cf2508a0bd4ef2b46d506cb17d164a086cd2e86d18c3da49fb",
+      "size": 561,
+      "store": "git"
+    },
+    {
+      "path": "evidence/criterion-2.jsonl",
+      "kind": "api-trace",
+      "sha256": "d89d20a12392e1cf2508a0bd4ef2b46d506cb17d164a086cd2e86d18c3da49fb",
+      "size": 561,
+      "store": "git"
+    },
+    {
+      "path": "reports/gitleaks.json",
+      "kind": "report",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "size": 3,
+      "store": "git"
+    },
+    {
+      "path": "reports/osv-scanner.json",
+      "kind": "report",
+      "sha256": "f5aad51596612fdc0d352296c3c0e561d182b49d0aff1680c1e738bb9ab3baf2",
+      "size": 10541,
+      "store": "git"
+    },
+    {
+      "path": "reports/semgrep.json",
+      "kind": "report",
+      "sha256": "756473600263d12b3a307850f555ae768f52d9f3509b6ffd27ab26673dfd7941",
+      "size": 12048,
+      "store": "git"
+    }
+  ],
+  "checks": [
+    {
+      "floor": "coverage",
+      "result": "pass",
+      "value": 100,
+      "threshold": 90,
+      "tool": "aayudha diff coverage (go test -coverprofile)",
+      "version": "go1.25.14",
+      "detail": "2 of 2 changed executable lines covered (go coverprofile)",
+      "network": "isolated"
+    },
+    {
+      "floor": "sast",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "semgrep",
+      "version": "1.180.0",
+      "detail": "p/golang p/javascript p/typescript p/kotlin p/swift p/github-actions: 0 critical, 0 high, 0 medium, 0 low",
+      "network": "allowed"
+    },
+    {
+      "floor": "secrets",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "gitleaks",
+      "version": "8.30.1",
+      "detail": "0 findings",
+      "network": "isolated"
+    },
+    {
+      "floor": "deps",
+      "result": "pass",
+      "value": 0,
+      "threshold": 0,
+      "tool": "osv-scanner",
+      "version": "2.6.0",
+      "detail": "go.mod pnpm-lock.yaml: 0 critical, 0 high, 0 medium, 0 low (3 more not called, by osv-scanner's call analysis)",
+      "network": "allowed"
+    },
+    {
+      "floor": "a11y",
+      "result": "skipped",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha",
+      "version": "-",
+      "detail": "skipped: no web target ([verify.environments.local] url)"
+    },
+    {
+      "floor": "perf",
+      "result": "skipped",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha",
+      "version": "-",
+      "detail": "skipped: no budgets in [verify.floors.perf]"
+    },
+    {
+      "floor": "screen-reader",
+      "result": "skipped",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha",
+      "version": "-",
+      "detail": "skipped: no-L01"
+    },
+    {
+      "floor": "dast",
+      "result": "skipped",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha",
+      "version": "-",
+      "detail": "skipped: [verify] dast is off"
+    },
+    {
+      "floor": "api",
+      "result": "skipped",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha",
+      "version": "-",
+      "detail": "skipped: no k6 script ([verify.floors.api] script)"
+    },
+    {
+      "floor": "mobile",
+      "result": "skipped",
+      "value": 0,
+      "threshold": 0,
+      "tool": "aayudha",
+      "version": "-",
+      "detail": "skipped: no ios or android in [verify] platforms"
+    }
+  ],
+  "cost": {
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "usd": 0
+  },
+  "links": {
+    "issue": "rahulnakmol/agentic-ayudha#112",
+    "pr": "rahulnakmol/agentic-ayudha#113",
+    "ready_snapshot": "specs/112/ready.md"
+  },
+  "created_at": "2026-10-12T05:22:05Z"
+}

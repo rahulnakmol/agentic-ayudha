@@ -1,0 +1,4 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGCKeepsBusyWorktree"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGCKeepsBusyWorktree","Output":"=== RUN   TestGCKeepsBusyWorktree\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGCKeepsBusyWorktree","Output":"--- PASS: TestGCKeepsBusyWorktree (1.12s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestGCKeepsBusyWorktree"}
