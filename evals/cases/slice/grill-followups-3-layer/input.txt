@@ -1,0 +1,12 @@
+Slice Feature #40 (Grill asks a follow-up when an answer is vague).
+
+Summary: When a human gives a vague answer during `aayu grill`, the interview asks one follow-up question before moving on.
+
+Problem: Grilled stories often carry criteria such as "works well" that the Ready check accepts but nobody can observe; four of the last ten stories were sent back at review for that.
+
+Scope: In scope: follow-up questions in the grill skill and the CLI interview, and eval cases for them. Out of scope: other verbs' interviews.
+
+Expected paths:
+internal/cli/grill*.go
+skills/grill/**
+evals/cases/grill/**

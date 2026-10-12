@@ -2,6 +2,7 @@ package evals
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
@@ -13,6 +14,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
+	"github.com/rahulnakmol/agentic-ayudha/internal/planning"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -618,5 +620,50 @@ func TestTier2GrillReferences(t *testing.T) {
 	sys := fake.Requests[0].System
 	if !strings.Contains(sys, "# grill\n") || !strings.Contains(sys, "## references/goal.md") || !strings.Contains(sys, "### Baseline (`baseline`, required)") {
 		t.Fatalf("the skill model did not get the grill skill with references/goal.md:\n%s", sys)
+	}
+}
+
+// WP5.4 tier 2: slice and plan drafts go through `aayu slice` and `aayu
+// plan`'s checks against the case's fixture first; one that fails them scores
+// 1 without the judge (rule 7), one that passes is judged.
+func TestTier2PlanningDrafts(t *testing.T) {
+	for _, tc := range []struct {
+		id, floor string
+		breakIt   func(raw []byte) []byte
+	}{
+		{"slice/proof-retention-6-layer", "effort:XL blocks Ready", func(raw []byte) []byte {
+			var d planning.SliceDraft
+			_ = json.Unmarshal(raw, &d)
+			d.Stories[0].Labels = []string{"effort:XL"}
+			b, _ := json.Marshal(d)
+			return b
+		}},
+		{"plan/config-migration", "needs a rollback step", func(raw []byte) []byte {
+			var d planning.PlanDraft
+			_ = json.Unmarshal(raw, &d)
+			d.Checkpoints[0].Rollback = ""
+			b, _ := json.Marshal(d)
+			return b
+		}},
+	} {
+		c, err := LoadCase(filepath.Join(root, "evals", "cases", filepath.FromSlash(tc.id)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		good, _ := os.ReadFile(filepath.Join(c.Dir, "output", c.Tier2.Draft+".json"))
+		fake := &models.Fake{Replies: []models.Response{{Text: string(good)}, {Text: `{"score": 5, "reason": "ok"}`}, {Text: string(tc.breakIt(good))}}}
+		h := harness(t, fake, "gpt-6.1-sol")
+		h.Config.K = 2
+		res, err := h.Tier2(context.Background(), []Case{c}, "abc", "dev", time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		runs := res.Cases[0].Runs
+		if runs[0].Score != 5 || runs[1].Score != 1 || !strings.Contains(runs[1].Floor, tc.floor) || len(fake.Requests) != 3 {
+			t.Errorf("%s: runs %+v, %d calls", tc.id, runs, len(fake.Requests))
+		}
+		if !strings.Contains(fake.Requests[0].System, "Reply with the draft you produce as JSON: {"+map[string]string{"slice": "feature", "plan": "story"}[c.Tier2.Draft]) {
+			t.Errorf("%s: the skill was not asked for its draft", tc.id)
+		}
 	}
 }

@@ -1,0 +1,23 @@
+{
+  "type": "story",
+  "title": "Grill skill asks a follow-up for vague criteria",
+  "fields": {
+    "summary": "As a product strategist, I want the grill skill to ask one follow-up when a criterion is vague, so that every criterion can be observed.",
+    "completion_goal": "1. [api-trace] state: the grill prompt for a story over MCP; expected: the question set tells the host to ask one follow-up when an expected outcome names no observable result",
+    "measure": "Completion Goal criteria observed",
+    "threshold": "all 1 criteria",
+    "scenario": "Request the grill story prompt through `aayu mcp` and read its question set.",
+    "environment": "local checkout with synthetic fixtures; never production"
+  },
+  "labels": [
+    "type:story",
+    "status:planned",
+    "effort:S",
+    "priority:P2"
+  ],
+  "parent": {
+    "number": 40,
+    "type": "feature"
+  },
+  "number": 41
+}

@@ -1,0 +1,13 @@
+# Recorded run of the slice skill (WP5.4) on an XL story: two XS-L stories under its Feature, and the XL story closed as
+# "split into" them (the close is the run's write; github/ serves the new stories for the recorded ready checks).
+skill = "slice"
+description = "Slice an XL story into at least two XS-L stories and close it as split."
+input = "input.txt"
+artifacts = ["output/slice.json"]
+schemas = [{ file = "output/slice.json", schema = "evals/schemas/slice.json" }]
+ready = ["output/stories/51.json", "output/stories/52.json"]
+calls = [
+  ["slice", "50", "--draft", "{case}/output/slice.json", "--create"],
+  ["ready", "51", "--check"],
+  ["ready", "52", "--check"],
+]

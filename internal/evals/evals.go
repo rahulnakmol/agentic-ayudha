@@ -103,6 +103,12 @@ type Tier2Spec struct {
 	// for this case (the brief skill's ste-words.md for the ste register); they
 	// follow the skill body in the prompt.
 	References []string `toml:"references"`
+	// Draft is the shape of the skill's reply: empty for a work item, or
+	// "slice" or "plan" for those verbs' drafts (WP5.4), checked by
+	// internal/planning against Issue, the case's github/ fixture of the
+	// Feature or story the draft is for, before the judge is asked.
+	Draft string `toml:"draft"`
+	Issue int    `toml:"issue"`
 }
 
 // LoadConfig reads evals/eval.toml under root.

@@ -1,0 +1,23 @@
+{
+  "type": "story",
+  "title": "List ledger packs through the API",
+  "fields": {
+    "summary": "As purge, I want to list packs through the GitHub contents API, so that a scheduled run needs no full clone.",
+    "completion_goal": "1. [api-trace] state: the fake GitHub serving a ledger tree with three packs; expected: the listing returns the three pack paths",
+    "measure": "Completion Goal criteria observed",
+    "threshold": "all 1 criteria",
+    "scenario": "Serve a recorded ledger tree and list it.",
+    "environment": "local checkout with synthetic fixtures; never production"
+  },
+  "labels": [
+    "type:story",
+    "status:planned",
+    "effort:S",
+    "priority:P2"
+  ],
+  "parent": {
+    "number": 40,
+    "type": "feature"
+  },
+  "number": 44
+}

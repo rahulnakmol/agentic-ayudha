@@ -285,9 +285,12 @@ func (h *Harness) Tier2(ctx context.Context, cases []Case, sha, ref string, now 
 				continue
 			}
 			var run Run
-			if c.Brief != nil {
+			switch {
+			case c.Brief != nil:
 				run, err = h.runBrief(ctx, c, lane, body, string(input), string(rubric))
-			} else {
+			case c.Tier2.Draft != "":
+				run, err = h.runPlanning(ctx, c, lane, body, string(input), string(rubric))
+			default:
 				run, err = h.run(ctx, c, lane, body, string(input), string(rubric), itemSchema)
 			}
 			if errors.Is(err, ErrBudget) || errors.Is(err, models.ErrBudget) {
@@ -364,9 +367,14 @@ func (h *Harness) run(ctx context.Context, c Case, lane verbs.LaneID, body, inpu
 		return Run{Status: RunFail, Score: 1, Floor: "out of scope: " + strings.Join(bad, "; ")}, nil
 	}
 	out, _ := json.MarshalIndent(it, "", "  ")
+	return h.judge(ctx, input, rubric, string(out), d.OpenQuestions, &calls)
+}
+
+// judge has the pinned judge score a skill's output against the rubric.
+func (h *Harness) judge(ctx context.Context, input, rubric, out string, open []string, calls *[]CallLog) (Run, error) {
 	questions := "(none)"
-	if len(d.OpenQuestions) > 0 {
-		questions = "- " + strings.Join(d.OpenQuestions, "\n- ")
+	if len(open) > 0 {
+		questions = "- " + strings.Join(open, "\n- ")
 	}
 	var v struct {
 		Score  int    `json:"score"`
@@ -375,16 +383,16 @@ func (h *Harness) run(ctx context.Context, c Case, lane verbs.LaneID, body, inpu
 	jreq := models.Request{
 		System: judgeSystem + "\n\n## Rubric\n\n" + strings.TrimSpace(rubric),
 		Messages: []models.Message{{Role: "user", Content: "## Task given to the skill\n\n" + untrusted("eval-input", input) +
-			"\n\n## Skill output\n\n" + untrusted("skill-output", string(out)) +
+			"\n\n## Skill output\n\n" + untrusted("skill-output", out) +
 			"\n\n## Open questions the skill left for a human\n\n" + untrusted("skill-questions", questions)}},
 		MaxTokens: h.Config.MaxTokens.Judge,
 		Format:    &models.Format{Name: "rubric_score", Schema: judgeSchema, Strict: true},
 	}
 	// Structured validates the judge's reply and retries the judgement once.
-	if err := models.Structured(ctx, h.complete(judgeLane, "judge", &calls), jreq, judgeSchema, &v); err != nil {
+	if err := models.Structured(ctx, h.complete(judgeLane, "judge", calls), jreq, judgeSchema, &v); err != nil {
 		return Run{}, err
 	}
-	run = Run{Status: RunFail, Score: v.Score, Pass: v.Score >= h.Config.PassScore, Reason: clip(v.Reason, 600)}
+	run := Run{Status: RunFail, Score: v.Score, Pass: v.Score >= h.Config.PassScore, Reason: clip(v.Reason, 600)}
 	if run.Pass {
 		run.Status = RunPass
 	}

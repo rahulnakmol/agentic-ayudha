@@ -157,6 +157,10 @@ func runCalls(ctx context.Context, c Case, assets fs.FS) (failed, writes []strin
 			writes = append(writes, "GitHub "+r.Method+" "+r.URL.Path)
 			mu.Unlock()
 			w.WriteHeader(http.StatusCreated)
+			if strings.HasSuffix(r.URL.Path, "/labels") {
+				_, _ = io.WriteString(w, "[]") // GitHub answers a label write with the issue's labels
+				return
+			}
 			_, _ = io.WriteString(w, "{}")
 			return
 		}
@@ -196,8 +200,12 @@ func runCalls(ctx context.Context, c Case, assets fs.FS) (failed, writes []strin
 			na = true
 			continue
 		}
+		args := []string{"--repo=o/r"}
+		for _, a := range call {
+			args = append(args, strings.ReplaceAll(a, "{case}", c.Dir)) // files the recorded run wrote, such as a slice draft
+		}
 		var out, errb bytes.Buffer
-		code := cli.Run(ctx, append([]string{"--repo=o/r"}, call...), cli.IO{In: strings.NewReader(""), Out: &out, Err: &errb}, cli.Options{
+		code := cli.Run(ctx, args, cli.IO{In: strings.NewReader(""), Out: &out, Err: &errb}, cli.Options{
 			Dir: repo, Assets: assets, Build: cli.BuildInfo{Version: "0.0.0-eval"}, GitHubAPI: gh.URL, Environ: environ,
 			Getenv:  func(k string) string { return env[k] },
 			GHToken: func(context.Context) (string, error) { return "", errors.New("gh is not used in evals") },
