@@ -1,0 +1,10 @@
+# Which tests prove story #112's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # uncommitted changes: kept, with "commit or discard them, then run `aayu gc` again"
+tests = ["internal/cli:TestGCKeepsBusyWorktree"]
+
+[[criterion]]
+id = 2 # unpushed commits: kept, with "push them or delete the branch, then run `aayu gc` again"
+tests = ["internal/cli:TestGCKeepsBusyWorktree"]
