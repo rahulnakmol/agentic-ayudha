@@ -71,6 +71,15 @@ renders one accessible HTML page with the sources in its footer.
   else. Then `##` sections. Keep the prose between 150 and 350 words.
 - Cite each claim with the ID of its source in brackets: `[#12]` an issue, `[P1]` a proof pack, `[R]` the Result,
   `[D1]` a measure snapshot. Say only what a source says. Never add numbers, dates, names, or outcomes of your own.
+- Simplify the words, never the facts. Every register keeps these exact:
+  - A number keeps its unit and what it counts. "4.2 exports per reviewer per week" is a rate per reviewer: say "on
+    average", never "each reviewer", and never drop "per reviewer".
+  - A state is only what a source records. "Released" is not "merged", and "out of scope" is not "not tested".
+  - A pack lists evidence for each criterion. Do not claim what a recording or trace shows beyond the criterion it
+    proves.
+  - Name no screen detail (a button, menu, or page) and no reason or effect (time saved, fewer errors) that no source
+    names.
+- Keep a metric's own words, such as "reviewer", in every register; they are technical names, also in `ste`.
 - Markdown only: no raw HTML and no `![…](…)` images. Pictures are visual blocks (below).
 
 ## Registers
@@ -79,7 +88,8 @@ renders one accessible HTML page with the sources in its footer.
   or lower. Explain an idea with an everyday picture instead of its technical name.
 - `ste`: Simplified Technical English. At most 20 words in a sentence. Use only words from
   `references/ste-words.md`, plus technical names: code in backticks, numbers, capitalised names, and words from the
-  titles of the work items. One instruction in a sentence, and start it with the verb. Use the active voice.
+  titles of the work items, the subject's summary, and the Result. One instruction in a sentence, and start it with
+  the verb. Use the active voice.
 - `engineer`: precise and compact. Name the components, floors, values, and thresholds exactly as the sources do.
 - `regulatory`: formal and traceable. Every paragraph and list item carries a citation. Say what was tested, by which
   floor, with what result, and what the evidence does not cover.

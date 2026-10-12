@@ -4,8 +4,8 @@ The `ste` register writes in the manner of Simplified Technical English (ASD-STE
 redistributable, so `aayu brief` checks against this list, written for aayudha: each word has one plain meaning.
 Regular plurals, possessives, and past forms (`-s`, `-es`, `-ies`, `-ed`) of a listed word pass. Technical names pass
 without the list: code in backticks, numbers, acronyms, capitalised names inside a sentence, and the words of the
-titles of the brief's work items. The lint also stops sentences over 20 words and sentences with more than one
-instruction. Use a verb from Verbs to start an instruction. Each section below is read by the lint; keep one
+titles of the brief's work items, of its subject's summary, and of its Result. The lint also stops sentences over 20
+words and sentences with more than one instruction. Use a verb from Verbs to start an instruction. Each section below is read by the lint; keep one
 comma-separated list of lowercase words per line.
 
 ## Verbs
