@@ -2,6 +2,7 @@ package aayudha
 
 import (
 	"io/fs"
+	"os"
 	"testing"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/skills"
@@ -15,6 +16,14 @@ func TestSkillLint(t *testing.T) {
 		t.Fatalf("embedded skills tree: %v", err)
 	}
 	for _, f := range skills.Lint(Assets, "skills") {
+		t.Error(f)
+	}
+}
+
+// TestNoMobbinOriginImages runs the Mobbin-origin image rule over the whole repository, not only the
+// skills tree (WP6.4: lint blocks Mobbin-origin images anywhere). CI runs it in the `build` job.
+func TestNoMobbinOriginImages(t *testing.T) {
+	for _, f := range skills.MobbinImages(os.DirFS("."), ".", ".git", "node_modules") {
 		t.Error(f)
 	}
 }

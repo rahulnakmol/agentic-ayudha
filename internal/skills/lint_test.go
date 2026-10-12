@@ -101,6 +101,22 @@ func TestLintBad(t *testing.T) {
 	}
 }
 
+// TestMobbinImagesAnywhere: outside skills the Mobbin rule still finds an
+// image file of Mobbin origin and an image embed of a Mobbin URL, allows a
+// plain link, and does not enter skipped directories.
+func TestMobbinImagesAnywhere(t *testing.T) {
+	m := fstest.MapFS{
+		"docs/research.md":              {Data: []byte("Reference: [Monzo login](https://mobbin.com/screens/9).\n\n<img src=\"https://bytescale.mobbin.com/p/9.png\">\n")},
+		"ledger/design/f1/ref.webp":     {Data: []byte("RIFF....WEBPVP8 mobbin.com/screens/9")},
+		"design/own.png":                {Data: []byte("\x89PNG\r\n\x1a\n")},
+		"node_modules/x/mobbin-cat.png": {Data: []byte("\x89PNG")},
+	}
+	got := MobbinImages(m, ".", "node_modules")
+	if len(got) != 2 || got[0].Path != "docs/research.md" || got[1].Path != "ledger/design/f1/ref.webp" || got[0].Rule != RuleMobbin {
+		t.Fatalf("findings = %v", got)
+	}
+}
+
 func TestLintSymlink(t *testing.T) {
 	dir := t.TempDir()
 	write := func(p, s string) {

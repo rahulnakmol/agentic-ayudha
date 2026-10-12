@@ -289,6 +289,14 @@
           "project": {
             "type": "string",
             "description": "Provider project: the PostHog project ID, the Sentry project ID, or the owner/name GitHub baselines read (default: the current repository)."
+          },
+          "transport": {
+            "type": "string",
+            "enum": [
+              "rest",
+              "mcp"
+            ],
+            "description": "Figma only: rest (personal access token, the default) or mcp (the remote MCP server, opt-in; the secret is an OAuth access token)."
           }
         },
         "additionalProperties": false,

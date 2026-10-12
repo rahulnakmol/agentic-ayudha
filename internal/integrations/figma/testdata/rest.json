@@ -1,0 +1,43 @@
+{
+  "source": "Synthetic: written from Figma's REST API reference (GET /v1/me, /v1/files/:key/nodes, /v1/images/:key, /v1/files/:key/variables/local; X-Figma-Token) because no Figma account exists yet; the AAYU_LIVE=1 test exercises the same requests against a real file",
+  "interactions": [
+    {
+      "method": "GET",
+      "url": "https://api.figma.com/v1/me",
+      "status": 200,
+      "response": {"id": "1197346", "email": "founder@example.com", "handle": "Rahul", "img_url": "https://s3-alpha.figma.com/profile/1197346"}
+    },
+    {
+      "method": "GET",
+      "url": "https://api.figma.com/v1/files/AbCdEf123/nodes?ids=1%3A2%2C4%3A7",
+      "status": 200,
+      "response": {"name": "Aayudha UI", "lastModified": "2026-10-10T08:00:00Z", "version": "6011223344", "nodes": {
+        "1:2": {"document": {"id": "1:2", "name": "Button / Primary", "type": "COMPONENT", "children": []}, "components": {}, "styles": {}},
+        "4:7": {"document": {"id": "4:7", "name": "Login", "type": "FRAME", "children": []}, "components": {}, "styles": {}}
+      }}
+    },
+    {
+      "method": "GET",
+      "url": "https://api.figma.com/v1/images/AbCdEf123?format=png&ids=1%3A2&scale=2",
+      "status": 200,
+      "response": {"err": null, "images": {"1:2": "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/7f3e2d1c-button-primary"}, "status": 200}
+    },
+    {
+      "method": "GET",
+      "url": "https://api.figma.com/v1/files/AbCdEf123/variables/local",
+      "status": 200,
+      "response": {"status": 200, "error": false, "meta": {
+        "variableCollections": {
+          "VariableCollectionId:1:0": {"id": "VariableCollectionId:1:0", "name": "Tokens", "modes": [{"modeId": "1:0", "name": "Light"}, {"modeId": "1:1", "name": "Dark"}], "defaultModeId": "1:0", "variableIds": ["VariableID:1:1", "VariableID:1:2", "VariableID:1:3", "VariableID:1:4", "VariableID:1:5"]}
+        },
+        "variables": {
+          "VariableID:1:1": {"id": "VariableID:1:1", "name": "color/brand/primary", "variableCollectionId": "VariableCollectionId:1:0", "resolvedType": "COLOR", "valuesByMode": {"1:0": {"r": 0.1, "g": 0.4, "b": 0.8, "a": 1}, "1:1": {"r": 1, "g": 1, "b": 1, "a": 1}}},
+          "VariableID:1:2": {"id": "VariableID:1:2", "name": "color/surface/overlay", "variableCollectionId": "VariableCollectionId:1:0", "resolvedType": "COLOR", "valuesByMode": {"1:0": {"r": 0, "g": 0, "b": 0, "a": 0.5}, "1:1": {"r": 0, "g": 0, "b": 0, "a": 0.7}}},
+          "VariableID:1:3": {"id": "VariableID:1:3", "name": "color/action/default", "variableCollectionId": "VariableCollectionId:1:0", "resolvedType": "COLOR", "valuesByMode": {"1:0": {"type": "VARIABLE_ALIAS", "id": "VariableID:1:1"}, "1:1": {"type": "VARIABLE_ALIAS", "id": "VariableID:1:2"}}},
+          "VariableID:1:4": {"id": "VariableID:1:4", "name": "space/4", "variableCollectionId": "VariableCollectionId:1:0", "resolvedType": "FLOAT", "valuesByMode": {"1:0": 16, "1:1": 16}},
+          "VariableID:1:5": {"id": "VariableID:1:5", "name": "font/family/body", "variableCollectionId": "VariableCollectionId:1:0", "resolvedType": "STRING", "valuesByMode": {"1:0": "Inter", "1:1": "Inter"}}
+        }
+      }}
+    }
+  ]
+}

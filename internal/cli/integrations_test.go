@@ -53,11 +53,24 @@ func TestBaselineExitCodes(t *testing.T) {
 	}
 }
 
-// TestDoctorIntegrations runs `aayu doctor` against recorded provider answers:
-// a verified read-only key, a key the provider reports as write-capable, a
-// key whose scope the provider does not report, and an adapter that is not
-// configured.
+// local sends requests for the loopback fixture servers to the network and
+// every other request to the replayer.
+type local struct{ replay http.RoundTripper }
+
+func (l local) RoundTrip(req *http.Request) (*http.Response, error) {
+	if req.URL.Hostname() == "127.0.0.1" {
+		return http.DefaultTransport.RoundTrip(req)
+	}
+	return l.replay.RoundTrip(req)
+}
+
+// TestDoctorIntegrations runs `aayu doctor` against recorded provider answers
+// (the WP5.2 and WP6.4 reachability checks): a verified read-only key, a key
+// the provider reports as write-capable, keys whose scope the provider does
+// not report (GitHub fine-grained, Figma), and Mobbin's MCP server, whose
+// read-only tool list is its scope.
 func TestDoctorIntegrations(t *testing.T) {
+	mobbin := fixture.ServeMCP(t, "../integrations/mobbin/testdata/mcp.json", "mobbin_oauth_test")
 	ok := func(url, header, body string) fixture.Interaction {
 		in := fixture.Interaction{Method: "GET", URL: url, Status: 200, Response: []byte(body)}
 		if header != "" {
@@ -69,8 +82,10 @@ func TestDoctorIntegrations(t *testing.T) {
 		ok("https://eu.posthog.com/api/personal_api_keys/@current/", "", `{"label":"aayudha","scopes":["query:read","insight:read"]}`),
 		ok("https://sentry.io/api/0/", "", `{"auth":{"scopes":["event:read","project:write"]},"user":{"username":"founder"}}`),
 		ok("https://api.github.com/user", "", `{"login":"rahulnakmol","type":"User"}`), // fine-grained: no X-OAuth-Scopes
+		ok("https://api.figma.com/v1/me", "", `{"id":"1197346","handle":"Rahul"}`),
 	}}}
-	env := map[string]string{"AAYU_SECRET_POSTHOG": "phx_test", "AAYU_SECRET_SENTRY": "sntrys_test", "AAYU_SECRET_GITHUB_READ": "github_pat_test"}
+	env := map[string]string{"AAYU_SECRET_POSTHOG": "phx_test", "AAYU_SECRET_SENTRY": "sntrys_test", "AAYU_SECRET_GITHUB_READ": "github_pat_test",
+		"AAYU_SECRET_FIGMA": "figd_test", "AAYU_SECRET_MOBBIN": "mobbin_oauth_test"}
 	repo := gitInit(t, "dev", map[string]string{".aayudha/config.toml": `version = 1
 [integrations.posthog]
 secret = "posthog"
@@ -86,17 +101,26 @@ project = "4507"
 secret = "github-read"
 scope = "read"
 project = "rahulnakmol/agentic-ayudha"
+[integrations.figma]
+secret = "figma"
+scope = "read"
+[integrations.mobbin]
+secret = "mobbin"
+scope = "read"
+url = "` + mobbin.URL + `"
 `})
-	_, out, errs := run(t, env, Options{Dir: repo, Exec: realGitWithLFS, LookPath: noTools, HTTP: &http.Client{Transport: r},
+	_, out, errs := run(t, env, Options{Dir: repo, Exec: realGitWithLFS, LookPath: noTools, HTTP: &http.Client{Transport: local{r}},
 		Secrets: secrets.New(secrets.Env{Getenv: func(k string) string { return env[k] }})}, "doctor")
 	r.Done()
-	if !regexp.MustCompile(`FAIL +integrations +2 of 3 configured integration\(s\) reachable with a read-only key`).MatchString(out) {
+	if !regexp.MustCompile(`FAIL +integrations +4 of 5 configured integration\(s\) reachable with a read-only key`).MatchString(out) {
 		t.Errorf("doctor's integrations row is not the expected FAIL:\n%s", out)
 	}
 	for _, want := range []string{
 		"posthog: reachable as personal API key aayudha; read-only scope verified (query:read, insight:read per GET /api/personal_api_keys/@current/)",
 		"sentry: reachable, but the key is write-capable (project:write per GET /api/0/); read verbs refuse it",
 		"github: reachable as rahulnakmol; the provider does not report this key's scope, so configured scope read is trusted",
+		"figma: reachable as Rahul; the provider does not report this key's scope, so configured scope read is trusted",
+		"mobbin: reachable as mobbin; read-only scope verified (search_flows, search_screens, search_sections per MCP tools/list at " + mobbin.URL + ")",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("doctor output lacks %q:\n%s%s", want, out, errs)
