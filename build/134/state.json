@@ -30,6 +30,18 @@
       "verify": "miss",
       "detail": "a11y blocked",
       "at": "2026-10-12T13:42:59Z"
+    },
+    {
+      "k": 1,
+      "n": 3,
+      "attempt": 3,
+      "commit": "8e01a42142d028066c3026ca9201bb640b0e6914",
+      "layers": [
+        "L01"
+      ],
+      "verify": "hold",
+      "detail": "floors hold; not run here (tool not installed; the merge gate runs them): secrets, deps",
+      "at": "2026-10-12T14:06:19Z"
     }
   ],
   "unblocked": [
