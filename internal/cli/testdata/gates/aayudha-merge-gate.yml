@@ -52,6 +52,10 @@ jobs:
       OSV_SCANNER_SHA256: ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108 # linux_amd64
       SEMGREP_VERSION: "1.180.0"
     steps:
+      # Checking out PR code under pull_request_target is what a base-branch gate must do to verify it. This job
+      # holds no secrets and a read-only token, and the PR's code runs only inside aayu verify's sandbox: scrubbed
+      # environment, no network, and its own PID namespace, so nothing it starts outlives the test run (D-4.8a).
+      # nosemgrep: yaml.github-actions.security.pull-request-target-code-checkout.pull-request-target-code-checkout
       - name: Check out the PR head (run only inside aayu verify's sandbox)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

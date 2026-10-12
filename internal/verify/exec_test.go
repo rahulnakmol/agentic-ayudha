@@ -4,9 +4,11 @@ import (
 	"context"
 	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // WP4.3 accept: a floor's child process cannot read AAYU_* or GITHUB_TOKEN
@@ -71,5 +73,23 @@ func TestChildHasNoNetwork(t *testing.T) {
 	out, _ = s.Run(context.Background(), Cmd{Dir: t.TempDir(), Name: "bash", Args: []string{"-c", "grep CapAmb /proc/self/status"}})
 	if !strings.Contains(string(out.Stdout), "0000000000000000") {
 		t.Fatalf("the tool kept ambient capabilities: %s", out.Stdout)
+	}
+}
+
+// An isolated child's background processes die with it (PID namespace), so
+// code under test cannot outlive its floor.
+func TestChildLeavesNoProcesses(t *testing.T) {
+	if !namespacesAvailable() {
+		t.Skip("namespaces are not available here")
+	}
+	mark := filepath.Join(t.TempDir(), "survived")
+	s := &Sandbox{Getenv: func(k string) string { return map[string]string{"PATH": os.Getenv("PATH")}[k] }, Home: t.TempDir()}
+	out, err := s.Run(context.Background(), Cmd{Dir: t.TempDir(), Name: "sh", Args: []string{"-c", "(sleep 1; touch " + mark + ") & echo started"}})
+	if err != nil || !strings.Contains(string(out.Stdout), "started") {
+		t.Fatalf("%v %s %s", err, out.Stdout, out.Stderr)
+	}
+	time.Sleep(2 * time.Second)
+	if _, err := os.Stat(mark); err == nil {
+		t.Fatal("a background process outlived the sandboxed tool")
 	}
 }
