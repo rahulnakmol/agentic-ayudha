@@ -66,6 +66,8 @@ func TestEvolveVerb(t *testing.T) {
 	gitIn(t, seed, "push", "--quiet", "origin", "dev")
 	dir := filepath.Join(tmp, "work")
 	gitIn(t, tmp, "clone", "--quiet", "--branch", "dev", bare, dir)
+	gitIn(t, dir, "config", "user.name", "Evolver") // CI has no git identity; evolve commits as the clone's user
+	gitIn(t, dir, "config", "user.email", "evolver@example.com")
 
 	g := fake.New(t, "o/r", "User")
 	g.Viewer = "founder"
@@ -123,7 +125,7 @@ func TestEvolveVerb(t *testing.T) {
 		t.Fatalf("eval-first change: %d %s %s", code, out, errOut)
 	}
 	msg := gitIn(t, bare, "log", "-1", "--format=%B", "evolve/stub-5")
-	if !strings.Contains(msg, "Aayudha-Evolve: #5") || !strings.Contains(msg, "Signed-off-by: ") {
+	if !strings.Contains(msg, "Aayudha-Evolve: #5") || !strings.Contains(msg, "Signed-off-by: Evolver <evolver@example.com>") {
 		t.Fatalf("evolve commit: %s", msg)
 	}
 	var paths []string
