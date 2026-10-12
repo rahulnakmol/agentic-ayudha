@@ -339,5 +339,8 @@ func TestReleaseFailsClosed(t *testing.T) {
 		if !tt.landed && (git(t, f.bare, "tag", "--list") != "" || !contains(f.g.LabelNames(2), "status:merged")) {
 			t.Errorf("%s: a failure before landing tagged or stamped", fail)
 		}
+		if tt.landed && !strings.Contains(errOut, "tagged rolling-2026-10-12, but the bookkeeping after landing failed") {
+			t.Errorf("%s: a failure after landing must say what landed: %s", fail, errOut)
+		}
 	}
 }

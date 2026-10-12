@@ -368,24 +368,39 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 	}
 
 	// 4. Stamp, tell, record, and make measure due.
+	if err := e.bookkeep(ctx, c, tok, repo, is, &p, shipped, now, to == "main"); err != nil {
+		return Errorf(ExitExternal, "release: %s is on %s as %q, tagged %s, but the bookkeeping after landing failed: %v; finish the stamps, notes, and Shipping evidence by hand",
+			short(p.Commit), dst, p.Message, p.Tag, err)
+	}
+	if err := e.Emit(p, func(out io.Writer) error { return promotionText(out, p) }); err != nil {
+		return err
+	}
+	return releaseErr
+}
+
+// bookkeep runs after the gated commit landed: it stamps the shipped stories
+// released, publishes the release notes, records the rung and the measure
+// due dates on the ledger, and writes the Release's Shipping evidence.
+func (e *Env) bookkeep(ctx context.Context, c *github.Client, tok identity.Token, repo string, is *gh.Issue, p *Promotion, shipped []int, now time.Time, final bool) error {
+	owner, name, _ := github.SplitRepo(repo)
 	for _, s := range p.Stories {
 		x, _, err := c.REST.Issues.Get(ctx, owner, name, s)
 		if err != nil {
-			return Wrap(ExitExternal, err)
+			return err
 		}
 		if err := setStatus(ctx, c, repo, s, github.IssueLabels(x), "released"); err != nil {
-			return Wrap(ExitExternal, err)
+			return err
 		}
 	}
-	if err := e.releaseNotes(ctx, c, tok, repo, &p, shipped); err != nil {
+	if err := e.releaseNotes(ctx, c, tok, repo, p, shipped); err != nil {
 		return err
 	}
-	due, err := e.measureDue(ctx, c, repo, &p, now)
+	due, err := e.measureDue(ctx, c, repo, p, now)
 	if err != nil {
 		return err
 	}
 	rec, _ := json.MarshalIndent(p, "", "  ")
-	files := map[string][]byte{rungPath(n, dst): append(rec, '\n')}
+	files := map[string][]byte{rungPath(p.Release, p.Target): append(rec, '\n')}
 	for _, d := range due {
 		b, _ := json.MarshalIndent(d, "", "  ")
 		files[fmt.Sprintf("measure/due/%d.json", d.Issue)] = append(b, '\n')
@@ -394,16 +409,10 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 	if err != nil {
 		return err
 	}
-	if _, err := lw.Write(ctx, ledger.Commit{Message: fmt.Sprintf("release: #%d %s %s (%s)", n, dst, p.Tag, me.Login), Files: files}); err != nil {
+	if _, err := lw.Write(ctx, ledger.Commit{Message: fmt.Sprintf("release: #%d %s %s (%s)", p.Release, p.Target, p.Tag, p.PromotedBy), Files: files}); err != nil {
 		return err
 	}
-	if err := e.shippingEvidence(ctx, c, repo, is, p, to == "main"); err != nil {
-		return err
-	}
-	if err := e.Emit(p, func(out io.Writer) error { return promotionText(out, p) }); err != nil {
-		return err
-	}
-	return releaseErr
+	return e.shippingEvidence(ctx, c, repo, is, *p, final)
 }
 
 func pick(v, def string) string {
