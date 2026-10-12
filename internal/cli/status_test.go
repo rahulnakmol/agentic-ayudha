@@ -23,7 +23,8 @@ import (
 //	│  └─ #5 Feature with a Result: #9 released, #10 cancelled (closable)
 //	└─ #3 Initiative
 //	   └─ #11 Feature: 105 ready stories #12–#116 (low risk; more than one page of sub-issues),
-//	      Decision #117 (open since Monday: overdue), Decision #118 (provisional, opened today)
+//	      Decision #117 (open since Monday: overdue; constrains story #12, which shows blocked),
+//	      Decision #118 (provisional, opened today; ratify or revert by Friday 13:00 London)
 func statusTree(t *testing.T) *fake.GitHub {
 	g := fake.New(t, "o/r", "User")
 	add := func(parent *fake.Issue, title string, labels ...string) *fake.Issue {
@@ -49,8 +50,10 @@ func statusTree(t *testing.T) *fake.GitHub {
 	for i := range 105 {
 		add(f3, fmt.Sprintf("Rule %d", i+1), "type:story", "status:ready", "risk:low")
 	}
-	add(f3, "Choose the rules engine", "type:decision", "status:discovery")
+	d1 := add(f3, "Choose the rules engine", "type:decision", "status:discovery")
+	d1.Body = "### Question\n\nWhich engine?\n\n### Links\n\nconstrains #12"
 	d2 := add(f3, "Cache decisions", "type:decision", "status:discovery", "decision:provisional")
+	d2.Body = "### Question\n\nCache?\n\n### Decision\n\nProvisional: … Ratify or revert by 2026-10-16T12:00:00Z (Fri 16 Oct 2026 13:00 BST)."
 	d2.CreatedAt = "2026-10-15T11:00:00Z"
 	if goal.Number != 1 || f3.Number != 11 || d2.Number != 118 {
 		t.Fatalf("tree numbering: goal %d, feature %d, last decision %d", goal.Number, f3.Number, d2.Number)
@@ -99,10 +102,12 @@ func TestStatusRollupsAndDigest(t *testing.T) {
 	check("goal by status", goal.ByStatus, map[string]int{"done": 1, "released": 2, "blocked": 1, "cancelled": 1, "ready": 105, "in-progress": 5, "discovery": 2})
 	check("goal by risk", goal.ByRisk, map[string]int{"high": 1, "low": 105})
 	check("goal by health", goal.ByHealth, map[string]int{"at-risk": 1})
-	check("goal blocked", goal.Blocked, []int{8})
+	check("goal blocked (status:blocked, or constrained by an open Decision)", goal.Blocked, []int{8, 12})
 	check("goal over budget", goal.OverBudget, []int{8})
 	check("goal shipped but unmeasured", goal.ShippedUnmeasured, []int{7, 9})
 	check("goal provisional", goal.Provisional, []int{118})
+	// Thursday 13:00 to Friday 13:00 London: 5 business hours Thursday, 4 Friday.
+	check("goal provisional hours", goal.ProvisionalHours, "#118 9 h")
 	check("goal cost", goal.CostUSD, 31.5)
 	check("goal proof coverage", goal.ProofCoverage, status.ProofNA)
 	check("goal decisions near SLA", len(goal.DecisionsNearSLA), 1)

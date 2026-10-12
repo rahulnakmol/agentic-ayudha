@@ -501,7 +501,7 @@ var Verbs = []Command{
 		Summary: "Record a Decision with options, evaluation, and recommendation; accept it, supersede it, or file a floor waiver.",
 		Seat:    Founder, Lane: LaneSpec, Layers: AllLayers(),
 		Inputs: []Input{
-			pos("decision", TypeIssue, "Decision issue."),
+			optPos("decision", TypeIssue, "Decision issue; without one, the SLA sweep over every open Decision. With --waiver, the story or bug to waive a floor on."),
 			humanOnly(flag("accept", TypeString, "Option to accept (human identity only).")),
 			flag("waiver", TypeString, "Floor to waive; creates a floor-waiver Decision."),
 		},
@@ -724,6 +724,8 @@ var Verbs = []Command{
 		Inputs: []Input{
 			pos("incident", TypeIssue, "Incident issue."),
 			flag("action", TypeString, "Catalog action to propose."),
+			flag("params", TypeString, "Action parameters as key=value pairs separated by commas."),
+			flag("close", TypeBool, "Close the incident: file its linked Bug and the retro entry."),
 		},
 		Outputs:  []string{"timeline", "proposed-action", "linked-bug"},
 		Gates:    []GateID{GateCatalog, GateEnvironment, GateHumanIdentity},

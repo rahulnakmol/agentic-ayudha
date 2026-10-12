@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
+	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
 // Version is the config schema version this binary reads and writes
@@ -281,6 +282,7 @@ func (c *Config) Clock() (Clock, error) { return NewClock(c.Time.TZ, c.Time.Busi
 var (
 	secretName = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
 	repoName   = regexp.MustCompile(`^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$`)
+	loginName  = regexp.MustCompile(`^@?[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$`)
 	issueRef   = regexp.MustCompile(`^[A-Za-z0-9-]+/[A-Za-z0-9._-]+#[1-9][0-9]*$`)
 	apiStyles  = []string{"", "messages", "responses", "chat"}
 	families   = []string{"", string(verbs.FamilyAnthropic), string(verbs.FamilyOpenAI), string(verbs.FamilyGoogle), string(verbs.FamilyXAI), string(verbs.FamilyHostManaged)}
@@ -361,6 +363,18 @@ func (c *Config) Validate() error {
 		}
 	default:
 		bad("[notify] channel = %q: want slack, email, or github", c.Notify.Channel)
+	}
+	for k, v := range c.Decisions.Authority {
+		_, isType := workitems.FindType(k)
+		if _, isLayer := verbs.FindLayer(verbs.LayerID(k)); !isType && !isLayer {
+			bad("[decisions.authority] %s: want a work-item type (the Decision's parent) or a layer L01-L09", k)
+		}
+		if _, isSeat := verbs.FindSeat(verbs.SeatID(v)); !isSeat && !loginName.MatchString(v) {
+			bad("[decisions.authority] %s = %q: want a seat slug or a GitHub login", k, v)
+		}
+	}
+	if e := c.Decisions.EscalateTo; e != "" && !loginName.MatchString(e) {
+		bad("[decisions] escalate_to = %q: want a GitHub login", e)
 	}
 	for name, in := range c.Integrations {
 		if !secretName.MatchString(in.Secret) {

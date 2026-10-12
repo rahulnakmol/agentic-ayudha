@@ -2,13 +2,15 @@
 // Initiative, or Feature through its sub-issues and rolls up Delivery Status,
 // health, risk, blocked and over-budget items, shipped-but-unmeasured items,
 // Decisions near their SLA, and cost, for the table, --json, the Goal comment,
-// and the --digest page. Proof coverage (M4), streaks (M5), and provisional
-// decision deadlines (WP5.6) are "n/a until" their WPs.
+// and the --digest page. Open Decisions show the items they constrain as
+// blocked, and provisional Decisions their business hours left to ratify or
+// revert (WP5.6).
 package status
 
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -21,11 +23,14 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
+// ratifyBy is the ratify-or-revert deadline decide writes into a provisional
+// Decision's body (WP5.6).
+var ratifyBy = regexp.MustCompile(`Ratify or revert by ([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z)`)
+
 // Not-yet-available columns (rule 1a).
 const (
-	ProofNA       = "n/a (no checkout to read the ledger)"
-	StreakNA      = "per layer (status --streak)" // a streak belongs to a layer, not a work item (WP5.7)
-	ProvisionalNA = "n/a until WP5.6"
+	ProofNA  = "n/a (no checkout to read the ledger)"
+	StreakNA = "per layer (status --streak)" // a streak belongs to a layer, not a work item (WP5.7)
 )
 
 // Decision is an open Decision and its SLA clock.
@@ -132,7 +137,7 @@ func (w *Walker) roll(ctx context.Context, n node, depth int) (*Rollup, error) {
 	r := &Rollup{Number: n.number, Title: n.title, Type: n.typ, State: n.state, Status: n.status, Health: n.health, Risk: n.risk,
 		Schema: workitems.SchemaVersion, ByStatus: map[string]int{}, ByHealth: map[string]int{}, ByRisk: map[string]int{},
 		Blocked: []int{}, OverBudget: []int{}, ShippedUnmeasured: []int{}, DecisionsNearSLA: []Decision{}, Provisional: []int{},
-		ProofCoverage: ProofNA, Streak: StreakNA, ProvisionalHours: ProvisionalNA}
+		ProofCoverage: ProofNA, Streak: StreakNA}
 	if depth > 8 {
 		return r, nil
 	}
@@ -212,6 +217,20 @@ func hasResult(n node) bool {
 }
 
 func (w *Walker) count(ctx context.Context, r *Rollup) error {
+	// An open Decision shows the items it constrains as blocked (WP5.6).
+	constrained := map[int]bool{}
+	for _, c := range r.leaves {
+		if c.typ == "decision" && c.state == "open" {
+			it, _ := workitems.Parse(c.number, c.title, c.body, "", c.labels)
+			links, _ := workitems.ParseLinks(it.Fields[workitems.FieldLinks])
+			for _, l := range links {
+				if l.Kind == "constrains" {
+					constrained[l.Number] = true
+				}
+			}
+		}
+	}
+	var hours []string
 	covered, done := 0, 0
 	for _, c := range r.leaves {
 		if w.Proof != nil && (c.typ == "story" || c.typ == "bug") && (c.status == "merged" || slices.Contains(shipped, c.status)) {
@@ -239,7 +258,7 @@ func (w *Walker) count(ctx context.Context, r *Rollup) error {
 		if c.risk != "" {
 			r.ByRisk[c.risk]++
 		}
-		if c.status == "blocked" {
+		if c.status == "blocked" || constrained[c.number] && c.state == "open" {
 			r.Blocked = append(r.Blocked, c.number)
 		}
 		cost := w.Cost[c.number]
@@ -253,6 +272,15 @@ func (w *Walker) count(ctx context.Context, r *Rollup) error {
 		if c.typ == "decision" && c.state == "open" {
 			if slices.Contains(c.labels, workitems.LabelProvisional) {
 				r.Provisional = append(r.Provisional, c.number)
+				h := fmt.Sprintf("#%d no deadline", c.number)
+				if m := ratifyBy.FindStringSubmatch(c.body); m != nil {
+					if by, err := time.Parse(time.RFC3339, m[1]); err == nil && w.Now.Before(by) {
+						h = fmt.Sprintf("#%d %g h", c.number, w.Clock.Between(w.Now, by).Round(6*time.Minute).Hours())
+					} else if err == nil {
+						h = fmt.Sprintf("#%d overdue", c.number)
+					}
+				}
+				hours = append(hours, h)
 			}
 			if w.SLAHours > 0 && !c.created.IsZero() {
 				deadline := w.Clock.Add(c.created, time.Duration(w.SLAHours)*time.Hour)
@@ -265,6 +293,11 @@ func (w *Walker) count(ctx context.Context, r *Rollup) error {
 	}
 	if w.Proof != nil {
 		r.ProofCoverage = fmt.Sprintf("%d/%d", covered, done)
+	}
+	sort.Strings(hours)
+	r.ProvisionalHours = "none"
+	if len(hours) > 0 {
+		r.ProvisionalHours = strings.Join(hours, ", ")
 	}
 	r.CostUSD = float64(int(r.CostUSD*100+0.5)) / 100
 	for _, s := range [][]int{r.Blocked, r.OverBudget, r.ShippedUnmeasured, r.Provisional} {
