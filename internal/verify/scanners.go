@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os/exec"
 	"slices"
 	"strconv"
 	"strings"
@@ -52,8 +51,9 @@ func severityCheck(s Severity, maxCritical, maxHigh int) proof.Check {
 	return c
 }
 
-func need(tool string) error {
-	if _, err := exec.LookPath(tool); err != nil {
+// need checks that a tool is on the floor's PATH (the child's, not the parent's).
+func (r *Run) need(tool string) error {
+	if _, err := lookPath(tool, r.Sandbox.Env(Cmd{}, NetAllowed)); err != nil {
 		return fmt.Errorf("%s is not installed: the floor cannot run, so it does not pass (install the pinned version; `aayu doctor` lists optional tools)", tool)
 	}
 	return nil
@@ -108,7 +108,7 @@ func (SAST) Applies(*Run) (bool, string) { return true, "" }
 // Run implements Floor.
 func (SAST) Run(ctx context.Context, r *Run) (Result, error) {
 	res := Result{Check: proof.Check{Tool: "semgrep"}}
-	if err := need("semgrep"); err != nil {
+	if err := r.need("semgrep"); err != nil {
 		return res, err
 	}
 	res.Check.Version = version(ctx, r, "semgrep", "--version")
@@ -189,7 +189,7 @@ func (Secrets) Applies(*Run) (bool, string) { return true, "" }
 // Run scans the commits between base and head (gitleaks git --log-opts).
 func (Secrets) Run(ctx context.Context, r *Run) (Result, error) {
 	res := Result{Check: proof.Check{Tool: "gitleaks", Threshold: float64(r.Floors.Secrets.MaxFindings)}}
-	if err := need("gitleaks"); err != nil {
+	if err := r.need("gitleaks"); err != nil {
 		return res, err
 	}
 	res.Check.Version = version(ctx, r, "gitleaks", "version")
@@ -246,7 +246,7 @@ func (Deps) Applies(*Run) (bool, string) { return true, "" }
 // Run implements Floor.
 func (Deps) Run(ctx context.Context, r *Run) (Result, error) {
 	res := Result{Check: proof.Check{Tool: "osv-scanner"}}
-	if err := need("osv-scanner"); err != nil {
+	if err := r.need("osv-scanner"); err != nil {
 		return res, err
 	}
 	res.Check.Version = strings.TrimPrefix(version(ctx, r, "osv-scanner", "--version"), "osv-scanner version: ")
