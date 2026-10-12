@@ -5,6 +5,7 @@
 package store
 
 import (
+	"bytes"
 	_ "embed"
 	"encoding/json"
 	"errors"
@@ -45,11 +46,11 @@ type Store struct {
 
 var (
 	idRE = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
-	// emailRE finds anything shaped like an email address: a local part, "@",
-	// and a domain name or an address literal ([192.0.2.1], [IPv6:…]).
-	emailRE = regexp.MustCompile(`[^\s@<>()"',;]+@(\[[^\]\s]*\]|[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*)`)
+	// domainRE is the domain part that follows an "@".
+	domainRE = regexp.MustCompile(`^[A-Za-z0-9.-]*`)
 	// reservedRE is example.com and its subdomains (RFC 2606), the only domain synthetic text may use.
 	reservedRE = regexp.MustCompile(`(?i)^([a-z0-9-]+\.)*example\.com$`)
+	atSigns    = strings.NewReplacer("\uff20", "@", "\ufe6b", "@")
 )
 
 // ErrSeed is wrapped by every seed problem.
@@ -58,14 +59,19 @@ var ErrSeed = errors.New("benefits-qa seed")
 // Load reads the embedded seed.
 func Load() (*Store, error) { return Parse(seedJSON) }
 
-// Parse reads and checks a seed: the version, the synthetic flag, every
+// Parse reads and checks a seed: only known fields, the version, the synthetic flag, every
 // passage (a unique slug ID, a plan, a section, and text), and that no text
 // anywhere in it, metadata included, holds an email address outside the
 // reserved example.com domain.
 func Parse(b []byte) (*Store, error) {
 	var s Seed
-	if err := json.Unmarshal(b, &s); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.DisallowUnknownFields() // a field this check does not know could hold anything
+	if err := dec.Decode(&s); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrSeed, err)
+	}
+	if dec.More() {
+		return nil, fmt.Errorf("%w: more than one JSON value", ErrSeed)
 	}
 	if s.Version != SchemaVersion {
 		return nil, fmt.Errorf("%w: version %d, want %d", ErrSeed, s.Version, SchemaVersion)
@@ -98,13 +104,20 @@ func Parse(b []byte) (*Store, error) {
 	return st, nil
 }
 
-// personal reports whether any of the texts holds an email address whose
-// domain is not example.com or one of its subdomains; an address literal is
-// never reserved.
+// personal reports whether any of the texts holds an "@" that is not part of
+// an address at example.com or one of its subdomains. Every email address
+// has an "@", so no spelling of one (a quoted local part, an address
+// literal, a look-alike domain) gets through; a bare "@" is refused too, and
+// the full-width and small at signs count as "@".
 func personal(texts ...string) bool {
 	for _, t := range texts {
-		for _, m := range emailRE.FindAllStringSubmatch(t, -1) {
-			if !reservedRE.MatchString(strings.TrimSuffix(m[1], ".")) {
+		for rest := atSigns.Replace(t); ; {
+			i := strings.IndexByte(rest, '@')
+			if i < 0 {
+				break
+			}
+			rest = rest[i+1:]
+			if !reservedRE.MatchString(strings.TrimSuffix(domainRE.FindString(rest), ".")) {
 				return true
 			}
 		}

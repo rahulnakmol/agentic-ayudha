@@ -45,9 +45,11 @@ func TestLoadSeed(t *testing.T) {
 func TestParseRefuses(t *testing.T) {
 	ok := `{"id":"a-b","plan":"P","section":"S","text":"Ask hr@example.com."}`
 	for name, tc := range map[string]struct{ seed, want string }{
-		"not json":      {`{`, "unexpected end"},
+		"not json":      {`{`, "unexpected EOF"},
 		"version":       {`{"version":2,"synthetic":true,"passages":[` + ok + `]}`, "version 2, want 1"},
 		"not synthetic": {`{"version":1,"passages":[` + ok + `]}`, "not marked synthetic"},
+		"unknown field": {`{"version":1,"synthetic":true,"contact":"asha.rao@gmail.com","passages":[` + ok + `]}`, `unknown field "contact"`},
+		"two values":    {`{"version":1,"synthetic":true,"passages":[` + ok + `]} {}`, "more than one JSON value"},
 		"no passages":   {`{"version":1,"synthetic":true}`, "no passages"},
 		"bad id":        {`{"version":1,"synthetic":true,"passages":[{"id":"A B","plan":"P","section":"S","text":"t"}]}`, `id "A B" is not a lowercase slug`},
 		"empty text":    {`{"version":1,"synthetic":true,"passages":[{"id":"x","plan":"P","section":"S","text":" "}]}`, "passage x: plan, section, and text are required"},
@@ -62,6 +64,12 @@ func TestParseRefuses(t *testing.T) {
 			"passage w: an email address outside example.com is personal data"},
 		"look-alike domain": {`{"version":1,"synthetic":true,"passages":[{"id":"v","plan":"P","section":"S","text":"Write to asha@notexample.com"}]}`,
 			"passage v: an email address outside example.com is personal data"},
+		"quoted local part": {`{"version":1,"synthetic":true,"passages":[{"id":"u","plan":"P","section":"S","text":"Write to \"asha rao\"@gmail.com"}]}`,
+			"passage u: an email address outside example.com is personal data"},
+		"reserved name inside another domain": {`{"version":1,"synthetic":true,"passages":[{"id":"r","plan":"P","section":"S","text":"Write to hr@example.com.evil.org"}]}`,
+			"passage r: an email address outside example.com is personal data"},
+		"full-width at sign": {`{"version":1,"synthetic":true,"passages":[{"id":"f","plan":"P","section":"S","text":"Write to asha\uff20gmail.com"}]}`,
+			"passage f: an email address outside example.com is personal data"},
 		"email in a section": {`{"version":1,"synthetic":true,"passages":[{"id":"y","plan":"P","section":"Ask asha.rao@gmail.com","text":"t"}]}`,
 			"passage y: an email address outside example.com is personal data"},
 		"email in a plan": {`{"version":1,"synthetic":true,"passages":[{"id":"z","plan":"asha.rao@gmail.com","section":"S","text":"t"}]}`,
@@ -72,7 +80,7 @@ func TestParseRefuses(t *testing.T) {
 			t.Errorf("%s: %v, want %q", name, err, tc.want)
 		}
 	}
-	for _, text := range []string{"Ask hr@example.com.", "Ask benefits@HR.Example.COM", "Costs 50 dollars @ the clinic"} {
+	for _, text := range []string{"Ask hr@example.com.", "Ask benefits@HR.Example.COM, or hr@example.com"} {
 		seed := `{"version":1,"synthetic":true,"passages":[{"id":"a","plan":"P","section":"S","text":"` + text + `"}]}`
 		if _, err := Parse([]byte(seed)); err != nil {
 			t.Errorf("%q: example.com and its subdomains are reserved, not personal: %v", text, err)
