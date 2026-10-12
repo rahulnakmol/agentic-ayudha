@@ -3,7 +3,7 @@ package proof
 import (
 	"bytes"
 	"context"
-	"crypto/md5" //nolint:gosec // S3 requires Content-MD5 on lifecycle writes; it is not used for security
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/xml"
 	"errors"
@@ -169,9 +169,11 @@ func (b *Bucket) EnsureLifecycle(ctx context.Context, repo string, days int) (ch
 		_, err = b.do(ctx, http.MethodDelete, "", url.Values{"lifecycle": {""}}, nil, nil)
 		return err == nil, err
 	}
-	sum := md5.Sum(body.Bytes()) //nolint:gosec // required by the S3 API
+	// S3 requires an integrity checksum on lifecycle writes: SHA-256 through
+	// the flexible-checksum headers rather than Content-MD5.
+	sum := sha256.Sum256(body.Bytes())
 	_, err = b.do(ctx, http.MethodPut, "", url.Values{"lifecycle": {""}}, body.Bytes(), map[string]string{
-		"Content-MD5": base64.StdEncoding.EncodeToString(sum[:]), "Content-Type": "application/xml"})
+		"X-Amz-Sdk-Checksum-Algorithm": "SHA256", "X-Amz-Checksum-Sha256": base64.StdEncoding.EncodeToString(sum[:]), "Content-Type": "application/xml"})
 	return err == nil, err
 }
 

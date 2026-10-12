@@ -72,8 +72,8 @@ func (f *S3) serve(w http.ResponseWriter, r *http.Request) {
 			}
 			http.Error(w, "<Error><Code>NoSuchLifecycleConfiguration</Code></Error>", http.StatusNotFound)
 		case http.MethodPut:
-			if r.Header.Get("Content-MD5") == "" {
-				http.Error(w, "<Error><Code>MissingContentMD5</Code></Error>", http.StatusBadRequest)
+			if r.Header.Get("Content-MD5") == "" && r.Header.Get("X-Amz-Checksum-Sha256") == "" {
+				http.Error(w, "<Error><Code>InvalidRequest</Code><Message>Missing required header for this request: Content-MD5 or x-amz-checksum-*</Message></Error>", http.StatusBadRequest)
 				return
 			}
 			f.Lifecycle[bucket] = body
