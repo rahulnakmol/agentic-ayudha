@@ -12,12 +12,15 @@ import (
 
 const capNetAdmin = 12
 
-// isolate runs cmd in a new user and network namespace as the same uid, with
-// CAP_NET_ADMIN kept only so the re-executed child can bring up loopback.
+// isolate runs cmd in new user, network, and PID namespaces as the same uid,
+// with CAP_NET_ADMIN kept only so the re-executed child can bring up
+// loopback. The tool becomes PID 1 of its namespace, so every process it
+// leaves behind is killed when it exits: code under test cannot outlive the
+// floor and touch the pack verify writes afterwards.
 func isolate(cmd *exec.Cmd) {
 	uid, gid := os.Getuid(), os.Getgid()
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Cloneflags:                 syscall.CLONE_NEWUSER | syscall.CLONE_NEWNET,
+		Cloneflags:                 syscall.CLONE_NEWUSER | syscall.CLONE_NEWNET | syscall.CLONE_NEWPID,
 		UidMappings:                []syscall.SysProcIDMap{{ContainerID: uid, HostID: uid, Size: 1}},
 		GidMappings:                []syscall.SysProcIDMap{{ContainerID: gid, HostID: gid, Size: 1}},
 		GidMappingsEnableSetgroups: false,

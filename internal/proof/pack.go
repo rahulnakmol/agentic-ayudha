@@ -252,9 +252,14 @@ func (p *Pack) FloorsHold() bool {
 	return true
 }
 
+// SkippedMobile is the detail of a mobile story's mobile floor in 0.1 (WP4.9).
+const SkippedMobile = "skipped: mobile"
+
 // BlocksShip reports whether a skipped floor blocks ship without a waiver:
 // a mobile story's skipped mobile floor does (WP4.9).
-func BlocksShip(c Check) bool { return c.Result == Skipped && c.Floor == "mobile" }
+func BlocksShip(c Check) bool {
+	return c.Result == Skipped && c.Floor == "mobile" && c.Detail == SkippedMobile
+}
 
 // MediaExts are the media file extensions: Git LFS on a private ledger,
 // the private bucket on a public one (V3). init writes them to the ledger's

@@ -213,7 +213,7 @@ func (Coverage) Run(ctx context.Context, r *Run) (Result, error) {
 			return res, errors.New("no coverage command: set [verify.floors.coverage] command and report (lcov, Cobertura, or Go coverprofile)")
 		}
 		report = r.tempFile("cover.out")
-		cmd = []string{"go", "test", "-json", "-covermode=set", "-coverprofile=" + report, "./..."}
+		cmd = []string{"go", "test", "-json", "-covermode=set", "-coverpkg=./...", "-coverprofile=" + report, "./..."}
 	} else if report != "" && !filepath.IsAbs(report) {
 		report = filepath.Join(r.Root, report)
 	}

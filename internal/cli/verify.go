@@ -19,6 +19,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verify"
+	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
 func init() { register("verify", runVerify) }
@@ -27,6 +28,7 @@ var (
 	storyRef     = regexp.MustCompile(`(?im)^\s*(?:refs|closes|fixes|resolves|story:?)\s+#([0-9]+)\b`)
 	storyTrailer = regexp.MustCompile(`(?m)^Aayudha-Story:\s*#?([0-9]+)\s*$`)
 	checkpoint   = regexp.MustCompile(`(?m)^Aayudha-Checkpoint:\s*([0-9]+/[0-9]+)\s*$`)
+	modelTrailer = regexp.MustCompile(`(?m)^Aayudha-Model:\s*(\S+)\s*$`)
 	storyBranch  = regexp.MustCompile(`^(?:story|bug)/([0-9]+)(?:-|$)`)
 )
 
@@ -43,6 +45,8 @@ type VerifyResult struct {
 	Unmapped   []int         `json:"criteria_without_evidence,omitempty"`
 	Problems   []string      `json:"problems,omitempty"`
 	NoSnapshot bool          `json:"no_ready_snapshot,omitempty"`
+	Waivers    []string      `json:"waivers,omitempty"`
+	Gate       []string      `json:"gate_problems,omitempty"` // --ci with a PR: why the merge gate fails besides the floors
 }
 
 func gitIn(ctx context.Context, dir string, args ...string) (string, error) {
@@ -209,6 +213,14 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 		}
 	}
 	rep := verify.Execute(ctx, r, floors)
+	if res.Story > 0 && !rep.Hold {
+		ws, err := e.waivers(ctx, repo, res.Story)
+		if err != nil {
+			return Wrap(ExitExternal, err)
+		}
+		res.Waivers = verify.ApplyWaivers(rep.Checks, res.Story, ws)
+		rep.Hold = (&proof.Pack{Checks: rep.Checks}).FloorsHold()
+	}
 	ev, problems, err := verify.TestEvidence(r)
 	if err != nil {
 		return Wrap(ExitUsage, err)
@@ -237,6 +249,9 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 		if m := checkpoint.FindStringSubmatch(msg); m != nil {
 			p.Checkpoint = m[1]
 		}
+		if m := modelTrailer.FindStringSubmatch(msg); m != nil {
+			p.Model = m[1]
+		}
 		pack, files := verify.Pack(r, rep, p)
 		res.Unmapped = verify.Unmapped(r, pack)
 		res.Pack = proof.LocalDir(root, res.Story)
@@ -244,13 +259,77 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 			return err
 		}
 	}
+	// The merge gate (WP4.8): the pack must prove the PR's current head, the
+	// story must still match its Ready snapshot, and every criterion must have
+	// evidence from this run.
+	if e.CI && res.PR > 0 && res.Story > 0 {
+		res.Gate = e.gateProblems(ctx, repo, res, snap.CompletionGoalHash)
+	}
 	if err := e.Emit(res, func(w io.Writer) error { return renderVerify(w, res) }); err != nil {
 		return err
 	}
 	if !res.Hold {
 		return Errorf(ExitFloor, "floor miss: %s", failing(res.Checks))
 	}
+	if len(res.Gate) > 0 {
+		return Errorf(ExitBlocked, "merge gate: %s", strings.Join(res.Gate, "; "))
+	}
 	return nil
+}
+
+// gateProblems are the merge gate's checks beyond the floors.
+func (e *Env) gateProblems(ctx context.Context, repo string, res VerifyResult, snapCG string) []string {
+	var out []string
+	if res.NoSnapshot {
+		return []string{fmt.Sprintf("story #%d has no Ready snapshot on the ledger", res.Story)}
+	}
+	if len(res.Unmapped) > 0 {
+		out = append(out, fmt.Sprintf("criteria without evidence from this run: %v (map them to tests in .aayudha/evidence/%d.toml)", res.Unmapped, res.Story))
+	}
+	c, _, err := e.readClient(ctx)
+	if err != nil {
+		return append(out, err.Error())
+	}
+	owner, name, _ := github.SplitRepo(repo)
+	if pr, _, err := c.REST.PullRequests.Get(ctx, owner, name, res.PR); err != nil {
+		out = append(out, "PR: "+err.Error())
+	} else if pr.GetHead().GetSHA() != res.Head {
+		out = append(out, fmt.Sprintf("pack.sha %s ≠ PR head %s (the PR moved; the gate re-runs on the new head)", short(res.Head), short(pr.GetHead().GetSHA())))
+	}
+	now, _, err := (&ready.Ready{GH: c, Repo: repo, TechnicalOwner: e.technicalOwner()}).Check(ctx, res.Story)
+	switch {
+	case err != nil:
+		out = append(out, "story: "+err.Error())
+	case now.CompletionGoalHash != snapCG:
+		out = append(out, fmt.Sprintf("story #%d's Completion Goal hash %s ≠ Ready snapshot %s (edited after Ready: run `aayu ready %d` again)", res.Story, short(now.CompletionGoalHash), short(snapCG), res.Story))
+	}
+	return out
+}
+
+// waivers are the floor-waiver Decisions under a story (its sub-issues of
+// type decision; accepting them is WP5.6's, n/a here).
+func (e *Env) waivers(ctx context.Context, repo string, story int) ([]verify.Waiver, error) {
+	c, _, err := e.readClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	owner, name, _ := github.SplitRepo(repo)
+	subs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.SubIssue, *gh.Response, error) {
+		return c.REST.SubIssue.ListByIssue(ctx, owner, name, int64(story), &o)
+	})
+	if err != nil {
+		return nil, err
+	}
+	var out []verify.Waiver
+	for _, s := range subs {
+		is := (*gh.Issue)(s)
+		if t, _ := workitems.TypeOf(is.GetType().GetName(), github.IssueLabels(is)); t != "decision" {
+			continue
+		}
+		_, v := workitems.Sections(is.GetBody())
+		out = append(out, verify.Waiver{Decision: is.GetNumber(), Title: is.GetTitle(), Body: is.GetBody(), Links: v["Links"]})
+	}
+	return out, nil
 }
 
 func failing(cs []proof.Check) string {
@@ -277,6 +356,12 @@ func renderVerify(w io.Writer, res VerifyResult) error {
 	}
 	for _, p := range res.Problems {
 		fmt.Fprintf(w, "  evidence: %s\n", p)
+	}
+	for _, x := range res.Waivers {
+		fmt.Fprintf(w, "  waived: %s\n", x)
+	}
+	for _, g := range res.Gate {
+		fmt.Fprintf(w, "  merge gate: %s\n", g)
 	}
 	switch {
 	case res.Pack != "":
