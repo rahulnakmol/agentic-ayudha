@@ -5,6 +5,7 @@
 //	go run ./internal/evals/cmd/eval -tier 2 -group <group> -sha <sha> -out evals/results/<sha>-<group>.json [-baseline <file>]
 //	go run ./internal/evals/cmd/eval -groups                                     # the group names, as JSON
 //	go run ./internal/evals/cmd/eval -compare evals/results/<sha>.json [-baseline <file>]
+//	go run ./internal/evals/cmd/eval -evolve-gate -base <sha> -branch <head ref> -labels <a,b>   # CI build (WP7.7)
 //
 // Tier 2 makes live model calls through [models.gateway] (AAYU_MODELS__GATEWAY__BASE_URL and
 // AAYU_MODELS__GATEWAY__SECRET, key in AAYU_SECRET_<NAME>), capped by [budget] and the -group's max_usd in evals/eval.toml.
@@ -19,6 +20,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"regexp"
@@ -55,11 +57,18 @@ func run(ctx context.Context) error {
 	group := flag.String("group", "", "tier 2: the group to run ([[groups]] in evals/eval.toml), with its own max_usd")
 	groups := flag.Bool("groups", false, "print the tier-2 group names as a JSON array and exit")
 	only := flag.String("cases", "", "tier 2: run only the cases whose ID (<skill>/<name>) matches this regular expression")
+	gate := flag.Bool("evolve-gate", false, "eval-first gate (WP7.7): fail an evolve PR (evolve/ branch or aayu:evolve label) that adds no reproducing eval case")
+	baseRef := flag.String("base", "", "base commit of the PR (-evolve-gate)")
+	branch := flag.String("branch", "", "head branch of the PR (-evolve-gate)")
+	labels := flag.String("labels", "", "comma-separated labels of the PR (-evolve-gate)")
 	flag.Parse()
 
 	root, err := os.Getwd()
 	if err != nil {
 		return err
+	}
+	if *gate {
+		return evolveGate(ctx, root, *baseRef, *branch, strings.Split(*labels, ","))
 	}
 	cfg, err := evals.LoadConfig(root)
 	if err != nil {
@@ -149,6 +158,35 @@ func run(ctx context.Context) error {
 		return verdict(res, base, cfg)
 	}
 	return errors.New("pass -tier 1, -tier 2, or -compare <file>")
+}
+
+// evolveGate runs the eval-first gate on the diff from base to HEAD.
+func evolveGate(ctx context.Context, root, base, branch string, labels []string) error {
+	if !evals.IsEvolvePR(branch, labels) {
+		fmt.Printf("evolve gate: %s is not an evolve PR (no %s branch prefix, no %s label); nothing to check\n", orDash(branch), evals.EvolveBranchPrefix, evals.EvolveLabel)
+		return nil
+	}
+	if base == "" {
+		return errors.New("-evolve-gate needs -base")
+	}
+	cmd := exec.CommandContext(ctx, "git", "diff", "--name-status", "--no-renames", base, "HEAD")
+	cmd.Dir = root
+	out, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("git diff %s HEAD: %w", base, err)
+	}
+	cases, problems := evals.EvolveGate(ctx, root, evals.ParseNameStatus(string(out)), aayudha.Assets)
+	for _, c := range cases {
+		fmt.Printf("evolve gate: new case %s for skill %s names Feedback #%d\n", c.ID, c.Skill, c.Feedback)
+	}
+	if len(problems) > 0 {
+		for _, p := range problems {
+			fmt.Println("::error::" + strings.ReplaceAll(p, "\n", "%0A"))
+		}
+		return fmt.Errorf("evolve gate: %d problem(s); an evolve PR is eval-first (WP7.7)", len(problems))
+	}
+	fmt.Println("evolve gate: passed")
+	return nil
 }
 
 func orDash(s string) string {

@@ -101,7 +101,12 @@ type Case struct {
 	Calls       [][]string `toml:"calls"` // the recorded run's `aayu` calls, without the program name
 	Scope       []Scope    `toml:"scope"` // requirements the input does not state; a work item that adds one fails
 	Brief       *BriefSpec `toml:"brief"` // a brief case: the input is the grounding, the output a Markdown draft
-	Tier2       *Tier2Spec `toml:"tier2"`
+	// Feedback and Reproduce make an evolve case (WP7.7): the accepted Feedback
+	// issue it reproduces, and the directory holding the old skill's recorded
+	// run (the output/ artifacts under that name), which must fail tier 1.
+	Feedback  int        `toml:"feedback"`
+	Reproduce string     `toml:"reproduce"`
+	Tier2     *Tier2Spec `toml:"tier2"`
 }
 
 // Scope is one known way a skill invents a requirement for this case's input,

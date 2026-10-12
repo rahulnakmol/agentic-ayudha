@@ -88,6 +88,17 @@ jobs:
       # and tier 1 of the skill evals (internal/evals, TestTier1) over evals/cases (WP3.4).
       - name: Build, vet, test
         run: go build ./... && go vet ./... && go test ./...
+      # WP7.7: an evolve PR (an evolve/ head branch, or the aayu:evolve label when it opens) must add an eval case that
+      # reproduces its Feedback on the old skill and passes on the new one, before any skill diff (eval-first). The
+      # checkout is the PR's merge commit, one commit deep; its first parent is the base it merges into.
+      - name: Eval-first gate for evolve PRs (WP7.7)
+        if: github.event_name == 'pull_request'
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          git fetch --no-tags --quiet --deepen=1 origin
+          go run ./internal/evals/cmd/eval -evolve-gate -base HEAD^1 -branch "$HEAD_REF" -labels "$LABELS"
       - name: Build matrix and binary size budget
         run: |
           set -euo pipefail

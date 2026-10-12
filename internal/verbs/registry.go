@@ -807,7 +807,10 @@ var Verbs = []Command{
 		Name: "evolve", WP: "WP7.7",
 		Summary: "Turn accepted retro Feedback into a failing eval case, then a skill diff that passes it, opened as an agent-authored PR.",
 		Seat:    AINativeEngineer, Lane: LaneBuild, Layers: OnlyLayers(L05),
-		Inputs:   []Input{flag("skill", TypeString, "Limit to one skill.")},
+		Inputs: []Input{
+			flag("skill", TypeString, "Skill to evolve: skills/<skill>/, or a stub under evals/skills/<skill>/."),
+			flag("feedback", TypeIssue, "Accepted Feedback issue filed by `aayu retro` that the change answers; without it, list the accepted retro Feedback."),
+		},
 		Outputs:  []string{"eval-case", "skill-pr"},
 		Gates:    []GateID{GateEvalFirst, GateCodeowner, GateHalt},
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeWrite,
