@@ -63,6 +63,9 @@ When a budget trips, the breaker pauses agent lanes and pages through `[notify]`
 | Key | Default | Meaning | Source |
 |---|---|---|---|
 | `review.figma_diff_max` | `2.0` | Largest share of pixels, in percent, a prototype screenshot may differ from its Figma frame after the anti-aliasing mask. Colour and typography token mismatches are counted separately and must be zero. | WP6.5 |
+| `review.baseline` | `["/"]` | URL paths on the `[verify.environments]` target that `baseline` captures for each commit. | proposed (WP6.6) |
+
+`review` runs lane A (the ui-review model) k = 3 times per state and counts a finding only when 2 of 3 runs report it at Nielsen severity 2 or more; lane B (impeccable, axe, focus-indicator and target-size probes) is deterministic, and its findings cannot be overridden by lane A (ground rule 7). These are fixed by the plan (WP6.6), not configuration.
 
 ## Retention
 

@@ -127,12 +127,12 @@ addons (MIT), Vite (MIT), Vitest (MIT), Playwright (Apache-2.0), TypeScript (Apa
 (MPL-2.0, through `@storybook/addon-a11y`). The development tree also contains BSD-2-Clause, BSD-3-Clause,
 ISC, BlueOak-1.0.0, and CC-BY-4.0 (browser-support data) packages.
 
-### Shelled out by `aayu verify` (not bundled)
+### Shelled out by `aayu verify`, the design verbs, and `aayu review` (not bundled)
 
-The floors (docs/BUILD-PLAN.md WP4.3–WP4.6) run these as separate programs in a scrubbed child process. Users
-install them; CI pins them (SHA-256 for binaries, a digest for the ZAP image, `pnpm-lock.yaml` integrity hashes for
-the `@aayudha/floors` development package that holds Playwright, axe-core, and Lighthouse for this repository's own
-floor tests).
+The floors (docs/BUILD-PLAN.md WP4.3–WP4.6), the prototype capture (WP6.5), and review (WP6.6) run these as separate
+programs in a scrubbed child process. Users install them; CI pins them (SHA-256 for binaries, a digest for the ZAP
+image, `pnpm-lock.yaml` integrity hashes for the `@aayudha/floors` development package that holds Playwright,
+axe-core, Lighthouse, and impeccable for this repository's own tests).
 
 | Component | Version pinned in CI | Licence | Use | Source |
 |---|---|---|---|---|
@@ -146,6 +146,7 @@ floor tests).
 | k6 | 2.3.0 | AGPL-3.0 | `api` floor; run as a program, never linked or distributed | <https://github.com/grafana/k6> |
 | Guidepup (`@guidepup/guidepup`, `@guidepup/playwright`, `@guidepup/setup`) with `@playwright/test` | 0.35.0, 0.19.1, 0.29.2; 1.64.0 | MIT; Apache-2.0 | `screen-reader` floor: drives VoiceOver (macOS) and NVDA (Windows; NVDA itself is GPL-2.0, installed by `guidepup install` and run as a program) | <https://github.com/guidepup/guidepup> |
 | Tesseract | user-installed, optional | Apache-2.0 | OCR in the redaction pass when present | <https://github.com/tesseract-ocr/tesseract> |
+| impeccable (with its platform engine `@impeccable/cli-<os>-<arch>`) | 4.5.2 (engine 0.1.14) | Apache-2.0 | `review` lane B (WP6.6): `detect --json` against each state's URL, shelled out | <https://github.com/pbakaus/impeccable> |
 
 ## Policy
 
@@ -176,12 +177,6 @@ CI scan when the component is actually added.
 | `modernc.org/sqlite` | `measure` snapshots, pure Go (WP7.2) | BSD-3-Clause |
 | `github.com/go-git/go-git` | Read-only git access | Apache-2.0 |
 | `github.com/yuin/goldmark` | Markdown parsing | MIT |
-
-### Shelled out (not bundled)
-
-| Component | Use | Expected licence |
-|---|---|---|
-| impeccable | `review` lane B, `detect --json` (WP6.6) | Apache-2.0 |
 
 Other optional tools that `doctor` reports (git-lfs, gh, node, DuckDB) are installed by the user and
 run as separate programs.

@@ -2,7 +2,7 @@
   "name": "@aayudha/floors",
   "private": true,
   "version": "0.0.0",
-  "description": "Pinned browser and screen-reader tools the web floors of `aayu verify` drive (WP4.5, WP4.7): Playwright, axe-core, Lighthouse, Guidepup. Dev tooling for this repository's own floor tests and CI; product repositories install these themselves.",
+  "description": "Pinned browser and screen-reader tools the web floors of `aayu verify` (WP4.5, WP4.7), the prototype capture (WP6.5), and review lane B (WP6.6) drive: Playwright, axe-core, Lighthouse, Guidepup, impeccable. Dev tooling for this repository's own floor tests and CI; product repositories install these themselves.",
   "license": "BSD-3-Clause",
   "devDependencies": {
     "@guidepup/guidepup": "0.35.0",
@@ -10,6 +10,7 @@
     "@guidepup/setup": "0.29.2",
     "@playwright/test": "1.64.0",
     "axe-core": "4.14.0",
+    "impeccable": "4.5.2",
     "lighthouse": "13.5.0",
     "playwright": "1.64.0"
   }

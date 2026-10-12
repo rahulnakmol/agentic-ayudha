@@ -196,6 +196,27 @@ func TestWireFormats(t *testing.T) {
 			t.Errorf("%s: anthropic-version header %q", tt.style, got.version)
 		}
 	}
+	// Images (review lane A, WP6.6): each format's own image block, before the text;
+	// turns without images stay plain strings.
+	ireq := req
+	ireq.Messages = []Message{{Role: "user", Content: "look", Images: []Image{{MediaType: "image/png", Data: []byte("PNG")}}}, {Role: "assistant", Content: "ok"}}
+	for style, want := range map[string]string{
+		StyleMessages:  `[{"content":[{"source":{"data":"UE5H","media_type":"image/png","type":"base64"},"type":"image"},{"text":"look","type":"text"}],"role":"user"},{"content":"ok","role":"assistant"}]`,
+		StyleResponses: `[{"content":[{"image_url":"data:image/png;base64,UE5H","type":"input_image"},{"text":"look","type":"input_text"}],"role":"user"},{"content":"ok","role":"assistant"}]`,
+		StyleChat:      `[{"content":"be brief","role":"system"},{"content":[{"image_url":{"url":"data:image/png;base64,UE5H"},"type":"image_url"},{"text":"look","type":"text"}],"role":"user"},{"content":"ok","role":"assistant"}]`,
+	} {
+		c := HTTPClient{BaseURL: srv.URL + "/v1", Style: style, Key: "k", HTTP: srv.Client()}
+		if _, err := c.Complete(context.Background(), ireq); err != nil {
+			t.Fatal(err)
+		}
+		key := "messages"
+		if style == StyleResponses {
+			key = "input"
+		}
+		if b, _ := json.Marshal(got.body[key]); string(b) != want {
+			t.Errorf("%s images: %s\nwant %s", style, b, want)
+		}
+	}
 }
 
 func TestBudgetBreaker(t *testing.T) {
