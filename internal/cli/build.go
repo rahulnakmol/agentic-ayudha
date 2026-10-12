@@ -167,8 +167,9 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			res.PR, res.PRURL = pr.GetNumber(), pr.GetHTMLURL()
 		}
 	}
-	if log, err := e.Actions(); err == nil {
-		_ = log.Checkpoint() // the actions segment of this checkpoint goes to the ledger (WP1.5)
+	// The actions segment of this checkpoint goes to the ledger (WP1.5), pushed with the build's own token.
+	if err := e.checkpoint(bot.Token); err != nil {
+		fmt.Fprintf(e.Err, "aayu: warning: the actions segment did not reach the ledger: %v\n", err)
 	}
 	res.Next = fmt.Sprintf("`aayu verify` in %s for an advisory pack; the merge gate re-runs it on PR #%d; then `aayu ship %d` after a human pass", res.Worktree, res.PR, res.PR)
 	return e.Emit(res, func(w io.Writer) error {
