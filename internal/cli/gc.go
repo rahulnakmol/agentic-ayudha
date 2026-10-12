@@ -146,11 +146,11 @@ func runGC(ctx context.Context, e *Env, _ Values) error {
 // commits its branch on origin does not have.
 func worktreeBusy(ctx context.Context, wt string) string {
 	if dirty, err := run2(ctx, wt, "git", "status", "--porcelain"); err != nil || dirty != "" {
-		return "it has uncommitted changes"
+		return "it has uncommitted changes; commit or discard them, then run `aayu gc` again"
 	}
 	branch, _ := run2(ctx, wt, "git", "rev-parse", "--abbrev-ref", "HEAD")
 	if n, err := run2(ctx, wt, "git", "rev-list", "--count", "HEAD", "--not", "--remotes=origin"); err == nil && n != "0" {
-		return fmt.Sprintf("%s has %s commit(s) not on origin", branch, n)
+		return fmt.Sprintf("%s has %s commit(s) not on origin; push them or delete the branch, then run `aayu gc` again", branch, n)
 	}
 	return ""
 }

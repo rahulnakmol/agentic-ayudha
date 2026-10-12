@@ -238,3 +238,27 @@ func TestShipPassRules(t *testing.T) {
 		t.Fatalf("lease after ship: %v", g.LabelNames(2))
 	}
 }
+
+// gc keeps the worktree of a closed story that still holds work and says how
+// to free it: uncommitted changes, then commits that are not on origin.
+func TestGCKeepsBusyWorktree(t *testing.T) {
+	g, env, opts, dir, _, _, _ := thinFixture(t)
+	g.Mu.Lock()
+	g.Issues[2].State = "closed"
+	g.Mu.Unlock()
+	wt := BuildWorktree(dir, 2)
+	_ = os.WriteFile(filepath.Join(wt, "draft.txt"), []byte("wip\n"), 0o644)
+	if code, out, errOut := run(t, env, opts, "gc", "--repo", "o/r"); code != 0 ||
+		!strings.Contains(out, "worktree #2 kept: the story is closed, but it has uncommitted changes; commit or discard them, then run `aayu gc` again") {
+		t.Fatalf("gc with uncommitted changes: %d %s %s", code, out, errOut)
+	}
+	git(t, wt, "add", "draft.txt")
+	git(t, wt, "commit", "--quiet", "-m", "wip")
+	if code, out, errOut := run(t, env, opts, "gc", "--repo", "o/r"); code != 0 ||
+		!strings.Contains(out, "has 1 commit(s) not on origin; push them or delete the branch, then run `aayu gc` again") {
+		t.Fatalf("gc with unpushed commits: %d %s %s", code, out, errOut)
+	}
+	if _, err := os.Stat(wt); err != nil {
+		t.Fatalf("a busy worktree was removed: %v", err)
+	}
+}
