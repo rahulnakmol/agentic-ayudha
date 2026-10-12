@@ -92,7 +92,8 @@ type LFS struct {
 
 // Proof is [proof].
 type Proof struct {
-	Media         string `koanf:"media" jsonschema_description:"Private bucket for proof media; required on public repos (V3)."`
+	Media         string `koanf:"media" jsonschema_description:"Private bucket for proof media; required on public repos (V3): s3://bucket[/prefix][?region=..&endpoint=..] or r2://<account>/bucket[/prefix]."`
+	MediaSecret   string `koanf:"media_secret" jsonschema_description:"Name of the secret holding the bucket's ACCESS_KEY_ID:SECRET_ACCESS_KEY; empty means proof-media."`
 	RetentionDays int    `koanf:"retention_days" jsonschema:"minimum=0" jsonschema_description:"Days to keep proof media before purge; 0 keeps forever."`
 }
 

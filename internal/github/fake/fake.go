@@ -61,6 +61,44 @@ type Issue struct {
 	Parent    int        `json:"-"`
 }
 
+// PR is a pull request; it shares its number with an Issue, as on GitHub.
+type PR struct {
+	Number int     `json:"number"`
+	Title  string  `json:"title"`
+	Body   string  `json:"body"`
+	State  string  `json:"state"`
+	Draft  bool    `json:"draft"`
+	Merged bool    `json:"merged"`
+	User   Account `json:"user"`
+	Head   Branch  `json:"head"`
+	Base   Branch  `json:"base"`
+	// MergeCommitSHA is set when the PR merges through the fake.
+	MergeCommitSHA string   `json:"merge_commit_sha,omitempty"`
+	Reviews        []Review `json:"-"`
+	Files          []string `json:"-"`
+	Diff           string   `json:"-"`
+}
+
+// Account is a user or bot.
+type Account struct {
+	Login string `json:"login"`
+	Type  string `json:"type"`
+}
+
+// Branch is a PR head or base.
+type Branch struct {
+	Ref string `json:"ref"`
+	SHA string `json:"sha"`
+}
+
+// Review is a PR review.
+type Review struct {
+	ID       int64   `json:"id"`
+	User     Account `json:"user"`
+	State    string  `json:"state"`
+	CommitID string  `json:"commit_id"`
+}
+
 // Request is one recorded request.
 type Request struct {
 	Method, Path string
@@ -83,6 +121,7 @@ type GitHub struct {
 	Trees      map[string][]map[string]any // sha -> entries
 	Commits    map[string]map[string]any   // sha -> commit
 	Issues     map[int]*Issue
+	Pulls      map[int]*PR
 	Requests   []Request
 	Projects   []map[string]any  // Projects v2: id, title
 	Secrets    map[string]string // Actions secret name -> encrypted value
@@ -102,7 +141,7 @@ type GitHub struct {
 func New(t testing.TB, repo, ownerType string) *GitHub {
 	owner, name, _ := strings.Cut(repo, "/")
 	g := &GitHub{Owner: owner, OwnerType: ownerType, Repo: name, Default: "dev", Viewer: owner,
-		Refs: map[string]string{}, Trees: map[string][]map[string]any{}, Commits: map[string]map[string]any{}, Issues: map[int]*Issue{}, seq: 1000}
+		Refs: map[string]string{}, Trees: map[string][]map[string]any{}, Commits: map[string]map[string]any{}, Issues: map[int]*Issue{}, Pulls: map[int]*PR{}, seq: 1000}
 	g.Server = httptest.NewServer(http.HandlerFunc(g.serve))
 	t.Cleanup(g.Server.Close)
 	return g
@@ -156,6 +195,17 @@ func (g *GitHub) label(name string) Label {
 	return Label{ID: g.seq, Name: name}
 }
 
+// AddPR adds an open pull request from head (at headSHA) into base, authored by author.
+func (g *GitHub) AddPR(title, body, author, head, headSHA, base string) *PR {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+	is := g.addIssue(title, body, nil)
+	pr := &PR{Number: is.Number, Title: title, Body: body, State: "open", User: Account{Login: author, Type: "User"},
+		Head: Branch{Ref: head, SHA: headSHA}, Base: Branch{Ref: base, SHA: strings.Repeat("b", 40)}}
+	g.Pulls[is.Number] = pr
+	return pr
+}
+
 // LabelNames returns an issue's label names.
 func (g *GitHub) LabelNames(n int) []string {
 	g.Mu.Lock()
@@ -175,6 +225,7 @@ func (g *GitHub) nextSHA(v any) string {
 }
 
 var (
+	rePull     = regexp.MustCompile(`^/repos/[^/]+/[^/]+/pulls/([0-9]+)(/reviews|/files|/merge)?$`)
 	reIssue    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)$`)
 	reLabels   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/labels$`)
 	reLabel    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/labels/(.+)$`)
@@ -443,6 +494,45 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			labels = append(labels, l.(string))
 		}
 		reply(201, g.addIssue(str("title"), str("body"), labels))
+	case rePull.MatchString(p):
+		sm := rePull.FindStringSubmatch(p)
+		pr := g.Pulls[atoi(sm[1])]
+		if pr == nil {
+			notFound()
+			return
+		}
+		switch {
+		case sm[2] == "" && m == "GET":
+			if r.Header.Get("Accept") == "application/vnd.github.v3.diff" {
+				w.WriteHeader(200)
+				_, _ = w.Write([]byte(pr.Diff))
+				return
+			}
+			reply(200, pr)
+		case sm[2] == "/reviews" && m == "GET":
+			out := []Review{}
+			out = append(out, pr.Reviews...)
+			reply(200, out)
+		case sm[2] == "/files" && m == "GET":
+			out := []map[string]any{}
+			for _, f := range pr.Files {
+				out = append(out, map[string]any{"filename": f, "status": "modified"})
+			}
+			reply(200, out)
+		case sm[2] == "/merge" && m == "PUT":
+			if sha, _ := body["sha"].(string); sha != "" && sha != pr.Head.SHA {
+				reply(409, map[string]any{"message": "Head branch was modified. Review and try the merge again."})
+				return
+			}
+			pr.Merged, pr.State = true, "closed"
+			pr.MergeCommitSHA = g.nextSHA(body)
+			if is := g.Issues[pr.Number]; is != nil {
+				is.State = "closed"
+			}
+			reply(200, map[string]any{"merged": true, "sha": pr.MergeCommitSHA, "message": "Pull Request successfully merged"})
+		default:
+			notFound()
+		}
 	case reIssue.MatchString(p):
 		is := g.Issues[atoi(reIssue.FindStringSubmatch(p)[1])]
 		if is == nil {

@@ -394,6 +394,19 @@ func checkMCP(ctx context.Context, p *Probe) Result {
 // checkLedgerMedia catches a visibility change after init (V3, WP2.5): a public
 // repository whose ledger tracks proof media in Git LFS is a floor-blocking
 // failure, because LFS objects cannot be purged from GitHub.
+// checkLFSQuota: GitHub publishes no LFS quota API for personal accounts
+// (Appendix B D-1.7a), so the check says where the media go and where to look.
+func checkLFSQuota(_ context.Context, p *Probe) Result {
+	if p.Config != nil && p.Config.Config.Proof.Media != "" {
+		return Result{Status: Pass, Detail: "proof media go to the bucket " + p.Config.Config.Proof.Media + "; the ledger keeps only hashes and data artifacts"}
+	}
+	warn := 80
+	if p.Config != nil && p.Config.Config.LFS.QuotaWarnPercent > 0 {
+		warn = p.Config.Config.LFS.QuotaWarnPercent
+	}
+	return Result{Status: NA, Detail: fmt.Sprintf("LFS quota: GitHub has no quota API for this account; watch Settings > Billing > Git LFS (warn at %d %%)", warn)}
+}
+
 func checkLedgerMedia(ctx context.Context, p *Probe) Result {
 	if p.Root == "" {
 		return Result{Status: Pass, Detail: "not in a repository"}

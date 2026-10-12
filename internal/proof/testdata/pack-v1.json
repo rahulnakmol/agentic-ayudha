@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "repo": "rahulnakmol/agentic-ayudha",
+  "story": 51,
+  "pr": 97,
+  "pr_head_sha": "0123456789abcdef0123456789abcdef01234567",
+  "base_sha": "89abcdef0123456789abcdef0123456789abcdef",
+  "checkpoint": "2/2",
+  "seat": "ai-native-engineer",
+  "host": "amp",
+  "model": "claude-opus-5-5",
+  "identity": "ci",
+  "authority": {"kind": "authoritative", "workflow": ".github/workflows/aayudha-merge-gate.yml", "run_id": 18123456789},
+  "completion_goal_hash": "3f1c2d4e5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d",
+  "footprint": ["L02", "L04"],
+  "criteria": [
+    {"id": 1, "evidence": ["coverage/diff.json"]},
+    {"id": 2, "evidence": ["screens/1-empty.png", "traces/list.json"]}
+  ],
+  "artifacts": [
+    {"path": "coverage/diff.json", "kind": "metric", "sha256": "0000000000000000000000000000000000000000000000000000000000000001", "size": 412, "store": "git"},
+    {"path": "screens/1-empty.png", "kind": "screenshot", "sha256": "0000000000000000000000000000000000000000000000000000000000000002", "size": 48213, "store": "bucket",
+     "object": "aayu/proof/rahulnakmol/agentic-ayudha/51/0000000000000000000000000000000000000000000000000000000000000002",
+     "tombstone": {"purged_at": "2027-01-10T00:00:00Z", "reason": "retention: older than 90 days"}},
+    {"path": "traces/list.json", "kind": "api-trace", "sha256": "0000000000000000000000000000000000000000000000000000000000000003", "size": 2048, "store": "git"}
+  ],
+  "checks": [
+    {"floor": "coverage", "result": "pass", "value": 93.5, "threshold": 90, "tool": "aayudha diff coverage (go coverprofile)", "version": "dev", "network": "isolated"},
+    {"floor": "sast", "result": "pass", "value": 0, "threshold": 0, "tool": "semgrep", "version": "1.180.0", "network": "allowed"},
+    {"floor": "mobile", "result": "waived", "value": 0, "threshold": 0, "tool": "aayudha", "version": "dev", "detail": "skipped: mobile", "waiver": "#58"}
+  ],
+  "cost": {"tokens_in": 120394, "tokens_out": 8812, "usd": 1.42},
+  "links": {"issue": "rahulnakmol/agentic-ayudha#51", "pr": "rahulnakmol/agentic-ayudha#97", "ready_snapshot": "specs/51/ready.md", "actions": ["actions/2026-10-12/amp-01abc.jsonl"]},
+  "created_at": "2026-10-12T10:00:00Z"
+}
