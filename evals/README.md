@@ -35,7 +35,7 @@ evolve PR (an `evolve/` head branch, or a commit with the `Aayudha-Evolve:` trai
 The old run must exist and validate against its schemas, and fail another check: a missing run does not reproduce anything.
 
 ```sh
-go run ./internal/evals/cmd/eval -evolve-gate -base HEAD^1 -branch "$HEAD_REF"
+go run ./internal/evals/cmd/eval -evolve-gate -base "$BASE_SHA" -head "$HEAD_SHA" -branch "$HEAD_REF"
 ```
 
 ## Tier 2: nightly and on promotion

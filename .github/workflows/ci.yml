@@ -90,16 +90,16 @@ jobs:
         run: go build ./... && go vet ./... && go test ./...
       # WP7.7: an evolve PR (an evolve/ head branch, or a commit with the Aayudha-Evolve trailer; both change only with a
       # push, which re-runs this job) must add an eval case that reproduces its Feedback on the old skill and passes on the
-      # new one, before any skill diff (eval-first). The checkout is the PR's merge commit; its first parent is the base
-      # and its second the head, so the PR's commits are fetched to read their trailers.
+      # new one, before any skill diff (eval-first). The gate works from the PR's base and head SHAs (commits base..head,
+      # change base...head) and fetches them from origin itself, never from the checked-out test-merge commit, which
+      # GitHub can recompute while the run is going (then HEAD^1 cannot be fetched).
       - name: Eval-first gate for evolve PRs (WP7.7)
         if: github.event_name == 'pull_request'
         env:
           HEAD_REF: ${{ github.head_ref }}
-          COMMITS: ${{ github.event.pull_request.commits }}
-        run: |
-          git fetch --no-tags --quiet --deepen="$((COMMITS + 1))" origin
-          go run ./internal/evals/cmd/eval -evolve-gate -base HEAD^1 -branch "$HEAD_REF"
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: go run ./internal/evals/cmd/eval -evolve-gate -base "$BASE_SHA" -head "$HEAD_SHA" -branch "$HEAD_REF"
       - name: Build matrix and binary size budget
         run: |
           set -euo pipefail
