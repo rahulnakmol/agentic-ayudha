@@ -211,14 +211,57 @@ const (
 	ExposeNever Exposure = "never" // human-only or admin; never exposed
 )
 
+// StageID names a stage of the journey from an idea to a measured release.
+type StageID string
+
+// Journey stages, in reading order.
+const (
+	StageSetup     StageID = "setup"
+	StageShape     StageID = "shape"
+	StageBreakDown StageID = "break-down"
+	StageReady     StageID = "ready"
+	StageDesign    StageID = "design"
+	StageBuild     StageID = "build"
+	StageProve     StageID = "prove"
+	StageShip      StageID = "ship"
+	StageRelease   StageID = "release"
+	StageLearn     StageID = "learn"
+	StageExplain   StageID = "explain"
+	StageOperate   StageID = "operate"
+)
+
+// Stage is a journey stage with the title readers see. The docs site's verb
+// map groups the verbs by stage (WP8.2).
+type Stage struct {
+	ID    StageID
+	Title string
+}
+
+// Stages lists the journey stages in reading order. Every verb has exactly one.
+var Stages = []Stage{
+	{StageSetup, "Set up"},
+	{StageShape, "Shape the goal"},
+	{StageBreakDown, "Break it down"},
+	{StageReady, "Get a story Ready"},
+	{StageDesign, "Design the screens"},
+	{StageBuild, "Build it"},
+	{StageProve, "Prove it"},
+	{StageShip, "Ship it"},
+	{StageRelease, "Release it"},
+	{StageLearn, "Measure and learn"},
+	{StageExplain, "Explain it"},
+	{StageOperate, "Keep it running"},
+}
+
 // Command is a verb or a plumbing command.
 type Command struct {
 	Name     string
-	Summary  string // one line, <= 200 chars; the SKILL.md description
-	WP       string // the work package that implements the command
-	Seat     SeatID // the single Accountable seat
-	Owns     SeatID // seat that owns thresholds or policy when it differs from Seat; empty otherwise
-	Lane     LaneID // empty for plumbing
+	Summary  string  // one line, <= 200 chars; the SKILL.md description
+	WP       string  // the work package that implements the command
+	Stage    StageID // the journey stage (verbs only; empty for plumbing)
+	Seat     SeatID  // the single Accountable seat
+	Owns     SeatID  // seat that owns thresholds or policy when it differs from Seat; empty otherwise
+	Lane     LaneID  // empty for plumbing
 	Layers   Layers
 	Inputs   []Input
 	Outputs  []string
@@ -464,7 +507,7 @@ func enumIn(name string, required, positional bool, desc string, values ...strin
 // Verbs lists the 32 verbs in plan order (V7, WP0.3).
 var Verbs = []Command{
 	{
-		Name: "grill", WP: "WP5.3",
+		Name: "grill", WP: "WP5.3", Stage: StageShape,
 		Summary: "Interview a human until a work item of the given type is complete and passes validation, then write it as an issue.",
 		Seat:    ProductStrategist, Lane: LaneSpec, Layers: AllLayers(),
 		Inputs: []Input{
@@ -480,7 +523,7 @@ var Verbs = []Command{
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeRead,
 	},
 	{
-		Name: "slice", WP: "WP5.4",
+		Name: "slice", WP: "WP5.4", Stage: StageBreakDown,
 		Summary: "Split a Feature into XS-L stories with observable criteria, dependencies, and a layer footprint; close XL items as split.",
 		Seat:    ProductStrategist, Lane: LanePlan, Layers: AllLayers(),
 		Inputs: []Input{
@@ -493,7 +536,7 @@ var Verbs = []Command{
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeRead,
 	},
 	{
-		Name: "plan", WP: "WP5.4",
+		Name: "plan", WP: "WP5.4", Stage: StageBreakDown,
 		Summary: "Plan a story: one checkpoint per layer, contracts, tests, instrumentation, and rollback.",
 		Seat:    CodeArchitect, Lane: LanePlan, Layers: AllLayers(),
 		Inputs: []Input{
@@ -508,7 +551,7 @@ var Verbs = []Command{
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeRead,
 	},
 	{
-		Name: "decide", WP: "WP5.6",
+		Name: "decide", WP: "WP5.6", Stage: StageBreakDown,
 		Summary: "Record a Decision with options, evaluation, and recommendation; accept it, supersede it, or file a floor waiver.",
 		Seat:    Founder, Lane: LaneSpec, Layers: AllLayers(),
 		Inputs: []Input{
@@ -521,7 +564,7 @@ var Verbs = []Command{
 		Surfaces: cliSkill, Identity: IdentityHuman, Mode: ModeHost, Exposure: ExposeNever,
 	},
 	{
-		Name: "triage", WP: "WP2.9",
+		Name: "triage", WP: "WP2.9", Stage: StageOperate,
 		Summary: "Classify intake issues as Feedback, Bug, or Incident by label only; never edits bodies or touches non-intake issues.",
 		Seat:    ProductStrategist, Lane: LaneChore, Layers: NoLayers(),
 		Inputs: []Input{
@@ -533,7 +576,7 @@ var Verbs = []Command{
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHybrid, ModeNote: "direct in Actions", Exposure: ExposeWrite,
 	},
 	{
-		Name: "build", WP: "WP5.5",
+		Name: "build", WP: "WP5.5", Stage: StageBuild,
 		Summary: "Build a Ready story or bug in a worktree with checkpoint commits per layer, verify each checkpoint, and open a PR.",
 		Seat:    AINativeEngineer, Lane: LaneBuild, Layers: AllLayers(),
 		Inputs: []Input{
@@ -545,7 +588,7 @@ var Verbs = []Command{
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeWrite,
 	},
 	{
-		Name: "verify", WP: "WP4.3",
+		Name: "verify", WP: "WP4.3", Stage: StageProve,
 		Summary: "Run the deterministic floors (coverage, SAST, secrets, deps, a11y, perf) and record results in a proof pack.",
 		Seat:    AINativeEngineer, Owns: QualityArchitect, Lane: LaneChore, Layers: AllLayers(),
 		Inputs: []Input{
@@ -557,7 +600,7 @@ var Verbs = []Command{
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeNone, Exposure: ExposeWrite,
 	},
 	{
-		Name: "inspect", WP: "WP4.8",
+		Name: "inspect", WP: "WP4.8", Stage: StageProve,
 		Summary: "Adversarially review a PR against its plan, pack, and criteria; return a structured disposition: merge, fix, or rebuild.",
 		Seat:    EngineeringManager, Lane: LaneReview, Layers: AllLayers(),
 		Inputs:   []Input{pos("pr", TypePR, "Pull request to inspect.")},
@@ -566,7 +609,7 @@ var Verbs = []Command{
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeDirect, Exposure: ExposeWrite,
 	},
 	{
-		Name: "ship", WP: "WP5.5",
+		Name: "ship", WP: "WP5.5", Stage: StageShip,
 		Summary: "Squash-merge a PR after a green merge gate and a human pass, write the Complete section, and clean up.",
 		Seat:    EngineeringManager, Lane: LaneChore, Layers: AllLayers(),
 		Inputs: []Input{
@@ -578,7 +621,7 @@ var Verbs = []Command{
 		Surfaces: cliSkill, Identity: IdentityHuman, Mode: ModeNone, Exposure: ExposeNever,
 	},
 	{
-		Name: "release", WP: "WP7.8",
+		Name: "release", WP: "WP7.8", Stage: StageRelease,
 		Summary: "Promote a Release along dev, rolling, main; stamp included stories released and trigger measurement.",
 		Seat:    DevOps, Lane: LaneChore, Layers: OnlyLayers(L09),
 		Inputs: []Input{
@@ -590,7 +633,7 @@ var Verbs = []Command{
 		Surfaces: cliSkill, Identity: IdentityHuman, Mode: ModeNone, Exposure: ExposeNever,
 	},
 	{
-		Name: "proof", WP: "WP4.2",
+		Name: "proof", WP: "WP4.2", Stage: StageProve,
 		Summary: "Push, get, verify, list, or purge proof packs on the ledger branch.",
 		Seat:    QualityArchitect, Lane: LaneChore, Layers: AllLayers(),
 		Inputs: []Input{
@@ -602,7 +645,7 @@ var Verbs = []Command{
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeNone, Exposure: ExposeRead,
 	},
 	{
-		Name: "ready", WP: "WP2.7",
+		Name: "ready", WP: "WP2.7", Stage: StageReady,
 		Summary: "Validate a work item for Ready, label it status:ready, and post the Ready snapshot; --check is read-only.",
 		Seat:    ProductStrategist, Lane: LaneChore, Layers: AllLayers(),
 		Inputs: []Input{
@@ -615,7 +658,7 @@ var Verbs = []Command{
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeNone, Exposure: ExposeRead,
 	},
 	{
-		Name: "research", WP: "WP6.5",
+		Name: "research", WP: "WP6.5", Stage: StageDesign,
 		Summary: "Gather pinned design references (URLs and IDs only) and user research for a Feature.",
 		Seat:    UXResearcher, Lane: LaneSpec, Layers: OnlyLayers(L01),
 		Inputs: []Input{
@@ -629,7 +672,7 @@ var Verbs = []Command{
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeRead,
 	},
 	{
-		Name: "wireframe", WP: "WP6.5",
+		Name: "wireframe", WP: "WP6.5", Stage: StageDesign,
 		Summary: "Produce wireframes for a Feature's states from its research and criteria.",
 		Seat:    UXResearcher, Lane: LaneBuild, Layers: OnlyLayers(L01),
 		Inputs: []Input{
@@ -641,7 +684,7 @@ var Verbs = []Command{
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeWrite,
 	},
 	{
-		Name: "mockup", WP: "WP6.5",
+		Name: "mockup", WP: "WP6.5", Stage: StageDesign,
 		Summary: "Produce design-system mockups for a Feature from its wireframes.",
 		Seat:    UXResearcher, Lane: LaneBuild, Layers: OnlyLayers(L01),
 		Inputs: []Input{
@@ -653,7 +696,7 @@ var Verbs = []Command{
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeWrite,
 	},
 	{
-		Name: "prototype", WP: "WP6.5",
+		Name: "prototype", WP: "WP6.5", Stage: StageDesign,
 		Summary: "Build a flagged, working prototype of a Feature with Code Connect mapping and a Figma screenshot diff.",
 		Seat:    UXResearcher, Lane: LaneBuild, Layers: OnlyLayers(L01, L02),
 		Inputs: []Input{
@@ -666,7 +709,7 @@ var Verbs = []Command{
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeWrite,
 	},
 	{
-		Name: "review", WP: "WP6.6",
+		Name: "review", WP: "WP6.6", Stage: StageDesign,
 		Summary: "Critique UI with a model lane and a deterministic lane; dispositions recapture, rebuild, fix, or ship.",
 		Seat:    UXResearcher, Lane: LaneUIReview, Layers: OnlyLayers(L01),
 		Inputs: []Input{
@@ -678,7 +721,7 @@ var Verbs = []Command{
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHybrid, ModeNote: "lane A direct", Exposure: ExposeWrite,
 	},
 	{
-		Name: "polish", WP: "WP6.6",
+		Name: "polish", WP: "WP6.6", Stage: StageDesign,
 		Summary: "Apply a review critique to a PR's UI and re-run review.",
 		Seat:    UXResearcher, Lane: LaneBuild, Layers: OnlyLayers(L01),
 		Inputs:   []Input{pos("pr", TypePR, "Pull request to polish.")},
@@ -687,7 +730,7 @@ var Verbs = []Command{
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeWrite,
 	},
 	{
-		Name: "baseline", WP: "WP6.6",
+		Name: "baseline", WP: "WP6.6", Stage: StageDesign,
 		Summary: "Capture visual baselines for a commit SHA.",
 		Seat:    UXResearcher, Lane: LaneChore, Layers: OnlyLayers(L01),
 		Inputs:   []Input{flag("sha", TypeString, "Commit to baseline; defaults to HEAD.")},
@@ -696,7 +739,7 @@ var Verbs = []Command{
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeNone, Exposure: ExposeWrite,
 	},
 	{
-		Name: "experiment", WP: "WP6.7",
+		Name: "experiment", WP: "WP6.7", Stage: StageLearn,
 		Summary: "Design an experiment for a Feature: hypothesis, metric, flag, and minimum sample size.",
 		Seat:    RevenueArchitect, Lane: LanePlan, Layers: OnlyLayers(L03, L08),
 		Inputs: []Input{
@@ -715,7 +758,7 @@ var Verbs = []Command{
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeWrite,
 	},
 	{
-		Name: "readout", WP: "WP6.7",
+		Name: "readout", WP: "WP6.7", Stage: StageLearn,
 		Summary: "Read out an experiment's lift once it reaches minimum sample and write the Result.",
 		Seat:    RevenueArchitect, Lane: LaneSpec, Layers: OnlyLayers(L08),
 		Inputs: []Input{
@@ -729,7 +772,7 @@ var Verbs = []Command{
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeWrite,
 	},
 	{
-		Name: "respond", WP: "WP5.6",
+		Name: "respond", WP: "WP5.6", Stage: StageOperate,
 		Summary: "Respond to an incident: propose an ops catalog action, execute it only through human approval, keep the timeline.",
 		Seat:    AINativeEngineer, Lane: LaneBuild, Layers: OnlyLayers(L07, L09),
 		Inputs: []Input{
@@ -743,7 +786,7 @@ var Verbs = []Command{
 		Surfaces: cliSkill, Identity: IdentityHuman, Mode: ModeHost, Exposure: ExposeNever,
 	},
 	{
-		Name: "status", WP: "WP2.8",
+		Name: "status", WP: "WP2.8", Stage: StageExplain,
 		Summary: "Roll up status, health, risk, proof coverage, decisions, and cost per Goal, Initiative, and Feature.",
 		Seat:    EngineeringManager, Lane: LaneChore, Layers: AllLayers(),
 		Inputs: []Input{
@@ -757,7 +800,7 @@ var Verbs = []Command{
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeNone, Exposure: ExposeRead,
 	},
 	{
-		Name: "audit", WP: "WP7.6",
+		Name: "audit", WP: "WP7.6", Stage: StageExplain,
 		Summary: "Audit floors, proof coverage, waivers, decision SLAs, autonomy exceptions, and unlogged writes; write a reproducible report.",
 		Seat:    Auditor, Lane: LaneReview, Layers: AllLayers(),
 		Inputs: []Input{
@@ -772,7 +815,7 @@ var Verbs = []Command{
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeNone, Exposure: ExposeWrite,
 	},
 	{
-		Name: "retro", WP: "WP7.6",
+		Name: "retro", WP: "WP7.6", Stage: StageLearn,
 		Summary: "Compare estimates with observed delivery, corrections, floor misses, and cost; file findings as Feedback issues.",
 		Seat:    EngineeringManager, Lane: LaneSpec, Layers: AllLayers(),
 		Inputs: []Input{
@@ -787,7 +830,7 @@ var Verbs = []Command{
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeWrite,
 	},
 	{
-		Name: "measure", WP: "WP7.2",
+		Name: "measure", WP: "WP7.2", Stage: StageLearn,
 		Summary: "Measure a Goal or Initiative against its baseline from analytics exports or live cloud pulls and write the Result.",
 		Seat:    RevenueArchitect, Lane: LaneChore, Layers: OnlyLayers(L08),
 		Inputs: []Input{
@@ -807,7 +850,7 @@ var Verbs = []Command{
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeNone, Exposure: ExposeWrite,
 	},
 	{
-		Name: "evolve", WP: "WP7.7",
+		Name: "evolve", WP: "WP7.7", Stage: StageLearn,
 		Summary: "Turn accepted retro Feedback into a failing eval case, then a skill diff that passes it, opened as an agent-authored PR.",
 		Seat:    AINativeEngineer, Lane: LaneBuild, Layers: OnlyLayers(L05),
 		Inputs: []Input{
@@ -819,7 +862,7 @@ var Verbs = []Command{
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeWrite,
 	},
 	{
-		Name: "brief", WP: "WP7.3",
+		Name: "brief", WP: "WP7.3", Stage: StageExplain,
 		Summary: "Explain work to an audience in a chosen register and purpose as a grounded, accessible HTML brief.",
 		Seat:    Mentalist, Lane: LaneSpec, Layers: AllLayers(),
 		Inputs: []Input{
@@ -833,7 +876,7 @@ var Verbs = []Command{
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHybrid, ModeNote: "adversarial pass direct", Exposure: ExposeRead,
 	},
 	{
-		Name: "tell", WP: "WP7.5",
+		Name: "tell", WP: "WP7.5", Stage: StageExplain,
 		Summary: "Write docs, guides, changelogs, release notes, launch copy, or brand copy that cite only proven Features; publish is human-only.",
 		Seat:    Marketer, Lane: LaneSpec, Layers: OnlyLayers(L01),
 		Inputs: []Input{
@@ -849,7 +892,7 @@ var Verbs = []Command{
 		Surfaces: cliSkillMCP, Identity: IdentityHuman, Mode: ModeHost, ModeNote: "publish requires the human identity", Exposure: ExposeWrite,
 	},
 	{
-		Name: "init", WP: "WP2.5",
+		Name: "init", WP: "WP2.5", Stage: StageSetup,
 		Summary: "Set up a product repo: labels, issue types, forms, config, ledger branch, and optionally projects, gates, identity, integrations.",
 		Seat:    Founder, Lane: LaneChore, Layers: OnlyLayers(L09),
 		Inputs: []Input{
@@ -864,7 +907,7 @@ var Verbs = []Command{
 		Surfaces: cliOnly, Identity: IdentityHuman, Mode: ModeNone, Exposure: ExposeNever,
 	},
 	{
-		Name: "install", WP: "WP3.2",
+		Name: "install", WP: "WP3.2", Stage: StageSetup,
 		Summary: "Install skill copies, lock.toml, MCP registration, and hooks for each host; shows a diff unless --apply.",
 		Seat:    DevOps, Lane: LaneChore, Layers: OnlyLayers(L09),
 		Inputs: []Input{
@@ -877,7 +920,7 @@ var Verbs = []Command{
 		Surfaces: cliOnly, Identity: IdentityHuman, Mode: ModeNone, Exposure: ExposeNever,
 	},
 	{
-		Name: "doctor", WP: "WP1.7",
+		Name: "doctor", WP: "WP1.7", Stage: StageSetup,
 		Summary: "Check tools, tokens, identity, config, host installs, and existing CI; --fix re-syncs copies after showing a diff.",
 		Seat:    DevOps, Lane: LaneChore, Layers: OnlyLayers(L09),
 		Inputs: []Input{

@@ -46,6 +46,29 @@ func TestRegistry(t *testing.T) {
 		{"command names unique across verbs and plumbing", func() error {
 			return unique(names(all))
 		}},
+		{"every verb in one journey stage, every stage used, plumbing in none", func() error {
+			used := map[StageID]bool{}
+			for _, s := range Stages {
+				used[s.ID] = false
+			}
+			for _, c := range Verbs {
+				if _, ok := used[c.Stage]; !ok {
+					return fmt.Errorf("verb %s: stage %q is not in Stages", c.Name, c.Stage)
+				}
+				used[c.Stage] = true
+			}
+			for id, ok := range used {
+				if !ok {
+					return fmt.Errorf("stage %s has no verb", id)
+				}
+			}
+			for _, c := range Plumbing {
+				if c.Stage != "" {
+					return fmt.Errorf("plumbing %s has a stage", c.Name)
+				}
+			}
+			return nil
+		}},
 		{"12 seats with unique IDs", func() error {
 			ids := make([]string, len(Seats))
 			for i, s := range Seats {

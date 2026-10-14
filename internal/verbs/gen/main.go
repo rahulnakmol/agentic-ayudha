@@ -4,6 +4,7 @@
 //
 // Outputs:
 //   - README.md: only the regions between the BEGIN/END GENERATED markers
+//   - docs/guide/when-to-use-what.md: only the verb-map region (the verbs by journey stage)
 //   - LAYERS.md and docs/RACI.md: whole files
 //   - seats/<seat>/CHARTER.md: only the region between the BEGIN/END GENERATED: raci markers
 //   - AGENTS.md: only the aayudha:raci section (internal/hosts.RenderAgentsMD)
@@ -51,7 +52,7 @@ func run() error {
 	if err := verbs.LintRACI(); err != nil {
 		return fmt.Errorf("registry lint (WP5.1):\n%w", err)
 	}
-	steps := []func() error{genReadme, genLayers, genRACI, genCharters, genAgents, genSkills, genSchemas, genConfigSchema}
+	steps := []func() error{genReadme, genVerbMap, genLayers, genRACI, genCharters, genAgents, genSkills, genSchemas, genConfigSchema}
 	for _, step := range steps {
 		if err := step(); err != nil {
 			return err
@@ -131,6 +132,54 @@ func replaceRegion(path, s, name, body string) (string, error) {
 		return "", fmt.Errorf("%s: need exactly one %q followed by one %q", path, begin, end)
 	}
 	return s[:i+len(begin)] + "\n\n" + body + "\n" + s[j:], nil
+}
+
+// ---- docs/guide/when-to-use-what.md ----------------------------------------
+
+// stagePages are the guide pages that tell each journey stage (docs/guide).
+var stagePages = map[verbs.StageID]string{
+	verbs.StageSetup: "start.md", verbs.StageShape: "journey-1-shape.md", verbs.StageBreakDown: "journey-2-break-down.md",
+	verbs.StageReady: "journey-3-ready.md", verbs.StageDesign: "journey-4-build.md#if-your-story-has-a-screen",
+	verbs.StageBuild: "journey-4-build.md", verbs.StageProve: "journey-5-prove.md", verbs.StageShip: "journey-6-ship.md",
+	verbs.StageRelease: "journey-7-release.md", verbs.StageLearn: "journey-8-learn.md", verbs.StageExplain: "journey-9-explain.md",
+	verbs.StageOperate: "when-to-use-what.md#something-broke-in-production",
+}
+
+// genVerbMap writes every verb under its journey stage, linked to its skill.
+func genVerbMap() error {
+	const path = "docs/guide/when-to-use-what.md"
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	var m strings.Builder
+	fmt.Fprintf(&m, "| Stage | Verb | What it does |\n|---|---|---|\n")
+	for _, st := range verbs.Stages {
+		page, ok := stagePages[st.ID]
+		if !ok {
+			return fmt.Errorf("%s: stage %s has no guide page", path, st.ID)
+		}
+		first := true
+		for _, c := range verbs.Verbs {
+			if c.Stage != st.ID {
+				continue
+			}
+			stage := ""
+			if first {
+				stage, first = fmt.Sprintf("[%s](%s)", st.Title, page), false
+			}
+			name := code(c.Name)
+			if c.Has(verbs.SurfaceSkill) {
+				name = fmt.Sprintf("[%s](../../%s/%s/SKILL.md)", name, skillsDir, c.Name)
+			}
+			fmt.Fprintf(&m, "| %s | %s | %s |\n", stage, name, cell(c.Summary))
+		}
+	}
+	s, err := replaceRegion(path, string(b), "verb-map", m.String())
+	if err != nil {
+		return err
+	}
+	return writeFile(path, []byte(s))
 }
 
 // ---- LAYERS.md -------------------------------------------------------------
