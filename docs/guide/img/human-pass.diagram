@@ -1,0 +1,11 @@
+# The human pass and solo mode (docs/guide/concepts-human-pass.md).
+title: A person always signs off; alone, you record that you did it alone
+direction: down
+gate: Merge gate green, inspect says merge
+pass: A second person approves: the human pass
+solo: Only you: a recorded solo-mode bypass
+ship: ship merges and writes the record
+gate -> pass: team
+gate -> solo: solo
+pass -> ship
+solo -> ship

@@ -1,0 +1,12 @@
+# Layers and footprints (docs/guide/concepts-layers.md).
+title: Story 131 touched two of the nine layers, each with its own owner
+direction: down
+story: Story 131: answers quote the best plan passage
+l04: L04 Domain and policy: refuse or refer
+l05: L05 Intelligence: find the best passage
+qa: Owner: Quality Architect
+eng: Owner: AI Native Engineer
+story -> l04: policy/
+story -> l05: answer/
+l04 -> qa
+l05 -> eng

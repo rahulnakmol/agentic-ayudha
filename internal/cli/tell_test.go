@@ -271,6 +271,29 @@ func TestTellDocsSite(t *testing.T) {
 		t.Errorf("a page without a source in the checkout was built: %v", err)
 	}
 
+	// With a guide, its README is the home page, README.md the overview, and
+	// the guide's images are served from the site.
+	_ = os.MkdirAll(filepath.Join(dir, "docs", "guide", "img"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "docs", "guide", "README.md"), []byte("# Welcome\n\n![Nine steps](img/journey.svg)\n\nRead the [overview](../../README.md).\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "docs", "guide", "img", "journey.svg"), []byte("<svg/>"), 0o644)
+	guided := filepath.Join(t.TempDir(), "guided")
+	if code, _, errOut := tellRun(t, env, opts, "docs", "--site", guided); code != 0 {
+		t.Fatalf("guided site: %d %s", code, errOut)
+	}
+	for file, want := range map[string]string{
+		"index.html":                 `<img src="docs/guide/img/journey.svg" alt="Nine steps">`,
+		"overview.html":              `<a href="constraints.html">CONSTRAINTS.md</a>`,
+		"docs/guide/img/journey.svg": `<svg/>`,
+		"skills/grill.html":          `<a href="../overview.html">Project overview</a>`,
+	} {
+		if b, err := os.ReadFile(filepath.Join(guided, filepath.FromSlash(file))); err != nil || !strings.Contains(string(b), want) {
+			t.Errorf("guided %s lacks %s (%v)", file, want, err)
+		}
+	}
+	if b, _ := os.ReadFile(filepath.Join(guided, "index.html")); !strings.Contains(string(b), `<a href="overview.html">overview</a>`) {
+		t.Errorf("the guide home does not link the overview:\n%s", b)
+	}
+
 	readme("# r\n\nBulk upload is next (#" + strconv.Itoa(unproven) + ").\n")
 	refused := filepath.Join(t.TempDir(), "refused")
 	code, out, _ := run(t, env, opts, "tell", "docs", "--repo", "o/r", "--site", refused)

@@ -237,7 +237,11 @@ func (e *Env) tellSite(ctx context.Context, rep *tellReport, root, repo, dir str
 	if err != nil {
 		return err
 	}
-	s := tell.Site{Repo: repo, Ref: ref, Date: date, Proven: proven, Brand: rep.Brand, UTM: rep.UTM, Pages: pages}
+	media, err := tell.SiteMedia(root, pages)
+	if err != nil {
+		return err
+	}
+	s := tell.Site{Repo: repo, Ref: ref, Date: date, Proven: proven, Brand: rep.Brand, UTM: rep.UTM, Pages: pages, Media: media}
 	files, cited, probs, err := s.Build()
 	if err != nil {
 		return err

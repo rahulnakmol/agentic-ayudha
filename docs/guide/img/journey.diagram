@@ -1,0 +1,21 @@
+# The journey on the docs site (docs/guide/journey.md). Rendered to journey.svg by go generate.
+title: The journey from an idea to a measured release
+direction: down
+shape: 1. Shape the goal: grill goal
+breakdown: 2. Break it down: slice, plan
+ready: 3. Get a story Ready: grill story, ready
+build: 4. Build it: build
+prove: 5. Prove it: verify, inspect
+ship: 6. Ship it: ship
+release: 7. Release it: release
+learn: 8. Measure and learn: measure, retro
+explain: 9. Explain it: brief, tell
+shape -> breakdown
+breakdown -> ready
+ready -> build: you say Ready
+build -> prove
+prove -> ship: you give the pass
+ship -> release
+release -> learn
+learn -> explain
+learn -> shape: the next goal
