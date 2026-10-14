@@ -1,0 +1,12 @@
+# Proof packs (docs/guide/concepts-proof.md).
+title: A proof pack ties every promise in a story to evidence that CI collected
+direction: down
+criteria: The story's promises: numbered criteria
+pr: The pull request's head commit
+gate: Merge gate in CI runs the checks again
+pack: Proof pack: evidence for each criterion
+ship: ship reads the pack before it merges
+criteria -> gate
+pr -> gate
+gate -> pack
+pack -> ship

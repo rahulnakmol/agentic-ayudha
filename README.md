@@ -8,6 +8,8 @@ Status: **pre-0.1**. There is no `v*` release yet; v0.1.0 is the first. The buil
 [docs/BUILD-PLAN.md](docs/BUILD-PLAN.md); it is the source of truth for scope and sequencing.
 
 Documentation: <https://rahulnakmol.github.io/agentic-ayudha/>, built from `dev` by `aayu tell docs --site` (WP8.2).
+New to aayudha? The site's guide ([docs/guide](docs/guide/README.md)) walks the journey from an idea to a measured
+release, with a real example.
 
 ## Install
 
@@ -15,6 +17,10 @@ Documentation: <https://rahulnakmol.github.io/agentic-ayudha/>, built from `dev`
 curl -fsSL https://raw.githubusercontent.com/rahulnakmol/agentic-ayudha/main/install.sh | sh
 aayu doctor
 ```
+
+Before v0.1.0 is released that line fails with a 404; install the latest rolling snapshot instead with
+`go install github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@rolling-2026-10-12.4` (Go 1.25 or newer; it installs
+`aayudha`, so add `alias aayu=aayudha`).
 
 `install.sh` installs only a signed `v*` release: it checks the cosign signature of `checksums.txt` against this
 repository's `release.yml` workflow identity, then the archive's SHA-256. It runs on macOS, Linux, and Windows (Git

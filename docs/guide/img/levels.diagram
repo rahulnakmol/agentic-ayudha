@@ -1,0 +1,8 @@
+# Adoption levels (docs/guide/adopt.md).
+title: Three levels of adoption, and each one is a good place to stop
+direction: down
+l1: Level 1: clear work items
+l2: Level 2: proof and the merge gate
+l3: Level 3: autonomy, loops, and integrations
+l1 -> l2: add the gates
+l2 -> l3: add the bot App

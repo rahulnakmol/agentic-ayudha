@@ -24,6 +24,11 @@ If either check fails, it installs nothing and exits non-zero. The binary goes t
 `AAYU_INSTALL_DIR` to change it) with an `aayu` link beside it; add that directory to your `PATH` if the script
 says so. `AAYU_VERSION=v0.1.0` pins a release; the default is the latest.
 
+Before the first `v*` release exists, the line above fails with a 404. Until then, install the latest rolling
+snapshot with Go 1.25 or newer: `go install github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@rolling-2026-10-12.4`.
+It installs `aayudha` only; add `alias aayu=aayudha` for the short name. It is not signature-checked like
+`install.sh`.
+
 ### Windows
 
 In Git Bash, run the same `install.sh` line; it installs `aayudha.exe` and `aayu.exe`. In PowerShell, use
@@ -69,7 +74,7 @@ Skill copies are real files, never symlinks, recorded with their hashes in `.aay
 
 Each host gets the same skills, the `aayu mcp` server, and hooks that run `aayu hook <name>` and nothing else.
 
-| | Amp | Cursor | Claude Code |
+| What | Amp | Cursor | Claude Code |
 |---|---|---|---|
 | Skills | `.agents/skills/<verb>/` | `.agents/skills/<verb>/` | `.claude/skills/<verb>/` |
 | MCP server | `amp.mcpServers` in `~/.config/amp/settings.json` (a home-directory edit, confirmed separately) | `.cursor/mcp.json` | `.mcp.json`, enabled in `.claude/settings.json` |

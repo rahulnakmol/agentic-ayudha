@@ -1,0 +1,108 @@
+# Brand written by `aayu grill brand` (WP5.3). Every pair is checked against WCAG 2.2 AA.
+version: 1
+name: aayudha docs
+voice:
+  tone:
+    - warm
+    - direct
+    - encouraging
+    - plain
+  avoid:
+    - revolutionary
+    - game-changing
+    - seamless
+    - seamlessly
+    - world-class
+    - best-in-class
+    - cutting-edge
+    - blazing
+    - effortless
+    - effortlessly
+    - magical
+    - guaranteed
+    - synergy
+    - exclamation marks
+    - jargon without an explanation the first time it appears
+    - internal plan references (work package numbers, Appendix B rows) outside the reference pages
+palette:
+  accent: '#1f5bd1'
+  done: '#fdf6e3'
+  done-edge: '#9a6700'
+  here: '#eef3fd'
+  ink: '#1d2330'
+  muted: '#535b6b'
+  panel: '#f5f6f8'
+  paper: '#ffffff'
+  setup: '#fdf0ec'
+  setup-edge: '#b4441d'
+  story: '#f3f0fa'
+  story-edge: '#6941c6'
+  tip: '#edf7ee'
+  tip-edge: '#2e7d32'
+pairs:
+  - fg: ink
+    bg: paper
+    use: text
+  - fg: muted
+    bg: paper
+    use: text
+  - fg: accent
+    bg: paper
+    use: text
+  - fg: paper
+    bg: ink
+    use: text
+  - fg: ink
+    bg: panel
+    use: text
+  - fg: accent
+    bg: panel
+    use: text
+  - fg: ink
+    bg: here
+    use: text
+  - fg: accent
+    bg: here
+    use: text
+  - fg: accent
+    bg: here
+    use: ui
+  - fg: ink
+    bg: tip
+    use: text
+  - fg: accent
+    bg: tip
+    use: text
+  - fg: tip-edge
+    bg: tip
+    use: ui
+  - fg: ink
+    bg: done
+    use: text
+  - fg: accent
+    bg: done
+    use: text
+  - fg: done-edge
+    bg: done
+    use: ui
+  - fg: ink
+    bg: setup
+    use: text
+  - fg: accent
+    bg: setup
+    use: text
+  - fg: setup-edge
+    bg: setup
+    use: ui
+  - fg: ink
+    bg: story
+    use: text
+  - fg: accent
+    bg: story
+    use: text
+  - fg: story-edge
+    bg: story
+    use: ui
+  - fg: accent
+    bg: paper
+    use: ui
