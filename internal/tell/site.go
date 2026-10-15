@@ -56,16 +56,31 @@ var sitePages = []SitePage{
 	{Out: "start.html", Nav: "Your first hour", Group: "Start here", Source: "docs/guide/start.md"},
 	{Out: "when-to-use-what.html", Nav: "When to use what", Group: "Start here", Source: "docs/guide/when-to-use-what.md"},
 	{Out: "adopt.html", Nav: "Adopt at your own pace", Group: "Start here", Source: "docs/guide/adopt.md"},
-	{Out: "journey.html", Nav: "The journey at a glance", Group: "The journey", Source: "docs/guide/journey.md"},
-	{Out: "journey-1-shape.html", Nav: "1. Shape the goal", Group: "The journey", Source: "docs/guide/journey-1-shape.md"},
-	{Out: "journey-2-break-down.html", Nav: "2. Break it down", Group: "The journey", Source: "docs/guide/journey-2-break-down.md"},
-	{Out: "journey-3-ready.html", Nav: "3. Get a story Ready", Group: "The journey", Source: "docs/guide/journey-3-ready.md"},
-	{Out: "journey-4-build.html", Nav: "4. Build it", Group: "The journey", Source: "docs/guide/journey-4-build.md"},
-	{Out: "journey-5-prove.html", Nav: "5. Prove it", Group: "The journey", Source: "docs/guide/journey-5-prove.md"},
-	{Out: "journey-6-ship.html", Nav: "6. Ship it", Group: "The journey", Source: "docs/guide/journey-6-ship.md"},
-	{Out: "journey-7-release.html", Nav: "7. Release it", Group: "The journey", Source: "docs/guide/journey-7-release.md"},
-	{Out: "journey-8-learn.html", Nav: "8. Measure and learn", Group: "The journey", Source: "docs/guide/journey-8-learn.md"},
-	{Out: "journey-9-explain.html", Nav: "9. Explain it", Group: "The journey", Source: "docs/guide/journey-9-explain.md"},
+	{Out: "journey.html", Nav: "Prologue: one Monday", Group: "The story", Source: "docs/guide/journey.md"},
+	{Out: "journey-1-shape.html", Nav: "1. The goal", Group: "The story", Source: "docs/guide/journey-1-shape.md"},
+	{Out: "journey-2-break-down.html", Nav: "2. The plan", Group: "The story", Source: "docs/guide/journey-2-break-down.md"},
+	{Out: "journey-3-ready.html", Nav: "3. The promises", Group: "The story", Source: "docs/guide/journey-3-ready.md"},
+	{Out: "journey-4-build.html", Nav: "4. The build", Group: "The story", Source: "docs/guide/journey-4-build.md"},
+	{Out: "journey-5-prove.html", Nav: "5. The gate says no", Group: "The story", Source: "docs/guide/journey-5-prove.md"},
+	{Out: "journey-6-ship.html", Nav: "6. The yes", Group: "The story", Source: "docs/guide/journey-6-ship.md"},
+	{Out: "journey-7-release.html", Nav: "7. The release", Group: "The story", Source: "docs/guide/journey-7-release.md"},
+	{Out: "journey-8-learn.html", Nav: "8. The number", Group: "The story", Source: "docs/guide/journey-8-learn.md"},
+	{Out: "journey-9-explain.html", Nav: "9. The telling", Group: "The story", Source: "docs/guide/journey-9-explain.md"},
+	{Out: "built-with-itself.html", Nav: "Epilogue: built with itself", Group: "The story", Source: "docs/guide/built-with-itself.md"},
+	{Out: "how-it-works.html", Nav: "Overview", Group: "How it works", Source: "docs/guide/how-it-works.md"},
+	{Out: "how-architecture.html", Nav: "Architecture", Group: "How it works", Source: "docs/guide/how-architecture.md"},
+	{Out: "how-registry.html", Nav: "Verb registry and codegen", Group: "How it works", Source: "docs/guide/how-registry.md"},
+	{Out: "how-trust.html", Nav: "Trust and identities", Group: "How it works", Source: "docs/guide/how-trust.md"},
+	{Out: "how-ledger.html", Nav: "The ledger branch", Group: "How it works", Source: "docs/guide/how-ledger.md"},
+	{Out: "how-proof-packs.html", Nav: "Proof packs", Group: "How it works", Source: "docs/guide/how-proof-packs.md"},
+	{Out: "how-merge-gate.html", Nav: "The merge gate", Group: "How it works", Source: "docs/guide/how-merge-gate.md"},
+	{Out: "how-floors.html", Nav: "Floors in detail", Group: "How it works", Source: "docs/guide/how-floors.md"},
+	{Out: "how-models.html", Nav: "Model gateway and lanes", Group: "How it works", Source: "docs/guide/how-models.md"},
+	{Out: "how-evals.html", Nav: "The eval harness", Group: "How it works", Source: "docs/guide/how-evals.md"},
+	{Out: "how-config-and-audit.html", Nav: "Config, secrets, audit", Group: "How it works", Source: "docs/guide/how-config-and-audit.md"},
+	{Out: "how-releases.html", Nav: "Releases and supply chain", Group: "How it works", Source: "docs/guide/how-releases.md"},
+	{Out: "how-security.html", Nav: "Security and threat model", Group: "How it works", Source: "docs/guide/how-security.md"},
+	{Out: "how-extending.html", Nav: "Extending aayudha", Group: "How it works", Source: "docs/guide/how-extending.md"},
 	{Out: "concepts-seats.html", Nav: "Seats and pairing", Group: "Concepts", Source: "docs/guide/concepts-seats.md"},
 	{Out: "concepts-layers.html", Nav: "The nine layers", Group: "Concepts", Source: "docs/guide/concepts-layers.md"},
 	{Out: "concepts-proof.html", Nav: "Proof packs", Group: "Concepts", Source: "docs/guide/concepts-proof.md"},
@@ -76,6 +91,7 @@ var sitePages = []SitePage{
 	{Out: "getting-started.html", Nav: "Install and connect", Group: "Reference", Source: "docs/getting-started.md"},
 	{Out: "verbs.html", Nav: "Verbs", Group: "Reference", Origin: "internal/verbs/registry.go"},
 	{Out: "glossary.html", Nav: "Glossary", Group: "Reference", Source: "GLOSSARY.md"},
+	{Out: "threat-model.html", Nav: "Threat model", Group: "Reference", Source: "docs/threat-model.md"},
 	{Out: "getting-started-azure.html", Nav: "Azure", Group: "Clouds", Source: "docs/getting-started-azure.md"},
 	{Out: "getting-started-aws.html", Nav: "AWS", Group: "Clouds", Source: "docs/getting-started-aws.md"},
 	{Out: "getting-started-gcp.html", Nav: "Google Cloud", Group: "Clouds", Source: "docs/getting-started-gcp.md"},
@@ -88,7 +104,7 @@ var sitePages = []SitePage{
 
 // openGroups are the sidebar groups shown open on every page; the others open
 // on their own pages.
-var openGroups = map[string]bool{"Start here": true, "The journey": true}
+var openGroups = map[string]bool{"Start here": true, "The story": true}
 
 // SitePages reads the site's pages from the checkout at root and the binary's
 // assets (skills/<verb>/SKILL.md). README.md is required: it is the overview,
@@ -205,6 +221,7 @@ func verbsMarkdown(assets fs.FS) string {
 				fmt.Fprintf(&b, "| %s | %s |\n", k, cell(v))
 			}
 		}
+		row("In plain words", c.Reader)
 		for _, st := range verbs.Stages {
 			if st.ID == c.Stage {
 				row("Journey stage", st.Title)
@@ -314,13 +331,13 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{.Title}} · {{.Name}} docs</title>
+<title>{{.Title}} · {{.Name}}</title>
 <link rel="stylesheet" href="{{.Root}}style.css">
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 <header class="top">
-<a class="brand" href="{{.Root}}index.html">{{.Name}} docs</a>
+<a class="brand" href="{{.Root}}index.html">{{.Name}}</a>
 <span class="build">Built from <a href="{{.Commit}}">{{.Short}}</a>{{if .Date}} ({{.Date}}){{end}}</span>
 </header>
 <details class="menu"><summary>Menu</summary>
@@ -385,6 +402,10 @@ func (s Site) Build() (map[string][]byte, []int, []Problem, error) {
 	}
 	blob := "https://github.com/" + s.Repo + "/blob/" + s.Ref + "/"
 	_, name, _ := strings.Cut(s.Repo, "/")
+	name += " docs"
+	if s.Brand.Name != "" {
+		name = s.Brand.Name // design/brand.yaml names the site
+	}
 	short := s.Ref
 	if len(short) > 7 {
 		short = short[:7]
