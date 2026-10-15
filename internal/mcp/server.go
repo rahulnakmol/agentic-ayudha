@@ -19,6 +19,8 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/seats"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
@@ -33,11 +35,14 @@ type Runner func(ctx context.Context, args []string, stdout, stderr io.Writer) i
 // Options configure the server.
 type Options struct {
 	Version      string
-	ExposeWrites bool          // [mcp] expose_writes
-	Run          Runner        // runs a verb as an agent (AAYU_AGENT=1)
-	Assets       fs.FS         // embedded skills/, for prompts
-	Timeout      time.Duration // per tool call; 0 means DefaultTimeout
-	Progress     time.Duration // progress notification interval; 0 means DefaultProgress
+	ExposeWrites bool   // [mcp] expose_writes
+	Run          Runner // runs a verb as an agent (AAYU_AGENT=1)
+	Assets       fs.FS  // embedded skills/ and seats/, for prompts
+	// TeamStage is the effective [team] stage and how it was decided
+	// (config.TeamStage); the persona prompt uses it when no stage is given.
+	TeamStage, TeamStageWhy string
+	Timeout                 time.Duration // per tool call; 0 means DefaultTimeout
+	Progress                time.Duration // progress notification interval; 0 means DefaultProgress
 }
 
 // Defaults for long verbs.
@@ -75,7 +80,7 @@ func Tools(exposeWrites bool) []verbs.Command {
 }
 
 // NewServer builds the stdio MCP server: one tool per exposed verb (schemas
-// generated from the registry), prompts for grill and brief, and the aayudha://
+// generated from the registry), prompts for grill, brief, and the seat personas, and the aayudha://
 // resources.
 func NewServer(o Options) (*sdk.Server, error) {
 	if o.Timeout == 0 {
@@ -98,6 +103,7 @@ func NewServer(o Options) (*sdk.Server, error) {
 			o.toolHandler(c))
 	}
 	o.addPrompts(s)
+	o.addPersonaPrompt(s)
 	o.addResources(s)
 	return s, nil
 }
@@ -390,6 +396,41 @@ func (o Options) addPrompts(s *sdk.Server) {
 			text := fmt.Sprintf("Write a brief on %s for the %s register with purpose %s, grounded only in linked evidence. Run `%s` to produce it.\n\n%s",
 				a["subject"], orDefault(a["register"], "engineer"), orDefault(a["purpose"], "explain"), cmd, o.skillBody("brief"))
 			return &sdk.GetPromptResult{Description: "brief " + a["subject"], Messages: []*sdk.PromptMessage{{Role: "user", Content: &sdk.TextContent{Text: text}}}}, nil
+		})
+}
+
+// addPersonaPrompt serves each seat twin's persona (WP5.1b) at a team stage,
+// rendered from the same seats/<seat>/persona.toml as the skills' persona blocks.
+func (o Options) addPersonaPrompt(s *sdk.Server) {
+	var slugs []string
+	for _, st := range verbs.Seats {
+		slugs = append(slugs, string(st.ID))
+	}
+	s.AddPrompt(&sdk.Prompt{Name: "persona", Description: "Speak and work as a seat's agent twin: its persona, its practice playbook at the team's stage, and the evidence rule.",
+		Arguments: []*sdk.PromptArgument{
+			{Name: "seat", Description: "One of: " + strings.Join(slugs, ", ") + ".", Required: true},
+			{Name: "stage", Description: "One of: " + strings.Join(config.TeamStages, ", ") + ". Empty: the repository's [team] stage."},
+		}},
+		func(_ context.Context, req *sdk.GetPromptRequest) (*sdk.GetPromptResult, error) {
+			a := req.Params.Arguments
+			personas, err := seats.LoadPersonas(o.Assets)
+			if err != nil {
+				return nil, err
+			}
+			p, ok := personas[verbs.SeatID(a["seat"])]
+			if !ok {
+				return nil, fmt.Errorf("persona: seat %q: want one of %s", a["seat"], strings.Join(slugs, ", "))
+			}
+			stage, why := a["stage"], "chosen by the caller"
+			switch {
+			case stage == "" && o.TeamStage != "":
+				stage, why = o.TeamStage, o.TeamStageWhy
+			case stage == "":
+				stage, why = config.StageStartup, "the default for a pod with no [team] settings"
+			case !slices.Contains(config.TeamStages, stage):
+				return nil, fmt.Errorf("persona: stage %q: want one of %s", stage, strings.Join(config.TeamStages, ", "))
+			}
+			return &sdk.GetPromptResult{Description: "persona " + p.Name, Messages: []*sdk.PromptMessage{{Role: "user", Content: &sdk.TextContent{Text: p.Prompt(stage, why)}}}}, nil
 		})
 }
 

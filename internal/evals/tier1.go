@@ -135,6 +135,12 @@ func Tier1(ctx context.Context, root string, c Case, assets fs.FS) Tier1Result {
 	if c.Brief != nil {
 		add("brief", tier1Brief(ctx, c, assets), false)
 	}
+	if c.Persona != nil {
+		add("persona", tier1Persona(c, assets), false)
+	}
+	if c.Pack != nil {
+		add("pack", tier1Pack(c, assets), false)
+	}
 
 	if c.Transcript != "" {
 		add("concrete", tier1Concrete(c, assets), false)

@@ -145,6 +145,11 @@ type Case struct {
 	Transcript string `toml:"transcript"`
 	// Cite is how many criteria must cite an assessment fact.
 	Cite int `toml:"cite"`
+	// Persona makes a persona case (WP5.1b): the input is the grounding, the
+	// output the seat twin's Markdown answer at a team stage.
+	Persona *PersonaSpec `toml:"persona"`
+	// Pack makes a decision-pack case (WP5.1b, D-5.6b).
+	Pack *PackSpec `toml:"pack"`
 	// Feedback and Reproduce make an evolve case (WP7.7): the accepted Feedback
 	// issue it reproduces, and the directory holding the old skill's recorded
 	// run (the output/ artifacts under that name), which must fail tier 1.
@@ -309,6 +314,12 @@ func LoadCase(dir string) (Case, error) {
 	}
 	if b := c.Brief; b != nil && (b.Register == "" || b.Purpose == "" || b.Draft == "") {
 		return c, fmt.Errorf("%s: [brief] needs register, purpose, and draft", c.ID)
+	}
+	if p := c.Persona; p != nil && (p.Seat == "" || p.Stage == "" || p.Practice == "" || p.Task == "" || p.Draft == "") {
+		return c, fmt.Errorf("%s: [persona] needs seat, stage, practice, task, and draft", c.ID)
+	}
+	if p := c.Pack; p != nil && (p.Seat == "" || p.Stage == "" || p.Question == "" || p.Draft == "") {
+		return c, fmt.Errorf("%s: [pack] needs seat, stage, question, and draft", c.ID)
 	}
 	return c, nil
 }

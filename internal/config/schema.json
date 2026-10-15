@@ -713,6 +713,27 @@
       "additionalProperties": false,
       "type": "object",
       "description": "Tolerances of the prototype's Figma screenshot diff (WP6.5) and UI review (WP6.6)."
+    },
+    "team": {
+      "properties": {
+        "stage": {
+          "type": "string",
+          "enum": [
+            "startup",
+            "scaleup",
+            "enterprise"
+          ],
+          "description": "startup, scaleup, or enterprise. Unset: inferred from size (15 or fewer people startup, up to 150 scaleup, more enterprise)."
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "People on the product team. Unset: the paired seat humans plus the founder."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "The team the seat twins adapt their practice to (WP5.1b): depth and ceremony only, never the floors, the evidence rule, or human-only gates."
     }
   },
   "additionalProperties": false,
