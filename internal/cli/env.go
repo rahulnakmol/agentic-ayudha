@@ -15,6 +15,7 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/delegate"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
 	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
@@ -70,7 +71,9 @@ type Options struct {
 	UIStatic bool
 	// CheckpointVerify replaces build's verify run on a checkpoint (tests); nil runs `aayu verify` in the worktree.
 	CheckpointVerify func(ctx context.Context, worktree string) (hold bool, detail string, err error)
-	RunPoll          time.Duration // how often release polls a workflow run; 0 is DefaultRunPoll (WP7.8)
+	// DelegateExec runs a delegation receiver's CLI (build --delegate, tests); nil runs the command.
+	DelegateExec delegate.Exec
+	RunPoll      time.Duration // how often release polls a workflow run; 0 is DefaultRunPoll (WP7.8)
 	// EvolveGate is the eval-first gate (internal/evals.Gate) for `evolve`
 	// (WP7.7). The binary injects it: internal/evals replays CLI calls, so it
 	// imports this package and cannot be imported by it.

@@ -800,6 +800,49 @@
       "additionalProperties": false,
       "type": "object",
       "description": "How inspect reviews a PR (WP4.8b): its mode, noise filters, and peer reviewer."
+    },
+    "delegate": {
+      "properties": {
+        "cursor_secret": {
+          "type": "string",
+          "description": "Name of the secret holding the Cursor API key (aayu auth set-secret)."
+        },
+        "cursor_api": {
+          "type": "string",
+          "description": "Base URL of Cursor's cloud agents API."
+        },
+        "cursor_model": {
+          "type": "string",
+          "description": "Model ID the Cursor cloud agent runs; empty: Cursor's default (its family is then unknown to aayu, so inspect names concrete reviewer families)."
+        },
+        "codex_env": {
+          "type": "string",
+          "description": "ID of the Codex cloud environment whose Install script runs bash .agents/setup; empty: Codex runs only locally."
+        },
+        "amp_orb_size": {
+          "type": "string",
+          "description": "Orb size of a delegated Amp thread; empty: the Amp project's default."
+        },
+        "claude_trigger": {
+          "type": "string",
+          "description": "The trigger phrase of the repository's claude-code-action workflow."
+        },
+        "checks": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Commands the brief tells a receiver to run before it finishes; empty: the checks AGENTS.md lists."
+        },
+        "local_timeout_minutes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Longest run of a receiver's CLI in an aayu worktree (--local)."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "How build --delegate reaches other agents (WP5.5b). Values name secrets; they never hold them."
     }
   },
   "additionalProperties": false,

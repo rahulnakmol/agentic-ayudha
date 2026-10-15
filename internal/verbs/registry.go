@@ -606,8 +606,10 @@ var Verbs = []Command{
 		Inputs: []Input{
 			pos("issue", TypeIssue, "Ready story or bug to build."),
 			flag("resume", TypeBool, "Resume from the last Aayudha-Checkpoint trailer."),
+			enumIn("delegate", false, false, "Hand the story to another agent's cloud agent with the delegation brief, or sync it: its PR, inspect's findings, and follow-ups (auto picks the cheapest adequate connected one).", "codex", "cursor", "claude", "amp", "auto"),
+			flag("local", TypeBool, "With --delegate: run the receiver's CLI on this machine in an aayu worktree, with no GitHub credential; aayu commits, verifies, pushes, and opens the PR."),
 		},
-		Outputs:  []string{"pr", "checkpoint-commits", "progress-comment"},
+		Outputs:  []string{"pr", "checkpoint-commits", "progress-comment", "delegation"},
 		Gates:    []GateID{GateReady, GateBudget, GateHalt},
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeWrite,
 	},
@@ -841,8 +843,9 @@ var Verbs = []Command{
 			flag("all", TypeBool, "Iterate [fleet] repos."),
 			readOnlyWith(flag("apply", TypeBool, "Post the replace-in-place Goal comments and close Features the parent-close rule allows; with --streak, record new corrections on the ledger."), "false"),
 			flag("streak", TypeBool, "Compute the autonomy streak of every layer from merged-PR history instead of the rollups (WP5.7)."),
+			flag("work", TypeBool, "List the work in flight instead: aayu worktrees (agent, story, branch, PR, age) and stories delegated to cloud agents (WP5.5b)."),
 		},
-		Outputs:  []string{"rollup", "goal-comment", "digest", "streaks"},
+		Outputs:  []string{"rollup", "goal-comment", "digest", "streaks", "work-in-flight"},
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeNone, Exposure: ExposeRead,
 	},
 	{

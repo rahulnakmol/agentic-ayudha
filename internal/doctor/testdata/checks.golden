@@ -98,6 +98,19 @@ PASS  worktrees  no leaked worktrees
 ## worktrees fail
 WARN  worktrees  1 leaked worktree(s); `aayu gc` prunes them
                    /tmp/wt-x (gitdir file points to non-existent location)
+## delegate-env pass
+PASS  delegate-env  delegation environments not set up: no .agents/setup (cloud receivers of `build --delegate` install with it)
+## delegate-env fail
+WARN  delegate-env  2 delegation environment(s) drifted from .agents/setup; `aayu doctor --fix` re-syncs .cursor/environment.json
+                      source: drift: .agents/setup is not executable (chmod +x; Amp runs it directly)
+                        .agents/setup installs Go 1.24.0, older than go.mod's go 1.25.0
+                      amp: ok: orbs run .agents/setup natively when a project snapshot is prepared
+                      cursor: drift: no .cursor/environment.json; `aayu doctor --fix` writes it, then merge it to the default branch
+                      codex: manual: Codex cloud environments are set in the Codex UI only; aayu cannot read them
+                        Install script: bash .agents/setup
+                        Internet access: the package-managers preset (or custom domains), GET/HEAD/OPTIONS only
+                        Secrets: none; put the environment's ID in [delegate] codex_env
+                      claude: missing: no workflow runs anthropics/claude-code-action; `/install-github-app` in Claude Code writes one
 ## leases pass
 PASS  leases  1 live build lease(s)
 ## leases fail

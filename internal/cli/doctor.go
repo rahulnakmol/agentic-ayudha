@@ -132,6 +132,11 @@ func runDoctor(ctx context.Context, e *Env, in Values) error {
 		if fix, err = e.fixCopies(); err != nil {
 			return err
 		}
+		if msg, err := e.fixDelegateEnv(); err != nil {
+			return err
+		} else if msg != "" {
+			fix += "\n" + msg
+		}
 	}
 	pr := e.progress("Checking tools, tokens, identity, config, and hosts")
 	results := doctor.Run(ctx, p)

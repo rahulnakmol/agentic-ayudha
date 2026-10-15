@@ -60,7 +60,8 @@ type State struct {
 	Status    string       `json:"status"` // handed-off, working, pr-open, fix-requested, merge-ready, capped, failed
 	BriefHash string       `json:"brief_sha256"`
 	StartedAt string       `json:"started_at"`
-	Reason    string       `json:"reason,omitempty"` // why this receiver (auto)
+	Reason    string       `json:"reason,omitempty"`  // why this receiver (auto)
+	Applied   string       `json:"applied,omitempty"` // the last task whose returned diff aayu applied (Codex)
 	FollowUps []FollowUp   `json:"follow_ups,omitempty"`
 	Events    []Event      `json:"events,omitempty"`
 }

@@ -22,6 +22,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/autonomy"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/delegate"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
@@ -49,6 +50,8 @@ type BuildResult struct {
 	PRURL      string   `json:"pr_url,omitempty"`
 	Notes      []string `json:"notes,omitempty"`
 	Next       string   `json:"next"`
+	// Delegation is set when another agent builds the story (--delegate, WP5.5b).
+	Delegation *Delegation `json:"delegation,omitempty"`
 }
 
 // Usage is a story's build budget use against [autonomy.budget].
@@ -214,6 +217,30 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		return block(fmt.Sprintf("cost budget breached: %.2f USD spent, budget %.2f USD", res.Budget.CostUSD, b.CostUSD))
 	}
 
+	// Delegation (WP5.5b): another agent writes the change. A cloud receiver
+	// works on its own branch and this run hands off or syncs; a local one, or a
+	// receiver that returns a diff, writes into an aayu worktree, and the
+	// checkpoint, verify, push, and PR below follow as for any build.
+	var write func(context.Context, string) error
+	var dlg *delegation
+	if in.String("delegate") != "" {
+		if dlg, err = e.newDelegation(ctx, in, c, bot, w, repo, root, n, chk, is.GetBody(), labels); err != nil {
+			return err
+		}
+		var done bool
+		write, done, err = e.delegateStep(ctx, dlg, chk, &res)
+		if done {
+			if eerr := e.emitDelegation(res); eerr != nil && err == nil {
+				err = eerr
+			}
+			return err
+		}
+		if err != nil {
+			return err
+		}
+		res.Worktree = delegate.Worktree(root, n, dlg.receiver)
+	}
+
 	// The worktree: cut from origin/dev, or resumed from the story branch.
 	if _, err := os.Stat(res.Worktree); err != nil {
 		if _, err := run2(ctx, root, "git", "fetch", "--quiet", "origin", dev); err != nil {
@@ -221,7 +248,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		}
 		remote, _ := run2(ctx, root, "git", "ls-remote", "--heads", "origin", res.Branch)
 		switch {
-		case remote != "" && !in.Bool("resume"):
+		case remote != "" && !in.Bool("resume") && dlg == nil:
 			return Errorf(ExitBlocked, "build #%d: %s already exists on origin; `aayu build %d --resume` continues from its last checkpoint", n, res.Branch, n)
 		case remote != "":
 			if _, err := run2(ctx, root, "git", "fetch", "--quiet", "origin", "+refs/heads/"+res.Branch+":refs/remotes/origin/"+res.Branch); err != nil {
@@ -237,20 +264,29 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			}
 		}
 		res.Created = true
-		res.Next = fmt.Sprintf("write the change in %s (tests included; map criteria to tests in .aayudha/evidence/%d.toml), then run `aayu build %d` again to commit a checkpoint", res.Worktree, n, n)
-		if res.Resumed != "" {
-			res.Next = fmt.Sprintf("resumed after checkpoint %s; continue in %s, then run `aayu build %d` again", res.Resumed, res.Worktree, n)
+		if write == nil { // the host's agent writes the change, then runs build again
+			res.Next = fmt.Sprintf("write the change in %s (tests included; map criteria to tests in .aayudha/evidence/%d.toml), then run `aayu build %d` again to commit a checkpoint", res.Worktree, n, n)
+			if res.Resumed != "" {
+				res.Next = fmt.Sprintf("resumed after checkpoint %s; continue in %s, then run `aayu build %d` again", res.Resumed, res.Worktree, n)
+			}
+			if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
+				return err
+			}
+			return e.Emit(res, func(w io.Writer) error {
+				_, err := fmt.Fprintf(w, "#%d %s: worktree %s on %s (leased by %s until %s)\n  next: %s\n", n, chk.Title, res.Worktree, res.Branch, res.Lease.Holder, res.Lease.Expires.UTC().Format(time.RFC3339), res.Next)
+				return err
+			})
 		}
-		if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
-			return err
-		}
-		return e.Emit(res, func(w io.Writer) error {
-			_, err := fmt.Fprintf(w, "#%d %s: worktree %s on %s (leased by %s until %s)\n  next: %s\n", n, chk.Title, res.Worktree, res.Branch, res.Lease.Holder, res.Lease.Expires.UTC().Format(time.RFC3339), res.Next)
-			return err
-		})
-	}
-	if in.Bool("resume") {
+	} else if in.Bool("resume") {
 		res.Resumed = lastTrailer(ctx, res.Worktree, dev)
+	}
+
+	if write != nil {
+		if err := write(ctx, res.Worktree); err != nil {
+			dlg.event(e.Now(), dlgFailed, clipText(err.Error(), 200))
+			_ = e.saveDelegation(ctx, dlg)
+			return Errorf(ExitExternal, "build #%d --delegate %s: %v", n, dlg.receiver, err)
+		}
 	}
 
 	// A checkpoint: commit what the agent wrote, then verify it.
@@ -277,8 +313,14 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		if attempt > 1 {
 			msg += fmt.Sprintf("\nAayudha-Attempt: %d", attempt)
 		}
-		if m := e.builderModel(); m != "" {
-			msg += "\nAayudha-Model: " + m
+		switch {
+		case dlg != nil:
+			msg += "\nAayudha-Delegate: " + dlg.receiver
+			if m := dlg.model(); m != "" {
+				msg += "\nAayudha-Model: " + m
+			}
+		case e.builderModel() != "":
+			msg += "\nAayudha-Model: " + e.builderModel()
 		}
 		if _, err := run2(ctx, res.Worktree, "git", "commit", "--quiet", "--signoff", "-m", msg); err != nil {
 			return Wrap(ExitExternal, err)
@@ -366,6 +408,14 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
 		return err
 	}
+	if dlg != nil {
+		dlg.state.PR = res.PR
+		dlg.event(e.Now(), dlgPROpen, fmt.Sprintf("checkpoint %s pushed to PR #%d", res.Checkpoint, res.PR))
+		dlg.fill(res.Delegation)
+		if err := e.saveDelegation(ctx, dlg); err != nil {
+			return err
+		}
+	}
 	// The actions segment of this checkpoint goes to the ledger (WP1.5), pushed with the build's own token.
 	if err := e.checkpoint(bot.Token); err != nil {
 		fmt.Fprintf(e.Err, "aayu: warning: the actions segment did not reach the ledger: %v\n", err)
@@ -404,6 +454,9 @@ func (e *Env) publishBuild(ctx context.Context, c *github.Client, token, root, r
 	} else {
 		title := "feat: " + strings.ToLower(chk.Title[:1]) + chk.Title[1:]
 		body := fmt.Sprintf("Refs #%d\n\nBuilt with `aayu build` (WP5.5) from the Ready snapshot of #%d (body hash `%s`), one verified checkpoint commit per layer. The merge gate verifies it on the base branch's definition; `aayu ship` merges it after a human pass.\n", n, n, chk.BodyHash[:12])
+		if d := res.Delegation; d != nil {
+			body = fmt.Sprintf("Refs #%d\n\nBuilt by %s (%s, `aayu build --delegate`, WP5.5b) from the delegation brief of #%d's Ready snapshot (body hash `%s`). aayu committed, verified, and pushed the change; the receiver has no merge rights. The merge gate and inspect review it; `aayu ship` merges it after a human pass.\n", n, d.Receiver, d.Mode, n, chk.BodyHash[:12])
+		}
 		var pr *gh.PullRequest
 		if _, err := c.Write(ctx, actions.Action{Kind: "github.pull.create", Target: repo, Story: fmt.Sprintf("#%d", n),
 			Request: &actions.Request{Method: http.MethodPost, Path: "/repos/" + repo + "/pulls"}, Payload: map[string]any{"head": res.Branch, "base": dev, "title": title}},
