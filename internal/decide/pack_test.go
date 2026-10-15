@@ -61,6 +61,7 @@ func TestCheckPack(t *testing.T) {
 		{"one option", "2. **Re-plan as M.**", "   **Re-plan as M.**", "1 options"},
 		{"no door", "This is a two-way door", "This is reversible", "one-way or a two-way door"},
 		{"decision not last", "## Your decision", "## Your decision\n\nReply re-plan (#212).\n\n## Notes", "must end with"},
+		{"too long to decide in five minutes", "## Cost of waiting", "## Cost of waiting\n\n" + strings.Repeat("More context on #212. ", 60) + "\n\n## Cost of waiting (again)", "a pack a busy human decides from in five minutes is at most 500"},
 		{"uncited claim", "- #231 is blocked by #212.", "- #231 is blocked by #212.\n- The audit reader already accepts unknown fields, so the risk is low.", "uncited claim"},
 	}
 	for _, tt := range tests {

@@ -105,6 +105,12 @@ them so it can be decided in one sitting. Nothing is applied and nothing is writ
    with trade-offs); Recommendation (with its door: one-way or two-way); Cost of waiting; Pre-mortem (as Juno, the
    Mentalist twin: assume the recommendation failed, give the likeliest reasons and the early warning); Questions
    that would change the answer; Your decision (the one thing to decide, answerable in a word or a line).
+   Keep it decidable in five minutes: at most 500 words, no specs, checklists, or implementation plans (cite them
+   instead). State each fact only as far as its source says it: a Decision governs exactly what its text says.
+   Name the door for what the option leaves behind: anything written to an append-only record, published, or
+   relied on by another reader is a one-way door for that data. The human you are talking to decides; do not
+   describe other approvers or configuration the facts do not show. Report Juno's pre-mortem in your own voice
+   ("Juno's pre-mortem: ...").
 4. Check it with `aayu decide <issue> --pack --draft <file>` (or the same question in quotes) and fix every
    finding: a missing part, a question longer than one sentence, the wrong number of options, no door, or an
    uncited claim.

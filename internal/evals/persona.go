@@ -234,7 +234,7 @@ func (h *Harness) runPack(ctx context.Context, c Case, lane verbs.LaneID, body, 
 	req := models.Request{
 		System: body + "\n\n## Persona of the owning twin (from `aayu decide --pack`)\n\n" + persona.Prompt(c.Pack.Stage, "set by the case") +
 			"\nYou have already run `aayu decide --pack`; the grounding is its output plus what you read, and it is the only source. " +
-			"Reply with the decision pack in Markdown only, nothing before or after it.",
+			fmt.Sprintf("Reply with the decision pack in Markdown only, at most %d words, nothing before or after it.", decide.PackMaxWords),
 		Messages:  []models.Message{{Role: "user", Content: untrusted("grounding", input) + "\n\nThe human is stuck and asks: " + c.Pack.Question}},
 		MaxTokens: h.Config.MaxTokens.Skill,
 	}

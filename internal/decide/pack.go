@@ -89,7 +89,8 @@ var (
 // CheckPack returns what keeps a decision pack from being decidable in one
 // sitting: a missing or out-of-order part, a question that is not one
 // sentence, other than two or three options, no door on the recommendation,
-// a decision that is not the last part or is more than one line, and every
+// a decision that is not the last part or is more than one line, more than
+// PackMaxWords words, and every
 // finding of the evidence rule (seats.CheckGrounding) against the grounding.
 func CheckPack(md, grounding string) []string {
 	return CheckPackWith(md, func(c string) bool { return strings.Contains(grounding, c) })
@@ -155,8 +156,15 @@ func CheckPackWith(md string, known func(cite string) bool) []string {
 			out = append(out, "the decision is more than one paragraph; ask for the one thing to decide")
 		}
 	}
+	if n := seats.Words(md); n > PackMaxWords {
+		out = append(out, fmt.Sprintf("%d words: a pack a busy human decides from in five minutes is at most %d; cite detail instead of pasting it", n, PackMaxWords))
+	}
 	return append(out, seats.CheckGroundingWith(md, known)...)
 }
+
+// PackMaxWords bounds a pack: a busy human decides from it in under five
+// minutes, so detail is linked, not pasted.
+const PackMaxWords = 500
 
 // PackTemplate is the outline the twin fills, one line per part.
 func PackTemplate() string {
