@@ -21,6 +21,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -379,7 +380,8 @@ func lock(path string, timeout time.Duration, sleep func(time.Duration)) (func()
 			_ = f.Close()
 			return func() { _ = os.Remove(path) }, nil
 		}
-		if !errors.Is(err, os.ErrExist) {
+		// Windows refuses to open a lock file another writer is deleting (access denied) until it is gone.
+		if !errors.Is(err, os.ErrExist) && (runtime.GOOS != "windows" || !errors.Is(err, os.ErrPermission)) {
 			return nil, err
 		}
 		if st, serr := os.Stat(path); serr == nil && time.Since(st.ModTime()) > staleAfter {
@@ -387,6 +389,9 @@ func lock(path string, timeout time.Duration, sleep func(time.Duration)) (func()
 			continue
 		}
 		if time.Now().After(deadline) {
+			if !errors.Is(err, os.ErrExist) {
+				return nil, err
+			}
 			return nil, fmt.Errorf("%w (%s)", ErrLocked, path)
 		}
 		sleep(50 * time.Millisecond)
