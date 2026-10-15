@@ -1,0 +1,210 @@
+{
+  "repo": "rahulnakmol/agentic-ayudha",
+  "release": 147,
+  "version": "v0.1.0",
+  "source": "rolling",
+  "target": "main",
+  "source_sha": "19f5a4ce3013ba7c678429e8bd9b6b768a81aedb",
+  "commit": "78bd4aedb388e521b154eeed1b4ee3404271b9ee",
+  "tree": "2806b5aa507ff9e17a4f31040e763cd9dcc5d090",
+  "message": "Release: v0.1.0",
+  "tag": "v0.1.0",
+  "candidate": "promote/main-v0.1.0",
+  "gate": {
+    "workflow": "ci.yml",
+    "id": 38780569731,
+    "url": "https://github.com/rahulnakmol/agentic-ayudha/actions/runs/38780569731",
+    "conclusion": "success",
+    "attempts": 2
+  },
+  "release_run": {
+    "workflow": "release.yml",
+    "id": 38783995304,
+    "url": "https://github.com/rahulnakmol/agentic-ayudha/actions/runs/38783995304",
+    "conclusion": "failure",
+    "attempts": 2
+  },
+  "artifacts": [
+    {
+      "name": "benchmarks",
+      "digest": "sha256:4b5431b867a3ad19a108ff8c3f388ecac4ae0013c57f9bf81682ee7e1def368d",
+      "size": 815
+    },
+    {
+      "name": "release-snapshot",
+      "digest": "sha256:fe3db0aaa059ce7a6a6d9a61ffb3d2e6d1e51dc9c346bdd0a84efca027045dd2",
+      "size": 69720669
+    },
+    {
+      "name": "aayudha_0.1.0_darwin_amd64.tar.gz",
+      "digest": "sha256:eb4bacf16492e678f07383918f85d931b1777efdabb64628e3378c708a388db7",
+      "size": 12123628
+    },
+    {
+      "name": "aayudha_0.1.0_darwin_amd64.tar.gz.sbom.json",
+      "digest": "sha256:8604dac1e63a449c72c080aa33a1c9a59bfe2732865f9d79fd361ed1c9474eab",
+      "size": 107647
+    },
+    {
+      "name": "aayudha_0.1.0_darwin_arm64.tar.gz",
+      "digest": "sha256:a864999458c07da27df5de90904371529e374737e29f463a9221b7151e1c0910",
+      "size": 11439159
+    },
+    {
+      "name": "aayudha_0.1.0_darwin_arm64.tar.gz.sbom.json",
+      "digest": "sha256:2a139d846234531cb5fc04ac80a7edeb4b8a26ebc85f02b0eef6375d16216fb4",
+      "size": 107647
+    },
+    {
+      "name": "aayudha_0.1.0_linux_amd64.tar.gz",
+      "digest": "sha256:f1680437c1118257732a8e41de8ed7aa17f40ad2f196d87bbfe3f0c396c7e1ed",
+      "size": 12089983
+    },
+    {
+      "name": "aayudha_0.1.0_linux_amd64.tar.gz.sbom.json",
+      "digest": "sha256:833c630ce15694e12dbf077007c8b56ad1953c63b43a25d74eeb3c3eff0ae109",
+      "size": 105811
+    },
+    {
+      "name": "aayudha_0.1.0_linux_arm64.tar.gz",
+      "digest": "sha256:822ca451d2d68a24e923c3347518d9ba975fc24e37590be2068a2bd2c9e704f5",
+      "size": 11146804
+    },
+    {
+      "name": "aayudha_0.1.0_linux_arm64.tar.gz.sbom.json",
+      "digest": "sha256:e8c0d01e8fb491d5cfc790b0cadbb8f37fde2a18378e8592e0a01ca334559c2e",
+      "size": 105811
+    },
+    {
+      "name": "aayudha_0.1.0_windows_amd64.zip",
+      "digest": "sha256:2addf4117645f15394a15951ac985685398b176ece92e670aeee06540d59c94b",
+      "size": 12146892
+    },
+    {
+      "name": "aayudha_0.1.0_windows_amd64.zip.sbom.json",
+      "digest": "sha256:e92c97f9395ade0e29e483d2b9a1a696f24a8831e08f57a03c6bb6da483f7144",
+      "size": 110492
+    },
+    {
+      "name": "aayudha_0.1.0_windows_arm64.zip",
+      "digest": "sha256:bf510826764da103b64c9db57360616eaa4299783aeb5875ac9a9c4fdb0a31a3",
+      "size": 11036777
+    },
+    {
+      "name": "aayudha_0.1.0_windows_arm64.zip.sbom.json",
+      "digest": "sha256:c63fd85d02d186f0fde5b7324484ad1248a89f074595c69e1cc4204b08ce42bf",
+      "size": 110492
+    },
+    {
+      "name": "checksums.txt",
+      "digest": "sha256:561a6b483ccd81276186f8c31ccf2a6c7b32f87bce07c6bd1ef56d129cc91b15",
+      "size": 1248
+    },
+    {
+      "name": "checksums.txt.sigstore.json",
+      "digest": "sha256:49373cc5948b2510d6692c5c1a7451130b632430fc5cf454cc251c7d008ca849",
+      "size": 10611
+    }
+  ],
+  "stories_released": [
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    59,
+    61,
+    63,
+    70,
+    91
+  ],
+  "already_released": [],
+  "shipped_not_listed": [
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    59,
+    61,
+    63,
+    70,
+    91,
+    130,
+    131,
+    132,
+    133,
+    134,
+    171,
+    172,
+    173,
+    177,
+    183
+  ],
+  "referenced_not_merged": [
+    37
+  ],
+  "release_notes": "tell/release/v0.1.0.md",
+  "measure_due": [
+    {
+      "issue": 29,
+      "type": "goal",
+      "due": "2026-11-12",
+      "release": 147,
+      "tag": "v0.1.0",
+      "stories": [
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        59,
+        61,
+        63,
+        70,
+        91
+      ]
+    },
+    {
+      "issue": 30,
+      "type": "initiative",
+      "due": "2026-11-12",
+      "release": 147,
+      "tag": "v0.1.0",
+      "stories": [
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        59,
+        61,
+        63,
+        70,
+        91
+      ]
+    }
+  ],
+  "promoted_by": "rahulnakmol",
+  "promoted_at": "2026-10-15T17:47:55Z"
+}
