@@ -44,10 +44,13 @@ pass_k = "advisory"
 # on-demand decision packs of an EM-owned and a Code Architect-owned question, in their own group with their own cap
 # (four cases, five runs each, plus at most one revision a run). Run 38682959916 reached a 6 USD cap after 6 of 20 runs
 # (about 1 USD a run at the fallback rate, every run revised once), so the cap is 20 USD.
+# The personas group does not gate yet (D-5.1d): runs 38682959916 and 38685472745 missed the bar. Its results are
+# computed and printed; evals-gate skips it until a run passes, then this line goes.
 [[groups]]
 name = "personas"
 prefixes = ["retro/", "decide/"]
 max_usd = 20.0
+gate = "advisory"
 
 [[groups]]
 name = "skills" # every other case

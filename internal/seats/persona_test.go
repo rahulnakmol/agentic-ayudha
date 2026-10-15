@@ -154,6 +154,18 @@ func TestCheckGrounding(t *testing.T) {
 		{"labelled analogy beside its evidence", "Analogy: a receipt without the items.\n\nThe tombstone lacks the kind (#212).", ""},
 		{"analogy alone", "Analogy: a receipt without the items.\n\nWe should talk soon.", "illustration without the cited point"},
 		{"cites nothing", "Nice work, team.", "cites nothing at all"},
+		// D-5.1d: the false positives of tier-2 runs 38682959916 and 38685472745, each with its other side.
+		{"template placeholder is no claim", "File the retro note under `retro/<date>/` after each plan review.", ""},
+		{"placeholder is no evidence for a real claim", "File it under `retro/<date>/`.\n\nThe migration is small, so the plan holds.", "uncited claim"},
+		{"a real but ungrounded path still fails", "The plan has no rollback (`ledger/plans/212/plan.json`).", "cites ledger/plans/212/plan.json"},
+		{"the twin's own charter", "My habits come from `seats/engineering-manager/CHARTER.md`, and the plan for #212 follows them.", ""},
+		{"the twin's own persona.toml", "The stage rule is in `seats/quality-architect/persona.toml`; the floor still holds (#212).", ""},
+		{"not a seat's charter", "See `seats/janitor/CHARTER.md` for the plan.", "cites seats/janitor/CHARTER.md"},
+		{"another file under a seat", "See `seats/engineering-manager/notes.md` for the plan.", "cites seats/engineering-manager/notes.md"},
+		{"bold option heading", "**A. Add `Kind` to `Tombstone`.**\n\nThe struct has no kind (`internal/ledger/tombstone.go:12-16`).", ""},
+		{"bold label then a claim", "**A. Add `Kind` to `Tombstone`.** Every tombstone needs a migration.", "uncited claim"},
+		{"short lead-in", "When a criterion changes stored state in L07, the plan includes:\n\n- an L07 checkpoint (#212)", ""},
+		{"long claim ending with a colon", "The ledger package already stores the kind of every purged object in a separate migration file, as follows:", "uncited claim"},
 		{"code fences are evidence quotes", "The struct (#212):\n\n```go\ntype Tombstone struct{ SHA string } // the migration\n```", ""},
 	}
 	for _, tt := range tests {
@@ -171,7 +183,7 @@ func TestCheckGrounding(t *testing.T) {
 // is refused, and a startup answer stays under the one-page bound.
 func TestCheckStage(t *testing.T) {
 	pr, _ := repoPersonas(t)[verbs.EngineeringManager].Practice("delivery-review")
-	long := "# Retro note\n\n" + strings.Repeat("word ", StartupMaxWords) + "\n"
+	long := "# Retro note\n\n" + strings.Repeat("word ", StartupMaxWords+20) + "\n"
 	tests := []struct {
 		name, md, stage, want string
 	}{
@@ -180,6 +192,8 @@ func TestCheckStage(t *testing.T) {
 		{"missing artefact", "# Notes\n\nShort.", config.StageStartup, `no heading for the startup artefact "Retro note"`},
 		{"ceremony at a startup", "# Retro note\n\n## Retrospective memo\n\nx", config.StageStartup, `carries the enterprise artefact "Retrospective memo"`},
 		{"over one page", long, config.StageStartup, "a startup gets the one-page version"},
+		{"headings and tables are not body prose", "# Retro note\n\n| a | b |\n|---|---|\n| " + strings.Repeat("cell ", 50) + "|\n\n" + strings.Repeat("word ", StartupMaxWords) + "\n", config.StageStartup, ""},
+		{"body prose over the bound", "# Retro note\n\n" + strings.Repeat("word ", StartupMaxWords+1) + "\n", config.StageStartup, "401 words"},
 		{"long is fine at enterprise", strings.Replace(long, "Retro note", "Retrospective memo", 1), config.StageEnterprise, ""},
 	}
 	for _, tt := range tests {

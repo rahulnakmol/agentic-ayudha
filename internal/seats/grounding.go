@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
 // The evidence rule (EvidenceRule) as a deterministic check on a twin's
@@ -14,9 +15,13 @@ import (
 // row. A unit that makes a claim about the code, architecture, risk, or
 // progress must carry a citation; questions are exempt, and a unit labelled
 // "Analogy:" or "Anecdote:" is exempt only when a cited unit stands next to
-// it, because an illustration never replaces evidence. With a grounding text,
+// it, because an illustration never replaces evidence. Headings are not
+// claims, including a unit that is only a bold label or a short lead-in ending
+// with a colon; nor is a statement about a template path (retro/<date>/),
+// which needs no grounding and counts as no evidence. With a grounding text,
 // every citation must name something the grounding contains, so a citation
-// cannot be invented.
+// cannot be invented; a twin's own charter or persona.toml is always known
+// (D-5.1d).
 
 var (
 	claimCue = regexp.MustCompile(`(?i)\b(code|files?|functions?|methods?|packages?|modules?|layers?|L0[1-9]|architecture|boundar(y|ies)|contracts?|interfaces?|api|schemas?|migrations?|registry|gates?|floors?|thresholds?|coverage|tests?|checkpoints?|packs?|proof|merged?|PRs?|pull requests?|commits?|branch(es)?|builds?|deploy\w*|releases?|incidents?|risks?|regress\w*|bugs?|defects?|estimates?|effort|budgets?|cost|spent|velocity|progress|shipped|blocked|latency|metrics?|baselines?|stor(y|ies)|corrections?|overr?an|flak\w*|struct|fields?|tombstones?|ledger|plan)\b|\d+(\.\d+)?\s?%`)
@@ -34,9 +39,14 @@ var (
 	}
 
 	illustration = regexp.MustCompile(`^(?:[*_]{1,2})?(Analogy|Anecdote)\b`)
-	listItem     = regexp.MustCompile(`^\s*(?:[-*+]|\d+[.)])\s+`)
-	tableRule    = regexp.MustCompile(`^\|?\s*:?-{3,}`)
-	headingLine  = regexp.MustCompile(`^#{1,6}\s+(.*)$`)
+	// boldLabel is a unit that is only a bold label, such as an option heading
+	// ("**A. Add the field.**"); a heading claims nothing.
+	boldLabel = regexp.MustCompile(`^\*\*[^*]+\*\*:?$`)
+	// personaSource is a twin's own persona source, which it may always cite.
+	personaSource = regexp.MustCompile(`^seats/([a-z-]+)/(CHARTER\.md|persona\.toml)$`)
+	listItem      = regexp.MustCompile(`^\s*(?:[-*+]|\d+[.)])\s+`)
+	tableRule     = regexp.MustCompile(`^\|?\s*:?-{3,}`)
+	headingLine   = regexp.MustCompile(`^#{1,6}\s+(.*)$`)
 )
 
 // unit is one paragraph, list item, or table row of a Markdown document.
@@ -151,8 +161,15 @@ func CheckGroundingWith(md string, known func(cite string) bool) []string {
 	var out []string
 	statements := 0
 	cited := make([]bool, len(units))
+	template := make([]bool, len(units))
 	for i, u := range units {
-		cited[i] = len(citations(u.text)) > 0
+		for _, c := range citations(u.text) {
+			if isPlaceholder(c) {
+				template[i] = true
+			} else {
+				cited[i] = true
+			}
+		}
 	}
 	for i, u := range units {
 		switch {
@@ -162,6 +179,10 @@ func CheckGroundingWith(md string, known func(cite string) bool) []string {
 			}
 		case strings.HasSuffix(u.text, "?") && !strings.Contains(strings.TrimSuffix(u.text, "?"), ". "):
 			// a question to the reader claims nothing
+		case isLabel(u.text):
+			// an option or section heading written as a bold label or a short lead-in claims nothing
+		case template[i] && !cited[i]:
+			// a statement about a template path (retro/<date>/) describes the process, not this code
 		case claimCue.MatchString(u.text) && !cited[i]:
 			statements++
 			out = append(out, fmt.Sprintf("uncited claim: %q", clip(u.text, 90)))
@@ -172,7 +193,7 @@ func CheckGroundingWith(md string, known func(cite string) bool) []string {
 			continue
 		}
 		for _, c := range citations(u.text) {
-			if !known(c) {
+			if !isPlaceholder(c) && !isPersonaSource(c) && !known(c) {
 				out = append(out, fmt.Sprintf("cites %s, which the grounding does not contain", c))
 			}
 		}
@@ -183,6 +204,28 @@ func CheckGroundingWith(md string, known func(cite string) bool) []string {
 	return out
 }
 
+// isPlaceholder reports whether a citation is a template path such as
+// retro/<date>/ or ledger/plans/<story>/plan.json: it names no real source,
+// so it needs no grounding and is no evidence either.
+func isPlaceholder(c string) bool { return strings.ContainsAny(c, "<>") }
+
+// isPersonaSource reports whether a citation is a registry seat's own charter
+// or persona.toml, which a twin may cite without it being in the grounding.
+func isPersonaSource(c string) bool {
+	m := personaSource.FindStringSubmatch(c)
+	if m == nil {
+		return false
+	}
+	_, ok := verbs.FindSeat(verbs.SeatID(m[1]))
+	return ok
+}
+
+// isLabel reports whether a unit is a heading in disguise: only a bold label,
+// or a lead-in of at most twelve words that ends with a colon.
+func isLabel(text string) bool {
+	return boldLabel.MatchString(text) || (strings.HasSuffix(text, ":") && len(strings.Fields(text)) <= 12)
+}
+
 // normHeading lowercases a heading and strips emphasis, code marks, and a
 // trailing colon.
 func normHeading(h string) string {
@@ -190,16 +233,16 @@ func normHeading(h string) string {
 	return strings.ToLower(strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(h), ":")))
 }
 
-// Words counts the prose words of a Markdown document (code fences and HTML
-// comments excluded).
+// Words counts the body prose of a Markdown document: paragraphs and list
+// items. Headings, table rows, code fences, and HTML comments are not counted,
+// so a one-page bound measures what a reader reads as text.
 func Words(md string) int {
-	units, headings := parse(md)
+	units, _ := parse(md)
 	n := 0
 	for _, u := range units {
-		n += len(strings.Fields(u.text))
-	}
-	for _, h := range headings {
-		n += len(strings.Fields(h))
+		if !strings.HasPrefix(u.text, "|") {
+			n += len(strings.Fields(u.text))
+		}
 	}
 	return n
 }
