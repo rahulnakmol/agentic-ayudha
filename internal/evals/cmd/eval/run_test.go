@@ -58,7 +58,7 @@ func TestGroups(t *testing.T) {
 	}
 	// evals-gate compares only the groups that gate (D-7.3h).
 	out, err = evalIn(t, repoRoot, func() error { main(); return nil }, "-groups", "-gating")
-	if err != nil || strings.TrimSpace(out) != `["brief","personas","skills"]` {
+	if err != nil || strings.TrimSpace(out) != `["brief","skills"]` {
 		t.Fatalf("-groups -gating: %v %q", err, out)
 	}
 }
