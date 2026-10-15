@@ -80,9 +80,7 @@ func (e *Env) openAudit(ctx context.Context, in Values, verb string, full bool) 
 	if a.store, err = e.proofStore(ctx, a.c, a.bot.Token, botIdent(a.bot), a.bot.Tag); err != nil {
 		return nil, err
 	}
-	b, _ := json.Marshal(cfg)
-	sum := sha256.Sum256(b)
-	confHash := "sha256:" + hex.EncodeToString(sum[:])
+	confHash := auditConfigHash(cfg, e.devBranch())
 	clock, _ := cfg.Clock()
 	a.data = &audit.Data{Dev: e.devBranch(), Ledger: "ledger", GateCheck: "protected-paths", Bots: cfg.Identity.BotLogins,
 		SLAHours: cfg.Decisions.SLAHours, Clock: clock, AllowedLicns: AllowedLicences}
@@ -122,6 +120,32 @@ func (e *Env) openAudit(ctx context.Context, in Values, verb string, full bool) 
 	return a, nil
 }
 
+// legacyConfigHash prefixes the whole-configuration hash that reports
+// recorded before Bug #183.
+const legacyConfigHash = "sha256:"
+
+// auditConfigHash hashes only the configuration audit and retro read, so a
+// key added for another feature ([ui], [team]) leaves earlier reports
+// replayable (Bug #183). A key audit starts reading belongs here.
+func auditConfigHash(cfg config.Config, dev string) string {
+	b, _ := json.Marshal(struct {
+		Bots           []string
+		SLAHours       int
+		Time           config.Time
+		CorrectionDays int
+		Never          []string
+		Streak         int
+		Media          string
+		MediaSecret    string
+		RetentionDays  int
+		PerStoryUSD    float64
+		Dev            string
+	}{cfg.Identity.BotLogins, cfg.Decisions.SLAHours, cfg.Time, cfg.Autonomy.CorrectionDays, cfg.Autonomy.Never, cfg.Autonomy.Streak,
+		cfg.Proof.Media, cfg.Proof.MediaSecret, cfg.Proof.RetentionDays, cfg.Budget.PerStoryUSD, dev})
+	sum := sha256.Sum256(b)
+	return "audit-config:sha256:" + hex.EncodeToString(sum[:])
+}
+
 // openReplay loads a report's GitHub inputs snapshot from the ledger tip and
 // the ledger at the commit it recorded. The configuration must be the one the
 // report recorded.
@@ -138,8 +162,15 @@ func (e *Env) openReplay(ctx context.Context, a *auditRun, verb, path, confHash 
 	if a.in, err = audit.Thaw(b, path, a.data); err != nil {
 		return Errorf(ExitUsage, "%s --replay: %v", verb, err)
 	}
-	if a.in.ConfigHash != confHash {
-		return Errorf(ExitBlocked, "%s --replay: the configuration changed since the report (config hash %s, now %s)", verb, a.in.ConfigHash, confHash)
+	switch {
+	case strings.HasPrefix(a.in.ConfigHash, legacyConfigHash):
+		// A report from before Bug #183 hashed the whole configuration, which
+		// a later binary cannot recompute: every new key changes it. The
+		// replay renders the recorded hash with the sections audit reads as
+		// configured now; the byte comparison with the report is the check.
+		fmt.Fprintf(e.Err, "aayu: %s --replay: %s records a whole-configuration hash from an earlier binary, which cannot be recomputed; replaying with the current [identity], [decisions], [time], [autonomy], [proof], [budget], and dev branch\n", verb, path)
+	case a.in.ConfigHash != confHash:
+		return Errorf(ExitBlocked, "%s --replay: the configuration changed since the report in what audit reads (config hash %s, now %s)", verb, a.in.ConfigHash, confHash)
 	}
 	if a.tree, err = a.store.Ledger.ReadAt(ctx, a.in.Ledger); err != nil {
 		return Errorf(ExitUsage, "%s --replay: %v", verb, err)

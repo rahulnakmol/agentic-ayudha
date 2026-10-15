@@ -132,7 +132,11 @@ segment never reached the ledger leaves no line. So the log is never the source 
 The report goes to `audit/<date>/audit-<time>.md` on the ledger, beside an `.inputs.json` snapshot of what GitHub
 returned. GitHub's history changes and rule suites are listed for only about a month, so
 `aayu audit --replay <snapshot>` regenerates the report byte for byte from the snapshot, and `--since`, `--until`, and `--ledger` re-read
-GitHub with the same inputs. The next run starts where the last report's cursor stopped.
+GitHub with the same inputs. The report's config hash covers only what audit reads (`[identity] bot_logins`,
+`[decisions]`, `[time]`, `[autonomy]`, `[proof]`, `[budget] per_story_usd`, the dev branch), so a key added for another
+feature leaves a report replayable; a replay refuses when one of those changed. Reports written before 15 October 2026
+recorded a hash of the whole configuration, which no later binary can recompute, so their replay is checked by the
+byte comparison alone. The next run starts where the last report's cursor stopped.
 
 The summary of the latest report on this repository's ledger,
 `audit/2026-10-12/audit-20261012T063500Z.md`:
