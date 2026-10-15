@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"io/fs"
 	"os"
 	"path"
@@ -13,8 +14,10 @@ import (
 	"time"
 
 	"github.com/charmbracelet/x/term"
+	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/cobra"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/seats"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ui"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
@@ -67,33 +70,41 @@ func (e *Env) isTerminal(stream any) bool {
 	return ok && term.IsTerminal(f.Fd())
 }
 
-// voice is the seat's persona for the CLI, read from its charter (seats/<seat>/
-// CHARTER.md, owned by the persona work): the `## Persona` section's intro and
-// sign-off lines (labels Intro or Purpose, Sign-off, and Name or Twin name),
-// else the first clause of the charter's `## Purpose`. Nothing is copied here.
-func (e *Env) voice(seat verbs.SeatID) ui.Voice {
+// voice is the seat's persona for the CLI (WP1.1b), read from its
+// persona.toml (WP5.1b, the single source): the twin's name, its purpose up to
+// the first colon as the intro, and one of its signature questions, picked by
+// the command, as the sign-off. Without a persona, the first clause of the
+// charter's purpose speaks and nothing is invented.
+func (e *Env) voice(seat verbs.SeatID, command string) ui.Voice {
 	v := ui.Voice{Seat: verbs.SeatName(seat)}
 	if e.Assets == nil {
 		return v
 	}
-	b, err := fs.ReadFile(e.Assets, path.Join("seats", string(seat), "CHARTER.md"))
-	if err != nil {
+	var p seats.Persona
+	if b, err := fs.ReadFile(e.Assets, seats.PersonaPath(seat)); err == nil && toml.Unmarshal(b, &p) == nil && p.Purpose != "" {
+		v.Name, v.Intro = p.Name, clause(p.Purpose)
+		if len(p.Questions) > 0 {
+			h := fnv.New32a()
+			_, _ = h.Write([]byte(command))
+			v.SignOff = p.Questions[int(h.Sum32()%uint32(len(p.Questions)))]
+		}
 		return v
 	}
-	persona := mdSection(string(b), "persona")
-	v.Name = field(persona, "twin name", "twin", "name")
-	v.Intro = field(persona, "intro", "introduction", "greeting", "purpose")
-	v.SignOff = field(persona, "sign-off", "signoff", "sign off", "closing")
-	if v.Intro == "" {
-		purpose := firstLine(mdSection(string(b), "purpose"))
-		if i := strings.IndexAny(purpose, ":."); i > 0 {
-			purpose = purpose[:i]
-		}
-		if purpose != "" {
-			v.Intro = strings.ToLower(purpose[:1]) + purpose[1:] + "."
-		}
+	if b, err := fs.ReadFile(e.Assets, path.Join("seats", string(seat), "CHARTER.md")); err == nil {
+		v.Intro = clause(firstLine(mdSection(string(b), "purpose")))
 	}
 	return v
+}
+
+// clause is a sentence up to its first colon or full stop, as its own sentence.
+func clause(s string) string {
+	if i := strings.IndexAny(s, ":."); i > 0 {
+		s = s[:i]
+	}
+	if s == "" {
+		return ""
+	}
+	return s + "."
 }
 
 // mdSection returns the body of the first level-2 heading that starts with name.
@@ -101,7 +112,7 @@ func mdSection(md, name string) string {
 	var b strings.Builder
 	in := false
 	for _, line := range strings.Split(md, "\n") {
-		if strings.HasPrefix(line, "## ") || strings.HasPrefix(line, "<!-- BEGIN GENERATED") {
+		if strings.HasPrefix(line, "## ") {
 			if in {
 				break
 			}
@@ -113,43 +124,6 @@ func mdSection(md, name string) string {
 		}
 	}
 	return b.String()
-}
-
-var labelLine = regexp.MustCompile(`^\s*(?:[-*]\s+)?(?:\*\*([^*]+?)\*\*|([A-Za-z][A-Za-z -]*?)):?\s*[:.—-]?\s*(.*)$`)
-
-// field finds a labelled one-line value in a persona section: "**Label:** text",
-// "- **Label**: text", "Label: text", or a "### Label" heading followed by text.
-func field(sec string, labels ...string) string {
-	lines := strings.Split(sec, "\n")
-	match := func(l string) bool {
-		l = strings.ToLower(strings.Trim(strings.TrimSpace(l), ":. "))
-		for _, want := range labels {
-			if l == want {
-				return true
-			}
-		}
-		return false
-	}
-	for i, line := range lines {
-		if h, ok := strings.CutPrefix(strings.TrimSpace(line), "### "); ok && match(h) {
-			return firstLine(strings.Join(lines[i+1:], "\n"))
-		}
-		m := labelLine.FindStringSubmatch(line)
-		if m == nil {
-			continue
-		}
-		label := m[1]
-		if label == "" {
-			label = m[2]
-			if !strings.Contains(line, ":") {
-				continue
-			}
-		}
-		if match(label) && strings.TrimSpace(m[3]) != "" {
-			return strings.Trim(strings.TrimSpace(m[3]), `"“”`)
-		}
-	}
-	return ""
 }
 
 func firstLine(s string) string {

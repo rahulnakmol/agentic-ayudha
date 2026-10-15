@@ -77,10 +77,10 @@ func (e *Env) commandVoice(cmd *cobra.Command) ui.Voice {
 	}
 	switch name := cmd.Name(); {
 	case name == "aayu":
-		return e.voice(verbs.EngineeringManager)
+		return e.voice(verbs.EngineeringManager, "home")
 	case name == "next" || name == "tour" || cmd.GroupID == "verbs":
 		if c, ok := verbs.Find(name); ok {
-			return e.voice(c.Seat)
+			return e.voice(c.Seat, name)
 		}
 	}
 	return ui.Voice{}

@@ -156,19 +156,21 @@ func TestErrorsEndWithNext(t *testing.T) {
 	}
 }
 
-func TestVoiceReadsTheCharter(t *testing.T) {
-	persona := "# X charter\n\n## Purpose\n\nOwns flow: and more.\n\n## Persona\n\n- **Twin name:** Mira\n- **Intro:** Let's see what's moving.\n- **Sign-off:** \"Small steps, real proof.\"\n\n## Limits\n\n- **Intro:** not this one\n"
-	v := voiceOf(t, persona)
-	if v.Name != "Mira" || v.Intro != "Let's see what's moving." || v.SignOff != "Small steps, real proof." || v.Speaker() != "Mira (Engineering Manager)" {
-		t.Errorf("persona section: %+v", v)
+func TestVoiceReadsThePersona(t *testing.T) {
+	persona := "name = \"Kiran\"\npurpose = \"Keeps work flowing to a proven merge: elevates the concept.\"\nquestions = [\"Who owns the next step, and by when?\", \"What does the pack say?\"]\n"
+	v := voiceOf(t, map[string]string{"seats/engineering-manager/persona.toml": persona}, "status")
+	if v.Name != "Kiran" || v.Intro != "Keeps work flowing to a proven merge." || v.Speaker() != "Kiran (Engineering Manager)" {
+		t.Errorf("persona: %+v", v)
 	}
-	headings := "## Persona\n\n### Purpose\n\nKeeps work flowing.\n\n### Sign-off\n\nOnward.\n"
-	if v := voiceOf(t, headings); v.Intro != "Keeps work flowing." || v.SignOff != "Onward." {
-		t.Errorf("persona with ### fields: %+v", v)
+	if v.SignOff != "Who owns the next step, and by when?" && v.SignOff != "What does the pack say?" {
+		t.Errorf("sign-off is not a signature question: %q", v.SignOff)
 	}
-	// No persona yet: the charter's purpose speaks; nothing is invented.
-	if v := voiceOf(t, "## Purpose\n\nOwns flow and the merge decision: work moves.\n"); v.Intro != "owns flow and the merge decision." || v.SignOff != "" {
-		t.Errorf("purpose fallback: %+v", v)
+	if again := voiceOf(t, map[string]string{"seats/engineering-manager/persona.toml": persona}, "status"); again.SignOff != v.SignOff {
+		t.Errorf("the sign-off of one command changed between runs")
+	}
+	// No persona: the charter's purpose speaks; nothing is invented.
+	if v := voiceOf(t, map[string]string{"seats/engineering-manager/CHARTER.md": "## Purpose\n\nOwns flow and the merge decision: work moves.\n"}, "status"); v.Intro != "Owns flow and the merge decision." || v.SignOff != "" || v.Name != "" {
+		t.Errorf("charter fallback: %+v", v)
 	}
 }
 
@@ -176,11 +178,15 @@ func TestVoiceReadsTheCharter(t *testing.T) {
 // seat speaking without churning when the real charters change.
 func testAssets(t *testing.T) fstest.MapFS {
 	t.Helper()
-	return fstest.MapFS{"seats/engineering-manager/CHARTER.md": {Data: []byte("## Purpose\n\nOwns flow.\n\n## Persona\n\n- **Twin name:** Mira\n- **Intro:** Here is where the work stands.\n- **Sign-off:** Small steps, real proof.\n")}}
+	return fstest.MapFS{"seats/engineering-manager/persona.toml": {Data: []byte("name = \"Mira\"\npurpose = \"Here is where the work stands: and the rest.\"\nquestions = [\"Small steps, real proof?\"]\n")}}
 }
 
-func voiceOf(t *testing.T, charter string) ui.Voice {
+func voiceOf(t *testing.T, files map[string]string, command string) ui.Voice {
 	t.Helper()
-	e, _ := newEnv(IO{}, Options{Assets: fstest.MapFS{"seats/engineering-manager/CHARTER.md": {Data: []byte(charter)}}, Getenv: func(string) string { return "" }, Dir: t.TempDir()})
-	return e.voice(verbs.EngineeringManager)
+	fsys := fstest.MapFS{}
+	for k, v := range files {
+		fsys[k] = &fstest.MapFile{Data: []byte(v)}
+	}
+	e, _ := newEnv(IO{}, Options{Assets: fsys, Getenv: func(string) string { return "" }, Dir: t.TempDir()})
+	return e.voice(verbs.EngineeringManager, command)
 }
