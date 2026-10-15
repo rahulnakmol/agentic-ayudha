@@ -121,6 +121,9 @@ type Input struct {
 	Files      []DiffFile        // the parsed diff; ParseDiff(Diff) when nil
 	Areas      []Area            // the review plan and retrieved context (BuildContext)
 	Dismissed  []Dismissal       // this repository's dismissed findings
+	// Voice is the Accountable seat's persona for the summary (the Engineering
+	// Manager twin, WP5.1b) with the evidence rule; empty: no persona.
+	Voice string
 }
 
 // DiffHash is the cache key of an inspection: the diff, the pack's head and
@@ -200,7 +203,11 @@ type Runner struct {
 
 // review asks one reviewer for its structured reply.
 func review(ctx context.Context, r Reviewer, in Input) (Reply, float64, error) {
-	req := models.Request{System: System, MaxTokens: 6000, Messages: []models.Message{{Role: "user", Content: Prompt(in)}}}
+	sys := System
+	if in.Voice != "" {
+		sys += "\n\n" + in.Voice
+	}
+	req := models.Request{System: sys, MaxTokens: 6000, Messages: []models.Message{{Role: "user", Content: Prompt(in)}}}
 	var reply Reply
 	var spent float64
 	err := models.Structured(ctx, func(ctx context.Context, q models.Request) (models.Response, error) {

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -26,6 +27,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
+	"github.com/rahulnakmol/agentic-ayudha/internal/seats"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
@@ -204,6 +206,27 @@ func reviewerModels(gw *models.Gateway, builder verbs.Family, peer bool, peerMod
 	return append(out, b), notes, nil
 }
 
+// InspectVoice is the Engineering Manager twin's voice for inspect's summary
+// (inspect is the EM seat's verb, WP5.1b) with the evidence rule: the summary
+// speaks as the persona and cites file:line; the findings stay in the reply's
+// schema and the floors stay facts. Empty when the personas cannot be read.
+func InspectVoice(assets fs.FS) string {
+	if assets == nil {
+		return ""
+	}
+	ps, err := seats.LoadPersonas(assets)
+	if err != nil {
+		return ""
+	}
+	p, ok := ps[verbs.EngineeringManager]
+	if !ok {
+		return ""
+	}
+	return fmt.Sprintf("Write the summary as %s, the %s twin. Voice: %s Pushing back: %s\n\n%s\n\n"+
+		"The persona shapes the summary only. Findings stay in the reply's schema, one per problem with its quote, and the deterministic floors stay facts no voice can soften.",
+		p.Name, verbs.SeatName(verbs.EngineeringManager), p.Voice, p.PushBack, seats.EvidenceRule)
+}
+
 func runInspect(ctx context.Context, e *Env, in Values) error {
 	if in.String("dismiss") != "" {
 		return e.inspectDismiss(ctx, in)
@@ -265,6 +288,7 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		ins.Pack, ins.Evidence, _ = e.packFor(ctx, c, ins.Story, pr.GetHead().GetSHA())
 	}
 	cfg := l.Config.Inspect
+	ins.Voice = InspectVoice(e.Assets)
 	ins.Mode = cfg.Mode
 	if deleg.Receiver != "" && cfg.DelegatedMode != "" {
 		ins.Mode = cfg.DelegatedMode

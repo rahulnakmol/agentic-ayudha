@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/cli"
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
@@ -287,7 +288,7 @@ func (h *Harness) runReview(ctx context.Context, c Case, variant string) (Run, f
 		}, req, []byte(legacySchema), &reply)
 		posted = reply.Findings // 0.1 posted every finding
 	default:
-		in.Mode = variant
+		in.Mode, in.Voice = variant, cli.InspectVoice(h.Assets)
 		fl := inspect.Filter{MinConfidence: h.Inspect.MinConfidence, SuppressAfter: h.Inspect.SuppressAfter, Generated: h.Inspect.Generated}
 		var res inspect.Result
 		res, _, err = inspect.Runner{Reviewers: rs, Filter: fl}.Run(ctx, in, inspect.State{})
