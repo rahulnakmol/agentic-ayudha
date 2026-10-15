@@ -1,0 +1,16 @@
+# PROTOTYPE evidence map (scratch branch): verify already reads `tests`; `journeys` is the proposed addition.
+[[criterion]]
+id = 1
+journeys = ["ask-answer.typed"]
+
+[[criterion]]
+id = 2
+journeys = ["refer-to-hr.typed"]
+
+[[criterion]]
+id = 3
+journeys = ["api-ask.errors"]
+
+[[criterion]]
+id = 4
+journeys = ["product-events.visit-and-ask"]
