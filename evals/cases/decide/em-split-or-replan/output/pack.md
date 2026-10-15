@@ -1,4 +1,4 @@
-# Decision pack: #212 split or re-plan (Kiran, Engineering Manager twin; startup)
+# Decision pack: #212 split or re-plan (Athena, Engineering Manager twin; startup)
 
 ## Question
 
@@ -39,7 +39,7 @@ correction rate stays above its 20 % threshold (#225).
 
 ## Pre-mortem
 
-Juno, the Mentalist twin, assumed option 2 failed a week from now. Likeliest reasons:
+Pythia, the Mentalist twin, assumed option 2 failed a week from now. Likeliest reasons:
 
 - The audit reader refuses the new field, because it decodes with `DisallowUnknownFields`
   (`internal/audit/purges.go:20-31`). Early warning: a test that reads an old and a new tombstone fails.

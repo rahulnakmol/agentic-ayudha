@@ -2,7 +2,7 @@
 # (Test plan). The same scenario runs as qa-startup and qa-enterprise; both must stay grounded and carry their own
 # stage's artefact and no other.
 skill = "proof"
-description = "Vera plans the tests for the #212 re-plan at the startup stage."
+description = "Themis plans the tests for the #212 re-plan at the startup stage."
 input = "../../retro/grounding.md"
 artifacts = ["output/plan.md"]
 
