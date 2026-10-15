@@ -46,14 +46,23 @@ func statusWork(ctx context.Context, e *Env) error {
 	if root == "" {
 		return Errorf(ExitUsage, "status --work runs in a checkout of the repository")
 	}
-	main := mainCheckout(root)
+	// git lists worktrees by their resolved path, with forward slashes (C:/… on
+	// Windows, /private/var/… for /var/… on macOS), so both sides are resolved.
+	resolve := func(p string) string {
+		p = filepath.FromSlash(p)
+		if r, err := filepath.EvalSymlinks(p); err == nil {
+			return r
+		}
+		return filepath.Clean(p)
+	}
+	main := resolve(mainCheckout(root))
 	now := e.Now()
 	var items []WorkItem
 	out, _ := run2(ctx, main, "git", "worktree", "list", "--porcelain")
 	base := filepath.Join(main, ".aayudha", "worktrees") + string(filepath.Separator)
 	path, branch := "", ""
 	flush := func() {
-		if !strings.HasPrefix(path, base) {
+		if path = resolve(path); !strings.HasPrefix(path, base) {
 			return
 		}
 		name := strings.TrimPrefix(path, base)
