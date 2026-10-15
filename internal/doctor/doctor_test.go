@@ -214,6 +214,9 @@ func failing(t *testing.T) map[string]func(*Probe) {
 				return "", errors.New("not found")
 			}
 		},
+		"delegate-env": func(p *Probe) {
+			p.Root = repoWith(t, map[string]string{".agents/setup": "#!/usr/bin/env bash\nGO_VERSION=\"1.24.0\"\n", "go.mod": "module m\n\ngo 1.25.0\n"})
+		},
 		"worktrees": func(p *Probe) {
 			overlay(p, map[string]string{"git worktree list --porcelain": "worktree /repo\nHEAD a\n\nworktree /tmp/wt-x\nHEAD b\nprunable gitdir file points to non-existent location\n"})
 		},

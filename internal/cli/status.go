@@ -200,6 +200,9 @@ func (e *Env) proofCovered(c *github.Client, repo string) func(ctx context.Conte
 }
 
 func runStatus(ctx context.Context, e *Env, in Values) error {
+	if in.Bool("work") {
+		return statusWork(ctx, e)
+	}
 	if in.Bool("streak") {
 		if in.Bool("all") || in.Bool("digest") || in.Has("issue") {
 			return Errorf(ExitUsage, "status --streak takes no issue, --all, or --digest")

@@ -82,6 +82,17 @@ suppress_after = 2      # distinct human dismissals a finding must resemble to b
 peer_model = ""         # empty: the first registry review candidate of another family
 generated = ["LAYERS.md", "CONSTRAINTS.md", "docs/RACI.md", "internal/config/schema.json", "internal/mcp/schemas/*.json", "go.sum", "pnpm-lock.yaml"]
 
+# How build --delegate reaches other agents (WP5.5b). Values name secrets; they never hold them.
+[delegate]
+cursor_secret = "cursor-api-key"
+cursor_api = "https://api.cursor.com"
+cursor_model = ""         # empty: Cursor's default model
+codex_env = ""            # the Codex cloud environment ID; empty: Codex runs only with --local
+amp_orb_size = "a1.small"
+claude_trigger = "@claude"
+checks = []               # empty: the brief points at the checks AGENTS.md lists
+local_timeout_minutes = 60
+
 # Design tokens and OpenFeature flag definitions the design verbs check against (WP6.5).
 [design]
 tokens = "packages/design-system/tokens/tokens.json"

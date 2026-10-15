@@ -35,6 +35,11 @@
       "description": "Compute the autonomy streak of every layer from merged-PR history instead of the rollups (WP5.7).",
       "type": "boolean",
       "x-aayu-type": "bool"
+    },
+    "work": {
+      "description": "List the work in flight instead: aayu worktrees (agent, story, branch, PR, age) and stories delegated to cloud agents (WP5.5b).",
+      "type": "boolean",
+      "x-aayu-type": "bool"
     }
   },
   "required": [],

@@ -164,3 +164,41 @@ func TestBaseline(t *testing.T) {
 }
 
 func itoa(n int) string { b, _ := json.Marshal(n); return string(b) }
+
+// polish off the PR head prepares .aayudha/worktrees/pr-<n> on the PR's
+// branch with the critique copied in, instead of asking for the main
+// checkout to switch branches (WP5.5b); the worktree sees review's critique
+// (reviewDir is shared by the clone's worktrees); gc removes it once the PR closes.
+func TestPolishPreparesWorktree(t *testing.T) {
+	g := readyTree(t)
+	dir, _ := ledgerCheckout(t)
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH")}
+	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+	git(t, dir, "checkout", "--quiet", "-b", "story/2-delivery")
+	_ = os.WriteFile(filepath.Join(dir, "page.html"), []byte("<p>form</p>\n"), 0o644)
+	git(t, dir, "add", ".")
+	git(t, dir, "commit", "--quiet", "-m", "feat: delivery preferences")
+	git(t, dir, "push", "--quiet", "origin", "story/2-delivery")
+	head := git(t, dir, "rev-parse", "HEAD")
+	git(t, dir, "checkout", "--quiet", "dev")
+	pr := g.AddPR("Delivery preferences", "Refs #2", "founder", "story/2-delivery", head, "dev")
+	_ = os.MkdirAll(reviewDir(dir, pr.Number), 0o755)
+	_ = os.WriteFile(filepath.Join(reviewDir(dir, pr.Number), "critique.json"), []byte(`{"disposition":"fix"}`), 0o644)
+	code, _, errOut := run(t, env, opts, "polish", itoa(pr.Number), "--repo", "o/r")
+	wt := filepath.Join(dir, ".aayudha", "worktrees", "pr-"+itoa(pr.Number))
+	if code != ExitBlocked || !strings.Contains(errOut, "applied in an aayu worktree: "+wt) || git(t, wt, "rev-parse", "HEAD") != head {
+		t.Fatalf("polish off the head: %d %s", code, errOut)
+	}
+	if b, _ := os.ReadFile(filepath.Join(reviewDir(wt, pr.Number), "critique.json")); string(b) != `{"disposition":"fix"}` {
+		t.Fatalf("the worktree does not see the critique: %q", b)
+	}
+	if git(t, dir, "rev-parse", "--abbrev-ref", "HEAD") != "dev" {
+		t.Fatal("polish switched the main checkout")
+	}
+	g.Mu.Lock()
+	g.Issues[pr.Number].State = "closed"
+	g.Mu.Unlock()
+	if code, out, errOut := run(t, env, opts, "gc", "--repo", "o/r"); code != 0 || !strings.Contains(out, "worktree #"+itoa(pr.Number)+" removed") || dirExists(wt) {
+		t.Fatalf("gc: %d %s %s", code, out, errOut)
+	}
+}

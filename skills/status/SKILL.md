@@ -36,11 +36,17 @@ aayu:
       required: false
       positional: false
       description: "Compute the autonomy streak of every layer from merged-PR history instead of the rollups (WP5.7)."
+    - name: work
+      type: bool
+      required: false
+      positional: false
+      description: "List the work in flight instead: aayu worktrees (agent, story, branch, PR, age) and stories delegated to cloud agents (WP5.5b)."
   outputs:
     - "rollup"
     - "goal-comment"
     - "digest"
     - "streaks"
+    - "work-in-flight"
   gates: []
   identity: bot
   mode: none

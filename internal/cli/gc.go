@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	gh "github.com/google/go-github/v90/github"
@@ -90,11 +91,13 @@ func runGC(ctx context.Context, e *Env, _ Values) error {
 		_, _ = run2(ctx, root, "git", "worktree", "prune")
 		dirs, _ := os.ReadDir(filepath.Join(root, ".aayudha", "worktrees"))
 		for _, d := range dirs {
-			n, err := strconv.Atoi(d.Name())
-			if !d.IsDir() || err != nil {
+			// <n> (build), <n>-<agent> (build --delegate --local), pr-<n> (polish).
+			m := worktreeName.FindStringSubmatch(strings.TrimPrefix(d.Name(), "pr-"))
+			if !d.IsDir() || m == nil {
 				continue
 			}
-			wt := BuildWorktree(root, n)
+			n, _ := strconv.Atoi(m[1])
+			wt := filepath.Join(root, ".aayudha", "worktrees", d.Name())
 			is, _, err := c.REST.Issues.Get(ctx, owner, name, n)
 			if err != nil && !github.NotFound(err) {
 				return Wrap(ExitExternal, err)
