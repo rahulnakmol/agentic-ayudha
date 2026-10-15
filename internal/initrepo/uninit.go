@@ -2,6 +2,7 @@ package initrepo
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -27,7 +28,12 @@ func (in *Init) Uninit(ctx context.Context) error {
 	r := in.Repo
 	st := in.State
 	var labels []*gh.Label
-	for _, o := range slices.Clone(st.Objects) {
+	// The ledger branch goes last, after the rulesets: the history ruleset
+	// blocks its deletion for everyone, admins included (D-4.2b.h).
+	objs := slices.Clone(st.Objects)
+	last := func(o Object) int { return map[bool]int{true: 1}[o.Kind == "ledger"] }
+	slices.SortStableFunc(objs, func(a, b Object) int { return cmp.Compare(last(a), last(b)) })
+	for _, o := range objs {
 		if o.Adopted {
 			in.note("uninit", o.Kind, o.Name, "kept", "existed before init")
 			if !in.dry() {
