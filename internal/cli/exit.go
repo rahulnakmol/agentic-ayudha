@@ -31,10 +31,21 @@ var ExitCodes = []struct {
 	{ExitBudget, "budget limit reached"},
 }
 
-// Error is an error that carries an exit code.
+// Error is an error that carries an exit code, and optionally the exact
+// command that fixes it (printed after the message as "next:").
 type Error struct {
 	Code int
 	Err  error
+	Next string
+}
+
+// WithNext attaches the exact command that fixes err. It keeps err's code (an
+// error without one is internal).
+func WithNext(err error, next string) error {
+	if err == nil {
+		return nil
+	}
+	return &Error{Code: CodeOf(err), Err: err, Next: next}
 }
 
 func (e *Error) Error() string { return e.Err.Error() }

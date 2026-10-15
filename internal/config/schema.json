@@ -734,6 +734,27 @@
       "additionalProperties": false,
       "type": "object",
       "description": "The team the seat twins adapt their practice to (WP5.1b): depth and ceremony only, never the floors, the evidence rule, or human-only gates."
+    },
+    "ui": {
+      "properties": {
+        "plain": {
+          "type": "boolean",
+          "description": "Words only on a terminal: no colour, motion, emoji, or box drawing (screen-reader friendly); the same as --plain."
+        },
+        "theme": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "saffron",
+            "contrast",
+            "mono"
+          ],
+          "description": "Colour theme: auto (the terminal's own 16 colours, default), saffron (warm true colour for dark terminals), contrast (bright and bold), or mono (no hue)."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "How aayu looks on a person's terminal (WP1.1b); usually set in the user-level config. Machines (--json, MCP, agents, CI, pipes) always get plain, stable text."
     }
   },
   "additionalProperties": false,

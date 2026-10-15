@@ -87,6 +87,6 @@ Sources:
 | `install` | Accountable; the twin executes it (chore lane); owns thresholds and policy |
 | `doctor` | Accountable; the twin executes it (chore lane); owns thresholds and policy |
 
-Plumbing commands accountable for: `config`, `auth`, `actions`, `models`, `mcp`, `self-update`, `upgrade`, `version`, `gc`, `uninit`, `hook`, `lfs-agent`.
+Plumbing commands accountable for: `config`, `auth`, `actions`, `models`, `mcp`, `self-update`, `upgrade`, `version`, `gc`, `uninit`, `hook`, `lfs-agent`, `completion`.
 
 <!-- END GENERATED: raci -->

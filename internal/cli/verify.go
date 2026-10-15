@@ -17,6 +17,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ui"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verify"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
@@ -220,7 +221,21 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 			return Wrap(ExitUsage, err)
 		}
 	}
-	rep := verify.Execute(ctx, r, floors)
+	// One floor at a time, so a person sees each one run (WP1.1b); the report
+	// is the one verify.Execute would build from all of them.
+	var rep verify.Report
+	for i, f := range floors {
+		fp := e.progress(fmt.Sprintf("Floor %d/%d: %s", i+1, len(floors), f.Name()))
+		one := verify.Execute(ctx, r, []verify.Floor{f})
+		rep.Checks, rep.Artifacts = append(rep.Checks, one.Checks...), append(rep.Artifacts, one.Artifacts...)
+		if len(one.Checks) > 0 {
+			c := one.Checks[0]
+			fp.Done(floorMark(c.Result), c.Result)
+		} else {
+			fp.Done(ui.StatusNA, "no check")
+		}
+	}
+	rep.Hold = (&proof.Pack{Checks: rep.Checks}).FloorsHold()
 	if res.Story > 0 && !rep.Hold {
 		ws, err := e.waivers(ctx, repo, res.Story)
 		if err != nil {
@@ -401,4 +416,17 @@ func renderVerify(w io.Writer, res VerifyResult) error {
 		fmt.Fprintln(w, "no pack: no story found (Refs #n in the PR body, an Aayudha-Story trailer, or a story/<n>-… branch)")
 	}
 	return nil
+}
+
+// floorMark is the status word a floor result shows as live progress.
+func floorMark(result string) string {
+	switch result {
+	case proof.Pass, proof.Waived:
+		return ui.StatusPass
+	case proof.Skipped:
+		return ui.StatusNA
+	case proof.Fail, proof.Blocked:
+		return ui.StatusFail
+	}
+	return ui.StatusInfo
 }

@@ -27,6 +27,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ui"
 )
 
 func init() { register("build", runBuild) }
@@ -287,7 +288,16 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		if rec.Layers == nil {
 			rec.Layers = []string{}
 		}
+		vp := e.progress(fmt.Sprintf("Checkpoint %s (%s): verifying the floors", res.Checkpoint, listOrNone(layers)))
 		hold, detail, verr := e.checkpointVerify(ctx, res.Worktree)
+		switch {
+		case verr != nil:
+			vp.Done(ui.StatusWarn, "verify could not run")
+		case hold:
+			vp.Done(ui.StatusPass, "floors hold")
+		default:
+			vp.Done(ui.StatusFail, "floor miss: "+detail)
+		}
 		switch {
 		case verr != nil:
 			rec.Verify, rec.Detail = "error", verr.Error()
@@ -324,7 +334,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 				_, err := fmt.Fprintf(w, "#%d: checkpoint %s (attempt %d) committed (%s); verify: floor miss: %s\n  next: %s\n", n, res.Checkpoint, attempt, short(res.Commit), detail, res.Next)
 				return err
 			})
-			return Errorf(ExitFloor, "checkpoint %s: floor miss: %s", res.Checkpoint, detail)
+			return WithNext(Errorf(ExitFloor, "checkpoint %s: floor miss: %s", res.Checkpoint, detail), fmt.Sprintf("aayu build %d", n))
 		}
 	}
 	ahead, _ := run2(ctx, res.Worktree, "git", "rev-list", "--count", "origin/"+dev+"..HEAD")
@@ -334,7 +344,14 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		}
 		return Errorf(ExitBlocked, "build #%d: nothing to commit yet in %s", n, res.Worktree)
 	}
-	if err := e.publishBuild(ctx, c, bot.Token.Value, root, repo, dev, n, chk, &res); err != nil {
+	pp := e.progress(fmt.Sprintf("Pushing %s and opening the pull request", res.Branch))
+	perr := e.publishBuild(ctx, c, bot.Token.Value, root, repo, dev, n, chk, &res)
+	if perr != nil {
+		pp.Done(ui.StatusFail, perr.Error())
+	} else {
+		pp.Done(ui.StatusPass, fmt.Sprintf("PR #%d", res.PR))
+	}
+	if err := perr; err != nil {
 		// The checkpoint is committed: record it even though the push or the PR
 		// failed, so the next run (or --resume) continues after it.
 		if serr := e.saveBuild(ctx, c, w, repo, n, &st, &res); serr != nil {

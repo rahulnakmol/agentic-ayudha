@@ -129,7 +129,10 @@ func runReady(ctx context.Context, e *Env, in Values) error {
 		return err
 	}
 	if !res.Pass {
-		return Errorf(ExitBlocked, "#%d does not pass Ready (%d problem(s))", n, len(res.Problems))
+		return WithNext(Errorf(ExitBlocked, "#%d does not pass Ready (%d problem(s)): fix them in the issue body", n, len(res.Problems)), fmt.Sprintf("aayu ready %d --check", n))
+	}
+	if !in.Bool("check") && !in.Bool("guard") && !res.DryRun {
+		e.milestone("first-ready", true, "Your first Ready story!", fmt.Sprintf("#%d is Ready; the build lane can pick it up with aayu build %d.", n, n))
 	}
 	return nil
 }

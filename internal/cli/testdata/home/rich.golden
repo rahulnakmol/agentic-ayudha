@@ -1,0 +1,18 @@
+-- stdout --
+[1;35maayudha · o/r[m
+[2mLevel 1: clear work items[m
+
+[2mJourney  [m[32m✓ Set up[m[2m → [m[32m✓ Shape[m[2m → [m[32m✓ Ready[m[2m → [m[32m✓ Build[m[2m → [m[32m✓ Prove[m[2m → [m[1;35m● Ship[m[2m → [m[2mRelease[m[2m → [m[2mLearn[m
+
+  Ready to build         [35m1[m  #1 Export the report as CSV
+  In progress            [35m1[m  #2 Sign in with a passkey
+  Waiting for a person   [35m1[m  PR #4 for #1, gate none
+  Blocked                [2m0[m
+  Failing floors         [2m0[m
+  Measurements due       [2m0[m
+
+[1;35mNext →[m [36maayu ship 4[m
+  PR #4 (story #1) waits for a person: review and approve it on GitHub, then ship it. [2m(Engineering Manager, for a person to run)[m
+-- stderr --
+[3;35mMira (Engineering Manager): Here is where the work stands.[m
+[3;35m— Mira (Engineering Manager): Small steps, real proof.[m

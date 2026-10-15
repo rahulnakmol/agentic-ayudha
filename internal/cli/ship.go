@@ -335,13 +335,19 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	if err := e.checkpoint(tok); err != nil {
 		return Wrap(ExitExternal, fmt.Errorf("merged, but the actions segment did not reach the ledger: %w", err))
 	}
-	return e.Emit(res, func(w io.Writer) error {
+	if err := e.Emit(res, func(w io.Writer) error {
 		fmt.Fprintf(w, "ship #%d: merged as %s; story #%d is status:merged with its Complete section\n", n, short(rec.MergeCommit), story)
 		fmt.Fprintf(w, "  pack %s%s\n", rec.Pack, map[bool]string{true: " (landed from the gate's run artifact: " + rec.PackLanded + ")", false: ""}[rec.PackLanded != ""])
 		fmt.Fprintf(w, "  human pass: %s by %s%s\n", rec.HumanPass.Kind, rec.HumanPass.Login, map[bool]string{true: " — " + rec.HumanPass.Note, false: ""}[rec.HumanPass.Note != ""])
 		fmt.Fprintf(w, "  ship record %s; actions segment %s\n", res.Record, rec.Actions)
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
+	// Every ship lands an authoritative pack (the merge gate's), so the first
+	// one is the first proven ship.
+	e.milestone("first-proven-ship", true, "Your first proven ship!", fmt.Sprintf("Story #%d merged with an authoritative proof pack and a recorded human pass.", story))
+	return nil
 }
 
 func dirExists(p string) bool { st, err := os.Stat(p); return err == nil && st.IsDir() }

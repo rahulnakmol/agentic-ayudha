@@ -17,6 +17,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/providers"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ui"
 	"github.com/rahulnakmol/agentic-ayudha/internal/upgrade"
 )
 
@@ -132,7 +133,9 @@ func runDoctor(ctx context.Context, e *Env, in Values) error {
 			return err
 		}
 	}
+	pr := e.progress("Checking tools, tokens, identity, config, and hosts")
 	results := doctor.Run(ctx, p)
+	pr.Done(ui.StatusInfo, fmt.Sprintf("%d checks", len(results)))
 	type report struct {
 		Results  []doctor.Result `json:"results"`
 		Blocking bool            `json:"blocking"`
@@ -140,7 +143,9 @@ func runDoctor(ctx context.Context, e *Env, in Values) error {
 	}
 	blocking := doctor.Blocking(results)
 	if err := e.Emit(report{results, blocking, fix}, func(w io.Writer) error {
-		if err := doctor.Render(w, results); err != nil {
+		if look := e.Look(); look.Human() {
+			renderDoctorHuman(look, results)
+		} else if err := doctor.Render(w, results); err != nil {
 			return err
 		}
 		if fix != "" {
@@ -182,4 +187,24 @@ func (e *Env) fixCopies() (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("--fix: re-synced %d file(s) with %s", len(res.Edits), hosts.LockPath), nil
+}
+
+// renderDoctorHuman is doctor for a person: a table (Rich) or aligned columns
+// (Plain) whose first column is always the status word, then a one-line tally.
+func renderDoctorHuman(p *ui.Printer, rs []doctor.Result) {
+	rows := make([][]string, 0, len(rs))
+	tally := map[doctor.Status]int{}
+	for _, r := range rs {
+		tally[r.Status]++
+		detail := r.Detail
+		if r.Blocking && r.Status == doctor.Fail {
+			detail += " [blocking]"
+		}
+		for _, l := range r.Lines {
+			detail += "\n  " + l
+		}
+		rows = append(rows, []string{p.Mark(strings.ToUpper(string(r.Status))), r.ID, detail})
+	}
+	p.Printf("%s", p.Table([]string{"Status", "Check", "Detail"}, rows))
+	p.Println(fmt.Sprintf("%d pass, %d warn, %d fail, %d not yet available", tally[doctor.Pass], tally[doctor.Warn], tally[doctor.Fail], tally[doctor.NA]))
 }

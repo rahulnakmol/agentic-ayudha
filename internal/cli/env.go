@@ -19,6 +19,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
 	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
 	"github.com/rahulnakmol/agentic-ayudha/internal/telemetry"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ui"
 )
 
 // IO is where a command reads and writes. Commands never touch os.Stdin,
@@ -61,6 +62,12 @@ type Options struct {
 	Assets          fs.FS                                                                       // embedded skills/ and hosts/ (root embed.go); install needs it
 	HaltPoll        time.Duration                                                               // how often a running verb re-reads the halt variable; 0 is DefaultHaltPoll (WP5.7)
 	TUI             func(m tea.Model) error                                                     // runs an interactive model in place of the terminal (tests); nil uses bubbletea on In/Out
+	// IsTerminal reports whether a stream (e.In, e.Out, or e.Err) is a person's
+	// terminal (WP1.1b); nil checks the file descriptor. Tests force a level with it.
+	IsTerminal func(stream any) bool
+	// UIStatic renders spinners and celebrations as their final frame only, so
+	// rich output is byte-stable (golden tests, recordings).
+	UIStatic bool
 	// CheckpointVerify replaces build's verify run on a checkpoint (tests); nil runs `aayu verify` in the worktree.
 	CheckpointVerify func(ctx context.Context, worktree string) (hold bool, detail string, err error)
 	RunPoll          time.Duration // how often release polls a workflow run; 0 is DefaultRunPoll (WP7.8)
@@ -87,6 +94,7 @@ type Globals struct {
 	Verbose bool
 	CI      bool     // running in CI: GITHUB_TOKEN may be the human token; bot writes need the App token
 	Set     []string // config overrides, key=value (the flags layer of WP1.2)
+	Plain   bool     // words only on a terminal (WP1.1b); machines always get plain text
 }
 
 // Env is everything a command handler may use.
@@ -101,6 +109,8 @@ type Env struct {
 
 	telemetry *telemetry.Telemetry
 	span      trace.Span
+
+	out, talk *ui.Printer // the result stream and the conversation stream (look.go)
 }
 
 func newEnv(io IO, opts Options) (*Env, error) {
