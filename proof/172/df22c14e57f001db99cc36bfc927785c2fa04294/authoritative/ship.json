@@ -1,0 +1,62 @@
+{
+  "repo": "rahulnakmol/agentic-ayudha",
+  "story": 172,
+  "pr": 181,
+  "pr_head_sha": "df22c14e57f001db99cc36bfc927785c2fa04294",
+  "merge_commit": "9b1ae661a141ff6bfe819ede009b83ab7b8958e1",
+  "pack": "proof/172/df22c14e57f001db99cc36bfc927785c2fa04294/authoritative/pack.json",
+  "pack_landed": "run 38701292184 of the base branch's aayudha-merge-gate.yml; landed by rahulnakmol through aayu ship because CI cannot write the ledger without a bot App (Appendix B D1, D-4.10a)",
+  "human_pass": {
+    "kind": "solo-bypass",
+    "login": "rahulnakmol",
+    "comment_url": "https://github.com/rahulnakmol/agentic-ayudha/pull/181#issuecomment-6187418131",
+    "commit": "df22c14e57f001db99cc36bfc927785c2fa04294",
+    "note": "solo mode: GitHub refuses self-approval and no bot App exists, so no second person could review (Appendix B D2)"
+  },
+  "footprint": [
+    "L02",
+    "L03",
+    "L09"
+  ],
+  "pass_rule": {
+    "as": "any-human",
+    "never_layers": [
+      "L09"
+    ],
+    "codeowners": [
+      "rahulnakmol"
+    ],
+    "never_paths": [
+      ".github/workflows/aayudha-loops.yml"
+    ]
+  },
+  "streak": {
+    "threshold": 20,
+    "layers": {
+      "L02": 0,
+      "L03": 0,
+      "L09": 0
+    },
+    "never_layers": [
+      "L09"
+    ],
+    "autonomous": false
+  },
+  "plan_review": {
+    "required": true,
+    "layers": [
+      "L09"
+    ],
+    "bypass": {
+      "as": "solo-bypass",
+      "reviewer": "none (solo mode)",
+      "recorded_by": "rahulnakmol",
+      "recorded_at": "2026-10-15T06:49:54Z",
+      "comment_url": "https://github.com/rahulnakmol/agentic-ayudha/issues/172#issuecomment-6186274040",
+      "note": "solo mode: no second person exists to review the plan, and no one reviewed it as the Engineering Manager (Appendix B D2)"
+    }
+  },
+  "actions_segment": "actions/2026-10-15/cli-20261015T080202Z.jsonl",
+  "shipped_at": "2026-10-15T08:02:14Z",
+  "shipped_by": "rahulnakmol"
+}
