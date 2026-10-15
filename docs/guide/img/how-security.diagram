@@ -1,0 +1,16 @@
+# Security and the threat model (docs/guide/how-security.md).
+title: Trust changes at five boundaries, and each boundary has its own control
+direction: down
+text: Untrusted text: issues, PRs, exports
+model: Host model reads it as wrapped data
+binary: aayu binary decides what may run
+child: Floors and tools run with no tokens
+repo: Rulesets, CODEOWNERS, protected paths
+ci: CI from the base branch: gate, release
+user: User installs only signed releases
+text -> model: provenance block
+model -> binary: asks for a verb
+binary -> child: scrubbed env
+binary -> repo: bot or human identity
+repo -> ci: base-branch workflow
+ci -> user: cosign, SHA-256

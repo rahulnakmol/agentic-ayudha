@@ -83,9 +83,10 @@ evidence".
 | Model spend | Loops and autonomous merges use models more often. Default caps: 25 USD per story and 100 USD per day per repository. When a cap trips, agents pause and a person is paged |
 | Other | PostHog bills by usage on its side; Sentry adds no cost |
 
-> **Honest status:** this repository runs at Level 2 today. It has no bot App installed yet, so its own loops cannot
-> run in Actions and its agents write as the founder, tagged as such. Level 3 is built; this repository has not
-> switched it on.
+> **Honest status:** this repository runs at Level 2 today. It has no bot App installed yet, so its agents write as
+> the founder, tagged as such, and the loops that need to write as the bot cannot run in Actions. The daily digest,
+> which needs no bot, does run there, though GitHub's scheduler often starts it late. Level 3 is built; this
+> repository has not switched it on.
 
 **Good for:** teams with a steady flow of work who want the agents to carry more of it, with the guard rails
 switched on.

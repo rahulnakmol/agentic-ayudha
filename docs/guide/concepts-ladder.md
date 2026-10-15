@@ -40,6 +40,8 @@ nothing; add `dev` and `rolling` when you want them.
 
 The procedure, step by step, is in [Contributing](../../CONTRIBUTING.md). Terms are defined in the
 [glossary](../../GLOSSARY.md).
+> **Under the hood:** the gates, signatures, and provenance of each step are in
+> [releases and the supply chain](how-releases.md).
 
 ## What's next
 

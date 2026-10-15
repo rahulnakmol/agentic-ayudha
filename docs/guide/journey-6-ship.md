@@ -1,58 +1,78 @@
-# 6. Ship it
+# 6. The yes
 
-This is your moment. The checks are green, the verdict is in, and a person gives the final yes. `ship` merges the
-pull request and writes down exactly what happened, so anyone can see later who approved what, and on what evidence.
+> *Monday, 09:03 UTC.* Pull request 142, the plan documents story, is finally green: a pack, and a "merge" from the
+> reviewer. Now it needs a person's yes from someone other than its author. On a team of two, Priya would give it. In
+> the run this story retells, there was no second person to ask: one human held both jobs.
 
-> **You are here:** step 6 of 9. [Shape](journey-1-shape.md) · [Break down](journey-2-break-down.md) ·
-> [Ready](journey-3-ready.md) · [Build](journey-4-build.md) · [Prove](journey-5-prove.md) · **Ship** ·
-> [Release](journey-7-release.md) · [Learn](journey-8-learn.md) · [Explain](journey-9-explain.md)
+## Why a person says the last word
+
+Floors decide whether a change may merge. A person decides whether it should. In aayudha that decision is the
+**human pass**: an approving review from a person's GitHub account, never a bot's. `ship`, the verb that merges, runs
+only under a person's identity, and it refuses to merge unless everything lines up: the merge gate is green on the
+exact head commit, an authoritative proof pack exists for it, the human pass is there, and for risky layers the plan
+was reviewed.
+
+## The one thing they could not get
+
+With one person, a real human pass is impossible: GitHub does not let you approve your own pull request. That
+leaves two bad options and one honest one. You could skip the check and say nothing. You could approve from a second
+account and pretend. Or you can merge in the open and leave a record that says exactly what was missing.
+
+aayudha only allows the third, and only when it is true. `ship --solo-bypass` refuses if a second person is paired
+with a seat or a bot App exists, because then a real review is possible. Everything else still has to hold: the merge
+gate green on the exact commit, the authoritative pack, inspect's "merge". At 09:03 a comment went onto pull request
+142 that begins "Solo-mode bypass:". It says the gate is green with inspect's "merge", that no second person can
+review, and that the pull request merges through `aayu ship 142 --solo-bypass`. It ends: "No review was given or
+faked."
+
+A minute later, `ship` merged it and wrote story 130's Outcome, here slightly shortened:
+
+- Merged in pull request 142 as commit `b5359bd` on 2026-10-12.
+- Authoritative pack: written by the merge gate in CI, and landed on the ledger by `ship` under the founder's name,
+  because without a bot App CI cannot write there itself.
+- Human pass: none possible. The founder merged under a recorded solo-mode bypass.
+- Plan-time review: none. The founder recorded a solo-mode plan-review bypass for layer L07.
+- The ship record, and the log of every write `ship` made, both on the ledger.
+
+All five stories shipped this way that day, between 09:04 and 14:28. Every bypass is a line that `audit` will list
+in its own section, so the founder can review each one after the fact. The moment a second person joins a seat, the
+bypass stops being allowed and the real review is required again.
+
+> **Tip:** run `aayu status <goal>` after shipping. It rolls up progress and proof for the whole Goal. For Goal 125 it
+> reached 5 of 5 stories shipped with authoritative proof.
 
 ## What you do, and what the agent does
 
-**You** approve the pull request on GitHub, then run `ship`. That approval is the **human pass**: a review from a
-person's account, never a bot's. `ship` runs only under your identity, so an agent cannot ship on its own.
+**You** approve the pull request on GitHub, then run `aayu ship <pr>`. If any check is missing, `ship` refuses and
+tells you which one.
 
-**`ship`** checks that everything lines up before it merges: the merge gate is green on the head commit, an
-authoritative proof pack exists for it, the human pass is there, and, for risky layers, the plan was reviewed. Then
-it squash-merges into your integration branch (`dev`, or `main` if that is all you have), writes the story's
-Outcome section (the reference calls it the Complete section), releases the agent's lease, and cleans up the branch.
+**`ship`** checks everything, squash-merges into your integration branch (`dev`, or `main` if that is all you have),
+writes the Outcome, releases the agent's lease, and cleans up the branch.
 
-```sh
-aayu ship <pr>
-```
+## What you learn
 
-If any check is missing, `ship` refuses and tells you which one.
+A safeguard you cannot meet is not a reason to fake it. Record that it was skipped, say why, and make it easy to
+review later. That is what makes the rest of the record trustworthy.
 
-## In the benefits-qa story
+## The verbs in this step
 
-> **In the story:** pull request 148 was merged at 09:52 UTC, 40 minutes after it was opened.
+<!-- BEGIN GENERATED: stage-verbs -->
 
-`ship` then wrote the Outcome of story 131. Here it is, slightly shortened:
+| Verb | What it does |
+|---|---|
+| [`ship`](../../skills/ship/SKILL.md) | Merges a proven pull request after your yes, and writes down who approved what, on which evidence. |
 
-- Merged in pull request 148 as commit `f56dc67` on 2026-10-12.
-- Authoritative pack: on the ledger, written by the merge gate's run in CI.
-- Human pass: none possible. The founder merged under a recorded solo-mode bypass.
-- Plan-time review: none. The founder recorded a solo-mode plan-review bypass for layer L04.
-- Ship record and the log of every write it made, both on the ledger.
+<!-- END GENERATED: stage-verbs -->
 
-## Solo mode, said plainly
-
-GitHub does not let you approve your own pull request, so a team of one cannot give a real human pass. Instead of
-faking one, aayudha records a **solo-mode bypass**, which `audit` lists. With two or more people you will never need
-it. See [the human pass and solo mode](concepts-human-pass.md).
-
-> **Tip:** run `aayu status <goal>` after shipping. It rolls up progress and proof coverage for the whole Goal. For
-> benefits-qa it reached 5 of 5 stories shipped with authoritative proof.
-
-## What you get back
-
-- A squash-merged commit on `dev`.
-- The story's Outcome section: the commit, the pack, who approved, and any bypass, with links.
-- A ship record on the ledger.
-
-> **Well done:** you just shipped your first proven story. Every claim about it can be checked by anyone, today or a
-> year from now.
+> **Under the hood:** how a human pass is recognised, what solo mode checks, and why agents write as a bot are in
+> [trust and identities](how-trust.md). Where the ship record and the bypasses are kept is in
+> [the ledger branch](how-ledger.md).
 
 ## What's next
 
-Merged is not released. [Release it](journey-7-release.md) to get it into people's hands.
+Merged is not the same as in people's hands. Everything on `dev` still has to climb one more gate:
+[chapter 7, the release](journey-7-release.md).
+
+> **You are here:** chapter 6 of 9. [Goal](journey-1-shape.md) · [Plan](journey-2-break-down.md) ·
+> [Promises](journey-3-ready.md) · [Build](journey-4-build.md) · [Gate](journey-5-prove.md) · **Yes** ·
+> [Release](journey-7-release.md) · [Number](journey-8-learn.md) · [Telling](journey-9-explain.md)

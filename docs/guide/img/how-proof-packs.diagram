@@ -1,0 +1,16 @@
+# Proof packs in detail (docs/guide/how-proof-packs.md).
+title: CI turns mapped tests and floor runs into a hashed pack that ship verifies before it merges
+direction: down
+ready: Ready snapshot: criteria and their hash
+map: Evidence map: .aayudha/evidence/N.toml
+verify: verify in the merge gate runs the tests and floors
+pack: pack.json: criteria, artifacts, checks
+ledger: ledger branch: proof/story/sha/kind/
+media: Media: LFS, a private bucket, or hash only
+ship: ship runs proof verify, then merges
+ready -> verify: criteria
+map -> verify: tests per criterion
+verify -> pack
+pack -> ledger: data artifacts
+pack -> media: screenshots
+ledger -> ship: authoritative only

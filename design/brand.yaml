@@ -29,6 +29,8 @@ palette:
   done: '#fdf6e3'
   done-edge: '#9a6700'
   here: '#eef3fd'
+  hood: '#eef1f6'
+  hood-edge: '#535b6b'
   ink: '#1d2330'
   muted: '#535b6b'
   panel: '#f5f6f8'
@@ -104,5 +106,20 @@ pairs:
     bg: story
     use: ui
   - fg: accent
+    bg: paper
+    use: ui
+  - fg: ink
+    bg: hood
+    use: text
+  - fg: accent
+    bg: hood
+    use: text
+  - fg: hood-edge
+    bg: hood
+    use: ui
+  - fg: story-edge
+    bg: paper
+    use: text
+  - fg: story-edge
     bg: paper
     use: ui

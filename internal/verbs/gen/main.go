@@ -4,7 +4,8 @@
 //
 // Outputs:
 //   - README.md: only the regions between the BEGIN/END GENERATED markers
-//   - docs/guide/when-to-use-what.md: only the verb-map region (the verbs by journey stage)
+//   - docs/guide/when-to-use-what.md: only the verb-map region (the verbs by journey stage);
+//     docs/guide/journey-*.md: only the stage-verbs region (the verbs of that step)
 //   - LAYERS.md and docs/RACI.md: whole files
 //   - seats/<seat>/CHARTER.md: only the region between the BEGIN/END GENERATED: raci markers
 //   - AGENTS.md: only the aayudha:raci section (internal/hosts.RenderAgentsMD)
@@ -23,6 +24,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
@@ -145,7 +147,9 @@ var stagePages = map[verbs.StageID]string{
 	verbs.StageOperate: "when-to-use-what.md#something-broke-in-production",
 }
 
-// genVerbMap writes every verb under its journey stage, linked to its skill.
+// genVerbMap writes every verb under its journey stage, linked to its skill,
+// with its reader summary; and each journey page's "stage-verbs" region with
+// the verbs of the stages that page tells.
 func genVerbMap() error {
 	const path = "docs/guide/when-to-use-what.md"
 	b, err := os.ReadFile(path)
@@ -154,11 +158,14 @@ func genVerbMap() error {
 	}
 	var m strings.Builder
 	fmt.Fprintf(&m, "| Stage | Verb | What it does |\n|---|---|---|\n")
+	pageStages := map[string][]verbs.StageID{}
 	for _, st := range verbs.Stages {
 		page, ok := stagePages[st.ID]
 		if !ok {
 			return fmt.Errorf("%s: stage %s has no guide page", path, st.ID)
 		}
+		file, _, _ := strings.Cut(page, "#")
+		pageStages[file] = append(pageStages[file], st.ID)
 		first := true
 		for _, c := range verbs.Verbs {
 			if c.Stage != st.ID {
@@ -168,18 +175,49 @@ func genVerbMap() error {
 			if first {
 				stage, first = fmt.Sprintf("[%s](%s)", st.Title, page), false
 			}
-			name := code(c.Name)
-			if c.Has(verbs.SurfaceSkill) {
-				name = fmt.Sprintf("[%s](../../%s/%s/SKILL.md)", name, skillsDir, c.Name)
-			}
-			fmt.Fprintf(&m, "| %s | %s | %s |\n", stage, name, cell(c.Summary))
+			fmt.Fprintf(&m, "| %s | %s | %s |\n", stage, verbLink(c, "../../"), cell(c.Reader))
 		}
 	}
 	s, err := replaceRegion(path, string(b), "verb-map", m.String())
 	if err != nil {
 		return err
 	}
-	return writeFile(path, []byte(s))
+	if err := writeFile(path, []byte(s)); err != nil {
+		return err
+	}
+	for file, stages := range pageStages {
+		if !strings.HasPrefix(file, "journey-") {
+			continue
+		}
+		p := "docs/guide/" + file
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		var v strings.Builder
+		v.WriteString("| Verb | What it does |\n|---|---|\n")
+		for _, c := range verbs.Verbs {
+			if slices.Contains(stages, c.Stage) {
+				fmt.Fprintf(&v, "| %s | %s |\n", verbLink(c, "../../"), cell(c.Reader))
+			}
+		}
+		s, err := replaceRegion(p, string(b), "stage-verbs", v.String())
+		if err != nil {
+			return err
+		}
+		if err := writeFile(p, []byte(s)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// verbLink is a verb's name in code, linked to its skill page when it has one.
+func verbLink(c verbs.Command, root string) string {
+	if c.Has(verbs.SurfaceSkill) {
+		return fmt.Sprintf("[%s](%s%s/%s/SKILL.md)", code(c.Name), root, skillsDir, c.Name)
+	}
+	return code(c.Name)
 }
 
 // ---- LAYERS.md -------------------------------------------------------------

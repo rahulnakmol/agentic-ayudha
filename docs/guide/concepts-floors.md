@@ -37,6 +37,8 @@ and the pack says so.
 
 The thresholds live in your repository's configuration, and the full list with every default is the
 [Constraints reference](../../CONSTRAINTS.md). Terms are defined in the [glossary](../../GLOSSARY.md).
+> **Under the hood:** every floor's tool, pinned version, threshold, and skip rule is in
+> [floors in detail](how-floors.md).
 
 ## What's next
 

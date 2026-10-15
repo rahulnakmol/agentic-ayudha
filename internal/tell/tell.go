@@ -29,6 +29,7 @@ var Kinds = []string{"docs", "guide", "changelog", "release", "launch", "brand"}
 // words on the avoid list are refused literally; longer entries ("exclamation
 // marks") guide the host only.
 type Brand struct {
+	Name   string   `json:"name,omitempty"` // design/brand.yaml's name; the docs site's title when set
 	Voice  string   `json:"voice"`
 	Tone   []string `json:"tone"`
 	Avoid  []string `json:"avoid"`
@@ -66,6 +67,7 @@ func LoadBrand(root string) (Brand, error) {
 	}
 	b.Source = design.BrandPath
 	if name := strings.TrimSpace(br.Name); name != "" {
+		b.Name = name
 		b.Voice = "Write as " + name + ". " + b.Voice
 	}
 	if len(br.Voice.Tone) > 0 {

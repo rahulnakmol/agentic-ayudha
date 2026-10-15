@@ -1,65 +1,73 @@
-# 1. Shape the goal
+# 1. The goal
 
-Most projects that disappoint were never clear about what success meant. This step fixes that before any code
-exists. You leave it with a Goal: a GitHub issue that says who benefits, which number shows it, where that number
-is today, and where it should get to.
+> *Monday, 07:20 UTC.* Priya types into her agent: "Use the grill skill to write a Goal: employees should get
+> benefits answers faster." The agent does not write anything. It asks a question instead. "Faster than what? Which
+> number would tell you it worked?"
 
-> **You are here:** step 1 of 9. **Shape** · [Break down](journey-2-break-down.md) · [Ready](journey-3-ready.md) ·
-> [Build](journey-4-build.md) · [Prove](journey-5-prove.md) · [Ship](journey-6-ship.md) ·
-> [Release](journey-7-release.md) · [Learn](journey-8-learn.md) · [Explain](journey-9-explain.md)
+## An interview that will not accept "faster"
 
-## What you do, and what the agent does
+Most projects that disappoint were never clear about what success meant. So the first thing aayudha does is refuse
+to start until it is.
 
-**You** answer questions. That is the whole job, and it is the most important one in the journey.
+The `grill` skill interviews Priya one question at a time, the way a sharp product lead would. Who benefits? The
+employees. Which number shows it? The share of people who get an answer from the plan documents within 7 days of
+first asking. What is that number today? Priya counted the inbox this morning, but a count from the inbox is not a baseline.
 
-**Your agent**, using the `grill` skill, interviews you like a good product lead: one question at a time, pushing
-back on vague answers. It writes what you said into the Goal's sections, checks that each required section is
-there, and fetches the current value of your number where it can. When everything passes, it files the issue.
+That is where most goals quietly go wrong. aayudha has a rule for it: no baseline, no target. Before Priya may say
+"60 %", the figure for today has to be measured in a way that can be repeated later.
 
-```sh
-aayu grill goal          # on a terminal: a short interview
-```
+So it is. `aayu measure` reads an export of the old process, where every question was an HR ticket, and counts: 31 of
+120 people got an answer quoted from the plan documents, from an HR specialist, within 7 days of first asking.
+**0.258.** Like everyone in this story's numbers, those 120 people are synthetic: a simulation with a fixed seed, so the
+count can be repeated exactly. The Goal records the exact command, so anyone
+can run it again in November and get the same number.
 
-Or, in your agent: "use the grill skill to write a Goal for …".
-
-## Why a baseline comes first
-
-aayudha refuses a target without a baseline: "no baseline, no target". A target such as "60 % of people get an
-answer within a week" means nothing unless you know today's figure and can measure it the same way again. The
-baseline also records how it was measured, so the result at the end of the journey is an honest comparison.
-
-## In the benefits-qa story
-
-> **In the story:** Goal 125 reads: "Example Co employees get an answer to their benefits questions within a week
-> of first asking, quoted from the plan documents, instead of waiting on an HR ticket."
+At 07:25, Goal 125 is filed:
 
 | Section | What the interview produced |
 |---|---|
-| Beneficiaries | Employees of the fictional Example Co |
-| Metric | Activation: the share of people who get a grounded answer within 7 days of their first visit |
-| Baseline | 0.258: 31 of 120 people, when every question was an HR ticket |
-| Target | At least 0.60, over the 28 days after the example ships |
+| Summary | Employees get an answer within a week of first asking, quoted from the plan documents, instead of waiting on an HR ticket |
+| Metric | Activation: the share who get an answer quoted from the plan documents, by the app or by HR, within 7 days of first asking |
+| Baseline | 0.258: 31 of 120 people |
+| Target | At least 0.60, over the 28 days after it ships |
 
-The baseline came from `aayu measure` on a seeded export of the old HR-ticket process, and the Goal records the exact
-command. Anyone can run it again and get 0.258.
+Twenty-one seconds later comes Initiative 126, the bet: if employees can ask the plan documents directly and get a
+quoted answer at once, the number rises from 0.258 to at least 0.60. The interview also made Priya name the riskiest
+assumption: that the plan text really covers the questions people ask.
 
-Right after the Goal, the same interview produced Initiative 126, the bet: "if employees can ask the plan documents
-directly and get a quoted, cited answer at once, activation rises from 0.258 to at least 0.60". It even names its
-riskiest assumption: that the plan text covers the questions people really ask.
+## What you do, and what the agent does
 
-> **Tip:** you will be tempted to skip the riskiest-assumption question. Do not. It is the one that tells you what
-> to measure first.
+**You** answer questions. That is the whole job, and it is the most important one in the story.
 
-## What you get back
+**Your agent** asks, pushes back on vague answers, writes what you said into the Goal's sections, checks that every
+required section is there, fetches the baseline where it can, and files the issue only when everything passes.
 
-- A Goal issue on GitHub, with a baseline you can measure again and a target with a direction.
-- Optionally an Initiative under it: the bet you are making, and why you think it will pay off.
-- After `aayu ready <goal>`, a Ready snapshot: a comment that fingerprints exactly what was agreed, so later edits
-  are visible.
+## What you learn
 
-> **Well done:** you have a measurable outcome, written down, before anyone wrote a line of code. Most teams never
-> get this far.
+A number with a baseline turns an opinion into a bet you can win or lose. It also tells the agents what matters,
+which is what every later check will measure against.
+
+> **Tip:** do not skip the riskiest-assumption question. It tells you what to watch first.
+
+## The verbs in this step
+
+<!-- BEGIN GENERATED: stage-verbs -->
+
+| Verb | What it does |
+|---|---|
+| [`grill`](../../skills/grill/SKILL.md) | Interviews you, one question at a time, until an idea is a complete work item, then files it on GitHub. |
+
+<!-- END GENERATED: stage-verbs -->
+
+> **Under the hood:** `grill` runs inside your agent, so your agent's model does the interviewing and the binary only
+> checks the draft and writes the issue. See [Architecture](how-architecture.md) for what runs where, and
+> [the verb registry](how-registry.md) for how every verb is declared once and generated everywhere.
 
 ## What's next
 
-A Goal is too big to build in one go. Next, [break it down](journey-2-break-down.md) into small, provable stories.
+The Goal is clear. It is also far too big to build in one go, and some of it is dangerous to get wrong:
+[chapter 2, the plan](journey-2-break-down.md).
+
+> **You are here:** chapter 1 of 9. **Goal** · [Plan](journey-2-break-down.md) · [Promises](journey-3-ready.md) ·
+> [Build](journey-4-build.md) · [Gate](journey-5-prove.md) · [Yes](journey-6-ship.md) ·
+> [Release](journey-7-release.md) · [Number](journey-8-learn.md) · [Telling](journey-9-explain.md)

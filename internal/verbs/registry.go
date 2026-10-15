@@ -257,6 +257,7 @@ var Stages = []Stage{
 type Command struct {
 	Name     string
 	Summary  string  // one line, <= 200 chars; the SKILL.md description
+	Reader   string  // one plain sentence for people new to aayudha: the docs site's verb map and journey pages; verbs only
 	WP       string  // the work package that implements the command
 	Stage    StageID // the journey stage (verbs only; empty for plumbing)
 	Seat     SeatID  // the single Accountable seat
@@ -509,6 +510,7 @@ var Verbs = []Command{
 	{
 		Name: "grill", WP: "WP5.3", Stage: StageShape,
 		Summary: "Interview a human until a work item of the given type is complete and passes validation, then write it as an issue.",
+		Reader:  "Interviews you, one question at a time, until an idea is a complete work item, then files it on GitHub.",
 		Seat:    ProductStrategist, Lane: LaneSpec, Layers: AllLayers(),
 		Inputs: []Input{
 			enumIn("type", true, true, "Work-item type (internal/workitems), or brand for design/brand.yaml.", "goal", "initiative", "feature", "story", "bug", "decision", "experiment", "release", "feedback", "incident", "brand"),
@@ -527,6 +529,7 @@ var Verbs = []Command{
 	{
 		Name: "slice", WP: "WP5.4", Stage: StageBreakDown,
 		Summary: "Split a Feature into XS-L stories with observable criteria, dependencies, and a layer footprint; close XL items as split.",
+		Reader:  "Splits a Feature into small stories, each with checkable promises, the parts of the code it touches, and its order.",
 		Seat:    ProductStrategist, Lane: LanePlan, Layers: AllLayers(),
 		Inputs: []Input{
 			pos("feature", TypeIssue, "Feature (or XL story) to slice."),
@@ -540,6 +543,7 @@ var Verbs = []Command{
 	{
 		Name: "plan", WP: "WP5.4", Stage: StageBreakDown,
 		Summary: "Plan a story: one checkpoint per layer, contracts, tests, instrumentation, and rollback.",
+		Reader:  "Plans a story one layer at a time: what changes, how it is tested, and how to roll it back.",
 		Seat:    CodeArchitect, Lane: LanePlan, Layers: AllLayers(),
 		Inputs: []Input{
 			pos("story", TypeIssue, "Story or bug to plan."),
@@ -555,6 +559,7 @@ var Verbs = []Command{
 	{
 		Name: "decide", WP: "WP5.6", Stage: StageBreakDown,
 		Summary: "Record a Decision with options, evaluation, and recommendation; accept it, supersede it, or file a floor waiver.",
+		Reader:  "Records a real choice with its options and a recommendation; only a person with the authority accepts it.",
 		Seat:    Founder, Lane: LaneSpec, Layers: AllLayers(),
 		Inputs: []Input{
 			optPos("decision", TypeIssue, "Decision issue; without one, the SLA sweep over every open Decision. With --waiver, the story or bug to waive a floor on."),
@@ -568,6 +573,7 @@ var Verbs = []Command{
 	{
 		Name: "triage", WP: "WP2.9", Stage: StageOperate,
 		Summary: "Classify intake issues as Feedback, Bug, or Incident by label only; never edits bodies or touches non-intake issues.",
+		Reader:  "Sorts incoming reports into feedback, bugs, and incidents by label, without editing what people wrote.",
 		Seat:    ProductStrategist, Lane: LaneChore, Layers: NoLayers(),
 		Inputs: []Input{
 			pos("issue", TypeIssue, "Intake issue to classify."),
@@ -580,6 +586,7 @@ var Verbs = []Command{
 	{
 		Name: "build", WP: "WP5.5", Stage: StageBuild,
 		Summary: "Build a Ready story or bug in a worktree with checkpoint commits per layer, verify each checkpoint, and open a PR.",
+		Reader:  "Writes the code for a Ready story in small checked steps, one layer at a time, and opens a pull request.",
 		Seat:    AINativeEngineer, Lane: LaneBuild, Layers: AllLayers(),
 		Inputs: []Input{
 			pos("issue", TypeIssue, "Ready story or bug to build."),
@@ -592,6 +599,7 @@ var Verbs = []Command{
 	{
 		Name: "verify", WP: "WP4.3", Stage: StageProve,
 		Summary: "Run the deterministic floors (coverage, SAST, secrets, deps, a11y, perf) and record results in a proof pack.",
+		Reader:  "Runs the fixed checks (tests, security, secrets, dependencies, accessibility, speed) and records the results.",
 		Seat:    AINativeEngineer, Owns: QualityArchitect, Lane: LaneChore, Layers: AllLayers(),
 		Inputs: []Input{
 			optPos("pr", TypePR, "Pull request to verify; defaults to the current worktree."),
@@ -604,6 +612,7 @@ var Verbs = []Command{
 	{
 		Name: "inspect", WP: "WP4.8", Stage: StageProve,
 		Summary: "Adversarially review a PR against its plan, pack, and criteria; return a structured disposition: merge, fix, or rebuild.",
+		Reader:  "A second model, from another vendor, reviews the pull request against every promise and says merge, fix, or rebuild.",
 		Seat:    EngineeringManager, Lane: LaneReview, Layers: AllLayers(),
 		Inputs:   []Input{pos("pr", TypePR, "Pull request to inspect.")},
 		Outputs:  []string{"disposition (merge|fix|rebuild)", "findings"},
@@ -613,6 +622,7 @@ var Verbs = []Command{
 	{
 		Name: "ship", WP: "WP5.5", Stage: StageShip,
 		Summary: "Squash-merge a PR after a green merge gate and a human pass, write the Complete section, and clean up.",
+		Reader:  "Merges a proven pull request after your yes, and writes down who approved what, on which evidence.",
 		Seat:    EngineeringManager, Lane: LaneChore, Layers: AllLayers(),
 		Inputs: []Input{
 			pos("pr", TypePR, "Pull request to ship."),
@@ -625,6 +635,7 @@ var Verbs = []Command{
 	{
 		Name: "release", WP: "WP7.8", Stage: StageRelease,
 		Summary: "Promote a Release along dev, rolling, main; stamp included stories released and trigger measurement.",
+		Reader:  "Moves shipped work up to a snapshot or stable release, after a full gate, and schedules the measurement.",
 		Seat:    DevOps, Lane: LaneChore, Layers: OnlyLayers(L09),
 		Inputs: []Input{
 			pos("release", TypeIssue, "Release issue."),
@@ -637,6 +648,7 @@ var Verbs = []Command{
 	{
 		Name: "proof", WP: "WP4.2", Stage: StageProve,
 		Summary: "Push, get, verify, list, or purge proof packs on the ledger branch.",
+		Reader:  "Stores, fetches, checks, and cleans up the proof packs that hold the evidence for each change.",
 		Seat:    QualityArchitect, Lane: LaneChore, Layers: AllLayers(),
 		Inputs: []Input{
 			readOnlyWith(enumIn("action", true, true, "Proof operation.", "push", "get", "verify", "list", "purge"), "get", "verify", "list"),
@@ -649,6 +661,7 @@ var Verbs = []Command{
 	{
 		Name: "ready", WP: "WP2.7", Stage: StageReady,
 		Summary: "Validate a work item for Ready, label it status:ready, and post the Ready snapshot; --check is read-only.",
+		Reader:  "Checks that a work item is complete and freezes exactly what was agreed, so later edits are visible.",
 		Seat:    ProductStrategist, Lane: LaneChore, Layers: AllLayers(),
 		Inputs: []Input{
 			pos("issue", TypeIssue, "Work item to make Ready."),
@@ -662,6 +675,7 @@ var Verbs = []Command{
 	{
 		Name: "research", WP: "WP6.5", Stage: StageDesign,
 		Summary: "Gather pinned design references (URLs and IDs only) and user research for a Feature.",
+		Reader:  "Collects design references and user research for a Feature.",
 		Seat:    UXResearcher, Lane: LaneSpec, Layers: OnlyLayers(L01),
 		Inputs: []Input{
 			pos("feature", TypeIssue, "Feature to research."),
@@ -676,6 +690,7 @@ var Verbs = []Command{
 	{
 		Name: "wireframe", WP: "WP6.5", Stage: StageDesign,
 		Summary: "Produce wireframes for a Feature's states from its research and criteria.",
+		Reader:  "Sketches the screens a Feature needs, from its research and promises.",
 		Seat:    UXResearcher, Lane: LaneBuild, Layers: OnlyLayers(L01),
 		Inputs: []Input{
 			pos("feature", TypeIssue, "Feature to wireframe."),
@@ -688,6 +703,7 @@ var Verbs = []Command{
 	{
 		Name: "mockup", WP: "WP6.5", Stage: StageDesign,
 		Summary: "Produce design-system mockups for a Feature from its wireframes.",
+		Reader:  "Turns wireframes into mockups that use your design system.",
 		Seat:    UXResearcher, Lane: LaneBuild, Layers: OnlyLayers(L01),
 		Inputs: []Input{
 			pos("feature", TypeIssue, "Feature to mock up."),
@@ -700,6 +716,7 @@ var Verbs = []Command{
 	{
 		Name: "prototype", WP: "WP6.5", Stage: StageDesign,
 		Summary: "Build a flagged, working prototype of a Feature with Code Connect mapping and a Figma screenshot diff.",
+		Reader:  "Builds a working prototype behind a flag and compares it with the design.",
 		Seat:    UXResearcher, Lane: LaneBuild, Layers: OnlyLayers(L01, L02),
 		Inputs: []Input{
 			pos("feature", TypeIssue, "Feature to prototype."),
@@ -713,6 +730,7 @@ var Verbs = []Command{
 	{
 		Name: "review", WP: "WP6.6", Stage: StageDesign,
 		Summary: "Critique UI with a model lane and a deterministic lane; dispositions recapture, rebuild, fix, or ship.",
+		Reader:  "Critiques a pull request's screens with a model and with fixed accessibility checks.",
 		Seat:    UXResearcher, Lane: LaneUIReview, Layers: OnlyLayers(L01),
 		Inputs: []Input{
 			pos("pr", TypePR, "Pull request whose UI to review."),
@@ -725,6 +743,7 @@ var Verbs = []Command{
 	{
 		Name: "polish", WP: "WP6.6", Stage: StageDesign,
 		Summary: "Apply a review critique to a PR's UI and re-run review.",
+		Reader:  "Applies a design critique to a pull request and reviews it again.",
 		Seat:    UXResearcher, Lane: LaneBuild, Layers: OnlyLayers(L01),
 		Inputs:   []Input{pos("pr", TypePR, "Pull request to polish.")},
 		Outputs:  []string{"commits"},
@@ -734,6 +753,7 @@ var Verbs = []Command{
 	{
 		Name: "baseline", WP: "WP6.6", Stage: StageDesign,
 		Summary: "Capture visual baselines for a commit SHA.",
+		Reader:  "Captures reference screenshots of a commit to compare later changes against.",
 		Seat:    UXResearcher, Lane: LaneChore, Layers: OnlyLayers(L01),
 		Inputs:   []Input{flag("sha", TypeString, "Commit to baseline; defaults to HEAD.")},
 		Outputs:  []string{"baseline-captures"},
@@ -743,6 +763,7 @@ var Verbs = []Command{
 	{
 		Name: "experiment", WP: "WP6.7", Stage: StageLearn,
 		Summary: "Design an experiment for a Feature: hypothesis, metric, flag, and minimum sample size.",
+		Reader:  "Designs an A/B test for a Feature: what you expect, what you measure, and how many people you need.",
 		Seat:    RevenueArchitect, Lane: LanePlan, Layers: OnlyLayers(L03, L08),
 		Inputs: []Input{
 			pos("feature", TypeIssue, "Feature (or Initiative) to experiment on."),
@@ -762,6 +783,7 @@ var Verbs = []Command{
 	{
 		Name: "readout", WP: "WP6.7", Stage: StageLearn,
 		Summary: "Read out an experiment's lift once it reaches minimum sample and write the Result.",
+		Reader:  "Reads out an experiment once it has enough people, and writes down the measured lift.",
 		Seat:    RevenueArchitect, Lane: LaneSpec, Layers: OnlyLayers(L08),
 		Inputs: []Input{
 			pos("experiment", TypeIssue, "Experiment to read out."),
@@ -776,6 +798,7 @@ var Verbs = []Command{
 	{
 		Name: "respond", WP: "WP5.6", Stage: StageOperate,
 		Summary: "Respond to an incident: propose an ops catalog action, execute it only through human approval, keep the timeline.",
+		Reader:  "Helps handle an incident: proposes a fix from your runbook, runs it only after a person approves, and keeps the timeline.",
 		Seat:    AINativeEngineer, Lane: LaneBuild, Layers: OnlyLayers(L07, L09),
 		Inputs: []Input{
 			pos("incident", TypeIssue, "Incident issue."),
@@ -790,6 +813,7 @@ var Verbs = []Command{
 	{
 		Name: "status", WP: "WP2.8", Stage: StageExplain,
 		Summary: "Roll up status, health, risk, proof coverage, decisions, and cost per Goal, Initiative, and Feature.",
+		Reader:  "Rolls up progress, risk, proof, open decisions, and cost for each Goal, Initiative, and Feature.",
 		Seat:    EngineeringManager, Lane: LaneChore, Layers: AllLayers(),
 		Inputs: []Input{
 			optPos("issue", TypeIssue, "Goal, Initiative, or Feature to roll up; defaults to all Goals."),
@@ -804,6 +828,7 @@ var Verbs = []Command{
 	{
 		Name: "audit", WP: "WP7.6", Stage: StageExplain,
 		Summary: "Audit floors, proof coverage, waivers, decision SLAs, autonomy exceptions, and unlogged writes; write a reproducible report.",
+		Reader:  "Writes a report anyone can reproduce: checks, proof, waivers, deadlines, bypasses, and any write that skipped the log.",
 		Seat:    Auditor, Lane: LaneReview, Layers: AllLayers(),
 		Inputs: []Input{
 			flag("since", TypeString, "Window start (YYYY-MM-DD UTC or RFC 3339); default the cursor of the newest audit report on the ledger, else 7 days back."),
@@ -819,6 +844,7 @@ var Verbs = []Command{
 	{
 		Name: "retro", WP: "WP7.6", Stage: StageLearn,
 		Summary: "Compare estimates with observed delivery, corrections, floor misses, and cost; file findings as Feedback issues.",
+		Reader:  "Compares plans with what happened and files what to improve as feedback you can accept or reject.",
 		Seat:    EngineeringManager, Lane: LaneSpec, Layers: AllLayers(),
 		Inputs: []Input{
 			flag("since", TypeString, "Window start (YYYY-MM-DD UTC or RFC 3339); default the cursor of the newest retro report on the ledger, else 7 days back."),
@@ -834,6 +860,7 @@ var Verbs = []Command{
 	{
 		Name: "measure", WP: "WP7.2", Stage: StageLearn,
 		Summary: "Measure a Goal or Initiative against its baseline from analytics exports or live cloud pulls and write the Result.",
+		Reader:  "Measures a Goal against its baseline, the same way as before, and writes the result into the Goal.",
 		Seat:    RevenueArchitect, Lane: LaneChore, Layers: OnlyLayers(L08),
 		Inputs: []Input{
 			optPos("issue", TypeIssue, "Goal or Initiative to measure; without it, only the cohorts and North Star are reported."),
@@ -854,6 +881,7 @@ var Verbs = []Command{
 	{
 		Name: "evolve", WP: "WP7.7", Stage: StageLearn,
 		Summary: "Turn accepted retro Feedback into a failing eval case, then a skill diff that passes it, opened as an agent-authored PR.",
+		Reader:  "Turns accepted feedback into a test for a skill, then a skill change that passes it, for a person to review.",
 		Seat:    AINativeEngineer, Lane: LaneBuild, Layers: OnlyLayers(L05),
 		Inputs: []Input{
 			flag("skill", TypeString, "Skill to evolve: skills/<skill>/, or a stub under evals/skills/<skill>/."),
@@ -866,6 +894,7 @@ var Verbs = []Command{
 	{
 		Name: "brief", WP: "WP7.3", Stage: StageExplain,
 		Summary: "Explain work to an audience in a chosen register and purpose as a grounded, accessible HTML brief.",
+		Reader:  "Explains a piece of work to one audience in a short page, where every claim is checked against its sources.",
 		Seat:    Mentalist, Lane: LaneSpec, Layers: AllLayers(),
 		Inputs: []Input{
 			pos("subject", TypeIssue, "Work item to brief on."),
@@ -880,6 +909,7 @@ var Verbs = []Command{
 	{
 		Name: "tell", WP: "WP7.5", Stage: StageExplain,
 		Summary: "Write docs, guides, changelogs, release notes, launch copy, or brand copy that cite only proven Features; publish is human-only.",
+		Reader:  "Writes docs, release notes, and launch copy in your brand's voice, linking only work that is proven.",
 		Seat:    Marketer, Lane: LaneSpec, Layers: OnlyLayers(L01),
 		Inputs: []Input{
 			enumIn("kind", true, true, "What to write.", "docs", "guide", "changelog", "release", "launch", "brand"),
@@ -896,6 +926,7 @@ var Verbs = []Command{
 	{
 		Name: "init", WP: "WP2.5", Stage: StageSetup,
 		Summary: "Set up a product repo: labels, issue types, forms, config, ledger branch, and optionally projects, gates, identity, integrations.",
+		Reader:  "Sets up a repository for aayudha: labels, issue forms, config, and the records branch; more on request.",
 		Seat:    Founder, Lane: LaneChore, Layers: OnlyLayers(L09),
 		Inputs: []Input{
 			flag("resume", TypeBool, "Resume a partial run from .aayudha/state.json."),
@@ -911,6 +942,7 @@ var Verbs = []Command{
 	{
 		Name: "install", WP: "WP3.2", Stage: StageSetup,
 		Summary: "Install skill copies, lock.toml, MCP registration, and hooks for each host; shows a diff unless --apply.",
+		Reader:  "Installs the aayudha skills, tools, and hooks into Amp, Cursor, or Claude Code.",
 		Seat:    DevOps, Lane: LaneChore, Layers: OnlyLayers(L09),
 		Inputs: []Input{
 			enumIn("host", false, false, "Host to install for.", "amp", "cursor", "claude", "all"),
@@ -924,6 +956,7 @@ var Verbs = []Command{
 	{
 		Name: "doctor", WP: "WP1.7", Stage: StageSetup,
 		Summary: "Check tools, tokens, identity, config, host installs, and existing CI; --fix re-syncs copies after showing a diff.",
+		Reader:  "Checks your machine and setup, and says exactly what to fix.",
 		Seat:    DevOps, Lane: LaneChore, Layers: OnlyLayers(L09),
 		Inputs: []Input{
 			readOnlyWith(flag("fix", TypeBool, "Re-sync copies and adapters after showing a diff."), "false"),

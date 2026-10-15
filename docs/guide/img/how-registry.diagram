@@ -1,0 +1,15 @@
+# The verb registry (docs/guide/how-registry.md). Rendered to how-registry.svg by go generate.
+title: One Go file declares every command, and go generate writes the rest from it
+direction: down
+registry: internal/verbs/registry.go: verbs, seats, layers, lanes, gates
+cli: CLI commands and flags, built at run time
+gen: go generate ./... runs the generators
+docs: README tables, LAYERS.md, RACI, charters, AGENTS.md
+skills: SKILL.md frontmatter and MCP tool schemas
+drift: CI generate-drift job fails on any difference
+registry -> cli: read at start
+registry -> gen: lint, then render
+gen -> docs
+gen -> skills
+docs -> drift
+skills -> drift

@@ -63,8 +63,24 @@ func TestRegistry(t *testing.T) {
 				}
 			}
 			for _, c := range Plumbing {
-				if c.Stage != "" {
-					return fmt.Errorf("plumbing %s has a stage", c.Name)
+				if c.Stage != "" || c.Reader != "" {
+					return fmt.Errorf("plumbing %s has a stage or a reader summary", c.Name)
+				}
+			}
+			return nil
+		}},
+		{"every verb has a plain reader summary, one sentence, distinct from its agent summary", func() error {
+			for _, c := range Verbs {
+				r := strings.TrimSpace(c.Reader)
+				switch {
+				case r == "":
+					return fmt.Errorf("verb %s has no reader summary", c.Name)
+				case len(r) > 160:
+					return fmt.Errorf("verb %s: reader summary is %d chars, want <= 160", c.Name, len(r))
+				case !strings.HasSuffix(r, ".") || strings.Count(r, ". ") > 0:
+					return fmt.Errorf("verb %s: reader summary is not one sentence ending in a full stop", c.Name)
+				case r == c.Summary:
+					return fmt.Errorf("verb %s: reader summary repeats the agent summary", c.Name)
 				}
 			}
 			return nil

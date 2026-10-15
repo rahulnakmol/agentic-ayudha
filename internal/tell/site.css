@@ -17,6 +17,8 @@
   --setup-edge: #b4441d;
   --story: #f3f0fa;
   --story-edge: #6941c6;
+  --hood: #eef1f6;
+  --hood-edge: #535b6b;
   --measure: 44rem;
   color-scheme: light;
 }
@@ -71,19 +73,21 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 2.5rem 0; }
 
 code { font: 0.875em/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code); padding: 0.1em 0.3em; border-radius: 3px; }
 /* Code wraps instead of scrolling, so every line is readable without a sideways scroll. */
-pre { background: var(--code); padding: 0.9rem 1rem; border-radius: 6px; max-width: var(--measure); white-space: pre-wrap; overflow-wrap: anywhere; }
+pre { background: var(--code); padding: 0.9rem 1rem; border-radius: 6px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.9375rem; }
 pre code { padding: 0; background: none; }
 table { border-collapse: collapse; display: block; overflow-x: auto; margin: 1rem 0; font-size: 0.9375rem; line-height: 1.5; }
 table:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 th, td { border: 1px solid var(--line); padding: 0.45rem 0.7rem; text-align: left; vertical-align: top; }
 th { background: var(--panel); }
 
-blockquote { margin: 1.25rem 0; padding: 0.25rem 1rem; border-left: 4px solid var(--line); color: var(--muted); }
+/* A plain block quote is a story scene: it opens each chapter. */
+blockquote { margin: 1.5rem 0; padding: 0.35rem 1.1rem; border-left: 4px solid var(--story-edge); color: var(--fg); font-size: 1.0625em; }
+blockquote em:first-child { font-style: normal; font-weight: 650; color: var(--story-edge); }
 /* Callouts: a block quote that opens with a bold label ("Tip:", "You are here:", …). The label is text,
    so the meaning never rests on colour alone. */
 blockquote.callout {
   color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-left-width: 5px;
-  border-radius: 6px; padding: 0.6rem 1.1rem;
+  border-radius: 6px; padding: 0.6rem 1.1rem; font-size: 1rem;
 }
 blockquote.callout > p:first-child > strong:first-child { display: inline; margin-right: 0.25rem; }
 blockquote.callout-you-are-here, blockquote.callout-start-here { background: var(--here); border-color: var(--accent); }
@@ -91,6 +95,7 @@ blockquote.callout-tip { background: var(--tip); border-color: var(--tip-edge); 
 blockquote.callout-well-done { background: var(--done); border-color: var(--done-edge); }
 blockquote.callout-needs-setup, blockquote.callout-before-the-first-release, blockquote.callout-honest-status { background: var(--setup); border-color: var(--setup-edge); }
 blockquote.callout-in-the-story { background: var(--story); border-color: var(--story-edge); }
+blockquote.callout-under-the-hood { background: var(--hood); border-color: var(--hood-edge); font-size: 0.9375rem; }
 blockquote.callout-start-here { font-size: 1.125rem; padding: 0.9rem 1.25rem; }
 
 footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.875rem; max-width: var(--measure); }

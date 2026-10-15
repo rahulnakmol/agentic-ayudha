@@ -1,0 +1,18 @@
+# Floors in detail (docs/guide/how-floors.md).
+title: Every floor that applies either passes or blocks, and only a human-accepted waiver turns a miss into a waived result
+direction: down
+head: Pull request head, in the verify sandbox
+applies: Does the floor apply to this change?
+skip: skipped, with the reason in the pack
+run: Pinned tool runs against its threshold
+pass: pass: the floor holds
+miss: fail or blocked: gate red, ship refuses
+waiver: Accepted floor-waiver Decision
+waived: waived: recorded, counted by audit
+head -> applies
+applies -> skip: no
+applies -> run: yes
+run -> pass: within threshold
+run -> miss: over or tool error
+miss -> waiver: human accepts
+waiver -> waived

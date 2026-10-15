@@ -1,0 +1,14 @@
+# Trust model (docs/guide/how-trust.md).
+title: An agent's change lands only after base-branch CI and a human pass, and ship records who gave it
+direction: down
+input: Untrusted text: issues, comments, tool output
+agent: Agent lane writes as the bot (or human fallback)
+pr: Pull request on a story branch
+ci: CI from the base branch: merge gate, protected paths
+pass: Human pass: approval, or recorded solo bypass
+ship: aayu ship merges and writes ship.json
+input -> agent: wrapped as data
+agent -> pr: opens
+pr -> ci: judged by
+ci -> pass: checks reported
+pass -> ship: checked by ship

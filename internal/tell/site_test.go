@@ -52,6 +52,14 @@ func TestSiteBuild(t *testing.T) {
 		t.Fatalf("files: %v", SiteFiles(files))
 	}
 
+	// design/brand.yaml's name titles the site.
+	named := s
+	named.Brand.Name = "aayudha docs"
+	files, _, _, _ = named.Build()
+	if b := string(files["index.html"]); !strings.Contains(b, `<title>Repo · aayudha docs</title>`) || !strings.Contains(b, `class="brand" href="index.html">aayudha docs</a>`) {
+		t.Errorf("brand name not used as the site name:\n%s", b)
+	}
+
 	s.Pages = append(s.Pages, SitePage{Out: "security.html", Nav: "Security", Source: "SECURITY.md", Origin: "SECURITY.md", Markdown: "# Security\n\nFixed in #8.\n"})
 	files, _, probs, err = s.Build()
 	if err != nil || files != nil || len(probs) != 1 || probs[0].String() != "SECURITY.md line 3: #8 is not a Feature with authoritative packs; copy links only proven Features" {

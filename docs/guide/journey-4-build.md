@@ -1,39 +1,16 @@
-# 4. Build it
+# 4. The build
 
-Now the agent writes the code. It works in small, checked steps, so a mistake shows up minutes after it is made,
-not days later in review. You can go and do something else.
+> *Monday, just after 07:30 UTC.* Sam types `aayu build 130` and leaves for coffee. By the time he is back, pull
+> request 135 is open, and a comment on the story that reads like a flight log: checkpoint, layer, result, budget used.
 
-> **You are here:** step 4 of 9. [Shape](journey-1-shape.md) · [Break down](journey-2-break-down.md) ·
-> [Ready](journey-3-ready.md) · **Build** · [Prove](journey-5-prove.md) · [Ship](journey-6-ship.md) ·
-> [Release](journey-7-release.md) · [Learn](journey-8-learn.md) · [Explain](journey-9-explain.md)
+## Small steps, each one checked
 
-## What you do, and what the agent does
+The agent writes the code in its own copy of the repository (a git worktree), so Sam's checkout is untouched. It
+takes a lease on the story, so no other agent picks it up. Then it follows the plan one layer at a time. After each
+layer it commits a **checkpoint** and runs `verify`, the same fixed checks CI will run later. A mistake shows up
+minutes after it is made, not days later in review.
 
-**You** do nothing, unless the agent gets stuck and asks for help.
-
-**Your agent** runs `build`. It takes a lease on the story, so no other agent picks it up, and works in its own copy
-of the repository (a git worktree), so your checkout is untouched. It follows the plan one layer at a time. After each
-layer it commits a **checkpoint** and runs `verify`, the same fixed checks CI will run later. When a checkpoint holds,
-it pushes the branch and opens or updates the pull request.
-
-```sh
-aayu build <story>            # start, or commit the next checkpoint
-aayu build <story> --resume   # carry on from another machine, or after a review asks for a fix
-```
-
-`build` refuses a story that is not Ready, or whose text changed after its Ready snapshot.
-
-## Guard rails while you are away
-
-Every build has a budget: by default 8 hours of wall time, 25 USD of model spend, and 3 failed attempts. The spend
-counts the model calls aayudha makes for the story, plus any spend your host reports to it; the code your agent
-writes is billed by your Amp, Cursor, or Claude Code plan as usual. If the budget runs out, or a risky layer fails
-twice, the story is marked blocked and a person is paged through the channel you choose: Slack, email, or a GitHub
-mention. The agent stops. You look, help if needed, and run `aayu ready <story>` to let it carry on.
-
-## In the benefits-qa story
-
-> **In the story:** story 131 was built as pull request 148, in three checkpoints.
+For story 131, pull request 148 grew three checkpoints:
 
 | Checkpoint | Layers | Result |
 |---|---|---|
@@ -41,36 +18,71 @@ mention. The agent stops. You look, help if needed, and run `aayu ready <story>`
 | 2 of 2 | L05 Intelligence | Checks hold |
 | 3 of 3 | L04 and L05 | Checks hold |
 
-The plan had two checkpoints. The first review asked for a fix, so a third was added, and the count became "3 of
-3". The story's progress comment showed the budget used: 0.5 of 8 hours and 0 of 3 failed attempts.
+The plan had two. The first review asked for a change, so a third checkpoint answered it, and the count became
+"3 of 3". The flight log on the story showed the budget: 0.5 of 8 hours used, 0 of 3 failed attempts.
 
-The pull request was opened at 09:12 UTC. Local checks could not run two of the security tools on that machine and
-said so, plainly: "not run here (tool not installed; the merge gate runs them)". That is fine: the next step runs
-everything again in CI, and that run is the one that counts.
+Some checks could not run on the building machine, and the log said so in plain words: "not run here (tool not
+installed; the merge gate runs them)". That is fine. The checks that count run in CI, in the next chapter.
+
+## A budget that keeps watch
+
+Every build has limits: by default 8 hours, 25 USD of model spend that aayudha can see, and 3 failed attempts. If
+the budget runs out, or a risky layer fails twice, the agent stops, marks the story blocked, and pages a person
+through Slack, email, or a GitHub mention. The code your agent writes is billed by your Amp, Cursor, or Claude Code
+plan as usual.
+
+On Monday the brake was pulled once, for an unexpected reason. Story 134's local checks failed twice on its platform
+layer, a risky one, so the story was marked blocked. The cause was a stale local copy of `aayu`, built before a fix
+to the accessibility check; CI, on the current version, had already passed every check. A person looked, rebuilt
+the binary, ran `aayu ready 134` to restart the budget, and the build carried on. The brake did its job: it stopped
+an agent that was failing and handed the question to a person.
 
 ## If your story has a screen
 
-Stories with a user interface have extra verbs, owned by the UX Researcher seat. Use them when you want design
-help, not by default:
+The Ask page, story 134, had screens, so it also went through design review. `review` critiques a pull request's
+screens twice: with a model, and with fixed checks for accessibility, focus, and the size of things you tap. The
+first review asked for two small visual fixes. The second said "ship". Hold on to that second review: it contains a
+disagreement that chapter 5 settles.
 
-- `research`, `wireframe`, `mockup`, and `prototype` take a Feature from references to a working, flagged prototype.
-- `review` critiques a pull request's screens twice: with a model, and with fixed checks for accessibility, focus,
-  and target size. `polish` applies the critique. `baseline` captures reference screenshots for a commit.
+> **Honest status:** the model half of `review` needs a model key where it runs. This repository runs it in a CI
+> workflow that holds the key.
 
-Story 134, the Ask page, was reviewed twice this way. The first review asked for two small visual fixes; the second
-said "ship".
+## What you do, and what the agent does
 
-> **Needs setup:** `review`'s model pass needs a model key wherever it runs. Without one, its fixed checks still
-> run in the merge gate.
+**You** do nothing, unless the agent gets stuck and asks for help.
 
-## What you get back
+**Your agent** writes the code and its tests, commits one checkpoint per layer, checks each, pushes, and opens the
+pull request. It maps each promise to the tests that prove it, which the next chapter turns into evidence.
 
-- A pull request whose commits are checkpoints, one layer each, each one already checked.
-- A progress comment on the story, with each checkpoint and the budget used so far.
+## What you learn
 
-> **Well done:** the code exists, and every layer was checked as it was written. Next, you find out whether it keeps
-> its promises.
+Checking every small step is cheaper than reviewing one big change. And a clear budget lets you walk away.
+
+## The verbs in this step
+
+<!-- BEGIN GENERATED: stage-verbs -->
+
+| Verb | What it does |
+|---|---|
+| [`build`](../../skills/build/SKILL.md) | Writes the code for a Ready story in small checked steps, one layer at a time, and opens a pull request. |
+| [`research`](../../skills/research/SKILL.md) | Collects design references and user research for a Feature. |
+| [`wireframe`](../../skills/wireframe/SKILL.md) | Sketches the screens a Feature needs, from its research and promises. |
+| [`mockup`](../../skills/mockup/SKILL.md) | Turns wireframes into mockups that use your design system. |
+| [`prototype`](../../skills/prototype/SKILL.md) | Builds a working prototype behind a flag and compares it with the design. |
+| [`review`](../../skills/review/SKILL.md) | Critiques a pull request's screens with a model and with fixed accessibility checks. |
+| [`polish`](../../skills/polish/SKILL.md) | Applies a design critique to a pull request and reviews it again. |
+| [`baseline`](../../skills/baseline/SKILL.md) | Captures reference screenshots of a commit to compare later changes against. |
+
+<!-- END GENERATED: stage-verbs -->
+
+> **Under the hood:** budgets, the breaker, and model lanes are in [the model gateway](how-models.md); what `verify`
+> runs and when each check is skipped is in [floors in detail](how-floors.md).
 
 ## What's next
 
-A pull request is not done until it is proven. [Prove it](journey-5-prove.md).
+The pull request is open. The agent says it is done. Now CI finds out whether that is true, and the answer, at
+first, is no: [chapter 5, the gate says no](journey-5-prove.md).
+
+> **You are here:** chapter 4 of 9. [Goal](journey-1-shape.md) · [Plan](journey-2-break-down.md) ·
+> [Promises](journey-3-ready.md) · **Build** · [Gate](journey-5-prove.md) · [Yes](journey-6-ship.md) ·
+> [Release](journey-7-release.md) · [Number](journey-8-learn.md) · [Telling](journey-9-explain.md)

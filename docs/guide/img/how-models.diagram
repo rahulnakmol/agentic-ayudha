@@ -1,0 +1,16 @@
+# The model gateway (docs/guide/how-models.md).
+title: A direct model call resolves its lane, passes the breaker, and lands priced in the actions log
+direction: down
+verb: A verb that calls a model directly
+resolve: Resolve the lane: config override or registry default
+family: Family check for review-type calls
+breaker: Budget breaker: refuse while tripped
+route: Route: AI gateway or the family's provider
+wire: Wire format: Messages, Responses, or Chat
+log: Actions log: tokens, cost, cost source
+verb -> resolve
+resolve -> family
+family -> breaker
+breaker -> route: under budget
+route -> wire
+wire -> log: reply priced
