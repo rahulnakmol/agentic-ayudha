@@ -31,6 +31,9 @@ func Register(mux *http.ServeMux, svc *ask.Service) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		_, _ = w.Write([]byte("ok\n"))
 	})
+	mux.HandleFunc("GET /api/plans", func(w http.ResponseWriter, _ *http.Request) {
+		write(w, http.StatusOK, []string{"Dental", "Medical", "Retirement", "Leave"})
+	})
 	mux.HandleFunc("/api/ask", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			w.Header().Set("Allow", http.MethodPost)

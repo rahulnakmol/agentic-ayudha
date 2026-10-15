@@ -63,7 +63,7 @@ var messages = map[string]string{
 	ReasonTooLong:    "Shorten your question to 500 characters or fewer.",
 	ReasonPersonal:   "We cannot answer questions about another person's records. Only that person or HR can see them.",
 	ReasonAdvice:     "We cannot give medical or financial advice. The plan documents and an HR specialist can explain your options.",
-	ReasonNotInPlans: "The plan documents do not answer this. An HR specialist will reply within 2 business days.",
+	ReasonNotInPlans: "The plan documents do not answer this. An HR specialist will reply within 3 business days.",
 }
 
 // Screen checks a question before any retrieval.
