@@ -1,0 +1,11 @@
+# Written by `aayu install` (WP3.2); `aayu install --apply` and `aayu doctor --fix` rewrite it. Do not edit.
+# Skill hashes cover each skill directory with LF line endings, so the lock is the same on every OS.
+version = 1
+installed_by = "1.2.3"
+skills_version = "0.0.0"
+pin = ""
+hosts = ["codex"]
+
+[skills]
+alpha = { version = "0.0.0", sha256 = "f69c5f450e8e0c6849f80d3423bb25992cb5b8fcfbc5747f07f299b08a1b823c" }
+beta = { version = "0.0.0", sha256 = "cca9edf32d305455a2b296de4c470212b918e25c70b1356f7645a28cbb966463" }

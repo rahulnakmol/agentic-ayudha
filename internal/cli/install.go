@@ -3,6 +3,7 @@ package cli
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -10,8 +11,10 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
 	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
 	"github.com/rahulnakmol/agentic-ayudha/internal/upgrade"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
@@ -159,7 +162,11 @@ func runInstall(ctx context.Context, e *Env, in Values) error {
 		fmt.Fprintf(e.Out, "install: applied %d repository edit(s)\n", len(repo))
 	}
 	if rep.Home == "skipped" {
-		return Errorf(ExitBlocked, "install: %d home-directory edit(s) not applied; confirm on a terminal or pass --yes", len(home))
+		next := "aayu install --apply --yes"
+		if e.Host != "" {
+			next = "aayu install --host " + e.Host + " --apply --yes"
+		}
+		return WithNext(Errorf(ExitBlocked, "install: %d home-directory edit(s) not applied; confirm on a terminal or pass --yes", len(home)), next)
 	}
 	return nil
 }
@@ -198,12 +205,18 @@ func runHook(ctx context.Context, e *Env, in Values) error {
 	if !known {
 		return Errorf(ExitUsage, "hook %q: unknown hook", name)
 	}
-	if f, ok := e.In.(*os.File); ok { // hosts send the event as JSON on stdin; it is not needed
-		if fi, err := f.Stat(); err == nil && fi.Mode()&os.ModeCharDevice == 0 {
-			_, _ = io.Copy(io.Discard, io.LimitReader(f, 1<<20))
-		}
+	if name == "status-line" {
+		_, err := fmt.Fprintln(e.Out, e.statusLine())
+		return err
 	}
-	r, err := hosts.RunHook(name, verbs.HostID(e.Host), config.RepoRoot(e.Dir), e.PauseFile())
+	var event []byte // hosts send the event as JSON on stdin; pre-tool reads the shell command in it
+	if !e.isTerminal(e.In) {
+		event, _ = io.ReadAll(io.LimitReader(e.In, 1<<20))
+	}
+	if e.Host == "" { // a marketplace plugin shared by several hosts names none
+		e.Host, _ = doctor.DetectHost("", e.Getenv)
+	}
+	r, err := hosts.RunHook(name, verbs.HostID(e.Host), config.RepoRoot(e.Dir), e.PauseFile(), event)
 	if err != nil {
 		return Wrap(ExitUsage, err)
 	}
@@ -212,9 +225,40 @@ func runHook(ctx context.Context, e *Env, in Values) error {
 			r = hosts.Deny(verbs.HostID(e.Host), fmt.Sprintf("aayudha: the repository is halted (%s): %s. A human clears it with `aayu resume`.", HaltVariable, reason))
 		}
 	}
+	// A marketplace plugin calls aayu from PATH and passes the skills version it
+	// carries; session-start says so when this binary carries another.
+	if v := in.String("skills"); name == "session-start" && v != "" && v != verbs.SkillVersion && e.Host != string(verbs.HostCursor) {
+		r.Stdout += fmt.Sprintf("aayudha: the %s plugin carries skills %s, but the aayu on PATH carries %s; update one of them (`aayu self-update`, or update the plugin).\n", e.Host, v, verbs.SkillVersion)
+	}
 	fmt.Fprint(e.Out, r.Stdout)
 	if r.Code != 0 {
-		return &Error{Code: r.Code, Err: errors.New(strings.TrimSpace(r.Stderr))}
+		return &Error{Code: r.Code, Err: errors.New(strings.TrimSpace(r.Stderr)), Next: "aayu resume"}
 	}
 	return nil
+}
+
+// statusLine is one line of journey state from the last home screen, for a
+// host's status line. It never touches the network: hosts refresh it often.
+func (e *Env) statusLine() string {
+	b, err := os.ReadFile(e.homeCacheFile())
+	var h Home
+	if err != nil || json.Unmarshal(b, &h) != nil {
+		return "aayudha | run aayu for the home screen"
+	}
+	parts := []string{"aayudha"}
+	for _, c := range []struct {
+		label string
+		n     int
+	}{{"Ready", len(h.Ready)}, {"building", len(h.InProgress)}, {"waiting for you", len(h.AwaitingHuman)}, {"blocked", len(h.Blocked)}, {"floor misses", len(h.FailingFloors)}} {
+		if c.n > 0 {
+			parts = append(parts, fmt.Sprintf("%s %d", c.label, c.n))
+		}
+	}
+	parts = append(parts, "next: "+h.Next.Command)
+	if at, err := time.Parse(time.RFC3339, h.At); err == nil {
+		if age := e.Now().Sub(at); age > 10*time.Minute {
+			parts = append(parts, fmt.Sprintf("as of %s ago", age.Truncate(time.Minute)))
+		}
+	}
+	return strings.Join(parts, " | ")
 }

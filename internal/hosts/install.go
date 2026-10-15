@@ -32,6 +32,8 @@ const (
 	ClaudeSettings = ".claude/settings.json"
 	CursorMCP      = ".cursor/mcp.json"
 	CursorHooks    = ".cursor/hooks.json"
+	CodexConfig    = ".codex/config.toml" // project config: Codex loads it for trusted projects only
+	CodexHooks     = ".codex/hooks.json"
 	AmpPlugin      = ".amp/plugins/aayudha.ts"
 	AmpSettings    = ".config/amp/settings.json" // relative to the user's home
 	ServerName     = "aayudha"                   // MCP server name in every host
@@ -441,7 +443,7 @@ func HookCommand(binary, name string, h verbs.HostID) string {
 var importsAgents = regexp.MustCompile(`(?m)^@AGENTS\.md\s*$`)
 
 // ourHook matches the commands HookCommand writes, for any binary path.
-var ourHook = regexp.MustCompile(`^"[^"]+" hook [a-z][a-z0-9-]* --host (amp|cursor|claude)$`)
+var ourHook = regexp.MustCompile(`^"[^"]+" hook [a-z][a-z0-9-]* --host (amp|cursor|claude|codex)$`)
 
 func (p *planner) hostFiles(hosts map[verbs.HostID]bool, lock Lock) error {
 	existing, err := p.read(AgentsMD, false)
@@ -473,6 +475,12 @@ func (p *planner) hostFiles(hosts map[verbs.HostID]bool, lock Lock) error {
 		}
 		if err := p.mergeJSON(ClaudeSettings, false, func(m map[string]any) {
 			m["enabledMcpjsonServers"] = addString(m["enabledMcpjsonServers"], ServerName)
+			// The status line shows journey state (WP3.2b); one the product set itself stays.
+			if sl, ok := m["statusLine"].(map[string]any); !ok || ourHook.MatchString(fmt.Sprint(sl["command"])) {
+				m["statusLine"] = map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "status-line", verbs.HostClaude)}
+			} else {
+				p.notes = append(p.notes, ClaudeSettings+" already has a statusLine, so install leaves it: add `"+HookCommand(p.o.Binary, "status-line", verbs.HostClaude)+"` to it for the aayudha journey state")
+			}
 			hk := obj(m, "hooks")
 			hk["SessionStart"] = replaceHooks(hk["SessionStart"], map[string]any{
 				"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "session-start", verbs.HostClaude)}}})
@@ -499,13 +507,34 @@ func (p *planner) hostFiles(hosts map[verbs.HostID]bool, lock Lock) error {
 			return err
 		}
 	}
+	if hosts[verbs.HostCodex] {
+		if err := p.codexConfig(); err != nil {
+			return err
+		}
+		if err := p.mergeJSON(CodexHooks, false, func(m map[string]any) {
+			hk := obj(m, "hooks")
+			hk["SessionStart"] = replaceHooks(hk["SessionStart"], map[string]any{
+				"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "session-start", verbs.HostCodex)}}})
+			hk["PreToolUse"] = replaceHooks(hk["PreToolUse"], map[string]any{
+				"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "pre-tool", verbs.HostCodex)}}})
+		}); err != nil {
+			return err
+		}
+	}
 	if hosts[verbs.HostAmp] {
 		tmpl, err := fs.ReadFile(p.o.Assets, "hosts/amp/aayudha.ts")
 		if err != nil {
 			return err
 		}
 		bin, _ := json.Marshal(p.o.Binary)
-		if err := p.write(AmpPlugin, false, p.o.text(bytes.ReplaceAll(lf(tmpl), []byte("__AAYU__"), bin))); err != nil {
+		ver, _ := json.Marshal(p.o.Version)
+		cmds, err := SlashCommands(p.o.Assets)
+		if err != nil {
+			return err
+		}
+		cj, _ := json.Marshal(cmds)
+		plugin := bytes.ReplaceAll(bytes.ReplaceAll(bytes.ReplaceAll(lf(tmpl), []byte("__AAYU__"), bin), []byte("__VERSION__"), ver), []byte("__COMMANDS__"), cj)
+		if err := p.write(AmpPlugin, false, p.o.text(plugin)); err != nil {
 			return err
 		}
 		if _, err := os.Stat(p.abs(AmpSettings+"c", true)); err == nil {
@@ -517,6 +546,38 @@ func (p *planner) hostFiles(hosts map[verbs.HostID]bool, lock Lock) error {
 		}
 	}
 	return nil
+}
+
+// Codex's MCP registration is a marked block in the project's
+// .codex/config.toml: text outside the markers is never changed, and an
+// aayudha server the product wrote itself is left alone with a note.
+const (
+	codexBegin = "# BEGIN aayudha (written by `aayu install`; do not edit inside this block)"
+	codexEnd   = "# END aayudha"
+)
+
+var codexBlock = regexp.MustCompile(`(?s)` + regexp.QuoteMeta(codexBegin) + `.*?` + regexp.QuoteMeta(codexEnd) + `\n?`)
+
+func (p *planner) codexConfig() error {
+	old, err := p.read(CodexConfig, false)
+	if err != nil {
+		return err
+	}
+	cmd, _ := json.Marshal(p.o.Binary) // a JSON string is a TOML basic string
+	block := codexBegin + "\n[mcp_servers." + ServerName + "]\ncommand = " + string(cmd) + "\nargs = [\"mcp\"]\n" + codexEnd + "\n"
+	text := string(lf(old))
+	switch {
+	case codexBlock.MatchString(text):
+		text = codexBlock.ReplaceAllLiteralString(text, block)
+	case strings.Contains(text, "[mcp_servers."+ServerName+"]"):
+		p.notes = append(p.notes, CodexConfig+" already defines [mcp_servers."+ServerName+"] outside aayudha's block, so install leaves it: point its command at "+string(cmd)+" with args [\"mcp\"]")
+		return nil
+	case text == "":
+		text = block
+	default:
+		text = strings.TrimRight(text, "\n") + "\n\n" + block
+	}
+	return p.write(CodexConfig, false, p.o.text([]byte(text)))
 }
 
 func (p *planner) agentsSections(lock Lock) []AgentsSection {
@@ -545,8 +606,9 @@ This repository runs the aayudha verbs as host skills, installed by `+"`aayu ins
 	hostsSec := fmt.Sprintf(`## Aayudha hosts
 
 Installed for: %s. The %s MCP server serves the verbs as tools (write verbs only with `+"`[mcp] expose_writes = true`"+`).
-Host hooks run `+"`aayu hook <name>`"+` only: `+"`session-start`"+` reports skill copies out of sync with the lock, and
-`+"`pre-tool`"+` blocks agent tool calls while the `+"`[budget]`"+` breaker has paused agent lanes.`, strings.Join(names, ", "), "`"+ServerName+"`")
+Host hooks run `+"`aayu hook <name>`"+` only: `+"`session-start`"+` reports skill copies out of sync with the lock,
+`+"`pre-tool`"+` blocks agent tool calls while the `+"`[budget]`"+` breaker has paused agent lanes and blocks shell commands that
+run a human-only verb, and `+"`status-line`"+` shows where the work stands.`, strings.Join(names, ", "), "`"+ServerName+"`")
 	return []AgentsSection{{ID: "skills", Body: skills}, {ID: "hosts", Body: hostsSec}}
 }
 
@@ -714,6 +776,9 @@ func Registrations(root, home string, lockHosts []string) []Registration {
 			rel, key = CursorMCP, "mcpServers"
 		case verbs.HostAmp:
 			rel, key, isHome = AmpSettings, "amp.mcpServers", true
+		case verbs.HostCodex:
+			out = append(out, codexRegistration(root))
+			continue
 		default:
 			continue
 		}
@@ -742,4 +807,75 @@ func Registrations(root, home string, lockHosts []string) []Registration {
 		out = append(out, r)
 	}
 	return out
+}
+
+// codexRegistration reads aayudha's server from the project's .codex/config.toml.
+func codexRegistration(root string) Registration {
+	r := Registration{Host: verbs.HostCodex, File: CodexConfig}
+	b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(CodexConfig)))
+	if errors.Is(err, fs.ErrNotExist) {
+		return r
+	}
+	if err != nil {
+		r.Err = err
+		return r
+	}
+	var cfg struct {
+		Servers map[string]struct {
+			Command string `toml:"command"`
+		} `toml:"mcp_servers"`
+	}
+	if err := toml.Unmarshal(b, &cfg); err != nil {
+		r.Err = err
+		return r
+	}
+	r.Command = cfg.Servers[ServerName].Command
+	return r
+}
+
+// SlashCommand is one host-neutral command source in hosts/commands/<name>.md
+// (Claude Code command format: description and argument-hint frontmatter, a
+// body using $ARGUMENTS). The Claude Code and Codex plugin load the directory
+// itself; the Amp plugin gets the same commands from install.
+type SlashCommand struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Hint        string `json:"hint,omitempty"`
+	Body        string `json:"body"`
+}
+
+// SlashCommands reads hosts/commands/*.md from the embedded assets, by name.
+func SlashCommands(assets fs.FS) ([]SlashCommand, error) {
+	files, err := fs.Glob(assets, "hosts/commands/*.md")
+	if err != nil {
+		return nil, err
+	}
+	out := []SlashCommand{}
+	for _, f := range files {
+		b, err := fs.ReadFile(assets, f)
+		if err != nil {
+			return nil, err
+		}
+		c := SlashCommand{Name: strings.TrimSuffix(path.Base(f), ".md")}
+		text := string(lf(b))
+		if rest, ok := strings.CutPrefix(text, "---\n"); ok {
+			if i := strings.Index(rest, "\n---\n"); i >= 0 {
+				for _, l := range strings.Split(rest[:i], "\n") {
+					k, v, _ := strings.Cut(l, ":")
+					v = strings.Trim(strings.TrimSpace(v), `"'`)
+					switch strings.TrimSpace(k) {
+					case "description":
+						c.Description = v
+					case "argument-hint":
+						c.Hint = v
+					}
+				}
+				text = rest[i+5:]
+			}
+		}
+		c.Body = strings.TrimSpace(text)
+		out = append(out, c)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, nil
 }

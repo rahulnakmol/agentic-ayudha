@@ -7,6 +7,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -18,6 +20,7 @@ import (
 var Hooks = []struct{ Name, Summary string }{
 	{"session-start", "Report skill copies that differ from .aayudha/lock.toml."},
 	{"pre-tool", "Block agent tool calls while the repository is halted or the [budget] breaker has paused agent lanes."},
+	{"status-line", "Print one line of journey state for a host's status line, from the last home screen (no network)."},
 }
 
 // HookResult is what a hook prints and its exit code. Exit code 2 blocks the
@@ -28,14 +31,17 @@ type HookResult struct {
 }
 
 // RunHook runs a hook for host in the repository at root ("" outside one).
-// pauseFile is the [budget] breaker's pause file. The CLI checks halt (WP5.7)
-// before it runs pre-tool and answers with Deny itself when the repository is halted.
-func RunHook(name string, host verbs.HostID, root, pauseFile string) (HookResult, error) {
+// pauseFile is the [budget] breaker's pause file; event is the JSON the host
+// sent on stdin (nil when it sent none). The CLI checks halt (WP5.7) before it
+// runs pre-tool and answers with Deny itself when the repository is halted.
+func RunHook(name string, host verbs.HostID, root, pauseFile string, event []byte) (HookResult, error) {
 	switch name {
 	case "pre-tool":
 		msg := ""
 		if b, err := os.ReadFile(pauseFile); err == nil {
 			msg = fmt.Sprintf("aayudha: agent lanes are paused by the [budget] breaker (%s): %s. A human must clear it.", pauseFile, strings.TrimSpace(string(b)))
+		} else if cmd, why := HumanOnlyCommand(shellCommand(event)); why != "" {
+			msg = fmt.Sprintf("aayudha: %s is for a person, not an agent (%s); ask them to run `%s` in their own terminal.", firstWords(cmd), why, cmd)
 		}
 		return Deny(host, msg), nil
 	case "session-start":
@@ -145,4 +151,67 @@ func readCopy(dir string) (map[string][]byte, error) {
 		return nil
 	})
 	return files, err
+}
+
+// humanPlumbing are the plumbing commands a person runs: they refuse agents or
+// act with authority an agent must not take.
+var humanPlumbing = []string{"resume", "self-update", "tour", "seat", "uninit"}
+
+// aayuWord finds aayu run as a command: at the start, after a separator, or
+// as the last element of a path (quoted or not), but not inside a quoted
+// argument such as a commit message.
+var aayuWord = regexp.MustCompile(`(?:^|[\s;&|(/\\])aayu(?:dha)?(?:\.exe)?"?\s+([a-z][a-z0-9-]*)([^;&|\n]*)`)
+
+// HumanOnlyCommand reports a shell command that runs a human-only aayudha
+// verb (WP3.2b): a verb the MCP server never exposes, a human-only flag, or
+// a person's plumbing command. It returns the aayu command and why, or "".
+// Hosts that send the shell command to their pre-tool hook (Claude Code,
+// Codex, Cursor) block it, so an agent is never the one that ships or releases.
+func HumanOnlyCommand(shell string) (cmd, why string) {
+	for _, m := range aayuWord.FindAllStringSubmatch(shell, -1) {
+		name, rest := m[1], m[2]
+		c, ok := verbs.Find(name)
+		if !ok {
+			continue
+		}
+		cmd = strings.TrimSpace("aayu " + name + rest)
+		if slices.Contains(humanPlumbing, name) {
+			return cmd, "a person's plumbing command"
+		}
+		if c.Exposure == verbs.ExposeNever && c.Has(verbs.SurfaceSkill) || name == "init" || name == "install" && strings.Contains(rest, "--apply") {
+			return cmd, "a human-only verb"
+		}
+		for _, in := range c.Inputs {
+			if in.HumanOnly && regexp.MustCompile(`(^|\s)--`+regexp.QuoteMeta(in.Name)+`(\s|=|$)`).MatchString(rest) {
+				return cmd, "--" + in.Name + " is human-only"
+			}
+		}
+	}
+	return "", ""
+}
+
+// shellCommand is the shell command in a pre-tool event: tool_input.command
+// (Claude Code, Codex) or command (Cursor's beforeShellExecution).
+func shellCommand(event []byte) string {
+	var e struct {
+		Command   string `json:"command"`
+		ToolInput struct {
+			Command string `json:"command"`
+		} `json:"tool_input"`
+	}
+	if json.Unmarshal(event, &e) != nil {
+		return ""
+	}
+	if e.ToolInput.Command != "" {
+		return e.ToolInput.Command
+	}
+	return e.Command
+}
+
+func firstWords(cmd string) string {
+	f := strings.Fields(cmd)
+	if len(f) > 2 {
+		f = f[:2]
+	}
+	return strings.Join(f, " ")
 }
