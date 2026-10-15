@@ -223,11 +223,36 @@ func TestReleaseLive(t *testing.T) {
 	opts := Options{Dir: dir, RunPoll: 5 * time.Second}
 	release := func(to string) (Promotion, string) {
 		t.Helper()
-		start := time.Now()
-		code, out, errOut := run(t, env, opts, "release", strconv.Itoa(rel), "--to", to, "--yes", "--repo", repo, "--json")
+		var (
+			code     int
+			out      string
+			errOut   string
+			notInDev = fmt.Sprintf("#%d (status ready) is not in rolling..dev", story)
+		)
+		// Even after the wait above, CI has twice seen release's own reads of the range miss the squash merge
+		// (runs 38761858117 and 38763856598) while the test's reads had it. That refusal comes before release
+		// writes anything, so retry it for a minute, logging what GitHub serves each time.
+		for i := 0; ; i++ {
+			start := time.Now()
+			code, out, errOut = run(t, env, opts, "release", strconv.Itoa(rel), "--to", to, "--yes", "--repo", repo, "--json")
+			t.Logf("release --to %s: exit %d in %v\n%s", to, code, time.Since(start).Round(time.Second), errOut)
+			if code != ExitBlocked || !strings.Contains(errOut, notInDev) || i == 6 {
+				break
+			}
+			var pulls []struct {
+				Number   int     `json:"number"`
+				MergedAt *string `json:"merged_at"`
+				Base     struct {
+					Ref string `json:"ref"`
+				} `json:"base"`
+			}
+			_ = json.Unmarshal(liveAPI(t, tok, "GET", fmt.Sprintf("/repos/%s/commits/%s/pulls", repo, merged["sha"]), nil), &pulls)
+			t.Logf("squash merge %v; release fetched origin/dev %s; rolling..dev %q; pulls with the merge %+v", merged["sha"],
+				gitDo("rev-parse", "origin/dev"), gitDo("rev-list", "--no-merges", "origin/rolling..origin/dev"), pulls)
+			time.Sleep(10 * time.Second)
+		}
 		var p Promotion
 		_ = json.NewDecoder(strings.NewReader(out)).Decode(&p)
-		t.Logf("release --to %s: exit %d in %v\n%s", to, code, time.Since(start).Round(time.Second), errOut)
 		if code != 0 {
 			t.Fatalf("release --to %s: exit %d: %s", to, code, errOut)
 		}
