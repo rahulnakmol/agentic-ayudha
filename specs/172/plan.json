@@ -1,0 +1,67 @@
+{
+  "story": 172,
+  "body_hash": "3208e22e6601db08a66a5e1a2428ce7ff68c3c221f6a91334671b6c715fcf051",
+  "footprint": [
+    "L02",
+    "L03",
+    "L09"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L03",
+      "title": "Default proof-purge loop",
+      "contracts": [
+        "loops.Defaults[\"proof-purge\"]: proof purge, daily 03:40 in [time] tz, bot, secrets proof-media; a loop's secrets key passes AAYU_SECRET_\u003cNAME\u003e to the Actions job"
+      ],
+      "tests": [
+        "internal/loops:TestRepositoryLoops",
+        "internal/loops:TestParseRefuses",
+        "internal/loops:TestGolden"
+      ],
+      "rollback": "revert the PR; delete loops/proof-purge.toml in products",
+      "criteria": [
+        1
+      ]
+    },
+    {
+      "layer": "L02",
+      "title": "init --gates writes and renders the default loops",
+      "contracts": [
+        "loopFiles adds each default loop the checkout lacks and writes its definition"
+      ],
+      "tests": [
+        "internal/cli:TestInitGatesRendersProofPurge",
+        "internal/cli:TestLoopProofPurge"
+      ],
+      "rollback": "revert the PR",
+      "criteria": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "layer": "L09",
+      "title": "aayudha-loops.yml regenerated with the proof-purge job",
+      "contracts": [
+        "the job starts with the halt check and aayu hook loop:proof-purge, then proof purge as the bot"
+      ],
+      "tests": [
+        "internal/cli:TestInitGatesRendersProofPurge"
+      ],
+      "rollback": "revert the PR and regenerate",
+      "criteria": [
+        1,
+        3
+      ]
+    }
+  ],
+  "em_review": {
+    "required": true,
+    "layers": [
+      "L09"
+    ]
+  },
+  "planned_at": "2026-10-15T06:40:20Z",
+  "planned_by": "human-fallback"
+}
