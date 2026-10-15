@@ -80,7 +80,7 @@ events = ["workflow_dispatch", "push"]
 
 [[groups]]
 name = "skills" # every other case
-max_usd = 6.0 # the single-reply cases cost 4.57 USD in run 38681630586
+max_usd = 8.0 # the single-reply cases cost 4.57 USD in run 38681630586; run 38747551788 hit a 6 USD cap at 6.03 and cut its last run to 0, so the cap is 8 (founder, 2026-10-15)
 
 # Output caps per call. Reasoning models may spend part of the cap on reasoning; a cap is not a charge. A reply that
 # stops at its cap is recorded as an error marked truncated, without a retry. Complete drafts measured 1700-2430 output
