@@ -14,6 +14,7 @@ specific asset protected from a specific actor; ask which.
 - Default: none chosen; this one needs the human's answer, because a guessed threat produces the wrong control.
 - Evidence: api-trace
 - Facts: route, code
+- Topics: asset-and-actor
 
 ### Who may do what (`sec.access`)
 
@@ -21,6 +22,7 @@ specific asset protected from a specific actor; ask which.
 - Default: the access rules the product already applies to similar routes, quoted from the code.
 - Evidence: api-trace
 - Facts: route, code, test
+- Topics: who-may, denial
 
 ### Personal data (`sec.data`)
 
@@ -29,6 +31,7 @@ specific asset protected from a specific actor; ask which.
 - Default: no new personal data stored, and none in logs.
 - Evidence: api-trace
 - Facts: code, event
+- Topics: personal-data, logging, retention
 
 ### Abuse limits (`sec.abuse`)
 
@@ -37,6 +40,7 @@ specific asset protected from a specific actor; ask which.
 - Default: none in this story unless the human names an abuse case; park it as an idea otherwise.
 - Evidence: api-trace
 - Facts: route
+- Topics: rate-limit
 
 ### Standard (`sec.standard`)
 
@@ -44,3 +48,4 @@ specific asset protected from a specific actor; ask which.
 - Default: none beyond the floors.
 - Evidence: api-trace
 - Facts: floor
+- Topics: standard

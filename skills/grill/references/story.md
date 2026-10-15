@@ -77,7 +77,7 @@ skill's "Spec record" for the exact lines.
 ### Provenance (`provenance`, optional; required when grilled)
 
 - `Request: "<the human's words>"`, then `Vague: "<qualifier>" → criteria N, M` (or `→ deferred: <why>`) for each vague
-  word, then one line per criterion: `N. stated|confirmed|default (<dimension>): "<the human's words>"; facts: <id>`.
+  word, then one line per criterion: `N. stated|confirmed|default (<dimension>/<topic>): "<the human's words>"; facts: <id>`.
 
 ## Labels (not body sections)
 

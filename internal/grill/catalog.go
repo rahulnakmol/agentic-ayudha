@@ -40,6 +40,9 @@ type Dimension struct {
 	Default  string   `json:"default"`
 	Evidence string   `json:"evidence"`
 	Facts    []string `json:"facts"` // fact kinds to cite when asking
+	// Topics are the keys a question about this dimension is tagged with
+	// (<dimension>/<topic>), so a scripted human can answer each one.
+	Topics []string `json:"topics,omitempty"`
 }
 
 // Catalog is every domain, sorted by ID.
@@ -50,7 +53,8 @@ type Catalog struct {
 var (
 	domainHeading = regexp.MustCompile("^# Vague: (.+) \\(`([a-z][a-z0-9-]*)`\\)\\s*$")
 	dimHeading    = regexp.MustCompile("^### (.+) \\(`([a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*)`\\)\\s*$")
-	dimField      = regexp.MustCompile(`^- (Ask|Default|Evidence|Facts): (.*)$`)
+	dimField      = regexp.MustCompile(`^- (Ask|Default|Evidence|Facts|Topics): (.*)$`)
+	topicKey      = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 )
 
 // LoadCatalog reads every catalogue under CatalogDir in fsys. A catalogue
@@ -139,11 +143,18 @@ func parseDomain(s string) (Domain, error) {
 				field = &cur.Default
 			case "Evidence":
 				field = &cur.Evidence
-			case "Facts":
+			case "Facts", "Topics":
 				field = nil
 				for _, f := range strings.Split(m[2], ",") {
-					if f = strings.TrimSpace(f); f != "" {
+					if f = strings.TrimSpace(f); f == "" {
+						continue
+					}
+					if m[1] == "Facts" {
 						cur.Facts = append(cur.Facts, f)
+					} else if !topicKey.MatchString(f) {
+						return d, fmt.Errorf("line %d: topic %q of %s: want a kebab-case key", i+1, f, cur.ID)
+					} else {
+						cur.Topics = append(cur.Topics, f)
 					}
 				}
 				continue

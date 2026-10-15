@@ -1,42 +1,95 @@
-# The simulated human of grill/bakery-ux (WP5.3b): the bakery's owner. Each question is answered by the catalogue
-# dimension the skill tags it with (skills/grill/references/vague/ux.md); any other topic gets the fallback, which parks it.
-# kind: confirm (states or agrees), default (accepts the skill's offered default), park, or defer.
+# The simulated human of grill/bakery-ux (WP5.3b): the bakery's owner. The skill tags each question with a topic, <dimension>/<key>, the keys
+# coming from the catalogue's Topics (skills/grill/references/vague/ux.md) or the request topics in the skill. The human answers by
+# topic, else by the topic's dimension, else with the fallback, which parks it: an unscripted idea never becomes a
+# requirement. kind: confirm (states or agrees), default (accepts the skill's offered default), park, or defer.
 max_rounds = 4
 readback = "Yes, that is what done looks like."
 fallback = { kind = "park", text = "That is not part of what I asked for; park it." }
 
-[answers."ux.tasks"]
+[topics."ux.tasks/primary-task"]
 kind = "confirm"
 text = "A customer picks bread, chooses a pickup time, and pays by card on the review screen as they do today, and knows the order went through: they see an order number and the pickup time."
 
-[answers."ux.steps"]
+[topics."ux.steps/screen-count"]
 kind = "confirm"
 text = "Five screens is too many. Three screens at most: choose items, then pickup time and details together, then review and pay."
 
-[answers."ux.states"]
+[topics."ux.steps/confirmation-placement"]
 kind = "confirm"
-text = "When a payment fails, keep the basket and show a message with a Try again button on the same screen. Loading is fine as it is, and offline can wait."
+text = "The confirmation is its own screen after paying; it does not count toward the three."
 
-[answers."ux.platforms"]
-kind = "default"
-text = "Your default is fine."
-
-[answers."ux.consistency"]
+[topics."ux.steps/options-placement"]
 kind = "confirm"
-text = "Only our existing tokens and components; nothing new-looking."
+text = "Options such as sliced or whole go with each product on the choose-items screen."
 
-[answers."ux.content"]
+[topics."ux.states/payment-failure"]
+kind = "confirm"
+text = "When a payment fails, keep the basket and show a message with a Try again button on the same screen."
+
+[topics."ux.states/loading"]
+kind = "park"
+text = "Loading is fine as it is."
+
+[topics."ux.states/offline"]
 kind = "defer"
-text = "I'm not sure about the wording yet. Leave it open and I'll write it with the shop staff."
+text = "Offline can wait; leave it open."
 
-[answers."ux.trust"]
+[topics."ux.states/other-errors"]
+kind = "park"
+text = "Only payment failures for this story; park errors on the other screens."
+
+[topics."ux.trust/before-paying"]
 kind = "confirm"
 text = "Show the total price and the pickup time on the review screen before they pay."
 
-[answers."ux.performance"]
+[topics."ux.content/exact-wording"]
+kind = "defer"
+text = "I'm not sure about the wording yet. Leave it open and I'll write it with the shop staff."
+
+[topics."request/dependency"]
+kind = "confirm"
+text = "Yes, depend on #14 and use its pickup slots on the combined screen."
+
+[topics."request/size"]
+kind = "confirm"
+text = "Keep it as one story; an L is fine."
+
+[topics."request/existing-behaviour"]
+kind = "confirm"
+text = "Payment exists today: the review screen charges the card, and the seed has a test card that is always declined."
+
+[dimensions."ux.tasks"]
+kind = "confirm"
+text = "A customer picks bread, chooses a pickup time, and pays by card on the review screen as they do today, and knows the order went through: they see an order number and the pickup time."
+
+[dimensions."ux.steps"]
+kind = "confirm"
+text = "Five screens is too many. Three screens at most: choose items, then pickup time and details together, then review and pay."
+
+[dimensions."ux.states"]
+kind = "confirm"
+text = "When a payment fails, keep the basket and show a message with a Try again button on the same screen. Loading is fine as it is, and offline can wait."
+
+[dimensions."ux.platforms"]
+kind = "default"
+text = "Your default is fine."
+
+[dimensions."ux.consistency"]
+kind = "confirm"
+text = "Only our existing tokens and components; nothing new-looking."
+
+[dimensions."ux.content"]
+kind = "defer"
+text = "I'm not sure about the wording yet. Leave it open and I'll write it with the shop staff."
+
+[dimensions."ux.trust"]
+kind = "confirm"
+text = "Show the total price and the pickup time on the review screen before they pay."
+
+[dimensions."ux.performance"]
 kind = "park"
 text = "Speed is fine today; leave it."
 
-[answers."ux.accessibility"]
+[dimensions."ux.accessibility"]
 kind = "park"
 text = "The floors are enough for this one."

@@ -14,6 +14,7 @@ never fails, rock-solid
 - Default: the failures the facts show no handling for, each with a visible message and a retry.
 - Evidence: screenshot
 - Facts: gap, route, code
+- Topics: failure-modes
 
 ### No lost or duplicated work (`rel.integrity`)
 
@@ -21,6 +22,7 @@ never fails, rock-solid
 - Default: yes for any action that charges money or creates a record, because duplicates are the costliest bug.
 - Evidence: api-trace
 - Facts: route, test
+- Topics: duplicates, lost-input
 
 ### Availability target (`rel.availability`)
 
@@ -29,6 +31,7 @@ never fails, rock-solid
   assumption or a parked idea.
 - Evidence: metric
 - Facts: event
+- Topics: availability-target
 
 ### Recovery (`rel.recovery`)
 
@@ -37,3 +40,4 @@ never fails, rock-solid
 - Default: the user can retry from the same screen with their input kept.
 - Evidence: recording
 - Facts: gap, route
+- Topics: retry, resume

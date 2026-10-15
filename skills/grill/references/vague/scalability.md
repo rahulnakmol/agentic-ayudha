@@ -13,6 +13,7 @@ Qualifiers: scalable, scale, scales, at scale, high traffic, heavy load, massive
 - Default: none chosen; ask for today's peak and the expected peak in twelve months.
 - Evidence: metric
 - Facts: code, event
+- Topics: peak-load, horizon
 
 ### Data volume (`scale.data`)
 
@@ -20,6 +21,7 @@ Qualifiers: scalable, scale, scales, at scale, high traffic, heavy load, massive
 - Default: ten times the seeded data set as the test size, when the human has no number.
 - Evidence: metric
 - Facts: code, test
+- Topics: data-volume, growth
 
 ### Past the limit (`scale.degrade`)
 
@@ -27,6 +29,7 @@ Qualifiers: scalable, scale, scales, at scale, high traffic, heavy load, massive
 - Default: a clear error with a retry, never lost input.
 - Evidence: api-trace
 - Facts: gap, route
+- Topics: over-limit
 
 ### Cost ceiling (`scale.cost`)
 
@@ -34,3 +37,4 @@ Qualifiers: scalable, scale, scales, at scale, high traffic, heavy load, massive
 - Default: none in the criteria; record it as an assumption when the human mentions one.
 - Evidence: metric
 - Facts: floor
+- Topics: cost-ceiling

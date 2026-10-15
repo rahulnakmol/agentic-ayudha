@@ -23,11 +23,12 @@ var Sources = []string{SourceStated, SourceConfirmed, SourceDefault}
 
 // Source is one criterion's line in the Provenance section:
 //
-//	N. <stated|confirmed|default> (<dimension>): "<the human's words>"; facts: <id>, <id>
+//	N. <stated|confirmed|default> (<dimension>[/<topic>]): "<the human's words>"; facts: <id>, <id>
 type Source struct {
 	N         int    `json:"n"`
 	Kind      string `json:"kind"`
-	Dimension string `json:"dimension,omitempty"` // catalogue dimension (ux.states) or request
+	Dimension string `json:"dimension,omitempty"` // catalogue dimension (ux.states), request, or other
+	Topic     string `json:"topic,omitempty"`     // the question's topic (ux.steps/screen-count), when the line names one
 	Quote     string `json:"quote"`
 	// Quotes are the human's words one by one: a criterion that rests on
 	// several replies quotes each (`"…" / "…"`), and an elided quote ("… …")
@@ -103,6 +104,9 @@ func ParseProvenance(s string) (Provenance, []workitems.Problem) {
 		if m := sourceLine.FindStringSubmatch(line); m != nil {
 			n, _ := strconv.Atoi(m[1])
 			src := Source{N: n, Kind: strings.ToLower(m[2]), Dimension: strings.TrimSpace(m[3])}
+			if dim, _, ok := strings.Cut(src.Dimension, "/"); ok {
+				src.Topic, src.Dimension = src.Dimension, dim
+			}
 			rest := m[4]
 			if f := factsPart.FindStringSubmatchIndex(rest); f != nil {
 				for _, id := range strings.Split(rest[f[2]:f[3]], ",") {
@@ -275,6 +279,18 @@ func Check(cat Catalog, it workitems.Item) []workitems.Problem {
 	if workitems.Empty(it.Fields[workitems.FieldAssumptions]) {
 		add(workitems.FieldAssumptions, "a grilled spec lists the assumptions it rests on (write \"none\" when there are none)")
 	}
+	for _, c := range cs {
+		src, ok := p.Source(c.N)
+		if !ok {
+			continue
+		}
+		said := normWords(strings.Join(append(append([]string{}, src.Quotes...), p.Request), " "))
+		for _, pl := range Placements(c.Expected) {
+			if !strings.Contains(said, normWords(pl.Key)) {
+				add(workitems.FieldCriteria, "criterion %d decides where something goes (%q), but the human's words in its Provenance never say so; ask the human, or defer it to Open questions", c.N, pl.Text)
+			}
+		}
+	}
 	crit := strings.ToLower(it.Fields[workitems.FieldCriteria])
 	for _, l := range lines(it.Fields[workitems.FieldParked]) {
 		if label := ideaLabel(l); len(label) >= 3 && strings.Contains(crit, label) {
@@ -282,6 +298,53 @@ func Check(cat Catalog, it workitems.Item) []workitems.Problem {
 		}
 	}
 	return ps
+}
+
+// Placement is a detail of where something appears, named in a
+// criterion's expected result: a route, a named screen or page, or a
+// position relative to another element. Key is the word the human must
+// have said for the skill to write it (WP5.3b).
+type Placement struct {
+	Text string `json:"text"`
+	Key  string `json:"key"`
+}
+
+var (
+	placeRoute    = regexp.MustCompile("`(/[^`\\s]*)`")
+	placeScreen   = regexp.MustCompile(`(?i)\b(?:on|in|onto|into)\s+(?:the\s+|a\s+|its\s+own\s+)?([a-z][a-z-]*)\s+(?:screen|page|step|dialog|modal|panel|tab)\b`)
+	placeRelative = regexp.MustCompile(`(?i)\b(above|below|beside|beneath|underneath|next to|to the left of|to the right of|at the top of|at the bottom of)\b`)
+)
+
+// Placements returns the placement details of an expected result.
+func Placements(expected string) []Placement {
+	var out []Placement
+	for _, m := range placeRoute.FindAllStringSubmatch(expected, -1) {
+		segs := strings.FieldsFunc(m[1], func(r rune) bool { return r == '/' })
+		key := ""
+		for i := len(segs) - 1; i >= 0 && key == ""; i-- {
+			if !strings.HasPrefix(segs[i], "[") && !strings.HasPrefix(segs[i], ":") {
+				key = segs[i]
+			}
+		}
+		if key != "" {
+			out = append(out, Placement{Text: m[0], Key: key})
+		}
+	}
+	for _, m := range placeScreen.FindAllStringSubmatch(expected, -1) {
+		out = append(out, Placement{Text: m[0], Key: m[1]})
+	}
+	for _, m := range placeRelative.FindAllStringSubmatch(expected, -1) {
+		out = append(out, Placement{Text: m[0], Key: m[1]})
+	}
+	return out
+}
+
+var nonWord = regexp.MustCompile(`[^\p{L}\p{N}]+`)
+
+// normWords lowercases s, keeps only words, and pads it with spaces so a
+// key matches whole words.
+func normWords(s string) string {
+	return " " + strings.TrimSpace(nonWord.ReplaceAllString(strings.ToLower(s), " ")) + " "
 }
 
 // ideaLabel is a parked idea's name: the text before its first colon or dash.

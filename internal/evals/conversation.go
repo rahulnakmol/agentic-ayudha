@@ -35,15 +35,21 @@ type Answer struct {
 	Text string `toml:"text" json:"text"`
 }
 
-// Human is a case's simulated human ([tier2] human): it answers each question
-// by the catalogue dimension the skill tagged it with, so a run is
-// reproducible whatever the wording of the question.
+// Human is a case's simulated human ([tier2] human). The skill tags each
+// question with a topic, <dimension>/<key> (ux.steps/confirmation-placement,
+// request/dependency), the keys coming from the catalogue's Topics; the
+// human answers by that topic, else by the topic's dimension, else with the
+// fallback. A run is reproducible whatever the wording of the questions, and
+// a follow-up on another topic of the same dimension gets its own answer.
 type Human struct {
-	MaxRounds int               `toml:"max_rounds"`
-	Fallback  Answer            `toml:"fallback"` // any dimension without a scripted answer
-	Readback  string            `toml:"readback"` // the human's reply to the readback
-	Answers   map[string]Answer `toml:"answers"`  // by dimension ID (ux.states)
+	MaxRounds  int               `toml:"max_rounds"`
+	Fallback   Answer            `toml:"fallback"`   // any topic and dimension without a scripted answer
+	Readback   string            `toml:"readback"`   // the human's reply to the readback
+	Topics     map[string]Answer `toml:"topics"`     // by topic (ux.steps/screen-count)
+	Dimensions map[string]Answer `toml:"dimensions"` // by dimension (ux.steps), for topics without their own answer
 }
+
+var topicRE = regexp.MustCompile(`^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)?/[a-z0-9][a-z0-9-]*$`)
 
 // LoadHuman reads a scripted-human file.
 func LoadHuman(path string) (Human, error) {
@@ -60,9 +66,16 @@ func LoadHuman(path string) (Human, error) {
 	if h.MaxRounds < 1 || h.Fallback.Text == "" {
 		return h, fmt.Errorf("%s: max_rounds >= 1 and a fallback answer are required", path)
 	}
-	for dim, a := range h.Answers {
-		if !slices.Contains([]string{KindConfirm, KindDefault, KindPark, KindDefer}, a.Kind) || a.Text == "" {
-			return h, fmt.Errorf("%s: answers.%s: want kind confirm|default|park|defer and a text", path, dim)
+	for _, m := range []map[string]Answer{h.Topics, h.Dimensions} {
+		for key, a := range m {
+			if !slices.Contains([]string{KindConfirm, KindDefault, KindPark, KindDefer}, a.Kind) || a.Text == "" {
+				return h, fmt.Errorf("%s: %s: want kind confirm|default|park|defer and a text", path, key)
+			}
+		}
+	}
+	for t := range h.Topics {
+		if !topicRE.MatchString(t) {
+			return h, fmt.Errorf("%s: topics.%s: want <dimension>/<key>", path, t)
 		}
 	}
 	if !slices.Contains([]string{KindPark, KindDefer}, h.Fallback.Kind) {
@@ -71,20 +84,25 @@ func LoadHuman(path string) (Human, error) {
 	return h, nil
 }
 
-// Answer returns the scripted reply to a question tagged with dimension.
-func (h Human) Answer(dimension string) Answer {
-	if a, ok := h.Answers[dimension]; ok {
+// Answer returns the scripted reply to a question tagged with topic.
+func (h Human) Answer(topic string) Answer {
+	if a, ok := h.Topics[topic]; ok {
+		return a
+	}
+	if a, ok := h.Dimensions[dimensionOf(topic)]; ok {
 		return a
 	}
 	return h.Fallback
 }
 
+func dimensionOf(topic string) string { d, _, _ := strings.Cut(topic, "/"); return d }
+
 // Question is one question of a skill's turn.
 type Question struct {
-	Dimension string   `json:"dimension"`
-	Ask       string   `json:"ask"`
-	Default   string   `json:"default,omitempty"`
-	Facts     []string `json:"facts,omitempty"`
+	Topic   string   `json:"topic"` // <dimension>/<key>
+	Ask     string   `json:"ask"`
+	Default string   `json:"default,omitempty"`
+	Facts   []string `json:"facts,omitempty"`
 }
 
 // Turn is one reply of the skill in a grill conversation: what it says
@@ -117,8 +135,10 @@ type Transcript struct {
 const conversationProtocol = `## This conversation
 
 You are grilling a human through a channel that carries JSON. Each reply is one turn:
-{"say": "...", "questions": [{"dimension": "<catalogue dimension ID, or request, or other>", "ask": "...", "default": "...", "facts": ["<fact ID>"]}], "done": false}
-Ask at most five questions per turn, tag each with the catalogue dimension it settles, and cite assessment facts by ID.
+{"say": "...", "questions": [{"topic": "<dimension>/<topic>", "ask": "...", "default": "...", "facts": ["<fact ID>"]}], "done": false}
+Ask at most five questions per turn. Tag each with the topic it settles: a catalogue dimension and one of its Topics
+(ux.steps/confirmation-placement), a request topic (request/dependency, request/size, request/existing-behaviour,
+request/parent, request/scope), or other/<key> for anything else. Cite assessment facts by ID.
 The human's answers come back numbered in the order you asked. When the spec is concrete, reply with "done": true,
 your plain-language readback in "say" ("Here is what done looks like: ..."), no questions, and "draft": the work item
 as JSON {type, title, fields, labels, parent, open_questions}, its fields including assumptions, open_questions,
@@ -139,12 +159,12 @@ func turnSchema(draftSchema []byte) ([]byte, error) {
 			"say":  map[string]any{"type": "string", "minLength": 1},
 			"done": map[string]any{"type": "boolean"},
 			"questions": map[string]any{"type": "array", "maxItems": 5, "items": map[string]any{
-				"type": "object", "required": []string{"dimension", "ask"}, "additionalProperties": false,
+				"type": "object", "required": []string{"topic", "ask"}, "additionalProperties": false,
 				"properties": map[string]any{
-					"dimension": map[string]any{"type": "string", "minLength": 1},
-					"ask":       map[string]any{"type": "string", "minLength": 1},
-					"default":   map[string]any{"type": "string"},
-					"facts":     map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+					"topic":   map[string]any{"type": "string", "pattern": topicRE.String()},
+					"ask":     map[string]any{"type": "string", "minLength": 1},
+					"default": map[string]any{"type": "string"},
+					"facts":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 				}}},
 			"draft": d,
 		},
@@ -239,13 +259,14 @@ func Concrete(cat grill.Catalog, a grill.Assessment, it workitems.Item, tr Trans
 	if norm(p.Request) != norm(tr.Request) {
 		out = append(out, fmt.Sprintf("provenance: Request %q is not the human's request", clip(p.Request, 80)))
 	}
-	said := map[string][]Answer{} // dimension → the human's replies
+	said, saidDim := map[string][]Answer{}, map[string][]Answer{} // topic, dimension → the human's replies
 	var all []string
 	all = append(all, norm(tr.Request))
 	for _, x := range tr.Exchanges {
 		for i, q := range x.Questions {
 			if i < len(x.Answers) {
-				said[q.Dimension] = append(said[q.Dimension], x.Answers[i])
+				said[q.Topic] = append(said[q.Topic], x.Answers[i])
+				saidDim[dimensionOf(q.Topic)] = append(saidDim[dimensionOf(q.Topic)], x.Answers[i])
 				all = append(all, norm(x.Answers[i].Text))
 			}
 		}
@@ -264,24 +285,27 @@ func Concrete(cat grill.Catalog, a grill.Assessment, it workitems.Item, tr Trans
 			out = append(out, fmt.Sprintf("fidelity: criterion %d quotes %q, which the human never said", s.N, clip(strings.Join(unsaid, " / "), 80)))
 			continue
 		}
-		if s.Dimension == "" || s.Dimension == "request" {
+		if s.Topic == "" && (s.Dimension == "" || s.Dimension == "request") {
 			if !inRequest && s.Kind == grill.SourceStated {
 				out = append(out, fmt.Sprintf("fidelity: criterion %d is stated in the request, but the request does not say %q", s.N, clip(s.Quote, 80)))
 			}
 			continue
 		}
-		replies := said[s.Dimension]
+		replies, asked := saidDim[s.Dimension], s.Dimension
+		if s.Topic != "" {
+			replies, asked = said[s.Topic], s.Topic
+		}
 		var kinds []string
 		for _, r := range replies {
 			kinds = append(kinds, r.Kind)
 		}
 		switch {
 		case len(replies) == 0:
-			out = append(out, fmt.Sprintf("fidelity: criterion %d comes from %s, which the human was never asked about", s.N, s.Dimension))
+			out = append(out, fmt.Sprintf("fidelity: criterion %d comes from %s, which the human was never asked about", s.N, asked))
 		case !slices.Contains(kinds, KindConfirm) && !slices.Contains(kinds, KindDefault):
-			out = append(out, fmt.Sprintf("fidelity: criterion %d comes from %s, which the human %s; it belongs in Parked ideas or Open questions", s.N, s.Dimension, strings.Join(kinds, " and ")))
+			out = append(out, fmt.Sprintf("fidelity: criterion %d comes from %s, which the human %s; it belongs in Parked ideas or Open questions", s.N, asked, strings.Join(kinds, " and ")))
 		case s.Kind == grill.SourceDefault && !slices.Contains(kinds, KindDefault):
-			out = append(out, fmt.Sprintf("fidelity: criterion %d claims an accepted default on %s, but the human did not accept a default there", s.N, s.Dimension))
+			out = append(out, fmt.Sprintf("fidelity: criterion %d claims an accepted default on %s, but the human did not accept a default there", s.N, asked))
 		}
 	}
 	return out

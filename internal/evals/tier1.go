@@ -279,8 +279,8 @@ func tier1Concrete(c Case, assets fs.FS) []string {
 				continue
 			}
 			for j, q := range x.Questions {
-				if want := h.Answer(q.Dimension); x.Answers[j] != want {
-					bad = append(bad, fmt.Sprintf("exchange %d question %d (%s): the recorded answer is not the script's", i+1, j+1, q.Dimension))
+				if want := h.Answer(q.Topic); x.Answers[j] != want {
+					bad = append(bad, fmt.Sprintf("exchange %d question %d (%s): the recorded answer is not the script's", i+1, j+1, q.Topic))
 				}
 			}
 		}

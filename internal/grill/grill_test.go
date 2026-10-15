@@ -2,6 +2,7 @@ package grill
 
 import (
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -80,6 +81,10 @@ func TestCheck(t *testing.T) {
 		{"vague threshold", map[string]string{workitems.FieldThreshold: "fast enough"}, []string{"threshold: Threshold says \"fast\""}},
 		{"grilled and complete", map[string]string{workitems.FieldProvenance: goodProvenance, workitems.FieldAssumptions: "none",
 			workitems.FieldOpenQuestions: "- answered: which task first\n- deferred: exact wording (staff write it)", workitems.FieldParked: "- loyalty stamps: a stamp card"}, nil},
+		{"placement the human said", map[string]string{workitems.FieldProvenance: goodProvenance, workitems.FieldAssumptions: "none",
+			workitems.FieldCriteria: "1. [screenshot] state: `/order/review` with 2 items; expected: the total and the pickup time on the review screen, at the top of `/order/review`\n" +
+				"2. [recording] state: `/order` empty basket; expected: a paid order in at most 3 screens",
+		}, []string{`criterion 1 decides where something goes ("at the top of")`}},
 		{"grilled gaps", map[string]string{
 			workitems.FieldProvenance:    "Request: \"Ordering needs high-quality UX and must be fast\"\nVague: \"fast\" → deferred: no number yet\n1. stated (ux.trust): \"show the total\"\n1. confirmed: \"again\"\n3. guessed: \"x\"",
 			workitems.FieldOpenQuestions: "what wording?",
@@ -165,5 +170,27 @@ func TestAssess(t *testing.T) {
 	b := Assess(AssessInput{Root: root, Type: "story", Idea: "Everything should feel polished", Catalog: catalog(t), Verify: l.Config.Verify})
 	if !strings.Contains(b.Scope, "no route matched") || !strings.Contains(b.Scope, "every one of the 8 page routes") {
 		t.Errorf("scope without a match: %s", b.Scope)
+	}
+}
+
+// A provenance tag may name the question's topic; Placements finds routes,
+// named screens, and relative positions in an expected result, never a
+// file path or a plural "screens".
+func TestTopicsAndPlacements(t *testing.T) {
+	p, ps := ParseProvenance("Request: \"x\"\n1. confirmed (ux.steps/screen-count): \"three\" / \"at most\"\n2. stated (ux.trust): \"total\"")
+	if len(ps) > 0 || p.Criteria[0].Topic != "ux.steps/screen-count" || p.Criteria[0].Dimension != "ux.steps" || p.Criteria[1].Topic != "" ||
+		strings.Join(p.Criteria[0].Quotes, "|") != "three|at most" {
+		t.Fatalf("%+v %v", p, ps)
+	}
+	var got []string
+	for _, pl := range Placements("the total on the review screen, below the \"Pay\" button, in `/order/[id]/review`, at most 3 screens, from `web/styles/tokens.css`") {
+		got = append(got, pl.Key)
+	}
+	if strings.Join(got, ",") != "review,review,below" {
+		t.Fatalf("placements: %v", got)
+	}
+	c := catalog(t)
+	if d, _ := c.Dimension("ux.steps"); !slices.Contains(d.Topics, "confirmation-placement") {
+		t.Fatalf("ux.steps topics: %v", d.Topics)
 	}
 }
