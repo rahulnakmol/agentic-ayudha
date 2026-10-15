@@ -85,6 +85,13 @@ func TestCheck(t *testing.T) {
 			workitems.FieldCriteria: "1. [screenshot] state: `/order/review` with 2 items; expected: the total and the pickup time on the review screen, at the top of `/order/review`\n" +
 				"2. [recording] state: `/order` empty basket; expected: a paid order in at most 3 screens",
 		}, []string{`criterion 1 decides where something goes ("at the top of")`}},
+		{"placement quoted from another reply", map[string]string{workitems.FieldAssumptions: "none",
+			workitems.FieldProvenance: "Request: \"Ordering needs high-quality UX\"\nVague: \"high-quality UX\" → criteria 1, 2\n" +
+				"1. confirmed (ux.states/payment-failure): \"keep the basket and retry on the same screen\" / \"people pay on the review screen\"\n" +
+				"2. confirmed (ux.states/payment-failure): \"keep the basket and retry on the same screen\"",
+			workitems.FieldCriteria: "1. [recording] state: `/order/review` with a declined card; expected: a \"Try again\" button on the same screen, with the total still on the review screen\n" +
+				"2. [recording] state: `/order/review` with a declined card; expected: the basket stays on that screen",
+		}, []string{`criterion 2 decides where something goes ("on that screen")`}},
 		{"grilled gaps", map[string]string{
 			workitems.FieldProvenance:    "Request: \"Ordering needs high-quality UX and must be fast\"\nVague: \"fast\" → deferred: no number yet\n1. stated (ux.trust): \"show the total\"\n1. confirmed: \"again\"\n3. guessed: \"x\"",
 			workitems.FieldOpenQuestions: "what wording?",

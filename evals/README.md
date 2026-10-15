@@ -90,8 +90,11 @@ Tier 2 runs in groups (`[[groups]]` in `eval.toml`), one `evals.yml` job per gro
 one group cannot use up another's cap: `brief` (the `brief/` cases, 12 USD), `personas` (the `retro/` and `decide/`
 persona cases, 20 USD), `conversations` (the grill conversation cases of WP5.3b, 20 USD, advisory until a run meets
 the bar, D-5.3b.g), and `skills` (every other case, 6 USD).
-Pushes to `dev` do not run the `brief` or `conversations` group; they run nightly, on dispatch (input `group` picks one group), and on
-pushes to `rolling` and `main`. Each group's results go to `results/<sha>-<group>.json`, uploaded as the artifact
+Pushes to `dev` do not run the `brief` group; it runs nightly, on dispatch (input `group` picks one group), and on
+pushes to `rolling` and `main`. The advisory `conversations` and `personas` groups never run nightly or on promotion
+(`events` in `eval.toml`): only on dispatch and on pushes to `dev` that change their own files (`skills/grill/`, the
+grill cases, `internal/grill/`; `seats/*/persona.toml`, `internal/seats/persona.go`, the `retro/` and `decide/` cases;
+and each one's harness file), so a pull request that changes them gets tier 2 once it merges (D-5.3b.h). Each group's results go to `results/<sha>-<group>.json`, uploaded as the artifact
 `eval-results-<sha>-<group>`; the promotion gate (`ci.yml` job `evals-gate`) fetches every group's results for the
 commit being promoted and for `main`, runs `eval -compare` on each, and fails when any group is missing or fails. A group with
 `pass_k = "advisory"` (`brief`, D-7.3g) passes on the mean bar and the drop rule; its pass^k findings print as

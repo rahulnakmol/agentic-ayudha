@@ -152,7 +152,8 @@ in what the repository already has, and nothing in it the human did not confirm.
    another, above or below what), what it is called, its order, a number. Ask; when there is no answer, defer it
    to Open questions or park it, and keep it out of the criteria. A criterion that places something
    (`` `/order/review` ``, "on the review screen", "above the button") must rest on the human's words saying so, or
-   `grill` and `ready` refuse it.
+   `grill` and `ready` refuse it: every place word it uses (`review`, `same`, `above`) must appear in a quote in that
+   criterion's Provenance line (see Placement quotes below).
 6. **Draft and validate.** Write the body (the reference's fields plus the spec record below) and validate it with
    `--idea`; fix every problem by asking, then validate again:
 
@@ -208,6 +209,24 @@ A grilled Story or Bug carries four more sections after its Completion Goal. `gr
   quote each one (`"…" / "…"`). The brackets name the question's topic (`ux.steps/screen-count`), its dimension
   alone, or `request` for the request's own words; a criterion may only name a topic or dimension you asked about. `; facts:` cites assessment fact IDs the criterion rests on; `grill` checks that each one exists. A
   qualifier you could not resolve is `Vague: "fast" → deferred: <why>` with a matching `deferred:` open question.
+
+**Placement quotes.** When a criterion's expected result says where something is (a route in backticks, "on the
+review screen", "on the same screen", "below the button"), its Provenance line quotes every human reply that names
+that place, even a reply given to another question. `grill` looks for each place word only in that line's quotes and
+the request:
+
+- Name the place; never point back to it. Write "on the review screen", not "on that screen" or "on this page": the
+  reader of the criterion has no earlier sentence to resolve "that".
+- Use the human's word for the place. If they said "the same screen", write "on the same screen" and quote that
+  reply; if another reply named the review screen, quote it too.
+- If no reply names the place, the placement is not confirmed: ask, or leave the place out of the criterion and add a
+  `deferred:` open question for it.
+
+```text
+4. confirmed (ux.states/payment-failure): "keep the basket and show Try again on the same screen" / "people pay on the review screen"
+```
+
+Criterion 4 may then say "on the same screen" and "on the review screen"; it may not say "on the pay screen".
 
 ## Done when concrete
 
