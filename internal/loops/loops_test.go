@@ -97,6 +97,7 @@ func TestParseRefuses(t *testing.T) {
 		"unknown key":        `command = ["status"]` + "\ncron = \"0 9 * * *\"\nshell = \"x\"",
 		"unknown host":       `command = ["status"]` + "\ncron = \"0 9 * * *\"\nhosts = [\"jenkins\"]",
 		"hourly on weekdays": `command = ["status"]` + "\ncron = \"0 * * * 1-5\"",
+		"a bad secret name":  `command = ["status"]` + "\ncron = \"0 9 * * *\"\nsecrets = [\"AAYU_SECRET_X\"]",
 	} {
 		if _, err := Parse("x", []byte("description = \"x\"\n"+body+"\n")); err == nil {
 			t.Errorf("%s: parsed", name)
@@ -142,10 +143,19 @@ func TestGolden(t *testing.T) {
 	}
 }
 
-// aayudha's own loops parse.
+// aayudha's own loops parse, and they include every default loop (Bug #172).
 func TestRepositoryLoops(t *testing.T) {
 	ls, err := Load(filepath.Join("..", ".."))
 	if err != nil || len(ls) == 0 {
 		t.Fatalf("%d loops: %v", len(ls), err)
+	}
+	for name, src := range Defaults {
+		d, err := Parse(name, []byte(src))
+		if err != nil {
+			t.Fatalf("default loop %s: %v", name, err)
+		}
+		if l, ok := Find(ls, name); !ok || !slices.Equal(l.Command, d.Command) {
+			t.Errorf("aayudha's loops lack the default %s (%v)", name, d.Command)
+		}
 	}
 }

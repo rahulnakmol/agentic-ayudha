@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"math"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -157,9 +159,18 @@ func (e *Env) loopFiles(it *initrepo.Init) (map[string][]byte, error) {
 	if err != nil {
 		return nil, Wrap(ExitUsage, err)
 	}
-	if len(ls) == 0 {
-		return nil, nil
+	// The default loops (proof-purge, Bug #172) join the checkout's own, and
+	// init writes their definitions so the product can tune them.
+	defs := map[string][]byte{}
+	for _, name := range slices.Sorted(maps.Keys(loops.Defaults)) {
+		if _, ok := loops.Find(ls, name); ok {
+			continue
+		}
+		l, _ := loops.Parse(name, []byte(loops.Defaults[name])) // TestDefaults parses every default
+		ls = append(ls, l)
+		defs[loops.Dir+"/"+name+".toml"] = []byte(loops.Defaults[name])
 	}
+	slices.SortFunc(ls, func(a, b loops.Loop) int { return strings.Compare(a.Name, b.Name) })
 	l, err := e.Config()
 	if err != nil {
 		return nil, err
@@ -169,7 +180,11 @@ func (e *Env) loopFiles(it *initrepo.Init) (map[string][]byte, error) {
 		branch = "dev"
 	}
 	files, err := loops.Files(ls, it.Repo.FullName, branch, l.Config.Time.TZ, initrepo.GuardVersion(e.Build.Version), Implemented)
-	return files, Wrap(ExitUsage, err)
+	if err != nil {
+		return nil, Wrap(ExitUsage, err)
+	}
+	maps.Copy(files, defs)
+	return files, nil
 }
 
 func isLoopHook(name string) (string, bool) { return strings.CutPrefix(name, LoopHookPrefix) }
