@@ -200,7 +200,11 @@ func renderDoctorHuman(p *ui.Printer, rs []doctor.Result) {
 		if r.Blocking && r.Status == doctor.Fail {
 			detail += " [blocking]"
 		}
-		for _, l := range r.Lines {
+		for i, l := range r.Lines {
+			if i == 3 { // a person gets the gist; --json and a pipe keep every line
+				detail += fmt.Sprintf("\n  %s and %d more (aayu doctor --json)", p.Sym("…", "..."), len(r.Lines)-3)
+				break
+			}
 			detail += "\n  " + l
 		}
 		rows = append(rows, []string{p.Mark(strings.ToUpper(string(r.Status))), r.ID, detail})
