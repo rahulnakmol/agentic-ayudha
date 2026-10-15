@@ -31,6 +31,8 @@ Numbered, observable criteria that prove the fix; each one line: `N. [evidence] 
 of `screenshot`, `recording`, `sr-transcript`, `api-trace`, `metric`.
 
 - Which criterion shows the defect is gone? Which shows nothing next to it broke?
+- Does a criterion lean on a vague word ("fast", "stable")? Resolve it into a number, a count, a named state, or exact
+  quoted wording (`references/vague/<domain>.md`); `ready` refuses one with nothing to observe.
 
 ### Measure (`measure`, required)
 
@@ -55,6 +57,28 @@ of `screenshot`, `recording`, `sr-transcript`, `api-trace`, `metric`.
 ### Links (`links`, optional)
 
 - Was it found through an Incident (`caused-by #N`)? Does it wait on another item (`depends-on #N`)?
+
+## Spec record (when grilled from an idea)
+
+Written after the conversation (`aayu grill bug --idea "<the human's words>"`); `grill` and `ready` check it. See the
+skill's "Spec record" for the exact lines.
+
+### Assumptions (`assumptions`, optional; required when grilled)
+
+- What does the spec take as given (data, platforms, an existing screen)? One per line; `none` when there are none.
+
+### Open questions (`open_questions`, optional)
+
+- What is still open? One per line: `answered: …` or `deferred: … (why it can wait)`. Nothing may be neither.
+
+### Parked ideas (`parked_ideas`, optional)
+
+- Which ideas came up that the human did not confirm? One per line, `<name>: <what it was>`. Never built for this item.
+
+### Provenance (`provenance`, optional; required when grilled)
+
+- `Request: "<the human's words>"`, then `Vague: "<qualifier>" → criteria N, M` (or `→ deferred: <why>`) for each vague
+  word, then one line per criterion: `N. stated|confirmed|default (<dimension>): "<the human's words>"; facts: <id>`.
 
 ## Labels (not body sections)
 

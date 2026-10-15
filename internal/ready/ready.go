@@ -62,6 +62,11 @@ type Ready struct {
 	Tag            string // identity:human-fallback on the day-one path
 	Login          string // who writes: the bot login, or the human's on the fallback path
 	Ledger         func(ctx context.Context, c ledger.Commit) (string, error)
+	// Concrete, when set, adds grill's concreteness check (WP5.3b): no vague
+	// qualifier left in the criteria, and a grilled spec's provenance holds.
+	// The guard leaves it unset, so Ready that already holds is never
+	// withdrawn by a rule added after it was granted.
+	Concrete func(workitems.Item) []workitems.Problem
 }
 
 // Check fetches and validates an issue for Ready. It writes nothing.
@@ -102,6 +107,9 @@ func (r *Ready) Check(ctx context.Context, n int) (Result, *gh.Issue, error) {
 			it.LinkTypes[l.Number], _ = workitems.TypeOf(target.GetType().GetName(), github.IssueLabels(target))
 		}
 		ps = append(ps, workitems.Validate(it, workitems.StageReady)...)
+		if r.Concrete != nil {
+			ps = append(ps, r.Concrete(it)...)
+		}
 		res.CompletionGoalHash = workitems.CompletionGoalHash(it)
 		res.Criteria, _ = workitems.ParseCriteria(it.Fields[workitems.FieldCriteria])
 		res.TechnicalOwner = it.Fields[workitems.FieldOwner]

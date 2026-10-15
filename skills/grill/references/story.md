@@ -29,6 +29,9 @@ asks for that outcome itself, and otherwise leave it to the floors.
   its result), or `metric` (a number)? Every criterion needs exactly one kind.
 - For `api-trace` and `metric` criteria: which tests will show it? (they go in `.aayudha/evidence/<story>.toml` when
   the story is built)
+- Does a criterion still lean on a vague word ("fast", "intuitive", "simple")? Resolve it into a number, a count, a
+  named state, or exact quoted wording, with the dimensions in `references/vague/<domain>.md`; `ready` refuses a
+  criterion that keeps one with nothing to observe.
 
 ### Measure (`measure`, required)
 
@@ -53,6 +56,28 @@ asks for that outcome itself, and otherwise leave it to the floors.
 ### Links (`links`, optional)
 
 - Does this story depend on another one? One line each: `depends-on #N`.
+
+## Spec record (when grilled from an idea)
+
+Written after the conversation (`aayu grill story --idea "<the human's words>"`); `grill` and `ready` check it. See the
+skill's "Spec record" for the exact lines.
+
+### Assumptions (`assumptions`, optional; required when grilled)
+
+- What does the spec take as given (data, platforms, an existing screen)? One per line; `none` when there are none.
+
+### Open questions (`open_questions`, optional)
+
+- What is still open? One per line: `answered: …` or `deferred: … (why it can wait)`. Nothing may be neither.
+
+### Parked ideas (`parked_ideas`, optional)
+
+- Which ideas came up that the human did not confirm? One per line, `<name>: <what it was>`. Never built for this item.
+
+### Provenance (`provenance`, optional; required when grilled)
+
+- `Request: "<the human's words>"`, then `Vague: "<qualifier>" → criteria N, M` (or `→ deferred: <why>`) for each vague
+  word, then one line per criterion: `N. stated|confirmed|default (<dimension>): "<the human's words>"; facts: <id>`.
 
 ## Labels (not body sections)
 

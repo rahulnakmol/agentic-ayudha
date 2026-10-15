@@ -5,10 +5,12 @@ import (
 	"io/fs"
 	"os"
 	"path"
+	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/grill"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -36,6 +38,10 @@ type grillModel struct {
 	problems []string
 	create   bool
 	done     bool
+	// onIdea returns the questions the idea's vague qualifiers decompose
+	// into (WP5.3b), inserted after the idea step; editing the idea
+	// replaces them.
+	onIdea func(idea string) []grillStep
 }
 
 func (m *grillModel) values() map[string]string {
@@ -98,6 +104,16 @@ func (m *grillModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *grillModel) next() {
 	m.steps[m.i].Value = strings.TrimRight(m.steps[m.i].Value, "\n")
+	if m.steps[m.i].ID == "idea" && m.onIdea != nil {
+		kept := m.steps[: m.i+1 : m.i+1]
+		var rest []grillStep
+		for _, s := range m.steps[m.i+1:] {
+			if !strings.HasPrefix(s.ID, "dim:") {
+				rest = append(rest, s)
+			}
+		}
+		m.steps = append(append(kept, m.onIdea(strings.TrimSpace(m.steps[m.i].Value))...), rest...)
+	}
 	if m.i+1 < len(m.steps) {
 		m.i++
 		return
@@ -144,13 +160,17 @@ func isLabelField(f string) bool {
 func (m *grillModel) View() tea.View {
 	var b strings.Builder
 	if m.i == len(m.steps) {
-		fmt.Fprintf(&b, "%s: review\n\n%s\n\n", m.name, strings.TrimSpace(m.preview))
+		var pv []string
+		for _, l := range strings.Split(strings.TrimSpace(m.preview), "\n") {
+			pv = append(pv, wrap(l, 110, "  "))
+		}
+		fmt.Fprintf(&b, "%s: readback\n\n%s\n\n", m.name, strings.Join(pv, "\n"))
 		if len(m.problems) == 0 {
 			b.WriteString("The draft passes validation.\n\n[c] create  [shift+tab] back  [q] quit without writing\n")
 		} else {
 			fmt.Fprintf(&b, "%d problem(s):\n", len(m.problems))
 			for _, p := range m.problems {
-				fmt.Fprintf(&b, "  - %s\n", p)
+				fmt.Fprintf(&b, "  - %s\n", wrap(p, 106, "    "))
 			}
 			b.WriteString("\n[e] edit the first problem  [shift+tab] back  [q] quit without writing\n")
 		}
@@ -163,7 +183,18 @@ func (m *grillModel) View() tea.View {
 	}
 	fmt.Fprintf(&b, "%s: question %d of %d\n\n%s (%s)\n", m.name, m.i+1, len(m.steps), s.Label, req)
 	for _, h := range s.Hints {
-		fmt.Fprintf(&b, "  %s\n", h)
+		fmt.Fprintf(&b, "  %s\n", wrap(h, 100, "    "))
+	}
+	if s.ID == workitems.FieldCriteria {
+		var said []string
+		for _, d := range m.steps {
+			if strings.HasPrefix(d.ID, "dim:") && strings.TrimSpace(d.Value) != "" {
+				said = append(said, fmt.Sprintf("  - %s: %s", d.Label, strings.TrimSpace(d.Value)))
+			}
+		}
+		if len(said) > 0 {
+			fmt.Fprintf(&b, "\n  What you said, to turn into numbered criteria:\n%s\n", strings.Join(said, "\n"))
+		}
 	}
 	fmt.Fprintf(&b, "\n> %s█\n\n", strings.ReplaceAll(s.Value, "\n", "\n  "))
 	if s.Multi {
@@ -179,10 +210,17 @@ func (m *grillModel) View() tea.View {
 // questions as hints, the parent when the type has one, and the labels.
 func workItemSteps(t workitems.Type, assets fs.FS) []grillStep {
 	hints := referenceHints(assets, t.ID)
-	steps := []grillStep{{ID: "title", Label: "Title", Required: true, Hints: hints["Title"]}}
+	var steps []grillStep
+	if t.HasCompletionGoal() {
+		steps = append(steps, grillStep{ID: "idea", Label: "In your own words, what do you want?", Multi: true, Hints: []string{
+			"- Say it the way you would to a colleague. Vague words (\"high quality\", \"fast\", \"simple\") are fine:",
+			"  grill breaks each one down into questions next, grounded in what this repository already has.",
+		}})
+	}
+	steps = append(steps, grillStep{ID: "title", Label: "Title", Required: true, Hints: hints["Title"]})
 	for _, f := range t.Fields() {
-		if f.RequiredAt == workitems.StageComplete {
-			continue // Complete sections are written by ship, readout, measure, and decide
+		if f.RequiredAt == workitems.StageComplete || specRecordField(f.ID) {
+			continue // Complete sections are written by later verbs; the spec record is built from the answers
 		}
 		h := hints[f.Label]
 		if len(h) == 0 && f.Description != "" {
@@ -195,6 +233,51 @@ func workItemSteps(t workitems.Type, assets fs.FS) []grillStep {
 		steps = append(steps, grillStep{ID: "parent", Label: "Parent (" + strings.Join(t.Parents, " or ") + ", issue number)", Required: t.ParentAt != ""})
 	}
 	return append(steps, grillStep{ID: "labels", Label: "Labels (comma-separated, e.g. effort:S,priority:P2)", Required: t.Effort, Hints: hints["Labels"]})
+}
+
+// wrap breaks s into lines of at most width runes at spaces, indenting every
+// line after the first, so long hints stay readable on a terminal.
+func wrap(s string, width int, indent string) string {
+	var b strings.Builder
+	n := 0
+	for i, w := range strings.Fields(s) {
+		if i > 0 && n+1+len([]rune(w)) > width {
+			b.WriteString("\n" + indent)
+			n = len([]rune(indent))
+		} else if i > 0 {
+			b.WriteByte(' ')
+			n++
+		}
+		b.WriteString(w)
+		n += len([]rune(w))
+	}
+	return b.String()
+}
+
+func specRecordField(id string) bool {
+	return id == workitems.FieldAssumptions || id == workitems.FieldOpenQuestions || id == workitems.FieldParked || id == workitems.FieldProvenance
+}
+
+// dimensionSteps are the questions an idea's vague qualifiers decompose
+// into: one per catalogue dimension, with its default and the facts of the
+// assessment it should cite.
+func dimensionSteps(a grill.Assessment) []grillStep {
+	var out []grillStep
+	for _, v := range a.Vague {
+		for _, d := range v.Dimensions {
+			hints := []string{"- " + d.Ask, "- Default: " + d.Default}
+			n := 0
+			for _, f := range a.Facts {
+				if n < 3 && slices.Contains(d.Facts, f.Kind) {
+					hints = append(hints, "- Fact "+f.ID+": "+f.Text)
+					n++
+				}
+			}
+			hints = append(hints, "- Answer in your words, or type default (accept it), park (not now), or defer (leave it open).")
+			out = append(out, grillStep{ID: "dim:" + v.Qualifier + ":" + d.ID, Label: fmt.Sprintf("%q: %s", v.Text, d.Name), Hints: hints})
+		}
+	}
+	return out
 }
 
 // brandSteps are the questions of `grill brand`.
@@ -230,8 +313,12 @@ func referenceHints(assets fs.FS, name string) map[string][]string {
 			cur = ""
 			continue
 		}
-		if t := strings.TrimSpace(line); cur != "" && strings.HasPrefix(t, "- ") {
+		t := strings.TrimSpace(line)
+		switch {
+		case cur != "" && strings.HasPrefix(t, "- "):
 			out[cur] = append(out[cur], t)
+		case cur != "" && t != "" && strings.HasPrefix(line, "  ") && len(out[cur]) > 0:
+			out[cur][len(out[cur])-1] += " " + t // a wrapped bullet
 		}
 	}
 	return out

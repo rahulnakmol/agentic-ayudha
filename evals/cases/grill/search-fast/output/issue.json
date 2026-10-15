@@ -1,0 +1,26 @@
+{
+  "type": "story",
+  "title": "Show menu search results within 200 ms of a keystroke",
+  "fields": {
+    "summary": "As a customer searching the bakery menu, I want matching products to show as I type, so that I do not give up searching.",
+    "completion_goal": "1. [metric] state: `/menu/search` with the seeded menu of 40 products, typing a query one character at a time on a mid-range laptop on a local network; expected: the p95 time from a keystroke to the matching products showing is at most 200 ms over 100 keystrokes",
+    "measure": "p95 keystroke-to-results time from a benchmark test on the seeded menu",
+    "threshold": "at most 200 ms at p95",
+    "scenario": "Run the menu-search benchmark against the local app with the seeded menu: it types queries one character at a time, 100 keystrokes in all, and records the time from each keystroke until the matching products show.",
+    "environment": "local app with the seeded synthetic menu (40 products) on a mid-range laptop; never production",
+    "assumptions": "- The seeded menu (40 products) stands in for the real menu's size.\n- Measured on a mid-range laptop on a local network (the accepted default).",
+    "open_questions": "- deferred: whether a CI budget should stop search from getting slow again (the human is not sure it is needed yet)",
+    "parked_ideas": "- result caching: cache search results per query (raised by grill; parked)\n- loading feedback: a new loading state while results arrive (parked: keep today's)",
+    "provenance": "Request: \"Make search fast. Customers give up when they search the menu. It belongs under Feature #50 (Menu).\"\nVague: \"fast\" → criteria 1\n1. confirmed (perf.target): \"Results should show within 200 ms of a keystroke for most people, say p95\"; facts: route:/menu/search, code:lib/search.ts"
+  },
+  "labels": [
+    "type:story",
+    "status:planned",
+    "effort:S"
+  ],
+  "parent": {
+    "number": 50,
+    "type": "feature"
+  },
+  "number": 51
+}

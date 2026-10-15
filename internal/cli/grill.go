@@ -19,6 +19,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/design"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
+	"github.com/rahulnakmol/agentic-ayudha/internal/grill"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/providers"
 	"github.com/rahulnakmol/agentic-ayudha/internal/measure"
@@ -43,11 +44,14 @@ type GrillResult struct {
 	DryRun   bool                   `json:"dry_run,omitempty"`
 	Pairs    []design.PairResult    `json:"pairs,omitempty"` // grill brand: the AA palette check
 	Written  string                 `json:"written,omitempty"`
+	Readback string                 `json:"readback,omitempty"` // Story, Bug: what done looks like, for the human to confirm (WP5.3b)
 }
 
 // grillDraft is what the interview produced: flags, or the TUI's answers.
+// Idea is the request in the human's words (--idea), which a grilled
+// Story's or Bug's Provenance must quote.
 type grillDraft struct {
-	Title, Body, Labels, Parent string
+	Title, Body, Labels, Parent, Idea string
 }
 
 // BaselineDays is the window of the baseline grill fetches for a Goal or
@@ -65,6 +69,9 @@ const BaselineDays = 28
 func runGrill(ctx context.Context, e *Env, in Values) error {
 	typ := in.String("type")
 	if typ == "brand" {
+		if in.Bool("assess") {
+			return Errorf(ExitUsage, "grill brand has no --assess; it checks the palette against WCAG AA")
+		}
 		return runGrillBrand(e, in)
 	}
 	t, ok := workitems.FindType(typ)
@@ -75,19 +82,53 @@ func runGrill(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return err
 	}
+	if in.Bool("assess") {
+		return e.runGrillAssess(ctx, repo, t, in)
+	}
 	c, tag, err := e.grillClient(ctx)
 	if err != nil {
 		return err
 	}
-	d := grillDraft{Title: strings.TrimSpace(in.String("title")), Body: in.String("body"), Labels: in.String("labels"), Parent: in.String("parent")}
+	d := grillDraft{Title: strings.TrimSpace(in.String("title")), Body: in.String("body"), Labels: in.String("labels"), Parent: in.String("parent"), Idea: strings.TrimSpace(in.String("idea"))}
 	create := in.Bool("create")
 	if d.Title == "" && strings.TrimSpace(d.Body) == "" && e.interactive() {
+		cat, err := e.grillCatalog()
+		if err != nil {
+			return err
+		}
 		m := &grillModel{name: "grill " + typ, steps: workItemSteps(t, e.Assets)}
 		for i := range m.steps {
-			m.steps[i].Value = map[string]string{"parent": d.Parent, "labels": d.Labels}[m.steps[i].ID]
+			m.steps[i].Value = map[string]string{"parent": d.Parent, "labels": d.Labels, "idea": d.Idea}[m.steps[i].ID]
+		}
+		m.onIdea = func(idea string) []grillStep {
+			if idea == "" {
+				return nil
+			}
+			a := grill.Assessment{Type: t.ID, Idea: idea}
+			if config.RepoRoot(e.Dir) != "" {
+				if got, err := e.grillAssess(ctx, c, repo, t.ID, idea); err == nil {
+					a = got
+				}
+			}
+			if a.Facts == nil { // outside a checkout: the qualifiers still decompose
+				for _, h := range cat.Find(idea) {
+					if dom, ok := cat.Domain(h.Domain); ok && !slices.ContainsFunc(a.Vague, func(v grill.VagueHit) bool { return v.Qualifier == h.Qualifier }) {
+						a.Vague = append(a.Vague, grill.VagueHit{Qualifier: h.Qualifier, Text: h.Text, Domain: dom.ID, Dimensions: dom.Dimensions})
+					}
+				}
+			}
+			return dimensionSteps(a)
+		}
+		answers := func(v map[string]string) grillDraft {
+			dd := draftFromAnswers(t, v)
+			dd.Idea = v["idea"]
+			if dd.Idea != "" && t.HasCompletionGoal() {
+				dd.Body = recordFromAnswers(cat, dd.Body, v)
+			}
+			return dd
 		}
 		m.check = func(v map[string]string) (string, []string) {
-			dd := draftFromAnswers(t, v)
+			dd := answers(v)
 			res, err := e.grillCheck(ctx, c, repo, t, &dd)
 			if err != nil {
 				return dd.Body, []string{"labels: " + err.Error()}
@@ -96,7 +137,11 @@ func runGrill(ctx context.Context, e *Env, in Values) error {
 			for _, p := range append(res.Create, res.Ready...) {
 				ps = append(ps, p.String())
 			}
-			return "# " + dd.Title + "\n\n" + dd.Body, ps
+			preview := "# " + dd.Title + "\n\n" + dd.Body
+			if res.Readback != "" {
+				preview = res.Readback + "\n\nThe issue it writes:\n\n" + preview
+			}
+			return preview, ps
 		}
 		vals, ok, err := e.runGrillTUI(m)
 		if err != nil {
@@ -105,7 +150,7 @@ func runGrill(ctx context.Context, e *Env, in Values) error {
 		if !ok {
 			return Errorf(ExitBlocked, "grill %s: the interview ended without writing anything", typ)
 		}
-		d, create = draftFromAnswers(t, vals), true
+		d, create = answers(vals), true
 	}
 	if d.Title == "" || strings.TrimSpace(d.Body) == "" {
 		return Errorf(ExitUsage, "grill %s needs --title and --body (the draft the interview produced, skills/grill/references/%s.md), or a terminal for the interview", typ, typ)
@@ -244,6 +289,14 @@ func (e *Env) grillCheck(ctx context.Context, c *github.Client, repo string, t w
 		res.Ready = append(res.Ready, bps...)
 	}
 	res.Ready = append(res.Ready, workitems.Validate(it, workitems.StageReady)...)
+	if t.HasCompletionGoal() {
+		ps, err := e.grillConcrete(ctx, c, repo, t, it, d.Idea)
+		if err != nil {
+			return res, err
+		}
+		res.Ready = append(res.Ready, ps...)
+		res.Readback = grill.Readback(it)
+	}
 	res.Pass = len(res.Create) == 0 && len(res.Ready) == 0
 	if res.Create == nil {
 		res.Create = []workitems.Problem{}

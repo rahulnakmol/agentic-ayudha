@@ -137,6 +137,14 @@ type Case struct {
 	Calls       [][]string `toml:"calls"` // the recorded run's `aayu` calls, without the program name
 	Scope       []Scope    `toml:"scope"` // requirements the input does not state; a work item that adds one fails
 	Brief       *BriefSpec `toml:"brief"` // a brief case: the input is the grounding, the output a Markdown draft
+	// Repo is a repository fixture (a directory relative to the case) the
+	// recorded calls run in and grill's --assess reads (WP5.3b).
+	Repo string `toml:"repo"`
+	// Transcript is the recorded grill conversation (WP5.3b); with it, tier 1
+	// checks the spec is concrete and faithful to what the human said.
+	Transcript string `toml:"transcript"`
+	// Cite is how many criteria must cite an assessment fact.
+	Cite int `toml:"cite"`
 	// Feedback and Reproduce make an evolve case (WP7.7): the accepted Feedback
 	// issue it reproduces, and the directory holding the old skill's recorded
 	// run (the output/ artifacts under that name), which must fail tier 1.
@@ -155,10 +163,16 @@ type Scope struct {
 	re      *regexp.Regexp
 }
 
-// OutOfScope returns one line per scope rule the item breaks.
+// OutOfScope returns one line per scope rule the item breaks. A grilled
+// spec's record (assumptions, open questions, parked ideas, provenance) is
+// where unconfirmed ideas belong, so the rules do not read it (WP5.3b).
 func (c Case) OutOfScope(it workitems.Item) []string {
 	keys := make([]string, 0, len(it.Fields))
 	for k := range it.Fields {
+		switch k {
+		case workitems.FieldAssumptions, workitems.FieldOpenQuestions, workitems.FieldParked, workitems.FieldProvenance:
+			continue
+		}
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
@@ -203,6 +217,9 @@ type Tier2Spec struct {
 	// Feature or story the draft is for, before the judge is asked.
 	Draft string `toml:"draft"`
 	Issue int    `toml:"issue"`
+	// Human is the scripted human (conversation.go) of a grill conversation
+	// case: the skill asks in rounds and the script answers by dimension.
+	Human string `toml:"human"`
 }
 
 var groupName = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
@@ -286,6 +303,9 @@ func LoadCase(dir string) (Case, error) {
 	}
 	if c.Skill == "" || c.Input == "" {
 		return c, fmt.Errorf("%s: skill and input are required", c.ID)
+	}
+	if c.Transcript != "" && c.Repo == "" {
+		return c, fmt.Errorf("%s: a transcript needs the repo fixture it was grilled in", c.ID)
 	}
 	if b := c.Brief; b != nil && (b.Register == "" || b.Purpose == "" || b.Draft == "") {
 		return c, fmt.Errorf("%s: [brief] needs register, purpose, and draft", c.ID)

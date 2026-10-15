@@ -83,3 +83,31 @@ body:
       placeholder: "depends-on #12"
     validations:
       required: false
+  - type: textarea
+    id: assumptions
+    attributes:
+      label: "Assumptions"
+      description: "What the spec takes as given, one per line; \"none\" when there are none."
+    validations:
+      required: false
+  - type: textarea
+    id: open_questions
+    attributes:
+      label: "Open questions"
+      description: "One per line, each \"answered: …\" or \"deferred: … (why it can wait)\"."
+    validations:
+      required: false
+  - type: textarea
+    id: parked_ideas
+    attributes:
+      label: "Parked ideas"
+      description: "Ideas raised while grilling that the human did not confirm. Out of scope: never built or checked for this item."
+    validations:
+      required: false
+  - type: textarea
+    id: provenance
+    attributes:
+      label: "Provenance"
+      description: "The request in the human's words, how each vague word was resolved, and each criterion's source: stated, confirmed, or default."
+    validations:
+      required: false

@@ -1,0 +1,10 @@
+{
+  "number": 50,
+  "title": "Menu",
+  "state": "open",
+  "labels": [
+    {
+      "name": "type:feature"
+    }
+  ]
+}

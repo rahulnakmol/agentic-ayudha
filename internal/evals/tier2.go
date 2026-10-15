@@ -40,6 +40,16 @@ type Run struct {
 	Error   string    `json:"error,omitempty"`
 	Excerpt string    `json:"excerpt,omitempty"` // the unusable reply's start (and end, when truncated), credentials redacted
 	Calls   []CallLog `json:"calls,omitempty"`   // every model call the run made, in order
+	// Transcript is a grill conversation run's exchanges and final criteria
+	// (WP5.3b), clipped and redacted, so a reader can see what was asked.
+	Transcript *RunTranscript `json:"transcript,omitempty"`
+}
+
+// RunTranscript is what a results file keeps of a conversation.
+type RunTranscript struct {
+	Exchanges  []Exchange `json:"exchanges"`
+	Criteria   string     `json:"criteria,omitempty"`
+	Provenance string     `json:"provenance,omitempty"`
 }
 
 // CallLog is one model call of a run.
@@ -291,6 +301,8 @@ func (h *Harness) Tier2(ctx context.Context, cases []Case, sha, ref string, now 
 				run, err = h.runBrief(ctx, c, lane, body, string(input), string(rubric))
 			case c.Tier2.Draft != "":
 				run, err = h.runPlanning(ctx, c, lane, body, string(input), string(rubric))
+			case c.Tier2.Human != "":
+				run, err = h.runConversation(ctx, c, lane, body, string(input), string(rubric), itemSchema)
 			default:
 				run, err = h.run(ctx, c, lane, body, string(input), string(rubric), itemSchema)
 			}
@@ -510,4 +522,97 @@ func short(sha string) string {
 		return sha[:12]
 	}
 	return sha
+}
+
+// runConversation is a grill conversation case (WP5.3b): the skill gets the
+// request and grill's assessment of the case's repository fixture, asks in
+// rounds, and the scripted human answers each question by its dimension.
+// The final draft must pass Ready, be concrete and faithful (Concrete), and
+// keep the case's scope rules before the judge scores the whole
+// conversation: question quality, concreteness, and fidelity.
+func (h *Harness) runConversation(ctx context.Context, c Case, lane verbs.LaneID, body, input, rubric string, draftSchema []byte) (run Run, err error) {
+	var calls []CallLog
+	defer func() { run.Calls = calls }()
+	human, err := LoadHuman(filepath.Join(c.Dir, c.Tier2.Human))
+	if err != nil {
+		return Run{}, err
+	}
+	schema, err := turnSchema(draftSchema)
+	if err != nil {
+		return Run{}, err
+	}
+	typ := "story" // the recorded run's type, when it has one
+	if len(c.Ready) > 0 {
+		var it workitems.Item
+		if readJSON(filepath.Join(c.Dir, filepath.FromSlash(c.Ready[0])), &it) == nil && it.Type != "" {
+			typ = it.Type
+		}
+	}
+	a, cat, err := c.Assess(h.Assets, typ, input)
+	if err != nil {
+		return Run{}, err
+	}
+	facts, _ := json.MarshalIndent(a, "", " ")
+	tr := Transcript{Request: strings.TrimSpace(input)}
+	rt := &RunTranscript{}
+	defer func() { run.Transcript = rt }()
+	msgs := []models.Message{{Role: "user", Content: untrusted("eval-input", input) +
+		"\n\n## Assessment (`aayu grill " + typ + " --assess --idea <the request> --json`)\n\n" + untrusted("repo", string(facts))}}
+	var last Turn
+	for round := 1; ; round++ {
+		var t Turn
+		req := models.Request{System: body + "\n\n" + conversationProtocol, Messages: msgs, MaxTokens: h.Config.MaxTokens.Skill}
+		if err := models.Structured(ctx, h.complete(lane, "skill", &calls), req, schema, &t); err != nil {
+			var re *models.ReplyError
+			if errors.As(err, &re) && !re.Parse && !re.Truncated {
+				return Run{Status: RunFail, Score: 1, Floor: "turn is not valid: " + err.Error()}, nil
+			}
+			return Run{}, err
+		}
+		x := Exchange{Say: clip(actions.RedactString(t.Say), 1200), Questions: t.Questions, Done: t.Done}
+		if t.Done {
+			tr.Exchanges = append(tr.Exchanges, x)
+			rt.Exchanges = append(rt.Exchanges, x)
+			last = t
+			break
+		}
+		if len(t.Questions) == 0 {
+			return Run{Status: RunFail, Score: 1, Floor: fmt.Sprintf("round %d: neither questions nor a finished spec", round)}, nil
+		}
+		if round > human.MaxRounds {
+			return Run{Status: RunFail, Score: 1, Floor: fmt.Sprintf("still asking after %d rounds and the human's request to write the spec", human.MaxRounds)}, nil
+		}
+		for _, q := range t.Questions {
+			x.Answers = append(x.Answers, human.Answer(q.Dimension))
+		}
+		tr.Exchanges = append(tr.Exchanges, x)
+		rt.Exchanges = append(rt.Exchanges, x)
+		reply := answerText(x.Answers)
+		if round == human.MaxRounds {
+			reply += "\n\nThat is all the time I have: write the spec now, and defer whatever is still open."
+		}
+		prev, _ := json.Marshal(t)
+		msgs = append(msgs, models.Message{Role: "assistant", Content: string(prev)}, models.Message{Role: "user", Content: reply})
+	}
+	if last.Draft == nil {
+		return Run{Status: RunFail, Score: 1, Floor: errNotDone.Error() + ": done without a draft"}, nil
+	}
+	it := last.Draft.Item
+	rt.Criteria = clip(it.Fields[workitems.FieldCriteria], 2000)
+	rt.Provenance = clip(it.Fields[workitems.FieldProvenance], 2000)
+	if ps := workitems.Validate(it, workitems.StageReady); len(ps) > 0 {
+		var msgs []string
+		for _, p := range ps {
+			msgs = append(msgs, p.String())
+		}
+		return Run{Status: RunFail, Score: 1, Floor: "fails Ready: " + strings.Join(msgs, "; ")}, nil
+	}
+	if bad := Concrete(cat, a, it, tr, c.Cite); len(bad) > 0 {
+		return Run{Status: RunFail, Score: 1, Floor: "not concrete or not faithful: " + strings.Join(bad, "; ")}, nil
+	}
+	if bad := c.OutOfScope(it); len(bad) > 0 {
+		return Run{Status: RunFail, Score: 1, Floor: "out of scope: " + strings.Join(bad, "; ")}, nil
+	}
+	out, _ := json.MarshalIndent(map[string]any{"conversation": tr.Exchanges, "spec": it}, "", "  ")
+	return h.judge(ctx, input, rubric, string(out), last.Draft.OpenQuestions, &calls)
 }
