@@ -169,7 +169,10 @@ func readDismissed(ctx context.Context, w *ledger.Writer) []inspect.Dismissal {
 // family. A registry default whose family equals the builder's is replaced
 // by the first candidate that differs (a delegated Codex PR, built by OpenAI's
 // models, is not reviewed by an OpenAI model); a configured one is refused.
-func reviewerModels(gw *models.Gateway, builder verbs.Family, peer bool, peerModel, story string) ([]models.Resolved, []string, error) {
+//
+// builder lists every family the builder may be (Bug #171: one when it is
+// known, all candidates when it is not); each reviewer differs from all.
+func reviewerModels(gw *models.Gateway, builder []verbs.Family, peer bool, peerModel, story string) ([]models.Resolved, []string, error) {
 	a, err := gw.Resolver.ResolveDirect(verbs.LaneReview, verbs.DirectHost, false)
 	if err != nil {
 		return nil, nil, Wrap(ExitUsage, err)
@@ -184,23 +187,31 @@ func reviewerModels(gw *models.Gateway, builder verbs.Family, peer bool, peerMod
 		}
 		return models.Resolved{}, false
 	}
-	if err := models.CheckFamilies(story, builder, a.Family); err != nil {
-		alt, ok := pick(builder)
+	differs := func(f verbs.Family) error {
+		for _, b := range builder {
+			if err := models.CheckFamilies(story, b, f); err != nil {
+				return err
+			}
+		}
+		return models.CheckFamilies(story, "", f)
+	}
+	if err := differs(a.Family); err != nil {
+		alt, ok := pick(builder...)
 		if a.Source == models.SourceConfig || !ok {
 			return nil, nil, Wrap(ExitBlocked, err)
 		}
-		notes = append(notes, fmt.Sprintf("the review lane's %s is the builder's family (%s); %s reviews instead", a.Model, builder, alt.Model))
+		notes = append(notes, fmt.Sprintf("the review lane's %s is of the builder's family or one it may be (%v); %s reviews instead", a.Model, builder, alt.Model))
 		a = alt
 	}
 	out := []models.Resolved{a}
 	if !peer {
 		return out, notes, nil
 	}
-	b, ok := pick(builder, a.Family, verbs.FamilyHostManaged)
+	b, ok := pick(append(slices.Clone(builder), a.Family, verbs.FamilyHostManaged)...)
 	if peerModel != "" {
 		b, ok = models.Resolved{Lane: verbs.LaneReview, Host: verbs.DirectHost, Model: peerModel, Display: peerModel, Family: verbs.FamilyOf(peerModel), Source: models.SourceConfig}, true
 	}
-	if !ok || b.Family == a.Family || models.CheckFamilies(story, builder, b.Family) != nil {
+	if !ok || b.Family == a.Family || differs(b.Family) != nil {
 		return nil, nil, Errorf(ExitUsage, "inspect: no peer reviewer whose family differs from the builder's (%s) and %s's (%s); set [inspect] peer_model", builder, a.Model, a.Family)
 	}
 	return append(out, b), notes, nil
@@ -263,6 +274,7 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		return Errorf(ExitBlocked, "inspect #%d: no story (Refs #n in the PR body or a story/<n>- branch); inspect judges a PR against its story", n)
 	}
 	var deleg delegate.State
+	checkpoints := map[string]string{} // checkpoint commit -> model, from build's ledger record (Bug #171)
 	if ins.Story > 0 {
 		if is, _, err := c.REST.Issues.Get(ctx, owner, name, ins.Story); err == nil {
 			ins.StoryTitle, ins.StoryBody = is.GetTitle(), is.GetBody()
@@ -280,6 +292,12 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 				}
 				if b, err := t.File(ctx, delegate.LedgerPath(ins.Story)); err == nil {
 					_ = json.Unmarshal(b, &deleg)
+				}
+				var st BuildState
+				if b, err := t.File(ctx, BuildLedgerPath(ins.Story)); err == nil && json.Unmarshal(b, &st) == nil {
+					for _, cp := range st.Checkpoints {
+						checkpoints[cp.Commit] = cp.Model
+					}
 				}
 				t.Close()
 			}
@@ -319,22 +337,33 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return err
 	}
-	builder := verbs.Family("")
-	switch {
-	case deleg.Receiver != "":
-		builder = deleg.Family
-	case ins.Pack != nil && ins.Pack.Model != "":
-		builder = verbs.FamilyOf(ins.Pack.Model)
-	case ins.Pack != nil:
-		if b, err := gw.Resolver.Resolve(verbs.LaneBuild, verbs.HostID(ins.Pack.Host)); err == nil {
-			builder = b.Family
+	// The builder's family comes from what aayu recorded outside the PR (the
+	// delegation record, build's checkpoint models); the pack's model, from the
+	// commit trailer, is only a claim. When they are missing or disagree the
+	// family is unknown, and every reviewer differs from every candidate
+	// (Bug #171).
+	var commits []string
+	if cs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.RepositoryCommit, *gh.Response, error) {
+		return c.REST.PullRequests.ListCommits(ctx, owner, name, n, &o)
+	}); err == nil {
+		for _, x := range cs {
+			commits = append(commits, x.GetSHA())
 		}
 	}
+	claim, lane := "", verbs.Family("")
+	if ins.Pack != nil {
+		claim = ins.Pack.Model
+		if b, err := gw.Resolver.Resolve(verbs.LaneBuild, verbs.HostID(ins.Pack.Host)); err == nil {
+			lane = b.Family
+		}
+	}
+	builder := inspect.BuilderOf(inspect.Records{Receiver: deleg.Receiver, Delegated: deleg.Family, Checkpoints: checkpoints}, commits, claim, lane)
 	story := fmt.Sprintf("#%d", ins.Story)
-	picked, notes, err := reviewerModels(gw, builder, ins.Mode == inspect.ModePeer, cfg.PeerModel, story)
+	picked, notes, err := reviewerModels(gw, builder.Candidates, ins.Mode == inspect.ModePeer, cfg.PeerModel, story)
 	if err != nil {
 		return err
 	}
+	notes = append([]string{builder.Note()}, notes...)
 	pager, err := e.Notifier(ctx)
 	if err != nil {
 		return err
@@ -355,7 +384,7 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 			}})
 	}
 	res, st, err := r.Run(ctx, ins, prev)
-	res.Head = pr.GetHead().GetSHA()
+	res.Head, res.Builder = pr.GetHead().GetSHA(), builder
 	res.Notes = append(notes, res.Notes...)
 	if st.Result != nil {
 		st.Result.Notes = res.Notes

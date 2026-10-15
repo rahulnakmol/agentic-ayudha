@@ -10,6 +10,7 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
 const pkgDiff = `diff --git a/internal/report/percent.go b/internal/report/percent.go
@@ -254,6 +255,45 @@ func TestBuildContext(t *testing.T) {
 	for _, want := range []string{"policy (L04)", "no test changed in this area", "Percent ← Row", "generated (not reviewed): LAYERS.md"} {
 		if !strings.Contains(plan, want) {
 			t.Errorf("plan lacks %q:\n%s", want, plan)
+		}
+	}
+}
+
+// Bug #171: the builder's family is known only from a record that covers the PR (a delegation, or a checkpoint
+// naming a model family for every commit) with one family the trailer, if any, does not contradict; otherwise every
+// family any source names is a candidate.
+func TestBuilderOf(t *testing.T) {
+	cp := func(m map[string]string) Records { return Records{Checkpoints: m} }
+	for _, tt := range []struct {
+		name    string
+		rec     Records
+		commits []string
+		claim   string
+		lane    verbs.Family
+		family  verbs.Family
+		cands   []verbs.Family
+		source  string
+	}{
+		{"record covers every commit", cp(map[string]string{"a": "claude-opus-5-5", "b": "claude-sonnet-5-5"}), []string{"a", "b"}, "", verbs.FamilyOpenAI,
+			verbs.FamilyAnthropic, []verbs.Family{verbs.FamilyAnthropic}, "attributed, not verified"},
+		{"a hand-made commit the record lacks", cp(map[string]string{"a": "claude-opus-5-5"}), []string{"a", "b"}, "", verbs.FamilyOpenAI,
+			"", []verbs.Family{verbs.FamilyAnthropic}, "names a model family for 1 of 2 commits"},
+		{"a checkpoint without a model does not cover its commit", cp(map[string]string{"a": "claude-opus-5-5", "b": ""}), []string{"a", "b"}, "", "",
+			"", []verbs.Family{verbs.FamilyAnthropic}, "for 1 of 2 commits"},
+		{"two families in the record", cp(map[string]string{"a": "claude-opus-5-5", "b": "gpt-6.1-sol"}), []string{"a", "b"}, "", "",
+			"", []verbs.Family{verbs.FamilyAnthropic, verbs.FamilyOpenAI}, "name 2 families"},
+		{"a host-managed build records no model", cp(map[string]string{"a": ""}), []string{"a"}, "", verbs.FamilyHostManaged,
+			"", nil, "no build or delegation record"},
+		{"no record: the claim and the lane are candidates", Records{}, []string{"a"}, "grok-4.7", verbs.FamilyAnthropic,
+			"", []verbs.Family{verbs.FamilyXAI, verbs.FamilyAnthropic}, "trailer claims grok-4.7 (self-reported, unverified)"},
+		{"a delegation covers the PR", Records{Receiver: "codex", Delegated: verbs.FamilyOpenAI}, []string{"a", "b"}, "", verbs.FamilyAnthropic,
+			verbs.FamilyOpenAI, []verbs.Family{verbs.FamilyOpenAI}, "handed the story to codex"},
+		{"a trailer contradicting the delegation", Records{Receiver: "codex", Delegated: verbs.FamilyOpenAI}, []string{"a"}, "claude-opus-5-5", "",
+			"", []verbs.Family{verbs.FamilyOpenAI, verbs.FamilyAnthropic}, "the records say openai"},
+	} {
+		got := BuilderOf(tt.rec, tt.commits, tt.claim, tt.lane)
+		if got.Family != tt.family || !slices.Equal(got.Candidates, tt.cands) || !strings.Contains(got.Note(), tt.source) {
+			t.Errorf("%s: %+v; want family %q, candidates %v, a note with %q", tt.name, got, tt.family, tt.cands, tt.source)
 		}
 	}
 }

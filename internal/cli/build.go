@@ -88,6 +88,10 @@ type CheckpointRecord struct {
 	Verify  string   `json:"verify"` // hold, miss, or error
 	Detail  string   `json:"detail,omitempty"`
 	At      string   `json:"at"`
+	// Model is the builder's model as build resolved it (AAYU_MODEL, else the
+	// host's build lane). inspect reads the builder's family from this record,
+	// which the PR cannot change, never from the commit trailer alone (Bug #171).
+	Model string `json:"model,omitempty"`
 }
 
 // BuildLedgerPath is where a story's build state lives on the ledger.
@@ -313,20 +317,21 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		if attempt > 1 {
 			msg += fmt.Sprintf("\nAayudha-Attempt: %d", attempt)
 		}
+		model := e.builderModel()
 		switch {
 		case dlg != nil:
 			msg += "\nAayudha-Delegate: " + dlg.receiver
-			if m := dlg.model(); m != "" {
-				msg += "\nAayudha-Model: " + m
+			if model = dlg.model(); model != "" {
+				msg += "\nAayudha-Model: " + model
 			}
-		case e.builderModel() != "":
-			msg += "\nAayudha-Model: " + e.builderModel()
+		case model != "":
+			msg += "\nAayudha-Model: " + model
 		}
 		if _, err := run2(ctx, res.Worktree, "git", "commit", "--quiet", "--signoff", "-m", msg); err != nil {
 			return Wrap(ExitExternal, err)
 		}
 		res.Commit, _ = run2(ctx, res.Worktree, "git", "rev-parse", "HEAD")
-		rec := CheckpointRecord{K: k, N: total, Attempt: attempt, Commit: res.Commit, Layers: layers, At: now.Format(time.RFC3339)}
+		rec := CheckpointRecord{K: k, N: total, Attempt: attempt, Commit: res.Commit, Layers: layers, At: now.Format(time.RFC3339), Model: model}
 		if rec.Layers == nil {
 			rec.Layers = []string{}
 		}

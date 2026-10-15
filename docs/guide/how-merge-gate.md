@@ -76,9 +76,13 @@ Every floor tool runs as a child process through `verify.Sandbox`:
 from the Ready snapshot; the pack for the current head; and excerpts (first 3,000 bytes) of the pack's text
 artifacts. Media never reach the model.
 
-1. **Family check.** The builder's family comes from the pack's `model` (from an `Aayudha-Model` commit trailer), else
-   the build lane of the pack's host. The reviewer is the review lane's model. If both are the same family, or the
-   reviewer has no concrete family, inspect refuses and exits 4.
+1. **Family check.** The builder's family comes from what aayu recorded on the ledger, outside the pull request: the
+   delegation record (`aayu delegate`), or the model `aayu build` wrote for each checkpoint commit
+   (`build/<story>/state.json`). It is known only when a record covers the pull request with one family and the pack's
+   `model` (from the `Aayudha-Model` trailer, which the builder writes itself) does not contradict it. Otherwise it is
+   unknown, and every family the records, the trailer, or (with no record) the build lane names is a candidate. Each
+   reviewer is of none of them; with none left, inspect refuses and exits 4. The verdict's first note names the builder
+   family and where it came from.
 2. **Prompt.** Floor results are given as facts. Everything a person or tool wrote (criteria, story, evidence, pull
    request text, diff capped at 120 kB) is wrapped in `<untrusted>` blocks the system prompt says never to obey.
 3. **Structured reply.** The model must answer in a closed JSON Schema: `disposition` (`merge`, `fix`, or
@@ -100,7 +104,10 @@ State drives three limits:
 inspect exits 0 on `merge` and 4 on `fix` or `rebuild`, so its check stays red until the reviewer says `merge`.
 
 > **Honest status:** inspect does not read the story's plan in this repository; its inputs are the pull request,
-> the diff, the story, the Ready criteria, and the pack. The `fix` re-entry is a fix in the same pull request.
+> the diff, the story, the Ready criteria, and the pack. The `fix` re-entry is a fix in the same pull request. A build
+> record holds the model `build` resolved (`AAYU_MODEL`, else the host's build lane), and without a bot App the
+> founder's token, which agents use here, can write the ledger, so the verdict calls that family attributed, not
+> verified. A pull request made without `aayu build` or `aayu delegate` has no record, so its builder family is unknown.
 
 ### How ship consumes the result
 
@@ -225,8 +232,9 @@ fixed head, returned `merge`, and the spend covers both calls.
 3. The gate fails when the pack does not prove the head, the Completion Goal drifted, or a criterion lacks evidence.
    Enforced by `gateProblems` in [internal/cli/verify.go](../../internal/cli/verify.go); `TestVerifyGateCI` covers
    missing evidence, Completion Goal drift, and a pull request with no story.
-4. The reviewer's model family differs from the builder's. Enforced by `CheckFamilies` in
-   [internal/models/resolve.go](../../internal/models/resolve.go), `TestReviewerFamilyMustDiffer`.
+4. The reviewer's model family differs from the builder's, and from every family the builder may be when it is
+   unknown. Enforced by `CheckFamilies` in [internal/models/resolve.go](../../internal/models/resolve.go) and
+   `inspect.BuilderOf` (`TestReviewerFamilyMustDiffer`, `TestBuilderOf`, `TestInspectBuilderFamily`).
 5. No model disposition overrides a floor, a P0 or P1 finding, or an unmet criterion. Enforced by `Enforce` in
    [internal/inspect/inspect.go](../../internal/inspect/inspect.go), `TestInspectDispositions`.
 6. Same inputs never cost a second model call; after two cycles inspect pages without a call; spend stops at the

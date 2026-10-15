@@ -167,6 +167,7 @@ type Result struct {
 	Cycle       int       `json:"cycle"`
 	CostUSD     float64   `json:"cost_usd"`
 	Next        string    `json:"next,omitempty"` // the re-entry step
+	Builder     Builder   `json:"builder"`        // the builder's family and where it came from (Bug #171)
 }
 
 // State is what inspect keeps between runs, in its replace-in-place comment.
