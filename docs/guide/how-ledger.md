@@ -204,7 +204,8 @@ and each `pack.json` is rewritten so the artifact carries a tombstone (`purged_a
 > lists the repository admin role as the only bypass actor. CI cannot write the ledger: the merge gate leaves the
 > authoritative pack as a run artifact, and `aayu ship` lands it under the founder's identity, saying so in
 > `pack_landed`. 91 ledger commits so far carry the `identity:human-fallback` trailer. The ledger README predates the
-> current layout: its table still names `packs/`, where the code writes `proof/`. This repository is public and
+> current layout: its table still names `packs/`, where the code writes `proof/`. No verb writes that file (it was
+> written by hand when the branch was created), so it is left as it is and this page describes the real layout. This repository is public and
 > `[proof] media` is empty, so no media has been pushed here. No workflow runs `aayu proof purge` on a schedule yet; a
 > human runs it.
 

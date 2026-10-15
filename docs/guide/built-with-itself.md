@@ -110,8 +110,9 @@ cost of a vague promise very concrete: 17 reviews where 10 were planned.
   12 October, and the model's contrast note on the Ask page.
 - **Proof coverage of aayudha's own work is low.** At the last audit it was 2 of 33 delivered stories, because most
   work packages merged before the merge gate existed. The report says so instead of hiding it.
-- **Some reference pages lag the code**, such as the status column of the threat model. The How it works pages
-  describe the code as it is.
+- **The ledger branch's own README is out of date.** It names a `packs/` folder, where proof really lives under
+  `proof/`. No verb writes that file, so it is left as written; [the ledger branch](how-ledger.md) page describes the
+  real layout.
 
 ## Read next
 
