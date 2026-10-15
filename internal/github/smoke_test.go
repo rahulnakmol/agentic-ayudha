@@ -106,9 +106,9 @@ func newLog(t *testing.T, dry bool) *actions.Log {
 	return l
 }
 
-// smoke is the WP2.3 contract: the operations M2's verbs use, against a
-// repository that starts with GitHub's default labels. The live test runs it
-// against a scratch repository; TestRecordedContract replays the recording.
+// smoke is the WP2.3 contract: the operations M2's verbs use, against a new
+// repository. The live test runs it against a scratch repository;
+// TestRecordedContract replays the recording.
 func smoke(t *testing.T, ctx context.Context, c *Client, repo string) {
 	t.Helper()
 	owner, name, _ := SplitRepo(repo)
@@ -126,7 +126,7 @@ func smoke(t *testing.T, ctx context.Context, c *Client, repo string) {
 		t.Fatalf("write outside actions: err %v, calls %d -> %d", err, before, c.Stats().Calls())
 	}
 
-	for _, l := range []string{"aayu-a", "aayu-b", "aayu-c"} {
+	for _, l := range []string{"aayu-a", "aayu-b", "aayu-c", "aayu-d", "aayu-e", "aayu-f"} { // more than a page of 5 without GitHub's default labels, which a new repository may not have yet
 		_, err := c.Write(ctx, actions.Action{Kind: "github.label.create", Target: repo, Request: &actions.Request{Method: "POST", Path: "/repos/" + repo + "/labels"}, Payload: map[string]any{"name": l}},
 			func(ctx context.Context) (any, error) {
 				lb, _, err := c.REST.Issues.CreateLabel(ctx, owner, name, gh.CreateIssueLabelRequest{Name: l, Color: gh.Ptr("0e8a16")})
