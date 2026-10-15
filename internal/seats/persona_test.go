@@ -103,7 +103,7 @@ func TestPersonaValidateRejects(t *testing.T) {
 		{"stage artefacts overlap", clone(func(p *Persona) {
 			p.Practices[0].Enterprise = Depth{Artefact: p.Practices[0].Startup.Artefact + " in full", Shape: "x"}
 		}), "stage artefacts must be distinct"},
-		{"two-word name", clone(func(p *Persona) { p.Name = "Kiran Rao" }), "want one capitalised word"},
+		{"two-word name", clone(func(p *Persona) { p.Name = "Athena Pallas" }), "want one capitalised word"},
 	}
 	for _, tt := range tests {
 		got := strings.Join(tt.p.Validate(), "\n")
@@ -120,13 +120,13 @@ func TestSkillBlockVoiceAndStandard(t *testing.T) {
 	ps := repoPersonas(t)
 	v, _ := verbs.Find("verify")
 	b := ps[v.Seat].SkillBlock(v, ps[verbs.PolicyOwner(v)])
-	if !strings.Contains(b, "## Voice: Noor, the AI Native Engineer (+SRE hat) twin") ||
-		!strings.Contains(b, "Noor speaks and runs `verify` in the chore lane; the standard is Vera's, the Quality Architect's") {
+	if !strings.Contains(b, "## Voice: Talos, the AI Native Engineer (+SRE hat) twin") ||
+		!strings.Contains(b, "Talos speaks and runs `verify` in the chore lane; the standard is Themis's, the Quality Architect's") {
 		t.Errorf("verify block does not split voice and standard:\n%s", b)
 	}
 	in, _ := verbs.Find("inspect")
 	b = ps[in.Seat].SkillBlock(in, ps[verbs.PolicyOwner(in)])
-	if !strings.Contains(b, "`inspect` runs in the review lane; Kiran owns both the voice and the standard.") {
+	if !strings.Contains(b, "`inspect` runs in the review lane; Athena owns both the voice and the standard.") {
 		t.Errorf("inspect block:\n%s", b)
 	}
 	for _, must := range []string{EvidenceRule, StageRule, "**When paired with a human:**", "| Practice | Startup | Scaleup | Enterprise |"} {

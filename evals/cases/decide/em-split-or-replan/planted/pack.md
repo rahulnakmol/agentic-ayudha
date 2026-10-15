@@ -1,4 +1,4 @@
-# Decision pack: #212 split or re-plan (Kiran, Engineering Manager twin; startup)
+# Decision pack: #212 split or re-plan (Athena, Engineering Manager twin; startup)
 
 ## Question
 

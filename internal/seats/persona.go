@@ -20,7 +20,7 @@ import (
 // prompt renders it at run time.
 type Persona struct {
 	Seat        verbs.SeatID `toml:"-"`
-	Name        string       `toml:"name"`        // the twin's short name (proposed; the founder may veto)
+	Name        string       `toml:"name"`        // the twin's short name
 	Purpose     string       `toml:"purpose"`     // one line
 	Temperament string       `toml:"temperament"` // how it carries itself
 	Voice       string       `toml:"voice"`       // how it sounds
@@ -265,7 +265,7 @@ func quoted(xs []string) string {
 	return strings.Join(out, " ")
 }
 
-// title is "Kiran, the Engineering Manager twin".
+// title is "Athena, the Engineering Manager twin".
 func (p Persona) title() string {
 	return p.Name + ", the " + verbs.SeatName(p.Seat) + " twin"
 }
@@ -311,7 +311,7 @@ func (p Persona) CharterSection() string {
 	b.WriteString("## Persona (generated)\n\n")
 	fmt.Fprintf(&b, "Source: %s. `go generate ./...` renders it here, at the top of the SKILL.md of every verb this seat is\n", code(PersonaPath(p.Seat)))
 	b.WriteString("Accountable for, into the AGENTS.md seat section, and into the MCP `persona` prompt. Edit the TOML, not this region.\n\n")
-	fmt.Fprintf(&b, "**%s** (the name is a proposal the founder may veto).\n\n", p.title())
+	fmt.Fprintf(&b, "**%s**.\n\n", p.title())
 	b.WriteString(p.character())
 	b.WriteString("\n### Practice playbook\n\n")
 	b.WriteString(p.playbook())
