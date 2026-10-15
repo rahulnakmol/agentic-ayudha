@@ -1,0 +1,16 @@
+{
+  "repo": "rahulnakmol/agentic-ayudha",
+  "kind": "release",
+  "campaign": "rolling-2026-10-15",
+  "tag": "rolling-2026-10-15",
+  "sha256": "8ca00c0474d06939c9b5d00d10a7b23ae2a7739ee2bc3a0f33789c3b15898697",
+  "cited_features": [],
+  "utm": {
+    "utm_source": "agentic-ayudha",
+    "utm_medium": "release",
+    "utm_campaign": "rolling-2026-10-15"
+  },
+  "copy": "tell/release/rolling-2026-10-15.md",
+  "published_by": "rahulnakmol",
+  "published_at": "2026-10-15T17:45:18Z"
+}
