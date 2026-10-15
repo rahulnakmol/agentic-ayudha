@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"go.yaml.in/yaml/v4"
+
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/scratch"
 	"github.com/rahulnakmol/agentic-ayudha/internal/initrepo"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
@@ -83,6 +85,10 @@ func TestLiveShipFromGateArtifact(t *testing.T) {
 		return out
 	}
 	write := func(rel, body string) {
+		var y map[string]any
+		if err := yaml.Unmarshal([]byte(body), &y); strings.HasSuffix(rel, ".yml") && err != nil {
+			t.Fatalf("%s: %v", rel, err)
+		}
 		p := filepath.Join(dir, filepath.FromSlash(rel))
 		_ = os.MkdirAll(filepath.Dir(p), 0o755)
 		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
@@ -100,7 +106,7 @@ func TestLiveShipFromGateArtifact(t *testing.T) {
 	gate := string(initrepo.GateWorkflows("v0.0.1")[initrepo.MergeGateWorkflow])
 	gate = strings.ReplaceAll(gate, "v0.0.1", version)
 	gate = strings.ReplaceAll(gate, `if [ "$AAYU_VERSION" = dev ]; then`, `if true; then`)
-	gate = strings.Replace(gate, `run: aayudha inspect "$PR" --ci --repo "$REPO"`, `run: echo "inspect stubbed by the aayudha live test: the scratch repository holds no model key"`, 1)
+	gate = strings.Replace(gate, `run: aayudha inspect "$PR" --ci --repo "$REPO"`, `run: echo "inspect stubbed by the aayudha live test, since the scratch repository holds no model key"`, 1)
 	write(".github/workflows/"+initrepo.MergeGateWorkflow, gate)
 	write("go.mod", "module example.com/sum\n\ngo 1.25\n")
 	write("README.md", "Scratch product for aayudha's live proof test.\n")
@@ -232,7 +238,7 @@ func TestLiveShipFromGateArtifact(t *testing.T) {
 	t.Logf("artifact %.0f (expires %v); gate comment:\n%s", a1["id"], a1["expires_at"], c1)
 
 	// 2. A failing commit: the earlier pack proves another SHA, and the new run failed.
-	write("sum.go", strings.Replace(liveSum, "a + b", "a - b", 1))
+	write("sum.go", strings.Replace(liveSum, "return a + b", "return a - b", 1))
 	h2 := push("fix: subtract (wrong)")
 	r2 := waitRuns(h2, "pull_request_target")["pull_request_target"]
 	if r2["conclusion"] != "failure" {
