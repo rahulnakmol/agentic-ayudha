@@ -41,6 +41,7 @@ type Config struct {
 	Design        Design                 `koanf:"design" jsonschema_description:"Where the design verbs (WP6.5) find the design tokens and the OpenFeature flag definitions."`
 	Review        Review                 `koanf:"review" jsonschema_description:"Tolerances of the prototype's Figma screenshot diff (WP6.5) and UI review (WP6.6)."`
 	Team          Team                   `koanf:"team" jsonschema_description:"The team the seat twins adapt their practice to (WP5.1b): depth and ceremony only, never the floors, the evidence rule, or human-only gates."`
+	UI            UI                     `koanf:"ui" jsonschema_description:"How aayu looks on a person's terminal (WP1.1b); usually set in the user-level config. Machines (--json, MCP, agents, CI, pipes) always get plain, stable text."`
 }
 
 // Team stages (WP5.1b): how much ceremony the seat twins' practice carries.
@@ -82,6 +83,12 @@ func (c *Config) TeamStage() (stage, why string) {
 		return StageScaleup, fmt.Sprintf("%s (%d)", why, size)
 	}
 	return StageEnterprise, fmt.Sprintf("%s (%d)", why, size)
+}
+
+// UI is [ui] (WP1.1b).
+type UI struct {
+	Plain bool   `koanf:"plain" jsonschema_description:"Words only on a terminal: no colour, motion, emoji, or box drawing (screen-reader friendly); the same as --plain."`
+	Theme string `koanf:"theme" jsonschema:"enum=auto,enum=saffron,enum=contrast,enum=mono" jsonschema_description:"Colour theme: auto (the terminal's own 16 colours, default), saffron (warm true colour for dark terminals), contrast (bright and bold), or mono (no hue)."`
 }
 
 // Design is [design] (WP6.5). Paths are relative to the repository root.

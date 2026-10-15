@@ -90,6 +90,6 @@ Layers owned: none.
 | `tell` | Informed |
 | `init` | Accountable; the twin executes it (chore lane); owns thresholds and policy |
 
-Plumbing commands accountable for: `halt`, `resume`, `seat`.
+Plumbing commands accountable for: `halt`, `resume`, `seat`, `tour`.
 
 <!-- END GENERATED: raci -->

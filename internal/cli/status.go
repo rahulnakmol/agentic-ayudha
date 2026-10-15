@@ -23,6 +23,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/status"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ui"
 )
 
 func init() { register("status", runStatus) }
@@ -227,13 +228,16 @@ func runStatus(ctx context.Context, e *Env, in Values) error {
 		return err
 	}
 	rep := statusReport{Repo: repo, Roots: []*status.Rollup{}}
+	pr := e.progress(fmt.Sprintf("Rolling up %d item(s) from GitHub", len(roots)))
 	for _, n := range roots {
 		r, err := w.Roll(ctx, n)
 		if err != nil {
+			pr.Done(ui.StatusFail, err.Error())
 			return err
 		}
 		rep.Roots = append(rep.Roots, r)
 	}
+	pr.Done(ui.StatusPass, "")
 	if in.Bool("apply") {
 		if rep.Closed, err = applyStatus(ctx, e, repo, rep.Roots); err != nil {
 			return err
@@ -253,6 +257,9 @@ func runStatus(ctx context.Context, e *Env, in Values) error {
 	return e.Emit(rep, func(w io.Writer) error {
 		if len(rep.Roots) == 0 {
 			fmt.Fprintf(w, "%s: no open Goals (label type:goal); pass a Goal, Initiative, or Feature\n", repo)
+		} else if look := e.Look(); look.Human() {
+			fmt.Fprint(w, look.Table(statusRows(rep.Roots)))
+			fmt.Fprintln(w, look.Style(ui.Muted, "Health, risk, decisions, and streak per item: aayu status --json"))
 		} else {
 			fmt.Fprint(w, status.Table(rep.Roots))
 		}
@@ -370,4 +377,22 @@ func statusAll(ctx context.Context, e *Env) error {
 		}
 		return nil
 	})
+}
+
+// statusRows is the rollup for a person: the columns that fit a terminal.
+func statusRows(roots []*status.Rollup) ([]string, [][]string) {
+	var rows [][]string
+	var row func(r *status.Rollup, depth int)
+	row = func(r *status.Rollup, depth int) {
+		rows = append(rows, []string{fmt.Sprintf("%s#%d %s %s", strings.Repeat("  ", depth), r.Number, r.Type, r.Title),
+			fmt.Sprintf("%d/%d", r.Done(), r.Items), fmt.Sprint(r.ByStatus["ready"]), fmt.Sprint(r.ByStatus["in-progress"]),
+			fmt.Sprint(len(r.Blocked)), r.ProofCoverage, fmt.Sprintf("$%.2f", r.CostUSD)})
+		for _, c := range r.Children {
+			row(c, depth+1)
+		}
+	}
+	for _, r := range roots {
+		row(r, 0)
+	}
+	return []string{"Item", "Done", "Ready", "In progress", "Blocked", "Proof", "Cost"}, rows
 }

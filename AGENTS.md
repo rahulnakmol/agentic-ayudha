@@ -108,16 +108,16 @@ seat's twin, consult the Consulted seats before acting, and leave paired humans'
 |---|---|---|---|
 | Product Strategist (`product-strategist`) | Mira | — | `grill`, `slice`, `triage`, `ready` |
 | Code Architect (`code-architect`) | Tomas | L02, L06 | `plan` |
-| Engineering Manager (`engineering-manager`) | Kiran | L03 | `inspect`, `ship`, `status`, `retro` |
+| Engineering Manager (`engineering-manager`) | Kiran | L03 | `inspect`, `ship`, `status`, `retro`, `next` |
 | AI Native Engineer (+SRE hat) (`ai-native-engineer`) | Noor | L05, L07 | `build`, `verify`, `respond`, `evolve` |
 | UX Researcher & Evolutionist (`ux-researcher-evolutionist`) | Ines | L01 | `research`, `wireframe`, `mockup`, `prototype`, `review`, `polish`, `baseline` |
-| DevOps & DevEx Tinkerer (`devops-devex-tinkerer`) | Pax | L09 | `release`, `install`, `doctor`, `config`, `auth`, `actions`, `models`, `mcp`, `self-update`, `upgrade`, `version`, `gc`, `uninit`, `hook`, `lfs-agent` |
+| DevOps & DevEx Tinkerer (`devops-devex-tinkerer`) | Pax | L09 | `release`, `install`, `doctor`, `config`, `auth`, `actions`, `models`, `mcp`, `self-update`, `upgrade`, `version`, `gc`, `uninit`, `hook`, `lfs-agent`, `completion` |
 | Quality Architect (`quality-architect`) | Vera | L04 | `proof` |
 | Mentalist (`mentalist`) | Juno | — | `brief` |
 | Auditor (`auditor`) | Hana | — | `audit` |
 | Marketer & Documenter (`marketer-documenter`) | Remy | — | `tell` |
 | Revenue Architect (`revenue-architect`) | Leo | L08 | `experiment`, `readout`, `measure` |
-| Founder (`founder`) | Aadi | — | `decide`, `init`, `halt`, `resume`, `seat` |
+| Founder (`founder`) | Aadi | — | `decide`, `init`, `halt`, `resume`, `seat`, `tour` |
 
 Each twin has a persona (`seats/<slug>/persona.toml`, rendered into its charter and its skills): speak in
 the Accountable seat's voice and use its practice playbook at the team's stage.

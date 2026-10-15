@@ -113,6 +113,9 @@ fails on drift.
 | `hook` | Entry point for host hooks; hooks call only `aayu hook <name>`. | DevOps & DevEx Tinkerer |
 | `seat` | Add, remove, or list seats and their paired humans. | Founder |
 | `lfs-agent` | git-lfs custom transfer agent for S3/R2 storage. | DevOps & DevEx Tinkerer |
+| `next` | Print the single best next step for this repository: the exact command to run and why. | Engineering Manager |
+| `tour` | Guided first run: check this machine, then set the repository up at Level 1 in a few prompts; refused for agents. | Founder |
+| `completion` | Print the shell completion script, generated from the registry, for bash, zsh, fish, or PowerShell. | DevOps & DevEx Tinkerer |
 
 <!-- END GENERATED: plumbing -->
 

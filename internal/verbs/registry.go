@@ -177,7 +177,7 @@ const (
 // are those that take a value. A registry input with a global flag's name reads
 // the global flag instead of defining its own.
 var (
-	GlobalFlags      = []string{"dry-run", "json", "repo", "host", "yes", "verbose", "set", "ci"}
+	GlobalFlags      = []string{"dry-run", "json", "repo", "host", "yes", "verbose", "set", "ci", "plain"}
 	GlobalValueFlags = []string{"repo", "host", "set"}
 )
 
@@ -1008,4 +1008,10 @@ var Plumbing = []Command{
 		optPos("seat", TypeString, "Seat slug."),
 		flag("human", TypeString, "GitHub login of the paired human (add).")),
 	plumb("lfs-agent", "0.2 (V6)", DevOps, IdentityHuman, "git-lfs custom transfer agent for S3/R2 storage."),
+	// WP1.1b (founder request, Appendix B S-1.1b): the CLI experience. Running
+	// `aayu` with no command in a checkout shows the home screen.
+	plumb("next", "WP1.1b", EngineeringManager, IdentityHuman, "Print the single best next step for this repository: the exact command to run and why."),
+	plumb("tour", "WP1.1b", Founder, IdentityHuman, "Guided first run: check this machine, then set the repository up at Level 1 in a few prompts; refused for agents."),
+	plumb("completion", "WP1.1b", DevOps, IdentityHuman, "Print the shell completion script, generated from the registry, for bash, zsh, fish, or PowerShell.",
+		enumIn("shell", true, true, "Shell to complete for.", "bash", "zsh", "fish", "powershell")),
 }

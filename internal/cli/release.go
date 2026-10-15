@@ -25,6 +25,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/tell"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ui"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -355,6 +356,9 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 	if err := e.Emit(p, func(out io.Writer) error { return promotionText(out, p) }); err != nil {
 		return err
 	}
+	if releaseErr == nil {
+		e.milestone("release", false, "Released!", fmt.Sprintf("%s is on %s as %s; %d stor(ies) stamped released.", short(p.Commit), dst, p.Tag, len(p.Stories)))
+	}
 	return releaseErr
 }
 
@@ -675,11 +679,14 @@ func (e *Env) waitRun(ctx context.Context, c *github.Client, repo, workflow stri
 	owner, name, _ := github.SplitRepo(repo)
 	ref := &RunRef{Workflow: workflow, ID: id}
 	want := 1 // the attempt whose result counts; after a re-run, a later one
+	pr := e.progress(fmt.Sprintf("Waiting for %s run %d", workflow, id))
 	for {
 		r, _, err := c.REST.Actions.GetWorkflowRunByID(ctx, owner, name, id)
 		if err != nil {
+			pr.Done(ui.StatusFail, err.Error())
 			return nil, Wrap(ExitExternal, err)
 		}
+		pr.Update(fmt.Sprintf("Waiting for %s run %d (%s, attempt %d)", workflow, id, pick(r.GetStatus(), "queued"), max(1, r.GetRunAttempt())))
 		if r.GetHeadSHA() != "" && r.GetHeadSHA() != sha {
 			return nil, Errorf(ExitExternal, "release: %s run %d is on %s, not %s", workflow, id, short(r.GetHeadSHA()), short(sha))
 		}
@@ -687,6 +694,7 @@ func (e *Env) waitRun(ctx context.Context, c *github.Client, repo, workflow stri
 		if r.GetStatus() == "completed" && ref.Attempts >= want {
 			ref.Conclusion = r.GetConclusion()
 			if ref.Conclusion == "success" || !retry || want > 1 {
+				pr.Done(map[bool]string{true: ui.StatusPass, false: ui.StatusFail}[ref.Conclusion == "success"], ref.Conclusion)
 				return ref, nil
 			}
 			e.Logf("release: %s run %d ended %s; re-running its failed jobs once", workflow, id, ref.Conclusion)
@@ -701,6 +709,7 @@ func (e *Env) waitRun(ctx context.Context, c *github.Client, repo, workflow stri
 			want = ref.Attempts + 1
 		}
 		if err := e.sleep(ctx); err != nil {
+			pr.Done(ui.StatusFail, err.Error())
 			return nil, err
 		}
 	}
