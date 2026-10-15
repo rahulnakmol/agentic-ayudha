@@ -842,7 +842,7 @@ func TestGroups(t *testing.T) {
 		}
 	}
 	o, other, err := cfg.ForGroup("skills", all)
-	if err != nil || o.MaxUSD != 6 || o.K != cfg.K || !cfg.Gates("skills") || len(brief)+len(plain)+len(personas)+len(review)+len(convs)+len(other) != len(all) {
+	if err != nil || o.MaxUSD != 8 || o.K != cfg.K || !cfg.Gates("skills") || len(brief)+len(plain)+len(personas)+len(review)+len(convs)+len(other) != len(all) {
 		t.Fatalf("skills group: %v, cap %v, %d+%d+%d+%d+%d+%d of %d cases", err, o.MaxUSD, len(brief), len(plain), len(personas), len(review), len(convs), len(other), len(all))
 	}
 	for _, c := range other {
