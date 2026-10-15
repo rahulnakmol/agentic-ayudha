@@ -1,0 +1,46 @@
+diff --git a/internal/invoice/total.go b/internal/invoice/total.go
+new file mode 100644
+index 0000000..2afb1c7
+--- /dev/null
++++ b/internal/invoice/total.go
+@@ -0,0 +1,25 @@
++package invoice
++
++import (
++	"fmt"
++	"strconv"
++)
++
++// Total sums the lines' cents times quantity and applies a whole-percent
++// discount (0-100).
++func Total(lines []Line, discountPercent int) (int64, error) {
++	if discountPercent < 0 || discountPercent > 100 {
++		return 0, fmt.Errorf("invoice: discount %d%% is outside 0-100", discountPercent)
++	}
++	var sum int64
++	for i := 1; i < len(lines); i++ {
++		sum += lines[i].Cents * int64(lines[i].Qty)
++	}
++	return sum - sum*int64(discountPercent)/100, nil
++}
++
++// ParseQty reads a quantity from a form value: a whole number of at least 1.
++func ParseQty(s string) (int, error) {
++	n, _ := strconv.Atoi(s)
++	return n, nil
++}
+diff --git a/internal/invoice/total_test.go b/internal/invoice/total_test.go
+new file mode 100644
+index 0000000..0e7ea0e
+--- /dev/null
++++ b/internal/invoice/total_test.go
+@@ -0,0 +1,9 @@
++package invoice
++
++import "testing"
++
++func TestTotalDiscountRange(t *testing.T) {
++	if _, err := Total(nil, 101); err == nil {
++		t.Fatal("101 % accepted")
++	}
++}

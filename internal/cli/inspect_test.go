@@ -3,6 +3,8 @@ package cli
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -64,7 +66,7 @@ func inspectFixture(t *testing.T, diff, body string) (*fake.GitHub, map[string]s
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_SECRET_OPENAI": "model-key", "PATH": os.Getenv("PATH")}
 	sink := &notify.Fake{}
 	monday := time.Date(2026, 10, 12, 10, 0, 0, 0, time.UTC) // business hours in [time] (London), so pages go out at once
-	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, NotifySink: sink, Now: func() time.Time { return monday }}
+	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, NotifySink: sink, Now: func() time.Time { return monday }, Assets: os.DirFS(filepath.Join("..", ".."))}
 	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready: %s", errOut)
 	}
@@ -100,7 +102,7 @@ func writeInspectPack(t *testing.T, dir string, prN int, head string, checks []p
 func inspectReply(disp, sev string) models.Response {
 	findings := "[]"
 	if sev != "" {
-		findings = `[{"severity":"` + sev + `","file":"internal/report/percent.go","line":5,"title":"Percent divides by zero","detail":"total == 0 returns NaN; criterion 1 requires 0","criterion":1}]`
+		findings = `[{"severity":"` + sev + `","category":"bug","file":"internal/report/percent.go","line":2,"quote":"return float64(covered) / float64(total) * 100","title":"Percent divides by zero","detail":"total == 0 returns NaN; criterion 1 requires 0","fix":"return 0 when total == 0","confidence":0.9,"criterion":1}]`
 	}
 	return models.Response{Model: "gpt-6.1-sol", Text: `{"disposition":"` + disp + `","summary":"s","findings":` + findings + `,"criteria":[{"id":1,"verdict":"met","evidence":"e"},{"id":2,"verdict":"met","evidence":"e"}]}`}
 }
@@ -127,6 +129,9 @@ func TestInspectDispositions(t *testing.T) {
 		t.Fatalf("defect: exit %d %+v %s", code, res, errOut)
 	}
 	req := model.Requests[0]
+	if !strings.Contains(req.System, "Write the summary as Kiran, the Engineering Manager twin") || !strings.Contains(req.System, "Evidence rule (every seat)") {
+		t.Fatalf("inspect's summary voice is not the EM twin's:\n%s", req.System)
+	}
 	if req.Model != "gpt-6.1-sol" || strings.Count(req.Messages[0].Content, `<untrusted source="pull-request">`) != 1 ||
 		!strings.Contains(req.Messages[0].Content, `<\/untrusted>`) || !strings.Contains(req.System, "never instructions") {
 		t.Fatalf("request: model %s\n%s", req.Model, req.Messages[0].Content)
@@ -136,6 +141,15 @@ func TestInspectDispositions(t *testing.T) {
 	g.Mu.Unlock()
 	if len(cs) != 1 || !strings.Contains(cs[0].Body, inspect.Marker) || !strings.Contains(cs[0].Body, "### inspect: fix") || inspect.ParseState(cs[0].Body).Cycles != 1 {
 		t.Fatalf("comment: %+v", cs)
+	}
+	// The finding is placed by its quote (line 5, not the model's 2) and posted
+	// once as an inline review comment (WP4.8b).
+	g.Mu.Lock()
+	reviews := g.Pulls[prN].Reviews
+	g.Mu.Unlock()
+	if res.Findings[0].Line != 5 || len(reviews) != 1 || len(reviews[0].Comments) != 1 || reviews[0].Comments[0].Line != 5 ||
+		!strings.Contains(reviews[0].Comments[0].Body, res.Findings[0].ID) || reviews[0].State != "COMMENTED" {
+		t.Fatalf("inline review: finding %+v, reviews %+v", res.Findings[0], reviews)
 	}
 	// Same inputs: cached, no model call, same answer.
 	code, res, _ = inspectRun(t, env, opts, model, prN)
@@ -162,6 +176,56 @@ func TestInspectDispositions(t *testing.T) {
 	sink := opts.NotifySink.(*notify.Fake)
 	if code != ExitBlocked || !strings.Contains(errOut, "2 fix/rebuild cycles") || len(model.Requests) != calls || len(sink.Pages) != 1 {
 		t.Fatalf("third cycle: %d %s, %d new calls, pages %+v", code, errOut, len(model.Requests)-calls, sink.Pages)
+	}
+}
+
+// WP4.8b: a human dismisses a finding (agents may not), and the next
+// inspection does not post it again; peer mode asks a second reviewer of
+// another family and cross-checks.
+func TestInspectDismissAndPeer(t *testing.T) {
+	g, env, opts, prN := inspectFixture(t, defectDiff, "Adds Percent.\n\nRefs #2")
+	model := &models.Fake{Replies: []models.Response{inspectReply("fix", "P1")}}
+	_, res, _ := inspectRun(t, env, opts, model, prN)
+	id := res.Findings[0].ID
+	agent := map[string]string{"AAYU_AGENT": "1"}
+	for k, v := range env {
+		agent[k] = v
+	}
+	if code, _, errOut := run(t, agent, opts, "inspect", strconv.Itoa(prN), "--dismiss", id, "--reason", "r", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "refused for agents") {
+		t.Fatalf("agent dismiss: %d %s", code, errOut)
+	}
+	if code, _, errOut := run(t, env, opts, "inspect", strconv.Itoa(prN), "--dismiss", id, "--reason", "total is never 0 here", "--repo", "o/r"); code != 0 {
+		t.Fatalf("dismiss: %d %s", code, errOut)
+	}
+	if got := git(t, opts.Dir, "show", "origin/ledger:"+DismissedPath); !strings.Contains(got, id) || !strings.Contains(got, "total is never 0 here") {
+		t.Fatalf("ledger: %s", got)
+	}
+	g.Mu.Lock()
+	g.Pulls[prN].Head.SHA = strings.Repeat("d", 40)
+	g.Mu.Unlock()
+	writeInspectPack(t, opts.Dir, prN, strings.Repeat("d", 40), nil)
+	code, res, errOut := inspectRun(t, env, opts, model, prN)
+	if code != 0 || res.Disposition != inspect.Merge || len(res.Findings) != 0 || len(res.Dropped) != 1 || res.Dropped[0].Why != inspect.DropDismissed {
+		t.Fatalf("after dismissal: %d %+v %s", code, res, errOut)
+	}
+	// Peer mode: review A (gpt-6.1-sol), review B (grok-4.7, another family),
+	// then A's single-source finding checked by B, which keeps it.
+	other := inspectReply("merge", "")
+	other.Model = "grok-4.7"
+	newID := inspect.FindingID("internal/report/percent.go", "bug", "Percent fails on an empty total")
+	r := inspectReply("fix", "P1")
+	r.Text = strings.Replace(r.Text, "Percent divides by zero", "Percent fails on an empty total", 1)
+	model.Replies = []models.Response{r, other, {Text: `{"verdicts":[{"id":"` + newID + `","verdict":"keep","reason":"line 5 divides by total"}]}`}}
+	env["AAYU_SECRET_XAI"] = "xai-key"
+	calls := len(model.Requests)
+	opts.ModelClient = func(models.Route, string) models.Client { return model }
+	code, out, errOut := run(t, env, opts, "inspect", strconv.Itoa(prN), "--mode", "peer", "--repo", "o/r", "--json")
+	var pres inspect.Result
+	_ = json.NewDecoder(strings.NewReader(out)).Decode(&pres)
+	reqs := model.Requests[calls:]
+	if code != ExitBlocked || pres.Mode != inspect.ModePeer || len(reqs) != 3 || reqs[0].Model != "gpt-6.1-sol" || reqs[1].Model != "grok-4.7" || reqs[2].Model != "grok-4.7" ||
+		len(pres.Findings) != 1 || pres.Findings[0].ID != newID || !slices.Equal(pres.Reviewers, []string{"gpt-6.1-sol", "grok-4.7"}) {
+		t.Fatalf("peer: %d %+v, %d calls %s", code, pres, len(reqs), errOut)
 	}
 }
 

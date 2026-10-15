@@ -1,0 +1,2 @@
+Retry the rates service
+The rates service fails now and then. Calls retry up to a few times with a doubling wait (capped at 30 s) and stop when the request is cancelled.

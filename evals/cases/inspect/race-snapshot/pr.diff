@@ -1,0 +1,54 @@
+diff --git a/internal/metrics/counter.go b/internal/metrics/counter.go
+index 9154403..df53995 100644
+--- a/internal/metrics/counter.go
++++ b/internal/metrics/counter.go
+@@ -1,6 +1,10 @@
+ package metrics
+ 
+-import "sync"
++import (
++	"encoding/json"
++	"net/http"
++	"sync"
++)
+ 
+ // Counter counts named events. It is safe for concurrent use.
+ type Counter struct {
+@@ -17,3 +21,18 @@ func (c *Counter) Inc(name string) {
+ 	c.n[name]++
+ 	c.mu.Unlock()
+ }
++
++// Snapshot returns a copy of every count.
++func (c *Counter) Snapshot() map[string]int {
++	out := make(map[string]int, len(c.n))
++	for k, v := range c.n {
++		out[k] = v
++	}
++	return out
++}
++
++// Handler serves GET /metrics as a JSON object of counts.
++func (c *Counter) Handler(w http.ResponseWriter, _ *http.Request) {
++	w.Header().Set("Content-Type", "application/json")
++	_ = json.NewEncoder(w).Encode(c.Snapshot())
++}
+diff --git a/internal/metrics/counter_test.go b/internal/metrics/counter_test.go
+new file mode 100644
+index 0000000..c70114c
+--- /dev/null
++++ b/internal/metrics/counter_test.go
+@@ -0,0 +1,13 @@
++package metrics
++
++import "testing"
++
++func TestSnapshot(t *testing.T) {
++	c := NewCounter()
++	for i := 0; i < 3; i++ {
++		c.Inc("orders")
++	}
++	if got := c.Snapshot()["orders"]; got != 3 {
++		t.Fatalf("orders = %d", got)
++	}
++}

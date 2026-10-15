@@ -1,0 +1,9 @@
+package orders
+
+import "testing"
+
+func TestSearchHandlerExists(t *testing.T) {
+	if SearchHandler(nil) == nil {
+		t.Fatal("no handler")
+	}
+}

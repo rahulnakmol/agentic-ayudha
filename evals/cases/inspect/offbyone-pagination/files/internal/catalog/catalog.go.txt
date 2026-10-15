@@ -1,0 +1,7 @@
+package catalog
+
+// Product is one item of the catalog.
+type Product struct {
+	SKU  string
+	Name string
+}

@@ -1,0 +1,29 @@
+package session
+
+import "sync"
+
+// Store keeps session values in memory. It is safe for concurrent use.
+type Store struct {
+	mu     sync.Mutex
+	values map[string]string
+}
+
+// NewStore returns an empty store.
+func NewStore() *Store {
+	return &Store{}
+}
+
+// Set stores v under k, replacing any earlier value.
+func (s *Store) Set(k, v string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.values[k] = v
+}
+
+// Get returns the value under k and whether it exists.
+func (s *Store) Get(k string) (string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, ok := s.values[k]
+	return v, ok
+}

@@ -1,0 +1,2 @@
+Catalog pages for the product list
+The product list shows 20 products per page, page 1 first. `catalog.Page` returns the products of one page and whether another page follows.

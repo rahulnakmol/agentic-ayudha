@@ -1,0 +1,25 @@
+package catalog
+
+import (
+	"strings"
+	"unicode"
+)
+
+// Slug lowercases s and joins its runs of letters and digits with single
+// hyphens: "Red Shoes (Size 9)" becomes "red-shoes-size-9".
+func Slug(s string) string {
+	var b strings.Builder
+	gap := false
+	for _, r := range strings.ToLower(s) {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) {
+			gap = true
+			continue
+		}
+		if gap && b.Len() > 0 {
+			b.WriteByte('-')
+		}
+		b.WriteRune(r)
+		gap = false
+	}
+	return b.String()
+}

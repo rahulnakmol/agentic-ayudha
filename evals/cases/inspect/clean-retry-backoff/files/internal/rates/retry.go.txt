@@ -1,0 +1,38 @@
+package rates
+
+import (
+	"context"
+	"errors"
+	"time"
+)
+
+// maxWait caps the wait between two tries.
+const maxWait = 30 * time.Second
+
+// Retry calls f up to attempts times, waiting base, then twice as long each
+// time (at most maxWait), and stops early when ctx is done. It returns nil on
+// the first success, ctx's error when cancelled, else f's last error.
+func Retry(ctx context.Context, attempts int, base time.Duration, f func(context.Context) error) error {
+	if attempts < 1 {
+		return errors.New("rates: attempts must be at least 1")
+	}
+	var err error
+	wait := base
+	for i := 0; i < attempts; i++ {
+		if err = f(ctx); err == nil {
+			return nil
+		}
+		if i == attempts-1 {
+			break
+		}
+		t := time.NewTimer(wait)
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			return ctx.Err()
+		case <-t.C:
+		}
+		wait = min(wait*2, maxWait)
+	}
+	return err
+}

@@ -1,0 +1,68 @@
+diff --git a/internal/rates/client.go b/internal/rates/client.go
+index 6bfca6b..f3dfc3a 100644
+--- a/internal/rates/client.go
++++ b/internal/rates/client.go
+@@ -1,9 +1,37 @@
+ package rates
+ 
+-import "net/http"
++import (
++	"context"
++	"encoding/json"
++	"fmt"
++	"net/http"
++	"net/url"
++)
+ 
+ // Client calls the rates service at BaseURL.
+ type Client struct {
+ 	BaseURL string
+ 	HTTP    *http.Client
+ }
++
++// Fetch returns the exchange rate for a currency code.
++func (c *Client) Fetch(ctx context.Context, code string) (float64, error) {
++	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/rates/"+url.PathEscape(code), nil)
++	if err != nil {
++		return 0, err
++	}
++	resp, err := c.HTTP.Do(req)
++	if err != nil {
++		return 0, err
++	}
++	if resp.StatusCode != http.StatusOK {
++		return 0, fmt.Errorf("rates: %s: %s", code, resp.Status)
++	}
++	var body struct {
++		Rate float64 `json:"rate"`
++	}
++	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
++		return 0, err
++	}
++	return body.Rate, nil
++}
+diff --git a/internal/rates/client_test.go b/internal/rates/client_test.go
+new file mode 100644
+index 0000000..d4582c0
+--- /dev/null
++++ b/internal/rates/client_test.go
+@@ -0,0 +1,19 @@
++package rates
++
++import (
++	"context"
++	"net/http"
++	"net/http/httptest"
++	"testing"
++)
++
++func TestFetch(t *testing.T) {
++	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		_, _ = w.Write([]byte(`{"rate":1.08}`))
++	}))
++	defer srv.Close()
++	c := &Client{BaseURL: srv.URL, HTTP: srv.Client()}
++	if got, err := c.Fetch(context.Background(), "EUR"); err != nil || got != 1.08 {
++		t.Fatalf("got %v %v", got, err)
++	}
++}

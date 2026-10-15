@@ -826,9 +826,13 @@ func TestGroups(t *testing.T) {
 	if err != nil || pg.MaxUSD != 20 || len(personas) != 4 {
 		t.Fatalf("personas group: %v, cap %v, %d cases", err, pg.MaxUSD, len(personas))
 	}
+	rv, review, err := cfg.ForGroup("review", all)
+	if err != nil || rv.MaxUSD != 20 || rv.K != 2 {
+		t.Fatalf("review group: %v, cap %v, k %d", err, rv.MaxUSD, rv.K)
+	}
 	o, other, err := cfg.ForGroup("skills", all)
-	if err != nil || o.MaxUSD != 20 || len(brief)+len(plain)+len(personas)+len(other) != len(all) {
-		t.Fatalf("skills group: %v, cap %v, %d+%d+%d+%d of %d cases", err, o.MaxUSD, len(brief), len(plain), len(personas), len(other), len(all))
+	if err != nil || o.MaxUSD != 20 || o.K != cfg.K || len(brief)+len(plain)+len(personas)+len(review)+len(other) != len(all) {
+		t.Fatalf("skills group: %v, cap %v, %d+%d+%d+%d+%d of %d cases", err, o.MaxUSD, len(brief), len(plain), len(personas), len(review), len(other), len(all))
 	}
 	for _, c := range brief {
 		if !strings.HasPrefix(c.ID, "brief/") || strings.HasPrefix(c.ID, "brief/eli5-") || strings.HasPrefix(c.ID, "brief/ste-") {

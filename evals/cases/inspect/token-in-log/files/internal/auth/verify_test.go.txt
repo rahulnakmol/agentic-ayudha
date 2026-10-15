@@ -1,0 +1,13 @@
+package auth
+
+import (
+	"errors"
+	"testing"
+)
+
+func TestCheckRejects(t *testing.T) {
+	v := &Verifier{parse: func(string) (Claims, error) { return Claims{}, errors.New("expired") }}
+	if _, err := v.Check("t"); !errors.Is(err, ErrUnauthorized) {
+		t.Fatal(err)
+	}
+}

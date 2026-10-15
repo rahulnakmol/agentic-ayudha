@@ -73,6 +73,15 @@ baseline = ["/"]     # paths baseline captures per commit
 
 # Settings WP1.2 onward read that CONSTRAINTS.md does not render.
 
+# How inspect reviews a PR (WP4.8b): one reviewer (general) or two of different families (peer), and its noise filters.
+[inspect]
+mode = "general"
+delegated_mode = "peer" # PRs another agent built through build --delegate (WP5.5b)
+min_confidence = 0.5    # P2 and P3 findings below it are not posted
+suppress_after = 2      # distinct human dismissals a finding must resemble to be suppressed
+peer_model = ""         # empty: the first registry review candidate of another family
+generated = ["LAYERS.md", "CONSTRAINTS.md", "docs/RACI.md", "internal/config/schema.json", "internal/mcp/schemas/*.json", "go.sum", "pnpm-lock.yaml"]
+
 # Design tokens and OpenFeature flag definitions the design verbs check against (WP6.5).
 [design]
 tokens = "packages/design-system/tokens/tokens.json"

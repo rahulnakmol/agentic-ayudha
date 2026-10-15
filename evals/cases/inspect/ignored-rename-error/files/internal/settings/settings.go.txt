@@ -1,0 +1,7 @@
+package settings
+
+// Settings are the shop's preferences.
+type Settings struct {
+	Currency string `json:"currency"`
+	PageSize int    `json:"page_size"`
+}

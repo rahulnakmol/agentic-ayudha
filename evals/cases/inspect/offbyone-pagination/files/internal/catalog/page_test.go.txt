@@ -1,0 +1,12 @@
+package catalog
+
+import "testing"
+
+func TestPageBounds(t *testing.T) {
+	if got, more := Page(nil, 0, 10); got != nil || more {
+		t.Fatalf("page 0: %v %v", got, more)
+	}
+	if got, more := Page([]string{"a"}, 5, 10); got != nil || more {
+		t.Fatalf("past the end: %v %v", got, more)
+	}
+}

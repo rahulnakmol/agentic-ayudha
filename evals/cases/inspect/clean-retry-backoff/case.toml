@@ -1,0 +1,15 @@
+# Seeded-defect PR for inspect (WP4.8b): Clean control: a bounded retry with backoff and cancellation.
+# Synthetic: written for this eval, with its defects planted on purpose; never run. The head's files are kept
+# as <path>.txt so this repository's build, linters, and scanners never compile or flag the planted defects.
+skill = "inspect"
+description = "Clean control: a bounded retry with backoff and cancellation"
+input = "pr.diff"
+
+[review]
+story = "story.txt"
+files = "files"
+builder = "claude-opus-5-5"
+criteria = [
+  "1. [api-trace] state: `Retry(ctx, 3, 10ms, f)` where f fails twice then succeeds; expected: returns nil after 3 calls",
+  "2. [api-trace] state: `Retry(ctx, 3, 1s, f)` with ctx cancelled during the first wait; expected: returns context.Canceled after 1 call",
+]

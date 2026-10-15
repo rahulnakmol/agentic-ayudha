@@ -1,0 +1,2 @@
+Search orders by customer name
+Support staff search orders by part of the customer's name at `GET /orders?q=<text>`. Results are ordered by order ID.

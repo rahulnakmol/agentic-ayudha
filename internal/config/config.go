@@ -42,6 +42,17 @@ type Config struct {
 	Review        Review                 `koanf:"review" jsonschema_description:"Tolerances of the prototype's Figma screenshot diff (WP6.5) and UI review (WP6.6)."`
 	Team          Team                   `koanf:"team" jsonschema_description:"The team the seat twins adapt their practice to (WP5.1b): depth and ceremony only, never the floors, the evidence rule, or human-only gates."`
 	UI            UI                     `koanf:"ui" jsonschema_description:"How aayu looks on a person's terminal (WP1.1b); usually set in the user-level config. Machines (--json, MCP, agents, CI, pipes) always get plain, stable text."`
+	Inspect       Inspect                `koanf:"inspect" jsonschema_description:"How inspect reviews a PR (WP4.8b): its mode, noise filters, and peer reviewer."`
+}
+
+// Inspect is [inspect] (WP4.8b).
+type Inspect struct {
+	Mode          string   `koanf:"mode" jsonschema:"enum=general,enum=peer" jsonschema_description:"general: one reviewer; peer: two reviewers of different families (both different from the builder's) cross-check each other's findings."`
+	DelegatedMode string   `koanf:"delegated_mode" jsonschema:"enum=general,enum=peer" jsonschema_description:"Mode for a PR another agent built through build --delegate (WP5.5b)."`
+	MinConfidence float64  `koanf:"min_confidence" jsonschema:"minimum=0,maximum=1" jsonschema_description:"P2 and P3 findings below this reviewer confidence are not posted; P0 and P1 always are."`
+	SuppressAfter int      `koanf:"suppress_after" jsonschema:"minimum=0" jsonschema_description:"A finding resembling this many distinct human dismissals in the same file or directory is not posted (never a P0 in security, data, or concurrency); 0 turns suppression off."`
+	PeerModel     string   `koanf:"peer_model" jsonschema_description:"Model ID of the peer reviewer; empty picks the first of the registry's review candidates whose family differs from the builder's and the first reviewer's."`
+	Generated     []string `koanf:"generated" jsonschema_description:"Path patterns (path.Match) of generated files that inspect does not review; the drift check owns them. Files whose header says Code generated ... DO NOT EDIT are skipped too."`
 }
 
 // Team stages (WP5.1b): how much ceremony the seat twins' practice carries.

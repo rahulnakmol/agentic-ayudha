@@ -1,0 +1,30 @@
+package settings
+
+import (
+	"encoding/json"
+	"os"
+)
+
+// Save writes s to path atomically: a temporary file, then a rename.
+func Save(path string, s Settings) error {
+	b, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+		return err
+	}
+	_ = os.Rename(tmp, path)
+	return nil
+}
+
+// Load reads settings from path.
+func Load(path string) (Settings, error) {
+	var s Settings
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return s, err
+	}
+	return s, json.Unmarshal(b, &s)
+}

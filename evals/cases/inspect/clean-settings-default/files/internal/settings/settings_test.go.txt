@@ -1,0 +1,19 @@
+package settings
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestNormalize(t *testing.T) {
+	s := Settings{}
+	if err := s.Normalize(); err != nil || s.PageSize != DefaultPageSize {
+		t.Fatalf("default: %+v %v", s, err)
+	}
+	for _, n := range []int{-1, 101} {
+		s := Settings{PageSize: n}
+		if err := s.Normalize(); err == nil || !strings.Contains(err.Error(), "outside 1-100") {
+			t.Fatalf("%d: %v", n, err)
+		}
+	}
+}

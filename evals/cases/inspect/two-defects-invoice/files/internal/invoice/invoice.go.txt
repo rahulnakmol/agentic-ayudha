@@ -1,0 +1,7 @@
+package invoice
+
+// Line is one invoice line: a unit price in cents and a quantity.
+type Line struct {
+	Cents int64
+	Qty   int
+}

@@ -1,0 +1,9 @@
+package session
+
+import "testing"
+
+func TestGetMissing(t *testing.T) {
+	if v, ok := NewStore().Get("missing"); ok || v != "" {
+		t.Fatalf("got %q %v", v, ok)
+	}
+}

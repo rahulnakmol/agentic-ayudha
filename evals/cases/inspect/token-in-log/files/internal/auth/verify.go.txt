@@ -1,0 +1,27 @@
+package auth
+
+import (
+	"errors"
+	"log"
+)
+
+// ErrUnauthorized is returned for any token that is not accepted.
+var ErrUnauthorized = errors.New("unauthorized")
+
+// Claims are what a valid token says about its holder.
+type Claims struct{ Subject string }
+
+// Verifier checks API tokens.
+type Verifier struct {
+	parse func(token string) (Claims, error)
+}
+
+// Check returns the claims of a valid token, and logs why a token was rejected.
+func (v *Verifier) Check(token string) (Claims, error) {
+	c, err := v.parse(token)
+	if err != nil {
+		log.Printf("auth: rejected token %q: %v", token, err)
+		return Claims{}, ErrUnauthorized
+	}
+	return c, nil
+}
