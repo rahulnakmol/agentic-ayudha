@@ -7,13 +7,14 @@ the contract (`contracts/ask.schema.json`) are refused with a 4xx and a JSON err
 {"id": "api-ask", "layers": ["L02", "L06"],
  "sources": ["examples/benefits-qa/api/api.go", "examples/benefits-qa/contracts/contracts.go",
              "examples/benefits-qa/contracts/ask.schema.json"],
- "routes": ["/api/ask", "GET /healthz"],
- "verified_at": "86275c2423cd8c0a6c61ab996ba560129deb4c2a"}
+ "routes": ["/api/ask", "GET /api/plans", "GET /healthz"],
+ "verified_at": "30468e38ca8271ea573481703c7c9ae80024f52e"}
 ```
 
 ## Sub-features
 
 - `answered`: a plan question returns `status: answered` with citations.
+- `plans`: `GET /api/plans` lists the plans the documents cover.
 - `errors`: wrong method (405), wrong media type (415), unknown field (400), empty question (400).
 
 ## How to get to it (user POV)
@@ -26,6 +27,12 @@ the contract (`contracts/ask.schema.json`) are refused with a 4xx and a JSON err
 {"id": "answered", "evidence": "api-trace", "steps": [
   {"api": {"path": "/api/ask", "json": {"question": "Does Example Co match my 401(k) contributions?", "user_id": "v-verify"},
            "status": 200, "body": {"status": "answered"}}}
+]}
+```
+
+```journey
+{"id": "plans", "evidence": "api-trace", "steps": [
+  {"api": {"method": "GET", "path": "/api/plans", "status": 200}}
 ]}
 ```
 

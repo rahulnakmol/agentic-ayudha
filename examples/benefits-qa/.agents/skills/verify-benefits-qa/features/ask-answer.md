@@ -9,7 +9,7 @@ with the plan and section it came from.
              "examples/benefits-qa/ask/ask.go", "examples/benefits-qa/answer/answer.go",
              "examples/benefits-qa/store/seed/plans.json"],
  "routes": ["GET /{$}", "GET /app.css", "GET /tokens.css"],
- "verified_at": "86275c2423cd8c0a6c61ab996ba560129deb4c2a"}
+ "verified_at": "30468e38ca8271ea573481703c7c9ae80024f52e"}
 ```
 
 ## Sub-features
@@ -20,7 +20,7 @@ with the plan and section it came from.
 
 ## How to get to it (user POV)
 
-- Open `/`, type in "Your question", choose "Ask".
+- Open `/`, type in "Your question", choose "Get answer".
 - Open `/`, choose a suggested question under "Try a question".
 - Open `/?q=<question>` directly (every state has an address).
 
@@ -31,7 +31,7 @@ with the plan and section it came from.
   {"goto": "/"},
   {"expect": {"role": "heading", "name": "Ask about your benefits"}},
   {"fill": {"label": "Your question", "value": "What is the dental annual deductible?"}},
-  {"click": {"role": "button", "name": "Ask"}},
+  {"click": {"role": "button", "name": "Get answer"}},
   {"expect": {"role": "heading", "name": "Answer"}},
   {"expectText": "50 dollars per person"},
   {"expectText": "Source: Dental, Deductible"},

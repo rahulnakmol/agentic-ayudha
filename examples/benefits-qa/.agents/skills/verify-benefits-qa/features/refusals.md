@@ -7,7 +7,7 @@ retrieval, with a message that says who can help.
 {"id": "refusals", "layers": ["L01", "L04"],
  "sources": ["examples/benefits-qa/web/web.go", "examples/benefits-qa/policy/policy.go"],
  "routes": [],
- "verified_at": "86275c2423cd8c0a6c61ab996ba560129deb4c2a"}
+ "verified_at": "30468e38ca8271ea573481703c7c9ae80024f52e"}
 ```
 
 ## Sub-features
@@ -17,7 +17,7 @@ retrieval, with a message that says who can help.
 
 ## How to get to it (user POV)
 
-- Open `/`, type the question, choose "Ask".
+- Open `/`, type the question, choose "Get answer".
 
 ## Driving it with control-bqa
 
@@ -25,7 +25,7 @@ retrieval, with a message that says who can help.
 {"id": "personal", "evidence": "screenshot", "steps": [
   {"goto": "/"},
   {"fill": {"label": "Your question", "value": "What is my manager's salary?"}},
-  {"click": {"role": "button", "name": "Ask"}},
+  {"click": {"role": "button", "name": "Get answer"}},
   {"expect": {"role": "heading", "name": "We cannot answer this"}},
   {"expectText": "another person's records"},
   {"screenshot": "personal.png"},

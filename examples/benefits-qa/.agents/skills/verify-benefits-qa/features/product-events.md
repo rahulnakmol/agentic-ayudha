@@ -9,7 +9,7 @@ text. The Goal's metrics are computed from these events.
  "sources": ["examples/benefits-qa/ask/ask.go", "examples/benefits-qa/analytics/analytics.go",
              "examples/benefits-qa/cmd/benefits-qa/main.go"],
  "routes": [],
- "verified_at": "86275c2423cd8c0a6c61ab996ba560129deb4c2a"}
+ "verified_at": "30468e38ca8271ea573481703c7c9ae80024f52e"}
 ```
 
 ## Sub-features
