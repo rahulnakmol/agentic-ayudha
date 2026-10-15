@@ -97,7 +97,7 @@ type ImpeccableHit struct {
 func (b *Browser) Impeccable(ctx context.Context, url string) ([]ImpeccableHit, string, error) {
 	bin := ""
 	for _, d := range nodeDirs(b.Root, b.Getenv("NODE_PATH")) {
-		if p := filepath.Join(d, ".bin", "impeccable"); fileExists(p) {
+		if p, err := exec.LookPath(filepath.Join(d, ".bin", "impeccable")); err == nil { // impeccable.cmd on Windows
 			bin = p
 			break
 		}
@@ -146,11 +146,6 @@ func nodeDirs(root, nodePath string) []string {
 		}
 	}
 	return dirs
-}
-
-func fileExists(p string) bool {
-	st, err := os.Stat(p)
-	return err == nil && !st.IsDir()
 }
 
 func tail(b []byte) string {
