@@ -60,7 +60,9 @@ type waiverReport struct {
 
 // runDecide is `aayu decide`: without flags it runs the SLA sweep (WP5.6, V8)
 // over one open Decision or all of them; --accept records a human's
-// acceptance; --waiver files a floor-waiver Decision on a story or bug.
+// acceptance; --waiver files a floor-waiver Decision on a story or bug;
+// --pack (read-only, on demand) grounds a decision pack for a seat twin to
+// work with the human (WP5.1b).
 func runDecide(ctx context.Context, e *Env, in Values) error {
 	repo, err := e.RepoName(ctx)
 	if err != nil {
@@ -74,8 +76,20 @@ func runDecide(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return Wrap(ExitUsage, err)
 	}
+	if in.Bool("pack") {
+		if in.Has("accept") || in.Has("waiver") {
+			return Errorf(ExitBlocked, "decide --pack is read-only: it does not combine with --accept or --waiver")
+		}
+		return decidePack(ctx, e, &l.Config, repo, in.String("decision"), in.String("seat"), in.String("draft"))
+	}
+	if in.Has("seat") || in.Has("draft") {
+		return Errorf(ExitUsage, "decide: --seat and --draft need --pack")
+	}
 	n := 0
 	if in.Has("decision") {
+		if !issueArg.MatchString(in.String("decision")) {
+			return Errorf(ExitUsage, "decide: %q is not an issue; a question needs --pack", in.String("decision"))
+		}
 		n = issueNumber(in.String("decision"))
 	}
 	switch {

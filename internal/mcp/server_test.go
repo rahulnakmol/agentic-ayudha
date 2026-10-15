@@ -179,6 +179,26 @@ func TestPromptsResourcesAndExitCodes(t *testing.T) {
 		t.Errorf("brief register=pirate: %v", err)
 	}
 
+	// WP5.1b: the grill prompt carries the Product Strategist's persona block exactly as the skill does, and the
+	// persona prompt renders a seat's practice at the requested stage.
+	skill, _ := os.ReadFile(filepath.Join("..", "..", "skills", "grill", "SKILL.md"))
+	_, block, _ := strings.Cut(string(skill), "<!-- BEGIN GENERATED: persona -->")
+	block, _, _ = strings.Cut(block, "<!-- END GENERATED: persona -->")
+	if text := pr.Messages[0].Content.(*sdk.TextContent).Text; block == "" || !strings.Contains(text, block) {
+		t.Error("grill prompt lacks the persona block of skills/grill/SKILL.md")
+	}
+	pp, err := cs.GetPrompt(ctx, &sdk.GetPromptParams{Name: "persona", Arguments: map[string]string{"seat": "engineering-manager", "stage": "enterprise"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text := pp.Messages[0].Content.(*sdk.TextContent).Text; !strings.Contains(text, "Speak and work as Kiran, the Engineering Manager twin") ||
+		!strings.Contains(text, "**Retrospective memo**") || strings.Contains(text, "**Retro note**") || !strings.Contains(text, "**Evidence rule (every seat).**") {
+		t.Errorf("persona prompt:\n%s", text)
+	}
+	if _, err := cs.GetPrompt(ctx, &sdk.GetPromptParams{Name: "persona", Arguments: map[string]string{"seat": "janitor"}}); err == nil || !strings.Contains(err.Error(), `seat "janitor"`) {
+		t.Errorf("persona janitor: %v", err)
+	}
+
 	for uri, want := range map[string]string{"aayudha://status/12": "status --json -- 12", "aayudha://ledger/12": "proof --json -- get 12"} {
 		calls = nil
 		rr, err := cs.ReadResource(ctx, &sdk.ReadResourceParams{URI: uri})

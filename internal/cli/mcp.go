@@ -53,7 +53,9 @@ func runMCP(ctx context.Context, e *Env, _ Values) error {
 	if err != nil {
 		return err
 	}
-	s, err := mcp.NewServer(mcp.Options{Version: e.Build.Version, ExposeWrites: l.Config.MCP.ExposeWrites, Run: e.agentRunner(), Assets: e.Assets})
+	stage, why := l.Config.TeamStage()
+	s, err := mcp.NewServer(mcp.Options{Version: e.Build.Version, ExposeWrites: l.Config.MCP.ExposeWrites, Run: e.agentRunner(), Assets: e.Assets,
+		TeamStage: stage, TeamStageWhy: why})
 	if err != nil {
 		return err
 	}

@@ -60,6 +60,7 @@ type Seat struct {
 	Paired    map[verbs.SeatID]string
 	BotLogins []string
 	Charter   func(id verbs.SeatID) ([]byte, error)
+	Personas  map[verbs.SeatID]Persona // the twins' personas, for the AGENTS.md seat section (WP5.1b)
 	Ledger    func(ctx context.Context, c ledger.Commit) (string, error)
 	Actor     string // login of the human running it, for the ledger record
 	Now       func() time.Time
@@ -218,7 +219,7 @@ func (s *Seat) files(res *Result, seat verbs.SeatID, human string) (bool, error)
 	if err != nil {
 		return false, err
 	}
-	if err := s.write(res, AgentsPath, string(hosts.RenderAgentsMD([]byte(agents), AgentsSection()))); err != nil {
+	if err := s.write(res, AgentsPath, string(hosts.RenderAgentsMD([]byte(agents), AgentsSection(s.Personas)))); err != nil {
 		return false, err
 	}
 	res.Humans = Humans(nextCO, s.BotLogins)
@@ -390,12 +391,19 @@ func Onboarding(seat verbs.SeatID, human, charter string) string {
 	b.WriteString(CharterRegion(seat))
 	b.WriteString("\n## Charter\n\n")
 	_, rest, _ := strings.Cut(strings.TrimSpace(charter), "\n") // the charter's own title duplicates the issue's
-	b.WriteString(regionRE.ReplaceAllString(strings.TrimSpace(demote(rest)), ""))
+	// The RACI region is already above; the persona region stays (it says how the twin works with its human),
+	// without its markers.
+	body := regionRE.ReplaceAllString(strings.TrimSpace(demote(rest)), "")
+	body = personaMarkerRE.ReplaceAllString(body, "")
+	b.WriteString(strings.TrimSpace(body))
 	b.WriteString("\n")
 	return b.String()
 }
 
-var regionRE = regexp.MustCompile(`(?s)\n*<!-- BEGIN GENERATED: raci -->.*<!-- END GENERATED: raci -->`)
+var (
+	regionRE        = regexp.MustCompile(`(?s)\n*<!-- BEGIN GENERATED: raci -->.*<!-- END GENERATED: raci -->`)
+	personaMarkerRE = regexp.MustCompile(`<!-- (BEGIN|END) GENERATED: persona -->\n*`)
+)
 
 // demote shifts a charter's headings down one level to sit under "## Charter".
 func demote(md string) string {

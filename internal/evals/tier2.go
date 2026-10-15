@@ -299,6 +299,10 @@ func (h *Harness) Tier2(ctx context.Context, cases []Case, sha, ref string, now 
 			switch {
 			case c.Brief != nil:
 				run, err = h.runBrief(ctx, c, lane, body, string(input), string(rubric))
+			case c.Pack != nil:
+				run, err = h.runPack(ctx, c, lane, body, string(input), string(rubric))
+			case c.Persona != nil:
+				run, err = h.runPersona(ctx, c, lane, body, string(input), string(rubric))
 			case c.Tier2.Draft != "":
 				run, err = h.runPlanning(ctx, c, lane, body, string(input), string(rubric))
 			case c.Tier2.Human != "":

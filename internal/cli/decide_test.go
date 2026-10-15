@@ -2,11 +2,13 @@ package cli
 
 import (
 	"encoding/json"
+	"os"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	aayudha "github.com/rahulnakmol/agentic-ayudha"
 	"github.com/rahulnakmol/agentic-ayudha/internal/decide"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
@@ -268,5 +270,112 @@ func TestDecideRefusals(t *testing.T) {
 	}
 	if code, _, _ := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "t"}, Options{GitHubAPI: g.URL(), GitHubGap: -1}, "decide"); code != ExitUsage {
 		t.Errorf("no --repo outside a checkout: exit %d, want %d", code, ExitUsage)
+	}
+}
+
+// TestDecidePack (WP5.1b, D-5.6b): `decide --pack` is read-only and on demand. It routes an issue or a free question
+// to the owning seat's twin, grounds the facts it finds (the issue, its parent and links, open Decisions), prints the
+// twin's persona and the pack outline, and --draft checks a pack for every part and cited claims. Nothing is written.
+func TestDecidePack(t *testing.T) {
+	g := decideTree(t)
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "t", "XDG_STATE_HOME": t.TempDir()}
+	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Assets: aayudha.Assets}
+	pack := func(want int, args ...string) packReport {
+		t.Helper()
+		code, out, errOut := run(t, env, opts, append([]string{"decide", "--repo", "o/r", "--json", "--pack"}, args...)...)
+		if code != want {
+			t.Fatalf("decide --pack %v: exit %d, want %d: %s", args, code, want, errOut)
+		}
+		var rep packReport
+		if err := json.NewDecoder(strings.NewReader(out)).Decode(&rep); err != nil { // the report comes before any error
+			t.Fatalf("decide --pack %v: %v: %s", args, err, out)
+		}
+		return rep
+	}
+	rep := pack(0, "2")
+	facts := ""
+	for _, f := range rep.Facts {
+		facts += f.Text + " (" + f.Cite + ")\n"
+	}
+	for _, want := range []string{`#2 "Choose the rules engine": decision, open`, `Parent: #1 "Decision engine": feature`, `Linked (constrains): #6 "Rule 1": story`, `Open Decision: #3 "Choose the data store"`} {
+		if !strings.Contains(facts, want) {
+			t.Errorf("facts lack %q:\n%s", want, facts)
+		}
+	}
+	if rep.Seat != "engineering-manager" || rep.Twin != "Kiran" || rep.Stage != "startup" || rep.Question != "Which rules engine?" ||
+		!strings.Contains(rep.Persona, "Speak and work as Kiran") || !strings.Contains(rep.Untrusted, "A: in-house.") || len(rep.Sections) != 8 {
+		t.Errorf("pack for #2: %+v", rep)
+	}
+	q := pack(0, "Should we add a field to the Tombstone schema or a separate index?")
+	if q.Seat != "code-architect" || q.Twin != "Tomas" || q.Issue != 0 || !strings.Contains(q.SeatWhy, `"field"`) {
+		t.Errorf("pack for a question: %+v", q)
+	}
+	if o := pack(0, "2", "--seat", "quality-architect"); o.Twin != "Vera" || o.SeatWhy != "--seat" {
+		t.Errorf("--seat: %+v", o)
+	}
+
+	dir := t.TempDir()
+	good := `# Decision pack
+
+## Question
+
+Which rules engine do we build #6 on?
+
+## Facts
+
+- #2 recommends A, and #6 is blocked while #2 is open.
+
+## Options
+
+1. In-house (#2): cheaper to run, slower to build.
+2. Vendor (#2): faster to build, a contract to manage.
+
+## Recommendation
+
+In-house, as #2 recommends; a two-way door until #6 ships.
+
+## Cost of waiting
+
+#6 stays blocked (#6).
+
+## Pre-mortem
+
+Juno: in-house failed because the rules outgrew it; early warning: #6 needs a rule type #2 did not list.
+
+## Questions that would change the answer
+
+- Does #6 need rules a vendor already has?
+
+## Your decision
+
+Reply A or B on #2.
+`
+	write := func(name, s string) string {
+		p := dir + "/" + name
+		if err := os.WriteFile(p, []byte(s), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	if r := pack(0, "2", "--draft", write("good.md", good)); len(r.Findings) != 0 {
+		t.Errorf("good draft: %v", r.Findings)
+	}
+	bad := strings.Replace(good, "## Pre-mortem", "## Notes", 1)
+	if r := pack(4, "2", "--draft", write("bad.md", bad)); !strings.Contains(strings.Join(r.Findings, "\n"), `missing part "## Pre-mortem"`) {
+		t.Errorf("bad draft: %v", r.Findings)
+	}
+	invented := strings.Replace(good, "#6 stays blocked (#6).", "#6 stays blocked (#99).", 1)
+	if r := pack(4, "2", "--draft", write("invented.md", invented)); !strings.Contains(strings.Join(r.Findings, "\n"), "cites #99") {
+		t.Errorf("invented citation: %v", r.Findings)
+	}
+
+	if code, _, errOut := run(t, env, opts, "decide", "--repo", "o/r", "--pack", "2", "--accept", "A"); code != 4 || !strings.Contains(errOut, "read-only") {
+		t.Errorf("--pack --accept: exit %d: %s", code, errOut)
+	}
+	if code, _, errOut := run(t, env, opts, "decide", "--repo", "o/r", "which engine?"); code != 2 || !strings.Contains(errOut, "a question needs --pack") {
+		t.Errorf("question without --pack: exit %d: %s", code, errOut)
+	}
+	if n := len(g.Writes()); n != 0 {
+		t.Errorf("decide --pack wrote %d times", n)
 	}
 }

@@ -18,6 +18,10 @@ skills/<verb>/
   `aayu: {seat, lane, layers, inputs, outputs, gates, identity, mode}`.
 - **Body** is everything after the closing `---`. It tells the host's model what to do and which `aayu` calls to make
   (ground rule 5: inside a host, the host's model reasons). Keep it short; move detail into `references/`.
+- **Persona block**: right after the body's title, between `<!-- BEGIN GENERATED: persona -->` and
+  `<!-- END GENERATED: persona -->`, `go generate ./...` writes the persona of the verb's Accountable seat from
+  `seats/<seat>/persona.toml` (WP5.1b): voice, playbook by team stage, and the evidence rule. Never edit it by hand;
+  everything outside the markers stays hand-authored.
 - **Hooks** a skill declares in frontmatter are command hooks that run `aayu hook <name>` and nothing else.
 - **Images**: never Mobbin-origin pixels (WP6.4). Link to the Mobbin page or ID instead.
 

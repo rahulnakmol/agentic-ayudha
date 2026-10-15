@@ -11,6 +11,9 @@ WP in brackets is where the term is built; "n/a until" means it does not exist y
 | Verb registry | `internal/verbs/registry.go`, the single source for verbs, seats, layers, lanes, and gates. Several files are generated from it [WP0.3]. |
 | Seat | One of twelve roles in the pod (Product Strategist, Code Architect, …). Every verb has one Accountable seat; every layer has one owner seat. |
 | Twin | The agent half of a seat. A seat is **solo** (twin only) or **paired** (twin plus a human) [WP5.1]. |
+| Persona | A twin's character and practice: name, voice, values, habits, how it pushes back and praises, what it never does, how it grounds itself, and a practice playbook with public sources. Source: `seats/<seat>/persona.toml`, rendered into charters, skills, and AGENTS.md [WP5.1b]. |
+| Team stage | `[team] stage`: `startup`, `scaleup`, or `enterprise`. Sets the depth and ceremony of each twin's practice (a one-page note to a full artefact), never the floors, the evidence rule, or human-only gates [WP5.1b]. |
+| Evidence rule | Every claim a twin makes about code, architecture, risk, or progress cites its source; anecdotes and analogies illustrate, never replace, evidence. Checked by `seats.CheckGrounding` [WP5.1b]. |
 | Founder | The seat that holds final authority. Founder A owns the plan; founder B is the escalation contact for Decisions. |
 | Layer | One of nine application layers, L01 Experience to L09 Platform / operations. A path belongs to the layer whose glob in [LAYERS.md](LAYERS.md) matches it. |
 | Footprint | The set of layers a story or PR touches, computed from its changed paths. |

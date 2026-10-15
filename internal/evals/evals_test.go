@@ -602,6 +602,104 @@ func TestTier2BriefRevisesOnceThenJudges(t *testing.T) {
 	}
 }
 
+// TestTier2PersonaRevisesOnceThenJudges (WP5.1b): the retro skill speaks as the
+// Engineering Manager twin; a reply with an uncited claim gets the evidence-rule
+// findings once and revises; one that still fails, or carries the wrong stage's
+// artefact, scores 1 without the judge; the judge sees the persona and stage.
+func TestTier2PersonaRevisesOnceThenJudges(t *testing.T) {
+	all, err := LoadCases(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []Case
+	for _, c := range all {
+		if c.ID == "retro/em-startup" {
+			cases = append(cases, c)
+		}
+	}
+	good, err := os.ReadFile(filepath.Join(root, "evals", "cases", "retro", "em-startup", "output", "retro.md"))
+	if err != nil || len(cases) != 1 {
+		t.Fatalf("case: %v", err)
+	}
+	uncited := string(good) + "\nThe ledger package already stores the kind elsewhere, so the migration was small.\n"
+	ceremony := strings.Replace(string(good), "# Retro note", "# Retrospective memo", 1)
+	judge := models.Response{Text: `{"score": 5, "reason": "grounded"}`}
+	replies := []models.Response{{Text: uncited}, {Text: string(good)}, judge}
+	for i := 0; i < 3; i++ {
+		replies = append(replies, models.Response{Text: string(good)}, judge)
+	}
+	replies = append(replies, models.Response{Text: ceremony}, models.Response{Text: ceremony})
+	fake := &models.Fake{Replies: replies}
+	h := harness(t, fake, "gpt-6.1-sol")
+	res, err := h.Tier2(context.Background(), cases, "abc", "dev", time.Unix(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs := res.Cases[0].Runs
+	if len(fake.Requests) != 11 || !runs[0].Revised || runs[0].Status != RunPass || runs[1].Revised || runs[4].Score != 1 ||
+		!strings.Contains(runs[4].Floor, `carries the enterprise artefact "Retrospective memo"`) {
+		t.Fatalf("%d calls, runs %+v", len(fake.Requests), runs)
+	}
+	first, revise, judged := fake.Requests[0], fake.Requests[1], fake.Requests[2]
+	if !strings.Contains(first.System, "## Voice: Kiran, the Engineering Manager twin") || !strings.Contains(first.System, "Team stage for this run: startup") ||
+		!strings.Contains(first.Messages[0].Content, `<untrusted source="grounding">`) {
+		t.Error("the skill prompt lacks the persona block, the stage, or the wrapped grounding")
+	}
+	if len(revise.Messages) != 3 || !strings.Contains(revise.Messages[2].Content, "uncited claim") {
+		t.Errorf("revision request: %+v", revise.Messages)
+	}
+	if judged.Model != "gpt-6.1-sol" || !strings.Contains(judged.Messages[0].Content, `startup artefact "Retro note"`) ||
+		!strings.Contains(judged.Messages[0].Content, "Speak and work as Kiran") {
+		t.Errorf("judge request: %s %.300s", judged.Model, judged.Messages[0].Content)
+	}
+}
+
+// TestTier2PackRevisesOnceThenJudges (WP5.1b, D-5.6b): the decide skill writes
+// the pack in the owning twin's persona (the Code Architect's for a design
+// question); a pack without its pre-mortem is sent back once with the finding.
+func TestTier2PackRevisesOnceThenJudges(t *testing.T) {
+	all, err := LoadCases(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []Case
+	for _, c := range all {
+		if c.ID == "decide/architect-tombstone-kind" {
+			cases = append(cases, c)
+		}
+	}
+	good, err := os.ReadFile(filepath.Join(root, "evals", "cases", "decide", "architect-tombstone-kind", "output", "pack.md"))
+	if err != nil || len(cases) != 1 {
+		t.Fatalf("case: %v", err)
+	}
+	noPremortem := strings.Replace(string(good), "## Pre-mortem", "## Risks", 1)
+	judge := models.Response{Text: `{"score": 4, "reason": "decidable"}`}
+	replies := []models.Response{{Text: noPremortem}, {Text: string(good)}, judge}
+	for i := 0; i < 4; i++ {
+		replies = append(replies, models.Response{Text: string(good)}, judge)
+	}
+	fake := &models.Fake{Replies: replies}
+	h := harness(t, fake, "gpt-6.1-sol")
+	res, err := h.Tier2(context.Background(), cases, "abc", "dev", time.Unix(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs := res.Cases[0].Runs
+	if len(fake.Requests) != 11 || !runs[0].Revised || runs[0].Status != RunPass || runs[1].Revised || res.Cases[0].Mean != 4 {
+		t.Fatalf("%d calls, runs %+v", len(fake.Requests), runs)
+	}
+	first, revise, judged := fake.Requests[0], fake.Requests[1], fake.Requests[2]
+	if !strings.Contains(first.System, "Speak and work as Tomas, the Code Architect twin") || !strings.Contains(first.Messages[0].Content, "The human is stuck and asks:") {
+		t.Errorf("skill prompt: %.300s", first.System)
+	}
+	if !strings.Contains(revise.Messages[2].Content, `missing part "## Pre-mortem"`) {
+		t.Errorf("revision request: %s", revise.Messages[2].Content)
+	}
+	if !strings.Contains(judged.Messages[0].Content, "Tomas, the Code Architect twin, at the scaleup stage") {
+		t.Errorf("judge request: %.300s", judged.Messages[0].Content)
+	}
+}
+
 // The grill cases' tier 2 (WP5.3) runs the grill skill with its question set
 // appended, on grill's own lane: the recorded Goal scores against the rubric.
 func TestTier2GrillReferences(t *testing.T) {
@@ -724,9 +822,13 @@ func TestGroups(t *testing.T) {
 	if err != nil || p.MaxUSD != 6 {
 		t.Fatalf("brief-plain group: %v, cap %v", err, p.MaxUSD)
 	}
+	pg, personas, err := cfg.ForGroup("personas", all)
+	if err != nil || pg.MaxUSD != 6 || len(personas) != 4 {
+		t.Fatalf("personas group: %v, cap %v, %d cases", err, pg.MaxUSD, len(personas))
+	}
 	o, other, err := cfg.ForGroup("skills", all)
-	if err != nil || o.MaxUSD != 20 || len(brief)+len(plain)+len(other) != len(all) {
-		t.Fatalf("skills group: %v, cap %v, %d+%d+%d of %d cases", err, o.MaxUSD, len(brief), len(plain), len(other), len(all))
+	if err != nil || o.MaxUSD != 20 || len(brief)+len(plain)+len(personas)+len(other) != len(all) {
+		t.Fatalf("skills group: %v, cap %v, %d+%d+%d+%d of %d cases", err, o.MaxUSD, len(brief), len(plain), len(personas), len(other), len(all))
 	}
 	for _, c := range brief {
 		if !strings.HasPrefix(c.ID, "brief/") || strings.HasPrefix(c.ID, "brief/eli5-") || strings.HasPrefix(c.ID, "brief/ste-") {

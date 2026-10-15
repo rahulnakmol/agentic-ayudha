@@ -40,6 +40,48 @@ type Config struct {
 	Measure       Measure                `koanf:"measure" jsonschema_description:"The events measure (WP7.2) reads as AARRR stages and the North Star."`
 	Design        Design                 `koanf:"design" jsonschema_description:"Where the design verbs (WP6.5) find the design tokens and the OpenFeature flag definitions."`
 	Review        Review                 `koanf:"review" jsonschema_description:"Tolerances of the prototype's Figma screenshot diff (WP6.5) and UI review (WP6.6)."`
+	Team          Team                   `koanf:"team" jsonschema_description:"The team the seat twins adapt their practice to (WP5.1b): depth and ceremony only, never the floors, the evidence rule, or human-only gates."`
+}
+
+// Team stages (WP5.1b): how much ceremony the seat twins' practice carries.
+const (
+	StageStartup    = "startup"    // the one-page version: a short decision note, a two-line risk list
+	StageScaleup    = "scaleup"    // the working version: a dated plan, owners, a weekly cadence
+	StageEnterprise = "enterprise" // the full artefact: design doc, review board, control evidence
+)
+
+// TeamStages lists the stages from least to most ceremony.
+var TeamStages = []string{StageStartup, StageScaleup, StageEnterprise}
+
+// Team is [team] (WP5.1b).
+type Team struct {
+	Stage string `koanf:"stage" jsonschema:"enum=startup,enum=scaleup,enum=enterprise" jsonschema_description:"startup, scaleup, or enterprise. Unset: inferred from size (15 or fewer people startup, up to 150 scaleup, more enterprise)."`
+	Size  int    `koanf:"size" jsonschema:"minimum=0" jsonschema_description:"People on the product team. Unset: the paired seat humans plus the founder."`
+}
+
+// TeamStage is the effective team stage and how it was decided: [team] stage
+// when set, else from [team] size, else from the pod's humans (the paired
+// seats plus the founder), so a solo pod is a startup.
+func (c *Config) TeamStage() (stage, why string) {
+	if c.Team.Stage != "" {
+		return c.Team.Stage, "[team] stage"
+	}
+	size, why := c.Team.Size, "[team] size"
+	if size <= 0 {
+		size, why = 1, "the pod's humans"
+		for name, s := range c.Seats {
+			if s.Mode == "paired" && name != string(verbs.Founder) {
+				size++
+			}
+		}
+	}
+	switch {
+	case size <= 15:
+		return StageStartup, fmt.Sprintf("%s (%d)", why, size)
+	case size <= 150:
+		return StageScaleup, fmt.Sprintf("%s (%d)", why, size)
+	}
+	return StageEnterprise, fmt.Sprintf("%s (%d)", why, size)
 }
 
 // Design is [design] (WP6.5). Paths are relative to the repository root.
@@ -385,6 +427,12 @@ func (c *Config) Validate() error {
 		if _, isSeat := verbs.FindSeat(verbs.SeatID(v)); !isSeat && !loginName.MatchString(v) {
 			bad("[decisions.authority] %s = %q: want a seat slug or a GitHub login", k, v)
 		}
+	}
+	if st := c.Team.Stage; st != "" && !slices.Contains(TeamStages, st) {
+		bad("[team] stage = %q: want %s", st, strings.Join(TeamStages, ", "))
+	}
+	if c.Team.Size < 0 {
+		bad("[team] size = %d: want a number of people, 0 or more", c.Team.Size)
 	}
 	if e := c.Decisions.EscalateTo; e != "" && !loginName.MatchString(e) {
 		bad("[decisions] escalate_to = %q: want a GitHub login", e)
