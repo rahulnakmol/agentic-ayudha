@@ -203,12 +203,18 @@ func TestReleaseLive(t *testing.T) {
 	time.Sleep(3 * time.Second)
 	merged := api(tok, "PUT", fmt.Sprintf("/repos/%s/pulls/%d/merge", repo, prN), map[string]any{"merge_method": "squash"})
 	gitDo("checkout", "--quiet", "dev")
-	for i := 0; i < 30; i++ { // GitHub links a fresh squash commit to its merged PR after a short delay
+	// GitHub links a fresh squash commit to its merged PR after a short delay, and its git side can serve dev
+	// without the commit for a while after the API merged it; release reads both.
+	for i := 0; ; i++ {
 		var pulls []struct {
 			MergedAt *string `json:"merged_at"`
 		}
-		if json.Unmarshal(liveAPI(t, tok, "GET", fmt.Sprintf("/repos/%s/commits/%s/pulls", repo, merged["sha"]), nil), &pulls) == nil && len(pulls) > 0 && pulls[0].MergedAt != nil {
+		linked := json.Unmarshal(liveAPI(t, tok, "GET", fmt.Sprintf("/repos/%s/commits/%s/pulls", repo, merged["sha"]), nil), &pulls) == nil && len(pulls) > 0 && pulls[0].MergedAt != nil
+		if linked && strings.HasPrefix(gitDo("ls-remote", "origin", "refs/heads/dev"), merged["sha"].(string)) {
 			break
+		}
+		if i == 30 {
+			t.Fatalf("the squash merge %v of PR #%d is not on dev or not linked to the PR after a minute", merged["sha"], prN)
 		}
 		time.Sleep(2 * time.Second)
 	}
@@ -217,11 +223,36 @@ func TestReleaseLive(t *testing.T) {
 	opts := Options{Dir: dir, RunPoll: 5 * time.Second}
 	release := func(to string) (Promotion, string) {
 		t.Helper()
-		start := time.Now()
-		code, out, errOut := run(t, env, opts, "release", strconv.Itoa(rel), "--to", to, "--yes", "--repo", repo, "--json")
+		var (
+			code     int
+			out      string
+			errOut   string
+			notInDev = fmt.Sprintf("#%d (status ready) is not in rolling..dev", story)
+		)
+		// Even after the wait above, CI has twice seen release's own reads of the range miss the squash merge
+		// (runs 38761858117 and 38763856598) while the test's reads had it. That refusal comes before release
+		// writes anything, so retry it for a minute, logging what GitHub serves each time.
+		for i := 0; ; i++ {
+			start := time.Now()
+			code, out, errOut = run(t, env, opts, "release", strconv.Itoa(rel), "--to", to, "--yes", "--repo", repo, "--json")
+			t.Logf("release --to %s: exit %d in %v\n%s", to, code, time.Since(start).Round(time.Second), errOut)
+			if code != ExitBlocked || !strings.Contains(errOut, notInDev) || i == 6 {
+				break
+			}
+			var pulls []struct {
+				Number   int     `json:"number"`
+				MergedAt *string `json:"merged_at"`
+				Base     struct {
+					Ref string `json:"ref"`
+				} `json:"base"`
+			}
+			_ = json.Unmarshal(liveAPI(t, tok, "GET", fmt.Sprintf("/repos/%s/commits/%s/pulls", repo, merged["sha"]), nil), &pulls)
+			t.Logf("squash merge %v; release fetched origin/dev %s; rolling..dev %q; pulls with the merge %+v", merged["sha"],
+				gitDo("rev-parse", "origin/dev"), gitDo("rev-list", "--no-merges", "origin/rolling..origin/dev"), pulls)
+			time.Sleep(10 * time.Second)
+		}
 		var p Promotion
 		_ = json.NewDecoder(strings.NewReader(out)).Decode(&p)
-		t.Logf("release --to %s: exit %d in %v\n%s", to, code, time.Since(start).Round(time.Second), errOut)
 		if code != 0 {
 			t.Fatalf("release --to %s: exit %d: %s", to, code, errOut)
 		}

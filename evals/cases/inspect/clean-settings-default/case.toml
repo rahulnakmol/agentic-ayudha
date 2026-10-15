@@ -1,0 +1,15 @@
+# Seeded-defect PR for inspect (WP4.8b): Clean control: a page-size default with a range check.
+# Synthetic: written for this eval, with its defects planted on purpose; never run. The head's files are kept
+# as <path>.txt so this repository's build, linters, and scanners never compile or flag the planted defects.
+skill = "inspect"
+description = "Clean control: a page-size default with a range check"
+input = "pr.diff"
+
+[review]
+story = "story.txt"
+files = "files"
+builder = "claude-opus-5-5"
+criteria = [
+  "1. [api-trace] state: `Normalize()` on settings with page_size 0; expected: page_size becomes 20 and no error",
+  "2. [api-trace] state: `Normalize()` on settings with page_size 101; expected: returns an error naming 101",
+]

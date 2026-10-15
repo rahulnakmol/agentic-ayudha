@@ -1,0 +1,11 @@
+# Seats and pairing (docs/guide/concepts-seats.md).
+title: A seat is an agent twin, paired with a human when you want one
+direction: down
+seat: A seat, such as Product Strategist
+twin: Agent twin: drafts, runs, files
+human: Paired human: answers, reviews, approves
+item: A work item that is complete and checked
+seat -> twin: does the work
+seat -> human: holds the gates
+twin -> item
+human -> item

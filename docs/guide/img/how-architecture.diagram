@@ -1,0 +1,17 @@
+# Architecture (docs/guide/how-architecture.md). Rendered to how-architecture.svg by go generate.
+title: The host's agent reasons from a skill, and the aayu binary does every check and every write
+direction: down
+agent: Host and its agent: Amp, Cursor, or Claude Code
+skill: Skill: SKILL.md copied into the repository
+mcp: aayu mcp: verbs as MCP tools over stdio
+binary: aayu binary: checks, writes, hooks
+github: GitHub: issues, pull requests, checks
+ci: CI workflows: merge gate, triage, loops
+ledger: ledger branch: packs, snapshots, actions log
+agent -> skill: reads
+agent -> mcp: tool calls
+skill -> binary: runs aayu verbs
+mcp -> binary: runs verbs in-process
+binary -> github: writes through actions
+github -> ci: events start runs
+ci -> ledger: authoritative pack

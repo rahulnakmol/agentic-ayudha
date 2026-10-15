@@ -1,0 +1,14 @@
+# Which tests prove Bug #183's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # the 12 and 15 October reports replay on the current binary from their snapshots and the ledger copy, byte-identical
+tests = ["internal/cli:TestAuditReplaysRecordedReports"]
+
+[[criterion]]
+id = 2 # a new report, then a [ui] change audit does not read: the replay exits 0 and is byte-identical
+tests = ["internal/cli:TestAuditRerunByteIdentical"]
+
+[[criterion]]
+id = 3 # a new report, then a change to a key audit reads: the replay refuses with exit 4 naming the configuration change
+tests = ["internal/cli:TestAuditRerunByteIdentical"]

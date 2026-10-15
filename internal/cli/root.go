@@ -20,6 +20,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ui"
 	"github.com/rahulnakmol/agentic-ayudha/internal/upgrade"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
@@ -34,14 +35,16 @@ func Run(ctx context.Context, args []string, io IO, opts Options) int {
 	}
 	root := newRoot(e)
 	root.SetArgs(args)
-	err = root.ExecuteContext(ctx)
+	cmd, err := root.ExecuteContextC(ctx)
 	code := CodeOf(err)
 	var ce *Error
 	if err != nil && !errors.As(err, &ce) {
 		code = ExitUsage
 	}
 	e.endTrace(code, err)
+	voice := e.commandVoice(cmd)
 	if err == nil {
+		e.Talk().SignOff(voice)
 		return ExitOK
 	}
 	if !errors.As(err, &ce) {
@@ -49,13 +52,38 @@ func Run(ctx context.Context, args []string, io IO, opts Options) int {
 		// commands, unknown flags, or malformed flag values.
 		ce = &Error{Code: ExitUsage, Err: err}
 	}
+	// Every error ends with the exact command to run next (WP1.1b).
+	next := nextFor(cmd, args, err, ce.Code)
 	if e.JSON {
 		enc := json.NewEncoder(e.Out)
 		enc.SetEscapeHTML(false)
-		_ = enc.Encode(map[string]any{"error": map[string]any{"code": ce.Code, "message": ce.Error()}})
+		_ = enc.Encode(map[string]any{"error": map[string]any{"code": ce.Code, "message": ce.Error(), "next": next}})
 	}
-	fmt.Fprintf(e.Err, "aayu: %v\n", ce)
+	if t := e.Talk(); t.Level == ui.Rich {
+		fmt.Fprintf(e.Err, "%s %v\n  %s %s\n", t.Style(ui.Fail, "✗ aayu:"), ce, t.Style(ui.Muted, "next:"), t.Style(ui.Command, next))
+	} else {
+		fmt.Fprintf(e.Err, "aayu: %v\n  next: %s\n", ce, next)
+	}
+	e.Talk().SignOff(voice)
 	return ce.Code
+}
+
+// commandVoice is the seat that speaks for cmd: a verb's Accountable seat, the
+// Engineering Manager for the home screen, and the registry seat of next and
+// tour. Other plumbing speaks for itself.
+func (e *Env) commandVoice(cmd *cobra.Command) ui.Voice {
+	if cmd == nil {
+		return ui.Voice{}
+	}
+	switch name := cmd.Name(); {
+	case name == "aayu":
+		return e.voice(verbs.EngineeringManager, "home")
+	case name == "next" || name == "tour" || cmd.GroupID == "verbs":
+		if c, ok := verbs.Find(name); ok {
+			return e.voice(c.Seat, name)
+		}
+	}
+	return ui.Voice{}
 }
 
 // globalFlags are the names of the global flags; a registry input with the same
@@ -81,6 +109,10 @@ Exit codes:
 	root.SetErr(e.Err)
 	root.CompletionOptions.DisableDefaultCmd = true
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return &Error{Code: ExitUsage, Err: err} })
+	// `aayu` alone is the home screen (WP1.1b); `aayu --help` still lists everything.
+	root.Args = cobra.NoArgs
+	root.SuggestionsMinimumDistance = 2
+	root.RunE = func(cmd *cobra.Command, _ []string) error { return runHome(cmd.Context(), e) }
 
 	hosts := make([]string, len(verbs.Hosts))
 	for i, h := range verbs.Hosts {
@@ -95,6 +127,7 @@ Exit codes:
 	pf.BoolVarP(&e.Verbose, "verbose", "v", false, "write diagnostics to stderr")
 	pf.BoolVar(&e.CI, "ci", false, "running in CI: accept GITHUB_TOKEN as the human token; bot writes need AAYU_BOT_TOKEN")
 	pf.StringArrayVar(&e.Set, "set", nil, "override a config value for this run, as key=value (repeatable)")
+	pf.BoolVar(&e.Plain, "plain", false, "words only on a terminal: no colour, motion, emoji, or box drawing (also [ui] plain = true, AAYU_PLAIN=1)")
 
 	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
 		e.startTrace(cmd)
@@ -124,9 +157,13 @@ Exit codes:
 		if e.Host != "" && !declaresHost && !slices.Contains(hosts, e.Host) {
 			return Errorf(ExitUsage, "--host %q: want one of %s", e.Host, strings.Join(hosts, ", "))
 		}
+		e.Talk().Intro(e.commandVoice(cmd))
 		return nil
 	}
 
+	_ = root.RegisterFlagCompletionFunc("host", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+		return append(slices.Clone(hosts), "all"), cobra.ShellCompDirectiveNoFileComp
+	})
 	root.AddGroup(&cobra.Group{ID: "verbs", Title: "Verbs:"}, &cobra.Group{ID: "plumbing", Title: "Plumbing commands:"})
 	for _, c := range verbs.Verbs {
 		root.AddCommand(newCommand(e, c, "verbs"))
@@ -251,6 +288,7 @@ func newCommand(e *Env, c verbs.Command, group string) *cobra.Command {
 		}
 		return classify(err)
 	}
+	completeInputs(cmd, c)
 	return cmd
 }
 

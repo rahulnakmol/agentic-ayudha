@@ -112,6 +112,12 @@ const (
 	FieldTarget      = "target"
 	FieldResult      = "result"
 	FieldOwner       = "technical_owner"
+
+	// Grilled spec record (WP5.3b): written by grill, checked by grill and ready.
+	FieldAssumptions   = "assumptions"
+	FieldOpenQuestions = "open_questions"
+	FieldParked        = "parked_ideas"
+	FieldProvenance    = "provenance"
 )
 
 // EvidenceKinds are the kinds of evidence a Completion Goal criterion may name.
@@ -183,6 +189,19 @@ func criteriaFields() []Field {
 		{ID: FieldThreshold, Label: "Threshold", Kind: KindText, RequiredAt: StageReady, Description: "The value the measure must reach."},
 		{ID: FieldScenario, Label: "Scenario", Kind: KindMarkdown, RequiredAt: StageReady, Description: "The user path or request sequence the criteria are observed in."},
 		{ID: FieldEnvironment, Label: "Environment", Kind: KindText, RequiredAt: StageReady, Description: "Where the evidence is captured, with seeded or synthetic data only (V3)."},
+	}
+}
+
+// specRecord is what grill records next to a Completion Goal (WP5.3b): what
+// the spec assumes, what is still open, the ideas the human did not confirm,
+// and where each criterion came from. All optional at Ready; grill and ready
+// check them when Provenance is present (internal/grill).
+func specRecord() []Field {
+	return []Field{
+		{ID: FieldAssumptions, Label: "Assumptions", Kind: KindMarkdown, Description: "What the spec takes as given, one per line; \"none\" when there are none."},
+		{ID: FieldOpenQuestions, Label: "Open questions", Kind: KindMarkdown, Description: "One per line, each \"answered: …\" or \"deferred: … (why it can wait)\"."},
+		{ID: FieldParked, Label: "Parked ideas", Kind: KindMarkdown, Description: "Ideas raised while grilling that the human did not confirm. Out of scope: never built or checked for this item."},
+		{ID: FieldProvenance, Label: "Provenance", Kind: KindMarkdown, Description: "The request in the human's words, how each vague word was resolved, and each criterion's source: stated, confirmed, or default."},
 	}
 }
 
@@ -258,10 +277,10 @@ var Types = []Type{
 			{StageCreate, []Field{
 				{ID: FieldSummary, Label: "Summary", Kind: KindMarkdown, RequiredAt: StageCreate, Description: "As a <who>, I want <what>, so that <why>."},
 			}},
-			{StageReady, append(criteriaFields(),
+			{StageReady, append(append(criteriaFields(),
 				Field{ID: FieldOwner, Label: "Technical Owner", Kind: KindText, Description: "Resolved by ready: the seat's paired human, else the Code Architect twin."},
 				links("Typed links, one per line: depends-on #N."),
-			)},
+			), specRecord()...)},
 			{StageComplete, []Field{
 				{ID: "outcome", Label: "Outcome", Kind: KindMarkdown, RequiredAt: StageComplete, Description: "Merged PR, authoritative pack, and what was observed."},
 			}},
@@ -280,10 +299,10 @@ var Types = []Type{
 				{ID: "expected", Label: "Expected behaviour", Kind: KindMarkdown, RequiredAt: StageCreate},
 				{ID: "actual", Label: "Actual behaviour", Kind: KindMarkdown, RequiredAt: StageCreate},
 			}},
-			{StageReady, append(criteriaFields(),
+			{StageReady, append(append(criteriaFields(),
 				Field{ID: FieldOwner, Label: "Technical Owner", Kind: KindText, Description: "Resolved by ready."},
 				links("Typed links, one per line: caused-by #N, depends-on #N."),
-			)},
+			), specRecord()...)},
 			{StageComplete, []Field{
 				{ID: "outcome", Label: "Outcome", Kind: KindMarkdown, RequiredAt: StageComplete},
 			}},

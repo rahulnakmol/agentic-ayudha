@@ -454,6 +454,10 @@ func TestAuditRerunByteIdentical(t *testing.T) {
 	if code, _, errOut := f.audit(t, "--replay", "audit/none.inputs.json"); code != ExitUsage {
 		t.Fatalf("replay of a missing snapshot: %d %s", code, errOut)
 	}
+	// A key audit does not read leaves the replay byte-identical (Bug #183); one it reads refuses it.
+	if code, again, errOut := run(t, f.env, f.opts, append([]string{"audit"}, append(strings.Fields(replay)[2:], "--set", "ui.theme=mono")...)...); code != 0 || again != stdout {
+		t.Fatalf("replay after a [ui] change: %d %s", code, errOut)
+	}
 	if code, _, errOut := run(t, f.env, f.opts, "audit", "--repo", "o/r", "--replay", snapshot, "--set", "decisions.sla_hours=8"); code != ExitBlocked || !strings.Contains(errOut, "configuration changed") {
 		t.Fatalf("replay under another configuration: %d %s", code, errOut)
 	}
@@ -665,4 +669,48 @@ func section(doc, heading string) string {
 		rest = rest[:i]
 	}
 	return rest
+}
+
+// Bug #183: the audit reports of 12 October 06:35 and 15 October 04:35 UTC replay byte-identically on the current
+// binary from their recorded inputs and the ledger at the commits they name, although keys audit never reads ([team],
+// [ui]) were added since. testdata/audit-replay holds this repository's ledger up to the 15 October report (a git
+// bundle), and its config and LAYERS.md as of that report.
+func TestAuditReplaysRecordedReports(t *testing.T) {
+	src, _ := filepath.Abs(filepath.Join("testdata", "audit-replay"))
+	root := t.TempDir()
+	bare := filepath.Join(root, "origin.git")
+	git(t, root, "clone", "--quiet", "--bare", filepath.Join(src, "ledger.bundle"), bare)
+	// No background maintenance: a push would start it, and its objects/maintenance.lock can vanish while the local
+	// clone below copies the objects directory.
+	git(t, bare, "config", "maintenance.auto", "false")
+	git(t, bare, "config", "gc.auto", "0")
+	seed := filepath.Join(root, "seed")
+	git(t, root, "init", "--quiet", "--initial-branch", "dev", seed)
+	git(t, seed, "commit", "--quiet", "--allow-empty", "-m", "dev")
+	git(t, seed, "push", "--quiet", bare, "dev")
+	dir := filepath.Join(root, "work")
+	git(t, root, "clone", "--quiet", "--branch", "dev", bare, dir)
+	_ = os.MkdirAll(filepath.Join(dir, ".aayudha"), 0o755)
+	for from, to := range map[string]string{"config.toml": ".aayudha/config.toml", "LAYERS.md": "LAYERS.md"} {
+		b, err := os.ReadFile(filepath.Join(src, from))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = os.WriteFile(filepath.Join(dir, filepath.FromSlash(to)), b, 0o644)
+	}
+	g := fake.New(t, "rahulnakmol/agentic-ayudha", "User")
+	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH")}
+	for _, report := range []string{"audit/2026-10-12/audit-20261012T063500Z", "audit/2026-10-15/audit-20261015T043536Z"} {
+		out := filepath.Join(t.TempDir(), "replay.md")
+		code, _, errOut := run(t, env, opts, "audit", "--repo", "rahulnakmol/agentic-ayudha", "--replay", report+".inputs.json", "--out", out)
+		got, _ := os.ReadFile(out)
+		want, err := exec.Command("git", "-C", bare, "show", "ledger:"+report+".md").Output()
+		if err != nil || code != 0 || string(got) != string(want) {
+			t.Errorf("%s: replay exit %d, byte-identical %v (%v): %s", report, code, string(got) == string(want), err, errOut)
+		}
+	}
+	if len(g.Writes()) != 0 {
+		t.Errorf("a replay wrote to GitHub: %v", g.Writes())
+	}
 }

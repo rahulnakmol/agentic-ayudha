@@ -1,0 +1,48 @@
+[
+  {
+    "conclusion": "success",
+    "name": "inspect-live",
+    "steps": [
+      {
+        "conclusion": "success",
+        "name": "Set up job",
+        "number": 1
+      },
+      {
+        "conclusion": "skipped",
+        "name": "Halt check (aayu halt, WP5.7)",
+        "number": 2
+      },
+      {
+        "conclusion": "success",
+        "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "number": 3
+      },
+      {
+        "conclusion": "success",
+        "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+        "number": 4
+      },
+      {
+        "conclusion": "success",
+        "name": "Live inspect on the three acceptance fixtures",
+        "number": 5
+      },
+      {
+        "conclusion": "success",
+        "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+        "number": 9
+      },
+      {
+        "conclusion": "success",
+        "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "number": 10
+      },
+      {
+        "conclusion": "success",
+        "name": "Complete job",
+        "number": 11
+      }
+    ]
+  }
+]

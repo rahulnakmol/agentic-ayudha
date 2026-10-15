@@ -1,0 +1,59 @@
+diff --git a/internal/settings/save.go b/internal/settings/save.go
+new file mode 100644
+index 0000000..6d30cca
+--- /dev/null
++++ b/internal/settings/save.go
+@@ -0,0 +1,30 @@
++package settings
++
++import (
++	"encoding/json"
++	"os"
++)
++
++// Save writes s to path atomically: a temporary file, then a rename.
++func Save(path string, s Settings) error {
++	b, err := json.MarshalIndent(s, "", "  ")
++	if err != nil {
++		return err
++	}
++	tmp := path + ".tmp"
++	if err := os.WriteFile(tmp, b, 0o600); err != nil {
++		return err
++	}
++	_ = os.Rename(tmp, path)
++	return nil
++}
++
++// Load reads settings from path.
++func Load(path string) (Settings, error) {
++	var s Settings
++	b, err := os.ReadFile(path)
++	if err != nil {
++		return s, err
++	}
++	return s, json.Unmarshal(b, &s)
++}
+diff --git a/internal/settings/save_test.go b/internal/settings/save_test.go
+new file mode 100644
+index 0000000..6cbc829
+--- /dev/null
++++ b/internal/settings/save_test.go
+@@ -0,0 +1,17 @@
++package settings
++
++import (
++	"path/filepath"
++	"testing"
++)
++
++func TestSaveLoad(t *testing.T) {
++	p := filepath.Join(t.TempDir(), "s.json")
++	want := Settings{Currency: "EUR", PageSize: 20}
++	if err := Save(p, want); err != nil {
++		t.Fatal(err)
++	}
++	if got, err := Load(p); err != nil || got != want {
++		t.Fatalf("got %+v %v", got, err)
++	}
++}

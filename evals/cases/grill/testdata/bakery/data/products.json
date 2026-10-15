@@ -1,0 +1,242 @@
+[
+ {
+  "sku": "P000",
+  "name": "Sourdough 1",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P001",
+  "name": "Rye 1",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P002",
+  "name": "Baguette 1",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P003",
+  "name": "Croissant 1",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P004",
+  "name": "Pain au chocolat 1",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P005",
+  "name": "Cinnamon bun 1",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P006",
+  "name": "Focaccia 1",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P007",
+  "name": "Brioche 1",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P008",
+  "name": "Bagel 1",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P009",
+  "name": "Scone 1",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P010",
+  "name": "Sourdough 2",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P011",
+  "name": "Rye 2",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P012",
+  "name": "Baguette 2",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P013",
+  "name": "Croissant 2",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P014",
+  "name": "Pain au chocolat 2",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P015",
+  "name": "Cinnamon bun 2",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P016",
+  "name": "Focaccia 2",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P017",
+  "name": "Brioche 2",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P018",
+  "name": "Bagel 2",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P019",
+  "name": "Scone 2",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P020",
+  "name": "Sourdough 3",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P021",
+  "name": "Rye 3",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P022",
+  "name": "Baguette 3",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P023",
+  "name": "Croissant 3",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P024",
+  "name": "Pain au chocolat 3",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P025",
+  "name": "Cinnamon bun 3",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P026",
+  "name": "Focaccia 3",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P027",
+  "name": "Brioche 3",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P028",
+  "name": "Bagel 3",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P029",
+  "name": "Scone 3",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P030",
+  "name": "Sourdough 4",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P031",
+  "name": "Rye 4",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P032",
+  "name": "Baguette 4",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P033",
+  "name": "Croissant 4",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P034",
+  "name": "Pain au chocolat 4",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P035",
+  "name": "Cinnamon bun 4",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P036",
+  "name": "Focaccia 4",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P037",
+  "name": "Brioche 4",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P038",
+  "name": "Bagel 4",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ },
+ {
+  "sku": "P039",
+  "name": "Scone 4",
+  "description": "Synthetic product for the eval fixture.",
+  "price": "3.50"
+ }
+]

@@ -1,0 +1,10 @@
+# The dev, rolling, main ladder (docs/guide/concepts-ladder.md).
+title: Every change climbs the same ladder: dev, then rolling, then main
+direction: down
+pr: A story's pull request
+dev: dev: where every merge lands
+rolling: rolling: canary snapshot, tag rolling-date
+main: main: stable release, tag vX.Y.Z
+pr -> dev: green gate, squash-merge
+dev -> rolling: rolling gate passes
+rolling -> main: stable gate passes

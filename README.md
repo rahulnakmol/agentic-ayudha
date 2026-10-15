@@ -8,6 +8,8 @@ Status: **pre-0.1**. There is no `v*` release yet; v0.1.0 is the first. The buil
 [docs/BUILD-PLAN.md](docs/BUILD-PLAN.md); it is the source of truth for scope and sequencing.
 
 Documentation: <https://rahulnakmol.github.io/agentic-ayudha/>, built from `dev` by `aayu tell docs --site` (WP8.2).
+New to aayudha? The site's guide ([docs/guide](docs/guide/README.md)) walks the journey from an idea to a measured
+release, with a real example.
 
 ## Install
 
@@ -15,6 +17,10 @@ Documentation: <https://rahulnakmol.github.io/agentic-ayudha/>, built from `dev`
 curl -fsSL https://raw.githubusercontent.com/rahulnakmol/agentic-ayudha/main/install.sh | sh
 aayu doctor
 ```
+
+Before v0.1.0 is released that line fails with a 404; install the latest rolling snapshot instead with
+`go install github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@rolling-2026-10-12.4` (Go 1.25 or newer; it installs
+`aayudha`, so add `alias aayu=aayudha`).
 
 `install.sh` installs only a signed `v*` release: it checks the cosign signature of `checksums.txt` against this
 repository's `release.yml` workflow identity, then the archive's SHA-256. It runs on macOS, Linux, and Windows (Git
@@ -54,14 +60,14 @@ fails on drift.
 | `grill` | Interview a human until a work item of the given type is complete and passes validation, then write it as an issue. | Product Strategist | spec | all | bot | cli, skill, mcp |
 | `slice` | Split a Feature into XS-L stories with observable criteria, dependencies, and a layer footprint; close XL items as split. | Product Strategist | plan | all | bot | cli, skill, mcp |
 | `plan` | Plan a story: one checkpoint per layer, contracts, tests, instrumentation, and rollback. | Code Architect | plan | all | bot | cli, skill, mcp |
-| `decide` | Record a Decision with options, evaluation, and recommendation; accept it, supersede it, or file a floor waiver. | Founder | spec | all | human | cli, skill |
+| `decide` | Record a Decision with options, evaluation, and recommendation; accept it, supersede it, or file a floor waiver. | Founder | spec | all | human | cli, skill, mcp |
 | `triage` | Classify intake issues as Feedback, Bug, or Incident by label only; never edits bodies or touches non-intake issues. | Product Strategist | chore | none | bot | cli, skill, mcp |
 | `build` | Build a Ready story or bug in a worktree with checkpoint commits per layer, verify each checkpoint, and open a PR. | AI Native Engineer (+SRE hat) | build | all | bot | cli, skill, mcp |
 | `verify` | Run the deterministic floors (coverage, SAST, secrets, deps, a11y, perf) and record results in a proof pack. | AI Native Engineer (+SRE hat) | chore | all | bot | cli, skill, mcp |
 | `inspect` | Adversarially review a PR against its plan, pack, and criteria; return a structured disposition: merge, fix, or rebuild. | Engineering Manager | review | all | bot | cli, skill, mcp |
 | `ship` | Squash-merge a PR after a green merge gate and a human pass, write the Complete section, and clean up. | Engineering Manager | chore | all | human | cli, skill |
 | `release` | Promote a Release along dev, rolling, main; stamp included stories released and trigger measurement. | DevOps & DevEx Tinkerer | chore | L09 | human | cli, skill |
-| `proof` | Push, get, verify, list, or purge proof packs on the ledger branch. | Quality Architect | chore | all | bot | cli, skill, mcp |
+| `proof` | Push, get, verify, or list proof packs on the ledger branch; comment is the merge gate's pack check. | Quality Architect | chore | all | bot | cli, skill, mcp |
 | `ready` | Validate a work item for Ready, label it status:ready, and post the Ready snapshot; --check is read-only. | Product Strategist | chore | all | bot | cli, skill, mcp |
 | `research` | Gather pinned design references (URLs and IDs only) and user research for a Feature. | UX Researcher & Evolutionist | spec | L01 | bot | cli, skill, mcp |
 | `wireframe` | Produce wireframes for a Feature's states from its research and criteria. | UX Researcher & Evolutionist | build | L01 | bot | cli, skill, mcp |
@@ -107,6 +113,9 @@ fails on drift.
 | `hook` | Entry point for host hooks; hooks call only `aayu hook <name>`. | DevOps & DevEx Tinkerer |
 | `seat` | Add, remove, or list seats and their paired humans. | Founder |
 | `lfs-agent` | git-lfs custom transfer agent for S3/R2 storage. | DevOps & DevEx Tinkerer |
+| `next` | Print the single best next step for this repository: the exact command to run and why. | Engineering Manager |
+| `tour` | Guided first run: check this machine, then set the repository up at Level 1 in a few prompts; refused for agents. | Founder |
+| `completion` | Print the shell completion script, generated from the registry, for bash, zsh, fish, or PowerShell. | DevOps & DevEx Tinkerer |
 
 <!-- END GENERATED: plumbing -->
 

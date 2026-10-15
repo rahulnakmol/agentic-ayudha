@@ -22,11 +22,13 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/autonomy"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/delegate"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ui"
 )
 
 func init() { register("build", runBuild) }
@@ -48,6 +50,8 @@ type BuildResult struct {
 	PRURL      string   `json:"pr_url,omitempty"`
 	Notes      []string `json:"notes,omitempty"`
 	Next       string   `json:"next"`
+	// Delegation is set when another agent builds the story (--delegate, WP5.5b).
+	Delegation *Delegation `json:"delegation,omitempty"`
 }
 
 // Usage is a story's build budget use against [autonomy.budget].
@@ -84,6 +88,10 @@ type CheckpointRecord struct {
 	Verify  string   `json:"verify"` // hold, miss, or error
 	Detail  string   `json:"detail,omitempty"`
 	At      string   `json:"at"`
+	// Model is the builder's model as build resolved it (AAYU_MODEL, else the
+	// host's build lane). inspect reads the builder's family from this record,
+	// which the PR cannot change, never from the commit trailer alone (Bug #171).
+	Model string `json:"model,omitempty"`
 }
 
 // BuildLedgerPath is where a story's build state lives on the ledger.
@@ -213,6 +221,30 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		return block(fmt.Sprintf("cost budget breached: %.2f USD spent, budget %.2f USD", res.Budget.CostUSD, b.CostUSD))
 	}
 
+	// Delegation (WP5.5b): another agent writes the change. A cloud receiver
+	// works on its own branch and this run hands off or syncs; a local one, or a
+	// receiver that returns a diff, writes into an aayu worktree, and the
+	// checkpoint, verify, push, and PR below follow as for any build.
+	var write func(context.Context, string) error
+	var dlg *delegation
+	if in.String("delegate") != "" {
+		if dlg, err = e.newDelegation(ctx, in, c, bot, w, repo, root, n, chk, is.GetBody(), labels); err != nil {
+			return err
+		}
+		var done bool
+		write, done, err = e.delegateStep(ctx, dlg, chk, &res)
+		if done {
+			if eerr := e.emitDelegation(res); eerr != nil && err == nil {
+				err = eerr
+			}
+			return err
+		}
+		if err != nil {
+			return err
+		}
+		res.Worktree = delegate.Worktree(root, n, dlg.receiver)
+	}
+
 	// The worktree: cut from origin/dev, or resumed from the story branch.
 	if _, err := os.Stat(res.Worktree); err != nil {
 		if _, err := run2(ctx, root, "git", "fetch", "--quiet", "origin", dev); err != nil {
@@ -220,7 +252,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		}
 		remote, _ := run2(ctx, root, "git", "ls-remote", "--heads", "origin", res.Branch)
 		switch {
-		case remote != "" && !in.Bool("resume"):
+		case remote != "" && !in.Bool("resume") && dlg == nil:
 			return Errorf(ExitBlocked, "build #%d: %s already exists on origin; `aayu build %d --resume` continues from its last checkpoint", n, res.Branch, n)
 		case remote != "":
 			if _, err := run2(ctx, root, "git", "fetch", "--quiet", "origin", "+refs/heads/"+res.Branch+":refs/remotes/origin/"+res.Branch); err != nil {
@@ -236,20 +268,29 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			}
 		}
 		res.Created = true
-		res.Next = fmt.Sprintf("write the change in %s (tests included; map criteria to tests in .aayudha/evidence/%d.toml), then run `aayu build %d` again to commit a checkpoint", res.Worktree, n, n)
-		if res.Resumed != "" {
-			res.Next = fmt.Sprintf("resumed after checkpoint %s; continue in %s, then run `aayu build %d` again", res.Resumed, res.Worktree, n)
+		if write == nil { // the host's agent writes the change, then runs build again
+			res.Next = fmt.Sprintf("write the change in %s (tests included; map criteria to tests in .aayudha/evidence/%d.toml), then run `aayu build %d` again to commit a checkpoint", res.Worktree, n, n)
+			if res.Resumed != "" {
+				res.Next = fmt.Sprintf("resumed after checkpoint %s; continue in %s, then run `aayu build %d` again", res.Resumed, res.Worktree, n)
+			}
+			if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
+				return err
+			}
+			return e.Emit(res, func(w io.Writer) error {
+				_, err := fmt.Fprintf(w, "#%d %s: worktree %s on %s (leased by %s until %s)\n  next: %s\n", n, chk.Title, res.Worktree, res.Branch, res.Lease.Holder, res.Lease.Expires.UTC().Format(time.RFC3339), res.Next)
+				return err
+			})
 		}
-		if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
-			return err
-		}
-		return e.Emit(res, func(w io.Writer) error {
-			_, err := fmt.Fprintf(w, "#%d %s: worktree %s on %s (leased by %s until %s)\n  next: %s\n", n, chk.Title, res.Worktree, res.Branch, res.Lease.Holder, res.Lease.Expires.UTC().Format(time.RFC3339), res.Next)
-			return err
-		})
-	}
-	if in.Bool("resume") {
+	} else if in.Bool("resume") {
 		res.Resumed = lastTrailer(ctx, res.Worktree, dev)
+	}
+
+	if write != nil {
+		if err := write(ctx, res.Worktree); err != nil {
+			dlg.event(e.Now(), dlgFailed, clipText(err.Error(), 200))
+			_ = e.saveDelegation(ctx, dlg)
+			return Errorf(ExitExternal, "build #%d --delegate %s: %v", n, dlg.receiver, err)
+		}
 	}
 
 	// A checkpoint: commit what the agent wrote, then verify it.
@@ -276,18 +317,38 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		if attempt > 1 {
 			msg += fmt.Sprintf("\nAayudha-Attempt: %d", attempt)
 		}
-		if m := e.builderModel(); m != "" {
-			msg += "\nAayudha-Model: " + m
+		model := e.builderModel()
+		switch {
+		case dlg != nil:
+			msg += "\nAayudha-Delegate: " + dlg.receiver
+			if model = dlg.model(); model != "" {
+				msg += "\nAayudha-Model: " + model
+			}
+		case model != "":
+			msg += "\nAayudha-Model: " + model
 		}
 		if _, err := run2(ctx, res.Worktree, "git", "commit", "--quiet", "--signoff", "-m", msg); err != nil {
 			return Wrap(ExitExternal, err)
 		}
 		res.Commit, _ = run2(ctx, res.Worktree, "git", "rev-parse", "HEAD")
-		rec := CheckpointRecord{K: k, N: total, Attempt: attempt, Commit: res.Commit, Layers: layers, At: now.Format(time.RFC3339)}
+		rec := CheckpointRecord{K: k, N: total, Attempt: attempt, Commit: res.Commit, Layers: layers, At: now.Format(time.RFC3339), Model: model}
 		if rec.Layers == nil {
 			rec.Layers = []string{}
 		}
+		on := ""
+		if len(layers) > 0 {
+			on = " on " + strings.Join(layers, ", ")
+		}
+		vp := e.progress(fmt.Sprintf("Checkpoint %s%s: verifying the floors", res.Checkpoint, on))
 		hold, detail, verr := e.checkpointVerify(ctx, res.Worktree)
+		switch {
+		case verr != nil:
+			vp.Done(ui.StatusWarn, "verify could not run")
+		case hold:
+			vp.Done(ui.StatusPass, "floors hold")
+		default:
+			vp.Done(ui.StatusFail, "floor miss: "+detail)
+		}
 		switch {
 		case verr != nil:
 			rec.Verify, rec.Detail = "error", verr.Error()
@@ -324,7 +385,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 				_, err := fmt.Fprintf(w, "#%d: checkpoint %s (attempt %d) committed (%s); verify: floor miss: %s\n  next: %s\n", n, res.Checkpoint, attempt, short(res.Commit), detail, res.Next)
 				return err
 			})
-			return Errorf(ExitFloor, "checkpoint %s: floor miss: %s", res.Checkpoint, detail)
+			return WithNext(Errorf(ExitFloor, "checkpoint %s: floor miss: %s", res.Checkpoint, detail), fmt.Sprintf("aayu build %d", n))
 		}
 	}
 	ahead, _ := run2(ctx, res.Worktree, "git", "rev-list", "--count", "origin/"+dev+"..HEAD")
@@ -334,7 +395,14 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		}
 		return Errorf(ExitBlocked, "build #%d: nothing to commit yet in %s", n, res.Worktree)
 	}
-	if err := e.publishBuild(ctx, c, bot.Token.Value, root, repo, dev, n, chk, &res); err != nil {
+	pp := e.progress(fmt.Sprintf("Pushing %s and opening the pull request", res.Branch))
+	perr := e.publishBuild(ctx, c, bot.Token.Value, root, repo, dev, n, chk, &res)
+	if perr != nil {
+		pp.Done(ui.StatusFail, perr.Error())
+	} else {
+		pp.Done(ui.StatusPass, fmt.Sprintf("PR #%d", res.PR))
+	}
+	if err := perr; err != nil {
 		// The checkpoint is committed: record it even though the push or the PR
 		// failed, so the next run (or --resume) continues after it.
 		if serr := e.saveBuild(ctx, c, w, repo, n, &st, &res); serr != nil {
@@ -344,6 +412,14 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	}
 	if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
 		return err
+	}
+	if dlg != nil {
+		dlg.state.PR = res.PR
+		dlg.event(e.Now(), dlgPROpen, fmt.Sprintf("checkpoint %s pushed to PR #%d", res.Checkpoint, res.PR))
+		dlg.fill(res.Delegation)
+		if err := e.saveDelegation(ctx, dlg); err != nil {
+			return err
+		}
 	}
 	// The actions segment of this checkpoint goes to the ledger (WP1.5), pushed with the build's own token.
 	if err := e.checkpoint(bot.Token); err != nil {
@@ -383,6 +459,9 @@ func (e *Env) publishBuild(ctx context.Context, c *github.Client, token, root, r
 	} else {
 		title := "feat: " + strings.ToLower(chk.Title[:1]) + chk.Title[1:]
 		body := fmt.Sprintf("Refs #%d\n\nBuilt with `aayu build` (WP5.5) from the Ready snapshot of #%d (body hash `%s`), one verified checkpoint commit per layer. The merge gate verifies it on the base branch's definition; `aayu ship` merges it after a human pass.\n", n, n, chk.BodyHash[:12])
+		if d := res.Delegation; d != nil {
+			body = fmt.Sprintf("Refs #%d\n\nBuilt by %s (%s, `aayu build --delegate`, WP5.5b) from the delegation brief of #%d's Ready snapshot (body hash `%s`). aayu committed, verified, and pushed the change; the receiver has no merge rights. The merge gate and inspect review it; `aayu ship` merges it after a human pass.\n", n, d.Receiver, d.Mode, n, chk.BodyHash[:12])
+		}
 		var pr *gh.PullRequest
 		if _, err := c.Write(ctx, actions.Action{Kind: "github.pull.create", Target: repo, Story: fmt.Sprintf("#%d", n),
 			Request: &actions.Request{Method: http.MethodPost, Path: "/repos/" + repo + "/pulls"}, Payload: map[string]any{"head": res.Branch, "base": dev, "title": title}},

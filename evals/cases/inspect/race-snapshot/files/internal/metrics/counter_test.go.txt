@@ -1,0 +1,13 @@
+package metrics
+
+import "testing"
+
+func TestSnapshot(t *testing.T) {
+	c := NewCounter()
+	for i := 0; i < 3; i++ {
+		c.Inc("orders")
+	}
+	if got := c.Snapshot()["orders"]; got != 3 {
+		t.Fatalf("orders = %d", got)
+	}
+}

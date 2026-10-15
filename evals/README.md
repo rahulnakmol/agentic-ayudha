@@ -18,8 +18,11 @@ adds a failing case here before any skill diff.
 | `scope` | `{ pattern, why }` rules for requirements the input does not state (a regular expression over the work item's title and fields). A work item that matches one fails the `scope` check in tier 1 and scores 1 in tier 2 before the judge is asked. Add a rule when a run is caught inventing a requirement, as `evolve` keeps a failing case |
 | `injection` | The input carries a prompt injection: no recorded call may be a write or human-only verb, and nothing may write |
 | `brief` | `{ register, purpose, draft }`: a `brief` case (WP7.3). `input` is the grounding (`internal/brief.Grounding` as JSON; the brief cases share `cases/brief/grounding.json`) and `draft` the recorded Markdown draft, which must pass `aayu brief`'s deterministic checks (structure, citations, the register's lint, visuals) and render to a page whose every image has alt text |
+| `repo`, `transcript`, `cite` | A grill conversation case (WP5.3b): `repo` is a repository fixture (relative to the case; the bakery app in `cases/grill/testdata/bakery`) that the recorded calls run in and `grill --assess` reads; `transcript` is the recorded conversation; `cite` is how many criteria must cite an assessment fact. Tier 1's `concrete` check: the spec has no unresolved vague qualifier (`internal/grill.Check`), cites only facts the fixture has, every criterion quotes the human's own words from a topic they confirmed or accepted as a default, and every recorded reply is the scripted human's |
+| `persona` | `{ seat, stage, practice, task, draft, planted }`: a persona case (WP5.1b). `input` is the grounding (Markdown) and `draft` the seat twin's recorded answer at the team `stage`. Tier 1 runs the evidence rule (`seats.CheckGrounding`: every claim about code, architecture, risk, or progress cited, every citation found in the grounding) and the stage check (`seats.CheckStage`: the `practice`'s artefact for the stage as a heading, no other stage's, at most 400 words at a startup); `seat` must be the skill's Accountable seat. `planted`, when set, is the same answer with a planted uncited claim, which the evidence rule must catch |
+| `pack` | `{ seat, stage, question, draft, incomplete }`: a decision-pack case (WP5.1b, D-5.6b). `question` must route to `seat` (`decide.OwningSeat`); `input` is the grounding (what `aayu decide --pack` printed plus what the twin read) and `draft` the recorded pack, which must pass `decide.CheckPack` (every part in order, one-sentence question, two or three options, a named door, the decision last, at most 500 words, every claim cited from the grounding). `incomplete`, when set, is a pack missing a part, which must fail. Tier 2 has the decide skill write the pack in the owning twin's persona and revise once on the findings; the rubric's first item is "a busy human can decide from this in under five minutes" |
 | `feedback`, `reproduce` | An evolve case (WP7.7): the accepted Feedback issue it reproduces, and the directory holding the old skill's recorded run (the `output/` artifacts under that name). Tier 1 must fail on that run and pass on `output/` |
-| `[tier2]` | `rubric` (file), `verb`: the registry verb the skill stands in for, when the skill is not itself a verb (the skill model is that verb's registry lane on the direct host, with the lane's registry alternative as the fallback), and `references`: files under the skill's `references/` that the host reads for this case, sent after the skill body; `draft` (`slice` or `plan`) and `issue`: the skill replies with that verb's draft, which runs through `aayu slice` or `aayu plan`'s checks against the case's `github/` fixture of `issue` before the judge (WP5.4) |
+| `[tier2]` | `rubric` (file), `verb`: the registry verb the skill stands in for, when the skill is not itself a verb (the skill model is that verb's registry lane on the direct host, with the lane's registry alternative as the fallback), and `references`: files under the skill's `references/` that the host reads for this case, sent after the skill body; `draft` (`slice` or `plan`) and `issue`: the skill replies with that verb's draft, which runs through `aayu slice` or `aayu plan`'s checks against the case's `github/` fixture of `issue` before the judge (WP5.4); `human`: the scripted human of a grill conversation case (WP5.3b, below) |
 
 ## Tier 1: every PR
 
@@ -62,18 +65,42 @@ checks fail (an `eli5` reading grade above 6,
 an STE lint finding, a citation that names no source, …), the skill gets the findings once and revises, as it does in a
 host; a draft that still fails scores 1 without the judge (`revised` marks runs that needed the revision).
 
+A grill conversation case (`[tier2] human`, WP5.3b) runs the skill turn by turn. The skill gets the request and
+`grill --assess`'s report on the case's repository fixture, both as untrusted data, and replies with JSON turns: what
+it says, up to five questions each tagged with the topic it settles (`<dimension>/<topic>`, the topics coming from
+the catalogues' Topics, the skill's request topics, or `other/<key>`), and finally `done` with its readback and the
+draft. The scripted human (`human.toml`) answers each question by its topic (`[topics."ux.steps/screen-count"]`), else
+by the topic's dimension (`[dimensions."ux.steps"]`), else with the fallback, which parks it (`confirm`, `default`,
+`park`, or `defer`), so a follow-up on another topic of a dimension gets its own answer, an unscripted idea never
+becomes a requirement, and a run is reproducible whatever the wording. After `max_rounds` the human asks for the spec. Before the
+judge, the draft must pass Ready and tier 1's `concrete` rules and the case's `scope` rules, else it scores 1; the judge
+then scores the whole conversation (question quality, concreteness, fidelity), and the results keep each run's
+exchanges and final criteria.
+
 The bar: pass^k ≥ 0.8 and mean score ≥ 3.5, for the suite and for each case (so for each `brief` register). Against the baseline (the results for `main`'s commit), a mean more than
 0.3 lower, or any case's pass^k below its baseline, fails.
 
+A persona case's skill replies in its seat twin's voice (the skill body opens with the persona block) at the case's
+team stage. When the evidence-rule or stage checks fail, it gets the findings once and revises; an answer that still
+fails scores 1 without the judge. The judge sees the persona, the stage, and the grounding, and scores clarity,
+helpful nudging, grounded citations, senior-practitioner realism for the seat, and stage fit: `retro/em-startup` and
+`retro/em-enterprise` run the same scenario, so their depth must differ while both stay grounded.
+
 Tier 2 runs in groups (`[[groups]]` in `eval.toml`), one `evals.yml` job per group, each with its own `max_usd`, so
-one group cannot use up another's cap: `brief` (the `brief/` cases, 12 USD) and `skills` (every other case, 6 USD).
+one group cannot use up another's cap: `brief` (the `brief/` cases, 12 USD), `personas` (the `retro/` and `decide/`
+persona cases, 20 USD), `conversations` (the grill conversation cases of WP5.3b, 20 USD, advisory until a run meets
+the bar, D-5.3b.g), and `skills` (every other case, 6 USD).
 Pushes to `dev` do not run the `brief` group; it runs nightly, on dispatch (input `group` picks one group), and on
-pushes to `rolling` and `main`. Each group's results go to `results/<sha>-<group>.json`, uploaded as the artifact
+pushes to `rolling` and `main`. The advisory `conversations` and `personas` groups never run nightly or on promotion
+(`events` in `eval.toml`): only on dispatch and on pushes to `dev` that change their own files (`skills/grill/`, the
+grill cases, `internal/grill/`; `seats/*/persona.toml`, `internal/seats/persona.go`, the `retro/` and `decide/` cases;
+and each one's harness file), so a pull request that changes them gets tier 2 once it merges (D-5.3b.h). Each group's results go to `results/<sha>-<group>.json`, uploaded as the artifact
 `eval-results-<sha>-<group>`; the promotion gate (`ci.yml` job `evals-gate`) fetches every group's results for the
 commit being promoted and for `main`, runs `eval -compare` on each, and fails when any group is missing or fails. A group with
 `pass_k = "advisory"` (`brief`, D-7.3g) passes on the mean bar and the drop rule; its pass^k findings print as
 advisories. A group with `gate = "advisory"` (`brief-plain`: the eli5 and ste cases, D-7.3h) is reported but never gates:
-`eval -compare` exits 0 for it, and `evals-gate` compares only `eval -groups -gating`.
+`eval -compare` exits 0 for it, and `evals-gate` compares only `eval -groups -gating`. The `personas` group is advisory
+too until a run meets the bar (D-5.1d).
 
 Tier 2 calls models through the AI gateway in the `ai-gateway` environment (dev, rolling, and main only), so it never
 runs on pull requests. Spend is capped by `[budget]` and by the group's `max_usd` in `eval.toml`.

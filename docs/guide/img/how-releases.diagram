@@ -1,0 +1,16 @@
+# Releases and the supply chain (docs/guide/how-releases.md).
+title: Every rung of the ladder is gated, and only a signed v* release reaches a user's machine
+direction: down
+dev: dev: reviewed pull requests merge here
+cand: promote/… branch holds the exact merge commit
+gate: ci.yml gate on the candidate
+rolling: rolling, tagged rolling-<date>
+main: main, annotated vX.Y.Z tag
+rel: release.yml builds, signs, attests
+user: install.sh checks signature, then SHA-256
+dev -> cand: aayu release
+cand -> gate: gate=rolling|stable
+gate -> rolling: green: fast-forward
+rolling -> main: stable gate green
+main -> rel: v* tag push
+rel -> user: signed assets

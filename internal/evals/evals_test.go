@@ -48,8 +48,8 @@ func TestTier1GrillEveryType(t *testing.T) {
 	}
 	covered := map[string]bool{}
 	for _, c := range cases {
-		if c.Skill != "grill" || len(c.Calls) == 0 || len(c.Calls[0]) < 2 || c.Calls[0][0] != "grill" {
-			continue
+		if c.Skill != "grill" || c.Transcript != "" || len(c.Calls) == 0 || len(c.Calls[0]) < 2 || c.Calls[0][0] != "grill" {
+			continue // conversation cases (WP5.3b) start with --assess; TestTier1 runs them
 		}
 		typ := c.Calls[0][1]
 		ty, ok := workitems.FindType(typ)
@@ -602,6 +602,104 @@ func TestTier2BriefRevisesOnceThenJudges(t *testing.T) {
 	}
 }
 
+// TestTier2PersonaRevisesOnceThenJudges (WP5.1b): the retro skill speaks as the
+// Engineering Manager twin; a reply with an uncited claim gets the evidence-rule
+// findings once and revises; one that still fails, or carries the wrong stage's
+// artefact, scores 1 without the judge; the judge sees the persona and stage.
+func TestTier2PersonaRevisesOnceThenJudges(t *testing.T) {
+	all, err := LoadCases(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []Case
+	for _, c := range all {
+		if c.ID == "retro/em-startup" {
+			cases = append(cases, c)
+		}
+	}
+	good, err := os.ReadFile(filepath.Join(root, "evals", "cases", "retro", "em-startup", "output", "retro.md"))
+	if err != nil || len(cases) != 1 {
+		t.Fatalf("case: %v", err)
+	}
+	uncited := string(good) + "\nThe ledger package already stores the kind elsewhere, so the migration was small.\n"
+	ceremony := strings.Replace(string(good), "# Retro note", "# Retrospective memo", 1)
+	judge := models.Response{Text: `{"score": 5, "reason": "grounded"}`}
+	replies := []models.Response{{Text: uncited}, {Text: string(good)}, judge}
+	for i := 0; i < 3; i++ {
+		replies = append(replies, models.Response{Text: string(good)}, judge)
+	}
+	replies = append(replies, models.Response{Text: ceremony}, models.Response{Text: ceremony})
+	fake := &models.Fake{Replies: replies}
+	h := harness(t, fake, "gpt-6.1-sol")
+	res, err := h.Tier2(context.Background(), cases, "abc", "dev", time.Unix(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs := res.Cases[0].Runs
+	if len(fake.Requests) != 11 || !runs[0].Revised || runs[0].Status != RunPass || runs[1].Revised || runs[4].Score != 1 ||
+		!strings.Contains(runs[4].Floor, `carries the enterprise artefact "Retrospective memo"`) {
+		t.Fatalf("%d calls, runs %+v", len(fake.Requests), runs)
+	}
+	first, revise, judged := fake.Requests[0], fake.Requests[1], fake.Requests[2]
+	if !strings.Contains(first.System, "## Voice: Athena, the Engineering Manager twin") || !strings.Contains(first.System, "Team stage for this run: startup") ||
+		!strings.Contains(first.Messages[0].Content, `<untrusted source="grounding">`) {
+		t.Error("the skill prompt lacks the persona block, the stage, or the wrapped grounding")
+	}
+	if len(revise.Messages) != 3 || !strings.Contains(revise.Messages[2].Content, "uncited claim") {
+		t.Errorf("revision request: %+v", revise.Messages)
+	}
+	if judged.Model != "gpt-6.1-sol" || !strings.Contains(judged.Messages[0].Content, `startup artefact "Retro note"`) ||
+		!strings.Contains(judged.Messages[0].Content, "Speak and work as Athena") {
+		t.Errorf("judge request: %s %.300s", judged.Model, judged.Messages[0].Content)
+	}
+}
+
+// TestTier2PackRevisesOnceThenJudges (WP5.1b, D-5.6b): the decide skill writes
+// the pack in the owning twin's persona (the Code Architect's for a design
+// question); a pack without its pre-mortem is sent back once with the finding.
+func TestTier2PackRevisesOnceThenJudges(t *testing.T) {
+	all, err := LoadCases(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []Case
+	for _, c := range all {
+		if c.ID == "decide/architect-tombstone-kind" {
+			cases = append(cases, c)
+		}
+	}
+	good, err := os.ReadFile(filepath.Join(root, "evals", "cases", "decide", "architect-tombstone-kind", "output", "pack.md"))
+	if err != nil || len(cases) != 1 {
+		t.Fatalf("case: %v", err)
+	}
+	noPremortem := strings.Replace(string(good), "## Pre-mortem", "## Risks", 1)
+	judge := models.Response{Text: `{"score": 4, "reason": "decidable"}`}
+	replies := []models.Response{{Text: noPremortem}, {Text: string(good)}, judge}
+	for i := 0; i < 4; i++ {
+		replies = append(replies, models.Response{Text: string(good)}, judge)
+	}
+	fake := &models.Fake{Replies: replies}
+	h := harness(t, fake, "gpt-6.1-sol")
+	res, err := h.Tier2(context.Background(), cases, "abc", "dev", time.Unix(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs := res.Cases[0].Runs
+	if len(fake.Requests) != 11 || !runs[0].Revised || runs[0].Status != RunPass || runs[1].Revised || res.Cases[0].Mean != 4 {
+		t.Fatalf("%d calls, runs %+v", len(fake.Requests), runs)
+	}
+	first, revise, judged := fake.Requests[0], fake.Requests[1], fake.Requests[2]
+	if !strings.Contains(first.System, "Speak and work as Daedalus, the Code Architect twin") || !strings.Contains(first.Messages[0].Content, "The human is stuck and asks:") {
+		t.Errorf("skill prompt: %.300s", first.System)
+	}
+	if !strings.Contains(revise.Messages[2].Content, `missing part "## Pre-mortem"`) {
+		t.Errorf("revision request: %s", revise.Messages[2].Content)
+	}
+	if !strings.Contains(judged.Messages[0].Content, "Daedalus, the Code Architect twin, at the scaleup stage") {
+		t.Errorf("judge request: %.300s", judged.Messages[0].Content)
+	}
+}
+
 // The grill cases' tier 2 (WP5.3) runs the grill skill with its question set
 // appended, on grill's own lane: the recorded Goal scores against the rubric.
 func TestTier2GrillReferences(t *testing.T) {
@@ -724,9 +822,33 @@ func TestGroups(t *testing.T) {
 	if err != nil || p.MaxUSD != 6 {
 		t.Fatalf("brief-plain group: %v, cap %v", err, p.MaxUSD)
 	}
+	pg, personas, err := cfg.ForGroup("personas", all)
+	if err != nil || pg.MaxUSD != 20 || len(personas) != 4 {
+		t.Fatalf("personas group: %v, cap %v, %d cases", err, pg.MaxUSD, len(personas))
+	}
+	rv, review, err := cfg.ForGroup("review", all)
+	if err != nil || rv.MaxUSD != 20 || rv.K != 2 {
+		t.Fatalf("review group: %v, cap %v, k %d", err, rv.MaxUSD, rv.K)
+	}
+	// D-5.3b.g: the grill conversations have their own capped, advisory group; skills is back to 6 USD without them.
+	cg, convs, err := cfg.ForGroup("conversations", all)
+	if err != nil || cg.MaxUSD != 20 || len(convs) != 2 || convs[0].ID != "grill/bakery-ux" || convs[1].ID != "grill/search-fast" || cfg.Gates("conversations") {
+		t.Fatalf("conversations group: %v, cap %v, %d cases, gates %v", err, cg.MaxUSD, len(convs), cfg.Gates("conversations"))
+	}
+	// D-5.3b.h: the advisory conversation and persona groups never run nightly (evals.yml scopes their pushes to dev).
+	for _, name := range []string{"conversations", "personas"} {
+		if g, _ := cfg.Group(name); g.RunsOn("schedule") || !g.RunsOn("push") || !g.RunsOn("workflow_dispatch") {
+			t.Errorf("%s group events: %v", name, g.Events)
+		}
+	}
 	o, other, err := cfg.ForGroup("skills", all)
-	if err != nil || o.MaxUSD != 6 || len(brief)+len(plain)+len(other) != len(all) {
-		t.Fatalf("skills group: %v, cap %v, %d+%d+%d of %d cases", err, o.MaxUSD, len(brief), len(plain), len(other), len(all))
+	if err != nil || o.MaxUSD != 8 || o.K != cfg.K || !cfg.Gates("skills") || len(brief)+len(plain)+len(personas)+len(review)+len(convs)+len(other) != len(all) {
+		t.Fatalf("skills group: %v, cap %v, %d+%d+%d+%d+%d+%d of %d cases", err, o.MaxUSD, len(brief), len(plain), len(personas), len(review), len(convs), len(other), len(all))
+	}
+	for _, c := range other {
+		if c.Tier2 != nil && c.Tier2.Human != "" {
+			t.Errorf("conversation case %s in the skills group", c.ID)
+		}
 	}
 	for _, c := range brief {
 		if !strings.HasPrefix(c.ID, "brief/") || strings.HasPrefix(c.ID, "brief/eli5-") || strings.HasPrefix(c.ID, "brief/ste-") {
@@ -1101,5 +1223,245 @@ func TestCompareSuitePassK(t *testing.T) {
 	}
 	if v, reasons := Compare(one, run(nil, nil), cfg); v != Fail || !strings.Contains(strings.Join(reasons, "\n"), "fell below the baseline") {
 		t.Fatalf("a case falling below its baseline: %s %v", v, reasons)
+	}
+}
+
+// conversationCase copies a grill conversation case so a test can break its
+// recorded run; the repository fixture stays where it is.
+func conversationCase(t *testing.T, id string) Case {
+	t.Helper()
+	c := copyCase(t, id)
+	c.Repo, _ = filepath.Abs(filepath.Join(root, "evals", "cases", "grill", "testdata", "bakery"))
+	return c
+}
+
+func editJSON(t *testing.T, path string, v any, edit func()) {
+	t.Helper()
+	if err := readJSON(path, v); err != nil {
+		t.Fatal(err)
+	}
+	edit()
+	b, _ := json.Marshal(v)
+	if err := os.WriteFile(path, b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// WP5.3b tier 1: the recorded bakery conversation passes, and each way a
+// grilled spec goes wrong fails the concrete check with its reason: a vague
+// criterion, a parked idea or a parked topic turned into a criterion, a
+// citation of a fact the repository does not have, a quote the human never
+// said (each of several quotes, an elided quote being its parts), a
+// criterion from a topic or dimension the human was never asked about, a
+// placement (which screen, above or below what) the human's words do not
+// state, a default the human did not accept, and a recording whose replies
+// are not the script's.
+func TestTier1GrillConversation(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		issue func(it *workitems.Item)
+		tr    func(tr *Transcript)
+		want  []string
+	}{
+		{"recorded", nil, nil, nil},
+		{"vague criterion", func(it *workitems.Item) {
+			it.Fields["completion_goal"] = strings.Replace(it.Fields["completion_goal"], "a screen of its own with the order number and the chosen pickup time", "the confirmation feels polished", 1)
+		}, nil, []string{`criterion 2 says "polished" with nothing to observe`}},
+		{"parked idea leaks", func(it *workitems.Item) {
+			it.Fields["completion_goal"] += "\n7. [screenshot] state: the order confirmation; expected: a loyalty stamp card with 1 of 10 stamps"
+			it.Fields["provenance"] += "\n7. confirmed (other): \"That is not part of what I asked for; park it.\""
+		}, nil, []string{`parked idea "loyalty stamp card" appears in the Completion Goal`, "criterion 7 comes from other, which the human park"}},
+		{"unknown fact", func(it *workitems.Item) {
+			it.Fields["provenance"] = strings.Replace(it.Fields["provenance"], "facts: gap:error:/order", "facts: gap:error:/checkout", 1)
+		}, nil, []string{`criterion 4 cites "gap:error:/checkout"`}},
+		{"words never said", func(it *workitems.Item) {
+			it.Fields["provenance"] = strings.Replace(it.Fields["provenance"], `"Three screens at most"`, `"two screens are plenty"`, 1)
+		}, nil, []string{`criterion 1 quotes "two screens are plenty", which the human never said`}},
+		{"one of two quotes never said", func(it *workitems.Item) {
+			it.Fields["provenance"] = strings.Replace(it.Fields["provenance"], `"they see an order number and the pickup time"`, `"they get a text message"`, 1)
+		}, nil, []string{`criterion 2 quotes "they get a text message", which the human never said`}},
+		{"elided quote", func(it *workitems.Item) {
+			it.Fields["provenance"] = strings.Replace(it.Fields["provenance"], `"Three screens at most"`, `"Five screens is too many... Three screens at most"`, 1)
+		}, nil, nil},
+		{"unasked topic", func(it *workitems.Item) {
+			it.Fields["provenance"] = strings.Replace(it.Fields["provenance"], "6. confirmed (ux.consistency/tokens-and-components)", "6. confirmed (ux.consistency/new-components)", 1)
+		}, nil, []string{"criterion 6 comes from ux.consistency/new-components, which the human was never asked about"}},
+		{"unasked dimension", func(it *workitems.Item) {
+			it.Fields["provenance"] = strings.Replace(it.Fields["provenance"], "6. confirmed (ux.consistency/tokens-and-components)", "6. confirmed (ux.performance)", 1)
+		}, nil, []string{"criterion 6 comes from ux.performance, which the human was never asked about"}},
+		{"placement the human never confirmed", func(it *workitems.Item) {
+			it.Fields["completion_goal"] = strings.Replace(it.Fields["completion_goal"], "are shown on the review screen before paying", "are shown above the \"Pay now\" button", 1)
+		}, nil, []string{`criterion 3 decides where something goes ("above")`}},
+		{"confirmation placed on a screen the human did not choose", func(it *workitems.Item) {
+			it.Fields["completion_goal"] = strings.Replace(it.Fields["completion_goal"], "expected: a screen of its own with the order number", "expected: on the review screen, the order number", 1)
+			it.Fields["provenance"] = strings.Replace(it.Fields["provenance"], `"The confirmation is its own screen after paying" / `, "", 1)
+		}, nil, []string{`criterion 2 decides where something goes ("on the review screen")`}},
+		{"default not accepted", func(it *workitems.Item) {
+			it.Fields["provenance"] = strings.Replace(it.Fields["provenance"], "1. confirmed (ux.steps/screen-count)", "1. default (ux.steps/screen-count)", 1)
+		}, nil, []string{"criterion 1 claims an accepted default on ux.steps/screen-count"}},
+		{"not the script's replies", nil, func(tr *Transcript) {
+			tr.Exchanges[0].Answers[1] = Answer{Kind: KindConfirm, Text: "Five screens is fine."}
+		}, []string{"exchange 1 question 2 (ux.steps/screen-count): the recorded answer is not the script's"}},
+	} {
+		c := conversationCase(t, "grill/bakery-ux")
+		if tc.issue != nil {
+			var it workitems.Item
+			editJSON(t, filepath.Join(c.Dir, "output", "issue.json"), &it, func() { tc.issue(&it) })
+		}
+		if tc.tr != nil {
+			var tr Transcript
+			editJSON(t, filepath.Join(c.Dir, "output", "transcript.json"), &tr, func() { tc.tr(&tr) })
+		}
+		c.Calls = nil // the recorded calls replay the recorded body; this test breaks the artifacts
+		r := Tier1(context.Background(), root, c, aayudha.Assets)
+		if len(tc.want) == 0 {
+			if !r.Passed() {
+				t.Errorf("%s: %s", tc.name, r)
+			}
+			continue
+		}
+		if status(r, "concrete") != Fail {
+			t.Errorf("%s: the concrete check passed:\n%s", tc.name, r)
+		}
+		for _, w := range tc.want {
+			if !strings.Contains(r.String(), w) {
+				t.Errorf("%s: missing %q in:\n%s", tc.name, w, r)
+			}
+		}
+	}
+}
+
+// conversationReplies are the recorded bakery conversation as fake model
+// replies: each turn as the skill sent it, then the judge's score.
+func conversationReplies(t *testing.T, c Case, edit func(d map[string]any)) []models.Response {
+	t.Helper()
+	var tr Transcript
+	if err := readJSON(filepath.Join(c.Dir, "output", "transcript.json"), &tr); err != nil {
+		t.Fatal(err)
+	}
+	var d map[string]any
+	if err := readJSON(filepath.Join(c.Dir, "output", "issue.json"), &d); err != nil {
+		t.Fatal(err)
+	}
+	delete(d, "number")
+	d["open_questions"] = []string{}
+	if edit != nil {
+		edit(d)
+	}
+	var out []models.Response
+	for _, x := range tr.Exchanges {
+		turn := map[string]any{"say": x.Say, "done": x.Done}
+		if x.Done {
+			turn["draft"] = d
+		} else {
+			turn["questions"] = x.Questions
+		}
+		b, _ := json.Marshal(turn)
+		out = append(out, models.Response{Text: string(b)})
+	}
+	return append(out, models.Response{Text: `{"score": 5, "reason": "grounded questions, concrete and faithful spec"}`})
+}
+
+// WP5.3b tier 2: a conversation case runs the skill turn by turn. The skill
+// gets the request and the assessment of the case's repository as untrusted
+// data, the scripted human answers each question by its topic (else its
+// dimension, else the fallback), and the
+// final draft must be concrete and faithful before the judge sees the whole
+// conversation. A draft that turns a parked topic into a criterion scores 1
+// without the judge; a skill that keeps asking after the human's last round
+// scores 1.
+func TestTier2GrillConversation(t *testing.T) {
+	c := conversationCase(t, "grill/bakery-ux")
+	fake := &models.Fake{Replies: conversationReplies(t, c, nil)}
+	h := harness(t, fake, "gpt-6.1-sol")
+	h.Config.K = 1
+	res, err := h.Tier2(context.Background(), []Case{c}, "abc", "dev", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := res.Cases[0].Runs[0]
+	if run.Score != 5 || len(fake.Requests) != 5 || run.Transcript == nil || len(run.Transcript.Exchanges) != 4 || !strings.Contains(run.Transcript.Criteria, "at most 3 screens") {
+		t.Fatalf("run: %+v, %d model calls", run, len(fake.Requests))
+	}
+	first := fake.Requests[0].Messages[0].Content
+	if !strings.Contains(first, `<untrusted source="eval-input">`) || !strings.Contains(first, `<untrusted source="repo">`) || !strings.Contains(first, `"id": "gap:error:/order"`) {
+		t.Fatalf("the skill did not get the request and the assessment as untrusted data:\n%s", first)
+	}
+	second := fake.Requests[1].Messages
+	if got := second[len(second)-1].Content; !strings.HasPrefix(got, "1. A customer picks bread") || !strings.Contains(got, "3. When a payment fails, keep the basket") {
+		t.Fatalf("the scripted human's answers to round 1:\n%s", got)
+	}
+	// Round 2 by topic (confirmation placement), by dimension (ux.platforms/widths), and round 3 a request topic and the fallback.
+	third := fake.Requests[2].Messages
+	if got := third[len(third)-1].Content; !strings.Contains(got, "2. The confirmation is its own screen after paying") || !strings.Contains(got, "3. Your default is fine.") {
+		t.Fatalf("the scripted human's answers to round 2:\n%s", got)
+	}
+	fourth := fake.Requests[3].Messages
+	if got := fourth[len(fourth)-1].Content; got != "1. Yes, depend on #14 and use its pickup slots on the combined screen.\n2. That is not part of what I asked for; park it." {
+		t.Fatalf("the scripted human's answers to round 3:\n%s", got)
+	}
+	if judge := fake.Requests[4].Messages[0].Content; !strings.Contains(judge, `"kind": "park"`) || !strings.Contains(judge, "loyalty stamp card") {
+		t.Fatalf("the judge did not see the conversation with the answers' kinds:\n%s", judge)
+	}
+
+	leak := conversationReplies(t, c, func(d map[string]any) {
+		f := d["fields"].(map[string]any)
+		f["completion_goal"] = f["completion_goal"].(string) + "\n7. [metric] state: `/order` with the seeded menu; expected: LCP at most 1500 ms"
+		f["provenance"] = f["provenance"].(string) + "\n7. confirmed (other): \"That is not part of what I asked for; park it.\""
+		f["threshold"] = "all 7 criteria"
+	})
+	fake = &models.Fake{Replies: leak[:4]}
+	h = harness(t, fake, "gpt-6.1-sol")
+	h.Config.K = 1
+	res, err = h.Tier2(context.Background(), []Case{c}, "abc", "dev", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run := res.Cases[0].Runs[0]; run.Score != 1 || !strings.Contains(run.Floor, "criterion 7 comes from other, which the human park") || len(fake.Requests) != 4 {
+		t.Fatalf("a parked topic as a criterion: %+v (%d calls)", run, len(fake.Requests))
+	}
+
+	ask, _ := json.Marshal(map[string]any{"say": "More.", "done": false, "questions": []map[string]string{{"topic": "ux.content/exact-wording", "ask": "Wording?"}}})
+	var replies []models.Response
+	for range 5 {
+		replies = append(replies, models.Response{Text: string(ask)})
+	}
+	fake = &models.Fake{Replies: replies}
+	h = harness(t, fake, "gpt-6.1-sol")
+	h.Config.K = 1
+	res, err = h.Tier2(context.Background(), []Case{c}, "abc", "dev", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run := res.Cases[0].Runs[0]; run.Score != 1 || !strings.Contains(run.Floor, "still asking after 4 rounds") ||
+		!strings.Contains(fake.Requests[4].Messages[len(fake.Requests[4].Messages)-1].Content, "write the spec now") {
+		t.Fatalf("a skill that never finishes: %+v", run)
+	}
+}
+
+// D-5.3b.g: the search case's scope rule is about result caching, not a
+// cache as a test condition. The recorded run measures with a cold cache
+// and passes; a criterion that caches results per query fails.
+func TestGrillSearchScopeCaching(t *testing.T) {
+	c, err := LoadCase(filepath.Join(root, "evals", "cases", "grill", "search-fast"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var it workitems.Item
+	if err := readJSON(filepath.Join(c.Dir, "output", "issue.json"), &it); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(it.Fields["completion_goal"], "a cold cache") {
+		t.Fatal("the recorded criterion no longer names a cold cache")
+	}
+	if bad := c.OutOfScope(it); len(bad) > 0 {
+		t.Fatalf("a cold cache as a test condition: %v", bad)
+	}
+	for _, crit := range []string{"search caches results per query", "the cached results show within 50 ms", "results caching keeps p95 under 200 ms", "warm and cold cache both under 200 ms"} {
+		it.Fields["completion_goal"] = "1. [metric] state: `/menu/search`; expected: " + crit
+		bad := c.OutOfScope(it)
+		if strings.Contains(crit, "warm and cold") != (len(bad) == 0) {
+			t.Errorf("%q: %v", crit, bad)
+		}
 	}
 }

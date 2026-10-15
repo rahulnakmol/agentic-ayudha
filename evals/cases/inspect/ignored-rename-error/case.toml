@@ -1,0 +1,21 @@
+# Seeded-defect PR for inspect (WP4.8b): Save ignores the rename error and reports success (data).
+# Synthetic: written for this eval, with its defects planted on purpose; never run. The head's files are kept
+# as <path>.txt so this repository's build, linters, and scanners never compile or flag the planted defects.
+skill = "inspect"
+description = "Save ignores the rename error and reports success (data)"
+input = "pr.diff"
+
+[review]
+story = "story.txt"
+files = "files"
+builder = "claude-opus-5-5"
+criteria = [
+  "1. [api-trace] state: `Save(path, s)` then `Load(path)`; expected: returns s",
+  "2. [api-trace] state: `Save(path, s)` where the rename fails (path is a directory); expected: returns an error and the old file is unchanged",
+]
+
+[[review.defects]]
+file = "internal/settings/save.go"
+lines = [18, 19]
+kind = "data"
+title = "the rename error is dropped, so a failed save reports success"

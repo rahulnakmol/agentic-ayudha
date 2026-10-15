@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -52,6 +53,16 @@ type Group struct {
 	// Gate is "enforced" (the default: a failing result fails evals-gate) or
 	// "advisory": results are computed and printed but never gate (D-7.3h).
 	Gate string `toml:"gate"`
+	// K overrides the runs per case for this group; 0 keeps eval.toml's k.
+	K int `toml:"k"`
+	// Events are the GitHub event names (EVENT in evals.yml) the group runs
+	// on; empty runs on every event. A costly group runs on dispatch only.
+	Events []string `toml:"events"`
+}
+
+// RunsOn reports whether a group runs for the workflow event (empty: any).
+func (g Group) RunsOn(event string) bool {
+	return len(g.Events) == 0 || event == "" || slices.Contains(g.Events, event)
 }
 
 // gate policies of a group.
@@ -107,6 +118,9 @@ func (c Config) ForGroup(name string, cases []Case) (Config, []Case, error) {
 			continue
 		}
 		c.MaxUSD = g.MaxUSD
+		if g.K > 0 {
+			c.K = g.K
+		}
 		var out []Case
 		for _, k := range cases {
 			if c.GroupOf(k.ID) == name {
@@ -137,12 +151,29 @@ type Case struct {
 	Calls       [][]string `toml:"calls"` // the recorded run's `aayu` calls, without the program name
 	Scope       []Scope    `toml:"scope"` // requirements the input does not state; a work item that adds one fails
 	Brief       *BriefSpec `toml:"brief"` // a brief case: the input is the grounding, the output a Markdown draft
+	// Repo is a repository fixture (a directory relative to the case) the
+	// recorded calls run in and grill's --assess reads (WP5.3b).
+	Repo string `toml:"repo"`
+	// Transcript is the recorded grill conversation (WP5.3b); with it, tier 1
+	// checks the spec is concrete and faithful to what the human said.
+	Transcript string `toml:"transcript"`
+	// Cite is how many criteria must cite an assessment fact.
+	Cite int `toml:"cite"`
+	// Persona makes a persona case (WP5.1b): the input is the grounding, the
+	// output the seat twin's Markdown answer at a team stage.
+	Persona *PersonaSpec `toml:"persona"`
+	// Pack makes a decision-pack case (WP5.1b, D-5.6b).
+	Pack *PackSpec `toml:"pack"`
 	// Feedback and Reproduce make an evolve case (WP7.7): the accepted Feedback
 	// issue it reproduces, and the directory holding the old skill's recorded
 	// run (the output/ artifacts under that name), which must fail tier 1.
 	Feedback  int        `toml:"feedback"`
 	Reproduce string     `toml:"reproduce"`
 	Tier2     *Tier2Spec `toml:"tier2"`
+	// Review makes a seeded-defect case for inspect (WP4.8b): the input is the
+	// PR's diff; tier 2 runs it in every review variant and scores precision
+	// and recall against the planted defects, without a judge.
+	Review *ReviewSpec `toml:"review"`
 }
 
 // Scope is one known way a skill invents a requirement for this case's input,
@@ -155,10 +186,16 @@ type Scope struct {
 	re      *regexp.Regexp
 }
 
-// OutOfScope returns one line per scope rule the item breaks.
+// OutOfScope returns one line per scope rule the item breaks. A grilled
+// spec's record (assumptions, open questions, parked ideas, provenance) is
+// where unconfirmed ideas belong, so the rules do not read it (WP5.3b).
 func (c Case) OutOfScope(it workitems.Item) []string {
 	keys := make([]string, 0, len(it.Fields))
 	for k := range it.Fields {
+		switch k {
+		case workitems.FieldAssumptions, workitems.FieldOpenQuestions, workitems.FieldParked, workitems.FieldProvenance:
+			continue
+		}
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
@@ -203,6 +240,9 @@ type Tier2Spec struct {
 	// Feature or story the draft is for, before the judge is asked.
 	Draft string `toml:"draft"`
 	Issue int    `toml:"issue"`
+	// Human is the scripted human (conversation.go) of a grill conversation
+	// case: the skill asks in rounds and the script answers by dimension.
+	Human string `toml:"human"`
 }
 
 var groupName = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
@@ -287,8 +327,17 @@ func LoadCase(dir string) (Case, error) {
 	if c.Skill == "" || c.Input == "" {
 		return c, fmt.Errorf("%s: skill and input are required", c.ID)
 	}
+	if c.Transcript != "" && c.Repo == "" {
+		return c, fmt.Errorf("%s: a transcript needs the repo fixture it was grilled in", c.ID)
+	}
 	if b := c.Brief; b != nil && (b.Register == "" || b.Purpose == "" || b.Draft == "") {
 		return c, fmt.Errorf("%s: [brief] needs register, purpose, and draft", c.ID)
+	}
+	if p := c.Persona; p != nil && (p.Seat == "" || p.Stage == "" || p.Practice == "" || p.Task == "" || p.Draft == "") {
+		return c, fmt.Errorf("%s: [persona] needs seat, stage, practice, task, and draft", c.ID)
+	}
+	if p := c.Pack; p != nil && (p.Seat == "" || p.Stage == "" || p.Question == "" || p.Draft == "") {
+		return c, fmt.Errorf("%s: [pack] needs seat, stage, question, and draft", c.ID)
 	}
 	return c, nil
 }

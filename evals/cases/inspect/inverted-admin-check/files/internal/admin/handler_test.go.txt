@@ -1,0 +1,19 @@
+package admin
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+type noAuth struct{}
+
+func (noAuth) User(*http.Request) (User, bool) { return nil, false }
+
+func TestDeleteUserUnauthorized(t *testing.T) {
+	w := httptest.NewRecorder()
+	(&Handler{Auth: noAuth{}}).DeleteUser(w, httptest.NewRequest("DELETE", "/admin/users/7", nil))
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("code %d", w.Code)
+	}
+}

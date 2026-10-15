@@ -1,0 +1,145 @@
+{
+  "request": "The bakery app needs high-quality UX for ordering. It belongs under Feature #40 (Online ordering).",
+  "exchanges": [
+    {
+      "say": "You want ordering to feel high quality. Today the /order flow is five screens (flow:/order), the review screen where people pay has no error state (gap:error:/order) though it records payment_declined, and the screens already share Stepper, Button, and 14 design tokens. Three questions, riskiest first.",
+      "questions": [
+        {
+          "topic": "ux.tasks/primary-task",
+          "ask": "Which task has to feel high quality first: a first order for pickup, or something else? And how does the customer know it worked?",
+          "default": "A first order for pickup that ends on a confirmation with an order number, because one well-defined task is buildable and testable in one story.",
+          "facts": [
+            "flow:/order",
+            "story:#14"
+          ]
+        },
+        {
+          "topic": "ux.steps/screen-count",
+          "ask": "Your order flow is five screens (/order, options, pickup, details, review). That feels long for a loaf of bread. Aim for three?",
+          "default": "Three screens, because the options and pickup screens only confirm a choice.",
+          "facts": [
+            "flow:/order"
+          ]
+        },
+        {
+          "topic": "ux.states/payment-failure",
+          "ask": "The pay screen has no error state today, though it already records payment_declined. When a payment fails, should the basket stay and a retry appear on the same screen?",
+          "default": "Keep the basket and offer a retry on the same screen.",
+          "facts": [
+            "gap:error:/order",
+            "event:payment_declined"
+          ]
+        }
+      ],
+      "answers": [
+        {
+          "kind": "confirm",
+          "text": "A customer picks bread, chooses a pickup time, and pays by card on the review screen as they do today, and knows the order went through: they see an order number and the pickup time."
+        },
+        {
+          "kind": "confirm",
+          "text": "Five screens is too many. Three screens at most: choose items, then pickup time and details together, then review and pay."
+        },
+        {
+          "kind": "confirm",
+          "text": "When a payment fails, keep the basket and show a message with a Try again button on the same screen."
+        }
+      ]
+    },
+    {
+      "say": "So: a first order for pickup, three screens at most, and a failed payment keeps the basket with a Try again button. A few more, including where the confirmation goes.",
+      "questions": [
+        {
+          "topic": "ux.trust/before-paying",
+          "ask": "What does a customer need to see before paying to trust the order: the total, the pickup time, both?",
+          "default": "The total and the pickup time on the review screen, because surprise costs are the main reason people abandon an order.",
+          "facts": [
+            "route:/order/review",
+            "component:BasketSummary"
+          ]
+        },
+        {
+          "topic": "ux.steps/confirmation-placement",
+          "ask": "Where does the confirmation with the order number go: its own screen after paying, or on the review screen once payment succeeds? Does it count toward the three?",
+          "default": "Its own screen after paying, not counted, because the three screens are the ones the customer works through."
+        },
+        {
+          "topic": "ux.platforms/widths",
+          "ask": "Your config says web only. Check every screen at a phone width (390 px) and a desktop width (1280 px)?",
+          "default": "390 px and 1280 px, the widths the web floors capture.",
+          "facts": [
+            "floor:platforms"
+          ]
+        },
+        {
+          "topic": "ux.consistency/tokens-and-components",
+          "ask": "You have 14 design tokens and Button, Stepper, and BasketSummary components. Must the new flow use only those?",
+          "default": "Only existing tokens and components, counted over the changed files, because a new look is a design decision, not a story detail.",
+          "facts": [
+            "tokens:web/styles/tokens.css",
+            "component:Button",
+            "component:Stepper"
+          ]
+        },
+        {
+          "topic": "ux.content/exact-wording",
+          "ask": "Is there wording that must appear exactly, such as the confirmation or the payment error message?",
+          "default": "Leave exact wording to you; the criteria name the elements, not the copy."
+        }
+      ],
+      "answers": [
+        {
+          "kind": "confirm",
+          "text": "Show the total price and the pickup time on the review screen before they pay."
+        },
+        {
+          "kind": "confirm",
+          "text": "The confirmation is its own screen after paying; it does not count toward the three."
+        },
+        {
+          "kind": "default",
+          "text": "Your default is fine."
+        },
+        {
+          "kind": "confirm",
+          "text": "Only our existing tokens and components; nothing new-looking."
+        },
+        {
+          "kind": "defer",
+          "text": "I'm not sure about the wording yet. Leave it open and I'll write it with the shop staff."
+        }
+      ]
+    },
+    {
+      "say": "Nearly there: the confirmation is its own screen after paying. Two last ones: the pickup slots in #14, and one idea of mine you can say no to.",
+      "questions": [
+        {
+          "topic": "request/dependency",
+          "ask": "Open story #14 defines the pickup slots on /order/pickup, which moves onto the combined screen. Depend on #14 and reuse its slots?",
+          "default": "Depend on #14, so the slots are built once.",
+          "facts": [
+            "story:#14"
+          ]
+        },
+        {
+          "topic": "other/loyalty-card",
+          "ask": "An idea while we're here: a loyalty stamp card on the confirmation screen, every tenth loaf free. Worth adding?"
+        }
+      ],
+      "answers": [
+        {
+          "kind": "confirm",
+          "text": "Yes, depend on #14 and use its pickup slots on the combined screen."
+        },
+        {
+          "kind": "park",
+          "text": "That is not part of what I asked for; park it."
+        }
+      ]
+    },
+    {
+      "say": "Here is what done looks like: a customer goes from an empty basket to a paid order in at most 3 screens, then sees a confirmation screen with an order number and the pickup time; the review screen shows the total and the pickup time before they pay; a declined payment keeps the 2 basket items and shows a Try again button on the same screen; every screen fits at 390 px and 1280 px without horizontal scrolling; and the screens use only the existing tokens and components. It depends on #14 for the pickup slots. The wording is deferred to you and the shop staff, offline is deferred, and the loyalty stamp card is parked.",
+      "done": true
+    }
+  ]
+}

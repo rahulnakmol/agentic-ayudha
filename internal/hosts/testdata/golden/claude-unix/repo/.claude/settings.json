@@ -24,5 +24,9 @@
         ]
       }
     ]
+  },
+  "statusLine": {
+    "command": "\"/opt/aayudha/bin/aayu\" hook status-line --host claude",
+    "type": "command"
   }
 }

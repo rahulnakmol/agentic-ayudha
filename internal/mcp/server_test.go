@@ -168,8 +168,35 @@ func TestPromptsResourcesAndExitCodes(t *testing.T) {
 		!strings.Contains(pr.Messages[0].Content.(*sdk.TextContent).Text, "`aayu grill brand`") {
 		t.Errorf("grill brand: %v %+v", err, pr)
 	}
+	// WP5.3b: with an idea, a story prompt carries grill's read-only assessment, run as the grill tool and wrapped as untrusted.
+	calls = nil
+	pr, err = cs.GetPrompt(ctx, &sdk.GetPromptParams{Name: "grill", Arguments: map[string]string{"type": "story", "idea": "make search fast"}})
+	if text := pr.Messages[0].Content.(*sdk.TextContent).Text; err != nil || len(calls) != 1 || strings.Join(calls[0], " ") != "grill --json --assess --idea make search fast -- story" ||
+		!strings.Contains(text, "<untrusted source=\"repo\">\n{\"ok\":true}\n</untrusted>") || !strings.Contains(text, "curious, candid colleague") {
+		t.Errorf("grill story with an idea: %v, ran %v:\n%s", err, calls, text)
+	}
 	if _, err := cs.GetPrompt(ctx, &sdk.GetPromptParams{Name: "brief", Arguments: map[string]string{"subject": "7", "register": "pirate"}}); err == nil || !strings.Contains(err.Error(), "register: want one of") {
 		t.Errorf("brief register=pirate: %v", err)
+	}
+
+	// WP5.1b: the grill prompt carries the Product Strategist's persona block exactly as the skill does, and the
+	// persona prompt renders a seat's practice at the requested stage.
+	skill, _ := os.ReadFile(filepath.Join("..", "..", "skills", "grill", "SKILL.md"))
+	_, block, _ := strings.Cut(string(skill), "<!-- BEGIN GENERATED: persona -->")
+	block, _, _ = strings.Cut(block, "<!-- END GENERATED: persona -->")
+	if text := pr.Messages[0].Content.(*sdk.TextContent).Text; block == "" || !strings.Contains(text, block) {
+		t.Error("grill prompt lacks the persona block of skills/grill/SKILL.md")
+	}
+	pp, err := cs.GetPrompt(ctx, &sdk.GetPromptParams{Name: "persona", Arguments: map[string]string{"seat": "engineering-manager", "stage": "enterprise"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text := pp.Messages[0].Content.(*sdk.TextContent).Text; !strings.Contains(text, "Speak and work as Athena, the Engineering Manager twin") ||
+		!strings.Contains(text, "**Retrospective memo**") || strings.Contains(text, "**Retro note**") || !strings.Contains(text, "**Evidence rule (every seat).**") {
+		t.Errorf("persona prompt:\n%s", text)
+	}
+	if _, err := cs.GetPrompt(ctx, &sdk.GetPromptParams{Name: "persona", Arguments: map[string]string{"seat": "janitor"}}); err == nil || !strings.Contains(err.Error(), `seat "janitor"`) {
+		t.Errorf("persona janitor: %v", err)
 	}
 
 	for uri, want := range map[string]string{"aayudha://status/12": "status --json -- 12", "aayudha://ledger/12": "proof --json -- get 12"} {

@@ -96,11 +96,16 @@ func runSeat(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return err
 	}
+	personas, err := seats.LoadPersonas(e.Assets)
+	if err != nil {
+		return err
+	}
 	s := &seats.Seat{
 		GH: c, Repo: repo, Root: root, Default: info.GetDefaultBranch(), Paired: paired(l.Config),
 		BotLogins: l.Config.Identity.BotLogins, Actor: actor, Now: e.Now,
-		Charter: func(id verbs.SeatID) ([]byte, error) { return fs.ReadFile(e.Assets, "seats/"+string(id)+"/CHARTER.md") },
-		Ledger:  func(ctx context.Context, cm ledger.Commit) (string, error) { return w.Write(ctx, cm) },
+		Charter:  func(id verbs.SeatID) ([]byte, error) { return fs.ReadFile(e.Assets, "seats/"+string(id)+"/CHARTER.md") },
+		Personas: personas,
+		Ledger:   func(ctx context.Context, cm ledger.Commit) (string, error) { return w.Write(ctx, cm) },
 	}
 	var res seats.Result
 	if action == "add" {

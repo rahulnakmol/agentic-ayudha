@@ -470,7 +470,7 @@ func (Perf) Run(ctx context.Context, r *Run) (Result, error) {
 	}
 	lh := ""
 	for _, d := range r.nodeDirs() {
-		if p := filepath.Join(d, ".bin", "lighthouse"); fileExists(p) {
+		if p, err := exec.LookPath(filepath.Join(d, ".bin", "lighthouse")); err == nil { // lighthouse.cmd on Windows
 			lh = p
 			break
 		}

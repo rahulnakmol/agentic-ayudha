@@ -40,6 +40,79 @@ type Config struct {
 	Measure       Measure                `koanf:"measure" jsonschema_description:"The events measure (WP7.2) reads as AARRR stages and the North Star."`
 	Design        Design                 `koanf:"design" jsonschema_description:"Where the design verbs (WP6.5) find the design tokens and the OpenFeature flag definitions."`
 	Review        Review                 `koanf:"review" jsonschema_description:"Tolerances of the prototype's Figma screenshot diff (WP6.5) and UI review (WP6.6)."`
+	Team          Team                   `koanf:"team" jsonschema_description:"The team the seat twins adapt their practice to (WP5.1b): depth and ceremony only, never the floors, the evidence rule, or human-only gates."`
+	UI            UI                     `koanf:"ui" jsonschema_description:"How aayu looks on a person's terminal (WP1.1b); usually set in the user-level config. Machines (--json, MCP, agents, CI, pipes) always get plain, stable text."`
+	Inspect       Inspect                `koanf:"inspect" jsonschema_description:"How inspect reviews a PR (WP4.8b): its mode, noise filters, and peer reviewer."`
+	Delegate      Delegate               `koanf:"delegate" jsonschema_description:"How build --delegate reaches other agents (WP5.5b). Values name secrets; they never hold them."`
+}
+
+// Delegate is [delegate] (WP5.5b).
+type Delegate struct {
+	CursorSecret        string   `koanf:"cursor_secret" jsonschema_description:"Name of the secret holding the Cursor API key (aayu auth set-secret)."`
+	CursorAPI           string   `koanf:"cursor_api" jsonschema_description:"Base URL of Cursor's cloud agents API."`
+	CursorModel         string   `koanf:"cursor_model" jsonschema_description:"Model ID the Cursor cloud agent runs; empty: Cursor's default (its family is then unknown to aayu, so inspect names concrete reviewer families)."`
+	CodexEnv            string   `koanf:"codex_env" jsonschema_description:"ID of the Codex cloud environment whose Install script runs bash .agents/setup; empty: Codex runs only locally."`
+	AmpOrbSize          string   `koanf:"amp_orb_size" jsonschema_description:"Orb size of a delegated Amp thread; empty: the Amp project's default."`
+	ClaudeTrigger       string   `koanf:"claude_trigger" jsonschema_description:"The trigger phrase of the repository's claude-code-action workflow."`
+	Checks              []string `koanf:"checks" jsonschema_description:"Commands the brief tells a receiver to run before it finishes; empty: the checks AGENTS.md lists."`
+	LocalTimeoutMinutes int      `koanf:"local_timeout_minutes" jsonschema:"minimum=0" jsonschema_description:"Longest run of a receiver's CLI in an aayu worktree (--local)."`
+}
+
+// Inspect is [inspect] (WP4.8b).
+type Inspect struct {
+	Mode          string   `koanf:"mode" jsonschema:"enum=general,enum=peer" jsonschema_description:"general: one reviewer; peer: two reviewers of different families (both different from the builder's) cross-check each other's findings."`
+	DelegatedMode string   `koanf:"delegated_mode" jsonschema:"enum=general,enum=peer" jsonschema_description:"Mode for a PR another agent built through build --delegate (WP5.5b)."`
+	MinConfidence float64  `koanf:"min_confidence" jsonschema:"minimum=0,maximum=1" jsonschema_description:"P2 and P3 findings below this reviewer confidence are not posted; P0 and P1 always are."`
+	SuppressAfter int      `koanf:"suppress_after" jsonschema:"minimum=0" jsonschema_description:"A finding resembling this many distinct human dismissals in the same file or directory is not posted (never a P0 in security, data, or concurrency); 0 turns suppression off."`
+	PeerModel     string   `koanf:"peer_model" jsonschema_description:"Model ID of the peer reviewer; empty picks the first of the registry's review candidates whose family differs from the builder's and the first reviewer's."`
+	Generated     []string `koanf:"generated" jsonschema_description:"Path patterns (path.Match) of generated files that inspect does not review; the drift check owns them. Files whose header says Code generated ... DO NOT EDIT are skipped too."`
+}
+
+// Team stages (WP5.1b): how much ceremony the seat twins' practice carries.
+const (
+	StageStartup    = "startup"    // the one-page version: a short decision note, a two-line risk list
+	StageScaleup    = "scaleup"    // the working version: a dated plan, owners, a weekly cadence
+	StageEnterprise = "enterprise" // the full artefact: design doc, review board, control evidence
+)
+
+// TeamStages lists the stages from least to most ceremony.
+var TeamStages = []string{StageStartup, StageScaleup, StageEnterprise}
+
+// Team is [team] (WP5.1b).
+type Team struct {
+	Stage string `koanf:"stage" jsonschema:"enum=startup,enum=scaleup,enum=enterprise" jsonschema_description:"startup, scaleup, or enterprise. Unset: inferred from size (15 or fewer people startup, up to 150 scaleup, more enterprise)."`
+	Size  int    `koanf:"size" jsonschema:"minimum=0" jsonschema_description:"People on the product team. Unset: the paired seat humans plus the founder."`
+}
+
+// TeamStage is the effective team stage and how it was decided: [team] stage
+// when set, else from [team] size, else from the pod's humans (the paired
+// seats plus the founder), so a solo pod is a startup.
+func (c *Config) TeamStage() (stage, why string) {
+	if c.Team.Stage != "" {
+		return c.Team.Stage, "[team] stage"
+	}
+	size, why := c.Team.Size, "[team] size"
+	if size <= 0 {
+		size, why = 1, "the pod's humans"
+		for name, s := range c.Seats {
+			if s.Mode == "paired" && name != string(verbs.Founder) {
+				size++
+			}
+		}
+	}
+	switch {
+	case size <= 15:
+		return StageStartup, fmt.Sprintf("%s (%d)", why, size)
+	case size <= 150:
+		return StageScaleup, fmt.Sprintf("%s (%d)", why, size)
+	}
+	return StageEnterprise, fmt.Sprintf("%s (%d)", why, size)
+}
+
+// UI is [ui] (WP1.1b).
+type UI struct {
+	Plain bool   `koanf:"plain" jsonschema_description:"Words only on a terminal: no colour, motion, emoji, or box drawing (screen-reader friendly); the same as --plain."`
+	Theme string `koanf:"theme" jsonschema:"enum=auto,enum=saffron,enum=contrast,enum=mono" jsonschema_description:"Colour theme: auto (the terminal's own 16 colours, default), saffron (warm true colour for dark terminals), contrast (bright and bold), or mono (no hue)."`
 }
 
 // Design is [design] (WP6.5). Paths are relative to the repository root.
@@ -119,9 +192,9 @@ type LFS struct {
 
 // Proof is [proof].
 type Proof struct {
-	Media         string `koanf:"media" jsonschema_description:"Private bucket for proof media; required on public repos (V3): s3://bucket[/prefix][?region=..&endpoint=..], r2://<account>/bucket[/prefix], azblob://<account>/<container>[/prefix][?auth=sas|key|oidc|cli&tenant=..&client=..&subscription=..&group=..], or gs://<bucket>[/prefix][?auth=key|oidc|cli&provider=..&sa=..]."`
+	Media         string `koanf:"media" jsonschema_description:"Optional private bucket that keeps proof media beyond the merge gate's run artifact (aayu ship copies them there; S-4.2b), and holds design and UI baseline media on a public repo (V3): s3://bucket[/prefix][?region=..&endpoint=..], r2://<account>/bucket[/prefix], azblob://<account>/<container>[/prefix][?auth=sas|key|oidc|cli&tenant=..&client=..&subscription=..&group=..], or gs://<bucket>[/prefix][?auth=key|oidc|cli&provider=..&sa=..]."`
 	MediaSecret   string `koanf:"media_secret" jsonschema_description:"Name of the secret holding the bucket's credential (ACCESS_KEY_ID:SECRET_ACCESS_KEY for s3 and r2; a SAS token or <client-id>:<client-secret> for azblob; a service account JSON key for gs; none with auth oidc or cli); empty means proof-media."`
-	RetentionDays int    `koanf:"retention_days" jsonschema:"minimum=0" jsonschema_description:"Days to keep proof media before purge; 0 keeps forever."`
+	RetentionDays int    `koanf:"retention_days" jsonschema:"minimum=0" jsonschema_description:"Days the merge gate keeps its aayudha-pack run artifact, at most the repository's artifact retention limit; also the bucket's lifecycle rule. 0 keeps as long as the limit allows."`
 }
 
 // Autonomy is [autonomy].
@@ -385,6 +458,12 @@ func (c *Config) Validate() error {
 		if _, isSeat := verbs.FindSeat(verbs.SeatID(v)); !isSeat && !loginName.MatchString(v) {
 			bad("[decisions.authority] %s = %q: want a seat slug or a GitHub login", k, v)
 		}
+	}
+	if st := c.Team.Stage; st != "" && !slices.Contains(TeamStages, st) {
+		bad("[team] stage = %q: want %s", st, strings.Join(TeamStages, ", "))
+	}
+	if c.Team.Size < 0 {
+		bad("[team] size = %d: want a number of people, 0 or more", c.Team.Size)
 	}
 	if e := c.Decisions.EscalateTo; e != "" && !loginName.MatchString(e) {
 		bad("[decisions] escalate_to = %q: want a GitHub login", e)

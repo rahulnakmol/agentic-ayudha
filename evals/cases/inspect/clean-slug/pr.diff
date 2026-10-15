@@ -1,0 +1,53 @@
+diff --git a/internal/catalog/slug.go b/internal/catalog/slug.go
+new file mode 100644
+index 0000000..1441dc6
+--- /dev/null
++++ b/internal/catalog/slug.go
+@@ -0,0 +1,25 @@
++package catalog
++
++import (
++	"strings"
++	"unicode"
++)
++
++// Slug lowercases s and joins its runs of letters and digits with single
++// hyphens: "Red Shoes (Size 9)" becomes "red-shoes-size-9".
++func Slug(s string) string {
++	var b strings.Builder
++	gap := false
++	for _, r := range strings.ToLower(s) {
++		if !unicode.IsLetter(r) && !unicode.IsDigit(r) {
++			gap = true
++			continue
++		}
++		if gap && b.Len() > 0 {
++			b.WriteByte('-')
++		}
++		b.WriteRune(r)
++		gap = false
++	}
++	return b.String()
++}
+diff --git a/internal/catalog/slug_test.go b/internal/catalog/slug_test.go
+new file mode 100644
+index 0000000..fb36437
+--- /dev/null
++++ b/internal/catalog/slug_test.go
+@@ -0,0 +1,16 @@
++package catalog
++
++import "testing"
++
++func TestSlug(t *testing.T) {
++	for in, want := range map[string]string{
++		"Red Shoes (Size 9)": "red-shoes-size-9",
++		"  --Café--  ":       "café",
++		"":                   "",
++		"a--b":               "a-b",
++	} {
++		if got := Slug(in); got != want {
++			t.Errorf("Slug(%q) = %q, want %q", in, got, want)
++		}
++	}
++}

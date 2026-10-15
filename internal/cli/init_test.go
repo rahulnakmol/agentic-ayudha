@@ -93,7 +93,8 @@ func treeFiles(g *fake.GitHub, ref string) []string {
 }
 
 // WP2.5 accept: run twice → zero changes; --dry-run writes nothing; a public
-// repository ends with no .lfsconfig on ledger and proof push --media exits 4;
+// repository ends with no .lfsconfig on ledger and proof push --media exits 4
+// (no bucket: media never go to the ledger, S-4.2b);
 // the product's existing ci.yml stays byte-identical.
 func TestInitTwiceDryRunPublicCoexistence(t *testing.T) {
 	g := fake.New(t, "o/r", "User")
@@ -129,7 +130,7 @@ func TestInitTwiceDryRunPublicCoexistence(t *testing.T) {
 			t.Errorf("form %s missing or wrong", typ.ID)
 		}
 	}
-	if !strings.Contains(first[".aayudha/config.toml"], `media = "" # required: private bucket`) {
+	if !strings.Contains(first[".aayudha/config.toml"], `media = "" # optional private bucket`) {
 		t.Errorf("public repository config:\n%s", first[".aayudha/config.toml"])
 	}
 	if !strings.Contains(first["AGENTS.md"], "<!-- BEGIN aayudha:work-items -->") {
@@ -148,7 +149,7 @@ func TestInitTwiceDryRunPublicCoexistence(t *testing.T) {
 		t.Fatal("second run changed files")
 	}
 
-	if code, _, errOut := run(t, nil, Options{Dir: dir}, "proof", "push", "--media"); code != ExitBlocked || !strings.Contains(errOut, "V3") {
+	if code, _, errOut := run(t, nil, Options{Dir: dir}, "proof", "push", "--media"); code != ExitBlocked || !strings.Contains(errOut, "S-4.2b") {
 		t.Errorf("proof push --media on a public repo: exit %d %s", code, errOut)
 	}
 }
@@ -194,7 +195,7 @@ func TestInitResume(t *testing.T) {
 	if len(g.Labels) != len(workitems.Labels()) || creates != len(workitems.Labels())+1 { // +1: the failed attempt
 		t.Fatalf("%d labels, %d create requests; want %d labels and no duplicate creates", len(g.Labels), creates, len(workitems.Labels()))
 	}
-	// Private repository: the ledger tracks media in LFS.
+	// Private repository: the ledger tracks design and baseline media in LFS.
 	if files := treeFiles(g, "heads/ledger"); !slices.Contains(files, ".lfsconfig") || !slices.Contains(files, ".gitattributes") {
 		t.Errorf("private ledger files: %v", files)
 	}
@@ -349,7 +350,7 @@ func TestInitExtras(t *testing.T) {
 	}
 	bypass := fmt.Sprint(g.Rulesets[0]["bypass_actors"])
 	g.Mu.Unlock()
-	if !strings.Contains(bypass, "Integration") || !strings.Contains(bypass, "4242") || strings.Contains(bypass, "RepositoryRole") {
+	if !strings.Contains(bypass, "Integration") || !strings.Contains(bypass, "4242") || !strings.Contains(bypass, "RepositoryRole") { // ship writes as the human (S-4.2b)
 		t.Errorf("ledger ruleset bypass after --identity: %s", bypass)
 	}
 	if !strings.Contains(manifest, `"contents":"write"`) || !strings.Contains(manifest, "127.0.0.1:1/callback") {

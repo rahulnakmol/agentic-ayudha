@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
@@ -40,7 +41,9 @@ type ReviewResult struct {
 // reviewDir is where review keeps a PR's latest critique and captures:
 // .aayudha/review/<pr>/ (git-ignored runtime state).
 func reviewDir(root string, pr int) string {
-	return filepath.Join(root, ".aayudha", "review", fmt.Sprint(pr))
+	// Shared by every worktree of the clone, like the actions log, so polish in
+	// .aayudha/worktrees/pr-<n> finds the critique review wrote.
+	return filepath.Join(mainCheckout(root), ".aayudha", "review", fmt.Sprint(pr))
 }
 
 // uiBrowser is the capture and impeccable runner in a throwaway sandbox; the caller must call done.
@@ -265,6 +268,11 @@ func runPolish(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return Errorf(ExitBlocked, "polish #%d: no critique to apply; run `aayu review %d` first", n, n)
 	}
+	if wt, err := e.polishWorktree(ctx, root, n); err != nil {
+		return err
+	} else if wt != "" {
+		return Errorf(ExitBlocked, "polish #%d: this checkout is not the PR head, so the critique (%s) is applied in an aayu worktree: %s; apply it there, commit and push, then run `aayu polish %d` in that worktree", n, filepath.Join(reviewDir(root, n), "critique.json"), wt, n)
+	}
 	var before uireview.Critique
 	if err := json.Unmarshal(raw, &before); err != nil {
 		return Errorf(ExitUsage, "polish #%d: %v", n, err)
@@ -288,6 +296,47 @@ func runPolish(ctx context.Context, e *Env, in Values) error {
 		return Errorf(ExitBlocked, "polish #%d: %d finding(s) of the critique remain", n, len(cmp.Remaining))
 	}
 	return nil
+}
+
+// polishWorktree gives polish a worktree of the PR head when this checkout is
+// not at it (WP5.5b: code-changing verbs never write in the main checkout):
+// .aayudha/worktrees/pr-<n> on the PR's branch (the critique is shared, reviewDir).
+// It returns "" when this checkout is the PR head, or is already an aayu
+// worktree (whose head the host must push before polish re-reviews).
+func (e *Env) polishWorktree(ctx context.Context, root string, n int) (string, error) {
+	main := mainCheckout(root)
+	if strings.HasPrefix(root, filepath.Join(main, ".aayudha", "worktrees")+string(filepath.Separator)) {
+		return "", nil
+	}
+	repo, err := e.RepoName(ctx)
+	if err != nil {
+		return "", err
+	}
+	c, _, err := e.readClient(ctx)
+	if err != nil {
+		return "", err
+	}
+	owner, name, _ := github.SplitRepo(repo)
+	pr, _, err := c.REST.PullRequests.Get(ctx, owner, name, n)
+	if err != nil {
+		return "", Wrap(ExitExternal, err)
+	}
+	if head, _ := gitIn(ctx, root, "rev-parse", "HEAD"); head == pr.GetHead().GetSHA() {
+		return "", nil
+	}
+	ref := pr.GetHead().GetRef()
+	wt := filepath.Join(main, ".aayudha", "worktrees", fmt.Sprintf("pr-%d", n))
+	if _, err := run2(ctx, main, "git", "fetch", "--quiet", "origin", "+refs/heads/"+ref+":refs/remotes/origin/"+ref); err != nil {
+		return "", Wrap(ExitExternal, err)
+	}
+	if _, err := os.Stat(wt); err != nil {
+		if _, err := run2(ctx, main, "git", "worktree", "add", "--quiet", "-B", ref, wt, "origin/"+ref); err != nil {
+			return "", Wrap(ExitExternal, err)
+		}
+	} else if _, err := run2(ctx, wt, "git", "merge", "--quiet", "--ff-only", "origin/"+ref); err != nil {
+		return "", Wrap(ExitBlocked, fmt.Errorf("polish #%d: %s has local work that is not on origin/%s: %w", n, wt, ref, err))
+	}
+	return wt, nil
 }
 
 func renderReview(w io.Writer, r ReviewResult) error {

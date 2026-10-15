@@ -33,11 +33,17 @@ func (e *Env) Gateway() (*models.Gateway, error) {
 	if err != nil {
 		return nil, err
 	}
+	// The breaker starts from the spend every process logged in this clone's
+	// actions log, so the budgets are not per process (Bug #177).
+	br := &models.Breaker{Budget: l.Config.Budget, Clock: clock, Now: e.Now, PauseFile: e.PauseFile(), Notify: n}
+	if err := br.SeedLog(e.ActionsPath()); err != nil {
+		return nil, Wrap(ExitInternal, err)
+	}
 	m := l.Config.Models
 	return &models.Gateway{
 		Models: m, Actions: log, HTTP: e.HTTP, Client: e.ModelClient,
 		Resolver: models.Resolver{Models: m, Log: func(s string) { e.Logf("%s", s) }},
-		Breaker:  &models.Breaker{Budget: l.Config.Budget, Clock: clock, Now: e.Now, PauseFile: e.PauseFile(), Notify: n},
+		Breaker:  br,
 		Key: func(name string) (string, error) {
 			v, _, err := e.SecretStore().Get(name)
 			return v, err

@@ -28,9 +28,10 @@ func codes(xs []string) string {
 	return strings.Join(out, ", ")
 }
 
-// AgentsSection is the seat RACI digest rendered into AGENTS.md: by the
-// generator on aayudha itself, and by `aayu seat` in a product repository.
-func AgentsSection() hosts.AgentsSection {
+// AgentsSection is the seat RACI digest and the twins' voices rendered into
+// AGENTS.md: by the generator on aayudha itself, and by `aayu seat` in a
+// product repository.
+func AgentsSection(personas map[verbs.SeatID]Persona) hosts.AgentsSection {
 	var b strings.Builder
 	b.WriteString(`## Seats and RACI (aayudha)
 
@@ -40,8 +41,8 @@ Architect's floors). Each layer has exactly one owner seat. A seat runs solo (ag
 (` + "`[seats.<slug>]`" + `, set by ` + "`aayu seat add <slug> --human <login>`" + `; ` + "`aayu seat list`" + ` shows them). Act as the Accountable
 seat's twin, consult the Consulted seats before acting, and leave paired humans' review to CODEOWNERS.
 
-| Seat | Layers owned | Accountable for |
-|---|---|---|
+| Seat | Twin | Layers owned | Accountable for |
+|---|---|---|---|
 `)
 	for _, s := range verbs.Seats {
 		var layers []string
@@ -58,8 +59,13 @@ seat's twin, consult the Consulted seats before acting, and leave paired humans'
 		if len(layers) > 0 {
 			l = strings.Join(layers, ", ")
 		}
-		fmt.Fprintf(&b, "| %s (%s) | %s | %s |\n", s.Name, code(string(s.ID)), l, codes(owns))
+		twin := "—"
+		if p, ok := personas[s.ID]; ok {
+			twin = p.Name
+		}
+		fmt.Fprintf(&b, "| %s (%s) | %s | %s | %s |\n", s.Name, code(string(s.ID)), twin, l, codes(owns))
 	}
+	b.WriteString(agentsVoices(personas))
 	return hosts.AgentsSection{ID: AgentsSectionID, Body: b.String()}
 }
 

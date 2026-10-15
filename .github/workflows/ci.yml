@@ -538,6 +538,9 @@ jobs:
     name: extended-integration
     if: inputs.gate == 'stable'
     runs-on: ubuntu-latest
+    # Live tests create and delete aayu-scratch-* repositories, so they need a token with repo create/delete.
+    # It lives only in the live-tests environment (branches dev and promote/*); Appendix B D-0.4f.
+    environment: live-tests
     steps:
       - name: Halt check (aayu halt, WP5.7)
         if: vars.AAYUDHA_HALT != ''
@@ -552,11 +555,11 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: false
-      # Live tests run against scratch repositories behind AAYU_LIVE=1 (§2 Testing); the first ones land in
-      # WP1.4 and WP2.3 together with the scratch-repo credentials they need.
+      # Live tests run against scratch repositories behind AAYU_LIVE=1 (§2 Testing).
       - name: Live integration tests
         env:
           AAYU_LIVE: "1"
+          AAYU_GITHUB_TOKEN: ${{ secrets.AAYU_GITHUB_TOKEN }}
         run: go test -race -count=1 -tags integration ./...
 
   smoke:
@@ -585,7 +588,9 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: false
       - name: Unit tests on this OS
-        run: go test -count=1 ./...
+        # internal/cli takes about 15 minutes on Windows, where git starts about ten times slower than on Linux
+        # (TestReleaseFailsClosed alone is 5.5 minutes): past go test's 10-minute default (Appendix B, D-0.4g).
+        run: go test -count=1 -timeout 30m ./...
       - name: Binary smoke test
         run: |
           set -euo pipefail

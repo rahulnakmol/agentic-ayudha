@@ -1,0 +1,21 @@
+# Seeded-defect PR for inspect (WP4.8b): NewStore leaves the map nil, so Set panics (bug).
+# Synthetic: written for this eval, with its defects planted on purpose; never run. The head's files are kept
+# as <path>.txt so this repository's build, linters, and scanners never compile or flag the planted defects.
+skill = "inspect"
+description = "NewStore leaves the map nil, so Set panics (bug)"
+input = "pr.diff"
+
+[review]
+story = "story.txt"
+files = "files"
+builder = "claude-opus-5-5"
+criteria = [
+  "1. [api-trace] state: `s := session.NewStore(); s.Set(\"cart\", \"3\"); s.Get(\"cart\")`; expected: returns \"3\" and true",
+  "2. [api-trace] state: `session.NewStore().Get(\"missing\")`; expected: returns \"\" and false",
+]
+
+[[review.defects]]
+file = "internal/session/store.go"
+lines = [13, 13]
+kind = "bug"
+title = "the values map is never made, so Set panics"

@@ -18,9 +18,9 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof/sigv4"
 )
 
-// Media is the private proof media store named by [proof] media (V3):
-// content-addressed objects, and an expiration rule per repository from
-// [proof] retention_days. Bucket is the S3-compatible one (WP4.2);
+// Media is the opt-in proof media store named by [proof] media: content-
+// addressed objects that outlive the merge gate's run artifact, and an
+// expiration rule per repository from [proof] retention_days (S-4.2b). Bucket is the S3-compatible one (WP4.2);
 // AzureBlob and GCS are Azure Blob Storage and Google Cloud Storage
 // (WP7.2b.2).
 type Media interface {
@@ -29,8 +29,6 @@ type Media interface {
 	Put(ctx context.Context, key string, data []byte) error
 	// Get returns ErrNoObject for a missing object.
 	Get(ctx context.Context, key string) ([]byte, error)
-	// Delete removes an object; a missing object is not an error.
-	Delete(ctx context.Context, key string) error
 	// EnsureLifecycle makes the store expire repo's objects after days
 	// (0 removes aayudha's rule), keeping every other rule. It returns
 	// ErrLifecycleUnmanaged when the credential cannot manage lifecycle.
@@ -41,13 +39,11 @@ type Media interface {
 
 // ErrLifecycleUnmanaged means the store's credential cannot read or set
 // lifecycle rules (an Azure SAS token, or no Azure Resource Manager scope):
-// the retention purge (`proof purge`) still applies, and the rule is set by
-// the founder from the setup files.
+// the founder sets the rule from the setup files.
 var ErrLifecycleUnmanaged = errors.New("lifecycle not managed by aayudha")
 
 // objectKey is the object key of an artifact: content-addressed under the
-// prefix, grouped by repository and story so purge and lifecycle rules can
-// find it.
+// prefix, grouped by repository and story so lifecycle rules can find it.
 func objectKey(prefix, repo string, story int, sha string) string {
 	return path.Join(prefix, "proof", repo, fmt.Sprint(story), sha)
 }
@@ -133,15 +129,6 @@ func (b *Bucket) Put(ctx context.Context, key string, data []byte) error {
 // Get downloads an object.
 func (b *Bucket) Get(ctx context.Context, key string) ([]byte, error) {
 	return b.do(ctx, http.MethodGet, key, nil, nil, nil)
-}
-
-// Delete removes an object; a missing object is not an error.
-func (b *Bucket) Delete(ctx context.Context, key string) error {
-	_, err := b.do(ctx, http.MethodDelete, key, nil, nil, nil)
-	if errors.Is(err, ErrNoObject) {
-		return nil
-	}
-	return err
 }
 
 // LifecycleRuleID prefixes the ID of the expiration rule aayudha keeps on the

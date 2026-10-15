@@ -111,7 +111,7 @@
       "properties": {
         "media": {
           "type": "string",
-          "description": "Private bucket for proof media; required on public repos (V3): s3://bucket[/prefix][?region=..\u0026endpoint=..], r2://\u003caccount\u003e/bucket[/prefix], azblob://\u003caccount\u003e/\u003ccontainer\u003e[/prefix][?auth=sas|key|oidc|cli\u0026tenant=..\u0026client=..\u0026subscription=..\u0026group=..], or gs://\u003cbucket\u003e[/prefix][?auth=key|oidc|cli\u0026provider=..\u0026sa=..]."
+          "description": "Optional private bucket that keeps proof media beyond the merge gate's run artifact (aayu ship copies them there; S-4.2b), and holds design and UI baseline media on a public repo (V3): s3://bucket[/prefix][?region=..\u0026endpoint=..], r2://\u003caccount\u003e/bucket[/prefix], azblob://\u003caccount\u003e/\u003ccontainer\u003e[/prefix][?auth=sas|key|oidc|cli\u0026tenant=..\u0026client=..\u0026subscription=..\u0026group=..], or gs://\u003cbucket\u003e[/prefix][?auth=key|oidc|cli\u0026provider=..\u0026sa=..]."
         },
         "media_secret": {
           "type": "string",
@@ -120,7 +120,7 @@
         "retention_days": {
           "type": "integer",
           "minimum": 0,
-          "description": "Days to keep proof media before purge; 0 keeps forever."
+          "description": "Days the merge gate keeps its aayudha-pack run artifact, at most the repository's artifact retention limit; also the bucket's lifecycle rule. 0 keeps as long as the limit allows."
         }
       },
       "additionalProperties": false,
@@ -713,6 +713,136 @@
       "additionalProperties": false,
       "type": "object",
       "description": "Tolerances of the prototype's Figma screenshot diff (WP6.5) and UI review (WP6.6)."
+    },
+    "team": {
+      "properties": {
+        "stage": {
+          "type": "string",
+          "enum": [
+            "startup",
+            "scaleup",
+            "enterprise"
+          ],
+          "description": "startup, scaleup, or enterprise. Unset: inferred from size (15 or fewer people startup, up to 150 scaleup, more enterprise)."
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "People on the product team. Unset: the paired seat humans plus the founder."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "The team the seat twins adapt their practice to (WP5.1b): depth and ceremony only, never the floors, the evidence rule, or human-only gates."
+    },
+    "ui": {
+      "properties": {
+        "plain": {
+          "type": "boolean",
+          "description": "Words only on a terminal: no colour, motion, emoji, or box drawing (screen-reader friendly); the same as --plain."
+        },
+        "theme": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "saffron",
+            "contrast",
+            "mono"
+          ],
+          "description": "Colour theme: auto (the terminal's own 16 colours, default), saffron (warm true colour for dark terminals), contrast (bright and bold), or mono (no hue)."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "How aayu looks on a person's terminal (WP1.1b); usually set in the user-level config. Machines (--json, MCP, agents, CI, pipes) always get plain, stable text."
+    },
+    "inspect": {
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "general",
+            "peer"
+          ],
+          "description": "general: one reviewer; peer: two reviewers of different families (both different from the builder's) cross-check each other's findings."
+        },
+        "delegated_mode": {
+          "type": "string",
+          "enum": [
+            "general",
+            "peer"
+          ],
+          "description": "Mode for a PR another agent built through build --delegate (WP5.5b)."
+        },
+        "min_confidence": {
+          "type": "number",
+          "maximum": 1,
+          "minimum": 0,
+          "description": "P2 and P3 findings below this reviewer confidence are not posted; P0 and P1 always are."
+        },
+        "suppress_after": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "A finding resembling this many distinct human dismissals in the same file or directory is not posted (never a P0 in security, data, or concurrency); 0 turns suppression off."
+        },
+        "peer_model": {
+          "type": "string",
+          "description": "Model ID of the peer reviewer; empty picks the first of the registry's review candidates whose family differs from the builder's and the first reviewer's."
+        },
+        "generated": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Path patterns (path.Match) of generated files that inspect does not review; the drift check owns them. Files whose header says Code generated ... DO NOT EDIT are skipped too."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "How inspect reviews a PR (WP4.8b): its mode, noise filters, and peer reviewer."
+    },
+    "delegate": {
+      "properties": {
+        "cursor_secret": {
+          "type": "string",
+          "description": "Name of the secret holding the Cursor API key (aayu auth set-secret)."
+        },
+        "cursor_api": {
+          "type": "string",
+          "description": "Base URL of Cursor's cloud agents API."
+        },
+        "cursor_model": {
+          "type": "string",
+          "description": "Model ID the Cursor cloud agent runs; empty: Cursor's default (its family is then unknown to aayu, so inspect names concrete reviewer families)."
+        },
+        "codex_env": {
+          "type": "string",
+          "description": "ID of the Codex cloud environment whose Install script runs bash .agents/setup; empty: Codex runs only locally."
+        },
+        "amp_orb_size": {
+          "type": "string",
+          "description": "Orb size of a delegated Amp thread; empty: the Amp project's default."
+        },
+        "claude_trigger": {
+          "type": "string",
+          "description": "The trigger phrase of the repository's claude-code-action workflow."
+        },
+        "checks": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Commands the brief tells a receiver to run before it finishes; empty: the checks AGENTS.md lists."
+        },
+        "local_timeout_minutes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Longest run of a receiver's CLI in an aayu worktree (--local)."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "How build --delegate reaches other agents (WP5.5b). Values name secrets; they never hold them."
     }
   },
   "additionalProperties": false,

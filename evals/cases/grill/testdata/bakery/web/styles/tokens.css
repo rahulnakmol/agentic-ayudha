@@ -1,0 +1,17 @@
+/* Crumb design tokens: every colour, space, and radius in the app comes from here. */
+:root {
+  --crumb-color-crust: #7a3e10;
+  --crumb-color-flour: #fffaf2;
+  --crumb-color-ink: #2b1d12;
+  --crumb-color-muted: #6b5a4c;
+  --crumb-color-danger: #a4161a;
+  --crumb-color-success: #1d6b38;
+  --crumb-space-1: 4px;
+  --crumb-space-2: 8px;
+  --crumb-space-3: 16px;
+  --crumb-space-4: 24px;
+  --crumb-radius: 8px;
+  --crumb-font-body: "Inter", sans-serif;
+  --crumb-font-display: "Fraunces", serif;
+  --crumb-size-target: 48px;
+}

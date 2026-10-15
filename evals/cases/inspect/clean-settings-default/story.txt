@@ -1,0 +1,2 @@
+Default page size
+A settings file without `page_size` uses 20 products per page; a page size outside 1-100 is refused when the settings load.

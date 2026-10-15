@@ -4,7 +4,10 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -85,6 +88,10 @@ func gateRun(t *testing.T, g *fake.GitHub, dir string, prN int, head string, che
 		p.Artifacts = append(p.Artifacts, proof.NewArtifact(rel, "api-trace", files[rel]))
 		p.Criteria = append(p.Criteria, proof.Criterion{ID: c.N, Evidence: []string{rel}})
 	}
+	// A capture: in the artifact and hash-checked by ship, never landed on the ledger.
+	files["media/criterion-1.png"] = []byte("\x89PNG capture")
+	p.Artifacts = append(p.Artifacts, proof.NewArtifact("media/criterion-1.png", "screenshot", files["media/criterion-1.png"]))
+	p.Criteria[0].Evidence = append(p.Criteria[0].Evidence, "media/criterion-1.png")
 	tmp := t.TempDir()
 	if err := proof.WriteLocal(filepath.Join(tmp, "2"), p, files); err != nil {
 		t.Fatal(err)
@@ -107,7 +114,7 @@ func gateRun(t *testing.T, g *fake.GitHub, dir string, prN int, head string, che
 	id := int64(9000 + len(g.Runs))
 	g.Runs = append(g.Runs, fake.WorkflowRun{ID: id, Path: ".github/workflows/aayudha-merge-gate.yml", HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "success"})
 	g.Artifacts[id] = []fake.ArtifactZip{{ID: id + 1, Name: "aayudha-pack", Zip: zb.Bytes()}}
-	g.CheckRuns[head] = []fake.CheckRun{{Name: "aayudha/merge-gate", Status: "completed", Conclusion: "success"}, {Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}}
+	g.CheckRuns[head] = []fake.CheckRun{{Name: "aayudha/merge-gate", Status: "completed", Conclusion: "success"}, {Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}, {Name: "aayudha/pack", Status: "completed", Conclusion: "success"}}
 }
 
 func review(login, typ, state, commit string) fake.Review {
@@ -118,7 +125,7 @@ func review(login, typ, state, commit string) fake.Review {
 // bot review (or the author's own) exits 4; one human approval on the head
 // ships it: merged, status:merged, Complete section, ship record and actions
 // segment on the ledger, branch and worktree cleaned up. The pack comes from
-// the merge gate's run artifact because no bot App can write the ledger.
+// the merge gate's run artifact (S-4.2b); a refused ship lands nothing.
 func TestBuildAndShip(t *testing.T) {
 	g, env, opts, dir, bare, prN, head := thinFixture(t)
 	if code, _, errOut := run(t, env, opts, "build", "3", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "does not pass Ready") {
@@ -132,7 +139,7 @@ func TestBuildAndShip(t *testing.T) {
 		code, out, errOut := run(t, env, opts, append([]string{"ship", strconv.Itoa(prN), "--repo", "o/r"}, args...)...)
 		return code, out + errOut
 	}
-	if code, out := ship(); code != ExitBlocked || !strings.Contains(out, "aayudha/merge-gate is missing") {
+	if code, out := ship(); code != ExitBlocked || !strings.Contains(out, "no merge gate pack for the head "+short(head)) {
 		t.Fatalf("ship before the gate: %d %s", code, out)
 	}
 	gateRun(t, g, dir, prN, head, []proof.Check{{Floor: "coverage", Result: proof.Pass, Value: 100, Threshold: 90, Tool: "aayudha", Version: "1"}})
@@ -142,14 +149,8 @@ func TestBuildAndShip(t *testing.T) {
 	if code, out := ship(); code != ExitBlocked || !strings.Contains(out, "from a bot identity and is not a human pass") {
 		t.Fatalf("ship with only a bot review: %d %s", code, out)
 	}
-	if got := git(t, bare, "show", "ledger:proof/2/"+head+"/authoritative/pack.json"); !strings.Contains(got, `"run_id": 9000`) || !strings.Contains(got, `"kind": "authoritative"`) {
-		t.Fatalf("landed pack: %s", got)
-	}
-	// The refused ship still checkpointed what it did (landing the pack) to the ledger.
-	if segs := git(t, bare, "ls-tree", "-r", "--name-only", "ledger", "actions/"); !strings.Contains(segs, ".jsonl") {
-		t.Fatalf("no actions segment after a refused ship:\n%s", segs)
-	} else if seg := git(t, bare, "show", "ledger:"+strings.Fields(segs)[len(strings.Fields(segs))-1]); !strings.Contains(seg, `"kind":"ledger.push"`) {
-		t.Fatalf("segment of the refused ship:\n%s", seg)
+	if got := git(t, bare, "ls-tree", "-r", "--name-only", "ledger", "proof/"); got != "" {
+		t.Fatalf("a refused ship landed a pack:\n%s", got)
 	}
 	// Every worktree of the clone shares one actions log: the build worktree sees the PR it opened.
 	wtOpts := opts
@@ -183,8 +184,24 @@ func TestBuildAndShip(t *testing.T) {
 	rec := git(t, bare, "show", "ledger:proof/2/"+head+"/authoritative/ship.json")
 	var sr ShipRecord
 	_ = json.Unmarshal([]byte(rec), &sr)
-	if sr.MergeCommit != pr.MergeCommitSHA || sr.HumanPass.Kind != "review" || sr.HumanPass.Login != "reviewer" {
+	if sr.MergeCommit != pr.MergeCommitSHA || sr.HumanPass.Kind != "review" || sr.HumanPass.Login != "reviewer" || sr.GateRun != 9000 || sr.Artifact != 9001 {
 		t.Fatalf("ship record: %s", rec)
+	}
+	// The landed pack is the artifact's pack.json, with the run that built it, under the human's identity.
+	g.Mu.Lock()
+	zb := g.Artifacts[9000][0].Zip
+	g.Mu.Unlock()
+	zr, _ := zip.NewReader(bytes.NewReader(zb), int64(len(zb)))
+	f, _ := zr.Open("2/pack.json")
+	raw, _ := io.ReadAll(f)
+	if sum := sha256.Sum256(raw); sr.PackSHA256 != hex.EncodeToString(sum[:]) {
+		t.Fatalf("ship record pack_sha256 %s, artifact's pack.json %x", sr.PackSHA256, sum)
+	}
+	if got := git(t, bare, "show", "ledger:proof/2/"+head+"/authoritative/pack.json"); !strings.Contains(got, `"run_id": 9000`) || !strings.Contains(got, `"writer": "founder (aayu ship)"`) {
+		t.Fatalf("landed pack: %s", got)
+	}
+	if got := git(t, bare, "ls-tree", "-r", "--name-only", "ledger", "proof/2/"); strings.Contains(got, ".png") || !strings.Contains(got, "evidence/criterion-1.jsonl") {
+		t.Fatalf("ledger holds media or lacks data artifacts:\n%s", got)
 	}
 	if seg := git(t, bare, "show", "ledger:"+sr.Actions); !strings.Contains(seg, "github.pull.merge") {
 		t.Fatalf("actions segment %s:\n%s", sr.Actions, seg)

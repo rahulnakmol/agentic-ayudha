@@ -78,6 +78,10 @@ func Tier1(ctx context.Context, root string, c Case, assets fs.FS) Tier1Result {
 		}
 		r.Checks = append(r.Checks, Check{name, st, lines})
 	}
+	if c.Review != nil { // a seeded-defect case: its construction, not a recorded run (WP4.8b)
+		add("review-case", Tier1Review(c), false)
+		return r
+	}
 
 	var missing []string
 	for _, f := range append([]string{c.Input}, c.Artifacts...) {
@@ -135,6 +139,16 @@ func Tier1(ctx context.Context, root string, c Case, assets fs.FS) Tier1Result {
 	if c.Brief != nil {
 		add("brief", tier1Brief(ctx, c, assets), false)
 	}
+	if c.Persona != nil {
+		add("persona", tier1Persona(c, assets), false)
+	}
+	if c.Pack != nil {
+		add("pack", tier1Pack(c, assets), false)
+	}
+
+	if c.Transcript != "" {
+		add("concrete", tier1Concrete(c, assets), false)
+	}
 
 	calls, writes, na := runCalls(ctx, c, assets)
 	if len(c.Calls) > 0 {
@@ -180,6 +194,11 @@ func runCalls(ctx context.Context, c Case, assets fs.FS) (failed, writes []strin
 	}
 	defer func() { _ = os.RemoveAll(tmp) }()
 	repo, home := filepath.Join(tmp, "repo"), filepath.Join(tmp, "home")
+	if src := c.CaseRepo(); src != "" {
+		if err := os.CopyFS(repo, os.DirFS(src)); err != nil {
+			return []string{"repo fixture: " + err.Error()}, nil, false
+		}
+	}
 	for _, d := range []string{filepath.Join(repo, ".git"), home} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			return []string{err.Error()}, nil, false
@@ -237,4 +256,47 @@ func doneActions(path string) []string {
 		}
 	}
 	return out
+}
+
+// tier1Concrete checks a recorded grill conversation (WP5.3b): the spec it
+// produced is concrete and cites only facts the fixture has (Concrete), and
+// every recorded reply is what the case's scripted human answers to that
+// question's dimension, so the recording is the script's conversation.
+func tier1Concrete(c Case, assets fs.FS) []string {
+	var tr Transcript
+	if err := readJSON(filepath.Join(c.Dir, filepath.FromSlash(c.Transcript)), &tr); err != nil {
+		return []string{c.Transcript + ": " + err.Error()}
+	}
+	var bad []string
+	if c.Tier2 != nil && c.Tier2.Human != "" {
+		h, err := LoadHuman(filepath.Join(c.Dir, c.Tier2.Human))
+		if err != nil {
+			return []string{err.Error()}
+		}
+		for i, x := range tr.Exchanges {
+			if len(x.Answers) != len(x.Questions) {
+				bad = append(bad, fmt.Sprintf("exchange %d: %d answers to %d questions", i+1, len(x.Answers), len(x.Questions)))
+				continue
+			}
+			for j, q := range x.Questions {
+				if want := h.Answer(q.Topic); x.Answers[j] != want {
+					bad = append(bad, fmt.Sprintf("exchange %d question %d (%s): the recorded answer is not the script's", i+1, j+1, q.Topic))
+				}
+			}
+		}
+	}
+	for _, f := range c.Ready {
+		var it workitems.Item
+		if err := readJSON(filepath.Join(c.Dir, filepath.FromSlash(f)), &it); err != nil {
+			continue // reported by the ready check
+		}
+		a, cat, err := c.Assess(assets, it.Type, tr.Request)
+		if err != nil {
+			return append(bad, err.Error())
+		}
+		for _, l := range Concrete(cat, a, it, tr, c.Cite) {
+			bad = append(bad, f+": "+l)
+		}
+	}
+	return bad
 }

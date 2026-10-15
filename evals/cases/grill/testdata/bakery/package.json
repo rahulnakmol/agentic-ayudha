@@ -1,0 +1,12 @@
+{
+  "name": "crumb-bakery",
+  "private": true,
+  "dependencies": {
+    "@radix-ui/react-dialog": "1.1.2",
+    "next": "15.0.3",
+    "react": "19.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.48.2"
+  }
+}

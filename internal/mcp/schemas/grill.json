@@ -4,6 +4,11 @@
   "additionalProperties": false,
   "description": "Interview a human until a work item of the given type is complete and passes validation, then write it as an issue.",
   "properties": {
+    "assess": {
+      "description": "Read-only fact pass for the idea: its vague qualifiers with the dimensions to ask about, and the routes, states, components, tokens, tests, events, related stories, floors, and layers it touches (repository content is reported as untrusted data).",
+      "type": "boolean",
+      "x-aayu-type": "bool"
+    },
     "body": {
       "description": "Drafted issue body in the issue-form layout (### <Field> sections), or the brand YAML for brand.",
       "type": "string",
@@ -16,6 +21,11 @@
         "false"
       ],
       "x-aayu-type": "bool"
+    },
+    "idea": {
+      "description": "The request in the human's own words. With --assess, the idea to assess; with a draft, the request its Provenance must quote and resolve.",
+      "type": "string",
+      "x-aayu-type": "string"
     },
     "labels": {
       "description": "Comma-separated label-held fields, e.g. effort:S,priority:P2.",

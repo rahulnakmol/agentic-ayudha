@@ -265,22 +265,22 @@ func TestHooks(t *testing.T) {
 	dir := t.TempDir()
 	pause := filepath.Join(dir, "paused")
 	for _, h := range AllHosts() {
-		r, err := RunHook("pre-tool", h, "", pause)
+		r, err := RunHook("pre-tool", h, "", pause, nil)
 		if err != nil || r.Code != 0 {
 			t.Errorf("%s pre-tool, not paused: %+v %v", h, r, err)
 		}
 	}
 	write(t, dir, "paused", "spend reached 100.00 USD")
 	for _, h := range AllHosts() {
-		r, _ := RunHook("pre-tool", h, "", pause)
+		r, _ := RunHook("pre-tool", h, "", pause, nil)
 		if r.Code != 2 || !strings.Contains(r.Stderr, "spend reached 100.00 USD") {
 			t.Errorf("%s pre-tool, paused: want exit 2 naming the breach, got %+v", h, r)
 		}
 	}
-	if r, _ := RunHook("pre-tool", verbs.HostCursor, "", pause); !strings.Contains(r.Stdout, `"permission":"deny"`) {
+	if r, _ := RunHook("pre-tool", verbs.HostCursor, "", pause, nil); !strings.Contains(r.Stdout, `"permission":"deny"`) {
 		t.Errorf("cursor deny JSON: %q", r.Stdout)
 	}
-	if _, err := RunHook("post-tool", verbs.HostClaude, "", pause); err == nil {
+	if _, err := RunHook("post-tool", verbs.HostClaude, "", pause, nil); err == nil {
 		t.Error("unknown hook accepted")
 	}
 	for _, h := range Hooks {

@@ -7,10 +7,12 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/grill"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
+	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
 func init() { register("ready", runReady) }
@@ -39,6 +41,13 @@ func runReady(ctx context.Context, e *Env, in Values) error {
 	}
 	n := issueNumber(in.String("issue"))
 	r := &ready.Ready{Repo: repo, TechnicalOwner: e.technicalOwner()}
+	if !in.Bool("guard") {
+		cat, err := e.grillCatalog()
+		if err != nil {
+			return err
+		}
+		r.Concrete = func(it workitems.Item) []workitems.Problem { return grill.Check(cat, it) }
+	}
 	var res ready.Result
 	switch {
 	case in.Bool("check") && in.Bool("guard"):
@@ -120,7 +129,10 @@ func runReady(ctx context.Context, e *Env, in Values) error {
 		return err
 	}
 	if !res.Pass {
-		return Errorf(ExitBlocked, "#%d does not pass Ready (%d problem(s))", n, len(res.Problems))
+		return WithNext(Errorf(ExitBlocked, "#%d does not pass Ready (%d problem(s)): fix them in the issue body", n, len(res.Problems)), fmt.Sprintf("aayu ready %d --check", n))
+	}
+	if !in.Bool("check") && !in.Bool("guard") && !res.DryRun {
+		e.milestone("first-ready", true, "Your first Ready story!", fmt.Sprintf("#%d is Ready; the build lane can pick it up with aayu build %d.", n, n))
 	}
 	return nil
 }

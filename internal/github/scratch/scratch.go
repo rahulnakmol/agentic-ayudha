@@ -30,8 +30,9 @@ func Token(t testing.TB) string {
 }
 
 // Repo creates a private aayu-scratch-* repository for the token's user
-// with a first commit, and deletes it when the test ends. Test scaffolding,
-// not a verb write, so it calls the API directly.
+// with a first commit, and deletes it when the test ends, unless
+// AAYU_LIVE_KEEP=1 keeps it as evidence (delete it by hand afterwards). Test
+// scaffolding, not a verb write, so it calls the API directly.
 func Repo(t testing.TB, token string) string {
 	t.Helper()
 	call := func(method, path string, body any) (int, []byte) {
@@ -61,6 +62,10 @@ func Repo(t testing.TB, token string) string {
 	}
 	_ = json.Unmarshal(b, &r)
 	t.Cleanup(func() {
+		if os.Getenv("AAYU_LIVE_KEEP") == "1" {
+			t.Logf("AAYU_LIVE_KEEP=1: kept https://github.com/%s", r.FullName)
+			return
+		}
 		if code, b := call("DELETE", "/repos/"+r.FullName, nil); code != http.StatusNoContent {
 			t.Errorf("delete scratch repository %s: %d %s", r.FullName, code, b)
 		}

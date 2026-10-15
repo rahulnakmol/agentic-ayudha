@@ -444,6 +444,20 @@ func TestReleaseFailsClosed(t *testing.T) {
 	}
 }
 
+// The remote cannot lock the tag on the first push (GitHub answers "(failed)"
+// while it still processes the landing push; git says "cannot lock ref"):
+// release retries the push and finishes the promotion.
+func TestReleaseRetriesALockedRef(t *testing.T) {
+	f := newLadderFixture(t)
+	git(t, f.bare, "config", "core.hooksPath", "hooks") // over any global hooks path
+	hook := "#!/bin/sh\nwhile read old new ref; do case \"$ref\" in refs/tags/*) if [ -e locked-once ]; then rm -f \"$ref.lock\"; else touch locked-once \"$ref.lock\"; fi;; esac; done\n"
+	_ = os.WriteFile(filepath.Join(f.bare, "hooks", "pre-receive"), []byte(hook), 0o755)
+	code, p, errOut := f.run(t, time.Date(2026, 10, 12, 9, 41, 0, 0, time.UTC), f.env, strconv.Itoa(f.release), "--to", "rolling", "--yes")
+	if _, err := os.Stat(filepath.Join(f.bare, "locked-once")); err != nil || code != 0 || git(t, f.bare, "rev-parse", "refs/tags/rolling-2026-10-12") != p.Commit {
+		t.Fatalf("a tag push the remote could not lock: exit %d (locked: %v): %s", code, err, errOut)
+	}
+}
+
 // A candidate that does not merge cleanly is refused before anything is
 // pushed; a story title with a word on the brand's avoid list makes the notes
 // fail tell's check, which refuses before landing too.

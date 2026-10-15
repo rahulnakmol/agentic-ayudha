@@ -1,0 +1,17 @@
+# The merge gate in detail (docs/guide/how-merge-gate.md).
+title: The base branch's gate verifies the pull request head in a sandbox, a model from another family reviews it, the pack job checks and comments, and ship needs all three green
+direction: down
+pr: Pull request opened or updated
+wf: Gate workflow from the base branch
+gate: aayudha/merge-gate: verify in a sandbox
+art: aayudha-pack run artifact
+insp: aayudha/inspect: merge, fix, or rebuild
+pack: aayudha/pack: check the pack, comment
+ship: ship: checks green, artifact from this run
+pr -> gate: head commit
+wf -> gate: trusted steps
+gate -> art: pack.json and media
+art -> insp: pack and diff
+art -> pack
+insp -> ship: verdict
+pack -> ship: pack hash

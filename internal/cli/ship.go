@@ -3,7 +3,10 @@ package cli
 import (
 	"archive/zip"
 	"bytes"
+	"cmp"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -31,8 +34,9 @@ import (
 
 func init() { register("ship", runShip) }
 
-// Gate checks ship requires on the PR head (the merge gate's jobs, WP4.8).
-var gateChecks = []string{"aayudha/merge-gate", "aayudha/inspect"}
+// Gate checks ship requires on the PR head (the merge gate's jobs, WP4.8;
+// aayudha/pack checks the pack and keeps its comment, S-4.2b).
+var gateChecks = []string{"aayudha/merge-gate", "aayudha/inspect", "aayudha/pack"}
 
 // SoloBypassPrefix starts the PR comment in which the merging human records a
 // solo-mode bypass (Appendix B D2).
@@ -50,14 +54,19 @@ type HumanPass struct {
 
 // ShipRecord is proof/<story>/<head>/authoritative/ship.json on the ledger.
 type ShipRecord struct {
-	Repo        string    `json:"repo"`
-	Story       int       `json:"story"`
-	PR          int       `json:"pr"`
-	Head        string    `json:"pr_head_sha"`
-	MergeCommit string    `json:"merge_commit"`
-	Pack        string    `json:"pack"`
-	PackLanded  string    `json:"pack_landed,omitempty"` // how the authoritative pack reached the ledger
-	HumanPass   HumanPass `json:"human_pass"`
+	Repo        string `json:"repo"`
+	Story       int    `json:"story"`
+	PR          int    `json:"pr"`
+	Head        string `json:"pr_head_sha"`
+	MergeCommit string `json:"merge_commit"`
+	Pack        string `json:"pack"`
+	PackLanded  string `json:"pack_landed,omitempty"` // how the authoritative pack reached the ledger
+	// The merge gate run that built the pack, its aayudha-pack artifact, and
+	// the SHA-256 of the artifact's pack.json, as the gate's comment shows it.
+	GateRun    int64     `json:"gate_run,omitempty"`
+	Artifact   int64     `json:"artifact,omitempty"`
+	PackSHA256 string    `json:"pack_sha256,omitempty"`
+	HumanPass  HumanPass `json:"human_pass"`
 	// Who could give the human pass, the footprint's never layers, the
 	// autonomy streak, and the EM plan-time review (WP5.5).
 	Footprint  []string         `json:"footprint"`
@@ -77,14 +86,18 @@ type ShipResult struct {
 	Branch string `json:"branch_deleted,omitempty"`
 }
 
-// runShip (WP5.5, from the WP4.10 thin slice): a green merge gate, an
-// authoritative pack that verifies and whose floors hold, and the human pass:
+// runShip (WP5.5, from the WP4.10 thin slice; S-4.2b): the merge gate's
+// pack, taken from the aayudha-pack artifact of the base branch's gate run on
+// the head and checked there, a green merge gate, the pack verifying against
+// the head and the Ready snapshot with its floors holding, and the human pass:
 // an approval of the head by the seat's human (solo: the [autonomy]
 // approver), never a bot or the author, plus a CODEOWNER's approval and the
-// EM's plan-time review for a never layer, whatever the streak. Then
-// squash-merge, the Complete section, status:merged, the ship record (with
-// the approval, the pass rule, and the streak state) beside the pack, the
-// lease released, and cleanup.
+// EM's plan-time review for a never layer, whatever the streak. Then the pack
+// (pack.json and data, no media) lands on the ledger under the human's
+// identity, the squash-merge, the Complete section, status:merged, the ship
+// record (with the run, the artifact, the pack's hash, the approval, the pass
+// rule, and the streak state) beside the pack, the lease released, and
+// cleanup.
 func runShip(ctx context.Context, e *Env, in Values) error {
 	if in.Bool("solo-bypass") && e.Agent() {
 		return Errorf(ExitBlocked, "ship --solo-bypass is a human's decision; it is refused for agents")
@@ -129,7 +142,17 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	}
 	rec := ShipRecord{Repo: repo, Story: story, PR: n, Head: head, ShippedBy: me.Login}
 
-	// 1. The merge gate is green on the head.
+	// 1. The pack the merge gate built for this head, from the artifact of a
+	// run of the base branch's workflow (S-4.2b): never a pack on the ledger,
+	// a preview, or an artifact another workflow uploaded.
+	gp, err := e.gatePack(ctx, c, owner, name, pr, story)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.RemoveAll(gp.tmp) }()
+	rec.GateRun, rec.Artifact, rec.PackSHA256 = gp.run.GetID(), gp.artifact, gp.sha256
+
+	// 2. The merge gate's checks are green on the head.
 	runs, _, err := c.REST.Checks.ListCheckRunsForRef(ctx, owner, name, head, &gh.ListCheckRunsOptions{ListOptions: gh.ListOptions{PerPage: 100}})
 	if err != nil {
 		return Wrap(ExitExternal, err)
@@ -150,35 +173,13 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		}
 	}
 
-	// 2. An authoritative pack for the head that verifies and whose floors hold.
+	// The pack verifies against the head and the Ready snapshot, and its floors hold.
 	s, err := e.proofStore(ctx, c, tok, "human", "")
 	if err != nil {
 		return err
 	}
 	t, err := s.Ledger.Read(ctx)
 	if err != nil {
-		return ledgerErr(err)
-	}
-	entry, ok, err := authoritative(ctx, s, t, story, head)
-	t.Close()
-	if err != nil {
-		return err
-	}
-	if !ok {
-		if rec.PackLanded, err = e.landGatePack(ctx, c, s, owner, name, story, head, me.Login); err != nil {
-			return err
-		}
-		if t, err = s.Ledger.Read(ctx); err != nil {
-			return ledgerErr(err)
-		}
-		entry, ok, err = authoritative(ctx, s, t, story, head)
-		t.Close()
-		if err != nil || !ok {
-			return Errorf(ExitBlocked, "ship #%d: no authoritative pack for %s after landing the gate's run artifact (%v)", n, short(head), err)
-		}
-	}
-	rec.Pack = entry.Path
-	if t, err = s.Ledger.Read(ctx); err != nil {
 		return ledgerErr(err)
 	}
 	exp := proof.Expect{HeadSHA: head}
@@ -190,18 +191,18 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		}
 		exp.CompletionGoalHash, exp.Criteria = snap.CompletionGoalHash, snap.Numbers()
 	}
-	rep := proof.Verify(entry.Pack, exp, s.Opener(ctx, t, entry))
 	t.Close()
+	rep := proof.VerifyLocal(gp.dir, gp.pack, exp)
 	if exp.CompletionGoalHash == "" {
 		rep.Problems = append(rep.Problems, "no Ready snapshot on the ledger")
 	}
 	if len(rep.Problems) > 0 {
-		return Errorf(ExitBlocked, "ship #%d: the authoritative pack does not verify: %s", n, strings.Join(rep.Problems, "; "))
+		return Errorf(ExitBlocked, "ship #%d: the merge gate's pack does not verify: %s", n, strings.Join(rep.Problems, "; "))
 	}
-	if !entry.Pack.FloorsHold() {
-		return Errorf(ExitBlocked, "ship #%d: floors do not hold in the authoritative pack: %s (a floor-waiver Decision under #%d waives one, WP4.9)", n, failing(entry.Pack.Checks), story)
+	if !gp.pack.FloorsHold() {
+		return Errorf(ExitBlocked, "ship #%d: floors do not hold in the merge gate's pack: %s (a floor-waiver Decision under #%d waives one, WP4.9)", n, failing(gp.pack.Checks), story)
 	}
-	for _, ck := range entry.Pack.Checks {
+	for _, ck := range gp.pack.Checks {
 		if ck.Waiver != "" {
 			rec.Waivers = append(rec.Waivers, ck.Floor+" by "+ck.Waiver)
 		}
@@ -213,7 +214,7 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	// EM's plan-time review. A footprint the streak makes autonomous needs no
 	// review.
 	root := config.RepoRoot(e.Dir)
-	rec.Footprint = entry.Pack.Footprint
+	rec.Footprint = gp.pack.Footprint
 	if rec.Footprint == nil {
 		rec.Footprint = []string{}
 	}
@@ -277,7 +278,18 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		rec.HumanPass = hp
 	}
 
-	// 4. Merge, then the Complete section, status:merged, the ship record, and cleanup.
+	// 4. Land the gate's pack (pack.json and data, never media unless the
+	// opt-in bucket is set) under the human's identity, merge, then the
+	// Complete section, status:merged, the ship record, and cleanup.
+	if !c.DryRun() {
+		landed, err := s.Push(ctx, gp.dir, s.Bucket != nil, proof.Authority{Kind: proof.Authoritative,
+			Workflow: ".github/workflows/" + MergeGateWorkflow, RunID: gp.run.GetID(), Writer: me.Login + " (aayu ship)"})
+		if err != nil {
+			return Wrap(ExitExternal, err)
+		}
+		rec.Pack = landed.Path
+		rec.PackLanded = fmt.Sprintf("artifact %d of run %d of the base branch's %s (%s), checked and landed by %s through aayu ship", gp.artifact, gp.run.GetID(), MergeGateWorkflow, gp.run.GetHTMLURL(), me.Login)
+	}
 	var merged *gh.PullRequestMergeResult
 	if _, err := c.Write(ctx, actions.Action{Kind: "github.pull.merge", Target: fmt.Sprintf("%s#%d", repo, n), Story: fmt.Sprintf("#%d", story),
 		Request: &actions.Request{Method: http.MethodPut, Path: fmt.Sprintf("/repos/%s/pulls/%d/merge", repo, n)},
@@ -335,97 +347,138 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	if err := e.checkpoint(tok); err != nil {
 		return Wrap(ExitExternal, fmt.Errorf("merged, but the actions segment did not reach the ledger: %w", err))
 	}
-	return e.Emit(res, func(w io.Writer) error {
+	if err := e.Emit(res, func(w io.Writer) error {
 		fmt.Fprintf(w, "ship #%d: merged as %s; story #%d is status:merged with its Complete section\n", n, short(rec.MergeCommit), story)
-		fmt.Fprintf(w, "  pack %s%s\n", rec.Pack, map[bool]string{true: " (landed from the gate's run artifact: " + rec.PackLanded + ")", false: ""}[rec.PackLanded != ""])
+		fmt.Fprintf(w, "  pack %s (sha256 %s): %s\n", rec.Pack, short(rec.PackSHA256), rec.PackLanded)
 		fmt.Fprintf(w, "  human pass: %s by %s%s\n", rec.HumanPass.Kind, rec.HumanPass.Login, map[bool]string{true: " — " + rec.HumanPass.Note, false: ""}[rec.HumanPass.Note != ""])
 		fmt.Fprintf(w, "  ship record %s; actions segment %s\n", res.Record, rec.Actions)
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
+	// Every ship lands an authoritative pack (the merge gate's), so the first
+	// one is the first proven ship.
+	e.milestone("first-proven-ship", true, "Your first proven ship!", fmt.Sprintf("Story #%d merged with an authoritative proof pack and a recorded human pass.", story))
+	return nil
 }
 
 func dirExists(p string) bool { st, err := os.Stat(p); return err == nil && st.IsDir() }
 
-// authoritative finds the authoritative pack for a story's head on the ledger.
-func authoritative(ctx context.Context, s *proof.Store, t *ledger.Tree, story int, head string) (proof.Entry, bool, error) {
-	es, err := s.Packs(ctx, t, story)
-	if err != nil {
-		return proof.Entry{}, false, err
-	}
-	for _, x := range es {
-		if x.Pack.Authority.Kind == proof.Authoritative && x.Pack.PRHeadSHA == head {
-			return x, true, nil
-		}
-	}
-	return proof.Entry{}, false, nil
+// gatePackRun is the merge gate's pack for a PR head, unpacked into dir.
+type gatePackRun struct {
+	run      *gh.WorkflowRun
+	artifact int64
+	pack     *proof.Pack
+	sha256   string // of the artifact's pack.json
+	dir, tmp string
 }
 
-// landGatePack lands the merge gate's pack on the ledger when CI could not
-// (no bot App, Appendix B D1): the newest successful run of the base
-// branch's aayudha-merge-gate.yml for this head, its aayudha-pack artifact,
-// pushed as authoritative under the human's identity with the run recorded.
-func (e *Env) landGatePack(ctx context.Context, c *github.Client, s *proof.Store, owner, name string, story int, head, login string) (string, error) {
-	runs, _, err := c.REST.Actions.ListWorkflowRunsByFileName(ctx, owner, name, MergeGateWorkflow, &gh.ListWorkflowRunsOptions{HeadSHA: head, Event: "pull_request_target", Status: "success"})
+// gatePack finds the pack the merge gate built for the PR's head (S-4.2b):
+// the aayudha-pack artifact of the newest successful run of the base branch's
+// aayudha-merge-gate.yml (event pull_request_target, so the workflow file is
+// the base branch's and the pull request cannot have edited it) on exactly
+// that head. The pack must be for the story, the PR, and the head, and every
+// artifact's bytes must match its hash in pack.json. Nothing on the ledger,
+// no preview, and no artifact uploaded by another workflow or by the pull
+// request's own copy of the gate counts; a refusal lists every run it passed
+// over and why.
+func (e *Env) gatePack(ctx context.Context, c *github.Client, owner, name string, pr *gh.PullRequest, story int) (gatePackRun, error) {
+	n, head, path := pr.GetNumber(), pr.GetHead().GetSHA(), ".github/workflows/"+MergeGateWorkflow
+	runs, _, err := c.REST.Actions.ListWorkflowRunsByFileName(ctx, owner, name, MergeGateWorkflow, &gh.ListWorkflowRunsOptions{Branch: pr.GetHead().GetRef(), ListOptions: gh.ListOptions{PerPage: 50}})
 	if err != nil {
-		return "", Wrap(ExitExternal, err)
+		return gatePackRun{}, Wrap(ExitExternal, err)
 	}
-	var run *gh.WorkflowRun
+	slices.SortFunc(runs.WorkflowRuns, func(a, b *gh.WorkflowRun) int { return cmp.Compare(b.GetID(), a.GetID()) })
+	var why []string
+	refuse := func(r *gh.WorkflowRun, format string, args ...any) {
+		why = append(why, fmt.Sprintf("run %d: ", r.GetID())+fmt.Sprintf(format, args...))
+	}
 	for _, r := range runs.WorkflowRuns {
-		if r.GetHeadSHA() == head && r.GetConclusion() == "success" && r.GetPath() == ".github/workflows/"+MergeGateWorkflow && (run == nil || r.GetID() > run.GetID()) {
-			run = r
+		switch {
+		case r.GetPath() != path:
+			refuse(r, "a run of %s, not %s", r.GetPath(), path)
+		case r.GetEvent() != "pull_request_target":
+			refuse(r, "a %s run, so the workflow file came from the pull request, not the base branch (only pull_request_target runs count)", r.GetEvent())
+		case r.GetHeadSHA() != head:
+			refuse(r, "proves %s, not the head %s", short(r.GetHeadSHA()), short(head))
+		case r.GetStatus() != "completed" || r.GetConclusion() != "success":
+			refuse(r, "is %s on the head", or(r.GetConclusion(), r.GetStatus()))
+		default:
+			g, err := e.unpackGateRun(ctx, c, owner, name, r, n, story, head)
+			if err == nil {
+				return g, nil
+			}
+			if CodeOf(err) != ExitBlocked {
+				return gatePackRun{}, err
+			}
+			refuse(r, "%v", err)
 		}
 	}
-	if run == nil {
-		return "", Errorf(ExitBlocked, "no authoritative pack for %s: no successful %s run for that head", short(head), MergeGateWorkflow)
+	if len(why) == 0 {
+		why = append(why, "no run of "+path+" for this pull request's branch")
 	}
+	if len(why) > 6 {
+		why = append(why[:6], fmt.Sprintf("%d older run(s)", len(why)-6))
+	}
+	return gatePackRun{}, Errorf(ExitBlocked, "ship #%d: no merge gate pack for the head %s: %s", n, short(head), strings.Join(why, "; "))
+}
+
+// unpackGateRun downloads a merge gate run's aayudha-pack artifact and checks
+// the pack in it: for this story, PR, and head, with every artifact's bytes
+// matching pack.json (proof.LoadLocal).
+func (e *Env) unpackGateRun(ctx context.Context, c *github.Client, owner, name string, run *gh.WorkflowRun, n, story int, head string) (gatePackRun, error) {
 	arts, _, err := c.REST.Actions.ListWorkflowRunArtifacts(ctx, owner, name, run.GetID(), nil)
 	if err != nil {
-		return "", Wrap(ExitExternal, err)
+		return gatePackRun{}, Wrap(ExitExternal, err)
 	}
 	var art *gh.Artifact
 	for _, a := range arts.Artifacts {
-		if a.GetName() == "aayudha-pack" && !a.GetExpired() {
+		if a.GetName() == "aayudha-pack" {
 			art = a
 		}
 	}
-	if art == nil {
-		return "", Errorf(ExitBlocked, "merge gate run %d has no aayudha-pack artifact", run.GetID())
+	switch {
+	case art == nil:
+		return gatePackRun{}, Errorf(ExitBlocked, "it kept no aayudha-pack artifact")
+	case art.GetExpired():
+		return gatePackRun{}, Errorf(ExitBlocked, "its aayudha-pack artifact %d expired (push a commit or re-run the gate for a fresh one)", art.GetID())
 	}
 	u, _, err := c.REST.Actions.DownloadArtifact(ctx, owner, name, art.GetID(), 3)
 	if err != nil {
-		return "", Wrap(ExitExternal, err)
+		return gatePackRun{}, Wrap(ExitExternal, err)
 	}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	resp, err := e.HTTP.Do(req)
 	if err != nil {
-		return "", Wrap(ExitExternal, err)
+		return gatePackRun{}, Wrap(ExitExternal, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	zipped, err := io.ReadAll(io.LimitReader(resp.Body, 512<<20))
 	if err != nil || resp.StatusCode != http.StatusOK {
-		return "", Errorf(ExitExternal, "download artifact %d: HTTP %d %v", art.GetID(), resp.StatusCode, err)
+		return gatePackRun{}, Errorf(ExitExternal, "download artifact %d: HTTP %d %v", art.GetID(), resp.StatusCode, err)
 	}
-	dir, err := os.MkdirTemp("", "aayudha-gate-pack-")
+	g := gatePackRun{run: run, artifact: art.GetID()}
+	if g.tmp, err = os.MkdirTemp("", "aayudha-gate-pack-"); err != nil {
+		return g, err
+	}
+	fail := func(err error) (gatePackRun, error) { _ = os.RemoveAll(g.tmp); return gatePackRun{}, err }
+	if err := unzip(zipped, g.tmp); err != nil {
+		return fail(Errorf(ExitBlocked, "its aayudha-pack artifact %d: %v", art.GetID(), err))
+	}
+	g.dir = filepath.Join(g.tmp, fmt.Sprint(story))
+	raw, err := os.ReadFile(filepath.Join(g.dir, proof.FileName))
 	if err != nil {
-		return "", err
+		return fail(Errorf(ExitBlocked, "its aayudha-pack artifact %d holds no pack for #%d", art.GetID(), story))
 	}
-	defer func() { _ = os.RemoveAll(dir) }()
-	if err := unzip(zipped, dir); err != nil {
-		return "", Wrap(ExitExternal, err)
+	if g.pack, err = proof.LoadLocal(g.dir); err != nil {
+		return fail(Errorf(ExitBlocked, "its aayudha-pack artifact %d: %v", art.GetID(), err))
 	}
-	packDir := filepath.Join(dir, fmt.Sprint(story))
-	p, err := proof.LoadLocal(packDir)
-	if err != nil {
-		return "", Errorf(ExitBlocked, "merge gate run %d's pack: %v", run.GetID(), err)
+	if p := g.pack; p.PRHeadSHA != head || p.Story != story || p.PR != n {
+		return fail(Errorf(ExitBlocked, "its pack is for #%d, PR %d, at %s, not #%d, PR %d, at %s", p.Story, p.PR, short(p.PRHeadSHA), story, n, short(head)))
 	}
-	if p.PRHeadSHA != head || p.Story != story {
-		return "", Errorf(ExitBlocked, "merge gate run %d's pack is for #%d at %s, not #%d at %s", run.GetID(), p.Story, short(p.PRHeadSHA), story, short(head))
-	}
-	note := fmt.Sprintf("run %d of the base branch's %s; landed by %s through aayu ship because CI cannot write the ledger without a bot App (Appendix B D1, D-4.10a)", run.GetID(), MergeGateWorkflow, login)
-	if _, err := s.Push(ctx, packDir, false, proof.Authority{Kind: proof.Authoritative, Workflow: ".github/workflows/" + MergeGateWorkflow, RunID: run.GetID(), Writer: login + " (aayu ship)"}); err != nil {
-		return "", Wrap(ExitExternal, err)
-	}
-	return note, nil
+	sum := sha256.Sum256(raw)
+	g.sha256 = hex.EncodeToString(sum[:])
+	return g, nil
 }
 
 func unzip(b []byte, dir string) error {

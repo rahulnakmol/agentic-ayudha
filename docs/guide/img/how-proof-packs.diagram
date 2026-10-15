@@ -1,0 +1,18 @@
+# Proof packs in detail (docs/guide/how-proof-packs.md).
+title: CI turns mapped tests and floor runs into a hashed pack that ship checks and lands before it merges
+direction: down
+ready: Ready snapshot: criteria and their hash
+map: Evidence map: .aayudha/evidence/N.toml
+verify: verify in the merge gate runs the tests and floors
+pack: pack.json: criteria, artifacts, checks
+art: aayudha-pack run artifact, media included
+comment: PR comment: verdicts, floors, pack hash
+ship: ship checks the run and the hashes
+ledger: ledger: pack.json and data, no media
+ready -> verify: criteria
+map -> verify: tests per criterion
+verify -> pack
+pack -> art: retention_days
+art -> comment: aayudha/pack
+art -> ship: gate run on the head only
+ship -> ledger: human identity

@@ -61,7 +61,7 @@ per_day_usd = 100.0
 per_pr_inspect_max = 5.0
 ci_minutes_month = 2000
 
-# Proof media and retention (V3, WP4.2).
+# Proof media and retention (V3, WP4.2; run artifacts since S-4.2b).
 [proof]
 media = ""
 retention_days = 90
@@ -72,6 +72,26 @@ figma_diff_max = 2.0 # percent of pixels after the anti-aliasing mask
 baseline = ["/"]     # paths baseline captures per commit
 
 # Settings WP1.2 onward read that CONSTRAINTS.md does not render.
+
+# How inspect reviews a PR (WP4.8b): one reviewer (general) or two of different families (peer), and its noise filters.
+[inspect]
+mode = "general"
+delegated_mode = "general" # PRs another agent built through build --delegate (WP5.5b; D-4.8b.7)
+min_confidence = 0.5    # P2 and P3 findings below it are not posted
+suppress_after = 2      # distinct human dismissals a finding must resemble to be suppressed
+peer_model = ""         # empty: the first registry review candidate of another family
+generated = ["LAYERS.md", "CONSTRAINTS.md", "docs/RACI.md", "internal/config/schema.json", "internal/mcp/schemas/*.json", "go.sum", "pnpm-lock.yaml"]
+
+# How build --delegate reaches other agents (WP5.5b). Values name secrets; they never hold them.
+[delegate]
+cursor_secret = "cursor-api-key"
+cursor_api = "https://api.cursor.com"
+cursor_model = ""         # empty: Cursor's default model
+codex_env = ""            # the Codex cloud environment ID; empty: Codex runs only with --local
+amp_orb_size = "a1.small"
+claude_trigger = "@claude"
+checks = []               # empty: the brief points at the checks AGENTS.md lists
+local_timeout_minutes = 60
 
 # Design tokens and OpenFeature flag definitions the design verbs check against (WP6.5).
 [design]

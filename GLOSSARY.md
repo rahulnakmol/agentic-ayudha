@@ -11,6 +11,9 @@ WP in brackets is where the term is built; "n/a until" means it does not exist y
 | Verb registry | `internal/verbs/registry.go`, the single source for verbs, seats, layers, lanes, and gates. Several files are generated from it [WP0.3]. |
 | Seat | One of twelve roles in the pod (Product Strategist, Code Architect, …). Every verb has one Accountable seat; every layer has one owner seat. |
 | Twin | The agent half of a seat. A seat is **solo** (twin only) or **paired** (twin plus a human) [WP5.1]. |
+| Persona | A twin's character and practice: name, voice, values, habits, how it pushes back and praises, what it never does, how it grounds itself, and a practice playbook with public sources. Source: `seats/<seat>/persona.toml`, rendered into charters, skills, and AGENTS.md [WP5.1b]. |
+| Team stage | `[team] stage`: `startup`, `scaleup`, or `enterprise`. Sets the depth and ceremony of each twin's practice (a one-page note to a full artefact), never the floors, the evidence rule, or human-only gates [WP5.1b]. |
+| Evidence rule | Every claim a twin makes about code, architecture, risk, or progress cites its source; anecdotes and analogies illustrate, never replace, evidence. Checked by `seats.CheckGrounding` [WP5.1b]. |
 | Founder | The seat that holds final authority. Founder A owns the plan; founder B is the escalation contact for Decisions. |
 | Layer | One of nine application layers, L01 Experience to L09 Platform / operations. A path belongs to the layer whose glob in [LAYERS.md](LAYERS.md) matches it. |
 | Footprint | The set of layers a story or PR touches, computed from its changed paths. |
@@ -23,9 +26,9 @@ WP in brackets is where the term is built; "n/a until" means it does not exist y
 | Floor | A deterministic check with a threshold (coverage, SAST, secrets, dependencies, accessibility, performance, screen reader, DAST, mobile). Defaults are in [CONSTRAINTS.md](CONSTRAINTS.md) [WP4.3–4.9]. |
 | Waiver | A recorded Decision that lets one floor miss through; `audit` counts waivers [WP5.6]. |
 | Proof pack | `pack.json` plus artifacts that map every Completion Goal criterion to evidence and record floor results for one PR head SHA [WP4.1]. |
-| Authoritative pack | A pack written by the merge-gate workflow in CI. Packs pushed by an agent are **advisory** [WP4.8]. |
+| Authoritative pack | The pack the merge-gate workflow built in CI, kept as its `aayudha-pack` run artifact and landed on `ledger` by a human's `ship` after checking it came from that run. Packs pushed by an agent are **advisory** [WP4.8, S-4.2b]. |
 | `ledger` | An orphan branch holding Ready snapshots, proof packs, action segments, and audit reports. Not for code. |
-| Merge gate | The base-branch workflow that re-runs `verify` on the PR head and writes the authoritative pack [WP4.8]. |
+| Merge gate | The base-branch workflow that re-runs `verify` on the PR head, keeps the authoritative pack as a run artifact, and comments on the PR [WP4.8, S-4.2b]. |
 | Disposition | The structured verdict of `inspect` (`merge`, `fix`, `rebuild`) or `review` (`recapture`, `rebuild`, `fix`, `ship`). It can downgrade a result, never override a floor. |
 | Human pass | An approving review from a human account (`type != Bot`, not a configured bot login) [WP1.4, WP5.5]. |
 | Streak | Consecutive correction-free merges on a layer. At `autonomy.streak`, agents may merge on that layer without a human pass, except on never-layers [WP5.7]. |

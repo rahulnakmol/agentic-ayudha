@@ -1,0 +1,50 @@
+diff --git a/internal/session/store.go b/internal/session/store.go
+new file mode 100644
+index 0000000..9dc856d
+--- /dev/null
++++ b/internal/session/store.go
+@@ -0,0 +1,29 @@
++package session
++
++import "sync"
++
++// Store keeps session values in memory. It is safe for concurrent use.
++type Store struct {
++	mu     sync.Mutex
++	values map[string]string
++}
++
++// NewStore returns an empty store.
++func NewStore() *Store {
++	return &Store{}
++}
++
++// Set stores v under k, replacing any earlier value.
++func (s *Store) Set(k, v string) {
++	s.mu.Lock()
++	defer s.mu.Unlock()
++	s.values[k] = v
++}
++
++// Get returns the value under k and whether it exists.
++func (s *Store) Get(k string) (string, bool) {
++	s.mu.Lock()
++	defer s.mu.Unlock()
++	v, ok := s.values[k]
++	return v, ok
++}
+diff --git a/internal/session/store_test.go b/internal/session/store_test.go
+new file mode 100644
+index 0000000..e5d17ff
+--- /dev/null
++++ b/internal/session/store_test.go
+@@ -0,0 +1,9 @@
++package session
++
++import "testing"
++
++func TestGetMissing(t *testing.T) {
++	if v, ok := NewStore().Get("missing"); ok || v != "" {
++		t.Fatalf("got %q %v", v, ok)
++	}
++}

@@ -1,0 +1,4 @@
+{
+  "install": "bash .agents/setup",
+  "name": "aayudha (.agents/setup)"
+}

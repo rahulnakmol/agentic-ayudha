@@ -1,0 +1,41 @@
+package rates
+
+import (
+	"context"
+	"errors"
+	"testing"
+	"time"
+)
+
+func TestRetrySucceedsOnThirdCall(t *testing.T) {
+	calls := 0
+	err := Retry(context.Background(), 3, time.Millisecond, func(context.Context) error {
+		calls++
+		if calls < 3 {
+			return errors.New("busy")
+		}
+		return nil
+	})
+	if err != nil || calls != 3 {
+		t.Fatalf("err %v after %d calls", err, calls)
+	}
+}
+
+func TestRetryStopsWhenCancelled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	calls := 0
+	err := Retry(ctx, 3, time.Second, func(context.Context) error {
+		calls++
+		cancel()
+		return errors.New("busy")
+	})
+	if !errors.Is(err, context.Canceled) || calls != 1 {
+		t.Fatalf("err %v after %d calls", err, calls)
+	}
+}
+
+func TestRetryNeedsAnAttempt(t *testing.T) {
+	if err := Retry(context.Background(), 0, time.Millisecond, nil); err == nil {
+		t.Fatal("0 attempts accepted")
+	}
+}

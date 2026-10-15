@@ -173,7 +173,8 @@ func (s *Sandbox) Run(ctx context.Context, c Cmd) (Out, error) {
 	return out, nil
 }
 
-// lookPath resolves a tool on the child's PATH, not the parent's.
+// lookPath resolves a tool on the child's PATH, not the parent's. On Windows
+// exec.LookPath tries each PATHEXT extension, so npm's .cmd shims resolve too.
 func lookPath(name string, env []string) (string, error) {
 	if strings.ContainsAny(name, `/\`) {
 		return name, nil
@@ -181,11 +182,10 @@ func lookPath(name string, env []string) (string, error) {
 	for _, kv := range env {
 		if v, ok := strings.CutPrefix(kv, "PATH="); ok {
 			for _, dir := range filepath.SplitList(v) {
-				p := filepath.Join(dir, name)
-				if st, err := os.Stat(p); err == nil && !st.IsDir() && st.Mode()&0o111 != 0 {
-					return p, nil
+				if dir == "" {
+					continue // a bare name would make exec.LookPath search the parent's PATH
 				}
-				if p, err := exec.LookPath(p + ".exe"); err == nil {
+				if p, err := exec.LookPath(filepath.Join(dir, name)); err == nil {
 					return p, nil
 				}
 			}

@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"slices"
 	"strconv"
 	"strings"
@@ -47,19 +49,22 @@ func gateArtifact(g *fake.GitHub, head string, arts ...fake.ArtifactZip) {
 	defer g.Mu.Unlock()
 	g.Runs = []fake.WorkflowRun{{ID: 8000, Path: ".github/workflows/aayudha-merge-gate.yml", HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "success"}}
 	g.Artifacts = map[int64][]fake.ArtifactZip{8000: arts}
-	g.CheckRuns[head] = []fake.CheckRun{{Name: "aayudha/merge-gate", Status: "completed", Conclusion: "success"}, {Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}}
+	g.CheckRuns[head] = []fake.CheckRun{{Name: "aayudha/merge-gate", Status: "completed", Conclusion: "success"}, {Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}, {Name: "aayudha/pack", Status: "completed", Conclusion: "success"}}
 }
 
-// WP4.10/WP5.5 ship refuses, before merging anything: without the human's
-// token; a PR that does not exist, is already merged or closed, or serves no
-// story; a merge gate that is red or still running on the head; a gate whose
-// pack cannot be trusted: no aayudha-pack artifact, an artifact that is not a
-// zip or has an entry outside its directory, no pack for the story, no
-// successful run, or a pack for another head; GitHub failing a read on the
-// way to the pack (exit 5); a pack with no Ready snapshot on the ledger to
-// verify against; and a repository without a ledger.
+// WP4.10/WP5.5 and S-4.2b: ship refuses, before landing or merging anything:
+// without the human's token; a PR that does not exist, is already merged or
+// closed, or serves no story; no pack from the merge gate for the head: no
+// run, a run of the pull request's own copy of the workflow (a pull_request
+// run, however green its jobs look), a successful run on another head, a
+// failed run, no aayudha-pack artifact, an artifact that is not a zip or has
+// an entry outside its directory, no pack for the story, an artifact whose
+// bytes do not match pack.json, or a pack for another head; a merge gate check
+// that is red or still running on the head; GitHub failing a read on the way
+// to the pack (exit 5); a pack with no Ready snapshot on the ledger to verify
+// against; and a repository without a ledger.
 func TestShipRefusals(t *testing.T) {
-	g, env, opts, dir, _, prN, head := thinFixture(t)
+	g, env, opts, dir, bare, prN, head := thinFixture(t)
 	ship := func(n int, args ...string) (int, string) { return shipCmd(t, env, opts, n, args...) }
 
 	if code, _, errOut := run(t, nil, opts, "ship", strconv.Itoa(prN), "--repo", "o/r"); code != ExitBlocked {
@@ -84,20 +89,31 @@ func TestShipRefusals(t *testing.T) {
 	if code, out := ship(chore.Number); code != ExitBlocked || !strings.Contains(out, "no story (Refs #n in the PR body)") {
 		t.Fatalf("ship of a PR without Refs: %d %s", code, out)
 	}
+	if code, out := ship(prN); code != ExitBlocked || !strings.Contains(out, "no merge gate pack for the head "+short(head)+": no run of .github/workflows/aayudha-merge-gate.yml") {
+		t.Fatalf("ship with no gate run: %d %s", code, out)
+	}
 
-	for _, gate := range []fake.CheckRun{
-		{Name: "aayudha/merge-gate", Status: "completed", Conclusion: "failure"},
-		{Name: "aayudha/merge-gate", Status: "in_progress"},
+	// Runs that are not the base branch's gate on this head, each with a pack that would otherwise ship.
+	other := strings.Repeat("f", 40)
+	for _, tt := range []struct {
+		name string
+		edit func(r *fake.WorkflowRun)
+		want string
+	}{
+		{"the PR's own copy of the gate", func(r *fake.WorkflowRun) { r.Event = "pull_request" },
+			"a pull_request run, so the workflow file came from the pull request, not the base branch"},
+		{"a run on another head", func(r *fake.WorkflowRun) { r.HeadSHA = other }, "proves " + short(other) + ", not the head " + short(head)},
+		{"a failed run", func(r *fake.WorkflowRun) { r.Conclusion = "failure" }, "is failure on the head"},
+		{"a run in progress", func(r *fake.WorkflowRun) { r.Status, r.Conclusion = "in_progress", "" }, "is in_progress on the head"},
 	} {
+		gateRun(t, g, dir, prN, head, coverageHolds)
 		g.Mu.Lock()
-		g.CheckRuns[head] = []fake.CheckRun{gate, {Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}}
+		g.Runs = g.Runs[len(g.Runs)-1:]
+		tt.edit(&g.Runs[0])
+		id := g.Runs[0].ID
 		g.Mu.Unlock()
-		want := "aayudha/merge-gate is " + gate.Conclusion + " on "
-		if gate.Conclusion == "" {
-			want = "aayudha/merge-gate is in_progress on "
-		}
-		if code, out := ship(prN); code != ExitBlocked || !strings.Contains(out, want) || !strings.Contains(out, "the merge gate must be green") {
-			t.Fatalf("ship with the gate %s/%s: %d %s", gate.Status, gate.Conclusion, code, out)
+		if code, out := ship(prN); code != ExitBlocked || !strings.Contains(out, "run "+strconv.FormatInt(id, 10)+": "+tt.want) {
+			t.Errorf("ship with %s: %d %s", tt.name, code, out)
 		}
 	}
 
@@ -110,10 +126,10 @@ func TestShipRefusals(t *testing.T) {
 		code int
 		want string
 	}{
-		{"no aayudha-pack artifact", []fake.ArtifactZip{{ID: 8001, Name: "coverage", Zip: zipOf(nil)}}, ExitBlocked, "merge gate run 8000 has no aayudha-pack artifact"},
-		{"an artifact that is not a zip", []fake.ArtifactZip{{ID: 8002, Name: "aayudha-pack", Zip: []byte("not a zip")}}, ExitExternal, "zip"},
-		{"an entry outside the artifact", []fake.ArtifactZip{pack(8003, map[string]string{"2/": "", "../escape.json": "{}"})}, ExitExternal, `artifact entry "../escape.json"`},
-		{"no pack for the story", []fake.ArtifactZip{pack(8004, map[string]string{"README.txt": "nothing here"})}, ExitBlocked, "merge gate run 8000's pack: "},
+		{"no aayudha-pack artifact", []fake.ArtifactZip{{ID: 8001, Name: "coverage", Zip: zipOf(nil)}}, ExitBlocked, "run 8000: it kept no aayudha-pack artifact"},
+		{"an artifact that is not a zip", []fake.ArtifactZip{{ID: 8002, Name: "aayudha-pack", Zip: []byte("not a zip")}}, ExitBlocked, "run 8000: its aayudha-pack artifact 8002: zip"},
+		{"an entry outside the artifact", []fake.ArtifactZip{pack(8003, map[string]string{"2/": "", "../escape.json": "{}"})}, ExitBlocked, `artifact entry "../escape.json"`},
+		{"no pack for the story", []fake.ArtifactZip{pack(8004, map[string]string{"README.txt": "nothing here"})}, ExitBlocked, "run 8000: its aayudha-pack artifact 8004 holds no pack for #2"},
 	}
 	for _, tt := range tests {
 		gateArtifact(g, head, tt.arts...)
@@ -121,12 +137,41 @@ func TestShipRefusals(t *testing.T) {
 			t.Errorf("ship with %s: %d %s", tt.name, code, out)
 		}
 	}
-	gateArtifact(g, head)
+
+	// An artifact whose evidence was changed after the gate hashed it.
+	gateRun(t, g, dir, prN, head, coverageHolds)
 	g.Mu.Lock()
-	g.Runs = nil
+	run := g.Runs[len(g.Runs)-1]
+	zr, _ := zip.NewReader(bytes.NewReader(g.Artifacts[run.ID][0].Zip), int64(len(g.Artifacts[run.ID][0].Zip)))
+	files := map[string]string{}
+	for _, f := range zr.File {
+		rc, _ := f.Open()
+		b, _ := io.ReadAll(rc)
+		files[f.Name] = string(b)
+	}
+	files["2/artifacts/evidence/criterion-1.jsonl"] = `{"Action":"pass","Test":"TestSomethingElse"}` + "\n"
+	g.Runs, g.Artifacts[run.ID] = []fake.WorkflowRun{run}, []fake.ArtifactZip{pack(run.ID+1, files)}
 	g.Mu.Unlock()
-	if code, out := ship(prN); code != ExitBlocked || !strings.Contains(out, "no successful aayudha-merge-gate.yml run for that head") {
-		t.Fatalf("ship with a green check but no gate run: %d %s", code, out)
+	if code, out := ship(prN); code != ExitBlocked || !strings.Contains(out, "artifact evidence/criterion-1.jsonl: hash mismatch") {
+		t.Errorf("ship with a tampered artifact: %d %s", code, out)
+	}
+
+	// A green pack, but a merge gate check red or still running on the head.
+	for _, gate := range []fake.CheckRun{
+		{Name: "aayudha/merge-gate", Status: "completed", Conclusion: "failure"},
+		{Name: "aayudha/pack", Status: "in_progress"},
+	} {
+		gateRun(t, g, dir, prN, head, coverageHolds)
+		g.Mu.Lock()
+		g.CheckRuns[head] = slices.Insert(g.CheckRuns[head], 0, gate)
+		g.Mu.Unlock()
+		want := gate.Name + " is " + or(gate.Conclusion, gate.Status) + " on "
+		if code, out := ship(prN); code != ExitBlocked || !strings.Contains(out, want) || !strings.Contains(out, "the merge gate must be green") {
+			t.Fatalf("ship with %s %s/%s: %d %s", gate.Name, gate.Status, gate.Conclusion, code, out)
+		}
+	}
+	if got := git(t, bare, "ls-tree", "-r", "--name-only", "ledger", "proof/"); got != "" {
+		t.Fatalf("a refused ship landed a pack:\n%s", got)
 	}
 
 	// GitHub failing a read on the way to the gate's pack: exit 5, nothing landed.
@@ -149,13 +194,13 @@ func TestShipRefusals(t *testing.T) {
 	}
 
 	// The gate's pack names another head than the run it came from.
-	other := strings.Repeat("f", 40)
 	gateRun(t, g, dir, prN, other, coverageHolds)
 	g.Mu.Lock()
-	g.Runs[len(g.Runs)-1].HeadSHA = head
+	g.Runs = g.Runs[len(g.Runs)-1:]
+	g.Runs[0].HeadSHA = head
 	g.CheckRuns[head] = g.CheckRuns[other]
 	g.Mu.Unlock()
-	if code, out := ship(prN); code != ExitBlocked || !strings.Contains(out, "pack is for #2 at "+short(other)+", not #2 at "+short(head)) {
+	if code, out := ship(prN); code != ExitBlocked || !strings.Contains(out, fmt.Sprintf("its pack is for #2, PR %d, at %s, not #2, PR %d, at %s", prN, short(other), prN, short(head))) {
 		t.Fatalf("ship with a pack for another head: %d %s", code, out)
 	}
 
@@ -164,7 +209,7 @@ func TestShipRefusals(t *testing.T) {
 	if _, err := (&ledger.Writer{Dir: dir}).Write(context.Background(), ledger.Commit{Message: "drop the snapshot", Delete: []string{ready.LedgerPath(2)}}); err != nil {
 		t.Fatal(err)
 	}
-	if code, out := ship(prN); code != ExitBlocked || !strings.Contains(out, "the authoritative pack does not verify: ") || !strings.Contains(out, "no Ready snapshot on the ledger") {
+	if code, out := ship(prN); code != ExitBlocked || !strings.Contains(out, "the merge gate's pack does not verify: ") || !strings.Contains(out, "no Ready snapshot on the ledger") {
 		t.Fatalf("ship without a Ready snapshot: %d %s", code, out)
 	}
 	git(t, dir, "push", "--quiet", "origin", "--delete", "ledger")

@@ -95,15 +95,19 @@ func call(t *testing.T, cs *sdk.ClientSession, name string, args map[string]any)
 }
 
 // The never-exposed verbs: human-only or admin (registry Exposure never).
-var neverExposed = []string{"decide", "ship", "release", "respond", "init", "install"}
+var neverExposed = []string{"ship", "release", "respond", "init", "install"}
 
 func TestMCPDefaultExposure(t *testing.T) {
 	cs := serveMCP(t, gitInit(t, "dev", nil))
 	names, tools := toolNames(t, cs)
 	// Read and authoring verbs only (the SDK lists tools by name).
-	want := []string{"brief", "doctor", "grill", "plan", "proof", "ready", "research", "slice", "status"}
+	want := []string{"brief", "decide", "doctor", "grill", "plan", "proof", "ready", "research", "slice", "status"}
 	if !slices.Equal(names, want) {
 		t.Fatalf("tools = %v, want %v", names, want)
+	}
+	// decide is exposed as decide --pack (WP5.1b): read-only, and never with the human-only --accept.
+	if p := props(t, tools["decide"]); p["pack"] != nil || p["accept"] != nil || p["seat"] == nil {
+		t.Errorf("decide tool properties %v: want --pack pinned, no --accept", p)
 	}
 	// ready is exposed as ready --check: the caller cannot choose to write.
 	if _, ok := props(t, tools["ready"])["check"]; ok {
@@ -117,8 +121,8 @@ func TestMCPDefaultExposure(t *testing.T) {
 	if out, isErr := call(t, cs, "ready", map[string]any{"issue": "12", "check": false}); !isErr || !strings.Contains(out, `unknown argument "check"`) {
 		t.Fatalf("ready with check=false: %q", out)
 	}
-	if out, isErr := call(t, cs, "proof", map[string]any{"action": "purge", "story": "12"}); !isErr || !strings.Contains(out, "writes") {
-		t.Fatalf("proof purge without expose_writes: %q", out)
+	if out, isErr := call(t, cs, "proof", map[string]any{"action": "push", "story": "12"}); !isErr || !strings.Contains(out, "writes") {
+		t.Fatalf("proof push without expose_writes: %q", out)
 	}
 	if _, ok := props(t, tools["status"])["digest"]; ok {
 		t.Error("status exposes --digest (a notify write) without expose_writes")
@@ -173,6 +177,9 @@ func TestMCPWritesAndDryRun(t *testing.T) {
 	}
 	if _, ok := props(t, tools["tell"])["publish"]; ok {
 		t.Error("tell exposes the human-only --publish")
+	}
+	if _, ok := props(t, tools["decide"])["accept"]; ok {
+		t.Error("decide exposes the human-only --accept")
 	}
 	if _, ok := props(t, tools["triage"])["dry_run"]; !ok {
 		t.Error("triage has no dry_run argument")

@@ -2,8 +2,10 @@ package models
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -81,6 +83,34 @@ func (b *Breaker) Seed(recs []actions.Record) {
 		}
 		b.perDay[b.day(r.Time)] += r.CostUSD
 	}
+}
+
+// SeedLog seeds the breaker from the actions log at path (WP1.5), so the
+// per-day and per-story limits count the spend of every process that logged
+// to it, not only this one's (Bug #177). A missing log seeds nothing.
+func (b *Breaker) SeedLog(path string) error {
+	f, err := os.Open(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+	var recs []actions.Record
+	for dec := json.NewDecoder(f); ; {
+		var r actions.Record
+		err := dec.Decode(&r)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil { // a read error (a directory, say) as well as a malformed record
+			return fmt.Errorf("%s: %w", path, err)
+		}
+		recs = append(recs, r)
+	}
+	b.Seed(recs)
+	return nil
 }
 
 // Paused reports whether agent lanes are paused.
@@ -213,6 +243,27 @@ func (g *Gateway) Do(ctx context.Context, c Call) (Response, Resolved, error) {
 		}
 	}
 	return resp, m, nil
+}
+
+// WithModel is the gateway with lane on host pinned to model, for a call the
+// binary routes to a named model of the lane (inspect's peer reviewer,
+// WP4.8b). Accounting, the breaker, and the actions log are shared.
+func (g *Gateway) WithModel(lane verbs.LaneID, host verbs.HostID, model string) *Gateway {
+	c := *g
+	lanes := map[string]map[string]config.ModelChoice{}
+	for l, hosts := range g.Models.Lanes {
+		lanes[l] = map[string]config.ModelChoice{}
+		for h, mc := range hosts {
+			lanes[l][h] = mc
+		}
+	}
+	if lanes[string(lane)] == nil {
+		lanes[string(lane)] = map[string]config.ModelChoice{}
+	}
+	lanes[string(lane)][string(host)] = config.ModelChoice{Model: model}
+	c.Models.Lanes = lanes
+	c.Resolver.Models = c.Models
+	return &c
 }
 
 func (g *Gateway) client(route Route, key string) Client {

@@ -1,0 +1,39 @@
+diff --git a/internal/catalog/page.go b/internal/catalog/page.go
+new file mode 100644
+index 0000000..ad0b505
+--- /dev/null
++++ b/internal/catalog/page.go
+@@ -0,0 +1,15 @@
++package catalog
++
++// Page returns the items of page n (1-based) with size items per page, and
++// whether another page follows. A page past the end is empty.
++func Page(items []string, n, size int) ([]string, bool) {
++	if n < 1 || size < 1 {
++		return nil, false
++	}
++	start := n * size
++	if start >= len(items) {
++		return nil, false
++	}
++	end := min(start+size, len(items))
++	return items[start:end], end < len(items)
++}
+diff --git a/internal/catalog/page_test.go b/internal/catalog/page_test.go
+new file mode 100644
+index 0000000..ab412ca
+--- /dev/null
++++ b/internal/catalog/page_test.go
+@@ -0,0 +1,12 @@
++package catalog
++
++import "testing"
++
++func TestPageBounds(t *testing.T) {
++	if got, more := Page(nil, 0, 10); got != nil || more {
++		t.Fatalf("page 0: %v %v", got, more)
++	}
++	if got, more := Page([]string{"a"}, 5, 10); got != nil || more {
++		t.Fatalf("past the end: %v %v", got, more)
++	}
++}

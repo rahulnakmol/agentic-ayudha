@@ -12,9 +12,10 @@ var wantVerbs = strings.Fields(`grill slice plan decide triage build verify insp
 research wireframe mockup prototype review polish baseline experiment readout respond status audit retro
 measure evolve brief tell init install doctor`)
 
-// wantPlumbing is the plumbing list from docs/BUILD-PLAN.md V7, in plan order.
+// wantPlumbing is the plumbing list from docs/BUILD-PLAN.md V7, in plan order,
+// then the three WP1.1b adds by founder request (Appendix B S-1.1b).
 var wantPlumbing = strings.Fields(`config auth actions models mcp self-update upgrade version halt resume gc
-uninit hook seat lfs-agent`)
+uninit hook seat lfs-agent next tour completion`)
 
 func names(cs []Command) []string {
 	out := make([]string, len(cs))
@@ -37,14 +38,53 @@ func TestRegistry(t *testing.T) {
 			}
 			return nil
 		}},
-		{"15 plumbing commands in plan order", func() error {
-			if got := names(Plumbing); !slices.Equal(got, wantPlumbing) || len(got) != 15 {
+		{"15 plumbing commands in plan order, then the 3 of WP1.1b", func() error {
+			if got := names(Plumbing); !slices.Equal(got, wantPlumbing) || len(got) != 18 {
 				return fmt.Errorf("plumbing = %v, want %v", got, wantPlumbing)
 			}
 			return nil
 		}},
 		{"command names unique across verbs and plumbing", func() error {
 			return unique(names(all))
+		}},
+		{"every verb in one journey stage, every stage used, plumbing in none", func() error {
+			used := map[StageID]bool{}
+			for _, s := range Stages {
+				used[s.ID] = false
+			}
+			for _, c := range Verbs {
+				if _, ok := used[c.Stage]; !ok {
+					return fmt.Errorf("verb %s: stage %q is not in Stages", c.Name, c.Stage)
+				}
+				used[c.Stage] = true
+			}
+			for id, ok := range used {
+				if !ok {
+					return fmt.Errorf("stage %s has no verb", id)
+				}
+			}
+			for _, c := range Plumbing {
+				if c.Stage != "" || c.Reader != "" {
+					return fmt.Errorf("plumbing %s has a stage or a reader summary", c.Name)
+				}
+			}
+			return nil
+		}},
+		{"every verb has a plain reader summary, one sentence, distinct from its agent summary", func() error {
+			for _, c := range Verbs {
+				r := strings.TrimSpace(c.Reader)
+				switch {
+				case r == "":
+					return fmt.Errorf("verb %s has no reader summary", c.Name)
+				case len(r) > 160:
+					return fmt.Errorf("verb %s: reader summary is %d chars, want <= 160", c.Name, len(r))
+				case !strings.HasSuffix(r, ".") || strings.Count(r, ". ") > 0:
+					return fmt.Errorf("verb %s: reader summary is not one sentence ending in a full stop", c.Name)
+				case r == c.Summary:
+					return fmt.Errorf("verb %s: reader summary repeats the agent summary", c.Name)
+				}
+			}
+			return nil
 		}},
 		{"12 seats with unique IDs", func() error {
 			ids := make([]string, len(Seats))

@@ -7,14 +7,18 @@
 # holds the model key but never runs PR code: it reads the diff through the API and the pack the gate produced.
 #
 #   gate     re-runs `verify` on the PR head and fails when a floor misses, the pack does not prove the head,
-#            the story's Completion Goal drifted from its Ready snapshot, or a criterion has no evidence.
+#            the story's Completion Goal drifted from its Ready snapshot, or a criterion has no evidence. It keeps
+#            the pack (pack.json and every artifact, media included) as the aayudha-pack run artifact for
+#            [proof] retention_days, at most the repository's artifact retention limit.
 #   inspect  the review lane's model judges the PR against the pack and criteria; fix or rebuild fails it.
-#   pack     writes the gate's pack to the ledger as the authoritative pack, with the bot App's token. Without an
-#            App (day one) the pack stays a run artifact and `aayu ship` lands it under the human's identity.
+#   pack     checks the run's pack against the PR head and the Ready snapshot and keeps one PR comment with each
+#            criterion's verdict, the floors, the pack's SHA-256, and a link to the artifact; it fails when the pack
+#            does not verify or a floor does not hold. Only the workflow token: CI writes nothing to the ledger.
+#            `aayu ship`, run by a human, checks that the artifact came from this workflow's run on the exact head
+#            and lands pack.json (no media) on the ledger under the human's identity (Appendix B S-4.2b).
 #
 # Setup: model keys in the `ai-gateway` environment (AAYU_SECRET_AI_GATEWAY with variable AAYU_AI_GATEWAY_URL,
-# or a provider key such as AAYU_SECRET_OPENAI); the bot App (AAYUDHA_APP_CLIENT_ID, AAYUDHA_APP_PRIVATE_KEY)
-# from `aayu init --identity`.
+# or a provider key such as AAYU_SECRET_OPENAI). Proof needs no bot App, bucket, or secret.
 name: aayudha-merge-gate
 
 on:
@@ -47,6 +51,8 @@ jobs:
       issues: read
     outputs:
       story: ${{ steps.verify.outputs.story }}
+      retention: ${{ steps.verify.outputs.retention }}
+      artifact-url: ${{ steps.keep.outputs.artifact-url }}
     env:
       GITLEAKS_VERSION: "8.30.1"
       GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb # linux_x64
@@ -106,10 +112,13 @@ jobs:
           code=$?
           set -e
           echo "story=$(jq -s '.[0].story // 0' "$RUNNER_TEMP/verify.json")" >> "$GITHUB_OUTPUT"
+          # [proof] retention_days, at most the repository's artifact retention limit (GITHUB_RETENTION_DAYS).
+          echo "retention=$(jq -s '.[0].retention_days // 0' "$RUNNER_TEMP/verify.json")" >> "$GITHUB_OUTPUT"
           jq -s -r '.[0] | "### aayudha verify: story #\(.story // "none"), head \(.head[0:7])\n\n| Floor | Result | Value | Threshold | Tool |\n|---|---|---|---|---|\n" + ([.checks[]? | "| \(.floor) | \(.result) | \(.value) | \(.threshold) | \(.tool) \(.version) |"] | join("\n")) + "\n\n" + ([(.gate_problems // [])[] | "- merge gate: " + .] | join("\n"))' "$RUNNER_TEMP/verify.json" >> "$GITHUB_STEP_SUMMARY"
           jq -s -c '.' "$RUNNER_TEMP/verify.json"
           exit "$code"
       - name: Keep the pack
+        id: keep
         if: always() && steps.verify.outputs.story != '0' && steps.verify.outputs.story != ''
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -117,7 +126,7 @@ jobs:
           path: head/.aayudha/proof/
           include-hidden-files: true
           if-no-files-found: ignore
-          retention-days: 30
+          retention-days: ${{ steps.verify.outputs.retention }}
 
   inspect:
     name: aayudha/inspect
@@ -131,6 +140,12 @@ jobs:
       pull-requests: write
       issues: read
     steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
       - name: Check out the base branch (trusted configuration; no PR code)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -166,45 +181,36 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+      pull-requests: write
     steps:
-      - name: No bot App
-        if: vars.AAYUDHA_APP_CLIENT_ID == ''
-        run: echo "::notice::No bot App (aayu init --identity), so CI cannot write the ledger (Appendix B D1). The authoritative pack stays this run's aayudha-pack artifact; aayu ship lands it under the human identity (Appendix B D-4.8a)."
-      - name: Mint the bot token (ledger writer)
-        id: app
-        if: vars.AAYUDHA_APP_CLIENT_ID != ''
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          client-id: ${{ vars.AAYUDHA_APP_CLIENT_ID }}
-          private-key: ${{ secrets.AAYUDHA_APP_PRIVATE_KEY }}
-          permission-contents: write
-          permission-issues: write
-          permission-pull-requests: write
-      - name: Check out the base branch
-        if: vars.AAYUDHA_APP_CLIENT_ID != ''
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - name: Check out the base branch (trusted configuration; no PR code)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        if: vars.AAYUDHA_APP_CLIENT_ID != ''
         with:
           go-version: "1.25.x"
           cache: false
       - name: Install aayudha {{VERSION}}
-        if: vars.AAYUDHA_APP_CLIENT_ID != ''
         run: |
           set -euo pipefail
           if [ "$AAYU_VERSION" = dev ]; then export GOPROXY=direct GONOSUMDB=github.com/rahulnakmol/agentic-ayudha; fi
           go install "github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@$AAYU_VERSION"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        if: vars.AAYUDHA_APP_CLIENT_ID != ''
         with:
           name: aayudha-pack
           path: .aayudha/proof/
-      - name: Write the authoritative pack to the ledger
-        if: vars.AAYUDHA_APP_CLIENT_ID != ''
+      # The workflow token only: the comment is the PR's view of the pack, and nothing is written to the ledger.
+      - name: Check the pack and keep the PR comment
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          AAYU_BOT_TOKEN: ${{ steps.app.outputs.token }}
           STORY: ${{ needs.gate.outputs.story }}
-        run: aayudha proof push "$STORY" --ci --repo "$REPO"
+          AAYU_PACK_ARTIFACT_URL: ${{ needs.gate.outputs.artifact-url }}
+          AAYU_PACK_RETENTION_DAYS: ${{ needs.gate.outputs.retention }}
+        run: aayudha proof comment "$STORY" --ci --repo "$REPO"

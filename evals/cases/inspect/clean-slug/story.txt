@@ -1,0 +1,2 @@
+Product URLs from names
+Each product page has a readable URL made from its name: lower case, letters and digits only, words joined by single hyphens.

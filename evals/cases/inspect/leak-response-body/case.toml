@@ -1,0 +1,21 @@
+# Seeded-defect PR for inspect (WP4.8b): Fetch never closes the response body (bug).
+# Synthetic: written for this eval, with its defects planted on purpose; never run. The head's files are kept
+# as <path>.txt so this repository's build, linters, and scanners never compile or flag the planted defects.
+skill = "inspect"
+description = "Fetch never closes the response body (bug)"
+input = "pr.diff"
+
+[review]
+story = "story.txt"
+files = "files"
+builder = "claude-opus-5-5"
+criteria = [
+  "1. [api-trace] state: `Fetch(ctx, \"EUR\")` against a service answering {\"rate\":1.08}; expected: returns 1.08",
+  "2. [api-trace] state: `Fetch(ctx, \"XXX\")` against a service answering 404; expected: returns an error naming XXX",
+]
+
+[[review.defects]]
+file = "internal/rates/client.go"
+lines = [23, 33]
+kind = "bug"
+title = "the response body is never closed"

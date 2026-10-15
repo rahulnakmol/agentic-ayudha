@@ -4,7 +4,7 @@
 version = 1
 
 [proof]
-media = "" # required: private bucket. Public repository: proof media never go to Git LFS (V3); `proof push` refuses media until this is set.
+media = "" # optional private bucket. Proof media stay in the merge gate's run artifact without one; design and UI baseline media need one here, since a public repository never puts media in Git LFS (V3).
 
 # aayudha has no paging channel yet: pages go to a JSON-lines outbox, which the Actions loops keep as an artifact (WP7.1).
 [notify]

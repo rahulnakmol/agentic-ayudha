@@ -37,7 +37,7 @@ FAIL  schema  repository schema is newer than this aayu: .aayudha/config.toml is
 ## host pass
 PASS  host  host amp (from AMP_THREAD_ID)
 ## host fail
-WARN  host  no host detected (Amp, Cursor, or Claude Code); pass --host when running outside one
+WARN  host  no host detected (Amp, Claude Code, OpenAI Codex, or Cursor); pass --host when running outside one
 ## secrets pass
 PASS  secrets  secrets backends: env, file
                  unavailable: keychain (no Secret Service)
@@ -60,8 +60,14 @@ N/A  lfs-quota  LFS quota: GitHub has no quota API for this account; watch Setti
 ## ledger-media pass
 PASS  ledger-media  no ledger branch fetched (origin/ledger)
 ## ledger-media fail
-FAIL  ledger-media  repository is public but its ledger tracks proof media in Git LFS (V3): LFS objects cannot be purged from GitHub [blocking]
-                      set [proof] media to a private bucket, remove .lfsconfig and the LFS lines of .gitattributes from ledger, and purge media already pushed
+FAIL  ledger-media  repository is public but its ledger tracks media in Git LFS (V3): LFS objects cannot be purged from GitHub [blocking]
+                      remove .lfsconfig and the LFS lines of .gitattributes from ledger and delete media already pushed there; proof media stay in run artifacts (S-4.2b), and design media need [proof] media
+## proof pass
+PASS  proof  proof: the merge gate keeps each pack as its aayudha-pack run artifact for 90 days (GitHub allows at most 90 on a public repository, 400 on a private one), and `aayu ship` lands pack.json on the ledger; no bot App, bucket, or secret needed
+## proof fail
+WARN  proof  proof: the merge gate keeps each pack as its aayudha-pack run artifact for 90 days (GitHub allows at most 90 on a public repository, 400 on a private one), and `aayu ship` lands pack.json on the ledger; no bot App, bucket, or secret needed
+               loops/proof-purge.toml runs `aayu proof purge`, which 0.2 removed (media expire with their run artifact): delete it, then run `aayu init --gates` to re-render the loops
+               .github/workflows/aayudha-merge-gate.yml is a 0.1 gate (its aayudha/pack job writes the ledger with a bot App instead of checking the pack and commenting): run `aayu init --gates`, which replaces it unless you edited it
 ## issue-types pass
 PASS  issue-types  organization repository: GitHub issue types are available
 ## issue-types fail
@@ -98,6 +104,19 @@ PASS  worktrees  no leaked worktrees
 ## worktrees fail
 WARN  worktrees  1 leaked worktree(s); `aayu gc` prunes them
                    /tmp/wt-x (gitdir file points to non-existent location)
+## delegate-env pass
+PASS  delegate-env  delegation environments not set up: no .agents/setup (cloud receivers of `build --delegate` install with it)
+## delegate-env fail
+WARN  delegate-env  2 delegation environment(s) drifted from .agents/setup; `aayu doctor --fix` re-syncs .cursor/environment.json
+                      source: drift: .agents/setup is not executable (chmod +x; Amp runs it directly)
+                        .agents/setup installs Go 1.24.0, older than go.mod's go 1.25.0
+                      amp: ok: orbs run .agents/setup natively when a project snapshot is prepared
+                      cursor: drift: no .cursor/environment.json; `aayu doctor --fix` writes it, then merge it to the default branch
+                      codex: manual: Codex cloud environments are set in the Codex UI only; aayu cannot read them
+                        Install script: bash .agents/setup
+                        Internet access: the package-managers preset (or custom domains), GET/HEAD/OPTIONS only
+                        Secrets: none; put the environment's ID in [delegate] codex_env
+                      claude: missing: no workflow runs anthropics/claude-code-action; `/install-github-app` in Claude Code writes one
 ## leases pass
 PASS  leases  1 live build lease(s)
 ## leases fail

@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -55,7 +56,7 @@ func TestPrecedence(t *testing.T) {
 		{"flag beats env", merge(user, repo, local), env, set, 5, LayerFlag, "--set budget.per_day_usd=5"},
 		{"env beats local", merge(user, repo, local), env, nil, 4, LayerEnv, "AAYU_BUDGET__PER_DAY_USD"},
 		{"local beats repo", merge(user, repo, local), nil, nil, 3, LayerLocal, "config.local.toml"},
-		{"repo beats user", merge(user, repo), nil, nil, 2, LayerRepo, ".aayudha/config.toml"},
+		{"repo beats user", merge(user, repo), nil, nil, 2, LayerRepo, filepath.Join(".aayudha", "config.toml")},
 		{"user beats default", user, nil, nil, 1, LayerUser, filepath.Join(".config", "aayudha", "config.toml")},
 		{"default", nil, nil, nil, 100, LayerDefault, "defaults.toml (embedded)"},
 		{"repo TOML beats repo JSON", merge(repo, map[string]string{"repo/.aayudha/config.json": `{"version": 1, "budget": {"per_day_usd": 7}}`}), nil, nil, 2, LayerRepo, "config.toml"},
@@ -102,6 +103,7 @@ func TestRejects(t *testing.T) {
 		{"decision authority key", nil, nil, []string{"decisions.authority.sprint=founder"}, "[decisions.authority] sprint"},
 		{"decision authority value", nil, nil, []string{"decisions.authority.story=not a login!"}, "want a seat slug or a GitHub login"},
 		{"escalation login", nil, nil, []string{"decisions.escalate_to=founder b"}, "escalate_to"},
+		{"team stage", nil, nil, []string{"team.stage=unicorn"}, `[team] stage = "unicorn"`},
 		{"auth on a non-cloud integration", nil, nil, []string{"integrations.posthog.secret=posthog", "integrations.posthog.scope=read", "integrations.posthog.auth=oidc"}, "only [integrations.azure]"},
 		{"cloud key auth without a secret", nil, nil, []string{"integrations.aws.scope=read", "integrations.aws.region=eu-west-1"}, `[integrations.aws] secret = ""`},
 	}
@@ -118,6 +120,39 @@ func TestRejects(t *testing.T) {
 	src := fixture(t, map[string]string{"repo/.aayudha/config.toml": "version = 9\n"})
 	if _, err := Load(src); !errors.Is(err, ErrNewerSchema) {
 		t.Fatalf("err = %v, want ErrNewerSchema", err)
+	}
+}
+
+// TestTeamStage: a set stage wins; else the size decides at the 15/16 and
+// 150/151 edges; else the pod's paired humans plus the founder, so a solo pod
+// is a startup (WP5.1b).
+func TestTeamStage(t *testing.T) {
+	paired := map[string]Seat{}
+	for i, id := range []string{"code-architect", "engineering-manager", "quality-architect"} {
+		paired[id] = Seat{Mode: "paired", Human: fmt.Sprintf("h%d", i)}
+	}
+	paired["founder"] = Seat{Mode: "paired", Human: "f"} // the founder is counted once
+	tests := []struct {
+		team  Team
+		seats map[string]Seat
+		want  string
+	}{
+		{Team{}, nil, StageStartup},
+		{Team{}, paired, StageStartup},
+		{Team{Size: 15}, nil, StageStartup},
+		{Team{Size: 16}, nil, StageScaleup},
+		{Team{Size: 150}, nil, StageScaleup},
+		{Team{Size: 151}, nil, StageEnterprise},
+		{Team{Stage: StageEnterprise, Size: 3}, nil, StageEnterprise},
+	}
+	for _, tt := range tests {
+		c := Config{Team: tt.team, Seats: tt.seats}
+		if got, why := c.TeamStage(); got != tt.want {
+			t.Errorf("%+v with %d seats: stage %s (%s), want %s", tt.team, len(tt.seats), got, why, tt.want)
+		}
+	}
+	if _, why := (&Config{Seats: paired}).TeamStage(); why != "the pod's humans (4)" {
+		t.Errorf("why = %q, want the pod's humans (4)", why)
 	}
 }
 

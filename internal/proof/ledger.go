@@ -11,14 +11,14 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 )
 
-// ErrMediaRefused is the V3 refusal: proof media never go to Git LFS or the
-// ledger of a public repository; they need a private bucket.
-var ErrMediaRefused = errors.New("refused: this repository is public (or its visibility is unknown) and [proof] media names no private bucket; proof media never go to a public ledger or Git LFS (V3)")
+// ErrMediaRefused: proof media never go to the ledger or Git LFS. They stay in
+// the merge gate's run artifact, and only an opt-in [proof] media bucket keeps
+// them longer (Appendix B S-4.2b).
+var ErrMediaRefused = errors.New("refused: [proof] media names no bucket; proof media never go to the ledger or Git LFS, they stay in the merge gate's aayudha-pack run artifact (S-4.2b)")
 
 // ErrNoPack means the ledger holds no pack for the story.
 var ErrNoPack = errors.New("no proof pack on the ledger")
@@ -35,21 +35,16 @@ func LocalDir(root string, story int) string {
 }
 
 // Store is the proof store of one repository: its ledger, and its media
-// bucket when [proof] media names one.
+// bucket when [proof] media names one (opt-in, for retention beyond the run
+// artifact's).
 type Store struct {
-	Repo          string
-	Ledger        *ledger.Writer
-	Bucket        Media // nil without [proof] media
-	Private       bool  // only a private repository may keep media in Git LFS
+	Repo   string
+	Ledger *ledger.Writer
+	Bucket Media // nil without [proof] media
+	// Private allows Git LFS on the ledger for design manifests and UI
+	// baselines (V3); proof packs never use it (S-4.2b).
+	Private       bool
 	RetentionDays int
-	Now           func() time.Time
-}
-
-func (s *Store) now() time.Time {
-	if s.Now != nil {
-		return s.Now()
-	}
-	return time.Now()
 }
 
 // LoadLocal reads a pack directory (pack.json plus artifacts/) and checks
@@ -63,18 +58,24 @@ func LoadLocal(dir string) (*Pack, error) {
 	if err != nil {
 		return nil, err
 	}
-	local := *p
-	local.Artifacts = slices.Clone(p.Artifacts)
-	for i := range local.Artifacts {
-		local.Artifacts[i].Store, local.Artifacts[i].Tombstone = StoreGit, nil // every local artifact must be present
-	}
-	r := Verify(&local, Expect{}, func(a Artifact) ([]byte, error) {
-		return os.ReadFile(filepath.Join(dir, "artifacts", filepath.FromSlash(a.Path)))
-	})
-	if !r.OK {
+	if r := VerifyLocal(dir, p, Expect{}); !r.OK {
 		return nil, fmt.Errorf("local pack %s: %s", dir, strings.Join(r.Problems, "; "))
 	}
 	return p, nil
+}
+
+// VerifyLocal verifies p against the pack directory dir it was read from:
+// every artifact must be present there, whatever store pack.json names, and
+// match its hash and size.
+func VerifyLocal(dir string, p *Pack, exp Expect) Report {
+	local := *p
+	local.Artifacts = slices.Clone(p.Artifacts)
+	for i := range local.Artifacts {
+		local.Artifacts[i].Store, local.Artifacts[i].Tombstone = StoreGit, nil
+	}
+	return Verify(&local, exp, func(a Artifact) ([]byte, error) {
+		return os.ReadFile(filepath.Join(dir, "artifacts", filepath.FromSlash(a.Path)))
+	})
 }
 
 // PushResult is what Push wrote.
@@ -87,22 +88,23 @@ type PushResult struct {
 	Stores    []string `json:"stores"` // per artifact: path=store
 	Lifecycle bool     `json:"lifecycle_changed,omitempty"`
 	// LifecycleNote says why the store's retention rule is not managed here
-	// (ErrLifecycleUnmanaged); `proof purge` still enforces retention.
+	// (ErrLifecycleUnmanaged); the rule is then set from the setup files.
 	LifecycleNote string `json:"lifecycle_note,omitempty"`
 }
 
-// Push lands the pack in dir on the ledger. Data artifacts are committed to
-// the ledger; media go to the bucket, or to Git LFS on a private repository
-// without a bucket, and only with media set: otherwise only their hashes are
-// kept (store "none"). A pack is authoritative only when the caller is the
-// merge gate in CI; every other push is advisory.
+// Push lands the pack in dir on the ledger: pack.json and its data artifacts
+// (text). Media never go to the ledger: with media set they go to the
+// [proof] media bucket, which must exist; otherwise only their hashes are kept
+// (store "none") and the bytes stay in the merge gate's run artifact. Only
+// `aayu ship` pushes an authoritative pack, after checking that the merge gate
+// run made it; every other push is advisory.
 func (s *Store) Push(ctx context.Context, dir string, media bool, auth Authority) (PushResult, error) {
 	p, err := LoadLocal(dir)
 	if err != nil {
 		return PushResult{}, err
 	}
 	hasMedia := slices.ContainsFunc(p.Artifacts, IsMedia)
-	if media && hasMedia && s.Bucket == nil && !s.Private {
+	if media && hasMedia && s.Bucket == nil {
 		return PushResult{}, ErrMediaRefused
 	}
 	if auth.Kind == "" {
@@ -112,7 +114,6 @@ func (s *Store) Push(ctx context.Context, dir string, media bool, auth Authority
 	base := Dir(p.Story, p.PRHeadSHA, auth.Kind)
 	c := ledger.Commit{Message: fmt.Sprintf("proof: %s pack for #%d at %s", auth.Kind, p.Story, short(p.PRHeadSHA)), Files: map[string][]byte{}}
 	res := PushResult{Story: p.Story, HeadSHA: p.PRHeadSHA, Authority: auth.Kind, Path: path.Join(base, FileName)}
-	lfs := false
 	for i := range p.Artifacts {
 		a := &p.Artifacts[i]
 		data, err := os.ReadFile(filepath.Join(dir, "artifacts", filepath.FromSlash(a.Path)))
@@ -126,14 +127,11 @@ func (s *Store) Push(ctx context.Context, dir string, media bool, auth Authority
 			c.Files[path.Join(base, "artifacts", a.Path)] = data
 		case !media:
 			a.Store = StoreNone
-		case s.Bucket != nil:
+		default:
 			a.Store, a.Object = StoreBucket, s.Bucket.Key(s.Repo, p.Story, a.SHA256)
 			if err := s.Bucket.Put(ctx, a.Object, data); err != nil {
 				return res, err
 			}
-		default: // private repository, no bucket: Git LFS on the ledger
-			a.Store, lfs = StoreLFS, true
-			c.Files[path.Join(base, "artifacts", a.Path)] = data
 		}
 		res.Stores = append(res.Stores, a.Path+"="+a.Store)
 	}
@@ -142,9 +140,7 @@ func (s *Store) Push(ctx context.Context, dir string, media bool, auth Authority
 		return res, err
 	}
 	c.Files[res.Path] = b
-	w := *s.Ledger
-	w.LFS = lfs
-	if res.Commit, err = w.Write(ctx, c); err != nil {
+	if res.Commit, err = s.Ledger.Write(ctx, c); err != nil {
 		return res, err
 	}
 	if s.Bucket != nil && media && hasMedia {
@@ -221,7 +217,7 @@ func (s *Store) Opener(ctx context.Context, t *ledger.Tree, e Entry) Opener {
 	base := path.Dir(e.Path)
 	return func(a Artifact) ([]byte, error) {
 		switch a.Store {
-		case StoreGit, StoreLFS:
+		case StoreGit, StoreLFS: // LFS: media of packs pushed before 0.2
 			return t.Content(ctx, path.Join(base, "artifacts", a.Path))
 		case StoreBucket:
 			if s.Bucket == nil {
@@ -231,81 +227,6 @@ func (s *Store) Opener(ctx context.Context, t *ledger.Tree, e Entry) Opener {
 		}
 		return nil, fmt.Errorf("unknown store %q", a.Store)
 	}
-}
-
-// PurgeResult is what Purge removed.
-type PurgeResult struct {
-	Packs   []string `json:"packs"`   // pack.json paths rewritten with tombstones
-	Objects []string `json:"objects"` // bucket objects deleted
-	Files   []string `json:"files"`   // LFS files removed from the ledger tip
-	Commit  string   `json:"ledger_commit,omitempty"`
-}
-
-// Purge removes proof media: every media artifact of the story's packs when
-// story > 0, else media of packs older than the retention TTL. Bucket objects
-// are deleted; LFS files are removed from the ledger tip (GitHub keeps LFS
-// objects until the repository is deleted, which is why public repositories
-// may not use LFS, V3). Each pack.json is rewritten with tombstones, keeping
-// every hash.
-func (s *Store) Purge(ctx context.Context, t *ledger.Tree, story int, reason string) (PurgeResult, error) {
-	var res PurgeResult
-	entries, err := s.Packs(ctx, t, story)
-	if err != nil {
-		return res, err
-	}
-	now := s.now().UTC()
-	c := ledger.Commit{Message: "proof: purge media", Files: map[string][]byte{}}
-	if story > 0 {
-		c.Message = fmt.Sprintf("proof: purge media of #%d", story)
-	}
-	for _, e := range entries {
-		if story == 0 {
-			created, err := time.Parse(time.RFC3339, e.Pack.CreatedAt)
-			if s.RetentionDays <= 0 || err != nil || now.Sub(created) < time.Duration(s.RetentionDays)*24*time.Hour {
-				continue
-			}
-		}
-		changed := false
-		base := path.Dir(e.Path)
-		for i := range e.Pack.Artifacts {
-			a := &e.Pack.Artifacts[i]
-			if !IsMedia(*a) || a.Tombstone != nil || a.Store == StoreNone {
-				continue
-			}
-			switch a.Store {
-			case StoreBucket:
-				if s.Bucket == nil {
-					return res, fmt.Errorf("%s: media in a bucket, but [proof] media is not set here", e.Path)
-				}
-				if err := s.Bucket.Delete(ctx, a.Object); err != nil {
-					return res, err
-				}
-				res.Objects = append(res.Objects, a.Object)
-			case StoreLFS:
-				f := path.Join(base, "artifacts", a.Path)
-				c.Delete = append(c.Delete, f)
-				res.Files = append(res.Files, f)
-			default:
-				continue
-			}
-			a.Tombstone = &Tombstone{PurgedAt: now.Format(time.RFC3339), Reason: reason}
-			changed = true
-		}
-		if !changed {
-			continue
-		}
-		b, err := Encode(e.Pack)
-		if err != nil {
-			return res, err
-		}
-		c.Files[e.Path] = b
-		res.Packs = append(res.Packs, e.Path)
-	}
-	if len(c.Files) == 0 {
-		return res, nil
-	}
-	res.Commit, err = s.Ledger.Write(ctx, c)
-	return res, err
 }
 
 // NewArtifact describes bytes as an artifact of a pack.
