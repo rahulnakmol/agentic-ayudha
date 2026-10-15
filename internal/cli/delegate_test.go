@@ -275,12 +275,19 @@ func TestDelegateLocalFallback(t *testing.T) {
 	if pushed := git(t, bare, "rev-parse", "refs/heads/story/2-show-empty-list"); pushed != git(t, wt, "rev-parse", "HEAD") {
 		t.Fatal("not pushed")
 	}
-	// status --work lists it: story, agent, worktree, branch, PR.
-	code, out, errOut := run(t, env, opts, "status", "--work", "--repo", "o/r", "--json")
-	var items []WorkItem
-	_ = json.Unmarshal([]byte(out), &items)
-	if code != 0 || len(items) != 1 || items[0].Story != 2 || items[0].Agent != "codex" || items[0].Where != ".aayudha/worktrees/2-codex" || items[0].PR != res.PR {
-		t.Fatalf("status --work: %d %s %s", code, out, errOut)
+	// status --work lists it: story, agent, worktree, branch, PR. Also from the checkout reached through a
+	// symlink (macOS's /var is /private/var), since git lists worktrees by their resolved path.
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(dir, link); err != nil {
+		link = dir // Windows without the symlink privilege
+	}
+	for _, opts.Dir = range []string{dir, link} {
+		code, out, errOut := run(t, env, opts, "status", "--work", "--repo", "o/r", "--json")
+		var items []WorkItem
+		_ = json.Unmarshal([]byte(out), &items)
+		if code != 0 || len(items) != 1 || items[0].Story != 2 || items[0].Agent != "codex" || items[0].Where != ".aayudha/worktrees/2-codex" || items[0].PR != res.PR {
+			t.Fatalf("status --work in %s: %d %s %s", opts.Dir, code, out, errOut)
+		}
 	}
 }
 
