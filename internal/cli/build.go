@@ -288,7 +288,11 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		if rec.Layers == nil {
 			rec.Layers = []string{}
 		}
-		vp := e.progress(fmt.Sprintf("Checkpoint %s (%s): verifying the floors", res.Checkpoint, listOrNone(layers)))
+		on := ""
+		if len(layers) > 0 {
+			on = " on " + strings.Join(layers, ", ")
+		}
+		vp := e.progress(fmt.Sprintf("Checkpoint %s%s: verifying the floors", res.Checkpoint, on))
 		hold, detail, verr := e.checkpointVerify(ctx, res.Worktree)
 		switch {
 		case verr != nil:
