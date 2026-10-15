@@ -76,7 +76,7 @@ baseline = ["/"]     # paths baseline captures per commit
 # How inspect reviews a PR (WP4.8b): one reviewer (general) or two of different families (peer), and its noise filters.
 [inspect]
 mode = "general"
-delegated_mode = "peer" # PRs another agent built through build --delegate (WP5.5b)
+delegated_mode = "general" # PRs another agent built through build --delegate (WP5.5b; D-4.8b.7)
 min_confidence = 0.5    # P2 and P3 findings below it are not posted
 suppress_after = 2      # distinct human dismissals a finding must resemble to be suppressed
 peer_model = ""         # empty: the first registry review candidate of another family

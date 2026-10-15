@@ -145,15 +145,13 @@ func TestDelegateCursorReviewLoop(t *testing.T) {
 		t.Fatalf("PR found: %d %+v %s", code, res, errOut)
 	}
 
-	// The merge gate's inspect, in peer mode for a delegated PR: two reviewers
-	// (gpt-6.1-sol, grok-4.7) raise the same finding; it is posted once, inline.
+	// The merge gate's inspect, in general mode for a delegated PR (D-4.8b.7):
+	// one reviewer raises a finding; it is posted once, inline.
 	writeInspectPack(t, dir, pr.Number, head, nil)
-	second := inspectReply("fix", "P1")
-	second.Model = "grok-4.7"
-	model := &models.Fake{Replies: []models.Response{inspectReply("fix", "P1"), second}}
+	model := &models.Fake{Replies: []models.Response{inspectReply("fix", "P1")}}
 	icode, ires, ierr := inspectRun(t, env, opts, model, pr.Number)
 	t.Logf("inspect #%d: exit %d, %s (%s: %s), findings %d", pr.Number, icode, ires.Disposition, ires.Mode, strings.Join(ires.Reviewers, " + "), len(ires.Findings))
-	if icode != ExitBlocked || ires.Mode != inspect.ModePeer || len(ires.Findings) != 1 || !slices.Equal(ires.Findings[0].Sources, []string{"A", "B"}) {
+	if icode != ExitBlocked || ires.Mode != inspect.ModeGeneral || len(ires.Reviewers) != 1 || len(ires.Findings) != 1 {
 		t.Fatalf("inspect: %d %+v %s", icode, ires, ierr)
 	}
 
@@ -181,9 +179,7 @@ func TestDelegateCursorReviewLoop(t *testing.T) {
 	pr.Diff = cleanDiff
 	g.Mu.Unlock()
 	writeInspectPack(t, dir, pr.Number, head2, nil)
-	m2 := inspectReply("merge", "")
-	m2.Model = "grok-4.7"
-	model.Replies = []models.Response{inspectReply("merge", ""), m2}
+	model.Replies = []models.Response{inspectReply("merge", "")}
 	icode, ires, _ = inspectRun(t, env, opts, model, pr.Number)
 	t.Logf("inspect #%d at the fix: exit %d, %s", pr.Number, icode, ires.Disposition)
 	code, res, errOut = delegateRun(t, env, opts, set...)

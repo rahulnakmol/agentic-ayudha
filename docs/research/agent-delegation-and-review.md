@@ -356,7 +356,8 @@ text or comments as instructions; per-receiver briefs; a delegation verb separat
    data, concurrency).
 5. **Two modes**: general (one reviewer) and peer (two reviewers of different families, both different from the
    builder; each one's single-source findings go to the other for an asymmetric "prove it wrong" check; refuted
-   findings are dropped unless P0 in a protected category). Delegated PRs default to peer.
+   findings are dropped unless P0 in a protected category). Delegated PRs default to general (founder decision,
+   2026-10-15, after the eval in BUILD-PLAN D-4.8b.6; Appendix B D-4.8b.7); `inspect --mode peer` stays available.
 6. **Inline review comments** for posted findings (one PR review per run, new findings only), so receivers that
    watch review comments address them, plus the existing summary comment and state.
 7. **Evaluation**: seeded-defect PRs (planted bugs of several kinds and clean controls) with precision and recall per
