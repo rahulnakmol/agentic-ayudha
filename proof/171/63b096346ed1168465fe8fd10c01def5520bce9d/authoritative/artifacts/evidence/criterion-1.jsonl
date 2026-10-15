@@ -1,0 +1,20 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily","Output":"=== RUN   TestInspectBuilderFamily\n"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily/the_trailer_names_anthropic,_the_build_record_openai"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily/the_trailer_names_anthropic,_the_build_record_openai","Output":"=== RUN   TestInspectBuilderFamily/the_trailer_names_anthropic,_the_build_record_openai\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily/the_trailer_names_anthropic,_the_build_record_openai","Output":"--- PASS: TestInspectBuilderFamily/the_trailer_names_anthropic,_the_build_record_openai (0.23s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily/the_trailer_names_anthropic,_the_build_record_openai"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily/no_trailer_and_no_build_record"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily/no_trailer_and_no_build_record","Output":"=== RUN   TestInspectBuilderFamily/no_trailer_and_no_build_record\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily/no_trailer_and_no_build_record","Output":"--- PASS: TestInspectBuilderFamily/no_trailer_and_no_build_record (0.19s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily/no_trailer_and_no_build_record"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily/honest:_record_and_trailer_agree_on_anthropic"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily/honest:_record_and_trailer_agree_on_anthropic","Output":"=== RUN   TestInspectBuilderFamily/honest:_record_and_trailer_agree_on_anthropic\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily/honest:_record_and_trailer_agree_on_anthropic","Output":"--- PASS: TestInspectBuilderFamily/honest:_record_and_trailer_agree_on_anthropic (0.23s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily/honest:_record_and_trailer_agree_on_anthropic"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily","Output":"--- PASS: TestInspectBuilderFamily (0.65s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInspectBuilderFamily"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/inspect","Test":"TestBuilderOf"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/inspect","Test":"TestBuilderOf","Output":"=== RUN   TestBuilderOf\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/inspect","Test":"TestBuilderOf","Output":"--- PASS: TestBuilderOf (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/inspect","Test":"TestBuilderOf"}

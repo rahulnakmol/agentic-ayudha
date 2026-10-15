@@ -1,0 +1,13 @@
+{
+  "covered": 84,
+  "executable": 85,
+  "percent": 98.82352941176471,
+  "threshold": 90,
+  "pass": true,
+  "uncovered": {
+    "internal/cli/build.go": [
+      325
+    ]
+  },
+  "format": "go coverprofile"
+}
