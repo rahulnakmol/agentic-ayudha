@@ -118,8 +118,12 @@ func TestInitTwiceDryRunPublicCoexistence(t *testing.T) {
 		t.Fatalf("first run: exit %d complete %t: %s", code, rep.Complete, errOut)
 	}
 	nLabels := len(workitems.Labels())
-	if rep.Counts["created"] != nLabels-1+2 || rep.Counts["adopted"] != 1 { // status:ready adopted; ledger and ruleset created
-		t.Fatalf("first run counts %v, want %d labels created, 1 adopted, plus ledger and ruleset", rep.Counts, nLabels-1)
+	if rep.Counts["created"] != nLabels-1+3 || rep.Counts["adopted"] != 1 { // status:ready adopted; ledger and two rulesets created
+		t.Fatalf("first run counts %v, want %d labels created, 1 adopted, plus ledger and two rulesets", rep.Counts, nLabels-1)
+	}
+	// D-4.2b.h: the write role (and up) may update the ledger; nobody may force-push or delete it.
+	if got := ledgerRulesets(g); got != "aayudha-ledger-history: [deletion non_fast_forward] bypass []; aayudha-ledger: [update] bypass [4 RepositoryRole]" {
+		t.Fatalf("ledger rulesets: %s", got)
 	}
 	first := snapshot(t, dir)
 	if first[".github/workflows/ci.yml"] != ciYML {
@@ -149,9 +153,67 @@ func TestInitTwiceDryRunPublicCoexistence(t *testing.T) {
 		t.Fatal("second run changed files")
 	}
 
+	// A 0.1 install (one ruleset, admin bypass, force push and deletion in it): a rerun creates the history
+	// ruleset first, then narrows the old one to updates and adds the write role, keeping its other actors.
+	// The 0.1 state never recorded the history ruleset, and its idempotency keys belong to another run.
+	stPath := filepath.Join(dir, ".aayudha", "state.json")
+	var st map[string]any
+	b, _ := os.ReadFile(stPath)
+	_ = json.Unmarshal(b, &st)
+	st["run"] = "run-of-0.1"
+	st["objects"] = slices.DeleteFunc(st["objects"].([]any), func(o any) bool { return o.(map[string]any)["name"] == initrepo.LedgerHistoryRuleset })
+	b, _ = json.Marshal(st)
+	_ = os.WriteFile(stPath, b, 0o644)
+	g.Mu.Lock()
+	g.Rulesets = slices.DeleteFunc(g.Rulesets, func(rs map[string]any) bool { return rs["name"] == initrepo.LedgerHistoryRuleset })
+	g.Rulesets[0]["rules"] = []any{map[string]any{"type": "deletion"}, map[string]any{"type": "non_fast_forward"}, map[string]any{"type": "update"}}
+	g.Rulesets[0]["bypass_actors"] = []any{map[string]any{"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always"}}
+	g.Mu.Unlock()
+	g.Reset()
+	if code, rep, errOut = runInitCmd(t, g, dir, "init", "--yes"); code != 0 || rep.Counts["created"] != 1 || rep.Counts["updated"] != 1 {
+		t.Fatalf("rerun on a 0.1 ruleset: exit %d, counts %v: %s", code, rep.Counts, errOut)
+	}
+	if w := g.Writes(); len(w) != 2 || w[0].Method != "POST" || w[1].Method != "PUT" {
+		t.Fatalf("migration writes %v, want the history ruleset created before the old one is narrowed", w)
+	}
+	if got := ledgerRulesets(g); got != "aayudha-ledger-history: [deletion non_fast_forward] bypass []; aayudha-ledger: [update] bypass [4 RepositoryRole 5 RepositoryRole]" {
+		t.Fatalf("ledger rulesets after the migration: %s", got)
+	}
+
 	if code, _, errOut := run(t, nil, Options{Dir: dir}, "proof", "push", "--media"); code != ExitBlocked || !strings.Contains(errOut, "S-4.2b") {
 		t.Errorf("proof push --media on a public repo: exit %d %s", code, errOut)
 	}
+}
+
+// ledgerRulesets renders the fake's ledger rulesets: name, rule types, and
+// bypass actors.
+func ledgerRulesets(g *fake.GitHub) string {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+	b, _ := json.Marshal(g.Rulesets)
+	var rs []struct {
+		Name   string
+		Rules  []struct{ Type string }
+		Bypass []struct {
+			ActorID   int64  `json:"actor_id"`
+			ActorType string `json:"actor_type"`
+		} `json:"bypass_actors"`
+	}
+	_ = json.Unmarshal(b, &rs)
+	var out []string
+	for _, r := range rs {
+		var rules, by []string
+		for _, x := range r.Rules {
+			rules = append(rules, x.Type)
+		}
+		slices.Sort(rules)
+		for _, a := range r.Bypass {
+			by = append(by, fmt.Sprint(a.ActorID, " ", a.ActorType))
+		}
+		out = append(out, fmt.Sprintf("%s: %v bypass %v", r.Name, rules, by))
+	}
+	slices.Sort(out)
+	return strings.Join(out, "; ")
 }
 
 func mapsEqual(a, b map[string]string) bool {
@@ -348,10 +410,9 @@ func TestInitExtras(t *testing.T) {
 	if len(g.Projects) != 3 || g.Variables["AAYUDHA_APP_CLIENT_ID"] != "Iv1.abc" || g.Secrets["AAYUDHA_APP_PRIVATE_KEY"] == "" || strings.Contains(g.Secrets["AAYUDHA_APP_PRIVATE_KEY"], "MIIE") {
 		t.Errorf("projects %d, variables %v, secret sealed %t", len(g.Projects), g.Variables, !strings.Contains(g.Secrets["AAYUDHA_APP_PRIVATE_KEY"], "MIIE"))
 	}
-	bypass := fmt.Sprint(g.Rulesets[0]["bypass_actors"])
 	g.Mu.Unlock()
-	if !strings.Contains(bypass, "Integration") || !strings.Contains(bypass, "4242") || !strings.Contains(bypass, "RepositoryRole") { // ship writes as the human (S-4.2b)
-		t.Errorf("ledger ruleset bypass after --identity: %s", bypass)
+	if got := ledgerRulesets(g); !strings.Contains(got, "aayudha-ledger: [update] bypass [4 RepositoryRole 4242 Integration]") { // ship writes as the human (D-4.2b.h)
+		t.Errorf("ledger rulesets after --identity: %s", got)
 	}
 	if !strings.Contains(manifest, `"contents":"write"`) || !strings.Contains(manifest, "127.0.0.1:1/callback") {
 		t.Errorf("manifest: %s", manifest)

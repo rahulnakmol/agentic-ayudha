@@ -289,22 +289,22 @@ func (in *Init) app(ctx context.Context, x Extras) error {
 }
 
 // ledgerBypassApp adds the bot App to the ledger ruleset's bypass actors, for
-// agent lanes, beside the admin role: `aayu ship`, run by a human, lands the
-// merge gate's pack and the ship record under the human's identity (S-4.2b;
-// before 0.2 the App replaced the admin role, Appendix B D1).
+// agent lanes, beside the write role: `aayu ship`, run by any human with
+// write access, lands the merge gate's pack and the ship record under that
+// human's identity (S-4.2b, D-4.2b.h; before 0.2 the App replaced the admin
+// role, Appendix B D1).
 func (in *Init) ledgerBypassApp(ctx context.Context, appID int64) error {
 	o, ok := in.State.Object("ruleset", LedgerRuleset)
 	if !ok {
 		return nil
 	}
 	path := "/repos/" + in.Repo.FullName + "/rulesets/" + o.ID
-	body := map[string]any{"bypass_actors": []map[string]any{{"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always"},
-		{"actor_id": appID, "actor_type": "Integration", "bypass_mode": "always"}}}
+	body := map[string]any{"bypass_actors": []map[string]any{writeRole, {"actor_id": appID, "actor_type": "Integration", "bypass_mode": "always"}}}
 	_, err := in.GH.Write(ctx, actions.Action{Kind: "github.ruleset.update", Target: in.Repo.FullName, IdempotencyKey: in.key("ruleset-bypass"),
 		Request: &actions.Request{Method: http.MethodPut, Path: path}, Payload: body},
 		func(ctx context.Context) (any, error) { return nil, in.rest(ctx, http.MethodPut, path, body, nil) })
 	if err == nil {
-		in.note("identity", "ruleset", o.Name+" bypass", "written", "the bot App joins the admin role as a ledger writer")
+		in.note("identity", "ruleset", o.Name+" bypass", "written", "the bot App joins the write role as a ledger writer")
 	}
 	return err
 }
