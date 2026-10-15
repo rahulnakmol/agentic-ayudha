@@ -1,0 +1,8 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha","Test":"TestHaltedWorkflowRuns"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha","Test":"TestHaltedWorkflowRuns","Output":"=== RUN   TestHaltedWorkflowRuns\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha","Test":"TestHaltedWorkflowRuns","Output":"--- PASS: TestHaltedWorkflowRuns (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha","Test":"TestHaltedWorkflowRuns"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha","Test":"TestEveryWorkflowJobStartsWithHaltCheck"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha","Test":"TestEveryWorkflowJobStartsWithHaltCheck","Output":"=== RUN   TestEveryWorkflowJobStartsWithHaltCheck\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha","Test":"TestEveryWorkflowJobStartsWithHaltCheck","Output":"--- PASS: TestEveryWorkflowJobStartsWithHaltCheck (0.19s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha","Test":"TestEveryWorkflowJobStartsWithHaltCheck"}
