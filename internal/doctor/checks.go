@@ -153,6 +153,7 @@ var hostEnv = []struct{ env, host string }{
 	{"CLAUDECODE", "claude"},
 	{"CURSOR_AGENT", "cursor"},
 	{"CURSOR_TRACE_ID", "cursor"},
+	{"CODEX_THREAD_ID", "codex"}, // Codex exports it to the commands it runs (WP3.2b)
 }
 
 // DetectHost returns the host from --host or the environment, and how it was found.
@@ -171,7 +172,7 @@ func DetectHost(flag string, getenv func(string) string) (host, how string) {
 func checkHost(_ context.Context, p *Probe) Result {
 	host, how := DetectHost(p.Host, p.Getenv)
 	if host == "" {
-		return Result{Status: Warn, Detail: "no host detected (Amp, Cursor, or Claude Code); pass --host when running outside one"}
+		return Result{Status: Warn, Detail: "no host detected (Amp, Claude Code, OpenAI Codex, or Cursor); pass --host when running outside one"}
 	}
 	return Result{Status: Pass, Detail: fmt.Sprintf("host %s (from %s)", host, how)}
 }

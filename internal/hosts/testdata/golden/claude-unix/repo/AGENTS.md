@@ -16,6 +16,7 @@ This repository runs the aayudha verbs as host skills, installed by `aayu instal
 ## Aayudha hosts
 
 Installed for: Claude Code. The `aayudha` MCP server serves the verbs as tools (write verbs only with `[mcp] expose_writes = true`).
-Host hooks run `aayu hook <name>` only: `session-start` reports skill copies out of sync with the lock, and
-`pre-tool` blocks agent tool calls while the `[budget]` breaker has paused agent lanes.
+Host hooks run `aayu hook <name>` only: `session-start` reports skill copies out of sync with the lock,
+`pre-tool` blocks agent tool calls while the `[budget]` breaker has paused agent lanes and blocks shell commands that
+run a human-only verb, and `status-line` shows where the work stands.
 <!-- END aayudha:hosts -->

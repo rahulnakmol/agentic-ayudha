@@ -352,6 +352,7 @@ const (
 	HostAmp    HostID = "amp"
 	HostCursor HostID = "cursor"
 	HostClaude HostID = "claude"
+	HostCodex  HostID = "codex" // OpenAI Codex CLI and IDE extension (WP3.2b)
 )
 
 // Hosts lists the primary hosts.
@@ -359,6 +360,7 @@ var Hosts = []Host{
 	{ID: HostAmp, Name: "Amp"},
 	{ID: HostCursor, Name: "Cursor", Excludes: []Family{FamilyOpenAI}}, // GPT lanes fall back to Grok on Cursor
 	{ID: HostClaude, Name: "Claude Code"},
+	{ID: HostCodex, Name: "OpenAI Codex"},
 }
 
 // Lane IDs.
@@ -390,6 +392,7 @@ func builderDefaults() []ModelDefault {
 		{Host: HostAmp, Model: "Amp medium", Family: FamilyHostManaged, Escalation: "Amp high"},
 		{Host: HostCursor, Model: "Claude Opus 5.5", ID: ModelClaudeOpus, Family: FamilyAnthropic, Alternative: "Claude Sonnet 5.5 (" + ModelClaudeSonnet + ")", AlternativeID: ModelClaudeSonnet},
 		{Host: HostClaude, Model: "Claude Opus 5.5", ID: ModelClaudeOpus, Family: FamilyAnthropic, Alternative: "Claude Sonnet 5.5 (" + ModelClaudeSonnet + ")", AlternativeID: ModelClaudeSonnet},
+		{Host: HostCodex, Model: "GPT-6.1 Sol", ID: ModelGPTSol, Family: FamilyOpenAI, Escalation: "GPT-6 Astra at high reasoning effort", EscalationID: ModelGPTAstra, EscalationEffort: "high"},
 	}
 }
 
@@ -412,16 +415,20 @@ var Lanes = []Lane{
 		reviewDefault(HostAmp),
 		{Host: HostCursor, Model: "Grok 4.7", ID: ModelGrok, Family: FamilyXAI},
 		reviewDefault(HostClaude),
+		// Codex builds with OpenAI, so its reviewer is another family.
+		{Host: HostCodex, Model: "Claude Opus 5.5", ID: ModelClaudeOpus, Family: FamilyAnthropic, Alternative: "Grok 4.7 (" + ModelGrok + ")", AlternativeID: ModelGrok},
 	}},
 	{ID: LaneUIReview, Summary: "Visual and interaction critique of UI.", Adversarial: true, Defaults: []ModelDefault{
 		{Host: HostAmp, Model: "Amp high", Family: FamilyHostManaged},
 		geminiDefault(HostCursor),
 		geminiDefault(HostClaude),
+		geminiDefault(HostCodex),
 	}},
 	{ID: LaneChore, Summary: "Cheap mechanical work: triage, status, checks.", Defaults: []ModelDefault{
 		{Host: HostAmp, Model: "Amp low", Family: FamilyHostManaged},
 		{Host: HostCursor, Model: "Haiku 5.5", ID: ModelClaudeHaiku, Family: FamilyAnthropic, ContextTokens: 100000},
 		{Host: HostClaude, Model: "Haiku 5.5", ID: ModelClaudeHaiku, Family: FamilyAnthropic, ContextTokens: 100000},
+		{Host: HostCodex, Model: "Haiku 5.5", ID: ModelClaudeHaiku, Family: FamilyAnthropic, ContextTokens: 100000},
 	}},
 }
 
@@ -948,7 +955,7 @@ var Verbs = []Command{
 		Reader:  "Installs the aayudha skills, tools, and hooks into Amp, Cursor, or Claude Code.",
 		Seat:    DevOps, Lane: LaneChore, Layers: OnlyLayers(L09),
 		Inputs: []Input{
-			enumIn("host", false, false, "Host to install for.", "amp", "cursor", "claude", "all"),
+			enumIn("host", false, false, "Host to install for.", "amp", "cursor", "claude", "codex", "all"),
 			flag("apply", TypeBool, "Write the changes instead of showing a diff."),
 			flag("pin", TypeString, "Skill version to pin."),
 		},
@@ -990,7 +997,8 @@ var Plumbing = []Command{
 		optPos("pattern", TypeString, "Pattern for grep.")),
 	plumb("models", "WP1.6", DevOps, IdentityHuman, "Show the resolved model for each lane and host.",
 		enumIn("action", true, true, "Models operation.", "show")),
-	plumb("mcp", "WP3.3", DevOps, IdentityBot, "Serve verbs as MCP tools over stdio."),
+	plumb("mcp", "WP3.3", DevOps, IdentityBot, "Serve verbs as MCP tools over stdio.",
+		flag("skills", TypeString, "Skills version of the host plugin starting the server; the server refuses to start when this binary carries another (WP3.2b).")),
 	plumb("self-update", "WP1.1", DevOps, IdentityHuman, "Replace the binary with a signed, newer release; refuses downgrades and agents."),
 	plumb("upgrade", "WP1.9", DevOps, IdentityHuman, "Migrate repo config, lock, state, and skill copies to this binary's schema versions.",
 		flag("apply", TypeBool, "Apply the migration instead of showing a diff.")),
@@ -1002,7 +1010,8 @@ var Plumbing = []Command{
 	plumb("uninit", "WP2.5", DevOps, IdentityHuman, "Remove what init created, by stored IDs.",
 		flag("external", TypeBool, "Also list orphaned external resources.")),
 	plumb("hook", "WP3.2", DevOps, IdentityBot, "Entry point for host hooks; hooks call only `aayu hook <name>`.",
-		pos("name", TypeString, "Hook name.")),
+		pos("name", TypeString, "Hook name."),
+		flag("skills", TypeString, "Skills version of the host plugin running the hook; session-start reports a mismatch with this binary (WP3.2b).")),
 	plumb("seat", "WP5.1", Founder, IdentityHuman, "Add, remove, or list seats and their paired humans.",
 		enumIn("action", true, true, "Seat operation.", "add", "remove", "list"),
 		optPos("seat", TypeString, "Seat slug."),

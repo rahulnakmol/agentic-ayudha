@@ -1,0 +1,24 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "\"/opt/aayudha/bin/aayu\" hook pre-tool --host codex",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "\"/opt/aayudha/bin/aayu\" hook session-start --host codex",
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  }
+}

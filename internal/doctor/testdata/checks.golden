@@ -37,7 +37,7 @@ FAIL  schema  repository schema is newer than this aayu: .aayudha/config.toml is
 ## host pass
 PASS  host  host amp (from AMP_THREAD_ID)
 ## host fail
-WARN  host  no host detected (Amp, Cursor, or Claude Code); pass --host when running outside one
+WARN  host  no host detected (Amp, Claude Code, OpenAI Codex, or Cursor); pass --host when running outside one
 ## secrets pass
 PASS  secrets  secrets backends: env, file
                  unavailable: keychain (no Secret Service)

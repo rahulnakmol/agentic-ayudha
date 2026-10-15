@@ -1,0 +1,5 @@
+# BEGIN aayudha (written by `aayu install`; do not edit inside this block)
+[mcp_servers.aayudha]
+command = "C:\\Program Files\\aayudha\\aayu.exe"
+args = ["mcp"]
+# END aayudha

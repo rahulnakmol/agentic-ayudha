@@ -9,6 +9,7 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/mcp"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
 func init() { register("mcp", runMCP) }
@@ -48,7 +49,10 @@ func globalArgs(e *Env) []string {
 
 // runMCP serves the verbs over stdio (WP3.3). Stdout carries only protocol
 // frames; diagnostics go to stderr.
-func runMCP(ctx context.Context, e *Env, _ Values) error {
+func runMCP(ctx context.Context, e *Env, in Values) error {
+	if v := in.String("skills"); v != "" && v != verbs.SkillVersion {
+		return WithNext(Errorf(ExitExternal, "mcp: the host plugin carries skills %s, and this aayu carries %s; the server does not start with mismatched skills", v, verbs.SkillVersion), "aayu self-update")
+	}
 	l, err := e.Config()
 	if err != nil {
 		return err

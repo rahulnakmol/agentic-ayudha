@@ -214,8 +214,8 @@ func lineCount(s string) int {
 }
 
 // HookCommand is the only command a hook may run: `aayu hook <name>`, optionally
-// with the host it runs under.
-var HookCommand = regexp.MustCompile(`^aayu hook [a-z][a-z0-9-]*( --host (amp|cursor|claude))?$`)
+// with the host it runs under and the skills version of the plugin that runs it.
+var HookCommand = regexp.MustCompile(`^aayu hook [a-z][a-z0-9-]*( --host (amp|cursor|claude|codex))?( --skills [0-9][0-9A-Za-z.+-]*)?$`)
 
 var hookField = regexp.MustCompile(`^[\s-]*(command|type|prompt|url):[ \t]*(.*)$`)
 
