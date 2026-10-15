@@ -823,7 +823,7 @@ func TestGroups(t *testing.T) {
 		t.Fatalf("brief-plain group: %v, cap %v", err, p.MaxUSD)
 	}
 	pg, personas, err := cfg.ForGroup("personas", all)
-	if err != nil || pg.MaxUSD != 6 || len(personas) != 4 {
+	if err != nil || pg.MaxUSD != 20 || len(personas) != 4 {
 		t.Fatalf("personas group: %v, cap %v, %d cases", err, pg.MaxUSD, len(personas))
 	}
 	o, other, err := cfg.ForGroup("skills", all)

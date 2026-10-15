@@ -42,11 +42,12 @@ pass_k = "advisory"
 
 # Persona cases (WP5.1b): the Engineering Manager twin's retro explanation at the startup and enterprise stages, and the
 # on-demand decision packs of an EM-owned and a Code Architect-owned question, in their own group with their own cap
-# (four cases, five single-reply runs each, plus at most one revision a run).
+# (four cases, five runs each, plus at most one revision a run). Run 38682959916 reached a 6 USD cap after 6 of 20 runs
+# (about 1 USD a run at the fallback rate, every run revised once), so the cap is 20 USD.
 [[groups]]
 name = "personas"
 prefixes = ["retro/", "decide/"]
-max_usd = 6.0
+max_usd = 20.0
 
 [[groups]]
 name = "skills" # every other case
