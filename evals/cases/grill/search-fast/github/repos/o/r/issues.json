@@ -1,0 +1,24 @@
+[
+  {
+    "number": 12,
+    "title": "Show the menu with prices",
+    "state": "closed",
+    "labels": [
+      {
+        "name": "type:story"
+      }
+    ],
+    "body": "### Summary\n\nAs a customer, I want to see the menu with prices.\n\n### Completion Goal\n\n1. [screenshot] state: `/menu` with the seeded menu; expected: every product with its price"
+  },
+  {
+    "number": 14,
+    "title": "Order pickup slots",
+    "state": "open",
+    "labels": [
+      {
+        "name": "type:story"
+      }
+    ],
+    "body": "### Summary\n\nAs a customer, I want to pick a pickup slot when I order.\n\n### Completion Goal\n\n1. [screenshot] state: `/order/pickup` as the seeded customer; expected: the next 6 half-hour pickup slots"
+  }
+]

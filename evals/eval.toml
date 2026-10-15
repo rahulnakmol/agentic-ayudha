@@ -42,7 +42,9 @@ pass_k = "advisory"
 
 [[groups]]
 name = "skills" # every other case
-max_usd = 6.0
+# 6 USD covered the single-reply cases (4.57 in the last run). The two grill conversation cases (WP5.3b) make three or
+# four skill calls a run with the assessment in context, about 1.2 USD a run at the fallback rate, so 20 USD covers both.
+max_usd = 20.0
 
 # Output caps per call. Reasoning models may spend part of the cap on reasoning; a cap is not a charge. A reply that
 # stops at its cap is recorded as an error marked truncated, without a retry. Complete drafts measured 1700-2430 output

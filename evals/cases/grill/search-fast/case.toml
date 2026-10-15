@@ -1,0 +1,29 @@
+# Recorded grill conversation (WP5.3b) on a vague non-UX request: "make search fast" in the synthetic bakery app
+# (../testdata/bakery). The skill turned "fast" into an operation, a percentile, a number, and conditions with the
+# scripted human (human.toml); caching and loading feedback were parked and a CI budget deferred.
+skill = "grill"
+description = "Grill \"make search fast\" into a measurable story; the conversation is scripted by human.toml."
+input = "input.txt"
+repo = "../testdata/bakery"
+transcript = "output/transcript.json"
+cite = 1
+artifacts = ["output/issue.json", "output/transcript.json"]
+schemas = [{ file = "output/issue.json", schema = "evals/schemas/workitem.json" }]
+ready = ["output/issue.json"]
+calls = [
+  ["grill", "story", "--assess", "--idea", "Make search fast. Customers give up when they search the menu. It belongs under Feature #50 (Menu)."],
+  ["grill", "story", "--idea", "Make search fast. Customers give up when they search the menu. It belongs under Feature #50 (Menu).", "--parent", "50", "--title", "Show menu search results within 200 ms of a keystroke", "--body", "### Summary\n\nAs a customer searching the bakery menu, I want matching products to show as I type, so that I do not give up searching.\n\n### Completion Goal\n\n1. [metric] state: `/menu/search` with the seeded menu of 40 products, typing a query one character at a time on a mid-range laptop on a local network; expected: the p95 time from a keystroke to the matching products showing is at most 200 ms over 100 keystrokes\n\n### Measure\n\np95 keystroke-to-results time from a benchmark test on the seeded menu\n\n### Threshold\n\nat most 200 ms at p95\n\n### Scenario\n\nRun the menu-search benchmark against the local app with the seeded menu: it types queries one character at a time, 100 keystrokes in all, and records the time from each keystroke until the matching products show.\n\n### Environment\n\nlocal app with the seeded synthetic menu (40 products) on a mid-range laptop; never production\n\n### Assumptions\n\n- The seeded menu (40 products) stands in for the real menu's size.\n- Measured on a mid-range laptop on a local network (the accepted default).\n\n### Open questions\n\n- deferred: whether a CI budget should stop search from getting slow again (the human is not sure it is needed yet)\n\n### Parked ideas\n\n- result caching: cache search results per query (raised by grill; parked)\n- loading feedback: a new loading state while results arrive (parked: keep today's)\n\n### Provenance\n\nRequest: \"Make search fast. Customers give up when they search the menu. It belongs under Feature #50 (Menu).\"\nVague: \"fast\" → criteria 1\n1. confirmed (perf.target): \"Results should show within 200 ms of a keystroke for most people, say p95\"; facts: route:/menu/search, code:lib/search.ts", "--labels", "effort:S", "--create"],
+  ["ready", "51", "--check"],
+]
+
+# The human parked caching and new loading feedback and deferred a CI budget; none may become a criterion.
+scope = [
+  { pattern = '(?i)\bcach', why = "result caching, which the human parked" },
+  { pattern = '(?i)\b(spinner|skeleton|loading (state|indicator|feedback))\b', why = "loading feedback, which the human parked" },
+  { pattern = '(?i)\b(ci|k6|budget gate|pipeline)\b', why = "a CI budget, which the human deferred" },
+]
+
+[tier2]
+rubric = "rubric.md"
+human = "human.toml"
+references = ["story.md", "vague/performance.md"]

@@ -168,6 +168,13 @@ func TestPromptsResourcesAndExitCodes(t *testing.T) {
 		!strings.Contains(pr.Messages[0].Content.(*sdk.TextContent).Text, "`aayu grill brand`") {
 		t.Errorf("grill brand: %v %+v", err, pr)
 	}
+	// WP5.3b: with an idea, a story prompt carries grill's read-only assessment, run as the grill tool and wrapped as untrusted.
+	calls = nil
+	pr, err = cs.GetPrompt(ctx, &sdk.GetPromptParams{Name: "grill", Arguments: map[string]string{"type": "story", "idea": "make search fast"}})
+	if text := pr.Messages[0].Content.(*sdk.TextContent).Text; err != nil || len(calls) != 1 || strings.Join(calls[0], " ") != "grill --json --assess --idea make search fast -- story" ||
+		!strings.Contains(text, "<untrusted source=\"repo\">\n{\"ok\":true}\n</untrusted>") || !strings.Contains(text, "curious, candid colleague") {
+		t.Errorf("grill story with an idea: %v, ran %v:\n%s", err, calls, text)
+	}
 	if _, err := cs.GetPrompt(ctx, &sdk.GetPromptParams{Name: "brief", Arguments: map[string]string{"subject": "7", "register": "pirate"}}); err == nil || !strings.Contains(err.Error(), "register: want one of") {
 		t.Errorf("brief register=pirate: %v", err)
 	}

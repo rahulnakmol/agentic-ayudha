@@ -7,10 +7,12 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/grill"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
+	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
 func init() { register("ready", runReady) }
@@ -39,6 +41,13 @@ func runReady(ctx context.Context, e *Env, in Values) error {
 	}
 	n := issueNumber(in.String("issue"))
 	r := &ready.Ready{Repo: repo, TechnicalOwner: e.technicalOwner()}
+	if !in.Bool("guard") {
+		cat, err := e.grillCatalog()
+		if err != nil {
+			return err
+		}
+		r.Concrete = func(it workitems.Item) []workitems.Problem { return grill.Check(cat, it) }
+	}
 	var res ready.Result
 	switch {
 	case in.Bool("check") && in.Bool("guard"):
