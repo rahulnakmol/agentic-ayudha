@@ -73,7 +73,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 2.5rem 0; }
 
 code { font: 0.875em/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code); padding: 0.1em 0.3em; border-radius: 3px; }
 /* Code wraps instead of scrolling, so every line is readable without a sideways scroll. */
-pre { background: var(--code); padding: 0.9rem 1rem; border-radius: 6px; max-width: var(--measure); white-space: pre-wrap; overflow-wrap: anywhere; }
+pre { background: var(--code); padding: 0.9rem 1rem; border-radius: 6px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.9375rem; }
 pre code { padding: 0; background: none; }
 table { border-collapse: collapse; display: block; overflow-x: auto; margin: 1rem 0; font-size: 0.9375rem; line-height: 1.5; }
 table:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
