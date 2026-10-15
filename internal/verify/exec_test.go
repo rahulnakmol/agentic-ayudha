@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -33,7 +34,11 @@ func TestChildEnvironmentIsScrubbed(t *testing.T) {
 		if !strings.Contains(env, "SEMGREP_X=ok") || !strings.Contains(env, "HOME="+s.Home) {
 			t.Fatalf("child env lacks its own variables:\n%s", env)
 		}
-		if noNS && (!strings.Contains(env, "HTTPS_PROXY=http://127.0.0.1:9") || out.Network != NetProxyBlocked) {
+		proxy := "HTTPS_PROXY=http://127.0.0.1:9"
+		if runtime.GOOS == "windows" { // names are case-insensitive there: the child gets one of HTTPS_PROXY and https_proxy
+			proxy, env = strings.ToLower(proxy), strings.ToLower(env)
+		}
+		if noNS && (!strings.Contains(env, proxy) || out.Network != NetProxyBlocked) {
 			t.Fatalf("fallback without namespaces: network %s\n%s", out.Network, env)
 		}
 	}

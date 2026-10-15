@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -192,6 +193,23 @@ JSON
 exit %d
 `, name, flag, report, code)
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	shim(t, dir, name)
+}
+
+// shim makes the shell script dir/name runnable on Windows, where a file
+// without a PATHEXT extension is not a program: name.cmd runs it with sh.
+func shim(t *testing.T, dir, name string) {
+	t.Helper()
+	if runtime.GOOS != "windows" {
+		return
+	}
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skip("no sh (Git for Windows) to run the stand-in tool")
+	}
+	if err := os.WriteFile(filepath.Join(dir, name+".cmd"), []byte("@\""+sh+"\" \"%~dp0"+name+"\" %*\r\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 }

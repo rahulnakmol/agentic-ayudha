@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -27,6 +29,15 @@ func standInNode(t *testing.T, axe string) string {
 	script := "#!/bin/sh\ncat >/dev/null\nprintf '%s' '" + out + "'\n"
 	if err := os.WriteFile(filepath.Join(dir, "node"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
+	}
+	if runtime.GOOS == "windows" { // a file without a PATHEXT extension is not a program there: node.cmd runs the script with sh
+		sh, err := exec.LookPath("sh")
+		if err != nil {
+			t.Skip("no sh (Git for Windows) to run the stand-in node")
+		}
+		if err := os.WriteFile(filepath.Join(dir, "node.cmd"), []byte("@\""+sh+"\" \"%~dp0node\" %*\r\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
 	}
 	return dir + string(os.PathListSeparator) + os.Getenv("PATH")
 }
