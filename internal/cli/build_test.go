@@ -398,8 +398,8 @@ func TestBuildTextDryRunPlanAndBudget(t *testing.T) {
 	if msg := git(t, wt, "log", "-1", "--format=%B"); !strings.Contains(msg, "Aayudha-Checkpoint: 2/3") || !strings.Contains(msg, "Aayudha-Model: claude-build-1") {
 		t.Fatalf("checkpoint commit:\n%s", msg)
 	}
-	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &st); err != nil || st.Attempts != 0 || len(st.Checkpoints) != 1 || st.Checkpoints[0].Verify != "error" {
-		t.Fatalf("ledger state after a verify error: %v %+v", err, st)
+	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &st); err != nil || st.Attempts != 0 || len(st.Checkpoints) != 1 || st.Checkpoints[0].Verify != "error" || st.Checkpoints[0].Model != "claude-build-1" {
+		t.Fatalf("ledger state after a verify error (the checkpoint records its model for inspect, Bug #171): %v %+v", err, st)
 	}
 
 	opts.CheckpointVerify = holds

@@ -297,3 +297,69 @@ func hasSeverity(fs []inspect.Finding, sev ...string) bool {
 	}
 	return false
 }
+
+// putLedger commits a file to the ledger branch of the bare origin.
+func putLedger(t *testing.T, bare, path, content string) {
+	t.Helper()
+	wt := filepath.Join(t.TempDir(), "ledger")
+	git(t, filepath.Dir(wt), "clone", "--quiet", "--branch", "ledger", bare, wt)
+	_ = os.MkdirAll(filepath.Join(wt, filepath.Dir(path)), 0o755)
+	_ = os.WriteFile(filepath.Join(wt, path), []byte(content), 0o644)
+	git(t, wt, "add", ".")
+	git(t, wt, "commit", "--quiet", "-m", "build state")
+	git(t, wt, "push", "--quiet", "origin", "ledger")
+}
+
+// Bug #171: inspect takes the builder's family from what aayu recorded on the ledger, never from the
+// Aayudha-Model trailer alone. A trailer that contradicts the record makes the family unknown, and the reviewer is
+// of a family different from every candidate; with no record the verdict says the family is unknown and why; an
+// honest PR is reviewed as before. Each verdict names the builder family, its source, and that a build record is
+// attributed, not verified.
+func TestInspectBuilderFamily(t *testing.T) {
+	head := strings.Repeat("c", 40)
+	for _, tc := range []struct {
+		name, recorded, claim, wantModel, wantFamily string
+		wantSource                                   []string
+	}{
+		{"the trailer names anthropic, the build record openai", "gpt-6.1-sol", "claude-opus-5-5", "grok-4.7", "",
+			[]string{"the records say openai", "trailer claims claude-opus-5-5 (self-reported, unverified)", "none of [openai anthropic]"}},
+		{"no trailer and no build record", "", "", "gpt-6.1-sol", "",
+			[]string{"no build or delegation record on the ledger names a model family", "the build lane's family on the pack's host is anthropic"}},
+		{"honest: record and trailer agree on anthropic", "claude-opus-5-5", "claude-opus-5-5", "gpt-6.1-sol", "anthropic",
+			[]string{"builder family anthropic (the build record on the ledger names it for all 1 commit(s)", "attributed, not verified"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g, env, opts, prN := inspectFixture(t, cleanDiff, "Adds Percent.\n\nRefs #2")
+			env["AAYU_SECRET_XAI"] = "model-key"
+			g.Mu.Lock()
+			g.Static = map[string]any{"/repos/o/r/pulls/" + strconv.Itoa(prN) + "/commits": []any{map[string]any{"sha": head}}}
+			g.Mu.Unlock()
+			if tc.recorded != "" {
+				st, _ := json.Marshal(BuildState{Story: 2, Checkpoints: []CheckpointRecord{{K: 1, N: 1, Attempt: 1, Commit: head, Verify: "hold", Model: tc.recorded}}})
+				putLedger(t, filepath.Join(filepath.Dir(opts.Dir), "origin.git"), BuildLedgerPath(2), string(st)) // ledgerCheckout's bare origin
+			}
+			pk, _ := proof.LoadLocal(proof.LocalDir(opts.Dir, 2))
+			pk.Model = tc.claim
+			files := map[string][]byte{}
+			for _, a := range pk.Artifacts {
+				files[a.Path], _ = os.ReadFile(filepath.Join(proof.LocalDir(opts.Dir, 2), "artifacts", filepath.FromSlash(a.Path)))
+			}
+			if err := proof.WriteLocal(proof.LocalDir(opts.Dir, 2), pk, files); err != nil {
+				t.Fatal(err)
+			}
+			model := &models.Fake{Replies: []models.Response{inspectReply("merge", "")}}
+			code, res, errOut := inspectRun(t, env, opts, model, prN)
+			if code != 0 || len(model.Requests) != 1 || model.Requests[0].Model != tc.wantModel || string(res.Builder.Family) != tc.wantFamily {
+				t.Fatalf("exit %d, %d requests, builder %+v; want reviewer %s, builder family %q: %s", code, len(model.Requests), res.Builder, tc.wantModel, tc.wantFamily, errOut)
+			}
+			g.Mu.Lock()
+			comment := g.Issues[prN].Comments[0].Body
+			g.Mu.Unlock()
+			for _, want := range tc.wantSource {
+				if !strings.Contains(comment, want) {
+					t.Errorf("the verdict lacks %q:\n%s", want, comment)
+				}
+			}
+		})
+	}
+}
