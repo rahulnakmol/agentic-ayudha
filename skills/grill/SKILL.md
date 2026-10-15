@@ -196,7 +196,8 @@ A grilled Story or Bug carries four more sections after its Completion Goal. `gr
   ```
 
   `stated`: the human said it; `confirmed`: you proposed it and the human agreed; `default`: the human accepted the
-  default you offered with its reason. Quote the human's words. The dimension in brackets is the catalogue's (or
+  default you offered with its reason. Quote the human's words exactly; when a criterion rests on several replies,
+  quote each one (`"…" / "…"`). The dimension in brackets is the catalogue's (or
   `request`). `; facts:` cites assessment fact IDs the criterion rests on; `grill` checks that each one exists. A
   qualifier you could not resolve is `Vague: "fast" → deferred: <why>` with a matching `deferred:` open question.
 

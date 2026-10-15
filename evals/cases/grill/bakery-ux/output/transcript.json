@@ -34,7 +34,7 @@
       "answers": [
         {
           "kind": "confirm",
-          "text": "A customer picks bread, chooses a pickup time, and pays, and knows the order went through: they see an order number and the pickup time."
+          "text": "A customer picks bread, chooses a pickup time, and pays by card on the review screen as they do today, and knows the order went through: they see an order number and the pickup time."
         },
         {
           "kind": "confirm",
@@ -69,7 +69,7 @@
         {
           "dimension": "ux.consistency",
           "ask": "You have 14 design tokens and Button, Stepper, and BasketSummary components. Must the new flow use only those?",
-          "default": "Only existing tokens and components, because a new look is a design decision, not a story detail.",
+          "default": "Only existing tokens and components, counted over the changed files, because a new look is a design decision, not a story detail.",
           "facts": [
             "tokens:web/styles/tokens.css",
             "component:Button",
@@ -105,12 +105,12 @@
         },
         {
           "kind": "park",
-          "text": "Not for this story; park it."
+          "text": "That is not part of what I asked for; park it."
         }
       ]
     },
     {
-      "say": "Here is what done looks like: a customer goes from an empty basket to a paid order in at most 3 screens and sees an order number and the pickup time; the review screen shows the total and the pickup time before they pay; a declined payment keeps the 2 basket items and shows a Try again button on the same screen; every screen fits at 390 px and 1280 px without horizontal scrolling; and the screens use only the existing tokens and components. It assumes a seeded payment stub that can decline. The wording is deferred to you and the shop staff, and the loyalty stamp card is parked.",
+      "say": "Here is what done looks like: a customer goes from an empty basket to a paid order in at most 3 screens and sees an order number and the pickup time; the review screen shows the total and the pickup time before they pay; a declined payment keeps the 2 basket items and shows a Try again button on the same screen; every screen fits at 390 px and 1280 px without horizontal scrolling; and the screens use only the existing tokens and components. It assumes payment works as it does today, with a seeded test card that is declined. The wording is deferred to you and the shop staff, and the loyalty stamp card is parked.",
       "done": true
     }
   ]

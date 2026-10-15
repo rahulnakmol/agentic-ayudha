@@ -251,13 +251,21 @@ func Concrete(cat grill.Catalog, a grill.Assessment, it workitems.Item, tr Trans
 		}
 	}
 	for _, s := range p.Criteria {
-		q := norm(s.Quote)
-		if q == "" || !slices.ContainsFunc(all, func(t string) bool { return strings.Contains(t, q) }) {
-			out = append(out, fmt.Sprintf("fidelity: criterion %d quotes %q, which the human never said", s.N, clip(s.Quote, 80)))
+		var unsaid []string
+		inRequest := true
+		for _, part := range s.Quotes {
+			q := norm(part)
+			if q == "" || !slices.ContainsFunc(all, func(t string) bool { return strings.Contains(t, q) }) {
+				unsaid = append(unsaid, part)
+			}
+			inRequest = inRequest && strings.Contains(norm(tr.Request), q)
+		}
+		if len(s.Quotes) == 0 || len(unsaid) > 0 {
+			out = append(out, fmt.Sprintf("fidelity: criterion %d quotes %q, which the human never said", s.N, clip(strings.Join(unsaid, " / "), 80)))
 			continue
 		}
 		if s.Dimension == "" || s.Dimension == "request" {
-			if !strings.Contains(norm(tr.Request), q) && s.Kind == grill.SourceStated {
+			if !inRequest && s.Kind == grill.SourceStated {
 				out = append(out, fmt.Sprintf("fidelity: criterion %d is stated in the request, but the request does not say %q", s.N, clip(s.Quote, 80)))
 			}
 			continue
