@@ -4,11 +4,16 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
+	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
 // Zero Options run against the real process: the environment (here the
@@ -43,5 +48,48 @@ func TestValues(t *testing.T) {
 	v := Values{"days": 14, "title": "x", "create": true, "bad": "14"}
 	if v.Int("days") != 14 || v.Int("bad") != 0 || v.Int("unset") != 0 || v.String("title") != "x" || !v.Bool("create") || v.Has("unset") || !v.Has("bad") {
 		t.Fatalf("values: %v", v)
+	}
+}
+
+// Bug #170: human-only verbs run from a skill's shell call in each host, with the founder's token and without
+// AAYU_AGENT, are refused as an agent lane before any GitHub call, even when the host gives the command a terminal.
+// This holds below the pre-tool hook (#169): the hook blocks a shell command it can read, and the binary still
+// refuses one the hook cannot see, such as a script that runs aayu.
+func TestHumanOnlyRefusedInHostShells(t *testing.T) {
+	g := fake.New(t, "o/r", "User")
+	commands := [][]string{
+		{"plan", "2", "--solo-bypass"},
+		{"decide", "5", "--accept", "B"},
+		{"release", "12", "--to", "rolling"},
+		{"resume"},
+	}
+	for host, marker := range hostShells {
+		env := maps.Clone(marker)
+		env["AAYU_GITHUB_TOKEN"] = "founder-token"
+		for _, args := range commands {
+			code, _, errOut := run(t, env, Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1}, append(args, "--repo", "o/r")...)
+			if code != ExitBlocked || !strings.Contains(errOut, "refused for an agent lane") {
+				t.Errorf("%s shell: aayu %s: exit %d: %s", host, strings.Join(args, " "), code, errOut)
+			}
+		}
+		// The pre-tool hook stops the command when the host forwards it, but not one hidden in a script.
+		if host != "amp" {
+			if r, _ := hosts.RunHook("pre-tool", verbs.HostID(host), "", filepath.Join(t.TempDir(), "paused"), []byte(`{"tool_input":{"command":"aayu ship 4 --solo-bypass"},"command":"aayu ship 4 --solo-bypass"}`)); r.Code != 2 {
+				t.Errorf("%s: the pre-tool hook let `aayu ship 4 --solo-bypass` through", host)
+			}
+		}
+		if cmd, _ := hosts.HumanOnlyCommand("sh ./merge.sh"); cmd != "" {
+			t.Errorf("the hook was expected not to see inside a script: %q", cmd)
+		}
+	}
+	if w := g.Writes(); len(w) != 0 {
+		t.Errorf("refused commands wrote to GitHub: %v", w)
+	}
+	// No marker and no terminal (a host that sets nothing, a script): human-only actions fail closed.
+	for _, args := range commands {
+		code, _, errOut := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "founder-token"}, Options{GitHubAPI: g.URL(), GitHubGap: -1}, append(args, "--repo", "o/r")...)
+		if code != ExitBlocked || !strings.Contains(errOut, "needs an interactive terminal") {
+			t.Errorf("no marker, no terminal: aayu %s: exit %d: %s", strings.Join(args, " "), code, errOut)
+		}
 	}
 }

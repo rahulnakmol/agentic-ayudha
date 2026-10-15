@@ -19,7 +19,7 @@ func installEnv(t *testing.T) (repo, home string, opts Options) {
 	repo = gitInit(t, "dev", map[string]string{"README.md": "x\n"})
 	home = t.TempDir()
 	const bin = "/opt/aayudha/bin/aayu"
-	opts = Options{Dir: repo, Assets: aayudha.Assets, Build: BuildInfo{Version: "1.0.0"}, LookPath: noTools,
+	opts = Options{IsTerminal: stdinTTY, Dir: repo, Assets: aayudha.Assets, Build: BuildInfo{Version: "1.0.0"}, LookPath: noTools,
 		Executable: func() (string, error) { return bin, nil },
 		Exec: func(ctx context.Context, dir, name string, args ...string) (string, error) {
 			if name == bin && len(args) == 1 && args[0] == "version" {

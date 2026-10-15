@@ -45,8 +45,8 @@ func runAuth(ctx context.Context, e *Env, in Values) error {
 	store := e.SecretStore()
 	switch action {
 	case "set-secret":
-		if e.Agent() {
-			return Errorf(ExitBlocked, "auth set-secret is for humans only and is refused when AAYU_AGENT=1")
+		if sig := e.agentSignal(); sig != "" { // no terminal needed: a person may pipe the value in
+			return Errorf(ExitBlocked, "auth set-secret is for humans only and is refused for an agent lane (%s)", sig)
 		}
 		fmt.Fprintf(e.Err, "Enter the value for %s on one line (input is read from stdin, never from arguments):\n", name)
 		line, err := bufio.NewReader(e.In).ReadString('\n')

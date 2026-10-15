@@ -53,7 +53,7 @@ type initReport struct {
 
 func runInitCmd(t *testing.T, g *fake.GitHub, dir string, args ...string) (int, initReport, string) {
 	t.Helper()
-	code, out, errOut := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}, Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}, append(args, "--json")...)
+	code, out, errOut := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}, Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}, append(args, "--json")...)
 	var rep initReport
 	if out != "" {
 		if err := json.NewDecoder(strings.NewReader(out)).Decode(&rep); err != nil {
@@ -148,7 +148,7 @@ func TestInitTwiceDryRunPublicCoexistence(t *testing.T) {
 		t.Fatal("second run changed files")
 	}
 
-	if code, _, errOut := run(t, nil, Options{Dir: dir}, "proof", "push", "--media"); code != ExitBlocked || !strings.Contains(errOut, "V3") {
+	if code, _, errOut := run(t, nil, Options{IsTerminal: stdinTTY, Dir: dir}, "proof", "push", "--media"); code != ExitBlocked || !strings.Contains(errOut, "V3") {
 		t.Errorf("proof push --media on a public repo: exit %d %s", code, errOut)
 	}
 }
@@ -225,7 +225,7 @@ func TestInitAdoptsLedgerAndUninit(t *testing.T) {
 		t.Errorf("organization: %d issue types; forms must set the type", len(g.IssueTypes))
 	}
 	_ = rep
-	if code, out, _ := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "x"}, Options{GitHubAPI: g.URL(), Dir: dir}, "uninit", "--external"); code != 0 || !strings.Contains(out, "no external resources") {
+	if code, out, _ := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "x"}, Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), Dir: dir}, "uninit", "--external"); code != 0 || !strings.Contains(out, "no external resources") {
 		t.Errorf("uninit --external: %d %s", code, out)
 	}
 	if code, _, errOut := runInitCmd(t, g, dir, "uninit", "--yes"); code != 0 {
@@ -263,7 +263,7 @@ func TestInitExtras(t *testing.T) {
 	_ = os.MkdirAll(filepath.Join(dir, "loops"), 0o755)
 	_ = os.WriteFile(filepath.Join(dir, "loops", "digest.toml"), []byte("description = \"Digest.\"\ncommand = [\"status\", \"--digest\"]\ncron = \"5 9 * * 1-5\"\n"), 0o644)
 	var manifest string
-	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, Build: BuildInfo{Version: "0.4.0"},
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, Build: BuildInfo{Version: "0.4.0"},
 		AppManifestCode: func(_ context.Context, post string, m func(string) string) (string, error) {
 			manifest = m("http://127.0.0.1:1/callback")
 			return "code-1", nil

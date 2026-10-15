@@ -34,7 +34,7 @@ func TestHaltStopsRunningLoop(t *testing.T) {
 	dir := t.TempDir()
 	sink := &notify.Fake{}
 	const poll = 200 * time.Millisecond
-	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, HaltPoll: poll, NotifySink: sink, Dir: dir}
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, HaltPoll: poll, NotifySink: sink, Dir: dir}
 	human := map[string]string{"AAYU_GITHUB_TOKEN": "t", "XDG_STATE_HOME": filepath.Join(dir, "state")}
 	agent := map[string]string{"AAYU_GITHUB_TOKEN": "t", "AAYU_AGENT": "1", "XDG_STATE_HOME": filepath.Join(dir, "state")}
 

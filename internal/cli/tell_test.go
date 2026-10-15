@@ -168,7 +168,7 @@ func TestTellPublishHumanOnly(t *testing.T) {
 		extra []string
 		want  string
 	}{
-		{"agent lane", agent, nil, nil, "refused for agents"},
+		{"agent lane", agent, nil, nil, "refused for an agent lane"},
 		{"CI token", env, nil, []string{"--ci"}, "refused in CI"},
 		{"GitHub bot account", env, func() { g.ViewerType = "Bot" }, nil, "is a bot identity"},
 		{"configured bot login", env, func() { g.ViewerType = "User" }, []string{"--set", "identity.bot_logins=founder"}, "founder is a bot identity"},

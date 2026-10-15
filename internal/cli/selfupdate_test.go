@@ -82,7 +82,7 @@ func selfUpdate(t *testing.T, srv *httptest.Server, v Verifier, version string, 
 	if err := os.WriteFile(exe, []byte(oldBinary), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	code, out, errs := run(t, env, Options{
+	code, out, errs := run(t, env, Options{IsTerminal: stdinTTY,
 		Build:      BuildInfo{Version: version},
 		Executable: func() (string, error) { return exe, nil },
 		SelfUpdate: SelfUpdateOptions{APIBase: srv.URL, Verifier: v, GOOS: "linux", GOARCH: "amd64"},

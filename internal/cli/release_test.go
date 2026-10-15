@@ -165,7 +165,7 @@ func TestReleaseLadder(t *testing.T) {
 		args []string
 		want string
 	}{
-		{"agent lane", agent, []string{rel, "--to", "rolling"}, "refused for agents"},
+		{"agent lane", agent, []string{rel, "--to", "rolling"}, "refused for an agent lane"},
 		{"no confirmation off a terminal", f.env, []string{rel, "--to", "rolling"}, "release not confirmed"},
 		{"main before rolling", f.env, []string{rel, "--to", "main", "--yes"}, "has not been promoted to rolling yet"},
 		{"includes unmerged work", f.env, []string{strconv.Itoa(f.wide), "--to", "rolling", "--yes"}, fmt.Sprintf("#%d (status in-progress) is not in rolling..dev", f.pending)},

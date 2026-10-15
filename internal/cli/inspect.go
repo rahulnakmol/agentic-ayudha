@@ -454,8 +454,8 @@ func (e *Env) postInline(ctx context.Context, c *github.Client, repo string, n i
 // dismiss its reviewer's findings.
 func (e *Env) inspectDismiss(ctx context.Context, in Values) error {
 	id, reason := in.String("dismiss"), strings.TrimSpace(in.String("reason"))
-	if e.Agent() {
-		return Errorf(ExitBlocked, "inspect --dismiss is a human's judgement; it is refused for agents")
+	if err := e.requireHuman("inspect --dismiss"); err != nil {
+		return err
 	}
 	if reason == "" {
 		return Errorf(ExitUsage, "inspect --dismiss %s: say why with --reason", id)

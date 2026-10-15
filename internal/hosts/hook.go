@@ -190,6 +190,35 @@ func HumanOnlyCommand(shell string) (cmd, why string) {
 	return "", ""
 }
 
+// AgentMarkers are the environment variables a host sets in every command its
+// agent runs, so a process can tell an agent lane from a person even when the
+// agent uses the person's token (Bug #170). The pre-tool hook (HumanOnlyCommand)
+// stops a human-only command a host forwards to it; these markers reach the
+// binary however the command was started (a script, an alias, a host that
+// forwards nothing). A person's own terminal sets none of them; CURSOR_TRACE_ID,
+// which Cursor also sets in a person's terminal, is not one.
+var AgentMarkers = []struct{ Env, Source string }{
+	{"CLAUDECODE", "Claude Code sets it to 1 in the Bash tool, hooks, and MCP servers it spawns"},
+	{"CODEX_THREAD_ID", "Codex exports it to the commands it runs (D-3.2b)"},
+	{"CODEX_SANDBOX", "Codex sets it inside its sandbox"},
+	{"CODEX_CI", "Codex sets it for the commands it runs"},
+	{"CURSOR_AGENT", "Cursor sets it to 1 in its agent's terminal"},
+	{"AMP_THREAD_ID", "Amp sets it in the commands of a thread"},
+	{"AGENT", "the AGENT=<name> convention (Amp sets AGENT=amp, Goose AGENT=goose)"},
+	{"AI_AGENT", "the AI_AGENT=<name> convention"},
+}
+
+// AgentMarker names the first agent marker set in the environment, as
+// NAME=value, or "" when there is none.
+func AgentMarker(getenv func(string) string) string {
+	for _, m := range AgentMarkers {
+		if v := getenv(m.Env); v != "" {
+			return m.Env + "=" + v
+		}
+	}
+	return ""
+}
+
 // shellCommand is the shell command in a pre-tool event: tool_input.command
 // (Claude Code, Codex) or command (Cursor's beforeShellExecution).
 func shellCommand(event []byte) string {

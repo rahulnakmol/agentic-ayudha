@@ -45,6 +45,20 @@ func run(t *testing.T, env map[string]string, opts Options, args ...string) (cod
 	return code, out.String(), errb.String()
 }
 
+// stdinTTY makes run's stdin a person's interactive terminal, as a human-only
+// action needs when no agent marker is set (Bug #170); stdout and stderr stay
+// pipes, so output is the plain text tests compare.
+func stdinTTY(stream any) bool { _, ok := stream.(*strings.Reader); return ok }
+
+// hostShells is the environment each host gives the shell commands its agent
+// runs, without AAYU_AGENT (Bug #170): what a skill's shell call sees.
+var hostShells = map[string]map[string]string{
+	"amp":    {"AGENT": "amp", "AMP_THREAD_ID": "T-0000"},
+	"cursor": {"CURSOR_AGENT": "1"},
+	"claude": {"CLAUDECODE": "1"},
+	"codex":  {"CODEX_THREAD_ID": "019a-thread"},
+}
+
 // withHandler temporarily implements a registry command for a test.
 func withHandler(t *testing.T, name string, h Handler) {
 	t.Helper()

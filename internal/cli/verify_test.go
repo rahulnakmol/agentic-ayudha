@@ -18,7 +18,7 @@ func TestVerifyWritesPackForStory(t *testing.T) {
 	g := readyTree(t)
 	dir, _ := ledgerCheckout(t)
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH")}
-	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
 	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready: %s", errOut)
 	}
@@ -110,7 +110,7 @@ func TestVerifyRefusesProduction(t *testing.T) {
 	git(t, dir, "checkout", "--quiet", "-b", "story/2-x")
 	git(t, dir, "commit", "--quiet", "--allow-empty", "-m", "feat: x")
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH"), "AAYU_ENV": "prod"}
-	code, out, errOut := run(t, env, Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}, "verify", "--repo", "o/r")
+	code, out, errOut := run(t, env, Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}, "verify", "--repo", "o/r")
 	if code != ExitBlocked || !strings.Contains(errOut, "production environment") {
 		t.Fatalf("verify against production: %d %s %s", code, out, errOut)
 	}
@@ -129,7 +129,7 @@ func TestVerifyMobileSkipAndWaiver(t *testing.T) {
 	g := readyTree(t)
 	dir, _ := ledgerCheckout(t)
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH")}
-	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
 	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready: %s", errOut)
 	}
@@ -180,7 +180,7 @@ func TestVerifyGateCI(t *testing.T) {
 	g := readyTree(t)
 	dir, _ := ledgerCheckout(t)
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH")}
-	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
 	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready: %s", errOut)
 	}

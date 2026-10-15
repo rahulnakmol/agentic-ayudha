@@ -16,6 +16,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/delegate"
+	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
 	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
@@ -145,9 +146,35 @@ func newEnv(io IO, opts Options) (*Env, error) {
 	return &Env{IO: io, Options: opts}, nil
 }
 
-// Agent reports whether the process runs as an agent lane (AAYU_AGENT=1).
-// Agents may not confirm on a human's behalf or replace the binary.
-func (e *Env) Agent() bool { return e.Getenv("AAYU_AGENT") == "1" }
+// Agent reports whether the process runs as an agent lane: AAYU_AGENT=1 (the
+// MCP server and the loops set it) or a marker a host sets in every command
+// its agent runs (hosts.AgentMarkers, Bug #170). Agents may not confirm on a
+// human's behalf or replace the binary.
+func (e *Env) Agent() bool { return e.agentSignal() != "" }
+
+// agentSignal names what marks the process as an agent lane, or "".
+func (e *Env) agentSignal() string {
+	if e.Getenv("AAYU_AGENT") == "1" {
+		return "AAYU_AGENT=1"
+	}
+	return hosts.AgentMarker(e.Getenv)
+}
+
+// requireHuman guards a human-only action (§0.1, Bug #170). It refuses an
+// agent lane. In solo mode an agent may hold the person's own token, so with no
+// marker it fails closed unless stdin is an interactive terminal: a skill's
+// shell call has none. In hosts that forward shell commands, the pre-tool hook
+// stops most such calls first (hosts.HumanOnlyCommand); this check holds for
+// whatever reaches the binary.
+func (e *Env) requireHuman(what string) error {
+	if sig := e.agentSignal(); sig != "" {
+		return Errorf(ExitBlocked, "%s is a person's decision and is refused for an agent lane (%s); ask a person to run it in their own terminal", what, sig)
+	}
+	if !e.isTerminal(e.In) {
+		return Errorf(ExitBlocked, "%s is a person's decision and needs an interactive terminal: with neither a terminal nor an agent marker, aayu cannot tell a person from an agent using the person's token", what)
+	}
+	return nil
+}
 
 // Emit writes a command result: v as indented JSON with --json, otherwise text.
 func (e *Env) Emit(v any, text func(w io.Writer) error) error {

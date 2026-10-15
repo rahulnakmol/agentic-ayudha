@@ -82,8 +82,10 @@ type installEdit struct {
 
 func runInstall(ctx context.Context, e *Env, in Values) error {
 	apply := in.Bool("apply")
-	if apply && e.Agent() {
-		return Errorf(ExitBlocked, "install --apply writes the hooks that govern agents; a human runs it (AAYU_AGENT=1)")
+	if apply {
+		if err := e.requireHuman("install --apply (it writes the hooks that govern agents)"); err != nil {
+			return err
+		}
 	}
 	o, err := e.installOptions()
 	if err != nil {
@@ -177,15 +179,11 @@ func (e *Env) confirm(question string) bool {
 	if e.Yes {
 		return true
 	}
-	f, ok := e.In.(*os.File)
-	if !ok {
-		return false
-	}
-	if fi, err := f.Stat(); err != nil || fi.Mode()&os.ModeCharDevice == 0 {
+	if !e.isTerminal(e.In) {
 		return false
 	}
 	fmt.Fprint(e.Err, question)
-	line, _ := bufio.NewReader(f).ReadString('\n')
+	line, _ := bufio.NewReader(e.In).ReadString('\n')
 	ans := strings.ToLower(strings.TrimSpace(line))
 	return ans == "y" || ans == "yes"
 }
