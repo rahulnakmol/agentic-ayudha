@@ -71,7 +71,7 @@ startup = { artefact = "Gate list", shape = "The floors from CONSTRAINTS.md that
 scaleup = { artefact = "Flake budget", shape = "A flake-rate budget per suite, the quarantine policy, and a weekly flake review." }
 enterprise = { artefact = "Quality gate policy", shape = "Gates per stage with thresholds and owners, the waiver process through Decisions, flake budget and reporting, and audit evidence." }
 sources = [
-  { cite = "John Micco, \"Flaky Tests at Google and How We Mitigate Them\" (Google Testing Blog, 2016)", url = "https://testing.googleblog.com/2016/05/flaky-tests-at-google-and-how-we.html" },
+  { cite = "John Micco, \"Flaky Tests at Google and How We Mitigate Them\" (Google Testing Blog, 2016)" },
   { cite = "Titus Winters, Tom Manshreck, and Hyrum Wright, Software Engineering at Google, ch. 11-14 on testing (O'Reilly, 2020)", url = "https://abseil.io/resources/swe-book" },
 ]
 

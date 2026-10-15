@@ -82,5 +82,5 @@ scaleup = { artefact = "Audit findings", shape = "Findings in the five-part form
 enterprise = { artefact = "Audit report", shape = "Scope, method, findings with severity and management responses, overall opinion, and the follow-up schedule." }
 sources = [
   { cite = "The Institute of Internal Auditors, Global Internal Audit Standards (IIA, 2024)", url = "https://www.theiia.org/en/standards/" },
-  { cite = "U.S. Government Accountability Office, Government Auditing Standards (GAO, 2018)", url = "https://www.gao.gov/yellowbook" },
+  { cite = "U.S. Government Accountability Office, Government Auditing Standards (GAO, 2018)" },
 ]

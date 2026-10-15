@@ -63,7 +63,7 @@ Sources:
 - Control objectives: Committee of Sponsoring Organizations of the Treadway Commission (COSO), Internal Control: Integrated Framework (COSO, 2013); AICPA, Trust Services Criteria for Security, Availability, Processing Integrity, Confidentiality, and Privacy (AICPA, 2017).
 - Evidence sufficiency: The Institute of Internal Auditors, Global Internal Audit Standards (IIA, 2024), <https://www.theiia.org/en/standards/>; NIST, SP 800-53A Rev. 5, Assessing Security and Privacy Controls in Information Systems and Organizations (NIST, 2022), <https://csrc.nist.gov/pubs/sp/800/53/a/r5/final>.
 - Sampling: AICPA, Audit Guide: Audit Sampling (AICPA, 2019).
-- Findings with severity and owner: The Institute of Internal Auditors, Global Internal Audit Standards (IIA, 2024), <https://www.theiia.org/en/standards/>; U.S. Government Accountability Office, Government Auditing Standards (GAO, 2018), <https://www.gao.gov/yellowbook>.
+- Findings with severity and owner: The Institute of Internal Auditors, Global Internal Audit Standards (IIA, 2024), <https://www.theiia.org/en/standards/>; U.S. Government Accountability Office, Government Auditing Standards (GAO, 2018).
 
 **Team stage.** Read `[team] stage` (`aayu config show`): `startup`, `scaleup`, or `enterprise`. Unset, it follows `[team] size` (15 people or fewer: startup; up to 150: scaleup; more: enterprise), and with no size the pod's humans (paired seats plus the founder), so a solo pod is a startup. The stage changes depth and ceremony only, never the floors, the evidence rule, or human-only gates. Put the stage's artefact in your output as a heading: a startup gets the one-page version (at most 400 words), an enterprise the full artefact.
 

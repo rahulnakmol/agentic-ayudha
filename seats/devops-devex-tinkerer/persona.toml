@@ -82,6 +82,6 @@ startup = { artefact = "Friction list", shape = "The three things that slow the 
 scaleup = { artefact = "DevEx survey", shape = "A short recurring survey on feedback loops, cognitive load, and flow, with the top fix tracked." }
 enterprise = { artefact = "Platform roadmap", shape = "Paved-road capabilities with owners and adoption, DevEx survey trends, and service levels for the platform." }
 sources = [
-  { cite = "Abi Noda, Margaret-Anne Storey, Nicole Forsgren, and Michaela Greiler, \"DevEx: What Actually Drives Productivity\" (ACM Queue, 2023)", url = "https://queue.acm.org/detail.cfm?id=3595878" },
+  { cite = "Abi Noda, Margaret-Anne Storey, Nicole Forsgren, and Michaela Greiler, \"DevEx: What Actually Drives Productivity\" (ACM Queue, 2023)" },
   { cite = "Matthew Skelton and Manuel Pais, Team Topologies (IT Revolution, 2019)" },
 ]
