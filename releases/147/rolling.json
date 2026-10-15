@@ -4,39 +4,46 @@
   "version": "v0.1.0",
   "source": "dev",
   "target": "rolling",
-  "source_sha": "89f0137cea1e161b08a7c67cc645d2850add239b",
-  "commit": "689ce9431cc2b1a9bd11757cae3aa429b166cf3c",
-  "tree": "5bdb57c06f0dde2bd6fd39804de814d7b799bafa",
-  "message": "Rolling snapshot: 20261012T1043Z",
-  "tag": "rolling-2026-10-12.3",
-  "candidate": "promote/rolling-20261012T1043Z",
+  "source_sha": "31373c2436ac6837e8e1158e3a0fa836c9c37fd3",
+  "commit": "19f5a4ce3013ba7c678429e8bd9b6b768a81aedb",
+  "tree": "2806b5aa507ff9e17a4f31040e763cd9dcc5d090",
+  "message": "Rolling snapshot: 20261015T1642Z",
+  "tag": "rolling-2026-10-15",
+  "candidate": "promote/rolling-20261015T1642Z",
   "evals": {
     "workflow": "evals.yml",
-    "id": 38238157806,
-    "url": "https://github.com/rahulnakmol/agentic-ayudha/actions/runs/38238157806",
+    "id": 38771264725,
+    "url": "https://github.com/rahulnakmol/agentic-ayudha/actions/runs/38771264725",
     "conclusion": "success",
     "attempts": 1
   },
   "gate": {
     "workflow": "ci.yml",
-    "id": 38240350947,
-    "url": "https://github.com/rahulnakmol/agentic-ayudha/actions/runs/38240350947",
+    "id": 38779085828,
+    "url": "https://github.com/rahulnakmol/agentic-ayudha/actions/runs/38779085828",
     "conclusion": "success",
     "attempts": 1
   },
   "artifacts": [
     {
       "name": "benchmarks",
-      "digest": "sha256:ee408a792e7cd2440aaf4406565eb54b3dc162eab4a0608a0bfe958152df768f",
-      "size": 698
+      "digest": "sha256:584b463f73457ac823c10018e86023b9bb00a39715b1eafedb198aa913b2361e",
+      "size": 815
     },
     {
       "name": "release-snapshot",
-      "digest": "sha256:3dda8a3da3ce9c8cd904a1023bb0403a0c0fc593c0e82b0905357b2aceeafe29",
-      "size": 64558707
+      "digest": "sha256:6ad9e16fbf29f8129de948cdcb24b34b584e0e10645610be211a9deaaf720608",
+      "size": 69720995
     }
   ],
   "stories_released": [
+    171,
+    172,
+    173,
+    177,
+    183
+  ],
+  "already_released": [
     53,
     54,
     55,
@@ -50,89 +57,18 @@
     68,
     69,
     71,
-    112,
-    130,
-    131
+    112
   ],
-  "already_released": [],
   "shipped_not_listed": [
-    130,
-    131
+    171,
+    172,
+    173,
+    177,
+    183
   ],
-  "referenced_not_merged": [
-    70
-  ],
-  "release_notes": "tell/release/rolling-2026-10-12.3.md",
-  "measure_due": [
-    {
-      "issue": 29,
-      "type": "goal",
-      "due": "2026-11-09",
-      "release": 147,
-      "tag": "rolling-2026-10-12.3",
-      "stories": [
-        53,
-        54,
-        55,
-        56,
-        60,
-        62,
-        64,
-        65,
-        66,
-        67,
-        68,
-        69,
-        71,
-        112
-      ]
-    },
-    {
-      "issue": 30,
-      "type": "initiative",
-      "due": "2026-11-09",
-      "release": 147,
-      "tag": "rolling-2026-10-12.3",
-      "stories": [
-        53,
-        54,
-        55,
-        56,
-        60,
-        62,
-        64,
-        65,
-        66,
-        67,
-        68,
-        69,
-        71,
-        112
-      ]
-    },
-    {
-      "issue": 125,
-      "type": "goal",
-      "due": "2026-11-09",
-      "release": 147,
-      "tag": "rolling-2026-10-12.3",
-      "stories": [
-        130,
-        131
-      ]
-    },
-    {
-      "issue": 126,
-      "type": "initiative",
-      "due": "2026-11-09",
-      "release": 147,
-      "tag": "rolling-2026-10-12.3",
-      "stories": [
-        130,
-        131
-      ]
-    }
-  ],
+  "referenced_not_merged": [],
+  "release_notes": "tell/release/rolling-2026-10-15.md",
+  "measure_due": [],
   "promoted_by": "rahulnakmol",
-  "promoted_at": "2026-10-12T10:43:05Z"
+  "promoted_at": "2026-10-15T16:42:02Z"
 }
