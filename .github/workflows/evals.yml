@@ -33,8 +33,10 @@ permissions:
   contents: read
   actions: read # download main's results artifact as the baseline
 
+# Pushes and the nightly schedule share one group per ref, so at most one of them queues behind a running one. A
+# dispatch gets a group of its own (the run ID), so a later push can never replace a pending dispatch (D-5.3b.g).
 concurrency:
-  group: evals-${{ github.ref }}
+  group: evals-${{ github.ref }}${{ github.event_name == 'workflow_dispatch' && format('-dispatch-{0}', github.run_id) || '' }}
   cancel-in-progress: false
 
 jobs:
@@ -108,8 +110,9 @@ jobs:
           fi
           # The brief register cases cost about 6-7 USD a run: nightly, dispatch, and promotion run them, pushes to dev
           # do not (D-7.3c).
-          if [ "$EVENT" = push ] && [ "$REF" = dev ] && { [ "$GROUP" = brief ] || [ "$GROUP" = brief-plain ]; }; then
-            echo "::notice::Push to dev: the brief group runs nightly, on dispatch, and on promotion."
+          # The grill conversation cases cost about 13 USD a run (D-5.3b.g): the same schedule.
+          if [ "$EVENT" = push ] && [ "$REF" = dev ] && { [ "$GROUP" = brief ] || [ "$GROUP" = brief-plain ] || [ "$GROUP" = conversations ]; }; then
+            echo "::notice::Push to dev: the $GROUP group runs nightly, on dispatch, and on promotion."
             run=false
           fi
           if [ "$run" = true ] && [ "$EVENT" = push ] && [ "$REF" = dev ]; then

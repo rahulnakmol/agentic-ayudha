@@ -6,7 +6,8 @@ seamless, beautiful, modern, clean, smooth, pleasant, professional, engaging, wo
 A UX qualifier names a feeling, not an outcome. Break it into the dimensions below, in this order (highest rework
 risk first), and ask about the ones the request and the facts leave open. Each dimension says what to ask, a
 sensible default to offer with its reason, the evidence kind that usually proves it, and the assessment facts
-(`aayu grill <type> --assess`) to cite when you ask.
+(`aayu grill <type> --assess`) to cite when you ask, and the topics a question about it is tagged with
+(`<dimension>/<topic>`).
 
 ## Dimensions
 
@@ -18,6 +19,7 @@ sensible default to offer with its reason, the evidence kind that usually proves
   because one well-defined task is buildable and testable in a story.
 - Evidence: recording
 - Facts: flow, route, story
+- Topics: primary-task, success-signal, audience
 
 ### Steps and time on task (`ux.steps`)
 
@@ -27,6 +29,7 @@ sensible default to offer with its reason, the evidence kind that usually proves
   time on task only when the human gives a number.
 - Evidence: recording
 - Facts: flow, route
+- Topics: screen-count, step-merge, confirmation-placement, options-placement, time-on-task
 
 ### Empty, loading, error, and offline states (`ux.states`)
 
@@ -37,6 +40,7 @@ sensible default to offer with its reason, the evidence kind that usually proves
   users order on the move.
 - Evidence: screenshot
 - Facts: gap, route
+- Topics: payment-failure, submit-failure, empty, loading, offline, other-errors
 
 ### Mobile and desktop (`ux.platforms`)
 
@@ -45,6 +49,7 @@ sensible default to offer with its reason, the evidence kind that usually proves
   widths the web floors capture.
 - Evidence: screenshot
 - Facts: floor, route
+- Topics: devices, widths
 
 ### Consistency with the design system (`ux.consistency`)
 
@@ -54,6 +59,7 @@ sensible default to offer with its reason, the evidence kind that usually proves
   spacing, or font values outside the tokens and 0 new components.
 - Evidence: metric
 - Facts: tokens, component, ds
+- Topics: tokens-and-components, new-components
 
 ### Content and tone (`ux.content`)
 
@@ -62,6 +68,7 @@ sensible default to offer with its reason, the evidence kind that usually proves
 - Default: the tone in `design/brand.yaml` when it exists; exact wording only when the human gives it, quoted.
 - Evidence: screenshot
 - Facts: route
+- Topics: exact-wording, tone
 
 ### Trust signals (`ux.trust`)
 
@@ -71,6 +78,7 @@ sensible default to offer with its reason, the evidence kind that usually proves
   the main reason people abandon an order.
 - Evidence: screenshot
 - Facts: route, story
+- Topics: before-paying, receipt, undo-or-cancel
 
 ### Performance budgets (`ux.performance`)
 
@@ -79,6 +87,7 @@ sensible default to offer with its reason, the evidence kind that usually proves
 - Default: the configured Lighthouse budgets and no extra criterion, because the floors already check them.
 - Evidence: metric
 - Facts: floor, gap
+- Topics: slow-screens, budgets
 
 ### Accessibility beyond the floors (`ux.accessibility`)
 
@@ -88,3 +97,4 @@ sensible default to offer with its reason, the evidence kind that usually proves
   the human did not ask for.
 - Evidence: sr-transcript
 - Facts: floor
+- Topics: beyond-floors

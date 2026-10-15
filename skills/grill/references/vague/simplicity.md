@@ -15,6 +15,7 @@ today's counts from the facts.
 - Default: today's count minus every step that only confirms, because each removed step is observable.
 - Evidence: recording
 - Facts: flow, route
+- Topics: step-count, inputs
 
 ### Remembered choices (`simple.memory`)
 
@@ -22,6 +23,7 @@ today's counts from the facts.
 - Default: nothing new remembered, because storing personal data is its own decision.
 - Evidence: screenshot
 - Facts: route, story
+- Topics: remembered-choices
 
 ### First use without help (`simple.learnability`)
 
@@ -30,6 +32,7 @@ today's counts from the facts.
 - Default: one clear primary action per screen, named in the criterion by its label.
 - Evidence: recording
 - Facts: route, component
+- Topics: first-use, primary-action
 
 ### Words the user knows (`simple.language`)
 
@@ -37,3 +40,4 @@ today's counts from the facts.
 - Default: keep today's labels unless the human names a confusing one.
 - Evidence: screenshot
 - Facts: route
+- Topics: labels

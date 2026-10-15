@@ -628,7 +628,7 @@ func (h *Harness) runConversation(ctx context.Context, c Case, lane verbs.LaneID
 			return Run{Status: RunFail, Score: 1, Floor: fmt.Sprintf("still asking after %d rounds and the human's request to write the spec", human.MaxRounds)}, nil
 		}
 		for _, q := range t.Questions {
-			x.Answers = append(x.Answers, human.Answer(q.Dimension))
+			x.Answers = append(x.Answers, human.Answer(q.Topic))
 		}
 		tr.Exchanges = append(tr.Exchanges, x)
 		rt.Exchanges = append(rt.Exchanges, x)

@@ -67,10 +67,12 @@ host; a draft that still fails scores 1 without the judge (`revised` marks runs 
 
 A grill conversation case (`[tier2] human`, WP5.3b) runs the skill turn by turn. The skill gets the request and
 `grill --assess`'s report on the case's repository fixture, both as untrusted data, and replies with JSON turns: what
-it says, up to five questions each tagged with the catalogue dimension it settles, and finally `done` with its readback
-and the draft. The scripted human (`human.toml`) answers each question by that dimension (`confirm`, `default`, `park`,
-or `defer`); a topic it has no answer for gets the fallback, which parks it, so an unscripted idea never becomes a
-requirement and a run is reproducible whatever the wording. After `max_rounds` the human asks for the spec. Before the
+it says, up to five questions each tagged with the topic it settles (`<dimension>/<topic>`, the topics coming from
+the catalogues' Topics, the skill's request topics, or `other/<key>`), and finally `done` with its readback and the
+draft. The scripted human (`human.toml`) answers each question by its topic (`[topics."ux.steps/screen-count"]`), else
+by the topic's dimension (`[dimensions."ux.steps"]`), else with the fallback, which parks it (`confirm`, `default`,
+`park`, or `defer`), so a follow-up on another topic of a dimension gets its own answer, an unscripted idea never
+becomes a requirement, and a run is reproducible whatever the wording. After `max_rounds` the human asks for the spec. Before the
 judge, the draft must pass Ready and tier 1's `concrete` rules and the case's `scope` rules, else it scores 1; the judge
 then scores the whole conversation (question quality, concreteness, fidelity), and the results keep each run's
 exchanges and final criteria.
@@ -86,8 +88,9 @@ helpful nudging, grounded citations, senior-practitioner realism for the seat, a
 
 Tier 2 runs in groups (`[[groups]]` in `eval.toml`), one `evals.yml` job per group, each with its own `max_usd`, so
 one group cannot use up another's cap: `brief` (the `brief/` cases, 12 USD), `personas` (the `retro/` and `decide/`
-persona cases, 20 USD), and `skills` (every other case, 20 USD since the grill conversation cases of WP5.3b).
-Pushes to `dev` do not run the `brief` group; it runs nightly, on dispatch (input `group` picks one group), and on
+persona cases, 20 USD), `conversations` (the grill conversation cases of WP5.3b, 20 USD, advisory until a run meets
+the bar, D-5.3b.g), and `skills` (every other case, 6 USD).
+Pushes to `dev` do not run the `brief` or `conversations` group; they run nightly, on dispatch (input `group` picks one group), and on
 pushes to `rolling` and `main`. Each group's results go to `results/<sha>-<group>.json`, uploaded as the artifact
 `eval-results-<sha>-<group>`; the promotion gate (`ci.yml` job `evals-gate`) fetches every group's results for the
 commit being promoted and for `main`, runs `eval -compare` on each, and fails when any group is missing or fails. A group with

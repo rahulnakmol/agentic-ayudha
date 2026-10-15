@@ -141,10 +141,18 @@ in what the repository already has, and nothing in it the human did not confirm.
    about what the request and the facts leave open. For each: why it matters, the options you see, and your
    default with its reason ("I'd aim for three screens, because steps two and three only confirm; OK?"). Cite facts
    by ID. Keep going round after round while anything that changes what gets built is still vague; stop asking
-   about a dimension once it is settled or the human parks or defers it.
+   about a dimension once it is settled or the human parks or defers it. Know the topic of each question:
+   `<dimension>/<topic>` with a topic from the catalogue's Topics (`ux.steps/confirmation-placement`), a request
+   topic (`request/dependency`, `request/size`, `request/existing-behaviour`, `request/parent`, `request/scope`), or
+   `other/<key>`; Provenance names it.
 5. **Brainstorm freely, write only what is confirmed.** Propose ideas: that is the point of a colleague. But an idea
    enters the spec only when the human states it, confirms it, or accepts it as your offered default. Anything
    else goes to Parked ideas (raised, not confirmed) or Open questions (needed, not yet answered).
+   **Never decide a detail the human did not confirm**: where something appears (which screen, its own screen or
+   another, above or below what), what it is called, its order, a number. Ask; when there is no answer, defer it
+   to Open questions or park it, and keep it out of the criteria. A criterion that places something
+   (`` `/order/review` ``, "on the review screen", "above the button") must rest on the human's words saying so, or
+   `grill` and `ready` refuse it.
 6. **Draft and validate.** Write the body (the reference's fields plus the spec record below) and validate it with
    `--idea`; fix every problem by asking, then validate again:
 
@@ -190,15 +198,15 @@ A grilled Story or Bug carries four more sections after its Completion Goal. `gr
   ```text
   Request: "The bakery app needs high-quality UX for ordering"
   Vague: "high-quality" → criteria 1, 2, 3
-  1. confirmed (ux.steps): "yes, three screens is right"; facts: flow:/order
+  1. confirmed (ux.steps/screen-count): "yes, three screens is right"; facts: flow:/order
   2. default (ux.states): "your default is fine"; facts: gap:error:/order
   3. stated (request): "customers must see the total before paying"
   ```
 
   `stated`: the human said it; `confirmed`: you proposed it and the human agreed; `default`: the human accepted the
   default you offered with its reason. Quote the human's words exactly; when a criterion rests on several replies,
-  quote each one (`"…" / "…"`). The dimension in brackets is the catalogue's (or
-  `request`). `; facts:` cites assessment fact IDs the criterion rests on; `grill` checks that each one exists. A
+  quote each one (`"…" / "…"`). The brackets name the question's topic (`ux.steps/screen-count`), its dimension
+  alone, or `request` for the request's own words; a criterion may only name a topic or dimension you asked about. `; facts:` cites assessment fact IDs the criterion rests on; `grill` checks that each one exists. A
   qualifier you could not resolve is `Vague: "fast" → deferred: <why>` with a matching `deferred:` open question.
 
 ## Done when concrete

@@ -17,6 +17,7 @@ are missing.
   what users feel.
 - Evidence: metric
 - Facts: route, code
+- Topics: action, viewpoint
 
 ### Number and percentile (`perf.target`)
 
@@ -26,6 +27,7 @@ are missing.
   proposal to confirm, never as a fact.
 - Evidence: metric
 - Facts: floor, gap
+- Topics: percentile-and-number, current-value
 
 ### Conditions (`perf.conditions`)
 
@@ -35,6 +37,7 @@ are missing.
   only.
 - Evidence: metric
 - Facts: code, test
+- Topics: data-size, device-and-network, cache-state, concurrency
 
 ### How it is measured (`perf.measure`)
 
@@ -44,6 +47,7 @@ are missing.
   production telemetry cannot be captured as proof.
 - Evidence: metric
 - Facts: test, event
+- Topics: proof, test
 
 ### Perceived speed (`perf.perceived`)
 
@@ -52,6 +56,7 @@ are missing.
 - Default: keep today's loading feedback; a new loading state only when the human asks for one.
 - Evidence: recording
 - Facts: gap, route
+- Topics: loading-feedback, partial-results
 
 ### Guarding against regressions (`perf.regression`)
 
@@ -59,3 +64,4 @@ are missing.
 - Default: none in this story; propose it as a parked idea, because a new CI budget is its own decision.
 - Evidence: metric
 - Facts: floor, gap
+- Topics: ci-budget
