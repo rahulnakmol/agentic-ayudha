@@ -1,61 +1,67 @@
-# 7. Release it
+# 7. The release
 
-Shipping puts a change on `dev`, where the team integrates. Releasing puts it in front of people. `release` moves
-your work up the ladder, from `dev` to a `rolling` snapshot for early adopters, then to a stable release on `main`,
-and it runs a full gate before every step.
+> *Monday, 14:47 UTC.* Priya types `aayu release 144 --to rolling` and answers "yes" at the prompt. Somewhere in CI,
+> a full test run starts on a commit that does not exist on any branch yet. If it fails, nothing moves.
 
-> **You are here:** step 7 of 9. [Shape](journey-1-shape.md) · [Break down](journey-2-break-down.md) ·
-> [Ready](journey-3-ready.md) · [Build](journey-4-build.md) · [Prove](journey-5-prove.md) · [Ship](journey-6-ship.md) ·
-> **Release** · [Learn](journey-8-learn.md) · [Explain](journey-9-explain.md)
+## Merged is not released
+
+Shipping put the five stories on `dev`, where the team integrates. Releasing puts them in front of people. aayudha
+moves work up a ladder of three branches: `dev`, then a `rolling` snapshot for early adopters, then a stable release
+on `main` ([dev, rolling, main](concepts-ladder.md)). Every step up runs a full gate first.
+
+Back at 08:51, the agent had filed Release 144, listing the three Features it would carry. Now `release` checks
+that everything on that list has shipped. Then it builds the exact merge commit that will land, on a temporary
+branch, and runs the promotion gate on it in CI: the full test suite that must pass before a branch moves.
+
+## What happened at 14:47
+
+- The candidate commit was `9991cd3`, titled "Rolling snapshot: 20261012T1447Z".
+- The skill evals (tests of the agents' own instructions, under the gates described in the
+  [epilogue](built-with-itself.md)) and the rolling gate both passed on the first attempt.
+- `rolling` moved to that exact commit, tagged `rolling-2026-10-12.4`.
+- Stories 132, 133, and 134 were stamped `released`. Stories 130 and 131 had gone out in an earlier snapshot.
+- Release notes were written, naming only proven Features.
+- The measurement of Goal 125 and Initiative 126 was scheduled for after 9 November 2026, 28 days out.
+
+All of it was written back onto the Release issue as shipping evidence: the runs, the artifacts and their
+fingerprints, the stories, the notes, and the due dates. You can install that very snapshot today, as
+[your first hour](start.md) shows.
+
+> **Honest status:** in the real run, the seeded measurement and the closing summary in the next two chapters were
+> made just before this release, between 14:29 and 14:39. The real 28-day measurement comes after 9 November. And no
+> stable release, `main` at version v0.1.0, has been cut yet; that step works the same way and adds a signed build, an
+> install check, and the package managers.
 
 ## What you do, and what the agent does
 
-**You** start the release. `release` runs only for a person, on a terminal, with a confirmation: agents and CI are
-refused. You first file a Release work item (`grill release`) that lists the Features it includes.
+**You** start the release. `release` runs only for a person, on a terminal, with a confirmation. Agents and CI are
+refused. Try `--dry-run` first: it shows what would ship and which stories would be stamped, and writes nothing.
 
-**`release`** does the careful part. It checks that everything the Release lists has shipped. It builds the exact
-merge commit that will land, runs the promotion gate on it in CI (the full test suite that must pass before a
-branch moves), and moves the branch only when the gate is green.
-Then it tags the commit, stamps every story it carried as `released`, writes release notes that name only proven
-Features, and schedules the measurement of each Goal above those stories, 28 days out.
+**`release`** does the careful part: checks the list, builds the candidate, runs the gate, moves the branch, tags it,
+stamps the stories, writes the notes, and schedules the measurement.
 
-```sh
-aayu release <release> --to rolling --dry-run   # what would ship, and which stories get stamped
-aayu release <release> --to rolling             # dev to rolling, after a confirmation
-aayu release <release> --to main                # rolling to main, as version vX.Y.Z
-```
+## What you learn
 
-The ladder is explained in [dev, rolling, main](concepts-ladder.md).
+Measure-later only works if "later" is on the calendar. `release` puts it there for you.
 
-## In the benefits-qa story
+## The verbs in this step
 
-> **In the story:** Release 144, "benefits-qa example on the next rolling snapshot", included the three Features.
+<!-- BEGIN GENERATED: stage-verbs -->
 
-At 14:47 UTC, `release` promoted `dev` to `rolling`:
+| Verb | What it does |
+|---|---|
+| [`release`](../../skills/release/SKILL.md) | Moves shipped work up to a snapshot or stable release, after a full gate, and schedules the measurement. |
 
-- The candidate commit was `9991cd3`, titled "Rolling snapshot: 20261012T1447Z".
-- The evals (tests of the agents' own skills) and the rolling gate both passed on the first attempt.
-- The commit was tagged `rolling-2026-10-12.4`.
-- Stories 132, 133, and 134 were stamped `released`. Stories 130 and 131 had already gone out in the snapshot before.
-- Release notes were written to the ledger.
-- Measurement of Goal 125 and Initiative 126 was scheduled for after 2026-11-09.
+<!-- END GENERATED: stage-verbs -->
 
-All of it was written back to the Release issue as shipping evidence: the runs, the artifacts and their
-fingerprints, the stories, the notes, and the due dates.
-
-> **Honest status:** a stable release (`main`, version v0.1.0) has not been cut for this project yet. The `rolling`
-> step above is real; the `main` step works the same way and adds a signed build, an install check, and the
-> package managers.
-
-## What you get back
-
-- A tagged snapshot or release, built from a commit that passed the full gate.
-- Every story it carried stamped `released`, including any you forgot to list (they are reported).
-- Release notes that cite only proven work, and a measurement date for each Goal.
-
-> **Well done:** your work is out. And because the measurement is already scheduled, you will not forget to check
-> whether it helped.
+> **Under the hood:** the gates, the tags, goreleaser, cosign signatures, provenance, and how `install.sh` checks a
+> download are in [releases and the supply chain](how-releases.md).
 
 ## What's next
 
-Did it work? [Measure and learn](journey-8-learn.md).
+The work is out. Now the only question that matters: did the number move?
+[Chapter 8, the number](journey-8-learn.md).
+
+> **You are here:** chapter 7 of 9. [Goal](journey-1-shape.md) · [Plan](journey-2-break-down.md) ·
+> [Promises](journey-3-ready.md) · [Build](journey-4-build.md) · [Gate](journey-5-prove.md) · [Yes](journey-6-ship.md) ·
+> **Release** · [Number](journey-8-learn.md) · [Telling](journey-9-explain.md)

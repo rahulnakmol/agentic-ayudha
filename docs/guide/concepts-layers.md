@@ -39,6 +39,8 @@ The five benefits-qa stories touched all nine layers between them.
 Which folders belong to which layer is yours to set: a product lists its path patterns in its own `LAYERS.md`, so
 any folder layout works. The rules for this repository are in the [Layers reference](../../LAYERS.md). Terms are defined in the
 [glossary](../../GLOSSARY.md).
+> **Under the hood:** how a changed path is matched to a layer, and how the footprint decides which checks run, is in
+> [floors in detail](how-floors.md) and [the verb registry](how-registry.md).
 
 ## What's next
 

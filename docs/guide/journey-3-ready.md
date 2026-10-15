@@ -1,35 +1,17 @@
-# 3. Get a story Ready
+# 3. The promises
 
-This is the step that makes everything after it work. Before any code is written, you and the agent agree, in
-writing, what "done" means for one story. Later, every check and every review measures the work against exactly
-these words, and nothing else.
+> *Monday, 07:29 UTC.* "So what does done look like for the answers story?" Priya asks. Sam starts listing what the
+> app should answer. The agent asks about the opposite. "What must it never answer? Write that down too."
 
-> **You are here:** step 3 of 9. [Shape](journey-1-shape.md) · [Break down](journey-2-break-down.md) · **Ready** ·
-> [Build](journey-4-build.md) · [Prove](journey-5-prove.md) · [Ship](journey-6-ship.md) ·
-> [Release](journey-7-release.md) · [Learn](journey-8-learn.md) · [Explain](journey-9-explain.md)
+## Done, written down before the code
 
-## What you do, and what the agent does
+This is the step that makes everything after it work. Before any code exists, Priya, Sam, and the agent agree, in
+writing, what "done" means for each story. Every later check and every review measures the work against exactly
+these words and nothing else.
 
-**You** read the story's promises and ask: if all of these are true, am I happy? If yes, you say Ready.
-
-**Your agent** uses `grill story` to write the story with you. Its heart is the **Completion Goal**: a numbered list
-of criteria, each one observable. Every criterion names the evidence that will prove it (a screenshot, a recording,
-a screen-reader transcript, an API trace, or a metric), the situation to test, and the expected result. Then `ready`
-checks the story is complete and posts a **Ready snapshot**: a comment that fingerprints the story's text, so any
-later edit is caught.
-
-```sh
-aayu ready <story> --check    # read-only: lists anything missing
-aayu ready <story>            # labels it status:ready and posts the snapshot
-```
-
-## In the benefits-qa story
-
-> **In the story:** story 131, "Answers quote the best plan passage; policy refuses or refers the rest". As an
-> Example Co employee, I want my question answered by quoting the plan passage that covers it, so that I can trust
-> the answer, and I want questions the plan does not answer sent to HR rather than guessed.
-
-Its Completion Goal had three criteria:
+`grill story` writes the story with them. Its heart is the **Completion Goal**: numbered promises, each one
+something a person could check, each naming the evidence that will prove it. For story 131, "answers quote the best
+plan passage; policy refuses or refers the rest", there were three:
 
 1. **API trace.** Ask "What is the dental annual deductible?". Expected: the answer quotes the dental-deductible
    passage in full, with plan Dental and section Deductible, and the policy marks it grounded.
@@ -38,29 +20,50 @@ Its Completion Goal had three criteria:
 3. **API trace.** Ask "Can I bring my dog to work?". Expected: it is referred to an HR specialist as not in the plan
    documents, and nothing is quoted.
 
-Notice what these do. They describe behaviour a person could check, not code. They include the questions the app
-must *not* answer. And they are specific enough that a reviewer can say "met" or "not met" without guessing.
+Two of the three promises are about what the app must not do. That is the privacy stake from the prologue, turned
+into something a machine can check.
 
-The Ready snapshot recorded two fingerprints: one for the whole story and one for the Completion Goal alone. When
-the merge gate later checked the proof, it compared the Completion Goal against that second fingerprint.
+Story 130, loading the plan documents, got a promise that looked routine: a seed file with "an email address outside
+example.com" must be refused, so that no real person's address can ever end up in a screenshot. Nobody expected that
+line to be the hardest promise of the day.
 
-## Why the snapshot matters
+## Freezing the agreement
 
-Without it, "done" quietly moves. Someone edits a criterion halfway through, and the work is judged against
-something nobody agreed to. With the snapshot, `build` refuses a story whose text changed after Ready. If the story
-truly needs to change, you change it and run `ready` again, and the new version is the one everyone sees.
+At 07:29, `ready` checked story 131 was complete and posted a **Ready snapshot**: a comment with two fingerprints,
+one of the whole story and one of the Completion Goal alone. From now on, if anyone edits the story, the fingerprint
+no longer matches, the story loses its Ready label, and `build` refuses to start. "Done" cannot quietly move.
 
-> **Tip:** write at least one criterion about what must *not* happen. In story 131, the refusals were the criteria
-> most likely to catch a real bug.
+## What you do, and what the agent does
 
-## What you get back
+**You** read the promises and ask: if all of these are true, am I happy? If yes, you say Ready.
 
-- A story labelled `status:ready`, with numbered criteria and the kind of evidence each one needs.
-- A Ready snapshot comment, with the fingerprints the rest of the journey checks against.
+**Your agent** drafts the promises with you, makes each one observable, names the evidence it needs, and runs
+`ready` to check and freeze the story.
 
-> **Well done:** your agent now has a precise, testable brief. Most bugs start as vague requirements, and you just
-> removed the vagueness.
+## What you learn
+
+The promises about what must not happen catch the most bugs, as chapter 5 will show. Write at least one for every
+story.
+
+## The verbs in this step
+
+<!-- BEGIN GENERATED: stage-verbs -->
+
+| Verb | What it does |
+|---|---|
+| [`ready`](../../skills/ready/SKILL.md) | Checks that a work item is complete and freezes exactly what was agreed, so later edits are visible. |
+
+<!-- END GENERATED: stage-verbs -->
+
+> **Under the hood:** the snapshot and its two hashes are written to the ledger (see [the ledger branch](how-ledger.md)),
+> and every proof pack later carries the Completion Goal hash it was checked against (see
+> [proof packs](how-proof-packs.md)).
 
 ## What's next
 
-The story is Ready, so the agent can [build it](journey-4-build.md).
+Five stories are Ready. Sam opens a terminal, types one command, and goes to get coffee:
+[chapter 4, the build](journey-4-build.md).
+
+> **You are here:** chapter 3 of 9. [Goal](journey-1-shape.md) · [Plan](journey-2-break-down.md) · **Promises** ·
+> [Build](journey-4-build.md) · [Gate](journey-5-prove.md) · [Yes](journey-6-ship.md) ·
+> [Release](journey-7-release.md) · [Number](journey-8-learn.md) · [Telling](journey-9-explain.md)

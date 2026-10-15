@@ -74,8 +74,8 @@ File an Incident (**`grill incident`**, or let **`triage`** classify a report), 
 an action from your team's operations catalog, keeps the timeline, and runs the action only after a person approves
 it. When you are done, `respond --close` files the follow-up Bug and the retro entry.
 
-If agents themselves are misbehaving, **`aayu halt`** stops every agent, loop, and workflow in the repository until a
-person runs `aayu resume`.
+If agents themselves are misbehaving, **`aayu halt`** stops agent lanes, loops, and the workflows that check the halt
+switch, until a person runs `aayu resume`.
 
 **You get back** a timeline, an approved fix, and a Bug that makes sure it does not happen again.
 
@@ -129,38 +129,38 @@ are not verbs; the verbs reference lists them.
 
 | Stage | Verb | What it does |
 |---|---|---|
-| [Set up](start.md) | `init` | Set up a product repo: labels, issue types, forms, config, ledger branch, and optionally projects, gates, identity, integrations. |
-|  | `install` | Install skill copies, lock.toml, MCP registration, and hooks for each host; shows a diff unless --apply. |
-|  | [`doctor`](../../skills/doctor/SKILL.md) | Check tools, tokens, identity, config, host installs, and existing CI; --fix re-syncs copies after showing a diff. |
-| [Shape the goal](journey-1-shape.md) | [`grill`](../../skills/grill/SKILL.md) | Interview a human until a work item of the given type is complete and passes validation, then write it as an issue. |
-| [Break it down](journey-2-break-down.md) | [`slice`](../../skills/slice/SKILL.md) | Split a Feature into XS-L stories with observable criteria, dependencies, and a layer footprint; close XL items as split. |
-|  | [`plan`](../../skills/plan/SKILL.md) | Plan a story: one checkpoint per layer, contracts, tests, instrumentation, and rollback. |
-|  | [`decide`](../../skills/decide/SKILL.md) | Record a Decision with options, evaluation, and recommendation; accept it, supersede it, or file a floor waiver. |
-| [Get a story Ready](journey-3-ready.md) | [`ready`](../../skills/ready/SKILL.md) | Validate a work item for Ready, label it status:ready, and post the Ready snapshot; --check is read-only. |
-| [Design the screens](journey-4-build.md#if-your-story-has-a-screen) | [`research`](../../skills/research/SKILL.md) | Gather pinned design references (URLs and IDs only) and user research for a Feature. |
-|  | [`wireframe`](../../skills/wireframe/SKILL.md) | Produce wireframes for a Feature's states from its research and criteria. |
-|  | [`mockup`](../../skills/mockup/SKILL.md) | Produce design-system mockups for a Feature from its wireframes. |
-|  | [`prototype`](../../skills/prototype/SKILL.md) | Build a flagged, working prototype of a Feature with Code Connect mapping and a Figma screenshot diff. |
-|  | [`review`](../../skills/review/SKILL.md) | Critique UI with a model lane and a deterministic lane; dispositions recapture, rebuild, fix, or ship. |
-|  | [`polish`](../../skills/polish/SKILL.md) | Apply a review critique to a PR's UI and re-run review. |
-|  | [`baseline`](../../skills/baseline/SKILL.md) | Capture visual baselines for a commit SHA. |
-| [Build it](journey-4-build.md) | [`build`](../../skills/build/SKILL.md) | Build a Ready story or bug in a worktree with checkpoint commits per layer, verify each checkpoint, and open a PR. |
-| [Prove it](journey-5-prove.md) | [`verify`](../../skills/verify/SKILL.md) | Run the deterministic floors (coverage, SAST, secrets, deps, a11y, perf) and record results in a proof pack. |
-|  | [`inspect`](../../skills/inspect/SKILL.md) | Adversarially review a PR against its plan, pack, and criteria; return a structured disposition: merge, fix, or rebuild. |
-|  | [`proof`](../../skills/proof/SKILL.md) | Push, get, verify, list, or purge proof packs on the ledger branch. |
-| [Ship it](journey-6-ship.md) | [`ship`](../../skills/ship/SKILL.md) | Squash-merge a PR after a green merge gate and a human pass, write the Complete section, and clean up. |
-| [Release it](journey-7-release.md) | [`release`](../../skills/release/SKILL.md) | Promote a Release along dev, rolling, main; stamp included stories released and trigger measurement. |
-| [Measure and learn](journey-8-learn.md) | [`experiment`](../../skills/experiment/SKILL.md) | Design an experiment for a Feature: hypothesis, metric, flag, and minimum sample size. |
-|  | [`readout`](../../skills/readout/SKILL.md) | Read out an experiment's lift once it reaches minimum sample and write the Result. |
-|  | [`retro`](../../skills/retro/SKILL.md) | Compare estimates with observed delivery, corrections, floor misses, and cost; file findings as Feedback issues. |
-|  | [`measure`](../../skills/measure/SKILL.md) | Measure a Goal or Initiative against its baseline from analytics exports or live cloud pulls and write the Result. |
-|  | [`evolve`](../../skills/evolve/SKILL.md) | Turn accepted retro Feedback into a failing eval case, then a skill diff that passes it, opened as an agent-authored PR. |
-| [Explain it](journey-9-explain.md) | [`status`](../../skills/status/SKILL.md) | Roll up status, health, risk, proof coverage, decisions, and cost per Goal, Initiative, and Feature. |
-|  | [`audit`](../../skills/audit/SKILL.md) | Audit floors, proof coverage, waivers, decision SLAs, autonomy exceptions, and unlogged writes; write a reproducible report. |
-|  | [`brief`](../../skills/brief/SKILL.md) | Explain work to an audience in a chosen register and purpose as a grounded, accessible HTML brief. |
-|  | [`tell`](../../skills/tell/SKILL.md) | Write docs, guides, changelogs, release notes, launch copy, or brand copy that cite only proven Features; publish is human-only. |
-| [Keep it running](when-to-use-what.md#something-broke-in-production) | [`triage`](../../skills/triage/SKILL.md) | Classify intake issues as Feedback, Bug, or Incident by label only; never edits bodies or touches non-intake issues. |
-|  | [`respond`](../../skills/respond/SKILL.md) | Respond to an incident: propose an ops catalog action, execute it only through human approval, keep the timeline. |
+| [Set up](start.md) | `init` | Sets up a repository for aayudha: labels, issue forms, config, and the records branch; more on request. |
+|  | `install` | Installs the aayudha skills, tools, and hooks into Amp, Cursor, or Claude Code. |
+|  | [`doctor`](../../skills/doctor/SKILL.md) | Checks your machine and setup, and says exactly what to fix. |
+| [Shape the goal](journey-1-shape.md) | [`grill`](../../skills/grill/SKILL.md) | Interviews you, one question at a time, until an idea is a complete work item, then files it on GitHub. |
+| [Break it down](journey-2-break-down.md) | [`slice`](../../skills/slice/SKILL.md) | Splits a Feature into small stories, each with checkable promises, the parts of the code it touches, and its order. |
+|  | [`plan`](../../skills/plan/SKILL.md) | Plans a story one layer at a time: what changes, how it is tested, and how to roll it back. |
+|  | [`decide`](../../skills/decide/SKILL.md) | Records a real choice with its options and a recommendation; only a person with the authority accepts it. |
+| [Get a story Ready](journey-3-ready.md) | [`ready`](../../skills/ready/SKILL.md) | Checks that a work item is complete and freezes exactly what was agreed, so later edits are visible. |
+| [Design the screens](journey-4-build.md#if-your-story-has-a-screen) | [`research`](../../skills/research/SKILL.md) | Collects design references and user research for a Feature. |
+|  | [`wireframe`](../../skills/wireframe/SKILL.md) | Sketches the screens a Feature needs, from its research and promises. |
+|  | [`mockup`](../../skills/mockup/SKILL.md) | Turns wireframes into mockups that use your design system. |
+|  | [`prototype`](../../skills/prototype/SKILL.md) | Builds a working prototype behind a flag and compares it with the design. |
+|  | [`review`](../../skills/review/SKILL.md) | Critiques a pull request's screens with a model and with fixed accessibility checks. |
+|  | [`polish`](../../skills/polish/SKILL.md) | Applies a design critique to a pull request and reviews it again. |
+|  | [`baseline`](../../skills/baseline/SKILL.md) | Captures reference screenshots of a commit to compare later changes against. |
+| [Build it](journey-4-build.md) | [`build`](../../skills/build/SKILL.md) | Writes the code for a Ready story in small checked steps, one layer at a time, and opens a pull request. |
+| [Prove it](journey-5-prove.md) | [`verify`](../../skills/verify/SKILL.md) | Runs the fixed checks (tests, security, secrets, dependencies, accessibility, speed) and records the results. |
+|  | [`inspect`](../../skills/inspect/SKILL.md) | A second model, from another vendor, reviews the pull request against every promise and says merge, fix, or rebuild. |
+|  | [`proof`](../../skills/proof/SKILL.md) | Stores, fetches, checks, and cleans up the proof packs that hold the evidence for each change. |
+| [Ship it](journey-6-ship.md) | [`ship`](../../skills/ship/SKILL.md) | Merges a proven pull request after your yes, and writes down who approved what, on which evidence. |
+| [Release it](journey-7-release.md) | [`release`](../../skills/release/SKILL.md) | Moves shipped work up to a snapshot or stable release, after a full gate, and schedules the measurement. |
+| [Measure and learn](journey-8-learn.md) | [`experiment`](../../skills/experiment/SKILL.md) | Designs an A/B test for a Feature: what you expect, what you measure, and how many people you need. |
+|  | [`readout`](../../skills/readout/SKILL.md) | Reads out an experiment once it has enough people, and writes down the measured lift. |
+|  | [`retro`](../../skills/retro/SKILL.md) | Compares plans with what happened and files what to improve as feedback you can accept or reject. |
+|  | [`measure`](../../skills/measure/SKILL.md) | Measures a Goal against its baseline, the same way as before, and writes the result into the Goal. |
+|  | [`evolve`](../../skills/evolve/SKILL.md) | Turns accepted feedback into a test for a skill, then a skill change that passes it, for a person to review. |
+| [Explain it](journey-9-explain.md) | [`status`](../../skills/status/SKILL.md) | Rolls up progress, risk, proof, open decisions, and cost for each Goal, Initiative, and Feature. |
+|  | [`audit`](../../skills/audit/SKILL.md) | Writes a report anyone can reproduce: checks, proof, waivers, deadlines, bypasses, and any write that skipped the log. |
+|  | [`brief`](../../skills/brief/SKILL.md) | Explains a piece of work to one audience in a short page, where every claim is checked against its sources. |
+|  | [`tell`](../../skills/tell/SKILL.md) | Writes docs, release notes, and launch copy in your brand's voice, linking only work that is proven. |
+| [Keep it running](when-to-use-what.md#something-broke-in-production) | [`triage`](../../skills/triage/SKILL.md) | Sorts incoming reports into feedback, bugs, and incidents by label, without editing what people wrote. |
+|  | [`respond`](../../skills/respond/SKILL.md) | Helps handle an incident: proposes a fix from your runbook, runs it only after a person approves, and keeps the timeline. |
 
 <!-- END GENERATED: verb-map -->
 

@@ -46,6 +46,8 @@ files, such as screenshots and recordings, go to Git LFS in private repositories
 ones, so they can be deleted after 90 days while the pack and its fingerprints stay.
 
 Terms are defined in the [glossary](../../GLOSSARY.md).
+> **Under the hood:** the `pack.json` format, field by field, is in [proof packs](how-proof-packs.md); where packs are
+> stored is in [the ledger branch](how-ledger.md).
 
 ## What's next
 

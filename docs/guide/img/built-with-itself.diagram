@@ -1,0 +1,17 @@
+# The epilogue (docs/guide/built-with-itself.md).
+title: aayudha was built through its own gates, and every exception was written down
+direction: down
+plan: A build plan, attacked by four reviewers
+threads: Parallel agent threads build it
+gates: Each pull request through its own gates
+bypass: Solo-mode bypasses, each recorded
+audit: audit reconciles them with GitHub
+evals: Evals fail five rounds; the bar changes in the open
+open: What is still open, listed
+plan -> threads
+threads -> gates
+gates -> bypass: no second person
+bypass -> audit
+gates -> evals: skills
+audit -> open
+evals -> open

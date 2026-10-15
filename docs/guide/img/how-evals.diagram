@@ -1,0 +1,16 @@
+# The eval harness (docs/guide/how-evals.md).
+title: Recorded runs are checked on every pull request, and model-judged runs gate every promotion per group
+direction: down
+case: Eval case: input, recorded run, rubric
+tier1: Tier 1: deterministic checks in go test
+tier2: Tier 2: k runs on the skill's lane model
+judge: Judge from another family scores 1 to 5
+results: Group results: pass^k and mean score
+compare: Compare with main's results for the group
+gate: evals-gate refuses a failing promotion
+case -> tier1: every pull request
+tier1 -> tier2: after merge
+tier2 -> judge
+judge -> results
+results -> compare
+compare -> gate: gating groups only

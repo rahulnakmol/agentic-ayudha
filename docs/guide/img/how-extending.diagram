@@ -1,0 +1,14 @@
+# Extending aayudha (docs/guide/how-extending.md). Rendered to how-extending.svg by go generate.
+title: Every extension starts from one declared source, then tests, generation, and a human review
+direction: down
+verb: New verb: registry entry, skill body, handler
+floor: New floor: Floor type, defaults.toml key, gen row
+host: New host: registry host, internal/hosts, hosts/
+integration: New integration: adapter, providers.Known
+tests: go test ./... and go generate ./...
+review: CODEOWNERS review of protected paths
+verb -> tests
+floor -> tests
+host -> tests
+integration -> tests
+tests -> review: pull request to dev

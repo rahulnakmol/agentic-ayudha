@@ -46,6 +46,8 @@ computes the streak from the merge history, so no agent can change it. The risky
 and the platform, always need a person, whatever the streak.
 
 Terms are defined in the [glossary](../../GLOSSARY.md).
+> **Under the hood:** how a person's approval is told apart from a bot's, and what solo mode checks, is in
+> [trust and identities](how-trust.md).
 
 ## What's next
 

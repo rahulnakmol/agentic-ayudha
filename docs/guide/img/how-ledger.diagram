@@ -1,0 +1,15 @@
+# The ledger branch (docs/guide/how-ledger.md).
+title: Every record lands on the ledger as one fast-forward commit, retried until it wins the race
+direction: down
+verb: A verb wants to record something
+lock: Take the clone's ledger lock
+tip: Fetch the ledger tip into a private ref
+apply: Apply files in a temporary worktree
+push: Push the commit as a fast-forward
+ledger: ledger branch: specs, proof, actions, audit
+verb -> lock
+lock -> tip
+tip -> apply
+apply -> push
+push -> tip: rejected: retry
+push -> ledger: accepted

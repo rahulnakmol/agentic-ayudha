@@ -56,6 +56,8 @@ On a small team you do not manage twelve seats. They all run solo by default; yo
 their review.
 
 Full details are in the [RACI table](../RACI.md). Terms are defined in the [glossary](../../GLOSSARY.md).
+> **Under the hood:** seats, verbs, and their RACI are declared once in the verb registry; see
+> [the verb registry and code generation](how-registry.md).
 
 ## What's next
 
