@@ -1,0 +1,63 @@
+{
+  "repo": "rahulnakmol/agentic-ayudha",
+  "story": 173,
+  "pr": 179,
+  "pr_head_sha": "0b5800f5258fb74b5534bf47e15cbfb4ec80b435",
+  "merge_commit": "e8cd8f8d400627872e24d3a8c98c2e449fe6078d",
+  "pack": "proof/173/0b5800f5258fb74b5534bf47e15cbfb4ec80b435/authoritative/pack.json",
+  "pack_landed": "run 38698143184 of the base branch's aayudha-merge-gate.yml; landed by rahulnakmol through aayu ship because CI cannot write the ledger without a bot App (Appendix B D1, D-4.10a)",
+  "human_pass": {
+    "kind": "solo-bypass",
+    "login": "rahulnakmol",
+    "comment_url": "https://github.com/rahulnakmol/agentic-ayudha/pull/179#issuecomment-6187147391",
+    "commit": "0b5800f5258fb74b5534bf47e15cbfb4ec80b435",
+    "note": "solo mode: GitHub refuses self-approval and no bot App exists, so no second person could review (Appendix B D2)"
+  },
+  "footprint": [
+    "L02",
+    "L09"
+  ],
+  "pass_rule": {
+    "as": "any-human",
+    "never_layers": [
+      "L09"
+    ],
+    "codeowners": [
+      "rahulnakmol"
+    ],
+    "never_paths": [
+      ".github/workflows/aayudha-merge-gate.yml",
+      ".github/workflows/floors.yml",
+      ".github/workflows/inspect-live.yml",
+      ".github/workflows/screen-reader.yml"
+    ]
+  },
+  "streak": {
+    "threshold": 20,
+    "layers": {
+      "L02": 0,
+      "L09": 0
+    },
+    "never_layers": [
+      "L09"
+    ],
+    "autonomous": false
+  },
+  "plan_review": {
+    "required": true,
+    "layers": [
+      "L09"
+    ],
+    "bypass": {
+      "as": "solo-bypass",
+      "reviewer": "none (solo mode)",
+      "recorded_by": "rahulnakmol",
+      "recorded_at": "2026-10-15T06:49:59Z",
+      "comment_url": "https://github.com/rahulnakmol/agentic-ayudha/issues/173#issuecomment-6186275376",
+      "note": "solo mode: no second person exists to review the plan, and no one reviewed it as the Engineering Manager (Appendix B D2)"
+    }
+  },
+  "actions_segment": "actions/2026-10-15/cli-20261015T074533Z.jsonl",
+  "shipped_at": "2026-10-15T07:45:44Z",
+  "shipped_by": "rahulnakmol"
+}
