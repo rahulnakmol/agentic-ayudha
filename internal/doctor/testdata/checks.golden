@@ -60,8 +60,14 @@ N/A  lfs-quota  LFS quota: GitHub has no quota API for this account; watch Setti
 ## ledger-media pass
 PASS  ledger-media  no ledger branch fetched (origin/ledger)
 ## ledger-media fail
-FAIL  ledger-media  repository is public but its ledger tracks proof media in Git LFS (V3): LFS objects cannot be purged from GitHub [blocking]
-                      set [proof] media to a private bucket, remove .lfsconfig and the LFS lines of .gitattributes from ledger, and purge media already pushed
+FAIL  ledger-media  repository is public but its ledger tracks media in Git LFS (V3): LFS objects cannot be purged from GitHub [blocking]
+                      remove .lfsconfig and the LFS lines of .gitattributes from ledger and delete media already pushed there; proof media stay in run artifacts (S-4.2b), and design media need [proof] media
+## proof pass
+PASS  proof  proof: the merge gate keeps each pack as its aayudha-pack run artifact for 90 days (GitHub allows at most 90 on a public repository, 400 on a private one), and `aayu ship` lands pack.json on the ledger; no bot App, bucket, or secret needed
+## proof fail
+WARN  proof  proof: the merge gate keeps each pack as its aayudha-pack run artifact for 90 days (GitHub allows at most 90 on a public repository, 400 on a private one), and `aayu ship` lands pack.json on the ledger; no bot App, bucket, or secret needed
+               loops/proof-purge.toml runs `aayu proof purge`, which 0.2 removed (media expire with their run artifact): delete it, then run `aayu init --gates` to re-render the loops
+               .github/workflows/aayudha-merge-gate.yml is a 0.1 gate (its aayudha/pack job writes the ledger with a bot App instead of checking the pack and commenting): run `aayu init --gates`, which replaces it unless you edited it
 ## issue-types pass
 PASS  issue-types  organization repository: GitHub issue types are available
 ## issue-types fail

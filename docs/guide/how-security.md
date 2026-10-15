@@ -70,9 +70,11 @@ most one hour.
 
 **Personal data in proof media.** Captures run only against seeded, non-production targets; `verify` refuses a
 production target. A redaction pass scans every capture for personal data, blocks the pack, and keeps no capture
-when it finds any. On a public repository, `proof push` refuses media unless `[proof] media` names a private
-bucket, because Git LFS objects cannot be purged from GitHub. The bucket gets lifecycle rules from
-`retention_days` (90 by default), and `aayu proof purge` deletes older media; the pack and its hashes stay.
+when it finds any. Media never go to the ledger or Git LFS, whose objects cannot be purged from GitHub: they stay in
+the merge gate's `aayudha-pack` run artifact, which GitHub deletes after `retention_days` (90 by default, at most the
+repository's limit). On a public repository any signed-in GitHub user can download that artifact until then. An
+opt-in `[proof] media` bucket keeps them longer under its own lifecycle rule; the pack and its hashes stay on the
+ledger.
 
 **Supply chain.** Every GitHub Action is pinned by full commit SHA, downloaded tools are checked against a pinned
 SHA-256, workflows default to `contents: read`, and checkout never persists credentials. Releases are signed and
@@ -130,8 +132,7 @@ The full table has 18 threats and the residual risks. Its status column was last
    `TestProtectedPathsGate`).
 5. Captures never target production, and personal data in a capture blocks the pack (`internal/verify/web.go`,
    `TestResolveTargetRefusesProduction`, `TestWebFloorsWithBrowser`).
-6. A public repository never stores proof media in Git LFS (`internal/proof/ledger.go`,
-   `TestPublicRepoRefusesMedia`).
+6. Proof media never go to the ledger or Git LFS (`internal/proof/ledger.go`, `TestMediaNeedABucket`).
 7. Spend past a budget limit pauses agent lanes (`internal/models/gateway.go`, `TestBudgetBreaker`).
 8. A halted repository runs no verb and no gated workflow job (`internal/cli/halt.go`, `TestHaltStopsRunningLoop`,
    `TestHaltFromWorkflowAndHook`); every job of every workflow and `init --gates` template starts with the halt step

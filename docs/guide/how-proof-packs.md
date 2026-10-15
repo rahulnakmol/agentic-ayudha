@@ -3,21 +3,21 @@
 A proof pack is one `pack.json` file, plus the artifacts it names, that records what CI observed about one exact
 commit of one story. It exists so that "done" is a checkable claim: every Completion Goal criterion points at
 evidence, every evidence file has a SHA-256 hash, and every floor result is written down with its tool and
-threshold. This page covers the schema, how criteria get their evidence, what makes a pack count, and how packs are
-checked, stored, and purged.
+threshold. This page covers the schema, how criteria get their evidence, what makes a pack count, and where packs
+and their media are kept.
 
-![CI reads the Ready snapshot and the evidence map, runs the tests and floors, and writes a hashed pack; data goes to the ledger, media to LFS or a bucket, and ship only accepts an authoritative pack that verifies.](img/how-proof-packs.svg)
+![CI reads the Ready snapshot and the evidence map, runs the tests and floors, and keeps a hashed pack with its media as a run artifact and a pull request comment; ship checks where the artifact came from and lands pack.json on the ledger.](img/how-proof-packs.svg)
 
-*The pack that counts is written by CI, from what CI ran.*
+*The pack that counts is built by CI, from what CI ran, and landed by a human's `ship`.*
 
 ## How it works
 
 A builder agent can say anything about its own work. The pack design keeps the agent from certifying it: the
 evidence for a criterion is the output of a test that `verify` ran itself, the pack is tied to one head commit and
-one Completion Goal hash, and only the base-branch merge gate can write a pack that `ship` accepts. The agent still
-chooses which of its tests prove each promise, in the evidence map it commits; that is why `inspect` reads the pack
-and judges whether the mapped tests really show each promise. In this repository's Go stories, an `api-trace`
-evidence file holds the `go test` events of the mapped test.
+one Completion Goal hash, and only the pack that the base-branch merge gate built on that head counts for `ship`.
+The agent still chooses which of its tests prove each promise, in the evidence map it commits; that is why `inspect`
+reads the pack and judges whether the mapped tests really show each promise. In this repository's Go stories, an
+`api-trace` evidence file holds the `go test` events of the mapped test.
 
 The flow for one pull request:
 
@@ -33,28 +33,55 @@ The flow for one pull request:
 5. Web floors add screenshots and recordings for screenshot and recording criteria (`screens/N.png`,
    `recordings/N.webm`), and every scanner adds its report.
 6. `verify.Pack` assembles the pack and `proof.WriteLocal` writes it to `.aayudha/proof/<story>/` (git-ignored).
-   In CI the merge gate uploads that directory as the `aayudha-pack` run artifact.
+7. In CI, the merge gate's `aayudha/merge-gate` job uploads that directory, media included, as the `aayudha-pack`
+   workflow artifact. GitHub keeps it for `[proof] retention_days`, at most the repository's artifact retention limit
+   (90 days on a public repository, up to 400 on a private one); `proof.ArtifactRetention` applies the limit, which
+   Actions passes as `GITHUB_RETENTION_DAYS`.
+8. The `aayudha/pack` job downloads the artifact, runs `aayu proof comment`, and keeps one comment on the pull
+   request: each Ready criterion's verdict, the floor results, the SHA-256 of `pack.json`, and links to the artifact
+   and the run. It fails when the pack does not verify (exit 4) or a floor does not hold (exit 3). It uses only the
+   workflow token and writes nothing to the ledger.
+9. A human runs `aayu ship`. It finds the artifact through the Actions API, checks where it came from (below), and
+   lands `pack.json` and its data artifacts (text, no media) on the ledger as the authoritative pack, under the
+   human's identity, next to the ship record.
+
+The proof needs no bot App, no media bucket, no secret, and no purge job in a product repository: the run artifact
+expires on its own, and the ledger keeps only text.
 
 ### Advisory and authoritative
 
-`authority.kind` is `advisory` or `authoritative`. `proof push` decides it from the environment, not from a flag: a
-pack is authoritative only when the process runs in CI and `GITHUB_WORKFLOW_REF` names
-`.github/workflows/aayudha-merge-gate.yml`. Every other push, from a laptop or an agent lane, is advisory. The merge
-gate runs under `pull_request_target`, so the workflow file comes from the base branch and a pull request cannot
-edit it to certify itself. See [the merge gate](how-merge-gate.md).
+`authority.kind` is `advisory` or `authoritative`. Only `aayu ship` writes an authoritative pack, and only the one
+the merge gate built. Before it lands anything, `ship` (`gatePack` in [internal/cli/ship.go](../../internal/cli/ship.go)):
 
-An authoritative pack also records `workflow` and `run_id`, and `writer` when someone other than the run landed it.
-`ship` reads only authoritative packs for the pull request's current head. If none is on the ledger yet, it finds
-the newest successful merge-gate run for that head, downloads its `aayudha-pack` artifact, checks that it is for
-the same story and head, and pushes it as authoritative with the run ID and `writer: "<login> (aayu ship)"`.
+- lists the runs of `.github/workflows/aayudha-merge-gate.yml` for the pull request's branch and takes the newest one
+  that is a `pull_request_target` run (so the workflow file came from the base branch, not the pull request), on
+  exactly the pull request's head commit, completed with `success`;
+- downloads that run's `aayudha-pack` artifact, refuses an expired one, and checks with `proof.LoadLocal` that every
+  artifact's bytes match their SHA-256 and size in `pack.json`;
+- checks that the pack names the same story, pull request, and head, then runs `proof.VerifyLocal` against the Ready
+  snapshot and requires the floors to hold.
 
-> **Honest status:** no bot GitHub App is installed on this repository, so the `aayudha/pack` job cannot write the
-> ledger. Every authoritative pack here was landed by `aayu ship` under the founder's identity, which is why the
-> real pack below says `"writer": "rahulnakmol (aayu ship)"`. The pack bytes are still the CI run's own.
+When nothing qualifies, `ship` exits 4 and lists every run it passed over and why: a `pull_request` run of the pull
+request's own copy of the gate, a run that proves another commit, a run that failed or is still running, a missing or
+tampered artifact. An artifact another workflow uploaded is never looked at, and a pack already on the ledger never
+counts. The authoritative pack on the ledger records the run (`workflow`, `run_id`) and `writer: "<login> (aayu ship)"`;
+the ship record adds `gate_run`, `artifact`, and `pack_sha256`, the same hash the pull request comment shows.
+
+Every other pack is advisory: `aayu proof push` from a laptop or an agent lane lands one, with its own comment, so an
+agent's preview (local, or screenshots and video in an Amp, Claude Code, Cursor, or Codex thread) never replaces the
+gate's comment and never satisfies `ship`. `proof push` refuses `--ci`: CI writes nothing to the ledger.
+
+> **Honest status:** the authoritative packs on this repository's ledger from before 0.2 (stories 130 to 134) were
+> landed by `aayu ship` from run artifacts too, under the 0.1 code, which checked the run's head and event but not the
+> artifact hashes before landing. They still read and verify. The provenance check binds a run to the head commit
+> and the base branch's workflow file, but GitHub's run record does not say which base branch a
+> `pull_request_target` run used; a pull request into another branch that carries an edited gate could produce a
+> qualifying run for the same commit. See [the threat model](../threat-model.md), T4.
 
 ### Validation
 
-`aayu proof verify <story>` takes the story's best pack (newest authoritative, else newest advisory) and checks:
+`aayu proof verify <story>` takes the story's best pack on the ledger (newest authoritative, else newest advisory)
+and checks:
 
 - every stored artifact's bytes match its `sha256` and `size`, and no path is listed twice or escapes the pack;
 - every evidence path in `criteria` names an artifact of the pack;
@@ -62,30 +89,28 @@ the same story and head, and pushes it as authoritative with the run ID and `wri
 - `completion_goal_hash` equals the Ready snapshot's hash, so a story edited after Ready fails;
 - `pr_head_sha` equals the pull request's current head.
 
-Floor results are reported as `floors_hold` but are not integrity problems. A pack can verify and still not ship.
-`ship` runs the same `proof.Verify` and then requires `FloorsHold()`.
+Media on the ledger copy are `"store": "none"`: their hashes are kept and counted as `artifacts_not_stored`, and the
+bytes are in the run artifact until it expires. Floor results are reported as `floors_hold` but are not integrity
+problems. A pack can verify and still not ship.
 
-### Media stores
+### Media and retention
 
-Each artifact has a `store`. Data artifacts (traces, metrics, reports) are always `git`: committed to the ledger.
-Media (screenshots, recordings, screen-reader transcripts, and image, video, audio, or PDF files) go to:
+Each artifact has a `store`. Data artifacts (traces, metrics, reports) are `git`: committed to the ledger by `ship`.
+Media (screenshots, recordings, screen-reader transcripts, and image, video, audio, or PDF files) never go to the
+ledger or Git LFS. They live in the run artifact, and the ledger copy says `none`. The one opt-in exception is a
+bucket:
 
-- `bucket`, when `[proof] media` names a private bucket: `s3://`, `r2://`, `azblob://`, or `gs://`, with the
-  credential in the `proof-media` secret. `object` holds the key. `proof push` also sets the bucket's lifecycle
-  rule to `[proof] retention_days` (default 90) where it can.
-- `lfs`, on a private repository without a bucket: Git LFS on the ledger.
-- `none`, when media are not pushed: only the hash and size are kept.
+- `bucket`, when `[proof] media` names a private bucket (`s3://`, `r2://`, `azblob://`, or `gs://`, with the
+  credential in the `proof-media` secret): `ship` and `proof push --media` copy media there, and `object` holds the
+  key. The push sets the bucket's lifecycle rule to `[proof] retention_days` where its credential can.
+- `none`: only the hash and size are kept. Without a bucket, `proof push --media` is refused (`ErrMediaRefused`).
 
-A public repository without a bucket refuses `proof push --media` (`ErrMediaRefused`). GitHub keeps LFS objects
-until the repository is deleted, so LFS is never used for a public repository's media.
+There is no purge job: a run artifact expires after its retention, and a bucket's lifecycle rule expires its objects.
+To remove media sooner, delete the run's artifact on GitHub.
 
-### Purge and tombstones
-
-`aayu proof purge <story>` deletes a story's media now. Without a story it deletes media of packs older than
-`retention_days`. Bucket objects are deleted and LFS files are removed from the ledger tip. Each affected
-`pack.json` is rewritten with a `tombstone` (`purged_at`, `reason`) on the artifact. The hash and size stay, so the
-pack still says what was captured. `proof verify` counts tombstoned and `none` artifacts as `artifacts_not_stored`
-instead of failing on them.
+Packs from before 0.2 stay readable. Their media may be `lfs` (Git LFS on a private ledger, read through `git lfs
+smudge`) or carry a `tombstone` (`purged_at`, `reason`) from the 0.1 `proof purge`. `proof verify` hashes the first
+and counts the second as not stored.
 
 ## Key data and file formats
 
@@ -237,43 +262,49 @@ The first line of its evidence for criterion 1, from
 
 > **Honest status:** `verify` does not fill `cost` yet, so packs record zero spend. Model spend is tracked by the
 > model gateway and shown by `inspect`. This repository is public and `[proof] media` is empty, so the screenshots in
-> story 134's pack have `"store": "none"`: their hashes are kept, their bytes are not.
+> story 134's pack have `"store": "none"`: their hashes are kept, and their bytes were in the run artifact.
 
 ## Invariants
 
 1. Evidence comes only from this run: a criterion gets a test artifact only if every mapped test ran and passed
    in the same `go test -json` run. Enforced in [internal/verify/evidence.go](../../internal/verify/evidence.go),
    `TestTestEvidence`.
-2. A pack is authoritative only when written from the merge-gate workflow in CI. Every other push is advisory.
-   Enforced by `authority()` in [internal/cli/proof.go](../../internal/cli/proof.go); `TestProofPushVerifyPurgeCLI`
-   checks that a push from outside the gate lands as advisory.
-3. Every stored artifact matches its hash and size, every Ready criterion has evidence, and the pack matches the
-   pull request head and the Ready Completion Goal hash. Enforced by `Verify` in
-   [internal/proof/verify.go](../../internal/proof/verify.go), `TestVerifyDetects`.
-4. `ship` accepts only an authoritative pack for the current head that verifies and whose floors hold. Enforced in
-   [internal/cli/ship.go](../../internal/cli/ship.go), `TestShipRefusals`.
-5. Media never reach a public repository's ledger or Git LFS. Enforced by `Push` in
-   [internal/proof/ledger.go](../../internal/proof/ledger.go), `TestPublicRepoRefusesMedia` and
-   `TestPrivateRepoMediaInLFS`.
-6. Purging removes bytes but never hashes: each purged artifact gets a tombstone. Enforced by `Purge` in
-   [internal/proof/ledger.go](../../internal/proof/ledger.go), `TestPushVerifyPurgeBucket`.
-7. Every pack validates against the JSON Schema of its `schema_version`. Enforced by `Decode` in
+2. Only `ship` lands an authoritative pack, and only from the `aayudha-pack` artifact of a successful
+   `pull_request_target` run of the merge gate on the exact head, with every hash matching. A run of the pull
+   request's own copy of the gate, a run on another commit, a failed run, or a tampered artifact is refused, and a
+   refused ship lands nothing. Enforced by `gatePack` in [internal/cli/ship.go](../../internal/cli/ship.go),
+   `TestShipRefusals` and `TestBuildAndShip`.
+3. Every other push is advisory, CI never pushes, and an advisory comment never replaces the gate's. Enforced in
+   [internal/cli/proof.go](../../internal/cli/proof.go), `TestProofPushVerifyCLI` and `TestProofCommentInMergeGate`.
+4. The gate's `aayudha/pack` check fails when the pack does not verify or a floor does not hold, and writes nothing to
+   the ledger. Enforced by `proofComment` in [internal/cli/proof.go](../../internal/cli/proof.go),
+   `TestProofCommentInMergeGate`.
+5. Every stored artifact matches its hash and size, every Ready criterion has evidence, and the pack matches the
+   pull request head and the Ready Completion Goal hash. Enforced by `Verify` and `VerifyLocal` in
+   [internal/proof](../../internal/proof), `TestVerifyDetects`.
+6. Media never reach the ledger or Git LFS; without a bucket they are refused. Enforced by `Push` in
+   [internal/proof/ledger.go](../../internal/proof/ledger.go), `TestMediaNeedABucket` and `TestPushVerifyBucket`.
+7. The run artifact is kept `[proof] retention_days`, never more than the repository allows. Enforced by
+   `ArtifactRetention` in [internal/proof/pack.go](../../internal/proof/pack.go), `TestArtifactRetention`.
+8. Packs from before 0.2 still verify, including LFS media and tombstones. `TestVerifyReadsPacksFromBefore02`.
+9. Every pack validates against the JSON Schema of its `schema_version`. Enforced by `Decode` in
    [internal/proof/pack.go](../../internal/proof/pack.go), `TestSchemaValidatesSamples`.
 
 ## Where it lives in the code
 
-- [internal/proof/pack.go](../../internal/proof/pack.go): types, schema decode, `FloorsHold`, media rules.
+- [internal/proof/pack.go](../../internal/proof/pack.go): types, schema decode, `FloorsHold`, media rules,
+  artifact retention.
 - [internal/proof/verify.go](../../internal/proof/verify.go): `proof verify` integrity checks.
-- [internal/proof/ledger.go](../../internal/proof/ledger.go): push, list, best pack, purge.
+- [internal/proof/ledger.go](../../internal/proof/ledger.go): push, list, best pack, local verification.
 - [internal/proof/bucket.go](../../internal/proof/bucket.go) and
-  [internal/proof/cloudmedia.go](../../internal/proof/cloudmedia.go): S3, R2, Azure Blob, and GCS media stores.
+  [internal/proof/cloudmedia.go](../../internal/proof/cloudmedia.go): the opt-in S3, R2, Azure Blob, and GCS stores.
 - [internal/proof/schema](../../internal/proof/schema): the JSON Schema.
 - [internal/verify/evidence.go](../../internal/verify/evidence.go): the evidence map and test evidence.
 - [internal/verify/verify.go](../../internal/verify/verify.go): pack assembly.
-- [internal/cli/proof.go](../../internal/cli/proof.go) and [internal/cli/ship.go](../../internal/cli/ship.go):
-  the CLI and the landing of the gate's pack.
+- [internal/cli/proof.go](../../internal/cli/proof.go): the CLI and the merge gate's comment;
+  [internal/cli/ship.go](../../internal/cli/ship.go): finding, checking, and landing the gate's pack.
 
 ## Read next
 
-- [The merge gate](how-merge-gate.md): the workflow that writes authoritative packs.
+- [The merge gate](how-merge-gate.md): the workflow that builds the pack and comments on it.
 - [Floors in detail](how-floors.md): every check in the `checks` array.

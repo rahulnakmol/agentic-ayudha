@@ -67,7 +67,7 @@ fails on drift.
 | `inspect` | Adversarially review a PR against its plan, pack, and criteria; return a structured disposition: merge, fix, or rebuild. | Engineering Manager | review | all | bot | cli, skill, mcp |
 | `ship` | Squash-merge a PR after a green merge gate and a human pass, write the Complete section, and clean up. | Engineering Manager | chore | all | human | cli, skill |
 | `release` | Promote a Release along dev, rolling, main; stamp included stories released and trigger measurement. | DevOps & DevEx Tinkerer | chore | L09 | human | cli, skill |
-| `proof` | Push, get, verify, list, or purge proof packs on the ledger branch. | Quality Architect | chore | all | bot | cli, skill, mcp |
+| `proof` | Push, get, verify, or list proof packs on the ledger branch; comment is the merge gate's pack check. | Quality Architect | chore | all | bot | cli, skill, mcp |
 | `ready` | Validate a work item for Ready, label it status:ready, and post the Ready snapshot; --check is read-only. | Product Strategist | chore | all | bot | cli, skill, mcp |
 | `research` | Gather pinned design references (URLs and IDs only) and user research for a Feature. | UX Researcher & Evolutionist | spec | L01 | bot | cli, skill, mcp |
 | `wireframe` | Produce wireframes for a Feature's states from its research and criteria. | UX Researcher & Evolutionist | build | L01 | bot | cli, skill, mcp |

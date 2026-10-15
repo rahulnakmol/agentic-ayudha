@@ -60,7 +60,8 @@ type Init struct {
 	Changes []Change
 }
 
-// Media extensions tracked by LFS on a private repository's ledger (V3).
+// Media extensions tracked by LFS on a private repository's ledger (V3): design
+// mockups and UI baselines. Proof media never go to the ledger (S-4.2b).
 var mediaExts = proof.MediaExts
 
 // LedgerRuleset is the name of the ruleset init creates when no existing
@@ -305,7 +306,7 @@ func (in *Init) ledger(ctx context.Context) error {
 	files := map[string]string{"README.md": ledgerReadme(r)}
 	if r.Private {
 		files[".gitattributes"] = lfsAttributes()
-		files[".lfsconfig"] = "# Proof media on this ledger are stored in GitHub LFS (V3: private repository).\n[lfs]\n\tlocksverify = false\n"
+		files[".lfsconfig"] = "# Design and UI baseline media on this ledger are stored in GitHub LFS (V3: private repository).\n[lfs]\n\tlocksverify = false\n"
 	}
 	var entries []*gh.TreeEntry
 	for _, p := range slices.Sorted(func(yield func(string) bool) {
@@ -344,7 +345,7 @@ func (in *Init) ledger(ctx context.Context) error {
 
 func lfsAttributes() string {
 	var b strings.Builder
-	b.WriteString("# Proof media are stored in GitHub LFS on private repositories (V3).\n")
+	b.WriteString("# Design and UI baseline media are stored in GitHub LFS on private repositories (V3); proof media never come here.\n")
 	for _, e := range mediaExts {
 		fmt.Fprintf(&b, "*.%s filter=lfs diff=lfs merge=lfs -text\n", e)
 	}
@@ -352,9 +353,9 @@ func lfsAttributes() string {
 }
 
 func ledgerReadme(r Repo) string {
-	media := "Proof media are stored in GitHub LFS (private repository)."
+	media := "Proof media are never stored here: they stay in each merge gate run's `aayudha-pack` artifact, and `aayu ship` lands `pack.json` and its data only. Design mockups and UI baselines are stored in GitHub LFS (private repository)."
 	if !r.Private {
-		media = "This repository is public: proof media are never stored here or in Git LFS; they go to the private bucket named by `[proof] media` (V3), and git holds `pack.json` and hashes only."
+		media = "This repository is public, so no media are stored here or in Git LFS (V3). Proof media stay in each merge gate run's `aayudha-pack` artifact, and `aayu ship` lands `pack.json` and its data only."
 	}
 	return "# ledger\n\nOrphan branch written by aayudha: Ready snapshots (`specs/<id>/ready.md`), proof packs, actions segments\n(`actions/<date>/<host>-<run>.jsonl`), and audit reports. Not for code; never merge it.\n\n" + media + "\n"
 }
@@ -460,7 +461,7 @@ func (in *Init) config(context.Context) error {
 	fmt.Fprintf(&b, "# aayudha configuration for %s, written by `aayu init` (WP2.5). It layers on the defaults built into\n", r.FullName)
 	b.WriteString("# the binary; `aayu config show --origin` shows where each value comes from. Protected path: changes need a\n# human CODEOWNER review.\nversion = 1\n")
 	if !r.Private {
-		b.WriteString("\n[proof]\nmedia = \"\" # required: private bucket. Public repository: proof media never go to Git LFS (V3); `proof push` refuses media until this is set.\n")
+		b.WriteString("\n[proof]\nmedia = \"\" # optional private bucket. Proof media stay in the merge gate's run artifact without one; design and UI baseline media need one here, since a public repository never puts media in Git LFS (V3).\n")
 	}
 	if !r.Coexist.HasDev && r.Default != "" && r.Default != "dev" {
 		mainBranch := r.Default

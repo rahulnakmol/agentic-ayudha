@@ -47,11 +47,11 @@ evidence".
 | CI changes | New workflows: the merge gate, a guard that removes Ready when a story is edited, intake triage, and an incident runner you trigger by hand |
 | CI minutes | About 10 minutes per push to a story's pull request in this repository (8 for the floors, 2 for the review); yours depend on your tests |
 | Model spend | `inspect` is capped at 5 USD per pull request by default. One review of pull request 148 cost 0.37 USD |
-| Storage | Private repositories keep screenshots and recordings in Git LFS. Public ones need a private bucket for them (S3, R2, Azure Blob Storage, or Google Cloud Storage) |
+| Storage | None to set up: screenshots and recordings stay in each CI run's `aayudha-pack` file for `[proof] retention_days` (90 by default, GitHub's limit is 90 days on a public repository), and `ship` copies the pack without them to the ledger. A private bucket (S3, R2, Azure Blob Storage, or Google Cloud Storage) is optional, for longer retention |
 
-> **Needs setup:** without a bot GitHub App (Level 3), CI cannot write the proof pack to the ledger branch itself.
-> It waits as a file on the CI run, and `ship` records it under your name. Everything still works; the pack is just
-> landed by you instead of by CI.
+> **Needs setup:** nothing beyond the model key. Proof needs no bot App, bucket, or secret: the pack waits as a file
+> on the CI run with a comment on the pull request, and `ship` checks it came from that run and records it under your
+> name.
 
 **Good for:** teams that let agents write real code and need to know it is safe to merge.
 

@@ -1,6 +1,6 @@
 # Code generated from loops/*.toml by aayudha (WP7.1); DO NOT EDIT.
-# aayudha loops, Actions fallback (docs/BUILD-PLAN.md WP7.1). Installed into product repos by `aayu init --gates`,
-# with loops/*.toml and the default loops (proof-purge). Protected path.
+# aayudha loops, Actions fallback (docs/BUILD-PLAN.md WP7.1). Installed into product repos by `aayu init --gates`
+# when loops/*.toml exists. Protected path.
 #
 # Each loop's cron is written in [time] tz (Europe/London); GitHub's cron is UTC, so a loop has one cron per UTC offset
 # of the zone, and `aayudha hook loop:<name>` runs only the one for today's offset (github.event.schedule). The guard also

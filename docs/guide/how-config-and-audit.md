@@ -51,7 +51,7 @@ never = ["L04", "L07", "L09"]
 approver = ""
 correction_days = 14
 …
-# Proof media and retention (V3, WP4.2).
+# Proof media and retention (V3, WP4.2; run artifacts since S-4.2b).
 [proof]
 media = ""
 retention_days = 90

@@ -41,9 +41,12 @@ This split is the whole point. The agent that did the work never gets to certify
 
 ## Where packs live
 
-Packs live on the `ledger` branch: a separate branch in your own repository that holds records, never code. Large
-files, such as screenshots and recordings, go to Git LFS in private repositories, or to a private bucket for public
-ones, so they can be deleted after 90 days while the pack and its fingerprints stay.
+The merge gate keeps each pack, screenshots and recordings included, as a file on its CI run, and posts a comment
+on the pull request with each promise's verdict, the check results, and the pack's fingerprint. GitHub deletes that
+file after 90 days by default (`[proof] retention_days`). When you run `ship`, it checks that the file came from the
+gate's own run on the exact commit and copies the pack, without its screenshots and recordings, to the `ledger`
+branch: a separate branch in your own repository that holds records, never code. The pack and its fingerprints stay
+there for good. None of this needs a bot App, a storage bucket, or a secret.
 
 Terms are defined in the [glossary](../../GLOSSARY.md).
 > **Under the hood:** the `pack.json` format, field by field, is in [proof packs](how-proof-packs.md); where packs are

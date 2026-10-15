@@ -1,12 +1,12 @@
 // Package proof defines proof packs (WP4.1) and the ledger operations on them
-// (WP4.2): push, get, verify, list, and purge.
+// (WP4.2): push, get, verify, and list.
 //
 // A pack is one pack.json that names the story, the PR head commit it proves,
 // who wrote it, the Completion Goal hash it was built against, which artifacts
 // are the evidence for each criterion, every artifact's SHA-256 and size and
 // where its bytes live, and every floor's result. Packs written by an agent are
-// advisory; packs written by the base-branch merge gate in CI are
-// authoritative (WP4.8).
+// advisory; the pack the base-branch merge gate builds in CI is authoritative
+// once `aayu ship` has checked that it came from that run (WP4.8, S-4.2b).
 package proof
 
 import (
@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"path"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
@@ -31,15 +32,15 @@ const FileName = "pack.json"
 // Authority kinds.
 const (
 	Advisory      = "advisory"      // pushed by an agent lane or a human
-	Authoritative = "authoritative" // written by the base-branch merge gate in CI (WP4.8)
+	Authoritative = "authoritative" // built by the base-branch merge gate in CI, landed by ship (WP4.8, S-4.2b)
 )
 
 // Artifact stores: where an artifact's bytes live.
 const (
 	StoreGit    = "git"    // committed to the ledger branch (data artifacts)
-	StoreLFS    = "lfs"    // committed to the ledger through Git LFS (media, private repositories)
-	StoreBucket = "bucket" // uploaded to the private [proof] media bucket (media; required on public repositories, V3)
-	StoreNone   = "none"   // media not pushed (proof push without --media); only the hash is kept
+	StoreLFS    = "lfs"    // Git LFS on the ledger: media of packs pushed before 0.2 (read only)
+	StoreBucket = "bucket" // the opt-in [proof] media bucket (media)
+	StoreNone   = "none"   // media not pushed: only the hash is kept, the bytes stay in the run artifact
 )
 
 // Floor results.
@@ -104,6 +105,7 @@ type Artifact struct {
 }
 
 // Tombstone records that an artifact's bytes were purged; the hash stays.
+// Packs purged before 0.2 carry it; nothing writes it now (S-4.2b).
 type Tombstone struct {
 	PurgedAt string `json:"purged_at"`
 	Reason   string `json:"reason"`
@@ -261,10 +263,26 @@ func BlocksShip(c Check) bool {
 	return c.Result == Skipped && c.Floor == "mobile" && c.Detail == SkippedMobile
 }
 
-// MediaExts are the media file extensions: Git LFS on a private ledger,
-// the private bucket on a public one (V3). init writes them to the ledger's
-// .gitattributes on private repositories.
+// MediaExts are the media file extensions. Media never go to the ledger: they
+// stay in the merge gate's run artifact, or go to the opt-in bucket (S-4.2b).
 var MediaExts = []string{"png", "jpg", "jpeg", "gif", "webp", "mp4", "webm", "mov", "wav", "mp3", "pdf"}
+
+// ArtifactRetention is how many days the merge gate keeps its aayudha-pack
+// run artifact: [proof] retention_days, clamped to the repository's artifact
+// retention limit, which Actions passes as GITHUB_RETENTION_DAYS (GitHub
+// allows at most 90 days on a public repository and 400 on a private one;
+// 90 when the limit is unknown). 0 days, which the config reads as "keep",
+// is the limit.
+func ArtifactRetention(days int, limit string) int {
+	max, err := strconv.Atoi(strings.TrimSpace(limit))
+	if err != nil || max <= 0 {
+		max = 90
+	}
+	if days <= 0 || days > max {
+		return max
+	}
+	return days
+}
 
 // IsMedia reports whether an artifact is proof media: a capture kind that can
 // show people or their data, or a media file extension.

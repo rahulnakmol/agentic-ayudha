@@ -102,8 +102,8 @@ var sections = []section{
 		heading: "Retention",
 		roots:   []string{"proof"},
 		rows: []row{
-			{"proof.media", "Private bucket for proof media. Empty means Git LFS on the `ledger` branch, which `init` allows only on private repos; public repos must set a bucket (V3).", "WP2.5"},
-			{"proof.retention_days", "Days proof media is kept before `proof purge` removes it and tombstones `pack.json`. Packs and hashes are kept.", proposed},
+			{"proof.media", "Optional private bucket for proof media beyond the merge gate's run artifact; `aayu ship` copies them there. Empty: proof media stay in the run artifact and never reach the `ledger` branch or Git LFS (S-4.2b).", "WP2.5"},
+			{"proof.retention_days", "Days the merge gate keeps its `aayudha-pack` run artifact (media included), at most the repository's limit (GitHub: 90 public, 400 private); also the bucket's lifecycle rule. `pack.json` on the ledger is kept.", proposed},
 		},
 	},
 }

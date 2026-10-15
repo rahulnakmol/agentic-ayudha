@@ -1,7 +1,8 @@
 # Trust model and identities
 
 aayudha lets agents open issues, push branches, and write records, and it is designed so that an agent never
-certifies or approves its own work: CI writes the proof that counts, and only a person's account gives the pass. How
+certifies or approves its own work: CI builds the proof that counts, a person's `ship` checks where it came from and
+records it, and only a person's account gives the pass. How
 strongly that holds depends on setup. With a bot App, agents write as the bot, and GitHub identities keep agent and
 person apart. Without one, as in this repository today, agents write with the person's token, and the line rests on
 a marker the agent's process carries; the solo-mode section below says what that means. This page explains who may do what, how the binary decides which GitHub identity it is acting as, what
@@ -20,12 +21,22 @@ The trust model in [docs/BUILD-PLAN.md](../BUILD-PLAN.md) (section 0.1) and the
 |---|---|---|
 | Human (founder, paired human) | Own GitHub account and token | Approve pull requests, accept Decisions, publish, run `init`, change protected paths, promote |
 | Agent lane (any host) | Bot: a GitHub App installation token or a machine user | Open issues and pull requests, push branches, push `ledger`, comment |
-| CI (merge gate, loops, release) | GitHub Actions, with the bot App token where it writes `ledger` | Run `verify` and `inspect`, write authoritative packs, compute streaks, build and sign releases |
+| CI (merge gate, loops, release) | GitHub Actions: the workflow token for proof, the bot App token for loops that write `ledger` | Run `verify` and `inspect`, build the authoritative pack as a run artifact and comment on it (never on the ledger), compute streaks, build and sign releases |
 | Untrusted input | None | Issue and pull request bodies, comments, intake forms, design text, analytics exports, tool output |
 
 Why split them? Because the person or process that did the work must never be the one that says it is good. An agent
 writes under a bot identity, so GitHub itself can tell its writes apart from a human's, and a bot review can never
 count as approval.
+
+### Who certifies a change
+
+The proof that counts is the pack the base-branch merge gate built, from what CI ran on the pull request's head
+commit. CI keeps it as the run's `aayudha-pack` artifact and comments on the pull request with the workflow token; it
+needs no bot App, bucket, or secret, and it writes nothing to the ledger. `aayu ship`, run by a person, finds that
+artifact through the Actions API, accepts it only from a successful `pull_request_target` run of the merge gate on the
+exact head with every hash matching, and lands `pack.json` (no media) and the ship record on the ledger under that
+person's identity. An agent's own `verify`, `proof push`, or a preview with screenshots and video in an Amp, Claude
+Code, Cursor, or Codex thread is advisory and never satisfies `ship`. See [proof packs](how-proof-packs.md).
 
 ## How the binary picks an identity
 
@@ -213,7 +224,9 @@ comment, the commit, and a note saying that no review happened.
 6. Agent lanes cannot bypass: `ship --solo-bypass` and `plan --solo-bypass` refuse when `AAYU_AGENT=1`, when a bot identity
    exists, when a second human holds a seat, or without the `Solo-mode bypass:` comment. Enforced in
    `internal/cli/ship.go` and `internal/cli/plan.go` (`TestShipMobileWaiverAndSoloBypass`, `TestShipEMSeatApprover`, `TestPlan`).
-7. Every bypass is written down and counted. `ship` writes it to `ship.json`, the story's Complete section, and the
+7. Only the merge gate's own run artifact for the exact head becomes the authoritative pack, landed by a person's
+   `ship`. Enforced in `internal/cli/ship.go` (`TestShipRefusals`).
+8. Every bypass is written down and counted. `ship` writes it to `ship.json`, the story's Complete section, and the
    actions log, and `audit` reconciles it (`TestAuditSoloBypassAndHumanFallback`, `TestAuditBypassRecordedLate`).
 
 ## Where it lives in the code
@@ -231,8 +244,8 @@ comment, the commit, and a note saying that no review happened.
 - [.github/CODEOWNERS](../../.github/CODEOWNERS) and [docs/threat-model.md](../threat-model.md).
 
 > **Honest status:** no bot GitHub App is installed on this repository yet, and it runs in solo mode with one human.
-> So every agent write here so far has gone out under the founder's token with the `identity:human-fallback` tag, CI
-> cannot write the ledger, and `aayu ship` lands the pack CI wrote under the founder's identity. Every merge needs a
+> So every agent write here so far has gone out under the founder's token with the `identity:human-fallback` tag, and
+> `aayu ship` lands the pack CI built under the founder's identity, as the design intends for every repository. Every merge needs a
 > recorded solo-mode bypass. Agent detection relies on `AAYU_AGENT=1`, which the MCP server sets; a process that
 > runs the CLI directly without it is treated as a human.
 

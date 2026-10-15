@@ -13,7 +13,8 @@ An agent saying "done, all tests pass" is a claim. This chapter is where claims 
    such as test coverage of the changed lines, security scans, leaked secrets, vulnerable dependencies,
    accessibility, and page speed ([floors](concepts-floors.md)).
 2. It writes the **proof pack**: a file that ties each of the story's promises to its evidence, with every check's
-   result ([proof packs](concepts-proof.md)).
+   result ([proof packs](concepts-proof.md)). The pack, screenshots and recordings included, stays on the CI run, and
+   a comment on the pull request shows each promise's verdict, the checks, and the pack's fingerprint.
 3. **`inspect`** hands the promises, the change, and the pack to a reviewer model from a different family, that is,
    another vendor, than the one that wrote the code. It answers `merge`, `fix`, or `rebuild`, with a verdict and evidence for each promise.
 
@@ -79,8 +80,8 @@ and the
 
 ## What you do, and what the agent does
 
-**You** read the verdict on the pull request. It is short on purpose. Then you go back to your coffee: the fixing is
-not your job.
+**You** read the verdict and the proof comment on the pull request. They are short on purpose. Then you go back to
+your coffee: the fixing is not your job.
 
 **The agents and CI** do the rest: the gate starts by itself, the builder fixes what the reviewer finds, and a
 capped pull request is rebuilt.
@@ -91,8 +92,10 @@ Two reviewers that disagree, one building and one checking, find more than one r
 when a model and a measurement disagree, believe the measurement.
 
 > **Needs setup:** the merge gate comes with `aayu init --gates`. `inspect` in CI needs a model key stored as a
-> repository secret. Without a bot GitHub App, CI cannot write the pack to the ledger itself: the pack waits as a
-> file on the CI run, and `ship` records it under your name. See [Adopt at your own pace](adopt.md).
+> repository secret. The proof needs nothing else: no bot App, bucket, or secret. The pack waits as a file on the CI
+> run for `[proof] retention_days` (90 by default), and `ship` checks it came from that run and records it under your
+> name. An agent's own preview, even with screenshots and video in your thread, never counts. See
+> [Adopt at your own pace](adopt.md).
 
 ## The verbs in this step
 
@@ -102,7 +105,7 @@ when a model and a measurement disagree, believe the measurement.
 |---|---|
 | [`verify`](../../skills/verify/SKILL.md) | Runs the fixed checks (tests, security, secrets, dependencies, accessibility, speed) and records the results. |
 | [`inspect`](../../skills/inspect/SKILL.md) | A second model, from another vendor, reviews the pull request against every promise and says merge, fix, or rebuild. |
-| [`proof`](../../skills/proof/SKILL.md) | Stores, fetches, checks, and cleans up the proof packs that hold the evidence for each change. |
+| [`proof`](../../skills/proof/SKILL.md) | Stores, fetches, and checks the proof packs that hold the evidence for each change. |
 
 <!-- END GENERATED: stage-verbs -->
 

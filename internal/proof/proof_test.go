@@ -331,18 +331,18 @@ func sample2SHA() string {
 	return p.Artifacts[1].SHA256
 }
 
-// WP4.2 (S3/R2) and WP7.2b.2 (Azure Blob, Cloud Storage): media go to the
-// private store with a retention rule merged into its others; data
-// artifacts and pack.json go to the ledger; the pack verifies from the
-// ledger; a swapped object is a hash mismatch; purge deletes the objects and
-// tombstones pack.json. Every request carries the store's credential.
-func TestPushVerifyPurgeBucket(t *testing.T) {
+// WP4.2 (S3/R2) and WP7.2b.2 (Azure Blob, Cloud Storage), opt-in since
+// S-4.2b: media go to the store with a retention rule merged into its others;
+// data artifacts and pack.json go to the ledger; the pack verifies from the
+// ledger; a swapped object is a hash mismatch. Every request carries the
+// store's credential.
+func TestPushVerifyBucket(t *testing.T) {
 	now := time.Date(2026, 10, 12, 12, 0, 0, 0, time.UTC)
 	for _, bk := range backends(t, now) {
 		t.Run(bk.name, func(t *testing.T) {
 			ctx := context.Background()
 			dir, bare := ledgerRemote(t, false)
-			st := &Store{Repo: "o/r", Ledger: &ledger.Writer{Dir: dir, Repo: "o/r"}, Bucket: bk.media, RetentionDays: 90, Now: func() time.Time { return now }}
+			st := &Store{Repo: "o/r", Ledger: &ledger.Writer{Dir: dir, Repo: "o/r"}, Bucket: bk.media, RetentionDays: 90}
 			pdir, p := localPack(t)
 			count := func() int { o, u := bk.fake(); defer u(); return len(o) }
 
@@ -408,26 +408,6 @@ func TestPushVerifyPurgeBucket(t *testing.T) {
 			}
 			tree.Close()
 
-			// Retention purge leaves a fresh pack alone; a story purge removes its media.
-			tree, _ = st.Ledger.Read(ctx)
-			if pr, err := st.Purge(ctx, tree, 0, "retention"); err != nil || len(pr.Packs) != 0 {
-				t.Fatalf("retention purge of a fresh pack: %+v %v", pr, err)
-			}
-			pr, err := st.Purge(ctx, tree, 7, "on request")
-			tree.Close()
-			if err != nil || len(pr.Objects) != 1 || count() != 0 {
-				t.Fatalf("purge: %+v %v, objects left %d", pr, err, count())
-			}
-			tree, _ = st.Ledger.Read(ctx)
-			defer tree.Close()
-			e, _ = st.Best(ctx, tree, 7)
-			a, _ := e.Pack.Artifact("screens/2-empty.png")
-			if a.Tombstone == nil || a.Tombstone.Reason != "on request" || a.SHA256 != p.Artifacts[2].SHA256 {
-				t.Fatalf("tombstone: %+v", a)
-			}
-			if r := Verify(e.Pack, exp, st.Opener(ctx, tree, e)); !r.OK || r.NotStored != 1 {
-				t.Fatalf("verify after purge: %+v", r)
-			}
 			// retention_days 0 removes aayudha's rule and keeps the others.
 			if !bk.note {
 				if changed, err := bk.media.EnsureLifecycle(ctx, "o/r", 0); err != nil || !changed {
@@ -444,53 +424,80 @@ func TestPushVerifyPurgeBucket(t *testing.T) {
 	}
 }
 
-// V3: a public repository without a bucket never pushes media, and the
-// refusal happens before anything is written.
-func TestPublicRepoRefusesMedia(t *testing.T) {
-	dir, bare := ledgerRemote(t, false)
-	st := &Store{Repo: "o/r", Ledger: &ledger.Writer{Dir: dir, Repo: "o/r"}}
-	pdir, _ := localPack(t)
-	before := run(t, bare, "rev-parse", "ledger")
-	if _, err := st.Push(context.Background(), pdir, true, Authority{}); !errors.Is(err, ErrMediaRefused) {
-		t.Fatalf("public push --media: %v", err)
-	}
-	if after := run(t, bare, "rev-parse", "ledger"); after != before {
-		t.Fatal("the refused push wrote the ledger")
+// S-4.2b: without a bucket, media never go to the ledger or Git LFS, on a
+// public or a private repository, and the refusal happens before anything is
+// written.
+func TestMediaNeedABucket(t *testing.T) {
+	for _, private := range []bool{false, true} {
+		dir, bare := ledgerRemote(t, private)
+		st := &Store{Repo: "o/r", Ledger: &ledger.Writer{Dir: dir, Repo: "o/r"}, Private: private}
+		pdir, _ := localPack(t)
+		before := run(t, bare, "rev-parse", "ledger")
+		if _, err := st.Push(context.Background(), pdir, true, Authority{}); !errors.Is(err, ErrMediaRefused) {
+			t.Fatalf("private %t: push --media without a bucket: %v", private, err)
+		}
+		if after := run(t, bare, "rev-parse", "ledger"); after != before {
+			t.Fatalf("private %t: the refused push wrote the ledger", private)
+		}
 	}
 }
 
-// WP4.2: on a private repository without a bucket, media go to Git LFS on the
-// ledger; purge removes them from the tip and tombstones the pack.
-func TestPrivateRepoMediaInLFS(t *testing.T) {
+// S-4.2b keeps `proof verify` reading packs pushed before 0.2: a screenshot in
+// Git LFS on a private ledger is downloaded and hashed, and a tombstoned
+// artifact counts as not stored.
+func TestVerifyReadsPacksFromBefore02(t *testing.T) {
 	if _, err := exec.LookPath("git-lfs"); err != nil {
 		t.Skip("git-lfs is not installed")
 	}
 	ctx := context.Background()
 	dir, bare := ledgerRemote(t, true)
-	st := &Store{Repo: "o/r", Ledger: &ledger.Writer{Dir: dir, Repo: "o/r"}, Private: true}
-	pdir, _ := localPack(t)
-	res, err := st.Push(ctx, pdir, true, Authority{})
+	st := &Store{Repo: "o/r", Ledger: &ledger.Writer{Dir: dir, Repo: "o/r"}}
+	p, files := sample()
+	p.Artifacts[1].Store = StoreLFS
+	base := Dir(7, head, Advisory)
+	c := ledger.Commit{Message: "proof: a 0.1 pack with LFS media", Files: map[string][]byte{}}
+	for rel, b := range files {
+		c.Files[base+"/artifacts/"+rel] = b
+	}
+	enc, err := Encode(p)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Contains(res.Stores, "screens/2-empty.png=lfs") {
-		t.Fatalf("stores: %v", res.Stores)
+	c.Files[base+"/"+FileName] = enc
+	w := *st.Ledger
+	w.LFS = true
+	if _, err := w.Write(ctx, c); err != nil {
+		t.Fatal(err)
 	}
-	ptr := run(t, bare, "show", "ledger:proof/7/"+head+"/advisory/artifacts/screens/2-empty.png")
-	if !strings.HasPrefix(ptr, "version https://git-lfs.github.com/spec/v1") {
+	if ptr := run(t, bare, "show", "ledger:"+base+"/artifacts/screens/2-empty.png"); !strings.HasPrefix(ptr, "version https://git-lfs.github.com/spec/v1") {
 		t.Fatalf("screenshot is not an LFS pointer on the ledger:\n%s", ptr)
 	}
 	tree, _ := st.Ledger.Read(ctx)
+	defer tree.Close()
 	e, _ := st.Best(ctx, tree, 7)
-	if r := Verify(e.Pack, Expect{HeadSHA: head, CompletionGoalHash: cg, Criteria: []int{1, 2}}, st.Opener(ctx, tree, e)); !r.OK || r.Hashed != 3 {
+	exp := Expect{HeadSHA: head, CompletionGoalHash: cg, Criteria: []int{1, 2}}
+	if r := Verify(e.Pack, exp, st.Opener(ctx, tree, e)); !r.OK || r.Hashed != 3 {
 		t.Fatalf("verify through LFS: %+v", r)
 	}
-	pr, err := st.Purge(ctx, tree, 7, "on request")
-	tree.Close()
-	if err != nil || len(pr.Files) != 1 {
-		t.Fatalf("purge: %+v %v", pr, err)
+	e.Pack.Artifacts[1].Tombstone = &Tombstone{PurgedAt: "2027-01-10T00:00:00Z", Reason: "retention: older than 90 days"}
+	if r := Verify(e.Pack, exp, st.Opener(ctx, tree, e)); !r.OK || r.Hashed != 2 || r.NotStored != 1 {
+		t.Fatalf("verify a tombstoned artifact: %+v", r)
 	}
-	if out := run(t, bare, "ls-tree", "-r", "--name-only", "ledger"); strings.Contains(out, ".png") {
-		t.Fatalf("LFS file still on the ledger tip:\n%s", out)
+}
+
+// S-4.2b: the run artifact keeps [proof] retention_days, never longer than the
+// repository allows, and "keep" (0) means as long as it allows.
+func TestArtifactRetention(t *testing.T) {
+	for _, c := range []struct {
+		days  int
+		limit string
+		want  int
+	}{
+		{30, "90", 30}, {90, "90", 90}, {91, "90", 90}, {120, "400", 120}, {401, "400", 400},
+		{0, "400", 400}, {200, "", 90}, {1, "", 1}, {45, "junk", 45},
+	} {
+		if got := ArtifactRetention(c.days, c.limit); got != c.want {
+			t.Errorf("ArtifactRetention(%d, %q) = %d, want %d", c.days, c.limit, got, c.want)
+		}
 	}
 }

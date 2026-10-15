@@ -121,8 +121,8 @@ func TestMCPDefaultExposure(t *testing.T) {
 	if out, isErr := call(t, cs, "ready", map[string]any{"issue": "12", "check": false}); !isErr || !strings.Contains(out, `unknown argument "check"`) {
 		t.Fatalf("ready with check=false: %q", out)
 	}
-	if out, isErr := call(t, cs, "proof", map[string]any{"action": "purge", "story": "12"}); !isErr || !strings.Contains(out, "writes") {
-		t.Fatalf("proof purge without expose_writes: %q", out)
+	if out, isErr := call(t, cs, "proof", map[string]any{"action": "push", "story": "12"}); !isErr || !strings.Contains(out, "writes") {
+		t.Fatalf("proof push without expose_writes: %q", out)
 	}
 	if _, ok := props(t, tools["status"])["digest"]; ok {
 		t.Error("status exposes --digest (a notify write) without expose_writes")

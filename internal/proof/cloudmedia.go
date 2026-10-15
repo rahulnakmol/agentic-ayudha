@@ -290,15 +290,6 @@ func (a *AzureBlob) Get(ctx context.Context, key string) ([]byte, error) {
 	return a.blob(ctx, http.MethodGet, key, nil)
 }
 
-// Delete implements Media.
-func (a *AzureBlob) Delete(ctx context.Context, key string) error {
-	_, err := a.blob(ctx, http.MethodDelete, key, nil)
-	if errors.Is(err, ErrNoObject) {
-		return nil
-	}
-	return err
-}
-
 // AzureRuleName is aayudha's management policy rule for repo: alphanumeric,
 // as Azure requires, and stable per repository.
 func AzureRuleName(repo string) string {
@@ -507,15 +498,6 @@ func (g *GCS) Put(ctx context.Context, key string, data []byte) error {
 // Get implements Media.
 func (g *GCS) Get(ctx context.Context, key string) ([]byte, error) {
 	return g.do(ctx, http.MethodGet, g.object(key)+"?alt=media", nil, "")
-}
-
-// Delete implements Media.
-func (g *GCS) Delete(ctx context.Context, key string) error {
-	_, err := g.do(ctx, http.MethodDelete, g.object(key), nil, "")
-	if errors.Is(err, ErrNoObject) {
-		return nil
-	}
-	return err
 }
 
 func (g *GCS) rules(ctx context.Context) ([]json.RawMessage, error) {
