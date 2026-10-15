@@ -11,7 +11,8 @@ something useful: clear, checked work items on GitHub.
 - A GitHub repository you administer, and the `gh` command line signed in (`gh auth login`), or a token in
   `AAYU_GITHUB_TOKEN`.
 - `git` 2.40 or newer and `git-lfs`. aayudha keeps its records, such as the agreed version of each story and the
-  evidence for each change, on a separate branch called `ledger`. Large files, such as screenshots, go to Git LFS.
+  evidence for each change, on a separate branch called `ledger`. Screenshots and recordings stay on the CI run that
+  made them and never go there.
 - Until the first release: Go 1.25 or newer, to install the snapshot (see below).
 - One of the agent hosts: Amp, Cursor, or Claude Code. aayudha works inside the agent you already use.
 

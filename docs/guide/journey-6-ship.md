@@ -10,8 +10,9 @@
 Floors decide whether a change may merge. A person decides whether it should. In aayudha that decision is the
 **human pass**: an approving review from a person's GitHub account, never a bot's. `ship`, the verb that merges, runs
 only under a person's identity, and it refuses to merge unless everything lines up: the merge gate is green on the
-exact head commit, an authoritative proof pack exists for it, the human pass is there, and for risky layers the plan
-was reviewed.
+exact head commit, the proof pack is the one the gate built on that commit (`ship` fetches it from the CI run and
+checks every fingerprint, so a pack the agent made itself never counts), the human pass is there, and for risky
+layers the plan was reviewed.
 
 ## The one thing you cannot get
 
@@ -21,7 +22,7 @@ account and pretend. Or you can merge in the open and leave a record that says e
 
 aayudha only allows the third, and only when it is true. `ship --solo-bypass` refuses if a second person is paired
 with a seat or a bot App exists, because then a real review is possible. Everything else still has to hold: the merge
-gate green on the exact commit, the authoritative pack, inspect's "merge". At 09:03 you post a comment on pull request
+gate green on the exact commit, the gate's own pack, inspect's "merge". At 09:03 you post a comment on pull request
 142 that begins "Solo-mode bypass:". It says the gate is green with inspect's "merge", that no second person can
 review, and that the pull request merges through `aayu ship 142 --solo-bypass`. It ends: "No review was given or
 faked."
@@ -29,8 +30,8 @@ faked."
 A minute later you run it. `ship` merges the pull request and writes story 130's Outcome, here slightly shortened:
 
 - Merged in pull request 142 as commit `b5359bd` on 2026-10-12.
-- Authoritative pack: written by the merge gate in CI, and landed on the ledger by `ship` under your name as the founder,
-  because without a bot App CI cannot write there itself.
+- Authoritative pack: built by the merge gate in CI, and landed on the ledger by `ship` under your name as the
+  founder. CI never writes the ledger; `ship` takes the pack from the gate's own run on that commit.
 - Human pass: none possible. You, the founder, merged under a recorded solo-mode bypass.
 - Plan-time review: none. You recorded a solo-mode plan-review bypass for layer L07.
 - The ship record, and the log of every write `ship` made, both on the ledger.
@@ -48,8 +49,9 @@ bypass stops being allowed and the real review is required again.
 `aayu ship <pr>`; alone, you run it with `--solo-bypass`, as you did today. If any check is missing, `ship` refuses
 and tells you which one.
 
-**`ship`** checks everything, squash-merges into your integration branch (`dev`, or `main` if that is all you have),
-writes the Outcome, releases the agent's lease, and cleans up the branch.
+**`ship`** checks everything, copies the gate's pack (without screenshots and recordings) to the ledger, squash-merges
+into your integration branch (`dev`, or `main` if that is all you have), writes the Outcome, releases the agent's
+lease, and cleans up the branch.
 
 ## What you learn
 

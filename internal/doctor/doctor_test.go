@@ -235,6 +235,10 @@ func failing(t *testing.T) map[string]func(*Probe) {
 		"mcp": func(p *Probe) {
 			overlay(p, map[string]string{"/usr/bin/aayu version": "aayu 1.1.0\n"})
 		},
+		"proof": func(p *Probe) {
+			p.Root = repoWith(t, map[string]string{".aayudha/config.toml": "version = 1\n", "loops/proof-purge.toml": "command = [\"proof\", \"purge\"]\n",
+				".github/workflows/aayudha-merge-gate.yml": "jobs:\n  pack:\n    steps:\n      - run: aayudha proof push \"$STORY\" --ci\n"})
+		},
 		"ledger-media": func(p *Probe) {
 			overlay(p, map[string]string{"git ls-tree --name-only origin/ledger": ".gitattributes\n.lfsconfig\nREADME.md\n"})
 		},

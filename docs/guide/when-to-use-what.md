@@ -147,7 +147,7 @@ are not verbs; the verbs reference lists them.
 | [Build it](journey-4-build.md) | [`build`](../../skills/build/SKILL.md) | Writes the code for a Ready story in small checked steps, one layer at a time, and opens a pull request. |
 | [Prove it](journey-5-prove.md) | [`verify`](../../skills/verify/SKILL.md) | Runs the fixed checks (tests, security, secrets, dependencies, accessibility, speed) and records the results. |
 |  | [`inspect`](../../skills/inspect/SKILL.md) | A second model, from another vendor, reviews the pull request against every promise and says merge, fix, or rebuild. |
-|  | [`proof`](../../skills/proof/SKILL.md) | Stores, fetches, checks, and cleans up the proof packs that hold the evidence for each change. |
+|  | [`proof`](../../skills/proof/SKILL.md) | Stores, fetches, and checks the proof packs that hold the evidence for each change. |
 | [Ship it](journey-6-ship.md) | [`ship`](../../skills/ship/SKILL.md) | Merges a proven pull request after your yes, and writes down who approved what, on which evidence. |
 | [Release it](journey-7-release.md) | [`release`](../../skills/release/SKILL.md) | Moves shipped work up to a snapshot or stable release, after a full gate, and schedules the measurement. |
 | [Measure and learn](journey-8-learn.md) | [`experiment`](../../skills/experiment/SKILL.md) | Designs an A/B test for a Feature: what you expect, what you measure, and how many people you need. |

@@ -100,8 +100,9 @@ cost of a vague promise very concrete: 17 reviews where 10 were planned.
 
 ## What is still open
 
-- **No bot App yet.** Agents write as the founder, tagged as such, and CI cannot write proof to the records branch
-  itself. Installing the App is a browser step only the founder can take.
+- **No bot App yet.** Agents write as the founder, tagged as such. Proof does not need the App (CI keeps the pack on
+  the run and `ship` records it), but separating agent writes from the founder's does. Installing the App is a browser
+  step only the founder can take.
 - **No stable release yet.** The latest is the snapshot `rolling-2026-10-12.4`. v0.1.0 waits for the founder's
   explicit decision, and the Homebrew, Scoop, and winget publishing needs repositories and tokens the founder creates.
 - **Measurement with real time.** The benefits-qa result is seeded; the real 28-day measurement is due after

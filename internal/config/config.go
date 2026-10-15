@@ -192,9 +192,9 @@ type LFS struct {
 
 // Proof is [proof].
 type Proof struct {
-	Media         string `koanf:"media" jsonschema_description:"Private bucket for proof media; required on public repos (V3): s3://bucket[/prefix][?region=..&endpoint=..], r2://<account>/bucket[/prefix], azblob://<account>/<container>[/prefix][?auth=sas|key|oidc|cli&tenant=..&client=..&subscription=..&group=..], or gs://<bucket>[/prefix][?auth=key|oidc|cli&provider=..&sa=..]."`
+	Media         string `koanf:"media" jsonschema_description:"Optional private bucket that keeps proof media beyond the merge gate's run artifact (aayu ship copies them there; S-4.2b), and holds design and UI baseline media on a public repo (V3): s3://bucket[/prefix][?region=..&endpoint=..], r2://<account>/bucket[/prefix], azblob://<account>/<container>[/prefix][?auth=sas|key|oidc|cli&tenant=..&client=..&subscription=..&group=..], or gs://<bucket>[/prefix][?auth=key|oidc|cli&provider=..&sa=..]."`
 	MediaSecret   string `koanf:"media_secret" jsonschema_description:"Name of the secret holding the bucket's credential (ACCESS_KEY_ID:SECRET_ACCESS_KEY for s3 and r2; a SAS token or <client-id>:<client-secret> for azblob; a service account JSON key for gs; none with auth oidc or cli); empty means proof-media."`
-	RetentionDays int    `koanf:"retention_days" jsonschema:"minimum=0" jsonschema_description:"Days to keep proof media before purge; 0 keeps forever."`
+	RetentionDays int    `koanf:"retention_days" jsonschema:"minimum=0" jsonschema_description:"Days the merge gate keeps its aayudha-pack run artifact, at most the repository's artifact retention limit; also the bucket's lifecycle rule. 0 keeps as long as the limit allows."`
 }
 
 // Autonomy is [autonomy].

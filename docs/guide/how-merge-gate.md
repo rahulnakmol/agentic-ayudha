@@ -5,10 +5,10 @@ It runs `verify` again on the pull request's head commit, asks a reviewer model 
 the change, and makes the result available to `ship`. It exists because the builder's own word is not evidence:
 the checks that decide a merge must run somewhere the pull request cannot change.
 
-![A pull request update starts the gate workflow taken from the base branch; the merge-gate job verifies the head in a sandbox and keeps the pack as a run artifact, the inspect job reviews it, the pack job writes it to the ledger when a bot App exists, and ship needs both checks green.](img/how-merge-gate.svg)
+![A pull request update starts the gate workflow taken from the base branch; the merge-gate job verifies the head in a sandbox and keeps the pack as a run artifact, the inspect job reviews it, the pack job checks it and comments, and ship needs all three checks green and the artifact from this run.](img/how-merge-gate.svg)
 
 *Three jobs: one runs the pull request's code with no secrets, one holds the model key and never runs that code, one
-writes the ledger.*
+checks the pack and comments. None writes the ledger.*
 
 ## How it works
 
@@ -38,8 +38,9 @@ base branch's `packages/floors` for the example product.
 2. checks out the head commit with `persist-credentials: false`;
 3. installs aayudha and the pinned floor tools (gitleaks and osv-scanner checked against SHA-256 hashes);
 4. runs `go mod download` so the test run can work offline;
-5. runs `aayudha verify "$PR" --ci`, writes a floor table to the job summary, and uploads `.aayudha/proof/` as the
-   `aayudha-pack` artifact (kept 30 days).
+5. runs `aayudha verify "$PR" --ci`, writes a floor table to the job summary, and uploads `.aayudha/proof/`, media
+   included, as the `aayudha-pack` artifact, kept for `[proof] retention_days` (90 by default) up to the repository's
+   artifact retention limit (`retention_days` in `verify`'s JSON).
 
 In CI, `verify` fails the job when a floor misses, and also when the pack does not prove the current head, the
 story's Completion Goal hash no longer matches its Ready snapshot, a criterion has no evidence from this run, or the
@@ -49,8 +50,11 @@ story has no Ready snapshot. A pull request that names no story passes with noth
 model keys, and has `pull-requests: write` to post its comment. It checks out the base branch only, downloads the
 `aayudha-pack` artifact, and reads the diff through the GitHub API. It never runs pull request code.
 
-**`aayudha/pack`** pushes the gate's pack to the ledger as authoritative with a bot App token. Without an App it
-prints a notice and the pack stays a run artifact. See [proof packs](how-proof-packs.md).
+**`aayudha/pack`** checks out the base branch, downloads the `aayudha-pack` artifact, and runs `aayudha proof comment`
+with the workflow token and `pull-requests: write`. It verifies the pack against the pull request's current head and
+the Ready snapshot (every artifact hashed), keeps one comment marked `<!-- aayudha:proof -->` with each criterion's
+verdict, the floor table, the SHA-256 of `pack.json`, and links to the artifact and the run, and fails when the pack
+does not verify or a floor does not hold. It writes nothing to the ledger. See [proof packs](how-proof-packs.md).
 
 ### The verify sandbox
 
@@ -111,12 +115,15 @@ inspect exits 0 on `merge` and 4 on `fix` or `rebuild`, so its check stays red u
 
 ### How ship consumes the result
 
-`ship` checks the newest `aayudha/merge-gate` and `aayudha/inspect` check runs on the head. Both must be `success`.
-Then it loads the authoritative pack for that head (landing it from the run artifact if needed), runs
-`proof.Verify` against the Ready snapshot, and requires the floors to hold. Only then does it look at the human pass.
+`ship` first finds the pack: the `aayudha-pack` artifact of the newest successful `pull_request_target` run of this
+workflow on exactly the head commit, with every hash matching `pack.json`. A `pull_request` run of the pull request's
+own copy of the workflow, a run on another commit, or an artifact from any other workflow never counts. Then it
+checks the newest `aayudha/merge-gate`, `aayudha/inspect`, and `aayudha/pack` check runs on the head (all must be
+`success`), verifies the pack against the Ready snapshot, and requires the floors to hold. Only then does it look at
+the human pass, and only after that does it land `pack.json` on the ledger, under the human's identity, and merge.
 
-> **Honest status:** no bot GitHub App is installed here, so `aayudha/pack` only prints its notice and `aayu ship`
-> lands each pack under the founder's identity. The repository runs in solo mode, with one human.
+> **Honest status:** the repository runs in solo mode, with one human, so every `aayu ship` here runs under the
+> founder's identity with a recorded bypass.
 
 ## Key data and file formats
 
@@ -240,14 +247,19 @@ fixed head, returned `merge`, and the spend covers both calls.
 6. Same inputs never cost a second model call; after two cycles inspect pages without a call; spend stops at the
    per-pull-request budget. Enforced in [internal/inspect/inspect.go](../../internal/inspect/inspect.go),
    `TestInspectDispositions` and `TestInspectMergeBudgetDraft`.
-7. `ship` merges only with both gate checks green on the head and an authoritative pack that verifies. Enforced in
+7. `ship` merges only with the three gate checks green on the head and the pack from this workflow's own
+   `pull_request_target` run on that head, every hash matching, verifying against the Ready snapshot. Enforced in
    [internal/cli/ship.go](../../internal/cli/ship.go), `TestShipRefusals`.
+8. The pack job uses only the workflow token, writes nothing to the ledger, and fails on a pack that does not verify
+   or a floor that does not hold. Enforced by `proofComment` in [internal/cli/proof.go](../../internal/cli/proof.go),
+   `TestProofCommentInMergeGate`.
 
 ## Where it lives in the code
 
 - [internal/initrepo/aayudha-merge-gate.yml](../../internal/initrepo/aayudha-merge-gate.yml): the template products get.
 - [.github/workflows/aayudha-merge-gate.yml](../../.github/workflows/aayudha-merge-gate.yml): this repository's gate.
 - [internal/cli/verify.go](../../internal/cli/verify.go): `verify --ci` and the gate problems.
+- [internal/cli/proof.go](../../internal/cli/proof.go): `proof comment`, the pack job.
 - [internal/verify/exec.go](../../internal/verify/exec.go),
   [internal/verify/netns_linux.go](../../internal/verify/netns_linux.go), and
   [internal/verify/netns_other.go](../../internal/verify/netns_other.go): the sandbox.

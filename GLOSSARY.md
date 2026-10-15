@@ -26,9 +26,9 @@ WP in brackets is where the term is built; "n/a until" means it does not exist y
 | Floor | A deterministic check with a threshold (coverage, SAST, secrets, dependencies, accessibility, performance, screen reader, DAST, mobile). Defaults are in [CONSTRAINTS.md](CONSTRAINTS.md) [WP4.3–4.9]. |
 | Waiver | A recorded Decision that lets one floor miss through; `audit` counts waivers [WP5.6]. |
 | Proof pack | `pack.json` plus artifacts that map every Completion Goal criterion to evidence and record floor results for one PR head SHA [WP4.1]. |
-| Authoritative pack | A pack written by the merge-gate workflow in CI. Packs pushed by an agent are **advisory** [WP4.8]. |
+| Authoritative pack | The pack the merge-gate workflow built in CI, kept as its `aayudha-pack` run artifact and landed on `ledger` by a human's `ship` after checking it came from that run. Packs pushed by an agent are **advisory** [WP4.8, S-4.2b]. |
 | `ledger` | An orphan branch holding Ready snapshots, proof packs, action segments, and audit reports. Not for code. |
-| Merge gate | The base-branch workflow that re-runs `verify` on the PR head and writes the authoritative pack [WP4.8]. |
+| Merge gate | The base-branch workflow that re-runs `verify` on the PR head, keeps the authoritative pack as a run artifact, and comments on the PR [WP4.8, S-4.2b]. |
 | Disposition | The structured verdict of `inspect` (`merge`, `fix`, `rebuild`) or `review` (`recapture`, `rebuild`, `fix`, `ship`). It can downgrade a result, never override a floor. |
 | Human pass | An approving review from a human account (`type != Bot`, not a configured bot login) [WP1.4, WP5.5]. |
 | Streak | Consecutive correction-free merges on a layer. At `autonomy.streak`, agents may merge on that layer without a human pass, except on never-layers [WP5.7]. |

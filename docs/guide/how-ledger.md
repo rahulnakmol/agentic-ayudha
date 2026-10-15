@@ -20,6 +20,8 @@ share it without losing a record.
 - **GitHub permissions apply.** A repository ruleset decides who may push it, the same way rulesets guard `main`.
 
 `git` and `git-lfs` are required for ledger work: the Go Git library has no support for linked worktrees or LFS.
+Proof media never go to the ledger; Git LFS here holds only design mockups and UI baselines on a private repository,
+and the media of packs pushed before 0.2.
 
 ## Layout
 
@@ -29,8 +31,8 @@ The real layout today, from `git ls-tree -r --name-only origin/ledger`, grouped:
 |---|---|---|
 | `specs/<n>/ready.md` | Ready snapshot: the body and Completion Goal hashes at Ready | `aayu ready` |
 | `specs/<n>/plan.json` | The story's plan: footprint, checkpoints, plan-time review or bypass | `aayu plan` |
-| `proof/<story>/<sha>/<authority>/pack.json` | A proof pack for one head commit; `<authority>` is `authoritative` or `advisory` | the merge gate in CI, or `aayu proof push` |
-| `proof/<story>/<sha>/<authority>/artifacts/…` | Evidence, coverage, and floor reports the pack hashes | same as the pack |
+| `proof/<story>/<sha>/<authority>/pack.json` | A proof pack for one head commit; `<authority>` is `authoritative` (the merge gate's, landed by `aayu ship`) or `advisory` | `aayu ship`, or `aayu proof push` |
+| `proof/<story>/<sha>/<authority>/artifacts/…` | Evidence, coverage, and floor reports the pack hashes (text; never media) | same as the pack |
 | `proof/<story>/<sha>/authoritative/ship.json` | The ship record: merge commit, human pass, streak | `aayu ship` |
 | `build/<n>/state.json` | Where `aayu build` is in a story | `aayu build` |
 | `actions/<date>/<host>-<run>.jsonl` | Actions segments: the hash-chained write log | every verb that writes |
@@ -153,30 +155,31 @@ A release record, from `git show origin/ledger:releases/144/rolling.json`, trimm
 ## Who may write
 
 `aayu init` makes sure a ruleset protects `refs/heads/ledger` with the `deletion`, `non_fast_forward`, and `update`
-rules. It adopts an existing ruleset that already does this, or creates one named `aayudha-ledger`. On day one the only
-bypass actor is the repository admin role. `aayu init --identity` creates the bot GitHub App and makes it the bypass
-actor in place of the admin role. From then on only the App's installation tokens can push the ledger: the merge gate
-in CI with the App token, and agent lanes with broker tokens. Today `aayu ship` writes the ship record, and lands CI's
-pack, with the human's own token, which the admin-role bypass allows.
+rules. It adopts an existing ruleset that already does this, or creates one named `aayudha-ledger`, whose bypass actor
+is the repository admin role. `aayu init --identity` creates the bot GitHub App and adds it as a second bypass actor,
+for agent lanes with broker tokens. The admin role stays: `aayu ship` writes the ship record and lands the merge
+gate's pack with the human's own token.
 
-Why not the built-in Actions token? On a personal repository the GitHub Actions app cannot be a ruleset bypass actor,
-so `GITHUB_TOKEN` can never write the ledger. See [trust model and identities](how-trust.md).
+CI writes nothing to the ledger. On a personal repository the GitHub Actions app cannot be a ruleset bypass actor, so
+`GITHUB_TOKEN` can never write the ledger, and the proof design does not need it to: the merge gate keeps its pack as
+a run artifact and comments on the pull request, and a human's `ship` lands it. See
+[trust model and identities](how-trust.md).
 
-## Retention and purge
+## Retention
 
-Pack JSON and hashes stay forever. Media (screenshots, recordings, screen-reader transcripts) does not:
+Pack JSON, hashes, and data artifacts stay on the ledger. Media (screenshots, recordings, screen-reader transcripts)
+never come here:
 
-- **Private repositories:** media goes to Git LFS on the ledger.
-- **Public repositories:** media goes to the private bucket named by `[proof] media`. `aayu proof push` refuses media
-  on a public repository, or one whose visibility is unknown, until a bucket is set. LFS objects cannot be deleted from
-  GitHub short of deleting the repository, and media can contain personal data.
+- **Every repository:** media stay in the merge gate run's `aayudha-pack` artifact. GitHub deletes it after
+  `[proof] retention_days` (default 90), at most the repository's artifact retention limit: 90 days on a public
+  repository, up to 400 on a private one. The ledger copy of `pack.json` keeps each media file's SHA-256 and size,
+  with `"store": "none"`.
+- **Opt-in, longer:** with `[proof] media` naming a private bucket, `aayu ship` also copies the media there, and the
+  bucket's own lifecycle rule (`EnsureLifecycle` in `internal/proof/bucket.go`) expires them after `retention_days`.
 
-`[proof] retention_days` defaults to 90. `aayu proof purge` deletes media in packs older than that;
-`aayu proof purge <story>` deletes all of one story's media now. Bucket objects are deleted, LFS files are removed from the ledger tip,
-and each `pack.json` is rewritten so the artifact carries a tombstone (`purged_at`, `reason`) while its SHA-256 stays.
-`aayu proof verify` does not try to open a tombstoned artifact. A bucket's own lifecycle rule can expire objects too (`EnsureLifecycle` in `internal/proof/bucket.go`).
-The `proof-purge` loop runs `aayu proof purge` daily at 03:40 in `[time] tz`; `aayu init --gates` writes
-`loops/proof-purge.toml` into every repository that lacks it, so retention does not depend on a person.
+There is no purge job and no loop: nothing on the ledger expires, and nothing outside it needs a person. Packs from
+before 0.2 may still hold media in Git LFS on a private ledger, or a `tombstone` from the 0.1 `proof purge`; `aayu
+proof verify` reads both.
 
 ## Invariants
 
@@ -188,29 +191,30 @@ The `proof-purge` loop runs `aayu proof purge` daily at 03:40 in `[time] tz`; `a
 3. Actions segments are appended, never replaced. Enforced in `ledger.Sink` (`TestSink`).
 4. The ledger cannot be deleted or force-pushed, and only the bypass actor can update it. Enforced by the ruleset that
    `internal/initrepo/init.go` creates or adopts (`TestInitAdoptsLedgerAndUninit`).
-5. Proof media never goes to LFS on a public repository, and a purge keeps every hash. Enforced in
-   `internal/proof/ledger.go` (`TestPublicRepoRefusesMedia`, `TestPrivateRepoMediaInLFS`, `TestPushVerifyPurgeBucket`).
+5. Proof media never go to the ledger or Git LFS, and CI never writes the ledger. Enforced in
+   `internal/proof/ledger.go` (`TestMediaNeedABucket`) and `internal/cli/proof.go` (`TestProofPushVerifyCLI`,
+   `TestProofCommentInMergeGate`).
 6. Tokens never appear on a Git command line: the writer passes them as an HTTP header through `GIT_CONFIG_*`
    environment variables, in a scrubbed environment. Enforced in `Writer.git` in `internal/ledger/ledger.go`.
 
 ## Where it lives in the code
 
 - [internal/ledger/ledger.go](../../internal/ledger/ledger.go): the writer, reads of the tip, and the actions sink.
-- [internal/proof/ledger.go](../../internal/proof/ledger.go): pack push, best pack, and purge.
+- [internal/proof/ledger.go](../../internal/proof/ledger.go): pack push and best pack.
+- [internal/cli/ship.go](../../internal/cli/ship.go): landing the merge gate's pack and the ship record.
 - [internal/cli/lease.go](../../internal/cli/lease.go): story leases.
 - [internal/cli/release.go](../../internal/cli/release.go): release records.
 - [internal/initrepo/init.go](../../internal/initrepo/init.go) and
   [internal/initrepo/extras.go](../../internal/initrepo/extras.go): the ledger branch, its ruleset, and the App bypass.
 
-> **Honest status:** no bot GitHub App is installed on this repository yet, so its ruleset, `ledger-writers`, still
-> lists the repository admin role as the only bypass actor. CI cannot write the ledger: the merge gate leaves the
-> authoritative pack as a run artifact, and `aayu ship` lands it under the founder's identity, saying so in
-> `pack_landed`. 91 ledger commits so far carry the `identity:human-fallback` trailer. The ledger README predates the
-> current layout: its table still names `packs/`, where the code writes `proof/`. No verb writes that file (it was
-> written by hand when the branch was created), so it is left as it is and this page describes the real layout. This repository is public and
-> `[proof] media` is empty, so no media has been pushed here. The `proof-purge` loop's Actions job writes the ledger as
-> the bot, so here it skips with a notice until an App exists; its Amp and Cursor schedules run once someone sets them
-> ([loops/README.md](../../loops/README.md)).
+> **Honest status:** no bot GitHub App is installed on this repository yet, so its ruleset, `ledger-writers`, lists
+> the repository admin role as the only bypass actor, and agents write under the founder's account. CI does not write
+> the ledger: the merge gate leaves the authoritative pack as a run artifact, and `aayu ship` lands it under the
+> founder's identity, saying so in `pack_landed`. 91 ledger commits so far carry the
+> `identity:human-fallback` trailer. The ledger README predates the current layout: its table still names `packs/`,
+> where the code writes `proof/`, and it still says CI and the bot write here and that media live in a bucket. No verb
+> writes that file (it was written by hand when the branch was created), so it is left as it is and this page
+> describes the real layout. This repository is public and `[proof] media` is empty, so no media has been pushed here.
 
 ## Read next
 

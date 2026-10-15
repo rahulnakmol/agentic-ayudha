@@ -48,6 +48,9 @@ type VerifyResult struct {
 	NoSnapshot bool          `json:"no_ready_snapshot,omitempty"`
 	Waivers    []string      `json:"waivers,omitempty"`
 	Gate       []string      `json:"gate_problems,omitempty"` // --ci with a PR: why the merge gate fails besides the floors
+	// RetentionDays is how long the merge gate keeps the pack as its
+	// aayudha-pack run artifact (--ci with a pack; S-4.2b).
+	RetentionDays int `json:"retention_days,omitempty"`
 }
 
 func gitIn(ctx context.Context, dir string, args ...string) (string, error) {
@@ -280,6 +283,9 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 		res.Pack = proof.LocalDir(root, res.Story)
 		if err := proof.WriteLocal(res.Pack, pack, files); err != nil {
 			return err
+		}
+		if e.CI {
+			res.RetentionDays = proof.ArtifactRetention(l.Config.Proof.RetentionDays, e.Getenv("GITHUB_RETENTION_DAYS"))
 		}
 	}
 	// The merge gate (WP4.8): the pack must prove the PR's current head, the

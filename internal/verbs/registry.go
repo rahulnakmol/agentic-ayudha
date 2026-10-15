@@ -669,13 +669,13 @@ var Verbs = []Command{
 	},
 	{
 		Name: "proof", WP: "WP4.2", Stage: StageProve,
-		Summary: "Push, get, verify, list, or purge proof packs on the ledger branch.",
-		Reader:  "Stores, fetches, checks, and cleans up the proof packs that hold the evidence for each change.",
+		Summary: "Push, get, verify, or list proof packs on the ledger branch; comment is the merge gate's pack check.",
+		Reader:  "Stores, fetches, and checks the proof packs that hold the evidence for each change.",
 		Seat:    QualityArchitect, Lane: LaneChore, Layers: AllLayers(),
 		Inputs: []Input{
-			readOnlyWith(enumIn("action", true, true, "Proof operation.", "push", "get", "verify", "list", "purge"), "get", "verify", "list"),
+			readOnlyWith(enumIn("action", true, true, "Proof operation: push an advisory pack, get, verify, or list packs, or (merge gate only) comment: check the run's pack and keep its PR comment.", "push", "get", "verify", "list", "comment"), "get", "verify", "list"),
 			optPos("story", TypeIssue, "Story whose pack to operate on."),
-			flag("media", TypeBool, "Include proof media; on a public repository this needs a private bucket in [proof] media (V3)."),
+			flag("media", TypeBool, "Include proof media; needs a bucket in [proof] media, since media never go to the ledger or Git LFS."),
 		},
 		Outputs:  []string{"pack", "verification-report"},
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeNone, Exposure: ExposeRead,

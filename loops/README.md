@@ -9,12 +9,7 @@ cron = "5 9 * * 1-5"               # five fields in [time] tz: one minute; hours
 hosts = ["amp", "cursor", "actions"]  # optional; default all three
 prompt = "…"                       # optional: what the host's agent does with the output
 bot = false                        # true when the command writes as the bot (the Actions job then needs the App)
-secrets = []                       # optional: aayu secrets the command reads; Actions passes AAYU_SECRET_<NAME>
 ```
-
-`proof-purge.toml` is a default loop: `aayu init --gates` writes it into a repository whose `loops/` lacks it, so proof
-media older than `[proof] retention_days` is deleted without a person (V3). Edit it to change its time; when `[proof]
-media_secret` names a secret other than `proof-media`, change `secrets` to match.
 
 `go generate ./...` renders aayudha's own loops; `aayu init --gates` renders a product's:
 

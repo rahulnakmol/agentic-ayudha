@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"sort"
@@ -16,6 +18,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/providers"
+	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
 	"github.com/rahulnakmol/agentic-ayudha/internal/upgrade"
 )
@@ -466,13 +469,13 @@ func checkMCP(ctx context.Context, p *Probe) Result {
 }
 
 // checkLedgerMedia catches a visibility change after init (V3, WP2.5): a public
-// repository whose ledger tracks proof media in Git LFS is a floor-blocking
+// repository whose ledger tracks media in Git LFS is a floor-blocking
 // failure, because LFS objects cannot be purged from GitHub.
 // checkLFSQuota: GitHub publishes no LFS quota API for personal accounts
 // (Appendix B D-1.7a), so the check says where the media go and where to look.
 func checkLFSQuota(_ context.Context, p *Probe) Result {
 	if p.Config != nil && p.Config.Config.Proof.Media != "" {
-		return Result{Status: Pass, Detail: "proof media go to the bucket " + p.Config.Config.Proof.Media + "; the ledger keeps only hashes and data artifacts"}
+		return Result{Status: Pass, Detail: "design and UI baseline media go to the bucket " + p.Config.Config.Proof.Media + "; proof media never use Git LFS"}
 	}
 	warn := 80
 	if p.Config != nil && p.Config.Config.LFS.QuotaWarnPercent > 0 {
@@ -506,6 +509,34 @@ func checkLedgerMedia(ctx context.Context, p *Probe) Result {
 		return Result{Status: Pass, Detail: "private repository: ledger proof media in Git LFS"}
 	}
 	return Result{Status: Fail, Blocking: true,
-		Detail: "repository is public but its ledger tracks proof media in Git LFS (V3): LFS objects cannot be purged from GitHub",
-		Lines:  []string{"set [proof] media to a private bucket, remove .lfsconfig and the LFS lines of .gitattributes from ledger, and purge media already pushed"}}
+		Detail: "repository is public but its ledger tracks media in Git LFS (V3): LFS objects cannot be purged from GitHub",
+		Lines:  []string{"remove .lfsconfig and the LFS lines of .gitattributes from ledger and delete media already pushed there; proof media stay in run artifacts (S-4.2b), and design media need [proof] media"}}
+}
+
+// checkProof says where proof lives (S-4.2b): the merge gate keeps each pack as
+// its run artifact for [proof] retention_days within GitHub's limit, and `aayu
+// ship` lands pack.json on the ledger, so proof needs no bot App, bucket,
+// secret, or purge job. It warns about what a 0.1 setup still carries.
+func checkProof(_ context.Context, p *Probe) Result {
+	days, media := 90, ""
+	if p.Config != nil {
+		days, media = p.Config.Config.Proof.RetentionDays, p.Config.Config.Proof.Media
+	}
+	detail := fmt.Sprintf("the merge gate keeps each pack as its aayudha-pack run artifact for %d days (GitHub allows at most 90 on a public repository, 400 on a private one), and `aayu ship` lands pack.json on the ledger; no bot App, bucket, or secret needed", proof.ArtifactRetention(days, "400"))
+	if media != "" {
+		detail += "; ship also copies media to " + media
+	}
+	var lines []string
+	if p.Root != "" {
+		if _, err := os.Stat(filepath.Join(p.Root, "loops", "proof-purge.toml")); err == nil {
+			lines = append(lines, "loops/proof-purge.toml runs `aayu proof purge`, which 0.2 removed (media expire with their run artifact): delete it, then run `aayu init --gates` to re-render the loops")
+		}
+		if b, err := os.ReadFile(filepath.Join(p.Root, ".github", "workflows", "aayudha-merge-gate.yml")); err == nil && !strings.Contains(string(b), "aayudha proof comment") {
+			lines = append(lines, ".github/workflows/aayudha-merge-gate.yml is a 0.1 gate (its aayudha/pack job writes the ledger with a bot App instead of checking the pack and commenting): run `aayu init --gates`, which replaces it unless you edited it")
+		}
+	}
+	if len(lines) > 0 {
+		return Result{Status: Warn, Detail: "proof: " + detail, Lines: lines}
+	}
+	return Result{Status: Pass, Detail: "proof: " + detail}
 }
