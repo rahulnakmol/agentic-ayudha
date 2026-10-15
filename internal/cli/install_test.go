@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,7 +19,7 @@ func installEnv(t *testing.T) (repo, home string, opts Options) {
 	t.Helper()
 	repo = gitInit(t, "dev", map[string]string{"README.md": "x\n"})
 	home = t.TempDir()
-	const bin = "/opt/aayudha/bin/aayu"
+	bin, _ := filepath.Abs(filepath.FromSlash("/opt/aayudha/bin/aayu")) // binaryPath makes it absolute: D:\opt\… on Windows
 	opts = Options{Dir: repo, Assets: aayudha.Assets, Build: BuildInfo{Version: "1.0.0"}, LookPath: noTools,
 		Executable: func() (string, error) { return bin, nil },
 		Exec: func(ctx context.Context, dir, name string, args ...string) (string, error) {
@@ -78,7 +79,9 @@ func TestInstall(t *testing.T) {
 	if code, out, errs := run(t, env, opts, "install", "--apply", "--yes"); code != 0 || !strings.Contains(out, "create ~/.config/amp/settings.json") {
 		t.Fatalf("install --apply --yes: exit %d\n%s%s", code, out, errs)
 	}
-	if b, err := os.ReadFile(filepath.Join(home, ".config", "amp", "settings.json")); err != nil || !strings.Contains(string(b), `"command": "/opt/aayudha/bin/aayu"`) {
+	bin, _ := filepath.Abs(filepath.FromSlash("/opt/aayudha/bin/aayu"))
+	cmd, _ := json.Marshal(bin)
+	if b, err := os.ReadFile(filepath.Join(home, ".config", "amp", "settings.json")); err != nil || !strings.Contains(string(b), `"command": `+string(cmd)) {
 		t.Fatalf("Amp settings: %v %s", err, b)
 	}
 	applied := treeHash(t, repo)

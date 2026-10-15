@@ -56,7 +56,7 @@ func TestPrecedence(t *testing.T) {
 		{"flag beats env", merge(user, repo, local), env, set, 5, LayerFlag, "--set budget.per_day_usd=5"},
 		{"env beats local", merge(user, repo, local), env, nil, 4, LayerEnv, "AAYU_BUDGET__PER_DAY_USD"},
 		{"local beats repo", merge(user, repo, local), nil, nil, 3, LayerLocal, "config.local.toml"},
-		{"repo beats user", merge(user, repo), nil, nil, 2, LayerRepo, ".aayudha/config.toml"},
+		{"repo beats user", merge(user, repo), nil, nil, 2, LayerRepo, filepath.Join(".aayudha", "config.toml")},
 		{"user beats default", user, nil, nil, 1, LayerUser, filepath.Join(".config", "aayudha", "config.toml")},
 		{"default", nil, nil, nil, 100, LayerDefault, "defaults.toml (embedded)"},
 		{"repo TOML beats repo JSON", merge(repo, map[string]string{"repo/.aayudha/config.json": `{"version": 1, "budget": {"per_day_usd": 7}}`}), nil, nil, 2, LayerRepo, "config.toml"},
