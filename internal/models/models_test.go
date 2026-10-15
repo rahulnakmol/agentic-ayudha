@@ -306,6 +306,9 @@ func TestBudgetBreaker(t *testing.T) {
 		if err := br.SeedLog(filepath.Join(bad, "actions.jsonl")); err == nil {
 			t.Fatal("a log under a file: want an error")
 		}
+		if err := br.SeedLog(dir); err == nil { // opens, then fails on the first read
+			t.Fatal("a directory as the log: want an error")
+		}
 	})
 }
 

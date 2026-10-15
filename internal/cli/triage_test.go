@@ -1,17 +1,23 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
-	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
 	"github.com/rahulnakmol/agentic-ayudha/internal/triage"
 )
 
@@ -101,66 +107,94 @@ func TestTriageInjection(t *testing.T) {
 	}
 }
 
-// Bug #177: the [budget] breaker counts every process's model spend recorded in the checkout's actions log, not
-// only its own: each `aayu` process seeds it from the log when it builds the gateway.
-func TestBudgetBreakerAcrossProcesses(t *testing.T) {
-	london := func(d, h int) func() time.Time {
-		loc, _ := time.LoadLocation("Europe/London")
-		return func() time.Time { return time.Date(2026, 10, d, h, 0, 0, 0, loc) } // Mon 12 Oct, Tue 13 Oct
+// TestAayuProcess is not a test of its own: TestBudgetBreakerAcrossProcesses runs this test binary as an `aayu`
+// child process through it, so each process starts with nothing in memory, as two invocations of the CLI do.
+func TestAayuProcess(t *testing.T) {
+	args := os.Getenv("AAYU_TEST_PROCESS_ARGS")
+	if args == "" {
+		t.Skip("runs only as a child process of TestBudgetBreakerAcrossProcesses")
 	}
-	process := func(t *testing.T, home string, g *fake.GitHub, sink *notify.Fake, now func() time.Time, issue string, usd float64, set ...string) (int, string) {
+	now, _ := time.Parse(time.RFC3339, os.Getenv("AAYU_TEST_NOW"))
+	code := Run(context.Background(), strings.Split(args, "\x1f"), IO{In: os.Stdin, Out: os.Stdout, Err: os.Stderr},
+		Options{GitHubAPI: os.Getenv("AAYU_TEST_GITHUB_API"), GitHubGap: -1, Now: func() time.Time { return now },
+			GHToken: func(context.Context) (string, error) { return "", errors.New("gh disabled in tests") }})
+	os.Exit(code)
+}
+
+// Bug #177: the [budget] breaker counts every model call logged in the clone's actions log, not only its own
+// process's. Each process here is a separate `aayu triage` (a child process) against a fake model endpoint that
+// reports each call's cost, sharing one state directory, as two runs on one machine do.
+func TestBudgetBreakerAcrossProcesses(t *testing.T) {
+	var cost atomic.Value
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprintf(w, `{"model":"claude-haiku-5-5","choices":[{"message":{"role":"assistant","content":"{\"class\":\"feedback\",\"accepted\":false,\"reason\":\"r\"}"}}],"usage":{"prompt_tokens":10,"completion_tokens":5,"cost":%s}}`, cost.Load())
+	}))
+	t.Cleanup(srv.Close)
+	process := func(t *testing.T, home string, g *fake.GitHub, at string, issue, usd string, set ...string) (int, string) {
 		t.Helper()
-		env := map[string]string{"AAYU_GITHUB_TOKEN": "t", "AAYU_SECRET_ANTHROPIC": "model-key", "HOME": home}
-		model := &models.Fake{Replies: []models.Response{{Text: `{"class":"feedback","accepted":false,"reason":"r"}`, Model: "claude-haiku-5-5", CostUSD: usd}}}
-		opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: home, Now: now, NotifySink: sink,
-			ModelClient: func(models.Route, string) models.Client { return model }}
-		args := []string{"triage", issue, "--repo", "o/r"}
+		cost.Store(usd)
+		args := []string{"triage", issue, "--repo", "o/r", "--set", "notify.channel=file", "--set", "notify.target=" + filepath.Join(home, "pages.jsonl")}
 		for _, s := range set {
 			args = append(args, "--set", s)
 		}
-		code, _, errOut := run(t, env, opts, args...)
-		return code, errOut
+		cmd := exec.Command(os.Args[0], "-test.run=^TestAayuProcess$")
+		cmd.Dir = home
+		cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + home, "AAYU_TEST_PROCESS_ARGS=" + strings.Join(args, "\x1f"),
+			"AAYU_TEST_NOW=" + at, "AAYU_TEST_GITHUB_API=" + g.URL(), "AAYU_GITHUB_TOKEN=t",
+			"AAYU_MODELS__GATEWAY__BASE_URL=" + srv.URL + "/v1", "AAYU_MODELS__GATEWAY__SECRET=ai-gateway",
+			"AAYU_MODELS__GATEWAY__API_STYLE=chat", "AAYU_SECRET_AI_GATEWAY=gateway-key"}
+		out, err := cmd.CombinedOutput()
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
+			return ee.ExitCode(), string(out)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		return 0, string(out)
 	}
 	paused := func(home string) bool {
 		_, err := os.Stat(filepath.Join(home, ".local", "state", "aayudha", "state", "paused"))
 		return err == nil
 	}
+	pages := func(home string) string { b, _ := os.ReadFile(filepath.Join(home, "pages.jsonl")); return string(b) }
+	// Monday 12 and Tuesday 13 October, in business hours in London ([time] defaults), so pages go out at once.
 	t.Run("two processes on one day reach per_day_usd", func(t *testing.T) {
-		home, g, sink := t.TempDir(), fake.New(t, "o/r", "User"), &notify.Fake{}
+		home, g := t.TempDir(), fake.New(t, "o/r", "User")
 		g.AddIssue("One", "a", "type:feedback", "intake")
 		g.AddIssue("Two", "b", "type:feedback", "intake")
-		if code, errOut := process(t, home, g, sink, london(12, 10), "1", 0.60, "budget.per_day_usd=1"); code != 0 || paused(home) {
-			t.Fatalf("first process (0.60 of 1.00): exit %d, paused %v: %s", code, paused(home), errOut)
+		if code, out := process(t, home, g, "2026-10-12T09:00:00Z", "1", "0.60", "budget.per_day_usd=1"); code != 0 || paused(home) {
+			t.Fatalf("first process (0.60 of 1.00): exit %d, paused %v: %s", code, paused(home), out)
 		}
-		code, errOut := process(t, home, g, sink, london(12, 11), "2", 0.60, "budget.per_day_usd=1")
-		if code != ExitBudget || !paused(home) || len(sink.Pages) != 1 || !strings.Contains(sink.Pages[0].Body, "reached 1.20 USD") {
-			t.Fatalf("second process (1.20 of 1.00 today): exit %d, paused %v, pages %+v: %s", code, paused(home), sink.Pages, errOut)
+		code, out := process(t, home, g, "2026-10-12T10:00:00Z", "2", "0.60", "budget.per_day_usd=1")
+		if code != ExitBudget || !paused(home) || strings.Count(pages(home), "\n") != 1 || !strings.Contains(pages(home), "reached 1.20 USD") {
+			t.Fatalf("second process (1.20 of 1.00 today): exit %d, paused %v, pages %q: %s", code, paused(home), pages(home), out)
 		}
 	})
 	t.Run("two processes on one story reach per_story_usd", func(t *testing.T) {
-		home, g, sink := t.TempDir(), fake.New(t, "o/r", "User"), &notify.Fake{}
+		home, g := t.TempDir(), fake.New(t, "o/r", "User")
 		is := g.AddIssue("One", "a", "type:feedback", "intake")
 		labels := slices.Clone(is.Labels)
-		if code, errOut := process(t, home, g, sink, london(12, 10), "1", 0.60, "budget.per_story_usd=1", "budget.per_day_usd=100"); code != 0 {
-			t.Fatalf("first process: exit %d: %s", code, errOut)
+		if code, out := process(t, home, g, "2026-10-12T09:00:00Z", "1", "0.60", "budget.per_story_usd=1", "budget.per_day_usd=100"); code != 0 {
+			t.Fatalf("first process: exit %d: %s", code, out)
 		}
 		g.Mu.Lock()
 		is.Labels = labels // back in intake, so the second process classifies the same story again
 		g.Mu.Unlock()
-		code, errOut := process(t, home, g, sink, london(12, 11), "1", 0.60, "budget.per_story_usd=1", "budget.per_day_usd=100")
-		if code != ExitBudget || !paused(home) || !strings.Contains(errOut, "story #1 spent 1.20 USD") {
-			t.Fatalf("second process on #1 (1.20 of 1.00): exit %d, paused %v: %s", code, paused(home), errOut)
+		code, out := process(t, home, g, "2026-10-12T10:00:00Z", "1", "0.60", "budget.per_story_usd=1", "budget.per_day_usd=100")
+		if code != ExitBudget || !paused(home) || !strings.Contains(out, "story #1 spent 1.20 USD") {
+			t.Fatalf("second process on #1 (1.20 of 1.00): exit %d, paused %v: %s", code, paused(home), out)
 		}
 	})
 	t.Run("yesterday's spend does not count today", func(t *testing.T) {
-		home, g, sink := t.TempDir(), fake.New(t, "o/r", "User"), &notify.Fake{}
+		home, g := t.TempDir(), fake.New(t, "o/r", "User")
 		g.AddIssue("One", "a", "type:feedback", "intake")
 		g.AddIssue("Two", "b", "type:feedback", "intake")
-		if code, errOut := process(t, home, g, sink, london(12, 17), "1", 0.90, "budget.per_day_usd=1"); code != 0 {
-			t.Fatalf("yesterday: exit %d: %s", code, errOut)
+		if code, out := process(t, home, g, "2026-10-12T16:00:00Z", "1", "0.90", "budget.per_day_usd=1"); code != 0 {
+			t.Fatalf("yesterday: exit %d: %s", code, out)
 		}
-		if code, errOut := process(t, home, g, sink, london(13, 10), "2", 0.60, "budget.per_day_usd=1"); code != 0 || paused(home) || len(sink.Pages) != 0 {
-			t.Fatalf("today after 0.90 yesterday: exit %d, paused %v, pages %+v: %s", code, paused(home), sink.Pages, errOut)
+		if code, out := process(t, home, g, "2026-10-13T09:00:00Z", "2", "0.60", "budget.per_day_usd=1"); code != 0 || paused(home) || pages(home) != "" {
+			t.Fatalf("today after 0.90 yesterday: exit %d, paused %v, pages %q: %s", code, paused(home), pages(home), out)
 		}
 	})
 }

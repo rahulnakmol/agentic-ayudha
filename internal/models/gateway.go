@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -97,9 +98,13 @@ func (b *Breaker) SeedLog(path string) error {
 	}
 	defer func() { _ = f.Close() }()
 	var recs []actions.Record
-	for dec := json.NewDecoder(f); dec.More(); {
+	for dec := json.NewDecoder(f); ; {
 		var r actions.Record
-		if err := dec.Decode(&r); err != nil {
+		err := dec.Decode(&r)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil { // a read error (a directory, say) as well as a malformed record
 			return fmt.Errorf("%s: %w", path, err)
 		}
 		recs = append(recs, r)
