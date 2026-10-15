@@ -110,12 +110,11 @@ From [docs/threat-model.md](../threat-model.md), trimmed to two rows:
 ```text
 | T2 | A PR changes the gates, skills, or thresholds that judge it | CODEOWNERS on protected paths; `protected-paths` check runs from the base branch (`pull_request_target`, never checks out PR code); solo-mode merges only through the recorded admin bypass (Appendix B D2) | In place (WP0.1) |
 …
-| T10 | A tampered or substituted release | goreleaser builds in `release.yml` only for an annotated `v*` tag whose commit is on `main` (`verify-tag`, Appendix B D4); `checksums.txt` signed keylessly with cosign; SLSA build provenance; SBOM per archive; `install.sh` verifies the signature against `release.yml@refs/tags/<exact tag>` and then the archive checksum; CI proves it refuses a flipped byte, a rewritten checksum, and a non-release signer | In place (WP0.4); `self-update` n/a until WP1.1 |
+| T10 | A tampered or substituted release | goreleaser builds in `release.yml` only for an annotated `v*` tag whose commit is on `main` (`verify-tag`, Appendix B D4); `checksums.txt` signed keylessly with cosign; SLSA build provenance; SBOM per archive; `install.sh` verifies the signature against `release.yml@refs/tags/<exact tag>` and then the archive checksum; CI proves it refuses a flipped byte, a rewritten checksum, and a non-release signer | In place (WP0.4); `self-update` replaces the binary only with a signed, newer release and refuses agents (WP1.1) |
 ```
 
-The full table has 18 threats and the residual risks. Some status cells were written before the code that now
-implements them (provenance wrapping, the scrubbed environment, the token broker, the budget breaker, and
-`self-update` all exist today); this page describes the current code.
+The full table has 18 threats and the residual risks. Its status column was last checked against the code on
+15 October 2026, and it says where this repository's own setup still falls short.
 
 ## Invariants
 
