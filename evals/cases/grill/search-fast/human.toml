@@ -2,7 +2,7 @@
 # any other topic gets the fallback, which parks it.
 max_rounds = 4
 readback = "Yes, that is what done looks like."
-fallback = { kind = "park", text = "Not for this story; park it." }
+fallback = { kind = "park", text = "That is not part of what I asked for; park it." }
 
 [answers."perf.operation"]
 kind = "confirm"

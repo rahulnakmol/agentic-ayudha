@@ -3,11 +3,11 @@
 # kind: confirm (states or agrees), default (accepts the skill's offered default), park, or defer.
 max_rounds = 4
 readback = "Yes, that is what done looks like."
-fallback = { kind = "park", text = "Not for this story; park it." }
+fallback = { kind = "park", text = "That is not part of what I asked for; park it." }
 
 [answers."ux.tasks"]
 kind = "confirm"
-text = "A customer picks bread, chooses a pickup time, and pays, and knows the order went through: they see an order number and the pickup time."
+text = "A customer picks bread, chooses a pickup time, and pays by card on the review screen as they do today, and knows the order went through: they see an order number and the pickup time."
 
 [answers."ux.steps"]
 kind = "confirm"

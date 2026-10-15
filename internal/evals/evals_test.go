@@ -1231,8 +1231,9 @@ func editJSON(t *testing.T, path string, v any, edit func()) {
 // grilled spec goes wrong fails the concrete check with its reason: a vague
 // criterion, a parked idea or a parked topic turned into a criterion, a
 // citation of a fact the repository does not have, a quote the human never
-// said, a default the human did not accept, and a recording whose replies are
-// not the script's.
+// said (each of several quotes, an elided quote being its parts), a default
+// the human did not accept, and a recording whose replies are not the
+// script's.
 func TestTier1GrillConversation(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
@@ -1246,7 +1247,7 @@ func TestTier1GrillConversation(t *testing.T) {
 		}, nil, []string{`criterion 2 says "polished" with nothing to observe`}},
 		{"parked idea leaks", func(it *workitems.Item) {
 			it.Fields["completion_goal"] += "\n7. [screenshot] state: the order confirmation; expected: a loyalty stamp card with 1 of 10 stamps"
-			it.Fields["provenance"] += "\n7. confirmed (other): \"Not for this story; park it.\""
+			it.Fields["provenance"] += "\n7. confirmed (other): \"That is not part of what I asked for; park it.\""
 		}, nil, []string{`parked idea "loyalty stamp card" appears in the Completion Goal`, "criterion 7 comes from other, which the human park"}},
 		{"unknown fact", func(it *workitems.Item) {
 			it.Fields["provenance"] = strings.Replace(it.Fields["provenance"], "facts: gap:error:/order", "facts: gap:error:/checkout", 1)
@@ -1254,6 +1255,12 @@ func TestTier1GrillConversation(t *testing.T) {
 		{"words never said", func(it *workitems.Item) {
 			it.Fields["provenance"] = strings.Replace(it.Fields["provenance"], `"Three screens at most"`, `"two screens are plenty"`, 1)
 		}, nil, []string{`criterion 1 quotes "two screens are plenty", which the human never said`}},
+		{"one of two quotes never said", func(it *workitems.Item) {
+			it.Fields["provenance"] = strings.Replace(it.Fields["provenance"], `"pays by card on the review screen as they do today"`, `"pays by card or in cash"`, 1)
+		}, nil, []string{`criterion 2 quotes "pays by card or in cash", which the human never said`}},
+		{"elided quote", func(it *workitems.Item) {
+			it.Fields["provenance"] = strings.Replace(it.Fields["provenance"], `"Three screens at most"`, `"Five screens is too many... Three screens at most"`, 1)
+		}, nil, nil},
 		{"default not accepted", func(it *workitems.Item) {
 			it.Fields["provenance"] = strings.Replace(it.Fields["provenance"], "1. confirmed (ux.steps)", "1. default (ux.steps)", 1)
 		}, nil, []string{"criterion 1 claims an accepted default on ux.steps"}},
@@ -1355,7 +1362,7 @@ func TestTier2GrillConversation(t *testing.T) {
 	leak := conversationReplies(t, c, func(d map[string]any) {
 		f := d["fields"].(map[string]any)
 		f["completion_goal"] = f["completion_goal"].(string) + "\n7. [metric] state: `/order` with the seeded menu; expected: LCP at most 1500 ms"
-		f["provenance"] = f["provenance"].(string) + "\n7. confirmed (other): \"Not for this story; park it.\""
+		f["provenance"] = f["provenance"].(string) + "\n7. confirmed (other): \"That is not part of what I asked for; park it.\""
 		f["threshold"] = "all 7 criteria"
 	})
 	fake = &models.Fake{Replies: leak[:3]}

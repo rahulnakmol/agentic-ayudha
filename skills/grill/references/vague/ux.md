@@ -49,8 +49,10 @@ sensible default to offer with its reason, the evidence kind that usually proves
 ### Consistency with the design system (`ux.consistency`)
 
 - Ask: Must the screens use only the existing design tokens and components? Is anything allowed to look new?
-- Default: only existing tokens and components, because a new look is a design decision, not a story detail.
-- Evidence: screenshot
+- Default: only existing tokens and components, because a new look is a design decision, not a story detail. A
+  screenshot cannot show where a colour came from, so state it as a count over the changed files: 0 colour,
+  spacing, or font values outside the tokens and 0 new components.
+- Evidence: metric
 - Facts: tokens, component, ds
 
 ### Content and tone (`ux.content`)

@@ -1,0 +1,2554 @@
+{
+  "version": 1,
+  "sha": "30fb83284bc0d90a7237a4e3b475501777a6055c",
+  "ref": "dev",
+  "time": "2026-10-15T04:30:12.555502157Z",
+  "judge": "gpt-6.1-sol",
+  "judge_family": "openai",
+  "k": 5,
+  "cases": [
+    {
+      "case": "grill/bakery-ux",
+      "skill": "grill",
+      "lane": "spec",
+      "model": "claude-opus-5-5",
+      "fallback": "claude-sonnet-5-5",
+      "family": "anthropic",
+      "runs": [
+        {
+          "status": "fail",
+          "score": 2,
+          "pass": false,
+          "reason": "Questions are grounded in repository facts, prioritize the main flow and failure states, offer reasoned defaults, and stay within five per round. The readback and most criteria are concrete. However, fidelity fails: criterion 1 requires exactly three screens rather than the confirmed maximum of three, and criteria 1–3 assume a submit-without-payment flow even though the human explicitly parked that alternative. Recording this as an assumption does not authorize making it an acceptance criterion. Criterion 4 also uses screenshots to prove code-level requirements such as zero new components, whi…",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 11828,
+              "tokens_out": 1736,
+              "max_tokens": 8000
+            },
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 13082,
+              "tokens_out": 1731,
+              "max_tokens": 8000
+            },
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 14223,
+              "tokens_out": 1786,
+              "max_tokens": 8000
+            },
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 15367,
+              "tokens_out": 5966,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 5846,
+              "tokens_out": 176,
+              "max_tokens": 2000
+            }
+          ],
+          "transcript": {
+            "exchanges": [
+              {
+                "say": "You want ordering in the bakery app to feel high quality, under Feature #40 (Online ordering). Today ordering is five screens: /order, /order/details, /order/options, /order/pickup and /order/review (flow:/order). Four of those screens show no error state, and none handle a lost connection (gap:error:/order, gap:offline:/order). Story #14 already covers the pickup-slot list on /order/pickup (story:#14). 'High quality' doesn't say what to build yet, so here are five questions, riskiest first.",
+                "questions": [
+                  {
+                    "dimension": "ux.tasks",
+                    "ask": "Which task has to feel high quality, and for whom? A customer placing a pickup order from scratch, reordering their usual, or something else? What should they see at the end that tells them it worked?",
+                    "default": "One task: a customer places a pickup order from /order through /order/review and ends on a confirmation screen showing the order went through. One well-defined task can be built and tested as a single story. Reordering would be parked for a separate story.",
+                    "facts": [
+                      "flow:/order",
+                      "event:order_submitted",
+                      "story:#14"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.steps",
+                    "ask": "Five screens is long for a bakery order. Does any screen only ask the customer to confirm something, so we could fold it into its neighbour? For example, could options and pickup time share a screen? Do you have a time-on-task number in mind?",
+                    "default": "No more than today's five screens, and four if one of /order/details or /order/options only confirms. Each extra step loses customers. No time-on-task criterion unless you give me a number. If we touch /order/pickup, we coordinate with #14 rather than redo its slot list.",
+                    "facts": [
+                      "flow:/order",
+                      "route:/order/options",
+                      "route:/order/pickup",
+                      "story:#14"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.states",
+                    "ask": "When something fails, what should the customer see? This applies to loading products on /order, saving options or pickup, and submitting on /order/review. Do customers order on the move, so a dropped connection matters?",
+                    "default": "Each of /order, /order/options, /order/pickup and /order/review gets an error state with a retry. A failed submit on /order/review never loses the basket or the details already entered. Offline handling stays out unless you say customers order on the move. Missing error states are the most common cause of a redo.",
+                    "facts": [
+                      "gap:error:/order",
+                      "gap:offline:/order",
+                      "gap:empty:/order",
+                      "route:/api/orders"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.trust",
+                    "ask": "What must the customer see before they commit to the order? Options include the total, the pickup time, and a way to change or cancel. Does payment happen in the app? I found no payment route, only /api/orders.",
+                    "default": "/order/review shows the order total (BasketSummary is already there) and the chosen pickup time before the customer submits. Surprise costs are the main reason people abandon an order. Payment stays out of this story unless you say it happens in-app.",
+                    "facts": [
+                      "route:/order/review",
+                      "component:BasketSummary",
+                      "route:/api/orders"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.platforms",
+                    "ask": "Do customers order on their phone, on a desktop, or both? Which widths must the criteria hold at?",
+                    "default": "The web, which is the only platform the product ships on, checked at 390 px and 1280 px. Those are the widths the web floors already capture.",
+                    "facts": [
+                      "floor:platforms",
+                      "flow:/order"
+                    ]
+                  }
+                ],
+                "answers": [
+                  {
+                    "kind": "confirm",
+                    "text": "A customer picks bread, chooses a pickup time, and pays, and knows the order went through: they see an order number and the pickup time."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Five screens is too many. Three screens at most: choose items, then pickup time and details together, then review and pay."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "When a payment fails, keep the basket and show a message with a Try again button on the same screen. Loading is fine as it is, and offline can wait."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Show the total price and the pickup time on the review screen before they pay."
+                  },
+                  {
+                    "kind": "default",
+                    "text": "Your default is fine."
+                  }
+                ]
+              },
+              {
+                "say": "Got it. The task is a customer picking bread, choosing a pickup time, and paying, ending on an order number and pickup time. It takes three screens at most: items, then pickup time with details, then review and pay. A failed payment keeps the basket and offers Try again on the same screen. The review screen shows the total and pickup time before paying. It is checked on the web at 390 px and 1280 px. Offline is deferred, and loading stays as it is. One thing worries me: the assessment found no payment code, only /api/orders (route:/api/orders), and building payments from scratch could push this past an L. Five more questions:",
+                "questions": [
+                  {
+                    "dimension": "other",
+                    "ask": "How do customers pay today? Is there a payment provider (Stripe, Square, something else) already set up for the bakery, even if the app doesn't use it yet?",
+                    "default": "If a provider already exists, this story uses it for card payment on the review screen. If none exists, I'd split payment integration into its own story under #40, with this one depending on it, because a new payment integration alone could fill a story.",
+                    "facts": [
+                      "route:/api/orders",
+                      "code:lib/orders.ts",
+                      "route:/order/review"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.steps",
+                    "ask": "Where does the order number and pickup time appear after paying: on a confirmation screen after review, or on the review screen itself? Does that confirmation count toward your three screens?",
+                    "default": "A separate confirmation screen after a successful payment, not counted in the three. It is the result of the task, not a step in it, and it gives the customer a clear page that says the order went through.",
+                    "facts": [
+                      "flow:/order",
+                      "event:order_submitted"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.steps",
+                    "ask": "Today there's a separate /order/options screen, for things like sliced or unsliced. In your three screens, should options move onto the choose-items screen? Should the pickup-time picker reuse the slot list from story #14?",
+                    "default": "Options are chosen on the items screen, next to each item. The pickup step reuses #14's list of the next six half-hour slots, and this story depends on #14 so we don't build the slot list twice.",
+                    "facts": [
+                      "route:/order/options",
+                      "route:/order/pickup",
+                      "story:#14",
+                      "component:ProductTile"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.content",
+                    "ask": "Is there exact wording you want for the failed-payment message or the confirmation? You gave me the button label 'Try again'.",
+                    "default": "The button reads exactly 'Try again'. The message reads 'Your payment didn't go through. Your basket is saved.' unless you want different words. No other wording is fixed in this story.",
+                    "facts": [
+                      "route:/order/review"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.consistency",
+                    "ask": "Must the new screens use only the existing design tokens and components, such as Stepper, Button, and BasketSummary? Or is anything allowed to look new?",
+                    "default": "Only the existing tokens and components, with the Stepper showing three steps instead of five. A new look is a design decision, not a story detail.",
+                    "facts": [
+                      "tokens:web/styles/tokens.css",
+                      "component:Stepper",
+                      "component:Button",
+                      "component:BasketSummary"
+                    ]
+                  }
+                ],
+                "answers": [
+                  {
+                    "kind": "park",
+                    "text": "Not for this story; park it."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Five screens is too many. Three screens at most: choose items, then pickup time and details together, then review and pay."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Five screens is too many. Three screens at most: choose items, then pickup time and details together, then review and pay."
+                  },
+                  {
+                    "kind": "defer",
+                    "text": "I'm not sure about the wording yet. Leave it open and I'll write it with the shop staff."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Only our existing tokens and components; nothing new-looking."
+                  }
+                ]
+              },
+              {
+                "say": "Thanks. Two things are settled. First, the screens use only the existing tokens and components (tokens:web/styles/tokens.css, component:Stepper, component:Button, component:BasketSummary). Second, the failed-payment message wording stays open for you to write with the shop staff; I'll record it as deferred, and the button still reads 'Try again', as you said. Your answers 2 and 3 repeated your earlier answer about three screens, so I think my questions on the confirmation screen and the options screen got lost; I've asked them again below. Parking the payment provider also creates a gap. You described the task as ending with the customer paying, and the failed-payment criterion depends on a payment step, but the assessment found no payment code (route:/api/orders, code:lib/orders.ts). I need to know what 'pay' means in this story before I can write the criteria.",
+                "questions": [
+                  {
+                    "dimension": "request",
+                    "ask": "With the payment provider parked, what happens on the review screen in this story? (a) The customer submits the order and pays in the shop at pickup, and the failure criterion applies to a failed submit. (b) This story waits for a separate payment story under #40 and depends on it. (c) Something else?",
+                    "default": "(a): the review screen submits the order through /api/orders, with no in-app payment in this story. If the submit fails, the basket and the details the customer entered are kept, and a 'Try again' button appears on the same screen. In-app payment is parked as its own story. This keeps the story buildable now without inventing a payment integration you haven't chosen.",
+                    "facts": [
+                      "route:/api/orders",
+                      "route:/order/review",
+                      "code:lib/orders.ts",
+                      "gap:error:/order"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.steps",
+                    "ask": "After a successful order, where do the order number and pickup time appear? Is it a separate confirmation screen after review that doesn't count toward your three, or the review screen itself turning into a confirmation?",
+                    "default": "A separate confirmation screen after a successful order, not counted in the three screens, showing the order number and the chosen pickup time. It is the result of the task, not a step in it.",
+                    "facts": [
+                      "flow:/order",
+                      "event:order_submitted"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.steps",
+                    "ask": "Today's /order/options screen goes away in your three-screen flow. Should options (such as sliced or unsliced) move onto the choose-items screen? Should the pickup-time part of screen two reuse story #14's slot list, with this story depending on #14?",
+                    "default": "Options are chosen on the items screen, next to each item. Screen two reuses #14's list of the next six half-hour slots, and this story records 'depends-on #14' so the slot list isn't built twice.",
+                    "facts": [
+                      "route:/order/options",
+                      "route:/order/pickup",
+                      "story:#14",
+                      "component:ProductTile"
+                    ]
+                  },
+                  {
+                    "dimension": "other",
+                    "ask": "Size check: I estimate this at effort M. That covers merging five screens into three plus a confirmation screen, a failed-submit state with retry, and the total and pickup time on review. OK, or do you see it differently?",
+                    "default": "effort:M, because it restructures one existing flow and adds one error state, with no new integration once payment is parked.",
+                    "facts": [
+                      "flow:/order",
+                      "layer:L01",
+                      "layer:L03"
+                    ]
+                  }
+                ],
+                "answers": [
+                  {
+                    "kind": "park",
+                    "text": "Not for this story; park it."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Five screens is too many. Three screens at most: choose items, then pickup time and details together, then review and pay."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Five screens is too many. Three screens at most: choose items, then pickup time and details together, then review and pay."
+                  },
+                  {
+                    "kind": "park",
+                    "text": "Not for this story; park it."
+                  }
+                ]
+              },
+              {
+                "say": "Your answers to 2 and 3 repeated the three-screen answer again, so I've deferred those questions rather than ask a third time. Here is what done looks like:\n1. A customer goes from choosing bread to submitting the order in exactly three screens: choose items, then pickup time and details, then review.\n2. Before submitting, the review screen shows the order total and the chosen pickup time.\n3. After a successful submit, the customer sees an order number and the pickup time they chose.\n4. Every screen in the flow uses only the existing design tokens and components, with nothing new-looking.\nAll of this is checked on the web at 390 px and 1280 px wide.\n\nIt assumes:\n- Seeded test data only.\n- The order is submitted through the existing /api/orders route, with no in-app payment, because you parked payment. If that's wrong, tell me.\n\nDeferred:\n- What the customer sees when the order fails. You asked for a kept basket and a 'Try again' button on a failed payment, but payment is parked.\n- The wording of that message, which you'll write with the shop staff.\n- Offline handling.\n- Whether the order-number confirmation is its own screen.\n- Where today's options screen goes.\n- Whether pickup re…",
+                "done": true
+              }
+            ],
+            "criteria": "1. [recording] state: `/order` as the seeded customer with an empty basket, at 390 px and 1280 px wide; expected: choosing items, choosing a pickup time and entering details, and reaching the submit action takes exactly 3 screens, in this order: choose items; pickup time and details; review.\n2. [screenshot] state: the review screen as the seeded customer with 2 items and a pickup time chosen, at 390 px and 1280 px wide; expected: the order total price and the chosen pickup time are both shown before the customer submits.\n3. [screenshot] state: as the seeded customer, right after submitting the order successfully from the review screen, at 390 px and 1280 px wide; expected: an order number and the chosen pickup time are shown.\n4. [screenshot] state: each screen of the order flow and the screen after a successful submit, as the seeded customer, at 390 px and 1280 px wide; expected: every colour used is one of the 14 tokens in `web/styles/tokens.css`, and every control is an existing component from `web/components/`, with 0 new components added.",
+            "provenance": "Request: \"The bakery app needs high-quality UX for ordering. It belongs under Feature #40 (Online ordering).\"\nVague: \"high-quality\" → criteria 1, 2, 3, 4\n1. stated (ux.steps): \"Five screens is too many. Three screens at most: choose items, then pickup time and details together, then review and pay.\"; facts: flow:/order, route:/order/options, route:/order/pickup\n2. stated (ux.trust): \"Show the total price and the pickup time on the review screen before they pay.\"; facts: route:/order/review, component:BasketSummary\n3. stated (ux.tasks): \"A customer picks bread, chooses a pickup time, and pays, and knows the order went through: they see an order number and the pickup time.\"; facts: flow:/order, event:order_submitted, route:/api/orders\n4. stated (ux.consistency): \"Only our existing tokens and components; nothing new-looking.\"; facts: tokens:web/styles/tokens.css, component:Stepper, component:Button, component:BasketSummary"
+          }
+        },
+        {
+          "status": "fail",
+          "score": 2,
+          "pass": false,
+          "reason": "Question quality is strong: repository-grounded, risk-prioritized rounds contain at most five questions and offer reasoned defaults. Most criteria are concrete and the readback is clear. Fidelity is weak, however: criteria 1–3 require a submit-without-payment workflow even though the human confirmed review and pay, then parked both the payment question and the proposed submission-only replacement. That replacement was never confirmed or accepted as a default, and the cited provenance does not support the change. Additionally, screenshots cannot establish criterion 4's requirement that zero new…",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 11828,
+              "tokens_out": 1655,
+              "max_tokens": 8000
+            },
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 13109,
+              "tokens_out": 1572,
+              "max_tokens": 8000
+            },
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 14407,
+              "tokens_out": 1694,
+              "max_tokens": 8000
+            },
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 15306,
+              "tokens_out": 5281,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 5743,
+              "tokens_out": 216,
+              "max_tokens": 2000
+            }
+          ],
+          "transcript": {
+            "exchanges": [
+              {
+                "say": "You want ordering in the bakery app to feel high quality, as a Story under Feature #40 (Online ordering). Here is what the repository shows. Ordering today is five screens: /order, /order/details, /order/options, /order/pickup and /order/review (flow:/order). Four of those screens have no error state, and the missing ones include the review screen where the order is submitted (gap:error:/order). No screen has an offline state (gap:offline:/order). Four screens have no empty state (gap:empty:/order). An open story, #14, already covers pickup slots on /order/pickup (story:#14), so we should avoid overlapping it. \"High quality\" is a feeling, so the questions below turn it into things we can observe. The riskiest ones come first.",
+                "questions": [
+                  {
+                    "dimension": "ux.tasks",
+                    "ask": "Which task must feel high quality, and for whom? Options: (a) a customer's first order, from picking items on /order to a confirmation they can see after submitting; (b) a returning customer reordering their usual; (c) both. Covering both is likely too big for one story.",
+                    "default": "(a), one customer placing one order end to end, ending on a visible confirmation that the order was received. One well-defined task is buildable and testable in a single story. The flow has no confirmation screen after /order/review today, so success needs one.",
+                    "facts": [
+                      "flow:/order",
+                      "event:order_submitted",
+                      "route:/order/review"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.steps",
+                    "ask": "Five screens is a lot for a bakery order. Should the flow stay at five, or get shorter? If shorter, which step feels like it only confirms what the customer already chose? Is /order/details or /order/options the one you would fold in?",
+                    "default": "No more than five screens today. Fold one step into another only if you name a step that just confirms, because each extra step loses customers. No time-on-task target unless you give a number.",
+                    "facts": [
+                      "flow:/order",
+                      "component:Stepper"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.states",
+                    "ask": "If submitting the order or loading a screen fails, what should the customer see? Should it be an error message with a Retry that keeps their basket and choices? And do customers order on the move, which would make an offline state matter?",
+                    "default": "An error state with Retry on /order, /order/options, /order/pickup and /order/review. A failure must never empty the basket or lose what the customer entered. Offline is out of this story unless you say customers order on the go.",
+                    "facts": [
+                      "gap:error:/order",
+                      "gap:offline:/order",
+                      "route:/api/orders"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.trust",
+                    "ask": "Before the customer submits, what must they see to trust the order: the total price, the chosen pickup time, a way to go back and change it? Pickup slots themselves are already #14's job; should this story depend on #14?",
+                    "default": "On /order/review, before submitting, show the order total (BasketSummary is already there) and the chosen pickup time. Surprise costs or times are the main reason people abandon an order. Mark this story as depends-on #14 for the slot list rather than redoing it.",
+                    "facts": [
+                      "route:/order/review",
+                      "component:BasketSummary",
+                      "story:#14"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.platforms",
+                    "ask": "Do customers order mostly on their phones, on desktop, or both? Which widths must the criteria hold at?",
+                    "default": "Web only, checked at 390 px (phone) and 1280 px (desktop). Those are the widths the web floors already capture.",
+                    "facts": [
+                      "floor:platforms"
+                    ]
+                  }
+                ],
+                "answers": [
+                  {
+                    "kind": "confirm",
+                    "text": "A customer picks bread, chooses a pickup time, and pays, and knows the order went through: they see an order number and the pickup time."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Five screens is too many. Three screens at most: choose items, then pickup time and details together, then review and pay."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "When a payment fails, keep the basket and show a message with a Try again button on the same screen. Loading is fine as it is, and offline can wait."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Show the total price and the pickup time on the review screen before they pay."
+                  },
+                  {
+                    "kind": "default",
+                    "text": "Your default is fine."
+                  }
+                ]
+              },
+              {
+                "say": "Thanks, that settles a lot. The task is one customer picking bread, choosing a pickup time, and paying. They know it worked when they see an order number and their pickup time. The flow becomes three screens at most: choose items, then pickup time and details together, then review and pay. A failed payment keeps the basket and shows a message with a Try again button on the same screen. Loading stays as it is and offline is deferred. Review shows the total and the pickup time before paying. It is checked on web at 390 px and 1280 px. Some things still change what gets built. The biggest is payment: the repository shows an /api/orders route (route:/api/orders) but nothing about taking payment. If the app takes no payment today, adding it is probably bigger than one story, and I'd propose splitting it off.",
+                "questions": [
+                  {
+                    "dimension": "request",
+                    "ask": "Does the app take payment today, or does /order/review only submit the order (event:order_submitted)? If payment is new, which provider? Should this story assume payment exists, or include building it?",
+                    "default": "This story assumes an existing payment step on the review screen. If there is none, payment becomes its own story that this one depends on. Adding a payment provider is likely an L or more on its own, and an XL story has to be sliced.",
+                    "facts": [
+                      "route:/api/orders",
+                      "route:/order/review",
+                      "event:order_submitted",
+                      "code:lib/orders.ts"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.steps",
+                    "ask": "Today there is also an options screen (/order/options), for things like sliced or unsliced. In the three-screen flow, do options go on the choose-items screen with each product? Or do they go on the pickup-and-details screen? And is the confirmation with the order number a fourth screen after paying, or shown on the review screen once payment succeeds?",
+                    "default": "Options go with each item on the choose-items screen, because they describe the item, not the pickup. The confirmation is a separate screen after paying and does not count toward the three. It is the result of the task, not a step in it.",
+                    "facts": [
+                      "flow:/order",
+                      "route:/order/options",
+                      "component:ProductTile"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.trust",
+                    "ask": "Pickup time slots are already open story #14 (the next 6 half-hour slots on /order/pickup). In the new flow, the pickup time moves onto the combined screen. Should this story depend on #14 and reuse its slot list, rather than defining slots itself?",
+                    "default": "Yes, mark it depends-on #14 and reuse its slots. That way two stories don't build two different slot pickers.",
+                    "facts": [
+                      "story:#14",
+                      "route:/order/pickup"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.content",
+                    "ask": "The button wording 'Try again' is clear. Is there exact wording for the payment-failed message, and for the confirmation (for example 'Order #1234 — pick up at 08:30')? Or should the writer use the brand tone and keep only 'Try again' exact?",
+                    "default": "Keep only 'Try again' as exact wording. The failure message and confirmation text stay open questions for you to fill in later, so I don't invent copy for you.",
+                    "facts": [
+                      "route:/order/review"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.consistency",
+                    "ask": "Must the three screens use only the existing tokens and components (Stepper, Button, BasketSummary, ProductTile, Card)? Or is a new look allowed?",
+                    "default": "Only existing tokens and components. The Stepper shows three steps instead of five. A new look is a design decision, not a story detail.",
+                    "facts": [
+                      "tokens:web/styles/tokens.css",
+                      "component:Stepper",
+                      "component:Button",
+                      "component:BasketSummary",
+                      "component:ProductTile",
+                      "component:Card"
+                    ]
+                  }
+                ],
+                "answers": [
+                  {
+                    "kind": "park",
+                    "text": "Not for this story; park it."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Five screens is too many. Three screens at most: choose items, then pickup time and details together, then review and pay."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Show the total price and the pickup time on the review screen before they pay."
+                  },
+                  {
+                    "kind": "defer",
+                    "text": "I'm not sure about the wording yet. Leave it open and I'll write it with the shop staff."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Only our existing tokens and components; nothing new-looking."
+                  }
+                ]
+              },
+              {
+                "say": "Noted. Payment is parked, the wording stays open for you and the shop staff, and the screens use only existing tokens and components. Answers 2 and 3 repeated your earlier answers, so two of my questions are still open: where options go, and whether this story builds on #14's slots. Parking payment also changes your first answer. The customer can no longer pay in this story, so I need to check what the last step and the failure case become. Four short questions, then I can draft.",
+                "questions": [
+                  {
+                    "dimension": "request",
+                    "ask": "With payment parked, the last step becomes submitting the order on the review screen, with no money taken. Your 'keep the basket, show a message, Try again' rule would then apply when submitting the order fails. Is that right?",
+                    "default": "Yes. Review ends with submitting the order. If the submit to /api/orders fails, the customer stays on review with the basket and choices kept, a message, and a 'Try again' button. Taking payment is the parked idea and appears in no criterion.",
+                    "facts": [
+                      "route:/order/review",
+                      "route:/api/orders",
+                      "event:order_submitted",
+                      "gap:error:/order"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.steps",
+                    "ask": "Today there is an options screen (/order/options), for things like sliced or unsliced. In your three screens, do item options go on the choose-items screen with each product? Or do they go on the pickup-and-details screen? Or are options dropped from ordering?",
+                    "default": "With each item on the choose-items screen. Options describe the item, not the pickup.",
+                    "facts": [
+                      "flow:/order",
+                      "route:/order/options",
+                      "component:ProductTile"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.steps",
+                    "ask": "Is the confirmation (order number and pickup time) a separate screen after the review screen, outside your three-screen limit? Or must it appear on the review screen itself once the order goes through?",
+                    "default": "A separate confirmation screen that does not count toward the three. It is the result of the task, not a step in it.",
+                    "facts": [
+                      "flow:/order",
+                      "route:/order/review"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.trust",
+                    "ask": "Open story #14 already defines the pickup slots: the next 6 half-hour slots on /order/pickup. Should this story depend on #14 and reuse its slot picker on the combined pickup-and-details screen?",
+                    "default": "Yes. Mark it depends-on #14 and reuse its slots, so two stories don't build two slot pickers.",
+                    "facts": [
+                      "story:#14",
+                      "route:/order/pickup"
+                    ]
+                  }
+                ],
+                "answers": [
+                  {
+                    "kind": "park",
+                    "text": "Not for this story; park it."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Five screens is too many. Three screens at most: choose items, then pickup time and details together, then review and pay."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Five screens is too many. Three screens at most: choose items, then pickup time and details together, then review and pay."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Show the total price and the pickup time on the review screen before they pay."
+                  }
+                ]
+              },
+              {
+                "say": "Your last answers repeated earlier ones, so rather than ask a fourth time I've drafted the story. The three questions you didn't answer are listed as deferred, and you can change any of them before I write the issue. I read your first answer as parking the failure rule along with payment, so this story defines no failure screen.\n\nHere is what done looks like:\n1. A customer starting at /order picks bread, chooses a pickup time, and submits the order in no more than three screens: choose items, then pickup time and details together, then review.\n2. Before submitting, the review screen shows the order total and the chosen pickup time.\n3. After submitting, the customer sees an order number and their pickup time.\n4. At 390 px and 1280 px, every screen uses only the existing design tokens and components, with nothing new-looking.\n\nAssumptions:\n- The app ships on web only, checked at 390 px and 1280 px.\n- Seeded test data includes a customer, bread products, and pickup slots.\n- Submitting goes through the existing /api/orders.\n- Loading states stay as they are.\n\nDeferred:\n- Where item options go.\n- Whether the confirmation is its own screen.\n- Whether this story depends on #14 for pickup …",
+                "done": true
+              }
+            ],
+            "criteria": "1. [recording] state: `/order` as the seeded customer with an empty basket; expected: the customer picks bread, chooses a pickup time, and submits the order passing through at most 3 screens (choose items; pickup time and details together; review)\n2. [screenshot] state: `/order/review` as the seeded customer with bread in the basket and a pickup time chosen, before submitting; expected: the order total price and the chosen pickup time are both visible\n3. [screenshot] state: the screen shown right after the seeded customer submits an order from `/order/review`; expected: an order number and the chosen pickup time are visible\n4. [screenshot] state: each ordering screen (`/order`, the pickup time and details screen, `/order/review`) as the seeded customer at 390 px and at 1280 px; expected: only colours and styles from the design tokens in web/styles/tokens.css and only existing components from web/components/** appear, with 0 new components or new colours",
+            "provenance": "Request: \"The bakery app needs high-quality UX for ordering. It belongs under Feature #40 (Online ordering).\"\nVague: \"high-quality\" → criteria 1, 2, 3, 4\n1. stated (ux.steps): \"Five screens is too many. Three screens at most: choose items, then pickup time and details together, then review and pay.\"; facts: flow:/order, route:/order\n2. stated (ux.trust): \"Show the total price and the pickup time on the review screen before they pay.\"; facts: route:/order/review, component:BasketSummary\n3. stated (ux.tasks): \"A customer picks bread, chooses a pickup time, and pays, and knows the order went through: they see an order number and the pickup time.\"; facts: route:/order/review, event:order_submitted\n4. stated (ux.consistency): \"Only our existing tokens and components; nothing new-looking.\"; facts: tokens:web/styles/tokens.css, component:Stepper, component:Button, component:BasketSummary, component:ProductTile, floor:platforms"
+          }
+        },
+        {
+          "status": "fail",
+          "score": 3,
+          "pass": false,
+          "reason": "The questions are repository-grounded, risk-prioritized, and limited to five per round, and the criteria largely trace correctly to confirmed answers or an accepted default. Parked ideas and deferred copy are kept out of the criteria. However, concreteness is weakened by criterion 5: screenshots cannot establish that only existing tokens and components are used or that no new ones exist; that requires code inspection. The payment-success and failure criteria also remain dependent on an explicitly unresolved meaning of 'pay', leaving their test setup undefined. The readback acknowledges this ho…",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 11828,
+              "tokens_out": 1189,
+              "max_tokens": 8000
+            },
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 12996,
+              "tokens_out": 1396,
+              "max_tokens": 8000
+            },
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 14091,
+              "tokens_out": 2161,
+              "max_tokens": 8000
+            },
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 14803,
+              "tokens_out": 4123,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 5448,
+              "tokens_out": 247,
+              "max_tokens": 2000
+            }
+          ],
+          "transcript": {
+            "exchanges": [
+              {
+                "say": "You want ordering in the bakery app to feel high quality, under Feature #40 (Online ordering). Here is what the repo shows. Ordering today is five screens: /order, details, options, pickup, review (`flow:/order`). Four of those screens have no error state, including /order/review, where the order is submitted (`gap:error:/order`, `event:order_submitted`). No screen has an offline state (`gap:offline:/order`). Story #14 is already open for the pickup screen's slots (`story:#14`), so I'd keep clear of that. \"High quality\" is a feeling, so let's turn it into things we can observe. Five questions, riskiest first:",
+                "questions": [
+                  {
+                    "dimension": "ux.tasks",
+                    "ask": "Which task must feel high quality, and for whom? Placing a first order as a customer, or something else such as reordering? What does success look like at the end: a confirmation screen showing what?",
+                    "default": "One task: a customer places an order from /order through /order/review and lands on a visible confirmation of the order. One well-defined task is buildable and testable in one story.",
+                    "facts": [
+                      "flow:/order",
+                      "event:order_started",
+                      "event:order_submitted"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.steps",
+                    "ask": "The flow is five screens today. How many should it be? Is any screen there only to confirm, so it could fold into another (for example options into details)?",
+                    "default": "No more than five screens, and four if one screen only confirms. I'd only set a time-on-task number if you have one in mind.",
+                    "facts": [
+                      "flow:/order",
+                      "route:/order/options",
+                      "route:/order/details"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.states",
+                    "ask": "When submitting the order fails, what should the customer see? Should their basket and choices be kept, with a retry on the same screen? Should the other screens without error states get one too, and does offline matter (do people order on the move)?",
+                    "default": "On /order/review, a failed submit shows an error message and a retry button, and the basket, options, and pickup time are kept. Error states for the other three screens and offline stay out of scope unless you say otherwise.",
+                    "facts": [
+                      "gap:error:/order",
+                      "gap:offline:/order",
+                      "route:/api/orders",
+                      "route:/order/review"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.trust",
+                    "ask": "What must the customer see before they submit so they trust the order: the total price, the pickup time, the items with their options, a way to edit or cancel?",
+                    "default": "The order total and the chosen pickup time are both visible on /order/review before the submit button. Surprise costs are the main reason people abandon an order.",
+                    "facts": [
+                      "route:/order/review",
+                      "component:BasketSummary",
+                      "story:#14"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.platforms",
+                    "ask": "Do customers order mostly on their phones, on desktop, or both? Should the criteria hold at both phone and desktop widths?",
+                    "default": "Web, checked at 390 px (phone) and 1280 px (desktop), the widths the web floors already capture. I'd also use only the existing design tokens and components (Stepper, Button, BasketSummary).",
+                    "facts": [
+                      "floor:platforms",
+                      "tokens:web/styles/tokens.css",
+                      "component:Stepper"
+                    ]
+                  }
+                ],
+                "answers": [
+                  {
+                    "kind": "confirm",
+                    "text": "A customer picks bread, chooses a pickup time, and pays, and knows the order went through: they see an order number and the pickup time."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Five screens is too many. Three screens at most: choose items, then pickup time and details together, then review and pay."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "When a payment fails, keep the basket and show a message with a Try again button on the same screen. Loading is fine as it is, and offline can wait."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Show the total price and the pickup time on the review screen before they pay."
+                  },
+                  {
+                    "kind": "default",
+                    "text": "Your default is fine."
+                  }
+                ]
+              },
+              {
+                "say": "Thanks, that is much sharper. Here is what I have. The task is a customer picking bread, choosing a pickup time, and paying, ending on a screen with an order number and the pickup time. The flow goes to three screens at most: items, then pickup time and details, then review and pay. A failed payment keeps the basket and shows a message with a Try again button on the same screen. Loading stays as it is, and offline is deferred. The review screen shows the total and the pickup time before paying. Checks run at 390 px and 1280 px using only the existing tokens and components. Four things still change what gets built:",
+                "questions": [
+                  {
+                    "dimension": "request",
+                    "ask": "You said the customer pays, but I found no payment code in the repo. The review screen submits to /api/orders and nothing else. Does paying exist today, perhaps outside these files? If not, is adding payment part of this story, or should this story treat 'pay' as submitting the order, with real payment as its own story?",
+                    "default": "Treat 'pay' as the existing submit to /api/orders and park real card payment as a separate story. A payment integration is a big piece of work with its own risks, and it would push this story past an L.",
+                    "facts": [
+                      "route:/api/orders",
+                      "route:/order/review",
+                      "event:order_submitted"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.steps",
+                    "ask": "Today there is a separate /order/options screen. In your three screens, where do the options go: into the items screen (choose a loaf and its options together) or into the details screen? Also, is the confirmation with the order number a fourth screen after paying, or shown on the review screen once the order goes through?",
+                    "default": "Options go on the items screen, next to the item they change. The confirmation is its own screen after paying and does not count toward the three, because it comes after the task is done.",
+                    "facts": [
+                      "flow:/order",
+                      "route:/order/options",
+                      "route:/order/details"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.content",
+                    "ask": "Is there exact wording for the failed-payment message? You gave the button label 'Try again'. Is there also a heading for the confirmation screen, such as 'Order placed'?",
+                    "default": "Exact wording only for the button, 'Try again', since that is what you gave. The message text and the confirmation heading stay open, for whoever owns the copy.",
+                    "facts": [
+                      "route:/order/review"
+                    ]
+                  },
+                  {
+                    "dimension": "other",
+                    "ask": "Story #14 (pickup slots) is open and works on /order/pickup, the screen this story merges with details. Should this story depend on #14 landing first, or go ahead on its own and let #14 adapt to the merged screen?",
+                    "default": "Add 'depends-on #14', so the merged screen is built on the finished pickup slots and #14 is not redone.",
+                    "facts": [
+                      "story:#14",
+                      "route:/order/pickup"
+                    ]
+                  },
+                  {
+                    "dimension": "other",
+                    "ask": "My size estimate: merging five screens into three, plus the error state and the confirmation, is effort:L, assuming payment is not added here. Does that match your sense?",
+                    "default": "effort:L. If it feels too big, the split I'd propose is (a) merge to three screens and (b) payment error state plus confirmation."
+                  }
+                ],
+                "answers": [
+                  {
+                    "kind": "park",
+                    "text": "Not for this story; park it."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Five screens is too many. Three screens at most: choose items, then pickup time and details together, then review and pay."
+                  },
+                  {
+                    "kind": "defer",
+                    "text": "I'm not sure about the wording yet. Leave it open and I'll write it with the shop staff."
+                  },
+                  {
+                    "kind": "park",
+                    "text": "Not for this story; park it."
+                  },
+                  {
+                    "kind": "park",
+                    "text": "Not for this story; park it."
+                  }
+                ]
+              },
+              {
+                "say": "Got it. Real card payment is parked, the dependency on #14 is parked, and the error and confirmation wording stays open for you and the shop staff. One caution on #14: it is open and also changes /order/pickup (`story:#14`), and this story merges that screen with details. Without a dependency, one of the two may need rework. I've noted that as parked rather than deciding it for you. Three things are still loose. I'll keep this round short:",
+                "questions": [
+                  {
+                    "dimension": "request",
+                    "ask": "With real payment parked, does 'pay' in this story mean the existing submit on /order/review (to /api/orders)? If so, 'payment fails' means that submit fails: the basket is kept, a message appears, and a 'Try again' button sits on the same screen.",
+                    "default": "Yes. 'Pay' is the existing order submit, and the failure case is a failed submit. The error criterion then needs no payment provider.",
+                    "facts": [
+                      "route:/api/orders",
+                      "route:/order/review",
+                      "gap:error:/order"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.steps",
+                    "ask": "You repeated your three screens, so I'll take that as settled: items, then pickup time and details, then review and pay. Two details still change the build. Where do today's /order/options choices go? And is the screen with the order number and pickup time a separate screen after paying, outside the three?",
+                    "default": "Options go on the items screen, next to the item they change. The confirmation (order number and pickup time) is its own screen after a successful submit and does not count toward the three, because your list ends at 'pay'.",
+                    "facts": [
+                      "flow:/order",
+                      "route:/order/options",
+                      "route:/order/details"
+                    ]
+                  },
+                  {
+                    "dimension": "other",
+                    "ask": "Effort is the one thing that can't be parked, because a story can't be marked Ready without a size. Can I put effort:L on it? The split into two stories would stay parked, as you said.",
+                    "default": "effort:L: merging five screens into three, plus the failed-submit state and the confirmation screen, without payment. If it grows during the build, I'd raise the split again."
+                  }
+                ],
+                "answers": [
+                  {
+                    "kind": "park",
+                    "text": "Not for this story; park it."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Five screens is too many. Three screens at most: choose items, then pickup time and details together, then review and pay."
+                  },
+                  {
+                    "kind": "park",
+                    "text": "Not for this story; park it."
+                  }
+                ]
+              },
+              {
+                "say": "Here is what done looks like. 1. A seeded customer places an order in at most three screens: choose items, then pickup time and details together, then review and pay. 2. Before paying, the review screen shows the total price and the chosen pickup time. 3. When paying fails, the customer stays on the review screen with their basket kept, sees a message, and has a 'Try again' button. 4. After a successful payment, the customer sees an order number and their pickup time. 5. These screens hold at 390 px and 1280 px and use only the existing design tokens and components. The spec assumes loading states stay as they are. Several things are deferred: offline, the exact wording of the error message, where today's options choices go, whether the confirmation is its own screen, and what 'pay' means here. Real payment is parked, so 'pay' could be the existing order submit, but you parked that interpretation. Please settle it before `aayu ready`, because criteria 3 and 4 depend on it. Parked: real card payment, depending on #14, splitting the story, and reading 'pay' as submit. Two flags. #14 also changes /order/pickup, so without a dependency one of the two stories may need rework. A story ca…",
+                "done": true
+              }
+            ],
+            "criteria": "1. [recording] state: `/order` as the seeded customer, placing an order from start to paying; expected: the order is placed in at most 3 screens, in this order: choose items, then pickup time and details together, then review and pay\n2. [screenshot] state: `/order/review` as the seeded customer with items and a pickup time chosen, before paying; expected: the order total price and the chosen pickup time are both visible\n3. [screenshot] state: `/order/review` as the seeded customer when paying fails; expected: the customer stays on the same screen, the basket items are unchanged, a message is shown, and a button labelled \"Try again\" is shown\n4. [screenshot] state: the screen shown to the seeded customer after paying succeeds; expected: an order number and the chosen pickup time are visible\n5. [screenshot] state: `/order`, the pickup-time-and-details screen, and `/order/review` as the seeded customer at 390 px and 1280 px widths; expected: each screen uses only the existing design tokens (web/styles/tokens.css) and existing components (such as Stepper, Button, BasketSummary, ProductTile), with no new tokens or components",
+            "provenance": "Request: \"The bakery app needs high-quality UX for ordering. It belongs under Feature #40 (Online ordering).\"\nVague: \"high-quality\" → criteria 1, 2, 3, 4, 5\n1. stated (ux.steps): \"Five screens is too many. Three screens at most: choose items, then pickup time and details together, then review and pay.\"; facts: flow:/order, route:/order, route:/order/details, route:/order/options, route:/order/pickup, route:/order/review\n2. stated (ux.trust): \"Show the total price and the pickup time on the review screen before they pay.\"; facts: route:/order/review, component:BasketSummary\n3. stated (ux.states): \"When a payment fails, keep the basket and show a message with a Try again button on the same screen.\"; facts: gap:error:/order, route:/order/review\n4. stated (ux.tasks): \"A customer picks bread, chooses a pickup time, and pays, and knows the order went through: they see an order number and the pickup time.\"; facts: flow:/order, event:order_submitted\n5. default (ux.platforms): \"Your default is fine.\"; facts: floor:platforms, tokens:web/styles/tokens.css, component:Stepper, component:Button, component:BasketSummary, component:ProductTile"
+          }
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "Questions are grounded in repository facts, prioritize the task, screen count, and failure handling, offer reasoned defaults, and stay within five per round. All four criteria specify observable states and outcomes with appropriate evidence, and the readback clearly describes completion. Each criterion is traceable to an explicit human confirmation; accepted platform defaults are recorded, while unresolved layout, wording, offline behavior, payment integration, and the pickup-slot dependency remain outside the criteria in open questions or parked ideas.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 11828,
+              "tokens_out": 1650,
+              "max_tokens": 8000
+            },
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 13237,
+              "tokens_out": 1598,
+              "max_tokens": 8000
+            },
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 14361,
+              "tokens_out": 5645,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 4861,
+              "tokens_out": 186,
+              "max_tokens": 2000
+            }
+          ],
+          "transcript": {
+            "exchanges": [
+              {
+                "say": "You want ordering in the bakery app to feel high quality, under Feature #40 (Online ordering). Today ordering is a five-screen flow: /order, /order/details, /order/options, /order/pickup, /order/review (flow:/order). Four of those screens have no error state; only /order/details has one (gap:error:/order). None has an offline state (gap:offline:/order). Story #14 (Order pickup slots) is already open on /order/pickup (story:#14), so this story should avoid overlapping it. \"High quality\" doesn't describe anything we can check yet. Five questions, riskiest first:",
+                "questions": [
+                  {
+                    "dimension": "ux.tasks",
+                    "ask": "Which task must feel high quality, and for whom? A first-time customer placing an order, a returning customer reordering, or something else? What should they see at the end that tells them it worked?",
+                    "default": "One task: a customer places a pickup order from /order through /order/review and lands on a confirmation they can see. One well-defined task fits in a story and can be tested; reordering can be a separate story.",
+                    "facts": [
+                      "flow:/order",
+                      "route:/order",
+                      "route:/order/review",
+                      "event:order_submitted"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.steps",
+                    "ask": "Five screens is a lot for a bakery order. Should the flow shrink, and to how many screens? Is there a screen that only confirms something the customer already chose (for example, could options and pickup share one screen)? If you have a time-on-task target for a first-time or a returning customer, what is it?",
+                    "default": "No more than today's five screens, and one fewer if you name a screen that only confirms. I'd set no time-on-task number unless you give one. Merging /order/pickup would also touch #14, so I'd only do it with your say-so.",
+                    "facts": [
+                      "flow:/order",
+                      "route:/order/options",
+                      "route:/order/pickup",
+                      "story:#14"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.states",
+                    "ask": "/order, /order/options, /order/pickup and /order/review have no error state. When loading or submitting fails, what should the customer see? Should their basket and choices be kept, with a way to retry on the same screen? Do empty states (for example, an empty basket on /order/review) or offline states matter for this story?",
+                    "default": "An error message with a Retry action on each of those four screens, keeping everything the customer already entered. A failed submit on /order/review must never empty the basket. I'd leave empty and offline states out of this story unless you say customers order on the move.",
+                    "facts": [
+                      "gap:error:/order",
+                      "gap:empty:/order",
+                      "gap:offline:/order",
+                      "route:/order/review",
+                      "route:/api/orders"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.trust",
+                    "ask": "What does the customer need to see before placing the order so they trust it: the basket total, the chosen pickup time, a way to change or cancel? Anything after placing it, like an order number or receipt?",
+                    "default": "The basket total and the chosen pickup time are visible on /order/review before the customer places the order. Surprise costs are the main reason people abandon an order. BasketSummary already shows on /order/review, so this builds on it.",
+                    "facts": [
+                      "route:/order/review",
+                      "component:BasketSummary",
+                      "story:#14"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.platforms",
+                    "ask": "Do customers order on their phones, on desktop, or both? Should every screen use only the existing design tokens and components (Stepper, Button, BasketSummary, ProductTile), or may anything look new? Is there exact wording you want, such as the confirmation or error messages?",
+                    "default": "Web only, checked at 390 px and 1280 px, the widths the web checks already capture. Existing tokens and components only, since a new look is a design decision. Exact wording only where you give it; otherwise I'll list it as an open question.",
+                    "facts": [
+                      "floor:platforms",
+                      "tokens:web/styles/tokens.css",
+                      "component:Stepper",
+                      "component:Button",
+                      "component:BasketSummary"
+                    ]
+                  }
+                ],
+                "answers": [
+                  {
+                    "kind": "confirm",
+                    "text": "A customer picks bread, chooses a pickup time, and pays, and knows the order went through: they see an order number and the pickup time."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Five screens is too many. Three screens at most: choose items, then pickup time and details together, then review and pay."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "When a payment fails, keep the basket and show a message with a Try again button on the same screen. Loading is fine as it is, and offline can wait."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Show the total price and the pickup time on the review screen before they pay."
+                  },
+                  {
+                    "kind": "default",
+                    "text": "Your default is fine."
+                  }
+                ]
+              },
+              {
+                "say": "Thanks, that settles most of it. The task: a customer picks bread, chooses a pickup time, pays, and sees an order number and the pickup time. The flow goes from five screens to at most three: items, then pickup time and details, then review and pay. A failed payment keeps the basket and shows a message with a \"Try again\" button on the same screen. The total and pickup time show on review before paying. Web at 390 px and 1280 px, existing tokens and components, no other exact wording. A few gaps still change what gets built. This already looks like an L effort, so I'll flag it if it grows further.",
+                "questions": [
+                  {
+                    "dimension": "ux.steps",
+                    "ask": "Today /order/options is its own screen. Where do its choices go in the three-screen flow: onto the item screen, onto the pickup-and-details screen, or are they dropped?",
+                    "default": "Onto the item screen (screen 1), next to each product. Options belong to the item being chosen, and this keeps screen 2 about pickup and the customer.",
+                    "facts": [
+                      "route:/order/options",
+                      "route:/order",
+                      "component:ProductTile",
+                      "flow:/order"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.tasks",
+                    "ask": "The order number and pickup time appear after paying. Is that confirmation a page after the three screens, or shown on the review screen once payment succeeds?",
+                    "default": "A confirmation page after payment that doesn't count toward the three. It ends the task rather than adding a step, and it gives a clear 'it worked' moment.",
+                    "facts": [
+                      "route:/order/review",
+                      "event:order_submitted",
+                      "route:/api/orders"
+                    ]
+                  },
+                  {
+                    "dimension": "request",
+                    "ask": "The repository shows an orders API (/api/orders) but no payment route. Does paying in the app already exist, or would this story add it? Adding payment would push the story past an L, so I'd split it.",
+                    "default": "Assume payment already happens when the order is submitted on /order/review, and this story only reshapes the screens. If payment doesn't exist yet, it becomes a separate story that this one depends on.",
+                    "facts": [
+                      "route:/api/orders",
+                      "code:lib/orders.ts",
+                      "route:/order/review"
+                    ]
+                  },
+                  {
+                    "dimension": "other",
+                    "ask": "Story #14 (Order pickup slots, open) defines the pickup slots on /order/pickup. Should this story depend on #14 and move its slot picker onto the combined pickup-and-details screen, without changing which slots it shows?",
+                    "default": "Yes: depends-on #14. This story moves the slot picker but leaves the slots themselves to #14, so the two stories don't fight over the same criterion.",
+                    "facts": [
+                      "story:#14",
+                      "route:/order/pickup",
+                      "route:/order/details"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.content",
+                    "ask": "For the failed payment: the button reads exactly \"Try again\", as you said. What should the message above it say? Should the order number on the confirmation follow any format?",
+                    "default": "The button label is exactly \"Try again\". The message text and the order number format stay open questions until you give them, since I shouldn't invent wording.",
+                    "facts": [
+                      "route:/order/review",
+                      "gap:error:/order"
+                    ]
+                  }
+                ],
+                "answers": [
+                  {
+                    "kind": "confirm",
+                    "text": "Five screens is too many. Three screens at most: choose items, then pickup time and details together, then review and pay."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "A customer picks bread, chooses a pickup time, and pays, and knows the order went through: they see an order number and the pickup time."
+                  },
+                  {
+                    "kind": "park",
+                    "text": "Not for this story; park it."
+                  },
+                  {
+                    "kind": "park",
+                    "text": "Not for this story; park it."
+                  },
+                  {
+                    "kind": "defer",
+                    "text": "I'm not sure about the wording yet. Leave it open and I'll write it with the shop staff."
+                  }
+                ]
+              },
+              {
+                "say": "Your answers 1 and 2 repeated your earlier ones, so where the /order/options choices go and whether the confirmation is its own page are still undecided. I've deferred both as open questions rather than guess; the criteria hold either way. Correct me if you meant something else. Here is what done looks like: (1) Starting at /order, a customer picks bread, chooses a pickup time, and pays in at most three screens: choose items, then pickup time and details, then review and pay. (2) After paying, they see an order number and the pickup time. (3) Before paying, the review screen shows the total price and the pickup time. (4) If payment fails, they stay on the review screen with the basket kept, a message, and a button reading exactly \"Try again\". It assumes payment already works when the order is submitted, so this story doesn't build payment. It also assumes web only, checked at 390 px and 1280 px, using only existing design tokens and components, with loading states left as they are. Deferred: where the options choices go, whether the confirmation is a separate page, the failure message wording and order number format (you'll write these with the shop staff), and offline states. Park…",
+                "done": true
+              }
+            ],
+            "criteria": "1. [recording] state: `/order` as the seeded customer with an empty basket; expected: the customer picks bread, chooses a pickup time, and pays in at most 3 screens, in this order: (1) choose items, (2) pickup time and details together, (3) review and pay.\n2. [screenshot] state: right after a successful payment as the seeded customer; expected: an order number and the chosen pickup time are shown.\n3. [screenshot] state: `/order/review` as the seeded customer with a seeded basket and chosen pickup time, before paying; expected: the total price and the chosen pickup time are both shown.\n4. [screenshot] state: `/order/review` as the seeded customer with a seeded payment failure, after pressing pay; expected: the customer is still on the same screen, the basket items and total are unchanged, a message is shown, and a button labelled exactly \"Try again\" is shown.",
+            "provenance": "Request: \"The bakery app needs high-quality UX for ordering. It belongs under Feature #40 (Online ordering).\"\nVague: \"high-quality\" → criteria 1, 2, 3, 4\n1. stated (ux.steps): \"Five screens is too many. Three screens at most: choose items, then pickup time and details together, then review and pay.\"; facts: flow:/order, route:/order, route:/order/options, route:/order/pickup, route:/order/details\n2. stated (ux.tasks): \"A customer picks bread, chooses a pickup time, and pays, and knows the order went through: they see an order number and the pickup time.\"; facts: route:/api/orders, event:order_submitted\n3. stated (ux.trust): \"Show the total price and the pickup time on the review screen before they pay.\"; facts: route:/order/review, component:BasketSummary\n4. stated (ux.states): \"When a payment fails, keep the basket and show a message with a Try again button on the same screen.\"; facts: gap:error:/order, route:/order/review"
+          }
+        },
+        {
+          "status": "fail",
+          "score": 3,
+          "pass": false,
+          "reason": "Questions are grounded in repository facts, prioritize the task, screen count, and failure states, and stay within five per round. The skill correctly leaves unanswered decisions and parked payment out of the criteria, with accurate provenance for the confirmed requirements. The readback and first three criteria are concrete. However, criterion 4 requires screenshots to prove exclusive use of existing components and tokens and zero new additions; screenshots cannot establish those source-code facts. That criterion needs repository inspection or an automated source audit as evidence, making the…",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 11828,
+              "tokens_out": 1468,
+              "max_tokens": 8000
+            },
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 13118,
+              "tokens_out": 1415,
+              "max_tokens": 8000
+            },
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 14386,
+              "tokens_out": 1026,
+              "max_tokens": 8000
+            },
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 15277,
+              "tokens_out": 5404,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 5596,
+              "tokens_out": 214,
+              "max_tokens": 2000
+            }
+          ],
+          "transcript": {
+            "exchanges": [
+              {
+                "say": "You want ordering in the bakery app to feel high quality, under Feature #40 (Online ordering). Today ordering is five screens: /order, /order/details, /order/options, /order/pickup, /order/review (flow:/order). The assessment found four gaps. Four of the five screens have no error state: /order, /order/options, /order/pickup and /order/review (gap:error:/order). Four screens have no empty state (gap:empty:/order). No screen has an offline state (gap:offline:/order). Story #14 (Order pickup slots) is open and already changing /order/pickup (story:#14). \"High quality\" could mean many things, so here are five questions, riskiest first.",
+                "questions": [
+                  {
+                    "dimension": "ux.tasks",
+                    "ask": "Which ordering task must feel high quality, and for whom? For example: a first-time customer placing a pickup order from browsing to confirmation, or a returning customer reordering. What should the customer see at the end so they know it worked?",
+                    "default": "One task: a customer places a pickup order from /order through /order/review and lands on a confirmation they can see. One well-defined task is something a single story can build and test. Reordering would be parked for a later story.",
+                    "facts": [
+                      "flow:/order",
+                      "route:/order",
+                      "route:/order/review",
+                      "event:order_submitted"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.steps",
+                    "ask": "Five screens is long for a bakery order. Should this story shorten the flow, and to how many screens? Is a target time for a first-time or returning customer something you want to commit to?",
+                    "default": "Keep at most the five screens there are today, with no new steps. Fold a screen only if you name one that just confirms. Pickup should stay its own screen, because #14 is building slots on /order/pickup and folding it would collide with that work. No time-on-task number unless you give one.",
+                    "facts": [
+                      "flow:/order",
+                      "story:#14",
+                      "component:Stepper"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.states",
+                    "ask": "When something fails on /order, /order/options, /order/pickup or /order/review (most importantly, submitting the order on review), what should the customer see? Should their basket and choices survive a failure? Do empty or offline states matter for this story?",
+                    "default": "Each of those four screens shows an error with a Retry, and a failed submit on /order/review keeps the basket, options and pickup time intact. Empty and offline states would be deferred unless you tell me customers order on the move.",
+                    "facts": [
+                      "gap:error:/order",
+                      "gap:empty:/order",
+                      "gap:offline:/order",
+                      "route:/api/orders"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.trust",
+                    "ask": "What must the customer see before they submit so they trust the order? For example: the itemised total, the pickup time they chose, a way to go back and edit. After submitting, do they need an order number or receipt?",
+                    "default": "/order/review shows the order total (BasketSummary is already there) and the chosen pickup time before the customer submits. Surprise costs or a missing pickup time are the main reasons people abandon an order. An order number or receipt goes in only if you want it.",
+                    "facts": [
+                      "component:BasketSummary",
+                      "route:/order/review",
+                      "story:#14"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.platforms",
+                    "ask": "Do customers order mostly on phones, on desktop, or both? Should the criteria hold at both phone and desktop widths?",
+                    "default": "Web only, as configured, checked at 390 px (phone) and 1280 px (desktop). Those are the widths the web floors already capture.",
+                    "facts": [
+                      "floor:platforms",
+                      "route:/order"
+                    ]
+                  }
+                ],
+                "answers": [
+                  {
+                    "kind": "confirm",
+                    "text": "A customer picks bread, chooses a pickup time, and pays, and knows the order went through: they see an order number and the pickup time."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Five screens is too many. Three screens at most: choose items, then pickup time and details together, then review and pay."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "When a payment fails, keep the basket and show a message with a Try again button on the same screen. Loading is fine as it is, and offline can wait."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Show the total price and the pickup time on the review screen before they pay."
+                  },
+                  {
+                    "kind": "default",
+                    "text": "Your default is fine."
+                  }
+                ]
+              },
+              {
+                "say": "Settled so far. The task is a customer picking bread, choosing a pickup time and paying, then seeing an order number and the pickup time (ux.tasks). The flow becomes three screens: items, then pickup time and details together, then review and pay (ux.steps). A failed payment keeps the basket and shows a message with a \"Try again\" button on the same screen; loading stays as it is and offline is deferred (ux.states). Review shows the total and the pickup time before paying (ux.trust). The criteria hold at 390 px and 1280 px (ux.platforms). Two of your answers open up things that change what gets built. The flow has no payment step today: /order/review submits to /api/orders (route:/api/orders, event:order_submitted). And the merge touches /order/options and /order/pickup, which #14 is changing (story:#14). Five more questions.",
+                "questions": [
+                  {
+                    "dimension": "request",
+                    "ask": "Paying is new: nothing in the flow takes payment today. Does this story add real payment on the review screen (which provider?), or does the order go through as it does now with payment left to its own story?",
+                    "default": "Keep payment out of this story: the review screen submits the order as it does today, and the failure handling covers a failed submit. Adding a payment provider is a large, risky change that would likely push this past an L. I'd make it its own story under #40 and park it here. If you want payment in now, tell me which provider.",
+                    "facts": [
+                      "route:/api/orders",
+                      "route:/order/review",
+                      "event:order_submitted"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.steps",
+                    "ask": "Today there is also an options screen (/order/options). In your three screens, where do the options go: onto the choose-items screen, or onto the pickup-and-details screen?",
+                    "default": "Put the options on the choose-items screen, next to the bread they change. Options describe the item, not the pickup.",
+                    "facts": [
+                      "route:/order/options",
+                      "route:/order",
+                      "component:ProductTile"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.steps",
+                    "ask": "Story #14 is building pickup slots on /order/pickup, and this story merges pickup into the details screen. Should this story wait for #14 (depends-on #14) and keep its slot picker on the merged screen?",
+                    "default": "Yes. Add depends-on #14 and reuse its pickup-slot picker on the merged screen. Building both at once on the same screen would cause rework.",
+                    "facts": [
+                      "story:#14",
+                      "route:/order/pickup",
+                      "route:/order/details"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.content",
+                    "ask": "What exact wording should the failure message and the confirmation use? You gave \"Try again\" for the button. Do you also have the message text, for example \"Your order didn't go through. Your basket is saved.\", and a confirmation heading?",
+                    "default": "Button label \"Try again\", exactly as you said. Leave the message and confirmation text as an open question for you to supply before build, so I don't write wording you didn't choose.",
+                    "facts": [
+                      "route:/order/review"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.consistency",
+                    "ask": "Must the merged screens use only the existing design tokens and components (Stepper, Button, BasketSummary, ProductTile, Card, the --crumb-* tokens), or may anything look new?",
+                    "default": "Only existing tokens and components, with the Stepper showing three steps. A new look is a design decision, not a story detail.",
+                    "facts": [
+                      "tokens:web/styles/tokens.css",
+                      "component:Stepper",
+                      "component:Button",
+                      "component:BasketSummary",
+                      "component:ProductTile",
+                      "component:Card"
+                    ]
+                  }
+                ],
+                "answers": [
+                  {
+                    "kind": "park",
+                    "text": "Not for this story; park it."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Five screens is too many. Three screens at most: choose items, then pickup time and details together, then review and pay."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Five screens is too many. Three screens at most: choose items, then pickup time and details together, then review and pay."
+                  },
+                  {
+                    "kind": "defer",
+                    "text": "I'm not sure about the wording yet. Leave it open and I'll write it with the shop staff."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Only our existing tokens and components; nothing new-looking."
+                  }
+                ]
+              },
+              {
+                "say": "Got it. Payment is parked for its own story, the message and confirmation wording stay open for you and the shop staff, and the screens use only existing tokens and components. Answers 2 and 3 repeated your three-screen plan (items, then pickup and details, then review), which is settled. They didn't say where the options go or how to handle #14, so I'm asking those two again. Parking payment also changes what \"fails\" means, so I want to check that and the size.",
+                "questions": [
+                  {
+                    "dimension": "ux.steps",
+                    "ask": "The options screen (/order/options) has to go somewhere in your three screens. Should the options sit on the choose-items screen or on the pickup-and-details screen? If you'd rather not decide now, I'll leave it open.",
+                    "default": "On the choose-items screen, next to the bread they change, because options describe the item, not the pickup.",
+                    "facts": [
+                      "route:/order/options",
+                      "route:/order",
+                      "component:ProductTile"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.steps",
+                    "ask": "Story #14 is building pickup slots on /order/pickup, which this story folds into the details screen. Should this story wait for #14 (depends-on #14) and reuse its slot picker on the merged screen?",
+                    "default": "Yes, depends-on #14, reusing its pickup-slot picker. Changing the same screen in parallel would cause rework.",
+                    "facts": [
+                      "story:#14",
+                      "route:/order/pickup",
+                      "route:/order/details"
+                    ]
+                  },
+                  {
+                    "dimension": "ux.states",
+                    "ask": "With payment parked, the review screen submits the order as it does today. Should your failure rule apply to a failed order submit: the basket, details and pickup time are kept, with a message and a \"Try again\" button on the review screen?",
+                    "default": "Yes, apply it to a failed submit from /order/review to /api/orders. When payment arrives in its own story, it can reuse the same pattern.",
+                    "facts": [
+                      "route:/order/review",
+                      "route:/api/orders",
+                      "gap:error:/order"
+                    ]
+                  },
+                  {
+                    "dimension": "other",
+                    "ask": "Size: merging five screens into three, adding the submit error state, and adding a confirmation that shows the order number and pickup time. Does effort L sound right to you?",
+                    "default": "effort:L. It reshapes the whole flow and adds two states, but it stays one deliverable because payment is out.",
+                    "facts": [
+                      "flow:/order",
+                      "layer:L01",
+                      "layer:L03"
+                    ]
+                  }
+                ],
+                "answers": [
+                  {
+                    "kind": "confirm",
+                    "text": "Five screens is too many. Three screens at most: choose items, then pickup time and details together, then review and pay."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Five screens is too many. Three screens at most: choose items, then pickup time and details together, then review and pay."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "When a payment fails, keep the basket and show a message with a Try again button on the same screen. Loading is fine as it is, and offline can wait."
+                  },
+                  {
+                    "kind": "park",
+                    "text": "Not for this story; park it."
+                  }
+                ]
+              },
+              {
+                "say": "Your last answers repeated earlier ones (the three-screen plan and the payment-failure rule), and I've asked twice where the options go and how this relates to #14. So I'm not asking a third time. I've written those as open questions for you to decide before build.\n\nOn effort: it can't be parked, because a story can't be Ready without it. I've kept my estimate of L; change it if you disagree.\n\nHere is what done looks like:\n1. A seeded customer places a pickup order in at most three screens: choose items at /order, then pickup time and details together on one screen, then review.\n2. Before submitting, the review screen shows the order total and the chosen pickup time.\n3. After submitting, the customer sees a confirmation with an order number and the chosen pickup time.\n4. The screens use only existing components and the 14 --crumb-* design tokens, with nothing new added.\n\nAssumed:\n- Web only, checked at 390 px and 1280 px.\n- Loading states stay as they are.\n- Orders are submitted to /api/orders as today.\n\nOpen:\n- Where the options go.\n- Whether to wait for #14.\n- Whether your failure rule applies to a failed order submit now that payment is parked.\n- The exact message and confirmati…",
+                "done": true
+              }
+            ],
+            "criteria": "1. [recording] state: `/order` as the seeded customer, at 390 px and 1280 px, placing a pickup order; expected: the order is placed in at most 3 screens, in this order: choose items at `/order`, pickup time and details together on one screen, then the review screen.\n2. [screenshot] state: the review screen as the seeded customer with a seeded basket and a chosen pickup time, before submitting, at 390 px and 1280 px; expected: the order total and the chosen pickup time are both shown.\n3. [screenshot] state: the screen after the seeded customer submits the order from the review screen, at 390 px and 1280 px; expected: a confirmation showing an order number and the chosen pickup time.\n4. [screenshot] state: each of the 3 ordering screens as the seeded customer, at 390 px and 1280 px; expected: built only from existing components (web/components, web/components/ui) and the 14 --crumb-* tokens in web/styles/tokens.css; 0 new components and 0 new tokens added.",
+            "provenance": "Request: \"The bakery app needs high-quality UX for ordering. It belongs under Feature #40 (Online ordering).\"\nVague: \"high-quality\" → criteria 1, 2, 3, 4\n1. stated (ux.steps): \"Five screens is too many. Three screens at most: choose items, then pickup time and details together, then review and pay.\"; facts: flow:/order, route:/order, route:/order/details, route:/order/options, route:/order/pickup, route:/order/review\n2. stated (ux.trust): \"Show the total price and the pickup time on the review screen before they pay.\"; facts: route:/order/review, component:BasketSummary\n3. stated (ux.tasks): \"A customer picks bread, chooses a pickup time, and pays, and knows the order went through: they see an order number and the pickup time.\"; facts: route:/api/orders, event:order_submitted\n4. stated (ux.consistency): \"Only our existing tokens and components; nothing new-looking.\"; facts: tokens:web/styles/tokens.css, component:Stepper, component:Button, component:BasketSummary, component:ProductTile, component:Card"
+          }
+        }
+      ],
+      "errors": 0,
+      "pass_k": 0,
+      "mean": 3
+    },
+    {
+      "case": "grill/goal-first-claim",
+      "skill": "grill",
+      "lane": "spec",
+      "model": "claude-opus-5-5",
+      "fallback": "claude-sonnet-5-5",
+      "family": "anthropic",
+      "runs": [
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The Goal states the outcome and claimant beneficiaries, defines activation as first claim submitted within 7 days of signing up, preserves the 0.31 baseline with its weekly cohorts and snapshot source, and retains the target of \u003e= 0.40 by 2027-03-31. It has no parent and introduces no substantive invented content.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 5153,
+              "tokens_out": 825,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1492,
+              "tokens_out": 85,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The Goal clearly states the outcome and claimant beneficiaries, defines activation as first claim submission within 7 days of signup, preserves the 0.31 baseline with its weekly cohorts and identified aayu measure snapshot, and retains the target of \u003e= 0.40 by 2027-03-31. It has no parent and introduces no substantive invented requirements.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 5153,
+              "tokens_out": 777,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1436,
+              "tokens_out": 88,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The Goal clearly states the outcome and claimant beneficiaries, defines activation as first claim submitted within 7 days of signing up, preserves the 0.31 baseline with its cohort window and aayu measure snapshot source, and retains the target of \u003e= 0.40 by 2027-03-31. It has no parent and introduces no invented metric, number, date, beneficiary, or initiative.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 5153,
+              "tokens_out": 756,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1408,
+              "tokens_out": 97,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The Goal clearly states the outcome and claimant beneficiaries, defines activation as first claim submitted within 7 days of signing up, preserves the 0.31 baseline with its weekly cohorts and snapshot source, and retains the target of \u003e= 0.40 by 2027-03-31. It has no parent and introduces no unsupported metrics, numbers, dates, beneficiaries, or initiatives. The open questions do not lower the score.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 5153,
+              "tokens_out": 729,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1440,
+              "tokens_out": 103,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The Goal clearly states the outcome and claimant beneficiaries, preserves activation as first claim submitted within 7 days of signing up, retains the 0.31 baseline with its weekly cohorts and exact snapshot reference, and sets a target of \u003e= 0.40 by 2027-03-31. It has no parent and introduces no substantive invented requirements.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 5153,
+              "tokens_out": 652,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1372,
+              "tokens_out": 87,
+              "max_tokens": 2000
+            }
+          ]
+        }
+      ],
+      "errors": 0,
+      "pass_k": 1,
+      "mean": 5
+    },
+    {
+      "case": "grill/search-fast",
+      "skill": "grill",
+      "lane": "spec",
+      "model": "claude-opus-5-5",
+      "fallback": "claude-sonnet-5-5",
+      "family": "anthropic",
+      "runs": [
+        {
+          "status": "fail",
+          "score": 1,
+          "pass": false,
+          "floor": "not concrete or not faithful: fidelity: criterion 1 quotes \"Typing in the menu search box until the matching products show... Results should…\", which the human never said",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 10375,
+              "tokens_out": 1194,
+              "max_tokens": 8000
+            },
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 11489,
+              "tokens_out": 2376,
+              "max_tokens": 8000
+            }
+          ],
+          "transcript": {
+            "exchanges": [
+              {
+                "say": "You want menu search to be fast because customers give up when they search, and it goes under Feature #50 (Menu). Search lives on its own screen, /menu/search (route:/menu/search), backed by /api/search (route:/api/search) and lib/search.ts (code:lib/search.ts). Today it has no loading state (gap:loading:/menu), no API speed budget (gap:api-budget), and no test that touches the menu screens (gap:tests:/menu). So 'fast' has no number yet, and nothing would catch it getting slow again. Five questions, riskiest first. I'd park a CI speed budget for now, since adding one is a decision of its own.",
+                "questions": [
+                  {
+                    "dimension": "perf.operation",
+                    "ask": "Which action must be fast? Options: the /menu/search page first loading, results appearing after the customer types a query, or opening a result. Measured from the customer's keystroke or submit to visible results?",
+                    "default": "Results appearing on /menu/search, timed from the customer's query input to the result tiles showing. That is the wait a customer feels before giving up.",
+                    "facts": [
+                      "route:/menu/search",
+                      "route:/api/search",
+                      "code:lib/search.ts",
+                      "component:ProductTile"
+                    ]
+                  },
+                  {
+                    "dimension": "perf.target",
+                    "ask": "What number must it meet, and at which percentile? Do you know roughly how long a search takes today, or where customers give up (for example after 2 seconds)?",
+                    "default": "p95, with the number you give. If you have none, I'll measure today's time on seeded data and propose a target below it for you to confirm. I won't invent one.",
+                    "facts": [
+                      "gap:api-budget",
+                      "floor:perf"
+                    ]
+                  },
+                  {
+                    "dimension": "perf.conditions",
+                    "ask": "Under what conditions must it hold: how many menu items are searched (today's seeded menu, or a larger one you expect), on what device and network, and with a cold or warm cache?",
+                    "default": "The seeded menu data on a mid-range laptop over a local network, warm cache. Proof captures run on seeded data only.",
+                    "facts": [
+                      "code:lib/search.ts",
+                      "story:#12"
+                    ]
+                  },
+                  {
+                    "dimension": "perf.measure",
+                    "ask": "Where should the number be measured: a repeatable benchmark of /api/search, an API trace of a search, or Lighthouse on /menu/search? There are no menu tests today, so this story would add the proving test.",
+                    "default": "A repeatable benchmark or API trace of /api/search on the seeded data, recorded as a metric criterion. The search_performed event can't serve as proof, because production telemetry isn't captured.",
+                    "facts": [
+                      "gap:tests:/menu",
+                      "gap:api-budget",
+                      "event:search_performed"
+                    ]
+                  },
+                  {
+                    "dimension": "perf.perceived",
+                    "ask": "While customers wait, what should they see? Today /menu/search has no loading state at all. Options: keep it as is, add a spinner or skeleton, or show results as they type. Is a partial result acceptable?",
+                    "default": "Keep today's behaviour (no new loading state) unless you ask for one. Since its absence may be part of why customers give up, say so if you want one in scope.",
+                    "facts": [
+                      "gap:loading:/menu",
+                      "route:/menu/search"
+                    ]
+                  }
+                ],
+                "answers": [
+                  {
+                    "kind": "confirm",
+                    "text": "Typing in the menu search box until the matching products show. That's what customers complain about."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Results should show within 200 ms of a keystroke for most people, say p95."
+                  },
+                  {
+                    "kind": "default",
+                    "text": "Your default is fine."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "A benchmark test on the seeded menu is fine as proof."
+                  },
+                  {
+                    "kind": "park",
+                    "text": "Leave the loading feedback as it is."
+                  }
+                ]
+              },
+              {
+                "say": "Here is what done looks like: on `/menu/search` with the seeded menu, a benchmark test shows that 95% of searches display the matching product tiles within 200 ms of a keystroke in the search box, on a mid-range laptop over a local network with a warm cache. It assumes the seeded menu is the data set that matters and that today's loading feedback stays as it is. Deferred: how search performs on a menu much larger than the seeded one, since proof runs on seeded data only. Parked, so not built here: a CI speed budget to stop search getting slow again, and a new loading indicator on the search screen. I estimated the size as effort:M because we don't yet know why search is slow, and the story adds the first menu test. Tell me if you see it as smaller. Confirm, or tell me what to change.",
+                "done": true
+              }
+            ],
+            "criteria": "1. [metric] state: `/menu/search` with the seeded menu, mid-range laptop, local network, warm cache; expected: p95 time from a keystroke in the search box to the matching product tiles being visible is \u003c= 200 ms, measured by a repeatable benchmark test",
+            "provenance": "Request: \"Make search fast. Customers give up when they search the menu. It belongs under Feature #50 (Menu).\"\nVague: \"fast\" → criteria 1\n1. stated (perf.target): \"Typing in the menu search box until the matching products show... Results should show within 200 ms of a keystroke for most people, say p95.\"; facts: route:/menu/search, route:/api/search, code:lib/search.ts, component:ProductTile, gap:api-budget, gap:tests:/menu"
+          }
+        },
+        {
+          "status": "fail",
+          "score": 1,
+          "pass": false,
+          "floor": "not concrete or not faithful: fidelity: criterion 1 quotes \"Results should show within 200 ms of a keystroke for most people, say p95.\\\"; ope…\", which the human never said",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 10375,
+              "tokens_out": 1230,
+              "max_tokens": 8000
+            },
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 11504,
+              "tokens_out": 2325,
+              "max_tokens": 8000
+            }
+          ],
+          "transcript": {
+            "exchanges": [
+              {
+                "say": "You want menu search to be fast, because customers give up when they search the menu; it goes under Feature #50 (Menu). Search today is the /menu/search screen (flow:/menu, route:/menu/search), backed by the API route /api/search (route:/api/search) and lib/search.ts (code:lib/search.ts). Four things stand out. No API speed budget is configured, so there is no number for search speed today (gap:api-budget). Neither menu screen has a loading state (gap:loading:/menu). No test covers the menu screens (gap:tests:/menu). A \"search_performed\" event is already emitted (event:search_performed). The only speed budgets that exist are page-level Lighthouse ones (floor:perf), and they don't measure search itself. Five questions, riskiest first. I'll leave a CI speed budget out of this story and park it as an idea unless you want it in.",
+                "questions": [
+                  {
+                    "dimension": "perf.operation",
+                    "ask": "Which action is the slow one customers give up on: opening /menu/search, typing in the search box, or the results appearing after they type? Do you know where they drop off?",
+                    "default": "The time from the customer's last keystroke to the matching results being visible on /menu/search, because that is the wait customers feel and give up on.",
+                    "facts": [
+                      "route:/menu/search",
+                      "route:/api/search",
+                      "code:lib/search.ts"
+                    ]
+                  },
+                  {
+                    "dimension": "perf.target",
+                    "ask": "What number must it meet, and at which percentile? Do you have a figure for how long it takes today?",
+                    "default": "p95, with the number you give. No search budget exists today (gap:api-budget). If you have no number, I'll measure today's time on the seeded menu and propose that figure minus a margin for you to confirm. I won't treat it as a fact.",
+                    "facts": [
+                      "gap:api-budget",
+                      "floor:perf"
+                    ]
+                  },
+                  {
+                    "dimension": "perf.conditions",
+                    "ask": "Under what conditions must it hold: how many menu items are searched, which device and network, and a cold or warm cache?",
+                    "default": "The seeded menu data on a mid-range laptop over a local network, warm cache, because proof captures run on seeded data only.",
+                    "facts": [
+                      "code:lib/search.ts",
+                      "gap:tests:/menu"
+                    ]
+                  },
+                  {
+                    "dimension": "perf.measure",
+                    "ask": "How should the number be measured and proven: a repeatable benchmark of /api/search, a browser-timed trace of the results appearing, or something else?",
+                    "default": "A repeatable benchmark against /api/search on the seeded data, recorded as a metric criterion. No test covers the menu today, so this story would add one. Production telemetry (search_performed) can't be captured as proof.",
+                    "facts": [
+                      "route:/api/search",
+                      "gap:tests:/menu",
+                      "event:search_performed"
+                    ]
+                  },
+                  {
+                    "dimension": "perf.perceived",
+                    "ask": "While customers wait, what should they see? There is no loading state on /menu/search today. Options: results that update as they type, a spinner, or a skeleton. Or is speed alone enough?",
+                    "default": "Keep today's behaviour (no loading state) and make search itself fast. A new loading state goes in only if you ask for one.",
+                    "facts": [
+                      "gap:loading:/menu",
+                      "route:/menu/search"
+                    ]
+                  }
+                ],
+                "answers": [
+                  {
+                    "kind": "confirm",
+                    "text": "Typing in the menu search box until the matching products show. That's what customers complain about."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Results should show within 200 ms of a keystroke for most people, say p95."
+                  },
+                  {
+                    "kind": "default",
+                    "text": "Your default is fine."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "A benchmark test on the seeded menu is fine as proof."
+                  },
+                  {
+                    "kind": "park",
+                    "text": "Leave the loading feedback as it is."
+                  }
+                ]
+              },
+              {
+                "say": "Here is what done looks like: on `/menu/search` with the seeded menu, a benchmark test shows matching products within 200 ms of a keystroke in the search box at p95. It runs on a mid-range laptop over a local network with a warm cache. It assumes the seeded menu stands in for the real one, and that today's loading feedback stays as it is: no new spinner or skeleton. It also assumes the story adds the benchmark test, since no test covers the menu screens today. Deferred: the benchmark's search terms and number of runs, which get chosen when the test is built. Parked: a CI budget that would fail the build if search gets slow again; that is its own decision. I've estimated it at effort M, because the cause of the slowness isn't known yet and the story also adds a new benchmark test. Confirm, or tell me what to change.",
+                "done": true
+              }
+            ],
+            "criteria": "1. [metric] state: `/menu/search` with the seeded menu, on a mid-range laptop over a local network with a warm cache; expected: the time from a keystroke in the search box to the matching products being visible is \u003c= 200 ms at p95, measured by a benchmark test on the seeded menu",
+            "provenance": "Request: \"Make search fast. Customers give up when they search the menu. It belongs under Feature #50 (Menu).\"\nVague: \"fast\" → criteria 1\n1. stated (perf.target): \"Results should show within 200 ms of a keystroke for most people, say p95.\"; operation stated (perf.operation): \"Typing in the menu search box until the matching products show.\"; conditions default (perf.conditions): \"Your default is fine.\"; measure confirmed (perf.measure): \"A benchmark test on the seeded menu is fine as proof.\"; facts: route:/menu/search, route:/api/search, code:lib/search.ts, gap:api-budget, gap:tests:/menu"
+          }
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The questions prioritize the operation and target, reference repository findings, and offer defaults or options with reasons. The final metric criterion and plain-language readback specify visible matching results within the human’s 200 ms at p95, measured from each keystroke on the seeded menu under the accepted conditions. The benchmark scenario, Measure, and Threshold align with that criterion. Provenance correctly attributes the target to the human, while loading feedback and a CI regression budget remain outside acceptance criteria.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 10375,
+              "tokens_out": 1150,
+              "max_tokens": 8000
+            },
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 11509,
+              "tokens_out": 2531,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 2910,
+              "tokens_out": 194,
+              "max_tokens": 2000
+            }
+          ],
+          "transcript": {
+            "exchanges": [
+              {
+                "say": "You want menu search to be fast, because customers give up when they search the menu; it goes under Feature #50 (Menu). Here is what I found. Search lives at `/menu/search` (`route:/menu/search`), backed by `/api/search` (`route:/api/search`) and `lib/search.ts` (`code:lib/search.ts`). Neither menu screen has a loading state (`gap:loading:/menu`), and no test mentions them (`gap:tests:/menu`). There is no API speed budget yet (`gap:api-budget`), so I can't tell you today's number; we'd have to measure it. The page-load Lighthouse floors already apply to every story (`floor:perf`). Five questions, riskiest first:",
+                "questions": [
+                  {
+                    "dimension": "perf.operation",
+                    "ask": "Which moment do customers give up on? It could be the search page loading, the wait after they type, or results arriving slowly from `/api/search`. Picking the wrong one means we speed up something nobody feels.",
+                    "default": "Time from the customer's last keystroke to results visible on `/menu/search`, because that wait is what makes someone abandon a search.",
+                    "facts": [
+                      "route:/menu/search",
+                      "route:/api/search",
+                      "code:lib/search.ts"
+                    ]
+                  },
+                  {
+                    "dimension": "perf.target",
+                    "ask": "What number should it meet, and at which percentile? Do you know roughly how slow it is today, even a guess like 'a few seconds'?",
+                    "default": "p95, with a number you give. If you have none, I'll propose measuring today's figure first and setting the target as that figure minus a margin, for you to confirm. I won't invent a number.",
+                    "facts": [
+                      "gap:api-budget",
+                      "floor:perf"
+                    ]
+                  },
+                  {
+                    "dimension": "perf.conditions",
+                    "ask": "Under what conditions must it hold? Roughly how many items are on the menu, and does it need to hold on phones over mobile data or only on a typical laptop?",
+                    "default": "The seeded menu data on a mid-range laptop over a local network, because proof captures run on seeded data only.",
+                    "facts": [
+                      "code:lib/search.ts",
+                      "gap:tests:/menu"
+                    ]
+                  },
+                  {
+                    "dimension": "perf.measure",
+                    "ask": "How should we prove it? Options are a repeatable benchmark or API trace against `/api/search` on seeded data, a browser timing on `/menu/search`, or the `search_performed` event in production.",
+                    "default": "A repeatable benchmark/API trace on seeded data, recorded as a `metric` criterion, because production telemetry can't be captured as proof. There is no test for these screens yet, so this story would add one.",
+                    "facts": [
+                      "gap:tests:/menu",
+                      "event:search_performed",
+                      "route:/api/search"
+                    ]
+                  },
+                  {
+                    "dimension": "perf.perceived",
+                    "ask": "While customers wait, what should they see? Today `/menu/search` shows no loading state at all, which may be part of why people give up. Options are results updating as they type, a spinner, or a skeleton.",
+                    "default": "Keep today's behaviour and add a loading state only if you ask for one. I'll flag that the missing loading state (`gap:loading:/menu`) may matter here.",
+                    "facts": [
+                      "gap:loading:/menu",
+                      "route:/menu/search",
+                      "component:ProductTile"
+                    ]
+                  }
+                ],
+                "answers": [
+                  {
+                    "kind": "confirm",
+                    "text": "Typing in the menu search box until the matching products show. That's what customers complain about."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Results should show within 200 ms of a keystroke for most people, say p95."
+                  },
+                  {
+                    "kind": "default",
+                    "text": "Your default is fine."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "A benchmark test on the seeded menu is fine as proof."
+                  },
+                  {
+                    "kind": "park",
+                    "text": "Leave the loading feedback as it is."
+                  }
+                ]
+              },
+              {
+                "say": "Here is what done looks like: on the seeded menu data, a benchmark test types a query into the `/menu/search` box, and the matching products appear within 200 ms of each keystroke at p95.\n\nIt assumes the following. The benchmark runs on the seeded menu data on a mid-range laptop over a local network. The loading feedback on `/menu/search` stays as it is today. The search page and `/api/search` already return the right matches, and this story only makes them faster.\n\nDeferred: today's keystroke-to-results time is unknown, because no API budget exists (`gap:api-budget`). The new benchmark will record it, but the 200 ms target stands either way.\n\nParked, so not built here: a CI budget (k6 or Lighthouse) to stop search getting slow again, and a loading state on `/menu/search` (`gap:loading:/menu`).\n\nI estimate effort S: one benchmark test plus speeding up `lib/search.ts` and `/api/search`. Tell me if you see it bigger. Confirm or edit, and I'll write it under Feature #50.",
+                "done": true
+              }
+            ],
+            "criteria": "1. [metric] state: `/menu/search` with the seeded menu, a benchmark test typing a query into the search box on a mid-range laptop over a local network; expected: p95 time from each keystroke to the matching products being visible \u003c= 200 ms",
+            "provenance": "Request: \"Make search fast. Customers give up when they search the menu. It belongs under Feature #50 (Menu).\"\nVague: \"fast\" → criteria 1\n1. stated (perf.target): \"Results should show within 200 ms of a keystroke for most people, say p95.\"; facts: route:/menu/search, route:/api/search, code:lib/search.ts, gap:api-budget"
+          }
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The questions ground the vague request in repository facts and establish the operation, percentile, human-supplied target, conditions, and measurement approach with defaults and reasons. The metric criterion specifies keystroke-to-visible matching products at p95 ≤200 ms on the seeded menu, with repeatable benchmark evidence and a clear plain-language readback. Measure and Threshold reference that criterion consistently. Provenance correctly attributes the target to the human, while loading feedback and a CI budget remain outside acceptance criteria in Parked ideas.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 10375,
+              "tokens_out": 1339,
+              "max_tokens": 8000
+            },
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 11637,
+              "tokens_out": 2644,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3001,
+              "tokens_out": 279,
+              "max_tokens": 2000
+            }
+          ],
+          "transcript": {
+            "exchanges": [
+              {
+                "say": "You want menu search to be fast, because customers give up when they search the menu; it goes under Feature #50 (Menu). Search lives on its own screen, `/menu/search` (flow:/menu, route:/menu/search), backed by an API route `/api/search` (route:/api/search) and `lib/search.ts` (code:lib/search.ts). There is no API budget configured, so any speed number has to come from you (gap:api-budget). No test mentions the menu screens (gap:tests:/menu), and neither menu screen has a loading state (gap:loading:/menu). A `search_performed` event fires (event:search_performed), but it records that a search happened, not how long it took. Five questions, riskiest first. I'd leave a CI speed budget out of this story and park it as its own decision.",
+                "questions": [
+                  {
+                    "dimension": "perf.operation",
+                    "ask": "Which action must be fast? It could be (a) the `/menu/search` page loading, (b) results appearing after a customer types or submits a query, or (c) opening a result. 'Customers give up when they search' sounds like (b) to me. Does search run as they type, or after they press enter?",
+                    "default": "(b): from the customer's last keystroke (or submit) on `/menu/search` to the results being visible, because that wait is what makes them give up.",
+                    "facts": [
+                      "route:/menu/search",
+                      "route:/api/search",
+                      "code:lib/search.ts"
+                    ]
+                  },
+                  {
+                    "dimension": "perf.target",
+                    "ask": "What number must it meet, and at which percentile? Do you know roughly how long it takes today, even a feeling like '3 seconds'? Without a number, 'fast' can't be checked.",
+                    "default": "p95, with your number. If you have none, I'd measure today's time on the seeded menu first and propose a target below it for you to confirm. I won't put a number in the spec you haven't agreed to.",
+                    "facts": [
+                      "gap:api-budget",
+                      "floor:perf"
+                    ]
+                  },
+                  {
+                    "dimension": "perf.conditions",
+                    "ask": "Under what conditions must it hold? How many menu items should search cover: is the seeded menu realistic, or does the real bakery have far more? And do you care about phones on mobile data, or is a laptop fine?",
+                    "default": "The seeded menu on a mid-range laptop over a local network, because proof captures run on seeded data only. If the real menu is much bigger, we'd seed a larger one for the test.",
+                    "facts": [
+                      "code:lib/search.ts",
+                      "gap:tests:/menu"
+                    ]
+                  },
+                  {
+                    "dimension": "perf.measure",
+                    "ask": "Where should the number be measured? Options: an API trace or benchmark of `/api/search` (server time only), or a browser test timing keystroke-to-results (what customers feel). There are no menu tests today, so either one is new.",
+                    "default": "A repeatable browser-timed check on `/menu/search` with the seeded menu, recorded as a `metric` criterion, because it measures what the customer waits for and can run as proof. Production telemetry can't be captured as proof.",
+                    "facts": [
+                      "gap:tests:/menu",
+                      "event:search_performed",
+                      "route:/api/search"
+                    ]
+                  },
+                  {
+                    "dimension": "perf.perceived",
+                    "ask": "While customers wait, what should they see? `/menu/search` has no loading state today, so a slow search may look like nothing is happening. That alone could be why people give up. Do you want a loading indicator, or results-as-you-type, as part of this story?",
+                    "default": "Keep today's behaviour (no new loading state) unless you ask for one. Say so if you think the blank wait is part of the problem; it's cheap to add.",
+                    "facts": [
+                      "gap:loading:/menu",
+                      "route:/menu/search"
+                    ]
+                  }
+                ],
+                "answers": [
+                  {
+                    "kind": "confirm",
+                    "text": "Typing in the menu search box until the matching products show. That's what customers complain about."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Results should show within 200 ms of a keystroke for most people, say p95."
+                  },
+                  {
+                    "kind": "default",
+                    "text": "Your default is fine."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "A benchmark test on the seeded menu is fine as proof."
+                  },
+                  {
+                    "kind": "park",
+                    "text": "Leave the loading feedback as it is."
+                  }
+                ]
+              },
+              {
+                "say": "Here is what done looks like: 1. On `/menu/search` with the seeded menu, on a mid-range laptop over a local network, a repeatable benchmark test measures from a keystroke in the search box to the matching products being visible, and the 95th percentile is 200 ms or less. It assumes the seeded menu is a fair stand-in for the real one, that search updates as the customer types, and that today's loading feedback stays as it is. It assumes no other behaviour of search changes. Nothing is deferred. Parked, not part of this story: a CI speed budget for search, and a new loading indicator. I've estimated the effort as M, because there are no menu tests today and we don't yet know how far today's search is from 200 ms. Tell me if you see the size, or any line above, differently; otherwise I'll write it under Feature #50.",
+                "done": true
+              }
+            ],
+            "criteria": "1. [metric] state: `/menu/search` with the seeded menu, on a mid-range laptop over a local network; expected: p95 time from a keystroke in the search box to the matching products being visible is \u003c= 200 ms, measured by a repeatable benchmark test",
+            "provenance": "Request: \"Make search fast. Customers give up when they search the menu. It belongs under Feature #50 (Menu).\"\nVague: \"fast\" → criteria 1\n1. stated (perf.target): \"Results should show within 200 ms of a keystroke for most people, say p95.\"; facts: route:/menu/search, route:/api/search, code:lib/search.ts, gap:api-budget, gap:tests:/menu"
+          }
+        },
+        {
+          "status": "fail",
+          "score": 1,
+          "pass": false,
+          "floor": "not concrete or not faithful: fidelity: criterion 1 quotes \"Typing in the menu search box until the matching products show.\\\" / \\\"Results shou…\", which the human never said",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 10375,
+              "tokens_out": 1246,
+              "max_tokens": 8000
+            },
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 11522,
+              "tokens_out": 2565,
+              "max_tokens": 8000
+            }
+          ],
+          "transcript": {
+            "exchanges": [
+              {
+                "say": "Here is what I heard: customers give up when they search the menu, and you want search to be fast. This is a Story under Feature #50 (Menu). Here is what I found. Search is the second screen of the menu flow (flow:/menu, route:/menu/search). It is backed by an API route (route:/api/search) and lib/search.ts (code:lib/search.ts). Neither search screen has a loading state (gap:loading:/menu), and no test mentions the menu screens (gap:tests:/menu). No API speed budget is configured (gap:api-budget), so I have no number for today. The only existing budget is the Lighthouse floor on page load (floor:perf). The page emits a search_performed event (event:search_performed), which may tell us how often people search. 'Fast' needs a target, so I have five questions, riskiest first. A CI budget to keep search fast later would be its own decision, so I'll park it unless you want it in this story.",
+                "questions": [
+                  {
+                    "dimension": "perf.operation",
+                    "ask": "Which moment is the slow one customers give up on? It could be opening /menu/search, results appearing after they type, or results appearing after they press search. Measured from whose input to what visible result?",
+                    "default": "From the customer's last keystroke (or submit) to the matching products showing on /menu/search. That is the wait the request describes, and it covers both /api/search and lib/search.ts.",
+                    "facts": [
+                      "route:/menu/search",
+                      "route:/api/search",
+                      "code:lib/search.ts"
+                    ]
+                  },
+                  {
+                    "dimension": "perf.target",
+                    "ask": "What number must it meet, and at which percentile? For example, 'results visible within 300 ms at p95'. Do you know roughly how long it takes today?",
+                    "default": "p95 with a number you give. If you have none, I'll measure today's figure on the seeded menu and propose a target below it for you to confirm. I won't invent one.",
+                    "facts": [
+                      "gap:api-budget",
+                      "floor:perf"
+                    ]
+                  },
+                  {
+                    "dimension": "perf.conditions",
+                    "ask": "Under what conditions must the target hold? How many menu items should we search over, on what device and network, and is the first (cold) search included?",
+                    "default": "The seeded menu data on a mid-range laptop over a local network, warm cache. Proof captures can only run on seeded data.",
+                    "facts": [
+                      "code:lib/search.ts"
+                    ]
+                  },
+                  {
+                    "dimension": "perf.measure",
+                    "ask": "How should we prove the number? Options are a repeatable benchmark or API trace of /api/search, an end-to-end timing on /menu/search, or something else.",
+                    "default": "A repeatable timing of the search on the seeded data, recorded as a metric criterion. There are no menu tests today and production telemetry can't be captured as proof, so this would be the first test covering search.",
+                    "facts": [
+                      "gap:tests:/menu",
+                      "event:search_performed",
+                      "route:/api/search"
+                    ]
+                  },
+                  {
+                    "dimension": "perf.perceived",
+                    "ask": "While customers wait, what should they see? Options are results updating as they type, a spinner or skeleton, or nothing new. Is a partial result list acceptable?",
+                    "default": "Keep today's behaviour and add no new loading state unless you ask for one. Note that /menu/search currently has no loading state at all.",
+                    "facts": [
+                      "gap:loading:/menu",
+                      "route:/menu/search"
+                    ]
+                  }
+                ],
+                "answers": [
+                  {
+                    "kind": "confirm",
+                    "text": "Typing in the menu search box until the matching products show. That's what customers complain about."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "Results should show within 200 ms of a keystroke for most people, say p95."
+                  },
+                  {
+                    "kind": "default",
+                    "text": "Your default is fine."
+                  },
+                  {
+                    "kind": "confirm",
+                    "text": "A benchmark test on the seeded menu is fine as proof."
+                  },
+                  {
+                    "kind": "park",
+                    "text": "Leave the loading feedback as it is."
+                  }
+                ]
+              },
+              {
+                "say": "Here is what done looks like. On `/menu/search` with the seeded menu, on a mid-range laptop over a local network with a warm cache, a benchmark test shows that at p95 the matching products appear within 200 ms of a keystroke in the menu search box. That is the whole Completion Goal: one metric criterion.\n\nAssumptions:\n- The seeded menu stands in for the real one.\n- The 200 ms covers everything between the keystroke and the visible results, including any delay before the search fires.\n- The product ships on web only.\n- Loading feedback stays exactly as it is today, with no new loading state.\n\nDeferred: how many keystrokes and runs the benchmark samples. That can be set when the test is written, as long as it yields a p95.\n\nParked: a CI budget, such as a k6 threshold, to stop search getting slow again. That is its own decision.\n\nI estimate effort M. We don't yet know why search is slow, and this adds the first test covering the menu screens. Tell me if you'd size it differently or want to change anything before I write it under Feature #50.",
+                "done": true
+              }
+            ],
+            "criteria": "1. [metric] state: `/menu/search` with the seeded menu data, mid-range laptop, local network, warm cache; expected: in a benchmark test, the time from a keystroke in the menu search box to the matching products showing is \u003c= 200 ms at p95",
+            "provenance": "Request: \"Make search fast. Customers give up when they search the menu. It belongs under Feature #50 (Menu).\"\nVague: \"fast\" → criteria 1\n1. stated (perf.target): \"Typing in the menu search box until the matching products show.\" / \"Results should show within 200 ms of a keystroke for most people, say p95.\" / \"Your default is fine.\" / \"A benchmark test on the seeded menu is fine as proof.\"; facts: route:/menu/search, route:/api/search, code:lib/search.ts, gap:api-budget, gap:tests:/menu"
+          }
+        }
+      ],
+      "errors": 0,
+      "pass_k": 0,
+      "mean": 2.6
+    },
+    {
+      "case": "grill/story-empty-claims",
+      "skill": "grill",
+      "lane": "spec",
+      "model": "claude-opus-5-5",
+      "fallback": "claude-sonnet-5-5",
+      "family": "anthropic",
+      "runs": [
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "Both requirements have observable criteria with fitting screenshot evidence: the zero-claims page states there are no claims yet and visibly shows how to start a claim. The claimant state, summary, scenario, and synthetic-only environment are concrete; the parent is Feature #30 and effort S is plausible. No additional requirements are imposed, and the open questions do not reduce the score.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 5939,
+              "tokens_out": 1616,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1789,
+              "tokens_out": 90,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "Both requested outcomes have observable screenshot criteria for a seeded claimant with zero claims: the page states they have no claims yet and explains how to start one. The summary and scenario are concrete, the environment explicitly uses synthetic non-production data, the parent is Feature #30, and effort S is plausible. No additional implementation requirements are imposed; deferred wording and design questions do not reduce the score.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 5939,
+              "tokens_out": 1369,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1762,
+              "tokens_out": 118,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "Both requirements have observable screenshot criteria for a seeded claimant with zero claims: an explicit no-claims message and visible guidance naming or linking to how to start a claim. The summary and scenario are concrete, the environment specifies synthetic data and never production, the parent is Feature #30, and effort S is plausible. No additional requirements are imposed; deferred wording and navigation questions do not reduce the score.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 5939,
+              "tokens_out": 1632,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1765,
+              "tokens_out": 96,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "Both requirements have observable screenshot criteria for a seeded claimant with zero claims: the page says there are no claims yet and explains how to start one. The summary, scenario, and synthetic-only local or preview environment are concrete, the parent is Feature #30, and effort S is plausible. No additional product requirements are imposed; unresolved wording and implementation choices are appropriately left as open questions.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 5939,
+              "tokens_out": 1655,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1767,
+              "tokens_out": 145,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "Both requirements have observable screenshot criteria for a seeded new claimant with no claims. The summary and scenario are concrete, the environment explicitly uses synthetic data and never production, the parent is Feature #30, and effort S is plausible. No additional product requirements are imposed; the deferred open questions do not reduce the score.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 5939,
+              "tokens_out": 1524,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1699,
+              "tokens_out": 79,
+              "max_tokens": 2000
+            }
+          ]
+        }
+      ],
+      "errors": 0,
+      "pass_k": 1,
+      "mean": 5
+    },
+    {
+      "case": "plan/config-migration",
+      "skill": "plan",
+      "lane": "plan",
+      "model": "claude-opus-5-5",
+      "fallback": "claude-sonnet-5-5",
+      "family": "anthropic",
+      "runs": [
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The single L07 checkpoint identifies the legacy retention_days setting, the new kind-to-days map, and expansion of the legacy value to every artifact kind. Its tests explicitly cover per-kind migration, config-show reporting, and byte-for-byte upgrade rollback. Rollback concretely restores an original-byte backup over the migrated file, and instrumentation records the migrated value, affected kinds, backup path, and restored config path. The work stays within the story’s scope.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 1769,
+              "tokens_out": 733,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1527,
+              "tokens_out": 136,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The single L07 checkpoint names the legacy key and new per-kind config shape, explicitly maps the old value to every artifact kind, and includes tests for migrated values, config-show output, and byte-for-byte upgrade rollback. Rollback concretely restores the original bytes from a backup saved before rewriting. Instrumentation records the config path, original retention value, affected kinds, and rollback backup path. The plan stays within the story and internal/config scope.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 1769,
+              "tokens_out": 783,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1566,
+              "tokens_out": 106,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 4,
+          "pass": true,
+          "reason": "The plan maps legacy `[proof] retention_days = N` to N days for every artifact kind, names tests for migrated config-show values and byte-for-byte rollback, specifies restoring the exact pre-migration backup, and records useful migration and backup details without expanding scope. The minor gap is that the contract describes per-kind retention conceptually but does not name the new configuration keys or structure.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 1769,
+              "tokens_out": 827,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1578,
+              "tokens_out": 157,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The single L07 checkpoint identifies the legacy retention_days setting, the new per-kind retention map, and the mapping of the old value to every kind. Tests explicitly cover migrated values, config-show reporting, and byte-for-byte restoration. Rollback concretely restores a verbatim pre-upgrade backup, instrumentation records the source value, populated-kind count, and rollback backup path, and the plan stays within the story’s scope.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 1769,
+              "tokens_out": 804,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1496,
+              "tokens_out": 139,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The checkpoint names the old scalar and new per-kind retention map and explicitly maps the old value to every known artifact kind. Its tests target migrated values, config-show reporting, byte-for-byte rollback, and backup-before-rewrite ordering. Rollback concretely restores the original file from a byte-exact backup, and instrumentation identifies the values, kinds, paths, and restoration verification recorded. The plan stays within the story’s scope.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 1769,
+              "tokens_out": 814,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1575,
+              "tokens_out": 102,
+              "max_tokens": 2000
+            }
+          ]
+        }
+      ],
+      "errors": 0,
+      "pass_k": 1,
+      "mean": 4.8
+    },
+    {
+      "case": "slice/proof-retention-6-layer",
+      "skill": "slice",
+      "lane": "plan",
+      "model": "claude-opus-5-5",
+      "fallback": "claude-sonnet-5-5",
+      "family": "anthropic",
+      "runs": [
+        {
+          "status": "pass",
+          "score": 4,
+          "pass": true,
+          "reason": "All five capabilities are covered by bounded stories with plausible efforts and sensible dependencies: config migration precedes purge, and purge precedes the CLI and scheduled workflow. Synthetic fixtures make the retention examples observable without imposing production retention values. The main minor gap is the CLI filter criterion: its report would remain under the report retention policy anyway, so the test does not demonstrate that --kind actually excludes otherwise purge-eligible artifacts. Making the report expired under its own retention would distinguish correct filtering from an ig…",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 1905,
+              "tokens_out": 3292,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 2933,
+              "tokens_out": 237,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 4,
+          "pass": true,
+          "reason": "All five capabilities are covered with plausible efforts, independently shippable stories, sensible dependency ordering, and observable seeded scenarios. The retention values and artifact ages are fixture values, not invented product requirements. One minor inconsistency remains: the purge story's threshold says every expired artifact is removed, but its kind-filtered criterion correctly keeps an expired screenshot. The threshold should be limited to artifacts within the selected purge scope.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 1905,
+              "tokens_out": 3054,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 2958,
+              "tokens_out": 192,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 4,
+          "pass": true,
+          "reason": "All five capabilities are covered, with sensible migration-to-purge-to-CLI/workflow dependencies, plausible efforts, and observable fixture-based evidence. The stories are reasonably independently shippable and add no material scope beyond the Feature. One minor gap is the mixed legacy/per-kind config criterion: it refers to a 'documented migration' without specifying precedence or the expected retention for kinds lacking an override, so that test's expected result is less precise than the others.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 1905,
+              "tokens_out": 3367,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3008,
+              "tokens_out": 160,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "All five requested capabilities are covered by independently shippable stories with plausible efforts and observable fixture-based criteria. Dependencies correctly put config migration before kind-aware purge and purge before the CLI flag and scheduled workflow; API listing also precedes the workflow. Numeric retention values and pack counts are test fixtures, not imposed requirements. The slice stays within scope, explicitly preserves the pack format, and leaves unresolved product choices as open questions rather than inventing requirements.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 1905,
+              "tokens_out": 2939,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 2859,
+              "tokens_out": 239,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "All five capabilities are covered: per-kind configuration with legacy migration, kind-aware purge, the CLI flag and documentation, API ledger listing, and scheduled purge. Stories are independently shippable, efforts are plausible, and dependencies put configuration before purge and purge before the flag and workflow. Criteria describe observable results using synthetic fixtures and appropriate API traces or bucket inspection. Numeric retention values and pack counts are fixture data, not imposed product requirements. No out-of-scope changes are added.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 1905,
+              "tokens_out": 3063,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 2896,
+              "tokens_out": 169,
+              "max_tokens": 2000
+            }
+          ]
+        }
+      ],
+      "errors": 0,
+      "pass_k": 1,
+      "mean": 4.4
+    },
+    {
+      "case": "stub/csv-export",
+      "skill": "stub",
+      "lane": "spec",
+      "model": "claude-opus-5-5",
+      "fallback": "claude-sonnet-5-5",
+      "family": "anthropic",
+      "runs": [
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "All three requirements have observable criteria with fitting evidence: API traces verify all matching claims across pages and exactly the visible columns, while a recording verifies continued scrolling and clicking during preparation for more than 10,000 claims. The summary, scenario, and staging environment are concrete, the parent is Feature #7, and effort M is plausible. No requirements beyond the request are imposed.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 1879,
+              "tokens_out": 1327,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1701,
+              "tokens_out": 92,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "All three requirements have observable criteria with fitting evidence: API traces verify every filtered claim across pages and exactly the visible columns in the CSV header, while a recording demonstrates scrolling and responsive controls during preparation for more than 10,000 claims. The summary, scenario, and staging environment are concrete, the parent is Feature #7, and effort M is plausible. No additional requirements are imposed.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 1879,
+              "tokens_out": 1235,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1640,
+              "tokens_out": 94,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "All three requirements have observable criteria and fitting evidence: API traces verify every filtered claim across pages and exactly the visible columns, while a recording verifies scrolling and click responsiveness during preparation for more than 10,000 matching claims. The summary, scenario, and staging environment are concrete, the parent is Feature #7, and effort M is plausible. No unstated requirements are imposed; checking the CSV header is a valid format convention.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 1879,
+              "tokens_out": 1258,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1728,
+              "tokens_out": 102,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "All three requirements have observable criteria with fitting evidence: API traces establish CSV coverage beyond the current page and exactly the visible columns, while a recording demonstrates responsiveness during preparation for more than 10,000 matching claims. The summary, scenario, and seeded staging environment are concrete, the parent is Feature #7, and effort M is plausible. No additional requirements are imposed; the open questions do not affect the score.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 1879,
+              "tokens_out": 1429,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1714,
+              "tokens_out": 99,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "All three requirements have observable criteria with fitting evidence: API traces verify all filtered claims across pages and exactly the visible columns in the CSV, while a recording demonstrates scrolling and click responsiveness during preparation for more than 10,000 claims. The summary, scenario, and staging environment are concrete, the parent is Feature #7, and effort M is plausible. The header check is a CSV convention, and no additional requirements are imposed.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 1879,
+              "tokens_out": 1500,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 1769,
+              "tokens_out": 145,
+              "max_tokens": 2000
+            }
+          ]
+        }
+      ],
+      "errors": 0,
+      "pass_k": 1,
+      "mean": 5
+    }
+  ],
+  "pass_k": 0.7142857142857142,
+  "mean": 4.257142857142857,
+  "errors": 0,
+  "cost_usd": 16.17858000000001,
+  "group": "skills",
+  "verdict": "fail",
+  "reasons": [
+    "grill/bakery-ux: mean rubric score 3.00 is below 3.50",
+    "grill/search-fast: mean rubric score 2.60 is below 3.50",
+    "pass^5 0.71 is below 0.80"
+  ]
+}

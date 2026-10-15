@@ -25,11 +25,15 @@ var Sources = []string{SourceStated, SourceConfirmed, SourceDefault}
 //
 //	N. <stated|confirmed|default> (<dimension>): "<the human's words>"; facts: <id>, <id>
 type Source struct {
-	N         int      `json:"n"`
-	Kind      string   `json:"kind"`
-	Dimension string   `json:"dimension,omitempty"` // catalogue dimension (ux.states) or request
-	Quote     string   `json:"quote"`
-	Facts     []string `json:"facts,omitempty"` // assessment fact IDs the criterion rests on
+	N         int    `json:"n"`
+	Kind      string `json:"kind"`
+	Dimension string `json:"dimension,omitempty"` // catalogue dimension (ux.states) or request
+	Quote     string `json:"quote"`
+	// Quotes are the human's words one by one: a criterion that rests on
+	// several replies quotes each (`"…" / "…"`), and an elided quote ("… …")
+	// is its parts.
+	Quotes []string `json:"quotes"`
+	Facts  []string `json:"facts,omitempty"` // assessment fact IDs the criterion rests on
 }
 
 // Resolution is one "Vague:" line: a qualifier of the request resolved into
@@ -108,7 +112,8 @@ func ParseProvenance(s string) (Provenance, []workitems.Problem) {
 				}
 				rest = rest[:f[0]]
 			}
-			src.Quote = unquote(rest)
+			src.Quotes = quotes(rest)
+			src.Quote = strings.Join(src.Quotes, " / ")
 			if !slices.Contains(Sources, src.Kind) {
 				bad("criterion %d: source %q: want one of %s", n, src.Kind, strings.Join(Sources, ", "))
 			}
@@ -121,6 +126,29 @@ func ParseProvenance(s string) (Provenance, []workitems.Problem) {
 		bad("line %d is not a Request, Vague, or criterion source line (want `N. stated|confirmed|default (<dimension>): \"<the human's words>\"`)", i+1)
 	}
 	return p, ps
+}
+
+var quotedPart = regexp.MustCompile(`"([^"]*)"|“([^”]*)”`)
+
+// quotes returns the quoted segments of a source line, each split at an
+// ellipsis; a line without quotation marks is one quote.
+func quotes(rest string) []string {
+	var segs []string
+	for _, m := range quotedPart.FindAllStringSubmatch(rest, -1) {
+		segs = append(segs, m[1]+m[2])
+	}
+	if len(segs) == 0 {
+		segs = []string{unquote(rest)}
+	}
+	var out []string
+	for _, q := range segs {
+		for _, part := range strings.FieldsFunc(strings.ReplaceAll(q, "...", "…"), func(r rune) bool { return r == '…' }) {
+			if part = strings.TrimSpace(part); part != "" {
+				out = append(out, part)
+			}
+		}
+	}
+	return out
 }
 
 func cutFold(s, prefix string) (string, bool) {
