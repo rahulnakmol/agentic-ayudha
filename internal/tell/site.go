@@ -30,7 +30,7 @@ import (
 type SitePage struct {
 	Out      string // output path in the site, e.g. "index.html" or "skills/grill.html"
 	Nav      string // sidebar label
-	Group    string // sidebar group: "", "Clouds", "Project", or "Skills"
+	Group    string // sidebar group, e.g. "Start here", "Your agent", "Clouds", "Project", or "Skills"
 	Source   string // repository path the Markdown is read as; relative links resolve from it
 	Origin   string // repository path the page is generated from, linked in its footer
 	Markdown string
@@ -56,6 +56,12 @@ var sitePages = []SitePage{
 	{Out: "start.html", Nav: "Your first hour", Group: "Start here", Source: "docs/guide/start.md"},
 	{Out: "when-to-use-what.html", Nav: "When to use what", Group: "Start here", Source: "docs/guide/when-to-use-what.md"},
 	{Out: "adopt.html", Nav: "Adopt at your own pace", Group: "Start here", Source: "docs/guide/adopt.md"},
+	{Out: "hosts.html", Nav: "Your agent", Group: "Your agent", Source: "docs/guide/hosts/README.md"},
+	{Out: "hosts-claude-code.html", Nav: "Claude Code", Group: "Your agent", Source: "docs/guide/hosts/claude-code.md"},
+	{Out: "hosts-codex.html", Nav: "OpenAI Codex", Group: "Your agent", Source: "docs/guide/hosts/codex.md"},
+	{Out: "hosts-amp.html", Nav: "Amp", Group: "Your agent", Source: "docs/guide/hosts/amp.md"},
+	{Out: "hosts-cursor.html", Nav: "Cursor", Group: "Your agent", Source: "docs/guide/hosts/cursor.md"},
+	{Out: "make-it-yours.html", Nav: "Make it yours", Group: "Your agent", Source: "docs/guide/hosts/make-it-yours.md"},
 	{Out: "journey.html", Nav: "Prologue: one Monday", Group: "The story", Source: "docs/guide/journey.md"},
 	{Out: "journey-1-shape.html", Nav: "1. The goal", Group: "The story", Source: "docs/guide/journey-1-shape.md"},
 	{Out: "journey-2-break-down.html", Nav: "2. The plan", Group: "The story", Source: "docs/guide/journey-2-break-down.md"},
