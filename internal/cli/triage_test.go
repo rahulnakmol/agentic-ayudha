@@ -2,12 +2,16 @@ package cli
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
+	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
 	"github.com/rahulnakmol/agentic-ayudha/internal/triage"
 )
 
@@ -95,4 +99,68 @@ func TestTriageInjection(t *testing.T) {
 	if !strings.HasPrefix(prompt, `<untrusted source="issue">`) || strings.Count(prompt, "</untrusted>") != 1 {
 		t.Errorf("the issue text is not wrapped as one untrusted block:\n%s", prompt)
 	}
+}
+
+// Bug #177: the [budget] breaker counts every process's model spend recorded in the checkout's actions log, not
+// only its own: each `aayu` process seeds it from the log when it builds the gateway.
+func TestBudgetBreakerAcrossProcesses(t *testing.T) {
+	london := func(d, h int) func() time.Time {
+		loc, _ := time.LoadLocation("Europe/London")
+		return func() time.Time { return time.Date(2026, 10, d, h, 0, 0, 0, loc) } // Mon 12 Oct, Tue 13 Oct
+	}
+	process := func(t *testing.T, home string, g *fake.GitHub, sink *notify.Fake, now func() time.Time, issue string, usd float64, set ...string) (int, string) {
+		t.Helper()
+		env := map[string]string{"AAYU_GITHUB_TOKEN": "t", "AAYU_SECRET_ANTHROPIC": "model-key", "HOME": home}
+		model := &models.Fake{Replies: []models.Response{{Text: `{"class":"feedback","accepted":false,"reason":"r"}`, Model: "claude-haiku-5-5", CostUSD: usd}}}
+		opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: home, Now: now, NotifySink: sink,
+			ModelClient: func(models.Route, string) models.Client { return model }}
+		args := []string{"triage", issue, "--repo", "o/r"}
+		for _, s := range set {
+			args = append(args, "--set", s)
+		}
+		code, _, errOut := run(t, env, opts, args...)
+		return code, errOut
+	}
+	paused := func(home string) bool {
+		_, err := os.Stat(filepath.Join(home, ".local", "state", "aayudha", "state", "paused"))
+		return err == nil
+	}
+	t.Run("two processes on one day reach per_day_usd", func(t *testing.T) {
+		home, g, sink := t.TempDir(), fake.New(t, "o/r", "User"), &notify.Fake{}
+		g.AddIssue("One", "a", "type:feedback", "intake")
+		g.AddIssue("Two", "b", "type:feedback", "intake")
+		if code, errOut := process(t, home, g, sink, london(12, 10), "1", 0.60, "budget.per_day_usd=1"); code != 0 || paused(home) {
+			t.Fatalf("first process (0.60 of 1.00): exit %d, paused %v: %s", code, paused(home), errOut)
+		}
+		code, errOut := process(t, home, g, sink, london(12, 11), "2", 0.60, "budget.per_day_usd=1")
+		if code != ExitBudget || !paused(home) || len(sink.Pages) != 1 || !strings.Contains(sink.Pages[0].Body, "reached 1.20 USD") {
+			t.Fatalf("second process (1.20 of 1.00 today): exit %d, paused %v, pages %+v: %s", code, paused(home), sink.Pages, errOut)
+		}
+	})
+	t.Run("two processes on one story reach per_story_usd", func(t *testing.T) {
+		home, g, sink := t.TempDir(), fake.New(t, "o/r", "User"), &notify.Fake{}
+		is := g.AddIssue("One", "a", "type:feedback", "intake")
+		labels := slices.Clone(is.Labels)
+		if code, errOut := process(t, home, g, sink, london(12, 10), "1", 0.60, "budget.per_story_usd=1", "budget.per_day_usd=100"); code != 0 {
+			t.Fatalf("first process: exit %d: %s", code, errOut)
+		}
+		g.Mu.Lock()
+		is.Labels = labels // back in intake, so the second process classifies the same story again
+		g.Mu.Unlock()
+		code, errOut := process(t, home, g, sink, london(12, 11), "1", 0.60, "budget.per_story_usd=1", "budget.per_day_usd=100")
+		if code != ExitBudget || !paused(home) || !strings.Contains(errOut, "story #1 spent 1.20 USD") {
+			t.Fatalf("second process on #1 (1.20 of 1.00): exit %d, paused %v: %s", code, paused(home), errOut)
+		}
+	})
+	t.Run("yesterday's spend does not count today", func(t *testing.T) {
+		home, g, sink := t.TempDir(), fake.New(t, "o/r", "User"), &notify.Fake{}
+		g.AddIssue("One", "a", "type:feedback", "intake")
+		g.AddIssue("Two", "b", "type:feedback", "intake")
+		if code, errOut := process(t, home, g, sink, london(12, 17), "1", 0.90, "budget.per_day_usd=1"); code != 0 {
+			t.Fatalf("yesterday: exit %d: %s", code, errOut)
+		}
+		if code, errOut := process(t, home, g, sink, london(13, 10), "2", 0.60, "budget.per_day_usd=1"); code != 0 || paused(home) || len(sink.Pages) != 0 {
+			t.Fatalf("today after 0.90 yesterday: exit %d, paused %v, pages %+v: %s", code, paused(home), sink.Pages, errOut)
+		}
+	})
 }

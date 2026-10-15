@@ -224,9 +224,9 @@ type Response struct {
 > **Honest status:** this repository's only model key is the secret of the `ai-gateway` environment, which only the
 > `dev`, `rolling`, and `main` branches may use. Neither the founder's machine nor an agent's sandbox holds a key, so
 > `review` lane A and the `brief` adversarial pass run in the `aayudha-model-lanes.yml` workflow, and live gateway
-> tests never run on pull requests. The breaker counts spend inside one process; the pause file is what carries a trip
-> across processes. `Breaker.Seed` can load past spend from the actions log, but no command calls it yet. The breaker
-> also cannot see what a host's own model spends inside a skill.
+> tests never run on pull requests. Each process seeds the breaker from its clone's actions log when it builds the
+> gateway (`Breaker.SeedLog`), so the budgets count every process in that clone; a CI run starts from a fresh clone, so
+> its breaker sees only that run's spend. The breaker also cannot see what a host's own model spends inside a skill.
 
 ## Read next
 
