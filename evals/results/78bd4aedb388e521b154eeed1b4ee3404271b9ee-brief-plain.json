@@ -1,0 +1,310 @@
+{
+  "version": 1,
+  "sha": "78bd4aedb388e521b154eeed1b4ee3404271b9ee",
+  "ref": "main",
+  "time": "2026-10-15T18:16:19.317665328Z",
+  "judge": "gpt-6.1-sol",
+  "judge_family": "openai",
+  "k": 5,
+  "cases": [
+    {
+      "case": "brief/eli5-explain",
+      "skill": "brief",
+      "lane": "spec",
+      "model": "claude-opus-5-5",
+      "fallback": "claude-sonnet-5-5",
+      "family": "anthropic",
+      "runs": [
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The brief accurately explains what changed, why it helps, and how the evidence supports it. Its test details, release status, scope, floor results, and export count match the grounding. It keeps the measure in exports per reviewer per week and explicitly avoids claiming proven time savings or fewer lost rows. Short sentences and the rows-and-columns analogy fit a curious ten-year-old.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 7456,
+              "tokens_out": 2894,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3576,
+              "tokens_out": 180,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "fail",
+          "score": 3,
+          "pass": false,
+          "reason": "The brief clearly explains what changed, why it helps, and how the evidence supports it, using simple language and accurate export counts. However, it claims that the gate's computer has no screen reader. The source says only that the Linux merge gate cannot run a screen reader; it does not establish that the computer lacks one. This is an unsupported explanation for the skipped check.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 7456,
+              "tokens_out": 1971,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3511,
+              "tokens_out": 172,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "fail",
+          "score": 3,
+          "pass": false,
+          "reason": "The brief clearly explains what changed, why it helps, and the three evidence-backed checks in child-friendly language. It also preserves the export count’s unit and correctly avoids claiming proven time savings. However, “After the release, there were 4.2 CSV exports per reviewer per week” adds an unsupported timeline: the Result gives a measurement window but does not establish that it followed release. Reporting the measured rate without that timing claim would resolve the issue.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 7456,
+              "tokens_out": 2484,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3538,
+              "tokens_out": 171,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "revised": true,
+          "reason": "The brief accurately explains what changed, why it helps, and how the evidence supports it. The claims, column counts, large-list example, released status, and export rate match the grounding. It keeps the export metric distinct from unproven benefits such as time saved or fewer lost rows, and correctly identifies scope limits and the screen-reader evidence gap. Short sentences and the sieve analogy fit a curious ten-year-old.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 7456,
+              "tokens_out": 2221,
+              "max_tokens": 8000
+            },
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 8192,
+              "tokens_out": 900,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3539,
+              "tokens_out": 168,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The brief accurately explains what changed, why it helps, and how the evidence supports it. Its claims match the scope, criterion results, checks, and export metric, without turning the export count into proof of time saved or fewer lost rows. The sieve analogy and short, everyday sentences suit a curious ten-year-old, and the takeaway comes first.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 7456,
+              "tokens_out": 2478,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3521,
+              "tokens_out": 158,
+              "max_tokens": 2000
+            }
+          ]
+        }
+      ],
+      "errors": 0,
+      "pass_k": 0,
+      "mean": 4.2
+    },
+    {
+      "case": "brief/ste-explain",
+      "skill": "brief",
+      "lane": "spec",
+      "model": "claude-opus-5-5",
+      "fallback": "claude-sonnet-5-5",
+      "family": "anthropic",
+      "runs": [
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The brief accurately explains the filtered CSV export, visible-column behavior, release status, and purpose. Its proof statements match the criterion evidence, and its floor results and export-rate measure match the grounding. It preserves the measure’s units and correctly states that the evidence does not show time savings or fewer lost rows. The takeaway comes first, the language is clear, and no unsupported controls or steps are invented.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 9434,
+              "tokens_out": 4544,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3595,
+              "tokens_out": 203,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The brief gives the correct takeaway first and accurately explains the filtered CSV export, visible-column scope, and offline-audit purpose. Its claims match the criterion evidence, floor results, and measured export rate. It preserves the measure’s units and clearly distinguishes export counts from unproven time savings or prevention of lost rows. The language is direct and generally active, and it invents no controls or procedural steps.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 9434,
+              "tokens_out": 5160,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3637,
+              "tokens_out": 181,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "revised": true,
+          "reason": "The brief accurately explains the filtered-claims CSV export and its visible-column limit without inventing controls or steps. It ties each goal to the mapped evidence, reports the floor results and export rate correctly, and distinguishes export counts from unproved time savings or problem resolution. The language is direct and clear, and the opening gives the release status and main capability.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 9434,
+              "tokens_out": 4703,
+              "max_tokens": 8000
+            },
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 10212,
+              "tokens_out": 1498,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3578,
+              "tokens_out": 177,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "revised": true,
+          "reason": "The brief gives the correct takeaway first and accurately explains filtered-claim CSV export with visible columns. Its evidence summaries, floor results, release status, and export-rate figures match the grounding. It introduces no unsupported controls or steps, preserves exports as the measured unit, and correctly states that the evidence does not show time saved or fewer lost rows. The language is direct and suitable for an explanatory STE brief.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 9434,
+              "tokens_out": 4416,
+              "max_tokens": 8000
+            },
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 10202,
+              "tokens_out": 1500,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3577,
+              "tokens_out": 278,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The brief accurately explains the filtered-claims CSV export and supports its claims with the grounding. It gives the correct takeaway first, reports the mapped evidence and floor results faithfully, and preserves the measure's unit without claiming reduced work or fewer lost rows. The screen-reader statement correctly reports an explicit skipped check. The language is clear and fits the explain purpose, without inventing controls or usage steps.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 9434,
+              "tokens_out": 4581,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3565,
+              "tokens_out": 204,
+              "max_tokens": 2000
+            }
+          ]
+        }
+      ],
+      "errors": 0,
+      "pass_k": 1,
+      "mean": 5
+    }
+  ],
+  "pass_k": 0.5,
+  "mean": 4.6,
+  "errors": 0,
+  "cost_usd": 5.323544999999999,
+  "group": "brief-plain",
+  "verdict": "pass"
+}
