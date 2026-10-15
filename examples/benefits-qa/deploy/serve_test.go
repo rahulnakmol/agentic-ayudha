@@ -2,7 +2,7 @@
 
 // serve.sh is a POSIX script that starts the app detached and tracks it by its
 // Unix pid (kill, nohup, $!); it does not run on Windows (docs/BUILD-PLAN.md
-// Appendix B, D-0.4f), so these tests are Unix only.
+// Appendix B, D-0.4g), so these tests are Unix only.
 
 package deploy
 

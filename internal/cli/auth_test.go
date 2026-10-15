@@ -174,7 +174,7 @@ func TestSecretCanary(t *testing.T) {
 	cfg, data := secrets.Dirs(func(k string) string { return map[string]string{"HOME": home}[k] })
 	for _, p := range []string{filepath.Join(data, "secrets.age"), filepath.Join(cfg, "age-identity.txt")} {
 		// Windows has no permission bits (Go reports 0666 for any writable file): the files take their
-		// directory's ACL, under the user profile the user's, SYSTEM's, and Administrators' (Appendix B, D-0.4f).
+		// directory's ACL, under the user profile the user's, SYSTEM's, and Administrators' (Appendix B, D-0.4g).
 		if fi, err := os.Stat(p); err != nil || runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600 {
 			t.Fatalf("%s: %v, mode %v; want 0600", p, err, fi.Mode().Perm())
 		}
