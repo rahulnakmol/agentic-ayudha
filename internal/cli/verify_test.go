@@ -105,7 +105,7 @@ func TestVerifyRefusesProduction(t *testing.T) {
 	dir, _ := ledgerCheckout(t)
 	marker := filepath.Join(t.TempDir(), "seeded")
 	_ = os.MkdirAll(filepath.Join(dir, ".aayudha"), 0o755)
-	cfg := "version = 1\n[verify]\nseed = [\"touch\", \"" + marker + "\"]\n[verify.environments.prod]\nurl = \"https://app.example.com\"\nproduction = true\n"
+	cfg := "version = 1\n[verify]\nseed = [\"touch\", '" + marker + "']\n[verify.environments.prod]\nurl = \"https://app.example.com\"\nproduction = true\n"
 	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte(cfg), 0o644)
 	git(t, dir, "checkout", "--quiet", "-b", "story/2-x")
 	git(t, dir, "commit", "--quiet", "--allow-empty", "-m", "feat: x")

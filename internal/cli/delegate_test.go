@@ -349,7 +349,8 @@ func TestDelegateCodexDiffReturn(t *testing.T) {
 	if code != 0 || res.PR == 0 || res.Worktree != wt || !strings.Contains(git(t, wt, "log", "-1", "--format=%B"), "Aayudha-Delegate: codex") {
 		t.Fatalf("diff return: %d %+v %s", code, res, errOut)
 	}
-	if b, _ := os.ReadFile(filepath.Join(wt, "empty.txt")); string(b) != "Your cart is empty\n" {
+	// The commit, not the working copy: with core.autocrlf (Git for Windows) git apply writes CRLF to the worktree.
+	if b := git(t, wt, "show", "HEAD:empty.txt"); b != "Your cart is empty" {
 		t.Fatalf("diff not applied: %q", b)
 	}
 }
