@@ -1,0 +1,14 @@
+{
+  "covered": 23,
+  "executable": 25,
+  "percent": 92,
+  "threshold": 90,
+  "pass": true,
+  "uncovered": {
+    "internal/cli/loops.go": [
+      184,
+      185
+    ]
+  },
+  "format": "go coverprofile"
+}

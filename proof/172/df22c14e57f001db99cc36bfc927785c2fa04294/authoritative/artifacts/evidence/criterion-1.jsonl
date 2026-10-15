@@ -1,0 +1,8 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInitGatesRendersProofPurge"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInitGatesRendersProofPurge","Output":"=== RUN   TestInitGatesRendersProofPurge\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInitGatesRendersProofPurge","Output":"--- PASS: TestInitGatesRendersProofPurge (0.05s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestInitGatesRendersProofPurge"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/loops","Test":"TestRepositoryLoops"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/loops","Test":"TestRepositoryLoops","Output":"=== RUN   TestRepositoryLoops\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/loops","Test":"TestRepositoryLoops","Output":"--- PASS: TestRepositoryLoops (0.00s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/loops","Test":"TestRepositoryLoops"}
