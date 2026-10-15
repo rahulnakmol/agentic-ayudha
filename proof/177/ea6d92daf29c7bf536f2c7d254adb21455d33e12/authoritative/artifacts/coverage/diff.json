@@ -1,0 +1,14 @@
+{
+  "covered": 23,
+  "executable": 25,
+  "percent": 92,
+  "threshold": 90,
+  "pass": true,
+  "uncovered": {
+    "internal/cli/triage.go": [
+      40,
+      41
+    ]
+  },
+  "format": "go coverprofile"
+}

@@ -1,0 +1,16 @@
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBudgetBreakerAcrossProcesses"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBudgetBreakerAcrossProcesses","Output":"=== RUN   TestBudgetBreakerAcrossProcesses\n"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBudgetBreakerAcrossProcesses/two_processes_on_one_day_reach_per_day_usd"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBudgetBreakerAcrossProcesses/two_processes_on_one_day_reach_per_day_usd","Output":"=== RUN   TestBudgetBreakerAcrossProcesses/two_processes_on_one_day_reach_per_day_usd\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBudgetBreakerAcrossProcesses/two_processes_on_one_day_reach_per_day_usd","Output":"--- PASS: TestBudgetBreakerAcrossProcesses/two_processes_on_one_day_reach_per_day_usd (0.04s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBudgetBreakerAcrossProcesses/two_processes_on_one_day_reach_per_day_usd"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBudgetBreakerAcrossProcesses/two_processes_on_one_story_reach_per_story_usd"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBudgetBreakerAcrossProcesses/two_processes_on_one_story_reach_per_story_usd","Output":"=== RUN   TestBudgetBreakerAcrossProcesses/two_processes_on_one_story_reach_per_story_usd\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBudgetBreakerAcrossProcesses/two_processes_on_one_story_reach_per_story_usd","Output":"--- PASS: TestBudgetBreakerAcrossProcesses/two_processes_on_one_story_reach_per_story_usd (0.04s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBudgetBreakerAcrossProcesses/two_processes_on_one_story_reach_per_story_usd"}
+{"Action":"run","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBudgetBreakerAcrossProcesses/yesterday's_spend_does_not_count_today"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBudgetBreakerAcrossProcesses/yesterday's_spend_does_not_count_today","Output":"=== RUN   TestBudgetBreakerAcrossProcesses/yesterday's_spend_does_not_count_today\n"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBudgetBreakerAcrossProcesses/yesterday's_spend_does_not_count_today","Output":"--- PASS: TestBudgetBreakerAcrossProcesses/yesterday's_spend_does_not_count_today (0.04s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBudgetBreakerAcrossProcesses/yesterday's_spend_does_not_count_today"}
+{"Action":"output","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBudgetBreakerAcrossProcesses","Output":"--- PASS: TestBudgetBreakerAcrossProcesses (0.12s)\n"}
+{"Action":"pass","Package":"github.com/rahulnakmol/agentic-ayudha/internal/cli","Test":"TestBudgetBreakerAcrossProcesses"}
