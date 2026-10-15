@@ -1,0 +1,74 @@
+{
+  "head": "30468e38ca8271ea573481703c7c9ae80024f52e",
+  "index": {
+    "missing": [],
+    "dead": []
+  },
+  "features": [
+    {
+      "id": "ask-answer",
+      "contract": "ok",
+      "missing_sources": [],
+      "missing_handles": [
+        "Ask"
+      ],
+      "stale": [
+        "examples/benefits-qa/web/web.go"
+      ],
+      "journeys": 3
+    },
+    {
+      "id": "refer-to-hr",
+      "contract": "ok",
+      "missing_sources": [],
+      "missing_handles": [
+        "Ask"
+      ],
+      "stale": [
+        "examples/benefits-qa/policy/policy.go",
+        "examples/benefits-qa/web/web.go"
+      ],
+      "journeys": 1
+    },
+    {
+      "id": "refusals",
+      "contract": "ok",
+      "missing_sources": [],
+      "missing_handles": [
+        "Ask"
+      ],
+      "stale": [
+        "examples/benefits-qa/policy/policy.go",
+        "examples/benefits-qa/web/web.go"
+      ],
+      "journeys": 2
+    },
+    {
+      "id": "api-ask",
+      "contract": "ok",
+      "missing_sources": [],
+      "missing_handles": [],
+      "stale": [
+        "examples/benefits-qa/api/api.go"
+      ],
+      "journeys": 2
+    },
+    {
+      "id": "product-events",
+      "contract": "ok",
+      "missing_sources": [],
+      "missing_handles": [],
+      "stale": [],
+      "journeys": 1
+    }
+  ],
+  "unmapped_routes": [
+    {
+      "route": "GET /api/plans",
+      "file": "examples/benefits-qa/api/api.go"
+    }
+  ],
+  "gone_routes": [],
+  "verdict": "drift",
+  "next": "fix the map (doc drift) or the harness, re-drive the affected journeys live, one PR"
+}

@@ -1,0 +1,494 @@
+diff --git a/.aayudha/evidence/171.toml b/.aayudha/evidence/171.toml
+new file mode 100644
+index 0000000..b388235
+--- /dev/null
++++ b/.aayudha/evidence/171.toml
+@@ -0,0 +1,14 @@
++# Which tests prove Bug #171's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
++# the run it makes, to the criteria).
++
++[[criterion]]
++id = 1 # trailers name anthropic, the build record openai: the family is unknown, the verdict marks the trailer self-reported and unverified, and the reviewer is of neither family
++tests = ["internal/cli:TestInspectBuilderFamily", "internal/inspect:TestBuilderOf"]
++
++[[criterion]]
++id = 2 # no Aayudha-Model trailer: the verdict names the builder family used and where it came from
++tests = ["internal/cli:TestInspectBuilderFamily"]
++
++[[criterion]]
++id = 3 # an honest PR built by another family: reviewed as before, the verdict names the family and its source
++tests = ["internal/cli:TestInspectBuilderFamily", "internal/cli:TestBuildTextDryRunPlanAndBudget"]
+diff --git a/docs/BUILD-PLAN.md b/docs/BUILD-PLAN.md
+index a428e73..6891696 100644
+--- a/docs/BUILD-PLAN.md
++++ b/docs/BUILD-PLAN.md
+@@ -769,3 +769,4 @@ Rows are named by the WP whose behaviour each Bug corrects.
+ |---|---|---|---|
+ | D-7.6d | WP7.6 accept: re-running audit with the same recorded inputs produces a byte-identical report; WP1.9: files an earlier binary wrote stay readable | Bug #183: the inputs snapshot recorded `config_hash` over the whole effective configuration, and `--replay` refused any difference, so every new key ([team] in WP5.1b, [ui] in WP1.1b) made every earlier report unreplayable (exit 4), though audit reads none of them. A whole-configuration hash cannot be recomputed by a binary with another configuration schema | New reports record `audit-config:sha256:<…>`, the hash of only what `audit` and `retro` read: `[identity] bot_logins`, `[decisions] sla_hours`, `[time]`, `[autonomy] correction_days`, `never`, `streak`, `[proof] media`, `media_secret`, `retention_days`, `[budget] per_story_usd`, and the dev branch; a replay refuses (exit 4) when that differs. A legacy `sha256:` hash is not recomputed: the replay renders the recorded hash, warns on stderr that it replays with the current values of those sections, and the byte comparison with the report is the check. Tested by `TestAuditReplaysRecordedReports` (the 12 October 06:35 and 15 October 04:35 UTC reports replay byte-identically from `internal/cli/testdata/audit-replay`: this repository's ledger up to the 15 October report as a 300 kB git bundle, with the config and `LAYERS.md` the replay reads) and `TestAuditRerunByteIdentical` (a `[ui] theme` change leaves the replay byte-identical; a `[decisions] sla_hours` change refuses it). A key audit starts reading must join `auditConfigHash` |
+ | D-1.6b | WP1.6 and D-1.6a: the `[budget]` breaker trips at `per_story_usd` or `per_day_usd` | Bug #177: `Breaker.Seed` was never called, so every `aayu` process started at zero and the limits bounded one process's spend; only the pause file carried a trip across processes. The actions log is per clone (`.aayudha/telemetry/actions.jsonl`, shared by its worktrees), and a CI run starts from a fresh clone | `Env.Gateway` seeds the breaker from the clone's actions log through `Breaker.SeedLog` before any call: every logged record with a cost counts toward its story and its local day in `[time] tz`, so per-day counts today's records and per-story the story's. A CI run's breaker still sees only that run's spend, and a host's own model spend inside a skill stays invisible to it (docs/guide/how-models.md). Tested by `TestBudgetBreakerAcrossProcesses` (two `aayu triage` child processes, each the test binary run as the CLI, sharing one state directory and calling a fake model endpoint through `[models.gateway]` that reports each call's cost: 0.60 + 0.60 USD on one day trips `per_day_usd = 1` with exit 6, the pause file, and one page in the `file` outbox; on one story it trips `per_story_usd = 1`; 0.90 USD yesterday does not count today) and the `TestBudgetBreaker` cases for a missing log, a malformed one, and one that cannot be read (a directory) |
++| D-4.8c | WP4.8, D-4.8a, and WP4.8b: `inspect` reviews with a model whose family ≠ the builder's; the builder's family from the delegation record, else the pack's `model` (the `Aayudha-Model` trailer), else the build lane of the pack's host | Bug #171: the trailer is written into the PR's own commits, so for every PR not delegated the different-family rule rested on what the builder said about itself, and a hand-made commit can carry any trailer. The actions log is per clone and absent from the merge gate's fresh checkout. A host-managed lane (Amp) records no model. The first fix, written before inspect v2 (#186) merged, was reworked onto it | `build` writes each checkpoint's model into its ledger record (`CheckpointRecord.Model`). `inspect` lists the PR's commits and calls `inspect.BuilderOf` with the delegation record and the checkpoint models: the family is known only when a delegation covers the PR, or a checkpoint names a model family for every commit, the records name one family, and the trailer, if any, agrees. Otherwise it is unknown, and the records', the trailer's, and (with no record) the build lane's families are candidates; `reviewerModels` (WP4.8b) takes the candidates, so the first reviewer and the peer are each of none of them, or inspect exits 4. The verdict's first note names the family and its source, marks the trailer "self-reported, unverified", and calls a family from a build record "attributed, not verified": the record holds what `build` resolved (`AAYU_MODEL` or the lane), and without a bot App the founder's token, which agents use here, can write the ledger. inspect's first review of this fix (cycle 1) found both: an agreeing builder-controlled record presented as verified, and a checkpoint without a model counted as covering its commit. Tested by `TestInspectBuilderFamily` (a trailer naming anthropic over a record naming openai is reviewed by `grok-4.7`; no record names the lane's family; an honest PR is reviewed by `gpt-6.1-sol` with the record as source), `TestBuilderOf` (partial and model-less records, two families, delegation, a trailer contradicting a delegation), and the checkpoint model assertion in `TestBuildTextDryRunPlanAndBudget` |
+diff --git a/docs/guide/how-merge-gate.md b/docs/guide/how-merge-gate.md
+index 8ecd457..99508dc 100644
+--- a/docs/guide/how-merge-gate.md
++++ b/docs/guide/how-merge-gate.md
+@@ -76,9 +76,13 @@ Every floor tool runs as a child process through `verify.Sandbox`:
+ from the Ready snapshot; the pack for the current head; and excerpts (first 3,000 bytes) of the pack's text
+ artifacts. Media never reach the model.
+ 
+-1. **Family check.** The builder's family comes from the pack's `model` (from an `Aayudha-Model` commit trailer), else
+-   the build lane of the pack's host. The reviewer is the review lane's model. If both are the same family, or the
+-   reviewer has no concrete family, inspect refuses and exits 4.
++1. **Family check.** The builder's family comes from what aayu recorded on the ledger, outside the pull request: the
++   delegation record (`aayu delegate`), or the model `aayu build` wrote for each checkpoint commit
++   (`build/<story>/state.json`). It is known only when a record covers the pull request with one family and the pack's
++   `model` (from the `Aayudha-Model` trailer, which the builder writes itself) does not contradict it. Otherwise it is
++   unknown, and every family the records, the trailer, or (with no record) the build lane names is a candidate. Each
++   reviewer is of none of them; with none left, inspect refuses and exits 4. The verdict's first note names the builder
++   family and where it came from.
+ 2. **Prompt.** Floor results are given as facts. Everything a person or tool wrote (criteria, story, evidence, pull
+    request text, diff capped at 120 kB) is wrapped in `<untrusted>` blocks the system prompt says never to obey.
+ 3. **Structured reply.** The model must answer in a closed JSON Schema: `disposition` (`merge`, `fix`, or
+@@ -100,7 +104,10 @@ State drives three limits:
+ inspect exits 0 on `merge` and 4 on `fix` or `rebuild`, so its check stays red until the reviewer says `merge`.
+ 
+ > **Honest status:** inspect does not read the story's plan in this repository; its inputs are the pull request,
+-> the diff, the story, the Ready criteria, and the pack. The `fix` re-entry is a fix in the same pull request.
++> the diff, the story, the Ready criteria, and the pack. The `fix` re-entry is a fix in the same pull request. A build
++> record holds the model `build` resolved (`AAYU_MODEL`, else the host's build lane), and without a bot App the
++> founder's token, which agents use here, can write the ledger, so the verdict calls that family attributed, not
++> verified. A pull request made without `aayu build` or `aayu delegate` has no record, so its builder family is unknown.
+ 
+ ### How ship consumes the result
+ 
+@@ -225,8 +232,9 @@ fixed head, returned `merge`, and the spend covers both calls.
+ 3. The gate fails when the pack does not prove the head, the Completion Goal drifted, or a criterion lacks evidence.
+    Enforced by `gateProblems` in [internal/cli/verify.go](../../internal/cli/verify.go); `TestVerifyGateCI` covers
+    missing evidence, Completion Goal drift, and a pull request with no story.
+-4. The reviewer's model family differs from the builder's. Enforced by `CheckFamilies` in
+-   [internal/models/resolve.go](../../internal/models/resolve.go), `TestReviewerFamilyMustDiffer`.
++4. The reviewer's model family differs from the builder's, and from every family the builder may be when it is
++   unknown. Enforced by `CheckFamilies` in [internal/models/resolve.go](../../internal/models/resolve.go) and
++   `inspect.BuilderOf` (`TestReviewerFamilyMustDiffer`, `TestBuilderOf`, `TestInspectBuilderFamily`).
+ 5. No model disposition overrides a floor, a P0 or P1 finding, or an unmet criterion. Enforced by `Enforce` in
+    [internal/inspect/inspect.go](../../internal/inspect/inspect.go), `TestInspectDispositions`.
+ 6. Same inputs never cost a second model call; after two cycles inspect pages without a call; spend stops at the
+diff --git a/internal/cli/build.go b/internal/cli/build.go
+index 762440f..51d2435 100644
+--- a/internal/cli/build.go
++++ b/internal/cli/build.go
+@@ -88,6 +88,10 @@ type CheckpointRecord struct {
+ 	Verify  string   `json:"verify"` // hold, miss, or error
+ 	Detail  string   `json:"detail,omitempty"`
+ 	At      string   `json:"at"`
++	// Model is the builder's model as build resolved it (AAYU_MODEL, else the
++	// host's build lane). inspect reads the builder's family from this record,
++	// which the PR cannot change, never from the commit trailer alone (Bug #171).
++	Model string `json:"model,omitempty"`
+ }
+ 
+ // BuildLedgerPath is where a story's build state lives on the ledger.
+@@ -313,20 +317,21 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
+ 		if attempt > 1 {
+ 			msg += fmt.Sprintf("\nAayudha-Attempt: %d", attempt)
+ 		}
++		model := e.builderModel()
+ 		switch {
+ 		case dlg != nil:
+ 			msg += "\nAayudha-Delegate: " + dlg.receiver
+-			if m := dlg.model(); m != "" {
+-				msg += "\nAayudha-Model: " + m
++			if model = dlg.model(); model != "" {
++				msg += "\nAayudha-Model: " + model
+ 			}
+-		case e.builderModel() != "":
+-			msg += "\nAayudha-Model: " + e.builderModel()
++		case model != "":
++			msg += "\nAayudha-Model: " + model
+ 		}
+ 		if _, err := run2(ctx, res.Worktree, "git", "commit", "--quiet", "--signoff", "-m", msg); err != nil {
+ 			return Wrap(ExitExternal, err)
+ 		}
+ 		res.Commit, _ = run2(ctx, res.Worktree, "git", "rev-parse", "HEAD")
+-		rec := CheckpointRecord{K: k, N: total, Attempt: attempt, Commit: res.Commit, Layers: layers, At: now.Format(time.RFC3339)}
++		rec := CheckpointRecord{K: k, N: total, Attempt: attempt, Commit: res.Commit, Layers: layers, At: now.Format(time.RFC3339), Model: model}
+ 		if rec.Layers == nil {
+ 			rec.Layers = []string{}
+ 		}
+diff --git a/internal/cli/build_test.go b/internal/cli/build_test.go
+index 3977cf9..621468d 100644
+--- a/internal/cli/build_test.go
++++ b/internal/cli/build_test.go
+@@ -398,8 +398,8 @@ func TestBuildTextDryRunPlanAndBudget(t *testing.T) {
+ 	if msg := git(t, wt, "log", "-1", "--format=%B"); !strings.Contains(msg, "Aayudha-Checkpoint: 2/3") || !strings.Contains(msg, "Aayudha-Model: claude-build-1") {
+ 		t.Fatalf("checkpoint commit:\n%s", msg)
+ 	}
+-	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &st); err != nil || st.Attempts != 0 || len(st.Checkpoints) != 1 || st.Checkpoints[0].Verify != "error" {
+-		t.Fatalf("ledger state after a verify error: %v %+v", err, st)
++	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &st); err != nil || st.Attempts != 0 || len(st.Checkpoints) != 1 || st.Checkpoints[0].Verify != "error" || st.Checkpoints[0].Model != "claude-build-1" {
++		t.Fatalf("ledger state after a verify error (the checkpoint records its model for inspect, Bug #171): %v %+v", err, st)
+ 	}
+ 
+ 	opts.CheckpointVerify = holds
+diff --git a/internal/cli/inspect.go b/internal/cli/inspect.go
+index f53019d..d751aed 100644
+--- a/internal/cli/inspect.go
++++ b/internal/cli/inspect.go
+@@ -169,7 +169,10 @@ func readDismissed(ctx context.Context, w *ledger.Writer) []inspect.Dismissal {
+ // family. A registry default whose family equals the builder's is replaced
+ // by the first candidate that differs (a delegated Codex PR, built by OpenAI's
+ // models, is not reviewed by an OpenAI model); a configured one is refused.
+-func reviewerModels(gw *models.Gateway, builder verbs.Family, peer bool, peerModel, story string) ([]models.Resolved, []string, error) {
++//
++// builder lists every family the builder may be (Bug #171: one when it is
++// known, all candidates when it is not); each reviewer differs from all.
++func reviewerModels(gw *models.Gateway, builder []verbs.Family, peer bool, peerModel, story string) ([]models.Resolved, []string, error) {
+ 	a, err := gw.Resolver.ResolveDirect(verbs.LaneReview, verbs.DirectHost, false)
+ 	if err != nil {
+ 		return nil, nil, Wrap(ExitUsage, err)
+@@ -184,23 +187,31 @@ func reviewerModels(gw *models.Gateway, builder verbs.Family, peer bool, peerMod
+ 		}
+ 		return models.Resolved{}, false
+ 	}
+-	if err := models.CheckFamilies(story, builder, a.Family); err != nil {
+-		alt, ok := pick(builder)
++	differs := func(f verbs.Family) error {
++		for _, b := range builder {
++			if err := models.CheckFamilies(story, b, f); err != nil {
++				return err
++			}
++		}
++		return models.CheckFamilies(story, "", f)
++	}
++	if err := differs(a.Family); err != nil {
++		alt, ok := pick(builder...)
+ 		if a.Source == models.SourceConfig || !ok {
+ 			return nil, nil, Wrap(ExitBlocked, err)
+ 		}
+-		notes = append(notes, fmt.Sprintf("the review lane's %s is the builder's family (%s); %s reviews instead", a.Model, builder, alt.Model))
++		notes = append(notes, fmt.Sprintf("the review lane's %s is of the builder's family or one it may be (%v); %s reviews instead", a.Model, builder, alt.Model))
+ 		a = alt
+ 	}
+ 	out := []models.Resolved{a}
+ 	if !peer {
+ 		return out, notes, nil
+ 	}
+-	b, ok := pick(builder, a.Family, verbs.FamilyHostManaged)
++	b, ok := pick(append(slices.Clone(builder), a.Family, verbs.FamilyHostManaged)...)
+ 	if peerModel != "" {
+ 		b, ok = models.Resolved{Lane: verbs.LaneReview, Host: verbs.DirectHost, Model: peerModel, Display: peerModel, Family: verbs.FamilyOf(peerModel), Source: models.SourceConfig}, true
+ 	}
+-	if !ok || b.Family == a.Family || models.CheckFamilies(story, builder, b.Family) != nil {
++	if !ok || b.Family == a.Family || differs(b.Family) != nil {
+ 		return nil, nil, Errorf(ExitUsage, "inspect: no peer reviewer whose family differs from the builder's (%s) and %s's (%s); set [inspect] peer_model", builder, a.Model, a.Family)
+ 	}
+ 	return append(out, b), notes, nil
+@@ -263,6 +274,7 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
+ 		return Errorf(ExitBlocked, "inspect #%d: no story (Refs #n in the PR body or a story/<n>- branch); inspect judges a PR against its story", n)
+ 	}
+ 	var deleg delegate.State
++	checkpoints := map[string]string{} // checkpoint commit -> model, from build's ledger record (Bug #171)
+ 	if ins.Story > 0 {
+ 		if is, _, err := c.REST.Issues.Get(ctx, owner, name, ins.Story); err == nil {
+ 			ins.StoryTitle, ins.StoryBody = is.GetTitle(), is.GetBody()
+@@ -281,6 +293,12 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
+ 				if b, err := t.File(ctx, delegate.LedgerPath(ins.Story)); err == nil {
+ 					_ = json.Unmarshal(b, &deleg)
+ 				}
++				var st BuildState
++				if b, err := t.File(ctx, BuildLedgerPath(ins.Story)); err == nil && json.Unmarshal(b, &st) == nil {
++					for _, cp := range st.Checkpoints {
++						checkpoints[cp.Commit] = cp.Model
++					}
++				}
+ 				t.Close()
+ 			}
+ 			ins.Dismissed = readDismissed(ctx, w)
+@@ -319,22 +337,33 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
+ 	if err != nil {
+ 		return err
+ 	}
+-	builder := verbs.Family("")
+-	switch {
+-	case deleg.Receiver != "":
+-		builder = deleg.Family
+-	case ins.Pack != nil && ins.Pack.Model != "":
+-		builder = verbs.FamilyOf(ins.Pack.Model)
+-	case ins.Pack != nil:
++	// The builder's family comes from what aayu recorded outside the PR (the
++	// delegation record, build's checkpoint models); the pack's model, from the
++	// commit trailer, is only a claim. When they are missing or disagree the
++	// family is unknown, and every reviewer differs from every candidate
++	// (Bug #171).
++	var commits []string
++	if cs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.RepositoryCommit, *gh.Response, error) {
++		return c.REST.PullRequests.ListCommits(ctx, owner, name, n, &o)
++	}); err == nil {
++		for _, x := range cs {
++			commits = append(commits, x.GetCommit().GetTree().GetSHA())
++		}
++	}
++	claim, lane := "", verbs.Family("")
++	if ins.Pack != nil {
++		claim = ins.Pack.Model
+ 		if b, err := gw.Resolver.Resolve(verbs.LaneBuild, verbs.HostID(ins.Pack.Host)); err == nil {
+-			builder = b.Family
++			lane = b.Family
+ 		}
+ 	}
++	builder := inspect.BuilderOf(inspect.Records{Receiver: deleg.Receiver, Delegated: deleg.Family, Checkpoints: checkpoints}, commits, claim, lane)
+ 	story := fmt.Sprintf("#%d", ins.Story)
+-	picked, notes, err := reviewerModels(gw, builder, ins.Mode == inspect.ModePeer, cfg.PeerModel, story)
++	picked, notes, err := reviewerModels(gw, builder.Candidates, ins.Mode == inspect.ModePeer, cfg.PeerModel, story)
+ 	if err != nil {
+ 		return err
+ 	}
++	notes = append([]string{builder.Note()}, notes...)
+ 	pager, err := e.Notifier(ctx)
+ 	if err != nil {
+ 		return err
+@@ -355,7 +384,7 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
+ 			}})
+ 	}
+ 	res, st, err := r.Run(ctx, ins, prev)
+-	res.Head = pr.GetHead().GetSHA()
++	res.Head, res.Builder = pr.GetHead().GetSHA(), builder
+ 	res.Notes = append(notes, res.Notes...)
+ 	if st.Result != nil {
+ 		st.Result.Notes = res.Notes
+diff --git a/internal/cli/inspect_test.go b/internal/cli/inspect_test.go
+index aa8a651..9072472 100644
+--- a/internal/cli/inspect_test.go
++++ b/internal/cli/inspect_test.go
+@@ -297,3 +297,69 @@ func hasSeverity(fs []inspect.Finding, sev ...string) bool {
+ 	}
+ 	return false
+ }
++
++// putLedger commits a file to the ledger branch of the bare origin.
++func putLedger(t *testing.T, bare, path, content string) {
++	t.Helper()
++	wt := filepath.Join(t.TempDir(), "ledger")
++	git(t, filepath.Dir(wt), "clone", "--quiet", "--branch", "ledger", bare, wt)
++	_ = os.MkdirAll(filepath.Join(wt, filepath.Dir(path)), 0o755)
++	_ = os.WriteFile(filepath.Join(wt, path), []byte(content), 0o644)
++	git(t, wt, "add", ".")
++	git(t, wt, "commit", "--quiet", "-m", "build state")
++	git(t, wt, "push", "--quiet", "origin", "ledger")
++}
++
++// Bug #171: inspect takes the builder's family from what aayu recorded on the ledger, never from the
++// Aayudha-Model trailer alone. A trailer that contradicts the record makes the family unknown, and the reviewer is
++// of a family different from every candidate; with no record the verdict says the family is unknown and why; an
++// honest PR is reviewed as before. Each verdict names the builder family, its source, and that a build record is
++// attributed, not verified.
++func TestInspectBuilderFamily(t *testing.T) {
++	head := strings.Repeat("c", 40)
++	for _, tc := range []struct {
++		name, recorded, claim, wantModel, wantFamily string
++		wantSource                                   []string
++	}{
++		{"the trailer names anthropic, the build record openai", "gpt-6.1-sol", "claude-opus-5-5", "grok-4.7", "",
++			[]string{"the records say openai", "trailer claims claude-opus-5-5 (self-reported, unverified)", "none of [openai anthropic]"}},
++		{"no trailer and no build record", "", "", "gpt-6.1-sol", "",
++			[]string{"no build or delegation record on the ledger names a model family", "the build lane's family on the pack's host is anthropic"}},
++		{"honest: record and trailer agree on anthropic", "claude-opus-5-5", "claude-opus-5-5", "gpt-6.1-sol", "anthropic",
++			[]string{"builder family anthropic (the build record on the ledger names it for all 1 commit(s)", "attributed, not verified"}},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			g, env, opts, prN := inspectFixture(t, cleanDiff, "Adds Percent.\n\nRefs #2")
++			env["AAYU_SECRET_XAI"] = "model-key"
++			g.Mu.Lock()
++			g.Static = map[string]any{"/repos/o/r/pulls/" + strconv.Itoa(prN) + "/commits": []any{map[string]any{"sha": head}}}
++			g.Mu.Unlock()
++			if tc.recorded != "" {
++				st, _ := json.Marshal(BuildState{Story: 2, Checkpoints: []CheckpointRecord{{K: 1, N: 1, Attempt: 1, Commit: head, Verify: "hold", Model: tc.recorded}}})
++				putLedger(t, filepath.Join(filepath.Dir(opts.Dir), "origin.git"), BuildLedgerPath(2), string(st)) // ledgerCheckout's bare origin
++			}
++			pk, _ := proof.LoadLocal(proof.LocalDir(opts.Dir, 2))
++			pk.Model = tc.claim
++			files := map[string][]byte{}
++			for _, a := range pk.Artifacts {
++				files[a.Path], _ = os.ReadFile(filepath.Join(proof.LocalDir(opts.Dir, 2), "artifacts", filepath.FromSlash(a.Path)))
++			}
++			if err := proof.WriteLocal(proof.LocalDir(opts.Dir, 2), pk, files); err != nil {
++				t.Fatal(err)
++			}
++			model := &models.Fake{Replies: []models.Response{inspectReply("merge", "")}}
++			code, res, errOut := inspectRun(t, env, opts, model, prN)
++			if code != 0 || len(model.Requests) != 1 || model.Requests[0].Model != tc.wantModel || string(res.Builder.Family) != tc.wantFamily {
++				t.Fatalf("exit %d, %d requests, builder %+v; want reviewer %s, builder family %q: %s", code, len(model.Requests), res.Builder, tc.wantModel, tc.wantFamily, errOut)
++			}
++			g.Mu.Lock()
++			comment := g.Issues[prN].Comments[0].Body
++			g.Mu.Unlock()
++			for _, want := range tc.wantSource {
++				if !strings.Contains(comment, want) {
++					t.Errorf("the verdict lacks %q:\n%s", want, comment)
++				}
++			}
++		})
++	}
++}
+diff --git a/internal/inspect/builder.go b/internal/inspect/builder.go
+new file mode 100644
+index 0000000..64401bf
+--- /dev/null
++++ b/internal/inspect/builder.go
+@@ -0,0 +1,90 @@
++package inspect
++
++import (
++	"fmt"
++	"slices"
++	"strings"
++
++	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
++)
++
++// Builder is what inspect knows of the builder's model family and where it
++// came from (Bug #171). The reviewer is of none of Candidates.
++type Builder struct {
++	Family     verbs.Family   `json:"family,omitempty"`     // empty when unknown
++	Candidates []verbs.Family `json:"candidates,omitempty"` // every family the evidence names
++	Source     string         `json:"source"`
++}
++
++// Records are what aayu wrote on the ledger about who built a PR, outside the
++// PR itself: the delegation record (internal/delegate, WP4.8b/WP5.5b), whose
++// receiver built the whole PR, and the model build recorded for each
++// checkpoint commit (build/<story>/state.json).
++type Records struct {
++	Receiver    string            // delegation receiver, "" without a delegation
++	Delegated   verbs.Family      // the receiver's family
++	Checkpoints map[string]string // checkpoint commit -> model build recorded
++}
++
++// BuilderOf decides the builder's family for a PR with commits. claim is the
++// pack's model, read from the Aayudha-Model trailer the builder writes into
++// its own commits, so self-reported; lane is the build lane's family on the
++// pack's host. The family is known only when a record covers the PR (a
++// delegation, or a checkpoint naming a model family for every commit), the
++// records name one family, and the claim does not contradict it. Otherwise it
++// is unknown, and every family the records, the claim, or (with no record) the
++// lane name is a candidate.
++func BuilderOf(rec Records, commits []string, claim string, lane verbs.Family) Builder {
++	var fams []verbs.Family
++	add := func(f verbs.Family) {
++		if f != "" && f != verbs.FamilyHostManaged && !slices.Contains(fams, f) {
++			fams = append(fams, f)
++		}
++	}
++	named := 0 // commits whose checkpoint record names a model family
++	for _, c := range commits {
++		if f := verbs.FamilyOf(rec.Checkpoints[c]); f != "" {
++			named++
++			add(f)
++		}
++	}
++	add(rec.Delegated)
++	recorded, claimed := slices.Clone(fams), verbs.FamilyOf(claim)
++	covered := rec.Receiver != "" && rec.Delegated != "" || len(commits) > 0 && named > 0
++	agrees := claim == "" || len(recorded) == 1 && claimed == recorded[0]
++	if covered && len(recorded) == 1 && agrees {
++		src := fmt.Sprintf("the build record on the ledger names it for all %d commit(s); aayu build took it from AAYU_MODEL or the host's build lane, which the builder's environment sets, so it is attributed, not verified", len(commits))
++		if rec.Receiver != "" {
++			src = fmt.Sprintf("the delegation record on the ledger: aayu delegate handed the story to %s", rec.Receiver)
++		}
++		return Builder{Family: recorded[0], Candidates: recorded, Source: src}
++	}
++	var why []string
++	switch {
++	case len(recorded) == 0:
++		why = append(why, "no build or delegation record on the ledger names a model family for the PR's commits")
++	case !covered:
++		why = append(why, fmt.Sprintf("the build record names a model family for %d of %d commits", named, len(commits)))
++	case len(recorded) > 1:
++		why = append(why, fmt.Sprintf("the records name %d families", len(recorded)))
++	default:
++		why = append(why, fmt.Sprintf("the records say %s", recorded[0]))
++	}
++	add(claimed)
++	if claim != "" {
++		why = append(why, fmt.Sprintf("the Aayudha-Model trailer claims %s (self-reported, unverified)", claim))
++	}
++	if len(recorded) == 0 && lane == "" && lane != verbs.FamilyHostManaged {
++		add(lane)
++		why = append(why, fmt.Sprintf("the build lane's family on the pack's host is %s", lane))
++	}
++	return Builder{Candidates: fams, Source: "unknown: " + strings.Join(why, "; ")}
++}
++
++// Note is the verdict's line about the builder.
++func (b Builder) Note() string {
++	if b.Family != "" {
++		return fmt.Sprintf("builder family %s (%s)", b.Family, b.Source)
++	}
++	return fmt.Sprintf("builder family unknown (%s); the reviewers are of none of %v", strings.TrimPrefix(b.Source, "unknown: "), b.Candidates)
++}
+diff --git a/internal/inspect/inspect.go b/internal/inspect/inspect.go
+index 822c4d2..11e8a88 100644
+--- a/internal/inspect/inspect.go
++++ b/internal/inspect/inspect.go
+@@ -167,6 +167,7 @@ type Result struct {
+ 	Cycle       int       `json:"cycle"`
+ 	CostUSD     float64   `json:"cost_usd"`
+ 	Next        string    `json:"next,omitempty"` // the re-entry step
++	Builder     Builder   `json:"builder"`        // the builder's family and where it came from (Bug #171)
+ }
+ 
+ // State is what inspect keeps between runs, in its replace-in-place comment.
+diff --git a/internal/inspect/inspect_test.go b/internal/inspect/inspect_test.go
+index 15b38fc..8bb8680 100644
+--- a/internal/inspect/inspect_test.go
++++ b/internal/inspect/inspect_test.go
+@@ -10,6 +10,7 @@
+ 
+ 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
+ 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
++	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
+ )
+ 
+ const pkgDiff = `diff --git a/internal/report/percent.go b/internal/report/percent.go
+@@ -257,3 +258,42 @@ func TestBuildContext(t *testing.T) {
+ 		}
+ 	}
+ }
++
++// Bug #171: the builder's family is known only from a record that covers the PR (a delegation, or a checkpoint
++// naming a model family for every commit) with one family the trailer, if any, does not contradict; otherwise every
++// family any source names is a candidate.
++func TestBuilderOf(t *testing.T) {
++	cp := func(m map[string]string) Records { return Records{Checkpoints: m} }
++	for _, tt := range []struct {
++		name    string
++		rec     Records
++		commits []string
++		claim   string
++		lane    verbs.Family
++		family  verbs.Family
++		cands   []verbs.Family
++		source  string
++	}{
++		{"record covers every commit", cp(map[string]string{"a": "claude-opus-5-5", "b": "claude-sonnet-5-5"}), []string{"a", "b"}, "", verbs.FamilyOpenAI,
++			verbs.FamilyAnthropic, []verbs.Family{verbs.FamilyAnthropic}, "attributed, not verified"},
++		{"a hand-made commit the record lacks", cp(map[string]string{"a": "claude-opus-5-5"}), []string{"a", "b"}, "", verbs.FamilyOpenAI,
++			"", []verbs.Family{verbs.FamilyAnthropic}, "names a model family for 1 of 2 commits"},
++		{"a checkpoint without a model does not cover its commit", cp(map[string]string{"a": "claude-opus-5-5", "b": ""}), []string{"a", "b"}, "", "",
++			"", []verbs.Family{verbs.FamilyAnthropic}, "for 1 of 2 commits"},
++		{"two families in the record", cp(map[string]string{"a": "claude-opus-5-5", "b": "gpt-6.1-sol"}), []string{"a", "b"}, "", "",
++			"", []verbs.Family{verbs.FamilyAnthropic, verbs.FamilyOpenAI}, "name 2 families"},
++		{"a host-managed build records no model", cp(map[string]string{"a": ""}), []string{"a"}, "", verbs.FamilyHostManaged,
++			"", nil, "no build or delegation record"},
++		{"no record: the claim and the lane are candidates", Records{}, []string{"a"}, "grok-4.7", verbs.FamilyAnthropic,
++			"", []verbs.Family{verbs.FamilyXAI, verbs.FamilyAnthropic}, "trailer claims grok-4.7 (self-reported, unverified)"},
++		{"a delegation covers the PR", Records{Receiver: "codex", Delegated: verbs.FamilyOpenAI}, []string{"a", "b"}, "", verbs.FamilyAnthropic,
++			verbs.FamilyOpenAI, []verbs.Family{verbs.FamilyOpenAI}, "handed the story to codex"},
++		{"a trailer contradicting the delegation", Records{Receiver: "codex", Delegated: verbs.FamilyOpenAI}, []string{"a"}, "claude-opus-5-5", "",
++			"", []verbs.Family{verbs.FamilyOpenAI, verbs.FamilyAnthropic}, "the records say openai"},
++	} {
++		got := BuilderOf(tt.rec, tt.commits, tt.claim, tt.lane)
++		if got.Family != tt.family || !slices.Equal(got.Candidates, tt.cands) || !strings.Contains(got.Note(), tt.source) {
++			t.Errorf("%s: %+v; want family %q, candidates %v, a note with %q", tt.name, got, tt.family, tt.cands, tt.source)
++		}
++	}
++}

@@ -1,0 +1,3 @@
+{"comments": [
+{"path": "internal/admin/handler.go", "start_line": 28, "end_line": 31, "category": "security", "severity": "critical", "content": "The authorization check is inverted: admins receive 403 while every authenticated non-admin falls through and can delete any user account. This is a privilege-escalation hole that is the exact opposite of the requirement (only admins may delete; everyone else gets 403). Change the condition to `if !u.IsAdmin() { ... 403 ... }`."}
+], "summary": {"total_files": 1, "reviewed_files": 1, "skipped_files": 0, "coverage_rate": 1.0}}

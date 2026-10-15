@@ -1,0 +1,9 @@
+{"i":0,"step":{"goto":"/"},"ok":true,"observed":"HTTP 200 http://127.0.0.1:8791/"}
+{"i":1,"step":{"expect":{"role":"heading","name":"Ask about your benefits"}},"ok":true,"observed":"heading \"Ask about your benefits\" visible"}
+{"i":2,"step":{"fill":{"label":"Your question","value":"What is the dental annual deductible?"}},"ok":true,"observed":"\"Your question\" = \"What is the dental annual deductible?\""}
+{"i":3,"step":{"click":{"role":"button","name":"Ask"}},"ok":true,"observed":"clicked button \"Ask\"; now at http://127.0.0.1:8791/?q=What+is+the+dental+annual+deductible%3F"}
+{"i":4,"step":{"expect":{"role":"heading","name":"Answer"}},"ok":true,"observed":"heading \"Answer\" visible"}
+{"i":5,"step":{"expectText":"50 dollars per person"},"ok":true,"observed":"text \"50 dollars per person\" visible"}
+{"i":6,"step":{"expectText":"Source: Dental, Deductible"},"ok":true,"observed":"text \"Source: Dental, Deductible\" visible"}
+{"i":7,"step":{"screenshot":"answer.png"},"ok":true,"observed":"screenshot answer.png"}
+{"i":8,"step":{"api":{"path":"/api/ask","json":{"question":"What is the dental annual deductible?","user_id":"v-verify"},"status":200,"body":{"status":"answered"}}},"ok":true,"observed":"POST /api/ask → 200"}

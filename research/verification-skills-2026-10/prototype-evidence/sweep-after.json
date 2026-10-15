@@ -1,0 +1,58 @@
+{
+  "run": "sweep-after-change",
+  "head": "30468e38ca8271ea573481703c7c9ae80024f52e",
+  "passed": 5,
+  "failed": 3,
+  "unreachable": 1,
+  "results": [
+    {
+      "journey": "ask-answer.typed",
+      "status": "failed",
+      "ms": 6059,
+      "reason": "step 3: locator.click: Timeout 5000ms exceeded."
+    },
+    {
+      "journey": "ask-answer.suggestion",
+      "status": "passed",
+      "ms": 664
+    },
+    {
+      "journey": "ask-answer.empty",
+      "status": "passed",
+      "ms": 514
+    },
+    {
+      "journey": "refer-to-hr.typed",
+      "status": "failed",
+      "ms": 5550,
+      "reason": "step 2: locator.click: Timeout 5000ms exceeded."
+    },
+    {
+      "journey": "refusals.personal",
+      "status": "failed",
+      "ms": 5591,
+      "reason": "step 2: locator.click: Timeout 5000ms exceeded."
+    },
+    {
+      "journey": "refusals.advice",
+      "status": "passed",
+      "ms": 588
+    },
+    {
+      "journey": "api-ask.answered",
+      "status": "passed",
+      "ms": 21
+    },
+    {
+      "journey": "api-ask.errors",
+      "status": "passed",
+      "ms": 21
+    },
+    {
+      "journey": "product-events.visit-and-ask",
+      "status": "unreachable",
+      "ms": 3,
+      "reason": "the [verify] seed launch (deploy/serve.sh) starts the app without -events; see the feature's Gotchas"
+    }
+  ]
+}

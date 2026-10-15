@@ -1,0 +1,4 @@
+{"comments":[
+{"path":"internal/invoice/total.go","content":"Off-by-one: the loop starts at `i := 1`, so the first invoice line is never added to the total; a single-line invoice totals 0. The story requires the sum of every line. Use `for _, l := range lines { sum += l.Cents * int64(l.Qty) }`.","start_line":15,"end_line":17,"category":"bug","severity":"high"},
+{"path":"internal/invoice/total.go","content":"ParseQty ignores the strconv.Atoi error and never checks the minimum, so it always returns a nil error: non-numeric input (\"abc\", \"1.5\", \"\") becomes 0, and 0 or negative quantities are accepted. Negative quantities from the form flow into Total and reduce/negate the invoice. Return the Atoi error and reject n < 1, as the contract requires.","start_line":22,"end_line":25,"category":"bug","severity":"high"}
+],"summary":{"total_files":1,"reviewed_files":1,"skipped_files":0,"coverage_rate":1.0}}

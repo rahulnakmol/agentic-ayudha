@@ -1,0 +1,3 @@
+{"comments": [
+{"path": "internal/rates/client.go", "start_line": 23, "end_line": 29, "category": "bug", "severity": "high", "content": "resp.Body is never closed — not on the non-200 early return (line 28), the decode-error return, nor the success path. Each Fetch leaks the response body, so the underlying TCP connection is never returned to the transport pool; under checkout load this exhausts connections/file descriptors. Add `defer resp.Body.Close()` immediately after the `c.HTTP.Do` error check."}
+], "summary": {"total_files": 1, "reviewed_files": 1, "skipped_files": 0, "coverage_rate": 1.0}}

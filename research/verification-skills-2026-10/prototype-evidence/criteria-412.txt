@@ -1,0 +1,4 @@
+1. [recording] state: `/` as a visitor; expected: typing "What is the dental annual deductible?" and choosing Ask shows an Answer card quoting the Dental plan with "Source: Dental, Deductible"
+2. [screenshot] state: `/` with a question the plans do not cover; expected: "We sent this to HR" with the reply time and no Source line
+3. [api-trace] state: `POST /api/ask` with an unknown field, the wrong method, or the wrong media type; expected: 400, 405, 415 with a JSON error
+4. [api-trace] state: one visit and one answered question; expected: benefits_visit, question_asked, answer_grounded for the same visitor, without the question text

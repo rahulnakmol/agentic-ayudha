@@ -1,0 +1,4 @@
+{"request":{"method":"GET","path":"/api/ask"},"response":{"status":405,"body":{"error":"use POST with a JSON body"}}}
+{"request":{"method":"POST","path":"/api/ask","contentType":"text/plain","body":"question=hi"},"response":{"status":415,"body":{"error":"send Content-Type: application/json"}}}
+{"request":{"method":"POST","path":"/api/ask","contentType":"application/json","body":"{\"question\":\"hi\",\"name\":\"Ada\"}"},"response":{"status":400,"body":{"error":"the body is not an AskRequest: unknown field \"name\""}}}
+{"request":{"method":"POST","path":"/api/ask","contentType":"application/json","body":"{\"question\":\"  \"}"},"response":{"status":400,"body":{"error":"question is required"}}}

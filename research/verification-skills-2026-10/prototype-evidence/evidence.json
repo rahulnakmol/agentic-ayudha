@@ -1,0 +1,113 @@
+{
+  "story": 412,
+  "head": "86275c2423cd8c0a6c61ab996ba560129deb4c2a",
+  "authority": "preview",
+  "note": "a preview: aayu ship accepts only the merge gate's pack for the PR head",
+  "criteria": [
+    {
+      "id": 1,
+      "kind": "recording",
+      "journeys": [
+        "ask-answer.typed"
+      ],
+      "artifacts": [
+        {
+          "path": ".aayudha/verify/ev-story-412/ask-answer.typed/recording.webm",
+          "kind": "recording",
+          "sha256": "a56a8957f9b7e994c47eb0dae9234297ea91803323e3b35f5fb78e78c17615e9",
+          "size": 114462,
+          "criteria": [
+            1
+          ]
+        },
+        {
+          "path": ".aayudha/verify/ev-story-412/ask-answer.typed/actions.jsonl",
+          "kind": "report",
+          "sha256": "f7cb8e60fef2abd27985e30b6be31619e93b8101eb1ab72d9bdfe6c267846f90",
+          "size": 1238,
+          "criteria": [
+            1
+          ]
+        },
+        {
+          "path": ".aayudha/verify/ev-story-412/ask-answer.typed/aria.txt",
+          "kind": "report",
+          "sha256": "0570c7ff2f8b1bdcdc96b3163f079a0d644dbc7e8db9e5e8f91c22616d459487",
+          "size": 743,
+          "criteria": [
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "kind": "screenshot",
+      "journeys": [
+        "refer-to-hr.typed"
+      ],
+      "artifacts": [
+        {
+          "path": ".aayudha/verify/ev-story-412/refer-to-hr.typed/referred.png",
+          "kind": "screenshot",
+          "sha256": "93a901d59f8694fbe5993be5b3c3c8704e2d534bcae69a58e717c1373e8db474",
+          "size": 55765,
+          "criteria": [
+            2
+          ]
+        },
+        {
+          "path": ".aayudha/verify/ev-story-412/refer-to-hr.typed/actions.jsonl",
+          "kind": "report",
+          "sha256": "e6f286780620ded13685f990200c02d18949341196d0e24b06634aa65e9ffa47",
+          "size": 1055,
+          "criteria": [
+            2
+          ]
+        },
+        {
+          "path": ".aayudha/verify/ev-story-412/refer-to-hr.typed/aria.txt",
+          "kind": "report",
+          "sha256": "34cce021dc0d8f2eb6646e393f90f5e10ded61a71c25606256455fd1e39286dc",
+          "size": 648,
+          "criteria": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "kind": "api-trace",
+      "journeys": [
+        "api-ask.errors"
+      ],
+      "artifacts": [
+        {
+          "path": ".aayudha/verify/ev-story-412/api-ask.errors/api-trace.jsonl",
+          "kind": "api-trace",
+          "sha256": "21c828ec86638427599119df7c885c4273d04e6786f77045d1cd6281d4e33923",
+          "size": 701,
+          "criteria": [
+            3
+          ]
+        },
+        {
+          "path": ".aayudha/verify/ev-story-412/api-ask.errors/actions.jsonl",
+          "kind": "report",
+          "sha256": "f7def3d85cea0579b385ef4b86f80bd4b7d57b598f8fa9593de5ecc5f9e1b597",
+          "size": 528,
+          "criteria": [
+            3
+          ]
+        }
+      ]
+    }
+  ],
+  "unmet": [
+    {
+      "id": 4,
+      "reason": "product-events.visit-and-ask: unreachable (the [verify] seed launch (deploy/serve.sh) starts the app without -events; see the feature's Gotchas)"
+    }
+  ]
+}
