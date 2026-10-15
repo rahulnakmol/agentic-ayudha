@@ -1,11 +1,11 @@
 # 3. The promises
 
-> *Monday, 07:29 UTC.* "So what does done look like for the answers story?" Priya asks. Sam starts listing what the
-> app should answer. The agent asks about the opposite. "What must it never answer? Write that down too."
+> *Monday, 07:29 UTC.* "So what does done look like for the answers story?" the agent asks. You start listing what
+> the app should answer. The agent asks about the opposite. "What must it never answer? Write that down too."
 
 ## Done, written down before the code
 
-This is the step that makes everything after it work. Before any code exists, Priya, Sam, and the agent agree, in
+This is the step that makes everything after it work. Before any code exists, you and the agent agree, in
 writing, what "done" means for each story. Every later check and every review measures the work against exactly
 these words and nothing else.
 
@@ -29,7 +29,7 @@ line to be the hardest promise of the day.
 
 ## Freezing the agreement
 
-At 07:29, `ready` checked story 131 was complete and posted a **Ready snapshot**: a comment with two fingerprints,
+At 07:29, `ready` checked that story 131 was complete and posted a **Ready snapshot**: a comment with two fingerprints,
 one of the whole story and one of the Completion Goal alone. From now on, if anyone edits the story, the fingerprint
 no longer matches, the story loses its Ready label, and `build` refuses to start. "Done" cannot quietly move.
 
@@ -61,7 +61,7 @@ story.
 
 ## What's next
 
-Five stories are Ready. Sam opens a terminal, types one command, and goes to get coffee:
+Five stories are Ready. You open a terminal, type one command, and go to get coffee:
 [chapter 4, the build](journey-4-build.md).
 
 > **You are here:** chapter 3 of 9. [Goal](journey-1-shape.md) · [Plan](journey-2-break-down.md) · **Promises** ·

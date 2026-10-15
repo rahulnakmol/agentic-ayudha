@@ -1,19 +1,20 @@
 # 1. The goal
 
-> *Monday, 07:20 UTC.* Priya types into her agent: "Use the grill skill to write a Goal: employees should get
-> benefits answers faster." The agent does not write anything. It asks a question instead. "Faster than what? Which
-> number would tell you it worked?"
+> *Monday, 07:20 UTC.* You type into your agent: "Use the grill skill to write a Goal: employees should get
+> benefits answers faster." The agent does not write anything. It asks you a question instead. "Faster than what?
+> Which number would tell you it worked?"
 
 ## An interview that will not accept "faster"
 
 Most projects that disappoint were never clear about what success meant. So the first thing aayudha does is refuse
 to start until it is.
 
-The `grill` skill interviews Priya one question at a time, the way a sharp product lead would. Who benefits? The
-employees. Which number shows it? The share of people who get an answer from the plan documents within 7 days of
-first asking. What is that number today? Priya counted the inbox this morning, but a count from the inbox is not a baseline.
+The `grill` skill interviews you one question at a time, the way a sharp product lead would. Who benefits? The
+employees, you say. Which number shows it? You settle on the share of people who get an answer from the plan
+documents within 7 days of first asking. What is that number today? You counted the inbox this morning. The agent is
+polite about it, and firm: a count from the inbox is not a baseline.
 
-That is where most goals quietly go wrong. aayudha has a rule for it: no baseline, no target. Before Priya may say
+That is where most goals quietly go wrong. aayudha has a rule for it: no baseline, no target. Before you may say
 "60 %", the figure for today has to be measured in a way that can be repeated later.
 
 So it is. `aayu measure` reads an export of the old process, where every question was an HR ticket, and counts: 31 of
@@ -32,7 +33,7 @@ At 07:25, Goal 125 is filed:
 | Target | At least 0.60, over the 28 days after it ships |
 
 Twenty-one seconds later comes Initiative 126, the bet: if employees can ask the plan documents directly and get a
-quoted answer at once, the number rises from 0.258 to at least 0.60. The interview also made Priya name the riskiest
+quoted answer at once, the number rises from 0.258 to at least 0.60. The interview also made you name the riskiest
 assumption: that the plan text really covers the questions people ask.
 
 ## What you do, and what the agent does

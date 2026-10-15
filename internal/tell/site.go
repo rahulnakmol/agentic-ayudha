@@ -62,7 +62,7 @@ var sitePages = []SitePage{
 	{Out: "hosts-amp.html", Nav: "Amp", Group: "Your agent", Source: "docs/guide/hosts/amp.md"},
 	{Out: "hosts-cursor.html", Nav: "Cursor", Group: "Your agent", Source: "docs/guide/hosts/cursor.md"},
 	{Out: "make-it-yours.html", Nav: "Make it yours", Group: "Your agent", Source: "docs/guide/hosts/make-it-yours.md"},
-	{Out: "journey.html", Nav: "Prologue: one Monday", Group: "The story", Source: "docs/guide/journey.md"},
+	{Out: "journey.html", Nav: "Prologue: your Monday", Group: "The story", Source: "docs/guide/journey.md"},
 	{Out: "journey-1-shape.html", Nav: "1. The goal", Group: "The story", Source: "docs/guide/journey-1-shape.md"},
 	{Out: "journey-2-break-down.html", Nav: "2. The plan", Group: "The story", Source: "docs/guide/journey-2-break-down.md"},
 	{Out: "journey-3-ready.html", Nav: "3. The promises", Group: "The story", Source: "docs/guide/journey-3-ready.md"},

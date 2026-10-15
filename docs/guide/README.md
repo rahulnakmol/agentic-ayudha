@@ -5,27 +5,27 @@ merge, and helps anyone at all is a different question. aayudha is the delivery 
 use, Amp, Cursor, or Claude Code. It answers that question with evidence at every step, from a fuzzy idea to a
 number that moved.
 
-> **Start here:** there are two ways in. [Read the story](journey.md): one small team, one goal, one Monday, and
-> every setback is real. Or [see how it works](how-it-works.md): the architecture, the file formats, and the
+> **Start here:** there are two ways in. [Read the story](journey.md): you, a team of agents, one goal, one Monday,
+> and every setback is real. Or [see how it works](how-it-works.md): the architecture, the file formats, and the
 > guarantees, written for engineers. Ready to try it yourself? Spend [your first hour](start.md).
 
 ## The story in one minute
 
-Of the last 120 people at Example Co who asked HR a benefits question, 31 got an answer within a week. Priya, the
-founder, wanted at least 60 % to. Sam, the engineer, had one day and an AI team.
+Picture an HR inbox. Of the last 120 people who asked a benefits question, 31 got an answer within a week. You want
+at least 60 % to. You have one day, one repository, and a team of agents.
 
 By the evening, five small stories had shipped, touching all nine layers of the app, from the screens to the data
 store. Before that, the checks had
 sent the work back again and again: five stories took 17 reviews, and four pull requests were thrown away and built
 again from scratch. One check for outside email addresses failed review four times, each time on a new way for an address to slip through. A model claimed a
-colour was too faint, and a measurement proved it wrong. The summary for the boss was refused once, for a single
+colour was too faint, and a measurement proved it wrong. The close-out summary was refused once, for a single
 sentence it could not back up.
 
 Every "no" made the result better. Measured on 120 simulated employees, the share answered within a week went from
 0.258 to 0.917, against a target of 0.60. The real measurement is due after 9 November.
 
-[Read the whole story](journey.md). Priya and Sam are illustrative; everything that happens to them happened in
-this repository on 12 October 2026, and the people they serve are synthetic.
+[Read the whole story](journey.md). It is told to you, in your shoes. Everything in it happened on 12 October 2026,
+in an example app that lives in this repository, and the employees it serves are synthetic.
 
 ## Why it exists
 
@@ -54,7 +54,7 @@ and the checks that run in CI (the automated checks GitHub runs on every pull re
 - **To start (Level 1):** no keys, no CI changes, about an hour. Your agent's own model does the interviewing.
 - **For proof on every pull request (Level 2):** one model key for the reviewer (by default an OpenAI model, so an
   OpenAI key or one AI gateway key), about 10 CI minutes per push in this repository, and at most 5 USD of review
-  per pull request by default. One review in the story cost 0.37 USD.
+  per pull request by default. In the story, all the reviews of one pull request cost 0.37 USD together.
 - **Your code:** the checks run in your own CI. The model vendors whose keys you add see what they review.
 - **Changed your mind?** `aayu uninit` removes what aayudha set up.
 
@@ -82,4 +82,4 @@ real value on day one without any of it.
 
 ## What's next
 
-Meet Priya and Sam on a Monday morning: [the story begins](journey.md).
+It is Monday morning, and the HR inbox is full: [the story begins](journey.md).
