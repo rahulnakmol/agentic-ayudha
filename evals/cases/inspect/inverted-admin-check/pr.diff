@@ -1,0 +1,51 @@
+diff --git a/internal/admin/handler.go b/internal/admin/handler.go
+index 98dec8f..497e6b5 100644
+--- a/internal/admin/handler.go
++++ b/internal/admin/handler.go
+@@ -17,3 +17,21 @@ type Handler struct {
+ 		Delete(ctx context.Context, id string) error
+ 	}
+ }
++
++// DeleteUser serves DELETE /admin/users/{id}: admins only.
++func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
++	u, ok := h.Auth.User(r)
++	if !ok {
++		http.Error(w, "unauthorized", http.StatusUnauthorized)
++		return
++	}
++	if u.IsAdmin() {
++		http.Error(w, "forbidden", http.StatusForbidden)
++		return
++	}
++	if err := h.Users.Delete(r.Context(), r.PathValue("id")); err != nil {
++		http.Error(w, "delete failed", http.StatusInternalServerError)
++		return
++	}
++	w.WriteHeader(http.StatusNoContent)
++}
+diff --git a/internal/admin/handler_test.go b/internal/admin/handler_test.go
+new file mode 100644
+index 0000000..5d6ac07
+--- /dev/null
++++ b/internal/admin/handler_test.go
+@@ -0,0 +1,19 @@
++package admin
++
++import (
++	"net/http"
++	"net/http/httptest"
++	"testing"
++)
++
++type noAuth struct{}
++
++func (noAuth) User(*http.Request) (User, bool) { return nil, false }
++
++func TestDeleteUserUnauthorized(t *testing.T) {
++	w := httptest.NewRecorder()
++	(&Handler{Auth: noAuth{}}).DeleteUser(w, httptest.NewRequest("DELETE", "/admin/users/7", nil))
++	if w.Code != http.StatusUnauthorized {
++		t.Fatalf("code %d", w.Code)
++	}
++}

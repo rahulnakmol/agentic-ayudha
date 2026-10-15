@@ -1,0 +1,11 @@
+# Which tests prove story #71's (WP8.2 docs and installers) Completion Goal (WP4.3: verify maps the go test -json
+# events of these tests, from the run it makes, to the criteria). Both criteria are runs on clean machines that no
+# go test can be: .github/workflows/installers.yml on GitHub-hosted ubuntu-latest, macos-latest, and windows-latest
+# runners installs a signed snapshot with install.sh (and, on Windows, the Scoop manifest), refuses tampered and
+# wrongly signed copies, and runs `aayu doctor` in a fresh checkout (Appendix B D-8.2c). It runs on the WP8.2 pull
+# request and by `gh workflow run installers.yml --ref dev`; once a v* release exists it also runs the documented
+# install.sh against it. The tests below cover what doctor's pass means.
+
+[[criterion]]
+id = 2 # `aayu doctor` passes: exit 0 unless a floor-blocking check fails; git-lfs missing is blocking
+tests = ["internal/doctor:TestBlockingOnlyOnFloorFailures", "internal/doctor:TestChecksGolden", "internal/cli:TestDoctorFailsOnMissingGitLFS"]

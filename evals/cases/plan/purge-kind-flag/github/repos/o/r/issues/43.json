@@ -1,0 +1,26 @@
+{
+  "number": 43,
+  "title": "proof purge --kind",
+  "state": "open",
+  "body": "### Summary\n\nAs a human, I want `aayu proof purge --kind recording`, so that I can purge one kind by hand.\n\n### Completion Goal\n\n1. [api-trace] state: `aayu proof purge --kind recording --dry-run` on the fixture ledger; expected: only recordings are listed for purge\n\n### Measure\n\nCompletion Goal criteria observed\n\n### Threshold\n\nall 1 criteria\n\n### Scenario\n\nRun the command with --dry-run against the fixture ledger.\n\n### Environment\n\nlocal checkout with synthetic fixtures; never production\n",
+  "labels": [
+    {
+      "name": "type:story"
+    },
+    {
+      "name": "status:ready"
+    },
+    {
+      "name": "effort:S"
+    },
+    {
+      "name": "priority:P2"
+    },
+    {
+      "name": "layer:L02"
+    },
+    {
+      "name": "layer:L03"
+    }
+  ]
+}

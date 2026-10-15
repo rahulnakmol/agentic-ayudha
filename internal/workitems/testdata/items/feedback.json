@@ -1,0 +1,40 @@
+{
+  "create": {
+    "type": "feedback",
+    "title": "I could not find the eligibility check",
+    "fields": {
+      "summary": "I looked for it on the home page.",
+      "context": "Mobile, evening."
+    },
+    "labels": [
+      "type:feedback",
+      "status:backlog"
+    ]
+  },
+  "ready": {
+    "type": "feedback",
+    "title": "I could not find the eligibility check",
+    "fields": {
+      "summary": "I looked for it on the home page.",
+      "context": "Mobile, evening.",
+      "links": "becomes #3"
+    },
+    "labels": [
+      "type:feedback",
+      "status:planned"
+    ]
+  },
+  "complete": {
+    "type": "feedback",
+    "title": "I could not find the eligibility check",
+    "fields": {
+      "summary": "I looked for it on the home page.",
+      "context": "Mobile, evening.",
+      "links": "becomes #3"
+    },
+    "labels": [
+      "type:feedback",
+      "status:done"
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+# How story #12 reached dev (WP4.8 merge gate).
+title: From pull request to dev
+pr: Pull request | Story #12, opened by the build lane.
+gate: Merge gate | Runs verify again on the head commit in CI.
+floors: Floors | Coverage, SAST, and accessibility.
+inspect: Inspect | The review lane judges each criterion against its evidence.
+ledger: Ledger | Keeps the authoritative pack P1.
+dev: dev | Squash-merged once the gate is green.
+pr -> gate: head commit
+gate -> floors: run again
+gate -> inspect: diff and pack
+floors -> ledger: results
+inspect -> ledger: disposition
+ledger -> dev: green gate

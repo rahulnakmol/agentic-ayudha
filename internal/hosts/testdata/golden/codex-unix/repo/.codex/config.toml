@@ -1,0 +1,5 @@
+# BEGIN aayudha (written by `aayu install`; do not edit inside this block)
+[mcp_servers.aayudha]
+command = "/opt/aayudha/bin/aayu"
+args = ["mcp"]
+# END aayudha

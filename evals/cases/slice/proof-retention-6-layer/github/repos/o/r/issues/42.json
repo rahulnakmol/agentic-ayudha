@@ -1,0 +1,20 @@
+{
+  "number": 42,
+  "title": "Purge proof media by kind",
+  "state": "open",
+  "body": "### Summary\n\nAs a quality architect, I want purge to drop each artifact kind after its own retention, so that recordings go before reports.\n\n### Completion Goal\n\n1. [api-trace] state: a ledger with a 40-day-old recording and report, recordings kept 30 days and reports 365; expected: purge tombstones the recording and keeps the report\n\n### Measure\n\nCompletion Goal criteria observed\n\n### Threshold\n\nall 1 criteria\n\n### Scenario\n\nPush two packs dated 40 days ago, set the retentions, and run purge.\n\n### Environment\n\nlocal checkout with synthetic fixtures; never production\n\n### Links\n\ndepends-on #41\n",
+  "labels": [
+    {
+      "name": "type:story"
+    },
+    {
+      "name": "status:planned"
+    },
+    {
+      "name": "effort:M"
+    },
+    {
+      "name": "priority:P2"
+    }
+  ]
+}

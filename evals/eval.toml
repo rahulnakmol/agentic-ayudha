@@ -1,0 +1,91 @@
+# Skill eval harness (docs/BUILD-PLAN.md WP3.4; evals/README.md).
+#
+# Tier 2 runs each case with a [tier2] section k times on the skill's model and has a pinned judge from
+# another model family score every run against the case's rubric. The judge's family is inferred from its
+# model ID (as the model gateway does, WP1.6) and must differ from the skill model's.
+
+judge = "gpt-6.1-sol" # openai; the stub skill runs on grill's spec lane, claude-opus-5-5 (anthropic) today
+k = 5                 # runs per case
+pass_score = 4        # a run passes at this rubric score (1-5) or above
+
+# The bar (WP3.4): pass^k >= 0.8 and mean >= 3.5 to pass, for the suite and for every case (WP7.3 sets the bar per
+# brief register); on promotion, a mean more than 0.3 below the baseline (evals/results/<main-sha>.json) or any
+# case's pass^k below its baseline fails.
+min_pass_k = 0.8
+min_mean = 3.5
+max_drop = 0.3
+
+# Tier 2 runs per group, each in its own job with its own spend cap in USD (on top of the [budget] breaker), so one
+# group can never use up another's (D-7.3d); the promotion gate needs every group to pass. pass_k = "advisory" holds a
+# group to the mean bar and the drop rule only (D-7.3g); "required" (the default) is the full WP3.4 bar. gate = "advisory" reports a group's
+# results without gating promotion (D-7.3h); "enforced" is the default. A case belongs to the first
+# group with a prefix of its ID, else to the group without prefixes. Unpriced models are charged at the gateway's
+# conservative fallback rate, so real spend is lower. The four brief register cases were charged 6.21 (run 38200697472)
+# and about 7 USD (run 38207049608); the stub, grill, slice, and plan cases together about 4.5 in that run.
+# The plain registers (eli5, ste) do not gate (D-7.3h): their rubric asks for everyday restatement and STE phrasing
+# that the fact-fidelity bar marks down (Feedback in D-7.3h). Results are computed and printed; evals-gate skips them.
+# A case belongs to the first group with a matching prefix, so this group comes before brief.
+[[groups]]
+name = "brief-plain"
+prefixes = ["brief/eli5-", "brief/ste-"]
+max_usd = 6.0
+pass_k = "advisory"
+gate = "advisory"
+
+[[groups]]
+name = "brief"
+prefixes = ["brief/"]
+max_usd = 6.0 # engineer-ideate and regulatory-close (the plain registers moved to brief-plain, D-7.3h)
+# The brief register bar is not met at pass^5 after five rounds (D-7.3g): the group passes on the mean bar (per case and
+# suite) and the drop rule; pass^5 is computed and printed, but advisory. Every other group keeps the full WP3.4 bar.
+pass_k = "advisory"
+
+# Persona cases (WP5.1b): the Engineering Manager twin's retro explanation at the startup and enterprise stages, and the
+# on-demand decision packs of an EM-owned and a Code Architect-owned question, in their own group with their own cap
+# (four cases, five runs each, plus at most one revision a run). Run 38682959916 reached a 6 USD cap after 6 of 20 runs
+# (about 1 USD a run at the fallback rate, every run revised once), so the cap is 20 USD.
+# The personas group does not gate yet (D-5.1d): runs 38682959916 and 38685472745 missed the bar. Its results are
+# computed and printed; evals-gate skips it until a run passes, then this line goes. It never runs nightly or on
+# promotion: on dispatch, and on pushes to dev that change persona files (evals.yml, D-5.3b.h).
+[[groups]]
+name = "personas"
+prefixes = ["retro/", "decide/"]
+max_usd = 20.0
+gate = "advisory"
+events = ["workflow_dispatch", "push"]
+
+# Seeded-defect PRs for inspect (WP4.8b): each case runs in three variants (the 0.1 prompt, general, peer) and is
+# scored by precision and recall against its planted defects, with no judge. Reported, never gating, and run on
+# dispatch only (about 70 review calls per k).
+[[groups]]
+name = "review"
+prefixes = ["inspect/"]
+max_usd = 20.0
+k = 2
+pass_k = "advisory"
+gate = "advisory"
+events = ["workflow_dispatch"]
+
+# Grill conversation cases (WP5.3b): three or four skill calls a run with the assessment in context, about 1.3 USD a
+# run at the fallback rate (13.42 USD for both cases in run 38687921977), in their own group with their own cap so they
+# never fail or starve the skills group. Advisory until a run meets the bar (D-5.3b.g): results are computed and
+# printed, evals-gate skips them; then the gate line goes. It never runs nightly or on promotion: on dispatch, and on
+# pushes to dev that change grill files (evals.yml, D-5.3b.h).
+[[groups]]
+name = "conversations"
+prefixes = ["grill/bakery-ux", "grill/search-fast"]
+max_usd = 20.0
+gate = "advisory"
+events = ["workflow_dispatch", "push"]
+
+[[groups]]
+name = "skills" # every other case
+max_usd = 8.0 # the single-reply cases cost 4.57 USD in run 38681630586; run 38747551788 hit a 6 USD cap at 6.03 and cut its last run to 0, so the cap is 8 (founder, 2026-10-15)
+
+# Output caps per call. Reasoning models may spend part of the cap on reasoning; a cap is not a charge. A reply that
+# stops at its cap is recorded as an error marked truncated, without a retry. Complete drafts measured 1700-2430 output
+# tokens (run 38185993917). Run 38200697472 truncated two ste brief drafts at 4000 (one reply held only a thinking
+# block), so the skill cap is 8000. Every call's stop reason and tokens are in the results file.
+[max_tokens]
+skill = 8000
+judge = 2000

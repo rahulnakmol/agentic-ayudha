@@ -1,0 +1,15 @@
+# Configuration, secrets, and the audit trail (docs/guide/how-config-and-audit.md).
+title: Every write is logged in a hash chain, and audit checks that log against GitHub's own history
+direction: down
+config: Layered config names secrets, never values
+secrets: Secrets: keychain, AAYU_SECRET_ env, age file
+verb: A verb makes an external write
+log: Actions log segments on the ledger
+github: GitHub's event history
+audit: aayu audit reconciles both into a report
+config -> verb: settings
+secrets -> verb: tokens and keys
+verb -> log: redacted record
+verb -> github: the write lands
+log -> audit: what aayu did
+github -> audit: source of record

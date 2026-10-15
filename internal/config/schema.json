@@ -1,0 +1,852 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rahulnakmol/agentic-ayudha/internal/config/schema.json",
+  "properties": {
+    "version": {
+      "type": "integer",
+      "description": "Config schema version."
+    },
+    "seats": {
+      "additionalProperties": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "solo",
+              "paired"
+            ],
+            "description": "solo: agent twin only; paired: agent twin plus a human."
+          },
+          "human": {
+            "type": "string",
+            "description": "GitHub login of the paired human."
+          },
+          "page": {
+            "type": "string",
+            "description": "Where to page this seat (overrides [notify] target)."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "type": "object",
+      "description": "Seat modes keyed by seat slug (registry seats)."
+    },
+    "models": {
+      "properties": {
+        "gateway": {
+          "properties": {
+            "base_url": {
+              "type": "string",
+              "description": "Gateway endpoint including the version path, e.g. https://gateway.example/v1; empty disables the gateway."
+            },
+            "secret": {
+              "type": "string",
+              "description": "Name of the secret holding the gateway key (sent as Authorization: Bearer)."
+            },
+            "api_style": {
+              "type": "string",
+              "enum": [
+                "",
+                "messages",
+                "responses",
+                "chat"
+              ],
+              "description": "Wire format for every model without a styles entry: messages (Anthropic Messages), responses (OpenAI Responses), chat (OpenAI Chat Completions). Empty uses the family default."
+            },
+            "styles": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "description": "Wire format overrides as \"\u003cmodel-id or family\u003e=\u003cstyle\u003e\", e.g. \"grok-4.7=chat\" (model IDs contain dots, so this is a list, not a table)."
+            }
+          },
+          "additionalProperties": false,
+          "type": "object"
+        }
+      },
+      "additionalProperties": {
+        "additionalProperties": {
+          "properties": {
+            "model": {
+              "type": "string",
+              "description": "Model ID as the provider or gateway names it."
+            },
+            "family": {
+              "type": "string",
+              "enum": [
+                "",
+                "anthropic",
+                "openai",
+                "google",
+                "xai",
+                "host-managed"
+              ],
+              "description": "Model family; inferred from the model ID when empty."
+            }
+          },
+          "additionalProperties": false,
+          "type": "object"
+        },
+        "type": "object",
+        "description": "[models.\u003clane\u003e.\u003chost\u003e]: lane and host IDs from the verb registry."
+      },
+      "type": "object",
+      "description": "Model overrides per lane and host, and the optional AI gateway."
+    },
+    "lfs": {
+      "properties": {
+        "quota_warn_percent": {
+          "type": "integer",
+          "maximum": 100,
+          "minimum": 1,
+          "description": "doctor warns when LFS storage or bandwidth use reaches this percentage."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "proof": {
+      "properties": {
+        "media": {
+          "type": "string",
+          "description": "Optional private bucket that keeps proof media beyond the merge gate's run artifact (aayu ship copies them there; S-4.2b), and holds design and UI baseline media on a public repo (V3): s3://bucket[/prefix][?region=..\u0026endpoint=..], r2://\u003caccount\u003e/bucket[/prefix], azblob://\u003caccount\u003e/\u003ccontainer\u003e[/prefix][?auth=sas|key|oidc|cli\u0026tenant=..\u0026client=..\u0026subscription=..\u0026group=..], or gs://\u003cbucket\u003e[/prefix][?auth=key|oidc|cli\u0026provider=..\u0026sa=..]."
+        },
+        "media_secret": {
+          "type": "string",
+          "description": "Name of the secret holding the bucket's credential (ACCESS_KEY_ID:SECRET_ACCESS_KEY for s3 and r2; a SAS token or \u003cclient-id\u003e:\u003cclient-secret\u003e for azblob; a service account JSON key for gs; none with auth oidc or cli); empty means proof-media."
+        },
+        "retention_days": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Days the merge gate keeps its aayudha-pack run artifact, at most the repository's artifact retention limit; also the bucket's lifecycle rule. 0 keeps as long as the limit allows."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "beneficiaries": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "type": "object",
+      "description": "Beneficiary groups a Goal can name, keyed by slug, with a one-line description."
+    },
+    "autonomy": {
+      "properties": {
+        "streak": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Correction-free merges per layer footprint before agent lanes may self-ship."
+        },
+        "never": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Layers (L01-L09) that never run autonomously."
+        },
+        "approver": {
+          "type": "string",
+          "description": "GitHub login that approves when autonomy does not apply."
+        },
+        "budget": {
+          "properties": {
+            "wall_hours": {
+              "type": "number",
+              "minimum": 0
+            },
+            "cost_usd": {
+              "type": "number",
+              "minimum": 0
+            },
+            "attempts": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "type": "object"
+        },
+        "correction_days": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Days after a merge in which a linked Bug or Incident counts as a correction of the PR."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "decisions": {
+      "properties": {
+        "authority": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object",
+          "description": "Decision type or layer to the seat or login that may accept it."
+        },
+        "sla_hours": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Business hours before an open Decision pages its authority and escalates."
+        },
+        "provisional_after_hours": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Business hours before a reversible Decision's recommendation applies provisionally (V8)."
+        },
+        "escalate_to": {
+          "type": "string",
+          "description": "GitHub login mentioned on escalation (founder B)."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "notify": {
+      "properties": {
+        "channel": {
+          "type": "string",
+          "enum": [
+            "",
+            "slack",
+            "email",
+            "github",
+            "file"
+          ]
+        },
+        "target": {
+          "type": "string",
+          "description": "slack: name of the secret holding the webhook URL; email: recipient address; github: login to mention; file: path of the JSON-lines outbox (default .aayudha/state/notify-outbox.jsonl), which the Actions loops keep as an artifact."
+        },
+        "issue": {
+          "type": "string",
+          "description": "github channel: issue the mention comment is posted on, as owner/name#number."
+        },
+        "smtp_addr": {
+          "type": "string",
+          "description": "email channel: SMTP server as host:port (STARTTLS)."
+        },
+        "from": {
+          "type": "string",
+          "description": "email channel: sender address, also the SMTP user."
+        },
+        "smtp_secret": {
+          "type": "string",
+          "description": "email channel: name of the secret holding the SMTP password."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "budget": {
+      "properties": {
+        "per_story_usd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "per_day_usd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "per_pr_inspect_max": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Model spend in USD for inspect on one PR across all its cycles."
+        },
+        "ci_minutes_month": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "mcp": {
+      "properties": {
+        "expose_writes": {
+          "type": "boolean",
+          "description": "Expose write verbs over MCP (WP3.3)."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "integrations": {
+      "additionalProperties": {
+        "properties": {
+          "secret": {
+            "type": "string",
+            "description": "Name of the secret holding the key (WP1.3); never the key itself."
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "read",
+              "write"
+            ]
+          },
+          "url": {
+            "type": "string",
+            "description": "Provider base URL when not the adapter's default (EU region, self-hosted), e.g. https://eu.posthog.com."
+          },
+          "org": {
+            "type": "string",
+            "description": "Provider organization: the Sentry organization slug, or the Microsoft Entra tenant ID (azure)."
+          },
+          "project": {
+            "type": "string",
+            "description": "Provider project: the PostHog project ID, the Sentry project ID, the owner/name GitHub baselines read (default: the current repository), the Azure resource ID of the Log Analytics workspace or Application Insights component (azure), the CloudWatch RUM app monitor name (aws), or \u003cproject\u003e.\u003cdataset\u003e of the GA4 BigQuery export (gcp)."
+          },
+          "transport": {
+            "type": "string",
+            "enum": [
+              "rest",
+              "mcp"
+            ],
+            "description": "Figma only: rest (personal access token, the default) or mcp (the remote MCP server, opt-in; the secret is an OAuth access token)."
+          },
+          "auth": {
+            "type": "string",
+            "enum": [
+              "key",
+              "oidc",
+              "cli"
+            ],
+            "description": "azure, aws, gcp: key (a credential in the secret, the default), oidc (GitHub Actions OIDC federation: short-lived tokens, no stored key), or cli (the az, aws, or gcloud login on this machine)."
+          },
+          "identity": {
+            "type": "string",
+            "description": "azure, aws, gcp with auth = \"oidc\": the Entra application (client) ID, the IAM role ARN, or the service account email to impersonate (optional for gcp)."
+          },
+          "federation": {
+            "type": "string",
+            "description": "gcp with auth = \"oidc\": the workload identity provider, projects/\u003cnumber\u003e/locations/global/workloadIdentityPools/\u003cpool\u003e/providers/\u003cprovider\u003e."
+          },
+          "region": {
+            "type": "string",
+            "description": "aws: the region of the app monitor and log group, e.g. eu-west-1; gcp: the BigQuery location when it is not US or EU."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "type": "object",
+      "description": "External integrations keyed by name. Values name secrets; they never hold them."
+    },
+    "verify": {
+      "properties": {
+        "dast": {
+          "type": "boolean",
+          "description": "Run the ZAP baseline floor (WP4.6)."
+        },
+        "platforms": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Platforms the product ships on, e.g. web, ios, android."
+        },
+        "upstream_checks": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Existing product CI check names the merge gate also requires."
+        },
+        "seed": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Command (argv) that loads seeded, synthetic data into the app before the web floors capture (WP4.5); the product provides it, e.g. under .aayudha/seed/."
+        },
+        "environments": {
+          "additionalProperties": {
+            "properties": {
+              "url": {
+                "type": "string",
+                "description": "Base URL of the running app."
+              },
+              "production": {
+                "type": "boolean",
+                "description": "A production environment: verify refuses to capture it (exit 4), and any target on its host."
+              }
+            },
+            "additionalProperties": false,
+            "type": "object"
+          },
+          "type": "object",
+          "description": "Apps the web, DAST, and API floors run against, by name; AAYU_ENV picks one (default local). A production environment is never captured."
+        },
+        "floors": {
+          "properties": {
+            "coverage": {
+              "properties": {
+                "min_diff_percent": {
+                  "type": "number",
+                  "maximum": 100,
+                  "minimum": 0
+                },
+                "command": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array",
+                  "description": "Test command that writes the coverage report, as argv; empty runs go test -coverprofile in a Go module."
+                },
+                "report": {
+                  "type": "string",
+                  "description": "Coverage report the command writes (lcov, Cobertura XML, or Go coverprofile), relative to the repository root."
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "sast": {
+              "properties": {
+                "max_critical": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "max_high": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "secrets": {
+              "properties": {
+                "max_findings": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "deps": {
+              "properties": {
+                "max_critical": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "max_high": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "a11y": {
+              "properties": {
+                "standard": {
+                  "type": "string"
+                },
+                "max_critical": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "max_serious": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "keyboard_only": {
+                  "type": "boolean"
+                },
+                "reduced_motion": {
+                  "type": "boolean"
+                },
+                "text_scale_percent": {
+                  "type": "integer",
+                  "minimum": 100
+                },
+                "min_target_px": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "screen_reader": {
+              "properties": {
+                "layers": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "max_missing_phrases": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "perf": {
+              "properties": {
+                "min_score": {
+                  "type": "number",
+                  "maximum": 1,
+                  "minimum": 0
+                },
+                "max_lcp_ms": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "max_cls": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "max_tbt_ms": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "type": "object",
+              "description": "Lighthouse budgets on every Completion Goal state (WP4.5)."
+            },
+            "dast": {
+              "properties": {
+                "max_high": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "api": {
+              "properties": {
+                "script": {
+                  "type": "string",
+                  "description": "k6 script whose thresholds are the API and CLI contract (WP4.6); BASE_URL is the target environment's URL. Empty skips the floor."
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "mobile": {
+              "properties": {
+                "skipped_blocks_ship": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object",
+          "description": "Floor thresholds; CONSTRAINTS.md documents each one."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "time": {
+      "properties": {
+        "tz": {
+          "type": "string",
+          "description": "IANA time zone for business hours."
+        },
+        "business_hours": {
+          "type": "string",
+          "description": "Business days and hours, e.g. Mon-Fri 09:00-18:00."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "identity": {
+      "properties": {
+        "app_id": {
+          "type": "integer",
+          "description": "GitHub App ID of the bot identity (created by init --identity)."
+        },
+        "app_slug": {
+          "type": "string",
+          "description": "GitHub App slug; the App's login is \u003cslug\u003e[bot]."
+        },
+        "broker": {
+          "type": "string",
+          "description": "Token broker workflow file in this repo that mints App installation tokens for laptops."
+        },
+        "machine_user": {
+          "type": "string",
+          "description": "Machine-user login, the fallback bot identity."
+        },
+        "machine_user_secret": {
+          "type": "string",
+          "description": "Name of the secret holding the machine user's token."
+        },
+        "bot_logins": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Logins whose reviews never count as a human pass (machine users and other bots)."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Bot identity for agent lanes and CI (WP1.4)."
+    },
+    "telemetry": {
+      "properties": {
+        "disabled": {
+          "type": "boolean",
+          "description": "Write no traces at all."
+        },
+        "otlp_endpoint": {
+          "type": "string",
+          "description": "Opt-in: also send traces as OTLP/HTTP JSON to this collector, e.g. https://collector.example:4318. Empty sends nothing."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Traces of verb runs (WP1.8): a local file by default; nothing leaves the machine unless otlp_endpoint is set."
+    },
+    "fleet": {
+      "properties": {
+        "repos": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "owner/name of each product repo."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "User-level only: the product repos that status --all and doctor --all iterate."
+    },
+    "branches": {
+      "properties": {
+        "dev": {
+          "type": "string",
+          "description": "Integration branch; pull requests target it."
+        },
+        "rolling": {
+          "type": "string",
+          "description": "Canary snapshot branch; empty when the product has none."
+        },
+        "main": {
+          "type": "string",
+          "description": "Stable release branch."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "The product's branches that play dev, rolling, and main when they have other names (written by init; nothing is renamed)."
+    },
+    "measure": {
+      "properties": {
+        "acquisition": {
+          "type": "string",
+          "description": "Event that acquires a user (e.g. signed_up); empty means a user's first event in the window."
+        },
+        "activation": {
+          "type": "string",
+          "description": "Event that activates an acquired user within activation_days."
+        },
+        "activation_days": {
+          "type": "integer",
+          "description": "Days after acquisition an activation counts; default 7."
+        },
+        "retention": {
+          "type": "string",
+          "description": "Event that counts as activity in days 7-13 after acquisition; empty means any event."
+        },
+        "referral": {
+          "type": "string",
+          "description": "Event by which an acquired user refers someone (e.g. invited_user)."
+        },
+        "north_star": {
+          "type": "string",
+          "description": "North Star: an event (distinct users who sent it in the window) or revenue (paid total in the window)."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "The events measure (WP7.2) reads as AARRR stages and the North Star."
+    },
+    "design": {
+      "properties": {
+        "tokens": {
+          "type": "string",
+          "description": "Design-token source (tokens.json in the W3C design-tokens format) whose colours and type scale mockups and prototypes must use."
+        },
+        "flags": {
+          "type": "string",
+          "description": "OpenFeature flag definitions (flagd JSON) that must declare each prototype's flag, off by default."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Where the design verbs (WP6.5) find the design tokens and the OpenFeature flag definitions."
+    },
+    "review": {
+      "properties": {
+        "figma_diff_max": {
+          "type": "number",
+          "maximum": 100,
+          "minimum": 0,
+          "description": "Largest share of pixels, in percent, a prototype screenshot may differ from its Figma frame after the anti-aliasing mask; colour and typography token mismatches must be zero regardless."
+        },
+        "baseline": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "URL paths on the [verify.environments] target that baseline captures for each commit (WP6.6)."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Tolerances of the prototype's Figma screenshot diff (WP6.5) and UI review (WP6.6)."
+    },
+    "team": {
+      "properties": {
+        "stage": {
+          "type": "string",
+          "enum": [
+            "startup",
+            "scaleup",
+            "enterprise"
+          ],
+          "description": "startup, scaleup, or enterprise. Unset: inferred from size (15 or fewer people startup, up to 150 scaleup, more enterprise)."
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "People on the product team. Unset: the paired seat humans plus the founder."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "The team the seat twins adapt their practice to (WP5.1b): depth and ceremony only, never the floors, the evidence rule, or human-only gates."
+    },
+    "ui": {
+      "properties": {
+        "plain": {
+          "type": "boolean",
+          "description": "Words only on a terminal: no colour, motion, emoji, or box drawing (screen-reader friendly); the same as --plain."
+        },
+        "theme": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "saffron",
+            "contrast",
+            "mono"
+          ],
+          "description": "Colour theme: auto (the terminal's own 16 colours, default), saffron (warm true colour for dark terminals), contrast (bright and bold), or mono (no hue)."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "How aayu looks on a person's terminal (WP1.1b); usually set in the user-level config. Machines (--json, MCP, agents, CI, pipes) always get plain, stable text."
+    },
+    "inspect": {
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "general",
+            "peer"
+          ],
+          "description": "general: one reviewer; peer: two reviewers of different families (both different from the builder's) cross-check each other's findings."
+        },
+        "delegated_mode": {
+          "type": "string",
+          "enum": [
+            "general",
+            "peer"
+          ],
+          "description": "Mode for a PR another agent built through build --delegate (WP5.5b)."
+        },
+        "min_confidence": {
+          "type": "number",
+          "maximum": 1,
+          "minimum": 0,
+          "description": "P2 and P3 findings below this reviewer confidence are not posted; P0 and P1 always are."
+        },
+        "suppress_after": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "A finding resembling this many distinct human dismissals in the same file or directory is not posted (never a P0 in security, data, or concurrency); 0 turns suppression off."
+        },
+        "peer_model": {
+          "type": "string",
+          "description": "Model ID of the peer reviewer; empty picks the first of the registry's review candidates whose family differs from the builder's and the first reviewer's."
+        },
+        "generated": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Path patterns (path.Match) of generated files that inspect does not review; the drift check owns them. Files whose header says Code generated ... DO NOT EDIT are skipped too."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "How inspect reviews a PR (WP4.8b): its mode, noise filters, and peer reviewer."
+    },
+    "delegate": {
+      "properties": {
+        "cursor_secret": {
+          "type": "string",
+          "description": "Name of the secret holding the Cursor API key (aayu auth set-secret)."
+        },
+        "cursor_api": {
+          "type": "string",
+          "description": "Base URL of Cursor's cloud agents API."
+        },
+        "cursor_model": {
+          "type": "string",
+          "description": "Model ID the Cursor cloud agent runs; empty: Cursor's default (its family is then unknown to aayu, so inspect names concrete reviewer families)."
+        },
+        "codex_env": {
+          "type": "string",
+          "description": "ID of the Codex cloud environment whose Install script runs bash .agents/setup; empty: Codex runs only locally."
+        },
+        "amp_orb_size": {
+          "type": "string",
+          "description": "Orb size of a delegated Amp thread; empty: the Amp project's default."
+        },
+        "claude_trigger": {
+          "type": "string",
+          "description": "The trigger phrase of the repository's claude-code-action workflow."
+        },
+        "checks": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Commands the brief tells a receiver to run before it finishes; empty: the checks AGENTS.md lists."
+        },
+        "local_timeout_minutes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Longest run of a receiver's CLI in an aayu worktree (--local)."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "How build --delegate reaches other agents (WP5.5b). Values name secrets; they never hold them."
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "title": "aayudha config",
+  "description": "Code generated by go generate (internal/verbs/gen) from internal/config; DO NOT EDIT. Layered: user, .aayudha/config.toml, .aayudha/config.local.toml, AAYU_\u003cSECTION\u003e__\u003cKEY\u003e, --set."
+}

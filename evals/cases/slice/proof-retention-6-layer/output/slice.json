@@ -1,0 +1,107 @@
+{
+  "feature": 40,
+  "stories": [
+    {
+      "title": "Migrate proof retention to per-kind days",
+      "fields": {
+        "summary": "As a quality architect, I want retention_days migrated to a retention per artifact kind, so that existing configs keep their meaning.",
+        "completion_goal": "1. [api-trace] state: a config with `[proof] retention_days = 90`; expected: `aayu config show` reports 90 days for every kind after the migration\n2. [api-trace] state: `aayu upgrade` on that config, then its rollback; expected: the file is restored byte for byte",
+        "measure": "Completion Goal criteria observed",
+        "threshold": "all 2 criteria",
+        "scenario": "Load a v1 config, run the migration, show the config, then roll the migration back.",
+        "environment": "local checkout with synthetic fixtures; never production"
+      },
+      "labels": [
+        "effort:M",
+        "priority:P2"
+      ],
+      "paths": [
+        "internal/config/**"
+      ]
+    },
+    {
+      "title": "Purge proof media by kind",
+      "fields": {
+        "summary": "As a quality architect, I want purge to drop each artifact kind after its own retention, so that recordings go before reports.",
+        "completion_goal": "1. [api-trace] state: a ledger with a 40-day-old recording and report, recordings kept 30 days and reports 365; expected: purge tombstones the recording and keeps the report",
+        "measure": "Completion Goal criteria observed",
+        "threshold": "all 1 criteria",
+        "scenario": "Push two packs dated 40 days ago, set the retentions, and run purge.",
+        "environment": "local checkout with synthetic fixtures; never production"
+      },
+      "labels": [
+        "effort:M",
+        "priority:P2"
+      ],
+      "paths": [
+        "internal/proof/**"
+      ],
+      "depends_on": [
+        1
+      ]
+    },
+    {
+      "title": "proof purge --kind",
+      "fields": {
+        "summary": "As a human, I want `aayu proof purge --kind recording`, so that I can purge one kind by hand.",
+        "completion_goal": "1. [api-trace] state: `aayu proof purge --kind recording --dry-run` on the fixture ledger; expected: only recordings are listed for purge",
+        "measure": "Completion Goal criteria observed",
+        "threshold": "all 1 criteria",
+        "scenario": "Run the command with --dry-run against the fixture ledger.",
+        "environment": "local checkout with synthetic fixtures; never production"
+      },
+      "labels": [
+        "effort:S",
+        "priority:P2"
+      ],
+      "paths": [
+        "internal/cli/proof.go",
+        "skills/proof/**"
+      ],
+      "depends_on": [
+        2
+      ]
+    },
+    {
+      "title": "List ledger packs through the API",
+      "fields": {
+        "summary": "As purge, I want to list packs through the GitHub contents API, so that a scheduled run needs no full clone.",
+        "completion_goal": "1. [api-trace] state: the fake GitHub serving a ledger tree with three packs; expected: the listing returns the three pack paths",
+        "measure": "Completion Goal criteria observed",
+        "threshold": "all 1 criteria",
+        "scenario": "Serve a recorded ledger tree and list it.",
+        "environment": "local checkout with synthetic fixtures; never production"
+      },
+      "labels": [
+        "effort:S",
+        "priority:P2"
+      ],
+      "paths": [
+        "internal/github/**"
+      ]
+    },
+    {
+      "title": "Scheduled proof purge",
+      "fields": {
+        "summary": "As a quality architect, I want purge to run weekly in Actions, so that retention holds without anyone remembering it.",
+        "completion_goal": "1. [api-trace] state: the purge workflow dispatched on a scratch repository with an expired recording; expected: the run tombstones it and succeeds",
+        "measure": "Completion Goal criteria observed",
+        "threshold": "all 1 criteria",
+        "scenario": "Dispatch the workflow on a scratch repository and read the ledger after it.",
+        "environment": "local checkout with synthetic fixtures; never production"
+      },
+      "labels": [
+        "effort:S",
+        "priority:P2"
+      ],
+      "paths": [
+        ".github/workflows/**"
+      ],
+      "depends_on": [
+        3,
+        4
+      ]
+    }
+  ],
+  "open_questions": []
+}

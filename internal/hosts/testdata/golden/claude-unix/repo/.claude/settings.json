@@ -1,0 +1,32 @@
+{
+  "enabledMcpjsonServers": [
+    "aayudha"
+  ],
+  "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "\"/opt/aayudha/bin/aayu\" hook pre-tool --host claude",
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "\"/opt/aayudha/bin/aayu\" hook session-start --host claude",
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "command": "\"/opt/aayudha/bin/aayu\" hook status-line --host claude",
+    "type": "command"
+  }
+}

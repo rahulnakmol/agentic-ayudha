@@ -1,0 +1,14 @@
+{
+  "number": 40,
+  "title": "Grill asks a follow-up when an answer is vague",
+  "state": "open",
+  "body": "### Summary\n\nWhen a human gives a vague answer during `aayu grill`, the interview asks one follow-up question before moving on.\n\n### Problem\n\nGrilled stories often carry criteria such as \"works well\" that the Ready check accepts but nobody can observe; four of the last ten stories were sent back at review for that.\n\n### Scope\n\nIn scope: follow-up questions in the grill skill and the CLI interview, and eval cases for them. Out of scope: other verbs' interviews.\n\n### Expected paths\n\ninternal/cli/grill*.go\nskills/grill/**\nevals/cases/grill/**\n",
+  "labels": [
+    {
+      "name": "type:feature"
+    },
+    {
+      "name": "status:planned"
+    }
+  ]
+}

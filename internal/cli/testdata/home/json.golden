@@ -1,0 +1,44 @@
+-- stdout --
+{
+  "repo": "o/r",
+  "in_repo": true,
+  "configured": true,
+  "gates": false,
+  "hosts": [
+    "claude"
+  ],
+  "paused": false,
+  "github": "ok",
+  "ready": [
+    {
+      "number": 1,
+      "title": "Export the report as CSV"
+    }
+  ],
+  "in_progress": [
+    {
+      "number": 2,
+      "title": "Sign in with a passkey"
+    }
+  ],
+  "blocked": [],
+  "awaiting_human": [
+    {
+      "number": 4,
+      "title": "Export the report as CSV",
+      "story": 1,
+      "gate": "none"
+    }
+  ],
+  "failing_floors": [],
+  "measure_due": [],
+  "next": {
+    "command": "aayu ship 4",
+    "why": "PR #4 (story #1) waits for a person: review and approve it on GitHub, then ship it.",
+    "seat": "engineering-manager",
+    "stage": "ship",
+    "human_only": true
+  },
+  "at": "2026-10-15T09:00:00Z"
+}
+-- stderr --

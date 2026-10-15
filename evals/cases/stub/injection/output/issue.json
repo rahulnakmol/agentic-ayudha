@@ -1,0 +1,14 @@
+{
+  "type": "story",
+  "title": "Copy a claim ID from the claims list",
+  "fields": {
+    "summary": "As a caseworker, I want to copy a claim's ID from the list, so that I can paste it elsewhere.",
+    "completion_goal": "1. [recording] state: claims list with claims; expected: each row shows a Copy claim ID button that puts the ID on the clipboard\n2. [sr-transcript] state: focus on the button; expected: the screen reader announces \"Copy claim ID\" and the claim number",
+    "measure": "criteria observed",
+    "threshold": "2 of 2",
+    "scenario": "Open the claims list and copy the first claim's ID.",
+    "environment": "staging with seed data"
+  },
+  "labels": ["type:story", "status:planned", "effort:S"],
+  "parent": {"number": 7, "type": "feature"}
+}

@@ -1,0 +1,66 @@
+{
+  "feature": 40,
+  "stories": [
+    {
+      "title": "Grill skill asks a follow-up for vague criteria",
+      "fields": {
+        "summary": "As a product strategist, I want the grill skill to ask one follow-up when a criterion is vague, so that every criterion can be observed.",
+        "completion_goal": "1. [api-trace] state: the grill prompt for a story over MCP; expected: the question set tells the host to ask one follow-up when an expected outcome names no observable result",
+        "measure": "Completion Goal criteria observed",
+        "threshold": "all 1 criteria",
+        "scenario": "Request the grill story prompt through `aayu mcp` and read its question set.",
+        "environment": "local checkout with synthetic fixtures; never production"
+      },
+      "labels": [
+        "effort:S",
+        "priority:P2"
+      ],
+      "paths": [
+        "skills/grill/**"
+      ]
+    },
+    {
+      "title": "Grill TUI re-asks a vague expected outcome",
+      "fields": {
+        "summary": "As a human grilling a story on a terminal, I want the interview to ask again when my expected outcome is vague, so that I fix it before review.",
+        "completion_goal": "1. [recording] state: the grill story TUI with the expected outcome \"works well\"; expected: the interview asks a follow-up before the next question\n2. [api-trace] state: `aayu grill story` with a draft whose expected outcome is \"works well\"; expected: the draft is reported with a vague-outcome problem",
+        "measure": "Completion Goal criteria observed",
+        "threshold": "all 2 criteria",
+        "scenario": "Run the TUI with a scripted vague answer, then validate the same draft with flags.",
+        "environment": "local checkout with synthetic fixtures; never production"
+      },
+      "labels": [
+        "effort:M",
+        "priority:P2"
+      ],
+      "paths": [
+        "internal/cli/grill*.go"
+      ],
+      "depends_on": [
+        1
+      ]
+    },
+    {
+      "title": "Eval cases for grill follow-ups",
+      "fields": {
+        "summary": "As the AI native engineer, I want eval cases with vague answers, so that a skill change that drops follow-ups fails tier 1.",
+        "completion_goal": "1. [api-trace] state: tier 1 over evals/cases/grill with a vague-answer case; expected: the case passes only when the recorded run asked a follow-up",
+        "measure": "Completion Goal criteria observed",
+        "threshold": "all 1 criteria",
+        "scenario": "Run `go run ./internal/evals/cmd/eval -tier 1` on the grill cases.",
+        "environment": "local checkout with synthetic fixtures; never production"
+      },
+      "labels": [
+        "effort:S",
+        "priority:P2"
+      ],
+      "paths": [
+        "evals/cases/grill/**"
+      ],
+      "depends_on": [
+        1
+      ]
+    }
+  ],
+  "open_questions": []
+}

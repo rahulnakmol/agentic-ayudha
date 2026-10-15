@@ -1,0 +1,52 @@
+name: models-live
+
+# Live model calls through the AI gateway (docs/BUILD-PLAN.md WP1.6). Never runs on pull requests: the
+# `ai-gateway` environment is restricted to the dev, rolling, and main branches, and fork PRs must never see
+# its key. Runs after a merge to dev that touches the model gateway, daily, and on demand. Skips cleanly
+# (green) while the environment's secret is not set.
+on:
+  push:
+    branches: [dev]
+    paths: ["internal/models/**", "internal/verbs/registry.go", ".github/workflows/models-live.yml"]
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: models-live
+  cancel-in-progress: false
+
+jobs:
+  live:
+    name: models-live
+    runs-on: ubuntu-latest
+    environment: ai-gateway
+    timeout-minutes: 10
+    env:
+      AAYU_LIVE: "1"
+      AAYU_AI_GATEWAY_URL: ${{ vars.AAYU_AI_GATEWAY_URL }}
+      AAYU_SECRET_AI_GATEWAY: ${{ secrets.AAYU_SECRET_AI_GATEWAY }}
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.25.x"
+          cache: false
+      - name: Live gateway calls (skip while the secret is absent)
+        run: |
+          if [ -z "$AAYU_SECRET_AI_GATEWAY" ]; then
+            echo "::notice::AAYU_SECRET_AI_GATEWAY is not set in the ai-gateway environment; skipping live model calls."
+            exit 0
+          fi
+          go test -count=1 -run Live -v ./internal/models

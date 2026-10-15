@@ -1,0 +1,5 @@
+# Quarterly skill evolution (WP7.7). The cron is in [time] tz.
+description = "Quarterly evolve: accepted retro Feedback becomes a failing eval case, then a skill diff that passes it."
+command = ["evolve"]
+cron = "0 10 2 1,4,7,10 *"
+prompt = "Report the eval cases and the agent-authored pull requests aayu evolve opened."

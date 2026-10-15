@@ -1,0 +1,22 @@
+# The story's arc (docs/guide/journey.md). Rendered to journey.svg by go generate.
+title: The journey from an idea to a measured release, in nine chapters
+direction: down
+shape: 1. The goal: grill goal
+breakdown: 2. The plan: slice, plan
+ready: 3. The promises: grill story, ready
+build: 4. The build: build
+prove: 5. The gate says no: verify, inspect
+ship: 6. The yes: ship
+release: 7. The release: release
+learn: 8. The number: measure, retro
+explain: 9. The telling: brief, tell
+shape -> breakdown
+breakdown -> ready
+ready -> build: you say Ready
+build -> prove
+prove -> build: fix
+prove -> ship: you give the yes
+ship -> release
+release -> learn
+learn -> explain
+learn -> shape: the next goal

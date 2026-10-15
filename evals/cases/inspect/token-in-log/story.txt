@@ -1,0 +1,2 @@
+Log rejected API tokens
+When an API token is rejected, the server logs why, so support can explain the 401 to the customer.

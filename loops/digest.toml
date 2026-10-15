@@ -1,0 +1,5 @@
+# Founder digest (WP2.8, WP7.1). It runs as business hours open, not overnight: [notify] holds non-urgent pages
+# until business hours ([time]), and a scheduled run keeps no held pages. The cron is in [time] tz.
+description = "Founder digest: the status rollup of every open Goal, paged through [notify]."
+command = ["status", "--digest"]
+cron = "5 9 * * 1-5"

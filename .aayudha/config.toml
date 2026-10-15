@@ -1,0 +1,32 @@
+# aayudha configuration for rahulnakmol/agentic-ayudha, written by `aayu init` (WP2.5). It layers on the defaults built into
+# the binary; `aayu config show --origin` shows where each value comes from. Protected path: changes need a
+# human CODEOWNER review.
+version = 1
+
+[proof]
+media = "" # optional private bucket. Proof media stay in the merge gate's run artifact without one; design and UI baseline media need one here, since a public repository never puts media in Git LFS (V3).
+
+# aayudha has no paging channel yet: pages go to a JSON-lines outbox, which the Actions loops keep as an artifact (WP7.1).
+[notify]
+channel = "file"
+
+# The nine-layer example product examples/benefits-qa (WP8.1) is the only app in this repository, so the web floors
+# (WP4.5) capture it: `[verify] seed` builds it and starts it on seeded, synthetic data (V3), detached, on the local
+# target; a story without screenshot or recording criteria never runs them. Budgets are the example's own.
+[verify]
+seed = ["examples/benefits-qa/deploy/serve.sh"]
+
+[verify.environments.local]
+url = "http://127.0.0.1:8787"
+
+[verify.floors.perf]
+min_score = 0.9
+max_lcp_ms = 2500
+max_cls = 0.1
+max_tbt_ms = 200
+
+# Snapshot metrics of the example's Goal and Initiative (WP7.2), from its synthetic Application Insights exports.
+[measure]
+acquisition = "benefits_visit"
+activation = "answer_grounded"
+activation_days = 7

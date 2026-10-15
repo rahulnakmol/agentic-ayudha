@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "aayudha": {
+      "args": [
+        "mcp"
+      ],
+      "command": "C:\\Program Files\\aayudha\\aayu.exe"
+    }
+  }
+}

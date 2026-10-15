@@ -1,0 +1,25 @@
+{
+  "story": 41,
+  "checkpoints": [
+    {
+      "layer": "L07",
+      "title": "Migrate [proof] retention_days to [proof.retention] per kind",
+      "contracts": [
+        "config schema v2: [proof.retention] screenshot_days, recording_days, report_days; v1 retention_days maps to all three"
+      ],
+      "tests": [
+        "internal/config:TestMigrateRetentionV1ToV2",
+        "internal/upgrade:TestRetentionMigrationRollback"
+      ],
+      "instrumentation": [
+        "upgrade logs the migrated keys and their values"
+      ],
+      "rollback": "aayu upgrade --rollback restores the v1 file from the backup the migration writes; the down step rewrites retention_days from report_days",
+      "criteria": [
+        1,
+        2
+      ]
+    }
+  ],
+  "open_questions": []
+}

@@ -1,0 +1,13 @@
+# Recorded run of the grill skill (`grill bug`, WP5.3): the host model interviewed with references/bug.md, validated the
+# draft, and wrote it with --create. github/ serves the created issue (#21) and its parent so the recorded `ready --check` sees
+# what the run wrote.
+skill = "grill"
+description = "Grill a Bug from a request; the issue it writes passes Ready."
+input = "input.txt"
+artifacts = ["output/issue.json"]
+schemas = [{ file = "output/issue.json", schema = "evals/schemas/workitem.json" }]
+ready = ["output/issue.json"]
+calls = [
+  ["grill", "bug", "--parent", "20", "--title", "Claims list shows a stale status after approval", "--body", "### Summary\n\nThe claims list keeps showing a claim's old status after a caseworker changes it.\n\n### Steps to reproduce\n\n1. Sign in as the seeded claimant with one submitted claim.\n2. As the seeded caseworker, approve that claim.\n3. As the claimant, reload the claims list.\n\n### Expected behaviour\n\nThe claim shows \"Approved\".\n\n### Actual behaviour\n\nThe claim shows \"Submitted\" until the claimant signs out and back in.\n\n### Completion Goal\n\n1. [screenshot] state: `/claims` as the seeded claimant after the caseworker approved the claim; expected: the claim shows \"Approved\" on the next page load\n2. [api-trace] state: GET /api/claims as the seeded claimant after the approval; expected: the claim's status is approved\n\n### Measure\n\nCompletion Goal criteria observed\n\n### Threshold\n\nall 2 criteria\n\n### Scenario\n\nApprove the seeded claimant's submitted claim as the caseworker, then reload the claimant's claims list and call GET /api/claims as the claimant.\n\n### Environment\n\nlocal app with the seeded synthetic claimant and caseworker; never production", "--labels", "effort:S,priority:P1", "--create"],
+  ["ready", "21", "--check"],
+]

@@ -1,0 +1,13 @@
+{
+  "rules": [
+    {
+      "enabled": true,
+      "name": "{{.AzureRule}}",
+      "type": "Lifecycle",
+      "definition": {
+        "actions": {"baseBlob": {"delete": {"daysAfterCreationGreaterThan": {{.Retention}}}}},
+        "filters": {"blobTypes": ["blockBlob"], "prefixMatch": ["<container>/{{.Name}}/proof/{{.Repo}}/"]}
+      }
+    }
+  ]
+}

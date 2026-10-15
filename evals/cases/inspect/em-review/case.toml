@@ -1,0 +1,16 @@
+# Persona case (WP5.1b), tier 1 only: an Engineering Manager-voice review of PR #219 at the scaleup stage, whose
+# findings cite code, LAYERS.md, the plan, and CONSTRAINTS.md. planted/review.md is the same review with one planted,
+# uncited architectural claim ("the ledger package already stores the kind"); the evidence rule must catch it.
+# inspect runs in the review lane, which the tier-2 judge also uses, so this case has no tier 2 (the retro cases do).
+skill = "inspect"
+description = "Athena reviews PR #219 with grounded citations; a planted uncited claim fails."
+input = "../../retro/grounding.md"
+artifacts = ["output/review.md", "planted/review.md"]
+
+[persona]
+seat = "engineering-manager"
+stage = "scaleup"
+practice = "coaching-nudges"
+draft = "output/review.md"
+planted = "planted/review.md"
+task = "Review PR #219 as the Engineering Manager twin and nudge it toward the right correction."

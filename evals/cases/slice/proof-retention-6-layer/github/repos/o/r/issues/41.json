@@ -1,0 +1,20 @@
+{
+  "number": 41,
+  "title": "Migrate proof retention to per-kind days",
+  "state": "open",
+  "body": "### Summary\n\nAs a quality architect, I want retention_days migrated to a retention per artifact kind, so that existing configs keep their meaning.\n\n### Completion Goal\n\n1. [api-trace] state: a config with `[proof] retention_days = 90`; expected: `aayu config show` reports 90 days for every kind after the migration\n2. [api-trace] state: `aayu upgrade` on that config, then its rollback; expected: the file is restored byte for byte\n\n### Measure\n\nCompletion Goal criteria observed\n\n### Threshold\n\nall 2 criteria\n\n### Scenario\n\nLoad a v1 config, run the migration, show the config, then roll the migration back.\n\n### Environment\n\nlocal checkout with synthetic fixtures; never production\n",
+  "labels": [
+    {
+      "name": "type:story"
+    },
+    {
+      "name": "status:planned"
+    },
+    {
+      "name": "effort:M"
+    },
+    {
+      "name": "priority:P2"
+    }
+  ]
+}

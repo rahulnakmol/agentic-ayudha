@@ -1,0 +1,50 @@
+# aayudha Ready guard (docs/BUILD-PLAN.md WP2.7). Installed into product repos by `aayu init --gates` (WP2.6)
+# as .github/workflows/aayudha-ready-guard.yml; the template is embedded in the aayudha binary.
+#
+# When an issue labelled status:ready is labelled or edited, the guard re-validates it against the Ready
+# stage and compares its body hash with the Ready snapshot. On a failure or drift it removes status:ready
+# and says why in a comment. It writes labels and comments only, with this workflow's own token, and
+# never writes the ledger (Appendix B D1).
+name: aayudha-ready-guard
+
+on:
+  issues:
+    types: [labeled, edited]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: aayudha-ready-guard-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  ready-guard:
+    name: aayudha/ready-guard
+    if: contains(github.event.issue.labels.*.name, 'status:ready')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.25.x"
+          cache: false
+      - name: Install aayudha v0.4.0
+        run: go install github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@v0.4.0
+      - name: Guard
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+          ISSUE: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        run: aayudha ready "$ISSUE" --guard --ci --repo "$REPO"

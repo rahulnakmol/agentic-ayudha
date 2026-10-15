@@ -1,0 +1,13 @@
+# Recorded run of the grill skill (`grill feature`, WP5.3): the host model interviewed with references/feature.md, validated the
+# draft, and wrote it with --create. github/ serves the created issue (#21) and its parent so the recorded `ready --check` sees
+# what the run wrote.
+skill = "grill"
+description = "Grill a Feature from a request; the issue it writes passes Ready."
+input = "input.txt"
+artifacts = ["output/issue.json"]
+schemas = [{ file = "output/issue.json", schema = "evals/schemas/workitem.json" }]
+ready = ["output/issue.json"]
+calls = [
+  ["grill", "feature", "--parent", "20", "--title", "Claims list", "--body", "### Summary\n\nClaimants see their claims and each claim's status in one list, with an empty state when they have none.\n\n### Problem\n\nClaimants cannot see what happened to a claim they submitted; support logged 140 tickets in September 2026 asking where a claim went.\n\n### Scope\n\nIn scope: the list of a claimant's own claims with status, and the empty state. Out of scope: editing claims from the list.\n\n### Expected paths\n\ninternal/claims/**\nweb/src/claims/**", "--labels", "priority:P2", "--create"],
+  ["ready", "21", "--check"],
+]

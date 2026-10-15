@@ -1,0 +1,13 @@
+# Recorded run of the grill skill (`grill decision`, WP5.3): the host model interviewed with references/decision.md, validated the
+# draft, and wrote it with --create. github/ serves the created issue (#21) and its parent so the recorded `ready --check` sees
+# what the run wrote.
+skill = "grill"
+description = "Grill a Decision from a request; the issue it writes passes Ready."
+input = "input.txt"
+artifacts = ["output/issue.json"]
+schemas = [{ file = "output/issue.json", schema = "evals/schemas/workitem.json" }]
+ready = ["output/issue.json"]
+calls = [
+  ["grill", "decision", "--parent", "20", "--title", "How the claims list pages through long lists", "--body", "### Question\n\nHow should the claims list page through long lists? The list is being built now (Feature #20).\n\n### Options\n\n1. Numbered pages\n2. A Load more button\n\n### Evaluation\n\nNumbered pages let caseworkers return to a position in a long list. Load more is simpler for claimants, who have few claims.\n\n### Recommendation\n\nNumbered pages, because caseworkers return to positions in long lists.\n\n### Reversible\n\ntrue", "--labels", "priority:P2", "--create"],
+  ["ready", "21", "--check"],
+]

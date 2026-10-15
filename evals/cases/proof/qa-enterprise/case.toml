@@ -1,0 +1,14 @@
+# Persona case (WP5.1b), tier 1: the Quality Architect twin's test strategy for the #212 re-plan at the enterprise stage
+# (Master test plan). The same scenario runs as qa-startup and qa-enterprise; both must stay grounded and carry their own
+# stage's artefact and no other.
+skill = "proof"
+description = "Themis plans the tests for the #212 re-plan at the enterprise stage."
+input = "../../retro/grounding.md"
+artifacts = ["output/plan.md"]
+
+[persona]
+seat = "quality-architect"
+stage = "enterprise"
+practice = "test-strategy"
+draft = "output/plan.md"
+task = "Plan the tests for the #212 re-plan after the review on PR #219, as the Quality Architect twin at this team stage."

@@ -1,0 +1,505 @@
+package cli
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
+	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/github"
+	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
+	"github.com/rahulnakmol/agentic-ayudha/internal/initrepo"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/cloud"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
+	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
+	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
+)
+
+func init() { register("proof", runProof) }
+
+// ProofMarker marks the merge gate's replace-in-place proof comment on a PR
+// (S-4.2b); AdvisoryProofMarker marks an advisory push's comment, so an agent
+// preview never replaces the gate's.
+const (
+	ProofMarker         = "<!-- aayudha:proof -->"
+	AdvisoryProofMarker = "<!-- aayudha:proof-advisory -->"
+)
+
+// MergeGateWorkflow is the workflow whose CI-written packs are authoritative (WP4.8).
+const MergeGateWorkflow = initrepo.MergeGateWorkflow
+
+// DefaultMediaSecret names the secret holding the media store's credential
+// (proof.OpenMedia lists what each store takes).
+const DefaultMediaSecret = "proof-media"
+
+// visibility reports whether the repository is private: from init's state
+// when present, else from the API. Unknown counts as public (V3).
+func (e *Env) private(ctx context.Context, c *github.Client, repo string) bool {
+	if root := config.RepoRoot(e.Dir); root != "" {
+		if st, err := initrepo.LoadState(root); err == nil && st != nil && st.Visibility != "" {
+			return st.Visibility == "private"
+		}
+	}
+	if c == nil {
+		return false
+	}
+	owner, name, err := github.SplitRepo(repo)
+	if err != nil {
+		return false
+	}
+	r, _, err := c.REST.Repositories.Get(ctx, owner, name)
+	return err == nil && r.GetPrivate()
+}
+
+// proofStore builds the repository's proof store: its ledger under tok, and
+// the [proof] media bucket with credentials from the secrets store.
+func (e *Env) proofStore(ctx context.Context, c *github.Client, tok identity.Token, ident, tag string) (*proof.Store, error) {
+	l, err := e.Config()
+	if err != nil {
+		return nil, err
+	}
+	repo, err := e.RepoName(ctx)
+	if err != nil {
+		return nil, err
+	}
+	w, err := e.Ledger(ctx, tok, ident, tag)
+	if err != nil {
+		return nil, err
+	}
+	s := &proof.Store{Repo: repo, Ledger: w, Private: e.private(ctx, c, repo), RetentionDays: l.Config.Proof.RetentionDays}
+	if m := l.Config.Proof.Media; m != "" {
+		name := l.Config.Proof.MediaSecret
+		if name == "" {
+			name = DefaultMediaSecret
+		}
+		s.Bucket, err = proof.OpenMedia(m, proof.MediaOptions{
+			Secret:     func() string { v, _, _ := e.SecretStore().Get(name); return v },
+			SecretName: name, HTTP: e.HTTP, Now: e.Now, Env: cloud.Env{Getenv: e.Getenv, Now: e.Now},
+		})
+		if errors.Is(err, proof.ErrMediaSecret) {
+			return nil, Wrap(ExitBlocked, err)
+		}
+		if err != nil {
+			return nil, Wrap(ExitUsage, err)
+		}
+	}
+	return s, nil
+}
+
+// inMergeGate reports whether this process is the base-branch merge gate in
+// CI (WP4.8): a pull_request_target run (the base branch's copy of the file,
+// as ship requires, D-4.2b.a) whose workflow ref names aayudha-merge-gate.yml.
+func (e *Env) inMergeGate() bool {
+	return e.CI && e.Getenv("GITHUB_EVENT_NAME") == "pull_request_target" &&
+		strings.Contains(e.Getenv("GITHUB_WORKFLOW_REF"), "/.github/workflows/"+MergeGateWorkflow+"@")
+}
+
+func runProof(ctx context.Context, e *Env, in Values) error {
+	action := in.String("action")
+	story := 0
+	if in.Has("story") {
+		story = issueNumber(in.String("story"))
+	}
+	if action == "push" && in.Bool("media") {
+		if l, err := e.Config(); err != nil {
+			return err
+		} else if l.Config.Proof.Media == "" {
+			return Errorf(ExitBlocked, "proof push --media: %v", proof.ErrMediaRefused)
+		}
+	}
+	if story == 0 && (action == "push" || action == "get" || action == "verify" || action == "comment") {
+		return Errorf(ExitUsage, "proof %s needs a story", action)
+	}
+	repo, err := e.RepoName(ctx)
+	if err != nil {
+		return err
+	}
+	switch action {
+	case "push":
+		return e.proofPush(ctx, repo, story, in.Bool("media"))
+	case "comment":
+		return e.proofComment(ctx, repo, story)
+	}
+	// get, list, verify read the ledger with the human's token.
+	c, tok, err := e.HumanGitHub(ctx)
+	if err != nil {
+		return err
+	}
+	s, err := e.proofStore(ctx, c, tok, "human", "")
+	if err != nil {
+		return err
+	}
+	t, err := s.Ledger.Read(ctx)
+	if err != nil {
+		return ledgerErr(err)
+	}
+	defer t.Close()
+	switch action {
+	case "list":
+		es, err := s.Packs(ctx, t, story)
+		if err != nil {
+			return err
+		}
+		if es == nil {
+			es = []proof.Entry{}
+		}
+		return e.Emit(es, func(w io.Writer) error {
+			if len(es) == 0 {
+				_, err := fmt.Fprintln(w, "no proof packs on the ledger")
+				return err
+			}
+			for _, x := range es {
+				fmt.Fprintf(w, "#%d  %s  %-13s  floors hold: %-5t  %s\n", x.Pack.Story, short(x.Pack.PRHeadSHA), x.Pack.Authority.Kind, x.Pack.FloorsHold(), x.Path)
+			}
+			return nil
+		})
+	case "get":
+		x, err := s.Best(ctx, t, story)
+		if errors.Is(err, proof.ErrNoPack) {
+			return Wrap(ExitBlocked, err)
+		}
+		if err != nil {
+			return err
+		}
+		return e.Emit(x, func(w io.Writer) error {
+			b, err := proof.Encode(x.Pack)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(w, "%s\n", x.Path)
+			_, err = w.Write(b)
+			return err
+		})
+	case "verify":
+		x, err := s.Best(ctx, t, story)
+		if errors.Is(err, proof.ErrNoPack) {
+			return Wrap(ExitBlocked, err)
+		}
+		if err != nil {
+			return err
+		}
+		exp := proof.Expect{}
+		if b, err := t.File(ctx, ready.LedgerPath(story)); err == nil {
+			snap, err := ready.ParseSnapshot(string(b))
+			if err != nil {
+				return err
+			}
+			exp.CompletionGoalHash, exp.Criteria = snap.CompletionGoalHash, snap.Numbers()
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		if x.Pack.PR > 0 {
+			owner, name, _ := github.SplitRepo(repo)
+			pr, _, err := c.REST.PullRequests.Get(ctx, owner, name, x.Pack.PR)
+			if err != nil {
+				return Wrap(ExitExternal, err)
+			}
+			exp.HeadSHA = pr.GetHead().GetSHA()
+		}
+		rep := proof.Verify(x.Pack, exp, s.Opener(ctx, t, x))
+		if exp.CompletionGoalHash == "" {
+			rep.Problems = append(rep.Problems, fmt.Sprintf("no Ready snapshot at ledger %s to check the Completion Goal against", ready.LedgerPath(story)))
+			rep.OK = false
+		}
+		if err := e.Emit(rep, func(w io.Writer) error {
+			fmt.Fprintf(w, "#%d %s pack at %s: %d artifact(s) hashed, %d not stored; floors hold: %t\n", story, rep.Authority, short(rep.HeadSHA), rep.Hashed, rep.NotStored, rep.FloorsHold)
+			for _, p := range rep.Problems {
+				fmt.Fprintf(w, "  - %s\n", p)
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+		if !rep.OK {
+			return Errorf(ExitBlocked, "#%d: proof verify found %d problem(s)", story, len(rep.Problems))
+		}
+		return nil
+	}
+	return Errorf(ExitUsage, "proof: unknown action %q", action)
+}
+
+func ledgerErr(err error) error {
+	if errors.Is(err, ledger.ErrNoLedger) {
+		return Wrap(ExitBlocked, err)
+	}
+	return Wrap(ExitExternal, err)
+}
+
+func botIdent(b identity.Bot) string {
+	if b.Kind == identity.KindHumanFallback {
+		return identity.KindHumanFallback
+	}
+	return "bot"
+}
+
+// proofPush lands the local pack (.aayudha/proof/<story>/) on the ledger as
+// an advisory pack and keeps an advisory comment on the PR and the issue. A
+// push is never authoritative: only `aayu ship` lands the merge gate's pack,
+// after checking the run that built it (S-4.2b).
+func (e *Env) proofPush(ctx context.Context, repo string, story int, media bool) error {
+	root := config.RepoRoot(e.Dir)
+	if root == "" {
+		return Errorf(ExitUsage, "proof push needs a checkout holding the pack (.aayudha/proof/%d/)", story)
+	}
+	dir := proof.LocalDir(root, story)
+	if _, err := os.Stat(dir); err != nil {
+		return Errorf(ExitBlocked, "no local pack for #%d in %s: run `aayu verify` first", story, dir)
+	}
+	if e.CI {
+		return Errorf(ExitUsage, "proof push --ci: CI writes nothing to the ledger; the merge gate keeps its pack as the aayudha-pack run artifact and `aayu ship` lands it (S-4.2b)")
+	}
+	c, bot, err := e.BotGitHub(ctx, "")
+	if err != nil {
+		return err
+	}
+	s, err := e.proofStore(ctx, c, bot.Token, botIdent(bot), bot.Tag)
+	if err != nil {
+		return err
+	}
+	res, err := s.Push(ctx, dir, media, proof.Authority{Kind: proof.Advisory})
+	if errors.Is(err, proof.ErrMediaRefused) {
+		return Errorf(ExitBlocked, "proof push --media: %v", err)
+	}
+	if err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	p, _ := proof.LoadLocal(dir)
+	body := ProofComment(repo, res, p)
+	targets := []int{story}
+	if p != nil && p.PR > 0 {
+		targets = append(targets, p.PR)
+	}
+	for _, n := range targets {
+		if _, err := c.UpsertComment(ctx, repo, n, AdvisoryProofMarker, body, actions.Action{Kind: "github.comment.proof", Payload: map[string]any{"pack": res.Path, "authority": res.Authority}}); err != nil {
+			return err
+		}
+	}
+	return e.Emit(res, func(w io.Writer) error {
+		fmt.Fprintf(w, "#%d: %s pack for %s pushed to ledger %s (%s)\n", story, res.Authority, short(res.HeadSHA), res.Path, short(res.Commit))
+		for _, st := range res.Stores {
+			fmt.Fprintf(w, "  %s\n", st)
+		}
+		if res.LifecycleNote != "" {
+			fmt.Fprintf(w, "  retention: %s\n", res.LifecycleNote)
+		}
+		return nil
+	})
+}
+
+// ProofComment renders the replace-in-place advisory proof comment.
+func ProofComment(repo string, res proof.PushResult, p *proof.Pack) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s\n### Proof pack (%s)\n\n", AdvisoryProofMarker, res.Authority)
+	fmt.Fprintf(&b, "Head `%s` · ledger `%s` at `%s`\n\n", short(res.HeadSHA), res.Path, short(res.Commit))
+	b.WriteString("Advisory: pushed by an agent lane or a human. It never satisfies `aayu ship`, which lands only the merge gate's pack.\n\n")
+	if p != nil && len(p.Checks) > 0 {
+		floorTable(&b, p.Checks)
+	}
+	fmt.Fprintf(&b, "`aayu proof verify %d --repo %s` checks hashes, criterion mapping, and the head commit.\n", res.Story, repo)
+	return b.String()
+}
+
+func floorTable(b *strings.Builder, checks []proof.Check) {
+	b.WriteString("| Floor | Result | Value | Threshold | Tool |\n|---|---|---|---|---|\n")
+	for _, c := range checks {
+		res := c.Result
+		if c.Waiver != "" {
+			res += " (" + c.Waiver + ")"
+		}
+		fmt.Fprintf(b, "| %s | %s | %g | %g | %s %s |\n", c.Floor, res, c.Value, c.Threshold, c.Tool, c.Version)
+	}
+	b.WriteString("\n")
+}
+
+// GateComment is what the merge gate's aayudha/pack job reports and comments.
+type GateComment struct {
+	Story      int          `json:"story"`
+	PR         int          `json:"pr"`
+	HeadSHA    string       `json:"pr_head_sha"`
+	PackSHA256 string       `json:"pack_sha256"`
+	Artifact   string       `json:"artifact_url,omitempty"`
+	Run        string       `json:"run_url,omitempty"`
+	Expires    string       `json:"artifact_expires,omitempty"`
+	Report     proof.Report `json:"report"`
+	Comment    bool         `json:"comment_changed"`
+}
+
+// proofComment is the merge gate's aayudha/pack job (S-4.2b). It checks the
+// pack this run's gate job built, downloaded from the aayudha-pack run
+// artifact into .aayudha/proof/<story>/, against the PR's current head and the
+// story's Ready snapshot, and keeps one comment on the PR with each
+// criterion's verdict, the floors, the pack's SHA-256, and a link to the
+// artifact. It uses only the workflow token and writes nothing to the ledger.
+// It exits 4 when the pack does not verify and 3 when a floor does not hold,
+// so the check fails with it.
+func (e *Env) proofComment(ctx context.Context, repo string, story int) error {
+	if !e.inMergeGate() {
+		return Errorf(ExitUsage, "proof comment runs only in the merge gate (a pull_request_target run of %s, --ci); an agent previews its work with `aayu verify`, which stays advisory", MergeGateWorkflow)
+	}
+	root := config.RepoRoot(e.Dir)
+	if root == "" {
+		return Errorf(ExitUsage, "proof comment needs a checkout holding the pack (.aayudha/proof/%d/)", story)
+	}
+	dir := proof.LocalDir(root, story)
+	raw, err := os.ReadFile(filepath.Join(dir, proof.FileName))
+	if err != nil {
+		return Errorf(ExitBlocked, "no pack for #%d in %s: the gate job kept none in its aayudha-pack artifact", story, dir)
+	}
+	p, err := proof.Decode(raw)
+	if err != nil {
+		return Errorf(ExitBlocked, "#%d: the gate's pack.json: %v", story, err)
+	}
+	if p.Story != story || p.PR == 0 {
+		return Errorf(ExitBlocked, "#%d: the gate's pack is for #%d, PR %d", story, p.Story, p.PR)
+	}
+	c, tok, err := e.readClient(ctx)
+	if err != nil {
+		return err
+	}
+	owner, name, _ := github.SplitRepo(repo)
+	pr, _, err := c.REST.PullRequests.Get(ctx, owner, name, p.PR)
+	if err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	exp := proof.Expect{HeadSHA: pr.GetHead().GetSHA()}
+	var crit []workitems.Criterion
+	w, err := e.Ledger(ctx, tok, "ci", "")
+	if err != nil {
+		return err
+	}
+	t, err := w.Read(ctx)
+	if err != nil {
+		return ledgerErr(err)
+	}
+	b, err := t.File(ctx, ready.LedgerPath(story))
+	t.Close()
+	if err == nil {
+		snap, err := ready.ParseSnapshot(string(b))
+		if err != nil {
+			return err
+		}
+		exp.CompletionGoalHash, exp.Criteria, crit = snap.CompletionGoalHash, snap.Numbers(), snap.Criteria
+	}
+	sum := sha256.Sum256(raw)
+	g := GateComment{Story: story, PR: p.PR, HeadSHA: p.PRHeadSHA, PackSHA256: hex.EncodeToString(sum[:]),
+		Artifact: e.Getenv("AAYU_PACK_ARTIFACT_URL")}
+	if id := e.Getenv("GITHUB_RUN_ID"); id != "" {
+		g.Run = fmt.Sprintf("%s/%s/actions/runs/%s", strings.TrimRight(or(e.Getenv("GITHUB_SERVER_URL"), "https://github.com"), "/"), repo, id)
+	}
+	if d, err := strconv.Atoi(e.Getenv("AAYU_PACK_RETENTION_DAYS")); err == nil && d > 0 {
+		g.Expires = e.Now().UTC().AddDate(0, 0, d).Format(time.DateOnly)
+	}
+	g.Report = proof.VerifyLocal(dir, p, exp)
+	if exp.CompletionGoalHash == "" {
+		g.Report.Problems = append(g.Report.Problems, fmt.Sprintf("no Ready snapshot at ledger %s", ready.LedgerPath(story)))
+		g.Report.OK = false
+	}
+	body := gateCommentBody(g, p, crit)
+	if g.Comment, err = c.UpsertComment(ctx, repo, p.PR, ProofMarker, body, actions.Action{Kind: "github.comment.proof",
+		Payload: map[string]any{"story": story, "pack_sha256": g.PackSHA256, "ok": g.Report.OK, "floors_hold": g.Report.FloorsHold}}); err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	if err := e.Emit(g, func(w io.Writer) error {
+		fmt.Fprintf(w, "#%d pack at %s (sha256 %s): %d artifact(s) hashed; floors hold: %t\n", story, short(p.PRHeadSHA), short(g.PackSHA256), g.Report.Hashed, g.Report.FloorsHold)
+		for _, pr := range g.Report.Problems {
+			fmt.Fprintf(w, "  - %s\n", pr)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	if !g.Report.OK {
+		return Errorf(ExitBlocked, "#%d: the gate's pack does not verify: %s", story, strings.Join(g.Report.Problems, "; "))
+	}
+	if !g.Report.FloorsHold {
+		return Errorf(ExitFloor, "floor miss: %s", failing(p.Checks))
+	}
+	return nil
+}
+
+// gateCommentBody renders the merge gate's proof comment: each Ready
+// criterion's verdict, the floors, the pack's hash, and where the pack is.
+func gateCommentBody(g GateComment, p *proof.Pack, crit []workitems.Criterion) string {
+	var b strings.Builder
+	verdict := "proven"
+	switch {
+	case !g.Report.OK:
+		verdict = "does not verify"
+	case !g.Report.FloorsHold:
+		verdict = "floors do not hold"
+	}
+	fmt.Fprintf(&b, "%s\n### Proof pack: %s\n\n", ProofMarker, verdict)
+	fmt.Fprintf(&b, "Story #%d at head `%s`, built by this pull request's merge gate run from what it ran.\n\n", g.Story, short(g.HeadSHA))
+	evidence := map[int][]string{}
+	for _, c := range p.Criteria {
+		evidence[c.ID] = c.Evidence
+	}
+	stored := map[string]bool{}
+	for _, a := range p.Artifacts {
+		stored[a.Path] = true
+	}
+	ids := []int{}
+	text := map[int]string{}
+	for _, c := range crit {
+		ids, text[c.N] = append(ids, c.N), c.State
+	}
+	if len(ids) == 0 {
+		for _, c := range p.Criteria {
+			ids = append(ids, c.ID)
+		}
+	}
+	b.WriteString("| Criterion | Verdict | Evidence |\n|---|---|---|\n")
+	for _, n := range ids {
+		v, refs := "no evidence", []string{}
+		for _, ref := range evidence[n] {
+			refs = append(refs, "`"+ref+"`")
+		}
+		if len(refs) > 0 {
+			v = "evidence from this run"
+			for _, ref := range evidence[n] {
+				if !stored[ref] {
+					v = "evidence missing from the pack"
+				}
+			}
+		}
+		label := fmt.Sprint(n)
+		if t := strings.TrimSpace(text[n]); t != "" {
+			label += ". " + strings.ReplaceAll(t, "|", "\\|")
+		}
+		fmt.Fprintf(&b, "| %s | %s | %s |\n", label, v, or(strings.Join(refs, ", "), "—"))
+	}
+	b.WriteString("\n")
+	if len(p.Checks) > 0 {
+		floorTable(&b, p.Checks)
+	}
+	if len(g.Report.Problems) > 0 {
+		b.WriteString("Problems:\n\n")
+		for _, pr := range g.Report.Problems {
+			fmt.Fprintf(&b, "- %s\n", pr)
+		}
+		b.WriteString("\n")
+	}
+	fmt.Fprintf(&b, "`pack.json` SHA-256: `%s`", g.PackSHA256)
+	if g.Artifact != "" {
+		fmt.Fprintf(&b, " · [aayudha-pack artifact](%s)", g.Artifact)
+	}
+	if g.Expires != "" {
+		fmt.Fprintf(&b, " (kept until %s)", g.Expires)
+	}
+	if g.Run != "" {
+		fmt.Fprintf(&b, " · [merge gate run](%s)", g.Run)
+	}
+	b.WriteString("\n\n")
+	b.WriteString("`aayu ship` lands this pack on the ledger (pack.json and data, no media) after checking that it came from this workflow's run on this head and that every hash matches. An agent's own preview never counts.\n")
+	return b.String()
+}

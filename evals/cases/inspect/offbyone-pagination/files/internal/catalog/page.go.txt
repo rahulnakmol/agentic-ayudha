@@ -1,0 +1,15 @@
+package catalog
+
+// Page returns the items of page n (1-based) with size items per page, and
+// whether another page follows. A page past the end is empty.
+func Page(items []string, n, size int) ([]string, bool) {
+	if n < 1 || size < 1 {
+		return nil, false
+	}
+	start := n * size
+	if start >= len(items) {
+		return nil, false
+	}
+	end := min(start+size, len(items))
+	return items[start:end], end < len(items)
+}

@@ -1,0 +1,22 @@
+name: protected-paths-review
+
+# Signal only: a review was submitted or dismissed. protected-paths-rerun.yml (which runs from the default
+# branch) re-runs the protected-paths check for the PR's head commit so an approval can turn it green.
+# This workflow runs from the PR's merge ref, so it must stay trivial: no token, no checkout, no PR data.
+on:
+  pull_request_review:
+    types: [submitted, dismissed]
+
+permissions: {}
+
+jobs:
+  signal:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - run: echo "Review recorded; protected-paths-rerun re-evaluates the gate from the default branch."

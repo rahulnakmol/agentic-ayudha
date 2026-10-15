@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rahulnakmol/agentic-ayudha/internal/proof/schema/pack.v1.json",
+  "title": "aayudha proof pack v1 (docs/BUILD-PLAN.md WP4.1)",
+  "type": "object",
+  "required": ["schema_version", "repo", "story", "pr_head_sha", "seat", "host", "identity", "authority", "completion_goal_hash", "criteria", "artifacts", "checks", "cost", "links", "created_at"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": 1},
+    "repo": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"},
+    "story": {"type": "integer", "minimum": 1},
+    "pr": {"type": "integer", "minimum": 1},
+    "pr_head_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "base_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "checkpoint": {"type": "string", "pattern": "^[0-9]+/[0-9]+$"},
+    "seat": {"type": "string", "minLength": 1},
+    "host": {"type": "string", "minLength": 1},
+    "model": {"type": "string"},
+    "identity": {"type": "string", "enum": ["bot", "human", "human-fallback", "ci"]},
+    "authority": {
+      "type": "object",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {"type": "string", "enum": ["advisory", "authoritative"]},
+        "workflow": {"type": "string"},
+        "run_id": {"type": "integer", "minimum": 1},
+        "writer": {"type": "string"}
+      }
+    },
+    "completion_goal_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "footprint": {"type": "array", "items": {"type": "string", "pattern": "^L[0-9]{2}$"}},
+    "criteria": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "evidence"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {"type": "integer", "minimum": 1},
+          "evidence": {"type": "array", "items": {"type": "string", "minLength": 1}}
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "kind", "sha256", "size", "store"],
+        "additionalProperties": false,
+        "properties": {
+          "path": {"type": "string", "pattern": "^[^/\\\\][^\\\\]*$"},
+          "kind": {"type": "string", "enum": ["screenshot", "recording", "sr-transcript", "api-trace", "metric", "report"]},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "size": {"type": "integer", "minimum": 0},
+          "store": {"type": "string", "enum": ["git", "lfs", "bucket", "none"]},
+          "object": {"type": "string"},
+          "tombstone": {
+            "type": "object",
+            "required": ["purged_at", "reason"],
+            "additionalProperties": false,
+            "properties": {
+              "purged_at": {"type": "string", "minLength": 1},
+              "reason": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["floor", "result", "value", "threshold", "tool", "version"],
+        "additionalProperties": false,
+        "properties": {
+          "floor": {"type": "string", "minLength": 1},
+          "result": {"type": "string", "enum": ["pass", "fail", "skipped", "waived", "blocked"]},
+          "value": {"type": "number"},
+          "threshold": {"type": "number"},
+          "tool": {"type": "string"},
+          "version": {"type": "string"},
+          "detail": {"type": "string"},
+          "waiver": {"type": "string", "pattern": "^#[0-9]+$"},
+          "network": {"type": "string", "enum": ["none", "isolated", "proxy-blocked", "allowed"]}
+        }
+      }
+    },
+    "cost": {
+      "type": "object",
+      "required": ["tokens_in", "tokens_out", "usd"],
+      "additionalProperties": false,
+      "properties": {
+        "tokens_in": {"type": "integer", "minimum": 0},
+        "tokens_out": {"type": "integer", "minimum": 0},
+        "usd": {"type": "number", "minimum": 0}
+      }
+    },
+    "links": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "issue": {"type": "string"},
+        "pr": {"type": "string"},
+        "ready_snapshot": {"type": "string"},
+        "actions": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "created_at": {"type": "string", "minLength": 1}
+  }
+}

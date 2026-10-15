@@ -1,0 +1,11 @@
+# Which tests prove story #53's Completion Goal (WP5.3; verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria). Criterion 2 (tier 2 at the WP3.4 bar) is proven after the merge by the
+# evals.yml run on dev, whose results file is committed as the baseline; no test in a PR run can show it.
+
+[[criterion]]
+id = 1 # one grill case per type, ten, each ending in an issue that passes ready (intake: Ready validation, D-5.3a)
+tests = ["internal/evals:TestTier1GrillEveryType", "internal/evals:TestTier1"]
+
+[[criterion]]
+id = 3 # a Goal with no reachable baseline is refused Ready naming the metric
+tests = ["internal/cli:TestGrillGoalBaseline"]

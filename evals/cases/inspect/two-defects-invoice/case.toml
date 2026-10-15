@@ -1,0 +1,28 @@
+# Seeded-defect PR for inspect (WP4.8b): Total skips the first line, and ParseQty never reports bad input (bug, contract).
+# Synthetic: written for this eval, with its defects planted on purpose; never run. The head's files are kept
+# as <path>.txt so this repository's build, linters, and scanners never compile or flag the planted defects.
+skill = "inspect"
+description = "Total skips the first line, and ParseQty never reports bad input (bug, contract)"
+input = "pr.diff"
+
+[review]
+story = "story.txt"
+files = "files"
+builder = "claude-opus-5-5"
+criteria = [
+  "1. [api-trace] state: `Total([{100 cents, qty 2}, {50 cents, qty 1}], 10)`; expected: returns 225",
+  "2. [api-trace] state: `ParseQty(\"abc\")` and `ParseQty(\"0\")`; expected: each returns an error",
+  "3. [api-trace] state: `Total(lines, 101)`; expected: returns an error",
+]
+
+[[review.defects]]
+file = "internal/invoice/total.go"
+lines = [15, 15]
+kind = "boundary"
+title = "the loop starts at 1 and skips the first line"
+
+[[review.defects]]
+file = "internal/invoice/total.go"
+lines = [23, 24]
+kind = "contract"
+title = "ParseQty drops the parse error and accepts 0 and negatives"

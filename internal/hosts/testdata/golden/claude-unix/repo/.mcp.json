@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "aayudha": {
+      "args": [
+        "mcp"
+      ],
+      "command": "/opt/aayudha/bin/aayu"
+    }
+  }
+}

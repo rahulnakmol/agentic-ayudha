@@ -1,0 +1,13 @@
+# Recorded run of the grill skill (`grill initiative`, WP5.3): the host model interviewed with references/initiative.md, validated the
+# draft, and wrote it with --create. github/ serves the created issue (#21) and its parent so the recorded `ready --check` sees
+# what the run wrote.
+skill = "grill"
+description = "Grill a Initiative from a request; the issue it writes passes Ready."
+input = "input.txt"
+artifacts = ["output/issue.json"]
+schemas = [{ file = "output/issue.json", schema = "evals/schemas/workitem.json" }]
+ready = ["output/issue.json"]
+calls = [
+  ["grill", "initiative", "--parent", "20", "--title", "Guide new claimants through their first claim", "--body", "### Summary\n\nShow new claimants a guided checklist for their first claim, to move Goal #20's activation.\n\n### Hypothesis\n\nIf new claimants see a checklist of the documents to gather before they start, activation rises from 0.31 to 0.36 because they no longer abandon the claim to look for documents.\n\n### Metric\n\nactivation\n\n### Baseline\n\n0.31: activation over the weekly cohorts of 2026-08-31 to 2026-09-28, from `aayu measure` snapshot all-20261005T060000Z.sqlite\n\n### Target\n\n>= 0.36 by 2026-12-31", "--labels", "priority:P1", "--create"],
+  ["ready", "21", "--check"],
+]

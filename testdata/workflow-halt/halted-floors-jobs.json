@@ -1,0 +1,114 @@
+[
+  {
+    "conclusion": "failure",
+    "name": "floors-dast",
+    "steps": [
+      {
+        "conclusion": "success",
+        "name": "Set up job",
+        "number": 1
+      },
+      {
+        "conclusion": "failure",
+        "name": "Halt check (aayu halt, WP5.7)",
+        "number": 2
+      },
+      {
+        "conclusion": "skipped",
+        "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "number": 3
+      },
+      {
+        "conclusion": "skipped",
+        "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+        "number": 4
+      },
+      {
+        "conclusion": "skipped",
+        "name": "k6 (pinned, SHA-256 checked)",
+        "number": 5
+      },
+      {
+        "conclusion": "skipped",
+        "name": "DAST and API floors (reflected XSS, k6 thresholds)",
+        "number": 6
+      },
+      {
+        "conclusion": "success",
+        "name": "Complete job",
+        "number": 7
+      }
+    ]
+  },
+  {
+    "conclusion": "failure",
+    "name": "floors-web",
+    "steps": [
+      {
+        "conclusion": "success",
+        "name": "Set up job",
+        "number": 1
+      },
+      {
+        "conclusion": "failure",
+        "name": "Halt check (aayu halt, WP5.7)",
+        "number": 2
+      },
+      {
+        "conclusion": "skipped",
+        "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "number": 3
+      },
+      {
+        "conclusion": "skipped",
+        "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+        "number": 4
+      },
+      {
+        "conclusion": "skipped",
+        "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+        "number": 5
+      },
+      {
+        "conclusion": "skipped",
+        "name": "Run pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413",
+        "number": 6
+      },
+      {
+        "conclusion": "skipped",
+        "name": "Install the floor tools (frozen lockfile)",
+        "number": 7
+      },
+      {
+        "conclusion": "skipped",
+        "name": "Install Chromium",
+        "number": 8
+      },
+      {
+        "conclusion": "skipped",
+        "name": "Web floors (axe, keyboard, reduced motion, text scale, targets, redaction, Lighthouse)",
+        "number": 9
+      },
+      {
+        "conclusion": "skipped",
+        "name": "Prototype capture and figma-diff gate (WP6.5)",
+        "number": 10
+      },
+      {
+        "conclusion": "skipped",
+        "name": "Review lane B on the planted and clean fixtures; review, polish, and baseline end to end (WP6.6)",
+        "number": 11
+      },
+      {
+        "conclusion": "skipped",
+        "name": "Brief page (axe on the rendered brief, WP7.3)",
+        "number": 12
+      },
+      {
+        "conclusion": "success",
+        "name": "Complete job",
+        "number": 13
+      }
+    ]
+  }
+]

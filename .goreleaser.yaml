@@ -1,0 +1,127 @@
+# goreleaser v2 configuration (docs/BUILD-PLAN.md WP0.4).
+#
+# release.yml runs `goreleaser release` on an annotated v* tag that is on main; ci.yml runs
+# `goreleaser release --snapshot` on every PR and push. Both sign checksums.txt keylessly with cosign, so
+# every archive is covered by a Sigstore bundle tied to the workflow that built it. install.sh accepts only
+# bundles from release.yml on a v* tag.
+#
+# Package-manager manifests are generated here but never uploaded by goreleaser (skip_upload): separate
+# release.yml jobs publish them, each with its own environment-scoped token, so the build job never holds a
+# token for another repository.
+version: 2
+
+project_name: aayudha
+
+# rolling-<date> traceability tags are not versions. Without this, a promotion candidate built on top of a
+# rolling snapshot picks rolling-* as its current tag and the snapshot version template fails to parse it.
+git:
+  ignore_tags:
+    - "rolling-*"
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - id: aayudha
+    main: ./cmd/aayudha
+    binary: aayudha
+    env:
+      - CGO_ENABLED=0 # ground rule 2: one static binary
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: aayudha
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+      - THIRD_PARTY_NOTICES.md
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+sboms:
+  - artifacts: archive # syft, one SPDX SBOM per archive
+
+signs:
+  - id: cosign-keyless
+    cmd: cosign
+    artifacts: checksum
+    signature: "${artifact}.sigstore.json"
+    args: ["sign-blob", "--bundle=${signature}", "--yes", "${artifact}"]
+    output: true
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot.{{ .ShortCommit }}"
+
+changelog:
+  use: github
+  sort: asc
+
+release:
+  github:
+    owner: rahulnakmol
+    name: agentic-ayudha
+  prerelease: auto
+  footer: |
+    Verify before you run it: `install.sh` checks the cosign signature of `checksums.txt` against this
+    repository's `release.yml` workflow identity, then the archive checksum. By hand:
+
+    ```sh
+    cosign verify-blob --bundle checksums.txt.sigstore.json \
+      --certificate-identity-regexp '^https://github\.com/rahulnakmol/agentic-ayudha/\.github/workflows/release\.yml@refs/tags/v' \
+      --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt
+    gh attestation verify <archive> --repo rahulnakmol/agentic-ayudha
+    ```
+
+homebrew_casks:
+  - name: aayudha
+    repository:
+      owner: rahulnakmol
+      name: homebrew-tap
+    homepage: https://github.com/rahulnakmol/agentic-ayudha
+    description: Agentic software delivery pod in one binary.
+    license: BSD-3-Clause
+    binaries: [aayudha]
+    hooks:
+      post:
+        # The binary is signed with cosign, not Apple notarisation; clear the quarantine flag Homebrew sets.
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/aayudha"]
+          end
+    skip_upload: true # published by release.yml `homebrew` job
+
+scoops:
+  - name: aayudha
+    repository:
+      owner: rahulnakmol
+      name: scoop-bucket
+    homepage: https://github.com/rahulnakmol/agentic-ayudha
+    description: Agentic software delivery pod in one binary.
+    license: BSD-3-Clause
+    skip_upload: true # published by release.yml `scoop` job
+
+winget:
+  - name: aayudha
+    publisher: rahulnakmol
+    package_identifier: rahulnakmol.aayudha
+    short_description: Agentic software delivery pod in one binary.
+    license: BSD-3-Clause
+    homepage: https://github.com/rahulnakmol/agentic-ayudha
+    publisher_url: https://github.com/rahulnakmol
+    repository:
+      owner: rahulnakmol
+      name: winget-pkgs
+    skip_upload: true # published by release.yml `winget` job

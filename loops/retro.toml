@@ -1,0 +1,5 @@
+# Weekly retro (WP7.6). The cron is in [time] tz.
+description = "Weekly retro: estimates against observed delivery, corrections, floor misses, and cost, filed as Feedback."
+command = ["retro"]
+cron = "0 10 * * 1"
+prompt = "Report the findings aayu retro filed, one line each, with their issue links."

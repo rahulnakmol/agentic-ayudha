@@ -1,0 +1,2 @@
+Admins delete user accounts
+Only an admin may delete a user account with `DELETE /admin/users/{id}`. Anyone else gets 403.

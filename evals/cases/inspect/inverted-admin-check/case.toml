@@ -1,0 +1,21 @@
+# Seeded-defect PR for inspect (WP4.8b): DeleteUser forbids admins and lets everyone else delete (security).
+# Synthetic: written for this eval, with its defects planted on purpose; never run. The head's files are kept
+# as <path>.txt so this repository's build, linters, and scanners never compile or flag the planted defects.
+skill = "inspect"
+description = "DeleteUser forbids admins and lets everyone else delete (security)"
+input = "pr.diff"
+
+[review]
+story = "story.txt"
+files = "files"
+builder = "claude-opus-5-5"
+criteria = [
+  "1. [api-trace] state: `DELETE /admin/users/7` as an admin; expected: 204 and user 7 is gone",
+  "2. [api-trace] state: `DELETE /admin/users/7` as a signed-in non-admin; expected: 403 and user 7 remains",
+]
+
+[[review.defects]]
+file = "internal/admin/handler.go"
+lines = [28, 28]
+kind = "security"
+title = "the admin check is inverted: non-admins may delete"

@@ -1,0 +1,2 @@
+Save settings atomically
+Settings are written to a temporary file and renamed over the old file, so a crash never leaves a half-written file. `Save` returns an error when the settings were not saved.

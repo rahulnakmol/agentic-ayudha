@@ -1,0 +1,16 @@
+package catalog
+
+import "testing"
+
+func TestSlug(t *testing.T) {
+	for in, want := range map[string]string{
+		"Red Shoes (Size 9)": "red-shoes-size-9",
+		"  --Café--  ":       "café",
+		"":                   "",
+		"a--b":               "a-b",
+	} {
+		if got := Slug(in); got != want {
+			t.Errorf("Slug(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

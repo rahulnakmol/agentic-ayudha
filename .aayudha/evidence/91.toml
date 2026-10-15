@@ -1,0 +1,10 @@
+# Which tests prove story #91's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # semgrep and docker missing: named with their floors, and the floors block verify
+tests = ["internal/doctor:TestOptionalToolsNamesFloors"]
+
+[[criterion]]
+id = 2 # every tool found: the check passes
+tests = ["internal/doctor:TestOptionalToolsNamesFloors", "internal/doctor:TestChecksGolden"]

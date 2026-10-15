@@ -1,0 +1,32 @@
+{
+  "enabledMcpjsonServers": [
+    "aayudha"
+  ],
+  "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "\"C:\\Program Files\\aayudha\\aayu.exe\" hook pre-tool --host claude",
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "\"C:\\Program Files\\aayudha\\aayu.exe\" hook session-start --host claude",
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "command": "\"C:\\Program Files\\aayudha\\aayu.exe\" hook status-line --host claude",
+    "type": "command"
+  }
+}

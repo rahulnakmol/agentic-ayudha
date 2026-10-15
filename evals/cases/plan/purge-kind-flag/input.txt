@@ -1,0 +1,8 @@
+Plan story #43 (proof purge --kind), footprint L02, L03, under Feature #40 (Proof retention per artifact kind).
+
+Summary: As a human, I want `aayu proof purge --kind recording`, so that I can purge one kind by hand.
+
+Completion Goal:
+1. [api-trace] state: `aayu proof purge --kind recording --dry-run` on the fixture ledger; expected: only recordings are listed for purge
+
+The change lives in: internal/cli/proof.go, skills/proof/**.

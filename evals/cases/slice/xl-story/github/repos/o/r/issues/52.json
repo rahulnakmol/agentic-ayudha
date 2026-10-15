@@ -1,0 +1,20 @@
+{
+  "number": 52,
+  "title": "Grill TUI re-asks a vague expected outcome",
+  "state": "open",
+  "body": "### Summary\n\nAs a human grilling a story on a terminal, I want the interview to ask again when my expected outcome is vague, so that I fix it before review.\n\n### Completion Goal\n\n1. [recording] state: the grill story TUI with the expected outcome \"works well\"; expected: the interview asks a follow-up before the next question\n2. [api-trace] state: `aayu grill story` with a draft whose expected outcome is \"works well\"; expected: the draft is reported with a vague-outcome problem\n\n### Measure\n\nCompletion Goal criteria observed\n\n### Threshold\n\nall 2 criteria\n\n### Scenario\n\nRun the TUI with a scripted vague answer, then validate the same draft with flags.\n\n### Environment\n\nlocal checkout with synthetic fixtures; never production\n\n### Links\n\ndepends-on #51\n",
+  "labels": [
+    {
+      "name": "type:story"
+    },
+    {
+      "name": "status:planned"
+    },
+    {
+      "name": "effort:M"
+    },
+    {
+      "name": "priority:P2"
+    }
+  ]
+}

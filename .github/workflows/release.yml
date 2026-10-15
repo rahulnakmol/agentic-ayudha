@@ -1,0 +1,260 @@
+name: release
+
+# docs/BUILD-PLAN.md WP0.4. Runs when an annotated v* tag is pushed; every action is pinned by full commit SHA.
+#
+# The release-tags ruleset lets only the repository admin create v* tags, but a ruleset cannot check which
+# commit a tag points to (Appendix B D4), so `verify-tag` refuses any tag whose commit is not on main before
+# anything is built. No step needs a human: pushing the tag is the whole trigger (CONTRIBUTING.md, Promotion).
+# A transiently failed run is resumed with `gh run rerun <run-id> --failed`.
+#
+# Signing is keyless: the cosign certificate names this file and the tag
+# (https://github.com/rahulnakmol/agentic-ayudha/.github/workflows/release.yml@refs/tags/vX.Y.Z), which is the
+# identity install.sh and `aayu self-update` pin.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GO_VERSION: "1.25.x"
+  TAG: ${{ github.ref_name }}
+
+jobs:
+  verify-tag:
+    name: verify-tag
+    runs-on: ubuntu-latest
+    outputs:
+      prerelease: ${{ steps.check.outputs.prerelease }}
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - id: check
+        run: |
+          set -euo pipefail
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::$TAG is not a release tag (vMAJOR.MINOR.PATCH[-PRERELEASE])."
+            exit 1
+          fi
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$TAG points to $GITHUB_SHA, which is not on main. Release tags are cut from main only (BUILD-PLAN rule 8, Appendix B D4). Delete the tag: git push origin :refs/tags/$TAG"
+            exit 1
+          fi
+          if [ -z "$(git ls-remote origin "refs/tags/$TAG^{}")" ]; then
+            echo "::error::$TAG is a lightweight tag; release tags are annotated (git tag -a $TAG -m '<summary>')."
+            exit 1
+          fi
+          prerelease=false
+          if [[ "$TAG" == *-* ]]; then prerelease=true; fi
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+          echo "$TAG -> $GITHUB_SHA is annotated and on main."
+
+  release:
+    name: release
+    needs: verify-tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the GitHub release and upload assets
+      id-token: write # keyless cosign signing and provenance
+      attestations: write # SLSA build provenance
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.3
+      - uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          syft-version: v1.54.1
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          version: v2.18.3
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: SLSA build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-checksums: dist/checksums.txt
+      - name: install.sh accepts this release with its pinned identity
+        run: |
+          set -euo pipefail
+          AAYU_BASE_URL=dist AAYU_VERSION="$TAG" AAYU_INSTALL_DIR="$RUNNER_TEMP/bin" sh install.sh
+          "$RUNNER_TEMP/bin/aayu" version | grep -F "${TAG#v}"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: packages
+          path: |
+            dist/homebrew
+            dist/scoop
+            dist/winget
+
+  # End-to-end: install the published release from GitHub the way a user does. macOS runners have no
+  # cosign, so this also exercises install.sh's pinned-cosign bootstrap.
+  smoke:
+    name: smoke (${{ matrix.os }})
+    needs: release
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the published release with install.sh
+        run: |
+          set -euo pipefail
+          AAYU_VERSION="$TAG" AAYU_INSTALL_DIR="$RUNNER_TEMP/bin" sh install.sh
+          "$RUNNER_TEMP/bin/aayu" version | grep -F "${TAG#v}"
+
+  # Package managers. Each job runs in its own environment so its token is scoped to that environment and
+  # never reaches the build job. Prereleases are not published to package managers.
+  homebrew:
+    name: homebrew
+    needs: [verify-tag, release]
+    if: needs.verify-tag.outputs.prerelease == 'false'
+    runs-on: ubuntu-latest
+    environment: release-homebrew
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: packages
+          path: pkg
+      - name: Push the cask to rahulnakmol/homebrew-tap
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::HOMEBREW_TAP_TOKEN is not set in the release-homebrew environment (founder action, CONTRIBUTING.md)."
+            exit 1
+          fi
+          gh auth setup-git
+          gh repo clone rahulnakmol/homebrew-tap tap -- --depth 1
+          mkdir -p tap/Casks
+          cp pkg/homebrew/Casks/aayudha.rb tap/Casks/aayudha.rb
+          cd tap
+          git config user.name "aayudha-release"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/aayudha.rb
+          git commit -s -m "aayudha $TAG"
+          git push origin HEAD
+
+  scoop:
+    name: scoop
+    needs: [verify-tag, release]
+    if: needs.verify-tag.outputs.prerelease == 'false'
+    runs-on: ubuntu-latest
+    environment: release-scoop
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: packages
+          path: pkg
+      - name: Push the manifest to rahulnakmol/scoop-bucket
+        env:
+          GH_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::SCOOP_BUCKET_TOKEN is not set in the release-scoop environment (founder action, CONTRIBUTING.md)."
+            exit 1
+          fi
+          gh auth setup-git
+          gh repo clone rahulnakmol/scoop-bucket bucket -- --depth 1
+          # goreleaser cannot name a Scoop alias: add the aayu shim beside aayudha. installers.yml tests this filter.
+          jq '.architecture |= map_values(.bin += [["aayudha.exe", "aayu"]])' pkg/scoop/aayudha.json > bucket/aayudha.json
+          cd bucket
+          git config user.name "aayudha-release"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add aayudha.json
+          git commit -s -m "aayudha $TAG"
+          git push origin HEAD
+
+  winget:
+    name: winget
+    needs: [verify-tag, release]
+    if: needs.verify-tag.outputs.prerelease == 'false'
+    runs-on: ubuntu-latest
+    environment: release-winget
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: packages
+          path: pkg
+      - name: Open the manifest PR on microsoft/winget-pkgs from rahulnakmol/winget-pkgs
+        env:
+          GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::WINGET_TOKEN is not set in the release-winget environment (founder action, CONTRIBUTING.md)."
+            exit 1
+          fi
+          version="${TAG#v}"
+          dir="manifests/r/rahulnakmol/aayudha/$version"
+          branch="rahulnakmol.aayudha-$version"
+          title="New version: rahulnakmol.aayudha version $version"
+          # winget-pkgs is too large to clone; write the three manifest files through the contents API.
+          gh repo sync rahulnakmol/winget-pkgs --source microsoft/winget-pkgs --branch master
+          base="$(gh api repos/microsoft/winget-pkgs/git/ref/heads/master --jq .object.sha)"
+          gh api repos/rahulnakmol/winget-pkgs/git/refs -f ref="refs/heads/$branch" -f sha="$base" >/dev/null
+          for f in "pkg/winget/$dir"/*.yaml; do
+            gh api -X PUT "repos/rahulnakmol/winget-pkgs/contents/$dir/$(basename "$f")" \
+              -f message="$title" -f branch="$branch" -f content="$(base64 -w0 "$f")" >/dev/null
+          done
+          gh pr create --repo microsoft/winget-pkgs --base master --head "rahulnakmol:$branch" \
+            --title "$title" --body "Generated by goreleaser in $RUN_URL."

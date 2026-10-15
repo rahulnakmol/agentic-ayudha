@@ -1,0 +1,120 @@
+name: floors
+
+# Acceptance of the browser and runtime floors of `aayu verify` (docs/BUILD-PLAN.md WP4.5, WP4.6) and the
+# prototype capture behind the figma-diff gate (WP6.5) and review lane B (WP6.6), and of the accessibility of
+# the page `aayu brief` renders (WP7.3), with the real
+# tools: Playwright + axe-core + Lighthouse (pinned in packages/floors and pnpm-lock.yaml), the OWASP ZAP image
+# pinned by digest, and k6 pinned by SHA-256. Kept out of ci.yml so the required checks on dev are untouched;
+# path-filtered and not required.
+on:
+  push:
+    branches: [dev]
+    paths:
+      - "internal/verify/**"
+      - "internal/design/**"
+      - "internal/uireview/**"
+      - "internal/cli/review*.go"
+      - "internal/brief/**"
+      - "packages/floors/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/floors.yml"
+  pull_request:
+    branches: [dev]
+    paths:
+      - "internal/verify/**"
+      - "internal/design/**"
+      - "internal/uireview/**"
+      - "internal/cli/review*.go"
+      - "internal/brief/**"
+      - "packages/floors/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/floors.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: floors-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  GO_VERSION: "1.25.x"
+
+jobs:
+  floors-web:
+    name: floors-web
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - name: Install the floor tools (frozen lockfile)
+        run: pnpm install --frozen-lockfile --filter @aayudha/floors
+      - name: Install Chromium
+        run: pnpm --filter @aayudha/floors exec playwright install --with-deps chromium
+      - name: Web floors (axe, keyboard, reduced motion, text scale, targets, redaction, Lighthouse)
+        env:
+          AAYU_FLOOR_WEB: "1"
+        run: go test ./internal/verify -run TestWebFloorsWithBrowser -count=1 -v
+      - name: Prototype capture and figma-diff gate (WP6.5)
+        env:
+          AAYU_FLOOR_WEB: "1"
+        run: go test ./internal/design -run TestPrototypeCaptureWithBrowser -count=1 -v
+      - name: Review lane B on the planted and clean fixtures; review, polish, and baseline end to end (WP6.6)
+        env:
+          AAYU_FLOOR_WEB: "1"
+        run: go test ./internal/uireview ./internal/cli -run 'TestLaneBWithBrowser|TestReviewAndPolish|TestBaseline' -count=1 -v
+      - name: Brief page (axe on the rendered brief, WP7.3)
+        env:
+          AAYU_FLOOR_WEB: "1"
+        run: go test ./internal/brief -run TestBriefPageWithBrowser -count=1 -v
+
+  floors-dast:
+    name: floors-dast
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      K6_VERSION: "2.3.0"
+      K6_SHA256: 39c3117b6af817592dcd0ce4242105c0a7af10948c2a425306f0be8f7a8a8ab1 # linux-amd64.tar.gz
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      - name: k6 (pinned, SHA-256 checked)
+        run: |
+          set -euo pipefail
+          curl -fsSLo "$RUNNER_TEMP/k6.tgz" "https://github.com/grafana/k6/releases/download/v${K6_VERSION}/k6-v${K6_VERSION}-linux-amd64.tar.gz"
+          echo "${K6_SHA256}  $RUNNER_TEMP/k6.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/k6.tgz" -C "$RUNNER_TEMP" --strip-components=1 "k6-v${K6_VERSION}-linux-amd64/k6"
+      # The floor runs ZAP from verify.ZAPImage, pinned by digest; docker pulls it on first use.
+      - name: DAST and API floors (reflected XSS, k6 thresholds)
+        env:
+          AAYU_FLOOR_DAST: "1"
+        run: PATH="$RUNNER_TEMP:$PATH" go test ./internal/verify -run TestDASTAndAPIFloors -count=1 -v -timeout 20m

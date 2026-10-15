@@ -1,0 +1,71 @@
+# Azure for {{.Repo}} (aayudha)
+
+Written by `aayu init --integrations` (WP7.2b). aayudha reads Application Insights through the Log Analytics
+query API with a read-only identity, and, optionally, keeps proof media in a private Blob Storage container.
+GitHub Actions gets short-lived tokens through OpenID Connect federation; no key is stored.
+
+## Founder actions (read-only analytics)
+
+Run these with an account that may create app registrations and role assignments.
+
+1. Note the IDs:
+
+   ```sh
+   az account show --query '{tenant: tenantId, subscription: id}'
+   az monitor app-insights component show --app <component> --resource-group <group> --query '{id: id, workspace: workspaceResourceId}'
+   ```
+
+2. Create the read-only app registration and its service principal:
+
+   ```sh
+   az ad app create --display-name aayudha-read-{{.Name}} --query appId -o tsv   # the client ID
+   az ad sp create --id <client-id>
+   ```
+
+3. Trust this repository's `{{.Branch}}` branch on GitHub Actions (no client secret):
+
+   ```sh
+   az ad app federated-credential create --id <client-id> --parameters .aayudha/setup/azure/federated-credential.json
+   ```
+
+4. Grant read only, on the component and on its Log Analytics workspace:
+
+   ```sh
+   az role assignment create --assignee <client-id> --role "Monitoring Reader" --scope <component id>
+   az role assignment create --assignee <client-id> --role "Log Analytics Reader" --scope <workspace id>
+   ```
+
+   No other role. aayudha asks Azure Resource Manager for the identity's actions on the resource before every
+   query and refuses one that can write.
+
+5. Fill `[integrations.azure]` in `.aayudha/config.toml`: `org` = the tenant ID, `identity` = the client ID,
+   `project` = the component ID. Commit it through a pull request.
+
+6. In each workflow job that runs `aayu` with it, add the snippet in `workflow.yml` (`id-token: write`).
+
+7. Check: `aayu doctor` (in Actions, or locally as below) reports `azure: reachable as application …;
+   read-only scope verified`.
+
+Locally, `auth = "oidc"` has no GitHub token to exchange. Run with your `az login` instead, which must itself
+be read-only on the resource (doctor refuses an Owner or Contributor login):
+
+```sh
+AAYU_INTEGRATIONS__AZURE__AUTH=cli aayu doctor
+```
+
+## Founder actions (proof media, optional)
+
+A public repository needs a private store for proof media (V3). Use a separate identity from the read-only one.
+
+1. Create a storage account with public access off and a private container (`az storage account create
+   --allow-blob-public-access false …`, `az storage container create --name proof …`).
+2. Either create a container SAS token with read, create, write, delete, and list (`sp=rcwdl`) and an expiry,
+   and store it with `aayu auth set-secret proof-media`; or give an Entra identity "Storage Blob Data
+   Contributor" on the container.
+3. Set `[proof] media = "azblob://<account>/proof/{{.Name}}"` (add `?auth=oidc&tenant=…&client=…` for an Entra
+   identity).
+4. A SAS token cannot manage the account's lifecycle policy: apply `lifecycle-policy.json` once
+   (`az storage account management-policy create --account-name <account> --resource-group <group> --policy
+   @.aayudha/setup/azure/lifecycle-policy.json`), after replacing `<container>`. With an Entra identity that
+   may write `Microsoft.Storage/storageAccounts/managementPolicies`, add `&subscription=…&group=…` to the media
+   URL and aayudha keeps the rule itself.

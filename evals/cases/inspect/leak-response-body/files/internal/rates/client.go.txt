@@ -1,0 +1,37 @@
+package rates
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/url"
+)
+
+// Client calls the rates service at BaseURL.
+type Client struct {
+	BaseURL string
+	HTTP    *http.Client
+}
+
+// Fetch returns the exchange rate for a currency code.
+func (c *Client) Fetch(ctx context.Context, code string) (float64, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/rates/"+url.PathEscape(code), nil)
+	if err != nil {
+		return 0, err
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("rates: %s: %s", code, resp.Status)
+	}
+	var body struct {
+		Rate float64 `json:"rate"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return 0, err
+	}
+	return body.Rate, nil
+}

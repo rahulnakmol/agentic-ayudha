@@ -1,0 +1,1 @@
+Check whether issue #12 is Ready, without changing anything.

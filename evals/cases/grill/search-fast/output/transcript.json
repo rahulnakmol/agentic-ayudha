@@ -1,0 +1,109 @@
+{
+  "request": "Make search fast. Customers give up when they search the menu. It belongs under Feature #50 (Menu).",
+  "exchanges": [
+    {
+      "say": "You want search to feel fast. Today /menu/search filters every product in lib/search.ts on each keystroke, and no API budget or search test exists (gap:api-budget, gap:tests:/menu). \"Fast\" needs an action, a number, and conditions; four questions.",
+      "questions": [
+        {
+          "topic": "perf.operation/action",
+          "ask": "Which action must be fast: the first load of /menu/search, typing in the box, or opening a result?",
+          "default": "Typing until the matching products show, measured from the keystroke, because that is what people feel.",
+          "facts": [
+            "route:/menu/search",
+            "code:lib/search.ts"
+          ]
+        },
+        {
+          "topic": "perf.target/percentile-and-number",
+          "ask": "What number must it meet, and for whom: typical users (p50) or nearly everyone (p95)? There is no API budget configured today.",
+          "default": "p95, with a number from you.",
+          "facts": [
+            "gap:api-budget",
+            "floor:perf"
+          ]
+        },
+        {
+          "topic": "perf.conditions/device-and-network",
+          "ask": "Under what device and network: a mid-range laptop on a local network?",
+          "default": "A mid-range laptop on a local network with the seeded menu, because proof captures run on seeded data only."
+        },
+        {
+          "topic": "perf.conditions/cache-state",
+          "ask": "Cold or warm: the first search after the page loads, or later ones?",
+          "default": "Both, reported separately; tell me if one matters more."
+        }
+      ],
+      "answers": [
+        {
+          "kind": "confirm",
+          "text": "Typing in the menu search box until the matching products show. That's what customers complain about."
+        },
+        {
+          "kind": "confirm",
+          "text": "Results should show within 200 ms of a keystroke for most people, say p95."
+        },
+        {
+          "kind": "default",
+          "text": "Your default is fine."
+        },
+        {
+          "kind": "confirm",
+          "text": "Cold cache: the first search right after the page loads is the one that hurts."
+        }
+      ]
+    },
+    {
+      "say": "Got it: typing to results, p95 within 200 ms, cold cache, on a mid-range laptop. Three on proof and scope, and one idea.",
+      "questions": [
+        {
+          "topic": "perf.measure/proof",
+          "ask": "How do we prove it: a benchmark test on the seeded menu, or the search_performed event in analytics?",
+          "default": "A repeatable benchmark on the seeded data, recorded as a metric.",
+          "facts": [
+            "event:search_performed",
+            "gap:tests:/menu"
+          ]
+        },
+        {
+          "topic": "perf.perceived/loading-feedback",
+          "ask": "While results load, what should people see? Today there is no loading state on /menu/search.",
+          "default": "Keep today's feedback.",
+          "facts": [
+            "gap:loading:/menu"
+          ]
+        },
+        {
+          "topic": "perf.regression/ci-budget",
+          "ask": "Should a CI budget stop search from getting slow again?",
+          "default": "Not in this story; park it."
+        },
+        {
+          "topic": "other/result-caching",
+          "ask": "lib/search.ts scans every product on every keystroke. Cache results per query as part of this?"
+        }
+      ],
+      "answers": [
+        {
+          "kind": "confirm",
+          "text": "A benchmark test on the seeded menu is fine as proof."
+        },
+        {
+          "kind": "park",
+          "text": "Leave the loading feedback as it is."
+        },
+        {
+          "kind": "defer",
+          "text": "Not sure we need a CI budget yet; leave it open."
+        },
+        {
+          "kind": "park",
+          "text": "That is not part of what I asked for; park it."
+        }
+      ]
+    },
+    {
+      "say": "Here is what done looks like: on the seeded menu of 40 products, with a cold cache on a mid-range laptop on a local network, typing in /menu/search shows the matching products within 200 ms of each keystroke at p95, proven by a benchmark test. A CI budget is deferred; result caching and new loading feedback are parked.",
+      "done": true
+    }
+  ]
+}

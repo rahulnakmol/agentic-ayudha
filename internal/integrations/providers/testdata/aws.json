@@ -1,0 +1,108 @@
+{
+  "source": "Synthetic: written from the STS GetCallerIdentity and IAM SimulatePrincipalPolicy query APIs, CloudWatch RUM GetAppMonitor, and CloudWatch Logs StartQuery/GetQueryResults (JSON 1.1) references because no AWS account exists yet; every request's SigV4 signature is recomputed by fixture.SigV4; the AAYU_LIVE=1 test sends the same requests to a real app monitor",
+  "interactions": [
+    {
+      "method": "GET",
+      "url": "https://sts.eu-west-1.amazonaws.com/?Action=GetCallerIdentity&Version=2011-06-15",
+      "status": 200,
+      "header": {
+        "Content-Type": "text/xml"
+      },
+      "text": "<GetCallerIdentityResponse xmlns=\"https://sts.amazonaws.com/doc/2011-06-15/\"><GetCallerIdentityResult><Arn>arn:aws:iam::123456789012:user/aayudha-read</Arn><UserId>AIDAAAYUDHAEXAMPLE01</UserId><Account>123456789012</Account></GetCallerIdentityResult><ResponseMetadata><RequestId>01234567-89ab-cdef-0123-456789abcdef</RequestId></ResponseMetadata></GetCallerIdentityResponse>"
+    },
+    {
+      "method": "GET",
+      "url": "https://iam.amazonaws.com/?Action=SimulatePrincipalPolicy&ActionNames.member.1=logs%3AStartQuery&ActionNames.member.10=logs%3ADeleteLogStream&ActionNames.member.11=rum%3APutRumEvents&ActionNames.member.12=rum%3ACreateAppMonitor&ActionNames.member.13=rum%3AUpdateAppMonitor&ActionNames.member.14=rum%3ADeleteAppMonitor&ActionNames.member.15=rum%3APutRumMetricsDestination&ActionNames.member.16=iam%3ACreateAccessKey&ActionNames.member.17=iam%3APutRolePolicy&ActionNames.member.18=iam%3AAttachRolePolicy&ActionNames.member.19=iam%3APassRole&ActionNames.member.2=logs%3AGetQueryResults&ActionNames.member.20=iam%3ACreateUser&ActionNames.member.21=s3%3APutObject&ActionNames.member.22=s3%3ADeleteObject&ActionNames.member.23=sts%3AAssumeRole&ActionNames.member.3=rum%3AGetAppMonitor&ActionNames.member.4=rum%3AGetAppMonitorData&ActionNames.member.5=logs%3APutLogEvents&ActionNames.member.6=logs%3ACreateLogGroup&ActionNames.member.7=logs%3ADeleteLogGroup&ActionNames.member.8=logs%3APutRetentionPolicy&ActionNames.member.9=logs%3APutSubscriptionFilter&PolicySourceArn=arn%3Aaws%3Aiam%3A%3A123456789012%3Auser%2Faayudha-read&ResourceArns.member.1=%2A&ResourceArns.member.2=arn%3Aaws%3Arum%3Aeu-west-1%3A123456789012%3Aappmonitor%2Fbenefits-qa&Version=2010-05-08",
+      "status": 200,
+      "header": {
+        "Content-Type": "text/xml"
+      },
+      "text": "<SimulatePrincipalPolicyResponse xmlns=\"https://iam.amazonaws.com/doc/2010-05-08/\"><SimulatePrincipalPolicyResult><IsTruncated>false</IsTruncated><EvaluationResults><member><EvalActionName>logs:StartQuery</EvalActionName><EvalResourceName>*</EvalResourceName><EvalDecision>allowed</EvalDecision></member><member><EvalActionName>logs:GetQueryResults</EvalActionName><EvalResourceName>*</EvalResourceName><EvalDecision>allowed</EvalDecision></member><member><EvalActionName>rum:GetAppMonitor</EvalActionName><EvalResourceName>*</EvalResourceName><EvalDecision>allowed</EvalDecision></member><member><EvalActionName>rum:GetAppMonitorData</EvalActionName><EvalResourceName>*</EvalResourceName><EvalDecision>allowed</EvalDecision></member><member><EvalActionName>logs:PutLogEvents</EvalActionName><EvalResourceName>*</EvalResourceName><EvalDecision>implicitDeny</EvalDecision></member><member><EvalActionName>logs:CreateLogGroup</EvalActionName><EvalResourceName>*</EvalResourceName><EvalDecision>implicitDeny</EvalDecision></member><member><EvalActionName>logs:DeleteLogGroup</EvalActionName><EvalResourceName>*</EvalResourceName><EvalDecision>implicitDeny</EvalDecision></member><member><EvalActionName>logs:PutRetentionPolicy</EvalActionName><EvalResourceName>*</EvalResourceName><EvalDecision>implicitDeny</EvalDecision></member><member><EvalActionName>logs:PutSubscriptionFilter</EvalActionName><EvalResourceName>*</EvalResourceName><EvalDecision>implicitDeny</EvalDecision></member><member><EvalActionName>logs:DeleteLogStream</EvalActionName><EvalResourceName>*</EvalResourceName><EvalDecision>implicitDeny</EvalDecision></member><member><EvalActionName>rum:PutRumEvents</EvalActionName><EvalResourceName>*</EvalResourceName><EvalDecision>implicitDeny</EvalDecision></member><member><EvalActionName>rum:CreateAppMonitor</EvalActionName><EvalResourceName>*</EvalResourceName><EvalDecision>implicitDeny</EvalDecision></member><member><EvalActionName>rum:UpdateAppMonitor</EvalActionName><EvalResourceName>*</EvalResourceName><EvalDecision>implicitDeny</EvalDecision></member><member><EvalActionName>rum:DeleteAppMonitor</EvalActionName><EvalResourceName>*</EvalResourceName><EvalDecision>implicitDeny</EvalDecision></member><member><EvalActionName>rum:PutRumMetricsDestination</EvalActionName><EvalResourceName>*</EvalResourceName><EvalDecision>implicitDeny</EvalDecision></member><member><EvalActionName>iam:CreateAccessKey</EvalActionName><EvalResourceName>*</EvalResourceName><EvalDecision>implicitDeny</EvalDecision></member><member><EvalActionName>iam:PutRolePolicy</EvalActionName><EvalResourceName>*</EvalResourceName><EvalDecision>implicitDeny</EvalDecision></member><member><EvalActionName>iam:AttachRolePolicy</EvalActionName><EvalResourceName>*</EvalResourceName><EvalDecision>implicitDeny</EvalDecision></member><member><EvalActionName>iam:PassRole</EvalActionName><EvalResourceName>*</EvalResourceName><EvalDecision>implicitDeny</EvalDecision></member><member><EvalActionName>iam:CreateUser</EvalActionName><EvalResourceName>*</EvalResourceName><EvalDecision>implicitDeny</EvalDecision></member><member><EvalActionName>s3:PutObject</EvalActionName><EvalResourceName>*</EvalResourceName><EvalDecision>implicitDeny</EvalDecision></member><member><EvalActionName>s3:DeleteObject</EvalActionName><EvalResourceName>*</EvalResourceName><EvalDecision>implicitDeny</EvalDecision></member><member><EvalActionName>sts:AssumeRole</EvalActionName><EvalResourceName>*</EvalResourceName><EvalDecision>implicitDeny</EvalDecision></member></EvaluationResults></SimulatePrincipalPolicyResult></SimulatePrincipalPolicyResponse>"
+    },
+    {
+      "method": "GET",
+      "url": "https://rum.eu-west-1.amazonaws.com/appmonitor/benefits-qa",
+      "status": 200,
+      "response": {
+        "AppMonitor": {
+          "Name": "benefits-qa",
+          "Id": "1a2b3c4d-0000-4000-8000-000000000000",
+          "Domain": "benefits.example.com",
+          "State": "ACTIVE",
+          "DataStorage": {
+            "CwLog": {
+              "CwLogEnabled": true,
+              "CwLogGroup": "/aws/vendedlogs/RUMService_benefits-qa1a2b3c4d"
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://logs.eu-west-1.amazonaws.com/",
+      "request_header": {
+        "X-Amz-Target": "Logs_20140328.StartQuery"
+      },
+      "body": {
+        "endTime": 1790816400,
+        "logGroupNames": [
+          "/aws/vendedlogs/RUMService_benefits-qa1a2b3c4d"
+        ],
+        "queryString": "filter event_timestamp >= 1788220800000 and event_timestamp < 1790812800000\n| filter event_type = 'signed_up'\n| stats count(*) as value",
+        "startTime": 1788220800
+      },
+      "status": 200,
+      "response": {
+        "queryId": "12ab3456-12ab-123a-789e-1234567890ab"
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://logs.eu-west-1.amazonaws.com/",
+      "request_header": {
+        "X-Amz-Target": "Logs_20140328.GetQueryResults"
+      },
+      "body": {
+        "queryId": "12ab3456-12ab-123a-789e-1234567890ab"
+      },
+      "status": 200,
+      "response": {
+        "status": "Running",
+        "results": [],
+        "statistics": {
+          "recordsMatched": 0,
+          "recordsScanned": 51200,
+          "bytesScanned": 10485760
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://logs.eu-west-1.amazonaws.com/",
+      "request_header": {
+        "X-Amz-Target": "Logs_20140328.GetQueryResults"
+      },
+      "body": {
+        "queryId": "12ab3456-12ab-123a-789e-1234567890ab"
+      },
+      "status": 200,
+      "response": {
+        "status": "Complete",
+        "results": [
+          [
+            {
+              "field": "value",
+              "value": "3407"
+            }
+          ]
+        ],
+        "statistics": {
+          "recordsMatched": 3407,
+          "recordsScanned": 91234,
+          "bytesScanned": 18874368
+        }
+      }
+    }
+  ]
+}

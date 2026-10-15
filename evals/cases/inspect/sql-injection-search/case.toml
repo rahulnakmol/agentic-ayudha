@@ -1,0 +1,21 @@
+# Seeded-defect PR for inspect (WP4.8b): Order search builds SQL from the query string (security).
+# Synthetic: written for this eval, with its defects planted on purpose; never run. The head's files are kept
+# as <path>.txt so this repository's build, linters, and scanners never compile or flag the planted defects.
+skill = "inspect"
+description = "Order search builds SQL from the query string (security)"
+input = "pr.diff"
+
+[review]
+story = "story.txt"
+files = "files"
+builder = "claude-opus-5-5"
+criteria = [
+  "1. [api-trace] state: `GET /orders?q=ann` with orders for Ann Lee and Bob Ray; expected: returns only Ann Lee's orders, by ID",
+  "2. [api-trace] state: `GET /orders?q=` (empty); expected: returns every order, by ID",
+]
+
+[[review.defects]]
+file = "internal/orders/search.go"
+lines = [13, 14]
+kind = "security"
+title = "customer search interpolates q into SQL (injection)"

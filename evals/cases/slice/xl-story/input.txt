@@ -1,0 +1,1 @@
+Story #50 under Feature #40 is labelled effort:XL. Slice it into XS-L stories under Feature #40 and close it as split.

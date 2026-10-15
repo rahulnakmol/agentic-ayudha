@@ -1,0 +1,15 @@
+# Decision-pack case (WP5.1b, D-5.6b): a stuck human asks a design question; the topic routes it to the Code Architect
+# twin (Daedalus), who writes the pack at the scaleup stage. Tier 2 has the decide skill write the pack again for the judge.
+skill = "decide"
+description = "Daedalus's decision pack: a kind field on Tombstone or a separate kind index."
+input = "../grounding.md"
+artifacts = ["output/pack.md"]
+
+[pack]
+seat = "code-architect"
+stage = "scaleup"
+question = "Should a purge record the media kind as a new field on Tombstone, or as a record in a separate append-only kind index on the ledger?"
+draft = "output/pack.md"
+
+[tier2]
+rubric = "../rubric.md"

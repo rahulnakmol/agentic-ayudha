@@ -1,0 +1,12 @@
+# Floors (docs/guide/concepts-floors.md).
+title: A floor is a fixed check that no model can talk its way past
+direction: down
+pr: The pull request's head commit
+floors: Floors: coverage, security, secrets, dependencies, accessibility, speed
+hold: Every floor holds: review can go on
+miss: One floor misses: the merge is blocked
+waiver: Only a recorded waiver lets it through
+pr -> floors
+floors -> hold: hold
+floors -> miss: miss
+miss -> waiver

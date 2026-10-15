@@ -1,0 +1,4 @@
+Feature #7 (Claims list). Caseworkers want to download the claims list as a CSV file so they can share it with their
+manager. The file holds every claim that matches the filters they applied (not only the current page) and only the
+columns that are visible. On lists of more than 10,000 claims the page must keep responding while the file is
+prepared.

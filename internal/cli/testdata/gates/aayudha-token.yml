@@ -1,0 +1,71 @@
+# aayudha token broker (docs/BUILD-PLAN.md WP1.4). Installed into product repos by `aayu init --gates`
+# (WP2.6) as .github/workflows/aayudha-token.yml; the template is embedded in the aayudha binary.
+#
+# A developer's agent lane needs a bot token, but the bot App's private key must never live on a laptop.
+# `aayu` dispatches this workflow with the human's own token (so every mint is attributed to that human
+# in the workflow-run history), passing a one-time age X25519 public key. The job mints an installation
+# token with the App key held as a repo secret, encrypts it to that key, and uploads it as a one-day
+# artifact that only the caller can decrypt. The client downloads it, deletes the artifact, and refuses any
+# token that outlives one hour.
+#
+# Setup: repository variable AAYUDHA_APP_CLIENT_ID and secret AAYUDHA_APP_PRIVATE_KEY.
+name: aayudha-token
+run-name: aayudha-token ${{ inputs.request_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      recipient:
+        description: "Caller's one-time age X25519 public key (age1...)"
+        required: true
+      request_id:
+        description: "Caller-chosen request ID (32 hex characters)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  mint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - name: Validate inputs
+        env:
+          RECIPIENT: ${{ inputs.recipient }}
+          REQUEST_ID: ${{ inputs.request_id }}
+        run: |
+          [[ "$RECIPIENT" =~ ^age1[02-9ac-hj-np-z]{58}$ ]] || { echo "::error::recipient is not an age X25519 public key"; exit 1; }
+          [[ "$REQUEST_ID" =~ ^[0-9a-f]{32}$ ]] || { echo "::error::request_id must be 32 lowercase hex characters"; exit 1; }
+      - name: Mint installation token
+        id: app
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.AAYUDHA_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AAYUDHA_APP_PRIVATE_KEY }}
+          # The caller uses the token after this job ends; it expires on its own within an hour.
+          skip-token-revoke: true
+      - name: Encrypt to the caller
+        env:
+          TOKEN: ${{ steps.app.outputs.token }}
+          RECIPIENT: ${{ inputs.recipient }}
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y -qq age >/dev/null
+          # Installation tokens live one hour from minting; report 55 minutes so the client never overstays.
+          expires=$(date -u -d '+55 minutes' +%Y-%m-%dT%H:%M:%SZ)
+          umask 077
+          printf '{"token":"%s","expires_at":"%s"}' "$TOKEN" "$expires" | age -r "$RECIPIENT" -o token.age
+      - name: Hand over
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: aayudha-token-${{ inputs.request_id }}
+          path: token.age
+          retention-days: 1
+          if-no-files-found: error

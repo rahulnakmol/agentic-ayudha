@@ -1,0 +1,601 @@
+name: ci
+
+# docs/BUILD-PLAN.md WP0.4. Every action is pinned by full commit SHA with its version in a comment.
+#
+# Pull requests and pushes run the PR suite. A workflow_dispatch with `gate` runs the same suite plus the
+# promotion gate on any ref, so an agent can promote without a human step (CONTRIBUTING.md, Promotion):
+#   gh workflow run ci.yml --ref <candidate-branch> -f gate=rolling   # dev → rolling
+#   gh workflow run ci.yml --ref <candidate-branch> -f gate=stable    # rolling → main
+on:
+  push:
+    branches: [dev, rolling, main]
+  pull_request:
+    branches: [dev, rolling, main]
+  workflow_dispatch:
+    inputs:
+      gate:
+        description: Promotion gate to run on top of the PR suite
+        type: choice
+        options: [none, rolling, stable]
+        default: none
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}-${{ inputs.gate || 'none' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  GO_VERSION: "1.25.x" # go.mod's language floor (Appendix B D5)
+
+jobs:
+  # Path filters. Jobs gated on these outputs report "skipped", which satisfies a required check, so only
+  # PRs that cannot affect a job skip it. Pushes and dispatches run everything.
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    outputs:
+      go: ${{ steps.filter.outputs.go }}
+      docs: ${{ steps.filter.outputs.docs }}
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - id: filter
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" != "pull_request" ]; then
+            { echo go=true; echo docs=true; } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # HEAD is the PR merge commit; its first parent is the base branch tip.
+          files="$(git diff --name-only HEAD^1 HEAD)"
+          printf '%s\n' "$files"
+          go=false docs=false
+          if grep -qE '(\.go$|^go\.(mod|sum)$|^\.golangci\.yml$|^\.goreleaser\.yaml$|^install\.sh$|^\.github/workflows/|^(skills|work-items|hosts|seats|internal/config)/)' <<<"$files"; then go=true; fi
+          if grep -qE '(\.md$|^\.markdownlint-cli2\.yaml$|^\.lycheeignore$|^\.github/workflows/ci\.yml$)' <<<"$files"; then docs=true; fi
+          { echo "go=$go"; echo "docs=$docs"; } >> "$GITHUB_OUTPUT"
+
+  # Job ids and names below are required status checks in the dev ruleset; do not rename them.
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      # go test includes TestSkillLint (embed_test.go): the WP3.1 skill lint (internal/skills) over the embedded skills/,
+      # and tier 1 of the skill evals (internal/evals, TestTier1) over evals/cases (WP3.4).
+      - name: Build, vet, test
+        run: go build ./... && go vet ./... && go test ./...
+      # WP7.7: an evolve PR (an evolve/ head branch, or a commit with the Aayudha-Evolve trailer; both change only with a
+      # push, which re-runs this job) must add an eval case that reproduces its Feedback on the old skill and passes on the
+      # new one, before any skill diff (eval-first). The gate works from the PR's base and head SHAs (commits base..head,
+      # change base...head) and fetches them from origin itself, never from the checked-out test-merge commit, which
+      # GitHub can recompute while the run is going (then HEAD^1 cannot be fetched).
+      - name: Eval-first gate for evolve PRs (WP7.7)
+        if: github.event_name == 'pull_request'
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: go run ./internal/evals/cmd/eval -evolve-gate -base "$BASE_SHA" -head "$HEAD_SHA" -branch "$HEAD_REF"
+      - name: Build matrix and binary size budget
+        run: |
+          set -euo pipefail
+          budget=60000000 # 60 MB
+          fail=0
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
+            os="${target%/*}" arch="${target#*/}"
+            out="bin/aayudha-$os-$arch"
+            if [ "$os" = windows ]; then out="$out.exe"; fi
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags "-s -w" -o "$out" ./cmd/aayudha
+            size="$(stat -c %s "$out")"
+            echo "$target: $size bytes (budget $budget)"
+            if [ "$size" -gt "$budget" ]; then
+              echo "::error::$target binary is $size bytes, over the 60 MB budget"
+              fail=1
+            fi
+          done
+          exit "$fail"
+
+  generate-drift:
+    name: generate-drift
+    runs-on: ubuntu-latest
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      # Covers every go:generate target: registry outputs (README, LAYERS.md, RACI, SKILL.md frontmatter,
+      # MCP schemas) and CONSTRAINTS.md. Embeds read the source trees directly (embed.go), so they cannot drift.
+      - name: Regenerate
+        run: go generate ./...
+      - name: Fail on drift
+        run: |
+          drift="$(git status --porcelain --untracked-files=all)"
+          if [ -n "$drift" ]; then
+            echo "::error::Generated files are out of date. Run 'go generate ./...' and commit the result; do not edit generated files by hand."
+            echo "Files changed, deleted, or created by go generate:"
+            echo "$drift"
+            git --no-pager diff
+            exit 1
+          fi
+          echo "No drift."
+      - name: Second run is byte-identical
+        run: |
+          go generate ./...
+          if [ -n "$(git status --porcelain --untracked-files=all)" ]; then
+            echo "::error::A second go generate run changed files; generators must be deterministic."
+            git --no-pager diff
+            exit 1
+          fi
+          echo "Second run byte-identical."
+
+  lint:
+    name: lint
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.14.0
+
+  # DCO sign-off and Conventional Commits on every PR commit, and on the PR title (it becomes the
+  # squash-merge subject). Merge commits are skipped.
+  commits:
+    name: commits
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: DCO and Conventional Commits
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+          cc='^(feat|fix|docs|refactor|test|build|ci|chore|perf|revert)(\([a-z0-9][a-z0-9._/-]*\))?!?: [^ ].*'
+          fail=0
+          if ! grep -qE "$cc" <<<"$TITLE"; then
+            echo "::error::PR title is not a Conventional Commit (it becomes the squash commit subject): $TITLE"
+            fail=1
+          fi
+          for sha in $(git rev-list --no-merges "$(git merge-base "$BASE_SHA" "$HEAD_SHA")..$HEAD_SHA"); do
+            subject="$(git log -1 --format=%s "$sha")"
+            email="$(git log -1 --format=%ae "$sha")"
+            if ! grep -qE "$cc" <<<"$subject"; then
+              echo "::error::$sha: subject is not a Conventional Commit: $subject"
+              fail=1
+            fi
+            if ! git log -1 --format=%B "$sha" | grep -iE '^Signed-off-by: .+ <[^>]+>$' | grep -qiF "<$email>"; then
+              echo "::error::$sha: no DCO 'Signed-off-by:' trailer for the author <$email>. Use 'git commit -s'; fix with 'git rebase --signoff origin/dev'."
+              fail=1
+            fi
+            echo "checked $sha: $subject"
+          done
+          exit "$fail"
+
+  security:
+    name: security
+    runs-on: ubuntu-latest
+    env:
+      GITLEAKS_VERSION: "8.30.1"
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb # linux_x64
+      OSV_SCANNER_VERSION: "2.6.0"
+      OSV_SCANNER_SHA256: ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108 # linux_amd64
+      SEMGREP_VERSION: "1.180.0"
+      GO_LICENSES_VERSION: "v2.0.1"
+      # Licences compatible with redistributing a BSD-3-Clause binary (THIRD_PARTY_NOTICES.md, Policy).
+      ALLOWED_LICENSES: 0BSD,Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC,MIT # 0BSD: Appendix B D-6.1a
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      - name: Secrets (gitleaks, full history)
+        run: |
+          set -euo pipefail
+          curl -fsSLo "$RUNNER_TEMP/gitleaks.tgz" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/gitleaks.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/gitleaks.tgz" -C "$RUNNER_TEMP" gitleaks
+          "$RUNNER_TEMP/gitleaks" git . --redact --no-banner
+      - name: SAST (semgrep)
+        run: |
+          set -euo pipefail
+          pipx install "semgrep==${SEMGREP_VERSION}"
+          semgrep scan --config p/golang --config p/secrets --config p/github-actions --error --metrics=off
+      - name: Dependency vulnerabilities (osv-scanner)
+        run: |
+          set -euo pipefail
+          curl -fsSLo "$RUNNER_TEMP/osv-scanner" "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64"
+          echo "${OSV_SCANNER_SHA256}  $RUNNER_TEMP/osv-scanner" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/osv-scanner"
+          "$RUNNER_TEMP/osv-scanner" scan source -r .
+      # WP4.4 accept with the pinned tools above: planted findings fail the sast, secrets, and deps floors and a
+      # clean fixture passes (internal/verify TestFloorsWithRealTools; fixtures are written at run time).
+      - name: Floors with the real tools (semgrep, gitleaks, osv-scanner)
+        env:
+          AAYU_FLOOR_TOOLS: "1"
+        run: PATH="$RUNNER_TEMP:$PATH" go test ./internal/verify -run TestFloorsWithRealTools -count=1 -v
+      - name: Licences (go-licenses)
+        run: go run "github.com/google/go-licenses/v2@${GO_LICENSES_VERSION}" check ./... --allowed_licenses="$ALLOWED_LICENSES"
+      # The Node packages are one pnpm workspace with a single root pnpm-lock.yaml (WP6.1, Appendix B D-6.1a).
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - name: Licences (npm)
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile --ignore-scripts
+          # Production dependency tree of every workspace package; dev tooling is not distributed.
+          found="$(pnpm licenses list --recursive --prod --json | jq -r 'keys[]')"
+          echo "Production licences: $(tr '\n' ' ' <<<"$found")"
+          bad="$(grep -vxF -f <(tr ',' '\n' <<<"$ALLOWED_LICENSES") <<<"$found" || true)"
+          if [ -n "$bad" ]; then
+            echo "::error::Licences not on the allow list: $(tr '\n' ' ' <<<"$bad")"
+            pnpm licenses list --recursive --prod
+            exit 1
+          fi
+
+  docs:
+    name: docs
+    needs: changes
+    if: needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Markdown lint
+        uses: DavidAnson/markdownlint-cli2-action@21c1be1b93ad9ed58fa840aacc3f279cde2a72ff # v24.2.0
+        with:
+          globs: "**/*.md"
+      - name: Link check (lychee)
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          lycheeVersion: v0.24.2
+          args: --no-progress --max-retries 3 --include-fragments "./**/*.md"
+          fail: true
+          jobSummary: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+  # Signed goreleaser snapshot, then install.sh against it: the genuine archive installs; a flipped byte,
+  # a checksum rewritten to match it, and a non-release signer are all refused. This is also the
+  # production validation of the promotion gates. Fork PRs cannot mint an OIDC token, so they skip it.
+  release-snapshot:
+    name: release-snapshot
+    needs: changes
+    if: >-
+      needs.changes.outputs.go == 'true' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # keyless cosign signing
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.3
+      - uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          syft-version: v1.54.1
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          version: v2.18.3
+          args: release --snapshot --clean
+      - name: Verify the snapshot signature
+        env:
+          IDENTITY: https://github.com/${{ github.workflow_ref }}
+        run: |
+          cosign verify-blob --bundle dist/checksums.txt.sigstore.json \
+            --certificate-identity "$IDENTITY" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            dist/checksums.txt
+      - name: install.sh accepts the genuine archive and refuses tampered ones
+        env:
+          IDENTITY: https://github.com/${{ github.workflow_ref }}
+        run: |
+          set -euo pipefail
+          version="$(jq -r .version dist/metadata.json)"
+          archive="aayudha_${version}_linux_amd64.tar.gz"
+          ci_identity_re="^$(printf '%s' "$IDENTITY" | sed 's/[][\.*^$+?(){}|]/\\&/g')\$"
+          t="$RUNNER_TEMP/install-test"
+          flip() { python3 -c 'import sys; p = sys.argv[1]; b = bytearray(open(p, "rb").read()); b[len(b) // 2] ^= 0xFF; open(p, "wb").write(b)' "$1"; }
+          # expect_refusal <case> <assets dir> <reason> [identity regexp]: install fails for that reason and installs nothing.
+          expect_refusal() {
+            if AAYU_BASE_URL="$2" AAYU_VERSION="$version" AAYU_INSTALL_DIR="$t/$1-bin" AAYU_CERT_IDENTITY_REGEXP="${4:-$ci_identity_re}" \
+                 sh install.sh 2>"$t/$1.log"; then
+              cat "$t/$1.log"; echo "::error::$1: install.sh accepted it"; exit 1
+            fi
+            cat "$t/$1.log"
+            grep -qF "$3" "$t/$1.log" || { echo "::error::$1: refused for the wrong reason"; exit 1; }
+            if [ -e "$t/$1-bin/aayudha" ]; then echo "::error::$1: a binary was installed"; exit 1; fi
+            echo "PASS $1: refused ($3)"
+          }
+          mkdir -p "$t"
+
+          echo "== genuine snapshot installs"
+          AAYU_BASE_URL=dist AAYU_VERSION="$version" AAYU_INSTALL_DIR="$t/good-bin" AAYU_CERT_IDENTITY_REGEXP="$ci_identity_re" sh install.sh
+          "$t/good-bin/aayu" version | tee "$t/version.txt"
+          grep -qF "$version" "$t/version.txt"
+          echo "PASS genuine: installed and runs"
+
+          echo "== one flipped byte in the archive"
+          cp -r dist "$t/flip"; flip "$t/flip/$archive"
+          cmp -l "dist/$archive" "$t/flip/$archive" || true
+          expect_refusal flipped-byte "$t/flip" "checksum mismatch"
+
+          echo "== flipped byte, with checksums.txt rewritten to match (the signature no longer covers it)"
+          cp -r dist "$t/resum"; flip "$t/resum/$archive"
+          sum="$(sha256sum "$t/resum/$archive" | cut -d' ' -f1)"
+          awk -v f="$archive" -v s="$sum" '$2 == f { $1 = s } { print $1 "  " $2 }' dist/checksums.txt > "$t/resum/checksums.txt"
+          expect_refusal rewritten-checksums "$t/resum" "signature verification failed"
+
+          echo "== genuine snapshot, but only release.yml on a v* tag is a trusted signer"
+          expect_refusal non-release-signer dist "signature verification failed" \
+            '^https://github\.com/rahulnakmol/agentic-ayudha/\.github/workflows/release\.yml@refs/tags/v'
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-snapshot
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.sbom.json
+            dist/checksums.txt
+            dist/checksums.txt.sigstore.json
+          retention-days: 7
+
+  # ---- Promotion gates (workflow_dispatch only) -------------------------------------------------------
+  # rolling: the PR suite above + integration (race detector) + benchmarks + evals-gate (tier-2 skill evals).
+  # stable:  rolling + extended (live) integration + cross-OS smoke tests. Security scans run in `security`.
+
+  integration:
+    name: integration
+    if: inputs.gate == 'rolling' || inputs.gate == 'stable'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      - name: Integration tests (build tag integration, race detector)
+        run: go test -race -count=1 -tags integration ./...
+
+  benchmarks:
+    name: benchmarks
+    if: inputs.gate == 'rolling' || inputs.gate == 'stable'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      - name: Benchmarks
+        run: |
+          set -o pipefail
+          go test -run '^$' -bench . -benchmem -count=1 ./... | tee benchmarks.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: benchmarks
+          path: benchmarks.txt
+
+  # The commit being promoted (the promotion merge's second parent) must have tier-2 eval results that pass the
+  # WP3.4 bar and do not regress against main's baseline. Tier 2 itself runs in evals.yml, in the ai-gateway
+  # environment, which a promote/* branch cannot use; this job only reads the results artifacts.
+  evals-gate:
+    name: evals-gate
+    if: inputs.gate == 'rolling' || inputs.gate == 'stable'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      - name: Tier-2 results of the promoted commit against main's baseline, every group (D-7.3d)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          src="$(git rev-parse HEAD^2 2>/dev/null || git rev-parse HEAD)"
+          main_sha="$(git rev-parse origin/main)"
+          fetch() { # fetch <sha> <group>: download eval-results-<sha>-<group> from the newest evals.yml run on that commit that has it
+            local run_id
+            for run_id in $(gh run list --workflow evals.yml --commit "$1" --limit 20 --json databaseId --jq '.[].databaseId'); do
+              gh run download "$run_id" --name "eval-results-$1-$2" --dir evals/results 2>/dev/null && return 0
+            done
+            return 1
+          }
+          failed=0
+          # Only gating groups: a group with gate = "advisory" (brief-plain, D-7.3h) is reported by evals.yml, never here.
+          for group in $(go run ./internal/evals/cmd/eval -groups -gating | tr -d '[]"' | tr ',' ' '); do
+            [ -f "evals/results/$src-$group.json" ] || fetch "$src" "$group" || true
+            if [ ! -f "evals/results/$src-$group.json" ]; then
+              echo "::error::No tier-2 eval results for $src, group $group. Run 'gh workflow run evals.yml --ref <source branch>', wait for it, then re-run this gate."
+              failed=1
+              continue
+            fi
+            [ -f "evals/results/$main_sha-$group.json" ] || fetch "$main_sha" "$group" || echo "::notice::No tier-2 baseline for main ($main_sha, group $group); only the absolute bar applies."
+            go run ./internal/evals/cmd/eval -compare "evals/results/$src-$group.json" -baseline "evals/results/$main_sha-$group.json" || failed=1
+          done
+          exit "$failed"
+
+  extended-integration:
+    name: extended-integration
+    if: inputs.gate == 'stable'
+    runs-on: ubuntu-latest
+    # Live tests create and delete aayu-scratch-* repositories, so they need a token with repo create/delete.
+    # It lives only in the live-tests environment (branches dev and promote/*); Appendix B D-0.4f.
+    environment: live-tests
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      # Live tests run against scratch repositories behind AAYU_LIVE=1 (§2 Testing).
+      - name: Live integration tests
+        env:
+          AAYU_LIVE: "1"
+          AAYU_GITHUB_TOKEN: ${{ secrets.AAYU_GITHUB_TOKEN }}
+        run: go test -race -count=1 -tags integration ./...
+
+  smoke:
+    name: smoke (${{ matrix.os }})
+    if: inputs.gate == 'stable'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      - name: Unit tests on this OS
+        # internal/cli takes about 15 minutes on Windows, where git starts about ten times slower than on Linux
+        # (TestReleaseFailsClosed alone is 5.5 minutes): past go test's 10-minute default (Appendix B, D-0.4g).
+        run: go test -count=1 -timeout 30m ./...
+      - name: Binary smoke test
+        run: |
+          set -euo pipefail
+          CGO_ENABLED=0 go build -trimpath -o "aayu-smoke$(go env GOEXE)" ./cmd/aayudha
+          ./aayu-smoke version
+          ./aayu-smoke help | grep -q 'Usage:'
+          set +e; ./aayu-smoke not-a-command; code=$?; set -e
+          [ "$code" = 2 ] || { echo "::error::unknown command exited $code, want 2"; exit 1; }

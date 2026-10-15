@@ -1,0 +1,14 @@
+# Which tests prove Bug #171's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # trailers name anthropic, the build record openai: the family is unknown, the verdict marks the trailer self-reported and unverified, and the reviewer is of neither family
+tests = ["internal/cli:TestInspectBuilderFamily", "internal/inspect:TestBuilderOf"]
+
+[[criterion]]
+id = 2 # no Aayudha-Model trailer: the verdict names the builder family used and where it came from
+tests = ["internal/cli:TestInspectBuilderFamily"]
+
+[[criterion]]
+id = 3 # an honest PR built by another family: reviewed as before, the verdict names the family and its source
+tests = ["internal/cli:TestInspectBuilderFamily", "internal/cli:TestBuildTextDryRunPlanAndBudget"]

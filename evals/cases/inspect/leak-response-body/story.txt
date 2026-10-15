@@ -1,0 +1,2 @@
+Exchange rates client
+Checkout converts prices with the rates service. `rates.Client.Fetch` returns the rate for a currency code and fails on any non-200 answer.

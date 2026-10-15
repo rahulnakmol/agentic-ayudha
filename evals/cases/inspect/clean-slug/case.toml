@@ -1,0 +1,15 @@
+# Seeded-defect PR for inspect (WP4.8b): Clean control: product slugs from names.
+# Synthetic: written for this eval, with its defects planted on purpose; never run. The head's files are kept
+# as <path>.txt so this repository's build, linters, and scanners never compile or flag the planted defects.
+skill = "inspect"
+description = "Clean control: product slugs from names"
+input = "pr.diff"
+
+[review]
+story = "story.txt"
+files = "files"
+builder = "claude-opus-5-5"
+criteria = [
+  "1. [api-trace] state: `catalog.Slug(\"Red Shoes (Size 9)\")`; expected: returns \"red-shoes-size-9\"",
+  "2. [api-trace] state: `catalog.Slug(\"  --Café--  \")`; expected: returns \"café\"",
+]

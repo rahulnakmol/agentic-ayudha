@@ -1,0 +1,18 @@
+{
+  "source": "Synthetic: written from PostHog's API reference (GET /api/personal_api_keys/@current/, POST /api/projects/:project_id/query/ with a HogQLQuery) because no PostHog account exists yet; the AAYU_LIVE=1 test exercises the same requests against a real project",
+  "interactions": [
+    {
+      "method": "GET",
+      "url": "https://us.posthog.com/api/personal_api_keys/@current/",
+      "status": 200,
+      "response": {"id": "0192c3a4-5b6c-7d8e-9f00-112233445566", "label": "aayudha baselines", "mask_value": "phx_...Qx7k", "created_at": "2026-09-30T10:00:00Z", "last_used_at": null, "user_id": 101, "scopes": ["query:read", "insight:read"], "scoped_teams": [12345], "scoped_organizations": []}
+    },
+    {
+      "method": "POST",
+      "url": "https://us.posthog.com/api/projects/12345/query/",
+      "body": {"name": "aayudha baseline users", "query": {"kind": "HogQLQuery", "query": "SELECT count(DISTINCT person_id) FROM events WHERE timestamp >= toDateTime('2026-09-01 00:00:00', 'UTC') AND timestamp < toDateTime('2026-10-01 00:00:00', 'UTC') AND (event = 'signed_up')"}},
+      "status": 200,
+      "response": {"columns": ["count(DISTINCT person_id)"], "types": [["count(DISTINCT person_id)", "UInt64"]], "results": [[4182]], "hasMore": false, "is_cached": false, "limit": 100, "offset": 0}
+    }
+  ]
+}

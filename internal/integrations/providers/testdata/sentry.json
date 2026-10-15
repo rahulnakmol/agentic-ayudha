@@ -1,0 +1,29 @@
+{
+  "source": "Synthetic: written from Sentry's API (GET /api/0/ echoes the token's scopes; GET /api/0/organizations/:org/sessions/ and /events/) because no Sentry account exists yet; the AAYU_LIVE=1 test exercises the same requests against a real project",
+  "interactions": [
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/",
+      "status": 200,
+      "response": {"version": "0", "auth": {"scopes": ["event:read", "org:read", "project:read"]}, "user": null}
+    },
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/organizations/acme/sessions/?end=2026-10-01T00%3A00%3A00Z&field=crash_free_rate%28session%29&includeSeries=0&interval=1d&project=4507&query=environment%3Aproduction&start=2026-09-01T00%3A00%3A00Z",
+      "status": 200,
+      "response": {"start": "2026-09-01T00:00:00Z", "end": "2026-10-01T00:00:00Z", "intervals": [], "groups": [{"by": {}, "totals": {"crash_free_rate(session)": 0.9934}}], "query": "environment:production"}
+    },
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/",
+      "status": 200,
+      "response": {"version": "0", "auth": {"scopes": ["event:read", "org:read", "project:read"]}, "user": null}
+    },
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/organizations/acme/events/?dataset=errors&end=2026-10-01T00%3A00%3A00Z&field=count%28%29&project=4507&start=2026-09-01T00%3A00%3A00Z",
+      "status": 200,
+      "response": {"data": [{"count()": 1287}], "meta": {"fields": {"count()": "integer"}, "units": {"count()": null}, "isMetricsData": false, "dataset": "errors"}}
+    }
+  ]
+}

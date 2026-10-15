@@ -1,0 +1,44 @@
+name: protected-paths-rerun
+
+# After a review (protected-paths-review.yml), re-run the latest protected-paths run for the reviewed head
+# commit. workflow_run always runs this file from the default branch; the re-run executes the base-branch
+# protected-paths workflow again, which fetches the reviews afresh and posts the required check on the PR's
+# head commit. Nothing from the PR is checked out or executed.
+on:
+  workflow_run:
+    workflows: [protected-paths-review]
+    types: [completed]
+
+permissions:
+  actions: write
+
+jobs:
+  rerun:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - name: Re-run protected-paths for the reviewed head commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          run_id=$(gh api "repos/$REPO/actions/workflows/protected-paths.yml/runs?event=pull_request_target&head_sha=$HEAD_SHA&per_page=1" \
+            --jq '.workflow_runs[0].id // empty')
+          if [[ -z "$run_id" ]]; then
+            echo "No protected-paths run for $HEAD_SHA (the PR may not target a gated branch)."
+            exit 0
+          fi
+          status=$(gh api "repos/$REPO/actions/runs/$run_id" --jq .status)
+          if [[ "$status" != "completed" ]]; then
+            echo "protected-paths run $run_id is $status; it will read the new review itself."
+            exit 0
+          fi
+          gh api -X POST "repos/$REPO/actions/runs/$run_id/rerun"
+          echo "Re-ran protected-paths run $run_id for $HEAD_SHA."

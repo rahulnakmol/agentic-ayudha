@@ -1,0 +1,59 @@
+# The simulated human of grill/search-fast (WP5.3b): the bakery's owner. The skill tags each question with a topic, <dimension>/<key>, the keys
+# coming from the catalogue's Topics (skills/grill/references/vague/performance.md) or the request topics in the skill. The human answers by
+# topic, else by the topic's dimension, else with the fallback, which parks it: an unscripted idea never becomes a
+# requirement. kind: confirm (states or agrees), default (accepts the skill's offered default), park, or defer.
+max_rounds = 4
+readback = "Yes, that is what done looks like."
+fallback = { kind = "park", text = "That is not part of what I asked for; park it." }
+
+[topics."perf.operation/action"]
+kind = "confirm"
+text = "Typing in the menu search box until the matching products show. That's what customers complain about."
+
+[topics."perf.target/percentile-and-number"]
+kind = "confirm"
+text = "Results should show within 200 ms of a keystroke for most people, say p95."
+
+[topics."perf.conditions/cache-state"]
+kind = "confirm"
+text = "Cold cache: the first search right after the page loads is the one that hurts."
+
+[topics."perf.measure/proof"]
+kind = "confirm"
+text = "A benchmark test on the seeded menu is fine as proof."
+
+[topics."perf.perceived/loading-feedback"]
+kind = "park"
+text = "Leave the loading feedback as it is."
+
+[topics."perf.regression/ci-budget"]
+kind = "defer"
+text = "Not sure we need a CI budget yet; leave it open."
+
+[topics."request/size"]
+kind = "confirm"
+text = "One story is fine."
+
+[dimensions."perf.operation"]
+kind = "confirm"
+text = "Typing in the menu search box until the matching products show. That's what customers complain about."
+
+[dimensions."perf.target"]
+kind = "confirm"
+text = "Results should show within 200 ms of a keystroke for most people, say p95."
+
+[dimensions."perf.conditions"]
+kind = "default"
+text = "Your default is fine."
+
+[dimensions."perf.measure"]
+kind = "confirm"
+text = "A benchmark test on the seeded menu is fine as proof."
+
+[dimensions."perf.perceived"]
+kind = "park"
+text = "Leave the loading feedback as it is."
+
+[dimensions."perf.regression"]
+kind = "defer"
+text = "Not sure we need a CI budget yet; leave it open."

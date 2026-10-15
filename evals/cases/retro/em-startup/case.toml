@@ -1,0 +1,17 @@
+# Persona case (WP5.1b): the Engineering Manager twin explains why story #212 overran at the startup stage. The same
+# scenario and task run as em-startup and em-enterprise, so the depth must differ while both stay grounded.
+# output/retro.md is a recorded answer (tier 1); tier 2 has the retro skill answer again and the judge score it.
+skill = "retro"
+description = "Athena explains the #212 overrun at the startup stage."
+input = "../grounding.md"
+artifacts = ["output/retro.md"]
+
+[persona]
+seat = "engineering-manager"
+stage = "startup"
+practice = "delivery-review"
+draft = "output/retro.md"
+task = "The founder asks in the retro thread: why did #212 overrun, and what do we change? Answer as the Engineering Manager twin, using the delivery-review practice at this team stage."
+
+[tier2]
+rubric = "../rubric.md"

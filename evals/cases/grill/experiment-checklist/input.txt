@@ -1,0 +1,1 @@
+Under Feature #20: test whether the first-claim checklist (flag first-claim-checklist) raises the share of new claimants who submit a claim. Event claim_submitted; baseline conversion 0.10 over the last 28 days from PostHog. Minimum sample 3841 per arm (two-sided z-test, alpha 0.05, power 0.8, 0.10 to 0.12).

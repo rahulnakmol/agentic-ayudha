@@ -1,0 +1,22 @@
+{
+  "type": "story",
+  "title": "Show empty-cart message",
+  "fields": {
+    "summary": "As a claimant, I want to see my empty list, so that I know where to start.",
+    "completion_goal": "1. [screenshot] state: cart is empty; expected: the \"Your cart is empty\" message and a Browse button\n2. [api-trace] state: POST /cart with no items; expected: 422 with code cart.empty",
+    "measure": "criteria observed",
+    "threshold": "2 of 2",
+    "scenario": "Open the list with no items.",
+    "environment": "staging with seed data"
+  },
+  "labels": [
+    "type:story",
+    "status:planned",
+    "effort:S"
+  ],
+  "parent": {
+    "number": 3,
+    "type": "feature"
+  },
+  "number": 12
+}

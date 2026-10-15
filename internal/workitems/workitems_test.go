@@ -1,0 +1,300 @@
+package workitems
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"regexp"
+	"slices"
+	"strings"
+	"testing"
+
+	"go.yaml.in/yaml/v4"
+
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
+)
+
+func loadFixture(t *testing.T, typ string) map[Stage]Item {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("testdata", "items", typ+".json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[Stage]Item
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatalf("%s: %v", typ, err)
+	}
+	return m
+}
+
+func messages(ps []Problem) string {
+	var s []string
+	for _, p := range ps {
+		s = append(s, p.String())
+	}
+	return strings.Join(s, "\n")
+}
+
+// Every type has a fixture per stage that passes that stage. A fixture filled
+// only to Create fails Ready whenever the type requires anything at Ready, so
+// stage gating is exercised in both directions.
+func TestFixturesPerTypeAndStage(t *testing.T) {
+	if len(Types) != 10 {
+		t.Fatalf("%d types, want ten", len(Types))
+	}
+	for _, typ := range Types {
+		fx := loadFixture(t, typ.ID)
+		for _, st := range Stages {
+			it, ok := fx[st]
+			if !ok {
+				t.Fatalf("%s: no %s fixture", typ.ID, st)
+			}
+			if ps := Validate(it, st); len(ps) > 0 {
+				t.Errorf("%s at %s: want pass, got:\n%s", typ.ID, st, messages(ps))
+			}
+		}
+		needsReady := typ.ParentAt == StageReady || typ.Effort
+		for _, f := range typ.Fields() {
+			needsReady = needsReady || f.RequiredAt == StageReady
+		}
+		if ps := Validate(fx[StageCreate], StageReady); needsReady && len(ps) == 0 {
+			t.Errorf("%s: the Create fixture passes Ready", typ.ID)
+		}
+		if ps := Validate(fx[StageReady], StageComplete); len(ps) == 0 && typ.ID != "feedback" {
+			t.Errorf("%s: the Ready fixture passes Complete", typ.ID)
+		}
+	}
+}
+
+func TestReadyFailures(t *testing.T) {
+	story := loadFixture(t, "story")[StageReady]
+	decision := loadFixture(t, "decision")[StageReady]
+	with := func(it Item, f func(*Item)) Item {
+		c := it
+		c.Fields = map[string]string{}
+		for k, v := range it.Fields {
+			c.Fields[k] = v
+		}
+		c.Labels = slices.Clone(it.Labels)
+		f(&c)
+		return c
+	}
+	tests := []struct {
+		name  string
+		item  Item
+		stage Stage
+		want  []string // every problem, exactly
+	}{
+		{"XL story", with(story, func(c *Item) {
+			c.Labels = append(slices.DeleteFunc(c.Labels, func(l string) bool { return l == "effort:S" }), "effort:XL")
+		}), StageReady,
+			[]string{"effort: effort:XL blocks Ready; slice it into XS-L stories"}},
+		{"XL decision", with(decision, func(c *Item) { c.Labels = append(c.Labels, "effort:XL") }), StageReady,
+			[]string{"effort: effort:XL blocks Ready; slice it into XS-L stories"}},
+		{"XL is fine at Create", with(story, func(c *Item) {
+			c.Labels = append(slices.DeleteFunc(c.Labels, func(l string) bool { return l == "effort:S" }), "effort:XL")
+		}), StageCreate, nil},
+		{"unmapped criterion", with(story, func(c *Item) {
+			c.Fields[FieldCriteria] = "1. [screenshot] state: empty; expected: message shown\n2. state: full; expected: total shown"
+		}), StageReady, []string{"completion_goal: criterion 2 is unmapped (no evidence kind); start it with one of [screenshot], [recording], [sr-transcript], [api-trace], [metric]"}},
+		{"unknown evidence kind", with(story, func(c *Item) {
+			c.Fields[FieldCriteria] = "1. [vibes] state: empty; expected: message shown"
+		}), StageReady, []string{`completion_goal: criterion 1 is unmapped (evidence kind "vibes"); start it with one of [screenshot], [recording], [sr-transcript], [api-trace], [metric]`}},
+		{"criterion without expected", with(story, func(c *Item) {
+			c.Fields[FieldCriteria] = "1. [metric] state: p95 latency under load"
+		}), StageReady, []string{`completion_goal: criterion 1 needs "state: <state>; expected: <what is observed>"`}},
+		{"no effort on a story", with(story, func(c *Item) { c.Labels = slices.DeleteFunc(c.Labels, func(l string) bool { return l == "effort:S" }) }), StageReady,
+			[]string{"effort: Effort is required at Ready: add one of the labels effort:XS, effort:S, effort:M, effort:L"}},
+		{"decision without reversible", with(decision, func(c *Item) { delete(c.Fields, FieldReversible) }), StageReady,
+			[]string{"reversible: Reversible is required at Decision-ready"}},
+		{"decision with a blank reversible", with(decision, func(c *Item) { c.Fields[FieldReversible] = "_No response_" }), StageReady,
+			[]string{"reversible: Reversible is required at Decision-ready"}},
+		{"decision reversible maybe", with(decision, func(c *Item) { c.Fields[FieldReversible] = "maybe" }), StageReady,
+			[]string{`reversible: Reversible = "maybe": want one of true, false`}},
+		{"decision without reversible still passes Create", with(decision, func(c *Item) { delete(c.Fields, FieldReversible) }), StageCreate, nil},
+		{"story under an initiative", with(story, func(c *Item) { c.Parent = &Ref{2, "initiative"} }), StageReady,
+			[]string{"parent: #2 is a initiative; a Story's parent must be a feature"}},
+		{"story without parent", with(story, func(c *Item) { c.Parent = nil }), StageReady,
+			[]string{"parent: a Story needs a parent feature at Ready"}},
+		{"link kind not allowed", with(story, func(c *Item) { c.Fields[FieldLinks] = "supersedes #4" }), StageReady,
+			[]string{`links: a Story cannot carry a "supersedes" link; allowed: depends-on`}},
+		{"supersedes a story", with(decision, func(c *Item) { c.Fields[FieldLinks] = "supersedes #9"; c.LinkTypes = map[int]string{9: "story"} }), StageReady,
+			[]string{"links: supersedes #9: #9 is a story; supersedes links to a decision"}},
+		{"two priorities", with(story, func(c *Item) { c.Labels = append(c.Labels, "priority:P1", "priority:P2") }), StageReady,
+			[]string{"priority: Priority has 2 labels (P1, P2); keep one"}},
+		{"type label disagrees", with(story, func(c *Item) { c.Labels = append(c.Labels, "type:bug") }), StageReady,
+			[]string{"type: label type:bug disagrees with the Story type"}},
+	}
+	for _, tt := range tests {
+		got := Validate(tt.item, tt.stage)
+		var gs []string
+		for _, p := range got {
+			gs = append(gs, p.String())
+		}
+		if !slices.Equal(gs, tt.want) {
+			t.Errorf("%s:\n got %q\nwant %q", tt.name, gs, tt.want)
+		}
+	}
+}
+
+func TestLabels(t *testing.T) {
+	seen := map[string]bool{}
+	hex := regexp.MustCompile(`^[0-9a-f]{6}$`)
+	for _, l := range Labels() {
+		if seen[l.Name] {
+			t.Errorf("duplicate label %q", l.Name)
+		}
+		seen[l.Name] = true
+		if len(l.Name) > 50 || len(l.Description) > 100 || !hex.MatchString(l.Color) {
+			t.Errorf("label %+v: GitHub allows names <= 50 and descriptions <= 100 characters and a 6-digit hex color", l)
+		}
+	}
+	for _, want := range []string{"type:story", "status:ready", "effort:XL", "identity:human-fallback", "decision:provisional", "needs:grill"} {
+		if !seen[want] {
+			t.Errorf("label %q missing", want)
+		}
+	}
+	for _, it := range IssueTypes() {
+		if !slices.Contains([]string{"gray", "blue", "green", "yellow", "orange", "red", "pink", "purple"}, it.Color) {
+			t.Errorf("issue type %s: color %q is not a GitHub issue type color", it.Name, it.Color)
+		}
+	}
+}
+
+// The grill verb's type input is the schema's type list plus brand, the
+// brand file (ground rule 4: the registry stays the single source of the CLI
+// surface).
+func TestGrillTypesMatchSchema(t *testing.T) {
+	c, _ := verbs.Find("grill")
+	for _, in := range c.Inputs {
+		if in.Name == "type" && !slices.Equal(in.Enum, append(TypeIDs(), "brand")) {
+			t.Fatalf("grill type enum %v, schema types %v", in.Enum, TypeIDs())
+		}
+	}
+}
+
+// form mirrors the GitHub issue form schema ("Syntax for issue forms" and
+// "Syntax for GitHub's form schema"); unknown keys fail decoding.
+type form struct {
+	Name        string   `yaml:"name"`
+	Description string   `yaml:"description"`
+	Title       string   `yaml:"title"`
+	Labels      []string `yaml:"labels"`
+	Assignees   []string `yaml:"assignees"`
+	Projects    []string `yaml:"projects"`
+	Type        string   `yaml:"type"`
+	Body        []struct {
+		Type       string `yaml:"type"`
+		ID         string `yaml:"id"`
+		Attributes struct {
+			Label       string   `yaml:"label"`
+			Description string   `yaml:"description"`
+			Placeholder string   `yaml:"placeholder"`
+			Value       string   `yaml:"value"`
+			Render      string   `yaml:"render"`
+			Options     []string `yaml:"options"`
+			Multiple    bool     `yaml:"multiple"`
+			Default     *int     `yaml:"default"`
+		} `yaml:"attributes"`
+		Validations *struct {
+			Required bool `yaml:"required"`
+		} `yaml:"validations"`
+	} `yaml:"body"`
+}
+
+func checkForm(src []byte) []string {
+	var f form
+	dec := yaml.NewDecoder(strings.NewReader(string(src)))
+	dec.KnownFields(true)
+	if err := dec.Decode(&f); err != nil {
+		return []string{err.Error()}
+	}
+	var errs []string
+	bad := func(s string) { errs = append(errs, s) }
+	if f.Name == "" || f.Description == "" {
+		bad("name and description are required")
+	}
+	idRE := regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+	ids, labels, inputs := map[string]bool{}, map[string]bool{}, 0
+	for i, el := range f.Body {
+		a := el.Attributes
+		switch el.Type {
+		case "markdown":
+			if a.Value == "" || el.ID != "" || el.Validations != nil {
+				bad("markdown element needs value and takes no id or validations")
+			}
+			continue
+		case "textarea", "input":
+			if len(a.Options) > 0 {
+				bad(el.Type + " takes no options")
+			}
+		case "dropdown":
+			if len(a.Options) == 0 || slices.Contains(a.Options, "None") || len(slices.Compact(slices.Sorted(slices.Values(a.Options)))) != len(a.Options) {
+				bad("dropdown needs unique options, none of them \"None\"")
+			}
+		default:
+			bad("unknown element type " + el.Type)
+		}
+		inputs++
+		if a.Label == "" || labels[a.Label] {
+			bad("element label missing or not unique: " + a.Label)
+		}
+		labels[a.Label] = true
+		if el.ID != "" && (!idRE.MatchString(el.ID) || ids[el.ID]) {
+			bad("element id invalid or not unique: " + el.ID)
+		}
+		ids[el.ID] = true
+		_ = i
+	}
+	if inputs == 0 {
+		bad("a form needs at least one non-markdown field")
+	}
+	return errs
+}
+
+func TestFormsPassGitHubFormSchema(t *testing.T) {
+	names := map[string]bool{}
+	for _, typ := range Types {
+		for _, opts := range []FormOptions{{}, {IssueTypes: true}} {
+			src := Form(typ, opts)
+			if errs := checkForm(src); len(errs) > 0 {
+				t.Errorf("%s %+v:\n%s", typ.ID, opts, strings.Join(errs, "\n"))
+			}
+			if strings.Contains(string(src), "\ntype: ") != opts.IssueTypes {
+				t.Errorf("%s: type key present = %t, want %t", typ.ID, !opts.IssueTypes, opts.IssueTypes)
+			}
+		}
+		var f form
+		_ = yaml.Unmarshal(Form(typ, FormOptions{}), &f)
+		if names[f.Name] {
+			t.Errorf("form name %q is not unique", f.Name)
+		}
+		names[f.Name] = true
+		// The form requires exactly the Create-stage fields, and never offers a label-held field.
+		for _, el := range f.Body[1:] {
+			fld, ok := typ.Field(el.ID)
+			if !ok {
+				t.Errorf("%s: form element %q is not a schema field", typ.ID, el.ID)
+			}
+			if el.Validations.Required != (fld.RequiredAt == StageCreate) {
+				t.Errorf("%s.%s: required = %t, want %t", typ.ID, el.ID, el.Validations.Required, fld.RequiredAt == StageCreate)
+			}
+		}
+		if !slices.Contains(f.Labels, "type:"+typ.ID) || slices.Contains(f.Labels, LabelIntake) != typ.Intake {
+			t.Errorf("%s: labels %v", typ.ID, f.Labels)
+		}
+	}
+	// The checker itself rejects what GitHub rejects.
+	for _, broken := range []string{
+		"name: x\ndescription: y\nbody:\n  - type: markdown\n    attributes:\n      value: hi\n",
+		"name: x\ndescription: y\nbody:\n  - type: dropdown\n    id: a\n    attributes:\n      label: A\n      options: [None, b]\n",
+		"name: x\ndescription: y\nbody:\n  - type: input\n    id: a b\n    attributes:\n      label: A\n",
+		"name: x\ndescription: y\nbody:\n  - type: input\n    attributes:\n      label: A\n  - type: textarea\n    attributes:\n      label: A\n",
+		"name: x\nbody:\n  - type: input\n    attributes:\n      label: A\n",
+		"name: x\ndescription: y\nbogus: 1\nbody:\n  - type: input\n    attributes:\n      label: A\n",
+	} {
+		if len(checkForm([]byte(broken))) == 0 {
+			t.Errorf("checker accepted a broken form:\n%s", broken)
+		}
+	}
+}

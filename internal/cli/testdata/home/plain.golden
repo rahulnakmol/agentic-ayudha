@@ -1,0 +1,18 @@
+-- stdout --
+aayudha: o/r
+Level 1: clear work items
+
+Journey: Set up (done) > Shape (done) > Ready (done) > Build (done) > Prove (done) > Ship (you are here) > Release > Learn
+
+Ready to build: 1 (#1 Export the report as CSV)
+In progress: 1 (#2 Sign in with a passkey)
+Waiting for a person: 1 (PR #4 for #1, gate none)
+Blocked: 0
+Failing floors: 0
+Measurements due: 0
+
+Next: aayu ship 4
+  Why: PR #4 (story #1) waits for a person: review and approve it on GitHub, then ship it. (Engineering Manager, for a person to run)
+-- stderr --
+Athena (Engineering Manager): Here is where the work stands.
+-- Athena (Engineering Manager): Small steps, real proof?

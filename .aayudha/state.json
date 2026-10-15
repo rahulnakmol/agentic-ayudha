@@ -1,0 +1,373 @@
+{
+  "schema_version": 1,
+  "repo": "rahulnakmol/agentic-ayudha",
+  "run": "2bf156e961ae",
+  "complete": true,
+  "done": [
+    "identity",
+    "labels",
+    "issue-types",
+    "forms",
+    "ledger",
+    "ruleset",
+    "config",
+    "agents",
+    "gates"
+  ],
+  "login": "rahulnakmol",
+  "identity": "human-fallback",
+  "visibility": "public",
+  "objects": [
+    {
+      "kind": "label",
+      "name": "type:goal",
+      "id": "12643306945"
+    },
+    {
+      "kind": "label",
+      "name": "type:initiative",
+      "id": "12643307132"
+    },
+    {
+      "kind": "label",
+      "name": "type:feature",
+      "id": "12643307220"
+    },
+    {
+      "kind": "label",
+      "name": "type:story",
+      "id": "12643307387"
+    },
+    {
+      "kind": "label",
+      "name": "type:bug",
+      "id": "12643307531"
+    },
+    {
+      "kind": "label",
+      "name": "type:decision",
+      "id": "12643307729"
+    },
+    {
+      "kind": "label",
+      "name": "type:experiment",
+      "id": "12643307828"
+    },
+    {
+      "kind": "label",
+      "name": "type:release",
+      "id": "12643307938"
+    },
+    {
+      "kind": "label",
+      "name": "type:feedback",
+      "id": "12643308053"
+    },
+    {
+      "kind": "label",
+      "name": "type:incident",
+      "id": "12643308233"
+    },
+    {
+      "kind": "label",
+      "name": "status:backlog",
+      "id": "12643308347"
+    },
+    {
+      "kind": "label",
+      "name": "status:discovery",
+      "id": "12643308458"
+    },
+    {
+      "kind": "label",
+      "name": "status:planned",
+      "id": "12643308537"
+    },
+    {
+      "kind": "label",
+      "name": "status:ready",
+      "id": "12643308636"
+    },
+    {
+      "kind": "label",
+      "name": "status:in-progress",
+      "id": "12643308838"
+    },
+    {
+      "kind": "label",
+      "name": "status:blocked",
+      "id": "12643309091"
+    },
+    {
+      "kind": "label",
+      "name": "status:validation",
+      "id": "12643309278"
+    },
+    {
+      "kind": "label",
+      "name": "status:merged",
+      "id": "12643309354"
+    },
+    {
+      "kind": "label",
+      "name": "status:released",
+      "id": "12643309529"
+    },
+    {
+      "kind": "label",
+      "name": "status:measured",
+      "id": "12643309602"
+    },
+    {
+      "kind": "label",
+      "name": "status:done",
+      "id": "12643309717"
+    },
+    {
+      "kind": "label",
+      "name": "status:cancelled",
+      "id": "12643309798"
+    },
+    {
+      "kind": "label",
+      "name": "priority:P0",
+      "id": "12643309888"
+    },
+    {
+      "kind": "label",
+      "name": "priority:P1",
+      "id": "12643310018"
+    },
+    {
+      "kind": "label",
+      "name": "priority:P2",
+      "id": "12643310111"
+    },
+    {
+      "kind": "label",
+      "name": "priority:P3",
+      "id": "12643310213"
+    },
+    {
+      "kind": "label",
+      "name": "effort:XS",
+      "id": "12643310359"
+    },
+    {
+      "kind": "label",
+      "name": "effort:S",
+      "id": "12643310457"
+    },
+    {
+      "kind": "label",
+      "name": "effort:M",
+      "id": "12643310511"
+    },
+    {
+      "kind": "label",
+      "name": "effort:L",
+      "id": "12643310554"
+    },
+    {
+      "kind": "label",
+      "name": "effort:XL",
+      "id": "12643310671"
+    },
+    {
+      "kind": "label",
+      "name": "risk:low",
+      "id": "12643310860"
+    },
+    {
+      "kind": "label",
+      "name": "risk:medium",
+      "id": "12643310942"
+    },
+    {
+      "kind": "label",
+      "name": "risk:high",
+      "id": "12643310998"
+    },
+    {
+      "kind": "label",
+      "name": "health:on-track",
+      "id": "12643311087"
+    },
+    {
+      "kind": "label",
+      "name": "health:at-risk",
+      "id": "12643311306"
+    },
+    {
+      "kind": "label",
+      "name": "health:off-track",
+      "id": "12643311490"
+    },
+    {
+      "kind": "label",
+      "name": "horizon:now",
+      "id": "12643311645"
+    },
+    {
+      "kind": "label",
+      "name": "horizon:next",
+      "id": "12643311749"
+    },
+    {
+      "kind": "label",
+      "name": "horizon:later",
+      "id": "12643311875"
+    },
+    {
+      "kind": "label",
+      "name": "intake",
+      "id": "12643311987"
+    },
+    {
+      "kind": "label",
+      "name": "needs:grill",
+      "id": "12643312114"
+    },
+    {
+      "kind": "label",
+      "name": "identity:human-fallback",
+      "id": "12643312229"
+    },
+    {
+      "kind": "label",
+      "name": "decision:provisional",
+      "id": "12643312320"
+    },
+    {
+      "kind": "label",
+      "name": "aayu:correction",
+      "id": "12643312438"
+    },
+    {
+      "kind": "label",
+      "name": "agent-authored",
+      "id": "12643312582"
+    },
+    {
+      "kind": "ledger",
+      "name": "ledger",
+      "id": "9af665ffae24cd0135ec49a59d41fbdfa1cfae63",
+      "adopted": true
+    },
+    {
+      "kind": "ruleset",
+      "name": "aayudha-ledger",
+      "id": "24891281",
+      "adopted": true
+    },
+    {
+      "kind": "label",
+      "name": "needs:bug",
+      "id": "12644399412"
+    },
+    {
+      "kind": "label",
+      "name": "aayudha:screen-reader",
+      "id": "12644022421",
+      "adopted": true
+    }
+  ],
+  "files": [
+    {
+      "path": ".github/ISSUE_TEMPLATE/aayudha-goal.yml",
+      "sha256": "725cb39033ac2ae8b8fae8f08fc3ac5a416f72af9574cf06ef61001c03589044",
+      "created": true
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/aayudha-initiative.yml",
+      "sha256": "7dbf1d587e71cf55b606079612154593207c68eafc858405c897325aef7be21d",
+      "created": true
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/aayudha-feature.yml",
+      "sha256": "4315d4620dc09ff6634b278b9f979ad6f8cab307a47d47e77042a128b29c91bb",
+      "created": true
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/aayudha-story.yml",
+      "sha256": "eab9b0a567f9150d20f046fb1fc6dc4a11245ac13af23e5dc5747c5e46b128ae",
+      "created": true
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/aayudha-bug.yml",
+      "sha256": "79d168a7331a43536ef49317ce7ffa41c1ce851244920093363316356bd2e5fd",
+      "created": true
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/aayudha-decision.yml",
+      "sha256": "436b34ec72225f8740db112c4b4e1c04e4c859bb1201a30520813b4e3e82e2a8",
+      "created": true
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/aayudha-experiment.yml",
+      "sha256": "7167ea6f816fa058c1d94c7e1299a0a7cb829d61c9e229b00d9eb4caf2523000",
+      "created": true
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/aayudha-release.yml",
+      "sha256": "bb7292964677267ccebddfd788a1e90925855a1c4be0d0d2f69736bb6dd27df1",
+      "created": true
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/aayudha-feedback.yml",
+      "sha256": "1577d0661c425ca42358da6c5cae261d521016c15e3d2bc20dc85d3f3f41580f",
+      "created": true
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/aayudha-incident.yml",
+      "sha256": "d2b91bbd284dfdc8ee1a6759a72f0c5eab97f21509f48a88f3bf25abcbfa5a5e",
+      "created": true
+    },
+    {
+      "path": ".aayudha/config.toml",
+      "sha256": "711c8a7ffb69ce446ca21e3fedbc2e765ada3419ae1201f99ed7df3695d862b3",
+      "created": true
+    },
+    {
+      "path": ".aayudha/.gitignore",
+      "sha256": "82709962d044f33a4e0df93028c14a824f6bed5b4ad1ea88eb76da1e84eddd0e",
+      "created": true
+    },
+    {
+      "path": "AGENTS.md",
+      "sha256": "95c72b80a6d54280f429da2a1b7567276398a7e845c098004d0d5c905f9c807f",
+      "created": false,
+      "section": "work-items"
+    },
+    {
+      "path": ".aayudha/seed/README.md",
+      "sha256": "ac37acf083060aa2c2ab8e5af2f222d7c4abcba1d2dfc83cd2137125db10c2ea",
+      "created": true
+    },
+    {
+      "path": ".github/workflows/aayudha-merge-gate.yml",
+      "sha256": "b1d38ad0f0cb9c387db4bfe332a17ca3d6f7587206d0e629ee3c56789761b73b",
+      "created": true
+    },
+    {
+      "path": ".github/workflows/aayudha-ready-guard.yml",
+      "sha256": "fd7a9c26b6861735c72efd6f37a6c8f054dbba93489afd64c6e873bb5a93104d",
+      "created": true
+    },
+    {
+      "path": ".github/workflows/aayudha-streak.yml",
+      "sha256": "24ed4a2e86d41d81a4ca2604dec41741a1ee6d77d68b4df00f851ed89e40e098",
+      "created": false
+    },
+    {
+      "path": ".github/workflows/aayudha-token.yml",
+      "sha256": "3afebda06dbd223d67019d6b708b72288e0b7af667a8e3936fec22eef089879c",
+      "created": true
+    },
+    {
+      "path": ".github/workflows/aayudha-triage.yml",
+      "sha256": "a46d7c9fbb3c99c53bfc36d911fee9c5071f0d0cfd6b09f49044c37dae1486b9",
+      "created": true
+    }
+  ]
+}

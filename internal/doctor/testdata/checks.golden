@@ -1,0 +1,140 @@
+## binary pass
+PASS  binary  aayu 1.2.0 is the latest release
+## binary fail
+WARN  binary  aayu 1.1.0 is installed; v1.2.0 is available (aayu self-update)
+## git pass
+PASS  git  git 2.45 (>= 2.40 required)
+## git fail
+FAIL  git  git 2.39 is too old; git >= 2.40 is required for linked worktrees [blocking]
+## git-lfs pass
+PASS  git-lfs  git-lfs/3.5.1
+## git-lfs fail
+FAIL  git-lfs  git-lfs not found; it is required for ledger operations (https://git-lfs.com) [blocking]
+## gh pass
+PASS  gh  gh found (optional)
+## gh fail
+WARN  gh  gh not found (optional: token source via `gh auth token`, and release provenance checks in self-update)
+## token pass
+PASS  token  token from AAYU_GITHUB_TOKEN -> rahulnakmol (scopes: read:org, repo)
+## token fail
+WARN  token  token from AAYU_GITHUB_TOKEN -> rahulnakmol (scopes: admin:org, delete_repo, repo, workflow)
+               token has the admin:org scope: administrative access beyond what verbs need; only init needs admin, and it confirms on a TTY
+               token has the delete_repo scope: it can delete repositories; no aayudha verb needs it
+               token has the workflow scope: it can rewrite GitHub Actions workflows, including the gates; drop it unless you are running init --gates
+## bot-identity pass
+PASS  bot-identity  bot identity: GitHub App aayudha-bot[bot] (laptops mint tokens through the aayudha-token.yml broker)
+## bot-identity fail
+WARN  bot-identity  bot identity: not configured; agent writes run under the human identity, tagged identity:human-fallback
+## config pass
+PASS  config  config is valid
+## config fail
+FAIL  config  config is invalid [blocking]
+                config: .aayudha/config.toml: '' has invalid keys: colour
+## schema pass
+PASS  schema  repository schema current (config v1)
+## schema fail
+FAIL  schema  repository schema is newer than this aayu: .aayudha/config.toml is config schema v2, this aayu supports up to v1; run `aayu self-update` [blocking]
+## host pass
+PASS  host  host amp (from AMP_THREAD_ID)
+## host fail
+WARN  host  no host detected (Amp, Claude Code, OpenAI Codex, or Cursor); pass --host when running outside one
+## secrets pass
+PASS  secrets  secrets backends: env, file
+                 unavailable: keychain (no Secret Service)
+## secrets fail
+WARN  secrets  secrets backends: env; no writable backend (secrets can come only from AAYU_SECRET_* variables)
+                 unavailable: keychain (no Secret Service)
+## skills-copies pass
+PASS  skills-copies  0 skill(s) for claude in sync with .aayudha/lock.toml (skills 0.0.0)
+## skills-copies fail
+FAIL  skills-copies  skill copies differ from .aayudha/lock.toml; aayu doctor --fix re-syncs them
+                       .claude/skills/ready is missing
+                       .claude/skills/status was edited or is stale
+## mcp pass
+PASS  mcp  aayudha MCP server registered for claude at this aayu's version
+## mcp fail
+FAIL  mcp  MCP registrations need aayu install --apply
+             claude: /usr/bin/aayu reports "aayu 1.1.0"; this aayu is 1.2.0
+## lfs-quota pass
+N/A  lfs-quota  LFS quota: GitHub has no quota API for this account; watch Settings > Billing > Git LFS (warn at 80 %)
+## ledger-media pass
+PASS  ledger-media  no ledger branch fetched (origin/ledger)
+## ledger-media fail
+FAIL  ledger-media  repository is public but its ledger tracks media in Git LFS (V3): LFS objects cannot be purged from GitHub [blocking]
+                      remove .lfsconfig and the LFS lines of .gitattributes from ledger and delete media already pushed there; proof media stay in run artifacts (S-4.2b), and design media need [proof] media
+## proof pass
+PASS  proof  proof: the merge gate keeps each pack as its aayudha-pack run artifact for 90 days (GitHub allows at most 90 on a public repository, 400 on a private one), and `aayu ship` lands pack.json on the ledger; no bot App, bucket, or secret needed
+## proof fail
+WARN  proof  proof: the merge gate keeps each pack as its aayudha-pack run artifact for 90 days (GitHub allows at most 90 on a public repository, 400 on a private one), and `aayu ship` lands pack.json on the ledger; no bot App, bucket, or secret needed
+               loops/proof-purge.toml runs `aayu proof purge`, which 0.2 removed (media expire with their run artifact): delete it, then run `aayu init --gates` to re-render the loops
+               .github/workflows/aayudha-merge-gate.yml is a 0.1 gate (its aayudha/pack job writes the ledger with a bot App instead of checking the pack and commenting): run `aayu init --gates`, which replaces it unless you edited it
+## issue-types pass
+PASS  issue-types  organization repository: GitHub issue types are available
+## issue-types fail
+WARN  issue-types  could not check issue-type support (no GitHub token or repository)
+## integrations pass
+PASS  integrations  1 of 1 configured integration(s) reachable with a read-only key
+                      posthog: reachable as personal API key aayudha; read-only scope verified (query:read per GET /api/personal_api_keys/@current/)
+                      sentry: not configured; set [integrations.sentry] for reliability baselines
+                      github: not configured; set [integrations.github] for delivery baselines from issues and pull requests
+                      growthbook: not configured; set [integrations.growthbook] for experiment results for readout and measure
+                      azure: not configured; set [integrations.azure] for Application Insights baselines and events (Log Analytics query API)
+                      aws: not configured; set [integrations.aws] for CloudWatch RUM baselines (Logs Insights) and events
+                      gcp: not configured; set [integrations.gcp] for GA4 BigQuery export baselines and events
+                      figma: not configured; set [integrations.figma] for design files: nodes, rendered images, and variables
+                      mobbin: not configured; set [integrations.mobbin] for design references as URLs and IDs
+## integrations fail
+FAIL  integrations  0 of 4 configured integration(s) reachable with a read-only key
+                      posthog: scope = "write": read verbs refuse this key, so it was not sent; configure a read-only key
+                      sentry: unreachable: provider error: GET https://sentry.io/api/0/: 401: {"detail":"Invalid token"}
+                      github: not configured: [integrations.github] secret "github-read" has no value: secret not found: github-read (set it with `aayu auth set-secret github-read`, or export AAYU_SECRET_GITHUB_READ)
+                      growthbook: not configured; set [integrations.growthbook] for experiment results for readout and measure
+                      azure: not configured; set [integrations.azure] for Application Insights baselines and events (Log Analytics query API)
+                      aws: not configured; set [integrations.aws] for CloudWatch RUM baselines (Logs Insights) and events
+                      gcp: not configured; set [integrations.gcp] for GA4 BigQuery export baselines and events
+                      figma: not configured; set [integrations.figma] for design files: nodes, rendered images, and variables
+                      mobbin: not configured; set [integrations.mobbin] for design references as URLs and IDs
+                      amplitude: configured; no adapter in this binary yet, so not checked
+## optional-tools pass
+PASS  optional-tools  all optional tools found
+## optional-tools fail
+WARN  optional-tools  8 optional tool(s) missing: gitleaks (secrets floor), osv-scanner (deps floor), docker (dast floor: ZAP), k6 (api floor), lighthouse (perf floor), tesseract (OCR in the redaction pass; without it the pass scans the DOM only), impeccable (review lane B), duckdb (measure, optional); a floor whose tool is missing blocks verify, it never passes
+## worktrees pass
+PASS  worktrees  no leaked worktrees
+## worktrees fail
+WARN  worktrees  1 leaked worktree(s); `aayu gc` prunes them
+                   /tmp/wt-x (gitdir file points to non-existent location)
+## delegate-env pass
+PASS  delegate-env  delegation environments not set up: no .agents/setup (cloud receivers of `build --delegate` install with it)
+## delegate-env fail
+WARN  delegate-env  2 delegation environment(s) drifted from .agents/setup; `aayu doctor --fix` re-syncs .cursor/environment.json
+                      source: drift: .agents/setup is not executable (chmod +x; Amp runs it directly)
+                        .agents/setup installs Go 1.24.0, older than go.mod's go 1.25.0
+                      amp: ok: orbs run .agents/setup natively when a project snapshot is prepared
+                      cursor: drift: no .cursor/environment.json; `aayu doctor --fix` writes it, then merge it to the default branch
+                      codex: manual: Codex cloud environments are set in the Codex UI only; aayu cannot read them
+                        Install script: bash .agents/setup
+                        Internet access: the package-managers preset (or custom domains), GET/HEAD/OPTIONS only
+                        Secrets: none; put the environment's ID in [delegate] codex_env
+                      claude: missing: no workflow runs anthropics/claude-code-action; `/install-github-app` in Claude Code writes one
+## leases pass
+PASS  leases  1 live build lease(s)
+## leases fail
+WARN  leases  2 stale build lease(s); `aayu gc` reclaims them
+                #9: bot@ci, expired 2026-01-01T00:00:00Z
+                #10: labelled leased without a lock comment
+## coexistence pass
+PASS  coexistence  coexistence report: nothing to coexist with
+## coexistence fail
+WARN  coexistence  coexistence report: 2 name collision(s) init must resolve
+                     existing workflow aayudha-token.yml (checks: mint): init leaves it byte-identical and adds aayudha/* checks alongside
+                     existing workflow ci.yml (checks: build, aayudha/test): init leaves it byte-identical and adds aayudha/* checks alongside
+                     existing branches outside dev/rolling/main/ledger: master
+                     no dev branch: init writes [branches] dev = "master" to config instead of renaming anything
+                     existing rulesets: protect-master; init adds its own alongside
+                     workflow aayudha-token.yml already exists; init installs a file with that name
+                     check "aayudha/test" in ci.yml uses the aayudha/ prefix that init registers
+## telemetry pass
+PASS  telemetry  traces to .aayudha/telemetry/traces.jsonl; nothing leaves this machine
+## telemetry fail
+PASS  telemetry  traces disabled

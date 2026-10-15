@@ -1,0 +1,13 @@
+{
+  "type": "feedback",
+  "title": "Send the open claims list to a manager",
+  "fields": {
+    "summary": "A caseworker wrote: \"I need to send my manager the list of open claims every Monday and I copy them by hand.\"",
+    "context": "She uses the claims list on a laptop, weekly."
+  },
+  "labels": [
+    "type:feedback",
+    "status:backlog"
+  ],
+  "number": 21
+}
