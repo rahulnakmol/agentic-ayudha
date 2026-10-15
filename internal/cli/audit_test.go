@@ -680,6 +680,10 @@ func TestAuditReplaysRecordedReports(t *testing.T) {
 	root := t.TempDir()
 	bare := filepath.Join(root, "origin.git")
 	git(t, root, "clone", "--quiet", "--bare", filepath.Join(src, "ledger.bundle"), bare)
+	// No background maintenance: a push would start it, and its objects/maintenance.lock can vanish while the local
+	// clone below copies the objects directory.
+	git(t, bare, "config", "maintenance.auto", "false")
+	git(t, bare, "config", "gc.auto", "0")
 	seed := filepath.Join(root, "seed")
 	git(t, root, "init", "--quiet", "--initial-branch", "dev", seed)
 	git(t, seed, "commit", "--quiet", "--allow-empty", "-m", "dev")
