@@ -1,11 +1,11 @@
 # 7. The release
 
-> *Monday, 14:47 UTC.* Priya types `aayu release 144 --to rolling` and answers "yes" at the prompt. Somewhere in CI,
+> *Monday, 14:47 UTC.* You type `aayu release 144 --to rolling` and answer "yes" at the prompt. Somewhere in CI,
 > a full test run starts on a commit that does not exist on any branch yet. If it fails, nothing moves.
 
 ## Merged is not released
 
-Shipping put the five stories on `dev`, where the team integrates. Releasing puts them in front of people. aayudha
+Shipping put your five stories on `dev`, where work integrates. Releasing puts them in front of people. aayudha
 moves work up a ladder of three branches: `dev`, then a `rolling` snapshot for early adopters, then a stable release
 on `main` ([dev, rolling, main](concepts-ladder.md)). Every step up runs a full gate first.
 
@@ -19,13 +19,14 @@ branch, and runs the promotion gate on it in CI: the full test suite that must p
 - The skill evals (tests of the agents' own instructions, under the gates described in the
   [epilogue](built-with-itself.md)) and the rolling gate both passed on the first attempt.
 - `rolling` moved to that exact commit, tagged `rolling-2026-10-12.4`.
-- Stories 132, 133, and 134 were stamped `released`. Stories 130 and 131 had gone out in an earlier snapshot.
+- Stories 132, 133, and 134 were stamped `released`. Stories 130 and 131 had already gone out in the 10:43
+  snapshot, `rolling-2026-10-12.3`.
 - Release notes were written, naming only proven Features.
 - The measurement of Goal 125 and Initiative 126 was scheduled for after 9 November 2026, 28 days out.
 
 All of it was written back onto the Release issue as shipping evidence: the runs, the artifacts and their
-fingerprints, the stories, the notes, and the due dates. You can install that very snapshot today, as
-[your first hour](start.md) shows.
+fingerprints, the stories, the notes, and the due dates. Because the example lives inside aayudha's own repository,
+that snapshot is also a release of aayudha itself: the very one [your first hour](start.md) installs.
 
 > **Honest status:** in the real run, the seeded measurement and the closing summary in the next two chapters were
 > made just before this release, between 14:29 and 14:39. The real 28-day measurement comes after 9 November. And no
@@ -59,7 +60,8 @@ Measure-later only works if "later" is on the calendar. `release` puts it there 
 
 ## What's next
 
-The work is out. Now the only question that matters: did the number move?
+The work is out. Now the only question that matters, and you already have a first answer from 14:29: did the
+number move?
 [Chapter 8, the number](journey-8-learn.md).
 
 > **You are here:** chapter 7 of 9. [Goal](journey-1-shape.md) · [Plan](journey-2-break-down.md) ·

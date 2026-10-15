@@ -1,8 +1,8 @@
 # 8. The number
 
-> *Monday, 14:29 UTC, a few minutes before the release in chapter 7.* Priya runs one command against the product's export. The terminal prints a single line. She
-> reads it twice: "Target met: activation = 0.916667 against the target >= 0.6." Then Sam asks the question that
-> matters. "Met on what, exactly?"
+> *Monday, 14:29 UTC, a few minutes before the release in chapter 7.* You run one command against the product's
+> export. The terminal prints a single line. You read it twice: "Target met: activation = 0.916667 against the
+> target >= 0.6." Then you ask yourself the question your boss will ask. "Met on what, exactly?"
 
 ## 0.258 became 0.917
 
@@ -17,7 +17,7 @@ writes the **Result** into the Goal: the value, the target, the change, and how 
 
 ## Met on what, exactly
 
-Sam's question is the right one, and the Goal answers it in writing. The 120 employees are synthetic. Their
+It is the right question, and the Goal answers it in writing. The 120 employees are synthetic. Their
 behaviour comes from a simulation with a fixed seed, run through the real, merged question workflow, so every
 question really went through the code that shipped. Anyone can run the simulation again and get the same file, byte
 for byte, and the same 0.917.
@@ -33,7 +33,7 @@ The baseline did not change: still 31 of 120, because the measurement only ever 
 
 A before-and-after number cannot prove *your change* moved it. When that matters, `experiment` designs an A/B test
 with a hypothesis, a metric, a feature flag, and the minimum number of people it needs, and `readout` reports the
-lift once enough people have taken part. Priya and Sam did not run one: their question was "does self-serve beat the
+lift once enough people have taken part. You did not run one: your question was "does self-serve beat the
 HR queue at all", and before-and-after answered it. Reach for an experiment when you are choosing between versions.
 
 > **Needs setup:** experiments need PostHog or GrowthBook connected with `aayu init --integrations`, and enough
@@ -44,7 +44,7 @@ HR queue at all", and before-and-after answered it. Reach for an experiment when
 `retro` compares the plan with what happened and files each lesson as a Feedback issue a person can accept or
 reject. This Monday would give it plenty: 17 reviews against a plan of 10, and four pull requests thrown away.
 `evolve` turns an accepted lesson into a lasting fix for the agents themselves: a failing test for the skill first,
-then a change to the skill that passes it, opened as a pull request a person reviews. Neither ran on benefits-qa;
+then a change to the skill that passes it, opened as a pull request a person reviews. Neither ran on the benefits app that day;
 the [epilogue](built-with-itself.md) shows the same loop at work on aayudha itself.
 
 ## What you do, and what the agent does
@@ -76,7 +76,7 @@ A result you can reproduce is worth more than a bigger one you cannot. Say what 
 
 ## What's next
 
-Priya has a number she can defend. Now she has to explain it to someone who was not there, and the first draft is
+You have a number you can defend. Now you have to explain it to someone who was not there, and your first draft is
 refused: [chapter 9, the telling](journey-9-explain.md).
 
 > **You are here:** chapter 8 of 9. [Goal](journey-1-shape.md) · [Plan](journey-2-break-down.md) ·

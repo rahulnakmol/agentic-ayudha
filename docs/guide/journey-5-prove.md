@@ -1,6 +1,6 @@
 # 5. The gate says no
 
-> *Monday, 07:43 UTC.* Eight minutes after the first pull request opened, a comment lands on it. Sam reads the first
+> *Monday, 07:43 UTC.* Eight minutes after the first pull request opened, a comment lands on it. You read the first
 > line: "inspect: fix". The agent's tests all pass. The checks all pass. And a reviewer has just found a way for a
 > stranger's email address to slip into the plan documents.
 
@@ -45,8 +45,8 @@ published contract. On the analytics story, pull request 156 went back twice, th
 HR answers could land after the end of the measured window. Both were closed and rebuilt, as 155 and 158, with every
 finding fixed and tested.
 
-In all, five stories took **17 reviews**. The team had budgeted 10: one review per pull request plus one round
-of fixes. Four pull requests (135, 140, 151, 156) were thrown
+In all, five stories took **17 reviews**. Your plan for the day allowed 10: one review per story plus one round
+of fixes. The gate itself allows two rounds before it closes a pull request, and it needed them. Four pull requests (135, 140, 151, 156) were thrown
 away. No pull request's reviews cost more than 2 USD in total; pull request 148's cost 0.37 USD.
 
 > **Tip:** treat `fix` as the system working, not failing. Each of these findings was a real defect, and each one now
@@ -79,7 +79,8 @@ and the
 
 ## What you do, and what the agent does
 
-**You** read the verdict on the pull request. It is short on purpose.
+**You** read the verdict on the pull request. It is short on purpose. Then you go back to your coffee: the fixing is
+not your job.
 
 **The agents and CI** do the rest: the gate starts by itself, the builder fixes what the reviewer finds, and a
 capped pull request is rebuilt.
@@ -111,8 +112,8 @@ when a model and a measurement disagree, believe the measurement.
 
 ## What's next
 
-Pull request 148 is green, with a pack and a "merge". One thing is missing, and only a person can give it. Sam
-reaches for the approve button: [chapter 6, the yes](journey-6-ship.md).
+At 09:03, pull request 142, the plan documents story, is the first to turn green, with a pack and a "merge". One
+thing is missing, and only a person can give it. You reach for the approve button: [chapter 6, the yes](journey-6-ship.md).
 
 > **You are here:** chapter 5 of 9. [Goal](journey-1-shape.md) · [Plan](journey-2-break-down.md) ·
 > [Promises](journey-3-ready.md) · [Build](journey-4-build.md) · **Gate** · [Yes](journey-6-ship.md) ·

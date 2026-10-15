@@ -1,6 +1,6 @@
 # 9. The telling
 
-> *Monday, 14:31 UTC.* Priya asks for a one-page close-out of the Goal for the engineers. Four minutes later the
+> *Monday, 14:31 UTC.* You ask for a one-page close-out of the Goal for the engineers. Four minutes later the
 > run fails. The reviewer, a model from another vendor, has found one sentence the sources do not support. The brief
 > is refused.
 
@@ -42,7 +42,7 @@ three Features.
 - **`audit`** writes a report someone else can reproduce: floor results, proof coverage, waivers, decision deadlines,
   every solo-mode bypass, and any write that skipped the log. It is what you hand an auditor.
 
-> **Honest status:** the latest audit report on the ledger covers the build up to 06:35 on 12 October, before this
+> **Honest status:** the latest audit report on the ledger covers aayudha's own build up to 06:35 on 12 October, before this
 > story began. The five solo-mode ships and three plan bypasses from today wait for the next `audit` run, which will
 > list each one.
 
@@ -75,7 +75,7 @@ Claims that point at evidence travel further than claims that ask for trust.
 
 ## The end of the day
 
-Just after seven there was a fuzzy wish and a count from an inbox. By 14:47 there was a measured baseline, five
+Just after seven you had a fuzzy wish and a count from an inbox. By 14:47 there was a measured baseline, five
 proven stories across all nine layers, a seeded result of 0.917 against a target of 0.60, a close-out brief backed
 by five proof packs, a release, and a date in November to check it all again with real people. Along the way the
 checks said no again and again, and every no left the product a little more correct and a little more private.
