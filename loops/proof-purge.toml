@@ -1,0 +1,8 @@
+# Proof media retention (WP4.2, V3): deletes the media of proof packs older than [proof] retention_days and
+# tombstones them. It writes the ledger, so in Actions it needs the bot App; the bucket credential is the proof-media
+# secret. The cron is in [time] tz.
+description = "Proof retention: delete the media of packs older than [proof] retention_days and tombstone their packs."
+command = ["proof", "purge"]
+cron = "40 3 * * *"
+secrets = ["proof-media"]
+bot = true

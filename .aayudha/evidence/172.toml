@@ -1,0 +1,14 @@
+# Which tests prove Bug #172's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # init --gates on a scratch repository and this repository's go generate render a scheduled proof purge loop that starts with aayu hook loop:proof-purge
+tests = ["internal/cli:TestInitGatesRendersProofPurge", "internal/loops:TestRepositoryLoops"]
+
+[[criterion]]
+id = 2 # the loop against a ledger with an old and a new pack and media in a fake bucket: the old pack's media deleted and tombstoned, the new pack untouched
+tests = ["internal/cli:TestLoopProofPurge"]
+
+[[criterion]]
+id = 3 # the loop while aayu halt is in force: exit 4 and nothing purged
+tests = ["internal/cli:TestLoopProofPurge"]

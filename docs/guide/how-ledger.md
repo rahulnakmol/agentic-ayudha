@@ -175,6 +175,8 @@ Pack JSON and hashes stay forever. Media (screenshots, recordings, screen-reader
 `aayu proof purge <story>` deletes all of one story's media now. Bucket objects are deleted, LFS files are removed from the ledger tip,
 and each `pack.json` is rewritten so the artifact carries a tombstone (`purged_at`, `reason`) while its SHA-256 stays.
 `aayu proof verify` does not try to open a tombstoned artifact. A bucket's own lifecycle rule can expire objects too (`EnsureLifecycle` in `internal/proof/bucket.go`).
+The `proof-purge` loop runs `aayu proof purge` daily at 03:40 in `[time] tz`; `aayu init --gates` writes
+`loops/proof-purge.toml` into every repository that lacks it, so retention does not depend on a person.
 
 ## Invariants
 
@@ -206,8 +208,9 @@ and each `pack.json` is rewritten so the artifact carries a tombstone (`purged_a
 > `pack_landed`. 91 ledger commits so far carry the `identity:human-fallback` trailer. The ledger README predates the
 > current layout: its table still names `packs/`, where the code writes `proof/`. No verb writes that file (it was
 > written by hand when the branch was created), so it is left as it is and this page describes the real layout. This repository is public and
-> `[proof] media` is empty, so no media has been pushed here. No workflow runs `aayu proof purge` on a schedule yet; a
-> human runs it.
+> `[proof] media` is empty, so no media has been pushed here. The `proof-purge` loop's Actions job writes the ledger as
+> the bot, so here it skips with a notice until an App exists; its Amp and Cursor schedules run once someone sets them
+> ([loops/README.md](../../loops/README.md)).
 
 ## Read next
 

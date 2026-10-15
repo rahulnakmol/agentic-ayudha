@@ -53,8 +53,33 @@ type Loop struct {
 	// Bot marks a loop whose command writes under the bot identity: in Actions
 	// it needs the bot App's token (D1) and is skipped with a notice without one.
 	Bot bool `toml:"bot,omitempty" json:"bot,omitempty"`
+	// Secrets are aayu secret names the command reads; the Actions job passes
+	// each from the repository secret AAYU_SECRET_<NAME> (e.g. proof-media).
+	Secrets []string `toml:"secrets,omitempty" json:"secrets,omitempty"`
 
 	sched schedule
+}
+
+// Defaults are the loops every repository runs: `init --gates` writes each
+// one that loops/ lacks, by name. proof-purge keeps [proof] retention_days
+// without a person: retention of proof media, which can hold personal data,
+// must not depend on someone remembering to purge (V3, WP4.2; Bug #172).
+var Defaults = map[string]string{
+	"proof-purge": `# Proof media retention (WP4.2, V3): deletes the media of proof packs older than [proof] retention_days and
+# tombstones them. It writes the ledger, so in Actions it needs the bot App; the bucket credential is the proof-media
+# secret. The cron is in [time] tz.
+description = "Proof retention: delete the media of packs older than [proof] retention_days and tombstone their packs."
+command = ["proof", "purge"]
+cron = "40 3 * * *"
+secrets = ["proof-media"]
+bot = true
+`,
+}
+
+// SecretEnv is the environment variable that carries an aayu secret (the
+// secrets store's AAYU_SECRET_<NAME>).
+func SecretEnv(name string) string {
+	return "AAYU_SECRET_" + strings.ToUpper(strings.ReplaceAll(name, "-", "_"))
 }
 
 // Runs reports whether the loop renders for host.
@@ -135,6 +160,11 @@ func Parse(name string, data []byte) (Loop, error) {
 	}
 	if err := checkCommand(l.Command); err != nil {
 		bad("command: %v", err)
+	}
+	for _, sec := range l.Secrets {
+		if !nameRE.MatchString(sec) {
+			bad("secrets: %q: want a secret name of lowercase letters, digits, and -", sec)
+		}
 	}
 	var err error
 	if l.sched, err = parseCron(l.Cron); err != nil {
@@ -581,8 +611,8 @@ func ActionsWorkflow(ls []Loop, tz string, loc *time.Location, version string, i
 	}
 	var b strings.Builder
 	b.WriteString(generated)
-	b.WriteString(`# aayudha loops, Actions fallback (docs/BUILD-PLAN.md WP7.1). Installed into product repos by ` + "`aayu init --gates`" + `
-# when loops/*.toml exists. Protected path.
+	b.WriteString(`# aayudha loops, Actions fallback (docs/BUILD-PLAN.md WP7.1). Installed into product repos by ` + "`aayu init --gates`" + `,
+# with loops/*.toml and the default loops (proof-purge). Protected path.
 #
 `)
 	fmt.Fprintf(&b, "# Each loop's cron is written in [time] tz (%s); GitHub's cron is UTC, so a loop has one cron per UTC offset\n", tz)
@@ -664,6 +694,9 @@ func ActionsWorkflow(ls []Loop, tz string, loc *time.Location, version string, i
 `, strings.Join(j.l.Command, " "))
 		if j.l.Bot {
 			b.WriteString("          AAYU_BOT_TOKEN: ${{ steps.app.outputs.token }}\n")
+		}
+		for _, sec := range j.l.Secrets {
+			fmt.Fprintf(&b, "          %s: ${{ secrets.%s }}\n", SecretEnv(sec), SecretEnv(sec))
 		}
 		fmt.Fprintf(&b, `          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
           AAYU_AGENT: "1"
