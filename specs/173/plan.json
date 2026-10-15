@@ -1,0 +1,52 @@
+{
+  "story": 173,
+  "body_hash": "c15e260b428550b8051df49d30258ceb2e1ddc0a417cb42b46c74c7e3fa98dca",
+  "footprint": [
+    "L02",
+    "L09"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L09",
+      "title": "Halt check first in every workflow job",
+      "contracts": [
+        "every job with steps in .github/workflows and the init --gates templates starts with the halt check: if vars.AAYUDHA_HALT != '', a script that fails"
+      ],
+      "tests": [
+        "TestEveryWorkflowJobStartsWithHaltCheck",
+        "TestHaltedWorkflowRuns"
+      ],
+      "instrumentation": [
+        "the halt step prints ::error:: with the halt reason"
+      ],
+      "rollback": "revert the PR; the workflows run unchecked again",
+      "criteria": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "layer": "L02",
+      "title": "The init --gates merge-gate template golden",
+      "contracts": [
+        "the rendered merge gate's inspect and pack jobs start with the halt check"
+      ],
+      "tests": [
+        "internal/cli:TestInitExtras"
+      ],
+      "rollback": "revert the PR",
+      "criteria": [
+        1
+      ]
+    }
+  ],
+  "em_review": {
+    "required": true,
+    "layers": [
+      "L09"
+    ]
+  },
+  "planned_at": "2026-10-15T06:40:25Z",
+  "planned_by": "human-fallback"
+}
