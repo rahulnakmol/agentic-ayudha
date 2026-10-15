@@ -2,8 +2,10 @@ package models
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -81,6 +83,34 @@ func (b *Breaker) Seed(recs []actions.Record) {
 		}
 		b.perDay[b.day(r.Time)] += r.CostUSD
 	}
+}
+
+// SeedLog seeds the breaker from the actions log at path (WP1.5), so the
+// per-day and per-story limits count the spend of every process that logged
+// to it, not only this one's (Bug #177). A missing log seeds nothing.
+func (b *Breaker) SeedLog(path string) error {
+	f, err := os.Open(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+	var recs []actions.Record
+	for dec := json.NewDecoder(f); ; {
+		var r actions.Record
+		err := dec.Decode(&r)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil { // a read error (a directory, say) as well as a malformed record
+			return fmt.Errorf("%s: %w", path, err)
+		}
+		recs = append(recs, r)
+	}
+	b.Seed(recs)
+	return nil
 }
 
 // Paused reports whether agent lanes are paused.

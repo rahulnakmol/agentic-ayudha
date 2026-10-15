@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -289,6 +290,24 @@ func TestBudgetBreaker(t *testing.T) {
 		}
 		if usd, source := Cost(nil, "unknown", Response{TokensIn: 1e6}); source != "fallback-rate" || usd != FallbackInputPerMTok {
 			t.Fatalf("fallback: %v %s", usd, source)
+		}
+	})
+	t.Run("a log that cannot be read is an error, a missing one seeds nothing", func(t *testing.T) {
+		dir := t.TempDir()
+		bad := filepath.Join(dir, "actions.jsonl")
+		_ = os.WriteFile(bad, []byte("{\"seq\":1}\nnot json\n"), 0o644)
+		br := &Breaker{Budget: config.Budget{PerDayUSD: 1}, Clock: london, Now: now, PauseFile: filepath.Join(dir, "paused")}
+		if err := br.SeedLog(filepath.Join(dir, "missing.jsonl")); err != nil || br.Check("") != nil {
+			t.Fatalf("missing log: %v", err)
+		}
+		if err := br.SeedLog(bad); err == nil || !strings.Contains(err.Error(), "actions.jsonl") {
+			t.Fatalf("malformed log: %v", err)
+		}
+		if err := br.SeedLog(filepath.Join(bad, "actions.jsonl")); err == nil {
+			t.Fatal("a log under a file: want an error")
+		}
+		if err := br.SeedLog(dir); err == nil { // opens, then fails on the first read
+			t.Fatal("a directory as the log: want an error")
 		}
 	})
 }

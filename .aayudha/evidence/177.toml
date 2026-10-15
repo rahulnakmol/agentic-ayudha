@@ -1,0 +1,14 @@
+# Which tests prove Bug #177's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # two processes on one day, 0.60 USD each, per_day_usd = 1: the second trips (exit 6, pause file, one page)
+tests = ["internal/cli:TestBudgetBreakerAcrossProcesses"]
+
+[[criterion]]
+id = 2 # two processes on one story, 0.60 USD each, per_story_usd = 1: the second trips for that story (exit 6)
+tests = ["internal/cli:TestBudgetBreakerAcrossProcesses"]
+
+[[criterion]]
+id = 3 # 0.60 USD logged yesterday and a 0.60 USD call today with per_day_usd = 1: no trip
+tests = ["internal/cli:TestBudgetBreakerAcrossProcesses"]
