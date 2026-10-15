@@ -1,0 +1,14 @@
+# Which tests prove Bug #173's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # every job with steps in .github/workflows and internal/initrepo (.yml and .yaml) starts with the halt check; the test names any that does not
+tests = ["TestEveryWorkflowJobStartsWithHaltCheck"]
+
+[[criterion]]
+id = 2 # floors, inspect-live, and screen-reader started on a scratch repository while AAYUDHA_HALT was set: each job failed at the halt check and skipped every later step (recorded runs in testdata/workflow-halt)
+tests = ["TestHaltedWorkflowRuns", "TestEveryWorkflowJobStartsWithHaltCheck"]
+
+[[criterion]]
+id = 3 # the same three workflows after AAYUDHA_HALT was deleted: the halt check skipped and every job succeeded (recorded runs)
+tests = ["TestHaltedWorkflowRuns"]

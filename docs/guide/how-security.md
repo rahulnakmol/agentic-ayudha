@@ -134,15 +134,15 @@ The full table has 18 threats and the residual risks. Its status column was last
    `TestPublicRepoRefusesMedia`).
 7. Spend past a budget limit pauses agent lanes (`internal/models/gateway.go`, `TestBudgetBreaker`).
 8. A halted repository runs no verb and no gated workflow job (`internal/cli/halt.go`, `TestHaltStopsRunningLoop`,
-   `TestHaltFromWorkflowAndHook`).
+   `TestHaltFromWorkflowAndHook`); every job of every workflow and `init --gates` template starts with the halt step
+   (`TestEveryWorkflowJobStartsWithHaltCheck` in `workflows_test.go`).
 
 > **Honest status:** no bot GitHub App is installed on this repository yet, and it runs in solo mode with one
 > human. Until an App exists, agent lanes fall back to the human's own token and every write they make is tagged
 > `identity:human-fallback`, so "human tokens never reach agents" holds for child processes but not yet for the
 > agents themselves. The merge gate keeps its pack as a run artifact, and `aayu ship` lands it on the ledger
 > under the human's identity. Protected-path changes are reviewed by nobody but the author; each merge is an
-> explicit, recorded admin bypass. Three of this repository's own development workflows (`floors.yml`,
-> `inspect-live.yml`, `screen-reader.yml`) have no halt step.
+> explicit, recorded admin bypass.
 
 ## Where it lives in the code
 

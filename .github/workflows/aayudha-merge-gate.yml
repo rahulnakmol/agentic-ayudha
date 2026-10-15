@@ -155,6 +155,12 @@ jobs:
       pull-requests: write
       issues: read
     steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
       - name: Check out the base branch (trusted configuration; no PR code)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -191,6 +197,12 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
       - name: No bot App
         if: vars.AAYUDHA_APP_CLIENT_ID == ''
         run: echo "::notice::No bot App (aayu init --identity), so CI cannot write the ledger (Appendix B D1). The authoritative pack stays this run's aayudha-pack artifact; aayu ship lands it under the human identity (Appendix B D-4.8a)."
