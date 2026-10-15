@@ -215,6 +215,27 @@ func (g *Gateway) Do(ctx context.Context, c Call) (Response, Resolved, error) {
 	return resp, m, nil
 }
 
+// WithModel is the gateway with lane on host pinned to model, for a call the
+// binary routes to a named model of the lane (inspect's peer reviewer,
+// WP4.8b). Accounting, the breaker, and the actions log are shared.
+func (g *Gateway) WithModel(lane verbs.LaneID, host verbs.HostID, model string) *Gateway {
+	c := *g
+	lanes := map[string]map[string]config.ModelChoice{}
+	for l, hosts := range g.Models.Lanes {
+		lanes[l] = map[string]config.ModelChoice{}
+		for h, mc := range hosts {
+			lanes[l][h] = mc
+		}
+	}
+	if lanes[string(lane)] == nil {
+		lanes[string(lane)] = map[string]config.ModelChoice{}
+	}
+	lanes[string(lane)][string(host)] = config.ModelChoice{Model: model}
+	c.Models.Lanes = lanes
+	c.Resolver.Models = c.Models
+	return &c
+}
+
 func (g *Gateway) client(route Route, key string) Client {
 	if g.Client != nil {
 		return g.Client(route, key)

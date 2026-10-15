@@ -1,0 +1,19 @@
+package rates
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestFetch(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"rate":1.08}`))
+	}))
+	defer srv.Close()
+	c := &Client{BaseURL: srv.URL, HTTP: srv.Client()}
+	if got, err := c.Fetch(context.Background(), "EUR"); err != nil || got != 1.08 {
+		t.Fatalf("got %v %v", got, err)
+	}
+}

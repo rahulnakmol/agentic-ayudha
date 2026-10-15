@@ -1,0 +1,2 @@
+// Package rates calls the exchange rates service.
+package rates

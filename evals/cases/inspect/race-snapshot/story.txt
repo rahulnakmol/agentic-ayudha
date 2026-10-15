@@ -1,0 +1,2 @@
+Metrics snapshot endpoint
+Operators read every counter at once at `GET /metrics`, while requests keep incrementing them.

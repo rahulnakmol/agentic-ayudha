@@ -1,0 +1,21 @@
+# Seeded-defect PR for inspect (WP4.8b): Page n of a 1-based pager starts one page late (boundary).
+# Synthetic: written for this eval, with its defects planted on purpose; never run. The head's files are kept
+# as <path>.txt so this repository's build, linters, and scanners never compile or flag the planted defects.
+skill = "inspect"
+description = "Page n of a 1-based pager starts one page late (boundary)"
+input = "pr.diff"
+
+[review]
+story = "story.txt"
+files = "files"
+builder = "claude-opus-5-5"
+criteria = [
+  "1. [api-trace] state: `catalog.Page([a b c d e], 1, 2)`; expected: returns [a b] and true",
+  "2. [api-trace] state: `catalog.Page([a b c d e], 3, 2)`; expected: returns [e] and false",
+]
+
+[[review.defects]]
+file = "internal/catalog/page.go"
+lines = [9, 9]
+kind = "boundary"
+title = "page n starts at n*size, skipping the first page"

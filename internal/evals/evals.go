@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -52,6 +53,16 @@ type Group struct {
 	// Gate is "enforced" (the default: a failing result fails evals-gate) or
 	// "advisory": results are computed and printed but never gate (D-7.3h).
 	Gate string `toml:"gate"`
+	// K overrides the runs per case for this group; 0 keeps eval.toml's k.
+	K int `toml:"k"`
+	// Events are the GitHub event names (EVENT in evals.yml) the group runs
+	// on; empty runs on every event. A costly group runs on dispatch only.
+	Events []string `toml:"events"`
+}
+
+// RunsOn reports whether a group runs for the workflow event (empty: any).
+func (g Group) RunsOn(event string) bool {
+	return len(g.Events) == 0 || event == "" || slices.Contains(g.Events, event)
 }
 
 // gate policies of a group.
@@ -107,6 +118,9 @@ func (c Config) ForGroup(name string, cases []Case) (Config, []Case, error) {
 			continue
 		}
 		c.MaxUSD = g.MaxUSD
+		if g.K > 0 {
+			c.K = g.K
+		}
 		var out []Case
 		for _, k := range cases {
 			if c.GroupOf(k.ID) == name {
@@ -156,6 +170,10 @@ type Case struct {
 	Feedback  int        `toml:"feedback"`
 	Reproduce string     `toml:"reproduce"`
 	Tier2     *Tier2Spec `toml:"tier2"`
+	// Review makes a seeded-defect case for inspect (WP4.8b): the input is the
+	// PR's diff; tier 2 runs it in every review variant and scores precision
+	// and recall against the planted defects, without a judge.
+	Review *ReviewSpec `toml:"review"`
 }
 
 // Scope is one known way a skill invents a requirement for this case's input,

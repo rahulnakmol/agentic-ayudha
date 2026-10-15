@@ -1,0 +1,48 @@
+diff --git a/internal/auth/verify.go b/internal/auth/verify.go
+index cfc055e..85a4c3d 100644
+--- a/internal/auth/verify.go
++++ b/internal/auth/verify.go
+@@ -1,6 +1,9 @@
+ package auth
+ 
+-import "errors"
++import (
++	"errors"
++	"log"
++)
+ 
+ // ErrUnauthorized is returned for any token that is not accepted.
+ var ErrUnauthorized = errors.New("unauthorized")
+@@ -12,3 +15,13 @@ type Claims struct{ Subject string }
+ type Verifier struct {
+ 	parse func(token string) (Claims, error)
+ }
++
++// Check returns the claims of a valid token, and logs why a token was rejected.
++func (v *Verifier) Check(token string) (Claims, error) {
++	c, err := v.parse(token)
++	if err != nil {
++		log.Printf("auth: rejected token %q: %v", token, err)
++		return Claims{}, ErrUnauthorized
++	}
++	return c, nil
++}
+diff --git a/internal/auth/verify_test.go b/internal/auth/verify_test.go
+new file mode 100644
+index 0000000..5ad0f9a
+--- /dev/null
++++ b/internal/auth/verify_test.go
+@@ -0,0 +1,13 @@
++package auth
++
++import (
++	"errors"
++	"testing"
++)
++
++func TestCheckRejects(t *testing.T) {
++	v := &Verifier{parse: func(string) (Claims, error) { return Claims{}, errors.New("expired") }}
++	if _, err := v.Check("t"); !errors.Is(err, ErrUnauthorized) {
++		t.Fatal(err)
++	}
++}

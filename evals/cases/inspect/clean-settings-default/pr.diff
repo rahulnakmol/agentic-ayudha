@@ -1,0 +1,54 @@
+diff --git a/internal/settings/settings.go b/internal/settings/settings.go
+index d24fe9f..8b807a6 100644
+--- a/internal/settings/settings.go
++++ b/internal/settings/settings.go
+@@ -1,7 +1,24 @@
+ package settings
+ 
++import "fmt"
++
++// DefaultPageSize is the page size of settings that do not set one.
++const DefaultPageSize = 20
++
+ // Settings are the shop's preferences.
+ type Settings struct {
+ 	Currency string `json:"currency"`
+ 	PageSize int    `json:"page_size"`
+ }
++
++// Normalize fills in defaults and checks ranges: a page size of 0 becomes
++// DefaultPageSize, and one outside 1-100 is an error.
++func (s *Settings) Normalize() error {
++	if s.PageSize == 0 {
++		s.PageSize = DefaultPageSize
++	}
++	if s.PageSize < 1 || s.PageSize > 100 {
++		return fmt.Errorf("settings: page_size %d is outside 1-100", s.PageSize)
++	}
++	return nil
++}
+diff --git a/internal/settings/settings_test.go b/internal/settings/settings_test.go
+new file mode 100644
+index 0000000..e362c2d
+--- /dev/null
++++ b/internal/settings/settings_test.go
+@@ -0,0 +1,19 @@
++package settings
++
++import (
++	"strings"
++	"testing"
++)
++
++func TestNormalize(t *testing.T) {
++	s := Settings{}
++	if err := s.Normalize(); err != nil || s.PageSize != DefaultPageSize {
++		t.Fatalf("default: %+v %v", s, err)
++	}
++	for _, n := range []int{-1, 101} {
++		s := Settings{PageSize: n}
++		if err := s.Normalize(); err == nil || !strings.Contains(err.Error(), "outside 1-100") {
++			t.Fatalf("%d: %v", n, err)
++		}
++	}
++}

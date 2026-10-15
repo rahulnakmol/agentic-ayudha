@@ -755,6 +755,51 @@
       "additionalProperties": false,
       "type": "object",
       "description": "How aayu looks on a person's terminal (WP1.1b); usually set in the user-level config. Machines (--json, MCP, agents, CI, pipes) always get plain, stable text."
+    },
+    "inspect": {
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "general",
+            "peer"
+          ],
+          "description": "general: one reviewer; peer: two reviewers of different families (both different from the builder's) cross-check each other's findings."
+        },
+        "delegated_mode": {
+          "type": "string",
+          "enum": [
+            "general",
+            "peer"
+          ],
+          "description": "Mode for a PR another agent built through build --delegate (WP5.5b)."
+        },
+        "min_confidence": {
+          "type": "number",
+          "maximum": 1,
+          "minimum": 0,
+          "description": "P2 and P3 findings below this reviewer confidence are not posted; P0 and P1 always are."
+        },
+        "suppress_after": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "A finding resembling this many distinct human dismissals in the same file or directory is not posted (never a P0 in security, data, or concurrency); 0 turns suppression off."
+        },
+        "peer_model": {
+          "type": "string",
+          "description": "Model ID of the peer reviewer; empty picks the first of the registry's review candidates whose family differs from the builder's and the first reviewer's."
+        },
+        "generated": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Path patterns (path.Match) of generated files that inspect does not review; the drift check owns them. Files whose header says Code generated ... DO NOT EDIT are skipped too."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "How inspect reviews a PR (WP4.8b): its mode, noise filters, and peer reviewer."
     }
   },
   "additionalProperties": false,

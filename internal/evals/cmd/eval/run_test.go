@@ -53,13 +53,27 @@ const testdata = "internal/evals/testdata/"
 // The entry point prints the tier-2 group names for the workflow's matrix.
 func TestGroups(t *testing.T) {
 	out, err := evalIn(t, repoRoot, func() error { main(); return nil }, "-groups")
-	if err != nil || strings.TrimSpace(out) != `["brief-plain","brief","personas","skills"]` {
+	if err != nil || strings.TrimSpace(out) != `["brief-plain","brief","personas","review","skills"]` {
 		t.Fatalf("-groups: %v %q", err, out)
 	}
 	// evals-gate compares only the groups that gate (D-7.3h).
 	out, err = evalIn(t, repoRoot, func() error { main(); return nil }, "-groups", "-gating")
 	if err != nil || strings.TrimSpace(out) != `["brief","personas","skills"]` {
 		t.Fatalf("-groups -gating: %v %q", err, out)
+	}
+}
+
+// The review group (WP4.8b) runs on dispatch only: on a push or the nightly
+// schedule its tier-2 run does nothing and writes no results.
+func TestReviewGroupDispatchOnly(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "r.json")
+	t.Setenv("EVENT", "push")
+	got, err := evalIn(t, repoRoot, func() error { main(); return nil }, "-tier", "2", "-group", "review", "-sha", "abc", "-out", out)
+	if err != nil || !strings.Contains(got, "runs on workflow_dispatch only") {
+		t.Fatalf("%v %q", err, got)
+	}
+	if _, err := os.Stat(out); err == nil {
+		t.Fatal("results written on a push")
 	}
 }
 

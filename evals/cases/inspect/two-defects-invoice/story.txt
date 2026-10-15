@@ -1,0 +1,2 @@
+Invoice totals with a discount
+An invoice total is the sum of every line's cents times quantity, less a whole-percent discount (0-100). Quantities come from a form; `ParseQty` returns an error for anything that is not a whole number of at least 1.

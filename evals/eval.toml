@@ -49,6 +49,18 @@ name = "personas"
 prefixes = ["retro/", "decide/"]
 max_usd = 20.0
 
+# Seeded-defect PRs for inspect (WP4.8b): each case runs in three variants (the 0.1 prompt, general, peer) and is
+# scored by precision and recall against its planted defects, with no judge. Reported, never gating, and run on
+# dispatch only (about 70 review calls per k).
+[[groups]]
+name = "review"
+prefixes = ["inspect/"]
+max_usd = 20.0
+k = 2
+pass_k = "advisory"
+gate = "advisory"
+events = ["workflow_dispatch"]
+
 [[groups]]
 name = "skills" # every other case
 # 6 USD covered the single-reply cases (4.57 in the last run). The two grill conversation cases (WP5.3b) make three or

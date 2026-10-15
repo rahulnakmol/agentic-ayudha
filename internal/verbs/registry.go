@@ -385,6 +385,11 @@ const (
 	ModelGeminiPro    = "gemini-3.1-pro-low"
 )
 
+// PeerReviewCandidates are the review-lane models inspect's peer mode picks
+// its second reviewer from, in order: the first whose family differs from the
+// builder's and the first reviewer's (WP4.8b).
+var PeerReviewCandidates = []string{ModelGPTSol, ModelGrok, ModelGeminiPro, ModelClaudeOpus}
+
 const geminiNote = "the gateway serves only gemini-3.1-pro-low; there is no plain gemini-3.1-pro"
 
 func builderDefaults() []ModelDefault {
@@ -624,8 +629,13 @@ var Verbs = []Command{
 		Summary: "Adversarially review a PR against its plan, pack, and criteria; return a structured disposition: merge, fix, or rebuild.",
 		Reader:  "A second model, from another vendor, reviews the pull request against every promise and says merge, fix, or rebuild.",
 		Seat:    EngineeringManager, Lane: LaneReview, Layers: AllLayers(),
-		Inputs:   []Input{pos("pr", TypePR, "Pull request to inspect.")},
-		Outputs:  []string{"disposition (merge|fix|rebuild)", "findings"},
+		Inputs: []Input{
+			pos("pr", TypePR, "Pull request to inspect."),
+			enumIn("mode", false, false, "general: one reviewer; peer: two reviewers of different families cross-check each other (default from [inspect]).", "general", "peer"),
+			humanOnly(flag("dismiss", TypeString, "Record the finding with this ID as dismissed in this repository, so inspect stops raising findings like it.")),
+			humanOnly(flag("reason", TypeString, "Why the finding is dismissed (with --dismiss).")),
+		},
+		Outputs:  []string{"disposition (merge|fix|rebuild)", "findings", "review-comments"},
 		Gates:    []GateID{GatePack, GateBudget},
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeDirect, Exposure: ExposeWrite,
 	},

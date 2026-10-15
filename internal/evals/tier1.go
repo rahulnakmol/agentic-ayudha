@@ -78,6 +78,10 @@ func Tier1(ctx context.Context, root string, c Case, assets fs.FS) Tier1Result {
 		}
 		r.Checks = append(r.Checks, Check{name, st, lines})
 	}
+	if c.Review != nil { // a seeded-defect case: its construction, not a recorded run (WP4.8b)
+		add("review-case", Tier1Review(c), false)
+		return r
+	}
 
 	var missing []string
 	for _, f := range append([]string{c.Input}, c.Artifacts...) {

@@ -98,10 +98,19 @@ type Branch struct {
 
 // Review is a PR review.
 type Review struct {
-	ID       int64   `json:"id"`
-	User     Account `json:"user"`
-	State    string  `json:"state"`
-	CommitID string  `json:"commit_id"`
+	ID       int64           `json:"id"`
+	User     Account         `json:"user"`
+	State    string          `json:"state"`
+	CommitID string          `json:"commit_id"`
+	Body     string          `json:"body,omitempty"`
+	Comments []ReviewComment `json:"-"` // the inline comments a posted review carried
+}
+
+// ReviewComment is one inline comment of a posted review.
+type ReviewComment struct {
+	Path string
+	Line int
+	Body string
 }
 
 // CheckRun is a check run on a commit.
@@ -459,7 +468,27 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			content, ok = files[f]
 		}
 		if !ok {
-			notFound()
+			// A directory: its direct children, as the contents API lists them.
+			files := g.Files
+			if pinned, ok := g.RefFiles[r.URL.Query().Get("ref")]; ok {
+				files = pinned
+			}
+			var entries []map[string]any
+			prefix := strings.TrimSuffix(f, "/") + "/"
+			if f == "" {
+				prefix = ""
+			}
+			for p := range files {
+				if rest, ok := strings.CutPrefix(p, prefix); ok && rest != "" && !strings.Contains(rest, "/") {
+					entries = append(entries, map[string]any{"type": "file", "path": p, "name": rest})
+				}
+			}
+			if len(entries) == 0 {
+				notFound()
+				return
+			}
+			slices.SortFunc(entries, func(a, b map[string]any) int { return strings.Compare(a["path"].(string), b["path"].(string)) })
+			reply(200, entries)
 			return
 		}
 		reply(200, map[string]any{"type": "file", "path": f, "encoding": "base64", "content": base64.StdEncoding.EncodeToString([]byte(content))})
@@ -716,6 +745,19 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			reply(200, pr)
+		case sm[2] == "/reviews" && m == "POST":
+			g.seq++
+			rv := Review{ID: g.seq, User: Account{Login: g.Viewer, Type: "User"}, State: "COMMENTED", CommitID: str("commit_id"), Body: str("body")}
+			if cs, ok := body["comments"].([]any); ok {
+				for _, x := range cs {
+					if c, ok := x.(map[string]any); ok {
+						line, _ := c["line"].(float64)
+						rv.Comments = append(rv.Comments, ReviewComment{Path: fmt.Sprint(c["path"]), Line: int(line), Body: fmt.Sprint(c["body"])})
+					}
+				}
+			}
+			pr.Reviews = append(pr.Reviews, rv)
+			reply(200, rv)
 		case sm[2] == "/reviews" && m == "GET":
 			out := []Review{}
 			out = append(out, pr.Reviews...)

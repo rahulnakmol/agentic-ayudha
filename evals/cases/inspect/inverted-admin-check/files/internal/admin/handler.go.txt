@@ -1,0 +1,37 @@
+package admin
+
+import (
+	"context"
+	"net/http"
+)
+
+// User is a signed-in account.
+type User interface{ IsAdmin() bool }
+
+// Handler serves the admin endpoints.
+type Handler struct {
+	Auth interface {
+		User(*http.Request) (User, bool)
+	}
+	Users interface {
+		Delete(ctx context.Context, id string) error
+	}
+}
+
+// DeleteUser serves DELETE /admin/users/{id}: admins only.
+func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
+	u, ok := h.Auth.User(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if u.IsAdmin() {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if err := h.Users.Delete(r.Context(), r.PathValue("id")); err != nil {
+		http.Error(w, "delete failed", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

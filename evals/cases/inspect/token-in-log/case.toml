@@ -1,0 +1,21 @@
+# Seeded-defect PR for inspect (WP4.8b): Check logs the rejected bearer token (security).
+# Synthetic: written for this eval, with its defects planted on purpose; never run. The head's files are kept
+# as <path>.txt so this repository's build, linters, and scanners never compile or flag the planted defects.
+skill = "inspect"
+description = "Check logs the rejected bearer token (security)"
+input = "pr.diff"
+
+[review]
+story = "story.txt"
+files = "files"
+builder = "claude-opus-5-5"
+criteria = [
+  "1. [api-trace] state: `Check(\"expired-token\")`; expected: returns ErrUnauthorized and logs the reason",
+  "2. [api-trace] state: `Check(<valid token>)`; expected: returns the token's claims",
+]
+
+[[review.defects]]
+file = "internal/auth/verify.go"
+lines = [23, 23]
+kind = "security"
+title = "the rejected token itself is written to the log"

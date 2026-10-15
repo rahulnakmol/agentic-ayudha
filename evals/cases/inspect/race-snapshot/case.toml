@@ -1,0 +1,21 @@
+# Seeded-defect PR for inspect (WP4.8b): Snapshot reads the counter map without the lock (concurrency).
+# Synthetic: written for this eval, with its defects planted on purpose; never run. The head's files are kept
+# as <path>.txt so this repository's build, linters, and scanners never compile or flag the planted defects.
+skill = "inspect"
+description = "Snapshot reads the counter map without the lock (concurrency)"
+input = "pr.diff"
+
+[review]
+story = "story.txt"
+files = "files"
+builder = "claude-opus-5-5"
+criteria = [
+  "1. [api-trace] state: `GET /metrics` after three `Inc(\"orders\")`; expected: returns {\"orders\":3}",
+  "2. [api-trace] state: `GET /metrics` while 100 goroutines call Inc; expected: returns without a race (go test -race)",
+]
+
+[[review.defects]]
+file = "internal/metrics/counter.go"
+lines = [27, 28]
+kind = "concurrency"
+title = "Snapshot reads the map without holding c.mu"

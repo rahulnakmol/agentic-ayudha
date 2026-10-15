@@ -1,0 +1,25 @@
+package invoice
+
+import (
+	"fmt"
+	"strconv"
+)
+
+// Total sums the lines' cents times quantity and applies a whole-percent
+// discount (0-100).
+func Total(lines []Line, discountPercent int) (int64, error) {
+	if discountPercent < 0 || discountPercent > 100 {
+		return 0, fmt.Errorf("invoice: discount %d%% is outside 0-100", discountPercent)
+	}
+	var sum int64
+	for i := 1; i < len(lines); i++ {
+		sum += lines[i].Cents * int64(lines[i].Qty)
+	}
+	return sum - sum*int64(discountPercent)/100, nil
+}
+
+// ParseQty reads a quantity from a form value: a whole number of at least 1.
+func ParseQty(s string) (int, error) {
+	n, _ := strconv.Atoi(s)
+	return n, nil
+}

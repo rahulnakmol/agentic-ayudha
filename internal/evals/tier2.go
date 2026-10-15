@@ -10,6 +10,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
@@ -43,6 +44,12 @@ type Run struct {
 	// Transcript is a grill conversation run's exchanges and final criteria
 	// (WP5.3b), clipped and redacted, so a reader can see what was asked.
 	Transcript *RunTranscript `json:"transcript,omitempty"`
+	// A review case's run (WP4.8b): its variant and what it would post against
+	// the planted defects.
+	Variant string `json:"variant,omitempty"`
+	TP      int    `json:"tp,omitempty"`
+	FP      int    `json:"fp,omitempty"`
+	FN      int    `json:"fn,omitempty"`
 }
 
 // RunTranscript is what a results file keeps of a conversation.
@@ -96,6 +103,8 @@ type Results struct {
 	Baseline string       `json:"baseline,omitempty"` // SHA of the results compared against
 	Verdict  string       `json:"verdict"`            // pass or fail
 	Reasons  []string     `json:"reasons,omitempty"`
+	// Review is the seeded-defect precision and recall per inspect variant (WP4.8b).
+	Review []ReviewSummary `json:"review,omitempty"`
 }
 
 // ErrBudget means a tier-2 run reached its group's max_usd (evals/eval.toml).
@@ -109,6 +118,9 @@ type Harness struct {
 	Config  Config
 	Gateway *models.Gateway
 	Assets  fs.FS // embedded skills/; stub skills live in evals/skills under Root
+	// Inspect is [inspect] from the configuration: the review cases' filters and peer model.
+	Inspect config.Inspect
+	mu      sync.Mutex
 	spent   float64
 
 	fallback string // the current case's skill-lane fallback model
@@ -205,13 +217,21 @@ func (h *Harness) complete(lane verbs.LaneID, role string, log *[]CallLog) func(
 	}
 }
 
+func (h *Harness) spentUSD() float64 {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.spent
+}
+
 func (h *Harness) call(ctx context.Context, gw *models.Gateway, lane verbs.LaneID, role string, req models.Request, log *[]CallLog) (models.Response, error) {
-	if h.spent >= h.Config.MaxUSD {
-		return models.Response{}, fmt.Errorf("%w: %.2f of %.2f USD", ErrBudget, h.spent, h.Config.MaxUSD)
+	if spent := h.spentUSD(); spent >= h.Config.MaxUSD {
+		return models.Response{}, fmt.Errorf("%w: %.2f of %.2f USD", ErrBudget, spent, h.Config.MaxUSD)
 	}
 	resp, m, err := gw.Do(ctx, models.Call{Story: "evals", Seat: string(verbs.AINativeEngineer), Lane: lane, Host: verbs.DirectHost, Req: req})
 	usd, _ := models.Cost(gw.Models.Prices, m.Model, resp)
+	h.mu.Lock()
 	h.spent += usd
+	h.mu.Unlock()
 	l := CallLog{Role: role, Model: m.Model, StopReason: resp.StopReason, Truncated: resp.Truncated,
 		TokensIn: resp.TokensIn, TokensOut: resp.TokensOut, MaxTokens: req.MaxTokens}
 	if err != nil {
@@ -249,8 +269,29 @@ func (h *Harness) Tier2(ctx context.Context, cases []Case, sha, ref string, now 
 	}
 	var scores []int
 	var budgetErr error
+	var reviews []Case
 	for _, c := range cases {
-		if c.Tier2 == nil {
+		if c.Review != nil {
+			reviews = append(reviews, c)
+		}
+	}
+	if len(reviews) > 0 {
+		crs, sum, err := h.reviewCases(ctx, reviews)
+		if err != nil {
+			return nil, err
+		}
+		for _, cr := range crs {
+			for _, r := range cr.Runs {
+				if r.Status != RunError {
+					scores = append(scores, r.Score)
+				}
+			}
+			res.Errors += cr.Errors
+		}
+		res.Cases, res.Review = append(res.Cases, crs...), sum
+	}
+	for _, c := range cases {
+		if c.Tier2 == nil || c.Review != nil {
 			continue
 		}
 		body, err := h.skillBody(c.Skill)
@@ -344,7 +385,7 @@ func (h *Harness) Tier2(ctx context.Context, cases []Case, sha, ref string, now 
 		res.PassK += cr.PassK / float64(len(res.Cases))
 	}
 	res.Mean = mean(scores)
-	res.CostUSD = h.spent
+	res.CostUSD = h.spentUSD()
 	return res, nil
 }
 

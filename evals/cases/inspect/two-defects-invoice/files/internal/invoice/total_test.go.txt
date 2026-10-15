@@ -1,0 +1,9 @@
+package invoice
+
+import "testing"
+
+func TestTotalDiscountRange(t *testing.T) {
+	if _, err := Total(nil, 101); err == nil {
+		t.Fatal("101 % accepted")
+	}
+}

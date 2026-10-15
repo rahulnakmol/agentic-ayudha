@@ -1,0 +1,8 @@
+package orders
+
+// Order is one customer order; Total is in cents.
+type Order struct {
+	ID       int64
+	Customer string
+	Total    int64
+}

@@ -1,0 +1,2 @@
+In-memory session store
+Sessions keep a few string values per visitor. `session.NewStore` returns an empty store; `Set` stores a value and `Get` reads it back.

@@ -16,9 +16,28 @@ aayu:
       required: true
       positional: true
       description: "Pull request to inspect."
+    - name: mode
+      type: enum
+      required: false
+      positional: false
+      enum:
+        - "general"
+        - "peer"
+      description: "general: one reviewer; peer: two reviewers of different families cross-check each other (default from [inspect])."
+    - name: dismiss
+      type: string
+      required: false
+      positional: false
+      description: "Record the finding with this ID as dismissed in this repository, so inspect stops raising findings like it."
+    - name: reason
+      type: string
+      required: false
+      positional: false
+      description: "Why the finding is dismissed (with --dismiss)."
   outputs:
     - "disposition (merge|fix|rebuild)"
     - "findings"
+    - "review-comments"
   gates:
     - "authoritative-pack"
     - "budget"

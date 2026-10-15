@@ -127,6 +127,10 @@ func run(ctx context.Context) error {
 		if cfg, cases, err = cfg.ForGroup(*group, cases); err != nil {
 			return fmt.Errorf("tier 2 needs -group: %w", err)
 		}
+		if g, _ := cfg.Group(*group); !g.RunsOn(os.Getenv("EVENT")) {
+			fmt.Printf("::notice::group %s runs on %s only, not on %s; nothing to do\n", *group, strings.Join(g.Events, ", "), os.Getenv("EVENT"))
+			return nil
+		}
 		h, err := harness(root, cfg)
 		if err != nil {
 			return err
@@ -274,6 +278,10 @@ func verdict(cur, base *evals.Results, cfg evals.Config) error {
 			}
 		}
 	}
+	for _, s := range cur.Review {
+		fmt.Printf("  inspect %s: precision %.2f, recall %.2f, F1 %.2f (TP %d, FP %d of which %d on clean controls, FN %d; %d run(s), %d error(s), %.2f USD)\n",
+			s.Variant, s.Precision, s.Recall, s.F1, s.TP, s.FP, s.CleanFP, s.FN, s.Runs, s.Errors, s.CostUSD)
+	}
 	for _, r := range evals.Advisories(cur, base, cfg) {
 		fmt.Printf("  ADVISORY (group %s: pass_k is advisory, D-7.3g): %s\n", cur.Group, r)
 	}
@@ -322,5 +330,5 @@ func harness(root string, cfg evals.Config) (*evals.Harness, error) {
 			return v, err
 		},
 	}
-	return &evals.Harness{Root: root, Config: cfg, Gateway: gw, Assets: aayudha.Assets}, nil
+	return &evals.Harness{Root: root, Config: cfg, Gateway: gw, Assets: aayudha.Assets, Inspect: l.Config.Inspect}, nil
 }
