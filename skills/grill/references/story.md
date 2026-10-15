@@ -78,6 +78,8 @@ skill's "Spec record" for the exact lines.
 
 - `Request: "<the human's words>"`, then `Vague: "<qualifier>" → criteria N, M` (or `→ deferred: <why>`) for each vague
   word, then one line per criterion: `N. stated|confirmed|default (<dimension>/<topic>): "<the human's words>"; facts: <id>`.
+- A criterion that says where something is (a route, "on the review screen", "below the button") quotes every reply
+  that names that place (`"…" / "…"`), and names the place instead of "that screen" (SKILL.md, Placement quotes).
 
 ## Labels (not body sections)
 

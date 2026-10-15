@@ -835,6 +835,12 @@ func TestGroups(t *testing.T) {
 	if err != nil || cg.MaxUSD != 20 || len(convs) != 2 || convs[0].ID != "grill/bakery-ux" || convs[1].ID != "grill/search-fast" || cfg.Gates("conversations") {
 		t.Fatalf("conversations group: %v, cap %v, %d cases, gates %v", err, cg.MaxUSD, len(convs), cfg.Gates("conversations"))
 	}
+	// D-5.3b.h: the advisory conversation and persona groups never run nightly (evals.yml scopes their pushes to dev).
+	for _, name := range []string{"conversations", "personas"} {
+		if g, _ := cfg.Group(name); g.RunsOn("schedule") || !g.RunsOn("push") || !g.RunsOn("workflow_dispatch") {
+			t.Errorf("%s group events: %v", name, g.Events)
+		}
+	}
 	o, other, err := cfg.ForGroup("skills", all)
 	if err != nil || o.MaxUSD != 6 || o.K != cfg.K || !cfg.Gates("skills") || len(brief)+len(plain)+len(personas)+len(review)+len(convs)+len(other) != len(all) {
 		t.Fatalf("skills group: %v, cap %v, %d+%d+%d+%d+%d+%d of %d cases", err, o.MaxUSD, len(brief), len(plain), len(personas), len(review), len(convs), len(other), len(all))
