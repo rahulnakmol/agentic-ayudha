@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	aayudha "github.com/rahulnakmol/agentic-ayudha"
 	"github.com/rahulnakmol/agentic-ayudha/internal/loops"
 )
 
@@ -218,5 +219,27 @@ func TestInstallLoops(t *testing.T) {
 	}
 	if _, r, _ := report("", "--host", "amp"); states(r) != "digest=actions:active triage-daily=amp:active" || !slices.Equal(r.Actions, []string{"digest"}) {
 		t.Errorf("digest in Actions only: %s, actions %v", states(r), r.Actions)
+	}
+}
+
+// D-7.1g: in a fresh repository, install --loops adds the default loops and every tool's render of them, so the
+// Claude Code and Codex steps name files that exist; a product's copy carries no aayudha-only setup.
+func TestInstallLoopsAddsDefaults(t *testing.T) {
+	for _, host := range []string{"claude", "codex"} {
+		dir := checkout(t)
+		opts := Options{Dir: dir, Assets: aayudha.Assets, LookPath: func(string) (string, error) { return "", os.ErrNotExist }}
+		code, out, errOut := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "t"}, opts, "install", "--loops", "--repo", "o/r", "--host", host, "--json")
+		var r loopsReport
+		_ = json.Unmarshal([]byte(out), &r)
+		if _, err := os.Stat(filepath.Join(dir, "loops", "triage-daily.toml")); code != 0 || err != nil || len(r.Stale) != 0 || len(r.States) == 0 {
+			t.Fatalf("%s in a fresh repository: exit %d, stale %v, %d loops: %s", host, code, r.Stale, len(r.States), errOut)
+		}
+		prompts := map[string]string{"claude": "loops/claude/routines.md", "codex": "loops/codex/scheduled-tasks.md"}[host]
+		if b, err := os.ReadFile(filepath.Join(dir, prompts)); err != nil || !strings.Contains(string(b), "aayudha triage-daily (o/r)") {
+			t.Errorf("%s: %s: %v", host, prompts, err)
+		}
+		if b, _ := os.ReadFile(filepath.Join(dir, ".github", "workflows", loops.Workflow)); !strings.Contains(string(b), "loop:verify-sweep") || strings.Contains(string(b), "aayudha/floors") {
+			t.Errorf("%s: the Actions fallback runs the sweep without aayudha's own setup:\n%s", host, b)
+		}
 	}
 }

@@ -27,6 +27,7 @@ type loopsReport struct {
 	Repo     string        `json:"repo"`
 	Tool     string        `json:"tool"`
 	Detected []string      `json:"detected"`
+	Added    []string      `json:"added,omitempty"` // the default loops and their renders, written to a repository that had no loops
 	Stale    []string      `json:"stale_files,omitempty"`
 	Warnings []string      `json:"warnings,omitempty"`
 	Applied  []string      `json:"applied,omitempty"`
@@ -43,7 +44,8 @@ type loopsReport struct {
 // with a ready prompt per loop. It warns when loops/active.json records loops
 // in another tool, since each would run twice. --run-now tests one loop in
 // the tool; --record notes loops as set up. It reads only this checkout's
-// loops/*.toml.
+// loops/*.toml; a repository with none first gets the defaults and their
+// renders (Appendix B D-7.1g).
 func runInstallLoops(ctx context.Context, e *Env, in Values) error {
 	root := config.RepoRoot(e.Dir)
 	if root == "" {
@@ -52,9 +54,6 @@ func runInstallLoops(ctx context.Context, e *Env, in Values) error {
 	ls, err := loops.Load(root)
 	if err != nil {
 		return Wrap(ExitUsage, err)
-	}
-	if len(ls) == 0 {
-		return Errorf(ExitUsage, "install --loops: no loops/*.toml in this repository; `aayu init --gates` adds the defaults")
 	}
 	repo, err := e.RepoName(ctx)
 	if err != nil {
@@ -68,6 +67,15 @@ func runInstallLoops(ctx context.Context, e *Env, in Values) error {
 	if branch == "" {
 		branch = "dev"
 	}
+	var added []string
+	if len(ls) == 0 {
+		if in.Has("record") {
+			return Errorf(ExitUsage, "install --loops --record: no loops/*.toml in this repository; run `aayu install --loops` first, which adds the defaults")
+		}
+		if ls, added, err = e.addDefaultLoops(root, repo, branch, tz); err != nil {
+			return err
+		}
+	}
 	rec, err := loops.ReadRecord(root)
 	if err != nil {
 		return Wrap(ExitUsage, err)
@@ -78,7 +86,7 @@ func runInstallLoops(ctx context.Context, e *Env, in Values) error {
 	if (in.Bool("apply") || in.String("run-now") != "") && e.Agent() {
 		return Errorf(ExitBlocked, "install --loops --apply and --run-now start runs that act as you; a human runs them (AAYU_AGENT=1)")
 	}
-	rep := loopsReport{Repo: repo}
+	rep := loopsReport{Repo: repo, Added: added}
 	files, err := loops.Files(ls, repo, branch, tz, initrepo.GuardVersion(e.Build.Version), Implemented)
 	if err != nil {
 		return Wrap(ExitUsage, err)
@@ -158,6 +166,47 @@ func runInstallLoops(ctx context.Context, e *Env, in Values) error {
 	return e.Emit(rep, func(w io.Writer) error { e.printLoops(w, rep); return nil })
 }
 
+// addDefaultLoops writes the default loops (loops.Defaults) to a repository
+// that has none, with every tool's render of them, as `aayu init --gates`
+// renders them, so the steps that follow name files that exist.
+func (e *Env) addDefaultLoops(root, repo, branch, tz string) ([]loops.Loop, []string, error) {
+	if e.Assets == nil {
+		return nil, nil, Errorf(ExitUsage, "install --loops: no loops/*.toml in this repository, and this binary carries no defaults")
+	}
+	defs, err := loops.Defaults(e.Assets)
+	if err != nil {
+		return nil, nil, Wrap(ExitUsage, err)
+	}
+	write := func(files map[string][]byte) ([]string, error) {
+		var paths []string
+		for _, p := range slices.Sorted(maps.Keys(files)) {
+			f := filepath.Join(root, filepath.FromSlash(p))
+			if err := os.MkdirAll(filepath.Dir(f), 0o755); err != nil {
+				return nil, err
+			}
+			if err := os.WriteFile(f, files[p], 0o644); err != nil {
+				return nil, err
+			}
+			paths = append(paths, p)
+		}
+		return paths, nil
+	}
+	added, err := write(defs)
+	if err != nil {
+		return nil, nil, err
+	}
+	ls, err := loops.Load(root)
+	if err != nil {
+		return nil, nil, Wrap(ExitUsage, err)
+	}
+	renders, err := loops.Files(ls, repo, branch, tz, initrepo.GuardVersion(e.Build.Version), Implemented)
+	if err != nil {
+		return nil, nil, Wrap(ExitUsage, err)
+	}
+	more, err := write(renders)
+	return ls, append(added, more...), err
+}
+
 // loopTool is the one tool that runs the loops: --host, or the human's pick
 // from the detected tools at a terminal, or the only one detected.
 func (e *Env) loopTool(answers *bufio.Reader, detected []string) (string, error) {
@@ -182,6 +231,9 @@ func (e *Env) loopTool(answers *bufio.Reader, detected []string) (string, error)
 }
 
 func (e *Env) printLoops(w io.Writer, rep loopsReport) {
+	if len(rep.Added) > 0 {
+		fmt.Fprintf(w, "This repository had no loops, so the defaults were added (%d files: loops/*.toml, each tool's render in %s/, and %s); commit them.\n", len(rep.Added), loops.Dir, ".github/workflows/"+loops.Workflow)
+	}
 	if len(rep.Stale) > 0 {
 		fmt.Fprintf(w, "note: %s differ from loops/*.toml: run `aayu init --gates` (or `go generate ./...` in aayudha) first\n", strings.Join(rep.Stale, ", "))
 	}

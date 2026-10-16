@@ -22,7 +22,9 @@ workflow token, so it runs only in the free GitHub Actions fallback, and no tool
 refuses a mix: `actions` or `setup` on an agent loop, and an agent tool, `bot = true`, or a `prompt` on an
 `agent = false` loop. Here `digest` and `verify-sweep` have `agent = false`; every other loop is an agent loop.
 
-This repository's loops are also the defaults a product copies. `triage-daily` (each weekday morning) replaces the
+This repository's loops are also the defaults a product gets: `aayu install --loops` in a repository with no
+`loops/*.toml` writes them, without `setup` and `setup_run` (this repository's own), and renders them for every tool
+(Appendix B D-7.1g). `triage-daily` (each weekday morning) replaces the
 retired aayudha-triage workflow and the weekly `triage` loop: `aayu triage` lists every open intake issue with no
 model, and the agent in your own session classifies each one with `--as`. `housekeeping` (weekly) runs `aayu gc`, then reports doctor drift,
 feature-map drift, and stale Ready issues. `ci-failed` (each weekday morning) sends a delegated story's failed

@@ -169,7 +169,9 @@ repository is halted, and 6 while the `[budget]` breaker has paused agent lanes 
 `[budget] ci_minutes_month`. Otherwise it says whether this run is due. A loop is due only within 59 minutes after its
 local time, which picks the right one of the two UTC crons.
 
-**The default loops.** This repository's loops are also the defaults a product copies into its own `loops/`. What the
+**The default loops.** This repository's loops are also the defaults a product gets: they are embedded in the
+binary, and `install --loops` in a repository with no `loops/*.toml` writes them and every tool's render first
+(`loops.Defaults`, which leaves out this repository's own `setup` and `setup_run`). What the
 deferred event loops did now runs on a schedule:
 
 | Loop | Starts | Runs |

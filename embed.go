@@ -15,7 +15,9 @@ package aayudha
 
 import "embed"
 
-// Assets holds skills/, work-items/, hosts/, and seats/ exactly as committed.
+// Assets holds skills/, work-items/, hosts/, and seats/ exactly as committed,
+// and loops/*.toml, the default loops `aayu install --loops` adds to a
+// repository that has none.
 //
-//go:embed skills work-items hosts seats
+//go:embed skills work-items hosts seats loops/*.toml
 var Assets embed.FS

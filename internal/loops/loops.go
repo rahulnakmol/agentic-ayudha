@@ -14,7 +14,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -112,6 +114,50 @@ func Load(root string) ([]Loop, error) {
 		out = append(out, l)
 	}
 	return out, errors.Join(errs...)
+}
+
+// Defaults are the default loops a repository gets from `aayu install --loops`
+// when it has none: aayudha's own loops/*.toml in assets, by path. setup and
+// setup_run, with the comment just above them, are left out, because they
+// are the product's own commands (aayudha's install its example's browser
+// tooling); a product adds its own.
+func Defaults(assets fs.FS) (map[string][]byte, error) {
+	files, err := fs.Glob(assets, Dir+"/*.toml")
+	if err != nil {
+		return nil, err
+	}
+	if len(files) == 0 {
+		return nil, fmt.Errorf("no default loops in this binary (%s/*.toml)", Dir)
+	}
+	out := map[string][]byte{}
+	for _, f := range files {
+		b, err := fs.ReadFile(assets, f)
+		if err != nil {
+			return nil, err
+		}
+		var keep, comment []string
+		inArray := false
+		for _, line := range strings.SplitAfter(string(b), "\n") {
+			switch {
+			case inArray:
+				inArray = strings.TrimSpace(line) != "]"
+			case strings.HasPrefix(line, "setup =") || strings.HasPrefix(line, "setup_run ="):
+				comment = nil // the comment above describes this repository's setup
+				inArray = strings.HasSuffix(strings.TrimSpace(line), "[")
+			case strings.HasPrefix(line, "#"):
+				comment = append(comment, line)
+			default:
+				keep, comment = append(append(keep, comment...), line), nil
+			}
+		}
+		keep = append(keep, comment...)
+		body := []byte(strings.Join(keep, ""))
+		if _, err := Parse(strings.TrimSuffix(path.Base(f), ".toml"), body); err != nil {
+			return nil, err
+		}
+		out[f] = body
+	}
+	return out, nil
 }
 
 // Find returns the loop named name.
