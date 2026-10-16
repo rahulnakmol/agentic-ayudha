@@ -76,7 +76,8 @@ type FollowUp struct {
 	At       string   `json:"at"`
 	Head     string   `json:"head"`
 	Cycle    int      `json:"cycle"`
-	Findings []string `json:"findings"` // inspect finding IDs
+	Findings []string `json:"findings"`         // inspect finding IDs
+	Checks   []string `json:"checks,omitempty"` // failed required checks (a CI repair round, P3)
 }
 
 // Event is one line of the delegation's history.
