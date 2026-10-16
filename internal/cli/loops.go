@@ -33,7 +33,8 @@ type loopGuard struct {
 // while the [budget] breaker has paused agent lanes or, in Actions, the loops'
 // runs this month have used [budget] ci_minutes_month; otherwise it says
 // whether this run is the scheduled one (in Actions, written to GITHUB_OUTPUT
-// as due=true|false). It writes nothing anywhere else.
+// as due=true|false); an event loop is due whenever its host's trigger
+// started it. It writes nothing anywhere else.
 func runLoopGuard(ctx context.Context, e *Env, name string) error {
 	root := config.RepoRoot(e.Dir)
 	if root == "" {
@@ -82,7 +83,12 @@ func runLoopGuard(ctx context.Context, e *Env, name string) error {
 			return Errorf(ExitUsage, "loop %s: a schedule event without github.event.schedule", name)
 		}
 	}
+	ev, isEvent := l.Event()
 	switch {
+	case isEvent && (event == "" || event == ev.Name):
+		g.Due, g.Reason = true, "event: "+strings.TrimPrefix(l.Label(""), "On ")
+	case isEvent:
+		g.Reason = fmt.Sprintf("not due: %s is not this loop's event (%s)", event, l.On)
 	case event == "workflow_dispatch":
 		g.Due, g.Reason = true, "dispatched by hand"
 	case l.Due(clock.Loc, e.Now(), fired):

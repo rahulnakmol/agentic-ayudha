@@ -7,6 +7,9 @@
 # stops on `aayu halt` (exit 4, before any write) and when this workflow's runs this month reach [budget]
 # ci_minutes_month or the [budget] breaker has paused agent lanes (exit 6). Pages from [notify] channel "file" are kept
 # as a run artifact.
+#
+# An event loop's job only records the GitHub event in the run summary: its agent step runs in the user's own agent
+# session (loops/README.md), so no model and no model key is ever used here.
 name: aayudha-loops
 
 on:
@@ -44,7 +47,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: aayudha-loops-${{ github.event.schedule || inputs.loop }}
+  group: aayudha-loops-${{ github.event.schedule || inputs.loop || github.run_id }}
   cancel-in-progress: false
 
 jobs:

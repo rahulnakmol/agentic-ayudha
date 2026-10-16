@@ -97,3 +97,38 @@ func TestLoopDigestOnSchedule(t *testing.T) {
 		t.Errorf("paused: exit %d, want %d", code, ExitBudget)
 	}
 }
+
+// S-7.1b: an event loop's guard is due whenever its own event started the run
+// (in an agent session, or in Actions on that event), not on another event;
+// halt still stops it with exit 4 before anything runs.
+func TestLoopGuardEvent(t *testing.T) {
+	g := statusTree(t)
+	dir := checkout(t)
+	_ = os.MkdirAll(filepath.Join(dir, "loops"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "loops", "triage-new.toml"), []byte("description = \"x\"\ncommand = [\"triage\", \"{number}\"]\non = \"issues.opened\"\n"), 0o644)
+	output := filepath.Join(t.TempDir(), "output")
+	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+	guard := func(event, halt string) (int, string) {
+		t.Helper()
+		_ = os.Remove(output)
+		env := map[string]string{"GITHUB_TOKEN": "workflow-token", "GITHUB_OUTPUT": output, "AAYUDHA_HALT": halt}
+		if event != "" {
+			env["GITHUB_ACTIONS"], env["GITHUB_EVENT_NAME"] = "true", event
+		}
+		code, stdout, _ := run(t, env, opts, "hook", "loop:triage-new", "--repo", "o/r")
+		out, _ := os.ReadFile(output)
+		return code, string(out) + stdout
+	}
+	if code, out := guard("", ""); code != 0 || !strings.Contains(out, "due=true") || !strings.Contains(out, "event: issues.opened") {
+		t.Errorf("agent session: exit %d %q", code, out)
+	}
+	if code, out := guard("issues", ""); code != 0 || !strings.Contains(out, "due=true") {
+		t.Errorf("Actions on issues: exit %d %q", code, out)
+	}
+	if code, out := guard("pull_request", ""); code != 0 || !strings.Contains(out, "due=false") {
+		t.Errorf("Actions on another event: exit %d %q", code, out)
+	}
+	if code, _ := guard("", "founder at 2026-10-16: test"); code != ExitBlocked {
+		t.Errorf("halted: exit %d, want %d", code, ExitBlocked)
+	}
+}

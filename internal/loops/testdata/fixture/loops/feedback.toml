@@ -1,0 +1,4 @@
+description = "Queue Feedback for evolve."
+command = ["evolve"]
+on = "issues.opened"
+filter = { label = "type:feedback" }

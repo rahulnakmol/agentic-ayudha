@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -46,10 +47,15 @@ var Hosts = []string{HostAmp, HostCursor, HostActions}
 type Loop struct {
 	Name        string   `toml:"-" json:"name"`
 	Description string   `toml:"description" json:"description"`
-	Command     []string `toml:"command" json:"command"` // aayu argv: a verb or plumbing command and its flags
-	Cron        string   `toml:"cron" json:"cron"`       // five fields, in [time] tz
-	Prompt      string   `toml:"prompt,omitempty" json:"prompt,omitempty"`
-	Hosts       []string `toml:"hosts,omitempty" json:"hosts"` // default: all
+	Command     []string `toml:"command" json:"command"`               // aayu argv: a verb or plumbing command and its flags
+	Cron        string   `toml:"cron,omitempty" json:"cron,omitempty"` // five fields, in [time] tz
+	// On starts the loop on a GitHub event instead of a schedule (one of
+	// Events), narrowed by Filter; its command may name the event's subject
+	// with {number} (an issue or pull request) or {tag} (a release).
+	On     string   `toml:"on,omitempty" json:"on,omitempty"`
+	Filter Filter   `toml:"filter,omitempty" json:"filter,omitzero"`
+	Prompt string   `toml:"prompt,omitempty" json:"prompt,omitempty"`
+	Hosts  []string `toml:"hosts,omitempty" json:"hosts"` // default: all
 	// Bot marks a loop whose command writes under the bot identity: in Actions
 	// it needs the bot App's token (D1) and is skipped with a notice without one.
 	Bot bool `toml:"bot,omitempty" json:"bot,omitempty"`
@@ -62,6 +68,72 @@ type Loop struct {
 	sched schedule
 }
 
+// Filter narrows an event loop: Label must be on the issue or pull request,
+// and Conclusion is the check suite's conclusion.
+type Filter struct {
+	Label      string `toml:"label,omitempty" json:"label,omitempty"`
+	Conclusion string `toml:"conclusion,omitempty" json:"conclusion,omitempty"`
+}
+
+// Event is a GitHub event a loop may start on.
+type Event struct {
+	Name, Action string // the webhook event and its action
+	Subject      string // what the command may name: "{number}" or "{tag}"
+	Label        bool   // the label filter applies
+	Conclusion   bool   // the conclusion filter applies
+}
+
+// Events are the GitHub events a loop's on may name, as event.action.
+var Events = map[string]Event{
+	"issues.opened":            {"issues", "opened", "{number}", true, false},
+	"issues.labeled":           {"issues", "labeled", "{number}", true, false},
+	"pull_request.opened":      {"pull_request", "opened", "{number}", true, false},
+	"pull_request.synchronize": {"pull_request", "synchronize", "{number}", true, false},
+	"check_suite.completed":    {"check_suite", "completed", "{number}", false, true},
+	"release.published":        {"release", "published", "{tag}", false, false},
+}
+
+// Event is the loop's event; ok is false for a scheduled loop.
+func (l Loop) Event() (Event, bool) {
+	ev, ok := Events[l.On]
+	return ev, ok && l.On != ""
+}
+
+// Native reports whether host starts the loop by itself. Every host runs a
+// schedule; for an event, why names the host's gap (Appendix B S-7.1b cites
+// each host's documentation), and the loop runs on the hosts that have it.
+func (l Loop) Native(host string) (ok bool, why string) {
+	if _, isEvent := l.Event(); !isEvent {
+		return true, ""
+	}
+	label := l.Filter.Label != ""
+	switch host {
+	case HostAmp:
+		// GitHub webhooks: an orb spawner per newly opened issue or PR, with an optional label present when it opens.
+		if l.On == "issues.opened" || l.On == "pull_request.opened" {
+			return true, ""
+		}
+		return false, "Amp starts a thread only for a newly opened issue or pull request (orb spawner); its CI subscriptions follow one exact commit"
+	case HostCursor:
+		switch {
+		case l.On == "pull_request.opened" || l.On == "pull_request.synchronize" || l.On == "check_suite.completed":
+			if label {
+				return false, "Cursor's pull request trigger has no label filter"
+			}
+			return true, ""
+		case strings.HasPrefix(l.On, "issues.") && label:
+			return true, "" // git_label on issues: fires when the label is added, including by an issue form at open
+		}
+		return false, "Cursor has no trigger for " + l.On + " without a label (only issue label changes and comments)"
+	case HostActions:
+		if l.On == "check_suite.completed" {
+			return false, "GitHub does not start workflows on check suites that Actions created, so Actions cannot record this event"
+		}
+		return true, ""
+	}
+	return false, "unknown host " + host
+}
+
 // Runs reports whether the loop renders for host.
 func (l Loop) Runs(host string) bool { return slices.Contains(l.Hosts, host) }
 
@@ -69,8 +141,9 @@ func (l Loop) Runs(host string) bool { return slices.Contains(l.Hosts, host) }
 func (l Loop) Verb() string { return l.Command[0] }
 
 var (
-	nameRE = regexp.MustCompile(`^[a-z][a-z0-9-]{0,40}$`)
-	flagRE = regexp.MustCompile(`^--([a-z][a-z-]*)(=.*)?$`)
+	nameRE  = regexp.MustCompile(`^[a-z][a-z0-9-]{0,40}$`)
+	flagRE  = regexp.MustCompile(`^--([a-z][a-z-]*)(=.*)?$`)
+	labelRE = regexp.MustCompile(`^[A-Za-z0-9:._/ -]{1,50}$`)
 )
 
 // Load reads every loops/*.toml under root, sorted by name.
@@ -146,9 +219,45 @@ func Parse(name string, data []byte) (Loop, error) {
 	if err := checkCommand(l.Command); err != nil {
 		bad("command: %v", err)
 	}
-	var err error
-	if l.sched, err = parseCron(l.Cron); err != nil {
-		bad("cron %q: %v", l.Cron, err)
+	switch ev, isEvent := Events[l.On]; {
+	case (l.Cron == "") == (l.On == ""):
+		bad("set cron (a schedule) or on (a GitHub event), not both and not neither")
+	case l.On != "" && !isEvent:
+		bad("on %q: want one of %s", l.On, strings.Join(slices.Sorted(maps.Keys(Events)), ", "))
+	case l.On != "":
+		if l.Filter.Label != "" && !ev.Label {
+			bad("filter.label: %s has no labels", l.On)
+		}
+		if l.Filter.Label != "" && !labelRE.MatchString(l.Filter.Label) {
+			bad("filter.label %q: want letters, digits, spaces, and :._/-", l.Filter.Label)
+		}
+		if l.On == "issues.labeled" && l.Filter.Label == "" {
+			bad("filter.label: issues.labeled needs the label")
+		}
+		if c := l.Filter.Conclusion; c != "" && (!ev.Conclusion || c != "failure" && c != "success") {
+			bad("filter.conclusion %q: only check_suite.completed has one, failure or success", c)
+		}
+		if len(l.Setup)+len(l.SetupRun) > 0 {
+			bad("setup: an event loop's Actions job only records the event")
+		}
+		for _, a := range l.Command {
+			for _, p := range []string{"{number}", "{tag}"} {
+				if strings.Contains(a, p) && p != ev.Subject {
+					bad("command: %s has no %s; use %s", l.On, p, ev.Subject)
+				}
+			}
+		}
+	default:
+		var err error
+		if l.sched, err = parseCron(l.Cron); err != nil {
+			bad("cron %q: %v", l.Cron, err)
+		}
+		if l.Filter != (Filter{}) {
+			bad("filter: only an event loop (on) has one")
+		}
+		if strings.ContainsAny(strings.Join(l.Command, " "), "{}") {
+			bad("command: a scheduled loop has no event subject to name")
+		}
 	}
 	return l, errors.Join(errs...)
 }
@@ -421,8 +530,18 @@ func (l Loop) RRule(tz string) string {
 	return start + "\n" + r
 }
 
-// Label is the schedule in words, in tz.
+// Label is the schedule in words, in tz, or the event that starts the loop.
 func (l Loop) Label(tz string) string {
+	if _, ok := l.Event(); ok {
+		s := "On " + l.On
+		if l.Filter.Label != "" {
+			s += " with label " + l.Filter.Label
+		}
+		if l.Filter.Conclusion != "" {
+			s += " with conclusion " + l.Filter.Conclusion
+		}
+		return s
+	}
 	sc := l.sched
 	if sc.hours == nil {
 		return fmt.Sprintf("Every hour at :%02d", sc.minute)
@@ -470,8 +589,16 @@ func join(ns []int) string {
 func (l Loop) AgentPrompt(repo, branch string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "aayudha loop %q for %s (loops/%s.toml): %s\n\n", l.Name, repo, l.Name, strings.TrimSpace(l.Description))
+	run := fmt.Sprintf("Run `AAYU_AGENT=1 aayu %s`", strings.Join(l.Command, " "))
+	if ev, ok := l.Event(); ok {
+		fmt.Fprintf(&b, "GitHub started this run on its event: %s.\n\n", strings.TrimPrefix(l.Label(""), "On "))
+		if strings.Contains(strings.Join(l.Command, " "), ev.Subject) {
+			what := map[string]string{"issues": "number of the issue", "pull_request": "number of the pull request", "check_suite": "number of the pull request whose check suite completed", "release": "tag of the release"}[ev.Name]
+			run += fmt.Sprintf(", with %s replaced by the %s", ev.Subject, what)
+		}
+	}
 	fmt.Fprintf(&b, "1. In a checkout of %s on %s with the aayu binary installed, run `aayu hook loop:%s`. If it exits 4 (the repository is halted) or 6 (the [budget] breaker paused agent lanes), stop and report its message. If it prints `not due`, stop without reporting.\n", repo, branch, l.Name)
-	fmt.Fprintf(&b, "2. Run `AAYU_AGENT=1 aayu %s`. If it exits 4 or 6, stop and report why; do not retry.\n", strings.Join(l.Command, " "))
+	fmt.Fprintf(&b, "2. %s. If it exits 4 or 6, stop and report why; do not retry.\n", run)
 	if p := strings.TrimSpace(l.Prompt); p != "" {
 		fmt.Fprintf(&b, "3. %s\n", p)
 	}
@@ -489,12 +616,59 @@ func (l Loop) AmpSchedule(repo, branch, tz string) ([]byte, error) {
 		ScheduleLabel string `json:"schedule_label"`
 		RunMode       string `json:"run_mode"`
 	}{"aayudha " + l.Name, l.AgentPrompt(repo, branch), l.RRule(tz), l.Label(tz), "fresh"}
+	return marshal(v)
+}
+
+// AmpSubscription is the input of Amp's create_github_subscription for an
+// event loop: an orb spawner that starts a new thread, with the loop's prompt
+// as its instructions, for each matching new issue or pull request. Setup adds
+// the Amp project_id and agent_mode.
+func (l Loop) AmpSubscription(repo, branch string) ([]byte, error) {
+	v := struct {
+		Title        string `json:"title"`
+		Repository   string `json:"repository"`
+		FilterKind   string `json:"filter_kind"`
+		IssueLabel   string `json:"issue_label,omitempty"`
+		PRLabel      string `json:"pr_label,omitempty"`
+		Destination  string `json:"destination"`
+		Instructions string `json:"instructions"`
+	}{Title: "aayudha " + l.Name, Repository: repo, Destination: "new-orb", Instructions: l.AgentPrompt(repo, branch)}
+	if l.On == "issues.opened" {
+		v.FilterKind, v.IssueLabel = "issue-opened", l.Filter.Label
+	} else {
+		v.FilterKind, v.PRLabel = "pr-opened", l.Filter.Label
+	}
+	return marshal(v)
+}
+
+func marshal(v any) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)
 	enc.SetIndent("", "  ")
 	err := enc.Encode(v)
 	return buf.Bytes(), err
+}
+
+// cursorTrigger is an event loop's trigger in cursor_platform_workflow.
+func (l Loop) cursorTrigger(repo string) string {
+	repos := "repos = [" + hclString(repo) + "]"
+	switch l.On {
+	case "pull_request.opened":
+		return "git_pull_request = { " + repos + `, pr_action = "opened" }`
+	case "pull_request.synchronize":
+		return "git_pull_request = { " + repos + `, pr_action = "pushed" }`
+	case "check_suite.completed":
+		return "git_ci_completed = { " + repos + ", condition = " + hclString(orAny(l.Filter.Conclusion)) + " }"
+	}
+	return "git_label = { " + repos + ", issues = true, on_added = true, label_name = " + hclString(l.Filter.Label) + " }"
+}
+
+func orAny(s string) string {
+	if s == "" {
+		return "any"
+	}
+	return s
 }
 
 func hclString(s string) string {
@@ -517,9 +691,22 @@ func CursorAutomations(ls []Loop, repo, branch, tz string, loc *time.Location) (
 		if !l.Runs(HostCursor) {
 			continue
 		}
-		crons, err := l.UTCCrons(loc)
-		if err != nil {
-			return nil, err
+		var triggers []string
+		if _, isEvent := l.Event(); isEvent {
+			ok, why := l.Native(HostCursor)
+			if !ok {
+				fmt.Fprintf(&b, "\n# %s (%s): not rendered: %s.\n", l.Name, l.Label(tz), why)
+				continue
+			}
+			triggers = append(triggers, l.cursorTrigger(repo))
+		} else {
+			crons, err := l.UTCCrons(loc)
+			if err != nil {
+				return nil, err
+			}
+			for _, c := range crons {
+				triggers = append(triggers, "cron = { schedule = "+hclString(c)+" }")
+			}
 		}
 		fmt.Fprintf(&b, "\n# %s: %s\n", l.Name, l.Label(tz))
 		fmt.Fprintf(&b, "resource \"cursor_platform_workflow\" \"aayudha_%s\" {\n", strings.ReplaceAll(l.Name, "-", "_"))
@@ -530,8 +717,8 @@ func CursorAutomations(ls []Loop, repo, branch, tz string, loc *time.Location) (
 		fmt.Fprintf(&b, "  git_branch  = %s\n", hclString(branch))
 		fmt.Fprintf(&b, "  prompt      = %s\n", hclString(l.AgentPrompt(repo, branch)))
 		b.WriteString("  trigger = [\n")
-		for _, c := range crons {
-			fmt.Fprintf(&b, "    { cron = { schedule = %s } },\n", hclString(c))
+		for _, t := range triggers {
+			fmt.Fprintf(&b, "    { %s },\n", t)
 		}
 		b.WriteString("  ]\n}\n")
 	}
@@ -570,6 +757,7 @@ func ActionsWorkflow(ls []Loop, tz string, loc *time.Location, version string, i
 		notes []string // the UTC offset each cron is for
 	}
 	var jobs []job
+	var events []Loop
 	var na []string
 	for _, l := range ls {
 		if !l.Runs(HostActions) {
@@ -581,6 +769,14 @@ func ActionsWorkflow(ls []Loop, tz string, loc *time.Location, version string, i
 				wp = c.WP
 			}
 			na = append(na, fmt.Sprintf("#   %s: aayu %s is not implemented yet; n/a until %s (rule 1a).", l.Name, l.Verb(), wp))
+			continue
+		}
+		if _, isEvent := l.Event(); isEvent {
+			if ok, why := l.Native(HostActions); !ok {
+				na = append(na, fmt.Sprintf("#   %s: %s", l.Name, why))
+			} else {
+				events = append(events, l)
+			}
 			continue
 		}
 		j := job{l: l}
@@ -607,6 +803,9 @@ func ActionsWorkflow(ls []Loop, tz string, loc *time.Location, version string, i
 # stops on ` + "`aayu halt`" + ` (exit 4, before any write) and when this workflow's runs this month reach [budget]
 # ci_minutes_month or the [budget] breaker has paused agent lanes (exit 6). Pages from [notify] channel "file" are kept
 # as a run artifact.
+#
+# An event loop's job only records the GitHub event in the run summary: its agent step runs in the user's own agent
+# session (loops/README.md), so no model and no model key is ever used here.
 `)
 	if len(na) > 0 {
 		b.WriteString("#\n# Not rendered:\n" + strings.Join(na, "\n") + "\n")
@@ -617,11 +816,21 @@ func ActionsWorkflow(ls []Loop, tz string, loc *time.Location, version string, i
 			fmt.Fprintf(&b, "    - cron: %q # %s: %s, while the zone is %s\n", c, j.l.Name, j.l.Label(tz), j.notes[i])
 		}
 	}
+	types := map[string][]string{}
+	for _, l := range events {
+		ev, _ := l.Event()
+		if !slices.Contains(types[ev.Name], ev.Action) {
+			types[ev.Name] = append(types[ev.Name], ev.Action)
+		}
+	}
+	for _, name := range slices.Sorted(maps.Keys(types)) {
+		fmt.Fprintf(&b, "  %s:\n    types: [%s]\n", name, strings.Join(types[name], ", "))
+	}
 	b.WriteString("  workflow_dispatch:\n    inputs:\n      loop:\n        description: Loop to run now (skips the schedule check)\n        required: true\n        type: choice\n        options:\n")
 	for _, j := range jobs {
 		fmt.Fprintf(&b, "          - %s\n", j.l.Name)
 	}
-	b.WriteString("\npermissions:\n  contents: read\n  issues: read\n  pull-requests: read\n  actions: read\n\nconcurrency:\n  group: aayudha-loops-${{ github.event.schedule || inputs.loop }}\n  cancel-in-progress: false\n\njobs:\n")
+	b.WriteString("\npermissions:\n  contents: read\n  issues: read\n  pull-requests: read\n  actions: read\n\nconcurrency:\n  group: aayudha-loops-${{ github.event.schedule || inputs.loop || github.run_id }}\n  cancel-in-progress: false\n\njobs:\n")
 	for i, j := range jobs {
 		if i > 0 {
 			b.WriteString("\n")
@@ -704,10 +913,52 @@ func ActionsWorkflow(ls []Loop, tz string, loc *time.Location, version string, i
           retention-days: 30
 `, run, OutboxPath, uploadAction, j.l.Name, OutboxPath)
 	}
-	if len(jobs) == 0 {
+	for _, l := range events {
+		if len(jobs) > 0 || l.Name != events[0].Name {
+			b.WriteString("\n")
+		}
+		b.WriteString(eventJob(l))
+	}
+	if len(jobs)+len(events) == 0 {
 		b.WriteString("  none:\n    if: false\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo no loops\n")
 	}
 	return []byte(b.String()), nil
+}
+
+// eventJob is an event loop's Actions job: the halt check, then a record of
+// the event in the run summary. It checks nothing out and runs no model.
+func eventJob(l Loop) string {
+	ev, _ := l.Event()
+	cond := fmt.Sprintf("github.event_name == '%s' && github.event.action == '%s'", ev.Name, ev.Action)
+	subject := map[string]string{"issues": "github.event.issue.number", "pull_request": "github.event.pull_request.number", "release": "github.event.release.tag_name"}[ev.Name]
+	if lb := l.Filter.Label; lb != "" {
+		if ev.Action == "labeled" {
+			cond += fmt.Sprintf(" && github.event.label.name == '%s'", lb)
+		} else {
+			cond += fmt.Sprintf(" && contains(github.event.%s.labels.*.name, '%s')", map[string]string{"issues": "issue", "pull_request": "pull_request"}[ev.Name], lb)
+		}
+	}
+	return fmt.Sprintf(`  %[1]s:
+    name: aayudha/loop-%[1]s
+    if: %[2]s
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); the loop does not run. A human clears it with aayu resume." && exit 4
+      - name: Record the event (no model runs in CI)
+        env:
+          SUBJECT: ${{ %[3]s }}
+        run: |
+          {
+            echo "### aayudha loop %[1]s"
+            echo "GitHub event %[4]s: %[5]s$SUBJECT. The loop's agent step runs in the user's own agent session (loops/README.md); this job only records the event."
+          } >> "$GITHUB_STEP_SUMMARY"
+`, l.Name, cond, subject, strings.TrimPrefix(l.Label(""), "On "), map[bool]string{true: "#", false: "tag "}[ev.Subject == "{number}"])
 }
 
 func utcOffset(off int) string {
@@ -748,9 +999,18 @@ func Files(ls []Loop, repo, branch, tz, version string, implemented func(string)
 		if !l.Runs(HostAmp) || !implemented(l.Verb()) {
 			continue
 		}
-		if out[Dir+"/amp/"+l.Name+".json"], err = l.AmpSchedule(repo, branch, tz); err != nil {
+		var b []byte
+		if _, isEvent := l.Event(); !isEvent {
+			b, err = l.AmpSchedule(repo, branch, tz)
+		} else if ok, _ := l.Native(HostAmp); ok {
+			b, err = l.AmpSubscription(repo, branch)
+		} else {
+			continue
+		}
+		if err != nil {
 			return nil, err
 		}
+		out[Dir+"/amp/"+l.Name+".json"] = b
 	}
 	var cursor []Loop
 	for _, l := range ls {

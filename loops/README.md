@@ -1,6 +1,6 @@
 # loops
 
-Scheduled loops (WP7.1), one file each: `loops/<name>.toml`.
+Loops (WP7.1), one file each: `loops/<name>.toml`. A loop runs on a schedule (`cron`) or on a GitHub event (`on`).
 
 ```toml
 description = "Founder digest: the status rollup of every open Goal, paged through [notify]."
@@ -12,6 +12,20 @@ bot = false                        # true when the command writes as the bot (th
 setup = ["node", "pnpm"]           # optional, Actions only: pinned tool setups, run once the guard says the loop is due
 setup_run = ["pnpm install --frozen-lockfile"]  # optional, Actions only: the product's own commands, after setup
 ```
+
+An event loop sets `on` instead of `cron` (Appendix B S-7.1b):
+
+```toml
+description = "Triage each new issue."
+command = ["triage", "{number}"]   # {number}: the issue or pull request; {tag}: the release
+on = "issues.opened"               # issues.opened|labeled, pull_request.opened|synchronize, check_suite.completed, release.published
+filter = { label = "type:feedback" }  # optional: label (issues, pull requests), conclusion = "failure"|"success" (check suites)
+```
+
+Each host starts an event loop with its own trigger where it has one: an Amp orb spawner (`create_github_subscription`)
+for a newly opened issue or pull request, or a Cursor Automation trigger (`git_pull_request`, `git_ci_completed`, or
+`git_label` for an issue with the label). A host without the trigger does not render the loop, and the rendered file
+says why. The Actions fallback never answers an event with a model: its job only records the event in the run summary.
 
 `verify-sweep` (nightly) and `verify-maintain` (weekly) are the feature maps' loops (WP4.5b.4): the sweep runs every
 behaviour check with no model, and both hand the maintain brief to the agent app `[verify] maintainer` names, the
@@ -47,12 +61,13 @@ This repository's `[verify] maintainer` is `amp`: the headless Amp run reads the
 
 - `.github/workflows/aayudha-loops.yml`: the GitHub Actions fallback. Actions cron is UTC, so each loop has one cron
   per UTC offset of the zone, and the guard runs only the one for today's offset.
-- `loops/amp/<name>.json`: the input of Amp's `set_schedule` (an RFC 5545 rule in the zone, `run_mode` fresh); ask an
-  Amp thread in the project to set it.
+- `loops/amp/<name>.json`: the input of Amp's `set_schedule` (an RFC 5545 rule in the zone, `run_mode` fresh), or for
+  an event loop of Amp's `create_github_subscription` (an orb spawner, `destination` new-orb, with the project's
+  `project_id` and an `agent_mode` added); ask an Amp thread in the project to set it.
 - `loops/cursor/aayudha-loops.tf`: Cursor Automations as `cursor_platform_workflow` resources of Cursor's Terraform
   provider; apply them with `terraform apply` and `CURSOR_TOKEN`.
 
-Every run starts with `aayu hook loop:<name>`: it exits 4 while the repository is halted (`aayu halt`), 6 while the
-`[budget]` breaker has paused agent lanes or the Actions loops have used `[budget] ci_minutes_month` this month, and
-otherwise says whether this run is the scheduled one. A loop whose command is not implemented yet is not rendered
-(n/a until its WP).
+Every run starts with `aayu hook loop:<name>`, on every host and for both kinds of loop: it exits 4 while the
+repository is halted (`aayu halt`), 6 while the `[budget]` breaker has paused agent lanes or the Actions loops have used
+`[budget] ci_minutes_month` this month, and otherwise says whether this run is the scheduled one (an event loop is due
+whenever its own event started it). A loop whose command is not implemented yet is not rendered (n/a until its WP).
