@@ -328,7 +328,8 @@ shown with the seeded declining card"), and Assumptions add that the instance st
 with "for every", "for any", or "whenever", never "on every <step|screen|page>", which reads as a placement. A route
 in backticks in the expected result is a placement too: keep routes in the state, where the tester starts, unless a
 quoted reply names that page. Never narrow the behaviour to a subset the human did not choose (only going forward,
-only an empty basket, only guests, only one log). Floors and configured platforms apply to every criterion on their
+only an empty basket, only guests, only one log, only the feature you are building when they said "any of our
+logs"). Floors and configured platforms apply to every criterion on their
 own: do not restate them in criteria or the readback.
 
 **Self-contained criteria.** Each criterion's state names everything a tester sets up, so it can be checked alone:
@@ -340,9 +341,12 @@ name it, and never narrow the behaviour the human asked for with it.
 **Behaviour, as agreed.** A criterion checks what a user or caller can observe: the slide takes 200 ms, the command
 exits 2. It checks the code or styles only when the human accepted that as proof, and then exactly as offered
 ("each duration this story adds matches its confirmed value"). Never tighten what was agreed into a restriction
-nobody asked for: "0 other durations added", "only 2 distinct values", "no other easing". The Summary and the
-readback's goal say what the vague word came to mean ("the step slides in 200 ms"), never the vague word itself
-("feels slick"); the word stays in Provenance.
+nobody asked for: "0 other durations added", "only 2 distinct values", "no other easing". A requirement the human
+stated stays a criterion even when they wave off a proof you offered for it; check it with the plainest evidence and
+say so in the readback. Pick the evidence kind that can show the expected result: a screenshot shows one state;
+anything with a before and after (press, then see) is a recording or an API trace. The Summary and the readback's
+goal say what the vague word came to mean ("the step slides in 200 ms"), never the vague word itself ("feels
+slick"); the word stays in Provenance.
 
 ## Done when concrete
 
