@@ -36,6 +36,17 @@ func LocalArgs(receiver, bin, wt, prompt string) []string {
 	return nil
 }
 
+// OwnKey reports whether the receiver's own CLI variable is set, which lets
+// its CLI run without a saved sign-in.
+func OwnKey(receiver string, getenv func(string) string) bool {
+	for _, k := range receiverKeys[receiver] {
+		if getenv(k) != "" {
+			return true
+		}
+	}
+	return false
+}
+
 // receiverKeys are the variables only the receiver's own CLI reads; the
 // scrubbed environment passes the receiver's own and nothing else. A model
 // provider's key (OPENAI_API_KEY, ANTHROPIC_API_KEY) or base URL is never

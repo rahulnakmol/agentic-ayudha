@@ -28,6 +28,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ui"
 )
 
 // Delegation is the part of a build result a delegated story adds.
@@ -130,77 +131,79 @@ func (o ghOps) Branches(ctx context.Context, prefix string) ([]string, error) {
 	return bs, nil
 }
 
-// connected reports which receivers' cloud agents are set up here, without
-// any network call: a Cursor API key; Codex's CLI with a cloud environment;
-// Claude Code's CLI (its cloud sessions need the user's claude.ai sign-in);
-// Amp's CLI with its key.
-func (e *Env) connected(root string) map[string]bool {
-	l, _ := e.Config()
-	out := map[string]bool{}
-	if l == nil {
-		return out
+// agents detects the four receivers here (agentenv.Detect: PATH, version,
+// each CLI's local sign-in, aayu's secret store and config, the recorded Amp
+// project; no network, model, or task call), by receiver name.
+func (e *Env) agents(ctx context.Context, root, repo string) map[string]agentenv.Agent {
+	p := agentenv.Probe{Root: root, Repo: repo, LookPath: e.lookPath(), Exec: e.Exec, Getenv: e.Getenv,
+		HasSecret: func(name string) bool { v, _, err := e.SecretStore().Get(name); return err == nil && v != "" }}
+	if p.Exec == nil {
+		p.Exec = agentenv.CombinedExec
 	}
-	cfg := l.Config.Delegate
-	if v, _, err := e.SecretStore().Get(orDefault(cfg.CursorSecret, "cursor-api-key")); err == nil && v != "" {
-		out[delegate.Cursor] = true
+	if l, err := e.Config(); err == nil {
+		p.CodexEnv, p.CursorSecret = l.Config.Delegate.CodexEnv, l.Config.Delegate.CursorSecret
 	}
-	if _, err := e.lookPath()("codex"); err == nil && cfg.CodexEnv != "" {
-		out[delegate.Codex] = true
-	}
-	if _, err := e.lookPath()("amp"); err == nil && (e.Getenv("AMP_API_KEY") != "") {
-		out[delegate.Amp] = true
-	}
-	if _, err := e.lookPath()("claude"); err == nil {
-		out[delegate.Claude] = true
+	out := map[string]agentenv.Agent{}
+	for _, a := range agentenv.Detect(ctx, p) {
+		out[a.Name] = a
 	}
 	return out
 }
 
-// receiverHelp says plainly what is missing for receiver r ("" for auto) and
-// offers what is available instead: the same receiver with --local when its
-// CLI is installed (or in the cloud when the user asked for --local), and
-// every other connected receiver. aayu never installs or signs in for the
-// user.
-func (e *Env) receiverHelp(_ context.Context, _ string, r string, cloud, local map[string]bool, wantLocal bool) string {
+// runsLocally reports whether a's CLI can run here: installed, and signed in
+// or holding its own key (delegate.OwnKey), which the scrubbed environment
+// passes to it.
+func (e *Env) runsLocally(a agentenv.Agent) bool {
+	return a.CLI != "" && (a.SignedIn || delegate.OwnKey(a.Name, e.Getenv))
+}
+
+// receiverHelp says plainly what is missing for receiver r ("" for auto),
+// with the exact install and sign-in commands from agentenv.Detect and what
+// to connect for its cloud agent, and offers what is available instead: the
+// same receiver in the other mode, and every other receiver available in the
+// mode asked for. aayu never installs or signs in for the user.
+func (e *Env) receiverHelp(r string, agents map[string]agentenv.Agent, wantLocal bool) string {
 	var b strings.Builder
-	what := func(x string) string {
+	if a, ok := agents[r]; ok {
+		cli := "not installed"
 		switch {
-		case cloud[x] && local[x]:
-			return "cloud agent connected, CLI installed"
-		case cloud[x]:
-			return "cloud agent connected, CLI not installed"
-		case local[x]:
-			return "cloud agent not connected, CLI installed"
+		case e.runsLocally(a):
+			cli = "installed (" + a.CLI + "), signed in"
+		case a.CLI != "":
+			cli = "installed (" + a.CLI + "), not signed in"
 		}
-		return "cloud agent not connected, CLI not installed"
-	}
-	if r != "" {
-		fmt.Fprintf(&b, "%s here: %s.\n", delegate.Names[r], what(r))
+		fmt.Fprintf(&b, "%s here: CLI %s; cloud: %s.\n", delegate.Names[r], cli, a.CloudDetail)
+		if a.CLI == "" {
+			fmt.Fprintf(&b, "- Install it: %s\n", strings.Join(a.Install, "; "))
+		}
+		if !e.runsLocally(a) {
+			fmt.Fprintf(&b, "- Sign in: %s\n", strings.Join(a.SignIn, "; "))
+		}
 		switch {
-		case !wantLocal && local[r]:
-			fmt.Fprintf(&b, "- Its CLI is installed: add `--local` to run it on this machine in a fresh aayu worktree.\n")
-		case wantLocal && cloud[r]:
-			fmt.Fprintf(&b, "- Its cloud agent is connected: drop `--local` to hand off in the cloud.\n")
+		case !wantLocal && e.runsLocally(a):
+			b.WriteString("- Or add `--local` to run its CLI on this machine in a fresh aayu worktree.\n")
+		case wantLocal && a.Cloud:
+			b.WriteString("- Or drop `--local`: its cloud agent is connected.\n")
 		}
 	}
 	for _, x := range delegate.Receivers {
-		if x == r {
-			continue
-		}
+		a := agents[x]
 		switch {
-		case !wantLocal && cloud[x]:
+		case x == r:
+		case !wantLocal && a.Cloud:
 			fmt.Fprintf(&b, "- %s's cloud agent is connected: `--delegate %s`.\n", delegate.Names[x], x)
-		case wantLocal && local[x]:
-			fmt.Fprintf(&b, "- %s's CLI is installed: `--delegate %s --local`.\n", delegate.Names[x], x)
+		case wantLocal && e.runsLocally(a):
+			fmt.Fprintf(&b, "- %s's CLI is ready here: `--delegate %s --local`.\n", delegate.Names[x], x)
 		}
 	}
-	b.WriteString("To connect a receiver, see docs/research/agent-delegation-and-review.md §10; aayu never installs or signs in for you.")
+	b.WriteString("aayu never installs or signs in for you; `aayu doctor` lists every agent.")
 	return b.String()
 }
 
 // newDelegation resolves the receiver (auto picks one), the mode (cloud
-// unless --local or the cloud agent is not connected), and the adapter, and
-// reads the story's delegation state from the ledger.
+// unless --local), and the adapter, and reads the story's delegation state
+// from the ledger. A receiver not available in that mode is refused with
+// receiverHelp.
 func (e *Env) newDelegation(ctx context.Context, in Values, c *github.Client, bot identity.Bot, w *ledger.Writer, repo, root string, n int, chk ready.Result, body string, labels []string) (*delegation, error) {
 	l, err := e.Config()
 	if err != nil {
@@ -222,10 +225,10 @@ func (e *Env) newDelegation(ctx context.Context, in Values, c *github.Client, bo
 	if ongoing && d.receiver == d.state.Receiver && d.state.Mode == "local" {
 		d.local = true // a sync keeps its hand-off's mode
 	}
-	cloud := e.connected(root)
-	local := map[string]bool{}
+	agents := e.agents(ctx, root, repo)
+	cloud, local := map[string]bool{}, map[string]bool{}
 	for _, r := range delegate.Receivers {
-		_, local[r] = delegate.LookLocal(r, e.lookPath())
+		cloud[r], local[r] = agents[r].Cloud, e.runsLocally(agents[r])
 	}
 	if d.receiver == "auto" {
 		effort := ""
@@ -242,7 +245,7 @@ func (e *Env) newDelegation(ctx context.Context, in Values, c *github.Client, bo
 		}
 		ch, err := delegate.Choose(effort, pickCloud, pickLocal)
 		if err != nil {
-			return nil, Errorf(ExitBlocked, "build #%d --delegate auto: %v\n%s", n, err, e.receiverHelp(ctx, root, "", cloud, local, d.local))
+			return nil, Errorf(ExitBlocked, "build #%d --delegate auto: %v\n%s", n, err, e.receiverHelp("", agents, d.local))
 		}
 		d.receiver, d.local, d.reason = ch.Receiver, ch.Local, ch.Reason
 	}
@@ -252,12 +255,12 @@ func (e *Env) newDelegation(ctx context.Context, in Values, c *github.Client, bo
 		return nil, Errorf(ExitUsage, "build --delegate %q: want one of %s or auto", d.receiver, strings.Join(delegate.Receivers, ", "))
 	}
 	if !d.local && !cloud[d.receiver] {
-		return nil, Errorf(ExitBlocked, "build #%d --delegate %s: %s's cloud agent is not connected here.\n%s", n, d.receiver, delegate.Names[d.receiver], e.receiverHelp(ctx, root, d.receiver, cloud, local, false))
+		return nil, Errorf(ExitBlocked, "build #%d --delegate %s: %s's cloud agent is not connected here.\n%s", n, d.receiver, delegate.Names[d.receiver], e.receiverHelp(d.receiver, agents, false))
 	}
 	if d.local {
 		bin, ok := delegate.LookLocal(d.receiver, e.lookPath())
-		if !ok {
-			return nil, Errorf(ExitBlocked, "build #%d --delegate %s --local: %s's CLI (%s) is not installed here.\n%s", n, d.receiver, delegate.Names[d.receiver], strings.Join(delegate.LocalBins[d.receiver], " or "), e.receiverHelp(ctx, root, d.receiver, cloud, local, true))
+		if !ok || !local[d.receiver] {
+			return nil, Errorf(ExitBlocked, "build #%d --delegate %s --local: %s's CLI is not ready here.\n%s", n, d.receiver, delegate.Names[d.receiver], e.receiverHelp(d.receiver, agents, true))
 		}
 		d.bin = bin
 	}
@@ -427,6 +430,11 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 			report()
 			return e.localWriter(d, d.brief), false, nil
 		}
+		// The receiver's cloud environment is verified first: set up and
+		// checked in a clean container when missing or stale (agentenv).
+		if err := e.ensureCloudEnv(ctx, d, res); err != nil {
+			return nil, true, err
+		}
 		var task delegate.Task
 		err := e.act(ctx, d, "delegate.handoff", map[string]any{"brief_sha256": d.state.BriefHash}, func(ctx context.Context) error {
 			var err error
@@ -492,6 +500,32 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 	}
 	res.PR = d.state.PR
 	return e.reviewLoop(ctx, d, res)
+}
+
+// ensureCloudEnv runs agentenv.Ensure for the receiver before a cloud
+// hand-off. A verified environment whose files are not on the default branch
+// yet, or one that fails verification, stops the hand-off with the exact
+// next step; --local stays available.
+func (e *Env) ensureCloudEnv(ctx context.Context, d *delegation, res *BuildResult) error {
+	ensure := e.EnsureEnv
+	if ensure == nil {
+		ensure = func(ctx context.Context, root, host string) (agentenv.HostStatus, error) {
+			return agentenv.Ensure(ctx, root, host, agentenv.EnsureOptions{Run: e.envRunner(), Fetch: e.envFetch()})
+		}
+	}
+	pp := e.progress(fmt.Sprintf("Checking %s's cloud environment", delegate.Names[d.receiver]))
+	st, err := ensure(ctx, d.root, d.receiver)
+	switch {
+	case errors.Is(err, agentenv.ErrNotLanded):
+		pp.Done(ui.StatusFail, "verified, not on the default branch yet")
+		return Errorf(ExitBlocked, "build #%d --delegate %s: %s's cloud environment is verified here but its cloud agent reads it from the default branch, which does not have it yet: %v. Then hand off again, or add `--local`", d.story, d.receiver, delegate.Names[d.receiver], err)
+	case err != nil:
+		pp.Done(ui.StatusFail, err.Error())
+		return Errorf(ExitBlocked, "build #%d --delegate %s: %s's cloud environment could not be set up and verified: %v. `aayu install --env --host %s --apply --verify` shows each step; or add `--local`", d.story, d.receiver, delegate.Names[d.receiver], err, d.receiver)
+	}
+	pp.Done(ui.StatusPass, st.State)
+	res.Notes = append(res.Notes, fmt.Sprintf("%s's cloud environment: %s", d.receiver, strings.TrimSpace(st.State+" "+st.Detail)))
+	return nil
 }
 
 func (d *delegation) model() string {

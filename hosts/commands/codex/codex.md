@@ -16,9 +16,11 @@ Codex's CLI on this machine instead of its cloud agent.
    On `pass`, create the story from my own words without questions. Create it with `aayu grill story … --create`
    and make it Ready with `aayu ready n`. Never invent a requirement I did not state.
 2. **Hand off.** Run `aayu build n --delegate codex --json`, with `--local` only when I asked for it. Cloud is the
-   default and works on a fresh branch; `--local` runs Codex's CLI in a fresh aayu worktree with no GitHub
-   credential. Every receiver gets the same brief: the Ready snapshot, the plan, the evidence map, the PR rules,
-   and the stop conditions, never a secret.
+   default and works on a fresh branch, after aayu checks the receiver's cloud environment (and sets it up and
+   verifies it, which can take minutes, when it is missing or stale); `--local` runs Codex's CLI in a fresh aayu
+   worktree with no GitHub credential. Every receiver gets the same brief: the Ready snapshot, the plan, the
+   evidence map, the PR rules, and the stop conditions, never a secret. If aayu says the environment must reach the
+   default branch first, show me its exact command and stop.
 3. **Codex not available?** aayu stops and says what is missing, with the exact install and sign-in steps, and
    names any other connected route. Tell me that plainly, show the steps, offer the other route, and stop. Do not
    install or sign in for me.

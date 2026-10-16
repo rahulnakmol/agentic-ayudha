@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/agentenv"
 	"github.com/rahulnakmol/agentic-ayudha/internal/delegate"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
@@ -32,7 +34,22 @@ func delegateFixture(t *testing.T) (*fake.GitHub, map[string]string, Options, st
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH"), "AAYU_SECRET_OPENAI": "model-key", "AAYU_SECRET_XAI": "xai-key"}
 	monday := time.Date(2026, 10, 12, 10, 0, 0, 0, time.UTC)
 	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, CheckpointVerify: holds, NotifySink: &notify.Fake{}, Now: func() time.Time { return monday },
-		LookPath: func(string) (string, error) { return "", os.ErrNotExist }}
+		LookPath: func(string) (string, error) { return "", os.ErrNotExist },
+		// Every CLI the tests put on PATH is signed in the way its cloud agent needs (agentenv.Detect's probes).
+		Exec: func(_ context.Context, _, _ string, args ...string) (string, error) {
+			switch strings.Join(args, " ") {
+			case "login status":
+				return "Logged in using ChatGPT", nil
+			case "auth status --json":
+				return `{"loggedIn":true,"authMethod":"claude.ai"}`, nil
+			case "--version":
+				return "1.0.0", nil
+			}
+			return "", errors.New("unexpected probe")
+		},
+		EnsureEnv: func(context.Context, string, string) (agentenv.HostStatus, error) {
+			return agentenv.HostStatus{State: agentenv.Verified}, nil
+		}}
 	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready: %s", errOut)
 	}
@@ -332,9 +349,12 @@ func TestDelegateLocalFallback(t *testing.T) {
 		return "Done.\n\n## What I proved\n1. proved: TestEmptyList passes (go test ./...)\n", os.WriteFile(filepath.Join(wt, "empty.txt"), []byte("Your cart is empty\n"), 0o644)
 	}
 	// Cloud by default: Codex's cloud agent is not connected, so aayu says so and
-	// offers its installed CLI, but never falls back to it on its own.
+	// offers its installed CLI, but never falls back to it on its own. Cursor is
+	// missing altogether: aayu names its install and sign-in steps.
 	code, _, errOut := delegateRun(t, env, opts, "--delegate", "cursor")
-	if code != ExitBlocked || !strings.Contains(errOut, "Cursor here: cloud agent not connected, CLI not installed") || !strings.Contains(errOut, "aayu never installs or signs in") {
+	if code != ExitBlocked || !strings.Contains(errOut, "Cursor here: CLI not installed; cloud: no Cursor API key") ||
+		!strings.Contains(errOut, "- Install it: curl https://cursor.com/install -fsS | bash") || !strings.Contains(errOut, "- Sign in: cursor-agent login") ||
+		!strings.Contains(errOut, "aayu never installs or signs in") {
 		t.Fatalf("missing receiver: %d %s", code, errOut)
 	}
 	code, _, errOut = delegateRun(t, env, opts, "--delegate", "codex")
@@ -405,8 +425,22 @@ func TestDelegateClaudeCloud(t *testing.T) {
 		b, err := os.ReadFile(filepath.Join("..", "delegate", "testdata", "claude", "cloud.txt"))
 		return string(b), err
 	}
+	// The cloud environment is checked first; one that is verified but not on
+	// the default branch yet stops the hand-off with the command that lands it.
+	var ensured []string
+	opts.EnsureEnv = func(_ context.Context, _, host string) (agentenv.HostStatus, error) {
+		ensured = append(ensured, host)
+		if len(ensured) == 1 {
+			return agentenv.HostStatus{}, fmt.Errorf("%w: git add .claude/settings.json && git commit -s …", agentenv.ErrNotLanded)
+		}
+		return agentenv.HostStatus{Host: host, State: agentenv.Verified}, nil
+	}
+	code, _, errOut := delegateRun(t, env, opts, "--delegate", "claude")
+	if code != ExitBlocked || brief != "" || !strings.Contains(errOut, "git add .claude/settings.json") || !strings.Contains(errOut, "add `--local`") {
+		t.Fatalf("environment not landed: %d %s", code, errOut)
+	}
 	code, res, errOut := delegateRun(t, env, opts, "--delegate", "claude")
-	if code != 0 || res.Delegation.Status != dlgHandedOff || res.Delegation.Mode != "cloud" || res.Delegation.TaskURL != "https://claude.ai/code/session_01HZX7Q2M4N8P6R3T5V9W0Y1A2" ||
+	if code != 0 || !slices.Equal(ensured, []string{"claude", "claude"}) || res.Delegation.Status != dlgHandedOff || res.Delegation.Mode != "cloud" || res.Delegation.TaskURL != "https://claude.ai/code/session_01HZX7Q2M4N8P6R3T5V9W0Y1A2" ||
 		!strings.Contains(brief, "new branch `story/2-show-empty-list` from `dev`") {
 		t.Fatalf("hand-off: %d %+v %s", code, res, errOut)
 	}
