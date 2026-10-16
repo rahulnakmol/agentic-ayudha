@@ -197,6 +197,10 @@ in what the repository already has, and nothing in it the human did not confirm.
    A topic the human parked or deferred stays out of everything that defines done (the criteria, Summary, Measure,
    Threshold, Scenario, and Checkpoints); it lives only in Parked ideas or Open questions. A default counts only for
    the question you offered it on: an answer to another question does not accept it.
+   **Everything the human stated or confirmed is in the spec**, not only the headline number: "the amounts must stay
+   exactly the same" is a criterion beside the latency one, "every option optional" is checked for every option,
+   and an outcome target they gave ("5 a week") is the Measure and Threshold, with what they want to see ("an
+   order we can see") as a criterion. Drop only what they declined, parked, or deferred.
 6. **Draft and validate.** Write the body (the reference's fields plus the spec record below) and validate it with
    `--idea`; fix every problem by asking, then validate again:
 
@@ -260,7 +264,9 @@ A grilled Story or Bug carries five more sections after its Completion Goal. `gr
   matching `deferred:` open question. `grill` refuses a grilled spec whose request has a term without its line.
 
   `stated`: the human said it; `confirmed`: you proposed it and the human agreed; `default`: the human accepted the
-  default you offered with its reason. Quote the human's words exactly; when a criterion rests on several replies,
+  default you offered with its reason, and the brackets name the topic where they accepted it. A criterion that
+  rests on a confirmed answer and an accepted default is `confirmed`, tagged with the confirmed answer's topic, and
+  quotes both. Quote the human's words exactly; when a criterion rests on several replies,
   quote each one (`"…" / "…"`). The brackets name the question's topic (`ux.steps/screen-count`), its dimension
   alone, or `request` for the request's own words; a criterion may only name a topic or dimension you asked about.
   `(request)` means every quote on the line is in the request; when a criterion also quotes a reply (a term's
@@ -294,6 +300,13 @@ human gave: use their example (`tally add 12.50 lunch`) or the request's, word f
 another one (`tally add 30 groceries`, "4.20 coffee"), even to show a second case. When the evidence needs inputs no
 one gave, name them by kind and source instead ("a seeded product", "the seeded customer's email") and leave the
 values to the test.
+
+**One instance, the whole scope.** A criterion checks one representative instance of what the human asked for: the
+seeded declining card for "when a payment fails", one seeded quote for "the amounts stay the same". Say so: the
+expected result states the human's whole scope ("on every step of the flow", "for any failed payment, shown with
+the seeded declining card"), and Assumptions add that the instance stands for the whole. Never narrow the behaviour
+to a subset the human did not choose (only going forward, only an empty basket, only guests, only one log). Floors
+and configured platforms apply to every criterion on their own: do not restate them in criteria or the readback.
 
 **Self-contained criteria.** Each criterion's state names everything a tester sets up, so it can be checked alone:
 the data or fixture (a fresh home directory, the seeded basket), who is acting, and the command, route, or action.

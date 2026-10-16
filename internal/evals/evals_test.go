@@ -1566,23 +1566,31 @@ func TestGrillSearchScopeCaching(t *testing.T) {
 	}
 }
 
-// D-5.8f: the terms case's rule rules prices and invoices out, so a criterion
-// that honours it ("with no price and no invoice", run 38841610907) passes and
-// one that adds them fails.
-func TestGrillTermsScopeAllowsNegation(t *testing.T) {
-	c, err := LoadCase(filepath.Join(root, "evals", "cases", "grill", "bakery-terms"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for crit, ok := range map[string]bool{
-		"1 new order is recorded holding those 6 values, with no price and no invoice": true,
-		"the order has no prices or invoices yet":                                      true,
-		"the form shows the price for each tray":                                       false,
-		"no deposit, and an invoice is emailed to the office":                          false,
+// D-5.8f and D-5.8g: a case's rule rules something out, so a criterion that
+// honours it ("with no price and no invoice", "no new option") passes and one
+// that adds it fails.
+func TestGrillScopeAllowsNegation(t *testing.T) {
+	for id, crits := range map[string]map[string]bool{
+		"grill/bakery-terms": {
+			"1 new order is recorded holding those 6 values, with no price and no invoice": true,
+			"the order has no prices or invoices yet":                                      true,
+			"the form shows the price for each tray":                                       false,
+			"no deposit, and an invoice is emailed to the office":                          false,
+		},
+		"grill/slugkit-simple": {
+			"`createSlugger` accepts the same five options as today and no new option": true,
+			"`slugify` takes a new option for the separator":                           false,
+		},
 	} {
-		it := workitems.Item{Title: "Office catering", Fields: map[string]string{"completion_goal": "1. [api-trace] state: the form sent; expected: " + crit}}
-		if bad := c.OutOfScope(it); (len(bad) == 0) != ok {
-			t.Errorf("%q: %v", crit, bad)
+		c, err := LoadCase(filepath.Join(root, "evals", "cases", id))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for crit, ok := range crits {
+			it := workitems.Item{Title: "x", Fields: map[string]string{"completion_goal": "1. [api-trace] state: the seeded input; expected: " + crit}}
+			if bad := c.OutOfScope(it); (len(bad) == 0) != ok {
+				t.Errorf("%s %q: %v", id, crit, bad)
+			}
 		}
 	}
 }
