@@ -67,6 +67,7 @@ and the checks that run in CI (the automated checks GitHub runs on every pull re
 | Feel what it is like to work this way | [The story](journey.md), nine short chapters |
 | Set it up and try it | [Your first hour](start.md) |
 | Find the right command for your situation | [When to use what](when-to-use-what.md) |
+| See how a vague ask ("make it slick") becomes a spec | [How aayudha unpacks a vague ask](unpack.md) |
 | Try it without touching CI or adding keys | [Adopt at your own pace](adopt.md) |
 | Understand the ideas | [Seats](concepts-seats.md), [layers](concepts-layers.md), [proof packs](concepts-proof.md), [floors](concepts-floors.md), [the human pass](concepts-human-pass.md), [dev, rolling, main](concepts-ladder.md) |
 | Know exactly how it works | [How it works](how-it-works.md), thirteen technical deep dives |
