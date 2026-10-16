@@ -66,6 +66,10 @@ This repository's `[verify] maintainer` is `amp`: the headless Amp run reads the
   `project_id` and an `agent_mode` added); ask an Amp thread in the project to set it.
 - `loops/cursor/aayudha-loops.tf`: Cursor Automations as `cursor_platform_workflow` resources of Cursor's Terraform
   provider; apply them with `terraform apply` and `CURSOR_TOKEN`.
+- `loops/claude/routines.md`: Claude Code routines, as the values for the claude.ai/code/routines form or `/schedule`
+  (Claude Code has no file or API that creates a routine).
+- `loops/codex/scheduled-tasks.md`: Codex scheduled tasks for the ChatGPT desktop app, with each loop's RFC 5545 rule
+  (Codex has no file or API that creates one, and no GitHub event trigger).
 
 Every run starts with `aayu hook loop:<name>`, on every host and for both kinds of loop: it exits 4 while the
 repository is halted (`aayu halt`), 6 while the `[budget]` breaker has paused agent lanes or the Actions loops have used

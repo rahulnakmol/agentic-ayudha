@@ -44,7 +44,7 @@ func run(root string) error {
 		return err
 	}
 	// Remove host outputs of loops that no longer render.
-	for _, dir := range []string{"amp", "cursor"} {
+	for _, dir := range []string{"amp", "cursor", "claude", "codex"} {
 		old, _ := filepath.Glob(filepath.Join(root, loops.Dir, dir, "*"))
 		for _, f := range old {
 			rel := filepath.ToSlash(strings.TrimPrefix(f, root+string(filepath.Separator)))
