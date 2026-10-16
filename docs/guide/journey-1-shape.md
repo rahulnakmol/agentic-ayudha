@@ -50,6 +50,9 @@ which is what every later check will measure against.
 
 > **Tip:** do not skip the riskiest-assumption question. It tells you what to watch first.
 
+The same interview runs whenever you ask for anything in vague words, not only for a Goal:
+[how aayudha unpacks a vague ask](unpack.md).
+
 ## The verbs in this step
 
 <!-- BEGIN GENERATED: stage-verbs -->

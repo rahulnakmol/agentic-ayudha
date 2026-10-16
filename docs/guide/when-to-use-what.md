@@ -12,6 +12,16 @@ outcome, a beneficiary, a metric, a baseline, and a target.
 **You get back** a Goal (or Feature) issue that anyone can read, with a number you can measure again later.
 Walkthrough: [Shape the goal](journey-1-shape.md).
 
+## I asked for something in words ("make it slick", "keep it simple")
+
+Just ask: `build`, `slice`, `plan`, and the `/codex`, `/cursor`, `/claude`, and `/amp` hand-offs all take words.
+When your words are vague, use abbreviations, or name nothing anyone could check, aayudha stops and unpacks them
+with you first: a few questions, riskiest first, then "here is what done looks like" for you to confirm. A concrete
+ask goes straight through with no questions.
+
+**You get back** a Ready Story with numbered criteria, the meaning of each abbreviation, and the checkpoints you
+will see as it is built. Walkthrough: [How aayudha unpacks a vague ask](unpack.md).
+
 ## I have a Feature and need a plan
 
 Use **`slice`**, then **`plan`**. `slice` splits the Feature into stories sized XS to L, each with criteria,
