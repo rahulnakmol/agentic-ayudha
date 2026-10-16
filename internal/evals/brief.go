@@ -62,7 +62,7 @@ func checkBrief(ctx context.Context, c Case, g *brief.Grounding, words *brief.Wo
 		prose = append(prose, u.Text)
 	}
 	for _, r := range c.Scope {
-		if m := r.re.FindString(strings.Join(prose, "\n")); m != "" {
+		if m := r.find(strings.Join(prose, "\n")); m != "" {
 			out = append(out, fmt.Sprintf("scope: adds %s (%q)", r.Why, m))
 		}
 	}

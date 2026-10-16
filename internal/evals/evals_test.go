@@ -3,11 +3,14 @@ package evals
 import (
 	"context"
 	"encoding/json"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -253,6 +256,52 @@ func TestTier2WithFakeModels(t *testing.T) {
 	}
 	if !strings.Contains(fake.Requests[0].Messages[0].Content, `<untrusted source="eval-input">`) {
 		t.Fatal("eval input reached the skill model unwrapped")
+	}
+}
+
+// resetting is a model client whose listed calls (1-based) fail with a dropped
+// connection, the way the AI gateway's resets arrived in run 38841610907.
+type resetting struct {
+	*models.Fake
+	n     int
+	drops []int
+}
+
+func (r *resetting) Complete(ctx context.Context, req models.Request) (models.Response, error) {
+	r.n++
+	if slices.Contains(r.drops, r.n) {
+		return models.Response{}, &url.Error{Op: "Post", URL: "https://gateway.example/v1/messages", Err: &net.OpError{Op: "read", Net: "tcp", Err: syscall.ECONNRESET}}
+	}
+	return r.Fake.Complete(ctx, req)
+}
+
+// TestTier2RetriesDroppedConnection: a reset is retried once and recorded on
+// the call, so the run is scored, not lost (WP5.8); a second reset in a row
+// fails the run, so a broken endpoint still cannot pass silently.
+func TestTier2RetriesDroppedConnection(t *testing.T) {
+	cases, _ := stubCases(root)
+	item, _ := os.ReadFile(filepath.Join(root, "evals", "cases", "stub", "csv-export", "output", "issue.json"))
+	var replies []models.Response
+	for i := 0; i < 5; i++ {
+		replies = append(replies, models.Response{Text: string(item)}, models.Response{Text: `{"score": 5, "reason": "covers the request"}`})
+	}
+	// Call 1 (run 1's skill) drops once; calls 5 and 6 (run 2's judge, then its retry) both drop.
+	client := &resetting{Fake: &models.Fake{Replies: replies}, drops: []int{1, 5, 6}}
+	h := harness(t, nil, "gpt-6.1-sol")
+	h.Gateway.Client = func(models.Route, string) models.Client { return client }
+	res, err := h.Tier2(context.Background(), cases, "abc", "dev", time.Unix(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs := res.Cases[0].Runs
+	if r := runs[0]; r.Status == RunError || r.Score != 5 || !strings.Contains(r.Calls[0].Retried, "connection reset") || r.Calls[1].Retried != "" {
+		t.Errorf("run 1, one reset: %+v", r)
+	}
+	if r := runs[1]; r.Status != RunError || !strings.Contains(r.Error, "connection reset") {
+		t.Errorf("run 2, two resets in a row: %+v", r)
+	}
+	if res.Cases[0].Errors != 1 {
+		t.Errorf("%d errors, want 1 (run 2)", res.Cases[0].Errors)
 	}
 }
 
@@ -838,7 +887,7 @@ func TestGroups(t *testing.T) {
 	for _, c := range convs {
 		convIDs = append(convIDs, c.ID)
 	}
-	if err != nil || cg.MaxUSD != 50 || strings.Join(convIDs, " ") != "grill/bakery-concrete grill/bakery-motion grill/bakery-terms grill/bakery-ux grill/search-fast grill/tally-simple" || cfg.Gates("conversations") {
+	if err != nil || cg.MaxUSD != 60 || strings.Join(convIDs, " ") != "grill/bakery-concrete grill/bakery-motion grill/bakery-terms grill/bakery-ux grill/quotes-fast grill/search-fast grill/slugkit-simple grill/tally-simple" || cfg.Gates("conversations") {
 		t.Fatalf("conversations group: %v, cap %v, %d cases, gates %v", err, cg.MaxUSD, len(convs), cfg.Gates("conversations"))
 	}
 	// D-5.3b.h: the advisory conversation and persona groups never run nightly (evals.yml scopes their pushes to dev).
@@ -1512,6 +1561,27 @@ func TestGrillSearchScopeCaching(t *testing.T) {
 		it.Fields["completion_goal"] = "1. [metric] state: `/menu/search`; expected: " + crit
 		bad := c.OutOfScope(it)
 		if strings.Contains(crit, "warm and cold") != (len(bad) == 0) {
+			t.Errorf("%q: %v", crit, bad)
+		}
+	}
+}
+
+// D-5.8f: the terms case's rule rules prices and invoices out, so a criterion
+// that honours it ("with no price and no invoice", run 38841610907) passes and
+// one that adds them fails.
+func TestGrillTermsScopeAllowsNegation(t *testing.T) {
+	c, err := LoadCase(filepath.Join(root, "evals", "cases", "grill", "bakery-terms"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for crit, ok := range map[string]bool{
+		"1 new order is recorded holding those 6 values, with no price and no invoice": true,
+		"the order has no prices or invoices yet":                                      true,
+		"the form shows the price for each tray":                                       false,
+		"no deposit, and an invoice is emailed to the office":                          false,
+	} {
+		it := workitems.Item{Title: "Office catering", Fields: map[string]string{"completion_goal": "1. [api-trace] state: the form sent; expected: " + crit}}
+		if bad := c.OutOfScope(it); (len(bad) == 0) != ok {
 			t.Errorf("%q: %v", crit, bad)
 		}
 	}

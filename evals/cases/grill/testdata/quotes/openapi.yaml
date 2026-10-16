@@ -1,0 +1,41 @@
+openapi: 3.0.3
+info:
+  title: Quotes API
+  version: 1.4.0
+paths:
+  /quotes:
+    post:
+      summary: Quote a shipment of up to 10 parcels.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [from, to, parcels]
+              properties:
+                from: { type: string, description: Origin postcode }
+                to: { type: string, description: Destination postcode }
+                parcels:
+                  type: array
+                  maxItems: 10
+                  items:
+                    type: object
+                    required: [weight_g]
+                    properties:
+                      weight_g: { type: integer }
+      responses:
+        "200":
+          description: The quote, in pence, with one line per parcel.
+  /quotes/{id}:
+    get:
+      summary: Fetch a stored quote.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: The stored quote. }
+  /health:
+    get:
+      summary: Liveness.
+      responses:
+        "200": { description: OK }

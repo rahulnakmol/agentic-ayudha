@@ -85,7 +85,7 @@ today's counts from the facts.
   defaults?
 - Default: one constructor and one call with defaults, shown by a runnable example.
 - Evidence: api-trace
-- Facts: code, test
+- Facts: export, code, test
 - Products: library
 - Topics: calls-to-first-result, defaults
 

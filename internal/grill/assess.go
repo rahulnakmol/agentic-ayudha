@@ -14,6 +14,8 @@ import (
 	"strings"
 	"unicode"
 
+	"go.yaml.in/yaml/v4"
+
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verify"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
@@ -84,7 +86,7 @@ type AssessInput struct {
 }
 
 // Fact kinds, in the order the report lists them.
-var FactKinds = []string{"product", "flow", "route", "command", "feature", "gap", "component", "ds", "tokens", "motion", "test", "event", "code", "story", "floor", "layer"}
+var FactKinds = []string{"product", "flow", "route", "command", "export", "feature", "gap", "component", "ds", "tokens", "motion", "test", "event", "code", "story", "floor", "layer"}
 
 const (
 	maxFiles     = 20000
@@ -126,6 +128,8 @@ func Assess(in AssessInput) Assessment {
 
 	matched := r.matchRoutes(pages)
 	switch {
+	case len(pages) == 0 && len(apis) > 0:
+		a.Scope = fmt.Sprintf("no page routes; the idea's words (%s) matched %d of %d API routes", strings.Join(a.Keywords, ", "), len(r.matchRoutes(apis)), len(apis))
 	case len(pages) == 0:
 		a.Scope = "no page routes found (Next.js app/ or pages/, SvelteKit routes/)"
 	case len(matched) == 0:
@@ -148,7 +152,11 @@ func Assess(in AssessInput) Assessment {
 		add(Fact{ID: "route:" + rt.Path, Kind: "route", Text: fmt.Sprintf("Page %s.", rt.Path), Source: rt.File})
 	}
 	for _, rt := range r.matchRoutes(apis) {
-		add(Fact{ID: "route:" + rt.Path, Kind: "route", Text: fmt.Sprintf("API route %s.", rt.Path), Source: rt.File})
+		text := fmt.Sprintf("API route %s.", rt.Path)
+		if rt.methods != "" {
+			text = fmt.Sprintf("API route %s (%s).", rt.Path, rt.methods)
+		}
+		add(Fact{ID: "route:" + rt.Path, Kind: "route", Text: text, Source: rt.File})
 	}
 	for _, g := range groups {
 		for _, st := range stateOrder {
@@ -171,6 +179,9 @@ func Assess(in AssessInput) Assessment {
 	// web product; with no product found, every kind is reported.
 	is := func(t string) bool { return len(a.Products) == 0 || slices.Contains(a.Products, t) }
 	r.commands(add)
+	if is("library") {
+		r.exports(add)
+	}
 	features(in.Maps, a.Keywords, add)
 	used := r.components(matched, add)
 	r.designSystem(add)
@@ -319,7 +330,9 @@ func (r *repo) walk() {
 		}
 		rel = filepath.ToSlash(rel)
 		r.paths = append(r.paths, rel)
-		if sourceExt[path.Ext(rel)] || path.Base(rel) == "package.json" || strings.HasSuffix(rel, ".json") && strings.Contains(path.Base(rel), "token") {
+		base := path.Base(rel)
+		if sourceExt[path.Ext(rel)] || base == "package.json" || strings.HasSuffix(rel, ".json") && strings.Contains(base, "token") ||
+			base == "openapi.yaml" || base == "openapi.yml" || base == "openapi.json" {
 			if info, err := d.Info(); err == nil && info.Size() <= maxFileBytes {
 				if b, err := os.ReadFile(p); err == nil {
 					r.files[rel] = string(b)
@@ -340,6 +353,7 @@ func (r *repo) walk() {
 type route struct {
 	Path, File, Dir, Kind string
 	appRoot               string // the directory conventions (loading.tsx, error.tsx) apply below
+	methods               string // an OpenAPI operation's methods ("GET, POST")
 }
 
 var pageExt = map[string]bool{".tsx": true, ".jsx": true, ".ts": true, ".js": true, ".mdx": true}
@@ -375,6 +389,10 @@ func (r *repo) routes() (pages, apis []route) {
 			}
 			continue
 		}
+		if base == "openapi.yaml" || base == "openapi.yml" || base == "openapi.json" {
+			apis = append(apis, openAPIRoutes(p, r.files[p])...)
+			continue
+		}
 		if i := lastIndex(segs[:len(segs)-1], "routes"); i >= 0 && (base == "+page.svelte" || base == "+server.ts" || base == "+server.js") {
 			rt := route{Path: routePath(segs[i+1 : len(segs)-1]), File: p, Dir: path.Dir(p), appRoot: strings.Join(segs[:i+1], "/")}
 			if base == "+page.svelte" {
@@ -394,6 +412,30 @@ func (r *repo) routes() (pages, apis []route) {
 	byPath(pages)
 	byPath(apis)
 	return pages, apis
+}
+
+// openAPIRoutes lists an OpenAPI document's paths as API routes (WP5.8), so an
+// API product's endpoints ground the questions as a web app's pages do. Its
+// routes have no directory: no file convention applies to them.
+func openAPIRoutes(file, src string) []route {
+	var doc struct {
+		Paths map[string]map[string]any `yaml:"paths"`
+	}
+	if yaml.Unmarshal([]byte(src), &doc) != nil {
+		return nil
+	}
+	var out []route
+	for p, ops := range doc.Paths {
+		var ms []string
+		for m := range ops {
+			if slices.Contains([]string{"get", "put", "post", "delete", "patch", "head", "options"}, m) {
+				ms = append(ms, strings.ToUpper(m))
+			}
+		}
+		sort.Strings(ms)
+		out = append(out, route{Path: p, File: file, Kind: "api", methods: strings.Join(ms, ", ")})
+	}
+	return out
 }
 
 func lastIndex(segs []string, s string) int {

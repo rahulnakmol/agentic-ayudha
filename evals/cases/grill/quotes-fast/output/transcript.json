@@ -1,0 +1,108 @@
+{
+  "request": "The quotes API is too slow at checkout. Make it fast. It belongs under Feature #80 (Partner integrations).",
+  "exchanges": [
+    {
+      "say": "You want quotes to be fast at checkout. Two words to unpack: \"slow\" and \"fast\" say nothing about which call, what number, or under what load. The API has POST /quotes and GET /quotes/{id} (route:/quotes, route:/quotes/{id}), and nothing measures it yet (gap:api-budget). Four questions, riskiest first.",
+      "questions": [
+        {
+          "topic": "perf.operation/action",
+          "ask": "Which call must be fast? The API has POST /quotes and GET /quotes/{id} (route:/quotes, route:/quotes/{id}); I'd guess POST /quotes at checkout.",
+          "default": "POST /quotes, from request sent to quote received, because that is what partners wait on.",
+          "facts": [
+            "route:/quotes",
+            "route:/quotes/{id}"
+          ]
+        },
+        {
+          "topic": "perf.target/percentile-and-number",
+          "ask": "What number must it meet, at which percentile? Nothing is measured here yet: there is no load test or API budget (gap:api-budget).",
+          "default": "p95, with your number, because most partners' customers must not wait.",
+          "facts": [
+            "gap:api-budget"
+          ]
+        },
+        {
+          "topic": "perf.endpoint/request-rate",
+          "ask": "Under what load: how many quotes a second at peak, and how many parcels in each?"
+        },
+        {
+          "topic": "request/existing-behaviour",
+          "ask": "Must every quote amount stay exactly as it is today? Each parcel is priced in turn today (code:src/routes/quotes.js).",
+          "facts": [
+            "code:src/routes/quotes.js"
+          ]
+        }
+      ],
+      "answers": [
+        {
+          "kind": "confirm",
+          "text": "POST /quotes, the call partner shops make at checkout. Fetching a stored quote is fine."
+        },
+        {
+          "kind": "confirm",
+          "text": "p95 under 300 ms for a quote of 10 parcels. Partners tell us it takes about a second today."
+        },
+        {
+          "kind": "confirm",
+          "text": "About 20 quotes a second at peak, each with up to 10 parcels."
+        },
+        {
+          "kind": "confirm",
+          "text": "The amounts must stay exactly the same; only the speed changes."
+        }
+      ]
+    },
+    {
+      "say": "So: POST /quotes, p95 under 300 ms for 10 parcels at about 20 quotes a second, with the amounts unchanged. Four more about proof and scope.",
+      "questions": [
+        {
+          "topic": "perf.measure/proof",
+          "ask": "How should it be proven, and for how long: a load test against a local server on the seeded rate table?",
+          "default": "A repeatable load test on the seeded data, because a partner's checkout cannot be captured as proof.",
+          "facts": [
+            "gap:api-budget"
+          ]
+        },
+        {
+          "topic": "perf.conditions/cache-state",
+          "ask": "Should the first request after the server starts count?",
+          "default": "Measure after one warm-up request, because partners call a running service."
+        },
+        {
+          "topic": "perf.regression/ci-budget",
+          "ask": "Do you want a k6 budget in CI so it stays fast?",
+          "default": "None in this story; park it, because a CI budget is its own decision."
+        },
+        {
+          "topic": "request/scope",
+          "ask": "Only POST /quotes, leaving GET /quotes/{id} and the OpenAPI contract alone?",
+          "facts": [
+            "route:/quotes/{id}"
+          ]
+        }
+      ],
+      "answers": [
+        {
+          "kind": "confirm",
+          "text": "A one-minute load test against a local server with the seeded rate table; that is what partners would feel."
+        },
+        {
+          "kind": "default",
+          "text": "Your default is fine."
+        },
+        {
+          "kind": "park",
+          "text": "Not in this story; we'll decide CI budgets separately."
+        },
+        {
+          "kind": "confirm",
+          "text": "Only POST /quotes. Leave GET /quotes/{id} and the contract as they are."
+        }
+      ]
+    },
+    {
+      "say": "Here is what done looks like. Goal: partner shops get a quote back fast enough at checkout. Done when: a one-minute load test on a local server with the seeded rate table, sending POST /quotes with 10 parcels at 20 a second, shows p95 under 300 ms; and quotes for the seeded parcels keep today's amounts to the penny. Checkpoints: the load test reports p95, then the amounts check passes. A CI budget and loading feedback are parked.",
+      "done": true
+    }
+  ]
+}

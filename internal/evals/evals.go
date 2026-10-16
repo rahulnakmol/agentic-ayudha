@@ -187,7 +187,20 @@ type Case struct {
 type Scope struct {
 	Pattern string `toml:"pattern"`
 	Why     string `toml:"why"`
+	// Allow, when set, matches phrases that honour the rule rather than break
+	// it ("no price" where the human ruled prices out); they are removed before
+	// Pattern is matched (WP5.8).
+	Allow   string `toml:"allow"`
 	re      *regexp.Regexp
+	allowRE *regexp.Regexp
+}
+
+// find returns the rule's first match in text, outside the allowed phrases.
+func (r Scope) find(text string) string {
+	if r.allowRE != nil {
+		text = r.allowRE.ReplaceAllString(text, " ")
+	}
+	return r.re.FindString(text)
 }
 
 // OutOfScope returns one line per scope rule the item breaks. A grilled
@@ -214,7 +227,7 @@ func (c Case) OutOfScope(it workitems.Item) []string {
 func (c Case) outOfScopeText(text string) []string {
 	var out []string
 	for _, r := range c.Scope {
-		if m := r.re.FindString(text); m != "" {
+		if m := r.find(text); m != "" {
 			out = append(out, fmt.Sprintf("adds %s (%q)", r.Why, m))
 		}
 	}
@@ -327,6 +340,11 @@ func LoadCase(dir string) (Case, error) {
 			return c, fmt.Errorf("%s: scope rule %d: why is required", c.ID, i+1)
 		}
 		c.Scope[i].re = re
+		if r.Allow != "" {
+			if c.Scope[i].allowRE, err = regexp.Compile(r.Allow); err != nil {
+				return c, fmt.Errorf("%s: scope rule %d allow: %w", c.ID, i+1, err)
+			}
+		}
 	}
 	if c.Skill == "" || c.Input == "" {
 		return c, fmt.Errorf("%s: skill and input are required", c.ID)

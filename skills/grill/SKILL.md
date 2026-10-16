@@ -194,6 +194,9 @@ in what the repository already has, and nothing in it the human did not confirm.
    (`` `/order/review` ``, "on the review screen", "above the button") must rest on the human's words saying so, or
    `grill` and `ready` refuse it: every place word it uses (`review`, `same`, `above`) must appear in a quote in that
    criterion's Provenance line (see Placement quotes below).
+   A topic the human parked or deferred stays out of everything that defines done (the criteria, Summary, Measure,
+   Threshold, Scenario, and Checkpoints); it lives only in Parked ideas or Open questions. A default counts only for
+   the question you offered it on: an answer to another question does not accept it.
 6. **Draft and validate.** Write the body (the reference's fields plus the spec record below) and validate it with
    `--idea`; fix every problem by asking, then validate again:
 
@@ -263,8 +266,9 @@ A grilled Story or Bug carries five more sections after its Completion Goal. `gr
   `(request)` means every quote on the line is in the request; when a criterion also quotes a reply (a term's
   meaning, an answer), name that reply's topic instead (`stated (term/pii)`). Provenance has only these line kinds:
   `Request:`, `Vague:`, `Term:`, and one numbered line per criterion. The Measure and Threshold are not criteria:
-  write them from the human's words and give them no Provenance line of their own (no `Measure:` or `Outcome:`). `; facts:` cites assessment fact IDs the criterion rests on; `grill` checks that each one exists. A
-  qualifier you could not resolve is `Vague: "fast" → deferred: <why>` with a matching `deferred:` open question.
+  write them from the human's words and give them no Provenance line of their own (no `Measure:` or `Outcome:`). `; facts:` cites assessment fact IDs the criterion rests on; `grill` checks that each one exists. Give every
+  criterion the facts for what it exercises (its route, command, or component, and the code it changes, such as
+  `route:/api/orders` and `code:lib/orders.ts`), not just the first one. A qualifier you could not resolve is `Vague: "fast" → deferred: <why>` with a matching `deferred:` open question.
 
 **Placement quotes.** When a criterion's expected result says where something is (a route in backticks, "on the
 review screen", "on the same screen", "below the button"), its Provenance line quotes every human reply that names
@@ -274,7 +278,8 @@ the request:
 - Name the place; never point back to it. Write "on the review screen", not "on that screen" or "on this page": the
   reader of the criterion has no earlier sentence to resolve "that".
 - Use the human's word for the place. If they said "the same screen", write "on the same screen" and quote that
-  reply; if another reply named the review screen, quote it too.
+  reply; if another reply named the review screen, quote it too. Never paraphrase a place: "pickup time and details
+  together" stays "together" (or "on the combined screen", if they said that), never "on one screen".
 - If no reply names the place, the placement is not confirmed: ask, or leave the place out of the criterion and add a
   `deferred:` open question for it.
 
@@ -283,6 +288,18 @@ the request:
 ```
 
 Criterion 4 may then say "on the same screen" and "on the review screen"; it may not say "on the pay screen".
+
+**Example values.** A value in a criterion (a command line, an amount, a name, a sample query, an email) is one the
+human gave: use their example (`tally add 12.50 lunch`) or the request's, word for word, and quote it. Never make up
+another one (`tally add 30 groceries`, "4.20 coffee"), even to show a second case. When the evidence needs inputs no
+one gave, name them by kind and source instead ("a seeded product", "the seeded customer's email") and leave the
+values to the test.
+
+**Self-contained criteria.** Each criterion's state names everything a tester sets up, so it can be checked alone:
+the data or fixture (a fresh home directory, the seeded basket), who is acting, and the command, route, or action.
+Never "any state", "installed", or "as above". An error case names the exact command or action that triggers it
+(`tally add` with no arguments) and the exact output or exit code. Seeded test data is setup, not a requirement:
+name it, and never narrow the behaviour the human asked for with it.
 
 ## Done when concrete
 

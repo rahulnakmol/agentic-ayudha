@@ -7,7 +7,7 @@ The assessment's `gate` said `unpack`. Score three things, then give one overall
 1. Question quality: the skill unpacks every abbreviation first, asks about the ambiguous ones (PDP, which does not fit this app; B2B, which has two meanings) before anything else, grounds them in the repository, and then works out who it is for, the outcome, and the smallest slice.
 2. Concreteness of the spec: every criterion names its state and something to observe (a button by its label, a count of fields, an API result, a count of log lines); Measure and Threshold carry the human's number (5 a week); each term has its confirmed meaning in Provenance. The readback says in plain language what done looks like: the goal, the
    criteria, and the checkpoints the human will see.
-3. Fidelity: the meaning of each term is the human's, not the jargon list's; the button label and the form fields are the human's; prices, invoices, company accounts, and delivery are out and are not criteria. Questions and parked ideas never lower the score; only what became a criterion counts.
+3. Fidelity: the meaning of each term is the human's, not the jargon list's; the button label and the form fields are the human's; prices, invoices, company accounts, and delivery are out and are not criteria. Test setup that a criterion's evidence needs (seeded data, a synthetic user, a fresh home directory) is not an added requirement; a state that narrows what the human asked for is. Questions and parked ideas never lower the score; only what became a criterion counts.
 
 - 5: All three are strong.
 - 4: One minor gap in one area.

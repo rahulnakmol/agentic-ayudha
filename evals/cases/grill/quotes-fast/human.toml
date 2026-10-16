@@ -1,0 +1,107 @@
+# The simulated human of grill/quotes-fast (WP5.8): the quotes API's owner. The skill tags each question with a topic, <dimension>/<key>, the keys
+# coming from the catalogues' Topics (vague/performance.md), term/<term> for an abbreviation, or the request topics in the skill. The human
+# answers by topic, else by the topic's dimension, else with the fallback, which parks it: an unscripted idea never becomes a
+# requirement. kind: confirm (states or agrees), default (accepts the skill's offered default), park, or defer.
+max_rounds = 4
+readback = "Yes, that is what done looks like."
+fallback = { kind = "park", text = "That is not part of what I asked for; park it." }
+
+[topics."perf.operation/action"]
+kind = "confirm"
+text = "POST /quotes, the call partner shops make at checkout. Fetching a stored quote is fine."
+
+[topics."perf.operation/viewpoint"]
+kind = "confirm"
+text = "From the partner's side: from sending the request to getting the quote back."
+
+[topics."perf.endpoint/endpoint"]
+kind = "confirm"
+text = "POST /quotes, the call partner shops make at checkout. Fetching a stored quote is fine."
+
+[topics."perf.endpoint/request-rate"]
+kind = "confirm"
+text = "About 20 quotes a second at peak, each with up to 10 parcels."
+
+[topics."perf.target/percentile-and-number"]
+kind = "confirm"
+text = "p95 under 300 ms for a quote of 10 parcels. Partners tell us it takes about a second today."
+
+[topics."perf.target/current-value"]
+kind = "confirm"
+text = "p95 under 300 ms for a quote of 10 parcels. Partners tell us it takes about a second today."
+
+[topics."perf.conditions/data-size"]
+kind = "confirm"
+text = "10 parcels per quote, with the seeded rate table."
+
+[topics."perf.conditions/concurrency"]
+kind = "confirm"
+text = "About 20 quotes a second at peak, each with up to 10 parcels."
+
+[topics."perf.conditions/cache-state"]
+kind = "default"
+text = "Your default is fine."
+
+[topics."perf.conditions/device-and-network"]
+kind = "default"
+text = "Your default is fine."
+
+[topics."perf.measure/proof"]
+kind = "confirm"
+text = "A one-minute load test against a local server with the seeded rate table; that is what partners would feel."
+
+[topics."perf.measure/test"]
+kind = "confirm"
+text = "A one-minute load test against a local server with the seeded rate table; that is what partners would feel."
+
+[topics."perf.perceived/loading-feedback"]
+kind = "park"
+text = "It's an API; partners show their own spinner."
+
+[topics."perf.perceived/partial-results"]
+kind = "park"
+text = "It's an API; partners show their own spinner."
+
+[topics."perf.regression/ci-budget"]
+kind = "park"
+text = "Not in this story; we'll decide CI budgets separately."
+
+[topics."request/existing-behaviour"]
+kind = "confirm"
+text = "The amounts must stay exactly the same; only the speed changes."
+
+[topics."request/scope"]
+kind = "confirm"
+text = "Only POST /quotes. Leave GET /quotes/{id} and the contract as they are."
+
+[topics."request/size"]
+kind = "confirm"
+text = "One story is fine."
+
+[dimensions."perf.operation"]
+kind = "confirm"
+text = "POST /quotes, the call partner shops make at checkout. Fetching a stored quote is fine."
+
+[dimensions."perf.endpoint"]
+kind = "confirm"
+text = "About 20 quotes a second at peak, each with up to 10 parcels."
+
+[dimensions."perf.target"]
+kind = "confirm"
+text = "p95 under 300 ms for a quote of 10 parcels. Partners tell us it takes about a second today."
+
+[dimensions."perf.conditions"]
+kind = "confirm"
+text = "10 parcels per quote, with the seeded rate table."
+
+[dimensions."perf.measure"]
+kind = "confirm"
+text = "A one-minute load test against a local server with the seeded rate table; that is what partners would feel."
+
+[dimensions."perf.perceived"]
+kind = "park"
+text = "It's an API; partners show their own spinner."
+
+[dimensions."perf.regression"]
+kind = "park"
+text = "Not in this story; we'll decide CI budgets separately."
