@@ -79,6 +79,9 @@ func TestCheck(t *testing.T) {
 		{"vague criterion", map[string]string{workitems.FieldCriteria: "1. [screenshot] state: `/order`; expected: the page feels intuitive"},
 			[]string{`completion_goal: criterion 1 says "intuitive" with nothing to observe`, "skills/grill/references/vague/ux.md"}},
 		{"vague word with a number", map[string]string{workitems.FieldCriteria: "1. [metric] state: `/menu/search` seeded; expected: fast: p95 under 200 ms"}, nil},
+		// "Reduced motion" names a state; "nice transitions" in the same catalogue is still vague.
+		{"reduced motion is a state", map[string]string{workitems.FieldCriteria: "1. [recording] state: the order steps with reduced motion on; expected: nothing slides and the step changes at once"}, nil},
+		{"vague transitions", map[string]string{workitems.FieldCriteria: "1. [recording] state: the order steps; expected: nice transitions between steps"}, []string{`criterion 1 says "nice"`}},
 		{"vague word only in quoted copy", map[string]string{workitems.FieldCriteria: "1. [screenshot] state: `/order`; expected: the \"Quick reorder\" button"}, nil},
 		{"vague threshold", map[string]string{workitems.FieldThreshold: "fast enough"}, []string{"threshold: Threshold says \"fast\""}},
 		{"grilled and complete", map[string]string{workitems.FieldProvenance: goodProvenance, workitems.FieldAssumptions: "none", workitems.FieldCheckpoints: goodCheckpoints,

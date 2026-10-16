@@ -320,11 +320,18 @@ func harness(root string, cfg evals.Config) (*evals.Harness, error) {
 	}
 	store := secrets.New(secrets.Env{Getenv: os.Getenv, Environ: os.Environ()})
 	m := evals.JudgeModels(l.Config.Models, cfg.Judge)
+	// Every eval call is charged to the story "evals", and the group's max_usd is
+	// the run's cap (D-7.3d), so per_story_usd never cuts a group short of it
+	// (D-5.8d); per_day_usd still applies.
+	budget := l.Config.Budget
+	if budget.PerStoryUSD > 0 && budget.PerStoryUSD < cfg.MaxUSD {
+		budget.PerStoryUSD = cfg.MaxUSD
+	}
 	gw := &models.Gateway{
 		Models:   m,
 		Resolver: models.Resolver{Models: m, Log: func(s string) { fmt.Fprintln(os.Stderr, s) }},
 		Actions:  log,
-		Breaker:  &models.Breaker{Budget: l.Config.Budget, Clock: clock, Now: time.Now, PauseFile: filepath.Join(tmp, "paused")},
+		Breaker:  &models.Breaker{Budget: budget, Clock: clock, Now: time.Now, PauseFile: filepath.Join(tmp, "paused")},
 		Key: func(name string) (string, error) {
 			v, _, err := store.Get(name)
 			return v, err

@@ -88,7 +88,7 @@ helpful nudging, grounded citations, senior-practitioner realism for the seat, a
 
 Tier 2 runs in groups (`[[groups]]` in `eval.toml`), one `evals.yml` job per group, each with its own `max_usd`, so
 one group cannot use up another's cap: `brief` (the `brief/` cases, 12 USD), `personas` (the `retro/` and `decide/`
-persona cases, 20 USD), `conversations` (the grill conversation cases of WP5.3b and WP5.8, 40 USD, advisory until a run meets
+persona cases, 20 USD), `conversations` (the grill conversation cases of WP5.3b and WP5.8, 50 USD, advisory until a run meets
 the bar, D-5.3b.g), and `skills` (every other case, 6 USD).
 Pushes to `dev` do not run the `brief` group; it runs nightly, on dispatch (input `group` picks one group), and on
 pushes to `rolling` and `main`. The advisory `conversations` and `personas` groups never run nightly or on promotion

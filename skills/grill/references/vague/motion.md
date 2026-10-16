@@ -1,6 +1,6 @@
 # Vague: motion and transitions (`motion`)
 
-Qualifiers: animation, animations, animated, animate, animates, transition, transitions, motion,
+Qualifiers: animation, animations, animated, animate, animates, transition, transitions,
 micro-interaction, micro-interactions, fluid, bouncy, springy
 
 "Nice transitions" names a feeling. Motion is concrete only when it names its purpose, the exact moments and

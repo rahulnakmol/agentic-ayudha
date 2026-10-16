@@ -75,7 +75,7 @@ events = ["workflow_dispatch"]
 [[groups]]
 name = "conversations"
 prefixes = ["grill/bakery-ux", "grill/search-fast", "grill/bakery-motion", "grill/bakery-terms", "grill/tally-simple", "grill/bakery-concrete"]
-max_usd = 40.0
+max_usd = 50.0 # 30 runs at about 1.5 USD (run 38837114422: 17 runs, 25.21 USD); the [budget] per_story_usd breaker no longer cuts a group below its cap (D-5.8d)
 gate = "advisory"
 events = ["workflow_dispatch", "push"]
 

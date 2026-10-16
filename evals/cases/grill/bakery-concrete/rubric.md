@@ -7,7 +7,7 @@ The assessment's `gate` said `pass`. Score three things, then give one overall s
 1. Question quality: the skill asks nothing, because the gate passed it: a concrete ask gets no friction. Any question scores this area low.
 2. Concreteness of the spec: the one criterion names the state and the exact format from the request; Checkpoints and the readback say the same. The readback says in plain language what done looks like: the goal, the
    criteria, and the checkpoints the human will see.
-3. Fidelity: the criterion is the request's own words (`stated (request)`); nothing is added that the request does not say, such as other screens, currencies, or rounding rules. Questions and parked ideas never lower the score; only what became a criterion counts.
+3. Fidelity: the criterion is the request's own words (`stated (request)`); nothing is added that the request does not say, such as other screens, currencies, or rounding rules. A screenshot needs a state to be taken in: the seeded customer and the seeded basket are test setup, not an added requirement. A state that narrows the behaviour asked for (only when the basket is non-empty, only for some customers) is an addition. Questions and parked ideas never lower the score; only what became a criterion counts.
 
 - 5: All three are strong.
 - 4: One minor gap in one area.

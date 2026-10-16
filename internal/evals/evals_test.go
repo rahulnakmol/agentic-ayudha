@@ -838,7 +838,7 @@ func TestGroups(t *testing.T) {
 	for _, c := range convs {
 		convIDs = append(convIDs, c.ID)
 	}
-	if err != nil || cg.MaxUSD != 40 || strings.Join(convIDs, " ") != "grill/bakery-concrete grill/bakery-motion grill/bakery-terms grill/bakery-ux grill/search-fast grill/tally-simple" || cfg.Gates("conversations") {
+	if err != nil || cg.MaxUSD != 50 || strings.Join(convIDs, " ") != "grill/bakery-concrete grill/bakery-motion grill/bakery-terms grill/bakery-ux grill/search-fast grill/tally-simple" || cfg.Gates("conversations") {
 		t.Fatalf("conversations group: %v, cap %v, %d cases, gates %v", err, cg.MaxUSD, len(convs), cfg.Gates("conversations"))
 	}
 	// D-5.3b.h: the advisory conversation and persona groups never run nightly (evals.yml scopes their pushes to dev).
