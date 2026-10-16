@@ -69,6 +69,7 @@ func TestFixturesPerTypeAndStage(t *testing.T) {
 func TestReadyFailures(t *testing.T) {
 	story := loadFixture(t, "story")[StageReady]
 	decision := loadFixture(t, "decision")[StageReady]
+	feature := loadFixture(t, "feature")[StageReady]
 	with := func(it Item, f func(*Item)) Item {
 		c := it
 		c.Fields = map[string]string{}
@@ -114,8 +115,11 @@ func TestReadyFailures(t *testing.T) {
 		{"decision without reversible still passes Create", with(decision, func(c *Item) { delete(c.Fields, FieldReversible) }), StageCreate, nil},
 		{"story under an initiative", with(story, func(c *Item) { c.Parent = &Ref{2, "initiative"} }), StageReady,
 			[]string{"parent: #2 is a initiative; a Story's parent must be a feature"}},
-		{"story without parent", with(story, func(c *Item) { c.Parent = nil }), StageReady,
-			[]string{"parent: a Story needs a parent feature at Ready"}},
+		// A Story stands on its own: a vague single-feature ask needs no Goal,
+		// Initiative, and Feature first (megaman, D-5.5c.12 (8), D-2.1c).
+		{"story without parent is Ready", with(story, func(c *Item) { c.Parent = nil }), StageReady, nil},
+		{"feature without parent", with(feature, func(c *Item) { c.Parent = nil }), StageReady,
+			[]string{"parent: a Feature needs a parent initiative at Ready"}},
 		{"link kind not allowed", with(story, func(c *Item) { c.Fields[FieldLinks] = "supersedes #4" }), StageReady,
 			[]string{`links: a Story cannot carry a "supersedes" link; allowed: depends-on`}},
 		{"supersedes a story", with(decision, func(c *Item) { c.Fields[FieldLinks] = "supersedes #9"; c.LinkTypes = map[int]string{9: "story"} }), StageReady,

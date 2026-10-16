@@ -10,7 +10,8 @@ human leaves open goes into an open question, not into the story.
 ### Summary (`summary`, required)
 
 - Who is this for, what do they want to do, and why? Write it as `As a <who>, I want <what>, so that <why>.`
-- Which Feature does it belong to? (the `--parent` issue; a Story needs one at Ready)
+- Does it belong under an open Feature the facts show? (the `--parent` issue, optional: a Story is Ready without
+  one; never file a Feature, Initiative, or Goal just to give it a parent)
 
 ## Ready
 

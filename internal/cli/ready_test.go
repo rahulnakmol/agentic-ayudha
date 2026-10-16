@@ -95,7 +95,7 @@ func TestReadyCheckFixtures(t *testing.T) {
 		{"3", ExitBlocked, []string{"effort: effort:XL blocks Ready; slice it into XS-L stories"}},
 		{"4", ExitBlocked, []string{"completion_goal: criterion 2 is unmapped (no evidence kind); start it with one of [screenshot], [recording], [sr-transcript], [api-trace], [metric]"}},
 		{"5", ExitBlocked, []string{"reversible: Reversible is required at Decision-ready"}},
-		{"6", ExitBlocked, []string{"parent: a Story needs a parent feature at Ready"}},
+		{"6", 0, nil}, // a Story without a parent Feature is Ready (D-2.1c)
 	}
 	for _, tt := range tests {
 		code, out, errOut := run(t, env, opts, "ready", tt.issue, "--check", "--json", "--repo", "o/r")
