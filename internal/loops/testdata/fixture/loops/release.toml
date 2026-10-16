@@ -1,4 +1,4 @@
 description = "Measure after a release."
 command = ["measure"]
 cron = "30 10 * * 1"
-hosts = ["amp", "actions"]
+hosts = ["amp"]

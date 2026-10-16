@@ -83,17 +83,7 @@ func runLoopGuard(ctx context.Context, e *Env, name string) error {
 			return Errorf(ExitUsage, "loop %s: a schedule event without github.event.schedule", name)
 		}
 	}
-	owners := []string(nil)
-	if e.CI {
-		rec, err := loops.ReadRecord(root)
-		if err != nil {
-			return Wrap(ExitUsage, err)
-		}
-		owners = rec.Owners(name)
-	}
 	switch {
-	case len(owners) > 0:
-		g.Reason = fmt.Sprintf("not due here: %s runs it (%s), so the Actions fallback leaves it there", strings.Join(owners, ", "), loops.RecordFile)
 	case event == "workflow_dispatch":
 		g.Due, g.Reason = true, "dispatched by hand"
 	case l.Due(clock.Loc, e.Now(), fired):

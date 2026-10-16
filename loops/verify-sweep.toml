@@ -1,9 +1,11 @@
-# Nightly behaviour sweep (WP4.5b.4). Every feature-map check runs with no model; when a map drifted or a check
-# failed, verify hands the maintain brief to the agent app [verify] maintainer names. The cron is in [time] tz.
-description = "Nightly sweep: run every feature-map behaviour check, and hand off the maintain brief when a map drifted or a check failed."
-command = ["verify", "--check", "all", "--maintain", "drift"]
+# Nightly behaviour sweep (WP4.5b.4). Every feature-map check runs with no model, so the loop needs no agent: it runs
+# in the free GitHub Actions fallback, and a failed check turns its run red (Appendix B D-7.1f). The weekly
+# verify-maintain loop hands the maintain brief to the agent; drift is also caught on every PR by `verify --map`. The
+# cron is in [time] tz.
+description = "Nightly sweep: run every feature-map behaviour check, with no model; a failed check fails the run."
+command = ["verify", "--check", "all"]
 cron = "30 2 * * *"
-bot = true
+agent = false
 setup = ["node", "pnpm"]
 # This repository's example web product reaches Playwright through the base branch's packages/floors (D-8.1b).
 setup_run = [
@@ -11,4 +13,3 @@ setup_run = [
   "pnpm --filter @aayudha/floors exec playwright install --with-deps chromium",
   "echo \"NODE_PATH=$PWD/packages/floors/node_modules\" >> \"$GITHUB_ENV\"",
 ]
-prompt = "Report each failed check in one line. If aayu posted a maintain brief and [verify] maintainer is amp, follow the maintain procedure of the verify skill on it: edit only the feature maps' skill directories and open at most one pull request. Otherwise report the brief's link."

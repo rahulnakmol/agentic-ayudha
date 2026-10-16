@@ -1,3 +1,4 @@
 description = "Founder digest."
 command = ["status", "--digest"]
 cron = "5 9 * * 1-5"
+agent = false

@@ -135,11 +135,16 @@ A loop is one file, `loops/<name>.toml`, that runs an aayu command unattended on
 pass, no human-only flag, and no `--yes`. In 0.2 every loop is scheduled. Event loops (`on`, `filter`) are deferred
 to a later version, and `Parse` refuses them with that message.
 
-**One tool runs every loop.** Two tools running the same loop would run it twice: two triage passes, two digests.
-So `aayu install --loops` asks which tool should run this repository's loops, offering only the tools whose CLI
-`agentenv.Detect` finds here (amp, cursor, claude, codex), or takes `--host`. It warns when
-[loops/active.json](../../loops/active.json) records loops in another tool. The Actions fallback leaves any loop
-recorded there to its tool: in Actions, the guard answers `not due here` for it.
+**Agent loops and no-AI loops.** A loop is an agent loop unless it sets `agent = false`. An agent loop needs an
+agent's judgement, the bot App (`bot = true`), or a personal token, so it runs in an agent tool and never in Actions.
+A loop with `agent = false` needs no model and runs with the workflow token, so it runs only in the free GitHub
+Actions fallback (Appendix B D-7.1f). `loops.Parse` enforces the split: it refuses `actions` in an agent loop's hosts,
+`setup` on an agent loop, and an agent tool, `bot = true`, or a `prompt` on an `agent = false` loop.
+
+**One tool runs every agent loop.** Two tools running the same loop would run it twice: two triage passes, two
+retros. So `aayu install --loops` asks which tool should run this repository's agent loops, offering only the tools
+whose CLI `agentenv.Detect` finds here (amp, cursor, claude, codex), or takes `--host`, and says which loops run in
+Actions instead. It warns when [loops/active.json](../../loops/active.json) records loops in another tool.
 
 **Renders and setup per tool.** `go generate ./...` renders this repository's loops, and `aayu init --gates` renders
 a product's.
@@ -150,7 +155,7 @@ a product's.
 | Cursor | `loops/cursor/aayudha-loops.tf` (provider `~> 0.8`, one cron per UTC offset), and `loops/cursor/automate.md` | `--apply`: `terraform apply` when `terraform` and `CURSOR_TOKEN` are there, recording each loop; otherwise a prompt per loop for the `/automate` skill | `cursor-agent -p` |
 | Claude Code | `loops/claude/routines.md`: one `/schedule` prompt per loop | Paste each into Claude Code v2.1.225 or later, signed in with claude.ai; `/schedule update` sets a cron a preset cannot say; at least one hour apart | `claude -p`, or `/schedule run` |
 | Codex | `loops/codex/scheduled-tasks.md`: one chat prompt per loop, with its RFC 5545 rule | Paste each into a Codex or ChatGPT chat in the desktop app's local project | `codex exec` |
-| GitHub Actions | `.github/workflows/aayudha-loops.yml`, one cron per UTC offset | The fallback for deterministic loops, with no model | `workflow_dispatch` |
+| GitHub Actions | `.github/workflows/aayudha-loops.yml`, one cron per UTC offset, only the `agent = false` loops | Nothing to set up: the workflow runs them with the workflow token and no model | `workflow_dispatch` |
 
 `--run-now <loop>` runs one loop's prompt once with the chosen tool's CLI in this checkout, marked as a test so the
 guard's `not due` does not stop it, and the terminal offers it after setup. `--apply` and `--run-now` are refused to
@@ -171,26 +176,29 @@ deferred event loops did now runs on a schedule:
 |---|---|---|
 | `triage-daily` | Daily 09:00 | `aayu triage` lists intake issues with no model; the agent classifies each new one with `--as` |
 | `triage` | Mondays 09:30 | The same, weekly |
-| `ci-failed` | Weekdays 09:45, 13:45, 17:45 | `aayu status --work`; for each delegated story with a failed required check, one `build --delegate` sync that sends it back |
+| `ci-failed` | Weekdays 09:45 | `aayu status --work`; for each delegated story with a failed required check, one `build --delegate` sync that sends it back |
 | `release-measure` | Mondays 10:30 | `aayu measure`, reported when a release was published in the last seven days |
 | `housekeeping` | Fridays 16:00 | `aayu gc`, then reports doctor drift, feature-map drift, and stale Ready issues |
 | `evolve` | Monthly, day 2 | Skill evolution, which also takes the Feedback filed since |
-| `digest`, `retro` | Weekdays, Mondays | The founder digest and the retro |
+| `retro` | Mondays | The retro |
+| `digest` | Weekdays 09:05, in Actions | `aayu status --digest`, paged through `[notify]`; `agent = false` |
+| `verify-sweep` | Daily 02:30, in Actions | `aayu verify --check all`, every behaviour check with no model; `agent = false` |
 
-`decisions`, `seat-review`, `verify-sweep`, and `verify-maintain` are scheduled loops too. Loops that need an agent's
-model (the triage pair, `ci-failed`, `release-measure`, `housekeeping`) have no Actions job.
+`decisions` (weekdays 09:15), `seat-review`, and `verify-maintain` are agent loops too. Only `digest` and
+`verify-sweep` have an Actions job; D-7.1f gives the reason for each loop.
 
 `--record <loop>=<ID>` (or `all=<ID>`) with `--host` writes `loops/active.json`: per tool and loop, a digest of the
 prompt and schedule, the tool's ID for it, and the date. An empty ID forgets a loop there. Doctor's `loops` row shows
-each loop with its owner tool: active, stale (changed after it was recorded), missing, or double (recorded in two
-tools).
+each loop with what runs it: its tool or `actions`; active, stale (changed after it was recorded), missing, or double
+(recorded in two tools, or an `agent = false` loop also recorded in a tool).
 
 > **Honest status:** "active" means recorded with the loop's current digest, not observed in the tool; no tool lets
 > aayu read your automations from its CLI. Proven live on Amp in this repository:
-> `install --loops --host amp --apply` set all 12 loops, one holder thread named `aayudha loop: <name>` each, and
-> doctor shows them active. `amp -ox` returns before each thread sets its schedule, so the schedule IDs were
-> confirmed and recorded afterwards. Cursor's file passes `terraform validate` but was not applied here; the Claude Code,
-> Codex, and `/automate` prompts are rendered from each tool's documentation and not yet run.
+> `install --loops --host amp --apply` set the loops, one holder thread named `aayudha loop: <name>` each, and
+> doctor shows them active; since D-7.1f, 10 run in Amp and `digest` and `verify-sweep` in Actions. `amp -ox`
+> returns before each thread sets its schedule, so the schedule IDs were confirmed and recorded afterwards. Cursor's
+> file passes `terraform validate` but was not applied here; the Claude Code, Codex, and `/automate` prompts are
+> rendered from each tool's documentation and not yet run.
 
 ## Key data and file formats
 
@@ -283,15 +291,16 @@ type State struct {
 8. An environment is verified only when its record carries the spec's current fingerprint; edited files or changed
    code make it stale. Enforced by `agentenv.Status`, `TestStatus`; generation keeps the owner's own keys,
    `TestGenerateKeepsTheOwnersKeys`; `install --env` end to end, `TestInstallEnv`.
-9. A loop sets a valid `cron` and an unattended command; an event loop (`on`, `filter`) is refused as deferred.
-   Enforced by `loops.Parse`, `TestParseRefuses`.
+9. A loop sets a valid `cron` and an unattended command; an event loop (`on`, `filter`) is refused as deferred; an
+   agent loop never runs in Actions, and an `agent = false` loop runs only there, without the bot. Enforced by
+   `loops.Parse`, `TestParseRefuses`.
 10. Every tool's render matches its golden file, and the Actions fallback has no event job. Enforced by
     `loops.Files`, `TestGolden`.
-11. The guard stops a halted or over-budget run first, and in Actions it leaves a loop recorded in an agent tool to
-    that tool. Enforced by `runLoopGuard` in [internal/cli/loops.go](../../internal/cli/loops.go),
+11. The guard stops a halted or over-budget run first, in every tool and in Actions. Enforced by `runLoopGuard` in [internal/cli/loops.go](../../internal/cli/loops.go),
     `TestLoopDigestOnSchedule`.
-12. `install --loops` offers only detected tools, sets every loop up in the one picked, warns about a loop recorded in
-    two tools, and `--run-now` runs one loop with the tool's CLI; a changed loop turns stale. Enforced by
+12. `install --loops` offers only detected tools, sets every agent loop up in the one picked, leaves `agent = false`
+    loops to Actions, warns about a loop recorded in two tools, and `--run-now` runs one loop with the tool's CLI; a
+    changed loop turns stale. Enforced by
     `runInstallLoops` and `loops.States`, `TestInstallLoops`; the doctor rows, `TestChecksGolden`.
 
 ## Where it lives in the code

@@ -103,6 +103,12 @@ func TestParseRefuses(t *testing.T) {
 		"an event loop":       `command = ["triage"]` + "\non = \"issues.opened\"",
 		"cron and an event":   `command = ["status"]` + "\ncron = \"0 9 * * *\"\non = \"issues.opened\"",
 		"an event filter":     `command = ["status"]` + "\ncron = \"0 9 * * *\"\nfilter = { label = \"x\" }",
+		// D-7.1f: the Actions fallback runs only loops that need no agent, and those need neither a tool nor the bot.
+		"an agent loop in Actions":    `command = ["triage"]` + "\ncron = \"0 9 * * *\"\nhosts = [\"amp\", \"actions\"]",
+		"Actions setup, agent loop":   `command = ["triage"]` + "\ncron = \"0 9 * * *\"\nsetup = [\"node\"]",
+		"no agent, in an agent tool":  `command = ["status"]` + "\ncron = \"0 9 * * *\"\nagent = false\nhosts = [\"amp\"]",
+		"no agent, writes as the bot": `command = ["decide"]` + "\ncron = \"0 9 * * *\"\nagent = false\nbot = true",
+		"no agent, a prompt":          `command = ["status"]` + "\ncron = \"0 9 * * *\"\nagent = false\nprompt = \"x\"",
 	} {
 		if _, err := Parse("x", []byte("description = \"x\"\n"+body+"\n")); err == nil {
 			t.Errorf("%s: parsed", name)

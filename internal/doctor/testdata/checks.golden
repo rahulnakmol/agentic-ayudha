@@ -144,8 +144,9 @@ WARN  retired-workflows  1 retired aayudha workflow(s): run `aayu init` and conf
 ## loops pass
 PASS  loops  no loops/*.toml
 ## loops fail
-WARN  loops  0 active, 0 stale, 1 missing, 1 double
-               digest             -            missing: only the Actions fallback runs it
+WARN  loops  1 active (1 in Actions), 0 stale, 1 missing, 1 double
+               digest             actions      active: needs no agent, so the GitHub Actions fallback runs it
+               review             -            missing
                triage             amp,codex    double: recorded in amp and codex, so it runs twice; remove it from all but one
                set them up in one tool with `aayu install --loops`
 ## leases pass

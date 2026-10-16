@@ -15,10 +15,10 @@ var agentCLIs = map[string][]string{
 	loops.HostCodex:  {"codex"},
 }
 
-// checkLoops reports this repository's loops and the agent tool that runs
-// each, against loops/active.json (Appendix B S-7.1d, S-7.1e): active, stale
-// (changed since it was set up), missing, or double (recorded in two tools,
-// so it runs twice). One tool runs the loops.
+// checkLoops reports this repository's loops and what runs each, against
+// loops/active.json (Appendix B S-7.1d, S-7.1e, D-7.1f): the one agent tool,
+// or the Actions fallback for a loop with agent = false. A loop is active,
+// stale (changed since it was set up), missing, or double (it runs twice).
 func checkLoops(_ context.Context, p *Probe) Result {
 	if p.Root == "" {
 		return Result{Status: Pass, Detail: "no checkout"}
@@ -43,7 +43,7 @@ func checkLoops(_ context.Context, p *Probe) Result {
 		}
 	}
 	if !found {
-		return Result{Status: Warn, Detail: fmt.Sprintf("%d loops, and no agent tool here (amp, cursor-agent, claude, codex): only the Actions fallback runs them", len(ls))}
+		return Result{Status: Warn, Detail: fmt.Sprintf("%d loops, and no agent tool here (amp, cursor-agent, claude, codex): only those with agent = false run, in the Actions fallback", len(ls))}
 	}
 	branch, tz := "dev", "UTC"
 	if p.Config != nil {
@@ -56,16 +56,17 @@ func checkLoops(_ context.Context, p *Probe) Result {
 	}
 	count := map[string]int{}
 	owners := map[string]bool{}
+	actions := 0
 	var lines []string
 	for _, s := range loops.States(ls, rec, p.Repo, branch, tz) {
 		count[s.Status]++
-		if s.Status == loops.NoHost {
-			continue
-		}
 		owner := s.Owner
-		if owner == "" {
+		switch owner {
+		case "":
 			owner = "-"
-		} else {
+		case loops.HostActions:
+			actions++
+		default:
 			owners[owner] = true
 		}
 		line := fmt.Sprintf("%-18s %-12s %s", s.Loop, owner, s.Status)
@@ -74,7 +75,7 @@ func checkLoops(_ context.Context, p *Probe) Result {
 		}
 		lines = append(lines, line)
 	}
-	detail := fmt.Sprintf("%d active, %d stale, %d missing, %d double", count[loops.Active], count[loops.Stale], count[loops.Missing], count[loops.Double])
+	detail := fmt.Sprintf("%d active (%d in Actions), %d stale, %d missing, %d double", count[loops.Active], actions, count[loops.Stale], count[loops.Missing], count[loops.Double])
 	if len(owners) > 1 {
 		lines = append(lines, "the loops are split across tools; one tool should run them all")
 	}

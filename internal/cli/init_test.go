@@ -325,7 +325,8 @@ func TestInitExtras(t *testing.T) {
 	g.App = map[string]any{"id": 4242, "slug": "aayudha-r", "client_id": "Iv1.abc", "pem": "-----BEGIN RSA PRIVATE KEY-----\nMIIEsecret\n-----END RSA PRIVATE KEY-----\n"}
 	dir := checkout(t)
 	_ = os.MkdirAll(filepath.Join(dir, "loops"), 0o755)
-	_ = os.WriteFile(filepath.Join(dir, "loops", "digest.toml"), []byte("description = \"Digest.\"\ncommand = [\"status\", \"--digest\"]\ncron = \"5 9 * * 1-5\"\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "loops", "digest.toml"), []byte("description = \"Digest.\"\ncommand = [\"status\", \"--digest\"]\ncron = \"5 9 * * 1-5\"\nagent = false\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "loops", "triage.toml"), []byte("description = \"Triage.\"\ncommand = [\"triage\"]\ncron = \"0 9 * * 1-5\"\n"), 0o644)
 	var manifest string
 	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, Build: BuildInfo{Version: "0.4.0"},
 		AppManifestCode: func(_ context.Context, post string, m func(string) string) (string, error) {
@@ -364,7 +365,9 @@ func TestInitExtras(t *testing.T) {
 	if own, err := os.ReadFile(filepath.Join("..", "..", ".github", "workflows", "aayudha-streak.yml")); err != nil || string(own) != string(initrepo.GateWorkflows("dev")[initrepo.StreakWorkflow]) {
 		t.Errorf(".github/workflows/aayudha-streak.yml is not the WP5.7 template rendered for dev")
 	}
-	if !strings.Contains(files[".github/workflows/aayudha-loops.yml"], "aayudha@v0.4.0") || files["loops/amp/digest.json"] == "" || !strings.Contains(files["loops/cursor/aayudha-loops.tf"], `"5 8 * * 1-5"`) {
+	// D-7.1f: the no-agent digest renders only for Actions, the triage agent loop only for the agent tools.
+	if wf := files[".github/workflows/aayudha-loops.yml"]; !strings.Contains(wf, "aayudha@v0.4.0") || !strings.Contains(wf, "loop:digest") || strings.Contains(wf, "triage") ||
+		files["loops/amp/triage.json"] == "" || files["loops/amp/digest.json"] != "" || !strings.Contains(files["loops/cursor/aayudha-loops.tf"], `"0 8 * * 1-5"`) {
 		t.Errorf("loops rendered by --gates: %v", slices.Collect(maps.Keys(files)))
 	}
 	cfg := files[".aayudha/config.toml"]

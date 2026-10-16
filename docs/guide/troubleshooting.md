@@ -109,8 +109,9 @@ record the loop with `--record <loop>=<ID>`.
 
 **It shows `stale`.** The loop file changed after you set it up. Set it up again in the tool and record it again.
 
-**It shows `double`.** The loop is recorded in two tools, so it runs twice. Delete it in one of them, then forget it
-there: `aayu install --loops --host <that tool> --record <loop>=`.
+**It shows `double`.** The loop runs twice: it is recorded in two tools, or it has `agent = false` (so GitHub Actions
+runs it) and is still recorded in a tool. Delete it in the tool, then forget it there:
+`aayu install --loops --host <that tool> --record <loop>=`.
 
 **A loop run stops with exit 4 or 6.** The repository is halted, or a budget paused the agents. A person reads why,
 then runs `aayu resume`.
