@@ -19,6 +19,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // Label is a repository label.
@@ -78,10 +79,11 @@ type PR struct {
 	Head   Branch  `json:"head"`
 	Base   Branch  `json:"base"`
 	// MergeCommitSHA is set when the PR merges through the fake.
-	MergeCommitSHA string   `json:"merge_commit_sha,omitempty"`
-	Reviews        []Review `json:"-"`
-	Files          []string `json:"-"`
-	Diff           string   `json:"-"`
+	MergeCommitSHA string    `json:"merge_commit_sha,omitempty"`
+	CreatedAt      time.Time `json:"created_at,omitzero"`
+	Reviews        []Review  `json:"-"`
+	Files          []string  `json:"-"`
+	Diff           string    `json:"-"`
 }
 
 // Account is a user or bot.
@@ -719,15 +721,20 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 	case m == "POST" && p == repo+"/pulls":
 		is := g.addIssue(str("title"), str("body"), nil)
 		pr := &PR{Number: is.Number, Title: str("title"), Body: str("body"), State: "open", User: Account{Login: g.Viewer, Type: "User"},
-			Head: Branch{Ref: str("head")}, Base: Branch{Ref: str("base"), SHA: strings.Repeat("b", 40)}}
+			Head: Branch{Ref: str("head")}, Base: Branch{Ref: str("base"), SHA: strings.Repeat("b", 40)}, CreatedAt: time.Now().UTC()}
 		g.Pulls[is.Number] = pr
 		reply(201, pr)
 	case m == "GET" && p == repo+"/pulls":
 		out := []*PR{}
+		q := r.URL.Query()
 		for _, pr := range g.Pulls {
-			if head := r.URL.Query().Get("head"); pr.State == "open" && (head == "" || head == g.Owner+":"+pr.Head.Ref) {
+			if st := q.Get("state"); (st == "all" || pr.State == st || (st == "" && pr.State == "open")) && (q.Get("head") == "" || q.Get("head") == g.Owner+":"+pr.Head.Ref) {
 				out = append(out, pr)
 			}
+		}
+		slices.SortFunc(out, func(a, b *PR) int { return a.Number - b.Number })
+		if q.Get("direction") == "desc" {
+			slices.Reverse(out)
 		}
 		reply(200, out)
 	case rePull.MatchString(p):

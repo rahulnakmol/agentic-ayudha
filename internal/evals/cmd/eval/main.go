@@ -215,7 +215,7 @@ func evolveGate(ctx context.Context, root, base, head, branch string) error {
 		fmt.Printf("evolve gate: %s is not an evolve PR (no %s branch prefix, no %s commit); nothing to check\n", orDash(branch), evals.EvolveBranchPrefix, evals.EvolveTrailer)
 		return nil
 	}
-	out, err := git("diff", "--name-status", "--no-renames", base+"..."+head)
+	out, err := git("diff", "--raw", "--numstat", "--no-renames", base+"..."+head)
 	if err != nil {
 		return err
 	}
