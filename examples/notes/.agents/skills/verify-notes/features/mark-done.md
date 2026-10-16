@@ -7,7 +7,7 @@ list fails with exit 1 and leaves the file as it was.
 {"id": "mark-done", "layers": ["L02"],
  "sources": ["examples/notes/cmd/notes/main.go", "examples/notes/store/store.go"],
  "surfaces": {"command": ["done"]},
- "verified_at": "aef4fe09c450db455388128e1359f5fb0fc7a561"}
+ "verified_at": "c514f9a54b6f60eedc10f619292e093ce314007d"}
 ```
 
 ## Sub-features

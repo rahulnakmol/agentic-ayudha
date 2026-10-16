@@ -7,7 +7,7 @@ usage error (exit 2) with a message that says what is wrong.
 {"id": "add-and-list", "layers": ["L02"],
  "sources": ["examples/notes/cmd/notes/main.go", "examples/notes/store/store.go"],
  "surfaces": {"command": ["add", "list"], "flag": ["file"]},
- "verified_at": "aef4fe09c450db455388128e1359f5fb0fc7a561"}
+ "verified_at": "c514f9a54b6f60eedc10f619292e093ce314007d"}
 ```
 
 ## Sub-features

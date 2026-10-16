@@ -7,7 +7,7 @@ again keeps each note's text, order, and done mark; a missing file holds no note
 {"id": "store", "layers": ["L07"],
  "sources": ["examples/notes/store/store.go", "examples/notes/store/store_test.go"],
  "surfaces": {"func": ["Load", "Save", "MarkDone"]},
- "verified_at": "aef4fe09c450db455388128e1359f5fb0fc7a561"}
+ "verified_at": "c514f9a54b6f60eedc10f619292e093ce314007d"}
 ```
 
 ## Sub-features
