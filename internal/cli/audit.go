@@ -83,10 +83,10 @@ func (e *Env) openAudit(ctx context.Context, in Values, verb string, full bool) 
 	confHash := auditConfigHash(cfg, e.devBranch())
 	clock, _ := cfg.Clock()
 	a.data = &audit.Data{Dev: e.devBranch(), Ledger: "ledger", GateCheck: "protected-paths", Bots: cfg.Identity.BotLogins,
-		SLAHours: cfg.Decisions.SLAHours, Clock: clock, AllowedLicns: AllowedLicences}
+		SLAHours: cfg.Decisions.SLAHours, Clock: clock, AllowedLicns: AllowedLicences, Days: cfg.Autonomy.CorrectionDays}
 	rules := autonomy.Rules{Bots: cfg.Identity.BotLogins, Days: cfg.Autonomy.CorrectionDays, Layers: autonomy.ReadLayers(config.RepoRoot(e.Dir))}
 	a.src = audit.Source{GH: a.c, Repo: a.repo, Store: a.store, Now: e.Now(), Rules: rules, Never: cfg.Autonomy.Never,
-		Suites: full && verb == "audit", Autonomy: full, Streak: cfg.Autonomy.Streak}
+		Suites: full && verb == "audit", Autonomy: full, Flow: verb == "retro", Streak: cfg.Autonomy.Streak}
 	if rp := in.String("replay"); rp != "" {
 		if in.Has("since") || in.Has("until") || in.Has("ledger") {
 			return nil, Errorf(ExitUsage, "%s --replay takes its window and ledger commit from the snapshot", verb)

@@ -60,6 +60,7 @@ type Retro struct {
 	Streaks     []autonomy.LayerStreak `json:"streaks"`
 	FloorMisses []string               `json:"floor_misses"`
 	Findings    []Finding              `json:"findings"`
+	Flow        Flow                   `json:"flow"`
 }
 
 // BuildRetro computes the retro for the window. perStoryUSD is [budget] per_story_usd.
@@ -126,6 +127,7 @@ func BuildRetro(in Inputs, d *Data, perStoryUSD float64) *Retro {
 				Detail: fmt.Sprintf("%s merged without an authoritative pack that covers it: %s.", ref, s.Reason)})
 		}
 	}
+	r.Flow = d.flow(in, r.Stories)
 	skills := map[string]*SkillRate{}
 	for _, a := range d.AgentPRs {
 		if !d.in(in, a.MergedAt) {
@@ -202,6 +204,7 @@ func (r *Retro) Markdown() []byte {
 		}
 		p("\n")
 	}
+	r.Flow.markdown(p, len(r.Stories))
 	p("## Corrections and streaks\n\n")
 	p("Agent PRs merged in the window: %d; corrected: %d.\n\n", r.AgentMerges, r.Corrected)
 	for _, c := range r.Corrections {
