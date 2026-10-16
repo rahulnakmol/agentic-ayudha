@@ -17,6 +17,32 @@ setup_run = ["pnpm install --frozen-lockfile"]  # optional, Actions only: the pr
 behaviour check with no model, and both hand the maintain brief to the agent app `[verify] maintainer` names, the
 sweep only when a map drifted or a check failed. No model key is used in the Actions jobs.
 
+## The user-side schedule for the maintain hand-off
+
+An Actions job writes as the bot, and the agent apps answer only the person who connected them, so in Actions
+`verify --maintain` only **records** the brief (no mention; D-4.5b.7). The agent is woken from your side: a run that
+executes the same loop as you posts the brief with `[verify] maintainer`'s mention (`@codex`, `@cursor`, `@claude`),
+or, for `amp`, follows the brief itself. Set up one of these per repository, in a checkout of it:
+
+- **Headless Amp (`amp -x`).** `loops/amp/<loop>.json` holds the prompt and the schedule (an RFC 5545 rule in
+  `[time] tz`). Run the prompt on that schedule with your scheduler, for example cron on a machine that is signed in
+  to Amp and to GitHub (`gh auth status`) and has `aayu` on `PATH`:
+
+  ```sh
+  # crontab -e; the times are the rules in loops/amp/verify-sweep.json and verify-maintain.json, in your zone
+  30 2 * * * cd ~/src/<repo> && git pull -q --ff-only && amp -x "$(jq -r .prompt loops/amp/verify-sweep.json)"
+  0 9 * * 1  cd ~/src/<repo> && git pull -q --ff-only && amp -x "$(jq -r .prompt loops/amp/verify-maintain.json)"
+  ```
+
+  A headless run cannot answer an approval prompt: allow the commands the prompt runs (`aayu`, `git`, `gh`) in your
+  Amp permissions first. The prompt starts with `aayu hook loop:<name>`, so a halted repository or a paused budget
+  stops the run before any write. The same JSON is also the input of Amp's `set_schedule`, if you schedule an Amp
+  thread in the project instead.
+- **A Cursor automation.** `loops/cursor/aayudha-loops.tf` declares both loops as `cursor_platform_workflow`
+  resources that run as you: `terraform apply` with `CURSOR_TOKEN` in the environment.
+
+This repository's `[verify] maintainer` is `amp`: the headless Amp run reads the brief and opens the one PR.
+
 `go generate ./...` renders aayudha's own loops; `aayu init --gates` renders a product's:
 
 - `.github/workflows/aayudha-loops.yml`: the GitHub Actions fallback. Actions cron is UTC, so each loop has one cron

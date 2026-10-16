@@ -548,6 +548,10 @@
           "type": "object",
           "description": "Floor thresholds; CONSTRAINTS.md documents each one."
         },
+        "drift_blocking_from": {
+          "type": "string",
+          "description": "Date (UTC, YYYY-MM-DD) from which feature-map drift fails the merge gate's feature-map floor; before it, or empty, drift is a warning."
+        },
         "red_on_base_blocking_from": {
           "type": "string",
           "description": "Date (UTC, YYYY-MM-DD) from which a Bug story whose mapped proving test passes on the base commit fails the merge gate; before it, or empty, the red-on-base check is advisory."

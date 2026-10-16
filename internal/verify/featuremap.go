@@ -12,6 +12,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/pelletier/go-toml/v2"
 
@@ -631,9 +632,10 @@ func (d MapDrift) Items() []string {
 }
 
 // MapFloor is the feature-map floor (WP4.5b.1): the drift check, in every
-// verify run. Drift is reported, never blocking: a renamed control a check
-// uses fails that check in the behaviour floor, and the maintain pass corrects
-// the map in its own PR (Appendix B S-4.5b).
+// verify run. Drift is a warning until [verify] drift_blocking_from and fails
+// the floor from that date (Appendix B D-4.5b.6); before it, a renamed control
+// a check uses still fails that check in the behaviour floor, and the maintain
+// pass corrects the map in its own PR.
 type MapFloor struct{}
 
 // Name implements Floor.
@@ -667,9 +669,18 @@ func (MapFloor) Run(ctx context.Context, r *Run) (Result, error) {
 		}
 	}
 	res.Check.Result, res.Check.Value = proof.Pass, float64(len(drift))
+	from, _ := time.Parse(time.DateOnly, r.Verify.DriftBlockingFrom)
+	blocking := !from.IsZero() && r.Now != nil && !r.Now().UTC().Before(from)
 	switch {
+	case len(drift) > 0 && blocking:
+		res.Check.Result = proof.Fail
+		res.Check.Detail = fmt.Sprintf("blocking since %s ([verify] drift_blocking_from): %s; update the map in this PR: %s", r.Verify.DriftBlockingFrom, plural(len(drift), "drift item"), strings.Join(first(drift, 5), "; "))
 	case len(drift) > 0:
-		res.Check.Detail = fmt.Sprintf("advisory: %s, for the maintain pass: %s", plural(len(drift), "drift item"), strings.Join(first(drift, 5), "; "))
+		when := "with no [verify] drift_blocking_from date"
+		if !from.IsZero() {
+			when = "until " + r.Verify.DriftBlockingFrom
+		}
+		res.Check.Detail = fmt.Sprintf("advisory %s: %s, for the maintain pass: %s", when, plural(len(drift), "drift item"), strings.Join(first(drift, 5), "; "))
 	case len(stale) > 0:
 		res.Check.Detail = fmt.Sprintf("in sync; %s changed since verified_at", plural(len(stale), "feature"))
 	default:

@@ -41,8 +41,9 @@ func failedChecks(arts []verify.Evidence) (out []verify.CheckResult, ran bool) {
 // brief on the tracking issue, @-mentioning [verify] maintainer, when mode is
 // always or the map drifted or a check failed, and not twice for the same
 // report. Outside CI it posts under the person's own account, because the
-// apps answer only the people who connected them; a loop in Actions posts as
-// the bot. It writes a line saying what it did to stderr.
+// apps answer only the people who connected them. A loop in Actions only
+// records the brief, as the bot and with no mention: the user-side schedule
+// wakes the agent (D-4.5b.7). It writes a line saying what it did to stderr.
 func (e *Env) maintainHandoff(ctx context.Context, mode string, b verify.Brief) error {
 	say := func(format string, args ...any) { fmt.Fprintf(e.Err, "maintain: "+format+"\n", args...) }
 	switch {
@@ -112,9 +113,11 @@ func (e *Env) maintainHandoff(ctx context.Context, mode string, b verify.Brief) 
 	if err != nil {
 		return Wrap(ExitExternal, err)
 	}
+	// A record is compared with records, a hand-off with hand-offs, so the
+	// Actions record of a drift never stops the person's run handing it off.
 	last := ""
 	for _, cm := range comments {
-		if d := verify.BriefDigest(cm.GetBody()); d != "" {
+		if d, rec := verify.BriefDigest(cm.GetBody()); d != "" && rec == e.CI {
 			last = d
 		}
 	}
@@ -123,7 +126,7 @@ func (e *Env) maintainHandoff(ctx context.Context, mode string, b verify.Brief) 
 		return nil
 	}
 	who := l.Config.Verify.Maintainer
-	body := b.Comment(who)
+	body := b.Comment(who, e.CI)
 	// A new comment each time: an edited comment notifies no one.
 	if _, err := c.Write(ctx, actions.Action{Kind: "github.comment.verify-maintain", Target: fmt.Sprintf("%s#%d", repo, n),
 		Request: &actions.Request{Method: http.MethodPost, Path: fmt.Sprintf("/repos/%s/issues/%d/comments", repo, n)},
@@ -134,6 +137,8 @@ func (e *Env) maintainHandoff(ctx context.Context, mode string, b verify.Brief) 
 		return Wrap(ExitExternal, err)
 	}
 	switch m := verify.Maintainers[who]; {
+	case e.CI:
+		say("brief recorded on #%d; the user-side schedule (amp -x or a Cursor automation) hands it to the maintainer", n)
 	case m != "":
 		say("brief posted on #%d for %s", n, m)
 	case who == "amp":

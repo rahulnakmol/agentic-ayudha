@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 )
@@ -147,8 +148,24 @@ func TestMapFloor(t *testing.T) {
 	}
 	rep := Execute(ctx, r, []Floor{MapFloor{}})
 	c := rep.Checks[0]
-	if !rep.Hold || c.Result != proof.Pass || c.Value != 1 || !strings.Contains(c.Detail, "advisory: 1 drift item") || !strings.Contains(c.Detail, "Add task") {
+	if !rep.Hold || c.Result != proof.Pass || c.Value != 1 || !strings.Contains(c.Detail, "advisory with no [verify] drift_blocking_from date: 1 drift item") || !strings.Contains(c.Detail, "Add task") {
 		t.Fatalf("check %+v hold %v", c, rep.Hold)
+	}
+	// D-4.5b.6: drift is a warning up to the day before [verify] drift_blocking_from, and fails the floor from it.
+	r.Verify.DriftBlockingFrom = "2026-11-13"
+	for _, tc := range []struct {
+		now  time.Time
+		want string
+		hold bool
+	}{
+		{time.Date(2026, 11, 12, 23, 59, 0, 0, time.UTC), "advisory until 2026-11-13: 1 drift item", true},
+		{time.Date(2026, 11, 13, 0, 0, 0, 0, time.UTC), "blocking since 2026-11-13 ([verify] drift_blocking_from): 1 drift item", false},
+	} {
+		r.Now = func() time.Time { return tc.now }
+		rep := Execute(ctx, r, []Floor{MapFloor{}})
+		if c := rep.Checks[0]; rep.Hold != tc.hold || !strings.Contains(c.Detail, tc.want) {
+			t.Errorf("%s: hold %v, check %+v", tc.now, rep.Hold, c)
+		}
 	}
 	if len(rep.Artifacts) != 1 || rep.Artifacts[0].Path != "reports/feature-map.json" || !strings.Contains(string(rep.Artifacts[0].Data), `"verdict": "drift"`) {
 		t.Fatalf("artifacts %+v", rep.Artifacts)

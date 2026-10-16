@@ -434,6 +434,28 @@ diff --git a/.aayudha/config.toml b/.aayudha/config.toml
 	if w := Weakened(ParseDiff(pkgDiff + testFileDiff)); len(w) != 0 {
 		t.Fatalf("adding a test is not a weakening: %+v", w)
 	}
+	// D-4.5b.9: a feature map's behaviour checks. Renaming a handle is not a
+	// weakening; dropping an assertion or a check is, and so is deleting the file.
+	fm := "examples/app/.agents/skills/verify-app/features/"
+	mapDiff := "diff --git a/" + fm + "ask.md b/" + fm + "ask.md\n--- a/" + fm + "ask.md\n+++ b/" + fm + "ask.md\n@@ -1,9 +1,4 @@\n" +
+		"-  {\"click\": {\"role\": \"button\", \"name\": \"Ask\"}},\n+  {\"click\": {\"role\": \"button\", \"name\": \"Send\"}},\n" +
+		"-  {\"expectText\": \"50 dollars\"},\n" +
+		" ]}\n" +
+		"-```check\n-{\"id\": \"empty\", \"kind\": \"ui\", \"steps\": [{\"goto\": \"/\"}, {\"expect\": {\"role\": \"heading\"}}]}\n-```\n" +
+		"diff --git a/" + fm + "refer.md b/" + fm + "refer.md\ndeleted file mode 100644\n--- a/" + fm + "refer.md\n+++ /dev/null\n@@ -1 +0,0 @@\n-# Refer\n"
+	want = []Weakening{
+		{fm + "ask.md", "fewer behaviour checks (1 removed, 0 added)"},
+		{fm + "ask.md", "fewer behaviour assertions (2 removed, 0 added)"},
+		{fm + "refer.md", "deleted"},
+	}
+	if got := Weakened(ParseDiff(mapDiff)); !slices.Equal(got, want) {
+		t.Fatalf("feature map weakened:\n%+v\nwant\n%+v", got, want)
+	}
+	rename := "diff --git a/" + fm + "ask.md b/" + fm + "ask.md\n--- a/" + fm + "ask.md\n+++ b/" + fm + "ask.md\n@@ -1 +1 @@\n" +
+		"-  {\"click\": {\"name\": \"Ask\"}}, {\"expectText\": \"x\"},\n+  {\"click\": {\"name\": \"Send\"}}, {\"expectText\": \"x\"},\n"
+	if w := Weakened(ParseDiff(rename)); len(w) != 0 {
+		t.Fatalf("a renamed handle is not a weakening: %+v", w)
+	}
 }
 
 func TestRiskOf(t *testing.T) {

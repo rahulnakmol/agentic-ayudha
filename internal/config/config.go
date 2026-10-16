@@ -285,6 +285,9 @@ type Verify struct {
 	// RedOnBaseBlockingFrom is the date (UTC, YYYY-MM-DD) from which a Bug
 	// story's proving test that passes on the base fails the merge gate (P5,
 	// founder decision 4); before it the red-on-base check is advisory.
+	// DriftBlockingFrom is the date (UTC, YYYY-MM-DD) from which feature-map
+	// drift fails the merge gate (WP4.5b, founder decision 2026-10-16).
+	DriftBlockingFrom     string `koanf:"drift_blocking_from" jsonschema_description:"Date (UTC, YYYY-MM-DD) from which feature-map drift fails the merge gate's feature-map floor; before it, or empty, drift is a warning."`
 	RedOnBaseBlockingFrom string `koanf:"red_on_base_blocking_from" jsonschema_description:"Date (UTC, YYYY-MM-DD) from which a Bug story whose mapped proving test passes on the base commit fails the merge gate; before it, or empty, the red-on-base check is advisory."`
 	Maintainer            string `koanf:"maintainer" jsonschema:"enum=amp,enum=claude,enum=codex,enum=cursor" jsonschema_description:"Agent app the feature maps' maintain brief @-mentions (WP4.5b.4): claude, codex, or cursor, installed on the repository; amp has no mention, so its scheduled loop thread reads the brief. Unset: the brief mentions no app."`
 }

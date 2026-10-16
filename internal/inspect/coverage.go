@@ -132,6 +132,11 @@ var (
 	numRe      = regexp.MustCompile(`^\s*"?([A-Za-z0-9_.-]+)"?\s*[:=]\s*"?(-?\d+(?:\.\d+)?)%?"?\s*,?\s*(#.*)?$`)
 	tighterLow = regexp.MustCompile(`(?i)(min|threshold|coverage|floor|lower|least)`)
 	tighterHi  = regexp.MustCompile(`(?i)(max|budget|limit|ceiling|timeout|tolerance|allow|upper|most)`)
+	// A feature map's behaviour checks (WP4.5b, D-4.5b.9): its files are not
+	// protected paths, so a check removed or an assertion dropped is flagged.
+	featureMapRe = regexp.MustCompile(`(^|/)\.agents/skills/verify-[^/]+/features/[^/]+\.md$`)
+	checkFence   = regexp.MustCompile("^\\s*```check\\s*$")
+	behaviourRe  = regexp.MustCompile(`"(expect|expectText|absentText|count|stdout|stderr|status|exit|body|test)"\s*:`)
 )
 
 func isCIFile(p string) bool {
@@ -164,7 +169,7 @@ func Weakened(files []DiffFile) []Weakening {
 				}
 			}
 		}
-		if f.Deleted && (isTestPath(f.Path) || isCIFile(f.Path)) {
+		if f.Deleted && (isTestPath(f.Path) || isCIFile(f.Path) || featureMapRe.MatchString(f.Path)) {
 			out = append(out, Weakening{f.Path, "deleted"})
 			continue
 		}
@@ -176,6 +181,13 @@ func Weakened(files []DiffFile) []Weakening {
 			return n
 		}
 		switch {
+		case featureMapRe.MatchString(f.Path):
+			if a, r := count(checkFence, added), count(checkFence, removed); r > a {
+				out = append(out, Weakening{f.Path, fmt.Sprintf("fewer behaviour checks (%d removed, %d added)", r, a)})
+			}
+			if a, r := count(behaviourRe, added), count(behaviourRe, removed); r > a {
+				out = append(out, Weakening{f.Path, fmt.Sprintf("fewer behaviour assertions (%d removed, %d added)", r, a)})
+			}
 		case isTestPath(f.Path):
 			if a, r := count(assertRe, added), count(assertRe, removed); r > a {
 				out = append(out, Weakening{f.Path, fmt.Sprintf("fewer assertions (%d removed, %d added)", r, a)})

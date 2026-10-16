@@ -11,4 +11,4 @@ setup_run = [
   "pnpm --filter @aayudha/floors exec playwright install --with-deps chromium",
   "echo \"NODE_PATH=$PWD/packages/floors/node_modules\" >> \"$GITHUB_ENV\"",
 ]
-prompt = "Report each failed check in one line, and the link of the maintain brief if aayu posted one."
+prompt = "Report each failed check in one line. If aayu posted a maintain brief and [verify] maintainer is amp, follow the maintain procedure of the verify skill on it: edit only the feature maps' skill directories and open at most one pull request. Otherwise report the brief's link."

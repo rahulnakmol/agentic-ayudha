@@ -106,7 +106,8 @@ in [references/feature-maps.md](references/feature-maps.md).
 
 - `aayu verify --map` compares every map with the source and runs nothing: renamed or new routes, commands, flags,
   and exported functions, dead index entries, handles a check uses that the source no longer has. Exit 3 is drift.
-  In the merge gate drift is reported, not blocking; a check that uses a renamed control fails, and that blocks.
+  In the merge gate drift is a warning until `[verify] drift_blocking_from` and fails the gate from that date, so
+  update the map in the PR that changes the product; a check that uses a renamed control fails, and that blocks.
 - `aayu verify --check <feature>`, `--check <feature>.<check>`, or `--check all` runs behaviour checks through the
   control tool. The gate runs the checks of every feature a PR touches. Artifacts of a preview are kept in
   `.aayudha/state/verify/`; look at the screenshots and traces before you report.

@@ -11,6 +11,9 @@ dast = false # ZAP baseline runs only when a product opts in (WP4.6)
 # P5 (founder decision 2026-10-15): a Bug story's proving tests rerun on the base commit; one that passes there
 # fails the gate from this date, four weeks after the decision. Before it, the red-on-base check is advisory.
 red_on_base_blocking_from = "2026-11-13"
+# WP4.5b (founder decision 2026-10-16): feature-map drift is a warning in the merge gate until this date, four weeks
+# after the decision, and fails the gate from it.
+drift_blocking_from = "2026-11-13"
 
 [verify.floors.coverage]
 min_diff_percent = 90.0
