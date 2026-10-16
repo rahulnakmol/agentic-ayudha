@@ -37,7 +37,8 @@ Never open a PR against `rolling` or `main`. Promotions are done by the maintain
 3. Commit with Conventional Commits and a DCO sign-off (below).
 4. Open a PR to `dev`. CI must be green: the required checks are `build`, `generate-drift`, `lint`,
    `commits`, `security`, `docs`, `release-snapshot` ([.github/workflows/ci.yml](.github/workflows/ci.yml)) and
-   `protected-paths`. Jobs that a PR's paths cannot affect report "skipped", which counts as passing.
+   `protected-paths`. Jobs that a PR's paths cannot affect report "skipped", which counts as passing. `build`
+   also runs the coverage ratchet: [ratchets.toml](ratchets.toml) says what it checks and how to tighten the floor.
 5. The PR is squash-merged. Then delete the branch and the worktree:
 
    ```sh
