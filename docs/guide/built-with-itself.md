@@ -103,8 +103,8 @@ cost of a vague promise very concrete: 17 reviews where 10 were planned.
 - **No bot App yet.** Agents write as the founder, tagged as such. Proof does not need the App (CI keeps the pack on
   the run and `ship` records it), but separating agent writes from the founder's does. Installing the App is a browser
   step only the founder can take.
-- **No stable release yet.** The latest is the snapshot `rolling-2026-10-12.4`. v0.1.0 waits for the founder's
-  explicit decision, and the Homebrew, Scoop, and winget publishing needs repositories and tokens the founder creates.
+- **Package managers.** v0.1.0 shipped on 15 October 2026, signed, with provenance. Its Homebrew, Scoop, and winget
+  jobs failed, so those three still need their repositories' tokens; `install.sh` works.
 - **Measurement with real time.** The benefits-qa result is seeded; the real 28-day measurement is due after
   9 November 2026.
 - **Reviews owed after the fact.** The founder still has to review the three plan bypasses and five solo ships from

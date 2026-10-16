@@ -12,8 +12,10 @@ promotion to `rolling` or `main` is refused when the scores fall below the bar o
 ## Cases
 
 A case is a directory, `evals/cases/<skill>/<name>/`, with a `case.toml`. It names the skill, the input given to it,
-and the artifacts a recorded run produced under `output/`. There are 23 cases today, for the `stub`, `grill`, `slice`,
-`plan`, `ready`, and `brief` skills. Nine of them have a `[tier2]` section and a rubric, so tier 2 runs them again.
+and the artifacts a recorded run produced under `output/`. There are 48 cases today, for the `stub`, `grill`, `slice`,
+`plan`, `ready`, `brief`, `retro`, `decide`, `proof`, and `inspect` skills. Nineteen of them have a `[tier2]` section
+and a rubric, so tier 2 runs them again. The 13 `inspect` cases are seeded-defect pull requests, scored by precision
+and recall against their planted defects, with no judge.
 
 A case can also carry:
 
@@ -64,7 +66,8 @@ For a suite, pass^k is the mean of the cases' pass^k, and the mean is over every
 Cases run in **groups**, defined by `[[groups]]` in `evals/eval.toml`. A case belongs to the first group with a prefix
 of its ID. Each group runs as its own job with its own spend cap (`max_usd`), so one group cannot use up another's
 money. The groups today are `brief-plain` (the `eli5` and `ste` brief cases), `brief` (`engineer-ideate` and
-`regulatory-close`), and `skills` (every other case).
+`regulatory-close`), `personas` (the `retro` and `decide` cases), `review` (the `inspect` cases), `conversations` (six
+grill conversations), and `skills` (every other case).
 
 `Compare` in `internal/evals/tier2.go` applies the bar to one group's results:
 
@@ -74,17 +77,20 @@ money. The groups today are `brief-plain` (the `eli5` and `ste` brief cases), `b
   fall below its own baseline. A case's pass^k below 0.8 is printed as an advisory and does not fail. Pull request 154
   made this change, because one off run in five failed whole promotions while the suite stood at pass^5 0.80 and mean
   4.80. The comment in `compare` and `TestCompareSuitePassK` hold it.
-- **`pass_k = "advisory"`** (the `brief` and `brief-plain` groups): pass^k findings, at the suite and against the
-  baseline, are printed as advisories. These groups pass on the mean bar, the error limit, and the drop rule. Pull
-  request 143 added this; `TestGroupPassKPolicy` covers it.
-- **`gate = "advisory"`** (`brief-plain` only): results are computed and printed, but never block a promotion. Pull
-  request 153 added this; `TestGroupGatePolicy` and `TestCompareAdvisoryGate` cover it.
+- **`pass_k = "advisory"`** (the `brief`, `brief-plain`, and `review` groups): pass^k findings, at the suite and
+  against the baseline, are printed as advisories. These groups pass on the mean bar, the error limit, and the drop
+  rule. Pull request 143 added this; `TestGroupPassKPolicy` covers it.
+- **`gate = "advisory"`** (`brief-plain`, `personas`, `review`, and `conversations`): results are computed and
+  printed, but never block a promotion. Pull request 153 added this; `TestGroupGatePolicy` and
+  `TestCompareAdvisoryGate` cover it.
 
 ## How the gates run
 
 - **`evals.yml`** runs tier 2, one matrix job per group, in the `ai-gateway` environment, which only `dev`, `rolling`,
   and `main` may use. It runs nightly, on dispatch, on pushes to `rolling` and `main`, and on pushes to `dev` that touch
-  skills, the harness, or the model gateway. The two brief groups skip pushes to `dev`, because they cost the most. Each group writes
+  skills, the harness, or the model gateway. The two brief groups skip pushes to `dev`, because they cost the most. The
+  advisory `personas` and `conversations` groups run only on dispatch and on pushes to `dev` that change their own
+  files, and `review` only on dispatch. Each group writes
   `evals/results/<sha>-<group>.json` and uploads it as the artifact `eval-results-<sha>-<group>`. Its baseline is the
   results file for `main`'s commit and the same group: a committed file under `evals/results/` if one exists, else
   that commit's artifact.
@@ -144,7 +150,7 @@ pass_k = "advisory"
 
 [[groups]]
 name = "skills" # every other case
-max_usd = 6.0
+max_usd = 8.0 # the single-reply cases cost 4.57 USD in run 38681630586; …
 ```
 
 The pass^k computation, from `Tier2` in `internal/evals/tier2.go`:
@@ -194,9 +200,109 @@ Rather than hide the shortfall, the team recorded it and changed only the `brief
 per register and for the suite, with pass^k reported as advisory (pull request 143). The next rolling candidate then
 failed `eli5` and `ste` even on the mean, mostly where the rubric asks for everyday restatement and then marks it down
 for fact fidelity. So pull request 153 moved those two registers into `brief-plain`, which is reported but does not
-gate. The plain-language rubric conflicts are tracked as an open issue, Feedback 152, for `evolve` to fix. Every other
-group keeps the full bar, which since pull request 154 applies pass^k per group at the suite level rather than to each
-case on its own. The design rows are in [the build plan](../BUILD-PLAN.md); search it for "advisory".
+gate. The plain-language rubric conflicts are tracked as an open issue, Feedback 152, for `evolve` to fix. The other
+gating group, `skills`, keeps the full bar, which since pull request 154 applies pass^k per group at the suite level
+rather than to each case on its own. The design rows are in [the build plan](../BUILD-PLAN.md); search it for
+"advisory".
+
+## Retro, evolve, and the coverage ratchet
+
+Three later additions sit around the harness. Two shape how skills learn from delivery: retro measures the flow of
+work, and evolve changes a skill only on repeated evidence. The third holds this repository's own test coverage.
+
+### Flow, reported and not gated
+
+`aayu retro` reviews the stories delivered in a window and files what it finds as Feedback issues. Every retro report
+also has a "Flow (reported, not gated)" section after the estimate table, and `retro --json` carries the same numbers
+as `flow`. They come from data aayu already keeps (issue timelines, the merge gate's runs, build records and
+dismissals on the ledger, merged pull requests), with no model:
+
+- **Time per stage**, as P50 and P90 hours: queue (Ready to the first checkpoint), build (to the merge gate going
+  green), human wait (gate green to ship), and total (Ready to ship). A stage counts only stories with both ends.
+- **Touches per story:** comments and reviews by a person on the story or its pull request between Ready and ship,
+  plus each later `status:ready`. Bots, comments with an aayudha marker, and ship's approving review do not count.
+- **inspect advice acted on:** the share of the finding IDs inspect posted that are gone from its latest inspection.
+  A finding a person dismissed, or one still open at merge, does not count as acted on.
+- **Escape rate:** stories with a Bug opened after the merge and within `[autonomy] correction_days`, whose body links
+  the story or its pull request, and which that pull request does not itself fix.
+- **Change mix:** the Conventional Commit type of every pull request title merged into `dev` in the window.
+
+Nothing gates on these numbers. No finding, Feedback issue, config key, or `status` line comes from them. They are a
+baseline, and the retro skill tells the agent not to change a story, a split, or a review to move one.
+
+The `flow` object of `retro --json`, from `internal/audit/flow.go`:
+
+```go
+type Flow struct {
+    Stories []StoryFlow `json:"stories"`
+    Stages  []Stage     `json:"stages"`
+    Touches Stage       `json:"touches"`
+    Inspect InspectFlow `json:"inspect"`
+    Escaped int         `json:"escaped"`
+    Mix     []TypeCount `json:"change_mix"`
+    Merged  int         `json:"merged_prs"`
+    Days    int         `json:"escape_days"` // [autonomy] correction_days
+}
+```
+
+> **Honest status:** the first dry run on this repository (1 to 16 October 2026, 46 stories and Bugs) showed a human
+> wait P50 of 0.0 hours, because in solo mode the agent ships as soon as the gate is green. Only 6 stories had a build
+> record, so the queue and build stages cover 6 stories. inspect had recorded one posted finding.
+
+### evolve's rules
+
+`aayu evolve` turns accepted retro Feedback about a skill into a skill change, through the eval-first gate above.
+Three rules keep it from chasing one-off noise:
+
+- **Two Feedback issues.** It proposes a change only when at least two accepted Feedback issues (labelled
+  `needs:grill`) name the same skill in their titles (`EvolveMinFeedback` = 2). With fewer it exits 4 and writes
+  nothing, and the pull request it opens cites every issue. Run without `--feedback`, it lists which skills are
+  ready and which are still waiting.
+- **Once a month per skill.** It refuses when an `evolve/<skill>-…` pull request was opened in the last 30 days
+  (`EvolveCooldownDays`), in any state.
+- **Rewrite, not append.** The eval-first gate refuses a skill diff that adds lines and removes none: "the skill diff
+  only appends". A fix rewrites the section the Feedback is about rather than adding a rule beside it. Because the
+  gate runs in the `build` job, CI enforces this rule, not only the verb.
+
+Retro checks that a fix held. Each report lists the evolve pull requests merged into `dev` in the 30 days before its
+cursor (`RecurrenceDays`). If a retro Feedback issue opened after the merge, or a finding of this window, names the
+same skill, the problem came back. Retro then files "evolve did not hold: skill `<s>` (…) came back" with the
+`aayu install --pin` rollback. That title names the skill, so it counts as evidence for the next evolve.
+
+The `evolve` loop in `loops/evolve.toml` runs monthly, on the 2nd at 10:00 in `[time] tz`. It only lists the skills
+that have the evidence; it changes no skill itself.
+
+### The coverage ratchet (this repository only)
+
+A ratchet is a floor that can only move up. This repository keeps one for its own test coverage. It is not a product
+feature: no verb, config key, or `init` template brings it to a repository aayudha sets up, and it uses no model.
+
+`ratchets.toml` at the repository root holds the floor (comments trimmed):
+
+```toml
+[coverage]
+floor = 63.4
+margin = 0.5
+```
+
+The required `build` job in `ci.yml` measures the statement coverage of `go test ./...` on every pull request and
+push, then runs `internal/ratchet`. `Check` in `internal/ratchet/ratchet.go` applies three rules:
+
+1. Coverage below the floor minus the margin (the measurement noise the floor tolerates) fails.
+2. On a pull request, coverage at the floor plus twice the margin or more fails until the pull request tightens the
+   floor with `-update`. A push to `dev` checks only rule 1, so two pull requests that each raised coverage a little
+   do not turn `dev` red; the next pull request tightens.
+3. A floor lower than the base's fails, unless `waiver = <n>` names a new floor-waiver Decision that a person accepted
+   (`aayu decide --waiver coverage <story-or-bug>`, then `--accept waive`). The job reads it with its own read token.
+   A waiver the base already named does not count again.
+
+The tightening never loosens, from `Tighten` in the same file:
+
+```go
+func Tighten(cur Ratchet, measured float64) float64 {
+    return math.Max(cur.Floor, math.Floor((measured-cur.Margin)*10)/10)
+}
+```
 
 ## Invariants
 
@@ -210,10 +316,27 @@ case on its own. The design rows are in [the build plan](../BUILD-PLAN.md); sear
    Enforced by `MaxErrors` and `Tier2`, `TestTier2SpendCap`.
 5. pass^k is enforced per group at the suite level, never per case; the per-case mean, the error limit, and the
    baselines stay enforced. Enforced in `compare`, `TestCompareSuitePassK`.
-6. Only `brief` and `brief-plain` relax pass^k, and only `brief-plain` does not gate; an unknown group gates. Enforced
-   by `Config.Gates` and `compare`, `TestGroupPassKPolicy`, `TestGroupGatePolicy`, `TestCompareAdvisoryGate`.
+6. Only `brief`, `brief-plain`, and `review` relax pass^k, and only `brief-plain`, `personas`, `review`, and
+   `conversations` do not gate; an unknown group gates. Enforced by `Config.Gates` and `compare`,
+   `TestGroups`, `TestGroupPassKPolicy`, `TestGroupGatePolicy`, `TestCompareAdvisoryGate`.
 7. An evolve pull request adds a reproducing case before any skill diff. Enforced by `EvolveGate` in
    `internal/evals/evolve.go`, `TestEvolveGateCI` and `TestEvolveGateAfterTestMergeRecomputed`.
+8. An evolve skill diff that only appends lines is refused, beside the same change as a rewrite, which passes.
+   Enforced by `EvolveGate` in `internal/evals/evolve.go`, `TestEvolveGateCI` in
+   `internal/evals/cmd/eval/main_test.go`.
+9. `aayu evolve` changes a skill only on at least two accepted Feedback issues that name it, and at most once in 30
+   days. Enforced by `runEvolve` in `internal/cli/evolve.go` (`EvolveMinFeedback`, `EvolveCooldownDays`),
+   `TestEvolveVerb` in `internal/evals/evolve_test.go`.
+10. Retro reports when a problem an evolve pull request fixed came back within 30 days, and files it under the skill's
+    name. Enforced by `recurrences` in `internal/audit/retro.go`, `TestRetroRecurrence` in
+    `internal/audit/audit_test.go`.
+11. Retro's flow numbers are computed from recorded data, with no model, and survive a snapshot round trip, so
+    `retro --replay` reproduces them; they file nothing. Computed by `flow` in `internal/audit/flow.go`,
+    `TestRetroFlow` in `internal/audit/audit_test.go`.
+12. This repository's coverage floor only tightens: coverage below the floor fails, a stale floor fails a pull
+    request, and a lower floor needs a new floor waiver a person accepted. Enforced by `Check`, `Tighten`, and
+    `AcceptedWaiver` in `internal/ratchet/ratchet.go`, `TestCheck`, `TestTotal`, and `TestAcceptedWaiver` in
+    `internal/ratchet/ratchet_test.go`, run by the `build` job in `.github/workflows/ci.yml`.
 
 ## Where it lives in the code
 
@@ -223,6 +346,12 @@ case on its own. The design rows are in [the build plan](../BUILD-PLAN.md); sear
 - [internal/evals/evolve.go](../../internal/evals/evolve.go): the eval-first gate.
 - [internal/evals/cmd/eval/main.go](../../internal/evals/cmd/eval/main.go): the `eval` command CI runs.
 - [evals/](../../evals/): cases, schemas, `eval.toml`, and results.
+- [internal/audit/flow.go](../../internal/audit/flow.go) and [internal/audit/retro.go](../../internal/audit/retro.go):
+  retro's flow section and the recurrence check.
+- [internal/cli/evolve.go](../../internal/cli/evolve.go) and [loops/evolve.toml](../../loops/evolve.toml): evolve's
+  evidence rule, monthly cap, and loop.
+- [internal/ratchet/ratchet.go](../../internal/ratchet/ratchet.go) and [ratchets.toml](../../ratchets.toml): the
+  coverage ratchet.
 - [.github/workflows/evals.yml](../../.github/workflows/evals.yml) and [.github/workflows/ci.yml](../../.github/workflows/ci.yml).
 
 > **Honest status:** tier 2 needs the `ai-gateway` key, so it never runs on pull requests, and a fork cannot run it.

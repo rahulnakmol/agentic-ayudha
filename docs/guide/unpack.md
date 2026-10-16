@@ -14,11 +14,15 @@ builds.
 
 aayudha does that at every place you can type a request in words: the `build`, `slice`, and `plan` skills, the
 `/codex`, `/cursor`, `/claude`, and `/amp` hand-offs, and the MCP `grill` and `ask` prompts. It works the same way
-in Claude Code, Codex, Cursor, and Amp.
+in Claude Code, Codex, Cursor, and Amp. At the terminal, `aayu build "…"` does not guess either: it refuses the
+words and prints the `aayu grill` command that unpacks them.
+
+> **Needs aayudha 0.2.** If `aayu version` prints 0.1.x, run `aayu self-update`. Until 0.2 is released,
+> `go install github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@dev` installs the build this page describes.
 
 ## Before: the request as typed
 
-> Make ordering feel slick, with nice animations and transitions between the steps. It belongs under Feature #40
+> Make ordering feel slick, with nice animations and transitions between the steps. It belongs under Feature 40
 > (Online ordering).
 
 Nothing in it can be checked. Which moments move? For how long? What happens for someone whose device asks for
@@ -104,7 +108,7 @@ proves. That is what you, the agent that plans it, the agent that builds it, and
 
 ## Concrete asks go straight through
 
-> Under Feature #40 (Online ordering), show the basket total on `/order/review` in pounds with two decimals, like
+> Under Feature 40 (Online ordering), show the basket total on `/order/review` in pounds with two decimals, like
 > "£12.50".
 
 The gate says **pass**. aayudha asks nothing, writes one criterion in the request's own words, makes the Story
@@ -122,7 +126,7 @@ number, a count, a named state, or exact wording, and every criterion must quote
 > **Under the hood:** the catalogues are Markdown files in `skills/grill/references/vague/` (for example
 > [the motion catalogue](../../skills/grill/references/vague/motion.md)), and the abbreviation list is
 > [`jargon.md`](../../skills/grill/references/jargon.md); add a dimension or a term there and the gate and the
-> questions pick it up. The rules are recorded in [the build plan](../BUILD-PLAN.md) as WP5.3b and WP5.8.
+> questions pick it up. The rules are recorded in [the build plan](../BUILD-PLAN.md).
 
 ## What's next
 

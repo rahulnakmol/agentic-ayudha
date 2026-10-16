@@ -33,6 +33,7 @@ type SitePage struct {
 	Group    string // sidebar group, e.g. "Start here", "Your agent", "Clouds", "Project", or "Skills"
 	Source   string // repository path the Markdown is read as; relative links resolve from it
 	Origin   string // repository path the page is generated from, linked in its footer
+	Summary  string // its line in llms.txt; default the first sentence of its first paragraph
 	Markdown string
 }
 
@@ -52,27 +53,34 @@ type Site struct {
 // Without a guide, README.md is the home page. The verbs reference and the
 // skill pages come from the binary's own registry and embedded skills.
 var sitePages = []SitePage{
-	{Out: "index.html", Nav: "Welcome", Group: "Start here", Source: "docs/guide/README.md"},
-	{Out: "start.html", Nav: "Your first hour", Group: "Start here", Source: "docs/guide/start.md"},
-	{Out: "when-to-use-what.html", Nav: "When to use what", Group: "Start here", Source: "docs/guide/when-to-use-what.md"},
-	{Out: "adopt.html", Nav: "Adopt at your own pace", Group: "Start here", Source: "docs/guide/adopt.md"},
+	{Out: "index.html", Summary: "What aayudha is, the problem it solves, and the real run it was proven on.", Nav: "Welcome", Group: "Start here", Source: "docs/guide/README.md"},
+	{Out: "start.html", Summary: "Install aayudha, run the guided tour, file your first story with checkable promises, and ask what to do next.", Nav: "Your first hour", Group: "Start here", Source: "docs/guide/start.md"},
+	{Out: "when-to-use-what.html", Summary: "Start from your situation (a vague idea, a bug, a ready pull request, an incident) and find the verb to run.", Nav: "When to use what", Group: "Start here", Source: "docs/guide/when-to-use-what.md"},
+	{Out: "adopt.html", Summary: "Three adoption levels, each a complete stopping point, with what each costs and gives.", Nav: "Adopt at your own pace", Group: "Start here", Source: "docs/guide/adopt.md"},
+	{Out: "journey.html", Summary: "The real 12 October run, told to you: from a vague goal to a measured release in nine chapters.", Nav: "Prologue: your Monday", Group: "The story", Source: "docs/guide/journey.md"},
+	{Out: "journey-1-shape.html", Summary: "Shaping a Goal with a measured baseline and a target, using the grill interview.", Nav: "1. The goal", Group: "The story", Source: "docs/guide/journey-1-shape.md"},
+	{Out: "journey-2-break-down.html", Summary: "Breaking the Goal into an Initiative, Features, and small stories with slice and plan.", Nav: "2. The plan", Group: "The story", Source: "docs/guide/journey-2-break-down.md"},
+	{Out: "journey-3-ready.html", Summary: "Writing checkable promises for each story and freezing them as Ready.", Nav: "3. The promises", Group: "The story", Source: "docs/guide/journey-3-ready.md"},
+	{Out: "journey-4-build.html", Summary: "How the agent builds a Ready story in its own worktree and opens a pull request.", Nav: "4. The build", Group: "The story", Source: "docs/guide/journey-4-build.md"},
+	{Out: "journey-5-prove.html", Summary: "How the merge gate, proof packs, and a reviewer of another vendor sent work back until it was right.", Nav: "5. The gate says no", Group: "The story", Source: "docs/guide/journey-5-prove.md"},
+	{Out: "journey-6-ship.html", Summary: "How a person's approval and ship merge a proven pull request, with a record of who approved what.", Nav: "6. The yes", Group: "The story", Source: "docs/guide/journey-6-ship.md"},
+	{Out: "journey-7-release.html", Summary: "How shipped work moves from dev to a rolling snapshot after a full gate.", Nav: "7. The release", Group: "The story", Source: "docs/guide/journey-7-release.md"},
+	{Out: "journey-8-learn.html", Summary: "Measuring the Goal against its baseline, then retro and evolve to learn from the work.", Nav: "8. The number", Group: "The story", Source: "docs/guide/journey-8-learn.md"},
+	{Out: "journey-9-explain.html", Summary: "Explaining the work to a boss or auditor with brief and tell, every claim checked.", Nav: "9. The telling", Group: "The story", Source: "docs/guide/journey-9-explain.md"},
+	{Out: "built-with-itself.html", Summary: "How aayudha builds and proves itself, and what is still unfinished.", Nav: "Epilogue: built with itself", Group: "The story", Source: "docs/guide/built-with-itself.md"},
+	{Out: "unpack.html", Summary: "How a vague request such as \"make it slick\" is unpacked into checkable promises before anything is built.", Nav: "A vague ask", Group: "Guides", Source: "docs/guide/unpack.md"},
+	{Out: "guide-review.html", Summary: "What happens when a pull request is ready: the merge gate, the reviewer app, fix rounds, and ship.", Nav: "A pull request is ready", Group: "Guides", Source: "docs/guide/guide-review.md"},
+	{Out: "guide-build.html", Summary: "Building a Ready story yourself or handing it to another agent's cloud, and preparing its environment.", Nav: "Hand work to an agent", Group: "Guides", Source: "docs/guide/guide-build.md"},
+	{Out: "guide-prove-behaviour.html", Summary: "Proving a behaviour change with a feature map and behaviour checks that drive your product like a person.", Nav: "Prove a behaviour change", Group: "Guides", Source: "docs/guide/guide-prove-behaviour.md"},
+	{Out: "guide-loops.html", Summary: "Setting up scheduled and event loops on each agent, and which host can start on which GitHub event.", Nav: "Loops", Group: "Guides", Source: "docs/guide/guide-loops.md"},
+	{Out: "guide-learn.html", Summary: "Measuring whether a release moved the Goal, running retro, and evolving skills with ratchets.", Nav: "Did it work?", Group: "Guides", Source: "docs/guide/guide-learn.md"},
+	{Out: "troubleshooting.html", Summary: "Symptoms, exit codes, and fixes for install, tour, Ready, the merge gate, ship, hand-offs, and loops.", Nav: "Troubleshooting", Group: "Guides", Source: "docs/guide/troubleshooting.md"},
 	{Out: "hosts.html", Nav: "Your agent", Group: "Your agent", Source: "docs/guide/hosts/README.md"},
 	{Out: "hosts-claude-code.html", Nav: "Claude Code", Group: "Your agent", Source: "docs/guide/hosts/claude-code.md"},
 	{Out: "hosts-codex.html", Nav: "OpenAI Codex", Group: "Your agent", Source: "docs/guide/hosts/codex.md"},
 	{Out: "hosts-amp.html", Nav: "Amp", Group: "Your agent", Source: "docs/guide/hosts/amp.md"},
 	{Out: "hosts-cursor.html", Nav: "Cursor", Group: "Your agent", Source: "docs/guide/hosts/cursor.md"},
-	{Out: "make-it-yours.html", Nav: "Make it yours", Group: "Your agent", Source: "docs/guide/hosts/make-it-yours.md"},
-	{Out: "journey.html", Nav: "Prologue: your Monday", Group: "The story", Source: "docs/guide/journey.md"},
-	{Out: "journey-1-shape.html", Nav: "1. The goal", Group: "The story", Source: "docs/guide/journey-1-shape.md"},
-	{Out: "journey-2-break-down.html", Nav: "2. The plan", Group: "The story", Source: "docs/guide/journey-2-break-down.md"},
-	{Out: "journey-3-ready.html", Nav: "3. The promises", Group: "The story", Source: "docs/guide/journey-3-ready.md"},
-	{Out: "journey-4-build.html", Nav: "4. The build", Group: "The story", Source: "docs/guide/journey-4-build.md"},
-	{Out: "journey-5-prove.html", Nav: "5. The gate says no", Group: "The story", Source: "docs/guide/journey-5-prove.md"},
-	{Out: "journey-6-ship.html", Nav: "6. The yes", Group: "The story", Source: "docs/guide/journey-6-ship.md"},
-	{Out: "journey-7-release.html", Nav: "7. The release", Group: "The story", Source: "docs/guide/journey-7-release.md"},
-	{Out: "journey-8-learn.html", Nav: "8. The number", Group: "The story", Source: "docs/guide/journey-8-learn.md"},
-	{Out: "journey-9-explain.html", Nav: "9. The telling", Group: "The story", Source: "docs/guide/journey-9-explain.md"},
-	{Out: "built-with-itself.html", Nav: "Epilogue: built with itself", Group: "The story", Source: "docs/guide/built-with-itself.md"},
+	{Out: "make-it-yours.html", Summary: "Changing aayu's colours, symbols, and voice in your terminal and docs.", Nav: "Make it yours", Group: "Your agent", Source: "docs/guide/hosts/make-it-yours.md"},
 	{Out: "how-it-works.html", Nav: "Overview", Group: "How it works", Source: "docs/guide/how-it-works.md"},
 	{Out: "how-architecture.html", Nav: "Architecture", Group: "How it works", Source: "docs/guide/how-architecture.md"},
 	{Out: "how-registry.html", Nav: "Verb registry and codegen", Group: "How it works", Source: "docs/guide/how-registry.md"},
@@ -81,8 +89,10 @@ var sitePages = []SitePage{
 	{Out: "how-proof-packs.html", Nav: "Proof packs", Group: "How it works", Source: "docs/guide/how-proof-packs.md"},
 	{Out: "how-merge-gate.html", Nav: "The merge gate", Group: "How it works", Source: "docs/guide/how-merge-gate.md"},
 	{Out: "how-floors.html", Nav: "Floors in detail", Group: "How it works", Source: "docs/guide/how-floors.md"},
+	{Out: "how-verify-maps.html", Nav: "Feature maps and behaviour checks", Group: "How it works", Source: "docs/guide/how-verify-maps.md"},
 	{Out: "how-models.html", Nav: "Model gateway and lanes", Group: "How it works", Source: "docs/guide/how-models.md"},
 	{Out: "how-evals.html", Nav: "The eval harness", Group: "How it works", Source: "docs/guide/how-evals.md"},
+	{Out: "how-agents.html", Nav: "Hand-offs, environments, loops", Group: "How it works", Source: "docs/guide/how-agents.md"},
 	{Out: "how-config-and-audit.html", Nav: "Config, secrets, audit", Group: "How it works", Source: "docs/guide/how-config-and-audit.md"},
 	{Out: "how-releases.html", Nav: "Releases and supply chain", Group: "How it works", Source: "docs/guide/how-releases.md"},
 	{Out: "how-security.html", Nav: "Security and threat model", Group: "How it works", Source: "docs/guide/how-security.md"},
@@ -93,7 +103,8 @@ var sitePages = []SitePage{
 	{Out: "concepts-floors.html", Nav: "Floors", Group: "Concepts", Source: "docs/guide/concepts-floors.md"},
 	{Out: "concepts-human-pass.html", Nav: "The human pass and solo mode", Group: "Concepts", Source: "docs/guide/concepts-human-pass.md"},
 	{Out: "concepts-ladder.html", Nav: "dev, rolling, main", Group: "Concepts", Source: "docs/guide/concepts-ladder.md"},
-	{Out: "overview.html", Nav: "Project overview", Group: "Reference", Source: "README.md"},
+	{Out: "overview.html", Nav: "README", Group: "Reference", Source: "README.md"},
+	{Out: "reference.html", Nav: "Project reference", Group: "Reference", Source: "docs/README.md"},
 	{Out: "getting-started.html", Nav: "Install and connect", Group: "Reference", Source: "docs/getting-started.md"},
 	{Out: "verbs.html", Nav: "Verbs", Group: "Reference", Origin: "internal/verbs/registry.go"},
 	{Out: "glossary.html", Nav: "Glossary", Group: "Reference", Source: "GLOSSARY.md"},
@@ -110,7 +121,7 @@ var sitePages = []SitePage{
 
 // openGroups are the sidebar groups shown open on every page; the others open
 // on their own pages.
-var openGroups = map[string]bool{"Start here": true, "The story": true}
+var openGroups = map[string]bool{"Start here": true, "Guides": true, "The story": true}
 
 // SitePages reads the site's pages from the checkout at root and the binary's
 // assets (skills/<verb>/SKILL.md). README.md is required: it is the overview,
@@ -339,6 +350,8 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{.Title}} · {{.Name}}</title>
 <link rel="stylesheet" href="{{.Root}}style.css">
+<link rel="alternate" type="text/markdown" href="{{.Twin}}">
+<link rel="alternate" type="text/plain" title="Index of every page, for agents" href="{{.Root}}llms.txt">
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
@@ -353,7 +366,7 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
 <nav class="side" aria-label="Site">{{template "links" .Groups}}</nav>
 <main id="main">
 {{.Body}}
-<footer>Generated by <code>aayu tell docs</code> from <a href="{{.Origin}}">{{.OriginPath}}</a>. Links to work items name only Features whose shipped stories all have authoritative proof packs.</footer>
+<footer>Generated by <code>aayu tell docs</code> from <a href="{{.Origin}}">{{.OriginPath}}</a>. Links to work items name only Features whose shipped stories all have authoritative proof packs. Agents: read this page <a href="{{.Twin}}">as Markdown</a>, or start from <a href="{{.Root}}llms.txt">llms.txt</a>.</footer>
 </main>
 </div>
 </body>
@@ -376,7 +389,8 @@ type navGroup struct {
 }
 
 // Build checks every page with Check and renders the site: one HTML file per
-// page and style.css. Any page that claims an unproven Feature or uses an
+// page, its Markdown twin (page.md beside page.html, for agents), llms.txt (an
+// index of every page with one line each), and style.css. Any page that claims an unproven Feature or uses an
 // avoided word refuses the whole site; the problems name the page.
 func (s Site) Build() (map[string][]byte, []int, []Problem, error) {
 	var probs []Problem
@@ -417,6 +431,8 @@ func (s Site) Build() (map[string][]byte, []int, []Problem, error) {
 		short = short[:7]
 	}
 	files := map[string][]byte{"style.css": siteCSS}
+	var index []llmsEntry
+	var about string
 	for p, b := range s.Media {
 		files[p] = b
 	}
@@ -459,6 +475,13 @@ func (s Site) Build() (map[string][]byte, []int, []Problem, error) {
 			return nil, ns, nil, err
 		}
 		root := strings.Repeat("../", strings.Count(p.Out, "/"))
+		twin := strings.TrimSuffix(p.Out, ".html") + ".md"
+		files[twin] = []byte("> The Markdown version of [" + title + "](" + path.Base(p.Out) + ") on the " + name + " site. " +
+			"Every page is listed in [llms.txt](" + root + "llms.txt).\n\n" + s.twinLinks(p.Out, base, blob, outOf, copies[i]))
+		index = append(index, llmsEntry{group: p.Group, title: title, href: twin, desc: pageSummary(p, copies[i])})
+		if i == 0 {
+			about = firstParagraph(copies[i])
+		}
 		var groups []navGroup
 		for _, q := range s.Pages {
 			if len(groups) == 0 || groups[len(groups)-1].Name != q.Group {
@@ -472,7 +495,7 @@ func (s Site) Build() (map[string][]byte, []int, []Problem, error) {
 		commit, _ := Tag("https://github.com/"+s.Repo+"/commit/"+s.Ref, s.UTM)
 		var page bytes.Buffer
 		err = pageTmpl.Execute(&page, map[string]any{
-			"Title": title, "Name": name, "Root": root, "Commit": commit, "Short": short, "Date": s.Date,
+			"Title": title, "Name": name, "Root": root, "Twin": path.Base(twin), "Commit": commit, "Short": short, "Date": s.Date,
 			"Groups": groups, "Body": template.HTML(body.String()), "Origin": origin, "OriginPath": p.Origin, //nolint:gosec // goldmark output with raw HTML omitted
 		})
 		if err != nil {
@@ -480,7 +503,118 @@ func (s Site) Build() (map[string][]byte, []int, []Problem, error) {
 		}
 		files[p.Out] = page.Bytes()
 	}
+	files["llms.txt"] = llmsTxt(name, about, index)
 	return files, ns, nil, nil
+}
+
+// llmsEntry is one page's line in llms.txt.
+type llmsEntry struct{ group, title, href, desc string }
+
+// llmsTxt is the site's index for agents (the llms.txt convention): the site
+// name, what it is (the home page's first paragraph), and one line per page under its sidebar group, linking
+// the page's Markdown twin. It is built from the same checked copy as the
+// pages, so it cannot drift from them.
+func llmsTxt(name, about string, index []llmsEntry) []byte {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# %s\n\n", name)
+	if about != "" {
+		fmt.Fprintf(&b, "> %s\n\n", about)
+	}
+	b.WriteString("Every page below is Markdown; the same path ending in .html is the page for people. " +
+		"Start with the first group, then read the How it works pages for the mechanics.\n")
+	group := "\x00"
+	for _, e := range index {
+		if e.group != group {
+			group = e.group
+			g := group
+			if g == "" {
+				g = "Start here"
+			}
+			fmt.Fprintf(&b, "\n## %s\n\n", g)
+		}
+		fmt.Fprintf(&b, "- [%s](%s)", e.title, e.href)
+		if e.desc != "" {
+			fmt.Fprintf(&b, ": %s", e.desc)
+		}
+		b.WriteString("\n")
+	}
+	return []byte(b.String())
+}
+
+// siteLink matches an inline Markdown link or image: its text and destination.
+var siteLink = regexp.MustCompile(`(!?\[[^\]\n]*\])\(<?([^)\s>]+)>?((?:\s+"[^"]*")?)\)`)
+
+// twinLinks maps the links of a page's Markdown as the HTML page maps them,
+// except that a link to another page goes to that page's Markdown twin.
+func (s Site) twinLinks(out string, base *url.URL, blob string, outOf map[string]string, md string) string {
+	return siteLink.ReplaceAllStringFunc(md, func(m string) string {
+		g := siteLink.FindStringSubmatch(m)
+		h := s.href(out, base, blob, outOf, g[2], strings.HasPrefix(g[1], "!"))
+		if u, err := url.Parse(h); err == nil && !u.IsAbs() && strings.HasSuffix(u.Path, ".html") {
+			u.Path = strings.TrimSuffix(u.Path, ".html") + ".md"
+			h = u.String()
+		}
+		return g[1] + "(" + h + g[3] + ")"
+	})
+}
+
+// pageSummary is a page's line in llms.txt: a skill page's reader summary
+// from the registry, or the first sentence of the page's first paragraph.
+func pageSummary(p SitePage, md string) string {
+	if p.Summary != "" {
+		return p.Summary
+	}
+	if p.Group == "Skills" {
+		for _, c := range verbs.Verbs {
+			if c.Name == p.Nav {
+				return c.Reader
+			}
+		}
+	}
+	return firstSentence(firstParagraph(md))
+}
+
+// firstParagraph is the text of a page's first prose paragraph: headings,
+// quotes, images, tables, lists, comments, and code are skipped, and links
+// keep only their text.
+func firstParagraph(md string) string {
+	var para []string
+	fence := false
+	for _, l := range strings.Split(md, "\n") {
+		t := strings.TrimSpace(l)
+		if strings.HasPrefix(t, "```") {
+			fence = !fence
+			continue
+		}
+		if fence {
+			continue
+		}
+		if t == "" {
+			if len(para) > 0 {
+				break
+			}
+			continue
+		}
+		if len(para) == 0 && strings.ContainsAny(t[:1], "#>!|<-*[") {
+			continue
+		}
+		para = append(para, t)
+	}
+	return siteLink.ReplaceAllStringFunc(strings.Join(para, " "), func(m string) string {
+		g := siteLink.FindStringSubmatch(m)
+		return strings.TrimSuffix(strings.TrimPrefix(strings.TrimPrefix(g[1], "!"), "["), "]")
+	})
+}
+
+// firstSentence cuts text after its first sentence, at most 240 characters.
+func firstSentence(text string) string {
+	if i := strings.Index(text, ". "); i > 0 {
+		text = text[:i+1]
+	}
+	if r := []rune(text); len(r) > 240 {
+		text = string(r[:239]) + "…"
+	}
+	return text
 }
 
 // href maps a link of the page at out: a link to another page's source

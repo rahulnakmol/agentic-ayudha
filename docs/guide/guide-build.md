@@ -1,0 +1,86 @@
+# Hand work to an agent
+
+A story is Ready. You can let the agent you are talking to build it, or hand it to another agent's cloud: Codex,
+Cursor, Claude Code, or Amp. Either way the work comes back as a pull request through the same merge gate, and
+nothing merges without a person.
+
+> **You are here:** a Ready story, at Level 2. New to Ready? See [step 4 of your first hour](start.md#4-mark-it-ready).
+>
+> **Needs aayudha 0.2.** If `aayu version` prints 0.1.x, this page is ahead of your binary: run `aayu self-update`.
+> Until 0.2 is released, `go install github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@dev` installs the build this
+> page describes.
+
+## Build it here
+
+```sh
+aayu build <story>
+```
+
+The agent works in its own git worktree, so your checkout is untouched. It follows the plan one layer at a time,
+commits a checkpoint after each, checks it, then opens a pull request. A budget keeps watch: by default 8 hours,
+25 USD of model spend aayudha can see, and 3 failed attempts. When it runs out, the agent stops and asks a person.
+
+**You should see** a pull request, and a comment on the story that reads like a flight log: checkpoint, layer, result,
+and budget used.
+
+## Hand it to another agent
+
+From inside your agent, type the short form, `/codex`, `/cursor`, `/claude`, or `/amp`, with the story number. Or run:
+
+```sh
+aayu build <story> --delegate codex     # or cursor, claude, amp, or auto
+```
+
+aayudha sends the receiver one brief: the story's promises, the plan, the branch and pull request rules, and a
+request to end with a `## What I proved` section. `auto` picks the cheapest connected cloud agent that fits the
+story's size. Gave it words instead of a story number? A vague ask is unpacked with you first, and the story is made
+Ready before anything leaves ([how aayudha unpacks a vague ask](unpack.md)).
+
+**You should see** the hand-off recorded on the story, then a pull request from the receiver.
+
+### Cloud by default
+
+A hand-off goes to the receiver's cloud agent, not your laptop. aayudha checks first that the agent is connected and
+that its cloud environment can build and test your repository. `--local` runs the receiver's command line on your
+machine instead, in a fresh worktree with only its own key, so it cannot push.
+
+If the receiver is not ready, `build` says exactly what is missing (the CLI, the sign-in, or the cloud connection),
+gives the commands to fix it, and lists the agents you can use instead. It never installs or signs in for you. See
+[hand-off problems](troubleshooting.md#hand-offs).
+
+### Set up the cloud environment once
+
+```sh
+aayu install --env              # shows what it found in your code, and every host's files
+aayu install --env --verify     # writes them, then proves each host in a clean container
+```
+
+`install --env` reads your code for toolchains, the package manager, services, and the names of the variables you
+need. It asks only what the code cannot say, then writes one setup script every host calls. Commit the files it
+writes: a cloud agent sees only what is on your default branch.
+
+**You should see** each host marked verified in `aayu doctor`'s `agent-env` row.
+
+## Follow it to the end
+
+Run the same `build --delegate` command again to sync. aayudha reads the receiver's report as a preview, then the
+merge gate's verdict:
+
+- a required check failed: it goes back to the builder, once per new commit;
+- `fix`: the reviewer's findings go back;
+- `merge`: it names `aayu ship <pr>` for you;
+- `rebuild`, or two rounds used: a person is asked.
+
+The [`ci-failed` loop](guide-loops.md) can run that sync for you whenever a check fails.
+
+## Under the hood
+
+The brief, the receiver adapters, the environment spec, and the cycle cap are in
+[hand-offs, agent environments, and loops](how-agents.md). How each host loads aayudha is in
+[your agent](hosts/README.md).
+
+## What's next
+
+- The pull request is open: [a pull request is ready](guide-review.md).
+- Make recurring work run itself: [keep things moving with loops](guide-loops.md).
+- See a build on a real day: [chapter 4 of the story](journey-4-build.md).

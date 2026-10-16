@@ -24,15 +24,15 @@ If either check fails, it installs nothing and exits non-zero. The binary goes t
 `AAYU_INSTALL_DIR` to change it) with an `aayu` link beside it; add that directory to your `PATH` if the script
 says so. `AAYU_VERSION=v0.1.0` pins a release; the default is the latest.
 
-Before the first `v*` release exists, the line above fails with a 404. Until then, install the latest rolling
-snapshot with Go 1.25 or newer: `go install github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@rolling-2026-10-12.4`.
+To build from source instead, with Go 1.25 or newer:
+`go install github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@v0.1.0` (or `@dev` for the latest integration build).
 It installs `aayudha` only; add `alias aayu=aayudha` for the short name. It is not signature-checked like
 `install.sh`.
 
 ### Windows
 
 In Git Bash, run the same `install.sh` line; it installs `aayudha.exe` and `aayu.exe`. In PowerShell, use
-[Scoop](https://scoop.sh) once the bucket is published with the first stable release:
+[Scoop](https://scoop.sh) once the bucket is published:
 
 ```powershell
 scoop bucket add rahulnakmol https://github.com/rahulnakmol/scoop-bucket
@@ -40,8 +40,11 @@ scoop install aayudha
 ```
 
 Homebrew (`brew install --cask rahulnakmol/tap/aayudha`) and winget (`winget install rahulnakmol.aayudha`)
-follow the same stable release. Scoop and winget check the archive's SHA-256 from their manifest; only
+come the same way. Scoop and winget check the archive's SHA-256 from their manifest; only
 `install.sh` checks the cosign signature.
+
+> **Honest status:** none of the three package managers has aayudha yet. The v0.1.0 release's Homebrew, Scoop, and
+> winget jobs did not complete, so the tap and the bucket are empty. Use `install.sh`, in Git Bash on Windows.
 
 ### Check the machine
 
@@ -94,7 +97,7 @@ the verb through the binary, so every GitHub write goes through the actions log.
 4. `inspect` reviews the pull request against its plan and proof pack.
 5. `ship` squash-merges it after a green merge gate and a human pass.
 
-`aayu status` rolls up progress and proof coverage. The [verbs reference](../README.md#verbs) lists all 32
+`aayu status` rolls up progress and proof coverage. The [verbs reference](README.md#verbs) lists all 32
 verbs; each skill's page explains its steps.
 
 ## Where to go next

@@ -54,7 +54,7 @@ See [the verb registry](how-registry.md) for how one Go file drives all four.
 
 ## Hosts
 
-There are three primary hosts: Amp, Cursor, and Claude Code (`verbs.Hosts`). `aayu install --host <host>` plans
+There are four primary hosts: Amp, Cursor, Claude Code, and OpenAI Codex (`verbs.Hosts`). `aayu install --host <host>` plans
 the edits and `--apply` writes them. Skill copies are real files, never symlinks, and their hashes go in
 `.aayudha/lock.toml`.
 
@@ -122,6 +122,58 @@ The fifth direct use is the eval judge, which is not a verb: `.github/workflows/
 current host's lane default is a host-managed mode (such as Amp medium), the binary uses the Claude Code defaults
 instead (`verbs.DirectHost`). Reviewer lanes must use a different model family from the builder.
 
+## The vagueness gate
+
+A request in words, such as "make onboarding slick with nice transitions", means one thing to the person who says it
+and another to the agent that builds it. The **vagueness gate** decides, before any skill acts on such a request,
+whether it must be unpacked with the human first. It follows the split above: the binary decides the verdict and
+supplies the facts, and the host's model talks with the human through the grill skill.
+
+Every entry point that takes words runs the same deterministic call first: the `build`, `slice`, and `plan` skills,
+the `/codex`, `/cursor`, `/claude`, and `/amp` hand-off commands, and the MCP `grill` and `ask` prompts. The call is
+`aayu grill story --assess --idea "<words>" --json` (`feature` for slice). Its `gate` field comes from `GateFor` in
+`internal/grill/gate.go`, with no model:
+
+- **unpack** when the request has a vague qualifier from a catalogue (kind `vague`: "slick", "fast", "maybe"), an
+  abbreviation or jargon term whose meaning the human must confirm (kind `term`: "PDP", "SSO"), or, with no
+  qualifier, nothing observable (kind `outcome`: no number, quoted wording, route, command, or flag);
+- **pass** otherwise.
+
+The same assessment carries the facts the model works from: the product types found in the checkout (web, api, cli,
+library), each term's usual meanings, and the catalogue's dimensions to ask about.
+
+```go
+type Gate struct {
+    Verdict string       `json:"verdict"`
+    Reasons []GateReason `json:"reasons"`
+    Next    string       `json:"next"`
+}
+```
+
+*From `internal/grill/gate.go`.* On `unpack`, the grill skill names each reason to the human, asks the riskiest
+questions first, reads back "Here is what done looks like", and continues only after the human confirms. Nothing
+enters the spec unconfirmed: each criterion's Provenance line says whether the human stated it, confirmed it, or
+accepted a default, quoting their words. For a grilled item, `grill.Check` (run by `grill` and `ready`) requires
+exactly one quoted source per criterion and every vague word resolved or deferred. On `pass`, the skill asks
+nothing and drafts the work item from the request's own words, cited as `stated (request)`. An issue number skips
+the gate, because that item was grilled when it was made Ready.
+
+The CLI holds the same line whatever a host's model does. A verb that takes an issue, given words instead, fails
+and points at the gate (from `internal/cli/root.go`):
+
+```go
+return nil, Errorf(ExitUsage, "%s: %s %q is a request in words, not an issue: unpack it into a Ready %s first with `aayu grill %s --assess --idea %s`, then run aayu %s on that %s",
+    cmd, in.Name, clip(raw, 60), typ, typ, strconv.Quote(raw), cmd, typ)
+```
+
+`build --delegate` also refuses a story with no Ready snapshot, so a hand-off cannot skip the gate. For the same flow
+from the user's side, see [How aayudha unpacks a vague ask](unpack.md).
+
+> **Honest status:** "vague" cannot be decided by rule, only approximated, so the gate can ask about a request a
+> person finds clear. The skill's side is measured by six judge-scored conversation cases that do not gate. On the
+> last run (run 38841610907) the concrete request passed with no questions in all five runs, while the suite mean was
+> 3.35, below the 3.5 bar.
+
 ## GitHub, the ledger, and CI
 
 GitHub is the system of record. Work items are issues, changes are pull requests, and gates are check runs. Every
@@ -148,11 +200,10 @@ CI runs the workflows that must not trust the author:
 
 > **Honest status:** no bot GitHub App is installed on this repository yet, so the merge gate's `pack` job cannot
 > write the ledger. The authoritative pack stays a run artifact, and `aayu ship` lands it under the founder's
-> identity. The repository runs in solo mode (one human). No v0.1.0 release exists yet; the latest build is the
-> rolling snapshot rolling-2026-10-12.4. No test checks that only the declared verbs import `internal/models`;
-> today that holds by inspection (`inspect`, `review`, `brief`, and `triage` in `internal/cli`). Product CI never
-> calls a model: `TestModelChecksNeverGateAndNeverShip` checks that no workflow `init --gates` installs names a model
-> key.
+> identity. The repository runs in solo mode (one human). v0.1.0 was released on 2026-10-15 (tag v0.1.0, commit
+> 78bd4ae on `main`). No test checks that only the declared verbs import `internal/models`; today that holds by
+> inspection (`inspect`, `review`, `brief`, and `triage` in `internal/cli`). Product CI never calls a model:
+> `TestModelChecksNeverGateAndNeverShip` checks that no workflow `init --gates` installs names a model key.
 
 ## Invariants
 
@@ -173,6 +224,15 @@ CI runs the workflows that must not trust the author:
 7. Concurrent ledger writers all land. Enforced in `internal/ledger/ledger.go` (`TestConcurrentWritersAllLand`).
 8. The merge gate runs from the base branch and keeps pull request code away from secrets. Enforced by
    `pull_request_target` and job separation in `.github/workflows/aayudha-merge-gate.yml`.
+9. A request in words gets a verdict without a model: unpack on a vague qualifier, an unconfirmed term, or nothing
+   observable; pass otherwise. Enforced by `GateFor` in `internal/grill/gate.go` (`TestGate` in
+   `internal/grill/grill_test.go`, `TestGrillAssess` in `internal/cli/grillassess_test.go`).
+10. A verb that takes an issue, given words, fails and names the gate's command; the MCP `ask` prompt wraps the words
+    as untrusted and embeds the verdict. Enforced in `internal/cli/root.go` (`TestGrillAssess`) and
+    `internal/mcp/server.go` (`TestPromptsResourcesAndExitCodes`).
+11. A recorded conversation obeys the verdict: on pass the skill asks nothing, on unpack its first turn asks before
+    it writes. Enforced by `GateFloor` in `internal/evals/conversation.go`, run by `TestTier1` on the grill cases,
+    such as `grill/bakery-concrete`.
 
 ## Where it lives in the code
 
@@ -181,6 +241,7 @@ CI runs the workflows that must not trust the author:
 - [internal/verbs/registry.go](../../internal/verbs/registry.go)
 - [internal/mcp](../../internal/mcp)
 - [internal/hosts](../../internal/hosts) and [hosts](../../hosts)
+- [internal/grill/gate.go](../../internal/grill/gate.go): the vagueness gate
 - [internal/models](../../internal/models)
 - [internal/actions](../../internal/actions) and [internal/ledger](../../internal/ledger)
 - [.github/workflows](../../.github/workflows)

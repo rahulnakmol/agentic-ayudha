@@ -284,7 +284,7 @@ func TestTellDocsSite(t *testing.T) {
 		"index.html":                 `<img src="docs/guide/img/journey.svg" alt="Nine steps">`,
 		"overview.html":              `<a href="constraints.html">CONSTRAINTS.md</a>`,
 		"docs/guide/img/journey.svg": `<svg/>`,
-		"skills/grill.html":          `<a href="../overview.html">Project overview</a>`,
+		"skills/grill.html":          `<a href="../overview.html">README</a>`,
 	} {
 		if b, err := os.ReadFile(filepath.Join(guided, filepath.FromSlash(file))); err != nil || !strings.Contains(string(b), want) {
 			t.Errorf("guided %s lacks %s (%v)", file, want, err)

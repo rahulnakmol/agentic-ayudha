@@ -155,9 +155,10 @@ own token, so the build job never holds a token for another repository. Prerelea
 Each manifest carries the archive's SHA-256, and the package manager checks the download against it; none of them
 checks the cosign signature. `installers.yml` proves that the Scoop manifest refuses a wrong hash.
 
-> **Honest status:** the Homebrew tap, the Scoop bucket, the winget fork, and their tokens are not set up yet, so
-> those three jobs would fail on a stable release today. No `v0.1.0` release exists and `main` has no `v*` tag;
-> the latest promotion is the rolling snapshot `rolling-2026-10-12.4` at commit `9991cd3`.
+> **Honest status:** v0.1.0 was released on 15 October 2026 (tag `v0.1.0`, commit `78bd4ae` on `main`): the tag
+> check, the signed build, provenance, and the smoke installs on Linux and macOS passed. Its Homebrew, Scoop, and winget
+> jobs failed, so the tap and the bucket are still empty and `install.sh` is the way to install. The promotion record
+> below is the earlier rolling snapshot `rolling-2026-10-12.4`, which carried the story.
 
 ## A real promotion record
 
