@@ -113,10 +113,11 @@ Who posts it matters, because the apps answer only the people who connected them
   woken". Records are de-duplicated against records only, so a nightly record never stops the person's own run from
   handing off the same drift.
 
-Two loops run this. `verify-sweep` runs `verify --check all --maintain drift` nightly at 02:30; its job is red when
-a check fails. `verify-maintain` runs `verify --map --maintain always` on Mondays at 09:00, so the app also looks for
-capabilities the map misses. The person's side runs the same prompt through a scheduled `amp -x` or a Cursor
-automation ([loops/README.md](../../loops/README.md)).
+Two loops run this. `verify-sweep` runs `verify --check all` nightly at 02:30. It needs no model, so it is an
+`agent = false` loop that runs in the free GitHub Actions fallback, and its run is red when a check fails (Appendix B
+D-7.1f). `verify-maintain` runs `verify --map --maintain always` on Mondays at 09:00 in your agent tool, so the app
+also looks for capabilities the map misses. Drift between those runs shows on every pull request, where the gate runs
+`verify --map` ([loops/README.md](../../loops/README.md)).
 
 Map directories are not protected paths. `inspect.Weakened` flags a pull request that deletes a feature file or leaves
 it with fewer `check` blocks or assertion keys (`expect`, `stdout`, `exit`, `test`, and others). A renamed handle is

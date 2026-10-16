@@ -18,5 +18,5 @@ sel -> ctl: check JSON on stdin
 ctl -> res: result JSON on stdout
 res -> gate: any failed
 map -> drift: drift found
-drift -> brief: sweep or weekly loop
+drift -> brief: weekly loop
 brief -> app

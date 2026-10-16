@@ -69,13 +69,6 @@ func TestLoopDigestOnSchedule(t *testing.T) {
 		t.Errorf("outbox: %s", b)
 	}
 
-	// S-7.1e: once a tool runs the loop (loops/active.json), the Actions fallback leaves it there.
-	_ = os.WriteFile(filepath.Join(dir, filepath.FromSlash(loops.RecordFile)), []byte(`{"amp": {"digest": {"digest": "x", "id": "s", "at": "2026-10-16"}}}`), 0o644)
-	if code, out := guard("5 8 * * 1-5", ""); code != 0 || out != "due=false\n" {
-		t.Errorf("a loop Amp runs, in Actions: exit %d, %q", code, out)
-	}
-	_ = os.Remove(filepath.Join(dir, filepath.FromSlash(loops.RecordFile)))
-
 	// Halted: the next run exits 4 at the guard, and the verb itself refuses too; nothing is written.
 	g.Reset()
 	if code, _ := guard("5 8 * * 1-5", "founder at 2026-10-12: test"); code != ExitBlocked {
@@ -213,5 +206,17 @@ func TestInstallLoops(t *testing.T) {
 	if calls = slices.DeleteFunc(calls, func(c string) bool { return !strings.Contains(c, " -x ") }); code != 0 || out != "loop triage: ran\n" ||
 		len(calls) != 1 || !strings.HasPrefix(calls[0], "/usr/bin/amp -x This is a Run now test") {
 		t.Errorf("run now: exit %d %q %v: %s", code, out, calls, errOut)
+	}
+	// D-7.1f: a loop that needs no agent runs in the Actions fallback. Still recorded in Amp, it runs twice until
+	// Amp forgets it; then only Actions runs it, and the report says so.
+	_ = os.WriteFile(filepath.Join(dir, "loops", "digest.toml"), []byte("description = \"Digest.\"\ncommand = [\"status\", \"--digest\"]\ncron = \"5 8 * * 1-5\"\nagent = false\n"), 0o644)
+	if _, r, _ := report("", "--host", "amp"); states(r) != "digest=actions,amp:double triage=amp:active" {
+		t.Errorf("digest now agent = false, still in amp: %s", states(r))
+	}
+	if code, _, errOut := run(t, env, opts, "install", "--loops", "--repo", "o/r", "--host", "amp", "--record", "digest="); code != 0 {
+		t.Errorf("forget a loop amp no longer runs: exit %d: %s", code, errOut)
+	}
+	if _, r, _ := report("", "--host", "amp"); states(r) != "digest=actions:active triage=amp:active" || !slices.Equal(r.Actions, []string{"digest"}) {
+		t.Errorf("digest in Actions only: %s, actions %v", states(r), r.Actions)
 	}
 }

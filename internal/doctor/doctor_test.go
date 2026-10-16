@@ -265,10 +265,12 @@ func failing(t *testing.T) map[string]func(*Probe) {
 		"retired-workflows": func(p *Probe) {
 			p.Root = repoWith(t, map[string]string{".github/workflows/aayudha-triage.yml": "name: aayudha-triage\non:\n  issues:\njobs: {}\n"})
 		},
-		// S-7.1d, S-7.1e: no tool runs the digest (missing), and triage is recorded in amp and codex (double).
+		// S-7.1d, S-7.1e, D-7.1f: the digest needs no agent (Actions runs it), no tool runs the review (missing),
+		// and triage is recorded in amp and codex (double).
 		"loops": func(p *Probe) {
 			p.Root = repoWith(t, map[string]string{
-				"loops/digest.toml": "description = \"Founder digest.\"\ncommand = [\"status\", \"--digest\"]\ncron = \"5 9 * * 1-5\"\n",
+				"loops/digest.toml": "description = \"Founder digest.\"\ncommand = [\"status\", \"--digest\"]\ncron = \"5 9 * * 1-5\"\nagent = false\n",
+				"loops/review.toml": "description = \"Review.\"\ncommand = [\"seat\", \"list\"]\ncron = \"0 11 1 * *\"\n",
 				"loops/triage.toml": "description = \"Triage.\"\ncommand = [\"triage\"]\ncron = \"0 9 * * *\"\nhosts = [\"amp\", \"codex\"]\n",
 				"loops/active.json": `{"amp": {"triage": {"digest": "000000000000", "id": "s-1", "at": "2026-10-16"}}, "codex": {"triage": {"digest": "000000000000", "id": "t-1", "at": "2026-10-16"}}}`,
 			})

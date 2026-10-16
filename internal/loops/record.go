@@ -8,14 +8,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 )
 
 // RecordFile is where a repository records which agent tool runs each of its
-// loops (`aayu install --loops`); doctor compares it with the loops, and the
-// Actions fallback leaves a recorded loop to its tool (Appendix B S-7.1d,
-// S-7.1e).
+// agent loops (`aayu install --loops`); doctor compares it with the loops
+// (Appendix B S-7.1d, S-7.1e). A loop that needs no agent runs in the Actions
+// fallback and is never recorded (D-7.1f).
 const RecordFile = Dir + "/active.json"
 
 // AgentHosts are the hosts that run a loop in the user's own agent session.
@@ -98,7 +97,6 @@ const (
 	Stale   = "stale"
 	Missing = "missing"
 	Double  = "double"
-	NoHost  = "n/a"
 )
 
 // State is one loop and the tool that owns it.
@@ -109,25 +107,25 @@ type State struct {
 	Detail string `json:"detail,omitempty"`
 }
 
-// States reports each loop with its owner tool: active (set up as it is
-// now), stale (set up, but the loop changed since), missing (no tool; the
-// Actions fallback runs it when it can), double (recorded in two tools, so it
-// runs twice), or n/a (the loop runs in no agent tool).
+// States reports each loop with what runs it: active (set up as it is now in
+// its agent tool, or a loop with agent = false, which the Actions fallback
+// runs), stale (set up, but the loop changed since), missing (an agent loop
+// no tool runs), or double (it runs twice: recorded in two tools, or a loop
+// the Actions fallback runs recorded in a tool as well).
 func States(ls []Loop, rec Record, repo, branch, tz string) []State {
 	var out []State
 	for _, l := range ls {
 		s := State{Loop: l.Name}
 		owners := rec.Owners(l.Name)
 		s.Owner = strings.Join(owners, ",")
-		agent := slices.ContainsFunc(AgentHosts, l.Runs)
 		switch {
-		case len(owners) == 0 && !agent:
-			s.Status, s.Detail = NoHost, "its hosts name no agent tool"
+		case !l.NeedsAgent() && len(owners) == 0:
+			s.Owner, s.Status, s.Detail = HostActions, Active, "needs no agent, so the GitHub Actions fallback runs it"
+		case !l.NeedsAgent():
+			s.Owner = HostActions + "," + s.Owner
+			s.Status, s.Detail = Double, "needs no agent and runs in the Actions fallback, but is recorded in "+strings.Join(owners, " and ")+" as well; delete it there, then forget it with `aayu install --loops --host "+owners[0]+" --record "+l.Name+"=`"
 		case len(owners) == 0:
 			s.Status = Missing
-			if l.Runs(HostActions) {
-				s.Detail = "only the Actions fallback runs it"
-			}
 		case len(owners) > 1:
 			s.Status, s.Detail = Double, "recorded in "+strings.Join(owners, " and ")+", so it runs twice; remove it from all but one"
 		default:

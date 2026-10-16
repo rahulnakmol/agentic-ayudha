@@ -64,8 +64,8 @@ aayu verify --check <feature>      # or <feature>.<check>, or all; a preview out
 
 ## Keeping the map honest
 
-Code moves and maps drift. Two loops keep up: a nightly sweep runs every check, and a weekly maintain pass, when
-something drifted or failed, posts a brief that @-mentions your maintainer app. The app opens at most one pull request
+Code moves and maps drift. Two loops keep up: a nightly sweep runs every check in GitHub Actions, with no model, and
+a weekly maintain pass posts a brief that @-mentions your maintainer app. The app opens at most one pull request
 of map fixes, through the same gate. It may never weaken a check: a real regression becomes a Bug. Set the loops up
 with [`aayu install --loops`](guide-loops.md).
 

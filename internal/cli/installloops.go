@@ -30,6 +30,7 @@ type loopsReport struct {
 	Stale    []string      `json:"stale_files,omitempty"`
 	Warnings []string      `json:"warnings,omitempty"`
 	Applied  []string      `json:"applied,omitempty"`
+	Actions  []string      `json:"actions,omitempty"` // loops with agent = false: the Actions fallback runs them
 	Steps    []string      `json:"steps"`
 	RunNow   string        `json:"run_now,omitempty"`
 	States   []loops.State `json:"states"`
@@ -109,6 +110,11 @@ func runInstallLoops(ctx context.Context, e *Env, in Values) error {
 		}
 	}
 	mine := toolLoops(ls, tool)
+	for _, l := range ls {
+		if !l.NeedsAgent() {
+			rep.Actions = append(rep.Actions, l.Name)
+		}
+	}
 	switch tool {
 	case loops.HostAmp:
 		rep.Applied, rep.Steps = e.ampLoops(ctx, root, agents[tool].CLI, in.Bool("apply"), rec, mine, repo, branch, tz)
@@ -179,7 +185,10 @@ func (e *Env) printLoops(w io.Writer, rep loopsReport) {
 	if len(rep.Stale) > 0 {
 		fmt.Fprintf(w, "note: %s differ from loops/*.toml: run `aayu init --gates` (or `go generate ./...` in aayudha) first\n", strings.Join(rep.Stale, ", "))
 	}
-	fmt.Fprintf(w, "The loops run in %s.\n", rep.Tool)
+	fmt.Fprintf(w, "The agent loops run in %s.\n", rep.Tool)
+	if len(rep.Actions) > 0 {
+		fmt.Fprintf(w, "%s need no agent: the GitHub Actions fallback (%s) runs them, with no model.\n", strings.Join(rep.Actions, ", "), loops.Workflow)
+	}
 	for _, x := range rep.Warnings {
 		fmt.Fprintln(w, "warning:", x)
 	}
@@ -193,9 +202,7 @@ func (e *Env) printLoops(w io.Writer, rep loopsReport) {
 		fmt.Fprintf(w, "  Run now, to test one loop: `%s`\n", rep.RunNow)
 	}
 	for _, s := range rep.States {
-		if s.Status != loops.NoHost {
-			fmt.Fprintf(w, "  %-18s %-7s %s\n", s.Loop, s.Status, s.Detail)
-		}
+		fmt.Fprintf(w, "  %-18s %-7s %s\n", s.Loop, s.Status, s.Detail)
 	}
 }
 
@@ -358,6 +365,11 @@ func (e *Env) recordLoops(root string, ls []loops.Loop, rec loops.Record, arg, r
 			if o := rec.Owners(l.Name); len(o) > 1 {
 				warn = append(warn, fmt.Sprintf("%s is also recorded in %s: it runs twice until you delete it from all but one", l.Name, strings.Join(slices.DeleteFunc(o, func(h string) bool { return h == e.Host }), ", ")))
 			}
+		}
+		if _, held := rec[e.Host][name]; !matched && held && id == "" {
+			rec.Delete(e.Host, name) // a loop that no longer runs in the tool, such as one now agent = false
+			forgot = append(forgot, name)
+			continue
 		}
 		if !matched && name != "all" {
 			return Errorf(ExitUsage, "install --loops --record: %s runs no loop %q", e.Host, name)

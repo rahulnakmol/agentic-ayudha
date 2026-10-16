@@ -3,7 +3,7 @@
 // RFC 5545 rule in the [time] zone), a Cursor Automation (the
 // cursor_platform_workflow resource of Cursor's Terraform provider, whose cron
 // runs in UTC), and the GitHub Actions fallback (aayudha-loops.yml, whose cron
-// is UTC). A loop's cron is written in [time] tz; the UTC renderings carry one
+// is UTC), which runs only the loops that need no agent (agent = false). A loop's cron is written in [time] tz; the UTC renderings carry one
 // cron per UTC offset the zone uses, and the guard (`aayu hook loop:<name>`)
 // lets only the one matching today's offset run. Every run checks halt and
 // [budget] first.
@@ -56,18 +56,28 @@ type Loop struct {
 	On     string         `toml:"on,omitempty" json:"-"`
 	Filter map[string]any `toml:"filter,omitempty" json:"-"`
 	Prompt string         `toml:"prompt,omitempty" json:"prompt,omitempty"`
-	Hosts  []string       `toml:"hosts,omitempty" json:"hosts"` // default: all
-	// Bot marks a loop whose command writes under the bot identity: in Actions
-	// it needs the bot App's token (D1) and is skipped with a notice without one.
+	// Agent false marks a loop that needs no model: its command is
+	// deterministic and runs with the workflow token, so it runs in the free
+	// GitHub Actions fallback, not in an agent tool (Appendix B D-7.1f).
+	// Unset, a loop is an agent loop and runs in the one agent tool.
+	Agent *bool    `toml:"agent,omitempty" json:"agent,omitempty"`
+	Hosts []string `toml:"hosts,omitempty" json:"hosts"` // default: every agent host, or actions for agent = false
+	// Bot marks a loop whose command writes under the bot identity, which the
+	// workflow token never is (D1): it stays an agent loop.
 	Bot bool `toml:"bot,omitempty" json:"bot,omitempty"`
-	// Setup prepares the Actions job for the command (WP4.5b.4): pinned tool
-	// setups (node, pnpm), then the product's own commands (SetupRun), so a
-	// sweep of a web product's behaviour checks has its browser tooling.
+	// Setup prepares the Actions job of an agent = false loop for its command
+	// (WP4.5b.4): pinned tool setups (node, pnpm), then the product's own
+	// commands (SetupRun), so a sweep of a web product's behaviour checks has
+	// its browser tooling.
 	Setup    []string `toml:"setup,omitempty" json:"setup,omitempty"`
 	SetupRun []string `toml:"setup_run,omitempty" json:"setup_run,omitempty"`
 
 	sched schedule
 }
+
+// NeedsAgent reports whether the loop runs in an agent tool (agent unset or
+// true) rather than in the Actions fallback.
+func (l Loop) NeedsAgent() bool { return l.Agent == nil || *l.Agent }
 
 // Runs reports whether the loop renders for host.
 func (l Loop) Runs(host string) bool { return slices.Contains(l.Hosts, host) }
@@ -127,8 +137,12 @@ func Parse(name string, data []byte) (Loop, error) {
 		return l, fmt.Errorf("loops/%s.toml: %w", name, err)
 	}
 	l.Name = name
-	if len(l.Hosts) == 0 {
-		l.Hosts = slices.Clone(Hosts)
+	switch {
+	case len(l.Hosts) > 0:
+	case l.NeedsAgent():
+		l.Hosts = slices.Clone(AgentHosts)
+	default:
+		l.Hosts = []string{HostActions}
 	}
 	var errs []error
 	bad := func(format string, args ...any) {
@@ -148,6 +162,24 @@ func Parse(name string, data []byte) (Loop, error) {
 	for _, x := range l.Setup {
 		if _, ok := setupActions[x]; !ok {
 			bad("setup: %q: want node or pnpm", x)
+		}
+	}
+	if l.NeedsAgent() {
+		if l.Runs(HostActions) {
+			bad("hosts: actions runs only loops that need no agent; set agent = false, or drop actions")
+		}
+		if len(l.Setup)+len(l.SetupRun) > 0 {
+			bad("setup and setup_run prepare the Actions job of an agent = false loop")
+		}
+	} else {
+		if !slices.Equal(l.Hosts, []string{HostActions}) {
+			bad("hosts: an agent = false loop runs only in the Actions fallback (actions)")
+		}
+		if l.Bot {
+			bad("bot: the workflow token is never the bot identity (D1); a loop that writes as the bot is an agent loop")
+		}
+		if l.Prompt != "" {
+			bad("prompt: no agent reads it in an agent = false loop")
 		}
 	}
 	if err := checkCommand(l.Command); err != nil {
@@ -570,7 +602,6 @@ const generated = "# Code generated from loops/*.toml by aayudha (WP7.1); DO NOT
 const (
 	checkoutAction = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 	setupGoAction  = "actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0"
-	appTokenAction = "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0"
 	uploadAction   = "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2"
 )
 
@@ -586,7 +617,7 @@ var setupActions = map[string]string{
 const OutboxPath = ".aayudha/state/notify-outbox.jsonl"
 
 // ActionsWorkflow renders aayudha-loops.yml: one job per loop that runs in
-// Actions, triggered by its UTC crons or a manual dispatch naming it.
+// Actions (agent = false), triggered by its UTC crons or a manual dispatch naming it.
 // version is the aayudha module version the jobs install. implemented reports
 // whether this binary has the loop's command; others are listed as n/a.
 func ActionsWorkflow(ls []Loop, tz string, loc *time.Location, version string, implemented func(string) bool) ([]byte, error) {
@@ -632,8 +663,8 @@ func ActionsWorkflow(ls []Loop, tz string, loc *time.Location, version string, i
 	b.WriteString(`# of the zone, and ` + "`aayudha hook loop:<name>`" + ` runs only the one for today's offset (github.event.schedule). The guard also
 # stops on ` + "`aayu halt`" + ` (exit 4, before any write) and when this workflow's runs this month reach [budget]
 # ci_minutes_month or the [budget] breaker has paused agent lanes (exit 6). Pages from [notify] channel "file" are kept
-# as a run artifact. A loop recorded as set up in an agent tool (loops/active.json) is left to that tool: the guard
-# says it is not due here, so it never runs twice. No model and no model key is ever used here.
+# as a run artifact. Only the loops that need no agent (agent = false) run here; the others run in the one agent tool
+# (aayu install --loops). No model, no model key, and no bot token is ever used here.
 `)
 	if len(na) > 0 {
 		b.WriteString("#\n# Not rendered:\n" + strings.Join(na, "\n") + "\n")
@@ -669,18 +700,6 @@ func ActionsWorkflow(ls []Loop, tz string, loc *time.Location, version string, i
         run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); the loop does not run. A human clears it with aayu resume." && exit 4
 `)
 		fmt.Fprintf(&b, "      - uses: %s\n        with:\n          persist-credentials: false\n", checkoutAction)
-		if j.l.Bot {
-			fmt.Fprintf(&b, `      - name: Mint the bot token
-        id: app
-        if: vars.AAYUDHA_APP_CLIENT_ID != ''
-        uses: %s
-        with:
-          client-id: ${{ vars.AAYUDHA_APP_CLIENT_ID }}
-          private-key: ${{ secrets.AAYUDHA_APP_PRIVATE_KEY }}
-          permission-issues: write
-          permission-contents: write
-`, appTokenAction)
-		}
 		fmt.Fprintf(&b, "      - uses: %s\n        with:\n          go-version: \"1.25.x\"\n          cache: false\n", setupGoAction)
 		fmt.Fprintf(&b, "      - name: Install aayudha %s\n        run: go install github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@%s\n", version, version)
 		fmt.Fprintf(&b, `      - name: Guard (schedule, halt, budget)
@@ -702,22 +721,11 @@ func ActionsWorkflow(ls []Loop, tz string, loc *time.Location, version string, i
 		}
 		args := strings.Join(quoteAll(j.l.Command), " ")
 		run := fmt.Sprintf("aayudha %s --ci --repo \"$REPO\"", args)
-		if j.l.Bot {
-			run = fmt.Sprintf(`|
-          if [[ -z "$AAYU_BOT_TOKEN" ]]; then
-            echo "::notice::No bot App (AAYUDHA_APP_CLIENT_ID): %s writes as the bot, and the workflow token is never a bot identity (D1). Run aayu init --identity to create the App."
-            exit 0
-          fi
-          aayudha %s --ci --repo "$REPO"`, j.l.Name, args)
-		}
 		fmt.Fprintf(&b, `      - name: Run aayu %s
         if: steps.guard.outputs.due == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
 `, strings.Join(j.l.Command, " "))
-		if j.l.Bot {
-			b.WriteString("          AAYU_BOT_TOKEN: ${{ steps.app.outputs.token }}\n")
-		}
 		fmt.Fprintf(&b, `          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
           AAYU_AGENT: "1"
           REPO: ${{ github.repository }}

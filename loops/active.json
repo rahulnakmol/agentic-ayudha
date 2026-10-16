@@ -1,18 +1,13 @@
 {
   "amp": {
     "ci-failed": {
-      "digest": "800f47b06ef2",
+      "digest": "9ce50c72daef",
       "id": "schedule ea64c910-00cb-5e3e-b362-61495500aa51 on T-01a144e7-4ef7-7682-8b58-e734cd8e355e",
       "at": "2026-10-16"
     },
     "decisions": {
-      "digest": "9d589f9b4196",
+      "digest": "ff6de886fd74",
       "id": "schedule e0a167fd-c25c-58b0-800b-ca29297ec7ce on T-01a144e7-5bbf-71ff-91b9-be10e830bf7c",
-      "at": "2026-10-16"
-    },
-    "digest": {
-      "digest": "3392bce66922",
-      "id": "schedule 938323bb-30c5-57e6-bde5-160b8277edf1 on T-01a144e7-684a-73ef-b6e9-5200a82cec3b",
       "at": "2026-10-16"
     },
     "evolve": {
@@ -53,11 +48,6 @@
     "verify-maintain": {
       "digest": "e57f9a295054",
       "id": "schedule 1184f96d-8103-5c5c-94aa-541e94ea1bc8 on T-01a144e7-d821-721c-8b73-e265dbf4625f",
-      "at": "2026-10-16"
-    },
-    "verify-sweep": {
-      "digest": "60136681a55b",
-      "id": "schedule daa6a559-32cb-55a4-ae75-f4013822812f on T-01a144e7-e51d-709c-815c-6c14a69e8053",
       "at": "2026-10-16"
     }
   }

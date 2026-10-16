@@ -2,7 +2,8 @@
 
 Some work should happen without anyone asking: triage new reports each morning, tidy up on Fridays, send a failed
 check back to the agent that built it, measure after a release. A **loop** is one small file that runs an aayu
-command on a schedule. It runs in your agent's own scheduler, as you, so your CI never calls a model.
+command on a schedule. A loop that needs an agent runs in your agent's own scheduler, as you, so your CI never calls
+a model. A loop that needs no agent (`agent = false`) runs free in GitHub Actions.
 
 > **You are here:** Level 3. Loops work at any level, but they pay off once work flows steadily.
 >
@@ -19,10 +20,12 @@ Copy the default loop files from aayudha's [loops](../../loops) folder into your
 |---|---|---|
 | `triage-daily` | Daily 09:00 | Lists new intake issues; your agent labels each as Feedback, Bug, or Incident |
 | `triage` | Mondays 09:30 | The same, weekly |
-| `ci-failed` | Weekdays 09:45, 13:45, 17:45 | For a story handed to another agent, sends a failed required check back to it |
+| `ci-failed` | Weekdays 09:45 | For a story handed to another agent, sends a failed required check back to it |
 | `release-measure` | Mondays 10:30 | Runs `measure` when a release was published that week |
 | `housekeeping` | Fridays 16:00 | Cleans up, then reports setup drift, feature-map drift, and stale Ready issues |
-| `digest`, `retro`, `evolve` | Weekdays, Mondays, monthly | The founder digest, the retro, and skill evolution, which takes new Feedback |
+| `retro`, `evolve` | Mondays, monthly | The retro, and skill evolution, which takes new Feedback |
+| `digest` | Weekdays 09:05, in Actions | The founder digest; it needs no agent |
+| `verify-sweep` | Daily 02:30, in Actions | Runs every behaviour check with no model; a failed check turns the run red |
 
 Times are in `[time] tz` from your config. Every run starts with a guard that stops it while the repository is halted
 or over budget.
@@ -32,7 +35,9 @@ or over budget.
 
 ## Set them up in one tool
 
-Pick one agent tool to run all the loops. If two tools ran them, every loop would run twice.
+Pick one agent tool to run all the agent loops. If two tools ran them, every loop would run twice. The loops that need
+no agent (`agent = false`, such as `digest` and `verify-sweep`) are not set up in a tool: the GitHub Actions fallback,
+`.github/workflows/aayudha-loops.yml`, runs them, and `install --loops` says so.
 
 ```sh
 aayu install --loops
@@ -68,15 +73,16 @@ When a tool gives you an ID for a loop you set up by hand, record it, so aayudha
 aayu install --loops --host claude --record all=<the routine names>
 ```
 
-**You should see** each recorded loop as active in `aayu doctor`'s `loops` row, with the tool that runs it. A loop you
-changed after recording it shows as stale, one you never set up as missing, and one recorded in two tools as double.
+**You should see** each recorded loop as active in `aayu doctor`'s `loops` row, with the tool that runs it, and each
+`agent = false` loop as active in `actions`. A loop you changed after recording it shows as stale, one you never set
+up as missing, and one that runs twice (recorded in two tools, or in a tool and Actions) as double.
 
 Stuck? See [loop problems](troubleshooting.md#loops).
 
 > **Honest status:** "active" means recorded with the loop's current contents; no tool lets aayudha read your
-> automations back. On Amp, `aayu install --loops --host amp --apply` set up all of aayudha's own loops live, one
-> Amp thread each. The Cursor, Claude Code, and Codex prompts follow each tool's documentation and have not been run
-> on a real account yet.
+> automations back. On Amp, `aayu install --loops --host amp --apply` set up aayudha's own agent loops live, one
+> Amp thread each; `digest` and `verify-sweep` run in Actions. The Cursor, Claude Code, and Codex prompts follow each
+> tool's documentation and have not been run on a real account yet.
 
 ## Under the hood
 
