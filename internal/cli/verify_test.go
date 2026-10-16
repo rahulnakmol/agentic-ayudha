@@ -222,6 +222,27 @@ func TestVerifyGateCI(t *testing.T) {
 	if code, res, errOut := gate(); code != 0 || len(res.Checks) != 0 || res.Story != 0 {
 		t.Fatalf("PR without a story: %d %+v %s", code, res, errOut)
 	}
+	// WP4.5b.2: it still runs the feature-map floors, and only them: a
+	// behaviour check of a feature it touches fails the gate.
+	fdir := filepath.Join(dir, ".agents", "skills", "verify-app", "features")
+	_ = os.MkdirAll(fdir, 0o755)
+	_ = os.WriteFile(filepath.Join(fdir, "README.md"), []byte("# app\n\n```map\n{\"product\": \"app\", \"control\": [\"sh\", \"-c\", \"echo '{\\\"status\\\": \\\"failed\\\", \\\"reason\\\": \\\"exit 1\\\"}'\"]}\n```\n\n1. [Cov](cov.md)\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(fdir, "cov.md"), []byte("# Cov\n\nx\n\n```feature\n{\"id\": \"cov\", \"sources\": [\"cov.info\"], \"verified_at\": \"\"}\n```\n\n## Sub-features\n\n## How to reach it\n\n## Behaviour checks\n\n```check\n{\"id\": \"read\", \"kind\": \"cli\", \"evidence\": \"api-trace\", \"steps\": [{\"run\": [\"cat\"]}]}\n```\n\n## Gotchas\n"), 0o644)
+	git(t, dir, "add", "-A")
+	git(t, dir, "commit", "--quiet", "--amend", "-m", "docs: tidy")
+	g.Mu.Lock()
+	pr.Head.SHA = git(t, dir, "rev-parse", "HEAD")
+	g.Mu.Unlock()
+	code, out, errOut := run(t, ci, opts, "verify", strconv.Itoa(pr.Number), "--ci", "--repo", "o/r", "--json")
+	var nostory VerifyResult
+	_ = json.NewDecoder(strings.NewReader(out)).Decode(&nostory)
+	var floors []string
+	for _, c := range nostory.Checks {
+		floors = append(floors, c.Floor+" "+c.Result)
+	}
+	if code != ExitFloor || strings.Join(floors, ", ") != "feature-map pass, behaviour fail" || nostory.Pack != "" {
+		t.Fatalf("no-story PR touching a feature: %d %q %s %s", code, floors, out, errOut)
+	}
 }
 
 // WP4.5b.1: verify --map needs no GitHub and no story; it exits 0 without a
