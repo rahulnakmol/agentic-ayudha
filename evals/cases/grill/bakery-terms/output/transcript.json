@@ -95,7 +95,7 @@
         },
         {
           "kind": "confirm",
-          "text": "Keeping PII out of the logs is part of this: no customer name, email, or phone number from the form may ever show up in the logs, the server's or the analytics events."
+          "text": "Keeping PII out of the logs is part of this: no customer name, email, or phone number may show up in any of our logs, the server's or the analytics events, whatever page or order it came from."
         },
         {
           "kind": "confirm",
