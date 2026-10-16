@@ -424,7 +424,28 @@ func (in *Init) rest(ctx context.Context, method, path string, body, out any) er
 	return err
 }
 
+// ruleset applies the ledger rulesets. Where the plan has no rulesets (a
+// private repository on GitHub Free answers 403 "Upgrade to GitHub Pro or make
+// this repository public"), init says so, records why in state.json for
+// `aayu doctor`, and carries on: the ledger branch is then unprotected, and a
+// later `aayu init` applies the rulesets once the plan allows them
+// (Appendix B D-2.5b).
 func (in *Init) ruleset(ctx context.Context) error {
+	err := in.applyRulesets(ctx)
+	var er *gh.ErrorResponse
+	if errors.As(err, &er) && er.Response != nil && er.Response.StatusCode == http.StatusForbidden && strings.Contains(er.Message, "Upgrade to GitHub") {
+		in.State.RulesetsUnapplied = "GitHub answered 403: " + er.Message
+		in.note("ruleset", "ruleset", LedgerRuleset, "not applied",
+			"this repository's GitHub plan has no rulesets ("+er.Message+"), so the ledger branch is unprotected: anyone with write access can force-push or delete it. Make the repository public or upgrade to GitHub Pro, then run aayu init again; aayu doctor reports it until then")
+		return nil
+	}
+	if err == nil {
+		in.State.RulesetsUnapplied = ""
+	}
+	return err
+}
+
+func (in *Init) applyRulesets(ctx context.Context) error {
 	r := in.Repo
 	var list []rulesetDetail
 	if err := in.rest(ctx, http.MethodGet, "/repos/"+r.FullName+"/rulesets", nil, &list); err != nil {

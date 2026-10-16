@@ -52,8 +52,11 @@ type State struct {
 	Login         string   `json:"login,omitempty"`
 	Identity      string   `json:"identity,omitempty"` // bot kind, or human-fallback
 	Visibility    string   `json:"visibility,omitempty"`
-	Objects       []Object `json:"objects"`
-	Files         []File   `json:"files"`
+	// RulesetsUnapplied says why the ledger rulesets could not be applied
+	// (GitHub's answer), empty once they are; `aayu doctor` reports it.
+	RulesetsUnapplied string   `json:"rulesets_unapplied,omitempty"`
+	Objects           []Object `json:"objects"`
+	Files             []File   `json:"files"`
 }
 
 // ErrIncomplete means an earlier init stopped part-way; rerun with --resume.

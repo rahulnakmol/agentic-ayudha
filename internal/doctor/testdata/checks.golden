@@ -62,6 +62,12 @@ PASS  ledger-media  no ledger branch fetched (origin/ledger)
 ## ledger-media fail
 FAIL  ledger-media  repository is public but its ledger tracks media in Git LFS (V3): LFS objects cannot be purged from GitHub [blocking]
                       remove .lfsconfig and the LFS lines of .gitattributes from ledger and delete media already pushed there; proof media stay in run artifacts (S-4.2b), and design media need [proof] media
+## ledger-rulesets pass
+N/A  ledger-rulesets  aayu init has not run here (no .aayudha/state.json)
+## ledger-rulesets fail
+WARN  ledger-rulesets  ledger rulesets not applied: GitHub answered 403: Upgrade to GitHub Pro or make this repository public to enable this feature.
+                         the ledger branch is unprotected: anyone with write access can force-push or delete it
+                         make the repository public or upgrade to GitHub Pro, then run `aayu init` again
 ## proof pass
 PASS  proof  proof: the merge gate keeps each pack as its aayudha-pack run artifact for 90 days (GitHub allows at most 90 on a public repository, 400 on a private one), and `aayu ship` lands pack.json on the ledger; no bot App, bucket, or secret needed
 ## proof fail

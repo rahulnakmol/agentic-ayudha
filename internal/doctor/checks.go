@@ -2,6 +2,7 @@ package doctor
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -511,6 +512,31 @@ func checkLedgerMedia(ctx context.Context, p *Probe) Result {
 	return Result{Status: Fail, Blocking: true,
 		Detail: "repository is public but its ledger tracks media in Git LFS (V3): LFS objects cannot be purged from GitHub",
 		Lines:  []string{"remove .lfsconfig and the LFS lines of .gitattributes from ledger and delete media already pushed there; proof media stay in run artifacts (S-4.2b), and design media need [proof] media"}}
+}
+
+// checkLedgerRulesets reports whether `aayu init` could protect the ledger
+// branch with its rulesets: on a private repository on GitHub Free it cannot,
+// and init records GitHub's answer in state.json (Appendix B D-2.5b).
+func checkLedgerRulesets(_ context.Context, p *Probe) Result {
+	if p.Root == "" {
+		return Result{Status: NA, Detail: "not in a repository"}
+	}
+	b, err := os.ReadFile(filepath.Join(p.Root, ".aayudha", "state.json"))
+	if err != nil {
+		return Result{Status: NA, Detail: "aayu init has not run here (no .aayudha/state.json)"}
+	}
+	var st struct {
+		RulesetsUnapplied string `json:"rulesets_unapplied"`
+	}
+	if err := json.Unmarshal(b, &st); err != nil {
+		return Result{Status: Warn, Detail: ".aayudha/state.json: " + err.Error()}
+	}
+	if st.RulesetsUnapplied != "" {
+		return Result{Status: Warn, Detail: "ledger rulesets not applied: " + st.RulesetsUnapplied,
+			Lines: []string{"the ledger branch is unprotected: anyone with write access can force-push or delete it",
+				"make the repository public or upgrade to GitHub Pro, then run `aayu init` again"}}
+	}
+	return Result{Status: Pass, Detail: "aayu init applied or adopted the ledger rulesets"}
 }
 
 // checkProof says where proof lives (S-4.2b): the merge gate keeps each pack as

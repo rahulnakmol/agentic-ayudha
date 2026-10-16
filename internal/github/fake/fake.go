@@ -205,6 +205,9 @@ type GitHub struct {
 	// their commits, files, and reviews), keyed by path without the query.
 	Static map[string]any
 
+	// RulesetsUnavailable answers every rulesets request as GitHub does for a
+	// private repository on GitHub Free.
+	RulesetsUnavailable bool
 	// Fail makes the request with this "METHOD /path" fail with a 500 once
 	// it has succeeded After times.
 	Fail      string
@@ -555,6 +558,8 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(204)
 
 	// Rulesets.
+	case g.RulesetsUnavailable && strings.HasPrefix(p, repo+"/rulesets"):
+		reply(403, map[string]any{"message": "Upgrade to GitHub Pro or make this repository public to enable this feature.", "status": "403"})
 	case m == "GET" && p == repo+"/rulesets":
 		reply(200, g.Rulesets)
 	case m == "GET" && strings.HasPrefix(p, repo+"/rulesets/"):

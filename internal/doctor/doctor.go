@@ -83,6 +83,7 @@ var Checks = []Check{
 	{"mcp", checkMCP},
 	{"lfs-quota", checkLFSQuota},
 	{"ledger-media", checkLedgerMedia},
+	{"ledger-rulesets", checkLedgerRulesets},
 	{"proof", checkProof},
 	{"issue-types", checkIssueTypes},
 	{"integrations", checkIntegrations},

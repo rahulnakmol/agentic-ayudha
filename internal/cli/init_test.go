@@ -229,6 +229,45 @@ func mapsEqual(a, b map[string]string) bool {
 	return true
 }
 
+// D-2.5b (megaman, D-5.5c.12): a private repository on GitHub Free has no
+// rulesets, and GitHub answers 403. Init still completes every other step,
+// says the rulesets were not applied and why, and records it for doctor; once
+// the plan allows rulesets, a rerun applies them and clears the record.
+func TestInitWithoutRulesets(t *testing.T) {
+	g := fake.New(t, "o/r", "User")
+	g.Private, g.RulesetsUnavailable = true, true
+	dir := checkout(t)
+	code, rep, errOut := runInitCmd(t, g, dir, "init", "--yes")
+	if code != 0 || !rep.Complete {
+		t.Fatalf("init: exit %d complete %t: %s", code, rep.Complete, errOut)
+	}
+	var said string
+	for _, c := range rep.Changes {
+		if c.Step == "ruleset" {
+			said = c.Result + ": " + c.Detail
+		}
+	}
+	if !strings.HasPrefix(said, "not applied: ") || !strings.Contains(said, "Upgrade to GitHub Pro") || !strings.Contains(said, "unprotected") {
+		t.Fatalf("ruleset step said %q", said)
+	}
+	files := snapshot(t, dir)
+	if files[".aayudha/config.toml"] == "" || !strings.Contains(files["AGENTS.md"], "aayudha:work-items") {
+		t.Fatal("init stopped before the config and agents steps")
+	}
+	if !strings.Contains(files[initrepo.StatePath], `"rulesets_unapplied": "GitHub answered 403: Upgrade to GitHub Pro`) {
+		t.Fatalf("state.json does not record why:\n%s", files[initrepo.StatePath])
+	}
+	g.Mu.Lock()
+	g.RulesetsUnavailable = false
+	g.Mu.Unlock()
+	if code, _, errOut := runInitCmd(t, g, dir, "init", "--yes"); code != 0 {
+		t.Fatalf("rerun after the upgrade: exit %d: %s", code, errOut)
+	}
+	if got := ledgerRulesets(g); !strings.Contains(got, initrepo.LedgerHistoryRuleset) || strings.Contains(snapshot(t, dir)[initrepo.StatePath], "rulesets_unapplied") {
+		t.Fatalf("rerun: rulesets %s", got)
+	}
+}
+
 // WP2.5 accept: a partial run is resumed from state without duplicates.
 func TestInitResume(t *testing.T) {
 	g := fake.New(t, "o/r", "User")

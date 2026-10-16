@@ -170,6 +170,12 @@ ruleset let only admins write, creates `aayudha-ledger-history` first and then n
 the write role added. Shipping merges into `dev` only; promotion to `rolling` and `main` stays a separate release step
 behind its own admin-only rulesets.
 
+A private personal repository on GitHub Free has no rulesets: GitHub answers 403 "Upgrade to GitHub Pro or make this
+repository public". `aayu init` then says the rulesets were not applied and why, records it in `.aayudha/state.json`,
+and finishes the other steps. The ledger branch stays unprotected, so anyone with write access can force-push or
+delete it, and the `ledger-rulesets` row of `aayu doctor` warns until you make the repository public or upgrade and run
+`aayu init` again.
+
 CI writes nothing to the ledger. On a personal repository the GitHub Actions app cannot be a ruleset bypass actor, so
 `GITHUB_TOKEN` can never write the ledger, and the proof design does not need it to: the merge gate keeps its pack as
 a run artifact and comments on the pull request, and a human's `ship` lands it. See
