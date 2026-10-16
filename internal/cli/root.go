@@ -351,6 +351,15 @@ func parseInput(cmd string, in verbs.Input, raw string) (any, error) {
 		}
 	case verbs.TypeIssue:
 		if !issueRE.MatchString(raw) {
+			if words := strings.Fields(raw); len(words) > 1 {
+				// A request in words (WP5.8): it is unpacked into a Ready work item first.
+				typ := "story"
+				if cmd == "slice" {
+					typ = "feature"
+				}
+				return nil, Errorf(ExitUsage, "%s: %s %q is a request in words, not an issue: unpack it into a Ready %s first with `aayu grill %s --assess --idea %s`, then run aayu %s on that %s",
+					cmd, in.Name, clip(raw, 60), typ, typ, strconv.Quote(raw), cmd, typ)
+			}
 			return nil, bad("an issue number, #number, or issue URL")
 		}
 	case verbs.TypePR:

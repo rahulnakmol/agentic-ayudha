@@ -62,6 +62,11 @@ asks for that outcome itself, and otherwise leave it to the floors.
 Written after the conversation (`aayu grill story --idea "<the human's words>"`); `grill` and `ready` check it. See the
 skill's "Spec record" for the exact lines.
 
+### Checkpoints (`checkpoints`, optional; required when grilled)
+
+- What can the human see or try at each step of the build? One per line, in build order:
+  `N. <what you can see or run> (criteria 1, 2)`. Every criterion is reached by one.
+
 ### Assumptions (`assumptions`, optional; required when grilled)
 
 - What does the spec take as given (data, platforms, an existing screen)? One per line; `none` when there are none.
@@ -77,7 +82,8 @@ skill's "Spec record" for the exact lines.
 ### Provenance (`provenance`, optional; required when grilled)
 
 - `Request: "<the human's words>"`, then `Vague: "<qualifier>" → criteria N, M` (or `→ deferred: <why>`) for each vague
-  word, then one line per criterion: `N. stated|confirmed|default (<dimension>/<topic>): "<the human's words>"; facts: <id>`.
+  word, a `Term: "<abbreviation>" → <meaning>; "<the human's words>"` line for each abbreviation or jargon term of
+  the request (or `→ deferred: <why>`), then one line per criterion: `N. stated|confirmed|default (<dimension>/<topic>): "<the human's words>"; facts: <id>`.
 - A criterion that says where something is (a route, "on the review screen", "below the button") quotes every reply
   that names that place (`"…" / "…"`), and names the place instead of "that screen" (SKILL.md, Placement quotes).
 

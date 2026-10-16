@@ -138,7 +138,9 @@ You are grilling a human through a channel that carries JSON. Each reply is one 
 {"say": "...", "questions": [{"topic": "<dimension>/<topic>", "ask": "...", "default": "...", "facts": ["<fact ID>"]}], "done": false}
 Ask at most five questions per turn. Tag each with the topic it settles: a catalogue dimension and one of its Topics
 (ux.steps/confirmation-placement), a request topic (request/dependency, request/size, request/existing-behaviour,
-request/parent, request/scope), or other/<key> for anything else. Cite assessment facts by ID.
+request/parent, request/scope), term/<term> for the meaning of an abbreviation (term/pdp), or other/<key> for
+anything else. Cite assessment facts by ID. Read the assessment's gate first: when it is "pass", ask nothing and
+reply "done" with the draft in your first turn.
 The human's answers come back numbered in the order you asked. When the spec is concrete, reply with "done": true,
 your plain-language readback in "say" ("Here is what done looks like: ..."), no questions, and "draft": the work item
 as JSON {type, title, fields, labels, parent, open_questions}, its fields including assumptions, open_questions,
@@ -231,7 +233,7 @@ func norm(s string) string {
 // shared by tier 1 (the recorded run) and tier 2 (before the judge): the
 // spec is concrete (grill.Check), cites only facts the assessment has, and
 // at least minCited criteria cite one; and it is faithful to the transcript:
-// every criterion's quote is the human's own words (the request or a reply),
+// every criterion's and term's quote is the human's own words (the request or a reply),
 // and none comes from a dimension the human parked, deferred, or was never
 // asked about, or claims a source the reply does not give.
 func Concrete(cat grill.Catalog, a grill.Assessment, it workitems.Item, tr Transcript, minCited int) []string {
@@ -268,6 +270,13 @@ func Concrete(cat grill.Catalog, a grill.Assessment, it workitems.Item, tr Trans
 				said[q.Topic] = append(said[q.Topic], x.Answers[i])
 				saidDim[dimensionOf(q.Topic)] = append(saidDim[dimensionOf(q.Topic)], x.Answers[i])
 				all = append(all, norm(x.Answers[i].Text))
+			}
+		}
+	}
+	for _, t := range p.Terms {
+		for _, part := range t.Quotes {
+			if q := norm(part); q == "" || !slices.ContainsFunc(all, func(x string) bool { return strings.Contains(x, q) }) {
+				out = append(out, fmt.Sprintf("fidelity: term %q quotes %q, which the human never said", t.Term, clip(part, 80)))
 			}
 		}
 	}
@@ -309,6 +318,20 @@ func Concrete(cat grill.Catalog, a grill.Assessment, it workitems.Item, tr Trans
 		}
 	}
 	return out
+}
+
+// GateFloor is the vagueness gate's deterministic check of a conversation
+// (WP5.8), shared by tier 1 and tier 2: on "pass" the skill asks nothing (a
+// concrete ask gets no friction), and on "unpack" its first turn asks
+// before it writes anything.
+func GateFloor(verdict string, first Turn) string {
+	switch {
+	case verdict == grill.GatePass && len(first.Questions) > 0:
+		return fmt.Sprintf("the gate passed a concrete request, but the skill asked %d question(s)", len(first.Questions))
+	case verdict == grill.GateUnpack && (first.Done || len(first.Questions) == 0):
+		return "the gate said unpack, but the skill's first turn asked nothing before writing the spec"
+	}
+	return ""
 }
 
 // errNotDone is a conversation that never produced its draft.

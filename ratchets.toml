@@ -9,5 +9,5 @@
 # (`aayu decide --waiver coverage <story-or-bug>`, then `aayu decide <n> --accept waive`), named here as
 # `waiver = <n>`; a waiver already named on the base does not count again.
 [coverage]
-floor = 62.8
+floor = 63.4
 margin = 0.5

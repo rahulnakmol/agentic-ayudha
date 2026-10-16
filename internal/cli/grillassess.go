@@ -138,10 +138,31 @@ func clip(s string, n int) string {
 	return s
 }
 
-// writeAssessment is the text report of --assess: the vague qualifiers with
-// their dimensions, then every fact, inside one untrusted block.
+// writeAssessment is the text report of --assess: the gate's verdict, the
+// product types, the terms to confirm, an unstated outcome, the vague
+// qualifiers with their dimensions, then every fact, inside one untrusted
+// block.
 func writeAssessment(w io.Writer, a grill.Assessment) error {
 	fmt.Fprintf(w, "grill %s --assess: %q\n\n", a.Type, a.Idea)
+	fmt.Fprintf(w, "%s\n\n", a.Gate.Summary())
+	if len(a.Products) > 0 {
+		fmt.Fprintf(w, "Product: %s (the dimensions below are the ones that apply to it).\n", strings.Join(a.Products, ", "))
+	}
+	for _, t := range a.Terms {
+		m := "not in the jargon list: ask what it means"
+		if len(t.Meanings) > 0 {
+			m = "usually " + strings.Join(t.Meanings, ", or ")
+		}
+		fmt.Fprintf(w, "Term: %q, %s. Confirm its meaning and record it as a Term: line.\n", t.Text, m)
+	}
+	for _, r := range a.Gate.Reasons {
+		if r.Kind == grill.ReasonOutcome {
+			fmt.Fprintf(w, "Outcome: %s. Work it through as a rough idea (%s):\n", r.Why, r.Catalogue)
+			for _, d := range r.Dimensions {
+				fmt.Fprintf(w, "  %s %s: %s\n    default: %s\n", d.ID, d.Name, d.Ask, d.Default)
+			}
+		}
+	}
 	if len(a.Vague) == 0 {
 		fmt.Fprintln(w, "Vague qualifiers: none found. Still ask what done looks like, in observable terms.")
 	}
@@ -171,16 +192,22 @@ func writeAssessment(w io.Writer, a grill.Assessment) error {
 // recordFromAnswers adds the spec record (WP5.3b) to a body drafted in the
 // TUI: the human typed every criterion, so each one is stated; each answer to
 // a dimension question is kept as the human gave it: an accepted default is
-// an assumption, "defer" an open question, "park" a parked idea.
+// an assumption, "defer" an open question, "park" a parked idea. A term's
+// answer is its meaning in the human's words (WP5.8), and each criterion is
+// its own checkpoint, in order, since the human typed no other split.
 func recordFromAnswers(cat grill.Catalog, body string, v map[string]string) string {
 	cs, _ := workitems.ParseCriteria(v[workitems.FieldCriteria])
-	var ids []string
+	var ids, termIDs []string
 	for id := range v {
-		if strings.HasPrefix(id, "dim:") {
+		switch {
+		case strings.HasPrefix(id, "dim:"):
 			ids = append(ids, id)
+		case strings.HasPrefix(id, "term:"):
+			termIDs = append(termIDs, id)
 		}
 	}
 	slices.Sort(ids)
+	slices.Sort(termIDs)
 	type res struct{ answered, deferred bool }
 	quals := map[string]*res{}
 	var order []string
@@ -191,7 +218,9 @@ func recordFromAnswers(cat grill.Catalog, body string, v map[string]string) stri
 		q, dimID := rest[:i], rest[i+1:]
 		if quals[q] == nil {
 			quals[q] = &res{}
-			order = append(order, q)
+			if q != outcomeQualifier {
+				order = append(order, q)
+			}
 		}
 		d, _ := cat.Dimension(dimID)
 		switch ans := strings.TrimSpace(v[id]); strings.ToLower(ans) {
@@ -225,8 +254,20 @@ func recordFromAnswers(cat grill.Catalog, body string, v map[string]string) stri
 			prov = append(prov, fmt.Sprintf("Vague: %q → deferred: not settled in the interview", q))
 		}
 	}
+	for _, id := range termIDs {
+		term := strings.TrimPrefix(id, "term:")
+		switch ans := strings.Join(strings.Fields(v[id]), " "); strings.ToLower(ans) {
+		case "", "defer", "park", "default":
+			open = append(open, fmt.Sprintf("- deferred: what %q means here (not settled in the interview)", term))
+			prov = append(prov, fmt.Sprintf("Term: %q → deferred: not settled in the interview", term))
+		default:
+			prov = append(prov, fmt.Sprintf("Term: %q → %s; %q", term, ans, ans))
+		}
+	}
+	var checkpoints []string
 	for _, c := range cs {
 		prov = append(prov, fmt.Sprintf("%d. stated (interview): %q", c.N, c.Expected))
+		checkpoints = append(checkpoints, fmt.Sprintf("%d. %s (criterion %d)", c.N, strings.TrimSuffix(c.Expected, "."), c.N))
 	}
 	if len(assumptions) == 0 {
 		assumptions = []string{"none"}
@@ -234,7 +275,7 @@ func recordFromAnswers(cat grill.Catalog, body string, v map[string]string) stri
 	for _, f := range []struct {
 		label string
 		lines []string
-	}{{"Assumptions", assumptions}, {"Open questions", open}, {"Parked ideas", parked}, {"Provenance", prov}} {
+	}{{"Checkpoints", checkpoints}, {"Assumptions", assumptions}, {"Open questions", open}, {"Parked ideas", parked}, {"Provenance", prov}} {
 		if len(f.lines) > 0 {
 			body = workitems.SetSection(body, f.label, strings.Join(f.lines, "\n"))
 		}

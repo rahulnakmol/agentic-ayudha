@@ -1,0 +1,29 @@
+# Recorded run (WP5.8) on a concrete request: "show the basket total on `/order/review` in pounds with two decimals, like "£12.50""
+# in the synthetic bakery app (../testdata/bakery). The gate said pass, so the skill asked nothing and drafted the story from the
+# request's own words.
+skill = "grill"
+description = "A concrete request passes the gate: the story is drafted from its own words with no questions."
+input = "input.txt"
+repo = "../testdata/bakery"
+gate = "pass"
+transcript = "output/transcript.json"
+cite = 1
+artifacts = ["output/issue.json", "output/transcript.json"]
+schemas = [{ file = "output/issue.json", schema = "evals/schemas/workitem.json" }]
+ready = ["output/issue.json"]
+calls = [
+  ["grill", "story", "--assess", "--idea", "Under Feature #40 (Online ordering), show the basket total on `/order/review` in pounds with two decimals, like \"£12.50\"."],
+  ["grill", "story", "--idea", "Under Feature #40 (Online ordering), show the basket total on `/order/review` in pounds with two decimals, like \"£12.50\".", "--parent", "40", "--title", "Show the basket total in pounds with two decimals on the review screen", "--body", "### Summary\n\nAs a customer on the review screen, I want the basket total shown in pounds with two decimals, like \"£12.50\".\n\n### Completion Goal\n\n1. [screenshot] state: `/order/review` with the seeded basket of 2 items; expected: the basket total in pounds with two decimals, in the form \"£12.50\"\n\n### Measure\n\nCompletion Goal criteria observed\n\n### Threshold\n\nthe 1 criterion\n\n### Scenario\n\nAs the seeded customer, add the 2 seeded items to the basket, open /order/review, and capture it.\n\n### Environment\n\nlocal app with the seeded synthetic customer; never production\n\n### Checkpoints\n\n1. The review screen shows the seeded basket's total in pounds with two decimals (criterion 1)\n\n### Assumptions\n\n- The seeded basket of 2 items stands for any basket.\n\n### Provenance\n\nRequest: \"Under Feature #40 (Online ordering), show the basket total on `/order/review` in pounds with two decimals, like \"£12.50\".\"\n1. stated (request): \"show the basket total on `/order/review` in pounds with two decimals\"; facts: route:/order/review, component:BasketSummary", "--labels", "effort:XS", "--create"],
+  ["ready", "43", "--check"],
+]
+
+# The request names one screen and one format: other screens, currencies, or rounding rules would be invented.
+scope = [
+  { pattern = '(?i)\b(euro|dollar|€|\$|currenc(y|ies)|round(ing|ed)?)\b', why = "a currency or rounding rule the request does not state" },
+  { pattern = '(?i)`/(menu|order/(details|options|pickup))`|`/order`', why = "a screen the request does not name" },
+]
+
+[tier2]
+rubric = "rubric.md"
+human = "human.toml"
+references = ["story.md", ]

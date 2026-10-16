@@ -6,6 +6,7 @@
     "completion_goal": "1. [metric] state: `/menu/search` with the seeded menu of 40 products and a cold cache, typing a query one character at a time on a mid-range laptop on a local network; expected: the p95 time from a keystroke to the matching products showing is at most 200 ms over 100 keystrokes",
     "measure": "p95 keystroke-to-results time from a benchmark test on the seeded menu",
     "threshold": "at most 200 ms at p95",
+    "checkpoints": "1. The menu-search benchmark runs on the seeded menu with a cold cache and prints the p95 keystroke-to-results time, at most 200 ms (criterion 1)",
     "scenario": "Load /menu/search, then run the menu-search benchmark against the local app with the seeded menu: it types queries one character at a time, 100 keystrokes in all, and records the time from each keystroke until the matching products show.",
     "environment": "local app with the seeded synthetic menu (40 products) on a mid-range laptop; never production",
     "assumptions": "- The seeded menu (40 products) stands in for the real menu's size.\n- Measured on a mid-range laptop on a local network (the accepted default).",

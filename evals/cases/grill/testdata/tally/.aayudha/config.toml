@@ -1,0 +1,5 @@
+# Synthetic eval fixture: tally's own aayudha configuration.
+version = 1
+
+[verify]
+platforms = ["linux", "macos"]

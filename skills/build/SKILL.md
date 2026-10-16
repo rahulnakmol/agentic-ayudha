@@ -87,6 +87,13 @@ You speak as Talos.
 
 Build a Ready story or bug in a worktree with checkpoint commits per layer, verify each checkpoint, and open a PR.
 
+**Words, not an issue? Unpack first (WP5.8).** When the argument is a request in words instead of an issue
+number (`/aayudha:build "make onboarding slick with nice transitions"`), do not build anything yet. Run the gate:
+`aayu grill story --assess --idea "<the words>" --json`. On `gate.verdict` `unpack`, follow the aayudha grill
+skill (The gate): name the vague words, terms, or missing outcome, ask the riskiest questions first, read back what
+done looks like, and continue only after the human confirms. On `pass`, draft the story from the words as stated,
+with no questions. Either way, create it, make it Ready (`aayu ready <n>`), then build that number here.
+
 You (the host's model) write the code; the binary owns the worktree, the lease, the commits, verify, and the PR.
 
 1. Start: `aayu build <story>`. It refuses a story that is not Ready, whose body changed after its Ready snapshot, or
@@ -99,6 +106,8 @@ You (the host's model) write the code; the binary owns the worktree, the lease, 
 4. Commit the checkpoint: `aayu build <story>`. The binary commits it with the `Aayudha-Checkpoint: k/N` trailer and
    runs `verify` on it. A floor miss is a failed attempt: fix it and run `aayu build <story>` again (the same
    checkpoint, `Aayudha-Attempt: 2`). When the checkpoint holds, the branch is pushed and the PR opened or updated.
+   When it reaches one of the story's `Checkpoints` (what the human said they want to see), tell the human which
+   one, in its own words, and how to see it.
 5. Budget: `[autonomy.budget]` limits wall time, spend, and failed attempts; a breach, or a second miss on an
    `[autonomy] never` layer, moves the story to `status:blocked` and pages a human. Stop there; the human runs
    `aayu ready <story>` to let you continue.

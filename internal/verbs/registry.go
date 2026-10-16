@@ -531,7 +531,7 @@ var Verbs = []Command{
 			flag("body", TypeString, "Drafted issue body in the issue-form layout (### <Field> sections), or the brand YAML for brand."),
 			flag("labels", TypeString, "Comma-separated label-held fields, e.g. effort:S,priority:P2."),
 			flag("idea", TypeString, "The request in the human's own words. With --assess, the idea to assess; with a draft, the request its Provenance must quote and resolve."),
-			flag("assess", TypeBool, "Read-only fact pass for the idea: its vague qualifiers with the dimensions to ask about, and the routes, states, components, tokens, tests, events, related stories, floors, and layers it touches (repository content is reported as untrusted data)."),
+			flag("assess", TypeBool, "Read-only fact pass for the idea: the vagueness gate (unpack or pass, with its reasons), its vague qualifiers, abbreviations, and missing outcome with the dimensions to ask about, the product types, and the routes, states, components, tokens, tests, events, related stories, floors, and layers it touches (repository content is reported as untrusted data)."),
 			readOnlyWith(flag("create", TypeBool, "Write the validated draft: the issue (through the actions log), or design/brand.yaml; without it grill only validates."), "false"),
 		},
 		Outputs:  []string{"issue", "design/brand.yaml", "assessment"},

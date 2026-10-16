@@ -1,0 +1,131 @@
+# The simulated human of grill/bakery-motion (WP5.8): the bakery's owner. The skill tags each question with a topic, <dimension>/<key>, the keys
+# coming from the catalogues' Topics (vague/motion.md, vague/ux.md), term/<term> for an abbreviation, or the request topics in the skill. The human
+# answers by topic, else by the topic's dimension, else with the fallback, which parks it: an unscripted idea never becomes a
+# requirement. kind: confirm (states or agrees), default (accepts the skill's offered default), park, or defer.
+max_rounds = 4
+readback = "Yes, that is what done looks like."
+fallback = { kind = "park", text = "That is not part of what I asked for; park it." }
+
+[topics."motion.purpose/moments"]
+kind = "confirm"
+text = "Two moments: moving between the order steps, and an item going into the basket. Nothing else needs to move."
+
+[topics."motion.purpose/purpose"]
+kind = "confirm"
+text = "So customers can tell they moved forward or back a step, and see that the item went in."
+
+[topics."motion.where/elements"]
+kind = "confirm"
+text = "The step content slides in the direction you are going; the header and the basket summary stay still. The basket count gives a small pop when an item goes in."
+
+[topics."motion.where/state-changes"]
+kind = "confirm"
+text = "The step content slides in the direction you are going; the header and the basket summary stay still. The basket count gives a small pop when an item goes in."
+
+[topics."motion.budget/duration"]
+kind = "confirm"
+text = "Keep it quick: step changes in 200 ms, and the basket pop in 150 ms, like the buttons already fade."
+
+[topics."motion.budget/easing"]
+kind = "default"
+text = "Your default is fine."
+
+[topics."motion.budget/tokens"]
+kind = "default"
+text = "Your default is fine."
+
+[topics."motion.reduced/reduced-motion"]
+kind = "confirm"
+text = "With reduced motion on, nothing slides or pops; the step and the count just change at once."
+
+[topics."motion.performance/frame-rate"]
+kind = "park"
+text = "Don't worry about frame rates for this one."
+
+[topics."motion.performance/layout-shift"]
+kind = "park"
+text = "Don't worry about that for this one."
+
+[topics."motion.proof/recording"]
+kind = "confirm"
+text = "A recording of both moments, once with reduced motion off and once with it on."
+
+[topics."motion.proof/duration-metric"]
+kind = "default"
+text = "Your default is fine."
+
+[topics."ux.tasks/primary-task"]
+kind = "confirm"
+text = "The normal order: choose items, then the pickup and details steps, then review and pay. Same steps as today."
+
+[topics."request/size"]
+kind = "confirm"
+text = "One story is fine."
+
+[topics."request/scope"]
+kind = "confirm"
+text = "Slick and nice just mean the motion for me; don't change anything else about the steps."
+
+[topics."request/existing-behaviour"]
+kind = "confirm"
+text = "Today nothing moves except the buttons fading on hover."
+
+[dimensions."motion.purpose"]
+kind = "confirm"
+text = "Two moments: moving between the order steps, and an item going into the basket. Nothing else needs to move."
+
+[dimensions."motion.where"]
+kind = "confirm"
+text = "The step content slides in the direction you are going; the header and the basket summary stay still. The basket count gives a small pop when an item goes in."
+
+[dimensions."motion.budget"]
+kind = "confirm"
+text = "Keep it quick: step changes in 200 ms, and the basket pop in 150 ms, like the buttons already fade."
+
+[dimensions."motion.reduced"]
+kind = "confirm"
+text = "With reduced motion on, nothing slides or pops; the step and the count just change at once."
+
+[dimensions."motion.performance"]
+kind = "park"
+text = "Don't worry about frame rates for this one."
+
+[dimensions."motion.proof"]
+kind = "confirm"
+text = "A recording of both moments, once with reduced motion off and once with it on."
+
+[dimensions."ux.tasks"]
+kind = "confirm"
+text = "The normal order: choose items, then the pickup and details steps, then review and pay. Same steps as today."
+
+[dimensions."ux.steps"]
+kind = "park"
+text = "Keep the steps as they are; this is only about motion."
+
+[dimensions."ux.states"]
+kind = "park"
+text = "Leave the states as they are."
+
+[dimensions."ux.platforms"]
+kind = "default"
+text = "Your default is fine."
+
+[dimensions."ux.consistency"]
+kind = "default"
+text = "Your default is fine."
+
+[dimensions."ux.content"]
+kind = "park"
+text = "No wording changes."
+
+[dimensions."ux.trust"]
+kind = "park"
+text = "Leave that as it is."
+
+[dimensions."ux.performance"]
+kind = "park"
+text = "Speed is fine today; leave it."
+
+[dimensions."ux.accessibility"]
+kind = "park"
+text = "The floors are enough for this one."

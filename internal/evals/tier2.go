@@ -614,6 +614,12 @@ func (h *Harness) runConversation(ctx context.Context, c Case, lane verbs.LaneID
 			}
 			return Run{}, err
 		}
+		if round == 1 {
+			if f := GateFloor(a.Gate.Verdict, t); f != "" {
+				rt.Exchanges = append(rt.Exchanges, Exchange{Say: clip(actions.RedactString(t.Say), 1200), Questions: t.Questions, Done: t.Done})
+				return Run{Status: RunFail, Score: 1, Floor: "gate: " + f}, nil
+			}
+		}
 		x := Exchange{Say: clip(actions.RedactString(t.Say), 1200), Questions: t.Questions, Done: t.Done}
 		if t.Done {
 			tr.Exchanges = append(tr.Exchanges, x)

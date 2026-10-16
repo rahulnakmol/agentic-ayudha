@@ -62,6 +62,8 @@ func story(fields map[string]string) workitems.Item {
 const goodProvenance = "Request: \"Ordering needs high-quality UX\"\nVague: \"high-quality UX\" → criteria 1, 2\n" +
 	"1. stated (ux.trust): \"show the total and the pickup time\"\n2. confirmed (ux.steps): \"three screens at most\"; facts: flow:/order"
 
+const goodCheckpoints = "1. The review screen shows the total and the pickup time (criterion 1)\n2. A paid order takes at most 3 screens (criteria 2)"
+
 // Check: a criterion keeps a vague word only with something to observe; a
 // grilled spec (Provenance present) resolves every qualifier of its request,
 // gives every criterion one source, lists assumptions, answers or defers
@@ -79,8 +81,25 @@ func TestCheck(t *testing.T) {
 		{"vague word with a number", map[string]string{workitems.FieldCriteria: "1. [metric] state: `/menu/search` seeded; expected: fast: p95 under 200 ms"}, nil},
 		{"vague word only in quoted copy", map[string]string{workitems.FieldCriteria: "1. [screenshot] state: `/order`; expected: the \"Quick reorder\" button"}, nil},
 		{"vague threshold", map[string]string{workitems.FieldThreshold: "fast enough"}, []string{"threshold: Threshold says \"fast\""}},
-		{"grilled and complete", map[string]string{workitems.FieldProvenance: goodProvenance, workitems.FieldAssumptions: "none",
+		{"grilled and complete", map[string]string{workitems.FieldProvenance: goodProvenance, workitems.FieldAssumptions: "none", workitems.FieldCheckpoints: goodCheckpoints,
 			workitems.FieldOpenQuestions: "- answered: which task first\n- deferred: exact wording (staff write it)", workitems.FieldParked: "- loyalty stamps: a stamp card"}, nil},
+		// WP5.8: every term of the request has its confirmed meaning, and the checkpoints reach every criterion.
+		{"terms and checkpoints", map[string]string{workitems.FieldAssumptions: "none",
+			workitems.FieldProvenance: "Request: \"Staff need SSO and a KPI board\"\nTerm: \"SSO\" → single sign-on with our Okta; \"yes, Okta\"\nTerm: \"KPIs\" → deferred: the human will list them\n" +
+				"Term: \"RBAC\" → role-based access\n1. stated (request): \"Staff need SSO\"\n2. stated (request): \"a KPI board\"",
+			workitems.FieldCheckpoints: "1. Staff sign in with Okta (criterion 1)\n3. The board shows (criteria 2, 5)\nThe board is fast",
+		}, []string{
+			`provenance: line 4: term "RBAC": write`,
+			`provenance: term "KPIs" is deferred, but Open questions has no "deferred:" entry for it`,
+			`checkpoints: "The board is fast": write`,
+			"checkpoints: checkpoint 2 is numbered 3",
+			"checkpoints: checkpoint 3 reaches criterion 5, which does not exist",
+		}},
+		{"term without its line", map[string]string{workitems.FieldAssumptions: "none", workitems.FieldCheckpoints: goodCheckpoints,
+			workitems.FieldProvenance: "Request: \"The PDP needs a CTA\"\nTerm: \"CTA\" → one button; \"one button\"\n1. stated (request): \"The PDP\"\n2. stated (request): \"a CTA\"",
+		}, []string{"the request says \"PDP\" but no `Term:` line records the meaning"}},
+		{"criterion no checkpoint reaches", map[string]string{workitems.FieldProvenance: goodProvenance, workitems.FieldAssumptions: "none",
+			workitems.FieldCheckpoints: "1. The review screen shows the total (criterion 1)"}, []string{"checkpoints: no checkpoint reaches criterion 2"}},
 		{"placement the human said", map[string]string{workitems.FieldProvenance: goodProvenance, workitems.FieldAssumptions: "none",
 			workitems.FieldCriteria: "1. [screenshot] state: `/order/review` with 2 items; expected: the total and the pickup time on the review screen, at the top of `/order/review`\n" +
 				"2. [recording] state: `/order` empty basket; expected: a paid order in at most 3 screens",
@@ -199,5 +218,98 @@ func TestTopicsAndPlacements(t *testing.T) {
 	c := catalog(t)
 	if d, _ := c.Dimension("ux.steps"); !slices.Contains(d.Topics, "confirmation-placement") {
 		t.Fatalf("ux.steps topics: %v", d.Topics)
+	}
+}
+
+// The vagueness gate (WP5.8): a vague qualifier, a term that is not plain,
+// or (with no qualifier) nothing observable sends a request to be unpacked;
+// a request with something to observe and nothing to decode passes. A
+// number inside a term (B2B) or an issue reference is not something to
+// observe, and an identifier is not a term.
+func TestGate(t *testing.T) {
+	c := catalog(t)
+	for _, tc := range []struct {
+		idea, verdict string
+		reasons       []string // kind:text
+	}{
+		{"make onboarding slick with nice transitions", GateUnpack, []string{"vague:slick", "vague:nice", "vague:transitions"}},
+		{"Staff need SSO for the POS", GateUnpack, []string{"term:SSO", "term:POS", "outcome:no observable result"}},
+		{"Let customers reorder their usual", GateUnpack, []string{"outcome:no observable result"}},
+		{"Under Feature #40, add a reorder button", GateUnpack, []string{"outcome:no observable result"}},
+		{"Add a B2B order form", GateUnpack, []string{"term:B2B", "outcome:no observable result"}},
+		{"Set AAYU_AGENT in the CI job and update the README", GateUnpack, []string{"outcome:no observable result"}},
+		{"maybe something like a loyalty card", GateUnpack, []string{"vague:maybe", "vague:something like"}},
+		{"Show the basket total on `/order/review` like \"£12.50\"", GatePass, nil},
+		{"Add a --json flag to tally list", GatePass, nil},
+		{"Fix the crash when the basket has 0 items", GatePass, nil},
+	} {
+		a := Assessment{Idea: tc.idea, Terms: c.Abbreviations(tc.idea)}
+		for _, h := range c.Find(tc.idea) {
+			a.Vague = append(a.Vague, VagueHit{Qualifier: h.Qualifier, Text: h.Text, Domain: h.Domain})
+		}
+		g := GateFor(c, a)
+		var got []string
+		for _, r := range g.Reasons {
+			got = append(got, r.Kind+":"+r.Text)
+		}
+		if g.Verdict != tc.verdict || strings.Join(got, ",") != strings.Join(tc.reasons, ",") {
+			t.Errorf("%q: %s %v, want %s %v", tc.idea, g.Verdict, got, tc.verdict, tc.reasons)
+		}
+	}
+	if ts := c.Abbreviations("The PDP and KPIs, in i18n and a11y"); len(ts) != 4 || len(ts[0].Meanings) != 2 || ts[1].Text != "KPIs" || ts[3].Text != "a11y" {
+		t.Errorf("abbreviations: %+v", ts)
+	}
+}
+
+// Product types decide which dimensions a qualifier asks about and which
+// facts are reported: "fast" asks about startup for the tally CLI and about
+// interaction latency for the bakery web app; the CLI's commands and flags
+// and the web app's motion are facts, and a CLI gets no design-token gap.
+func TestAssessProducts(t *testing.T) {
+	c := catalog(t)
+	assess := func(fixture, idea string) (Assessment, map[string]string) {
+		root := "../../evals/cases/grill/testdata/" + fixture
+		l, err := config.Load(config.Sources{RepoDir: root})
+		if err != nil {
+			t.Fatal(err)
+		}
+		a := Assess(AssessInput{Root: root, Type: "story", Idea: idea, Catalog: c, Verify: l.Config.Verify})
+		facts := map[string]string{}
+		for _, f := range a.Facts {
+			facts[f.ID] = f.Text
+		}
+		return a, facts
+	}
+	dims := func(a Assessment) []string {
+		var out []string
+		for _, d := range a.Vague[0].Dimensions {
+			out = append(out, d.ID)
+		}
+		return out
+	}
+	cli, cf := assess("tally", "make tally fast")
+	if strings.Join(cli.Products, ",") != "cli" || !slices.Contains(dims(cli), "perf.startup") || slices.Contains(dims(cli), "perf.interaction") {
+		t.Errorf("tally: products %v, dimensions %v", cli.Products, dims(cli))
+	}
+	for id, want := range map[string]string{
+		"command:tally":     "6 commands and 27 flags in all (init, add, list, report, export, config); 3 flags apply to the tool itself",
+		"command:tally add": "7 flags: --amount, --category, --currency, --date, --note, --tag, --split",
+		"product:cli":       "package main in cmd/tally",
+	} {
+		if !strings.Contains(cf[id], want) {
+			t.Errorf("%s = %q, want %q", id, cf[id], want)
+		}
+	}
+	for _, id := range []string{"gap:tokens", "gap:motion", "floor:a11y", "gap:perf-budget", "gap:api-budget"} {
+		if _, ok := cf[id]; ok {
+			t.Errorf("tally is a CLI, but the assessment has %s", id)
+		}
+	}
+	web, wf := assess("bakery", "make search fast")
+	if strings.Join(web.Products, ",") != "web,api" || slices.Contains(dims(web), "perf.startup") || !slices.Contains(dims(web), "perf.interaction") {
+		t.Errorf("bakery: products %v, dimensions %v", web.Products, dims(web))
+	}
+	if !strings.Contains(wf["motion:web/styles/buttons.css"], "durations 150ms") || wf["gap:reduced-motion"] == "" {
+		t.Errorf("bakery motion facts: %q, %q", wf["motion:web/styles/buttons.css"], wf["gap:reduced-motion"])
 	}
 }

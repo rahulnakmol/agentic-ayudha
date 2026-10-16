@@ -1,0 +1,1 @@
+Under Feature #40 (Online ordering), show the basket total on `/order/review` in pounds with two decimals, like "£12.50".

@@ -1,0 +1,9 @@
+{
+  "request": "Under Feature #40 (Online ordering), show the basket total on `/order/review` in pounds with two decimals, like \"£12.50\".",
+  "exchanges": [
+    {
+      "say": "Here is what done looks like. Goal: the review screen shows the basket total in pounds with two decimals. Done when: `/order/review` with the seeded basket of 2 items shows its total like \"£12.50\". One checkpoint: the review screen shows it. The request was concrete, so I asked nothing.",
+      "done": true
+    }
+  ]
+}
