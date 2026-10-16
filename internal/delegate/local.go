@@ -21,7 +21,11 @@ var LocalBins = map[string][]string{
 // in the worktree. Each may edit files there; none commits, pushes, or opens a
 // PR (aayu does, after verify). The flags are the CLIs' documented ones
 // (research §5): Codex's workspace-write sandbox, Cursor's print mode with
-// --force, Claude Code's print mode allowed to edit, and Amp's execute mode.
+// --force, Claude Code's print mode allowed to edit and to run shell commands
+// (acceptEdits alone denies Bash in print mode, so the receiver could not run
+// the tests the brief asks it to verify with; D-5.5c.13), and Amp's execute
+// mode. Claude Code's --allowedTools takes several values, so it comes before
+// another flag, never just before the prompt.
 func LocalArgs(receiver, bin, wt, prompt string) []string {
 	switch receiver {
 	case Codex:
@@ -29,7 +33,7 @@ func LocalArgs(receiver, bin, wt, prompt string) []string {
 	case Cursor:
 		return []string{"-p", "--force", "--output-format", "text", "--workspace", wt, prompt}
 	case Claude:
-		return []string{"-p", "--permission-mode", "acceptEdits", "--output-format", "text", prompt}
+		return []string{"-p", "--allowedTools", "Bash", "--permission-mode", "acceptEdits", "--output-format", "text", prompt}
 	case Amp:
 		return []string{"-x", prompt}
 	}

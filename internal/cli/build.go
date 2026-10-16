@@ -395,6 +395,21 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
 			return err
 		}
+		if dlg != nil {
+			// The receiver changed nothing: keep its report and the hand-off's
+			// state, so the person sees why (D-5.5c.16), and let the next run
+			// hand off afresh.
+			dlg.event(e.Now(), dlgFailed, "the local "+dlg.receiver+" run changed nothing")
+			dlg.fill(res.Delegation)
+			if err := e.saveDelegation(ctx, dlg); err != nil {
+				return err
+			}
+			res.Next = fmt.Sprintf("%s changed nothing in %s; read its report, then `aayu build %d --delegate %s --local` hands off again in a fresh worktree", dlg.receiver, res.Worktree, n, dlg.receiver)
+			if err := e.emitDelegation(res); err != nil {
+				return err
+			}
+			return Errorf(ExitBlocked, "build #%d --delegate %s: the receiver changed nothing in %s", n, dlg.receiver, res.Worktree)
+		}
 		return Errorf(ExitBlocked, "build #%d: nothing to commit yet in %s", n, res.Worktree)
 	}
 	pp := e.progress(fmt.Sprintf("Pushing %s and opening the pull request", res.Branch))

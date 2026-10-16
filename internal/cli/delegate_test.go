@@ -405,6 +405,37 @@ func TestDelegateLocalFallback(t *testing.T) {
 	}
 }
 
+// A local receiver that changes nothing: its own report and the hand-off's
+// state survive (megaman: Codex's "not proved" was lost, D-5.5c.16), and the
+// next run hands off afresh.
+func TestDelegateLocalNoChange(t *testing.T) {
+	_, env, opts, dir, bare := delegateFixture(t)
+	opts.LookPath = func(name string) (string, error) {
+		if name == "codex" {
+			return "/usr/local/bin/codex", nil
+		}
+		return "", os.ErrNotExist
+	}
+	report := "1. not proved: the sandbox could not start (bwrap: setting up uid map: Permission denied)"
+	opts.DelegateExec = func(context.Context, string, []string, string, string, ...string) (string, error) {
+		return "codex\nI could not run anything.\n\n## What I proved\n" + report + "\n", nil
+	}
+	code, res, errOut := delegateRun(t, env, opts, "--delegate", "codex", "--local")
+	if code != ExitBlocked || res.Delegation == nil || res.Delegation.Proved != report || res.Delegation.Status != dlgFailed || !strings.Contains(errOut, "changed nothing") {
+		t.Fatalf("no change: %d %+v %s", code, res.Delegation, errOut)
+	}
+	var st delegate.State
+	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+delegate.LedgerPath(2))), &st); err != nil || st.Proved != report || st.Status != dlgFailed || st.Handoffs != 1 {
+		t.Fatalf("ledger: %v %+v", err, st)
+	}
+	opts.DelegateExec = func(_ context.Context, wt string, _ []string, _, _ string, _ ...string) (string, error) {
+		return "", os.WriteFile(filepath.Join(wt, "empty.txt"), []byte("Your cart is empty\n"), 0o644)
+	}
+	if code, res, errOut := delegateRun(t, env, opts, "--delegate", "codex", "--local"); code != 0 || res.Worktree != delegate.Worktree(dir, 2, "codex", 2) {
+		t.Fatalf("the next hand-off: %d %+v %s", code, res, errOut)
+	}
+}
+
 // Claude Code on the web: the brief starts a cloud session from the user's
 // own CLI (no workflow, no key in CI); the session pushes the branch the brief
 // named, from which aayu opens the PR.

@@ -591,7 +591,7 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 		return nil, true, Wrap(ExitExternal, err)
 	}
 	res.PRURL = pr.GetHTMLURL()
-	if p := delegate.Proved(pr.GetBody()); p != "" {
+	if p := delegate.Proved(pr.GetBody(), ""); p != "" {
 		d.state.Proved = p
 	}
 	head := pr.GetHead().GetSHA()
@@ -752,7 +752,7 @@ func (e *Env) localWriter(d *delegation, prompt string) func(context.Context, st
 		env := delegate.ScrubEnv(e.Environ, d.receiver, gh)
 		return e.act(ctx, d, "delegate.local-run", map[string]any{"bin": filepath.Base(d.bin), "worktree": wt, "prompt_sha256": delegate.BriefHash(prompt)}, func(ctx context.Context) error {
 			out, err := e.delegateExec()(ctx, wt, env, "", d.bin, delegate.LocalArgs(d.receiver, d.bin, wt, prompt)...)
-			if p := delegate.Proved(out); p != "" {
+			if p := delegate.Proved(out, prompt); p != "" {
 				d.state.Proved = p
 			}
 			return err
