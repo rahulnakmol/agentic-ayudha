@@ -1,14 +1,19 @@
 package cli
 
 import (
+	"archive/tar"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	aayudha "github.com/rahulnakmol/agentic-ayudha"
+	"github.com/rahulnakmol/agentic-ayudha/internal/agentenv"
 	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
 	"github.com/rahulnakmol/agentic-ayudha/internal/skills"
 )
@@ -172,5 +177,57 @@ func TestInstallMirrorsVerifySkill(t *testing.T) {
 	}
 	if lock, _, _ := hosts.ReadLock(repo); len(lock.ProductSkills) != 0 {
 		t.Errorf("lock after delete: %v", lock.ProductSkills)
+	}
+}
+
+// TestInstallEnv: an agent may set up and verify agent environments (they land
+// through review like any file); a clean-container failure is fixed and retried.
+func TestInstallEnv(t *testing.T) {
+	repo := gitInit(t, "dev", map[string]string{"go.mod": "module m\n\ngo 1.25.0\n"})
+	sum := strings.Repeat("a", 64)
+	runs := 0
+	opts := Options{Dir: repo, Build: BuildInfo{Version: "1.0.0"},
+		EnvFetch: func(_ context.Context, u string) ([]byte, error) {
+			return []byte(`[{"version":"go1.25.8","stable":true,"files":[{"os":"linux","arch":"amd64","kind":"archive","sha256":"` + sum + `"},{"os":"linux","arch":"arm64","kind":"archive","sha256":"` + sum + `"}]}]`), nil
+		},
+		EnvRunner: func(_ context.Context, stdin io.Reader, out io.Writer, name string, args ...string) error {
+			if name != "docker" || len(args) == 0 {
+				return errors.New("no")
+			}
+			if args[0] != "run" {
+				return nil // info, build
+			}
+			runs++
+			files := map[string]string{}
+			tr := tar.NewReader(stdin)
+			for h, err := tr.Next(); err == nil; h, err = tr.Next() {
+				b, _ := io.ReadAll(tr)
+				files[h.Name] = string(b)
+			}
+			if !strings.Contains(files[".agents/setup"], " unzip\n") {
+				fmt.Fprintln(out, ".agents/check: line 20: unzip: command not found")
+				return errors.New("exit status 127")
+			}
+			check := strings.Split(strings.TrimSpace(files[".agents/check"]), "\n")
+			fmt.Fprintf(out, "aayu-phase setup-cold 40\naayu-phase setup-warm 2\n%s\naayu-phase check 9\n", strings.Trim(strings.TrimPrefix(check[len(check)-1], "echo "), `"`))
+			return nil
+		}}
+	code, out, errs := run(t, map[string]string{"AAYU_AGENT": "1", "HOME": t.TempDir()}, opts, "install", "--env", "--verify", "--host", "amp")
+	if code != 0 {
+		t.Fatalf("install --env --verify: exit %d\n%s%s", code, out, errs)
+	}
+	if runs != 2 || !strings.Contains(out, "fixed: added apt package unzip") || !strings.Contains(out, "PASS amp in debian:12: setup cold 40s, warm 2s, check 9s; 2 attempt(s)") {
+		t.Fatalf("want a failing attempt fixed, then a pass; %d runs:\n%s", runs, out)
+	}
+	sts, err := agentenv.Status(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sts[0].Host != "amp" || sts[0].State != agentenv.Verified || sts[1].State != agentenv.Missing {
+		t.Fatalf("status after verifying amp: %+v", sts)
+	}
+	spec, _ := os.ReadFile(filepath.Join(repo, agentenv.SpecPath))
+	if !strings.Contains(string(spec), "'unzip'") || !strings.Contains(string(spec), "fix: unzip was missing in a clean container") {
+		t.Errorf("the fix is not recorded in the spec:\n%s", spec)
 	}
 }

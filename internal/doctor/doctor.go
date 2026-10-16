@@ -39,10 +39,12 @@ type Result struct {
 
 // Probe is everything checks may observe. Tests supply fakes.
 type Probe struct {
-	Root      string // repository root; "" outside a repository
-	Getenv    func(string) string
-	LookPath  func(string) (string, error)
-	Exec      func(ctx context.Context, dir, name string, args ...string) (string, error)
+	Root     string // repository root; "" outside a repository
+	Getenv   func(string) string
+	LookPath func(string) (string, error)
+	Exec     func(ctx context.Context, dir, name string, args ...string) (string, error)
+	// Combined is Exec with stdout and stderr together (agent CLIs print their sign-in status on stderr).
+	Combined  func(ctx context.Context, dir, name string, args ...string) (string, error)
 	Config    *config.Loaded
 	ConfigErr error
 	Secrets   *secrets.Store
@@ -86,7 +88,8 @@ var Checks = []Check{
 	{"integrations", checkIntegrations},
 	{"optional-tools", checkOptionalTools},
 	{"worktrees", checkWorktrees},
-	{"delegate-env", checkDelegateEnv},
+	{"agent-env", checkAgentEnv},
+	{"agents", checkAgents},
 	{"reviewer-apps", checkReviewerApps},
 	{"leases", checkLeases},
 	{"coexistence", checkCoexistence},

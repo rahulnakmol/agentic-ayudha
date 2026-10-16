@@ -19,6 +19,7 @@ import (
 	gh "github.com/google/go-github/v90/github"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
+	"github.com/rahulnakmol/agentic-ayudha/internal/agentenv"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/delegate"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
@@ -787,34 +788,42 @@ func (e *Env) emitDelegation(res BuildResult) error {
 	})
 }
 
-// fixDelegateEnv writes .cursor/environment.json from the environment source
-// (doctor --fix, WP5.5b), keeping every key but name and install, and shows
-// what changed. Codex's environment lives in its UI; Amp reads .agents/setup.
+// fixDelegateEnv re-syncs the agent environments' generated files with
+// .aayudha/env.toml (doctor --fix), offline: the spec holds every pin, so
+// nothing is resolved or verified here (aayu install --env does both).
 func (e *Env) fixDelegateEnv() (string, error) {
 	root := config.RepoRoot(e.Dir)
 	if root == "" {
 		return "", nil
 	}
-	if _, err := os.Stat(filepath.Join(root, delegate.SetupPath)); err != nil {
-		return "--fix: no " + delegate.SetupPath + ", so no delegation environment to generate", nil
-	}
-	p := filepath.Join(root, filepath.FromSlash(delegate.CursorEnvPath))
-	old, _ := os.ReadFile(p)
-	b, err := delegate.CursorEnvironment(old)
+	s, ok, err := agentenv.LoadSpec(root)
 	if err != nil {
 		return "", Wrap(ExitBlocked, fmt.Errorf("doctor --fix: %w", err))
 	}
-	if string(old) == string(b) {
-		return "--fix: " + delegate.CursorEnvPath + " already installs with " + delegate.SetupCommand, nil
+	if !ok {
+		return "--fix: no " + agentenv.SpecPath + ", so no agent environment to re-sync; `aayu install --env` sets one up", nil
+	}
+	files, _, err := agentenv.Generate(root, s)
+	if err != nil {
+		return "", Wrap(ExitBlocked, fmt.Errorf("doctor --fix: %w", err))
+	}
+	var changed []string
+	for _, f := range files {
+		old, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(f.Path)))
+		fi, _ := os.Stat(filepath.Join(root, filepath.FromSlash(f.Path)))
+		if err == nil && string(old) == string(f.Content) && (!f.Exec || fi.Mode()&0o111 != 0) {
+			continue
+		}
+		changed = append(changed, f.Path)
+	}
+	if len(changed) == 0 {
+		return "--fix: the agent environment files match " + agentenv.SpecPath, nil
 	}
 	if e.DryRun {
-		return "--fix (dry run): would write " + delegate.CursorEnvPath + ":\n" + string(b), nil
+		return "--fix (dry run): would rewrite " + strings.Join(changed, ", ") + " from " + agentenv.SpecPath, nil
 	}
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+	if err := agentenv.Write(root, s); err != nil {
 		return "", err
 	}
-	if err := os.WriteFile(p, b, 0o644); err != nil {
-		return "", err
-	}
-	return "--fix: wrote " + delegate.CursorEnvPath + " (install: " + delegate.SetupCommand + "); commit it to the default branch for Cursor's cloud agents:\n" + string(b), nil
+	return "--fix: rewrote " + strings.Join(changed, ", ") + " from " + agentenv.SpecPath + "; commit them to the default branch, then `aayu install --env --verify`", nil
 }

@@ -1,0 +1,35 @@
+# Agent environments aayu verified (`aayu install --env --verify`, `--cloud`). Generated; do not edit.
+[container]
+[container.amp]
+fingerprint = 'sha256:b6655dfa4a0f5c48'
+method = 'container'
+image = 'debian:12'
+at = '2026-10-16T02:27:35Z'
+seconds = 316
+evidence = 'setup cold 144s, warm 3s; check 169s; 1 attempt(s)'
+
+[container.claude]
+fingerprint = 'sha256:b6655dfa4a0f5c48'
+method = 'container'
+image = 'ubuntu:24.04'
+at = '2026-10-16T02:35:02Z'
+seconds = 214
+evidence = 'setup cold 49s, warm 4s; check 161s; 1 attempt(s)'
+
+[container.codex]
+fingerprint = 'sha256:b6655dfa4a0f5c48'
+method = 'container'
+image = 'ghcr.io/openai/codex-universal:latest'
+at = '2026-10-16T02:22:15Z'
+seconds = 225
+evidence = 'setup cold 44s, warm 4s; check 177s; 1 attempt(s)'
+
+[container.cursor]
+fingerprint = 'sha256:b6655dfa4a0f5c48'
+method = 'container'
+image = 'ubuntu:24.04'
+at = '2026-10-16T02:31:24Z'
+seconds = 223
+evidence = 'setup cold 56s, warm 3s; check 164s; 1 attempt(s)'
+
+[cloud]
