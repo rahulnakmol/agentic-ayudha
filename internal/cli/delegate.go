@@ -593,6 +593,48 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 			Body: fmt.Sprintf("%s#%d (delegated to %s, PR #%d): %s.", d.repo, d.story, d.receiver, d.state.PR, why)})
 		res.Notes = append(res.Notes, "page: "+sent)
 	}
+	sentFor := slices.ContainsFunc(d.state.FollowUps, func(f delegate.FollowUp) bool { return f.Head == head })
+	// P3: a failed required check goes back to the builder, one round per head,
+	// within the same cap as inspect's fix cycles. The merge gate still decides.
+	var upstream []string
+	if l, err := e.Config(); err == nil {
+		upstream = l.Config.Verify.UpstreamChecks
+	}
+	if fails, err := failedRequired(ctx, d.c, owner, name, head, upstream); err != nil {
+		res.Notes = append(res.Notes, "required checks not read: "+oneLineErr(err))
+	} else if len(fails) > 0 && !sentFor {
+		var names []string
+		for _, f := range fails {
+			names = append(names, f.Name)
+		}
+		round := len(d.state.FollowUps)
+		if round >= inspect.MaxCycles {
+			d.event(now, dlgCapped, fmt.Sprintf("%d follow-up rounds; %s failed on %s", round, strings.Join(names, ", "), short(head)))
+			page(fmt.Sprintf("%d follow-up rounds reached the cap and %s still failed", round, strings.Join(names, ", ")))
+			report()
+			_ = e.saveDelegation(ctx, d)
+			return nil, true, Errorf(ExitBlocked, "build #%d: PR #%d reached the %d-cycle cap with %s failing; a human takes over (paged)", d.story, d.state.PR, inspect.MaxCycles, strings.Join(names, ", "))
+		}
+		msg := delegate.CIFollowUpMessage(d.story, d.state.PR, round+1, inspect.MaxCycles, fails)
+		d.state.FollowUps = append(d.state.FollowUps, delegate.FollowUp{At: now.UTC().Format(time.RFC3339), Head: head, Cycle: round, Findings: []string{}, Checks: names})
+		d.event(now, dlgFix, fmt.Sprintf("round %d: %s failed on %s", round+1, strings.Join(names, ", "), short(head)))
+		res.Delegation.FollowUp = true
+		report()
+		if d.local {
+			return e.localWriter(d, msg), false, nil
+		}
+		if err := e.act(ctx, d, "delegate.follow-up", map[string]any{"pr": d.state.PR, "head": head, "cycle": round, "checks": names}, func(ctx context.Context) error {
+			t, err := d.adapter.FollowUp(ctx, d.state, msg)
+			if err == nil && t.ID != "" {
+				d.state.Task = t.ID
+			}
+			return err
+		}); err != nil {
+			return nil, true, Errorf(ExitExternal, "build #%d: follow-up to %s: %v", d.story, d.receiver, err)
+		}
+		res.Next = fmt.Sprintf("%s failed; sent to %s; sync again after its new commits", strings.Join(names, ", "), d.receiver)
+		return nil, true, e.saveDelegation(ctx, d)
+	}
 	switch {
 	case (r == nil || r.Head != head) && st.Cycles >= inspect.MaxCycles:
 		// inspect stops at its cap and will not review this head: a human takes over.
@@ -620,7 +662,7 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 		report()
 		_ = e.saveDelegation(ctx, d)
 		return nil, true, Errorf(ExitBlocked, "build #%d: inspect asked for a rebuild of PR #%d; a human reviews the story and plan", d.story, d.state.PR)
-	case slices.ContainsFunc(d.state.FollowUps, func(f delegate.FollowUp) bool { return f.Head == head }):
+	case sentFor:
 		report()
 		res.Next = fmt.Sprintf("the findings on %s were sent to %s; waiting for its new commits on PR #%d", short(head), d.receiver, d.state.PR)
 		return nil, true, e.saveDelegation(ctx, d)

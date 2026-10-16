@@ -117,6 +117,8 @@ type ReviewComment struct {
 
 // CheckRun is a check run on a commit.
 type CheckRun struct {
+	ID         int64  `json:"id,omitempty"`
+	HTMLURL    string `json:"html_url,omitempty"`
 	Name       string `json:"name"`
 	Status     string `json:"status"`
 	Conclusion string `json:"conclusion"`
@@ -176,6 +178,7 @@ type GitHub struct {
 	Issues     map[int]*Issue
 	Pulls      map[int]*PR
 	CheckRuns  map[string][]CheckRun   // commit SHA -> check runs, newest first
+	JobLogs    map[int64]string        // Actions job (check run) ID -> its log, behind a redirect like GitHub's
 	Runs       []WorkflowRun           // Actions workflow runs
 	Artifacts  map[int64][]ArtifactZip // run ID -> artifacts
 	Releases   map[string]*Release     // tag -> GitHub Release
@@ -305,6 +308,7 @@ var (
 	reRelTag    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/releases/tags/(.+)$`)
 	reRelease   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/releases/([0-9]+)$`)
 	reRunArts   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/runs/([0-9]+)/artifacts$`)
+	reJobLogs   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/jobs/([0-9]+)/logs$`)
 	reArtZip    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/artifacts/([0-9]+)/zip$`)
 	rePull      = regexp.MustCompile(`^/repos/[^/]+/[^/]+/pulls/([0-9]+)(/reviews|/files|/merge|/comments)?$`)
 	reIssue     = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)$`)
@@ -705,6 +709,16 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			out = append(out, map[string]any{"id": a.ID, "name": a.Name, "expired": false})
 		}
 		reply(200, map[string]any{"total_count": len(out), "artifacts": out})
+	case m == "GET" && reJobLogs.MatchString(p):
+		id := int64(atoi(reJobLogs.FindStringSubmatch(p)[1]))
+		if _, ok := g.JobLogs[id]; !ok {
+			notFound()
+			return
+		}
+		w.Header().Set("Location", g.Server.URL+"/job-log/"+reJobLogs.FindStringSubmatch(p)[1])
+		w.WriteHeader(http.StatusFound)
+	case m == "GET" && strings.HasPrefix(p, "/job-log/"):
+		_, _ = w.Write([]byte(g.JobLogs[int64(atoi(strings.TrimPrefix(p, "/job-log/")))]))
 	case m == "GET" && reArtZip.MatchString(p):
 		w.Header().Set("Location", g.Server.URL+"/blob/"+reArtZip.FindStringSubmatch(p)[1])
 		w.WriteHeader(http.StatusFound)
