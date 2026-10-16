@@ -314,3 +314,99 @@ func (r *repo) motion(add func(Fact)) {
 		add(Fact{ID: "gap:reduced-motion", Kind: "gap", Text: "Motion exists but nothing honours prefers-reduced-motion (no media query or hook found)."})
 	}
 }
+
+// ---- library surface -----------------------------------------------------------
+
+var (
+	jsExportObj  = regexp.MustCompile(`module\.exports\s*=\s*\{([^}]*)\}`)
+	jsExportProp = regexp.MustCompile(`(?m)^\s*(?:module\.)?exports\.([A-Za-z_$][\w$]*)\s*=`)
+	jsExportDecl = regexp.MustCompile(`(?m)^\s*export\s+(?:default\s+)?(?:async\s+)?(?:function\*?|const|let|class)\s+([A-Za-z_$][\w$]*)`)
+	jsIdent      = regexp.MustCompile(`^[A-Za-z_$][\w$]*`)
+)
+
+// exports reports what a JavaScript library's entry file exports (WP5.8), the
+// library's counterpart of a CLI's commands: an `export:<package>` fact with
+// each exported name and its parameters, and a `test:<file>` fact for each test
+// that calls one of them, so "simple to use" and "fast" questions can quote the
+// calls a first-time user makes today.
+func (r *repo) exports(add func(Fact)) {
+	for _, p := range r.paths {
+		if path.Base(p) != "package.json" {
+			continue
+		}
+		var pkg struct {
+			Name    string          `json:"name"`
+			Main    string          `json:"main"`
+			Exports json.RawMessage `json:"exports"`
+		}
+		if json.Unmarshal([]byte(r.files[p]), &pkg) != nil || pkg.Name == "" {
+			continue
+		}
+		entry := pkg.Main
+		var exp any
+		if json.Unmarshal(pkg.Exports, &exp) == nil {
+			switch e := exp.(type) {
+			case string:
+				entry = e
+			case map[string]any:
+				if s, ok := e["."].(string); ok {
+					entry = s
+				}
+			}
+		}
+		if entry == "" {
+			continue
+		}
+		file := path.Clean(path.Join(path.Dir(p), entry))
+		src := r.files[file]
+		if src == "" {
+			continue
+		}
+		var names []string
+		if m := jsExportObj.FindStringSubmatch(src); m != nil {
+			for _, part := range strings.Split(m[1], ",") {
+				if n := jsIdent.FindString(strings.TrimSpace(part)); n != "" {
+					names = append(names, n)
+				}
+			}
+		}
+		for _, re := range []*regexp.Regexp{jsExportProp, jsExportDecl} {
+			for _, m := range re.FindAllStringSubmatch(src, -1) {
+				names = append(names, m[1])
+			}
+		}
+		slices.Sort(names)
+		names = slices.Compact(names)
+		if len(names) == 0 {
+			continue
+		}
+		var sigs []string
+		for _, n := range names {
+			sig := n
+			if m := regexp.MustCompile(`(?:function\s+` + regexp.QuoteMeta(n) + `|\b` + regexp.QuoteMeta(n) + `\s*=\s*(?:async\s*)?(?:function\s*)?)\(([^)]*)\)`).FindStringSubmatch(src); m != nil {
+				sig = n + "(" + strings.Join(strings.Fields(m[1]), " ") + ")"
+			}
+			sigs = append(sigs, sig)
+		}
+		add(Fact{ID: "export:" + pkg.Name, Kind: "export", Source: file,
+			Text: fmt.Sprintf("Library %s exports %d name(s) from %s: %s.", pkg.Name, len(sigs), file, strings.Join(sigs, ", "))})
+		prefix := ""
+		if d := path.Dir(p); d != "." {
+			prefix = d + "/"
+		}
+		for _, t := range r.paths {
+			if !isTest(t) || !strings.HasPrefix(t, prefix) {
+				continue
+			}
+			var calls []string
+			for _, n := range names {
+				if strings.Contains(r.files[t], n+"(") {
+					calls = append(calls, n)
+				}
+			}
+			if len(calls) > 0 {
+				add(Fact{ID: "test:" + t, Kind: "test", Source: t, Text: fmt.Sprintf("Test %s calls %s.", t, strings.Join(calls, ", "))})
+			}
+		}
+	}
+}

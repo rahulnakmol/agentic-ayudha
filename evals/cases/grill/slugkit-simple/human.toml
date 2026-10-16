@@ -1,0 +1,39 @@
+# The simulated human of grill/slugkit-simple (WP5.8): slugkit's maintainer. The skill tags each question with a topic, <dimension>/<key>, the keys
+# coming from the catalogues' Topics (vague/simplicity.md), term/<term> for an abbreviation, or the request topics in the skill. The human
+# answers by topic, else by the topic's dimension, else with the fallback, which parks it: an unscripted idea never becomes a
+# requirement. kind: confirm (states or agrees), default (accepts the skill's offered default), park, or defer.
+max_rounds = 4
+readback = "Yes, that is what done looks like."
+fallback = { kind = "park", text = "That is not part of what I asked for; park it." }
+
+[topics."simple.lib-surface/calls-to-first-result"]
+kind = "confirm"
+text = "One import and one call: `slugify('Hello World')` should give 'hello-world', and that should be the first example in the README."
+
+[topics."simple.lib-surface/defaults"]
+kind = "confirm"
+text = "Every option should be optional: a dash, lowercase, and no length limit unless you ask."
+
+[topics."simple.language/labels"]
+kind = "park"
+text = "The option names are fine."
+
+[topics."request/existing-behaviour"]
+kind = "confirm"
+text = "Today they copy the README and forget one of the five options, then get `invalid options`. Keep createSlugger working exactly as it does for people who already use it."
+
+[topics."request/scope"]
+kind = "confirm"
+text = "Only the first-use path and the defaults. No new options."
+
+[topics."request/size"]
+kind = "confirm"
+text = "One story is fine."
+
+[dimensions."simple.lib-surface"]
+kind = "confirm"
+text = "One import and one call: `slugify('Hello World')` should give 'hello-world', and that should be the first example in the README."
+
+[dimensions."simple.language"]
+kind = "park"
+text = "The option names are fine."

@@ -7,7 +7,7 @@ The assessment's `gate` said `unpack`. Score three things, then give one overall
 1. Question quality: the questions are about a command-line tool: the first command a new user types, required flags and defaults, what an error says, exit codes, and help; they cite the command facts and come riskiest first.
 2. Concreteness of the spec: every criterion names the command, its state (a fresh home directory), and an exit code, a count, or exact output; nothing still says "simple" or "easy". The readback says in plain language what done looks like: the goal, the
    criteria, and the checkpoints the human will see.
-3. Fidelity: the first command, GBP, the plain-word amount and category, and the 24-line help are the human's; exit code 2 is the accepted default; dropping report and export (parked) and remembered choices (parked) are not criteria. Questions and parked ideas never lower the score; only what became a criterion counts.
+3. Fidelity: the first command, GBP, the plain-word amount and category, and the 24-line help are the human's; exit code 2 is the accepted default; dropping report and export (parked) and remembered choices (parked) are not criteria. Test setup that a criterion's evidence needs (seeded data, a synthetic user, a fresh home directory) is not an added requirement; a state that narrows what the human asked for is. Questions and parked ideas never lower the score; only what became a criterion counts.
 
 - 5: All three are strong.
 - 4: One minor gap in one area.

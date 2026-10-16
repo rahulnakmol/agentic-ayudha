@@ -1,0 +1,10 @@
+{
+  "number": 80,
+  "title": "Partner integrations",
+  "state": "open",
+  "labels": [
+    {
+      "name": "type:feature"
+    }
+  ]
+}

@@ -316,6 +316,21 @@ func TestAssessProducts(t *testing.T) {
 	if !strings.Contains(wf["motion:web/styles/buttons.css"], "durations 150ms") || wf["gap:reduced-motion"] == "" {
 		t.Errorf("bakery motion facts: %q, %q", wf["motion:web/styles/buttons.css"], wf["gap:reduced-motion"])
 	}
+	// WP5.8: an API's endpoints come from its OpenAPI document, and a library's
+	// surface from its entry file, so their questions are grounded too.
+	api, af := assess("quotes", "make the quotes API fast")
+	if strings.Join(api.Products, ",") != "api" || !slices.Contains(dims(api), "perf.endpoint") || slices.Contains(dims(api), "perf.interaction") ||
+		af["route:/quotes"] != "API route /quotes (POST)." || af["route:/quotes/{id}"] != "API route /quotes/{id} (GET)." || af["route:/health"] != "" || af["gap:api-budget"] == "" {
+		t.Errorf("quotes: products %v, dimensions %v, facts %v", api.Products, dims(api), af)
+	}
+	lib, lf := assess("slugkit", "make slugkit simple to use")
+	if strings.Join(lib.Products, ",") != "library" || !slices.Contains(dims(lib), "simple.lib-surface") || slices.Contains(dims(lib), "simple.cli-surface") ||
+		lf["export:slugkit"] != "Library slugkit exports 1 name(s) from src/index.js: createSlugger(options)." || lf["test:test/index.test.js"] != "Test test/index.test.js calls createSlugger." {
+		t.Errorf("slugkit: products %v, dimensions %v, facts %v", lib.Products, dims(lib), lf)
+	}
+	if _, ok := wf["export:bakery-web"]; ok {
+		t.Error("a web app has no library surface fact")
+	}
 }
 
 // WP4.5b.5: a mapped feature the idea's words touch is a feature fact naming

@@ -1,0 +1,28 @@
+# Recorded grill conversation (WP5.8) on a vague request about a library: "Make slugkit simple to use" in the synthetic slugkit
+# library (../testdata/slugkit). The assessment found a library with one export, so "simple" decomposed into the calls to a first
+# result and its defaults; the scripted human (human.toml) answered by topic.
+skill = "grill"
+description = "Unpack \"make the library simple\" into first-call criteria; the conversation is scripted by human.toml."
+input = "input.txt"
+repo = "../testdata/slugkit"
+gate = "unpack"
+transcript = "output/transcript.json"
+cite = 3
+artifacts = ["output/issue.json", "output/transcript.json"]
+schemas = [{ file = "output/issue.json", schema = "evals/schemas/workitem.json" }]
+ready = ["output/issue.json"]
+calls = [
+  ["grill", "story", "--assess", "--idea", "Make slugkit simple to use. People keep getting it wrong. It belongs under Feature #90 (Developer experience)."],
+  ["grill", "story", "--idea", "Make slugkit simple to use. People keep getting it wrong. It belongs under Feature #90 (Developer experience).", "--parent", "90", "--title", "Get a first slug from one import and one call", "--body", "### Summary\n\nAs a developer trying slugkit for the first time, I want a slug from one import and one call, so that I stop getting `invalid options`.\n\n### Completion Goal\n\n1. [api-trace] state: a new Node project with only slugkit installed, importing slugify and calling `slugify('Hello World')` with no options; expected: it returns 'hello-world' after 1 import and 1 call\n2. [api-trace] state: the same new project calling `slugify('Hello World')` with no options; expected: the words are joined by a dash, the result is all lowercase, and it is not shortened (0 = no length limit)\n3. [metric] state: the existing tests in test/index.test.js, which call createSlugger with all five options; expected: 0 failures, with 0 test files changed\n4. [metric] state: README.md; expected: its first code example has 2 lines: the import of slugify and `slugify('Hello World')`\n\n### Measure\n\nCompletion Goal criteria observed\n\n### Threshold\n\nall 4 criteria\n\n### Scenario\n\nIn a new Node project with only slugkit installed, import slugify and call `slugify('Hello World')`; run the existing tests; read the README's first example.\n\n### Environment\n\na new Node project on linux with only slugkit installed; synthetic input only\n\n### Checkpoints\n\n1. `slugify('Hello World')` returns 'hello-world' from one import and one call, with the agreed defaults (criteria 1, 2)\n2. Existing createSlugger users see no change (criterion 3)\n3. The README opens with that two-line example (criterion 4)\n\n### Assumptions\n\n- slugify is exported next to createSlugger from the same entry file.\n\n### Open questions\n\n- answered: whether createSlugger changes (no: it keeps working as today)\n\n### Parked ideas\n\n- option names: renaming options such as transliterate (the human parked it)\n\n### Provenance\n\nRequest: \"Make slugkit simple to use. People keep getting it wrong. It belongs under Feature #90 (Developer experience).\"\nVague: \"simple\" → criteria 1, 2, 4\n1. confirmed (simple.lib-surface/calls-to-first-result): \"One import and one call: `slugify('Hello World')` should give 'hello-world'\"; facts: export:slugkit\n2. confirmed (simple.lib-surface/defaults): \"Every option should be optional: a dash, lowercase, and no length limit unless you ask.\" / \"`slugify('Hello World')` should give 'hello-world'\"; facts: export:slugkit\n3. confirmed (request/existing-behaviour): \"Keep createSlugger working exactly as it does for people who already use it.\"; facts: test:test/index.test.js, export:slugkit\n4. confirmed (simple.lib-surface/calls-to-first-result): \"One import and one call: `slugify('Hello World')`\" / \"that should be the first example in the README\"; facts: export:slugkit", "--labels", "effort:S", "--create"],
+  ["ready", "91", "--check"],
+]
+
+# The human ruled out new options and parked renaming them: neither may become a criterion.
+scope = [
+  { pattern = '(?i)\bnew option|\badd(s|ing)? an? option|\brenam', why = "a new or renamed option, which the human ruled out or parked" },
+]
+
+[tier2]
+rubric = "rubric.md"
+human = "human.toml"
+references = ["story.md", "vague/simplicity.md"]

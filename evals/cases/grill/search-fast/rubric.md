@@ -14,7 +14,7 @@ or `defer`. Score three things, then give one overall score from 1 to 5.
    them; nothing still says just "fast". The readback says in plain language what done looks like.
 3. Fidelity: the number and percentile are the human's, not the skill's; caching and new loading feedback (parked)
    and a CI budget (deferred) are not criteria and appear in Parked ideas or Open questions; Provenance names the
-   right source. Questions and parked ideas never lower the score.
+   right source. Test setup that a criterion's evidence needs (seeded data, a synthetic user, a fresh home directory) is not an added requirement; a state that narrows what the human asked for is. Questions and parked ideas never lower the score.
 
 - 5: All three are strong.
 - 4: One minor gap in one area.

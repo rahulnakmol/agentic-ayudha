@@ -56,7 +56,7 @@ are missing.
   allocations?
 - Default: a benchmark of the named call on a fixed input, compared with today's result.
 - Evidence: metric
-- Facts: code, test
+- Facts: export, code, test
 - Products: library
 - Topics: call, allocations
 

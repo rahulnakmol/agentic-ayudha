@@ -1,0 +1,5 @@
+# Synthetic eval fixture: quotes-api's own aayudha configuration.
+version = 1
+
+[verify]
+platforms = ["linux"]
