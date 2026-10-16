@@ -147,7 +147,8 @@ func TestInstallMirrorsVerifySkill(t *testing.T) {
 		t.Fatalf("install: exit %d\n%s%s", code, out, errs)
 	}
 	mirror := filepath.Join(repo, ".claude", "skills", "verify-shop")
-	if b, err := os.ReadFile(filepath.Join(mirror, "features", "README.md")); err != nil || string(b) != "# map\n" {
+	// install writes text with CRLF line endings on Windows (hosts.Options.Windows).
+	if b, err := os.ReadFile(filepath.Join(mirror, "features", "README.md")); err != nil || strings.ReplaceAll(string(b), "\r\n", "\n") != "# map\n" {
 		t.Fatalf("mirror: %v %q", err, b)
 	}
 	if b, _ := os.ReadFile(filepath.Join(src, "SKILL.md")); string(b) != "---\nname: verify-shop\n---\n" {
@@ -164,7 +165,7 @@ func TestInstallMirrorsVerifySkill(t *testing.T) {
 	if _, out, _ := run(t, env, opts, "doctor", "--fix"); !strings.Contains(out, "PASS  skills-copies") {
 		t.Fatalf("doctor --fix:\n%s", out)
 	}
-	if b, _ := os.ReadFile(filepath.Join(mirror, "features", "README.md")); string(b) != "# map, with a feature\n" {
+	if b, _ := os.ReadFile(filepath.Join(mirror, "features", "README.md")); strings.ReplaceAll(string(b), "\r\n", "\n") != "# map, with a feature\n" {
 		t.Fatalf("mirror after --fix: %q", b)
 	}
 
