@@ -179,10 +179,18 @@ func TestLiveInspectApp(t *testing.T) {
 		}
 		return ""
 	}
+	// codexReviewsOf counts Codex's reviews of head: a review on the commit, or a receipt comment naming it
+	// ("Didn't find any major issues" comes as a comment, not a review).
 	codexReviewsOf := func(pr int, head string) int {
 		n := 0
 		for _, r := range list(fmt.Sprintf("/repos/%s/pulls/%d/reviews?per_page=100", repo, pr)) {
 			if u, _ := r["user"].(map[string]any); u["login"] == "chatgpt-codex-connector[bot]" && r["commit_id"] == head {
+				n++
+			}
+		}
+		for _, c := range list(fmt.Sprintf("/repos/%s/issues/%d/comments?per_page=100", repo, pr)) {
+			b, _ := c["body"].(string)
+			if u, _ := c["user"].(map[string]any); u["login"] == "chatgpt-codex-connector[bot]" && strings.Contains(b, "codex-review-receipt") && strings.Contains(b, "`"+head[:10]+"`") {
 				n++
 			}
 		}

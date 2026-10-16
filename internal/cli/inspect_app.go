@@ -85,6 +85,7 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 			return Wrap(ExitExternal, err)
 		}
 		notes = append(notes, "review requested from "+choice.Kind()+" under your account")
+		since = e.Now()
 	}
 	files := inspect.ParseDiff(a.in.Diff)
 	var changed []string
