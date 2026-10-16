@@ -64,8 +64,8 @@ anything honours `prefers-reduced-motion`.
 
 - Ask: What shows the motion is right: a recording of each moment at normal and at reduced motion, a metric of each
   duration in the styles, or both?
-- Default: a recording of each moment at both settings, and a metric that every duration in the changed styles is
-  within the confirmed budget.
+- Default: a recording of each moment at both settings, and a metric that each duration this story adds matches the
+  confirmed value for its moment (a check of what was agreed, not a ban on other values).
 - Evidence: recording
 - Facts: test, motion
 - Products: web
