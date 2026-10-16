@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -288,7 +289,8 @@ func TestGenerateKeepsTheOwnersKeys(t *testing.T) {
 	}
 	for _, f := range []string{SetupPath, CheckPath, StartPath, ResumePath} {
 		fi, err := os.Stat(filepath.Join(root, f))
-		if err != nil || fi.Mode()&0o111 == 0 {
+		// Windows has no executable bit; there the scripts run through bash.
+		if err != nil || (runtime.GOOS != "windows" && fi.Mode()&0o111 == 0) {
 			t.Errorf("%s: %v, mode %v; want an executable", f, err, fi)
 		}
 		if _, err := exec.LookPath("bash"); err == nil {
