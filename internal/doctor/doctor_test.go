@@ -111,7 +111,7 @@ func healthy(t *testing.T) *Probe {
 			"git for-each-ref --format=%(refname:short) refs/heads refs/remotes/origin": "dev\nmain\norigin/HEAD\norigin/dev\n",
 			"git symbolic-ref --short refs/remotes/origin/HEAD":                         "origin/dev\n",
 		}),
-		Config:  load(t, "identity.app_id=42", "identity.app_slug=aayudha-bot", "integrations.posthog.secret=posthog", "integrations.posthog.scope=read", "integrations.posthog.project=12345"),
+		Config:  load(t, "identity.app_id=42", "identity.app_slug=aayudha-bot", "integrations.posthog.secret=posthog", "integrations.posthog.scope=read", "integrations.posthog.project=12345", "inspect.apps=codex"),
 		Secrets: secrets.New(down{}, secrets.Env{Getenv: getenv}, secrets.File{Path: "/tmp/s.age", IdentityPath: "/tmp/id"}),
 		Human: func(context.Context) (identity.Token, error) {
 			return identity.Token{Value: "t", Source: "AAYU_GITHUB_TOKEN"}, nil
@@ -124,6 +124,7 @@ func healthy(t *testing.T) *Probe {
 			"/repos/o/r/rulesets": []any{},
 			"/repos/o/r/issues?state=open&labels=aayudha:leased&per_page=100": []any{map[string]any{"number": 9}},
 			"/repos/o/r/issues/9/comments?per_page=100":                       []any{map[string]any{"body": "<!-- aayudha:lease holder=bot@ci expires=2099-01-01T00:00:00Z -->"}},
+			"/orgs/o/installations?per_page=100":                              map[string]any{"installations": []any{map[string]any{"app_slug": "chatgpt-codex-connector"}}},
 		}),
 		Repo:      "o/r",
 		Version:   "1.2.0",
@@ -216,6 +217,16 @@ func failing(t *testing.T) map[string]func(*Probe) {
 		},
 		"delegate-env": func(p *Probe) {
 			p.Root = repoWith(t, map[string]string{".agents/setup": "#!/usr/bin/env bash\nGO_VERSION=\"1.24.0\"\n", "go.mod": "module m\n\ngo 1.25.0\n"})
+		},
+		// Codex replied on a PR, but config does not name it; Cursor's family is unknown.
+		"reviewer-apps": func(p *Probe) {
+			p.Config = load(t)
+			p.API = fakeAPI(map[string]any{
+				"/repos/o/r/pulls?state=all&per_page=10":         []any{map[string]any{"number": 3, "head": map[string]any{"sha": "abc"}}},
+				"/repos/o/r/issues/3/comments?per_page=100":      []any{map[string]any{"user": map[string]any{"login": "chatgpt-codex-connector[bot]"}}},
+				"/repos/o/r/pulls/3/reviews?per_page=100":        []any{},
+				"/repos/o/r/commits/abc/check-runs?per_page=100": map[string]any{"check_runs": []any{map[string]any{"name": "Cursor Bugbot", "app": map[string]any{"slug": "cursor"}}}},
+			})
 		},
 		"worktrees": func(p *Probe) {
 			overlay(p, map[string]string{"git worktree list --porcelain": "worktree /repo\nHEAD a\n\nworktree /tmp/wt-x\nHEAD b\nprunable gitdir file points to non-existent location\n"})

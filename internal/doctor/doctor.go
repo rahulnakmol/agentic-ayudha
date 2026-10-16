@@ -87,6 +87,7 @@ var Checks = []Check{
 	{"optional-tools", checkOptionalTools},
 	{"worktrees", checkWorktrees},
 	{"delegate-env", checkDelegateEnv},
+	{"reviewer-apps", checkReviewerApps},
 	{"leases", checkLeases},
 	{"coexistence", checkCoexistence},
 	{"telemetry", checkTelemetry},

@@ -104,7 +104,7 @@ when a model and a measurement disagree, believe the measurement.
 | Verb | What it does |
 |---|---|
 | [`verify`](../../skills/verify/SKILL.md) | Runs the fixed checks (tests, security, secrets, dependencies, accessibility, speed) and records the results. |
-| [`inspect`](../../skills/inspect/SKILL.md) | A second model, from another vendor, reviews the pull request against every promise and says merge, fix, or rebuild. |
+| [`inspect`](../../skills/inspect/SKILL.md) | An agent app from another vendor, installed on your account, reviews the pull request against every promise; aayu reads its reply as merge, fix, or rebuild. |
 | [`proof`](../../skills/proof/SKILL.md) | Stores, fetches, and checks the proof packs that hold the evidence for each change. |
 
 <!-- END GENERATED: stage-verbs -->

@@ -225,42 +225,12 @@ func review(ctx context.Context, r Reviewer, in Input) (Reply, float64, error) {
 	return reply, spent, err
 }
 
-// Run inspects in, given the state of earlier runs on this PR.
+// Run inspects in, given the state of earlier runs on this PR, with the
+// review lane's model (reviewer "model").
 func (r Runner) Run(ctx context.Context, in Input, prev State) (Result, State, error) {
-	res := Result{PR: in.PR, Findings: []Finding{}, Criteria: []Verdict{}}
-	if in.Pack != nil {
-		res.Head = in.Pack.PRHeadSHA
-	}
-	if in.Draft {
-		res.Disposition, res.Summary = Skipped, "draft pull request: inspect runs when it is ready for review"
-		return res, prev, nil
-	}
-	if in.Pack == nil {
-		return res, prev, ErrNoPack
-	}
-	if in.Files == nil {
-		in.Files = ParseDiff(in.Diff)
-	}
-	res.Weakened = Weakened(in.Files)
-	res.DiffHash = DiffHash(in)
-	if prev.Result != nil && prev.DiffHash == res.DiffHash {
-		out := *prev.Result
-		out.Cached, out.CostUSD = true, 0
-		return out, prev, nil
-	}
-	st := prev
-	if prev.Cycles >= MaxCycles {
-		if r.Page != nil {
-			_ = r.Page(ctx, fmt.Sprintf("inspect: PR #%d hit the %d-cycle cap", in.PR, MaxCycles),
-				fmt.Sprintf("%s#%d had %d fix/rebuild cycles; inspect stops calling the model until a human reviews it.", in.Repo, in.PR, prev.Cycles))
-		}
-		return res, st, ErrCycles
-	}
-	if r.MaxUSD > 0 && prev.SpentUSD >= r.MaxUSD {
-		if r.Page != nil {
-			_ = r.Page(ctx, fmt.Sprintf("inspect: PR #%d reached its budget", in.PR), fmt.Sprintf("%s#%d spent %.2f USD of %.2f on inspect.", in.Repo, in.PR, prev.SpentUSD, r.MaxUSD))
-		}
-		return res, st, ErrBudget
+	res, st, err := r.begin(ctx, &in, prev, "")
+	if err != nil || res.Disposition == Skipped || res.Cached {
+		return res, st, err
 	}
 	if len(r.Reviewers) == 0 {
 		return res, st, errors.New("inspect: no reviewer")
@@ -283,11 +253,84 @@ func (r Runner) Run(ctx context.Context, in Input, prev State) (Result, State, e
 	} else {
 		res.Findings, res.Dropped = keep, dropped
 	}
+	return r.finish(in, prev, st, res, inPrompt(in.Diff, maxDiffBytes))
+}
+
+// Judge turns a reviewer app's or a human's reply (ReadReply) into the
+// inspection, through the same noise rules, test-gap verdicts, coverage seal,
+// cycle count, and rule 7 as a model's reply. The files the reply says it
+// reviewed seal the manifest. No model is called.
+func (r Runner) Judge(ctx context.Context, in Input, prev State, rep AppReply) (Result, State, error) {
+	res, st, err := r.begin(ctx, &in, prev, rep.Source)
+	if err != nil || res.Disposition == Skipped || res.Cached {
+		return res, st, err
+	}
+	res.Mode, res.Plan, res.Model, res.Reviewers = ModeGeneral, in.Areas, rep.Login, []string{rep.Login}
+	res.Findings, res.Dropped = r.Filter.Clean(rep.Findings, in.Files, in.Areas, "A")
+	res.Disposition, res.Summary, res.Criteria = rep.Disposition, rep.Summary, rep.Criteria
+	res.Notes = append(res.Notes, "reply: "+rep.Source)
+	covered := map[string]bool{}
+	for _, p := range rep.Reviewed {
+		covered[p] = true
+	}
+	return r.finish(in, prev, st, res, func(p string) bool { return covered[p] })
+}
+
+// begin handles what every inspection does before a review: drafts, the
+// pack, the diff, weakened checks, the cache (salt: the reply a judgement
+// reads), the cycle cap, and the budget.
+func (r Runner) begin(ctx context.Context, in *Input, prev State, salt string) (Result, State, error) {
+	res := Result{PR: in.PR, Findings: []Finding{}, Criteria: []Verdict{}}
+	if in.Pack != nil {
+		res.Head = in.Pack.PRHeadSHA
+	}
+	if in.Draft {
+		res.Disposition, res.Summary = Skipped, "draft pull request: inspect runs when it is ready for review"
+		return res, prev, nil
+	}
+	if in.Pack == nil {
+		return res, prev, ErrNoPack
+	}
+	if in.Files == nil {
+		in.Files = ParseDiff(in.Diff)
+	}
+	res.Weakened = Weakened(in.Files)
+	res.DiffHash = DiffHash(*in)
+	if salt != "" {
+		h := sha256.Sum256([]byte(res.DiffHash + "\x00" + salt))
+		res.DiffHash = hex.EncodeToString(h[:])
+	}
+	if prev.Result != nil && prev.DiffHash == res.DiffHash {
+		out := *prev.Result
+		out.Cached, out.CostUSD = true, 0
+		return out, prev, nil
+	}
+	st := prev
+	if prev.Cycles >= MaxCycles {
+		if r.Page != nil {
+			_ = r.Page(ctx, fmt.Sprintf("inspect: PR #%d hit the %d-cycle cap", in.PR, MaxCycles),
+				fmt.Sprintf("%s#%d had %d fix/rebuild cycles; inspect stops reviewing until a human reviews it.", in.Repo, in.PR, prev.Cycles))
+		}
+		return res, st, ErrCycles
+	}
+	if r.MaxUSD > 0 && prev.SpentUSD >= r.MaxUSD {
+		if r.Page != nil {
+			_ = r.Page(ctx, fmt.Sprintf("inspect: PR #%d reached its budget", in.PR), fmt.Sprintf("%s#%d spent %.2f USD of %.2f on inspect.", in.Repo, in.PR, prev.SpentUSD, r.MaxUSD))
+		}
+		return res, st, ErrBudget
+	}
+	return res, st, nil
+}
+
+// finish applies what every review gets after its reply: learned
+// suppression, test-gap verdicts, the sealed coverage manifest, the fix lift,
+// rule 7, and the cycle count.
+func (r Runner) finish(in Input, prev, st State, res Result, covered func(string) bool) (Result, State, error) {
 	var sup []Dropped
 	res.Findings, sup = r.Filter.Suppress(res.Findings, in.Dismissed)
 	res.Dropped = append(res.Dropped, sup...)
 	TestGapVerdicts(&res)
-	m := Seal(in.Files, in.Areas, r.Filter, inPrompt(in.Diff, maxDiffBytes))
+	m := Seal(in.Files, in.Areas, r.Filter, covered)
 	res.Coverage = &m
 	liftFix(&res)
 	st.SpentUSD += res.CostUSD

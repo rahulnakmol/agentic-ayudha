@@ -809,6 +809,33 @@
           },
           "type": "array",
           "description": "Path patterns (path.Match) of generated files that inspect does not review; the drift check owns them. Files whose header says Code generated ... DO NOT EDIT are skipped too."
+        },
+        "reviewer": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "claude",
+            "codex",
+            "cursor",
+            "amp",
+            "human",
+            "model"
+          ],
+          "description": "Who reviews in the merge gate. auto: the first installed agent app (apps) of a family other than the builder's, else a human; claude, codex, cursor: that app (a same-family app falls back); human: a human review; model: the review lane's model, called with a key (aayudha's evals, or a person who holds one)."
+        },
+        "apps": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Agent apps installed on the repository's org or account that answer an @-mention with a review: claude, codex, cursor. aayu doctor and aayu install detect them."
+        },
+        "app_families": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object",
+          "description": "Model family of each reviewer app (anthropic, openai, google, xai). An app without one cannot review, since the different-family rule needs it; Cursor runs the model its user picks."
         }
       },
       "additionalProperties": false,

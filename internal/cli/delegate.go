@@ -604,6 +604,9 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 	case r == nil || r.Head != head:
 		d.event(now, dlgPROpen, "")
 		report()
+		if note := e.requestReview(ctx, d.state.PR); note != "" {
+			res.Notes = append(res.Notes, note)
+		}
 		res.Next = fmt.Sprintf("waiting for the merge gate's inspect on PR #%d at %s", d.state.PR, short(head))
 		return nil, true, e.saveDelegation(ctx, d)
 	case r.Disposition == inspect.Merge:

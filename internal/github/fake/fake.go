@@ -306,7 +306,7 @@ var (
 	reRelease   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/releases/([0-9]+)$`)
 	reRunArts   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/runs/([0-9]+)/artifacts$`)
 	reArtZip    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/artifacts/([0-9]+)/zip$`)
-	rePull      = regexp.MustCompile(`^/repos/[^/]+/[^/]+/pulls/([0-9]+)(/reviews|/files|/merge)?$`)
+	rePull      = regexp.MustCompile(`^/repos/[^/]+/[^/]+/pulls/([0-9]+)(/reviews|/files|/merge|/comments)?$`)
 	reIssue     = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)$`)
 	reLabels    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/labels$`)
 	reLabel     = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/labels/(.+)$`)
@@ -769,6 +769,15 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		case sm[2] == "/reviews" && m == "GET":
 			out := []Review{}
 			out = append(out, pr.Reviews...)
+			reply(200, out)
+		case sm[2] == "/comments" && m == "GET": // the inline comments of every review, on the review's commit
+			out := []map[string]any{}
+			for _, rv := range pr.Reviews {
+				for i, c := range rv.Comments {
+					out = append(out, map[string]any{"id": rv.ID*1000 + int64(i), "user": rv.User, "path": c.Path, "line": c.Line, "body": c.Body,
+						"commit_id": rv.CommitID, "original_commit_id": rv.CommitID, "pull_request_review_id": rv.ID})
+				}
+			}
 			reply(200, out)
 		case sm[2] == "/files" && m == "GET":
 			out := []map[string]any{}
