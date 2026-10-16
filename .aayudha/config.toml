@@ -30,3 +30,9 @@ max_tbt_ms = 200
 acquisition = "benefits_visit"
 activation = "answer_grounded"
 activation_days = 7
+
+# The merge gate's reviewer: the ChatGPT Codex Connector is installed on this account and answered `@codex review`
+# live (founder decision 2026-10-15: no AI key in the merge gate). Cursor is installed too, but its family is the
+# model its user picks, so it reviews only once [inspect.app_families] names one.
+[inspect]
+apps = ["codex"]

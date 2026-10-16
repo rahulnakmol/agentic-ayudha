@@ -358,6 +358,9 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		}
 	}
 	builder := inspect.BuilderOf(inspect.Records{Receiver: deleg.Receiver, Delegated: deleg.Family, Checkpoints: checkpoints}, commits, claim, lane)
+	if cfg.Reviewer != inspect.ReviewerModel {
+		return e.inspectThroughApp(ctx, appInspect{c: c, repo: repo, pr: pr, in: ins, prev: prev, builder: builder, cfg: l.Config})
+	}
 	story := fmt.Sprintf("#%d", ins.Story)
 	picked, notes, err := reviewerModels(gw, builder.Candidates, ins.Mode == inspect.ModePeer, cfg.PeerModel, story)
 	if err != nil {

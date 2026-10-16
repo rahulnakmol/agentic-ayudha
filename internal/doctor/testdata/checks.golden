@@ -117,6 +117,22 @@ WARN  delegate-env  2 delegation environment(s) drifted from .agents/setup; `aay
                         Internet access: the package-managers preset (or custom domains), GET/HEAD/OPTIONS only
                         Secrets: none; put the environment's ID in [delegate] codex_env
                       claude: missing: no workflow runs anthropics/claude-code-action; `/install-github-app` in Claude Code writes one
+## reviewer-apps pass
+PASS  reviewer-apps  merge-gate reviewer: codex (openai), unless it is of the builder's family; then the next app, else a human
+                       claude (@claude review, family anthropic): not detected
+                       codex (@codex review, family openai): configured in [inspect] apps; detected: installed on the organisation o
+                       cursor (@cursor, family host-managed): not detected
+                       amp (no mention, family host-managed): not detected
+                         Amp has no @amp mention and replies as the person who connected it, so aayu cannot tell its reply from the builder's
+## reviewer-apps fail
+WARN  reviewer-apps  reviewer apps detected but not configured: codex, cursor; add them to [inspect] apps (the gate reads config only)
+                       claude (@claude review, family anthropic): not detected
+                       codex (@codex review, family openai): detected: chatgpt-codex-connector[bot] replied on #3
+                       cursor (@cursor, family host-managed): detected: check run "Cursor Bugbot" on #3
+                       amp (no mention, family host-managed): not detected
+                         Amp has no @amp mention and replies as the person who connected it, so aayu cannot tell its reply from the builder's
+                       no reviewer app in [inspect] apps (`aayu doctor` detects installed ones)
+                       falling back to a human review
 ## leases pass
 PASS  leases  1 live build lease(s)
 ## leases fail

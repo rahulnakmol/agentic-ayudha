@@ -66,6 +66,11 @@ type Inspect struct {
 	SuppressAfter int      `koanf:"suppress_after" jsonschema:"minimum=0" jsonschema_description:"A finding resembling this many distinct human dismissals in the same file or directory is not posted (never a P0 in security, data, or concurrency); 0 turns suppression off."`
 	PeerModel     string   `koanf:"peer_model" jsonschema_description:"Model ID of the peer reviewer; empty picks the first of the registry's review candidates whose family differs from the builder's and the first reviewer's."`
 	Generated     []string `koanf:"generated" jsonschema_description:"Path patterns (path.Match) of generated files that inspect does not review; the drift check owns them. Files whose header says Code generated ... DO NOT EDIT are skipped too."`
+	// The merge gate's reviewer (founder decision 2026-10-15): no AI key in a
+	// product repository's CI.
+	Reviewer    string            `koanf:"reviewer" jsonschema:"enum=auto,enum=claude,enum=codex,enum=cursor,enum=amp,enum=human,enum=model" jsonschema_description:"Who reviews in the merge gate. auto: the first installed agent app (apps) of a family other than the builder's, else a human; claude, codex, cursor: that app (a same-family app falls back); human: a human review; model: the review lane's model, called with a key (aayudha's evals, or a person who holds one)."`
+	Apps        []string          `koanf:"apps" jsonschema_description:"Agent apps installed on the repository's org or account that answer an @-mention with a review: claude, codex, cursor. aayu doctor and aayu install detect them."`
+	AppFamilies map[string]string `koanf:"app_families" jsonschema_description:"Model family of each reviewer app (anthropic, openai, google, xai). An app without one cannot review, since the different-family rule needs it; Cursor runs the model its user picks."`
 }
 
 // Team stages (WP5.1b): how much ceremony the seat twins' practice carries.

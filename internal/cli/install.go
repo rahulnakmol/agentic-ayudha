@@ -16,6 +16,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
 	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
+	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/upgrade"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
@@ -107,6 +108,7 @@ func runInstall(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return Wrap(ExitUsage, fmt.Errorf("install: %w", err))
 	}
+	res.Notes = append(res.Notes, e.reviewerAppsNote(ctx)...)
 	var repo, home []hosts.Edit
 	rep := installReport{Notes: res.Notes, Applied: apply}
 	for _, ed := range res.Edits {
@@ -261,4 +263,28 @@ func (e *Env) statusLine() string {
 		}
 	}
 	return strings.Join(parts, " | ")
+}
+
+// reviewerAppsNote reports, best effort, the agent apps that can review this
+// repository's PRs in the merge gate (founder decision 2026-10-15), so the
+// person installing knows what to put in [inspect] apps. Nothing without a
+// token or a repository.
+func (e *Env) reviewerAppsNote(ctx context.Context) []string {
+	tok, err := e.Resolver().Human(ctx)
+	if err != nil {
+		return nil
+	}
+	repo, err := e.RepoName(ctx)
+	if err != nil {
+		return nil
+	}
+	found := inspect.DetectApps(ctx, func(ctx context.Context, path string, out any) error { return e.githubGet(ctx, tok, path, out) }, repo)
+	var names []string
+	for _, d := range found {
+		names = append(names, d.App+" ("+d.Source+")")
+	}
+	if len(names) == 0 {
+		return []string{"reviewer apps: none detected on " + repo + "; the merge gate needs one installed on the org or account (Claude, Codex, or Cursor) named in [inspect] apps, else it asks a human"}
+	}
+	return []string{"reviewer apps detected on " + repo + ": " + strings.Join(names, ", ") + "; name them in [inspect] apps for the merge gate (`aayu doctor` shows the choice)"}
 }

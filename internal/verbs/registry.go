@@ -631,7 +631,7 @@ var Verbs = []Command{
 	{
 		Name: "inspect", WP: "WP4.8", Stage: StageProve,
 		Summary: "Adversarially review a PR against its plan, pack, and criteria; return a structured disposition: merge, fix, or rebuild.",
-		Reader:  "A second model, from another vendor, reviews the pull request against every promise and says merge, fix, or rebuild.",
+		Reader:  "An agent app from another vendor, installed on your account, reviews the pull request against every promise; aayu reads its reply as merge, fix, or rebuild.",
 		Seat:    EngineeringManager, Lane: LaneReview, Layers: AllLayers(),
 		Inputs: []Input{
 			pos("pr", TypePR, "Pull request to inspect."),

@@ -427,7 +427,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	if err := e.checkpoint(bot.Token); err != nil {
 		fmt.Fprintf(e.Err, "aayu: warning: the actions segment did not reach the ledger: %v\n", err)
 	}
-	res.Next = fmt.Sprintf("the merge gate re-runs verify on PR #%d; `aayu ship %d` after a human pass", res.PR, res.PR)
+	res.Next = fmt.Sprintf("the merge gate re-runs verify on PR #%d; when the change is complete, `aayu inspect %d` asks the reviewer app to review the head; `aayu ship %d` after a human pass", res.PR, res.PR, res.PR)
 	return e.Emit(res, func(w io.Writer) error {
 		if res.Commit != "" {
 			fmt.Fprintf(w, "#%d: checkpoint %s committed (%s); verify: %s\n", n, res.Checkpoint, short(res.Commit), res.Verify)

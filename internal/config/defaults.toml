@@ -84,6 +84,14 @@ min_confidence = 0.5    # P2 and P3 findings below it are not posted
 suppress_after = 2      # distinct human dismissals a finding must resemble to be suppressed
 peer_model = ""         # empty: the first registry review candidate of another family
 generated = ["LAYERS.md", "CONSTRAINTS.md", "docs/RACI.md", "internal/config/schema.json", "internal/mcp/schemas/*.json", "go.sum", "pnpm-lock.yaml"]
+# The merge gate holds no AI key: it @-mentions an agent app installed on the org or account and reads its reply
+# (founder decision 2026-10-15). auto: the first of apps whose family differs from the builder's, else a human.
+reviewer = "auto"
+apps = []                 # claude, codex, cursor: what `aayu doctor` and `aayu install` detect, confirmed here
+
+[inspect.app_families]
+claude = "anthropic"
+codex = "openai"
 
 # How build --delegate reaches other agents (WP5.5b). Values name secrets; they never hold them.
 [delegate]
