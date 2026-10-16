@@ -43,6 +43,9 @@ HR queue at all", and before-and-after answered it. Reach for an experiment when
 
 `retro` compares the plan with what happened and files each lesson as a Feedback issue a person can accept or
 reject. This Monday would give it plenty: 17 reviews against a plan of 10, and four pull requests thrown away.
+It also reports the flow without filing anything: hours from Ready to ship split by stage, how long a green pull
+request waited for a person, how often a person stepped in, how much of inspect's advice was acted on, how many
+shipped stories came back as Bugs, and the mix of changes.
 `evolve` turns an accepted lesson into a lasting fix for the agents themselves: a failing test for the skill first,
 then a change to the skill that passes it, opened as a pull request a person reviews. Neither ran on the benefits app that day;
 the [epilogue](built-with-itself.md) shows the same loop at work on aayudha itself.

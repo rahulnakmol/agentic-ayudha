@@ -92,3 +92,10 @@ Compare estimates with observed delivery, corrections, floor misses, and cost; f
 Findings are deterministic: a story over its Effort's checkpoint budget (XS 1, S 2, M 3, L 5), cost over
 `[budget] per_story_usd`, a story merged without proof after the merge gate existed, a floor miss, and a
 correction rate above 20 % overall or per skill. A finding already filed (same title) is not filed again.
+
+The report also measures the flow, from data aayu already keeps and with no model: hours per stage (Ready to the
+first checkpoint, to the merge gate going green, to ship; the last is the human wait), touches per story (a person
+stepping in between Ready and ship), the share of inspect's posted findings acted on, the escape rate (Bugs opened
+within `[autonomy] correction_days` that link a shipped story or its PR), and the change mix by Conventional Commit
+type. These numbers are reported, never filed as findings: quote them in your comments, and do not change a story,
+a split, or a review to move one.
