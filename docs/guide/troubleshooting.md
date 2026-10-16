@@ -104,13 +104,13 @@ edited a generated file. Run `aayu install --env --verify`.
 
 ## Loops
 
-**doctor's `loops` row shows `missing`.** Run `aayu install --loops`, follow its steps for that host, then record the
-loop with `--record <loop>=<ID>`.
+**doctor's `loops` row shows `missing`.** Run `aayu install --loops`, follow its steps for the tool you picked, then
+record the loop with `--record <loop>=<ID>`.
 
-**It shows `stale`.** The loop file changed after you set it up. Set it up again on the host and record it again.
+**It shows `stale`.** The loop file changed after you set it up. Set it up again in the tool and record it again.
 
-**It shows `session`.** The host has no trigger for that event, so your next agent session picks it up. That is
-expected; nothing runs between sessions ([which host has which trigger](guide-loops.md#not-every-host-can-do-every-event)).
+**It shows `double`.** The loop is recorded in two tools, so it runs twice. Delete it in one of them, then forget it
+there: `aayu install --loops --host <that tool> --record <loop>=`.
 
 **A loop run stops with exit 4 or 6.** The repository is halted, or a budget paused the agents. A person reads why,
 then runs `aayu resume`.

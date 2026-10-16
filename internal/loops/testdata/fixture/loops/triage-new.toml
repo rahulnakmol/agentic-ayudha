@@ -1,4 +1,0 @@
-description = "Triage each new issue."
-command = ["triage", "{number}"]
-on = "issues.opened"
-prompt = "Choose --as from the issue's text."

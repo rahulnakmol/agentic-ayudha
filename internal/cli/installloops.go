@@ -1,14 +1,15 @@
 package cli
 
 import (
+	"bufio"
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"maps"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -19,29 +20,29 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/loops"
 )
 
-// loopHost is one agent host's part of `aayu install --loops`: whether its
-// CLI was detected, what was applied, the exact steps left, and each loop's
-// state there.
-type loopHost struct {
-	Host     string        `json:"host"`
-	Detected bool          `json:"detected"`
+// loopsReport is `aayu install --loops`: the one tool that runs this
+// repository's loops, what was applied there, the exact steps left, how to
+// test one loop now, and each loop's state.
+type loopsReport struct {
+	Repo     string        `json:"repo"`
+	Tool     string        `json:"tool"`
+	Detected []string      `json:"detected"`
+	Stale    []string      `json:"stale_files,omitempty"`
+	Warnings []string      `json:"warnings,omitempty"`
 	Applied  []string      `json:"applied,omitempty"`
 	Steps    []string      `json:"steps"`
+	RunNow   string        `json:"run_now,omitempty"`
 	States   []loops.State `json:"states"`
 }
 
-type loopsReport struct {
-	Repo  string     `json:"repo"`
-	Stale []string   `json:"stale_files,omitempty"`
-	Hosts []loopHost `json:"hosts"`
-}
-
-// runInstallLoops is `aayu install --loops` (Appendix B S-7.1d): for each
-// agent host this repository's user has (agentenv.Detect, or --host), set up
-// the repository's loops in the host's own tooling where it can (with --apply,
-// Cursor's Terraform), show the exact steps for the rest, and with --record
-// note a loop as set up so doctor can say active, missing, or stale. It is
-// per repository: it reads only this checkout's loops/*.toml.
+// runInstallLoops is `aayu install --loops` (Appendix B S-7.1d, S-7.1e): the
+// user picks one tool to run every loop of this repository (offered only
+// from the tools agentenv.Detect finds, or named with --host), and it sets
+// the loops up there: Amp and Cursor with --apply, Claude Code and Codex
+// with a ready prompt per loop. It warns when loops/active.json records loops
+// in another tool, since each would run twice. --run-now tests one loop in
+// the tool; --record notes loops as set up. It reads only this checkout's
+// loops/*.toml.
 func runInstallLoops(ctx context.Context, e *Env, in Values) error {
 	root := config.RepoRoot(e.Dir)
 	if root == "" {
@@ -70,11 +71,11 @@ func runInstallLoops(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return Wrap(ExitUsage, err)
 	}
-	if r := in.String("record"); r != "" {
+	if r := in.String("record"); in.Has("record") {
 		return e.recordLoops(root, ls, rec, r, repo, branch, tz)
 	}
-	if in.Bool("apply") && e.Agent() {
-		return Errorf(ExitBlocked, "install --loops --apply creates automations that run as you; a human runs it (AAYU_AGENT=1)")
+	if (in.Bool("apply") || in.String("run-now") != "") && e.Agent() {
+		return Errorf(ExitBlocked, "install --loops --apply and --run-now start runs that act as you; a human runs them (AAYU_AGENT=1)")
 	}
 	rep := loopsReport{Repo: repo}
 	files, err := loops.Files(ls, repo, branch, tz, initrepo.GuardVersion(e.Build.Version), Implemented)
@@ -87,104 +88,214 @@ func runInstallLoops(ctx context.Context, e *Env, in Values) error {
 		}
 	}
 	agents := e.agents(ctx, root, repo)
-	hosts := loops.AgentHosts
-	if e.Host != "" && e.Host != "all" {
-		if !slices.Contains(hosts, e.Host) {
-			return Errorf(ExitUsage, "install --loops --host %s: want %s", e.Host, strings.Join(hosts, ", "))
+	for _, h := range loops.AgentHosts {
+		if agents[h].CLI != "" {
+			rep.Detected = append(rep.Detected, h)
 		}
-		hosts = []string{e.Host}
 	}
-	for _, h := range hosts {
-		lh := loopHost{Host: h, Detected: agents[h].CLI != ""}
-		if e.Host == "" && !lh.Detected {
-			continue
-		}
-		mine := hostLoops(ls, h)
-		switch h {
-		case loops.HostAmp:
-			lh.Steps = e.ampLoopSteps(ctx, root, repo, mine)
-		case loops.HostCursor:
-			lh.Applied, lh.Steps = e.cursorLoops(ctx, root, in.Bool("apply"), rec, mine, repo, branch, tz)
-		case loops.HostClaude:
-			lh.Steps = []string{
-				"Claude Code has no file or API that creates a routine: create each one in " + loops.Dir + "/claude/routines.md at https://claude.ai/code/routines, or with `/schedule` in Claude Code (signed in with claude.ai, not an API key).",
-			}
-		case loops.HostCodex:
-			lh.Steps = []string{
-				"Codex has no file or API that creates a scheduled task: create each one in " + loops.Dir + "/codex/scheduled-tasks.md in the ChatGPT desktop app (Scheduled, New task).",
-			}
-		}
-		if len(mine) > 0 {
-			lh.Steps = append(lh.Steps, fmt.Sprintf("Then record each one: `aayu install --loops --host %s --record <loop>=<its %s ID>` (or all=<ID>), and commit %s.", h, h, loops.RecordFile))
-		}
-		lh.States = loops.States(ls, rec, []string{h}, repo, branch, tz)
-		rep.Hosts = append(rep.Hosts, lh)
+	answers := bufio.NewReader(e.In)
+	if rep.Tool, err = e.loopTool(answers, rep.Detected); err != nil {
+		return err
 	}
-	return e.Emit(rep, func(w io.Writer) error {
-		if len(rep.Stale) > 0 {
-			fmt.Fprintf(w, "note: %s differ from loops/*.toml: run `aayu init --gates` (or `go generate ./...` in aayudha) first\n", strings.Join(rep.Stale, ", "))
+	tool := rep.Tool
+	if !slices.Contains(rep.Detected, tool) {
+		rep.Warnings = append(rep.Warnings, fmt.Sprintf("the %s CLI is not detected here; the steps below assume you have %s", tool, tool))
+	}
+	for _, h := range loops.AgentHosts {
+		if h != tool && len(rec[h]) > 0 {
+			names := slices.Sorted(maps.Keys(rec[h]))
+			rep.Warnings = append(rep.Warnings, fmt.Sprintf("%s records %s as set up in %s. Set up in %s as well, each would run twice: delete them in %s, then forget them with `aayu install --loops --host %s --record %s=` (an empty ID).",
+				loops.RecordFile, strings.Join(names, ", "), h, tool, h, h, names[0]))
 		}
-		if len(rep.Hosts) == 0 {
-			fmt.Fprintln(w, "install --loops: no agent CLI detected (amp, cursor-agent, claude, codex); name one with --host")
+	}
+	mine := toolLoops(ls, tool)
+	switch tool {
+	case loops.HostAmp:
+		rep.Applied, rep.Steps = e.ampLoops(ctx, root, agents[tool].CLI, in.Bool("apply"), rec, mine, repo, branch, tz)
+	case loops.HostCursor:
+		rep.Applied, rep.Steps = e.cursorLoops(ctx, root, in.Bool("apply"), rec, mine, repo, branch, tz)
+	case loops.HostClaude:
+		rep.Steps = []string{
+			fmt.Sprintf("In Claude Code v2.1.225 or later, signed in with a claude.ai subscription (not an API key) and started in this checkout, paste each `/schedule` prompt in %s/claude/routines.md (%d loops). Each saves a routine that runs as you in Anthropic's cloud.", loops.Dir, len(mine)),
+			"The routines' cloud environment needs the aayu binary: run `aayu install --env --host claude` and follow it.",
 		}
-		for _, lh := range rep.Hosts {
-			fmt.Fprintf(w, "\n%s:\n", lh.Host)
-			for _, a := range lh.Applied {
-				fmt.Fprintln(w, "  applied:", a)
-			}
-			for i, s := range lh.Steps {
-				fmt.Fprintf(w, "  %d. %s\n", i+1, s)
-			}
-			for _, s := range lh.States {
-				fmt.Fprintf(w, "  %-18s %-7s %s\n", s.Loop, s.Status, s.Detail)
-			}
+	case loops.HostCodex:
+		rep.Steps = []string{fmt.Sprintf("In the ChatGPT desktop app, open a Codex or ChatGPT chat in this repository's local project and paste each prompt in %s/codex/scheduled-tasks.md (%d loops). Each creates a scheduled task that runs as you while the app is open.", loops.Dir, len(mine))}
+	}
+	if len(rep.Applied) == 0 && len(mine) > 0 {
+		rep.Steps = append(rep.Steps, fmt.Sprintf("Then record them: `aayu install --loops --host %s --record all=<what %s calls them>` (or <loop>=<ID>,…), and commit %s.", tool, tool, loops.RecordFile))
+	}
+	if len(mine) > 0 {
+		test := mine[0]
+		if t, ok := loops.Find(mine, "triage"); ok {
+			test = t
 		}
-		return nil
-	})
+		rep.RunNow = fmt.Sprintf("aayu install --loops --host %s --run-now %s", tool, test.Name)
+		if name := in.String("run-now"); name != "" {
+			return e.runLoopNow(ctx, root, agents[tool], tool, mine, name, repo, branch)
+		}
+		if e.isTerminal(e.In) && !e.Agent() {
+			e.printLoops(e.Err, rep)
+			fmt.Fprintf(e.Err, "Test the %s loop now in %s (Run now)? [y/N]: ", test.Name, tool)
+			if ans, _ := answers.ReadString('\n'); strings.EqualFold(strings.TrimSpace(ans), "y") {
+				return e.runLoopNow(ctx, root, agents[tool], tool, mine, test.Name, repo, branch)
+			}
+			return nil
+		}
+	} else if in.String("run-now") != "" {
+		return Errorf(ExitUsage, "install --loops --run-now: %s runs no loop of this repository", tool)
+	}
+	if rec, err = loops.ReadRecord(root); err != nil { // --apply may have recorded loops
+		return Wrap(ExitUsage, err)
+	}
+	rep.States = loops.States(ls, rec, repo, branch, tz)
+	return e.Emit(rep, func(w io.Writer) error { e.printLoops(w, rep); return nil })
 }
 
-// hostLoops are the loops host starts by itself.
-func hostLoops(ls []loops.Loop, host string) []loops.Loop {
+// loopTool is the one tool that runs the loops: --host, or the human's pick
+// from the detected tools at a terminal, or the only one detected.
+func (e *Env) loopTool(answers *bufio.Reader, detected []string) (string, error) {
+	switch h := e.Host; {
+	case h == "all":
+		return "", Errorf(ExitUsage, "install --loops: one tool runs the loops; name it with --host (%s)", strings.Join(loops.AgentHosts, ", "))
+	case h != "":
+		return h, nil
+	case len(detected) == 0:
+		return "", Errorf(ExitUsage, "install --loops: no agent CLI detected (amp, cursor-agent, claude, codex); name the tool that runs the loops with --host")
+	case e.isTerminal(e.In) && !e.Agent():
+		fmt.Fprintf(e.Err, "Which tool should run this repository's loops? Detected: %s. [%s]: ", strings.Join(detected, ", "), strings.Join(detected, "/"))
+		line, _ := answers.ReadString('\n')
+		if ans := strings.ToLower(strings.TrimSpace(line)); slices.Contains(detected, ans) {
+			return ans, nil
+		}
+		return "", Errorf(ExitUsage, "install --loops: answer one of %s", strings.Join(detected, ", "))
+	case len(detected) == 1:
+		return detected[0], nil
+	}
+	return "", Errorf(ExitUsage, "install --loops: one tool runs the loops; name it with --host (detected: %s)", strings.Join(detected, ", "))
+}
+
+func (e *Env) printLoops(w io.Writer, rep loopsReport) {
+	if len(rep.Stale) > 0 {
+		fmt.Fprintf(w, "note: %s differ from loops/*.toml: run `aayu init --gates` (or `go generate ./...` in aayudha) first\n", strings.Join(rep.Stale, ", "))
+	}
+	fmt.Fprintf(w, "The loops run in %s.\n", rep.Tool)
+	for _, x := range rep.Warnings {
+		fmt.Fprintln(w, "warning:", x)
+	}
+	for _, a := range rep.Applied {
+		fmt.Fprintln(w, "  set up:", a)
+	}
+	for i, s := range rep.Steps {
+		fmt.Fprintf(w, "  %d. %s\n", i+1, s)
+	}
+	if rep.RunNow != "" {
+		fmt.Fprintf(w, "  Run now, to test one loop: `%s`\n", rep.RunNow)
+	}
+	for _, s := range rep.States {
+		if s.Status != loops.NoHost {
+			fmt.Fprintf(w, "  %-18s %-7s %s\n", s.Loop, s.Status, s.Detail)
+		}
+	}
+}
+
+// toolLoops are the loops tool runs.
+func toolLoops(ls []loops.Loop, tool string) []loops.Loop {
 	var out []loops.Loop
 	for _, l := range ls {
-		if ok, _ := l.Native(host); ok && l.Runs(host) && Implemented(l.Verb()) {
+		if l.Runs(tool) && Implemented(l.Verb()) {
 			out = append(out, l)
 		}
 	}
 	return out
 }
 
-// ampLoopSteps are Amp's steps: Amp has no CLI for schedules or GitHub
-// subscriptions, so an Amp thread of the project sets each one with its own
-// tools, as the user. One schedule lives on one thread.
-func (e *Env) ampLoopSteps(ctx context.Context, root, repo string, ls []loops.Loop) []string {
-	project := "<the project's ID: amp projects get " + repo + " --json>"
-	if out, err := e.run(ctx, root, "amp", "projects", "get", repo, "--json"); err == nil {
-		var p struct {
-			ID string `json:"id"`
-		}
-		if json.Unmarshal([]byte(out), &p) == nil && p.ID != "" {
-			project = p.ID
+// runNowArgs is how each tool's CLI runs one prompt headless, as the user.
+var runNowArgs = map[string]struct{ bin, flag string }{
+	loops.HostAmp:    {"amp", "-x"},
+	loops.HostClaude: {"claude", "-p"},
+	loops.HostCodex:  {"codex", "exec"},
+	loops.HostCursor: {"cursor-agent", "-p"},
+}
+
+// runLoopNow runs one loop's Run now prompt once with the tool's own CLI in
+// this checkout, so the user sees it work before it runs on its schedule.
+func (e *Env) runLoopNow(ctx context.Context, root string, a agentenv.Agent, tool string, ls []loops.Loop, name, repo, branch string) error {
+	l, ok := loops.Find(ls, name)
+	if !ok {
+		return Errorf(ExitUsage, "install --loops --run-now %s: %s runs no loop by that name", name, tool)
+	}
+	bin := a.CLI
+	if bin == "" {
+		bin = runNowArgs[tool].bin
+	}
+	fmt.Fprintf(e.Err, "install --loops: running loop %s once with %s %s …\n", name, bin, runNowArgs[tool].flag)
+	out, err := e.run(ctx, root, bin, runNowArgs[tool].flag, l.RunNowPrompt(repo, branch))
+	fmt.Fprintln(e.Out, strings.TrimSpace(out))
+	if err != nil {
+		return Errorf(ExitExternal, "install --loops --run-now %s: %s: %v", name, bin, err)
+	}
+	return nil
+}
+
+// threadID finds an Amp thread ID in a CLI's output.
+var threadID = regexp.MustCompile(`T-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
+
+// ampLoops sets each loop's Amp schedule with --apply: Amp schedules are an
+// agent tool (set_schedule) and one thread holds one schedule, so it starts
+// one headless Amp thread per loop in an orb of the project (`amp -ox`),
+// which calls set_schedule with the rendered input and keeps the schedule,
+// and records the loop. Without --apply it returns the steps.
+func (e *Env) ampLoops(ctx context.Context, root, bin string, apply bool, rec loops.Record, ls []loops.Loop, repo, branch, tz string) ([]string, []string) {
+	if !apply {
+		return nil, []string{
+			fmt.Sprintf("Run `aayu install --loops --host amp --apply`: for each of the %d loops it starts one headless Amp thread in an orb of the project (`amp -ox`), which calls set_schedule with %s/amp/<loop>.json and keeps that schedule (one schedule per thread), and it records each loop.", len(ls), loops.Dir),
+			fmt.Sprintf("Or by hand: in a new Amp thread of the project for each loop, ask \"Call set_schedule with the input in %s/amp/<loop>.json, exactly as written.\"", loops.Dir),
 		}
 	}
-	var steps []string
+	if bin == "" {
+		bin = "amp"
+	}
+	var applied, steps []string
+	today := e.Now().UTC().Format(time.DateOnly)
 	for _, l := range ls {
-		path := loops.Dir + "/amp/" + l.Name + ".json"
-		if _, isEvent := l.Event(); isEvent {
-			steps = append(steps, fmt.Sprintf("In any Amp thread, ask: \"Call create_github_subscription with the input in %s, adding project_id %s and agent_mode medium.\"", path, project))
-		} else {
-			steps = append(steps, fmt.Sprintf("In a new Amp thread of the project (one schedule per thread), ask: \"Call set_schedule with the input in %s, exactly as written.\"", path))
+		in, err := os.ReadFile(filepath.Join(root, loops.Dir, "amp", l.Name+".json"))
+		if err != nil {
+			steps = append(steps, fmt.Sprintf("%s: %v; run `aayu init --gates` first", l.Name, err))
+			continue
 		}
+		prompt := "Call Amp's set_schedule on this thread with exactly this input, and do nothing else. Then reply with one line: `schedule <its ID> on <this thread's ID>`.\n\n" + string(in)
+		out, err := e.run(ctx, root, bin, "-ox", "--project", repo, "--no-archive-after-execute", "--title", "aayudha "+l.Name+" ("+repo+")", "-x", prompt)
+		if err != nil {
+			steps = append(steps, fmt.Sprintf("%s: amp failed: %v: %s", l.Name, err, lastLine(out)))
+			continue
+		}
+		id := lastLine(out)
+		if t := threadID.FindString(out); t != "" && !strings.Contains(id, t) {
+			id = "schedule on " + t
+		}
+		rec.Set(loops.HostAmp, l.Name, loops.Entry{Digest: l.Digest(repo, branch, tz), ID: id, At: today})
+		applied = append(applied, l.Name+": "+id)
 	}
-	return steps
+	if len(applied) > 0 {
+		if err := rec.Write(root); err != nil {
+			steps = append(steps, "recording failed: "+err.Error())
+		}
+		steps = append(steps, "Commit "+loops.RecordFile+".")
+	}
+	return applied, steps
 }
 
 // cursorLoops applies loops/cursor/aayudha-loops.tf with Terraform when asked
 // and possible (terraform on PATH and CURSOR_TOKEN set), recording every
-// Cursor loop as set up; otherwise it returns the commands.
+// Cursor loop as set up; otherwise it returns the commands, and the
+// /automate prompts for a user without Terraform or a key.
 func (e *Env) cursorLoops(ctx context.Context, root string, apply bool, rec loops.Record, ls []loops.Loop, repo, branch, tz string) ([]string, []string) {
 	dir := loops.Dir + "/cursor"
-	steps := []string{fmt.Sprintf("With a Cursor API key in CURSOR_TOKEN: `terraform -chdir=%s init && terraform -chdir=%s apply` (the cursor/cursor provider); set each automation's Run as to Me.", dir, dir)}
+	steps := []string{
+		fmt.Sprintf("With Terraform and a Cursor API key in CURSOR_TOKEN: `aayu install --loops --host cursor --apply` runs `terraform -chdir=%s init && terraform -chdir=%s apply` (the cursor/cursor provider) and records the loops.", dir, dir),
+		fmt.Sprintf("Without them: paste each prompt in %s/automate.md into a local Cursor agent session; the /automate skill creates the automation.", dir),
+	}
 	_, tfErr := e.lookPath()("terraform")
 	switch {
 	case !apply:
@@ -207,39 +318,59 @@ func (e *Env) cursorLoops(ctx context.Context, root string, apply bool, rec loop
 	if err := rec.Write(root); err != nil {
 		return nil, append(steps, "recording failed: "+err.Error())
 	}
-	return applied, nil
+	return applied, []string{"Commit " + loops.RecordFile + "."}
 }
 
 // recordLoops is `install --loops --host <h> --record <loop>=<id>[,…]`, or
-// all=<id> for every loop the host starts by itself.
+// all=<id> for every loop the tool runs; an empty ID forgets the loop there.
+// Recording a loop that another tool holds warns that it runs twice.
 func (e *Env) recordLoops(root string, ls []loops.Loop, rec loops.Record, arg, repo, branch, tz string) error {
 	if !slices.Contains(loops.AgentHosts, e.Host) {
-		return Errorf(ExitUsage, "install --loops --record: name the host with --host (%s)", strings.Join(loops.AgentHosts, ", "))
+		return Errorf(ExitUsage, "install --loops --record: name the tool with --host (%s)", strings.Join(loops.AgentHosts, ", "))
 	}
-	mine := hostLoops(ls, e.Host)
+	mine := toolLoops(ls, e.Host)
 	today := e.Now().UTC().Format(time.DateOnly)
-	var done []string
+	var done, forgot, warn []string
 	for _, pair := range strings.Split(arg, ",") {
 		name, id, ok := strings.Cut(strings.TrimSpace(pair), "=")
-		if !ok || id == "" {
+		if !ok {
 			return Errorf(ExitUsage, "install --loops --record %q: want <loop>=<ID>", pair)
 		}
+		matched := false
 		for _, l := range mine {
-			if name == "all" || name == l.Name {
-				rec.Set(e.Host, l.Name, loops.Entry{Digest: l.Digest(repo, branch, tz), ID: id, At: today})
-				done = append(done, l.Name)
+			if name != "all" && name != l.Name {
+				continue
+			}
+			matched = true
+			if id == "" {
+				rec.Delete(e.Host, l.Name)
+				forgot = append(forgot, l.Name)
+				continue
+			}
+			rec.Set(e.Host, l.Name, loops.Entry{Digest: l.Digest(repo, branch, tz), ID: id, At: today})
+			done = append(done, l.Name)
+			if o := rec.Owners(l.Name); len(o) > 1 {
+				warn = append(warn, fmt.Sprintf("%s is also recorded in %s: it runs twice until you delete it from all but one", l.Name, strings.Join(slices.DeleteFunc(o, func(h string) bool { return h == e.Host }), ", ")))
 			}
 		}
-		if name != "all" && !slices.Contains(done, name) {
-			return Errorf(ExitUsage, "install --loops --record: %s does not start loop %q by itself", e.Host, name)
+		if !matched && name != "all" {
+			return Errorf(ExitUsage, "install --loops --record: %s runs no loop %q", e.Host, name)
 		}
 	}
 	if err := rec.Write(root); err != nil {
 		return err
 	}
-	return e.Emit(map[string]any{"host": e.Host, "recorded": done}, func(w io.Writer) error {
-		_, err := fmt.Fprintf(w, "install --loops: recorded %s as set up on %s in %s\n", strings.Join(done, ", "), e.Host, loops.RecordFile)
-		return err
+	return e.Emit(map[string]any{"host": e.Host, "recorded": done, "forgotten": forgot, "warnings": warn}, func(w io.Writer) error {
+		if len(done) > 0 {
+			fmt.Fprintf(w, "install --loops: recorded %s as set up in %s in %s\n", strings.Join(done, ", "), e.Host, loops.RecordFile)
+		}
+		if len(forgot) > 0 {
+			fmt.Fprintf(w, "install --loops: forgot %s in %s\n", strings.Join(forgot, ", "), e.Host)
+		}
+		for _, x := range warn {
+			fmt.Fprintln(w, "warning:", x)
+		}
+		return nil
 	})
 }
 

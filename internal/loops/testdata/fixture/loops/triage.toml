@@ -1,0 +1,5 @@
+description = "Triage new issues."
+command = ["triage"]
+cron = "0 9 * * *"
+prompt = "Choose --as from each issue's text."
+hosts = ["amp", "cursor", "claude", "codex"]

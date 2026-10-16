@@ -98,22 +98,19 @@ func TestParseRefuses(t *testing.T) {
 		"unknown host":        `command = ["status"]` + "\ncron = \"0 9 * * *\"\nhosts = [\"jenkins\"]",
 		"hourly on weekdays":  `command = ["status"]` + "\ncron = \"0 * * * 1-5\"",
 		"an unpinned setup":   `command = ["status"]` + "\ncron = \"0 9 * * *\"\nsetup = [\"python\"]",
-		"cron and on":         `command = ["status"]` + "\ncron = \"0 9 * * *\"\non = \"issues.opened\"",
-		"neither cron nor on": `command = ["status"]`,
-		"an unknown event":    `command = ["status"]` + "\non = \"issues.edited\"",
-		"a release label":     `command = ["measure"]` + "\non = \"release.published\"\nfilter = { label = \"x\" }",
-		"labeled, no label":   `command = ["triage", "{number}"]` + "\non = \"issues.labeled\"",
-		"an issue conclusion": `command = ["status"]` + "\non = \"issues.opened\"\nfilter = { conclusion = \"failure\" }",
-		"a bad conclusion":    `command = ["status"]` + "\non = \"check_suite.completed\"\nfilter = { conclusion = \"cancelled\" }",
-		"a quote in a label":  `command = ["status"]` + "\non = \"issues.opened\"\nfilter = { label = \"a'b\" }",
-		"a release's number":  `command = ["measure", "{number}"]` + "\non = \"release.published\"",
+		"no cron":             `command = ["status"]`,
 		"a scheduled subject": `command = ["triage", "{number}"]` + "\ncron = \"0 9 * * *\"",
-		"a schedule's filter": `command = ["status"]` + "\ncron = \"0 9 * * *\"\nfilter = { label = \"x\" }",
-		"an event's setup":    `command = ["status"]` + "\non = \"issues.opened\"\nsetup = [\"node\"]",
+		"an event loop":       `command = ["triage"]` + "\non = \"issues.opened\"",
+		"cron and an event":   `command = ["status"]` + "\ncron = \"0 9 * * *\"\non = \"issues.opened\"",
+		"an event filter":     `command = ["status"]` + "\ncron = \"0 9 * * *\"\nfilter = { label = \"x\" }",
 	} {
 		if _, err := Parse("x", []byte("description = \"x\"\n"+body+"\n")); err == nil {
 			t.Errorf("%s: parsed", name)
 		}
+	}
+	// Event loops are deferred (Appendix B S-7.1e): the error says so, rather than "unknown key".
+	if _, err := Parse("x", []byte("description = \"x\"\ncommand = [\"triage\"]\non = \"issues.opened\"\n")); err == nil || !strings.Contains(err.Error(), "deferred") {
+		t.Errorf("an event loop: %v", err)
 	}
 }
 

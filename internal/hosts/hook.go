@@ -19,7 +19,7 @@ import (
 // Hooks are the host hooks `aayu hook <name>` implements (WP3.2). install
 // registers each of them with every host it installs for.
 var Hooks = []struct{ Name, Summary string }{
-	{"session-start", "Report skill copies that differ from .aayudha/lock.toml, and the GitHub events since the last session that a loop no agent host runs starts on."},
+	{"session-start", "Report skill copies that differ from .aayudha/lock.toml."},
 	{"pre-tool", "Block agent tool calls while the repository is halted or the [budget] breaker has paused agent lanes."},
 	{"status-line", "Print one line of journey state for a host's status line, from the last home screen (no network)."},
 }
@@ -33,10 +33,9 @@ type HookResult struct {
 
 // RunHook runs a hook for host in the repository at root ("" outside one).
 // pauseFile is the [budget] breaker's pause file; event is the JSON the host
-// sent on stdin (nil when it sent none); extra is what session-start adds
-// after the skill copies' check (the loop events, Appendix B D-7.1e). The CLI checks halt (WP5.7) before it
+// sent on stdin (nil when it sent none). The CLI checks halt (WP5.7) before it
 // runs pre-tool and answers with Deny itself when the repository is halted.
-func RunHook(name string, host verbs.HostID, root, pauseFile string, event []byte, extra string) (HookResult, error) {
+func RunHook(name string, host verbs.HostID, root, pauseFile string, event []byte) (HookResult, error) {
 	switch name {
 	case "pre-tool":
 		msg := ""
@@ -52,9 +51,6 @@ func RunHook(name string, host verbs.HostID, root, pauseFile string, event []byt
 			if problems := CheckCopies(root); len(problems) > 0 {
 				msg = "aayudha: skill copies differ from " + LockPath + " (" + strings.Join(problems, "; ") + "); run `aayu doctor --fix`."
 			}
-		}
-		if extra = strings.TrimSpace(extra); extra != "" {
-			msg = strings.TrimSpace(msg + "\n\n" + extra)
 		}
 		if host == verbs.HostCursor {
 			if msg == "" {

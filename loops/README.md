@@ -1,6 +1,7 @@
 # loops
 
-Loops (WP7.1), one file each: `loops/<name>.toml`. A loop runs on a schedule (`cron`) or on a GitHub event (`on`).
+Loops (WP7.1), one file each: `loops/<name>.toml`. A loop runs on a schedule (`cron`). Event loops (`on`, `filter`) are
+deferred to a later version (Appendix B S-7.1e): `loops.Parse` refuses them.
 
 ```toml
 description = "Founder digest: the status rollup of every open Goal, paged through [notify]."
@@ -13,31 +14,13 @@ setup = ["node", "pnpm"]           # optional, Actions only: pinned tool setups,
 setup_run = ["pnpm install --frozen-lockfile"]  # optional, Actions only: the product's own commands, after setup
 ```
 
-An event loop sets `on` instead of `cron` (Appendix B S-7.1b):
-
-```toml
-description = "Triage each new issue."
-command = ["triage", "{number}"]   # {number}: the issue or pull request; {tag}: the release
-on = "issues.opened"               # issues.opened|labeled, pull_request.opened|synchronize, check_suite.completed, release.published
-filter = { label = "type:feedback" }  # optional: label (issues, pull requests), conclusion = "failure"|"success" (check suites)
-```
-
-Each host starts an event loop with its own trigger where it has one (Appendix B D-7.1e has the host × event matrix
-and its sources): an Amp orb spawner (`create_github_subscription`) for a newly opened issue or pull request, and for a
-failed check a spawner on each new pull request whose thread subscribes to its head commit's CI (a chain: it covers the
-heads that thread sees); a Cursor Automation trigger (`git_pull_request`, `git_ci_completed`, or `git_label` for an
-issue with the label); a Claude Code routine for pull request and release events. Where a host has no trigger, the
-event waits for your next session there: `aayu hook session-start`, which `aayu install` registers as each host's
-session-start hook, reads GitHub as you, lists each event since your last session for a loop no host runs yet
-(`loops/active.json`), and asks the agent to offer you its run. Claude Code, Codex, and Cursor give that list to the
-agent; the Amp plugin shows it to you as a notice. Nothing runs until a session starts. The Actions fallback never
-answers an event with a model: its job only records the event in the run summary.
-
-This repository's loops are also the defaults a product copies. `triage` (weekly) and `triage-new` (when an intake form
-opens an issue) replace the retired aayudha-triage workflow: `aayu triage` lists the intake issues with no model, and
-the agent in your own session classifies each one with `--as`. `housekeeping` (weekly) runs `aayu gc`, then reports
-doctor drift, feature-map drift, and stale Ready issues. `feedback`, `ci-failed`, and `release-measure` start on a new
-Feedback issue, a failed check suite (the delegated builder gets the failed check, #231), and a published release.
+This repository's loops are also the defaults a product copies. `triage-daily` (every morning) and `triage` (weekly)
+replace the retired aayudha-triage workflow: `aayu triage` lists the intake issues with no model, and the agent in
+your own session classifies each one with `--as`. `housekeeping` (weekly) runs `aayu gc`, then reports doctor drift,
+feature-map drift, and stale Ready issues. `ci-failed` (three times each working day) sends a delegated story's failed
+required check back to its builder (#231), `release-measure` (weekly) runs `measure` when a release was published
+that week, and `evolve` (monthly) takes the Feedback filed since. They do on a schedule what the deferred event loops
+did on arrival.
 
 `verify-sweep` (nightly) and `verify-maintain` (weekly) are the feature maps' loops (WP4.5b.4): the sweep runs every
 behaviour check with no model, and both hand the maintain brief to the agent app `[verify] maintainer` names, the
@@ -73,34 +56,34 @@ This repository's `[verify] maintainer` is `amp`: the headless Amp run reads the
 
 - `.github/workflows/aayudha-loops.yml`: the GitHub Actions fallback. Actions cron is UTC, so each loop has one cron
   per UTC offset of the zone, and the guard runs only the one for today's offset.
-- `loops/amp/<name>.json`: the input of Amp's `set_schedule` (an RFC 5545 rule in the zone, `run_mode` fresh), or for
-  an event loop of Amp's `create_github_subscription` (an orb spawner, `destination` new-orb, with the project's
-  `project_id` and an `agent_mode` added); ask an Amp thread in the project to set it.
+- `loops/amp/<name>.json`: the input of Amp's `set_schedule` (an RFC 5545 rule in the zone, `run_mode` fresh).
 - `loops/cursor/aayudha-loops.tf`: Cursor Automations as `cursor_platform_workflow` resources of Cursor's Terraform
-  provider; apply them with `terraform apply` and `CURSOR_TOKEN`.
-- `loops/claude/routines.md`: Claude Code routines, as the values for the claude.ai/code/routines form or `/schedule`
-  (Claude Code has no file or API that creates a routine).
-- `loops/codex/scheduled-tasks.md`: Codex scheduled tasks for the ChatGPT desktop app, with each loop's RFC 5545 rule
-  (Codex has no file or API that creates one, and no GitHub event trigger; your next Codex session picks up events).
+  provider; apply them with `terraform apply` and `CURSOR_TOKEN`. `loops/cursor/automate.md` has the same loops as
+  prompts for Cursor's `/automate` skill, for a user without Terraform or a key.
+- `loops/claude/routines.md`: one `/schedule` prompt per loop for Claude Code (v2.1.225 or later, claude.ai login),
+  which saves it as a routine.
+- `loops/codex/scheduled-tasks.md`: one prompt per loop for a Codex or ChatGPT chat in the desktop app, which creates
+  the scheduled task, with each loop's RFC 5545 rule.
 
-## Setting the loops up on your agent hosts
+## Setting the loops up in one tool
 
-`aayu install --loops` is the one entry point, per repository: it detects the agent hosts you have here (the amp,
-cursor-agent, claude, and codex CLIs) and, for each, sets up this repository's loops where the host's own tooling can,
-and shows the exact steps for the rest:
+`aayu install --loops` is the one entry point, per repository. One tool runs every loop: two would run each loop
+twice. It asks which tool should run them, offering only those whose CLI it detects here (amp, cursor-agent, claude,
+codex), or takes `--host`, and warns when `loops/active.json` records loops in another tool. Then:
 
-- Amp: one prompt per loop for an Amp thread of the project, which calls `set_schedule` (one schedule per thread) or
-  `create_github_subscription` with the rendered input and the project's ID. Amp has no CLI for either.
+- Amp: with `--apply`, one headless Amp thread per loop in an orb of the project (`amp -ox`) calls `set_schedule` with
+  the rendered input and keeps that schedule (one schedule per thread); each loop is recorded.
 - Cursor: with `--apply`, `terraform apply` of `loops/cursor/aayudha-loops.tf` when `terraform` and `CURSOR_TOKEN` are
-  there; it records the Cursor loops as set up.
-- Claude Code and Codex: the sections of `loops/claude/routines.md` and `loops/codex/scheduled-tasks.md` to enter.
+  there, recording each loop; without them, the `/automate` prompts in `loops/cursor/automate.md`.
+- Claude Code and Codex: the prompts in `loops/claude/routines.md` and `loops/codex/scheduled-tasks.md` to paste.
 
-Record each loop you set up with `aayu install --loops --host <host> --record <loop>=<ID>` (or `all=<ID>`); the record
-is `loops/active.json`, committed with the loops. `aayu doctor` then reports every loop, scheduled or event, on each of
-your hosts: active, stale (the loop changed after it was set up), missing, or session (the host has no trigger for the
-loop's event, so your next session there picks it up).
+`--run-now <loop>` tests one loop once with the tool's own CLI here (`amp -x`, `cursor-agent -p`, `claude -p`,
+`codex exec`); at a terminal it is offered after setup. Record each loop you set up by hand with
+`aayu install --loops --host <tool> --record <loop>=<ID>` (or `all=<ID>`; an empty ID forgets one); the record is
+`loops/active.json`, committed with the loops. `aayu doctor` then shows each loop with the tool that runs it: active,
+stale (the loop changed after it was set up), missing, or double (recorded in two tools). In Actions, the guard leaves
+a recorded loop to its tool, so the fallback never runs it a second time.
 
-Every run starts with `aayu hook loop:<name>`, on every host and for both kinds of loop: it exits 4 while the
+Every run starts with `aayu hook loop:<name>`, in every tool: it exits 4 while the
 repository is halted (`aayu halt`), 6 while the `[budget]` breaker has paused agent lanes or the Actions loops have used
-`[budget] ci_minutes_month` this month, and otherwise says whether this run is the scheduled one (an event loop is due
-whenever its own event started it). A loop whose command is not implemented yet is not rendered (n/a until its WP).
+`[budget] ci_minutes_month` this month, and otherwise says whether this run is the scheduled one. A loop whose command is not implemented yet is not rendered (n/a until its WP).

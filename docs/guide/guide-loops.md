@@ -1,9 +1,8 @@
 # Keep things moving with loops
 
-Some work should happen without anyone asking: triage new reports on arrival, tidy up on Fridays, send a failed check
-back to the agent that built it, measure after a release. A **loop** is one small file that runs an aayu command on a
-schedule or when something happens on GitHub. It runs in your agent's own scheduler, in your own session, so your CI
-never calls a model.
+Some work should happen without anyone asking: triage new reports each morning, tidy up on Fridays, send a failed
+check back to the agent that built it, measure after a release. A **loop** is one small file that runs an aayu
+command on a schedule. It runs in your agent's own scheduler, as you, so your CI never calls a model.
 
 > **You are here:** Level 3. Loops work at any level, but they pay off once work flows steadily.
 >
@@ -13,85 +12,76 @@ never calls a model.
 
 ## What you get
 
-`aayu init --gates` copies the default loop files into `loops/`. They do nothing until you set them up on your
-agent, below.
+Copy the default loop files from aayudha's [loops](../../loops) folder into your repository's `loops/`, then run
+`aayu init --gates`, which renders them for every tool. They do nothing until you set them up, below.
 
-| Loop | Starts | Does |
+| Loop | Runs | Does |
 |---|---|---|
-| `triage` | Mondays 09:30 | Lists new intake issues; your agent labels each as Feedback, Bug, or Incident |
-| `triage-new` | An intake issue is opened | The same, for that issue only |
+| `triage-daily` | Daily 09:00 | Lists new intake issues; your agent labels each as Feedback, Bug, or Incident |
+| `triage` | Mondays 09:30 | The same, weekly |
+| `ci-failed` | Weekdays 09:45, 13:45, 17:45 | For a story handed to another agent, sends a failed required check back to it |
+| `release-measure` | Mondays 10:30 | Runs `measure` when a release was published that week |
 | `housekeeping` | Fridays 16:00 | Cleans up, then reports setup drift, feature-map drift, and stale Ready issues |
-| `ci-failed` | A check suite fails | For a story handed to another agent, sends the failed check back to it |
-| `feedback` | A Feedback issue is opened | Reports which skills now have enough evidence for `evolve` |
-| `release-measure` | A release is published | Runs `measure` |
-| `digest`, `retro`, `evolve` | Weekdays, Mondays, monthly | The founder digest, the retro, and skill evolution |
+| `digest`, `retro`, `evolve` | Weekdays, Mondays, monthly | The founder digest, the retro, and skill evolution, which takes new Feedback |
 
 Times are in `[time] tz` from your config. Every run starts with a guard that stops it while the repository is halted
 or over budget.
 
-## Set them up
+> **Honest status:** loops run on a schedule only in 0.2. Starting a loop when something happens on GitHub, such as
+> an issue being opened, is planned for a later version.
+
+## Set them up in one tool
+
+Pick one agent tool to run all the loops. If two tools ran them, every loop would run twice.
 
 ```sh
 aayu install --loops
 ```
 
-It finds the agents you have and, for each one, sets the loops up where that agent's tools allow, then prints the
-exact steps for the rest:
+It asks which tool should run them, offering only the ones it finds here (Amp, Cursor, Claude Code, or Codex), then
+sets them up there or prints exactly what to paste:
 
-- **Amp:** one prompt per loop, to paste into an Amp thread of your project.
-- **Cursor:** with `--apply`, it runs `terraform apply` for you, if Terraform and a Cursor token are there.
-- **Claude Code:** the values for the routines form.
-- **Codex:** the values for a scheduled task.
+- **Amp:** run `aayu install --loops --host amp --apply`. It starts one Amp thread per loop in your project, which
+  sets the loop's schedule, and records each one.
+- **Cursor:** with Terraform and a Cursor API key in `CURSOR_TOKEN`, `--apply` creates the automations. Without
+  them, paste each prompt from `loops/cursor/automate.md` into a Cursor agent session; its `/automate` skill does the
+  rest.
+- **Claude Code:** paste each `/schedule` prompt from `loops/claude/routines.md` into Claude Code (v2.1.225 or later,
+  signed in with your claude.ai account). Each becomes a routine.
+- **Codex:** paste each prompt from `loops/codex/scheduled-tasks.md` into a Codex or ChatGPT chat in the desktop app.
+  Each becomes a scheduled task.
 
-When a loop is set up on a host, record it, so aayudha can tell you later if it went stale:
+If `loops/active.json` says loops are already set up in another tool, it warns you first. Delete them there, then
+forget them: `aayu install --loops --host <that tool> --record <loop>=`.
+
+**Test one loop now.** At the end, it offers to run one loop once. You can also run it yourself:
 
 ```sh
-aayu install --loops --host amp --record triage=<the ID the host gave you>
+aayu install --loops --host amp --run-now triage
 ```
 
-**You should see** each recorded loop as active in `aayu doctor`'s `loops` row. A loop you changed after recording it
-shows as stale, and one you never set up as missing.
+**You should see** the loop's report in your terminal: the intake issues it classified, or nothing to do.
 
-## Not every host can do every event
+When a tool gives you an ID for a loop you set up by hand, record it, so aayudha can tell you later if it went stale:
 
-Each agent can start a run on different GitHub events. Where a host has its own trigger, the loop runs there
-("native"). Where it has none, the event waits for **your next session**: when you open your agent,
-`aayu hook session-start` lists the events since last time and offers the loop's steps. Nothing runs between
-sessions. `aayu doctor` shows such a loop as `session`.
+```sh
+aayu install --loops --host claude --record all=<the routine names>
+```
 
-The table follows each host's own documentation; only the Amp column has been run live so far (see the note below).
-
-| Event (default loop) | Amp | Cursor | Claude Code | Codex |
-|---|---|---|---|---|
-| Intake issue opened (`triage-new`) | native | native, from the label | session | session, or a person's `@codex` |
-| Feedback filed (`feedback`) | native | native, from the label | session | session, or a person's `@codex` |
-| Check suite failed (`ci-failed`) | chained | native | session, or auto-fix on one pull request | session, or a person's `@codex` |
-| Release published (`release-measure`) | session | session | native | session |
-
-- **Amp, chained.** Amp cannot start a thread on a CI failure. So the `ci-failed` loop starts a thread when a pull
-  request opens, and that thread subscribes itself to the pull request's checks and runs the loop when one fails.
-  It covers the pull request's first commit and any later commit the thread hears about, and starts one Amp thread
-  per new pull request.
-- **Cursor.** The Terraform that `install --loops --apply` runs cannot express every trigger Cursor's web app
-  offers. Triggers such as a review submitted are web-app only.
-- **Codex.** Codex has no GitHub event trigger you can create outside its own app or chat, so its event loops rely on
-  your session, or on a person posting `@codex` on the issue or pull request. aayudha never posts that mention from a
-  workflow.
-- **Claude Code** routines start on pull request and release events only. Auto-fix answers CI failures on one pull
-  request a person turns it on for.
-- **GitHub Actions** is a fallback that only records an event and never runs a model.
+**You should see** each recorded loop as active in `aayu doctor`'s `loops` row, with the tool that runs it. A loop you
+changed after recording it shows as stale, one you never set up as missing, and one recorded in two tools as double.
 
 Stuck? See [loop problems](troubleshooting.md#loops).
 
-> **Honest status:** "active" means recorded with the loop's current contents; no host lets aayudha read your
-> automations back. On Amp, the scheduled `triage`, the `triage-new` spawner, and the chained `ci-failed` thread were
-> proven live. The Cursor, Claude Code, and Codex forms are rendered from their documentation and not yet run on a
-> real host.
+> **Honest status:** "active" means recorded with the loop's current contents; no tool lets aayudha read your
+> automations back. On Amp, the weekly and daily triage schedules run live in aayudha's own repository; Amp's
+> `--apply` is tested with a stand-in, not yet run live. The Cursor, Claude Code, and Codex prompts follow each tool's
+> documentation and have not been run on a real account yet.
 
 ## Under the hood
 
-The loop format, the events and filters, each host's render, and the guard are in
-[hand-offs, agent environments, and loops](how-agents.md#scheduled-and-event-loops).
+The loop format, each tool's render and setup, and the guard are in
+[hand-offs, agent environments, and loops](how-agents.md#scheduled-loops).
 
 ## What's next
 

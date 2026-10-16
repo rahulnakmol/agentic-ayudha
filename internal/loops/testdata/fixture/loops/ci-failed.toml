@@ -1,4 +1,0 @@
-description = "Hand a failed check back to the builder."
-command = ["status", "--work"]
-on = "check_suite.completed"
-filter = { conclusion = "failure" }
