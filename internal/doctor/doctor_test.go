@@ -15,6 +15,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/agentenv"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations"
@@ -69,6 +70,31 @@ func overlay(p *Probe, table map[string]string) {
 		}
 		return base(ctx, dir, name, args...)
 	}
+}
+
+// staleEnv is a repository whose agent environment was generated and
+// verified for go 1.25.0, after which go.mod moved to 1.26.0.
+func staleEnv(t *testing.T) string {
+	root := repoWith(t, map[string]string{"go.mod": "module m\n\ngo 1.25.0\n"})
+	d, err := agentenv.Discover(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := agentenv.Settle(d, map[string]agentenv.Answer{"hosts": {Value: "amp,cursor", Source: "stated"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Tools[0].Version, s.Tools[0].SHA256 = "1.25.8", map[string]string{"amd64": strings.Repeat("a", 64), "arm64": strings.Repeat("b", 64)}
+	if err := agentenv.Write(root, s); err != nil {
+		t.Fatal(err)
+	}
+	if err := agentenv.RecordContainer(root, agentenv.Amp, s, agentenv.Result{Image: "debian:12"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module m\n\ngo 1.26.0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return root
 }
 
 // fakeExec answers commands from a table keyed by "name args...".
@@ -126,7 +152,14 @@ func healthy(t *testing.T) *Probe {
 			"/repos/o/r/issues/9/comments?per_page=100":                       []any{map[string]any{"body": "<!-- aayudha:lease holder=bot@ci expires=2099-01-01T00:00:00Z -->"}},
 			"/orgs/o/installations?per_page=100":                              map[string]any{"installations": []any{map[string]any{"app_slug": "chatgpt-codex-connector"}}},
 		}),
-		Repo:      "o/r",
+		Repo: "o/r",
+		Combined: fakeExec(map[string]string{
+			"/usr/bin/x --version":          "1.0.0\n",
+			"/usr/bin/x login status":       "Logged in using ChatGPT\n",
+			"/usr/bin/x status":             "Logged in as dev@example.com\n",
+			"/usr/bin/x auth status --json": `{"loggedIn": true, "authMethod": "claude.ai"}`,
+			"/usr/bin/x account list":       "* dev@example.com\n",
+		}),
 		Version:   "1.2.0",
 		Latest:    func(context.Context) (string, error) { return "v1.2.0", nil },
 		TracePath: ".aayudha/telemetry/traces.jsonl",
@@ -215,8 +248,8 @@ func failing(t *testing.T) map[string]func(*Probe) {
 				return "", errors.New("not found")
 			}
 		},
-		"delegate-env": func(p *Probe) {
-			p.Root = repoWith(t, map[string]string{".agents/setup": "#!/usr/bin/env bash\nGO_VERSION=\"1.24.0\"\n", "go.mod": "module m\n\ngo 1.25.0\n"})
+		"agent-env": func(p *Probe) {
+			p.Root = staleEnv(t)
 		},
 		// Codex replied on a PR, but config does not name it; Cursor's family is unknown.
 		"reviewer-apps": func(p *Probe) {

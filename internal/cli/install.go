@@ -82,6 +82,9 @@ type installEdit struct {
 }
 
 func runInstall(ctx context.Context, e *Env, in Values) error {
+	if in.Bool("env") || in.Bool("verify") || in.Bool("cloud") || in.String("record") != "" {
+		return runInstallEnv(ctx, e, in)
+	}
 	apply := in.Bool("apply")
 	if apply && e.Agent() {
 		return Errorf(ExitBlocked, "install --apply writes the hooks that govern agents; a human runs it (AAYU_AGENT=1)")

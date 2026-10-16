@@ -257,25 +257,31 @@ the structured findings.
 | Codex cloud | UI only: an **Install script** and a **Start skill**; Codex reads `AGENTS.md` for commands; no repository file or API defines the environment [V]. Legacy: setup and maintenance scripts, the `universal` image with `CODEX_ENV_GO_VERSION` (1.22–1.25.1 only) [V] | Published filesystem; Legacy cache up to 12 h, invalidated when scripts or variables change [V] | Network secrets substituted by the proxy for allowed domains; Legacy secrets only during setup [V] | Off for the agent by default; presets (package managers) or custom domains; methods can be limited to GET/HEAD/OPTIONS [V] |
 | Cursor cloud agents | `.cursor/environment.json` on the **default branch** (`install`, `start`, `terminals`, `build.dockerfile`, `image`, `snapshot`, `egressAllowlist`, `egressMode`, …), else a dashboard environment [V] | A Build runs `install` and captures disk only; Dockerfile layers cached [V] | Dashboard: environment variable, runtime secret (redacted), build secret; OIDC/IAM [V] | Internet by default; allow-all, default + allowlist, or allowlist only [V] |
 | Amp orbs | `.agents/setup` (committed, idempotent, ≤ 20 min), `.agents/resume` (no installs) [V] | Snapshot per orb size, reused up to 72 h; a setup change alone does not invalidate it [V] | Workspace, project, personal secrets; OIDC from `amp orb id-token` [V] | No documented default restriction [I] |
-| Claude Code (Action) | The GitHub Actions workflow: steps before the action [V] | The runner's cache actions | Actions secrets | The runner's |
+| Claude Code on the web | UI only: an environment (name, network access, environment variables, setup script) per account; the setup script runs as root on Ubuntu 24.04 before Claude Code starts; a `SessionStart` hook in the repository's `.claude/settings.json` runs in every cloud session (`CLAUDE_CODE_REMOTE=true`, `$CLAUDE_PROJECT_DIR`) [V]. `/remote-env` only selects an environment [V] | Setup results cached about 5 min after the first run [V] | Environment variables in the UI; no secret store [V] | Trusted by default: a package-manager and forge allowlist; Custom adds domains [V] |
+| Claude Code (Action) | Not used: it needs `ANTHROPIC_API_KEY` in the product repository's CI (founder rule, 2026-10-16) | — | — | — |
 
 ### 6.2 One source, generated per receiver
 
-The repository's `.agents/setup` is the source: pinned Go with its SHA-256, Node and pnpm checks, git-lfs,
-`pnpm install --frozen-lockfile`, `go mod download`, idempotent and fast on a warm filesystem. aayu generates or
-checks, never forks it:
+Built in WP3.2c (Appendix B S-3.2c). `aayu install --env` discovers the environment from the code and writes the
+spec to `.aayudha/env.toml`; every host's files are generated from it, and every host calls the same two
+scripts: `.agents/setup` (pinned, checksummed, idempotent; it runs as root or as a sudo user) and `.agents/check`
+(the pinned toolchains are the ones on `PATH`, services start, the build and tests pass, then a marker line).
 
-- **Amp**: native; `doctor` checks the script exists and is executable.
-- **Cursor**: `.cursor/environment.json` with `"install": "bash .agents/setup"` (aayu owns `name` and `install`;
-  other keys are the owner's). `doctor --fix` writes it; `doctor` reports drift. It must be on `dev` (the default
-  branch) to take effect.
-- **Codex**: the Install script field is one constant line, `bash .agents/setup`, so the UI cannot drift from the
-  repository; `doctor` prints the exact values to paste and marks the receiver "manual" because the UI cannot be
-  read. Internet: the package-managers preset.
-- **Claude Code**: `doctor` checks that a workflow using `anthropics/claude-code-action` runs `.agents/setup`
-  before the action, and prints the step when it does not. aayu does not write `.github/` itself.
-- **Toolchain pins**: `doctor` compares the Go version `.agents/setup` installs with `go.mod`'s `go` line (the
-  installed toolchain may be newer, Appendix B D5, never older).
+- **Amp**: runs `.agents/setup` natively and `.agents/resume` on resume (it starts the services only).
+- **Cursor**: `.cursor/environment.json` `install: bash .agents/setup` and, with services, `start:
+  bash .agents/start`; aayu owns `name`, `install`, and `start`, the rest is the owner's. It must be on the
+  default branch.
+- **Codex**: UI only. aayu prints the Install script (`bash .agents/setup`), the Start skill (start the services),
+  the extra allowed domains beyond the Package managers preset, and the variables by name, then verifies with
+  `codex cloud exec --env <id>` or a recorded probe reply.
+- **Claude Code on the web**: the `SessionStart` hook in `.claude/settings.json` runs `.agents/setup` when
+  `CLAUDE_CODE_REMOTE` is `true`, so the UI needs no setup script; aayu prints the network allowlist additions and
+  the variables.
+- **Proof**: `install --env --verify` runs setup cold, setup warm, then the check in a clean container of each
+  host's documented base; `doctor` reports each host as verified, stale, or missing.
+
+The shared script holds for all four hosts: each one either runs a repository file or accepts one command, and
+each of the documented bases (Debian 12, Ubuntu 24.04, codex-universal) has bash, apt, and sudo or root.
 
 ### 6.3 Principles of a good agent environment
 
