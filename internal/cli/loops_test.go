@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/loops"
 )
 
@@ -70,6 +69,13 @@ func TestLoopDigestOnSchedule(t *testing.T) {
 		t.Errorf("outbox: %s", b)
 	}
 
+	// S-7.1e: once a tool runs the loop (loops/active.json), the Actions fallback leaves it there.
+	_ = os.WriteFile(filepath.Join(dir, filepath.FromSlash(loops.RecordFile)), []byte(`{"amp": {"digest": {"digest": "x", "id": "s", "at": "2026-10-16"}}}`), 0o644)
+	if code, out := guard("5 8 * * 1-5", ""); code != 0 || out != "due=false\n" {
+		t.Errorf("a loop Amp runs, in Actions: exit %d, %q", code, out)
+	}
+	_ = os.Remove(filepath.Join(dir, filepath.FromSlash(loops.RecordFile)))
+
 	// Halted: the next run exits 4 at the guard, and the verb itself refuses too; nothing is written.
 	g.Reset()
 	if code, _ := guard("5 8 * * 1-5", "founder at 2026-10-12: test"); code != ExitBlocked {
@@ -103,170 +109,109 @@ func TestLoopDigestOnSchedule(t *testing.T) {
 	}
 }
 
-// S-7.1b: an event loop's guard is due whenever its own event started the run
-// (in an agent session, or in Actions on that event), not on another event;
-// halt still stops it with exit 4 before anything runs.
-func TestLoopGuardEvent(t *testing.T) {
-	g := statusTree(t)
-	dir := checkout(t)
-	_ = os.MkdirAll(filepath.Join(dir, "loops"), 0o755)
-	_ = os.WriteFile(filepath.Join(dir, "loops", "triage-new.toml"), []byte("description = \"x\"\ncommand = [\"triage\", \"{number}\"]\non = \"issues.opened\"\n"), 0o644)
-	output := filepath.Join(t.TempDir(), "output")
-	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
-	guard := func(event, halt string) (int, string) {
-		t.Helper()
-		_ = os.Remove(output)
-		env := map[string]string{"GITHUB_TOKEN": "workflow-token", "GITHUB_OUTPUT": output, "AAYUDHA_HALT": halt}
-		if event != "" {
-			env["GITHUB_ACTIONS"], env["GITHUB_EVENT_NAME"] = "true", event
-		}
-		code, stdout, _ := run(t, env, opts, "hook", "loop:triage-new", "--repo", "o/r")
-		out, _ := os.ReadFile(output)
-		return code, string(out) + stdout
-	}
-	if code, out := guard("", ""); code != 0 || !strings.Contains(out, "due=true") || !strings.Contains(out, "event: issues.opened") {
-		t.Errorf("agent session: exit %d %q", code, out)
-	}
-	if code, out := guard("issues", ""); code != 0 || !strings.Contains(out, "due=true") {
-		t.Errorf("Actions on issues: exit %d %q", code, out)
-	}
-	if code, out := guard("pull_request", ""); code != 0 || !strings.Contains(out, "due=false") {
-		t.Errorf("Actions on another event: exit %d %q", code, out)
-	}
-	if code, _ := guard("", "founder at 2026-10-16: test"); code != ExitBlocked {
-		t.Errorf("halted: exit %d, want %d", code, ExitBlocked)
-	}
-}
-
-// S-7.1d: install --loops shows each detected host's steps for this
-// repository only (Amp: set_schedule and create_github_subscription inputs
-// with the project's ID); --record notes loops as set up, so the next run says
-// active, and a changed loop says stale.
+// S-7.1e: install --loops sets every loop up in the one tool the user picks
+// from those detected; Amp's --apply starts one headless Amp thread per loop
+// and records it; recording a loop in a second tool warns that it runs twice,
+// and an empty ID forgets it; --run-now tests one loop with the tool's CLI.
 func TestInstallLoops(t *testing.T) {
 	dir := checkout(t)
 	_ = os.MkdirAll(filepath.Join(dir, "loops"), 0o755)
 	_ = os.WriteFile(filepath.Join(dir, "loops", "digest.toml"), []byte("description = \"Digest.\"\ncommand = [\"status\", \"--digest\"]\ncron = \"5 9 * * 1-5\"\n"), 0o644)
-	_ = os.WriteFile(filepath.Join(dir, "loops", "triage-new.toml"), []byte("description = \"Triage.\"\ncommand = [\"triage\"]\non = \"issues.opened\"\nfilter = { label = \"intake\" }\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "loops", "triage.toml"), []byte("description = \"Triage.\"\ncommand = [\"triage\"]\ncron = \"0 9 * * *\"\nhosts = [\"amp\", \"codex\"]\n"), 0o644)
+	// The rendered Amp inputs, as init --gates writes them.
+	files, err := func() (map[string][]byte, error) {
+		ls, err := loops.Load(dir)
+		if err != nil {
+			return nil, err
+		}
+		return loops.Files(ls, "o/r", "dev", "UTC", "dev", Implemented)
+	}()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for p, b := range files {
+		_ = os.MkdirAll(filepath.Join(dir, filepath.Dir(p)), 0o755)
+		_ = os.WriteFile(filepath.Join(dir, p), b, 0o644)
+	}
+	var calls []string
 	opts := Options{Dir: dir,
 		LookPath: func(b string) (string, error) {
-			if b == "amp" {
-				return "/usr/bin/amp", nil
+			if b == "amp" || b == "codex" {
+				return "/usr/bin/" + b, nil
 			}
 			return "", os.ErrNotExist
 		},
 		Exec: func(_ context.Context, _, name string, args ...string) (string, error) {
-			if strings.Join(append([]string{name}, args...), " ") == "amp projects get o/r --json" {
-				return `{"id": "proj-7"}`, nil
+			calls = append(calls, strings.Join(append([]string{name}, args...), " "))
+			if strings.HasSuffix(name, "amp") && slices.Contains(args, "-ox") {
+				return "Done.\nschedule s-" + args[slices.Index(args, "--title")+1][8:14] + " on T-01a14215-c759-72bf-9a65-d2317a72a878", nil
+			}
+			if strings.HasSuffix(name, "amp") && args[0] == "-x" {
+				return "loop triage: ran", nil
 			}
 			return "", errors.New("not found")
 		}}
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "t"}
-	report := func(args ...string) loopsReport {
+	report := func(stdin string, args ...string) (int, loopsReport, string) {
 		t.Helper()
-		code, out, errOut := run(t, env, opts, append([]string{"install", "--loops", "--repo", "o/r", "--json"}, args...)...)
+		code, out, errOut := runIn(t, env, opts, stdin, append([]string{"install", "--loops", "--repo", "o/r", "--json"}, args...)...)
 		var r loopsReport
-		if err := json.Unmarshal([]byte(out), &r); code != 0 || err != nil {
-			t.Fatalf("install --loops %v: exit %d %v: %s", args, code, err, errOut)
-		}
-		return r
+		_ = json.Unmarshal([]byte(out), &r)
+		return code, r, errOut
 	}
 	states := func(r loopsReport) string {
 		var s []string
-		for _, h := range r.Hosts {
-			for _, st := range h.States {
-				s = append(s, h.Host+":"+st.Loop+"="+st.Status)
-			}
+		for _, st := range r.States {
+			s = append(s, st.Loop+"="+st.Owner+":"+st.Status)
 		}
 		return strings.Join(s, " ")
 	}
-	r := report()
-	if len(r.Hosts) != 1 || r.Hosts[0].Host != "amp" || !r.Hosts[0].Detected {
-		t.Fatalf("detected hosts: %+v", r.Hosts)
+	// Two tools detected and no terminal to ask: name one.
+	if code, _, errOut := report(""); code != ExitUsage || !strings.Contains(errOut, "detected: amp, codex") {
+		t.Fatalf("two tools, no terminal: exit %d: %s", code, errOut)
 	}
-	steps := strings.Join(r.Hosts[0].Steps, "\n")
-	if !strings.Contains(steps, "set_schedule with the input in loops/amp/digest.json") || !strings.Contains(steps, "create_github_subscription with the input in loops/amp/triage-new.json, adding project_id proj-7") {
-		t.Errorf("amp steps:\n%s", steps)
+	// At a terminal it offers only the detected tools.
+	term := opts
+	term.IsTerminal = func(any) bool { return true }
+	if code, _, errOut := runIn(t, env, term, "cursor\n", "install", "--loops", "--repo", "o/r"); code != ExitUsage || !strings.Contains(errOut, "Detected: amp, codex. [amp/codex]") {
+		t.Errorf("an undetected pick: exit %d: %s", code, errOut)
 	}
-	if got := states(r); got != "amp:digest=missing amp:triage-new=missing" {
-		t.Errorf("before: %s", got)
+	if code, _, errOut := runIn(t, env, term, "codex\nn\n", "install", "--loops", "--repo", "o/r"); code != 0 || !strings.Contains(errOut, "codex/scheduled-tasks.md (2 loops)") || !strings.Contains(errOut, "Test the triage loop now in codex") {
+		t.Errorf("codex picked: exit %d: %s", code, errOut)
 	}
-	if !slices.Contains(r.Stale, "loops/amp/digest.json") {
-		t.Errorf("unrendered files not reported: %v", r.Stale)
+	// Amp with --apply: one headless thread per loop sets its schedule, and each loop is recorded.
+	code, r, errOut := report("", "--host", "amp", "--apply")
+	if code != 0 || states(r) != "digest=amp:active triage=amp:active" {
+		t.Fatalf("amp --apply: exit %d %s: %s", code, states(r), errOut)
 	}
-	if code, _, errOut := run(t, env, opts, "install", "--loops", "--repo", "o/r", "--host", "amp", "--record", "digest=T-1,triage-new=sub-2"); code != 0 {
-		t.Fatalf("record: exit %d: %s", code, errOut)
+	if n := len(slices.DeleteFunc(slices.Clone(calls), func(c string) bool {
+		return !strings.HasPrefix(c, "/usr/bin/amp -ox --project o/r --no-archive-after-execute")
+	})); n != 2 {
+		t.Errorf("amp threads started: %d, calls %v", n, calls)
 	}
-	if got := states(report()); got != "amp:digest=active amp:triage-new=active" {
-		t.Errorf("after recording: %s", got)
+	if b, _ := os.ReadFile(filepath.Join(dir, "loops", "active.json")); !strings.Contains(string(b), `"id": "schedule s-digest on T-01a14215`) {
+		t.Errorf("active.json:\n%s", b)
+	}
+	// Recording triage in Codex as well: it would run twice, so both say so.
+	if code, out, _ := run(t, env, opts, "install", "--loops", "--repo", "o/r", "--host", "codex", "--record", "triage=task-1"); code != 0 || !strings.Contains(out, "triage is also recorded in amp: it runs twice") {
+		t.Errorf("double record: exit %d: %s", code, out)
+	}
+	code, r, _ = report("", "--host", "codex")
+	if code != 0 || states(r) != "digest=amp:active triage=amp,codex:double" || len(r.Warnings) != 1 || !strings.Contains(r.Warnings[0], "records digest, triage as set up in amp") {
+		t.Errorf("codex with loops in amp: exit %d %s %v", code, states(r), r.Warnings)
+	}
+	if code, _, _ := run(t, env, opts, "install", "--loops", "--repo", "o/r", "--host", "codex", "--record", "triage="); code != 0 {
+		t.Errorf("forget: exit %d", code)
 	}
 	_ = os.WriteFile(filepath.Join(dir, "loops", "digest.toml"), []byte("description = \"Digest.\"\ncommand = [\"status\", \"--digest\"]\ncron = \"5 8 * * 1-5\"\n"), 0o644)
-	if got := states(report()); got != "amp:digest=stale amp:triage-new=active" {
-		t.Errorf("after the digest moved to 08:05: %s", got)
+	if _, r, _ := report("", "--host", "amp"); states(r) != "digest=amp:stale triage=amp:active" || r.RunNow != "aayu install --loops --host amp --run-now triage" {
+		t.Errorf("after forgetting codex and moving the digest: %s, run now %q", states(r), r.RunNow)
 	}
-	if code, _, _ := run(t, env, opts, "install", "--loops", "--repo", "o/r", "--host", "codex", "--record", "triage-new=x"); code != ExitUsage {
-		t.Errorf("recording an event loop on Codex, which has no trigger for it: exit %d, want %d", code, ExitUsage)
-	}
-}
-
-// Appendix B D-7.1e: where no host trigger runs an event loop, the next session's SessionStart hook lists the
-// GitHub events since the last session, once, for each event loop no agent host runs; a loop recorded as set up
-// on a host is left to that host.
-func TestSessionStartLoopEvents(t *testing.T) {
-	dir := checkout(t)
-	_ = os.MkdirAll(filepath.Join(dir, "loops"), 0o755)
-	for name, body := range map[string]string{
-		"triage-new":      "description = \"Triage.\"\ncommand = [\"triage\"]\non = \"issues.opened\"\nfilter = { label = \"intake\" }\n",
-		"feedback":        "description = \"Feedback.\"\ncommand = [\"evolve\"]\non = \"issues.opened\"\nfilter = { label = \"type:feedback\" }\n",
-		"ci-failed":       "description = \"Failed check.\"\ncommand = [\"status\", \"--work\"]\non = \"check_suite.completed\"\nfilter = { conclusion = \"failure\" }\n",
-		"release-measure": "description = \"Measure.\"\ncommand = [\"measure\"]\non = \"release.published\"\n",
-	} {
-		_ = os.WriteFile(filepath.Join(dir, "loops", name+".toml"), []byte(body), 0o644)
-	}
-	g := fake.New(t, "o/r", "User")
-	g.AddIssue("New intake", "", "intake").CreatedAt = "2026-10-16T08:00:00Z"
-	g.AddIssue("Old intake", "", "intake").CreatedAt = "2026-10-14T08:00:00Z" // before the first session's day
-	g.AddIssue("Feedback", "", "type:feedback").CreatedAt = "2026-10-16T08:00:00Z"
-	g.AddPR("Fix", "", "dev1", "fix", strings.Repeat("c", 40), "dev").UpdatedAt = time.Date(2026, 10, 16, 8, 0, 0, 0, time.UTC)
-	g.CheckRuns[strings.Repeat("c", 40)] = []fake.CheckRun{
-		{Name: "build", Status: "completed", Conclusion: "failure", CompletedAt: "2026-10-16T09:00:00Z"},
-		{Name: "lint", Status: "completed", Conclusion: "success", CompletedAt: "2026-10-16T09:00:00Z"},
-		{Name: "docs", Status: "completed", Conclusion: "failure", CompletedAt: "2026-10-14T09:00:00Z"},
-	}
-	g.Releases = map[string]*fake.Release{
-		"v1.0.0": {ID: 1, TagName: "v1.0.0", PublishedAt: "2026-10-16T09:30:00Z"},
-		"v1.1.0": {ID: 2, TagName: "v1.1.0", Draft: true},
-	}
-	now := time.Date(2026, 10, 16, 10, 0, 0, 0, time.UTC)
-	env := map[string]string{"AAYU_GITHUB_TOKEN": "t"}
-	opts := Options{Dir: dir, GitHubAPI: g.URL(), GitHubGap: -1, Now: func() time.Time { return now }}
-	if code, _, errOut := run(t, env, opts, "install", "--loops", "--repo", "o/r", "--host", "amp", "--record", "feedback=sub-9"); code != 0 {
-		t.Fatalf("record: exit %d: %s", code, errOut)
-	}
-	code, out, errOut := run(t, env, opts, "hook", "session-start", "--host", "claude")
-	if code != 0 {
-		t.Fatalf("session-start: exit %d: %s", code, errOut)
-	}
-	for _, want := range []string{"since 2026-10-15T10:00:00Z", "Loop triage-new", "- issue #1 opened\n", `- pull request #4: check "build" completed with failure on ccccccc`,
-		"- release v1.0.0 published\n", "run `aayu hook loop:release-measure`"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("session-start lacks %q:\n%s", want, out)
-		}
-	}
-	for _, not := range []string{"#2", "Loop feedback", `"lint"`, `"docs"`, "v1.1.0", "New intake"} {
-		if strings.Contains(out, not) {
-			t.Errorf("session-start reports %q (old, recorded on amp, not matching, a draft, or untrusted text):\n%s", not, out)
-		}
-	}
-	if _, out, _ := run(t, env, opts, "hook", "session-start", "--host", "claude"); strings.Contains(out, "aayudha: since") {
-		t.Errorf("the second session reports the same events again:\n%s", out)
-	}
-	now = now.Add(time.Hour)
-	g.AddIssue("Newer intake", "", "intake").CreatedAt = "2026-10-16T10:30:00Z"
-	_, out, _ = run(t, env, opts, "hook", "session-start", "--host", "cursor")
-	var cursor struct {
-		Context string `json:"additional_context"`
-	}
-	if err := json.Unmarshal([]byte(out), &cursor); err != nil || !strings.Contains(cursor.Context, "issue #5 opened") || strings.Contains(cursor.Context, "#1 opened") {
-		t.Errorf("cursor session-start: %v %q", err, out)
+	// Run now: the tool's own CLI runs the loop once, past "not due".
+	calls = nil
+	code, out, errOut := run(t, env, opts, "install", "--loops", "--repo", "o/r", "--host", "amp", "--run-now", "triage")
+	if calls = slices.DeleteFunc(calls, func(c string) bool { return !strings.Contains(c, " -x ") }); code != 0 || out != "loop triage: ran\n" ||
+		len(calls) != 1 || !strings.HasPrefix(calls[0], "/usr/bin/amp -x This is a Run now test") {
+		t.Errorf("run now: exit %d %q %v: %s", code, out, calls, errOut)
 	}
 }

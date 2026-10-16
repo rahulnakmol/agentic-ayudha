@@ -3,119 +3,107 @@ package loops
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
-// The hosts below have no file or API that creates a recurring run, so a loop
-// renders as the exact values and steps to enter (Appendix B S-7.1b).
+// These tools create a recurring run from a chat or slash command, not from a
+// file aayu can apply, so a loop renders as the exact prompt to paste
+// (Appendix B S-7.1e).
 const (
 	claudeDocs = "https://code.claude.com/docs/en/routines"
-	codexDocs  = "https://developers.openai.com/codex/automations"
+	codexDocs  = "https://learn.chatgpt.com/docs/automations"
+	cursorDocs = "https://cursor.com/docs/cloud-agent/automations"
 )
 
 const generatedMD = "<!-- Code generated from loops/*.toml by aayudha (WP7.1); DO NOT EDIT. -->\n\n"
 
-// ClaudeRoutines renders the loops as Claude Code routines: one section per
-// loop with the values for the claude.ai/code/routines form or `/schedule` in
-// the CLI. A routine runs in Anthropic's cloud on a fresh clone, under the
-// user's claude.ai login.
+// RunNowPrompt is the loop's prompt for a one-off test run outside its
+// schedule: the guard still stops a halted or over-budget repository, but
+// `not due` does not stop the test.
+func (l Loop) RunNowPrompt(repo, branch string) string {
+	return "This is a Run now test of the loop, outside its schedule: if step 1 prints `not due`, carry on with step 2 anyway. Stop on exit 4 or 6 as written.\n\n" +
+		l.AgentPrompt(repo, branch)
+}
+
+// ClaudeRoutines renders the loops as Claude Code routines: one `/schedule`
+// prompt per loop, to paste into Claude Code in a checkout of the repository.
+// A routine runs in Anthropic's cloud on a fresh clone, under the user's
+// claude.ai login.
 func ClaudeRoutines(ls []Loop, repo, branch, tz string) []byte {
 	var b strings.Builder
 	b.WriteString(generatedMD)
 	fmt.Fprintf(&b, "# Claude Code routines for %s\n\n", repo)
-	fmt.Fprintf(&b, "Each loop is a routine ([docs](%s)). Create it at `claude.ai/code/routines` (**New routine**), or run\n", claudeDocs)
-	b.WriteString("`/schedule` in Claude Code and give it the values below; a GitHub trigger from the CLI needs Claude Code v2.1.225 or\n")
-	b.WriteString("later and the Claude GitHub App on the repository. Routines need a claude.ai subscription login (not an API key), run\n")
-	b.WriteString("as you, and count against your plan's daily routine runs. The routine's cloud environment must have the aayu\n")
-	b.WriteString("binary: `aayu install --env --host claude` prints its setup script.\n\n")
-	var gaps []string
+	fmt.Fprintf(&b, "Each loop is a routine ([docs](%s)). In Claude Code v2.1.225 or later, signed in with a claude.ai\n", claudeDocs)
+	b.WriteString("subscription (not an API key) and started in a checkout of this repository, paste each loop's `/schedule` prompt\n")
+	b.WriteString("below. Claude asks what it still needs, then saves the routine to your account; it runs as you, in Anthropic's\n")
+	b.WriteString("cloud. If Claude picks a preset instead of the cron, run `/schedule update` and give it the cron. The shortest\n")
+	b.WriteString("interval a routine allows is one hour. The routine's cloud environment needs the aayu binary:\n")
+	b.WriteString("`aayu install --env --host claude` prints its setup script.\n\n")
+	b.WriteString("To test a routine, run `/schedule run` and name it, or click **Run now** on its page. To test the prompt here first,\n")
+	b.WriteString("run `aayu install --loops --host claude --run-now <loop>`.\n\n")
 	for _, l := range ls {
 		if !l.Runs(HostClaude) {
 			continue
 		}
-		if ok, why := l.Native(HostClaude); !ok {
-			gaps = append(gaps, fmt.Sprintf("- `%s` (%s): %s.", l.Name, l.Label(tz), why))
-			continue
-		}
-		fmt.Fprintf(&b, "## aayudha %s\n\n", l.Name)
-		fmt.Fprintf(&b, "- **Name:** `aayudha %s (%s)`\n", l.Name, repo)
-		fmt.Fprintf(&b, "- **Repository:** `%s`, branch `%s`\n", repo, branch)
-		if ev, isEvent := l.Event(); isEvent {
-			kind := map[string]string{"pull_request": "Pull request", "release": "Release"}[ev.Name]
-			fmt.Fprintf(&b, "- **Trigger:** GitHub event, **%s**, action `%s`\n", kind, ev.Action)
-			if l.Filter.Label != "" {
-				fmt.Fprintf(&b, "- **Filter:** Labels is one of `%s`\n", l.Filter.Label)
-			}
-		} else {
-			fmt.Fprintf(&b, "- **Trigger:** Schedule, %s\n", l.Label(tz))
-			fmt.Fprintf(&b, "- **Cron:** `%s` in %s; when no preset says it, pick the closest one, then set this cron with `/schedule update`\n", l.Cron, tz)
-		}
-		b.WriteString("- **Prompt:**\n\n")
-		writeFence(&b, l.AgentPrompt(repo, branch))
+		fmt.Fprintf(&b, "## aayudha %s\n\n%s.\n\n", l.Name, l.Label(tz))
+		writeFence(&b, fmt.Sprintf("/schedule Create a recurring routine named \"aayudha %s (%s)\" for the repository %s, branch %s, on the cron schedule `%s` in the time zone %s (%s). Each run uses this prompt, exactly:\n\n%s",
+			l.Name, repo, repo, branch, l.Cron, tz, l.Label(tz), l.AgentPrompt(repo, branch)))
 	}
-	writeGaps(&b, gaps, "Claude Code", "Claude's auto-fix, which you turn on for one pull request (`/autofix-pr`), also answers that "+
-		"pull request's failed checks and review comments as you. aayudha does not install @claude on GitHub: it needs "+
-		"claude-code-action with an API key in Actions, and no model key goes into CI.")
 	return []byte(strings.TrimRight(b.String(), "\n") + "\n")
 }
 
-// CodexTasks renders the scheduled loops as Codex scheduled tasks in the
-// ChatGPT desktop app: one section per loop with its RFC 5545 rule. A project
-// task runs on this machine while the app is open.
+// CodexTasks renders the loops as Codex scheduled tasks: one prompt per loop
+// to paste into a Codex or ChatGPT chat in the desktop app, which creates a
+// standalone task on the local project. The task runs as the user, while the
+// machine is on and the app is open.
 func CodexTasks(ls []Loop, repo, branch, tz string) []byte {
 	var b strings.Builder
 	b.WriteString(generatedMD)
 	fmt.Fprintf(&b, "# Codex scheduled tasks for %s\n\n", repo)
-	fmt.Fprintf(&b, "Each scheduled loop is a Codex scheduled task ([docs](%s)). In the ChatGPT desktop app, open **Scheduled**, then\n", codexDocs)
-	fmt.Fprintf(&b, "**New task**, choose this repository's local project (`%s`), run it on a **worktree**, set a custom schedule with the\n", repo)
-	b.WriteString("rule below, and paste the prompt. The task runs as you, while the machine is on and the app is open; it uses your\n")
-	b.WriteString("default sandbox settings, and the aayu binary must be on its PATH.\n\n")
-	var gaps []string
+	fmt.Fprintf(&b, "Each loop is a Codex scheduled task ([docs](%s)). In the ChatGPT desktop app, open a Codex or ChatGPT chat\n", codexDocs)
+	fmt.Fprintf(&b, "in this repository's local project (`%s`) and paste each loop's prompt below; ChatGPT creates the task, which you\n", repo)
+	b.WriteString("then find under **Scheduled**. A task runs as you, with your default sandbox settings, while the machine is on and\n")
+	b.WriteString("the app is open, and the aayu binary must be on its PATH.\n\n")
+	b.WriteString("Test each prompt before it runs on its own, as the Codex documentation advises: run\n")
+	b.WriteString("`aayu install --loops --host codex --run-now <loop>`, which runs it once with `codex exec`.\n\n")
 	for _, l := range ls {
 		if !l.Runs(HostCodex) {
 			continue
 		}
-		if ok, why := l.Native(HostCodex); !ok {
-			gaps = append(gaps, fmt.Sprintf("- `%s` (%s): %s.", l.Name, l.Label(tz), why))
-			continue
-		}
-		fmt.Fprintf(&b, "## aayudha %s\n\n", l.Name)
-		fmt.Fprintf(&b, "- **Name:** `aayudha %s (%s)`\n", l.Name, repo)
-		fmt.Fprintf(&b, "- **Project:** `%s` on `%s`, run on a worktree\n", repo, branch)
-		fmt.Fprintf(&b, "- **Schedule:** %s\n", l.Label(tz))
 		_, rule, _ := strings.Cut(l.RRule(tz), "\n")
-		fmt.Fprintf(&b, "- **Rule** (the app's times are your computer's time zone; this rule is in %s):\n\n", tz)
-		writeFence(&b, rule+"\n")
-		b.WriteString("- **Prompt:**\n\n")
-		writeFence(&b, l.AgentPrompt(repo, branch))
+		fmt.Fprintf(&b, "## aayudha %s\n\n%s.\n\n", l.Name, l.Label(tz))
+		writeFence(&b, fmt.Sprintf("Create a standalone scheduled task named \"aayudha %s (%s)\" for this local project, running on a new worktree from %s, with the custom schedule %s in the time zone %s (%s). Each run starts a new chat with this prompt, exactly:\n\n%s",
+			l.Name, repo, branch, rule, tz, l.Label(tz), l.AgentPrompt(repo, branch)))
 	}
-	writeGaps(&b, gaps, "Codex", "Codex's GitHub app also starts a cloud task as you when you comment `@codex <task>` on an issue or "+
-		"pull request, and reviews pull requests when you turn on automatic code review; neither runs a loop by itself.")
 	return []byte(strings.TrimRight(b.String(), "\n") + "\n")
 }
 
-func writeFence(b *strings.Builder, body string) {
-	b.WriteString("  ```text\n")
-	for _, line := range strings.Split(strings.TrimRight(body, "\n"), "\n") {
-		if line == "" {
-			b.WriteString("\n")
+// CursorAutomate renders the loops as prompts for Cursor's /automate skill,
+// for a user without Terraform or a Cursor API key: one per loop, to paste in
+// a local Cursor agent session. Cursor's cron runs in UTC.
+func CursorAutomate(ls []Loop, repo, branch, tz string, loc *time.Location) ([]byte, error) {
+	var b strings.Builder
+	b.WriteString(generatedMD)
+	fmt.Fprintf(&b, "# Cursor automations for %s, with /automate\n\n", repo)
+	fmt.Fprintf(&b, "`aayu install --loops --host cursor --apply` creates these automations with Terraform when `terraform` and a\n")
+	fmt.Fprintf(&b, "Cursor API key (`CURSOR_TOKEN`) are there. Without them, paste each loop's prompt below into a local Cursor agent\n")
+	fmt.Fprintf(&b, "session in this repository: the `/automate` skill sets the automation up ([docs](%s)). Each runs as you\n", cursorDocs)
+	b.WriteString("(**Run as: Me**). To test a prompt first, run `aayu install --loops --host cursor --run-now <loop>`.\n\n")
+	for _, l := range ls {
+		if !l.Runs(HostCursor) {
 			continue
 		}
-		b.WriteString("  " + line + "\n")
+		crons, err := l.UTCCrons(loc)
+		if err != nil {
+			return nil, err
+		}
+		fmt.Fprintf(&b, "## aayudha %s\n\n%s.\n\n", l.Name, l.Label(tz))
+		writeFence(&b, fmt.Sprintf("/automate Create an automation named \"aayudha %s (%s)\" on the repository github.com/%s, branch %s, that runs as me, with a scheduled trigger for each of these UTC cron expressions: %s (%s; the prompt's first step skips the one that is not due). Its prompt, exactly:\n\n%s",
+			l.Name, repo, repo, branch, "`"+strings.Join(crons, "`, `")+"`", l.Label(tz), l.AgentPrompt(repo, branch)))
 	}
-	b.WriteString("  ```\n\n")
+	return []byte(strings.TrimRight(b.String(), "\n") + "\n"), nil
 }
 
-// writeGaps lists the event loops host has no trigger for: the user's next
-// session picks up their events (Appendix B D-7.1e). also names what else
-// the host offers a person.
-func writeGaps(b *strings.Builder, gaps []string, host, also string) {
-	if len(gaps) == 0 {
-		return
-	}
-	b.WriteString("## Picked up by your next session\n\n")
-	fmt.Fprintf(b, "%s has no trigger for these loops' events, so nothing runs when they happen. When your next %s session\n", host, host)
-	b.WriteString("starts in this repository, aayu's SessionStart hook (`aayu install` sets it up) reads GitHub as you, lists each such\n")
-	b.WriteString("event since your last session for a loop no agent host runs yet (" + RecordFile + "), and asks the agent to offer\n")
-	b.WriteString("you its run.\n\n" + also + "\n\n")
-	b.WriteString(strings.Join(gaps, "\n") + "\n")
+func writeFence(b *strings.Builder, body string) {
+	b.WriteString("```text\n" + strings.TrimRight(body, "\n") + "\n```\n\n")
 }

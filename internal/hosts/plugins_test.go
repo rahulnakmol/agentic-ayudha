@@ -47,16 +47,16 @@ func TestHumanOnlyCommand(t *testing.T) {
 func TestPreToolBlocksHumanOnlyShell(t *testing.T) {
 	ship := []byte(`{"tool_name":"Bash","tool_input":{"command":"aayu ship 4"}}`)
 	for _, h := range []verbs.HostID{verbs.HostClaude, verbs.HostCodex, verbs.HostAmp} {
-		r, _ := RunHook("pre-tool", h, "", filepath.Join(t.TempDir(), "none"), ship, "")
+		r, _ := RunHook("pre-tool", h, "", filepath.Join(t.TempDir(), "none"), ship)
 		if r.Code != 2 || !strings.Contains(r.Stderr, "run `aayu ship 4` in their own terminal") {
 			t.Errorf("%s: %+v", h, r)
 		}
 	}
-	r, _ := RunHook("pre-tool", verbs.HostCursor, "", filepath.Join(t.TempDir(), "none"), []byte(`{"command":"aayu release 3 --to rolling"}`), "")
+	r, _ := RunHook("pre-tool", verbs.HostCursor, "", filepath.Join(t.TempDir(), "none"), []byte(`{"command":"aayu release 3 --to rolling"}`))
 	if r.Code != 2 || !strings.Contains(r.Stdout, `"permission":"deny"`) {
 		t.Errorf("cursor: %+v", r)
 	}
-	if r, _ := RunHook("pre-tool", verbs.HostClaude, "", filepath.Join(t.TempDir(), "none"), []byte(`{"tool_name":"Bash","tool_input":{"command":"aayu build 4"}}`), ""); r.Code != 0 {
+	if r, _ := RunHook("pre-tool", verbs.HostClaude, "", filepath.Join(t.TempDir(), "none"), []byte(`{"tool_name":"Bash","tool_input":{"command":"aayu build 4"}}`)); r.Code != 0 {
 		t.Errorf("build was blocked: %+v", r)
 	}
 	// The delegate commands' calls pass on every host.
@@ -66,7 +66,7 @@ func TestPreToolBlocksHumanOnlyShell(t *testing.T) {
 	} {
 		ev, _ := json.Marshal(map[string]any{"tool_name": "Bash", "tool_input": map[string]string{"command": cmd}, "command": cmd})
 		for _, h := range []verbs.HostID{verbs.HostClaude, verbs.HostCodex, verbs.HostCursor, verbs.HostAmp} {
-			if r, _ := RunHook("pre-tool", h, "", filepath.Join(t.TempDir(), "none"), ev, ""); r.Code != 0 {
+			if r, _ := RunHook("pre-tool", h, "", filepath.Join(t.TempDir(), "none"), ev); r.Code != 0 {
 				t.Errorf("%s: %s was blocked: %+v", h, cmd, r)
 			}
 		}

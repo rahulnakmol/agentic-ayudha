@@ -1,3 +1,0 @@
-description = "Inspect each pushed pull request."
-command = ["inspect", "{number}"]
-on = "pull_request.synchronize"

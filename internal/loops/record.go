@@ -8,11 +8,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 )
 
-// RecordFile is where a repository records which of its loops are set up on
-// which agent host (`aayu install --loops --record`); doctor compares it with
-// the loops (Appendix B S-7.1d).
+// RecordFile is where a repository records which agent tool runs each of its
+// loops (`aayu install --loops`); doctor compares it with the loops, and the
+// Actions fallback leaves a recorded loop to its tool (Appendix B S-7.1d,
+// S-7.1e).
 const RecordFile = Dir + "/active.json"
 
 // AgentHosts are the hosts that run a loop in the user's own agent session.
@@ -62,68 +65,80 @@ func (r Record) Set(host, loop string, e Entry) {
 	r[host][loop] = e
 }
 
-// Digest identifies what a host holds for the loop, its prompt and its
-// trigger, so a changed loop shows as stale until it is set up again.
+// Delete forgets loop on host.
+func (r Record) Delete(host, loop string) {
+	delete(r[host], loop)
+	if len(r[host]) == 0 {
+		delete(r, host)
+	}
+}
+
+// Owners are the agent tools loop is recorded as set up in. One tool runs
+// the loops (Appendix B S-7.1e); two would run the same loop twice.
+func (r Record) Owners(loop string) []string {
+	var out []string
+	for _, h := range AgentHosts {
+		if _, ok := r[h][loop]; ok {
+			out = append(out, h)
+		}
+	}
+	return out
+}
+
+// Digest identifies what a tool holds for the loop, its prompt and its
+// schedule, so a changed loop shows as stale until it is set up again.
 func (l Loop) Digest(repo, branch, tz string) string {
 	sum := sha256.Sum256([]byte(l.AgentPrompt(repo, branch) + "\n" + l.Cron + "\n" + l.Label(tz)))
 	return hex.EncodeToString(sum[:6])
 }
 
-// Loop states on a host.
+// Loop states.
 const (
 	Active  = "active"
 	Stale   = "stale"
 	Missing = "missing"
-	// Session: the host has no trigger for the loop's event, so the user's
-	// next session there picks it up: aayu's SessionStart hook lists the
-	// events since the last session (Appendix B D-7.1e).
-	Session = "session"
+	Double  = "double"
 	NoHost  = "n/a"
 )
 
-// sessionNote says how the user's next session on host picks up an event.
-var sessionNote = map[string]string{
-	HostAmp:    "the aayudha plugin shows each new event to you when your next Amp session starts (a notice, not agent context); ask the agent to run it",
-	HostCursor: "the sessionStart hook gives each new event to the agent when your next Cursor session starts",
-	HostClaude: "the SessionStart hook gives each new event to the agent when your next Claude Code session starts",
-	HostCodex:  "the SessionStart hook gives each new event to the agent when your next Codex session starts",
-}
-
-// State is one loop on one agent host.
+// State is one loop and the tool that owns it.
 type State struct {
-	Host   string `json:"host"`
 	Loop   string `json:"loop"`
+	Owner  string `json:"owner,omitempty"` // the tools it is recorded in, comma-separated
 	Status string `json:"status"`
 	Detail string `json:"detail,omitempty"`
 }
 
-// States reports each loop on each of hosts: active (set up as it is now),
-// stale (set up, but the loop changed since), missing, session (the host has
-// no trigger for its event, so the next session picks it up), or n/a (the
-// loop does not run there).
-func States(ls []Loop, rec Record, hosts []string, repo, branch, tz string) []State {
+// States reports each loop with its owner tool: active (set up as it is
+// now), stale (set up, but the loop changed since), missing (no tool; the
+// Actions fallback runs it when it can), double (recorded in two tools, so it
+// runs twice), or n/a (the loop runs in no agent tool).
+func States(ls []Loop, rec Record, repo, branch, tz string) []State {
 	var out []State
-	for _, h := range hosts {
-		for _, l := range ls {
-			s := State{Host: h, Loop: l.Name}
-			ok, why := l.Native(h)
-			e, set := rec[h][l.Name]
-			switch {
-			case !l.Runs(h):
-				s.Status, s.Detail = NoHost, "the loop's hosts leave it out"
-			case !ok && sessionNote[h] != "":
-				s.Status, s.Detail = Session, why+"; "+sessionNote[h]
-			case !ok:
-				s.Status, s.Detail = NoHost, why
-			case !set:
-				s.Status = Missing
-			case e.Digest != l.Digest(repo, branch, tz):
+	for _, l := range ls {
+		s := State{Loop: l.Name}
+		owners := rec.Owners(l.Name)
+		s.Owner = strings.Join(owners, ",")
+		agent := slices.ContainsFunc(AgentHosts, l.Runs)
+		switch {
+		case len(owners) == 0 && !agent:
+			s.Status, s.Detail = NoHost, "its hosts name no agent tool"
+		case len(owners) == 0:
+			s.Status = Missing
+			if l.Runs(HostActions) {
+				s.Detail = "only the Actions fallback runs it"
+			}
+		case len(owners) > 1:
+			s.Status, s.Detail = Double, "recorded in "+strings.Join(owners, " and ")+", so it runs twice; remove it from all but one"
+		default:
+			e := rec[owners[0]][l.Name]
+			if e.Digest != l.Digest(repo, branch, tz) {
 				s.Status, s.Detail = Stale, fmt.Sprintf("set up %s (%s); the loop changed since", e.At, e.ID)
-			default:
+			} else {
 				s.Status, s.Detail = Active, fmt.Sprintf("set up %s (%s)", e.At, e.ID)
 			}
-			out = append(out, s)
 		}
+		out = append(out, s)
 	}
 	return out
 }

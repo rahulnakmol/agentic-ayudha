@@ -15,11 +15,10 @@ var agentCLIs = map[string][]string{
 	loops.HostCodex:  {"codex"},
 }
 
-// checkLoops reports this repository's loops, scheduled and event alike, on
-// each agent host its user has (the host's CLI is on PATH, or a loop is
-// recorded there): active, stale, or missing against loops/active.json
-// (Appendix B S-7.1d). A loop whose event a host has no trigger for shows as
-// session there: the user's next session picks the event up (D-7.1e).
+// checkLoops reports this repository's loops and the agent tool that runs
+// each, against loops/active.json (Appendix B S-7.1d, S-7.1e): active, stale
+// (changed since it was set up), missing, or double (recorded in two tools,
+// so it runs twice). One tool runs the loops.
 func checkLoops(_ context.Context, p *Probe) Result {
 	if p.Root == "" {
 		return Result{Status: Pass, Detail: "no checkout"}
@@ -35,20 +34,16 @@ func checkLoops(_ context.Context, p *Probe) Result {
 	if err != nil {
 		return Result{Status: Fail, Detail: err.Error()}
 	}
-	var hosts []string
+	found := len(rec) > 0
 	for _, h := range loops.AgentHosts {
-		found := len(rec[h]) > 0
 		for _, bin := range agentCLIs[h] {
 			if _, err := p.LookPath(bin); err == nil {
 				found = true
 			}
 		}
-		if found {
-			hosts = append(hosts, h)
-		}
 	}
-	if len(hosts) == 0 {
-		return Result{Status: Warn, Detail: fmt.Sprintf("%d loops, and no agent host here (amp, cursor-agent, claude, codex): only the Actions fallback runs them", len(ls))}
+	if !found {
+		return Result{Status: Warn, Detail: fmt.Sprintf("%d loops, and no agent tool here (amp, cursor-agent, claude, codex): only the Actions fallback runs them", len(ls))}
 	}
 	branch, tz := "dev", "UTC"
 	if p.Config != nil {
@@ -60,22 +55,32 @@ func checkLoops(_ context.Context, p *Probe) Result {
 		}
 	}
 	count := map[string]int{}
+	owners := map[string]bool{}
 	var lines []string
-	for _, s := range loops.States(ls, rec, hosts, p.Repo, branch, tz) {
+	for _, s := range loops.States(ls, rec, p.Repo, branch, tz) {
 		count[s.Status]++
 		if s.Status == loops.NoHost {
 			continue
 		}
-		line := fmt.Sprintf("%-7s %-18s %s", s.Host, s.Loop, s.Status)
+		owner := s.Owner
+		if owner == "" {
+			owner = "-"
+		} else {
+			owners[owner] = true
+		}
+		line := fmt.Sprintf("%-18s %-12s %s", s.Loop, owner, s.Status)
 		if s.Detail != "" {
 			line += ": " + s.Detail
 		}
 		lines = append(lines, line)
 	}
-	detail := fmt.Sprintf("%d active, %d stale, %d missing, %d by the next session on %v", count[loops.Active], count[loops.Stale], count[loops.Missing], count[loops.Session], hosts)
-	if count[loops.Stale]+count[loops.Missing] == 0 {
+	detail := fmt.Sprintf("%d active, %d stale, %d missing, %d double", count[loops.Active], count[loops.Stale], count[loops.Missing], count[loops.Double])
+	if len(owners) > 1 {
+		lines = append(lines, "the loops are split across tools; one tool should run them all")
+	}
+	if count[loops.Stale]+count[loops.Missing]+count[loops.Double] == 0 && len(owners) <= 1 {
 		return Result{Status: Pass, Detail: detail, Lines: lines}
 	}
-	lines = append(lines, "set them up with `aayu install --loops`, then record each with --record")
+	lines = append(lines, "set them up in one tool with `aayu install --loops`")
 	return Result{Status: Warn, Detail: detail, Lines: lines}
 }

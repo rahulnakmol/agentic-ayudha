@@ -224,11 +224,7 @@ func runHook(ctx context.Context, e *Env, in Values) error {
 	if e.Host == "" { // a marketplace plugin shared by several hosts names none
 		e.Host, _ = doctor.DetectHost("", e.Getenv)
 	}
-	root, extra := config.RepoRoot(e.Dir), ""
-	if name == "session-start" && root != "" {
-		extra = e.loopEvents(ctx, root)
-	}
-	r, err := hosts.RunHook(name, verbs.HostID(e.Host), root, e.PauseFile(), event, extra)
+	r, err := hosts.RunHook(name, verbs.HostID(e.Host), config.RepoRoot(e.Dir), e.PauseFile(), event)
 	if err != nil {
 		return Wrap(ExitUsage, err)
 	}
