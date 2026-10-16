@@ -76,7 +76,7 @@ const Schema = `{"type":"object","additionalProperties":false,"required":["dispo
 "summary":{"type":"string","maxLength":1200},
 "findings":{"type":"array","maxItems":20,"items":{"type":"object","additionalProperties":false,"required":["severity","category","file","line","quote","title","detail","fix","confidence","criterion"],"properties":{
 "severity":{"type":"string","enum":["P0","P1","P2","P3"]},
-"category":{"type":"string","enum":["bug","security","data","concurrency","contract","test","performance","maintainability","style","docs"]},
+"category":{"type":"string","enum":["bug","security","data","concurrency","contract","test","test-value","performance","maintainability","style","docs"]},
 "file":{"type":"string"},"line":{"type":"integer","minimum":0},"quote":{"type":"string","maxLength":400},
 "title":{"type":"string","maxLength":200},"detail":{"type":"string","maxLength":1200},"fix":{"type":"string","maxLength":800},
 "confidence":{"type":"number","minimum":0,"maximum":1},"criterion":{"type":"integer","minimum":0}}}},
@@ -93,9 +93,11 @@ Judge each numbered Completion Goal criterion against the evidence in the proof 
 Work through the review plan: for each changed area, check the risks it lists, the callers of the changed symbols, and the related tests. Then report each real defect once:
 - quote: copy the exact line of the diff's new side that the finding is about (aayu places the comment by it);
 - severity: P0 breaks production, security, or data; P1 is a defect a user or caller would hit, or a criterion that is not met; P2 should be fixed but does not break the story; P3 is a nit;
-- category: bug, security, data, concurrency, contract, test, performance, maintainability, or docs;
+- category: bug, security, data, concurrency, contract, test, test-value, performance, maintainability, or docs; test-value marks a test that only restates the implementation or duplicates another test (aayu counts these and never posts them);
 - confidence: your probability, from 0 to 1, that the finding is real and a second reviewer would confirm it;
 - fix: the concrete change that resolves it.
+
+Test files: do not report a missing, thin, or weak test as a finding on a test file. Judge it in the criterion it concerns: "unclear" or "unmet", with the gap as the evidence.
 
 Precision matters more than volume: every wrong finding costs the author a fix cycle. Do not report what the deterministic floors and linters already check (formatting, naming, imports, typos, unused code, coverage numbers), problems in code the pull request does not change, or anything you cannot point at with a quoted line.
 
@@ -168,6 +170,10 @@ type Result struct {
 	CostUSD     float64   `json:"cost_usd"`
 	Next        string    `json:"next,omitempty"` // the re-entry step
 	Builder     Builder   `json:"builder"`        // the builder's family and where it came from (Bug #171)
+	// Coverage is the sealed manifest of what the review covered; Weakened
+	// lists the checks this PR made weaker (flags, not verdicts).
+	Coverage *Manifest   `json:"coverage,omitempty"`
+	Weakened []Weakening `json:"weakened,omitempty"`
 }
 
 // State is what inspect keeps between runs, in its replace-in-place comment.
@@ -235,6 +241,7 @@ func (r Runner) Run(ctx context.Context, in Input, prev State) (Result, State, e
 	if in.Files == nil {
 		in.Files = ParseDiff(in.Diff)
 	}
+	res.Weakened = Weakened(in.Files)
 	res.DiffHash = DiffHash(in)
 	if prev.Result != nil && prev.DiffHash == res.DiffHash {
 		out := *prev.Result
@@ -279,6 +286,9 @@ func (r Runner) Run(ctx context.Context, in Input, prev State) (Result, State, e
 	var sup []Dropped
 	res.Findings, sup = r.Filter.Suppress(res.Findings, in.Dismissed)
 	res.Dropped = append(res.Dropped, sup...)
+	TestGapVerdicts(&res)
+	m := Seal(in.Files, in.Areas, r.Filter, inPrompt(in.Diff, maxDiffBytes))
+	res.Coverage = &m
 	liftFix(&res)
 	st.SpentUSD += res.CostUSD
 	if res.Findings == nil {
@@ -334,8 +344,43 @@ func (res *Result) peer(ctx context.Context, b, a Reviewer, in Input, fl Filter,
 	res.Summary = strings.TrimSpace("A: " + replyA.Summary + "\n\nB: " + replyB.Summary)
 }
 
-// liftFix turns a fix into merge when every finding behind it was shown wrong:
-// refuted by the peer reviewer, or like ones a human dismissed. Findings the
+// TestGapVerdicts turns the test gaps the filter took off test files into the
+// verdicts of the criteria they name (research P1): a P0 or P1 gap makes its
+// criterion unmet, a lesser one makes a met criterion unclear, each with the
+// gap as the evidence; a gap that names no criterion becomes a note. Line
+// findings never carry them.
+func TestGapVerdicts(res *Result) {
+	for _, d := range res.Dropped {
+		if d.Why != DropTestGap {
+			continue
+		}
+		gap := fmt.Sprintf("test gap noted by the reviewer in %s: %s", d.File, oneLine(d.Title, 200))
+		if d.Criterion <= 0 {
+			res.Notes = append(res.Notes, gap)
+			continue
+		}
+		v := "unclear"
+		if d.Severity == "P0" || d.Severity == "P1" {
+			v = "unmet"
+		}
+		i := slices.IndexFunc(res.Criteria, func(x Verdict) bool { return x.ID == d.Criterion })
+		switch {
+		case i < 0:
+			res.Criteria = append(res.Criteria, Verdict{ID: d.Criterion, Verdict: v, Evidence: gap})
+		case res.Criteria[i].Verdict == "unmet":
+		case res.Criteria[i].Verdict == "met" || v == "unmet":
+			res.Criteria[i].Verdict, res.Criteria[i].Evidence = v, gap
+		default:
+			res.Criteria[i].Evidence = oneLine(res.Criteria[i].Evidence+"; "+gap, 600)
+		}
+	}
+	slices.SortStableFunc(res.Criteria, func(a, b Verdict) int { return a.ID - b.ID })
+}
+
+// liftFix turns a fix into merge when every finding behind it was shown wrong
+// or moved out of the line findings: refuted by the peer reviewer, like ones a
+// human dismissed, a test gap (now in its criterion's verdict, where an unmet
+// one still blocks), or a test-value count. Findings the
 // noise rules dropped for other reasons keep the fix, an unmet criterion keeps
 // it, and the floors still decide afterwards (Enforce).
 func liftFix(res *Result) {
@@ -349,7 +394,7 @@ func liftFix(res *Result) {
 			continue
 		}
 		switch d.Why {
-		case DropRefuted, DropDismissed:
+		case DropRefuted, DropDismissed, DropTestGap, DropTestValue:
 			shown++
 		case DropDuplicate:
 		default:
@@ -358,7 +403,7 @@ func liftFix(res *Result) {
 	}
 	if shown > 0 {
 		res.Disposition = Merge
-		res.Notes = append(res.Notes, fmt.Sprintf("fix lifted to merge: the %d finding(s) behind it were refuted by the peer reviewer or match human dismissals", shown))
+		res.Notes = append(res.Notes, fmt.Sprintf("fix lifted to merge: the %d finding(s) behind it were refuted by the peer reviewer, match human dismissals, or are test gaps and test-value counts judged elsewhere", shown))
 	}
 }
 
@@ -398,6 +443,9 @@ func Enforce(res *Result, p *proof.Pack) {
 		if v.Verdict == "unmet" {
 			why = append(why, fmt.Sprintf("criterion %d unmet", v.ID))
 		}
+	}
+	if u := res.Coverage.Unreviewed(); len(u) > 0 {
+		why = append(why, fmt.Sprintf("%d changed file(s) left unreviewed: %s", len(u), strings.Join(u, ", ")))
 	}
 	if len(why) > 0 {
 		res.Disposition, res.Overridden = Fix, "merge downgraded to fix: "+strings.Join(why, "; ")
@@ -451,9 +499,13 @@ func reviewMaterial(in Input) string {
 		}
 	}
 	b.WriteString("\n## Pull request\n\n" + triage.Untrusted("pull-request", "Title: "+in.Title+"\n\n"+in.Body) + "\n\n")
-	b.WriteString("## Diff\n\n" + triage.Untrusted("diff", capText(in.Diff, 120000)) + "\n")
+	b.WriteString("## Diff\n\n" + triage.Untrusted("diff", capText(in.Diff, maxDiffBytes)) + "\n")
 	return b.String()
 }
+
+// maxDiffBytes caps the diff in the prompt; a file past it is unreviewed in
+// the coverage manifest, which fails the gate.
+const maxDiffBytes = 120000
 
 var notIdent = regexp.MustCompile(`[^A-Za-z0-9_.$:/ -]`)
 
@@ -612,6 +664,25 @@ func Comment(res Result, st State, maxUSD float64) string {
 	}
 	for _, x := range res.Notes {
 		b.WriteString("Note: " + x + ".\n\n")
+	}
+	if len(res.Weakened) > 0 {
+		b.WriteString("**Checks this PR weakens** (a PR may edit its own checks; each is flagged for the human pass):\n\n")
+		for _, w := range res.Weakened {
+			fmt.Fprintf(&b, "- `%s`: %s\n", w.File, w.What)
+		}
+		b.WriteString("\n")
+	}
+	if m := res.Coverage; m != nil {
+		n := map[string]int{}
+		for _, c := range m.Files {
+			n[c.Status]++
+		}
+		fmt.Fprintf(&b, "Coverage: %s, %d reviewed, %d skipped, %d unreviewed · manifest `%s`\n\n", m.State, n[Reviewed], n[SkippedCov], n[Unreviewed], short(m.SHA256))
+		b.WriteString("<details><summary>Coverage manifest</summary>\n\n| File | Status | Why |\n|---|---|---|\n")
+		for _, c := range m.Files {
+			fmt.Fprintf(&b, "| `%s` | %s | %s |\n", c.Path, c.Status, cell(c.Why))
+		}
+		b.WriteString("\n</details>\n\n")
 	}
 	if len(res.Plan) > 0 {
 		b.WriteString("<details><summary>Review plan</summary>\n\n" + PlanText(res.Plan) + "\n</details>\n\n")
