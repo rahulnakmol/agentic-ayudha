@@ -144,10 +144,11 @@ WARN  retired-workflows  1 retired aayudha workflow(s): run `aayu init` and conf
 ## loops pass
 PASS  loops  no loops/*.toml
 ## loops fail
-WARN  loops  0 active, 1 stale, 2 missing on [amp codex]
+WARN  loops  0 active, 1 stale, 2 missing, 1 by the next session on [amp codex]
                amp     digest             missing
                amp     triage-new         stale: set up 2026-10-16 (sub-1); the loop changed since
                codex   digest             missing
+               codex   triage-new         session: Codex starts no run of its own on a GitHub event: its tasks run on a schedule, and its GitHub app reviews pull requests or answers an @codex comment a person posts; the SessionStart hook gives each new event to the agent when your next Codex session starts
                set them up with `aayu install --loops`, then record each with --record
 ## leases pass
 PASS  leases  1 live build lease(s)

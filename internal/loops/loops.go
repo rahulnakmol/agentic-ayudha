@@ -102,8 +102,10 @@ func (l Loop) Event() (Event, bool) {
 }
 
 // Native reports whether host starts the loop by itself. Every host runs a
-// schedule; for an event, why names the host's gap (Appendix B S-7.1b cites
-// each host's documentation), and the loop runs on the hosts that have it.
+// schedule; for an event, why names the host's gap, and the loop runs on the
+// hosts that have one. Appendix B D-7.1e cites each host's documentation; an
+// agent host without a trigger leaves the event to the user's next session
+// (its SessionStart hook reports it, see States).
 func (l Loop) Native(host string) (ok bool, why string) {
 	if _, isEvent := l.Event(); !isEvent {
 		return true, ""
@@ -111,11 +113,12 @@ func (l Loop) Native(host string) (ok bool, why string) {
 	label := l.Filter.Label != ""
 	switch host {
 	case HostAmp:
-		// GitHub webhooks: an orb spawner per newly opened issue or PR, with an optional label present when it opens.
-		if l.On == "issues.opened" || l.On == "pull_request.opened" {
+		// GitHub webhooks: an orb spawner per newly opened issue or PR, with an optional label present when it
+		// opens. A failed check chains: a pr-opened spawner whose thread subscribes to its head commit's CI.
+		if l.On == "issues.opened" || l.On == "pull_request.opened" || l.On == "check_suite.completed" {
 			return true, ""
 		}
-		return false, "Amp starts a thread only for a newly opened issue or pull request (orb spawner); its CI subscriptions follow one exact commit"
+		return false, "Amp starts a thread only for a newly opened issue or pull request; comments, pushes, and releases cannot start one"
 	case HostCursor:
 		switch {
 		case l.On == "pull_request.opened" || l.On == "pull_request.synchronize" || l.On == "check_suite.completed":
@@ -135,9 +138,9 @@ func (l Loop) Native(host string) (ok bool, why string) {
 		if strings.HasPrefix(l.On, "pull_request.") || l.On == "release.published" {
 			return true, ""
 		}
-		return false, "Claude Code routines' GitHub triggers cover pull requests and releases only"
+		return false, "Claude Code routines' GitHub triggers cover pull requests and releases only, with no issue or check event"
 	case HostCodex:
-		return false, "Codex scheduled tasks run on a schedule; their app events do not include GitHub events"
+		return false, "Codex starts no run of its own on a GitHub event: its tasks run on a schedule, and its GitHub app reviews pull requests or answers an @codex comment a person posts"
 	case HostActions:
 		if l.On == "check_suite.completed" {
 			return false, "GitHub does not start workflows on check suites that Actions created, so Actions cannot record this event"
@@ -635,7 +638,9 @@ func (l Loop) AmpSchedule(repo, branch, tz string) ([]byte, error) {
 // AmpSubscription is the input of Amp's create_github_subscription for an
 // event loop: an orb spawner that starts a new thread, with the loop's prompt
 // as its instructions, for each matching new issue or pull request. Setup adds
-// the Amp project_id and agent_mode.
+// the Amp project_id and agent_mode. Amp cannot start a thread on a CI result,
+// so a check_suite loop chains (Appendix B D-7.1e): it spawns on each new pull
+// request, and that thread subscribes to its head commit's CI.
 func (l Loop) AmpSubscription(repo, branch string) ([]byte, error) {
 	v := struct {
 		Title        string `json:"title"`
@@ -646,9 +651,20 @@ func (l Loop) AmpSubscription(repo, branch string) ([]byte, error) {
 		Destination  string `json:"destination"`
 		Instructions string `json:"instructions"`
 	}{Title: "aayudha " + l.Name, Repository: repo, Destination: "new-orb", Instructions: l.AgentPrompt(repo, branch)}
-	if l.On == "issues.opened" {
+	switch l.On {
+	case "issues.opened":
 		v.FilterKind, v.IssueLabel = "issue-opened", l.Filter.Label
-	} else {
+	case "check_suite.completed":
+		v.FilterKind = "pr-opened"
+		when := "its conclusion is " + l.Filter.Conclusion
+		if l.Filter.Conclusion == "" {
+			when = "it completes"
+		}
+		v.Instructions = fmt.Sprintf("This thread started for a newly opened pull request of %s. Amp cannot start a thread on a CI result, so this loop chains:\n\n"+
+			"- Now: look up the pull request's head commit and call create_github_subscription with filter_kind \"ci\", repository %q, commit_sha set to that commit's full SHA, and destination \"this-thread\". Then stop and wait.\n"+
+			"- Each time a CI result arrives: if the pull request's head has moved to another commit, subscribe to that commit's CI the same way. If %s, do the steps below once for it; otherwise stop without reporting.\n"+
+			"- When the pull request merges or closes, stop.\n\n", repo, repo, when) + v.Instructions
+	default:
 		v.FilterKind, v.PRLabel = "pr-opened", l.Filter.Label
 	}
 	return marshal(v)
@@ -699,7 +715,7 @@ func CursorAutomations(ls []Loop, repo, branch, tz string, loc *time.Location) (
 	fmt.Fprintf(&b, "# Cursor Automations for %s, one per loop, from loops/*.toml (WP7.1). Apply with Terraform and the\n", repo)
 	b.WriteString("# cursor/cursor provider (CURSOR_TOKEN); Cursor stores them in the cloud. Cron triggers run in UTC: each loop has\n")
 	fmt.Fprintf(&b, "# one per UTC offset of %s, and `aayu hook loop:<name>` lets only the scheduled one run.\n\n", tz)
-	b.WriteString("terraform {\n  required_providers {\n    cursor = {\n      source  = \"cursor/cursor\"\n      version = \"~> 0.1\"\n    }\n  }\n}\n")
+	b.WriteString("terraform {\n  required_providers {\n    cursor = {\n      source  = \"cursor/cursor\"\n      version = \"~> 0.8\"\n    }\n  }\n}\n")
 	for _, l := range ls {
 		if !l.Runs(HostCursor) {
 			continue
@@ -708,7 +724,7 @@ func CursorAutomations(ls []Loop, repo, branch, tz string, loc *time.Location) (
 		if _, isEvent := l.Event(); isEvent {
 			ok, why := l.Native(HostCursor)
 			if !ok {
-				fmt.Fprintf(&b, "\n# %s (%s): not rendered: %s.\n", l.Name, l.Label(tz), why)
+				fmt.Fprintf(&b, "\n# %s (%s): not rendered: %s. Your next Cursor session's sessionStart hook reports the event.\n", l.Name, l.Label(tz), why)
 				continue
 			}
 			triggers = append(triggers, l.cursorTrigger(repo))
