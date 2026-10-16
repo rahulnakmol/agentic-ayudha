@@ -74,9 +74,9 @@ changed after recording it shows as stale, one you never set up as missing, and 
 Stuck? See [loop problems](troubleshooting.md#loops).
 
 > **Honest status:** "active" means recorded with the loop's current contents; no tool lets aayudha read your
-> automations back. On Amp, the weekly and daily triage schedules run live in aayudha's own repository; Amp's
-> `--apply` is tested with a stand-in, not yet run live. The Cursor, Claude Code, and Codex prompts follow each tool's
-> documentation and have not been run on a real account yet.
+> automations back. On Amp, `aayu install --loops --host amp --apply` set up all of aayudha's own loops live, one
+> Amp thread each. The Cursor, Claude Code, and Codex prompts follow each tool's documentation and have not been run
+> on a real account yet.
 
 ## Under the hood
 

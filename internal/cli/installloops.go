@@ -257,6 +257,7 @@ func (e *Env) ampLoops(ctx context.Context, root, bin string, apply bool, rec lo
 		bin = "amp"
 	}
 	var applied, steps []string
+	async := false
 	today := e.Now().UTC().Format(time.DateOnly)
 	for _, l := range ls {
 		in, err := os.ReadFile(filepath.Join(root, loops.Dir, "amp", l.Name+".json"))
@@ -274,12 +275,17 @@ func (e *Env) ampLoops(ctx context.Context, root, bin string, apply bool, rec lo
 		if t := threadID.FindString(out); t != "" && !strings.Contains(id, t) {
 			id = "schedule on " + t
 		}
+		async = async || !strings.HasPrefix(id, "schedule ")
 		rec.Set(loops.HostAmp, l.Name, loops.Entry{Digest: l.Digest(repo, branch, tz), ID: id, At: today})
 		applied = append(applied, l.Name+": "+id)
 	}
 	if len(applied) > 0 {
 		if err := rec.Write(root); err != nil {
 			steps = append(steps, "recording failed: "+err.Error())
+		}
+		if async {
+			// amp -ox returns the thread before its agent runs (Appendix B D-7.1f).
+			steps = append(steps, "Each Amp thread sets its schedule a few seconds after it starts: open each one to check it holds the schedule, then record the schedule ID with `aayu install --loops --host amp --record <loop>=schedule <ID> on <thread>`.")
 		}
 		steps = append(steps, "Commit "+loops.RecordFile+".")
 	}

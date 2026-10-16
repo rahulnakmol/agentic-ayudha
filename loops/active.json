@@ -1,13 +1,63 @@
 {
   "amp": {
+    "ci-failed": {
+      "digest": "800f47b06ef2",
+      "id": "schedule ea64c910-00cb-5e3e-b362-61495500aa51 on T-01a144e7-4ef7-7682-8b58-e734cd8e355e",
+      "at": "2026-10-16"
+    },
+    "decisions": {
+      "digest": "9d589f9b4196",
+      "id": "schedule e0a167fd-c25c-58b0-800b-ca29297ec7ce on T-01a144e7-5bbf-71ff-91b9-be10e830bf7c",
+      "at": "2026-10-16"
+    },
+    "digest": {
+      "digest": "3392bce66922",
+      "id": "schedule 938323bb-30c5-57e6-bde5-160b8277edf1 on T-01a144e7-684a-73ef-b6e9-5200a82cec3b",
+      "at": "2026-10-16"
+    },
+    "evolve": {
+      "digest": "b74cd15c9187",
+      "id": "schedule 078df3af-a4cb-592e-8850-afb9d711f18b on T-01a144e7-7883-708c-8950-f6dc5c2dc68b",
+      "at": "2026-10-16"
+    },
+    "housekeeping": {
+      "digest": "7582b03f2c1c",
+      "id": "schedule 3ceaa45a-2af8-5ea7-9473-69a57808fee5 on T-01a144e7-8dd2-73b9-9a40-e4c33f5b129c",
+      "at": "2026-10-16"
+    },
+    "release-measure": {
+      "digest": "e81047e97173",
+      "id": "schedule b821ae75-6f32-54e3-bbc1-f2760cebc24c on T-01a144e7-9ac5-76be-899e-4ad717cc11c2",
+      "at": "2026-10-16"
+    },
+    "retro": {
+      "digest": "3a20490e4e96",
+      "id": "schedule afa80086-06c5-500b-9ef6-7aefd903b932 on T-01a144e7-a5ba-709e-b84f-7b0b4d45c37c",
+      "at": "2026-10-16"
+    },
+    "seat-review": {
+      "digest": "97c9b1affc59",
+      "id": "schedule f6c2c5cb-e9a3-5930-8d95-fc499633cf93 on T-01a144e7-afb9-70fe-a3d3-6246d3ff8f08",
+      "at": "2026-10-16"
+    },
     "triage": {
       "digest": "77c82d01e2d2",
-      "id": "schedule 32013ed7-ca58-531f-a02b-a58394c31d70 on T-01a14215-c759-72bf-9a65-d2317a72a878",
+      "id": "schedule 5b01dd9a-2e61-5053-bc82-c5bdca325010 on T-01a144e7-c9dc-707b-874d-6dbed80e5211",
       "at": "2026-10-16"
     },
     "triage-daily": {
       "digest": "4746a7324bc0",
-      "id": "schedule d370285d-1bb8-52aa-a4dc-ac5517748c06 on T-f3f2c175-afd2-4e27-ba02-21bfb082623f",
+      "id": "schedule 8f6a2fe5-af9b-5a95-8474-94b510eeac98 on T-01a144e7-baf9-7754-994e-19ea072da0dd",
+      "at": "2026-10-16"
+    },
+    "verify-maintain": {
+      "digest": "e57f9a295054",
+      "id": "schedule 1184f96d-8103-5c5c-94aa-541e94ea1bc8 on T-01a144e7-d821-721c-8b73-e265dbf4625f",
+      "at": "2026-10-16"
+    },
+    "verify-sweep": {
+      "digest": "60136681a55b",
+      "id": "schedule daa6a559-32cb-55a4-ae75-f4013822812f on T-01a144e7-e51d-709c-815c-6c14a69e8053",
       "at": "2026-10-16"
     }
   }

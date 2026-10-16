@@ -186,10 +186,11 @@ each loop with its owner tool: active, stale (changed after it was recorded), mi
 tools).
 
 > **Honest status:** "active" means recorded with the loop's current digest, not observed in the tool; no tool lets
-> aayu read your automations from its CLI. Proven live on Amp in this repository: the weekly `triage` and the
-> `triage-daily` schedules, set with `set_schedule` from an agent thread. `install --loops --apply` for Amp is tested
-> with a stand-in `amp` binary, not yet run live. Cursor's file passes `terraform validate` but was not applied here;
-> the Claude Code, Codex, and `/automate` prompts are rendered from each tool's documentation and not yet run.
+> aayu read your automations from its CLI. Proven live on Amp in this repository:
+> `install --loops --host amp --apply` set all 12 loops, one holder thread named `aayudha loop: <name>` each, and
+> doctor shows them active. `amp -ox` returns before each thread sets its schedule, so the schedule IDs were
+> confirmed and recorded afterwards. Cursor's file passes `terraform validate` but was not applied here; the Claude Code,
+> Codex, and `/automate` prompts are rendered from each tool's documentation and not yet run.
 
 ## Key data and file formats
 
