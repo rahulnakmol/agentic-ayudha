@@ -34,14 +34,15 @@ type Exec func(ctx context.Context, dir, name string, args ...string) (string, e
 var ampThreadURL = regexp.MustCompile(`https://ampcode\.com/threads/T-[0-9a-f-]{36}`)
 
 // ProbeAmp starts an orb thread in the repository's Amp project with the
-// probe (`amp -ox --stream-json`, which stays attached until the turn ends
-// and keeps the thread for review) and checks the reply's marker against
-// want. The orb runs the project's base branch, so want is that branch's
-// fingerprint.
+// probe (`amp -ox --stream-json`, which stays attached until the turn ends)
+// and checks the reply's marker against want. The orb runs the project's base
+// branch, so want is that branch's fingerprint. Once the reply is read the
+// thread is archived (founder decision 2026-10-16): `amp -x` archives a new
+// thread when it finishes, and ProbeAmp archives it again explicitly so a
+// changed default cannot leave it open. The URL stays as evidence.
 func ProbeAmp(ctx context.Context, run Exec, project, want string) CloudResult {
 	r := CloudResult{Host: Amp}
-	out, err := run(ctx, "", "amp", "-ox", ProbePrompt, "--project", project, "--stream-json", "--no-archive-after-execute",
-		"--title", "aayu environment probe")
+	out, err := run(ctx, "", "amp", "-ox", ProbePrompt, "--project", project, "--stream-json", "--title", "aayu environment probe")
 	sc := bufio.NewScanner(strings.NewReader(out))
 	sc.Buffer(make([]byte, 4<<20), 4<<20)
 	for sc.Scan() {
@@ -66,9 +67,15 @@ func ProbeAmp(ctx context.Context, run Exec, project, want string) CloudResult {
 	}
 	if err != nil && r.Reply == "" {
 		r.Detail = "amp -ox failed: " + err.Error() + ": " + clip(out, 300)
-		return r
+	} else {
+		r = judge(r, want)
 	}
-	return judge(r, want)
+	if id, ok := strings.CutPrefix(r.URL, "https://ampcode.com/threads/"); ok {
+		if aout, aerr := run(ctx, "", "amp", "threads", "archive", id); aerr != nil {
+			r.Detail += "; the probe thread was not archived (`amp threads archive " + id + "`): " + clip(strings.TrimSpace(aout), 200)
+		}
+	}
+	return r
 }
 
 func judge(r CloudResult, want string) CloudResult {
