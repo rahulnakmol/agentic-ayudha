@@ -294,3 +294,49 @@ func TestRetroFlow(t *testing.T) {
 		t.Error("the replayed retro differs")
 	}
 }
+
+// The recurrence check (P4, S-7.7c): an evolve PR's problem came back when a
+// retro Feedback issue opened after its merge, or a finding of this window,
+// names the same skill. A Feedback from before the merge, a recurrence
+// finding itself, and an evolve PR merged more than 30 days before the cursor
+// do not count.
+func TestRetroRecurrence(t *testing.T) {
+	in := Inputs{Repo: "o/r", Since: at(0), Until: at(48)}
+	d := &Data{Dev: "dev",
+		PRs: []PR{{Number: 20, Base: "dev", Head: "evolve/grill-5", MergedAt: at(10)}, {Number: 21, Base: "dev", Head: "evolve/ready-6", MergedAt: at(12)},
+			{Number: 22, Base: "dev", Head: "evolve/plan-7", MergedAt: at(-24 * 35)}, {Number: 23, Base: "dev", Head: "evolve/slice-8", MergedAt: at(5)},
+			{Number: 24, Base: "dev", Head: "feat/grill-9", MergedAt: at(6)}},
+		Items: []Item{
+			{Number: 30, Title: "Feedback: retro: skill `grill` correction rate 2/2 above 20 %, w2", CreatedAt: at(15)},
+			{Number: 31, Title: "Feedback: retro: skill `slice` correction rate 2/2 above 20 %, w1", CreatedAt: at(4)},
+			{Number: 32, Title: "Feedback: retro: evolve did not hold: skill `slice` (PR #9, Feedback #1) came back", CreatedAt: at(20)},
+			{Number: 33, Title: "Feedback: retro: skill `plan` correction rate 1/1 above 20 %, w3", CreatedAt: at(20)},
+		},
+		AgentPRs:    []AgentPR{{Number: 40, MergedAt: at(30), Skills: []string{"ready"}}},
+		Corrections: []autonomy.Correction{{PR: 40, Kind: autonomy.KindRevert, At: at(31)}},
+	}
+	r := BuildRetro(in, d, 0)
+	var back []string
+	for _, rc := range r.Recurrence {
+		back = append(back, fmt.Sprintf("%s:%d", rc.Skill, len(rc.Back)))
+	}
+	if strings.Join(back, " ") != "grill:1 ready:1 slice:0" {
+		t.Errorf("recurrence: %v", back)
+	}
+	var titles []string
+	for _, f := range r.Findings {
+		titles = append(titles, f.Title)
+	}
+	got := strings.Join(titles, "\n")
+	for _, want := range []string{"evolve did not hold: skill `grill` (PR #20, Feedback #5) came back", "evolve did not hold: skill `ready` (PR #21, Feedback #6) came back"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("findings lack %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "`slice` (PR #23") || strings.Contains(got, "`plan`") {
+		t.Errorf("findings:\n%s", got)
+	}
+	if md := string(r.Markdown()); !strings.Contains(md, "| #23 | `slice` | #8 | 2026-10-12T05:00:00Z | no |") || !strings.Contains(md, "| #20 | `grill` | #5 | 2026-10-12T10:00:00Z | **yes**: Feedback #30 |") {
+		t.Errorf("report:\n%s", md)
+	}
+}

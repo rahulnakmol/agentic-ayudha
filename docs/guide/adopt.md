@@ -68,7 +68,7 @@ evidence".
   person. Risky layers (domain policy, stored data, and the platform) always need a person, however long the
   streak. A protected workflow computes the streak, so no agent can fake it.
 - **Loops.** Scheduled runs keep the system moving: a daily founder digest, a decision-deadline sweep, a weekly
-  retro, a monthly seat review, and a quarterly skill evolution. They run in Amp, Cursor, or GitHub Actions.
+  retro, a monthly seat review, and a monthly skill evolution. They run in Amp, Cursor, or GitHub Actions.
 - **Integrations.** Baselines and results come straight from PostHog, Sentry, Azure, AWS, or Google Cloud, and
   experiments can run on PostHog feature flags. Cloud access is read-only and keyless (see
   [Azure](../getting-started-azure.md), [AWS](../getting-started-aws.md), and [Google Cloud](../getting-started-gcp.md)).

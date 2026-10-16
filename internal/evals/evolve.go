@@ -7,6 +7,7 @@ import (
 	"path"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/cli"
@@ -19,20 +20,41 @@ const (
 	EvolveLabel        = cli.EvolveLabel // applied to evolve PRs for people; IsEvolvePR does not read it
 )
 
-// Change is one changed path of a diff (git diff --name-status): A, M, D, …
+// Change is one changed path of a diff: its status (A, M, D, …) and, when
+// the diff carried --numstat, the lines it added and deleted.
 type Change struct {
-	Status string
-	Path   string
+	Status         string
+	Path           string
+	Stat           bool // Added and Deleted are known (a text file in a --numstat diff)
+	Added, Deleted int
 }
 
-// ParseNameStatus reads `git diff --name-status --no-renames` output.
+// ParseNameStatus reads `git diff --no-renames` output in --name-status form,
+// or in --raw --numstat form (`aayu evolve` and CI), which adds line counts.
 func ParseNameStatus(out string) []Change {
 	var cs []Change
+	at := map[string]int{}
 	for _, line := range strings.Split(out, "\n") {
-		st, p, ok := strings.Cut(strings.TrimSpace(line), "\t")
-		if ok && st != "" {
-			cs = append(cs, Change{Status: st[:1], Path: strings.TrimSpace(p)})
+		line = strings.TrimSpace(line)
+		head, p, ok := strings.Cut(line, "\t")
+		if !ok || head == "" {
+			continue
 		}
+		if f := strings.Fields(head); strings.HasPrefix(head, ":") && len(f) == 5 {
+			head = f[4] // a --raw line: :mode mode sha sha status
+		} else if added, err := strconv.Atoi(head); err == nil {
+			deleted, path, _ := strings.Cut(p, "\t") // a --numstat line: added deleted path
+			if i, ok := at[strings.TrimSpace(path)]; ok {
+				if d, err := strconv.Atoi(deleted); err == nil {
+					cs[i].Stat, cs[i].Added, cs[i].Deleted = true, added, d
+				}
+			}
+			continue
+		} else if head == "-" {
+			continue // a binary file in --numstat
+		}
+		at[strings.TrimSpace(p)] = len(cs)
+		cs = append(cs, Change{Status: head[:1], Path: strings.TrimSpace(p)})
 	}
 	return cs
 }
@@ -114,10 +136,14 @@ func EvolveGate(ctx context.Context, root string, changes []Change, assets fs.FS
 		if c.Feedback <= 0 {
 			bad("case.toml names no feedback = <issue> (the accepted Feedback it reproduces)")
 		}
-		if !slices.ContainsFunc(changes, func(x Change) bool {
+		skill := func(x Change) bool {
 			return strings.HasPrefix(x.Path, "skills/"+c.Skill+"/") || strings.HasPrefix(x.Path, "evals/skills/"+c.Skill+"/")
-		}) {
+		}
+		if !slices.ContainsFunc(changes, skill) {
 			bad("the change has no diff to skill %q (skills/%s/ or evals/skills/%s/)", c.Skill, c.Skill, c.Skill)
+		} else if added, rewritten, counted := appendOnly(changes, skill); counted && !rewritten {
+			bad("the skill diff only appends (%d lines added, none removed or rewritten): rewrite the guidance the Feedback is about "+
+				"instead of adding a rule beside it (P4, Appendix B S-7.7c)", added)
 		}
 		if r := Tier1(ctx, root, c, assets); !r.Passed() {
 			bad("the new skill's recorded run fails tier 1:\n%s", r)
@@ -148,4 +174,24 @@ func EvolveGate(ctx context.Context, root string, changes []Change, assets fs.FS
 		problems = append([]string{"an evolve PR must add a new eval case (evals/cases/<skill>/<name>/case.toml) before any skill diff (eval-first, WP7.7); this one adds none"}, problems...)
 	}
 	return cases, problems
+}
+
+// appendOnly sums the skill's line counts: whether any change removed or
+// rewrote an existing line (a deleted line, or a deleted file), and whether
+// the diff carried line counts at all (a --name-status diff does not).
+func appendOnly(changes []Change, skill func(Change) bool) (added int, rewritten, counted bool) {
+	for _, x := range changes {
+		if !skill(x) {
+			continue
+		}
+		switch {
+		case x.Status == "D":
+			rewritten = true
+		case x.Stat:
+			counted = true
+			added += x.Added
+			rewritten = rewritten || x.Deleted > 0
+		}
+	}
+	return added, rewritten, counted
 }
