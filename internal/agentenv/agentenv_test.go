@@ -463,9 +463,18 @@ func TestProbeReplies(t *testing.T) {
 	stream := `{"type":"system","session_id":"T-01a14222-ad07-73da-8a1e-0886cc74f548"}
 {"type":"result","result":"aayu-env ok sha256:0123456789abcdef","is_error":false}
 `
-	r := ProbeAmp(context.Background(), func(context.Context, string, string, ...string) (string, error) { return stream, nil }, "o/r", want)
+	var calls [][]string
+	r := ProbeAmp(context.Background(), func(_ context.Context, _, name string, args ...string) (string, error) {
+		calls = append(calls, append([]string{name}, args...))
+		return stream, nil
+	}, "o/r", want)
 	if !r.OK || r.URL != "https://ampcode.com/threads/T-01a14222-ad07-73da-8a1e-0886cc74f548" {
 		t.Errorf("amp probe: %+v", r)
+	}
+	// The probe thread archives itself once its reply is read; the URL stays as evidence.
+	if len(calls) != 2 || slices.Contains(calls[0], "--no-archive-after-execute") ||
+		strings.Join(calls[1], " ") != "amp threads archive T-01a14222-ad07-73da-8a1e-0886cc74f548" {
+		t.Errorf("want the probe started without --no-archive-after-execute, then archived; calls %q", calls)
 	}
 	r = ProbeAmp(context.Background(), func(context.Context, string, string, ...string) (string, error) {
 		return strings.Replace(stream, "0123456789abcdef", "ffffffffffffffff", 1), nil
