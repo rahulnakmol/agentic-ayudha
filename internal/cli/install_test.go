@@ -126,3 +126,51 @@ func TestHookCommand(t *testing.T) {
 		t.Fatalf("unknown hook: exit %d", code)
 	}
 }
+
+// WP4.5b.3 accept: install mirrors the product's own verify skill from
+// .agents/skills, where Amp, Cursor, and Codex read it, to .claude/skills;
+// doctor sees a copy behind its source and --fix catches it up; a skill the
+// product deleted loses its copy.
+func TestInstallMirrorsVerifySkill(t *testing.T) {
+	repo, home, opts := installEnv(t)
+	env := map[string]string{"HOME": home}
+	src := filepath.Join(repo, ".agents", "skills", "verify-shop")
+	_ = os.MkdirAll(filepath.Join(src, "features"), 0o755)
+	_ = os.WriteFile(filepath.Join(src, "SKILL.md"), []byte("---\nname: verify-shop\n---\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(src, "features", "README.md"), []byte("# map\n"), 0o644)
+	if code, out, errs := run(t, env, opts, "install", "--apply", "--yes"); code != 0 {
+		t.Fatalf("install: exit %d\n%s%s", code, out, errs)
+	}
+	mirror := filepath.Join(repo, ".claude", "skills", "verify-shop")
+	if b, err := os.ReadFile(filepath.Join(mirror, "features", "README.md")); err != nil || string(b) != "# map\n" {
+		t.Fatalf("mirror: %v %q", err, b)
+	}
+	if b, _ := os.ReadFile(filepath.Join(src, "SKILL.md")); string(b) != "---\nname: verify-shop\n---\n" {
+		t.Fatalf("install changed the source skill: %q", b)
+	}
+	if lock, _, _ := hosts.ReadLock(repo); lock.ProductSkills["verify-shop"].Source != ".agents/skills/verify-shop" {
+		t.Fatalf("lock product_skills: %v", lock.ProductSkills)
+	}
+
+	_ = os.WriteFile(filepath.Join(src, "features", "README.md"), []byte("# map, with a feature\n"), 0o644)
+	if _, out, _ := run(t, env, opts, "doctor"); !strings.Contains(out, ".claude/skills/verify-shop is behind its source .agents/skills/verify-shop") {
+		t.Fatalf("doctor on a changed source:\n%s", out)
+	}
+	if _, out, _ := run(t, env, opts, "doctor", "--fix"); !strings.Contains(out, "PASS  skills-copies") {
+		t.Fatalf("doctor --fix:\n%s", out)
+	}
+	if b, _ := os.ReadFile(filepath.Join(mirror, "features", "README.md")); string(b) != "# map, with a feature\n" {
+		t.Fatalf("mirror after --fix: %q", b)
+	}
+
+	_ = os.RemoveAll(src)
+	if code, out, errs := run(t, env, opts, "install", "--apply", "--yes"); code != 0 {
+		t.Fatalf("install after delete: exit %d\n%s%s", code, out, errs)
+	}
+	if _, err := os.Stat(mirror); !os.IsNotExist(err) {
+		t.Errorf("mirror of a deleted skill: %v", err)
+	}
+	if lock, _, _ := hosts.ReadLock(repo); len(lock.ProductSkills) != 0 {
+		t.Errorf("lock after delete: %v", lock.ProductSkills)
+	}
+}

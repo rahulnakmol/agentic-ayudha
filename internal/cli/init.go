@@ -143,7 +143,7 @@ func runInit(ctx context.Context, e *Env, in Values) error {
 	if runErr == nil {
 		x := initrepo.Extras{
 			Projects: in.Bool("projects"), Gates: in.Bool("gates"), Identity: in.Bool("identity"), Integrations: in.Bool("integrations"),
-			Version: e.Build.Version,
+			VerifySkill: in.Bool("verify-skill"), Assets: e.Assets, Version: e.Build.Version,
 			Confirm: func(summary string) bool {
 				fmt.Fprintln(e.Err, summary)
 				return e.confirm("Continue? [y/N] ")

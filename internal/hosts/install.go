@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -107,6 +108,16 @@ type Lock struct {
 	Pin           string               `toml:"pin"`
 	Hosts         []string             `toml:"hosts"`
 	Skills        map[string]LockSkill `toml:"skills"`
+	// ProductSkills are the product's own verify skills (WP4.5b.3) that install
+	// mirrors from .agents/skills to the hosts that do not read it.
+	ProductSkills map[string]LockProductSkill `toml:"product_skills"`
+}
+
+// LockProductSkill records one mirrored product skill: its source directory
+// and the hash of what was copied.
+type LockProductSkill struct {
+	Source string `toml:"source"`
+	SHA256 string `toml:"sha256"`
 }
 
 // LockSkill records one installed skill.
@@ -148,6 +159,12 @@ func renderLock(l Lock) []byte {
 	for _, n := range names {
 		fmt.Fprintf(&b, "%s = { version = %q, sha256 = %q }\n", n, l.Skills[n].Version, l.Skills[n].SHA256)
 	}
+	if len(l.ProductSkills) > 0 {
+		b.WriteString("\n[product_skills]\n")
+		for _, n := range slices.Sorted(maps.Keys(l.ProductSkills)) {
+			fmt.Fprintf(&b, "%s = { source = %q, sha256 = %q }\n", n, l.ProductSkills[n].Source, l.ProductSkills[n].SHA256)
+		}
+	}
 	return []byte(b.String())
 }
 
@@ -188,6 +205,36 @@ func sourceSkills(assets fs.FS) (map[string][]skillFile, error) {
 			return nil, err
 		}
 		out[e.Name()] = files
+	}
+	return out, nil
+}
+
+// productSkills reads the product's own verify skills, .agents/skills/verify-*/
+// with a SKILL.md (WP4.5b.3), that are not aayudha skills of the same name.
+func (p *planner) productSkills(ours map[string][]skillFile) (map[string][]skillFile, error) {
+	out := map[string][]skillFile{}
+	if p.underSymlink(AgentsSkills) {
+		return out, nil
+	}
+	entries, err := os.ReadDir(p.abs(AgentsSkills, false))
+	if errors.Is(err, fs.ErrNotExist) {
+		return out, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	for _, e := range entries {
+		dir := AgentsSkills + "/" + e.Name()
+		if _, aayudha := ours[e.Name()]; aayudha || !e.IsDir() || !strings.HasPrefix(e.Name(), "verify-") {
+			continue
+		}
+		files, err := readCopy(p.abs(dir, false))
+		if err != nil || files["SKILL.md"] == nil {
+			continue // a symlink or no skill: nothing to mirror
+		}
+		for _, rel := range slices.Sorted(maps.Keys(files)) {
+			out[e.Name()] = append(out[e.Name()], skillFile{rel: rel, data: lf(files[rel])})
+		}
 	}
 	return out, nil
 }
@@ -345,6 +392,32 @@ func Plan(o Options) (*Result, error) {
 	sort.Strings(dirs)
 	for _, d := range dirs {
 		if err := p.skillCopies(d, src, old.Skills); err != nil {
+			return nil, err
+		}
+	}
+	if slices.Contains(dirs, ClaudeSkills) {
+		// The product's verify skills live where Amp, Cursor, and Codex read
+		// them; Claude Code gets a copy, recorded so a later install removes
+		// the copy of a skill the product deleted.
+		prod, err := p.productSkills(src)
+		if err != nil {
+			return nil, err
+		}
+		previous := map[string]LockSkill{}
+		for n, ps := range old.ProductSkills {
+			previous[n] = LockSkill{SHA256: ps.SHA256}
+		}
+		for n, files := range prod {
+			m := map[string][]byte{}
+			for _, f := range files {
+				m[f.rel] = f.data
+			}
+			if lock.ProductSkills == nil {
+				lock.ProductSkills = map[string]LockProductSkill{}
+			}
+			lock.ProductSkills[n] = LockProductSkill{Source: AgentsSkills + "/" + n, SHA256: HashSkill(m)}
+		}
+		if err := p.skillCopies(ClaudeSkills, prod, previous); err != nil {
 			return nil, err
 		}
 	}

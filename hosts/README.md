@@ -11,6 +11,13 @@ whole templates live here.
 | Claude Code | `.claude/skills/<verb>/` | `.mcp.json`, enabled in `.claude/settings.json` | `.claude/settings.json` (and its `statusLine`) | `CLAUDE.md` stub importing `@AGENTS.md` |
 | OpenAI Codex | `.agents/skills/<verb>/` | `[mcp_servers.aayudha]` in a marked block of `.codex/config.toml` (trusted projects only) | `.codex/hooks.json` | `AGENTS.md` sections |
 
+`aayu init --verify-skill` writes a product's own verify skill (WP4.5b.3) from [`verify-skill/`](verify-skill/):
+`SKILL.md`, a feature map with no features yet, and a control tool in the stack the checkout already has (`go.mod`:
+[`go/control/main.go`](verify-skill/go/control/main.go); `package.json`: [`node/control.mjs`](verify-skill/node/control.mjs);
+neither: a [stub](verify-skill/other/control.sh) to replace). The examples' control tools are these templates
+(`TestInitVerifySkill`). `aayu install` copies a product's `.agents/skills/verify-*/` to `.claude/skills/` and records
+it under `[product_skills]` in `.aayudha/lock.toml`.
+
 Every hook runs `"<absolute path to aayu>" hook <name> --host <host>` and nothing else. Copies are real files, never
 symlinks (V2), recorded with their hashes in `.aayudha/lock.toml`.
 

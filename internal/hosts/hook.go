@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -120,6 +121,19 @@ func CheckCopies(root string) []string {
 			case HashSkill(files) != lock.Skills[n].SHA256:
 				problems = append(problems, dir+"/"+n+" was edited or is stale")
 			}
+		}
+	}
+	for _, n := range slices.Sorted(maps.Keys(lock.ProductSkills)) {
+		ps, mirror := lock.ProductSkills[n], ClaudeSkills+"/"+n
+		files, err := readCopy(filepath.Join(root, filepath.FromSlash(mirror)))
+		src, serr := readCopy(filepath.Join(root, filepath.FromSlash(ps.Source)))
+		switch {
+		case err != nil:
+			problems = append(problems, mirror+" (the copy of "+ps.Source+"): "+err.Error())
+		case HashSkill(files) != ps.SHA256:
+			problems = append(problems, mirror+" was edited; its source is "+ps.Source)
+		case serr != nil || HashSkill(src) != ps.SHA256:
+			problems = append(problems, mirror+" is behind its source "+ps.Source)
 		}
 	}
 	return problems
