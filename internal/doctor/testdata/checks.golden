@@ -141,6 +141,14 @@ PASS  retired-workflows  no retired aayudha workflow in .github/workflows
 ## retired-workflows fail
 WARN  retired-workflows  1 retired aayudha workflow(s): run `aayu init` and confirm to remove, or delete by hand
                            .github/workflows/aayudha-triage.yml classifies intake issues with a model in CI, and product CI never calls a model (Appendix B S-2.9b); triage runs from your own agent (`aayu triage <issue> --as …`) or an agent app you @-mention
+## loops pass
+PASS  loops  no loops/*.toml
+## loops fail
+WARN  loops  0 active, 1 stale, 2 missing on [amp codex]
+               amp     digest             missing
+               amp     triage-new         stale: set up 2026-10-16 (sub-1); the loop changed since
+               codex   digest             missing
+               set them up with `aayu install --loops`, then record each with --record
 ## leases pass
 PASS  leases  1 live build lease(s)
 ## leases fail

@@ -77,6 +77,22 @@ This repository's `[verify] maintainer` is `amp`: the headless Amp run reads the
 - `loops/codex/scheduled-tasks.md`: Codex scheduled tasks for the ChatGPT desktop app, with each loop's RFC 5545 rule
   (Codex has no file or API that creates one, and no GitHub event trigger).
 
+## Setting the loops up on your agent hosts
+
+`aayu install --loops` is the one entry point, per repository: it detects the agent hosts you have here (the amp,
+cursor-agent, claude, and codex CLIs) and, for each, sets up this repository's loops where the host's own tooling can,
+and shows the exact steps for the rest:
+
+- Amp: one prompt per loop for an Amp thread of the project, which calls `set_schedule` (one schedule per thread) or
+  `create_github_subscription` with the rendered input and the project's ID. Amp has no CLI for either.
+- Cursor: with `--apply`, `terraform apply` of `loops/cursor/aayudha-loops.tf` when `terraform` and `CURSOR_TOKEN` are
+  there; it records the Cursor loops as set up.
+- Claude Code and Codex: the sections of `loops/claude/routines.md` and `loops/codex/scheduled-tasks.md` to enter.
+
+Record each loop you set up with `aayu install --loops --host <host> --record <loop>=<ID>` (or `all=<ID>`); the record
+is `loops/active.json`, committed with the loops. `aayu doctor` then reports every loop, scheduled or event, on each of
+your hosts: active, stale (the loop changed after it was set up), or missing.
+
 Every run starts with `aayu hook loop:<name>`, on every host and for both kinds of loop: it exits 4 while the
 repository is halted (`aayu halt`), 6 while the `[budget]` breaker has paused agent lanes or the Actions loops have used
 `[budget] ci_minutes_month` this month, and otherwise says whether this run is the scheduled one (an event loop is due

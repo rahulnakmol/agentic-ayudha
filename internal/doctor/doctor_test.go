@@ -265,6 +265,20 @@ func failing(t *testing.T) map[string]func(*Probe) {
 		"retired-workflows": func(p *Probe) {
 			p.Root = repoWith(t, map[string]string{".github/workflows/aayudha-triage.yml": "name: aayudha-triage\non:\n  issues:\njobs: {}\n"})
 		},
+		// S-7.1d: amp holds an old triage-new (stale) and no digest (missing); the event loop Codex has no trigger for is left out.
+		"loops": func(p *Probe) {
+			p.Root = repoWith(t, map[string]string{
+				"loops/digest.toml":     "description = \"Founder digest.\"\ncommand = [\"status\", \"--digest\"]\ncron = \"5 9 * * 1-5\"\n",
+				"loops/triage-new.toml": "description = \"Triage.\"\ncommand = [\"triage\"]\non = \"issues.opened\"\nhosts = [\"amp\", \"codex\"]\n",
+				"loops/active.json":     `{"amp": {"triage-new": {"digest": "000000000000", "id": "sub-1", "at": "2026-10-16"}}}`,
+			})
+			p.LookPath = func(b string) (string, error) {
+				if b == "codex" {
+					return "/usr/bin/codex", nil
+				}
+				return "", os.ErrNotExist
+			}
+		},
 		"worktrees": func(p *Probe) {
 			overlay(p, map[string]string{"git worktree list --porcelain": "worktree /repo\nHEAD a\n\nworktree /tmp/wt-x\nHEAD b\nprunable gitdir file points to non-existent location\n"})
 		},
