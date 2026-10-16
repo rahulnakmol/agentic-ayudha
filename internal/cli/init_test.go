@@ -17,6 +17,7 @@ import (
 
 	"golang.org/x/crypto/nacl/box"
 
+	aayudha "github.com/rahulnakmol/agentic-ayudha"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/initrepo"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
@@ -464,5 +465,54 @@ func TestInitExtras(t *testing.T) {
 	defer g.Mu.Unlock()
 	if len(g.Secrets) != 0 || len(g.Variables) != 0 {
 		t.Errorf("uninit left secrets %v, variables %v", g.Secrets, g.Variables)
+	}
+}
+
+// WP4.5b.3 accept: init --verify-skill writes a product's verify skill with a
+// control tool in the stack the checkout already has (go.mod: Go; package.json:
+// Node; neither: a stub), its empty map passes `verify --map`, the examples'
+// control tools are the templates, and uninit keeps a file the team edited.
+func TestInitVerifySkill(t *testing.T) {
+	for _, tc := range []struct{ marker, control, example string }{
+		{"go.mod", "control/main.go", "../../examples/notes/.agents/skills/verify-notes/control/main.go"},
+		{"package.json", "control.mjs", "../../examples/benefits-qa/.agents/skills/verify-benefits-qa/control.mjs"},
+		{"", "control.sh", ""},
+	} {
+		t.Run(tc.control, func(t *testing.T) {
+			g := fake.New(t, "o/r", "User")
+			dir := checkout(t)
+			if tc.marker != "" {
+				_ = os.WriteFile(filepath.Join(dir, tc.marker), []byte("{}\n"), 0o644)
+			}
+			env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}
+			opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, Assets: aayudha.Assets}
+			if code, out, errOut := run(t, env, opts, "init", "--yes", "--json", "--verify-skill"); code != 0 {
+				t.Fatalf("init --verify-skill: exit %d: %s\n%s", code, errOut, out)
+			}
+			files := snapshot(t, dir)
+			skill := ".agents/skills/verify-r/"
+			if !strings.HasPrefix(files[skill+"SKILL.md"], "---\nname: verify-r\n") || files[skill+tc.control] == "" {
+				t.Fatalf("skill files: %v", slices.Sorted(maps.Keys(files)))
+			}
+			if !strings.Contains(files[skill+"features/README.md"], `"control": [`) || strings.Contains(files[skill+"features/README.md"]+files[skill+"SKILL.md"], "{{") {
+				t.Errorf("map not filled in:\n%s", files[skill+"features/README.md"])
+			}
+			if tc.example != "" {
+				if ex, err := os.ReadFile(tc.example); err != nil || string(ex) != files[skill+tc.control] {
+					t.Errorf("%s is not the %s template (copy hosts/verify-skill/ over it): %v", tc.example, tc.control, err)
+				}
+			}
+			if code, out, errOut := run(t, env, opts, "verify", "--map", "--json"); code != 0 {
+				t.Errorf("verify --map on the new skill: exit %d: %s\n%s", code, errOut, out)
+			}
+			_ = os.WriteFile(filepath.Join(dir, skill, "SKILL.md"), []byte(files[skill+"SKILL.md"]+"\nOur notes.\n"), 0o644)
+			if code, _, errOut := run(t, env, opts, "uninit", "--yes"); code != 0 {
+				t.Fatalf("uninit: %d %s", code, errOut)
+			}
+			after := snapshot(t, dir)
+			if !strings.HasSuffix(after[skill+"SKILL.md"], "Our notes.\n") || after[skill+tc.control] != "" {
+				t.Errorf("after uninit: %v", slices.Sorted(maps.Keys(after)))
+			}
+		})
 	}
 }

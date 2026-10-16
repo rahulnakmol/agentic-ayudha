@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io/fs"
 	"maps"
 	"net/http"
 	"os"
@@ -81,8 +82,10 @@ func GuardVersion(v string) string {
 
 // Extras are the opt-in init flags (WP2.6).
 type Extras struct {
-	Projects, Gates, Identity, Integrations bool
-	Version                                 string
+	Projects, Gates, Identity, Integrations, VerifySkill bool
+	Version                                              string
+	// Assets are the embedded asset trees (hosts/verify-skill/ for --verify-skill).
+	Assets fs.FS
 	// Loops are the rendered loops/*.toml of the checkout (WP7.1), by path:
 	// the Actions fallback and the Amp and Cursor files; --gates writes them.
 	Loops map[string][]byte
@@ -105,7 +108,7 @@ func (in *Init) RunExtras(ctx context.Context, x Extras) error {
 		on   bool
 		name string
 		run  func(context.Context, Extras) error
-	}{{x.Gates, "gates", in.gates}, {x.Projects, "projects", in.projects}, {x.Identity, "identity-app", in.app}, {x.Integrations, "integrations", in.integrations}} {
+	}{{x.Gates, "gates", in.gates}, {x.Projects, "projects", in.projects}, {x.Identity, "identity-app", in.app}, {x.Integrations, "integrations", in.integrations}, {x.VerifySkill, "verify-skill", in.verifySkill}} {
 		if !s.on {
 			continue
 		}

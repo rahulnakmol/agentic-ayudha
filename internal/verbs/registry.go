@@ -959,6 +959,7 @@ var Verbs = []Command{
 			flag("gates", TypeBool, "Install gate workflows."),
 			flag("identity", TypeBool, "Create the GitHub App bot identity."),
 			flag("integrations", TypeBool, "Configure external integrations."),
+			flag("verify-skill", TypeBool, "Write the product's verify skill: an empty feature map and a control tool in the product's stack."),
 		},
 		Outputs:  []string{"labels", "issue-types", "forms", "config", "ledger-branch", "state"},
 		Gates:    []GateID{GateTTY},
