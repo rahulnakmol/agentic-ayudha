@@ -7,7 +7,7 @@ labels: ["type:release", "status:backlog"]
 body:
   - type: markdown
     attributes:
-      value: "A promotion that ships stories to rolling or main. Add it as a sub-issue of its parent goal. Set Priority, Effort, Risk, Health, and Horizon with the `priority:`, `effort:`, `risk:`, `health:`, and `horizon:` labels; they are not form fields. Fields left blank here can be filled in before `aayu ready`."
+      value: "A promotion that ships stories to rolling or main. If it has a parent goal, add it as a sub-issue of it. Set Priority, Effort, Risk, Health, and Horizon with the `priority:`, `effort:`, `risk:`, `health:`, and `horizon:` labels; they are not form fields. Fields left blank here can be filled in before `aayu ready`."
   - type: textarea
     id: summary
     attributes:

@@ -7,7 +7,7 @@ labels: ["type:decision", "status:backlog"]
 body:
   - type: markdown
     attributes:
-      value: "A choice between options with a recommendation, accepted by its authority. Add it as a sub-issue of its parent goal or initiative or feature or story or bug or incident. Set Priority, Effort, Risk, Health, and Horizon with the `priority:`, `effort:`, `risk:`, `health:`, and `horizon:` labels; they are not form fields. Fields left blank here can be filled in before `aayu ready`."
+      value: "A choice between options with a recommendation, accepted by its authority. If it has a parent goal or initiative or feature or story or bug or incident, add it as a sub-issue of it. Set Priority, Effort, Risk, Health, and Horizon with the `priority:`, `effort:`, `risk:`, `health:`, and `horizon:` labels; they are not form fields. Fields left blank here can be filled in before `aayu ready`."
   - type: textarea
     id: summary
     attributes:

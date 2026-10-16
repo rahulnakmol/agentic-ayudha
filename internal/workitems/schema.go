@@ -271,10 +271,12 @@ var Types = []Type{
 	},
 	{
 		ID: "story", Name: "Story", Color: "yellow", LabelColor: "fbca04",
-		Description: "An XS-L slice of a Feature with a Completion Goal.",
-		Parents:     []string{"feature"}, ParentAt: StageReady,
-		Links:  []string{"depends-on"},
-		Effort: true,
+		Description: "An XS-L slice of work with a Completion Goal, under a Feature when there is one.",
+		// A Story stands on its own: a vague single-feature ask must not need a
+		// Goal, an Initiative, and a Feature first (megaman, D-5.5c.12 (8), D-2.1c).
+		Parents: []string{"feature"},
+		Links:   []string{"depends-on"},
+		Effort:  true,
 		Sections: []Section{
 			{StageCreate, []Field{
 				{ID: FieldSummary, Label: "Summary", Kind: KindMarkdown, RequiredAt: StageCreate, Description: "As a <who>, I want <what>, so that <why>."},

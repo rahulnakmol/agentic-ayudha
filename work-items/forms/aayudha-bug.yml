@@ -7,7 +7,7 @@ labels: ["type:bug", "status:backlog"]
 body:
   - type: markdown
     attributes:
-      value: "A defect, with a Completion Goal that proves the fix. Add it as a sub-issue of its parent feature or story. Set Priority, Effort, Risk, Health, and Horizon with the `priority:`, `effort:`, `risk:`, `health:`, and `horizon:` labels; they are not form fields. Effort is required at Ready, and `effort:XL` blocks Ready: slice it first. Fields left blank here can be filled in before `aayu ready`."
+      value: "A defect, with a Completion Goal that proves the fix. If it has a parent feature or story, add it as a sub-issue of it. Set Priority, Effort, Risk, Health, and Horizon with the `priority:`, `effort:`, `risk:`, `health:`, and `horizon:` labels; they are not form fields. Effort is required at Ready, and `effort:XL` blocks Ready: slice it first. Fields left blank here can be filled in before `aayu ready`."
   - type: textarea
     id: summary
     attributes:

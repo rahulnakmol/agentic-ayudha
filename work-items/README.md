@@ -26,7 +26,7 @@ Schema version 1.
 | Goal | none | none | no | no | [`aayudha-goal.yml`](forms/aayudha-goal.yml) |
 | Initiative | goal (required at ready) | none | no | no | [`aayudha-initiative.yml`](forms/aayudha-initiative.yml) |
 | Feature | initiative (required at ready) | depends-on | no | no | [`aayudha-feature.yml`](forms/aayudha-feature.yml) |
-| Story | feature (required at ready) | depends-on | yes | no | [`aayudha-story.yml`](forms/aayudha-story.yml) |
+| Story | feature | depends-on | yes | no | [`aayudha-story.yml`](forms/aayudha-story.yml) |
 | Bug | feature, story | caused-by, depends-on | yes | no | [`aayudha-bug.yml`](forms/aayudha-bug.yml) |
 | Decision | goal, initiative, feature, story, bug, incident | supersedes, constrains, waives | no | no | [`aayudha-decision.yml`](forms/aayudha-decision.yml) |
 | Experiment | feature, initiative (required at ready) | none | no | no | [`aayudha-experiment.yml`](forms/aayudha-experiment.yml) |

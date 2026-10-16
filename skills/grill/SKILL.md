@@ -176,9 +176,12 @@ in what the repository already has, and nothing in it the human did not confirm.
      draft until the human has named the smallest slice: what the user sees (a button by its label, a form by its
      fields) and what happens when they use it.
    - **The goal.** Every grilled item says why it matters, in a form both of you can check later: the Summary's
-     "so that", and a Measure and Threshold with the human's own number. When the outcome reaches beyond this item,
-     or the human wants to track it after release, propose a Goal (`aayu grill goal`, with its baseline) and link
-     the item under it. Never invent the number. A baseline is a number the human or a fact gives; when neither
+     "so that", and a Measure and Threshold with the human's own number. A Story stands on its own: a vague ask for
+     one change becomes a Story directly, with no Goal, Initiative, or Feature filed first. Use `--parent` only for
+     an open Feature the facts show (`story:` and Feature facts) and the human confirms it belongs under; otherwise
+     leave it out. Offer a Goal (`aayu grill goal`, then its Initiative and Feature) only when the human states a goal
+     of their own: an outcome beyond this item, with their number and how they count it. Never file a stand-in
+     metric (`north_star`) to make one. Never invent the number. A baseline is a number the human or a fact gives; when neither
      does, the baseline is unknown: say so and add a `deferred:` open question for it. Never estimate one, not even
      0 ("the form does not exist yet, so 0" is an estimate). The Measure names what is counted; the Threshold
      carries the human's number.
@@ -221,7 +224,9 @@ in what the repository already has, and nothing in it the human did not confirm.
 6. **Draft and validate.** Write the body (the reference's fields plus the spec record below) and validate it with
    `--idea`; fix every problem by asking, then validate again:
 
-   `aayu grill story --idea "<the human's words>" --parent <feature> --title "<title>" --body "<body>" --labels effort:S`
+   `aayu grill story --idea "<the human's words>" --title "<title>" --body "<body>" --labels effort:S`
+
+   Add `--parent <feature>` only when the human confirmed an existing Feature.
 
 7. **Read it back.** Before writing, tell the human in plain language: "Here is what done looks like: …". Start
    with the goal and how it is measured, then one sentence per criterion, then the checkpoints they will see as it
@@ -367,8 +372,8 @@ A grilled spec passes only when:
   leave Baseline to the binary: it fetches the value over the 28 days before today and writes it with its population,
   window, source query, and fetch time. When no integration can answer, the draft is refused Ready naming the metric;
   ask the human to configure the integration or pick a reachable metric. Never type a baseline number yourself.
-- `initiative`, `feature`, `story`, `experiment`: need a parent at Ready (Goal, Initiative, Feature, Feature or
-  Initiative); pass it as `--parent`.
+- `initiative`, `feature`, `experiment`: need a parent at Ready (Goal, Initiative, Feature or Initiative); pass it
+  as `--parent`. A `story` may have a parent Feature, and is Ready without one.
 - `story`, `bug`: need an `effort:XS|S|M|L` label; an XL story is sliced (`aayu slice`), never grilled as one. When the
   conversation grows past an L, say so and propose the split.
 - `decision`: Reversible is `true` or `false`; only a reversible Decision applies provisionally (V8).
