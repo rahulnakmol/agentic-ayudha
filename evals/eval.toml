@@ -86,7 +86,8 @@ max_usd = 8.0 # the single-reply cases cost 4.57 USD in run 38681630586; run 387
 # Output caps per call. Reasoning models may spend part of the cap on reasoning; a cap is not a charge. A reply that
 # stops at its cap is recorded as an error marked truncated, without a retry. Complete drafts measured 1700-2430 output
 # tokens (run 38185993917). Run 38200697472 truncated two ste brief drafts at 4000 (one reply held only a thinking
-# block), so the skill cap is 8000. Every call's stop reason and tokens are in the results file.
+# block), so the skill cap was 8000. Grill conversations reached 7819 and 8000 tokens in a reply (runs 38871247156 and
+# 38879696010, D-5.8h), so it is 12000. Every call's stop reason and tokens are in the results file.
 [max_tokens]
-skill = 8000
+skill = 12000
 judge = 2000

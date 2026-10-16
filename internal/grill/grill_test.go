@@ -108,6 +108,10 @@ func TestCheck(t *testing.T) {
 			workitems.FieldCriteria: "1. [screenshot] state: `/order/review` with 2 items; expected: the total and the pickup time on the review screen, at the top of `/order/review`\n" +
 				"2. [recording] state: `/order` empty basket; expected: a paid order in at most 3 screens",
 		}, []string{`criterion 1 decides where something goes ("at the top of")`}},
+		{"scope is not a placement", map[string]string{workitems.FieldProvenance: goodProvenance, workitems.FieldAssumptions: "none", workitems.FieldCheckpoints: goodCheckpoints,
+			workitems.FieldCriteria: "1. [screenshot] state: `/order/review` with 2 items; expected: the total and the pickup time\n" +
+				"2. [recording] state: `/order` empty basket; expected: a paid order in at most 3 screens, with the total shown on every step",
+		}, nil},
 		{"placement quoted from another reply", map[string]string{workitems.FieldAssumptions: "none",
 			workitems.FieldProvenance: "Request: \"Ordering needs high-quality UX\"\nVague: \"high-quality UX\" → criteria 1, 2\n" +
 				"1. confirmed (ux.states/payment-failure): \"keep the basket and retry on the same screen\" / \"people pay on the review screen\"\n" +

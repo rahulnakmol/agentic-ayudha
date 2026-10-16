@@ -450,7 +450,10 @@ func Placements(expected string) []Placement {
 		}
 	}
 	for _, m := range placeScreen.FindAllStringSubmatch(expected, -1) {
-		out = append(out, Placement{Text: m[0], Key: m[1]})
+		// "on every step" states a scope, not where something goes.
+		if !slices.Contains([]string{"every", "each", "any", "all"}, strings.ToLower(m[1])) {
+			out = append(out, Placement{Text: m[0], Key: m[1]})
+		}
 	}
 	for _, m := range placeRelative.FindAllStringSubmatch(expected, -1) {
 		out = append(out, Placement{Text: m[0], Key: m[1]})

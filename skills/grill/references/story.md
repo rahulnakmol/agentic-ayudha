@@ -55,7 +55,8 @@ asks for that outcome itself, and otherwise leave it to the floors.
 
 ### Links (`links`, optional)
 
-- Does this story depend on another one? One line each: `depends-on #N`.
+- Does this story depend on another one? One line each: `depends-on #N`, nothing else on the line. Leave the field
+  out when there is none; the parent Feature goes in `--parent`, never here.
 
 ## Spec record (when grilled from an idea)
 
