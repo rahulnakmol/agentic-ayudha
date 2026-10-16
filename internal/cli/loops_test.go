@@ -144,7 +144,7 @@ func TestInstallLoops(t *testing.T) {
 		Exec: func(_ context.Context, _, name string, args ...string) (string, error) {
 			calls = append(calls, strings.Join(append([]string{name}, args...), " "))
 			if strings.HasSuffix(name, "amp") && slices.Contains(args, "-ox") {
-				return "Done.\nschedule s-" + args[slices.Index(args, "--title")+1][8:14] + " on T-01a14215-c759-72bf-9a65-d2317a72a878", nil
+				return "Done.\nschedule s-" + strings.TrimPrefix(args[slices.Index(args, "--title")+1], "aayudha loop: ") + " on T-01a14215-c759-72bf-9a65-d2317a72a878", nil
 			}
 			if strings.HasSuffix(name, "amp") && args[0] == "-x" {
 				return "loop triage: ran", nil
