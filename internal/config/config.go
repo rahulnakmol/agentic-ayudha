@@ -277,6 +277,10 @@ type Verify struct {
 	Seed           []string               `koanf:"seed" jsonschema_description:"Command (argv) that loads seeded, synthetic data into the app before the web floors capture (WP4.5); the product provides it, e.g. under .aayudha/seed/."`
 	Environments   map[string]Environment `koanf:"environments" jsonschema_description:"Apps the web, DAST, and API floors run against, by name; AAYU_ENV picks one (default local). A production environment is never captured."`
 	Floors         Floors                 `koanf:"floors" jsonschema_description:"Floor thresholds; CONSTRAINTS.md documents each one."`
+	// RedOnBaseBlockingFrom is the date (UTC, YYYY-MM-DD) from which a Bug
+	// story's proving test that passes on the base fails the merge gate (P5,
+	// founder decision 4); before it the red-on-base check is advisory.
+	RedOnBaseBlockingFrom string `koanf:"red_on_base_blocking_from" jsonschema_description:"Date (UTC, YYYY-MM-DD) from which a Bug story whose mapped proving test passes on the base commit fails the merge gate; before it, or empty, the red-on-base check is advisory."`
 }
 
 // Environment is [verify.environments.<name>].

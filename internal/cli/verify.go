@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	gh "github.com/google/go-github/v90/github"
@@ -266,6 +267,21 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 			fp.Done(floorMark(c.Result), c.Result)
 		} else {
 			fp.Done(ui.StatusNA, "no check")
+		}
+	}
+	// P5 (founder decision 4): a Bug story's proving tests must fail on the base.
+	if e.CI && pr != nil && res.Story > 0 && !in.Has("check") && in.String("floor") == "" {
+		owner, name, _ := github.SplitRepo(repo)
+		if is, _, err := client.REST.Issues.Get(ctx, owner, name, res.Story); err != nil {
+			return Wrap(ExitExternal, err)
+		} else if slices.ContainsFunc(is.Labels, func(lb *gh.Label) bool { return lb.GetName() == "type:bug" }) {
+			c, ok, err := redOnBase(ctx, r.Sandbox, root, res.Base, head, res.Story, e.Now(), l.Config.Verify.RedOnBaseBlockingFrom)
+			if err != nil {
+				return Wrap(ExitExternal, fmt.Errorf("red-on-base: %w", err))
+			}
+			if ok {
+				rep.Checks = append(rep.Checks, c)
+			}
 		}
 	}
 	rep.Hold = (&proof.Pack{Checks: rep.Checks}).FloorsHold()
