@@ -32,16 +32,18 @@ import (
 // Dir is where loop definitions live in a repository.
 const Dir = "loops"
 
-// Host IDs a loop may name: the two primary hosts that schedule agents, and
-// the GitHub Actions fallback.
+// Host IDs a loop may name: the agent hosts that schedule or start agents in
+// the user's own session, and the GitHub Actions fallback.
 const (
 	HostAmp     = "amp"
 	HostCursor  = "cursor"
+	HostClaude  = "claude"
+	HostCodex   = "codex"
 	HostActions = "actions"
 )
 
 // Hosts lists every host a loop renders for.
-var Hosts = []string{HostAmp, HostCursor, HostActions}
+var Hosts = []string{HostAmp, HostCursor, HostClaude, HostCodex, HostActions}
 
 // Loop is one loops/<name>.toml.
 type Loop struct {
@@ -125,6 +127,14 @@ func (l Loop) Native(host string) (ok bool, why string) {
 			return true, "" // git_label on issues: fires when the label is added, including by an issue form at open
 		}
 		return false, "Cursor has no trigger for " + l.On + " without a label (only issue label changes and comments)"
+	case HostClaude:
+		// Routines: GitHub triggers cover pull requests and releases (code.claude.com/docs/en/routines).
+		if strings.HasPrefix(l.On, "pull_request.") || l.On == "release.published" {
+			return true, ""
+		}
+		return false, "Claude Code routines' GitHub triggers cover pull requests and releases only"
+	case HostCodex:
+		return false, "Codex scheduled tasks run on a schedule; their app events do not include GitHub events"
 	case HostActions:
 		if l.On == "check_suite.completed" {
 			return false, "GitHub does not start workflows on check suites that Actions created, so Actions cannot record this event"
@@ -1021,6 +1031,8 @@ func Files(ls []Loop, repo, branch, tz, version string, implemented func(string)
 	if out[Dir+"/cursor/aayudha-loops.tf"], err = CursorAutomations(cursor, repo, branch, tz, loc); err != nil {
 		return nil, err
 	}
+	out[Dir+"/claude/routines.md"] = ClaudeRoutines(cursor, repo, branch, tz)
+	out[Dir+"/codex/scheduled-tasks.md"] = CodexTasks(cursor, repo, branch, tz)
 	return out, nil
 }
 
