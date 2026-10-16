@@ -2,6 +2,10 @@ package hosts
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -297,6 +301,52 @@ func TestHostPluginsLoad(t *testing.T) {
 		if strings.Contains(out, "aayudha:source-command-codex") {
 			t.Errorf("Codex offers a hand-off to itself")
 		}
+		// The model is offered the aayudha MCP tools (D-3.2b.c, megaman
+		// evidence D-5.5c.12): a fake Responses endpoint records the request
+		// Codex sends, with the plugin's server running this binary.
+		bin := t.TempDir()
+		if out, err := exec.Command("go", "build", "-o", filepath.Join(bin, "aayu"), "../../cmd/aayudha").CombinedOutput(); err != nil {
+			t.Fatalf("build aayu: %v\n%s", err, out)
+		}
+		var body []byte
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if body == nil {
+				body, _ = io.ReadAll(r.Body)
+			}
+			w.Header().Set("Content-Type", "text/event-stream")
+			for _, e := range []string{`{"type":"response.created","response":{"id":"r"}}`,
+				`{"type":"response.output_item.done","item":{"type":"message","role":"assistant","id":"m","content":[{"type":"output_text","text":"ok"}]}}`,
+				`{"type":"response.completed","response":{"id":"r","usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}}`} {
+				fmt.Fprintf(w, "event: %s\ndata: %s\n\n", regexp.MustCompile(`"type":"([^"]+)"`).FindStringSubmatch(e)[1], e)
+			}
+		}))
+		defer srv.Close()
+		cfg := filepath.Join(home, ".codex", "config.toml")
+		old, _ := os.ReadFile(cfg)
+		_ = os.WriteFile(cfg, []byte("model = \"gpt-5\"\nmodel_provider = \"fake\"\n"+string(old)+
+			"\n[model_providers.fake]\nname = \"fake\"\nbase_url = \""+srv.URL+"/v1\"\nwire_api = \"responses\"\nenv_key = \"FAKE_KEY\"\n"), 0o644)
+		env = append(env, "FAKE_KEY=x", "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+		run(t, env, t.TempDir(), "codex", "exec", "--skip-git-repo-check", "hi")
+		var req struct {
+			Tools []struct {
+				Type, Name string
+				Tools      []struct{ Name string }
+			}
+		}
+		_ = json.Unmarshal(body, &req)
+		var offered []string
+		for _, tool := range req.Tools {
+			if tool.Name == "mcp__"+ServerName {
+				for _, f := range tool.Tools {
+					offered = append(offered, f.Name)
+				}
+			}
+		}
+		for _, w := range []string{"status", "doctor", "grill", "ready"} {
+			if !slices.Contains(offered, w) {
+				t.Errorf("Codex offered the model aayudha tools %v, without %s", offered, w)
+			}
+		}
 	})
 	t.Run("amp", func(t *testing.T) {
 		if _, err := exec.LookPath("amp"); err != nil {
@@ -320,4 +370,100 @@ func TestHostPluginsLoad(t *testing.T) {
 			t.Errorf("Amp offers a hand-off to itself")
 		}
 	})
+}
+
+// Codex runs a plugin's or a project's hooks only after the person trusts
+// them (D-3.2b.a, megaman evidence D-5.5c.12): CodexHookTrust reads the trust
+// Codex records and says which aayudha hooks it skips. The hashes are the
+// ones Codex 0.162.1 reported in its app-server hooks/list for these files.
+func TestCodexHookTrust(t *testing.T) {
+	root, codexHome := t.TempDir(), t.TempDir()
+	repoHooks := filepath.Join(root, ".codex", "hooks.json")
+	_ = os.MkdirAll(filepath.Dir(repoHooks), 0o755)
+	_ = os.WriteFile(repoHooks, []byte(`{"hooks": {"PreToolUse": [{"hooks": [{"command": "\"/tmp/cxhome/aayu\" hook pre-tool --host codex", "type": "command"}]}],
+"SessionStart": [{"hooks": [{"command": "\"/tmp/cxhome/aayu\" hook session-start --host codex", "type": "command"}]}]}}`), 0o644)
+	cache := filepath.Join(codexHome, "plugins", "cache", "aayudha", "aayudha", "0.0.0", "hosts", "codex")
+	_ = os.MkdirAll(cache, 0o755)
+	plugin, _ := os.ReadFile("../../hosts/codex/hooks.json")
+	_ = os.WriteFile(filepath.Join(cache, "hooks.json"), plugin, 0o644)
+	config := func(s string) { _ = os.WriteFile(filepath.Join(codexHome, "config.toml"), []byte(s), 0o644) }
+
+	config("[plugins.\"aayudha@aayudha\"]\nenabled = true\n")
+	found, problems, err := CodexHookTrust(root, codexHome)
+	if err != nil || found != 4 || len(problems) != 5 || !strings.Contains(problems[0], "does not trust this project") {
+		t.Fatalf("nothing trusted: %d %q %v", found, problems, err)
+	}
+	// The repository's PreToolUse and the plugin's PreToolUse are trusted; the
+	// plugin's SessionStart was trusted at another definition (an update).
+	config(fmt.Sprintf(`[plugins."aayudha@aayudha"]
+enabled = true
+[projects.%q]
+trust_level = "trusted"
+[hooks.state.%q]
+trusted_hash = "sha256:1218764140f472694d705f891e417ee0dd6161635a189e9531bf3bd4dc4ebde8"
+[hooks.state."aayudha@aayudha:hosts/codex/hooks.json:pre_tool_use:0:0"]
+trusted_hash = "sha256:611739dac789e7fbad81a394975c225003db4aabf33a3b1912c2f52229f89e97"
+[hooks.state."aayudha@aayudha:hosts/codex/hooks.json:session_start:0:0"]
+trusted_hash = "sha256:0000"
+`, root, repoHooks+":pre_tool_use:0:0"))
+	_, problems, _ = CodexHookTrust(root, codexHome)
+	want := []string{
+		".codex/hooks.json: the SessionStart hook is not trusted yet; trust it in Codex's /hooks",
+		"plugin aayudha@aayudha: the SessionStart hook changed since it was trusted (an update); trust it again in Codex's /hooks",
+	}
+	if !slices.Equal(problems, want) {
+		t.Errorf("partly trusted:\n got %q\nwant %q", problems, want)
+	}
+	// No Codex hooks of aayudha's: nothing to check.
+	if found, _, _ := CodexHookTrust(t.TempDir(), t.TempDir()); found != 0 {
+		t.Errorf("found %d hooks in an empty setup", found)
+	}
+}
+
+// With the aayudha plugin enabled for a host, install registers no hooks or
+// MCP server of its own there and removes the ones it wrote before, so the
+// host runs each hook and lists the server once (D-3.2b.d, megaman evidence
+// D-5.5c.12 defect 7).
+func TestInstallLeavesHooksAndMCPToThePlugin(t *testing.T) {
+	root, home := t.TempDir(), t.TempDir()
+	mine := `{"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "./mine.sh"}]}]}}`
+	_ = os.MkdirAll(filepath.Join(root, ".claude"), 0o755)
+	_ = os.WriteFile(filepath.Join(root, ".claude", "settings.json"), []byte(mine), 0o644)
+	o := opts(t, root, home, false, verbs.HostClaude, verbs.HostCodex)
+	res, err := Plan(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Apply(o, res.Edits, false); err != nil {
+		t.Fatal(err)
+	}
+	if !RepoHooks(root, verbs.HostClaude) || !RepoHooks(root, verbs.HostCodex) {
+		t.Fatal("install without the plugin wrote no repository hooks")
+	}
+	// The person enables the plugin in both hosts, then installs again.
+	_ = os.MkdirAll(filepath.Join(home, ".claude"), 0o755)
+	_ = os.WriteFile(filepath.Join(home, ".claude", "settings.json"), []byte(`{"enabledPlugins": {"aayudha@aayudha": true}}`), 0o644)
+	_ = os.MkdirAll(filepath.Join(home, ".codex"), 0o755)
+	_ = os.WriteFile(filepath.Join(home, ".codex", "config.toml"), []byte("[plugins.\"aayudha@aayudha\"]\nenabled = true\n"), 0o644)
+	if res, err = Plan(o); err != nil {
+		t.Fatal(err)
+	}
+	if err := Apply(o, res.Edits, false); err != nil {
+		t.Fatal(err)
+	}
+	if RepoHooks(root, verbs.HostClaude) || RepoHooks(root, verbs.HostCodex) {
+		t.Error("repository hooks remain beside the plugin's")
+	}
+	for _, f := range []string{ClaudeMCP, CodexConfig, CodexHooks} {
+		if _, err := os.Stat(filepath.Join(root, f)); err == nil {
+			t.Errorf("%s remains beside the plugin", f)
+		}
+	}
+	b, _ := os.ReadFile(filepath.Join(root, ".claude", "settings.json"))
+	if !strings.Contains(string(b), "./mine.sh") || strings.Contains(string(b), "enabledMcpjsonServers") || !strings.Contains(string(b), "hook status-line --host claude") {
+		t.Errorf("settings.json: the product's hook and the status line stay, aayudha's server approval goes:\n%s", b)
+	}
+	if n := strings.Count(strings.Join(res.Notes, "\n"), "the aayudha plugin is enabled"); n != 2 {
+		t.Errorf("notes %q", res.Notes)
+	}
 }

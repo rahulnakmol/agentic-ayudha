@@ -62,6 +62,7 @@ func SkillDir(h verbs.HostID) string {
 type Options struct {
 	Root          string         // repository root
 	Home          string         // the user's home directory
+	CodexHome     string         // Codex's configuration directory ($CODEX_HOME); "" is Home/.codex
 	Hosts         []verbs.HostID // empty: the hosts in lock.toml, else every host
 	Assets        fs.FS          // embedded tree with skills/ and hosts/
 	Binary        string         // absolute path of the aayu binary hooks and MCP registrations run
@@ -541,26 +542,41 @@ func (p *planner) hostFiles(hosts map[verbs.HostID]bool, lock Lock) error {
 		if err := p.write(ClaudeMD, false, p.o.text(cm)); err != nil {
 			return err
 		}
-		if err := p.mergeJSON(ClaudeMCP, false, func(m map[string]any) {
-			obj(m, "mcpServers")[ServerName] = server
+		plugin := p.pluginEnabled(verbs.HostClaude)
+		if err := p.mergeJSONIf(ClaudeMCP, !plugin, func(m map[string]any) {
+			if plugin {
+				deleteKey(m, "mcpServers", ServerName)
+			} else {
+				obj(m, "mcpServers")[ServerName] = server
+			}
 		}); err != nil {
 			return err
 		}
 		if err := p.mergeJSON(ClaudeSettings, false, func(m map[string]any) {
-			m["enabledMcpjsonServers"] = addString(m["enabledMcpjsonServers"], ServerName)
+			if plugin {
+				m["enabledMcpjsonServers"] = dropString(m["enabledMcpjsonServers"], ServerName)
+				if len(m["enabledMcpjsonServers"].([]any)) == 0 {
+					delete(m, "enabledMcpjsonServers")
+				}
+			} else {
+				m["enabledMcpjsonServers"] = addString(m["enabledMcpjsonServers"], ServerName)
+			}
 			// The status line shows journey state (WP3.2b); one the product set itself stays.
 			if sl, ok := m["statusLine"].(map[string]any); !ok || ourHook.MatchString(fmt.Sprint(sl["command"])) {
 				m["statusLine"] = map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "status-line", verbs.HostClaude)}
 			} else {
 				p.notes = append(p.notes, ClaudeSettings+" already has a statusLine, so install leaves it: add `"+HookCommand(p.o.Binary, "status-line", verbs.HostClaude)+"` to it for the aayudha journey state")
 			}
-			hk := obj(m, "hooks")
-			hk["SessionStart"] = replaceHooks(hk["SessionStart"], map[string]any{
-				"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "session-start", verbs.HostClaude)}}})
-			hk["PreToolUse"] = replaceHooks(hk["PreToolUse"], map[string]any{"matcher": "*",
-				"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "pre-tool", verbs.HostClaude)}}})
+			setHooks(m, plugin, map[string]any{
+				"SessionStart": map[string]any{"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "session-start", verbs.HostClaude)}}},
+				"PreToolUse": map[string]any{"matcher": "*",
+					"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "pre-tool", verbs.HostClaude)}}},
+			})
 		}); err != nil {
 			return err
+		}
+		if plugin {
+			p.notes = append(p.notes, pluginNote("Claude Code", ClaudeMCP+" and "+ClaudeSettings))
 		}
 	}
 	if hosts[verbs.HostCursor] {
@@ -581,17 +597,22 @@ func (p *planner) hostFiles(hosts map[verbs.HostID]bool, lock Lock) error {
 		}
 	}
 	if hosts[verbs.HostCodex] {
-		if err := p.codexConfig(); err != nil {
+		plugin := p.pluginEnabled(verbs.HostCodex)
+		if err := p.codexConfig(plugin); err != nil {
 			return err
 		}
-		if err := p.mergeJSON(CodexHooks, false, func(m map[string]any) {
-			hk := obj(m, "hooks")
-			hk["SessionStart"] = replaceHooks(hk["SessionStart"], map[string]any{
-				"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "session-start", verbs.HostCodex)}}})
-			hk["PreToolUse"] = replaceHooks(hk["PreToolUse"], map[string]any{
-				"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "pre-tool", verbs.HostCodex)}}})
+		if err := p.mergeJSONIf(CodexHooks, !plugin, func(m map[string]any) {
+			setHooks(m, plugin, map[string]any{
+				"SessionStart": map[string]any{"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "session-start", verbs.HostCodex)}}},
+				"PreToolUse":   map[string]any{"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "pre-tool", verbs.HostCodex)}}},
+			})
 		}); err != nil {
 			return err
+		}
+		if plugin {
+			p.notes = append(p.notes, pluginNote("OpenAI Codex", CodexConfig+" and "+CodexHooks))
+		} else {
+			p.notes = append(p.notes, "Codex runs these hooks only after you trust them: open /hooks in Codex and trust the aayudha hooks (`aayu doctor` reports any it would skip)")
 		}
 	}
 	if hosts[verbs.HostAmp] {
@@ -631,7 +652,7 @@ const (
 
 var codexBlock = regexp.MustCompile(`(?s)` + regexp.QuoteMeta(codexBegin) + `.*?` + regexp.QuoteMeta(codexEnd) + `\n?`)
 
-func (p *planner) codexConfig() error {
+func (p *planner) codexConfig(plugin bool) error {
 	old, err := p.read(CodexConfig, false)
 	if err != nil {
 		return err
@@ -640,6 +661,16 @@ func (p *planner) codexConfig() error {
 	block := codexBegin + "\n[mcp_servers." + ServerName + "]\ncommand = " + string(cmd) + "\nargs = [\"mcp\"]\n" + codexEnd + "\n"
 	text := string(lf(old))
 	switch {
+	case plugin: // the plugin's server serves this repository; drop the block install wrote before
+		if !codexBlock.MatchString(text) {
+			return nil
+		}
+		text = strings.TrimLeft(codexBlock.ReplaceAllLiteralString(text, ""), "\n")
+		if strings.TrimSpace(text) == "" {
+			p.edits = append(p.edits, Edit{Kind: Delete, Path: CodexConfig, Old: old})
+			return nil
+		}
+		text = strings.TrimRight(text, "\n") + "\n"
 	case codexBlock.MatchString(text):
 		text = codexBlock.ReplaceAllLiteralString(text, block)
 	case strings.Contains(text, "[mcp_servers."+ServerName+"]"):
@@ -681,7 +712,9 @@ This repository runs the aayudha verbs as host skills, installed by `+"`aayu ins
 Installed for: %s. The %s MCP server serves the verbs as tools (write verbs only with `+"`[mcp] expose_writes = true`"+`).
 Host hooks run `+"`aayu hook <name>`"+` only: `+"`session-start`"+` reports skill copies out of sync with the lock,
 `+"`pre-tool`"+` blocks agent tool calls while the `+"`[budget]`"+` breaker has paused agent lanes and blocks shell commands that
-run a human-only verb, and `+"`status-line`"+` shows where the work stands.`, strings.Join(names, ", "), "`"+ServerName+"`")
+run a human-only verb, and `+"`status-line`"+` shows where the work stands.
+
+%s`, strings.Join(names, ", "), "`"+ServerName+"`", wrapText("B"+strings.TrimPrefix(Routing, "aayudha: b"), 118))
 	return []AgentsSection{{ID: "skills", Body: skills}, {ID: "hosts", Body: hostsSec}}
 }
 
@@ -737,10 +770,89 @@ func addString(v any, s string) []any {
 	return append(list, s)
 }
 
+// pluginEnabled reports the aayudha marketplace plugin enabled for host.
+func (p *planner) pluginEnabled(host verbs.HostID) bool {
+	ch := p.o.CodexHome
+	if ch == "" {
+		ch = filepath.Join(p.o.Home, ".codex")
+	}
+	return PluginEnabled(host, p.o.Root, p.o.Home, ch)
+}
+
+// pluginNote says why install wrote no hooks or MCP registration for a host.
+func pluginNote(host, files string) string {
+	return "the aayudha plugin is enabled for " + host + ", so its hooks and MCP server serve this repository and install writes none in " + files + " (it removes any it wrote before); disable the plugin and re-run install for the repository's own"
+}
+
+// mergeJSONIf is mergeJSON, except that a file that does not exist is created
+// only when create is true.
+// A file left empty is deleted.
+func (p *planner) mergeJSONIf(rel string, create bool, set func(map[string]any)) error {
+	if create {
+		return p.mergeJSON(rel, false, set)
+	}
+	old, err := p.read(rel, false)
+	if err != nil || old == nil {
+		return err
+	}
+	empty := false
+	if err := p.mergeJSON(rel, false, func(m map[string]any) { set(m); empty = len(m) == 0 }); err != nil {
+		return err
+	}
+	if n := len(p.edits); empty && n > 0 && p.edits[n-1].Path == rel {
+		p.edits[n-1] = Edit{Kind: Delete, Path: rel, Old: old}
+	}
+	return nil
+}
+
+// setHooks puts aayudha's entry for each event into m's hooks, replacing the
+// ones it wrote before, or with drop only removes them (and empty events).
+func setHooks(m map[string]any, drop bool, entries map[string]any) {
+	hk := obj(m, "hooks")
+	for ev, entry := range entries {
+		if !drop {
+			hk[ev] = replaceHooks(hk[ev], entry.(map[string]any))
+			continue
+		}
+		if rest := dropOurs(hk[ev]); len(rest) > 0 {
+			hk[ev] = rest
+		} else {
+			delete(hk, ev)
+		}
+	}
+	if len(hk) == 0 {
+		delete(m, "hooks")
+	}
+}
+
+func deleteKey(m map[string]any, key, name string) {
+	if o, ok := m[key].(map[string]any); ok {
+		delete(o, name)
+		if len(o) == 0 {
+			delete(m, key)
+		}
+	}
+}
+
+func dropString(v any, s string) []any {
+	list, _ := v.([]any)
+	out := []any{}
+	for _, x := range list {
+		if x != s {
+			out = append(out, x)
+		}
+	}
+	return out
+}
+
 // replaceHooks drops the entries aayudha wrote before (recognised by their
 // commands) from a host's hook list and appends entry; the product's own hooks
 // stay, in order.
 func replaceHooks(v any, entry map[string]any) []any {
+	return append(dropOurs(v), entry)
+}
+
+func dropOurs(v any) []any {
 	list, _ := v.([]any)
 	var out []any
 	for _, e := range list {
@@ -748,7 +860,7 @@ func replaceHooks(v any, entry map[string]any) []any {
 			out = append(out, e)
 		}
 	}
-	return append(out, entry)
+	return out
 }
 
 func isOurs(e any) bool {

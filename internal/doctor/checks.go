@@ -446,8 +446,14 @@ func checkMCP(ctx context.Context, p *Probe) Result {
 		return Result{Status: Pass, Detail: "no MCP registrations (skills are not installed; aayu install)"}
 	}
 	var problems, fine []string
-	for _, r := range hosts.Registrations(p.Root, p.Getenv("HOME"), lock.Hosts) {
+	home := p.Getenv("HOME")
+	for _, r := range hosts.Registrations(p.Root, home, lock.Hosts) {
+		plugin := hosts.PluginEnabled(r.Host, p.Root, home, hosts.CodexHome(home, p.Getenv))
 		switch {
+		case plugin && r.Command != "":
+			problems = append(problems, fmt.Sprintf("%s: the aayudha plugin's server and %s both register %q, so the host lists it twice", r.Host, r.File, hosts.ServerName))
+		case plugin:
+			fine = append(fine, string(r.Host)+" (the plugin's)")
 		case r.Err != nil:
 			problems = append(problems, fmt.Sprintf("%s: %s: %v", r.Host, r.File, r.Err))
 		case r.Command == "":
@@ -467,6 +473,23 @@ func checkMCP(ctx context.Context, p *Probe) Result {
 		return Result{Status: Fail, Detail: "MCP registrations need aayu install --apply", Lines: problems}
 	}
 	return Result{Status: Pass, Detail: fmt.Sprintf("aayudha MCP server registered for %s at this aayu's version", strings.Join(fine, ", "))}
+}
+
+// checkCodexHooks reports aayudha's Codex hooks that Codex would skip (WP3.2b,
+// D-3.2b.a): Codex runs a plugin's or a project's hooks only after the person
+// trusts them in /hooks, so until then nothing stops an agent in Codex from
+// running a human-only verb.
+func checkCodexHooks(_ context.Context, p *Probe) Result {
+	found, problems, err := hosts.CodexHookTrust(p.Root, hosts.CodexHome(p.Getenv("HOME"), p.Getenv))
+	switch {
+	case err != nil:
+		return Result{Status: Fail, Detail: err.Error()}
+	case found == 0:
+		return Result{Status: Pass, Detail: "no aayudha hooks for OpenAI Codex here"}
+	case len(problems) > 0:
+		return Result{Status: Fail, Detail: "Codex skips aayudha hooks it does not trust, so no guard rail stops an agent from running a human-only verb there: open /hooks in Codex and trust them", Lines: problems}
+	}
+	return Result{Status: Pass, Detail: fmt.Sprintf("Codex trusts aayudha's %d hook(s)", found)}
 }
 
 // checkLedgerMedia catches a visibility change after init (V3, WP2.5): a public

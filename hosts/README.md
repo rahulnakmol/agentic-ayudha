@@ -46,4 +46,11 @@ no source uses `$ARGUMENTS` (Codex drops a command that does). How a user calls 
 
 A marketplace plugin cannot know where `aayu` is on each machine, so it runs `aayu` from `PATH` and passes the skills
 version it carries (`--skills`): the MCP server refuses to start on a mismatch and `session-start` reports one. Use
-either the plugin or `aayu install` for a host in a repository, not both, or the skills appear twice.
+either the plugin or `aayu install` for a host in a repository, not both, or the skills appear twice. Hooks and the MCP
+server never run twice: with the plugin enabled in Claude Code (`enabledPlugins`) or Codex (`[plugins."aayudha@…"]`),
+`install` writes neither for that host and removes its earlier ones, and a plugin hook (it passes `--skills`) stands
+aside where the repository has `install`'s hooks.
+
+Codex runs a plugin's or a project's hooks only after the person trusts them in `/hooks`, and again after any change
+to them (a plugin update changes `--skills`). Until then nothing refuses a human-only verb in Codex. `aayu doctor`'s
+`codex-hooks` row compares the trust Codex records in `config.toml` (`[hooks.state]`) with each aayudha hook.

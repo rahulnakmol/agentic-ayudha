@@ -29,6 +29,7 @@ var Hooks = []struct{ Name, Summary string }{
 type HookResult struct {
 	Stdout, Stderr string
 	Code           int
+	Next           string // the step that clears a refusal, for the error's "next:" line
 }
 
 // RunHook runs a hook for host in the repository at root ("" outside one).
@@ -38,18 +39,27 @@ type HookResult struct {
 func RunHook(name string, host verbs.HostID, root, pauseFile string, event []byte) (HookResult, error) {
 	switch name {
 	case "pre-tool":
-		msg := ""
+		msg, next := "", ""
 		if b, err := os.ReadFile(pauseFile); err == nil {
 			msg = fmt.Sprintf("aayudha: agent lanes are paused by the [budget] breaker (%s): %s. A human must clear it.", pauseFile, strings.TrimSpace(string(b)))
+			next = "a person clears the breaker with `aayu resume`"
 		} else if cmd, why := HumanOnlyCommand(shellCommand(event)); why != "" {
 			msg = fmt.Sprintf("aayudha: %s is for a person, not an agent (%s); ask them to run `%s` in their own terminal.", firstWords(cmd), why, cmd)
+			next = "a person runs `" + cmd + "` in their own terminal"
 		}
-		return Deny(host, msg), nil
+		r := Deny(host, msg)
+		r.Next = next
+		return r, nil
 	case "session-start":
 		msg := ""
 		if root != "" {
 			if problems := CheckCopies(root); len(problems) > 0 {
 				msg = "aayudha: skill copies differ from " + LockPath + " (" + strings.Join(problems, "; ") + "); run `aayu doctor --fix`."
+			}
+			// Codex does not route a request through the grill gate on its own
+			// (Appendix B D-5.5c.12), so its session starts with the rule.
+			if _, err := os.Stat(filepath.Join(root, ".aayudha", "config.toml")); err == nil && host == verbs.HostCodex {
+				msg = strings.TrimSpace(Routing + "\n" + msg)
 			}
 		}
 		if host == verbs.HostCursor {
@@ -66,6 +76,13 @@ func RunHook(name string, host verbs.HostID, root, pauseFile string, event []byt
 	}
 	return HookResult{}, fmt.Errorf("unknown hook %q", name)
 }
+
+// Routing is how an agent takes a request in a repository aayudha runs
+// (WP3.2b, D-3.2b.b): the grill gate first, then only the work the person asked
+// for. The AGENTS.md hosts section and Codex's session-start hook carry it.
+const Routing = "aayudha: before you change anything for a request, run `aayu grill story --assess --idea \"<the person's words>\" --json` (the grill skill). " +
+	"On `unpack`, ask the person its questions, riskiest first, and wait for their answers before you file, ready, or build anything. " +
+	"Work only on the issue the person asked for: never pick up an open or Ready story on your own."
 
 // Deny is the pre-tool hook's answer for host: allow when msg is empty, else
 // block the tool call with msg (exit 2, and Cursor's JSON permission reply).
