@@ -11,8 +11,8 @@ export const description = 'aayudha: the journey from a grilled idea to a measur
 
 const AAYU = "C:\\Program Files\\aayudha\\aayu.exe"
 const VERSION = "1.2.3"
-// hosts/commands/*.md, the host-neutral command sources the Claude Code and
-// Codex plugin load too (home and next are native commands below).
+// hosts/commands/*/*.md, the host-neutral command sources the Claude Code,
+// Codex, and Cursor plugins load too, without /amp (home and next are native below).
 const SHARED: { name: string; description: string; hint?: string; body: string }[] = []
 
 // The verbs an agent may run, each sent to the thread as a request to use its skill.
@@ -99,12 +99,14 @@ export default function (amp: PluginAPI) {
 	for (const c of SHARED.filter((c) => c.name !== 'home' && c.name !== 'next')) {
 		amp.registerCommand(c.name, { title: c.description || c.name, category: 'aayudha', description: c.description },
 			guard(async (ctx) => {
+				// A command with an argument hint takes the request after it, as
+				// Claude Code, Codex, and Cursor append it.
 				let args = ''
-				if (c.body.includes('$ARGUMENTS')) {
-					args = ((await ctx.ui.input({ title: c.description || c.name, helpText: c.hint ?? '', submitButtonText: 'Ask the agent' })) ?? '').trim()
+				if (c.hint) {
+					args = ((await ctx.ui.input({ title: c.description || c.name, helpText: c.hint, submitButtonText: 'Ask the agent' })) ?? '').trim()
 					if (args === '') return
 				}
-				await ask(ctx, c.body.split('$ARGUMENTS').join(args))
+				await ask(ctx, args ? `${c.body}\n\nARGUMENTS: ${args}` : c.body)
 			}))
 	}
 

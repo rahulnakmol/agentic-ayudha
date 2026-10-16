@@ -1,0 +1,16 @@
+{
+  "name": "aayudha",
+  "description": "aayudha: an agentic software delivery pod, from a grilled idea to a measured release, with proof.",
+  "owner": {
+    "name": "Rahul Akmol",
+    "url": "https://github.com/rahulnakmol"
+  },
+  "plugins": [
+    {
+      "name": "aayudha",
+      "source": "./",
+      "description": "The aayudha verbs as skills and slash commands, the aayudha MCP server, the host hooks, and your next step. Needs the aayu binary on PATH.",
+      "category": "development"
+    }
+  ]
+}
