@@ -155,6 +155,48 @@ func (e *Env) connected(root string) map[string]bool {
 	return out
 }
 
+// receiverHelp says plainly what is missing for receiver r ("" for auto) and
+// offers what is available instead: the same receiver with --local when its
+// CLI is installed (or in the cloud when the user asked for --local), and
+// every other connected receiver. aayu never installs or signs in for the
+// user.
+func (e *Env) receiverHelp(_ context.Context, _ string, r string, cloud, local map[string]bool, wantLocal bool) string {
+	var b strings.Builder
+	what := func(x string) string {
+		switch {
+		case cloud[x] && local[x]:
+			return "cloud agent connected, CLI installed"
+		case cloud[x]:
+			return "cloud agent connected, CLI not installed"
+		case local[x]:
+			return "cloud agent not connected, CLI installed"
+		}
+		return "cloud agent not connected, CLI not installed"
+	}
+	if r != "" {
+		fmt.Fprintf(&b, "%s here: %s.\n", delegate.Names[r], what(r))
+		switch {
+		case !wantLocal && local[r]:
+			fmt.Fprintf(&b, "- Its CLI is installed: add `--local` to run it on this machine in a fresh aayu worktree.\n")
+		case wantLocal && cloud[r]:
+			fmt.Fprintf(&b, "- Its cloud agent is connected: drop `--local` to hand off in the cloud.\n")
+		}
+	}
+	for _, x := range delegate.Receivers {
+		if x == r {
+			continue
+		}
+		switch {
+		case !wantLocal && cloud[x]:
+			fmt.Fprintf(&b, "- %s's cloud agent is connected: `--delegate %s`.\n", delegate.Names[x], x)
+		case wantLocal && local[x]:
+			fmt.Fprintf(&b, "- %s's CLI is installed: `--delegate %s --local`.\n", delegate.Names[x], x)
+		}
+	}
+	b.WriteString("To connect a receiver, see docs/research/agent-delegation-and-review.md §10; aayu never installs or signs in for you.")
+	return b.String()
+}
+
 // newDelegation resolves the receiver (auto picks one), the mode (cloud
 // unless --local or the cloud agent is not connected), and the adapter, and
 // reads the story's delegation state from the ledger.
@@ -172,8 +214,12 @@ func (e *Env) newDelegation(ctx context.Context, in Values, c *github.Client, bo
 	if _, err := readLedgerJSON(ctx, w, delegate.LedgerPath(n), &d.state); err != nil {
 		return nil, Wrap(ExitExternal, err)
 	}
-	if d.receiver == "auto" && d.state.Receiver != "" && d.state.Status != dlgFailed && d.state.Status != dlgMerged {
+	ongoing := d.state.Receiver != "" && d.state.Status != dlgFailed && d.state.Status != dlgMerged
+	if d.receiver == "auto" && ongoing {
 		d.receiver, d.local, d.reason = d.state.Receiver, d.state.Mode == "local", d.state.Reason
+	}
+	if ongoing && d.receiver == d.state.Receiver && d.state.Mode == "local" {
+		d.local = true // a sync keeps its hand-off's mode
 	}
 	cloud := e.connected(root)
 	local := map[string]bool{}
@@ -187,26 +233,30 @@ func (e *Env) newDelegation(ctx context.Context, in Values, c *github.Client, bo
 				effort = v
 			}
 		}
+		// Cloud by default: auto picks among cloud agents, and among local CLIs
+		// only with --local.
+		pickCloud, pickLocal := cloud, map[string]bool{}
 		if d.local {
-			cloud = map[string]bool{}
+			pickCloud, pickLocal = map[string]bool{}, local
 		}
-		ch, err := delegate.Choose(effort, cloud, local)
+		ch, err := delegate.Choose(effort, pickCloud, pickLocal)
 		if err != nil {
-			return nil, Errorf(ExitBlocked, "build #%d --delegate auto: %v; see docs/research/agent-delegation-and-review.md §10 for what to connect", n, err)
+			return nil, Errorf(ExitBlocked, "build #%d --delegate auto: %v\n%s", n, err, e.receiverHelp(ctx, root, "", cloud, local, d.local))
 		}
 		d.receiver, d.local, d.reason = ch.Receiver, ch.Local, ch.Reason
 	}
+	// Cloud by default; the local CLI only on the user's explicit --local. A
+	// receiver that is not available is named plainly, with what to do.
+	if !slices.Contains(delegate.Receivers, d.receiver) {
+		return nil, Errorf(ExitUsage, "build --delegate %q: want one of %s or auto", d.receiver, strings.Join(delegate.Receivers, ", "))
+	}
 	if !d.local && !cloud[d.receiver] {
-		if !local[d.receiver] {
-			return nil, Errorf(ExitBlocked, "build #%d --delegate %s: the %s cloud agent is not connected here and its CLI is not on PATH; connect it (docs/research/agent-delegation-and-review.md §10) or install the CLI for --local", n, d.receiver, d.receiver)
-		}
-		d.local = true
-		d.reason = strings.TrimPrefix(d.reason+"; ", "; ") + d.receiver + "'s cloud agent is not connected, so its CLI runs in an aayu worktree"
+		return nil, Errorf(ExitBlocked, "build #%d --delegate %s: %s's cloud agent is not connected here.\n%s", n, d.receiver, delegate.Names[d.receiver], e.receiverHelp(ctx, root, d.receiver, cloud, local, false))
 	}
 	if d.local {
 		bin, ok := delegate.LookLocal(d.receiver, e.lookPath())
 		if !ok {
-			return nil, Errorf(ExitBlocked, "build #%d --delegate %s --local: no %s on PATH", n, d.receiver, strings.Join(delegate.LocalBins[d.receiver], " or "))
+			return nil, Errorf(ExitBlocked, "build #%d --delegate %s --local: %s's CLI (%s) is not installed here.\n%s", n, d.receiver, delegate.Names[d.receiver], strings.Join(delegate.LocalBins[d.receiver], " or "), e.receiverHelp(ctx, root, d.receiver, cloud, local, true))
 		}
 		d.bin = bin
 	}

@@ -226,7 +226,7 @@ func TestDelegateCycleCapPages(t *testing.T) {
 	}
 }
 
-// The local fallback (--local, or the cloud agent not connected): the
+// The local mode, on the user's explicit --local only: the
 // receiver's CLI runs in a fresh .aayudha/worktrees/<n>-<agent>[-<k>] with no
 // GitHub, aayu, or model-provider credential in its environment; aayu
 // commits, verifies, pushes, and opens the PR with Refs #n and what the
@@ -253,9 +253,19 @@ func TestDelegateLocalFallback(t *testing.T) {
 		gotEnv, gotArgs = env, append([]string{name}, args...)
 		return "Done.\n\n## What I proved\n1. proved: TestEmptyList passes (go test ./...)\n", os.WriteFile(filepath.Join(wt, "empty.txt"), []byte("Your cart is empty\n"), 0o644)
 	}
-	code, res, errOut := delegateRun(t, env, opts, "--delegate", "codex") // not connected in the cloud: falls back to the CLI
+	// Cloud by default: Codex's cloud agent is not connected, so aayu says so and
+	// offers its installed CLI, but never falls back to it on its own.
+	code, _, errOut := delegateRun(t, env, opts, "--delegate", "cursor")
+	if code != ExitBlocked || !strings.Contains(errOut, "Cursor here: cloud agent not connected, CLI not installed") || !strings.Contains(errOut, "aayu never installs or signs in") {
+		t.Fatalf("missing receiver: %d %s", code, errOut)
+	}
+	code, _, errOut = delegateRun(t, env, opts, "--delegate", "codex")
+	if code != ExitBlocked || !strings.Contains(errOut, "Codex's cloud agent is not connected") || !strings.Contains(errOut, "add `--local`") {
+		t.Fatalf("no silent fallback to the CLI: %d %s", code, errOut)
+	}
+	code, res, errOut := delegateRun(t, env, opts, "--delegate", "codex", "--local")
 	wt := delegate.Worktree(dir, 2, "codex", 2)
-	if code != 0 || res.Worktree != wt || res.PR == 0 || res.Delegation.Mode != "local" || !strings.Contains(res.Delegation.Reason, "not connected") {
+	if code != 0 || res.Worktree != wt || res.PR == 0 || res.Delegation.Mode != "local" {
 		t.Fatalf("local: %d %+v %s", code, res, errOut)
 	}
 	if gotArgs[0] != "/usr/local/bin/codex" || !slices.Contains(gotArgs, wt) || !slices.Contains(gotArgs, "workspace-write") {

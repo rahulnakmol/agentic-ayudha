@@ -303,6 +303,10 @@ func TestChoose(t *testing.T) {
 			t.Errorf("%s %v %v: %+v %v", c.effort, c.cloud, c.local, ch, err)
 		}
 	}
+	// Cloud is the default: with a cloud agent and a local CLI both offered, the cloud one wins.
+	if ch, _ := Choose("S", map[string]bool{Cursor: true}, map[string]bool{Codex: true}); ch.Receiver != Cursor || ch.Local {
+		t.Fatalf("cloud first: %+v", ch)
+	}
 	if _, err := Choose("S", nil, nil); !errors.Is(err, ErrNotConnected) {
 		t.Fatalf("nothing connected: %v", err)
 	}
