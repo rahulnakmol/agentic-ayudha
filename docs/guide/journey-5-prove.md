@@ -14,9 +14,12 @@ An agent saying "done, all tests pass" is a claim. This chapter is where claims 
    accessibility, and page speed ([floors](concepts-floors.md)).
 2. It writes the **proof pack**: a file that ties each of the story's promises to its evidence, with every check's
    result ([proof packs](concepts-proof.md)). The pack, screenshots and recordings included, stays on the CI run, and
-   a comment on the pull request shows each promise's verdict, the checks, and the pack's fingerprint.
-3. **`inspect`** hands the promises, the change, and the pack to a reviewer model from a different family, that is,
-   another vendor, than the one that wrote the code. It answers `merge`, `fix`, or `rebuild`, with a verdict and evidence for each promise.
+   a comment on the pull request shows each promise's verdict, the checks, and the pack's fingerprint. It opens with
+   a risk line, high, medium, or low, that tells the person who merges where to look first. For a Bug, the gate also
+   runs the proving tests on the code before the fix: a test that passes there does not show the fix.
+3. **`inspect`** asks an agent app you installed on your account, such as Claude or Codex, from a different family,
+   that is, another vendor, than the one that wrote the code, to review the change. aayu reads its reply as `merge`,
+   `fix`, or `rebuild`, with a verdict for each promise. No AI key sits in your CI, and no reply means no merge.
 
 A pull request gets two rounds of fixes. If it still is not right, aayudha stops spending and asks for a fresh start:
 the pull request is closed, and the story is built again from the latest code.
