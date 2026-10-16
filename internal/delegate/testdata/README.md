@@ -7,6 +7,8 @@ official documentation on that date (sources in `docs/research/agent-delegation-
 - `cursor/`: Cursor cloud agents API v1, `POST /v1/agents`, `GET /v1/agents/{id}/runs/{runId}`, `POST /v1/agents/{id}/runs`.
 - `codex/`: the output of `codex cloud exec`, `codex cloud status`, and `codex cloud diff` (codex-cli 0.162.1, marked
   experimental; the text format is not documented, so the adapter matches task URLs, task IDs, and status words).
+- `codex/exec-local.txt`: what `codex exec` prints in a local hand-off. The header and the echoed prompt are as
+  codex-cli 0.163.0 printed them in an orb (2026-10-16, no sign-in); the answer after `codex` is synthetic.
 - `amp/`: the output of `amp -ox --project`, which prints the new thread's URL.
 - `claude/`: the output of `claude --cloud "<brief>"` (a session ID and its `claude.ai/code` link; the new-session output
   is not documented, so the adapter matches either) and of `claude -p <msg> --cloud <session> --output-format json`,

@@ -45,7 +45,7 @@ func TestBrief(t *testing.T) {
 		"1. [screenshot] state: `/cart` empty; expected: \"Your cart is empty\"",
 		"Empty-cart message (layer L01), proves criteria 1",
 		"[[criterion]]\nid = 1\ntests = [\"web:TestEmptyCart\"]\nchecks = [\"cart.empty\"]\n\n",
-		"[[criterion]]\nid = 2\ntests = [\"<package path>:<TestName>\"]\n\n",
+		"[[criterion]]\nid = 2\ntests = [\"./<package dir>:<TestName>\"]\n\n",
 		"`.aayudha/evidence/2.toml`",
 		"The PR body starts with the line `Refs #2`",
 		"Sign off every commit (`git commit -s`, DCO)",
@@ -243,11 +243,26 @@ func TestClaudeCloud(t *testing.T) {
 // with credentials removed; nothing when it wrote none.
 func TestProved(t *testing.T) {
 	body := "Refs #2\n\n## Summary\nAdds the empty state.\n\n" + ProvedHeading + "\n1. proved: TestEmptyList passes\n2. not proved: no screenshot (no browser)\ntoken ghp_abcdefghijklmnopqrstuvwxyz0123456789\n\n## Notes\nnone\n"
-	got := Proved(body)
+	got := Proved(body, "")
 	if !strings.HasPrefix(got, "1. proved: TestEmptyList passes\n2. not proved") || strings.Contains(got, "Notes") || strings.Contains(got, "ghp_") || strings.Contains(got, "Summary") {
 		t.Fatalf("proved: %q", got)
 	}
-	if Proved("Refs #2\n\nNo section.") != "" {
+	if Proved("Refs #2\n\nNo section.", "") != "" {
+		t.Fatal("a body without the section")
+	}
+	// codex exec echoes the prompt, whose own "What I proved" template comes
+	// first; the receiver's section is the one after it (D-5.5c.15). A prompt
+	// that only mentions the heading inline (the brief) never counts.
+	out, _ := os.ReadFile("testdata/codex/exec-local.txt")
+	prompt := "Create a file named LIVE_SMOKE.md in the current directory containing exactly the word ok. Then end your final message with this section:\n\n" +
+		ProvedHeading + "\n1. proved: <how you checked that LIVE_SMOKE.md contains ok>\n"
+	if got := Proved(string(out), prompt); got != "1. proved: `cat LIVE_SMOKE.md` printed ok and `wc -c` reported 3 bytes (ok and a newline)." {
+		t.Fatalf("codex output: %q", got)
+	}
+	if got := Proved("user\n"+prompt+"\ncodex\nI could not finish.\n", prompt); got != "" {
+		t.Fatalf("only the echoed template: %q", got)
+	}
+	if Proved("End your final message with a `"+ProvedHeading+"` section.", "") != "" {
 		t.Fatal("a body without the section")
 	}
 }
@@ -277,6 +292,13 @@ func TestScrubEnv(t *testing.T) {
 	}
 	if args := LocalArgs(Codex, "codex", "/wt", "p"); !slices.Equal(args, []string{"exec", "--cd", "/wt", "--sandbox", "workspace-write", "p"}) {
 		t.Fatalf("codex args %v", args)
+	}
+	// Claude Code may run the tests it must verify with (acceptEdits alone
+	// denies Bash in print mode, D-5.5c.13), and the variadic --allowedTools
+	// does not swallow the prompt: claude 2.1.301 answers "Input must be
+	// provided" when it comes last.
+	if args := LocalArgs(Claude, "claude", "/wt", "p"); !slices.Equal(args, []string{"-p", "--allowedTools", "Bash", "--permission-mode", "acceptEdits", "--output-format", "text", "p"}) {
+		t.Fatalf("claude args %v", args)
 	}
 }
 

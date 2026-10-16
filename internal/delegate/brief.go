@@ -82,10 +82,11 @@ func Brief(in BriefInput) string {
 	}
 
 	b.WriteString("\n## Evidence map (write it; the merge gate fails without it)\n\n")
-	fmt.Fprintf(&b, "Commit `.aayudha/evidence/%d.toml` mapping every criterion to the tests (and the feature map's behaviour checks) that prove it. The merge gate runs them and fails when a criterion has no passing proof:\n\n", in.Story)
+	fmt.Fprintf(&b, "Commit `.aayudha/evidence/%d.toml` mapping every criterion to the tests (and the feature map's behaviour checks) that prove it. The merge gate runs them and fails when a criterion has no passing proof. "+
+		"Name each test `<package>:<test>`: the package as its import path or its directory from the repository root (`./mathx`), the test as its top-level name or a subtest (`TestSum` or `TestSum/positive`):\n\n", in.Story)
 	b.WriteString("```toml\n")
 	for _, c := range in.Criteria {
-		tests := `"<package path>:<TestName>"`
+		tests := `"./<package dir>:<TestName>"`
 		var ts, cs []string
 		for _, cp := range in.Checkpoints {
 			for _, n := range cp.Criteria {
@@ -145,11 +146,18 @@ const ProvedHeading = "## What I proved"
 const maxProved = 2000
 
 // Proved is the receiver's "What I proved" section in text (a PR body or a
-// local CLI's final message), without its heading and up to the next heading
-// of the same level, or "" when there is none. It is the receiver's claim:
+// local CLI's output), without its heading and up to the next heading of the
+// same level, or "" when there is none. echoed is the prompt the receiver was
+// given: CLIs that echo it (codex exec prints it before its answer) would
+// otherwise hand back the prompt's own instruction, so it is removed first.
+// Only a heading at the start of a line counts, and the last one wins: the
+// receiver's final message comes last. It is the receiver's claim:
 // untrusted, reported as a preview, never a gate.
-func Proved(text string) string {
-	i := strings.Index(text, ProvedHeading)
+func Proved(text, echoed string) string {
+	if echoed != "" {
+		text = strings.ReplaceAll(text, echoed, "")
+	}
+	i := strings.LastIndex("\n"+text, "\n"+ProvedHeading+"\n") // i indexes text where the heading starts
 	if i < 0 {
 		return ""
 	}

@@ -133,10 +133,10 @@ func TestLiveLocalReceivers(t *testing.T) {
 				t.Fatalf("%s %v: %v\n%s", bin, LocalArgs(r, bin, wt, "…"), err, clip(out, 2000))
 			}
 			b, _ := os.ReadFile(filepath.Join(wt, "LIVE_SMOKE.md"))
-			if strings.TrimSpace(string(b)) != "ok" || Proved(out) == "" {
-				t.Fatalf("%s: LIVE_SMOKE.md %q, proved %q\n%s", r, b, Proved(out), clip(out, 2000))
+			if strings.TrimSpace(string(b)) != "ok" || Proved(out, prompt) == "" {
+				t.Fatalf("%s: LIVE_SMOKE.md %q, proved %q\n%s", r, b, Proved(out, prompt), clip(out, 2000))
 			}
-			t.Logf("%s (%s) proved: %s", r, bin, Proved(out))
+			t.Logf("%s (%s) proved: %s", r, bin, Proved(out, prompt))
 		})
 	}
 }
