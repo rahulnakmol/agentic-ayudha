@@ -259,7 +259,11 @@ A grilled Story or Bug carries five more sections after its Completion Goal. `gr
   `stated`: the human said it; `confirmed`: you proposed it and the human agreed; `default`: the human accepted the
   default you offered with its reason. Quote the human's words exactly; when a criterion rests on several replies,
   quote each one (`"…" / "…"`). The brackets name the question's topic (`ux.steps/screen-count`), its dimension
-  alone, or `request` for the request's own words; a criterion may only name a topic or dimension you asked about. `; facts:` cites assessment fact IDs the criterion rests on; `grill` checks that each one exists. A
+  alone, or `request` for the request's own words; a criterion may only name a topic or dimension you asked about.
+  `(request)` means every quote on the line is in the request; when a criterion also quotes a reply (a term's
+  meaning, an answer), name that reply's topic instead (`stated (term/pii)`). Provenance has only these line kinds:
+  `Request:`, `Vague:`, `Term:`, and one numbered line per criterion. The Measure and Threshold are not criteria:
+  write them from the human's words and give them no Provenance line of their own (no `Measure:` or `Outcome:`). `; facts:` cites assessment fact IDs the criterion rests on; `grill` checks that each one exists. A
   qualifier you could not resolve is `Vague: "fast" → deferred: <why>` with a matching `deferred:` open question.
 
 **Placement quotes.** When a criterion's expected result says where something is (a route in backticks, "on the

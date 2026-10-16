@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/rahulnakmol/agentic-ayudha/internal/evals"
 )
 
 func git(t *testing.T, dir string, args ...string) string {
@@ -228,4 +230,19 @@ func withCase(files map[string]string, edit func(string) string) map[string]stri
 	k := "evals/cases/stub/no-content-type/case.toml"
 	files[k] = edit(files[k])
 	return files
+}
+
+// TestHarnessBudget: a group whose cap is above [budget] per_story_usd (25 by
+// default) gets its whole cap, since every eval call is charged to one story;
+// a smaller cap leaves the breaker as configured (D-5.8d).
+func TestHarnessBudget(t *testing.T) {
+	for cap, want := range map[float64]float64{50: 50, 6: 25} {
+		h, err := harness(t.TempDir(), evals.Config{MaxUSD: cap})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := h.Gateway.Breaker.Budget.PerStoryUSD; got != want {
+			t.Errorf("max_usd %v: per_story_usd %v, want %v", cap, got, want)
+		}
+	}
 }
