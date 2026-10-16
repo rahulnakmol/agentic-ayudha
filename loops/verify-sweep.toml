@@ -6,8 +6,9 @@ description = "Nightly sweep: run every feature-map behaviour check, with no mod
 command = ["verify", "--check", "all"]
 cron = "30 2 * * *"
 agent = false
+# This repository's own setup: its example web product reaches Playwright through the base branch's packages/floors
+# (D-8.1b). A product's copy from `aayu install --loops` leaves setup and setup_run out; add the product's own.
 setup = ["node", "pnpm"]
-# This repository's example web product reaches Playwright through the base branch's packages/floors (D-8.1b).
 setup_run = [
   "pnpm install --frozen-lockfile --filter @aayudha/floors",
   "pnpm --filter @aayudha/floors exec playwright install --with-deps chromium",
