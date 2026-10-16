@@ -528,7 +528,7 @@ func (p *planner) hostFiles(hosts map[verbs.HostID]bool, lock Lock) error {
 		}
 		bin, _ := json.Marshal(p.o.Binary)
 		ver, _ := json.Marshal(p.o.Version)
-		cmds, err := SlashCommands(p.o.Assets)
+		cmds, err := SlashCommands(p.o.Assets, verbs.HostAmp)
 		if err != nil {
 			return err
 		}
@@ -833,10 +833,13 @@ func codexRegistration(root string) Registration {
 	return r
 }
 
-// SlashCommand is one host-neutral command source in hosts/commands/<name>.md
-// (Claude Code command format: description and argument-hint frontmatter, a
-// body using $ARGUMENTS). The Claude Code and Codex plugin load the directory
-// itself; the Amp plugin gets the same commands from install.
+// SlashCommand is one host-neutral command source in hosts/commands/<dir>/<name>.md
+// (Claude Code command format: description and argument-hint frontmatter; the
+// host appends the user's arguments, so no body uses $ARGUMENTS, which Codex
+// refuses). common/ holds home and next; <agent>/ holds the hand-off to that
+// agent. The Claude Code, Codex, and Cursor plugin manifests list common/ and
+// every agent's directory but their own; the Amp plugin gets the same commands
+// from install.
 type SlashCommand struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
@@ -844,9 +847,11 @@ type SlashCommand struct {
 	Body        string `json:"body"`
 }
 
-// SlashCommands reads hosts/commands/*.md from the embedded assets, by name.
-func SlashCommands(assets fs.FS) ([]SlashCommand, error) {
-	files, err := fs.Glob(assets, "hosts/commands/*.md")
+// SlashCommands reads hosts/commands/*/*.md from the embedded assets, by name,
+// for host: a delegate command named after the host itself (/amp in Amp) is
+// left out, since a host never delegates to itself. An empty host gets all.
+func SlashCommands(assets fs.FS, host verbs.HostID) ([]SlashCommand, error) {
+	files, err := fs.Glob(assets, "hosts/commands/*/*.md")
 	if err != nil {
 		return nil, err
 	}
@@ -857,6 +862,9 @@ func SlashCommands(assets fs.FS) ([]SlashCommand, error) {
 			return nil, err
 		}
 		c := SlashCommand{Name: strings.TrimSuffix(path.Base(f), ".md")}
+		if host != "" && path.Base(path.Dir(f)) == string(host) {
+			continue
+		}
 		text := string(lf(b))
 		if rest, ok := strings.CutPrefix(text, "---\n"); ok {
 			if i := strings.Index(rest, "\n---\n"); i >= 0 {

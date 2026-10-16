@@ -59,6 +59,18 @@ func TestPreToolBlocksHumanOnlyShell(t *testing.T) {
 	if r, _ := RunHook("pre-tool", verbs.HostClaude, "", filepath.Join(t.TempDir(), "none"), []byte(`{"tool_name":"Bash","tool_input":{"command":"aayu build 4"}}`)); r.Code != 0 {
 		t.Errorf("build was blocked: %+v", r)
 	}
+	// The delegate commands' calls pass on every host.
+	for _, cmd := range []string{
+		`aayu build 4 --delegate cursor --json`, `aayu build 4 --delegate codex --local --json`, `aayu ready 4 --check`,
+		`aayu grill story --assess --idea "make the CLI simple" --json`, `aayu status --work`,
+	} {
+		ev, _ := json.Marshal(map[string]any{"tool_name": "Bash", "tool_input": map[string]string{"command": cmd}, "command": cmd})
+		for _, h := range []verbs.HostID{verbs.HostClaude, verbs.HostCodex, verbs.HostCursor, verbs.HostAmp} {
+			if r, _ := RunHook("pre-tool", h, "", filepath.Join(t.TempDir(), "none"), ev); r.Code != 0 {
+				t.Errorf("%s: %s was blocked: %+v", h, cmd, r)
+			}
+		}
+	}
 }
 
 func TestCodexConfigKeepsTheProductsConfig(t *testing.T) {
@@ -103,66 +115,91 @@ func TestCodexConfigKeepsTheProductsConfig(t *testing.T) {
 	}
 }
 
-// TestPluginManifests: the marketplace plugin (Claude Code and Codex) carries
-// this binary's skills version everywhere it calls aayu, its hooks call only
-// `aayu hook <name>`, no command grants a human-only verb, and the Amp
-// plugin offers no human-only verb.
+// TestPluginManifests: the Claude Code, Codex, and Cursor plugin manifests
+// carry this binary's skills version everywhere they call aayu, their hooks
+// call only `aayu hook <name>` for their host, each lists every command source
+// in hosts/commands/ except the one that would delegate to the host itself,
+// no command grants a human-only verb or uses what Codex refuses in a command
+// ($ARGUMENTS, @mentions), and the Amp plugin offers no human-only verb.
 func TestPluginManifests(t *testing.T) {
-	var plugin struct {
-		Name       string   `json:"name"`
-		Version    string   `json:"version"`
-		Commands   []string `json:"commands"`
-		Hooks      string   `json:"hooks"`
-		MCPServers map[string]struct {
-			Command string   `json:"command"`
-			Args    []string `json:"args"`
-		} `json:"mcpServers"`
+	all, err := SlashCommands(aayudha.Assets, "")
+	if err != nil || !slices.ContainsFunc(all, func(c SlashCommand) bool { return c.Name == "next" }) {
+		t.Fatalf("commands %v %v", all, err)
 	}
-	readJSON(t, "../../.claude-plugin/plugin.json", &plugin)
-	var market struct {
-		Name    string `json:"name"`
-		Plugins []struct{ Name, Source string }
-	}
-	readJSON(t, "../../.claude-plugin/marketplace.json", &market)
-	if plugin.Name != "aayudha" || plugin.Version != verbs.SkillVersion || len(market.Plugins) != 1 || market.Plugins[0].Name != plugin.Name || market.Plugins[0].Source != "./" {
-		t.Fatalf("plugin %+v, marketplace %+v", plugin, market)
-	}
-	srv := plugin.MCPServers[ServerName]
-	if srv.Command != "aayu" || !slices.Equal(srv.Args, []string{"mcp", "--skills", verbs.SkillVersion}) {
-		t.Errorf("MCP server %+v", srv)
-	}
-	var hooks struct {
-		Hooks map[string][]struct {
-			Hooks []struct{ Type, Command string }
+	for _, m := range []struct {
+		host             verbs.HostID
+		manifest, market string
+		hooks            string
+	}{
+		{verbs.HostClaude, ".claude-plugin/plugin.json", ".claude-plugin/marketplace.json", "./hosts/claude/hooks.json"},
+		{verbs.HostCodex, ".codex-plugin/plugin.json", ".claude-plugin/marketplace.json", "./hosts/codex/hooks.json"},
+		{verbs.HostCursor, ".cursor-plugin/plugin.json", ".cursor-plugin/marketplace.json", "./hosts/cursor/hooks.json"},
+	} {
+		var plugin struct {
+			Name       string   `json:"name"`
+			Version    string   `json:"version"`
+			Commands   []string `json:"commands"`
+			Hooks      string   `json:"hooks"`
+			MCPServers map[string]struct {
+				Command string   `json:"command"`
+				Args    []string `json:"args"`
+			} `json:"mcpServers"`
 		}
-	}
-	readJSON(t, "../../"+plugin.Hooks, &hooks)
-	n := 0
-	for ev, groups := range hooks.Hooks {
-		for _, g := range groups {
-			for _, h := range g.Hooks {
+		readJSON(t, "../../"+m.manifest, &plugin)
+		var market struct {
+			Name    string `json:"name"`
+			Plugins []struct{ Name, Source string }
+		}
+		readJSON(t, "../../"+m.market, &market)
+		if plugin.Name != "aayudha" || plugin.Version != verbs.SkillVersion || len(market.Plugins) != 1 || market.Plugins[0].Name != plugin.Name || market.Plugins[0].Source != "./" {
+			t.Fatalf("%s: plugin %+v, marketplace %+v", m.host, plugin, market)
+		}
+		srv := plugin.MCPServers[ServerName]
+		if srv.Command != "aayu" || !slices.Equal(srv.Args, []string{"mcp", "--skills", verbs.SkillVersion}) {
+			t.Errorf("%s: MCP server %+v", m.host, srv)
+		}
+		want := []string{"./hosts/commands/common/"}
+		for _, h := range []verbs.HostID{verbs.HostAmp, verbs.HostClaude, verbs.HostCodex, verbs.HostCursor} {
+			if h != m.host {
+				want = append(want, "./hosts/commands/"+string(h)+"/")
+			}
+		}
+		if !slices.Equal(plugin.Commands, want) {
+			t.Errorf("%s: commands %v, want %v (every source but /%s)", m.host, plugin.Commands, want, m.host)
+		}
+		if plugin.Hooks != m.hooks {
+			t.Fatalf("%s: hooks %s", m.host, plugin.Hooks)
+		}
+		var hooks struct {
+			Hooks map[string]json.RawMessage
+		}
+		readJSON(t, "../../"+plugin.Hooks, &hooks)
+		cmds := regexp.MustCompile(`"command":\s*"([^"]*)"`)
+		n := 0
+		for ev, raw := range hooks.Hooks {
+			for _, c := range cmds.FindAllStringSubmatch(string(raw), -1) {
 				n++
-				if h.Type != "command" || !skills.HookCommand.MatchString(h.Command) || !strings.HasSuffix(h.Command, " --skills "+verbs.SkillVersion) {
-					t.Errorf("%s hook %q", ev, h.Command)
+				host := m.host != verbs.HostClaude // the Claude hooks name no host: aayu detects it
+				if !skills.HookCommand.MatchString(c[1]) || !strings.HasSuffix(c[1], " --skills "+verbs.SkillVersion) || host != strings.Contains(c[1], " --host "+string(m.host)+" ") {
+					t.Errorf("%s: %s hook %q", m.host, ev, c[1])
 				}
 			}
 		}
-	}
-	if n != 2 {
-		t.Errorf("%d hooks, want session-start and pre-tool", n)
-	}
-	cmds, err := SlashCommands(aayudha.Assets)
-	if err != nil || !slices.ContainsFunc(cmds, func(c SlashCommand) bool { return c.Name == "next" }) {
-		t.Fatalf("commands %v %v", cmds, err)
-	}
-	for _, c := range plugin.Commands {
-		if c != "./hosts/commands/" {
-			t.Errorf("command path %s: the shared sources live in hosts/commands/", c)
+		if n < 2 {
+			t.Errorf("%s: %d hooks, want session-start and pre-tool", m.host, n)
 		}
 	}
+	codexRefuses := regexp.MustCompile(`\$ARGUMENTS|\$[0-9]|\{\{|!` + "`" + `|(^|\s)@[A-Za-z]`)
+	for _, c := range all {
+		if codexRefuses.MatchString(c.Body) {
+			t.Errorf("%s: Codex drops a command whose body has $ARGUMENTS, $n, {{…}}, !`…`, or an @mention", c.Name)
+		}
+	}
+	cmds := all
 	tools := regexp.MustCompile(`(?m)^allowed-tools:(.*)$`)
 	for _, c := range cmds {
-		b, _ := os.ReadFile("../../hosts/commands/" + c.Name + ".md")
+		f, _ := filepath.Glob("../../hosts/commands/*/" + c.Name + ".md")
+		b, _ := os.ReadFile(f[0])
 		for _, m := range tools.FindAllStringSubmatch(string(b), -1) {
 			for _, call := range regexp.MustCompile(`Bash\(([^)]*)\)`).FindAllStringSubmatch(m[1], -1) {
 				if cmd, _ := HumanOnlyCommand(strings.TrimSuffix(call[1], ":*")); cmd != "" {
@@ -223,6 +260,20 @@ func TestHostPluginsLoad(t *testing.T) {
 				t.Errorf("details lack %q:\n%s", w, out)
 			}
 		}
+		// Commands appear in the skills inventory: the other agents, never Claude itself.
+		inv := regexp.MustCompile(`(?m)^\s*Skills \(\d+\)\s+(.*)$`).FindStringSubmatch(out)
+		if inv == nil {
+			t.Fatalf("no skills inventory:\n%s", out)
+		}
+		names := strings.Split(inv[1], ", ")
+		for _, w := range []string{"amp", "codex", "cursor"} {
+			if !slices.Contains(names, w) {
+				t.Errorf("Claude Code lacks /aayudha:%s: %v", w, names)
+			}
+		}
+		if slices.Contains(names, "claude") {
+			t.Errorf("Claude Code offers /aayudha:claude, a hand-off to itself")
+		}
 	})
 	t.Run("codex", func(t *testing.T) {
 		if _, err := exec.LookPath("codex"); err != nil {
@@ -237,10 +288,14 @@ func TestHostPluginsLoad(t *testing.T) {
 			t.Errorf("codex mcp list:\n%s", out)
 		}
 		out := run(t, env, t.TempDir(), "codex", "debug", "prompt-input", "hi")
-		for _, w := range []string{"aayudha:build", "aayudha:ready", "aayudha:grill", "aayudha:source-command-next"} {
+		for _, w := range []string{"aayudha:build", "aayudha:ready", "aayudha:grill", "aayudha:source-command-next",
+			"aayudha:source-command-claude", "aayudha:source-command-cursor", "aayudha:source-command-amp"} {
 			if !strings.Contains(out, w) {
 				t.Errorf("codex prompt input lacks %s", w)
 			}
+		}
+		if strings.Contains(out, "aayudha:source-command-codex") {
+			t.Errorf("Codex offers a hand-off to itself")
 		}
 	})
 	t.Run("amp", func(t *testing.T) {
@@ -249,16 +304,20 @@ func TestHostPluginsLoad(t *testing.T) {
 		}
 		dir := t.TempDir()
 		tmpl, _ := os.ReadFile(filepath.Join(repo, "hosts", "amp", "aayudha.ts"))
-		cmds, _ := SlashCommands(aayudha.Assets)
+		cmds, _ := SlashCommands(aayudha.Assets, verbs.HostAmp)
 		cj, _ := json.Marshal(cmds)
 		plugin := strings.NewReplacer("__AAYU__", `"aayu"`, "__VERSION__", `"0.0.0-dev"`, "__COMMANDS__", string(cj)).Replace(string(tmpl))
 		_ = os.MkdirAll(filepath.Join(dir, ".amp", "plugins"), 0o755)
 		_ = os.WriteFile(filepath.Join(dir, ".amp", "plugins", "aayudha.ts"), []byte(plugin), 0o644)
 		out := run(t, nil, dir, "amp", "plugins", "list")
-		for _, w := range []string{".amp/plugins/aayudha.ts active", "events: session.start, tool.call", "aayudha: Next step", "aayudha: Build a Ready story"} {
+		for _, w := range []string{".amp/plugins/aayudha.ts active", "events: session.start, tool.call", "aayudha: Next step", "aayudha: Build a Ready story",
+			"Codex cloud agent", "Cursor's cloud agent", "Claude Code on the web"} {
 			if !strings.Contains(out, w) {
-				t.Errorf("amp plugins list lacks %q", w)
+				t.Errorf("amp plugins list lacks %q:\n%s", w, out)
 			}
+		}
+		if strings.Contains(out, "an Amp thread in an orb") {
+			t.Errorf("Amp offers a hand-off to itself")
 		}
 	})
 }

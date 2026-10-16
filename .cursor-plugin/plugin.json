@@ -1,0 +1,37 @@
+{
+  "name": "aayudha",
+  "displayName": "aayudha",
+  "version": "0.0.0",
+  "description": "The aayudha verbs as skills and slash commands (/aayudha:grill, /aayudha:ready, /aayudha:build, …), the aayudha MCP server, the host hooks, /aayudha:home and /aayudha:next for where the work stands, and hand-offs to the other coding agents. Needs the aayu binary on PATH.",
+  "author": {
+    "name": "Rahul Akmol",
+    "url": "https://github.com/rahulnakmol"
+  },
+  "homepage": "https://rahulnakmol.github.io/agentic-ayudha/",
+  "repository": "https://github.com/rahulnakmol/agentic-ayudha",
+  "license": "BSD-3-Clause",
+  "keywords": [
+    "agentic",
+    "delivery",
+    "proof",
+    "work-items",
+    "sdlc"
+  ],
+  "commands": [
+    "./hosts/commands/common/",
+    "./hosts/commands/amp/",
+    "./hosts/commands/claude/",
+    "./hosts/commands/codex/"
+  ],
+  "hooks": "./hosts/cursor/hooks.json",
+  "mcpServers": {
+    "aayudha": {
+      "command": "aayu",
+      "args": [
+        "mcp",
+        "--skills",
+        "0.0.0"
+      ]
+    }
+  }
+}
