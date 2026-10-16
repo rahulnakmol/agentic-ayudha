@@ -82,6 +82,9 @@ type installEdit struct {
 }
 
 func runInstall(ctx context.Context, e *Env, in Values) error {
+	if in.Bool("loops") {
+		return runInstallLoops(ctx, e, in)
+	}
 	if in.Bool("env") || in.Bool("verify") || in.Bool("cloud") || in.String("record") != "" {
 		return runInstallEnv(ctx, e, in)
 	}

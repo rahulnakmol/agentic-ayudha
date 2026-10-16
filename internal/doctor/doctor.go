@@ -92,6 +92,7 @@ var Checks = []Check{
 	{"agents", checkAgents},
 	{"reviewer-apps", checkReviewerApps},
 	{"retired-workflows", checkRetiredWorkflows},
+	{"loops", checkLoops},
 	{"leases", checkLeases},
 	{"coexistence", checkCoexistence},
 	{"telemetry", checkTelemetry},
