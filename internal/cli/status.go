@@ -143,7 +143,19 @@ func (e *Env) walker(ctx context.Context, c *github.Client, repo string) (*statu
 		return nil, Wrap(ExitUsage, err)
 	}
 	w := &status.Walker{GH: c, Repo: repo, Clock: clock, SLAHours: l.Config.Decisions.SLAHours, Now: e.Now(),
-		Budget: l.Config.Budget.PerStoryUSD, Cost: e.costs(repo)}
+		Budget: l.Config.Budget.PerStoryUSD, Cost: e.costs(repo), InFlight: map[int]bool{}}
+	owner, name, _ := github.SplitRepo(repo)
+	prs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.PullRequest, *gh.Response, error) {
+		return c.REST.PullRequests.List(ctx, owner, name, &gh.PullRequestListOptions{State: "open", ListOptions: o})
+	})
+	if err != nil {
+		return nil, Wrap(ExitExternal, err)
+	}
+	for _, pr := range prs {
+		if n := StoryOf(pr.GetBody(), "", pr.GetHead().GetRef()); n > 0 {
+			w.InFlight[n] = true
+		}
+	}
 	if config.RepoRoot(e.Dir) != "" {
 		w.Proof = e.proofCovered(c, repo)
 	}

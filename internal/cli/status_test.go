@@ -155,3 +155,33 @@ func TestStatusRollupsAndDigest(t *testing.T) {
 		t.Errorf("goal comment:\n%s", g.Issues[1].Comments[0].Body)
 	}
 }
+
+// A story still labelled status:ready while an open PR builds it counts as in
+// progress (megaman: build held a lease and PR #5 was open, and status still
+// counted Story #4 as Ready; D-5.5c.18). A PR that only mentions a story does
+// not move it.
+func TestStatusCountsAStoryWithAnOpenPRInProgress(t *testing.T) {
+	g := fake.New(t, "o/r", "User")
+	goal := g.AddIssue("Ship sums", "", "type:goal", "status:in-progress")
+	building := g.AddIssue("Add mathx sum", "", "type:story", "status:ready")
+	waiting := g.AddIssue("Add mathx product", "", "type:story", "status:ready")
+	branch := g.AddIssue("Add mathx max", "", "type:story", "status:ready")
+	for _, s := range []*fake.Issue{building, waiting, branch} {
+		goal.Subs = append(goal.Subs, s.Number)
+		s.Parent = goal.Number
+	}
+	g.AddPR("feat: add mathx sum", fmt.Sprintf("Refs #%d", building.Number), "codex", "codex/sum", strings.Repeat("a", 40), "dev")
+	g.AddPR("feat: add mathx max", "", "founder", fmt.Sprintf("story/%d-add-mathx-max", branch.Number), strings.Repeat("b", 40), "dev")
+	g.AddPR("docs: notes", fmt.Sprintf("See #%d later.", waiting.Number), "founder", "docs/notes", strings.Repeat("c", 40), "dev")
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "t", "XDG_STATE_HOME": filepath.Join(t.TempDir(), "state")}
+	code, out, errOut := run(t, env, Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: t.TempDir()}, "status", "--repo", "o/r", "--json")
+	var rep struct {
+		Roots []*status.Rollup `json:"roots"`
+	}
+	if err := json.Unmarshal([]byte(out), &rep); code != 0 || err != nil || len(rep.Roots) != 1 {
+		t.Fatalf("status: %d %v %s", code, err, errOut)
+	}
+	if got := rep.Roots[0].ByStatus; fmt.Sprint(got) != fmt.Sprint(map[string]int{"in-progress": 2, "ready": 1}) {
+		t.Fatalf("by status %v, want 2 in progress (Refs #%d, story/%d-…) and 1 ready", got, building.Number, branch.Number)
+	}
+}

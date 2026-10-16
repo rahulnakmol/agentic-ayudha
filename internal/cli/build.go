@@ -29,6 +29,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ui"
+	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
 func init() { register("build", runBuild) }
@@ -186,6 +187,9 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	if why != "" {
 		return Errorf(ExitBlocked, "build #%d: %s", n, why)
 	}
+	// The branch, commits, and PR title use the title without its issue
+	// form's "Story: " prefix (D-5.5c.19).
+	chk.Title = workitems.BareTitle(chk.Title)
 	res := BuildResult{Issue: n, Worktree: BuildWorktree(root, n), Branch: fmt.Sprintf("story/%d-%s", n, slug(chk.Title))}
 	dev := e.devBranch()
 	w, err := e.Ledger(ctx, bot.Token, c.Identity(), bot.Tag)
@@ -207,6 +211,14 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	st.Story, st.Branch = n, res.Branch
 	if res.Lease, err = e.takeLease(ctx, c, repo, n, leaseHolder(bot.Login), labels); err != nil {
 		return err
+	}
+	// A story being built is in progress (D-5.5c.17): build is the verb that
+	// moves it there from status:ready, and later runs accept either label.
+	if !contains(labels, labelInProgress) {
+		if err := setStatus(ctx, c, repo, n, labels, "in-progress"); err != nil {
+			return Wrap(ExitExternal, err)
+		}
+		labels = append(slices.DeleteFunc(labels, func(l string) bool { return strings.HasPrefix(l, "status:") }), labelInProgress)
 	}
 	b := l.Config.Autonomy.Budget
 	res.Budget = Usage{MaxWall: b.WallHours, MaxCost: b.CostUSD, MaxAttempts: b.Attempts, Attempts: st.Attempts, CostUSD: e.buildCost(repo, n)}
@@ -669,15 +681,21 @@ func wrapExternal(err error) error {
 	return Wrap(ExitExternal, err)
 }
 
-// notReady says why a story cannot be built: not labelled status:ready, not
-// passing Ready, or its body hash differs from the Ready snapshot's.
+// labelInProgress is the Delivery Status build gives a story it builds.
+const labelInProgress = "status:in-progress"
+
+// notReady says why a story cannot be built: not labelled status:ready (or
+// status:in-progress, which an earlier build run set), not passing Ready, or
+// its body hash differs from the Ready snapshot's. The Ready guard acts only
+// on status:ready, so the hash check here is what catches a body edited
+// while the story is in progress.
 // A failure to read the snapshot is an error, not a reason: the story may
 // well be Ready.
 func (e *Env) notReady(ctx context.Context, c *github.Client, repo string, n int, chk ready.Result, labels []string) (string, error) {
 	switch {
 	case !chk.Pass:
 		return fmt.Sprintf("it does not pass Ready (%d problem(s)); run `aayu ready %d --check`", len(chk.Problems), n), nil
-	case !contains(labels, ready.LabelReady):
+	case !contains(labels, ready.LabelReady) && !contains(labels, labelInProgress):
 		return "it is not labelled status:ready; run `aayu ready " + fmt.Sprint(n) + "`", nil
 	}
 	snap, err := ready.SnapshotHash(ctx, c, repo, n)
