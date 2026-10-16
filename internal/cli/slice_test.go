@@ -181,6 +181,7 @@ func TestPlan(t *testing.T) {
 		"missing layer": {func(d *planning.PlanDraft) { d.Checkpoints[0].Layer = "L04" }, "layer L07 of the story's footprint has no checkpoint"},
 		"no tests":      {func(d *planning.PlanDraft) { d.Checkpoints[0].Tests = nil }, "name the tests that prove it"},
 		"criterion":     {func(d *planning.PlanDraft) { d.Checkpoints[0].Criteria = []int{1} }, "criterion 2 has no checkpoint whose tests prove it"},
+		"unknown check": {func(d *planning.PlanDraft) { d.Checkpoints[0].Checks = []string{"store.round-trip"} }, "checkpoint 1 (L07): no check store.round-trip in the feature maps"},
 	} {
 		if code, out := plan(draft(tc.edit), "--create"); code != ExitBlocked || !strings.Contains(out, tc.want) {
 			t.Errorf("%s: exit %d, want 4 with %q:\n%s", name, code, tc.want, out)

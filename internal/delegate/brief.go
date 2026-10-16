@@ -82,22 +82,27 @@ func Brief(in BriefInput) string {
 	}
 
 	b.WriteString("\n## Evidence map (write it; the merge gate fails without it)\n\n")
-	fmt.Fprintf(&b, "Commit `.aayudha/evidence/%d.toml` mapping every criterion to the tests that prove it. The merge gate runs those tests and fails when a criterion has no passing test:\n\n", in.Story)
+	fmt.Fprintf(&b, "Commit `.aayudha/evidence/%d.toml` mapping every criterion to the tests (and the feature map's behaviour checks) that prove it. The merge gate runs them and fails when a criterion has no passing proof:\n\n", in.Story)
 	b.WriteString("```toml\n")
 	for _, c := range in.Criteria {
 		tests := `"<package path>:<TestName>"`
-		var ts []string
+		var ts, cs []string
 		for _, cp := range in.Checkpoints {
 			for _, n := range cp.Criteria {
 				if n == c.N {
 					ts = append(ts, cp.Tests...)
+					cs = append(cs, cp.Checks...)
 				}
 			}
 		}
 		if len(ts) > 0 {
 			tests = `"` + strings.Join(ts, `", "`) + `"`
 		}
-		fmt.Fprintf(&b, "[[criterion]]\nid = %d\ntests = [%s]\n\n", c.N, tests)
+		fmt.Fprintf(&b, "[[criterion]]\nid = %d\ntests = [%s]\n", c.N, tests)
+		if len(cs) > 0 {
+			fmt.Fprintf(&b, "checks = [\"%s\"]\n", strings.Join(cs, `", "`))
+		}
+		b.WriteString("\n")
 	}
 	b.WriteString("```\n")
 

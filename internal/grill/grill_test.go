@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verify"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -311,5 +312,24 @@ func TestAssessProducts(t *testing.T) {
 	}
 	if !strings.Contains(wf["motion:web/styles/buttons.css"], "durations 150ms") || wf["gap:reduced-motion"] == "" {
 		t.Errorf("bakery motion facts: %q, %q", wf["motion:web/styles/buttons.css"], wf["gap:reduced-motion"])
+	}
+}
+
+// WP4.5b.5: a mapped feature the idea's words touch is a feature fact naming
+// the checks that prove it; a feature the idea does not touch is not.
+func TestAssessFeatureFacts(t *testing.T) {
+	maps := []*verify.FeatureMap{{Product: "notes", Features: []verify.Feature{
+		{ID: "mark-done", File: "x/features/mark-done.md", Surfaces: map[string][]string{"command": {"done"}}, Checks: []verify.Check{{ID: "missing", Kind: "cli"}}},
+		{ID: "store", File: "x/features/store.md", Surfaces: map[string][]string{"func": {"Load", "Save"}}, Checks: []verify.Check{{ID: "round-trip", Kind: "lib"}}},
+	}}}
+	a := Assess(AssessInput{Root: t.TempDir(), Type: "story", Idea: "Undo a note marked done by mistake", Catalog: catalog(t), Maps: maps})
+	var got []Fact
+	for _, f := range a.Facts {
+		if f.Kind == "feature" {
+			got = append(got, f)
+		}
+	}
+	if len(got) != 1 || got[0].ID != "feature:mark-done" || got[0].Source != "x/features/mark-done.md" || !strings.Contains(got[0].Text, "mark-done.missing (cli)") {
+		t.Errorf("feature facts: %+v", got)
 	}
 }

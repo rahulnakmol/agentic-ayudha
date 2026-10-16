@@ -78,10 +78,13 @@ type AssessInput struct {
 	Verify  config.Verify
 	Stories []Issue  // stories and bugs of the repository, when GitHub answered
 	Notes   []string // what the caller could not fetch
+	// Maps are the repository's feature maps (WP4.5b.5): each mapped feature
+	// the idea's words touch is a feature fact with the checks that prove it.
+	Maps []*verify.FeatureMap
 }
 
 // Fact kinds, in the order the report lists them.
-var FactKinds = []string{"product", "flow", "route", "command", "gap", "component", "ds", "tokens", "motion", "test", "event", "code", "story", "floor", "layer"}
+var FactKinds = []string{"product", "flow", "route", "command", "feature", "gap", "component", "ds", "tokens", "motion", "test", "event", "code", "story", "floor", "layer"}
 
 const (
 	maxFiles     = 20000
@@ -168,6 +171,7 @@ func Assess(in AssessInput) Assessment {
 	// web product; with no product found, every kind is reported.
 	is := func(t string) bool { return len(a.Products) == 0 || slices.Contains(a.Products, t) }
 	r.commands(add)
+	features(in.Maps, a.Keywords, add)
 	used := r.components(matched, add)
 	r.designSystem(add)
 	if is("web") {
@@ -752,6 +756,29 @@ func stories(is []Issue, kw []string, add func(Fact)) {
 			text += "; Completion Goal: " + strings.Join(crit, " ")
 		}
 		add(Fact{ID: "story:#" + strconv.Itoa(is.Number), Kind: "story", Text: text, Source: "#" + strconv.Itoa(is.Number)})
+	}
+}
+
+// features reports each mapped feature whose id, surfaces, or check ids share
+// a word with the idea, with the behaviour checks that already prove it.
+func features(maps []*verify.FeatureMap, kw []string, add func(Fact)) {
+	for _, m := range maps {
+		for _, f := range m.Features {
+			words := []string{f.ID}
+			for _, vs := range f.Surfaces {
+				words = append(words, vs...)
+			}
+			var refs []string
+			for _, c := range f.Checks {
+				words = append(words, c.ID)
+				refs = append(refs, f.Ref(c)+" ("+c.Kind+")")
+			}
+			if !overlaps(kw, strings.Join(words, " ")) {
+				continue
+			}
+			add(Fact{ID: "feature:" + f.ID, Kind: "feature", Source: f.File,
+				Text: fmt.Sprintf("Feature %s of %s, proved by its behaviour checks %s.", f.ID, m.Product, strings.Join(refs, ", "))})
+		}
 	}
 }
 

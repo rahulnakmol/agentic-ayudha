@@ -105,6 +105,8 @@ You (the host's model) plan; the binary checks the plan and records it on the le
    - `tests`: the tests that prove it (at least one), named as `package:TestName` where you can;
    - `instrumentation`: logs, metrics, or traces it adds;
    - `criteria`: the Completion Goal criteria its tests prove (together the checkpoints cover every criterion);
+   - `checks`: the feature map's behaviour checks (`<feature>.<check>`) that prove the same criteria, from the
+     `features` `aayu plan <story>` lists for the footprint; they go into the evidence map beside the tests;
    - `rollback`: how to undo it. Required for an `L07` checkpoint (migrations and state): name the down migration or
      the restore step.
    When the story has no layer labels yet, the plan's layers become its footprint. Put what you cannot decide into
