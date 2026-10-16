@@ -97,6 +97,7 @@ func TestParseRefuses(t *testing.T) {
 		"unknown key":        `command = ["status"]` + "\ncron = \"0 9 * * *\"\nshell = \"x\"",
 		"unknown host":       `command = ["status"]` + "\ncron = \"0 9 * * *\"\nhosts = [\"jenkins\"]",
 		"hourly on weekdays": `command = ["status"]` + "\ncron = \"0 * * * 1-5\"",
+		"an unpinned setup":  `command = ["status"]` + "\ncron = \"0 9 * * *\"\nsetup = [\"python\"]",
 	} {
 		if _, err := Parse("x", []byte("description = \"x\"\n"+body+"\n")); err == nil {
 			t.Errorf("%s: parsed", name)

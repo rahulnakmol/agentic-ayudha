@@ -31,6 +31,14 @@ aayu:
       required: false
       positional: false
       description: "Only the behaviour floor, on these feature-map checks: <feature>, <feature>.<check>, or all (the sweep); a run outside the merge gate is a preview."
+    - name: maintain
+      type: enum
+      required: false
+      positional: false
+      enum:
+        - "drift"
+        - "always"
+      description: "With --map or --check: post the maintain brief on the tracking issue for the agent app [verify] maintainer names, when the map drifted or a check failed (drift), or every time (always)."
   outputs:
     - "floor-results"
     - "pack"

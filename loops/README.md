@@ -9,7 +9,13 @@ cron = "5 9 * * 1-5"               # five fields in [time] tz: one minute; hours
 hosts = ["amp", "cursor", "actions"]  # optional; default all three
 prompt = "…"                       # optional: what the host's agent does with the output
 bot = false                        # true when the command writes as the bot (the Actions job then needs the App)
+setup = ["node", "pnpm"]           # optional, Actions only: pinned tool setups, run once the guard says the loop is due
+setup_run = ["pnpm install --frozen-lockfile"]  # optional, Actions only: the product's own commands, after setup
 ```
+
+`verify-sweep` (nightly) and `verify-maintain` (weekly) are the feature maps' loops (WP4.5b.4): the sweep runs every
+behaviour check with no model, and both hand the maintain brief to the agent app `[verify] maintainer` names, the
+sweep only when a map drifted or a check failed. No model key is used in the Actions jobs.
 
 `go generate ./...` renders aayudha's own loops; `aayu init --gates` renders a product's:
 
