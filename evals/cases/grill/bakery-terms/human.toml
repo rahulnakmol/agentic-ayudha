@@ -20,7 +20,19 @@ text = "B2B means offices that order trays of pastries for meetings. Not a separ
 
 [topics."term/pii"]
 kind = "confirm"
-text = "PII is personal data: customer names, emails, and phone numbers."
+text = "PII is personal data: customer names, emails, and phone numbers. None of it may show up in any of our logs: the server's logs or the analytics events."
+
+[topics."other/pii-logs"]
+kind = "confirm"
+text = "Every log we keep: the server's logs and the analytics events. No customer name, email, or phone number in any of them."
+
+[topics."other/logs"]
+kind = "confirm"
+text = "Every log we keep: the server's logs and the analytics events. No customer name, email, or phone number in any of them."
+
+[topics."other/log-scope"]
+kind = "confirm"
+text = "Every log we keep: the server's logs and the analytics events. No customer name, email, or phone number in any of them."
 
 [topics."idea.who/user"]
 kind = "confirm"
@@ -64,7 +76,7 @@ text = "Your default is fine."
 
 [topics."request/scope"]
 kind = "confirm"
-text = "Keeping PII out of the logs is part of this: the form's personal data must never show up in the logs."
+text = "Keeping PII out of the logs is part of this: the form's personal data must never show up in the logs, the server's or the analytics events."
 
 [topics."request/size"]
 kind = "confirm"

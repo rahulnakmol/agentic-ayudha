@@ -14,7 +14,7 @@ or `defer`. Score three things, then give one overall score from 1 to 5.
    them; nothing still says just "fast". The readback says in plain language what done looks like.
 3. Fidelity: the number and percentile are the human's, not the skill's; caching and new loading feedback (parked)
    and a CI budget (deferred) are not criteria and appear in Parked ideas or Open questions; Provenance names the
-   right source. Test setup that a criterion's evidence needs (seeded data, a synthetic user, a fresh home directory) is not an added requirement; a state that narrows what the human asked for is. Questions and parked ideas never lower the score.
+   right source. A criterion checks one representative instance (seeded data, a synthetic user, a fresh home directory, one seeded declining card for "a payment fails"): that is test setup, not an added requirement or a narrowing, as long as the expected result keeps the human's whole scope. It narrows only when its wording limits the behaviour itself to a subset the human did not choose ("only for guests", "only going forward"). Questions and parked ideas never lower the score.
 
 - 5: All three are strong.
 - 4: One minor gap in one area.
