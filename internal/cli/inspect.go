@@ -343,14 +343,19 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	// family is unknown, and every reviewer differs from every candidate
 	// (Bug #171).
 	var commits []string
+	claim, lane := "", verbs.Family("")
 	if cs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.RepositoryCommit, *gh.Response, error) {
 		return c.REST.PullRequests.ListCommits(ctx, owner, name, n, &o)
 	}); err == nil {
 		for _, x := range cs {
 			commits = append(commits, x.GetSHA())
+			// Without a pack (a review request, a reply event), the head's trailer is the
+			// same claim verify writes into the pack, so every run picks the same reviewer.
+			if m := modelTrailer.FindStringSubmatch(x.GetCommit().GetMessage()); m != nil && x.GetSHA() == pr.GetHead().GetSHA() {
+				claim = m[1]
+			}
 		}
 	}
-	claim, lane := "", verbs.Family("")
 	if ins.Pack != nil {
 		claim = ins.Pack.Model
 		if b, err := gw.Resolver.Resolve(verbs.LaneBuild, verbs.HostID(ins.Pack.Host)); err == nil {

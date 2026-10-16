@@ -495,6 +495,18 @@ func TestInspectThroughApp(t *testing.T) {
 	if code != 0 || res.Disposition != inspect.Merge || res.Model != "founder" || !slices.ContainsFunc(res.Notes, func(n string) bool { return strings.Contains(n, "falling back to a human review") }) {
 		t.Fatalf("same-family app falls back to a human: %d %+v %s", code, res, errOut)
 	}
+
+	// With no pack (a request before the gate ran, or a reply event), the
+	// head's Aayudha-Model trailer still names the builder, so the request goes
+	// to the app the gate will read (codex), not the first installed (claude).
+	g, env, opts, prN = inspectFixture(t, cleanDiff, "Refs #2")
+	_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
+	_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\napps = [\"claude\", \"codex\"]\n"), 0o644)
+	_ = os.RemoveAll(proof.LocalDir(opts.Dir, 2))
+	g.Static = map[string]any{"/repos/o/r/pulls/" + strconv.Itoa(prN) + "/commits": jsonOf(t, `[{"sha":"`+head+`","commit":{"message":"feat: percent\n\nAayudha-Model: claude-opus-5-5\n"}}]`)}
+	if code, _, errOut = inspectApp(t, env, opts, prN); code != ExitBlocked || len(comments()) != 1 || !strings.HasPrefix(comments()[0].Body, "@codex review\n") {
+		t.Fatalf("request without a pack: exit %d %+v %s", code, comments(), errOut)
+	}
 }
 
 func lastInspect(t *testing.T, g *fake.GitHub, n int) string {
