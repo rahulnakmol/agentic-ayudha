@@ -172,16 +172,24 @@ in what the repository already has, and nothing in it the human did not confirm.
    - **Rough idea or no outcome.** When the gate says the request names no observable result, or it uses a
      rough-idea word ("maybe", "something like", "what if"), work it through like a product team
      ([references/vague/idea.md](references/vague/idea.md)): who it is for, the job, the outcome and how it is
-     measured, the smallest slice a user can try, what is out, and the checkpoints the human wants to see.
+     measured, the smallest slice a user can try, what is out, and the checkpoints the human wants to see. Do not
+     draft until the human has named the smallest slice: what the user sees (a button by its label, a form by its
+     fields) and what happens when they use it.
    - **The goal.** Every grilled item says why it matters, in a form both of you can check later: the Summary's
      "so that", and a Measure and Threshold with the human's own number. When the outcome reaches beyond this item,
      or the human wants to track it after release, propose a Goal (`aayu grill goal`, with its baseline) and link
-     the item under it. Never invent the number.
+     the item under it. Never invent the number. A baseline is a number the human or a fact gives; when neither
+     does, the baseline is unknown: say so and add a `deferred:` open question for it. Never estimate one, not even
+     0 ("the form does not exist yet, so 0" is an estimate). The Measure names what is counted; the Threshold
+     carries the human's number.
 4. **Ask in rounds.** Three to five questions per round, highest rework risk first (the catalogue's order), only
    about what the request and the facts leave open. For each: why it matters, the options you see, and your
    default with its reason ("I'd aim for three screens, because steps two and three only confirm; OK?"). Cite facts
    by ID. Keep going round after round while anything that changes what gets built is still vague; stop asking
-   about a dimension once it is settled or the human parks or defers it. Know the topic of each question:
+   about a dimension once it is settled or the human parks or defers it. One question settles one decision: a reply to
+   a bundled question usually answers half of it, and the other half is then neither confirmed nor deferred. Ask the
+   error wording and the exit code as two questions, not one. Know the
+   topic of each question:
    `<dimension>/<topic>` with a topic from the catalogue's Topics (`ux.steps/confirmation-placement`), a request
    topic (`request/dependency`, `request/size`, `request/existing-behaviour`, `request/parent`, `request/scope`), or
    `other/<key>`; Provenance names it.
@@ -257,7 +265,8 @@ A grilled Story or Bug carries five more sections after its Completion Goal. `gr
   a question is neither.
 - `### Parked ideas`: ideas raised in the conversation that the human did not confirm, one per line as
   `<name>: <what it was>`. Out of scope: never built or checked for this item; a parked name may not appear in a
-  criterion.
+  criterion, so name it with words no criterion uses ("cutting or reordering steps", not "step changes" when a
+  criterion checks every step change).
 - `### Provenance`: the request, how each vague qualifier was resolved, and where each criterion came from:
 
   ```text
@@ -273,7 +282,9 @@ A grilled Story or Bug carries five more sections after its Completion Goal. `gr
   matching `deferred:` open question. `grill` refuses a grilled spec whose request has a term without its line.
 
   `stated`: the human said it; `confirmed`: you proposed it and the human agreed; `default`: the human accepted the
-  default you offered with its reason, and the brackets name the topic where they accepted it. A criterion that
+  default you offered with its reason, and the brackets name the topic where they accepted it. Tag `default` only
+  when the reply just accepts your default ("your default is fine", "OK, go with that"); a reply that agrees in its
+  own words ("Yes, one screen, 24 lines is fine") is `confirmed`. A criterion that
   rests on a confirmed answer and an accepted default is `confirmed`, tagged with the confirmed answer's topic, and
   quotes both. Quote the human's words exactly; when a criterion rests on several replies,
   quote each one (`"…" / "…"`). The brackets name the question's topic (`ux.steps/screen-count`), its dimension
@@ -325,6 +336,13 @@ the data or fixture (a fresh home directory, the seeded basket), who is acting, 
 Never "any state", "installed", or "as above". An error case names the exact command or action that triggers it
 (`tally add` with no arguments) and the exact output or exit code. Seeded test data is setup, not a requirement:
 name it, and never narrow the behaviour the human asked for with it.
+
+**Behaviour, as agreed.** A criterion checks what a user or caller can observe: the slide takes 200 ms, the command
+exits 2. It checks the code or styles only when the human accepted that as proof, and then exactly as offered
+("each duration this story adds matches its confirmed value"). Never tighten what was agreed into a restriction
+nobody asked for: "0 other durations added", "only 2 distinct values", "no other easing". The Summary and the
+readback's goal say what the vague word came to mean ("the step slides in 200 ms"), never the vague word itself
+("feels slick"); the word stays in Provenance.
 
 ## Done when concrete
 

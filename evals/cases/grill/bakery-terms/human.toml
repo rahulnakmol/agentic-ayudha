@@ -76,7 +76,7 @@ text = "Your default is fine."
 
 [topics."request/scope"]
 kind = "confirm"
-text = "Keeping PII out of the logs is part of this: the form's personal data must never show up in the logs, the server's or the analytics events."
+text = "Keeping PII out of the logs is part of this: no customer name, email, or phone number from the form may ever show up in the logs, the server's or the analytics events."
 
 [topics."request/size"]
 kind = "confirm"
