@@ -70,7 +70,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 			}
 			fmt.Fprintf(stdout, "%d [%s] %s\n", i+1, mark, n.Text)
 		}
-	case "done":
+	case "finish":
 		n, err := strconv.Atoi(strings.Join(rest, ""))
 		if err != nil {
 			return usage("done needs a note number")

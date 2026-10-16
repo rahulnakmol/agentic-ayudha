@@ -48,7 +48,7 @@ var page = template.Must(template.New("page").Parse(`<!doctype html>
 <p class="lead">Answers quote the Example Co plan documents and name their source. Questions the documents do not answer go to an HR specialist.</p>
 <form method="get" action="/" role="search">
 <label for="q">Your question</label>
-<div class="row"><input id="q" name="q" type="text" maxlength="500" value="{{.Q}}" autocomplete="off" required><button type="submit">Ask</button></div>
+<div class="row"><input id="q" name="q" type="text" maxlength="500" value="{{.Q}}" autocomplete="off" required><button type="submit">Send</button></div>
 </form>
 {{with .Resp}}<section class="card {{.Status}}" aria-labelledby="result">
 {{if eq .Status "answered"}}<h2 id="result">Answer</h2>
