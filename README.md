@@ -52,7 +52,7 @@ freezes what was agreed. Lost at any point? `aayu next` prints the one next step
 - [How it works](docs/guide/how-it-works.md): the architecture, file formats, and guarantees, for engineers.
 
 All of it is on [the docs site](https://rahulnakmol.github.io/agentic-ayudha/). Agents can read the same docs as
-Markdown, starting from `https://rahulnakmol.github.io/agentic-ayudha/llms.txt`.
+Markdown, starting from [llms.txt](https://rahulnakmol.github.io/agentic-ayudha/llms.txt).
 
 ## Adopt at your own pace
 
