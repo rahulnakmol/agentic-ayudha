@@ -197,6 +197,15 @@ in what the repository already has, and nothing in it the human did not confirm.
    A topic the human parked or deferred stays out of everything that defines done (the criteria, Summary, Measure,
    Threshold, Scenario, and Checkpoints); it lives only in Parked ideas or Open questions. A default counts only for
    the question you offered it on: an answer to another question does not accept it.
+   **Declined is parked, not a criterion.** When the human turns down a change you raised ("leave the loading
+   feedback as it is", "the option names are fine", "no prices or invoices yet", "don't change anything else about
+   the steps"), park it. No criterion mentions it, neither to require it nor to forbid it: "no spinner appears",
+   "the option names are unchanged", "with no price and no invoice", and "no step added or removed" each add a check
+   nobody asked for. It belongs only in Parked ideas, and in Assumptions when it frames the work.
+   **Ask what must not change.** When the request changes something that works today (make it faster, simpler, or
+   cleaner), ask in the first round what must keep working exactly as it does (`request/existing-behaviour`): the
+   results a call returns, the amounts it computes, the calls people already make. What the human names there is a
+   requirement in its own right and gets its own criterion.
    **Everything the human stated or confirmed is in the spec**, not only the headline number: "the amounts must stay
    exactly the same" is a criterion beside the latency one, "every option optional" is checked for every option,
    and an outcome target they gave ("5 a week") is the Measure and Threshold, with what they want to see ("an
@@ -303,10 +312,13 @@ values to the test.
 
 **One instance, the whole scope.** A criterion checks one representative instance of what the human asked for: the
 seeded declining card for "when a payment fails", one seeded quote for "the amounts stay the same". Say so: the
-expected result states the human's whole scope ("on every step of the flow", "for any failed payment, shown with
-the seeded declining card"), and Assumptions add that the instance stands for the whole. Never narrow the behaviour
-to a subset the human did not choose (only going forward, only an empty basket, only guests, only one log). Floors
-and configured platforms apply to every criterion on their own: do not restate them in criteria or the readback.
+expected result states the human's whole scope ("for every step change in the order flow", "for any failed payment,
+shown with the seeded declining card"), and Assumptions add that the instance stands for the whole. Say the scope
+with "for every", "for any", or "whenever", never "on every <step|screen|page>", which reads as a placement. A route
+in backticks in the expected result is a placement too: keep routes in the state, where the tester starts, unless a
+quoted reply names that page. Never narrow the behaviour to a subset the human did not choose (only going forward,
+only an empty basket, only guests, only one log). Floors and configured platforms apply to every criterion on their
+own: do not restate them in criteria or the readback.
 
 **Self-contained criteria.** Each criterion's state names everything a tester sets up, so it can be checked alone:
 the data or fixture (a fresh home directory, the seeded basket), who is acting, and the command, route, or action.
