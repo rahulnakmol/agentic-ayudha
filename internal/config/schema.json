@@ -551,6 +551,16 @@
         "red_on_base_blocking_from": {
           "type": "string",
           "description": "Date (UTC, YYYY-MM-DD) from which a Bug story whose mapped proving test passes on the base commit fails the merge gate; before it, or empty, the red-on-base check is advisory."
+        },
+        "maintainer": {
+          "type": "string",
+          "enum": [
+            "amp",
+            "claude",
+            "codex",
+            "cursor"
+          ],
+          "description": "Agent app the feature maps' maintain brief @-mentions (WP4.5b.4): claude, codex, or cursor, installed on the repository; amp has no mention, so its scheduled loop thread reads the brief. Unset: the brief mentions no app."
         }
       },
       "additionalProperties": false,

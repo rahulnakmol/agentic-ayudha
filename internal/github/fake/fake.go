@@ -643,7 +643,8 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		reply(200, out)
 	case m == "POST" && p == repo+"/issues":
 		var labels []string
-		for _, l := range body["labels"].([]any) {
+		ls, _ := body["labels"].([]any) // GitHub creates an issue without labels too
+		for _, l := range ls {
 			labels = append(labels, l.(string))
 		}
 		reply(201, g.addIssue(str("title"), str("body"), labels))

@@ -1,0 +1,14 @@
+# Nightly behaviour sweep (WP4.5b.4). Every feature-map check runs with no model; when a map drifted or a check
+# failed, verify hands the maintain brief to the agent app [verify] maintainer names. The cron is in [time] tz.
+description = "Nightly sweep: run every feature-map behaviour check, and hand off the maintain brief when a map drifted or a check failed."
+command = ["verify", "--check", "all", "--maintain", "drift"]
+cron = "30 2 * * *"
+bot = true
+setup = ["node", "pnpm"]
+# This repository's example web product reaches Playwright through the base branch's packages/floors (D-8.1b).
+setup_run = [
+  "pnpm install --frozen-lockfile --filter @aayudha/floors",
+  "pnpm --filter @aayudha/floors exec playwright install --with-deps chromium",
+  "echo \"NODE_PATH=$PWD/packages/floors/node_modules\" >> \"$GITHUB_ENV\"",
+]
+prompt = "Report each failed check in one line, and the link of the maintain brief if aayu posted one."

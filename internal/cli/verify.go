@@ -137,8 +137,12 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return err
 	}
+	maintain := in.String("maintain")
+	if maintain != "" && !in.Bool("map") && !in.Has("check") {
+		return Errorf(ExitUsage, "verify --maintain runs with --map or --check")
+	}
 	if in.Bool("map") {
-		return e.verifyMap(ctx, root)
+		return e.verifyMap(ctx, root, maintain)
 	}
 	head, err := gitIn(ctx, root, "rev-parse", "HEAD")
 	if err != nil {
@@ -355,6 +359,17 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 	if err := e.Emit(res, func(w io.Writer) error { return renderVerify(w, res) }); err != nil {
 		return err
 	}
+	if maintain != "" {
+		d, _, err := verify.CheckMaps(ctx, root)
+		if err != nil {
+			return Wrap(ExitUsage, err)
+		}
+		b := verify.Brief{Drift: d}
+		b.Failed, b.Ran = failedChecks(rep.Artifacts)
+		if err := e.maintainHandoff(ctx, maintain, b); err != nil {
+			return err
+		}
+	}
 	if !res.Hold {
 		return Errorf(ExitFloor, "floor miss: %s", failing(res.Checks))
 	}
@@ -366,7 +381,7 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 
 // verifyMap is `verify --map`: the feature maps' drift check (WP4.5b.1). It
 // reads the maps and the checkout and runs no product code.
-func (e *Env) verifyMap(ctx context.Context, root string) error {
+func (e *Env) verifyMap(ctx context.Context, root, maintain string) error {
 	d, _, err := verify.CheckMaps(ctx, root)
 	if err != nil {
 		return Wrap(ExitUsage, err)
@@ -395,6 +410,11 @@ func (e *Env) verifyMap(ctx context.Context, root string) error {
 		return nil
 	}); err != nil {
 		return err
+	}
+	if maintain != "" {
+		if err := e.maintainHandoff(ctx, maintain, verify.Brief{Drift: d}); err != nil {
+			return err
+		}
 	}
 	if d.Verdict == verify.DriftFound {
 		return Errorf(ExitFloor, "feature map drift: fix the map in its skill directory, or let the maintain pass do it")

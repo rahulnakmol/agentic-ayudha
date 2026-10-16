@@ -53,6 +53,11 @@ type Loop struct {
 	// Bot marks a loop whose command writes under the bot identity: in Actions
 	// it needs the bot App's token (D1) and is skipped with a notice without one.
 	Bot bool `toml:"bot,omitempty" json:"bot,omitempty"`
+	// Setup prepares the Actions job for the command (WP4.5b.4): pinned tool
+	// setups (node, pnpm), then the product's own commands (SetupRun), so a
+	// sweep of a web product's behaviour checks has its browser tooling.
+	Setup    []string `toml:"setup,omitempty" json:"setup,omitempty"`
+	SetupRun []string `toml:"setup_run,omitempty" json:"setup_run,omitempty"`
 
 	sched schedule
 }
@@ -131,6 +136,11 @@ func Parse(name string, data []byte) (Loop, error) {
 	for _, h := range l.Hosts {
 		if !slices.Contains(Hosts, h) {
 			bad("hosts: %q: want %s", h, strings.Join(Hosts, ", "))
+		}
+	}
+	for _, x := range l.Setup {
+		if _, ok := setupActions[x]; !ok {
+			bad("setup: %q: want node or pnpm", x)
 		}
 	}
 	if err := checkCommand(l.Command); err != nil {
@@ -538,6 +548,13 @@ const (
 	uploadAction   = "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2"
 )
 
+// setupActions are the tool setups a loop's setup may name, pinned like every
+// other action; pnpm reads its version from the root package.json.
+var setupActions = map[string]string{
+	"node": "actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0\n        with:\n          node-version: \"24\"\n          package-manager-cache: false",
+	"pnpm": "pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0",
+}
+
 // OutboxPath is where the file notify channel writes pages in a checkout; the
 // Actions fallback keeps it as a run artifact.
 const OutboxPath = ".aayudha/state/notify-outbox.jsonl"
@@ -647,6 +664,15 @@ func ActionsWorkflow(ls []Loop, tz string, loc *time.Location, version string, i
           REPO: ${{ github.repository }}
         run: aayudha hook loop:%s --ci --repo "$REPO"
 `, j.l.Name)
+		for _, x := range j.l.Setup {
+			fmt.Fprintf(&b, "      - if: steps.guard.outputs.due == 'true'\n        uses: %s\n", setupActions[x])
+		}
+		if len(j.l.SetupRun) > 0 {
+			fmt.Fprintf(&b, "      - name: Set up for aayu %s\n        if: steps.guard.outputs.due == 'true'\n        run: |\n          set -euo pipefail\n", strings.Join(j.l.Command, " "))
+			for _, line := range j.l.SetupRun {
+				fmt.Fprintf(&b, "          %s\n", line)
+			}
+		}
 		args := strings.Join(quoteAll(j.l.Command), " ")
 		run := fmt.Sprintf("aayudha %s --ci --repo \"$REPO\"", args)
 		if j.l.Bot {

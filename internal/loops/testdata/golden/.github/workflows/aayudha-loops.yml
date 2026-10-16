@@ -114,6 +114,16 @@ jobs:
           AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
           REPO: ${{ github.repository }}
         run: aayudha hook loop:quarterly --ci --repo "$REPO"
+      - if: steps.guard.outputs.due == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: Set up for aayu status --json
+        if: steps.guard.outputs.due == 'true'
+        run: |
+          set -euo pipefail
+          npm ci
       - name: Run aayu status --json
         if: steps.guard.outputs.due == 'true'
         env:
