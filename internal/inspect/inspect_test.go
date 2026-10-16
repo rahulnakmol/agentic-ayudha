@@ -435,3 +435,51 @@ diff --git a/.aayudha/config.toml b/.aayudha/config.toml
 		t.Fatalf("adding a test is not a weakening: %+v", w)
 	}
 }
+
+func TestRiskOf(t *testing.T) {
+	file := func(p string, added, removed int) DiffFile {
+		h := Hunk{NewStart: 1}
+		for i := range added {
+			h.Lines = append(h.Lines, DiffLine{N: i + 1, Text: "x", Added: true})
+		}
+		for range removed {
+			h.Removed = append(h.Removed, "y")
+		}
+		return DiffFile{Path: p, Hunks: []Hunk{h}}
+	}
+	layer := func(paths []string) []string {
+		var out []string
+		for _, p := range paths {
+			l := "L" + strings.SplitN(p, "/", 2)[0]
+			if !slices.Contains(out, l) {
+				out = append(out, l)
+			}
+		}
+		slices.Sort(out)
+		return out
+	}
+	protected := func(p string) bool { return strings.HasPrefix(p, ".github/") }
+	tests := []struct {
+		name    string
+		files   []DiffFile
+		tier    string
+		reasons []string
+		look    []string
+	}{
+		{"small change in two layers", []DiffFile{file("01/a.go", 10, 2), file("02/b.go", 30, 0)}, RiskLow, nil, []string{"02/b.go", "01/a.go"}},
+		{"three layers", []DiffFile{file("01/a.go", 1, 0), file("02/b.go", 1, 0), file("03/c.go", 1, 0)}, RiskMedium, []string{"3 layers: L01, L02, L03"}, nil},
+		{"401 changed lines", []DiffFile{file("01/a.go", 300, 101)}, RiskMedium, []string{"large diff: 1 files, 401 changed lines"}, []string{"01/a.go"}},
+		{"400 changed lines", []DiffFile{file("01/a.go", 300, 100)}, RiskLow, nil, nil},
+		{"never-layer", []DiffFile{file("01/a.go", 500, 0), file("09/deploy.go", 1, 0)}, RiskHigh, []string{"never-layer L09: 09/deploy.go"}, []string{"09/deploy.go"}},
+		{"protected path and a migration", []DiffFile{file(".github/workflows/ci.yml", 1, 0), file("01/db/migrations/0002_add.sql", 3, 0)}, RiskHigh,
+			[]string{"protected path: .github/workflows/ci.yml", "migration: 01/db/migrations/0002_add.sql"}, []string{".github/workflows/ci.yml", "01/db/migrations/0002_add.sql"}},
+		{"dependency added", []DiffFile{file("go.mod", 1, 0)}, RiskHigh, []string{"dependency manifest changed: go.mod"}, nil},
+		{"dependency removed only", []DiffFile{file("go.mod", 0, 1)}, RiskLow, nil, nil},
+	}
+	for _, tt := range tests {
+		got := RiskOf(tt.files, layer, []string{"L09"}, protected)
+		if got.Tier != tt.tier || (tt.reasons != nil || got.Tier == RiskLow) && !slices.Equal(got.Reasons, append([]string{}, tt.reasons...)) || tt.look != nil && !slices.Equal(got.Look, tt.look) {
+			t.Errorf("%s: %+v", tt.name, got)
+		}
+	}
+}
