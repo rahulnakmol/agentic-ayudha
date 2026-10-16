@@ -1,0 +1,29 @@
+# Recorded grill conversation (WP5.8) on a vague motion request: "slick, with nice animations and transitions between the steps"
+# in the synthetic bakery app (../testdata/bakery). The gate said unpack; the skill unpacked the motion into moments, what moves,
+# durations, reduced motion, and proof with the scripted human (human.toml), and wrote a story with checkpoints.
+skill = "grill"
+description = "Unpack \"slick, with nice animations and transitions\" into concrete motion criteria; the conversation is scripted by human.toml."
+input = "input.txt"
+repo = "../testdata/bakery"
+gate = "unpack"
+transcript = "output/transcript.json"
+cite = 3
+artifacts = ["output/issue.json", "output/transcript.json"]
+schemas = [{ file = "output/issue.json", schema = "evals/schemas/workitem.json" }]
+ready = ["output/issue.json"]
+calls = [
+  ["grill", "story", "--assess", "--idea", "Make ordering feel slick, with nice animations and transitions between the steps. It belongs under Feature #40 (Online ordering)."],
+  ["grill", "story", "--idea", "Make ordering feel slick, with nice animations and transitions between the steps. It belongs under Feature #40 (Online ordering).", "--parent", "40", "--title", "Show what changed when moving between order steps and adding to the basket", "--body", "### Summary\n\nAs a customer ordering from the bakery, I want moving between the order steps and adding an item to show what changed, so that I can tell where I am and that the item went in.\n\n### Completion Goal\n\n1. [recording] state: `/order` as the seeded customer moving forward and back between the order steps with reduced motion off; expected: the step content slides in the direction of travel and settles within 200 ms, while the header and the basket summary do not move\n2. [recording] state: `/order` as the seeded customer adding one loaf with reduced motion off; expected: the basket count changes to 1 with a pop that ends within 150 ms\n3. [recording] state: the same two moments with the system's reduced-motion setting on; expected: the step content and the basket count change at once, with 0 sliding or popping\n4. [metric] state: the style files the story changes; expected: every transition and animation duration in them is 150 ms or 200 ms\n\n### Measure\n\nCompletion Goal criteria observed\n\n### Threshold\n\nall 4 criteria\n\n### Scenario\n\nAs the seeded customer, open /order, move forward through every step and back one, and add a loaf; record it with reduced motion off, then again with the system's reduced-motion setting on.\n\n### Environment\n\nlocal app with the seeded synthetic customer, in a desktop browser; never production\n\n### Checkpoints\n\n1. Moving between the order steps slides the step content while the header and the basket summary stay still (criterion 1)\n2. Adding a loaf pops the basket count (criterion 2)\n3. With reduced motion on nothing slides or pops, and the changed styles use only the two confirmed durations (criteria 3, 4)\n\n### Assumptions\n\n- Easing is ease-out, like the existing button fade (the accepted default).\n- The order steps themselves stay as they are today.\n\n### Open questions\n\n- answered: which moments move (moving between steps, and adding an item)\n\n### Parked ideas\n\n- frame rate: holding a frame rate on a mid-range phone (the human parked it)\n- confirmation celebration: a small animation on the order confirmation (raised by grill; the human parked it)\n\n### Provenance\n\nRequest: \"Make ordering feel slick, with nice animations and transitions between the steps. It belongs under Feature #40 (Online ordering).\"\nVague: \"slick\" → criteria 1, 2, 3, 4\nVague: \"nice\" → criteria 1, 2, 3, 4\nVague: \"animations\" → criteria 1, 2, 3, 4\nVague: \"transitions\" → criteria 1, 2, 3, 4\n1. confirmed (motion.where/elements): \"The step content slides in the direction you are going; the header and the basket summary stay still\" / \"step changes in 200 ms\"; facts: flow:/order, component:Stepper, component:BasketSummary\n2. confirmed (motion.budget/duration): \"the basket pop in 150 ms\" / \"The basket count gives a small pop when an item goes in\"; facts: motion:web/styles/buttons.css\n3. confirmed (motion.reduced/reduced-motion): \"With reduced motion on, nothing slides or pops; the step and the count just change at once\"; facts: gap:reduced-motion\n4. default (motion.proof/duration-metric): \"Your default is fine.\" / \"step changes in 200 ms, and the basket pop in 150 ms\"; facts: motion:web/styles/buttons.css", "--labels", "effort:M", "--create"],
+  ["ready", "42", "--check"],
+]
+
+# The human parked frame rates and the confirmation celebration: neither may become a criterion.
+scope = [
+  { pattern = '(?i)\bfps\b|frame[- ]?rate|\b60\s*(fps|frames)', why = "a frame rate, which the human parked" },
+  { pattern = '(?i)celebrat|confetti', why = "the confirmation celebration, which the human parked" },
+]
+
+[tier2]
+rubric = "rubric.md"
+human = "human.toml"
+references = ["story.md", "vague/motion.md", "vague/ux.md"]

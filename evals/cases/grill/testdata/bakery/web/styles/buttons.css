@@ -1,0 +1,7 @@
+/* The only motion in the app today: buttons fade their background on hover. */
+.crumb-button {
+  background: var(--crumb-color-crust);
+  color: var(--crumb-color-flour);
+  min-height: var(--crumb-size-target);
+  transition: background-color 150ms ease-out;
+}

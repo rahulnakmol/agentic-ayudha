@@ -84,6 +84,13 @@ body:
     validations:
       required: false
   - type: textarea
+    id: checkpoints
+    attributes:
+      label: "Checkpoints"
+      description: "What the human can see or try at each step of the build, in order, one per line: \"N. <what you can see or run> (criteria 1, 2)\"."
+    validations:
+      required: false
+  - type: textarea
     id: assumptions
     attributes:
       label: "Assumptions"

@@ -1,0 +1,1 @@
+Make the tally CLI simple to use. New users get lost. It belongs under Feature #70 (Getting started).

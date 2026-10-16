@@ -43,14 +43,19 @@ type VagueHit struct {
 // vague qualifiers of the idea and what the repository already has that the
 // idea touches. The host's model reasons over it; the binary only reports.
 type Assessment struct {
-	Type      string     `json:"type"`
-	Idea      string     `json:"idea"`
-	Untrusted string     `json:"untrusted"`
-	Keywords  []string   `json:"keywords"`
-	Scope     string     `json:"scope"`
-	Vague     []VagueHit `json:"vague"`
-	Facts     []Fact     `json:"facts"`
-	Notes     []string   `json:"notes,omitempty"`
+	Type      string   `json:"type"`
+	Idea      string   `json:"idea"`
+	Untrusted string   `json:"untrusted"`
+	Keywords  []string `json:"keywords"`
+	Scope     string   `json:"scope"`
+	// Products are the kinds of product the repository is (web, api, cli,
+	// library); each qualifier's dimensions are those that apply to them.
+	Products []string       `json:"products"`
+	Vague    []VagueHit     `json:"vague"`
+	Terms    []Abbreviation `json:"terms"` // abbreviations and jargon to confirm (WP5.8)
+	Gate     Gate           `json:"gate"`  // unpack or pass (WP5.8)
+	Facts    []Fact         `json:"facts"`
+	Notes    []string       `json:"notes,omitempty"`
 }
 
 // UntrustedNote is the Assessment's reminder that its facts are data.
@@ -76,7 +81,7 @@ type AssessInput struct {
 }
 
 // Fact kinds, in the order the report lists them.
-var FactKinds = []string{"flow", "route", "gap", "component", "ds", "tokens", "test", "event", "code", "story", "floor", "layer"}
+var FactKinds = []string{"product", "flow", "route", "command", "gap", "component", "ds", "tokens", "motion", "test", "event", "code", "story", "floor", "layer"}
 
 const (
 	maxFiles     = 20000
@@ -87,21 +92,12 @@ var skipDirs = map[string]bool{".git": true, "node_modules": true, "vendor": tru
 	".next": true, ".svelte-kit": true, "coverage": true, "out": true, "target": true, "testdata": true, ".turbo": true, ".cache": true}
 
 var sourceExt = map[string]bool{".ts": true, ".tsx": true, ".js": true, ".jsx": true, ".mjs": true, ".cjs": true, ".vue": true,
-	".svelte": true, ".go": true, ".py": true, ".rb": true, ".html": true, ".css": true, ".scss": true, ".mdx": true}
+	".svelte": true, ".go": true, ".py": true, ".rb": true, ".rs": true, ".html": true, ".css": true, ".scss": true, ".mdx": true}
 
 // Assess runs the fact pass. It reads files under in.Root and nothing else;
 // it never writes.
 func Assess(in AssessInput) Assessment {
 	a := Assessment{Type: in.Type, Idea: clean(in.Idea, 2000), Untrusted: UntrustedNote, Notes: in.Notes, Keywords: keywords(in.Catalog, in.Idea)}
-	seen := map[string]bool{}
-	for _, h := range in.Catalog.Find(in.Idea) {
-		if seen[h.Qualifier] {
-			continue
-		}
-		seen[h.Qualifier] = true
-		d, _ := in.Catalog.Domain(h.Domain)
-		a.Vague = append(a.Vague, VagueHit{Qualifier: h.Qualifier, Text: h.Text, Domain: d.ID, Catalogue: "skills/grill/" + d.File, Dimensions: d.Dimensions})
-	}
 	r := &repo{root: in.Root, kw: a.Keywords, files: map[string]string{}}
 	r.walk()
 	if r.truncated {
@@ -113,6 +109,18 @@ func Assess(in AssessInput) Assessment {
 	}
 
 	pages, apis := r.routes()
+	a.Products = r.products(pages, apis, add)
+	seen := map[string]bool{}
+	for _, h := range in.Catalog.Find(in.Idea) {
+		if seen[h.Qualifier] {
+			continue
+		}
+		seen[h.Qualifier] = true
+		d, _ := in.Catalog.Domain(h.Domain)
+		a.Vague = append(a.Vague, VagueHit{Qualifier: h.Qualifier, Text: h.Text, Domain: d.ID, Catalogue: "skills/grill/" + d.File, Dimensions: ForProducts(d.Dimensions, a.Products)})
+	}
+	a.Terms = in.Catalog.Abbreviations(in.Idea)
+
 	matched := r.matchRoutes(pages)
 	switch {
 	case len(pages) == 0:
@@ -156,14 +164,21 @@ func Assess(in AssessInput) Assessment {
 		}
 	}
 
+	// Facts about screens, design tokens, motion, and page budgets apply to a
+	// web product; with no product found, every kind is reported.
+	is := func(t string) bool { return len(a.Products) == 0 || slices.Contains(a.Products, t) }
+	r.commands(add)
 	used := r.components(matched, add)
 	r.designSystem(add)
-	r.tokens(add)
+	if is("web") {
+		r.tokens(add)
+		r.motion(add)
+	}
 	r.tests(groups, add)
 	r.events(matched, add)
 	code := r.code(used, add)
 	stories(in.Stories, a.Keywords, add)
-	floors(in.Verify, add)
+	floors(in.Verify, is, add)
 	r.layers(matched, code, add)
 
 	order := func(k string) int { return slices.Index(FactKinds, k) }
@@ -179,6 +194,13 @@ func Assess(in AssessInput) Assessment {
 	if a.Vague == nil {
 		a.Vague = []VagueHit{}
 	}
+	if a.Terms == nil {
+		a.Terms = []Abbreviation{}
+	}
+	if a.Products == nil {
+		a.Products = []string{}
+	}
+	a.Gate = GateFor(in.Catalog, a)
 	return a
 }
 
@@ -733,23 +755,25 @@ func stories(is []Issue, kw []string, add func(Fact)) {
 	}
 }
 
-func floors(v config.Verify, add func(Fact)) {
+func floors(v config.Verify, is func(string) bool, add func(Fact)) {
 	a := v.Floors.A11y
-	if a.Standard != "" {
+	if a.Standard != "" && is("web") {
 		add(Fact{ID: "floor:a11y", Kind: "floor", Source: "CONSTRAINTS.md",
 			Text: fmt.Sprintf("Accessibility floor on every story: %s, %d critical and %d serious axe violations allowed, keyboard-only %t, %d px targets, %d %% text scale.",
 				a.Standard, a.MaxCritical, a.MaxSerious, a.KeyboardOnly, a.MinTargetPx, a.TextScalePercent)})
 	}
 	p := v.Floors.Perf
-	if p.MinScore > 0 || p.MaxLCPMs > 0 || p.MaxCLS > 0 || p.MaxTBTMs > 0 {
+	switch {
+	case !is("web"):
+	case p.MinScore > 0 || p.MaxLCPMs > 0 || p.MaxCLS > 0 || p.MaxTBTMs > 0:
 		add(Fact{ID: "floor:perf", Kind: "floor", Source: "[verify.floors.perf]",
 			Text: fmt.Sprintf("Lighthouse budgets on every Completion Goal state: score >= %g, LCP <= %g ms, CLS <= %g, TBT <= %g ms (0 = unset).", p.MinScore, p.MaxLCPMs, p.MaxCLS, p.MaxTBTMs)})
-	} else {
+	default:
 		add(Fact{ID: "gap:perf-budget", Kind: "gap", Source: "[verify.floors.perf]", Text: "No Lighthouse budget is configured; a page-speed criterion needs its number from the human."})
 	}
 	if s := v.Floors.API.Script; s != "" {
 		add(Fact{ID: "floor:api", Kind: "floor", Source: s, Text: fmt.Sprintf("k6 thresholds in %s are the API contract on every story.", clean(s, 120))})
-	} else {
+	} else if is("api") {
 		add(Fact{ID: "gap:api-budget", Kind: "gap", Source: "[verify.floors.api]", Text: "No API budget (k6 script) is configured; an API-speed criterion needs its number and conditions from the human."})
 	}
 	if len(v.Platforms) > 0 {

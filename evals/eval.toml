@@ -70,11 +70,12 @@ events = ["workflow_dispatch"]
 # run at the fallback rate (13.42 USD for both cases in run 38687921977), in their own group with their own cap so they
 # never fail or starve the skills group. Advisory until a run meets the bar (D-5.3b.g): results are computed and
 # printed, evals-gate skips them; then the gate line goes. It never runs nightly or on promotion: on dispatch, and on
-# pushes to dev that change grill files (evals.yml, D-5.3b.h).
+# pushes to dev that change grill files (evals.yml, D-5.3b.h). WP5.8 adds four cases (motion, terms, a CLI's
+# "simple", and a concrete request the gate passes, which is one call a run), so the cap is 40 USD (D-5.8c).
 [[groups]]
 name = "conversations"
-prefixes = ["grill/bakery-ux", "grill/search-fast"]
-max_usd = 20.0
+prefixes = ["grill/bakery-ux", "grill/search-fast", "grill/bakery-motion", "grill/bakery-terms", "grill/tally-simple", "grill/bakery-concrete"]
+max_usd = 40.0
 gate = "advisory"
 events = ["workflow_dispatch", "push"]
 

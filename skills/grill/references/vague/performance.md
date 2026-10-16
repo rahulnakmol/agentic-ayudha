@@ -11,13 +11,54 @@ are missing.
 
 ### Which operation (`perf.operation`)
 
-- Ask: Which exact action must be fast: the first page load, typing in the box, the results appearing, opening a
-  result? From whose point of view?
+- Ask: Which exact action must be fast, from whose point of view? For a web app: the first page load, typing in a
+  box, results appearing. For a command-line tool: a command from launch to its output. For an API: one endpoint.
+  For a library: one call.
 - Default: the one action the request names, measured from the user's input to the visible result, because that is
   what users feel.
 - Evidence: metric
 - Facts: route, code
 - Topics: action, viewpoint
+
+### Interaction latency (`perf.interaction`)
+
+- Ask: From which input to which visible change: a click to the next screen, a keystroke to results, the first page
+  load (LCP)? Is Interaction to Next Paint the right measure, or a mark of your own?
+- Default: input to the visible result on the seeded data, measured in the browser, because that is what users feel.
+- Evidence: metric
+- Facts: route, floor
+- Products: web
+- Topics: input-to-paint, page-load
+
+### Startup and per-command time (`perf.startup`)
+
+- Ask: How long may the tool take from launch to its first output, and how long may each named command take at p95,
+  cold (first run after install) and warm?
+- Default: no slower than today for every command, measured as repeated runs on the seeded data; a number only when
+  the human gives one.
+- Evidence: metric
+- Facts: command, product
+- Products: cli
+- Topics: cold-start, per-command
+
+### Endpoint latency (`perf.endpoint`)
+
+- Ask: Which endpoint, at what percentile and number, under what request rate and payload size?
+- Default: p95 on the seeded data at the request rate the human names, shown by an API trace or a load test.
+- Evidence: api-trace
+- Facts: route, floor, gap
+- Products: api
+- Topics: endpoint, request-rate
+
+### Call cost (`perf.library`)
+
+- Ask: Which call, with what input size: how many operations per second, or how long per call, and how many
+  allocations?
+- Default: a benchmark of the named call on a fixed input, compared with today's result.
+- Evidence: metric
+- Facts: code, test
+- Products: library
+- Topics: call, allocations
 
 ### Number and percentile (`perf.target`)
 
@@ -51,8 +92,8 @@ are missing.
 
 ### Perceived speed (`perf.perceived`)
 
-- Ask: While the user waits, what do they see: results as they type, a spinner, a skeleton? Is a partial result
-  acceptable?
+- Ask: While the user waits, what do they see: results as they type, a spinner, a skeleton, a progress line on the
+  terminal? Is a partial result acceptable?
 - Default: keep today's loading feedback; a new loading state only when the human asks for one.
 - Evidence: recording
 - Facts: gap, route

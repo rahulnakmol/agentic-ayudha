@@ -1,0 +1,17 @@
+{
+  "number": 43,
+  "title": "Show the basket total in pounds with two decimals on the review screen",
+  "state": "open",
+  "body": "### Summary\n\nAs a customer on the review screen, I want the basket total shown in pounds with two decimals, like \"£12.50\".\n\n### Completion Goal\n\n1. [screenshot] state: `/order/review` with the seeded basket of 2 items; expected: the basket total in pounds with two decimals, in the form \"£12.50\"\n\n### Measure\n\nCompletion Goal criteria observed\n\n### Threshold\n\nthe 1 criterion\n\n### Scenario\n\nAs the seeded customer, add the 2 seeded items to the basket, open /order/review, and capture it.\n\n### Environment\n\nlocal app with the seeded synthetic customer; never production\n\n### Checkpoints\n\n1. The review screen shows the seeded basket's total in pounds with two decimals (criterion 1)\n\n### Assumptions\n\n- The seeded basket of 2 items stands for any basket.\n\n### Provenance\n\nRequest: \"Under Feature #40 (Online ordering), show the basket total on `/order/review` in pounds with two decimals, like \"£12.50\".\"\n1. stated (request): \"show the basket total on `/order/review` in pounds with two decimals\"; facts: route:/order/review, component:BasketSummary",
+  "labels": [
+    {
+      "name": "type:story"
+    },
+    {
+      "name": "status:planned"
+    },
+    {
+      "name": "effort:XS"
+    }
+  ]
+}

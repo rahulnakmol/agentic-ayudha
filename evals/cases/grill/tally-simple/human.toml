@@ -1,0 +1,83 @@
+# The simulated human of grill/tally-simple (WP5.8): tally's maintainer. The skill tags each question with a topic, <dimension>/<key>, the keys
+# coming from the catalogues' Topics (vague/simplicity.md), term/<term> for an abbreviation, or the request topics in the skill. The human
+# answers by topic, else by the topic's dimension, else with the fallback, which parks it: an unscripted idea never becomes a
+# requirement. kind: confirm (states or agrees), default (accepts the skill's offered default), park, or defer.
+max_rounds = 4
+readback = "Yes, that is what done looks like."
+fallback = { kind = "park", text = "That is not part of what I asked for; park it." }
+
+[topics."simple.cli-first-run/first-command"]
+kind = "confirm"
+text = "The first thing people type is `tally add 12.50 lunch`, and it fails because they never ran `tally init`. It should just work: create what it needs on first use, in GBP like `tally init` does today."
+
+[topics."simple.cli-first-run/zero-config"]
+kind = "confirm"
+text = "The first thing people type is `tally add 12.50 lunch`, and it fails because they never ran `tally init`. It should just work: create what it needs on first use, in GBP like `tally init` does today."
+
+[topics."simple.cli-surface/command-count"]
+kind = "confirm"
+text = "Adding an expense is the task. `tally add` should take the amount and a category as plain words, with every flag optional."
+
+[topics."simple.cli-surface/flag-defaults"]
+kind = "confirm"
+text = "Adding an expense is the task. `tally add` should take the amount and a category as plain words, with every flag optional."
+
+[topics."simple.cli-errors/error-messages"]
+kind = "confirm"
+text = "When something is wrong it should say what to type instead."
+
+[topics."simple.cli-errors/exit-codes"]
+kind = "default"
+text = "Your default is fine."
+
+[topics."simple.cli-help/help-text"]
+kind = "confirm"
+text = "Yes, one screen, 24 lines is fine, with an example of add."
+
+[topics."simple.cli-help/examples"]
+kind = "confirm"
+text = "Yes, one screen, 24 lines is fine, with an example of add."
+
+[topics."simple.memory/remembered-choices"]
+kind = "park"
+text = "Don't remember anything new."
+
+[topics."simple.language/labels"]
+kind = "park"
+text = "The words are fine."
+
+[topics."idea.who/user"]
+kind = "confirm"
+text = "People who just installed tally and want to log one expense."
+
+[topics."request/size"]
+kind = "confirm"
+text = "One story is fine."
+
+[topics."request/scope"]
+kind = "confirm"
+text = "Only adding an expense, the errors, and the help. Leave the other commands alone."
+
+[dimensions."simple.cli-first-run"]
+kind = "confirm"
+text = "The first thing people type is `tally add 12.50 lunch`, and it fails because they never ran `tally init`. It should just work: create what it needs on first use, in GBP like `tally init` does today."
+
+[dimensions."simple.cli-surface"]
+kind = "confirm"
+text = "Adding an expense is the task. `tally add` should take the amount and a category as plain words, with every flag optional."
+
+[dimensions."simple.cli-errors"]
+kind = "confirm"
+text = "When something is wrong it should say what to type instead."
+
+[dimensions."simple.cli-help"]
+kind = "confirm"
+text = "Yes, one screen, 24 lines is fine, with an example of add."
+
+[dimensions."simple.memory"]
+kind = "park"
+text = "Don't remember anything new."
+
+[dimensions."simple.language"]
+kind = "park"
+text = "The words are fine."

@@ -1,7 +1,8 @@
 # Vague: user experience (`ux`)
 
 Qualifiers: high quality, high-quality, great UX, good UX, better UX, intuitive, delightful, polished, user-friendly,
-seamless, beautiful, modern, clean, smooth, pleasant, professional, engaging, world-class, premium
+seamless, beautiful, modern, clean, smooth, pleasant, professional, engaging, world-class, premium, slick, sleek,
+nice, elegant, stunning
 
 A UX qualifier names a feeling, not an outcome. Break it into the dimensions below, in this order (highest rework
 risk first), and ask about the ones the request and the facts leave open. Each dimension says what to ask, a
@@ -29,6 +30,7 @@ sensible default to offer with its reason, the evidence kind that usually proves
   time on task only when the human gives a number.
 - Evidence: recording
 - Facts: flow, route
+- Products: web
 - Topics: screen-count, step-merge, confirmation-placement, options-placement, time-on-task
 
 ### Empty, loading, error, and offline states (`ux.states`)
@@ -40,6 +42,7 @@ sensible default to offer with its reason, the evidence kind that usually proves
   users order on the move.
 - Evidence: screenshot
 - Facts: gap, route
+- Products: web
 - Topics: payment-failure, submit-failure, empty, loading, offline, other-errors
 
 ### Mobile and desktop (`ux.platforms`)
@@ -49,6 +52,7 @@ sensible default to offer with its reason, the evidence kind that usually proves
   widths the web floors capture.
 - Evidence: screenshot
 - Facts: floor, route
+- Products: web
 - Topics: devices, widths
 
 ### Consistency with the design system (`ux.consistency`)
@@ -59,6 +63,7 @@ sensible default to offer with its reason, the evidence kind that usually proves
   spacing, or font values outside the tokens and 0 new components.
 - Evidence: metric
 - Facts: tokens, component, ds
+- Products: web
 - Topics: tokens-and-components, new-components
 
 ### Content and tone (`ux.content`)
@@ -78,6 +83,7 @@ sensible default to offer with its reason, the evidence kind that usually proves
   the main reason people abandon an order.
 - Evidence: screenshot
 - Facts: route, story
+- Products: web
 - Topics: before-paying, receipt, undo-or-cancel
 
 ### Performance budgets (`ux.performance`)
@@ -97,4 +103,27 @@ sensible default to offer with its reason, the evidence kind that usually proves
   the human did not ask for.
 - Evidence: sr-transcript
 - Facts: floor
+- Products: web
 - Topics: beyond-floors
+
+### Output a person and a script can read (`ux.cli-output`)
+
+- Ask: What should each command print for a person, and for a script: a table, plain lines, `--json`? How wide, and
+  in colour only on a terminal?
+- Default: a person gets short lines that fit 80 columns, colour only on a terminal and never with `NO_COLOR`; a
+  script gets `--json` with the same facts.
+- Evidence: api-trace
+- Facts: command, product
+- Products: cli
+- Topics: human-output, json-output, colour
+
+### Consistent commands (`ux.cli-consistency`)
+
+- Ask: Should the commands share one shape: verb-noun names, the same flag for the same idea (`--json`, `--quiet`),
+  the same exit codes?
+- Default: the same flag name and meaning on every command that takes it, with today's names kept unless the human
+  renames one.
+- Evidence: api-trace
+- Facts: command
+- Products: cli
+- Topics: flag-names, exit-codes

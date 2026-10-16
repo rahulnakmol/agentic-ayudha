@@ -43,17 +43,43 @@ type Dimension struct {
 	// Topics are the keys a question about this dimension is tagged with
 	// (<dimension>/<topic>), so a scripted human can answer each one.
 	Topics []string `json:"topics,omitempty"`
+	// Products are the product types the dimension applies to (web, api,
+	// cli, library); empty applies to every product. The assessment keeps
+	// the dimensions of the products it finds in the repository, so "fast"
+	// asks about startup time for a CLI and interaction latency for a web app.
+	Products []string `json:"products,omitempty"`
 }
 
-// Catalog is every domain, sorted by ID.
+// ProductTypes are the kinds of product a repository can be (Assess finds
+// them; a dimension's Products names them).
+var ProductTypes = []string{"web", "api", "cli", "library"}
+
+// ForProducts returns the dimensions that apply to any of products, in
+// order; with no products every dimension applies.
+func ForProducts(ds []Dimension, products []string) []Dimension {
+	if len(products) == 0 {
+		return ds
+	}
+	var out []Dimension
+	for _, d := range ds {
+		if len(d.Products) == 0 || slices.ContainsFunc(d.Products, func(p string) bool { return slices.Contains(products, p) }) {
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
+// Catalog is every domain, sorted by ID, and the abbreviations the gate
+// unpacks (references/jargon.md).
 type Catalog struct {
 	Domains []Domain `json:"domains"`
+	Jargon  Jargon   `json:"jargon"`
 }
 
 var (
 	domainHeading = regexp.MustCompile("^# Vague: (.+) \\(`([a-z][a-z0-9-]*)`\\)\\s*$")
 	dimHeading    = regexp.MustCompile("^### (.+) \\(`([a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*)`\\)\\s*$")
-	dimField      = regexp.MustCompile(`^- (Ask|Default|Evidence|Facts|Topics): (.*)$`)
+	dimField      = regexp.MustCompile(`^- (Ask|Default|Evidence|Facts|Topics|Products): (.*)$`)
 	topicKey      = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 )
 
@@ -88,6 +114,13 @@ func LoadCatalog(fsys fs.FS) (Catalog, error) {
 		c.Domains = append(c.Domains, d)
 	}
 	sort.Slice(c.Domains, func(i, j int) bool { return c.Domains[i].ID < c.Domains[j].ID })
+	b, err := fs.ReadFile(fsys, JargonFile)
+	if err != nil {
+		return c, err
+	}
+	if c.Jargon, err = parseJargon(string(b)); err != nil {
+		return c, fmt.Errorf("%s: %w", JargonFile, err)
+	}
 	return c, nil
 }
 
@@ -143,7 +176,7 @@ func parseDomain(s string) (Domain, error) {
 				field = &cur.Default
 			case "Evidence":
 				field = &cur.Evidence
-			case "Facts", "Topics":
+			case "Facts", "Topics", "Products":
 				field = nil
 				for _, f := range strings.Split(m[2], ",") {
 					if f = strings.TrimSpace(f); f == "" {
@@ -151,6 +184,11 @@ func parseDomain(s string) (Domain, error) {
 					}
 					if m[1] == "Facts" {
 						cur.Facts = append(cur.Facts, f)
+					} else if m[1] == "Products" {
+						if !slices.Contains(ProductTypes, f) {
+							return d, fmt.Errorf("line %d: product %q of %s: want one of %s", i+1, f, cur.ID, strings.Join(ProductTypes, ", "))
+						}
+						cur.Products = append(cur.Products, f)
 					} else if !topicKey.MatchString(f) {
 						return d, fmt.Errorf("line %d: topic %q of %s: want a kebab-case key", i+1, f, cur.ID)
 					} else {

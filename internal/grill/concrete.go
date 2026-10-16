@@ -52,12 +52,25 @@ type Resolution struct {
 type Provenance struct {
 	Request  string       `json:"request"`
 	Vague    []Resolution `json:"vague"`
+	Terms    []TermDef    `json:"terms,omitempty"`
 	Criteria []Source     `json:"criteria"`
+}
+
+// TermDef is one "Term:" line (WP5.8): an abbreviation or jargon term of the
+// request with the meaning the human confirmed, in their words, or deferred.
+//
+//	Term: "PDP" → product detail page; "yes, the product page"
+type TermDef struct {
+	Term     string   `json:"term"`
+	Meaning  string   `json:"meaning,omitempty"`
+	Quotes   []string `json:"quotes,omitempty"`
+	Deferred string   `json:"deferred,omitempty"`
 }
 
 var (
 	requestLine = regexp.MustCompile(`(?i)^\s*request:\s*(.*)$`)
 	vagueLine   = regexp.MustCompile(`(?i)^\s*vague:\s*(.+?)\s*(?:→|->)\s*(.*)$`)
+	termLine    = regexp.MustCompile(`(?i)^\s*term:\s*(.+?)\s*(?:→|->)\s*(.*)$`)
 	sourceLine  = regexp.MustCompile(`^\s*([0-9]+)[.)]\s+([a-z]+)\s*(?:\(([^)]*)\))?\s*:\s*(.*)$`)
 	factsPart   = regexp.MustCompile(`(?i);\s*facts:\s*(.*)$`)
 	numberRE    = regexp.MustCompile(`[0-9]`)
@@ -101,6 +114,22 @@ func ParseProvenance(s string) (Provenance, []workitems.Problem) {
 			p.Vague = append(p.Vague, r)
 			continue
 		}
+		if m := termLine.FindStringSubmatch(line); m != nil {
+			t := TermDef{Term: unquote(m[1])}
+			rest := strings.TrimSpace(m[2])
+			if d, ok := cutFold(rest, "deferred"); ok {
+				t.Deferred = strings.TrimSpace(strings.TrimLeft(d, ": "))
+				if t.Deferred == "" {
+					t.Deferred = "deferred"
+				}
+			} else if mean, said, ok := strings.Cut(rest, ";"); ok && strings.TrimSpace(mean) != "" && strings.TrimSpace(said) != "" {
+				t.Meaning, t.Quotes = unquote(mean), quotes(said)
+			} else {
+				bad("line %d: term %q: write `Term: \"%s\" → <meaning>; \"<the human's words confirming it>\"` or `→ deferred: <why>`", i+1, t.Term, t.Term)
+			}
+			p.Terms = append(p.Terms, t)
+			continue
+		}
 		if m := sourceLine.FindStringSubmatch(line); m != nil {
 			n, _ := strconv.Atoi(m[1])
 			src := Source{N: n, Kind: strings.ToLower(m[2]), Dimension: strings.TrimSpace(m[3])}
@@ -127,7 +156,7 @@ func ParseProvenance(s string) (Provenance, []workitems.Problem) {
 			p.Criteria = append(p.Criteria, src)
 			continue
 		}
-		bad("line %d is not a Request, Vague, or criterion source line (want `N. stated|confirmed|default (<dimension>): \"<the human's words>\"`)", i+1)
+		bad("line %d is not a Request, Vague, Term, or criterion source line (want `N. stated|confirmed|default (<dimension>): \"<the human's words>\"`)", i+1)
 	}
 	return p, ps
 }
@@ -170,6 +199,86 @@ func unquote(s string) string {
 		}
 	}
 	return s
+}
+
+// Term returns the Term line for an abbreviation of the request, matched
+// case-insensitively and with or without a plural "s".
+func (p Provenance) Term(text string) (TermDef, bool) {
+	k := strings.ToLower(text)
+	for _, t := range p.Terms {
+		if tk := strings.ToLower(t.Term); tk == k || tk+"s" == k || tk == k+"s" {
+			return t, true
+		}
+	}
+	return TermDef{}, false
+}
+
+// Checkpoint is one line of a grilled spec's Checkpoints: what the human can
+// see or try at that step of the build, and the criteria it reaches.
+type Checkpoint struct {
+	N        int    `json:"n"`
+	Text     string `json:"text"`
+	Criteria []int  `json:"criteria"`
+}
+
+var (
+	checkpointLine = regexp.MustCompile(`^\s*([0-9]+)[.)]\s+(.+?)\s*\((?i:criteri(?:on|a))\s+([0-9][0-9 ,and]*)\)\.?\s*$`)
+)
+
+// ParseCheckpoints parses the Checkpoints section; a line without its
+// criteria is a problem.
+func ParseCheckpoints(s string) ([]Checkpoint, []workitems.Problem) {
+	var out []Checkpoint
+	var ps []workitems.Problem
+	for _, l := range strings.Split(strings.ReplaceAll(s, "\r\n", "\n"), "\n") {
+		if strings.TrimSpace(l) == "" {
+			continue
+		}
+		m := checkpointLine.FindStringSubmatch(l)
+		if m == nil {
+			ps = append(ps, workitems.Problem{Field: workitems.FieldCheckpoints, Message: fmt.Sprintf("%q: write `N. <what the human can see or run> (criteria 1, 2)`", clip(strings.TrimSpace(l), 80))})
+			continue
+		}
+		n, _ := strconv.Atoi(m[1])
+		c := Checkpoint{N: n, Text: m[2]}
+		for _, x := range listNumbers.FindAllString(m[3], -1) {
+			v, _ := strconv.Atoi(x)
+			c.Criteria = append(c.Criteria, v)
+		}
+		out = append(out, c)
+	}
+	return out, ps
+}
+
+// checkCheckpoints: a grilled spec says what the human can see at each step
+// of the build, every checkpoint reaches criteria that exist, and every
+// criterion is reached by one.
+func checkCheckpoints(s string, cs []workitems.Criterion) []workitems.Problem {
+	if workitems.Empty(s) {
+		return []workitems.Problem{{Field: workitems.FieldCheckpoints, Message: "a grilled spec lists its checkpoints: what the human can see or try at each step of the build, in order, each naming the criteria it reaches (`1. <what you can see> (criteria 1, 2)`)"}}
+	}
+	cps, ps := ParseCheckpoints(s)
+	have, reached := map[int]bool{}, map[int]bool{}
+	for _, c := range cs {
+		have[c.N] = true
+	}
+	for i, cp := range cps {
+		if cp.N != i+1 {
+			ps = append(ps, workitems.Problem{Field: workitems.FieldCheckpoints, Message: fmt.Sprintf("checkpoint %d is numbered %d; number them 1, 2, … in order", i+1, cp.N)})
+		}
+		for _, n := range cp.Criteria {
+			if !have[n] {
+				ps = append(ps, workitems.Problem{Field: workitems.FieldCheckpoints, Message: fmt.Sprintf("checkpoint %d reaches criterion %d, which does not exist", cp.N, n)})
+			}
+			reached[n] = true
+		}
+	}
+	for _, c := range cs {
+		if !reached[c.N] && len(cps) > 0 {
+			ps = append(ps, workitems.Problem{Field: workitems.FieldCheckpoints, Message: fmt.Sprintf("no checkpoint reaches criterion %d; name it in the checkpoint where the human can first see it", c.N)})
+		}
+	}
+	return ps
 }
 
 // Source returns the provenance of criterion n.
@@ -276,9 +385,19 @@ func Check(cat Catalog, it workitems.Item) []workitems.Problem {
 			}
 		}
 	}
+	for _, ab := range cat.Abbreviations(p.Request) {
+		t, ok := p.Term(ab.Text)
+		switch {
+		case !ok:
+			add(workitems.FieldProvenance, "the request says %q but no `Term:` line records the meaning the human confirmed (%s)", ab.Text, JargonFile)
+		case t.Deferred != "" && !deferredQs:
+			add(workitems.FieldProvenance, "term %q is deferred, but Open questions has no \"deferred:\" entry for it", t.Term)
+		}
+	}
 	if workitems.Empty(it.Fields[workitems.FieldAssumptions]) {
 		add(workitems.FieldAssumptions, "a grilled spec lists the assumptions it rests on (write \"none\" when there are none)")
 	}
+	ps = append(ps, checkCheckpoints(it.Fields[workitems.FieldCheckpoints], cs)...)
 	for _, c := range cs {
 		src, ok := p.Source(c.N)
 		if !ok {
@@ -420,14 +539,42 @@ func CheckFacts(p Provenance, a Assessment) []workitems.Problem {
 }
 
 // Readback is the plain-language summary of a Story's or Bug's spec that the
-// human confirms or edits before it is written: what done looks like, one
-// sentence per criterion, then what it assumes, leaves open, and parks.
+// human confirms or edits before it is written: the goal and how it is
+// measured, what done looks like (one sentence per criterion), the
+// checkpoints the human will see as it is built, the meaning of each term,
+// then what it assumes, leaves open, and parks.
 func Readback(it workitems.Item) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Here is what done looks like for %q:\n", it.Title)
+	if g := strings.TrimSpace(it.Fields[workitems.FieldSummary]); !workitems.Empty(g) {
+		fmt.Fprintf(&b, "Goal: %s\n", strings.Join(strings.Fields(g), " "))
+	}
+	if m, t := strings.TrimSpace(it.Fields[workitems.FieldMeasure]), strings.TrimSpace(it.Fields[workitems.FieldThreshold]); !workitems.Empty(m) && !workitems.Empty(t) {
+		fmt.Fprintf(&b, "Measured by %s; met at %s.\n", strings.TrimSuffix(m, "."), strings.TrimSuffix(t, "."))
+	}
 	cs, _ := workitems.ParseCriteria(it.Fields[workitems.FieldCriteria])
+	if len(cs) > 0 {
+		b.WriteString("Done when:\n")
+	}
 	for _, c := range cs {
 		fmt.Fprintf(&b, "%d. %s: %s (shown by a %s).\n", c.N, c.State, strings.TrimSuffix(c.Expected, "."), c.Evidence)
+	}
+	if cps, _ := ParseCheckpoints(it.Fields[workitems.FieldCheckpoints]); len(cps) > 0 {
+		b.WriteString("Checkpoints, what you will see as it is built:\n")
+		for _, cp := range cps {
+			fmt.Fprintf(&b, "%d. %s.\n", cp.N, strings.TrimSuffix(cp.Text, "."))
+		}
+	}
+	if p, _ := ParseProvenance(it.Fields[workitems.FieldProvenance]); len(p.Terms) > 0 {
+		var ts []string
+		for _, t := range p.Terms {
+			if t.Deferred != "" {
+				ts = append(ts, fmt.Sprintf("%s is still to be confirmed", t.Term))
+			} else {
+				ts = append(ts, fmt.Sprintf("%s means %s", t.Term, t.Meaning))
+			}
+		}
+		fmt.Fprintf(&b, "Terms: %s.\n", strings.Join(ts, "; "))
 	}
 	for _, s := range []struct{ id, label string }{
 		{workitems.FieldAssumptions, "It assumes"},
