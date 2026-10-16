@@ -2,7 +2,7 @@
 
 # Claude Code routines for rahulnakmol/agentic-ayudha
 
-Each loop is a routine ([docs](https://code.claude.com/docs/en/routines)). Create it at <https://claude.ai/code/routines> (**New routine**), or run
+Each loop is a routine ([docs](https://code.claude.com/docs/en/routines)). Create it at `claude.ai/code/routines` (**New routine**), or run
 `/schedule` in Claude Code and give it the values below; a GitHub trigger from the CLI needs Claude Code v2.1.225 or
 later and the Claude GitHub App on the repository. Routines need a claude.ai subscription login (not an API key), run
 as you, and count against your plan's daily routine runs. The routine's cloud environment must have the aayu
