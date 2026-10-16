@@ -1,14 +1,15 @@
 # The merge gate
 
 The merge gate is one GitHub Actions workflow, `aayudha-merge-gate.yml`, that runs on every non-draft pull request.
-It runs `verify` again on the pull request's head commit, asks a reviewer model from a different family to judge
-the change, and makes the result available to `ship`. It exists because the builder's own word is not evidence:
+It runs `verify` again on the pull request's head commit, reads the review of an agent app from a different family,
+and makes the result available to `ship`. It exists because the builder's own word is not evidence:
 the checks that decide a merge must run somewhere the pull request cannot change.
 
 ![A pull request update starts the gate workflow taken from the base branch; the merge-gate job verifies the head in a sandbox and keeps the pack as a run artifact, the inspect job reviews it, the pack job checks it and comments, and ship needs all three checks green and the artifact from this run.](img/how-merge-gate.svg)
 
-*Three jobs: one runs the pull request's code with no secrets, one holds the model key and never runs that code, one
-checks the pack and comments. None writes the ledger.*
+*Three jobs on each update: one runs the pull request's code with no secrets, one reads the reviewer app's reply and
+never runs that code, one checks the pack and comments. A fourth re-runs inspect when the reviewer replies. No job
+holds an AI key, and none writes the ledger.*
 
 ## How it works
 
@@ -20,7 +21,8 @@ a tool version has no effect on its own run. Its changes apply only after they m
 `.github/` is also a protected path in `.github/CODEOWNERS`, so a change to the gate needs a CODEOWNER review.
 
 That trigger has a known risk: the job runs in the base repository's context, and checking out untrusted code there
-can leak secrets. The gate splits the work so that the job running pull request code holds nothing worth stealing.
+can leak secrets. The gate splits the work so that the job running pull request code holds nothing worth stealing, and since 0.2 no
+job holds an AI key at all.
 
 `aayu init --gates` installs the template from
 [internal/initrepo/aayudha-merge-gate.yml](../../internal/initrepo/aayudha-merge-gate.yml) into a product
@@ -29,7 +31,7 @@ repository, with the aayudha version filled in. This repository's own copy,
 installs aayudha from the `dev` branch, and it installs the web floor tools (Playwright, axe-core, Lighthouse) from the
 base branch's `packages/floors` for the example product.
 
-### The three jobs
+### The jobs
 
 **`aayudha/merge-gate`** (the `gate` job) has no repository secrets, only the read-only workflow token, and
 `verify` scrubs even that from the tools it runs. It:
@@ -46,9 +48,16 @@ In CI, `verify` fails the job when a floor misses, and also when the pack does n
 story's Completion Goal hash no longer matches its Ready snapshot, a criterion has no evidence from this run, or the
 story has no Ready snapshot. A pull request that names no story passes with nothing to prove.
 
-**`aayudha/inspect`** runs only after the gate job succeeds. It uses the `ai-gateway` environment, which holds the
-model keys, and has `pull-requests: write` to post its comment. It checks out the base branch only, downloads the
-`aayudha-pack` artifact, and reads the diff through the GitHub API. It never runs pull request code.
+**`aayudha/inspect`** runs only after the gate job succeeds. It holds no AI key (founder decision of 2026-10-15): it
+reads the reviewer app's reply on the pull request and has `pull-requests: write` to post its comment. It checks out
+the base branch only, downloads the `aayudha-pack` artifact, and reads the diff through the GitHub API. It never runs
+pull request code.
+
+**`aayudha/inspect-reply`** (the `reply` job) runs on `issue_comment` and `pull_request_review` events, never on
+`pull_request_target`. It checks out the default branch, holds `actions: write` and read access, and runs
+`aayudha inspect "$PR" --ci`. When the chosen reviewer has replied for the head, usable or not, and the head's gate
+run has a green `aayudha/merge-gate` and a red `aayudha/inspect`, it re-runs that run's failed jobs, so the inspect
+check on the head commit itself carries the verdict. Any other comment changes nothing.
 
 **`aayudha/pack`** checks out the base branch, downloads the `aayudha-pack` artifact, and runs `aayudha proof comment`
 with the workflow token and `pull-requests: write`. It verifies the pack against the pull request's current head and
@@ -76,42 +85,69 @@ Every floor tool runs as a child process through `verify.Sandbox`:
 
 ### How inspect works
 
-`aayu inspect <pr> --ci` gathers its input: the pull request title, body, and diff; the story issue; the criteria
-from the Ready snapshot; the pack for the current head; and excerpts (first 3,000 bytes) of the pack's text
-artifacts. Media never reach the model.
+A product repository's CI holds no AI key (founder decision of 2026-10-15). inspect's reviewer is an agent app
+installed on the organisation or account, from a family other than the builder's. aayu asks it with an @-mention and
+reads its reply deterministically:
+
+| App | Request | Replies as | Family |
+|---|---|---|---|
+| Claude | `@claude review` | `claude[bot]` | Anthropic |
+| Codex | `@codex review` | `chatgpt-codex-connector[bot]` | OpenAI |
+| Cursor | `@cursor` | `cursor[bot]` | none until `[inspect] app_families.cursor` names one: Cursor runs several vendors' models |
+| Amp | — | — | cannot review: Amp acts as the account that runs it, so its reply cannot be told from a person's |
+
+`[inspect] apps` lists the apps installed (`aayu doctor`'s `reviewer-apps` row and `aayu install` detect them from
+the account's installations, and from the comments, reviews, and checks on the last ten pull requests).
+`[inspect] reviewer` picks one: `auto`, the default, takes the first listed app whose family is not the builder's;
+with none left, the review falls back to a person, `[autonomy] approver`. A high-risk pull request still gets this
+one reviewer, never two. `reviewer = "model"` keeps the 0.1 model lane for a repository that accepts a key in CI.
 
 1. **Family check.** The builder's family comes from what aayu recorded on the ledger, outside the pull request: the
    delegation record (`aayu delegate`), or the model `aayu build` wrote for each checkpoint commit
-   (`build/<story>/state.json`). It is known only when a record covers the pull request with one family and the pack's
-   `model` (from the `Aayudha-Model` trailer, which the builder writes itself) does not contradict it. Otherwise it is
-   unknown, and every family the records, the trailer, or (with no record) the build lane names is a candidate. Each
-   reviewer is of none of them; with none left, inspect refuses and exits 4. The verdict's first note names the builder
-   family and where it came from.
-2. **Prompt.** Floor results are given as facts. Everything a person or tool wrote (criteria, story, evidence, pull
-   request text, diff capped at 120 kB) is wrapped in `<untrusted>` blocks the system prompt says never to obey.
-3. **Structured reply.** The model must answer in a closed JSON Schema: `disposition` (`merge`, `fix`, or
-   `rebuild`), a summary, per-criterion verdicts (`met`, `unmet`, `unclear`), and findings with severity P0 to P3.
-4. **Enforce.** A floor that does not hold, a P0 or P1 finding, or an unmet criterion turns `merge` into `fix`, with
-   the reason recorded in `overridden`. The model can downgrade a disposition; nothing upgrades it past a floor.
-5. **Comment.** inspect keeps one comment on the pull request, marked `<!-- aayudha:inspect -->`, and replaces it in
-   place. A hidden `aayudha:inspect-state` JSON holds the input hash, the cycle count, and the spend.
+   (`build/<story>/state.json`). It is known only when a record covers the pull request with one family and the
+   `Aayudha-Model` trailer, which the builder writes itself, does not contradict it. Otherwise every family the
+   records, the trailer, or the build lane names is a candidate, and the reviewer app is of none of them. The
+   verdict's first notes name the builder family, where it came from, and the reviewer.
+2. **Request.** `aayu inspect <pr>`, run outside CI by the builder or a person, keeps one comment for the head under
+   that person's account: the mention, the criteria, and the stated format, a fenced `aayudha-review` JSON block with
+   the head, a disposition (`merge`, `fix`, or `rebuild`), a summary, the files reviewed, findings with severity P0 to
+   P3, and a verdict per criterion (`met`, `unmet`, `unclear`). The apps answer the people who connected them, never
+   a workflow token, so CI cannot ask. `build` and a `delegate` sync post the request for you.
+3. **Read.** Only posts by the reviewer's own login count. The newest `aayudha-review` block for the head is checked
+   against the schema. Codex will not use a custom format, so its own review counts instead: a receipt naming the
+   exact head commit, and its inline findings on that commit, each with a P0 to P3 badge. A person's review counts
+   only as an approval of the head by the approver.
+4. **Enforce.** A floor that does not hold, a P0 or P1 finding, or an unmet criterion turns `merge` into `fix`. A
+   changed file the reviewer did not review fails it too: the sealed coverage manifest lists every changed file as
+   reviewed, skipped with a reason (generated, or deleted), or unreviewed (left out of `reviewed`, or past the 120 kB
+   diff cap). "No test for X" notes on test files are dropped; a test gap becomes its criterion's verdict instead.
+   Tests that only restate the code are counted, never posted. Checks the pull request weakens (fewer assertions, a
+   new skip, removed CI steps, `continue-on-error`, a looser threshold) are flagged, not blocked: a pull request may
+   edit its own checks, and a human decides.
+5. **Fail closed.** No reply for the head is disposition `no-reply`; a reply in neither format, or a block that fails
+   the schema, is `malformed-reply`. Both exit 4, so the check stays red; neither counts as a fix cycle.
+6. **Comment.** inspect keeps one comment on the pull request, marked `<!-- aayudha:inspect -->`, and replaces it in
+   place. A hidden `aayudha:inspect-state` JSON holds the input hash, the cycle count, and the coverage manifest.
 
-State drives three limits:
+State drives two limits:
 
-- **Cache.** The input hash covers the diff, the pack's head, Completion Goal hash, and checks, and the criteria.
-  Same inputs, no model call.
+- **Cache.** The input hash covers the diff, the pack's head, Completion Goal hash, and checks, the criteria, and
+  the reply it read. Same inputs, same verdict.
 - **Cycle cap.** Each `fix` or `rebuild` on a new input counts one cycle. After two, the next run pages a human and
-  exits 4 without calling the model.
-- **Budget.** Spend per pull request is capped by `[budget] per_pr_inspect_max`, default 5.00 USD. At the cap,
-  inspect pages and exits 6.
+  exits 4. A `delegate` sync shares the cap with failed required checks it sends back to the builder.
 
-inspect exits 0 on `merge` and 4 on `fix` or `rebuild`, so its check stays red until the reviewer says `merge`.
+inspect exits 0 on `merge` and 4 on anything else, so its check stays red until the reviewer says `merge`.
 
-> **Honest status:** inspect does not read the story's plan in this repository; its inputs are the pull request,
-> the diff, the story, the Ready criteria, and the pack. The `fix` re-entry is a fix in the same pull request. A build
-> record holds the model `build` resolved (`AAYU_MODEL`, else the host's build lane), and without a bot App the
-> founder's token, which agents use here, can write the ledger, so the verdict calls that family attributed, not
-> verified. A pull request made without `aayu build` or `aayu delegate` has no record, so its builder family is unknown.
+> **Honest status:** Codex's own review judges no criterion, so each is `unclear` unless a P0 or P1 finding names it;
+> the pack's evidence proves the criteria. Claude and Cursor were not shown answering in the stated format: Claude did
+> not answer on the test repository (not installed there) and Cursor's Bugbot was disabled for it. In solo mode the
+> person who approves under the human fallback holds the same account the agents use, so that approval is attributed,
+> not verified. Live, on `rahulnakmol/aayu-scratch-1792115145474361918` (kept, `TestLiveInspectApp`): PR 4's
+> inspect check failed with `no-reply`, `aayu inspect 4` posted `@codex review`, Codex answered with a receipt within
+> two minutes, the reply job re-ran the gate (run 38837238758, attempt 2), and the check turned green with `merge`
+> from "comment 6206322212 by chatgpt-codex-connector[bot] (Codex's own review of 221013b15cb2)"; PR 5's reviewer,
+> Claude, never answered, a person's forged `aayudha-review` block re-ran nothing ("no reply from claude for this
+> head; nothing to re-run"), and its check stayed red.
 
 ### How ship consumes the result
 
@@ -134,18 +170,22 @@ The trigger and the key steps, from
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review, edited]
+  issue_comment:
+    types: [created, edited]
+  pull_request_review:
+    types: [submitted, edited]
 
 permissions:
   contents: read
 
 concurrency:
-  group: aayudha-merge-gate-${{ github.event.pull_request.number }}
+  group: aayudha-merge-gate-${{ github.event_name == 'pull_request_target' && 'gate' || 'reply' }}-${{ github.event.pull_request.number || github.event.issue.number }}
   cancel-in-progress: true
 …
 jobs:
   gate:
     name: aayudha/merge-gate
-    if: github.event.pull_request.draft == false
+    if: github.event_name == 'pull_request_target' && github.event.pull_request.draft == false
 …
       - name: Check out the PR head (run only inside aayu verify's sandbox)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -167,13 +207,25 @@ jobs:
   inspect:
     name: aayudha/inspect
     needs: gate
-    if: needs.gate.outputs.story != '0'
+    if: github.event_name == 'pull_request_target' && needs.gate.outputs.story != '0'
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    environment: ai-gateway
     permissions:
       contents: read
       pull-requests: write
+      issues: read
+…
+  reply:
+    name: aayudha/inspect-reply
+    if: >-
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && github.event.issue.state == 'open' &&
+      (endsWith(github.event.comment.user.login, '[bot]') || contains(github.event.comment.body, 'aayudha-review'))) ||
+      (github.event_name == 'pull_request_review' && github.event.pull_request.state == 'open')
+    permissions:
+      actions: write
+      checks: read
+      contents: read
+      pull-requests: read
       issues: read
 ```
 
@@ -198,7 +250,7 @@ type Result struct {
 }
 ```
 
-The real inspect comment on pull request 148 (story 131), from
+A 0.1 inspect comment, reviewed by a model in the gate, on pull request 148 (story 131), from
 `gh api repos/rahulnakmol/agentic-ayudha/issues/148/comments`, shortened:
 
 ```text
@@ -239,14 +291,17 @@ fixed head, returned `merge`, and the spend covers both calls.
 3. The gate fails when the pack does not prove the head, the Completion Goal drifted, or a criterion lacks evidence.
    Enforced by `gateProblems` in [internal/cli/verify.go](../../internal/cli/verify.go); `TestVerifyGateCI` covers
    missing evidence, Completion Goal drift, and a pull request with no story.
-4. The reviewer's model family differs from the builder's, and from every family the builder may be when it is
-   unknown. Enforced by `CheckFamilies` in [internal/models/resolve.go](../../internal/models/resolve.go) and
-   `inspect.BuilderOf` (`TestReviewerFamilyMustDiffer`, `TestBuilderOf`, `TestInspectBuilderFamily`).
+4. The reviewer app's family differs from the builder's, and from every family the builder may be when it is
+   unknown; with no such app, a person reviews. Only the reviewer's own login counts, and a missing or malformed reply
+   fails closed. Enforced by `inspect.ChooseReviewer` and `inspect.ReadReply` in
+   [internal/inspect/apps.go](../../internal/inspect/apps.go) and `inspect.BuilderOf` (`TestInspectThroughApp`,
+   `TestBuilderOf`).
 5. No model disposition overrides a floor, a P0 or P1 finding, or an unmet criterion. Enforced by `Enforce` in
    [internal/inspect/inspect.go](../../internal/inspect/inspect.go), `TestInspectDispositions`.
-6. Same inputs never cost a second model call; after two cycles inspect pages without a call; spend stops at the
-   per-pull-request budget. Enforced in [internal/inspect/inspect.go](../../internal/inspect/inspect.go),
-   `TestInspectDispositions` and `TestInspectMergeBudgetDraft`.
+6. Same inputs give the same verdict; after two cycles inspect pages; a changed file the reviewer did not review
+   fails the gate. Enforced in [internal/inspect/inspect.go](../../internal/inspect/inspect.go) and
+   [internal/inspect/coverage.go](../../internal/inspect/coverage.go), `TestInspectDispositions` and
+   `TestCoverageManifest`.
 7. `ship` merges only with the three gate checks green on the head and the pack from this workflow's own
    `pull_request_target` run on that head, every hash matching, verifying against the Ready snapshot. Enforced in
    [internal/cli/ship.go](../../internal/cli/ship.go), `TestShipRefusals`.
@@ -265,6 +320,9 @@ fixed head, returned `merge`, and the spend covers both calls.
   [internal/verify/netns_other.go](../../internal/verify/netns_other.go): the sandbox.
 - [internal/inspect/inspect.go](../../internal/inspect/inspect.go) and
   [internal/cli/inspect.go](../../internal/cli/inspect.go): the review, its state, and the comment.
+- [internal/inspect/apps.go](../../internal/inspect/apps.go) and
+  [internal/cli/inspect_app.go](../../internal/cli/inspect_app.go): the reviewer apps, the request, the reply, and
+  the reply job's re-run.
 - [internal/cli/ship.go](../../internal/cli/ship.go): how `ship` reads the gate.
 
 ## Read next
