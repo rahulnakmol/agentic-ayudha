@@ -55,6 +55,11 @@ PASS  mcp  aayudha MCP server registered for claude at this aayu's version
 ## mcp fail
 FAIL  mcp  MCP registrations need aayu install --apply
              claude: /usr/bin/aayu reports "aayu 1.1.0"; this aayu is 1.2.0
+## codex-hooks pass
+PASS  codex-hooks  no aayudha hooks for OpenAI Codex here
+## codex-hooks fail
+FAIL  codex-hooks  Codex skips aayudha hooks it does not trust, so no guard rail stops an agent from running a human-only verb there: open /hooks in Codex and trust them
+                     plugin aayudha@aayudha: the PreToolUse hook is not trusted yet; trust it in Codex's /hooks
 ## lfs-quota pass
 N/A  lfs-quota  LFS quota: GitHub has no quota API for this account; watch Settings > Billing > Git LFS (warn at 80 %)
 ## ledger-media pass

@@ -81,6 +81,7 @@ var Checks = []Check{
 	{"secrets", checkSecrets},
 	{"skills-copies", checkSkillCopies},
 	{"mcp", checkMCP},
+	{"codex-hooks", checkCodexHooks},
 	{"lfs-quota", checkLFSQuota},
 	{"ledger-media", checkLedgerMedia},
 	{"ledger-rulesets", checkLedgerRulesets},

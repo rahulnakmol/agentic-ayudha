@@ -296,6 +296,21 @@ func failing(t *testing.T) map[string]func(*Probe) {
 			p.API = fakeAPI(map[string]any{"/repos/o/r/rulesets": []any{map[string]any{"name": "protect-master"}}})
 		},
 		"telemetry": func(p *Probe) { p.Config = load(t, "telemetry.disabled=true") },
+		// D-3.2b.a: the enabled Codex plugin's hooks were never trusted in /hooks.
+		"codex-hooks": func(p *Probe) {
+			home := t.TempDir()
+			cache := filepath.Join(home, ".codex", "plugins", "cache", "aayudha", "aayudha", "0.0.0", "hosts", "codex")
+			_ = os.MkdirAll(cache, 0o755)
+			_ = os.WriteFile(filepath.Join(cache, "hooks.json"), []byte(`{"hooks": {"PreToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": "aayu hook pre-tool --host codex --skills 0.0.0"}]}]}}`), 0o644)
+			_ = os.WriteFile(filepath.Join(home, ".codex", "config.toml"), []byte("[plugins.\"aayudha@aayudha\"]\nenabled = true\n"), 0o644)
+			getenv := p.Getenv
+			p.Getenv = func(k string) string {
+				if k == "HOME" {
+					return home
+				}
+				return getenv(k)
+			}
+		},
 		"mcp": func(p *Probe) {
 			overlay(p, map[string]string{"/usr/bin/aayu version": "aayu 1.1.0\n"})
 		},
