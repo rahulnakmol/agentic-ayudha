@@ -13,6 +13,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/grill"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verify"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -66,6 +67,9 @@ func (e *Env) grillAssess(ctx context.Context, c *github.Client, repo, typ, idea
 	}
 	in := grill.AssessInput{Root: root, Type: typ, Idea: idea, Catalog: cat, Verify: l.Config.Verify}
 	in.Stories, in.Notes = grillStories(ctx, c, repo)
+	if in.Maps, err = verify.LoadMaps(ctx, root); err != nil {
+		in.Notes = append(in.Notes, "feature maps: "+err.Error())
+	}
 	return grill.Assess(in), nil
 }
 

@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/planning"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verify"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -44,9 +46,44 @@ type PlanResult struct {
 	planning.PlanReport
 	Criteria []workitems.Criterion `json:"criteria"`
 	Never    []string              `json:"never_layers"`
-	Ledger   string                `json:"ledger,omitempty"`
-	DryRun   bool                  `json:"dry_run,omitempty"`
-	Next     string                `json:"next,omitempty"`
+	// Features are the mapped features in the footprint's layers (WP4.5b.5),
+	// whose checks a checkpoint names in its checks.
+	Features []PlanFeature `json:"features,omitempty"`
+	Ledger   string        `json:"ledger,omitempty"`
+	DryRun   bool          `json:"dry_run,omitempty"`
+	Next     string        `json:"next,omitempty"`
+}
+
+// PlanFeature is one mapped feature a plan can ground its checkpoints in.
+type PlanFeature struct {
+	ID     string   `json:"id"`
+	Layers []string `json:"layers"`
+	File   string   `json:"file"`
+	Checks []string `json:"checks"`
+}
+
+// planFeatures are the features in the footprint's layers, and every check
+// ref of every map.
+func planFeatures(ctx context.Context, root string, footprint []string) ([]PlanFeature, map[string]bool) {
+	known := map[string]bool{}
+	if root == "" {
+		return nil, known
+	}
+	maps, _ := verify.LoadMaps(ctx, root)
+	var out []PlanFeature
+	for _, m := range maps {
+		for _, f := range m.Features {
+			pf := PlanFeature{ID: f.ID, Layers: f.Layers, File: f.File}
+			for _, c := range f.Checks {
+				known[f.Ref(c)] = true
+				pf.Checks = append(pf.Checks, f.Ref(c))
+			}
+			if slices.ContainsFunc(f.Layers, func(l string) bool { return slices.Contains(footprint, l) }) {
+				out = append(out, pf)
+			}
+		}
+	}
+	return out, known
 }
 
 // readPlan reads a story's plan from the ledger.
@@ -107,11 +144,17 @@ func runPlan(ctx context.Context, e *Env, in Values) error {
 	footprint := planning.Footprint(labels)
 	never := l.Config.Autonomy.Never
 	res := PlanResult{Criteria: chk.Criteria, Never: never}
+	var known map[string]bool
+	res.Features, known = planFeatures(ctx, config.RepoRoot(e.Dir), footprint)
 	if !in.Has("draft") {
 		res.PlanReport = planning.PlanReport{Story: n, Footprint: footprint, Problems: []string{}}
 		res.Next = fmt.Sprintf("draft one checkpoint per footprint layer (skills/plan), then `aayu plan %d --draft <file>`", n)
 		return e.Emit(res, func(w io.Writer) error {
-			fmt.Fprintf(w, "#%d %s: footprint %s; %d criteria; never layers %s\n  next: %s\n", n, story.Title, listOrNone(footprint), len(chk.Criteria), listOrNone(never), res.Next)
+			fmt.Fprintf(w, "#%d %s: footprint %s; %d criteria; never layers %s\n", n, story.Title, listOrNone(footprint), len(chk.Criteria), listOrNone(never))
+			for _, f := range res.Features {
+				fmt.Fprintf(w, "  feature %s (%s): checks %s\n", f.ID, f.File, strings.Join(f.Checks, ", "))
+			}
+			fmt.Fprintf(w, "  next: %s\n", res.Next)
 			return nil
 		})
 	}
@@ -120,6 +163,14 @@ func runPlan(ctx context.Context, e *Env, in Values) error {
 		return err
 	}
 	res.PlanReport = planning.CheckPlan(story, footprint, never, d)
+	for i, cp := range d.Checkpoints {
+		for _, ref := range cp.Checks {
+			if !known[ref] {
+				res.Problems = append(res.Problems, fmt.Sprintf("checkpoint %d (%s): no check %s in the feature maps (`aayu verify --map --json` lists them)", i+1, cp.Layer, ref))
+				res.Pass = false
+			}
+		}
+	}
 	if res.Pass && in.Bool("create") {
 		res.DryRun = c.DryRun()
 		rec := PlanRecord{Story: n, BodyHash: chk.BodyHash, Footprint: res.Footprint, Checkpoints: d.Checkpoints, Review: res.Review,
