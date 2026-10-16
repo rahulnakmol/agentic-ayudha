@@ -265,7 +265,7 @@ func (e *Env) ampLoops(ctx context.Context, root, bin string, apply bool, rec lo
 			continue
 		}
 		prompt := "Call Amp's set_schedule on this thread with exactly this input, and do nothing else. Then reply with one line: `schedule <its ID> on <this thread's ID>`.\n\n" + string(in)
-		out, err := e.run(ctx, root, bin, "-ox", "--project", repo, "--no-archive-after-execute", "--title", "aayudha "+l.Name+" ("+repo+")", "-x", prompt)
+		out, err := e.run(ctx, root, bin, "-ox", "--project", repo, "--no-archive-after-execute", "--title", "aayudha loop: "+l.Name, "-x", prompt)
 		if err != nil {
 			steps = append(steps, fmt.Sprintf("%s: amp failed: %v: %s", l.Name, err, lastLine(out)))
 			continue
