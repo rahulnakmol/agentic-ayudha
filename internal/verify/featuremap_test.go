@@ -31,7 +31,7 @@ func fixtureFeature(verifiedAt string) string {
 	return "# Tasks\n\nPeople add tasks and list them.\n\n```feature\n" + `{"id": "tasks", "layers": ["L01"], "sources": ["app/main.go"],
  "surfaces": {"route": ["GET /{$}", "POST /api/add"], "command": ["list", "add"]}, "verified_at": "` + verifiedAt + `"}` +
 		"\n```\n\n## Sub-features\n\n- add\n\n## How to reach it\n\n- Open `/`.\n\n## Behaviour checks\n\n```check\n" +
-		`{"id": "add", "kind": "ui", "evidence": "screenshot", "steps": [{"goto": "/"}, {"fill": {"label": "Task", "value": "milk"}}, {"click": {"role": "button", "name": "Add task"}}]}` +
+		`{"id": "add", "kind": "ui", "evidence": "screenshot", "steps": [{"goto": "/"}, {"fill": {"label": "Task", "value": "milk"}}, {"click": {"role": "button", "name": "Add task"}}, {"api": {"path": "/api/add", "json": {"name": "Ada"}}}]}` +
 		"\n```\n\n```check\n" + `{"id": "list", "kind": "cli", "evidence": "api-trace", "steps": [{"run": ["list"], "exit": 0}]}` +
 		"\n```\n\n## Gotchas\n\n- None.\n"
 }
@@ -61,7 +61,8 @@ func write(t *testing.T, root string, files map[string]string) {
 	}
 }
 
-// TestMapDrift: a map in sync is clean; then a renamed button, a new route, a
+// TestMapDrift: a map in sync is clean (a request body's "name" is data, not a
+// handle); then a renamed button, a new route, a
 // removed command, a dead index entry, a feature file outside the contract and
 // the index, an unknown check in an evidence map, and an edited source are each
 // reported, by kind, in that one run.

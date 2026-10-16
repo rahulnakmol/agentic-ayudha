@@ -264,36 +264,33 @@ func loadFeature(root, file string) (Feature, []string) {
 	return f, errs
 }
 
-// handles are the strings a check relies on finding in the product: the
-// values of HandleKeys anywhere in its steps.
-func (c Check) handles() []string {
-	var out []string
-	var walk func(v any)
-	walk = func(v any) {
-		switch x := v.(type) {
-		case map[string]any:
-			for k, val := range x {
-				if s, ok := val.(string); ok && slices.Contains(HandleKeys, k) && s != "" {
-					if !slices.Contains(out, s) {
-						out = append(out, s)
-					}
-					continue
+// handle is a string a check relies on finding in the product's source.
+type handle struct{ key, value string }
+
+// handles are the HandleKeys fields of each step's action ({"click": {"name":
+// …}}), never values deeper down, which are data (a request body's "name").
+func (c Check) handles() []handle {
+	var out []handle
+	add := func(k string, v any) {
+		if s, ok := v.(string); ok && s != "" && slices.Contains(HandleKeys, k) && !slices.Contains(out, handle{k, s}) {
+			out = append(out, handle{k, s})
+		}
+	}
+	for _, raw := range c.Steps {
+		var step map[string]any
+		if json.Unmarshal(raw, &step) != nil {
+			continue
+		}
+		for k, action := range step {
+			add(k, action)
+			if fields, ok := action.(map[string]any); ok {
+				for fk, fv := range fields {
+					add(fk, fv)
 				}
-				walk(val)
-			}
-		case []any:
-			for _, e := range x {
-				walk(e)
 			}
 		}
 	}
-	for _, s := range c.Steps {
-		var v any
-		if json.Unmarshal(s, &v) == nil {
-			walk(v)
-		}
-	}
-	sort.Strings(out)
+	sort.Slice(out, func(i, j int) bool { return out[i].value < out[j].value })
 	return out
 }
 
@@ -498,7 +495,7 @@ func checkMap(ctx context.Context, root string, files []string, m *FeatureMap, r
 		for _, c := range f.Checks {
 			for _, h := range c.handles() {
 				if !hasHandle(text.String(), h) {
-					fr.MissingHandles = append(fr.MissingHandles, c.ID+": "+h)
+					fr.MissingHandles = append(fr.MissingHandles, c.ID+": "+h.value)
 				}
 			}
 		}
@@ -524,10 +521,13 @@ func sortSurfaces(s []Surface) {
 	})
 }
 
-// hasHandle finds a handle as a quoted string or as element text in the
-// source: >h<, "h", 'h', or `h`.
-func hasHandle(text, h string) bool {
-	for _, q := range []string{">" + h + "<", `"` + h + `"`, "'" + h + "'", "`" + h + "`"} {
+// hasHandle finds a handle in the source: a test by its name as a word, any
+// other handle quoted or as element text: >h<, "h", 'h', or backquoted.
+func hasHandle(text string, h handle) bool {
+	if h.key == "test" {
+		return regexp.MustCompile(`\b` + regexp.QuoteMeta(h.value) + `\b`).MatchString(text)
+	}
+	for _, q := range []string{">" + h.value + "<", `"` + h.value + `"`, "'" + h.value + "'", "`" + h.value + "`"} {
 		if strings.Contains(text, q) {
 			return true
 		}
