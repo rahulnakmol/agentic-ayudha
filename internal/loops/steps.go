@@ -52,7 +52,9 @@ func ClaudeRoutines(ls []Loop, repo, branch, tz string) []byte {
 		b.WriteString("- **Prompt:**\n\n")
 		writeFence(&b, l.AgentPrompt(repo, branch))
 	}
-	writeGaps(&b, gaps)
+	writeGaps(&b, gaps, "Claude Code", "Claude's auto-fix, which you turn on for one pull request (`/autofix-pr`), also answers that "+
+		"pull request's failed checks and review comments as you. aayudha does not install @claude on GitHub: it needs "+
+		"claude-code-action with an API key in Actions, and no model key goes into CI.")
 	return []byte(strings.TrimRight(b.String(), "\n") + "\n")
 }
 
@@ -86,7 +88,8 @@ func CodexTasks(ls []Loop, repo, branch, tz string) []byte {
 		b.WriteString("- **Prompt:**\n\n")
 		writeFence(&b, l.AgentPrompt(repo, branch))
 	}
-	writeGaps(&b, gaps)
+	writeGaps(&b, gaps, "Codex", "Codex's GitHub app also starts a cloud task as you when you comment `@codex <task>` on an issue or "+
+		"pull request, and reviews pull requests when you turn on automatic code review; neither runs a loop by itself.")
 	return []byte(strings.TrimRight(b.String(), "\n") + "\n")
 }
 
@@ -102,10 +105,17 @@ func writeFence(b *strings.Builder, body string) {
 	b.WriteString("  ```\n\n")
 }
 
-func writeGaps(b *strings.Builder, gaps []string) {
+// writeGaps lists the event loops host has no trigger for: the user's next
+// session picks up their events (Appendix B D-7.1e). also names what else
+// the host offers a person.
+func writeGaps(b *strings.Builder, gaps []string, host, also string) {
 	if len(gaps) == 0 {
 		return
 	}
-	b.WriteString("## Not set up on this host\n\nThese loops start on an event this host has no trigger for; a host that has one runs them.\n\n")
+	b.WriteString("## Picked up by your next session\n\n")
+	fmt.Fprintf(b, "%s has no trigger for these loops' events, so nothing runs when they happen. When your next %s session\n", host, host)
+	b.WriteString("starts in this repository, aayu's SessionStart hook (`aayu install` sets it up) reads GitHub as you, lists each such\n")
+	b.WriteString("event since your last session for a loop no agent host runs yet (" + RecordFile + "), and asks the agent to offer\n")
+	b.WriteString("you its run.\n\n" + also + "\n\n")
 	b.WriteString(strings.Join(gaps, "\n") + "\n")
 }

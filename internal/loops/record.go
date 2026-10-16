@@ -74,8 +74,20 @@ const (
 	Active  = "active"
 	Stale   = "stale"
 	Missing = "missing"
+	// Session: the host has no trigger for the loop's event, so the user's
+	// next session there picks it up: aayu's SessionStart hook lists the
+	// events since the last session (Appendix B D-7.1e).
+	Session = "session"
 	NoHost  = "n/a"
 )
+
+// sessionNote says how the user's next session on host picks up an event.
+var sessionNote = map[string]string{
+	HostAmp:    "the aayudha plugin shows each new event to you when your next Amp session starts (a notice, not agent context); ask the agent to run it",
+	HostCursor: "the sessionStart hook gives each new event to the agent when your next Cursor session starts",
+	HostClaude: "the SessionStart hook gives each new event to the agent when your next Claude Code session starts",
+	HostCodex:  "the SessionStart hook gives each new event to the agent when your next Codex session starts",
+}
 
 // State is one loop on one agent host.
 type State struct {
@@ -86,8 +98,9 @@ type State struct {
 }
 
 // States reports each loop on each of hosts: active (set up as it is now),
-// stale (set up, but the loop changed since), missing, or n/a (the loop does
-// not run there, or the host has no trigger for its event).
+// stale (set up, but the loop changed since), missing, session (the host has
+// no trigger for its event, so the next session picks it up), or n/a (the
+// loop does not run there).
 func States(ls []Loop, rec Record, hosts []string, repo, branch, tz string) []State {
 	var out []State
 	for _, h := range hosts {
@@ -98,6 +111,8 @@ func States(ls []Loop, rec Record, hosts []string, repo, branch, tz string) []St
 			switch {
 			case !l.Runs(h):
 				s.Status, s.Detail = NoHost, "the loop's hosts leave it out"
+			case !ok && sessionNote[h] != "":
+				s.Status, s.Detail = Session, why+"; "+sessionNote[h]
 			case !ok:
 				s.Status, s.Detail = NoHost, why
 			case !set:

@@ -18,8 +18,8 @@ var agentCLIs = map[string][]string{
 // checkLoops reports this repository's loops, scheduled and event alike, on
 // each agent host its user has (the host's CLI is on PATH, or a loop is
 // recorded there): active, stale, or missing against loops/active.json
-// (Appendix B S-7.1d). Loops a host has no trigger for are left to the hosts
-// that have one.
+// (Appendix B S-7.1d). A loop whose event a host has no trigger for shows as
+// session there: the user's next session picks the event up (D-7.1e).
 func checkLoops(_ context.Context, p *Probe) Result {
 	if p.Root == "" {
 		return Result{Status: Pass, Detail: "no checkout"}
@@ -72,7 +72,7 @@ func checkLoops(_ context.Context, p *Probe) Result {
 		}
 		lines = append(lines, line)
 	}
-	detail := fmt.Sprintf("%d active, %d stale, %d missing on %v", count[loops.Active], count[loops.Stale], count[loops.Missing], hosts)
+	detail := fmt.Sprintf("%d active, %d stale, %d missing, %d by the next session on %v", count[loops.Active], count[loops.Stale], count[loops.Missing], count[loops.Session], hosts)
 	if count[loops.Stale]+count[loops.Missing] == 0 {
 		return Result{Status: Pass, Detail: detail, Lines: lines}
 	}

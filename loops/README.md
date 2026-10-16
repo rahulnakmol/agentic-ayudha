@@ -22,10 +22,16 @@ on = "issues.opened"               # issues.opened|labeled, pull_request.opened|
 filter = { label = "type:feedback" }  # optional: label (issues, pull requests), conclusion = "failure"|"success" (check suites)
 ```
 
-Each host starts an event loop with its own trigger where it has one: an Amp orb spawner (`create_github_subscription`)
-for a newly opened issue or pull request, or a Cursor Automation trigger (`git_pull_request`, `git_ci_completed`, or
-`git_label` for an issue with the label). A host without the trigger does not render the loop, and the rendered file
-says why. The Actions fallback never answers an event with a model: its job only records the event in the run summary.
+Each host starts an event loop with its own trigger where it has one (Appendix B D-7.1e has the host × event matrix
+and its sources): an Amp orb spawner (`create_github_subscription`) for a newly opened issue or pull request, and for a
+failed check a spawner on each new pull request whose thread subscribes to its head commit's CI (a chain: it covers the
+heads that thread sees); a Cursor Automation trigger (`git_pull_request`, `git_ci_completed`, or `git_label` for an
+issue with the label); a Claude Code routine for pull request and release events. Where a host has no trigger, the
+event waits for your next session there: `aayu hook session-start`, which `aayu install` registers as each host's
+session-start hook, reads GitHub as you, lists each event since your last session for a loop no host runs yet
+(`loops/active.json`), and asks the agent to offer you its run. Claude Code, Codex, and Cursor give that list to the
+agent; the Amp plugin shows it to you as a notice. Nothing runs until a session starts. The Actions fallback never
+answers an event with a model: its job only records the event in the run summary.
 
 This repository's loops are also the defaults a product copies. `triage` (weekly) and `triage-new` (when an intake form
 opens an issue) replace the retired aayudha-triage workflow: `aayu triage` lists the intake issues with no model, and
@@ -75,7 +81,7 @@ This repository's `[verify] maintainer` is `amp`: the headless Amp run reads the
 - `loops/claude/routines.md`: Claude Code routines, as the values for the claude.ai/code/routines form or `/schedule`
   (Claude Code has no file or API that creates a routine).
 - `loops/codex/scheduled-tasks.md`: Codex scheduled tasks for the ChatGPT desktop app, with each loop's RFC 5545 rule
-  (Codex has no file or API that creates one, and no GitHub event trigger).
+  (Codex has no file or API that creates one, and no GitHub event trigger; your next Codex session picks up events).
 
 ## Setting the loops up on your agent hosts
 
@@ -91,7 +97,8 @@ and shows the exact steps for the rest:
 
 Record each loop you set up with `aayu install --loops --host <host> --record <loop>=<ID>` (or `all=<ID>`); the record
 is `loops/active.json`, committed with the loops. `aayu doctor` then reports every loop, scheduled or event, on each of
-your hosts: active, stale (the loop changed after it was set up), or missing.
+your hosts: active, stale (the loop changed after it was set up), missing, or session (the host has no trigger for the
+loop's event, so your next session there picks it up).
 
 Every run starts with `aayu hook loop:<name>`, on every host and for both kinds of loop: it exits 4 while the
 repository is halted (`aayu halt`), 6 while the `[budget]` breaker has paused agent lanes or the Actions loops have used

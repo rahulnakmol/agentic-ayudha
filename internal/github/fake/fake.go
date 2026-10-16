@@ -81,6 +81,8 @@ type PR struct {
 	// MergeCommitSHA is set when the PR merges through the fake.
 	MergeCommitSHA string    `json:"merge_commit_sha,omitempty"`
 	CreatedAt      time.Time `json:"created_at,omitzero"`
+	UpdatedAt      time.Time `json:"updated_at,omitzero"`
+	Labels         []Label   `json:"labels,omitempty"`
 	Reviews        []Review  `json:"-"`
 	Files          []string  `json:"-"`
 	Diff           string    `json:"-"`
@@ -122,6 +124,8 @@ type CheckRun struct {
 	Name       string `json:"name"`
 	Status     string `json:"status"`
 	Conclusion string `json:"conclusion"`
+	// CompletedAt is when the check finished (RFC 3339), or empty.
+	CompletedAt string `json:"completed_at,omitempty"`
 }
 
 // WorkflowRun is an Actions run.
@@ -144,6 +148,9 @@ type Release struct {
 	Body    string           `json:"body"`
 	HTMLURL string           `json:"html_url"`
 	Assets  []map[string]any `json:"assets,omitempty"`
+	Draft   bool             `json:"draft,omitempty"`
+	// PublishedAt is when the release was published (RFC 3339), or empty.
+	PublishedAt string `json:"published_at,omitempty"`
 }
 
 // ArtifactZip is a run artifact with its zip bytes.
@@ -685,6 +692,13 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		default:
 			notFound()
 		}
+	case m == "GET" && p == repo+"/releases":
+		out := []*Release{}
+		for _, rel := range g.Releases {
+			out = append(out, rel)
+		}
+		slices.SortFunc(out, func(a, b *Release) int { return int(b.ID - a.ID) })
+		reply(200, out)
 	case m == "GET" && reRelTag.MatchString(p):
 		if rel := g.Releases[reRelTag.FindStringSubmatch(p)[1]]; rel != nil {
 			reply(200, rel)

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/loops"
 )
 
@@ -204,5 +205,68 @@ func TestInstallLoops(t *testing.T) {
 	}
 	if code, _, _ := run(t, env, opts, "install", "--loops", "--repo", "o/r", "--host", "codex", "--record", "triage-new=x"); code != ExitUsage {
 		t.Errorf("recording an event loop on Codex, which has no trigger for it: exit %d, want %d", code, ExitUsage)
+	}
+}
+
+// Appendix B D-7.1e: where no host trigger runs an event loop, the next session's SessionStart hook lists the
+// GitHub events since the last session, once, for each event loop no agent host runs; a loop recorded as set up
+// on a host is left to that host.
+func TestSessionStartLoopEvents(t *testing.T) {
+	dir := checkout(t)
+	_ = os.MkdirAll(filepath.Join(dir, "loops"), 0o755)
+	for name, body := range map[string]string{
+		"triage-new":      "description = \"Triage.\"\ncommand = [\"triage\"]\non = \"issues.opened\"\nfilter = { label = \"intake\" }\n",
+		"feedback":        "description = \"Feedback.\"\ncommand = [\"evolve\"]\non = \"issues.opened\"\nfilter = { label = \"type:feedback\" }\n",
+		"ci-failed":       "description = \"Failed check.\"\ncommand = [\"status\", \"--work\"]\non = \"check_suite.completed\"\nfilter = { conclusion = \"failure\" }\n",
+		"release-measure": "description = \"Measure.\"\ncommand = [\"measure\"]\non = \"release.published\"\n",
+	} {
+		_ = os.WriteFile(filepath.Join(dir, "loops", name+".toml"), []byte(body), 0o644)
+	}
+	g := fake.New(t, "o/r", "User")
+	g.AddIssue("New intake", "", "intake").CreatedAt = "2026-10-16T08:00:00Z"
+	g.AddIssue("Old intake", "", "intake").CreatedAt = "2026-10-14T08:00:00Z" // before the first session's day
+	g.AddIssue("Feedback", "", "type:feedback").CreatedAt = "2026-10-16T08:00:00Z"
+	g.AddPR("Fix", "", "dev1", "fix", strings.Repeat("c", 40), "dev").UpdatedAt = time.Date(2026, 10, 16, 8, 0, 0, 0, time.UTC)
+	g.CheckRuns[strings.Repeat("c", 40)] = []fake.CheckRun{
+		{Name: "build", Status: "completed", Conclusion: "failure", CompletedAt: "2026-10-16T09:00:00Z"},
+		{Name: "lint", Status: "completed", Conclusion: "success", CompletedAt: "2026-10-16T09:00:00Z"},
+		{Name: "docs", Status: "completed", Conclusion: "failure", CompletedAt: "2026-10-14T09:00:00Z"},
+	}
+	g.Releases = map[string]*fake.Release{
+		"v1.0.0": {ID: 1, TagName: "v1.0.0", PublishedAt: "2026-10-16T09:30:00Z"},
+		"v1.1.0": {ID: 2, TagName: "v1.1.0", Draft: true},
+	}
+	now := time.Date(2026, 10, 16, 10, 0, 0, 0, time.UTC)
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "t"}
+	opts := Options{Dir: dir, GitHubAPI: g.URL(), GitHubGap: -1, Now: func() time.Time { return now }}
+	if code, _, errOut := run(t, env, opts, "install", "--loops", "--repo", "o/r", "--host", "amp", "--record", "feedback=sub-9"); code != 0 {
+		t.Fatalf("record: exit %d: %s", code, errOut)
+	}
+	code, out, errOut := run(t, env, opts, "hook", "session-start", "--host", "claude")
+	if code != 0 {
+		t.Fatalf("session-start: exit %d: %s", code, errOut)
+	}
+	for _, want := range []string{"since 2026-10-15T10:00:00Z", "Loop triage-new", "- issue #1 opened\n", `- pull request #4: check "build" completed with failure on ccccccc`,
+		"- release v1.0.0 published\n", "run `aayu hook loop:release-measure`"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("session-start lacks %q:\n%s", want, out)
+		}
+	}
+	for _, not := range []string{"#2", "Loop feedback", `"lint"`, `"docs"`, "v1.1.0", "New intake"} {
+		if strings.Contains(out, not) {
+			t.Errorf("session-start reports %q (old, recorded on amp, not matching, a draft, or untrusted text):\n%s", not, out)
+		}
+	}
+	if _, out, _ := run(t, env, opts, "hook", "session-start", "--host", "claude"); strings.Contains(out, "aayudha: since") {
+		t.Errorf("the second session reports the same events again:\n%s", out)
+	}
+	now = now.Add(time.Hour)
+	g.AddIssue("Newer intake", "", "intake").CreatedAt = "2026-10-16T10:30:00Z"
+	_, out, _ = run(t, env, opts, "hook", "session-start", "--host", "cursor")
+	var cursor struct {
+		Context string `json:"additional_context"`
+	}
+	if err := json.Unmarshal([]byte(out), &cursor); err != nil || !strings.Contains(cursor.Context, "issue #5 opened") || strings.Contains(cursor.Context, "#1 opened") {
+		t.Errorf("cursor session-start: %v %q", err, out)
 	}
 }

@@ -7,7 +7,7 @@ terraform {
   required_providers {
     cursor = {
       source  = "cursor/cursor"
-      version = "~> 0.1"
+      version = "~> 0.8"
     }
   }
 }
@@ -94,7 +94,7 @@ resource "cursor_platform_workflow" "aayudha_housekeeping" {
   ]
 }
 
-# release-measure (On release.published): not rendered: Cursor Automations have no release trigger.
+# release-measure (On release.published): not rendered: Cursor Automations have no release trigger. Your next Cursor session's sessionStart hook reports the event.
 
 # retro: Mon at 10:00 Europe/London
 resource "cursor_platform_workflow" "aayudha_retro" {
