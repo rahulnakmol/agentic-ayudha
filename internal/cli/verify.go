@@ -113,6 +113,9 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return err
 	}
+	if in.Bool("map") {
+		return e.verifyMap(ctx, root)
+	}
 	head, err := gitIn(ctx, root, "rev-parse", "HEAD")
 	if err != nil {
 		return Wrap(ExitUsage, err)
@@ -302,6 +305,44 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 	}
 	if len(res.Gate) > 0 {
 		return Errorf(ExitBlocked, "merge gate: %s", strings.Join(res.Gate, "; "))
+	}
+	return nil
+}
+
+// verifyMap is `verify --map`: the feature maps' drift check (WP4.5b.1). It
+// reads the maps and the checkout and runs no product code.
+func (e *Env) verifyMap(ctx context.Context, root string) error {
+	d, _, err := verify.CheckMaps(ctx, root)
+	if err != nil {
+		return Wrap(ExitUsage, err)
+	}
+	if err := e.Emit(d, func(w io.Writer) error {
+		switch d.Verdict {
+		case verify.DriftNone:
+			_, err := fmt.Fprintln(w, "no feature map here (.agents/skills/verify-<product>/features/README.md); `aayu init --verify-skill` scaffolds one")
+			return err
+		case verify.DriftClean:
+			fmt.Fprintf(w, "feature maps in sync with the source at %s:", short(d.Head))
+		default:
+			fmt.Fprintf(w, "feature maps at %s: %s", short(d.Head), d.Verdict)
+		}
+		for _, m := range d.Maps {
+			n := 0
+			for _, f := range m.Features {
+				n += f.Checks
+			}
+			fmt.Fprintf(w, " %s (%d features, %d checks)", m.Dir, len(m.Features), n)
+		}
+		fmt.Fprintln(w)
+		for _, x := range d.Items() {
+			fmt.Fprintf(w, "  %s\n", x)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	if d.Verdict == verify.DriftFound {
+		return Errorf(ExitFloor, "feature map drift: fix the map in its skill directory, or let the maintain pass do it")
 	}
 	return nil
 }
