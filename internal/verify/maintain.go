@@ -56,28 +56,38 @@ func (b Brief) Digest() string {
 	return hex.EncodeToString(h[:8])
 }
 
-// BriefDigest reads the digest of a brief comment, or "".
-func BriefDigest(body string) string {
+// BriefDigest reads a brief comment's digest, or "", and whether it is a
+// record (posted by an Actions loop, waking no one) rather than a hand-off.
+func BriefDigest(body string) (digest string, record bool) {
 	rest, ok := strings.CutPrefix(body, BriefMarker)
 	if !ok {
-		return ""
+		return "", false
 	}
 	var d struct {
 		Digest string `json:"digest"`
+		Record bool   `json:"record"`
 	}
 	end := strings.Index(rest, " -->")
 	if end < 0 || json.Unmarshal([]byte(rest[:end]), &d) != nil {
-		return ""
+		return "", false
 	}
-	return d.Digest
+	return d.Digest, d.Record
 }
 
 // Comment renders the brief for maintainer (a key of Maintainers, or "").
-func (b Brief) Comment(maintainer string) string {
+// A record is what an Actions loop posts (D-4.5b.7): the bot's mention wakes
+// no app, so it mentions none and leaves the hand-off to the user-side
+// schedule (a headless Amp run or a Cursor automation, as the person).
+func (b Brief) Comment(maintainer string, record bool) string {
 	var s strings.Builder
-	fmt.Fprintf(&s, "%s{\"digest\":%q} -->\n", BriefMarker, b.Digest())
-	if m := Maintainers[maintainer]; m != "" {
-		s.WriteString(m + " ")
+	if record {
+		fmt.Fprintf(&s, "%s{\"digest\":%q,\"record\":true} -->\n", BriefMarker, b.Digest())
+		s.WriteString("**Recorded by the Actions loop; no agent was woken.** The user-side schedule (a headless `amp -x` run or a Cursor automation, as the person; loops/README.md) hands this to the maintainer.\n\n")
+	} else {
+		fmt.Fprintf(&s, "%s{\"digest\":%q} -->\n", BriefMarker, b.Digest())
+		if m := Maintainers[maintainer]; m != "" {
+			s.WriteString(m + " ")
+		}
 	}
 	fmt.Fprintf(&s, "please run the **maintain** procedure of the `verify` skill on the feature maps at `%s`, and open at most one pull request with the corrections.\n\n", short7(b.Drift.Head))
 	s.WriteString("### Drift (`aayu verify --map`)\n\n")

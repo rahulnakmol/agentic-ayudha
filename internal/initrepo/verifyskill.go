@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"maps"
 	"os"
@@ -88,5 +89,35 @@ func (in *Init) verifySkill(_ context.Context, x Extras) error {
 	}
 	in.note("verify-skill", "file", VerifySkillDir(in.Repo.Name), "unchanged",
 		"control tool for a "+stack+" product; add the features with the verify skill's create procedure, then `aayu verify --map`")
-	return nil
+	if x.Maintainer == "" {
+		in.note("verify-skill", "config", "[verify] maintainer", "unchanged", "no maintainer chosen: set it to the agent that keeps the maps (amp, codex, cursor, or claude)")
+		return nil
+	}
+	return in.setVerifyKey("maintainer", x.Maintainer)
+}
+
+var verifyHeader = regexp.MustCompile(`(?m)^\[verify\][ \t]*(#.*)?$`)
+
+// setVerifyKey sets one [verify] key in the repository config, adding the
+// section when it is missing; a key already set there is kept.
+func (in *Init) setVerifyKey(key, value string) error {
+	cur, err := os.ReadFile(filepath.Join(in.Root, ConfigPath))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	line := fmt.Sprintf("%s = %q\n", key, value)
+	loc := verifyHeader.FindIndex(cur)
+	if loc == nil {
+		return in.appendConfig("verify", "[verify]\n"+line)
+	}
+	body := cur[loc[1]:]
+	if end := regexp.MustCompile(`(?m)^\[`).FindIndex(body); end != nil {
+		body = body[:end[0]]
+	}
+	if regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(key) + `\s*=`).Match(body) {
+		in.note("verify-skill", "config", "[verify] "+key, "kept", "already set")
+		return nil
+	}
+	next := string(cur[:loc[1]]) + "\n" + strings.TrimSuffix(line, "\n") + string(cur[loc[1]:])
+	return in.updateFile("verify-skill", ConfigPath, []byte(next))
 }

@@ -322,11 +322,21 @@ func TestVerifyMaintainHandoff(t *testing.T) {
 	git(t, dir, "add", "-A")
 	git(t, dir, "commit", "--quiet", "-m", "app")
 	git(t, dir, "update-ref", "refs/remotes/origin/dev", "HEAD")
-	if code, _, errOut := run(t, env, opts, "verify", "--check", "all", "--maintain", "drift"); code != ExitFloor || len(briefs()) != 2 || !strings.Contains(briefs()[1], "`hello.hi` failed: printed nothing") {
+	// D-4.5b.7: the Actions sweep only records it, with no mention, once; the record does not stop the person's run.
+	ci := map[string]string{"PATH": os.Getenv("PATH"), "GITHUB_TOKEN": "human-token", "AAYU_BOT_TOKEN": "bot-token"}
+	for i := 0; i < 2; i++ {
+		if code, _, errOut := run(t, ci, opts, "verify", "--check", "all", "--maintain", "drift", "--ci", "--repo", "o/r"); code != ExitFloor || len(briefs()) != 2 {
+			t.Fatalf("CI sweep %d: %d %s %d briefs", i, code, errOut, len(briefs()))
+		}
+	}
+	if b := briefs()[1]; !strings.Contains(b, "Recorded by the Actions loop; no agent was woken") || strings.Contains(b, "@claude") {
+		t.Fatalf("record: %s", b)
+	}
+	if code, _, errOut := run(t, env, opts, "verify", "--check", "all", "--maintain", "drift"); code != ExitFloor || len(briefs()) != 3 || !strings.Contains(briefs()[2], "@claude please") || !strings.Contains(briefs()[2], "`hello.hi` failed: printed nothing") {
 		t.Fatalf("sweep: %d %s %v", code, errOut, briefs())
 	}
 	// always posts even an unchanged report.
-	if code, _, errOut := run(t, env, opts, "verify", "--map", "--maintain", "always"); code != ExitFloor || len(briefs()) != 3 {
+	if code, _, errOut := run(t, env, opts, "verify", "--map", "--maintain", "always"); code != ExitFloor || len(briefs()) != 4 {
 		t.Fatalf("always: %d %s %d briefs", code, errOut, len(briefs()))
 	}
 	if code, _, _ := run(t, env, opts, "verify", "--maintain", "drift"); code != ExitUsage {

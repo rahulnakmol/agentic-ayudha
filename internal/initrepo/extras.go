@@ -82,6 +82,9 @@ type Extras struct {
 	Version                                              string
 	// Assets are the embedded asset trees (hosts/verify-skill/ for --verify-skill).
 	Assets fs.FS
+	// Maintainer is the agent the human chose to maintain the feature maps
+	// (--verify-skill, D-4.5b.8), written as [verify] maintainer; "" writes none.
+	Maintainer string
 	// Loops are the rendered loops/*.toml of the checkout (WP7.1), by path:
 	// the Actions fallback and the Amp and Cursor files; --gates writes them.
 	Loops map[string][]byte

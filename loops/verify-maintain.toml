@@ -4,4 +4,4 @@ description = "Weekly maintain pass: hand the feature maps' maintain brief to th
 command = ["verify", "--map", "--maintain", "always"]
 cron = "0 9 * * 1"
 bot = true
-prompt = "If [verify] maintainer is amp or unset, follow the maintain procedure of the verify skill on the brief aayu just posted: edit only the feature maps' skill directories and open at most one pull request. Otherwise report the brief's link."
+prompt = "If [verify] maintainer is amp, follow the maintain procedure of the verify skill on the brief aayu just posted: edit only the feature maps' skill directories and open at most one pull request. Otherwise report the brief's link."

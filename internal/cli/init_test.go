@@ -561,3 +561,35 @@ func TestInitRetiredTriageWorkflow(t *testing.T) {
 		t.Fatal("init touched a product's own aayudha-triage.yml")
 	}
 }
+
+// D-4.5b.8: init --verify-skill offers only the agents detected for the
+// repository (here the amp CLI, signed in) and writes the one the human picks
+// as [verify] maintainer; an agent it did not offer is not written.
+func TestInitVerifySkillMaintainer(t *testing.T) {
+	for answer, want := range map[string]string{"amp\n": "maintainer = \"amp\"", "codex\n": ""} {
+		g := fake.New(t, "o/r", "User")
+		dir := checkout(t)
+		opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, Assets: aayudha.Assets,
+			IsTerminal: func(any) bool { return true },
+			LookPath: func(b string) (string, error) {
+				if b == "amp" {
+					return "/usr/local/bin/amp", nil
+				}
+				return "", os.ErrNotExist
+			},
+			Exec: func(_ context.Context, dir, name string, args ...string) (string, error) {
+				if name == "/usr/local/bin/amp" {
+					return "founder@example.com", nil
+				}
+				return realGitWithLFS(context.Background(), dir, name, args...)
+			}}
+		code, _, errOut := runIn(t, map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}, opts, answer, "init", "--yes", "--json", "--verify-skill")
+		if code != 0 || !strings.Contains(errOut, "Detected: amp. [amp, or Enter to skip]") {
+			t.Fatalf("%q: exit %d: %s", answer, code, errOut)
+		}
+		cfg, _ := os.ReadFile(filepath.Join(dir, ".aayudha", "config.toml"))
+		if got := strings.Contains(string(cfg), "[verify]\nmaintainer = \"amp\""); got != (want != "") || strings.Contains(string(cfg), "codex") {
+			t.Errorf("%q: config:\n%s", answer, cfg)
+		}
+	}
+}
