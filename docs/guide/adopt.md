@@ -43,15 +43,15 @@ evidence".
 
 | Cost | At Level 2 |
 |---|---|
-| Keys | One model key, stored as a repository secret (`AAYU_SECRET_OPENAI`, `AAYU_SECRET_ANTHROPIC`, or a gateway key), for `inspect` in CI |
-| CI changes | New workflows: the merge gate, a guard that removes Ready when a story is edited, intake triage, and an incident runner you trigger by hand |
+| Keys | None in CI: product CI never calls a model. `inspect` reads the review of an agent app you install on your account (Claude, Codex, or Cursor), and triage runs from your own agent |
+| CI changes | New workflows: the merge gate, a guard that removes Ready when a story is edited, and an incident runner you trigger by hand |
 | CI minutes | About 10 minutes per push to a story's pull request in this repository (8 for the floors, 2 for the review); yours depend on your tests |
-| Model spend | `inspect` is capped at 5 USD per pull request by default. One review of pull request 148 cost 0.37 USD |
+| Model spend | None in CI. The reviewer app bills through your own subscription to it |
 | Storage | None to set up: screenshots and recordings stay in each CI run's `aayudha-pack` file for `[proof] retention_days` (90 by default, GitHub's limit is 90 days on a public repository), and `ship` copies the pack without them to the ledger. A private bucket (S3, R2, Azure Blob Storage, or Google Cloud Storage) is optional, for longer retention |
 
-> **Needs setup:** nothing beyond the model key. Proof needs no bot App, bucket, or secret: the pack waits as a file
-> on the CI run with a comment on the pull request, and `ship` checks it came from that run and records it under your
-> name.
+> **Needs setup:** nothing beyond a reviewer app installed on your account (`aayu doctor` detects it). Proof needs
+> no bot App, bucket, or secret: the pack waits as a file on the CI run with a comment on the pull request, and
+> `ship` checks it came from that run and records it under your name.
 
 **Good for:** teams that let agents write real code and need to know it is safe to merge.
 
@@ -96,7 +96,7 @@ switched on.
 | From | To | Run |
 |---|---|---|
 | Nothing | Level 1 | `aayu init`, then `aayu install --host <your host> --apply` |
-| Level 1 | Level 2 | `aayu init --gates`, add a model key secret, and commit the new workflows through a pull request |
+| Level 1 | Level 2 | `aayu init --gates`, install a reviewer app (Claude, Codex, or Cursor) and name it in `[inspect] apps`, and commit the new workflows through a pull request |
 | Level 2 | Level 3 | `aayu init --identity`, then `aayu init --integrations` for the services you use |
 
 Every step is idempotent: running it again changes nothing. And `aayu uninit` removes what `init` created.

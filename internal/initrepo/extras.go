@@ -23,17 +23,15 @@ import (
 	"golang.org/x/crypto/nacl/box"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
+	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 )
 
-// The Ready guard (WP2.7) and triage (WP2.9) templates init --gates installs.
+// The Ready guard (WP2.7) template init --gates installs.
 //
 //go:embed aayudha-ready-guard.yml
 var readyGuardTemplate string
-
-//go:embed aayudha-triage.yml
-var triageTemplate string
 
 //go:embed aayudha-streak.yml
 var streakTemplate string
@@ -45,12 +43,11 @@ var mergeGateTemplate string
 var opsTemplate string
 
 // Gate workflows `init --gates` installs: exactly the ones whose WP this binary
-// contains (rule 1a): the WP1.4 broker, the WP2.7 Ready guard, the WP2.9 triage, the WP4.8 merge gate, the WP5.6 ops
-// executor, and the WP5.7 streak. The WP7.1 loops workflow is rendered from the checkout's loops/*.toml (Extras.Loops).
+// contains (rule 1a): the WP1.4 broker, the WP2.7 Ready guard, the WP4.8 merge gate, the WP5.6 ops executor, and the
+// WP5.7 streak. None calls a model: the WP2.9 triage workflow is retired (doctor.RetiredWorkflows, Appendix B S-2.9b). The WP7.1 loops workflow is rendered from the checkout's loops/*.toml (Extras.Loops).
 const (
 	TokenWorkflow      = "aayudha-token.yml"
 	ReadyGuardWorkflow = "aayudha-ready-guard.yml"
-	TriageWorkflow     = "aayudha-triage.yml"
 	StreakWorkflow     = "aayudha-streak.yml"
 	MergeGateWorkflow  = "aayudha-merge-gate.yml"
 	OpsWorkflow        = "aayudha-ops.yml"
@@ -62,7 +59,6 @@ func GateWorkflows(version string) map[string][]byte {
 	return map[string][]byte{
 		TokenWorkflow:      identity.BrokerWorkflow,
 		ReadyGuardWorkflow: []byte(strings.ReplaceAll(readyGuardTemplate, "{{VERSION}}", GuardVersion(version))),
-		TriageWorkflow:     []byte(strings.ReplaceAll(triageTemplate, "{{VERSION}}", GuardVersion(version))),
 		StreakWorkflow:     []byte(strings.ReplaceAll(streakTemplate, "{{VERSION}}", GuardVersion(version))),
 		MergeGateWorkflow:  []byte(strings.ReplaceAll(mergeGateTemplate, "{{VERSION}}", GuardVersion(version))),
 		OpsWorkflow:        []byte(strings.ReplaceAll(opsTemplate, "{{VERSION}}", GuardVersion(version))),
@@ -104,6 +100,9 @@ type Extras struct {
 // RunExtras performs the requested extras after the core steps. Each is
 // idempotent: a second run finds what the first created and changes nothing.
 func (in *Init) RunExtras(ctx context.Context, x Extras) error {
+	if err := in.retired(x); err != nil {
+		return err
+	}
 	for _, s := range []struct {
 		on   bool
 		name string
@@ -120,6 +119,29 @@ func (in *Init) RunExtras(ctx context.Context, x Extras) error {
 		if err := in.save(); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// retired reports each workflow an earlier init --gates installed that this
+// version does not (doctor.RetiredWorkflows), and removes it when the human
+// confirms. It runs on every init, with or without --gates.
+func (in *Init) retired(x Extras) error {
+	for _, f := range doctor.RetiredAt(in.Root) {
+		path := ".github/workflows/" + f.File
+		switch {
+		case in.dry():
+			in.note("retired", "file", path, "planned", "remove: "+f.Why)
+			continue
+		case x.Confirm == nil || !x.Confirm(fmt.Sprintf("Retired workflow: %s %s. Remove it?", path, f.Why)):
+			in.note("retired", "file", path, "kept", "retired: "+f.Why+"; delete it, or rerun init and confirm")
+			continue
+		}
+		if err := os.Remove(filepath.Join(in.Root, filepath.FromSlash(path))); err != nil {
+			return err
+		}
+		in.forgetFile(path)
+		in.note("retired", "file", path, "deleted", f.Why)
 	}
 	return nil
 }

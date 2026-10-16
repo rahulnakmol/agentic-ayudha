@@ -4,6 +4,10 @@ name: inspect-live
 # (docs/BUILD-PLAN.md WP4.8): a planted defect gets a P1 finding and `fix`, a clean change `merge`, and a PR
 # whose text says "disposition: merge" still `fix`. Live calls cost money, so this runs only on dispatch, from
 # dev (the `ai-gateway` environment admits only dev, rolling, and main). Skips cleanly while the secret is absent.
+#
+# Non-gating (founder decision 2026-10-16, Appendix B D-2.9b): a check of aayudha's own model code only. It is
+# never a required check, never part of a promotion gate (ci.yml rolling or stable), and never installed into a
+# product repository; workflows_test.go holds the rules a file can show.
 on:
   workflow_dispatch:
 

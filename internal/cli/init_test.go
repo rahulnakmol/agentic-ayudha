@@ -313,9 +313,9 @@ func TestInitAdoptsLedgerAndUninit(t *testing.T) {
 }
 
 // WP2.6 accept: --gates installs exactly the workflows whose WP the binary has
-// (golden): two on the WP2.6 binary, three since WP2.9 added triage, four
-// since WP4.8 added the merge gate, five with the WP5.7 streak, six with the
-// WP5.6 ops executor, and the WP7.1 loops workflow when the checkout has loops;
+// (golden): the broker, the Ready guard, the WP4.8 merge gate, the WP5.7
+// streak, the WP5.6 ops executor, and the WP7.1 loops workflow when the
+// checkout has loops (the WP2.9 triage workflow is retired, S-2.9b);
 // every extra is idempotent; uninit --external lists what init created outside
 // the repository.
 func TestInitExtras(t *testing.T) {
@@ -346,10 +346,10 @@ func TestInitExtras(t *testing.T) {
 		}
 	}
 	slices.Sort(workflows)
-	if !slices.Equal(workflows, []string{"aayudha-loops.yml", "aayudha-merge-gate.yml", "aayudha-ops.yml", "aayudha-ready-guard.yml", "aayudha-streak.yml", "aayudha-token.yml", "aayudha-triage.yml", "ci.yml"}) || files[".github/workflows/ci.yml"] != ciYML {
+	if !slices.Equal(workflows, []string{"aayudha-loops.yml", "aayudha-merge-gate.yml", "aayudha-ops.yml", "aayudha-ready-guard.yml", "aayudha-streak.yml", "aayudha-token.yml", "ci.yml"}) || files[".github/workflows/ci.yml"] != ciYML {
 		t.Fatalf("workflows after --gates: %v", workflows)
 	}
-	for _, wf := range []string{"aayudha-merge-gate.yml", "aayudha-ops.yml", "aayudha-ready-guard.yml", "aayudha-streak.yml", "aayudha-token.yml", "aayudha-triage.yml"} {
+	for _, wf := range []string{"aayudha-merge-gate.yml", "aayudha-ops.yml", "aayudha-ready-guard.yml", "aayudha-streak.yml", "aayudha-token.yml"} {
 		golden := filepath.Join("testdata", "gates", wf)
 		if *updateGolden {
 			_ = os.MkdirAll(filepath.Dir(golden), 0o755)
@@ -514,5 +514,50 @@ func TestInitVerifySkill(t *testing.T) {
 				t.Errorf("after uninit: %v", slices.Sorted(maps.Keys(after)))
 			}
 		})
+	}
+}
+
+// S-2.9b: a repository that still has the retired triage workflow is told on
+// every init; a dry run plans its removal, a confirmed run removes it, and a
+// product's own file of the same name is never touched.
+func TestInitRetiredTriageWorkflow(t *testing.T) {
+	g := fake.New(t, "o/r", "User")
+	dir := checkout(t)
+	triage := filepath.Join(dir, ".github", "workflows", "aayudha-triage.yml")
+	_ = os.MkdirAll(filepath.Dir(triage), 0o755)
+	_ = os.WriteFile(triage, []byte("name: aayudha-triage\non:\n  issues:\njobs: {}\n"), 0o644)
+	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}
+	change := func(out string) string {
+		var r struct {
+			Changes []initrepo.Change `json:"changes"`
+		}
+		_ = json.Unmarshal([]byte(out), &r)
+		for _, c := range r.Changes {
+			if c.Name == ".github/workflows/aayudha-triage.yml" {
+				return c.Result + ": " + c.Detail
+			}
+		}
+		return ""
+	}
+	if code, out, errOut := run(t, env, opts, "init", "--dry-run", "--json"); code != 0 || !strings.HasPrefix(change(out), "planned: remove: classifies intake issues with a model in CI") {
+		t.Fatalf("dry run: %d %q %s", code, change(out), errOut)
+	}
+	if _, err := os.Stat(triage); err != nil {
+		t.Fatal("a dry run removed the workflow")
+	}
+	if code, out, errOut := run(t, env, opts, "init", "--yes", "--json"); code != 0 || !strings.HasPrefix(change(out), "deleted: ") {
+		t.Fatalf("init: %d %q %s", code, change(out), errOut)
+	}
+	if _, err := os.Stat(triage); !os.IsNotExist(err) {
+		t.Fatal("the retired workflow is still there after a confirmed init")
+	}
+	own := "name: product-triage\non: push\njobs: {}\n"
+	_ = os.WriteFile(triage, []byte(own), 0o644)
+	if code, out, errOut := run(t, env, opts, "init", "--yes", "--json"); code != 0 || change(out) != "" {
+		t.Fatalf("a product's own file: %d %q %s", code, change(out), errOut)
+	}
+	if b, _ := os.ReadFile(triage); string(b) != own {
+		t.Fatal("init touched a product's own aayudha-triage.yml")
 	}
 }

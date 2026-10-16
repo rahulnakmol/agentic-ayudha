@@ -6,7 +6,7 @@ skill: Skill: SKILL.md copied into the repository
 mcp: aayu mcp: verbs as MCP tools over stdio
 binary: aayu binary: checks, writes, hooks
 github: GitHub: issues, pull requests, checks
-ci: CI workflows: merge gate, triage, loops
+ci: CI workflows: merge gate, guards, loops
 ledger: ledger branch: packs, snapshots, actions log
 agent -> skill: reads
 agent -> mcp: tool calls

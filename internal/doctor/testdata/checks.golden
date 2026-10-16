@@ -136,6 +136,11 @@ WARN  reviewer-apps  reviewer apps detected but not configured: codex, cursor; a
                          Amp has no @amp mention and replies as the person who connected it, so aayu cannot tell its reply from the builder's
                        no reviewer app in [inspect] apps (`aayu doctor` detects installed ones)
                        falling back to a human review
+## retired-workflows pass
+PASS  retired-workflows  no retired aayudha workflow in .github/workflows
+## retired-workflows fail
+WARN  retired-workflows  1 retired aayudha workflow(s): run `aayu init` and confirm to remove, or delete by hand
+                           .github/workflows/aayudha-triage.yml classifies intake issues with a model in CI, and product CI never calls a model (Appendix B S-2.9b); triage runs from your own agent (`aayu triage <issue> --as …`) or an agent app you @-mention
 ## leases pass
 PASS  leases  1 live build lease(s)
 ## leases fail

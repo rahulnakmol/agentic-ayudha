@@ -5,12 +5,15 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"strings"
 	"testing"
 
 	"go.yaml.in/yaml/v4"
+
+	"github.com/rahulnakmol/agentic-ayudha/internal/initrepo"
 )
 
 // TestEveryWorkflowJobStartsWithHaltCheck holds the WP5.7 rule that `aayu halt` stops every workflow (Bug #173):
@@ -134,6 +137,52 @@ func TestHaltedWorkflowRuns(t *testing.T) {
 						t.Errorf("resumed %s: job %q %s, halt check %s, next step %+v", wf, j.Name, j.Conclusion, j.Steps[1].Conclusion, work)
 					}
 				}
+			}
+		}
+	}
+}
+
+// Founder decisions of 2026-10-15 and 2026-10-16 (Appendix B S-4.8c, S-2.9b, D-2.9b): product CI never calls a model,
+// and this repository's model checks never gate. Every workflow `init --gates` installs holds no model key or
+// AI-gateway environment; the four workflows that call the gateway for aayudha's own model code run on no pull
+// request event (so none can be a required check of a PR), and ci.yml's gates (PR, rolling, stable) never name them.
+func TestModelChecksNeverGateAndNeverShip(t *testing.T) {
+	keys := regexp.MustCompile(`ai-gateway|AAYU_SECRET_|AAYU_MODELS__|AAYU_AI_GATEWAY`)
+	for name, b := range initrepo.GateWorkflows("dev") {
+		if m := keys.Find(b); m != nil {
+			t.Errorf("init --gates installs %s, which names %q: product CI never calls a model", name, m)
+		}
+	}
+	ci, err := os.ReadFile(".github/workflows/ci.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{"inspect-live", "aayudha-model-lanes", "models-live", "ux-review-live"} {
+		b, err := os.ReadFile(".github/workflows/" + f + ".yml")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var wf struct {
+			On   map[string]any `yaml:"on"`
+			Jobs map[string]struct {
+				Name string `yaml:"name"`
+			} `yaml:"jobs"`
+		}
+		if err := yaml.Unmarshal(b, &wf); err != nil {
+			t.Fatalf("%s: %v", f, err)
+		}
+		for ev := range wf.On {
+			if strings.HasPrefix(ev, "pull_request") {
+				t.Errorf("%s runs on %s, so it could become a required check", f, ev)
+			}
+		}
+		names := []string{f + ".yml"} // and each job's check name (a job ID such as "live" is an ordinary word)
+		for _, j := range wf.Jobs {
+			names = append(names, j.Name)
+		}
+		for _, n := range names {
+			if n != "" && strings.Contains(string(ci), n) {
+				t.Errorf("ci.yml names %q of %s: a model check must not be part of a gate", n, f)
 			}
 		}
 	}

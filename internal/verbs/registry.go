@@ -596,7 +596,7 @@ var Verbs = []Command{
 		},
 		Outputs:  []string{"labels"},
 		Gates:    []GateID{GateLabelsOnly, GateHalt},
-		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHybrid, ModeNote: "direct in Actions", Exposure: ExposeWrite,
+		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHybrid, ModeNote: "the host's model passes --as; never in product CI", Exposure: ExposeWrite,
 	},
 	{
 		Name: "build", WP: "WP5.5", Stage: StageBuild,
