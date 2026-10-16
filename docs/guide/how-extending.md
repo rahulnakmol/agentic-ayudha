@@ -57,7 +57,7 @@ func init() { register("ship", runShip) }
 `internal/cli/env.go`. A registry command with no handler appears in `aayu --help` marked "lands in" its work
 package and exits with code 2, so you can merge the registry entry before the handler.
 
-`go generate ./...` then writes the README row, the verb map in `docs/guide/when-to-use-what.md`, `docs/RACI.md`,
+`go generate ./...` then writes the verbs table row in `docs/README.md`, the verb map in `docs/guide/when-to-use-what.md`, `docs/RACI.md`,
 the seat charters, `AGENTS.md`, and, when `Exposure` is not `never`, `internal/mcp/schemas/<verb>.json`. See
 [the verb registry](how-registry.md).
 

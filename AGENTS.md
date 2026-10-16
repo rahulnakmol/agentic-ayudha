@@ -33,7 +33,7 @@ the end is generated (WP5.1); the full table is [docs/RACI.md](docs/RACI.md).
   and commit `ratchets.toml`. Never lower the floor by hand: that needs an accepted floor waiver (the file says how).
 
 - Generated files (never edit by hand; change the source and run `go generate ./...`):
-  - from `internal/verbs/registry.go`: README tables, `LAYERS.md`, `docs/RACI.md`, `skills/*/SKILL.md`
+  - from `internal/verbs/registry.go`: the tables in `docs/README.md`, `LAYERS.md`, `docs/RACI.md`, `skills/*/SKILL.md`
     frontmatter, `internal/mcp/schemas/*.json`;
   - from `internal/config/defaults.toml` (the embedded base config layer): `CONSTRAINTS.md`. A new key in a
     rendered section needs a row in `internal/config/gen`, or generation fails.

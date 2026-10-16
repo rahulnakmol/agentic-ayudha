@@ -1,0 +1,21 @@
+# Hand-offs, agent environments, and loops (docs/guide/how-agents.md).
+title: A Ready story goes to another agent's cloud only after Detect finds it and Ensure verifies its environment; the merge gate's verdict or a failed check goes back within the cap, and loops start the same commands through each host's own trigger
+direction: down
+loop: loops/*.toml: cron or on
+host: Rendered per host: Amp, Cursor, Claude Code, Codex, Actions
+guard: aayu hook loop:<name>: halt and budget first
+cmd: build --delegate, or /codex /cursor /claude /amp
+detect: agentenv.Detect: CLIs, sign-ins, clouds
+ensure: agentenv.Ensure: environment verified in a clean container
+recv: Receiver's cloud agent, or its CLI with --local
+pr: Pull request through the merge gate
+human: A person: aayu ship, or the cap's page
+loop -> host
+host -> guard: its trigger fires
+guard -> cmd: ci-failed syncs a hand-off
+cmd -> detect
+detect -> ensure: cloud connected
+ensure -> recv: the brief
+recv -> pr
+pr -> cmd: send back
+pr -> human: merge-ready or capped

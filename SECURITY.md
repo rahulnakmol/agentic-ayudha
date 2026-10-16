@@ -11,8 +11,8 @@ Features marked "n/a until WPx.y" do not exist yet. Until then the manual step w
 
 | Version | Supported |
 |---|---|
-| pre-0.1 (today) | Nothing is supported for production use. Reports are still welcome and are fixed on `dev`. |
-| After the first stable release | The current release, plus security patches for the previous two minor versions. Each minor version's end-of-life date is published in its GitHub release notes. |
+| 0.1.x (current, first released 2026-10-15) | Supported: the current release, plus security patches for the previous two minor versions. Each minor version's end-of-life date is published in its GitHub release notes. |
+| Before v0.1.0 | Not supported. |
 
 Only tagged releases from `main` (`v*`) are supported. `dev` and `rolling` snapshots are not.
 

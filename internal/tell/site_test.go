@@ -43,12 +43,24 @@ func TestSiteBuild(t *testing.T) {
 		{"skills/grill.html", `href="../style.css"`},
 		{"skills/grill.html", `src="../docs/guide/img/journey.svg"`},
 		{"skills/grill.html", `<a href="../index.html">Overview</a>`},
+		// Every page has a Markdown twin for agents, linked from its head and footer.
+		{"index.html", `<link rel="alternate" type="text/markdown" href="index.md">`},
+		{"skills/grill.html", `href="../llms.txt"`},
+		{"index.md", "> The Markdown version of [Repo](index.html) on the r docs site. Every page is listed in [llms.txt](llms.txt)."},
+		{"index.md", "[the promotion steps](contributing.md#promotion-agent-run-no-approval)"},
+		{"index.md", "[the plan](https://github.com/o/r/blob/abc1234def/docs/BUILD-PLAN.md?utm_campaign=c&utm_medium=docs&utm_source=r#a)"},
+		{"index.md", "![The journey has nine steps](docs/guide/img/journey.svg)"},
+		{"skills/grill.md", "[how to contribute](../contributing.md)"},
+		// llms.txt lists every page's twin under its group, with its first sentence or, for a skill, its reader summary.
+		{"llms.txt", "# r docs\n\n> Read the promotion steps, the plan, and #7.\n"},
+		{"llms.txt", "\n## Project\n\n- [Contributing](contributing.md)\n"},
+		{"llms.txt", "\n## Skills\n\n- [grill](skills/grill.md): Interviews you"},
 	} {
 		if !strings.Contains(string(files[tt.file]), tt.want) {
 			t.Errorf("%s lacks %s:\n%s", tt.file, tt.want, files[tt.file])
 		}
 	}
-	if len(files["style.css"]) == 0 || string(files["docs/guide/img/journey.svg"]) != "<svg/>" || len(files) != 5 {
+	if len(files["style.css"]) == 0 || string(files["docs/guide/img/journey.svg"]) != "<svg/>" || len(files) != 9 {
 		t.Fatalf("files: %v", SiteFiles(files))
 	}
 

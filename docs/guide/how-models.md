@@ -13,7 +13,8 @@ reply, and stops all agent lanes when spend reaches the budget.
 ## Lanes and their defaults
 
 The registry in `internal/verbs/registry.go` declares six lanes. Each verb names exactly one lane, and each lane has a
-default for each of the three hosts (Amp, Cursor, Claude Code).
+default for each host. The table shows Amp, Cursor, and Claude Code; `aayu models show` lists every host, OpenAI Codex
+included.
 
 | Lane | What it does | Amp | Cursor | Claude Code |
 |---|---|---|---|---|

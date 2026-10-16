@@ -47,8 +47,13 @@ It also reports the flow without filing anything: hours from Ready to ship split
 request waited for a person, how often a person stepped in, how much of inspect's advice was acted on, how many
 shipped stories came back as Bugs, and the mix of changes.
 `evolve` turns an accepted lesson into a lasting fix for the agents themselves: a failing test for the skill first,
-then a change to the skill that passes it, opened as a pull request a person reviews. Neither ran on the benefits app that day;
-the [epilogue](built-with-itself.md) shows the same loop at work on aayudha itself.
+then a change to the skill that passes it, opened as a pull request a person reviews. Neither ran on the benefits app
+that day; the [epilogue](built-with-itself.md) shows the same loop at work on aayudha itself.
+
+> **Since then:** `evolve` waits for at least two accepted Feedback issues about the same skill, changes a skill at
+> most once a month, rewrites its guidance instead of adding rules, and the next retro checks whether the problem came
+> back. Loops can now run the retro, evolve, and the measurement after a release in your agent's own scheduler. See
+> [did it work?](guide-learn.md) and [keep things moving with loops](guide-loops.md).
 
 ## What you do, and what the agent does
 

@@ -1,104 +1,138 @@
 # Your first hour
 
-In the next hour you will install aayudha, connect one GitHub repository, teach your agent the aayudha skills, and
-file your first Goal. Nothing here changes your CI or needs a model key. You can stop at the end and still have
-something useful: clear, checked work items on GitHub.
+In the next hour you will install aayudha, set up one GitHub repository with a single guided command, and file your
+first story with promises a person can check. Nothing here changes your CI or needs a model key. You can stop at the
+end and keep what you have: clear, checked work items on GitHub.
 
-> **You are here:** setting up. Next comes [the journey](journey.md), from an idea to a measured release.
+> **You are here:** setting up. After each step, "You should see" tells you what success looks like. If you see
+> something else, the [troubleshooting](troubleshooting.md) link at that step says what to do.
 
 ## What you need
 
-- A GitHub repository you administer, and the `gh` command line signed in (`gh auth login`), or a token in
-  `AAYU_GITHUB_TOKEN`.
-- `git` 2.40 or newer and `git-lfs`. aayudha keeps its records, such as the agreed version of each story and the
-  evidence for each change, on a separate branch called `ledger`. Screenshots and recordings stay on the CI run that
-  made them and never go there.
-- Until the first release: Go 1.25 or newer, to install the snapshot (see below).
-- One of the agent hosts: Amp, Cursor, or Claude Code. aayudha works inside the agent you already use.
+- A GitHub repository you administer, cloned on your machine, and the `gh` command line signed in
+  (`gh auth login`). A token in `AAYU_GITHUB_TOKEN` works too.
+- `git` 2.40 or newer, and `git-lfs`.
+- One of the agents aayudha works inside: Claude Code, Codex, Cursor, or Amp.
 
 ## 1. Install aayudha
-
-> **Before the first release:** there is no stable release yet, so the install line below returns a 404 for now.
-> Install the latest snapshot with Go 1.25 or newer instead:
->
-> `go install github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@rolling-2026-10-12.4`
->
-> This installs `aayudha` into your Go bin directory. Add `alias aayu=aayudha` to your shell profile so the short
-> name works too. Once v0.1.0 is out, use the line below and skip this note.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/rahulnakmol/agentic-ayudha/main/install.sh | sh
 ```
 
-The script installs a signed release and checks its signature and checksum before it copies anything. You get two
-names for the same program: `aayudha` and its short alias `aayu`.
+The script downloads the latest signed release and checks its signature and checksum before it copies anything. It
+installs one program under two names: `aayudha`, and the short `aayu` this guide uses.
 
-## 2. Check your machine
+**You should see** `signature and checksum verified`, then `installed aayu 0.1.0`. If it also says
+`add ~/.local/bin to your PATH`, do that, and open a new terminal.
 
-```sh
-aayu doctor
-```
-
-`doctor` checks your tools, your GitHub sign-in, and your setup, one row each. Green `PASS` rows are good. `WARN`
-and `N/A` rows are optional things you can set up later, so do not worry about them today. Only a `FAIL ...
-[blocking]` row needs fixing now, and it says how.
-
-## 3. Connect your repository
-
-In a clone of your repository, run:
+Check it:
 
 ```sh
-aayu init
+aayu version
 ```
 
-`init` asks you to confirm, then sets up the repository for work items: labels, a small config file in
-`.aayudha/`, and the `ledger` branch for records. It adds issue forms for the ten kinds of work item: Goal,
-Initiative, Feature, Story, Bug, Decision, Experiment, Release, Feedback, and Incident. It adds no CI workflows and
-needs no keys. Commit the files it wrote through a pull request, like any other change.
+**You should see** `aayu 0.1.0` or newer. Other ways to install, such as `go install` or a pinned version, are in
+[Install and connect](../getting-started.md). Stuck? See [install problems](troubleshooting.md#install).
 
-It fits around what you have:
+## 2. Take the tour
 
-- **`AGENTS.md`:** `init` adds one marked section and leaves the rest of your file alone.
-- **Branches:** if you have no `dev` branch, `init` maps your existing branches, such as `main`, and renames
-  nothing.
-- **Undo:** `aayu uninit` removes what `init` created.
-
-## 4. Teach your agent the skills
+In your repository's folder, run:
 
 ```sh
-aayu install --host amp            # or cursor, claude, or all; shows what it will write
-aayu install --host amp --apply    # writes it
+aayu tour
 ```
 
-Each aayudha verb becomes a skill your agent can use: a short instruction file it reads when you ask for that
-verb. The skills call `aayu` for anything that writes to GitHub, so every write is logged.
+Run it in your own terminal, not through your agent: the tour is a guided first run for a person, and it refuses
+to run for an agent. It takes three steps, and it asks before it changes anything:
 
-## 5. File your first Goal
+1. **This machine.** It checks git, git-lfs, your GitHub sign-in, and the config, the same checks as `aayu doctor`.
+2. **The repository.** It runs `aayu init`, which lists every label, issue form, and file it will add, then asks
+   before it uses your admin access. `init` also creates `ledger`, a separate branch where aayudha keeps its records,
+   such as exactly what was agreed for each story.
+3. **Your agent.** It asks which agent you use, then runs `aayu install` for it: one skill per aayudha verb (a short
+   instruction file your agent reads when you ask for that verb), the MCP server, and hooks.
 
-Open your agent in the repository and ask in plain words:
+**You should see** `PASS` on the machine check, the plan `init` prints, and at the end:
 
-> Use the grill skill to write a Goal for: customers wait too long for a reply to support tickets.
+```text
+★ Level 1! This repository has clear work items. Commit what changed in a pull request.
+Next → aayu grill story
+```
 
-In Claude Code you can also type `/grill`. The agent interviews you, one question at a time: what outcome you want
-and for whom, which number shows it, where that number is today, and where it should be. When every required
-section is filled in and the target has a baseline, it files the Goal as a GitHub issue.
+The picture on the [README](../../README.md) shows a whole run. Stuck? See [tour problems](troubleshooting.md#tour).
 
-> **Tip:** a Goal needs a number you can measure again later. If you have no analytics connected yet, pick a number
-> GitHub already knows, such as merged pull requests, or give a value from an export you have. You can also start
-> one level down with a Feature: ask for "a Feature" instead of "a Goal".
+> **It fits around what you have.** `init` adds one marked section to an existing `AGENTS.md` and leaves the rest
+> alone. If you have no `dev` branch, it maps your existing branches, such as `main`, and renames nothing. And
+> `aayu uninit` removes what it created.
 
-Then mark it Ready. Ready means complete, agreed, and frozen: aayudha records exactly what was agreed, so later
-changes are visible. You will see why this matters in [step 3](journey-3-ready.md).
+Commit what the tour wrote, `.aayudha/`, the issue forms, and your agent's skill folder, through a pull request,
+like any other change.
+
+## 3. Ask for your first story
+
+A story is the smallest piece of work that delivers something a person can check. On a bigger project, stories sit
+under a Feature, Features under an Initiative (a bet worth making), and Initiatives under a Goal with a number.
+You can start with one story; [the story](journey.md) shows the whole ladder at work.
+
+Open your agent in the repository and ask, in plain words:
+
+> Use the grill skill to write a story: people should be able to export their report as CSV.
+
+In Claude Code you can also type `/grill story` (`/aayudha:grill story` with the plugin). The agent interviews you, one question at a time: who needs this,
+what "done" looks like, and what must not happen. If your ask is vague ("make it nicer"), it stops and unpacks it
+with you first; [how aayudha unpacks a vague ask](unpack.md) shows a real conversation. When every promise is
+something a person could check, it files the story as a GitHub issue.
+
+**You should see** a new issue labelled `type:story`, with a **Completion Goal**: numbered promises, each naming the
+evidence that will prove it, such as `1. [api-trace] state: …; expected: …`.
+
+## 4. Mark it Ready
+
+Ready means complete, agreed, and frozen. aayudha records exactly what was agreed, so a later edit is visible
+instead of silent.
 
 ```sh
 aayu ready <issue> --check   # read-only: says what is missing, if anything
 aayu ready <issue>           # labels it Ready and posts a snapshot of exactly what was agreed
 ```
 
-> **Well done:** you have a Goal on GitHub that anyone on your team can read, with a baseline and a target. That
-> alone beats most backlogs.
+**You should see** `--check` exit cleanly, then a `status:ready` label on the issue and a comment that holds the
+agreed text's fingerprint. Stuck? See [Ready problems](troubleshooting.md#ready).
+
+> **Well done:** you have a story on GitHub that anyone on your team can read, with promises a machine can check.
+> That alone beats most backlogs.
+
+## 5. Ask what to do next
+
+```sh
+aayu next
+```
+
+**You should see** one command and why, for example `aayu build <issue>` because that story is Ready and nobody is
+building it. Whenever you are unsure, `aayu next` reads the repository and names the single best next step.
+
+## Optional: your first proven pull request (another half hour)
+
+To have every pull request checked before it merges, move to Level 2. The merge gate with no AI key in CI arrives in
+aayudha 0.2; if `aayu version` prints 0.1.x, run `aayu self-update` first, or, until 0.2 is released, install the
+integration build with `go install github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@dev`.
+
+1. `aayu init --gates` adds the merge gate workflow. Commit it through a pull request and merge it. The gate runs
+   from your base branch's copy, so it starts checking from the next pull request.
+2. Install a reviewer app on your GitHub account whose models come from a different vendor than the ones that
+   build. Building with Claude Code? Install Codex. Building with Codex? Install Claude. On Cursor or Amp, pick the
+   app whose vendor differs from the model you build with. Name it in `[inspect] apps`. `aayu doctor`'s
+   `reviewer-apps` row shows the apps it detected and says why one cannot review.
+3. Ask your agent to build the story (`aayu build <issue>`), or hand it to another agent's cloud
+   ([hand work to an agent](guide-build.md)).
+
+**You should see** the merge gate run on the pull request, a proof comment, and the reviewer's verdict. Your CI
+needs no AI key: the review comes from the app you installed. [A pull request is ready](guide-review.md) walks you
+through it.
 
 ## What's next
 
-See where this Goal goes from here: [the journey at a glance](journey.md). Or, if you want to keep things small for
-now, read [Adopt at your own pace](adopt.md) for what you have already (Level 1) and what each next level costs.
+- See the whole loop on a real project: [the story](journey.md).
+- Find the command for your situation: [when to use what](when-to-use-what.md).
+- Decide how far to go: [adopt at your own pace](adopt.md).

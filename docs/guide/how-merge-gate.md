@@ -48,6 +48,12 @@ In CI, `verify` fails the job when a floor misses, and also when the pack does n
 story's Completion Goal hash no longer matches its Ready snapshot, a criterion has no evidence from this run, or the
 story has no Ready snapshot. A pull request that names no story passes with nothing to prove.
 
+When the story is a Bug, `verify --ci` also runs a **red-on-base** check: each test its evidence map names is run on
+the base commit, with the pull request's test files copied over, in the same sandbox. A test that fails on the base
+shows the fix; one that passes there does not. The check is advisory until the date in
+`[verify] red_on_base_blocking_from` (`2026-11-13` by default, four weeks after the founder's decision): before it, a
+test that is green on the base is reported and skipped; from it, the check fails. Only Go modules are run today.
+
 **`aayudha/inspect`** runs only after the gate job succeeds. It holds no AI key (founder decision of 2026-10-15): it
 reads the reviewer app's reply on the pull request and has `pull-requests: write` to post its comment. It checks out
 the base branch only, downloads the `aayudha-pack` artifact, and reads the diff through the GitHub API. It never runs
@@ -64,6 +70,12 @@ with the workflow token and `pull-requests: write`. It verifies the pack against
 the Ready snapshot (every artifact hashed), keeps one comment marked `<!-- aayudha:proof -->` with each criterion's
 verdict, the floor table, the SHA-256 of `pack.json`, and links to the artifact and the run, and fails when the pack
 does not verify or a floor does not hold. It writes nothing to the ledger. See [proof packs](how-proof-packs.md).
+
+The proof comment also points the human pass, from the diff alone and with no model. A **risk line** gives a tier:
+high for a never-layer file, a protected path, a changed dependency manifest, or a migration; medium for three or
+more layers or a large diff (over 400 changed lines or 20 files); low otherwise. It names up to five files to read
+first. Under it, **Checks this PR weakens** lists each weakened check, as inspect does. Neither approves or blocks
+anything: a pull request may edit its own checks, and a human decides.
 
 ### The verify sandbox
 
@@ -134,7 +146,9 @@ State drives two limits:
 - **Cache.** The input hash covers the diff, the pack's head, Completion Goal hash, and checks, the criteria, and
   the reply it read. Same inputs, same verdict.
 - **Cycle cap.** Each `fix` or `rebuild` on a new input counts one cycle. After two, the next run pages a human and
-  exits 4. A `delegate` sync shares the cap with failed required checks it sends back to the builder.
+  exits 4. A `delegate` sync shares the cap with failed required checks it sends back to the builder: when a required
+  check fails on a delegated pull request's head, the sync sends its log tail, redacted and quoted as data, to the
+  builder once per head (`protected-paths` and inspect are not sent). The merge gate still decides.
 
 inspect exits 0 on `merge` and 4 on anything else, so its check stays red until the reviewer says `merge`.
 
@@ -241,12 +255,22 @@ type Result struct {
     Findings    []Finding `json:"findings"`
     Criteria    []Verdict `json:"criteria"`
     Model       string    `json:"model,omitempty"`
+    Mode        string    `json:"mode,omitempty"`
+    Reviewers   []string  `json:"reviewers,omitempty"` // A, then B in peer mode
+    Plan        []Area    `json:"plan,omitempty"`
+    Dropped     []Dropped `json:"dropped,omitempty"` // findings not posted, with why
+    Notes       []string  `json:"notes,omitempty"`
     Overridden  string    `json:"overridden,omitempty"` // why the floors changed the model's disposition
     DiffHash    string    `json:"diff_hash"`
     Cached      bool      `json:"cached,omitempty"`
     Cycle       int       `json:"cycle"`
     CostUSD     float64   `json:"cost_usd"`
     Next        string    `json:"next,omitempty"` // the re-entry step
+    Builder     Builder   `json:"builder"`        // the builder's family and where it came from …
+    // Coverage is the sealed manifest of what the review covered; Weakened
+    // lists the checks this PR made weaker (flags, not verdicts).
+    Coverage *Manifest   `json:"coverage,omitempty"`
+    Weakened []Weakening `json:"weakened,omitempty"`
 }
 ```
 
@@ -308,6 +332,18 @@ fixed head, returned `merge`, and the spend covers both calls.
 8. The pack job uses only the workflow token, writes nothing to the ledger, and fails on a pack that does not verify
    or a floor that does not hold. Enforced by `proofComment` in [internal/cli/proof.go](../../internal/cli/proof.go),
    `TestProofCommentInMergeGate`.
+9. No workflow `init --gates` installs holds a model key or the AI-gateway environment. Enforced by
+   `TestModelChecksNeverGateAndNeverShip` in [workflows_test.go](../../workflows_test.go).
+10. The proof comment's risk line and weakened-check list come from the diff alone and approve nothing. Enforced by
+    `inspect.RiskOf` in [internal/inspect/risk.go](../../internal/inspect/risk.go) and `inspect.Weakened` in
+    [internal/inspect/coverage.go](../../internal/inspect/coverage.go), `TestRiskOf`, `TestWeakenedChecks`, and
+    `TestProofCommentInMergeGate`.
+11. A Bug's proving test that passes on the base fails the gate from `[verify] red_on_base_blocking_from` on, and is
+    reported but skipped before it. Enforced by `redOnBase` in
+    [internal/cli/redbase.go](../../internal/cli/redbase.go), `TestRedOnBase`.
+12. A failed required check on a delegated pull request goes back to the builder once per head, within the cycle cap;
+    then a human is paged. Enforced in [internal/cli/delegate.go](../../internal/cli/delegate.go) and
+    [internal/cli/cirepair.go](../../internal/cli/cirepair.go), `TestDelegateCIRepair`.
 
 ## Where it lives in the code
 
@@ -323,6 +359,8 @@ fixed head, returned `merge`, and the spend covers both calls.
 - [internal/inspect/apps.go](../../internal/inspect/apps.go) and
   [internal/cli/inspect_app.go](../../internal/cli/inspect_app.go): the reviewer apps, the request, the reply, and
   the reply job's re-run.
+- [internal/inspect/risk.go](../../internal/inspect/risk.go): the proof comment's risk line.
+- [internal/cli/redbase.go](../../internal/cli/redbase.go): the red-on-base check for Bugs.
 - [internal/cli/ship.go](../../internal/cli/ship.go): how `ship` reads the gate.
 
 ## Read next

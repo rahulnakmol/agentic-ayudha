@@ -969,7 +969,7 @@ var Verbs = []Command{
 	{
 		Name: "install", WP: "WP3.2", Stage: StageSetup,
 		Summary: "Install skill copies, lock.toml, MCP registration, and hooks for each host; shows a diff unless --apply.",
-		Reader:  "Installs the aayudha skills, tools, and hooks into Amp, Cursor, or Claude Code.",
+		Reader:  "Installs the aayudha skills, tools, and hooks into your agent, and sets up its cloud environment and loops.",
 		Seat:    DevOps, Lane: LaneChore, Layers: OnlyLayers(L09),
 		Inputs: []Input{
 			enumIn("host", false, false, "Host to install for.", "amp", "cursor", "claude", "codex", "all"),

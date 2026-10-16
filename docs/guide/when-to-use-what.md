@@ -51,17 +51,31 @@ what people wrote.
 Use **`build`**. The agent works in its own worktree, commits one checkpoint per layer, checks each one, and opens a
 pull request. It stops and asks a person when it runs out of budget.
 
+To have another agent build it in its cloud, use `build --delegate codex` (or `cursor`, `claude`, `amp`), or type
+`/codex` and its siblings in your agent. `aayu install --env` sets up the cloud environment it builds in.
+
 **You get back** a pull request whose every checkpoint has already been checked.
-Walkthrough: [Build it](journey-4-build.md).
+Guide: [hand work to an agent](guide-build.md). In the story: [the build](journey-4-build.md).
 
 ## A pull request is ready
 
-Let the **merge gate** run (it starts by itself), read **`inspect`**'s verdict, then **`ship`**. Run **`verify`**
+Let the **merge gate** run (it starts by itself), read **`inspect`**'s verdict, then **`ship`**. The review comes
+from an agent app from another vendor installed on your account, so your CI needs no AI key. Run **`verify`**
 yourself first if you want a quick local check.
 
 **You get back** an authoritative proof pack, a verdict per criterion (`merge`, `fix`, or `rebuild`), and, once you
 approve, a merged pull request with its Outcome written.
-Walkthrough: [Prove it](journey-5-prove.md) and [Ship it](journey-6-ship.md).
+Guide: [a pull request is ready](guide-review.md). In the story: [the gate says no](journey-5-prove.md) and
+[the yes](journey-6-ship.md).
+
+## I want the gate to check what my product actually does
+
+Use **`init --verify-skill`** to start a feature map, a list of what your product can do with a behaviour check for
+each capability, then ask your agent to fill it in with the **`verify`** skill. **`verify --map`** shows where the map
+and the code disagree.
+
+**You get back** behaviour checks that the merge gate runs on every pull request that touches them, with no model.
+Guide: [prove a behaviour change](guide-prove-behaviour.md).
 
 ## The pull request changes a screen
 
@@ -114,19 +128,30 @@ Use **`measure`** on the Goal after the release. If you need to know whether *yo
 plan an **`experiment`** before release and **`readout`** after.
 
 **You get back** a Result on the Goal: the value, the target, the change, and how to reproduce it.
-Walkthrough: [Measure and learn](journey-8-learn.md).
+Guide: [did it work?](guide-learn.md) In the story: [the number](journey-8-learn.md).
 
 ## The agents keep making the same mistake
 
 Use **`retro`** to find the pattern, accept the Feedback it files, then **`evolve`** to turn it into a tested skill
-change that a person reviews.
+change that a person reviews. `evolve` waits for at least two accepted Feedback issues about the same skill and
+changes a skill at most once a month.
 
 **You get back** a skill that no longer makes that mistake, with a test that keeps it that way.
+Guide: [did it work?](guide-learn.md#stop-repeating-mistakes-evolve)
+
+## I want work to happen without anyone asking
+
+Use **`install --loops`**. It sets up scheduled and event loops, such as triage on arrival or a failed check sent back
+to its builder, in your agent's own scheduler, and shows the steps for what it cannot set up itself.
+
+**You get back** loops that `aayu doctor` reports as active, stale, or missing on each host.
+Guide: [keep things moving with loops](guide-loops.md).
 
 ## Something about my setup is off
 
-Use **`doctor`**. It checks tools, sign-in, configuration, installed skills, and existing CI, and says what to fix.
-`aayu doctor --fix` re-syncs skill copies after an upgrade.
+Use **`doctor`**. It checks tools, sign-in, configuration, installed skills, agent environments, reviewer apps,
+loops, and existing CI, and says what to fix. `aayu doctor --fix` re-syncs skill copies after an upgrade. Not sure
+what to do next at all? `aayu next` names one step. A specific error? See [troubleshooting](troubleshooting.md).
 
 ## All 32 verbs, by journey stage
 
@@ -140,7 +165,7 @@ are not verbs; the verbs reference lists them.
 | Stage | Verb | What it does |
 |---|---|---|
 | [Set up](start.md) | `init` | Sets up a repository for aayudha: labels, issue forms, config, and the records branch; more on request. |
-|  | `install` | Installs the aayudha skills, tools, and hooks into Amp, Cursor, or Claude Code. |
+|  | `install` | Installs the aayudha skills, tools, and hooks into your agent, and sets up its cloud environment and loops. |
 |  | [`doctor`](../../skills/doctor/SKILL.md) | Checks your machine and setup, and says exactly what to fix. |
 | [Shape the goal](journey-1-shape.md) | [`grill`](../../skills/grill/SKILL.md) | Interviews you, one question at a time, until an idea is a complete work item, then files it on GitHub. |
 | [Break it down](journey-2-break-down.md) | [`slice`](../../skills/slice/SKILL.md) | Splits a Feature into small stories, each with checkable promises, the parts of the code it touches, and its order. |
@@ -174,7 +199,7 @@ are not verbs; the verbs reference lists them.
 
 <!-- END GENERATED: verb-map -->
 
-For every input and flag, see the [project overview](../../README.md#verbs) and the verbs reference.
+For every input and flag, see the [project reference](../README.md#verbs) and the verbs reference.
 
 ## What's next
 

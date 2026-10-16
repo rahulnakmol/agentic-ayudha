@@ -205,7 +205,7 @@ By making a contribution to this project, I certify that:
 `internal/verbs/registry.go` is the single source for verbs and plumbing commands (ground rule 4). These are
 generated from it by `go generate ./...`:
 
-- the verbs and plumbing tables in `README.md` (between the `BEGIN GENERATED` / `END GENERATED` markers);
+- the verbs and plumbing tables in `docs/README.md` (between the `BEGIN GENERATED` / `END GENERATED` markers);
 - `LAYERS.md`;
 - `docs/RACI.md`;
 - the frontmatter of `skills/<verb>/SKILL.md` (the body below the frontmatter is hand-written);
