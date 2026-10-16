@@ -59,10 +59,12 @@ The source column tells you which rule won: `default`, `config`, `fallback`, or 
 Ground rule 5 in [the build plan](../BUILD-PLAN.md) says that inside a host, the host's model reasons. The binary calls
 a model itself only where the work must not depend on the host:
 
-- `inspect` in the merge gate (registry mode `direct`).
+- `inspect` with `[inspect] reviewer = "model"` (registry mode `direct`); by default the merge gate reads an agent
+  app's review instead.
 - `review` lane A (`hybrid`: the host reasons, then the binary makes one direct pass).
 - The `brief` adversarial pass (`hybrid`), which checks the draft for claims its sources do not support.
-- `triage` when it runs in GitHub Actions (`hybrid`, direct in Actions).
+- `triage` when a person runs it without `--as` and holds a key (`hybrid`); it never runs in product CI, where the
+  host's model or an agent app you @-mention classifies the issue.
 - The eval judge in the eval harness, which is not a verb.
 
 `inspect`, `review`, and `brief` call `models.CheckFamilies` before they call the model. It refuses a reviewer whose

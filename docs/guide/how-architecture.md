@@ -112,8 +112,10 @@ const (
   `install`, `doctor`, and all plumbing.
 - **host:** `grill`, `slice`, `plan`, `build`, `decide`, `research`, `wireframe`, `mockup`, `prototype`, `polish`,
   `experiment`, `readout`, `respond`, `retro`, `evolve`, and `tell`.
-- **direct:** `inspect`, the adversarial review in the merge gate.
-- **hybrid:** `review` (lane A direct), `brief` (adversarial pass direct), and `triage` (direct in Actions).
+- **direct:** `inspect` with `[inspect] reviewer = "model"`; by default it reads an installed agent app's review and
+  calls no model (Appendix B S-4.8c).
+- **hybrid:** `review` (lane A direct), `brief` (adversarial pass direct), and `triage` (the host's model passes
+  `--as`; never in product CI, Appendix B S-2.9b).
 
 The fifth direct use is the eval judge, which is not a verb: `.github/workflows/evals.yml` runs it through
 `internal/evals`. When the binary calls a model, it goes through the model gateway in `internal/models`. When the
@@ -135,19 +137,22 @@ backoff when another writer pushed first.
 CI runs the workflows that must not trust the author:
 
 - `aayudha-merge-gate.yml` runs on `pull_request_target`, so the base branch's copy runs. The `gate` job re-runs
-  `verify` on the head with no secrets; `inspect` holds the model key but never runs pull request code; `pack`
-  writes the authoritative pack.
-- `aayudha-triage.yml` classifies new intake issues by label only.
+  `verify` on the head with no secrets; `inspect` reads an installed agent app's review and never runs pull request
+  code; `pack` checks the pack and comments. No job holds an AI key.
 - `aayudha-ready-guard.yml` strips `status:ready` when a Ready issue's body drifts from its snapshot.
 - `aayudha-streak.yml` computes each layer's autonomy streak from merged-pull-request history.
-- `aayudha-model-lanes.yml` runs `review` and `brief` by hand where the model key lives.
+- `aayudha-model-lanes.yml` runs `review` and `brief` by hand where the model key lives. It, `inspect-live.yml`,
+  `models-live.yml`, and `ux-review-live.yml` check aayudha's own model code: never a required check, never a
+  promotion gate, never installed into a product repository (Appendix B D-2.9b).
 - `ci.yml` builds, tests, lints, and checks generated files; `evals.yml` runs tier-2 skill evals.
 
 > **Honest status:** no bot GitHub App is installed on this repository yet, so the merge gate's `pack` job cannot
 > write the ledger. The authoritative pack stays a run artifact, and `aayu ship` lands it under the founder's
 > identity. The repository runs in solo mode (one human). No v0.1.0 release exists yet; the latest build is the
 > rolling snapshot rolling-2026-10-12.4. No test checks that only the declared verbs import `internal/models`;
-> today that holds by inspection (`inspect`, `review`, `brief`, and `triage` in `internal/cli`).
+> today that holds by inspection (`inspect`, `review`, `brief`, and `triage` in `internal/cli`). Product CI never
+> calls a model: `TestModelChecksNeverGateAndNeverShip` checks that no workflow `init --gates` installs names a model
+> key.
 
 ## Invariants
 

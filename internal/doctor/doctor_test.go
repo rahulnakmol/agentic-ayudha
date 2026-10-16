@@ -261,6 +261,10 @@ func failing(t *testing.T) map[string]func(*Probe) {
 				"/repos/o/r/commits/abc/check-runs?per_page=100": map[string]any{"check_runs": []any{map[string]any{"name": "Cursor Bugbot", "app": map[string]any{"slug": "cursor"}}}},
 			})
 		},
+		// A 0.1 triage workflow, still installed; a product's own file of the same name would not count.
+		"retired-workflows": func(p *Probe) {
+			p.Root = repoWith(t, map[string]string{".github/workflows/aayudha-triage.yml": "name: aayudha-triage\non:\n  issues:\njobs: {}\n"})
+		},
 		"worktrees": func(p *Probe) {
 			overlay(p, map[string]string{"git worktree list --porcelain": "worktree /repo\nHEAD a\n\nworktree /tmp/wt-x\nHEAD b\nprunable gitdir file points to non-existent location\n"})
 		},
