@@ -1,0 +1,47 @@
+{
+  "repo": "rahulnakmol/agentic-ayudha",
+  "release": 268,
+  "version": "v0.2.0",
+  "source": "dev",
+  "target": "rolling",
+  "source_sha": "5d134d92c622048b1f21711e28a3293ee4e7e833",
+  "commit": "b5147581ee42e4860d098941a8c6fc1e3ab298f1",
+  "tree": "9fc7e125d8d10486163950d8885571e11ba4cd40",
+  "message": "Rolling snapshot: 20261016T2131Z",
+  "tag": "rolling-2026-10-16",
+  "candidate": "promote/rolling-20261016T2131Z",
+  "evals": {
+    "workflow": "evals.yml",
+    "id": 38970050211,
+    "url": "https://github.com/rahulnakmol/agentic-ayudha/actions/runs/38970050211",
+    "conclusion": "success",
+    "attempts": 1
+  },
+  "gate": {
+    "workflow": "ci.yml",
+    "id": 38976186493,
+    "url": "https://github.com/rahulnakmol/agentic-ayudha/actions/runs/38976186493",
+    "conclusion": "success",
+    "attempts": 1
+  },
+  "artifacts": [
+    {
+      "name": "release-snapshot",
+      "digest": "sha256:8d42a884e8dba682e4f040969a5ad724a0cf864bc38f96a3c541e1fe3a7a7fe8",
+      "size": 72780342
+    },
+    {
+      "name": "benchmarks",
+      "digest": "sha256:55851077529566ffd9dfa8a414036405e71c96bc00304c1398bed28e95466c7f",
+      "size": 875
+    }
+  ],
+  "stories_released": [],
+  "already_released": [],
+  "shipped_not_listed": [],
+  "referenced_not_merged": [],
+  "release_notes": "tell/release/rolling-2026-10-16.md",
+  "measure_due": [],
+  "promoted_by": "rahulnakmol",
+  "promoted_at": "2026-10-16T21:31:50Z"
+}
