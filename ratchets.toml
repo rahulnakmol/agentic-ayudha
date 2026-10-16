@@ -1,0 +1,13 @@
+# Ratchets for this repository (docs/BUILD-PLAN.md Appendix B S-4.3r and D-4.3r; research P7). Not a product
+# feature in 0.2: no repository aayudha sets up gets this file.
+#
+# [coverage] is the statement coverage of `go test ./...` across the module, in percent, as CI's build job measures
+# it. The floor only tightens. CI fails when coverage falls below floor - margin, and when coverage holds at
+# floor + 2 * margin or more on a pull request until it tightens the floor with
+#   go test -coverprofile=coverage.out ./... && go run ./internal/ratchet/cmd/ratchet -update -coverprofile coverage.out
+# which never lowers it. Lowering the floor needs a floor waiver a human accepted
+# (`aayu decide --waiver coverage <story-or-bug>`, then `aayu decide <n> --accept waive`), named here as
+# `waiver = <n>`; a waiver already named on the base does not count again.
+[coverage]
+floor = 62.8
+margin = 0.5
