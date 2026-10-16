@@ -1,0 +1,4 @@
+description = "Measure after a release."
+command = ["measure"]
+on = "release.published"
+hosts = ["amp", "actions"]

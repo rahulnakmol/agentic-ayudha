@@ -8,7 +8,11 @@
 # ci_minutes_month or the [budget] breaker has paused agent lanes (exit 6). Pages from [notify] channel "file" are kept
 # as a run artifact.
 #
+# An event loop's job only records the GitHub event in the run summary: its agent step runs in the user's own agent
+# session (loops/README.md), so no model and no model key is ever used here.
+#
 # Not rendered:
+#   ci-failed: GitHub does not start workflows on check suites that Actions created, so Actions cannot record this event
 #   retro: aayu retro is not implemented yet; n/a until WP7.6 (rule 1a).
 name: aayudha-loops
 
@@ -20,6 +24,12 @@ on:
     - cron: "0 10 2 1,4,7,10 *" # quarterly: Day 2 of Jan, Apr, Jul, Oct at 10:00 Europe/London, while the zone is UTC+0
     - cron: "15 8,12,16 * * 1-5" # sweep: Mon–Fri at 09:15, 13:15, 17:15 Europe/London, while the zone is UTC+1
     - cron: "15 9,13,17 * * 1-5" # sweep: Mon–Fri at 09:15, 13:15, 17:15 Europe/London, while the zone is UTC+0
+  issues:
+    types: [opened]
+  pull_request:
+    types: [synchronize]
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       loop:
@@ -38,7 +48,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: aayudha-loops-${{ github.event.schedule || inputs.loop }}
+  group: aayudha-loops-${{ github.event.schedule || inputs.loop || github.run_id }}
   cancel-in-progress: false
 
 jobs:
@@ -198,3 +208,87 @@ jobs:
           name: aayudha-notify-sweep
           path: .aayudha/state/notify-outbox.jsonl
           retention-days: 30
+
+  feedback:
+    name: aayudha/loop-feedback
+    if: github.event_name == 'issues' && github.event.action == 'opened' && contains(github.event.issue.labels.*.name, 'type:feedback')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); the loop does not run. A human clears it with aayu resume." && exit 4
+      - name: Record the event (no model runs in CI)
+        env:
+          SUBJECT: ${{ github.event.issue.number }}
+        run: |
+          {
+            echo "### aayudha loop feedback"
+            echo "GitHub event issues.opened with label type:feedback: #$SUBJECT. The loop's agent step runs in the user's own agent session (loops/README.md); this job only records the event."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  inspect-pr:
+    name: aayudha/loop-inspect-pr
+    if: github.event_name == 'pull_request' && github.event.action == 'synchronize'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); the loop does not run. A human clears it with aayu resume." && exit 4
+      - name: Record the event (no model runs in CI)
+        env:
+          SUBJECT: ${{ github.event.pull_request.number }}
+        run: |
+          {
+            echo "### aayudha loop inspect-pr"
+            echo "GitHub event pull_request.synchronize: #$SUBJECT. The loop's agent step runs in the user's own agent session (loops/README.md); this job only records the event."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  release:
+    name: aayudha/loop-release
+    if: github.event_name == 'release' && github.event.action == 'published'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); the loop does not run. A human clears it with aayu resume." && exit 4
+      - name: Record the event (no model runs in CI)
+        env:
+          SUBJECT: ${{ github.event.release.tag_name }}
+        run: |
+          {
+            echo "### aayudha loop release"
+            echo "GitHub event release.published: tag $SUBJECT. The loop's agent step runs in the user's own agent session (loops/README.md); this job only records the event."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  triage-new:
+    name: aayudha/loop-triage-new
+    if: github.event_name == 'issues' && github.event.action == 'opened'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); the loop does not run. A human clears it with aayu resume." && exit 4
+      - name: Record the event (no model runs in CI)
+        env:
+          SUBJECT: ${{ github.event.issue.number }}
+        run: |
+          {
+            echo "### aayudha loop triage-new"
+            echo "GitHub event issues.opened: #$SUBJECT. The loop's agent step runs in the user's own agent session (loops/README.md); this job only records the event."
+          } >> "$GITHUB_STEP_SUMMARY"
