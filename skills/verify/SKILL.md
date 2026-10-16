@@ -26,6 +26,11 @@ aayu:
       required: false
       positional: false
       description: "Only the feature-map drift check (WP4.5b): compare every .agents/skills/verify-*/ map with the source, run nothing, and exit 3 on drift."
+    - name: check
+      type: string
+      required: false
+      positional: false
+      description: "Only the behaviour floor, on these feature-map checks: <feature>, <feature>.<check>, or all (the sweep); a run outside the merge gate is a preview."
   outputs:
     - "floor-results"
     - "pack"

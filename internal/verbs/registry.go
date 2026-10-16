@@ -622,6 +622,7 @@ var Verbs = []Command{
 			optPos("pr", TypePR, "Pull request to verify; defaults to the current worktree."),
 			flag("floor", TypeString, "Run only this floor."),
 			flag("map", TypeBool, "Only the feature-map drift check (WP4.5b): compare every .agents/skills/verify-*/ map with the source, run nothing, and exit 3 on drift."),
+			flag("check", TypeString, "Only the behaviour floor, on these feature-map checks: <feature>, <feature>.<check>, or all (the sweep); a run outside the merge gate is a preview."),
 		},
 		Outputs:  []string{"floor-results", "pack", "map-drift"},
 		Gates:    []GateID{GateHalt},

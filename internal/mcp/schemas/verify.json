@@ -4,6 +4,11 @@
   "additionalProperties": false,
   "description": "Run the deterministic floors (coverage, SAST, secrets, deps, a11y, perf) and record results in a proof pack.",
   "properties": {
+    "check": {
+      "description": "Only the behaviour floor, on these feature-map checks: <feature>, <feature>.<check>, or all (the sweep); a run outside the merge gate is a preview.",
+      "type": "string",
+      "x-aayu-type": "string"
+    },
     "floor": {
       "description": "Run only this floor.",
       "type": "string",

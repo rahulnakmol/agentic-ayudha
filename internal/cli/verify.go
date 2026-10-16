@@ -160,14 +160,10 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 	}
 	msg, _ := gitIn(ctx, root, "log", "-1", "--format=%B", head)
 	res.Story = StoryOf(body, msg, branch)
-	if e.CI && res.PR > 0 && res.Story == 0 {
-		// The merge gate proves stories; a PR that serves none has nothing to prove.
-		res.Checks, res.Hold, res.Footprint = []proof.Check{}, true, []string{}
-		return e.Emit(res, func(w io.Writer) error {
-			_, err := fmt.Fprintf(w, "merge gate: PR #%d serves no story (no Refs #n, Aayudha-Story trailer, or story/<n>- branch); nothing to prove\n", res.PR)
-			return err
-		})
-	}
+	// The merge gate proves stories; a PR that serves no story has no pack to
+	// prove, but its feature-map floors still run: the drift check, and the
+	// behaviour checks of what it touches (WP4.5b).
+	noStoryGate := e.CI && res.PR > 0 && res.Story == 0
 
 	r := &verify.Run{Root: root, Base: res.Base, Head: head, Floors: l.Config.Verify.Floors, Verify: l.Config.Verify, Story: res.Story, Labels: labels, Now: e.Now, Env: e.Getenv,
 		CI: e.CI, Nightly: e.Getenv("GITHUB_EVENT_NAME") == "schedule"}
@@ -222,8 +218,16 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 	r.Sandbox, r.Work = &verify.Sandbox{Getenv: e.Getenv, Home: home}, work
 
 	floors := verify.Standard()
-	if f := in.String("floor"); f != "" {
-		if floors, err = verify.ByName(floors, f); err != nil {
+	switch {
+	case in.Has("check"):
+		r.Checks, floors = in.String("check"), []verify.Floor{verify.Behaviour{}}
+	case noStoryGate:
+		floors = verify.MapFloors()
+		if f := in.String("floor"); f != "" {
+			floors, _ = verify.ByName(floors, f) // another floor does not run without a story
+		}
+	case in.String("floor") != "":
+		if floors, err = verify.ByName(floors, in.String("floor")); err != nil {
 			return Wrap(ExitUsage, err)
 		}
 	}
@@ -457,6 +461,8 @@ func renderVerify(w io.Writer, res VerifyResult) error {
 			fmt.Fprintf(w, " (criteria without evidence: %v)", res.Unmapped)
 		}
 		fmt.Fprintln(w, "; `aayu proof push` lands it on the ledger (advisory)")
+	case res.Story == 0 && res.PR > 0:
+		fmt.Fprintf(w, "merge gate: PR #%d serves no story (no Refs #n, Aayudha-Story trailer, or story/<n>- branch), so there is no pack; only the feature-map floors run\n", res.PR)
 	case res.Story > 0 && res.NoSnapshot:
 		fmt.Fprintf(w, "no pack: #%d has no Ready snapshot on the ledger (run `aayu ready %d`)\n", res.Story, res.Story)
 	default:
