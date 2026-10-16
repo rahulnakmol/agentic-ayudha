@@ -21,9 +21,15 @@ aayu:
       required: false
       positional: false
       description: "Run only this floor."
+    - name: map
+      type: bool
+      required: false
+      positional: false
+      description: "Only the feature-map drift check (WP4.5b): compare every .agents/skills/verify-*/ map with the source, run nothing, and exit 3 on drift."
   outputs:
     - "floor-results"
     - "pack"
+    - "map-drift"
   gates:
     - "halt"
   identity: bot

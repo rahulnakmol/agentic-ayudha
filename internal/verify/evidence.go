@@ -44,6 +44,9 @@ type EvidenceMap struct {
 	Criterion []struct {
 		ID    int      `toml:"id"`
 		Tests []string `toml:"tests"` // TestName, or package/path:TestName
+		// Checks are feature-map behaviour checks, <feature>.<check> (WP4.5b),
+		// which the behaviour floor runs in this verify run.
+		Checks []string `toml:"checks"`
 	} `toml:"criterion"`
 }
 

@@ -223,3 +223,28 @@ func TestVerifyGateCI(t *testing.T) {
 		t.Fatalf("PR without a story: %d %+v %s", code, res, errOut)
 	}
 }
+
+// WP4.5b.1: verify --map needs no GitHub and no story; it exits 0 without a
+// map or with a map in sync, and 3 when the map drifted from the source.
+func TestVerifyMapExitCodes(t *testing.T) {
+	dir := t.TempDir()
+	git(t, dir, "init", "--quiet", "-b", "dev")
+	env := map[string]string{"PATH": os.Getenv("PATH")}
+	if code, out, errOut := run(t, env, Options{Dir: dir}, "verify", "--map"); code != 0 || !strings.Contains(out, "no feature map here") {
+		t.Fatalf("no map: %d %s %s", code, out, errOut)
+	}
+	fdir := filepath.Join(dir, ".agents", "skills", "verify-app", "features")
+	_ = os.MkdirAll(fdir, 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "app.sh"), []byte("case $1 in hello) echo hi;; esac # cmd hello\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(fdir, "README.md"), []byte("# app\n\n```map\n{\"product\": \"app\", \"control\": [\"sh\", \"control.sh\"], \"surfaces\": [{\"kind\": \"command\", \"files\": [\"app.sh\"], \"pattern\": \"cmd ([a-z]+)\"}]}\n```\n\n1. [Hello](hello.md)\n"), 0o644)
+	feature := "# Hello\n\nSays hi.\n\n```feature\n{\"id\": \"hello\", \"sources\": [\"app.sh\"], \"surfaces\": {\"command\": [\"hello\"]}, \"verified_at\": \"\"}\n```\n\n## Sub-features\n\n## How to reach it\n\n## Behaviour checks\n\n```check\n{\"id\": \"hi\", \"kind\": \"cli\", \"evidence\": \"api-trace\", \"steps\": [{\"run\": [\"hello\"], \"stdout\": \"hi\"}]}\n```\n\n## Gotchas\n"
+	_ = os.WriteFile(filepath.Join(fdir, "hello.md"), []byte(feature), 0o644)
+	if code, out, errOut := run(t, env, Options{Dir: dir}, "verify", "--map", "--json"); code != 0 || !strings.Contains(out, `"verdict": "stale"`) {
+		t.Fatalf("in sync (never verified): %d %s %s", code, out, errOut)
+	}
+	_ = os.WriteFile(filepath.Join(dir, "app.sh"), []byte("case $1 in greet) echo hi;; esac # cmd greet\n"), 0o644)
+	code, out, errOut := run(t, env, Options{Dir: dir}, "verify", "--map")
+	if code != ExitFloor || !strings.Contains(out, `unmapped command "greet" (app.sh)`) || !strings.Contains(out, `command "hello" of feature hello is no longer in the source`) || !strings.Contains(errOut, "feature map drift") {
+		t.Fatalf("drift: %d %s %s", code, out, errOut)
+	}
+}

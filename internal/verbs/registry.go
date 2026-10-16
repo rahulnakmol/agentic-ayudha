@@ -621,8 +621,9 @@ var Verbs = []Command{
 		Inputs: []Input{
 			optPos("pr", TypePR, "Pull request to verify; defaults to the current worktree."),
 			flag("floor", TypeString, "Run only this floor."),
+			flag("map", TypeBool, "Only the feature-map drift check (WP4.5b): compare every .agents/skills/verify-*/ map with the source, run nothing, and exit 3 on drift."),
 		},
-		Outputs:  []string{"floor-results", "pack"},
+		Outputs:  []string{"floor-results", "pack", "map-drift"},
 		Gates:    []GateID{GateHalt},
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeNone, Exposure: ExposeWrite,
 	},
