@@ -195,12 +195,24 @@ type Scope struct {
 	allowRE *regexp.Regexp
 }
 
-// find returns the rule's first match in text, outside the allowed phrases.
-func (r Scope) find(text string) string {
+// find returns the rule's first match in text, outside the allowed phrases,
+// and the clause around it, so a floor shows what the skill wrote.
+func (r Scope) find(text string) (match, clause string) {
 	if r.allowRE != nil {
-		text = r.allowRE.ReplaceAllString(text, " ")
+		text = r.allowRE.ReplaceAllStringFunc(text, func(m string) string { return strings.Repeat(" ", len(m)) })
 	}
-	return r.re.FindString(text)
+	loc := r.re.FindStringIndex(text)
+	if loc == nil {
+		return "", ""
+	}
+	start, end := max(0, loc[0]-80), min(len(text), loc[1]+80)
+	if i := strings.LastIndexAny(text[start:loc[0]], ".;\n\""); i >= 0 {
+		start += i + 1
+	}
+	if i := strings.IndexAny(text[loc[1]:end], ".;\n\""); i >= 0 {
+		end = loc[1] + i
+	}
+	return text[loc[0]:loc[1]], strings.Join(strings.Fields(text[start:end]), " ")
 }
 
 // OutOfScope returns one line per scope rule the item breaks. A grilled
@@ -227,8 +239,8 @@ func (c Case) OutOfScope(it workitems.Item) []string {
 func (c Case) outOfScopeText(text string) []string {
 	var out []string
 	for _, r := range c.Scope {
-		if m := r.find(text); m != "" {
-			out = append(out, fmt.Sprintf("adds %s (%q)", r.Why, m))
+		if m, clause := r.find(text); m != "" {
+			out = append(out, fmt.Sprintf("adds %s (%q in %q)", r.Why, m, clause))
 		}
 	}
 	return out
