@@ -825,7 +825,7 @@
         },
         "claude_trigger": {
           "type": "string",
-          "description": "The trigger phrase of the repository's claude-code-action workflow."
+          "description": "Unused since WP5.5c: Claude Code is reached through its own CLI's cloud sessions (claude --cloud), not claude-code-action, so no AI key sits in the repository's CI. Kept so 0.1 configurations still load."
         },
         "checks": {
           "items": {

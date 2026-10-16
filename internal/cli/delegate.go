@@ -38,6 +38,7 @@ type Delegation struct {
 	Task     string         `json:"task,omitempty"`
 	TaskURL  string         `json:"task_url,omitempty"`
 	PR       int            `json:"pr,omitempty"`
+	Proved   string         `json:"proved,omitempty"` // the receiver's own "What I proved" (a preview; the merge gate's proof decides)
 	FollowUp bool           `json:"follow_up_sent,omitempty"`
 	State    delegate.State `json:"-"`
 }
@@ -46,6 +47,8 @@ type Delegation struct {
 type delegation struct {
 	receiver string
 	local    bool
+	fresh    bool // this run hands off: a new branch and, locally, a new worktree
+	handoff  int  // which hand-off of the story this is (from 1)
 	reason   string
 	adapter  delegate.Adapter
 	state    delegate.State
@@ -103,26 +106,12 @@ func clipText(s string, n int) string {
 	return s
 }
 
-// ghOps gives the Claude adapter aayu's actions-logged GitHub writes and the
-// branches on origin.
+// ghOps gives the Claude adapter the branches on origin.
 type ghOps struct {
 	e    *Env
 	c    *github.Client
 	repo string
 	root string
-}
-
-func (o ghOps) Comment(ctx context.Context, n int, body string) (string, error) {
-	owner, name, _ := github.SplitRepo(o.repo)
-	url := ""
-	_, err := o.c.Write(ctx, actions.Action{Kind: "github.issue.comment", Target: fmt.Sprintf("%s#%d", o.repo, n),
-		Request: &actions.Request{Method: http.MethodPost, Path: fmt.Sprintf("/repos/%s/issues/%d/comments", o.repo, n)}, Payload: map[string]any{"kind": "delegate"}},
-		func(ctx context.Context) (any, error) {
-			cm, _, err := o.c.REST.Issues.CreateComment(ctx, owner, name, n, &gh.IssueComment{Body: &body})
-			url = cm.GetHTMLURL()
-			return map[string]any{"id": cm.GetID()}, err
-		})
-	return url, err
 }
 
 func (o ghOps) Branches(ctx context.Context, prefix string) ([]string, error) {
@@ -142,7 +131,8 @@ func (o ghOps) Branches(ctx context.Context, prefix string) ([]string, error) {
 
 // connected reports which receivers' cloud agents are set up here, without
 // any network call: a Cursor API key; Codex's CLI with a cloud environment;
-// a claude-code-action workflow on the base branch; Amp's CLI with its key.
+// Claude Code's CLI (its cloud sessions need the user's claude.ai sign-in);
+// Amp's CLI with its key.
 func (e *Env) connected(root string) map[string]bool {
 	l, _ := e.Config()
 	out := map[string]bool{}
@@ -159,23 +149,10 @@ func (e *Env) connected(root string) map[string]bool {
 	if _, err := e.lookPath()("amp"); err == nil && (e.Getenv("AMP_API_KEY") != "") {
 		out[delegate.Amp] = true
 	}
-	if claudeWorkflow(root) != "" {
+	if _, err := e.lookPath()("claude"); err == nil {
 		out[delegate.Claude] = true
 	}
 	return out
-}
-
-var claudeAction = regexp.MustCompile(`uses:\s*anthropics/claude-code-action@`)
-
-// claudeWorkflow is the workflow file that runs claude-code-action, if any.
-func claudeWorkflow(root string) string {
-	fs, _ := filepath.Glob(filepath.Join(root, ".github", "workflows", "*.y*ml"))
-	for _, f := range fs {
-		if b, err := os.ReadFile(f); err == nil && claudeAction.Match(b) {
-			return f
-		}
-	}
-	return ""
 }
 
 // newDelegation resolves the receiver (auto picks one), the mode (cloud
@@ -186,9 +163,12 @@ func (e *Env) newDelegation(ctx context.Context, in Values, c *github.Client, bo
 	if err != nil {
 		return nil, err
 	}
+	if r := e.Getenv("AAYU_DELEGATED"); r != "" {
+		return nil, Errorf(ExitBlocked, "build #%d --delegate: this run is %s working on a delegated story, and a receiver never hands work on to another agent", n, r)
+	}
 	cfg := l.Config.Delegate
 	d := &delegation{receiver: in.String("delegate"), local: in.Bool("local"), c: c, w: w, repo: repo, story: n, title: chk.Title,
-		branch: fmt.Sprintf("story/%d-%s", n, slug(chk.Title)), dev: e.devBranch(), root: root, bot: bot, body: body}
+		dev: e.devBranch(), root: root, bot: bot, body: body}
 	if _, err := readLedgerJSON(ctx, w, delegate.LedgerPath(n), &d.state); err != nil {
 		return nil, Wrap(ExitExternal, err)
 	}
@@ -238,13 +218,38 @@ func (e *Env) newDelegation(ctx context.Context, in Values, c *github.Client, bo
 	case delegate.Amp:
 		d.adapter = delegate.AmpCLI{Exec: ex, OrbSize: cfg.AmpOrbSize, Env: delegate.ScrubEnv(e.Environ, delegate.Amp, os.TempDir())}
 	case delegate.Claude:
-		d.adapter = delegate.ClaudeMention{GitHub: ghOps{e, c, repo, root}, Trigger: cfg.ClaudeTrigger}
+		d.adapter = delegate.ClaudeCloud{Exec: ex, Dir: root, Env: delegate.ScrubEnv(e.Environ, delegate.Claude, os.TempDir()), GitHub: ghOps{e, c, repo, root}}
 	case delegate.Codex:
 		d.adapter = delegate.CodexCloud{Exec: ex, EnvID: cfg.CodexEnv, Env: delegate.ScrubEnv(e.Environ, delegate.Codex, os.TempDir())}
 	default:
 		return nil, Errorf(ExitUsage, "build --delegate %q: want one of %s or auto", d.receiver, strings.Join(delegate.Receivers, ", "))
 	}
+	// Every hand-off is fresh: a new branch and, locally, a new worktree; a
+	// sync keeps the hand-off's own.
+	d.fresh = d.state.Receiver == "" || d.state.Receiver != d.receiver || d.state.Status == dlgFailed || d.state.Status == dlgMerged
+	d.handoff = max(d.state.Handoffs, 1)
+	if d.state.Receiver == "" {
+		d.handoff = 0
+	}
+	d.branch = d.state.Branch
+	if d.fresh {
+		d.handoff++
+		for d.local && e.taken(ctx, root, delegate.Worktree(root, n, d.receiver, d.handoff), delegate.Branch(n, slug(chk.Title), d.handoff)) {
+			d.handoff++
+		}
+		d.branch = delegate.Branch(n, slug(chk.Title), d.handoff)
+	}
 	return d, nil
+}
+
+// taken reports a worktree directory or a branch on origin that an earlier
+// hand-off left, so a fresh local hand-off takes the next number.
+func (e *Env) taken(ctx context.Context, root, wt, branch string) bool {
+	if _, err := os.Stat(wt); err == nil {
+		return true
+	}
+	out, _ := run2(ctx, root, "git", "ls-remote", "--heads", "origin", branch)
+	return strings.TrimSpace(out) != ""
 }
 
 // writeBrief renders the story's brief from the Ready snapshot on the
@@ -360,15 +365,14 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 	now := e.Now()
 	res.Delegation = &Delegation{Receiver: d.receiver, Mode: mode(d.local), Reason: d.reason}
 	report := func() { d.fill(res.Delegation) }
-	fresh := d.state.Receiver == "" || d.state.Receiver != d.receiver || d.state.Status == dlgFailed || d.state.Status == dlgMerged
-	if fresh {
+	if d.fresh {
 		if err := e.writeBrief(ctx, d, chk); err != nil {
 			return nil, true, err
 		}
 		d.state = delegate.State{Story: d.story, Receiver: d.receiver, Mode: mode(d.local), Model: d.model(), Family: delegate.Family(d.receiver, d.model()),
-			BriefHash: delegate.BriefHash(d.brief), StartedAt: now.UTC().Format(time.RFC3339), Reason: d.reason, Branch: d.branch}
+			BriefHash: delegate.BriefHash(d.brief), StartedAt: now.UTC().Format(time.RFC3339), Reason: d.reason, Branch: d.branch, Handoffs: d.handoff}
 		if d.local {
-			d.event(now, dlgWorking, "local "+filepath.Base(d.bin)+" in "+filepath.Base(delegate.Worktree(d.root, d.story, d.receiver)))
+			d.event(now, dlgWorking, "local "+filepath.Base(d.bin)+" in "+filepath.Base(delegate.Worktree(d.root, d.story, d.receiver, d.handoff)))
 			report()
 			return e.localWriter(d, d.brief), false, nil
 		}
@@ -449,7 +453,7 @@ func (d *delegation) model() string {
 }
 
 func (d *delegation) fill(r *Delegation) {
-	r.Status, r.Task, r.TaskURL, r.PR, r.State = d.state.Status, d.state.Task, d.state.TaskURL, d.state.PR, d.state
+	r.Status, r.Task, r.TaskURL, r.PR, r.Proved, r.State = d.state.Status, d.state.Task, d.state.TaskURL, d.state.PR, d.state.Proved, d.state
 }
 
 // findDelegatedPR finds the receiver's PR: the receiver's own PR URL, an open
@@ -502,6 +506,9 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 		return nil, true, Wrap(ExitExternal, err)
 	}
 	res.PRURL = pr.GetHTMLURL()
+	if p := delegate.Proved(pr.GetBody()); p != "" {
+		d.state.Proved = p
+	}
 	head := pr.GetHead().GetSHA()
 	if d.state.Branch == "" || d.state.Branch != pr.GetHead().GetRef() {
 		d.state.Branch = pr.GetHead().GetRef()
@@ -614,7 +621,10 @@ func (e *Env) localWriter(d *delegation, prompt string) func(context.Context, st
 		defer cancel()
 		env := delegate.ScrubEnv(e.Environ, d.receiver, gh)
 		return e.act(ctx, d, "delegate.local-run", map[string]any{"bin": filepath.Base(d.bin), "worktree": wt, "prompt_sha256": delegate.BriefHash(prompt)}, func(ctx context.Context) error {
-			_, err := e.delegateExec()(ctx, wt, env, "", d.bin, delegate.LocalArgs(d.receiver, d.bin, wt, prompt)...)
+			out, err := e.delegateExec()(ctx, wt, env, "", d.bin, delegate.LocalArgs(d.receiver, d.bin, wt, prompt)...)
+			if p := delegate.Proved(out); p != "" {
+				d.state.Proved = p
+			}
 			return err
 		})
 	}
@@ -639,6 +649,12 @@ func applyDiff(diff string) func(context.Context, string) error {
 	}
 }
 
+// quoteLines quotes text as a Markdown block quote, so a receiver's report
+// cannot add headings or other structure to a PR body.
+func quoteLines(text string) string {
+	return "> " + strings.ReplaceAll(strings.TrimSpace(text), "\n", "\n> ")
+}
+
 // emitDelegation reports a delegation step.
 func (e *Env) emitDelegation(res BuildResult) error {
 	return e.Emit(res, func(w io.Writer) error {
@@ -656,6 +672,12 @@ func (e *Env) emitDelegation(res BuildResult) error {
 		fmt.Fprintln(w)
 		if d.Reason != "" {
 			fmt.Fprintf(w, "  why: %s\n", d.Reason)
+		}
+		if d.Proved != "" {
+			fmt.Fprintf(w, "  %s says it proved (a preview; the merge gate's proof decides):\n", d.Receiver)
+			for _, l := range strings.Split(d.Proved, "\n") {
+				fmt.Fprintf(w, "    %s\n", l)
+			}
 		}
 		if d.FollowUp {
 			fmt.Fprintln(w, "  follow-up sent with inspect's findings")

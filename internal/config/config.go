@@ -53,7 +53,7 @@ type Delegate struct {
 	CursorModel         string   `koanf:"cursor_model" jsonschema_description:"Model ID the Cursor cloud agent runs; empty: Cursor's default (its family is then unknown to aayu, so inspect names concrete reviewer families)."`
 	CodexEnv            string   `koanf:"codex_env" jsonschema_description:"ID of the Codex cloud environment whose Install script runs bash .agents/setup; empty: Codex runs only locally."`
 	AmpOrbSize          string   `koanf:"amp_orb_size" jsonschema_description:"Orb size of a delegated Amp thread; empty: the Amp project's default."`
-	ClaudeTrigger       string   `koanf:"claude_trigger" jsonschema_description:"The trigger phrase of the repository's claude-code-action workflow."`
+	ClaudeTrigger       string   `koanf:"claude_trigger" jsonschema_description:"Unused since WP5.5c: Claude Code is reached through its own CLI's cloud sessions (claude --cloud), not claude-code-action, so no AI key sits in the repository's CI. Kept so 0.1 configurations still load."`
 	Checks              []string `koanf:"checks" jsonschema_description:"Commands the brief tells a receiver to run before it finishes; empty: the checks AGENTS.md lists."`
 	LocalTimeoutMinutes int      `koanf:"local_timeout_minutes" jsonschema:"minimum=0" jsonschema_description:"Longest run of a receiver's CLI in an aayu worktree (--local)."`
 }

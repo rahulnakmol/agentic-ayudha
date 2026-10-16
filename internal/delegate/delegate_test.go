@@ -54,6 +54,11 @@ func TestBrief(t *testing.T) {
 		"After 2 fix cycles a human takes over",
 		"`.github/`, `skills/`",
 		"```text\nThe cart shows a message when empty.",
+		"use your own subagents or parallel workers",
+		"verify every Completion Goal criterion yourself, with evidence",
+		"Put a `## What I proved` section in the PR body",
+		"the merge gate's proof decides",
+		"Do not hand this story to another agent",
 	} {
 		if !strings.Contains(b, want) {
 			t.Errorf("brief lacks %q", want)
@@ -64,7 +69,8 @@ func TestBrief(t *testing.T) {
 	}
 	in := briefInput()
 	in.Local = true
-	if l := Brief(in); !strings.Contains(l, "Do not commit, push, or open a PR") || strings.Contains(l, "open one pull request") {
+	if l := Brief(in); !strings.Contains(l, "Do not commit, push, or open a PR") || strings.Contains(l, "open one pull request") ||
+		!strings.Contains(l, "End your final message with a `## What I proved` section") {
 		t.Fatalf("local brief:\n%s", l)
 	}
 	if BriefHash(b) == BriefHash(Brief(in)) {
@@ -184,15 +190,7 @@ func TestAmpCLI(t *testing.T) {
 	}
 }
 
-type fakeGH struct {
-	comments map[int][]string
-	branches []string
-}
-
-func (f *fakeGH) Comment(_ context.Context, n int, body string) (string, error) {
-	f.comments[n] = append(f.comments[n], body)
-	return "https://github.com/o/r/issues/" + string(rune('0'+n)) + "#c", nil
-}
+type fakeGH struct{ branches []string }
 
 func (f *fakeGH) Branches(_ context.Context, prefix string) ([]string, error) {
 	var out []string
@@ -204,23 +202,53 @@ func (f *fakeGH) Branches(_ context.Context, prefix string) ([]string, error) {
 	return out, nil
 }
 
-// Claude Code: the brief as an @claude comment on the story; the action's
-// branch for the story; a follow-up as an @claude comment on the PR.
-func TestClaudeMention(t *testing.T) {
-	g := &fakeGH{comments: map[int][]string{}, branches: []string{"claude/issue-12-x", "claude/issue-2-20261015-0900"}}
-	c := ClaudeMention{GitHub: g}
-	ctx := context.Background()
-	if _, err := c.Handoff(ctx, Handoff{Story: 2, Base: "dev", Brief: "the brief"}); err != nil || !strings.HasPrefix(g.comments[2][0], "@claude ") || !strings.Contains(g.comments[2][0], "the brief") {
-		t.Fatalf("handoff: %v %v", err, g.comments)
+// Claude Code on the web: the brief starts a cloud session from the user's
+// CLI in the repository; the branch the brief named is the signal; a
+// follow-up is queued on the session.
+func TestClaudeCloud(t *testing.T) {
+	cloud, _ := os.ReadFile("testdata/claude/cloud.txt")
+	queued, _ := os.ReadFile("testdata/claude/followup.json")
+	var calls []call
+	ex := func(_ context.Context, dir string, _ []string, _, _ string, args ...string) (string, error) {
+		calls = append(calls, call{dir, args})
+		if args[0] == "--cloud" {
+			return string(cloud), nil
+		}
+		return string(queued), nil
 	}
-	if s, _ := c.Status(ctx, State{Story: 2}); s.Branch != "claude/issue-2-20261015-0900" {
+	g := &fakeGH{branches: []string{"story/2-show-empty-list-2", "story/12-x"}}
+	c := ClaudeCloud{Exec: ex, Dir: "/repo", GitHub: g}
+	ctx := context.Background()
+	task, err := c.Handoff(ctx, Handoff{Story: 2, Base: "dev", Brief: "the brief"})
+	if err != nil || task.ID != "session_01HZX7Q2M4N8P6R3T5V9W0Y1A2" || task.URL != "https://claude.ai/code/session_01HZX7Q2M4N8P6R3T5V9W0Y1A2" ||
+		calls[0].dir != "/repo" || !slices.Equal(calls[0].args, []string{"--cloud", "the brief"}) {
+		t.Fatalf("handoff: %v %+v %+v", err, task, calls)
+	}
+	if s, _ := c.Status(ctx, State{Story: 2, Task: task.ID, Branch: "story/2-show-empty-list"}); s.Branch != "" {
+		t.Fatalf("a longer branch name is not the brief's branch: %+v", s)
+	}
+	if s, _ := c.Status(ctx, State{Story: 2, Task: task.ID, Branch: "story/2-show-empty-list-2"}); s.Branch != "story/2-show-empty-list-2" {
 		t.Fatalf("branch: %+v", s)
 	}
-	if _, err := c.FollowUp(ctx, State{Story: 2}, "fix"); err == nil {
-		t.Fatal("a follow-up without a PR")
+	if _, err := c.FollowUp(ctx, State{Task: task.ID}, "fix"); err != nil || !slices.Equal(calls[1].args, []string{"-p", "fix", "--cloud", task.ID, "--output-format", "json"}) {
+		t.Fatalf("follow-up: %v %+v", err, calls)
 	}
-	if _, err := c.FollowUp(ctx, State{Story: 2, PR: 7}, "fix"); err != nil || g.comments[7][0] != "@claude fix" {
-		t.Fatalf("follow-up: %v %v", err, g.comments)
+	queued = []byte(`{"ok":false}`)
+	if _, err := c.FollowUp(ctx, State{Task: task.ID}, "fix"); err == nil {
+		t.Fatal("a follow-up that was not queued passed")
+	}
+}
+
+// What a receiver says it proved: its section only, up to the next heading,
+// with credentials removed; nothing when it wrote none.
+func TestProved(t *testing.T) {
+	body := "Refs #2\n\n## Summary\nAdds the empty state.\n\n" + ProvedHeading + "\n1. proved: TestEmptyList passes\n2. not proved: no screenshot (no browser)\ntoken ghp_abcdefghijklmnopqrstuvwxyz0123456789\n\n## Notes\nnone\n"
+	got := Proved(body)
+	if !strings.HasPrefix(got, "1. proved: TestEmptyList passes\n2. not proved") || strings.Contains(got, "Notes") || strings.Contains(got, "ghp_") || strings.Contains(got, "Summary") {
+		t.Fatalf("proved: %q", got)
+	}
+	if Proved("Refs #2\n\nNo section.") != "" {
+		t.Fatal("a body without the section")
 	}
 }
 
@@ -228,18 +256,21 @@ func TestClaudeMention(t *testing.T) {
 // GitHub, gh, or aayu variable and no other secret; git and gh credentials cut.
 func TestScrubEnv(t *testing.T) {
 	env := ScrubEnv([]string{"PATH=/bin", "HOME=/h", "GITHUB_TOKEN=g", "GH_TOKEN=h", "AAYU_SECRET_AI_GATEWAY=x", "AAYU_GITHUB_TOKEN=y",
-		"OPENAI_API_KEY=o", "CURSOR_API_KEY=c", "MY_SERVICE_SECRET=s", "GOCACHE=/c", "LANG=C"}, Codex, "/tmp/gh")
+		"CODEX_API_KEY=k", "OPENAI_API_KEY=o", "OPENAI_BASE_URL=https://gateway", "ANTHROPIC_API_KEY=a", "AAYU_MODELS__GATEWAY__SECRET=s",
+		"CURSOR_API_KEY=c", "MY_SERVICE_SECRET=s", "GOCACHE=/c", "LANG=C"}, Codex, "/tmp/gh")
 	keep := map[string]bool{}
 	for _, kv := range env {
 		k, _, _ := strings.Cut(kv, "=")
 		keep[k] = true
 	}
-	for _, k := range []string{"PATH", "HOME", "OPENAI_API_KEY", "GOCACHE", "LANG", "GH_CONFIG_DIR", "GIT_SSH_COMMAND", "GIT_CONFIG_COUNT"} {
+	for _, k := range []string{"PATH", "HOME", "CODEX_API_KEY", "GOCACHE", "LANG", "GH_CONFIG_DIR", "GIT_SSH_COMMAND", "GIT_CONFIG_COUNT"} {
 		if !keep[k] {
 			t.Errorf("%s dropped", k)
 		}
 	}
-	for _, k := range []string{"GITHUB_TOKEN", "GH_TOKEN", "AAYU_SECRET_AI_GATEWAY", "AAYU_GITHUB_TOKEN", "CURSOR_API_KEY", "MY_SERVICE_SECRET"} {
+	// No model provider's key or base URL: it may be a gateway's (no gateway credential reaches a receiver).
+	for _, k := range []string{"GITHUB_TOKEN", "GH_TOKEN", "AAYU_SECRET_AI_GATEWAY", "AAYU_GITHUB_TOKEN", "CURSOR_API_KEY", "MY_SERVICE_SECRET",
+		"OPENAI_API_KEY", "OPENAI_BASE_URL", "ANTHROPIC_API_KEY", "AAYU_MODELS__GATEWAY__SECRET"} {
 		if keep[k] {
 			t.Errorf("%s kept", k)
 		}
