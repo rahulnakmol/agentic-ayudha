@@ -11,9 +11,10 @@ Codex's CLI on this machine instead of its cloud agent.
 
 1. **Only a Ready story leaves.** For a number `n`, run `aayu ready n --check`; if it fails, show me what blocks
    Ready and stop. For a goal in words, run the vagueness gate first: `aayu grill story --assess --idea "<goal>"
-   --json`, then the aayudha grill skill's unpack-and-confirm step with me (name each ambiguity, riskiest question
-   first, read back what done looks like). Create the story with `aayu grill story … --create` and make it Ready
-   with `aayu ready n`. Never invent a requirement I did not state; a concrete goal goes straight through.
+   --json`. On `gate.verdict` = `unpack`, follow the aayudha grill skill's gate with me: name each of
+   `gate.reasons`, ask the riskiest question first, and read back what done looks like before anything is created.
+   On `pass`, create the story from my own words without questions. Create it with `aayu grill story … --create`
+   and make it Ready with `aayu ready n`. Never invent a requirement I did not state.
 2. **Hand off.** Run `aayu build n --delegate codex --json`, with `--local` only when I asked for it. Cloud is the
    default and works on a fresh branch; `--local` runs Codex's CLI in a fresh aayu worktree with no GitHub
    credential. Every receiver gets the same brief: the Ready snapshot, the plan, the evidence map, the PR rules,

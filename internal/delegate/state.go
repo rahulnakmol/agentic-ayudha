@@ -22,6 +22,9 @@ const (
 // Receivers lists the agents a story can be delegated to.
 var Receivers = []string{Codex, Cursor, Claude, Amp}
 
+// Names are the receivers' product names, for messages.
+var Names = map[string]string{Codex: "Codex", Cursor: "Cursor", Claude: "Claude Code", Amp: "Amp"}
+
 // LedgerPath is where a story's delegation state lives on the ledger.
 func LedgerPath(story int) string { return fmt.Sprintf("delegate/%d/state.json", story) }
 
