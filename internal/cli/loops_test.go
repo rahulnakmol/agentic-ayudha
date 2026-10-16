@@ -110,7 +110,7 @@ func TestInstallLoops(t *testing.T) {
 	dir := checkout(t)
 	_ = os.MkdirAll(filepath.Join(dir, "loops"), 0o755)
 	_ = os.WriteFile(filepath.Join(dir, "loops", "digest.toml"), []byte("description = \"Digest.\"\ncommand = [\"status\", \"--digest\"]\ncron = \"5 9 * * 1-5\"\n"), 0o644)
-	_ = os.WriteFile(filepath.Join(dir, "loops", "triage.toml"), []byte("description = \"Triage.\"\ncommand = [\"triage\"]\ncron = \"0 9 * * *\"\nhosts = [\"amp\", \"codex\"]\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "loops", "triage-daily.toml"), []byte("description = \"Triage.\"\ncommand = [\"triage\"]\ncron = \"0 9 * * *\"\nhosts = [\"amp\", \"codex\"]\n"), 0o644)
 	// The rendered Amp inputs, as init --gates writes them.
 	files, err := func() (map[string][]byte, error) {
 		ls, err := loops.Load(dir)
@@ -169,12 +169,12 @@ func TestInstallLoops(t *testing.T) {
 	if code, _, errOut := runIn(t, env, term, "cursor\n", "install", "--loops", "--repo", "o/r"); code != ExitUsage || !strings.Contains(errOut, "Detected: amp, codex. [amp/codex]") {
 		t.Errorf("an undetected pick: exit %d: %s", code, errOut)
 	}
-	if code, _, errOut := runIn(t, env, term, "codex\nn\n", "install", "--loops", "--repo", "o/r"); code != 0 || !strings.Contains(errOut, "codex/scheduled-tasks.md (2 loops)") || !strings.Contains(errOut, "Test the triage loop now in codex") {
+	if code, _, errOut := runIn(t, env, term, "codex\nn\n", "install", "--loops", "--repo", "o/r"); code != 0 || !strings.Contains(errOut, "codex/scheduled-tasks.md (2 loops)") || !strings.Contains(errOut, "Test the triage-daily loop now in codex") {
 		t.Errorf("codex picked: exit %d: %s", code, errOut)
 	}
 	// Amp with --apply: one headless thread per loop sets its schedule, and each loop is recorded.
 	code, r, errOut := report("", "--host", "amp", "--apply")
-	if code != 0 || states(r) != "digest=amp:active triage=amp:active" {
+	if code != 0 || states(r) != "digest=amp:active triage-daily=amp:active" {
 		t.Fatalf("amp --apply: exit %d %s: %s", code, states(r), errOut)
 	}
 	if n := len(slices.DeleteFunc(slices.Clone(calls), func(c string) bool {
@@ -185,24 +185,24 @@ func TestInstallLoops(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(dir, "loops", "active.json")); !strings.Contains(string(b), `"id": "schedule s-digest on T-01a14215`) {
 		t.Errorf("active.json:\n%s", b)
 	}
-	// Recording triage in Codex as well: it would run twice, so both say so.
-	if code, out, _ := run(t, env, opts, "install", "--loops", "--repo", "o/r", "--host", "codex", "--record", "triage=task-1"); code != 0 || !strings.Contains(out, "triage is also recorded in amp: it runs twice") {
+	// Recording triage-daily in Codex as well: it would run twice, so both say so.
+	if code, out, _ := run(t, env, opts, "install", "--loops", "--repo", "o/r", "--host", "codex", "--record", "triage-daily=task-1"); code != 0 || !strings.Contains(out, "triage-daily is also recorded in amp: it runs twice") {
 		t.Errorf("double record: exit %d: %s", code, out)
 	}
 	code, r, _ = report("", "--host", "codex")
-	if code != 0 || states(r) != "digest=amp:active triage=amp,codex:double" || len(r.Warnings) != 1 || !strings.Contains(r.Warnings[0], "records digest, triage as set up in amp") {
+	if code != 0 || states(r) != "digest=amp:active triage-daily=amp,codex:double" || len(r.Warnings) != 1 || !strings.Contains(r.Warnings[0], "records digest, triage-daily as set up in amp") {
 		t.Errorf("codex with loops in amp: exit %d %s %v", code, states(r), r.Warnings)
 	}
-	if code, _, _ := run(t, env, opts, "install", "--loops", "--repo", "o/r", "--host", "codex", "--record", "triage="); code != 0 {
+	if code, _, _ := run(t, env, opts, "install", "--loops", "--repo", "o/r", "--host", "codex", "--record", "triage-daily="); code != 0 {
 		t.Errorf("forget: exit %d", code)
 	}
 	_ = os.WriteFile(filepath.Join(dir, "loops", "digest.toml"), []byte("description = \"Digest.\"\ncommand = [\"status\", \"--digest\"]\ncron = \"5 8 * * 1-5\"\n"), 0o644)
-	if _, r, _ := report("", "--host", "amp"); states(r) != "digest=amp:stale triage=amp:active" || r.RunNow != "aayu install --loops --host amp --run-now triage" {
+	if _, r, _ := report("", "--host", "amp"); states(r) != "digest=amp:stale triage-daily=amp:active" || r.RunNow != "aayu install --loops --host amp --run-now triage-daily" {
 		t.Errorf("after forgetting codex and moving the digest: %s, run now %q", states(r), r.RunNow)
 	}
 	// Run now: the tool's own CLI runs the loop once, past "not due".
 	calls = nil
-	code, out, errOut := run(t, env, opts, "install", "--loops", "--repo", "o/r", "--host", "amp", "--run-now", "triage")
+	code, out, errOut := run(t, env, opts, "install", "--loops", "--repo", "o/r", "--host", "amp", "--run-now", "triage-daily")
 	if calls = slices.DeleteFunc(calls, func(c string) bool { return !strings.Contains(c, " -x ") }); code != 0 || out != "loop triage: ran\n" ||
 		len(calls) != 1 || !strings.HasPrefix(calls[0], "/usr/bin/amp -x This is a Run now test") {
 		t.Errorf("run now: exit %d %q %v: %s", code, out, calls, errOut)
@@ -210,13 +210,13 @@ func TestInstallLoops(t *testing.T) {
 	// D-7.1f: a loop that needs no agent runs in the Actions fallback. Still recorded in Amp, it runs twice until
 	// Amp forgets it; then only Actions runs it, and the report says so.
 	_ = os.WriteFile(filepath.Join(dir, "loops", "digest.toml"), []byte("description = \"Digest.\"\ncommand = [\"status\", \"--digest\"]\ncron = \"5 8 * * 1-5\"\nagent = false\n"), 0o644)
-	if _, r, _ := report("", "--host", "amp"); states(r) != "digest=actions,amp:double triage=amp:active" {
+	if _, r, _ := report("", "--host", "amp"); states(r) != "digest=actions,amp:double triage-daily=amp:active" {
 		t.Errorf("digest now agent = false, still in amp: %s", states(r))
 	}
 	if code, _, errOut := run(t, env, opts, "install", "--loops", "--repo", "o/r", "--host", "amp", "--record", "digest="); code != 0 {
 		t.Errorf("forget a loop amp no longer runs: exit %d: %s", code, errOut)
 	}
-	if _, r, _ := report("", "--host", "amp"); states(r) != "digest=actions:active triage=amp:active" || !slices.Equal(r.Actions, []string{"digest"}) {
+	if _, r, _ := report("", "--host", "amp"); states(r) != "digest=actions:active triage-daily=amp:active" || !slices.Equal(r.Actions, []string{"digest"}) {
 		t.Errorf("digest in Actions only: %s, actions %v", states(r), r.Actions)
 	}
 }

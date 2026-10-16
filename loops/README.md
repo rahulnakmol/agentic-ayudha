@@ -22,9 +22,9 @@ workflow token, so it runs only in the free GitHub Actions fallback, and no tool
 refuses a mix: `actions` or `setup` on an agent loop, and an agent tool, `bot = true`, or a `prompt` on an
 `agent = false` loop. Here `digest` and `verify-sweep` have `agent = false`; every other loop is an agent loop.
 
-This repository's loops are also the defaults a product copies. `triage-daily` (every morning) and `triage` (weekly)
-replace the retired aayudha-triage workflow: `aayu triage` lists the intake issues with no model, and the agent in
-your own session classifies each one with `--as`. `housekeeping` (weekly) runs `aayu gc`, then reports doctor drift,
+This repository's loops are also the defaults a product copies. `triage-daily` (each weekday morning) replaces the
+retired aayudha-triage workflow and the weekly `triage` loop: `aayu triage` lists every open intake issue with no
+model, and the agent in your own session classifies each one with `--as`. `housekeeping` (weekly) runs `aayu gc`, then reports doctor drift,
 feature-map drift, and stale Ready issues. `ci-failed` (each weekday morning) sends a delegated story's failed
 required check back to its builder (#231), `release-measure` (weekly) runs `measure` when a release was published
 that week, and `evolve` (monthly) takes the Feedback filed since. They do on a schedule what the deferred event loops

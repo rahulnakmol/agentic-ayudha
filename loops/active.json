@@ -35,13 +35,8 @@
       "id": "schedule f6c2c5cb-e9a3-5930-8d95-fc499633cf93 on T-01a144e7-afb9-70fe-a3d3-6246d3ff8f08",
       "at": "2026-10-16"
     },
-    "triage": {
-      "digest": "77c82d01e2d2",
-      "id": "schedule 5b01dd9a-2e61-5053-bc82-c5bdca325010 on T-01a144e7-c9dc-707b-874d-6dbed80e5211",
-      "at": "2026-10-16"
-    },
     "triage-daily": {
-      "digest": "4746a7324bc0",
+      "digest": "30d46761de7a",
       "id": "schedule 8f6a2fe5-af9b-5a95-8474-94b510eeac98 on T-01a144e7-baf9-7754-994e-19ea072da0dd",
       "at": "2026-10-16"
     },
