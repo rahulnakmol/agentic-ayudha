@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -51,6 +52,28 @@ type VerifyResult struct {
 	// RetentionDays is how long the merge gate keeps the pack as its
 	// aayudha-pack run artifact (--ci with a pack; S-4.2b).
 	RetentionDays int `json:"retention_days,omitempty"`
+	// Artifacts is where a preview without a pack keeps the floors' artifacts.
+	Artifacts string `json:"artifacts_dir,omitempty"`
+}
+
+// writeArtifacts replaces dir with the artifacts, by their pack paths.
+func writeArtifacts(dir string, files map[string][]byte) error {
+	if err := os.RemoveAll(dir); err != nil {
+		return err
+	}
+	for rel, b := range files {
+		if err := proof.CleanPath(rel); err != nil {
+			return err
+		}
+		f := filepath.Join(dir, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(f), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(f, b, 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func gitIn(ctx context.Context, dir string, args ...string) (string, error) {
@@ -295,6 +318,18 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 			res.RetentionDays = proof.ArtifactRetention(l.Config.Proof.RetentionDays, e.Getenv("GITHUB_RETENTION_DAYS"))
 		}
 	}
+	// A preview without a story keeps what the floors captured, so a person or
+	// an agent can look at a behaviour check's screenshots and traces (WP4.5b).
+	if res.Pack == "" && !e.CI && len(rep.Artifacts) > 0 {
+		res.Artifacts = filepath.Join(root, ".aayudha", "state", "verify")
+		files := map[string][]byte{}
+		for _, a := range rep.Artifacts {
+			files[a.Path] = a.Data
+		}
+		if err := writeArtifacts(res.Artifacts, files); err != nil {
+			return err
+		}
+	}
 	// The merge gate (WP4.8): the pack must prove the PR's current head, the
 	// story must still match its Ready snapshot, and every criterion must have
 	// evidence from this run.
@@ -467,6 +502,9 @@ func renderVerify(w io.Writer, res VerifyResult) error {
 		fmt.Fprintf(w, "no pack: #%d has no Ready snapshot on the ledger (run `aayu ready %d`)\n", res.Story, res.Story)
 	default:
 		fmt.Fprintln(w, "no pack: no story found (Refs #n in the PR body, an Aayudha-Story trailer, or a story/<n>-… branch)")
+	}
+	if res.Artifacts != "" {
+		fmt.Fprintf(w, "artifacts kept in %s (a preview)\n", res.Artifacts)
 	}
 	return nil
 }
