@@ -1,0 +1,6 @@
+# Measure after a release (WP7.2, WP7.1; Appendix B S-7.1c). The cohorts and North Star are read when a release is
+# published; measure reads exports or live integrations and needs no model.
+description = "Measure on release: report the cohorts and North Star when a release is published."
+command = ["measure"]
+on = "release.published"
+prompt = "Report the cohorts and the North Star in a few lines, with the release tag. If measure stops for a missing baseline or export, report that and stop."

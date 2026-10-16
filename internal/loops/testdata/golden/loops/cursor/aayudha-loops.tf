@@ -93,4 +93,4 @@ resource "cursor_platform_workflow" "aayudha_sweep" {
   ]
 }
 
-# triage-new (On issues.opened): not rendered: Cursor has no trigger for issues.opened without a label (only issue label changes and comments).
+# triage-new (On issues.opened): not rendered: Cursor has no trigger for a new issue without a label (only issue label changes and comments).

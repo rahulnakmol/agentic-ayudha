@@ -126,7 +126,10 @@ func (l Loop) Native(host string) (ok bool, why string) {
 		case strings.HasPrefix(l.On, "issues.") && label:
 			return true, "" // git_label on issues: fires when the label is added, including by an issue form at open
 		}
-		return false, "Cursor has no trigger for " + l.On + " without a label (only issue label changes and comments)"
+		if l.On == "release.published" {
+			return false, "Cursor Automations have no release trigger"
+		}
+		return false, "Cursor has no trigger for a new issue without a label (only issue label changes and comments)"
 	case HostClaude:
 		// Routines: GitHub triggers cover pull requests and releases (code.claude.com/docs/en/routines).
 		if strings.HasPrefix(l.On, "pull_request.") || l.On == "release.published" {

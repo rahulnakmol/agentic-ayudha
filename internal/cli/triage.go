@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"io"
 
+	gh "github.com/google/go-github/v90/github"
+
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/triage"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
+	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
 func init() { register("triage", runTriage) }
@@ -71,6 +74,12 @@ func runTriage(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return err
 	}
+	if in.String("issue") == "" {
+		if in.String("as") != "" {
+			return Errorf(ExitUsage, "triage --as: name the intake issue it classifies")
+		}
+		return listIntake(ctx, e, repo)
+	}
 	c, err := e.triageClient(ctx)
 	if err != nil {
 		return err
@@ -102,6 +111,48 @@ func runTriage(ctx context.Context, e *Env, in Values) error {
 			fmt.Fprintf(w, " (accepted: %t)", res.Accepted)
 		}
 		fmt.Fprintf(w, "; added %v, removed %v\n", res.Added, res.Removed)
+		return nil
+	})
+}
+
+// Intake is an open intake issue that triage would classify.
+type Intake struct {
+	Issue int    `json:"issue"`
+	Title string `json:"title"`
+	URL   string `json:"url"`
+}
+
+// listIntake is `aayu triage` with no issue: the open intake issues, oldest
+// first, for the weekly triage loop's agent to classify one by one with --as.
+// It reads only.
+func listIntake(ctx context.Context, e *Env, repo string) error {
+	c, _, err := e.HumanGitHub(ctx)
+	if err != nil {
+		return err
+	}
+	owner, name, _ := github.SplitRepo(repo)
+	is, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.Issue, *gh.Response, error) {
+		return c.REST.Issues.ListByRepo(ctx, owner, name, &gh.IssueListByRepoOptions{State: "open", Labels: []string{workitems.LabelIntake}, Sort: "created", Direction: "asc", ListOptions: o})
+	})
+	if err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	out := []Intake{}
+	for _, i := range is {
+		if !i.IsPullRequest() {
+			out = append(out, Intake{i.GetNumber(), i.GetTitle(), i.GetHTMLURL()})
+		}
+	}
+	return e.Emit(out, func(w io.Writer) error {
+		if len(out) == 0 {
+			_, err := fmt.Fprintln(w, "no open intake issues")
+			return err
+		}
+		for _, i := range out {
+			if _, err := fmt.Fprintf(w, "#%d %s\n", i.Issue, i.Title); err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 }

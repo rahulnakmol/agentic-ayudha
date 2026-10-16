@@ -27,6 +27,12 @@ for a newly opened issue or pull request, or a Cursor Automation trigger (`git_p
 `git_label` for an issue with the label). A host without the trigger does not render the loop, and the rendered file
 says why. The Actions fallback never answers an event with a model: its job only records the event in the run summary.
 
+This repository's loops are also the defaults a product copies. `triage` (weekly) and `triage-new` (when an intake form
+opens an issue) replace the retired aayudha-triage workflow: `aayu triage` lists the intake issues with no model, and
+the agent in your own session classifies each one with `--as`. `housekeeping` (weekly) runs `aayu gc`, then reports
+doctor drift, feature-map drift, and stale Ready issues. `feedback`, `ci-failed`, and `release-measure` start on a new
+Feedback issue, a failed check suite (the delegated builder gets the failed check, #231), and a published release.
+
 `verify-sweep` (nightly) and `verify-maintain` (weekly) are the feature maps' loops (WP4.5b.4): the sweep runs every
 behaviour check with no model, and both hand the maintain brief to the agent app `[verify] maintainer` names, the
 sweep only when a map drifted or a check failed. No model key is used in the Actions jobs.

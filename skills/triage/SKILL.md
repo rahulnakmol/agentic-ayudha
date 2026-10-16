@@ -13,9 +13,9 @@ aayu:
   inputs:
     - name: issue
       type: issue
-      required: true
+      required: false
       positional: true
-      description: "Intake issue to classify."
+      description: "Intake issue to classify; without it, list the open intake issues and change nothing (the weekly triage loop)."
     - name: as
       type: enum
       required: false
