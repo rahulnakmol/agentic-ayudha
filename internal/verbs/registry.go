@@ -591,7 +591,7 @@ var Verbs = []Command{
 		Reader:  "Sorts incoming reports into feedback, bugs, and incidents by label, without editing what people wrote.",
 		Seat:    ProductStrategist, Lane: LaneChore, Layers: NoLayers(),
 		Inputs: []Input{
-			pos("issue", TypeIssue, "Intake issue to classify."),
+			optPos("issue", TypeIssue, "Intake issue to classify; without it, list the open intake issues and change nothing (the weekly triage loop)."),
 			enumIn("as", false, false, "Class chosen by the host's model; without it the binary asks the triage lane's model.", "feedback", "bug", "incident"),
 		},
 		Outputs:  []string{"labels"},

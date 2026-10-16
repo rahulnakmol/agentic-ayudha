@@ -1,0 +1,7 @@
+# Feedback for evolve (WP7.7, WP7.1; Appendix B S-7.1c): when a Feedback issue opens, report whether a skill now has the
+# evidence aayu evolve needs. The monthly evolve loop acts on it; this one changes nothing.
+description = "Feedback for evolve: when a Feedback issue opens, report the skills that now have the evidence evolve needs."
+command = ["evolve"]
+on = "issues.opened"
+filter = { label = "type:feedback" }
+prompt = "Report each skill evolve lists as ready, in one line, and say whether the issue that started this run is one of its Feedback issues. Change nothing."

@@ -1,0 +1,7 @@
+# A failed check goes back to the builder (P3, #231; Appendix B S-7.1c). When a pull request's check suite fails, the
+# delegated story's sync sends the failed required check to the cloud agent that built it, within the two-cycle cap.
+description = "Failed check: send a delegated story's failed required check back to its builder."
+command = ["status", "--work"]
+on = "check_suite.completed"
+filter = { conclusion = "failure" }
+prompt = "If the pull request whose check suite failed is a story delegated to a cloud agent (in the list above), run `AAYU_AGENT=1 aayu build <story> --delegate <its receiver>` once to sync it, which sends the failed required check back to the builder within the cap, and report what it did. Otherwise stop without reporting."

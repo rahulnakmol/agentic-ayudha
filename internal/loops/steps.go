@@ -22,7 +22,7 @@ func ClaudeRoutines(ls []Loop, repo, branch, tz string) []byte {
 	var b strings.Builder
 	b.WriteString(generatedMD)
 	fmt.Fprintf(&b, "# Claude Code routines for %s\n\n", repo)
-	fmt.Fprintf(&b, "Each loop is a routine ([docs](%s)). Create it at <https://claude.ai/code/routines> (**New routine**), or run\n", claudeDocs)
+	fmt.Fprintf(&b, "Each loop is a routine ([docs](%s)). Create it at `claude.ai/code/routines` (**New routine**), or run\n", claudeDocs)
 	b.WriteString("`/schedule` in Claude Code and give it the values below; a GitHub trigger from the CLI needs Claude Code v2.1.225 or\n")
 	b.WriteString("later and the Claude GitHub App on the repository. Routines need a claude.ai subscription login (not an API key), run\n")
 	b.WriteString("as you, and count against your plan's daily routine runs. The routine's cloud environment must have the aayu\n")
