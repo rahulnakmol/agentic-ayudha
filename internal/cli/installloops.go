@@ -133,7 +133,7 @@ func runInstallLoops(ctx context.Context, e *Env, in Values) error {
 	}
 	if len(mine) > 0 {
 		test := mine[0]
-		if t, ok := loops.Find(mine, "triage"); ok {
+		if t, ok := loops.Find(mine, "triage-daily"); ok {
 			test = t
 		}
 		rep.RunNow = fmt.Sprintf("aayu install --loops --host %s --run-now %s", tool, test.Name)

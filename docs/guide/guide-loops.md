@@ -18,8 +18,7 @@ Copy the default loop files from aayudha's [loops](../../loops) folder into your
 
 | Loop | Runs | Does |
 |---|---|---|
-| `triage-daily` | Daily 09:00 | Lists new intake issues; your agent labels each as Feedback, Bug, or Incident |
-| `triage` | Mondays 09:30 | The same, weekly |
+| `triage-daily` | Weekdays 09:00 | Lists every open intake issue; your agent labels each as Feedback, Bug, or Incident |
 | `ci-failed` | Weekdays 09:45 | For a story handed to another agent, sends a failed required check back to it |
 | `release-measure` | Mondays 10:30 | Runs `measure` when a release was published that week |
 | `housekeeping` | Fridays 16:00 | Cleans up, then reports setup drift, feature-map drift, and stale Ready issues |
@@ -62,7 +61,7 @@ forget them: `aayu install --loops --host <that tool> --record <loop>=`.
 **Test one loop now.** At the end, it offers to run one loop once. You can also run it yourself:
 
 ```sh
-aayu install --loops --host amp --run-now triage
+aayu install --loops --host amp --run-now triage-daily
 ```
 
 **You should see** the loop's report in your terminal: the intake issues it classified, or nothing to do.
