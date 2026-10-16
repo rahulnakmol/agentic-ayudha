@@ -36,12 +36,15 @@ func LocalArgs(receiver, bin, wt, prompt string) []string {
 	return nil
 }
 
-// receiverKeys are the variables each receiver's own CLI authenticates with;
-// the scrubbed environment passes only the receiver's own.
+// receiverKeys are the variables only the receiver's own CLI reads; the
+// scrubbed environment passes the receiver's own and nothing else. A model
+// provider's key (OPENAI_API_KEY, ANTHROPIC_API_KEY) or base URL is never
+// passed: it may be a model gateway's credential, and a receiver runs on its
+// user's own sign-in (founder rule, 2026-10-16; Appendix B D-5.5c.5).
 var receiverKeys = map[string][]string{
-	Codex:  {"CODEX_API_KEY", "OPENAI_API_KEY"},
+	Codex:  {"CODEX_API_KEY"},
 	Cursor: {"CURSOR_API_KEY"},
-	Claude: {"ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"},
+	Claude: {"CLAUDE_CODE_OAUTH_TOKEN"},
 	Amp:    {"AMP_API_KEY"},
 }
 
@@ -84,10 +87,25 @@ func LookLocal(receiver string, look func(string) (string, error)) (string, bool
 	return "", false
 }
 
-// Worktree is where a story delegated to a local receiver is built:
-// .aayudha/worktrees/<n>-<receiver>.
-func Worktree(root string, story int, receiver string) string {
-	return filepath.Join(root, ".aayudha", "worktrees", fmt.Sprintf("%d-%s", story, receiver))
+// Worktree is where hand-off k (from 1) of a story to a local receiver, or of
+// a receiver's returned diff, is built: .aayudha/worktrees/<n>-<receiver>, and
+// <n>-<receiver>-<k> from the second hand-off on, so each starts fresh.
+func Worktree(root string, story int, receiver string, k int) string {
+	name := fmt.Sprintf("%d-%s", story, receiver)
+	if k > 1 {
+		name += fmt.Sprintf("-%d", k)
+	}
+	return filepath.Join(root, ".aayudha", "worktrees", name)
+}
+
+// Branch is hand-off k's branch: story/<n>-<slug>, and story/<n>-<slug>-<k>
+// from the second hand-off on.
+func Branch(story int, slug string, k int) string {
+	b := fmt.Sprintf("story/%d-%s", story, slug)
+	if k > 1 {
+		b += fmt.Sprintf("-%d", k)
+	}
+	return b
 }
 
 // EmptyDir makes an empty temporary directory (the local receiver's gh config).

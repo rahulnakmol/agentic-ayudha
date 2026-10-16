@@ -60,8 +60,10 @@ type State struct {
 	Status    string       `json:"status"` // handed-off, working, pr-open, fix-requested, merge-ready, capped, failed
 	BriefHash string       `json:"brief_sha256"`
 	StartedAt string       `json:"started_at"`
-	Reason    string       `json:"reason,omitempty"`  // why this receiver (auto)
-	Applied   string       `json:"applied,omitempty"` // the last task whose returned diff aayu applied (Codex)
+	Handoffs  int          `json:"handoffs,omitempty"` // hand-offs of this story so far; each gets a fresh branch and worktree
+	Proved    string       `json:"proved,omitempty"`   // the receiver's own "What I proved" section (untrusted; a preview)
+	Reason    string       `json:"reason,omitempty"`   // why this receiver (auto)
+	Applied   string       `json:"applied,omitempty"`  // the last task whose returned diff aayu applied (Codex)
 	FollowUps []FollowUp   `json:"follow_ups,omitempty"`
 	Events    []Event      `json:"events,omitempty"`
 }

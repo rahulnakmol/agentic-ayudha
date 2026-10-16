@@ -210,6 +210,13 @@ Amp CLI 0.0.1792022479, cursor-agent 2026.10.14).
 - **Cost.** API tokens or plan usage, plus Actions minutes [V].
 - **Limits.** Only users with write access trigger it; it cannot approve PRs [V].
 - **Uncertainty: low** (issue branch name format).
+- **Superseded (2026-10-16, WP5.5c).** The founder's rule is no AI key in a product repository's CI, and
+  claude-code-action needs one. aayu now starts Claude Code on the web from the user's signed-in CLI:
+  `claude --cloud "<brief>"`, run in the repository; follow-ups go through `claude -p "<msg>" --cloud <session>
+  --output-format json`, which answers `{ok, session_id, url}`. Cloud sessions use the claude.ai subscription and
+  ignore `ANTHROPIC_API_KEY`. A session pushes its branch and does not open a PR from the CLI, so aayu opens it
+  (code.claude.com/docs/en/claude-code-on-the-web and /authentication, read 2026-10-16) [V; the new-session
+  output format is not documented: I].
 
 ### 5.4 Amp
 
@@ -388,7 +395,7 @@ approve or merge; dismissals by agents (dismissing is human-only).
 |---|---|---|
 | Cursor | Install the Cursor GitHub App on the repository; create an API key (dashboard, or a service account) and store it with `aayu auth set-secret cursor-api-key` (value on stdin); set a spend limit; merge the generated `.cursor/environment.json` to `dev` | `cursor-agent` installed and logged in (`agent login`) or `CURSOR_API_KEY` |
 | Codex | ChatGPT plan with Codex; install the ChatGPT Codex Connector app on the repository; create a cloud environment with Install script `bash .agents/setup` and the package-managers internet preset; put its ID in `[delegate.codex] env`; `codex login` on the machine that delegates | `codex` CLI logged in, or `CODEX_API_KEY` |
-| Claude Code | Install the Claude GitHub App (`/install-github-app`), add `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` as a repository secret, keep the workflow it writes, with a step running `bash .agents/setup` before the action | `claude` CLI logged in, or `ANTHROPIC_API_KEY` |
+| Claude Code | Since WP5.5c: a Pro, Max, Team, or Enterprise claude.ai plan; `claude auth login` with that claude.ai account (an API-key login cannot start cloud sessions); the Claude GitHub App on the repository, or `/web-setup`; a cloud environment whose setup script runs `bash .agents/setup`. No workflow and no repository secret | `claude` CLI signed in, or `CLAUDE_CODE_OAUTH_TOKEN` (`claude setup-token`); `ANTHROPIC_API_KEY` is not passed to it |
 | Amp | Connect GitHub in Amp (Amp GitHub App), create the Amp project for the repository, store `AMP_API_KEY` (`sgamp_…`) for the CLI | `amp` CLI with `AMP_API_KEY` |
 
 ## 11. Open questions and uncertainty

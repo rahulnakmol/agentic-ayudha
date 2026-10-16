@@ -242,7 +242,8 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		if err != nil {
 			return err
 		}
-		res.Worktree = delegate.Worktree(root, n, dlg.receiver)
+		res.Worktree, res.Branch = delegate.Worktree(root, n, dlg.receiver, dlg.handoff), dlg.branch
+		st.Branch = res.Branch
 	}
 
 	// The worktree: cut from origin/dev, or resumed from the story branch.
@@ -291,6 +292,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			_ = e.saveDelegation(ctx, dlg)
 			return Errorf(ExitExternal, "build #%d --delegate %s: %v", n, dlg.receiver, err)
 		}
+		dlg.fill(res.Delegation) // what the receiver says it proved, for the PR body
 	}
 
 	// A checkpoint: commit what the agent wrote, then verify it.
@@ -461,6 +463,9 @@ func (e *Env) publishBuild(ctx context.Context, c *github.Client, token, root, r
 		body := fmt.Sprintf("Refs #%d\n\nBuilt with `aayu build` (WP5.5) from the Ready snapshot of #%d (body hash `%s`), one verified checkpoint commit per layer. The merge gate verifies it on the base branch's definition; `aayu ship` merges it after a human pass.\n", n, n, chk.BodyHash[:12])
 		if d := res.Delegation; d != nil {
 			body = fmt.Sprintf("Refs #%d\n\nBuilt by %s (%s, `aayu build --delegate`, WP5.5b) from the delegation brief of #%d's Ready snapshot (body hash `%s`). aayu committed, verified, and pushed the change; the receiver has no merge rights. The merge gate and inspect review it; `aayu ship` merges it after a human pass.\n", n, d.Receiver, d.Mode, n, chk.BodyHash[:12])
+			if d.Proved != "" {
+				body += fmt.Sprintf("\n%s\n\n%s's own check, quoted as it reported it (a preview; the merge gate's proof decides):\n\n%s\n", delegate.ProvedHeading, d.Receiver, quoteLines(d.Proved))
+			}
 		}
 		var pr *gh.PullRequest
 		if _, err := c.Write(ctx, actions.Action{Kind: "github.pull.create", Target: repo, Story: fmt.Sprintf("#%d", n),

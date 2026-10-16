@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -226,12 +227,20 @@ func TestDelegateCycleCapPages(t *testing.T) {
 }
 
 // The local fallback (--local, or the cloud agent not connected): the
-// receiver's CLI runs in .aayudha/worktrees/<n>-<agent> with no GitHub or
-// aayu credential in its environment; aayu commits, verifies, pushes, and
-// opens the PR with Refs #n.
+// receiver's CLI runs in a fresh .aayudha/worktrees/<n>-<agent>[-<k>] with no
+// GitHub, aayu, or model-provider credential in its environment; aayu
+// commits, verifies, pushes, and opens the PR with Refs #n and what the
+// receiver says it proved. A delegated receiver cannot delegate again.
 func TestDelegateLocalFallback(t *testing.T) {
 	g, env, opts, dir, bare := delegateFixture(t)
-	env["GITHUB_TOKEN"], env["GH_TOKEN"], env["OPENAI_API_KEY"] = "gh-canary", "gh-canary", "openai-own-key"
+	env["GITHUB_TOKEN"], env["GH_TOKEN"], env["CODEX_API_KEY"], env["OPENAI_API_KEY"] = "gh-canary", "gh-canary", "codex-own-key", "gateway-canary"
+	env["AAYU_DELEGATED"] = "cursor"
+	if code, _, errOut := delegateRun(t, env, opts, "--delegate", "codex", "--local"); code != ExitBlocked || !strings.Contains(errOut, "never hands work on") {
+		t.Fatalf("re-delegation from a receiver: %d %s", code, errOut)
+	}
+	delete(env, "AAYU_DELEGATED")
+	// An earlier hand-off left 2-codex behind: this one starts fresh in 2-codex-2.
+	_ = os.MkdirAll(delegate.Worktree(dir, 2, "codex", 1), 0o755)
 	opts.LookPath = func(name string) (string, error) {
 		if name == "codex" {
 			return "/usr/local/bin/codex", nil
@@ -242,10 +251,10 @@ func TestDelegateLocalFallback(t *testing.T) {
 	var gotArgs []string
 	opts.DelegateExec = func(_ context.Context, wt string, env []string, _, name string, args ...string) (string, error) {
 		gotEnv, gotArgs = env, append([]string{name}, args...)
-		return "", os.WriteFile(filepath.Join(wt, "empty.txt"), []byte("Your cart is empty\n"), 0o644)
+		return "Done.\n\n## What I proved\n1. proved: TestEmptyList passes (go test ./...)\n", os.WriteFile(filepath.Join(wt, "empty.txt"), []byte("Your cart is empty\n"), 0o644)
 	}
 	code, res, errOut := delegateRun(t, env, opts, "--delegate", "codex") // not connected in the cloud: falls back to the CLI
-	wt := delegate.Worktree(dir, 2, "codex")
+	wt := delegate.Worktree(dir, 2, "codex", 2)
 	if code != 0 || res.Worktree != wt || res.PR == 0 || res.Delegation.Mode != "local" || !strings.Contains(res.Delegation.Reason, "not connected") {
 		t.Fatalf("local: %d %+v %s", code, res, errOut)
 	}
@@ -254,21 +263,22 @@ func TestDelegateLocalFallback(t *testing.T) {
 	}
 	for _, kv := range gotEnv {
 		k, v, _ := strings.Cut(kv, "=")
-		if strings.HasPrefix(k, "GITHUB_") || k == "GH_TOKEN" || strings.HasPrefix(k, "AAYU_SECRET") || k == "AAYU_GITHUB_TOKEN" || v == "gh-canary" || v == "human-token" {
+		if strings.HasPrefix(k, "GITHUB_") || k == "GH_TOKEN" || strings.HasPrefix(k, "AAYU_SECRET") || k == "AAYU_GITHUB_TOKEN" || v == "gh-canary" || v == "human-token" || v == "gateway-canary" {
 			t.Fatalf("the local receiver got %s", k)
 		}
 	}
-	if !slices.Contains(gotEnv, "OPENAI_API_KEY=openai-own-key") {
+	if !slices.Contains(gotEnv, "CODEX_API_KEY=codex-own-key") {
 		t.Fatal("the receiver's own key was dropped")
 	}
 	msg := git(t, wt, "log", "-1", "--format=%B")
 	g.Mu.Lock()
 	p := g.Pulls[res.PR]
 	g.Mu.Unlock()
-	if !strings.Contains(msg, "Aayudha-Delegate: codex") || !strings.Contains(msg, "Signed-off-by:") || !strings.Contains(p.Body, "Refs #2") || !strings.Contains(p.Body, "Built by codex (local") {
-		t.Fatalf("commit:\n%s\nPR body:\n%s", msg, p.Body)
+	if !strings.Contains(msg, "Aayudha-Delegate: codex") || !strings.Contains(msg, "Signed-off-by:") || !strings.Contains(p.Body, "Refs #2") || !strings.Contains(p.Body, "Built by codex (local") ||
+		!strings.Contains(p.Body, "## What I proved") || !strings.Contains(p.Body, "> 1. proved: TestEmptyList passes") || res.Delegation.Proved != "1. proved: TestEmptyList passes (go test ./...)" {
+		t.Fatalf("commit:\n%s\nPR body:\n%s\nproved: %q", msg, p.Body, res.Delegation.Proved)
 	}
-	if pushed := git(t, bare, "rev-parse", "refs/heads/story/2-show-empty-list"); pushed != git(t, wt, "rev-parse", "HEAD") {
+	if pushed := git(t, bare, "rev-parse", "refs/heads/story/2-show-empty-list-2"); pushed != git(t, wt, "rev-parse", "HEAD") {
 		t.Fatal("not pushed")
 	}
 	// status --work lists it: story, agent, worktree, branch, PR. Also from the checkout reached through a
@@ -281,20 +291,35 @@ func TestDelegateLocalFallback(t *testing.T) {
 		code, out, errOut := run(t, env, opts, "status", "--work", "--repo", "o/r", "--json")
 		var items []WorkItem
 		_ = json.Unmarshal([]byte(out), &items)
-		if code != 0 || len(items) != 1 || items[0].Story != 2 || items[0].Agent != "codex" || items[0].Where != ".aayudha/worktrees/2-codex" || items[0].PR != res.PR {
+		if code != 0 || len(items) != 1 || items[0].Story != 2 || items[0].Agent != "codex" || items[0].Where != ".aayudha/worktrees/2-codex-2" || items[0].PR != res.PR {
 			t.Fatalf("status --work in %s: %d %s %s", opts.Dir, code, out, errOut)
 		}
 	}
 }
 
-// Claude Code: the brief as an @claude comment on the story; the action's
-// claude/issue-2-… branch, from which aayu opens the PR.
-func TestDelegateClaudeMention(t *testing.T) {
+// Claude Code on the web: the brief starts a cloud session from the user's
+// own CLI (no workflow, no key in CI); the session pushes the branch the brief
+// named, from which aayu opens the PR.
+func TestDelegateClaudeCloud(t *testing.T) {
 	g, env, opts, dir, bare := delegateFixture(t)
-	_ = os.MkdirAll(filepath.Join(dir, ".github", "workflows"), 0o755)
-	_ = os.WriteFile(filepath.Join(dir, ".github", "workflows", "claude.yml"), []byte("jobs:\n  c:\n    steps:\n      - run: bash .agents/setup\n      - uses: anthropics/claude-code-action@v1\n"), 0o644)
+	opts.LookPath = func(name string) (string, error) {
+		if name == "claude" {
+			return "/bin/claude", nil
+		}
+		return "", os.ErrNotExist
+	}
+	var brief string
+	opts.DelegateExec = func(_ context.Context, wd string, _ []string, _, _ string, args ...string) (string, error) {
+		if args[0] != "--cloud" || wd != dir {
+			return "", errors.New("unexpected claude " + strings.Join(args, " ") + " in " + wd)
+		}
+		brief = args[1]
+		b, err := os.ReadFile(filepath.Join("..", "delegate", "testdata", "claude", "cloud.txt"))
+		return string(b), err
+	}
 	code, res, errOut := delegateRun(t, env, opts, "--delegate", "claude")
-	if code != 0 || res.Delegation.Status != dlgHandedOff || !strings.HasPrefix(comment(g, 2, "@claude "), "@claude please build this story") {
+	if code != 0 || res.Delegation.Status != dlgHandedOff || res.Delegation.Mode != "cloud" || res.Delegation.TaskURL != "https://claude.ai/code/session_01HZX7Q2M4N8P6R3T5V9W0Y1A2" ||
+		!strings.Contains(brief, "new branch `story/2-show-empty-list` from `dev`") {
 		t.Fatalf("hand-off: %d %+v %s", code, res, errOut)
 	}
 	seed := filepath.Join(t.TempDir(), "s")
@@ -302,12 +327,12 @@ func TestDelegateClaudeMention(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(seed, "empty.txt"), []byte("x\n"), 0o644)
 	git(t, seed, "add", ".")
 	git(t, seed, "commit", "--quiet", "-m", "feat: empty list")
-	git(t, seed, "push", "--quiet", "origin", "HEAD:refs/heads/claude/issue-2-20261015-0900")
+	git(t, seed, "push", "--quiet", "origin", "HEAD:refs/heads/story/2-show-empty-list")
 	code, res, errOut = delegateRun(t, env, opts, "--delegate", "claude")
 	g.Mu.Lock()
 	p := g.Pulls[res.Delegation.PR]
 	g.Mu.Unlock()
-	if code != 0 || p == nil || p.Head.Ref != "claude/issue-2-20261015-0900" || !strings.HasPrefix(p.Body, "Refs #2") {
+	if code != 0 || p == nil || p.Head.Ref != "story/2-show-empty-list" || !strings.HasPrefix(p.Body, "Refs #2") {
 		t.Fatalf("PR from the branch: %d %+v %s", code, res, errOut)
 	}
 }
@@ -345,7 +370,7 @@ func TestDelegateCodexDiffReturn(t *testing.T) {
 	}
 	status = read("status-done.txt")
 	code, res, errOut := delegateRun(t, env, opts, set...)
-	wt := delegate.Worktree(dir, 2, "codex")
+	wt := delegate.Worktree(dir, 2, "codex", 1)
 	if code != 0 || res.PR == 0 || res.Worktree != wt || !strings.Contains(git(t, wt, "log", "-1", "--format=%B"), "Aayudha-Delegate: codex") {
 		t.Fatalf("diff return: %d %+v %s", code, res, errOut)
 	}
