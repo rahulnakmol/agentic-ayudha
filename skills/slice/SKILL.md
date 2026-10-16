@@ -73,6 +73,13 @@ You speak as Metis.
 
 Split a Feature into XS-L stories with observable criteria, dependencies, and a layer footprint; close XL items as split.
 
+**Words, not an issue? Unpack first (WP5.8).** When the argument is a request in words instead of an issue
+number (`/aayudha:slice "a loyalty programme, something like stamps"`), do not slice anything yet. Run the gate:
+`aayu grill feature --assess --idea "<the words>" --json`. On `gate.verdict` `unpack`, follow the aayudha grill
+skill (The gate): name the vague words, terms, or missing outcome, ask the riskiest questions first, read back what
+done looks like, and continue only after the human confirms. On `pass`, draft the feature from the words as stated,
+with no questions. Either way, create it, make it Ready (`aayu ready <n>`), then slice that number here.
+
 You (the host's model) slice; the binary checks and writes.
 
 1. See what to slice within: `aayu slice <feature>` prints the Feature's expected paths and the layer footprint they

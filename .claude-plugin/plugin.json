@@ -2,7 +2,7 @@
   "name": "aayudha",
   "displayName": "aayudha",
   "version": "0.0.0",
-  "description": "The aayudha verbs as skills and slash commands (/aayudha:grill, /aayudha:ready, /aayudha:build, …), the aayudha MCP server, the host hooks, and /aayudha:home and /aayudha:next for where the work stands. Needs the aayu binary on PATH.",
+  "description": "The aayudha verbs as skills and slash commands (/aayudha:grill, /aayudha:ready, /aayudha:build, …), the aayudha MCP server, the host hooks, /aayudha:home and /aayudha:next for where the work stands, and hand-offs to the other coding agents. Needs the aayu binary on PATH.",
   "author": {
     "name": "Rahul Akmol",
     "url": "https://github.com/rahulnakmol"
@@ -18,7 +18,10 @@
     "sdlc"
   ],
   "commands": [
-    "./hosts/commands/"
+    "./hosts/commands/common/",
+    "./hosts/commands/amp/",
+    "./hosts/commands/codex/",
+    "./hosts/commands/cursor/"
   ],
   "hooks": "./hosts/claude/hooks.json",
   "mcpServers": {

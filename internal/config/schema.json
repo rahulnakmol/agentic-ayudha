@@ -547,6 +547,24 @@
           "additionalProperties": false,
           "type": "object",
           "description": "Floor thresholds; CONSTRAINTS.md documents each one."
+        },
+        "drift_blocking_from": {
+          "type": "string",
+          "description": "Date (UTC, YYYY-MM-DD) from which feature-map drift fails the merge gate's feature-map floor; before it, or empty, drift is a warning."
+        },
+        "red_on_base_blocking_from": {
+          "type": "string",
+          "description": "Date (UTC, YYYY-MM-DD) from which a Bug story whose mapped proving test passes on the base commit fails the merge gate; before it, or empty, the red-on-base check is advisory."
+        },
+        "maintainer": {
+          "type": "string",
+          "enum": [
+            "amp",
+            "claude",
+            "codex",
+            "cursor"
+          ],
+          "description": "Agent app the feature maps' maintain brief @-mentions (WP4.5b.4): claude, codex, or cursor, installed on the repository; amp has no mention, so its scheduled loop thread reads the brief. Unset: the brief mentions no app."
         }
       },
       "additionalProperties": false,
@@ -795,6 +813,33 @@
           },
           "type": "array",
           "description": "Path patterns (path.Match) of generated files that inspect does not review; the drift check owns them. Files whose header says Code generated ... DO NOT EDIT are skipped too."
+        },
+        "reviewer": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "claude",
+            "codex",
+            "cursor",
+            "amp",
+            "human",
+            "model"
+          ],
+          "description": "Who reviews in the merge gate. auto: the first installed agent app (apps) of a family other than the builder's, else a human; claude, codex, cursor: that app (a same-family app falls back); human: a human review; model: the review lane's model, called with a key (aayudha's evals, or a person who holds one)."
+        },
+        "apps": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Agent apps installed on the repository's org or account that answer an @-mention with a review: claude, codex, cursor. aayu doctor and aayu install detect them."
+        },
+        "app_families": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object",
+          "description": "Model family of each reviewer app (anthropic, openai, google, xai). An app without one cannot review, since the different-family rule needs it; Cursor runs the model its user picks."
         }
       },
       "additionalProperties": false,
@@ -825,7 +870,7 @@
         },
         "claude_trigger": {
           "type": "string",
-          "description": "The trigger phrase of the repository's claude-code-action workflow."
+          "description": "Unused since WP5.5c: Claude Code is reached through its own CLI's cloud sessions (claude --cloud), not claude-code-action, so no AI key sits in the repository's CI. Kept so 0.1 configurations still load."
         },
         "checks": {
           "items": {

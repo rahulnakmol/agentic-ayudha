@@ -170,7 +170,17 @@ func TestProofCommentInMergeGate(t *testing.T) {
 		}
 		return code, out + errOut, body
 	}
+	// The PR edits its own CI and drops a step: the risk line and the weakened-check flag show it.
+	fgh.Mu.Lock()
+	fgh.Pulls[prN].Diff = "diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml\n--- a/.github/workflows/ci.yml\n+++ b/.github/workflows/ci.yml\n@@ -5,4 +5,3 @@\n       - uses: actions/checkout@v7\n-      - name: Lint\n-        run: golangci-lint run\n       - name: Test\n+        run: go test ./...\n"
+	fgh.Mu.Unlock()
+	_ = os.MkdirAll(filepath.Join(dir, ".github"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, ".github", "CODEOWNERS"), []byte("* @someone\n/.github/ @founder\n"), 0o644)
 	code, out, body := comment()
+	if !strings.Contains(body, "**Risk: high** (never-layer L09: .github/workflows/ci.yml; protected path: .github/workflows/ci.yml). Look first at `.github/workflows/ci.yml`.") ||
+		!strings.Contains(body, "**Checks this PR weakens**") || !strings.Contains(body, "- `.github/workflows/ci.yml`: ") {
+		t.Fatalf("risk line and weakened checks (exit %d, %s):\n%s", code, out, body)
+	}
 	raw, _ := os.ReadFile(filepath.Join(proof.LocalDir(dir, 2), proof.FileName))
 	sum := sha256.Sum256(raw)
 	for _, want := range []string{"### Proof pack: proven", "| 1. ", "| 1. cart is empty | evidence from this run | `screens/1.png` |", "| coverage | pass | 95 | 90 |",

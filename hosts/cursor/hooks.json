@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "aayu hook session-start --host cursor --skills 0.0.0"
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "aayu hook pre-tool --host cursor --skills 0.0.0"
+      }
+    ],
+    "beforeMCPExecution": [
+      {
+        "command": "aayu hook pre-tool --host cursor --skills 0.0.0"
+      }
+    ]
+  }
+}

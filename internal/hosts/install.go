@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -61,6 +62,7 @@ func SkillDir(h verbs.HostID) string {
 type Options struct {
 	Root          string         // repository root
 	Home          string         // the user's home directory
+	CodexHome     string         // Codex's configuration directory ($CODEX_HOME); "" is Home/.codex
 	Hosts         []verbs.HostID // empty: the hosts in lock.toml, else every host
 	Assets        fs.FS          // embedded tree with skills/ and hosts/
 	Binary        string         // absolute path of the aayu binary hooks and MCP registrations run
@@ -107,6 +109,16 @@ type Lock struct {
 	Pin           string               `toml:"pin"`
 	Hosts         []string             `toml:"hosts"`
 	Skills        map[string]LockSkill `toml:"skills"`
+	// ProductSkills are the product's own verify skills (WP4.5b.3) that install
+	// mirrors from .agents/skills to the hosts that do not read it.
+	ProductSkills map[string]LockProductSkill `toml:"product_skills"`
+}
+
+// LockProductSkill records one mirrored product skill: its source directory
+// and the hash of what was copied.
+type LockProductSkill struct {
+	Source string `toml:"source"`
+	SHA256 string `toml:"sha256"`
 }
 
 // LockSkill records one installed skill.
@@ -148,6 +160,12 @@ func renderLock(l Lock) []byte {
 	for _, n := range names {
 		fmt.Fprintf(&b, "%s = { version = %q, sha256 = %q }\n", n, l.Skills[n].Version, l.Skills[n].SHA256)
 	}
+	if len(l.ProductSkills) > 0 {
+		b.WriteString("\n[product_skills]\n")
+		for _, n := range slices.Sorted(maps.Keys(l.ProductSkills)) {
+			fmt.Fprintf(&b, "%s = { source = %q, sha256 = %q }\n", n, l.ProductSkills[n].Source, l.ProductSkills[n].SHA256)
+		}
+	}
 	return []byte(b.String())
 }
 
@@ -188,6 +206,36 @@ func sourceSkills(assets fs.FS) (map[string][]skillFile, error) {
 			return nil, err
 		}
 		out[e.Name()] = files
+	}
+	return out, nil
+}
+
+// productSkills reads the product's own verify skills, .agents/skills/verify-*/
+// with a SKILL.md (WP4.5b.3), that are not aayudha skills of the same name.
+func (p *planner) productSkills(ours map[string][]skillFile) (map[string][]skillFile, error) {
+	out := map[string][]skillFile{}
+	if p.underSymlink(AgentsSkills) {
+		return out, nil
+	}
+	entries, err := os.ReadDir(p.abs(AgentsSkills, false))
+	if errors.Is(err, fs.ErrNotExist) {
+		return out, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	for _, e := range entries {
+		dir := AgentsSkills + "/" + e.Name()
+		if _, aayudha := ours[e.Name()]; aayudha || !e.IsDir() || !strings.HasPrefix(e.Name(), "verify-") {
+			continue
+		}
+		files, err := readCopy(p.abs(dir, false))
+		if err != nil || files["SKILL.md"] == nil {
+			continue // a symlink or no skill: nothing to mirror
+		}
+		for _, rel := range slices.Sorted(maps.Keys(files)) {
+			out[e.Name()] = append(out[e.Name()], skillFile{rel: rel, data: lf(files[rel])})
+		}
 	}
 	return out, nil
 }
@@ -348,6 +396,32 @@ func Plan(o Options) (*Result, error) {
 			return nil, err
 		}
 	}
+	if slices.Contains(dirs, ClaudeSkills) {
+		// The product's verify skills live where Amp, Cursor, and Codex read
+		// them; Claude Code gets a copy, recorded so a later install removes
+		// the copy of a skill the product deleted.
+		prod, err := p.productSkills(src)
+		if err != nil {
+			return nil, err
+		}
+		previous := map[string]LockSkill{}
+		for n, ps := range old.ProductSkills {
+			previous[n] = LockSkill{SHA256: ps.SHA256}
+		}
+		for n, files := range prod {
+			m := map[string][]byte{}
+			for _, f := range files {
+				m[f.rel] = f.data
+			}
+			if lock.ProductSkills == nil {
+				lock.ProductSkills = map[string]LockProductSkill{}
+			}
+			lock.ProductSkills[n] = LockProductSkill{Source: AgentsSkills + "/" + n, SHA256: HashSkill(m)}
+		}
+		if err := p.skillCopies(ClaudeSkills, prod, previous); err != nil {
+			return nil, err
+		}
+	}
 	if err := p.write(LockPath, false, o.text(renderLock(lock))); err != nil {
 		return nil, err
 	}
@@ -468,26 +542,41 @@ func (p *planner) hostFiles(hosts map[verbs.HostID]bool, lock Lock) error {
 		if err := p.write(ClaudeMD, false, p.o.text(cm)); err != nil {
 			return err
 		}
-		if err := p.mergeJSON(ClaudeMCP, false, func(m map[string]any) {
-			obj(m, "mcpServers")[ServerName] = server
+		plugin := p.pluginEnabled(verbs.HostClaude)
+		if err := p.mergeJSONIf(ClaudeMCP, !plugin, func(m map[string]any) {
+			if plugin {
+				deleteKey(m, "mcpServers", ServerName)
+			} else {
+				obj(m, "mcpServers")[ServerName] = server
+			}
 		}); err != nil {
 			return err
 		}
 		if err := p.mergeJSON(ClaudeSettings, false, func(m map[string]any) {
-			m["enabledMcpjsonServers"] = addString(m["enabledMcpjsonServers"], ServerName)
+			if plugin {
+				m["enabledMcpjsonServers"] = dropString(m["enabledMcpjsonServers"], ServerName)
+				if len(m["enabledMcpjsonServers"].([]any)) == 0 {
+					delete(m, "enabledMcpjsonServers")
+				}
+			} else {
+				m["enabledMcpjsonServers"] = addString(m["enabledMcpjsonServers"], ServerName)
+			}
 			// The status line shows journey state (WP3.2b); one the product set itself stays.
 			if sl, ok := m["statusLine"].(map[string]any); !ok || ourHook.MatchString(fmt.Sprint(sl["command"])) {
 				m["statusLine"] = map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "status-line", verbs.HostClaude)}
 			} else {
 				p.notes = append(p.notes, ClaudeSettings+" already has a statusLine, so install leaves it: add `"+HookCommand(p.o.Binary, "status-line", verbs.HostClaude)+"` to it for the aayudha journey state")
 			}
-			hk := obj(m, "hooks")
-			hk["SessionStart"] = replaceHooks(hk["SessionStart"], map[string]any{
-				"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "session-start", verbs.HostClaude)}}})
-			hk["PreToolUse"] = replaceHooks(hk["PreToolUse"], map[string]any{"matcher": "*",
-				"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "pre-tool", verbs.HostClaude)}}})
+			setHooks(m, plugin, map[string]any{
+				"SessionStart": map[string]any{"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "session-start", verbs.HostClaude)}}},
+				"PreToolUse": map[string]any{"matcher": "*",
+					"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "pre-tool", verbs.HostClaude)}}},
+			})
 		}); err != nil {
 			return err
+		}
+		if plugin {
+			p.notes = append(p.notes, pluginNote("Claude Code", ClaudeMCP+" and "+ClaudeSettings))
 		}
 	}
 	if hosts[verbs.HostCursor] {
@@ -508,17 +597,22 @@ func (p *planner) hostFiles(hosts map[verbs.HostID]bool, lock Lock) error {
 		}
 	}
 	if hosts[verbs.HostCodex] {
-		if err := p.codexConfig(); err != nil {
+		plugin := p.pluginEnabled(verbs.HostCodex)
+		if err := p.codexConfig(plugin); err != nil {
 			return err
 		}
-		if err := p.mergeJSON(CodexHooks, false, func(m map[string]any) {
-			hk := obj(m, "hooks")
-			hk["SessionStart"] = replaceHooks(hk["SessionStart"], map[string]any{
-				"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "session-start", verbs.HostCodex)}}})
-			hk["PreToolUse"] = replaceHooks(hk["PreToolUse"], map[string]any{
-				"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "pre-tool", verbs.HostCodex)}}})
+		if err := p.mergeJSONIf(CodexHooks, !plugin, func(m map[string]any) {
+			setHooks(m, plugin, map[string]any{
+				"SessionStart": map[string]any{"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "session-start", verbs.HostCodex)}}},
+				"PreToolUse":   map[string]any{"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "pre-tool", verbs.HostCodex)}}},
+			})
 		}); err != nil {
 			return err
+		}
+		if plugin {
+			p.notes = append(p.notes, pluginNote("OpenAI Codex", CodexConfig+" and "+CodexHooks))
+		} else {
+			p.notes = append(p.notes, "Codex runs these hooks only after you trust them: open /hooks in Codex and trust the aayudha hooks (`aayu doctor` reports any it would skip)")
 		}
 	}
 	if hosts[verbs.HostAmp] {
@@ -528,7 +622,7 @@ func (p *planner) hostFiles(hosts map[verbs.HostID]bool, lock Lock) error {
 		}
 		bin, _ := json.Marshal(p.o.Binary)
 		ver, _ := json.Marshal(p.o.Version)
-		cmds, err := SlashCommands(p.o.Assets)
+		cmds, err := SlashCommands(p.o.Assets, verbs.HostAmp)
 		if err != nil {
 			return err
 		}
@@ -558,7 +652,7 @@ const (
 
 var codexBlock = regexp.MustCompile(`(?s)` + regexp.QuoteMeta(codexBegin) + `.*?` + regexp.QuoteMeta(codexEnd) + `\n?`)
 
-func (p *planner) codexConfig() error {
+func (p *planner) codexConfig(plugin bool) error {
 	old, err := p.read(CodexConfig, false)
 	if err != nil {
 		return err
@@ -567,6 +661,16 @@ func (p *planner) codexConfig() error {
 	block := codexBegin + "\n[mcp_servers." + ServerName + "]\ncommand = " + string(cmd) + "\nargs = [\"mcp\"]\n" + codexEnd + "\n"
 	text := string(lf(old))
 	switch {
+	case plugin: // the plugin's server serves this repository; drop the block install wrote before
+		if !codexBlock.MatchString(text) {
+			return nil
+		}
+		text = strings.TrimLeft(codexBlock.ReplaceAllLiteralString(text, ""), "\n")
+		if strings.TrimSpace(text) == "" {
+			p.edits = append(p.edits, Edit{Kind: Delete, Path: CodexConfig, Old: old})
+			return nil
+		}
+		text = strings.TrimRight(text, "\n") + "\n"
 	case codexBlock.MatchString(text):
 		text = codexBlock.ReplaceAllLiteralString(text, block)
 	case strings.Contains(text, "[mcp_servers."+ServerName+"]"):
@@ -608,7 +712,9 @@ This repository runs the aayudha verbs as host skills, installed by `+"`aayu ins
 Installed for: %s. The %s MCP server serves the verbs as tools (write verbs only with `+"`[mcp] expose_writes = true`"+`).
 Host hooks run `+"`aayu hook <name>`"+` only: `+"`session-start`"+` reports skill copies out of sync with the lock,
 `+"`pre-tool`"+` blocks agent tool calls while the `+"`[budget]`"+` breaker has paused agent lanes and blocks shell commands that
-run a human-only verb, and `+"`status-line`"+` shows where the work stands.`, strings.Join(names, ", "), "`"+ServerName+"`")
+run a human-only verb, and `+"`status-line`"+` shows where the work stands.
+
+%s`, strings.Join(names, ", "), "`"+ServerName+"`", wrapText("B"+strings.TrimPrefix(Routing, "aayudha: b"), 118))
 	return []AgentsSection{{ID: "skills", Body: skills}, {ID: "hosts", Body: hostsSec}}
 }
 
@@ -664,10 +770,89 @@ func addString(v any, s string) []any {
 	return append(list, s)
 }
 
+// pluginEnabled reports the aayudha marketplace plugin enabled for host.
+func (p *planner) pluginEnabled(host verbs.HostID) bool {
+	ch := p.o.CodexHome
+	if ch == "" {
+		ch = filepath.Join(p.o.Home, ".codex")
+	}
+	return PluginEnabled(host, p.o.Root, p.o.Home, ch)
+}
+
+// pluginNote says why install wrote no hooks or MCP registration for a host.
+func pluginNote(host, files string) string {
+	return "the aayudha plugin is enabled for " + host + ", so its hooks and MCP server serve this repository and install writes none in " + files + " (it removes any it wrote before); disable the plugin and re-run install for the repository's own"
+}
+
+// mergeJSONIf is mergeJSON, except that a file that does not exist is created
+// only when create is true.
+// A file left empty is deleted.
+func (p *planner) mergeJSONIf(rel string, create bool, set func(map[string]any)) error {
+	if create {
+		return p.mergeJSON(rel, false, set)
+	}
+	old, err := p.read(rel, false)
+	if err != nil || old == nil {
+		return err
+	}
+	empty := false
+	if err := p.mergeJSON(rel, false, func(m map[string]any) { set(m); empty = len(m) == 0 }); err != nil {
+		return err
+	}
+	if n := len(p.edits); empty && n > 0 && p.edits[n-1].Path == rel {
+		p.edits[n-1] = Edit{Kind: Delete, Path: rel, Old: old}
+	}
+	return nil
+}
+
+// setHooks puts aayudha's entry for each event into m's hooks, replacing the
+// ones it wrote before, or with drop only removes them (and empty events).
+func setHooks(m map[string]any, drop bool, entries map[string]any) {
+	hk := obj(m, "hooks")
+	for ev, entry := range entries {
+		if !drop {
+			hk[ev] = replaceHooks(hk[ev], entry.(map[string]any))
+			continue
+		}
+		if rest := dropOurs(hk[ev]); len(rest) > 0 {
+			hk[ev] = rest
+		} else {
+			delete(hk, ev)
+		}
+	}
+	if len(hk) == 0 {
+		delete(m, "hooks")
+	}
+}
+
+func deleteKey(m map[string]any, key, name string) {
+	if o, ok := m[key].(map[string]any); ok {
+		delete(o, name)
+		if len(o) == 0 {
+			delete(m, key)
+		}
+	}
+}
+
+func dropString(v any, s string) []any {
+	list, _ := v.([]any)
+	out := []any{}
+	for _, x := range list {
+		if x != s {
+			out = append(out, x)
+		}
+	}
+	return out
+}
+
 // replaceHooks drops the entries aayudha wrote before (recognised by their
 // commands) from a host's hook list and appends entry; the product's own hooks
 // stay, in order.
 func replaceHooks(v any, entry map[string]any) []any {
+	return append(dropOurs(v), entry)
+}
+
+func dropOurs(v any) []any {
 	list, _ := v.([]any)
 	var out []any
 	for _, e := range list {
@@ -675,7 +860,7 @@ func replaceHooks(v any, entry map[string]any) []any {
 			out = append(out, e)
 		}
 	}
-	return append(out, entry)
+	return out
 }
 
 func isOurs(e any) bool {
@@ -833,10 +1018,13 @@ func codexRegistration(root string) Registration {
 	return r
 }
 
-// SlashCommand is one host-neutral command source in hosts/commands/<name>.md
-// (Claude Code command format: description and argument-hint frontmatter, a
-// body using $ARGUMENTS). The Claude Code and Codex plugin load the directory
-// itself; the Amp plugin gets the same commands from install.
+// SlashCommand is one host-neutral command source in hosts/commands/<dir>/<name>.md
+// (Claude Code command format: description and argument-hint frontmatter; the
+// host appends the user's arguments, so no body uses $ARGUMENTS, which Codex
+// refuses). common/ holds home and next; <agent>/ holds the hand-off to that
+// agent. The Claude Code, Codex, and Cursor plugin manifests list common/ and
+// every agent's directory but their own; the Amp plugin gets the same commands
+// from install.
 type SlashCommand struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
@@ -844,9 +1032,11 @@ type SlashCommand struct {
 	Body        string `json:"body"`
 }
 
-// SlashCommands reads hosts/commands/*.md from the embedded assets, by name.
-func SlashCommands(assets fs.FS) ([]SlashCommand, error) {
-	files, err := fs.Glob(assets, "hosts/commands/*.md")
+// SlashCommands reads hosts/commands/*/*.md from the embedded assets, by name,
+// for host: a delegate command named after the host itself (/amp in Amp) is
+// left out, since a host never delegates to itself. An empty host gets all.
+func SlashCommands(assets fs.FS, host verbs.HostID) ([]SlashCommand, error) {
+	files, err := fs.Glob(assets, "hosts/commands/*/*.md")
 	if err != nil {
 		return nil, err
 	}
@@ -857,6 +1047,9 @@ func SlashCommands(assets fs.FS) ([]SlashCommand, error) {
 			return nil, err
 		}
 		c := SlashCommand{Name: strings.TrimSuffix(path.Base(f), ".md")}
+		if host != "" && path.Base(path.Dir(f)) == string(host) {
+			continue
+		}
 		text := string(lf(b))
 		if rest, ok := strings.CutPrefix(text, "---\n"); ok {
 			if i := strings.Index(rest, "\n---\n"); i >= 0 {

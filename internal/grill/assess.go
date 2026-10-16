@@ -14,6 +14,8 @@ import (
 	"strings"
 	"unicode"
 
+	"go.yaml.in/yaml/v4"
+
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verify"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
@@ -43,14 +45,19 @@ type VagueHit struct {
 // vague qualifiers of the idea and what the repository already has that the
 // idea touches. The host's model reasons over it; the binary only reports.
 type Assessment struct {
-	Type      string     `json:"type"`
-	Idea      string     `json:"idea"`
-	Untrusted string     `json:"untrusted"`
-	Keywords  []string   `json:"keywords"`
-	Scope     string     `json:"scope"`
-	Vague     []VagueHit `json:"vague"`
-	Facts     []Fact     `json:"facts"`
-	Notes     []string   `json:"notes,omitempty"`
+	Type      string   `json:"type"`
+	Idea      string   `json:"idea"`
+	Untrusted string   `json:"untrusted"`
+	Keywords  []string `json:"keywords"`
+	Scope     string   `json:"scope"`
+	// Products are the kinds of product the repository is (web, api, cli,
+	// library); each qualifier's dimensions are those that apply to them.
+	Products []string       `json:"products"`
+	Vague    []VagueHit     `json:"vague"`
+	Terms    []Abbreviation `json:"terms"` // abbreviations and jargon to confirm (WP5.8)
+	Gate     Gate           `json:"gate"`  // unpack or pass (WP5.8)
+	Facts    []Fact         `json:"facts"`
+	Notes    []string       `json:"notes,omitempty"`
 }
 
 // UntrustedNote is the Assessment's reminder that its facts are data.
@@ -73,10 +80,13 @@ type AssessInput struct {
 	Verify  config.Verify
 	Stories []Issue  // stories and bugs of the repository, when GitHub answered
 	Notes   []string // what the caller could not fetch
+	// Maps are the repository's feature maps (WP4.5b.5): each mapped feature
+	// the idea's words touch is a feature fact with the checks that prove it.
+	Maps []*verify.FeatureMap
 }
 
 // Fact kinds, in the order the report lists them.
-var FactKinds = []string{"flow", "route", "gap", "component", "ds", "tokens", "test", "event", "code", "story", "floor", "layer"}
+var FactKinds = []string{"product", "flow", "route", "command", "export", "feature", "gap", "component", "ds", "tokens", "motion", "test", "event", "code", "story", "floor", "layer"}
 
 const (
 	maxFiles     = 20000
@@ -87,21 +97,12 @@ var skipDirs = map[string]bool{".git": true, "node_modules": true, "vendor": tru
 	".next": true, ".svelte-kit": true, "coverage": true, "out": true, "target": true, "testdata": true, ".turbo": true, ".cache": true}
 
 var sourceExt = map[string]bool{".ts": true, ".tsx": true, ".js": true, ".jsx": true, ".mjs": true, ".cjs": true, ".vue": true,
-	".svelte": true, ".go": true, ".py": true, ".rb": true, ".html": true, ".css": true, ".scss": true, ".mdx": true}
+	".svelte": true, ".go": true, ".py": true, ".rb": true, ".rs": true, ".html": true, ".css": true, ".scss": true, ".mdx": true}
 
 // Assess runs the fact pass. It reads files under in.Root and nothing else;
 // it never writes.
 func Assess(in AssessInput) Assessment {
 	a := Assessment{Type: in.Type, Idea: clean(in.Idea, 2000), Untrusted: UntrustedNote, Notes: in.Notes, Keywords: keywords(in.Catalog, in.Idea)}
-	seen := map[string]bool{}
-	for _, h := range in.Catalog.Find(in.Idea) {
-		if seen[h.Qualifier] {
-			continue
-		}
-		seen[h.Qualifier] = true
-		d, _ := in.Catalog.Domain(h.Domain)
-		a.Vague = append(a.Vague, VagueHit{Qualifier: h.Qualifier, Text: h.Text, Domain: d.ID, Catalogue: "skills/grill/" + d.File, Dimensions: d.Dimensions})
-	}
 	r := &repo{root: in.Root, kw: a.Keywords, files: map[string]string{}}
 	r.walk()
 	if r.truncated {
@@ -113,8 +114,22 @@ func Assess(in AssessInput) Assessment {
 	}
 
 	pages, apis := r.routes()
+	a.Products = r.products(pages, apis, add)
+	seen := map[string]bool{}
+	for _, h := range in.Catalog.Find(in.Idea) {
+		if seen[h.Qualifier] {
+			continue
+		}
+		seen[h.Qualifier] = true
+		d, _ := in.Catalog.Domain(h.Domain)
+		a.Vague = append(a.Vague, VagueHit{Qualifier: h.Qualifier, Text: h.Text, Domain: d.ID, Catalogue: "skills/grill/" + d.File, Dimensions: ForProducts(d.Dimensions, a.Products)})
+	}
+	a.Terms = in.Catalog.Abbreviations(in.Idea)
+
 	matched := r.matchRoutes(pages)
 	switch {
+	case len(pages) == 0 && len(apis) > 0:
+		a.Scope = fmt.Sprintf("no page routes; the idea's words (%s) matched %d of %d API routes", strings.Join(a.Keywords, ", "), len(r.matchRoutes(apis)), len(apis))
 	case len(pages) == 0:
 		a.Scope = "no page routes found (Next.js app/ or pages/, SvelteKit routes/)"
 	case len(matched) == 0:
@@ -137,7 +152,11 @@ func Assess(in AssessInput) Assessment {
 		add(Fact{ID: "route:" + rt.Path, Kind: "route", Text: fmt.Sprintf("Page %s.", rt.Path), Source: rt.File})
 	}
 	for _, rt := range r.matchRoutes(apis) {
-		add(Fact{ID: "route:" + rt.Path, Kind: "route", Text: fmt.Sprintf("API route %s.", rt.Path), Source: rt.File})
+		text := fmt.Sprintf("API route %s.", rt.Path)
+		if rt.methods != "" {
+			text = fmt.Sprintf("API route %s (%s).", rt.Path, rt.methods)
+		}
+		add(Fact{ID: "route:" + rt.Path, Kind: "route", Text: text, Source: rt.File})
 	}
 	for _, g := range groups {
 		for _, st := range stateOrder {
@@ -156,14 +175,25 @@ func Assess(in AssessInput) Assessment {
 		}
 	}
 
+	// Facts about screens, design tokens, motion, and page budgets apply to a
+	// web product; with no product found, every kind is reported.
+	is := func(t string) bool { return len(a.Products) == 0 || slices.Contains(a.Products, t) }
+	r.commands(add)
+	if is("library") {
+		r.exports(add)
+	}
+	features(in.Maps, a.Keywords, add)
 	used := r.components(matched, add)
 	r.designSystem(add)
-	r.tokens(add)
+	if is("web") {
+		r.tokens(add)
+		r.motion(add)
+	}
 	r.tests(groups, add)
 	r.events(matched, add)
 	code := r.code(used, add)
 	stories(in.Stories, a.Keywords, add)
-	floors(in.Verify, add)
+	floors(in.Verify, is, add)
 	r.layers(matched, code, add)
 
 	order := func(k string) int { return slices.Index(FactKinds, k) }
@@ -179,6 +209,13 @@ func Assess(in AssessInput) Assessment {
 	if a.Vague == nil {
 		a.Vague = []VagueHit{}
 	}
+	if a.Terms == nil {
+		a.Terms = []Abbreviation{}
+	}
+	if a.Products == nil {
+		a.Products = []string{}
+	}
+	a.Gate = GateFor(in.Catalog, a)
 	return a
 }
 
@@ -293,7 +330,9 @@ func (r *repo) walk() {
 		}
 		rel = filepath.ToSlash(rel)
 		r.paths = append(r.paths, rel)
-		if sourceExt[path.Ext(rel)] || path.Base(rel) == "package.json" || strings.HasSuffix(rel, ".json") && strings.Contains(path.Base(rel), "token") {
+		base := path.Base(rel)
+		if sourceExt[path.Ext(rel)] || base == "package.json" || strings.HasSuffix(rel, ".json") && strings.Contains(base, "token") ||
+			base == "openapi.yaml" || base == "openapi.yml" || base == "openapi.json" {
 			if info, err := d.Info(); err == nil && info.Size() <= maxFileBytes {
 				if b, err := os.ReadFile(p); err == nil {
 					r.files[rel] = string(b)
@@ -314,6 +353,7 @@ func (r *repo) walk() {
 type route struct {
 	Path, File, Dir, Kind string
 	appRoot               string // the directory conventions (loading.tsx, error.tsx) apply below
+	methods               string // an OpenAPI operation's methods ("GET, POST")
 }
 
 var pageExt = map[string]bool{".tsx": true, ".jsx": true, ".ts": true, ".js": true, ".mdx": true}
@@ -349,6 +389,10 @@ func (r *repo) routes() (pages, apis []route) {
 			}
 			continue
 		}
+		if base == "openapi.yaml" || base == "openapi.yml" || base == "openapi.json" {
+			apis = append(apis, openAPIRoutes(p, r.files[p])...)
+			continue
+		}
 		if i := lastIndex(segs[:len(segs)-1], "routes"); i >= 0 && (base == "+page.svelte" || base == "+server.ts" || base == "+server.js") {
 			rt := route{Path: routePath(segs[i+1 : len(segs)-1]), File: p, Dir: path.Dir(p), appRoot: strings.Join(segs[:i+1], "/")}
 			if base == "+page.svelte" {
@@ -368,6 +412,30 @@ func (r *repo) routes() (pages, apis []route) {
 	byPath(pages)
 	byPath(apis)
 	return pages, apis
+}
+
+// openAPIRoutes lists an OpenAPI document's paths as API routes (WP5.8), so an
+// API product's endpoints ground the questions as a web app's pages do. Its
+// routes have no directory: no file convention applies to them.
+func openAPIRoutes(file, src string) []route {
+	var doc struct {
+		Paths map[string]map[string]any `yaml:"paths"`
+	}
+	if yaml.Unmarshal([]byte(src), &doc) != nil {
+		return nil
+	}
+	var out []route
+	for p, ops := range doc.Paths {
+		var ms []string
+		for m := range ops {
+			if slices.Contains([]string{"get", "put", "post", "delete", "patch", "head", "options"}, m) {
+				ms = append(ms, strings.ToUpper(m))
+			}
+		}
+		sort.Strings(ms)
+		out = append(out, route{Path: p, File: file, Kind: "api", methods: strings.Join(ms, ", ")})
+	}
+	return out
 }
 
 func lastIndex(segs []string, s string) int {
@@ -733,23 +801,48 @@ func stories(is []Issue, kw []string, add func(Fact)) {
 	}
 }
 
-func floors(v config.Verify, add func(Fact)) {
+// features reports each mapped feature whose id, surfaces, or check ids share
+// a word with the idea, with the behaviour checks that already prove it.
+func features(maps []*verify.FeatureMap, kw []string, add func(Fact)) {
+	for _, m := range maps {
+		for _, f := range m.Features {
+			words := []string{f.ID}
+			for _, vs := range f.Surfaces {
+				words = append(words, vs...)
+			}
+			var refs []string
+			for _, c := range f.Checks {
+				words = append(words, c.ID)
+				refs = append(refs, f.Ref(c)+" ("+c.Kind+")")
+			}
+			if !overlaps(kw, strings.Join(words, " ")) {
+				continue
+			}
+			add(Fact{ID: "feature:" + f.ID, Kind: "feature", Source: f.File,
+				Text: fmt.Sprintf("Feature %s of %s, proved by its behaviour checks %s.", f.ID, m.Product, strings.Join(refs, ", "))})
+		}
+	}
+}
+
+func floors(v config.Verify, is func(string) bool, add func(Fact)) {
 	a := v.Floors.A11y
-	if a.Standard != "" {
+	if a.Standard != "" && is("web") {
 		add(Fact{ID: "floor:a11y", Kind: "floor", Source: "CONSTRAINTS.md",
 			Text: fmt.Sprintf("Accessibility floor on every story: %s, %d critical and %d serious axe violations allowed, keyboard-only %t, %d px targets, %d %% text scale.",
 				a.Standard, a.MaxCritical, a.MaxSerious, a.KeyboardOnly, a.MinTargetPx, a.TextScalePercent)})
 	}
 	p := v.Floors.Perf
-	if p.MinScore > 0 || p.MaxLCPMs > 0 || p.MaxCLS > 0 || p.MaxTBTMs > 0 {
+	switch {
+	case !is("web"):
+	case p.MinScore > 0 || p.MaxLCPMs > 0 || p.MaxCLS > 0 || p.MaxTBTMs > 0:
 		add(Fact{ID: "floor:perf", Kind: "floor", Source: "[verify.floors.perf]",
 			Text: fmt.Sprintf("Lighthouse budgets on every Completion Goal state: score >= %g, LCP <= %g ms, CLS <= %g, TBT <= %g ms (0 = unset).", p.MinScore, p.MaxLCPMs, p.MaxCLS, p.MaxTBTMs)})
-	} else {
+	default:
 		add(Fact{ID: "gap:perf-budget", Kind: "gap", Source: "[verify.floors.perf]", Text: "No Lighthouse budget is configured; a page-speed criterion needs its number from the human."})
 	}
 	if s := v.Floors.API.Script; s != "" {
 		add(Fact{ID: "floor:api", Kind: "floor", Source: s, Text: fmt.Sprintf("k6 thresholds in %s are the API contract on every story.", clean(s, 120))})
-	} else {
+	} else if is("api") {
 		add(Fact{ID: "gap:api-budget", Kind: "gap", Source: "[verify.floors.api]", Text: "No API budget (k6 script) is configured; an API-speed criterion needs its number and conditions from the human."})
 	}
 	if len(v.Platforms) > 0 {

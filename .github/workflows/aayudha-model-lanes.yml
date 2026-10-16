@@ -7,6 +7,10 @@ name: aayudha-model-lanes
 # Dispatch only, because each run costs model spend: review is k = 3 ui-review calls per UI state, brief one review
 # call. The PR's code is built but never run as the runner user: the example app runs as `nobody`, so it cannot
 # read the environment of the process holding the key, and only the review or brief step sees the secret.
+#
+# Non-gating (founder decision 2026-10-16, Appendix B D-2.9b): a check of aayudha's own model code only. It is
+# never a required check, never part of a promotion gate (ci.yml rolling or stable), and never installed into a
+# product repository; workflows_test.go holds the rules a file can show.
 on:
   workflow_dispatch:
     inputs:

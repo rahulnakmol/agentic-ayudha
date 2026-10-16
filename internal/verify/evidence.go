@@ -44,6 +44,9 @@ type EvidenceMap struct {
 	Criterion []struct {
 		ID    int      `toml:"id"`
 		Tests []string `toml:"tests"` // TestName, or package/path:TestName
+		// Checks are feature-map behaviour checks, <feature>.<check> (WP4.5b),
+		// which the behaviour floor runs in this verify run.
+		Checks []string `toml:"checks"`
 	} `toml:"criterion"`
 }
 
@@ -92,9 +95,15 @@ func TestEvidence(r *Run) ([]Evidence, []string, error) {
 			if !scoped {
 				test, pkg = pkg, ""
 			}
+			// A package is an import path or its directory (`./mathx`, `.` for
+			// the module root); a test is a top-level test or a subtest
+			// (`TestSum/positive`), which covers its own subtests.
+			pkg = strings.TrimSuffix(strings.TrimPrefix(pkg, "./"), "/")
+			if pkg == "." {
+				pkg = ""
+			}
 			match := func(ev TestEvent) bool {
-				top, _, _ := strings.Cut(ev.Test, "/")
-				return top == test && (pkg == "" || ev.Package == pkg || strings.HasSuffix(ev.Package, "/"+pkg))
+				return (ev.Test == test || strings.HasPrefix(ev.Test, test+"/")) && (pkg == "" || ev.Package == pkg || strings.HasSuffix(ev.Package, "/"+pkg))
 			}
 			passed := slices.ContainsFunc(events, func(ev TestEvent) bool { return match(ev) && ev.Test == test && ev.Action == "pass" })
 			failed := slices.ContainsFunc(events, func(ev TestEvent) bool { return match(ev) && ev.Action == "fail" })

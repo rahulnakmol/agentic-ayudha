@@ -20,6 +20,12 @@ import (
 // run invokes the CLI in-process with a fixed environment.
 func run(t *testing.T, env map[string]string, opts Options, args ...string) (code int, stdout, stderr string) {
 	t.Helper()
+	return runIn(t, env, opts, "", args...)
+}
+
+// runIn is run with stdin.
+func runIn(t *testing.T, env map[string]string, opts Options, stdin string, args ...string) (code int, stdout, stderr string) {
+	t.Helper()
 	var out, errb bytes.Buffer
 	opts.Getenv = func(k string) string { return env[k] }
 	for k, v := range env {
@@ -41,7 +47,7 @@ func run(t *testing.T, env map[string]string, opts Options, args ...string) (cod
 	if opts.GHToken == nil { // never pick up the developer's real gh login
 		opts.GHToken = func(context.Context) (string, error) { return "", errors.New("gh disabled in tests") }
 	}
-	code = Run(context.Background(), args, IO{In: strings.NewReader(""), Out: &out, Err: &errb}, opts)
+	code = Run(context.Background(), args, IO{In: strings.NewReader(stdin), Out: &out, Err: &errb}, opts)
 	return code, out.String(), errb.String()
 }
 

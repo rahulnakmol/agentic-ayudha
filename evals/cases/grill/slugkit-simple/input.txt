@@ -1,0 +1,1 @@
+Make slugkit simple to use. People keep getting it wrong. It belongs under Feature #90 (Developer experience).

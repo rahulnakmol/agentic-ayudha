@@ -21,7 +21,11 @@ var LocalBins = map[string][]string{
 // in the worktree. Each may edit files there; none commits, pushes, or opens a
 // PR (aayu does, after verify). The flags are the CLIs' documented ones
 // (research §5): Codex's workspace-write sandbox, Cursor's print mode with
-// --force, Claude Code's print mode allowed to edit, and Amp's execute mode.
+// --force, Claude Code's print mode allowed to edit and to run shell commands
+// (acceptEdits alone denies Bash in print mode, so the receiver could not run
+// the tests the brief asks it to verify with; D-5.5c.13), and Amp's execute
+// mode. Claude Code's --allowedTools takes several values, so it comes before
+// another flag, never just before the prompt.
 func LocalArgs(receiver, bin, wt, prompt string) []string {
 	switch receiver {
 	case Codex:
@@ -29,19 +33,33 @@ func LocalArgs(receiver, bin, wt, prompt string) []string {
 	case Cursor:
 		return []string{"-p", "--force", "--output-format", "text", "--workspace", wt, prompt}
 	case Claude:
-		return []string{"-p", "--permission-mode", "acceptEdits", "--output-format", "text", prompt}
+		return []string{"-p", "--allowedTools", "Bash", "--permission-mode", "acceptEdits", "--output-format", "text", prompt}
 	case Amp:
 		return []string{"-x", prompt}
 	}
 	return nil
 }
 
-// receiverKeys are the variables each receiver's own CLI authenticates with;
-// the scrubbed environment passes only the receiver's own.
+// OwnKey reports whether the receiver's own CLI variable is set, which lets
+// its CLI run without a saved sign-in.
+func OwnKey(receiver string, getenv func(string) string) bool {
+	for _, k := range receiverKeys[receiver] {
+		if getenv(k) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// receiverKeys are the variables only the receiver's own CLI reads; the
+// scrubbed environment passes the receiver's own and nothing else. A model
+// provider's key (OPENAI_API_KEY, ANTHROPIC_API_KEY) or base URL is never
+// passed: it may be a model gateway's credential, and a receiver runs on its
+// user's own sign-in (founder rule, 2026-10-16; Appendix B D-5.5c.5).
 var receiverKeys = map[string][]string{
-	Codex:  {"CODEX_API_KEY", "OPENAI_API_KEY"},
+	Codex:  {"CODEX_API_KEY"},
 	Cursor: {"CURSOR_API_KEY"},
-	Claude: {"ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"},
+	Claude: {"CLAUDE_CODE_OAUTH_TOKEN"},
 	Amp:    {"AMP_API_KEY"},
 }
 
@@ -84,10 +102,25 @@ func LookLocal(receiver string, look func(string) (string, error)) (string, bool
 	return "", false
 }
 
-// Worktree is where a story delegated to a local receiver is built:
-// .aayudha/worktrees/<n>-<receiver>.
-func Worktree(root string, story int, receiver string) string {
-	return filepath.Join(root, ".aayudha", "worktrees", fmt.Sprintf("%d-%s", story, receiver))
+// Worktree is where hand-off k (from 1) of a story to a local receiver, or of
+// a receiver's returned diff, is built: .aayudha/worktrees/<n>-<receiver>, and
+// <n>-<receiver>-<k> from the second hand-off on, so each starts fresh.
+func Worktree(root string, story int, receiver string, k int) string {
+	name := fmt.Sprintf("%d-%s", story, receiver)
+	if k > 1 {
+		name += fmt.Sprintf("-%d", k)
+	}
+	return filepath.Join(root, ".aayudha", "worktrees", name)
+}
+
+// Branch is hand-off k's branch: story/<n>-<slug>, and story/<n>-<slug>-<k>
+// from the second hand-off on.
+func Branch(story int, slug string, k int) string {
+	b := fmt.Sprintf("story/%d-%s", story, slug)
+	if k > 1 {
+		b += fmt.Sprintf("-%d", k)
+	}
+	return b
 }
 
 // EmptyDir makes an empty temporary directory (the local receiver's gh config).

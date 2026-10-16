@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
+	"github.com/rahulnakmol/agentic-ayudha/internal/agentenv"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/delegate"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
@@ -71,6 +72,13 @@ type Options struct {
 	UIStatic bool
 	// CheckpointVerify replaces build's verify run on a checkpoint (tests); nil runs `aayu verify` in the worktree.
 	CheckpointVerify func(ctx context.Context, worktree string) (hold bool, detail string, err error)
+	// EnvRunner runs install --env --verify's containers (tests); nil runs docker.
+	EnvRunner agentenv.Runner
+	// EnvFetch reads the vendors' release indexes for install --env (tests); nil uses HTTP.
+	EnvFetch agentenv.Fetch
+	// EnsureEnv makes a receiver's cloud environment verified before a cloud
+	// hand-off (tests); nil runs agentenv.Ensure with EnvRunner and EnvFetch.
+	EnsureEnv func(ctx context.Context, root, host string) (agentenv.HostStatus, error)
 	// DelegateExec runs a delegation receiver's CLI (build --delegate, tests); nil runs the command.
 	DelegateExec delegate.Exec
 	RunPoll      time.Duration // how often release polls a workflow run; 0 is DefaultRunPoll (WP7.8)

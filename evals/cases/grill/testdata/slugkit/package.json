@@ -1,0 +1,9 @@
+{
+  "name": "slugkit",
+  "version": "2.3.1",
+  "description": "Synthetic eval fixture: turn titles into URL slugs.",
+  "main": "src/index.js",
+  "exports": { ".": "./src/index.js" },
+  "scripts": { "test": "node --test test/" },
+  "license": "MIT"
+}

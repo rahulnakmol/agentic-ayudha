@@ -35,7 +35,7 @@ type WorkItem struct {
 	Unpushed int    `json:"unpushed,omitempty"` // commits origin does not have
 }
 
-var worktreeName = regexp.MustCompile(`^(\d+)(?:-([a-z]+))?$`)
+var worktreeName = regexp.MustCompile(`^(\d+)(?:-([a-z]+)(?:-\d+)?)?$`)
 
 // statusWork lists the work in flight: every worktree under
 // .aayudha/worktrees/ (build, delegate --local, evolve, polish) with its

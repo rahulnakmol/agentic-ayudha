@@ -3,7 +3,7 @@
 // RFC 5545 rule in the [time] zone), a Cursor Automation (the
 // cursor_platform_workflow resource of Cursor's Terraform provider, whose cron
 // runs in UTC), and the GitHub Actions fallback (aayudha-loops.yml, whose cron
-// is UTC). A loop's cron is written in [time] tz; the UTC renderings carry one
+// is UTC), which runs only the loops that need no agent (agent = false). A loop's cron is written in [time] tz; the UTC renderings carry one
 // cron per UTC offset the zone uses, and the guard (`aayu hook loop:<name>`)
 // lets only the one matching today's offset run. Every run checks halt and
 // [budget] first.
@@ -14,7 +14,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -31,31 +33,53 @@ import (
 // Dir is where loop definitions live in a repository.
 const Dir = "loops"
 
-// Host IDs a loop may name: the two primary hosts that schedule agents, and
-// the GitHub Actions fallback.
+// Host IDs a loop may name: the agent hosts that schedule or start agents in
+// the user's own session, and the GitHub Actions fallback.
 const (
 	HostAmp     = "amp"
 	HostCursor  = "cursor"
+	HostClaude  = "claude"
+	HostCodex   = "codex"
 	HostActions = "actions"
 )
 
 // Hosts lists every host a loop renders for.
-var Hosts = []string{HostAmp, HostCursor, HostActions}
+var Hosts = []string{HostAmp, HostCursor, HostClaude, HostCodex, HostActions}
 
 // Loop is one loops/<name>.toml.
 type Loop struct {
 	Name        string   `toml:"-" json:"name"`
 	Description string   `toml:"description" json:"description"`
-	Command     []string `toml:"command" json:"command"` // aayu argv: a verb or plumbing command and its flags
-	Cron        string   `toml:"cron" json:"cron"`       // five fields, in [time] tz
-	Prompt      string   `toml:"prompt,omitempty" json:"prompt,omitempty"`
-	Hosts       []string `toml:"hosts,omitempty" json:"hosts"` // default: all
-	// Bot marks a loop whose command writes under the bot identity: in Actions
-	// it needs the bot App's token (D1) and is skipped with a notice without one.
+	Command     []string `toml:"command" json:"command"`               // aayu argv: a verb or plumbing command and its flags
+	Cron        string   `toml:"cron,omitempty" json:"cron,omitempty"` // five fields, in [time] tz
+	// On and Filter are the event-loop keys of WP7.1b, deferred to a later
+	// version (Appendix B S-7.1e): Parse refuses them, so 0.2 loops are
+	// scheduled only.
+	On     string         `toml:"on,omitempty" json:"-"`
+	Filter map[string]any `toml:"filter,omitempty" json:"-"`
+	Prompt string         `toml:"prompt,omitempty" json:"prompt,omitempty"`
+	// Agent false marks a loop that needs no model: its command is
+	// deterministic and runs with the workflow token, so it runs in the free
+	// GitHub Actions fallback, not in an agent tool (Appendix B D-7.1f).
+	// Unset, a loop is an agent loop and runs in the one agent tool.
+	Agent *bool    `toml:"agent,omitempty" json:"agent,omitempty"`
+	Hosts []string `toml:"hosts,omitempty" json:"hosts"` // default: every agent host, or actions for agent = false
+	// Bot marks a loop whose command writes under the bot identity, which the
+	// workflow token never is (D1): it stays an agent loop.
 	Bot bool `toml:"bot,omitempty" json:"bot,omitempty"`
+	// Setup prepares the Actions job of an agent = false loop for its command
+	// (WP4.5b.4): pinned tool setups (node, pnpm), then the product's own
+	// commands (SetupRun), so a sweep of a web product's behaviour checks has
+	// its browser tooling.
+	Setup    []string `toml:"setup,omitempty" json:"setup,omitempty"`
+	SetupRun []string `toml:"setup_run,omitempty" json:"setup_run,omitempty"`
 
 	sched schedule
 }
+
+// NeedsAgent reports whether the loop runs in an agent tool (agent unset or
+// true) rather than in the Actions fallback.
+func (l Loop) NeedsAgent() bool { return l.Agent == nil || *l.Agent }
 
 // Runs reports whether the loop renders for host.
 func (l Loop) Runs(host string) bool { return slices.Contains(l.Hosts, host) }
@@ -92,6 +116,50 @@ func Load(root string) ([]Loop, error) {
 	return out, errors.Join(errs...)
 }
 
+// Defaults are the default loops a repository gets from `aayu install --loops`
+// when it has none: aayudha's own loops/*.toml in assets, by path. setup and
+// setup_run, with the comment just above them, are left out, because they
+// are the product's own commands (aayudha's install its example's browser
+// tooling); a product adds its own.
+func Defaults(assets fs.FS) (map[string][]byte, error) {
+	files, err := fs.Glob(assets, Dir+"/*.toml")
+	if err != nil {
+		return nil, err
+	}
+	if len(files) == 0 {
+		return nil, fmt.Errorf("no default loops in this binary (%s/*.toml)", Dir)
+	}
+	out := map[string][]byte{}
+	for _, f := range files {
+		b, err := fs.ReadFile(assets, f)
+		if err != nil {
+			return nil, err
+		}
+		var keep, comment []string
+		inArray := false
+		for _, line := range strings.SplitAfter(string(b), "\n") {
+			switch {
+			case inArray:
+				inArray = strings.TrimSpace(line) != "]"
+			case strings.HasPrefix(line, "setup =") || strings.HasPrefix(line, "setup_run ="):
+				comment = nil // the comment above describes this repository's setup
+				inArray = strings.HasSuffix(strings.TrimSpace(line), "[")
+			case strings.HasPrefix(line, "#"):
+				comment = append(comment, line)
+			default:
+				keep, comment = append(append(keep, comment...), line), nil
+			}
+		}
+		keep = append(keep, comment...)
+		body := []byte(strings.Join(keep, ""))
+		if _, err := Parse(strings.TrimSuffix(path.Base(f), ".toml"), body); err != nil {
+			return nil, err
+		}
+		out[f] = body
+	}
+	return out, nil
+}
+
 // Find returns the loop named name.
 func Find(ls []Loop, name string) (Loop, bool) {
 	for _, l := range ls {
@@ -115,8 +183,12 @@ func Parse(name string, data []byte) (Loop, error) {
 		return l, fmt.Errorf("loops/%s.toml: %w", name, err)
 	}
 	l.Name = name
-	if len(l.Hosts) == 0 {
-		l.Hosts = slices.Clone(Hosts)
+	switch {
+	case len(l.Hosts) > 0:
+	case l.NeedsAgent():
+		l.Hosts = slices.Clone(AgentHosts)
+	default:
+		l.Hosts = []string{HostActions}
 	}
 	var errs []error
 	bad := func(format string, args ...any) {
@@ -133,12 +205,45 @@ func Parse(name string, data []byte) (Loop, error) {
 			bad("hosts: %q: want %s", h, strings.Join(Hosts, ", "))
 		}
 	}
+	for _, x := range l.Setup {
+		if _, ok := setupActions[x]; !ok {
+			bad("setup: %q: want node or pnpm", x)
+		}
+	}
+	if l.NeedsAgent() {
+		if l.Runs(HostActions) {
+			bad("hosts: actions runs only loops that need no agent; set agent = false, or drop actions")
+		}
+		if len(l.Setup)+len(l.SetupRun) > 0 {
+			bad("setup and setup_run prepare the Actions job of an agent = false loop")
+		}
+	} else {
+		if !slices.Equal(l.Hosts, []string{HostActions}) {
+			bad("hosts: an agent = false loop runs only in the Actions fallback (actions)")
+		}
+		if l.Bot {
+			bad("bot: the workflow token is never the bot identity (D1); a loop that writes as the bot is an agent loop")
+		}
+		if l.Prompt != "" {
+			bad("prompt: no agent reads it in an agent = false loop")
+		}
+	}
 	if err := checkCommand(l.Command); err != nil {
 		bad("command: %v", err)
 	}
-	var err error
-	if l.sched, err = parseCron(l.Cron); err != nil {
-		bad("cron %q: %v", l.Cron, err)
+	switch {
+	case l.On != "" || l.Filter != nil:
+		bad("on and filter: event loops are deferred to a later version (Appendix B S-7.1e); set cron, a schedule")
+	case l.Cron == "":
+		bad("cron is required: five fields in [time] tz")
+	default:
+		var err error
+		if l.sched, err = parseCron(l.Cron); err != nil {
+			bad("cron %q: %v", l.Cron, err)
+		}
+		if strings.ContainsAny(strings.Join(l.Command, " "), "{}") {
+			bad("command: a scheduled loop has no event subject to name")
+		}
 	}
 	return l, errors.Join(errs...)
 }
@@ -460,8 +565,9 @@ func join(ns []int) string {
 func (l Loop) AgentPrompt(repo, branch string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "aayudha loop %q for %s (loops/%s.toml): %s\n\n", l.Name, repo, l.Name, strings.TrimSpace(l.Description))
+	run := fmt.Sprintf("Run `AAYU_AGENT=1 aayu %s`", strings.Join(l.Command, " "))
 	fmt.Fprintf(&b, "1. In a checkout of %s on %s with the aayu binary installed, run `aayu hook loop:%s`. If it exits 4 (the repository is halted) or 6 (the [budget] breaker paused agent lanes), stop and report its message. If it prints `not due`, stop without reporting.\n", repo, branch, l.Name)
-	fmt.Fprintf(&b, "2. Run `AAYU_AGENT=1 aayu %s`. If it exits 4 or 6, stop and report why; do not retry.\n", strings.Join(l.Command, " "))
+	fmt.Fprintf(&b, "2. %s. If it exits 4 or 6, stop and report why; do not retry.\n", run)
 	if p := strings.TrimSpace(l.Prompt); p != "" {
 		fmt.Fprintf(&b, "3. %s\n", p)
 	}
@@ -479,6 +585,10 @@ func (l Loop) AmpSchedule(repo, branch, tz string) ([]byte, error) {
 		ScheduleLabel string `json:"schedule_label"`
 		RunMode       string `json:"run_mode"`
 	}{"aayudha " + l.Name, l.AgentPrompt(repo, branch), l.RRule(tz), l.Label(tz), "fresh"}
+	return marshal(v)
+}
+
+func marshal(v any) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)
@@ -502,14 +612,18 @@ func CursorAutomations(ls []Loop, repo, branch, tz string, loc *time.Location) (
 	fmt.Fprintf(&b, "# Cursor Automations for %s, one per loop, from loops/*.toml (WP7.1). Apply with Terraform and the\n", repo)
 	b.WriteString("# cursor/cursor provider (CURSOR_TOKEN); Cursor stores them in the cloud. Cron triggers run in UTC: each loop has\n")
 	fmt.Fprintf(&b, "# one per UTC offset of %s, and `aayu hook loop:<name>` lets only the scheduled one run.\n\n", tz)
-	b.WriteString("terraform {\n  required_providers {\n    cursor = {\n      source  = \"cursor/cursor\"\n      version = \"~> 0.1\"\n    }\n  }\n}\n")
+	b.WriteString("terraform {\n  required_providers {\n    cursor = {\n      source  = \"cursor/cursor\"\n      version = \"~> 0.8\"\n    }\n  }\n}\n")
 	for _, l := range ls {
 		if !l.Runs(HostCursor) {
 			continue
 		}
+		var triggers []string
 		crons, err := l.UTCCrons(loc)
 		if err != nil {
 			return nil, err
+		}
+		for _, c := range crons {
+			triggers = append(triggers, "cron = { schedule = "+hclString(c)+" }")
 		}
 		fmt.Fprintf(&b, "\n# %s: %s\n", l.Name, l.Label(tz))
 		fmt.Fprintf(&b, "resource \"cursor_platform_workflow\" \"aayudha_%s\" {\n", strings.ReplaceAll(l.Name, "-", "_"))
@@ -520,8 +634,8 @@ func CursorAutomations(ls []Loop, repo, branch, tz string, loc *time.Location) (
 		fmt.Fprintf(&b, "  git_branch  = %s\n", hclString(branch))
 		fmt.Fprintf(&b, "  prompt      = %s\n", hclString(l.AgentPrompt(repo, branch)))
 		b.WriteString("  trigger = [\n")
-		for _, c := range crons {
-			fmt.Fprintf(&b, "    { cron = { schedule = %s } },\n", hclString(c))
+		for _, t := range triggers {
+			fmt.Fprintf(&b, "    { %s },\n", t)
 		}
 		b.WriteString("  ]\n}\n")
 	}
@@ -534,16 +648,22 @@ const generated = "# Code generated from loops/*.toml by aayudha (WP7.1); DO NOT
 const (
 	checkoutAction = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 	setupGoAction  = "actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0"
-	appTokenAction = "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0"
 	uploadAction   = "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2"
 )
+
+// setupActions are the tool setups a loop's setup may name, pinned like every
+// other action; pnpm reads its version from the root package.json.
+var setupActions = map[string]string{
+	"node": "actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0\n        with:\n          node-version: \"24\"\n          package-manager-cache: false",
+	"pnpm": "pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0",
+}
 
 // OutboxPath is where the file notify channel writes pages in a checkout; the
 // Actions fallback keeps it as a run artifact.
 const OutboxPath = ".aayudha/state/notify-outbox.jsonl"
 
 // ActionsWorkflow renders aayudha-loops.yml: one job per loop that runs in
-// Actions, triggered by its UTC crons or a manual dispatch naming it.
+// Actions (agent = false), triggered by its UTC crons or a manual dispatch naming it.
 // version is the aayudha module version the jobs install. implemented reports
 // whether this binary has the loop's command; others are listed as n/a.
 func ActionsWorkflow(ls []Loop, tz string, loc *time.Location, version string, implemented func(string) bool) ([]byte, error) {
@@ -589,7 +709,8 @@ func ActionsWorkflow(ls []Loop, tz string, loc *time.Location, version string, i
 	b.WriteString(`# of the zone, and ` + "`aayudha hook loop:<name>`" + ` runs only the one for today's offset (github.event.schedule). The guard also
 # stops on ` + "`aayu halt`" + ` (exit 4, before any write) and when this workflow's runs this month reach [budget]
 # ci_minutes_month or the [budget] breaker has paused agent lanes (exit 6). Pages from [notify] channel "file" are kept
-# as a run artifact.
+# as a run artifact. Only the loops that need no agent (agent = false) run here; the others run in the one agent tool
+# (aayu install --loops). No model, no model key, and no bot token is ever used here.
 `)
 	if len(na) > 0 {
 		b.WriteString("#\n# Not rendered:\n" + strings.Join(na, "\n") + "\n")
@@ -604,7 +725,7 @@ func ActionsWorkflow(ls []Loop, tz string, loc *time.Location, version string, i
 	for _, j := range jobs {
 		fmt.Fprintf(&b, "          - %s\n", j.l.Name)
 	}
-	b.WriteString("\npermissions:\n  contents: read\n  issues: read\n  pull-requests: read\n  actions: read\n\nconcurrency:\n  group: aayudha-loops-${{ github.event.schedule || inputs.loop }}\n  cancel-in-progress: false\n\njobs:\n")
+	b.WriteString("\npermissions:\n  contents: read\n  issues: read\n  pull-requests: read\n  actions: read\n\nconcurrency:\n  group: aayudha-loops-${{ github.event.schedule || inputs.loop || github.run_id }}\n  cancel-in-progress: false\n\njobs:\n")
 	for i, j := range jobs {
 		if i > 0 {
 			b.WriteString("\n")
@@ -625,18 +746,6 @@ func ActionsWorkflow(ls []Loop, tz string, loc *time.Location, version string, i
         run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); the loop does not run. A human clears it with aayu resume." && exit 4
 `)
 		fmt.Fprintf(&b, "      - uses: %s\n        with:\n          persist-credentials: false\n", checkoutAction)
-		if j.l.Bot {
-			fmt.Fprintf(&b, `      - name: Mint the bot token
-        id: app
-        if: vars.AAYUDHA_APP_CLIENT_ID != ''
-        uses: %s
-        with:
-          client-id: ${{ vars.AAYUDHA_APP_CLIENT_ID }}
-          private-key: ${{ secrets.AAYUDHA_APP_PRIVATE_KEY }}
-          permission-issues: write
-          permission-contents: write
-`, appTokenAction)
-		}
 		fmt.Fprintf(&b, "      - uses: %s\n        with:\n          go-version: \"1.25.x\"\n          cache: false\n", setupGoAction)
 		fmt.Fprintf(&b, "      - name: Install aayudha %s\n        run: go install github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@%s\n", version, version)
 		fmt.Fprintf(&b, `      - name: Guard (schedule, halt, budget)
@@ -647,24 +756,22 @@ func ActionsWorkflow(ls []Loop, tz string, loc *time.Location, version string, i
           REPO: ${{ github.repository }}
         run: aayudha hook loop:%s --ci --repo "$REPO"
 `, j.l.Name)
+		for _, x := range j.l.Setup {
+			fmt.Fprintf(&b, "      - if: steps.guard.outputs.due == 'true'\n        uses: %s\n", setupActions[x])
+		}
+		if len(j.l.SetupRun) > 0 {
+			fmt.Fprintf(&b, "      - name: Set up for aayu %s\n        if: steps.guard.outputs.due == 'true'\n        run: |\n          set -euo pipefail\n", strings.Join(j.l.Command, " "))
+			for _, line := range j.l.SetupRun {
+				fmt.Fprintf(&b, "          %s\n", line)
+			}
+		}
 		args := strings.Join(quoteAll(j.l.Command), " ")
 		run := fmt.Sprintf("aayudha %s --ci --repo \"$REPO\"", args)
-		if j.l.Bot {
-			run = fmt.Sprintf(`|
-          if [[ -z "$AAYU_BOT_TOKEN" ]]; then
-            echo "::notice::No bot App (AAYUDHA_APP_CLIENT_ID): %s writes as the bot, and the workflow token is never a bot identity (D1). Run aayu init --identity to create the App."
-            exit 0
-          fi
-          aayudha %s --ci --repo "$REPO"`, j.l.Name, args)
-		}
 		fmt.Fprintf(&b, `      - name: Run aayu %s
         if: steps.guard.outputs.due == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
 `, strings.Join(j.l.Command, " "))
-		if j.l.Bot {
-			b.WriteString("          AAYU_BOT_TOKEN: ${{ steps.app.outputs.token }}\n")
-		}
 		fmt.Fprintf(&b, `          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
           AAYU_AGENT: "1"
           REPO: ${{ github.repository }}
@@ -708,7 +815,8 @@ func quoteAll(argv []string) []string {
 }
 
 // Files renders every host output for a repository, by path: the Actions
-// fallback, one Amp schedule per loop, and the Cursor Terraform file.
+// fallback, one Amp schedule per loop, the Cursor Terraform file and its
+// /automate prompts, and the Claude Code and Codex prompts.
 func Files(ls []Loop, repo, branch, tz, version string, implemented func(string) bool) (map[string][]byte, error) {
 	loc, err := time.LoadLocation(tz)
 	if err != nil {
@@ -722,9 +830,11 @@ func Files(ls []Loop, repo, branch, tz, version string, implemented func(string)
 		if !l.Runs(HostAmp) || !implemented(l.Verb()) {
 			continue
 		}
-		if out[Dir+"/amp/"+l.Name+".json"], err = l.AmpSchedule(repo, branch, tz); err != nil {
+		b, err := l.AmpSchedule(repo, branch, tz)
+		if err != nil {
 			return nil, err
 		}
+		out[Dir+"/amp/"+l.Name+".json"] = b
 	}
 	var cursor []Loop
 	for _, l := range ls {
@@ -735,6 +845,11 @@ func Files(ls []Loop, repo, branch, tz, version string, implemented func(string)
 	if out[Dir+"/cursor/aayudha-loops.tf"], err = CursorAutomations(cursor, repo, branch, tz, loc); err != nil {
 		return nil, err
 	}
+	if out[Dir+"/cursor/automate.md"], err = CursorAutomate(cursor, repo, branch, tz, loc); err != nil {
+		return nil, err
+	}
+	out[Dir+"/claude/routines.md"] = ClaudeRoutines(cursor, repo, branch, tz)
+	out[Dir+"/codex/scheduled-tasks.md"] = CodexTasks(cursor, repo, branch, tz)
 	return out, nil
 }
 

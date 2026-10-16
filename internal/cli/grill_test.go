@@ -498,7 +498,7 @@ func TestGrillTUIStory(t *testing.T) {
 	if code != 0 || !strings.Contains(out, fmt.Sprintf("created #%d", before+1)) {
 		t.Fatalf("grill story on a terminal: %d %s %s", code, out, errOut)
 	}
-	if !strings.Contains(parentView, "Parent (feature, issue number) (required)") || !strings.Contains(parentView, "> 1") {
+	if !strings.Contains(parentView, "Parent (feature, issue number) (optional)") || !strings.Contains(parentView, "> 1") {
 		t.Errorf("parent question:\n%s", parentView)
 	}
 	if len(reviews) != 3 || !strings.Contains(reviews[0], `labels: grill: label "status:done" is not a label-held field`) ||

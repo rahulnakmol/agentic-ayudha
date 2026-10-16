@@ -1,0 +1,7 @@
+# Weekly housekeeping (WP5.5, WP1.7, WP4.5b; Appendix B S-7.1c). gc writes as the human (it reclaims leases), so the
+# loop runs in the user's own agent session and has no Actions fallback. The cron is in [time] tz.
+description = "Weekly housekeeping: reclaim stale leases and worktrees, then report doctor drift, feature-map drift, and stale Ready issues."
+command = ["gc"]
+cron = "0 16 * * 5"
+hosts = ["amp", "cursor", "claude", "codex"]
+prompt = "Report what gc reclaimed and removed. Then run `aayu doctor` and report each check that is not ok; run `aayu verify --map` and report each feature map that drifted from the source; and for each open issue labelled status:ready that has not been updated for 14 days (read it with `gh issue list --label status:ready`), run `aayu ready <issue> --check` and report the ones that no longer validate. Change nothing else."

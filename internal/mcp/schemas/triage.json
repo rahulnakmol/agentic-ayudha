@@ -15,15 +15,13 @@
       "x-aayu-type": "enum"
     },
     "issue": {
-      "description": "Intake issue to classify.",
+      "description": "Intake issue to classify; without it, list the open intake issues and change nothing (the weekly triage loop).",
       "pattern": "^(#?[1-9][0-9]*|https://github\\.com/[^/]+/[^/]+/issues/[1-9][0-9]*)$",
       "type": "string",
       "x-aayu-type": "issue"
     }
   },
-  "required": [
-    "issue"
-  ],
+  "required": [],
   "title": "triage",
   "type": "object",
   "x-aayu-exposure": "write",

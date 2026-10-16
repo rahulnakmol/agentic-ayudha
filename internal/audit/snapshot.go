@@ -34,6 +34,8 @@ type Snapshot struct {
 	NeverMerges []NeverMerge           `json:"never_merges"`
 	AgentPRs    []AgentPR              `json:"agent_prs"`
 	Streaks     []autonomy.LayerStreak `json:"streaks"`
+	GateRuns    []Run                  `json:"gate_runs,omitempty"` // retro only
+	Bugs        []Bug                  `json:"bugs,omitempty"`      // retro only
 }
 
 // MaxBody bounds the comment text Fetch keeps, and so the snapshot: the audit
@@ -46,7 +48,8 @@ func Freeze(in *Inputs, d *Data, path string) []byte {
 	stored := *in
 	stored.Snapshot, stored.SnapshotSHA256 = "", ""
 	s := Snapshot{Version: SnapshotVersion, Inputs: stored, GateSince: d.GateSince, RuleSuites: d.RuleSuites, PRs: d.PRs, Runs: d.Runs,
-		Subjects: d.Subjects, OnMain: d.OnMain, Licence: d.Licence, Corrections: d.Corrections, NeverMerges: d.NeverMerges, AgentPRs: d.AgentPRs, Streaks: d.Streaks}
+		Subjects: d.Subjects, OnMain: d.OnMain, Licence: d.Licence, Corrections: d.Corrections, NeverMerges: d.NeverMerges, AgentPRs: d.AgentPRs, Streaks: d.Streaks,
+		GateRuns: d.GateRuns, Bugs: d.Bugs}
 	s.Items = d.Items
 	b, _ := json.MarshalIndent(s, "", " ")
 	b = append(b, '\n')
@@ -68,6 +71,7 @@ func Thaw(b []byte, path string, d *Data) (Inputs, error) {
 	d.GateSince, d.RuleSuites, d.PRs, d.Items, d.Runs = s.GateSince, s.RuleSuites, s.PRs, s.Items, s.Runs
 	d.Subjects, d.OnMain, d.Licence = s.Subjects, s.OnMain, s.Licence
 	d.Corrections, d.NeverMerges, d.AgentPRs, d.Streaks = s.Corrections, s.NeverMerges, s.AgentPRs, s.Streaks
+	d.GateRuns, d.Bugs = s.GateRuns, s.Bugs
 	in := s.Inputs
 	sum := sha256.Sum256(b)
 	in.Snapshot, in.SnapshotSHA256 = path, hex.EncodeToString(sum[:])

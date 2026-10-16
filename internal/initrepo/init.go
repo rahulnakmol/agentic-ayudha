@@ -64,9 +64,23 @@ type Init struct {
 // mockups and UI baselines. Proof media never go to the ledger (S-4.2b).
 var mediaExts = proof.MediaExts
 
-// LedgerRuleset is the name of the ruleset init creates when no existing
-// ruleset already protects the ledger branch.
-const LedgerRuleset = "aayudha-ledger"
+// The rulesets init creates on the ledger branch when no existing ruleset
+// already protects it (Appendix B D-4.2b.h). LedgerRuleset restricts updates
+// to its bypass actors: the write role and up (and the bot App), so a human
+// with write access can run ship, while the Actions workflow token, which
+// cannot be a bypass actor on a personal repository (D1), never writes the
+// ledger. A bypass actor bypasses every rule of its ruleset, so force pushes
+// and deletion are blocked by LedgerHistoryRuleset, which has no bypass
+// actors at all.
+const (
+	LedgerRuleset        = "aayudha-ledger"
+	LedgerHistoryRuleset = "aayudha-ledger-history"
+)
+
+// writeRole is the repository's write role as a ruleset bypass actor; it
+// covers maintain and admin too (current_user_can_bypass is "always" for the
+// admin with only this actor listed, D-4.2b.h).
+var writeRole = map[string]any{"actor_id": 4, "actor_type": "RepositoryRole", "bypass_mode": "always"}
 
 // NewState starts the state for a first run.
 func NewState(repo string) *State {
@@ -374,6 +388,20 @@ type rulesetDetail struct {
 	Rules []struct {
 		Type string `json:"type"`
 	} `json:"rules"`
+	BypassActors []struct {
+		ActorID    int64  `json:"actor_id"`
+		ActorType  string `json:"actor_type"`
+		BypassMode string `json:"bypass_mode"`
+	} `json:"bypass_actors"`
+}
+
+func (d rulesetDetail) ruleTypes() []string {
+	var types []string
+	for _, r := range d.Rules {
+		types = append(types, r.Type)
+	}
+	slices.Sort(types)
+	return types
 }
 
 func (d rulesetDetail) protectsLedger() bool {
@@ -383,10 +411,7 @@ func (d rulesetDetail) protectsLedger() bool {
 	if !slices.Contains(d.Conditions.RefName.Include, "refs/heads/ledger") {
 		return false
 	}
-	var types []string
-	for _, r := range d.Rules {
-		types = append(types, r.Type)
-	}
+	types := d.ruleTypes()
 	return slices.Contains(types, "deletion") && slices.Contains(types, "non_fast_forward")
 }
 
@@ -399,43 +424,108 @@ func (in *Init) rest(ctx context.Context, method, path string, body, out any) er
 	return err
 }
 
+// ruleset applies the ledger rulesets. Where the plan has no rulesets (a
+// private repository on GitHub Free answers 403 "Upgrade to GitHub Pro or make
+// this repository public"), init says so, records why in state.json for
+// `aayu doctor`, and carries on: the ledger branch is then unprotected, and a
+// later `aayu init` applies the rulesets once the plan allows them
+// (Appendix B D-2.5b).
 func (in *Init) ruleset(ctx context.Context) error {
+	err := in.applyRulesets(ctx)
+	var er *gh.ErrorResponse
+	if errors.As(err, &er) && er.Response != nil && er.Response.StatusCode == http.StatusForbidden && strings.Contains(er.Message, "Upgrade to GitHub") {
+		in.State.RulesetsUnapplied = "GitHub answered 403: " + er.Message
+		in.note("ruleset", "ruleset", LedgerRuleset, "not applied",
+			"this repository's GitHub plan has no rulesets ("+er.Message+"), so the ledger branch is unprotected: anyone with write access can force-push or delete it. Make the repository public or upgrade to GitHub Pro, then run aayu init again; aayu doctor reports it until then")
+		return nil
+	}
+	if err == nil {
+		in.State.RulesetsUnapplied = ""
+	}
+	return err
+}
+
+func (in *Init) applyRulesets(ctx context.Context) error {
 	r := in.Repo
 	var list []rulesetDetail
 	if err := in.rest(ctx, http.MethodGet, "/repos/"+r.FullName+"/rulesets", nil, &list); err != nil {
 		return err
 	}
-	o, recorded := in.State.Object("ruleset", LedgerRuleset)
-	var match *rulesetDetail
-	for _, s := range list {
-		if recorded && strconv.FormatInt(s.ID, 10) == o.ID {
-			in.note("ruleset", "ruleset", s.Name, "unchanged", "")
-			return nil
-		}
-		var d rulesetDetail
-		if err := in.rest(ctx, http.MethodGet, fmt.Sprintf("/repos/%s/rulesets/%d", r.FullName, s.ID), nil, &d); err != nil {
-			return err
-		}
-		if match == nil && d.protectsLedger() {
-			match = &d
-		}
+	listed := func(id string) bool {
+		return slices.ContainsFunc(list, func(s rulesetDetail) bool { return strconv.FormatInt(s.ID, 10) == id })
 	}
-	if match != nil {
-		in.State.Put(Object{Kind: "ruleset", Name: LedgerRuleset, ID: strconv.FormatInt(match.ID, 10), Adopted: true})
-		in.note("ruleset", "ruleset", match.Name, "adopted", "already protects refs/heads/ledger; added nothing alongside it")
+	o, recorded := in.State.Object("ruleset", LedgerRuleset)
+	if recorded && o.Adopted && listed(o.ID) {
+		in.note("ruleset", "ruleset", o.Name, "unchanged", "the team's own ruleset; aayudha leaves it as it is")
 		return nil
 	}
+	if !recorded || o.Adopted {
+		for _, s := range list {
+			var d rulesetDetail
+			if err := in.rest(ctx, http.MethodGet, fmt.Sprintf("/repos/%s/rulesets/%d", r.FullName, s.ID), nil, &d); err != nil {
+				return err
+			}
+			if d.protectsLedger() {
+				in.State.Put(Object{Kind: "ruleset", Name: LedgerRuleset, ID: strconv.FormatInt(d.ID, 10), Adopted: true})
+				in.note("ruleset", "ruleset", d.Name, "adopted", "already protects refs/heads/ledger; added nothing alongside it")
+				return nil
+			}
+		}
+	}
+	// History first, so a 0.1 ruleset loses its force-push and deletion rules
+	// only once the history ruleset holds them.
+	if err := in.ensureRuleset(ctx, listed, LedgerHistoryRuleset, []string{"deletion", "non_fast_forward"}, nil); err != nil {
+		return err
+	}
+	return in.ensureRuleset(ctx, listed, LedgerRuleset, []string{"update"}, writeRole)
+}
+
+// ensureRuleset creates the ledger ruleset name with exactly rules, or
+// brings the recorded one to them, adding bypass to its bypass actors and
+// keeping the rest (the bot App, D-4.2b.d).
+func (in *Init) ensureRuleset(ctx context.Context, listed func(string) bool, name string, rules []string, bypass map[string]any) error {
+	r := in.Repo
 	body := map[string]any{
-		"name": LedgerRuleset, "target": "branch", "enforcement": "active",
-		"conditions": map[string]any{"ref_name": map[string]any{"include": []string{"refs/heads/ledger"}, "exclude": []string{}}},
-		"rules":      []map[string]any{{"type": "deletion"}, {"type": "non_fast_forward"}, {"type": "update"}},
-		// Day one (Appendix B D1): the repository admin role writes the ledger
-		// until init --identity adds the bot App as the bypass actor.
-		"bypass_actors": []map[string]any{{"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always"}},
+		"name": name, "target": "branch", "enforcement": "active",
+		"conditions":    map[string]any{"ref_name": map[string]any{"include": []string{"refs/heads/ledger"}, "exclude": []string{}}},
+		"rules":         []map[string]any{},
+		"bypass_actors": []map[string]any{},
+	}
+	for _, t := range rules {
+		body["rules"] = append(body["rules"].([]map[string]any), map[string]any{"type": t})
+	}
+	if bypass != nil {
+		body["bypass_actors"] = []map[string]any{bypass}
+	}
+	if o, ok := in.State.Object("ruleset", name); ok && listed(o.ID) {
+		var d rulesetDetail
+		path := "/repos/" + r.FullName + "/rulesets/" + o.ID
+		if err := in.rest(ctx, http.MethodGet, path, nil, &d); err != nil {
+			return err
+		}
+		has := bypass == nil
+		for _, a := range d.BypassActors {
+			if a.ActorType == bypass["actor_type"] && a.ActorID == int64(bypass["actor_id"].(int)) {
+				has = true
+				continue
+			}
+			body["bypass_actors"] = append(body["bypass_actors"].([]map[string]any), map[string]any{"actor_id": a.ActorID, "actor_type": a.ActorType, "bypass_mode": a.BypassMode})
+		}
+		if has && slices.Equal(d.ruleTypes(), rules) {
+			in.note("ruleset", "ruleset", name, "unchanged", "")
+			return nil
+		}
+		if _, err := in.GH.Write(ctx, actions.Action{Kind: "github.ruleset.update", Target: r.FullName, IdempotencyKey: in.key("ruleset-update", name),
+			Request: &actions.Request{Method: http.MethodPut, Path: path}, Payload: body},
+			func(ctx context.Context) (any, error) { return nil, in.rest(ctx, http.MethodPut, path, body, nil) }); err != nil {
+			return err
+		}
+		in.note("ruleset", "ruleset", name, "updated", "write-access humans write the ledger; force pushes and deletion stay blocked (D-4.2b.h)")
+		return nil
 	}
 	var created rulesetDetail
 	rec, err := in.GH.Write(ctx, actions.Action{
-		Kind: "github.ruleset.create", Target: r.FullName, IdempotencyKey: in.key("ruleset", LedgerRuleset),
+		Kind: "github.ruleset.create", Target: r.FullName, IdempotencyKey: in.key("ruleset", name),
 		Request: &actions.Request{Method: http.MethodPost, Path: "/repos/" + r.FullName + "/rulesets"}, Payload: body,
 	}, func(ctx context.Context) (any, error) {
 		err := in.rest(ctx, http.MethodPost, "/repos/"+r.FullName+"/rulesets", body, &created)
@@ -448,7 +538,7 @@ func (in *Init) ruleset(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	in.recordCreated(rec, Object{Kind: "ruleset", Name: LedgerRuleset, ID: strconv.FormatInt(created.ID, 10)}, "ruleset")
+	in.recordCreated(rec, Object{Kind: "ruleset", Name: name, ID: strconv.FormatInt(created.ID, 10)}, "ruleset")
 	return nil
 }
 

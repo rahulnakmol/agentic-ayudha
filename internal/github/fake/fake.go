@@ -19,6 +19,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // Label is a repository label.
@@ -78,10 +79,11 @@ type PR struct {
 	Head   Branch  `json:"head"`
 	Base   Branch  `json:"base"`
 	// MergeCommitSHA is set when the PR merges through the fake.
-	MergeCommitSHA string   `json:"merge_commit_sha,omitempty"`
-	Reviews        []Review `json:"-"`
-	Files          []string `json:"-"`
-	Diff           string   `json:"-"`
+	MergeCommitSHA string    `json:"merge_commit_sha,omitempty"`
+	CreatedAt      time.Time `json:"created_at,omitzero"`
+	Reviews        []Review  `json:"-"`
+	Files          []string  `json:"-"`
+	Diff           string    `json:"-"`
 }
 
 // Account is a user or bot.
@@ -115,6 +117,8 @@ type ReviewComment struct {
 
 // CheckRun is a check run on a commit.
 type CheckRun struct {
+	ID         int64  `json:"id,omitempty"`
+	HTMLURL    string `json:"html_url,omitempty"`
 	Name       string `json:"name"`
 	Status     string `json:"status"`
 	Conclusion string `json:"conclusion"`
@@ -174,6 +178,7 @@ type GitHub struct {
 	Issues     map[int]*Issue
 	Pulls      map[int]*PR
 	CheckRuns  map[string][]CheckRun   // commit SHA -> check runs, newest first
+	JobLogs    map[int64]string        // Actions job (check run) ID -> its log, behind a redirect like GitHub's
 	Runs       []WorkflowRun           // Actions workflow runs
 	Artifacts  map[int64][]ArtifactZip // run ID -> artifacts
 	Releases   map[string]*Release     // tag -> GitHub Release
@@ -200,6 +205,9 @@ type GitHub struct {
 	// their commits, files, and reviews), keyed by path without the query.
 	Static map[string]any
 
+	// RulesetsUnavailable answers every rulesets request as GitHub does for a
+	// private repository on GitHub Free.
+	RulesetsUnavailable bool
 	// Fail makes the request with this "METHOD /path" fail with a 500 once
 	// it has succeeded After times.
 	Fail      string
@@ -303,8 +311,9 @@ var (
 	reRelTag    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/releases/tags/(.+)$`)
 	reRelease   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/releases/([0-9]+)$`)
 	reRunArts   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/runs/([0-9]+)/artifacts$`)
+	reJobLogs   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/jobs/([0-9]+)/logs$`)
 	reArtZip    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/artifacts/([0-9]+)/zip$`)
-	rePull      = regexp.MustCompile(`^/repos/[^/]+/[^/]+/pulls/([0-9]+)(/reviews|/files|/merge)?$`)
+	rePull      = regexp.MustCompile(`^/repos/[^/]+/[^/]+/pulls/([0-9]+)(/reviews|/files|/merge|/comments)?$`)
 	reIssue     = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)$`)
 	reLabels    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/labels$`)
 	reLabel     = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/labels/(.+)$`)
@@ -549,6 +558,8 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(204)
 
 	// Rulesets.
+	case g.RulesetsUnavailable && strings.HasPrefix(p, repo+"/rulesets"):
+		reply(403, map[string]any{"message": "Upgrade to GitHub Pro or make this repository public to enable this feature.", "status": "403"})
 	case m == "GET" && p == repo+"/rulesets":
 		reply(200, g.Rulesets)
 	case m == "GET" && strings.HasPrefix(p, repo+"/rulesets/"):
@@ -641,7 +652,8 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		reply(200, out)
 	case m == "POST" && p == repo+"/issues":
 		var labels []string
-		for _, l := range body["labels"].([]any) {
+		ls, _ := body["labels"].([]any) // GitHub creates an issue without labels too
+		for _, l := range ls {
 			labels = append(labels, l.(string))
 		}
 		reply(201, g.addIssue(str("title"), str("body"), labels))
@@ -702,6 +714,16 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			out = append(out, map[string]any{"id": a.ID, "name": a.Name, "expired": false})
 		}
 		reply(200, map[string]any{"total_count": len(out), "artifacts": out})
+	case m == "GET" && reJobLogs.MatchString(p):
+		id := int64(atoi(reJobLogs.FindStringSubmatch(p)[1]))
+		if _, ok := g.JobLogs[id]; !ok {
+			notFound()
+			return
+		}
+		w.Header().Set("Location", g.Server.URL+"/job-log/"+reJobLogs.FindStringSubmatch(p)[1])
+		w.WriteHeader(http.StatusFound)
+	case m == "GET" && strings.HasPrefix(p, "/job-log/"):
+		_, _ = w.Write([]byte(g.JobLogs[int64(atoi(strings.TrimPrefix(p, "/job-log/")))]))
 	case m == "GET" && reArtZip.MatchString(p):
 		w.Header().Set("Location", g.Server.URL+"/blob/"+reArtZip.FindStringSubmatch(p)[1])
 		w.WriteHeader(http.StatusFound)
@@ -719,15 +741,20 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 	case m == "POST" && p == repo+"/pulls":
 		is := g.addIssue(str("title"), str("body"), nil)
 		pr := &PR{Number: is.Number, Title: str("title"), Body: str("body"), State: "open", User: Account{Login: g.Viewer, Type: "User"},
-			Head: Branch{Ref: str("head")}, Base: Branch{Ref: str("base"), SHA: strings.Repeat("b", 40)}}
+			Head: Branch{Ref: str("head")}, Base: Branch{Ref: str("base"), SHA: strings.Repeat("b", 40)}, CreatedAt: time.Now().UTC()}
 		g.Pulls[is.Number] = pr
 		reply(201, pr)
 	case m == "GET" && p == repo+"/pulls":
 		out := []*PR{}
+		q := r.URL.Query()
 		for _, pr := range g.Pulls {
-			if head := r.URL.Query().Get("head"); pr.State == "open" && (head == "" || head == g.Owner+":"+pr.Head.Ref) {
+			if st := q.Get("state"); (st == "all" || pr.State == st || (st == "" && pr.State == "open")) && (q.Get("head") == "" || q.Get("head") == g.Owner+":"+pr.Head.Ref) {
 				out = append(out, pr)
 			}
+		}
+		slices.SortFunc(out, func(a, b *PR) int { return a.Number - b.Number })
+		if q.Get("direction") == "desc" {
+			slices.Reverse(out)
 		}
 		reply(200, out)
 	case rePull.MatchString(p):
@@ -761,6 +788,15 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		case sm[2] == "/reviews" && m == "GET":
 			out := []Review{}
 			out = append(out, pr.Reviews...)
+			reply(200, out)
+		case sm[2] == "/comments" && m == "GET": // the inline comments of every review, on the review's commit
+			out := []map[string]any{}
+			for _, rv := range pr.Reviews {
+				for i, c := range rv.Comments {
+					out = append(out, map[string]any{"id": rv.ID*1000 + int64(i), "user": rv.User, "path": c.Path, "line": c.Line, "body": c.Body,
+						"commit_id": rv.CommitID, "original_commit_id": rv.CommitID, "pull_request_review_id": rv.ID})
+				}
+			}
 			reply(200, out)
 		case sm[2] == "/files" && m == "GET":
 			out := []map[string]any{}

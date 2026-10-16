@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	aayudha "github.com/rahulnakmol/agentic-ayudha"
 	"github.com/rahulnakmol/agentic-ayudha/internal/cli"
@@ -112,12 +113,33 @@ func TestEvolveVerb(t *testing.T) {
 	g.AddIssue("Feedback: retro: skill `stub` correction rate 2/3 above 20 %", "### What happened or what you need\n\nx\n", "type:feedback", "status:backlog", "intake", "needs:grill")
 	g.AddIssue("Feedback: retro: not accepted yet", "x", "type:feedback", "status:backlog", "intake")
 	g.AddIssue("Feedback: retro: correction rate 3/4 above 20 %", "x", "type:feedback", "status:backlog", "intake", "needs:grill")
-	if code, out, errOut := run(); code != 0 || !strings.Contains(out, "aayu evolve --skill <skill> --feedback 7") {
+	if code, out, errOut := run(); code != 0 || !strings.Contains(out, "#7 Feedback: retro: correction rate 3/4 above 20 %\n  names no skill") {
 		t.Fatalf("a finding that names no skill: %d %s %s", code, out, errOut)
 	}
+	// P4 (S-7.7c): a skill changes only on two accepted Feedback issues that name it.
+	if code, out, errOut := run(); code != 0 || !strings.Contains(out, "waiting: skill `stub` needs 2 accepted Feedback issues, has 1") || strings.Contains(out, "--feedback 5") {
+		t.Fatalf("listing one Feedback for a skill: %d %s %s", code, out, errOut)
+	}
+	if code, _, errOut := run("--skill", "stub", "--feedback", "5"); code != cli.ExitBlocked || !strings.Contains(errOut, "skill `stub` has #5 only") {
+		t.Fatalf("evolve on one Feedback: %d %s", code, errOut)
+	}
+	if code, _, errOut := run("--skill", "stub", "--feedback", "7"); code != cli.ExitBlocked || !strings.Contains(errOut, "#7 does not name skill `stub`") {
+		t.Fatalf("evolve on Feedback about no skill: %d %s", code, errOut)
+	}
+	g.AddIssue("Feedback: retro: skill `stub` correction rate 3/3 above 20 %, a later window", "x", "type:feedback", "status:backlog", "intake", "needs:grill")
 	if code, out, errOut := run(); code != 0 || !strings.Contains(out, "#5 Feedback: retro: skill `stub`") || !strings.Contains(out, "aayu evolve --skill stub --feedback 5") || strings.Contains(out, "#6") {
 		t.Fatalf("listing accepted retro Feedback: %d %s %s", code, out, errOut)
 	}
+	// At most one evolve PR per skill a month: one opened 10 days ago blocks, one 40 days ago does not.
+	g.Mu.Lock()
+	g.Pulls[100] = &fake.PR{Number: 100, State: "closed", Head: fake.Branch{Ref: "evolve/stub-2"}, CreatedAt: time.Now().AddDate(0, 0, -10)}
+	g.Mu.Unlock()
+	if code, _, errOut := run("--skill", "stub", "--feedback", "5"); code != cli.ExitBlocked || !strings.Contains(errOut, "PR #100 proposed a change to skill `stub`") {
+		t.Fatalf("evolve within a month of the last: %d %s", code, errOut)
+	}
+	g.Mu.Lock()
+	g.Pulls[100].CreatedAt = time.Now().AddDate(0, 0, -40)
+	g.Mu.Unlock()
 	if code, _, errOut := run("--skill", "Bad", "--feedback", "5"); code != cli.ExitUsage {
 		t.Fatalf("bad skill name: %d %s", code, errOut)
 	}
@@ -201,19 +223,19 @@ func TestEvolveVerb(t *testing.T) {
 	if !strings.Contains(labels, "agent-authored") || !strings.Contains(labels, "aayu:evolve") {
 		t.Fatalf("PR labels: %s", labels)
 	}
+	if body := g.Pulls[prN].Body; !strings.Contains(body, "Evidence: #5, #8") {
+		t.Fatalf("PR body does not cite both Feedback issues: %s", body)
+	}
 	g.Mu.Lock()
 	g.Fail, g.FailAfter = "GET /repos/o/r/pulls", 0
 	g.Mu.Unlock()
 	if code, _, errOut := run("--skill", "stub", "--feedback", "5"); code != cli.ExitExternal {
 		t.Fatalf("re-run with GitHub failing: %d %s", code, errOut)
 	}
-	// Another skill for the same Feedback gets its own worktree and branch.
+	// A Feedback that names another skill does not evolve it, so evolve never cuts a second worktree for it.
 	g.Reset()
-	if code, out, errOut := run("--skill", "grill", "--feedback", "5"); code != 0 || !strings.Contains(out, "evolve-grill-5") || !strings.Contains(out, "evolve/grill-5") {
-		t.Fatalf("another skill: %d %s %s", code, out, errOut)
-	}
-	if b := gitIn(t, wt, "rev-parse", "--abbrev-ref", "HEAD"); b != "evolve/stub-5" {
-		t.Fatalf("the stub worktree moved to %s", b)
+	if code, _, errOut := run("--skill", "grill", "--feedback", "5"); code != cli.ExitBlocked || !strings.Contains(errOut, "does not name skill `grill`") {
+		t.Fatalf("another skill: %d %s", code, errOut)
 	}
 	// A re-run finds the open PR instead of opening another.
 	g.Reset()

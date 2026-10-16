@@ -1,0 +1,17 @@
+{
+  "number": 81,
+  "title": "Quote a 10-parcel shipment in under 300 ms at p95",
+  "state": "open",
+  "body": "### Summary\n\nAs a partner shop at checkout, I want POST /quotes to return a quote within 300 ms at p95, so that my customers are not kept waiting.\n\n### Completion Goal\n\n1. [metric] state: a local server with the seeded rate table, one warm-up request, then a one-minute load test sending POST /quotes with 10 parcels at 20 requests a second; expected: p95 response time under 300 ms\n2. [api-trace] state: POST /quotes with the seeded parcels in test/quotes.test.js, before and after the change; expected: the same amount in pence on every line and the same total_pence\n\n### Measure\n\np95 response time of POST /quotes in the load test\n\n### Threshold\n\nunder 300 ms at 20 requests a second with 10 parcels\n\n### Scenario\n\nStart the server locally with the seeded rate table, send one warm-up request, run the one-minute load test against POST /quotes, and compare the seeded parcels' quotes with today's.\n\n### Environment\n\na local server on linux with the seeded synthetic rate table; never a partner's traffic\n\n### Checkpoints\n\n1. The one-minute load test reports p95 for POST /quotes under 300 ms (criterion 1)\n2. Quotes for the seeded parcels match today's amounts (criterion 2)\n\n### Assumptions\n\n- Measured after one warm-up request on a local server (the accepted default).\n- The seeded rate table stands for the real one.\n\n### Open questions\n\n- answered: whether GET /quotes/{id} changes (no: only POST /quotes)\n\n### Parked ideas\n\n- CI budget: a k6 threshold in CI (raised by grill; the human parked it)\n- loading feedback: partners show their own spinner (the human parked it)\n\n### Provenance\n\nRequest: \"The quotes API is too slow at checkout. Make it fast. It belongs under Feature #80 (Partner integrations).\"\nVague: \"slow\" → criteria 1\nVague: \"fast\" → criteria 1\n1. confirmed (perf.target/percentile-and-number): \"p95 under 300 ms for a quote of 10 parcels\" / \"About 20 quotes a second at peak\" / \"A one-minute load test against a local server with the seeded rate table\" / \"Your default is fine.\"; facts: route:/quotes, gap:api-budget\n2. confirmed (request/existing-behaviour): \"The amounts must stay exactly the same; only the speed changes.\"; facts: route:/quotes, code:src/routes/quotes.js",
+  "labels": [
+    {
+      "name": "type:story"
+    },
+    {
+      "name": "status:planned"
+    },
+    {
+      "name": "effort:M"
+    }
+  ]
+}

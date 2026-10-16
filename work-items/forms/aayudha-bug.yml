@@ -7,7 +7,7 @@ labels: ["type:bug", "status:backlog"]
 body:
   - type: markdown
     attributes:
-      value: "A defect, with a Completion Goal that proves the fix. Add it as a sub-issue of its parent feature or story. Set Priority, Effort, Risk, Health, and Horizon with the `priority:`, `effort:`, `risk:`, `health:`, and `horizon:` labels; they are not form fields. Effort is required at Ready, and `effort:XL` blocks Ready: slice it first. Fields left blank here can be filled in before `aayu ready`."
+      value: "A defect, with a Completion Goal that proves the fix. If it has a parent feature or story, add it as a sub-issue of it. Set Priority, Effort, Risk, Health, and Horizon with the `priority:`, `effort:`, `risk:`, `health:`, and `horizon:` labels; they are not form fields. Effort is required at Ready, and `effort:XL` blocks Ready: slice it first. Fields left blank here can be filled in before `aayu ready`."
   - type: textarea
     id: summary
     attributes:
@@ -81,6 +81,13 @@ body:
       label: "Links"
       description: "Typed links, one per line: caused-by #N, depends-on #N."
       placeholder: "depends-on #12"
+    validations:
+      required: false
+  - type: textarea
+    id: checkpoints
+    attributes:
+      label: "Checkpoints"
+      description: "What the human can see or try at each step of the build, in order, one per line: \"N. <what you can see or run> (criteria 1, 2)\"."
     validations:
       required: false
   - type: textarea

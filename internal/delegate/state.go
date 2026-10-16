@@ -22,6 +22,9 @@ const (
 // Receivers lists the agents a story can be delegated to.
 var Receivers = []string{Codex, Cursor, Claude, Amp}
 
+// Names are the receivers' product names, for messages.
+var Names = map[string]string{Codex: "Codex", Cursor: "Cursor", Claude: "Claude Code", Amp: "Amp"}
+
 // LedgerPath is where a story's delegation state lives on the ledger.
 func LedgerPath(story int) string { return fmt.Sprintf("delegate/%d/state.json", story) }
 
@@ -60,8 +63,10 @@ type State struct {
 	Status    string       `json:"status"` // handed-off, working, pr-open, fix-requested, merge-ready, capped, failed
 	BriefHash string       `json:"brief_sha256"`
 	StartedAt string       `json:"started_at"`
-	Reason    string       `json:"reason,omitempty"`  // why this receiver (auto)
-	Applied   string       `json:"applied,omitempty"` // the last task whose returned diff aayu applied (Codex)
+	Handoffs  int          `json:"handoffs,omitempty"` // hand-offs of this story so far; each gets a fresh branch and worktree
+	Proved    string       `json:"proved,omitempty"`   // the receiver's own "What I proved" section (untrusted; a preview)
+	Reason    string       `json:"reason,omitempty"`   // why this receiver (auto)
+	Applied   string       `json:"applied,omitempty"`  // the last task whose returned diff aayu applied (Codex)
 	FollowUps []FollowUp   `json:"follow_ups,omitempty"`
 	Events    []Event      `json:"events,omitempty"`
 }
@@ -71,7 +76,8 @@ type FollowUp struct {
 	At       string   `json:"at"`
 	Head     string   `json:"head"`
 	Cycle    int      `json:"cycle"`
-	Findings []string `json:"findings"` // inspect finding IDs
+	Findings []string `json:"findings"`         // inspect finding IDs
+	Checks   []string `json:"checks,omitempty"` // failed required checks (a CI repair round, P3)
 }
 
 // Event is one line of the delegation's history.

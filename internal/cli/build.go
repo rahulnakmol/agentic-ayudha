@@ -29,6 +29,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ui"
+	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
 func init() { register("build", runBuild) }
@@ -186,6 +187,9 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	if why != "" {
 		return Errorf(ExitBlocked, "build #%d: %s", n, why)
 	}
+	// The branch, commits, and PR title use the title without its issue
+	// form's "Story: " prefix (D-5.5c.19).
+	chk.Title = workitems.BareTitle(chk.Title)
 	res := BuildResult{Issue: n, Worktree: BuildWorktree(root, n), Branch: fmt.Sprintf("story/%d-%s", n, slug(chk.Title))}
 	dev := e.devBranch()
 	w, err := e.Ledger(ctx, bot.Token, c.Identity(), bot.Tag)
@@ -207,6 +211,14 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	st.Story, st.Branch = n, res.Branch
 	if res.Lease, err = e.takeLease(ctx, c, repo, n, leaseHolder(bot.Login), labels); err != nil {
 		return err
+	}
+	// A story being built is in progress (D-5.5c.17): build is the verb that
+	// moves it there from status:ready, and later runs accept either label.
+	if !contains(labels, labelInProgress) {
+		if err := setStatus(ctx, c, repo, n, labels, "in-progress"); err != nil {
+			return Wrap(ExitExternal, err)
+		}
+		labels = append(slices.DeleteFunc(labels, func(l string) bool { return strings.HasPrefix(l, "status:") }), labelInProgress)
 	}
 	b := l.Config.Autonomy.Budget
 	res.Budget = Usage{MaxWall: b.WallHours, MaxCost: b.CostUSD, MaxAttempts: b.Attempts, Attempts: st.Attempts, CostUSD: e.buildCost(repo, n)}
@@ -242,7 +254,8 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		if err != nil {
 			return err
 		}
-		res.Worktree = delegate.Worktree(root, n, dlg.receiver)
+		res.Worktree, res.Branch = delegate.Worktree(root, n, dlg.receiver, dlg.handoff), dlg.branch
+		st.Branch = res.Branch
 	}
 
 	// The worktree: cut from origin/dev, or resumed from the story branch.
@@ -291,6 +304,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			_ = e.saveDelegation(ctx, dlg)
 			return Errorf(ExitExternal, "build #%d --delegate %s: %v", n, dlg.receiver, err)
 		}
+		dlg.fill(res.Delegation) // what the receiver says it proved, for the PR body
 	}
 
 	// A checkpoint: commit what the agent wrote, then verify it.
@@ -393,6 +407,21 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
 			return err
 		}
+		if dlg != nil {
+			// The receiver changed nothing: keep its report and the hand-off's
+			// state, so the person sees why (D-5.5c.16), and let the next run
+			// hand off afresh.
+			dlg.event(e.Now(), dlgFailed, "the local "+dlg.receiver+" run changed nothing")
+			dlg.fill(res.Delegation)
+			if err := e.saveDelegation(ctx, dlg); err != nil {
+				return err
+			}
+			res.Next = fmt.Sprintf("%s changed nothing in %s; read its report, then `aayu build %d --delegate %s --local` hands off again in a fresh worktree", dlg.receiver, res.Worktree, n, dlg.receiver)
+			if err := e.emitDelegation(res); err != nil {
+				return err
+			}
+			return Errorf(ExitBlocked, "build #%d --delegate %s: the receiver changed nothing in %s", n, dlg.receiver, res.Worktree)
+		}
 		return Errorf(ExitBlocked, "build #%d: nothing to commit yet in %s", n, res.Worktree)
 	}
 	pp := e.progress(fmt.Sprintf("Pushing %s and opening the pull request", res.Branch))
@@ -425,7 +454,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	if err := e.checkpoint(bot.Token); err != nil {
 		fmt.Fprintf(e.Err, "aayu: warning: the actions segment did not reach the ledger: %v\n", err)
 	}
-	res.Next = fmt.Sprintf("the merge gate re-runs verify on PR #%d; `aayu ship %d` after a human pass", res.PR, res.PR)
+	res.Next = fmt.Sprintf("the merge gate re-runs verify on PR #%d; when the change is complete, `aayu inspect %d` asks the reviewer app to review the head; `aayu ship %d` after a human pass", res.PR, res.PR, res.PR)
 	return e.Emit(res, func(w io.Writer) error {
 		if res.Commit != "" {
 			fmt.Fprintf(w, "#%d: checkpoint %s committed (%s); verify: %s\n", n, res.Checkpoint, short(res.Commit), res.Verify)
@@ -461,6 +490,9 @@ func (e *Env) publishBuild(ctx context.Context, c *github.Client, token, root, r
 		body := fmt.Sprintf("Refs #%d\n\nBuilt with `aayu build` (WP5.5) from the Ready snapshot of #%d (body hash `%s`), one verified checkpoint commit per layer. The merge gate verifies it on the base branch's definition; `aayu ship` merges it after a human pass.\n", n, n, chk.BodyHash[:12])
 		if d := res.Delegation; d != nil {
 			body = fmt.Sprintf("Refs #%d\n\nBuilt by %s (%s, `aayu build --delegate`, WP5.5b) from the delegation brief of #%d's Ready snapshot (body hash `%s`). aayu committed, verified, and pushed the change; the receiver has no merge rights. The merge gate and inspect review it; `aayu ship` merges it after a human pass.\n", n, d.Receiver, d.Mode, n, chk.BodyHash[:12])
+			if d.Proved != "" {
+				body += fmt.Sprintf("\n%s\n\n%s's own check, quoted as it reported it (a preview; the merge gate's proof decides):\n\n%s\n", delegate.ProvedHeading, d.Receiver, quoteLines(d.Proved))
+			}
 		}
 		var pr *gh.PullRequest
 		if _, err := c.Write(ctx, actions.Action{Kind: "github.pull.create", Target: repo, Story: fmt.Sprintf("#%d", n),
@@ -649,15 +681,21 @@ func wrapExternal(err error) error {
 	return Wrap(ExitExternal, err)
 }
 
-// notReady says why a story cannot be built: not labelled status:ready, not
-// passing Ready, or its body hash differs from the Ready snapshot's.
+// labelInProgress is the Delivery Status build gives a story it builds.
+const labelInProgress = "status:in-progress"
+
+// notReady says why a story cannot be built: not labelled status:ready (or
+// status:in-progress, which an earlier build run set), not passing Ready, or
+// its body hash differs from the Ready snapshot's. The Ready guard acts only
+// on status:ready, so the hash check here is what catches a body edited
+// while the story is in progress.
 // A failure to read the snapshot is an error, not a reason: the story may
 // well be Ready.
 func (e *Env) notReady(ctx context.Context, c *github.Client, repo string, n int, chk ready.Result, labels []string) (string, error) {
 	switch {
 	case !chk.Pass:
 		return fmt.Sprintf("it does not pass Ready (%d problem(s)); run `aayu ready %d --check`", len(chk.Problems), n), nil
-	case !contains(labels, ready.LabelReady):
+	case !contains(labels, ready.LabelReady) && !contains(labels, labelInProgress):
 		return "it is not labelled status:ready; run `aayu ready " + fmt.Sprint(n) + "`", nil
 	}
 	snap, err := ready.SnapshotHash(ctx, c, repo, n)

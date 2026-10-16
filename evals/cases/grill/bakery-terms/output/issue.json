@@ -1,0 +1,27 @@
+{
+  "type": "story",
+  "title": "Send a catering request from the menu",
+  "fields": {
+    "summary": "As an office manager ordering pastries for a meeting, I want an 'Order for your office' button on the menu that sends a catering request, so that my order arrives instead of getting lost on the phone.",
+    "completion_goal": "1. [screenshot] state: `/menu` with the seeded menu; expected: one \"Order for your office\" button on the menu page\n2. [recording] state: `/menu` as the seeded office manager pressing \"Order for your office\"; expected: a form with 6 fields: company, name, email, phone, date, and how many people\n3. [api-trace] state: the seeded office manager sends the form with all 6 fields; expected: POST /api/orders creates 1 order that holds the company, name, email, phone, date, and number of people\n4. [metric] state: the app's log output while the seeded office manager sends the form; expected: 0 lines containing the seeded name, email, or phone number",
+    "measure": "catering requests received through the form per week",
+    "threshold": "at least 5 a week",
+    "scenario": "As the seeded office manager, open /menu, press the button, fill in the form with the seeded company, name, email, phone, date, and 12 people, and send it; read the created order and the app's log output.",
+    "environment": "local app with the seeded synthetic office manager; never production",
+    "checkpoints": "1. The menu shows the one button, and it opens the six-field form (criteria 1, 2)\n2. Sending the form creates the order with the request's details (criterion 3)\n3. The logs hold none of the form's personal data (criterion 4)",
+    "assumptions": "- Catering requests reuse POST /api/orders, as orders do today.\n- The seeded office manager and company are synthetic data.",
+    "open_questions": "- answered: which page PDP means (the menu, /menu)",
+    "parked_ideas": "- prices and invoices: pricing a catering order and invoicing the company (out of scope, said the human)",
+    "provenance": "Request: \"The PDP needs a CTA for B2B catering orders, and keep PII out of the logs. It belongs under Feature #60 (Catering).\"\nTerm: \"PDP\" → the menu, `/menu`, where each product has its tile; \"By PDP I mean the menu, /menu, where each product has its tile\"\nTerm: \"CTA\" → one call-to-action button that starts a catering order; \"Yes, a call to action: one button that starts a catering order\"\nTerm: \"B2B\" → offices that order trays of pastries for meetings; \"B2B means offices that order trays of pastries for meetings\"\nTerm: \"PII\" → customer names, emails, and phone numbers; \"PII is personal data: customer names, emails, and phone numbers\"\n1. confirmed (idea.slice/smallest-slice): \"Just an 'Order for your office' button on the menu page\"; facts: component:ProductTile\n2. confirmed (idea.slice/smallest-slice): \"a short form: company, name, email, phone, date, and how many people\"\n3. confirmed (idea.outcome/change): \"Every catering request should arrive as an order we can see\"; facts: route:/api/orders, event:order_submitted\n4. confirmed (request/scope): \"no customer name, email, or phone number may show up in any of our logs\" / \"customer names, emails, and phone numbers\""
+  },
+  "labels": [
+    "type:story",
+    "status:planned",
+    "effort:M"
+  ],
+  "parent": {
+    "number": 60,
+    "type": "feature"
+  },
+  "number": 61
+}

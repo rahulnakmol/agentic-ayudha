@@ -70,6 +70,9 @@ jobs:
   build:
     name: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read # the coverage ratchet reads a floor-waiver Decision
     steps:
       - name: Halt check (aayu halt, WP5.7)
         if: vars.AAYUDHA_HALT != ''
@@ -87,7 +90,16 @@ jobs:
       # go test includes TestSkillLint (embed_test.go): the WP3.1 skill lint (internal/skills) over the embedded skills/,
       # and tier 1 of the skill evals (internal/evals, TestTier1) over evals/cases (WP3.4).
       - name: Build, vet, test
-        run: go build ./... && go vet ./... && go test ./...
+        run: go build ./... && go vet ./... && go test -coverprofile=coverage.out ./...
+      # Appendix B S-4.3r (research P7, this repository only in 0.2): the coverage floor in ratchets.toml only tightens.
+      # Coverage below floor - margin fails; coverage at floor + 2 * margin or more fails until the PR tightens the floor
+      # with -update; a floor lower than the base's needs a new floor waiver a human accepted, which this reads from
+      # GitHub. No model and no secret: the job's own read token.
+      - name: Coverage ratchet (S-4.3r)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: go run ./internal/ratchet/cmd/ratchet -coverprofile coverage.out ${BASE_SHA:+-base "$BASE_SHA"}
       # WP7.7: an evolve PR (an evolve/ head branch, or a commit with the Aayudha-Evolve trailer; both change only with a
       # push, which re-runs this job) must add an eval case that reproduces its Feedback on the old skill and passes on the
       # new one, before any skill diff (eval-first). The gate works from the PR's base and head SHAs (commits base..head,

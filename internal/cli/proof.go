@@ -13,11 +13,15 @@ import (
 	"strings"
 	"time"
 
+	gh "github.com/google/go-github/v90/github"
+
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
+	"github.com/rahulnakmol/agentic-ayudha/internal/autonomy"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/initrepo"
+	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/cloud"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
@@ -332,6 +336,10 @@ type GateComment struct {
 	Expires    string       `json:"artifact_expires,omitempty"`
 	Report     proof.Report `json:"report"`
 	Comment    bool         `json:"comment_changed"`
+	// Risk and Weakened are read from the PR's diff (P6, founder decision 3):
+	// they point the human pass and approve nothing.
+	Risk     inspect.Risk        `json:"risk"`
+	Weakened []inspect.Weakening `json:"weakened,omitempty"`
 }
 
 // proofComment is the merge gate's aayudha/pack job (S-4.2b). It checks the
@@ -399,6 +407,9 @@ func (e *Env) proofComment(ctx context.Context, repo string, story int) error {
 	if d, err := strconv.Atoi(e.Getenv("AAYU_PACK_RETENTION_DAYS")); err == nil && d > 0 {
 		g.Expires = e.Now().UTC().AddDate(0, 0, d).Format(time.DateOnly)
 	}
+	if g.Risk, g.Weakened, err = e.prRisk(ctx, c, owner, name, p.PR, root); err != nil {
+		return Wrap(ExitExternal, err)
+	}
 	g.Report = proof.VerifyLocal(dir, p, exp)
 	if exp.CompletionGoalHash == "" {
 		g.Report.Problems = append(g.Report.Problems, fmt.Sprintf("no Ready snapshot at ledger %s", ready.LedgerPath(story)))
@@ -427,6 +438,32 @@ func (e *Env) proofComment(ctx context.Context, repo string, story int) error {
 	return nil
 }
 
+// prRisk reads PR n's diff and computes its risk line and weakened checks,
+// with the layers, never-layers, and CODEOWNERS of the base checkout at root.
+func (e *Env) prRisk(ctx context.Context, c *github.Client, owner, name string, n int, root string) (inspect.Risk, []inspect.Weakening, error) {
+	diff, _, err := c.REST.PullRequests.GetRaw(ctx, owner, name, n, gh.RawOptions{Type: gh.Diff})
+	if err != nil {
+		return inspect.Risk{}, nil, err
+	}
+	var never []string
+	if l, err := e.Config(); err == nil {
+		never = l.Config.Autonomy.Never
+	}
+	var rules []identity.CodeownersRule
+	for _, f := range []string{".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS"} {
+		if b, err := os.ReadFile(filepath.Join(root, f)); err == nil {
+			rules = identity.ParseCodeowners(string(b))
+			break
+		}
+	}
+	protected := func(p string) bool {
+		_, pattern, ok := identity.Owners(rules, p)
+		return ok && strings.Trim(pattern, "/*") != "" // a catch-all owner protects nothing in particular
+	}
+	files := inspect.ParseDiff(diff)
+	return inspect.RiskOf(files, autonomy.ReadLayers(root).Footprint, never, protected), inspect.Weakened(files), nil
+}
+
 // gateCommentBody renders the merge gate's proof comment: each Ready
 // criterion's verdict, the floors, the pack's hash, and where the pack is.
 func gateCommentBody(g GateComment, p *proof.Pack, crit []workitems.Criterion) string {
@@ -440,6 +477,21 @@ func gateCommentBody(g GateComment, p *proof.Pack, crit []workitems.Criterion) s
 	}
 	fmt.Fprintf(&b, "%s\n### Proof pack: %s\n\n", ProofMarker, verdict)
 	fmt.Fprintf(&b, "Story #%d at head `%s`, built by this pull request's merge gate run from what it ran.\n\n", g.Story, short(g.HeadSHA))
+	fmt.Fprintf(&b, "**Risk: %s**", g.Risk.Tier)
+	if len(g.Risk.Reasons) > 0 {
+		fmt.Fprintf(&b, " (%s)", strings.Join(g.Risk.Reasons, "; "))
+	}
+	if len(g.Risk.Look) > 0 {
+		fmt.Fprintf(&b, ". Look first at `%s`", strings.Join(g.Risk.Look, "`, `"))
+	}
+	b.WriteString(". The tier is computed from the diff; it approves nothing.\n\n")
+	if len(g.Weakened) > 0 {
+		b.WriteString("**Checks this PR weakens** (a PR may edit its own checks; a human decides whether this is right):\n\n")
+		for _, w := range g.Weakened {
+			fmt.Fprintf(&b, "- `%s`: %s\n", w.File, w.What)
+		}
+		b.WriteString("\n")
+	}
 	evidence := map[int][]string{}
 	for _, c := range p.Criteria {
 		evidence[c.ID] = c.Evidence

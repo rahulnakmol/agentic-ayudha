@@ -35,8 +35,8 @@ nothing; add `dev` and `rolling` when you want them.
 - **Every release is traceable.** A tag points at one commit, built by one workflow, from one gate run.
 - **Measurement starts on time.** `release` schedules the Goal's measurement when the work goes out.
 
-> **In the story:** benefits-qa reached `rolling` as `rolling-2026-10-12.4`. You can install that very snapshot
-> today, as [your first hour](start.md) shows. The first stable release, v0.1.0, has not been cut yet.
+> **In the story:** benefits-qa reached `rolling` as `rolling-2026-10-12.4`. Three days later, on 15 October 2026,
+> `main` got the first stable release, v0.1.0, which is what [your first hour](start.md) installs.
 
 The procedure, step by step, is in [Contributing](../../CONTRIBUTING.md). Terms are defined in the
 [glossary](../../GLOSSARY.md).

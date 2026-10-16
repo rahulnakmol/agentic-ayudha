@@ -22,6 +22,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/autonomy"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
+	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
@@ -46,6 +47,7 @@ type Source struct {
 	Never    []string
 	Suites   bool // read rule suites (needs admin), workflow runs, refs, and the licence inputs
 	Autonomy bool // read merged-PR history for corrections and streaks
+	Flow     bool // read the merge gate's runs for retro's flow metrics
 	Streak   int  // [autonomy] streak
 }
 
@@ -83,6 +85,11 @@ func Fetch(ctx context.Context, s Source, in *Inputs, d *Data) error {
 			return err
 		}
 		if err := d.fetchLicence(ctx, s, in, owner, name); err != nil {
+			return err
+		}
+	}
+	if s.Flow {
+		if err := d.fetchGateRuns(ctx, s, in, owner, name); err != nil {
 			return err
 		}
 	}
@@ -182,6 +189,9 @@ func (d *Data) fetchLedger(ctx context.Context, s Source, in *Inputs) error {
 			sh.PlanBypass = &PlanBypass{Layers: pr.Layers, By: pr.Bypass.RecordedBy, Comment: pr.Bypass.CommentURL}
 		}
 		d.Ships = append(d.Ships, sh)
+	}
+	if err := d.fetchFlowLedger(ctx, s); err != nil {
+		return err
 	}
 	reports, err := s.Tree.List(ctx, "audit")
 	if err != nil {
@@ -354,6 +364,9 @@ func (d *Data) fetchPRs(ctx context.Context, s Source, in *Inputs, owner, name s
 		}
 		pr := PR{Number: p.GetNumber(), Title: p.GetTitle(), Base: p.GetBase().GetRef(), Head: p.GetHead().GetRef(),
 			Author: p.GetUser().GetLogin(), MergedAt: p.GetMergedAt().UTC(), MergeSHA: p.GetMergeCommitSHA(), Body: p.GetBody()}
+		if s.Flow {
+			pr.HeadSHA = p.GetHead().GetSHA()
+		}
 		pr.LinkStories()
 		d.PRs = append(d.PRs, pr)
 	}
@@ -398,6 +411,12 @@ func (d *Data) fetchItems(ctx context.Context, s Source, in *Inputs, owner, name
 			e := Event{Kind: t.GetEvent(), Actor: t.GetActor().GetLogin(), At: t.GetCreatedAt().UTC(), Label: t.GetLabel().GetName(), Body: t.GetBody(), ID: t.GetID(), State: t.GetState()}
 			if e.Kind == "commented" && strings.HasPrefix(strings.TrimSpace(e.Body), "Solo-mode bypass") {
 				e.Suites = SuiteIDs(e.Body)
+			}
+			if e.Kind == "commented" && s.Flow {
+				e.Aayu = strings.Contains(e.Body, "<!-- aayudha:")
+				if strings.Contains(e.Body, inspect.Marker) && e.At.Before(in.Until) {
+					it.Inspect = reviewOf(inspect.ParseState(e.Body))
+				}
 			}
 			if len(e.Body) > MaxBody {
 				e.Body = strings.ToValidUTF8(e.Body[:MaxBody], "")
@@ -573,6 +592,9 @@ func (d *Data) fetchAutonomy(ctx context.Context, s Source, in *Inputs) error {
 		}
 	}
 	slices.SortStableFunc(d.Corrections, func(a, b autonomy.Correction) int { return strings.Compare(a.Key(), b.Key()) })
+	if s.Flow {
+		d.Bugs = bugsOf(issues)
+	}
 	for _, p := range prs {
 		if !s.Rules.Agent(p) {
 			continue

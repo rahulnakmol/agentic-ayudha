@@ -10,7 +10,8 @@ human leaves open goes into an open question, not into the story.
 ### Summary (`summary`, required)
 
 - Who is this for, what do they want to do, and why? Write it as `As a <who>, I want <what>, so that <why>.`
-- Which Feature does it belong to? (the `--parent` issue; a Story needs one at Ready)
+- Does it belong under an open Feature the facts show? (the `--parent` issue, optional: a Story is Ready without
+  one; never file a Feature, Initiative, or Goal just to give it a parent)
 
 ## Ready
 
@@ -55,12 +56,18 @@ asks for that outcome itself, and otherwise leave it to the floors.
 
 ### Links (`links`, optional)
 
-- Does this story depend on another one? One line each: `depends-on #N`.
+- Does this story depend on another one? One line each: `depends-on #N`, nothing else on the line. Leave the field
+  out when there is none; the parent Feature goes in `--parent`, never here.
 
 ## Spec record (when grilled from an idea)
 
 Written after the conversation (`aayu grill story --idea "<the human's words>"`); `grill` and `ready` check it. See the
 skill's "Spec record" for the exact lines.
+
+### Checkpoints (`checkpoints`, optional; required when grilled)
+
+- What can the human see or try at each step of the build? One per line, in build order:
+  `N. <what you can see or run> (criteria 1, 2)`. Every criterion is reached by one.
 
 ### Assumptions (`assumptions`, optional; required when grilled)
 
@@ -77,7 +84,8 @@ skill's "Spec record" for the exact lines.
 ### Provenance (`provenance`, optional; required when grilled)
 
 - `Request: "<the human's words>"`, then `Vague: "<qualifier>" → criteria N, M` (or `→ deferred: <why>`) for each vague
-  word, then one line per criterion: `N. stated|confirmed|default (<dimension>/<topic>): "<the human's words>"; facts: <id>`.
+  word, a `Term: "<abbreviation>" → <meaning>; "<the human's words>"` line for each abbreviation or jargon term of
+  the request (or `→ deferred: <why>`), then one line per criterion: `N. stated|confirmed|default (<dimension>/<topic>): "<the human's words>"; facts: <id>`.
 - A criterion that says where something is (a route, "on the review screen", "below the button") quotes every reply
   that names that place (`"…" / "…"`), and names the place instead of "that screen" (SKILL.md, Placement quotes).
 

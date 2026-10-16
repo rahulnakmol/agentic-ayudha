@@ -28,6 +28,9 @@ type Checkpoint struct {
 	Instrumentation []string `json:"instrumentation,omitempty"`
 	Rollback        string   `json:"rollback,omitempty"`
 	Criteria        []int    `json:"criteria,omitempty"` // Completion Goal criteria this checkpoint's tests prove
+	// Checks are the feature-map behaviour checks (<feature>.<check>, WP4.5b.5)
+	// that prove the same criteria; they go into the evidence map beside tests.
+	Checks []string `json:"checks,omitempty"`
 }
 
 // Review is the Engineering Manager's plan-time review, required when the

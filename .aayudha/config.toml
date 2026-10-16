@@ -15,6 +15,9 @@ channel = "file"
 # target; a story without screenshot or recording criteria never runs them. Budgets are the example's own.
 [verify]
 seed = ["examples/benefits-qa/deploy/serve.sh"]
+# The feature maps' maintain pass (D-4.5b.8): a headless Amp run on the founder's side (`amp -x`, loops/README.md)
+# follows the brief; Amp has no @-mention.
+maintainer = "amp"
 
 [verify.environments.local]
 url = "http://127.0.0.1:8787"
@@ -30,3 +33,9 @@ max_tbt_ms = 200
 acquisition = "benefits_visit"
 activation = "answer_grounded"
 activation_days = 7
+
+# The merge gate's reviewer: the ChatGPT Codex Connector is installed on this account and answered `@codex review`
+# live (founder decision 2026-10-15: no AI key in the merge gate). Cursor is installed too, but its family is the
+# model its user picks, so it reviews only once [inspect.app_families] names one.
+[inspect]
+apps = ["codex"]

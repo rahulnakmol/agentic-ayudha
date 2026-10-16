@@ -108,7 +108,7 @@ func (m *grillModel) next() {
 		kept := m.steps[: m.i+1 : m.i+1]
 		var rest []grillStep
 		for _, s := range m.steps[m.i+1:] {
-			if !strings.HasPrefix(s.ID, "dim:") {
+			if !ideaStep(s.ID) {
 				rest = append(rest, s)
 			}
 		}
@@ -188,7 +188,7 @@ func (m *grillModel) View() tea.View {
 	if s.ID == workitems.FieldCriteria {
 		var said []string
 		for _, d := range m.steps {
-			if strings.HasPrefix(d.ID, "dim:") && strings.TrimSpace(d.Value) != "" {
+			if ideaStep(d.ID) && strings.TrimSpace(d.Value) != "" {
 				said = append(said, fmt.Sprintf("  - %s: %s", d.Label, strings.TrimSpace(d.Value)))
 			}
 		}
@@ -255,26 +255,53 @@ func wrap(s string, width int, indent string) string {
 }
 
 func specRecordField(id string) bool {
-	return id == workitems.FieldAssumptions || id == workitems.FieldOpenQuestions || id == workitems.FieldParked || id == workitems.FieldProvenance
+	return id == workitems.FieldCheckpoints || id == workitems.FieldAssumptions || id == workitems.FieldOpenQuestions || id == workitems.FieldParked || id == workitems.FieldProvenance
 }
 
-// dimensionSteps are the questions an idea's vague qualifiers decompose
-// into: one per catalogue dimension, with its default and the facts of the
-// assessment it should cite.
+// ideaStep reports whether a step was inserted from the idea's assessment.
+func ideaStep(id string) bool { return strings.HasPrefix(id, "dim:") || strings.HasPrefix(id, "term:") }
+
+// outcomeQualifier keys the rough-idea questions of a request that names
+// nothing observable (WP5.8); it is not a qualifier of the request.
+const outcomeQualifier = "(outcome)"
+
+// dimensionSteps are the questions an idea's assessment raises, in the
+// gate's order: what each abbreviation means, then one question per
+// catalogue dimension of each vague qualifier, then, when the request names
+// nothing observable, the rough-idea pass. Each has its default and the
+// facts of the assessment it should cite.
 func dimensionSteps(a grill.Assessment) []grillStep {
 	var out []grillStep
+	for _, t := range a.Terms {
+		hints := []string{"- What does it mean here?"}
+		for _, m := range t.Meanings {
+			hints = append(hints, "- Usually: "+m)
+		}
+		hints = append(hints, "- Answer with its meaning in your words, or type defer (leave it open).")
+		out = append(out, grillStep{ID: "term:" + t.Text, Label: fmt.Sprintf("%q: what it means", t.Text), Hints: hints})
+	}
+	dimStep := func(qual, text string, d grill.Dimension) grillStep {
+		hints := []string{"- " + d.Ask, "- Default: " + d.Default}
+		n := 0
+		for _, f := range a.Facts {
+			if n < 3 && slices.Contains(d.Facts, f.Kind) {
+				hints = append(hints, "- Fact "+f.ID+": "+f.Text)
+				n++
+			}
+		}
+		hints = append(hints, "- Answer in your words, or type default (accept it), park (not now), or defer (leave it open).")
+		return grillStep{ID: "dim:" + qual + ":" + d.ID, Label: fmt.Sprintf("%s: %s", text, d.Name), Hints: hints}
+	}
 	for _, v := range a.Vague {
 		for _, d := range v.Dimensions {
-			hints := []string{"- " + d.Ask, "- Default: " + d.Default}
-			n := 0
-			for _, f := range a.Facts {
-				if n < 3 && slices.Contains(d.Facts, f.Kind) {
-					hints = append(hints, "- Fact "+f.ID+": "+f.Text)
-					n++
-				}
+			out = append(out, dimStep(v.Qualifier, fmt.Sprintf("%q", v.Text), d))
+		}
+	}
+	for _, r := range a.Gate.Reasons {
+		if r.Kind == grill.ReasonOutcome {
+			for _, d := range r.Dimensions {
+				out = append(out, dimStep(outcomeQualifier, "The idea", d))
 			}
-			hints = append(hints, "- Answer in your words, or type default (accept it), park (not now), or defer (leave it open).")
-			out = append(out, grillStep{ID: "dim:" + v.Qualifier + ":" + d.ID, Label: fmt.Sprintf("%q: %s", v.Text, d.Name), Hints: hints})
 		}
 	}
 	return out

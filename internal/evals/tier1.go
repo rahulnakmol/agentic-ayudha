@@ -18,6 +18,7 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/cli"
+	"github.com/rahulnakmol/agentic-ayudha/internal/grill"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
@@ -259,9 +260,11 @@ func doneActions(path string) []string {
 }
 
 // tier1Concrete checks a recorded grill conversation (WP5.3b): the spec it
-// produced is concrete and cites only facts the fixture has (Concrete), and
+// produced is concrete and cites only facts the fixture has (Concrete),
 // every recorded reply is what the case's scripted human answers to that
-// question's dimension, so the recording is the script's conversation.
+// question's dimension, so the recording is the script's conversation, and
+// the vagueness gate's verdict on the request is the case's and the
+// conversation obeys it (WP5.8).
 func tier1Concrete(c Case, assets fs.FS) []string {
 	var tr Transcript
 	if err := readJSON(filepath.Join(c.Dir, filepath.FromSlash(c.Transcript)), &tr); err != nil {
@@ -281,6 +284,29 @@ func tier1Concrete(c Case, assets fs.FS) []string {
 			for j, q := range x.Questions {
 				if want := h.Answer(q.Topic); x.Answers[j] != want {
 					bad = append(bad, fmt.Sprintf("exchange %d question %d (%s): the recorded answer is not the script's", i+1, j+1, q.Topic))
+				}
+			}
+		}
+	}
+	if c.Gate != "" {
+		a, _, err := c.Assess(assets, "story", tr.Request)
+		if err != nil {
+			return append(bad, err.Error())
+		}
+		var first Turn
+		if len(tr.Exchanges) > 0 {
+			first = Turn{Questions: tr.Exchanges[0].Questions, Done: tr.Exchanges[0].Done}
+		}
+		switch {
+		case a.Gate.Verdict != c.Gate:
+			bad = append(bad, fmt.Sprintf("gate: the request's verdict is %q, the case expects %q (%s)", a.Gate.Verdict, c.Gate, a.Gate.Summary()))
+		case GateFloor(a.Gate.Verdict, first) != "":
+			bad = append(bad, "gate: "+GateFloor(a.Gate.Verdict, first))
+		}
+		if c.Gate == grill.GatePass {
+			for i, x := range tr.Exchanges {
+				if len(x.Questions) > 0 {
+					bad = append(bad, fmt.Sprintf("gate: exchange %d asks %d question(s) about a concrete request", i+1, len(x.Questions)))
 				}
 			}
 		}

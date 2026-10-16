@@ -1,0 +1,13 @@
+{
+  "name": "quotes-api",
+  "version": "1.4.0",
+  "private": true,
+  "description": "Synthetic eval fixture: a shipping-quotes HTTP API that partners call at checkout.",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "express": "4.21.2"
+  }
+}

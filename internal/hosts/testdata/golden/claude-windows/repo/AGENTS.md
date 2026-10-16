@@ -19,4 +19,9 @@ Installed for: Claude Code. The `aayudha` MCP server serves the verbs as tools (
 Host hooks run `aayu hook <name>` only: `session-start` reports skill copies out of sync with the lock,
 `pre-tool` blocks agent tool calls while the `[budget]` breaker has paused agent lanes and blocks shell commands that
 run a human-only verb, and `status-line` shows where the work stands.
+
+Before you change anything for a request, run `aayu grill story --assess --idea "<the person's words>" --json` (the
+grill skill). On `unpack`, ask the person its questions, riskiest first, and wait for their answers before you file,
+ready, or build anything. Work only on the issue the person asked for: never pick up an open or Ready story on your
+own.
 <!-- END aayudha:hosts -->

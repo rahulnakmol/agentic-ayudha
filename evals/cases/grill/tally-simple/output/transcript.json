@@ -1,0 +1,102 @@
+{
+  "request": "Make the tally CLI simple to use. New users get lost. It belongs under Feature #70 (Getting started).",
+  "exchanges": [
+    {
+      "say": "You want tally to be simple for new users. Today it has 6 commands and 27 flags (command:tally); `tally add` needs 3 required flags and fails until you run `tally init` (command:tally add, README). Four questions, riskiest first.",
+      "questions": [
+        {
+          "topic": "simple.cli-first-run/first-command",
+          "ask": "What do new users type first? Today `tally add` needs `tally init` first and fails without ~/.tally/config.toml (README). Should the first add just work?",
+          "default": "The first `tally add` creates what it needs, because a required setup step is where new users get lost.",
+          "facts": [
+            "command:tally init",
+            "command:tally add"
+          ]
+        },
+        {
+          "topic": "simple.cli-surface/command-count",
+          "ask": "`tally add` has 7 flags today and requires --amount, --category, and --date (command:tally add). Which task should be simple, and which flags must stay required?",
+          "default": "Adding an expense, with the amount and category as plain words and every flag optional.",
+          "facts": [
+            "command:tally add",
+            "command:tally"
+          ]
+        },
+        {
+          "topic": "simple.cli-errors/error-messages",
+          "ask": "When a command fails today it prints `tally: missing required flag` with no hint. What should it say?",
+          "default": "The cause and the exact command to type instead.",
+          "facts": [
+            "code:cmd/tally/main.go"
+          ]
+        },
+        {
+          "topic": "simple.cli-help/help-text",
+          "ask": "There is no help screen beyond a one-line usage. Should `tally --help` fit one screen (24 lines) with an example?",
+          "default": "Usage, the commonest commands, and one example, in 24 lines.",
+          "facts": [
+            "command:tally"
+          ]
+        }
+      ],
+      "answers": [
+        {
+          "kind": "confirm",
+          "text": "The first thing people type is `tally add 12.50 lunch`, and it fails because they never ran `tally init`. It should just work: create what it needs on first use, in GBP like `tally init` does today."
+        },
+        {
+          "kind": "confirm",
+          "text": "Adding an expense is the task. `tally add` should take the amount and a category as plain words, with every flag optional."
+        },
+        {
+          "kind": "confirm",
+          "text": "When something is wrong it should say what to type instead."
+        },
+        {
+          "kind": "confirm",
+          "text": "Yes, one screen, 24 lines is fine, with an example of add."
+        }
+      ]
+    },
+    {
+      "say": "So: the first `tally add 12.50 lunch` just works, the amount and category are plain words, errors say what to type, and help fits one screen. Two more.",
+      "questions": [
+        {
+          "topic": "simple.cli-errors/exit-codes",
+          "ask": "Exit codes: every failure exits 1 today. Use 2 for a usage mistake, like a missing amount?",
+          "default": "2 for usage errors, 1 for the rest."
+        },
+        {
+          "topic": "simple.memory/remembered-choices",
+          "ask": "Should tally remember anything new, such as the last category?",
+          "default": "Nothing new."
+        },
+        {
+          "topic": "other/fewer-commands",
+          "ask": "Six commands and 27 flags in all (command:tally). Worth dropping report and export to make it simpler?",
+          "facts": [
+            "command:tally"
+          ]
+        }
+      ],
+      "answers": [
+        {
+          "kind": "default",
+          "text": "Your default is fine."
+        },
+        {
+          "kind": "park",
+          "text": "Don't remember anything new."
+        },
+        {
+          "kind": "park",
+          "text": "That is not part of what I asked for; park it."
+        }
+      ]
+    },
+    {
+      "say": "Here is what done looks like. Goal: someone who just installed tally logs their first expense without reading anything. Done when: on a fresh machine `tally add 12.50 lunch` exits 0 and `tally list` shows it in GBP; `tally add` has 0 required flags and takes the amount and category as words; `tally add` with nothing exits 2 and shows the example to type; and `tally --help` fits 24 lines with that example. Dropping report and export is parked.",
+      "done": true
+    }
+  ]
+}

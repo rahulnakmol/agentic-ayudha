@@ -1,0 +1,7 @@
+# The simulated human of grill/bakery-concrete (WP5.8): the bakery's owner. The skill tags each question with a topic, <dimension>/<key>, the keys
+# coming from the catalogues' Topics (none: a concrete request is never asked about), term/<term> for an abbreviation, or the request topics in the skill. The human
+# answers by topic, else by the topic's dimension, else with the fallback, which parks it: an unscripted idea never becomes a
+# requirement. kind: confirm (states or agrees), default (accepts the skill's offered default), park, or defer.
+max_rounds = 1
+readback = "Yes, that is what done looks like."
+fallback = { kind = "park", text = "I asked for exactly what I wrote; park anything else." }

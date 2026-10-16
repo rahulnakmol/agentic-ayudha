@@ -3,7 +3,7 @@
 // the repository root by `go generate ./...` through the directive in embed.go.
 //
 // Outputs:
-//   - README.md: only the regions between the BEGIN/END GENERATED markers
+//   - docs/README.md: only the regions between the BEGIN/END GENERATED markers (the verbs and plumbing tables)
 //   - docs/guide/when-to-use-what.md: only the verb-map region (the verbs by journey stage);
 //     docs/guide/journey-*.md: only the stage-verbs region (the verbs of that step)
 //   - LAYERS.md and docs/RACI.md: whole files
@@ -104,10 +104,10 @@ func mode(c verbs.Command) string {
 	return string(c.Mode)
 }
 
-// ---- README.md -------------------------------------------------------------
+// ---- docs/README.md --------------------------------------------------------
 
 func genReadme() error {
-	const path = "README.md"
+	const path = "docs/README.md"
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return err

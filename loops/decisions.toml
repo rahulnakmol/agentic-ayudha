@@ -1,5 +1,5 @@
-# Decision SLA sweep (WP5.6, V8) three times a business day. The cron is in [time] tz.
+# Decision SLA sweep (WP5.6, V8) once each weekday morning (Appendix B D-7.1f). The cron is in [time] tz.
 description = "Decision SLA sweep: page and escalate Decisions past their SLA; apply reversible recommendations provisionally."
 command = ["decide"]
-cron = "15 9,13,17 * * 1-5"
+cron = "15 9 * * 1-5"
 bot = true

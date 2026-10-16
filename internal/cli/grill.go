@@ -110,12 +110,14 @@ func runGrill(ctx context.Context, e *Env, in Values) error {
 					a = got
 				}
 			}
-			if a.Facts == nil { // outside a checkout: the qualifiers still decompose
+			if a.Facts == nil { // outside a checkout: the qualifiers and terms still decompose
 				for _, h := range cat.Find(idea) {
 					if dom, ok := cat.Domain(h.Domain); ok && !slices.ContainsFunc(a.Vague, func(v grill.VagueHit) bool { return v.Qualifier == h.Qualifier }) {
 						a.Vague = append(a.Vague, grill.VagueHit{Qualifier: h.Qualifier, Text: h.Text, Domain: dom.ID, Dimensions: dom.Dimensions})
 					}
 				}
+				a.Terms = cat.Abbreviations(idea)
+				a.Gate = grill.GateFor(cat, a)
 			}
 			return dimensionSteps(a)
 		}

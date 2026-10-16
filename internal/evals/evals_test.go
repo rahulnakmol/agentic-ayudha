@@ -3,10 +3,14 @@ package evals
 import (
 	"context"
 	"encoding/json"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -252,6 +256,52 @@ func TestTier2WithFakeModels(t *testing.T) {
 	}
 	if !strings.Contains(fake.Requests[0].Messages[0].Content, `<untrusted source="eval-input">`) {
 		t.Fatal("eval input reached the skill model unwrapped")
+	}
+}
+
+// resetting is a model client whose listed calls (1-based) fail with a dropped
+// connection, the way the AI gateway's resets arrived in run 38841610907.
+type resetting struct {
+	*models.Fake
+	n     int
+	drops []int
+}
+
+func (r *resetting) Complete(ctx context.Context, req models.Request) (models.Response, error) {
+	r.n++
+	if slices.Contains(r.drops, r.n) {
+		return models.Response{}, &url.Error{Op: "Post", URL: "https://gateway.example/v1/messages", Err: &net.OpError{Op: "read", Net: "tcp", Err: syscall.ECONNRESET}}
+	}
+	return r.Fake.Complete(ctx, req)
+}
+
+// TestTier2RetriesDroppedConnection: a reset is retried once and recorded on
+// the call, so the run is scored, not lost (WP5.8); a second reset in a row
+// fails the run, so a broken endpoint still cannot pass silently.
+func TestTier2RetriesDroppedConnection(t *testing.T) {
+	cases, _ := stubCases(root)
+	item, _ := os.ReadFile(filepath.Join(root, "evals", "cases", "stub", "csv-export", "output", "issue.json"))
+	var replies []models.Response
+	for i := 0; i < 5; i++ {
+		replies = append(replies, models.Response{Text: string(item)}, models.Response{Text: `{"score": 5, "reason": "covers the request"}`})
+	}
+	// Call 1 (run 1's skill) drops once; calls 5 and 6 (run 2's judge, then its retry) both drop.
+	client := &resetting{Fake: &models.Fake{Replies: replies}, drops: []int{1, 5, 6}}
+	h := harness(t, nil, "gpt-6.1-sol")
+	h.Gateway.Client = func(models.Route, string) models.Client { return client }
+	res, err := h.Tier2(context.Background(), cases, "abc", "dev", time.Unix(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs := res.Cases[0].Runs
+	if r := runs[0]; r.Status == RunError || r.Score != 5 || !strings.Contains(r.Calls[0].Retried, "connection reset") || r.Calls[1].Retried != "" {
+		t.Errorf("run 1, one reset: %+v", r)
+	}
+	if r := runs[1]; r.Status != RunError || !strings.Contains(r.Error, "connection reset") {
+		t.Errorf("run 2, two resets in a row: %+v", r)
+	}
+	if res.Cases[0].Errors != 1 {
+		t.Errorf("%d errors, want 1 (run 2)", res.Cases[0].Errors)
 	}
 }
 
@@ -831,8 +881,13 @@ func TestGroups(t *testing.T) {
 		t.Fatalf("review group: %v, cap %v, k %d", err, rv.MaxUSD, rv.K)
 	}
 	// D-5.3b.g: the grill conversations have their own capped, advisory group; skills is back to 6 USD without them.
+	// D-5.8c: six conversation cases, 40 USD.
 	cg, convs, err := cfg.ForGroup("conversations", all)
-	if err != nil || cg.MaxUSD != 20 || len(convs) != 2 || convs[0].ID != "grill/bakery-ux" || convs[1].ID != "grill/search-fast" || cfg.Gates("conversations") {
+	var convIDs []string
+	for _, c := range convs {
+		convIDs = append(convIDs, c.ID)
+	}
+	if err != nil || cg.MaxUSD != 60 || strings.Join(convIDs, " ") != "grill/bakery-concrete grill/bakery-motion grill/bakery-terms grill/bakery-ux grill/quotes-fast grill/search-fast grill/slugkit-simple grill/tally-simple" || cfg.Gates("conversations") {
 		t.Fatalf("conversations group: %v, cap %v, %d cases, gates %v", err, cg.MaxUSD, len(convs), cfg.Gates("conversations"))
 	}
 	// D-5.3b.h: the advisory conversation and persona groups never run nightly (evals.yml scopes their pushes to dev).
@@ -1262,48 +1317,71 @@ func TestTier1GrillConversation(t *testing.T) {
 		issue func(it *workitems.Item)
 		tr    func(tr *Transcript)
 		want  []string
+		id    string // the case; empty: grill/bakery-ux
 	}{
-		{"recorded", nil, nil, nil},
+		{"recorded", nil, nil, nil, ""},
 		{"vague criterion", func(it *workitems.Item) {
 			it.Fields["completion_goal"] = strings.Replace(it.Fields["completion_goal"], "a screen of its own with the order number and the chosen pickup time", "the confirmation feels polished", 1)
-		}, nil, []string{`criterion 2 says "polished" with nothing to observe`}},
+		}, nil, []string{`criterion 2 says "polished" with nothing to observe`}, ""},
 		{"parked idea leaks", func(it *workitems.Item) {
 			it.Fields["completion_goal"] += "\n7. [screenshot] state: the order confirmation; expected: a loyalty stamp card with 1 of 10 stamps"
 			it.Fields["provenance"] += "\n7. confirmed (other): \"That is not part of what I asked for; park it.\""
-		}, nil, []string{`parked idea "loyalty stamp card" appears in the Completion Goal`, "criterion 7 comes from other, which the human park"}},
+		}, nil, []string{`parked idea "loyalty stamp card" appears in the Completion Goal`, "criterion 7 comes from other, which the human park"}, ""},
 		{"unknown fact", func(it *workitems.Item) {
 			it.Fields["provenance"] = strings.Replace(it.Fields["provenance"], "facts: gap:error:/order", "facts: gap:error:/checkout", 1)
-		}, nil, []string{`criterion 4 cites "gap:error:/checkout"`}},
+		}, nil, []string{`criterion 4 cites "gap:error:/checkout"`}, ""},
 		{"words never said", func(it *workitems.Item) {
 			it.Fields["provenance"] = strings.Replace(it.Fields["provenance"], `"Three screens at most"`, `"two screens are plenty"`, 1)
-		}, nil, []string{`criterion 1 quotes "two screens are plenty", which the human never said`}},
+		}, nil, []string{`criterion 1 quotes "two screens are plenty", which the human never said`}, ""},
 		{"one of two quotes never said", func(it *workitems.Item) {
 			it.Fields["provenance"] = strings.Replace(it.Fields["provenance"], `"they see an order number and the pickup time"`, `"they get a text message"`, 1)
-		}, nil, []string{`criterion 2 quotes "they get a text message", which the human never said`}},
+		}, nil, []string{`criterion 2 quotes "they get a text message", which the human never said`}, ""},
 		{"elided quote", func(it *workitems.Item) {
 			it.Fields["provenance"] = strings.Replace(it.Fields["provenance"], `"Three screens at most"`, `"Five screens is too many... Three screens at most"`, 1)
-		}, nil, nil},
+		}, nil, nil, ""},
 		{"unasked topic", func(it *workitems.Item) {
 			it.Fields["provenance"] = strings.Replace(it.Fields["provenance"], "6. confirmed (ux.consistency/tokens-and-components)", "6. confirmed (ux.consistency/new-components)", 1)
-		}, nil, []string{"criterion 6 comes from ux.consistency/new-components, which the human was never asked about"}},
+		}, nil, []string{"criterion 6 comes from ux.consistency/new-components, which the human was never asked about"}, ""},
 		{"unasked dimension", func(it *workitems.Item) {
 			it.Fields["provenance"] = strings.Replace(it.Fields["provenance"], "6. confirmed (ux.consistency/tokens-and-components)", "6. confirmed (ux.performance)", 1)
-		}, nil, []string{"criterion 6 comes from ux.performance, which the human was never asked about"}},
+		}, nil, []string{"criterion 6 comes from ux.performance, which the human was never asked about"}, ""},
 		{"placement the human never confirmed", func(it *workitems.Item) {
 			it.Fields["completion_goal"] = strings.Replace(it.Fields["completion_goal"], "are shown on the review screen before paying", "are shown above the \"Pay now\" button", 1)
-		}, nil, []string{`criterion 3 decides where something goes ("above")`}},
+		}, nil, []string{`criterion 3 decides where something goes ("above")`}, ""},
 		{"confirmation placed on a screen the human did not choose", func(it *workitems.Item) {
 			it.Fields["completion_goal"] = strings.Replace(it.Fields["completion_goal"], "expected: a screen of its own with the order number", "expected: on the review screen, the order number", 1)
 			it.Fields["provenance"] = strings.Replace(it.Fields["provenance"], `"The confirmation is its own screen after paying" / `, "", 1)
-		}, nil, []string{`criterion 2 decides where something goes ("on the review screen")`}},
+		}, nil, []string{`criterion 2 decides where something goes ("on the review screen")`}, ""},
 		{"default not accepted", func(it *workitems.Item) {
 			it.Fields["provenance"] = strings.Replace(it.Fields["provenance"], "1. confirmed (ux.steps/screen-count)", "1. default (ux.steps/screen-count)", 1)
-		}, nil, []string{"criterion 1 claims an accepted default on ux.steps/screen-count"}},
+		}, nil, []string{"criterion 1 claims an accepted default on ux.steps/screen-count"}, ""},
 		{"not the script's replies", nil, func(tr *Transcript) {
 			tr.Exchanges[0].Answers[1] = Answer{Kind: KindConfirm, Text: "Five screens is fine."}
-		}, []string{"exchange 1 question 2 (ux.steps/screen-count): the recorded answer is not the script's"}},
+		}, []string{"exchange 1 question 2 (ux.steps/screen-count): the recorded answer is not the script's"}, ""},
+		// WP5.8: terms, checkpoints, and the gate.
+		{"term without its meaning", func(it *workitems.Item) {
+			it.Fields["provenance"] = regexp.MustCompile(`(?m)^Term: "PDP".*\n`).ReplaceAllString(it.Fields["provenance"], "")
+		}, nil, []string{"the request says \"PDP\" but no `Term:` line records the meaning the human confirmed"}, "grill/bakery-terms"},
+		{"term meaning the human never gave", func(it *workitems.Item) {
+			it.Fields["provenance"] = strings.Replace(it.Fields["provenance"], `"B2B means offices that order trays of pastries for meetings"`, `"B2B means a portal for business customers"`, 1)
+		}, nil, []string{`fidelity: term "B2B" quotes "B2B means a portal for business customers", which the human never said`}, "grill/bakery-terms"},
+		{"criterion no checkpoint reaches", func(it *workitems.Item) {
+			it.Fields["checkpoints"] = strings.Replace(it.Fields["checkpoints"], "(criteria 3, 4)", "(criterion 3)", 1)
+		}, nil, []string{"no checkpoint reaches criterion 4"}, "grill/bakery-motion"},
+		{"no checkpoints", func(it *workitems.Item) { delete(it.Fields, "checkpoints") }, nil,
+			[]string{"checkpoints: a grilled spec lists its checkpoints"}, "grill/tally-simple"},
+		{"questions on a concrete request", nil, func(tr *Transcript) {
+			tr.Exchanges = append([]Exchange{{Say: "A few questions first.", Questions: []Question{{Topic: "request/scope", Ask: "Which currency?"}},
+				Answers: []Answer{{Kind: KindPark, Text: "I asked for exactly what I wrote; park anything else."}}}}, tr.Exchanges...)
+		}, []string{"gate: the gate passed a concrete request, but the skill asked 1 question(s)"}, "grill/bakery-concrete"},
+		{"no stop on a vague request", nil, func(tr *Transcript) { tr.Exchanges = tr.Exchanges[len(tr.Exchanges)-1:] },
+			[]string{"gate: the gate said unpack, but the skill's first turn asked nothing"}, "grill/bakery-motion"},
 	} {
-		c := conversationCase(t, "grill/bakery-ux")
+		id := tc.id
+		if id == "" {
+			id = "grill/bakery-ux"
+		}
+		c := conversationCase(t, id)
 		if tc.issue != nil {
 			var it workitems.Item
 			editJSON(t, filepath.Join(c.Dir, "output", "issue.json"), &it, func() { tc.issue(&it) })
@@ -1437,6 +1515,28 @@ func TestTier2GrillConversation(t *testing.T) {
 		!strings.Contains(fake.Requests[4].Messages[len(fake.Requests[4].Messages)-1].Content, "write the spec now") {
 		t.Fatalf("a skill that never finishes: %+v", run)
 	}
+
+	// WP5.8: the gate passes a concrete request, so the recorded draft in the first turn scores, and a question there
+	// is friction, scored 1 without the judge.
+	cc := conversationCase(t, "grill/bakery-concrete")
+	fake = &models.Fake{Replies: conversationReplies(t, cc, nil)}
+	h = harness(t, fake, "gpt-6.1-sol")
+	h.Config.K = 1
+	if res, err = h.Tier2(context.Background(), []Case{cc}, "abc", "dev", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if run := res.Cases[0].Runs[0]; run.Score != 5 || len(fake.Requests) != 2 {
+		t.Fatalf("a concrete request drafted at once: %+v (%d calls)", run, len(fake.Requests))
+	}
+	fake = &models.Fake{Replies: []models.Response{{Text: string(ask)}}}
+	h = harness(t, fake, "gpt-6.1-sol")
+	h.Config.K = 1
+	if res, err = h.Tier2(context.Background(), []Case{cc}, "abc", "dev", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if run := res.Cases[0].Runs[0]; run.Score != 1 || !strings.Contains(run.Floor, "the gate passed a concrete request, but the skill asked 1 question(s)") || len(fake.Requests) != 1 {
+		t.Fatalf("a question on a concrete request: %+v (%d calls)", run, len(fake.Requests))
+	}
 }
 
 // D-5.3b.g: the search case's scope rule is about result caching, not a
@@ -1462,6 +1562,35 @@ func TestGrillSearchScopeCaching(t *testing.T) {
 		bad := c.OutOfScope(it)
 		if strings.Contains(crit, "warm and cold") != (len(bad) == 0) {
 			t.Errorf("%q: %v", crit, bad)
+		}
+	}
+}
+
+// D-5.8f and D-5.8g: a case's rule rules something out, so a criterion that
+// honours it ("with no price and no invoice", "no new option") passes and one
+// that adds it fails.
+func TestGrillScopeAllowsNegation(t *testing.T) {
+	for id, crits := range map[string]map[string]bool{
+		"grill/bakery-terms": {
+			"1 new order is recorded holding those 6 values, with no price and no invoice": true,
+			"the order has no prices or invoices yet":                                      true,
+			"the form shows the price for each tray":                                       false,
+			"no deposit, and an invoice is emailed to the office":                          false,
+		},
+		"grill/slugkit-simple": {
+			"`createSlugger` accepts the same five options as today and no new option": true,
+			"`slugify` takes a new option for the separator":                           false,
+		},
+	} {
+		c, err := LoadCase(filepath.Join(root, "evals", "cases", id))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for crit, ok := range crits {
+			it := workitems.Item{Title: "x", Fields: map[string]string{"completion_goal": "1. [api-trace] state: the seeded input; expected: " + crit}}
+			if bad := c.OutOfScope(it); (len(bad) == 0) != ok {
+				t.Errorf("%s %q: %v", id, crit, bad)
+			}
 		}
 	}
 }

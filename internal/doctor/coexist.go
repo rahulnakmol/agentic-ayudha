@@ -16,7 +16,7 @@ import (
 // its rulesets alongside existing ones, and maps branch names in config
 // instead of renaming anything.
 var (
-	initWorkflows = []string{"aayudha-token.yml", "aayudha-ready-guard.yml", "aayudha-triage.yml"}
+	initWorkflows = []string{"aayudha-token.yml", "aayudha-ready-guard.yml"}
 	initBranches  = []string{"dev", "rolling", "main", "ledger"}
 )
 

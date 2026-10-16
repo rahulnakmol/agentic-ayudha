@@ -1,7 +1,7 @@
 # The verb registry and code generation
 
 Every command aayudha has is declared once, as Go data, in `internal/verbs/registry.go`. The CLI reads that data
-when it starts, and `go generate ./...` writes the README tables, the RACI (who is Responsible, Accountable,
+when it starts, and `go generate ./...` writes the verb and plumbing tables in `docs/README.md`, the RACI (who is Responsible, Accountable,
 Consulted, and Informed), the layer map, the skill frontmatter, and the MCP tool schemas from it. CI fails when any
 generated file differs from what the generators would write. This exists so that the docs, the skills, and the
 binary cannot disagree about what a verb is, who owns it, or what it may touch.
@@ -22,7 +22,7 @@ The registry holds more than verbs:
 - `Plumbing`: the 15 plumbing commands, built with the `plumb` helper (no lane, no layers, CLI only).
 - `Seats`: the twelve seats.
 - `LayerTable`: the nine layers (L01 to L09), each with one owner seat and the path globs that place a file in it.
-- `Hosts`: Amp, Cursor, and Claude Code, with model families a host cannot run.
+- `Hosts`: Amp, Cursor, Claude Code, and OpenAI Codex, with model families a host cannot run.
 - `Lanes`: the six model lanes (`build`, `spec`, `plan`, `review`, `ui-review`, `chore`) with per-host defaults.
 - `Gates`: the named preconditions a command may declare, such as `merge-gate` and `human-pass`.
 - `Stages`: the journey stages, in reading order. Every verb has exactly one.
@@ -109,13 +109,13 @@ root (or reaches it), writes only when bytes differ, and is deterministic.
 
 | Generator | Source | Writes |
 |---|---|---|
-| `internal/verbs/gen` | the registry and `raci.go` | `README.md` verb and plumbing tables; the verb map in `docs/guide/when-to-use-what.md`; `LAYERS.md`; `docs/RACI.md`; the RACI region of each `seats/<seat>/CHARTER.md`; the `aayudha:raci` section of `AGENTS.md`; `skills/<verb>/SKILL.md` frontmatter; `internal/mcp/schemas/<verb>.json`; `internal/config/schema.json` from the config structs |
+| `internal/verbs/gen` | the registry and `raci.go` | `docs/README.md` verb and plumbing tables; the verb map in `docs/guide/when-to-use-what.md`; `LAYERS.md`; `docs/RACI.md`; the RACI region of each `seats/<seat>/CHARTER.md`; the `aayudha:raci` section of `AGENTS.md`; `skills/<verb>/SKILL.md` frontmatter; `internal/mcp/schemas/<verb>.json`; `internal/config/schema.json` from the config structs |
 | `internal/config/gen` | `internal/config/defaults.toml` | `CONSTRAINTS.md` |
 | `internal/workitems/gen` | the work-item schema in `internal/workitems` | `work-items/forms/aayudha-<type>.yml` and a region of `work-items/README.md` |
 | `internal/loops/gen` | `loops/*.toml` | `.github/workflows/aayudha-loops.yml`, `loops/amp/<name>.json`, `loops/cursor/aayudha-loops.tf` |
 | `internal/tell/gen` | `docs/guide/img/*.diagram` | the `.svg` beside each, drawn by the brief diagram renderer |
 
-Partial files are edited only between markers, such as `<!-- BEGIN GENERATED: verbs -->` in the README. A
+Partial files are edited only between markers, such as `<!-- BEGIN GENERATED: verbs -->` in `docs/README.md`. A
 `SKILL.md` keeps its hand-written body: the generator replaces only the leading frontmatter block. Stale outputs
 are handled on purpose. Stale MCP schemas and SVGs are deleted. A `SKILL.md` for a command without the skill
 surface makes generation fail, because its body is hand-written and should not vanish silently. The config
@@ -210,8 +210,8 @@ if the second run changes anything.
 8. The CLI lists every registry command, and an unbuilt one names its work package. Enforced in
    `internal/cli/cli_test.go` (`TestHelpNamesAayuAndListsRegistry`, `TestNotImplementedNamesWP`).
 
-> **Honest status:** `SkillVersion` is still `"0.0.0"`, so every generated frontmatter says `version: "0.0.0"`. No
-> v0.1.0 release exists yet; the latest build is the rolling snapshot rolling-2026-10-12.4.
+> **Honest status:** `SkillVersion` is still `"0.0.0"`, so every generated frontmatter says `version: "0.0.0"`,
+> even in the v0.1.0 release: the skill version is not yet tied to the release version.
 
 ## Where it lives in the code
 

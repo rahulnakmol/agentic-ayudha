@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io/fs"
 	"maps"
 	"net/http"
 	"os"
@@ -22,17 +23,15 @@ import (
 	"golang.org/x/crypto/nacl/box"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
+	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 )
 
-// The Ready guard (WP2.7) and triage (WP2.9) templates init --gates installs.
+// The Ready guard (WP2.7) template init --gates installs.
 //
 //go:embed aayudha-ready-guard.yml
 var readyGuardTemplate string
-
-//go:embed aayudha-triage.yml
-var triageTemplate string
 
 //go:embed aayudha-streak.yml
 var streakTemplate string
@@ -44,12 +43,11 @@ var mergeGateTemplate string
 var opsTemplate string
 
 // Gate workflows `init --gates` installs: exactly the ones whose WP this binary
-// contains (rule 1a): the WP1.4 broker, the WP2.7 Ready guard, the WP2.9 triage, the WP4.8 merge gate, the WP5.6 ops
-// executor, and the WP5.7 streak. The WP7.1 loops workflow is rendered from the checkout's loops/*.toml (Extras.Loops).
+// contains (rule 1a): the WP1.4 broker, the WP2.7 Ready guard, the WP4.8 merge gate, the WP5.6 ops executor, and the
+// WP5.7 streak. None calls a model: the WP2.9 triage workflow is retired (doctor.RetiredWorkflows, Appendix B S-2.9b). The WP7.1 loops workflow is rendered from the checkout's loops/*.toml (Extras.Loops).
 const (
 	TokenWorkflow      = "aayudha-token.yml"
 	ReadyGuardWorkflow = "aayudha-ready-guard.yml"
-	TriageWorkflow     = "aayudha-triage.yml"
 	StreakWorkflow     = "aayudha-streak.yml"
 	MergeGateWorkflow  = "aayudha-merge-gate.yml"
 	OpsWorkflow        = "aayudha-ops.yml"
@@ -61,7 +59,6 @@ func GateWorkflows(version string) map[string][]byte {
 	return map[string][]byte{
 		TokenWorkflow:      identity.BrokerWorkflow,
 		ReadyGuardWorkflow: []byte(strings.ReplaceAll(readyGuardTemplate, "{{VERSION}}", GuardVersion(version))),
-		TriageWorkflow:     []byte(strings.ReplaceAll(triageTemplate, "{{VERSION}}", GuardVersion(version))),
 		StreakWorkflow:     []byte(strings.ReplaceAll(streakTemplate, "{{VERSION}}", GuardVersion(version))),
 		MergeGateWorkflow:  []byte(strings.ReplaceAll(mergeGateTemplate, "{{VERSION}}", GuardVersion(version))),
 		OpsWorkflow:        []byte(strings.ReplaceAll(opsTemplate, "{{VERSION}}", GuardVersion(version))),
@@ -81,8 +78,13 @@ func GuardVersion(v string) string {
 
 // Extras are the opt-in init flags (WP2.6).
 type Extras struct {
-	Projects, Gates, Identity, Integrations bool
-	Version                                 string
+	Projects, Gates, Identity, Integrations, VerifySkill bool
+	Version                                              string
+	// Assets are the embedded asset trees (hosts/verify-skill/ for --verify-skill).
+	Assets fs.FS
+	// Maintainer is the agent the human chose to maintain the feature maps
+	// (--verify-skill, D-4.5b.8), written as [verify] maintainer; "" writes none.
+	Maintainer string
 	// Loops are the rendered loops/*.toml of the checkout (WP7.1), by path:
 	// the Actions fallback and the Amp and Cursor files; --gates writes them.
 	Loops map[string][]byte
@@ -101,11 +103,14 @@ type Extras struct {
 // RunExtras performs the requested extras after the core steps. Each is
 // idempotent: a second run finds what the first created and changes nothing.
 func (in *Init) RunExtras(ctx context.Context, x Extras) error {
+	if err := in.retired(x); err != nil {
+		return err
+	}
 	for _, s := range []struct {
 		on   bool
 		name string
 		run  func(context.Context, Extras) error
-	}{{x.Gates, "gates", in.gates}, {x.Projects, "projects", in.projects}, {x.Identity, "identity-app", in.app}, {x.Integrations, "integrations", in.integrations}} {
+	}{{x.Gates, "gates", in.gates}, {x.Projects, "projects", in.projects}, {x.Identity, "identity-app", in.app}, {x.Integrations, "integrations", in.integrations}, {x.VerifySkill, "verify-skill", in.verifySkill}} {
 		if !s.on {
 			continue
 		}
@@ -117,6 +122,29 @@ func (in *Init) RunExtras(ctx context.Context, x Extras) error {
 		if err := in.save(); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// retired reports each workflow an earlier init --gates installed that this
+// version does not (doctor.RetiredWorkflows), and removes it when the human
+// confirms. It runs on every init, with or without --gates.
+func (in *Init) retired(x Extras) error {
+	for _, f := range doctor.RetiredAt(in.Root) {
+		path := ".github/workflows/" + f.File
+		switch {
+		case in.dry():
+			in.note("retired", "file", path, "planned", "remove: "+f.Why)
+			continue
+		case x.Confirm == nil || !x.Confirm(fmt.Sprintf("Retired workflow: %s %s. Remove it?", path, f.Why)):
+			in.note("retired", "file", path, "kept", "retired: "+f.Why+"; delete it, or rerun init and confirm")
+			continue
+		}
+		if err := os.Remove(filepath.Join(in.Root, filepath.FromSlash(path))); err != nil {
+			return err
+		}
+		in.forgetFile(path)
+		in.note("retired", "file", path, "deleted", f.Why)
 	}
 	return nil
 }
@@ -289,22 +317,22 @@ func (in *Init) app(ctx context.Context, x Extras) error {
 }
 
 // ledgerBypassApp adds the bot App to the ledger ruleset's bypass actors, for
-// agent lanes, beside the admin role: `aayu ship`, run by a human, lands the
-// merge gate's pack and the ship record under the human's identity (S-4.2b;
-// before 0.2 the App replaced the admin role, Appendix B D1).
+// agent lanes, beside the write role: `aayu ship`, run by any human with
+// write access, lands the merge gate's pack and the ship record under that
+// human's identity (S-4.2b, D-4.2b.h; before 0.2 the App replaced the admin
+// role, Appendix B D1).
 func (in *Init) ledgerBypassApp(ctx context.Context, appID int64) error {
 	o, ok := in.State.Object("ruleset", LedgerRuleset)
 	if !ok {
 		return nil
 	}
 	path := "/repos/" + in.Repo.FullName + "/rulesets/" + o.ID
-	body := map[string]any{"bypass_actors": []map[string]any{{"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always"},
-		{"actor_id": appID, "actor_type": "Integration", "bypass_mode": "always"}}}
+	body := map[string]any{"bypass_actors": []map[string]any{writeRole, {"actor_id": appID, "actor_type": "Integration", "bypass_mode": "always"}}}
 	_, err := in.GH.Write(ctx, actions.Action{Kind: "github.ruleset.update", Target: in.Repo.FullName, IdempotencyKey: in.key("ruleset-bypass"),
 		Request: &actions.Request{Method: http.MethodPut, Path: path}, Payload: body},
 		func(ctx context.Context) (any, error) { return nil, in.rest(ctx, http.MethodPut, path, body, nil) })
 	if err == nil {
-		in.note("identity", "ruleset", o.Name+" bypass", "written", "the bot App joins the admin role as a ledger writer")
+		in.note("identity", "ruleset", o.Name+" bypass", "written", "the bot App joins the write role as a ledger writer")
 	}
 	return err
 }

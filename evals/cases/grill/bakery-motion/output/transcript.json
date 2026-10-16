@@ -1,0 +1,136 @@
+{
+  "request": "Make ordering feel slick, with nice animations and transitions between the steps. It belongs under Feature #40 (Online ordering).",
+  "exchanges": [
+    {
+      "say": "You want ordering to feel slick, with nice animations and transitions. I read \"slick\" and \"nice\" as feelings and \"animations\" and \"transitions\" as motion we still have to pin down. Today the only motion is a 150 ms button fade (motion:web/styles/buttons.css), nothing honours reduced motion (gap:reduced-motion), and the order flow is five steps (flow:/order). Four questions, riskiest first.",
+      "questions": [
+        {
+          "topic": "motion.purpose/moments",
+          "ask": "Which moments should move? Today the only motion is the buttons' 150 ms fade (motion:web/styles/buttons.css), and the order flow is five steps (flow:/order). I'd start with moving between steps and adding to the basket. OK?",
+          "default": "Moving between steps and adding an item, because motion that explains a change the customer caused is the kind that does not get redone.",
+          "facts": [
+            "motion:web/styles/buttons.css",
+            "flow:/order"
+          ]
+        },
+        {
+          "topic": "request/scope",
+          "ask": "Is \"slick\" and \"nice\" only about motion, or also about changing the steps themselves?",
+          "default": "Only motion; the steps stay as they are."
+        },
+        {
+          "topic": "motion.where/elements",
+          "ask": "Within a step change, what moves and what stays still? The Stepper and BasketSummary are shared components.",
+          "default": "Only the step content moves; shared chrome stays put so the page does not feel like it jumps.",
+          "facts": [
+            "component:Stepper",
+            "component:BasketSummary"
+          ]
+        },
+        {
+          "topic": "motion.reduced/reduced-motion",
+          "ask": "Nothing in the app honours prefers-reduced-motion yet (gap:reduced-motion). With reduced motion on, should the motion go entirely?",
+          "default": "No movement at all with reduced motion on, because motion can make some people unwell.",
+          "facts": [
+            "gap:reduced-motion"
+          ]
+        }
+      ],
+      "answers": [
+        {
+          "kind": "confirm",
+          "text": "Two moments: moving between the order steps, and an item going into the basket. Nothing else needs to move."
+        },
+        {
+          "kind": "confirm",
+          "text": "Slick and nice just mean the motion for me; don't change anything else about the steps."
+        },
+        {
+          "kind": "confirm",
+          "text": "The step content slides in the direction you are going; the header and the basket summary stay still. The basket count gives a small pop when an item goes in."
+        },
+        {
+          "kind": "confirm",
+          "text": "With reduced motion on, nothing slides or pops; the step and the count just change at once."
+        }
+      ]
+    },
+    {
+      "say": "So: two moments, only the step content and the basket count move, and nothing moves with reduced motion on. Now the numbers and the proof.",
+      "questions": [
+        {
+          "topic": "motion.budget/duration",
+          "ask": "How long may each motion take? Your buttons already use 150 ms. I'd propose 200 ms for a step change and 150 ms for the basket. Your numbers?",
+          "default": "200 ms and 150 ms, as proposals for you to confirm.",
+          "facts": [
+            "motion:web/styles/buttons.css"
+          ]
+        },
+        {
+          "topic": "motion.budget/easing",
+          "ask": "Easing: ease-out, like the buttons?",
+          "default": "ease-out, to match the existing fade.",
+          "facts": [
+            "motion:web/styles/buttons.css"
+          ]
+        },
+        {
+          "topic": "motion.proof/recording",
+          "ask": "How do we prove it: a recording of each moment with reduced motion off and on?",
+          "default": "Both recordings."
+        },
+        {
+          "topic": "motion.proof/duration-metric",
+          "ask": "And a check over the changed styles that every duration is one you confirmed?",
+          "default": "Yes: a metric over the changed style files."
+        },
+        {
+          "topic": "motion.performance/frame-rate",
+          "ask": "Should it hold a frame rate on a mid-range phone?",
+          "default": "Only transform and opacity animated; no frame-rate number unless you have one."
+        }
+      ],
+      "answers": [
+        {
+          "kind": "confirm",
+          "text": "Keep it quick: step changes in 200 ms, and the basket pop in 150 ms, like the buttons already fade."
+        },
+        {
+          "kind": "default",
+          "text": "Your default is fine."
+        },
+        {
+          "kind": "confirm",
+          "text": "A recording of both moments, once with reduced motion off and once with it on."
+        },
+        {
+          "kind": "default",
+          "text": "Your default is fine."
+        },
+        {
+          "kind": "park",
+          "text": "Don't worry about frame rates for this one."
+        }
+      ]
+    },
+    {
+      "say": "Nearly done. One idea of mine you can say no to.",
+      "questions": [
+        {
+          "topic": "other/confirmation-flourish",
+          "ask": "An idea: a small celebration animation on the order confirmation. Want it?"
+        }
+      ],
+      "answers": [
+        {
+          "kind": "park",
+          "text": "That is not part of what I asked for; park it."
+        }
+      ]
+    },
+    {
+      "say": "Here is what done looks like. Goal: moving through the order steps and adding a loaf feel responsive, so customers can tell where they are. Done when: moving between steps slides the step content over 200 ms while the header and basket summary stay still; adding a loaf pops the basket count over 150 ms; with reduced motion on, both change at once with no movement; and every duration in the changed styles is 150 or 200 ms. Checkpoints: first the step slide, then the basket pop, then reduced motion and the duration check. Easing is ease-out (your accepted default); frame rates and the confirmation animation are parked.",
+      "done": true
+    }
+  ]
+}

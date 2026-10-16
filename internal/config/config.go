@@ -53,7 +53,7 @@ type Delegate struct {
 	CursorModel         string   `koanf:"cursor_model" jsonschema_description:"Model ID the Cursor cloud agent runs; empty: Cursor's default (its family is then unknown to aayu, so inspect names concrete reviewer families)."`
 	CodexEnv            string   `koanf:"codex_env" jsonschema_description:"ID of the Codex cloud environment whose Install script runs bash .agents/setup; empty: Codex runs only locally."`
 	AmpOrbSize          string   `koanf:"amp_orb_size" jsonschema_description:"Orb size of a delegated Amp thread; empty: the Amp project's default."`
-	ClaudeTrigger       string   `koanf:"claude_trigger" jsonschema_description:"The trigger phrase of the repository's claude-code-action workflow."`
+	ClaudeTrigger       string   `koanf:"claude_trigger" jsonschema_description:"Unused since WP5.5c: Claude Code is reached through its own CLI's cloud sessions (claude --cloud), not claude-code-action, so no AI key sits in the repository's CI. Kept so 0.1 configurations still load."`
 	Checks              []string `koanf:"checks" jsonschema_description:"Commands the brief tells a receiver to run before it finishes; empty: the checks AGENTS.md lists."`
 	LocalTimeoutMinutes int      `koanf:"local_timeout_minutes" jsonschema:"minimum=0" jsonschema_description:"Longest run of a receiver's CLI in an aayu worktree (--local)."`
 }
@@ -66,6 +66,11 @@ type Inspect struct {
 	SuppressAfter int      `koanf:"suppress_after" jsonschema:"minimum=0" jsonschema_description:"A finding resembling this many distinct human dismissals in the same file or directory is not posted (never a P0 in security, data, or concurrency); 0 turns suppression off."`
 	PeerModel     string   `koanf:"peer_model" jsonschema_description:"Model ID of the peer reviewer; empty picks the first of the registry's review candidates whose family differs from the builder's and the first reviewer's."`
 	Generated     []string `koanf:"generated" jsonschema_description:"Path patterns (path.Match) of generated files that inspect does not review; the drift check owns them. Files whose header says Code generated ... DO NOT EDIT are skipped too."`
+	// The merge gate's reviewer (founder decision 2026-10-15): no AI key in a
+	// product repository's CI.
+	Reviewer    string            `koanf:"reviewer" jsonschema:"enum=auto,enum=claude,enum=codex,enum=cursor,enum=amp,enum=human,enum=model" jsonschema_description:"Who reviews in the merge gate. auto: the first installed agent app (apps) of a family other than the builder's, else a human; claude, codex, cursor: that app (a same-family app falls back); human: a human review; model: the review lane's model, called with a key (aayudha's evals, or a person who holds one)."`
+	Apps        []string          `koanf:"apps" jsonschema_description:"Agent apps installed on the repository's org or account that answer an @-mention with a review: claude, codex, cursor. aayu doctor and aayu install detect them."`
+	AppFamilies map[string]string `koanf:"app_families" jsonschema_description:"Model family of each reviewer app (anthropic, openai, google, xai). An app without one cannot review, since the different-family rule needs it; Cursor runs the model its user picks."`
 }
 
 // Team stages (WP5.1b): how much ceremony the seat twins' practice carries.
@@ -277,6 +282,14 @@ type Verify struct {
 	Seed           []string               `koanf:"seed" jsonschema_description:"Command (argv) that loads seeded, synthetic data into the app before the web floors capture (WP4.5); the product provides it, e.g. under .aayudha/seed/."`
 	Environments   map[string]Environment `koanf:"environments" jsonschema_description:"Apps the web, DAST, and API floors run against, by name; AAYU_ENV picks one (default local). A production environment is never captured."`
 	Floors         Floors                 `koanf:"floors" jsonschema_description:"Floor thresholds; CONSTRAINTS.md documents each one."`
+	// RedOnBaseBlockingFrom is the date (UTC, YYYY-MM-DD) from which a Bug
+	// story's proving test that passes on the base fails the merge gate (P5,
+	// founder decision 4); before it the red-on-base check is advisory.
+	// DriftBlockingFrom is the date (UTC, YYYY-MM-DD) from which feature-map
+	// drift fails the merge gate (WP4.5b, founder decision 2026-10-16).
+	DriftBlockingFrom     string `koanf:"drift_blocking_from" jsonschema_description:"Date (UTC, YYYY-MM-DD) from which feature-map drift fails the merge gate's feature-map floor; before it, or empty, drift is a warning."`
+	RedOnBaseBlockingFrom string `koanf:"red_on_base_blocking_from" jsonschema_description:"Date (UTC, YYYY-MM-DD) from which a Bug story whose mapped proving test passes on the base commit fails the merge gate; before it, or empty, the red-on-base check is advisory."`
+	Maintainer            string `koanf:"maintainer" jsonschema:"enum=amp,enum=claude,enum=codex,enum=cursor" jsonschema_description:"Agent app the feature maps' maintain brief @-mentions (WP4.5b.4): claude, codex, or cursor, installed on the repository; amp has no mention, so its scheduled loop thread reads the brief. Unset: the brief mentions no app."`
 }
 
 // Environment is [verify.environments.<name>].

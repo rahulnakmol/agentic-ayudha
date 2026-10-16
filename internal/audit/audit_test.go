@@ -1,12 +1,15 @@
 package audit
 
 import (
+	"fmt"
+
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/autonomy"
+	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 )
@@ -209,5 +212,131 @@ func TestAuditPlanReviewBypass(t *testing.T) {
 	}
 	if c := r.Counts(); c.PlanBypasses != 1 || c.SoloShips != 1 {
 		t.Errorf("counts: %+v", c)
+	}
+}
+
+// Flow metrics (P1, S-7.6e) on hand-computed, asymmetric data: #1 waits 24 h
+// for a person after its gate went green and was touched three times; #2 has
+// no build record, ships an hour after green, and escapes as Bug #9. Bug #8
+// came before #2 merged, Bug #7 is fixed by #1's own PR, a dismissal of the
+// same finding ID on another PR does not count, and a PR into main is not in
+// the change mix. The numbers survive a snapshot round trip (--replay).
+func TestRetroFlow(t *testing.T) {
+	in := Inputs{Repo: "o/r", Since: at(0), Until: at(48)}
+	ready := func(h int) Event { return Event{Kind: "labeled", Label: "status:ready", Actor: "founder", At: at(h)} }
+	d := &Data{Dev: "dev", Days: 14, Bots: []string{"aayu-bot"},
+		Items: []Item{
+			{Number: 1, Title: "Waits", Labels: []string{"type:story", "status:merged", "effort:S"}, Events: []Event{ready(0),
+				{Kind: "commented", Actor: "founder", At: at(3)}, ready(4),
+				{Kind: "commented", Actor: "aayu-bot", At: at(5)}, {Kind: "commented", Actor: "founder", Aayu: true, At: at(5)}}},
+			{Number: 2, Title: "Escapes", Labels: []string{"type:story", "status:merged", "effort:XS"}, Events: []Event{ready(1),
+				{Kind: "commented", Actor: "founder", At: at(30)}}},
+			{Number: 11, PR: true, Events: []Event{{Kind: "reviewed", State: "changes_requested", Actor: "founder", At: at(6)},
+				{Kind: "commented", Actor: "github-actions[bot]", At: at(6)}, {Kind: "reviewed", State: "approved", Actor: "founder", At: at(28)}},
+				Inspect: &Review{Cycles: 2, Posted: []string{"a", "b", "c"}, Open: []string{"c"}}},
+			{Number: 12, PR: true},
+		},
+		PRs: []PR{{Number: 11, Title: "feat(x): waits", Base: "dev", Body: "Refs #1\nFixes #7", MergedAt: at(29), HeadSHA: "h11"},
+			{Number: 12, Title: "fix: escapes", Base: "dev", Head: "story/2-escapes", MergedAt: at(11), HeadSHA: "h12"},
+			{Number: 13, Title: "docs: notes", Base: "dev", MergedAt: at(12)}, {Number: 14, Title: "Update things", Base: "dev", MergedAt: at(13)},
+			{Number: 15, Title: "feat: promote", Base: "main", MergedAt: at(14)}},
+		GateRuns: []Run{{ID: 1, HeadSHA: "h11", UpdatedAt: at(7)}, {ID: 2, HeadSHA: "h11", UpdatedAt: at(5)}, {ID: 3, HeadSHA: "old12", UpdatedAt: at(8)},
+			{ID: 4, HeadSHA: "h12", UpdatedAt: at(10)}, {ID: 5, HeadSHA: "h12", UpdatedAt: at(12)}},
+		Builds:    map[int]BuildLog{1: {First: at(2)}},
+		Dismissed: []inspect.Dismissal{{ID: "b", PR: 11}, {ID: "a", PR: 99}},
+		Bugs: []Bug{{Number: 7, CreatedAt: at(30), Links: []int{11}}, {Number: 8, CreatedAt: at(5), Links: []int{2}},
+			{Number: 9, CreatedAt: at(20), Links: []int{12}}, {Number: 10, CreatedAt: at(60), Links: []int{1}}},
+	}
+	check := func(r *Retro) {
+		t.Helper()
+		f := r.Flow
+		want := map[string][3]float64{"Queue: Ready to first checkpoint": {1, 2, 2}, "Build: first checkpoint to gate green": {1, 3, 3},
+			"Human wait: gate green to ship": {2, 1, 24}, "Total: Ready to ship": {2, 10, 29}}
+		for _, s := range f.Stages {
+			if w := want[s.Name]; float64(s.Stories) != w[0] || s.P50 != w[1] || s.P90 != w[2] {
+				t.Errorf("%s: %d stories, P50 %g, P90 %g; want %v", s.Name, s.Stories, s.P50, s.P90, w)
+			}
+		}
+		if len(f.Stories) != 2 || f.Stories[0].Touches != 3 || f.Stories[1].Touches != 0 {
+			t.Errorf("touches: %+v", f.Stories)
+		}
+		if f.Escaped != 1 || fmt.Sprint(f.Stories[1].Escapes) != "[9]" || len(f.Stories[0].Escapes) != 0 {
+			t.Errorf("escapes: %d %+v", f.Escaped, f.Stories)
+		}
+		if f.Inspect != (InspectFlow{PRs: 1, WithPosts: 1, Cycles: 2, Posted: 3, ActedOn: 1, Dismissed: 1, Open: 1}) {
+			t.Errorf("inspect: %+v", f.Inspect)
+		}
+		if f.Merged != 4 || fmt.Sprint(f.Mix) != "[{docs 1} {feat 1} {fix 1} {other 1}]" {
+			t.Errorf("change mix of %d: %v", f.Merged, f.Mix)
+		}
+		md := string(r.Markdown())
+		for _, w := range []string{"| Human wait: gate green to ship | 2 of 2 | 1.0 h | 24.0 h |", "| #1 | #11 | 2.0 | 3.0 | 24.0 | 29.0 | 3 | — |",
+			"| #2 | #12 | n/a | n/a | 1.0 | 10.0 | 0 | Bug #9 |", "**inspect advice acted on:** 33 % (1 of 3 posted findings)", "**Escape rate:** 50 % (1 of 2 stories)"} {
+			if !strings.Contains(md, w) {
+				t.Errorf("report lacks %q:\n%s", w, md)
+			}
+		}
+	}
+	for i := range d.PRs {
+		d.PRs[i].LinkStories() // as Fetch does; the snapshot keeps the links, not the body
+	}
+	r := BuildRetro(in, d, 25)
+	check(r)
+	snap := Freeze(&in, d, "retro/x.inputs.json")
+	thawed := &Data{Dev: "dev", Days: 14, Bots: d.Bots, Builds: d.Builds, Dismissed: d.Dismissed}
+	in2, err := Thaw(snap, "retro/x.inputs.json", thawed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r2 := BuildRetro(in2, thawed, 25)
+	check(r2)
+	if string(r2.Markdown()) != string(BuildRetro(in, d, 25).Markdown()) {
+		t.Error("the replayed retro differs")
+	}
+}
+
+// The recurrence check (P4, S-7.7c): an evolve PR's problem came back when a
+// retro Feedback issue opened after its merge, or a finding of this window,
+// names the same skill. A Feedback from before the merge, a recurrence
+// finding itself, and an evolve PR merged more than 30 days before the cursor
+// do not count.
+func TestRetroRecurrence(t *testing.T) {
+	in := Inputs{Repo: "o/r", Since: at(0), Until: at(48)}
+	d := &Data{Dev: "dev",
+		PRs: []PR{{Number: 20, Base: "dev", Head: "evolve/grill-5", MergedAt: at(10)}, {Number: 21, Base: "dev", Head: "evolve/ready-6", MergedAt: at(12)},
+			{Number: 22, Base: "dev", Head: "evolve/plan-7", MergedAt: at(-24 * 35)}, {Number: 23, Base: "dev", Head: "evolve/slice-8", MergedAt: at(5)},
+			{Number: 24, Base: "dev", Head: "feat/grill-9", MergedAt: at(6)}},
+		Items: []Item{
+			{Number: 30, Title: "Feedback: retro: skill `grill` correction rate 2/2 above 20 %, w2", CreatedAt: at(15)},
+			{Number: 31, Title: "Feedback: retro: skill `slice` correction rate 2/2 above 20 %, w1", CreatedAt: at(4)},
+			{Number: 32, Title: "Feedback: retro: evolve did not hold: skill `slice` (PR #9, Feedback #1) came back", CreatedAt: at(20)},
+			{Number: 33, Title: "Feedback: retro: skill `plan` correction rate 1/1 above 20 %, w3", CreatedAt: at(20)},
+		},
+		AgentPRs:    []AgentPR{{Number: 40, MergedAt: at(30), Skills: []string{"ready"}}},
+		Corrections: []autonomy.Correction{{PR: 40, Kind: autonomy.KindRevert, At: at(31)}},
+	}
+	r := BuildRetro(in, d, 0)
+	var back []string
+	for _, rc := range r.Recurrence {
+		back = append(back, fmt.Sprintf("%s:%d", rc.Skill, len(rc.Back)))
+	}
+	if strings.Join(back, " ") != "grill:1 ready:1 slice:0" {
+		t.Errorf("recurrence: %v", back)
+	}
+	var titles []string
+	for _, f := range r.Findings {
+		titles = append(titles, f.Title)
+	}
+	got := strings.Join(titles, "\n")
+	for _, want := range []string{"evolve did not hold: skill `grill` (PR #20, Feedback #5) came back", "evolve did not hold: skill `ready` (PR #21, Feedback #6) came back"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("findings lack %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "`slice` (PR #23") || strings.Contains(got, "`plan`") {
+		t.Errorf("findings:\n%s", got)
+	}
+	if md := string(r.Markdown()); !strings.Contains(md, "| #23 | `slice` | #8 | 2026-10-12T05:00:00Z | no |") || !strings.Contains(md, "| #20 | `grill` | #5 | 2026-10-12T10:00:00Z | **yes**: Feedback #30 |") {
+		t.Errorf("report:\n%s", md)
 	}
 }

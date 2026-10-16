@@ -55,6 +55,11 @@ PASS  mcp  aayudha MCP server registered for claude at this aayu's version
 ## mcp fail
 FAIL  mcp  MCP registrations need aayu install --apply
              claude: /usr/bin/aayu reports "aayu 1.1.0"; this aayu is 1.2.0
+## codex-hooks pass
+PASS  codex-hooks  no aayudha hooks for OpenAI Codex here
+## codex-hooks fail
+FAIL  codex-hooks  Codex skips aayudha hooks it does not trust, so no guard rail stops an agent from running a human-only verb there: open /hooks in Codex and trust them
+                     plugin aayudha@aayudha: the PreToolUse hook is not trusted yet; trust it in Codex's /hooks
 ## lfs-quota pass
 N/A  lfs-quota  LFS quota: GitHub has no quota API for this account; watch Settings > Billing > Git LFS (warn at 80 %)
 ## ledger-media pass
@@ -62,6 +67,12 @@ PASS  ledger-media  no ledger branch fetched (origin/ledger)
 ## ledger-media fail
 FAIL  ledger-media  repository is public but its ledger tracks media in Git LFS (V3): LFS objects cannot be purged from GitHub [blocking]
                       remove .lfsconfig and the LFS lines of .gitattributes from ledger and delete media already pushed there; proof media stay in run artifacts (S-4.2b), and design media need [proof] media
+## ledger-rulesets pass
+N/A  ledger-rulesets  aayu init has not run here (no .aayudha/state.json)
+## ledger-rulesets fail
+WARN  ledger-rulesets  ledger rulesets not applied: GitHub answered 403: Upgrade to GitHub Pro or make this repository public to enable this feature.
+                         the ledger branch is unprotected: anyone with write access can force-push or delete it
+                         make the repository public or upgrade to GitHub Pro, then run `aayu init` again
 ## proof pass
 PASS  proof  proof: the merge gate keeps each pack as its aayudha-pack run artifact for 90 days (GitHub allows at most 90 on a public repository, 400 on a private one), and `aayu ship` lands pack.json on the ledger; no bot App, bucket, or secret needed
 ## proof fail
@@ -104,19 +115,51 @@ PASS  worktrees  no leaked worktrees
 ## worktrees fail
 WARN  worktrees  1 leaked worktree(s); `aayu gc` prunes them
                    /tmp/wt-x (gitdir file points to non-existent location)
-## delegate-env pass
-PASS  delegate-env  delegation environments not set up: no .agents/setup (cloud receivers of `build --delegate` install with it)
-## delegate-env fail
-WARN  delegate-env  2 delegation environment(s) drifted from .agents/setup; `aayu doctor --fix` re-syncs .cursor/environment.json
-                      source: drift: .agents/setup is not executable (chmod +x; Amp runs it directly)
-                        .agents/setup installs Go 1.24.0, older than go.mod's go 1.25.0
-                      amp: ok: orbs run .agents/setup natively when a project snapshot is prepared
-                      cursor: drift: no .cursor/environment.json; `aayu doctor --fix` writes it, then merge it to the default branch
-                      codex: manual: Codex cloud environments are set in the Codex UI only; aayu cannot read them
-                        Install script: bash .agents/setup
-                        Internet access: the package-managers preset (or custom domains), GET/HEAD/OPTIONS only
-                        Secrets: none; put the environment's ID in [delegate] codex_env
-                      claude: missing: no workflow runs anthropics/claude-code-action; `/install-github-app` in Claude Code writes one
+## agent-env pass
+PASS  agent-env  agent environments not set up: no .aayudha/env.toml; `aayu install --env` discovers one from the code
+## agent-env fail
+WARN  agent-env  0 verified, 2 stale, 2 missing; `aayu install --env --apply --verify` refreshes and verifies them
+                   amp: stale: the toolchain changed since .aayudha/env.toml was generated; `aayu install --env --apply --verify` refreshes it
+                     go: the code now asks for >=1.26.0, the spec has >=1.25.0 (go.mod:3 (go 1.26.0))
+                   cursor: stale: the toolchain changed since .aayudha/env.toml was generated; `aayu install --env --apply --verify` refreshes it
+                     go: the code now asks for >=1.26.0, the spec has >=1.25.0 (go.mod:3 (go 1.26.0))
+                   codex: missing: not set up for codex (answer hosts in .aayudha/env.toml)
+                   claude: missing: not set up for claude (answer hosts in .aayudha/env.toml)
+## agents pass
+PASS  agents  local CLIs signed in: codex, cursor, claude, amp; cloud agents connected: claude
+                codex: /usr/bin/x 1.0.0, signed in; cloud: no Codex cloud environment: `aayu install --env --host codex` prints the values to create one, then set [delegate] codex_env
+                cursor: /usr/bin/x 1.0.0, signed in; cloud: no Cursor API key: create one at https://cursor.com/dashboard (Integrations, API keys), then `aayu auth set-secret cursor-api-key` (the value on stdin)
+                claude: /usr/bin/x 1.0.0, signed in; cloud: claude --cloud with a claude.ai account
+                amp: /usr/bin/x 1.0.0, signed in; cloud: no Amp project recorded for this repository: `aayu install --env --host amp --cloud` finds it and proves the orb environment
+## reviewer-apps pass
+PASS  reviewer-apps  merge-gate reviewer: codex (openai), unless it is of the builder's family; then the next app, else a human
+                       claude (@claude review, family anthropic): not detected
+                       codex (@codex review, family openai): configured in [inspect] apps; detected: installed on the organisation o
+                       cursor (@cursor, family host-managed): not detected
+                       amp (no mention, family host-managed): not detected
+                         Amp has no @amp mention and replies as the person who connected it, so aayu cannot tell its reply from the builder's
+## reviewer-apps fail
+WARN  reviewer-apps  reviewer apps detected but not configured: codex, cursor; add them to [inspect] apps (the gate reads config only)
+                       claude (@claude review, family anthropic): not detected
+                       codex (@codex review, family openai): detected: chatgpt-codex-connector[bot] replied on #3
+                       cursor (@cursor, family host-managed): detected: check run "Cursor Bugbot" on #3
+                       amp (no mention, family host-managed): not detected
+                         Amp has no @amp mention and replies as the person who connected it, so aayu cannot tell its reply from the builder's
+                       no reviewer app in [inspect] apps (`aayu doctor` detects installed ones)
+                       falling back to a human review
+## retired-workflows pass
+PASS  retired-workflows  no retired aayudha workflow in .github/workflows
+## retired-workflows fail
+WARN  retired-workflows  1 retired aayudha workflow(s): run `aayu init` and confirm to remove, or delete by hand
+                           .github/workflows/aayudha-triage.yml classifies intake issues with a model in CI, and product CI never calls a model (Appendix B S-2.9b); triage runs from your own agent (`aayu triage <issue> --as …`) or an agent app you @-mention
+## loops pass
+PASS  loops  no loops/*.toml
+## loops fail
+WARN  loops  1 active (1 in Actions), 0 stale, 1 missing, 1 double
+               digest             actions      active: needs no agent, so the GitHub Actions fallback runs it
+               review             -            missing
+               triage             amp,codex    double: recorded in amp and codex, so it runs twice; remove it from all but one
+               set them up in one tool with `aayu install --loops`
 ## leases pass
 PASS  leases  1 live build lease(s)
 ## leases fail

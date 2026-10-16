@@ -7,7 +7,9 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	gh "github.com/google/go-github/v90/github"
@@ -51,6 +53,28 @@ type VerifyResult struct {
 	// RetentionDays is how long the merge gate keeps the pack as its
 	// aayudha-pack run artifact (--ci with a pack; S-4.2b).
 	RetentionDays int `json:"retention_days,omitempty"`
+	// Artifacts is where a preview without a pack keeps the floors' artifacts.
+	Artifacts string `json:"artifacts_dir,omitempty"`
+}
+
+// writeArtifacts replaces dir with the artifacts, by their pack paths.
+func writeArtifacts(dir string, files map[string][]byte) error {
+	if err := os.RemoveAll(dir); err != nil {
+		return err
+	}
+	for rel, b := range files {
+		if err := proof.CleanPath(rel); err != nil {
+			return err
+		}
+		f := filepath.Join(dir, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(f), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(f, b, 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func gitIn(ctx context.Context, dir string, args ...string) (string, error) {
@@ -113,6 +137,13 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return err
 	}
+	maintain := in.String("maintain")
+	if maintain != "" && !in.Bool("map") && !in.Has("check") {
+		return Errorf(ExitUsage, "verify --maintain runs with --map or --check")
+	}
+	if in.Bool("map") {
+		return e.verifyMap(ctx, root, maintain)
+	}
 	head, err := gitIn(ctx, root, "rev-parse", "HEAD")
 	if err != nil {
 		return Wrap(ExitUsage, err)
@@ -157,14 +188,10 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 	}
 	msg, _ := gitIn(ctx, root, "log", "-1", "--format=%B", head)
 	res.Story = StoryOf(body, msg, branch)
-	if e.CI && res.PR > 0 && res.Story == 0 {
-		// The merge gate proves stories; a PR that serves none has nothing to prove.
-		res.Checks, res.Hold, res.Footprint = []proof.Check{}, true, []string{}
-		return e.Emit(res, func(w io.Writer) error {
-			_, err := fmt.Fprintf(w, "merge gate: PR #%d serves no story (no Refs #n, Aayudha-Story trailer, or story/<n>- branch); nothing to prove\n", res.PR)
-			return err
-		})
-	}
+	// The merge gate proves stories; a PR that serves no story has no pack to
+	// prove, but its feature-map floors still run: the drift check, and the
+	// behaviour checks of what it touches (WP4.5b).
+	noStoryGate := e.CI && res.PR > 0 && res.Story == 0
 
 	r := &verify.Run{Root: root, Base: res.Base, Head: head, Floors: l.Config.Verify.Floors, Verify: l.Config.Verify, Story: res.Story, Labels: labels, Now: e.Now, Env: e.Getenv,
 		CI: e.CI, Nightly: e.Getenv("GITHUB_EVENT_NAME") == "schedule"}
@@ -219,8 +246,16 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 	r.Sandbox, r.Work = &verify.Sandbox{Getenv: e.Getenv, Home: home}, work
 
 	floors := verify.Standard()
-	if f := in.String("floor"); f != "" {
-		if floors, err = verify.ByName(floors, f); err != nil {
+	switch {
+	case in.Has("check"):
+		r.Checks, floors = in.String("check"), []verify.Floor{verify.Behaviour{}}
+	case noStoryGate:
+		floors = verify.MapFloors()
+		if f := in.String("floor"); f != "" {
+			floors, _ = verify.ByName(floors, f) // another floor does not run without a story
+		}
+	case in.String("floor") != "":
+		if floors, err = verify.ByName(floors, in.String("floor")); err != nil {
 			return Wrap(ExitUsage, err)
 		}
 	}
@@ -236,6 +271,21 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 			fp.Done(floorMark(c.Result), c.Result)
 		} else {
 			fp.Done(ui.StatusNA, "no check")
+		}
+	}
+	// P5 (founder decision 4): a Bug story's proving tests must fail on the base.
+	if e.CI && pr != nil && res.Story > 0 && !in.Has("check") && in.String("floor") == "" {
+		owner, name, _ := github.SplitRepo(repo)
+		if is, _, err := client.REST.Issues.Get(ctx, owner, name, res.Story); err != nil {
+			return Wrap(ExitExternal, err)
+		} else if slices.ContainsFunc(is.Labels, func(lb *gh.Label) bool { return lb.GetName() == "type:bug" }) {
+			c, ok, err := redOnBase(ctx, r.Sandbox, root, res.Base, head, res.Story, e.Now(), l.Config.Verify.RedOnBaseBlockingFrom)
+			if err != nil {
+				return Wrap(ExitExternal, fmt.Errorf("red-on-base: %w", err))
+			}
+			if ok {
+				rep.Checks = append(rep.Checks, c)
+			}
 		}
 	}
 	rep.Hold = (&proof.Pack{Checks: rep.Checks}).FloorsHold()
@@ -288,6 +338,18 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 			res.RetentionDays = proof.ArtifactRetention(l.Config.Proof.RetentionDays, e.Getenv("GITHUB_RETENTION_DAYS"))
 		}
 	}
+	// A preview without a story keeps what the floors captured, so a person or
+	// an agent can look at a behaviour check's screenshots and traces (WP4.5b).
+	if res.Pack == "" && !e.CI && len(rep.Artifacts) > 0 {
+		res.Artifacts = filepath.Join(root, ".aayudha", "state", "verify")
+		files := map[string][]byte{}
+		for _, a := range rep.Artifacts {
+			files[a.Path] = a.Data
+		}
+		if err := writeArtifacts(res.Artifacts, files); err != nil {
+			return err
+		}
+	}
 	// The merge gate (WP4.8): the pack must prove the PR's current head, the
 	// story must still match its Ready snapshot, and every criterion must have
 	// evidence from this run.
@@ -297,11 +359,65 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 	if err := e.Emit(res, func(w io.Writer) error { return renderVerify(w, res) }); err != nil {
 		return err
 	}
+	if maintain != "" {
+		d, _, err := verify.CheckMaps(ctx, root)
+		if err != nil {
+			return Wrap(ExitUsage, err)
+		}
+		b := verify.Brief{Drift: d}
+		b.Failed, b.Ran = failedChecks(rep.Artifacts)
+		if err := e.maintainHandoff(ctx, maintain, b); err != nil {
+			return err
+		}
+	}
 	if !res.Hold {
 		return Errorf(ExitFloor, "floor miss: %s", failing(res.Checks))
 	}
 	if len(res.Gate) > 0 {
 		return Errorf(ExitBlocked, "merge gate: %s", strings.Join(res.Gate, "; "))
+	}
+	return nil
+}
+
+// verifyMap is `verify --map`: the feature maps' drift check (WP4.5b.1). It
+// reads the maps and the checkout and runs no product code.
+func (e *Env) verifyMap(ctx context.Context, root, maintain string) error {
+	d, _, err := verify.CheckMaps(ctx, root)
+	if err != nil {
+		return Wrap(ExitUsage, err)
+	}
+	if err := e.Emit(d, func(w io.Writer) error {
+		switch d.Verdict {
+		case verify.DriftNone:
+			_, err := fmt.Fprintln(w, "no feature map here (.agents/skills/verify-<product>/features/README.md); `aayu init --verify-skill` scaffolds one")
+			return err
+		case verify.DriftClean:
+			fmt.Fprintf(w, "feature maps in sync with the source at %s:", short(d.Head))
+		default:
+			fmt.Fprintf(w, "feature maps at %s: %s", short(d.Head), d.Verdict)
+		}
+		for _, m := range d.Maps {
+			n := 0
+			for _, f := range m.Features {
+				n += f.Checks
+			}
+			fmt.Fprintf(w, " %s (%d features, %d checks)", m.Dir, len(m.Features), n)
+		}
+		fmt.Fprintln(w)
+		for _, x := range d.Items() {
+			fmt.Fprintf(w, "  %s\n", x)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	if maintain != "" {
+		if err := e.maintainHandoff(ctx, maintain, verify.Brief{Drift: d}); err != nil {
+			return err
+		}
+	}
+	if d.Verdict == verify.DriftFound {
+		return Errorf(ExitFloor, "feature map drift: fix the map in its skill directory, or let the maintain pass do it")
 	}
 	return nil
 }
@@ -416,10 +532,15 @@ func renderVerify(w io.Writer, res VerifyResult) error {
 			fmt.Fprintf(w, " (criteria without evidence: %v)", res.Unmapped)
 		}
 		fmt.Fprintln(w, "; `aayu proof push` lands it on the ledger (advisory)")
+	case res.Story == 0 && res.PR > 0:
+		fmt.Fprintf(w, "merge gate: PR #%d serves no story (no Refs #n, Aayudha-Story trailer, or story/<n>- branch), so there is no pack; only the feature-map floors run\n", res.PR)
 	case res.Story > 0 && res.NoSnapshot:
 		fmt.Fprintf(w, "no pack: #%d has no Ready snapshot on the ledger (run `aayu ready %d`)\n", res.Story, res.Story)
 	default:
 		fmt.Fprintln(w, "no pack: no story found (Refs #n in the PR body, an Aayudha-Story trailer, or a story/<n>-… branch)")
+	}
+	if res.Artifacts != "" {
+		fmt.Fprintf(w, "artifacts kept in %s (a preview)\n", res.Artifacts)
 	}
 	return nil
 }

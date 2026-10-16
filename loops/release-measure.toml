@@ -1,0 +1,8 @@
+# Measure what is due after a release (WP7.2, WP7.1; Appendix B S-7.1c, S-7.1e). A weekly check replaces the
+# release.published event loop deferred from 0.2. It runs in an agent tool, which first checks for a release. The
+# cron is in [time] tz.
+description = "Weekly measure: report the cohorts and North Star when a release was published in the last seven days."
+command = ["measure"]
+cron = "30 10 * * 1"
+hosts = ["amp", "cursor", "claude", "codex"]
+prompt = "List the releases published in the last seven days with `gh release list --limit 10`. If there is none, stop without reporting. Otherwise report the cohorts and the North Star in a few lines, with each release tag. If measure stopped for a missing baseline or export, report that and stop."

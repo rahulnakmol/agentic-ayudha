@@ -59,8 +59,11 @@ func intro(t Type) string {
 	}
 	var s strings.Builder
 	s.WriteString(t.Description)
-	if len(t.Parents) > 0 {
+	switch {
+	case len(t.Parents) > 0 && t.ParentAt != "":
 		fmt.Fprintf(&s, " Add it as a sub-issue of its parent %s.", strings.Join(t.Parents, " or "))
+	case len(t.Parents) > 0:
+		fmt.Fprintf(&s, " If it has a parent %s, add it as a sub-issue of it.", strings.Join(t.Parents, " or "))
 	}
 	s.WriteString(" Set Priority, Effort, Risk, Health, and Horizon with the `priority:`, `effort:`, `risk:`, `health:`, and `horizon:` labels; they are not form fields.")
 	if t.Effort {

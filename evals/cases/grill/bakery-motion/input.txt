@@ -1,0 +1,1 @@
+Make ordering feel slick, with nice animations and transitions between the steps. It belongs under Feature #40 (Online ordering).

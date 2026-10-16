@@ -1,0 +1,75 @@
+{
+  "request": "Make slugkit simple to use. People keep getting it wrong. It belongs under Feature #90 (Developer experience).",
+  "exchanges": [
+    {
+      "say": "You want slugkit to be simple. \"Simple\" for a library means the calls and options a first-time user needs before the first result. Today the only export is createSlugger(options) (export:slugkit), which throws unless all five options are given. Three questions, riskiest first.",
+      "questions": [
+        {
+          "topic": "simple.lib-surface/calls-to-first-result",
+          "ask": "What should a first-time user write to get a first slug? Today the one export is createSlugger(options) (export:slugkit), and it needs all five options.",
+          "default": "One import and one call with defaults, because the README's first example is what everyone copies.",
+          "facts": [
+            "export:slugkit"
+          ]
+        },
+        {
+          "topic": "request/existing-behaviour",
+          "ask": "How do people get it wrong today, and must createSlugger keep working as it does for existing users (test:test/index.test.js)?",
+          "facts": [
+            "test:test/index.test.js"
+          ]
+        },
+        {
+          "topic": "simple.lib-surface/defaults",
+          "ask": "Which options can have defaults, and what should each default be?",
+          "default": "A dash, lowercase, and no length limit, because that is what the README example passes today.",
+          "facts": [
+            "export:slugkit"
+          ]
+        }
+      ],
+      "answers": [
+        {
+          "kind": "confirm",
+          "text": "One import and one call: `slugify('Hello World')` should give 'hello-world', and that should be the first example in the README."
+        },
+        {
+          "kind": "confirm",
+          "text": "Today they copy the README and forget one of the five options, then get `invalid options`. Keep createSlugger working exactly as it does for people who already use it."
+        },
+        {
+          "kind": "confirm",
+          "text": "Every option should be optional: a dash, lowercase, and no length limit unless you ask."
+        }
+      ]
+    },
+    {
+      "say": "So: one import and one call, `slugify('Hello World')` giving 'hello-world', with a dash, lowercase, and no length limit by default, and createSlugger unchanged. Two more.",
+      "questions": [
+        {
+          "topic": "simple.language/labels",
+          "ask": "Are any option names confusing, such as transliterate?",
+          "default": "Keep today's names."
+        },
+        {
+          "topic": "request/scope",
+          "ask": "Is this only the first call and its defaults, with no new options?"
+        }
+      ],
+      "answers": [
+        {
+          "kind": "park",
+          "text": "The option names are fine."
+        },
+        {
+          "kind": "confirm",
+          "text": "Only the first-use path and the defaults. No new options."
+        }
+      ]
+    },
+    {
+      "say": "Here is what done looks like. Goal: a first-time user gets a slug from one import and one call. Done when: `slugify('Hello World')` returns 'hello-world' with no options; its defaults are a dash, lowercase, and no length limit; the existing createSlugger tests pass unchanged; and the README's first example is those two lines. Checkpoints: the one-call slug, then the unchanged tests, then the README. Renaming options is parked.",
+      "done": true
+    }
+  ]
+}

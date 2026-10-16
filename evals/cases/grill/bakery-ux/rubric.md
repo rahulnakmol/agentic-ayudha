@@ -17,7 +17,7 @@ give one overall score from 1 to 5.
 3. Fidelity: every criterion comes from something the human confirmed or accepted as a default; nothing the human
    parked or deferred (speed, accessibility beyond the floors, offline, exact wording, the loyalty idea) is a
    criterion; parked and deferred topics appear in Parked ideas or Open questions; the Provenance names the right
-   source for each criterion. Questions and parked ideas never lower the score; only what became a criterion counts.
+   source for each criterion. A criterion checks one representative instance (seeded data, a synthetic user, a fresh home directory, one seeded declining card for "a payment fails"): that is test setup, not an added requirement or a narrowing, as long as the expected result keeps the human's whole scope. It narrows only when its wording limits the behaviour itself to a subset the human did not choose ("only for guests", "only going forward"). Questions and parked ideas never lower the score; only what became a criterion counts.
 
 - 5: All three are strong: grounded, prioritized questions; a fully concrete spec; complete fidelity.
 - 4: One minor gap in one area (a question that ignores an obvious fact, one criterion that could be more precise).

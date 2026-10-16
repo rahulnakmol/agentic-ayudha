@@ -198,3 +198,28 @@ func TestBudgetBreakerAcrossProcesses(t *testing.T) {
 		}
 	})
 }
+
+// S-7.1c: with no issue, triage lists the open intake issues, oldest first,
+// for the triage loop's agent; it skips closed and non-intake issues, writes
+// nothing, and calls no model.
+func TestTriageListsIntake(t *testing.T) {
+	g := fake.New(t, "o/r", "User")
+	g.AddIssue("Add CSV export", "", "type:feedback", "intake")
+	g.AddIssue("Story, not intake", "", "type:story")
+	g.AddIssue("Closed intake", "", "intake").State = "closed"
+	g.AddIssue("Site is down", "", "type:incident", "intake")
+	model := &models.Fake{}
+	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, ModelClient: func(models.Route, string) models.Client { return model }}
+	code, out, errOut := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "t"}, opts, "triage", "--repo", "o/r", "--json")
+	var got []Intake
+	_ = json.Unmarshal([]byte(out), &got)
+	if code != 0 || len(got) != 2 || got[0].Issue != 1 || got[1].Issue != 4 || got[1].Title != "Site is down" {
+		t.Errorf("exit %d, %+v: %s", code, got, errOut)
+	}
+	if len(g.Writes()) != 0 || len(model.Requests) != 0 {
+		t.Errorf("%d writes, %d model calls", len(g.Writes()), len(model.Requests))
+	}
+	if code, _, _ := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "t"}, opts, "triage", "--repo", "o/r", "--as", "bug"); code != ExitUsage {
+		t.Errorf("--as with no issue: exit %d, want %d", code, ExitUsage)
+	}
+}

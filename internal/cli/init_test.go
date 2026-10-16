@@ -17,6 +17,7 @@ import (
 
 	"golang.org/x/crypto/nacl/box"
 
+	aayudha "github.com/rahulnakmol/agentic-ayudha"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/initrepo"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
@@ -118,8 +119,12 @@ func TestInitTwiceDryRunPublicCoexistence(t *testing.T) {
 		t.Fatalf("first run: exit %d complete %t: %s", code, rep.Complete, errOut)
 	}
 	nLabels := len(workitems.Labels())
-	if rep.Counts["created"] != nLabels-1+2 || rep.Counts["adopted"] != 1 { // status:ready adopted; ledger and ruleset created
-		t.Fatalf("first run counts %v, want %d labels created, 1 adopted, plus ledger and ruleset", rep.Counts, nLabels-1)
+	if rep.Counts["created"] != nLabels-1+3 || rep.Counts["adopted"] != 1 { // status:ready adopted; ledger and two rulesets created
+		t.Fatalf("first run counts %v, want %d labels created, 1 adopted, plus ledger and two rulesets", rep.Counts, nLabels-1)
+	}
+	// D-4.2b.h: the write role (and up) may update the ledger; nobody may force-push or delete it.
+	if got := ledgerRulesets(g); got != "aayudha-ledger-history: [deletion non_fast_forward] bypass []; aayudha-ledger: [update] bypass [4 RepositoryRole]" {
+		t.Fatalf("ledger rulesets: %s", got)
 	}
 	first := snapshot(t, dir)
 	if first[".github/workflows/ci.yml"] != ciYML {
@@ -149,9 +154,67 @@ func TestInitTwiceDryRunPublicCoexistence(t *testing.T) {
 		t.Fatal("second run changed files")
 	}
 
+	// A 0.1 install (one ruleset, admin bypass, force push and deletion in it): a rerun creates the history
+	// ruleset first, then narrows the old one to updates and adds the write role, keeping its other actors.
+	// The 0.1 state never recorded the history ruleset, and its idempotency keys belong to another run.
+	stPath := filepath.Join(dir, ".aayudha", "state.json")
+	var st map[string]any
+	b, _ := os.ReadFile(stPath)
+	_ = json.Unmarshal(b, &st)
+	st["run"] = "run-of-0.1"
+	st["objects"] = slices.DeleteFunc(st["objects"].([]any), func(o any) bool { return o.(map[string]any)["name"] == initrepo.LedgerHistoryRuleset })
+	b, _ = json.Marshal(st)
+	_ = os.WriteFile(stPath, b, 0o644)
+	g.Mu.Lock()
+	g.Rulesets = slices.DeleteFunc(g.Rulesets, func(rs map[string]any) bool { return rs["name"] == initrepo.LedgerHistoryRuleset })
+	g.Rulesets[0]["rules"] = []any{map[string]any{"type": "deletion"}, map[string]any{"type": "non_fast_forward"}, map[string]any{"type": "update"}}
+	g.Rulesets[0]["bypass_actors"] = []any{map[string]any{"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always"}}
+	g.Mu.Unlock()
+	g.Reset()
+	if code, rep, errOut = runInitCmd(t, g, dir, "init", "--yes"); code != 0 || rep.Counts["created"] != 1 || rep.Counts["updated"] != 1 {
+		t.Fatalf("rerun on a 0.1 ruleset: exit %d, counts %v: %s", code, rep.Counts, errOut)
+	}
+	if w := g.Writes(); len(w) != 2 || w[0].Method != "POST" || w[1].Method != "PUT" {
+		t.Fatalf("migration writes %v, want the history ruleset created before the old one is narrowed", w)
+	}
+	if got := ledgerRulesets(g); got != "aayudha-ledger-history: [deletion non_fast_forward] bypass []; aayudha-ledger: [update] bypass [4 RepositoryRole 5 RepositoryRole]" {
+		t.Fatalf("ledger rulesets after the migration: %s", got)
+	}
+
 	if code, _, errOut := run(t, nil, Options{Dir: dir}, "proof", "push", "--media"); code != ExitBlocked || !strings.Contains(errOut, "S-4.2b") {
 		t.Errorf("proof push --media on a public repo: exit %d %s", code, errOut)
 	}
+}
+
+// ledgerRulesets renders the fake's ledger rulesets: name, rule types, and
+// bypass actors.
+func ledgerRulesets(g *fake.GitHub) string {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+	b, _ := json.Marshal(g.Rulesets)
+	var rs []struct {
+		Name   string
+		Rules  []struct{ Type string }
+		Bypass []struct {
+			ActorID   int64  `json:"actor_id"`
+			ActorType string `json:"actor_type"`
+		} `json:"bypass_actors"`
+	}
+	_ = json.Unmarshal(b, &rs)
+	var out []string
+	for _, r := range rs {
+		var rules, by []string
+		for _, x := range r.Rules {
+			rules = append(rules, x.Type)
+		}
+		slices.Sort(rules)
+		for _, a := range r.Bypass {
+			by = append(by, fmt.Sprint(a.ActorID, " ", a.ActorType))
+		}
+		out = append(out, fmt.Sprintf("%s: %v bypass %v", r.Name, rules, by))
+	}
+	slices.Sort(out)
+	return strings.Join(out, "; ")
 }
 
 func mapsEqual(a, b map[string]string) bool {
@@ -164,6 +227,45 @@ func mapsEqual(a, b map[string]string) bool {
 		}
 	}
 	return true
+}
+
+// D-2.5b (megaman, D-5.5c.12): a private repository on GitHub Free has no
+// rulesets, and GitHub answers 403. Init still completes every other step,
+// says the rulesets were not applied and why, and records it for doctor; once
+// the plan allows rulesets, a rerun applies them and clears the record.
+func TestInitWithoutRulesets(t *testing.T) {
+	g := fake.New(t, "o/r", "User")
+	g.Private, g.RulesetsUnavailable = true, true
+	dir := checkout(t)
+	code, rep, errOut := runInitCmd(t, g, dir, "init", "--yes")
+	if code != 0 || !rep.Complete {
+		t.Fatalf("init: exit %d complete %t: %s", code, rep.Complete, errOut)
+	}
+	var said string
+	for _, c := range rep.Changes {
+		if c.Step == "ruleset" {
+			said = c.Result + ": " + c.Detail
+		}
+	}
+	if !strings.HasPrefix(said, "not applied: ") || !strings.Contains(said, "Upgrade to GitHub Pro") || !strings.Contains(said, "unprotected") {
+		t.Fatalf("ruleset step said %q", said)
+	}
+	files := snapshot(t, dir)
+	if files[".aayudha/config.toml"] == "" || !strings.Contains(files["AGENTS.md"], "aayudha:work-items") {
+		t.Fatal("init stopped before the config and agents steps")
+	}
+	if !strings.Contains(files[initrepo.StatePath], `"rulesets_unapplied": "GitHub answered 403: Upgrade to GitHub Pro`) {
+		t.Fatalf("state.json does not record why:\n%s", files[initrepo.StatePath])
+	}
+	g.Mu.Lock()
+	g.RulesetsUnavailable = false
+	g.Mu.Unlock()
+	if code, _, errOut := runInitCmd(t, g, dir, "init", "--yes"); code != 0 {
+		t.Fatalf("rerun after the upgrade: exit %d: %s", code, errOut)
+	}
+	if got := ledgerRulesets(g); !strings.Contains(got, initrepo.LedgerHistoryRuleset) || strings.Contains(snapshot(t, dir)[initrepo.StatePath], "rulesets_unapplied") {
+		t.Fatalf("rerun: rulesets %s", got)
+	}
 }
 
 // WP2.5 accept: a partial run is resumed from state without duplicates.
@@ -250,9 +352,9 @@ func TestInitAdoptsLedgerAndUninit(t *testing.T) {
 }
 
 // WP2.6 accept: --gates installs exactly the workflows whose WP the binary has
-// (golden): two on the WP2.6 binary, three since WP2.9 added triage, four
-// since WP4.8 added the merge gate, five with the WP5.7 streak, six with the
-// WP5.6 ops executor, and the WP7.1 loops workflow when the checkout has loops;
+// (golden): the broker, the Ready guard, the WP4.8 merge gate, the WP5.7
+// streak, the WP5.6 ops executor, and the WP7.1 loops workflow when the
+// checkout has loops (the WP2.9 triage workflow is retired, S-2.9b);
 // every extra is idempotent; uninit --external lists what init created outside
 // the repository.
 func TestInitExtras(t *testing.T) {
@@ -262,7 +364,8 @@ func TestInitExtras(t *testing.T) {
 	g.App = map[string]any{"id": 4242, "slug": "aayudha-r", "client_id": "Iv1.abc", "pem": "-----BEGIN RSA PRIVATE KEY-----\nMIIEsecret\n-----END RSA PRIVATE KEY-----\n"}
 	dir := checkout(t)
 	_ = os.MkdirAll(filepath.Join(dir, "loops"), 0o755)
-	_ = os.WriteFile(filepath.Join(dir, "loops", "digest.toml"), []byte("description = \"Digest.\"\ncommand = [\"status\", \"--digest\"]\ncron = \"5 9 * * 1-5\"\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "loops", "digest.toml"), []byte("description = \"Digest.\"\ncommand = [\"status\", \"--digest\"]\ncron = \"5 9 * * 1-5\"\nagent = false\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "loops", "triage.toml"), []byte("description = \"Triage.\"\ncommand = [\"triage\"]\ncron = \"0 9 * * 1-5\"\n"), 0o644)
 	var manifest string
 	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, Build: BuildInfo{Version: "0.4.0"},
 		AppManifestCode: func(_ context.Context, post string, m func(string) string) (string, error) {
@@ -283,10 +386,10 @@ func TestInitExtras(t *testing.T) {
 		}
 	}
 	slices.Sort(workflows)
-	if !slices.Equal(workflows, []string{"aayudha-loops.yml", "aayudha-merge-gate.yml", "aayudha-ops.yml", "aayudha-ready-guard.yml", "aayudha-streak.yml", "aayudha-token.yml", "aayudha-triage.yml", "ci.yml"}) || files[".github/workflows/ci.yml"] != ciYML {
+	if !slices.Equal(workflows, []string{"aayudha-loops.yml", "aayudha-merge-gate.yml", "aayudha-ops.yml", "aayudha-ready-guard.yml", "aayudha-streak.yml", "aayudha-token.yml", "ci.yml"}) || files[".github/workflows/ci.yml"] != ciYML {
 		t.Fatalf("workflows after --gates: %v", workflows)
 	}
-	for _, wf := range []string{"aayudha-merge-gate.yml", "aayudha-ops.yml", "aayudha-ready-guard.yml", "aayudha-streak.yml", "aayudha-token.yml", "aayudha-triage.yml"} {
+	for _, wf := range []string{"aayudha-merge-gate.yml", "aayudha-ops.yml", "aayudha-ready-guard.yml", "aayudha-streak.yml", "aayudha-token.yml"} {
 		golden := filepath.Join("testdata", "gates", wf)
 		if *updateGolden {
 			_ = os.MkdirAll(filepath.Dir(golden), 0o755)
@@ -301,7 +404,9 @@ func TestInitExtras(t *testing.T) {
 	if own, err := os.ReadFile(filepath.Join("..", "..", ".github", "workflows", "aayudha-streak.yml")); err != nil || string(own) != string(initrepo.GateWorkflows("dev")[initrepo.StreakWorkflow]) {
 		t.Errorf(".github/workflows/aayudha-streak.yml is not the WP5.7 template rendered for dev")
 	}
-	if !strings.Contains(files[".github/workflows/aayudha-loops.yml"], "aayudha@v0.4.0") || files["loops/amp/digest.json"] == "" || !strings.Contains(files["loops/cursor/aayudha-loops.tf"], `"5 8 * * 1-5"`) {
+	// D-7.1f: the no-agent digest renders only for Actions, the triage agent loop only for the agent tools.
+	if wf := files[".github/workflows/aayudha-loops.yml"]; !strings.Contains(wf, "aayudha@v0.4.0") || !strings.Contains(wf, "loop:digest") || strings.Contains(wf, "triage") ||
+		files["loops/amp/triage.json"] == "" || files["loops/amp/digest.json"] != "" || !strings.Contains(files["loops/cursor/aayudha-loops.tf"], `"0 8 * * 1-5"`) {
 		t.Errorf("loops rendered by --gates: %v", slices.Collect(maps.Keys(files)))
 	}
 	cfg := files[".aayudha/config.toml"]
@@ -348,10 +453,9 @@ func TestInitExtras(t *testing.T) {
 	if len(g.Projects) != 3 || g.Variables["AAYUDHA_APP_CLIENT_ID"] != "Iv1.abc" || g.Secrets["AAYUDHA_APP_PRIVATE_KEY"] == "" || strings.Contains(g.Secrets["AAYUDHA_APP_PRIVATE_KEY"], "MIIE") {
 		t.Errorf("projects %d, variables %v, secret sealed %t", len(g.Projects), g.Variables, !strings.Contains(g.Secrets["AAYUDHA_APP_PRIVATE_KEY"], "MIIE"))
 	}
-	bypass := fmt.Sprint(g.Rulesets[0]["bypass_actors"])
 	g.Mu.Unlock()
-	if !strings.Contains(bypass, "Integration") || !strings.Contains(bypass, "4242") || !strings.Contains(bypass, "RepositoryRole") { // ship writes as the human (S-4.2b)
-		t.Errorf("ledger ruleset bypass after --identity: %s", bypass)
+	if got := ledgerRulesets(g); !strings.Contains(got, "aayudha-ledger: [update] bypass [4 RepositoryRole 4242 Integration]") { // ship writes as the human (D-4.2b.h)
+		t.Errorf("ledger rulesets after --identity: %s", got)
 	}
 	if !strings.Contains(manifest, `"contents":"write"`) || !strings.Contains(manifest, "127.0.0.1:1/callback") {
 		t.Errorf("manifest: %s", manifest)
@@ -403,5 +507,131 @@ func TestInitExtras(t *testing.T) {
 	defer g.Mu.Unlock()
 	if len(g.Secrets) != 0 || len(g.Variables) != 0 {
 		t.Errorf("uninit left secrets %v, variables %v", g.Secrets, g.Variables)
+	}
+}
+
+// WP4.5b.3 accept: init --verify-skill writes a product's verify skill with a
+// control tool in the stack the checkout already has (go.mod: Go; package.json:
+// Node; neither: a stub), its empty map passes `verify --map`, the examples'
+// control tools are the templates, and uninit keeps a file the team edited.
+func TestInitVerifySkill(t *testing.T) {
+	for _, tc := range []struct{ marker, control, example string }{
+		{"go.mod", "control/main.go", "../../examples/notes/.agents/skills/verify-notes/control/main.go"},
+		{"package.json", "control.mjs", "../../examples/benefits-qa/.agents/skills/verify-benefits-qa/control.mjs"},
+		{"", "control.sh", ""},
+	} {
+		t.Run(tc.control, func(t *testing.T) {
+			g := fake.New(t, "o/r", "User")
+			dir := checkout(t)
+			if tc.marker != "" {
+				_ = os.WriteFile(filepath.Join(dir, tc.marker), []byte("{}\n"), 0o644)
+			}
+			env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}
+			opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, Assets: aayudha.Assets}
+			if code, out, errOut := run(t, env, opts, "init", "--yes", "--json", "--verify-skill"); code != 0 {
+				t.Fatalf("init --verify-skill: exit %d: %s\n%s", code, errOut, out)
+			}
+			files := snapshot(t, dir)
+			skill := ".agents/skills/verify-r/"
+			if !strings.HasPrefix(files[skill+"SKILL.md"], "---\nname: verify-r\n") || files[skill+tc.control] == "" {
+				t.Fatalf("skill files: %v", slices.Sorted(maps.Keys(files)))
+			}
+			if !strings.Contains(files[skill+"features/README.md"], `"control": [`) || strings.Contains(files[skill+"features/README.md"]+files[skill+"SKILL.md"], "{{") {
+				t.Errorf("map not filled in:\n%s", files[skill+"features/README.md"])
+			}
+			if tc.example != "" {
+				if ex, err := os.ReadFile(tc.example); err != nil || string(ex) != files[skill+tc.control] {
+					t.Errorf("%s is not the %s template (copy hosts/verify-skill/ over it): %v", tc.example, tc.control, err)
+				}
+			}
+			if code, out, errOut := run(t, env, opts, "verify", "--map", "--json"); code != 0 {
+				t.Errorf("verify --map on the new skill: exit %d: %s\n%s", code, errOut, out)
+			}
+			_ = os.WriteFile(filepath.Join(dir, skill, "SKILL.md"), []byte(files[skill+"SKILL.md"]+"\nOur notes.\n"), 0o644)
+			if code, _, errOut := run(t, env, opts, "uninit", "--yes"); code != 0 {
+				t.Fatalf("uninit: %d %s", code, errOut)
+			}
+			after := snapshot(t, dir)
+			if !strings.HasSuffix(after[skill+"SKILL.md"], "Our notes.\n") || after[skill+tc.control] != "" {
+				t.Errorf("after uninit: %v", slices.Sorted(maps.Keys(after)))
+			}
+		})
+	}
+}
+
+// S-2.9b: a repository that still has the retired triage workflow is told on
+// every init; a dry run plans its removal, a confirmed run removes it, and a
+// product's own file of the same name is never touched.
+func TestInitRetiredTriageWorkflow(t *testing.T) {
+	g := fake.New(t, "o/r", "User")
+	dir := checkout(t)
+	triage := filepath.Join(dir, ".github", "workflows", "aayudha-triage.yml")
+	_ = os.MkdirAll(filepath.Dir(triage), 0o755)
+	_ = os.WriteFile(triage, []byte("name: aayudha-triage\non:\n  issues:\njobs: {}\n"), 0o644)
+	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}
+	change := func(out string) string {
+		var r struct {
+			Changes []initrepo.Change `json:"changes"`
+		}
+		_ = json.Unmarshal([]byte(out), &r)
+		for _, c := range r.Changes {
+			if c.Name == ".github/workflows/aayudha-triage.yml" {
+				return c.Result + ": " + c.Detail
+			}
+		}
+		return ""
+	}
+	if code, out, errOut := run(t, env, opts, "init", "--dry-run", "--json"); code != 0 || !strings.HasPrefix(change(out), "planned: remove: classifies intake issues with a model in CI") {
+		t.Fatalf("dry run: %d %q %s", code, change(out), errOut)
+	}
+	if _, err := os.Stat(triage); err != nil {
+		t.Fatal("a dry run removed the workflow")
+	}
+	if code, out, errOut := run(t, env, opts, "init", "--yes", "--json"); code != 0 || !strings.HasPrefix(change(out), "deleted: ") {
+		t.Fatalf("init: %d %q %s", code, change(out), errOut)
+	}
+	if _, err := os.Stat(triage); !os.IsNotExist(err) {
+		t.Fatal("the retired workflow is still there after a confirmed init")
+	}
+	own := "name: product-triage\non: push\njobs: {}\n"
+	_ = os.WriteFile(triage, []byte(own), 0o644)
+	if code, out, errOut := run(t, env, opts, "init", "--yes", "--json"); code != 0 || change(out) != "" {
+		t.Fatalf("a product's own file: %d %q %s", code, change(out), errOut)
+	}
+	if b, _ := os.ReadFile(triage); string(b) != own {
+		t.Fatal("init touched a product's own aayudha-triage.yml")
+	}
+}
+
+// D-4.5b.8: init --verify-skill offers only the agents detected for the
+// repository (here the amp CLI, signed in) and writes the one the human picks
+// as [verify] maintainer; an agent it did not offer is not written.
+func TestInitVerifySkillMaintainer(t *testing.T) {
+	for answer, want := range map[string]string{"amp\n": "maintainer = \"amp\"", "codex\n": ""} {
+		g := fake.New(t, "o/r", "User")
+		dir := checkout(t)
+		opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, Assets: aayudha.Assets,
+			IsTerminal: func(any) bool { return true },
+			LookPath: func(b string) (string, error) {
+				if b == "amp" {
+					return "/usr/local/bin/amp", nil
+				}
+				return "", os.ErrNotExist
+			},
+			Exec: func(_ context.Context, dir, name string, args ...string) (string, error) {
+				if name == "/usr/local/bin/amp" {
+					return "founder@example.com", nil
+				}
+				return realGitWithLFS(context.Background(), dir, name, args...)
+			}}
+		code, _, errOut := runIn(t, map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}, opts, answer, "init", "--yes", "--json", "--verify-skill")
+		if code != 0 || !strings.Contains(errOut, "Detected: amp. [amp, or Enter to skip]") {
+			t.Fatalf("%q: exit %d: %s", answer, code, errOut)
+		}
+		cfg, _ := os.ReadFile(filepath.Join(dir, ".aayudha", "config.toml"))
+		if got := strings.Contains(string(cfg), "[verify]\nmaintainer = \"amp\""); got != (want != "") || strings.Contains(string(cfg), "codex") {
+			t.Errorf("%q: config:\n%s", answer, cfg)
+		}
 	}
 }

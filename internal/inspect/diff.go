@@ -21,6 +21,7 @@ type Hunk struct {
 	NewStart int
 	Context  string
 	Lines    []DiffLine
+	Removed  []string // the old side's removed lines, in order (for weakened-check flags)
 }
 
 // DiffLine is a line on the new side of a hunk.
@@ -73,6 +74,8 @@ func ParseDiff(diff string) []DiffFile {
 		case strings.HasPrefix(line, " "):
 			h.Lines = append(h.Lines, DiffLine{N: n, Text: line[1:]})
 			n++
+		case strings.HasPrefix(line, "-"):
+			h.Removed = append(h.Removed, line[1:])
 		}
 	}
 	return out

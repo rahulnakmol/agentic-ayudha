@@ -91,7 +91,7 @@ func runGC(ctx context.Context, e *Env, _ Values) error {
 		_, _ = run2(ctx, root, "git", "worktree", "prune")
 		dirs, _ := os.ReadDir(filepath.Join(root, ".aayudha", "worktrees"))
 		for _, d := range dirs {
-			// <n> (build), <n>-<agent> (build --delegate --local), pr-<n> (polish).
+			// <n> (build), <n>-<agent>[-<k>] (build --delegate --local), pr-<n> (polish).
 			m := worktreeName.FindStringSubmatch(strings.TrimPrefix(d.Name(), "pr-"))
 			if !d.IsDir() || m == nil {
 				continue

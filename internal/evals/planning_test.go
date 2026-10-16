@@ -139,8 +139,14 @@ func TestPlanScope(t *testing.T) {
 		{"downgrade", "a downgrade path", edit(func(d *planning.PlanDraft) {
 			d.Checkpoints[0].Rollback += "; a downgrade collapses the per-kind values back into one scalar"
 		})},
-		{"rejects legacy", "refusing older configs", edit(func(d *planning.PlanDraft) {
+		{"rejects legacy", `refusing older configs, which the story does not ask for ("rejects legacy" in "config load rejects legacy retention_days after the bump")`, edit(func(d *planning.PlanDraft) {
 			d.Checkpoints[0].Contracts = append(d.Checkpoints[0].Contracts, "config load rejects legacy retention_days after the bump")
+		})},
+		// v0.2.0 rolling run 38953604673 floored a plan on "reject legacy": a plan
+		// that promises the opposite honours the story (D-5.4d).
+		{"promises not to reject legacy", "", edit(func(d *planning.PlanDraft) {
+			d.Checkpoints[0].Contracts = append(d.Checkpoints[0].Contracts, "config load does not reject legacy retention_days; it keeps reading them until the migration runs")
+			d.Checkpoints[0].Tests = append(d.Checkpoints[0].Tests, "internal/config:loading never refuses old configs")
 		})},
 		{"asked instead", "", edit(func(d *planning.PlanDraft) {
 			d.OpenQuestions = append(d.OpenQuestions, "Should config load reject legacy retention_days, and is a downgrade needed?")

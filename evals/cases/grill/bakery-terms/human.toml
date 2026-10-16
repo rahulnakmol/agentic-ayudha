@@ -1,0 +1,115 @@
+# The simulated human of grill/bakery-terms (WP5.8): the bakery's owner. The skill tags each question with a topic, <dimension>/<key>, the keys
+# coming from the catalogues' Topics (jargon.md, vague/idea.md), term/<term> for an abbreviation, or the request topics in the skill. The human
+# answers by topic, else by the topic's dimension, else with the fallback, which parks it: an unscripted idea never becomes a
+# requirement. kind: confirm (states or agrees), default (accepts the skill's offered default), park, or defer.
+max_rounds = 4
+readback = "Yes, that is what done looks like."
+fallback = { kind = "park", text = "That is not part of what I asked for; park it." }
+
+[topics."term/pdp"]
+kind = "confirm"
+text = "By PDP I mean the menu, /menu, where each product has its tile. We don't have separate product pages."
+
+[topics."term/cta"]
+kind = "confirm"
+text = "Yes, a call to action: one button that starts a catering order."
+
+[topics."term/b2b"]
+kind = "confirm"
+text = "B2B means offices that order trays of pastries for meetings. Not a separate portal."
+
+[topics."term/pii"]
+kind = "confirm"
+text = "PII is personal data: customer names, emails, and phone numbers. None of it may show up in any of our logs: the server's logs or the analytics events."
+
+[topics."other/pii-logs"]
+kind = "confirm"
+text = "Every log we keep: the server's logs and the analytics events. No customer name, email, or phone number in any of them."
+
+[topics."other/logs"]
+kind = "confirm"
+text = "Every log we keep: the server's logs and the analytics events. No customer name, email, or phone number in any of them."
+
+[topics."other/log-scope"]
+kind = "confirm"
+text = "Every log we keep: the server's logs and the analytics events. No customer name, email, or phone number in any of them."
+
+[topics."idea.who/user"]
+kind = "confirm"
+text = "Office managers ordering for a meeting of 10 or more people."
+
+[topics."idea.job/today"]
+kind = "confirm"
+text = "Office orders come by phone today and get lost. Every catering request should arrive as an order we can see. I'd like 5 a week through the form to start."
+
+[topics."idea.job/job"]
+kind = "confirm"
+text = "Office orders come by phone today and get lost. Every catering request should arrive as an order we can see. I'd like 5 a week through the form to start."
+
+[topics."idea.outcome/change"]
+kind = "confirm"
+text = "Office orders come by phone today and get lost. Every catering request should arrive as an order we can see. I'd like 5 a week through the form to start."
+
+[topics."idea.outcome/measure"]
+kind = "confirm"
+text = "Office orders come by phone today and get lost. Every catering request should arrive as an order we can see. I'd like 5 a week through the form to start."
+
+[topics."idea.outcome/goal"]
+kind = "confirm"
+text = "No separate Goal; the 5 a week is enough for this story."
+
+[topics."idea.slice/smallest-slice"]
+kind = "confirm"
+text = "Just an 'Order for your office' button on the menu page and a short form: company, name, email, phone, date, and how many people. It sends us the request as an order; no prices or invoices yet."
+
+[topics."idea.slice/size"]
+kind = "confirm"
+text = "One story is fine."
+
+[topics."idea.out-of-scope/not-in-scope"]
+kind = "confirm"
+text = "No prices, invoices, company accounts, or delivery."
+
+[topics."idea.checkpoints/checkpoints"]
+kind = "default"
+text = "Your default is fine."
+
+[topics."request/scope"]
+kind = "confirm"
+text = "Keeping PII out of the logs is part of this: no customer name, email, or phone number may show up in any of our logs, the server's or the analytics events, whatever page or order it came from."
+
+[topics."request/size"]
+kind = "confirm"
+text = "One story is fine."
+
+[topics."request/existing-behaviour"]
+kind = "confirm"
+text = "Orders go through POST /api/orders today; catering requests can use it too."
+
+[dimensions."term"]
+kind = "defer"
+text = "I'm not sure what you mean by that; leave it open."
+
+[dimensions."idea.who"]
+kind = "confirm"
+text = "Office managers ordering for a meeting of 10 or more people."
+
+[dimensions."idea.job"]
+kind = "confirm"
+text = "Office orders come by phone today and get lost. Every catering request should arrive as an order we can see. I'd like 5 a week through the form to start."
+
+[dimensions."idea.outcome"]
+kind = "confirm"
+text = "Office orders come by phone today and get lost. Every catering request should arrive as an order we can see. I'd like 5 a week through the form to start."
+
+[dimensions."idea.slice"]
+kind = "confirm"
+text = "Just an 'Order for your office' button on the menu page and a short form: company, name, email, phone, date, and how many people. It sends us the request as an order; no prices or invoices yet."
+
+[dimensions."idea.out-of-scope"]
+kind = "confirm"
+text = "No prices, invoices, company accounts, or delivery."
+
+[dimensions."idea.checkpoints"]
+kind = "default"
+text = "Your default is fine."
