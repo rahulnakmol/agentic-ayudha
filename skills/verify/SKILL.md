@@ -122,12 +122,15 @@ summary alone does not tell them what to do next.
 ## When a branch changes the product
 
 Update the map in the same branch (drift fails the gate from `drift_blocking_from`). Tell the person what you will
-change before you change it: the surfaces, and each new check with its steps and assertions. Then wait for their yes,
-unless they already asked you to make the change. Each new check proves one criterion. It sets up the exact state
-the criterion names (the same notes, data, or page) and asserts the exact result it expects, so the check fails
-when the behaviour is wrong. Read the feature file before you change it, and write it once. Then run
-`aayu verify --map` (it must be clean) and `aayu verify --check <feature>`. Report what is still missing, such as the
-story's criteria in its evidence map.
+change before you change it: the surfaces, and each new check with its steps and assertions. Then end your turn and
+wait for their yes, unless they already asked you to make the change without hearing it first; "tell me first" means
+wait. Each new check proves one criterion. Copy the criterion's state into the check's steps literally: the same
+records in the same order, and the same one marked done, paid, or selected (when the criterion says "the second done",
+the check adds two and marks the second). Assert the criterion's whole expected output (the exact stdout or body, and
+the exit code), not a substring of it, so the check fails when the behaviour is wrong. Before you write, compare each
+check's steps and assertion with its criterion, line by line. Read the feature file before you change it, and write it
+once. Then run `aayu verify --map` (it must be clean) and `aayu verify --check <feature>`. Report what is still
+missing, such as the story's criteria in its evidence map.
 
 ## Feature maps and behaviour checks (WP4.5b)
 
