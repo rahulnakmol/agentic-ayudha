@@ -39,7 +39,7 @@ Three rules shape this table:
 The `review` default also names an escalation: GPT-6 Astra at high reasoning effort, used when a caller marks a
 review as heavy. The `ui-review` default on Cursor, Claude Code, and Codex is Gemini 3.8 Flash
 (`gemini-3.8-flash`, `google` family), so it is never in the family of an anthropic or OpenAI builder. It is interim
-until the AI gateway routes the target, `gemini-4-argon-high` (Appendix B D-6.6b).
+until the AI gateway routes the target, `gemini-4-argon-high`, which it does not serve yet.
 
 ## How `aayu models` resolves a lane
 
