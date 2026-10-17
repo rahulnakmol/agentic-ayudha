@@ -1731,7 +1731,8 @@ func TestTier2TellRevisesOnceThenJudges(t *testing.T) {
 		t.Fatal(err)
 	}
 	runs := res.Cases[0].Runs
-	if len(fake.Requests) != 11 || !runs[0].Revised || runs[0].Status != RunPass || runs[1].Revised || runs[4].Score != 1 || !strings.Contains(runs[4].Floor, "is not a Feature with authoritative packs") {
+	if len(fake.Requests) != 11 || !runs[0].Revised || runs[0].Status != RunPass || runs[1].Revised || runs[4].Score != 1 || !strings.Contains(runs[4].Floor, "is not a Feature with authoritative packs") ||
+		!strings.Contains(runs[0].RevisedFor, "superlative") || !strings.HasPrefix(runs[0].Answer, "# Benefits QA v1.5.0") || !strings.Contains(runs[4].Answer, "most powerful") {
 		t.Fatalf("%d calls, runs %+v", len(fake.Requests), runs)
 	}
 	first, revise, judged := fake.Requests[0], fake.Requests[1], fake.Requests[2]

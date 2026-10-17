@@ -18,7 +18,7 @@ spreadsheet opens) of every claim your filters match, with the columns you choos
 
 ## What to expect
 
-- You can keep working while the file is prepared. On a list of more than 10,000 claims, the list keeps responding.
+- On a list of more than 10,000 claims, the list keeps responding while the file is prepared.
 - The export covers the claims list only. PDF files, scheduled exports, and exports of other lists are outside what
   this feature does.
 

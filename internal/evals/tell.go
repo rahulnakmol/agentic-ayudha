@@ -118,55 +118,30 @@ func (h *Harness) runTell(ctx context.Context, c Case, lane verbs.LaneID, body, 
 	if err != nil {
 		return Run{}, err
 	}
-	sources := untrusted("aayu tell "+c.Tell.Kind, tellBrief(c, g, b, u)) + "\n\n" + untrusted(design.BrandPath, string(brand)) + "\n\n" + untrusted("grounding", input)
+	brief := tellBrief(c, g, b, u)
 	task := "The human asks: " + c.Tell.Request
 	req := models.Request{
-		System:    body + "\n\nYou have run `aayu tell " + c.Tell.Kind + "` and read the brand and every Feature's packs already; they follow. Reply with the Markdown draft only, nothing before or after it.",
-		Messages:  []models.Message{{Role: "user", Content: sources + "\n\n" + task}},
+		System: body + "\n\nYou have run `aayu tell " + c.Tell.Kind + "` and read the brand and every Feature's packs already; they follow. Reply with the Markdown draft only, nothing before or after it.",
+		Messages: []models.Message{{Role: "user", Content: untrusted("aayu tell "+c.Tell.Kind, brief) + "\n\n" + untrusted(design.BrandPath, string(brand)) +
+			"\n\n" + untrusted("grounding", input) + "\n\n" + task}},
 		MaxTokens: h.Config.MaxTokens.Skill,
 	}
-	complete := h.complete(lane, "skill", &calls)
-	var draft string
-	var problems []string
-	for attempt := 0; attempt < 2; attempt++ {
-		resp, err := complete(ctx, req)
-		if err != nil {
-			return Run{}, err
-		}
-		if resp.Truncated {
-			return Run{}, &models.ReplyError{Err: fmt.Errorf("the draft stopped at the %d-token cap", req.MaxTokens), Reply: resp.Text, Truncated: true}
-		}
-		draft = draftOnly(resp.Text)
-		if problems = checkTell(c, g, b, u, draft); len(problems) == 0 {
-			run.Revised = attempt > 0
-			break
-		}
-		req.Messages = append(req.Messages, models.Message{Role: "assistant", Content: draft},
-			models.Message{Role: "user", Content: "`aayu tell " + c.Tell.Kind + " --from` refused the draft:\n- " + strings.Join(problems, "\n- ") + "\n\nFix every finding and reply with the whole revised draft only."})
+	draft, problems, first, err := reviseOnce(ctx, h.complete(lane, "skill", &calls), req, func(d string) []string { return checkTell(c, g, b, u, d) })
+	if err != nil {
+		return Run{}, err
 	}
+	run.Revised, run.RevisedFor = len(first) > 0, revisedFor(first)
 	if len(problems) > 0 {
-		return Run{Status: RunFail, Score: 1, Revised: true, Floor: "tell checks: " + clip(strings.Join(problems, "; "), 600)}, nil
+		return Run{Status: RunFail, Score: 1, Revised: true, RevisedFor: run.RevisedFor, Floor: "tell checks: " + clip(strings.Join(problems, "; "), 600), Answer: answerOf(draft)}, nil
 	}
 	checks := "Deterministic checks passed (`aayu tell --from`): every link to a work item is a proven Feature; no sentence names an unproven Feature; " +
 		"every proven Feature the copy names is linked; no word on the brand's avoid list; no superlative"
-	var v struct {
-		Score  int    `json:"score"`
-		Reason string `json:"reason"`
-	}
-	jreq := models.Request{
-		System: judgeSystem + "\n\n## Rubric\n\n" + strings.TrimSpace(rubric),
-		Messages: []models.Message{{Role: "user", Content: "## Task given to the skill\n\nWrite `" + c.Tell.Kind + "` copy. " + task +
-			"\n\n## Sources (the only ones)\n\n" + sources + "\n\n## Skill output\n\n" + untrusted("skill-output", draft) + "\n\n## Checks\n\n" + checks + "."}},
-		MaxTokens: h.Config.MaxTokens.Judge,
-		Format:    &models.Format{Name: "rubric_score", Schema: judgeSchema, Strict: true},
-	}
-	if err := models.Structured(ctx, h.complete(judgeLane, "judge", &calls), jreq, judgeSchema, &v); err != nil {
+	judged, err := h.judge(ctx, "## Task\n\nWrite `"+c.Tell.Kind+"` copy. "+task+"\n\n## `aayu tell "+c.Tell.Kind+"` (the brief)\n\n"+brief+
+		"\n\n## "+design.BrandPath+"\n\n"+string(brand)+"\n\n## Grounding (the only source)\n\n"+input+"\n\n## Checks\n\n"+checks+".", rubric, draft, nil, &calls)
+	if err != nil {
 		return Run{}, err
 	}
-	revised := run.Revised
-	run = Run{Status: RunFail, Score: v.Score, Pass: v.Score >= h.Config.PassScore, Reason: clip(v.Reason, 600), Revised: revised}
-	if run.Pass {
-		run.Status = RunPass
-	}
-	return run, nil
+	judged.Revised, judged.RevisedFor = run.Revised, run.RevisedFor
+	judged.Answer = answerOf(draft)
+	return judged, nil
 }

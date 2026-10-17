@@ -13,7 +13,8 @@ voice, and whether the post works as a launch.
 
 A claim is any statement of what the product does, who it helps, a control, or a number. A claim traces to a pack when
 it restates a criterion of an authoritative pack whose inspect verdict is met (its state and expected result, or the
-inspect judgement), a Feature's summary, problem, or scope, or a Result in its own words. Anything else is an
+inspect judgement), a floor that passed, stated as exactly what it checked, a Feature's summary, problem, or scope, or
+a Result in its own unit and population. Anything else is an
 unsupported claim: a control or behaviour no criterion names; a speed, comparison, adoption, or satisfaction claim; a
 number other than a Result's, or a Result's number without its unit and population ("4.2 CSV exports per reviewer per
 week"); a Result for #15 or #16, which have none yet; a hint at Team workspaces or anything else to come; a URL, offer,
