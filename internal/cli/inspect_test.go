@@ -588,6 +588,23 @@ func TestInspectWithoutStory(t *testing.T) {
 		t.Fatalf("an unreviewed test file on a PR without criteria: %d %s %q", code, res.Disposition, res.Overridden)
 	}
 
+	// Nor a deletion: with no criteria to judge its effect, a deleted file is
+	// reviewed like any other.
+	dhead := strings.Repeat("b", 40)
+	del := g.AddPR("refactor: drop Percent", "Drops it.", "founder", "refactor/drop-percent", dhead, "dev")
+	g.Mu.Lock()
+	del.Diff = "diff --git a/internal/report/percent.go b/internal/report/percent.go\ndeleted file mode 100644\n--- a/internal/report/percent.go\n+++ /dev/null\n@@ -1 +0,0 @@\n-package report\n"
+	g.Static["/repos/o/r/pulls/"+strconv.Itoa(del.Number)+"/commits"] = jsonOf(t, `[{"sha":"`+dhead+`","commit":{"message":"refactor: drop\n\nAayudha-Model: claude-opus-5-5\n"}}]`)
+	g.Mu.Unlock()
+	addComment(g, del.Number, "chatgpt-codex-connector[bot]", "Bot", statedReply(dhead, "merge"))
+	if code, res, _ = inspectApp(t, env, opts, del.Number, "--ci"); code != ExitBlocked || !strings.Contains(res.Overridden, "left unreviewed: internal/report/percent.go") {
+		t.Fatalf("an unreviewed deletion on a PR without criteria: %d %s %q", code, res.Disposition, res.Overridden)
+	}
+	addComment(g, del.Number, "chatgpt-codex-connector[bot]", "Bot", statedReply(dhead, "merge", "internal/report/percent.go"))
+	if code, res, errOut = inspectApp(t, env, opts, del.Number, "--ci"); code != 0 || res.Disposition != inspect.Merge {
+		t.Fatalf("a reviewed deletion on a PR without criteria: %d %s %s", code, res.Disposition, errOut)
+	}
+
 	// The docs-only exemption does not depend on the reviewer backend.
 	if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\nreviewer = \"model\"\n"), 0o644); err != nil {
 		t.Fatal(err)

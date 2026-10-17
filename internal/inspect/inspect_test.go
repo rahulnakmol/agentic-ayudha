@@ -367,7 +367,7 @@ func TestCoverageManifest(t *testing.T) {
 		{Path: "internal/report/percent.go", Status: Reviewed},
 		{Path: "LAYERS.md", Status: SkippedCov, Why: "generated: the drift check owns it"},
 		{Path: "internal/report/percent_test.go", Status: Reviewed},
-		{Path: "old.go", Status: SkippedCov, Why: "deleted"},
+		{Path: "old.go", Status: Reviewed}, // no criteria here: the deletion was in the reviewer's prompt
 	}
 	if m == nil || !slices.Equal(m.Files, want) || m.State != "complete" || res.Disposition != Merge {
 		t.Fatalf("manifest %+v, disposition %s", m, res.Disposition)

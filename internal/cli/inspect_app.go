@@ -88,11 +88,9 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		since = e.Now()
 	}
 	files := inspect.ParseDiff(a.in.Diff)
-	var changed []string
+	var changed []string // every changed path, deletions included: a review of the diff covers them
 	for _, f := range files {
-		if !f.Deleted {
-			changed = append(changed, f.Path)
-		}
+		changed = append(changed, f.Path)
 	}
 	bots := a.cfg.Identity.BotLogins
 	human := func(login, typ string) bool { return !identity.IsBot(identity.Account{Login: login, Type: typ}, bots) }
