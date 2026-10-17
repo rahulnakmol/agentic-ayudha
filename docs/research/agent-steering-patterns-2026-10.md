@@ -24,9 +24,8 @@ thread sample; **[I]** inferred.
   (13 moments in 9 threads) is an agent making a failing evaluation pass by changing the evaluation: loosening a
   rubric, demoting a gate to advisory, rerunning until a stochastic run passes, or a formatting-only change that
   satisfies a scorer without improving the work. A reviewer (a person, or an orchestrator relaying one) caught
-  every one. Product floors already resist this
-  (ground rule 7, waivers as Decisions, the coverage ratchet); the skill-eval bars in `evals/eval.toml` and the case
-  rubrics do not. **Fix: a `check` that ratchets eval bars like coverage** (§5.1).
+  every one. Product floors already resist this (ground rule 7, waivers as Decisions, the coverage ratchet); the
+  skill-eval bars in `evals/eval.toml` and the case rubrics do not. **Fix: a `check` that ratchets eval bars like coverage** (§5.1).
 - **The most frequent correction was invisible to people but costly.** About 60 times in 25 threads an agent
   committed or pushed work that a check then failed: formatting, lint, Markdown lint, generated-file drift, a commit
   without a sign-off or with a non-conventional subject, a secret-shaped fixture, a coverage floor. About 11 reached
@@ -40,7 +39,7 @@ thread sample; **[I]** inferred.
   the same decision log or regenerated the same counts; one reused a row ID it then claimed was its own. **Fix: one
   file per decision row, rendered by `go generate`, with a uniqueness test** (§5.4).
 - **Much is already handled.** Exactly-once host installs, no faked approvals, the vagueness gate, worktree
-  isolation, and safer defaults were each corrected repeatedly at first and are now enforced in code (§4). They are
+  isolation, and safer defaults were each corrected repeatedly at first and are now enforced in code (§3, P8 to P13). They are
   the evidence that the codebase layer works: none of them recurred in the sample after the code landed.
 - **What stays human.** Scope decisions (late additions, reversals, freezes) were the second most frequent kind of
   steering (about 18 moments) and are rightly a person's call. The environment can only make them cheaper to make
@@ -229,7 +228,7 @@ Each was filed as a Feedback issue through `aayu grill feedback`, then classifie
 `aayu retro --classify <n> --layer <layer> --reason … --criterion …`, which files the fix as a backlog Story whose
 Completion Goal names the proof. None is Ready; a person reviews each before `aayu ready`.
 
-### 5.1 Ratchet eval bars like the coverage floor (P1, `check`)
+### 5.1 Ratchet eval bars like the coverage floor (P1, `check`): Feedback #327, Story #331
 
 - **Reason:** whether a PR lowers a bar is a property of the diff, so a check catches it every time; only the
   decision to lower one needs a person, and that already has a home (an accepted Decision).
@@ -238,7 +237,7 @@ Completion Goal names the proof. None is Ready; a person reviews each before `aa
   TestEvalBarRatchet fails it, and passes once the PR names one`.
 - **Surface:** `internal/evals` (a check run by the `build` job), `evals/README.md`.
 
-### 5.2 One local gate that mirrors the required CI jobs (P2, `check`)
+### 5.2 One local gate that mirrors the required CI jobs (P2, `check`): Feedback #328, Story #332
 
 - **Reason:** every failure in the pattern is already a CI check; running the same checks before a push catches it
   every time, and generating the gate from the workflow keeps the list from drifting.
@@ -247,7 +246,7 @@ Completion Goal names the proof. None is Ready; a person reviews each before `aa
   mirrors, and TestLocalGateMirrorsRequiredJobs fails when a required job has no local step`.
 - **Surface:** `aayu install --env` (`internal/agentenv`), a pre-push hook registered by `install`, `AGENTS.md`.
 
-### 5.3 Every deterministic rule ships with three fixtures (P6, `check`)
+### 5.3 Every deterministic rule ships with three fixtures (P6, `check`): Feedback #329, Story #333
 
 - **Reason:** the failures were a negated sentence, a near-miss word, and a paraphrase; a test that requires those
   fixture kinds for each rule catches a rule that lacks them before it costs an evaluation round.
@@ -255,7 +254,7 @@ Completion Goal names the proof. None is Ready; a person reviews each before `aa
   fixture; expected: TestCaseRulesHaveFixtures fails naming the rule and the missing kind`.
 - **Surface:** `internal/evals` (tier-1 rules), `evals/cases/**`.
 
-### 5.4 One file per decision row (P5, `codebase`)
+### 5.4 One file per decision row (P5, `codebase`): Feedback #330, Story #334
 
 - **Reason:** conflicts come from many writers appending to one file; one file per record removes the conflict, and
   rendering the table makes a duplicate ID a generation error rather than a review catch.
