@@ -82,7 +82,8 @@ func RunHook(name string, host verbs.HostID, root, pauseFile string, event []byt
 // for. The AGENTS.md hosts section and Codex's session-start hook carry it.
 const Routing = "aayudha: before you change anything for a request, run `aayu grill story --assess --idea \"<the person's words>\" --json` (the grill skill). " +
 	"On `unpack`, ask the person its questions, riskiest first, and wait for their answers before you file, ready, or build anything. " +
-	"Work only on the issue the person asked for: never pick up an open or Ready story on your own."
+	"Work only on the issue the person asked for: never pick up an open or Ready story on your own. " +
+	"`aayu build` holds a story the person has not asked for in this session: ask them, and pass their words with `--asked \"<their words>\"`."
 
 // Deny is the pre-tool hook's answer for host: allow when msg is empty, else
 // block the tool call with msg (exit 2, and Cursor's JSON permission reply).

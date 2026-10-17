@@ -23,5 +23,6 @@ run a human-only verb, and `status-line` shows where the work stands.
 Before you change anything for a request, run `aayu grill story --assess --idea "<the person's words>" --json` (the
 grill skill). On `unpack`, ask the person its questions, riskiest first, and wait for their answers before you file,
 ready, or build anything. Work only on the issue the person asked for: never pick up an open or Ready story on your
-own.
+own. `aayu build` holds a story the person has not asked for in this session: ask them, and pass their words with
+`--asked "<their words>"`.
 <!-- END aayudha:hosts -->

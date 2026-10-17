@@ -20,7 +20,7 @@ const SKILL_COMMANDS: { verb: string; title: string; ask?: string; prompt: (n: s
 	{ verb: 'grill', title: 'Shape a story with the Product Strategist', prompt: () => 'Use the aayudha grill skill to shape a new story with me, one question at a time.' },
 	{ verb: 'ready', title: 'Check a story for Ready', ask: 'Story or bug number', prompt: (n) => `Use the aayudha ready skill: run \`aayu ready ${n} --check\` and tell me what still blocks Ready.` },
 	{ verb: 'plan', title: 'Plan a story', ask: 'Story or bug number', prompt: (n) => `Use the aayudha plan skill on #${n}: one checkpoint per layer.` },
-	{ verb: 'build', title: 'Build a Ready story', ask: 'Story or bug number', prompt: (n) => `Use the aayudha build skill on #${n}: commit each checkpoint with \`aayu build ${n}\`.` },
+	{ verb: 'build', title: 'Build a Ready story', ask: 'Story or bug number', prompt: (n) => `Use the aayudha build skill on #${n}: I picked it from the palette, so start it with \`aayu build ${n} --asked "build #${n} (command palette)"\`, then commit each checkpoint with \`aayu build ${n}\`.` },
 	{ verb: 'verify', title: 'Verify the floors', prompt: () => 'Use the aayudha verify skill on the current change and report each floor.' },
 	{ verb: 'inspect', title: 'Inspect a pull request', ask: 'Pull request number', prompt: (n) => `Use the aayudha inspect skill on PR #${n}.` },
 ]

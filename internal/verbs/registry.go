@@ -608,6 +608,7 @@ var Verbs = []Command{
 			flag("resume", TypeBool, "Resume from the last Aayudha-Checkpoint trailer."),
 			enumIn("delegate", false, false, "Hand the story to another agent's cloud agent with the delegation brief, or sync it: its PR, inspect's findings, and follow-ups (auto picks the cheapest adequate connected one).", "codex", "cursor", "claude", "amp", "auto"),
 			flag("local", TypeBool, "With --delegate: run the receiver's CLI on this machine in an aayu worktree, with no GitHub credential; aayu commits, verifies, pushes, and opens the PR."),
+			flag("asked", TypeString, "The person's own words asking for this story. An agent needs them to pick up a Ready story that did not come out of grill in this session; without them build stops with a warning before taking the story."),
 		},
 		Outputs:  []string{"pr", "checkpoint-commits", "progress-comment", "delegation"},
 		Gates:    []GateID{GateReady, GateBudget, GateHalt},

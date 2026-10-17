@@ -190,6 +190,9 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	// The branch, commits, and PR title use the title without its issue
 	// form's "Story: " prefix (D-5.5c.19).
 	chk.Title = workitems.BareTitle(chk.Title)
+	if err := e.askedGate(ctx, c, repo, n, chk.Title, labels, in); err != nil {
+		return err
+	}
 	res := BuildResult{Issue: n, Worktree: BuildWorktree(root, n), Branch: fmt.Sprintf("story/%d-%s", n, slug(chk.Title))}
 	dev := e.devBranch()
 	w, err := e.Ledger(ctx, bot.Token, c.Identity(), bot.Tag)
