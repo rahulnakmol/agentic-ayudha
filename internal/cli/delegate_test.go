@@ -578,7 +578,7 @@ func TestDelegateLocalUsageLimitPause(t *testing.T) {
 	for _, d := range slept {
 		total += d
 	}
-	if code != 0 || res.PR == 0 || runs != 2 || total != resets.Sub(start)+time.Minute || res.Budget.Attempts != 0 {
+	if code != 0 || res.PR == 0 || runs != 2 || total != resets.Sub(start)+time.Minute || res.Budget.Attempts != 0 || res.Budget.WallHours < total.Hours() {
 		t.Fatalf("pause and resume: %d %+v runs %d slept %v %s", code, res.Budget, runs, slept, errOut)
 	}
 	var leasedUntil time.Time

@@ -322,7 +322,12 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	}
 
 	if write != nil {
-		if err := write(ctx, res.Worktree); err != nil {
+		err := write(ctx, res.Worktree)
+		// The wall clock ran on while the receiver worked, or waited out a usage limit.
+		if started, perr := time.Parse(time.RFC3339, st.StartedAt); perr == nil {
+			res.Budget.WallHours = e.Now().Sub(started).Hours()
+		}
+		if err != nil {
 			// A usage limit build cannot wait out here is a pause, not a
 			// failure: no attempt is counted, and the wall clock runs on.
 			var pause *usagePause

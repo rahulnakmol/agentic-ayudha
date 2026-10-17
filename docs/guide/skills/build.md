@@ -81,8 +81,9 @@ It checks these before it acts, and stops when one fails:
 The default budget is 8 hours, 3 failed attempts, and 60 USD of metered spend. The spend limit applies only when
 aayudha's own model calls are pay-as-you-go (a gateway endpoint or a provider key); subscription use is not counted.
 Past the budget, the story moves to `status:blocked` and a person is paged. When a local receiver hits its
-subscription usage limit, the build pauses until the limit resets; the pause is not a failed attempt, and the
-wall clock keeps running.
+subscription usage limit and says when it resets, the build waits for the reset and continues. With no reset time,
+or a reset too late for the wall clock, it stops as paused (exit 4) and prints the command to run again. A pause is
+not a failed attempt, and the wall clock keeps running.
 
 ## What only a person does
 

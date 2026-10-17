@@ -26,13 +26,15 @@ installed; the merge gate runs them)". That is fine. The checks that count run i
 
 ## A budget that keeps watch
 
-Every build has limits: by default 8 hours, 3 failed attempts, and 60 USD of metered spend. The spend limit
-applies only when aayudha's own model calls are pay-as-you-go, through a gateway endpoint or a provider key;
-subscription use is not counted, and the build output says so. If the budget runs out, or a risky layer fails
-twice, the agent stops, marks the story blocked, and pages a person through Slack, email, or a GitHub mention. The
-code your agent writes is billed by your agent's own plan as usual. If a local receiver
-(`--delegate <agent> --local`) hits its subscription usage limit, the build pauses until the limit resets and then
-continues; a pause is not a failed attempt, and the 8-hour clock keeps running.
+Every build has limits: by default 8 hours, 25 USD of model spend that aayudha can see, and 3 failed attempts. If
+the budget runs out, or a risky layer fails twice, the agent stops, marks the story blocked, and pages a person
+through Slack, email, or a GitHub mention. The code your agent writes is billed by your agent's own
+plan as usual.
+
+> **Since then:** the spend limit is 60 USD, and it applies only when aayudha's own model calls are pay-as-you-go,
+> through a gateway endpoint or a provider key. Subscription use is not counted, and the build output says so. When
+> an agent building on your machine hits its subscription usage limit, the build waits for the reset and carries on,
+> or tells you when to run it again: [hand work to an agent](guide-build.md).
 
 On your Monday the brake was pulled once, and the alert landed on you. Story 134's local checks failed twice on its
 platform layer, a risky one, so the agent stopped and marked the story blocked. You looked. The cause was not the

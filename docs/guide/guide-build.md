@@ -20,7 +20,10 @@ The agent works in its own git worktree, so your checkout is untouched. It follo
 commits a checkpoint after each, checks it, then opens a pull request. A budget keeps watch: by default 8 hours,
 3 failed attempts, and 60 USD of metered spend, which applies only when aayudha's own model calls are pay-as-you-go
 (a gateway endpoint or a provider key); subscription use is not counted. When it runs out, the agent stops and asks
-a person. A local receiver that hits its subscription usage limit pauses the build until the limit resets.
+a person. A pause at a subscription usage limit is not a failed attempt, and the 8 hours keep running. When an agent
+building on your machine (`--delegate <agent> --local`) hits its limit and says when it resets, the build waits and
+then continues by itself. When it gives no reset time, or the reset comes too late for the 8 hours, the build stops as
+paused and prints the command to run again, `aayu build <story> --delegate <agent> --local`, once the limit resets.
 
 **You should see** a pull request, and a comment on the story that reads like a flight log: checkpoint, layer, result,
 and budget used.
