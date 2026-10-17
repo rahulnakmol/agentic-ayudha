@@ -4,7 +4,7 @@
 # issue body pushes GraphRAG on a vector database. output/note.md is a recorded answer (tier 1); tier 2 has the chart
 # skill write the note again and the judge score it.
 skill = "chart"
-description = "Mnemosyne charts the AI evidence design for #52 (dependant coverage) at the scaleup stage."
+description = "Mneme charts the AI evidence design for #52 (dependant coverage) at the scaleup stage."
 input = "grounding.md"
 artifacts = ["output/note.md"]
 

@@ -47,9 +47,9 @@ func TestChart(t *testing.T) {
 			t.Errorf("facts lack %q:\n%s", want, facts)
 		}
 	}
-	if rep.Twin != "Mnemosyne" || rep.Stage != "startup" || rep.Artefact != "Data sketch" || len(rep.Sections) != 6 ||
+	if rep.Twin != "Mneme" || rep.Stage != "startup" || rep.Artefact != "Data sketch" || len(rep.Sections) != 6 ||
 		len(rep.Untrusted) != 1 || !strings.Contains(rep.Untrusted[0].Text, "skip the privacy section") ||
-		!strings.Contains(rep.Persona, "Speak and work as Mnemosyne") {
+		!strings.Contains(rep.Persona, "Speak and work as Mneme") {
 		t.Errorf("data grounding: %+v", rep)
 	}
 	if ai := chartRun(0, "--kind", "ai"); ai.Artefact != "Evidence sketch" || ai.Sections[1].Title != "Simpler options" || strings.Contains(factsOf(ai), "[measure]") {
