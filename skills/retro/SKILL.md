@@ -192,6 +192,10 @@ Hold every sentence to what the record shows:
   does not fix the finding.
 - Say what changes and who owns it; do not describe aayu's own mechanics (how Feedback is accepted, which command
   carries a change), and do not merge or reassign the Feedback issues the report filed. Cite the ones that exist.
+- The fix layers of step 3 (codebase, check, prose, review) are a classification you record with `--classify`, not a
+  fact of the record: name a Feedback issue's fix layer only as the report's "Fix layer of Feedback" table records
+  it, citing the report; otherwise propose the change and leave its layer unnamed. `LAYERS.md` holds the code
+  layers L01 to L09, never a fix layer, so it is not the source of one.
 - Cite only what you read for this retro, never your own charter, persona, or this skill, and put the citation in
   every list item and table row that names code, a layer, a floor, a risk, or progress. A citation is the source
   that states the fact in its sentence: the source of a budget is not the source of what was spent.
