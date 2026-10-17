@@ -238,8 +238,9 @@ start the next, and later runs resume the saved sections, so fixing one section 
 error never loses the sections before it. Until the questions section exists, an item whose question you have not
 written yet carries `"?"`, and the questions section's `assign` maps each to its question. With every section saved,
 the check writes the merged `survey.json` and `SURVEY.md`; `aayu survey --sections` reports which sections pass,
-which have problems, and which are missing or stale (saved against another index). A small survey may be written
-whole in one file; the check is the same.
+which have problems, and which are missing or stale (saved against another index or other content). With no
+modernisation asked for, submit that section as `{"modernisation": null}`. A small survey may be written whole in one
+file; the check is the same.
 
 - **Engineering** (`E1`…, topics architecture, modules, data, interfaces, build, dependencies, tests, risks,
   quality, operations): the shape of the system, its contracts and data, how it is built and tested, and what is

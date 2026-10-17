@@ -173,6 +173,38 @@ func TestSurveyDraftSections(t *testing.T) {
 	if code, r = draft("--sections"); code != 0 || !slices.Equal(r.Stale, []string{"product"}) || !slices.Equal(r.Missing, []string{"product"}) || r.Merged != "" {
 		t.Fatalf("stale: %d %+v", code, r)
 	}
+	// So is every section once the checkout's content changes, at the same
+	// commit (this checkout has no git): the claims were checked against
+	// other code.
+	src := filepath.Join(dir, "src", "util.cpp")
+	b, err = os.ReadFile(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(src, append(b, []byte("// edited\n")...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, stderr := run(t, nil, opts, "survey", dir, "--out", out); code != 0 {
+		t.Fatalf("re-index: %d %s", code, stderr)
+	}
+	if code, r = draft("--sections"); code != 0 || len(r.Stale) != 5 || len(r.Resumed) != 0 {
+		t.Fatalf("content changed: %d %+v", code, r)
+	}
+
+	// A survey that describes the product without a modernisation plan
+	// submits the section empty, and completes.
+	out = filepath.Join(t.TempDir(), "survey")
+	if code, _, stderr := run(t, nil, opts, "survey", dir, "--out", out); code != 0 {
+		t.Fatalf("index: %d %s", code, stderr)
+	}
+	describe := write("describe.json", func(k string) bool {
+		return k != "modernisation" && k != "compatibility" && k != "do_not_carry"
+	}, func(s string) string {
+		return strings.Replace(strings.Replace(s, "{", `{"modernisation":null,`, 1), `"affects":["N1","E4"]`, `"affects":["E4"]`, 1)
+	})
+	if code, r = draft("--draft", describe); code != 0 || len(r.Missing) != 0 || r.Merged == "" {
+		t.Fatalf("no modernisation: %d %+v", code, r)
+	}
 }
 
 // survey --docs indexes manuals and notes from outside the checkout: each is
@@ -216,6 +248,9 @@ func TestSurveyDocs(t *testing.T) {
 	}
 	if code, stdout, _ = run(t, nil, opts, "survey", dir, "--out", out, "--draft", cite("manual:operator-notes.md:9"), "--plain"); code != ExitBlocked || !strings.Contains(stdout, "manual:operator-notes.md:9") {
 		t.Fatalf("cite past the end: %d %s", code, stdout)
+	}
+	if code, stdout, _ = run(t, nil, opts, "survey", dir, "--out", out, "--draft", cite("doc:manual:operator-notes.md"), "--plain"); code != ExitBlocked || !strings.Contains(stdout, "cite the lines of manual operator-notes.md") {
+		t.Fatalf("the whole manual cited: %d %s", code, stdout)
 	}
 }
 

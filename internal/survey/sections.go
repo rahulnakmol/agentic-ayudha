@@ -369,6 +369,7 @@ func itemSection(d Draft, id string) string {
 type SavedSection struct {
 	Section  string          `json:"section"`
 	Commit   string          `json:"index_commit,omitempty"`
+	Digest   string          `json:"index_digest,omitempty"`
 	SavedAt  string          `json:"saved_at"`
 	Pass     bool            `json:"pass"`
 	Problems []string        `json:"problems"`
@@ -399,8 +400,9 @@ func SaveSection(dir string, s SavedSection) error {
 }
 
 // LoadSections reads the saved sections of dir. A section saved against
-// another index commit is stale: it is returned in stale, not in saved.
-func LoadSections(dir, commit string) (saved map[string]SavedSection, stale []string, err error) {
+// another index (its commit or its content digest differs) is stale: it is
+// returned in stale, not in saved.
+func LoadSections(dir, commit, digest string) (saved map[string]SavedSection, stale []string, err error) {
 	saved = map[string]SavedSection{}
 	for _, name := range SectionNames() {
 		b, err := os.ReadFile(filepath.Join(dir, name+".json"))
@@ -414,7 +416,7 @@ func LoadSections(dir, commit string) (saved map[string]SavedSection, stale []st
 		if err := json.Unmarshal(b, &s); err != nil {
 			return nil, nil, fmt.Errorf("%s: %w", filepath.Join(dir, name+".json"), err)
 		}
-		if s.Commit != commit {
+		if s.Commit != commit || s.Digest != digest {
 			stale = append(stale, name)
 			continue
 		}
