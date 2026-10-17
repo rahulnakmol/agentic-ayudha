@@ -32,6 +32,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ui"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -413,11 +414,14 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 				msg += "\nAayudha-Model: " + model
 			}
 		case copilot:
-			// Auto may answer with several models, of several families: each
-			// is a candidate builder family, and the most recent is the record's.
+			// Auto may answer with several models, of several families: the
+			// trailers name each one. The build record holds one model, so it
+			// names one only when every model Copilot reported is of its family;
+			// otherwise it names none, and inspect sees an unknown builder
+			// rather than a single family that hides the others.
 			msg += "\n" + cm.Trailers()
 			model = ""
-			if len(cm.Models) > 0 {
+			if len(cm.Models) > 0 && !slices.ContainsFunc(cm.Models, func(m string) bool { return verbs.FamilyOf(m) != verbs.FamilyOf(cm.Models[0]) }) {
 				model = cm.Models[0]
 			}
 		case model != "":

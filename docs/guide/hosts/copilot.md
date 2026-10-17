@@ -110,6 +110,10 @@ the reviewer's model family differs from the builder's. If no model is recorded,
 review counts as a same-family review, which never raises how much aayu does on its own. A pull request opened outside
 `build` declares the same lines in its body.
 
+> **Honest status:** `aayu inspect` does not read every `Aayudha-Model` line yet; that change is in progress. Until it
+> lands, when Copilot reports models of two families, `build` leaves the model out of its ledger record, so inspect
+> treats the builder as unknown instead of trusting one family.
+
 ## Review from another family
 
 Copilot gives you two ways to review with a different model family from the builder's:
@@ -138,7 +142,11 @@ Copilot gives you two ways to review with a different model family from the buil
 `build` records a Critique turn's critic as `Aayudha-Critic-Model: <model>`. It counts as a different-family review only
 when the critic's family is outside every builder family on the pull request.
 
-> **Honest status:** one trivial Critique turn cost 16 premium requests, against 1 for an Auto call. HydraFusion is
+> **Honest status:** today `[models.review.copilot]` sets the reviewer you pick inside Copilot, and
+> `aayu models show --host copilot` shows it. `aayu inspect` still runs its own reviewer and does not yet read
+> `Aayudha-Critic-Model`, so a Critique review does not count towards autonomy until that inspect change lands.
+>
+> One trivial Critique turn cost 16 premium requests, against 1 for an Auto call. HydraFusion is
 > billed at each model's standard rate, gets no Auto discount, and has no SLA. You cannot choose its models: on the
 > proving run it drafted with `claude-opus-5.5` and critiqued with `gpt-6-luna`.
 
