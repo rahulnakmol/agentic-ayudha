@@ -3,5 +3,18 @@
   "branch": "story/401-every-deterministic-eval-rule-ships-with",
   "started_at": "2026-10-17T15:49:20Z",
   "failed_attempts": 0,
-  "checkpoints": null
+  "checkpoints": [
+    {
+      "k": 1,
+      "n": 1,
+      "attempt": 1,
+      "commit": "44d521904a1e0603a131403c1f823c2e130dcf07",
+      "layers": [
+        "L05"
+      ],
+      "verify": "hold",
+      "detail": "floors hold; not run here (tool not installed; the merge gate runs them): sast, secrets, deps",
+      "at": "2026-10-17T16:13:31Z"
+    }
+  ]
 }
