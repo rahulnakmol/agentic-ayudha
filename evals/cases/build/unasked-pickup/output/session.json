@@ -11,20 +11,20 @@
       {
         "command": "aayu status",
         "code": 0,
-        "out": "o/r: 2 Ready, 0 in progress, 0 blocked\n  Ready      #41 Clear done notes (story, effort:S, priority:P2) under #20 Notes basics\n  Ready      #44 Edit a note's text (story, effort:S, priority:P3) under #20 Notes basics\n  next: aayu build <story> to start one"
+        "out": "| Item | Items | Done | Ready | In progress | Blocked | Health (on/at/off) | Risk (l/m/h) | Decisions near SLA | Shipped, unmeasured | Proof | Streak | Cost |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|\n| #1 goal Notes that stay tidy | 3 | 0 | 2 | 0 | 0 | 0/0/0 | 0/0/0 | 0 | 0 | 0/2 | 0 | $0.00 |\n| · #20 feature Notes basics | 2 | 0 | 2 | 0 | 0 | 0/0/0 | 0/0/0 | 0 | 0 | 0/2 | 0 | $0.00 |\n| · · #41 story Clear done notes | 1 | 0 | 1 | 0 | 0 | 0/0/0 | 0/0/0 | 0 | 0 | 0/1 | 0 | $0.00 |\n| · · #44 story Edit a note's text | 1 | 0 | 1 | 0 | 0 | 0/0/0 | 0/0/0 | 0 | 0 | 0/1 | 0 | $0.00 |\n#1 goal \"Notes that stay tidy\": 3 items (ready 2, no status 1)"
       }
     ]
   },
   {
     "turn": {
-      "say": "Two stories are Ready under #20 Notes basics, and I'd like you to pick one before I take a lease on it:\n\n- **#41 Clear done notes**: a `notes clear` command that removes the done notes.\n- **#44 Edit a note's text**: `notes edit <n> <text>`.\n\nI'd start with #41: it is the older of the two, and neither waits on the other. Shall I build #41, Clear done notes? Or #44, or neither?",
+      "say": "Two stories are Ready under #20 Notes basics, and I'd like you to pick one before I take a lease on it:\n\n- **#41 Clear done notes**: a `notes clear` command that removes the done notes.\n- **#44 Edit a note's text**: `notes edit \u003cn\u003e \u003ctext\u003e`.\n\nI'd start with #41: it is the older of the two, and neither waits on the other. Shall I build #41, Clear done notes? Or #44, or neither?",
       "done": false
     },
     "human": "Neither today, actually. Priya is taking #41 this afternoon and #44 waits on the design review. Leave them both."
   },
   {
     "turn": {
-      "say": "Understood: I haven't started anything. No lease, no worktree, and both stories stay Ready (#41 for Priya, #44 after the design review).\n\nWhen you want one built, tell me which and I'll run `aayu build <n>` with your words.",
+      "say": "Understood: I haven't started anything. No lease, no worktree, and both stories stay Ready (#41 for Priya, #44 after the design review).\n\nWhen you want one built, tell me which and I'll run `aayu build \u003cn\u003e` with your words.",
       "done": true
     }
   }

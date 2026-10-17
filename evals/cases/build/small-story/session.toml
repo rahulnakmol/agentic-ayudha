@@ -51,6 +51,66 @@ out = '''#41 Clear done notes: footprint L02; 2 criteria; never layers L04, L07,
   1/1 L02 `notes clear` in cmd/notes removes the done notes and says how many (paths: cmd/notes/**; tests: a test per criterion, in cmd/notes)
   out of plan: store/ (L07, a never layer)'''
 
+[[reply]] # the same plan as JSON, as the verb encodes PlanResult (internal/cli/plan.go): the criteria word for word (D-3.4i)
+match = '^aayu plan (?:#?41 --json|--json #?41)\s*$'
+code = 0
+out = '''{
+  "story": 41,
+  "footprint": [
+    "L02"
+  ],
+  "em_review": {
+    "required": false
+  },
+  "problems": [],
+  "pass": true,
+  "criteria": [
+    {
+      "n": 1,
+      "evidence_kind": "api-trace",
+      "state": "three notes \"buy milk\", \"call Ada\", \"post letter\", the second marked done, then `notes clear`",
+      "expected": "exit 0, stdout \"cleared 1 done note\", and `notes list` shows \"1 [ ] buy milk\" and \"2 [ ] post letter\""
+    },
+    {
+      "n": 2,
+      "evidence_kind": "api-trace",
+      "state": "two notes, none done, then `notes clear`",
+      "expected": "exit 0, stdout \"nothing to clear\", and the notes file unchanged"
+    }
+  ],
+  "never_layers": [
+    "L04",
+    "L07",
+    "L09"
+  ],
+  "features": [
+    {
+      "id": "add-and-list",
+      "layers": [
+        "L02"
+      ],
+      "file": ".agents/skills/verify-notes/features/add-and-list.md",
+      "checks": [
+        "add-then-list",
+        "empty",
+        "usage"
+      ]
+    },
+    {
+      "id": "mark-done",
+      "layers": [
+        "L02"
+      ],
+      "file": ".agents/skills/verify-notes/features/mark-done.md",
+      "checks": [
+        "done",
+        "missing"
+      ]
+    }
+  ],
+  "ledger": "specs/41/plan.json"
+}'''
+
 [[reply]] # verify on its own, before the checkpoint: a preview of what the commit will find
 match = '^aayu verify(?:\s+--json)?\s*$'
 evidence = true
