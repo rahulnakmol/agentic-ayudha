@@ -52,6 +52,7 @@ func TestSurveyFloors(t *testing.T) {
 		{"survey/maruku-compat", `"probe:check-differs:headers"`, `"probe:check-differs:easy"`, "probe:check-differs:easy: no such probe fact"},
 		{"survey/maruku-compat", `"level": "undecided"`, `"level": "exact"`, "K1"},
 		{"survey/maruku-backlog", `"title": "Render tables, footnotes, and header attribute lists as Maruku did"`, `"title": "Render tables and footnotes, and support <?maruku ?> instructions"`, "scope: adds a do-not-carry entry the person confirmed"},
+		{"survey/maruku-backlog", `"title": "Render tables, footnotes, and header attribute lists as Maruku did"`, `"title": "Render tables, footnotes, and abbreviations as Maruku did"`, "scope: adds syntax the person said no page uses"},
 		// Controls: the recorded replies pass, including a scope line that keeps a quirk out
 		// and a Decision whose options name the alternative it rejects.
 		{"survey/tinyjs-rust", "", "", ""},
