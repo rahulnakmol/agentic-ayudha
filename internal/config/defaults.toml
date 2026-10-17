@@ -120,6 +120,9 @@ quota_warn_percent = 80 # doctor warns at 80 % of the LFS quota (WP1.7)
 [decisions]
 sla_hours = 24
 provisional_after_hours = 48
+# Solo mode (at most one human): the window is the shorter of this and provisional_after_hours (Story #432). At least
+# 12, and read only from .aayudha/config.toml, a protected path. Never a waiver, seat change, or human-only step.
+solo_provisional_after_hours = 24
 
 # Business hours for SLA clocks and paging windows (WP1.2). DST-aware through the IANA zone.
 [time]

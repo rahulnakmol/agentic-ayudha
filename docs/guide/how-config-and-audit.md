@@ -41,6 +41,17 @@ generated from `defaults.toml`, and the `generate-drift` check fails when the tw
 loosened quietly. The `local`, `env`, and `flag` layers can still change these keys on one machine; that changes what
 an agent on that machine does, but not what the protected files or CI's gate workflows say.
 
+One key is stricter. `[decisions] solo_provisional_after_hours` (default 24) is read only from
+`.aayudha/config.toml` and the embedded defaults: a value in the user, `local`, `env`, or `flag` layer fails the load,
+and so does a value under 12, the hard minimum in code (`config.MinSoloProvisionalHours`). With at most one human
+configured (paired seats' humans and `[autonomy] approver`), a reversible, Decision-ready Decision's recommendation
+then applies provisionally after the shorter of it and `provisional_after_hours` (rule V8); `provisional_after_hours = 0`
+still turns provisional application off. No mode ever applies a waiver of any kind (by label, a `waives #N` link, or a
+title or question that says waive), a seat change, or a step the trust model keeps human-only (approving a PR,
+publishing, `aayu init`, a protected path, a floor, or a ratchet) (`decide.Decision.Excluded`). `aayu status` and
+`aayu inbox` list the provisional Decisions with their ratify-or-revert deadline, so a person can reverse one with
+`aayu decide <n> --accept <option>`.
+
 From `internal/config/defaults.toml`:
 
 ```toml

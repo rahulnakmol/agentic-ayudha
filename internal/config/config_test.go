@@ -225,3 +225,35 @@ func TestBusinessHoursSLA(t *testing.T) {
 		t.Fatalf("Between backwards = %s, want 0", got)
 	}
 }
+
+// TestSoloProvisionalKey (Story #432, criterion 3): the solo window has a hard
+// minimum of 12 business hours, and only the protected repository config sets
+// it; every other layer is refused, even with an allowed value.
+func TestSoloProvisionalKey(t *testing.T) {
+	key := "[decisions]\nsolo_provisional_after_hours = 24\n"
+	tests := []struct {
+		name     string
+		files    map[string]string
+		env, set []string
+		want     string
+	}{
+		{"below the minimum", map[string]string{"repo/.aayudha/config.toml": "version = 1\n[decisions]\nsolo_provisional_after_hours = 11\n"}, nil, nil, "solo_provisional_after_hours = 11: the minimum is 12 business hours"},
+		{"user config", map[string]string{"home/.config/aayudha/config.toml": "version = 1\n" + key}, nil, nil, "read only from .aayudha/config.toml"},
+		{"local config", map[string]string{"repo/.aayudha/config.local.toml": "version = 1\n" + key}, nil, nil, "read only from .aayudha/config.toml"},
+		{"environment", nil, []string{"AAYU_DECISIONS__SOLO_PROVISIONAL_AFTER_HOURS=24"}, nil, "read only from .aayudha/config.toml"},
+		{"--set", nil, nil, []string{"decisions.solo_provisional_after_hours=24"}, "read only from .aayudha/config.toml"},
+	}
+	for _, tt := range tests {
+		src := fixture(t, tt.files)
+		src.Environ, src.Sets = tt.env, tt.set
+		if _, err := Load(src); err == nil || !strings.Contains(err.Error(), tt.want) {
+			t.Errorf("%s: err = %v, want %q", tt.name, err, tt.want)
+		}
+	}
+	for body, want := range map[string]int{"": 24, "[decisions]\nsolo_provisional_after_hours = 12\n": 12} {
+		l, err := Load(fixture(t, map[string]string{"repo/.aayudha/config.toml": "version = 1\n" + body}))
+		if err != nil || l.Config.Decisions.SoloProvisional != want {
+			t.Errorf("repository config %q: %v; want %d", body, err, want)
+		}
+	}
+}

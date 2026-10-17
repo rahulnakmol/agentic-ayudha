@@ -61,23 +61,82 @@ func (d Decision) Reversible() bool {
 	return !d.Waiver() && strings.EqualFold(strings.TrimSpace(d.Item.Fields[workitems.FieldReversible]), "true")
 }
 
+var (
+	waiverRE    = regexp.MustCompile(`(?i)\bwaiv`)
+	seatRE      = regexp.MustCompile(`(?i)\bseats?\b` + seatNames())
+	humanOnlyRE = regexp.MustCompile(`(?i)\bapprov\w*\b.{0,40}\b(pr|prs|pull requests?)\b|\bpublish|\baayu init\b|\bratchet|\bfloors?\b|` +
+		`\.github/|\bskills/|\bops/|constraints\.md|codeowners|\.aayudha/config\.toml|\[(autonomy|models|decisions)[].]`)
+)
+
+func seatNames() string {
+	var b strings.Builder
+	for _, s := range verbs.Seats {
+		fmt.Fprintf(&b, `|\b%s\b|\b%s\b`, regexp.QuoteMeta(string(s.ID)), regexp.QuoteMeta(s.Name))
+	}
+	return b.String()
+}
+
+// Excluded says why d's recommendation is never applied provisionally,
+// whatever its body says and in every mode (V8, Story #432): a waiver of any
+// kind, so no agent waits out a floor or ratchet; a seat change; or a step the
+// trust model keeps human-only. "" when none applies. Its title, question,
+// and links are read, so a waiver without the label still counts.
+func (d Decision) Excluded() string {
+	text := d.Title + "\n" + d.Item.Fields[workitems.FieldSummary]
+	switch {
+	case d.Waiver() || waiverRE.MatchString(text+"\n"+d.Item.Fields[workitems.FieldLinks]):
+		return "a waiver is never applied provisionally"
+	case seatRE.MatchString(text):
+		return "a seat change is never applied provisionally"
+	case humanOnlyRE.MatchString(text):
+		return "a human-only step of the trust model (a PR approval, publishing, init, a protected path, a floor, or a ratchet) is never applied provisionally"
+	}
+	return ""
+}
+
 // Policy is [decisions] with the [time] clock.
 type Policy struct {
 	Clock       config.Clock
 	SLA         time.Duration // business hours before the page and escalation
 	Provisional time.Duration // business hours before a reversible recommendation applies
+	Solo        bool          // the solo window applies: at most one human is configured
 	EscalateTo  string        // login mentioned on escalation (founder B); empty when unset
 }
 
-// NewPolicy reads [decisions] and [time].
+// NewPolicy reads [decisions] and [time]. In solo mode the provisional window
+// is the shorter of provisional_after_hours and solo_provisional_after_hours,
+// never under config.MinSoloProvisionalHours; provisional_after_hours = 0
+// still turns provisional application off.
 func NewPolicy(c *config.Config) (Policy, error) {
 	clock, err := c.Clock()
 	if err != nil {
 		return Policy{}, err
 	}
-	return Policy{Clock: clock, SLA: time.Duration(c.Decisions.SLAHours) * time.Hour,
+	p := Policy{Clock: clock, SLA: time.Duration(c.Decisions.SLAHours) * time.Hour,
 		Provisional: time.Duration(c.Decisions.ProvisionalAfter) * time.Hour,
-		EscalateTo:  strings.TrimPrefix(strings.TrimSpace(c.Decisions.EscalateTo), "@")}, nil
+		EscalateTo:  strings.TrimPrefix(strings.TrimSpace(c.Decisions.EscalateTo), "@")}
+	if solo := time.Duration(max(c.Decisions.SoloProvisional, config.MinSoloProvisionalHours)) * time.Hour; Humans(c) <= 1 && p.Provisional > 0 && solo < p.Provisional {
+		p.Provisional, p.Solo = solo, true
+	}
+	return p, nil
+}
+
+// Humans counts the distinct human logins the configuration names: paired
+// seats' humans and [autonomy] approver. At most one is solo mode.
+func Humans(c *config.Config) int {
+	seen := map[string]bool{}
+	add := func(login string) {
+		if l := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(login), "@")); l != "" {
+			seen[l] = true
+		}
+	}
+	for _, s := range c.Seats {
+		if s.Mode == "paired" {
+			add(s.Human)
+		}
+	}
+	add(c.Autonomy.Approver)
+	return len(seen)
 }
 
 // Deadlines returns when d's SLA lapses and when its recommendation may apply
@@ -117,8 +176,8 @@ func (p Policy) Evaluate(d Decision, now time.Time) Step {
 	switch {
 	case slices.Contains(d.Labels, workitems.LabelProvisional):
 		s.Reason = "already applied provisionally"
-	case d.Waiver():
-		s.Reason = "a floor waiver is never applied provisionally"
+	case d.Excluded() != "":
+		s.Reason = d.Excluded()
 	case !d.Reversible():
 		s.Reason = "reversible: false; the lapse only re-pages"
 	case len(workitems.Validate(d.Item, workitems.StageReady)) > 0:
@@ -182,6 +241,8 @@ func EscalationComment(d Decision, p Policy, authority, login string) string {
 	switch {
 	case d.Waiver():
 		b.WriteString("- This is a floor waiver: it is never applied provisionally (rule 7); the floor miss stays blocking until a human accepts it.\n")
+	case d.Excluded() != "":
+		fmt.Fprintf(&b, "- Not applied provisionally: %s; it waits for a human to accept it.\n", d.Excluded())
 	case d.Reversible():
 		fmt.Fprintf(&b, "- Reversible: at %s (%s business hours) the recommendation applies provisionally and must then be ratified or reverted.\n", local(prov, p.Clock), hours(p.Provisional))
 	default:
@@ -195,9 +256,13 @@ func EscalationComment(d Decision, p Policy, authority, login string) string {
 func ProvisionalText(d Decision, p Policy, at time.Time) string {
 	by := p.RatifyBy(at)
 	rec := strings.TrimSpace(d.Item.Fields["recommendation"])
-	return fmt.Sprintf("Provisional: the recommendation (%s) applies from %s because the Decision was not accepted within %s business hours (V8). "+
-		"Ratify or revert by %s (%s) with `aayu decide %d --accept <option>`.",
-		oneLine(rec), local(at, p.Clock), hours(p.Provisional), by.UTC().Format(time.RFC3339), local(by, p.Clock), d.Number)
+	rule := "V8"
+	if p.Solo {
+		rule = "V8, solo mode"
+	}
+	return fmt.Sprintf("Provisional: the recommendation (%s) applies from %s because the Decision was not accepted within %s business hours (%s). "+
+		"Ratify or revert by %s (%s) with `aayu inbox` or `aayu decide %d --accept <option>`.",
+		oneLine(rec), local(at, p.Clock), hours(p.Provisional), rule, by.UTC().Format(time.RFC3339), local(by, p.Clock), d.Number)
 }
 
 var ratifyRE = regexp.MustCompile(`Ratify or revert by ([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z)`)

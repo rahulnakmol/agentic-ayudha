@@ -9,9 +9,11 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
+// policy is a two-human team's: the general 48-hour window.
 func policy(t *testing.T, escalate string) Policy {
 	t.Helper()
-	c := config.Config{Decisions: config.Decisions{SLAHours: 24, ProvisionalAfter: 48, EscalateTo: escalate}, Time: config.Time{TZ: "Europe/London", BusinessHours: "Mon-Fri 09:00-18:00"}}
+	c := config.Config{Decisions: config.Decisions{SLAHours: 24, ProvisionalAfter: 48, SoloProvisional: 24, EscalateTo: escalate}, Time: config.Time{TZ: "Europe/London", BusinessHours: "Mon-Fri 09:00-18:00"},
+		Seats: map[string]config.Seat{"code-architect": {Mode: "paired", Human: "arch"}}, Autonomy: config.Autonomy{Approver: "founder-a"}}
 	p, err := NewPolicy(&c)
 	if err != nil {
 		t.Fatal(err)
@@ -98,5 +100,101 @@ func TestEvaluateAndTexts(t *testing.T) {
 	}
 	if !strings.HasSuffix(Accepted("A", "o", at48, false), "on 2026-10-19.") {
 		t.Error(Accepted("A", "o", at48, false))
+	}
+}
+
+// TestSoloProvisional (Story #432, criterion 1): with at most one human the
+// window is the shorter of the two keys, never under 12 business hours; a
+// second human restores the general window, and 0 still turns V8 off. Created
+// Monday 12 October 10:00 London: 12 business hours end Tuesday 13:00, 20 end
+// Wednesday 12:00, 24 end Wednesday 16:00, and 48 end Monday 19 October 13:00.
+func TestSoloProvisional(t *testing.T) {
+	london := func(day, hour int) time.Time { return time.Date(2026, 10, day, hour-1, 0, 0, 0, time.UTC) } // BST
+	tests := []struct {
+		name          string
+		general, solo int
+		seats         map[string]config.Seat
+		approver      string
+		want          time.Time // zero: never applies
+		solomode      bool
+	}{
+		{"one human, as approver and seat", 48, 24, map[string]config.Seat{"code-architect": {Mode: "paired", Human: "@Founder-A"}}, "founder-a", london(14, 16), true},
+		{"no human configured", 48, 24, nil, "", london(14, 16), true},
+		{"two humans", 48, 24, map[string]config.Seat{"code-architect": {Mode: "paired", Human: "arch"}}, "founder-a", london(19, 13), false},
+		{"a solo seat's login is not a human", 48, 24, map[string]config.Seat{"code-architect": {Mode: "solo", Human: "arch"}}, "founder-a", london(14, 16), true},
+		{"the general window is shorter", 20, 24, nil, "", london(14, 12), false},
+		{"below the minimum, built without Load", 48, 5, nil, "", london(13, 13), true},
+		{"V8 off", 0, 24, nil, "", time.Time{}, false},
+	}
+	for _, tt := range tests {
+		c := config.Config{Decisions: config.Decisions{SLAHours: 24, ProvisionalAfter: tt.general, SoloProvisional: tt.solo}, Seats: tt.seats,
+			Autonomy: config.Autonomy{Approver: tt.approver}, Time: config.Time{TZ: "Europe/London", BusinessHours: "Mon-Fri 09:00-18:00"}}
+		p, err := NewPolicy(&c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		d := decision("true")
+		d.Created = london(12, 10)
+		if p.Solo != tt.solomode {
+			t.Errorf("%s: solo = %v", tt.name, p.Solo)
+		}
+		if tt.want.IsZero() {
+			if s := p.Evaluate(d, london(30, 17)); s.Apply || s.Overdue {
+				t.Errorf("%s: %+v", tt.name, s)
+			}
+			continue
+		}
+		if s := p.Evaluate(d, tt.want.Add(-time.Minute)); s.Apply {
+			t.Errorf("%s: applied a minute early: %+v", tt.name, s)
+		}
+		if s := p.Evaluate(d, tt.want); !s.Apply {
+			t.Errorf("%s: not applied at %s: %+v", tt.name, tt.want, s)
+		}
+	}
+	solo, _ := NewPolicy(&config.Config{Decisions: config.Decisions{SLAHours: 24, ProvisionalAfter: 48, SoloProvisional: 24}, Time: config.Time{TZ: "Europe/London", BusinessHours: "Mon-Fri 09:00-18:00"}})
+	if text := ProvisionalText(decision("true"), solo, london(14, 16)); !strings.Contains(text, "within 24 business hours (V8, solo mode)") || !strings.Contains(text, "`aayu inbox`") {
+		t.Errorf("solo provisional text: %s", text)
+	}
+}
+
+// TestProvisionalNever (Story #432, criterion 2): a waiver of any kind (with
+// or without its label), a seat change, and a human-only step of the trust
+// model are never applied, in solo mode or not, whatever their body says; an
+// ordinary two-way door still is.
+func TestProvisionalNever(t *testing.T) {
+	at := time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC) // far past either window
+	with := func(title, links string, labels ...string) Decision {
+		d := decision("true", labels...)
+		d.Title, d.Item.Fields[workitems.FieldLinks] = title, links
+		return d
+	}
+	never := map[string]struct {
+		d    Decision
+		want string
+	}{
+		"waiver label":          {with("Ship #6 as it is", "", LabelWaiver), "a waiver"},
+		"waives link":           {with("Ship #6 as it is", "waives #6"), "a waiver"},
+		"eval-bar waiver title": {with("Waive the eval-bar on #9", ""), "a waiver"},
+		"seat change":           {with("Pair a human on the code-architect seat", ""), "a seat change"},
+		"seat by name":          {with("Hand triage to the Quality Architect", ""), "a seat change"},
+		"autonomy":              {with("Allow L04 in [autonomy] auto", ""), "human-only step"},
+		"protected path":        {with("Edit .github/workflows/ci.yml to skip lint", ""), "human-only step"},
+		"approve a PR":          {with("Approve the PR for #12 without review", ""), "human-only step"},
+		"publish":               {with("Publish v0.3.0 tonight", ""), "human-only step"},
+		"ratchet":               {with("Hold the coverage ratchet for a week", ""), "human-only step"},
+		"one-way door":          {decision("false"), "reversible: false"},
+	}
+	for _, p := range []Policy{policy(t, ""), func() Policy { p := policy(t, ""); p.Provisional, p.Solo = 24*time.Hour, true; return p }()} {
+		for name, tt := range never {
+			if s := p.Evaluate(tt.d, at); s.Apply || !strings.Contains(s.Reason, tt.want) {
+				t.Errorf("%s (solo %v): %+v, want refused as %q", name, p.Solo, s, tt.want)
+			}
+		}
+		if s := p.Evaluate(with("Choose the rules engine", "constrains #6"), at); !s.Apply {
+			t.Errorf("ordinary two-way door (solo %v): %+v", p.Solo, s)
+		}
+	}
+	if c := EscalationComment(with("Pair a human on the code-architect seat", ""), policy(t, ""), "default = founder", ""); !strings.Contains(c, "Not applied provisionally: a seat change") {
+		t.Errorf("seat-change escalation:\n%s", c)
 	}
 }
