@@ -249,41 +249,12 @@ func runInvestigate(ctx context.Context, e *Env, in Values) error {
 	}
 
 	// The query log: one per incident, so a note can cite any query it ran.
-	logPath := filepath.Join(e.stateDir(), "state", "investigate", strconv.Itoa(n), "queries.jsonl")
-	qlog, err := readQueryLog(logPath)
+	ql, err := openQueryLog(filepath.Join(e.stateDir(), "state", "investigate", strconv.Itoa(n), "queries.jsonl"), exp, digest, e.Now)
 	if err != nil {
 		return err
 	}
-	run := func(text string) (loggedQuery, error) {
-		q, err := production.ParseQuery(text, rep.From, rep.To)
-		if err != nil {
-			return loggedQuery{}, Wrap(ExitUsage, err)
-		}
-		if q.Where["service"] == "" {
-			q.Where["service"] = rep.Service
-		}
-		if q.Where["environment"] == "" && rep.Env != "" && q.Kind != "logs" && q.Kind != "trace" {
-			q.Where["environment"] = rep.Env
-		}
-		res, err := production.Run(exp, q, resolve)
-		if err != nil {
-			return loggedQuery{}, Wrap(ExitUsage, err)
-		}
-		lq := loggedQuery{Text: q.String(), Source: "export " + filepath.Base(filepath.Clean(exp.Dir)), Export: digest, Rows: len(res.Rows), Matched: res.Matched, Result: res}
-		for _, old := range qlog {
-			if old.Text == lq.Text && old.Export == digest {
-				lq.ID, lq.At = old.ID, old.At
-			}
-		}
-		if lq.ID == "" {
-			lq.ID, lq.At = fmt.Sprintf("q%d", len(qlog)+1), e.Now().UTC()
-			qlog = append(qlog, lq)
-			if err := appendQueryLog(logPath, lq); err != nil {
-				return loggedQuery{}, err
-			}
-		}
-		return lq, nil
-	}
+	ql.from, ql.to, ql.service, ql.env, ql.resolve = rep.From, rep.To, rep.Service, rep.Env, resolve
+	run := ql.run
 	if in.Has("query") && !in.Has("draft") {
 		lq, err := run(in.String("query"))
 		if err != nil {
@@ -309,18 +280,7 @@ func runInvestigate(ctx context.Context, e *Env, in Values) error {
 		}
 		rep.Queries = append(rep.Queries, lq)
 	}
-	// Queries the twin ran before on this export stay citable.
-	for _, old := range qlog {
-		if old.Export == digest && !slices.ContainsFunc(rep.Queries, func(q loggedQuery) bool { return q.ID == old.ID }) {
-			text, rest, _ := strings.Cut(old.Text, " | ")
-			if _, lim, ok := strings.Cut(rest, " | limit "); ok {
-				text += " limit " + lim
-			}
-			if lq, err := run(text); err == nil && lq.ID == old.ID {
-				rep.Queries = append(rep.Queries, lq)
-			}
-		}
-	}
+	rep.Queries = append(rep.Queries, ql.rerun(rep.Queries)...)
 
 	// Implicated code: each exception's innermost frame in the repository.
 	seen := map[string]bool{}
@@ -378,10 +338,7 @@ func runInvestigate(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return Wrap(ExitUsage, err)
 	}
-	logged := map[string]bool{}
-	for _, q := range qlog {
-		logged["query "+q.ID] = true
-	}
+	logged := ql.cites()
 	known := func(cite string) bool {
 		if strings.HasPrefix(cite, "query ") {
 			return logged[cite]
@@ -542,36 +499,106 @@ func exportDigest(e *production.Export) (string, error) {
 	return hex.EncodeToString(h.Sum(nil))[:16], nil
 }
 
-func readQueryLog(path string) ([]loggedQuery, error) {
+// queryLog is the log of bounded queries one investigation (or one SLO
+// review) ran over an export, so a document can cite each as `query qN`.
+type queryLog struct {
+	path, digest string
+	exp          *production.Export
+	entries      []loggedQuery
+	now          func() time.Time
+	// scope of every query: the window, the service, and the environment
+	from, to     time.Time
+	service, env string
+	resolve      production.Resolver
+}
+
+func openQueryLog(path string, exp *production.Export, digest string, now func() time.Time) (*queryLog, error) {
+	l := &queryLog{path: path, digest: digest, exp: exp, now: now}
 	b, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
+		return l, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	var out []loggedQuery
 	for _, line := range strings.Split(strings.TrimSpace(string(b)), "\n") {
 		var q loggedQuery
 		if line == "" || json.Unmarshal([]byte(line), &q) != nil {
 			continue
 		}
-		out = append(out, q)
+		l.entries = append(l.entries, q)
 	}
-	return out, nil
+	return l, nil
 }
 
-func appendQueryLog(path string, q loggedQuery) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	b, _ := json.Marshal(q)
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+// run parses, scopes, bounds, and runs one query, and logs it under a new ID
+// unless the same query already ran on the same export.
+func (l *queryLog) run(text string) (loggedQuery, error) {
+	q, err := production.ParseQuery(text, l.from, l.to)
 	if err != nil {
-		return err
+		return loggedQuery{}, Wrap(ExitUsage, err)
 	}
-	_, err = f.Write(append(b, '\n'))
-	return errors.Join(err, f.Close())
+	if q.Where["service"] == "" {
+		q.Where["service"] = l.service
+	}
+	if q.Where["environment"] == "" && l.env != "" && q.Kind != "logs" && q.Kind != "trace" {
+		q.Where["environment"] = l.env
+	}
+	res, err := production.Run(l.exp, q, l.resolve)
+	if err != nil {
+		return loggedQuery{}, Wrap(ExitUsage, err)
+	}
+	lq := loggedQuery{Text: q.String(), Source: "export " + filepath.Base(filepath.Clean(l.exp.Dir)), Export: l.digest, Rows: len(res.Rows), Matched: res.Matched, Result: res}
+	for _, old := range l.entries {
+		if old.Text == lq.Text && old.Export == l.digest {
+			lq.ID, lq.At = old.ID, old.At
+		}
+	}
+	if lq.ID == "" {
+		lq.ID, lq.At = fmt.Sprintf("q%d", len(l.entries)+1), l.now().UTC()
+		l.entries = append(l.entries, lq)
+		if err := os.MkdirAll(filepath.Dir(l.path), 0o755); err != nil {
+			return loggedQuery{}, err
+		}
+		b, _ := json.Marshal(lq)
+		f, err := os.OpenFile(l.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+		if err != nil {
+			return loggedQuery{}, err
+		}
+		_, err = f.Write(append(b, '\n'))
+		if err := errors.Join(err, f.Close()); err != nil {
+			return loggedQuery{}, err
+		}
+	}
+	return lq, nil
+}
+
+// rerun runs again every query logged on this export that is not in have,
+// so the queries the twin ran before stay citable with their results.
+func (l *queryLog) rerun(have []loggedQuery) []loggedQuery {
+	var out []loggedQuery
+	for _, old := range slices.Clone(l.entries) {
+		if old.Export != l.digest || slices.ContainsFunc(have, func(q loggedQuery) bool { return q.ID == old.ID }) {
+			continue
+		}
+		text, rest, _ := strings.Cut(old.Text, " | ")
+		if _, lim, ok := strings.Cut(rest, " | limit "); ok {
+			text += " limit " + lim
+		}
+		if lq, err := l.run(text); err == nil && lq.ID == old.ID {
+			out = append(out, lq)
+		}
+	}
+	return out
+}
+
+// cites is the set of `query qN` citations the log holds.
+func (l *queryLog) cites() map[string]bool {
+	out := map[string]bool{}
+	for _, q := range l.entries {
+		out["query "+q.ID] = true
+	}
+	return out
 }
 
 // queryMarkdown renders one query and its result as untrusted data.

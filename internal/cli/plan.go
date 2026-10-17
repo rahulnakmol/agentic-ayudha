@@ -33,6 +33,7 @@ type PlanRecord struct {
 	BodyHash    string                `json:"body_hash"`
 	Footprint   []string              `json:"footprint"`
 	Checkpoints []planning.Checkpoint `json:"checkpoints"`
+	Rollout     *planning.Rollout     `json:"rollout,omitempty"`
 	Review      planning.Review       `json:"em_review"`
 	PlannedAt   string                `json:"planned_at"`
 	PlannedBy   string                `json:"planned_by"`
@@ -163,6 +164,17 @@ func runPlan(ctx context.Context, e *Env, in Values) error {
 		return err
 	}
 	res.PlanReport = planning.CheckPlan(story, footprint, never, d)
+	if defs, _, err := readSLOs(config.RepoRoot(e.Dir)); err != nil {
+		return Wrap(ExitUsage, err)
+	} else if defs != nil {
+		var names []string
+		for _, o := range defs.SLOs {
+			names = append(names, o.Name)
+		}
+		if ps := planning.CheckRollout(d, names); len(ps) > 0 {
+			res.Problems, res.Pass = append(res.Problems, ps...), false
+		}
+	}
 	for i, cp := range d.Checkpoints {
 		for _, ref := range cp.Checks {
 			if !known[ref] {
@@ -173,7 +185,7 @@ func runPlan(ctx context.Context, e *Env, in Values) error {
 	}
 	if res.Pass && in.Bool("create") {
 		res.DryRun = c.DryRun()
-		rec := PlanRecord{Story: n, BodyHash: chk.BodyHash, Footprint: res.Footprint, Checkpoints: d.Checkpoints, Review: res.Review,
+		rec := PlanRecord{Story: n, BodyHash: chk.BodyHash, Footprint: res.Footprint, Checkpoints: d.Checkpoints, Rollout: d.Rollout, Review: res.Review,
 			PlannedAt: e.Now().UTC().Format(time.RFC3339), PlannedBy: c.Identity()}
 		if res.FromPlan && !res.DryRun {
 			add := make([]string, 0, len(res.Footprint))

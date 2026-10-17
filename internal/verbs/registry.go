@@ -1076,6 +1076,36 @@ var Verbs = []Command{
 		Gates:    []GateID{GateHalt},
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeRead,
 	},
+	{
+		Name: "slo", WP: "WP5.10", Stage: StageOperate,
+		Summary: "Define SLOs and error budgets from the user's side, measure them from a sanitised export, and record the budget that gates release.",
+		Reader:  "Sets how reliable the product must be for its users, measures how much room for failure is left, and holds back risky releases when it runs out.",
+		Seat:    ProductionEngineer, Lane: LaneSpec, Layers: AllLayers(),
+		Inputs: []Input{
+			flag("telemetry", TypePath, "Sanitised OpenTelemetry export directory to measure each SLO in ops/slos.toml from (traces.jsonl), read with no network."),
+			flag("service", TypeString, "Service to scope the baseline queries to; default the only service in the export."),
+			flag("query", TypeString, "Run one more bounded query and log it as qN: <kind> [by f,…] [where k=v …] [limit N]."),
+			flag("draft", TypePath, "SLO document (Markdown) to check: every part, the stage's artefact, cited evidence, objectives as percentages with windows, a burn-rate alert, the budget policy, and a proposed ops/slos.toml in a toml block that parses."),
+			readOnlyWith(flag("create", TypeBool, "Write the checked draft's toml block to ops/slos.toml in the checkout, for a pull request a person reviews; needs --draft."), "false"),
+			readOnlyWith(flag("record", TypeBool, "Record each SLO's measure and budget on the ledger (slo/status.json), which release reads; needs --telemetry."), "false"),
+		},
+		Outputs:  []string{"slo-document", "slo-status", "query-log"},
+		Gates:    []GateID{GateHalt},
+		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeRead,
+	},
+	{
+		Name: "runbook", WP: "WP5.10", Stage: StageOperate,
+		Summary: "Write and check runbooks: confirm a known failure with a bounded query, mitigate it only through the ops catalog, verify it, and roll it back.",
+		Reader:  "Writes down how to spot and fix each known production problem with the approved actions, so whoever is on call can follow it.",
+		Seat:    ProductionEngineer, Lane: LaneSpec, Layers: AllLayers(),
+		Inputs: []Input{
+			flag("draft", TypePath, "Runbook entry (Markdown) to check: every part, the stage's artefact, cited evidence, an SLO named, a bounded confirm query, a catalog action, its rollback, and no executed change."),
+			readOnlyWith(flag("create", TypeBool, "Write the checked draft to ops/runbooks/<name>.md in the checkout, for a pull request a person reviews; needs --draft."), "false"),
+		},
+		Outputs:  []string{"runbook", "runbook-findings"},
+		Gates:    []GateID{GateHalt},
+		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeRead,
+	},
 }
 
 func plumb(name, wp string, seat SeatID, id Identity, summary string, inputs ...Input) Command {

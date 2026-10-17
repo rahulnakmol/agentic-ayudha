@@ -187,12 +187,25 @@ func TestPlan(t *testing.T) {
 			t.Errorf("%s: exit %d, want 4 with %q:\n%s", name, code, tc.want, out)
 		}
 	}
-	code, out := plan(draft(func(*planning.PlanDraft) {}), "--create")
+	// A product with SLOs needs a rollout that watches one of them (Decision #324).
+	_ = os.MkdirAll(filepath.Join(dir, "ops"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "ops", "slos.toml"), []byte("version = 1\n[[slo]]\nname = \"config-load\"\nservice = \"app\"\njourney = \"Load my settings\"\nsli = \"availability\"\nobjective = 99.9\nwindow = \"28d\"\n"), 0o644)
+	if code, out := plan(draft(func(*planning.PlanDraft) {})); code != ExitBlocked || !strings.Contains(out, "the product has SLOs (config-load), so the plan needs a rollout") {
+		t.Fatalf("no rollout: %d %s", code, out)
+	}
+	if code, out := plan(draft(func(d *planning.PlanDraft) {
+		d.Rollout = &planning.Rollout{Watch: []string{"the error rate"}, RollbackTrigger: "errors", Rollback: "revert"}
+	})); code != ExitBlocked || !strings.Contains(out, "rollout: watch at least one SLO by name (config-load)") {
+		t.Fatalf("a rollout watching no SLO: %d %s", code, out)
+	}
+	code, out := plan(draft(func(d *planning.PlanDraft) {
+		d.Rollout = &planning.Rollout{Flag: "none: a one-time migration", Watch: []string{"config-load burn rate"}, RollbackTrigger: "config-load 1h burn rate above 14.4", Rollback: "the down migration"}
+	}), "--create")
 	if code != 0 || !strings.Contains(out, "EM plan-time review required (never layers L07)") || !strings.Contains(out, "wrote specs/2/plan.json") {
 		t.Fatalf("plan: %d %s", code, out)
 	}
 	var rec PlanRecord
-	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:specs/2/plan.json")), &rec); err != nil || !rec.Review.Required || rec.Review.ApprovedBy != "" || len(rec.Checkpoints) != 1 {
+	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:specs/2/plan.json")), &rec); err != nil || !rec.Review.Required || rec.Review.ApprovedBy != "" || len(rec.Checkpoints) != 1 || rec.Rollout == nil {
 		t.Fatalf("plan record: %v %+v", err, rec)
 	}
 	if code, _, errOut := run(t, env, opts, "plan", "2", "--approve", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "refused for agents") {

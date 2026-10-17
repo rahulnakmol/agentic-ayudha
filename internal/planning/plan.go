@@ -16,7 +16,41 @@ const OperationalData = "L07"
 type PlanDraft struct {
 	Story         int          `json:"story"`
 	Checkpoints   []Checkpoint `json:"checkpoints"`
+	Rollout       *Rollout     `json:"rollout,omitempty"`
 	OpenQuestions []string     `json:"open_questions,omitempty"`
+}
+
+// Rollout is how the change reaches production safely (Decision #324): the
+// plan of a product with SLOs needs one.
+type Rollout struct {
+	Flag            string   `json:"flag,omitempty"`   // the feature flag, or why there is none
+	Canary          string   `json:"canary,omitempty"` // the canary share or ring
+	Watch           []string `json:"watch"`            // the SLOs (by name in ops/slos.toml) and signals to watch
+	RollbackTrigger string   `json:"rollback_trigger"` // the signal and value that trigger the rollback
+	Rollback        string   `json:"rollback"`         // the catalog action or revert that undoes it, tried once
+}
+
+// CheckRollout returns what keeps a plan's rollout from being safe: it is
+// required, watches at least one of slos by name, and names its rollback
+// trigger and its rollback.
+func CheckRollout(d PlanDraft, slos []string) []string {
+	r := d.Rollout
+	if r == nil {
+		return []string{fmt.Sprintf("the product has SLOs (%s), so the plan needs a rollout: the flag, the canary, the SLOs to watch, the rollback trigger, and the rollback", strings.Join(slos, ", "))}
+	}
+	var out []string
+	if !slices.ContainsFunc(r.Watch, func(w string) bool {
+		return slices.ContainsFunc(slos, func(s string) bool { return strings.Contains(w, s) })
+	}) {
+		out = append(out, fmt.Sprintf("rollout: watch at least one SLO by name (%s)", strings.Join(slos, ", ")))
+	}
+	if strings.TrimSpace(r.RollbackTrigger) == "" {
+		out = append(out, "rollout: name the signal and value that trigger the rollback")
+	}
+	if strings.TrimSpace(r.Rollback) == "" {
+		out = append(out, "rollout: name the rollback (a catalog action or a revert), tried once")
+	}
+	return out
 }
 
 // Checkpoint is one build checkpoint: one layer of the story's footprint.

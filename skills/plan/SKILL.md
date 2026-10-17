@@ -118,7 +118,11 @@ You (the host's model) plan; the binary checks the plan and records it on the le
    no refusing or rejecting older inputs or configs, no new flags or modes. A rollback restores what was there
    before (a backup, a down migration); it never drops data. If such a choice seems needed, ask it in
    `open_questions` instead.
-4. Write the plan as JSON, `{"story": N, "checkpoints": [...], "open_questions": [...]}`, and check it (read-only):
+   When the product defines SLOs (`ops/slos.toml`), add a `rollout`, drafted with the Production
+   Engineer: `flag` (the feature flag, or why there is none), `canary` (the share or ring), `watch` (the SLOs by
+   name and the signals to watch), `rollback_trigger` (the signal and value that roll it back), and `rollback` (the
+   catalog action or revert that undoes it; release refuses a catalog rollback that has never run once).
+4. Write the plan as JSON, `{"story": N, "checkpoints": [...], "rollout": {...}, "open_questions": [...]}`, and check it (read-only):
 
    `aayu plan <story> --draft plan.json`
 

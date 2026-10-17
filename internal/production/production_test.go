@@ -159,3 +159,116 @@ func TestCheckInvestigation(t *testing.T) {
 		}
 	}
 }
+
+func TestSLOs(t *testing.T) {
+	for _, tt := range []struct{ toml, want string }{
+		{"version = 1\n[[slo]]\nname = \"a\"\nservice = \"app\"\njourney = \"j\"\nsli = \"availability\"\nobjective = 100.0\nwindow = \"28d\"\n", "leaves no error budget"},
+		{"version = 1\n[[slo]]\nname = \"a\"\nservice = \"app\"\njourney = \"j\"\nsli = \"latency\"\nobjective = 99.0\nwindow = \"28d\"\n", "needs a threshold"},
+		{"version = 1\n[[slo]]\nname = \"a\"\nservice = \"app\"\njourney = \"j\"\nsli = \"availability\"\nobjective = 99.0\nwindow = \"2h\"\n", "between 1d and 90d"},
+		{"version = 1\n[[slo]]\nname = \"a\"\nservice = \"app\"\njourney = \"j\"\nsli = \"availability\"\nobjective = 99.0\nwindow = \"28d\"\nowner = \"x\"\n", "unknown keys"},
+	} {
+		if _, err := ParseSLOs([]byte(tt.toml)); err == nil || !strings.Contains(err.Error(), tt.want) {
+			t.Errorf("ParseSLOs: %v, want %q", err, tt.want)
+		}
+	}
+	defs, err := ParseSLOs([]byte(`version = 1
+[[slo]]
+name = "ask-availability"
+service = "app"
+journey = "Ask"
+sli = "availability"
+objective = 95.0
+window = "28d"
+[[slo]]
+name = "ask-loose"
+service = "app"
+journey = "Ask"
+sli = "availability"
+route = "/api/ask"
+objective = 80.0
+window = "28d"
+[[slo]]
+name = "ask-latency"
+service = "app"
+journey = "Ask"
+sli = "latency"
+threshold = "25ms"
+objective = 50.0
+window = "7d"
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The fixture: 20 asks of app (2 server errors on the new revision, which also
+	// takes 30 ms; the old one 10-19 ms) and one error of another service.
+	to := t0.Add(20 * time.Minute)
+	got := map[string]Measured{}
+	for _, o := range defs.SLOs {
+		got[o.Name] = Measure(exportFixture(), o, to)
+	}
+	// 2 bad of 20 against a 5 % budget (1 bad event): twice the budget, so overspent by the whole budget.
+	if m := got["ask-availability"]; m.Total != 20 || m.Good != 18 || m.Value != 90 || m.BudgetRemaining != -1 || !m.Spent || m.Burn1h != 2 {
+		t.Fatalf("availability: %+v", m)
+	}
+	// 2 bad of 20 against a 20 % budget (4 bad events): half of it left.
+	if m := got["ask-loose"]; m.BudgetRemaining != 0.5 || m.Spent {
+		t.Fatalf("loose availability: %+v", m)
+	}
+	// The ten 30 ms asks are slower than 25 ms: exactly the 50 % budget, so spent.
+	if m := got["ask-latency"]; m.Good != 10 || m.BudgetRemaining != 0 || !m.Spent {
+		t.Fatalf("latency: %+v", m)
+	}
+	st := Status{ComputedAt: to, SLOs: []Measured{got["ask-availability"], got["ask-latency"]}}
+	if s := st.Stale(to.Add(7*24*time.Hour), defs); !strings.Contains(s, `no measure of SLO "ask-loose"`) {
+		t.Fatalf("stale for a missing SLO: %q", s)
+	}
+	st.SLOs = append(st.SLOs, got["ask-loose"])
+	if s := st.Stale(to.Add(StaleAfter), defs); s != "" || st.Stale(to.Add(StaleAfter+time.Minute), defs) == "" {
+		t.Fatalf("stale at the boundary: %q", s)
+	}
+	if spent := st.Spent(); strings.Join(spent, ",") != "ask-availability,ask-latency" {
+		t.Fatalf("spent: %v", spent)
+	}
+}
+
+func TestCheckRunbook(t *testing.T) {
+	good, err := os.ReadFile("testdata/runbook.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pr := seats.Practice{ID: "runbooks-toil", Startup: seats.Depth{Artefact: "Runbook entry", Shape: "x"},
+		Scaleup: seats.Depth{Artefact: "Runbook set", Shape: "x"}, Enterprise: seats.Depth{Artefact: "Operational readiness review", Shape: "x"}}
+	defs, _ := ParseSLOs([]byte("version = 1\n[[slo]]\nname = \"ask-availability\"\nservice = \"app\"\njourney = \"Ask\"\nsli = \"availability\"\nobjective = 99.5\nwindow = \"28d\"\n"))
+	action := func(name, params string) string {
+		if name != "rollback-app" && name != "deploy-app" {
+			return "not in the catalog"
+		}
+		return ""
+	}
+	rollback := func(name string) string {
+		return map[string]string{"rollback-app": "deploy-app", "deploy-app": "rollback-app"}[name]
+	}
+	check := func(md string) string {
+		return strings.Join(CheckRunbook(md, "startup", pr, func(string) bool { return true }, action, rollback, defs), "\n")
+	}
+	if f := check(string(good)); f != "" {
+		t.Fatalf("the recorded runbook: %s", f)
+	}
+	for name, tt := range map[string]struct{ old, new, want string }{
+		"no SLO":              {"The `ask-availability` alert", "The `ask-errors` alert", "names no SLO"},
+		"an unbounded query":  {`"errors by version,route limit 20"`, `"errors by version,route limit 900"`, "limit 900"},
+		"an unknown action":   {"--action rollback-app", "--action restart-api", `"restart-api": not in the catalog`},
+		"no catalog rollback": {"`deploy-app` with the reverted revision", "Redeploy by hand", "the catalog's rollback of rollback-app is deploy-app"},
+		"a claimed run":       {"Propose `aayu respond", "We rolled back; propose `aayu respond", "claims a production change"},
+		"a shell mitigation":  {"Propose `aayu respond", "Run `kubectl rollout undo` or propose `aayu respond", `runs "kubectl"`},
+		"a missing part":      {"## Tried\n\nNot yet.\n", "", `missing part "## Tried"`},
+	} {
+		bad := strings.Replace(string(good), tt.old, tt.new, 1)
+		if bad == string(good) {
+			t.Fatalf("%s: %q is not in the runbook", name, tt.old)
+		}
+		if f := check(bad); !strings.Contains(f, tt.want) {
+			t.Errorf("%s: findings %q, want %q", name, f, tt.want)
+		}
+	}
+}

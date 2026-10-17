@@ -35,6 +35,12 @@ required check back to its builder (#231), `release-measure` (weekly) runs `meas
 that week, and `evolve` (monthly) takes the Feedback filed since. They do on a schedule what the deferred event loops
 did on arrival.
 
+The Production Engineer's loops (WP5.10, Decision #324) are agent loops, so telemetry and its credentials stay in your
+own session: `alert-triage` (twice each weekday) reports fast-burning SLOs and open incidents with no investigation
+note, `error-budget-review` (weekly) measures every SLO from a fresh sanitised export and records the budget that
+`release` reads, and `patch-sweep` (weekly) runs the deps floor and files a Bug for each fixable advisory. None of them
+runs a catalog action: a person approves every one through `aayu respond`.
+
 `verify-sweep` (nightly) and `verify-maintain` (weekly) are the feature maps' loops (WP4.5b.4). The sweep runs every
 behaviour check with no model in Actions, and its run is red when a check fails. The maintain pass is an agent loop:
 it hands the maintain brief to the agent app `[verify] maintainer` names. No model key is used in the Actions jobs.

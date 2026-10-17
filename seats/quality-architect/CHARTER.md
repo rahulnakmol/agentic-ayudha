@@ -95,5 +95,6 @@ Sources:
 | `evolve` | Consulted |
 | `chart` | Informed |
 | `survey` | Consulted |
+| `slo` | Consulted |
 
 <!-- END GENERATED: raci -->

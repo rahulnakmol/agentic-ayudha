@@ -109,6 +109,8 @@ Sources:
 | `doctor` | Informed |
 | `survey` | Informed |
 | `investigate` | Informed |
+| `slo` | Informed |
+| `runbook` | Informed |
 
 Plumbing commands accountable for: `next`.
 

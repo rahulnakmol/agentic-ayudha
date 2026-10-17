@@ -77,6 +77,8 @@ every input of every verb.
 | `chart` | Chart an issue's data or AI design before planning: decisions, metrics, sources, platform, and retention; or evidence, permissions, abstention, and evals. | Data & AI Architect | spec | L05, L07, L08 | bot | cli, skill, mcp |
 | `survey` | Survey a codebase with no product docs: index it, check an evidence-backed analysis and backlog, and capture golden outputs for parity. | Code Architect | plan | all | bot | cli, skill, mcp |
 | `investigate` | Investigate an incident from bounded telemetry queries to the deployed revision and the implicated code, and check the note; it proposes a mitigation, never runs one. | Production Engineer | spec | all | bot | cli, skill, mcp |
+| `slo` | Define SLOs and error budgets from the user's side, measure them from a sanitised export, and record the budget that gates release. | Production Engineer | spec | all | bot | cli, skill, mcp |
+| `runbook` | Write and check runbooks: confirm a known failure with a bounded query, mitigate it only through the ops catalog, verify it, and roll it back. | Production Engineer | spec | all | bot | cli, skill, mcp |
 
 <!-- END GENERATED: verbs -->
 

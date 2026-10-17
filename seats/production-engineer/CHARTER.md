@@ -106,5 +106,7 @@ Sources:
 | `release` | Consulted |
 | `respond` | Accountable; the twin executes it (build lane); owns thresholds and policy |
 | `investigate` | Accountable; the twin executes it (spec lane); owns thresholds and policy |
+| `slo` | Accountable; the twin executes it (spec lane); owns thresholds and policy |
+| `runbook` | Accountable; the twin executes it (spec lane); owns thresholds and policy |
 
 <!-- END GENERATED: raci -->
