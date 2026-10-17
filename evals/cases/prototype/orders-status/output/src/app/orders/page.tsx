@@ -4,13 +4,13 @@ import { Card } from "@aayudha/design-system"
 import { useOrders } from "../../orders/useOrders"
 import { OrdersTable } from "../../orders/OrdersTable"
 import { NoOrders, OrdersFailed } from "../../orders/OrdersMessages"
-import { LegacyOrdersPage } from "../../orders/LegacyOrdersPage"
+import { OrdersPage as TodaysOrders } from "../../orders/OrdersPage"
 
 export default function OrdersPage() {
   // Off by default (flags.flagd.json); flagd turns it on for environment "preview" only.
   const deliveryStatus = useBooleanFlagValue("orders-delivery-status", false)
   const { orders, failed, retrying, retry } = useOrders()
-  if (!deliveryStatus) return <LegacyOrdersPage />
+  if (!deliveryStatus) return <TodaysOrders /> // today's page, unchanged
   return (
     <main className="mx-auto max-w-3xl px-page py-page">
       <h1 className="mb-section text-header-2 font-semibold">Your orders</h1>

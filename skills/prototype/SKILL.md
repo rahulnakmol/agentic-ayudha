@@ -78,17 +78,22 @@ Build a flagged, working prototype of a Feature with Code Connect mapping and a 
 1. Build the mockups as working UI in the product, from design-system components and tokens only: the product's
    real routes, data, and API calls (including the error answers a story names), not a static copy of the mockup.
    Reuse the components the Figma file maps to; build a component the system lacks as a real component from tokens,
-   with the mockup's accessibility (names, focus ring, 44 px targets, announced messages) intact.
+   with the mockup's accessibility (names, focus ring, 44 px targets, announced messages) intact. Each API answer
+   applies to what was sent: Save sends the chosen value and keeps the choice steady while the request is in
+   flight; an error answer the story names (a 409, a 500) updates what the page shows (a window now full is marked
+   so) without changing the person's choice silently, and every state a seed opens behaves as the real one would.
 2. Put it behind an OpenFeature flag, off by default, declared in `[design] flags` (flagd JSON):
    `{"flags": {"orders-v2": {"state": "ENABLED", "variants": {"on": true, "off": false}, "defaultVariant": "off"}}}`.
    Read it where the route renders, with a false default (`useBooleanFlagValue("orders-v2", false)` in React), and
-   keep today's UI when it is off. Turn it on only in the environment you capture (flagd targeting on that
+   when it is off render the component the route renders today, imported unchanged: never a stand-in or a copy of
+   today's page. Turn it on only in the environment you capture (flagd targeting on that
    environment, `[verify.environments.<AAYU_ENV>]`, never production).
 3. Make every state reachable on the capture target at its own path (a seed or fixture parameter the capture
    environment honours and production ignores), so each can be rendered against its Figma frame.
 4. Map each Figma component the prototype uses, new ones included, to code with Code Connect
    (`figma.connect(Component, "<figma URL with node-id>", {props, example})`), with its props and an example a
-   designer can copy. Keep the mappings with the Feature's code: one `.figma.tsx` beside each new component, and one
+   designer can copy: each example uses only the props it declares and the imports at the top of its file. Keep the
+   mappings with the Feature's code: one `.figma.tsx` beside each new component, and one
    for the existing system components the Feature uses, importing them from the design system. Never add or edit
    files in the design-system package; its changes belong to the human who owns it.
    Keep the prototype to the files the Feature needs: the route, its new components, the data calls, the seed for
