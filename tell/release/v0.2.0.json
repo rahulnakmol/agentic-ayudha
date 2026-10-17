@@ -1,0 +1,17 @@
+{
+  "repo": "rahulnakmol/agentic-ayudha",
+  "kind": "release",
+  "campaign": "v0.2.0",
+  "tag": "v0.2.0",
+  "sha256": "14f62ef4e1efa49dfdc00c2643f7fae7e00392b3326939dc89711294a46485a9",
+  "cited_features": [],
+  "utm": {
+    "utm_source": "agentic-ayudha",
+    "utm_medium": "release",
+    "utm_campaign": "v0.2.0"
+  },
+  "copy": "tell/release/v0.2.0.md",
+  "github_release": "https://github.com/rahulnakmol/agentic-ayudha/releases/tag/v0.2.0",
+  "published_by": "rahulnakmol",
+  "published_at": "2026-10-17T01:00:56Z"
+}
