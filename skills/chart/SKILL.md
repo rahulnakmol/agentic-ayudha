@@ -304,7 +304,11 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   cut well below the bound (to about 320), not just to it: first delete prose that restates a table or the
   grounding, then any paragraph before the first part, then move remaining lists into tables.
   Put the metrics with their edge-case rules, the copies with their retention, and the checks in tables (three at
-  most), and keep the prose for the decision, the design choice, and the assumptions.
+  most), and keep the prose for the decision, the design choice, and the assumptions. Tables do not count as prose,
+  but they count as the page: a startup sketch is half a page in all, so each table keeps to the rows the decision
+  needs (about five: the metrics it reads, the copies that hold personal data, the three checks that prove the
+  number right: reconciliation, completeness, a hand-counted fixture), with one trigger in `## Design`. More rows and
+  thresholds are a scaleup's data design, not a better sketch.
 - Each part must use its key words, or the check refuses it: `## Metrics` says "grain" and "window"; `## Design`
   says "trigger" (write `Trigger:` before the threshold); `## Privacy and retention` says how long data is "kept" or
   its "retention" and how a "deletion" reaches every copy; `## Evidence and permissions` says "permission" and
