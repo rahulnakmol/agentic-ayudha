@@ -173,7 +173,7 @@ func headerAPI(code string) []Symbol {
 			o := open{other: true}
 			if parens == 0 && (len(stack) == 0 || !stack[len(stack)-1].other) {
 				text, _ := labels(code[start:i])
-				h := strings.Join(strings.Fields(text), " ")
+				h := strings.Join(strings.Fields(blankAnnotations(text)), " ") // class __declspec(dllexport) Foo
 				if m := typeOpen.FindStringSubmatch(h); m != nil {
 					r := reachable()
 					o = open{class: true, name: m[2], reachable: r, public: r && m[1] != "class"}

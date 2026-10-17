@@ -33,12 +33,12 @@ func registeredName(s string) string {
 }
 
 // builtins records the builtins each source file registers (Index.Builtins)
-// and where an input file calls one (Index.Uses), so a case set can be
+// and where any file calls one (Index.Uses; an input of the same language as
+// the host counts too), so a case set can be
 // checked against the builtins its runner registers. A registration counts
 // only when its function argument is a function of the index and its call is
 // code, not a comment.
 func (ix *Index) builtins(files map[string]*scanned, defs map[string][]string) {
-	regLangs := map[string]bool{}
 	names := map[string]bool{}
 	for _, p := range sortedKeys(files) {
 		s := files[p]
@@ -60,7 +60,6 @@ func (ix *Index) builtins(files map[string]*scanned, defs map[string][]string) {
 			}
 			at := p + ":" + itoa(strings.Count(s.raw[:lit[0]], "\n")+1)
 			ix.Builtins = append(ix.Builtins, Fact{ID: "builtin:" + at, Kind: "builtin", At: at, Detail: name})
-			regLangs[ix.Files[k].Lang] = true
 			names[name] = true
 		}
 	}
@@ -75,12 +74,7 @@ func (ix *Index) builtins(files map[string]*scanned, defs map[string][]string) {
 	use := regexp.MustCompile(`(?:^|[^\w$.])(` + strings.Join(pats, "|") + `)\s*\(`)
 	for _, p := range sortedKeys(files) {
 		s := files[p]
-		k, ok := ix.byPath[p]
-		if !ok {
-			continue
-		}
-		f := ix.Files[k]
-		if f.Role != "test" && f.Role != "data" && (f.Role != "source" || regLangs[f.Lang]) {
+		if _, ok := ix.byPath[p]; !ok {
 			continue
 		}
 		text := s.code // literals and comments blanked: a name in a string or a comment is not a call
