@@ -46,14 +46,16 @@ no source uses `$ARGUMENTS` (Codex drops a command that does). How a user calls 
 
 A marketplace plugin cannot know where `aayu` is on each machine, so it runs `aayu` from `PATH` and passes the skills
 version it carries (`--skills`): the MCP server refuses to start on a mismatch and `session-start` reports one. Use
-either the plugin or `aayu install` for a host in a repository, not both. With the plugin enabled in Claude Code
-(`enabledPlugins`), Codex (`[plugins."aayudha@…"]`), or Cursor's local plugin folder (`~/.cursor/plugins/local`),
-`install` writes no skill copies, hooks, or MCP server for that host and removes its earlier ones. `lock.toml` records
-those hosts as `plugin_hosts`. A skill directory another installed host still reads keeps its copies (Amp, Codex, and
-Cursor share `.agents/skills/`), and the product's `verify-*` skills are still mirrored to `.claude/skills/`. A plugin
-hook (it passes `--skills`) stands aside where the repository has `install`'s hooks. `aayu doctor`'s `skills-copies`
-row reports a host that lists the skills twice, or none because its plugin was disabled after install. Amp keeps the
-first skill of each name, so it never lists one twice.
+What `aayu install` commits never depends on one machine's plugin setting: it always writes the skill copies, hooks,
+and MCP server, so a teammate without the plugin gets everything. Where a host lets a repository turn a plugin off, it
+does: `enabledPlugins` `false` in `.claude/settings.json` (Claude Code; project settings beat user settings) and
+`[plugins."aayudha@aayudha"] enabled = false` in `.codex/config.toml` (Codex, in a trusted project). Cursor has no such
+switch, so its plugin and `install` together list each skill twice. Skill copies go to one folder per reader:
+`.claude/skills/` for Claude Code, `.agents/skills/` for Codex, and Cursor and Amp share whichever exists (Cursor reads
+both through Third-Party Imports); only Claude Code plus Codex plus Cursor leaves Cursor two copies. The product's
+`verify-*` skills are still mirrored to `.claude/skills/`. A plugin hook (it passes `--skills`) stands aside where the
+host runs the repository's hooks. `aayu doctor`'s `skills-copies` row reports a host that lists the skills twice. Amp
+keeps the first skill of each name, so it never lists one twice.
 
 Codex runs a plugin's or a project's hooks only after the person trusts them in `/hooks`, and again after any change
 to them (a plugin update changes `--skills`). Until then nothing refuses a human-only verb in Codex. `aayu doctor`'s

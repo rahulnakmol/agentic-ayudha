@@ -2,4 +2,7 @@
 [mcp_servers.aayudha]
 command = "/opt/aayudha/bin/aayu"
 args = ["mcp"]
+
+[plugins."aayudha@aayudha"]
+enabled = false
 # END aayudha

@@ -32,6 +32,20 @@ func CodexHome(home string, getenv func(string) string) string {
 	return filepath.Join(home, ".codex")
 }
 
+// RepoHooksRun reports whether the host runs the repository's own aayudha
+// hooks: RepoHooks, and for Codex a project it trusts, since Codex ignores an
+// untrusted project's .codex/ (so the plugin's hooks are the only guard there).
+func RepoHooksRun(root string, host verbs.HostID, codexHome string) bool {
+	if !RepoHooks(root, host) {
+		return false
+	}
+	if host == verbs.HostCodex {
+		c, _ := readCodexConfig(codexHome)
+		return codexTrusts(c, root)
+	}
+	return true
+}
+
 // RepoHooks reports whether `aayu install` registered the repository's own
 // hooks for host (the commands HookCommand writes, in the host's project hook
 // file).
@@ -44,17 +58,22 @@ func RepoHooks(root string, host verbs.HostID) bool {
 	return err == nil && bytes.Contains(b, []byte(" hook pre-tool --host "+string(host)+`"`))
 }
 
-// PluginEnabled reports whether the aayudha plugin is enabled for host:
-// Claude Code's enabledPlugins in the user's or the project's settings, a
-// [plugins."aayudha@…"] table in Codex's config.toml, or the aayudha plugin in
-// Cursor's local plugin folder (~/.cursor/plugins/local; Cursor keeps its
-// marketplace installs with the account, where aayu cannot read them). Amp has
-// no aayudha plugin but the one install writes: false.
+// PluginEnabled reports whether the aayudha plugin is active for host in the
+// repository at root, on this machine. Claude Code: an enabledPlugins entry
+// for aayudha@…, where the project's settings.local.json overrides its
+// settings.json, which overrides the user's (code.claude.com/docs/en/settings).
+// Codex: a [plugins."aayudha@…"] table in the user's config.toml, which a
+// trusted project's .codex/config.toml overrides. Cursor: the aayudha plugin
+// in its local plugin folder (~/.cursor/plugins/local); Cursor keeps
+// marketplace installs with the account, where aayu cannot see them, and has
+// no per-repository off switch. Amp has no aayudha plugin but the one install
+// writes: false.
 func PluginEnabled(host verbs.HostID, root, home, codexHome string) bool {
 	ours := func(k string) bool { return strings.HasPrefix(k, ServerName+"@") }
+	effective := map[string]bool{} // plugin ID -> on, from the highest layer that sets it
 	switch host {
 	case verbs.HostClaude:
-		files := []string{filepath.Join(root, ".claude", "settings.json"), filepath.Join(root, ".claude", "settings.local.json")}
+		files := []string{filepath.Join(root, ".claude", "settings.local.json"), filepath.Join(root, ".claude", "settings.json")}
 		if home != "" {
 			files = append(files, filepath.Join(home, ".claude", "settings.json"))
 		}
@@ -64,8 +83,8 @@ func PluginEnabled(host verbs.HostID, root, home, codexHome string) bool {
 			}
 			if b, err := os.ReadFile(f); err == nil && json.Unmarshal(b, &s) == nil {
 				for k, on := range s.Enabled {
-					if on && ours(k) {
-						return true
+					if _, set := effective[k]; ours(k) && !set {
+						effective[k] = on
 					}
 				}
 			}
@@ -84,11 +103,36 @@ func PluginEnabled(host verbs.HostID, root, home, codexHome string) bool {
 			}
 		}
 	case verbs.HostCodex:
-		cfg, _ := readCodexConfig(codexHome)
-		for k, p := range cfg.Plugins {
-			if ours(k) && (p.Enabled == nil || *p.Enabled) {
-				return true
+		user, _ := readCodexConfig(codexHome)
+		var layers []codexConfig
+		if root != "" && codexTrusts(user, root) {
+			var project codexConfig
+			if b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(CodexConfig))); err == nil && toml.Unmarshal(b, &project) == nil {
+				layers = append(layers, project)
 			}
+		}
+		for _, c := range append(layers, user) {
+			for k, p := range c.Plugins {
+				if _, set := effective[k]; ours(k) && !set {
+					effective[k] = p.Enabled == nil || *p.Enabled
+				}
+			}
+		}
+	}
+	for _, on := range effective {
+		if on {
+			return true
+		}
+	}
+	return false
+}
+
+// codexTrusts reports whether Codex trusts the project at root, so it reads
+// the project's .codex/ files.
+func codexTrusts(c codexConfig, root string) bool {
+	for _, r := range []string{root, resolved(root)} {
+		if c.Projects[r].TrustLevel == "trusted" {
+			return true
 		}
 	}
 	return false
@@ -144,11 +188,7 @@ func CodexHookTrust(root, codexHome string) (found int, problems []string, err e
 	if root != "" && RepoHooks(root, verbs.HostCodex) {
 		file := filepath.Join(root, filepath.FromSlash(CodexHooks))
 		sources = append(sources, source{CodexHooks, file, file})
-		trusted := false
-		for _, r := range []string{root, resolved(root)} {
-			trusted = trusted || cfg.Projects[r].TrustLevel == "trusted"
-		}
-		if !trusted {
+		if !codexTrusts(cfg, root) {
 			problems = append(problems, "Codex does not trust this project, so it loads nothing from .codex/ (hooks or MCP): trust it when Codex asks, or set [projects."+fmt.Sprintf("%q", root)+"] trust_level = \"trusted\" in "+filepath.Join(codexHome, "config.toml"))
 		}
 	}
@@ -298,54 +338,57 @@ func modTime(p string) int64 {
 }
 
 // pluginReads are the project skill directories in which a host with the
-// aayudha plugin enabled would find aayudha's copies beside the plugin's own
-// skills: Cursor also reads Claude Code's. Amp keeps the first skill of each
-// name (ampcode.com/docs/customize/skills), so it never lists one twice.
+// aayudha plugin active also finds aayudha's copies: Cursor reads Claude
+// Code's as well. Amp keeps the first skill of each name
+// (ampcode.com/docs/customize/skills), so it never lists one twice.
 var pluginReads = map[verbs.HostID][]string{
 	verbs.HostClaude: {ClaudeSkills},
 	verbs.HostCodex:  {AgentsSkills},
 	verbs.HostCursor: {AgentsSkills, ClaudeSkills},
 }
 
-// SkillDoubles reports each host whose aayudha plugin is enabled while a
-// project directory it reads still holds aayudha's skill copies, so the host
-// lists every skill twice, and each host install left to a plugin that is no
-// longer enabled, so it has none (D-3.2b.f). One line per problem, with the fix.
+// SkillDoubles reports each host that lists aayudha's skills twice in the
+// repository at root on this machine (D-3.2b.g, D-3.2b.h), one line each with
+// the fix: a host whose aayudha plugin is still active beside the
+// repository's copies.
 func SkillDoubles(root, home, codexHome string, lock Lock) []string {
+	copies := func(d string) bool {
+		for n := range lock.Skills {
+			if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(d), n, "SKILL.md")); err == nil {
+				return true
+			}
+		}
+		return false
+	}
 	var out []string
 	for _, h := range AllHosts() {
 		hh, _ := verbs.FindHost(h)
-		if !PluginEnabled(h, root, home, codexHome) {
-			if slices.Contains(lock.PluginHosts, string(h)) && !slices.Contains(lock.SkillDirs(), SkillDir(h)) {
-				out = append(out, fmt.Sprintf("%s: install left the skills to the aayudha plugin, which is no longer enabled, so %s has none; aayu install --apply copies them", hh.Name, hh.Name))
-			}
+		if !PluginEnabled(h, root, home, codexHome) || !slices.ContainsFunc(pluginReads[h], copies) {
 			continue
 		}
-		for _, d := range pluginReads[h] {
-			has := false
-			for n := range lock.Skills {
-				if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(d), n, "SKILL.md")); err == nil {
-					has = true
-					break
-				}
-			}
-			if !has {
-				continue
-			}
-			// The installed hosts that read d from install's copies and have no plugin.
-			var others []string
-			for _, o := range lock.Hosts {
-				if SkillDir(verbs.HostID(o)) == d && !PluginEnabled(verbs.HostID(o), root, home, codexHome) {
-					oh, _ := verbs.FindHost(verbs.HostID(o))
-					others = append(others, oh.Name)
-				}
-			}
-			fix := "aayu install --apply removes the copies"
-			if len(others) > 0 {
-				fix = "the copies stay for " + strings.Join(others, ", ") + ": add the plugin there too (then aayu install --apply), or disable it for " + hh.Name
-			}
-			out = append(out, fmt.Sprintf("%s: the aayudha plugin and the copies in %s both give it the aayudha skills, so it lists each twice; %s", hh.Name, d, fix))
-		}
+		fix := map[verbs.HostID]string{
+			verbs.HostClaude: "aayu install --host claude --apply turns the plugin off for this repository in " + ClaudeSettings + "; an enabledPlugins entry in .claude/settings.local.json overrides that",
+			verbs.HostCodex:  "trust this project in Codex, so it reads " + CodexConfig + ", where aayu install --host codex --apply turns the plugin off",
+			verbs.HostCursor: "a repository cannot turn a Cursor plugin off: disable the aayudha plugin for this workspace in Cursor",
+		}[h]
+		out = append(out, fmt.Sprintf("%s: the aayudha plugin and the repository's copies both give it the aayudha skills, so it lists each twice; %s", hh.Name, fix))
 	}
 	return out
+}
+
+// CursorReadsBoth reports whether Cursor, installed here, finds aayudha's
+// copies in both .agents/skills and .claude/skills: with Third-Party Imports
+// on (its default) it lists each skill twice. install keeps both only when
+// Claude Code and Codex are installed too, since each reads only its own
+// (D-3.2b.g); nothing a repository commits can stop Cursor reading both.
+func CursorReadsBoth(root string, lock Lock) bool {
+	copies := func(d string) bool {
+		for n := range lock.Skills {
+			if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(d), n, "SKILL.md")); err == nil {
+				return true
+			}
+		}
+		return false
+	}
+	return slices.Contains(lock.Hosts, string(verbs.HostCursor)) && copies(AgentsSkills) && copies(ClaudeSkills)
 }

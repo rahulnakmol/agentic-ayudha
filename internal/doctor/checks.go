@@ -432,15 +432,23 @@ func checkSkillCopies(_ context.Context, p *Probe) Result {
 	if problems := hosts.CheckCopies(p.Root); len(problems) > 0 {
 		return Result{Status: Fail, Detail: fmt.Sprintf("skill copies differ from %s; aayu doctor --fix re-syncs them", hosts.LockPath), Lines: problems}
 	}
+	// A Cursor plugin installed from a marketplace lives with the Cursor
+	// account, where aayu cannot see it (D-3.2b.i), so doctor says so.
+	var cursor []string
+	if slices.Contains(lock.Hosts, "cursor") {
+		cursor = []string{"Cursor: aayu sees an aayudha plugin only in ~/.cursor/plugins/local, not one installed from a marketplace; if you installed one, disable it for this workspace in Cursor, or Cursor lists each aayudha skill twice"}
+	}
 	home := p.Getenv("HOME")
 	if doubles := hosts.SkillDoubles(p.Root, home, hosts.CodexHome(home, p.Getenv), lock); len(doubles) > 0 {
-		return Result{Status: Fail, Detail: "the aayudha plugin and install's copies disagree, so a host lists the skills twice or not at all", Lines: doubles}
+		return Result{Status: Fail, Detail: "a host lists each aayudha skill twice", Lines: append(doubles, cursor...)}
 	}
-	d := fmt.Sprintf("%d skill(s) for %s in sync with %s (skills %s)", len(lock.Skills), strings.Join(lock.Hosts, ", "), hosts.LockPath, lock.SkillsVersion)
-	if len(lock.PluginHosts) > 0 {
-		d += "; the aayudha plugin serves " + strings.Join(lock.PluginHosts, ", ")
+	if hosts.CursorReadsBoth(p.Root, lock) {
+		// Claude Code reads only .claude/skills and Codex only .agents/skills,
+		// so with both installed the copies are in both, and Cursor reads both.
+		return Result{Status: Warn, Detail: "Cursor lists each aayudha skill twice: Claude Code needs the copies in .claude/skills and Codex those in .agents/skills, and Cursor reads both",
+			Lines: append([]string{"turn off Third-Party Imports in Cursor's settings (Agents) on this machine, or install for Claude Code or Codex, not both"}, cursor...)}
 	}
-	return Result{Status: Pass, Detail: d}
+	return Result{Status: Pass, Detail: fmt.Sprintf("%d skill(s) for %s in sync with %s (skills %s)", len(lock.Skills), strings.Join(lock.Hosts, ", "), hosts.LockPath, lock.SkillsVersion), Lines: cursor}
 }
 
 // checkMCP checks each installed host's aayudha MCP registration: present, and

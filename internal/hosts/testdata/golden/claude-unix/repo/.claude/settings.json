@@ -2,6 +2,9 @@
   "enabledMcpjsonServers": [
     "aayudha"
   ],
+  "enabledPlugins": {
+    "aayudha@aayudha": false
+  },
   "hooks": {
     "PreToolUse": [
       {

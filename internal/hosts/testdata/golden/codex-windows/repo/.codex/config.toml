@@ -2,4 +2,7 @@
 [mcp_servers.aayudha]
 command = "C:\\Program Files\\aayudha\\aayu.exe"
 args = ["mcp"]
+
+[plugins."aayudha@aayudha"]
+enabled = false
 # END aayudha

@@ -64,13 +64,14 @@ codex mcp list
 aayu doctor
 ```
 
-Use the plugin or `install`, not both. If the plugin is enabled when you run `install`, install writes no skill copies,
-hooks, or MCP server of its own (and removes the ones it wrote before), so Codex lists each skill once and runs each
-hook once. If you add the plugin later, the plugin's hooks stand aside and tell you to run
-`aayu install --host codex --apply` again; until you do, `aayu doctor` reports the doubled skills.
+What `install` writes is the same whether or not you have the plugin, so a teammate who clones the repository without
+the plugin still gets every skill. If you also have the plugin, `install` turns it off for this repository: the
+aayudha block in `.codex/config.toml` sets `[plugins."aayudha@aayudha"] enabled = false`, so Codex lists each skill and
+the `aayudha` server once and runs each hook once. Codex reads that file only in a trusted project, but it reads
+`.agents/skills/` either way, so until you trust the project it lists each skill twice (the plugin's and the
+repository's), and the plugin's hooks do not stand aside; `aayu doctor` reports the double until you trust it.
 
-Amp and Cursor read `.agents/skills/` too. If you also install for one of them, the copies stay for it and Codex lists
-each skill twice; `aayu doctor` says so. Use the plugin for Cursor as well, or `install` for Codex.
+Cursor and Amp read the same `.agents/skills/` copies, so installing for them as well adds no second copy.
 
 ## How Codex takes a request
 
