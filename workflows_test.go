@@ -72,6 +72,62 @@ func TestEveryWorkflowJobStartsWithHaltCheck(t *testing.T) {
 	}
 }
 
+// TestDevInstallRunsNoGitMaintenance: installing aayudha at dev fetches the module with git (GOPROXY=direct). Each
+// git fetch in Go's module cache starts a detached `git maintenance run --auto`, whose repack rewrites .git/shallow
+// while Go's next fetch reads it, so the install failed at random with "fatal: shallow file has changed since we
+// read it". Every such step, here and in the templates `init --gates` installs, turns auto-maintenance off for the
+// git that go install runs: the script is run with a stand-in go that prints the git config it would see.
+func TestDevInstallRunsNoGitMaintenance(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash steps")
+	}
+	var files []string
+	for _, pattern := range []string{".github/workflows/*.yml", "internal/initrepo/*.yml"} {
+		m, _ := filepath.Glob(pattern)
+		files = append(files, m...)
+	}
+	bin := t.TempDir()
+	fake := "#!/bin/sh\ngit config --get maintenance.auto || echo unset\n"
+	if err := os.WriteFile(filepath.Join(bin, "go"), []byte(fake), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	found := 0
+	for _, f := range files {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var wf struct {
+			Jobs map[string]struct {
+				Steps []struct {
+					Run string `yaml:"run"`
+				} `yaml:"steps"`
+			} `yaml:"jobs"`
+		}
+		if err := yaml.Unmarshal([]byte(strings.ReplaceAll(string(b), "{{VERSION}}", "dev")), &wf); err != nil {
+			t.Fatalf("%s: %v", f, err)
+		}
+		for name, job := range wf.Jobs {
+			for _, s := range job.Steps {
+				if !strings.Contains(s.Run, "GOPROXY=direct") || !strings.Contains(s.Run, "go install") {
+					continue
+				}
+				found++
+				cmd := exec.Command("bash", "-c", s.Run)
+				cmd.Dir = t.TempDir()
+				cmd.Env = append(os.Environ(), "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"), "AAYU_VERSION=dev")
+				out, err := cmd.CombinedOutput()
+				if err != nil || strings.TrimSpace(string(out)) != "false" {
+					t.Errorf("%s: job %s installs dev with git auto-maintenance on (maintenance.auto = %q, %v)", f, name, strings.TrimSpace(string(out)), err)
+				}
+			}
+		}
+	}
+	if found < 4 {
+		t.Fatalf("found only %d dev install steps", found)
+	}
+}
+
 // Founder decisions of 2026-10-15 and 2026-10-16 (Appendix B S-4.8c, S-2.9b, D-2.9b): product CI never calls a model,
 // and this repository's model checks never gate. Every workflow `init --gates` installs holds no model key or
 // AI-gateway environment; the four workflows that call the gateway for aayudha's own model code run on no pull
