@@ -173,7 +173,7 @@ func (e *Env) addDefaultLoops(root, repo, branch, tz string) ([]loops.Loop, []st
 	if e.Assets == nil {
 		return nil, nil, Errorf(ExitUsage, "install --loops: no loops/*.toml in this repository, and this binary carries no defaults")
 	}
-	defs, err := loops.Defaults(e.Assets)
+	defs, err := loops.Defaults(e.Assets, root)
 	if err != nil {
 		return nil, nil, Wrap(ExitUsage, err)
 	}

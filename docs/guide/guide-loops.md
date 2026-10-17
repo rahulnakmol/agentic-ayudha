@@ -15,7 +15,9 @@ a model. A loop that needs no agent (`agent = false`) runs free in GitHub Action
 
 The first time you run `aayu install --loops` (below) in a repository with no `loops/` folder, it adds the default
 loop files from aayudha's [loops](../../loops) folder and renders them for every tool, so there is nothing to copy.
-Commit them. They do nothing until you set them up. To change a loop later, edit its file and run
+The nightly `verify-sweep` installs your dependencies and the Playwright browser with the package manager your
+lockfile names (pnpm, Bun, or npm); edit its `setup_run` if your checks need more. Commit them. They do nothing until
+you set them up. To change a loop later, edit its file and run
 `aayu init --gates`, which renders them again.
 
 | Loop | Runs | Does |

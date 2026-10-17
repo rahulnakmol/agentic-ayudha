@@ -227,6 +227,9 @@ func TestInstallLoops(t *testing.T) {
 func TestInstallLoopsAddsDefaults(t *testing.T) {
 	for _, host := range []string{"claude", "codex"} {
 		dir := checkout(t)
+		if host == "codex" { // D-7.1h: a pnpm product's sweep installs its dependencies and the browser with pnpm
+			_ = os.WriteFile(filepath.Join(dir, "pnpm-lock.yaml"), []byte("lockfileVersion: '9.0'\n"), 0o644)
+		}
 		opts := Options{Dir: dir, Assets: aayudha.Assets, LookPath: func(string) (string, error) { return "", os.ErrNotExist }}
 		code, out, errOut := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "t"}, opts, "install", "--loops", "--repo", "o/r", "--host", host, "--json")
 		var r loopsReport
@@ -240,6 +243,9 @@ func TestInstallLoopsAddsDefaults(t *testing.T) {
 		}
 		if b, _ := os.ReadFile(filepath.Join(dir, ".github", "workflows", loops.Workflow)); !strings.Contains(string(b), "loop:verify-sweep") || strings.Contains(string(b), "aayudha/floors") {
 			t.Errorf("%s: the Actions fallback runs the sweep without aayudha's own setup:\n%s", host, b)
+		}
+		if b, _ := os.ReadFile(filepath.Join(dir, ".github", "workflows", loops.Workflow)); (host == "codex") != strings.Contains(string(b), "pnpm exec playwright install --with-deps chromium") {
+			t.Errorf("%s: the sweep's setup does not follow the lockfile:\n%s", host, b)
 		}
 	}
 }

@@ -117,11 +117,12 @@ func Load(root string) ([]Loop, error) {
 }
 
 // Defaults are the default loops a repository gets from `aayu install --loops`
-// when it has none: aayudha's own loops/*.toml in assets, by path. setup and
-// setup_run, with the comment just above them, are left out, because they
-// are the product's own commands (aayudha's install its example's browser
-// tooling); a product adds its own.
-func Defaults(assets fs.FS) (map[string][]byte, error) {
+// when it has none: aayudha's own loops/*.toml in assets, by path. A loop's
+// setup and setup_run, with the comment just above them, are aayudha's own
+// (its example's browser tooling), so they are replaced by the product's,
+// from the lockfiles at root (ProductSetup, Appendix B D-7.1h), or left out
+// when it has none.
+func Defaults(assets fs.FS, root string) (map[string][]byte, error) {
 	files, err := fs.Glob(assets, Dir+"/*.toml")
 	if err != nil {
 		return nil, err
@@ -136,7 +137,7 @@ func Defaults(assets fs.FS) (map[string][]byte, error) {
 			return nil, err
 		}
 		var keep, comment []string
-		inArray := false
+		inArray, replaced := false, false
 		for _, line := range strings.SplitAfter(string(b), "\n") {
 			switch {
 			case inArray:
@@ -144,6 +145,9 @@ func Defaults(assets fs.FS) (map[string][]byte, error) {
 			case strings.HasPrefix(line, "setup =") || strings.HasPrefix(line, "setup_run ="):
 				comment = nil // the comment above describes this repository's setup
 				inArray = strings.HasSuffix(strings.TrimSpace(line), "[")
+				if !replaced {
+					keep, replaced = append(keep, productSetupTOML(root)), true
+				}
 			case strings.HasPrefix(line, "#"):
 				comment = append(comment, line)
 			default:
@@ -158,6 +162,59 @@ func Defaults(assets fs.FS) (map[string][]byte, error) {
 		out[f] = body
 	}
 	return out, nil
+}
+
+// ProductSetup is what the Actions job of a product's loop installs before
+// its command, read from the lockfiles at root (D-7.1h): the pinned tool
+// setups (setupActions), the commands that install the dependencies and the
+// Playwright browser the behaviour checks drive, through the same package
+// manager, and the lockfiles it read. pnpm wins over Bun, and Bun over npm;
+// with both pnpm and Bun locks, pnpm installs and Bun is set up too. No
+// lockfile, no setup.
+func ProductSetup(root string) (tools, run, from []string) {
+	has := func(names ...string) bool {
+		for _, n := range names {
+			if _, err := os.Stat(filepath.Join(root, n)); err == nil {
+				from = append(from, n)
+				return true
+			}
+		}
+		return false
+	}
+	pnpm, bun := has("pnpm-lock.yaml"), has("bun.lock", "bun.lockb")
+	const browser = "playwright install --with-deps chromium"
+	switch {
+	case pnpm && bun:
+		return []string{"node", "pnpm", "bun"}, []string{"pnpm install --frozen-lockfile", "pnpm exec " + browser}, from
+	case pnpm:
+		return []string{"node", "pnpm"}, []string{"pnpm install --frozen-lockfile", "pnpm exec " + browser}, from
+	case bun:
+		return []string{"bun"}, []string{"bun install --frozen-lockfile", "bunx " + browser}, from
+	case has("package-lock.json"):
+		return []string{"node"}, []string{"npm ci", "npx " + browser}, from
+	}
+	return nil, nil, nil
+}
+
+// productSetupTOML is ProductSetup as loop keys, or "" with no lockfile.
+func productSetupTOML(root string) string {
+	tools, run, from := ProductSetup(root)
+	if len(tools) == 0 {
+		return ""
+	}
+	q := func(s string) string { b, _ := json.Marshal(s); return string(b) }
+	var b strings.Builder
+	fmt.Fprintf(&b, "# From this repository's %s (aayu install --loops, Appendix B D-7.1h); edit it as the product needs.\n", strings.Join(from, " and "))
+	ts := make([]string, len(tools))
+	for i, t := range tools {
+		ts[i] = q(t)
+	}
+	fmt.Fprintf(&b, "setup = [%s]\nsetup_run = [\n", strings.Join(ts, ", "))
+	for _, r := range run {
+		fmt.Fprintf(&b, "  %s,\n", q(r))
+	}
+	b.WriteString("]\n")
+	return b.String()
 }
 
 // Find returns the loop named name.
@@ -207,7 +264,7 @@ func Parse(name string, data []byte) (Loop, error) {
 	}
 	for _, x := range l.Setup {
 		if _, ok := setupActions[x]; !ok {
-			bad("setup: %q: want node or pnpm", x)
+			bad("setup: %q: want node, pnpm, or bun", x)
 		}
 	}
 	if l.NeedsAgent() {
@@ -652,8 +709,10 @@ const (
 )
 
 // setupActions are the tool setups a loop's setup may name, pinned like every
-// other action; pnpm reads its version from the root package.json.
+// other action; pnpm reads its version from the root package.json, and Bun
+// from its packageManager field or .bun-version, else the latest.
 var setupActions = map[string]string{
+	"bun":  "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0",
 	"node": "actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0\n        with:\n          node-version: \"24\"\n          package-manager-cache: false",
 	"pnpm": "pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0",
 }

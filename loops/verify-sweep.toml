@@ -7,7 +7,7 @@ command = ["verify", "--check", "all"]
 cron = "30 2 * * *"
 agent = false
 # This repository's own setup: its example web product reaches Playwright through the base branch's packages/floors
-# (D-8.1b). A product's copy from `aayu install --loops` leaves setup and setup_run out; add the product's own.
+# (D-8.1b). A product's copy from `aayu install --loops` gets its own, from its lockfile (Appendix B D-7.1h).
 setup = ["node", "pnpm"]
 setup_run = [
   "pnpm install --frozen-lockfile --filter @aayudha/floors",
