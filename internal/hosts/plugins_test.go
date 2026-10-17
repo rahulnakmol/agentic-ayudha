@@ -362,6 +362,14 @@ func TestHostPluginsLoad(t *testing.T) {
 		plugin := strings.NewReplacer("__AAYU__", `"aayu"`, "__VERSION__", `"0.0.0-dev"`, "__COMMANDS__", string(cj)).Replace(string(tmpl))
 		_ = os.MkdirAll(filepath.Join(dir, ".amp", "plugins"), 0o755)
 		_ = os.WriteFile(filepath.Join(dir, ".amp", "plugins", "aayudha.ts"), []byte(plugin), 0o644)
+		list := exec.Command("amp", "plugins", "list")
+		list.Dir = dir
+		b, err := list.CombinedOutput()
+		if err != nil && strings.Contains(string(b), "Unable to connect to https://ampcode.com") {
+			// amp loads the account's global plugins first; without a sign-in or the network (aayu verify's sandbox
+			// has neither) it lists nothing, so this cannot check the plugin here.
+			t.Skipf("amp cannot reach ampcode.com to list plugins: %s", strings.TrimSpace(string(b)))
+		}
 		out := run(t, nil, dir, "amp", "plugins", "list")
 		for _, w := range []string{".amp/plugins/aayudha.ts active", "events: session.start, tool.call", "aayudha: Next step", "aayudha: Build a Ready story",
 			"Codex cloud agent", "Cursor's cloud agent", "Claude Code on the web"} {
