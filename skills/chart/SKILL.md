@@ -180,8 +180,9 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   only aggregates (suppress small groups, and every value that would reveal a suppressed count with it: a share, a
   total, or a difference beside it; until a human confirms wider access, the default is the restrictive one:
   aggregates only, no free text, the shortest retention the decision needs), who may read each copy (the export,
-  the snapshot, the view) and what enforces it (an access rule the grounding shows, else a requirement with its
-  check), how long each copy is kept (export, snapshot, aggregate), and how a deletion
+  the snapshot, the view) and what enforces it (an access rule the grounding shows; else a proposed restriction,
+  such as only the pipeline's identity and the named owners, written as a requirement with its check, and nothing
+  is built on that copy until the check passes), how long each copy is kept (export, snapshot, aggregate), and how a deletion
   reaches every copy: the person's rows are removed from the source system (the telemetry store or database the
   events come from), from each export and snapshot, and aggregates are rebuilt from them within a stated time
   (an `Assumption:` that fits the pipeline's own schedule). Whether the source can delete one person's rows is a fact only
@@ -228,7 +229,8 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   cannot change an answer.
 - `## Abstention`: answer only when a retrieved source supports the claim; otherwise say so and refer the person on.
   Support means the cited passage or row states the claim (the quoted words, the same number), and you say how that
-  is checked; a retrieval score is relevance, never support, and a verbatim match only proves the quote is real:
+  is checked; a number is checked against the source the citation contract names for it (the table for the fields
+  it holds, the passage for a rule the table cannot express), never against every source at once; a retrieval score is relevance, never support, and a verbatim match only proves the quote is real:
   the passage must also be the one for the reader's plan and the question's date, and state the answer itself. A
   check that only finds the right kind of terms (a dependant word and an age) is relevance again: support compares
   the answer's subject, relationship, and value with what the passage says about them. Query expansion only widens
