@@ -412,13 +412,13 @@ func TestTier2RetriesProviderFaults(t *testing.T) {
 	judged := models.Response{Text: `{"score": 5, "reason": "covers the request"}`}
 	looping := models.Response{Text: `{"title": "` + strings.Repeat("<br> ", 3000), StopReason: "max_tokens", Truncated: true, TokensOut: 32000, CostUSD: 0.3}
 	// Run 1: call 1 is a 429. Run 2: call 4 stalls. Run 3: call 7 is a 524 and call 8 loops on <br>. Run 4: calls
-	// 11, 12, and 13 are overloaded, one past the cap. Run 5 has no fault.
+	// 11, 12, and 13 are overloaded, one past the cap, and so is call 14, the lane's fallback. Run 5 has no fault.
 	overloaded := &models.StreamError{Type: "overloaded_error", Message: "Overloaded"}
 	client := &resetting{Fake: &models.Fake{Replies: []models.Response{ok, judged, ok, judged, looping, ok, judged, ok, judged}}, fail: map[int]error{
 		1:  &models.StatusError{Code: 429, Body: "rate limited", RetryAfter: 40 * time.Second},
 		4:  stall{},
 		7:  &models.StatusError{Code: 524, Body: "error code: 524", RetryAfter: 5 * time.Minute},
-		11: overloaded, 12: overloaded, 13: overloaded,
+		11: overloaded, 12: overloaded, 13: overloaded, 14: overloaded,
 	}}
 	h := harness(t, nil, "gpt-6.1-sol")
 	h.Gateway.Client = func(models.Route, string) models.Client { return client }
@@ -436,7 +436,7 @@ func TestTier2RetriesProviderFaults(t *testing.T) {
 		t.Errorf("run 3's retries do not record what the looping reply cost: %+v", rs)
 	}
 	if r := runs[3]; r.Status != RunError || !strings.Contains(r.Error, "overloaded_error") || len(r.Calls[0].Retries) != ProviderRetries {
-		t.Errorf("run 4, three faults: %+v", r)
+		t.Errorf("run 4, three faults and a failed fallback: %+v", r)
 	}
 	if r := runs[4]; r.Status != RunPass || len(r.Calls) != 2 || faults(r.Calls[0])+faults(r.Calls[1]) != "" {
 		t.Errorf("run 5, no fault: %+v", r)
@@ -461,8 +461,9 @@ func TestTier2RetriesProviderFaults(t *testing.T) {
 // TestTier2RetriesTheModelBeforeItsFallback: a gateway outage answers 502
 // with no tokens (Cloudflare's "error code: 502" while the gateway swaps its
 // binary). The skill's own model is retried, with a pause before each retry,
-// and only then is the lane's fallback called; the skill call streams, so a
-// long reply cannot idle into a 524.
+// and only then is the lane's fallback called. A stream that keeps failing on
+// the provider's side (overloaded) takes the fallback too. The skill call
+// streams, so a long reply cannot idle into a 524.
 func TestTier2RetriesTheModelBeforeItsFallback(t *testing.T) {
 	var events []string
 	old := pause
@@ -474,8 +475,10 @@ func TestTier2RetriesTheModelBeforeItsFallback(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		replies = append(replies, models.Response{Text: string(item)}, models.Response{Text: `{"score": 5, "reason": "covers the request"}`})
 	}
+	// Run 1: calls 1-3 are 502s, call 4 the fallback, 5 the judge. Run 2: calls 6-8 are overloaded streams.
 	outage := &models.StatusError{Code: 502, Body: "error code: 502"}
-	client := &resetting{Fake: &models.Fake{Replies: replies}, fail: map[int]error{1: outage, 2: outage, 3: outage}}
+	overloaded := &models.StreamError{Type: "overloaded_error", Message: "Overloaded"}
+	client := &resetting{Fake: &models.Fake{Replies: replies}, fail: map[int]error{1: outage, 2: outage, 3: outage, 6: overloaded, 7: overloaded, 8: overloaded}}
 	h := harness(t, nil, "gpt-6.1-sol")
 	h.Gateway.Client = func(models.Route, string) models.Client {
 		return completeFunc(func(ctx context.Context, req models.Request) (models.Response, error) {
@@ -492,6 +495,9 @@ func TestTier2RetriesTheModelBeforeItsFallback(t *testing.T) {
 		t.Fatalf("run 1: %+v", r)
 	}
 	own, fb := r.Calls[0].Model, r.Calls[1].Model
+	if r := res.Cases[0].Runs[1]; r.Status != RunPass || len(r.Calls) != 3 || r.Calls[1].Model != fb {
+		t.Errorf("run 2, overloaded streams then the fallback: %+v", r)
+	}
 	if want := []string{own, "pause", own, "pause", own, fb}; !slices.Equal(events[:6], want) {
 		t.Errorf("calls and pauses %v, want %v first", events[:6], want)
 	}

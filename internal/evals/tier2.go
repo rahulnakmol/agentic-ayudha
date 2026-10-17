@@ -255,8 +255,10 @@ func (h *Harness) complete(lane verbs.LaneID, role string, log *[]CallLog) func(
 	return func(ctx context.Context, req models.Request) (models.Response, error) {
 		resp, err := h.call(ctx, h.Gateway, lane, role, req, log)
 		var se *models.StatusError
-		if role == "skill" && h.fallback != "" && errors.As(err, &se) {
-			// The lane's default model could not be called: use its registry alternative.
+		var st *models.StreamError
+		if role == "skill" && h.fallback != "" && (errors.As(err, &se) || errors.As(err, &st) && (st.Type == "api_error" || st.Type == "overloaded_error")) {
+			// The lane's default model could not be called, or its stream kept
+			// failing on the provider's side: use its registry alternative.
 			resp, err = h.call(ctx, h.withModel(lane, h.fallback), lane, role, req, log)
 		}
 		return resp, err

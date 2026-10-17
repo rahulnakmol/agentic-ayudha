@@ -100,7 +100,7 @@ waits about 10 s, and after a 5xx or a stream server error about 30 s, times the
 again at random, so the runs that meet one gateway outage do not all retry into it at once: the two retries of a 5xx
 span 90 to 135 s, as long as the gateway's restarts last. A reply's `Retry-After` is honoured when it asks for longer,
 up to 2 minutes a retry. The skill's own model is retried first; its lane's fallback is called only after those
-retries fail. Every skill call streams, so a long reply keeps bytes flowing and the gateway's proxy does not cut it
+retries fail, on an error status or a stream that kept failing on the provider's side. Every skill call streams, so a long reply keeps bytes flowing and the gateway's proxy does not cut it
 with a 524 after 100 s of silence. Each run records every
 model call: role, model, stop reason, input and output tokens, the cap, its cost, and each provider retry with its
 fault and cost. An errored run keeps what it produced before the call that failed (its draft, the floor findings
