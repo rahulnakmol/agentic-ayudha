@@ -58,6 +58,20 @@ func SkillDir(h verbs.HostID) string {
 	return AgentsSkills
 }
 
+// SkillDirs are the directories install keeps aayudha's skill copies in for
+// the lock's hosts: each host's SkillDir, except where every host reading it
+// has its aayudha plugin enabled, which carries the skills itself (D-3.2b.f).
+func (l Lock) SkillDirs() []string {
+	var dirs []string
+	for _, h := range l.Hosts {
+		if d := SkillDir(verbs.HostID(h)); !slices.Contains(l.PluginHosts, h) && !slices.Contains(dirs, d) {
+			dirs = append(dirs, d)
+		}
+	}
+	sort.Strings(dirs)
+	return dirs
+}
+
 // Options configure one install plan.
 type Options struct {
 	Root          string         // repository root
@@ -103,12 +117,16 @@ var ErrPinned = errors.New("skills are pinned to another version")
 
 // Lock is .aayudha/lock.toml.
 type Lock struct {
-	Version       int                  `toml:"version"`
-	InstalledBy   string               `toml:"installed_by"`
-	SkillsVersion string               `toml:"skills_version"`
-	Pin           string               `toml:"pin"`
-	Hosts         []string             `toml:"hosts"`
-	Skills        map[string]LockSkill `toml:"skills"`
+	Version       int      `toml:"version"`
+	InstalledBy   string   `toml:"installed_by"`
+	SkillsVersion string   `toml:"skills_version"`
+	Pin           string   `toml:"pin"`
+	Hosts         []string `toml:"hosts"`
+	// PluginHosts are the installed hosts whose aayudha plugin was enabled at
+	// install, so the plugin serves their skills and install wrote no copies
+	// for them (D-3.2b.f).
+	PluginHosts []string             `toml:"plugin_hosts"`
+	Skills      map[string]LockSkill `toml:"skills"`
 	// ProductSkills are the product's own verify skills (WP4.5b.3) that install
 	// mirrors from .agents/skills to the hosts that do not read it.
 	ProductSkills map[string]LockProductSkill `toml:"product_skills"`
@@ -151,7 +169,15 @@ func renderLock(l Lock) []byte {
 	for i, h := range l.Hosts {
 		q[i] = fmt.Sprintf("%q", h)
 	}
-	fmt.Fprintf(&b, "hosts = [%s]\n\n[skills]\n", strings.Join(q, ", "))
+	fmt.Fprintf(&b, "hosts = [%s]\n", strings.Join(q, ", "))
+	if len(l.PluginHosts) > 0 {
+		p := make([]string, len(l.PluginHosts))
+		for i, h := range l.PluginHosts {
+			p[i] = fmt.Sprintf("%q", h)
+		}
+		fmt.Fprintf(&b, "plugin_hosts = [%s]\n", strings.Join(p, ", "))
+	}
+	b.WriteString("\n[skills]\n")
 	names := make([]string, 0, len(l.Skills))
 	for n := range l.Skills {
 		names = append(names, n)
@@ -384,19 +410,45 @@ func Plan(o Options) (*Result, error) {
 		lock.Skills[name] = LockSkill{Version: o.SkillsVersion, SHA256: HashSkill(m)}
 	}
 
-	var dirs []string
 	for _, h := range hostList {
-		if d := SkillDir(verbs.HostID(h)); !slices.Contains(dirs, d) {
-			dirs = append(dirs, d)
+		if p.pluginEnabled(verbs.HostID(h)) {
+			lock.PluginHosts = append(lock.PluginHosts, h)
 		}
 	}
-	sort.Strings(dirs)
+	dirs := lock.SkillDirs()
 	for _, d := range dirs {
 		if err := p.skillCopies(d, src, old.Skills); err != nil {
 			return nil, err
 		}
 	}
-	if slices.Contains(dirs, ClaudeSkills) {
+	// A directory install filled before that the plugin now serves loses
+	// aayudha's copies, so the host lists each skill once; the product's own
+	// skills there stay.
+	for _, d := range old.SkillDirs() {
+		if slices.Contains(dirs, d) || p.underSymlink(d) {
+			continue
+		}
+		if fi, err := os.Lstat(p.abs(d, false)); err != nil || !fi.IsDir() {
+			continue
+		}
+		previous := maps.Clone(old.Skills)
+		if previous == nil {
+			previous = map[string]LockSkill{}
+		}
+		for n := range src {
+			previous[n] = LockSkill{}
+		}
+		if err := p.skillCopies(d, nil, previous); err != nil {
+			return nil, err
+		}
+	}
+	for _, h := range lock.PluginHosts {
+		if d := SkillDir(verbs.HostID(h)); slices.Contains(dirs, d) {
+			hh, _ := verbs.FindHost(verbs.HostID(h))
+			p.notes = append(p.notes, "the aayudha plugin is enabled for "+hh.Name+", but another host installed here reads "+d+", so its copies stay and "+hh.Name+" lists each aayudha skill twice; use the plugin or install for every host that reads it")
+		}
+	}
+	if slices.Contains(hostList, string(verbs.HostClaude)) {
 		// The product's verify skills live where Amp, Cursor, and Codex read
 		// them; Claude Code gets a copy, recorded so a later install removes
 		// the copy of a skill the product deleted.
@@ -576,24 +628,36 @@ func (p *planner) hostFiles(hosts map[verbs.HostID]bool, lock Lock) error {
 			return err
 		}
 		if plugin {
-			p.notes = append(p.notes, pluginNote("Claude Code", ClaudeMCP+" and "+ClaudeSettings))
+			p.notes = append(p.notes, pluginNote("Claude Code", skillFiles(lock, ClaudeSkills)+ClaudeMCP+" and "+ClaudeSettings))
 		}
 	}
 	if hosts[verbs.HostCursor] {
-		if err := p.mergeJSON(CursorMCP, false, func(m map[string]any) {
-			obj(m, "mcpServers")[ServerName] = server
-		}); err != nil {
-			return err
-		}
-		if err := p.mergeJSON(CursorHooks, false, func(m map[string]any) {
-			m["version"] = json.Number("1")
-			hk := obj(m, "hooks")
-			hk["sessionStart"] = replaceHooks(hk["sessionStart"], map[string]any{"command": HookCommand(p.o.Binary, "session-start", verbs.HostCursor)})
-			for _, ev := range []string{"beforeShellExecution", "beforeMCPExecution"} {
-				hk[ev] = replaceHooks(hk[ev], map[string]any{"command": HookCommand(p.o.Binary, "pre-tool", verbs.HostCursor)})
+		plugin := p.pluginEnabled(verbs.HostCursor)
+		if err := p.mergeJSONIf(CursorMCP, !plugin, func(m map[string]any) {
+			if plugin {
+				deleteKey(m, "mcpServers", ServerName)
+			} else {
+				obj(m, "mcpServers")[ServerName] = server
 			}
 		}); err != nil {
 			return err
+		}
+		if err := p.mergeJSONIf(CursorHooks, !plugin, func(m map[string]any) {
+			pre := map[string]any{"command": HookCommand(p.o.Binary, "pre-tool", verbs.HostCursor)}
+			setHooks(m, plugin, map[string]any{
+				"sessionStart":         map[string]any{"command": HookCommand(p.o.Binary, "session-start", verbs.HostCursor)},
+				"beforeShellExecution": pre, "beforeMCPExecution": pre,
+			})
+			if _, ok := m["hooks"]; ok {
+				m["version"] = json.Number("1")
+			} else {
+				delete(m, "version")
+			}
+		}); err != nil {
+			return err
+		}
+		if plugin {
+			p.notes = append(p.notes, pluginNote("Cursor", skillFiles(lock, AgentsSkills)+CursorMCP+" and "+CursorHooks))
 		}
 	}
 	if hosts[verbs.HostCodex] {
@@ -610,7 +674,7 @@ func (p *planner) hostFiles(hosts map[verbs.HostID]bool, lock Lock) error {
 			return err
 		}
 		if plugin {
-			p.notes = append(p.notes, pluginNote("OpenAI Codex", CodexConfig+" and "+CodexHooks))
+			p.notes = append(p.notes, pluginNote("OpenAI Codex", skillFiles(lock, AgentsSkills)+CodexConfig+" and "+CodexHooks))
 		} else {
 			p.notes = append(p.notes, "Codex runs these hooks only after you trust them: open /hooks in Codex and trust the aayudha hooks (`aayu doctor` reports any it would skip)")
 		}
@@ -686,12 +750,13 @@ func (p *planner) codexConfig(plugin bool) error {
 
 func (p *planner) agentsSections(lock Lock) []AgentsSection {
 	var dirs []string
-	for _, h := range lock.Hosts {
-		if d := "`" + SkillDir(verbs.HostID(h)) + "/`"; !slices.Contains(dirs, d) {
-			dirs = append(dirs, d)
-		}
+	for _, d := range lock.SkillDirs() {
+		dirs = append(dirs, "`"+d+"/`")
 	}
-	sort.Strings(dirs)
+	where := "The skill copies in " + strings.Join(dirs, " and ")
+	if len(dirs) == 0 {
+		where = "The aayudha plugin carries the skills here, so install keeps no copies. Any copies"
+	}
 	var names []string
 	for _, h := range lock.Hosts {
 		if hh, ok := verbs.FindHost(verbs.HostID(h)); ok {
@@ -702,11 +767,11 @@ func (p *planner) agentsSections(lock Lock) []AgentsSection {
 
 This repository runs the aayudha verbs as host skills, installed by `+"`aayu install`"+` (skills version %s).
 
-- The skill copies in %s are managed: do not edit them. `+"`aayu install --apply`"+` or `+"`aayu doctor --fix`"+`
+- %s are managed: do not edit them. `+"`aayu install --apply`"+` or `+"`aayu doctor --fix`"+`
   rewrites them from the binary, and `+"`.aayudha/lock.toml`"+` records their hashes.
 - Inside a skill, the host's model reasons; every external write goes through an `+"`aayu`"+` command, which logs it.
 - `+"`aayu doctor`"+` checks the tools, tokens, configuration, and these copies.
-- Seat charters and the RACI arrive with WP5.1.`, lock.SkillsVersion, strings.Join(dirs, " and "))
+- Seat charters and the RACI arrive with WP5.1.`, lock.SkillsVersion, where)
 	hostsSec := fmt.Sprintf(`## Aayudha hosts
 
 Installed for: %s. The %s MCP server serves the verbs as tools (write verbs only with `+"`[mcp] expose_writes = true`"+`).
@@ -781,7 +846,15 @@ func (p *planner) pluginEnabled(host verbs.HostID) bool {
 
 // pluginNote says why install wrote no hooks or MCP registration for a host.
 func pluginNote(host, files string) string {
-	return "the aayudha plugin is enabled for " + host + ", so its hooks and MCP server serve this repository and install writes none in " + files + " (it removes any it wrote before); disable the plugin and re-run install for the repository's own"
+	return "the aayudha plugin is enabled for " + host + ", so its skills, hooks, and MCP server serve this repository and install writes none in " + files + " (it removes any it wrote before); disable the plugin and re-run install for the repository's own"
+}
+
+// skillFiles names dir for a plugin note when install keeps no copies there.
+func skillFiles(lock Lock, dir string) string {
+	if slices.Contains(lock.SkillDirs(), dir) {
+		return ""
+	}
+	return dir + ", "
 }
 
 // mergeJSONIf is mergeJSON, except that a file that does not exist is created

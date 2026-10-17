@@ -76,9 +76,10 @@ aayu install --host claude --apply
 It writes skill copies to `.claude/skills/`, the MCP server to `.mcp.json`, and the hooks and the status line to
 `.claude/settings.json`, each calling aayu by its full, version-checked path. Each teammate runs it once on their
 machine. Use the plugin or `install`, not both. If the plugin is enabled when you run `install`, install writes no
-hooks or MCP server of its own (and removes the ones it wrote before), so Claude Code lists one `aayudha` server and runs
-each hook once. If you add the plugin later, its hooks stand aside and tell you to run
-`aayu install --host claude --apply` again. The skills still appear twice while both are present.
+skill copies, hooks, or MCP server of its own (and removes the ones it wrote before), so Claude Code lists each skill
+and the `aayudha` server once and runs each hook once. Your own `verify-*` skills are still copied to `.claude/skills/`,
+because the plugin does not carry them. If you add the plugin later, its hooks stand aside and tell you to run
+`aayu install --host claude --apply` again; until you do, `aayu doctor` reports the doubled skills.
 
 ## Check it worked
 

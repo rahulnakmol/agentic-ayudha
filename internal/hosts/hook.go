@@ -112,13 +112,7 @@ func CheckCopies(root string) []string {
 		return nil
 	}
 	var problems []string
-	seen := map[string]bool{}
-	for _, h := range lock.Hosts {
-		dir := SkillDir(verbs.HostID(h))
-		if seen[dir] {
-			continue
-		}
-		seen[dir] = true
+	for _, dir := range lock.SkillDirs() {
 		if fi, err := os.Lstat(filepath.Join(root, filepath.FromSlash(dir))); err == nil && fi.Mode()&fs.ModeSymlink != 0 {
 			problems = append(problems, dir+" is a symlink, not real copies (V2)")
 			continue

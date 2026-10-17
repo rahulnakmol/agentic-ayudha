@@ -432,7 +432,15 @@ func checkSkillCopies(_ context.Context, p *Probe) Result {
 	if problems := hosts.CheckCopies(p.Root); len(problems) > 0 {
 		return Result{Status: Fail, Detail: fmt.Sprintf("skill copies differ from %s; aayu doctor --fix re-syncs them", hosts.LockPath), Lines: problems}
 	}
-	return Result{Status: Pass, Detail: fmt.Sprintf("%d skill(s) for %s in sync with %s (skills %s)", len(lock.Skills), strings.Join(lock.Hosts, ", "), hosts.LockPath, lock.SkillsVersion)}
+	home := p.Getenv("HOME")
+	if doubles := hosts.SkillDoubles(p.Root, home, hosts.CodexHome(home, p.Getenv), lock); len(doubles) > 0 {
+		return Result{Status: Fail, Detail: "the aayudha plugin and install's copies disagree, so a host lists the skills twice or not at all", Lines: doubles}
+	}
+	d := fmt.Sprintf("%d skill(s) for %s in sync with %s (skills %s)", len(lock.Skills), strings.Join(lock.Hosts, ", "), hosts.LockPath, lock.SkillsVersion)
+	if len(lock.PluginHosts) > 0 {
+		d += "; the aayudha plugin serves " + strings.Join(lock.PluginHosts, ", ")
+	}
+	return Result{Status: Pass, Detail: d}
 }
 
 // checkMCP checks each installed host's aayudha MCP registration: present, and

@@ -15,8 +15,13 @@ aayu install --host cursor --apply
 | `.cursor/mcp.json` | The `aayudha` MCP server |
 | `.cursor/hooks.json` | `sessionStart`, `beforeShellExecution`, and `beforeMCPExecution` |
 
-Every entry calls aayu by its full, version-checked path, so each teammate runs `install` once on their machine. Check
-it with:
+Every entry calls aayu by its full, version-checked path, so each teammate runs `install` once on their machine.
+
+If you use the aayudha plugin from Cursor's local plugin folder (`~/.cursor/plugins/local/aayudha`), `install` writes
+none of these for Cursor: the plugin carries the skills, hooks, and MCP server. aayu cannot see a plugin you installed
+from a marketplace, which Cursor keeps with your account, so use the plugin or `install`, not both. Cursor also reads
+`.claude/skills/`, so installing for Claude Code here gives Cursor a second copy; `aayu doctor` reports it when the
+plugin is in the local folder. Check it with:
 
 ```sh
 aayu doctor

@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -43,14 +44,21 @@ func RepoHooks(root string, host verbs.HostID) bool {
 	return err == nil && bytes.Contains(b, []byte(" hook pre-tool --host "+string(host)+`"`))
 }
 
-// PluginEnabled reports whether the aayudha marketplace plugin is enabled for
-// host: Claude Code's enabledPlugins in the user's or the project's settings,
-// or a [plugins."aayudha@…"] table in Codex's config.toml. Other hosts: false.
+// PluginEnabled reports whether the aayudha plugin is enabled for host:
+// Claude Code's enabledPlugins in the user's or the project's settings, a
+// [plugins."aayudha@…"] table in Codex's config.toml, or the aayudha plugin in
+// Cursor's local plugin folder (~/.cursor/plugins/local; Cursor keeps its
+// marketplace installs with the account, where aayu cannot read them). Amp has
+// no aayudha plugin but the one install writes: false.
 func PluginEnabled(host verbs.HostID, root, home, codexHome string) bool {
 	ours := func(k string) bool { return strings.HasPrefix(k, ServerName+"@") }
 	switch host {
 	case verbs.HostClaude:
-		for _, f := range []string{filepath.Join(home, ".claude", "settings.json"), filepath.Join(root, ".claude", "settings.json"), filepath.Join(root, ".claude", "settings.local.json")} {
+		files := []string{filepath.Join(root, ".claude", "settings.json"), filepath.Join(root, ".claude", "settings.local.json")}
+		if home != "" {
+			files = append(files, filepath.Join(home, ".claude", "settings.json"))
+		}
+		for _, f := range files {
 			var s struct {
 				Enabled map[string]bool `json:"enabledPlugins"`
 			}
@@ -60,6 +68,19 @@ func PluginEnabled(host verbs.HostID, root, home, codexHome string) bool {
 						return true
 					}
 				}
+			}
+		}
+	case verbs.HostCursor:
+		if home == "" {
+			return false
+		}
+		manifests, _ := filepath.Glob(filepath.Join(home, ".cursor", "plugins", "local", "*", ".cursor-plugin", "plugin.json"))
+		for _, f := range manifests {
+			var m struct {
+				Name string `json:"name"`
+			}
+			if b, err := os.ReadFile(f); err == nil && json.Unmarshal(b, &m) == nil && m.Name == ServerName {
+				return true
 			}
 		}
 	case verbs.HostCodex:
@@ -90,6 +111,9 @@ type codexConfig struct {
 
 func readCodexConfig(codexHome string) (codexConfig, error) {
 	var c codexConfig
+	if codexHome == "" || codexHome == ".codex" { // no home: nothing to read
+		return c, nil
+	}
 	b, err := os.ReadFile(filepath.Join(codexHome, "config.toml"))
 	if errors.Is(err, fs.ErrNotExist) {
 		return c, nil
@@ -271,4 +295,57 @@ func modTime(p string) int64 {
 		return fi.ModTime().UnixNano()
 	}
 	return 0
+}
+
+// pluginReads are the project skill directories in which a host with the
+// aayudha plugin enabled would find aayudha's copies beside the plugin's own
+// skills: Cursor also reads Claude Code's. Amp keeps the first skill of each
+// name (ampcode.com/docs/customize/skills), so it never lists one twice.
+var pluginReads = map[verbs.HostID][]string{
+	verbs.HostClaude: {ClaudeSkills},
+	verbs.HostCodex:  {AgentsSkills},
+	verbs.HostCursor: {AgentsSkills, ClaudeSkills},
+}
+
+// SkillDoubles reports each host whose aayudha plugin is enabled while a
+// project directory it reads still holds aayudha's skill copies, so the host
+// lists every skill twice, and each host install left to a plugin that is no
+// longer enabled, so it has none (D-3.2b.f). One line per problem, with the fix.
+func SkillDoubles(root, home, codexHome string, lock Lock) []string {
+	var out []string
+	for _, h := range AllHosts() {
+		hh, _ := verbs.FindHost(h)
+		if !PluginEnabled(h, root, home, codexHome) {
+			if slices.Contains(lock.PluginHosts, string(h)) && !slices.Contains(lock.SkillDirs(), SkillDir(h)) {
+				out = append(out, fmt.Sprintf("%s: install left the skills to the aayudha plugin, which is no longer enabled, so %s has none; aayu install --apply copies them", hh.Name, hh.Name))
+			}
+			continue
+		}
+		for _, d := range pluginReads[h] {
+			has := false
+			for n := range lock.Skills {
+				if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(d), n, "SKILL.md")); err == nil {
+					has = true
+					break
+				}
+			}
+			if !has {
+				continue
+			}
+			// The installed hosts that read d from install's copies and have no plugin.
+			var others []string
+			for _, o := range lock.Hosts {
+				if SkillDir(verbs.HostID(o)) == d && !PluginEnabled(verbs.HostID(o), root, home, codexHome) {
+					oh, _ := verbs.FindHost(verbs.HostID(o))
+					others = append(others, oh.Name)
+				}
+			}
+			fix := "aayu install --apply removes the copies"
+			if len(others) > 0 {
+				fix = "the copies stay for " + strings.Join(others, ", ") + ": add the plugin there too (then aayu install --apply), or disable it for " + hh.Name
+			}
+			out = append(out, fmt.Sprintf("%s: the aayudha plugin and the copies in %s both give it the aayudha skills, so it lists each twice; %s", hh.Name, d, fix))
+		}
+	}
+	return out
 }

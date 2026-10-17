@@ -64,10 +64,13 @@ codex mcp list
 aayu doctor
 ```
 
-Use the plugin or `install`, not both. If the plugin is enabled when you run `install`, install writes no hooks or MCP
-server of its own (and removes the ones it wrote before), so Codex runs each hook once. If you add the plugin later,
-the plugin's hooks stand aside and tell you to run `aayu install --host codex --apply` again. The skills still appear
-twice while both are present.
+Use the plugin or `install`, not both. If the plugin is enabled when you run `install`, install writes no skill copies,
+hooks, or MCP server of its own (and removes the ones it wrote before), so Codex lists each skill once and runs each
+hook once. If you add the plugin later, the plugin's hooks stand aside and tell you to run
+`aayu install --host codex --apply` again; until you do, `aayu doctor` reports the doubled skills.
+
+Amp and Cursor read `.agents/skills/` too. If you also install for one of them, the copies stay for it and Codex lists
+each skill twice; `aayu doctor` says so. Use the plugin for Cursor as well, or `install` for Codex.
 
 ## How Codex takes a request
 
