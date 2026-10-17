@@ -300,7 +300,7 @@ func runHalt(ctx context.Context, e *Env, in Values) error {
 
 // runResume clears the halt variable and the [budget] breaker's pause file.
 func runResume(ctx context.Context, e *Env, _ Values) error {
-	if err := e.requireHuman("resume"); err != nil {
+	if err := e.requireHuman(ctx, "resume", AccessWrite); err != nil {
 		return err
 	}
 	c, _, err := e.HumanGitHub(ctx)

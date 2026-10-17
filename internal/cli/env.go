@@ -85,6 +85,7 @@ type Options struct {
 	// DelegateExec runs a delegation receiver's CLI (build --delegate, tests); nil runs the command.
 	DelegateExec delegate.Exec
 	RunPoll      time.Duration // how often release polls a workflow run; 0 is DefaultRunPoll (WP7.8)
+	DevicePoll   time.Duration // how often the presence check polls GitHub's device flow (tests); 0 uses GitHub's interval
 	// EvolveGate is the eval-first gate (internal/evals.Gate) for `evolve`
 	// (WP7.7). The binary injects it: internal/evals replays CLI calls, so it
 	// imports this package and cannot be imported by it.
@@ -118,6 +119,8 @@ type Env struct {
 	Options
 	config  *config.Loaded // loaded on first use by Config
 	actions *actions.Log   // opened on first use by Actions
+
+	approval *Approval // a person's device-flow approval for this command (presence.go)
 
 	haltWatch bool // checkHalt read the halt variable through the API, so a running verb re-reads it (WP5.7)
 
@@ -168,22 +171,6 @@ func (e *Env) agentSignal() string {
 		return "AAYU_AGENT=1"
 	}
 	return hosts.AgentMarker(e.Getenv)
-}
-
-// requireHuman guards a human-only action (§0.1, Bug #170). It refuses an
-// agent lane. In solo mode an agent may hold the person's own token, so with no
-// marker it fails closed unless stdin is an interactive terminal: a skill's
-// shell call has none. In hosts that forward shell commands, the pre-tool hook
-// stops most such calls first (hosts.HumanOnlyCommand); this check holds for
-// whatever reaches the binary.
-func (e *Env) requireHuman(what string) error {
-	if sig := e.agentSignal(); sig != "" {
-		return Errorf(ExitBlocked, "%s is a person's decision and is refused for an agent lane (%s); ask a person to run it in their own terminal", what, sig)
-	}
-	if !e.isTerminal(e.In) {
-		return Errorf(ExitBlocked, "%s is a person's decision and needs an interactive terminal: with neither a terminal nor an agent marker, aayu cannot tell a person from an agent using the person's token", what)
-	}
-	return nil
 }
 
 // Emit writes a command result: v as indented JSON with --json, otherwise text.

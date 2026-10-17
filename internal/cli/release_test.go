@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -388,6 +389,20 @@ func TestReleaseLadder(t *testing.T) {
 			git(t, f.bare, "rev-parse", "refs/heads/main") != mainTip0 || git(t, f.bare, "tag", "--list", "v0.1.0") != "" {
 			t.Fatalf("main with request miss %d (%+v): %d %s", i, miss, code, errOut)
 		}
+	}
+	// In a person's shell that carries an agent marker (an orb's Terminal tab), the yes comes through a device-flow
+	// approval instead (presence.go); a denied one promotes nothing.
+	f.g.Mu.Lock()
+	f.g.Variables = map[string]string{"AAYUDHA_DEVICE_CLIENT_ID": "c"}
+	f.g.Device = &fake.DeviceFlow{ClientID: "c", Approver: "founder", Outcome: "deny"}
+	f.g.Mu.Unlock()
+	marked := maps.Clone(f.env)
+	marked["AMP_THREAD_ID"] = "T-0000"
+	f.opts.DevicePoll = time.Millisecond
+	if code, _, errOut := f.run(t, day.Add(2*time.Hour), marked, rel, "--to", "main"); code != ExitBlocked || f.g.Device.Started != 1 ||
+		!strings.Contains(errOut, fmt.Sprintf("release #%s --to main (v0.1.0) on o/r was not approved: the request was denied", rel)) ||
+		git(t, f.bare, "rev-parse", "refs/heads/main") != mainTip0 {
+		t.Fatalf("main with a denied device-flow approval: %d %s", code, errOut)
 	}
 	if strings.Contains(fmt.Sprint(f.dispatched), "promote/main") {
 		t.Fatalf("a refused main rung dispatched its gate: %v", f.dispatched)

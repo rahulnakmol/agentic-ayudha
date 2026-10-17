@@ -67,7 +67,7 @@ type ghRelease struct {
 }
 
 func runSelfUpdate(ctx context.Context, e *Env, _ Values) error {
-	if err := e.requireHuman("self-update"); err != nil {
+	if err := e.requireHuman(ctx, "self-update", AccessAny); err != nil {
 		return err
 	}
 	exe, err := e.Executable()

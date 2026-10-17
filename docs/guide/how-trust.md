@@ -119,10 +119,52 @@ Both commands refuse the bypass when:
 - a second human holds a paired seat, because then they can review;
 - no comment from the caller starts with `Solo-mode bypass:` (checked by `soloModeComment` in `internal/cli/ship.go`).
 
+### Approving from any device (presence check)
+
+A marked shell is not always an agent. An orb's Terminal tab, or a runner's shell, inherits the agent's marker
+(`AMP_THREAD_ID`), and the person typing there is you. Neither the marker nor a terminal can tell you apart from an
+agent: an agent can type into the same tmux session. So when a human-only command runs where the guard would refuse
+it, aayu asks the person to prove they are there, through GitHub's OAuth device flow:
+
+```text
+resume on rahulnakmol/agentic-ayudha needs a person's approval.
+  On any device, open https://github.com/login/device and enter WDJB-MJHT (expires in 15 minutes).
+  Approve only if you started this command yourself. Waiting...
+Approved by @rahulnakmol (device-flow, admin access).
+```
+
+You approve on any device, your phone included, signed in to GitHub with your password and second factor. aayu then
+checks the approving account, and refuses unless all of these hold:
+
+- it is a person, not a bot and not one of `[identity] bot_logins`;
+- it is the same account as the token aayu acts with;
+- it has the repository access the command needs: admin for the bypasses, `init`, `uninit`, `seat`,
+  `install --apply`, and `upgrade --apply`; write for `decide --accept`, `inbox`, `resume`, `plan --approve`,
+  `inspect --dismiss`, `tell --publish`, and the stable-release yes of `release --to main`. `auth set-secret` and
+  `self-update` need only a person.
+
+A denied, expired, or mismatched approval refuses, and nothing is done. The approval is recorded in the actions log
+(`presence.approve`, with the command, the approver, and the method). `release --to main` records it as the
+stable-release request (`via: device-flow`). One approval covers the later steps of the same command at its access
+level, so the inbox asks once per run.
+
+The device-flow token proves who approved and nothing else. It asks for no scopes, aayu reads only `/user` with it,
+and it is never stored; every write still goes out with the token it always used. aayu offers an agent no way to
+complete an approval: no flag, variable, or file supplies one, and the device flow needs your GitHub web session.
+aayu's own unattended lanes (`AAYU_AGENT=1`: the MCP server and the loops) never wait for an approval; they are
+refused at once. The pre-tool hooks still block human-only commands an agent tries to run. Approve only a code from a
+command you started: GitHub's page names the app, not the command.
+
+**Setup, once per repository:** create a GitHub OAuth App (Settings, Developer settings, OAuth Apps, New OAuth App;
+any homepage and callback URL), tick **Enable Device Flow**, and save its client ID as the repository variable
+`AAYUDHA_DEVICE_CLIENT_ID` (`gh variable set AAYUDHA_DEVICE_CLIENT_ID --body <client-id>`). A repository with
+aayudha's GitHub App (`AAYUDHA_APP_CLIENT_ID`) can instead tick **Enable Device Flow** on that App. A client ID is
+public; no secret is involved. Without either, a marked shell is refused as before.
+
 > **Honest status:** two layers stand between an agent and a human-only command. In Claude Code, Codex, and Cursor the
 > installed pre-tool hook blocks the shell command before it runs (`hosts.HumanOnlyCommand`); the Amp plugin does not
-> forward the command, so on Amp the binary's check is the first one. The binary then refuses any process carrying a
-> host's agent marker, and with no marker it needs an interactive terminal. An agent that deliberately clears its
+> forward the command, so on Amp the binary's check is the first one. The binary then asks for a device-flow approval
+> from any process carrying a host's agent marker, or with neither a marker nor an interactive terminal. An agent that deliberately clears its
 > host's variables and runs inside a pseudo-terminal still looks like a person: the markers are honest-agent signals,
 > not authentication. What protects you then is the record: the comment, the ship record, and `audit`'s list of every
 > bypass. Install the bot App, or pair a second person, and the bypass is refused outright.
@@ -253,9 +295,11 @@ comment, the commit, and a note saying that no review happened.
    download. Enforced in `internal/identity/broker.go` (`TestBrokerRoundTrip`).
 6. Agent lanes cannot bypass: `ship --solo-bypass` and `plan --solo-bypass` refuse an agent lane (`AAYU_AGENT=1` or a
    host's agent marker), a process with neither a marker nor a terminal, a repository with a bot identity, a second
-   human in a seat, or a missing `Solo-mode bypass:` comment. Enforced in `Env.requireHuman` in `internal/cli/env.go`,
+   human in a seat, or a missing `Solo-mode bypass:` comment, unless the person approves it from any device as an
+   admin (the presence check). Enforced in `Env.requireHuman` in `internal/cli/presence.go`,
    `internal/cli/ship.go`, and `internal/cli/plan.go` (`TestShipMobileWaiverAndSoloBypass`,
-   `TestHumanOnlyRefusedInHostShells`, `TestShipEMSeatApprover`, `TestPlan`).
+   `TestHumanOnlyRefusedInHostShells`, `TestShipEMSeatApprover`, `TestPlan`, `TestPresenceCheckDeviceFlow`,
+   `TestPresenceCheckAccess`).
 7. Only the merge gate's own run artifact for the exact head becomes the authoritative pack, landed by a person's
    `ship`. Enforced in `internal/cli/ship.go` (`TestShipRefusals`).
 8. Every bypass is written down and counted. `ship` writes it to `ship.json`, the story's Complete section, and the
@@ -280,7 +324,8 @@ comment, the commit, and a note saying that no review happened.
 > `aayu ship` lands the pack CI built under the founder's identity, as the design intends for every repository. Every
 > merge needs a recorded solo-mode bypass. An agent lane is `AAYU_AGENT=1` or a host's agent marker
 > (`internal/hosts.AgentMarkers`). The orchestrating agents that ran this repository's solo-mode ships and releases
-> from Amp before Bug 170 was fixed are now refused; those steps need the founder at a terminal.
+> from Amp before Bug 170 was fixed are now refused; those steps need the founder, at a terminal or through a
+> device-flow approval.
 
 ## Read next
 

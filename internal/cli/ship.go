@@ -100,7 +100,7 @@ type ShipResult struct {
 // cleanup.
 func runShip(ctx context.Context, e *Env, in Values) error {
 	if in.Bool("solo-bypass") {
-		if err := e.requireHuman("ship --solo-bypass"); err != nil {
+		if err := e.requireHuman(ctx, "ship --solo-bypass", AccessAdmin); err != nil {
 			return err
 		}
 	}

@@ -91,7 +91,7 @@ func runInstall(ctx context.Context, e *Env, in Values) error {
 	}
 	apply := in.Bool("apply")
 	if apply {
-		if err := e.requireHuman("install --apply (it writes the hooks that govern agents)"); err != nil {
+		if err := e.requireHuman(ctx, "install --apply (it writes the hooks that govern agents)", AccessAdmin); err != nil {
 			return err
 		}
 	}
