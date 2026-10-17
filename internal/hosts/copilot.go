@@ -95,23 +95,54 @@ func CopilotTrusted(root, copilotHome string) bool {
 	return false
 }
 
-// copilotEvent is the camelCase preToolUse payload Copilot sends a hook.
+// copilotEvent is the camelCase preToolUse payload Copilot sends a hook. An
+// MCP tool's toolName is <server>-<tool>, such as aayudha-status (seen with
+// Copilot CLI 1.0.98).
 type copilotEvent struct {
 	SessionID string `json:"sessionId"`
 	Cwd       string `json:"cwd"`
+	ToolName  string `json:"toolName"`
+}
+
+// CopilotGuarded reports whether root's Copilot hooks file is one Copilot
+// runs (version 1) with a preToolUse command that is aayu's pre-tool hook.
+func CopilotGuarded(root string) bool {
+	b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(CopilotHooks)))
+	var f struct {
+		Version int `json:"version"`
+		Hooks   struct {
+			PreToolUse []struct {
+				Type       string `json:"type"`
+				Bash       string `json:"bash"`
+				PowerShell string `json:"powershell"`
+			} `json:"preToolUse"`
+		} `json:"hooks"`
+	}
+	if err != nil || json.Unmarshal(b, &f) != nil || f.Version != 1 {
+		return false
+	}
+	for _, h := range f.Hooks.PreToolUse {
+		for _, c := range []string{h.Bash, h.PowerShell} {
+			if h.Type == "command" && ourHook.MatchString(c) && strings.HasSuffix(c, " hook pre-tool --host copilot") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 var sessionID = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 
 // recordCopilotSession notes, in root's local state, the Copilot session whose
-// agent is about to run shell, when shell runs aayu build: build reads that
-// session's log for the models Copilot reported (ReadCopilotSession).
+// agent is about to run aayu build, in shell or through the aayudha MCP
+// server's build tool: build reads that session's log for the models Copilot
+// reported (ReadCopilotSession).
 func recordCopilotSession(root string, event []byte, shell string) {
 	var e copilotEvent
 	if root == "" || json.Unmarshal(event, &e) != nil || !sessionID.MatchString(e.SessionID) || e.SessionID == "." || e.SessionID == ".." {
 		return
 	}
-	runsBuild := false
+	runsBuild := e.ToolName == ServerName+"-build" // the aayudha MCP server's build tool
 	for _, m := range aayuWord.FindAllStringSubmatch(shell, -1) {
 		runsBuild = runsBuild || m[1] == "build"
 	}

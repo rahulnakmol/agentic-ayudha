@@ -594,12 +594,13 @@ func TestIntegrationCapabilities(t *testing.T) {
 
 // The copilot row passes only on trust it can read: Copilot CLI's, found
 // through USERPROFILE where HOME is unset (Windows). Without Copilot CLI,
-// VS Code's Workspace Trust is out of reach, so the row asks for it.
+// VS Code's Workspace Trust is out of reach, so the row asks for it; and a
+// hooks file only counts when Copilot would run aayu's pre-tool hook from it.
 func TestCopilotTrustRow(t *testing.T) {
 	profile := t.TempDir()
 	p := healthy(t)
 	p.Root = repoWith(t, map[string]string{".aayudha/lock.toml": "version = 1\nskills_version = \"0.0.0\"\nhosts = [\"copilot\"]\n[skills]\n",
-		".github/hooks/aayudha.json": `{"version":1,"hooks":{"preToolUse":[{"type":"command","bash":"aayu hook pre-tool --host copilot"}]}}`})
+		".github/hooks/aayudha.json": `{"version":1,"hooks":{"preToolUse":[{"type":"command","bash":"\"/usr/bin/aayu\" hook pre-tool --host copilot"}]}}`})
 	_ = os.MkdirAll(filepath.Join(profile, ".copilot"), 0o755)
 	_ = os.WriteFile(filepath.Join(profile, ".copilot", "config.json"), []byte("// managed\n"+`{"trustedFolders":[`+strconv.Quote(p.Root)+`]}`), 0o644)
 	env := map[string]string{"USERPROFILE": profile}
@@ -610,6 +611,11 @@ func TestCopilotTrustRow(t *testing.T) {
 	p.LookPath = func(string) (string, error) { return "", errors.New("not found") }
 	if r := checkCopilot(context.Background(), p); r.Status != Warn {
 		t.Errorf("VS Code only: %s %s", r.Status, r.Detail)
+	}
+	// A file that only mentions the hook guards nothing.
+	_ = os.WriteFile(filepath.Join(p.Root, ".github", "hooks", "aayudha.json"), []byte(`{"version":1,"hooks":{"preToolUse":[{"type":"command","bash":"echo aayu hook pre-tool --host copilot"}]}}`), 0o644)
+	if r := checkCopilot(context.Background(), p); r.Status != Fail {
+		t.Errorf("a hook that is not aayu's: %s %s", r.Status, r.Detail)
 	}
 }
 
