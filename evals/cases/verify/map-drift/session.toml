@@ -4,7 +4,7 @@
 # so their answers are recorded; {map} and {checks} fill them from the checkout as it is at that moment.
 max_turns = 8
 overlay = "testdata/branch"
-files = '^\.agents/skills/verify-notes/features/[A-Za-z0-9-]+\.md$' # the person allowed map updates for their change
+files = '^\.agents/skills/verify-notes/features/[A-Za-z0-9-]+\.md$|^\.aayudha/evidence/31\.toml$' # the person allowed map updates for their change, and the story's evidence map when it is proposed with them (D-3.4k)
 map_clean = true   # the skill: update the map in the PR that changes the product
 keep_checks = true # never weaken, skip, or delete a check
 
