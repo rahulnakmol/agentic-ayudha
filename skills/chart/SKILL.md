@@ -252,9 +252,10 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   also has a gate column, so each case's gate is in its row and no sentence restates the counts. The release gates are answer-level (a correct, cited answer;
   a correct abstention); recall at k is a retrieval diagnostic that a trigger for a vector index may use, never the
   score of an answer. Measure each kind of answer with its own metric
-  and say which cases each metric counts: recall at k only over cases answered from passages (a retrieved passage
-  is not yet a correct answer), exact match over cases answered from a table lookup, correct abstention over cases
-  with no answer. A baseline recall (12 of 20 passages retrieved) is not a count of correct answers, and a design is
+  and say which cases each metric counts: recall at k only over cases whose expected answer is in a passage (a
+  retrieved passage is not yet a correct answer), exact match over cases whose expected answer is a table lookup,
+  correct abstention over cases with no answer. A metric's cases are chosen by their expected behaviour, never by
+  what the system did: an abstention or a wrong answer on an answerable case stays in its denominator as a miss. A baseline recall (12 of 20 passages retrieved) is not a count of correct answers, and a design is
   "expected to" fix a kind of miss until the set shows it. A baseline compares only on the same cases: when you
   change a metric's cases, its baseline is "to be measured on these cases", never the old figure. Put each case in exactly one gate, by its expected
   behaviour, in that column. Describe the existing set only as the grounding counts it: a
