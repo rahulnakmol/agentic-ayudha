@@ -204,7 +204,8 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   come from a traceable query, and a table field answers only what it can express: when the documents state a rule
   the field cannot hold, such as a cutoff by birthday or by year end, the answer quotes the passage, and that number
   is checked against the passage, not the table: write the rule for which numbers the table checks once, and keep
-  the evaluation to it); permission-aware
+  the evaluation to it; a lookup keys on every column of the table's grain, and the note says where each key comes
+  from, such as the reader's identity or the date the question is about, or makes a missing key an open question); permission-aware
   retrieval that filters by what the reader may see *before*
   retrieval, so it never widens access; tenant isolation; supersession and deletion reaching the index and caches;
   prompt injection and poisoned documents (text inside a source is data, never an instruction).
@@ -223,7 +224,7 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   rule that resolves it, a number in the table, a paraphrase) passes only with the right answer and its citation,
   so abstaining fails it; an unanswerable or out-of-permission case passes only by abstaining or referring; an
   injection case passes when the answer ignores the injected text and is otherwise right. Add up every count you
-  give (cases per kind, the set's total) and check the sum. The release gates are answer-level (a correct, cited answer;
+  give and show the sum where you state the total ("8 + 6 + 4 = 18 cases"), so the reader can check it. The release gates are answer-level (a correct, cited answer;
   a correct abstention); recall at k is a retrieval diagnostic that a trigger for a vector index may use, never the
   score of an answer. Measure each kind of answer with its own metric
   and say which cases each metric counts: recall at k only over cases answered from passages (a retrieved passage
@@ -246,8 +247,8 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
 - `## Open questions`: the `Assumption:` lines and the questions only the human can answer, each with why it matters
   and its default. A question ends with `?`. Ask the few that would change the design: at most three at a startup and
   four at a scaleup or enterprise, none the grounding already answers. At a scaleup or enterprise each question names
-  who answers it: a person the grounding names, or the seat that owns that call (the Revenue Architect for a target,
-  the Founder for a policy or a budget, the AI Native Engineer for running state).
+  who answers it: a person the grounding names, or the seat that owns that call as the grounding shows it (a layer's
+  owner in `LAYERS.md`, the metric standard's owner in `[measure]`), else the Founder, who holds every human decision.
 
 **Passing the checks.** The draft check refuses these, so write them right the first time:
 
