@@ -124,8 +124,8 @@ JSON), never a rendering: it cannot see pixels, so layout and visual hierarchy a
 Tier 2 runs in groups (`[[groups]]` in `eval.toml`), one `evals.yml` job per group, each with its own `max_usd`, so
 one group cannot use up another's cap: `brief` (the `brief/` cases, 12 USD), `personas` (the `retro/` and `decide/`
 persona cases, 20 USD), `conversations` (the grill conversation cases of WP5.3b and WP5.8, 60 USD, advisory until a run meets
-the bar, D-5.3b.g), `tell` (the `tell/` cases, 8 USD, advisory and run on dispatch only until it holds a mean of at least 4.0 on two
-consecutive full runs, D-7.5b), `host-skills` (the build, verify, and ready session cases, 37 USD, advisory and on
+the bar, D-5.3b.g), `tell` (the `tell/` cases, 8 USD, gating since two consecutive full runs held a mean of 5.00, D-7.5e; it runs on
+dispatch and on pushes to `rolling` and `main`, never nightly or on pushes to `dev`), `host-skills` (the build, verify, and ready session cases, 37 USD, advisory and on
 dispatch only, D-3.4f), `ux` (the UX Researcher's skills, 35 USD, advisory and on dispatch only, D-6.5b; its `max_tokens` raises the skill
 call's output cap to 24000 for multi-file stages, D-6.5c), `survey` (the `survey/` cases, 30 USD, advisory and on
 dispatch only, its skill output cap 24000 for a whole survey draft, WP5.9), and `skills` (every other case, 6 USD).
