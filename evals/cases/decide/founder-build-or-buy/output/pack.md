@@ -3,7 +3,7 @@
 ## Question
 
 Should this quarter's budget and engineer time go on building our own rules engine, on a hosted rules engine, or on
-neither, for follow-up booking?
+hard-coding only the three rules clinics ask for most, for follow-up booking?
 
 The real decision is how much rule flexibility Goal #300 needs this quarter, since 41 of 50 pilot requests were three
 rules (#310).
@@ -23,7 +23,7 @@ rules (#310).
 
 1. **Hard-code the three rules.** Extend `Eligible` with the gap, clinician, and plan rules
    (`internal/booking/eligible.go:10-24`).
-   - Gains: 1.5 weeks, no spend, no vendor data path (`ledger/plans/301/estimate.json`).
+   - Gains: 1.5 weeks and no third-party fee (`ledger/plans/301/estimate.json`, `ops/budget/2026-Q4.md`).
    - Costs: the clinic in #311 waits for per-clinician rules (#311).
 2. **Build our own engine.** Three effort-L stories in L04 (`LAYERS.md`).
    - Gains: every rule shape, no vendor (`ledger/plans/301/estimate.json`).
@@ -37,7 +37,8 @@ rules (#310).
 Option 1: it serves 41 of 50 requests at the lowest cost (#310, `ledger/plans/301/estimate.json`). Product
 dominates: Goal #300 is won by the rules clinics ask for, and the other perspectives only add cost or a dependency
 (`ops/goals/300.md`). Not doing: an engine of either kind this quarter (#311).
-Door: two-way door; three rules in `Eligible` change no contract and commit no spend (`internal/booking/eligible.go:10-24`).
+Door: two-way door; three rules in `Eligible`, which writes nothing, commit no contract (`internal/booking/eligible.go:10-24`).
+The engine is weeks of build spent and the annual contract has no exit (`ops/budget/2026-Q4.md`).
 
 ## Cost of waiting
 

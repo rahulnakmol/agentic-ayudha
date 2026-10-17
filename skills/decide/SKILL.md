@@ -149,7 +149,10 @@ citation.
    behind: anything written to an append-only record, published, or relied on by another reader is a one-way door for
    that data, while a plan, a scope, or a split is a two-way door. Count what the option writes now as well as what
    it defers: records written now in the old shape stay that way, and a code change is a two-way door only until
-   records that depend on it are written. When an option has both, say which part is which. When the owning twin is
+   records that depend on it are written. When an option has both, say which part is which. When a fact constrains
+   how the recommended option must be carried out (a reader that refuses what the option writes, a Decision on older
+   shapes, a dependency), the recommendation names it as a condition of the option in one cited clause; listing it
+   in Facts is not enough. When the owning twin is
    the Founder, one cited sentence before `Door:` says which perspective dominates this decision (operations: cost,
    risk, people, process; technology: architecture, build or buy, technical risk; product: what, for whom, why) and
    why it outweighs the other two; the Facts carry the deciding fact of each perspective (the money left and what
@@ -183,7 +186,9 @@ Before you show the pack, check each sentence against the facts, as a reviewer w
 - The recommendation, every `Gains:` and `Costs:` line, and every pre-mortem reason rest on what sources state, not
   on your inferences, labelled or not: a link the sources do not make (that one fact caused, blocks, requires, or
   serves another; what an option will or will not cover; what data a type holds) is either left out or asked as a
-  question in part 7. A reviewer who reads only the cited lines must reach the same claim.
+  question in part 7. A reviewer who reads only the cited lines must reach the same claim. An absolute (no spend, no
+  records, nothing is written, the only, never) is a claim too: write it only when a source states it, else say what
+  the source does state ("no third-party fee").
 - Cite only what you read for this decision (issues, code, `LAYERS.md`, the ledger, `CONSTRAINTS.md`), never your
   own charter, persona, or this skill. Every list item and paragraph that names code, a layer, a risk, a floor, or
   progress carries its citation in itself, not once for the list.

@@ -3,14 +3,14 @@
 # dominates and why, and labels the door, at the scaleup stage. Its own grounding and rubric: a build, buy, or neither
 # decision. Tier 2 has the decide skill write the pack again for the judge.
 skill = "decide"
-description = "Zeus's decision pack: build a rules engine, buy a hosted one, or hard-code the three rules clinics use."
+description = "Zeus's decision pack: build a rules engine, buy a hosted one, or hard-code the three rules clinics ask for most."
 input = "../founder-grounding.md"
 artifacts = ["output/pack.md"]
 
 [pack]
 seat = "founder"
 stage = "scaleup"
-question = "Should this quarter's budget and engineer time go on building our own rules engine, on a hosted rules engine, or on neither, for follow-up booking?"
+question = "Should this quarter's budget and engineer time go on building our own rules engine, on a hosted rules engine, or on hard-coding only the three rules clinics ask for most, for follow-up booking?"
 draft = "output/pack.md"
 
 [tier2]
