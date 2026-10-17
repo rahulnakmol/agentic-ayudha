@@ -125,15 +125,22 @@ func recordCopilotSession(root string, event []byte, shell string) {
 	}
 }
 
-// CopilotSessionLog returns the log of the Copilot session that ran aayu build
-// in root within the last maxAge, or "" when there is none.
+// CopilotSessionLog returns the log of the Copilot session whose pre-tool hook
+// noted, within the last maxAge, that it was about to run aayu build in root,
+// or "" when there is none. It takes the note: the hook writes one before each
+// aayu build its agent runs, so a later build by a person or another host is
+// never credited to that session.
 func CopilotSessionLog(root, copilotHome string, maxAge time.Duration, now time.Time) string {
 	path := filepath.Join(root, filepath.FromSlash(CopilotSession))
 	fi, err := os.Stat(path)
-	if err != nil || now.Sub(fi.ModTime()) > maxAge {
+	if err != nil {
 		return ""
 	}
 	b, err := os.ReadFile(path)
+	_ = os.Remove(path)
+	if now.Sub(fi.ModTime()) > maxAge {
+		return ""
+	}
 	var rec struct {
 		SessionID string `json:"session_id"`
 	}
