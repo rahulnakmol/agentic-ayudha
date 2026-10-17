@@ -1,0 +1,117 @@
+{
+  "repo": "rahulnakmol/agentic-ayudha",
+  "release": 268,
+  "version": "v0.2.0",
+  "source": "rolling",
+  "target": "main",
+  "source_sha": "a7efe408a50baba80bbede0a7b9fa717db388ced",
+  "commit": "aeedef7e7ed55d0d1c52d3958924a2ce26020bef",
+  "tree": "b76feae8b3c0d7914d8217d01bc7927089a01b5e",
+  "message": "Release: v0.2.0",
+  "tag": "v0.2.0",
+  "candidate": "promote/main-v0.2.0",
+  "gate": {
+    "workflow": "ci.yml",
+    "id": 38986574122,
+    "url": "https://github.com/rahulnakmol/agentic-ayudha/actions/runs/38986574122",
+    "conclusion": "success",
+    "attempts": 2
+  },
+  "release_run": {
+    "workflow": "release.yml",
+    "id": 38988597908,
+    "url": "https://github.com/rahulnakmol/agentic-ayudha/actions/runs/38988597908",
+    "conclusion": "success",
+    "attempts": 1
+  },
+  "artifacts": [
+    {
+      "name": "release-snapshot",
+      "digest": "sha256:06f1869010fe57cdcfbff4c5335c112455756934bc79d212d7802c69d7431604",
+      "size": 72780411
+    },
+    {
+      "name": "benchmarks",
+      "digest": "sha256:d9c5064ce68da5e22b140c6e0b0fddef9be5447904ff61855f8d0b1d0a9297af",
+      "size": 873
+    },
+    {
+      "name": "aayudha_0.2.0_darwin_amd64.tar.gz",
+      "digest": "sha256:42efc45a573253ae3aa4c520b716e89f29902927c8e92be8fa2586a210827798",
+      "size": 12659135
+    },
+    {
+      "name": "aayudha_0.2.0_darwin_amd64.tar.gz.sbom.json",
+      "digest": "sha256:26671f22b54f7f33685265f5e1c997998c4dcd0939ef13330d7162085d688779",
+      "size": 107647
+    },
+    {
+      "name": "aayudha_0.2.0_darwin_arm64.tar.gz",
+      "digest": "sha256:3c963ac1ae78a4ea4c59e3e6e6b0f9316e1b07d1ebaf0440caa886d229f77501",
+      "size": 11935949
+    },
+    {
+      "name": "aayudha_0.2.0_darwin_arm64.tar.gz.sbom.json",
+      "digest": "sha256:08ed6657cad46af10f4acb7383dcc7486095f887ee11a9c7fc7ef602ace2c2d4",
+      "size": 107647
+    },
+    {
+      "name": "aayudha_0.2.0_linux_amd64.tar.gz",
+      "digest": "sha256:d64c9b7854400694280aa642ff614e31ca959d28a0cebe89281aa6fc09c43a6a",
+      "size": 12623139
+    },
+    {
+      "name": "aayudha_0.2.0_linux_amd64.tar.gz.sbom.json",
+      "digest": "sha256:c2b45952ab5c147af18e8ac587bfb8af88a6917ab85dd4386bcfb248a9ae92df",
+      "size": 105811
+    },
+    {
+      "name": "aayudha_0.2.0_linux_arm64.tar.gz",
+      "digest": "sha256:687aca04d067218da6c51ddd497b02319d684098d4d48af0523982168aa53323",
+      "size": 11625526
+    },
+    {
+      "name": "aayudha_0.2.0_linux_arm64.tar.gz.sbom.json",
+      "digest": "sha256:a015097c8c8747651e7d6462ee7244f226a0c2e6c3de8ad1eb496a364b4edefb",
+      "size": 105811
+    },
+    {
+      "name": "aayudha_0.2.0_windows_amd64.zip",
+      "digest": "sha256:71ffd232dd277045ce83c6aa49c87a7e2a9b36faef7c04a73a0e903735717f2c",
+      "size": 12682196
+    },
+    {
+      "name": "aayudha_0.2.0_windows_amd64.zip.sbom.json",
+      "digest": "sha256:106cada00ba24067c3dcc2ba538a1bd5f3830533c5cae5dbcc11efad6b9439b0",
+      "size": 110492
+    },
+    {
+      "name": "aayudha_0.2.0_windows_arm64.zip",
+      "digest": "sha256:6b1bda22273517b84018111cc1e4f51a463f5de6461e24e46ab6308995a55f27",
+      "size": 11520037
+    },
+    {
+      "name": "aayudha_0.2.0_windows_arm64.zip.sbom.json",
+      "digest": "sha256:ab4476dabbbfa1e45b78aa84034cf7692fbff868507499718ab0572f1ac87682",
+      "size": 110492
+    },
+    {
+      "name": "checksums.txt",
+      "digest": "sha256:7c07f33870ea4d343a69c9cd86783ffbce8997eecf9c969396ef57b338214270",
+      "size": 1248
+    },
+    {
+      "name": "checksums.txt.sigstore.json",
+      "digest": "sha256:d2c05cfe741451526948ef9ae464f90bb208b3727fc716b55be3771137251ee0",
+      "size": 10380
+    }
+  ],
+  "stories_released": [],
+  "already_released": [],
+  "shipped_not_listed": [],
+  "referenced_not_merged": [],
+  "release_notes": "tell/release/v0.2.0.md",
+  "measure_due": [],
+  "promoted_by": "rahulnakmol",
+  "promoted_at": "2026-10-17T00:28:30Z"
+}
