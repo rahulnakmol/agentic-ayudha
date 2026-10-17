@@ -99,7 +99,8 @@ in order as `##` headings:
    such as runs per hour and approval, exactly as the catalog gives them), its risk and blast
    radius, and when not to use it. When no catalog action fixes this failure (a slow dependency is not fixed by a
    restart or a rollback), write "no catalog action" and name the action a person should add, and who to escalate to
-   meanwhile; never offer a catalog action that does not address the cause.
+   meanwhile; never offer a catalog action that does not address the cause. Name each catalog action you rule out and why; never
+   state how many actions the catalog has.
 4. **Verify.** For each alert and SLO the entry covers, its own query to rerun and the value to expect (for example
    the serving revision's error rate back to 0 % in `requests by version`, or the latency SLO's percentile back under
    its threshold), and how long to watch.

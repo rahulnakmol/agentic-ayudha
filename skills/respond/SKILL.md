@@ -116,13 +116,18 @@ timestamped lines, one decision at a time, and every change to production is a p
    the citation, and turn open questions into actions rather than causes. Keep the
    investigation's confidence: a hypothesis the note weighed against stays "unlikely", never "ruled out", unless
    the note rules it out. Say how the incident was detected only as the grounding shows it (people
-   reporting it, an alert firing); never assert that an alert did or did not fire when the record does not say. When people
-   reported it, add an action for an SLO burn-rate alert on that journey, owned by the Production Engineer. Measure the impact from the first observed
+   reporting it, an alert firing); never assert that an alert did or did not fire when the record does not say. When the record
+   says only that it was reported, write "reported (`#N`)" and nothing about who or how. When the record names no
+   alert that fired, add an action for an SLO burn-rate alert on that journey, owned by the Production Engineer, and give
+   that as its reason ("the record names no alert"), never that no alert fired or that people found it; a team saying
+   it has no alert on one signal is not evidence that no signal existed. Measure the impact from the first observed
    failure to the start of the verified recovery window, say the end is approximate when no query covers it, and
    quote counts per window as the queries give them; never extend a rate past the window that measured it. Describe the response only by what the timeline and
    comments record, not by how an investigation is meant to run (such as "the revision was established before the code
    was read"). Never call a run a first try or a clean run unless the record
-   shows its history. The follow-up Bug files on close: write its status as "to file on close", never as filed (not even "filed by
+   shows its history. The incident is open until `--close` runs: describe recovery by the recovery query and its window,
+   never as verified before a close-out the record does not show. A request to a team outside the pod is "requested,
+   not yet accepted" until the record shows them accept it. The follow-up Bug files on close: write its status as "to file on close", never as filed (not even "filed by
    `--close`"), and never describe an approval, a run,
    or an owner's agreement the timeline and comments do not show (every owner is a seat: the AI Native Engineer builds the durable fix, the Production Engineer owns alerts,
    runbooks, and the catalog; name a person only when the record shows they agreed; outside the pod, a team is "to
