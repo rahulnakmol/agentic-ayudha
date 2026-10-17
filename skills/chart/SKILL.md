@@ -167,10 +167,14 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   system of record (L07) apart from the analytical copy (L08). Prefer, in order: the exports and snapshot that
   `aayu measure` already builds (SQLite, or DuckDB); views on a read replica; a warehouse or lakehouse; streaming only
   for a decision that needs minutes. Name the next stage's **trigger** as a measured threshold and where it is
-  measured, with a number (for example `Assumption:` the query's p95 on the snapshot over 2 s, freshness needed under an
-  hour, or a second team consuming the table), never as a user count and never as "a bound we agree".
+  measured, with a number (for example `Assumption:` the query's p95 on the snapshot over 2 s, or freshness needed under
+  an hour), never as a user count and never as "a bound we agree". Each trigger names the limit of the current design
+  it measures, and the next stage is the smallest change that removes that limit: a freshness need is met by a more
+  frequent export or load, not a read replica; slow queries by an index or a larger engine; another consumer is a
+  reason to publish a contract, not by itself a reason to change the store.
 - `## Privacy and retention`: what personal data appears (free text often holds it), who sees per-person rows and who
-  only aggregates (suppress small groups; until a human confirms wider access, the default is the restrictive one:
+  only aggregates (suppress small groups, and every value that would reveal a suppressed count with it: a share, a
+  total, or a difference beside it; until a human confirms wider access, the default is the restrictive one:
   aggregates only, no free text, the shortest retention the decision needs), how long each copy is kept (export, snapshot, aggregate), and how a deletion
   reaches every copy: the person's rows are removed from the source system (the telemetry store or database the
   events come from; if it cannot delete, say so, give its retention, and make it an open question), from each export
