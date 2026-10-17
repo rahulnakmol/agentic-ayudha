@@ -32,6 +32,27 @@ adds a failing case here before any skill diff.
 Deterministic, no model calls. `TestTier1` in `internal/evals` runs every case inside `go test`, so the CI job `build`
 runs it; `go run ./internal/evals/cmd/eval -tier 1` prints the same report.
 
+## The bars only rise
+
+A failing eval is fixed by improving the work, never by lowering the eval (Story #400, Feedback #327). On every PR,
+CI's `build` job compares this directory with the PR's base (`evals.CheckBars`, run by the coverage ratchet's command)
+and fails a change that:
+
+- lowers `pass_score`, `min_pass_k`, or `min_mean`, or raises `max_drop`, in `eval.toml`;
+- moves a case into a group whose `gate` or `pass_k` is `"advisory"`, or removes a case;
+- removes a case's deterministic rule (a `case.toml` scope rule, a `session.toml` require, forbid, or say_forbid
+  rule), or changes its `pattern` or `allow`;
+- drops a rubric item (a criterion, a score anchor, or a paragraph), or rewords one so that it loses any word.
+
+Raising a bar and adding a case, a group (a new group starts advisory), a rule, or rubric words need nothing. When a
+bar really is wrong, a human decides: `aayu decide --waiver eval-bar <story>`, accepted with
+`aayu decide <n> --accept waive`, then named as `bar_waiver = <n>` in `eval.toml`. A waiver the base already names does
+not count again. To run the check before a push:
+
+```sh
+go test -coverprofile=coverage.out ./... && go run ./internal/ratchet/cmd/ratchet -coverprofile coverage.out -base "$(git merge-base origin/dev HEAD)"
+```
+
 ## Evolve PRs: eval-first
 
 `aayu evolve` (WP7.7) answers accepted retro Feedback about a skill. Its PR must add a new case here that names the

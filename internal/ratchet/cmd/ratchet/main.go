@@ -1,5 +1,7 @@
 // Command ratchet checks or tightens this repository's coverage floor
-// (internal/ratchet; Appendix B S-4.3r). CI's build job runs
+// (internal/ratchet; Appendix B S-4.3r) and, given a base, checks that the
+// change lowers no skill-eval bar (evals.CheckBars, Story #400). CI's build
+// job runs
 //
 //	go run ./internal/ratchet/cmd/ratchet -coverprofile coverage.out [-base <sha>]
 //
@@ -7,13 +9,18 @@
 package main
 
 import (
+	"archive/tar"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/evals"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ratchet"
 )
@@ -24,7 +31,7 @@ func main() {
 	update := flag.Bool("update", false, "tighten the floor in "+ratchet.File+" to what the coverage supports; never loosens it")
 	flag.Parse()
 	if err := run(*profile, *base, *update); err != nil {
-		fmt.Fprintf(os.Stderr, "::error::coverage ratchet: %v\n", err)
+		fmt.Fprintf(os.Stderr, "::error::%v\n", err)
 		os.Exit(1)
 	}
 }
@@ -65,15 +72,110 @@ func run(profile, base string, update bool) error {
 	}
 	problems, waiver := ratchet.Check(cur.Coverage, prev, measured)
 	if waiver != 0 {
-		if err := checkWaiver(waiver); err != nil {
+		if err := checkWaiver(waiver, "coverage"); err != nil {
 			problems = append(problems, fmt.Sprintf("waiver #%d: %v", waiver, err))
 		}
 	}
 	fmt.Printf("coverage %.1f %%; floor %.1f %% (margin %.1f)\n", measured, cur.Coverage.Floor, cur.Coverage.Margin)
-	if len(problems) > 0 {
-		return fmt.Errorf("%s", strings.Join(problems, "\n::error::coverage ratchet: "))
+	var barProblems []string
+	if base != "" {
+		if barProblems, err = evalBars(base); err != nil {
+			return err
+		}
+	}
+	var all []string
+	for _, p := range problems {
+		all = append(all, "coverage ratchet: "+p)
+	}
+	for _, p := range barProblems {
+		all = append(all, "eval-bar ratchet: "+p)
+	}
+	if len(all) > 0 {
+		return errors.New(strings.Join(all, "\n::error::"))
 	}
 	return nil
+}
+
+// evalBars checks that the change from base lowers no skill-eval bar
+// (evals.CheckBars): base's evals/ is read from git, the change's from the
+// working tree.
+func evalBars(base string) ([]string, error) {
+	dir, err := os.MkdirTemp("", "eval-bars-")
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+	if err := extract(base, "evals", dir); err != nil {
+		return nil, err
+	}
+	lowered, problems, err := evals.CheckBars(dir, ".", func(n int) error { return checkWaiver(n, evals.BarFloor) })
+	if err != nil {
+		return nil, fmt.Errorf("eval-bar ratchet: %w", err)
+	}
+	for _, l := range lowered {
+		fmt.Printf("eval bar lowered: %s\n", l)
+	}
+	if len(lowered) == 0 {
+		fmt.Println("eval bars: none lowered")
+	}
+	return problems, nil
+}
+
+// extract writes the tree at sha:dir under root, as `git archive` gives it.
+func extract(sha, dir, root string) error {
+	cmd := exec.Command("git", "archive", "--format=tar", sha, dir)
+	out, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	tr := tar.NewReader(out)
+	for {
+		h, err := tr.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			_ = cmd.Wait()
+			return fmt.Errorf("git archive %s %s: %w", sha, dir, err)
+		}
+		name := filepath.Join(root, filepath.FromSlash(h.Name))
+		if !strings.HasPrefix(name, filepath.Clean(root)+string(os.PathSeparator)) {
+			continue
+		}
+		switch h.Typeflag {
+		case tar.TypeDir:
+			err = os.MkdirAll(name, 0o755)
+		case tar.TypeReg:
+			if err = os.MkdirAll(filepath.Dir(name), 0o755); err == nil {
+				err = writeFrom(name, tr)
+			}
+		}
+		if err != nil {
+			_ = cmd.Wait()
+			return err
+		}
+	}
+	if err := cmd.Wait(); err != nil {
+		return fmt.Errorf("git archive %s %s: %w: %s", sha, dir, err, strings.TrimSpace(stderr.String()))
+	}
+	return nil
+}
+
+func writeFrom(name string, r io.Reader) error {
+	f, err := os.Create(name)
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(f, r)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	return err
 }
 
 // baseRatchet reads the base commit's ratchet; the floor before the ratchet
@@ -99,8 +201,8 @@ func baseRatchet(sha string) (*ratchet.Ratchet, error) {
 	return &r.Coverage, nil
 }
 
-// checkWaiver reads the waiver Decision from GitHub with the job's token.
-func checkWaiver(n int) error {
+// checkWaiver reads a floor-waiver Decision for floor from GitHub with the job's token.
+func checkWaiver(n int, floor string) error {
 	repo := os.Getenv("GITHUB_REPOSITORY")
 	owner, name, err := github.SplitRepo(repo)
 	if err != nil {
@@ -114,5 +216,5 @@ func checkWaiver(n int) error {
 	if err != nil {
 		return err
 	}
-	return ratchet.AcceptedWaiver(is, "coverage", nil)
+	return ratchet.AcceptedWaiver(is, floor, nil)
 }

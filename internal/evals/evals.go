@@ -33,8 +33,11 @@ type Config struct {
 	MinPassK  float64 `toml:"min_pass_k"` // suite pass^k bar
 	MinMean   float64 `toml:"min_mean"`   // suite mean rubric score bar
 	MaxDrop   float64 `toml:"max_drop"`   // largest allowed fall of the mean below the baseline
-	MaxUSD    float64 `toml:"-"`          // spend cap of the run: the selected group's max_usd (ForGroup)
-	Groups    []Group `toml:"groups"`     // tier-2 case groups, each run as its own job with its own spend cap
+	// BarWaiver is the accepted eval-bar floor waiver that let this change
+	// lower a bar (CheckBars); one named on the base does not count again.
+	BarWaiver int     `toml:"bar_waiver"`
+	MaxUSD    float64 `toml:"-"`      // spend cap of the run: the selected group's max_usd (ForGroup)
+	Groups    []Group `toml:"groups"` // tier-2 case groups, each run as its own job with its own spend cap
 	MaxTokens struct {
 		Skill int `toml:"skill"`
 		Judge int `toml:"judge"`
