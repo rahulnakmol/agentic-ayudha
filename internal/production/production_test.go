@@ -159,6 +159,12 @@ func TestCheckInvestigation(t *testing.T) {
 			t.Errorf("%s: findings %q, want %q", name, f, tt.want)
 		}
 	}
+	// A stop condition given as a table row labelled Stop is a stop condition.
+	row := strings.Replace(string(good), "Rollback: `deploy-app` with `revision=bbbbbbb2` (ops/actions.toml); stop if `aaaaaaa1` shows any 500.",
+		"\n| Item | Detail |\n|---|---|\n| Stop | If `aaaaaaa1` shows any 500, page the on-call (ops/actions.toml) |\n", 1)
+	if f := strings.Join(CheckInvestigation(row, 1, "startup", pr, known, action), "\n"); strings.Contains(f, "rollback or stop condition") {
+		t.Errorf("a Stop row: findings %q", f)
+	}
 }
 
 func TestSLOs(t *testing.T) {
