@@ -157,8 +157,11 @@ checks the cosign signature. `installers.yml` proves that the Scoop manifest ref
 
 > **Honest status:** v0.1.0 was released on 15 October 2026 (tag `v0.1.0`, commit `78bd4ae` on `main`): the tag
 > check, the signed build, provenance, and the smoke installs on Linux and macOS passed. Its Homebrew, Scoop, and winget
-> jobs failed, so the tap and the bucket are still empty and `install.sh` is the way to install. The promotion record
-> below is the earlier rolling snapshot `rolling-2026-10-12.4`, which carried the story.
+> jobs failed, so at that release the tap and the bucket stayed empty and `install.sh` was the way to install. Since
+> v0.2.0, Homebrew and Scoop have aayudha (the tap's cask and the bucket's manifest are at 0.2.0). winget does not
+> yet: its package has passed validation and is waiting for a moderator in
+> [microsoft/winget-pkgs pull request 454680](https://github.com/microsoft/winget-pkgs/pull/454680). The promotion record below is the earlier rolling snapshot
+> `rolling-2026-10-12.4`, which carried the story.
 
 ## A real promotion record
 
