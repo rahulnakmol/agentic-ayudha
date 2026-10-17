@@ -1,0 +1,3 @@
+# Expected output
+
+4

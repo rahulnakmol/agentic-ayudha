@@ -84,6 +84,11 @@ func classify(p string) (role string, lang Lang, system string) {
 			return "vendored", l, ""
 		}
 	}
+	// A Markdown or text file under a test directory is a test's input or
+	// expected output, not documentation of the product.
+	if docExt[ext] && !strings.HasPrefix(base, "readme") && isTestPath(p) {
+		return "data", Lang{}, ""
+	}
 	if docExt[ext] || strings.HasPrefix(base, "readme") || base == "changelog" || base == "news" || base == "authors" || base == "copying" || base == "license" || base == "install" || base == "todo" {
 		return "doc", Lang{}, ""
 	}
