@@ -171,24 +171,26 @@ func TestInbox(t *testing.T) {
 	g.AddIssue("Choose the cache", workitems.Render(tw, map[string]string{workitems.FieldSummary: "Which cache?",
 		"options": "- **Keep it**: the current one.\n- **Swap it** for a managed one.\n- **Drop it** entirely.", "evaluation": "Swap is cheaper.",
 		"recommendation": "Option 2, because it is cheaper.", workitems.FieldReversible: "true"}), "type:decision", "status:planned") // #2
-	g.AddIssue("Old story", "x", "type:story", "status:backlog")                                       // #3
-	g.AddIssue("New story", "Replaces #3.", "type:story", "status:ready")                              // #4
-	capped := g.AddPR("fix(cli): capped", "Refs #170", "o", "fix/170", strings.Repeat("d", 40), "dev") // #5
+	g.AddIssue("Old story", "x", "type:story", "status:backlog") // #3
+	g.AddIssue("New story", "Replaces #3.", "type:story", "status:ready")
+	g.AddIssue("A bug with no fix yet", "x", "type:bug", "status:planned")                             // #4
+	capped := g.AddPR("fix(cli): capped", "Refs #170", "o", "fix/170", strings.Repeat("d", 40), "dev") // #6
 	g.Mu.Lock()
 	g.Issues[capped.Number].Comments = append(g.Issues[capped.Number].Comments, &fake.Comment{ID: 78, Body: inspect.Marker + "\n<!-- aayudha:inspect-state " + string(st) + " -->\n"})
 	g.Mu.Unlock()
-	opts.GitHubAPI = g.URL()
-	code, out, errOut = runIn(t, newEnv(), opts, "x a c o s  c 9 c 2  c  c", "inbox", "--repo", "o/r")
+	// Without persona assets a step names the seat alone.
+	bare := Options{GitHubAPI: g.URL(), GitHubGap: -1, IsTerminal: tty}
+	code, out, errOut = runIn(t, newEnv(), bare, "x a c o s  c 9 c 2  c  c", "inbox", "--repo", "o/r")
 	if code != 0 {
 		t.Fatalf("inbox: exit %d: %s\n%s", code, errOut, out)
 	}
 	for _, want := range []string{
 		"[1/4] Decision #1: Pick a queue\n  not Decision-ready (",
-		") has no recommendation to accept here.",
+		"  Founder has no recommendation to accept here.",
 		"  > x\n  keys: a, c, s, o, q\n  > a\n  no recommendation: choose another (c), open (o), or skip (s)\n  > c\n  no other option: accept (a), open (o), or skip (s)\n  > o\n  open: ",
 		"  the Decision recommends: accept Swap it\n  other 1: accept Keep it\n  other 2: accept Drop it\n",
 		"  > c\n  which other (1-2)? 9\n  not one of the others\n  > c\n  which other (1-2)? 2\n#2 accepted: Drop it, by @o",
-		"[3/4] PR at inspect's cycle cap #5",
+		"[3/4] PR at inspect's cycle cap #6",
 		"  > c\n  not done: ",
 		"[4/4] Replaced #3: Old story",
 		"inbox: 1 done, 1 skipped, 1 left",
@@ -202,10 +204,24 @@ func TestInbox(t *testing.T) {
 		t.Errorf("after the picks: #1 %s, #3 %s, #2:\n%s", g.Issues[1].State, g.Issues[3].State, g.Issues[2].Body)
 	}
 	g.Mu.Unlock()
-	// With nothing waiting, it says so.
-	opts.GitHubAPI = fake.New(t, "o/r", "User").URL()
+	// With nothing waiting, it says so; under a bot's token it refuses.
+	g = fake.New(t, "o/r", "User")
+	opts.GitHubAPI = g.URL()
 	if code, out, _ := runIn(t, newEnv(), opts, "", "inbox", "--repo", "o/r"); code != 0 || out != "o/r: nothing waits for you.\n" {
 		t.Errorf("empty inbox: exit %d: %q", code, out)
+	}
+	// An option marked "(recommended)" is the recommendation; input that ends
+	// at the pick of another leaves the step undone.
+	g.AddIssue("Choose the CDN", workitems.Render(tw, map[string]string{workitems.FieldSummary: "Which CDN?",
+		"options": "1. **Ours**\n2. **Theirs** (recommended)\n3. **None**", "evaluation": "Theirs is faster.",
+		"recommendation": "The managed one.", workitems.FieldReversible: "true"}), "type:decision", "status:planned")
+	if code, out, _ := runIn(t, newEnv(), opts, "c", "inbox", "--repo", "o/r"); code != 0 ||
+		!strings.Contains(out, "  the Decision recommends: accept Theirs\n  other 1: accept Ours\n  other 2: accept None\n  > c\n  which other (1-2)? \ninbox: 0 done, 0 skipped, 1 left") {
+		t.Errorf("recommended option, input ends at the pick: exit %d:\n%s", code, out)
+	}
+	g.ViewerType = "Bot"
+	if code, _, errOut := runIn(t, newEnv(), opts, "", "inbox", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "is a bot identity") {
+		t.Errorf("inbox under a bot token: exit %d: %s", code, errOut)
 	}
 
 	// Criterion 6: a host agent's `aayu inbox` is blocked at the pre-tool hook.

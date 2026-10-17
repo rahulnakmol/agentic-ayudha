@@ -155,11 +155,8 @@ func gatherInbox(ctx context.Context, c *github.Client, repo, dev string) ([]Inb
 	}
 	replacedBy := map[int]int{}
 	for _, is := range issues {
-		if is.IsPullRequest() {
-			continue
-		}
 		for _, m := range replacesRE.FindAllStringSubmatch(is.GetBody(), -1) {
-			if n, _ := strconv.Atoi(m[1]); n != is.GetNumber() && (replacedBy[n] == 0 || is.GetNumber() < replacedBy[n]) {
+			if n, _ := strconv.Atoi(m[1]); !is.IsPullRequest() && n != is.GetNumber() && (replacedBy[n] == 0 || is.GetNumber() < replacedBy[n]) {
 				replacedBy[n] = is.GetNumber()
 			}
 		}
@@ -208,9 +205,6 @@ func gatherInbox(ctx context.Context, c *github.Client, repo, dev string) ([]Inb
 		}
 	}
 	for _, p := range open {
-		if p.GetDraft() {
-			continue
-		}
 		comments, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.IssueComment, *gh.Response, error) {
 			return c.REST.Issues.ListComments(ctx, owner, name, p.GetNumber(), &gh.IssueListCommentsOptions{ListOptions: o})
 		})
