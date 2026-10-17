@@ -76,6 +76,7 @@ and the checks that run in CI (the automated checks GitHub runs on every pull re
 | Find out whether it helped | [Did it work?](guide-learn.md) |
 | Fix something that went wrong | [Troubleshooting](troubleshooting.md) |
 | Try it without touching CI or adding keys | [Adopt at your own pace](adopt.md) |
+| See the whole loop: who does what, and where it can stop | [The delivery loop](concepts-loop.md) |
 | Understand the ideas | [Seats](concepts-seats.md), [layers](concepts-layers.md), [proof packs](concepts-proof.md), [floors](concepts-floors.md), [the human pass](concepts-human-pass.md), [dev, rolling, main](concepts-ladder.md) |
 | Know exactly how it works | [How it works](how-it-works.md), fifteen technical deep dives |
 | See how aayudha was built with itself | [Epilogue: built with itself](built-with-itself.md) |

@@ -65,7 +65,8 @@ site links work only when every story under it shipped with proof, and those thr
 Then an [epilogue](built-with-itself.md): how aayudha was built the same way, with its own gates saying no to it.
 
 > **Tip:** every chapter ends with an "Under the hood" box for engineers who want the mechanics, and a "What's next"
-> that leads into the next chapter. You can also read the [How it works](how-it-works.md) track on its own.
+> that leads into the next chapter. You can also read the [How it works](how-it-works.md) track on its own, or see
+> the whole loop on one page first: [the delivery loop](concepts-loop.md).
 
 ## What's next
 
