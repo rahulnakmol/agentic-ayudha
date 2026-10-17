@@ -100,7 +100,15 @@ func TestParityFloor(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			root := parityRoot(t, tc.next, tc.evidence)
-			r := &Run{Root: root, Story: 9, Criteria: crit, Work: t.TempDir(), Sandbox: &Sandbox{Home: t.TempDir()}}
+			// The build runs `go build`, whose telemetry child outlives it and
+			// writes under HOME/.config/go; a strict t.TempDir cleanup races
+			// it, so HOME is removed best effort, as `aayu verify` removes it.
+			home, err := os.MkdirTemp("", "aayu-parity-home-")
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = os.RemoveAll(home) })
+			r := &Run{Root: root, Story: 9, Criteria: crit, Work: t.TempDir(), Sandbox: &Sandbox{Home: home}}
 			if ok, why := (Parity{}).Applies(r); !ok {
 				t.Fatalf("does not apply: %s", why)
 			}
