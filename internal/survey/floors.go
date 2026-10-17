@@ -91,7 +91,8 @@ func entryName(ix *Index, e Fact) string {
 // program (main or script entries), each case set names the runners that run
 // it (a program, or a test harness that drives the library); every input it names is a file of the checkout; and every builtin its
 // cases call (in an input file, or named in the case set's title or
-// comparison) is registered by each of its runners. With no inputs named,
+// comparison) is registered by each of its runners; with one program and no
+// runners named, that program is the runner. With no inputs named,
 // the checkout's test files the case set draws on (from) are its inputs. A builtin is a name a source file registers for the
 // program it embeds (Index.Builtins); a runner registers it when the
 // registration is reachable from the runner's main through the call graph.
@@ -115,6 +116,9 @@ func checkRunners(ix *Index, m *Modernisation, add func(string, ...any)) {
 			add("case set %s: name its runners (the programs that run it, of %s), and its inputs when they are files of the checkout: this checkout has %d programs", g.ID, listAt(runnable, 4), len(programs))
 		}
 		var runners []Fact
+		if len(programs) == 1 && len(g.Runners) == 0 {
+			runners = runnable // the only program runs it
+		}
 		for _, r := range g.Runners {
 			k := slices.IndexFunc(runnable, func(e Fact) bool { return e.ID == r || e.At == r })
 			switch t := slices.IndexFunc(ix.Tests, func(e Fact) bool { return e.ID == r }); {
@@ -186,8 +190,8 @@ func checkRunners(ix *Index, m *Modernisation, add func(string, ...any)) {
 // runnerReach returns whether any of a builtin's registrations is reachable
 // from a runner: in a function the runner's main reaches through call edges
 // (ambiguous edges count, so the floor never fails on a call it cannot
-// resolve), or at file scope in a file the runner loads (its own, or one
-// defining a function it reaches). It also returns whether a runner drives
+// resolve), or at file scope in a file the runner loads (its own, one
+// defining a function it reaches, or one those import or include). It also returns whether a runner drives
 // the program: it reaches a function defined outside the test files, or
 // imports or includes such a file.
 func runnerReach(ix *Index) (reach func(Fact, []Fact) bool, drives func(Fact) bool) {
@@ -247,16 +251,46 @@ func runnerReach(ix *Index) (reach func(Fact, []Fact) bool, drives func(Fact) bo
 	}
 	// loads reports whether a runner loads a file: the runner's own file, or a
 	// file defining a function the runner reaches.
-	loads := func(r Fact, file string) bool {
-		if f, _ := splitAt(r.At); f == file {
-			return true
-		}
-		for _, s := range byFile[file] {
-			if reached(r)[s.ID] {
-				return true
+	loaded := map[string][]string{} // file → the checkout files it imports or includes
+	for _, e := range ix.Edges {
+		if e.Kind != "call" && strings.HasPrefix(e.From, "file:") {
+			for _, to := range e.To {
+				if f, ok := strings.CutPrefix(to, "file:"); ok {
+					loaded[strings.TrimPrefix(e.From, "file:")] = append(loaded[strings.TrimPrefix(e.From, "file:")], f)
+				}
 			}
 		}
-		return false
+	}
+	// loadsMemo holds the files a runner loads: its own, each file defining a
+	// function it reaches, and every file those import or include (an import
+	// runs a module's file-scope code; an included header's static
+	// initialisers run in the program).
+	loadsMemo := map[string]map[string]bool{}
+	loads := func(r Fact, file string) bool {
+		if m, ok := loadsMemo[r.ID]; ok {
+			return m[file]
+		}
+		f, _ := splitAt(r.At)
+		m := map[string]bool{f: true}
+		queue := []string{f}
+		for g, syms := range byFile {
+			for _, s := range syms {
+				if !m[g] && reached(r)[s.ID] {
+					m[g] = true
+					queue = append(queue, g)
+				}
+			}
+		}
+		for ; len(queue) > 0; queue = queue[1:] {
+			for _, to := range loaded[queue[0]] {
+				if !m[to] {
+					m[to] = true
+					queue = append(queue, to)
+				}
+			}
+		}
+		loadsMemo[r.ID] = m
+		return m[file]
 	}
 	reach = func(r Fact, regs []Fact) bool {
 		for _, b := range regs {
@@ -270,16 +304,6 @@ func runnerReach(ix *Index) (reach func(Fact, []Fact) bool, drives func(Fact) bo
 	test := map[string]bool{}
 	for _, f := range ix.Files {
 		test[f.Path] = f.Role == "test"
-	}
-	loaded := map[string][]string{} // file → the checkout files it imports or includes
-	for _, e := range ix.Edges {
-		if e.Kind != "call" && strings.HasPrefix(e.From, "file:") {
-			for _, to := range e.To {
-				if f, ok := strings.CutPrefix(to, "file:"); ok {
-					loaded[strings.TrimPrefix(e.From, "file:")] = append(loaded[strings.TrimPrefix(e.From, "file:")], f)
-				}
-			}
-		}
 	}
 	drives = func(r Fact) bool {
 		for f, syms := range byFile {
