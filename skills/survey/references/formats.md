@@ -39,7 +39,9 @@ a misspelt field never silently drops a claim.
     {"id": "K1", "kind": "stdout", "name": "The integer result on stdout", "cites": ["src/util.cpp:14"], "consumers": "who depends on it",
      "level": "undecided", "decided_by": "Q1", "proof": ["G1"]},
     {"id": "K2", "kind": "ui-form", "name": "The invoice form's fields and tab order", "cites": ["Invoice.frm:1"], "level": "exact",
-     "decided_by": "Q4", "proof": ["check:invoicing/invoice-form.enter-invoice"]}
+     "decided_by": "Q4", "proof": ["check:invoicing/invoice-form.enter-invoice"]},
+    {"id": "K3", "kind": "exit-code", "name": "Exit code 1 on a script error", "cites": ["src/main.cpp:9"], "level": "exact",
+     "decided_by": "request", "quote": "with the same behaviour", "proof": ["G1"]}
   ],
   "modernisation": {
     "target": "Rust",
@@ -51,7 +53,8 @@ a misspelt field never silently drops a claim.
       {"id": "M2", "title": "Port the engine", "modules": ["mod:src"], "claims": ["E1", "C1"], "depends_on": ["M1"], "parity": ["G1"]}
     ],
     "case_sets": [
-      {"id": "G1", "title": "…", "from": ["test:tests/test001.js", "entry:src/main.cpp:4"], "compare": "exact stdout and exit code", "exclude": ["random output (E7; Q4 asks whether it matters)"]}
+      {"id": "G1", "title": "…", "from": ["test:tests/test001.js", "entry:src/main.cpp:4"], "compare": "exact stdout and exit code", "exclude": ["random output (E7; Q4 asks whether it matters)"],
+       "reference": "commit 8214477, g++ 12.2.0, the Makefile's CFLAGS -c -g -Wall"}
     ],
     "risks": [
       {"id": "R1", "claim": "…", "basis": "observed", "cites": ["src/main.cpp:7-8"]}
@@ -89,10 +92,13 @@ a misspelt field never silently drops a claim.
 - `compatibility`: `kind` is one of cli, exit-code, stdout, stderr, env, locale, file-format, config, plugin, protocol,
   api, data-store, ui-form, ui-shortcut, ui-print, ui-clipboard, ui-file-association, os-integration, com. `level` is
   `exact`, `differ` (with `difference`), `drop` (with `deprecation`: the warning, the release, the removal), or
-  `undecided`. Only the person decides a level: `decided_by` is `"request"` when their request says it, an answered
-  question, or, while `undecided`, the open question that will decide. `proof` names case sets, suites, or user
+  `undecided`. Only the person decides a level: `decided_by` is `"request"` when their request says it (then `quote`
+  holds the request's own words that decide it, and the check finds them in `request`), an answered question, or,
+  while `undecided`, the open question that will decide. `proof` names case sets, suites, or user
   behaviour checks that replay a user journey (`check:<product>/<feature>.<check>`, from the product's feature map, `aayu verify --map`); an `exact` interface needs exact evidence,
-  and a user-visible one (`ui-…`, `os-integration`) a check.
+  and a user-visible one (`ui-…`, `os-integration`) a check. A case set that proves an `exact` interface names its
+  `reference`: the pinned legacy build its goldens come from (the commit, the toolchain and its version, the build
+  flags), since another build of the same source can print other results.
 - `suites`, `migrations` (each with a tested `rollback`), `coexistence` (`mode`: shadow, side-by-side, or switch), and
   `shims` (each with its `removal` plan) are described in [compatibility.md](compatibility.md).
 

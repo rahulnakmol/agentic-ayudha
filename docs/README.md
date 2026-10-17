@@ -5,7 +5,8 @@ The reference for people who work on aayudha itself, or want every detail in one
 
 ## Documents
 
-- Scope and sequencing: [BUILD-PLAN.md](BUILD-PLAN.md). Principles: [ETHOS.md](../ETHOS.md). Terms:
+- Scope and sequencing: [BUILD-PLAN.md](BUILD-PLAN.md), with its Appendix B rows (deviations and decisions) one file
+  per row in [appendix-b/](appendix-b/README.md). Principles: [ETHOS.md](../ETHOS.md). Terms:
   [GLOSSARY.md](../GLOSSARY.md). Threats: [threat-model.md](threat-model.md).
 - Generated: [CONSTRAINTS.md](../CONSTRAINTS.md) (default floors, autonomy, budgets, and retention, from
   `internal/config/defaults.toml`), [LAYERS.md](../LAYERS.md), and [RACI.md](RACI.md) (from the verb registry).
