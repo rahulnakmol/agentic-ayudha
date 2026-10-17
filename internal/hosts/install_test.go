@@ -282,7 +282,7 @@ func TestHooks(t *testing.T) {
 	if r, _ := RunHook("pre-tool", verbs.HostCursor, "", pause, nil); !strings.Contains(r.Stdout, `"permission":"deny"`) {
 		t.Errorf("cursor deny JSON: %q", r.Stdout)
 	}
-	if _, err := RunHook("post-tool", verbs.HostClaude, "", pause, nil); err == nil {
+	if _, err := RunHook("rm-rf", verbs.HostClaude, "", pause, nil); err == nil {
 		t.Error("unknown hook accepted")
 	}
 	for _, h := range Hooks {

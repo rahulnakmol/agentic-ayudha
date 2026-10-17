@@ -134,4 +134,14 @@ export default function (amp: PluginAPI) {
 		}
 		return { action: 'allow' }
 	})
+
+	// The post-tool hook logs PostHog and Sentry calls; only MCP tools and the
+	// shell reach them, so no other result starts a process.
+	amp.on('tool.result', async (event, ctx) => {
+		const shell = amp.helpers.shellCommandFromToolCall(event)
+		if (!event.tool.startsWith('mcp__') && !/sentry|posthog/i.test(shell?.command ?? '')) return
+		const input = shell ? { command: shell.command } : event.input
+		const result = JSON.stringify({ tool_name: shell ? 'Bash' : event.tool, tool_input: input, thread_id: event.thread.id, status: event.status, output: event.output ?? null })
+		await ctx.$`${AAYU} hook post-tool --host amp --event ${result}`
+	})
 }

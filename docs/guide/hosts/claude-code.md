@@ -40,7 +40,7 @@ Run `/reload-plugins`, or start a new session.
 | `/aayudha:next` | The single best next step; Claude takes it when it may |
 | `/aayudha:grill`, `/aayudha:ready`, `/aayudha:build`, … | One skill per verb, from the same `skills/` the binary carries |
 | The `aayudha` MCP server | The verbs as tools; write verbs only with `[mcp] expose_writes = true` |
-| Hooks | `session-start` reports skill drift; `pre-tool` pauses agents when the budget breaker trips or the repository is halted, and refuses PostHog or Sentry writes through another MCP server or CLI |
+| Hooks | `session-start` reports skill drift; `pre-tool` pauses agents when the budget breaker trips or the repository is halted, and refuses PostHog or Sentry writes through another MCP server or CLI; `post-tool` logs the PostHog and Sentry reads it lets through |
 
 Shipping, releasing, accepting a Decision, and responding to an incident are for a person. Their skills only run when
 you type them, the MCP server never offers them, and the `pre-tool` hook blocks Claude if it tries to run them in a

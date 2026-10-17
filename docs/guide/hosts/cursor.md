@@ -13,7 +13,7 @@ aayu install --host cursor --apply
 | `.agents/skills/<verb>/` | One skill per verb |
 | `AGENTS.md` | The aayudha sections, which Cursor reads as project rules |
 | `.cursor/mcp.json` | The `aayudha` MCP server |
-| `.cursor/hooks.json` | `sessionStart`, `beforeShellExecution`, and `beforeMCPExecution` |
+| `.cursor/hooks.json` | `sessionStart`, `beforeShellExecution`, `beforeMCPExecution`, `afterShellExecution`, and `afterMCPExecution` |
 | `.cursor/commands/aayudha-<name>.md` | `/aayudha-home`, `/aayudha-next`, and the hand-offs `/aayudha-claude`, `/aayudha-codex`, `/aayudha-amp` |
 | `.cursor/cli.json` | `Shell(aayu)` and `Mcp(aayudha:*)` in `permissions.allow`, so the Cursor CLI may run aayu and the aayudha tools |
 

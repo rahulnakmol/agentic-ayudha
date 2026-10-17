@@ -30,8 +30,8 @@ codex mcp list
 
 ### Trust the hooks
 
-Codex does not run a plugin's hooks until you trust them. Start Codex, open `/hooks`, and trust the two aayudha hooks:
-`SessionStart` and `PreToolUse`. Until you do, nothing stops an agent in Codex from running `aayu ship` or
+Codex does not run a plugin's hooks until you trust them. Start Codex, open `/hooks`, and trust the three aayudha hooks:
+`SessionStart`, `PreToolUse`, and `PostToolUse`. Until you do, nothing stops an agent in Codex from running `aayu ship` or
 `aayu release` itself. Codex asks again after each plugin update, because the hooks name the plugin's version.
 
 `aayu doctor` tells you when Codex would skip one:

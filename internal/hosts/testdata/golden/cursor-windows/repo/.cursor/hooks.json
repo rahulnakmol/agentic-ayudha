@@ -1,5 +1,15 @@
 {
   "hooks": {
+    "afterMCPExecution": [
+      {
+        "command": "\"C:\\Program Files\\aayudha\\aayu.exe\" hook post-tool --host cursor"
+      }
+    ],
+    "afterShellExecution": [
+      {
+        "command": "\"C:\\Program Files\\aayudha\\aayu.exe\" hook post-tool --host cursor"
+      }
+    ],
     "beforeMCPExecution": [
       {
         "command": "\"C:\\Program Files\\aayudha\\aayu.exe\" hook pre-tool --host cursor"
