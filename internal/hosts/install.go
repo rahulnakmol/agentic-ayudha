@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
+	"go.yaml.in/yaml/v4"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
@@ -25,8 +26,9 @@ import (
 // Repository paths install manages (WP3.2).
 const (
 	LockPath       = ".aayudha/lock.toml"
-	AgentsSkills   = ".agents/skills" // Amp and Cursor
-	ClaudeSkills   = ".claude/skills" // Claude Code
+	AgentsSkills   = ".agents/skills"           // Amp and Cursor
+	ClaudeSkills   = ".claude/skills"           // Claude Code
+	ClaudeCommands = ".claude/commands/aayudha" // Claude Code: /aayudha:<name>; Cursor reads only top-level command files
 	AgentsMD       = "AGENTS.md"
 	ClaudeMD       = "CLAUDE.md"
 	ClaudeMCP      = ".mcp.json"
@@ -131,13 +133,14 @@ type Lock struct {
 	Pin           string               `toml:"pin"`
 	Hosts         []string             `toml:"hosts"`
 	Skills        map[string]LockSkill `toml:"skills"`
-	// ProductSkills are the product's own verify skills (WP4.5b.3) that install
-	// mirrors from .agents/skills to the hosts that do not read it.
+	// ProductSkills are the product's own verify skills (WP4.5b.3) in
+	// .agents/skills that Claude Code reaches through a pointer command in
+	// .claude/commands/aayudha (D-3.2b.l).
 	ProductSkills map[string]LockProductSkill `toml:"product_skills"`
 }
 
-// LockProductSkill records one mirrored product skill: its source directory
-// and the hash of what was copied.
+// LockProductSkill records one product skill Claude Code reaches: its source
+// directory and the hash of the pointer install wrote.
 type LockProductSkill struct {
 	Source string `toml:"source"`
 	SHA256 string `toml:"sha256"`
@@ -443,31 +446,8 @@ func Plan(o Options) (*Result, error) {
 	if len(dirs) == 2 && slices.Contains(hostList, string(verbs.HostCursor)) {
 		p.notes = append(p.notes, cursorBoth)
 	}
-	if slices.Contains(hostList, string(verbs.HostClaude)) {
-		// The product's verify skills live where Amp, Cursor, and Codex read
-		// them; Claude Code gets a copy, recorded so a later install removes
-		// the copy of a skill the product deleted.
-		prod, err := p.productSkills(src)
-		if err != nil {
-			return nil, err
-		}
-		previous := map[string]LockSkill{}
-		for n, ps := range old.ProductSkills {
-			previous[n] = LockSkill{SHA256: ps.SHA256}
-		}
-		for n, files := range prod {
-			m := map[string][]byte{}
-			for _, f := range files {
-				m[f.rel] = f.data
-			}
-			if lock.ProductSkills == nil {
-				lock.ProductSkills = map[string]LockProductSkill{}
-			}
-			lock.ProductSkills[n] = LockProductSkill{Source: AgentsSkills + "/" + n, SHA256: HashSkill(m)}
-		}
-		if err := p.skillCopies(ClaudeSkills, prod, previous); err != nil {
-			return nil, err
-		}
+	if err := p.commands(hostList, src, &lock, old); err != nil {
+		return nil, err
 	}
 	if err := p.write(LockPath, false, o.text(renderLock(lock))); err != nil {
 		return nil, err
@@ -553,6 +533,110 @@ func (p *planner) skillCopies(dir string, src map[string][]skillFile, previous m
 		}
 	}
 	return nil
+}
+
+// commands plans what the aayudha plugin would otherwise give a host and
+// install provides itself, since install turns the plugin off (D-3.2b.k), and
+// the product's verify skills for Claude Code (D-3.2b.l).
+//
+// Claude Code: the plugin's commands in .claude/commands/aayudha/, so they keep
+// their names (/aayudha:next, /aayudha:codex, …), and one pointer per product
+// verify skill to its folder in .agents/skills (/aayudha:verify-<product>),
+// instead of a second copy in .claude/skills that Cursor would read too.
+// Cursor reads only top-level files in .claude/commands, so it reads none of
+// these. Codex: the plugin's commands as skills in .agents/skills, named as
+// Codex names a plugin's commands (aayudha:source-command-next, …).
+func (p *planner) commands(hostList []string, src map[string][]skillFile, lock *Lock, old Lock) error {
+	// Mirrors install wrote before D-3.2b.l, whole copies in .claude/skills, go.
+	previous := map[string]LockSkill{}
+	for n := range old.ProductSkills {
+		previous[n] = LockSkill{}
+	}
+	if err := p.skillCopies(ClaudeSkills, nil, previous); err != nil {
+		return err
+	}
+	if slices.Contains(hostList, string(verbs.HostClaude)) {
+		cmds, err := SlashCommands(p.o.Assets, verbs.HostClaude)
+		if err != nil {
+			return err
+		}
+		var files []skillFile
+		for _, c := range cmds {
+			files = append(files, skillFile{rel: c.Name + ".md", data: c.Source})
+		}
+		prod, err := p.productSkills(src)
+		if err != nil {
+			return err
+		}
+		for _, n := range slices.Sorted(maps.Keys(prod)) {
+			var skill []byte
+			for _, f := range prod[n] {
+				if f.rel == "SKILL.md" {
+					skill = f.data
+				}
+			}
+			ptr := ProductPointer(n, skill)
+			files = append(files, skillFile{rel: n + ".md", data: ptr})
+			if lock.ProductSkills == nil {
+				lock.ProductSkills = map[string]LockProductSkill{}
+			}
+			lock.ProductSkills[n] = LockProductSkill{Source: AgentsSkills + "/" + n, SHA256: HashSkill(map[string][]byte{n + ".md": ptr})}
+		}
+		dir, name := path.Split(ClaudeCommands)
+		if err := p.skillCopies(strings.TrimSuffix(dir, "/"), map[string][]skillFile{name: files}, map[string]LockSkill{name: {}}); err != nil {
+			return err
+		}
+	}
+	if slices.Contains(hostList, string(verbs.HostCodex)) {
+		cmds, err := SlashCommands(p.o.Assets, verbs.HostCodex)
+		if err != nil {
+			return err
+		}
+		want := map[string][]skillFile{}
+		for _, c := range cmds {
+			id := "source-command-" + c.Name
+			name, _ := json.Marshal(ServerName + ":" + id)
+			desc, _ := json.Marshal(c.Description)
+			want[ServerName+"-"+id] = []skillFile{{rel: "SKILL.md", data: fmt.Appendf(nil,
+				"---\nname: %s\ndescription: %s\n---\n\n<!-- The aayudha command `%s`, written by `aayu install`. Use this skill when the person runs it. -->\n\n%s\n",
+				name, desc, c.Name, c.Body)}}
+		}
+		previous := map[string]LockSkill{}
+		entries, _ := os.ReadDir(p.abs(AgentsSkills, false))
+		for _, e := range entries {
+			if strings.HasPrefix(e.Name(), ServerName+"-source-command-") {
+				previous[e.Name()] = LockSkill{}
+			}
+		}
+		if err := p.skillCopies(AgentsSkills, want, previous); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ProductPointer is Claude Code's command for the product's verify skill name
+// whose SKILL.md is skill: its frontmatter without name and paths (a command
+// file takes neither), and a body that points at the skill's folder.
+func ProductPointer(name string, skill []byte) []byte {
+	front, _, _ := strings.Cut(strings.TrimPrefix(string(lf(skill)), "---\n"), "\n---\n")
+	var doc yaml.Node
+	var keep []*yaml.Node
+	if yaml.Unmarshal([]byte(front), &doc) == nil && len(doc.Content) == 1 && doc.Content[0].Kind == yaml.MappingNode {
+		m := doc.Content[0]
+		for i := 0; i+1 < len(m.Content); i += 2 {
+			if k := m.Content[i].Value; k != "name" && k != "paths" {
+				keep = append(keep, m.Content[i], m.Content[i+1])
+			}
+		}
+		m.Content = keep
+		if b, err := yaml.Marshal(m); err == nil {
+			front = strings.TrimSuffix(string(b), "\n")
+		}
+	}
+	dir := AgentsSkills + "/" + name
+	return fmt.Appendf(nil, "---\n%s\n---\n\nThis is the product's verify skill, `%s`, which lives in `%s/`. Read `%s/SKILL.md` and follow it; every path it names is relative to `%s/`.\n\n(Written by `aayu install`; edit the skill in `%s/`, not this pointer.)\n",
+		front, name, dir, dir, dir, dir)
 }
 
 // HookCommand is the exact command a host runs for an aayudha hook. The binary
@@ -999,6 +1083,7 @@ type SlashCommand struct {
 	Description string `json:"description"`
 	Hint        string `json:"hint,omitempty"`
 	Body        string `json:"body"`
+	Source      []byte `json:"-"` // the file as written, LF
 }
 
 // SlashCommands reads hosts/commands/*/*.md from the embedded assets, by name,
@@ -1020,6 +1105,7 @@ func SlashCommands(assets fs.FS, host verbs.HostID) ([]SlashCommand, error) {
 			continue
 		}
 		text := string(lf(b))
+		c.Source = []byte(text)
 		if rest, ok := strings.CutPrefix(text, "---\n"); ok {
 			if i := strings.Index(rest, "\n---\n"); i >= 0 {
 				for _, l := range strings.Split(rest[:i], "\n") {

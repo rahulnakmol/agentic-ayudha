@@ -221,12 +221,27 @@ func runHook(ctx context.Context, e *Env, in Values) error {
 	if !e.isTerminal(e.In) {
 		event, _ = io.ReadAll(io.LimitReader(e.In, 1<<20))
 	}
+	root := config.RepoRoot(e.Dir)
+	var r hosts.HookResult
+	// Cursor also runs Claude Code's hooks, the repository's and the plugin's
+	// (Third-Party Imports, on by default). Such a hook answers in Cursor's
+	// format, and stands aside where Cursor runs another aayudha hook for the
+	// event, so each event is checked once (D-3.2b.j).
+	standAside := false
+	if e.Host != string(verbs.HostCursor) && hosts.CursorEvent(event) {
+		standAside = root != "" && hosts.CursorRunsAnother(root, e.homeDir(), in.String("skills") != "")
+		e.Host = string(verbs.HostCursor)
+	}
 	if e.Host == "" { // a marketplace plugin shared by several hosts names none
 		e.Host, _ = doctor.DetectHost("", e.Getenv)
 	}
-	root := config.RepoRoot(e.Dir)
-	var r hosts.HookResult
-	if in.String("skills") != "" && root != "" && hosts.RepoHooksRun(root, verbs.HostID(e.Host), hosts.CodexHome(e.homeDir(), e.Getenv)) {
+	if standAside {
+		r = hosts.Deny(verbs.HostCursor, "")
+		if name != "pre-tool" {
+			r.Stdout = "{}\n"
+		}
+	} else if in.String("skills") != "" && root != "" && hosts.RepoHooksRun(root, verbs.HostID(e.Host), hosts.CodexHome(e.homeDir(), e.Getenv)) {
+		standAside = true
 		// A marketplace plugin's hook (it passes --skills) stands aside where
 		// the host runs the hooks `aayu install` registered for it, so each
 		// runs once (D-3.2b.d). install turns the plugin off in such a
@@ -246,7 +261,7 @@ func runHook(ctx context.Context, e *Env, in Values) error {
 			return Wrap(ExitUsage, err)
 		}
 	}
-	if name == "pre-tool" {
+	if name == "pre-tool" && !standAside { // the hook that runs refuses a halt, once
 		if reason := e.haltCached(ctx); reason != "" {
 			r = hosts.Deny(verbs.HostID(e.Host), fmt.Sprintf("aayudha: the repository is halted (%s): %s. A human clears it with `aayu resume`.", HaltVariable, reason))
 			r.Next = "a person clears the halt with `aayu resume`"

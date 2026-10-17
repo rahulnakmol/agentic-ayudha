@@ -475,6 +475,24 @@ func TestCheckStates(t *testing.T) {
 			overlay(p, lfsLedger)
 			p.API = fakeAPI(map[string]any{"/repos/o/r": map[string]any{"private": true}})
 		}, Pass, "private repository: ledger proof media in Git LFS"},
+		// D-3.2b.m: Codex reads the project's server only once the person
+		// trusts the project; until then the plugin's server is the one it
+		// lists. That is the person's setup step, not a doubled server.
+		{"untrusted Codex project", checkMCP, func(p *Probe) {
+			p.Root = repoWith(t, map[string]string{".aayudha/config.toml": "version = 1\n",
+				".aayudha/lock.toml": "version = 1\nskills_version = \"0.0.0\"\nhosts = [\"codex\"]\n[skills]\n",
+				".codex/config.toml": "[mcp_servers.aayudha]\ncommand = \"/usr/bin/aayu\"\nargs = [\"mcp\"]\n"})
+			home := t.TempDir()
+			_ = os.MkdirAll(filepath.Join(home, ".codex"), 0o755)
+			_ = os.WriteFile(filepath.Join(home, ".codex", "config.toml"), []byte("[plugins.\"aayudha@aayudha\"]\nenabled = true\n"), 0o644)
+			getenv := p.Getenv
+			p.Getenv = func(k string) string {
+				if k == "HOME" {
+					return home
+				}
+				return getenv(k)
+			}
+		}, Warn, "trust this project in Codex"},
 	}
 	for _, tt := range tests {
 		p := healthy(t)

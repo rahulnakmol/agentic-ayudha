@@ -1,6 +1,7 @@
 package hosts
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -136,16 +137,16 @@ func CheckCopies(root string) []string {
 		}
 	}
 	for _, n := range slices.Sorted(maps.Keys(lock.ProductSkills)) {
-		ps, mirror := lock.ProductSkills[n], ClaudeSkills+"/"+n
-		files, err := readCopy(filepath.Join(root, filepath.FromSlash(mirror)))
-		src, serr := readCopy(filepath.Join(root, filepath.FromSlash(ps.Source)))
+		ps, ptr := lock.ProductSkills[n], ClaudeCommands+"/"+n+".md"
+		got, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(ptr)))
+		skill, serr := os.ReadFile(filepath.Join(root, filepath.FromSlash(ps.Source), "SKILL.md"))
 		switch {
 		case err != nil:
-			problems = append(problems, mirror+" (the copy of "+ps.Source+"): "+err.Error())
-		case HashSkill(files) != ps.SHA256:
-			problems = append(problems, mirror+" was edited; its source is "+ps.Source)
-		case serr != nil || HashSkill(src) != ps.SHA256:
-			problems = append(problems, mirror+" is behind its source "+ps.Source)
+			problems = append(problems, ptr+" (Claude Code's pointer to "+ps.Source+"): "+err.Error())
+		case HashSkill(map[string][]byte{n + ".md": got}) != ps.SHA256:
+			problems = append(problems, ptr+" was edited; its source is "+ps.Source)
+		case serr != nil || !bytes.Equal(lf(got), ProductPointer(n, skill)):
+			problems = append(problems, ptr+" is behind its source "+ps.Source)
 		}
 	}
 	return problems

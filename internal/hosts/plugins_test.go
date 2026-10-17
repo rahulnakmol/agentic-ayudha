@@ -421,6 +421,47 @@ trusted_hash = "sha256:0000"
 	}
 }
 
+// install turns the plugin off for Claude Code and Codex, so it gives each of
+// them every command its plugin manifest carries, under the plugin's name
+// (D-3.2b.k): Claude Code's /aayudha:<name>, and the aayudha:source-command-<name>
+// skill Codex makes of a plugin command.
+func TestInstallKeepsThePluginsCommands(t *testing.T) {
+	for host, manifest := range map[verbs.HostID]string{verbs.HostClaude: ".claude-plugin/plugin.json", verbs.HostCodex: ".codex-plugin/plugin.json"} {
+		root := t.TempDir()
+		o := Options{Root: root, Home: t.TempDir(), Hosts: []verbs.HostID{host}, Assets: os.DirFS("../.."), Binary: "/opt/aayudha/bin/aayu", Version: "1.2.3", SkillsVersion: "0.0.0"}
+		res, err := Plan(o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := Apply(o, res.Edits, false); err != nil {
+			t.Fatal(err)
+		}
+		var m struct{ Commands []string }
+		b, _ := os.ReadFile(filepath.Join("../..", manifest))
+		if err := json.Unmarshal(b, &m); err != nil || len(m.Commands) == 0 {
+			t.Fatalf("%s: %v", manifest, err)
+		}
+		for _, dir := range m.Commands {
+			files, _ := filepath.Glob(filepath.Join("../..", filepath.FromSlash(dir), "*.md"))
+			for _, f := range files {
+				name := strings.TrimSuffix(filepath.Base(f), ".md")
+				src, _ := os.ReadFile(f)
+				switch host {
+				case verbs.HostClaude:
+					if got, err := os.ReadFile(filepath.Join(root, ".claude/commands/aayudha", name+".md")); err != nil || !bytes.Equal(got, src) {
+						t.Errorf("Claude Code: no /aayudha:%s from install (%v)", name, err)
+					}
+				case verbs.HostCodex:
+					got, err := os.ReadFile(filepath.Join(root, ".agents/skills/aayudha-source-command-"+name, "SKILL.md"))
+					if err != nil || !strings.HasPrefix(string(got), "---\nname: \"aayudha:source-command-"+name+"\"\n") {
+						t.Errorf("Codex: no aayudha:source-command-%s skill from install: %q %v", name, got, err)
+					}
+				}
+			}
+		}
+	}
+}
+
 // The repository install writes is the same whatever plugins the machine
 // running it has, so a teammate who clones it without the plugin gets every
 // aayudha skill; and in it the plugin steps aside (Claude Code: the shared
@@ -521,8 +562,15 @@ func TestInstallGivesCursorOneCopy(t *testing.T) {
 	if exists(".agents/skills/alpha") || !exists(".claude/skills/alpha/SKILL.md") || CursorReadsBoth(root, lock) {
 		t.Error("with Claude Code, Cursor and Claude Code share .claude/skills, and .agents/skills keeps no aayudha copy")
 	}
-	if !exists(".agents/skills/verify-web/SKILL.md") || !exists(".claude/skills/verify-web/SKILL.md") {
-		t.Error("the product's verify skill is no longer kept and mirrored")
+	// The product's verify skill stays in .agents/skills, and Claude Code
+	// reaches it through a command that points there, not a second copy in
+	// .claude/skills, which Cursor would list too (D-3.2b.l).
+	if !exists(".agents/skills/verify-web/SKILL.md") || exists(".claude/skills/verify-web") {
+		t.Error("Cursor reads the product's verify skill twice, or not at all")
+	}
+	if b, err := os.ReadFile(filepath.Join(root, ".claude/commands/aayudha/verify-web.md")); err != nil ||
+		!strings.HasPrefix(string(b), "---\ndescription: \"The product's own.\"\n---\n") || !strings.Contains(string(b), "Read `.agents/skills/verify-web/SKILL.md`") {
+		t.Errorf("Claude Code's command for the product's verify skill: %q %v", b, err)
 	}
 	res, lock := install(verbs.HostCodex)
 	if !exists(".agents/skills/alpha/SKILL.md") || !CursorReadsBoth(root, lock) || !slices.Contains(res.Notes, cursorBoth) {

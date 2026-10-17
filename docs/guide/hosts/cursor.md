@@ -24,6 +24,11 @@ copies in both folders; then Cursor lists each skill twice, and `aayu doctor` wa
 machine, or install for one of the two. If you turn the import off with Claude Code and Cursor installed and Codex not,
 Cursor sees no aayudha skills; run `aayu install --host codex --apply` to add `.agents/skills/`.
 
+With Third-Party Imports on, Cursor also runs Claude Code's hooks from `.claude/settings.json` and from the Claude Code
+plugin. Each aayudha hook answers once per event: a Claude Code hook that Cursor runs stands aside when Cursor has its
+own aayudha hooks here (from `install` or the local plugin), and otherwise answers in Cursor's format. Cursor reads only
+top-level files in `.claude/commands/`, so it does not list the Claude Code commands in `.claude/commands/aayudha/`.
+
 Use the aayudha Cursor plugin or `install` in a repository, not both. Cursor has no setting a repository can commit to
 turn a plugin off, so with both, Cursor lists each skill and the MCP server twice; disable the plugin for that
 workspace in Cursor. aayu sees the plugin only in Cursor's local plugin folder (`~/.cursor/plugins/local/aayudha`). It

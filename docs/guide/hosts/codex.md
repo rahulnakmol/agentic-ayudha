@@ -52,12 +52,14 @@ This writes:
 | File | What it holds |
 |---|---|
 | `.agents/skills/<verb>/` | One skill per verb, which Codex finds in every repository folder |
+| `.agents/skills/aayudha-source-command-<name>/` | The plugin's commands, as Codex names them: `$aayudha:source-command-next`, `$aayudha:source-command-home`, and the hand-offs |
 | `AGENTS.md` | The aayudha sections, which Codex reads as project guidance |
 | `.codex/config.toml` | The `aayudha` MCP server, between `# BEGIN aayudha` and `# END aayudha`; the rest of the file is yours |
 | `.codex/hooks.json` | The `session-start` and `pre-tool` hooks |
 
 Codex loads a project's `.codex/` files only when you trust the project, and it runs new hooks only after you
-review them: open `/hooks` in Codex once and trust aayudha's. Then check:
+review them: open `/hooks` in Codex once and trust aayudha's. Until you trust the project, `aayu doctor` shows that step
+on its `mcp` and `codex-hooks` rows. Then check:
 
 ```sh
 codex mcp list
