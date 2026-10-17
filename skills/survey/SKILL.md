@@ -289,6 +289,14 @@ Check it, and fix every problem the check reports:
 It resolves every citation against the index and the files, enforces the bases above, and renders `SURVEY.md` with
 coverage (modules, entry points, and markers cited) and the index's limits. Exit 4 while a problem remains.
 
+**Self-check.** A draft that passes the check can still say more than its evidence: the check proves that every
+citation exists, not that it supports the sentence. So when `aayu survey --draft` passes, verify the draft once more,
+item by item (every claim, trap finding, do-not-carry entry, interface, question default, risk, and modernisation
+step). For each, re-read the lines or probe facts it cites, not your notes, and ask whether they say exactly this,
+for this scope, with these numbers, and for this build. Correct, narrow, or remove what they do not support, or turn
+it into a risk or a question, using the checks in the list above. Then run `aayu survey --draft` again, and tell the
+person which items the self-check changed and why. The draft you show is the corrected one.
+
 ## 3. Interview the person for the gaps
 
 Open questions go to the person in rounds, like `grill`:
@@ -331,8 +339,11 @@ another builds the replacement, so the record is done before anything changes.
   `constrains` those Stories) lets the person accept the Decision; the Stories show blocked until they do.
 
 `aayu survey --backlog backlog.json --draft survey.json` checks every item against the work-item schema and the
-survey, renders `backlog.md`, and prints a review digest. Nothing is filed. Show the person `backlog.md`; when they
-confirm the exact draft, file it:
+survey, renders `backlog.md`, and prints a review digest. When it passes, self-check the backlog as you did the draft:
+for every item, re-read the claims and answers it rests on and ask whether the person asked for this work, at this
+scope (no area, option, or behaviour their answers leave out; no requirement nobody stated), and whether each
+Completion Goal can be checked by the command it names. Correct what fails and run the check again. Nothing is
+filed. Show the person `backlog.md`, with what the self-check changed; when they confirm the exact draft, file it:
 
 `aayu survey --backlog backlog.json --draft survey.json --create --reviewed <digest>`
 

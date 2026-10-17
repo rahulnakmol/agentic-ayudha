@@ -7,8 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -323,13 +325,108 @@ func (h *Harness) runSurvey(ctx context.Context, c Case, lane verbs.LaneID, body
 	if c.Survey.Kind == "backlog" {
 		grounding += "## survey.json (checked, with the recorded interview)\n\n" + w.surveyJ + "\n\n"
 	}
-	judged, err := h.judge(ctx, "## Task\n\n"+task+"\n\n"+grounding+"## Checks\n\n"+checks+".", rubric, prettyJSON(reply), nil, &calls)
+	judgeInput := "## Task\n\n" + task + "\n\n" + grounding + "## Checks\n\n" + checks + "."
+	// The self-check (D-5.9l): the draft that passed the floors is judged for
+	// the record only, so its effect stays visible; the skill then verifies
+	// every item against its evidence and only the corrected draft is scored.
+	firstJudged, err := h.judge(ctx, judgeInput, rubric, prettyJSON(reply), nil, &calls)
 	if err != nil {
 		return Run{}, err
 	}
-	judged.Revised, judged.RevisedFor = run.Revised, run.RevisedFor
-	judged.Answer = answerOf(reply)
+	sc := &SelfCheck{FirstScore: firstJudged.Score, FirstReason: firstJudged.Reason}
+	req.Messages = append(req.Messages, models.Message{Role: "assistant", Content: reply}, models.Message{Role: "user", Content: selfCheckPrompt(c.Survey.Kind, file)})
+	corrected, problems, again, err := reviseOnce(ctx, h.complete(lane, "skill", &calls), req, func(d string) []string { return checkSurvey(c, w, d) })
+	if err != nil {
+		return Run{}, err
+	}
+	sc.Changed, sc.Revised = changedItems(reply, corrected), len(again) > 0
+	if len(problems) > 0 {
+		return Run{Status: RunFail, Score: 1, Revised: run.Revised, RevisedFor: run.RevisedFor, SelfCheck: sc,
+			Floor: "survey checks after the self-check: " + clip(strings.Join(problems, "; "), 600), Answer: answerOf(corrected)}, nil
+	}
+	judged, err := h.judge(ctx, judgeInput, rubric, prettyJSON(corrected), nil, &calls)
+	if err != nil {
+		return Run{}, err
+	}
+	judged.Revised, judged.RevisedFor, judged.SelfCheck = run.Revised, run.RevisedFor, sc
+	judged.Answer = answerOf(corrected)
 	return judged, nil
+}
+
+// SelfCheck is what a survey run's self-verification turn did (D-5.9l).
+type SelfCheck struct {
+	// FirstScore is the judge's score of the draft that passed the floors
+	// before the self-check, recorded to show the turn's effect and never
+	// counted; FirstReason is why.
+	FirstScore  int    `json:"first_score"`
+	FirstReason string `json:"first_reason,omitempty"`
+	// Changed lists the items (by id or key) the self-check changed, removed,
+	// or added, as "E3 changed".
+	Changed []string `json:"changed"`
+	// Revised is set when the corrected draft failed the floors once.
+	Revised bool `json:"revised,omitempty"`
+}
+
+// selfCheckPrompt asks for the skill's self-check of a draft that passed.
+func selfCheckPrompt(kind, file string) string {
+	if kind == "backlog" {
+		return "Your backlog.json passes `aayu survey --backlog`. Now self-check it, as the skill's section 4 says: for every item, re-read the claims and answers it rests on, in the survey and the files above, and ask whether the person asked for this work at this scope and whether each Completion Goal can be checked by the command it names. Correct, narrow, or remove what fails. Reply with the whole corrected backlog.json only."
+	}
+	return "Your " + file + " passes `aayu survey --draft`. Now self-check it, as the skill's **Self-check** says: for every claim, trap finding, do-not-carry entry, interface, question default, risk, and modernisation step, re-read the lines or probe facts it cites in what you were shown above, not your draft, and ask whether they say exactly this, for this scope, with these numbers, and for this build. Correct, narrow, or remove what they do not support, or turn it into a risk or a question. Reply with the whole corrected " + file + " only."
+}
+
+// changedItems compares two JSON replies by the objects that carry an "id"
+// or a "key" (claims, questions, steps, items) and lists the ones that
+// changed, were removed, or were added.
+func changedItems(before, after string) []string {
+	index := func(s string) (map[string]string, []string) {
+		var v any
+		_ = json.Unmarshal([]byte(s), &v)
+		m, order := map[string]string{}, []string(nil)
+		var walk func(any)
+		walk = func(x any) {
+			switch t := x.(type) {
+			case map[string]any:
+				id, _ := t["id"].(string)
+				if id == "" {
+					id, _ = t["key"].(string)
+				}
+				if id != "" {
+					if _, seen := m[id]; !seen {
+						order = append(order, id)
+					}
+					b, _ := json.Marshal(t)
+					m[id] = string(b)
+				}
+				for _, k := range slices.Sorted(maps.Keys(t)) {
+					walk(t[k])
+				}
+			case []any:
+				for _, e := range t {
+					walk(e)
+				}
+			}
+		}
+		walk(v)
+		return m, order
+	}
+	a, ao := index(before)
+	b, bo := index(after)
+	out := []string{}
+	for _, id := range ao {
+		switch nb, ok := b[id]; {
+		case !ok:
+			out = append(out, id+" removed")
+		case nb != a[id]:
+			out = append(out, id+" changed")
+		}
+	}
+	for _, id := range bo {
+		if _, ok := a[id]; !ok {
+			out = append(out, id+" added")
+		}
+	}
+	return out
 }
 
 // prettyJSON indents a JSON reply for the judge, or returns it as it is.

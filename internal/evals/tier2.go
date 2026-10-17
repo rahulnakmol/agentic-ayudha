@@ -55,6 +55,9 @@ type Run struct {
 	// clipped and redacted, so a reader can see what the checks and the judge
 	// saw and say who was wrong.
 	Answer string `json:"answer,omitempty"`
+	// SelfCheck is a survey run's self-verification turn: the first draft's
+	// score, recorded only, and what the turn changed (D-5.9l).
+	SelfCheck *SelfCheck `json:"self_check,omitempty"`
 	// Session is a session case's turns and what each command answered (D-3.4f).
 	Session []SessionStep `json:"session,omitempty"`
 	// A review case's run (WP4.8b): its variant and what it would post against
