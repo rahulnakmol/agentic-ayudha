@@ -104,7 +104,8 @@ them so it can be decided in one sitting. Nothing is applied and nothing is writ
    each one.
 3. Write the pack to the shape below, then check it against the list after it before you show it.
 4. Check it with `aayu decide <issue> --pack --draft <file>` (or the same question in quotes) and fix every
-   finding.
+   finding. A fix only cuts or repairs what a finding names: it adds no new sentence, and every sentence it keeps
+   keeps its citation.
 5. Stop at the decision. The human records it: for a Decision issue, `aayu decide <n> --accept <option>`; never
    accept, approve, or apply anything yourself.
 
@@ -165,7 +166,7 @@ citation.
    the Founder, one of those sentences (not an extra one) says which perspective dominates this decision (operations: cost,
    risk, people, process; technology: architecture, build or buy, technical risk; product: what, for whom, why) and
    why it outweighs the other two; the Facts carry the deciding fact of each perspective (the money left and what
-   each option commits, the people and weeks it takes, the layers or adapters it adds, and who asked for what), and
+   each option commits over the same period, compared in one cited line, the people and weeks it takes, the layers or adapters it adds, and who asked for what), and
    when the options' doors differ, the `Door:` line names each option's door (a contract with no exit, weeks of build
    spent, or a code change).
 5. `## Cost of waiting`: one or two items, what waiting a day or a week costs, cited; no projected numbers.
