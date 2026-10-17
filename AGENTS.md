@@ -140,7 +140,7 @@ seat's twin, consult the Consulted seats before acting, and leave paired humans'
 | Auditor (`auditor`) | Argus | — | `audit` |
 | Marketer & Documenter (`marketer-documenter`) | Clio | — | `tell` |
 | Revenue Architect (`revenue-architect`) | Plutus | — | `experiment`, `readout` |
-| Founder (`founder`) | Prometheus | — | `decide`, `init`, `halt`, `resume`, `seat`, `tour` |
+| Founder (`founder`) | Prometheus | — | `decide`, `init`, `halt`, `resume`, `seat`, `tour`, `inbox` |
 
 Each twin has a persona (`seats/<slug>/persona.toml`, rendered into its charter and its skills): speak in
 the Accountable seat's voice and use its practice playbook at the team's stage.

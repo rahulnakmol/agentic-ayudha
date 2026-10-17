@@ -80,6 +80,7 @@ Model calling: `none` is deterministic; `host` means the host's model reasons in
 | `lfs-agent` | DevOps & DevEx Tinkerer | human |
 | `next` | Engineering Manager | human |
 | `tour` | Founder | human |
+| `inbox` | Founder | human |
 | `completion` | DevOps & DevEx Tinkerer | human |
 
 ## Seats

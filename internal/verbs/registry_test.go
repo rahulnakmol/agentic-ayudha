@@ -15,9 +15,10 @@ research wireframe mockup prototype review polish baseline experiment readout re
 measure evolve brief tell init install doctor chart survey investigate slo runbook`)
 
 // wantPlumbing is the plumbing list from docs/BUILD-PLAN.md V7, in plan order,
-// then the three WP1.1b adds by founder request (Appendix B S-1.1b).
+// then the three WP1.1b adds by founder request (Appendix B S-1.1b), with the
+// founder's inbox (Story #431) before completion.
 var wantPlumbing = strings.Fields(`config auth actions models mcp self-update upgrade version halt resume gc
-uninit hook seat lfs-agent next tour completion`)
+uninit hook seat lfs-agent next tour inbox completion`)
 
 func names(cs []Command) []string {
 	out := make([]string, len(cs))
@@ -40,8 +41,8 @@ func TestRegistry(t *testing.T) {
 			}
 			return nil
 		}},
-		{"15 plumbing commands in plan order, then the 3 of WP1.1b", func() error {
-			if got := names(Plumbing); !slices.Equal(got, wantPlumbing) || len(got) != 18 {
+		{"15 plumbing commands in plan order, then the 3 of WP1.1b and inbox", func() error {
+			if got := names(Plumbing); !slices.Equal(got, wantPlumbing) || len(got) != 19 {
 				return fmt.Errorf("plumbing = %v, want %v", got, wantPlumbing)
 			}
 			return nil
