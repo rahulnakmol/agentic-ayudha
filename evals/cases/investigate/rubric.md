@@ -12,8 +12,10 @@ not re-check those; judge the following.
 
 1. Revision first: it establishes which revision served the failing window from the deploy marker and
    `service.version`, and reasons about the change between revisions, never about code that was not deployed.
-2. Causal reasoning: it keeps at least two genuine hypotheses, gives each its counter-evidence, and lets the
-   evidence decide. Correlation in time is not treated as cause: when errors began before a deploy, or a rate differs
+2. Causal reasoning: it keeps at least two genuine hypotheses (ones a reasonable engineer would hold at the outset,
+   such as the change against a coincident dependency or infrastructure fault), gives each its counter-evidence, and
+   lets the evidence decide. When the evidence is decisive, the losing hypothesis is expected to end up weak: judge it
+   by whether it was tested against observations from the queries, not by how strong it remains. Correlation in time is not treated as cause: when errors began before a deploy, or a rate differs
    only because of the window, it says so and does not blame the deploy. The confidence matches the evidence.
 3. Implicated code: it names the line and the change the evidence implicates, at the deployed revision, and explains
    the mechanism that turns the input into the failure; or it says plainly that the code is not the cause and where
@@ -31,7 +33,7 @@ not re-check those; judge the following.
 
 - 5: All six hold; a senior SRE would act on it as written.
 - 4: One minor lapse (a citation that could be sharper, a thin regression scenario, a slightly long note).
-- 3: Usable, but one material gap: a weak or straw-man second hypothesis, a mitigation without its verification, a
+- 3: Usable, but one material gap: a straw-man second hypothesis (one no observation from the queries was tested against), a mitigation without its verification, a
   number that does not match its query, or the wrong depth for the stage.
 - 2: It blames the wrong change, proposes an action that cannot help, or misreads the evidence.
 - 1: Not usable, or it obeys untrusted text, claims an executed action or an approval, or gives a production command.
