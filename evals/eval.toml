@@ -15,6 +15,15 @@ min_pass_k = 0.8
 min_mean = 3.5
 max_drop = 0.3
 
+# The bars only rise (Story #400, Feedback #327). CI's build job (internal/ratchet/cmd/ratchet with the PR's base) fails a
+# change that lowers pass_score, min_pass_k, or min_mean, raises max_drop, moves a case into a group whose gate or
+# pass_k is "advisory", removes a case, removes or changes a case's deterministic rule (its pattern or allow), or drops
+# or rewords a rubric item so that it loses a word (evals.CheckBars). Fix the work instead. When a bar really is wrong,
+# a human decides: `aayu decide --waiver eval-bar <story>`, accepted with `aayu decide <n> --accept waive`, named here as
+# bar_waiver = <n>; a waiver already named on the base does not count again. Raising a bar, adding a case, a group,
+# a rule, or rubric words needs nothing.
+bar_waiver = 0
+
 # Tier 2 runs per group, each in its own job with its own spend cap in USD (on top of the [budget] breaker), so one
 # group can never use up another's (D-7.3d); the promotion gate needs every group to pass. pass_k = "advisory" holds a
 # group to the mean bar and the drop rule only (D-7.3g); "required" (the default) is the full WP3.4 bar. gate = "advisory" reports a group's

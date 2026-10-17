@@ -34,8 +34,10 @@ const FloorsLayer = "L04"
 
 // Waivable lists the floors a waiver Decision may name (WP4.3–WP4.9). The
 // PII redaction floor is not waivable: a capture holding personal data never
-// lands (V3), whoever accepts.
-var Waivable = []string{"coverage", "sast", "secrets", "deps", "a11y", "keyboard", "reduced-motion", "text-scale", "targets", "perf", "dast", "api", "screen-reader", "mobile", "error-budget"}
+// lands (V3), whoever accepts. eval-bar is this repository's skill-eval bars
+// (evals.CheckBars, Story #400): a change that lowers one names an accepted
+// eval-bar waiver.
+var Waivable = []string{"coverage", "sast", "secrets", "deps", "a11y", "keyboard", "reduced-motion", "text-scale", "targets", "perf", "dast", "api", "screen-reader", "mobile", "error-budget", "eval-bar"}
 
 // Decision is an open or closed Decision issue as decide sees it.
 type Decision struct {
