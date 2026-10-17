@@ -112,6 +112,11 @@ type CaseSet struct {
 	Compare string   `json:"compare"`           // exact, or normalised with what is normalised
 	Cases   string   `json:"cases,omitempty"`   // the cases file (--golden), once written
 	Exclude []string `json:"exclude,omitempty"` // behaviour deliberately not kept, each naming the question or claim that decided it
+	// Reference is the pinned legacy build the goldens come from: the commit,
+	// the toolchain and its version, and the build flags. A case set that
+	// proves an exact interface needs it, since another build of the same
+	// source can print other results (MINPACK's Release flags, D-5.9j).
+	Reference string `json:"reference,omitempty"`
 }
 
 // Coverage says how much of the index the draft cites.

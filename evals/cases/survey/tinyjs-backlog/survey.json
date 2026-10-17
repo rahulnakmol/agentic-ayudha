@@ -533,7 +533,8 @@
         "compare": "exact stdout and exit code",
         "exclude": [
           "Math.rand and Math.randInt sequences (E16; Q5 is deferred)"
-        ]
+        ],
+        "reference": "tiny-js at commit 8214477, built by its Makefile with g++ 12.2.0 and CFLAGS -c -g -Wall -rdynamic -D_DEBUG (Makefile:1-3)"
       },
       {
         "id": "G3",
@@ -542,7 +543,8 @@
           "Script.cpp:93-95",
           "TinyJS.cpp:1333-1344"
         ],
-        "compare": "exact stdout (the ERROR line with its position) and exit code"
+        "compare": "exact stdout (the ERROR line with its position) and exit code",
+        "reference": "tiny-js at commit 8214477, built by its Makefile with g++ 12.2.0 and CFLAGS -c -g -Wall -rdynamic -D_DEBUG (Makefile:1-3)"
       }
     ],
     "risks": [

@@ -80,7 +80,7 @@ func TestCheckBacklog(t *testing.T) {
 	}
 	exact := func(d Draft) Draft {
 		d.Compatibility = append([]Interface(nil), d.Compatibility...)
-		d.Compatibility[0].Level, d.Compatibility[0].DecidedBy = "exact", "request"
+		d.Compatibility[0].Level, d.Compatibility[0].DecidedBy, d.Compatibility[0].Quote = "exact", "request", "rebuild it in Rust"
 		d.Modernisation.Suites = append([]Suite(nil), d.Modernisation.Suites...)
 		d.Compatibility[0].Proof = []string{"G1", "S1"}
 		return d

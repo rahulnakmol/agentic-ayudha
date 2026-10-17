@@ -65,6 +65,17 @@ func TestCheckDraft(t *testing.T) {
 			d.Compatibility[1].Kind, d.Compatibility[1].Level, d.Compatibility[1].DecidedBy = "ui-form", "exact", "request"
 		}, "K2 is user-visible (ui-form): prove it with a user journey"},
 		{"dropped with no path", func(d *Draft) { d.Compatibility[1].Level, d.Compatibility[1].DecidedBy = "drop", "request" }, "deprecation does not give the path"},
+		{"request decides without its words", func(d *Draft) {
+			d.Compatibility[1].Level, d.Compatibility[1].DecidedBy, d.Compatibility[1].Deprecation = "drop", "request", "warn in 1.0, remove in 2.0"
+		}, "K2: decided by the request: quote the request's words"},
+		{"request quoted with words it lacks", func(d *Draft) {
+			d.Compatibility[1].Level, d.Compatibility[1].DecidedBy, d.Compatibility[1].Deprecation = "drop", "request", "warn in 1.0, remove in 2.0"
+			d.Compatibility[1].Quote = "with the same behaviour"
+		}, "K2: decided by the request: quote the request's words"},
+		{"exact without a pinned reference build", func(d *Draft) {
+			d.Compatibility[0].Level, d.Compatibility[0].DecidedBy, d.Compatibility[0].Quote = "exact", "request", "rebuild it  in\nRust"
+			d.Modernisation.CaseSets[0].Reference = " "
+		}, "K1 must match exactly, but case set G1 names no pinned reference build"},
 		{"no contract", func(d *Draft) { d.Compatibility = nil }, "list the compatibility contract"},
 		{"migration with no way back", func(d *Draft) {
 			d.Modernisation.Migrations = []Migration{{ID: "MG1", What: "calc history file", Cites: []string{"src/util.cpp:5"}, Proof: []string{"G1"}}}
