@@ -584,6 +584,8 @@ func TestDocsOnly(t *testing.T) {
 		{[]string{"evals/cases/grill/bakery-ux/rubric.md"}, false},
 		{[]string{".github/PULL_REQUEST_TEMPLATE.md"}, false},
 		{[]string{"internal/hosts/testdata/skills/x.md"}, false},
+		{[]string{"internal/production/testdata/runbook.md"}, false},
+		{[]string{"internal/report/notes.md"}, false},
 		{[]string{"CHANGELOG.txt"}, false},
 	} {
 		if got := DocsOnly(files(tc.paths...)); got != tc.want {

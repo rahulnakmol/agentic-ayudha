@@ -59,8 +59,11 @@ it serves a story. It holds no AI key (founder decision of 2026-10-15): it reads
 request and has `pull-requests: write` to post its comment. It checks out the base branch only, downloads the
 `aayudha-pack` artifact when the pull request serves a story, and reads the diff through the GitHub API. It never runs
 pull request code. A pull request without a story is judged on the reviewer's disposition and the coverage manifest,
-with no criteria. One that changes only documentation (files under `docs/`, or Markdown outside the skills, seats,
-hosts, work items, evals, and agent and workflow config, other than an `AGENTS.md`) passes without a review.
+with no criteria. One that changes only documentation passes without a review: files under `docs/`, Markdown at the
+repository root, and `README.md` files. Test fixtures, the skills, seats, hosts, work items, evals, and agent and
+workflow config never count as documentation. Neither do the steering documents: any `AGENTS.md` or `CLAUDE.md`, the
+build plan, the constraints, the contributing guide, the ethos, the glossary, the threat model, and the security
+policy. A rename counts by both its old and new paths.
 
 **`aayudha/inspect-reply`** (the `reply` job) runs on `issue_comment` and `pull_request_review` events, never on
 `pull_request_target`. It checks out the default branch, holds `actions: write` and read access, and runs

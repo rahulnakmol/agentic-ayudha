@@ -163,15 +163,17 @@ func isTestPath(p string) bool {
 		strings.HasPrefix(b, "test_") || strings.HasSuffix(strings.TrimSuffix(b, path.Ext(b)), "_test")
 }
 
-// DocsOnly reports whether every file a diff touches is documentation: under
-// docs/, or a Markdown file outside the directories whose Markdown steers the
-// product or its agents (skills, seats, hosts, work items, evals, agent and
-// workflow config). A steering document (an AGENTS.md or CLAUDE.md, and the
-// sources of truth: the build plan, the constraints, the contributing guide,
-// the ethos, the glossary, the threat model, the security policy) is never
-// documentation, under docs/ or not. A renamed file is documentation only when
-// both its old and new paths are. Such a PR merges without a review; any other
-// file needs one. An empty diff is not docs-only.
+// DocsOnly reports whether every file a diff touches is documentation: a
+// file under docs/, a Markdown file at the repository root, or a README.md.
+// A steering document (an AGENTS.md or CLAUDE.md, and the sources of truth:
+// the build plan, the constraints, the contributing guide, the ethos, the
+// glossary, the threat model, the security policy) is never documentation,
+// nor is anything under a test fixture directory or a directory whose files
+// steer the product or its agents (skills, seats, hosts, work items, evals,
+// agent and workflow config); other Markdown, such as a fixture a test loads,
+// is not either. A renamed file is documentation only when both its old and
+// new paths are. Such a PR merges without a review; any other file needs one.
+// An empty diff is not docs-only.
 func DocsOnly(files []DiffFile) bool {
 	for _, f := range files {
 		if !docsPath(f.Path) || (f.From != "" && !docsPath(f.From)) {
@@ -186,13 +188,11 @@ func docsPath(p string) bool {
 	case "AGENTS.md", "CLAUDE.md", "BUILD-PLAN.md", "CONSTRAINTS.md", "CONTRIBUTING.md", "ETHOS.md", "GLOSSARY.md", "threat-model.md", "SECURITY.md":
 		return false
 	}
-	if strings.HasPrefix(p, "docs/") {
-		return true
-	}
-	for _, d := range []string{"skills/", "seats/", "hosts/", "work-items/", "evals/", ".agents/", ".claude/", ".github/", ".cursor/"} {
+	for _, d := range []string{"testdata/", "fixtures/", "skills/", "seats/", "hosts/", "work-items/", "evals/", ".agents/", ".claude/", ".github/", ".cursor/"} {
 		if strings.HasPrefix(p, d) || strings.Contains(p, "/"+d) {
 			return false
 		}
 	}
-	return strings.HasSuffix(strings.ToLower(p), ".md")
+	md := strings.HasSuffix(strings.ToLower(p), ".md")
+	return strings.HasPrefix(p, "docs/") || md && !strings.Contains(p, "/") || path.Base(p) == "README.md"
 }
