@@ -295,7 +295,7 @@ func (e *Env) statusLine() string {
 		label string
 		n     int
 	}{{"Ready", len(h.Ready)}, {"building", len(h.InProgress)}, {"waiting for you", len(h.AwaitingHuman)}, {"blocked", len(h.Blocked)}, {"floor misses", len(h.FailingFloors)},
-		{"Feedback to classify", len(h.Unclassified)}} {
+		{"Feedback to classify", len(h.Unclassified)}, {"inbox", len(h.Inbox)}} {
 		if c.n > 0 {
 			parts = append(parts, fmt.Sprintf("%s %d", c.label, c.n))
 		}

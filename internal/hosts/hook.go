@@ -185,7 +185,7 @@ func readCopy(dir string) (map[string][]byte, error) {
 
 // humanPlumbing are the plumbing commands a person runs: they refuse agents or
 // act with authority an agent must not take.
-var humanPlumbing = []string{"resume", "self-update", "tour", "seat", "uninit"}
+var humanPlumbing = []string{"resume", "self-update", "tour", "seat", "uninit", "inbox"}
 
 // aayuWord finds aayu run as a command: at the start, after a separator, or
 // as the last element of a path (quoted or not), but not inside a quoted

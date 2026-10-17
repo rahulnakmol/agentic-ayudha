@@ -63,6 +63,7 @@ type State struct {
 	FailingFloors []Floor  `json:"failing_floors"`
 	MeasureDue    []Due    `json:"measure_due"`
 	Unclassified  []Item   `json:"unclassified_feedback"` // open Feedback with no fix:<layer> label (D-7.7e)
+	Inbox         []Item   `json:"inbox"`                 // human-only steps `aayu inbox` lists (Story #431); Detail is the kind
 }
 
 // Level is the adoption level the repository has reached (docs/guide/adopt.md).
@@ -110,6 +111,10 @@ func Candidates(s State) []Step {
 	}
 	if len(s.OutOfSync) > 0 {
 		add(Step{Command: "aayu doctor --fix", Why: "the installed skill copies differ from .aayudha/lock.toml (" + s.OutOfSync[0] + ").", Seat: verbs.DevOps, Stage: verbs.StageSetup, HumanOnly: true})
+	}
+	if len(s.Inbox) > 0 {
+		add(Step{Command: "aayu inbox", Why: fmt.Sprintf("%d human-only step(s) wait for you (%s): act on each with one keypress, with the twin's recommendation.", len(s.Inbox), items(s.Inbox, "#")),
+			Seat: verbs.Founder, Stage: verbs.StageShip, HumanOnly: true})
 	}
 	for _, pr := range s.AwaitingHuman {
 		if pr.Gate == "passed" || pr.Gate == "none" {
@@ -218,6 +223,9 @@ func Render(p *ui.Printer, s State, next Step) {
 		{"Blocked", count(len(s.Blocked)), items(s.Blocked, "#")},
 		{"Failing floors", count(len(s.FailingFloors)), floors(s.FailingFloors)},
 		{"Measurements due", count(len(s.MeasureDue)), dues(s.MeasureDue)},
+	}
+	if len(s.Inbox) > 0 {
+		rows = append(rows, []string{"Waiting in your inbox", count(len(s.Inbox)), items(s.Inbox, "#")})
 	}
 	if p.Level == ui.Rich {
 		for _, r := range rows {

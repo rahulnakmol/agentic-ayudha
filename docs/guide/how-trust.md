@@ -130,6 +130,28 @@ Both commands refuse the bypass when:
 A plan bypass is never an approval: `approved_by` stays empty. Protected-path merges in solo mode use the same comment,
 then `gh pr merge --squash --admin`, and `aayu audit` reports one whose comment came after the merge as "recorded late".
 
+### The inbox
+
+A solo founder should not be the bottleneck on human-only steps, but no switch turns those gates off: in solo mode an
+agent could flip such a switch through the admin bypass. Instead `aayu inbox` lists every human-only step that waits
+for you, each with the twin's recommendation, and you act on each with one keypress: `a` accepts the recommendation,
+`c` chooses another option, `s` skips, `o` opens it, and `q` quits. It lists:
+
+| Step | What the record shows | The recommendation | What accepting does |
+|---|---|---|---|
+| Decision | an open Decision, a floor waiver, or a provisional one (V8) | the Decision's own Recommendation (ratify, for a provisional one) | `aayu decide <n> --accept <option>` |
+| PR at the cycle cap | inspect ran its 2 fix/rebuild cycles on an open PR and stopped | open it and review it (another: `aayu ship <pr>`, with every gate of ship) | opens the PR |
+| Story merged without ship | a PR merged into dev that links the Story, which is still before `status:merged` | mark it merged without proof (it stays uncovered) | `status:merged`, the merged-without-proof comment, the lease removed |
+| Bug with its fix merged | a PR merged into dev that links the open Bug | close it as completed | `status:done`, a "Fixed in #PR" comment, closed |
+| Replaced | another issue's body says "Replaces #N", and #N is still open | close it as not planned | `status:cancelled`, a "Replaced by #M" comment, closed |
+
+A PR links an item as `ship` and `audit` read it: a `story/<n>-` branch, or `Refs`, `Closes`, `Fixes`, or `Resolves #n`
+in its body. `inbox` refuses agents (`AAYU_AGENT=1`) and needs a terminal, and the host hooks block `aayu inbox` in an
+agent's shell. Every write is the person's own, under their token, logged in the actions log, and each step keeps the
+rules of the verb that owns it: a Decision still needs its authority, and ship still needs its gates and a human pass.
+`--dry-run` shows what each keypress would write without writing. The home screen shows "Waiting in your inbox" with
+the count, and `aayu next` names `aayu inbox`, whenever it has steps (`gatherInbox` in `internal/cli/inbox.go`).
+
 ## Protected paths and CODEOWNERS
 
 `.github/CODEOWNERS` lists the paths that define the gates: `.github/`, `skills/`, `ops/`, `seats/`, `CONSTRAINTS.md`,
