@@ -171,6 +171,10 @@ Hold every sentence to what the record shows:
 - Each sentence, the opening one included, is an observation with its citation, a conclusion labelled as one ("so", "which suggests") that names
   the observations it rests on, or a proposed change. Causes are system causes (the footprint read at Ready, a plan
   without a step), never a person.
+- A labelled conclusion claims no more than the observations it names: a reader of only those lines reaches it. When
+  a gap became visible, why someone acted, or what would have happened otherwise is a conclusion only when a record
+  states it; and "only", "first", "never", or "all" is a claim of its own. A call path in the code shows what calls
+  what, not when anyone could have seen a gap: say what the record shows and stop there.
 - Never turn a missing record into a fact. Write "the plan has no checkpoint in that layer", not "nobody checked the
   layers"; say what a later checkpoint did as its record says, and nothing more (not that it also supplied what the
   plan lacked); "coverage was under the floor at that checkpoint", not "the change was untested"; "the review requested
@@ -180,7 +184,12 @@ Hold every sentence to what the record shows:
 - No number, date, person, rule, or budget that is not in what you read. An owner is a seat twin or a person the
   record names; "when it is checked" is a date the record gives (the next retro's) or an event it supports ("before
   the next story of that kind is marked Ready"), never an invented date. The artefact ends with the change in one
-  statement: what changes, its owner, and its check; a coaching question to the owner may come just before it.
+  statement: what changes, its owner, and its check; a coaching question to the owner may come just before it. The
+  change names the layer, type, floor, or code it is about, so it carries its own citation in the same sentence (the
+  source of the gap it closes: "… the layer of every type a criterion needs (`internal/ledger/tombstone.go:12-16`,
+  `LAYERS.md`)"); a "Why" line under it does not cite it.
+- When a check reports an uncited claim, add the citation to that very sentence, or cut the sentence; rewording it
+  does not fix the finding.
 - Say what changes and who owns it; do not describe aayu's own mechanics (how Feedback is accepted, which command
   carries a change), and do not merge or reassign the Feedback issues the report filed. Cite the ones that exist.
 - Cite only what you read for this retro, never your own charter, persona, or this skill, and put the citation in
