@@ -220,6 +220,42 @@ func HumanOnlyCommand(shell string) (cmd, why string) {
 	return "", ""
 }
 
+// AgentMarkers are the environment variables a host sets in every command its
+// agent runs, so a process can tell an agent lane from a person even when the
+// agent uses the person's token (Bug #170). It is the one list: the human-only
+// guard (cli.Env.requireHuman), build's asked gate (D-5.5c.20), and host
+// detection (doctor.DetectHost, for the markers that name a Host) all read it.
+// The pre-tool hook (HumanOnlyCommand) stops a human-only command a host
+// forwards to it; these markers reach the binary however the command was
+// started (a script, an alias, a host that forwards nothing). A person's own
+// terminal sets none of them; CURSOR_TRACE_ID, which Cursor also sets in a
+// person's terminal, is not one (doctor uses it to name the host only).
+var AgentMarkers = []struct {
+	Env    string
+	Host   verbs.HostID // the host the marker names, "" for a cross-host convention
+	Source string
+}{
+	{"AMP_THREAD_ID", verbs.HostAmp, "Amp sets it in the commands of a thread"},
+	{"CLAUDECODE", verbs.HostClaude, "Claude Code sets it to 1 in the Bash tool, hooks, and MCP servers it spawns"},
+	{"CURSOR_AGENT", verbs.HostCursor, "Cursor sets it to 1 in its agent's terminal"},
+	{"CODEX_THREAD_ID", verbs.HostCodex, "Codex exports it to the commands it runs (D-3.2b)"},
+	{"CODEX_SANDBOX", verbs.HostCodex, "Codex sets it inside its sandbox"},
+	{"CODEX_CI", verbs.HostCodex, "Codex sets it for the commands it runs"},
+	{"AGENT", "", "the AGENT=<name> convention (Amp sets AGENT=amp, Goose AGENT=goose)"},
+	{"AI_AGENT", "", "the AI_AGENT=<name> convention"},
+}
+
+// AgentMarker names the first agent marker set in the environment, as
+// NAME=value, or "" when there is none.
+func AgentMarker(getenv func(string) string) string {
+	for _, m := range AgentMarkers {
+		if v := getenv(m.Env); v != "" {
+			return m.Env + "=" + v
+		}
+	}
+	return ""
+}
+
 // shellCommand is the shell command in a pre-tool event: tool_input.command
 // (Claude Code, Codex) or command (Cursor's beforeShellExecution).
 func shellCommand(event []byte) string {

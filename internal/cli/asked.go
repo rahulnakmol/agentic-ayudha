@@ -9,10 +9,10 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
-	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 )
 
@@ -32,19 +32,6 @@ type askedRecord struct {
 }
 
 func (e *Env) askedPath() string { return filepath.Join(e.stateDir(), "state", "asked.jsonl") }
-
-// agentShell names the signal that an agent runs this process: AAYU_AGENT=1,
-// or the marker a host sets in its agent's commands. Cursor's own terminal
-// sets CURSOR_TRACE_ID for a person too, so it does not count.
-func (e *Env) agentShell() string {
-	if e.Agent() {
-		return "AAYU_AGENT=1"
-	}
-	if host, how := doctor.DetectHost("", e.Getenv); host != "" && how != "CURSOR_TRACE_ID" {
-		return how
-	}
-	return ""
-}
 
 // session is the host's ID for the agent session, when it exports one.
 func (e *Env) session() string {
@@ -97,7 +84,7 @@ func (e *Env) grilledHere(repo string, n int) bool {
 // in their own terminal, and a story already in progress (a later checkpoint,
 // a delegation sync), pass. The confirmation or the hold is logged.
 func (e *Env) askedGate(ctx context.Context, c *github.Client, repo string, n int, title string, labels []string, in Values) error {
-	marker := e.agentShell()
+	marker, _, _ := strings.Cut(e.agentSignal(), "=") // the marker's name: hosts.AgentMarkers, the list the human-only guard uses
 	if marker == "" || contains(labels, labelInProgress) || e.grilledHere(repo, n) {
 		return nil
 	}

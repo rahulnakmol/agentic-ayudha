@@ -342,13 +342,10 @@ func (e *Env) provenFeatures(ctx context.Context, c *github.Client, repo string)
 // refuseNonHuman refuses a human-only act (tell --publish, release) for agent
 // lanes and in CI, where the token is a workflow or bot token.
 func (e *Env) refuseNonHuman(what string) error {
-	if e.Agent() {
-		return Errorf(ExitBlocked, "%s is a human's act; it is refused for agents (AAYU_AGENT=1)", what)
-	}
 	if e.CI {
 		return Errorf(ExitBlocked, "%s is a human's act; it is refused in CI, where the token is a workflow or bot token", what)
 	}
-	return nil
+	return e.requireHuman(what)
 }
 
 // humanAccount checks that tok is a human's own account: not a GitHub bot or

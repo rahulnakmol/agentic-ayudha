@@ -1,0 +1,21 @@
+# Claude Code 2.1.300 Bash tool, driven by a scripted local model endpoint (no real model), 2026-10-15T07:43:12Z
+$ aayu ship 189 --solo-bypass --dry-run --repo rahulnakmol/agentic-ayudha
+AAYU_AGENT=<unset> CLAUDECODE=1
+aayu: ship --solo-bypass is a person's decision and is refused for an agent lane (CLAUDECODE=1); ask a person to run it in their own terminal
+exit=4
+$ aayu plan 170 --solo-bypass --dry-run --repo rahulnakmol/agentic-ayudha
+AAYU_AGENT=<unset> CLAUDECODE=1
+aayu: plan --solo-bypass is a person's decision and is refused for an agent lane (CLAUDECODE=1); ask a person to run it in their own terminal
+exit=4
+$ aayu decide 170 --accept A --dry-run --repo rahulnakmol/agentic-ayudha
+AAYU_AGENT=<unset> CLAUDECODE=1
+aayu: decide --accept is a person's decision and is refused for an agent lane (CLAUDECODE=1); ask a person to run it in their own terminal
+exit=4
+$ aayu release 177 --to rolling --dry-run --repo rahulnakmol/agentic-ayudha
+AAYU_AGENT=<unset> CLAUDECODE=1
+aayu: release is a person's decision and is refused for an agent lane (CLAUDECODE=1); ask a person to run it in their own terminal
+exit=4
+$ aayu resume --dry-run --repo rahulnakmol/agentic-ayudha
+AAYU_AGENT=<unset> CLAUDECODE=1
+aayu: resume is a person's decision and is refused for an agent lane (CLAUDECODE=1); ask a person to run it in their own terminal
+exit=4

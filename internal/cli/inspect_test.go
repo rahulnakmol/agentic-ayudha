@@ -201,10 +201,12 @@ func TestInspectDismissAndPeer(t *testing.T) {
 	for k, v := range env {
 		agent[k] = v
 	}
-	if code, _, errOut := run(t, agent, opts, "inspect", strconv.Itoa(prN), "--dismiss", id, "--reason", "r", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "refused for agents") {
+	if code, _, errOut := run(t, agent, opts, "inspect", strconv.Itoa(prN), "--dismiss", id, "--reason", "r", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "refused for an agent lane") {
 		t.Fatalf("agent dismiss: %d %s", code, errOut)
 	}
-	if code, _, errOut := run(t, env, opts, "inspect", strconv.Itoa(prN), "--dismiss", id, "--reason", "total is never 0 here", "--repo", "o/r"); code != 0 {
+	person := opts
+	person.IsTerminal = stdinTTY // a human-only judgement, made on a terminal (Bug #170)
+	if code, _, errOut := run(t, env, person, "inspect", strconv.Itoa(prN), "--dismiss", id, "--reason", "total is never 0 here", "--repo", "o/r"); code != 0 {
 		t.Fatalf("dismiss: %d %s", code, errOut)
 	}
 	if got := git(t, opts.Dir, "show", "origin/ledger:"+DismissedPath); !strings.Contains(got, id) || !strings.Contains(got, "total is never 0 here") {

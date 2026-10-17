@@ -1,7 +1,7 @@
 // Package ui is how aayu talks to a person on a terminal (WP1.1b): colour,
 // themes, symbols, tables, live progress, celebrations, and the seat that
 // speaks for a command. It never changes what a machine reads: output for
-// --json, MCP, agents (AAYU_AGENT=1), CI, and anything that is not a terminal
+// --json, MCP, agents (AAYU_AGENT=1 or a host's agent marker), CI, and anything that is not a terminal
 // is the Machine level, which adds nothing to a command's stable text.
 //
 // Meaning never rides on colour or a symbol alone: every status keeps its word
@@ -37,7 +37,7 @@ func (l Level) String() string {
 type Signals struct {
 	TTY     bool   // the stream is a terminal
 	JSON    bool   // --json
-	Agent   bool   // AAYU_AGENT=1 (agent lanes and the MCP server)
+	Agent   bool   // an agent lane: AAYU_AGENT=1 or a host's agent marker (hosts.AgentMarkers)
 	CI      bool   // --ci, or the CI environment variable
 	Plain   bool   // --plain or [ui] plain = true
 	NoColor bool   // NO_COLOR is set to a non-empty value (no-color.org)

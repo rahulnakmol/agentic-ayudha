@@ -56,7 +56,7 @@ func TestDecideSLA(t *testing.T) {
 	sink := &notify.Fake{}
 	now := time.Date(2026, 10, 19, 11, 59, 0, 0, time.UTC)
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "t", "XDG_STATE_HOME": t.TempDir()}
-	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Now: func() time.Time { return now }, NotifySink: sink}
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Now: func() time.Time { return now }, NotifySink: sink}
 	sweep := func() []decisionStep {
 		t.Helper()
 		code, out, errOut := run(t, env, opts, "decide", "--repo", "o/r", "--json", "--set", "decisions.escalate_to=founder-b")
@@ -185,7 +185,7 @@ func TestDecideSLA(t *testing.T) {
 func TestDecideWaiver(t *testing.T) {
 	g := decideTree(t)
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "t"}
-	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1}
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1}
 	if code, _, _ := run(t, env, opts, "decide", "6", "--repo", "o/r", "--waiver", "redaction"); code != ExitBlocked {
 		t.Errorf("redaction waiver: exit %d, want %d", code, ExitBlocked)
 	}
@@ -232,7 +232,7 @@ func TestDecideGitHubFailures(t *testing.T) {
 			g := decideTree(t)
 			g.Fail = f
 			env := map[string]string{"AAYU_GITHUB_TOKEN": "t", "XDG_STATE_HOME": t.TempDir()}
-			opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Now: func() time.Time { return at48 }, NotifySink: &notify.Fake{}}
+			opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Now: func() time.Time { return at48 }, NotifySink: &notify.Fake{}}
 			if code, _, errOut := run(t, env, opts, append(tt.args, "--repo", "o/r")...); code != ExitExternal {
 				t.Errorf("%v with %s failing: exit %d, want %d: %s", tt.args, f, code, ExitExternal, errOut)
 			}
@@ -259,16 +259,16 @@ func TestDecideRefusals(t *testing.T) {
 		if tt.mutate != nil {
 			tt.mutate(g)
 		}
-		code, _, errOut := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "t"}, Options{GitHubAPI: g.URL(), GitHubGap: -1}, append(tt.args, "--repo", "o/r")...)
+		code, _, errOut := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "t"}, Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1}, append(tt.args, "--repo", "o/r")...)
 		if code != tt.want || len(g.Writes()) != 0 {
 			t.Errorf("%s: exit %d (want %d), writes %v: %s", tt.name, code, tt.want, g.Writes(), errOut)
 		}
 	}
 	g := decideTree(t)
-	if code, out, _ := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "t"}, Options{GitHubAPI: g.URL(), GitHubGap: -1}, "decide", "6", "--waiver", "deps", "--dry-run", "--repo", "o/r"); code != 0 || !strings.Contains(out, "planned (dry run)") || len(g.Writes()) != 0 {
+	if code, out, _ := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "t"}, Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1}, "decide", "6", "--waiver", "deps", "--dry-run", "--repo", "o/r"); code != 0 || !strings.Contains(out, "planned (dry run)") || len(g.Writes()) != 0 {
 		t.Errorf("dry-run waiver: exit %d: %s", code, out)
 	}
-	if code, _, _ := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "t"}, Options{GitHubAPI: g.URL(), GitHubGap: -1}, "decide"); code != ExitUsage {
+	if code, _, _ := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "t"}, Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1}, "decide"); code != ExitUsage {
 		t.Errorf("no --repo outside a checkout: exit %d, want %d", code, ExitUsage)
 	}
 }
@@ -279,7 +279,7 @@ func TestDecideRefusals(t *testing.T) {
 func TestDecidePack(t *testing.T) {
 	g := decideTree(t)
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "t", "XDG_STATE_HOME": t.TempDir()}
-	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Assets: aayudha.Assets}
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Assets: aayudha.Assets}
 	pack := func(want int, args ...string) packReport {
 		t.Helper()
 		code, out, errOut := run(t, env, opts, append([]string{"decide", "--repo", "o/r", "--json", "--pack"}, args...)...)

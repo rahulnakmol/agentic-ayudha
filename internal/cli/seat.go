@@ -41,8 +41,8 @@ func runSeat(ctx context.Context, e *Env, in Values) error {
 	if action == "list" {
 		return seatList(e, root, l.Config)
 	}
-	if e.Agent() {
-		return Errorf(ExitBlocked, "seat %s: seat changes are protected-path and ruleset writes; only a human runs them", action)
+	if err := e.requireHuman("seat " + action); err != nil {
+		return err
 	}
 	if _, ok := verbs.FindSeat(verbs.SeatID(slug)); !ok {
 		var ids []string

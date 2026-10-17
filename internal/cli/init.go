@@ -54,6 +54,9 @@ func (e *Env) originRepo(ctx context.Context) string {
 // confirmOrBlock asks on a terminal (or takes a human's --yes) and turns a no
 // into exit 4.
 func (e *Env) confirmOrBlock(verb, question string) error {
+	if err := e.requireHuman(verb); err != nil {
+		return err
+	}
 	if !e.confirm(question + " [y/N] ") {
 		return Errorf(ExitBlocked, "%s not confirmed: it needs a yes on a terminal, or --yes from a human", verb)
 	}

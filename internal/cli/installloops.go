@@ -83,8 +83,8 @@ func runInstallLoops(ctx context.Context, e *Env, in Values) error {
 	if r := in.String("record"); in.Has("record") {
 		return e.recordLoops(root, ls, rec, r, repo, branch, tz)
 	}
-	if (in.Bool("apply") || in.String("run-now") != "") && e.Agent() {
-		return Errorf(ExitBlocked, "install --loops --apply and --run-now start runs that act as you; a human runs them (AAYU_AGENT=1)")
+	if sig := e.agentSignal(); (in.Bool("apply") || in.String("run-now") != "") && sig != "" {
+		return Errorf(ExitBlocked, "install --loops --apply and --run-now start runs that act as you; a human runs them (agent lane: %s)", sig)
 	}
 	rep := loopsReport{Repo: repo, Added: added}
 	files, err := loops.Files(ls, repo, branch, tz, initrepo.GuardVersion(e.Build.Version), Implemented)

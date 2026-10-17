@@ -718,6 +718,12 @@ func TestBuildHoldsAStoryThePersonDidNotAskFor(t *testing.T) {
 	if _, err := os.Stat(BuildWorktree(dir, 2)); err == nil {
 		t.Fatal("held story got a worktree")
 	}
+	// The gate reads the human-only guard's marker list (hosts.AgentMarkers): a
+	// cross-host convention holds too, and Cursor's CURSOR_TRACE_ID, which its
+	// terminal sets for a person, does not (below).
+	if code, _, errOut := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH"), "AGENT": "goose"}, opts, "build", "2", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "in this session (AGENT)") {
+		t.Fatalf("AGENT=goose pickup: %d %s", code, errOut)
+	}
 	if code, _, errOut := run(t, agent("s1"), opts, "build", "2", "--repo", "o/r", "--asked", "yes, build #2"); code != 0 || !contains(g.LabelNames(2), LeaseLabel) {
 		t.Fatalf("asked pickup: %d %s", code, errOut)
 	}
@@ -741,5 +747,11 @@ func TestBuildHoldsAStoryThePersonDidNotAskFor(t *testing.T) {
 	}
 	if code, _, errOut := run(t, agent("s1"), opts, "build", n, "--repo", "o/r"); code != 0 {
 		t.Fatalf("own grilled story: %d %s", code, errOut)
+	}
+	if code, _, errOut := run(t, person, opts, "ready", "6", "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready 6: %s", errOut)
+	}
+	if code, _, errOut := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH"), "CURSOR_TRACE_ID": "t"}, opts, "build", "6", "--repo", "o/r"); code != 0 {
+		t.Fatalf("a person in Cursor's terminal: %d %s", code, errOut)
 	}
 }

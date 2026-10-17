@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -30,7 +31,7 @@ func thinFixture(t *testing.T) (g *fake.GitHub, env map[string]string, opts Opti
 	git(t, dir, "config", "user.name", "Builder")
 	git(t, dir, "config", "user.email", "builder@example.com")
 	env = map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH"), "AAYU_MODEL": "claude-opus-5-5"}
-	opts = Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, CheckpointVerify: holds}
+	opts = Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, CheckpointVerify: holds}
 	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready: %s", errOut)
 	}
@@ -247,13 +248,35 @@ func TestShipMobileWaiverAndSoloBypass(t *testing.T) {
 	if code, out := ship("--solo-bypass"); code != ExitBlocked || !strings.Contains(out, `post a PR comment starting "Solo-mode bypass:"`) {
 		t.Fatalf("solo bypass without the comment: %d %s", code, out)
 	}
-	if code, _, errOut := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1"}, opts, "ship", strconv.Itoa(prN), "--solo-bypass", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "refused for agents") {
+	if code, _, errOut := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_AGENT": "1"}, opts, "ship", strconv.Itoa(prN), "--solo-bypass", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "refused for an agent lane") {
 		t.Fatalf("solo bypass by an agent: %d %s", code, errOut)
 	}
 	g.Mu.Lock()
 	g.Issues[prN].Comments = append(g.Issues[prN].Comments, &fake.Comment{ID: 77, Body: "Solo-mode bypass: one human, no bot App; shipping the thin-slice story."})
 	g.Issues[prN].Comments[0].User.Login, g.Issues[prN].Comments[0].User.Type = "founder", "User"
 	g.Mu.Unlock()
+	// Bug #170: with every solo-mode condition met, an agent running ship --solo-bypass through its host's shell
+	// with the founder's token (no AAYU_AGENT) is refused, even on a terminal, and nothing is merged; with no
+	// terminal and no marker it fails closed.
+	for host, marker := range hostShells {
+		agentEnv := maps.Clone(env)
+		maps.Copy(agentEnv, marker)
+		if code, _, errOut := run(t, agentEnv, opts, "ship", strconv.Itoa(prN), "--solo-bypass", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "refused for an agent lane") {
+			t.Fatalf("solo bypass from a %s shell: %d %s", host, code, errOut)
+		}
+	}
+	noTTY := opts
+	noTTY.IsTerminal = nil
+	if code, _, errOut := run(t, env, noTTY, "ship", strconv.Itoa(prN), "--solo-bypass", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "needs an interactive terminal") {
+		t.Fatalf("solo bypass with no terminal and no marker: %d %s", code, errOut)
+	}
+	g.Mu.Lock()
+	merged := g.Pulls[prN].Merged
+	g.Mu.Unlock()
+	if merged {
+		t.Fatal("a refused solo bypass merged the PR")
+	}
+	// A person in a terminal outside any host: accepted as before.
 	code, out := ship("--solo-bypass")
 	if code != 0 || !strings.Contains(out, "human pass: solo-bypass by founder") {
 		t.Fatalf("solo bypass: %d %s", code, out)
