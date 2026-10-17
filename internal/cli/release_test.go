@@ -235,7 +235,7 @@ func TestReleaseLadder(t *testing.T) {
 		t.Fatalf("a person's no at a terminal: %d %s", code, errOut)
 	}
 
-	// An agent (D-7.8c) runs it with no terminal and no --yes. A gate that still fails after one re-run of its
+	// An agent (Story #430) runs it with no terminal and no --yes. A gate that still fails after one re-run of its
 	// failed jobs stops the promotion: nothing lands.
 	f.gateFails = 2
 	if code, _, errOut := f.run(t, day, agent, rel, "--to", "rolling"); code != ExitBlocked || !strings.Contains(errOut, "the rolling gate failed") {
@@ -353,7 +353,7 @@ func TestReleaseLadder(t *testing.T) {
 	}
 	git(t, f.bare, "update-ref", "refs/heads/rolling", rollingTip)
 
-	// Main needs the explicit stable-release request (D-7.8c): a comment "Stable release: v0.1.0" on the Release,
+	// Main needs the explicit stable-release request (Story #430): a comment "Stable release: v0.1.0" on the Release,
 	// after its rolling snapshot (10:41), by a non-bot account with write access and no aayudha marker. Each near
 	// miss alone is refused, with nothing pushed.
 	rollingAt := day.Add(time.Hour)

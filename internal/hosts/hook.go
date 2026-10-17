@@ -264,7 +264,7 @@ var stableWriters = regexp.MustCompile(`(?i)(^|[\s;&|(])(gh|curl|wget|http|xh)\s
 
 // StableRequestCommand reports a shell command that would write a
 // stable-release request ("Stable release: v1.2.0", which `aayu release --to
-// main` reads from the Release issue, D-7.8c): the words and a command that
+// main` reads from the Release issue, Story #430): the words and a command that
 // can post them to GitHub. aayu itself never writes one.
 func StableRequestCommand(shell string) bool {
 	return strings.Contains(strings.ToLower(shell), "stable release:") && stableWriters.MatchString(shell)

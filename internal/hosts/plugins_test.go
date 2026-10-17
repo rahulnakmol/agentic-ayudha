@@ -37,7 +37,7 @@ func TestHumanOnlyCommand(t *testing.T) {
 		{"aayu build 12", ""},
 		{"aayu tell release --from notes.md", ""},
 		{"aayu plan 5 --create", ""},
-		{"aayu release 7 --to main", ""}, // an agent promotes behind the gate (D-7.8c)
+		{"aayu release 7 --to main", ""}, // an agent promotes behind the gate (Story #430)
 		{"echo aayushipment ship", ""},
 		{"git commit -m 'aayu ship later'", ""},
 		{"aayu status; aayu ship 4", "aayu ship 4"},
@@ -66,7 +66,7 @@ func TestPreToolBlocksHumanOnlyShell(t *testing.T) {
 		t.Errorf("build was blocked: %+v", r)
 	}
 	// An agent never writes the stable-release request that `release --to main`
-	// needs (D-7.8c), with whatever tool posts it; reading it, or the word in a
+	// needs (Story #430), with whatever tool posts it; reading it, or the word in a
 	// commit, passes.
 	for _, tt := range []struct {
 		cmd     string

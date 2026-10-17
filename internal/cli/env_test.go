@@ -95,7 +95,7 @@ func TestHumanOnlyRefusedInHostShells(t *testing.T) {
 
 // Bug #170: the recorded runs in testdata/host-shells (an Amp thread's shell, Claude Code's Bash tool, and a Claude
 // Code hook) refused every
-// human-only command with exit 4 (their release run predates D-7.8c, which lets an agent promote), naming a marker this binary still recognises; without a marker, a command with no
+// human-only command with exit 4 (their release run predates Story #430, which lets an agent promote), naming a marker this binary still recognises; without a marker, a command with no
 // terminal was refused and one on a terminal passed the human check.
 func TestHostShellRecords(t *testing.T) {
 	refusal := regexp.MustCompile(`refused for an agent lane \(([A-Z_]+)=`)

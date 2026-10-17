@@ -105,7 +105,7 @@ type Promotion struct {
 	MeasureDue      []MeasureDue   `json:"measure_due"`
 	PromotedBy      string         `json:"promoted_by"`
 	PromotedAt      string         `json:"promoted_at"`
-	Agent           string         `json:"agent,omitempty"`          // the agent marker when an agent ran it (D-7.8c); empty for a person
+	Agent           string         `json:"agent,omitempty"`          // the agent marker when an agent ran it (Story #430); empty for a person
 	Request         *StableRequest `json:"stable_request,omitempty"` // main: who asked for the stable release
 	DryRun          bool           `json:"dry_run,omitempty"`
 	Notices         []string       `json:"notices,omitempty"`
@@ -139,7 +139,7 @@ var shippedStatus = []string{"released", "measured", "done", "cancelled"}
 // records the artifact identity and shipping evidence, and makes the Goals and
 // Initiatives above the stories due for measure.
 func runRelease(ctx context.Context, e *Env, in Values) (err error) {
-	// An agent may promote (founder policy, D-7.8c): the gate below decides, and
+	// An agent may promote (founder policy, Story #430): the gate below decides, and
 	// main needs a person's stable-release request. CI may not: its token is a
 	// workflow or bot token.
 	if e.CI {
@@ -330,7 +330,7 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 	if !has[gateWorkflow] {
 		return Errorf(ExitBlocked, "release: no %s workflow to gate the candidate (dispatch input gate=%s)", gateWorkflow, gateFor(to))
 	}
-	// The TTY gate is gone for release (D-7.8c): a person at a terminal is still
+	// The TTY gate is gone for release (Story #430): a person at a terminal is still
 	// asked (or says --yes), and an agent, or a run without a terminal, goes on
 	// with no prompt: the gate decides, and main already holds a person's request.
 	if person && !e.confirm(fmt.Sprintf("Promote %s (%s) to %s as %q for Release #%d? [y/N] ", src, short(srcSHA), dst, p.Message, n)) {

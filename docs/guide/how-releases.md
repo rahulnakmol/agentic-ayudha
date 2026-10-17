@@ -46,7 +46,7 @@ path filters that let a pull request skip jobs are off for dispatches. On top of
 bookkeeping. It lives in `internal/cli/release.go`.
 
 - **Refusals first.** It refuses CI, and refuses a token that belongs to a bot or to a login in
-  `[identity] bot_logins`. An agent may run it under a person's account (founder policy, Appendix B D-7.8c): there
+  `[identity] bot_logins`. An agent may run it under a person's account (founder policy, Story #430): there
   is no TTY prompt for agents, because the gate is the control. A person at a terminal is still asked to confirm,
   or passes `--yes`. The registry marks it human identity, stable-request, and halt gate, and exposes it over MCP
   (the Model Context Protocol server that hosts call) only where `expose_writes` allows writes.
