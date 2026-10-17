@@ -18,6 +18,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -58,7 +59,7 @@ type Fact struct {
 // is set; the index never picks one.
 type Edge struct {
 	Kind      string   `json:"kind"` // include, import, call
-	From      string   `json:"from"` // file:<path>, a symbol ID, or a Python main guard's entry ID
+	From      string   `json:"from"` // file:<path>, a symbol ID, or a script's or Python main guard's entry ID
 	To        []string `json:"to"`
 	At        string   `json:"at"`
 	Ambiguous bool     `json:"ambiguous,omitempty"`
@@ -413,6 +414,7 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 			ix.Edges = append(ix.Edges, Edge{Kind: "call", From: from, To: to, At: p + ":" + itoa(c.line), Ambiguous: len(to) > 1})
 		}
 		ix.guardCalls(p, s, byName)
+		ix.scriptCalls(p, s, byName)
 	}
 	ix.builtins(files, byName)
 	ix.history(ctx, root, opt.Git)
@@ -454,6 +456,34 @@ func (ix *Index) guardCalls(p string, s *scanned, byName map[string][]string) {
 		}
 	}
 }
+
+// scriptCalls records what a script's file-scope code names as edges from
+// its script entry: a script runs its top-level lines, which no function
+// holds, so it reaches the functions they name and no others. A name counts
+// with or without parentheses, as shell, Perl, and Ruby call without them.
+func (ix *Index) scriptCalls(p string, s *scanned, byName map[string][]string) {
+	from := "entry:" + p + ":1"
+	if !slices.ContainsFunc(ix.Entries, func(e Fact) bool { return e.ID == from && e.Kind == "script" }) {
+		return
+	}
+	inDef := func(ln int) bool {
+		return slices.ContainsFunc(s.syms, func(d Symbol) bool { return isDefKind(d.Kind) && d.line <= ln && ln <= d.End })
+	}
+	seen := map[string]bool{}
+	for k, text := range strings.Split(s.code, "\n") {
+		if inDef(k + 1) {
+			continue
+		}
+		for _, w := range wordRe.FindAllString(text, -1) {
+			if to := byName[w]; len(to) > 0 && !cKeywords[w] && !seen[w] {
+				seen[w] = true
+				ix.Edges = append(ix.Edges, Edge{Kind: "call", From: from, To: to[:min(len(to), 8)], At: p + ":" + itoa(k+1), Ambiguous: len(to) > 1})
+			}
+		}
+	}
+}
+
+var wordRe = regexp.MustCompile(`[A-Za-z_][\w]*`)
 
 // scanned is one file read while building the index.
 type scanned struct {
@@ -916,7 +946,7 @@ func fileOf(id string) string {
 		return id[5:]
 	case strings.HasPrefix(id, "sym:"):
 		return strings.SplitN(id[4:], "#", 2)[0]
-	case strings.HasPrefix(id, "entry:"): // a main guard's calls (guardCalls)
+	case strings.HasPrefix(id, "entry:"): // a script's or main guard's calls
 		f, _ := splitAt(id[6:])
 		return f
 	}
