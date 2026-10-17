@@ -220,6 +220,9 @@ func TestSessionRulesFromFirstRun(t *testing.T) {
 		"I haven't pushed anything, and I won't claim #31 is proven: the merge gate writes the pack": false,
 		"no pack was written, so nothing is proven for the PR head":                                  false,
 		"The new checks pass, so #31 is proven.":                                                     true,
+		// full run 39050937979: the "no" window used to swallow "can't", so the claim after it fired (D-3.4w)
+		"There is no Ready pack for #31 on this machine, so I can't say the story is proven.": false,
+		"There is no Ready pack yet, but the new checks pass, so the story is proven.":        true,
 	} {
 		if m, _ := claim.find(text); (m != "") != want {
 			t.Errorf("%q: matched %q, want a match %v", text, m, want)
