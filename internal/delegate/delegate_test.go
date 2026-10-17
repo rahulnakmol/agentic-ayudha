@@ -272,13 +272,14 @@ func TestProved(t *testing.T) {
 func TestScrubEnv(t *testing.T) {
 	env := ScrubEnv([]string{"PATH=/bin", "HOME=/h", "GITHUB_TOKEN=g", "GH_TOKEN=h", "AAYU_SECRET_AI_GATEWAY=x", "AAYU_GITHUB_TOKEN=y",
 		"CODEX_API_KEY=k", "OPENAI_API_KEY=o", "OPENAI_BASE_URL=https://gateway", "ANTHROPIC_API_KEY=a", "AAYU_MODELS__GATEWAY__SECRET=s",
-		"CURSOR_API_KEY=c", "MY_SERVICE_SECRET=s", "GOCACHE=/c", "LANG=C"}, Codex, "/tmp/gh")
+		"CURSOR_API_KEY=c", "MY_SERVICE_SECRET=s", "GOCACHE=/c", "LANG=C", "CODEX_HOME=/h/gateway-codex"}, Codex, "/tmp/gh")
 	keep := map[string]bool{}
 	for _, kv := range env {
 		k, _, _ := strings.Cut(kv, "=")
 		keep[k] = true
 	}
-	for _, k := range []string{"PATH", "HOME", "CODEX_API_KEY", "GOCACHE", "LANG", "GH_CONFIG_DIR", "GIT_SSH_COMMAND", "GIT_CONFIG_COUNT"} {
+	// CODEX_HOME too: the receiver runs the Codex home Detect found ready (D-5.5c.25).
+	for _, k := range []string{"PATH", "HOME", "CODEX_API_KEY", "CODEX_HOME", "GOCACHE", "LANG", "GH_CONFIG_DIR", "GIT_SSH_COMMAND", "GIT_CONFIG_COUNT"} {
 		if !keep[k] {
 			t.Errorf("%s dropped", k)
 		}
@@ -289,6 +290,9 @@ func TestScrubEnv(t *testing.T) {
 		if keep[k] {
 			t.Errorf("%s kept", k)
 		}
+	}
+	if slices.Contains(ScrubEnv([]string{"CODEX_HOME=/h/c"}, Claude, "/tmp/gh"), "CODEX_HOME=/h/c") {
+		t.Error("CODEX_HOME reached a receiver other than Codex")
 	}
 	if args := LocalArgs(Codex, "codex", "/wt", "p"); !slices.Equal(args, []string{"exec", "--cd", "/wt", "--sandbox", "workspace-write", "p"}) {
 		t.Fatalf("codex args %v", args)

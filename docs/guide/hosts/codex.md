@@ -103,7 +103,8 @@ asks `codex doctor --json`, which reads the configuration the way `codex exec` d
 local hand-off (`aayu build <n> --delegate codex --local`) when the active provider needs no OpenAI sign-in and has its
 credentials: an `auth` command in its config, or `CODEX_API_KEY`. A provider whose key comes from another environment
 variable (`env_key`) does not count, because aayu never passes a model provider's key to a local receiver; give the
-provider an `auth` command instead. `aayu doctor` then shows "codex: … runs through model provider `<id>`". `codex
+provider an `auth` command instead. A `CODEX_HOME` set where you run aayu reaches the receiver, so it runs the same
+Codex home that aayu checked. `aayu doctor` then shows "codex: … runs through model provider `<id>`". `codex
 doctor` also checks that the provider's endpoint answers, so this one probe does reach the network.
 
 ## Models
