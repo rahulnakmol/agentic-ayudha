@@ -23,6 +23,10 @@ type Message struct {
 	Role    string  `json:"role"` // user or assistant
 	Content string  `json:"content"`
 	Images  []Image `json:"-"` // user turns only; sent before the text in each wire format
+	// CacheBreak ends a cacheable prefix after this message: an Anthropic
+	// Messages cache_control breakpoint. Other formats cache prefixes on
+	// their own (OpenAI with Request.CacheKey), so they ignore it.
+	CacheBreak bool `json:"-"`
 }
 
 // Image is an image attached to a user message.
@@ -35,11 +39,16 @@ type Image struct {
 // images, else each message with images as a content array (images first,
 // then the text) in the format's own block types.
 func wire(style string, msgs []Message) any {
-	if !slices.ContainsFunc(msgs, func(m Message) bool { return len(m.Images) > 0 }) {
+	breaks := style == StyleMessages && slices.ContainsFunc(msgs, func(m Message) bool { return m.CacheBreak })
+	if !breaks && !slices.ContainsFunc(msgs, func(m Message) bool { return len(m.Images) > 0 }) {
 		return msgs
 	}
 	out := make([]map[string]any, len(msgs))
 	for i, m := range msgs {
+		if style == StyleMessages && m.CacheBreak && len(m.Images) == 0 {
+			out[i] = map[string]any{"role": m.Role, "content": []map[string]any{{"type": "text", "text": m.Content, "cache_control": map[string]string{"type": "ephemeral"}}}}
+			continue
+		}
 		if len(m.Images) == 0 {
 			out[i] = map[string]any{"role": m.Role, "content": m.Content}
 			continue
@@ -74,6 +83,9 @@ type Request struct {
 	MaxTokens int
 	Effort    string  // reasoning effort; empty for the provider default
 	Format    *Format // ask for JSON matching a schema where the wire format supports it; nil for free text
+	// CacheKey groups calls that share a prompt prefix for OpenAI Responses
+	// (prompt_cache_key), so they reach the same cache; others ignore it.
+	CacheKey string
 	// Stream asks an Anthropic Messages endpoint to stream the reply, so a long
 	// generation keeps bytes flowing past a proxy's idle timeout (a gateway
 	// behind Cloudflare answers 524 after 100 seconds of silence). Other wire
@@ -173,6 +185,9 @@ func (c HTTPClient) Complete(ctx context.Context, r Request) (Response, error) {
 		}
 		if f := r.Format; f != nil {
 			b["text"] = map[string]any{"format": map[string]any{"type": "json_schema", "name": f.Name, "schema": f.Schema, "strict": f.Strict}}
+		}
+		if r.CacheKey != "" {
+			b["prompt_cache_key"] = r.CacheKey
 		}
 		body = b
 	case StyleChat:

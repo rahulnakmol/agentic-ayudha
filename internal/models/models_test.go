@@ -220,6 +220,29 @@ func TestWireFormats(t *testing.T) {
 			t.Errorf("%s images: %s\nwant %s", style, b, want)
 		}
 	}
+	// Prompt caching: a CacheBreak message ends with an Anthropic cache_control
+	// breakpoint and the others stay plain; OpenAI Responses gets the cache key
+	// instead; Chat sends neither.
+	creq := req
+	creq.CacheKey = "aayu-eval-survey/x"
+	creq.Messages = []Message{{Role: "user", Content: "prefix", CacheBreak: true}, {Role: "assistant", Content: "draft", CacheBreak: true}, {Role: "user", Content: "check"}}
+	for style, want := range map[string]string{
+		StyleMessages:  `[{"content":[{"cache_control":{"type":"ephemeral"},"text":"prefix","type":"text"}],"role":"user"},{"content":[{"cache_control":{"type":"ephemeral"},"text":"draft","type":"text"}],"role":"assistant"},{"content":"check","role":"user"}]`,
+		StyleResponses: `[{"content":"prefix","role":"user"},{"content":"draft","role":"assistant"},{"content":"check","role":"user"}]`,
+		StyleChat:      `[{"content":"be brief","role":"system"},{"content":"prefix","role":"user"},{"content":"draft","role":"assistant"},{"content":"check","role":"user"}]`,
+	} {
+		c := HTTPClient{BaseURL: srv.URL + "/v1", Style: style, Key: "k", HTTP: srv.Client()}
+		if _, err := c.Complete(context.Background(), creq); err != nil {
+			t.Fatal(err)
+		}
+		key := "messages"
+		if style == StyleResponses {
+			key = "input"
+		}
+		if b, _ := json.Marshal(got.body[key]); string(b) != want || (got.body["prompt_cache_key"] == creq.CacheKey) != (style == StyleResponses) {
+			t.Errorf("%s cache: %s key %v\nwant %s", style, b, got.body["prompt_cache_key"], want)
+		}
+	}
 }
 
 func TestBudgetBreaker(t *testing.T) {

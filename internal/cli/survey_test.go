@@ -167,7 +167,7 @@ func TestSurveyBacklogCreateLive(t *testing.T) {
 	tok := os.Getenv("AAYU_SURVEY_SCRATCH_TOKEN")
 	if tok == "" {
 		t.Skip("AAYU_SURVEY_SCRATCH_TOKEN is not set: survey filing runs only with the fine-grained token limited to " + repo +
-			" (Issues read and write), which the founder stores in the live-tests environment (D-5.9n)")
+			" (Issues read and write), which the founder stores in the live-tests environment")
 	}
 	dir, state := t.TempDir(), t.TempDir()
 	if err := os.CopyFS(dir, os.DirFS(filepath.Join("..", "survey", "testdata", "legacy"))); err != nil {

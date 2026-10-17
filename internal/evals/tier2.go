@@ -87,8 +87,12 @@ type CallLog struct {
 	Truncated  bool   `json:"truncated,omitempty"`
 	TokensIn   int    `json:"tokens_in"`
 	TokensOut  int    `json:"tokens_out"`
-	MaxTokens  int    `json:"max_tokens"`
-	Error      string `json:"error,omitempty"`
+	// CachedIn and CacheWriteIn are the parts of TokensIn read from and
+	// written to the provider's prompt cache.
+	CachedIn     int    `json:"cached_in,omitempty"`
+	CacheWriteIn int    `json:"cache_write_in,omitempty"`
+	MaxTokens    int    `json:"max_tokens"`
+	Error        string `json:"error,omitempty"`
 	// Retries are the provider faults the call was retried after (WP5.8,
 	// D-3.4o, D-3.4r, D-3.4y), each with what it cost: the provider's error,
 	// never the skill's, so it does not cost the run its one allowed error.
@@ -266,6 +270,9 @@ func (h *Harness) call(ctx context.Context, gw *models.Gateway, lane verbs.LaneI
 	if spent := h.spentUSD(); spent >= h.Config.MaxUSD {
 		return models.Response{}, fmt.Errorf("%w: %.2f of %.2f USD", ErrBudget, spent, h.Config.MaxUSD)
 	}
+	if key, _ := ctx.Value(cacheKey{}).(string); req.CacheKey == "" {
+		req.CacheKey = key
+	}
 	c := models.Call{Story: "evals", Seat: string(verbs.AINativeEngineer), Lane: lane, Host: verbs.DirectHost, Req: req}
 	var retries []Retry
 	resp, m, err := gw.Do(ctx, c)
@@ -297,7 +304,7 @@ func (h *Harness) call(ctx context.Context, gw *models.Gateway, lane verbs.LaneI
 		h.mu.Unlock()
 	}
 	l := CallLog{Role: role, Model: m.Model, StopReason: resp.StopReason, Truncated: resp.Truncated,
-		TokensIn: resp.TokensIn, TokensOut: resp.TokensOut, MaxTokens: req.MaxTokens, Retries: retries}
+		TokensIn: resp.TokensIn, TokensOut: resp.TokensOut, CachedIn: resp.CachedIn, CacheWriteIn: resp.CacheWriteIn, MaxTokens: req.MaxTokens, Retries: retries}
 	if err != nil {
 		l.Error = clip(actions.RedactString(err.Error()), 200)
 	}
@@ -481,6 +488,8 @@ func (h *Harness) Tier2(ctx context.Context, cases []Case, sha, ref string, now 
 			}
 		}
 		h.fallback = alt
+		// One prompt-cache key per case: its runs share their prompt prefixes.
+		ctx := context.WithValue(ctx, cacheKey{}, "aayu-eval-"+c.ID)
 		cr := CaseResult{Case: c.ID, Skill: c.Skill, Lane: lane, Model: m.Model, Family: m.Family, Fallback: alt}
 		for i := 0; i < h.Config.K; i++ {
 			if budgetErr != nil { // the spend cap stops every later run: recorded, never silent
@@ -628,6 +637,10 @@ func (h *Harness) judge(ctx context.Context, input, rubric, out string, open []s
 	}
 	return run, nil
 }
+
+// cacheKey carries a case's prompt-cache key (models.Request.CacheKey) to
+// every call of its runs.
+type cacheKey struct{}
 
 // errorRun records a run the harness could not complete, with a short,
 // redacted excerpt of the last unusable reply.
