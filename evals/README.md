@@ -53,6 +53,22 @@ not count again. To run the check before a push:
 go test -coverprofile=coverage.out ./... && go run ./internal/ratchet/cmd/ratchet -coverprofile coverage.out -base "$(git merge-base origin/dev HEAD)"
 ```
 
+## Every rule has its fixtures
+
+A deterministic rule (a `case.toml` scope rule, a `session.toml` require, forbid, or say_forbid rule) ships with
+three kinds of fixture, enforced by `TestCaseRulesHaveFixtures` (Story #401, Feedback #329):
+
+- `match`: text the rule must fire on, one entry for each way the thing can be said;
+- `negated`: the same thing ruled out or not done ("does not show that reviewers read", or a command with the
+  forbidden part taken out). The rule must not fire on it, unless `negated_fires = true` says why ruling the thing out
+  breaks the rule too (a topic the human parked: deciding it either way is out of scope);
+- `near_miss`: an ordinary use of a word in the pattern, a neighbouring command, or a nearby claim the rule must not
+  fire on ("timestamp" for a `\bstamp` rule).
+
+The test fails naming the case, the rule, and the missing fixture kind or the fixture it misfires on. A misfire is
+fixed in the rule, never by choosing a fixture the rule happens to pass, and a changed rule needs an `eval-bar`
+waiver (above).
+
 ## Evolve PRs: eval-first
 
 `aayu evolve` (WP7.7) answers accepted retro Feedback about a skill. Its PR must add a new case here that names the

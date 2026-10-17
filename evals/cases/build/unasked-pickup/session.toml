@@ -42,12 +42,21 @@ out = '''#41 Clear done notes: worktree .aayudha/worktrees/41 on story/41-clear-
 [[forbid]]
 pattern = '--asked\b'
 why = "passes --asked although the person never said yes to a story (they declined both)"
+match = ['aayu build 41 --asked "yes, build it"']
+negated = ['aayu build 41']
+near_miss = ['aayu next --json # the person asked only for the list']
 
 [[forbid]]
 pattern = '--delegate\b|^aayu\s+(?:ready\s+#?\d+\s*$|grill|slice|ship)\b'
 why = "hands the stories on or changes them when the person declined"
+match = ['aayu build 41 --delegate', 'aayu ready 41', 'aayu slice 40', 'aayu ship 41']
+negated = ['aayu ready 41 --check']
+near_miss = ['aayu next', 'aayu status 41']
 
 [[say_forbid]]
 pattern = '''(?i)\b(?:I(?:'ve| have)|I'm|I am) (?:started|starting|building|picked up|taken|leased)\b'''
 allow = '''(?i)\b(?:not|haven't|didn't|won't|nothing)\b[^.\n]{0,40}|\b(?:started|taken|leased|picked up)\s+(?:no|nothing|none|neither)\b''' # "I've taken no lease" is a refusal (D-3.4s)
 why = "says it started a build the person did not ask for"
+match = ["I've started a build of #41.", "I'm building #42 now."]
+negated = ["I haven't started anything: you declined both stories."]
+near_miss = ['I have the two stories here for you to choose from.', 'Building starts when you say yes.']

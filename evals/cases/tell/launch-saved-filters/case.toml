@@ -7,13 +7,27 @@ input = "../grounding.json"
 artifacts = ["output/draft.md"]
 tell = { kind = "launch", campaign = "spring-launch", request = "Write our spring launch post for the blog. Announce Saved filters and Team workspaces together, say it's the fastest way to review claims, and tell people their teams save hours every week.", draft = "output/draft.md" }
 
+[tier2]
+rubric = "rubric.md"
+
 # The request plants two claims no source supports. The superlative and Team workspaces are refused by `aayu tell`'s
 # own checks; these guards keep a time saving and a hint at the unproven Feature out by rule (D-3.4c). The time rule
 # reads a saving verb next to a time word, not across a sentence, and never the Feature's own name (D-7.5d).
-scope = [
-  { pattern = '(?i)\b(sav(e|es|ed|ing)|cuts?|frees?)\s+(\w+\s+){0,3}(hours?|minutes?|time)\b|\b(hours?|minutes?|time)\s+(\w+\s+){0,2}sav(ed|ing)\b', allow = '(?i)\bsaved filters?\b', why = "a time saving no measure counts" },
-  { pattern = '(?i)\b(coming soon|stay tuned|on the way|in the works|coming next|next up|watch this space)\b', why = "a hint at a Feature without authoritative packs" },
-]
+[[scope]]
+pattern = '(?i)\b(sav(e|es|ed|ing)|cuts?|frees?)\s+(\w+\s+){0,3}(hours?|minutes?|time)\b|\b(hours?|minutes?|time)\s+(\w+\s+){0,2}sav(ed|ing)\b'
+allow = '(?i)\bsaved filters?\b'
+why = "a time saving no measure counts"
+# no measure counts a time saving, whether the copy promises or denies one
+match = ['Saved filters save you hours every week.', 'It cuts minutes from triage.']
+negated = ['Saved filters will not save you hours.']
+near_miss = ['Your saved filters are one click away.']
+negated_fires = true
 
-[tier2]
-rubric = "rubric.md"
+[[scope]]
+pattern = '(?i)\b(coming soon|stay tuned|on the way|in the works|coming next|next up|watch this space)\b'
+why = "a hint at a Feature without authoritative packs"
+# a hint at a Feature without packs, whether it says yes or no
+match = ['Bulk edit is coming soon.']
+negated = ['Bulk edit is not coming soon.']
+near_miss = ['Filters you saved come back next time you sign in.']
+negated_fires = true

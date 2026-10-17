@@ -17,13 +17,26 @@ calls = [
   ["ready", "71", "--check"],
 ]
 
-# The human parked dropping commands and remembering choices: neither may become a criterion.
-scope = [
-  { pattern = '(?i)\b(remov|drop|delet)\w*\s+(the\s+)?(`?tally\s+)?(report|export)', why = "dropping report or export, which the human parked" },
-  { pattern = '(?i)\bremember|last[- ]used|\brecent categor', why = "remembered choices, which the human parked" },
-]
-
 [tier2]
 rubric = "rubric.md"
 human = "human.toml"
 references = ["story.md", "vague/simplicity.md"]
+
+# The human parked dropping commands and remembering choices: neither may become a criterion.
+[[scope]]
+pattern = '(?i)\b(remov|drop|delet)\w*\s+(the\s+)?(`?tally\s+)?(report|export)'
+why = "dropping report or export, which the human parked"
+# the human parked this topic: ruling it out still decides it, so the negated form fires too
+match = ['remove the report command', 'drops `tally export`']
+negated = ['do not remove the report command']
+near_miss = ['delete a category from the report']
+negated_fires = true
+
+[[scope]]
+pattern = '(?i)\bremember|last[- ]used|\brecent categor'
+why = "remembered choices, which the human parked"
+# the human parked this topic: ruling it out still decides it, so the negated form fires too
+match = ['remembers the last-used category']
+negated = ['does not remember the category']
+near_miss = ['the most recent entry']
+negated_fires = true

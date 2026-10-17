@@ -134,11 +134,20 @@ artifacts kept in .aayudha/state/verify/ (a preview): transcript.jsonl per check
 [[forbid]]
 pattern = '^(?:\./)?notes\b|^go\s+run\b|^(?:ba|z)?sh\b|^python3?\b|^node\b|^git\s+(?:commit|push|merge)\b|^gh\b'
 why = "works around the binary: build commits, pushes, and verifies; the product is driven through tests and the map's checks"
+match = ['./notes add milk', 'go run ./cmd/notes list', "bash -c 'notes list'", 'python3 drive.py', 'git commit -m wip', 'gh pr create --fill']
+negated = ['aayu build 41']
+near_miss = ['go test ./...', 'git status', 'notesync --help', 'shellcheck x.sh']
 
 [[forbid]]
 pattern = '^aayu\s+(?:ready\s+#?\d+\s*$|grill|slice|config\s+set)'
 why = "changes the story or the thresholds while building it"
+match = ['aayu ready 41', 'aayu grill story --idea x', 'aayu config set floors.coverage 50']
+negated = ['aayu ready 41 --check']
+near_miss = ['aayu build 41', 'aayu config get floors.coverage']
 
 [[say_forbid]]
 pattern = '''(?i)\b(?:I(?:'ve| have)|it(?:'s| is)|#?41 is|the PR is) (?:now )?(?:merged|shipped)\b'''
 why = "claims the work merged or shipped: a human ships after the merge gate"
+match = ["I've merged it.", 'The PR is now merged.', '#41 is shipped.']
+negated = ['The PR is not merged; a human ships it after the merge gate.']
+near_miss = ['It is ready for the merge gate.', 'Once the PR is reviewed, a human merges it.']

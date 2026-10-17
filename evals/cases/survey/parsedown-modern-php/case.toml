@@ -7,9 +7,6 @@ description = "Survey a legacy PHP library at three levels and plan an in-place 
 input = "request.txt"
 repo = "../repos/parsedown"
 artifacts = ["output/survey.json"]
-scope = [
-  { pattern = '(?i)\b\d+(\.\d+)?\s*(ms|milliseconds|x faster|times faster|% faster)\b', why = "a performance figure nothing in the repository measures" },
-]
 
 [survey]
 kind = "draft"
@@ -24,3 +21,12 @@ read = [
 [tier2]
 rubric = "rubric.md"
 references = ["formats.md", "modernisation.md"]
+
+[[scope]]
+pattern = '(?i)\b\d+(\.\d+)?\s*(ms|milliseconds|x faster|times faster|% faster)\b'
+why = "a performance figure nothing in the repository measures"
+# no measure backs the figure, whether the sentence asserts or denies it
+match = ['The port is 3x faster.', 'It renders a page in 12 ms.']
+negated = ['The port is not 3x faster.']
+near_miss = ['It parses 12 files.', 'The suite has 12 messages.']
+negated_fires = true

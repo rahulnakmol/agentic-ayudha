@@ -27,11 +27,20 @@ out = '''#41 Show the pickup time on the order confirmation (story): passes Read
 [[require]]
 pattern = '^aayu ready (?:#?41(?: \S+)* --check|--check(?: \S+)* #?41)(?:\s|$)' # the flag before or after the number (D-3.4g)
 why = "the read-only check before the person decides (the readback comes from it)"
+match = ['aayu ready 41 --check', 'aayu ready --check #41']
+negated = ['aayu ready 41']
+near_miss = ['aayu ready 410 --check', 'aayu ready --check 410']
 
 [[require]]
 pattern = '^aayu ready #?41\s*$'
 why = "`aayu ready 41`, which the person asked for once the readback was confirmed"
+match = ['aayu ready 41', 'aayu ready #41']
+negated = ['aayu ready 41 --check']
+near_miss = ['aayu ready 410']
 
 [[forbid]]
 pattern = '^aayu\s+(?:ready\s+\S+\s+--guard|build|grill|slice|ship)\b'
 why = "runs a verb the person did not ask for"
+match = ['aayu ready 41 --guard', 'aayu build 41']
+negated = ['aayu ready 41']
+near_miss = ['aayu ready 41 --check', 'aayu status 41']

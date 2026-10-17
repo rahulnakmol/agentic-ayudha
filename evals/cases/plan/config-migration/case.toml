@@ -6,18 +6,30 @@ input = "input.txt"
 artifacts = ["output/plan.json"]
 schemas = [{ file = "output/plan.json", schema = "evals/schemas/plan.json" }]
 calls = [["plan", "41", "--draft", "{case}/output/plan.json"]]
+
+[tier2]
+rubric = "rubric.md"
+draft = "plan"
+issue = 41
+
 # Behaviour the story does not ask for. Tier-2 run 38230815198 scored 2 for a plan that also rejected legacy configs
 # and added a backup-free downgrade; checked before the judge, open questions excepted (TestPlanScope keeps both sides).
 # A plan that promises the opposite ("loading does not reject legacy configs") honours the story ("existing configs
 # keep their meaning"), so the allow phrase removes negated forms first (v0.2.0 rolling run 38953604673, D-5.4d).
 # The same holds for a plan that rules a downgrade out ("no downgrade path other than restoring the backup"): the story's
 # rollback restores the file, so a negated downgrade honours it (push runs 39013697227 and 39014607367, D-5.4f).
-scope = [
-  { pattern = '(?i)\bdowngrad(e|es|ed|ing)\b', why = "a downgrade path the story does not ask for", allow = '(?i)(\b(not|never|without|no)|n\x27t)\s+(\w+\s+){0,2}?downgrad(e|es|ed|ing)\b' },
-  { pattern = '(?i)\b(reject|refus)\w*\s+(the\s+|any\s+|all\s+)?(legacy|old|older|previous|v1)\b', why = "refusing older configs, which the story does not ask for", allow = '(?i)(\b(not|never|without|no)|n\x27t)\s+(\w+\s+){0,2}?(reject|refus)\w*\s+(the\s+|any\s+|all\s+)?(legacy|old|older|previous|v1)\b' },
-]
+[[scope]]
+pattern = '(?i)\bdowngrad(e|es|ed|ing)\b'
+why = "a downgrade path the story does not ask for"
+allow = '(?i)(\b(not|never|without|no)|n\x27t)\s+(\w+\s+){0,2}?downgrad(e|es|ed|ing)\b'
+match = ['add a downgrade path to the old format']
+negated = ['no downgrade path is planned']
+near_miss = ['an upgrade path from the old format']
 
-[tier2]
-rubric = "rubric.md"
-draft = "plan"
-issue = 41
+[[scope]]
+pattern = '(?i)\b(reject|refus)\w*\s+(the\s+|any\s+|all\s+)?(legacy|old|older|previous|v1)\b'
+why = "refusing older configs, which the story does not ask for"
+allow = '(?i)(\b(not|never|without|no)|n\x27t)\s+(\w+\s+){0,2}?(reject|refus)\w*\s+(the\s+|any\s+|all\s+)?(legacy|old|older|previous|v1)\b'
+match = ['reject old configs with an error']
+negated = ['never reject old configs; migrate them']
+near_miss = ['reject a negative retention value']

@@ -207,9 +207,47 @@ type Scope struct {
 	// Allow, when set, matches phrases that honour the rule rather than break
 	// it ("no price" where the human ruled prices out); they are removed before
 	// Pattern is matched (WP5.8).
-	Allow   string `toml:"allow"`
-	re      *regexp.Regexp
-	allowRE *regexp.Regexp
+	Allow string `toml:"allow"`
+	// Fixtures (Story #401, Feedback #329): every rule ships with text it
+	// must fire on (Match, each way the thing can be said), a negated form
+	// that rules the thing out or does not do it (Negated), and a near miss:
+	// an ordinary use of a word in the pattern, a valid idiom, or a
+	// neighbouring claim it must not fire on (NearMiss). A rule must not fire
+	// on its negated fixtures unless NegatedFires says that even ruling the
+	// thing out is out of scope (a topic the human parked, not ruled out).
+	// TestCaseRulesHaveFixtures enforces all of it.
+	Match        []string `toml:"match"`
+	Negated      []string `toml:"negated"`
+	NearMiss     []string `toml:"near_miss"`
+	NegatedFires bool     `toml:"negated_fires"`
+	re           *regexp.Regexp
+	allowRE      *regexp.Regexp
+}
+
+// fixtureProblems returns what is wrong with the rule's fixtures: a missing
+// kind, a match fixture it does not fire on, or a negated or near-miss
+// fixture it fires on (or, with NegatedFires, a negated one it does not).
+func (r Scope) fixtureProblems() []string {
+	var out []string
+	for _, k := range []struct {
+		kind  string
+		texts []string
+		fires bool
+	}{{"match", r.Match, true}, {"negated", r.Negated, r.NegatedFires}, {"near_miss", r.NearMiss, false}} {
+		if len(k.texts) == 0 {
+			out = append(out, "no "+k.kind+" fixture")
+		}
+		for _, t := range k.texts {
+			if m, _ := r.find(t); (m != "") != k.fires {
+				verb := "fires"
+				if k.fires {
+					verb = "does not fire"
+				}
+				out = append(out, fmt.Sprintf("%s on its %s fixture %q", verb, k.kind, t))
+			}
+		}
+	}
+	return out
 }
 
 // find returns the rule's first match in text, outside the allowed phrases,

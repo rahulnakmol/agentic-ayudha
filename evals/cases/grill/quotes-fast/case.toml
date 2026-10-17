@@ -17,12 +17,17 @@ calls = [
   ["ready", "81", "--check"],
 ]
 
-# The human parked a CI budget and kept GET /quotes/{id} as it is: neither may become a criterion.
-scope = [
-  { pattern = '(?i)\bin CI\b|\bCI budget|\bk6 threshold|on every (pull request|PR)\b', why = "a CI budget, which the human parked" },
-]
-
 [tier2]
 rubric = "rubric.md"
 human = "human.toml"
 references = ["story.md", "vague/performance.md"]
+
+# The human parked a CI budget and kept GET /quotes/{id} as it is: neither may become a criterion.
+[[scope]]
+pattern = '(?i)\bin CI\b|\bCI budget|\bk6 threshold|on every (pull request|PR)\b'
+why = "a CI budget, which the human parked"
+# the human parked this topic: ruling it out still decides it, so the negated form fires too
+match = ['a k6 threshold in CI fails the build', 'checked on every pull request']
+negated = ['not enforced in CI']
+near_miss = ['on every page load']
+negated_fires = true

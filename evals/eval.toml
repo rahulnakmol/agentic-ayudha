@@ -22,7 +22,7 @@ max_drop = 0.3
 # a human decides: `aayu decide --waiver eval-bar <story>`, accepted with `aayu decide <n> --accept waive`, named here as
 # bar_waiver = <n>; a waiver already named on the base does not count again. Raising a bar, adding a case, a group,
 # a rule, or rubric words needs nothing.
-bar_waiver = 0
+bar_waiver = 413 # Story #401: negation allows on the brief rule (4 cases) and two slice/proof-retention-6-layer rules (D-4.3t)
 
 # Tier 2 runs per group, each in its own job with its own spend cap in USD (on top of the [budget] breaker), so one
 # group can never use up another's (D-7.3d); the promotion gate needs every group to pass. pass_k = "advisory" holds a
