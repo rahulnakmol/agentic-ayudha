@@ -76,8 +76,9 @@ func TestFloorCapabilityMap(t *testing.T) {
 func TestFloorCapabilityMapNamespaces(t *testing.T) {
 	dir := t.TempDir()
 	for name, body := range map[string]string{
-		"api.h":   "namespace a {\nvoid parse();\nclass Foo {\npublic:\n  void bar();\n};\n}\nnamespace b {\nvoid parse();\n}\n",
-		"api.cpp": "#include \"api.h\"\nnamespace a {\nvoid parse() {}\n}\nvoid a::Foo::bar() {}\nvoid b::parse() {}\n",
+		"api.h":   "namespace a {\nvoid parse();\nclass Foo {\npublic:\n  void bar();\n};\n}\nnamespace b {\nvoid parse();\nvoid load(int n);\nvoid load(double x);\n}\n",
+		"api.cpp": "#include \"api.h\"\nnamespace a {\nvoid parse() {}\n}\nvoid a::Foo::bar() {}\nvoid b::parse() {}\nvoid b::load(int n) {}\nvoid b::load(double x) {}\n",
+		"more.h":  "namespace a {\nvoid parse();\n}\n",
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
 			t.Fatal(err)
@@ -89,13 +90,15 @@ func TestFloorCapabilityMapNamespaces(t *testing.T) {
 	}
 	base := func() Draft {
 		return Draft{Capabilities: []Claim{{ID: "C1", Name: "Parse", Text: "Parses.", Basis: "observed",
-			Cites: []string{"sym:api.cpp#a::parse", "sym:api.cpp#a::Foo::bar", "sym:api.cpp#b::parse", "api.h:3"}}}}
+			Cites: []string{"sym:api.cpp#a::parse", "sym:api.cpp#a::Foo::bar", "sym:api.cpp#b::parse", "api.h:3", "sym:api.cpp#b::load", "sym:api.cpp#b::load~2"}}}}
 	}
 	cites := func(c ...string) func(d *Draft) { return func(d *Draft) { d.Capabilities[0].Cites = c } }
 	runFloorCases(t, ix, base, []floorCase{
 		{"negated", "each declaration covered by its definition's symbol", func(*Draft) {}, "no capability covers", false},
-		{"match", "the method's definition left out", cites("sym:api.cpp#a::parse", "sym:api.cpp#b::parse", "api.h:3"), "api.h:5 (method a::Foo::bar)", true},
-		{"near miss", "another namespace's parse cited for a::parse", cites("sym:api.cpp#b::parse", "sym:api.cpp#a::Foo::bar", "api.h:3"), "api.h:2 (function a::parse)", true},
+		{"match", "the method's definition left out", cites("sym:api.cpp#a::parse", "sym:api.cpp#b::parse", "api.h:3"), "5 (method a::Foo::bar)", true},
+		{"near miss", "another namespace's parse cited for a::parse", cites("sym:api.cpp#b::parse", "sym:api.cpp#a::Foo::bar", "api.h:3", "sym:api.cpp#b::load", "sym:api.cpp#b::load~2"), "api.h:2 (function a::parse)", true},
+		{"match", "one of two overloads cited", cites("sym:api.cpp#a::parse", "sym:api.cpp#a::Foo::bar", "sym:api.cpp#b::parse", "api.h:3", "sym:api.cpp#b::load"), "(function b::load)", true},
+		{"negated", "a function declared in two headers, its one definition cited", func(*Draft) {}, "more.h", false},
 	})
 }
 
@@ -141,8 +144,15 @@ func TestFloorRunners(t *testing.T) {
 		t.Errorf("entries = %v; want class Box in util.hxx", ix.Entries)
 	}
 	// An export annotation before a declaration does not hide it.
-	if !slices.ContainsFunc(ix.Entries, func(e Fact) bool { return e.At == "util.hxx:7" && e.Detail == "function exported_api" }) {
-		t.Errorf("entries = %v; want exported_api after its __declspec", ix.Entries)
+	for at, name := range map[string]string{"util.hxx:7": "exported_api", "util.hxx:8": "exported_attr", "util.hxx:9": "exported_old"} {
+		if !slices.ContainsFunc(ix.Entries, func(e Fact) bool { return e.At == at && e.Detail == "function "+name }) {
+			t.Errorf("entries = %v; want %s after its attribute", ix.Entries, name)
+		}
+	}
+	if slices.ContainsFunc(ix.Entries, func(e Fact) bool {
+		return strings.Contains(e.Detail, "visibility") || strings.Contains(e.Detail, "deprecated")
+	}) {
+		t.Errorf("entries = %v; an attribute's arguments are not declarations", ix.Entries)
 	}
 	// A builtin citation counts toward its file's module.
 	if r := Check(ix, Draft{Engineering: []Claim{{ID: "E1", Topic: "interfaces", Text: "Math.sqrt is a native.", Basis: "observed", Cites: []string{"builtin:interp.cpp:29"}}}}); !slices.Equal(r.Coverage.UncitedModule, []string{"mod:tests"}) {
@@ -184,6 +194,9 @@ func TestFloorRunners(t *testing.T) {
 		{"negated", "a file-scope registration in a file the runner's executable links", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{tests}, []string{"tests/boot.js"} }), "case set G1", false},
 		{"match", "the same registration, from an executable that does not link it", set(func(g *CaseSet) { g.Inputs = []string{"tests/boot.js"} }),
 			"tests/boot.js:1 calls Boot.go, which runner entry:cli.cpp:3 does not register", true},
+		{"match", "an exclusion that names tests/math.js does not exclude math.js", set(func(g *CaseSet) {
+			g.Inputs, g.Exclude = []string{"math.js", "tests/math.js"}, []string{"tests/math.js needs Math (Q1)"}
+		}), "case set G1: math.js:1 calls Math.sqrt", true},
 		{"near miss", "a comment, a string, and another object's sqrt", set(func(g *CaseSet) { g.Inputs = []string{"tests/nearmiss.js"} }), "case set G1", false},
 		{"near miss", "a title about Math without naming a builtin", set(func(g *CaseSet) { g.Title = "Math results (sqrt) and myMath.sqrt" }), "case set G1", false},
 	})
@@ -241,12 +254,17 @@ func TestFloorRunnerPrograms(t *testing.T) {
 		{"near miss", "a test that drives the program through a helper", set(func(g *CaseSet) { g.Runners = []string{"test:tests/test_render.py"} }), "case set G1", false},
 		{"near miss", "a spec that calls the program only at file scope, after importing it", set(func(g *CaseSet) { g.Runners = []string{"test:spec/render_spec.py"} }), "case set G1", false},
 	})
-	write("other.py", "#!/usr/bin/env python3\nimport lib\nprint(lib.render(2))\n")
+	write("other.py", "#!/usr/bin/env python3\nimport lib\n\n\ndef hush(x):\n    return x\n\n\ndef mute(env):\n    env.register('hush', hush)\n\n\ndef loud(env):\n    env.register('boom', hush)\n\n\nloud(lib.Env())\nprint(lib.render(2))\n")
+	write("cases/hush.js", "hush(1);\n")
+	write("cases/boom.js", "boom(1);\n")
 	runFloorCases(t, build(), base, []floorCase{
 		{"match", "a second program, no runners", func(*Draft) {}, "case set G1: name its runners", true},
 		{"negated", "the main guard's runner, whose guard calls the function that registers it", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:tool.py:11"}, []string{"cases/loud.js"} }), "case set G1", false},
 		{"match", "a program that never calls that function", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/loud.js"} }),
 			"cases/loud.js:1 calls shout, which runner entry:other.py:1 does not register", true},
+		{"negated", "a script whose top-level code calls the function that registers it", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/boom.js"} }), "case set G1", false},
+		{"match", "a function of the script its top-level code never calls", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/hush.js"} }),
+			"cases/hush.js:1 calls hush, which runner entry:other.py:1 does not register", true},
 		{"match", "a function of the guard's file the guard never calls", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:tool.py:11"}, []string{"cases/hum.js"} }),
 			"cases/hum.js:1 calls hum, which runner entry:tool.py:11 does not register", true},
 		{"negated", "a file-scope registration in a module the runner imports", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:tool.py:11"}, []string{"cases/yell.js"} }), "case set G1", false},
