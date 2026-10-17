@@ -1,7 +1,10 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -9,7 +12,10 @@ import (
 	"testing"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
+	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
+	"github.com/rahulnakmol/agentic-ayudha/internal/uireview"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verify"
 )
 
@@ -352,5 +358,44 @@ func TestVerifyMaintainHandoff(t *testing.T) {
 	}
 	if n != 1 {
 		t.Errorf("%d tracking issues, want 1", n)
+	}
+}
+
+// TestVerifyScreenshotReview: verify's screenshot judgement goes through the
+// ui-review lane at its high effort, through the same reviewer as `aayu
+// review`'s lane A, and is labelled advisory with the model and effort. A
+// gateway failure is recorded as skipped rather than stopping verify.
+func TestVerifyScreenshotReview(t *testing.T) {
+	dir := t.TempDir()
+	fakeModel := &models.Fake{Replies: []models.Response{laneAReply("contrast"), laneAReply("contrast"), laneAReply()}}
+	newE := func(client models.Client) *Env {
+		e, err := newEnv(IO{In: strings.NewReader(""), Out: io.Discard, Err: io.Discard}, Options{Dir: dir,
+			Getenv: func(k string) string {
+				return map[string]string{"HOME": dir, "XDG_STATE_HOME": dir, "AAYU_SECRET_GOOGLE": "k"}[k]
+			},
+			GHToken:     func(context.Context) (string, error) { return "", os.ErrNotExist },
+			ModelClient: func(models.Route, string) models.Client { return client }})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return e
+	}
+	arts := []verify.Evidence{{Path: "screens/1.png", Kind: "screenshot", Data: []byte("png")}, {Path: "reports/a11y.json", Kind: "report", Data: []byte("{}")}}
+	sr := newE(fakeModel).screenshotReview(context.Background(), arts, 0)
+	if sr == nil || !sr.Advisory || sr.Skipped != "" || sr.Model != verbs.ModelGemini || sr.Effort != "high" || len(sr.Findings) != 1 || sr.Findings[0].Kind != "contrast" {
+		t.Fatalf("screenshot review: %+v", sr)
+	}
+	if len(fakeModel.Requests) != uireview.K {
+		t.Fatalf("%d lane A calls, want %d", len(fakeModel.Requests), uireview.K)
+	}
+	if r := fakeModel.Requests[0]; r.Effort != "high" || r.Model != verbs.ModelGemini || len(r.Messages[0].Images) != 1 {
+		t.Fatalf("lane A request: model %s, effort %q, %d images", r.Model, r.Effort, len(r.Messages[0].Images))
+	}
+	broken := &models.Fake{Err: errors.New("gateway down")}
+	if sr := newE(broken).screenshotReview(context.Background(), arts, 0); sr == nil || !sr.Advisory || sr.Skipped == "" {
+		t.Fatalf("a failing gateway: %+v", sr)
+	}
+	if sr := newE(fakeModel).screenshotReview(context.Background(), arts[1:], 0); sr != nil {
+		t.Fatalf("no screenshots: %+v", sr)
 	}
 }

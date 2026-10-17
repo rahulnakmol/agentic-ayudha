@@ -163,7 +163,10 @@ in [references/feature-maps.md](references/feature-maps.md).
   update the map in the PR that changes the product; a check that uses a renamed control fails, and that blocks.
 - `aayu verify --check <feature>`, `--check <feature>.<check>`, or `--check all` runs behaviour checks through the
   control tool. The gate runs the checks of every feature a PR touches. Artifacts of a preview are kept in
-  `.aayudha/state/verify/`; look at the screenshots and traces before you report.
+  `.aayudha/state/verify/`. Verify has the ui-review lane's model look at every screenshot it captured
+  (`screenshot_review`, and `reports/screenshot-review.json` in the pack, labelled with the model and effort). That
+  judgement is advisory: report its findings, but the floors alone decide whether the change holds. Read the traces
+  yourself before you report.
 - Drive the product only through the map's checks. Do not write ad-hoc scripts against it to prove a criterion.
 
 ## Create a map
