@@ -166,8 +166,9 @@ func isTestPath(p string) bool {
 // DocsOnly reports whether every file a diff touches is documentation: under
 // docs/, or a Markdown file outside the directories whose Markdown steers the
 // product or its agents (skills, seats, hosts, work items, evals, agent and
-// workflow config). A steering document (an AGENTS.md or CLAUDE.md, the build
-// plan, the constraints, the contributing guide, the ethos) is never
+// workflow config). A steering document (an AGENTS.md or CLAUDE.md, and the
+// sources of truth: the build plan, the constraints, the contributing guide,
+// the ethos, the glossary, the threat model, the security policy) is never
 // documentation, under docs/ or not. A renamed file is documentation only when
 // both its old and new paths are. Such a PR merges without a review; any other
 // file needs one. An empty diff is not docs-only.
@@ -182,7 +183,7 @@ func DocsOnly(files []DiffFile) bool {
 
 func docsPath(p string) bool {
 	switch path.Base(p) {
-	case "AGENTS.md", "CLAUDE.md", "BUILD-PLAN.md", "CONSTRAINTS.md", "CONTRIBUTING.md", "ETHOS.md":
+	case "AGENTS.md", "CLAUDE.md", "BUILD-PLAN.md", "CONSTRAINTS.md", "CONTRIBUTING.md", "ETHOS.md", "GLOSSARY.md", "threat-model.md", "SECURITY.md":
 		return false
 	}
 	if strings.HasPrefix(p, "docs/") {

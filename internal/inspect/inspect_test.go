@@ -579,6 +579,8 @@ func TestDocsOnly(t *testing.T) {
 		{[]string{"internal/cli/AGENTS.md"}, false},
 		{[]string{"docs/guide/AGENTS.md"}, false},
 		{[]string{"docs/BUILD-PLAN.md"}, false},
+		{[]string{"GLOSSARY.md"}, false},
+		{[]string{"docs/threat-model.md"}, false},
 		{[]string{"evals/cases/grill/bakery-ux/rubric.md"}, false},
 		{[]string{".github/PULL_REQUEST_TEMPLATE.md"}, false},
 		{[]string{"internal/hosts/testdata/skills/x.md"}, false},
