@@ -568,7 +568,7 @@ func (d *discoverer) existingSetup() {
 			floor := strings.TrimPrefix(g.Want, ">=")
 			if !olderVersion(string(m[1]), floor) {
 				d.ask(Question{ID: "go-version", Ask: fmt.Sprintf("Your hand-written %s pins Go %s; go.mod asks for at least %s. Which Go should every agent environment install?", SetupPath, m[1], floor),
-					Default: string(m[1]), Why: "keeps the toolchain the team already runs; newer than go.mod's floor is allowed (Appendix B D5)"})
+					Default: string(m[1]), Why: "keeps the toolchain the team already runs; newer than go.mod's floor is allowed"})
 			}
 		}
 	}

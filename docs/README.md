@@ -5,15 +5,15 @@ The reference for people who work on aayudha itself, or want every detail in one
 
 ## Documents
 
-- Scope and sequencing: [BUILD-PLAN.md](BUILD-PLAN.md), with its Appendix B rows (deviations and decisions) one file
-  per row in [appendix-b/](appendix-b/README.md). Principles: [ETHOS.md](../ETHOS.md). Terms:
+- Scope and sequencing: [BUILD-PLAN.md](BUILD-PLAN.md). Its Appendix B decision log up to 2026-10-17 is archived
+  privately; deviations since are in pull request descriptions ("Deviation from the plan:"). Principles: [ETHOS.md](../ETHOS.md). Terms:
   [GLOSSARY.md](../GLOSSARY.md). Threats: [threat-model.md](threat-model.md).
 - Generated: [CONSTRAINTS.md](../CONSTRAINTS.md) (default floors, autonomy, budgets, and retention, from
   `internal/config/defaults.toml`), [LAYERS.md](../LAYERS.md), and [RACI.md](RACI.md) (from the verb registry).
 - Install, hosts, and clouds: [getting-started.md](getting-started.md), with
   [Azure](getting-started-azure.md), [AWS](getting-started-aws.md), and [Google Cloud](getting-started-gcp.md).
 - Coding agents: [AGENTS.md](../AGENTS.md). Contributors: [CONTRIBUTING.md](../CONTRIBUTING.md). Vulnerabilities:
-  [SECURITY.md](../SECURITY.md). Research notes: [research/](research/).
+  [SECURITY.md](../SECURITY.md). Research notes live in the same private repository, `rahulnakmol/agentic-ayudha-research`.
 - The guide, which [the docs site](https://rahulnakmol.github.io/agentic-ayudha/) is built from by
   `aayu tell docs --site`: [guide/](guide/README.md).
 

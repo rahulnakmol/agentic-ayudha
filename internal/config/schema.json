@@ -111,7 +111,7 @@
       "properties": {
         "media": {
           "type": "string",
-          "description": "Optional private bucket that keeps proof media beyond the merge gate's run artifact (aayu ship copies them there; S-4.2b), and holds design and UI baseline media on a public repo (V3): s3://bucket[/prefix][?region=..\u0026endpoint=..], r2://\u003caccount\u003e/bucket[/prefix], azblob://\u003caccount\u003e/\u003ccontainer\u003e[/prefix][?auth=sas|key|oidc|cli\u0026tenant=..\u0026client=..\u0026subscription=..\u0026group=..], or gs://\u003cbucket\u003e[/prefix][?auth=key|oidc|cli\u0026provider=..\u0026sa=..]."
+          "description": "Optional private bucket that keeps proof media beyond the merge gate's run artifact (aayu ship copies them there), and holds design and UI baseline media on a public repo (V3): s3://bucket[/prefix][?region=..\u0026endpoint=..], r2://\u003caccount\u003e/bucket[/prefix], azblob://\u003caccount\u003e/\u003ccontainer\u003e[/prefix][?auth=sas|key|oidc|cli\u0026tenant=..\u0026client=..\u0026subscription=..\u0026group=..], or gs://\u003cbucket\u003e[/prefix][?auth=key|oidc|cli\u0026provider=..\u0026sa=..]."
         },
         "media_secret": {
           "type": "string",

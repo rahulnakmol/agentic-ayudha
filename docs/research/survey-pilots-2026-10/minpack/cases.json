@@ -1,8 +1,0 @@
-{"cases": [
-  {"id": "hybrd1", "set": "G1", "argv": ["{bin}/hybdrv"], "stdin": "ex/file21"},
-  {"id": "hybrj1", "set": "G1", "argv": ["{bin}/hyjdrv"], "stdin": "ex/file21"},
-  {"id": "lmder1", "set": "G1", "argv": ["{bin}/lmddrv"], "stdin": "ex/file22"},
-  {"id": "lmdif1", "set": "G1", "argv": ["{bin}/lmfdrv"], "stdin": "ex/file22"},
-  {"id": "lmstr1", "set": "G1", "argv": ["{bin}/lmsdrv"], "stdin": "ex/file22"},
-  {"id": "chkder", "set": "G1", "argv": ["{bin}/chkdrv"], "stdin": "ex/file23"}
-]}

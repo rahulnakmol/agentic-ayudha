@@ -89,7 +89,7 @@ read them, and report them in the Quality Architect's terms.
 ## What a run proves
 
 - **A run on your checkout is a preview.** It tells you what the merge gate will find; it proves nothing. Only the
-  pack the merge gate writes for the PR head counts (S-4.2b). Never claim a story is proven from a local run.
+  pack the merge gate writes for the PR head counts. Never claim a story is proven from a local run.
 - `aayu verify` runs every floor for the current worktree; `aayu verify --floor coverage` runs one. Exit 3 is a
   floor miss: report the floor, its value, and its threshold from `CONSTRAINTS.md`, then fix the cause. Never rerun
   a floor hoping it passes, and never edit a threshold.

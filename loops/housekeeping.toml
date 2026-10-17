@@ -1,4 +1,4 @@
-# Weekly housekeeping (WP5.5, WP1.7, WP4.5b; Appendix B S-7.1c). gc writes as the human (it reclaims leases), so the
+# Weekly housekeeping (WP5.5, WP1.7, WP4.5b). gc writes as the human (it reclaims leases), so the
 # loop runs in the user's own agent session and has no Actions fallback. The cron is in [time] tz.
 description = "Weekly housekeeping: reclaim stale leases and worktrees, then report doctor drift, feature-map drift, and stale Ready issues."
 command = ["gc"]

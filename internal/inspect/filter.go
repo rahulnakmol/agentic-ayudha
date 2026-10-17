@@ -15,7 +15,7 @@ import (
 // data, and concurrency are protected: no confidence threshold, learned
 // suppression, or peer refutation removes a P0 in them (WP4.8b).
 // test-value marks a test that only restates the code or duplicates another:
-// counted, never posted (research P2, docs/research/video-learnings-2026-10.md).
+// counted, never posted (research P2, private research note video-learnings-2026-10.md).
 var Categories = []string{"bug", "security", "data", "concurrency", "contract", "test", "test-value", "performance", "maintainability", "style", "docs"}
 
 // Protected reports whether a category is never suppressed at P0.
@@ -72,7 +72,7 @@ var testGapRe = regexp.MustCompile(`(?i)\b(no|missing|lacks?|without|add(s|ing)?
 // finding, or one worded as a missing test, in a file that is itself a test.
 // Such notes are judged in the criterion's verdict, never posted as line
 // findings (the research measured all 8 of inspect's false positives on the
-// seeded set as these, docs/research/verification-skills-2026-10.md §8.2).
+// seeded set as these, private research note verification-skills-2026-10.md §8.2).
 func TestGap(f Finding) bool {
 	return isTestPath(f.File) && !Protected(f.Category) && (f.Category == "test" || testGapRe.MatchString(f.Title+" "+f.Detail))
 }

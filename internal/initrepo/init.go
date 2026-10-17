@@ -520,7 +520,7 @@ func (in *Init) ensureRuleset(ctx context.Context, listed func(string) bool, nam
 			func(ctx context.Context) (any, error) { return nil, in.rest(ctx, http.MethodPut, path, body, nil) }); err != nil {
 			return err
 		}
-		in.note("ruleset", "ruleset", name, "updated", "write-access humans write the ledger; force pushes and deletion stay blocked (D-4.2b.h)")
+		in.note("ruleset", "ruleset", name, "updated", "write-access humans write the ledger; force pushes and deletion stay blocked")
 		return nil
 	}
 	var created rulesetDetail

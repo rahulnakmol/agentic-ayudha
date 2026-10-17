@@ -79,7 +79,7 @@ Push, get, verify, or list proof packs on the ledger branch. `comment` is the me
 runs only there, with the workflow token, checks the run's pack, and keeps the pull request's proof comment.
 
 A push is always advisory: only `aayu ship`, run by a human, lands the merge gate's pack as authoritative, after
-checking that it came from the gate's own run on the exact head (S-4.2b). Media never go to the ledger or Git LFS;
+checking that it came from the gate's own run on the exact head. Media never go to the ledger or Git LFS;
 they stay in the run artifact, or go to the `[proof] media` bucket when one is set.
 
 Body lands in WP4.2 (the verb). Format and lint: skills/README.md.

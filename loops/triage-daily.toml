@@ -1,4 +1,4 @@
-# Weekday triage (WP2.9, WP7.1; Appendix B S-7.1c, S-7.1e, D-7.1f). Event loops are deferred to a later version, so
+# Weekday triage (WP2.9, WP7.1). Event loops are deferred to a later version, so
 # intake issues are triaged each weekday morning instead of on arrival. It replaces the aayudha-triage workflow retired
 # from product CI (#243) and the weekly triage loop, whose scope it already had: the binary lists every open intake
 # issue, oldest first, with no model, and the agent in the user's own session classifies each one (--as), so no model

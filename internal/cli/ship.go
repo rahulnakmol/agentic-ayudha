@@ -532,7 +532,7 @@ func (e *Env) soloBypass(ctx context.Context, c *github.Client, owner, name stri
 		return HumanPass{}, err
 	}
 	return HumanPass{Kind: "solo-bypass", Login: login, Comment: url, Commit: head,
-		Note: "solo mode: GitHub refuses self-approval and no bot App exists, so no second person could review (Appendix B D2)"}, nil
+		Note: "solo mode: GitHub refuses self-approval and no bot App exists, so no second person could review"}, nil
 }
 
 // soloModeComment checks that solo mode holds (no bot identity, no second

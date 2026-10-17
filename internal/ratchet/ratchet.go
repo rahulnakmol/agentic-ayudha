@@ -1,5 +1,5 @@
 // Package ratchet keeps this repository's coverage floor from loosening
-// (docs/research/video-learnings-2026-10.md P7; Appendix B S-4.3r and D-4.3r).
+// (private research note video-learnings-2026-10.md P7; Appendix B S-4.3r and D-4.3r).
 // The floor lives in ratchets.toml at the repository root. CI measures the
 // statement coverage of `go test ./...` on every PR and push: coverage below
 // the floor (less its noise margin) fails; coverage that holds well above it

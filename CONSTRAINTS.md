@@ -73,5 +73,5 @@ When a budget trips, the breaker pauses agent lanes and pages through `[notify]`
 
 | Key | Default | Meaning | Source |
 |---|---|---|---|
-| `proof.media` | `""` | Optional private bucket for proof media beyond the merge gate's run artifact; `aayu ship` copies them there. Empty: proof media stay in the run artifact and never reach the `ledger` branch or Git LFS (S-4.2b). | WP2.5 |
+| `proof.media` | `""` | Optional private bucket for proof media beyond the merge gate's run artifact; `aayu ship` copies them there. Empty: proof media stay in the run artifact and never reach the `ledger` branch or Git LFS. | WP2.5 |
 | `proof.retention_days` | `90` | Days the merge gate keeps its `aayudha-pack` run artifact (media included), at most the repository's limit (GitHub: 90 public, 400 private); also the bucket's lifecycle rule. `pack.json` on the ledger is kept. | proposed (WP0.5) |

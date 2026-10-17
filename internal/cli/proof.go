@@ -260,7 +260,7 @@ func (e *Env) proofPush(ctx context.Context, repo string, story int, media bool)
 		return Errorf(ExitBlocked, "no local pack for #%d in %s: run `aayu verify` first", story, dir)
 	}
 	if e.CI {
-		return Errorf(ExitUsage, "proof push --ci: CI writes nothing to the ledger; the merge gate keeps its pack as the aayudha-pack run artifact and `aayu ship` lands it (S-4.2b)")
+		return Errorf(ExitUsage, "proof push --ci: CI writes nothing to the ledger; the merge gate keeps its pack as the aayudha-pack run artifact and `aayu ship` lands it")
 	}
 	c, bot, err := e.BotGitHub(ctx, "")
 	if err != nil {

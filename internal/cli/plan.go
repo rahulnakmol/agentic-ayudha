@@ -341,7 +341,7 @@ func (e *Env) bypassPlanReview(ctx context.Context, repo string, n int, cfg *con
 		return err
 	}
 	p.Review.Bypass = &planning.ReviewBypass{As: "solo-bypass", Reviewer: "none (solo mode)", RecordedBy: me.Login, RecordedAt: e.Now().UTC().Format(time.RFC3339), Comment: url,
-		Note: "solo mode: no second person exists to review the plan, and no one reviewed it as the Engineering Manager (Appendix B D2)"}
+		Note: "solo mode: no second person exists to review the plan, and no one reviewed it as the Engineering Manager"}
 	b, _ := json.MarshalIndent(p, "", "  ")
 	if _, err := w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("specs: solo-mode plan-review bypass of #%d recorded by %s (no review)", n, me.Login), Files: map[string][]byte{PlanLedgerPath(n): append(b, '\n')}}); err != nil {
 		return Wrap(ExitExternal, err)

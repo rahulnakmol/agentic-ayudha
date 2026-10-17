@@ -135,7 +135,7 @@ func gateScript(s Spec) string {
   # The local gate (Story #399): the CI jobs a pull request must pass, from ` + strings.Join(gateFiles(s), " and ") + `.
   # git push runs it through the pre-push hook that ` + "`aayu install --env --apply`" + ` and .agents/setup install.
   # A git hook exports GIT_DIR and the like for its repository; tests that run git in a temporary directory would
-  # then change this clone instead (Appendix B D-3.2c.h). The gate finds its repository from the working directory.
+  # then change this clone instead. The gate finds its repository from the working directory.
   unset $(git rev-parse --local-env-vars 2>/dev/null)
   GATE_TMP=$(mktemp -d)
   export GATE_TMP

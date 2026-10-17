@@ -24,7 +24,7 @@
 #            criterion's verdict, the floors, the pack's SHA-256, and a link to the artifact; it fails when the pack
 #            does not verify or a floor does not hold. Only the workflow token: CI writes nothing to the ledger.
 #            `aayu ship`, run by a human, checks that the artifact came from this workflow's run on the exact head
-#            and lands pack.json (no media) on the ledger under the human's identity (Appendix B S-4.2b).
+#            and lands pack.json (no media) on the ledger under the human's identity.
 #
 # Setup: install a reviewer app (Claude, Codex, or Cursor) on the org or account and name it in [inspect] apps
 # (`aayu doctor` detects it). No model key, bot App, bucket, or secret.
@@ -80,7 +80,7 @@ jobs:
         run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
       # Checking out PR code under pull_request_target is what a base-branch gate must do to verify it. This job
       # holds no secrets and a read-only token, and the PR's code runs only inside aayu verify's sandbox: scrubbed
-      # environment, no network, and its own PID namespace, so nothing it starts outlives the test run (D-4.8a).
+      # environment, no network, and its own PID namespace, so nothing it starts outlives the test run.
       # nosemgrep: yaml.github-actions.security.pull-request-target-code-checkout.pull-request-target-code-checkout
       - name: Check out the PR head (run only inside aayu verify's sandbox)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

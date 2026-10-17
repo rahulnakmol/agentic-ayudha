@@ -15,7 +15,7 @@ import (
 // Live checks of each receiver, behind AAYU_LIVE=1 and the receiver's own
 // credentials; each skips cleanly without them (WP5.5b). No receiver was
 // connected when they were written: the founder's actions are in
-// docs/research/agent-delegation-and-review.md §10.
+// private research note agent-delegation-and-review.md §10.
 //
 //	AAYU_LIVE=1 AAYU_LIVE_CURSOR_KEY=… [AAYU_LIVE_DELEGATE_REPO=owner/scratch] go test ./internal/delegate -run Live
 //	AAYU_LIVE=1 AAYU_LIVE_CODEX_ENV=env_… (codex logged in)                  go test ./internal/delegate -run Live

@@ -12,7 +12,6 @@ package aayudha
 //go:generate go run ./internal/config/gen
 //go:generate go run ./internal/workitems/gen
 //go:generate go run ./internal/tell/gen
-//go:generate go run ./internal/appendixb/gen
 
 import "embed"
 

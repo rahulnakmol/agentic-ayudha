@@ -6,9 +6,9 @@ id = 1 # every job with steps in .github/workflows and internal/initrepo (.yml a
 tests = ["TestEveryWorkflowJobStartsWithHaltCheck"]
 
 [[criterion]]
-id = 2 # floors, inspect-live, and screen-reader started on a scratch repository while AAYUDHA_HALT was set: each job failed at the halt check and skipped every later step (recorded runs in testdata/workflow-halt)
-tests = ["TestHaltedWorkflowRuns", "TestEveryWorkflowJobStartsWithHaltCheck"]
+id = 2 # floors, inspect-live, and screen-reader started on a scratch repository while AAYUDHA_HALT was set: each job failed at the halt check and skipped every later step (recorded runs in testdata/workflow-halt, deleted on 2026-10-17 with TestHaltedWorkflowRuns, which read them)
+tests = ["TestEveryWorkflowJobStartsWithHaltCheck"]
 
 [[criterion]]
-id = 3 # the same three workflows after AAYUDHA_HALT was deleted: the halt check skipped and every job succeeded (recorded runs)
-tests = ["TestHaltedWorkflowRuns"]
+id = 3 # the same three workflows after AAYUDHA_HALT was deleted: the halt check skipped and every job succeeded (recorded runs, deleted on 2026-10-17; the authoritative pack on the ledger holds the proof from when #173 shipped)
+tests = []
