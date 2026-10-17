@@ -53,7 +53,7 @@ pass_k = "advisory"
 [[groups]]
 name = "personas"
 prefixes = ["retro/", "decide/"]
-max_usd = 30.0 # six cases, one per skill and team stage (D-5.1f): 30 runs; run 38980397572 cost 13.35 USD for 20
+max_usd = 23.0 # six cases, 30 runs; run 39006699646 cost 21.02 USD. 23 keeps two full runs inside the founder's 50 USD (D-5.1k)
 gate = "advisory"
 events = ["workflow_dispatch", "push"]
 
