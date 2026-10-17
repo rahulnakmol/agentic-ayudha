@@ -53,7 +53,8 @@ pass_k = "advisory"
 [[groups]]
 name = "personas"
 prefixes = ["retro/", "decide/"]
-max_usd = 30.0 # six cases, one per skill and team stage (D-5.1f): 30 runs; run 38980397572 cost 13.35 USD for 20
+max_usd = 22.5 # seven cases with the Founder pack, 35 runs. Run 39006699646 (six cases) recorded 21.02 USD at the fallback rate,
+# about a quarter of that at list prices (#321), so 22.5 is a checkpoint, not a stop (D-5.1l)
 gate = "advisory"
 events = ["workflow_dispatch", "push"]
 

@@ -74,4 +74,5 @@ and a migration, which the plan does not have."
 
 ## Cost
 
-Story #212 spent 11.80 USD of model calls (`[budget] per_story_usd` is 25.0 in `CONSTRAINTS.md`; within budget).
+Story #212 spent 11.80 USD of model calls (`retro/2026-10-09/report.md`, from the `actions.jsonl` segments); `[budget] per_story_usd`
+is 25.0 in `CONSTRAINTS.md`, so it is within budget.

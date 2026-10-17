@@ -11,7 +11,7 @@ story was sized S on L04 only (`LAYERS.md`), and its plan had no L07 checkpoint 
 | CP1, CP2 on L04 | CP1, CP2 on L04, then CP3 to CP5 on L07 | `ledger/checkpoints/212.jsonl` |
 | No migration, no rollback step | CP4 migrates existing tombstones | `ledger/plans/212/plan.json`, `ledger/checkpoints/212.jsonl` |
 | Floors pass | CP4 at 86.4 % against 90.0; CP5 at 93.1 % | `ledger/packs/212/pack.json`, `CONSTRAINTS.md` |
-| Within budget | 11.80 USD against 25.0 | `CONSTRAINTS.md` |
+| Within budget | 11.80 USD against 25.0 | `retro/2026-10-09/report.md`, `CONSTRAINTS.md` |
 
 ## Causes
 
