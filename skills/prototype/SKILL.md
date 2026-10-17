@@ -75,12 +75,21 @@ You speak as Iris.
 
 Build a flagged, working prototype of a Feature with Code Connect mapping and a Figma screenshot diff.
 
-1. Build the mockups as working UI in the product, from design-system components and tokens only.
+1. Build the mockups as working UI in the product, from design-system components and tokens only: the product's
+   real routes, data, and API calls (including the error answers a story names), not a static copy of the mockup.
+   Reuse the components the Figma file maps to; build a component the system lacks as a real component from tokens,
+   with the mockup's accessibility (names, focus ring, 44 px targets, announced messages) intact.
 2. Put it behind an OpenFeature flag, off by default, declared in `[design] flags` (flagd JSON):
    `{"flags": {"orders-v2": {"state": "ENABLED", "variants": {"on": true, "off": false}, "defaultVariant": "off"}}}`.
-   Turn it on only in the environment you capture (`[verify.environments.<AAYU_ENV>]`, never production).
-3. Map each Figma component the prototype uses to code with Code Connect (`figma.connect(Component, "<figma URL with node-id>")`).
-4. Write `stage.json`: the flag, the Figma file key, the Code Connect sources, the components, and each state's
+   Read it where the route renders, with a false default (`useBooleanFlagValue("orders-v2", false)` in React), and
+   keep today's UI when it is off. Turn it on only in the environment you capture (flagd targeting on that
+   environment, `[verify.environments.<AAYU_ENV>]`, never production).
+3. Make every state reachable on the capture target at its own path (a seed or fixture parameter the capture
+   environment honours and production ignores), so each can be rendered against its Figma frame.
+4. Map each Figma component the prototype uses, new ones included, to code with Code Connect
+   (`figma.connect(Component, "<figma URL with node-id>", {props, example})`), with its props and an example a
+   designer can copy.
+5. Write `stage.json`: the flag, the Figma file key, the Code Connect sources, the components, and each state's
    URL path and Figma frame (the same state IDs as the mockups):
 
    ```json
@@ -89,7 +98,7 @@ Build a flagged, working prototype of a Feature with Code Connect mapping and a 
     "states": [{"id": "list", "title": "Orders list", "path": "/orders", "figma_node": "4:7"}]}
    ```
 
-5. Run the gate:
+6. Run the gate:
 
    ```sh
    aayu prototype 42 --from .aayudha/design/42/prototype

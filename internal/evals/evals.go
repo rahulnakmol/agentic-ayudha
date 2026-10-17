@@ -57,6 +57,9 @@ type Group struct {
 	Gate string `toml:"gate"`
 	// K overrides the runs per case for this group; 0 keeps eval.toml's k.
 	K int `toml:"k"`
+	// MaxTokens overrides the skill call's output cap for this group; 0 keeps
+	// eval.toml's [max_tokens] skill (D-6.5c).
+	MaxTokens int `toml:"max_tokens"`
 	// Events are the GitHub event names (EVENT in evals.yml) the group runs
 	// on; empty runs on every event. A costly group runs on dispatch only.
 	Events []string `toml:"events"`
@@ -122,6 +125,9 @@ func (c Config) ForGroup(name string, cases []Case) (Config, []Case, error) {
 		c.MaxUSD = g.MaxUSD
 		if g.K > 0 {
 			c.K = g.K
+		}
+		if g.MaxTokens > 0 {
+			c.MaxTokens.Skill = g.MaxTokens
 		}
 		var out []Case
 		for _, k := range cases {

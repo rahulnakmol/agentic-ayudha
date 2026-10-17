@@ -65,7 +65,16 @@ Apply a review critique to a PR's UI and re-run review.
 1. Read `.aayudha/review/<pr>/critique.json` (written by `aayu review`) and fix every finding in both lanes,
    using design-system tokens and components only. Fix the cause, not the measurement: never lower a floor,
    hide an element from the capture, or waive a finding here (waivers are `decide --waiver` Decisions).
-2. Commit the fixes on the PR branch and restart the app on the review target.
+   - Lane A's findings count as much as lane B's, including those no tool can measure (copy, labels that read the
+     same out of context, a missing visible label).
+   - Use the token for what it is (`--ay-color-text-label`, `--ay-color-focus`, the control height), and name it in
+     your note when the page has no token stylesheet and carries the value.
+   - Keep the diff to the findings: change only the lines a finding needs. No restyling the finding does not ask for
+     (type, spacing, hover or motion effects), no new markup structure, no placeholder or copy edits beyond the
+     finding, so the re-run compares like with like and a reviewer can map each changed line to a finding. Keep
+     every control; fix it rather than remove it.
+2. Commit the fixes on the PR branch and restart the app on the review target. In the PR, note each finding (lane,
+   element) and its fix, that nothing was waived or hidden, and how to re-run.
 3. Re-run both lanes and compare:
 
    ```sh
