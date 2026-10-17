@@ -1,13 +1,19 @@
 package cli
 
 import (
+	"bytes"
+	"cmp"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/survey"
@@ -145,6 +151,95 @@ func TestSurveyBacklogCreate(t *testing.T) {
 	g.Reset()
 	if code, stdout, _ = run(t, env, opts, create...); code != 0 || len(g.Writes()) != 0 {
 		t.Fatalf("third create wrote: %d %v %s", code, g.Writes(), stdout)
+	}
+}
+
+// D-5.9n: survey filing against GitHub runs on the permanent private
+// repository rahulnakmol/aayu-survey-scratch with AAYU_SURVEY_SCRATCH_TOKEN, a
+// fine-grained token limited to it (Issues read and write), never the admin
+// token. Each run files under a product of its own, so it never meets an
+// earlier run's issues; it closes what it filed and deletes its label after.
+func TestSurveyBacklogCreateLive(t *testing.T) {
+	repo := cmp.Or(os.Getenv("AAYU_SURVEY_SCRATCH_REPO"), "rahulnakmol/aayu-survey-scratch")
+	if os.Getenv("AAYU_LIVE") != "1" {
+		t.Skip("live test: set AAYU_LIVE=1")
+	}
+	tok := os.Getenv("AAYU_SURVEY_SCRATCH_TOKEN")
+	if tok == "" {
+		t.Skip("AAYU_SURVEY_SCRATCH_TOKEN is not set: survey filing runs only with the fine-grained token limited to " + repo +
+			" (Issues read and write), which the founder stores in the live-tests environment (D-5.9n)")
+	}
+	dir, state := t.TempDir(), t.TempDir()
+	if err := os.CopyFS(dir, os.DirFS(filepath.Join("..", "survey", "testdata", "legacy"))); err != nil {
+		t.Fatal(err)
+	}
+	product := fmt.Sprintf("calc-live-%d", time.Now().UnixNano())
+	files := map[string]string{}
+	for _, f := range []string{"draft.json", "backlog.json"} {
+		b, err := os.ReadFile(filepath.Join("..", "survey", "testdata", f))
+		if err != nil {
+			t.Fatal(err)
+		}
+		files[f] = filepath.Join(state, f)
+		if err := os.WriteFile(files[f], []byte(strings.Replace(string(b), `"product": "calc"`, `"product": "`+product+`"`, 1)), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(func() { closeSurveyLive(t, tok, repo, survey.Label(product)) })
+	out := filepath.Join(state, "survey")
+	opts := Options{Dir: dir}
+	env := map[string]string{"AAYU_GITHUB_TOKEN": tok, "XDG_STATE_HOME": filepath.Join(state, "xdg")}
+	if code, _, stderr := run(t, env, opts, "survey", dir, "--out", out); code != 0 {
+		t.Fatalf("index: %d %s", code, stderr)
+	}
+	args := []string{"survey", dir, "--out", out, "--repo", repo, "--backlog", files["backlog.json"], "--draft", files["draft.json"], "--json"}
+	var res SurveyBacklogResult
+	code, stdout, stderr := run(t, env, opts, args...)
+	if err := json.Unmarshal([]byte(stdout), &res); code != 0 || err != nil || !res.Pass {
+		t.Fatalf("check: %d %v %s %s", code, err, stdout, stderr)
+	}
+	create := append(args, "--create", "--reviewed", res.Digest, "--limit", "4")
+	for i, want := range []struct{ filed, existing int }{{4, 0}, {3, 4}, {0, 7}} {
+		res = SurveyBacklogResult{}
+		code, stdout, stderr = run(t, env, opts, create...)
+		if err := json.Unmarshal([]byte(stdout), &res); code != 0 || err != nil || len(res.Filed) != want.filed || len(res.Existing) != want.existing {
+			t.Fatalf("create %d: %d %v filed %v existing %v %s", i+1, code, err, res.Filed, res.Existing, stderr)
+		}
+	}
+}
+
+// closeSurveyLive closes the issues a live run filed and deletes their
+// label. Test scaffolding, not a verb write, so it calls the API directly.
+func closeSurveyLive(t *testing.T, tok, repo, label string) {
+	call := func(method, path string, body any) (int, []byte) {
+		var rd io.Reader
+		if body != nil {
+			b, _ := json.Marshal(body)
+			rd = bytes.NewReader(b)
+		}
+		req, _ := http.NewRequest(method, "https://api.github.com/repos/"+repo+path, rd)
+		req.Header.Set("Authorization", "Bearer "+tok)
+		req.Header.Set("Accept", "application/vnd.github+json")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return 0, nil
+		}
+		defer func() { _ = resp.Body.Close() }()
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, b
+	}
+	_, b := call("GET", "/issues?state=open&per_page=100&labels="+url.QueryEscape(label), nil)
+	var issues []struct {
+		Number int `json:"number"`
+	}
+	_ = json.Unmarshal(b, &issues)
+	for _, is := range issues {
+		if code, _ := call("PATCH", fmt.Sprintf("/issues/%d", is.Number), map[string]string{"state": "closed", "state_reason": "not_planned"}); code != http.StatusOK {
+			t.Errorf("close %s#%d: HTTP %d", repo, is.Number, code)
+		}
+	}
+	if code, _ := call("DELETE", "/labels/"+url.PathEscape(label), nil); code != http.StatusNoContent {
+		t.Errorf("delete label %s: HTTP %d", label, code)
 	}
 }
 

@@ -81,27 +81,58 @@ func TestSurveyFloors(t *testing.T) {
 	}
 }
 
-// WP5.9: a survey run shows the skill what a host sees (the index summary,
-// every module pack, and the files read, numbered, as untrusted data), revises
-// once on the checks' findings, and is judged only when it passes; a reply
-// refused twice scores 1 without the judge. D-5.9l: a draft that passes is
-// judged for the record, then self-checked; only the corrected draft is
-// scored, and it must pass the floors too (one revision).
+// selfCheckReply is a corrections reply (D-5.9n) that keeps every item of
+// draft except the verdicts given by id.
+func selfCheckReply(t *testing.T, draft string, but map[string]string) string {
+	t.Helper()
+	root, err := decodeOrdered([]byte(draft))
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := map[string]slot{}
+	var order []string
+	index(root.(*object), "", items, map[string]*list{}, map[string]slot{}, &order, func(string, ...any) {})
+	var vs []string
+	for _, id := range order {
+		if v, ok := but[id]; ok {
+			vs = append(vs, v)
+		} else {
+			vs = append(vs, `{"id": "`+id+`", "verdict": "keep"}`)
+		}
+	}
+	return `{"verdicts": [` + strings.Join(vs, ", ") + `]}`
+}
+
+// D-5.9l, D-5.9n: a survey reply that fails the floors is revised once; the
+// draft that passes is judged for the record, then the skill's self-check
+// replies with corrections, which apply to that draft all or nothing; the
+// floors run on the result (one revision for a reply that does not apply or
+// a result that fails them), and only the corrected draft is scored.
 func TestTier2SurveyRevisesOnceThenJudges(t *testing.T) {
 	c, good := surveyCase(t, "survey/tinyjs-rust")
 	bad := strings.Replace(good, `"target": "Rust"`, `"target": "Go"`, 1)
-	narrowed := strings.Replace(good, "The interpreter is one class, CTinyJS,", "The interpreter's entry point is the class CTinyJS,", 1)
-	if narrowed == good {
+	root, err := decodeOrdered([]byte(good))
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := map[string]slot{}
+	index(root.(*object), "", items, map[string]*list{}, map[string]slot{}, new([]string), func(string, ...any) {})
+	e1 := string(encodeOrdered(items["E1"].get()))
+	narrowedE1 := strings.Replace(e1, "The interpreter is one class, CTinyJS,", "The interpreter's entry point is the class CTinyJS,", 1)
+	if narrowedE1 == e1 {
 		t.Fatal("the recorded draft has no E1 to narrow")
 	}
+	narrow := selfCheckReply(t, good, map[string]string{"E1": `{"id": "E1", "verdict": "replace", "why": "one class is not shown", "item": ` + narrowedE1 + `}`})
+	dangling := selfCheckReply(t, good, map[string]string{"E5": `{"id": "E5", "verdict": "remove"}`}) // M1 still rests on E5
+	unknown := `{"verdicts": [{"id": "E99", "verdict": "keep"}]}`
 	judge := func(n int) models.Response {
 		return models.Response{Text: fmt.Sprintf(`{"score": %d, "reason": "r%d"}`, n, n)}
 	}
 	replies := []models.Response{
-		{Text: bad}, {Text: "```json\n" + good + "```"}, judge(2), {Text: narrowed}, judge(4), // revised, then self-checked
-		{Text: good}, judge(3), {Text: bad}, {Text: good}, judge(5), // the corrected draft fails the floors once
-		{Text: good}, judge(3), {Text: bad}, {Text: bad}, // and twice: a floor miss, whatever the first draft scored
-		{Text: good}, judge(4), {Text: good}, judge(4),
+		{Text: bad}, {Text: "```json\n" + good + "```"}, judge(2), {Text: narrow}, judge(4), // revised, then self-checked
+		{Text: good}, judge(3), {Text: dangling}, {Text: narrow}, judge(5), // the corrected draft fails the floors once
+		{Text: good}, judge(3), {Text: unknown}, {Text: good}, // corrections that never apply: a floor miss, whatever the first draft scored
+		{Text: good}, judge(4), {Text: selfCheckReply(t, good, nil)}, judge(4),
 		{Text: bad}, {Text: bad}, // refused twice before any self-check
 	}
 	fake := &models.Fake{Replies: replies}
@@ -118,14 +149,15 @@ func TestTier2SurveyRevisesOnceThenJudges(t *testing.T) {
 		score, first int
 		changed      string
 		revised      bool
-	}{{4, 2, "E1 changed", false}, {5, 3, "", true}, {1, 3, "", true}, {4, 4, "", false}} {
+	}{{4, 2, "E1 replaced", false}, {5, 3, "E1 replaced", true}, {1, 3, "", true}, {4, 4, "", false}} {
 		r := runs[i]
 		if r.Score != want.score || r.SelfCheck == nil || r.SelfCheck.FirstScore != want.first || r.SelfCheck.Revised != want.revised ||
-			strings.Join(r.SelfCheck.Changed, ",") != want.changed {
+			strings.Join(r.SelfCheck.Changed, ",") != want.changed || r.SelfCheck.FirstDraft != good || r.SelfCheck.Corrections == "" {
 			t.Errorf("run %d: score %d, self-check %+v; want score %d, first %d, changed %q, revised %v", i+1, r.Score, r.SelfCheck, want.score, want.first, want.changed, want.revised)
 		}
 	}
-	if !runs[0].Revised || runs[1].Revised || !strings.Contains(runs[2].Floor, "after the self-check") || runs[4].Score != 1 || runs[4].SelfCheck != nil || !strings.Contains(runs[4].Floor, `does not name "Go"`) {
+	if !runs[0].Revised || runs[1].Revised || !strings.Contains(runs[2].Floor, "after the self-check: corrections not applied") ||
+		runs[4].Score != 1 || runs[4].SelfCheck != nil || !strings.Contains(runs[4].Floor, `does not name "Go"`) {
 		t.Errorf("runs %+v", runs)
 	}
 	first, revise, judgedFirst, selfCheck, judged := fake.Requests[0], fake.Requests[1], fake.Requests[2], fake.Requests[3], fake.Requests[4]
@@ -144,9 +176,15 @@ func TestTier2SurveyRevisesOnceThenJudges(t *testing.T) {
 	if len(revise.Messages) != 3 || !strings.Contains(revise.Messages[2].Content, `the request does not name "Go"`) {
 		t.Errorf("revision request: %+v", revise.Messages)
 	}
-	// The self-check continues from the draft that passed, not the refused one.
-	if n := len(selfCheck.Messages); n != 3 || strings.TrimSpace(selfCheck.Messages[1].Content) != strings.TrimSpace(good) || !strings.Contains(selfCheck.Messages[2].Content, "self-check") {
+	// The self-check continues from the draft that passed, not the refused one, and asks for corrections only.
+	if n := len(selfCheck.Messages); n != 3 || strings.TrimSpace(selfCheck.Messages[1].Content) != strings.TrimSpace(good) ||
+		!strings.Contains(selfCheck.Messages[2].Content, "Reply with your corrections only") {
 		t.Errorf("self-check request: %d messages", n)
+	}
+	// A result that fails the floors goes back with the findings and asks for the corrections again.
+	again := fake.Requests[8].Messages
+	if last := again[len(again)-1].Content; !strings.Contains(last, "M1") || !strings.Contains(last, "E5") || !strings.Contains(last, "whole corrections object again") {
+		t.Errorf("floor revision of the corrections: %.600s", last)
 	}
 	for _, j := range []models.Request{judgedFirst, judged} {
 		if !strings.Contains(j.System, "Rubric: survey draft of a legacy C++ interpreter") || !strings.Contains(j.Messages[0].Content, "74: int main(int argc, char **argv)") {

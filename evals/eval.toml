@@ -178,7 +178,8 @@ max_tokens = 64000
 # through `aayu survey`, gives the skill every module pack and the files the case lists (about 20k tokens of input),
 # allows one revision on `aayu survey --draft` or `--backlog` findings, then the judge reads the same grounding. A
 # draft that passes is judged for the record only, then self-checked (D-5.9l): the skill verifies every item against
-# its evidence and only the corrected draft, which must pass the floors again, is scored.
+# its evidence and replies with corrections only, applied to the draft all or nothing (D-5.9n); only the corrected
+# draft, which must pass the floors again, is scored.
 # Advisory until two consecutive full runs hold a mean of 4.0 per case (the founder's standing rule, D-5.9l); then
 # gating. Dispatch only, so every run's spend is chosen.
 # One case of five runs was recorded at 16.87 USD at the fallback rate (run 39017129248), 4.74 at list price; per the
@@ -187,10 +188,11 @@ max_tokens = 64000
 [[groups]]
 name = "survey"
 prefixes = ["survey/"]
-# max_usd is an estimate, since no full run of the six cases exists: run 39030601284 (three cases, fifteen runs)
-# cost 25.88 USD, about 1.73 a run; the self-check adds a skill call that reads the draft and rewrites it and a judge
-# call, about 2.70 a run, so a full run of thirty runs is about 80 USD, and the breaker is twice that.
-max_usd = 160.0
+# max_usd is the founder's budget stage, a checkpoint and not an estimate (D-5.9n). Run 39046436016 (tiny-js, five
+# runs with the full-redraft self-check) cost 14.11 USD; with corrections only, a case is about 11.5 to 12.6. Stage 1
+# runs survey/tinyjs-rust alone for about 15 USD or less: the breaker is checked before each call, and one call costs up
+# to about 1.1 USD, so it is 14. A later stage raises it in its own PR.
+max_usd = 14.0
 gate = "advisory"
 events = ["workflow_dispatch"]
 # A survey draft of tiny-js is about 6000 tokens of JSON before any thinking; at the first cap of 24000, three of five

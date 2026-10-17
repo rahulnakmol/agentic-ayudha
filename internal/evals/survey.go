@@ -2,18 +2,18 @@ package evals
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
-	"maps"
 	"os"
 	"path/filepath"
-	"slices"
 	"strconv"
 	"strings"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/cli"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/survey"
@@ -333,16 +333,30 @@ func (h *Harness) runSurvey(ctx context.Context, c Case, lane verbs.LaneID, body
 	if err != nil {
 		return Run{}, err
 	}
-	sc := &SelfCheck{FirstScore: firstJudged.Score, FirstReason: firstJudged.Reason}
+	sc := &SelfCheck{FirstScore: firstJudged.Score, FirstReason: firstJudged.Reason, FirstDraft: actions.RedactString(reply)}
+	// The self-check replies with corrections only (D-5.9n), applied to the
+	// draft all or nothing; the floors then run on the result. A reply that
+	// does not apply, or a result that fails the floors, gets one revision.
 	req.Messages = append(req.Messages, models.Message{Role: "assistant", Content: reply}, models.Message{Role: "user", Content: selfCheckPrompt(c.Survey.Kind, file)})
-	corrected, problems, again, err := reviseOnce(ctx, h.complete(lane, "skill", &calls), req, func(d string) []string { return checkSurvey(c, w, d) })
+	var corrected string
+	patch, problems, again, err := reviseOnceAsking(ctx, h.complete(lane, "skill", &calls), req, func(p string) []string {
+		var refused []string
+		corrected, sc.Changed, refused = applyCorrections(reply, p)
+		if len(refused) > 0 {
+			for i := range refused {
+				refused[i] = "corrections not applied (none is, until all apply): " + refused[i]
+			}
+			return refused
+		}
+		return checkSurvey(c, w, corrected)
+	}, "Fix every finding and reply with the whole corrections object again, for the "+file+" you self-checked, never the draft itself.")
 	if err != nil {
 		return Run{}, err
 	}
-	sc.Changed, sc.Revised = changedItems(reply, corrected), len(again) > 0
+	sc.Corrections, sc.Revised = actions.RedactString(patch), len(again) > 0
 	if len(problems) > 0 {
 		return Run{Status: RunFail, Score: 1, Revised: run.Revised, RevisedFor: run.RevisedFor, SelfCheck: sc,
-			Floor: "survey checks after the self-check: " + clip(strings.Join(problems, "; "), 600), Answer: answerOf(corrected)}, nil
+			Floor: "survey checks after the self-check: " + clip(strings.Join(problems, "; "), 600), Answer: answerOf(cmp.Or(corrected, patch))}, nil
 	}
 	judged, err := h.judge(ctx, judgeInput, rubric, prettyJSON(corrected), nil, &calls)
 	if err != nil {
@@ -360,73 +374,35 @@ type SelfCheck struct {
 	// counted; FirstReason is why.
 	FirstScore  int    `json:"first_score"`
 	FirstReason string `json:"first_reason,omitempty"`
-	// Changed lists the items (by id or key) the self-check changed, removed,
-	// or added, as "E3 changed".
+	// FirstDraft is that draft in full, and Corrections the self-check's
+	// reply that was applied to it (D-5.9n): together they reproduce the
+	// scored draft exactly.
+	FirstDraft  string `json:"first_draft,omitempty"`
+	Corrections string `json:"corrections,omitempty"`
+	// Changed lists what the applied corrections changed, as "E3 replaced",
+	// "E5 removed", "R9 added", or "summary set".
 	Changed []string `json:"changed"`
 	// Revised is set when the corrected draft failed the floors once.
 	Revised bool `json:"revised,omitempty"`
 }
 
-// selfCheckPrompt asks for the skill's self-check of a draft that passed.
+// selfCheckPrompt asks for the skill's self-check of a draft that passed,
+// as corrections only (D-5.9n).
 func selfCheckPrompt(kind, file string) string {
+	check := "Now self-check it, as the skill's **Self-check** says: for every claim, trap finding, do-not-carry entry, interface, question and its default, risk, modernisation step, and case set, re-read the lines or probe facts it cites in what you were shown above, not your draft, and ask whether they say exactly this, for this scope, with these numbers, and for this build. Correct or narrow what they do not support, remove what nothing supports, or turn it into a risk or a question."
+	id, lists, fields := "id", `"risks", "questions", or "modernisation.steps"`, `"summary" or "modernisation.strategy"`
 	if kind == "backlog" {
-		return "Your backlog.json passes `aayu survey --backlog`. Now self-check it, as the skill's section 4 says: for every item, re-read the claims and answers it rests on, in the survey and the files above, and ask whether the person asked for this work at this scope and whether each Completion Goal can be checked by the command it names. Correct, narrow, or remove what fails. Reply with the whole corrected backlog.json only."
+		check = "Now self-check it, as the skill's section 4 says: for every item, re-read the claims and answers it rests on, in the survey and the files above, and ask whether the person asked for this work at this scope and whether each Completion Goal can be checked by the command it names. Correct, narrow, or remove what fails."
+		id, lists, fields = "key", `"items"`, `"open_questions"`
 	}
-	return "Your " + file + " passes `aayu survey --draft`. Now self-check it, as the skill's **Self-check** says: for every claim, trap finding, do-not-carry entry, interface, question default, risk, and modernisation step, re-read the lines or probe facts it cites in what you were shown above, not your draft, and ask whether they say exactly this, for this scope, with these numbers, and for this build. Correct, narrow, or remove what they do not support, or turn it into a risk or a question. Reply with the whole corrected " + file + " only."
-}
-
-// changedItems compares two JSON replies by the objects that carry an "id"
-// or a "key" (claims, questions, steps, items) and lists the ones that
-// changed, were removed, or were added.
-func changedItems(before, after string) []string {
-	index := func(s string) (map[string]string, []string) {
-		var v any
-		_ = json.Unmarshal([]byte(s), &v)
-		m, order := map[string]string{}, []string(nil)
-		var walk func(any)
-		walk = func(x any) {
-			switch t := x.(type) {
-			case map[string]any:
-				id, _ := t["id"].(string)
-				if id == "" {
-					id, _ = t["key"].(string)
-				}
-				if id != "" {
-					if _, seen := m[id]; !seen {
-						order = append(order, id)
-					}
-					b, _ := json.Marshal(t)
-					m[id] = string(b)
-				}
-				for _, k := range slices.Sorted(maps.Keys(t)) {
-					walk(t[k])
-				}
-			case []any:
-				for _, e := range t {
-					walk(e)
-				}
-			}
-		}
-		walk(v)
-		return m, order
-	}
-	a, ao := index(before)
-	b, bo := index(after)
-	out := []string{}
-	for _, id := range ao {
-		switch nb, ok := b[id]; {
-		case !ok:
-			out = append(out, id+" removed")
-		case nb != a[id]:
-			out = append(out, id+" changed")
-		}
-	}
-	for _, id := range bo {
-		if _, ok := a[id]; !ok {
-			out = append(out, id+" added")
-		}
-	}
-	return out
+	return "Your " + file + " passes the checks. " + check + "\n\n" +
+		"Do not rewrite the draft. Reply with your corrections only, as one JSON object:\n\n" +
+		`{"verdicts": [{"id": "<` + id + `>", "verdict": "keep"}, {"id": "<` + id + `>", "verdict": "replace", "why": "…", "item": {the whole corrected item, with the same ` + id + `}}, {"id": "<` + id + `>", "verdict": "remove", "why": "…"}], "add": [{"list": "<list key path>", "why": "…", "item": {a new item with an unused ` + id + `}}], "fields": {"<key path>": <new value>}}` + "\n\n" +
+		"- Give exactly one verdict for every item that has an " + id + ", in every list: keep it when its evidence supports it as written; replace it with the whole corrected item when it must change; remove it when nothing supports it.\n" +
+		"- add appends a new item to a list by its key path, such as " + lists + ".\n" +
+		"- fields sets text that has no " + id + ", by its key path, such as " + fields + "; never request or product.\n" +
+		"- When you remove an item, correct every item that refers to it.\n\n" +
+		"The corrections are applied to your draft exactly as written, all or nothing, and the checks run again on the result."
 }
 
 // prettyJSON indents a JSON reply for the judge, or returns it as it is.
