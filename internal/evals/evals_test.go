@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -329,6 +330,17 @@ func TestTier2RetriesServerErrors(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		replies = append(replies, models.Response{Text: string(item)}, models.Response{Text: `{"score": 5, "reason": "covers the request"}`})
 	}
+	// Run 4's skill reply first loops on "<br>" to the cap, and is sampled again (D-3.4r); run 5's stops at the cap
+	// mid-way through a long reply that does not repeat, and is not (the same cap would stop it again).
+	capped := func(s string) models.Response {
+		return models.Response{Text: s, StopReason: "max_tokens", Truncated: true, TokensOut: 32000}
+	}
+	var long strings.Builder
+	for i := 0; long.Len() < 6000; i++ {
+		long.WriteString("line " + strconv.Itoa(i) + " of the file, ")
+	}
+	replies = slices.Insert(replies, 6, capped(`{"say": "Local preview only. > `+strings.Repeat("<br> ", 3000)))
+	replies = slices.Insert(replies, 9, capped(`{"say": "`+long.String()))
 	// Call 1 (run 1's skill) gets a 524 and call 2 retries it; call 4 (run 2's skill) a stream api_error, retried
 	// by call 5; call 7 (run 3's skill) a 400, which is not retried but goes to the lane's fallback model.
 	client := &resetting{Fake: &models.Fake{Replies: replies}, fail: map[int]error{
@@ -351,6 +363,12 @@ func TestTier2RetriesServerErrors(t *testing.T) {
 	}
 	if r := runs[2]; r.Calls[0].Retried != "" || !strings.Contains(r.Calls[0].Error, "400") {
 		t.Errorf("run 3, a 400 is not retried: %+v", r)
+	}
+	if r := runs[3]; r.Status == RunError || r.Score != 5 || !strings.Contains(r.Calls[0].Retried, `degenerate reply: 32000 tokens repeating "<br>"`) {
+		t.Errorf("run 4, a reply looping on <br>: %+v", r)
+	}
+	if r := runs[4]; r.Status != RunError || r.Calls[0].Retried != "" || !strings.Contains(r.Error, "truncated") {
+		t.Errorf("run 5, a long reply at the cap is not retried: %+v", r)
 	}
 }
 
