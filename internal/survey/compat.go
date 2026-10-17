@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -182,6 +183,10 @@ var envProbes = []struct {
 // cases never reach (from an lcov tracefile).
 func Probe(ctx context.Context, ix *Index, root, bin, casesFile string, c Cases, opt ProbeOptions) (*Probes, error) {
 	p := &Probes{Bin: bin, BinSHA256: fileSum(bin), Cases: casesFile, Facts: []Fact{}}
+	root, err := filepath.Abs(root) // strace and lcov report absolute paths; the checkout may be given as "."
+	if err != nil {
+		return nil, err
+	}
 	home, err := os.MkdirTemp("", "aayu-probe-")
 	if err != nil {
 		return nil, err
@@ -213,7 +218,7 @@ func Probe(ctx context.Context, ix *Index, root, bin, casesFile string, c Cases,
 	}
 	strace, _ := exec.LookPath("strace")
 	if strace != "" {
-		p.Ran = append(p.Ran, "every case under strace -f -e trace=open,openat,creat,execve")
+		p.Ran = append(p.Ran, "every case under strace -f -y -e trace=open,openat,creat")
 	} else {
 		p.Skipped = append(p.Skipped, "files read and written: strace is not installed")
 	}
@@ -256,6 +261,9 @@ func Probe(ctx context.Context, ix *Index, root, bin, casesFile string, c Cases,
 				return nil, err
 			}
 			for _, f := range r {
+				if ix.isCode(f) {
+					continue // an interpreter loading the program's own source is not a dependency
+				}
 				reads[f] = append(reads[f], k.ID)
 			}
 			for _, f := range w {
@@ -280,9 +288,28 @@ func Probe(ctx context.Context, ix *Index, root, bin, casesFile string, c Cases,
 		if kind == "writes" {
 			m = writes
 		}
-		for _, f := range sortedKeys(m) {
-			ids := m[f]
-			add(kind, f, fmt.Sprintf("%s %s in %d case(s): %s", kind, f, len(ids), strings.Join(ids[:min(len(ids), 5)], ", ")), len(ids))
+		// Outside the checkout, many files under one directory are one
+		// dependency (a class path, a gem directory): one fact for it.
+		under := map[string][]string{}
+		for f := range m {
+			if filepath.IsAbs(f) {
+				under[filepath.Dir(f)] = append(under[filepath.Dir(f)], f)
+			}
+		}
+		grouped := map[string][]string{} // fact key → case IDs
+		for f, ids := range m {
+			if d := filepath.Dir(f); len(under[d]) > 5 {
+				f = d + "/"
+			}
+			grouped[f] = append(grouped[f], ids...)
+		}
+		for _, f := range sortedKeys(grouped) {
+			ids := slices.Compact(slices.Sorted(slices.Values(grouped[f])))
+			what := f
+			if strings.HasSuffix(f, "/") {
+				what = fmt.Sprintf("%d files under %s", len(under[strings.TrimSuffix(f, "/")]), f)
+			}
+			add(kind, f, fmt.Sprintf("%s %s in %d case(s): %s", kind, what, len(ids), strings.Join(ids[:min(len(ids), 5)], ", ")), len(ids))
 		}
 	}
 	if opt.Coverage != "" {
@@ -310,7 +337,7 @@ func installedLocales() map[string]bool {
 
 // straceOpen is an open, openat, or creat line of strace's output: the path
 // and the flags.
-var straceOpen = regexp.MustCompile(`(?:open|openat|creat)\((?:AT_FDCWD|\d+, )?,?\s*"([^"]+)"(?:,\s*([A-Z_|]+))?[^=]*=\s*(-?\d+)`)
+var straceOpen = regexp.MustCompile(`(?:open|openat|creat)\((?:AT_FDCWD|\d+)?(?:<[^>]*>)?,?\s*"([^"]+)"(?:,\s*([A-Z_|]+))?[^=]*=\s*(-?\d+)(?:<([^>]*)>)?`)
 
 // traceFiles runs one case under strace and lists the files it opened for
 // reading and for writing, outside the system's own directories: the
@@ -323,7 +350,7 @@ func traceFiles(ctx context.Context, root, strace, bin, home string, k Case) (re
 	_ = log.Close()
 	defer func() { _ = os.Remove(log.Name()) }()
 	traced := k
-	traced.Argv = append([]string{strace, "-f", "-qq", "-e", "trace=open,openat,creat", "-o", log.Name()}, k.Argv...)
+	traced.Argv = append([]string{strace, "-f", "-qq", "-y", "-e", "trace=open,openat,creat", "-o", log.Name()}, k.Argv...)
 	if _, err := runCase(ctx, root, bin, home, traced); err != nil {
 		return nil, nil, err
 	}
@@ -344,8 +371,13 @@ func traceFiles(ctx context.Context, root, strace, bin, home string, k Case) (re
 			continue // a failed open: the program looked for it and went on
 		}
 		path := m[1]
-		if !filepath.IsAbs(path) {
+		if m[4] != "" {
+			path = m[4] // -y resolved it: right after a chdir, where the case's directory would be wrong
+		} else if !filepath.IsAbs(path) {
 			path = filepath.Join(root, k.Cwd, path)
+		}
+		if fi, err := os.Stat(path); err == nil && fi.IsDir() {
+			continue // a directory opened to list it or to remember the working directory
 		}
 		name := systemPath(path, root, home)
 		if name == "" || path == bin || seen[name+m[2]] {
@@ -361,6 +393,16 @@ func traceFiles(ctx context.Context, root, strace, bin, home string, k Case) (re
 	return reads, writes, sc.Err()
 }
 
+// isCode reports whether p is one of the checkout's source, test, or
+// vendored files.
+func (ix *Index) isCode(p string) bool {
+	if ix == nil {
+		return false
+	}
+	k, ok := ix.byPath[p]
+	return ok && slices.Contains([]string{"source", "test", "vendored"}, ix.Files[k].Role)
+}
+
 // systemPath names an opened path for the report: inside the checkout
 // relative to it, in the scratch HOME as ~/…, and "" for the system's own
 // files (libraries, locales, /proc, /dev) and the program's own build.
@@ -372,7 +414,7 @@ func systemPath(p, root, home string) string {
 	if rel, err := filepath.Rel(home, p); err == nil && !strings.HasPrefix(rel, "..") {
 		return "~/" + filepath.ToSlash(rel)
 	}
-	for _, pre := range []string{"/usr/", "/lib", "/bin/", "/sbin/", "/proc/", "/sys/", "/dev/", "/etc/ld.so", "/etc/localtime", "/etc/locale", "/run/", "/tmp/aayu-", "/opt/", "/snap/", "/nix/"} {
+	for _, pre := range []string{"/usr/", "/lib", "/bin/", "/sbin/", "/proc/", "/sys/", "/dev/", "/etc/ld.so", "/etc/localtime", "/etc/locale", "/etc/passwd", "/etc/group", "/etc/nsswitch.conf", "/run/", "/tmp/aayu-", "/tmp/hsperfdata_", "/opt/", "/snap/", "/nix/"} {
 		if strings.HasPrefix(p, pre) {
 			return ""
 		}
@@ -388,9 +430,6 @@ func unreached(ix *Index, root, tracefile string, add func(kind, key, detail str
 		return 0, err
 	}
 	defer func() { _ = f.Close() }()
-	if abs, err := filepath.Abs(root); err == nil {
-		root = abs // lcov writes absolute paths; the checkout may be given as "."
-	}
 	hits := map[string]map[int]int{} // file → line → count
 	cur := ""
 	sc := bufio.NewScanner(f)

@@ -243,6 +243,15 @@ Write `survey.json` ([references/formats.md](references/formats.md) has every fi
   replaces. [references/modernisation.md](references/modernisation.md) has notes per stack (C++ to Rust, PHP in
   place, Fortran, Ruby, VB6, COBOL, and others).
 
+Before you check it, review the scope of every claim against the code, not against your notes. For each claim with
+never, always, only, every, all, none, or cannot, and each claim about what happens after an error, name the path
+that would make it false and look at it: another entry point or argument (a runner that skips files when it
+discovers them may still run a file named on its command line), a helper that differs from the constructor (a
+registration function may add what the default set lacks), an error handler that throws rather than continues, a
+caller in another module. Then write the claim for the scope it holds in ("discovery skips …", "the command-line
+runner registers …"), or make it a risk to check or a question. Quote output and error text only from the line that
+prints it, for the path that prints it.
+
 Check it, and fix every problem the check reports:
 
 `aayu survey --draft survey.json`

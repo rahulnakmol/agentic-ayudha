@@ -3,6 +3,7 @@ package survey
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,17 +23,25 @@ case "$1" in
   pid) echo "run $$" ;;
   tz) echo "zone ${TZ}" ;;
   home) cat "$HOME/.aayu-probe" 2>/dev/null || echo none ;;
-  write) echo saved > "$HOME/out.log"; echo ok ;;
+  write) cd "$HOME" && echo saved > out.log; echo ok ;;
+  load) cat lib/tool.py README.md "$LIBDIR"/*.rb > /dev/null; echo ok ;;
 esac
 `
 	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
+	}
+	libdir := t.TempDir() // a gem directory outside the checkout
+	for i := range 6 {
+		if err := os.WriteFile(filepath.Join(libdir, fmt.Sprintf("m%d.rb", i)), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 	c := Cases{Cases: []Case{
 		{ID: "pid", Set: "G1", Argv: []string{"{bin}", "pid"}},
 		{ID: "tz", Set: "G1", Argv: []string{"{bin}", "tz"}},
 		{ID: "home", Set: "G1", Argv: []string{"{bin}", "home"}},
 		{ID: "write", Set: "G1", Argv: []string{"{bin}", "write"}},
+		{ID: "load", Set: "G1", Argv: []string{"{bin}", "load"}, Env: []string{"LIBDIR=" + libdir}},
 	}}
 	// The index is read back from index.json, as `aayu survey --golden` reads it.
 	idx := filepath.Join(dir, "index.json")
@@ -72,6 +81,20 @@ esac
 	if _, err := exec.LookPath("strace"); err == nil {
 		if f, ok := got["probe:writes:~/out.log"]; !ok || !strings.Contains(f.Detail, "write") {
 			t.Errorf("strace is installed, but no write of out.log: %v", p.Facts)
+		}
+		// A data file read is a dependency; the checkout's own source, as an interpreter loads it, is not.
+		if _, ok := got["probe:reads:README.md"]; !ok {
+			t.Errorf("no read of README.md: %v", p.Facts)
+		}
+		if _, ok := got["probe:reads:lib/tool.py"]; ok {
+			t.Error("a read of the checkout's own source is reported as a dependency")
+		}
+		// Many files under one directory outside the checkout are one dependency.
+		if f, ok := got["probe:reads:"+libdir+"/"]; !ok || !strings.Contains(f.Detail, "6 files under") {
+			t.Errorf("no single read of %s/: %v", libdir, p.Facts)
+		}
+		if _, ok := got["probe:reads:"+filepath.Join(libdir, "m0.rb")]; ok {
+			t.Error("a file of a grouped directory is reported on its own")
 		}
 	} else if !strings.Contains(strings.Join(p.Skipped, " "), "strace is not installed") {
 		t.Errorf("a skipped probe must say so: %v", p.Skipped)
