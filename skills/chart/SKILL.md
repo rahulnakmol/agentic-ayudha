@@ -124,8 +124,9 @@ default stated two ways is a contradiction the reader cannot build from.
 Title it with the stage's artefact from the grounding (`# Data sketch: …` at a startup, `# Data design: …` at a
 scaleup, `# Data architecture record: …` at an enterprise; for AI `Evidence sketch`, `Evidence design`, `Evidence
 dossier`), and never use another stage's artefact name as a heading. Then the parts of the outline, in order, as level-two
-(`##`) headings; `## Open questions` is always last. A startup note is half a page: at most 400 words of prose and at most
-three tables (tables do not count as prose, so put metrics and evaluation cases in tables); a scaleup note reads in
+(`##`) headings; `## Open questions` is always last. A startup note is half a page: at most 400 words of prose, and two tables
+in a data sketch (the metrics and the checks) or the tables an evidence sketch's cases need (tables do not count as
+prose, so put metrics and evaluation cases in tables); a scaleup note reads in
 ten minutes, about two pages: at most about 1 200 words of prose, and its evaluation table has one row per kind of
 case (with its count and expected behaviour), not one per case; an enterprise note is the full record. Every
 sentence you add is one more claim to keep consistent: say each thing once, in the part it belongs to. Do not restate the grounding: cite it, and spend the words on the design. The
@@ -157,7 +158,8 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   events in the grounding: every event it needs exists, and each edge case has a rule (an item with no outcome event,
   a late or repeated event, an empty field); a check you write must accept every case the definition allows. A rule
   you choose (deduplication, which outcome wins) is a design choice: write it as an `Assumption:`, never as a fact
-  about the data. The edge-case rules are part of the definition: write the definition so it already includes them
+  about the data. Deduplicate within one kind of event (a repeated "asked" event), never across the events a key
+  joins: an item and its outcome share its ID, and deduplicating on the ID alone discards the outcome. The edge-case rules are part of the definition: write the definition so it already includes them
   (if an item with no outcome counts as unanswered, the numerator says so), never a rule that contradicts the table.
   When an outcome can arrive after the item, give the cutoff as an `Assumption:` (an outcome counts only within N
   hours of the item), and say that how late outcomes arrive is not yet measured unless the grounding shows their
@@ -303,13 +305,14 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   decides (when a week becomes final) is not asked again. When the check reports too many words,
   cut well below the bound (to about 320), not just to it: first delete prose that restates a table or the
   grounding, then any paragraph before the first part, then move remaining lists into tables.
-  Put the metrics with their edge-case rules, the copies with their retention, and the checks in tables (three at
-  most), and keep the prose for the decision, the design choice, and the assumptions. Tables do not count as prose,
-  but they count as the page: a startup data sketch is half a page in all, so its tables together hold about
-  twelve rows (an evidence sketch's evaluation table keeps every case its set needs), each table only the rows the decision needs (the metrics it reads, every copy derived from personal data, aggregates included, and the checks `## Checks` asks for,
-  combined into rows: reconciliation with the quality thresholds for skipped rows, duplicates, and nulls;
-  completeness; a hand-counted fixture; the proposed Completion Goal criterion), with one trigger in `## Design`. More rows and
-  thresholds are a scaleup's data design, not a better sketch.
+  Tables do not count as prose, but they count as the page: a startup data sketch is the persona's half page, so
+  it has two tables, the metrics (with their edge-case rules) and the checks (reconciliation with the skipped-row,
+  duplicate, and null thresholds; completeness; a hand-counted fixture; the proposed Completion Goal criterion),
+  and one trigger in `## Design`. Its privacy part is about four lines of prose: what personal data appears and who
+  may read what; one retention and one deletion path stated for every copy derived from personal data at once
+  (the exports, the snapshot, the aggregates); and the source whose delete is unverified as the exception.
+  `## Decision` adds only what the line under the title does not say. More tables, rows, and thresholds are a
+  scaleup's data design, not a better sketch; an evidence sketch's evaluation table keeps every case its set needs.
 - Each part must use its key words, or the check refuses it: `## Metrics` says "grain" and "window"; `## Design`
   says "trigger" (write `Trigger:` before the threshold); `## Privacy and retention` says how long data is "kept" or
   its "retention" and how a "deletion" reaches every copy; `## Evidence and permissions` says "permission" and
