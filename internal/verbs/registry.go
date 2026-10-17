@@ -523,7 +523,7 @@ func enumIn(name string, required, positional bool, desc string, values ...strin
 
 // Verbs lists the 32 verbs in plan order (V7, WP0.3), then chart, the Data & AI
 // Architect's verb (Decision #283, Appendix B S-5.1g), then survey (WP5.9,
-// Decision #287).
+// Decision #287), then the Production Engineer's verbs (WP5.10, Decision #324).
 var Verbs = []Command{
 	{
 		Name: "grill", WP: "WP5.3", Stage: StageShape,
@@ -1048,6 +1048,27 @@ var Verbs = []Command{
 		},
 		Outputs:  []string{"index", "fact-pack", "survey-report", "backlog", "issues", "golden", "parity"},
 		Gates:    []GateID{GateValidator, GateHalt},
+		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeRead,
+	},
+	{
+		Name: "investigate", WP: "WP5.10", Stage: StageOperate,
+		Summary: "Investigate an incident from bounded telemetry queries to the deployed revision and the implicated code, and check the note; it proposes a mitigation, never runs one.",
+		Reader:  "Works out what went wrong in production from your telemetry and the code that was actually deployed, and suggests a fix for a person to approve.",
+		Seat:    ProductionEngineer, Lane: LaneSpec, Layers: AllLayers(),
+		Inputs: []Input{
+			pos("incident", TypeIssue, "Incident issue."),
+			required(flag("telemetry", TypePath, "Sanitised OpenTelemetry export directory: traces.jsonl (OTLP JSON), logs.jsonl (JSON lines with trace_id), deploys.jsonl (deploy markers); read with no network.")),
+			flag("service", TypeString, "Service to scope every query to; default the only service in the export."),
+			flag("environment", TypeString, "Deployment environment to scope to; default the deploy marker's."),
+			flag("revision", TypeString, "Deployed revision; default the deploy marker serving the window, else service.version on the spans."),
+			flag("from", TypeString, "Window start (RFC 3339, UTC); default an hour before the incident started. The window is at most 7 days."),
+			flag("to", TypeString, "Window end, exclusive (RFC 3339, UTC); default the export's last record."),
+			flag("query", TypeString, "Run one more bounded query and log it as qN: <kind> [by f,…] [where k=v …] [limit N] [bucket 5m]."),
+			flag("draft", TypePath, "Investigation note (Markdown) to check: every part, the stage's artefact, cited evidence, two hypotheses, bounded queries, and a mitigation only proposed from the catalog."),
+			readOnlyWith(flag("create", TypeBool, "Post the checked note on the incident, replaced in place, and add a timeline line (through the actions log); needs --draft."), "false"),
+		},
+		Outputs:  []string{"investigation-note", "grounding", "query-log"},
+		Gates:    []GateID{GateHalt},
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeRead,
 	},
 }

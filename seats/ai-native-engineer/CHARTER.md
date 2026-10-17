@@ -94,5 +94,6 @@ Layers owned: none.
 | `retro` | Consulted |
 | `evolve` | Accountable; the twin executes it (build lane); owns thresholds and policy |
 | `chart` | Informed |
+| `investigate` | Consulted |
 
 <!-- END GENERATED: raci -->

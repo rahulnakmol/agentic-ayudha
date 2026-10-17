@@ -55,6 +55,8 @@ var RACI = map[string]Roles{
 	"doctor":     {Informed: []SeatID{EngineeringManager}},
 	"chart":      {Consulted: []SeatID{CodeArchitect, RevenueArchitect}, Informed: []SeatID{AINativeEngineer, QualityArchitect}},
 	"survey":     {Consulted: []SeatID{ProductStrategist, QualityArchitect}, Informed: []SeatID{EngineeringManager}},
+	// The Production Engineer's verbs (Decision #324): the builder is Consulted where its code is implicated.
+	"investigate": {Consulted: []SeatID{AINativeEngineer}, Informed: []SeatID{EngineeringManager}},
 }
 
 // PolicyOwner is the seat that owns a command's thresholds or policy.
