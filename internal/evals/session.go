@@ -866,7 +866,9 @@ func (h *Harness) runSession(ctx context.Context, c Case, lane verbs.LaneID, bod
 	humanNext, finished := 0, false
 	for turn := 1; turn <= spec.MaxTurns+1; turn++ {
 		var t SessionTurn
-		req := models.Request{System: body + "\n\n" + sessionProtocol, Messages: msgs, MaxTokens: h.Config.MaxTokens.Skill}
+		// A turn that writes files runs for minutes; streaming keeps the gateway
+		// from closing the idle connection (HTTP 524, D-6.5d and D-3.4m).
+		req := models.Request{System: body + "\n\n" + sessionProtocol, Messages: msgs, MaxTokens: h.Config.MaxTokens.Skill, Stream: true}
 		if err := models.Structured(ctx, h.complete(lane, "skill", &calls), req, sessionSchema(), &t); err != nil {
 			var re *models.ReplyError
 			if errors.As(err, &re) && !re.Parse && !re.Truncated {
