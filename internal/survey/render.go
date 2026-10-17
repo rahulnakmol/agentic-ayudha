@@ -5,6 +5,18 @@ import (
 	"strings"
 )
 
+// CountedOnly names the languages of the checkout that the index counts but
+// does not read, with their size.
+func CountedOnly(ix *Index) []string {
+	var out []string
+	for _, l := range ix.Languages {
+		if l.CountedOnly {
+			out = append(out, fmt.Sprintf("%s (%d files, %d lines)", l.Name, l.Files, l.Lines))
+		}
+	}
+	return out
+}
+
 // Render writes the survey report (SURVEY.md) from a checked draft: every
 // claim with its basis and its citations, the capability map, the questions
 // for the person, the modernisation path, what the index could not see, and
@@ -46,6 +58,9 @@ func Render(ix *Index, d Draft, r Report) string {
 	}
 	if len(dyn) > 0 {
 		p("- Dynamic dispatch the index cannot follow: %s.\n", strings.Join(dyn, ", "))
+	}
+	if co := CountedOnly(ix); len(co) > 0 {
+		p("- Counted by file and line only, never read (no symbols, calls, imports, or traps, so no claim about them comes from the index): %s.\n", strings.Join(co, ", "))
 	}
 	if len(ix.NotIndexed) > 0 {
 		var ns []string

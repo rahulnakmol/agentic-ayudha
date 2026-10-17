@@ -138,16 +138,19 @@ max_tokens = 24000
 # evals/cases/survey/repos) and one backlog from a survey with a recorded interview. Each run indexes the fixture
 # through `aayu survey`, gives the skill every module pack and the files the case lists (about 20k tokens of input),
 # allows one revision on `aayu survey --draft` or `--backlog` findings, then the judge reads the same grounding.
-# Advisory until two consecutive full runs hold a mean of 4.0 per case; dispatch only, so every run's spend is chosen
-# (the founder's cap for the workstream is 100 USD).
+# Advisory until two consecutive full runs hold a mean of 4.0 per case; dispatch only, so every run's spend is chosen.
+# One case of five runs cost 16.87 USD (run 39017129248), so a full run of every case needs more than the first cap of
+# 30; per the founder's rule of 2026-10-17 (quality is the constraint, never burn money) the breaker sits where a full
+# run fits, and each dispatch is filtered to the cases the last run failed first.
 [[groups]]
 name = "survey"
 prefixes = ["survey/"]
-max_usd = 30.0
+max_usd = 90.0
 gate = "advisory"
 events = ["workflow_dispatch"]
-# A survey draft of tiny-js is about 6000 tokens of JSON before any thinking, so the skill cap is the ux group's 24000.
-max_tokens = 24000
+# A survey draft of tiny-js is about 6000 tokens of JSON before any thinking; at the first cap of 24000, three of five
+# runs stopped mid-draft (run 39017129248), so the skill cap is 48000.
+max_tokens = 48000
 
 [[groups]]
 name = "skills" # every other case

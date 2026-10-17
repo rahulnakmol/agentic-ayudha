@@ -47,6 +47,7 @@ type Pack struct {
 	Targets  []Target  `json:"targets"`  // build targets that compile one of the module's files
 	Entries  []Fact    `json:"entries"`  // entry points in the module
 	Surfaces []Fact    `json:"surfaces"` // I/O surfaces in the module
+	Traps    []Fact    `json:"traps"`    // trap rules that match in the module: where to check (traps.go)
 	Markers  []Marker  `json:"markers"`
 	Tests    []Fact    `json:"tests"`
 	Symbols  []Symbol  `json:"symbols"`
@@ -115,6 +116,11 @@ func (ix *Index) ModulePack(id string, limit int) (*Pack, error) {
 	for _, f := range ix.Surfaces {
 		if inAt(f.At) {
 			p.Surfaces = append(p.Surfaces, f)
+		}
+	}
+	for _, f := range ix.Traps {
+		if inAt(f.At) {
+			p.Traps = append(p.Traps, f)
 		}
 	}
 	for _, f := range ix.Tests {

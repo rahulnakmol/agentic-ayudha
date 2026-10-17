@@ -1,0 +1,16 @@
+      * A fixed-form COBOL program.
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. BILLING.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01 WS-AMOUNT PIC S9(7)V99 COMP-3.
+       01 WS-ALT REDEFINES WS-AMOUNT PIC X(5).
+       PROCEDURE DIVISION.
+       MAIN-PARA.
+           PERFORM CALC-PARA THRU CALC-EXIT.
+           CALL 'PRINTER' USING WS-AMOUNT.
+           STOP RUN.
+       CALC-PARA.
+           COMPUTE WS-AMOUNT = WS-AMOUNT * 2.
+       CALC-EXIT.
+           EXIT.

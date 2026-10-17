@@ -24,7 +24,7 @@ import (
 )
 
 // Version is the index schema version.
-const Version = 1
+const Version = 2
 
 // DefaultBudget is a module's default size in tokens (about four bytes each).
 const DefaultBudget = 20000
@@ -82,6 +82,9 @@ type Count struct {
 	Name  string `json:"name"`
 	Files int    `json:"files"`
 	Lines int    `json:"lines"`
+	// CountedOnly is set for a language the index counts but does not read:
+	// no symbols, calls, imports, or traps (lang.go lists which).
+	CountedOnly bool `json:"counted_only,omitempty"`
 }
 
 // Index is the deterministic survey of one checkout: the same commit gives
@@ -97,6 +100,7 @@ type Index struct {
 	Deps       []Dep    `json:"deps"`
 	Entries    []Fact   `json:"entries"`
 	Surfaces   []Fact   `json:"surfaces"`
+	Traps      []Fact   `json:"traps"` // trap rules that match (traps.go): where to check a semantic the port could get wrong
 	Tests      []Fact   `json:"tests"`
 	Docs       []Fact   `json:"docs"`
 	Markers    []Marker `json:"markers"`
@@ -160,6 +164,58 @@ var surfaceRules = []struct {
 	{"random", regexp.MustCompile(`\b(rand|srand|random|drand48|mt_rand|Math\.random|rand::\w+|random\.\w+|math/rand)\b\s*[(:]`)},
 }
 
+// langSurfaceRules replace surfaceRules for the keyword languages, matched
+// against lower-cased code.
+var langSurfaceRules = map[string][]struct {
+	kind string
+	re   *regexp.Regexp
+}{
+	"fortran": {
+		{"cli-args", regexp.MustCompile(`\b(?:get_command_argument|get_command|command_argument_count|getarg|iargc)\b`)},
+		{"file", regexp.MustCompile(`\b(?:open|inquire)\s*\(`)},
+		{"stdin", regexp.MustCompile(`\bread\s*\(\s*(?:\*|5)\s*[,)]|\bread\s+\*`)},
+		{"stdout", regexp.MustCompile(`\bwrite\s*\(\s*(?:\*|6)\s*[,)]|\bprint\s+(?:\*|\d)`)},
+		{"env", regexp.MustCompile(`\b(?:get_environment_variable|getenv)\b`)},
+		{"process", regexp.MustCompile(`\b(?:execute_command_line|system)\s*\(`)},
+		{"time", regexp.MustCompile(`\b(?:cpu_time|date_and_time|system_clock|etime|dtime|secnds)\b`)},
+		{"random", regexp.MustCompile(`\b(?:random_number|random_seed|rand|ran|irand)\s*\(`)},
+		{"dynamic-dispatch", regexp.MustCompile(`(?m)^\s*external\b|\bprocedure\s*\(\s*\w*\s*\)\s*,\s*pointer`)},
+	},
+	"cobol": {
+		{"file", regexp.MustCompile(`\bselect\b[^.]*\bassign\b|\b(?:open|read|write|rewrite|delete)\s+(?:input|output|i-o|extend)?\s*[a-z]`)},
+		{"stdin", regexp.MustCompile(`\baccept\b`)},
+		{"stdout", regexp.MustCompile(`\bdisplay\b`)},
+		{"database", regexp.MustCompile(`\bexec\s+sql\b`)},
+		{"process", regexp.MustCompile(`\bexec\s+cics\b|\bcall\s+["']system["']`)},
+		{"time", regexp.MustCompile(`\bcurrent-date\b|\baccept\s+\w+\s+from\s+(?:date|time|day)\b`)},
+		{"dynamic-dispatch", regexp.MustCompile(`\bcall\s+[a-z]`)},
+	},
+	"pascal": {
+		{"cli-args", regexp.MustCompile(`\b(?:paramstr|paramcount)\b`)},
+		{"file", regexp.MustCompile(`\b(?:assignfile|assign|reset|rewrite|append|blockread|blockwrite|tfilestream)\b\s*[(.]`)},
+		{"stdout", regexp.MustCompile(`\bwriteln?\b`)},
+		{"stdin", regexp.MustCompile(`\breadln?\b`)},
+		{"env", regexp.MustCompile(`\bgetenvironmentvariable\b|\bgetenv\b`)},
+		{"process", regexp.MustCompile(`\b(?:shellexecute\w*|createprocess\w*|winexec|tprocess)\b`)},
+		{"time", regexp.MustCompile(`\b(?:now|date|time|gettickcount)\b\s*[;)(]`)},
+		{"random", regexp.MustCompile(`\b(?:random|randomize)\b`)},
+		{"database", regexp.MustCompile(`\bt(?:ado|ib|sql|fd)\w*(?:query|connection|table)\b|\btdatabase\b`)},
+		{"ui", regexp.MustCompile(`\btform\d*\b|\b(?:showmessage|messagedlg)\b`)},
+	},
+	"vb": {
+		{"cli-args", regexp.MustCompile(`\bcommand\$?\s*(?:\(|$)|\bwscript\.arguments\b|\bmy\.application\.commandlineargs\b`)},
+		{"file", regexp.MustCompile(`\bopen\b[^\n]*\bfor\s+(?:input|output|append|binary|random)\b|\b(?:filesystemobject|kill|filecopy|mkdir)\b`)},
+		{"stdout", regexp.MustCompile(`\b(?:debug\.print|wscript\.echo|console\.write\w*|msgbox)\b`)},
+		{"env", regexp.MustCompile(`\benviron\$?\s*\(`)},
+		{"process", regexp.MustCompile(`\bshell\s*\(|\bcreateobject\s*\(\s*"`)},
+		{"time", regexp.MustCompile(`\b(?:now|date|time|timer)\b`)},
+		{"random", regexp.MustCompile(`\b(?:rnd|randomize)\b`)},
+		{"database", regexp.MustCompile(`\b(?:opendatabase|adodb|dao\.|openrecordset)\b`)},
+		{"ui", regexp.MustCompile(`\bbegin\s+vb\.(?:form|menu|commandbutton|textbox)\b|\bmsgbox\b|\.show\b`)},
+		{"dynamic-dispatch", regexp.MustCompile(`\bcallbyname\b|\bcreateobject\b|\bgetobject\b`)},
+	},
+}
+
 // Build indexes the checkout at root.
 func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 	if opt.Budget <= 0 {
@@ -182,20 +238,47 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 		syms  []Symbol
 	}
 	files := map[string]*scanned{}
-	cpp := false
+	present := map[string]bool{}
 	for _, p := range paths {
-		if l, ok := langs[strings.ToLower(path.Ext(p))]; ok && l.Name == "cpp" {
-			cpp = true
+		if l, ok := langs[strings.ToLower(path.Ext(p))]; ok && strings.ToLower(path.Ext(p)) != ".inc" {
+			present[l.Name] = true
 		}
 	}
+	cpp := present["cpp"]
+	// An .inc file is PHP unless the checkout has no PHP and has Fortran or
+	// Pascal, whose include files share the extension.
+	incLang, incOK := langs[".inc"], true
+	switch {
+	case present["php"]:
+	case present["fortran"]:
+		incLang = langs[".f90"]
+	case present["pascal"]:
+		incLang = langs[".pas"]
+	default:
+		incOK = false
+	}
+	fixLang := func(p string, l Lang) Lang {
+		if l.Name == "c" && cpp {
+			l.Name = "cpp" // a header in a C++ project is C++
+		}
+		if strings.ToLower(path.Ext(p)) == ".inc" && l.Name != "" {
+			if !incOK {
+				return Lang{}
+			}
+			l = incLang
+		}
+		return l
+	}
+	var keywordFiles []string
 	for _, p := range paths {
 		info, err := os.Lstat(filepath.Join(root, filepath.FromSlash(p)))
 		if err != nil || !info.Mode().IsRegular() {
 			continue
 		}
 		role, lang, _ := classify(p)
-		if lang.Name == "c" && cpp {
-			lang.Name = "cpp" // a header in a C++ project is C++
+		lang = fixLang(p, lang)
+		if lang.Name == "" && role == "source" {
+			role = "data"
 		}
 		f := File{Path: p, Role: role, Lang: lang.Name, Bytes: int(info.Size())}
 		ix.byPath[p] = len(ix.Files)
@@ -215,8 +298,15 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 			f.Lines++
 		}
 		_, lang, system := classify(f.Path)
-		if lang.Name == "c" && cpp {
-			lang.Name = "cpp"
+		lang = fixLang(f.Path, lang)
+		if f.Role == "data" && path.Ext(f.Path) == "" {
+			// A script without an extension (bin/tool) is read by its #! line.
+			if l, ok := shebangLang(raw); ok {
+				lang, f.Lang, f.Role = l, l.Name, "source"
+				if isTestPath(f.Path) {
+					f.Role = "test"
+				}
+			}
 		}
 		s := &scanned{raw: string(raw)}
 		files[f.Path] = s
@@ -227,10 +317,17 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 			ix.Targets = append(ix.Targets, ts...)
 			ix.Deps = append(ix.Deps, ds...)
 			ix.Systems = append(ix.Systems, system)
+			ix.buildTraps(f.Path, s.raw)
 		case f.Role == "doc":
 			ix.Docs = append(ix.Docs, Fact{ID: "doc:" + f.Path, Kind: "doc", At: f.Path + ":1", Detail: firstHeading(s.raw)})
 		case lang.Syntax != syntaxNone && (f.Role == "source" || f.Role == "test" || f.Role == "vendored"):
-			code, cs := strip(s.raw, lang.Syntax, lang.Name)
+			var code string
+			var cs []comment
+			if isKeywordSyntax(lang.Syntax) {
+				code, cs = stripKeyword(f.Path, s.raw, lang.Syntax)
+			} else {
+				code, cs = strip(s.raw, lang.Syntax, lang.Name)
+			}
 			s.code = code
 			ix.Markers = append(ix.Markers, markers(f.Path, cs)...)
 			if f.Role == "vendored" || !lang.Symbols {
@@ -244,6 +341,10 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 				for _, im := range imps {
 					ix.Edges = append(ix.Edges, Edge{Kind: "import", From: "file:" + f.Path, To: []string{"ext:" + im}, At: f.Path + ":1"})
 				}
+			case isKeywordSyntax(lang.Syntax):
+				var traps []Fact
+				s.syms, s.calls, traps = keywordSymbols(f.Path, code, s.raw, lang.Syntax)
+				ix.Traps = append(ix.Traps, traps...)
 			case lang.Syntax == syntaxHash:
 				s.syms, s.calls = lineSymbols(f.Path, code, lang.Name)
 			default:
@@ -260,15 +361,23 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 			}
 			uniqueIDs(s.syms)
 			ix.Symbols = append(ix.Symbols, s.syms...)
-			ix.surfaces(f.Path, code)
+			ix.surfaces(f.Path, lang.Name, code)
+			ix.traps(f.Path, lang.Name, code, s.raw)
 			ix.entries(f.Path, f.Role, lang.Name, s.raw, s.syms)
 		}
 		if f.Role == "test" {
 			ix.Tests = append(ix.Tests, Fact{ID: "test:" + f.Path, Kind: "test", At: f.Path + ":1"})
 		}
 		if lang.Name != "" && f.Role != "build" {
-			ix.imports(f.Path, lang.Name, s.raw, exists)
+			if isKeywordSyntax(lang.Syntax) {
+				keywordFiles = append(keywordFiles, f.Path) // after every module's symbols are read
+			} else {
+				ix.imports(f.Path, lang.Name, s.raw, exists)
+			}
 		}
+	}
+	for _, p := range keywordFiles {
+		ix.keywordImports(p, langs[strings.ToLower(path.Ext(p))].Syntax, files[p].raw, exists)
 	}
 	// The call graph, resolved by the called name's last component.
 	byName := map[string][]string{}
@@ -355,8 +464,12 @@ func runGit(ctx context.Context, dir string, args ...string) string {
 	return string(out)
 }
 
-func (ix *Index) surfaces(file, code string) {
-	for _, r := range surfaceRules {
+func (ix *Index) surfaces(file, lang, code string) {
+	rules := surfaceRules
+	if lr, ok := langSurfaceRules[lang]; ok {
+		rules, code = lr, strings.ToLower(code) // the keyword languages are case-insensitive
+	}
+	for _, r := range rules {
 		locs := r.re.FindAllStringIndex(code, -1)
 		if len(locs) == 0 {
 			continue
@@ -374,6 +487,8 @@ func (ix *Index) entries(file, role, lang, raw string, syms []Symbol) {
 	for _, s := range syms {
 		n := lastName(s.Name)
 		switch {
+		case s.Kind == "program":
+			add("main", s.line, s.Name)
 		case isDefKind(s.Kind) && (n == "main" || n == "WinMain" || n == "wmain") && !strings.Contains(s.Name, "::"):
 			add("main", s.line, s.Name)
 		case s.Public && role == "source" && (lang == "php" || lang == "python" || lang == "ruby" || lang == "javascript" || lang == "typescript" || lang == "java" || lang == "csharp" || lang == "go" || lang == "cpp" || lang == "c" || lang == "rust"):
@@ -569,7 +684,7 @@ func (ix *Index) counts() {
 		case f.Lang != "" && f.Role != "build" && f.Role != "doc":
 			c := langs[f.Lang]
 			if c == nil {
-				c = &Count{Name: f.Lang}
+				c = &Count{Name: f.Lang, CountedOnly: !indexedLang(f.Lang)}
 				langs[f.Lang] = c
 			}
 			c.Files++
@@ -736,7 +851,7 @@ func (ix *Index) finish() {
 	sort.SliceStable(ix.Targets, byID(len(ix.Targets), func(i int) string { return ix.Targets[i].ID }))
 	sort.SliceStable(ix.Deps, byID(len(ix.Deps), func(i int) string { return ix.Deps[i].ID }))
 	ix.Deps = dedupeDeps(ix.Deps)
-	for _, l := range []*[]Fact{&ix.Entries, &ix.Surfaces, &ix.Tests, &ix.Docs} {
+	for _, l := range []*[]Fact{&ix.Entries, &ix.Surfaces, &ix.Traps, &ix.Tests, &ix.Docs} {
 		fs := *l
 		sort.SliceStable(fs, func(i, j int) bool { return fs[i].ID < fs[j].ID })
 	}
@@ -748,6 +863,9 @@ func (ix *Index) finish() {
 		}
 		return ix.Edges[i].From+strings.Join(ix.Edges[i].To, ",") < ix.Edges[j].From+strings.Join(ix.Edges[j].To, ",")
 	})
+	if ix.Traps == nil {
+		ix.Traps = []Fact{}
+	}
 	if ix.Targets == nil {
 		ix.Targets = []Target{}
 	}
@@ -773,7 +891,7 @@ func (ix *Index) index() {
 	for _, d := range ix.Deps {
 		ix.ids[d.ID] = true
 	}
-	for _, l := range [][]Fact{ix.Entries, ix.Surfaces, ix.Tests, ix.Docs} {
+	for _, l := range [][]Fact{ix.Entries, ix.Surfaces, ix.Traps, ix.Tests, ix.Docs} {
 		for _, f := range l {
 			ix.ids[f.ID] = true
 		}
@@ -825,7 +943,7 @@ func (ix *Index) Resolve(cite string) error {
 	if ix.ids[cite] {
 		return nil
 	}
-	for _, pre := range []string{"file:", "sym:", "build:", "dep:", "entry:", "io:", "test:", "doc:", "marker:", "mod:"} {
+	for _, pre := range []string{"file:", "sym:", "build:", "dep:", "entry:", "io:", "trap:", "test:", "doc:", "marker:", "mod:"} {
 		if strings.HasPrefix(cite, pre) {
 			return fmt.Errorf("%s: no such fact in the index", cite)
 		}
