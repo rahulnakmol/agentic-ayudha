@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -263,7 +264,7 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		rec.HumanPass = HumanPass{Kind: "review", Login: r.User.Login, ReviewID: ids[strings.ToLower(r.User.Login)], Commit: head}
 		break
 	}
-	if rec.HumanPass.Kind == "" && rec.Streak.Autonomous && !in.Bool("solo-bypass") && sameFamilyReview(ctx, c, owner, name, head) {
+	if rec.HumanPass.Kind == "" && rec.Streak.Autonomous && !in.Bool("solo-bypass") && sameFamilyReview(ctx, c, owner, name, n, head) {
 		why = append(why, "the merge gate's inspect job at this head did not record a different-family review (a same-family review, or none), which never lets an agent merge without a person")
 	} else if rec.HumanPass.Kind == "" && rec.Streak.Autonomous && !in.Bool("solo-bypass") {
 		rec.HumanPass = HumanPass{Kind: "autonomous", Login: me.Login, Commit: head,
@@ -670,8 +671,9 @@ func setSection(body, label, value string) string {
 // wrote the log are the base branch's, so neither the pull request nor a
 // workflow on its branch can write it, as a comment could be. A same-family
 // review, no such run or job, a job that did not succeed, or a log without
-// the review line all refuse, so a person passes the PR.
-func sameFamilyReview(ctx context.Context, c *github.Client, owner, name string, head string) bool {
+// the review line, or a log whose header names another PR, all refuse, so a
+// person passes the PR.
+func sameFamilyReview(ctx context.Context, c *github.Client, owner, name string, n int, head string) bool {
 	path := ".github/workflows/" + MergeGateWorkflow
 	runs, _, err := c.REST.Actions.ListWorkflowRunsByFileName(ctx, owner, name, MergeGateWorkflow, &gh.ListWorkflowRunsOptions{HeadSHA: head, Event: "pull_request_target", ListOptions: gh.ListOptions{PerPage: 20}})
 	if err != nil {
@@ -690,8 +692,10 @@ func sameFamilyReview(ctx context.Context, c *github.Client, owner, name string,
 			if j.GetName() == "aayudha/inspect" && j.GetConclusion() == "success" {
 				// The first review line: aayu prints it before any text a
 				// reviewer wrote (findings, notes), so none can stand in for it.
-				m := reviewLine.FindStringSubmatch(jobLog(ctx, c, owner, name, j.GetID()))
-				return m == nil || m[1] != inspect.RungA && m[1] != inspect.RungB
+				// The header binds the log to this PR: two PRs can share a head.
+				log := jobLog(ctx, c, owner, name, j.GetID())
+				h, m := inspectHeader.FindStringSubmatch(log), reviewLine.FindStringSubmatch(log)
+				return h == nil || h[1] != strconv.Itoa(n) || m == nil || m[1] != inspect.RungA && m[1] != inspect.RungB
 			}
 		}
 		return true
@@ -699,6 +703,10 @@ func sameFamilyReview(ctx context.Context, c *github.Client, owner, name string,
 	return true
 }
 
-// reviewLine is the review label aayu inspect prints in the merge gate's log
-// (an Actions log line starts with its timestamp).
-var reviewLine = regexp.MustCompile(`(?m)^(?:\S+Z )?\s*review: (?:different-family review \((A|B)[,)]|same-family review \((C)\)|human review)`)
+// inspectHeader is the first line aayu inspect prints, naming the PR, and
+// reviewLine its review label, in the merge gate's log (an Actions log line
+// starts with its timestamp).
+var (
+	inspectHeader = regexp.MustCompile(`(?m)^(?:\S+Z )?inspect #([0-9]+) at [0-9a-f]+: `)
+	reviewLine    = regexp.MustCompile(`(?m)^(?:\S+Z )?\s*review: (?:different-family review \((A|B)[,)]|same-family review \((C)\)|human review)`)
+)

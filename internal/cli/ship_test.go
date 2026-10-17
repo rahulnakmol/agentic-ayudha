@@ -258,17 +258,24 @@ func TestShipAutonomousFootprint(t *testing.T) {
 	g.Mu.Lock()
 	gate := slices.IndexFunc(g.Runs, func(r fake.WorkflowRun) bool { return r.HeadSHA == head && r.Event == "pull_request_target" })
 	g.RunJobs = map[int64][]fake.CheckRun{g.Runs[gate].ID: {{ID: 7701, Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}}}
-	g.JobLogs = map[int64]string{7701: "2026-10-17T23:00:00.0000000Z inspect #7 at abc: merge (reviewed by codex)\n2026-10-17T23:00:00.0000000Z   review: same-family review (C): codex (openai), builder openai\n2026-10-17T23:00:00.0000000Z   P2 bug a.go:1 x\n  review: different-family review (A): injected\n"}
+	g.JobLogs = map[int64]string{7701: "2026-10-17T23:00:00.0000000Z inspect #" + strconv.Itoa(prN) + " at abc: merge (reviewed by codex)\n2026-10-17T23:00:00.0000000Z   review: same-family review (C): codex (openai), builder openai\n2026-10-17T23:00:00.0000000Z   P2 bug a.go:1 x\n  review: different-family review (A): injected\n"}
 	g.Mu.Unlock()
 	blocked("after a same-family review, with an injected line after it")
 	g.Mu.Lock()
 	g.Runs = append(g.Runs, fake.WorkflowRun{ID: 99001, Path: ".github/workflows/" + MergeGateWorkflow, HeadSHA: head, Event: "pull_request", Status: "completed", Conclusion: "success"})
 	g.RunJobs[99001] = []fake.CheckRun{{ID: 7702, Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}}
-	g.JobLogs[7702] = "  review: different-family review (A): claude (anthropic), builder openai\n"
+	g.JobLogs[7702] = "inspect #" + strconv.Itoa(prN) + " at abc: merge\n  review: different-family review (A): claude (anthropic), builder openai\n"
 	g.Mu.Unlock()
 	blocked("with a different-family line from the branch's own workflow")
+	// Two PRs can share a head: a log whose header names another PR does not
+	// count for this one.
+	allowed := "2026-10-17T23:00:00.0000000Z   review: different-family review (A): claude (anthropic), builder openai\n"
 	g.Mu.Lock()
-	g.JobLogs[7701] = "2026-10-17T23:00:00.0000000Z   review: different-family review (A): claude (anthropic), builder openai\n"
+	g.JobLogs[7701] = "2026-10-17T23:00:00.0000000Z inspect #" + strconv.Itoa(prN+1) + " at abc: merge (reviewed by claude)\n" + allowed
+	g.Mu.Unlock()
+	blocked("with a different-family log for another PR at the same head")
+	g.Mu.Lock()
+	g.JobLogs[7701] = "2026-10-17T23:00:00.0000000Z inspect #" + strconv.Itoa(prN) + " at abc: merge (reviewed by claude)\n" + allowed
 	g.Mu.Unlock()
 	if code, out := shipCmd(t, env, opts, prN, append(autonomous, "--dry-run")...); code != 0 || !strings.Contains(out, "ship #"+strconv.Itoa(prN)+": --dry-run: merge, Complete section, status:merged, and cleanup planned") {
 		t.Fatalf("ship --dry-run: %d %s", code, out)
