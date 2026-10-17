@@ -263,8 +263,8 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		rec.HumanPass = HumanPass{Kind: "review", Login: r.User.Login, ReviewID: ids[strings.ToLower(r.User.Login)], Commit: head}
 		break
 	}
-	if rec.HumanPass.Kind == "" && rec.Streak.Autonomous && !in.Bool("solo-bypass") && sameFamilyReview(ctx, c, owner, name, n, head, l.Config.Identity) {
-		why = append(why, "the merge gate's inspect record for this head is missing or a same-family review, which never lets an agent merge without a person")
+	if rec.HumanPass.Kind == "" && rec.Streak.Autonomous && !in.Bool("solo-bypass") && sameFamilyReview(ctx, c, owner, name, head) {
+		why = append(why, "the merge gate's inspect job at this head did not record a different-family review (a same-family review, or none), which never lets an agent merge without a person")
 	} else if rec.HumanPass.Kind == "" && rec.Streak.Autonomous && !in.Bool("solo-bypass") {
 		rec.HumanPass = HumanPass{Kind: "autonomous", Login: me.Login, Commit: head,
 			Note: fmt.Sprintf("every layer of footprint %s has a streak of at least %d correction-free agent merges and none is a never layer (WP5.7)", strings.Join(rec.Footprint, ", "), rec.Streak.Threshold)}
@@ -662,29 +662,43 @@ func setSection(body, label, value string) string {
 	return strings.Join(out, "\n")
 }
 
-// sameFamilyReview reports whether the PR's inspection at head was a
-// same-family review (rung C of the review ladder, Decision #469). Only the
-// inspect comment the merge gate itself wrote counts: one by GitHub Actions
-// or aayu's own bot identity, never a comment anyone could forge. No such
-// record, a record for another head, or comments that cannot be read also
-// refuse an autonomous pass, so a person must pass the PR.
-func sameFamilyReview(ctx context.Context, c *github.Client, owner, name string, n int, head string, id config.Identity) bool {
-	posts, err := prPosts(ctx, c, owner, name, n)
+// sameFamilyReview reports whether ship must refuse an autonomous pass
+// because the PR's review at head is not known to be different-family (the
+// review ladder, Decision #469). The rung is read only from the log of the
+// aayudha/inspect job in the newest completed pull_request_target run of the
+// base branch's merge gate on that head: the workflow file and the aayu that
+// wrote the log are the base branch's, so neither the pull request nor a
+// workflow on its branch can write it, as a comment could be. A same-family
+// review, no such run or job, a job that did not succeed, or a log without
+// the review line all refuse, so a person passes the PR.
+func sameFamilyReview(ctx context.Context, c *github.Client, owner, name string, head string) bool {
+	path := ".github/workflows/" + MergeGateWorkflow
+	runs, _, err := c.REST.Actions.ListWorkflowRunsByFileName(ctx, owner, name, MergeGateWorkflow, &gh.ListWorkflowRunsOptions{HeadSHA: head, Event: "pull_request_target", ListOptions: gh.ListOptions{PerPage: 20}})
 	if err != nil {
 		return true
 	}
-	gate := []string{"github-actions[bot]"}
-	if id.AppSlug != "" {
-		gate = append(gate, id.AppSlug+"[bot]")
-	}
-	if id.MachineUser != "" {
-		gate = append(gate, id.MachineUser)
-	}
-	var st *inspect.Result
-	for _, p := range posts {
-		if p.Kind == "comment" && strings.Contains(p.Body, inspect.Marker) && slices.ContainsFunc(gate, func(g string) bool { return strings.EqualFold(g, p.Login) }) {
-			st = inspect.ParseState(p.Body).Result
+	slices.SortFunc(runs.WorkflowRuns, func(a, b *gh.WorkflowRun) int { return cmp.Compare(b.GetID(), a.GetID()) })
+	for _, r := range runs.WorkflowRuns {
+		if r.GetPath() != path || r.GetEvent() != "pull_request_target" || r.GetHeadSHA() != head || r.GetStatus() != "completed" {
+			continue
 		}
+		jobs, _, err := c.REST.Actions.ListWorkflowJobs(ctx, owner, name, r.GetID(), &gh.ListWorkflowJobsOptions{Filter: "latest"})
+		if err != nil {
+			return true
+		}
+		for _, j := range jobs.Jobs {
+			if j.GetName() == "aayudha/inspect" && j.GetConclusion() == "success" {
+				// The first review line: aayu prints it before any text a
+				// reviewer wrote (findings, notes), so none can stand in for it.
+				m := reviewLine.FindStringSubmatch(jobLog(ctx, c, owner, name, j.GetID()))
+				return m == nil || m[1] != inspect.RungA && m[1] != inspect.RungB
+			}
+		}
+		return true
 	}
-	return st == nil || st.Head != head || st.Rung == inspect.RungC
+	return true
 }
+
+// reviewLine is the review label aayu inspect prints in the merge gate's log
+// (an Actions log line starts with its timestamp).
+var reviewLine = regexp.MustCompile(`(?m)^(?:\S+Z )?\s*review: (?:different-family review \((A|B)[,)]|same-family review \((C)\)|human review)`)

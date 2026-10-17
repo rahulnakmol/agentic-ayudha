@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -174,12 +175,18 @@ func reviewRung(b inspect.Builder, c inspect.Choice, rep inspect.AppReply) (stri
 		return inspect.RungHuman, "", b.RungLabel(inspect.RungHuman, rep.Login, "")
 	}
 	f, who := c.Family, c.App
-	if rep.Model != "" {
+	switch {
+	case rep.Model != "" && !modelID.MatchString(rep.Model):
+		f, who = "", c.App+" with a model ID aayu does not accept" // reviewer text never reaches the label
+	case rep.Model != "":
 		f, who = verbs.FamilyOf(rep.Model), c.App+" with "+rep.Model
 	}
 	rung := b.Rung(f)
 	return rung, f, b.RungLabel(rung, who, f)
 }
+
+// modelID is what a reported model may look like to be named in a label.
+var modelID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/-]{0,63}$`)
 
 func (e *Env) emitInspect(res inspect.Result, notes []string) error {
 	res.Notes = append(notes, res.Notes...)
