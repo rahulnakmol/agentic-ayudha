@@ -1,0 +1,19 @@
+# Runbook case (Decision #324): the Production Engineer twin writes the runbook for benefits-qa's first alerting SLO at
+# the startup stage, from the real output of `aayu runbook` and the checked investigation note of incident #1.
+# output/runbook.md is a recorded answer (tier 1); planted/runbook.md gives a shell command against production, which
+# the floors must catch. Tier 2 has the runbook skill write it again and the judge score it.
+skill = "runbook"
+description = "Atlas writes the runbook for benefits-qa's ask-availability alert, at the startup stage."
+input = "grounding.md"
+artifacts = ["output/runbook.md"]
+
+[persona]
+seat = "production-engineer"
+stage = "startup"
+practice = "runbooks-toil"
+draft = "output/runbook.md"
+planted = "planted/runbook.md"
+task = "The ask-availability SLO alerts but has no runbook. Write the runbook entry for the failure incident #1 showed, at this team stage, so whoever is on call next can follow it."
+
+[tier2]
+rubric = "../rubric.md"

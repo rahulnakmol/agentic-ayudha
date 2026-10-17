@@ -70,6 +70,19 @@ max_usd = 8.0 # run 39012883212 (32cca9a): 3.53 USD for 19 of 20 runs (one 524 f
 gate = "advisory"
 events = ["workflow_dispatch"]
 
+# Production Engineer cases (Decision #324, D-5.10d): investigate, slo, runbook, and respond (the postmortem), two
+# cases each at the startup and scaleup stages, on groundings from the instrumented benefits-qa (a bad deploy) and a
+# synthetic claims service (a slow dependency no catalog action fixes). Persona cases answered in the twin's voice and
+# revised once on the checks' findings; the floors are internal/production's (production.CheckDoc): every part in
+# order, catalog actions only, no executed change or production command, bounded queries, two cited queries in an
+# investigation, a blameless postmortem. Advisory until a run holds a mean of at least 4.0 per skill; dispatch only.
+[[groups]]
+name = "production"
+prefixes = ["investigate/", "slo/", "runbook/", "respond/"]
+max_usd = 15.0 # an estimate, no run yet: data-ai's latest full run cost about 0.93 USD a case (39012883212), so eight cases about 7.44
+gate = "advisory"
+events = ["workflow_dispatch"]
+
 # Seeded-defect PRs for inspect (WP4.8b): each case runs in three variants (the 0.1 prompt, general, peer) and is
 # scored by precision and recall against its planted defects, with no judge. Reported, never gating, and run on
 # dispatch only (about 80 review calls per k; D-4.8d).
