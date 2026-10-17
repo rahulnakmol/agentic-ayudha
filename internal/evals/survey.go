@@ -302,8 +302,10 @@ func (h *Harness) runSurvey(ctx context.Context, c Case, lane verbs.LaneID, body
 		ctxText += untrusted("survey.json", w.surveyJ) + "\n\n"
 	}
 	req := models.Request{
-		System:    body + "\n\nYou have indexed the repository and read every module's pack and the files that follow. Reply with " + file + " only: one JSON object, nothing before or after it.",
-		Messages:  []models.Message{{Role: "user", Content: ctxText + "The person asks:\n\n" + untrusted("request", input) + "\n\n" + task}},
+		System: body + "\n\nYou have indexed the repository and read every module's pack and the files that follow. Reply with " + file + " only: one JSON object, nothing before or after it.",
+		// The case's shared prefix (the skill, the packs and files, the request)
+		// is cached once for every run and revision.
+		Messages:  []models.Message{{Role: "user", Content: ctxText + "The person asks:\n\n" + untrusted("request", input) + "\n\n" + task, CacheBreak: true}},
 		MaxTokens: h.Config.MaxTokens.Skill,
 		// A survey draft runs for minutes; streaming keeps the gateway from
 		// closing the idle connection (HTTP 524 in run 39014616715).
@@ -337,7 +339,8 @@ func (h *Harness) runSurvey(ctx context.Context, c Case, lane verbs.LaneID, body
 	// The self-check replies with corrections only (D-5.9n), applied to the
 	// draft all or nothing; the floors then run on the result. A reply that
 	// does not apply, or a result that fails the floors, gets one revision.
-	req.Messages = append(req.Messages, models.Message{Role: "assistant", Content: reply}, models.Message{Role: "user", Content: selfCheckPrompt(c.Survey.Kind, file)})
+	// The draft is the second cached prefix: the self-check and its revision read it.
+	req.Messages = append(req.Messages, models.Message{Role: "assistant", Content: reply, CacheBreak: true}, models.Message{Role: "user", Content: selfCheckPrompt(c.Survey.Kind, file)})
 	var corrected string
 	patch, problems, again, err := reviseOnceAsking(ctx, h.complete(lane, "skill", &calls), req, func(p string) []string {
 		var refused []string

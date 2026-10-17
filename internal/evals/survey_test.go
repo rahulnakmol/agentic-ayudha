@@ -129,7 +129,7 @@ func TestTier2SurveyRevisesOnceThenJudges(t *testing.T) {
 		return models.Response{Text: fmt.Sprintf(`{"score": %d, "reason": "r%d"}`, n, n)}
 	}
 	replies := []models.Response{
-		{Text: bad}, {Text: "```json\n" + good + "```"}, judge(2), {Text: narrow}, judge(4), // revised, then self-checked
+		{Text: bad, CachedIn: 900, CacheWriteIn: 40}, {Text: "```json\n" + good + "```"}, judge(2), {Text: narrow}, judge(4), // revised, then self-checked
 		{Text: good}, judge(3), {Text: dangling}, {Text: narrow}, judge(5), // the corrected draft fails the floors once
 		{Text: good}, judge(3), {Text: unknown}, {Text: good}, // corrections that never apply: a floor miss, whatever the first draft scored
 		{Text: good}, judge(4), {Text: selfCheckReply(t, good, nil)}, judge(4),
@@ -175,6 +175,20 @@ func TestTier2SurveyRevisesOnceThenJudges(t *testing.T) {
 	}
 	if len(revise.Messages) != 3 || !strings.Contains(revise.Messages[2].Content, `the request does not name "Go"`) {
 		t.Errorf("revision request: %+v", revise.Messages)
+	}
+	// Prompt caching: the case's shared prefix and the draft end in breakpoints,
+	// every call of the case carries its cache key, and the run records the
+	// cache reads and writes.
+	if !first.Messages[0].CacheBreak || !selfCheck.Messages[0].CacheBreak || !selfCheck.Messages[1].CacheBreak || selfCheck.Messages[2].CacheBreak {
+		t.Error("cache breakpoints are not after the shared prefix and the draft")
+	}
+	for i, r := range fake.Requests {
+		if r.CacheKey != "aayu-eval-survey/tinyjs-rust" {
+			t.Fatalf("call %d: cache key %q", i, r.CacheKey)
+		}
+	}
+	if c := runs[0].Calls[0]; c.CachedIn != 900 || c.CacheWriteIn != 40 {
+		t.Errorf("call log: %+v", c)
 	}
 	// The self-check continues from the draft that passed, not the refused one, and asks for corrections only.
 	if n := len(selfCheck.Messages); n != 3 || strings.TrimSpace(selfCheck.Messages[1].Content) != strings.TrimSpace(good) ||
