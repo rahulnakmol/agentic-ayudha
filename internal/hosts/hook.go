@@ -21,7 +21,7 @@ import (
 // registers each of them with every host it installs for.
 var Hooks = []struct{ Name, Summary string }{
 	{"session-start", "Report skill copies that differ from .aayudha/lock.toml."},
-	{"pre-tool", "Block agent tool calls while the repository is halted or the [budget] breaker has paused agent lanes."},
+	{"pre-tool", "Block agent tool calls while the repository is halted or the [budget] breaker has paused agent lanes, a human-only aayu command, and a PostHog or Sentry write through a host's MCP server or CLI."},
 	{"status-line", "Print one line of journey state for a host's status line, from the last home screen (no network)."},
 }
 

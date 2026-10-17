@@ -119,6 +119,12 @@ func TestRegistry(t *testing.T) {
 			}
 			return nil
 		}},
+		{"the integration adapters and their host-call guard are contracts, L06 (Decision #449)", func() error {
+			if l, _ := FindLayer(L06); !slices.Contains(l.Paths, "internal/integrations/**") {
+				return fmt.Errorf("L06 paths %v lack internal/integrations/**", l.Paths)
+			}
+			return nil
+		}},
 		{"every path glob belongs to exactly one layer", func() error {
 			var globs []string
 			for _, l := range LayerTable {

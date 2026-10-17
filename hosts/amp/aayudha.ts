@@ -125,8 +125,10 @@ export default function (amp: PluginAPI) {
 		}
 	})
 
-	amp.on('tool.call', async (_event, ctx) => {
-		const r = await ctx.$`${AAYU} hook pre-tool --host amp`
+	amp.on('tool.call', async (event, ctx) => {
+		// The hook reads the call as Claude Code sends it: tool_name and tool_input.
+		const call = JSON.stringify({ tool_name: event.tool, tool_input: event.input })
+		const r = await ctx.$`${AAYU} hook pre-tool --host amp --event ${call}`
 		if (r.exitCode === 2) {
 			return { action: 'reject-and-continue', message: r.stderr.trim() }
 		}

@@ -257,3 +257,29 @@ func TestSoloProvisionalKey(t *testing.T) {
 		}
 	}
 }
+
+// TestAllowPIIRepoOnly (Decision #449): personal data from a host's PostHog or
+// Sentry MCP is the repository's opt-in, so only the protected repository
+// config turns it on; a person's or an agent's own layer is refused.
+func TestAllowPIIRepoOnly(t *testing.T) {
+	key := "[integrations.posthog]\nallow_pii = true\n"
+	for name, tt := range map[string]struct {
+		files    map[string]string
+		env, set []string
+	}{
+		"user config":  {files: map[string]string{"home/.config/aayudha/config.toml": "version = 1\n" + key}},
+		"local config": {files: map[string]string{"repo/.aayudha/config.local.toml": "version = 1\n" + key}},
+		"environment":  {env: []string{"AAYU_INTEGRATIONS__SENTRY__ALLOW_PII=true"}},
+		"--set":        {set: []string{"integrations.posthog.allow_pii=true"}},
+	} {
+		src := fixture(t, tt.files)
+		src.Environ, src.Sets = tt.env, tt.set
+		if _, err := Load(src); err == nil || !strings.Contains(err.Error(), "allow_pii is read only from .aayudha/config.toml") {
+			t.Errorf("%s: err = %v; want the repository-only refusal", name, err)
+		}
+	}
+	l, err := Load(fixture(t, map[string]string{"repo/.aayudha/config.toml": "version = 1\n" + key + "secret = \"posthog\"\nscope = \"read\"\nproject = \"1\"\n"}))
+	if err != nil || !l.Config.Integrations["posthog"].AllowPII || l.Config.Integrations["sentry"].AllowPII {
+		t.Errorf("repository config: %v; want posthog allow_pii on and sentry off", err)
+	}
+}

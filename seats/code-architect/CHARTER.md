@@ -79,7 +79,7 @@ Sources:
 | Layer owned | Name | Paths |
 |---|---|---|
 | L02 | Interaction / API boundary | `cmd/**`, `internal/cli/**`, `internal/mcp/**`, `examples/benefits-qa/api/**`, `examples/benefits-qa/cmd/**` |
-| L06 | Contracts / integration | `internal/github/**`, `internal/hosts/**`, `internal/notify/**`, `hosts/**`, `examples/benefits-qa/contracts/**` |
+| L06 | Contracts / integration | `internal/github/**`, `internal/hosts/**`, `internal/integrations/**`, `internal/notify/**`, `hosts/**`, `examples/benefits-qa/contracts/**` |
 
 | Verb | Role |
 |---|---|
