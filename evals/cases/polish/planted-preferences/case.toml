@@ -1,0 +1,17 @@
+# polish (WP6.6): the host applies a review critique to the delivery preferences page with three planted defects. output/ is a recorded run (tier 1); tier 2 reruns
+# it. The floors: the page is rewritten whole with token colours only and every control kept, polish.md reports every
+# kind of finding, and lane B in Chromium (impeccable, axe, the focus and 44 px probes) finds no a11y finding on it
+# (n/a in tier 1 without AAYU_FLOOR_WEB=1).
+skill = "polish"
+description = "Apply the critique to the delivery preferences page with three planted defects."
+input = "input.md"
+artifacts = ["output/preferences.html", "output/polish.md", "critique.json", "preferences.html"]
+
+[ux]
+output = "output"
+page = "preferences.html"
+planted = ["focus-visible", "contrast", "target-size"]
+context = ["./critique.json", "evals/cases/mockup/design-system.md", "packages/design-system/src/styles/tokens.css"]
+
+[tier2]
+rubric = "rubric.md"

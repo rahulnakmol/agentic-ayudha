@@ -1,0 +1,10 @@
+{
+  "notes": "notes.md",
+  "references": [
+    {"source": "mobbin", "kind": "screen", "id": "5e4d3c2b-1a09-4f8e-8d7c-6b5a4f3e2d1c", "url": "https://mobbin.com/screens/5e4d3c2b-1a09-4f8e-8d7c-6b5a4f3e2d1c"},
+    {"source": "mobbin", "kind": "flow", "id": "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d", "url": "https://mobbin.com/flows/9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d"},
+    {"source": "web", "kind": "guideline", "id": "gov-uk-radios", "url": "https://design-system.service.gov.uk/components/radios/"},
+    {"source": "web", "kind": "guideline", "id": "wcag-2.2-3.3.1", "url": "https://www.w3.org/WAI/WCAG22/Understanding/error-identification.html"},
+    {"source": "web", "kind": "article", "id": "baymard-delivery-dates", "url": "https://baymard.com/blog/delivery-date-selection"}
+  ]
+}

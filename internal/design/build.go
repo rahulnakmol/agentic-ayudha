@@ -141,6 +141,10 @@ type Build struct {
 	Target       string // base URL of the [verify.environments] target
 	Capture      Capture
 	Captures     []Captured // supplied with --captures; Capture is not called
+	// Static stops a prototype after its spec, flag, Code Connect, and token
+	// checks: no Figma call, render, or gate (the skill evals, which have no
+	// Figma file or running app).
+	Static bool
 }
 
 // Result is a built stage: the manifest and the files to land beside it
@@ -340,6 +344,9 @@ func (b *Build) prototype(ctx context.Context, spec Spec, up *Manifest, res *Res
 	tok, err := ParseTokens(b.Tokens)
 	if err != nil {
 		return fmt.Errorf("%w: [design] tokens: %w", ErrRefuse, err)
+	}
+	if b.Static {
+		return nil
 	}
 
 	// Figma frames, pinned by the hash of their renders.

@@ -1,0 +1,17 @@
+# research (WP6.5) for a Feature with seeded research data, at the startup team stage. output/ is a recorded run
+# (tier 1); tier 2 reruns it. The floors: `aayu research`'s checks, references only from the host's search results
+# (two of them are images, which must be dropped), quotations word for word from the data, and the startup Job
+# story as a heading within 400 words.
+skill = "research"
+description = "Research notes and pinned references for the orders list's delivery status."
+input = "input.md"
+artifacts = ["output/stage.json", "output/notes.md"]
+
+[ux]
+output = "output"
+feature = 420
+team = "startup"
+practice = "jobs-to-be-done"
+
+[tier2]
+rubric = "rubric.md"

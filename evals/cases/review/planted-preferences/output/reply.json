@@ -1,0 +1,16 @@
+{
+  "findings": [
+    {"kind": "focus-visible", "heuristic": 1, "severity": 3, "element": "select#window, button", "summary": "After one Tab press the Delivery window select looks exactly as at rest: `button:focus, select:focus { outline: none; }` removes the focus indicator from every control, so keyboard users cannot see where they are.", "fix": "Replace the rule with `:focus-visible { outline: 2px solid var(--ay-color-focus); outline-offset: 2px; }` on the select and both buttons."},
+    {"kind": "contrast", "heuristic": 8, "severity": 3, "element": "main > p", "summary": "The help text that explains what happens when nobody is home is #838383 on #ffffff, about 3.8:1, below the 4.5:1 floor for body text; low-vision users may miss the five-day depot rule.", "fix": "Use the label text token (--ay-color-text-label, #4f5a6b, about 7:1)."},
+    {"kind": "target-size", "heuristic": 7, "severity": 2, "element": "button.icon \"Help with delivery windows\"", "summary": "The help button is 32 x 32 px, under the 44 x 44 px floor, and sits next to Save, so a missed tap can hit the wrong control on a phone.", "fix": "Make it the icon button size of the cozy density (--ay-size-control-height, 44 px) on both axes."},
+    {"kind": "copy", "heuristic": 10, "severity": 1, "element": "button.icon \"?\"", "summary": "The help button shows only \"?\"; its accessible name is clear, but sighted first-time users cannot tell what help it offers.", "fix": "Optional: add the visible text \"What do the windows mean?\" or a tooltip."}
+  ],
+  "nielsen": [3, 0, 0, 0, 0, 0, 2, 3, 0, 1],
+  "personas": [
+    {"persona": "keyboard-only", "blocked": true, "note": "Tab reaches the select and both buttons, but nothing shows which one has focus, so choosing a window and saving is guesswork."},
+    {"persona": "screen-reader", "blocked": false, "note": "The tree names the heading, the labelled combobox, and both buttons; the help button's name is announced."},
+    {"persona": "low-vision", "blocked": false, "note": "The 3.8:1 help text is hard to read when zoomed, and the missing focus ring makes the current control hard to find."},
+    {"persona": "first-time", "blocked": false, "note": "The task is clear: pick a window and save; the \"?\" button's purpose is not obvious."}
+  ],
+  "rebuild": false
+}

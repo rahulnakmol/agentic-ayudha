@@ -1,0 +1,14 @@
+{
+  "findings": [
+    {"kind": "copy", "heuristic": 10, "severity": 1, "element": "button.icon \"?\"", "summary": "The help button shows only \"?\"; its accessible name, \"Help with delivery windows\", is clear, but sighted first-time users cannot tell what help it offers.", "fix": "Optional: a visible label or tooltip, \"What do the windows mean?\"."},
+    {"kind": "feedback", "heuristic": 1, "severity": 1, "element": "button \"Save preferences\"", "summary": "The capture does not show what happens after Save; the confirmation is outside this state.", "fix": "Check the saved state's capture when it is reviewed."}
+  ],
+  "nielsen": [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+  "personas": [
+    {"persona": "keyboard-only", "blocked": false, "note": "After one Tab the select shows a 2 px blue outline; Tab order is select, Save, help."},
+    {"persona": "screen-reader", "blocked": false, "note": "Heading, labelled combobox with three options, and two named buttons."},
+    {"persona": "low-vision", "blocked": false, "note": "Body and label text are dark grey on white (about 7:1); controls are 44 px tall."},
+    {"persona": "first-time", "blocked": false, "note": "One clear task, pick a window and save, with the depot rule explained up front."}
+  ],
+  "rebuild": false
+}

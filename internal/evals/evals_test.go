@@ -917,9 +917,27 @@ func TestGroups(t *testing.T) {
 		strings.Join(hostIDs, " ") != "build/small-story build/unasked-pickup ready/readback-pass ready/refuse-unready verify/map-drift verify/preview-honest" {
 		t.Fatalf("host-skills group: %v, cap %v, cases %v, events %v", err, hg.MaxUSD, hostIDs, g.Events)
 	}
+	// The UX skills: two cases per skill, advisory, on dispatch only.
+	ug, ux, err := cfg.ForGroup("ux", all)
+	perSkill := map[string]int{}
+	for _, c := range ux {
+		perSkill[c.Skill]++
+		if c.UX == nil {
+			t.Errorf("%s in the ux group is not a UX case", c.ID)
+		}
+	}
+	uxg, _ := cfg.Group("ux")
+	if err != nil || ug.MaxUSD != 35 || cfg.Gates("ux") || len(perSkill) != 7 || uxg.RunsOn("push") || uxg.RunsOn("schedule") {
+		t.Fatalf("ux group: %v, cap %v, gates %v, cases per skill %v, events %v", err, ug.MaxUSD, cfg.Gates("ux"), perSkill, uxg.Events)
+	}
+	for skill, n := range perSkill {
+		if n < 2 {
+			t.Errorf("ux group: %s has %d case(s), want at least 2", skill, n)
+		}
+	}
 	o, other, err := cfg.ForGroup("skills", all)
-	if err != nil || o.MaxUSD != 8 || o.K != cfg.K || !cfg.Gates("skills") || len(brief)+len(plain)+len(personas)+len(review)+len(convs)+len(tells)+len(hosts)+len(other) != len(all) {
-		t.Fatalf("skills group: %v, cap %v, %d+%d+%d+%d+%d+%d+%d+%d of %d cases", err, o.MaxUSD, len(brief), len(plain), len(personas), len(review), len(convs), len(tells), len(hosts), len(other), len(all))
+	if err != nil || o.MaxUSD != 8 || o.K != cfg.K || !cfg.Gates("skills") || len(brief)+len(plain)+len(personas)+len(review)+len(convs)+len(tells)+len(hosts)+len(ux)+len(other) != len(all) {
+		t.Fatalf("skills group: %v, cap %v, %d+%d+%d+%d+%d+%d+%d+%d+%d of %d cases", err, o.MaxUSD, len(brief), len(plain), len(personas), len(review), len(convs), len(tells), len(hosts), len(ux), len(other), len(all))
 	}
 	for _, c := range other {
 		if c.Tier2 != nil && c.Tier2.Human != "" {

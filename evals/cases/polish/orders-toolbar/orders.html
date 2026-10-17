@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Your orders</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f5f6f8; color: #1b2330; font: 16px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 760px; margin: 32px auto; padding: 0 12px; }
+  h1 { font-size: 24px; font-weight: 600; margin: 0 0 16px; }
+  .toolbar { display: flex; gap: 8px; margin-bottom: 16px; }
+  .toolbar input { flex: 1; height: 44px; padding: 0 12px; border: 1px solid #7d8696; border-radius: 8px; font: inherit; }
+  .toolbar button { width: 44px; height: 44px; border: 1px solid #7d8696; border-radius: 8px; background: #ffffff; }
+  .card { background: #ffffff; border: 1px solid #dde1e7; border-radius: 12px; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-top: 1px solid #dde1e7; }
+  .row:first-child { border-top: 0; }
+  .row .id { font-weight: 600; width: 88px; }
+  .row .date { flex: 1; }
+  .row .status { color: #9aa1ab; font-size: 14px; }
+  .row button { height: 32px; padding: 0 10px; border: 0; border-radius: 8px; background: #1f5bd1; color: #ffffff; font: inherit; font-size: 14px; }
+  button:focus-visible, input:focus-visible { outline: 2px solid #1f5bd1; outline-offset: 2px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Your orders</h1>
+  <div class="toolbar">
+    <input type="search" placeholder="Search orders">
+    <button type="button"><svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M2 4h16M5 10h10M8 16h4" stroke="currentColor" stroke-width="2"/></svg></button>
+  </div>
+  <div class="card">
+    <div class="row"><span class="id">#10482</span><span class="date">14 Oct</span><span class="status">Out for delivery</span><button type="button">Track</button></div>
+    <div class="row"><span class="id">#10477</span><span class="date">11 Oct</span><span class="status">Being packed</span><button type="button">Track</button></div>
+    <div class="row"><span class="id">#10431</span><span class="date">2 Oct</span><span class="status">Delivered</span><button type="button">Track</button></div>
+  </div>
+</main>
+</body>
+</html>

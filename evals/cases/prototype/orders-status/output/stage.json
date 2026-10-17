@@ -1,0 +1,11 @@
+{
+  "flag": "orders-delivery-status",
+  "figma_file": "Ord3rsSt4tus",
+  "code_connect": ["src/orders/OrderStatusBadge.figma.tsx", "src/orders/OrdersTable.figma.tsx", "src/orders/OrdersMessages.figma.tsx"],
+  "components": ["3:21", "3:30", "3:2", "3:40"],
+  "states": [
+    {"id": "list", "title": "Orders list with three orders and their delivery status", "path": "/orders", "figma_node": "12:4"},
+    {"id": "empty", "title": "No orders yet", "path": "/orders?seed=empty", "figma_node": "12:9"},
+    {"id": "error", "title": "Orders could not load", "path": "/orders?seed=error", "figma_node": "12:15"}
+  ]
+}
