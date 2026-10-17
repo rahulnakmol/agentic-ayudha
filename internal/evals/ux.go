@@ -402,6 +402,7 @@ var (
 	discardLine  = regexp.MustCompile(`\bgit\s+(reset\s+--hard|clean\s+-\w*f|checkout\s+(\S+\s+)?--\s|restore\b|stash\s+(drop|clear))`)
 	writeLine    = regexp.MustCompile(`\bgit\s+push\b|\bgh\s+(pr|issue)\s+(create|comment|edit|merge|close)\b|\bgh\s+api\b.*-X\s*(POST|PATCH|PUT|DELETE)|--admin\b`)
 	prodLine     = regexp.MustCompile(`(?i)AAYU_ENV=["']?(prod|production)\b`)
+	assignLine   = regexp.MustCompile(`^(?:export\s+|readonly\s+)?([A-Za-z_][A-Za-z0-9_]*)=(["']?)([^"'\s;$]*)(["']?)$`)
 )
 
 // baselineChecks checks a baseline run's commands: the checkout is at the
@@ -414,9 +415,22 @@ func baselineChecks(u *UXSpec, dir string) []string {
 	if err != nil {
 		return []string{"no commands.sh"}
 	}
+	// A script may name the commit or target once (SHA=77aa31c) and use
+	// "$SHA" after; the checks read each line with such variables expanded.
 	var lines []string
+	vars := map[string]string{}
+	expand := func(k string) string {
+		if v, ok := vars[k]; ok {
+			return v
+		}
+		return "${" + k + "}"
+	}
 	for _, l := range strings.Split(string(b), "\n") {
 		if l = strings.TrimSpace(l); l != "" && !strings.HasPrefix(l, "#") {
+			l = os.Expand(l, expand)
+			if m := assignLine.FindStringSubmatch(l); m != nil {
+				vars[m[1]] = m[3]
+			}
 			lines = append(lines, l)
 		}
 	}
@@ -426,14 +440,15 @@ func baselineChecks(u *UXSpec, dir string) []string {
 		return []string{"commands.sh never runs `aayu baseline`"}
 	}
 	if u.SHA != "" {
-		if !regexp.MustCompile(`--sha[ =]` + regexp.QuoteMeta(u.SHA) + `\b`).MatchString(lines[at]) {
+		if !regexp.MustCompile(`--sha[ =]["']?` + regexp.QuoteMeta(u.SHA) + `\b`).MatchString(lines[at]) {
 			bad = append(bad, fmt.Sprintf("`%s` does not baseline %s (--sha %s)", lines[at], u.SHA, u.SHA))
 		}
 		if !slices.ContainsFunc(lines[:at], func(l string) bool { return checkoutLine.MatchString(l) && strings.Contains(l, u.SHA) }) {
 			bad = append(bad, "no checkout of "+u.SHA+" before `aayu baseline`")
 		}
 	}
-	if !slices.ContainsFunc(lines[:at+1], func(l string) bool { return strings.Contains(l, "AAYU_ENV="+u.Env) }) {
+	envLine := regexp.MustCompile(`AAYU_ENV=["']?` + regexp.QuoteMeta(u.Env) + `\b`)
+	if !slices.ContainsFunc(lines[:at+1], envLine.MatchString) {
 		bad = append(bad, fmt.Sprintf("the app is not started on the %s target (AAYU_ENV=%s) before `aayu baseline`", u.Env, u.Env))
 	}
 	for _, l := range lines {
@@ -692,6 +707,9 @@ func (h *Harness) runUX(ctx context.Context, c Case, lane verbs.LaneID, body, in
 		System:    body + "\n\n" + uxProtocol(c),
 		Messages:  []models.Message{{Role: "user", Content: untrusted("eval-input", input) + extra}},
 		MaxTokens: h.Config.MaxTokens.Skill,
+		// A prototype runs for minutes; streaming keeps the gateway from
+		// closing the idle connection (HTTP 524 in run 39012826814, D-6.5d).
+		Stream: true,
 	}
 	var files uxFiles
 	var problems []string

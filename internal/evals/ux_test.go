@@ -83,6 +83,11 @@ func TestUXFloorsCatchLapses(t *testing.T) {
 		{"baseline/wrong-checkout", "commands.sh", "AAYU_ENV=staging aayu baseline --sha 77aa31c", "AAYU_ENV=staging aayu baseline", "does not baseline 77aa31c"},
 		{"baseline/wrong-checkout", "commands.sh", "git worktree add --detach ../shop-v0.3.0 77aa31c", "git worktree add --detach ../shop-v0.3.0 HEAD", "no checkout of 77aa31c"},
 		{"baseline/wrong-checkout", "commands.sh", "git fetch origin --tags", "git reset --hard", "discards local changes"},
+		// A commit or target named once in a variable counts where the variable is used, and only with its value.
+		{"baseline/wrong-checkout", "commands.sh", "git worktree add --detach ../shop-v0.3.0 77aa31c", "SHA=\"77aa31c\"\ngit worktree add --detach ../shop-v0.3.0 \"${SHA}\"", ""},
+		{"baseline/wrong-checkout", "commands.sh", "AAYU_ENV=staging aayu baseline --sha 77aa31c", "SHA=77aa31c\nTARGET=staging\nAAYU_ENV=\"$TARGET\" aayu baseline --sha \"$SHA\"", ""},
+		{"baseline/wrong-checkout", "commands.sh", "git worktree add --detach ../shop-v0.3.0 77aa31c", "SHA=5d1e0b2\ngit worktree add --detach ../shop-v0.3.0 \"$SHA\"", "no checkout of 77aa31c"},
+		{"baseline/release-candidate", "commands.sh", "AAYU_ENV=preview aayu baseline", "TARGET=production\nAAYU_ENV=$TARGET aayu baseline", "targets production"},
 		{"baseline/release-candidate", "commands.sh", "AAYU_ENV=preview aayu baseline", "AAYU_ENV=production aayu baseline", "targets production"},
 		{"baseline/release-candidate", "commands.sh", "kill %1", "gh pr comment 57 --body baselined", "writes to GitHub"},
 	} {
