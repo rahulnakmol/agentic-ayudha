@@ -124,7 +124,11 @@ You (the host's model) write the code; the binary owns the worktree, the lease, 
    the feature map in the same checkpoint: the surface on the feature it belongs to, and a behaviour check per
    criterion that drives the real product (the aayudha verify skill, "When a branch changes the product"); map the
    criteria to those checks too, and run `aayu verify --map` (it must be clean) before the commit. The evidence map
-   has exactly this shape, one table per criterion (`internal/verify.EvidenceMap`);
+   and the feature map are the checkpoint's own records, not product code: write them in the same checkpoint,
+   without asking, outside the plan's paths and in a path `LAYERS.md` leaves unassigned; only an `[autonomy] never`
+   layer stops you. `aayu build <story>` runs the tests when it commits the checkpoint, so when you cannot run tests
+   yourself, write the failing test and the code together and let that commit run them; do not stop to ask for
+   another way. The evidence map has exactly this shape, one table per criterion (`internal/verify.EvidenceMap`);
    any other shape parses as nothing mapped:
 
    ```toml
