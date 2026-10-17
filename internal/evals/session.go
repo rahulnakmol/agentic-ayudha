@@ -184,7 +184,9 @@ You are working in the person's terminal through a channel that carries JSON. Ea
 to the repository root (the story's worktree when you build). Commands run one by one with no shell: no pipes,
 redirection, or chaining. aayu, cat, and ls run; anything else is not available here. The results come back in the
 next message. When you need the person, ask in "say" and run nothing; their answer comes back. When the work is
-finished, or you have stopped and said why, reply with "done": true and your final report to the person in "say".`
+finished, or you have stopped and said why, reply with "done": true and your final report to the person in "say".
+When the channel asks you to send a turn again because it was not valid JSON, send the same turn: the person never
+saw the rejected reply, so do not mention it to them.`
 
 func sessionSchema() []byte {
 	return []byte(`{"type":"object","additionalProperties":false,"required":["say","done"],"properties":{
@@ -551,6 +553,9 @@ func (w *world) succeeded(re *regexp.Regexp) bool {
 func inProcess(args []string) bool {
 	if len(args) == 0 {
 		return true // the home screen
+	}
+	if slices.Contains(args, "--help") || slices.Contains(args, "-h") {
+		return true // a verb's usage: it prints and runs nothing (D-3.4j)
 	}
 	switch args[0] {
 	case "help", "--help", "-h":

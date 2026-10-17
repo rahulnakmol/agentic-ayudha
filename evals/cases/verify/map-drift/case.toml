@@ -11,4 +11,5 @@ artifacts = ["output/session.json"]
 
 [tier2]
 rubric = "rubric.md"
+references = ["feature-maps.md"] # the map contract the skill links to; a host lets the skill read it (D-3.4j)
 session = "session.toml"

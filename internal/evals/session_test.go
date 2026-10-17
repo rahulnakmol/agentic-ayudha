@@ -125,6 +125,28 @@ func TestSessionRerunAfterFloorMiss(t *testing.T) {
 	}
 }
 
+// A verb's help prints its usage and runs nothing, so it answers as the
+// binary does instead of "has no recorded answer" (D-3.4j), while the verb
+// itself still does not run.
+func TestSessionVerbHelp(t *testing.T) {
+	c, _ := sessionCase(t, "build/small-story")
+	spec, err := LoadSession(filepath.Join(c.Dir, c.Tier2.Session))
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, cleanup, err := newWorld(c, spec, aayudha.Assets)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	if r := w.run(context.Background(), "aayu verify --help"); r.Code != 0 || !strings.Contains(r.Out, "aayu verify") {
+		t.Errorf("aayu verify --help: exit %d\n%s", r.Code, r.Out)
+	}
+	if r := w.run(context.Background(), "aayu verify"); r.Code == 0 && strings.Contains(r.Out, "Usage") {
+		t.Errorf("aayu verify ran as help:\n%s", r.Out)
+	}
+}
+
 func TestShellWords(t *testing.T) {
 	got, err := shellWords(`aayu build 41 --asked "Build #41, \"now\"" 'a b'`)
 	if want := []string{"aayu", "build", "41", "--asked", `Build #41, "now"`, "a b"}; err != nil || !slices.Equal(got, want) {
