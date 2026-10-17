@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -539,7 +540,7 @@ func TestDelegateCodexDiffReturn(t *testing.T) {
 // wall-time budget ends cannot be waited out: the build stops as paused, not
 // failed, again with no attempt counted.
 func TestDelegateLocalUsageLimitPause(t *testing.T) {
-	_, env, opts, _, bare := delegateFixture(t)
+	g, env, opts, _, bare := delegateFixture(t)
 	opts.LookPath = func(name string) (string, error) {
 		if name == "codex" {
 			return "/usr/local/bin/codex", nil
@@ -561,7 +562,8 @@ func TestDelegateLocalUsageLimitPause(t *testing.T) {
 		return "ERROR: You’ve hit your usage limit. Visit https://chatgpt.com/settings/usage to purchase more credits or try again at " +
 			at.Format("Jan 2") + "th" + at.Format(", 2006 3:04 PM") + "."
 	}
-	resets := now.Add(90 * time.Minute).Truncate(time.Minute)
+	// Five hours outlasts the four-hour story lease, so the wait renews it.
+	resets := now.Add(5 * time.Hour).Truncate(time.Minute)
 	runs := 0
 	opts.DelegateExec = func(_ context.Context, wt string, _ []string, _, _ string, _ ...string) (string, error) {
 		runs++
@@ -570,9 +572,26 @@ func TestDelegateLocalUsageLimitPause(t *testing.T) {
 		}
 		return "", os.WriteFile(filepath.Join(wt, "empty.txt"), []byte("Your cart is empty\n"), 0o644)
 	}
+	g.Reset()
 	code, res, errOut := delegateRun(t, env, opts, "--delegate", "codex", "--local")
-	if code != 0 || res.PR == 0 || runs != 2 || len(slept) != 1 || slept[0] != resets.Sub(start)+time.Minute || res.Budget.Attempts != 0 {
+	var total time.Duration
+	for _, d := range slept {
+		total += d
+	}
+	if code != 0 || res.PR == 0 || runs != 2 || total != resets.Sub(start)+time.Minute || res.Budget.Attempts != 0 {
 		t.Fatalf("pause and resume: %d %+v runs %d slept %v %s", code, res.Budget, runs, slept, errOut)
+	}
+	var leasedUntil time.Time
+	for _, r := range g.Writes() {
+		body, _ := r.Body["body"].(string)
+		if m := regexp.MustCompile(`aayudha:lease holder=\S+ expires=(\S+) -->`).FindStringSubmatch(body); m != nil {
+			if t, err := time.Parse(time.RFC3339, m[1]); err == nil && t.After(leasedUntil) {
+				leasedUntil = t
+			}
+		}
+	}
+	if leasedUntil.Before(resets) {
+		t.Fatalf("the lease ran out at %s, before the limit reset at %s", leasedUntil, resets)
 	}
 	var st BuildState
 	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &st); err != nil || st.Attempts != 0 {
@@ -588,19 +607,22 @@ func TestDelegateLocalUsageLimitPause(t *testing.T) {
 		t.Fatalf("no pause event: %+v", ds.Events)
 	}
 
-	// A reset two days out is after the 8-hour wall budget: no wait, a pause.
-	_, env, opts, _, bare = delegateFixture(t)
-	opts.LookPath = func(name string) (string, error) { return "/usr/local/bin/" + name, nil }
-	opts.Sleep = func(context.Context, time.Duration) error { t.Fatal("waited past the wall budget"); return nil }
-	opts.DelegateExec = func(context.Context, string, []string, string, string, ...string) (string, error) {
-		return limit(opts.Now().Add(48 * time.Hour)), errors.New("codex: exit status 1")
-	}
-	code, res, errOut = delegateRun(t, env, opts, "--delegate", "codex", "--local")
-	if code != ExitBlocked || !strings.Contains(errOut, "paused") || !strings.Contains(errOut, "after the build's wall-time budget ends") || res.Budget.Attempts != 0 || res.Delegation.Status != dlgPaused {
-		t.Fatalf("past the wall budget: %d %+v %s", code, res, errOut)
-	}
-	st = BuildState{}
-	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &st); err != nil || st.Attempts != 0 || st.Blocked != "" {
-		t.Fatalf("build state after a pause past the wall budget: %v %+v", err, st)
+	// A reset two days out is after the 8-hour wall budget, and one less than a
+	// minute before it leaves no time to run again: no wait, a pause.
+	for _, after := range []time.Duration{48 * time.Hour, 8*time.Hour - 30*time.Second} {
+		_, env, opts, _, bare = delegateFixture(t)
+		opts.LookPath = func(name string) (string, error) { return "/usr/local/bin/" + name, nil }
+		opts.Sleep = func(context.Context, time.Duration) error { t.Fatal("waited past the wall budget"); return nil }
+		opts.DelegateExec = func(context.Context, string, []string, string, string, ...string) (string, error) {
+			return limit(opts.Now().Add(after)), errors.New("codex: exit status 1")
+		}
+		code, res, errOut = delegateRun(t, env, opts, "--delegate", "codex", "--local")
+		if code != ExitBlocked || !strings.Contains(errOut, "paused") || !strings.Contains(errOut, "after the build's wall-time budget ends") || res.Budget.Attempts != 0 || res.Delegation.Status != dlgPaused {
+			t.Fatalf("reset %s out: %d %+v %s", after, code, res, errOut)
+		}
+		st = BuildState{}
+		if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &st); err != nil || st.Attempts != 0 || st.Blocked != "" {
+			t.Fatalf("build state after a pause past the wall budget: %v %+v", err, st)
+		}
 	}
 }

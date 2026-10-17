@@ -275,20 +275,21 @@ func TestBudgetBreaker(t *testing.T) {
 			t.Fatalf("0.99 of 1.00 spent: %d calls, %d pages, paused %v", len(fake.Requests), len(sink.Pages), br.Paused())
 		}
 	})
-	t.Run("reaching the limit trips once and pages once", func(t *testing.T) {
+	t.Run("going over the limit trips once and pages once", func(t *testing.T) {
 		gw, fake, sink, br := setup(t, config.Budget{PerStoryUSD: 1.00}, 0.25)
 		var errs []error
-		for i := 0; i < 6; i++ {
+		for i := 0; i < 7; i++ {
 			_, _, err := gw.Do(context.Background(), call)
 			errs = append(errs, err)
 		}
+		// Exactly 1.00 is still within the limit, as it is for build's cost_usd.
 		for i, err := range errs {
-			if wantTrip := i >= 3; errors.Is(err, ErrBudget) != wantTrip {
+			if wantTrip := i >= 4; errors.Is(err, ErrBudget) != wantTrip {
 				t.Fatalf("call %d: err %v, want tripped = %v", i+1, err, wantTrip)
 			}
 		}
-		if len(fake.Requests) != 4 {
-			t.Fatalf("%d provider calls, want 4 (the 4th reaches 1.00; later calls are refused before the provider)", len(fake.Requests))
+		if len(fake.Requests) != 5 {
+			t.Fatalf("%d provider calls, want 5 (the 5th goes over 1.00; later calls are refused before the provider)", len(fake.Requests))
 		}
 		if len(sink.Pages) != 1 || !strings.Contains(sink.Pages[0].Body, "per_story_usd = 1.00") || !br.Paused() {
 			t.Fatalf("pages = %+v, paused %v; want exactly one page", sink.Pages, br.Paused())

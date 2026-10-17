@@ -121,9 +121,10 @@ and where the cost came from. `Cost` in `internal/models/gateway.go` picks the f
 Cache reads and cache writes are charged at their own rates when the price has them, and a prompt past a model's
 long-context threshold is charged at its long-context rates.
 
-The **breaker** enforces `[budget]`. Before each call, `Check` refuses if agent lanes are paused, or if the story or
-the local day has already reached its limit. After each call, `Add` adds the spend. When a story reaches
-`per_story_usd` or the day reaches `per_day_usd` (reaching the limit exactly counts), it writes the pause file
+The **breaker** enforces `[budget]`. Before each call, `Check` refuses if agent lanes are paused, if the story has
+gone over its limit, or if the local day has reached its limit. After each call, `Add` adds the spend. When a story
+goes over `per_story_usd` (exactly the limit is still allowed, as it is for a build's `cost_usd`) or the day reaches
+`per_day_usd` (reaching it exactly counts), it writes the pause file
 `.aayudha/state/paused`, pages through `[notify]`, and returns `ErrBudget`. The CLI maps that error to exit code 6.
 Pages are keyed by scope, and `[notify]` sends each key at most once per local day, so a tripped breaker pages once.
 While the pause file exists, every direct call is refused, and the loop guard (`aayu hook loop:<name>`, the first step

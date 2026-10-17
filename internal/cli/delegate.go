@@ -755,6 +755,11 @@ func (e *Env) localWriter(d *delegation, prompt string) func(context.Context, st
 			err := func() error {
 				ctx, cancel := context.WithTimeout(ctx, limit)
 				defer cancel()
+				if !d.wallEnd.IsZero() { // a run never outlasts the build's wall-time budget
+					var stop context.CancelFunc
+					ctx, stop = context.WithDeadline(ctx, d.wallEnd)
+					defer stop()
+				}
 				return e.act(ctx, d, "delegate.local-run", map[string]any{"bin": filepath.Base(d.bin), "worktree": wt, "prompt_sha256": delegate.BriefHash(prompt)}, func(ctx context.Context) error {
 					var err error
 					out, err = e.delegateExec()(ctx, wt, env, "", d.bin, delegate.LocalArgs(d.receiver, d.bin, wt, prompt)...)
@@ -778,16 +783,26 @@ func (e *Env) localWriter(d *delegation, prompt string) func(context.Context, st
 			switch {
 			case resets.IsZero():
 				return &usagePause{fmt.Sprintf("%s's subscription usage limit was reached and it printed no reset time", name)}
-			case !d.wallEnd.IsZero() && resets.After(d.wallEnd):
+			case !d.wallEnd.IsZero() && !resets.Add(time.Minute).Before(d.wallEnd):
 				return &usagePause{fmt.Sprintf("%s's subscription usage limit resets at %s, after the build's wall-time budget ends at %s",
 					name, resets.UTC().Format(time.RFC3339), d.wallEnd.UTC().Format(time.RFC3339))}
 			}
 			d.event(e.Now(), dlgPaused, fmt.Sprintf("%s's subscription usage limit; resumes at %s", name, resets.UTC().Format(time.RFC3339)))
 			_ = e.saveDelegation(ctx, d)
 			pp := e.progress(fmt.Sprintf("Paused: %s's subscription usage limit; resuming at %s", name, resets.Local().Format("15:04 MST")))
-			if err := e.pauseFor(ctx, resets.Sub(e.Now())+time.Minute); err != nil {
-				pp.Done(ui.StatusFail, "stopped while paused")
-				return err
+			// The story's lease is renewed before each stretch of the wait, so it
+			// never lapses to another builder while this one is paused.
+			for wait := resets.Sub(e.Now()) + time.Minute; wait > 0; {
+				step := min(wait, LeaseTTL/2)
+				if _, err := e.takeLease(ctx, d.c, d.repo, d.story, leaseHolder(d.bot.Login), nil); err != nil {
+					pp.Done(ui.StatusFail, "could not renew the story's lease while paused")
+					return err
+				}
+				if err := e.pauseFor(ctx, step); err != nil {
+					pp.Done(ui.StatusFail, "stopped while paused")
+					return err
+				}
+				wait -= step
 			}
 			pp.Done(ui.StatusPass, "the window reset")
 			d.event(e.Now(), dlgWorking, "resumed after the usage limit reset")
