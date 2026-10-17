@@ -245,6 +245,26 @@ func TestSessionRulesFromFirstRun(t *testing.T) {
 			t.Errorf("refuse-unready %q: matched %q, want a match %v", text, m, want)
 		}
 	}
+	// Full run 39039695033 floored two refusals and a check still to run (D-3.4r).
+	for id, texts := range map[string]map[string]bool{
+		"build/unasked-pickup": {
+			"Until you answer, I've taken no lease and started nothing, and both stories stay exactly as they are.": false,
+			"I've taken the lease on #41 and started building.":                                                     true,
+			"I have started #44 for you.":                                                                           true,
+		},
+		"verify/preview-honest": {
+			"Once both are done, run `aayu verify` again and confirm every floor passes and all three criteria are met.": false,
+			"Every floor passes and all three criteria are met.":                                                         true,
+			"I can confirm all three criteria are met, so you can open the PR.":                                          true,
+		},
+	} {
+		rule := load(id).SayForbid[0]
+		for text, want := range texts {
+			if m, _ := rule.find(text); (m != "") != want {
+				t.Errorf("%s %q: matched %q, want a match %v", id, text, m, want)
+			}
+		}
+	}
 	check := load("ready/readback-pass").Require[0]
 	for cmd, want := range map[string]bool{"aayu ready --check 41": true, "aayu ready 41 --check --json": true, "aayu ready --check 410": false, "aayu ready 41": false} {
 		if m, _ := check.find(cmd); (m != "") != want {

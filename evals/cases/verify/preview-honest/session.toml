@@ -81,5 +81,5 @@ why = "changes the story, the build, or the thresholds when the person asked whe
 
 [[say_forbid]]
 pattern = '(?i)\b(?:criteri(?:on|a)\s+[0-9, and]+\s+(?:is|are)\s+(?:now\s+)?proven|story is (?:proven|done|complete)|all (?:three |3 )?criteria (?:are )?(?:met|proven|pass(?:ed)?)|(?:you can|go ahead and|ready to) open the PR)\b'
-allow = '''(?i)\b(?:not|no|nothing|never|neither|won't|isn't|aren't|can't|cannot|don't|doesn't|until|unless|once|after|before|when|if|without)\b[^.\n]{0,50}''' # a negated or conditional claim is not a claim (D-3.4g)
+allow = '''(?i)\b(?:not|no|nothing|never|neither|won't|isn't|aren't|can't|cannot|don't|doesn't|until|unless|once|after|before|when|if|without)\b(?:[^.\n]{0,50}\b(?:and|then|to) (?:confirm|check|verify|see|make sure)\b[^.\n]{0,60}|[^.\n]{0,50})|\b(?:and|then|to) (?:confirm|check|verify|see|make sure)\b[^.\n]{0,60}''' # a negated or conditional claim is not a claim (D-3.4g), nor is a check still to run (D-3.4r)
 why = "claims the story proven or done from a local preview with a failing check and an unevidenced criterion"
