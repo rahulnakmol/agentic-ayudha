@@ -322,9 +322,11 @@ jobs:
           set -euo pipefail
           aayu version | tee "$RUNNER_TEMP/version.txt"
           grep -qF "${RELEASE#v}" "$RUNNER_TEMP/version.txt"
+      # The release's own tree: dev's loops and config may use commands newer than the published binary.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ env.RELEASE }}
           path: fresh
       - name: aayu doctor passes in a fresh checkout
         working-directory: fresh
@@ -378,6 +380,7 @@ jobs:
         if: steps.bucket.outputs.published == 'true'
         with:
           persist-credentials: false
+          ref: ${{ env.RELEASE }}
           path: fresh
       - name: aayu doctor passes in a fresh checkout
         if: steps.bucket.outputs.published == 'true'
