@@ -2,6 +2,7 @@ package evals
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -83,16 +84,26 @@ func TestSurveyFloors(t *testing.T) {
 // WP5.9: a survey run shows the skill what a host sees (the index summary,
 // every module pack, and the files read, numbered, as untrusted data), revises
 // once on the checks' findings, and is judged only when it passes; a reply
-// refused twice scores 1 without the judge.
+// refused twice scores 1 without the judge. D-5.9l: a draft that passes is
+// judged for the record, then self-checked; only the corrected draft is
+// scored, and it must pass the floors too (one revision).
 func TestTier2SurveyRevisesOnceThenJudges(t *testing.T) {
 	c, good := surveyCase(t, "survey/tinyjs-rust")
 	bad := strings.Replace(good, `"target": "Rust"`, `"target": "Go"`, 1)
-	judge := models.Response{Text: `{"score": 4, "reason": "cites the code"}`}
-	replies := []models.Response{{Text: bad}, {Text: "```json\n" + good + "```"}, judge}
-	for i := 0; i < 3; i++ {
-		replies = append(replies, models.Response{Text: good}, judge)
+	narrowed := strings.Replace(good, "The interpreter is one class, CTinyJS,", "The interpreter's entry point is the class CTinyJS,", 1)
+	if narrowed == good {
+		t.Fatal("the recorded draft has no E1 to narrow")
 	}
-	replies = append(replies, models.Response{Text: bad}, models.Response{Text: bad})
+	judge := func(n int) models.Response {
+		return models.Response{Text: fmt.Sprintf(`{"score": %d, "reason": "r%d"}`, n, n)}
+	}
+	replies := []models.Response{
+		{Text: bad}, {Text: "```json\n" + good + "```"}, judge(2), {Text: narrowed}, judge(4), // revised, then self-checked
+		{Text: good}, judge(3), {Text: bad}, {Text: good}, judge(5), // the corrected draft fails the floors once
+		{Text: good}, judge(3), {Text: bad}, {Text: bad}, // and twice: a floor miss, whatever the first draft scored
+		{Text: good}, judge(4), {Text: good}, judge(4),
+		{Text: bad}, {Text: bad}, // refused twice before any self-check
+	}
 	fake := &models.Fake{Replies: replies}
 	h := harness(t, fake, "gpt-6.1-sol")
 	res, err := h.Tier2(context.Background(), []Case{c}, "abc", "dev", time.Unix(0, 0))
@@ -100,11 +111,25 @@ func TestTier2SurveyRevisesOnceThenJudges(t *testing.T) {
 		t.Fatal(err)
 	}
 	runs := res.Cases[0].Runs
-	if len(fake.Requests) != 11 || !runs[0].Revised || runs[0].Score != 4 || runs[1].Revised || runs[4].Score != 1 || !strings.Contains(runs[4].Floor, `does not name "Go"`) {
-		t.Fatalf("%d calls, runs %+v", len(fake.Requests), runs)
+	if len(fake.Requests) != len(replies) {
+		t.Fatalf("%d calls, want %d: runs %+v", len(fake.Requests), len(replies), runs)
 	}
-	first, revise, judged := fake.Requests[0], fake.Requests[1], fake.Requests[2]
-	if !first.Stream || !revise.Stream {
+	for i, want := range []struct {
+		score, first int
+		changed      string
+		revised      bool
+	}{{4, 2, "E1 changed", false}, {5, 3, "", true}, {1, 3, "", true}, {4, 4, "", false}} {
+		r := runs[i]
+		if r.Score != want.score || r.SelfCheck == nil || r.SelfCheck.FirstScore != want.first || r.SelfCheck.Revised != want.revised ||
+			strings.Join(r.SelfCheck.Changed, ",") != want.changed {
+			t.Errorf("run %d: score %d, self-check %+v; want score %d, first %d, changed %q, revised %v", i+1, r.Score, r.SelfCheck, want.score, want.first, want.changed, want.revised)
+		}
+	}
+	if !runs[0].Revised || runs[1].Revised || !strings.Contains(runs[2].Floor, "after the self-check") || runs[4].Score != 1 || runs[4].SelfCheck != nil || !strings.Contains(runs[4].Floor, `does not name "Go"`) {
+		t.Errorf("runs %+v", runs)
+	}
+	first, revise, judgedFirst, selfCheck, judged := fake.Requests[0], fake.Requests[1], fake.Requests[2], fake.Requests[3], fake.Requests[4]
+	if !first.Stream || !revise.Stream || !selfCheck.Stream {
 		t.Error("the survey skill call does not stream")
 	}
 	for _, want := range []string{`<untrusted source="aayu survey and aayu survey --module">`, "$ aayu survey --module mod:(root)#2", "marker marker:TinyJS.cpp:111",
@@ -119,7 +144,16 @@ func TestTier2SurveyRevisesOnceThenJudges(t *testing.T) {
 	if len(revise.Messages) != 3 || !strings.Contains(revise.Messages[2].Content, `the request does not name "Go"`) {
 		t.Errorf("revision request: %+v", revise.Messages)
 	}
-	if !strings.Contains(judged.System, "Rubric: survey draft of a legacy C++ interpreter") || !strings.Contains(judged.Messages[0].Content, "74: int main(int argc, char **argv)") {
-		t.Errorf("judge request: %.300s", judged.Messages[0].Content)
+	// The self-check continues from the draft that passed, not the refused one.
+	if n := len(selfCheck.Messages); n != 3 || strings.TrimSpace(selfCheck.Messages[1].Content) != strings.TrimSpace(good) || !strings.Contains(selfCheck.Messages[2].Content, "self-check") {
+		t.Errorf("self-check request: %d messages", n)
+	}
+	for _, j := range []models.Request{judgedFirst, judged} {
+		if !strings.Contains(j.System, "Rubric: survey draft of a legacy C++ interpreter") || !strings.Contains(j.Messages[0].Content, "74: int main(int argc, char **argv)") {
+			t.Errorf("judge request: %.300s", j.Messages[0].Content)
+		}
+	}
+	if !strings.Contains(judged.Messages[0].Content, "entry point is the class CTinyJS") || strings.Contains(judgedFirst.Messages[0].Content, "entry point is the class CTinyJS") {
+		t.Error("the judge did not score the first draft, then the corrected one")
 	}
 }

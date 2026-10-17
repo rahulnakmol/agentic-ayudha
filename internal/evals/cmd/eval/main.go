@@ -279,6 +279,9 @@ func verdict(cur, base *evals.Results, cfg evals.Config) error {
 			if r.Status == evals.RunError {
 				fmt.Printf("      %s; reply: %q\n", r.Error, r.Excerpt)
 			}
+			if sc := r.SelfCheck; sc != nil {
+				fmt.Printf("      self-check: first draft judged %d (not counted), %d item(s) changed\n", sc.FirstScore, len(sc.Changed))
+			}
 		}
 	}
 	for _, s := range cur.Review {
