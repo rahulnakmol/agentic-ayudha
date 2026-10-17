@@ -1,0 +1,13 @@
+# Cursor Agent CLI 2026.10.14-941492e (cursor-agent, installed in the orb, not signed in), 2026-10-17
+# Where its shell tool sets the agent marker, read from the shipped bundle:
+# ~/.local/share/cursor-agent/versions/2026.10.14-941492e/index.js
+# sha256 27776c587649c9b6fa9671ac8dda2810f29346e66937efe8ac254012d2113482
+# A live run needs a signed-in Cursor account: with no account (--api-key bogus) the CLI stops at
+# "Failed to reach the Cursor API" before any hook or tool runs, so no command can be recorded here.
+byte 4546534: the sandboxed shell tool spawns the command with the caller's environment plus the marker
+  const A=(0,x.Xw)({...process.env,...cl,CURSOR_AGENT:"1"}),_={cwd:r,env:A,...},y={executable:"/bin/sh",args:["-c",t.command]}
+byte 4703827: the terminal tool's environment for each command
+  const f=t.signal,g={CURSOR_AGENT:"1"};t.conversationId&&(g.CURSOR_CONVERSATION_ID=...)
+byte 4729032: the agent's default terminal executor
+  (0,x.Fn)({env:{CURSOR_AGENT:"1"},userTerminalHint:this.userTerminalHint})
+marker: CURSOR_AGENT=1

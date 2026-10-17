@@ -22,6 +22,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
 	"github.com/rahulnakmol/agentic-ayudha/internal/upgrade"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -152,24 +153,21 @@ func checkSchema(_ context.Context, p *Probe) Result {
 	return Result{Status: Pass, Detail: fmt.Sprintf("repository schema current (config v%d)", upgrade.Current[upgrade.KindConfig])}
 }
 
-// hostEnv maps an environment variable each host sets to the host.
-var hostEnv = []struct{ env, host string }{
-	{"AMP_THREAD_ID", "amp"},
-	{"CLAUDECODE", "claude"},
-	{"CURSOR_AGENT", "cursor"},
-	{"CURSOR_TRACE_ID", "cursor"},
-	{"CODEX_THREAD_ID", "codex"}, // Codex exports it to the commands it runs (WP3.2b)
-}
-
-// DetectHost returns the host from --host or the environment, and how it was found.
+// DetectHost returns the host from --host or the environment, and how it was
+// found: the first agent marker that names a host (hosts.AgentMarkers), else
+// CURSOR_TRACE_ID, which Cursor sets in its terminal for a person too, so it
+// names the host without marking an agent.
 func DetectHost(flag string, getenv func(string) string) (host, how string) {
 	if flag != "" {
 		return flag, "--host"
 	}
-	for _, h := range hostEnv {
-		if getenv(h.env) != "" {
-			return h.host, h.env
+	for _, m := range hosts.AgentMarkers {
+		if m.Host != "" && getenv(m.Env) != "" {
+			return string(m.Host), m.Env
 		}
+	}
+	if getenv("CURSOR_TRACE_ID") != "" {
+		return string(verbs.HostCursor), "CURSOR_TRACE_ID"
 	}
 	return "", ""
 }

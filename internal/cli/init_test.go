@@ -527,7 +527,7 @@ func TestInitVerifySkill(t *testing.T) {
 				_ = os.WriteFile(filepath.Join(dir, tc.marker), []byte("{}\n"), 0o644)
 			}
 			env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}
-			opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, Assets: aayudha.Assets}
+			opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, Assets: aayudha.Assets}
 			if code, out, errOut := run(t, env, opts, "init", "--yes", "--json", "--verify-skill"); code != 0 {
 				t.Fatalf("init --verify-skill: exit %d: %s\n%s", code, errOut, out)
 			}
@@ -568,7 +568,7 @@ func TestInitRetiredTriageWorkflow(t *testing.T) {
 	triage := filepath.Join(dir, ".github", "workflows", "aayudha-triage.yml")
 	_ = os.MkdirAll(filepath.Dir(triage), 0o755)
 	_ = os.WriteFile(triage, []byte("name: aayudha-triage\non:\n  issues:\njobs: {}\n"), 0o644)
-	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}
 	change := func(out string) string {
 		var r struct {

@@ -116,6 +116,11 @@ func TestHostShellRecords(t *testing.T) {
 			}
 		}
 	}
+	// Cursor's record is its CLI's source: every place it sets the marker names one this binary recognises.
+	src, _ := os.ReadFile(filepath.Join("testdata", "host-shells", "cursor-agent-source.txt"))
+	if strings.Count(string(src), `CURSOR_AGENT:"1"`) != 3 || hosts.AgentMarker(func(k string) string { return map[string]string{"CURSOR_AGENT": "1"}[k] }) != "CURSOR_AGENT=1" {
+		t.Errorf("cursor-agent-source.txt:\n%s", src)
+	}
 	b, _ := os.ReadFile(filepath.Join("testdata", "host-shells", "no-marker.txt"))
 	if s := string(b); strings.Count(s, "needs an interactive terminal") != 2 || !strings.Contains(s, "the merge gate must be green") || strings.Contains(s, "refused for an agent lane") {
 		t.Errorf("no-marker.txt:\n%s", s)

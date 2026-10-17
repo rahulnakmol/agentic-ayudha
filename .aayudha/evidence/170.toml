@@ -2,7 +2,7 @@
 # the run it makes, to the criteria).
 
 [[criterion]]
-id = 1 # ship --solo-bypass from a host agent's shell without AAYU_AGENT: exit 4 naming the agent lane, nothing merged (live Amp and Claude Code records; Cursor's marker in the unit test)
+id = 1 # ship --solo-bypass from a host agent's shell without AAYU_AGENT: exit 4 naming the agent lane, nothing merged (live Amp and Claude Code records; Cursor's CLI source record and its marker in the unit test)
 tests = ["internal/cli:TestHostShellRecords", "internal/cli:TestShipMobileWaiverAndSoloBypass"]
 
 [[criterion]]

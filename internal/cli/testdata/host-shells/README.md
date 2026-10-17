@@ -15,7 +15,11 @@ Recorded on 2026-10-15 with the binary built from `fix/170-agent-detection`, eac
 - `no-marker.txt`: with every marker removed, once with no terminal (refused) and once in a pseudo-terminal from
   `script(1)` (the human check passes and `ship` refuses on its own merge-gate check).
 
-Cursor could not run here: its agent needs a Cursor account and Cursor's own backend, which no local stand-in
-replaces. Its marker, `CURSOR_AGENT=1`, comes from Cursor's agent
-execution layer as reported on Cursor's forum (Appendix B D-1.4c). `TestHostShellRecords` checks each refusal
-against the current code's markers.
+- `cursor-agent-source.txt`: where Cursor Agent CLI 2026.10.14 sets `CURSOR_AGENT=1` for the commands its shell
+  and terminal tools run, read from the bundle it ships, with the file's SHA-256 and byte offsets.
+
+Cursor could not run here: its agent needs a signed-in Cursor account and Cursor's own backend, which no local
+stand-in replaces, and with no account the CLI stops before any hook or tool runs. So its record is the source of
+the installed CLI rather than a run. `TestHostShellRecords` checks each refusal, and the Cursor marker, against the
+current code's markers (`hosts.AgentMarkers`). A signed-in person can add a live record by asking Cursor's agent to
+run the five commands in `amp-shell.txt` in a scratch repository.
