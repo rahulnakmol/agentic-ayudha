@@ -109,7 +109,7 @@ func TestReviewLive(t *testing.T) {
 	site := fixtureSite(t, polished)
 	b := testBrowser(t)
 	b.Work = out // keep the screenshots for the run's artifact
-	reviewer := &Reviewer{Tools: b, Complete: laneA, Model: rev.Model, Effort: "medium", K: K, MinTargetPx: 44, Now: time.Now}
+	reviewer := &Reviewer{Tools: b, Complete: laneA, Model: rev.Model, Effort: rev.Effort, K: K, MinTargetPx: 44, Now: time.Now}
 	run := func(id, path string) *Critique {
 		c, _, err := reviewer.Review(ctx, []State{{ID: id, URL: site.URL + path}})
 		if err != nil {

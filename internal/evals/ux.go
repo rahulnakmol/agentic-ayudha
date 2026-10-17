@@ -797,7 +797,9 @@ func (h *Harness) runLaneA(ctx context.Context, c Case, complete func(context.Co
 	if err != nil {
 		return Run{}, err
 	}
-	req, err := uireview.Prompt(capture, 44, "medium")
+	// No effort here: the gateway sends the ui-review lane's (high), as the
+	// binary's review does.
+	req, err := uireview.Prompt(capture, 44, "")
 	if err != nil {
 		return Run{}, err
 	}

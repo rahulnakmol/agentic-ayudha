@@ -386,9 +386,11 @@ const (
 	ModelGPTSol       = "gpt-6.1-sol"
 	ModelGPTAstra     = "gpt-6-astra"
 	ModelGrok         = "grok-4.7"
-	// ModelGemini is the ui-review lane's model. gemini-3.8-flash is interim
-	// (D-6.6b, founder: "gemini-3.8-flash — use this until argon shows up");
-	// the target is gemini-4-argon-high, which the gateway does not route yet.
+	// ModelGemini is the ui-review lane's model, called at high reasoning
+	// effort (founder: "aayu to default to 3.8-flash-high gemini model for all
+	// UI/UX review"; the gateway has no gemini-3.8-flash-high ID, so "-high" is
+	// the effort). It is interim (D-6.6b): the target is gemini-4-argon-high,
+	// which needs the founder's paid Google plan before the gateway routes it.
 	ModelGemini = "gemini-3.8-flash"
 )
 
@@ -412,7 +414,7 @@ func reviewDefault(h HostID) ModelDefault {
 }
 
 func geminiDefault(h HostID) ModelDefault {
-	return ModelDefault{Host: h, Model: "Gemini 3.8 Flash", ID: ModelGemini, Family: FamilyGoogle,
+	return ModelDefault{Host: h, Model: "Gemini 3.8 Flash (high)", ID: ModelGemini, Family: FamilyGoogle, Effort: "high",
 		Alternative: "Fable 5.1 (" + ModelClaudeFable + "; anthropic family, so only when the builder is not anthropic)"}
 }
 
@@ -771,7 +773,7 @@ var Verbs = []Command{
 		Seat:    UXResearcher, Lane: LaneUIReview, Layers: OnlyLayers(L01),
 		Inputs: []Input{
 			pos("pr", TypePR, "Pull request whose UI to review."),
-			flag("deep", TypeBool, "Run lane A at high effort."),
+			flag("deep", TypeBool, "Run lane A at high effort when the lane's default effort is lower."),
 		},
 		Outputs:  []string{"critique", "disposition (recapture|rebuild|fix|ship)"},
 		Gates:    []GateID{GateBudget},

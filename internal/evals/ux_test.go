@@ -223,8 +223,8 @@ func TestTier2UXRuns(t *testing.T) {
 		res.Cases[0].Model != verbs.ModelGemini {
 		t.Fatalf("%d calls, %s, runs %+v", len(fake.Requests), res.Cases[0].Model, runs)
 	}
-	if lane := fake.Requests[0]; len(lane.Messages[0].Images) != 2 || !strings.Contains(lane.System, "You are lane A of a UI review") {
-		t.Errorf("lane A request: %d images, %.80s", len(lane.Messages[0].Images), lane.System)
+	if lane := fake.Requests[0]; len(lane.Messages[0].Images) != 2 || !strings.Contains(lane.System, "You are lane A of a UI review") || lane.Effort != "high" {
+		t.Errorf("lane A request: %d images, effort %q, %.80s", len(lane.Messages[0].Images), lane.Effort, lane.System)
 	}
 	if j := fake.Requests[2].Messages[0].Content; !strings.Contains(j, "Lane B on the same capture") || !strings.Contains(j, `<untrusted source="markup">`) {
 		t.Errorf("judge request: %.300s", j)

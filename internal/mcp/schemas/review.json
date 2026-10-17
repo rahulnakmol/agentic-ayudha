@@ -5,7 +5,7 @@
   "description": "Critique UI with a model lane and a deterministic lane; dispositions recapture, rebuild, fix, or ship.",
   "properties": {
     "deep": {
-      "description": "Run lane A at high effort.",
+      "description": "Run lane A at high effort when the lane's default effort is lower.",
       "type": "boolean",
       "x-aayu-type": "bool"
     },

@@ -158,7 +158,11 @@ func (e *Env) reviewer(ctx context.Context, b *uireview.Browser, story int, deep
 	if err := models.CheckFamilies(key, builder, rev.Family); err != nil {
 		return nil, Wrap(ExitBlocked, err)
 	}
-	effort := "medium"
+	// The lane's effort (high for gemini-3.8-flash); --deep raises a lower one.
+	effort := rev.Effort
+	if effort == "" {
+		effort = "medium"
+	}
 	if deep {
 		effort = "high"
 	}
