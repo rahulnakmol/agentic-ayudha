@@ -124,9 +124,11 @@ default stated two ways is a contradiction the reader cannot build from.
 Title it with the stage's artefact from the grounding (`# Data sketch: …` at a startup, `# Data design: …` at a
 scaleup, `# Data architecture record: …` at an enterprise; for AI `Evidence sketch`, `Evidence design`, `Evidence
 dossier`), and never use another stage's artefact name as a heading. Then the parts of the outline, in order, as level-two
-(`##`) headings; `## Open questions` is always last. A startup note is half a page: at most 400 words of prose (tables do not
-count, so put metrics and evaluation cases in tables); a scaleup note reads in ten minutes, about two pages; an
-enterprise note is the full record. Do not restate the grounding: cite it, and spend the words on the design. The
+(`##`) headings; `## Open questions` is always last. A startup note is half a page: at most 400 words of prose and at most
+three tables (tables do not count as prose, so put metrics and evaluation cases in tables); a scaleup note reads in
+ten minutes, about two pages: at most about 1 200 words of prose, and its evaluation table has one row per kind of
+case (with its count and expected behaviour), not one per case; an enterprise note is the full record. Every
+sentence you add is one more claim to keep consistent: say each thing once, in the part it belongs to. Do not restate the grounding: cite it, and spend the words on the design. The
 first sentence under the title names who acts and on what; no preamble about the request, no note about who is
 writing, and no inventory of facts. The shared brief lives in the conversation, not in the note: in the note, each
 confirmed fact appears once, cited, in the part whose design rests on it.
@@ -193,7 +195,9 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   lookup, not a generated sentence; a small corpus is often served by keyword search; a refusal rule may be the
   feature. Add a vector index only when lexical retrieval misses paraphrases on the evaluation set, hybrid retrieval
   and reranking when both kinds of miss happen, and a knowledge graph only for named multi-hop or relationship
-  questions that fail otherwise. If someone asked for a technology, say what result would justify it (a trigger).
+  questions that fail otherwise. If someone asked for a technology, say what result would justify it (a trigger). A trigger for a heavier
+  option is a comparison, never a count of failures: the option is added when, on the failing cases, it beats the
+  current design by a stated margin, and only a local or smaller variant is assumed unless the grounding rules it out.
 - `## Evidence and permissions`: the sources of truth with version and effective date; passages kept with their
   document, version, section, and time; the citation contract (every factual sentence carries its passage, numbers
   come from a traceable query, and a table field answers only what it can express: when the documents state a rule
@@ -223,7 +227,9 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   is not yet a correct answer), exact match over cases answered from a table lookup, correct abstention over cases
   with no answer. A baseline recall (12 of 20 passages retrieved) is not a count of correct answers, and a design is
   "expected to" fix a kind of miss until the set shows it. A baseline compares only on the same cases: when you
-  change a metric's cases, its baseline is "to be measured on these cases", never the old figure. Then read each case's expected behaviour against the
+  change a metric's cases, its baseline is "to be measured on these cases", never the old figure. Put each case in exactly one gate, by its expected
+  behaviour, and add the gates up to the set's total. Describe the existing set only as the grounding counts it: a
+  breakdown of the misses is not a breakdown of the whole set. Then read each case's expected behaviour against the
   abstention, contradiction, and injection rules you wrote: they must agree,
   and every trigger you mention for a later option gives its number here. Thresholds nobody has agreed yet are
   `Assumption:` lines. A Completion Goal criterion you propose is proposed: cite the issue it will be added to, never
@@ -249,13 +255,15 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
 - Cite exactly as the grounding writes it: `#41`, `LAYERS.md`, `[measure]`, `analytics/events.go:14-31`. Never cite a
   glob, a directory you did not see, or a name such as `event.Field` that the grounding does not spell that way.
 - Write `Assumption:` or `Unverified:` at the start of its own line or list item, in plain text, never inside a
-  table cell: that is how the check knows the point is not claimed as fact.
+  table cell: that is how the check knows the point is not claimed as fact. A table of your own design choices
+  (retention periods, thresholds, access rules) is a proposal: put one `Assumption:` line right above it naming what
+  in it is proposed, and let its Source column cite only the facts in each row.
 - At a startup, count your prose before you finish: at most 400 words outside tables and headings; aim for 300.
   Every paragraph and list item counts, the lines under the title included. When the check reports too many words,
   cut well below the bound (to about 320), not just to it: first delete prose that restates a table or the
   grounding, then any paragraph before the first part, then move remaining lists into tables.
-  Put every list of like things (metrics, edge-case rules, copies and their retention, checks, evaluation cases) in a
-  table, and keep the prose for the decision, the design choice, and the assumptions.
+  Put the metrics with their edge-case rules, the copies with their retention, and the checks in tables (three at
+  most), and keep the prose for the decision, the design choice, and the assumptions.
 - Each part must use its key words, or the check refuses it: `## Metrics` says "grain" and "window"; `## Design`
   says "trigger" (write `Trigger:` before the threshold); `## Privacy and retention` says how long data is "kept" or
   its "retention" and how a "deletion" reaches every copy; `## Evidence and permissions` says "permission" and
