@@ -36,9 +36,40 @@ aayu:
       required: false
       positional: false
       description: "Regenerate a report from the GitHub inputs snapshot at this ledger path (retro/<date>/…inputs.json); files nothing."
+    - name: classify
+      type: issue
+      required: false
+      positional: false
+      description: "Feedback issue to classify by the highest layer that can fix its correction for good (needs --layer and --reason); writes no report."
+    - name: layer
+      type: enum
+      required: false
+      positional: false
+      enum:
+        - "codebase"
+        - "check"
+        - "prose"
+        - "review"
+      description: "With --classify: codebase (a type, invariant, or boundary), check (a lint rule, test, or CI check), prose (skill or AGENTS.md guidance), or review (what is surfaced for human review)."
+    - name: reason
+      type: string
+      required: false
+      positional: false
+      description: "With --classify: why this is the highest layer that can fix the correction for good."
+    - name: not-catchable
+      type: string
+      required: false
+      positional: false
+      description: "With --classify: why no type, invariant, lint rule, or test can catch it; required for prose and review, and lets evolve rewrite a skill for a codebase or check correction."
+    - name: criterion
+      type: string
+      required: false
+      positional: false
+      description: "With --classify and a layer other than prose: the Completion Goal criterion of the Story filed for it, `[evidence] state: …; expected: …`, whose proof is the new type, invariant, lint rule, test, or review surface."
   outputs:
     - "retro-report"
     - "feedback-issues"
+    - "fix-layer"
   gates:
     - "halt"
   identity: bot
@@ -84,10 +115,25 @@ Compare estimates with observed delivery, corrections, floor misses, and cost; f
 
 1. Run `aayu retro` in a checkout (`--dry-run` first to see the findings). It writes the report under
    `retro/<date>/` on the ledger with its inputs in the header, and files each new finding as a Feedback issue
-   on this repository. It never opens a PR: a change that a finding asks for goes through `aayu evolve` (for a
-   skill) or a Story, after a human accepts the Feedback.
+   on this repository. It never opens a PR: a change that a finding asks for goes through a Story (codebase, check,
+   or review layer) or `aayu evolve` (prose layer, a skill), after a human accepts the Feedback.
 2. Read the report and add what the numbers cannot say as a comment on the Feedback issues it filed: why an
    estimate missed, what the corrections have in common. Do not edit the report.
+3. Classify each Feedback issue by the highest layer that can fix its correction for good (ETHOS 10), and record
+   it: `aayu retro --classify <n> --layer <layer> --reason "<why this layer>"`. Ask in this order and stop at the
+   first yes:
+   - **codebase**: could a type, an invariant, or a boundary make the mistake impossible to write?
+   - **check**: could a lint rule, a test, a CI check, or a `verify` floor catch it every time?
+   - **prose**: does avoiding it need judgement that no rule can encode? Then a skill or `AGENTS.md` rewrite.
+   - **review**: can only a person see it? Then change what the environment surfaces for review (the proof
+     comment, inspect's review plan, the risk line), not how hard people look.
+
+   For codebase, check, and review, pass `--criterion "[evidence] state: …; expected: …"`: aayu files a Story with
+   it as the Completion Goal, so name the proof in backticks (the type, the invariant's test, the lint rule).
+   For prose and review, pass `--not-catchable "<why no type, invariant, lint rule, or test can catch it>"`;
+   `aayu evolve` refuses a skill rewrite for anything else. The layer is your judgement, so the reason must say
+   what you checked; a human can reclassify by running the command again. The report's "Fix layer of Feedback"
+   table counts every Feedback issue by its layer.
 
 Findings are deterministic: a story over its Effort's checkpoint budget (XS 1, S 2, M 3, L 5), cost over
 `[budget] per_story_usd`, a story merged without proof after the merge gate existed, a floor miss, and a

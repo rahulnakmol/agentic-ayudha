@@ -340,3 +340,22 @@ func TestRetroRecurrence(t *testing.T) {
 		t.Errorf("report:\n%s", md)
 	}
 }
+
+// retro counts every Feedback issue opened before the cursor by its fix layer
+// (S-7.7d); a PR, another type, and Feedback opened after the cursor are not
+// counted.
+func TestRetroFixLayers(t *testing.T) {
+	in := Inputs{Repo: "o/r", Since: at(0), Until: at(48)}
+	fb := func(n int, created time.Time, labels ...string) Item {
+		return Item{Number: n, Title: "Feedback", CreatedAt: created, Labels: append([]string{"type:feedback"}, labels...)}
+	}
+	d := &Data{Dev: "dev", Items: []Item{fb(1, at(1), "fix:codebase"), fb(2, at(2), "fix:check"), fb(3, at(3), "fix:check", "needs:grill"),
+		fb(4, at(4), "fix:prose"), fb(5, at(5)), fb(6, at(50), "fix:review"), {Number: 7, PR: true, Labels: []string{"type:feedback", "fix:prose"}, CreatedAt: at(1)},
+		{Number: 8, Labels: []string{"type:story", "fix:check"}, CreatedAt: at(1)}}}
+	md := string(BuildRetro(in, d, 0).Markdown())
+	for _, want := range []string{"| codebase | 1 | #1 |", "| check | 2 | #2, #3 |", "| prose | 1 | #4 |", "| review | 0 | — |", "| unclassified | 1 | #5 |"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("report lacks %q:\n%s", want, md)
+		}
+	}
+}

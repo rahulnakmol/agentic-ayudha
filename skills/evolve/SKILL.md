@@ -73,10 +73,17 @@ A skill changes only on evidence, and rarely: at least two accepted retro Feedba
 most one evolve PR in 30 days. `aayu evolve` refuses otherwise; do not work around it by filing or accepting Feedback
 yourself (accepting is a human's call).
 
+A skill rewrite is the third layer, not the first (ETHOS 10). Each Feedback issue is classified first with
+`aayu retro --classify`, and evolve takes only the ones classified **prose**. A codebase or check correction is
+fixed by its Story (a type, invariant, lint rule, or test), and a review correction by changing what is surfaced for
+review; evolve refuses those, and an unclassified one, unless the classification says why no type, invariant, lint
+rule, or test can catch it (`--not-catchable`). If while working you find that code or a check could catch the
+problem after all, stop and reclassify it instead of rewriting the skill.
+
 Eval-first, always in this order:
 
 1. Run `aayu evolve` to list the Feedback issues filed by `aayu retro` that a human accepted (label `needs:grill`),
-   grouped by the skill each names. Take a skill the list shows as ready and run
+   grouped by the skill each names, with each one's fix layer. Take a skill the list shows as ready and run
    `aayu evolve --skill <skill> --feedback <n>`: it cuts a worktree on `evolve/<skill>-<n>` from `origin/dev`.
 2. Read every Feedback issue that names the skill, and the stories and PRs they cite. Name the owning surface: an
    instruction that is **missing**, one that is **wrong**, or one that is **unclear**. If the issues do not share a

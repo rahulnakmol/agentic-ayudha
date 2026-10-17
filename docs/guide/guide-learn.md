@@ -51,6 +51,8 @@ These flow numbers are a baseline, reported and never gated. Do not change a sto
 When the agents keep making the same mistake, `evolve` turns accepted Feedback into a better skill. It is careful on
 purpose:
 
+- it takes only Feedback **classified as prose**: a mistake that a type, an invariant, a lint rule, or a test could
+  prevent becomes a Story instead (`aayu retro --classify`), because the code is the most lasting place for a fix;
 - it acts only when **at least two** accepted Feedback issues point at the same skill;
 - it changes a skill **at most once a month**;
 - it writes a failing test for the skill first, then **rewrites** the guidance rather than piling on rules;
