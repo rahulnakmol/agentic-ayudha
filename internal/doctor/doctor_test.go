@@ -572,3 +572,23 @@ func TestCopilotTrustRow(t *testing.T) {
 		t.Errorf("VS Code only: %s %s", r.Status, r.Detail)
 	}
 }
+
+// Doctor never runs an MCP registration's command from the repository itself:
+// .mcp.json is repository content, so a branch could point it at a committed
+// script. A relative path is refused the same way.
+func TestMCPDoesNotRunARepositoryCommand(t *testing.T) {
+	for _, cmd := range []string{"<root>/bin/aayu", "bin/aayu"} {
+		p := healthy(t)
+		ran := false
+		exec := p.Exec
+		p.Exec = func(ctx context.Context, dir, name string, args ...string) (string, error) {
+			ran = ran || strings.Contains(name, "bin/aayu") && name != "/usr/bin/aayu"
+			return exec(ctx, dir, name, args...)
+		}
+		c := strings.ReplaceAll(cmd, "<root>", p.Root)
+		_ = os.WriteFile(filepath.Join(p.Root, ".mcp.json"), []byte(`{"mcpServers": {"aayudha": {"command": `+strconv.Quote(c)+`, "args": ["mcp"]}}}`), 0o644)
+		if r := checkMCP(context.Background(), p); r.Status != Fail || ran {
+			t.Errorf("%s: %s ran=%v %s %v", cmd, r.Status, ran, r.Detail, r.Lines)
+		}
+	}
+}
