@@ -28,7 +28,7 @@ import (
 
 func init() { register("inbox", runInbox) }
 
-// `aayu inbox` (Story #431, Appendix B S-5.6c): every human-only step waiting
+// `aayu inbox` (Story #431): every human-only step waiting
 // for a person, each with the twin's recommendation, acted on with one
 // keypress. It turns no gate off: each write is the person's, under their own
 // token, and each step keeps the rules of the verb that owns it.

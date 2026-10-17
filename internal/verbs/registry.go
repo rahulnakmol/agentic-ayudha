@@ -1156,7 +1156,7 @@ var Plumbing = []Command{
 	// `aayu` with no command in a checkout shows the home screen.
 	plumb("next", "WP1.1b", EngineeringManager, IdentityHuman, "Print the single best next step for this repository: the exact command to run and why."),
 	plumb("tour", "WP1.1b", Founder, IdentityHuman, "Guided first run: check this machine, then set the repository up at Level 1 in a few prompts; refused for agents."),
-	// Story #431 (founder request, Appendix B S-5.6c): the founder's inbox.
+	// Story #431 (founder request): the founder's inbox.
 	plumb("inbox", "WP5.6c", Founder, IdentityHuman, "List every human-only step waiting for you, with the twin's recommendation, and act on each with one keypress; refused for agents, needs a terminal."),
 	plumb("completion", "WP1.1b", DevOps, IdentityHuman, "Print the shell completion script, generated from the registry, for bash, zsh, fish, or PowerShell.",
 		enumIn("shell", true, true, "Shell to complete for.", "bash", "zsh", "fish", "powershell")),

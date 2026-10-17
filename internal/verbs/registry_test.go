@@ -16,7 +16,7 @@ measure evolve brief tell init install doctor chart survey investigate slo runbo
 
 // wantPlumbing is the plumbing list from docs/BUILD-PLAN.md V7, in plan order,
 // then the three WP1.1b adds by founder request (Appendix B S-1.1b), with the
-// founder's inbox (Story #431, Appendix B S-5.6c) before completion.
+// founder's inbox (Story #431) before completion.
 var wantPlumbing = strings.Fields(`config auth actions models mcp self-update upgrade version halt resume gc
 uninit hook seat lfs-agent next tour inbox completion`)
 
