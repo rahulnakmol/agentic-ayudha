@@ -1004,14 +1004,14 @@ func TestGroups(t *testing.T) {
 	if g, _ := cfg.Group("tell"); err != nil || tg.MaxUSD != 3 || len(tells) != 3 || !cfg.Gates("tell") || !g.RunsOn("push") || g.RunsOn("schedule") || !g.RunsOn("workflow_dispatch") {
 		t.Fatalf("tell group: %v, cap %v, %d cases, gates %v, events %v", err, tg.MaxUSD, len(tells), cfg.Gates("tell"), g.Events)
 	}
-	// D-3.4f: the host-skill session cases have their own advisory group, run on dispatch only; ready/story-ready, a
-	// tier-1 case with no tier 2, stays where it was.
+	// D-3.4f: the host-skill session cases have their own group; ready/story-ready, a tier-1 case with no tier 2, stays
+	// where it was. D-3.4x: it gates, like tell, on dispatch and on pushes (evals.yml skips pushes to dev), never nightly.
 	hg, hosts, err := cfg.ForGroup("host-skills", all)
 	var hostIDs []string
 	for _, c := range hosts {
 		hostIDs = append(hostIDs, c.ID)
 	}
-	if g, _ := cfg.Group("host-skills"); err != nil || hg.MaxUSD != 12 || cfg.Gates("host-skills") || g.RunsOn("push") || g.RunsOn("schedule") ||
+	if g, _ := cfg.Group("host-skills"); err != nil || hg.MaxUSD != 13 || !cfg.Gates("host-skills") || !g.RunsOn("push") || g.RunsOn("schedule") || !g.RunsOn("workflow_dispatch") ||
 		strings.Join(hostIDs, " ") != "build/small-story build/unasked-pickup ready/readback-pass ready/refuse-unready verify/map-drift verify/preview-honest" {
 		t.Fatalf("host-skills group: %v, cap %v, cases %v, events %v", err, hg.MaxUSD, hostIDs, g.Events)
 	}
