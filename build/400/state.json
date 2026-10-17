@@ -1,0 +1,7 @@
+{
+  "story": 400,
+  "branch": "story/400-fail-ci-when-a-pr-lowers-a-skill-eval-ba",
+  "started_at": "2026-10-17T15:19:12Z",
+  "failed_attempts": 0,
+  "checkpoints": null
+}
