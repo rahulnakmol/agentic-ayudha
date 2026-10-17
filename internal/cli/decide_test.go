@@ -47,7 +47,8 @@ func decideTree(t *testing.T) *fake.GitHub {
 	return g
 }
 
-// WP5.6 accept: a reversible Decision fixture at 48 business hours gains
+// WP5.6 accept, for a team of two humans (Story #432 shortens the window
+// only in solo mode): a reversible Decision fixture at 48 business hours gains
 // decision:provisional with the escalation comment mentioning founder B; an
 // irreversible one does not. Opened Monday 10:00 London, 24 business hours
 // lapse Wednesday 16:00 and 48 lapse the next Monday 13:00 (12:00 UTC).
@@ -59,7 +60,7 @@ func TestDecideSLA(t *testing.T) {
 	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Now: func() time.Time { return now }, NotifySink: sink}
 	sweep := func() []decisionStep {
 		t.Helper()
-		code, out, errOut := run(t, env, opts, "decide", "--repo", "o/r", "--json", "--set", "decisions.escalate_to=founder-b")
+		code, out, errOut := run(t, env, opts, "decide", "--repo", "o/r", "--json", "--set", "decisions.escalate_to=founder-b", "--set", "autonomy.approver=founder-a", "--set", "seats.code-architect.mode=paired", "--set", "seats.code-architect.human=arch")
 		if code != 0 {
 			t.Fatalf("decide sweep: exit %d: %s", code, errOut)
 		}
@@ -115,7 +116,7 @@ func TestDecideSLA(t *testing.T) {
 			t.Errorf("#%d at 48 h: %+v, labels %v", n, s, labels(n))
 		}
 	}
-	if byN[4].Reason != "a floor waiver is never applied provisionally" {
+	if byN[4].Reason != "a waiver is never applied provisionally" {
 		t.Errorf("#4 reason: %q", byN[4].Reason)
 	}
 	// The irreversible Decision re-pages as overdue.
@@ -124,7 +125,7 @@ func TestDecideSLA(t *testing.T) {
 	}
 
 	// The text report names each Decision's state and what it blocks.
-	if code, out, _ := run(t, env, opts, "decide", "--repo", "o/r", "--set", "decisions.escalate_to=founder-b"); code != 0 || !strings.Contains(out, `#2 "Choose the rules engine": provisional; ratify or revert by 2026-10-22T09:00:00Z`) ||
+	if code, out, _ := run(t, env, opts, "decide", "--repo", "o/r", "--set", "decisions.escalate_to=founder-b", "--set", "autonomy.approver=founder-a", "--set", "seats.code-architect.mode=paired", "--set", "seats.code-architect.human=arch"); code != 0 || !strings.Contains(out, `#2 "Choose the rules engine": provisional; ratify or revert by 2026-10-22T09:00:00Z`) ||
 		!strings.Contains(out, "blocks #6 while open") || !strings.Contains(out, "overdue (reversible: false; the lapse only re-pages)") {
 		t.Errorf("text report: exit %d:\n%s", code, out)
 	}
@@ -377,5 +378,39 @@ Reply A or B on #2.
 	}
 	if n := len(g.Writes()); n != 0 {
 		t.Errorf("decide --pack wrote %d times", n)
+	}
+}
+
+// Story #432, criteria 1 and 4, end to end: with no second human configured
+// (solo), the reversible Decision #2 applies at 24 business hours (Wednesday
+// 16:00 London), a minute before it does not, and the waiver #4 and the
+// irreversible #3 and #5 never do; status then lists #2 with its deadline and
+// how to reverse it.
+func TestSoloProvisional(t *testing.T) {
+	g := decideTree(t)
+	now := time.Date(2026, 10, 14, 14, 59, 0, 0, time.UTC)
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "t", "XDG_STATE_HOME": t.TempDir()}
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Now: func() time.Time { return now }, NotifySink: &notify.Fake{}}
+	if code, _, errOut := run(t, env, opts, "decide", "--repo", "o/r"); code != 0 || slices.Contains(g.LabelNames(2), workitems.LabelProvisional) {
+		t.Fatalf("a minute before 24 business hours: exit %d %s, #2 labels %v", code, errOut, g.LabelNames(2))
+	}
+	now = now.Add(time.Minute)
+	if code, _, errOut := run(t, env, opts, "decide", "--repo", "o/r"); code != 0 {
+		t.Fatalf("decide at 24 business hours: exit %d: %s", code, errOut)
+	}
+	for n, want := range map[int]bool{2: true, 3: false, 4: false, 5: false} {
+		if got := slices.Contains(g.LabelNames(n), workitems.LabelProvisional); got != want {
+			t.Errorf("#%d provisional = %v at 24 solo business hours", n, got)
+		}
+	}
+	g.Mu.Lock()
+	body := g.Issues[2].Body
+	g.Mu.Unlock()
+	if !strings.Contains(body, "within 24 business hours (V8, solo mode)") {
+		t.Errorf("#2 body:\n%s", body)
+	}
+	code, out, _ := run(t, env, opts, "status", "--repo", "o/r")
+	if want := "provisional Decision #2 Choose the rules engine: ratify or revert by 2026-10-19T12:00:00Z with `aayu inbox` or `aayu decide 2 --accept <option>`"; code != 0 || !strings.Contains(out, want) {
+		t.Errorf("status: exit %d, want %q:\n%s", code, want, out)
 	}
 }

@@ -111,6 +111,12 @@ func Load(src Sources) (*Loaded, error) {
 			errs = append(errs, fmt.Errorf("%s: [fleet] is user-level only; move it to the user config", source))
 			return
 		}
+		// Like [autonomy], the solo window is the protected repository
+		// config's alone (Story #432): no person's or agent's own layer sets it.
+		if name != LayerDefault && name != LayerRepo && k.Exists("decisions.solo_provisional_after_hours") {
+			errs = append(errs, fmt.Errorf("%s: [decisions] solo_provisional_after_hours is read only from .aayudha/config.toml, a protected path", source))
+			return
+		}
 		l.layers = append(l.layers, layer{name, source, k})
 		if err := l.merged.Merge(k); err != nil {
 			errs = append(errs, err)

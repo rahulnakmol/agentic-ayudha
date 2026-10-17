@@ -223,11 +223,16 @@ type AutonomyBudget struct {
 	Attempts  int     `koanf:"attempts" jsonschema:"minimum=0"`
 }
 
+// MinSoloProvisionalHours is the hard minimum of [decisions]
+// solo_provisional_after_hours (Story #432): no configuration goes below it.
+const MinSoloProvisionalHours = 12
+
 // Decisions is [decisions]. SLA durations are business hours ([time]).
 type Decisions struct {
 	Authority        map[string]string `koanf:"authority" jsonschema_description:"Decision type or layer to the seat or login that may accept it."`
 	SLAHours         int               `koanf:"sla_hours" jsonschema:"minimum=0" jsonschema_description:"Business hours before an open Decision pages its authority and escalates."`
 	ProvisionalAfter int               `koanf:"provisional_after_hours" jsonschema:"minimum=0" jsonschema_description:"Business hours before a reversible Decision's recommendation applies provisionally (V8)."`
+	SoloProvisional  int               `koanf:"solo_provisional_after_hours" jsonschema:"minimum=12" jsonschema_description:"In solo mode (at most one human), the shorter window before a reversible Decision's recommendation applies provisionally (V8); at least 12, and read only from .aayudha/config.toml."`
 	EscalateTo       string            `koanf:"escalate_to" jsonschema_description:"GitHub login mentioned on escalation (founder B)."`
 }
 
@@ -480,6 +485,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Team.Size < 0 {
 		bad("[team] size = %d: want a number of people, 0 or more", c.Team.Size)
+	}
+	if h := c.Decisions.SoloProvisional; h < MinSoloProvisionalHours {
+		bad("[decisions] solo_provisional_after_hours = %d: the minimum is %d business hours", h, MinSoloProvisionalHours)
 	}
 	if e := c.Decisions.EscalateTo; e != "" && !loginName.MatchString(e) {
 		bad("[decisions] escalate_to = %q: want a GitHub login", e)
