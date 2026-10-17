@@ -30,7 +30,7 @@ var (
 
 	citationKinds = []string{"path", "dir", "issue", "adr", "symbol", "commit", "run", "config", "query"}
 	citationREs   = map[string]*regexp.Regexp{
-		"path":   regexp.MustCompile(`(?:[A-Za-z0-9_.<>-]+/)*[A-Za-z0-9_<>-][A-Za-z0-9_.<>-]*\.(?:go|md|toml|ya?ml|jsonl?|tsx?|m?js|sh|sql|txt|csv|html|css|py)\b(?::\d+(?:-\d+)?)?`),
+		"path":   regexp.MustCompile(`(?:[A-Za-z0-9_.<>-]+/)*[A-Za-z0-9_<>-][A-Za-z0-9_.<>-]*\.(?:go|md|toml|ya?ml|jsonl?|tsx?|m?js|sh|sql|txt|csv|html|css|py|bicep|tf)\b(?::\d+(?:-\d+)?)?`),
 		"dir":    regexp.MustCompile("`[A-Za-z0-9_.-]+/[A-Za-z0-9_.*<>/-]*`"),
 		"issue":  regexp.MustCompile(`(?:^|[^\w&/])#(\d+)\b`),
 		"adr":    regexp.MustCompile(`\bADR-\d+\b`),
