@@ -108,6 +108,10 @@ func TestFloorRunners(t *testing.T) {
 	if !slices.ContainsFunc(ix.Entries, func(e Fact) bool { return e.ID == "entry:interp.h:20#beta" && e.At == "interp.h:20" }) {
 		t.Errorf("entries = %v; want beta beside alpha on interp.h:20", ix.Entries)
 	}
+	// A .hxx header is a header: its class is an entry point, as a .h header's is.
+	if !slices.ContainsFunc(ix.Entries, func(e Fact) bool { return e.At == "util.hxx:3" && e.Detail == "class Box" }) {
+		t.Errorf("entries = %v; want class Box in util.hxx", ix.Entries)
+	}
 	// A builtin citation counts toward its file's module.
 	if r := Check(ix, Draft{Engineering: []Claim{{ID: "E1", Topic: "interfaces", Text: "Math.sqrt is a native.", Basis: "observed", Cites: []string{"builtin:interp.cpp:29"}}}}); !slices.Equal(r.Coverage.UncitedModule, []string{"mod:tests"}) {
 		t.Errorf("coverage = %+v; the builtin cite covers interp.cpp's module", r.Coverage)
@@ -141,6 +145,10 @@ func TestFloorRunners(t *testing.T) {
 			"tests/json.js:1 calls JSON.parse, which runner entry:cli.cpp:3 does not register", true},
 		{"match", "a test file that drives nothing as the runner", set(func(g *CaseSet) { g.Runners = []string{"test:tests/hello.js"} }),
 			"runner test:tests/hello.js is a test file that calls no function and loads no file outside the tests", true},
+		{"match", "no inputs, and a test file it draws on calls a builtin the runner lacks", set(func(g *CaseSet) { g.From, g.Inputs = []string{cli, "test:tests/math.js"}, nil }),
+			"case set G1: tests/math.js:1 calls Math.sqrt, " + notCLI, true},
+		{"negated", "no inputs, and the test file it draws on calls only what the runner registers", set(func(g *CaseSet) { g.From, g.Inputs = []string{cli, "test:tests/hello.js"}, nil }), "case set G1", false},
+		{"near miss", "a test file it draws on, with inputs that name other files", set(func(g *CaseSet) { g.From = []string{cli, "test:tests/math.js"} }), "case set G1", false},
 		{"near miss", "a comment, a string, and another object's sqrt", set(func(g *CaseSet) { g.Inputs = []string{"tests/nearmiss.js"} }), "case set G1", false},
 		{"near miss", "a title about Math without naming a builtin", set(func(g *CaseSet) { g.Title = "Math results (sqrt) and myMath.sqrt" }), "case set G1", false},
 	})
@@ -161,8 +169,9 @@ func TestFloorRunnerPrograms(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("tool.py", "#!/usr/bin/env python3\nimport lib\n\n\ndef run():\n    print(lib.render(1))\n\n\nif __name__ == \"__main__\":\n    run()\n")
-	write("lib.py", "def render(x):\n    return str(x)\n")
+	write("tool.py", "#!/usr/bin/env python3\nimport lib\n\n\ndef run(env):\n    lib.setup(env)\n    print(lib.render(1))\n\n\nif __name__ == \"__main__\":\n    run(lib.Env())\n")
+	write("lib.py", "def render(x):\n    return str(x)\n\n\ndef shout(x):\n    return str(x).upper()\n\n\ndef setup(env):\n    env.register('shout', shout)\n")
+	write("cases/loud.js", "shout(\"hi\");\n")
 	write("tests/test_render.py", "import helpers\n\n\ndef test_render():\n    assert helpers.check(1)\n")
 	write("tests/helpers.py", "import lib\n\n\ndef check(x):\n    return lib.render(x) == str(x)\n")
 	write("tests/make_data.py", "def make():\n    return [1, 2]\n")
@@ -192,5 +201,8 @@ func TestFloorRunnerPrograms(t *testing.T) {
 	write("other.py", "#!/usr/bin/env python3\nimport lib\nprint(lib.render(2))\n")
 	runFloorCases(t, build(), base, []floorCase{
 		{"match", "a second program, no runners", func(*Draft) {}, "case set G1: name its runners", true},
+		{"negated", "the main guard's runner, whose guard calls the function that registers it", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:tool.py:10"}, []string{"cases/loud.js"} }), "case set G1", false},
+		{"match", "a program that never calls that function", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/loud.js"} }),
+			"cases/loud.js:1 calls shout, which runner entry:other.py:1 does not register", true},
 	})
 }
