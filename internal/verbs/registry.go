@@ -357,6 +357,9 @@ const (
 	HostCursor HostID = "cursor"
 	HostClaude HostID = "claude"
 	HostCodex  HostID = "codex" // OpenAI Codex CLI and IDE extension (WP3.2b)
+	// HostCopilot is GitHub Copilot: Copilot CLI and VS Code agent mode, which
+	// share one runtime and its skill, hook, and MCP formats.
+	HostCopilot HostID = "copilot"
 )
 
 // Hosts lists the primary hosts.
@@ -365,6 +368,7 @@ var Hosts = []Host{
 	{ID: HostCursor, Name: "Cursor", Excludes: []Family{FamilyOpenAI}}, // GPT lanes fall back to Grok on Cursor
 	{ID: HostClaude, Name: "Claude Code"},
 	{ID: HostCodex, Name: "OpenAI Codex"},
+	{ID: HostCopilot, Name: "GitHub Copilot"},
 }
 
 // Lane IDs.
@@ -405,8 +409,37 @@ func builderDefaults() []ModelDefault {
 		{Host: HostCursor, Model: "Claude Opus 5.5", ID: ModelClaudeOpus, Family: FamilyAnthropic, Alternative: "Claude Sonnet 5.5 (" + ModelClaudeSonnet + ")", AlternativeID: ModelClaudeSonnet},
 		{Host: HostClaude, Model: "Claude Opus 5.5", ID: ModelClaudeOpus, Family: FamilyAnthropic, Alternative: "Claude Sonnet 5.5 (" + ModelClaudeSonnet + ")", AlternativeID: ModelClaudeSonnet},
 		{Host: HostCodex, Model: "GPT-6.1 Sol", ID: ModelGPTSol, Family: FamilyOpenAI, Escalation: "GPT-6 Astra at high reasoning effort", EscalationID: ModelGPTAstra, EscalationEffort: "high"},
+		copilotAuto(CopilotBalance, CopilotIntelligence),
 	}
 }
+
+// Copilot's Auto tiers. aayu cannot pick a model inside Copilot, so a lane on
+// Copilot is the Auto tier the person or the session selects (/model auto
+// <tier> in Copilot CLI, Optimize for in VS Code), and the family is the
+// model Copilot reports for each response.
+const (
+	CopilotEfficiency   = "Copilot Auto (Efficiency)"
+	CopilotBalance      = "Copilot Auto (Balance)"
+	CopilotIntelligence = "Copilot Auto (Intelligence)"
+)
+
+// Copilot model selectors: what [models.<lane>.copilot] model may name
+// besides a concrete Copilot model ID. Each is the Copilot CLI flag pair
+// --model auto --auto-tier <tier>, or --experimental --model hydrafusion for
+// HydraFusion, a research preview and so only ever opt-in
+// (docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference).
+const (
+	CopilotAutoEfficiency   = "auto:efficiency"
+	CopilotAutoBalance      = "auto:balance"
+	CopilotAutoIntelligence = "auto:intelligence"
+	CopilotHydraFusion      = "hydrafusion"
+)
+
+func copilotAuto(tier, escalation string) ModelDefault {
+	return ModelDefault{Host: HostCopilot, Model: tier, ID: copilotTierID[tier], Family: FamilyHostManaged, Escalation: escalation}
+}
+
+var copilotTierID = map[string]string{CopilotEfficiency: CopilotAutoEfficiency, CopilotBalance: CopilotAutoBalance, CopilotIntelligence: CopilotAutoIntelligence}
 
 func reviewDefault(h HostID) ModelDefault {
 	return ModelDefault{Host: h, Model: "GPT-6.1 Sol", ID: ModelGPTSol, Family: FamilyOpenAI,
@@ -429,6 +462,11 @@ var Lanes = []Lane{
 		reviewDefault(HostClaude),
 		// Codex builds with OpenAI, so its reviewer is another family.
 		{Host: HostCodex, Model: "Claude Opus 5.5", ID: ModelClaudeOpus, Family: FamilyAnthropic, Alternative: "Grok 4.7 (" + ModelGrok + ")", AlternativeID: ModelGrok},
+		// Copilot reviews with a model the person picks from a family other
+		// than the builder's, or with HydraFusion Critique when they opt in
+		// ([models.review.copilot]); a preview, so never the default.
+		{Host: HostCopilot, Model: CopilotIntelligence, ID: CopilotAutoIntelligence, Family: FamilyHostManaged,
+			Alternative: "a model from a family other than the builder's, picked in Copilot's model picker; or HydraFusion Critique, opt-in, which counts only when its recorded critic's family differs from the builder's"},
 	}},
 	// Interim model gemini-3.8-flash; the target is gemini-4-argon-high once the
 	// gateway routes it (ModelGemini, D-6.6b).
@@ -437,12 +475,14 @@ var Lanes = []Lane{
 		geminiDefault(HostCursor),
 		geminiDefault(HostClaude),
 		geminiDefault(HostCodex),
+		copilotAuto(CopilotIntelligence, ""),
 	}},
 	{ID: LaneChore, Summary: "Cheap mechanical work: triage, status, checks.", Defaults: []ModelDefault{
 		{Host: HostAmp, Model: "Amp low", Family: FamilyHostManaged},
 		{Host: HostCursor, Model: "Haiku 5.5", ID: ModelClaudeHaiku, Family: FamilyAnthropic, ContextTokens: 100000},
 		{Host: HostClaude, Model: "Haiku 5.5", ID: ModelClaudeHaiku, Family: FamilyAnthropic, ContextTokens: 100000},
 		{Host: HostCodex, Model: "Haiku 5.5", ID: ModelClaudeHaiku, Family: FamilyAnthropic, ContextTokens: 100000},
+		copilotAuto(CopilotEfficiency, ""),
 	}},
 }
 
@@ -993,7 +1033,7 @@ var Verbs = []Command{
 		Reader:  "Installs the aayudha skills, tools, and hooks into your agent, and sets up its cloud environment and loops.",
 		Seat:    DevOps, Lane: LaneChore, Layers: OnlyLayers(L09),
 		Inputs: []Input{
-			enumIn("host", false, false, "Host to install for.", "amp", "cursor", "claude", "codex", "all"),
+			enumIn("host", false, false, "Host to install for.", "amp", "cursor", "claude", "codex", "copilot", "all"),
 			flag("apply", TypeBool, "Write the changes instead of showing a diff."),
 			flag("pin", TypeString, "Skill version to pin."),
 			flag("env", TypeBool, "Set up agent environments instead: discover them from the code, ask what it cannot say, and show each host's generated configuration and UI values."),

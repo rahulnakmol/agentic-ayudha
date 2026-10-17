@@ -25,6 +25,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/delegate"
 	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
+	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
@@ -401,11 +402,23 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			msg += fmt.Sprintf("\nAayudha-Attempt: %d", attempt)
 		}
 		model := e.builderModel()
+		cm, copilot := hosts.CopilotModels{}, false
+		if dlg == nil && e.Getenv("AAYU_MODEL") == "" {
+			cm, copilot = e.copilotModels(root)
+		}
 		switch {
 		case dlg != nil:
 			msg += "\nAayudha-Delegate: " + dlg.receiver
 			if model = dlg.model(); model != "" {
 				msg += "\nAayudha-Model: " + model
+			}
+		case copilot:
+			// Auto may answer with several models, of several families: each
+			// is a candidate builder family, and the most recent is the record's.
+			msg += "\n" + cm.Trailers()
+			model = ""
+			if len(cm.Models) > 0 {
+				model = cm.Models[0]
 			}
 		case model != "":
 			msg += "\nAayudha-Model: " + model
@@ -816,6 +829,23 @@ func contains(xs []string, x string) bool {
 		}
 	}
 	return false
+}
+
+// copilotModels reads the models Copilot reported in the Copilot session that
+// ran this build in root, which its pre-tool hook recorded within the last
+// quarter hour. ok is false when no Copilot session ran it.
+func (e *Env) copilotModels(root string) (hosts.CopilotModels, bool) {
+	log := hosts.CopilotSessionLog(root, hosts.CopilotHome(e.homeDir(), e.Getenv), 15*time.Minute, e.Now())
+	if log == "" {
+		return hosts.CopilotModels{}, false
+	}
+	f, err := os.Open(log)
+	if err != nil {
+		return hosts.CopilotModels{}, true // Copilot built it; which model is unknown
+	}
+	defer func() { _ = f.Close() }()
+	m, _ := hosts.ReadCopilotSession(f)
+	return m, true
 }
 
 // builderModel is the model the building agent runs on, when known: the
