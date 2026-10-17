@@ -34,18 +34,25 @@ const (
 
 // Run is one tier-2 run of a case.
 type Run struct {
-	Status  string    `json:"status"`
-	Score   int       `json:"score"` // 1-5; a deterministic floor miss scores 1 without asking the judge (rule 7); 0 for an error
-	Pass    bool      `json:"pass"`
-	Floor   string    `json:"floor,omitempty"`
-	Revised bool      `json:"revised,omitempty"` // a brief draft revised once after aayu brief's checks
-	Reason  string    `json:"reason,omitempty"`
-	Error   string    `json:"error,omitempty"`
-	Excerpt string    `json:"excerpt,omitempty"` // the unusable reply's start (and end, when truncated), credentials redacted
-	Calls   []CallLog `json:"calls,omitempty"`   // every model call the run made, in order
+	Status  string `json:"status"`
+	Score   int    `json:"score"` // 1-5; a deterministic floor miss scores 1 without asking the judge (rule 7); 0 for an error
+	Pass    bool   `json:"pass"`
+	Floor   string `json:"floor,omitempty"`
+	Revised bool   `json:"revised,omitempty"` // a brief draft revised once after aayu brief's checks
+	// RevisedFor is what the deterministic checks found in a persona or pack
+	// run's first draft, the findings it was asked to fix.
+	RevisedFor string    `json:"revised_for,omitempty"`
+	Reason     string    `json:"reason,omitempty"`
+	Error      string    `json:"error,omitempty"`
+	Excerpt    string    `json:"excerpt,omitempty"` // the unusable reply's start (and end, when truncated), credentials redacted
+	Calls      []CallLog `json:"calls,omitempty"`   // every model call the run made, in order
 	// Transcript is a grill conversation run's exchanges and final criteria
 	// (WP5.3b), clipped and redacted, so a reader can see what was asked.
 	Transcript *RunTranscript `json:"transcript,omitempty"`
+	// Answer is a persona or decision-pack run's last answer (WP5.1b),
+	// clipped and redacted, so a reader can see what the checks and the judge
+	// saw and say who was wrong.
+	Answer string `json:"answer,omitempty"`
 	// A review case's run (WP4.8b): its variant and what it would post against
 	// the planted defects.
 	Variant string `json:"variant,omitempty"`

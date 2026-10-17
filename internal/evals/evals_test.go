@@ -690,6 +690,11 @@ func TestTier2PersonaRevisesOnceThenJudges(t *testing.T) {
 		!strings.Contains(runs[4].Floor, `carries the enterprise artefact "Retrospective memo"`) {
 		t.Fatalf("%d calls, runs %+v", len(fake.Requests), runs)
 	}
+	// A run records what was judged or refused, and what its first draft was asked to fix.
+	if !strings.Contains(runs[0].RevisedFor, "uncited claim") || runs[1].RevisedFor != "" || strings.Contains(runs[0].Answer, "already stores the kind") ||
+		!strings.HasPrefix(runs[0].Answer, "# Retro note") || !strings.HasPrefix(runs[4].Answer, "# Retrospective memo") {
+		t.Errorf("recorded: %q / %q / %.40q / %.40q", runs[0].RevisedFor, runs[1].RevisedFor, runs[0].Answer, runs[4].Answer)
+	}
 	first, revise, judged := fake.Requests[0], fake.Requests[1], fake.Requests[2]
 	if !strings.Contains(first.System, "## Voice: Athena, the Engineering Manager twin") || !strings.Contains(first.System, "Team stage for this run: startup") ||
 		!strings.Contains(first.Messages[0].Content, `<untrusted source="grounding">`) {
@@ -873,7 +878,7 @@ func TestGroups(t *testing.T) {
 		t.Fatalf("brief-plain group: %v, cap %v", err, p.MaxUSD)
 	}
 	pg, personas, err := cfg.ForGroup("personas", all)
-	if err != nil || pg.MaxUSD != 20 || len(personas) != 4 {
+	if err != nil || pg.MaxUSD != 30 || len(personas) != 6 {
 		t.Fatalf("personas group: %v, cap %v, %d cases", err, pg.MaxUSD, len(personas))
 	}
 	rv, review, err := cfg.ForGroup("review", all)

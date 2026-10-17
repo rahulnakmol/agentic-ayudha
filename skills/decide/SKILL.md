@@ -112,8 +112,9 @@ them so it can be decided in one sitting. Nothing is applied and nothing is writ
 A pack is read by a busy human who decides from it in five minutes. Write it to fit, not long and then trimmed: the
 budget is part of the design. Its only `##` headings are the eight parts below, in order, under an optional `#` title;
 your persona's practice artefacts (risk list, decision record, and so on) are not extra sections here. The team stage
-sets depth by what you cite, never by pasting: about 300 words at a startup, about 400 at a scaleup, and never more
-than 500 at an enterprise, where the depth is the dissent, the risks, and the review the decision needs.
+sets depth by what you cite, never by pasting: at most 350 words at a startup, 450 at a scaleup, and 500 at an
+enterprise, where the depth is the dissent, the risks, and the review the decision needs. Count the words before you
+reply; when over, cut the weakest fact or trade-off, never a part or a citation.
 
 1. `## Question`: one sentence ending in a question mark, nothing else in that paragraph. Then one short paragraph
    that starts "Why this question:" and says, with a citation, why it is the real decision and not a symptom.
@@ -124,14 +125,16 @@ than 500 at an enterprise, where the depth is the dissent, the risks, and the re
 3. `## Options`: two or three numbered top-level items, each `N. **Name.** what it does` with a citation, and its
    trade-offs as indented sub-items (`- Gains:`, `- Costs:`, each cited), so only the options are top-level. Put
    each option in its viable form, with what it would take to work (what must change first, what moves elsewhere).
-   An option you would never pick is a straw man; leave it out.
+   An option you would never pick is a straw man; leave it out. When an option does not meet a criterion or a
+   Decision as written, say which one and what would have to change.
 4. `## Recommendation`: the option and why, in two or three cited sentences that follow from the facts. Then one
    line that starts `Door:`, contains the words "one-way door" or "two-way door", and cites what the option leaves
    behind: anything written to an append-only record, published, or relied on by another reader is a one-way door for
-   that data, while a plan, a scope, or a split is a two-way door. When an option has both, say which part is which.
+   that data, while a plan, a scope, or a split is a two-way door. Count what the option writes now as well as what
+   it defers: records written now in the old shape stay that way. When an option has both, say which part is which.
 5. `## Cost of waiting`: one or two items, what waiting a day or a week costs, cited; no projected numbers.
 6. `## Pre-mortem`: "Pythia's pre-mortem: assume option N failed." in your own voice, then two items, each a
-   likely reason specific to this recommendation, with its citation, and "Early warning:" with the observable check
+   likely reason specific to the recommended option (not a risk every option shares), with its citation, and "Early warning:" with the observable check
    that would show it first.
 7. `## Questions that would change the answer`: two or three items, each a single question ending in a question
    mark that names the option its answer would favour.
