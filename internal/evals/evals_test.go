@@ -1017,7 +1017,7 @@ func TestGroups(t *testing.T) {
 	}
 	// Decision #283: the Data & AI Architect's chart and measure cases, advisory, on dispatch only.
 	dg, dataAI, err := cfg.ForGroup("data-ai", all)
-	if g, _ := cfg.Group("data-ai"); err != nil || dg.MaxUSD != 8 || len(dataAI) != 4 || cfg.Gates("data-ai") || g.RunsOn("push") || g.RunsOn("schedule") {
+	if g, _ := cfg.Group("data-ai"); err != nil || dg.MaxUSD != 8 || dg.MaxTokens.Skill != 32000 || len(dataAI) != 4 || cfg.Gates("data-ai") || g.RunsOn("push") || g.RunsOn("schedule") {
 		t.Fatalf("data-ai group: %v, cap %v, %d cases, gates %v", err, dg.MaxUSD, len(dataAI), cfg.Gates("data-ai"))
 	}
 	// Decision #324: the Production Engineer's cases, two per skill, advisory, on dispatch only.

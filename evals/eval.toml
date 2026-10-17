@@ -69,6 +69,10 @@ prefixes = ["chart/", "measure/"]
 max_usd = 8.0 # run 39012883212 (32cca9a): 3.53 USD for 19 of 20 runs (one 524 from the endpoint), so about 3.72 a full run
 gate = "advisory"
 events = ["workflow_dispatch"]
+# A scaleup chart note thinks through many checks before it writes: run 39034116306 stopped two of five
+# chart/ai-scaleup runs at the 12000-token cap (mostly thinking), so the group's cap is 32000, a ceiling and not a
+# charge (D-5.1g.n).
+max_tokens = 32000
 
 # Production Engineer cases (Decision #324, D-5.10d): investigate, slo, runbook, and respond (the postmortem), two
 # cases each at the startup and scaleup stages, on groundings from the instrumented benefits-qa (a bad deploy) and a
