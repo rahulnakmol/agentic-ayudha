@@ -419,4 +419,14 @@ func TestVerifyScreenshotReview(t *testing.T) {
 	if sr := e.screenshotReview(context.Background(), unscanned, 0, ""); sr == nil || !strings.Contains(sr.Skipped, "OCR") || len(fakeModel.Requests) != calls {
 		t.Fatalf("unscanned screenshots: %+v, %d calls", sr, len(fakeModel.Requests)-calls)
 	}
+	if sr := e.screenshotReview(context.Background(), unscanned[1:], 0, ""); sr != nil {
+		t.Fatalf("a behaviour control's screenshot alone: %+v", sr)
+	}
+	// Findings that quote personal data from the page are not kept: the
+	// report goes on the ledger.
+	leak := models.Response{Text: `{"findings":[{"kind":"contrast","heuristic":4,"severity":3,"element":"jane.doe@acme.io","summary":"low contrast","fix":"darken"}],"nielsen":[0,0,0,0,0,0,0,0,0,0],"personas":[],"rebuild":false}`}
+	leaky := &models.Fake{Replies: []models.Response{leak, leak, leak}}
+	if sr := newE(leaky).screenshotReview(context.Background(), arts, 0, ""); sr == nil || len(sr.Findings) != 0 || !strings.Contains(sr.Skipped, "personal data") || strings.Contains(sr.Skipped, "jane.doe@acme.io") {
+		t.Fatalf("findings quoting personal data: %+v", sr)
+	}
 }

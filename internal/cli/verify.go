@@ -75,9 +75,11 @@ type ScreenshotReview struct {
 	Skipped     string             `json:"skipped,omitempty"` // why no judgement was made
 }
 
-// screenshotReview runs the ui-review lane on the screenshots whose pixels
-// the web floor's redaction pass read with OCR and found free of personal
-// data (OCRScanned); no other screenshot is sent to a model.
+// screenshotReview runs the ui-review lane on the web floor's screenshots
+// (screens/N.png) whose pixels its redaction pass read with OCR and found
+// free of personal data (OCRScanned); no other screenshot is sent to a model.
+// The findings go on the ledger as a report, so they get the same PII scan:
+// if it matches, none is kept.
 // builderModel is the head's Aayudha-Model trailer, for the family check. Any
 // failure (no model key, a family clash, a gateway error) is recorded as
 // skipped: the judgement is advisory and never stops verify.
@@ -86,7 +88,7 @@ func (e *Env) screenshotReview(ctx context.Context, arts []verify.Evidence, stor
 	unscanned := 0
 	for _, a := range arts {
 		switch {
-		case a.Kind != "screenshot":
+		case a.Kind != "screenshot" || !strings.HasPrefix(a.Path, "screens/"): // a behaviour control's are never eligible
 		case a.OCRScanned:
 			shots = append(shots, a)
 		default:
@@ -125,6 +127,11 @@ func (e *Env) screenshotReview(ctx context.Context, arts []verify.Evidence, stor
 	l, err := uireview.LaneA(ctx, rv.Complete, caps, rv.K, rv.MinTargetPx, rv.Effort, rv.Model)
 	if err != nil {
 		sr.Skipped = err.Error()
+		return sr
+	}
+	b, _ := json.Marshal(l.Findings)
+	if pii := verify.ScanPII(string(b)); len(pii) > 0 {
+		sr.Skipped = "the model's findings quoted personal data, so none is kept: " + strings.Join(pii, "; ")
 		return sr
 	}
 	sr.Disposition, sr.Findings = l.Disposition, l.Findings
