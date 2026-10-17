@@ -2,6 +2,7 @@
 [mcp_servers.aayudha]
 command = "C:\\Program Files\\aayudha\\aayu.exe"
 args = ["mcp"]
+env_vars = ["AAYU_GITHUB_TOKEN", "GH_TOKEN", "GH_CONFIG_DIR", "XDG_CONFIG_HOME"]
 
 [plugins."aayudha@aayudha"]
 enabled = false

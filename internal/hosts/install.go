@@ -807,6 +807,14 @@ const (
 	codexEnd   = "# END aayudha"
 )
 
+// CodexMCPEnv are the variables Codex copies from its own environment into the
+// aayudha MCP server's (env_vars), in the plugin manifest and in install's
+// block. Codex otherwise gives a stdio server only HOME, PATH, and a few
+// more, so the server would find no GitHub token that the shell finds:
+// these are the places aayu looks for one (AAYU_GITHUB_TOKEN, and gh's token
+// and config folder) and the folder of its own secrets file.
+var CodexMCPEnv = []string{"AAYU_GITHUB_TOKEN", "GH_TOKEN", "GH_CONFIG_DIR", "XDG_CONFIG_HOME"}
+
 var codexBlock = regexp.MustCompile(`(?s)` + regexp.QuoteMeta(codexBegin) + `.*?` + regexp.QuoteMeta(codexEnd) + `\n?`)
 
 func (p *planner) codexConfig() error {
@@ -824,7 +832,8 @@ func (p *planner) codexConfig() error {
 		plugin = ""
 		p.notes = append(p.notes, CodexConfig+" already has a [plugins.\""+PluginID+"\"] table outside aayudha's block, so install leaves it: set enabled = false there, or Codex lists each aayudha skill twice for anyone with the plugin")
 	}
-	block := codexBegin + "\n[mcp_servers." + ServerName + "]\ncommand = " + string(cmd) + "\nargs = [\"mcp\"]\n" + plugin + codexEnd + "\n"
+	envVars, _ := json.Marshal(CodexMCPEnv) // a JSON string array is a TOML array
+	block := codexBegin + "\n[mcp_servers." + ServerName + "]\ncommand = " + string(cmd) + "\nargs = [\"mcp\"]\nenv_vars = " + strings.ReplaceAll(string(envVars), ",", ", ") + "\n" + plugin + codexEnd + "\n"
 	switch {
 	case codexBlock.MatchString(text):
 		text = codexBlock.ReplaceAllLiteralString(text, block)
