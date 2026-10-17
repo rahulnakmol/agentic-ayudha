@@ -2,6 +2,26 @@
   "story": 431,
   "branch": "story/431-aayu-inbox-every-human-only-step-with-th",
   "started_at": "2026-10-17T19:22:33Z",
-  "failed_attempts": 0,
-  "checkpoints": null
+  "failed_attempts": 1,
+  "failures_by_layer": {
+    "L02": 1,
+    "L03": 1,
+    "L06": 1
+  },
+  "checkpoints": [
+    {
+      "k": 1,
+      "n": 3,
+      "attempt": 1,
+      "commit": "ee0bbaa08422e9481afcdc18916d60db22297731",
+      "layers": [
+        "L02",
+        "L03",
+        "L06"
+      ],
+      "verify": "miss",
+      "detail": "coverage fail, a11y blocked",
+      "at": "2026-10-17T19:43:53Z"
+    }
+  ]
 }
