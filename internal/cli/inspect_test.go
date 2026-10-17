@@ -561,4 +561,25 @@ func TestInspectWithoutStory(t *testing.T) {
 	if code, res, errOut = inspectApp(t, env, opts, docs.Number, "--ci"); code != 0 || res.Disposition != inspect.Skipped || !strings.Contains(res.Summary, "only documentation") {
 		t.Fatalf("docs-only PR: exit %d %+v %s", code, res, errOut)
 	}
+
+	// With no criteria to judge test gaps in, a test file is reviewed like any
+	// other: a reply that covers nothing leaves it unreviewed.
+	thead := strings.Repeat("f", 40)
+	tests := g.AddPR("test: pin Percent", "Tests.", "founder", "test/percent", thead, "dev")
+	g.Mu.Lock()
+	tests.Diff = "diff --git a/internal/report/percent_test.go b/internal/report/percent_test.go\nnew file mode 100644\n--- /dev/null\n+++ b/internal/report/percent_test.go\n@@ -0,0 +1 @@\n+package report\n"
+	g.Static["/repos/o/r/pulls/"+strconv.Itoa(tests.Number)+"/commits"] = jsonOf(t, `[{"sha":"`+thead+`","commit":{"message":"test: pin\n\nAayudha-Model: claude-opus-5-5\n"}}]`)
+	g.Mu.Unlock()
+	addComment(g, tests.Number, "chatgpt-codex-connector[bot]", "Bot", statedReply(thead, "merge"))
+	if code, res, _ = inspectApp(t, env, opts, tests.Number, "--ci"); code != ExitBlocked || !strings.Contains(res.Overridden, "left unreviewed: internal/report/percent_test.go") {
+		t.Fatalf("an unreviewed test file on a PR without criteria: %d %s %q", code, res.Disposition, res.Overridden)
+	}
+
+	// The docs-only exemption does not depend on the reviewer backend.
+	if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\nreviewer = \"model\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, res, errOut = inspectApp(t, env, opts, docs.Number, "--ci"); code != 0 || res.Disposition != inspect.Skipped {
+		t.Fatalf("docs-only PR with a model reviewer: exit %d %+v %s", code, res, errOut)
+	}
 }

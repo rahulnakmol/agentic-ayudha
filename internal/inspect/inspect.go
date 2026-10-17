@@ -343,7 +343,7 @@ func (r Runner) finish(in Input, prev, st State, res Result, covered func(string
 	res.Findings, sup = r.Filter.Suppress(res.Findings, in.Dismissed)
 	res.Dropped = append(res.Dropped, sup...)
 	TestGapVerdicts(&res)
-	m := Seal(in.Files, in.Areas, r.Filter, covered)
+	m := Seal(in.Files, in.Areas, r.Filter, in.Pack != nil && len(in.Pack.Criteria) > 0, covered)
 	res.Coverage = &m
 	liftFix(&res)
 	st.SpentUSD += res.CostUSD

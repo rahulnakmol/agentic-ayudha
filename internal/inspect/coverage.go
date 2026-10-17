@@ -38,10 +38,11 @@ type Manifest struct {
 }
 
 // Seal builds the manifest from the diff: deleted and generated files are
-// skipped with their reason; a file the reviewer covered is reviewed; a test
-// file it did not cover is skipped (test gaps are judged in the criteria's
-// verdicts); any other file is unreviewed.
-func Seal(files []DiffFile, areas []Area, fl Filter, covered func(path string) bool) Manifest {
+// skipped with their reason; a file the reviewer covered is reviewed; when the
+// story has criteria, a test file it did not cover is skipped (test gaps are
+// judged in the criteria's verdicts); any other file is unreviewed, test files
+// of a PR without criteria included.
+func Seal(files []DiffFile, areas []Area, fl Filter, criteria bool, covered func(path string) bool) Manifest {
 	generated := map[string]bool{}
 	for _, a := range areas {
 		for _, g := range a.Generated {
@@ -58,7 +59,7 @@ func Seal(files []DiffFile, areas []Area, fl Filter, covered func(path string) b
 			c.Status, c.Why = SkippedCov, "generated: the drift check owns it"
 		case covered(f.Path):
 			c.Status = Reviewed
-		case isTestPath(f.Path):
+		case criteria && isTestPath(f.Path):
 			c.Status, c.Why = SkippedCov, "test file: test gaps are judged in the criteria's verdicts"
 		default:
 			c.Status, c.Why = Unreviewed, "the review did not cover it"

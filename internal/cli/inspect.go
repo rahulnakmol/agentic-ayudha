@@ -360,6 +360,11 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		}
 	}
 	builder := inspect.BuilderOf(inspect.Records{Receiver: deleg.Receiver, Delegated: deleg.Family, Checkpoints: checkpoints}, commits, claim, lane)
+	// A docs-only PR merges without a review, whichever backend reviews.
+	if !ins.Draft && inspect.DocsOnly(inspect.ParseDiff(ins.Diff)) {
+		return e.emitInspect(inspect.Result{PR: n, Head: pr.GetHead().GetSHA(), Findings: []inspect.Finding{}, Criteria: []inspect.Verdict{}, Builder: builder,
+			Disposition: inspect.Skipped, Summary: "the PR changes only documentation, which merges without a review"}, []string{builder.Note()})
+	}
 	if cfg.Reviewer != inspect.ReviewerModel {
 		return e.inspectThroughApp(ctx, appInspect{c: c, repo: repo, pr: pr, in: ins, prev: prev, builder: builder, cfg: l.Config})
 	}

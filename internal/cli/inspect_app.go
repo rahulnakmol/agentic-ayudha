@@ -60,10 +60,6 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		res.Disposition, res.Summary = inspect.Skipped, "draft pull request: inspect runs when it is ready for review"
 		return e.emitInspect(res, notes)
 	}
-	if inspect.DocsOnly(inspect.ParseDiff(a.in.Diff)) {
-		res.Disposition, res.Summary = inspect.Skipped, "the PR changes only documentation, which merges without a review"
-		return e.emitInspect(res, notes)
-	}
 	posts, err := prPosts(ctx, a.c, owner, name, n)
 	if err != nil {
 		return Wrap(ExitExternal, err)
