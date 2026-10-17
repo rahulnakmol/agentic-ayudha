@@ -1080,11 +1080,12 @@ func TestLoadConfigRefuses(t *testing.T) {
 func TestLoadCaseRefuses(t *testing.T) {
 	const base = "skill = \"stub\"\ninput = \"input.txt\"\n"
 	for name, tc := range map[string]struct{ toml, want string }{
-		"unknown key":   {base + "inputs = \"x\"\n", "case.toml: "},
-		"bad pattern":   {base + "scope = [{ pattern = '(', why = \"x\" }]\n", "scope rule 1: "},
-		"no why":        {base + "scope = [{ pattern = 'csv' }]\n", "scope rule 1: why is required"},
-		"no input":      {"skill = \"stub\"\n", "skill and input are required"},
-		"partial brief": {base + "[brief]\nregister = \"ste\"\n", "[brief] needs register, purpose, and draft"},
+		"unknown key":       {base + "inputs = \"x\"\n", "case.toml: "},
+		"bad pattern":       {base + "scope = [{ pattern = '(', why = \"x\" }]\n", "scope rule 1: "},
+		"no why":            {base + "scope = [{ pattern = 'csv' }]\n", "scope rule 1: why is required"},
+		"no input":          {"skill = \"stub\"\n", "skill and input are required"},
+		"partial brief":     {base + "[brief]\nregister = \"ste\"\n", "[brief] needs register, purpose, and draft"},
+		"unknown tell kind": {base + "tell = { kind = \"tweet\", request = \"x\", draft = \"d.md\" }\n", "[tell] needs a kind (docs, guide"},
 	} {
 		dir := filepath.Join(t.TempDir(), "evals", "cases", "stub", "broken")
 		_ = os.MkdirAll(dir, 0o755)
@@ -1632,6 +1633,34 @@ func TestTier1TellRules(t *testing.T) {
 		if got := checkTell(c, g, b, u, tc.draft); !strings.Contains(strings.Join(got, "\n"), tc.want) {
 			t.Errorf("%s: %q, want %q", tc.id, got, tc.want)
 		}
+	}
+}
+
+// D-7.5b: a tell case carries its own brand, so a missing design/brand.yaml
+// fails tier 1 instead of falling back to the default voice; so do a missing
+// grounding or recorded draft.
+func TestTier1TellCaseFiles(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "evals", "cases", "tell", "c")
+	_ = os.MkdirAll(filepath.Join(dir, "design"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "case.toml"), []byte("skill = \"tell\"\ninput = \"g.json\"\ntell = { kind = \"docs\", request = \"x\", draft = \"d.md\" }\n"), 0o644)
+	c, err := LoadCase(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := tier1Tell(c); len(got) != 1 || !strings.Contains(got[0], "grounding g.json") {
+		t.Errorf("no grounding: %q", got)
+	}
+	_ = os.WriteFile(filepath.Join(dir, "g.json"), []byte(`{"repo": "o/r"}`), 0o644)
+	if got := tier1Tell(c); len(got) != 1 || !strings.Contains(got[0], "a tell case needs its own design/brand.yaml") {
+		t.Errorf("no brand: %q", got)
+	}
+	_ = os.WriteFile(filepath.Join(dir, "design", "brand.yaml"), []byte("version: 1\nvoice:\n  tone: [plain]\n"), 0o644)
+	if got := tier1Tell(c); len(got) != 1 || !strings.Contains(got[0], "d.md") {
+		t.Errorf("no draft: %q", got)
+	}
+	_ = os.WriteFile(filepath.Join(dir, "d.md"), []byte("# Docs\n"), 0o644)
+	if _, _, u, _ := tellSetup(c); len(tier1Tell(c)) != 0 || u.Campaign != "docs" || u.Medium != "docs" || u.Source != "r" {
+		t.Errorf("complete case: %q, utm %+v", tier1Tell(c), u)
 	}
 }
 
