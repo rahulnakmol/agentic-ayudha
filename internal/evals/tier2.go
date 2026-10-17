@@ -52,6 +52,9 @@ type Run struct {
 	TP      int    `json:"tp,omitempty"`
 	FP      int    `json:"fp,omitempty"`
 	FN      int    `json:"fn,omitempty"`
+	// Findings is what the review run posted, each marked against the planted
+	// defects, then what it dropped and why.
+	Findings []ReviewFinding `json:"findings,omitempty"`
 }
 
 // RunTranscript is what a results file keeps of a conversation.

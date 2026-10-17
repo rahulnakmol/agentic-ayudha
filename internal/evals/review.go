@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/cli"
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
@@ -74,6 +75,20 @@ const matchSlack = 3
 // matched defect is a duplicate and counts as a false positive, as does every
 // finding that matches no defect.
 func ScoreFindings(fs []inspect.Finding, ds []Defect) (tp, fp, fn int) {
+	hits, fn := matchFindings(fs, ds)
+	for _, h := range hits {
+		if h {
+			tp++
+		} else {
+			fp++
+		}
+	}
+	return tp, fp, fn
+}
+
+// matchFindings reports, per finding, whether it matched a planted defect
+// (ScoreFindings' rule), and how many defects no finding matched.
+func matchFindings(fs []inspect.Finding, ds []Defect) (hits []bool, fn int) {
 	matched := make([]bool, len(ds))
 	for _, f := range fs {
 		hit := -1
@@ -102,17 +117,44 @@ func ScoreFindings(fs []inspect.Finding, ds []Defect) (tp, fp, fn int) {
 		}
 		if hit >= 0 {
 			matched[hit] = true
-			tp++
-		} else {
-			fp++
 		}
+		hits = append(hits, hit >= 0)
 	}
 	for _, m := range matched {
 		if !m {
 			fn++
 		}
 	}
-	return tp, fp, fn
+	return hits, fn
+}
+
+// ReviewFinding is one finding of a review run as the results file keeps it,
+// clipped and redacted: "true" or "false" against the planted defects when
+// posted, else "dropped: <why>", so a reader can see why a run scored as it did.
+type ReviewFinding struct {
+	Verdict    string  `json:"verdict"`
+	Severity   string  `json:"severity"`
+	Category   string  `json:"category,omitempty"`
+	File       string  `json:"file"`
+	Line       int     `json:"line"`
+	Confidence float64 `json:"confidence,omitempty"`
+	Title      string  `json:"title"`
+	Detail     string  `json:"detail,omitempty"`
+}
+
+func reviewFindings(posted []inspect.Finding, hits []bool, dropped []inspect.Dropped) []ReviewFinding {
+	mk := func(f inspect.Finding, verdict string) ReviewFinding {
+		return ReviewFinding{Verdict: verdict, Severity: f.Severity, Category: f.Category, File: f.File, Line: f.Line, Confidence: f.Confidence,
+			Title: clip(actions.RedactString(f.Title), 200), Detail: clip(actions.RedactString(f.Detail), 400)}
+	}
+	var out []ReviewFinding
+	for i, f := range posted {
+		out = append(out, mk(f, fmt.Sprint(hits[i])))
+	}
+	for _, d := range dropped {
+		out = append(out, mk(d.Finding, "dropped: "+d.Why))
+	}
+	return out
 }
 
 // reviewScore maps a run to the harness's 1-5 scale: a clean control scores
@@ -274,6 +316,7 @@ func (h *Harness) runReview(ctx context.Context, c Case, variant string) (Run, f
 	}
 	start := h.spentUSD()
 	var posted []inspect.Finding
+	var dropped []inspect.Dropped
 	switch variant {
 	case VariantLegacy:
 		var reply struct {
@@ -292,7 +335,7 @@ func (h *Harness) runReview(ctx context.Context, c Case, variant string) (Run, f
 		fl := inspect.Filter{MinConfidence: h.Inspect.MinConfidence, SuppressAfter: h.Inspect.SuppressAfter, Generated: h.Inspect.Generated}
 		var res inspect.Result
 		res, _, err = inspect.Runner{Reviewers: rs, Filter: fl}.Run(ctx, in, inspect.State{})
-		posted = res.Findings
+		posted, dropped = res.Findings, res.Dropped
 		if variant == VariantPeer && res.Mode != inspect.ModePeer && err == nil {
 			err = fmt.Errorf("peer mode fell back to general: %s", strings.Join(res.Notes, "; "))
 		}
@@ -303,10 +346,18 @@ func (h *Harness) runReview(ctx context.Context, c Case, variant string) (Run, f
 		run.Calls, run.Variant = calls, variant
 		return run, cost, err
 	}
-	tp, fp, fn := ScoreFindings(posted, c.Review.Defects)
+	hits, fn := matchFindings(posted, c.Review.Defects)
+	tp := 0
+	for _, h := range hits {
+		if h {
+			tp++
+		}
+	}
+	fp := len(hits) - tp
 	score := reviewScore(tp, fp, fn, len(c.Review.Defects) == 0)
 	run := Run{Status: RunFail, Score: score, Pass: score >= h.Config.PassScore, Variant: variant, TP: tp, FP: fp, FN: fn, Calls: calls,
-		Reason: fmt.Sprintf("%d posted: %d true, %d false; %d planted defect(s) missed", len(posted), tp, fp, fn)}
+		Findings: reviewFindings(posted, hits, dropped),
+		Reason:   fmt.Sprintf("%d posted: %d true, %d false; %d planted defect(s) missed", len(posted), tp, fp, fn)}
 	if run.Pass {
 		run.Status = RunPass
 	}

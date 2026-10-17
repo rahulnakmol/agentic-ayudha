@@ -165,4 +165,13 @@ func TestTier2ReviewVariants(t *testing.T) {
 	if len(res.Cases) != 3 || res.Cases[2].Case != "inspect/two-defects-invoice@peer" || res.Cases[2].Runs[0].Score != 5 {
 		t.Errorf("cases: %+v", res.Cases)
 	}
+	// The results file says why each run scored as it did: what it posted,
+	// marked against the planted defects, then what it dropped and why.
+	var verdicts []string
+	for _, f := range res.Cases[1].Runs[0].Findings {
+		verdicts = append(verdicts, f.Verdict+" "+f.Title)
+	}
+	if want := []string{"true Total skips the first invoice line", "dropped: linter-owned comment wording"}; !slices.Equal(verdicts, want) {
+		t.Errorf("general findings: %q, want %q", verdicts, want)
+	}
 }
