@@ -49,6 +49,5 @@ In the claims boundary, claims/eligibility/client.go:23: a short per-attempt tim
 
 The eligibility database failed over at 14:15, which explains the slowdown.
 
-
 - Unverified: eligibility's latency and error rate since 14:00; ask the Member Data team for a sanitised export of eligibility's server spans, 13:30-15:00, aggregates only.
 - Next: `latency by version,route where route=/api/claims bucket 5m limit 50` and `logs where level=WARN limit 20`, to extend query q4.

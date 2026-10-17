@@ -37,7 +37,6 @@ Rerun `--query "errors by version,route where route=/api/claims limit 20"` and e
 
 The eligibility database failover after last week's deploy was the cause; a restart clears it.
 
-
 None: this runbook changes nothing in production until `eligibility-queue-claims` merges; its definition must name
 its own rollback (ops/actions.toml).
 

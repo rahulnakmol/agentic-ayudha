@@ -33,7 +33,6 @@ The latency budget is the tighter one: 28 % left before today, and today's 54 sl
 
 The eligibility team's database failover caused today's incident, so its failures do not count against our budget.
 
-
 | SLO | Page | Ticket | Runbook |
 |---|---|---|---|
 | `claim-submit-availability` | 1h burn rate above 14.4 | 6h burn rate above 6 | ops/runbooks/claim-submit-errors.md |

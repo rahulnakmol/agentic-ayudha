@@ -126,7 +126,8 @@ one group cannot use up another's cap. Every call is charged at its model's list
 each cap is about twice the group's latest full run at that price, rounded up to a whole dollar, so it stops a runaway
 run and never cuts a normal one short (D-3.4q; the basis is on each `max_usd` line). The groups: `brief-plain` (the
 `eli5` and `ste` registers, 4 USD), `brief` (the other `brief/` cases, 3 USD), `personas` (the `retro/` and `decide/`
-persona cases, 14 USD), `data-ai` (the `chart/` and `measure/` cases, 8 USD), `review` (the `inspect/` seeded-defect
+persona cases, 14 USD), `data-ai` (the `chart/` and `measure/` cases, 8 USD), `production` (the `investigate/`, `slo/`,
+`runbook/`, and `respond/` cases, 15 USD, advisory and on dispatch only, D-5.10d), `review` (the `inspect/` seeded-defect
 cases, 5 USD), `conversations` (the grill conversation cases of WP5.3b and WP5.8, 37 USD, advisory until a run meets
 the bar, D-5.3b.g), `tell` (the `tell/` cases, 3 USD, gating since two consecutive full runs held a mean of 5.00, D-7.5e; it runs on
 dispatch and on pushes to `rolling` and `main`, never nightly or on pushes to `dev`), `host-skills` (the build, verify, and ready session cases, 12 USD, advisory and on

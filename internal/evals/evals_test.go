@@ -981,14 +981,28 @@ func TestGroups(t *testing.T) {
 	if g, _ := cfg.Group("data-ai"); err != nil || dg.MaxUSD != 8 || len(dataAI) != 4 || cfg.Gates("data-ai") || g.RunsOn("push") || g.RunsOn("schedule") {
 		t.Fatalf("data-ai group: %v, cap %v, %d cases, gates %v", err, dg.MaxUSD, len(dataAI), cfg.Gates("data-ai"))
 	}
+	// Decision #324: the Production Engineer's cases, two per skill, advisory, on dispatch only.
+	pg, prod, err := cfg.ForGroup("production", all)
+	perProd := map[string]int{}
+	for _, c := range prod {
+		perProd[c.Skill]++
+	}
+	if g, _ := cfg.Group("production"); err != nil || pg.MaxUSD != 15 || len(perProd) != 4 || cfg.Gates("production") || g.RunsOn("push") || g.RunsOn("schedule") {
+		t.Fatalf("production group: %v, cap %v, cases per skill %v, gates %v", err, pg.MaxUSD, perProd, cfg.Gates("production"))
+	}
+	for skill, n := range perProd {
+		if n < 2 {
+			t.Errorf("production group: %s has %d case(s), want at least 2", skill, n)
+		}
+	}
 	// WP5.9: the survey skill's cases, advisory, on dispatch only, capped at twice a full run's estimate (D-3.4q).
 	sg, surveys, err := cfg.ForGroup("survey", all)
 	if g, _ := cfg.Group("survey"); err != nil || sg.MaxUSD != 65 || sg.MaxTokens.Skill != 48000 || len(surveys) < 2 || cfg.Gates("survey") || g.RunsOn("push") || g.RunsOn("schedule") {
 		t.Fatalf("survey group: %v, cap %v, %d cases, gates %v", err, sg.MaxUSD, len(surveys), cfg.Gates("survey"))
 	}
 	o, other, err := cfg.ForGroup("skills", all)
-	if err != nil || o.MaxUSD != 4 || o.K != cfg.K || o.MaxTokens.Skill != cfg.MaxTokens.Skill || !cfg.Gates("skills") || len(brief)+len(plain)+len(personas)+len(review)+len(convs)+len(tells)+len(hosts)+len(ux)+len(dataAI)+len(surveys)+len(other) != len(all) {
-		t.Fatalf("skills group: %v, cap %v, %d+%d+%d+%d+%d+%d+%d+%d+%d+%d+%d of %d cases", err, o.MaxUSD, len(brief), len(plain), len(personas), len(review), len(convs), len(tells), len(hosts), len(ux), len(dataAI), len(surveys), len(other), len(all))
+	if err != nil || o.MaxUSD != 4 || o.K != cfg.K || o.MaxTokens.Skill != cfg.MaxTokens.Skill || !cfg.Gates("skills") || len(brief)+len(plain)+len(personas)+len(review)+len(convs)+len(tells)+len(hosts)+len(ux)+len(dataAI)+len(prod)+len(surveys)+len(other) != len(all) {
+		t.Fatalf("skills group: %v, cap %v, %d+%d+%d+%d+%d+%d+%d+%d+%d+%d+%d+%d of %d cases", err, o.MaxUSD, len(brief), len(plain), len(personas), len(review), len(convs), len(tells), len(hosts), len(ux), len(dataAI), len(prod), len(surveys), len(other), len(all))
 	}
 	for _, c := range other {
 		if c.Tier2 != nil && c.Tier2.Human != "" {
