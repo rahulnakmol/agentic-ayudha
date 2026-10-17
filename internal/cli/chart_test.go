@@ -41,7 +41,7 @@ func TestChart(t *testing.T) {
 		facts += f.Text + " (" + f.Cite + ")\n"
 	}
 	for _, want := range []string{`#1 "Unanswered questions view": feature, open`, `Child: #2 "HR sees last week's unanswered questions": story`,
-		"L05 Intelligence, owner Data & AI Architect", "L07 Operational data / state, owner AI Native Engineer (+SRE hat)",
+		"L05 Intelligence, owner Data & AI Architect", "L07 Operational data / state, owner Production Engineer",
 		"L08 Analytics / reporting, owner Data & AI Architect", "(`[measure]`)"} {
 		if !strings.Contains(facts, want) {
 			t.Errorf("facts lack %q:\n%s", want, facts)

@@ -13,7 +13,7 @@ Twin: Mneme, the Data & AI Architect. Team stage: startup (`[team] stage = "star
 - Parent: #38 "Cut HR benefits tickets": initiative, open, labels type:initiative, status:in-progress (#38)
 - Child: #44 "HR sees last week's unanswered questions by topic": story, open, labels type:story, status:backlog (#44)
 - L05 Intelligence, owner Data & AI Architect: `answer/**` (LAYERS.md)
-- L07 Operational data / state, owner AI Native Engineer (+SRE hat): `store/**` (LAYERS.md)
+- L07 Operational data / state, owner Production Engineer: `store/**` (LAYERS.md)
 - L08 Analytics / reporting, owner Data & AI Architect: `analytics/**` (LAYERS.md)
 - acquisition "benefits_visit", activation "answer_grounded" within 7 days, retention "", referral "", North Star "answer_grounded" (`[measure]`)
 - `aayu measure` reads exports into a pinned SQLite snapshot under `.aayudha/state/measure/` (DuckDB optional) and computes these stages over complete weekly cohorts; the metric standard (definitions, targets, the North Star) is the Revenue Architect's (`[measure]`)

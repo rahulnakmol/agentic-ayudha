@@ -12,5 +12,5 @@ Failing floors: 0
 Measurements due: 0
 
 Next: aayu build 2
-  Why: #2 "Sign in with a passkey" is being built: commit the next checkpoint. (AI Native Engineer (+SRE hat))
+  Why: #2 "Sign in with a passkey" is being built: commit the next checkpoint. (AI Native Engineer)
 -- stderr --

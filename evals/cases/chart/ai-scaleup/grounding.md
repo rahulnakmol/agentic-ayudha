@@ -12,7 +12,7 @@ Twin: Mneme, the Data & AI Architect. Team stage: scaleup (`[team] stage = "scal
 - #52 "Answer dependant-coverage questions": feature, open, labels type:feature, status:discovery, priority:P1 (#52)
 - Parent: #49 "Fewer benefits tickets for every employer": initiative, open, labels type:initiative, status:in-progress (#49)
 - L05 Intelligence, owner Data & AI Architect: `answer/**` (LAYERS.md)
-- L07 Operational data / state, owner AI Native Engineer (+SRE hat): `store/**` (LAYERS.md)
+- L07 Operational data / state, owner Production Engineer: `store/**` (LAYERS.md)
 - L08 Analytics / reporting, owner Data & AI Architect: `analytics/**` (LAYERS.md)
 - Integrations configured (names only, read-only scope): azure (`[integrations]`)
 

@@ -23,7 +23,7 @@ func repoPersonas(t *testing.T) map[verbs.SeatID]Persona {
 	return ps
 }
 
-// TestPersonas: all thirteen personas are complete, every playbook entry has a
+// TestPersonas: all fourteen personas are complete, every playbook entry has a
 // public source, and no persona text uses a word on the brand's avoid list or
 // an exclamation mark (design/brand.yaml).
 func TestPersonas(t *testing.T) {
@@ -120,7 +120,7 @@ func TestSkillBlockVoiceAndStandard(t *testing.T) {
 	ps := repoPersonas(t)
 	v, _ := verbs.Find("verify")
 	b := ps[v.Seat].SkillBlock(v, ps[verbs.PolicyOwner(v)])
-	if !strings.Contains(b, "## Voice: Talos, the AI Native Engineer (+SRE hat) twin") ||
+	if !strings.Contains(b, "## Voice: Talos, the AI Native Engineer twin") ||
 		!strings.Contains(b, "Talos speaks and runs `verify` in the chore lane; the standard is Themis's, the Quality Architect's") {
 		t.Errorf("verify block does not split voice and standard:\n%s", b)
 	}

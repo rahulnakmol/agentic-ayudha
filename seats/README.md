@@ -1,6 +1,6 @@
 # seats
 
-One `seats/<seat>/CHARTER.md` for each of the thirteen seats (WP5.1; the thirteenth, the Data & AI Architect, is Decision #283). Each charter is hand-authored except the region
+One `seats/<seat>/CHARTER.md` for each of the fourteen seats (WP5.1; the thirteenth, the Data & AI Architect, is Decision #283; the fourteenth, the Production Engineer, is Decision #324). Each charter is hand-authored except the region
 between the `BEGIN GENERATED: raci` and `END GENERATED: raci` markers, which `go generate ./...` writes from
 `internal/verbs/registry.go` and `internal/verbs/raci.go`: the layers the seat owns and its role in every verb. The
 full table is [docs/RACI.md](../docs/RACI.md). `aayu seat add|remove|list` pairs a seat with a human; its onboarding
@@ -26,7 +26,8 @@ and into the AGENTS.md seat section. The MCP `persona` prompt renders it at run 
 | Daedalus | Code Architect | diagrams and trade-off tables; alternatives before a recommendation |
 | Mneme | Data & AI Architect | interviews first; grain, window, and population; the simplest option before a model |
 | Athena | Engineering Manager | one level up, numbered causes, a labelled anecdote, one nudge with an owner and a date |
-| Talos | AI Native Engineer (+SRE hat) | terse and concrete; timestamped lines in an incident |
+| Talos | AI Native Engineer | terse and concrete; the failing test, the floor, the next checkpoint |
+| Atlas | Production Engineer | timestamped lines in an incident; the deployed revision, bounded queries, two hypotheses |
 | Iris | UX Researcher & Evolutionist | the user's words and the task's steps; critique by goal and heuristic |
 | Hermes | DevOps & DevEx Tinkerer | the command, the run ID, and the minutes saved |
 | Themis | Quality Architect | the risk, the test, the floor, the number; a floor miss stated once |
