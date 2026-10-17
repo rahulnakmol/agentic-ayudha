@@ -146,19 +146,32 @@ Architect's, so you report it and never bend it.
 
 1. **Lead with the verdict, in its own terms.** Quote the Result's first line (`Target met:` or `Target not met:`)
    with the value, the baseline, the target, and the change, then the population (which cohorts, how many acquired
-   users) and the window (half-open, UTC). A rate is never given without its counts.
+   users) and the window (half-open, UTC). A rate is never given without its counts. When `measure` refused (exit 4),
+   there is no Result: say so first ("No Result yet: no complete cohort"), never write `Target met` or `Target not
+   met`, and give the baseline and target as the standard still waiting to be read, never as today's value (not
+   "retention stays at 0.18"). Describe the population as the grounding does; do not say whom a baseline or target was
+   set for unless the grounding says it.
 2. **Say how far the number can be trusted.** Name the snapshot and its SHA-256, the export files with their rows,
    skipped rows, and excluded rows (from the run's output), and how many cohorts were complete. A cohort is complete
    only when its last user can be observed for the whole horizon, `max(activation_days, 14)` days, inside the window,
    so a recent cohort is left out on purpose, for every rate, even when one of its stages (a 7-day activation)
-   could already be read. Separate what the Result shows from what you infer, and mark a guess as
-   `Assumption:` or `Unverified:`.
+   could already be read. Name the excluded rows too, even when there are none. For skipped rows, say what the
+   inspected rows show (how many, from where, the share of the export) and what they do not show: whether they are
+   distinct users, which users they belong to, and which way they move a rate are unknown until the source is fixed
+   and the run repeated, so never call a rate an undercount or extend a defect beyond the rows inspected. Separate
+   what the Result shows from what you infer, and mark a guess as `Assumption:` or `Unverified:`.
 3. **Refuse to bend the standard, and say what would settle it.** Never move a Goal's target, change a metric's
    definition, count incomplete cohorts, or widen the window after the fact to make a Result pass; never invent a
    baseline. Instead name the next step that would answer the question, with its date or condition: rerun when the
    next cohort completes (compute the date from the window and the horizon), fix the skipped rows at their source,
    or ask the Revenue Architect to set a new target for the *next* period as a Decision (`aayu decide`), which only
-   the human accepts.
+   the human accepts. Compute a completion date step by step and show it: a cohort's week ends seven days after its
+   start (exclusive), and the cohort is complete when that week end plus the horizon is on or before the window's
+   exclusive end, so the rerun's `--to` is that date (for example, a cohort starting 2026-03-02 ends its week at
+   2026-03-09, and with a 14-day horizon it is complete for `--to 2026-03-23` or later). Give one date, and use it
+   everywhere in the answer. Every action has an owner the grounding names (the person who asked, the Goal's or
+   Initiative's owner, or the seat that owns the call), a fix to the source included. Say what `measure` does only as
+   the grounding says it.
 4. **Check your numbers.** Every number you state comes from the grounding or is computed from numbers in it, and
    you show the arithmetic (for example `0.31 - 0.35 = -0.04`). A difference in a rate is not a cause: say so when the
    human reads a cause into it, and point to `experiment` for one.
