@@ -43,7 +43,7 @@ func (e *Env) installOptions() (hosts.Options, error) {
 	if e.Assets == nil {
 		return hosts.Options{}, errors.New("this binary has no embedded skills")
 	}
-	return hosts.Options{Root: root, Home: e.homeDir(), CodexHome: hosts.CodexHome(e.homeDir(), e.Getenv), Assets: e.Assets, Version: e.Build.Version,
+	return hosts.Options{Root: root, Home: e.homeDir(), Assets: e.Assets, Version: e.Build.Version,
 		SkillsVersion: verbs.SkillVersion, Windows: runtime.GOOS == "windows"}, nil
 }
 
@@ -226,18 +226,19 @@ func runHook(ctx context.Context, e *Env, in Values) error {
 	}
 	root := config.RepoRoot(e.Dir)
 	var r hosts.HookResult
-	if in.String("skills") != "" && root != "" && hosts.RepoHooks(root, verbs.HostID(e.Host)) {
+	if in.String("skills") != "" && root != "" && hosts.RepoHooksRun(root, verbs.HostID(e.Host), hosts.CodexHome(e.homeDir(), e.Getenv)) {
 		// A marketplace plugin's hook (it passes --skills) stands aside where
-		// `aayu install` registered the repository's own hooks for this host, so
-		// each hook runs once (D-3.2b.d); install drops the repository's copies
-		// once the plugin is enabled.
+		// the host runs the hooks `aayu install` registered for it, so each
+		// runs once (D-3.2b.d). install turns the plugin off in such a
+		// repository (D-3.2b.h), so this happens only when something turned it
+		// back on.
 		switch {
 		case name == "pre-tool":
 			r = hosts.Deny(verbs.HostID(e.Host), "")
 		case e.Host == string(verbs.HostCursor):
 			r.Stdout = "{}\n"
 		default:
-			r.Stdout = fmt.Sprintf("aayudha: the aayudha plugin and `aayu install` both register hooks and an MCP server for %s here; the repository's hooks run. A person runs `aayu install --host %s --apply` to keep only the plugin's.\n", e.Host, e.Host)
+			r.Stdout = fmt.Sprintf("aayudha: the aayudha plugin is on here although `aayu install` set this repository up for %s, so the host lists each aayudha skill twice; the repository's hooks run. A person runs `aayu install --host %s --apply`, which turns the plugin off for this repository, or removes the override that turned it back on.\n", e.Host, e.Host)
 		}
 	} else {
 		var err error

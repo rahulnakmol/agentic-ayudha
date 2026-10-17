@@ -1,6 +1,7 @@
 package hosts
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -420,65 +421,22 @@ trusted_hash = "sha256:0000"
 	}
 }
 
-// With the aayudha plugin enabled for a host, install registers no hooks or
-// MCP server of its own there and removes the ones it wrote before, so the
-// host runs each hook and lists the server once (D-3.2b.d, megaman evidence
-// D-5.5c.12 defect 7).
-func TestInstallLeavesHooksAndMCPToThePlugin(t *testing.T) {
-	root, home := t.TempDir(), t.TempDir()
-	mine := `{"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "./mine.sh"}]}]}}`
-	_ = os.MkdirAll(filepath.Join(root, ".claude"), 0o755)
-	_ = os.WriteFile(filepath.Join(root, ".claude", "settings.json"), []byte(mine), 0o644)
-	o := opts(t, root, home, false, verbs.HostClaude, verbs.HostCodex)
-	res, err := Plan(o)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := Apply(o, res.Edits, false); err != nil {
-		t.Fatal(err)
-	}
-	if !RepoHooks(root, verbs.HostClaude) || !RepoHooks(root, verbs.HostCodex) {
-		t.Fatal("install without the plugin wrote no repository hooks")
-	}
-	// The person enables the plugin in both hosts, then installs again.
-	_ = os.MkdirAll(filepath.Join(home, ".claude"), 0o755)
-	_ = os.WriteFile(filepath.Join(home, ".claude", "settings.json"), []byte(`{"enabledPlugins": {"aayudha@aayudha": true}}`), 0o644)
-	_ = os.MkdirAll(filepath.Join(home, ".codex"), 0o755)
-	_ = os.WriteFile(filepath.Join(home, ".codex", "config.toml"), []byte("[plugins.\"aayudha@aayudha\"]\nenabled = true\n"), 0o644)
-	if res, err = Plan(o); err != nil {
-		t.Fatal(err)
-	}
-	if err := Apply(o, res.Edits, false); err != nil {
-		t.Fatal(err)
-	}
-	if RepoHooks(root, verbs.HostClaude) || RepoHooks(root, verbs.HostCodex) {
-		t.Error("repository hooks remain beside the plugin's")
-	}
-	for _, f := range []string{ClaudeMCP, CodexConfig, CodexHooks} {
-		if _, err := os.Stat(filepath.Join(root, f)); err == nil {
-			t.Errorf("%s remains beside the plugin", f)
-		}
-	}
-	b, _ := os.ReadFile(filepath.Join(root, ".claude", "settings.json"))
-	if !strings.Contains(string(b), "./mine.sh") || strings.Contains(string(b), "enabledMcpjsonServers") || !strings.Contains(string(b), "hook status-line --host claude") {
-		t.Errorf("settings.json: the product's hook and the status line stay, aayudha's server approval goes:\n%s", b)
-	}
-	if n := strings.Count(strings.Join(res.Notes, "\n"), "the aayudha plugin is enabled"); n != 2 {
-		t.Errorf("notes %q", res.Notes)
-	}
-}
-
-// With the aayudha plugin enabled for a host, install writes no skill copies
-// for it and removes the ones it wrote before, so the host lists each aayudha
-// skill once; the product's own verify skills are still mirrored for Claude
-// Code; a directory another host still reads keeps its copies, and doctor's
-// SkillDoubles names that double (D-3.2b.f).
-func TestInstallLeavesSkillsToThePlugin(t *testing.T) {
-	root, home := t.TempDir(), t.TempDir()
-	write(t, root, ".agents/skills/verify-web/SKILL.md", "---\nname: verify-web\ndescription: \"The product's own.\"\n---\n")
-	o := opts(t, root, home, false, verbs.HostClaude, verbs.HostCodex)
-	install := func() *Result {
-		t.Helper()
+// The repository install writes is the same whatever plugins the machine
+// running it has, so a teammate who clones it without the plugin gets every
+// aayudha skill; and in it the plugin steps aside (Claude Code: the shared
+// project settings; Codex: the trusted project's config), so a teammate with
+// the plugin sees each skill once (D-3.2b.h). Cursor has no such switch, and
+// doctor's SkillDoubles says what to do there.
+func TestInstallIsTheSameWithOrWithoutThePlugin(t *testing.T) {
+	plain, withPlugin := t.TempDir(), t.TempDir()
+	write(t, withPlugin, ".claude/settings.json", `{"enabledPlugins": {"aayudha@aayudha": true}}`)
+	write(t, withPlugin, ".codex/config.toml", "[plugins.\"aayudha@aayudha\"]\nenabled = true\n")
+	write(t, withPlugin, ".cursor/plugins/local/aayudha/.cursor-plugin/plugin.json", `{"name": "aayudha"}`)
+	var trees []map[string][]byte
+	var root string
+	for _, home := range []string{plain, withPlugin} {
+		root = t.TempDir()
+		o := opts(t, root, home, false, verbs.HostClaude, verbs.HostCodex, verbs.HostCursor)
 		res, err := Plan(o)
 		if err != nil {
 			t.Fatal(err)
@@ -486,55 +444,88 @@ func TestInstallLeavesSkillsToThePlugin(t *testing.T) {
 		if err := Apply(o, res.Edits, false); err != nil {
 			t.Fatal(err)
 		}
-		return res
+		trees = append(trees, snapshot(t, root))
 	}
-	exists := func(rel string) bool { _, err := os.Stat(filepath.Join(root, rel)); return err == nil }
-	install()
-	if !exists(".claude/skills/alpha/SKILL.md") || !exists(".agents/skills/alpha/SKILL.md") {
-		t.Fatal("install without the plugin wrote no copies")
+	if len(trees[0]) != len(trees[1]) {
+		t.Fatalf("%d files without the plugin, %d with it", len(trees[0]), len(trees[1]))
 	}
-	write(t, home, ".claude/settings.json", `{"enabledPlugins": {"aayudha@aayudha": true}}`)
-	write(t, home, ".codex/config.toml", "[plugins.\"aayudha@aayudha\"]\nenabled = true\n")
-	lock, _, _ := ReadLock(root)
-	if d := SkillDoubles(root, home, filepath.Join(home, ".codex"), lock); len(d) != 2 || !strings.HasSuffix(d[0], "aayu install --apply removes the copies") {
-		t.Errorf("doubles before re-install: %q", d)
-	}
-	install()
-	for _, rel := range []string{".claude/skills/alpha", ".claude/skills/beta", ".agents/skills/alpha", ".agents/skills/beta"} {
-		if exists(rel) {
-			t.Errorf("%s remains beside the plugin's skills", rel)
+	for f, b := range trees[0] {
+		if !bytes.Equal(b, trees[1][f]) {
+			t.Errorf("%s differs with the plugin on the installing machine", f)
 		}
 	}
-	if !exists(".claude/skills/verify-web/SKILL.md") || !exists(".agents/skills/verify-web/SKILL.md") {
-		t.Error("the product's verify skill is no longer in both places")
+	for _, f := range []string{".claude/skills/alpha/SKILL.md", ".agents/skills/alpha/SKILL.md", ".claude/settings.json", ".codex/config.toml"} {
+		if trees[1][f] == nil {
+			t.Fatalf("no %s", f)
+		}
 	}
-	lock, _, _ = ReadLock(root)
-	if p := CheckCopies(root); len(p) > 0 {
-		t.Errorf("copies after the plugin took over: %q", p)
+	if !strings.Contains(string(trees[1][".claude/settings.json"]), `"aayudha@aayudha": false`) ||
+		!strings.Contains(string(trees[1][".codex/config.toml"]), "[plugins.\"aayudha@aayudha\"]\nenabled = false\n# END aayudha") {
+		t.Fatal("install does not turn the plugin off for the repository")
 	}
-	if d := SkillDoubles(root, home, filepath.Join(home, ".codex"), lock); len(d) != 0 {
-		t.Errorf("doubles after re-install: %q", d)
+	// In that repository the plugins step aside: the project settings beat
+	// the user's, and Codex reads the project's once it trusts the project.
+	codexHome := filepath.Join(withPlugin, ".codex")
+	lock, _, _ := ReadLock(root)
+	if PluginEnabled(verbs.HostClaude, root, withPlugin, codexHome) || !PluginEnabled(verbs.HostCodex, root, withPlugin, codexHome) {
+		t.Error("Claude Code's plugin should be off here, and Codex's on until it trusts the project")
 	}
-	// Amp has no aayudha plugin and reads .agents/skills, so its copies come
-	// back, and Codex, which reads them too, lists them twice: doctor says so.
-	o.Hosts = []verbs.HostID{verbs.HostAmp}
-	res := install()
+	has := func(d []string, prefix, says string) bool {
+		return slices.ContainsFunc(d, func(l string) bool { return strings.HasPrefix(l, prefix) && strings.Contains(l, says) })
+	}
+	d := SkillDoubles(root, withPlugin, codexHome, lock)
+	if len(d) != 2 || !has(d, "OpenAI Codex:", "trust this project") || !has(d, "Cursor:", "disable the aayudha plugin for this workspace") {
+		t.Errorf("doubles before Codex trusts the project: %q", d)
+	}
+	write(t, withPlugin, ".codex/config.toml", fmt.Sprintf("[plugins.\"aayudha@aayudha\"]\nenabled = true\n[projects.%q]\ntrust_level = \"trusted\"\n", root))
+	if d := SkillDoubles(root, withPlugin, codexHome, lock); len(d) != 1 || !strings.HasPrefix(d[0], "Cursor:") {
+		t.Errorf("doubles once Codex trusts the project: %q", d)
+	}
+	// A teammate turning the plugin back on for themselves gets the double named.
+	write(t, root, ".claude/settings.local.json", `{"enabledPlugins": {"aayudha@aayudha": true}}`)
+	if d := SkillDoubles(root, withPlugin, codexHome, lock); len(d) != 2 || !has(d, "Claude Code:", "settings.local.json") {
+		t.Errorf("a local override: %q", d)
+	}
+}
+
+// Each host reads one copy of each aayudha skill (D-3.2b.g): Cursor also
+// reads .claude/skills, so with Claude Code installed it shares Claude Code's
+// copies, and .agents/skills holds aayudha's only for Codex (or without
+// Claude Code). Only Claude Code, Codex, and Cursor together leave Cursor
+// two copies, which install and doctor name.
+func TestInstallGivesCursorOneCopy(t *testing.T) {
+	root, home := t.TempDir(), t.TempDir()
+	write(t, root, ".agents/skills/verify-web/SKILL.md", "---\nname: verify-web\ndescription: \"The product's own.\"\n---\n")
+	exists := func(rel string) bool { _, err := os.Stat(filepath.Join(root, rel)); return err == nil }
+	install := func(hosts ...verbs.HostID) (*Result, Lock) {
+		t.Helper()
+		o := opts(t, root, home, false, hosts...)
+		res, err := Plan(o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := Apply(o, res.Edits, false); err != nil {
+			t.Fatal(err)
+		}
+		lock, _, _ := ReadLock(root)
+		if p := CheckCopies(root); len(p) > 0 {
+			t.Errorf("copies after installing %v: %q", lock.Hosts, p)
+		}
+		return res, lock
+	}
+	install(verbs.HostCursor)
 	if !exists(".agents/skills/alpha/SKILL.md") || exists(".claude/skills/alpha") {
-		t.Error("with Amp, .agents/skills needs the copies and .claude/skills does not")
+		t.Fatal("Cursor alone reads .agents/skills")
 	}
-	lock, _, _ = ReadLock(root)
-	d := SkillDoubles(root, home, filepath.Join(home, ".codex"), lock)
-	if len(d) != 1 || !strings.HasPrefix(d[0], "OpenAI Codex: the aayudha plugin and the copies in .agents/skills") || !strings.Contains(d[0], "stay for Amp") {
-		t.Errorf("doubles with Amp: %q", d)
+	_, lock := install(verbs.HostClaude)
+	if exists(".agents/skills/alpha") || !exists(".claude/skills/alpha/SKILL.md") || CursorReadsBoth(root, lock) {
+		t.Error("with Claude Code, Cursor and Claude Code share .claude/skills, and .agents/skills keeps no aayudha copy")
 	}
-	if !strings.Contains(strings.Join(res.Notes, "\n"), "OpenAI Codex lists each aayudha skill twice") {
-		t.Errorf("notes %q", res.Notes)
+	if !exists(".agents/skills/verify-web/SKILL.md") || !exists(".claude/skills/verify-web/SKILL.md") {
+		t.Error("the product's verify skill is no longer kept and mirrored")
 	}
-	// The plugin goes away: Claude Code has no skills until install runs again.
-	write(t, home, ".claude/settings.json", `{}`)
-	if d := SkillDoubles(root, home, filepath.Join(home, ".codex"), lock); !slices.ContainsFunc(d, func(s string) bool {
-		return strings.HasPrefix(s, "Claude Code: install left the skills to the aayudha plugin")
-	}) {
-		t.Errorf("a disabled plugin: %q", d)
+	res, lock := install(verbs.HostCodex)
+	if !exists(".agents/skills/alpha/SKILL.md") || !CursorReadsBoth(root, lock) || !slices.Contains(res.Notes, cursorBoth) {
+		t.Errorf("Codex needs .agents/skills and Claude Code .claude/skills, so Cursor reads both, and install says so: %q", res.Notes)
 	}
 }

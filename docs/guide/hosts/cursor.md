@@ -17,11 +17,18 @@ aayu install --host cursor --apply
 
 Every entry calls aayu by its full, version-checked path, so each teammate runs `install` once on their machine.
 
-If you use the aayudha plugin from Cursor's local plugin folder (`~/.cursor/plugins/local/aayudha`), `install` writes
-none of these for Cursor: the plugin carries the skills, hooks, and MCP server. aayu cannot see a plugin you installed
-from a marketplace, which Cursor keeps with your account, so use the plugin or `install`, not both. Cursor also reads
-`.claude/skills/`, so installing for Claude Code here gives Cursor a second copy; `aayu doctor` reports it when the
-plugin is in the local folder. Check it with:
+Cursor also reads `.claude/skills/` when "Include Third-Party Plugins, Skills, and Other Configs" is on (Settings →
+Agents; on by default). So when you install for Claude Code as well, Cursor uses Claude Code's copies in
+`.claude/skills/` and `install` writes no second set to `.agents/skills/`. Only Claude Code and Codex together need
+copies in both folders; then Cursor lists each skill twice, and `aayu doctor` warns: turn the import off on that
+machine, or install for one of the two. If you turn the import off with Claude Code and Cursor installed and Codex not,
+Cursor sees no aayudha skills; run `aayu install --host codex --apply` to add `.agents/skills/`.
+
+Use the aayudha Cursor plugin or `install` in a repository, not both. Cursor has no setting a repository can commit to
+turn a plugin off, so with both, Cursor lists each skill and the MCP server twice; disable the plugin for that
+workspace in Cursor. aayu sees the plugin only in Cursor's local plugin folder (`~/.cursor/plugins/local/aayudha`). It
+cannot see a plugin you installed from a marketplace, which Cursor keeps with your account, so `aayu doctor` cannot
+report that double. Check it with:
 
 ```sh
 aayu doctor

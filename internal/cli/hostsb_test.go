@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,17 +46,26 @@ func TestPluginHooksAndStatusLine(t *testing.T) {
 	if _, out, _ := hook("{}", nil, "session-start", "--host", "codex"); !strings.HasPrefix(out, "aayudha: before you change anything for a request, run `aayu grill story --assess") {
 		t.Errorf("codex session-start: %q", out)
 	}
-	// Where `aayu install` registered the repository's own hooks, the plugin's
-	// (they pass --skills) stand aside, so each runs once (D-3.2b.d).
+	// Where the host runs the hooks `aayu install` registered, the plugin's
+	// (they pass --skills) stand aside, so each runs once (D-3.2b.d). Codex
+	// runs a project's hooks only in a project it trusts, so in an untrusted
+	// one the plugin's hook still refuses (D-3.2b.h).
 	_ = os.MkdirAll(filepath.Join(repo, ".codex"), 0o755)
 	_ = os.WriteFile(filepath.Join(repo, ".codex", "hooks.json"), []byte(`{"hooks": {"PreToolUse": [{"hooks": [{"type": "command", "command": "\"/usr/bin/aayu\" hook pre-tool --host codex"}]}]}}`), 0o644)
-	if code, _, _ := hook(`{"tool_name":"Bash","tool_input":{"command":"aayu ship 4"}}`, nil, "pre-tool", "--host", "codex", "--skills", "0.0.0"); code != 0 {
+	codexHome := t.TempDir()
+	codex := map[string]string{"CODEX_HOME": codexHome}
+	ship := `{"tool_name":"Bash","tool_input":{"command":"aayu ship 4"}}`
+	if code, _, _ := hook(ship, codex, "pre-tool", "--host", "codex", "--skills", "0.0.0"); code != 2 {
+		t.Errorf("the plugin's pre-tool stood aside in an untrusted Codex project, leaving no guard: exit %d", code)
+	}
+	_ = os.WriteFile(filepath.Join(codexHome, "config.toml"), []byte(fmt.Sprintf("[projects.%q]\ntrust_level = \"trusted\"\n", repo)), 0o644)
+	if code, _, _ := hook(ship, codex, "pre-tool", "--host", "codex", "--skills", "0.0.0"); code != 0 {
 		t.Errorf("the plugin's pre-tool ran beside the repository's: exit %d", code)
 	}
-	if code, _, _ := hook(`{"tool_name":"Bash","tool_input":{"command":"aayu ship 4"}}`, nil, "pre-tool", "--host", "codex"); code != 2 {
+	if code, _, _ := hook(ship, codex, "pre-tool", "--host", "codex"); code != 2 {
 		t.Errorf("the repository's pre-tool stood aside: exit %d", code)
 	}
-	if _, out, _ := hook("{}", nil, "session-start", "--host", "codex", "--skills", "0.0.0"); !strings.Contains(out, "both register hooks") || strings.Contains(out, "grill") {
+	if _, out, _ := hook("{}", codex, "session-start", "--host", "codex", "--skills", "0.0.0"); !strings.Contains(out, "turns the plugin off for this repository") || strings.Contains(out, "grill") {
 		t.Errorf("the plugin's session-start beside the repository's: %q", out)
 	}
 	if code, _, _ := hook(`{"tool_name":"Bash","tool_input":{"command":"aayu build 4"}}`, nil, "pre-tool", "--host", "claude"); code != 0 {

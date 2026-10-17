@@ -75,11 +75,15 @@ aayu install --host claude --apply
 
 It writes skill copies to `.claude/skills/`, the MCP server to `.mcp.json`, and the hooks and the status line to
 `.claude/settings.json`, each calling aayu by its full, version-checked path. Each teammate runs it once on their
-machine. Use the plugin or `install`, not both. If the plugin is enabled when you run `install`, install writes no
-skill copies, hooks, or MCP server of its own (and removes the ones it wrote before), so Claude Code lists each skill
-and the `aayudha` server once and runs each hook once. Your own `verify-*` skills are still copied to `.claude/skills/`,
-because the plugin does not carry them. If you add the plugin later, its hooks stand aside and tell you to run
-`aayu install --host claude --apply` again; until you do, `aayu doctor` reports the doubled skills.
+machine. What `install` writes is the same whether or not you have the plugin, so a teammate who clones the repository
+without the plugin still gets every skill.
+
+If you also have the plugin, `install` turns it off for this repository: `.claude/settings.json` gets
+`"enabledPlugins": {"aayudha@aayudha": false}`, which Claude Code applies over your user setting. Claude Code then lists
+each skill and the `aayudha` server once, runs each hook once, and keeps the plugin on in your other repositories. The
+plugin's own commands, such as `/aayudha:next`, are off here too; the skills cover the same verbs. An `enabledPlugins`
+entry in `.claude/settings.local.json` turns the plugin back on: its hooks stand aside, and `aayu doctor` reports the
+doubled skills.
 
 ## Check it worked
 

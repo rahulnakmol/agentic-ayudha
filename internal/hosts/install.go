@@ -50,7 +50,8 @@ func AllHosts() []verbs.HostID {
 	return out
 }
 
-// SkillDir is where a host reads project skills.
+// SkillDir is the project skill directory a host reads natively. install
+// before D-3.2b.g wrote each installed host's; SkillDirs is what it writes now.
 func SkillDir(h verbs.HostID) string {
 	if h == verbs.HostClaude {
 		return ClaudeSkills
@@ -59,14 +60,22 @@ func SkillDir(h verbs.HostID) string {
 }
 
 // SkillDirs are the directories install keeps aayudha's skill copies in for
-// the lock's hosts: each host's SkillDir, except where every host reading it
-// has its aayudha plugin enabled, which carries the skills itself (D-3.2b.f).
+// the lock's hosts, chosen so each host reads one copy of each skill
+// (D-3.2b.g). Claude Code reads only .claude/skills and Codex only
+// .agents/skills. Cursor reads .agents/skills and, with its Third-Party
+// Imports setting (on by default), .claude/skills too; Amp reads both and
+// keeps the first of each name. So Cursor and Amp share Claude Code's copies
+// when it is installed, and .agents/skills holds copies only for Codex or
+// when Claude Code is not installed. With Claude Code, Codex, and Cursor all
+// installed, Cursor reads both: Doubles reports it.
 func (l Lock) SkillDirs() []string {
+	has := func(h verbs.HostID) bool { return slices.Contains(l.Hosts, string(h)) }
 	var dirs []string
-	for _, h := range l.Hosts {
-		if d := SkillDir(verbs.HostID(h)); !slices.Contains(l.PluginHosts, h) && !slices.Contains(dirs, d) {
-			dirs = append(dirs, d)
-		}
+	if has(verbs.HostClaude) {
+		dirs = append(dirs, ClaudeSkills)
+	}
+	if has(verbs.HostCodex) || len(dirs) == 0 && (has(verbs.HostCursor) || has(verbs.HostAmp)) {
+		dirs = append(dirs, AgentsSkills)
 	}
 	sort.Strings(dirs)
 	return dirs
@@ -76,7 +85,6 @@ func (l Lock) SkillDirs() []string {
 type Options struct {
 	Root          string         // repository root
 	Home          string         // the user's home directory
-	CodexHome     string         // Codex's configuration directory ($CODEX_HOME); "" is Home/.codex
 	Hosts         []verbs.HostID // empty: the hosts in lock.toml, else every host
 	Assets        fs.FS          // embedded tree with skills/ and hosts/
 	Binary        string         // absolute path of the aayu binary hooks and MCP registrations run
@@ -117,16 +125,12 @@ var ErrPinned = errors.New("skills are pinned to another version")
 
 // Lock is .aayudha/lock.toml.
 type Lock struct {
-	Version       int      `toml:"version"`
-	InstalledBy   string   `toml:"installed_by"`
-	SkillsVersion string   `toml:"skills_version"`
-	Pin           string   `toml:"pin"`
-	Hosts         []string `toml:"hosts"`
-	// PluginHosts are the installed hosts whose aayudha plugin was enabled at
-	// install, so the plugin serves their skills and install wrote no copies
-	// for them (D-3.2b.f).
-	PluginHosts []string             `toml:"plugin_hosts"`
-	Skills      map[string]LockSkill `toml:"skills"`
+	Version       int                  `toml:"version"`
+	InstalledBy   string               `toml:"installed_by"`
+	SkillsVersion string               `toml:"skills_version"`
+	Pin           string               `toml:"pin"`
+	Hosts         []string             `toml:"hosts"`
+	Skills        map[string]LockSkill `toml:"skills"`
 	// ProductSkills are the product's own verify skills (WP4.5b.3) that install
 	// mirrors from .agents/skills to the hosts that do not read it.
 	ProductSkills map[string]LockProductSkill `toml:"product_skills"`
@@ -170,13 +174,6 @@ func renderLock(l Lock) []byte {
 		q[i] = fmt.Sprintf("%q", h)
 	}
 	fmt.Fprintf(&b, "hosts = [%s]\n", strings.Join(q, ", "))
-	if len(l.PluginHosts) > 0 {
-		p := make([]string, len(l.PluginHosts))
-		for i, h := range l.PluginHosts {
-			p[i] = fmt.Sprintf("%q", h)
-		}
-		fmt.Fprintf(&b, "plugin_hosts = [%s]\n", strings.Join(p, ", "))
-	}
 	b.WriteString("\n[skills]\n")
 	names := make([]string, 0, len(l.Skills))
 	for n := range l.Skills {
@@ -410,21 +407,22 @@ func Plan(o Options) (*Result, error) {
 		lock.Skills[name] = LockSkill{Version: o.SkillsVersion, SHA256: HashSkill(m)}
 	}
 
-	for _, h := range hostList {
-		if p.pluginEnabled(verbs.HostID(h)) {
-			lock.PluginHosts = append(lock.PluginHosts, h)
-		}
-	}
 	dirs := lock.SkillDirs()
 	for _, d := range dirs {
 		if err := p.skillCopies(d, src, old.Skills); err != nil {
 			return nil, err
 		}
 	}
-	// A directory install filled before that the plugin now serves loses
-	// aayudha's copies, so the host lists each skill once; the product's own
+	// A directory an earlier install filled that no host needs now loses
+	// aayudha's copies, so no host lists a skill twice; the product's own
 	// skills there stay.
-	for _, d := range old.SkillDirs() {
+	before := old.SkillDirs()
+	for _, h := range old.Hosts {
+		if d := SkillDir(verbs.HostID(h)); !slices.Contains(before, d) {
+			before = append(before, d)
+		}
+	}
+	for _, d := range before {
 		if slices.Contains(dirs, d) || p.underSymlink(d) {
 			continue
 		}
@@ -442,11 +440,8 @@ func Plan(o Options) (*Result, error) {
 			return nil, err
 		}
 	}
-	for _, h := range lock.PluginHosts {
-		if d := SkillDir(verbs.HostID(h)); slices.Contains(dirs, d) {
-			hh, _ := verbs.FindHost(verbs.HostID(h))
-			p.notes = append(p.notes, "the aayudha plugin is enabled for "+hh.Name+", but another host installed here reads "+d+", so its copies stay and "+hh.Name+" lists each aayudha skill twice; use the plugin or install for every host that reads it")
-		}
+	if len(dirs) == 2 && slices.Contains(hostList, string(verbs.HostCursor)) {
+		p.notes = append(p.notes, cursorBoth)
 	}
 	if slices.Contains(hostList, string(verbs.HostClaude)) {
 		// The product's verify skills live where Amp, Cursor, and Codex read
@@ -594,32 +589,24 @@ func (p *planner) hostFiles(hosts map[verbs.HostID]bool, lock Lock) error {
 		if err := p.write(ClaudeMD, false, p.o.text(cm)); err != nil {
 			return err
 		}
-		plugin := p.pluginEnabled(verbs.HostClaude)
-		if err := p.mergeJSONIf(ClaudeMCP, !plugin, func(m map[string]any) {
-			if plugin {
-				deleteKey(m, "mcpServers", ServerName)
-			} else {
-				obj(m, "mcpServers")[ServerName] = server
-			}
+		if err := p.mergeJSON(ClaudeMCP, false, func(m map[string]any) {
+			obj(m, "mcpServers")[ServerName] = server
 		}); err != nil {
 			return err
 		}
 		if err := p.mergeJSON(ClaudeSettings, false, func(m map[string]any) {
-			if plugin {
-				m["enabledMcpjsonServers"] = dropString(m["enabledMcpjsonServers"], ServerName)
-				if len(m["enabledMcpjsonServers"].([]any)) == 0 {
-					delete(m, "enabledMcpjsonServers")
-				}
-			} else {
-				m["enabledMcpjsonServers"] = addString(m["enabledMcpjsonServers"], ServerName)
-			}
+			m["enabledMcpjsonServers"] = addString(m["enabledMcpjsonServers"], ServerName)
+			// The repository's copies, hooks, and server serve every teammate,
+			// so the aayudha plugin steps aside here for whoever has it: the
+			// shared project setting overrides the user's (D-3.2b.h).
+			obj(m, "enabledPlugins")[PluginID] = false
 			// The status line shows journey state (WP3.2b); one the product set itself stays.
 			if sl, ok := m["statusLine"].(map[string]any); !ok || ourHook.MatchString(fmt.Sprint(sl["command"])) {
 				m["statusLine"] = map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "status-line", verbs.HostClaude)}
 			} else {
 				p.notes = append(p.notes, ClaudeSettings+" already has a statusLine, so install leaves it: add `"+HookCommand(p.o.Binary, "status-line", verbs.HostClaude)+"` to it for the aayudha journey state")
 			}
-			setHooks(m, plugin, map[string]any{
+			setHooks(m, map[string]any{
 				"SessionStart": map[string]any{"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "session-start", verbs.HostClaude)}}},
 				"PreToolUse": map[string]any{"matcher": "*",
 					"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "pre-tool", verbs.HostClaude)}}},
@@ -627,57 +614,38 @@ func (p *planner) hostFiles(hosts map[verbs.HostID]bool, lock Lock) error {
 		}); err != nil {
 			return err
 		}
-		if plugin {
-			p.notes = append(p.notes, pluginNote("Claude Code", skillFiles(lock, ClaudeSkills)+ClaudeMCP+" and "+ClaudeSettings))
-		}
 	}
 	if hosts[verbs.HostCursor] {
-		plugin := p.pluginEnabled(verbs.HostCursor)
-		if err := p.mergeJSONIf(CursorMCP, !plugin, func(m map[string]any) {
-			if plugin {
-				deleteKey(m, "mcpServers", ServerName)
-			} else {
-				obj(m, "mcpServers")[ServerName] = server
-			}
+		if err := p.mergeJSON(CursorMCP, false, func(m map[string]any) {
+			obj(m, "mcpServers")[ServerName] = server
 		}); err != nil {
 			return err
 		}
-		if err := p.mergeJSONIf(CursorHooks, !plugin, func(m map[string]any) {
+		if err := p.mergeJSON(CursorHooks, false, func(m map[string]any) {
+			m["version"] = json.Number("1")
 			pre := map[string]any{"command": HookCommand(p.o.Binary, "pre-tool", verbs.HostCursor)}
-			setHooks(m, plugin, map[string]any{
+			setHooks(m, map[string]any{
 				"sessionStart":         map[string]any{"command": HookCommand(p.o.Binary, "session-start", verbs.HostCursor)},
 				"beforeShellExecution": pre, "beforeMCPExecution": pre,
 			})
-			if _, ok := m["hooks"]; ok {
-				m["version"] = json.Number("1")
-			} else {
-				delete(m, "version")
-			}
 		}); err != nil {
 			return err
 		}
-		if plugin {
-			p.notes = append(p.notes, pluginNote("Cursor", skillFiles(lock, AgentsSkills)+CursorMCP+" and "+CursorHooks))
-		}
+		p.notes = append(p.notes, cursorPlugin)
 	}
 	if hosts[verbs.HostCodex] {
-		plugin := p.pluginEnabled(verbs.HostCodex)
-		if err := p.codexConfig(plugin); err != nil {
+		if err := p.codexConfig(); err != nil {
 			return err
 		}
-		if err := p.mergeJSONIf(CodexHooks, !plugin, func(m map[string]any) {
-			setHooks(m, plugin, map[string]any{
+		if err := p.mergeJSON(CodexHooks, false, func(m map[string]any) {
+			setHooks(m, map[string]any{
 				"SessionStart": map[string]any{"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "session-start", verbs.HostCodex)}}},
 				"PreToolUse":   map[string]any{"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "pre-tool", verbs.HostCodex)}}},
 			})
 		}); err != nil {
 			return err
 		}
-		if plugin {
-			p.notes = append(p.notes, pluginNote("OpenAI Codex", skillFiles(lock, AgentsSkills)+CodexConfig+" and "+CodexHooks))
-		} else {
-			p.notes = append(p.notes, "Codex runs these hooks only after you trust them: open /hooks in Codex and trust the aayudha hooks (`aayu doctor` reports any it would skip)")
-		}
+		p.notes = append(p.notes, "Codex reads .codex/ only in a project you trust, and runs these hooks only after you trust them in /hooks; until then the aayudha plugin, if you have it, is not turned off here either (`aayu doctor` reports both)")
 	}
 	if hosts[verbs.HostAmp] {
 		tmpl, err := fs.ReadFile(p.o.Assets, "hosts/amp/aayudha.ts")
@@ -716,25 +684,23 @@ const (
 
 var codexBlock = regexp.MustCompile(`(?s)` + regexp.QuoteMeta(codexBegin) + `.*?` + regexp.QuoteMeta(codexEnd) + `\n?`)
 
-func (p *planner) codexConfig(plugin bool) error {
+func (p *planner) codexConfig() error {
 	old, err := p.read(CodexConfig, false)
 	if err != nil {
 		return err
 	}
 	cmd, _ := json.Marshal(p.o.Binary) // a JSON string is a TOML basic string
-	block := codexBegin + "\n[mcp_servers." + ServerName + "]\ncommand = " + string(cmd) + "\nargs = [\"mcp\"]\n" + codexEnd + "\n"
 	text := string(lf(old))
+	// The aayudha plugin steps aside in this trusted project: the project
+	// layer overrides the user's [plugins] entry (D-3.2b.h). A table the
+	// product wrote itself stays, since TOML allows it once.
+	plugin := "\n[plugins.\"" + PluginID + "\"]\nenabled = false\n"
+	if strings.Contains(codexBlock.ReplaceAllLiteralString(text, ""), "[plugins.\""+PluginID+"\"]") {
+		plugin = ""
+		p.notes = append(p.notes, CodexConfig+" already has a [plugins.\""+PluginID+"\"] table outside aayudha's block, so install leaves it: set enabled = false there, or Codex lists each aayudha skill twice for anyone with the plugin")
+	}
+	block := codexBegin + "\n[mcp_servers." + ServerName + "]\ncommand = " + string(cmd) + "\nargs = [\"mcp\"]\n" + plugin + codexEnd + "\n"
 	switch {
-	case plugin: // the plugin's server serves this repository; drop the block install wrote before
-		if !codexBlock.MatchString(text) {
-			return nil
-		}
-		text = strings.TrimLeft(codexBlock.ReplaceAllLiteralString(text, ""), "\n")
-		if strings.TrimSpace(text) == "" {
-			p.edits = append(p.edits, Edit{Kind: Delete, Path: CodexConfig, Old: old})
-			return nil
-		}
-		text = strings.TrimRight(text, "\n") + "\n"
 	case codexBlock.MatchString(text):
 		text = codexBlock.ReplaceAllLiteralString(text, block)
 	case strings.Contains(text, "[mcp_servers."+ServerName+"]"):
@@ -754,9 +720,6 @@ func (p *planner) agentsSections(lock Lock) []AgentsSection {
 		dirs = append(dirs, "`"+d+"/`")
 	}
 	where := "The skill copies in " + strings.Join(dirs, " and ")
-	if len(dirs) == 0 {
-		where = "The aayudha plugin carries the skills here, so install keeps no copies. Any copies"
-	}
 	var names []string
 	for _, h := range lock.Hosts {
 		if hh, ok := verbs.FindHost(verbs.HostID(h)); ok {
@@ -835,97 +798,30 @@ func addString(v any, s string) []any {
 	return append(list, s)
 }
 
-// pluginEnabled reports the aayudha marketplace plugin enabled for host.
-func (p *planner) pluginEnabled(host verbs.HostID) bool {
-	ch := p.o.CodexHome
-	if ch == "" {
-		ch = filepath.Join(p.o.Home, ".codex")
-	}
-	return PluginEnabled(host, p.o.Root, p.o.Home, ch)
-}
+// PluginID is the aayudha plugin's ID in Claude Code and Codex: the plugin
+// from this repository's marketplace, which is also named aayudha.
+const PluginID = ServerName + "@" + ServerName
 
-// pluginNote says why install wrote no hooks or MCP registration for a host.
-func pluginNote(host, files string) string {
-	return "the aayudha plugin is enabled for " + host + ", so its skills, hooks, and MCP server serve this repository and install writes none in " + files + " (it removes any it wrote before); disable the plugin and re-run install for the repository's own"
-}
-
-// skillFiles names dir for a plugin note when install keeps no copies there.
-func skillFiles(lock Lock, dir string) string {
-	if slices.Contains(lock.SkillDirs(), dir) {
-		return ""
-	}
-	return dir + ", "
-}
-
-// mergeJSONIf is mergeJSON, except that a file that does not exist is created
-// only when create is true.
-// A file left empty is deleted.
-func (p *planner) mergeJSONIf(rel string, create bool, set func(map[string]any)) error {
-	if create {
-		return p.mergeJSON(rel, false, set)
-	}
-	old, err := p.read(rel, false)
-	if err != nil || old == nil {
-		return err
-	}
-	empty := false
-	if err := p.mergeJSON(rel, false, func(m map[string]any) { set(m); empty = len(m) == 0 }); err != nil {
-		return err
-	}
-	if n := len(p.edits); empty && n > 0 && p.edits[n-1].Path == rel {
-		p.edits[n-1] = Edit{Kind: Delete, Path: rel, Old: old}
-	}
-	return nil
-}
+// The install notes for Cursor, whose plugin aayu cannot turn off per
+// repository and which also reads .claude/skills (D-3.2b.g, D-3.2b.h).
+const (
+	cursorPlugin = "Cursor has no setting a repository can commit to turn a plugin off, so if you also use the aayudha Cursor plugin here, Cursor lists each aayudha skill and the MCP server twice: disable the plugin for this workspace in Cursor. aayu doctor sees a plugin only in ~/.cursor/plugins/local, not one installed from a marketplace"
+	cursorBoth   = "Claude Code needs the copies in .claude/skills and Codex those in .agents/skills, and Cursor reads both (with Third-Party Imports, on by default), so Cursor lists each aayudha skill twice; turn off Third-Party Imports in Cursor's settings, or install for Claude Code or Codex, not both"
+)
 
 // setHooks puts aayudha's entry for each event into m's hooks, replacing the
-// ones it wrote before, or with drop only removes them (and empty events).
-func setHooks(m map[string]any, drop bool, entries map[string]any) {
+// ones it wrote before.
+func setHooks(m map[string]any, entries map[string]any) {
 	hk := obj(m, "hooks")
 	for ev, entry := range entries {
-		if !drop {
-			hk[ev] = replaceHooks(hk[ev], entry.(map[string]any))
-			continue
-		}
-		if rest := dropOurs(hk[ev]); len(rest) > 0 {
-			hk[ev] = rest
-		} else {
-			delete(hk, ev)
-		}
+		hk[ev] = replaceHooks(hk[ev], entry.(map[string]any))
 	}
-	if len(hk) == 0 {
-		delete(m, "hooks")
-	}
-}
-
-func deleteKey(m map[string]any, key, name string) {
-	if o, ok := m[key].(map[string]any); ok {
-		delete(o, name)
-		if len(o) == 0 {
-			delete(m, key)
-		}
-	}
-}
-
-func dropString(v any, s string) []any {
-	list, _ := v.([]any)
-	out := []any{}
-	for _, x := range list {
-		if x != s {
-			out = append(out, x)
-		}
-	}
-	return out
 }
 
 // replaceHooks drops the entries aayudha wrote before (recognised by their
 // commands) from a host's hook list and appends entry; the product's own hooks
 // stay, in order.
 func replaceHooks(v any, entry map[string]any) []any {
-	return append(dropOurs(v), entry)
-}
-
-func dropOurs(v any) []any {
 	list, _ := v.([]any)
 	var out []any
 	for _, e := range list {
@@ -933,7 +829,7 @@ func dropOurs(v any) []any {
 			out = append(out, e)
 		}
 	}
-	return out
+	return append(out, entry)
 }
 
 func isOurs(e any) bool {

@@ -105,7 +105,9 @@ func TestInstall(t *testing.T) {
 	if _, out, _ := run(t, env, opts, "doctor"); !strings.Contains(out, "FAIL  skills-copies") || !strings.Contains(out, ".claude/skills/ready was edited or is stale") {
 		t.Fatalf("doctor on an edited copy:\n%s", out)
 	}
-	if _, out, _ := run(t, env, opts, "doctor", "--fix"); !strings.Contains(out, "--fix: re-synced 1 file(s)") || !strings.Contains(out, "PASS  skills-copies") {
+	// With every host installed, Cursor reads both copies: a warning, not a failure (D-3.2b.g).
+	if _, out, _ := run(t, env, opts, "doctor", "--fix"); !strings.Contains(out, "--fix: re-synced 1 file(s)") || !strings.Contains(out, "WARN  skills-copies      Cursor lists each aayudha skill twice") ||
+		!strings.Contains(out, "not one installed from a marketplace") { // D-3.2b.i
 		t.Fatalf("doctor --fix:\n%s", out)
 	}
 	if treeHash(t, repo) != applied {
@@ -162,7 +164,7 @@ func TestInstallMirrorsVerifySkill(t *testing.T) {
 	if _, out, _ := run(t, env, opts, "doctor"); !strings.Contains(out, ".claude/skills/verify-shop is behind its source .agents/skills/verify-shop") {
 		t.Fatalf("doctor on a changed source:\n%s", out)
 	}
-	if _, out, _ := run(t, env, opts, "doctor", "--fix"); !strings.Contains(out, "PASS  skills-copies") {
+	if _, out, _ := run(t, env, opts, "doctor", "--fix"); strings.Contains(out, "FAIL  skills-copies") {
 		t.Fatalf("doctor --fix:\n%s", out)
 	}
 	if b, _ := os.ReadFile(filepath.Join(mirror, "features", "README.md")); strings.ReplaceAll(string(b), "\r\n", "\n") != "# map, with a feature\n" {
