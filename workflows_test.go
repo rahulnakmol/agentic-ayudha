@@ -193,8 +193,9 @@ func TestGitleaksScansOnlyTheCommitUnderTest(t *testing.T) {
 // tag. v* tags sit on main's Release merge commits, which dev and rolling never contain, and a rolling commit
 // carries a rolling-<date> tag, which goreleaser takes first and cannot parse as a version (release-snapshot failed
 // on every rolling push). Each workflow running `release --snapshot` must first set GORELEASER_CURRENT_TAG to the
-// newest v* tag by version, here v0.10.0: not an ancestor of HEAD, after v0.9.0 only in version order, and above
-// its prereleases v0.10.0-rc.1 and v0.10.0-rc.2.
+// newest v* tag by version, here v0.10.0: not an ancestor of HEAD, after v0.9.0 only in version order, above
+// its prereleases v0.10.0-rc.1 and v0.10.0-rc.2; and v11.0.0, v10junk, and v99.0.0 do not count, since release.yml
+// refuses a lightweight, malformed, or off-main tag.
 func TestSnapshotNamesItselfFromTheNewestRelease(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("bash steps")
@@ -213,14 +214,19 @@ func TestSnapshotNamesItselfFromTheNewestRelease(t *testing.T) {
 	gitIn("commit", "-q", "--allow-empty", "-m", "base")
 	gitIn("checkout", "-q", "-b", "main")
 	gitIn("commit", "-q", "--allow-empty", "-m", "Release: v0.9.0")
-	gitIn("tag", "v0.9.0")
-	gitIn("tag", "v0.10.0-rc.1")
+	gitIn("tag", "-a", "-m", "v0.9.0", "v0.9.0")
+	gitIn("tag", "-a", "-m", "v0.10.0-rc.1", "v0.10.0-rc.1")
 	gitIn("commit", "-q", "--allow-empty", "-m", "Release: v0.10.0")
 	gitIn("tag", "-a", "-m", "v0.10.0", "v0.10.0")
-	gitIn("tag", "v0.10.0-rc.2") // tagged late; a prerelease still ranks below its release
+	gitIn("tag", "-a", "-m", "v0.10.0-rc.2", "v0.10.0-rc.2") // tagged late; a prerelease still ranks below its release
+	// Tags release.yml refuses never name a snapshot: lightweight, malformed, or off main.
+	gitIn("tag", "v11.0.0")
+	gitIn("tag", "-a", "-m", "v10junk", "v10junk")
+	gitIn("update-ref", "refs/remotes/origin/main", "main") // the checkout's fetch-depth 0 fetches origin/main
 	gitIn("checkout", "-q", "rolling")
 	gitIn("commit", "-q", "--allow-empty", "-m", "Rolling snapshot")
 	gitIn("tag", "rolling-2026-10-16.2")
+	gitIn("tag", "-a", "-m", "v99.0.0", "v99.0.0")
 	step := regexp.MustCompile(`(?m)^\s*run: (.*GORELEASER_CURRENT_TAG=.*)$`)
 	files, _ := filepath.Glob(".github/workflows/*.yml")
 	found := 0
