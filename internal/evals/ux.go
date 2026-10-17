@@ -803,7 +803,7 @@ func (h *Harness) runLaneA(ctx context.Context, c Case, complete func(context.Co
 	if err != nil {
 		return Run{}, err
 	}
-	req.Stream = true // as every skill call, so a long critique does not idle into a 524
+	req.Stream = true // as every skill call (only the Messages wire format streams)
 	var rep uireview.Reply
 	if err := models.Structured(ctx, complete, req, uireview.Schema(), &rep); err != nil {
 		var re *models.ReplyError
