@@ -232,7 +232,8 @@ Write `survey.json` ([references/formats.md](references/formats.md) has every fi
   `drop` with a deprecation path, or `undecided`. [references/compatibility.md](references/compatibility.md) says how
   projects that shipped drop-in replacements did it.
 - **Questions** (`Q1`…): each gap the code cannot close, with why it changes the plan and your default with its
-  reason.
+  reason. Ask first what only the person knows about use: who runs it, on what input (trusted or not), and which
+  entry points are the product. A gap a probe or a read can close is not a question; close it.
 - **Modernisation**, when asked for a modern version: the `target` comes from the request's own words
   (`target_source: "request"`) or an answered question; never choose it yourself. A `strategy`, ordered `steps` (each
   naming the modules it replaces, the claims it rests on, and the case sets that prove it), `case_sets` (where the
@@ -293,8 +294,12 @@ coverage (modules, entry points, and markers cited) and the index's limits. Exit
 citation exists, not that it supports the sentence. So when `aayu survey --draft` passes, verify the draft once more,
 item by item (every claim, trap finding, do-not-carry entry, interface, question default, risk, and modernisation
 step). For each, re-read the lines or probe facts it cites, not your notes, and ask whether they say exactly this,
-for this scope, with these numbers, and for this build. Correct, narrow, or remove what they do not support, or turn
-it into a risk or a question, using the checks in the list above. Then run `aayu survey --draft` again, and tell the
+for this scope, with these numbers, and for this build. An `inferred` claim or a question's default holds only when
+each step of its reasoning is in the cited lines: a step they do not give (a date from a copyright year, a reason
+for the history, which branch holds a file) is a guess, so state only what the lines say or ask it. What a source
+"says" is quoted from it, never paraphrased into more. Check the capability map against the engineering view too:
+each public interface the draft names belongs to some capability. Correct, narrow, or remove what they do not
+support, or turn it into a risk or a question, using the checks in the list above. Then run `aayu survey --draft` again, and tell the
 person which items the self-check changed and why. The draft you show is the corrected one.
 
 ## 3. Interview the person for the gaps
