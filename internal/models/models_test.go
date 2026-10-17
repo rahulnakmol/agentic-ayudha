@@ -13,7 +13,9 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
@@ -538,6 +540,29 @@ func TestMessagesStream(t *testing.T) {
 				t.Errorf("stream cost %.6f, want %.6f", usd, want)
 			}
 		}
+	}
+}
+
+// A stream cut off inside a data line is a dropped connection, not a reply
+// that does not decode: the read error (or an unexpected EOF when the stream
+// just ends) comes back, with the usage so far, so the caller retries it.
+func TestMessagesStreamCutInsideAnEvent(t *testing.T) {
+	start := `data: {"type":"message_start","message":{"model":"m","usage":{"input_tokens":7}}}` + "\n\n"
+	partial := start + `data: {"type":"content_block_delta","index":0,"delta":{"type":"text_d`
+	for name, tc := range map[string]struct {
+		body io.Reader
+		want error
+	}{
+		"reset": {io.MultiReader(strings.NewReader(partial), iotest.ErrReader(syscall.ECONNRESET)), syscall.ECONNRESET},
+		"ended": {strings.NewReader(partial), io.ErrUnexpectedEOF},
+	} {
+		r, err := decodeMessagesStream(tc.body)
+		if !errors.Is(err, tc.want) || r.TokensIn != 7 {
+			t.Errorf("%s: %+v %v, want %v with the usage so far", name, r, err, tc.want)
+		}
+	}
+	if _, err := decodeMessagesStream(strings.NewReader(start + "data: {not json}\n\ndata: {}\n\n")); err == nil || !strings.Contains(err.Error(), "decode messages stream") {
+		t.Errorf("a malformed event mid-stream is still a decode error: %v", err)
 	}
 }
 

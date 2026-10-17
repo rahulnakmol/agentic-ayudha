@@ -3,6 +3,7 @@ package models
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -255,7 +256,8 @@ func (c HTTPClient) Complete(ctx context.Context, r Request) (Response, error) {
 
 // decodeMessagesStream reads an Anthropic Messages event stream: the text
 // deltas in order, the stop reason, and the usage from message_start and
-// message_delta. An error event is an error.
+// message_delta. An error event is an error, and so is a stream cut off
+// inside an event; both come back with the usage so far.
 func decodeMessagesStream(body io.Reader) (Response, error) {
 	var r Response
 	var sb strings.Builder
@@ -284,6 +286,11 @@ func decodeMessagesStream(body io.Reader) (Response, error) {
 			} `json:"error"`
 		}
 		if err := json.Unmarshal([]byte(strings.TrimSpace(data)), &ev); err != nil {
+			if !sc.Scan() {
+				// The stream was cut inside this event: report the read
+				// error (a dropped connection), not the partial line.
+				return r, fmt.Errorf("read messages stream: %w", cmp.Or(sc.Err(), io.ErrUnexpectedEOF))
+			}
 			return Response{}, fmt.Errorf("decode messages stream: %w", err)
 		}
 		switch ev.Type {
