@@ -1,0 +1,36 @@
+{
+  "product": "calc",
+  "request": "Tell me what this calculator does and how we would rebuild it in Rust",
+  "summary": "calc evaluates an integer expression given on the command line and prints the result.",
+  "engineering": [
+    {"id": "E1", "topic": "architecture", "claim": "main builds an Engine and evaluates its first argument.", "basis": "observed", "cites": ["sym:src/main.cpp#main", "src/main.cpp:4-11"]},
+    {"id": "E2", "topic": "build", "claim": "Make and CMake both build the calc executable from the same three sources.", "basis": "observed", "cites": ["build:Makefile#calc", "build:CMakeLists.txt#calc"]},
+    {"id": "E3", "topic": "risks", "claim": "Division by zero crashes the engine.", "basis": "stated", "cites": ["marker:src/engine.cpp:5"]},
+    {"id": "E4", "topic": "interfaces", "claim": "CALC_DEBUG switches on a trace of each parse.", "basis": "inferred", "cites": ["io:env:src/util.cpp:6"], "reasoning": "parse reads the variable and prints only when it is set."}
+  ],
+  "capabilities": [
+    {"id": "C1", "name": "Evaluate an expression", "claim": "Given an expression argument, prints its integer value.", "basis": "observed", "cites": ["entry:src/main.cpp:4", "sym:src/engine.cpp#Engine::eval"]}
+  ],
+  "product_claims": [
+    {"id": "P1", "topic": "users", "claim": "Who runs calc, and in which scripts, is not in the code.", "basis": "unknown", "question": "Q1"},
+    {"id": "P2", "topic": "context", "claim": "The README calls it a calculator.", "basis": "stated", "cites": ["doc:README.md"]}
+  ],
+  "questions": [
+    {"id": "Q1", "question": "Who runs calc today, and from what?", "why": "It decides which outputs must stay byte-identical.", "default": "Scripts that read its stdout, so stdout and exit codes stay exact.", "affects": ["P1"], "status": "open"}
+  ],
+  "modernisation": {
+    "target": "Rust",
+    "target_source": "request",
+    "strategy": "Port the engine first behind the same command line, then retire the C++ build.",
+    "steps": [
+      {"id": "M1", "title": "Port the engine", "modules": ["mod:src"], "claims": ["E1", "C1"], "parity": ["G1"]},
+      {"id": "M2", "title": "Retire the C++ build", "depends_on": ["M1"], "claims": ["E2"], "parity": ["G1"]}
+    ],
+    "case_sets": [
+      {"id": "G1", "title": "Command-line expressions", "from": ["entry:src/main.cpp:4", "test:tests/test001.js"], "compare": "exact stdout, stderr, and exit code", "exclude": ["the division-by-zero crash (E3)"]}
+    ],
+    "risks": [
+      {"id": "R1", "claim": "The usage message goes to stderr with exit 2; scripts may rely on it.", "basis": "observed", "cites": ["src/main.cpp:7-8"]}
+    ]
+  }
+}

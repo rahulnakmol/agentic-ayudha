@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -64,12 +65,15 @@ func surveyDirs(e *Env, in Values) (root, out string) {
 // writes the survey draft; the binary never calls a model.
 func runSurvey(ctx context.Context, e *Env, in Values) error {
 	root, out := surveyDirs(e, in)
-	for _, f := range []string{"draft", "backlog", "create", "reviewed", "limit", "golden", "parity", "bin", "run"} {
+	for _, f := range []string{"backlog", "create", "reviewed", "limit", "golden", "parity", "bin", "run"} {
 		if in.Has(f) {
-			return Errorf(ExitUsage, "survey --%s is n/a until a later part of WP5.9 (Decision #287); this binary indexes (`aayu survey`) and prints module packs (`--module`)", f)
+			return Errorf(ExitUsage, "survey --%s is n/a until a later part of WP5.9 (Decision #287); this binary indexes (`aayu survey`), prints module packs (`--module`), and checks a survey draft (`--draft`)", f)
 		}
 	}
 	indexFile := filepath.Join(out, "index.json")
+	if in.Has("draft") {
+		return e.surveyDraft(indexFile, out, in.String("draft"))
+	}
 	if id := in.String("module"); id != "" {
 		ix, err := survey.Load(indexFile)
 		if err != nil {
@@ -229,4 +233,59 @@ func (u untrustedWriter) Write(b []byte) (int, error) {
 		return 0, err
 	}
 	return len(b), nil
+}
+
+// SurveyDraftResult is the check of a survey draft and where its report went.
+type SurveyDraftResult struct {
+	survey.Report
+	Survey string `json:"survey_md"`
+	Next   string `json:"next"`
+}
+
+// surveyDraft checks a survey draft against the index and renders SURVEY.md,
+// with the problems listed in it while the draft does not pass.
+func (e *Env) surveyDraft(indexFile, out, file string) error {
+	ix, err := survey.Load(indexFile)
+	if err != nil {
+		return Errorf(ExitUsage, "survey --draft: %v; run `aayu survey` first", err)
+	}
+	b, err := os.ReadFile(file)
+	if err != nil {
+		return Wrap(ExitUsage, err)
+	}
+	d, err := survey.ParseDraft(b)
+	if err != nil {
+		return Errorf(ExitUsage, "%s: %v", file, err)
+	}
+	res := SurveyDraftResult{Report: survey.Check(ix, d), Survey: filepath.Join(out, "SURVEY.md")}
+	if err := os.WriteFile(res.Survey, []byte(survey.Render(ix, d, res.Report)), 0o644); err != nil {
+		return Wrap(ExitInternal, err)
+	}
+	res.Next = "fix every problem, then run again"
+	if res.Pass {
+		res.Next = "interview the person on the open questions (skills/survey), record their answers in the draft, then draft the backlog"
+		if res.Coverage.OpenQuestions == 0 {
+			res.Next = "draft the backlog from the survey (skills/survey), then `aayu survey --backlog <file> --draft " + file + "`"
+		}
+	}
+	if err := e.Emit(res, func(w io.Writer) error {
+		verdict := "passes"
+		if !res.Pass {
+			verdict = "does not pass yet"
+		}
+		c := res.Coverage
+		fmt.Fprintf(w, "survey draft %s: %s; modules cited %d of %d, entry points %d of %d, markers %d of %d; %d open questions, %d unknown claims\n",
+			file, verdict, c.ModulesCited, c.Modules, c.EntriesCited, c.Entries, c.MarkersCited, c.Markers, c.OpenQuestions, c.Unknowns)
+		for _, p := range res.Problems {
+			fmt.Fprintf(w, "  problem: %s\n", p)
+		}
+		fmt.Fprintf(w, "  wrote %s\n  next: %s\n", res.Survey, res.Next)
+		return nil
+	}); err != nil {
+		return err
+	}
+	if !res.Pass {
+		return Errorf(ExitBlocked, "the survey draft has %d problem(s); revise it", len(res.Problems))
+	}
+	return nil
 }

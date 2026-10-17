@@ -40,4 +40,24 @@ func TestSurveyIndexAndPack(t *testing.T) {
 	if code, _, stderr = run(t, nil, opts, "survey", dir, "--out", out, "--module", "mod:nope"); code != ExitUsage || !strings.Contains(stderr, "mod:src") {
 		t.Fatalf("unknown module: %d %s", code, stderr)
 	}
+
+	// --draft checks the analysis against the index and renders SURVEY.md; a
+	// product claim marked observed blocks (exit 4) and the report lists it.
+	draft := filepath.Join("..", "survey", "testdata", "draft.json")
+	code, stdout, stderr = run(t, nil, opts, "survey", dir, "--out", out, "--draft", draft, "--json")
+	var dr SurveyDraftResult
+	if err := json.Unmarshal([]byte(stdout), &dr); code != 0 || err != nil || !dr.Pass {
+		t.Fatalf("draft: %d %v %s %s", code, err, stdout, stderr)
+	}
+	if md, err := os.ReadFile(dr.Survey); err != nil || !strings.Contains(string(md), "## Capability map") {
+		t.Fatalf("SURVEY.md: %v", err)
+	}
+	b, _ := os.ReadFile(draft)
+	bad := filepath.Join(t.TempDir(), "bad.json")
+	if err := os.WriteFile(bad, []byte(strings.Replace(string(b), `"basis": "stated", "cites": ["doc:README.md"]`, `"basis": "observed", "cites": ["doc:README.md"]`, 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, stdout, _ = run(t, nil, opts, "survey", dir, "--out", out, "--draft", bad, "--plain"); code != ExitBlocked || !strings.Contains(stdout, "a product claim cannot be observed") {
+		t.Fatalf("bad draft: %d %s", code, stdout)
+	}
 }
