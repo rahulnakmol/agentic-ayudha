@@ -108,6 +108,9 @@ func TestReadyCheckFixtures(t *testing.T) {
 		if code != tt.code || !slices.Equal(got, tt.want) {
 			t.Errorf("ready %s --check: exit %d %q, want %d %q (%s)", tt.issue, code, got, tt.code, tt.want, errOut)
 		}
+		if tt.issue == "2" && (res.Threshold != "2 of 2" || res.Environment != "staging with seed data" || res.Scenario != "Open the list with no items.") {
+			t.Errorf("ready 2 --check: threshold %q, scenario %q, environment %q; want the story's fields (D-3.4i)", res.Threshold, res.Scenario, res.Environment)
+		}
 	}
 	if w := g.Writes(); len(w) != 0 {
 		t.Errorf("--check wrote %v", w)

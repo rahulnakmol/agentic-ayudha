@@ -43,6 +43,10 @@ type Result struct {
 	BodyHash           string                `json:"body_hash"`
 	CompletionGoalHash string                `json:"completion_goal_hash,omitempty"`
 	Criteria           []workitems.Criterion `json:"criteria,omitempty"`
+	Measure            string                `json:"measure,omitempty"` // with Threshold, Scenario, Environment: the rest of the Completion Goal, for a readback
+	Threshold          string                `json:"threshold,omitempty"`
+	Scenario           string                `json:"scenario,omitempty"`
+	Environment        string                `json:"environment,omitempty"`
 	TechnicalOwner     string                `json:"technical_owner,omitempty"`
 	Identity           string                `json:"identity,omitempty"`
 	Tag                string                `json:"tag,omitempty"`
@@ -112,6 +116,8 @@ func (r *Ready) Check(ctx context.Context, n int) (Result, *gh.Issue, error) {
 		}
 		res.CompletionGoalHash = workitems.CompletionGoalHash(it)
 		res.Criteria, _ = workitems.ParseCriteria(it.Fields[workitems.FieldCriteria])
+		res.Measure, res.Threshold = it.Fields[workitems.FieldMeasure], it.Fields[workitems.FieldThreshold]
+		res.Scenario, res.Environment = it.Fields[workitems.FieldScenario], it.Fields[workitems.FieldEnvironment]
 		res.TechnicalOwner = it.Fields[workitems.FieldOwner]
 		if res.TechnicalOwner == "" {
 			res.TechnicalOwner = r.TechnicalOwner
