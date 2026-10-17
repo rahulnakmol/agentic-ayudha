@@ -355,35 +355,62 @@ func TestTier2RetriesServerErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 	runs := res.Cases[0].Runs
-	if r := runs[0]; r.Status == RunError || !strings.Contains(r.Calls[0].Retried, "524") {
+	if r := runs[0]; r.Status == RunError || !strings.Contains(faults(r.Calls[0]), "524") {
 		t.Errorf("run 1, a 524: %+v", r)
 	}
-	if r := runs[1]; r.Status == RunError || !strings.Contains(r.Calls[0].Retried, "api_error") {
+	if r := runs[1]; r.Status == RunError || !strings.Contains(faults(r.Calls[0]), "api_error") {
 		t.Errorf("run 2, a stream api_error: %+v", r)
 	}
-	if r := runs[2]; r.Calls[0].Retried != "" || !strings.Contains(r.Calls[0].Error, "400") {
+	if r := runs[2]; faults(r.Calls[0]) != "" || !strings.Contains(r.Calls[0].Error, "400") {
 		t.Errorf("run 3, a 400 is not retried: %+v", r)
 	}
-	if r := runs[3]; r.Status == RunError || r.Score != 5 || !strings.Contains(r.Calls[0].Retried, `degenerate reply: 32000 tokens repeating "<br>"`) {
+	if r := runs[3]; r.Status == RunError || r.Score != 5 || !strings.Contains(faults(r.Calls[0]), `degenerate reply: 32000 tokens repeating "<br>"`) {
 		t.Errorf("run 4, a reply looping on <br>: %+v", r)
 	}
-	if r := runs[4]; r.Status != RunError || r.Calls[0].Retried != "" || !strings.Contains(r.Error, "truncated") {
+	if r := runs[4]; r.Status != RunError || faults(r.Calls[0]) != "" || !strings.Contains(r.Error, "truncated") {
 		t.Errorf("run 5, a long reply at the cap is not retried: %+v", r)
 	}
 }
 
-// TestTier2RetriesDroppedConnection: a reset is retried once and recorded on
-// the call, so the run is scored, not lost (WP5.8); a second reset in a row
-// fails the run, so a broken endpoint still cannot pass silently.
-func TestTier2RetriesDroppedConnection(t *testing.T) {
+func faults(l CallLog) string {
+	var f []string
+	for _, r := range l.Retries {
+		f = append(f, r.Fault)
+	}
+	return strings.Join(f, "; ")
+}
+
+// stall is a stream that stopped arriving until the HTTP client's timeout, as
+// in host-skills run 39038277548.
+type stall struct{}
+
+func (stall) Error() string {
+	return "read messages stream: context deadline exceeded (Client.Timeout or context cancellation while reading body)"
+}
+func (stall) Timeout() bool   { return true }
+func (stall) Temporary() bool { return true }
+
+// TestTier2RetriesProviderFaults (D-3.4y): a provider fault (a 429, a stalled
+// stream, a 524, a reply looping on one token) is retried, at most twice a run,
+// and each retry is recorded with its cost; a run whose faults pass the cap
+// errors as before. Only that run counts against the case's one allowed error.
+func TestTier2RetriesProviderFaults(t *testing.T) {
+	rateLimitWait = 0
+	t.Cleanup(func() { rateLimitWait = 10 * time.Second })
 	cases, _ := stubCases(root)
 	item, _ := os.ReadFile(filepath.Join(root, "evals", "cases", "stub", "csv-export", "output", "issue.json"))
-	var replies []models.Response
-	for i := 0; i < 5; i++ {
-		replies = append(replies, models.Response{Text: string(item)}, models.Response{Text: `{"score": 5, "reason": "covers the request"}`})
-	}
-	// Call 1 (run 1's skill) drops once; calls 5 and 6 (run 2's judge, then its retry) both drop.
-	client := &resetting{Fake: &models.Fake{Replies: replies}, drops: []int{1, 5, 6}}
+	ok := models.Response{Text: string(item)}
+	judged := models.Response{Text: `{"score": 5, "reason": "covers the request"}`}
+	looping := models.Response{Text: `{"title": "` + strings.Repeat("<br> ", 3000), StopReason: "max_tokens", Truncated: true, TokensOut: 32000, CostUSD: 0.3}
+	// Run 1: call 1 is a 429. Run 2: call 4 stalls. Run 3: call 7 is a 524 and call 8 loops on <br>. Run 4: calls
+	// 11, 12, and 13 are overloaded, one past the cap. Run 5 has no fault.
+	overloaded := &models.StreamError{Type: "overloaded_error", Message: "Overloaded"}
+	client := &resetting{Fake: &models.Fake{Replies: []models.Response{ok, judged, ok, judged, looping, ok, judged, ok, judged}}, fail: map[int]error{
+		1:  &models.StatusError{Code: 429, Body: "rate limited"},
+		4:  stall{},
+		7:  &models.StatusError{Code: 524, Body: "error code: 524"},
+		11: overloaded, 12: overloaded, 13: overloaded,
+	}}
 	h := harness(t, nil, "gpt-6.1-sol")
 	h.Gateway.Client = func(models.Route, string) models.Client { return client }
 	res, err := h.Tier2(context.Background(), cases, "abc", "dev", time.Unix(0, 0))
@@ -391,11 +418,49 @@ func TestTier2RetriesDroppedConnection(t *testing.T) {
 		t.Fatal(err)
 	}
 	runs := res.Cases[0].Runs
-	if r := runs[0]; r.Status == RunError || r.Score != 5 || !strings.Contains(r.Calls[0].Retried, "connection reset") || r.Calls[1].Retried != "" {
+	for i, want := range []string{"429", "Client.Timeout", `524; degenerate reply: 32000 tokens repeating "<br>"`} {
+		if r := runs[i]; r.Status != RunPass || r.Score != 5 || !strings.Contains(faults(r.Calls[0]), want) || faults(r.Calls[1]) != "" {
+			t.Errorf("run %d, %s then a reply: %+v", i+1, want, r)
+		}
+	}
+	if rs := runs[2].Calls[0].Retries; len(rs) != 2 || rs[1].CostUSD != 0.3 || rs[1].TokensOut != 32000 {
+		t.Errorf("run 3's retries do not record what the looping reply cost: %+v", rs)
+	}
+	if r := runs[3]; r.Status != RunError || !strings.Contains(r.Error, "overloaded_error") || len(r.Calls[0].Retries) != ProviderRetries {
+		t.Errorf("run 4, three faults: %+v", r)
+	}
+	if r := runs[4]; r.Status != RunPass || len(r.Calls) != 2 || faults(r.Calls[0])+faults(r.Calls[1]) != "" {
+		t.Errorf("run 5, no fault: %+v", r)
+	}
+	if c := res.Cases[0]; c.Errors != 1 || c.Mean != 5 {
+		t.Errorf("errors %d, mean %v: only run 4 is an error", c.Errors, c.Mean)
+	}
+}
+
+// TestTier2RetriesDroppedConnection: a reset is retried and recorded on the
+// call, so the run is scored, not lost (WP5.8); a third reset in one run
+// (past ProviderRetries) fails it, so a broken endpoint still cannot pass silently.
+func TestTier2RetriesDroppedConnection(t *testing.T) {
+	cases, _ := stubCases(root)
+	item, _ := os.ReadFile(filepath.Join(root, "evals", "cases", "stub", "csv-export", "output", "issue.json"))
+	var replies []models.Response
+	for i := 0; i < 5; i++ {
+		replies = append(replies, models.Response{Text: string(item)}, models.Response{Text: `{"score": 5, "reason": "covers the request"}`})
+	}
+	// Call 1 (run 1's skill) drops once; calls 5, 6, and 7 (run 2's judge, then its two retries) all drop.
+	client := &resetting{Fake: &models.Fake{Replies: replies}, drops: []int{1, 5, 6, 7}}
+	h := harness(t, nil, "gpt-6.1-sol")
+	h.Gateway.Client = func(models.Route, string) models.Client { return client }
+	res, err := h.Tier2(context.Background(), cases, "abc", "dev", time.Unix(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs := res.Cases[0].Runs
+	if r := runs[0]; r.Status == RunError || r.Score != 5 || !strings.Contains(faults(r.Calls[0]), "connection reset") || faults(r.Calls[1]) != "" {
 		t.Errorf("run 1, one reset: %+v", r)
 	}
 	if r := runs[1]; r.Status != RunError || !strings.Contains(r.Error, "connection reset") {
-		t.Errorf("run 2, two resets in a row: %+v", r)
+		t.Errorf("run 2, three resets in a row: %+v", r)
 	}
 	if res.Cases[0].Errors != 1 {
 		t.Errorf("%d errors, want 1 (run 2)", res.Cases[0].Errors)

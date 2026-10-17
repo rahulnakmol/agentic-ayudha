@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/fs"
 	"maps"
+	"net"
 	"os"
 	"path"
 	"path/filepath"
@@ -88,9 +89,19 @@ type CallLog struct {
 	TokensOut  int    `json:"tokens_out"`
 	MaxTokens  int    `json:"max_tokens"`
 	Error      string `json:"error,omitempty"`
-	// Retried is the dropped connection a call was retried after, once (WP5.8):
-	// the network's error, never the skill's, so it does not cost the run.
-	Retried string `json:"retried,omitempty"`
+	// Retries are the provider faults the call was retried after (WP5.8,
+	// D-3.4o, D-3.4r, D-3.4y), each with what it cost: the provider's error,
+	// never the skill's, so it does not cost the run its one allowed error.
+	Retries []Retry `json:"retries,omitempty"`
+}
+
+// Retry is one attempt of a call that met a provider fault and was repeated.
+type Retry struct {
+	Fault     string  `json:"fault"`
+	Model     string  `json:"model,omitempty"`
+	TokensIn  int     `json:"tokens_in,omitempty"`
+	TokensOut int     `json:"tokens_out,omitempty"`
+	CostUSD   float64 `json:"cost_usd"`
 }
 
 // CaseResult is a case's k runs.
@@ -256,35 +267,37 @@ func (h *Harness) call(ctx context.Context, gw *models.Gateway, lane verbs.LaneI
 		return models.Response{}, fmt.Errorf("%w: %.2f of %.2f USD", ErrBudget, spent, h.Config.MaxUSD)
 	}
 	c := models.Call{Story: "evals", Seat: string(verbs.AINativeEngineer), Lane: lane, Host: verbs.DirectHost, Req: req}
+	var retries []Retry
 	resp, m, err := gw.Do(ctx, c)
-	var retried string
-	if transient(err) && ctx.Err() == nil {
-		retried = clip(actions.RedactString(err.Error()), 200)
+	for {
+		fault := providerFault(ctx, resp, err)
+		if fault == "" || runRetries(*log)+len(retries) >= ProviderRetries {
+			break // a reply, a fault of the request or the reply, or the run's retries spent (D-3.4y)
+		}
+		usd, _ := models.Cost(gw.Models.Prices, m.Model, resp)
+		h.charge(usd)
+		retries = append(retries, Retry{Fault: fault, Model: m.Model, TokensIn: resp.TokensIn, TokensOut: resp.TokensOut, CostUSD: usd})
+		if wait := providerWait(err, len(retries)); wait > 0 {
+			select {
+			case <-ctx.Done():
+				return models.Response{}, ctx.Err()
+			case <-time.After(wait):
+			}
+		}
 		resp, m, err = gw.Do(ctx, c)
 	}
-	var wasted float64
-	if err == nil && resp.Truncated && ctx.Err() == nil {
-		if unit := repeating(resp.Text); unit != "" {
-			// Sampling that loops on one token until the cap is the model's fault, not the reply's
-			// content: a new sample is the call retried, never the run (D-3.4r). It is paid for.
-			wasted, _ = models.Cost(gw.Models.Prices, m.Model, resp)
-			retried = clip(fmt.Sprintf("degenerate reply: %d tokens repeating %q", resp.TokensOut, unit), 200)
-			resp, m, err = gw.Do(ctx, c)
-		}
-	}
 	usd, source := models.Cost(gw.Models.Prices, m.Model, resp)
-	usd += wasted
-	h.mu.Lock()
-	h.spent += usd
+	h.charge(usd)
 	if source == models.CostFallback && err == nil {
+		h.mu.Lock()
 		if h.unpriced == nil {
 			h.unpriced = map[string]int{}
 		}
 		h.unpriced[m.Model]++
+		h.mu.Unlock()
 	}
-	h.mu.Unlock()
 	l := CallLog{Role: role, Model: m.Model, StopReason: resp.StopReason, Truncated: resp.Truncated,
-		TokensIn: resp.TokensIn, TokensOut: resp.TokensOut, MaxTokens: req.MaxTokens, Retried: retried}
+		TokensIn: resp.TokensIn, TokensOut: resp.TokensOut, MaxTokens: req.MaxTokens, Retries: retries}
 	if err != nil {
 		l.Error = clip(actions.RedactString(err.Error()), 200)
 	}
@@ -292,15 +305,62 @@ func (h *Harness) call(ctx context.Context, gw *models.Gateway, lane verbs.LaneI
 	return resp, err
 }
 
-// transient reports a failure of the call itself, not of the reply: a dropped
-// connection, a 5xx from the endpoint or the gateway in front of it, or a
-// server error inside a streamed reply (api_error, overloaded_error). Like a
-// drop, it is retried once (D-3.4o); a 4xx or an invalid request is not.
-func transient(err error) bool {
+func (h *Harness) charge(usd float64) {
+	h.mu.Lock()
+	h.spent += usd
+	h.mu.Unlock()
+}
+
+// ProviderRetries is how many provider faults one run (one of a case's k
+// samples) may retry, across all its calls. The next fault errors the run as
+// before, so an outage cannot spend a group's budget (D-3.4y).
+const ProviderRetries = 2
+
+// rateLimitWait is the pause before retrying a 429, times the retry's number.
+var rateLimitWait = 10 * time.Second
+
+func runRetries(log []CallLog) int {
+	n := 0
+	for _, l := range log {
+		n += len(l.Retries)
+	}
+	return n
+}
+
+// providerFault names a failure of the provider rather than of the skill: a
+// dropped connection, a 5xx (the gateway's 524 included) or a 429, a server
+// error inside a stream, a stream that stalled past the client's timeout, or a
+// reply that loops on one token to the cap. It is "" for a reply and for every
+// fault of the request or of the reply itself (another 4xx, a long reply at the
+// cap, malformed JSON), which stay the run's.
+func providerFault(ctx context.Context, resp models.Response, err error) string {
+	if ctx.Err() != nil {
+		return ""
+	}
 	var se *models.StatusError
 	var st *models.StreamError
-	return dropped(err) || errors.As(err, &se) && se.Code >= 500 ||
-		errors.As(err, &st) && (st.Type == "api_error" || st.Type == "overloaded_error")
+	var ne net.Error
+	switch {
+	case err == nil:
+		if unit := repeating(resp.Text); resp.Truncated && unit != "" {
+			return clip(fmt.Sprintf("degenerate reply: %d tokens repeating %q", resp.TokensOut, unit), 200)
+		}
+		return ""
+	case dropped(err),
+		errors.As(err, &se) && (se.Code >= 500 || se.Code == 429),
+		errors.As(err, &st) && (st.Type == "api_error" || st.Type == "overloaded_error"),
+		errors.As(err, &ne) && ne.Timeout():
+		return clip(actions.RedactString(err.Error()), 200)
+	}
+	return ""
+}
+
+func providerWait(err error, n int) time.Duration {
+	var se *models.StatusError
+	if errors.As(err, &se) && se.Code == 429 {
+		return time.Duration(n) * rateLimitWait
+	}
+	return 0
 }
 
 // repeating returns the unit a reply ends on when its last 2000 characters
