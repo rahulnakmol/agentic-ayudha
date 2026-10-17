@@ -175,9 +175,12 @@ Architect's, so you report it and never bend it.
    Initiative's owner, or the seat that owns the call). The source fix is its own action, and an unverified cause
    is investigated before it is fixed: where (the file that sets the missing field, from the grounding), who (a
    person the grounding names, else the AI Native Engineer, who builds and runs that code), and by when; a rerun
-   alone does not fix it. A fix changes only events recorded after it lands, so say whether the rerun's window still
-   holds rows from before the fix (and so the same defect); never promise a clean rerun. Every defect the run shows
-   gets a disposition, the small ones included (rows with an unparsable timestamp). Attribute a share only to the
+   alone does not fix it. Whether rows from before a fix can be recovered (repaired, re-exported) is unknown unless the
+   grounding says so: make it a question the investigation answers, and say the rerun is clean only if it is
+   answered yes; never promise a clean rerun, and never claim the old rows are lost. Every defect the run shows
+   gets a disposition, the small ones included (rows with an unparsable timestamp). Judge the data only as far as the
+   inspection goes: name the defects found, never declare the rest sound ("not broken overall"), and treat how many
+   skipped rows are acceptable as the Revenue Architect's threshold (an open question) unless the grounding gives one. Attribute a share only to the
    population it was measured on: a share of the whole export is not a share of one cohort, and when a defect began
    is unknown unless the grounding dates it. Wording for a meeting says only what is true now: a fix not yet started
    is "proposed", never "being fixed". Say what `measure` does only as the grounding says it.
