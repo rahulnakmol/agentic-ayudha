@@ -398,10 +398,13 @@ func polishChecks(root string, c Case, dir string) ([]string, map[string][]byte,
 }
 
 var (
-	checkoutLine = regexp.MustCompile(`\bgit\s+(checkout|switch|worktree\s+add)\b`)
-	discardLine  = regexp.MustCompile(`\bgit\s+(reset\s+--hard|clean\s+-\w*f|checkout\s+(\S+\s+)?--\s|restore\b|stash\s+(drop|clear))`)
-	writeLine    = regexp.MustCompile(`\bgit\s+push\b|\bgh\s+(pr|issue)\s+(create|comment|edit|merge|close)\b|\bgh\s+api\b.*-X\s*(POST|PATCH|PUT|DELETE)|--admin\b`)
+	// git's global options (git -C <dir>, git -c k=v) may come before the subcommand.
+	checkoutLine = regexp.MustCompile(`\bgit(\s+-[Cc]\s+\S+)*\s+(checkout|switch|worktree\s+add)\b`)
+	discardLine  = regexp.MustCompile(`\bgit(\s+-[Cc]\s+\S+)*\s+(reset\s+--hard|clean\s+-\w*f|checkout\s+(\S+\s+)?--\s|restore\b|stash\s+(drop|clear))`)
+	writeLine    = regexp.MustCompile(`\bgit(\s+-[Cc]\s+\S+)*\s+push\b|\bgh\s+(pr|issue)\s+(create|comment|edit|merge|close)\b|\bgh\s+api\b.*-X\s*(POST|PATCH|PUT|DELETE)|--admin\b`)
 	prodLine     = regexp.MustCompile(`(?i)AAYU_ENV=["']?(prod|production)\b`)
+	runsBaseline = regexp.MustCompile(`\baayu\s+baseline\b`)
+	shellQuoted  = regexp.MustCompile(`"[^"]*"|'[^']*'`)
 	assignLine   = regexp.MustCompile(`^(?:export\s+|readonly\s+)?([A-Za-z_][A-Za-z0-9_]*)=(["']?)([^"'\s;$]*)(["']?)$`)
 )
 
@@ -415,17 +418,26 @@ func baselineChecks(u *UXSpec, dir string) []string {
 	if err != nil {
 		return []string{"no commands.sh"}
 	}
-	// A script may name the commit or target once (SHA=77aa31c) and use
-	// "$SHA" after; the checks read each line with such variables expanded.
+	// A script may name the commit or target once (SHA=77aa31c, or
+	// SHA="${1:-77aa31c}") and use "$SHA" after; the checks read each command,
+	// a line continued with a trailing backslash joined, with such variables
+	// expanded.
 	var lines []string
 	vars := map[string]string{}
 	expand := func(k string) string {
 		if v, ok := vars[k]; ok {
 			return v
 		}
+		if name, def, ok := strings.Cut(k, ":-"); ok {
+			if v, ok := vars[name]; ok {
+				return v
+			}
+			return def
+		}
 		return "${" + k + "}"
 	}
-	for _, l := range strings.Split(string(b), "\n") {
+	src := strings.ReplaceAll(strings.ReplaceAll(string(b), "\r\n", "\n"), "\\\n", " ")
+	for _, l := range strings.Split(src, "\n") {
 		if l = strings.TrimSpace(l); l != "" && !strings.HasPrefix(l, "#") {
 			l = os.Expand(l, expand)
 			if m := assignLine.FindStringSubmatch(l); m != nil {
@@ -435,7 +447,9 @@ func baselineChecks(u *UXSpec, dir string) []string {
 		}
 	}
 	var bad []string
-	at := slices.IndexFunc(lines, func(l string) bool { return strings.Contains(l, "aayu baseline") })
+	// The run is the first command that runs `aayu baseline`, not a line that
+	// only mentions it in a quoted string (echo "aayu baseline for …").
+	at := slices.IndexFunc(lines, func(l string) bool { return runsBaseline.MatchString(shellQuoted.ReplaceAllString(l, `""`)) })
 	if at < 0 {
 		return []string{"commands.sh never runs `aayu baseline`"}
 	}
@@ -740,7 +754,7 @@ func (h *Harness) runUX(ctx context.Context, c Case, lane verbs.LaneID, body, in
 			break
 		}
 		if attempt == 0 {
-			run.Revised = true
+			run.Revised, run.RevisedFor = true, revisedFor(problems)
 			prev, _ := json.Marshal(files)
 			req.Messages = append(req.Messages, models.Message{Role: "assistant", Content: string(prev)},
 				models.Message{Role: "user", Content: "The checks reported:\n- " + strings.Join(problems, "\n- ") +
@@ -748,13 +762,13 @@ func (h *Harness) runUX(ctx context.Context, c Case, lane verbs.LaneID, body, in
 		}
 	}
 	if len(problems) > 0 {
-		return Run{Status: RunFail, Score: 1, Revised: true, Floor: clip(strings.Join(problems, "; "), 600)}, nil
+		return Run{Status: RunFail, Score: 1, Revised: true, RevisedFor: run.RevisedFor, Floor: clip(strings.Join(problems, "; "), 600), Answer: answerOf(renderFiles(files))}, nil
 	}
 	judged, err := h.judge(ctx, input+extra+"\n\n## Checks\n\n"+uxPassed(c), rubric, renderFiles(files), nil, &calls)
 	if err != nil {
 		return Run{}, err
 	}
-	judged.Revised = run.Revised
+	judged.Revised, judged.RevisedFor, judged.Answer = run.Revised, run.RevisedFor, answerOf(renderFiles(files))
 	return judged, nil
 }
 
