@@ -90,6 +90,21 @@ max_usd = 8.0
 gate = "advisory"
 events = ["workflow_dispatch"]
 
+# Host-skill session cases (D-3.4f): build, verify, and ready as they run in a person's terminal, over several turns.
+# The skill runs commands against the case's world (session.toml): real `aayu` verbs that only read, recorded answers
+# for the ones that lease, commit, or run code, and a scripted person. The hard rules each skill's verb enforces are
+# tier-1 floors on the recorded session and on every run (session.go). Build runs on its own lane (claude-opus-5-5),
+# verify and ready on the chore lane. Estimated at about 21 USD a run at the fallback rate (six cases, five runs,
+# build about 1.3 USD a run). Advisory until it holds the bar (mean 4.0 per case) on two consecutive full runs; that
+# switch is proposed in a PR. It runs on dispatch only, so its spend is chosen run by run (the founder's cap for the
+# workstream is 60 USD).
+[[groups]]
+name = "host-skills"
+prefixes = ["build/", "verify/", "ready/readback-", "ready/refuse-"]
+max_usd = 25.0
+gate = "advisory"
+events = ["workflow_dispatch"]
+
 [[groups]]
 name = "skills" # every other case
 max_usd = 8.0 # the single-reply cases cost 4.57 USD in run 38681630586; run 38747551788 hit a 6 USD cap at 6.03 and cut its last run to 0, so the cap is 8 (founder, 2026-10-15)

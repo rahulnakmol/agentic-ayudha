@@ -154,6 +154,10 @@ func Tier1(ctx context.Context, root string, c Case, assets fs.FS) Tier1Result {
 		add("concrete", tier1Concrete(c, assets), false)
 	}
 
+	if c.Tier2 != nil && c.Tier2.Session != "" {
+		add("session", tier1Session(ctx, c, assets), false)
+	}
+
 	calls, writes, na := runCalls(ctx, c, assets)
 	if len(c.Calls) > 0 {
 		add("calls", calls, na)

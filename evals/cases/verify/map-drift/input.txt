@@ -1,0 +1,1 @@
+I added `notes -json list` for #31 on this branch. Run verify before I push. If the feature map needs updating for my change, tell me what you'd change first, then do it.

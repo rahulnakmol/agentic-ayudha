@@ -1,0 +1,37 @@
+# The world of the ready readback case (D-3.4f): issue #41 under Feature #40, a complete Story. `aayu ready 41 --check`
+# runs for real against github/. `aayu ready 41` (apply) needs the bot identity and the ledger, which an eval does not
+# have, so its answer is recorded, as the verb prints it (internal/cli/ready.go); it answers only after a passing check.
+max_turns = 5
+files = ""
+
+human = [
+  "Yes, that's what we agreed. Go ahead.",
+  "Great, thanks.",
+]
+
+[[reply]]
+match = '^aayu ready #?41\s*$'
+after = '^aayu ready #?41 --check\b'
+code = 0
+out = '''#41 Show the pickup time on the order confirmation (story): passes Ready
+  labelled status:ready; snapshot posted and written to ledger specs/41/ready.md (8d2f0a4)
+  written as aayudha-bot[bot], tagged aayudha-bot'''
+
+[[reply]] # apply without a check first: the verb validates anyway, and the ledger needs the bot here
+match = '^aayu ready #?41\s*$'
+code = 0
+out = '''#41 Show the pickup time on the order confirmation (story): passes Ready
+  labelled status:ready; snapshot posted and written to ledger specs/41/ready.md (8d2f0a4)
+  written as aayudha-bot[bot], tagged aayudha-bot'''
+
+[[require]]
+pattern = '^aayu ready #?41 --check\b'
+why = "the read-only check before the person decides (the readback comes from it)"
+
+[[require]]
+pattern = '^aayu ready #?41\s*$'
+why = "`aayu ready 41`, which the person asked for once the readback was confirmed"
+
+[[forbid]]
+pattern = '^aayu\s+(?:ready\s+\S+\s+--guard|build|grill|slice|ship)\b'
+why = "runs a verb the person did not ask for"

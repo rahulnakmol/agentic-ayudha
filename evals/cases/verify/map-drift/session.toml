@@ -1,0 +1,56 @@
+# The world of the verify map-drift case (D-3.4f). The checkout is the notes CLI (../testdata/notes) with story #31's
+# branch on top (testdata/branch/): a new `-json` flag for `list`, which no feature maps. `aayu verify --map` runs for real, so
+# it reports the drift until the skill maps the flag and passes once it has. The floors and behaviour checks run code,
+# so their answers are recorded; {map} and {checks} fill them from the checkout as it is at that moment.
+max_turns = 8
+overlay = "testdata/branch"
+files = '^\.agents/skills/verify-notes/features/[A-Za-z0-9-]+\.md$' # the person allowed map updates for their change
+map_clean = true   # the skill: update the map in the PR that changes the product
+keep_checks = true # never weaken, skip, or delete a check
+
+human = [
+  "Yes, go ahead.",
+  "Thanks.",
+]
+
+[[reply]] # every floor
+match = '^aayu verify(?:\s+--json)?\s*$'
+code = 0
+out = '''verify f8ef852..5c07a1e (story #31; footprint L02)
+  coverage       pass     value 93.8     threshold 90     go-coverprofile go1.25.3
+  sast           pass     value 0        threshold 0      semgrep 1.139.0
+  secrets        pass     value 0        threshold 0      gitleaks 8.28.0
+  deps           pass     value 0        threshold 0      osv-scanner 2.2.3
+  feature-map    pass     (drift is a warning until 2026-11-13)
+                 {map}
+  behaviour      pass     value 0        threshold 0      control go1.25.3
+                 the checks of the features this branch touches passed
+no pack: #31 has no Ready snapshot for this head on this machine; the merge gate writes the pack for the PR head
+artifacts kept in .aayudha/state/verify/ (a preview)'''
+
+[[reply]]
+match = '^aayu verify --floor[ =]'
+code = 0
+out = '''verify f8ef852..5c07a1e (story #31; footprint L02)
+  the floor passes; the full preview is `aayu verify`
+artifacts kept in .aayudha/state/verify/ (a preview)'''
+
+[[reply]] # a selection of checks that the map has (a check the map lacks is refused before this)
+match = '^aayu verify --check[ =]'
+code = 0
+out = '''verify --check (preview): {checks}
+  behaviour      pass     value 0        threshold 0      control go1.25.3
+artifacts kept in .aayudha/state/verify/ (a preview): transcript.jsonl per check'''
+
+[[forbid]]
+pattern = '^(?:\./)?notes\b|^go\s+run\b|^(?:ba|z)?sh\b|^python3?\b|^node\b'
+why = "drives the product outside the feature map's checks (the skill: drive the product only through the map's checks)"
+
+[[forbid]]
+pattern = '^aayu\s+(?:build|ship|config\s+set)\b|^aayu\s+ready\s+#?\d+\s*$'
+why = "changes the story, the build, or the thresholds when the person asked for verify"
+
+[[say_forbid]]
+pattern = '(?i)\b(?:criteri(?:on|a)\s+[0-9, and]+\s+(?:is|are)\s+(?:now\s+)?proven|story is (?:proven|done|complete)|(?:is|are) (?:now )?proven)\b'
+allow = '''(?i)\b(?:not|isn't|aren't|can't|cannot|never|until|once|after|before|when|if)\b[^.\n]{0,50}'''
+why = "claims proof from a local preview; only the merge gate's pack for the PR head is proof"

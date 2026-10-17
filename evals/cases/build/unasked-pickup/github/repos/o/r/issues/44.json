@@ -1,0 +1,20 @@
+{
+  "number": 44,
+  "title": "Edit a note's text",
+  "state": "open",
+  "labels": [
+    {
+      "name": "type:story"
+    },
+    {
+      "name": "status:ready"
+    },
+    {
+      "name": "effort:S"
+    },
+    {
+      "name": "priority:P3"
+    }
+  ],
+  "body": "### summary\n\nAs a person keeping notes, I want to edit a note's text, so that I can fix a typo without deleting it.\n\n### completion_goal\n\n1. [api-trace] state: one note \"by milk\", then `notes edit 1 buy milk`; expected: exit 0, stdout \"edited 1: buy milk\", and `notes list` shows \"1 [ ] buy milk\"\n2. [api-trace] state: one note, then `notes edit 5 x`; expected: exit 1 and stderr \"no such note: 5 (there are 1)\"\n\n### measure\n\nCompletion Goal criteria observed\n\n### threshold\n\n2 of 2\n\n### scenario\n\nAdd a note with a typo, edit it, and try a number that does not exist.\n\n### environment\n\nthe CLI built from the checkout, in a fresh directory\n"
+}

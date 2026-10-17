@@ -23,7 +23,7 @@ adds a failing case here before any skill diff.
 | `persona` | `{ seat, stage, practice, task, draft, planted }`: a persona case (WP5.1b). `input` is the grounding (Markdown) and `draft` the seat twin's recorded answer at the team `stage`. Tier 1 runs the evidence rule (`seats.CheckGrounding`: every claim about code, architecture, risk, or progress cited, every citation found in the grounding) and the stage check (`seats.CheckStage`: the `practice`'s artefact for the stage as a heading, no other stage's, at most 400 words at a startup); `seat` must be the skill's Accountable seat. `planted`, when set, is the same answer with a planted uncited claim, which the evidence rule must catch |
 | `pack` | `{ seat, stage, question, draft, incomplete }`: a decision-pack case (WP5.1b, D-5.6b). `question` must route to `seat` (`decide.OwningSeat`); `input` is the grounding (what `aayu decide --pack` printed plus what the twin read) and `draft` the recorded pack, which must pass `decide.CheckPack` (every part in order, one-sentence question, two or three options, a named door, the decision last, at most 500 words, every claim cited from the grounding). `incomplete`, when set, is a pack missing a part, which must fail. Tier 2 has the decide skill write the pack in the owning twin's persona and revise once on the findings; the rubric's first item is "a busy human can decide from this in under five minutes" |
 | `feedback`, `reproduce` | An evolve case (WP7.7): the accepted Feedback issue it reproduces, and the directory holding the old skill's recorded run (the `output/` artifacts under that name). Tier 1 must fail on that run and pass on `output/` |
-| `[tier2]` | `rubric` (file), `verb`: the registry verb the skill stands in for, when the skill is not itself a verb (the skill model is that verb's registry lane on the direct host, with the lane's registry alternative as the fallback), and `references`: files under the skill's `references/` that the host reads for this case, sent after the skill body; `draft` (`slice` or `plan`) and `issue`: the skill replies with that verb's draft, which runs through `aayu slice` or `aayu plan`'s checks against the case's `github/` fixture of `issue` before the judge (WP5.4); `human`: the scripted human of a grill conversation case (WP5.3b, below) |
+| `[tier2]` | `rubric` (file), `verb`: the registry verb the skill stands in for, when the skill is not itself a verb (the skill model is that verb's registry lane on the direct host, with the lane's registry alternative as the fallback), and `references`: files under the skill's `references/` that the host reads for this case, sent after the skill body; `draft` (`slice` or `plan`) and `issue`: the skill replies with that verb's draft, which runs through `aayu slice` or `aayu plan`'s checks against the case's `github/` fixture of `issue` before the judge (WP5.4); `human`: the scripted human of a grill conversation case (WP5.3b, below); `session`: the world of a session case (D-3.4f, below) |
 
 ## Tier 1: every PR
 
@@ -78,6 +78,22 @@ judge, the draft must pass Ready and tier 1's `concrete` rules and the case's `s
 then scores the whole conversation (question quality, concreteness, fidelity), and the results keep each run's
 exchanges and final criteria. A `gate` case scores 1 without the judge when round 1 contradicts the verdict: no question on `unpack`, any question on `pass`.
 
+A session case (`[tier2] session`, D-3.4f) runs a host skill as it runs in a person's terminal: `build`, `verify`,
+`ready`. The skill replies in JSON turns (what it says, files it writes, commands it runs, and `done`); the harness
+answers each command from the case's world and sends the results back as untrusted data. The world is
+`session.toml`: recorded `[[reply]]` answers (first match first; `after` makes one wait for an earlier command that
+exited 0; `{checks}`, `{map}`, and `{evidence}` fill one from the checkout as it is), else the real binary in-process
+for verbs that only read (`ready`, `verify --map`, `status`, `config`), against a fake GitHub serving `github/`, in a
+git checkout of the case's `repo` fixture (feature maps kept under `_agents/` there become `.agents/`) with
+`overlay` committed on top as the branch; else `cat` and `ls`. Nothing the skill writes is run: Go files are
+parsed, and an evidence map is checked statically. A turn that runs nothing gets the next scripted `human` reply.
+The floors, on the recorded session in tier 1 (`output/session.json`, replayed so every command must still exit as
+recorded) and on every tier-2 run before the judge: writes only to paths matching `files`; no GitHub write; no
+human-only verb; `--asked` words only as the person said them; no rerun of a command after its floor miss with nothing
+changed; each `require` command run, no `forbid` command run, nothing said that matches `say_forbid`; with
+`[evidence]`, every criterion mapped to a Go test that exists or a check in a feature map; `map_clean`, `aayu verify
+--map` clean at the end; `keep_checks`, no behaviour check removed; and the session done within `max_turns`.
+
 The bar: pass^k ≥ 0.8 and mean score ≥ 3.5, for the suite and for each case (so for each `brief` register). Against the baseline (the results for `main`'s commit), a mean more than
 0.3 lower, or any case's pass^k below its baseline, fails.
 
@@ -91,7 +107,8 @@ Tier 2 runs in groups (`[[groups]]` in `eval.toml`), one `evals.yml` job per gro
 one group cannot use up another's cap: `brief` (the `brief/` cases, 12 USD), `personas` (the `retro/` and `decide/`
 persona cases, 20 USD), `conversations` (the grill conversation cases of WP5.3b and WP5.8, 60 USD, advisory until a run meets
 the bar, D-5.3b.g), `tell` (the `tell/` cases, 8 USD, advisory and run on dispatch only until it holds a mean of at least 4.0 on two
-consecutive full runs, D-7.5b), and `skills` (every other case, 6 USD).
+consecutive full runs, D-7.5b), `host-skills` (the build, verify, and ready session cases, 25 USD, advisory and on
+dispatch only, D-3.4f), and `skills` (every other case, 6 USD).
 Pushes to `dev` do not run the `brief` group; it runs nightly, on dispatch (input `group` picks one group), and on
 pushes to `rolling` and `main`. The advisory `conversations` and `personas` groups never run nightly or on promotion
 (`events` in `eval.toml`): only on dispatch and on pushes to `dev` that change their own files (`skills/grill/`, the

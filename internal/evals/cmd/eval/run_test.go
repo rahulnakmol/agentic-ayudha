@@ -53,7 +53,7 @@ const testdata = "internal/evals/testdata/"
 // The entry point prints the tier-2 group names for the workflow's matrix.
 func TestGroups(t *testing.T) {
 	out, err := evalIn(t, repoRoot, func() error { main(); return nil }, "-groups")
-	if err != nil || strings.TrimSpace(out) != `["brief-plain","brief","personas","review","conversations","tell","skills"]` {
+	if err != nil || strings.TrimSpace(out) != `["brief-plain","brief","personas","review","conversations","tell","host-skills","skills"]` {
 		t.Fatalf("-groups: %v %q", err, out)
 	}
 	// evals-gate compares only the groups that gate (D-7.3h).

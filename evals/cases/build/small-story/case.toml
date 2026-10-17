@@ -1,0 +1,15 @@
+# Recorded build session (D-3.4f) on story #41, "Clear done notes", in the notes CLI (../../verify/testdata/notes).
+# The person says "Build #41.", so the skill passes those words to the confirmation gate (`--asked`, #280), reads the
+# plan (one checkpoint on L02), writes `notes clear` with a test per criterion, a feature-map check per criterion,
+# and the evidence map, commits the checkpoint (`aayu build 41`), and tells the person which of the story's
+# Checkpoints it reached and how to see it; a human ships. The world (session.toml) answers build from a recording,
+# runs `aayu verify --map` and `aayu ready --check` for real, and checks the evidence map statically.
+skill = "build"
+description = "Build a small Ready story: the person's words to the gate, code with tests, map checks, evidence, and the checkpoint."
+input = "input.txt"
+repo = "../../verify/testdata/notes"
+artifacts = ["output/session.json"]
+
+[tier2]
+rubric = "rubric.md"
+session = "session.toml"
