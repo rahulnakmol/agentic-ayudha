@@ -522,3 +522,105 @@ func lastInspect(t *testing.T, g *fake.GitHub, n int) string {
 	}
 	return ""
 }
+
+// Every PR that is ready for review gets a review, not only a story's: a PR
+// without a story is judged on the reviewer's disposition and the sealed
+// coverage manifest, with no pack and no criteria; one without a reply fails
+// closed; one that changes only docs passes without a review.
+func TestInspectWithoutStory(t *testing.T) {
+	g, env, opts, _ := inspectFixture(t, cleanDiff, "Refs #2")
+	_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
+	if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\napps = [\"codex\"]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	head := strings.Repeat("d", 40)
+	pr := g.AddPR("fix: guard an empty total", "Guards Percent against an empty total.", "founder", "fix/percent-empty", head, "dev")
+	g.Mu.Lock()
+	pr.Diff = cleanDiff
+	g.Static = map[string]any{"/repos/o/r/pulls/" + strconv.Itoa(pr.Number) + "/commits": jsonOf(t, `[{"sha":"`+head+`","commit":{"message":"fix: guard\n\nAayudha-Model: claude-opus-5-5\n"}}]`)}
+	g.Mu.Unlock()
+
+	code, res, errOut := inspectApp(t, env, opts, pr.Number, "--ci")
+	if code != ExitBlocked || res.Disposition != NoReply || strings.Contains(errOut, "no story") || strings.Contains(errOut, "no proof pack") {
+		t.Fatalf("no reply: exit %d %s %s", code, res.Disposition, errOut)
+	}
+	addComment(g, pr.Number, "chatgpt-codex-connector[bot]", "Bot", statedReply(head, "merge", "internal/report/percent.go"))
+	code, res, errOut = inspectApp(t, env, opts, pr.Number, "--ci")
+	if code != 0 || res.Disposition != inspect.Merge || res.Coverage == nil || res.Coverage.State != "complete" || res.Model != "chatgpt-codex-connector[bot]" {
+		t.Fatalf("reply on a PR without a story: exit %d %+v %s", code, res, errOut)
+	}
+	addComment(g, pr.Number, "chatgpt-codex-connector[bot]", "Bot", statedReply(head, "merge"))
+	if code, res, _ = inspectApp(t, env, opts, pr.Number, "--ci"); code != ExitBlocked || !strings.Contains(res.Overridden, "left unreviewed: internal/report/percent.go") {
+		t.Fatalf("an unreviewed file on a PR without a story: %d %s %q", code, res.Disposition, res.Overridden)
+	}
+
+	docs := g.AddPR("docs: explain Percent", "Docs.", "founder", "docs/percent", strings.Repeat("e", 40), "dev")
+	g.Mu.Lock()
+	docs.Diff = "diff --git a/docs/guide/percent.md b/docs/guide/percent.md\nnew file mode 100644\n--- /dev/null\n+++ b/docs/guide/percent.md\n@@ -0,0 +1 @@\n+# Percent\n"
+	g.Mu.Unlock()
+	if code, res, errOut = inspectApp(t, env, opts, docs.Number, "--ci"); code != 0 || res.Disposition != inspect.Skipped || !strings.Contains(res.Summary, "only documentation") {
+		t.Fatalf("docs-only PR: exit %d %+v %s", code, res, errOut)
+	}
+
+	// A PR that names its story in the head commit's Aayudha-Story trailer is
+	// that story's PR, as verify finds it (the trailer before a story-shaped
+	// branch), judged against its pack (here missing, so the gate fails
+	// closed), never as storyless; when the head commit cannot be read, the
+	// gate fails closed too.
+	shead := strings.Repeat("a", 40)
+	trailer := g.AddPR("fix: percent", "No reference here.", "founder", "story/9-percent", shead, "dev")
+	g.Mu.Lock()
+	trailer.Diff = cleanDiff
+	g.Commits[shead] = map[string]any{"sha": shead, "message": "fix: percent\n\nAayudha-Story: #2\n"}
+	g.Mu.Unlock()
+	if code, _, errOut := inspectApp(t, env, opts, trailer.Number, "--ci"); code != ExitBlocked || !strings.Contains(errOut, "no proof pack") {
+		t.Fatalf("a story named by the head trailer: exit %d %s", code, errOut)
+	}
+	g.Mu.Lock()
+	g.Fail = "GET /repos/o/r/git/commits/" + shead
+	g.Mu.Unlock()
+	if code, _, errOut := inspectApp(t, env, opts, trailer.Number, "--ci"); code != ExitExternal {
+		t.Fatalf("an unreadable head commit: exit %d %s", code, errOut)
+	}
+	g.Mu.Lock()
+	g.Fail = ""
+	g.Mu.Unlock()
+
+	// With no criteria to judge test gaps in, a test file is reviewed like any
+	// other: a reply that covers nothing leaves it unreviewed.
+	thead := strings.Repeat("f", 40)
+	tests := g.AddPR("test: pin Percent", "Tests.", "founder", "test/percent", thead, "dev")
+	g.Mu.Lock()
+	tests.Diff = "diff --git a/internal/report/percent_test.go b/internal/report/percent_test.go\nnew file mode 100644\n--- /dev/null\n+++ b/internal/report/percent_test.go\n@@ -0,0 +1 @@\n+package report\n"
+	g.Static["/repos/o/r/pulls/"+strconv.Itoa(tests.Number)+"/commits"] = jsonOf(t, `[{"sha":"`+thead+`","commit":{"message":"test: pin\n\nAayudha-Model: claude-opus-5-5\n"}}]`)
+	g.Mu.Unlock()
+	addComment(g, tests.Number, "chatgpt-codex-connector[bot]", "Bot", statedReply(thead, "merge"))
+	if code, res, _ = inspectApp(t, env, opts, tests.Number, "--ci"); code != ExitBlocked || !strings.Contains(res.Overridden, "left unreviewed: internal/report/percent_test.go") {
+		t.Fatalf("an unreviewed test file on a PR without criteria: %d %s %q", code, res.Disposition, res.Overridden)
+	}
+
+	// Nor a deletion: with no criteria to judge its effect, a deleted file is
+	// reviewed like any other.
+	dhead := strings.Repeat("b", 40)
+	del := g.AddPR("refactor: drop Percent", "Drops it.", "founder", "refactor/drop-percent", dhead, "dev")
+	g.Mu.Lock()
+	del.Diff = "diff --git a/internal/report/percent.go b/internal/report/percent.go\ndeleted file mode 100644\n--- a/internal/report/percent.go\n+++ /dev/null\n@@ -1 +0,0 @@\n-package report\n"
+	g.Static["/repos/o/r/pulls/"+strconv.Itoa(del.Number)+"/commits"] = jsonOf(t, `[{"sha":"`+dhead+`","commit":{"message":"refactor: drop\n\nAayudha-Model: claude-opus-5-5\n"}}]`)
+	g.Mu.Unlock()
+	addComment(g, del.Number, "chatgpt-codex-connector[bot]", "Bot", statedReply(dhead, "merge"))
+	if code, res, _ = inspectApp(t, env, opts, del.Number, "--ci"); code != ExitBlocked || !strings.Contains(res.Overridden, "left unreviewed: internal/report/percent.go") {
+		t.Fatalf("an unreviewed deletion on a PR without criteria: %d %s %q", code, res.Disposition, res.Overridden)
+	}
+	addComment(g, del.Number, "chatgpt-codex-connector[bot]", "Bot", statedReply(dhead, "merge", "internal/report/percent.go"))
+	if code, res, errOut = inspectApp(t, env, opts, del.Number, "--ci"); code != 0 || res.Disposition != inspect.Merge {
+		t.Fatalf("a reviewed deletion on a PR without criteria: %d %s %s", code, res.Disposition, errOut)
+	}
+
+	// The docs-only exemption does not depend on the reviewer backend.
+	if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\nreviewer = \"model\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, res, errOut = inspectApp(t, env, opts, docs.Number, "--ci"); code != 0 || res.Disposition != inspect.Skipped {
+		t.Fatalf("docs-only PR with a model reviewer: exit %d %+v %s", code, res, errOut)
+	}
+}

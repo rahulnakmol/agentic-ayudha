@@ -123,6 +123,9 @@ Release, Feedback, Incident). File them with the `aayudha-<type>` issue forms. T
   edit a Ready issue's body: the Ready guard strips `status:ready` when it drifts.
 - The `ledger` branch holds snapshots, proof, and actions segments. Never commit code to it or merge it.
 - Every GitHub write goes through `aayu`; agents never write with `gh` directly.
+- Every pull request that is not docs-only gets a review by an agent app of another model family. `aayu build`
+  asks for it after each push; after the last push to a pull request `aayu build` did not open, run
+  `aayu inspect <pr>` to ask for it.
 <!-- END aayudha:work-items -->
 
 <!-- BEGIN aayudha:raci -->

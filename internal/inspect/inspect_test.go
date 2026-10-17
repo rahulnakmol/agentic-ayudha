@@ -367,7 +367,7 @@ func TestCoverageManifest(t *testing.T) {
 		{Path: "internal/report/percent.go", Status: Reviewed},
 		{Path: "LAYERS.md", Status: SkippedCov, Why: "generated: the drift check owns it"},
 		{Path: "internal/report/percent_test.go", Status: Reviewed},
-		{Path: "old.go", Status: SkippedCov, Why: "deleted"},
+		{Path: "old.go", Status: Reviewed}, // no criteria here: the deletion was in the reviewer's prompt
 	}
 	if m == nil || !slices.Equal(m.Files, want) || m.State != "complete" || res.Disposition != Merge {
 		t.Fatalf("manifest %+v, disposition %s", m, res.Disposition)
@@ -552,6 +552,60 @@ func TestPeerPairsOneDefectOnce(t *testing.T) {
 		}
 		if !slices.Equal(got, c.posts) {
 			t.Errorf("%s: posted %q, want %q", c.name, got, c.posts)
+		}
+	}
+}
+
+// A PR that touches only documentation merges without a review; any file
+// that steers the product or its agents, even Markdown, needs one.
+func TestDocsOnly(t *testing.T) {
+	files := func(ps ...string) []DiffFile {
+		var out []DiffFile
+		for _, p := range ps {
+			out = append(out, DiffFile{Path: p})
+		}
+		return out
+	}
+	for _, tc := range []struct {
+		paths []string
+		want  bool
+	}{
+		{[]string{"docs/guide/how-trust.md", "README.md", "examples/benefits-qa/README.md"}, true},
+		{[]string{"docs/img/flow.png"}, true},
+		{nil, false},
+		{[]string{"docs/guide/how-trust.md", "internal/inspect/diff.go"}, false},
+		{[]string{"skills/build/SKILL.md"}, false},
+		{[]string{"AGENTS.md"}, false},
+		{[]string{"internal/cli/AGENTS.md"}, false},
+		{[]string{"docs/guide/AGENTS.md"}, false},
+		{[]string{"docs/BUILD-PLAN.md"}, false},
+		{[]string{"GLOSSARY.md"}, false},
+		{[]string{"docs/threat-model.md"}, false},
+		{[]string{"evals/cases/grill/bakery-ux/rubric.md"}, false},
+		{[]string{".github/PULL_REQUEST_TEMPLATE.md"}, false},
+		{[]string{"internal/hosts/testdata/skills/x.md"}, false},
+		{[]string{"internal/production/testdata/runbook.md"}, false},
+		{[]string{"internal/report/notes.md"}, false},
+		{[]string{"docs/guide/skills/build.md", "docs/guide/hosts/codex.md"}, true},
+		{[]string{"CHANGELOG.txt"}, false},
+	} {
+		if got := DocsOnly(files(tc.paths...)); got != tc.want {
+			t.Errorf("DocsOnly(%v) = %v, want %v", tc.paths, got, tc.want)
+		}
+	}
+	// A rename is judged by both paths: code or a steering document moved
+	// into docs/ needs a review, with or without edits.
+	for _, tc := range []struct {
+		diff string
+		want bool
+	}{
+		{"diff --git a/internal/auth.go b/docs/auth.go\nsimilarity index 100%\nrename from internal/auth.go\nrename to docs/auth.go\n", false},
+		{"diff --git a/docs/BUILD-PLAN.md b/docs/archive/plan.md\nsimilarity index 90%\nrename from docs/BUILD-PLAN.md\nrename to docs/archive/plan.md\n--- a/docs/BUILD-PLAN.md\n+++ b/docs/archive/plan.md\n@@ -1 +1 @@\n-# Plan\n+# Old plan\n", false},
+		{"diff --git a/docs/a.md b/docs/guide/a.md\nsimilarity index 100%\nrename from docs/a.md\nrename to docs/guide/a.md\n", true},
+		{"diff --git \"a/docs/\\303\\251.md\" \"b/docs/\\303\\251.md\"\n--- \"a/docs/\\303\\251.md\"\n+++ \"b/docs/\\303\\251.md\"\n@@ -1 +1 @@\n-a\n+b\n", true},
+	} {
+		if got := DocsOnly(ParseDiff(tc.diff)); got != tc.want {
+			t.Errorf("DocsOnly(%q) = %v, want %v", tc.diff, got, tc.want)
 		}
 	}
 }

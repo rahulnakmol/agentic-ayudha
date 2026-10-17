@@ -65,7 +65,7 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		return Wrap(ExitExternal, err)
 	}
 	replyEvent := e.CI && (e.Getenv("GITHUB_EVENT_NAME") == "issue_comment" || e.Getenv("GITHUB_EVENT_NAME") == "pull_request_review")
-	if a.in.Pack == nil && e.CI && !replyEvent {
+	if a.in.Pack == nil && a.in.Story > 0 && e.CI && !replyEvent {
 		return Errorf(ExitBlocked, "inspect #%d: %v", n, inspect.ErrNoPack)
 	}
 	var since time.Time
@@ -88,11 +88,9 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		since = e.Now()
 	}
 	files := inspect.ParseDiff(a.in.Diff)
-	var changed []string
+	var changed []string // every changed path, deletions included: a review of the diff covers them
 	for _, f := range files {
-		if !f.Deleted {
-			changed = append(changed, f.Path)
-		}
+		changed = append(changed, f.Path)
 	}
 	bots := a.cfg.Identity.BotLogins
 	human := func(login, typ string) bool { return !identity.IsBot(identity.Account{Login: login, Type: typ}, bots) }
@@ -111,7 +109,7 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		}}
 	st := a.prev
 	switch {
-	case rerr == nil && a.in.Pack == nil:
+	case rerr == nil && a.in.Pack == nil && a.in.Story > 0:
 		res.Disposition, res.Summary = NoReply, fmt.Sprintf("%s replied (%s); the merge gate judges the reply against its pack for `%s`", choice.Kind(), rep.Source, short(head))
 		res.Next = "the merge gate's inspect check reads it"
 	case errors.Is(rerr, inspect.ErrNoReply), errors.Is(rerr, inspect.ErrMalformed):

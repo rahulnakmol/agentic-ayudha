@@ -301,8 +301,8 @@ func (r Runner) begin(ctx context.Context, in *Input, prev State, salt string) (
 		res.Disposition, res.Summary = Skipped, "draft pull request: inspect runs when it is ready for review"
 		return res, prev, nil
 	}
-	if in.Pack == nil {
-		return res, prev, ErrNoPack
+	if in.Pack == nil && in.Story > 0 {
+		return res, prev, ErrNoPack // a story PR is judged against its pack; a PR without a story has none
 	}
 	if in.Files == nil {
 		in.Files = ParseDiff(in.Diff)
@@ -343,7 +343,7 @@ func (r Runner) finish(in Input, prev, st State, res Result, covered func(string
 	res.Findings, sup = r.Filter.Suppress(res.Findings, in.Dismissed)
 	res.Dropped = append(res.Dropped, sup...)
 	TestGapVerdicts(&res)
-	m := Seal(in.Files, in.Areas, r.Filter, covered)
+	m := Seal(in.Files, in.Areas, r.Filter, in.Pack != nil && len(in.Pack.Criteria) > 0, covered)
 	res.Coverage = &m
 	liftFix(&res)
 	st.SpentUSD += res.CostUSD
