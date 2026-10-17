@@ -78,7 +78,8 @@ a misspelt field never silently drops a claim.
   instead.
 - Citations: a fact ID the index printed (`file:`, `sym:`, `build:`, `dep:`, `entry:`, `io:`, `trap:`, `test:`,
   `doc:`, `marker:`, `mod:`), or `path:line` / `path:start-end` inside the file.
-- A question's `affects` lists the claims, modernisation steps, and case sets its answer changes.
+- A question's `affects` lists the claims, do-not-carry entries, interfaces, and modernisation steps, case sets, suites,
+  migrations, and shims its answer changes.
 - `target_source` is `"request"` only when the request names the target; otherwise ask, and use the answered
   question's ID.
 - `traps`: one finding per trap rule checked (`rule` is a heading of [traps.md](traps.md), or `"stack"` for a

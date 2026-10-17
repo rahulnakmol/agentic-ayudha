@@ -1,0 +1,28 @@
+# survey (D-5.9i, D-5.9j): the backlog step on Maruku. survey.json is the maruku-compat pilot draft after a recorded
+# interview: equivalent HTML is enough (Q1, so K1 may differ), the pages use only tables, footnotes, and header
+# attribute lists (Q2), the render helper passes fenced_code_blocks per document and never touches MaRuKu::Globals
+# (Q3), nothing runs the maruku command (Q4, so K4 is dropped with a deprecation path), and nothing uses the Array
+# patch or embedded Ruby (Q5, Q6), so the do-not-carry entries N1-N3 are confirmed. The skill writes backlog.json.
+# Floors: `aayu survey --backlog` (work-item schema; every item on what the survey knows; parity case sets and suites
+# on porting Stories; contract levels; each step's do-not-carry entries listed in `avoids` and constrained by a
+# Decision) and the scope rules: no work on the syntax, options, command, or features the person ruled out.
+skill = "survey"
+description = "Draft the backlog for moving off a legacy library: compatibility stories with contract levels and suites, and do-not-carry Decisions."
+input = "request.txt"
+repo = "../repos/maruku"
+artifacts = ["output/backlog.json"]
+scope = [
+  { pattern = '(?i)\b(support|supports|port|ports|implement|implements|add|adds|keep|keeps|render|renders)\b[^.\n"]{0,40}\b(divs?|math|meta-?data headers?|blahtex|itex)\b', why = "syntax the person said no page uses (Q2)", allow = '(?i)(\b(no|not|never|without|nor|neither|excluded?|except)\b|\bout:)[^.\n"]{0,60}' },
+  { pattern = '(?i)\b(support|supports|keep|keeps|carry|carries|port|ports|implement|implements|preserve|preserves)\b[^.\n"]{0,40}(<\?maruku|instance_eval|MaRuKu::Globals|replace_each_string|unsafe[_ ]features)', why = "a do-not-carry entry the person confirmed (Q3, Q5, Q6)", allow = '(?i)(\b(no|not|never|without|nor|neither)\b|\bout:)[^.\n"]{0,60}' },
+  { pattern = '(?i)\b(port|ports|keep|keeps|ship|ships|support|supports|implement|implements|rewrite|rewrites)\b[^.\n"]{0,30}\bmaruku command\b', why = "the command the person said nothing runs (Q4)", allow = '(?i)(\b(no|not|never|without|nor)\b|\bout:)[^.\n"]{0,60}' },
+]
+
+[survey]
+kind = "backlog"
+survey = "survey.json"
+draft = "output/backlog.json"
+probes = ["../maruku-compat/probes/frozen-literals.json"] # the survey cites them
+
+[tier2]
+rubric = "rubric.md"
+references = ["formats.md", "compatibility.md"]

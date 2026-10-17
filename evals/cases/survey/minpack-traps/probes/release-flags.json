@@ -1,0 +1,65 @@
+{
+  "bin": "/tmp/mp/legacy",
+  "bin_sha256": "",
+  "cases": "cases.json",
+  "ran": [
+    "every case twice with HOME a scratch directory, LC_ALL=C, TZ=UTC (legacy)",
+    "every case with TZ=Asia/Kathmandu",
+    "every case with LC_ALL=de_DE.UTF-8 LANG=de_DE.UTF-8",
+    "every case with another HOME holding a dotfile",
+    "every case under strace -f -y -e trace=open,openat,creat",
+    "every case on the checker build release-O3-march-native-ffast-math",
+    "coverage from cov.info: 1 function(s) the cases never reach"
+  ],
+  "facts": [
+    {
+      "id": "probe:check-differs:chkder",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build release-O3-march-native-ffast-math changes stdout: line 76: as captured \" 0.9831445D+00 0.1000000D+01 0.9658781D+00 0.1000000D+01\", checker build \" 0.9831445D+00 0.1000000D+01 0.999…",
+      "count": 1
+    },
+    {
+      "id": "probe:check-differs:hybrd1",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build release-O3-march-native-ffast-math changes stdout: line 46: as captured \" final l2 norm of the residuals 0.5373479D-12\", checker build \" final l2 norm of the residuals 0.2686740D-12\"",
+      "count": 1
+    },
+    {
+      "id": "probe:check-differs:hybrj1",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build release-O3-march-native-ffast-math changes stdout: line 30: as captured \" final l2 norm of the residuals 0.2886580D-13\", checker build \" final l2 norm of the residuals 0.0000000D+00\"",
+      "count": 1
+    },
+    {
+      "id": "probe:check-differs:lmder1",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build release-O3-march-native-ffast-math changes stdout: line 60: as captured \" -0.1677968D+03 -0.8339841D+02 0.2211100D+03 -0.4119920D+02 -0.3275936D+02\", checker build \" 0.1175648D+03 0…",
+      "count": 1
+    },
+    {
+      "id": "probe:check-differs:lmdif1",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build release-O3-march-native-ffast-math changes stdout: line 32: as captured \" number of function evaluations 3\", checker build \" number of function evaluations 4\"",
+      "count": 1
+    },
+    {
+      "id": "probe:check-differs:lmstr1",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build release-O3-march-native-ffast-math changes stdout: line 60: as captured \" 0.2561515D+03 -0.1557990D+02 0.1294492D+03 -0.7289948D+01 -0.1168073D+03\", checker build \" -0.5190881D+03 -…",
+      "count": 1
+    },
+    {
+      "id": "probe:unreached:src/covar.f#covar",
+      "kind": "unreached",
+      "at": "cases.json",
+      "detail": "subroutine covar (src/covar.f:1): 50 instrumented lines, none run by the cases",
+      "count": 50
+    }
+  ]
+}

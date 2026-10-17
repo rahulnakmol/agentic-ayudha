@@ -48,10 +48,18 @@ func TestSurveyFloors(t *testing.T) {
 		{"survey/tinyjs-backlog", `"title": "Port the parser and execution to Rust"`, `"title": "Port the parser and fix the prefix increment operator"`, "scope: adds a fix for a quirk the person kept"},
 		{"survey/tinyjs-backlog", `"title": "Port the built-in and Math functions to Rust"`, `"title": "Port the built-ins and add a time limit for each script"`, "scope: adds limits for scripts the person said are trusted"},
 		{"survey/tinyjs-backlog", `"E14"`, `"Q5"`, "basis Q5 is a question that is not answered yet"},
-		// Controls: the recorded replies pass, including a scope line that keeps a quirk out.
+		// D-5.9i: probe facts, contract levels, and the do-not-carry entries the person confirmed.
+		{"survey/maruku-compat", `"probe:check-differs:headers"`, `"probe:check-differs:easy"`, "probe:check-differs:easy: no such probe fact"},
+		{"survey/maruku-compat", `"level": "undecided"`, `"level": "exact"`, "K1"},
+		{"survey/maruku-backlog", `"title": "Render tables, footnotes, and header attribute lists as Maruku did"`, `"title": "Render tables and footnotes, and support <?maruku ?> instructions"`, "scope: adds a do-not-carry entry the person confirmed"},
+		// Controls: the recorded replies pass, including a scope line that keeps a quirk out
+		// and a Decision whose options name the alternative it rejects.
 		{"survey/tinyjs-rust", "", "", ""},
 		{"survey/parsedown-modern-php", "", "", ""},
 		{"survey/tinyjs-backlog", "", "", ""},
+		{"survey/minpack-traps", "", "", ""},
+		{"survey/maruku-compat", "", "", ""},
+		{"survey/maruku-backlog", "", "", ""},
 	} {
 		c, reply := surveyCase(t, tc.id)
 		if tc.old != "" {
