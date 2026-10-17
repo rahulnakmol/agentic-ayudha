@@ -7,7 +7,7 @@ tests = ["internal/cli:TestCounsel"]
 
 [[criterion]]
 id = 2 # --draft: exit 0 when complete, exit 4 naming each defect
-tests = ["internal/cli:TestCounsel", "internal/counsel:TestReviewClaims"]
+tests = ["internal/cli:TestCounsel", "internal/counsel:TestReviewClaims", "internal/counsel:TestCheckStructure"]
 
 [[criterion]]
 id = 3 # --post: one labelled counsel comment, same/different-family, replaced in place, no review; no target exits 2

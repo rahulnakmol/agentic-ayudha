@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/counsel"
+	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 )
 
 // Story #478: `aayu counsel` grounds Atri's counsel on a question, an issue, a path, or a PR without writing;
@@ -18,10 +19,25 @@ import (
 // place, and never a review.
 func TestCounsel(t *testing.T) {
 	g, env, opts, n := inspectFixture(t, "", "Refs #2")
+	files := []string{"internal/verify/floors.go", "internal/report/percent.go"}
+	for i := range 13 {
+		files = append(files, fmt.Sprintf("docs/guide/page%02d.md", i))
+	}
 	g.Mu.Lock()
-	g.Pulls[n].Files = []string{"internal/report/percent.go", "docs/guide/status.md"}
+	g.Pulls[n].Files = files
 	g.Mu.Unlock()
-	if err := os.MkdirAll(filepath.Join(opts.Dir, "internal", "report"), 0o755); err != nil {
+	writeInspectPack(t, opts.Dir, n, strings.Repeat("c", 40), []proof.Check{
+		{Floor: "coverage", Result: proof.Pass, Value: 100, Threshold: 90, Tool: "aayudha", Version: "1"},
+		{Floor: "sast", Result: proof.Pass, Tool: "semgrep", Version: "1.180.0", Waiver: "#9"},
+	})
+	layers, err := os.ReadFile(filepath.Join("..", "..", "LAYERS.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(opts.Dir, "LAYERS.md"), layers, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(opts.Dir, "internal", "cli"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	pr := strconv.Itoa(n)
@@ -30,7 +46,7 @@ func TestCounsel(t *testing.T) {
 		t.Helper()
 		code, out, errOut := run(t, env, opts, append([]string{"counsel", "--repo", "o/r", "--json"}, args...)...)
 		if code != want {
-			t.Fatalf("counsel %v: exit %d, want %d: %s", args, code, want, errOut)
+			t.Fatalf("counsel %v: exit %d, want %d: %s%s", args, code, want, errOut, clipFindings(out))
 		}
 		var rep counselReport
 		if err := json.NewDecoder(strings.NewReader(out)).Decode(&rep); err != nil {
@@ -51,7 +67,8 @@ func TestCounsel(t *testing.T) {
 	facts := factText(onPR)
 	for _, want := range []string{
 		fmt.Sprintf(`PR #%d "Add Percent for the status table": open`, n),
-		"internal/report/percent.go", "Story: #2", "Proof pack for #2 at ccccccc", "coverage pass",
+		"Changed in L04: internal/verify/floors.go", "internal/report/percent.go", "and 2 more", "Story: #2", "Proof pack for #2 at ccccccc", "coverage pass (100, floor 90)",
+		"sast pass waived by #9",
 		"Builder:", "Open Decision: #5", "CONSTRAINTS.md", "L03 ",
 	} {
 		if !strings.Contains(facts, want) {
@@ -72,8 +89,14 @@ func TestCounsel(t *testing.T) {
 	if d := counselRun(env, 0, "--issue", "5"); d.Issue != 5 || d.Topic != "Engine" || strings.Contains(factText(d), "Open Decision: #5") {
 		t.Errorf("Decision topic: issue %d, topic %q, facts %s", d.Issue, d.Topic, factText(d))
 	}
-	if p := counselRun(env, 0, "internal/report"); p.Path != "internal/report" || !strings.Contains(factText(p), "Path internal/report in this checkout: a directory") {
+	if p := counselRun(env, 0, "internal/cli"); p.Path != "internal/cli" ||
+		!strings.Contains(factText(p), "Path internal/cli in this checkout: a directory, in L02 Interaction / API boundary (owner Code Architect)") {
 		t.Errorf("path topic: %q %s", p.Path, factText(p))
+	}
+	if code, out, errOut := run(t, env, opts, "counsel", "--repo", "o/r", "--pr", pr); code != 0 ||
+		!strings.Contains(out, "# Counsel grounding: Add Percent for the status table") || !strings.Contains(out, "<untrusted source=\"pr-body\">") ||
+		!strings.Contains(out, "## The call") || !strings.Contains(out, "Speak and work as Atri") {
+		t.Errorf("text grounding: exit %d: %s%s", code, out, errOut)
 	}
 	if w := len(g.Writes()); w != writes {
 		t.Fatalf("counsel grounding wrote %d times", w-writes)
@@ -100,7 +123,7 @@ Merge after the normal review, keeping Percent's zero case as #2 states it (#2).
 
 ## What not to do
 
-Do not widen the PR to docs/guide/status.md rewrites (#%d).
+Do not widen the PR to docs/guide/page00.md rewrites (#%d).
 
 ## What would change it
 
@@ -142,6 +165,10 @@ Is the zero case the behaviour you want?
 		if !strings.Contains(strings.Join(r.Findings, "\n"), want) || r.Posted {
 			t.Errorf("%s: findings %v, posted %v", name, r.Findings, r.Posted)
 		}
+	}
+	if code, out, _ := run(t, env, opts, "counsel", "--repo", "o/r", "--pr", pr, "--draft", filepath.Join(dir, "approval-claim.md")); code != 4 ||
+		!strings.Contains(out, "not a complete counsel yet:\n- ") {
+		t.Errorf("text findings: exit %d: %s", code, out)
 	}
 	if w := len(g.Writes()); w != writes {
 		t.Fatalf("counsel without a passing --post wrote %d times", w-writes)
@@ -196,6 +223,16 @@ Which options belong on #5?
 	if r := counselRun(gpt, 0, "--issue", "5", "--draft", onDecision, "--post"); !r.Posted || r.Label != "written by gpt-6.1-sol (openai)" {
 		t.Errorf("--post on an issue: posted %v, label %q", r.Posted, r.Label)
 	}
+	// Text mode, and the writer named from the spec lane's model when AAYU_MODEL is unset.
+	if code, out, errOut := run(t, env, opts, "counsel", "--repo", "o/r", "--pr", pr, "--draft", p, "--post", "--host", "claude",
+		"--set", "models.spec.claude.model=claude-fable-5-1"); code != 0 || !strings.Contains(out, "complete: every part is there") ||
+		!strings.Contains(out, "Posted as counsel (same-family counsel: claude-fable-5-1 (anthropic), builder family unknown)") {
+		t.Errorf("text post: exit %d: %s%s", code, out, errOut)
+	}
+	if code, out, _ := run(t, env, opts, "counsel", "--repo", "o/r", "--pr", pr, "--draft", p, "--post", "--host", "claude",
+		"--set", "models.spec.claude.model=claude-fable-5-1"); code != 0 || !strings.Contains(out, "already carries this counsel") {
+		t.Errorf("text rerun: exit %d: %s", code, out)
+	}
 	g.Mu.Lock()
 	var posted []string
 	for _, c := range g.Issues[n].Comments {
@@ -209,7 +246,7 @@ Which options belong on #5?
 	if strings.Count(onIssue, counsel.Marker) != 1 {
 		t.Errorf("want one counsel comment on Decision #5, got %q", onIssue)
 	}
-	if len(posted) != 1 || !strings.Contains(posted[0], "claude-opus-5-5 (anthropic)") || !strings.Contains(posted[0], "not a review, an approval, or a Decision") {
+	if len(posted) != 1 || !strings.Contains(posted[0], "claude-fable-5-1 (anthropic)") || !strings.Contains(posted[0], "not a review, an approval, or a Decision") {
 		t.Errorf("want one counsel comment carrying the latest label, got %q", posted)
 	}
 	if reviews != 0 {
@@ -221,4 +258,11 @@ Which options belong on #5?
 			t.Errorf("%v: exit %d, want 2: %s", args, code, errOut)
 		}
 	}
+}
+
+// clipFindings is a failed run's findings, for the test's message.
+func clipFindings(out string) string {
+	var rep counselReport
+	_ = json.NewDecoder(strings.NewReader(out)).Decode(&rep)
+	return strings.Join(rep.Findings, "\n")
 }

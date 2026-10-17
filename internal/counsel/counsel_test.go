@@ -51,3 +51,26 @@ func TestLabel(t *testing.T) {
 		}
 	}
 }
+
+// A counsel's parts come in order, none empty, ending with the one question, within MaxWords.
+func TestCheckStructure(t *testing.T) {
+	good := Template("Three-hat line")
+	good = strings.Replace(good, "What this is really about", "A two-way door: what this is really about", 1)
+	good = strings.Replace(good, "The concrete next aayu command", "Run `aayu decide 5`: the concrete next command", 1)
+	good = strings.Replace(good, "The one question the person must answer, in one line.", "Is this the call?", 1)
+	if f := CheckStructure(good); len(f) != 0 {
+		t.Fatalf("the filled template: %v", f)
+	}
+	for name, tt := range map[string]struct{ md, want string }{
+		"out of order": {strings.NewReplacer("## Recommendation", "## What not to do", "## What not to do", "## Recommendation").Replace(good),
+			`part "What not to do" is out of order`},
+		"empty part":        {strings.Replace(good, "The facts or answers that would change the recommendation.", "", 1), `part "What would change it" is empty`},
+		"question not last": {good + "## Notes\n\nMore.\n", `must end with "## Your question"`},
+		"two-line question": {strings.Replace(good, "Is this the call?", "Is this the call?\nOr that?", 1), "not one line ending in a question mark"},
+		"too long":          {good + strings.Repeat("word ", MaxWords), "words: counsel is read in a few minutes"},
+	} {
+		if f := strings.Join(CheckStructure(tt.md), "\n"); !strings.Contains(f, tt.want) {
+			t.Errorf("%s: want %q in:\n%s", name, tt.want, f)
+		}
+	}
+}
