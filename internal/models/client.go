@@ -288,7 +288,7 @@ func decodeMessagesStream(body io.Reader) (Response, error) {
 				r.CostUSD = *ev.Usage.Cost
 			}
 		case "error":
-			return Response{}, fmt.Errorf("messages stream error: %s: %s", ev.Error.Type, truncate(ev.Error.Message, 300))
+			return Response{}, &StreamError{Type: ev.Error.Type, Message: truncate(ev.Error.Message, 300)}
 		}
 	}
 	if err := sc.Err(); err != nil {
@@ -302,6 +302,18 @@ func decodeMessagesStream(body io.Reader) (Response, error) {
 }
 
 // StatusError is a non-2xx reply.
+// StreamError is an error event inside a streamed Messages reply, after the
+// endpoint answered 200: its Type is the provider's (api_error, overloaded_error,
+// invalid_request_error, ...).
+type StreamError struct {
+	Type    string
+	Message string
+}
+
+func (e *StreamError) Error() string {
+	return fmt.Sprintf("messages stream error: %s: %s", e.Type, e.Message)
+}
+
 type StatusError struct {
 	Code int
 	Body string
