@@ -1,0 +1,21 @@
+{
+  "product": "calc",
+  "items": [
+    {"key": "goal", "type": "goal", "title": "calc keeps working while it moves to Rust", "fields": {"summary": "The calculator README describes stays usable while its engine is rebuilt."}, "basis": ["P2"]},
+    {"key": "rust-engine", "type": "initiative", "parent": "goal", "title": "Rebuild the engine in Rust", "fields": {"summary": "Port the engine behind the same command line."}, "basis": ["E1", "M1"]},
+    {"key": "evaluate", "type": "feature", "parent": "rust-engine", "title": "Evaluate an expression", "fields": {"summary": "Given an expression argument, print its value.", "problem": "The engine is C++ with known crashes (E3).", "scope": "In: the command line and its output. Out: new operators."}, "basis": ["C1", "E1"]},
+    {"key": "capture-golden", "type": "story", "parent": "evaluate", "title": "Capture golden outputs from the C++ build", "labels": ["effort:S"], "basis": ["E1", "C1"], "step": "M1", "parity": ["G1"],
+     "fields": {"summary": "As the maintainer, I want the C++ build's outputs captured, so that the Rust build can be held to them.",
+       "completion_goal": "1. [api-trace] state: the C++ build of commit HEAD and case set G1; expected: aayu survey --golden writes one golden file per case with its SHA-256",
+       "measure": "cases captured", "threshold": "every case in G1", "scenario": "Run the capture once on the C++ build.", "environment": "local checkout, fixture inputs only"}},
+    {"key": "port-eval", "type": "story", "parent": "evaluate", "title": "Port eval to Rust", "labels": ["effort:M"], "basis": ["E1", "C1"], "step": "M1", "parity": ["G1"], "depends_on": ["capture-golden"],
+     "fields": {"summary": "As the maintainer, I want eval in Rust, so that the engine leaves C++.",
+       "completion_goal": "1. [api-trace] state: the Rust build and case set G1; expected: aayu survey --parity reports every case identical",
+       "measure": "identical cases", "threshold": "all of G1", "scenario": "Replay G1 on the Rust build.", "environment": "local checkout, fixture inputs only"}},
+    {"key": "div-zero", "type": "bug", "parent": "evaluate", "title": "Division by zero crashes", "labels": ["effort:S"], "basis": ["marker:src/engine.cpp:5"],
+     "fields": {"summary": "calc crashes on a division by zero.", "reproduce": "Run calc with 1/0.", "expected": "An error message and a non-zero exit.", "actual": "A crash (marker:src/engine.cpp:5).",
+       "completion_goal": "1. [api-trace] state: calc 1/0; expected: exit 2 and an error on stderr",
+       "measure": "exit code", "threshold": "2", "scenario": "Run calc 1/0.", "environment": "local checkout"}}
+  ],
+  "open_questions": ["deferred: who runs calc today (Q1)"]
+}
