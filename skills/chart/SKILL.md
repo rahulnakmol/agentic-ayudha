@@ -159,10 +159,12 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   (if an item with no outcome counts as unanswered, the numerator says so), never a rule that contradicts the table.
   When an outcome can arrive after the item, give the cutoff as an `Assumption:` (an outcome counts only within N
   hours of the item), and say that how late outcomes arrive is not yet measured unless the grounding shows their
-  timing. A week is final only when the cutoff has passed and a completeness check passes (the exports cover the
-  whole cutoff period); until then it is marked provisional, and a later change is restated with a note, never
-  hidden. A figure in the grounding is a baseline only for the definition it was computed with: for a new
-  definition (a cutoff, deduplication) the baseline is "to be computed on the fixture", never the old count.
+  timing. A week is final only when the cutoff has passed and a completeness check passes: the exports cover the
+  whole cutoff period, on the export's own schedule (a daily export of the previous day means a cutoff that crosses
+  midnight is covered only after the next day's export); until then it is marked provisional, and a later change is
+  restated with a note, never hidden. Quote a figure from the grounding as the grounding states it, and say nothing
+  about how it was counted beyond that; the baseline of a definition of your own (a cutoff, deduplication) is "to be
+  computed on the exports", never the grounding's figure.
 - `## Design`: the smallest model, store, and pipeline that serve today's decision, and the option it beat. Keep the
   system of record (L07) apart from the analytical copy (L08). Prefer, in order: the exports and snapshot that
   `aayu measure` already builds (SQLite, or DuckDB); views on a read replica; a warehouse or lakehouse; streaming only
