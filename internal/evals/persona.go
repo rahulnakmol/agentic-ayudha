@@ -127,6 +127,9 @@ func (h *Harness) runPersona(ctx context.Context, c Case, lane verbs.LaneID, bod
 			"Reply with your Markdown answer only, nothing before or after it.",
 		Messages:  []models.Message{{Role: "user", Content: untrusted("grounding", input) + "\n\n" + c.Persona.Task}},
 		MaxTokens: h.Config.MaxTokens.Skill,
+		// A long note (the data-ai chart cases write 9k-13k tokens) runs for minutes; unstreamed, the gateway closes
+		// the idle connection with a 524 on every attempt (run 39066544341, chart/ai-scaleup), as for sessions.
+		Stream: true,
 	}
 	answer, problems, first, err := reviseOnce(ctx, h.complete(lane, "skill", &calls), req, func(a string) []string { return checkPersona(c, pr, input, a) })
 	if err != nil {
@@ -278,6 +281,7 @@ func (h *Harness) runPack(ctx context.Context, c Case, lane verbs.LaneID, body, 
 			fmt.Sprintf("Reply with the decision pack in Markdown only, at most %d words, nothing before or after it.", decide.PackMaxWords),
 		Messages:  []models.Message{{Role: "user", Content: untrusted("grounding", input) + "\n\nThe human is stuck and asks: " + c.Pack.Question}},
 		MaxTokens: h.Config.MaxTokens.Skill,
+		Stream:    true, // as the persona call
 	}
 	pack, problems, first, err := reviseOnce(ctx, h.complete(lane, "skill", &calls), req, func(a string) []string { return decide.CheckPack(a, input) })
 	if err != nil {

@@ -865,6 +865,9 @@ func TestTier2PersonaRevisesOnceThenJudges(t *testing.T) {
 	if len(revise.Messages) != 3 || !strings.Contains(revise.Messages[2].Content, "uncited claim") {
 		t.Errorf("revision request: %+v", revise.Messages)
 	}
+	if !first.Stream || !revise.Stream {
+		t.Error("the persona skill call does not stream; a long note would time out at the gateway (524)")
+	}
 	if judged.Model != "gpt-6.1-sol" || !strings.Contains(judged.Messages[0].Content, `startup artefact "Retro note"`) ||
 		!strings.Contains(judged.Messages[0].Content, "Speak and work as Drona") {
 		t.Errorf("judge request: %s %.300s", judged.Model, judged.Messages[0].Content)
