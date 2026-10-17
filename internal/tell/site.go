@@ -75,6 +75,7 @@ var sitePages = []SitePage{
 	{Out: "guide-loops.html", Summary: "Setting up scheduled and event loops on each agent, and which host can start on which GitHub event.", Nav: "Loops", Group: "Guides", Source: "docs/guide/guide-loops.md"},
 	{Out: "guide-learn.html", Summary: "Measuring whether a release moved the Goal, running retro, and evolving skills with ratchets.", Nav: "Did it work?", Group: "Guides", Source: "docs/guide/guide-learn.md"},
 	{Out: "troubleshooting.html", Summary: "Symptoms, exit codes, and fixes for install, tour, Ready, the merge gate, ship, hand-offs, and loops.", Nav: "Troubleshooting", Group: "Guides", Source: "docs/guide/troubleshooting.md"},
+	{Out: "skills/index.html", Summary: "Every verb on its own page: what it is for, the prompt and command, what you get back, its seat and twin, its gates, and what only a person does.", Nav: "Every skill", Group: "Skills", Source: "docs/guide/skills/README.md"},
 	{Out: "hosts.html", Nav: "Your agent", Group: "Your agent", Source: "docs/guide/hosts/README.md"},
 	{Out: "hosts-claude-code.html", Nav: "Claude Code", Group: "Your agent", Source: "docs/guide/hosts/claude-code.md"},
 	{Out: "hosts-codex.html", Nav: "OpenAI Codex", Group: "Your agent", Source: "docs/guide/hosts/codex.md"},
@@ -129,8 +130,18 @@ var openGroups = map[string]bool{"Start here": true, "Guides": true, "The story"
 // checkout has no guide.
 func SitePages(root string, assets fs.FS, proven map[int]Feature) ([]SitePage, error) {
 	var pages []SitePage
-	home := false
+	home, skills := false, false
 	for _, p := range sitePages {
+		if p.Out == "skills/index.html" {
+			guide, err := guideSkillPages(root)
+			if err != nil {
+				return nil, err
+			}
+			if guide != nil {
+				pages, skills = append(pages, guide...), true
+			}
+			continue
+		}
 		if p.Out == "verbs.html" {
 			p.Source, p.Markdown = "verbs.md", verbsMarkdown(assets)
 			pages = append(pages, p)
@@ -152,6 +163,9 @@ func SitePages(root string, assets fs.FS, proven map[int]Feature) ([]SitePage, e
 		}
 		pages = append(pages, p)
 	}
+	if skills {
+		return pages, nil
+	}
 	for _, c := range verbs.Verbs {
 		b, err := fs.ReadFile(assets, "skills/"+c.Name+"/SKILL.md")
 		if errors.Is(err, fs.ErrNotExist) {
@@ -161,6 +175,43 @@ func SitePages(root string, assets fs.FS, proven map[int]Feature) ([]SitePage, e
 		}
 		pages = append(pages, SitePage{Out: "skills/" + c.Name + ".html", Nav: c.Name, Group: "Skills",
 			Source: "skills/" + c.Name + "/SKILL.md", Origin: "skills/" + c.Name + "/SKILL.md", Markdown: stripFrontmatter(string(b))})
+	}
+	return pages, nil
+}
+
+// guideSkillPages are the guide's skill pages (docs/guide/skills): its index,
+// then one page per verb in journey-stage order, each at skills/<verb>.html.
+// It returns nil when the checkout has no index, so the site falls back to the
+// embedded skills.
+func guideSkillPages(root string) ([]SitePage, error) {
+	const dir = "docs/guide/skills/"
+	var pages []SitePage
+	b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(dir+"README.md")))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+	for _, p := range sitePages {
+		if p.Out == "skills/index.html" {
+			p.Origin, p.Markdown = p.Source, string(b)
+			pages = append(pages, p)
+		}
+	}
+	for _, st := range verbs.Stages {
+		for _, c := range verbs.Verbs {
+			if c.Stage != st.ID {
+				continue
+			}
+			src := dir + c.Name + ".md"
+			b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(src)))
+			if errors.Is(err, fs.ErrNotExist) {
+				continue
+			} else if err != nil {
+				return nil, err
+			}
+			pages = append(pages, SitePage{Out: "skills/" + c.Name + ".html", Nav: c.Name, Group: "Skills", Source: src, Origin: src, Markdown: string(b)})
+		}
 	}
 	return pages, nil
 }

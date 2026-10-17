@@ -79,6 +79,7 @@ and the checks that run in CI (the automated checks GitHub runs on every pull re
 | Understand the ideas | [Seats](concepts-seats.md), [layers](concepts-layers.md), [proof packs](concepts-proof.md), [floors](concepts-floors.md), [the human pass](concepts-human-pass.md), [dev, rolling, main](concepts-ladder.md) |
 | Know exactly how it works | [How it works](how-it-works.md), fifteen technical deep dives |
 | See how aayudha was built with itself | [Epilogue: built with itself](built-with-itself.md) |
+| Look up one verb: its prompt, seat, gates, and what only you do | [Every skill, one page each](skills/README.md) |
 | Look up a term or a flag | [Glossary](../../GLOSSARY.md), the [project reference](../README.md), and the verb pages |
 
 ## If you are an agent

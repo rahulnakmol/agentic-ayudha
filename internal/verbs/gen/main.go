@@ -6,6 +6,8 @@
 //   - docs/README.md: only the regions between the BEGIN/END GENERATED markers (the verbs and plumbing tables)
 //   - docs/guide/when-to-use-what.md: only the verb-map region (the verbs by journey stage);
 //     docs/guide/journey-*.md: only the stage-verbs region (the verbs of that step)
+//   - docs/guide/skills/<verb>.md: only the skill-card, skill-usage, skill-gates, and skill-human regions (a new
+//     verb gets a page with the headings to write under); docs/guide/skills/README.md: only the skill-index region
 //   - LAYERS.md and docs/RACI.md: whole files
 //   - seats/<seat>/CHARTER.md: only the regions between the BEGIN/END GENERATED: persona and raci markers
 //   - AGENTS.md: only the aayudha:raci section (internal/hosts.RenderAgentsMD), with the twins' voices
@@ -64,7 +66,7 @@ func run() error {
 	if personas, err = seats.LoadPersonas(os.DirFS(".")); err != nil {
 		return err
 	}
-	steps := []func() error{genReadme, genVerbMap, genLayers, genRACI, genCharters, genAgents, genSkills, genSchemas, genConfigSchema}
+	steps := []func() error{genReadme, genVerbMap, genSkillPages, genLayers, genRACI, genCharters, genAgents, genSkills, genSchemas, genConfigSchema}
 	for _, step := range steps {
 		if err := step(); err != nil {
 			return err
@@ -185,7 +187,7 @@ func genVerbMap() error {
 			if first {
 				stage, first = fmt.Sprintf("[%s](%s)", st.Title, page), false
 			}
-			fmt.Fprintf(&m, "| %s | %s | %s |\n", stage, verbLink(c, "../../"), cell(c.Reader))
+			fmt.Fprintf(&m, "| %s | %s | %s |\n", stage, verbLink(c), cell(c.Reader))
 		}
 	}
 	s, err := replaceRegion(path, string(b), "verb-map", m.String())
@@ -208,7 +210,7 @@ func genVerbMap() error {
 		v.WriteString("| Verb | What it does |\n|---|---|\n")
 		for _, c := range verbs.Verbs {
 			if slices.Contains(stages, c.Stage) {
-				fmt.Fprintf(&v, "| %s | %s |\n", verbLink(c, "../../"), cell(c.Reader))
+				fmt.Fprintf(&v, "| %s | %s |\n", verbLink(c), cell(c.Reader))
 			}
 		}
 		s, err := replaceRegion(p, string(b), "stage-verbs", v.String())
@@ -222,12 +224,9 @@ func genVerbMap() error {
 	return nil
 }
 
-// verbLink is a verb's name in code, linked to its skill page when it has one.
-func verbLink(c verbs.Command, root string) string {
-	if c.Has(verbs.SurfaceSkill) {
-		return fmt.Sprintf("[%s](%s%s/%s/SKILL.md)", code(c.Name), root, skillsDir, c.Name)
-	}
-	return code(c.Name)
+// verbLink is a verb's name in code, linked to its page in the guide (docs/guide/skills).
+func verbLink(c verbs.Command) string {
+	return fmt.Sprintf("[%s](skills/%s.md)", code(c.Name), c.Name)
 }
 
 // ---- LAYERS.md -------------------------------------------------------------

@@ -109,7 +109,7 @@ root (or reaches it), writes only when bytes differ, and is deterministic.
 
 | Generator | Source | Writes |
 |---|---|---|
-| `internal/verbs/gen` | the registry and `raci.go` | `docs/README.md` verb and plumbing tables; the verb map in `docs/guide/when-to-use-what.md`; `LAYERS.md`; `docs/RACI.md`; the RACI region of each `seats/<seat>/CHARTER.md`; the `aayudha:raci` section of `AGENTS.md`; `skills/<verb>/SKILL.md` frontmatter; `internal/mcp/schemas/<verb>.json`; `internal/config/schema.json` from the config structs |
+| `internal/verbs/gen` | the registry and `raci.go` | `docs/README.md` verb and plumbing tables; the verb map in `docs/guide/when-to-use-what.md`; the generated regions of each skill page `docs/guide/skills/<verb>.md` (a new verb gets a page) and its index; `LAYERS.md`; `docs/RACI.md`; the RACI region of each `seats/<seat>/CHARTER.md`; the `aayudha:raci` section of `AGENTS.md`; `skills/<verb>/SKILL.md` frontmatter; `internal/mcp/schemas/<verb>.json`; `internal/config/schema.json` from the config structs |
 | `internal/config/gen` | `internal/config/defaults.toml` | `CONSTRAINTS.md` |
 | `internal/workitems/gen` | the work-item schema in `internal/workitems` | `work-items/forms/aayudha-<type>.yml` and a region of `work-items/README.md` |
 | `internal/loops/gen` | `loops/*.toml` | `.github/workflows/aayudha-loops.yml`, `loops/amp/<name>.json`, `loops/cursor/aayudha-loops.tf` |
