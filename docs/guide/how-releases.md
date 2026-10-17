@@ -77,7 +77,9 @@ bookkeeping. It lives in `internal/cli/release.go`.
 | `rolling` | `rolling-<date>`, then `rolling-<date>.<n>` for the n-th snapshot of a day | lightweight | `rolling-2026-10-12.4` |
 | `main` | `vX.Y.Z` | annotated, `Release vX.Y.Z: <title>` | none yet |
 
-`.goreleaser.yaml` ignores `rolling-*` tags, so a snapshot tag is never parsed as a version.
+A snapshot build never reads a `rolling-*` tag as its version. Before goreleaser runs, `ci.yml` and `installers.yml`
+set `GORELEASER_CURRENT_TAG` to the newest `v*` tag (a release ranks above its prereleases), so a snapshot is named
+after the next patch, for example `0.2.1-snapshot.a7efe40`.
 
 ## The signed build
 
