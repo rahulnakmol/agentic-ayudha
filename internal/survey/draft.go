@@ -48,6 +48,10 @@ type Draft struct {
 	// level the person decides.
 	Compatibility []Interface    `json:"compatibility,omitempty"`
 	Modernisation *Modernisation `json:"modernisation,omitempty"`
+	// Assign maps each item a section left pending (its question "?") to the
+	// question that asks it; the questions section writes it, and merging the
+	// sections applies it (MergeSections).
+	Assign map[string]string `json:"assign,omitempty"`
 }
 
 // Claim is one statement about the software, with how it is known.

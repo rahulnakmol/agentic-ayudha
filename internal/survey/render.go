@@ -276,12 +276,19 @@ func claimLine(c Claim) string {
 	return s
 }
 
+// basisText labels a claim as a fact (the code, a named document or manual,
+// or the person says it), an inference (reasoned from cited evidence), or an
+// unknown with the question that asks it.
 func basisText(c Claim) string {
 	switch c.Basis {
 	case BasisConfirmed:
-		return "confirmed, " + c.Answer
+		return "fact, confirmed, " + c.Answer
 	case BasisUnknown:
 		return "unknown, " + c.Question
+	case BasisInferred:
+		return "inference"
+	case BasisObserved, BasisStated:
+		return "fact, " + c.Basis
 	}
 	return c.Basis
 }

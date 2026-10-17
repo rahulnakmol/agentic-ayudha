@@ -42,8 +42,13 @@
       ],
       "x-aayu-type": "bool"
     },
+    "docs": {
+      "description": "User manuals and notes from outside the checkout (a file or a directory of text, Markdown, HTML, man pages, or PDF through pdftotext), indexed as manual:<name> documents a claim cites by line; their text is written under <out>/manuals.",
+      "type": "string",
+      "x-aayu-type": "path"
+    },
     "draft": {
-      "description": "Survey draft to check (JSON: claims at the engineering, capability, and product levels, trap findings, the do-not-carry list, the compatibility contract, unknowns, answers, modernisation path): every claim cites the index or a probe, or is marked unknown; renders SURVEY.md.",
+      "description": "Survey draft to check, whole or some of its sections (JSON: claims at the engineering, capability, and product levels, trap findings, the do-not-carry list, the compatibility contract, unknowns, answers, modernisation path): every claim cites the index, a manual, or a probe, or is marked unknown. Each section is saved with its findings under <out>/sections and resumed by later runs; with every section present it writes survey.json and renders SURVEY.md.",
       "type": "string",
       "x-aayu-type": "path"
     },
@@ -92,6 +97,14 @@
     },
     "run": {
       "description": "With --golden, --parity, or --compat: run the cases' program; without it the cases file is only checked.",
+      "type": "boolean",
+      "x-aayu-read-only-values": [
+        "false"
+      ],
+      "x-aayu-type": "bool"
+    },
+    "sections": {
+      "description": "Report the survey sections saved under <out>/sections: which pass, which have problems, and which are missing or stale.",
       "type": "boolean",
       "x-aayu-read-only-values": [
         "false"

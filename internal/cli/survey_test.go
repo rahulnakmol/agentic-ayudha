@@ -70,6 +70,155 @@ func TestSurveyIndexAndPack(t *testing.T) {
 	}
 }
 
+// A survey written in sections: each section in a --draft file is checked and
+// saved under <out>/sections at once, a later run resumes the saved ones, a
+// failing later section never loses them, and with every section present the
+// merged survey.json and SURVEY.md are written. A section saved against
+// another index commit is stale and must be written again.
+func TestSurveyDraftSections(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.CopyFS(dir, os.DirFS(filepath.Join("..", "survey", "testdata", "legacy"))); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(t.TempDir(), "survey")
+	opts := Options{Dir: dir, GitHubGap: -1}
+	if code, _, stderr := run(t, nil, opts, "survey", dir, "--out", out); code != 0 {
+		t.Fatalf("index: %d %s", code, stderr)
+	}
+	b, err := os.ReadFile(filepath.Join("..", "survey", "testdata", "draft.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var whole map[string]json.RawMessage
+	if err := json.Unmarshal(b, &whole); err != nil {
+		t.Fatal(err)
+	}
+	first := []string{"product", "request", "engineering", "traps", "capabilities"}
+	write := func(name string, keep func(k string) bool, edit func(string) string) string {
+		part := map[string]json.RawMessage{}
+		for k, v := range whole {
+			if keep(k) {
+				part[k] = v
+			}
+		}
+		b, _ := json.Marshal(part)
+		f := filepath.Join(t.TempDir(), name)
+		if err := os.WriteFile(f, []byte(edit(string(b))), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return f
+	}
+	same := func(s string) string { return s }
+	a := write("a.json", func(k string) bool { return slices.Contains(first, k) }, same)
+	rest := func(k string) bool { return !slices.Contains(first, k) }
+	draft := func(args ...string) (int, SurveyDraftResult) {
+		t.Helper()
+		code, stdout, stderr := run(t, nil, opts, append([]string{"survey", dir, "--out", out, "--json"}, args...)...)
+		var r SurveyDraftResult // the result, then the error when it blocks
+		if err := json.NewDecoder(strings.NewReader(stdout)).Decode(&r); err != nil {
+			t.Fatalf("%v: %d %v %s %s", args, code, err, stdout, stderr)
+		}
+		return code, r
+	}
+	saved := func(name string) survey.SavedSection {
+		t.Helper()
+		var s survey.SavedSection
+		b, err := os.ReadFile(filepath.Join(out, "sections", name+".json"))
+		if err != nil || json.Unmarshal(b, &s) != nil {
+			t.Fatalf("section %s: %v", name, err)
+		}
+		return s
+	}
+
+	code, r := draft("--draft", a)
+	if code != 0 || !slices.Equal(r.Saved, []string{"engineering", "capabilities"}) || !slices.Equal(r.Missing, []string{"product", "modernisation", "questions"}) || r.Merged != "" {
+		t.Fatalf("first sections: %d %+v", code, r)
+	}
+	// A later section that fails blocks, is saved with its findings, and the
+	// earlier sections stay saved and resumed.
+	bad := write("bad.json", rest, func(s string) string {
+		return strings.Replace(s, `"basis":"stated","cites":["doc:README.md"]`, `"basis":"observed","cites":["doc:README.md"]`, 1)
+	})
+	code, r = draft("--draft", bad)
+	if p := saved("product"); code != ExitBlocked || !slices.Equal(r.Resumed, []string{"engineering", "capabilities"}) || p.Pass || len(p.Problems) == 0 || !strings.Contains(p.Problems[0], "cannot be observed") {
+		t.Fatalf("failing section: %d %+v %+v", code, r, p)
+	}
+	if e := saved("engineering"); !e.Pass || len(e.Content) == 0 {
+		t.Fatalf("engineering lost: %+v", e)
+	}
+	code, r = draft("--draft", write("b.json", rest, same))
+	if code != 0 || !r.Pass || len(r.Missing) != 0 || r.Merged == "" {
+		t.Fatalf("complete: %d %+v", code, r)
+	}
+	mb, err := os.ReadFile(r.Merged)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if merged, err := survey.ParseDraft(mb); err != nil || len(merged.Engineering) == 0 || len(merged.Capabilities) == 0 || merged.Modernisation == nil {
+		t.Fatalf("survey.json: %v %s", err, mb)
+	}
+	if md, err := os.ReadFile(r.Survey); err != nil || !strings.Contains(string(md), "## Capability map") {
+		t.Fatalf("SURVEY.md: %v", err)
+	}
+	// --sections alone resumes every saved section and passes again.
+	if code, r = draft("--sections"); code != 0 || !r.Pass || len(r.Resumed) != 5 || len(r.Saved) != 0 {
+		t.Fatalf("resume: %d %+v", code, r)
+	}
+	// A section saved against another index commit is stale, not resumed.
+	p := saved("product")
+	p.Commit = "0123456789abcdef"
+	if err := survey.SaveSection(filepath.Join(out, "sections"), p); err != nil {
+		t.Fatal(err)
+	}
+	if code, r = draft("--sections"); code != 0 || !slices.Equal(r.Stale, []string{"product"}) || !slices.Equal(r.Missing, []string{"product"}) || r.Merged != "" {
+		t.Fatalf("stale: %d %+v", code, r)
+	}
+}
+
+// survey --docs indexes manuals and notes from outside the checkout: each is
+// copied under <out>/manuals and cited by line as manual:<name>:<line>, so a
+// claim a manual states is traced to it; a line past its end is not a cite.
+func TestSurveyDocs(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.CopyFS(dir, os.DirFS(filepath.Join("..", "survey", "testdata", "legacy"))); err != nil {
+		t.Fatal(err)
+	}
+	docs := t.TempDir()
+	if err := os.WriteFile(filepath.Join(docs, "operator-notes.md"), []byte("# Operator notes\n\nThe night shift runs calc on each batch total.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(t.TempDir(), "survey")
+	opts := Options{Dir: dir, GitHubGap: -1}
+	if code, _, stderr := run(t, nil, opts, "survey", dir, "--out", out, "--docs", docs); code != 0 {
+		t.Fatalf("index: %d %s", code, stderr)
+	}
+	if b, err := os.ReadFile(filepath.Join(out, "manuals", "operator-notes.md")); err != nil || !strings.Contains(string(b), "night shift") {
+		t.Fatalf("manual copy: %v", err)
+	}
+	b, err := os.ReadFile(filepath.Join("..", "survey", "testdata", "draft.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cite := func(at string) string {
+		f := filepath.Join(t.TempDir(), "draft.json")
+		claim := `"claim": "The operator notes say the night shift runs calc on each batch total.", "basis": "stated", "cites": ["` + at + `"]`
+		if err := os.WriteFile(f, []byte(strings.Replace(string(b), `"claim": "The README calls it a calculator.", "basis": "stated", "cites": ["doc:README.md"]`, claim, 1)), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return f
+	}
+	code, stdout, stderr := run(t, nil, opts, "survey", dir, "--out", out, "--draft", cite("manual:operator-notes.md:3"), "--plain")
+	if code != 0 {
+		t.Fatalf("manual cite: %d %s %s", code, stdout, stderr)
+	}
+	if md, err := os.ReadFile(filepath.Join(out, "SURVEY.md")); err != nil || !strings.Contains(string(md), "manual:operator-notes.md:3") || !strings.Contains(string(md), "fact, stated") {
+		t.Fatalf("SURVEY.md: %v\n%s", err, md)
+	}
+	if code, stdout, _ = run(t, nil, opts, "survey", dir, "--out", out, "--draft", cite("manual:operator-notes.md:9"), "--plain"); code != ExitBlocked || !strings.Contains(stdout, "manual:operator-notes.md:9") {
+		t.Fatalf("cite past the end: %d %s", code, stdout)
+	}
+}
+
 // WP5.9: `survey --backlog` renders backlog.md and its digest and files
 // nothing; --create files only the reviewed digest, at most --limit issues a
 // run, each with the survey marker and label under its parent; a re-run files
