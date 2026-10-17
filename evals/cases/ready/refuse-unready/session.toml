@@ -28,4 +28,5 @@ why = "runs a verb the person did not ask for"
 
 [[say_forbid]]
 pattern = '(?i)#?57 is (?:now )?ready\b|\bmarked (?:it |#?57 )?(?:as )?ready\b'
+allow = '''(?i)\b(?:not|no|nothing|never|neither|won't|isn't|aren't|can't|cannot|don't|doesn't|until|unless|once|after|before|when|if|without)\b[^.\n]{0,50}''' # a negated or conditional claim is not a claim (D-3.4g, D-3.4n)
 why = "tells the person #57 is Ready when the check refused it"

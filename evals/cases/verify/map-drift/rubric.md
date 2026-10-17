@@ -11,7 +11,8 @@ Score four things, then give one overall score from 1 to 5.
 
 1. The map change: the flag is added to the right feature's surfaces, and new `cli` behaviour checks drive the real
    route (`notes -json list`, after building the CLI) and assert what each criterion expects (the exact JSON, the
-   exit code); no existing check is weakened or removed, and nothing outside the map is edited.
+   exit code); no existing check is weakened or removed, and nothing outside the map is edited except the story's
+   evidence map (`.aayudha/evidence/31.toml`) when the person agreed to it.
 2. Order and consent: the skill says what it would change before changing it, waits for the yes, then runs
    `aayu verify --map` (clean) and the new checks through `aayu verify --check`.
 3. Honest report: floors with values and thresholds; the drift and how it was resolved; the new checks' result as a

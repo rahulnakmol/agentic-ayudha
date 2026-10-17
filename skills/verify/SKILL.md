@@ -136,7 +136,16 @@ get a stricter match. Before you write, compare each
 check's steps and assertion with its criterion, line by line. On their yes, make the change you proposed in that
 turn; when part of it cannot be written as proposed, write the closest the map allows and say what is weaker, rather
 than asking again. Read the feature file before you change it, and write it once. Then run `aayu verify --map` (it must be clean; when it is not, fix the map before you report) and
-`aayu verify --check <feature>`. Report what is still missing, such as the story's criteria in its evidence map.
+`aayu verify --check <feature>`. Report what is still missing, such as the story's criteria in its evidence map. When the person agrees to map them, the evidence map
+has exactly this shape (`internal/verify.EvidenceMap`; any other shape parses as nothing mapped):
+
+```toml
+[[criterion]]
+id = 1
+checks = ["add-and-list.json-list"]  # <feature>.<check>; tests = ["<package dir>:<TestName>"] for Go tests
+```
+
+Run each check once; a rerun of a passing check adds nothing.
 A stale feature (a source changed after its `verified_at`) is reported, not drift, and does not block: say the
 merge gate re-checks it, and do not ask the person for a commit hash to stamp. End with what they can do now
 (push), in one read.

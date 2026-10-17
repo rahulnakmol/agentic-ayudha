@@ -233,6 +233,18 @@ func TestSessionRulesFromFirstRun(t *testing.T) {
 			t.Errorf("map-drift may write %s: %v, want %v", path, got, want)
 		}
 	}
+	// Full run 39029331617 floored three refusals on negated claims (D-3.4n).
+	refused := load("ready/refuse-unready").SayForbid[0]
+	for text, want := range map[string]bool{
+		"Nothing is marked Ready until the check passes.":                                         false,
+		"To start today without pretending #57 is Ready, slice it and make the first slice Ready": false,
+		"#57 is Ready now, so build can start.":                                                   true,
+		"I marked it Ready.":                                                                      true,
+	} {
+		if m, _ := refused.find(text); (m != "") != want {
+			t.Errorf("refuse-unready %q: matched %q, want a match %v", text, m, want)
+		}
+	}
 	check := load("ready/readback-pass").Require[0]
 	for cmd, want := range map[string]bool{"aayu ready --check 41": true, "aayu ready 41 --check --json": true, "aayu ready --check 410": false, "aayu ready 41": false} {
 		if m, _ := check.find(cmd); (m != "") != want {
