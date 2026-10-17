@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -588,5 +589,26 @@ func TestIntegrationCapabilities(t *testing.T) {
 	text = strings.Join(r.Lines, "\n")
 	if r.Status != Fail || !strings.Contains(text, `posthog: PostHog at https://us.posthog.com does not accept the key. Fix: set url = "https://eu.posthog.com"`) || strings.Contains(text, "unreachable") {
 		t.Fatalf("status %s:\n%s", r.Status, text)
+	}
+}
+
+// The copilot row passes only on trust it can read: Copilot CLI's, found
+// through USERPROFILE where HOME is unset (Windows). Without Copilot CLI,
+// VS Code's Workspace Trust is out of reach, so the row asks for it.
+func TestCopilotTrustRow(t *testing.T) {
+	profile := t.TempDir()
+	p := healthy(t)
+	p.Root = repoWith(t, map[string]string{".aayudha/lock.toml": "version = 1\nskills_version = \"0.0.0\"\nhosts = [\"copilot\"]\n[skills]\n",
+		".github/hooks/aayudha.json": `{"version":1,"hooks":{"preToolUse":[{"type":"command","bash":"aayu hook pre-tool --host copilot"}]}}`})
+	_ = os.MkdirAll(filepath.Join(profile, ".copilot"), 0o755)
+	_ = os.WriteFile(filepath.Join(profile, ".copilot", "config.json"), []byte("// managed\n"+`{"trustedFolders":[`+strconv.Quote(p.Root)+`]}`), 0o644)
+	env := map[string]string{"USERPROFILE": profile}
+	p.Getenv = func(k string) string { return env[k] }
+	if r := checkCopilot(context.Background(), p); r.Status != Pass {
+		t.Errorf("trusted through USERPROFILE: %s %s %v", r.Status, r.Detail, r.Lines)
+	}
+	p.LookPath = func(string) (string, error) { return "", errors.New("not found") }
+	if r := checkCopilot(context.Background(), p); r.Status != Warn {
+		t.Errorf("VS Code only: %s %s", r.Status, r.Detail)
 	}
 }

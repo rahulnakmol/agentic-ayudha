@@ -47,7 +47,7 @@ copilot skill list
 
 Copilot loads a repository's MCP server and hooks only after you trust the folder. Start `copilot` in the repository
 once and answer yes. `copilot -p` never asks, so do this before you run it from a script. VS Code asks through
-Workspace Trust.
+Workspace Trust, which aayu cannot read, so without Copilot CLI `aayu doctor` keeps asking you to check it.
 
 Until you trust it, nothing stops an agent from running a step that belongs to a person. `aayu doctor` shows the step:
 

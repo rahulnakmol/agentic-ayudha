@@ -64,8 +64,8 @@ func TestReadCopilotSession(t *testing.T) {
 	}
 }
 
-// build finds the session log of the Copilot session that ran it, and only
-// a recent one.
+// build finds the session log of the Copilot session that ran it, only a
+// recent one, and only once.
 func TestCopilotSessionLog(t *testing.T) {
 	root, home := t.TempDir(), t.TempDir()
 	now := time.Now()
@@ -76,6 +76,10 @@ func TestCopilotSessionLog(t *testing.T) {
 	if got, want := CopilotSessionLog(root, home, time.Hour, now), filepath.Join(home, "session-state", "abc-1", "events.jsonl"); got != want {
 		t.Errorf("log %q, want %q", got, want)
 	}
+	if got := CopilotSessionLog(root, home, time.Hour, now); got != "" {
+		t.Errorf("a second build took the same note: %q", got)
+	}
+	recordCopilotSession(root, []byte(`{"sessionId":"abc-1","cwd":"/r"}`), "aayu build 4")
 	if got := CopilotSessionLog(root, home, time.Hour, now.Add(2*time.Hour)); got != "" {
 		t.Errorf("stale record: %q", got)
 	}

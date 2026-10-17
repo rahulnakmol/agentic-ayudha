@@ -650,15 +650,20 @@ func checkCopilot(ctx context.Context, p *Probe) Result {
 	if b, err := os.ReadFile(filepath.Join(p.Root, filepath.FromSlash(hosts.CopilotHooks))); err != nil || !strings.Contains(string(b), "hook pre-tool") {
 		problems = append(problems, "no aayudha hooks in "+hosts.CopilotHooks+", so nothing stops an agent in Copilot from running a human-only verb: run `aayu install --host copilot --apply`")
 	}
+	home := p.Getenv("HOME")
+	if home == "" {
+		home = p.Getenv("USERPROFILE") // Windows
+	}
 	if path, err := p.LookPath("copilot"); err == nil {
 		if out, err := p.Exec(ctx, "", path, "--version"); err == nil {
 			lines = append(lines, strings.TrimSpace(strings.SplitN(out, "\n", 2)[0]))
 		}
-		if !hosts.CopilotTrusted(p.Root, hosts.CopilotHome(p.Getenv("HOME"), p.Getenv)) {
+		if !hosts.CopilotTrusted(p.Root, hosts.CopilotHome(home, p.Getenv)) {
 			steps = append(steps, "trust this folder in Copilot CLI: start `copilot` here once and answer yes; until then it loads neither the aayudha MCP server nor the hooks")
 		}
 	} else {
-		lines = append(lines, "Copilot CLI is not on PATH; VS Code agent mode asks through Workspace Trust")
+		// VS Code keeps Workspace Trust where aayu cannot read it.
+		steps = append(steps, "Copilot CLI is not on PATH, so aayu cannot check trust: in VS Code, trust this folder (Workspace Trust), or it loads neither the aayudha MCP server nor the hooks")
 	}
 	switch ct := p.Getenv("COPILOT_GITHUB_TOKEN"); {
 	case ct != "" && p.Human != nil:
