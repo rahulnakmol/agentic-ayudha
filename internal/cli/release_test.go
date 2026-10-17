@@ -167,6 +167,7 @@ func TestReleaseLadder(t *testing.T) {
 		args []string
 		want string
 	}{
+		{"in CI", f.env, []string{rel, "--to", "rolling", "--ci"}, "refused in CI"},
 		{"agent says --yes", agent, []string{rel, "--to", "rolling", "--yes"}, "--yes is for humans only"},
 		{"main before rolling", f.env, []string{rel, "--to", "main", "--yes"}, "has not been promoted to rolling yet"},
 		{"includes unmerged work", f.env, []string{strconv.Itoa(f.wide), "--to", "rolling", "--yes"}, fmt.Sprintf("#%d (status in-progress) is not in rolling..dev", f.pending)},
@@ -364,7 +365,7 @@ func TestReleaseLadder(t *testing.T) {
 		f.g.Issues[f.release].Comments = append(f.g.Issues[f.release].Comments, c)
 	}
 	f.g.Mu.Lock()
-	f.g.Permissions = map[string]string{"maintainer": "maintain", "visitor": "read"}
+	f.g.Permissions = map[string]string{"maintainer": "maintain"} // visitor: read, the default
 	f.g.Mu.Unlock()
 	mainTip0 := git(t, f.bare, "rev-parse", "refs/heads/main")
 	for i, miss := range []struct{ login, typ, body string }{
@@ -391,7 +392,17 @@ func TestReleaseLadder(t *testing.T) {
 	if strings.Contains(fmt.Sprint(f.dispatched), "promote/main") {
 		t.Fatalf("a refused main rung dispatched its gate: %v", f.dispatched)
 	}
+	// A dry run without the request says what is missing instead of refusing.
+	if code, p, errOut := f.run(t, day.Add(2*time.Hour), agent, rel, "--to", "main", "--dry-run"); code != 0 || !strings.Contains(strings.Join(p.Notices, "\n"), "needs the explicit stable-release request") {
+		t.Fatalf("main dry run with no request: %d %+v %s", code, p.Notices, errOut)
+	}
 	comment("maintainer", "User", "Stable release: v0.1.0\n\nShip it.", rollingAt.Add(30*time.Minute))
+	later := f.opts
+	later.Now = func() time.Time { return day.Add(2 * time.Hour) }
+	if code, out, errOut := run(t, agent, later, "release", rel, "--to", "main", "--dry-run", "--repo", "o/r"); code != 0 ||
+		!strings.Contains(out, "  stable release requested by @maintainer (comment) https://github.com/o/r/issues/") {
+		t.Fatalf("main dry run with the request: %d %s %s", code, out, errOut)
+	}
 
 	// Main: Release: v0.1.0, an annotated tag, and the Release closed.
 	code, p, errOut = f.run(t, day.Add(2*time.Hour), agent, rel, "--to", "main")

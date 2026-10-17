@@ -1081,10 +1081,6 @@ func promotionText(out io.Writer, p Promotion) error {
 // person's token, so GitHub cannot tell who typed the comment: aayu writes no
 // such comment, and the pre-tool hook refuses an agent's command that would.
 func (e *Env) stableRequest(ctx context.Context, c *github.Client, repo string, n int, version, rollingAt string, botLogins []string) (*StableRequest, error) {
-	after, err := time.Parse(time.RFC3339, rollingAt)
-	if err != nil {
-		return nil, Errorf(ExitBlocked, "release #%d: its rolling rung has no time (%q)", n, rollingAt)
-	}
 	owner, name, _ := github.SplitRepo(repo)
 	cs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.IssueComment, *gh.Response, error) {
 		return c.REST.Issues.ListComments(ctx, owner, name, n, &gh.IssueListCommentsOptions{ListOptions: o})
@@ -1097,7 +1093,7 @@ func (e *Env) stableRequest(ctx context.Context, c *github.Client, repo string, 
 		first, _, _ := strings.Cut(strings.TrimSpace(cm.GetBody()), "\n")
 		v, ok := strings.CutPrefix(strings.TrimSpace(first), StableRequestPrefix)
 		u := cm.GetUser()
-		if !ok || strings.TrimSpace(v) != version || strings.Contains(cm.GetBody(), "<!-- aayudha:") || !cm.GetCreatedAt().After(after) ||
+		if !ok || strings.TrimSpace(v) != version || strings.Contains(cm.GetBody(), "<!-- aayudha:") || cm.GetCreatedAt().UTC().Format(time.RFC3339) <= rollingAt || // both UTC RFC 3339, so they order as text
 			identity.IsBot(identity.Account{Login: u.GetLogin(), Type: u.GetType()}, botLogins) {
 			continue
 		}

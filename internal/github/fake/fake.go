@@ -913,11 +913,8 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		reply(200, out)
 	case rePerm.MatchString(p) && m == "GET":
 		login := rePerm.FindStringSubmatch(p)[1]
-		perm, ok := g.Permissions[login]
-		switch {
-		case !ok && login == g.Viewer:
-			perm = "admin"
-		case !ok:
+		perm := g.Permissions[login]
+		if perm == "" {
 			perm = "read"
 		}
 		role := perm
