@@ -26,6 +26,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
+	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
@@ -64,6 +65,21 @@ type Usage struct {
 	MaxCost     float64 `json:"max_cost_usd"`
 	Attempts    int     `json:"failed_attempts"`
 	MaxAttempts int     `json:"max_attempts"`
+	// MeteredBy names what makes aayu's own model calls pay-as-you-go (the
+	// [models.gateway] endpoint or a direct provider's key). The cost limit
+	// applies only then; "" means it is off.
+	MeteredBy string `json:"metered_by,omitempty"`
+}
+
+// Line is the budget as a person reads it. Spend is what aayu meters (its
+// gateway calls and AAYU_COST_USD); a subscription host session reports no
+// cost, so 0.00 USD is not the real cost of a build done there.
+func (u Usage) Line() string {
+	spend := fmt.Sprintf("metered spend %.2f USD of %g (subscription use not counted)", u.CostUSD, u.MaxCost)
+	if u.MeteredBy == "" || u.MaxCost <= 0 {
+		spend = fmt.Sprintf("metered spend %.2f USD, no cost limit: no pay-as-you-go model key or endpoint is configured (subscription use not counted)", u.CostUSD)
+	}
+	return fmt.Sprintf("%.1f of %g h, %s, %d of %d failed attempts", u.WallHours, u.MaxWall, spend, u.Attempts, u.MaxAttempts)
 }
 
 // BuildState is build/<story>/state.json on the ledger: when the build
@@ -225,7 +241,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		labels = append(slices.DeleteFunc(labels, func(l string) bool { return strings.HasPrefix(l, "status:") }), labelInProgress)
 	}
 	b := l.Config.Autonomy.Budget
-	res.Budget = Usage{MaxWall: b.WallHours, MaxCost: b.CostUSD, MaxAttempts: b.Attempts, Attempts: st.Attempts, CostUSD: e.buildCost(repo, n)}
+	res.Budget = Usage{MaxWall: b.WallHours, MaxCost: b.CostUSD, MaxAttempts: b.Attempts, Attempts: st.Attempts, CostUSD: e.buildCost(repo, n), MeteredBy: e.meteredBy(&l.Config)}
 	if started, err := time.Parse(time.RFC3339, st.StartedAt); err == nil {
 		res.Budget.WallHours = now.Sub(started).Hours()
 	}
@@ -233,8 +249,8 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	switch {
 	case b.WallHours > 0 && res.Budget.WallHours > b.WallHours:
 		return block(fmt.Sprintf("wall-time budget breached: %.1f h since the build started, budget %.1f h", res.Budget.WallHours, b.WallHours))
-	case b.CostUSD > 0 && res.Budget.CostUSD > b.CostUSD:
-		return block(fmt.Sprintf("cost budget breached: %.2f USD spent, budget %.2f USD", res.Budget.CostUSD, b.CostUSD))
+	case b.CostUSD > 0 && res.Budget.MeteredBy != "" && res.Budget.CostUSD > b.CostUSD:
+		return block(fmt.Sprintf("cost budget breached: metered spend %.2f USD of %g (subscription use not counted)", res.Budget.CostUSD, b.CostUSD))
 	}
 
 	// Delegation (WP5.5b): another agent writes the change. A cloud receiver
@@ -406,7 +422,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			}
 			res.Next = fmt.Sprintf("fix the floor miss in %s and run `aayu build %d` again (failed attempts %d of %d)", res.Worktree, n, st.Attempts, b.Attempts)
 			_ = e.Emit(res, func(w io.Writer) error {
-				_, err := fmt.Fprintf(w, "#%d: checkpoint %s (attempt %d) committed (%s); verify: floor miss: %s\n  next: %s\n", n, res.Checkpoint, attempt, short(res.Commit), detail, res.Next)
+				_, err := fmt.Fprintf(w, "#%d: checkpoint %s (attempt %d) committed (%s); verify: floor miss: %s\n  budget: %s\n  next: %s\n", n, res.Checkpoint, attempt, short(res.Commit), detail, res.Budget.Line(), res.Next)
 				return err
 			})
 			return WithNext(Errorf(ExitFloor, "checkpoint %s: floor miss: %s", res.Checkpoint, detail), fmt.Sprintf("aayu build %d", n))
@@ -473,7 +489,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	res.Next = fmt.Sprintf("the merge gate re-runs verify and inspect on PR #%d (the reviewer app was asked to review this head); `aayu ship %d` after a human pass", res.PR, res.PR)
 	return e.Emit(res, func(w io.Writer) error {
 		if res.Commit != "" {
-			fmt.Fprintf(w, "#%d: checkpoint %s committed (%s); verify: %s\n", n, res.Checkpoint, short(res.Commit), res.Verify)
+			fmt.Fprintf(w, "#%d: checkpoint %s committed (%s); verify: %s\n  budget: %s\n", n, res.Checkpoint, short(res.Commit), res.Verify, res.Budget.Line())
 		}
 		for _, x := range res.Notes {
 			fmt.Fprintf(w, "  note: %s\n", x)
@@ -557,6 +573,22 @@ func nextCheckpoint(ctx context.Context, st BuildState, wt, dev string) (k, atte
 		return k + 1, 1
 	}
 	return 1, 1
+}
+
+// meteredBy names what lets aayu's own model calls incur pay-as-you-go spend:
+// the [models.gateway] endpoint, or a direct provider's key in the secret
+// store. With neither, the cost limit is off: work in a subscription host
+// session reports no cost, so a limit on metered spend would mean nothing.
+func (e *Env) meteredBy(c *config.Config) string {
+	if c.Models.Gateway.BaseURL != "" {
+		return "[models.gateway] base_url"
+	}
+	for _, name := range models.DirectSecrets() {
+		if v, _, err := e.SecretStore().Get(name); err == nil && v != "" {
+			return "the " + name + " key"
+		}
+	}
+	return ""
 }
 
 // buildCost is the story's model spend: the gateway's calls in the actions
@@ -652,7 +684,7 @@ func (e *Env) saveBuild(ctx context.Context, c *github.Client, w *ledger.Writer,
 		fmt.Fprintf(&body, "| %d/%d | %d | %s | `%s` | %s: %s |\n", cp.K, cp.N, cp.Attempt, listOrNone(cp.Layers), short(cp.Commit), cp.Verify, cp.Detail)
 	}
 	u := res.Budget
-	fmt.Fprintf(&body, "\nBudget: %.1f of %.1f h, %.2f of %.2f USD, %d of %d failed attempts.", u.WallHours, u.MaxWall, u.CostUSD, u.MaxCost, u.Attempts, u.MaxAttempts)
+	fmt.Fprintf(&body, "\nBudget: %s.", u.Line())
 	if st.Blocked != "" {
 		fmt.Fprintf(&body, "\n\n**Blocked:** %s", st.Blocked)
 	}

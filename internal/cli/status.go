@@ -301,6 +301,7 @@ func runStatus(ctx context.Context, e *Env, in Values) error {
 			fmt.Fprintf(w, "%s: no open Goals (label type:goal); pass a Goal, Initiative, or Feature\n", repo)
 		} else if look := e.Look(); look.Human() {
 			fmt.Fprint(w, look.Table(statusRows(rep.Roots)))
+			fmt.Fprintln(w, look.Style(ui.Muted, status.SpendNote))
 			fmt.Fprintln(w, look.Style(ui.Muted, "Health, risk, decisions, and streak per item: aayu status --json"))
 		} else {
 			fmt.Fprint(w, status.Table(rep.Roots))
@@ -431,7 +432,7 @@ func statusRows(roots []*status.Rollup) ([]string, [][]string) {
 	row = func(r *status.Rollup, depth int) {
 		rows = append(rows, []string{fmt.Sprintf("%s#%d %s %s", strings.Repeat("  ", depth), r.Number, r.Type, r.Title),
 			fmt.Sprintf("%d/%d", r.Done(), r.Items), fmt.Sprint(r.ByStatus["ready"]), fmt.Sprint(r.ByStatus["in-progress"]),
-			fmt.Sprint(len(r.Blocked)), r.ProofCoverage, fmt.Sprintf("$%.2f", r.CostUSD)})
+			fmt.Sprint(len(r.Blocked)), r.ProofCoverage, fmt.Sprintf("%.2f USD", r.CostUSD)})
 		for _, c := range r.Children {
 			row(c, depth+1)
 		}
@@ -439,5 +440,5 @@ func statusRows(roots []*status.Rollup) ([]string, [][]string) {
 	for _, r := range roots {
 		row(r, 0)
 	}
-	return []string{"Item", "Done", "Ready", "In progress", "Blocked", "Proof", "Cost"}, rows
+	return []string{"Item", "Done", "Ready", "In progress", "Blocked", "Proof", "Metered spend"}, rows
 }

@@ -134,7 +134,8 @@ func TestBuildLeaseAttemptsResume(t *testing.T) {
 }
 
 // WP5.5 build budget: a second verify miss on a never layer blocks before the
-// attempts budget, and spend over [autonomy.budget] cost_usd blocks at once.
+// attempts budget, and metered spend over [autonomy.budget] cost_usd blocks at
+// once, but only when aayu's own model calls are pay-as-you-go.
 func TestBuildNeverLayerAndCost(t *testing.T) {
 	g, env, opts, dir, _, _, _ := thinFixture(t)
 	wt := BuildWorktree(dir, 2)
@@ -156,9 +157,45 @@ func TestBuildNeverLayerAndCost(t *testing.T) {
 	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready again: %s", errOut)
 	}
-	env["AAYU_COST_USD"] = "30"
-	if code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(out+errOut, "cost budget breached: 30.00 USD spent, budget 25.00 USD") {
-		t.Fatalf("over the cost budget: %d %s %s", code, out, errOut)
+	// The cost limit (60 USD) applies only when aayu's own calls are
+	// pay-as-you-go: a direct provider's key here. Spend is appended to the
+	// clone's actions log, which build reads.
+	logged := func(usd string) {
+		t.Helper()
+		p := filepath.Join(dir, ".aayudha", "telemetry", "actions.jsonl")
+		_ = os.MkdirAll(filepath.Dir(p), 0o755)
+		f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = f.WriteString(`{"kind":"model.call","story":"#2","status":"done","cost_usd":` + usd + "}\n")
+		_ = f.Close()
+	}
+	notBlocked := func(what string) {
+		t.Helper()
+		if _, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); strings.Contains(out+errOut, "cost budget breached") || contains(g.LabelNames(2), "status:blocked") {
+			t.Fatalf("%s: blocked: %s %s", what, out, errOut)
+		}
+	}
+	env["AAYU_SECRET_ANTHROPIC"] = "model-key"
+	logged("60")
+	notBlocked("metered, at 60 USD")
+	logged("0.01")
+	if code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(out+errOut, "cost budget breached: metered spend 60.01 USD of 60 (subscription use not counted)") {
+		t.Fatalf("metered, over the cost budget: %d %s %s", code, out, errOut)
+	}
+	// With no metered key or endpoint there is no cost limit, though the log
+	// shows 100 USD for the story.
+	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready again: %s", errOut)
+	}
+	delete(env, "AAYU_SECRET_ANTHROPIC")
+	logged("39.99")
+	_ = os.WriteFile(filepath.Join(wt, "notes.txt"), []byte("a checkpoint\n"), 0o644)
+	_, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r")
+	if strings.Contains(out+errOut, "cost budget breached") || contains(g.LabelNames(2), "status:blocked") ||
+		!strings.Contains(out, "metered spend 100.00 USD, no cost limit: no pay-as-you-go model key or endpoint is configured (subscription use not counted)") {
+		t.Fatalf("no metered key, 100 USD logged: %s %s", out, errOut)
 	}
 }
 

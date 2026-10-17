@@ -75,7 +75,7 @@ var sections = []section{
 			{"autonomy.approver", "GitHub login that gives the human pass in solo mode. Empty until `init` sets it.", "WP5.5"},
 			{"autonomy.correction_days", "Days after a merge in which a Bug or Incident that links the PR counts as a correction and resets the streak of every layer the PR touched.", "proposed (WP5.7)"},
 			{"autonomy.budget.wall_hours", "Wall-clock hours one `build` may run before the story is marked `status:blocked` and the owner is paged.", proposed},
-			{"autonomy.budget.cost_usd", "Model spend, in USD, one `build` may use before it is blocked.", proposed},
+			{"autonomy.budget.cost_usd", "Metered model spend, in USD, one `build` may use before it is blocked. It applies only when aayu's own model calls are pay-as-you-go: a `[models.gateway]` endpoint or a direct provider's key (anthropic, openai, google, xai) is configured. With neither there is no cost limit, because subscription use reports no cost; build and status say so.", proposed},
 			{"autonomy.budget.attempts", "Failed checkpoint attempts before a story is blocked. A second failure on a never-layer blocks regardless.", proposed},
 		},
 	},
@@ -83,7 +83,7 @@ var sections = []section{
 		heading: "Budgets",
 		roots:   []string{"budget"},
 		rows: []row{
-			{"budget.per_story_usd", "Model spend per story, in USD, before the circuit breaker pauses agent lanes (exit 6).", proposed},
+			{"budget.per_story_usd", "Model spend per story, in USD, before the circuit breaker pauses agent lanes (exit 6). At least `autonomy.budget.cost_usd`, so the breaker never stops a story before its build budget does.", proposed},
 			{"budget.per_day_usd", "Model spend per repository per day, in USD, before the breaker trips.", proposed},
 			{"budget.per_pr_inspect_max", "Model spend, in USD, for `inspect` on one PR across all its cycles.", proposed},
 			{"budget.ci_minutes_month", "GitHub Actions minutes per month that agent-started workflows may use.", proposed},
