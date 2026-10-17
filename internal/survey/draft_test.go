@@ -82,6 +82,13 @@ func TestRenderSurvey(t *testing.T) {
 			t.Errorf("SURVEY.md lacks %q:\n%s", want, md)
 		}
 	}
+	// Model-written text shows as written: no HTML tag or emphasis is read into
+	// it, a code span stays as it is, and each heading is used once.
+	d.Engineering[0].Text = "Blocks call block<Type>Continue by name; xss* and strict* files switch modes; see `a_b*c`."
+	md = Render(ix, d, Check(ix, d))
+	if !strings.Contains(md, `block\<Type>Continue by name; xss\* and strict\* files`) || !strings.Contains(md, "`a_b*c`") || strings.Count(md, "### Risks\n") != 1 || !strings.Contains(md, "### Modernisation risks\n") {
+		t.Errorf("escaping:\n%s", md)
+	}
 	d.ProductClaims[1].Basis = "observed"
 	if md := Render(ix, d, Check(ix, d)); !strings.Contains(md, "## Problems") {
 		t.Error("a failing draft's report lists its problems")

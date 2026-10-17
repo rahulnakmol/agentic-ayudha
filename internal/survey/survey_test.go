@@ -47,6 +47,10 @@ func TestIndexFacts(t *testing.T) {
 	if got := target("build:Makefile#clean"); got.Kind != "rule" || len(got.Sources) != 0 {
 		t.Errorf("make clean = %+v", got)
 	}
+	// A test's Markdown input is test data, not a product document.
+	if len(ix.Docs) != 1 || ix.Docs[0].ID != "doc:README.md" {
+		t.Errorf("docs = %v, want only doc:README.md", ix.Docs)
+	}
 
 	sym := map[string]Symbol{}
 	for _, s := range ix.Symbols {
