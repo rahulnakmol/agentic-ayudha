@@ -130,7 +130,7 @@ func runChart(ctx context.Context, e *Env, in Values) error {
 		m := l.Config.Measure
 		rep.Facts = append(rep.Facts, packFact{Text: fmt.Sprintf("acquisition %q, activation %q within %d days, retention %q, referral %q, North Star %q",
 			m.Acquisition, m.Activation, m.ActivationDays, m.Retention, m.Referral, m.NorthStar), Cite: "`[measure]`"},
-			packFact{Text: "`aayu measure` reads exports into a pinned SQLite snapshot under `.aayudha/state/measure/` (DuckDB optional) and computes these stages over complete weekly cohorts", Cite: "`[measure]`"})
+			packFact{Text: "`aayu measure` reads exports into a pinned SQLite snapshot under `.aayudha/state/measure/` (DuckDB optional) and computes these stages over complete weekly cohorts; the metric standard (definitions, targets, the North Star) is the Revenue Architect's", Cite: "`[measure]`"})
 	}
 	var names []string
 	for k := range l.Config.Integrations {
