@@ -4,7 +4,7 @@
 # output/note.md is a recorded answer (tier 1); planted/note.md is the same note with an uncited claim. Tier 2 has
 # the chart skill write the note again and the judge score it.
 skill = "chart"
-description = "Mnemosyne charts the data for #41 (HR's unanswered questions) at the startup stage."
+description = "Mneme charts the data for #41 (HR's unanswered questions) at the startup stage."
 input = "grounding.md"
 artifacts = ["output/note.md"]
 

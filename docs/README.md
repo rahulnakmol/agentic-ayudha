@@ -67,7 +67,7 @@ every input of every verb.
 | `status` | Roll up status, health, risk, proof coverage, decisions, and cost per Goal, Initiative, and Feature. | Engineering Manager | chore | all | bot | cli, skill, mcp |
 | `audit` | Audit floors, proof coverage, waivers, decision SLAs, autonomy exceptions, and unlogged writes; write a reproducible report. | Auditor | review | all | bot | cli, skill, mcp |
 | `retro` | Compare estimates with observed delivery, corrections, floor misses, and cost; file findings as Feedback issues. | Engineering Manager | spec | all | bot | cli, skill, mcp |
-| `measure` | Measure a Goal or Initiative against its baseline from analytics exports or live cloud pulls and write the Result. | Data & AI Architect | chore | L08 | bot | cli, skill, mcp |
+| `measure` | Measure a Goal or Initiative against its baseline from analytics exports or live cloud pulls and write the Result. | Data & AI Architect | spec | L08 | bot | cli, skill, mcp |
 | `evolve` | Turn accepted retro Feedback into a failing eval case, then a skill diff that passes it, opened as an agent-authored PR. | AI Native Engineer (+SRE hat) | build | L05 | bot | cli, skill, mcp |
 | `brief` | Explain work to an audience in a chosen register and purpose as a grounded, accessible HTML brief. | Mentalist | spec | all | bot | cli, skill, mcp |
 | `tell` | Write docs, guides, changelogs, release notes, launch copy, or brand copy that cite only proven Features; publish is human-only. | Marketer & Documenter | spec | L01 | human | cli, skill, mcp |

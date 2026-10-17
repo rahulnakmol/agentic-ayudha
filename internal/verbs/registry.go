@@ -898,7 +898,7 @@ var Verbs = []Command{
 		Name: "measure", WP: "WP7.2", Stage: StageLearn,
 		Summary: "Measure a Goal or Initiative against its baseline from analytics exports or live cloud pulls and write the Result.",
 		Reader:  "Measures a Goal against its baseline, the same way as before, and writes the result into the Goal.",
-		Seat:    DataAIArchitect, Owns: RevenueArchitect, Lane: LaneChore, Layers: OnlyLayers(L08),
+		Seat:    DataAIArchitect, Owns: RevenueArchitect, Lane: LaneSpec, Layers: OnlyLayers(L08),
 		Inputs: []Input{
 			optPos("issue", TypeIssue, "Goal or Initiative to measure; without it, only the cohorts and North Star are reported."),
 			flag("metric", TypeString, "acquisition, activation, retention, referral, revenue, north_star, or <source>:<metric> [filter]; default the issue's Metric."),

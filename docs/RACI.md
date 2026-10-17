@@ -41,7 +41,7 @@ Charters: `seats/<seat>/CHARTER.md`.
 | `status` | Engineering Manager | Engineering Manager twin, chore lane | Engineering Manager | — | Founder | all | bot | none | read |
 | `audit` | Auditor | Auditor twin, review lane | Auditor | Quality Architect | Founder | all | bot | none | write |
 | `retro` | Engineering Manager | Engineering Manager twin, spec lane | Engineering Manager | Auditor, AI Native Engineer (+SRE hat) | Founder | all | bot | host | write |
-| `measure` | Data & AI Architect | Data & AI Architect twin, chore lane | Revenue Architect | Product Strategist | Founder | L08 | bot | none | write |
+| `measure` | Data & AI Architect | Data & AI Architect twin, spec lane | Revenue Architect | Product Strategist | Founder | L08 | bot | none | write |
 | `evolve` | AI Native Engineer (+SRE hat) | AI Native Engineer (+SRE hat) twin, build lane | AI Native Engineer (+SRE hat) | Quality Architect, Data & AI Architect | Engineering Manager | L05 | bot | host | write |
 | `brief` | Mentalist | Mentalist twin, spec lane | Mentalist | Product Strategist | Marketer & Documenter | all | bot | hybrid (adversarial pass direct) | read |
 | `tell` | Marketer & Documenter | Marketer & Documenter twin, spec lane | Marketer & Documenter | Mentalist, Product Strategist | Founder | L01 | human | host (publish requires the human identity) | write |
