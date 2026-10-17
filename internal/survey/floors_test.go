@@ -144,8 +144,8 @@ func TestFloorRunners(t *testing.T) {
 		t.Errorf("entries = %v; want class Box in util.hxx", ix.Entries)
 	}
 	// An export annotation before a declaration does not hide it.
-	for at, name := range map[string]string{"util.hxx:7": "exported_api", "util.hxx:8": "exported_attr", "util.hxx:9": "exported_old"} {
-		if !slices.ContainsFunc(ix.Entries, func(e Fact) bool { return e.At == at && e.Detail == "function "+name }) {
+	for at, name := range map[string]string{"util.hxx:7": "function exported_api", "util.hxx:8": "function exported_attr", "util.hxx:9": "function exported_old", "util.hxx:12": "method Exported::run"} {
+		if !slices.ContainsFunc(ix.Entries, func(e Fact) bool { return e.At == at && e.Detail == name }) {
 			t.Errorf("entries = %v; want %s after its attribute", ix.Entries, name)
 		}
 	}
@@ -219,6 +219,7 @@ func TestFloorRunnerPrograms(t *testing.T) {
 	}
 	write("tool.py", "#!/usr/bin/env python3\nimport lib\nimport plugins\n\n\ndef run(env):\n    lib.setup(env)\n    print(lib.render(1))\n\n\nif __name__ == \"__main__\":\n    run(lib.Env())\n\n\ndef hum(x):\n    return x\n\n\ndef unused(env):\n    env.register('hum', hum)\n")
 	write("cases/hum.js", "hum(1);\n")
+	write("examples/case.py", "shout(\"x\")\n")
 	write("lib.py", "def render(x):\n    return str(x)\n\n\ndef shout(x):\n    return str(x).upper()\n\n\ndef setup(env):\n    env.register('shout', shout)\n")
 	write("cases/loud.js", "shout(\"hi\");\n")
 	write("plugins.py", "import lib\n\n\ndef yell(x):\n    return x\n\n\nlib.REG.register('yell', yell)\n")
@@ -262,6 +263,8 @@ func TestFloorRunnerPrograms(t *testing.T) {
 		{"negated", "the main guard's runner, whose guard calls the function that registers it", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:tool.py:11"}, []string{"cases/loud.js"} }), "case set G1", false},
 		{"match", "a program that never calls that function", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/loud.js"} }),
 			"cases/loud.js:1 calls shout, which runner entry:other.py:1 does not register", true},
+		{"match", "an input in the host's own language", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"examples/case.py"} }),
+			"examples/case.py:1 calls shout, which runner entry:other.py:1 does not register", true},
 		{"negated", "a script whose top-level code calls the function that registers it", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/boom.js"} }), "case set G1", false},
 		{"match", "a function of the script its top-level code never calls", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/hush.js"} }),
 			"cases/hush.js:1 calls hush, which runner entry:other.py:1 does not register", true},
