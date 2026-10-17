@@ -92,6 +92,25 @@ func TestAppend(t *testing.T) {
 	if strings.Join(ids, ",") != "c1,c2" {
 		t.Errorf("logged IDs %v; want c1,c2", ids)
 	}
+	// A host with no session ID shares one file per day; a very long ID is
+	// cut, so a file name never outgrows the file system's limit.
+	for _, tt := range []struct{ session, want string }{
+		{"", "no-session-"},
+		{strings.Repeat("s", 300), strings.Repeat("s", 80) + ".jsonl"},
+	} {
+		if _, err := Append(dir, Entry{Session: tt.session}); err != nil {
+			t.Fatal(err)
+		}
+		if m, _ := filepath.Glob(filepath.Join(dir, tt.want+"*")); len(m) != 1 {
+			t.Errorf("session %.12q…: files %v; want one named %s…", tt.session, m, tt.want)
+		}
+	}
+	// A log directory that cannot be created is an error for the caller to report.
+	blocker := filepath.Join(dir, "file")
+	_ = os.WriteFile(blocker, nil, 0o600)
+	if _, err := Append(filepath.Join(blocker, "calls"), Entry{Session: "s"}); err == nil {
+		t.Error("Append under a file succeeded; want an error")
+	}
 }
 
 func TestFromPostHook(t *testing.T) {
@@ -110,5 +129,8 @@ func TestFromPostHook(t *testing.T) {
 				t.Fatalf("FromPostHook = %q %q failed=%v ok=%v; want %q %q failed=%v", session, r.Output, r.Failed, ok, tt.session, tt.out, tt.failed)
 			}
 		})
+	}
+	if _, _, _, ok := FromPostHook([]byte("not an event")); ok {
+		t.Error("FromPostHook read a call from text that is not JSON")
 	}
 }
