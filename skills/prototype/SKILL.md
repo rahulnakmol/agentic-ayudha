@@ -88,7 +88,12 @@ Build a flagged, working prototype of a Feature with Code Connect mapping and a 
    environment honours and production ignores), so each can be rendered against its Figma frame.
 4. Map each Figma component the prototype uses, new ones included, to code with Code Connect
    (`figma.connect(Component, "<figma URL with node-id>", {props, example})`), with its props and an example a
-   designer can copy.
+   designer can copy. Keep the mappings with the Feature's code: one `.figma.tsx` beside each new component, and one
+   for the existing system components the Feature uses, importing them from the design system. Never add or edit
+   files in the design-system package; its changes belong to the human who owns it.
+   Keep the prototype to the files the Feature needs: the route, its new components, the data calls, the seed for
+   the capture states, the flag, and the mappings; nothing the gate and the states do not need (no rewritten system
+   components, test suites, or storybooks), so a reviewer can read the whole change.
 5. Write `stage.json`: the flag, the Figma file key, the Code Connect sources, the components, and each state's
    URL path and Figma frame (the same state IDs as the mockups):
 
