@@ -1,0 +1,6 @@
+# Which tests prove story #399's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # .agents/check --full exits non-zero naming the CI job it mirrors; a required CI job without a local step fails
+tests = ["internal/agentenv:TestLocalGateMirrorsRequiredJobs", "internal/agentenv:TestLocalGateScript", "internal/agentenv:TestInstallPrePush"]

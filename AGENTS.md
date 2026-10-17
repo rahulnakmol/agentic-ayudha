@@ -27,6 +27,11 @@ the end is generated (WP5.1); the full table is [docs/RACI.md](docs/RACI.md).
   markdownlint-cli2                  # the CI `docs` job, config in .markdownlint-cli2.yaml
   ```
 
+- Before every push: `bash .agents/check --full`, the local gate. It runs the checks of every required CI job,
+  names the job that fails, and says what runs only in CI. `git push` runs it through the pre-push hook that
+  `aayu install --env --apply` installs (Appendix B D-3.2c.h); its commands are the `[[gate]]` entries in
+  `.aayudha/env.toml`.
+
 - Coverage ratchet (`ratchets.toml`, Appendix B S-4.3r): the `build` job fails when coverage drops below the floor,
   and on a PR when coverage holds well above it. Then run
   `go test -coverprofile=coverage.out ./... && go run ./internal/ratchet/cmd/ratchet -update -coverprofile coverage.out`

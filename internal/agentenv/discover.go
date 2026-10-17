@@ -88,6 +88,7 @@ func Discover(root string) (Discovery, error) {
 	d.makefile()
 	d.unsupported()
 	d.existingSetup()
+	d.gate()
 	if len(d.spec.Checks) == 0 {
 		d.ask(Question{ID: "checks", Ask: "The code names no build or test command. Which command proves an agent can work here?",
 			Default: "none", Why: "without one, verification can only show that setup succeeds"})
