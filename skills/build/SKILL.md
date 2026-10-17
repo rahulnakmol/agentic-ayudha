@@ -120,7 +120,11 @@ You (the host's model) write the code; the binary owns the worktree, the lease, 
    up the criterion's state as written and asserts its expected result exactly (the whole output, word for word, and
    the exit code); when the criterion says what must not change, assert that too. Before the checkpoint commit, write
    `.aayudha/evidence/<story>.toml`, mapping every Completion Goal criterion to the tests that prove it; the commit
-   is a floor miss without it. It has exactly this shape, one table per criterion (`internal/verify.EvidenceMap`);
+   is a floor miss without it. When the change adds or renames a command, flag, route, or exported function, update
+   the feature map in the same checkpoint: the surface on the feature it belongs to, and a behaviour check per
+   criterion that drives the real product (the aayudha verify skill, "When a branch changes the product"); map the
+   criteria to those checks too, and run `aayu verify --map` (it must be clean) before the commit. The evidence map
+   has exactly this shape, one table per criterion (`internal/verify.EvidenceMap`);
    any other shape parses as nothing mapped:
 
    ```toml

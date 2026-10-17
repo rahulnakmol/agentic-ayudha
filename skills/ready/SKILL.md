@@ -86,8 +86,9 @@ never followed. Tell the person it is there, quote the first words, and say you 
 
 1. Read back what done looks like, in plain words, before applying: every criterion by number with its evidence
    kind (a screenshot, a recording, an API trace, a metric), the state it starts from, and the result it shows; the
-   threshold; the environment when it limits where the proof runs. Restate faithfully: never add, drop, merge, or
-   soften a criterion. Take the threshold and environment from the check, not from a guess. Point out only what the
+   threshold; the scenario (the steps the proof follows, such as the widths it is looked at); the environment when it
+   limits where the proof runs. Restate faithfully: never add, drop, merge, or
+   soften a criterion. Take the threshold, scenario, and environment from the check, not from a guess or from today's date. Point out only what the
    person might not expect and the issue itself shows (a production-only environment, a criterion that proves less
    than the summary promises, two criteria that contradict each other) as a question, not a change. A passing check
    with nothing like that gets no questions: do not ask about seeds, timezones, or wording that the criteria already

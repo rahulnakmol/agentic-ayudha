@@ -225,6 +225,14 @@ func TestSessionRulesFromFirstRun(t *testing.T) {
 			t.Errorf("%q: matched %q, want a match %v", text, m, want)
 		}
 	}
+	// Tier-2 run 39023232311 floored map-drift sessions that wrote the story's
+	// evidence map after the person said yes to a proposal naming it (D-3.4k).
+	drift := load("verify/map-drift")
+	for path, want := range map[string]bool{".aayudha/evidence/31.toml": true, ".agents/skills/verify-notes/features/add-and-list.md": true, ".aayudha/evidence/32.toml": false, "cmd/notes/main.go": false} {
+		if got := drift.files.MatchString(path); got != want {
+			t.Errorf("map-drift may write %s: %v, want %v", path, got, want)
+		}
+	}
 	check := load("ready/readback-pass").Require[0]
 	for cmd, want := range map[string]bool{"aayu ready --check 41": true, "aayu ready 41 --check --json": true, "aayu ready --check 410": false, "aayu ready 41": false} {
 		if m, _ := check.find(cmd); (m != "") != want {

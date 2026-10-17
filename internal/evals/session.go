@@ -183,8 +183,9 @@ You are working in the person's terminal through a channel that carries JSON. Ea
 "say" is what you tell the person this turn. "files" are written before "commands" run, in order; a path is relative
 to the repository root (the story's worktree when you build). Commands run one by one with no shell: no pipes,
 redirection, or chaining. aayu, cat, and ls run; anything else is not available here. The results come back in the
-next message. When you need the person, ask in "say" and run nothing; their answer comes back. When the work is
-finished, or you have stopped and said why, reply with "done": true and your final report to the person in "say".
+next message. When you need the person (a question, or a proposal waiting for their yes), ask in "say", run
+nothing, and reply with "done": false; their answer comes back. When the work is finished, or you have stopped and
+said why, reply with "done": true and your final report to the person in "say".
 When the channel asks you to send a turn again because it was not valid JSON, send the same turn: the person never
 saw the rejected reply, so do not mention it to them.`
 
@@ -913,7 +914,11 @@ func clipSteps(steps []SessionStep) []SessionStep {
 		s.Turn.Say = clip(actions.RedactString(s.Turn.Say), 3000)
 		fs := make([]SessionFile, len(s.Turn.Files))
 		for j, f := range s.Turn.Files {
-			fs[j] = SessionFile{Path: f.Path, Content: clip(actions.RedactString(f.Content), 4000)}
+			c := actions.RedactString(f.Content)
+			if len([]rune(c)) > 12000 { // the floors read the whole file; say so, or a clipped file reads as broken (D-3.4k)
+				c = clip(c, 12000) + "\n[clipped here for length by the eval harness; the file was written whole]"
+			}
+			fs[j] = SessionFile{Path: f.Path, Content: c}
 		}
 		s.Turn.Files = fs
 		rs := make([]CommandResult, len(s.Results))

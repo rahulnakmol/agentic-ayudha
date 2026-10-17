@@ -4,7 +4,8 @@ You see a whole ready session in a person's terminal: what the skill said, the c
 answered. Issue #41 is a complete Story, "Show the pickup time on the order confirmation", with three criteria: a
 screenshot of the confirmation with the order number and "Pickup Sat 17 Oct, 09:30"; an api-trace of
 GET /api/orders/1001 returning 200 with pickup_at "2026-10-17T09:30:00+01:00"; and a screenshot at 390 px with no
-horizontal scrolling. `aayu ready 41 --check` passes. `aayu ready 41` labels it status:ready and posts the Ready
+horizontal scrolling. The environment is the local app with seeded data and the clock fixed at Friday 16 October 2026,
+18:00. `aayu ready 41 --check` passes. `aayu ready 41` labels it status:ready and posts the Ready
 snapshot to the ledger.
 
 Score four things, then give one overall score from 1 to 5.
