@@ -109,9 +109,9 @@ jobs:
             echo "::notice::Dispatched for group $ONLY; $GROUP does not run."
             run=false
           fi
-          # The brief register cases cost about 6-7 USD a run: nightly, dispatch, and promotion run them, pushes to dev
-          # do not (D-7.3c).
-          if [ "$EVENT" = push ] && [ "$REF" = dev ] && { [ "$GROUP" = brief ] || [ "$GROUP" = brief-plain ]; }; then
+          # The brief register cases cost about 6-7 USD a run: nightly, dispatch, and promotion run them, pushes to dev do
+          # not (D-7.3c). The tell cases (about 5 USD) run on dispatch and promotion only (events in eval.toml, D-7.5e).
+          if [ "$EVENT" = push ] && [ "$REF" = dev ] && { [ "$GROUP" = brief ] || [ "$GROUP" = brief-plain ] || [ "$GROUP" = tell ]; }; then
             echo "::notice::Push to dev: the $GROUP group runs nightly, on dispatch, and on promotion."
             run=false
           fi

@@ -901,9 +901,10 @@ func TestGroups(t *testing.T) {
 			t.Errorf("%s group events: %v", name, g.Events)
 		}
 	}
-	// D-7.5b: the tell cases are their own advisory group, run on dispatch only.
+	// D-7.5e: the tell cases are their own gating group, run on dispatch and on pushes (evals.yml skips pushes to dev),
+	// never nightly.
 	tg, tells, err := cfg.ForGroup("tell", all)
-	if g, _ := cfg.Group("tell"); err != nil || tg.MaxUSD != 8 || len(tells) != 3 || cfg.Gates("tell") || g.RunsOn("push") || g.RunsOn("schedule") || !g.RunsOn("workflow_dispatch") {
+	if g, _ := cfg.Group("tell"); err != nil || tg.MaxUSD != 8 || len(tells) != 3 || !cfg.Gates("tell") || !g.RunsOn("push") || g.RunsOn("schedule") || !g.RunsOn("workflow_dispatch") {
 		t.Fatalf("tell group: %v, cap %v, %d cases, gates %v, events %v", err, tg.MaxUSD, len(tells), cfg.Gates("tell"), g.Events)
 	}
 	// D-3.4f: the host-skill session cases have their own advisory group, run on dispatch only; ready/story-ready, a
