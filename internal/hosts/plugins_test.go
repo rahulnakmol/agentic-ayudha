@@ -467,3 +467,74 @@ func TestInstallLeavesHooksAndMCPToThePlugin(t *testing.T) {
 		t.Errorf("notes %q", res.Notes)
 	}
 }
+
+// With the aayudha plugin enabled for a host, install writes no skill copies
+// for it and removes the ones it wrote before, so the host lists each aayudha
+// skill once; the product's own verify skills are still mirrored for Claude
+// Code; a directory another host still reads keeps its copies, and doctor's
+// SkillDoubles names that double (D-3.2b.f).
+func TestInstallLeavesSkillsToThePlugin(t *testing.T) {
+	root, home := t.TempDir(), t.TempDir()
+	write(t, root, ".agents/skills/verify-web/SKILL.md", "---\nname: verify-web\ndescription: \"The product's own.\"\n---\n")
+	o := opts(t, root, home, false, verbs.HostClaude, verbs.HostCodex)
+	install := func() *Result {
+		t.Helper()
+		res, err := Plan(o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := Apply(o, res.Edits, false); err != nil {
+			t.Fatal(err)
+		}
+		return res
+	}
+	exists := func(rel string) bool { _, err := os.Stat(filepath.Join(root, rel)); return err == nil }
+	install()
+	if !exists(".claude/skills/alpha/SKILL.md") || !exists(".agents/skills/alpha/SKILL.md") {
+		t.Fatal("install without the plugin wrote no copies")
+	}
+	write(t, home, ".claude/settings.json", `{"enabledPlugins": {"aayudha@aayudha": true}}`)
+	write(t, home, ".codex/config.toml", "[plugins.\"aayudha@aayudha\"]\nenabled = true\n")
+	lock, _, _ := ReadLock(root)
+	if d := SkillDoubles(root, home, filepath.Join(home, ".codex"), lock); len(d) != 2 || !strings.HasSuffix(d[0], "aayu install --apply removes the copies") {
+		t.Errorf("doubles before re-install: %q", d)
+	}
+	install()
+	for _, rel := range []string{".claude/skills/alpha", ".claude/skills/beta", ".agents/skills/alpha", ".agents/skills/beta"} {
+		if exists(rel) {
+			t.Errorf("%s remains beside the plugin's skills", rel)
+		}
+	}
+	if !exists(".claude/skills/verify-web/SKILL.md") || !exists(".agents/skills/verify-web/SKILL.md") {
+		t.Error("the product's verify skill is no longer in both places")
+	}
+	lock, _, _ = ReadLock(root)
+	if p := CheckCopies(root); len(p) > 0 {
+		t.Errorf("copies after the plugin took over: %q", p)
+	}
+	if d := SkillDoubles(root, home, filepath.Join(home, ".codex"), lock); len(d) != 0 {
+		t.Errorf("doubles after re-install: %q", d)
+	}
+	// Amp has no aayudha plugin and reads .agents/skills, so its copies come
+	// back, and Codex, which reads them too, lists them twice: doctor says so.
+	o.Hosts = []verbs.HostID{verbs.HostAmp}
+	res := install()
+	if !exists(".agents/skills/alpha/SKILL.md") || exists(".claude/skills/alpha") {
+		t.Error("with Amp, .agents/skills needs the copies and .claude/skills does not")
+	}
+	lock, _, _ = ReadLock(root)
+	d := SkillDoubles(root, home, filepath.Join(home, ".codex"), lock)
+	if len(d) != 1 || !strings.HasPrefix(d[0], "OpenAI Codex: the aayudha plugin and the copies in .agents/skills") || !strings.Contains(d[0], "stay for Amp") {
+		t.Errorf("doubles with Amp: %q", d)
+	}
+	if !strings.Contains(strings.Join(res.Notes, "\n"), "OpenAI Codex lists each aayudha skill twice") {
+		t.Errorf("notes %q", res.Notes)
+	}
+	// The plugin goes away: Claude Code has no skills until install runs again.
+	write(t, home, ".claude/settings.json", `{}`)
+	if d := SkillDoubles(root, home, filepath.Join(home, ".codex"), lock); !slices.ContainsFunc(d, func(s string) bool {
+		return strings.HasPrefix(s, "Claude Code: install left the skills to the aayudha plugin")
+	}) {
+		t.Errorf("a disabled plugin: %q", d)
+	}
+}
