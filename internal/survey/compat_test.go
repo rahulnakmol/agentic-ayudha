@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/rahulnakmol/agentic-ayudha/internal/testbin"
 )
 
 // --probe finds what reading the code cannot: output that changes between
@@ -17,31 +19,73 @@ import (
 // Each finding becomes a citable probe fact.
 func TestProbe(t *testing.T) {
 	dir := t.TempDir()
-	bin := filepath.Join(dir, "legacy.sh")
-	script := `#!/bin/sh
-case "$1" in
-  pid) echo "run $$" ;;
-  tz) echo "zone ${TZ}" ;;
-  home) cat "$HOME/.aayu-probe" 2>/dev/null || echo none ;;
-  write) cd "$HOME" && echo saved > out.log; echo ok ;;
-  load) cat lib/tool.py README.md "$LIBDIR"/*.rb "${GEM_PATH##*:}"/gems/x.rb "$2" > /dev/null; echo ok ;;
-esac
-`
-	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
+	// The fixtures are Go programs, so the probe runs them by path as it runs a legacy build, on every OS.
+	bin := testbin.Build(t, dir, "legacy", `package main
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+)
+
+func main() {
+	switch os.Args[1] {
+	case "pid":
+		fmt.Println("run", os.Getpid())
+	case "tz":
+		fmt.Println("zone", os.Getenv("TZ"))
+	case "home":
+		if b, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".aayu-probe")); err == nil {
+			os.Stdout.Write(b)
+		} else {
+			fmt.Println("none")
+		}
+	case "write":
+		_ = os.WriteFile(filepath.Join(os.Getenv("HOME"), "out.log"), []byte("saved\n"), 0o644)
+		fmt.Println("ok")
+	case "load":
+		gems := filepath.SplitList(os.Getenv("GEM_PATH"))
+		rb, _ := filepath.Glob(filepath.Join(os.Getenv("LIBDIR"), "*.rb"))
+		for _, f := range append(rb, "lib/tool.py", "README.md", filepath.Join(gems[len(gems)-1], "gems", "x.rb"), os.Args[2]) {
+			_, _ = os.ReadFile(f)
+		}
+		fmt.Println("ok")
 	}
+}
+`)
 	// The checker build reports a runtime error on one case and prints
 	// something else on another, beside its report on stderr.
-	checker := filepath.Join(dir, "checked.sh")
-	if err := os.WriteFile(checker, []byte(`#!/bin/sh
-case "$1" in
-  home) echo "Fortran runtime error: Index '11' of dimension 1 of array 'x' above upper bound of 10" >&2; cat "$HOME/.aayu-probe" 2>/dev/null || echo none ;;
-  write) echo "previous warning" >&2; echo "$PWD/lib/write.rb:3:in 'save': can't modify frozen String: \"\" (FrozenError)" >&2 ;;
-  *) exec `+bin+` "$@" ;;
-esac
-`), 0o755); err != nil {
-		t.Fatal(err)
+	checker := testbin.Build(t, dir, "checked", fmt.Sprintf(`package main
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+)
+
+func main() {
+	switch os.Args[1] {
+	case "home":
+		fmt.Fprintln(os.Stderr, "Fortran runtime error: Index '11' of dimension 1 of array 'x' above upper bound of 10")
+	case "write":
+		wd, _ := os.Getwd()
+		fmt.Fprintln(os.Stderr, "previous warning")
+		fmt.Fprintf(os.Stderr, "%%s:3:in 'save': can't modify frozen String: \"\" (FrozenError)\n", filepath.Join(wd, "lib", "write.rb"))
+		return
 	}
+	cmd := exec.Command(%q, os.Args[1:]...)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	if err := cmd.Run(); err != nil {
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
+			os.Exit(ee.ExitCode())
+		}
+		os.Exit(1)
+	}
+}
+`, bin))
 	libdir := t.TempDir() // a gem directory outside the checkout
 	for i := range 6 {
 		if err := os.WriteFile(filepath.Join(libdir, fmt.Sprintf("m%d.rb", i)), nil, 0o644); err != nil {
@@ -60,7 +104,7 @@ esac
 		{ID: "tz", Set: "G1", Argv: []string{"{bin}", "tz"}},
 		{ID: "home", Set: "G1", Argv: []string{"{bin}", "home"}},
 		{ID: "write", Set: "G1", Argv: []string{"{bin}", "write"}},
-		{ID: "load", Set: "G1", Argv: []string{"{bin}", "load", "Makefile"}, Env: []string{"LIBDIR=" + libdir, "GEM_PATH=/no/such/dir:" + gems}},
+		{ID: "load", Set: "G1", Argv: []string{"{bin}", "load", "Makefile"}, Env: []string{"LIBDIR=" + libdir, "GEM_PATH=" + strings.Join([]string{"/no/such/dir", gems}, string(os.PathListSeparator))}},
 	}}
 	// The index is read back from index.json, as `aayu survey --golden` reads it.
 	idx := filepath.Join(dir, "index.json")
@@ -92,7 +136,7 @@ esac
 		}
 	}
 	// A difference on the checker build says why: its error, not a warning before it.
-	if f := got["probe:check-differs:write"]; !strings.Contains(f.Detail, "(its stderr: lib/write.rb:3:in 'save'") || !strings.Contains(f.Detail, "(FrozenError)") {
+	if f := got["probe:check-differs:write"]; !strings.Contains(f.Detail, "(its stderr: "+filepath.Join("lib", "write.rb")+":3:in 'save'") || !strings.Contains(f.Detail, "(FrozenError)") {
 		t.Errorf("the check-differs fact does not carry the checker's error: %q", f.Detail)
 	}
 	// A case that differs between identical runs says nothing about its environment.

@@ -2,6 +2,7 @@ package verify
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -10,16 +11,27 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/survey"
+	"github.com/rahulnakmol/agentic-ayudha/internal/testbin"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
-// legacyCalc is the legacy build: it prints its argument doubled, and its
-// suite test "neg" passes only for a positive argument.
-const legacyCalc = "#!/bin/sh\nif [ \"$1\" = neg ]; then exit 0; fi\necho $(( $1 * 2 ))\n"
+// calc is a build of the calculator: it prints its argument doubled, and its
+// suite test "neg" exits negExit; with wrongTwo it prints 5 for 2. It is Go,
+// so the cases run it by path, as they run a real build, on every OS.
+func calc(negExit int, wrongTwo bool) string {
+	two := ""
+	if wrongTwo {
+		two = "\tif a == \"2\" {\n\t\tfmt.Println(5)\n\t\treturn\n\t}\n"
+	}
+	return fmt.Sprintf("package main\n\nimport (\n\t\"fmt\"\n\t\"os\"\n\t\"strconv\"\n)\n\nfunc main() {\n\ta := os.Args[1]\n\tif a == \"neg\" {\n\t\tos.Exit(%d)\n\t}\n%s\tn, _ := strconv.Atoi(a)\n\tfmt.Println(n * 2)\n}\n", negExit, two)
+}
+
+// legacyCalc is the legacy build; its suite test "neg" passes.
+var legacyCalc = calc(0, false)
 
 // parityRoot is a checkout with a committed legacy capture of two case sets
 // (G1: cases one and two; S1: suite test neg in area signs) and a new build
-// at build/calc written by the build command from build/calc.src.
+// at build/calc that the build command compiles from build/calc.go.
 func parityRoot(t *testing.T, next, evidence string) string {
 	t.Helper()
 	root := t.TempDir()
@@ -32,8 +44,8 @@ func parityRoot(t *testing.T, next, evidence string) string {
 			t.Fatal(err)
 		}
 	}
-	write("legacy/calc", legacyCalc, 0o755)
-	write("build/calc.src", next, 0o644)
+	legacy := testbin.Build(t, filepath.Join(root, "legacy"), "calc", legacyCalc)
+	write("build/calc.go", next, 0o644)
 	write(".aayudha/survey/cases.json", `{"cases": [
   {"id": "one", "set": "G1", "argv": ["{bin}", "1"]},
   {"id": "two", "set": "G1", "argv": ["{bin}", "2"]}
@@ -47,14 +59,15 @@ func parityRoot(t *testing.T, next, evidence string) string {
 		if err != nil || len(probs) > 0 {
 			t.Fatal(err, probs)
 		}
-		if _, err := survey.Capture(ctx, root, filepath.Join(root, "legacy/calc"), "abc1234", filepath.Join(root, ".aayudha/survey/golden", f), cs); err != nil {
+		if _, err := survey.Capture(ctx, root, legacy, "abc1234", filepath.Join(root, ".aayudha/survey/golden", f), cs); err != nil {
 			t.Fatal(err)
 		}
 	}
 	return root
 }
 
-const parityBuild = `build = ["sh", "-c", "cp build/calc.src build/calc && chmod +x build/calc"]`
+// parityBuild is the evidence map's build command and the new build it writes.
+var parityBuild = `bin = "build/calc` + testbin.Exe + `"` + "\n" + `build = ["go", "build", "-o", "build/calc` + testbin.Exe + `", "build/calc.go"]`
 
 // TestParityFloor (WP5.9, D-5.9m): a modernisation Story whose criterion runs
 // `aayu survey --parity` or `--compat` cannot merge while the new build
@@ -62,17 +75,15 @@ const parityBuild = `build = ["sh", "-c", "cp build/calc.src build/calc && chmod
 // run in the evidence map; when it holds, the criterion is evidenced.
 func TestParityFloor(t *testing.T) {
 	ctx := context.Background()
-	parity := "[[criterion]]\nid = 1\n[[criterion.parity]]\ncases = \".aayudha/survey/cases.json\"\nbin = \"build/calc\"\n" + parityBuild + "\n"
-	compat := "[[criterion]]\nid = 2\n[[criterion.compat]]\ncases = \".aayudha/survey/suite.json\"\nbin = \"build/calc\"\n" + parityBuild + "\n"
+	parity := "[[criterion]]\nid = 1\n[[criterion.parity]]\ncases = \".aayudha/survey/cases.json\"\n" + parityBuild + "\n"
+	compat := "[[criterion]]\nid = 2\n[[criterion.compat]]\ncases = \".aayudha/survey/suite.json\"\n" + parityBuild + "\n"
 	crit := []workitems.Criterion{
 		{N: 1, Evidence: "api-trace", State: "the Rust build and case set G1", Expected: "aayu survey --parity reports no difference"},
 		{N: 2, Evidence: "metric", State: "suite S1", Expected: "aayu survey --compat reports no regression"},
 		{N: 3, Evidence: "screenshot", State: "the about page", Expected: "it shows the version"},
 	}
 	// The new build doubles like the legacy one; it differs only on 2 and on neg.
-	same := "#!/bin/sh\nif [ \"$1\" = neg ]; then exit 0; fi\necho $(( $1 * 2 ))\n"
-	wrongTwo := "#!/bin/sh\nif [ \"$1\" = neg ]; then exit 0; fi\nif [ \"$1\" = 2 ]; then echo 5; exit 0; fi\necho $(( $1 * 2 ))\n"
-	failsNeg := "#!/bin/sh\nif [ \"$1\" = neg ]; then exit 1; fi\necho $(( $1 * 2 ))\n"
+	same, wrongTwo, failsNeg := calc(0, false), calc(0, true), calc(1, false)
 	tests := []struct {
 		name, next, evidence string
 		result               string
@@ -84,7 +95,7 @@ func TestParityFloor(t *testing.T) {
 		{"the Story ports only case one", wrongTwo, strings.Replace(parity, "\nbin", "\nids = [\"one\"]\nbin", 1) + compat, proof.Pass, []int{1, 2}, "criterion 1: 1 cases match"},
 		{"a legacy-passing test regresses", failsNeg, parity + compat, proof.Fail, []int{1}, "criterion 2: 1 test(s) the legacy build passes fail on the new build"},
 		{"a criterion has no run", same, parity, proof.Blocked, nil, "criterion 2 runs `aayu survey --compat` but .aayudha/evidence/9.toml gives it no [[criterion.compat]] run"},
-		{"the build fails", same, strings.Replace(parity, "cp build", "false && cp build", 1) + compat, proof.Blocked, nil, "exited 1"},
+		{"the build fails", same, strings.Replace(parity, `"build/calc.go"`, `"build/missing.go"`, 1) + compat, proof.Blocked, nil, "exited 1"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
