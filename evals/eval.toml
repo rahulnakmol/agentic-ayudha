@@ -54,18 +54,29 @@ max_usd = 3.0 # engineer-ideate and regulatory-close (the plain registers moved 
 # suite) and the drop rule; pass^5 is computed and printed, but advisory. Every other group keeps the full WP3.4 bar.
 pass_k = "advisory"
 
-# Persona cases (WP5.1b): the Engineering Manager twin's retro explanation at the startup and enterprise stages, and the
-# on-demand decision packs of an EM-owned and a Code Architect-owned question, in their own group with their own cap
-# (five runs each, plus at most one revision a run).
-# The personas group does not gate yet (D-5.1d): runs 38682959916 and 38685472745 missed the bar. Its results are
-# computed and printed; evals-gate skips it until a run passes, then this line goes. It never runs nightly or on
-# promotion: on dispatch, and on pushes to dev that change persona files (evals.yml, D-5.3b.h).
+# Persona cases (WP5.1b): the on-demand decision packs of an EM-owned, a Code Architect-owned, a Quality
+# Architect-owned, and a Founder question, answered in the Accountable seat's voice, in their own group with their own
+# cap (five runs each, plus at most one revision a run).
+# The personas group does not gate (D-5.1d, D-5.1t option (a)): its results are computed and printed, and evals-gate
+# skips it. It never runs nightly or on promotion: on dispatch, and on pushes to dev that change persona files
+# (evals.yml, D-5.3b.h).
 [[groups]]
 name = "personas"
-prefixes = ["retro/", "decide/"]
-max_usd = 14.0 # seven cases, one per skill and team stage (D-5.1f) and the Founder pack (D-5.1l): 35 runs; run 39006699646 (b861636)
-# cost 5.76 USD for the first six, about 0.96 a case, so about 6.72 for seven
+prefixes = ["decide/"]
+max_usd = 8.0 # four cases: run 39006699646 (b861636) cost about 0.96 a case, so about 3.84; the founder case alone cost
+# 1.00 USD in run 39044452662
 gate = "advisory"
+events = ["workflow_dispatch", "push"]
+
+# The Engineering Manager twin's retro explanation at the startup, scaleup, and enterprise stages (WP5.1b). It gates
+# since two consecutive filtered runs on the same skill text held every run at 4 or more with no floor failure
+# (39065433359 at 4.80, 39066499915 at 4.87; D-5.1y). Like tell, it runs on dispatch (aayu release dispatches
+# evals.yml on dev before a rolling gate) and on pushes to rolling and main, so every promoted commit has results for
+# the next gate; never nightly, and never on pushes to dev (evals.yml).
+[[groups]]
+name = "retro"
+prefixes = ["retro/"]
+max_usd = 4.0 # run 39065433359 (4ae87fa): 1.86 USD
 events = ["workflow_dispatch", "push"]
 
 # Data & AI Architect cases (Decision #283, Appendix B S-5.1g): the chart notes (data at a startup, AI at a scaleup) and

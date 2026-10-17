@@ -1041,8 +1041,14 @@ func TestGroups(t *testing.T) {
 		t.Fatalf("brief-plain group: %v, cap %v", err, p.MaxUSD)
 	}
 	pg, personas, err := cfg.ForGroup("personas", all)
-	if err != nil || pg.MaxUSD != 14 || len(personas) != 7 {
-		t.Fatalf("personas group: %v, cap %v, %d cases", err, pg.MaxUSD, len(personas))
+	if err != nil || pg.MaxUSD != 8 || len(personas) != 4 || cfg.Gates("personas") {
+		t.Fatalf("personas group: %v, cap %v, %d cases, gates %v", err, pg.MaxUSD, len(personas), cfg.Gates("personas"))
+	}
+	// D-5.1y: the retro cases gate in their own group, run on dispatch and on pushes (evals.yml skips pushes to dev),
+	// never nightly.
+	rg, retros, err := cfg.ForGroup("retro", all)
+	if g, _ := cfg.Group("retro"); err != nil || rg.MaxUSD != 4 || len(retros) != 3 || !cfg.Gates("retro") || !g.RunsOn("push") || g.RunsOn("schedule") || !g.RunsOn("workflow_dispatch") {
+		t.Fatalf("retro group: %v, cap %v, %d cases, gates %v, events %v", err, rg.MaxUSD, len(retros), cfg.Gates("retro"), g.Events)
 	}
 	rv, review, err := cfg.ForGroup("review", all)
 	if err != nil || rv.MaxUSD != 5 || rv.K != 2 {
@@ -1123,8 +1129,8 @@ func TestGroups(t *testing.T) {
 		t.Fatalf("survey group: %v, cap %v, %d cases, gates %v", err, sg.MaxUSD, len(surveys), cfg.Gates("survey"))
 	}
 	o, other, err := cfg.ForGroup("skills", all)
-	if err != nil || o.MaxUSD != 4 || o.K != cfg.K || o.MaxTokens.Skill != cfg.MaxTokens.Skill || !cfg.Gates("skills") || len(brief)+len(plain)+len(personas)+len(review)+len(convs)+len(tells)+len(hosts)+len(ux)+len(dataAI)+len(prod)+len(surveys)+len(other) != len(all) {
-		t.Fatalf("skills group: %v, cap %v, %d+%d+%d+%d+%d+%d+%d+%d+%d+%d+%d+%d of %d cases", err, o.MaxUSD, len(brief), len(plain), len(personas), len(review), len(convs), len(tells), len(hosts), len(ux), len(dataAI), len(prod), len(surveys), len(other), len(all))
+	if err != nil || o.MaxUSD != 4 || o.K != cfg.K || o.MaxTokens.Skill != cfg.MaxTokens.Skill || !cfg.Gates("skills") || len(brief)+len(plain)+len(personas)+len(retros)+len(review)+len(convs)+len(tells)+len(hosts)+len(ux)+len(dataAI)+len(prod)+len(surveys)+len(other) != len(all) {
+		t.Fatalf("skills group: %v, cap %v, %d+%d+%d+%d+%d+%d+%d+%d+%d+%d+%d+%d+%d of %d cases", err, o.MaxUSD, len(brief), len(plain), len(personas), len(retros), len(review), len(convs), len(tells), len(hosts), len(ux), len(dataAI), len(prod), len(surveys), len(other), len(all))
 	}
 	for _, c := range other {
 		if c.Tier2 != nil && c.Tier2.Human != "" {

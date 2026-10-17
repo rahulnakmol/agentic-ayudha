@@ -113,18 +113,18 @@ jobs:
           fi
           # The brief register cases cost about 3 USD a run at list price: nightly, dispatch, and promotion run them, pushes
           # to dev do not (D-7.3c). The tell cases (about 1.50 USD) and the host-skills cases (about 6 USD) run on dispatch
-          # and promotion only (events in eval.toml, D-7.5e and D-3.4x).
-          if [ "$EVENT" = push ] && [ "$REF" = dev ] && { [ "$GROUP" = brief ] || [ "$GROUP" = brief-plain ] || [ "$GROUP" = tell ] || [ "$GROUP" = host-skills ]; }; then
+          # and promotion only (events in eval.toml, D-7.5e and D-3.4x), and so do the retro cases (about 1.90 USD, D-5.1y).
+          if [ "$EVENT" = push ] && [ "$REF" = dev ] && { [ "$GROUP" = brief ] || [ "$GROUP" = brief-plain ] || [ "$GROUP" = tell ] || [ "$GROUP" = host-skills ] || [ "$GROUP" = retro ]; }; then
             echo "::notice::Push to dev: the $GROUP group runs nightly, on dispatch, and on promotion."
             run=false
           fi
-          # The advisory conversations and personas groups (about 18 and 7 USD a run) never run nightly (events in
+          # The advisory conversations and personas groups (about 18 and 4 USD a run) never run nightly (events in
           # evals/eval.toml) or on promotion: only on dispatch and on pushes to dev that change their own files
           # (D-5.3b.h).
           paths=
           case "$GROUP" in
             conversations) paths='^(skills/grill/|evals/cases/grill/|internal/grill/|internal/evals/conversation\.go$)' ;;
-            personas) paths='^(seats/[^/]+/persona\.toml$|internal/seats/persona\.go$|evals/cases/(retro|decide)/|internal/evals/persona\.go$)' ;;
+            personas) paths='^(seats/[^/]+/persona\.toml$|internal/seats/persona\.go$|evals/cases/decide/|internal/evals/persona\.go$)' ;;
           esac
           if [ "$run" = true ] && [ -n "$paths" ] && [ "$EVENT" = push ]; then
             if [ "$REF" != dev ] || ! git diff --name-only "$BEFORE" "$SHA" | grep -qE "$paths"; then
