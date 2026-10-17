@@ -269,13 +269,15 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: false
-      - name: Secrets (gitleaks, full history)
+      # Every commit reachable from the commit under test (a PR's merge commit, or the pushed head), not every fetched
+      # ref: with --log-opts unset gitleaks scans `git log --all`, so a leak on another, unmerged branch failed every PR.
+      - name: Secrets (gitleaks, full history of the commit under test)
         run: |
           set -euo pipefail
           curl -fsSLo "$RUNNER_TEMP/gitleaks.tgz" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
           echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/gitleaks.tgz" | sha256sum -c -
           tar -xzf "$RUNNER_TEMP/gitleaks.tgz" -C "$RUNNER_TEMP" gitleaks
-          "$RUNNER_TEMP/gitleaks" git . --redact --no-banner
+          "$RUNNER_TEMP/gitleaks" git . --redact --no-banner --log-opts=HEAD
       - name: SAST (semgrep)
         run: |
           set -euo pipefail

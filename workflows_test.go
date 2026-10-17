@@ -128,6 +128,67 @@ func TestDevInstallRunsNoGitMaintenance(t *testing.T) {
 	}
 }
 
+// TestGitleaksScansOnlyTheCommitUnderTest: a secrets scan of a full-history checkout runs `gitleaks git`, which
+// with no --log-opts scans `git log --all`: every fetched branch, so a planted test token on someone else's
+// unmerged branch failed the security job of every PR. Each scan in the workflows and in the templates
+// `init --gates` installs is run, in a repository whose HEAD has a clean history and whose other branch has the
+// leak, with a stand-in gitleaks that lists the commits real gitleaks would read (its --log-opts, else --all).
+func TestGitleaksScansOnlyTheCommitUnderTest(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash steps")
+	}
+	repo := t.TempDir()
+	gitIn := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = repo
+		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.com", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.com")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	gitIn("init", "-q", "-b", "dev")
+	gitIn("commit", "-q", "--allow-empty", "-m", "base")
+	base := gitIn("rev-parse", "HEAD")
+	gitIn("checkout", "-q", "-b", "prep")
+	gitIn("commit", "-q", "--allow-empty", "-m", "a token on another branch")
+	other := gitIn("rev-parse", "HEAD")
+	gitIn("checkout", "-q", "dev")
+	bin := t.TempDir()
+	fake := "#!/bin/sh\nopts=--all\nfor a in \"$@\"; do case $a in --log-opts=*) opts=${a#--log-opts=};; esac; done\nexec git log --format=%H $opts\n"
+	if err := os.WriteFile(filepath.Join(bin, "gitleaks"), []byte(fake), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var files []string
+	for _, pattern := range []string{".github/workflows/*.yml", "internal/initrepo/*.yml"} {
+		m, _ := filepath.Glob(pattern)
+		files = append(files, m...)
+	}
+	gitleaks := regexp.MustCompile(`(?m)^\s*\S*gitleaks"? git .*$`)
+	found := 0
+	for _, f := range files {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, line := range gitleaks.FindAllString(string(b), -1) {
+			found++
+			cmd := exec.Command("bash", "-c", line)
+			cmd.Dir = repo
+			cmd.Env = append(os.Environ(), "RUNNER_TEMP="+bin, "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+			out, err := cmd.CombinedOutput()
+			if err != nil || !strings.Contains(string(out), base) || strings.Contains(string(out), other) {
+				t.Errorf("%s: %q scans %q (%v); want HEAD's history only", f, strings.TrimSpace(line), out, err)
+			}
+		}
+	}
+	if found == 0 {
+		t.Fatal("found no gitleaks git scan in the workflows")
+	}
+}
+
 // Founder decisions of 2026-10-15 and 2026-10-16 (Appendix B S-4.8c, S-2.9b, D-2.9b): product CI never calls a model,
 // and this repository's model checks never gate. Every workflow `init --gates` installs holds no model key or
 // AI-gateway environment; the four workflows that call the gateway for aayudha's own model code run on no pull
