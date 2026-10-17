@@ -146,6 +146,7 @@ func TestCheckInvestigation(t *testing.T) {
 		"an unknown action":     {"--action rollback-app", "--action restart-api", `"restart-api": not in the catalog`},
 		"a claimed rollback":    {"Propose `aayu respond", "We rolled back; propose `aayu respond", "claims a production change"},
 		"a shell mitigation":    {"Propose `aayu respond", "Run `kubectl rollout undo deploy/app` or propose `aayu respond", `runs "kubectl"`},
+		"a deploy script":       {"Propose `aayu respond", "Run `deploy/deploy.sh --rollback` or propose `aayu respond", `runs "deploy/deploy.sh -"`},
 		"another incident":      {"aayu respond 1 ", "aayu respond 2 ", "names another incident"},
 		"an unbounded template": {"## Missing evidence and next queries\n", "## Missing evidence and next queries\n\n```kql\nAppExceptions\n| summarize count() by AppVersion\n```\n", "no time window"},
 		"no rollback":           {"Rollback: `deploy-app` with `revision=bbbbbbb2` (ops/actions.toml); stop if `aaaaaaa1` shows any 500.", "Then `deploy-app` later (ops/actions.toml).", "rollback or stop condition"},

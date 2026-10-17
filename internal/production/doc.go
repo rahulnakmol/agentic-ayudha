@@ -127,8 +127,10 @@ var executed = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)\b(the\s+)?(rollback|restart|redeploy|mitigation|catalog\s+action|action)\s+(was|has\s+been|is\s+now)\s+(executed|applied|run|completed|performed|done|deployed)\b`),
 }
 
-// shellCommand is a command that would change production outside the catalog.
-var shellCommand = regexp.MustCompile("(?im)(^|`|\\$\\s*)(kubectl|systemctl|service\\s+\\S+\\s+restart|docker|podman|ssh|sudo|helm|terraform|az\\s|aws\\s|gcloud\\s|git\\s+(revert|push|reset)|rm\\s+-|pkill|kill\\s|curl\\s+-X\\s*(POST|PUT|DELETE|PATCH)|psql|mysql|redis-cli)")
+// shellCommand is a command that would change production outside the catalog,
+// including a script run with flags (`deploy.sh --rollback`): the catalog
+// action that wraps it is the only way in.
+var shellCommand = regexp.MustCompile("(?im)(^|`|\\$\\s*)(kubectl|systemctl|service\\s+\\S+\\s+restart|docker|podman|ssh|sudo|helm|terraform|az\\s|aws\\s|gcloud\\s|git\\s+(revert|push|reset)|rm\\s+-|pkill|kill\\s|curl\\s+-X\\s*(POST|PUT|DELETE|PATCH)|psql|mysql|redis-cli|\\S+\\.sh\\s+-|bash\\s|sh\\s+-c)")
 
 // checkNoExecution returns findings for claimed executions and for production
 // commands outside `aayu respond --action`.

@@ -24,8 +24,8 @@ var Runbook = Kind{
 			must: []rule{must("`[a-z][a-z0-9-]*`", "name the SLO or alert it answers in backticks")}},
 		{Title: "Confirm", What: "The bounded query that confirms it: `aayu investigate <incident> --telemetry <dir> --query \"…\"`, or a fenced template for the live system with a window and a row limit.",
 			must: []rule{must("(--query\\s+\"|```(kql|sql|cwl|logsinsights|promql|logql|gcl|hogql|sentry))", "give the bounded query that confirms the failure")}},
-		{Title: "Mitigate", What: "The catalog action that mitigates it, as `aayu respond <incident> --action <name> --params …`, with its risk; a person approves it through the Environment.",
-			must: []rule{must(`aayu respond\s+(<incident>|#?\d+)\s+--action\s+[a-z0-9-]+`, "mitigate only with `aayu respond <incident> --action <name>` from the catalog")}},
+		{Title: "Mitigate", What: "The catalog action that mitigates it, as `aayu respond <incident> --action <name> --params …`, with its risk; a person approves it through the Environment. When none fits, say \"no catalog action\" and name the action a person should add to `ops/actions.toml`.",
+			must: []rule{must(`(aayu respond\s+(<incident>|#?\d+)\s+--action\s+[a-z0-9-]+|no catalog action)`, "mitigate only with `aayu respond <incident> --action <name>` from the catalog, or say no catalog action fits and name the one to add")}},
 		{Title: "Verify", What: "The signal that shows the mitigation worked: the bounded query and the value to expect, and how long to watch.",
 			must: []rule{must(`(--query|query|expect)`, "name the query and the value that verifies the mitigation")}},
 		{Title: "Rollback", What: "How to undo the mitigation: its catalog rollback action, or `none` and why."},
@@ -81,16 +81,8 @@ func CheckRunbook(md, stage string, pr seats.Practice, known func(string) bool, 
 			out = append(out, fmt.Sprintf("the symptom names no SLO of %s (%s)", SLOPath, strings.Join(names, ", ")))
 		}
 	}
-	now := time.Now().UTC()
 	for _, m := range queryArg.FindAllStringSubmatch(md, -1) {
-		q, err := ParseQuery(m[1], now.Add(-time.Hour), now)
-		if err == nil {
-			if q.Where["service"] == "" {
-				q.Where["service"] = "<service>" // investigate scopes it to the incident's service
-			}
-			err = q.Check()
-		}
-		if err != nil {
+		if err := boundedQuery(m[1]); err != nil {
 			out = append(out, fmt.Sprintf("query %q: %v", m[1], err))
 		}
 	}
@@ -107,6 +99,21 @@ func CheckRunbook(md, stage string, pr seats.Practice, known func(string) bool, 
 	}
 	out = append(out, checkNoExecution(md, "Mitigate")...)
 	return append(out, checkQueryTemplates(md)...)
+}
+
+// boundedQuery parses a query a document gives for `aayu investigate
+// --query` and checks its bounds; investigate scopes it to the incident's
+// service and window.
+func boundedQuery(text string) error {
+	now := time.Now().UTC()
+	q, err := ParseQuery(text, now.Add(-time.Hour), now)
+	if err != nil {
+		return err
+	}
+	if q.Where["service"] == "" {
+		q.Where["service"] = "<service>"
+	}
+	return q.Check()
 }
 
 // CheckSLODoc is every deterministic check on an SLO document: its parts, the

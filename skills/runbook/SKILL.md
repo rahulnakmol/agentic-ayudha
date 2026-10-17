@@ -88,7 +88,9 @@ in order as `##` headings:
    by version,route limit 20"`, or a fenced template for the live system (`kql`, `cwl`, `gcl`, `sentry`, `hogql`) with
    a time window and a row limit. Aggregates first.
 3. **Mitigate.** One catalog action as `aayu respond <incident> --action <name> --params key=value`, its risk and blast
-   radius, and when not to use it.
+   radius, and when not to use it. When no catalog action fixes this failure (a slow dependency is not fixed by a
+   restart or a rollback), write "no catalog action" and name the action a person should add, and who to escalate to
+   meanwhile; never offer a catalog action that does not address the cause.
 4. **Verify.** The query to rerun and the value to expect (for example the serving revision's error rate back to 0 %
    in `requests by version`), and how long to watch.
 5. **Rollback.** The catalog's rollback of the mitigation action (the checker requires it when the catalog names one),

@@ -1,0 +1,20 @@
+# Runbook case (Decision #324): the Production Engineer twin writes the runbook for a claims service's submission
+# alerts at the scaleup stage, from the real output of `aayu runbook` (a synthetic service written for this eval) and
+# the checked investigation note of incident #7, whose cause no catalog action addresses. output/runbook.md is a
+# recorded answer (tier 1); planted/runbook.md adds an uncited cause, which the evidence rule must catch. Tier 2 has
+# the runbook skill write it again and the judge score it.
+skill = "runbook"
+description = "Atlas writes the runbook for a dependency timeout that no catalog action fixes, at the scaleup stage."
+input = "grounding.md"
+artifacts = ["output/runbook.md"]
+
+[persona]
+seat = "production-engineer"
+stage = "scaleup"
+practice = "runbooks-toil"
+draft = "output/runbook.md"
+planted = "planted/runbook.md"
+task = "Both claim-submission SLOs alert without a runbook. Write the runbook for the failure incident #7 showed, at this team stage; the on-call rota starts tomorrow."
+
+[tier2]
+rubric = "../rubric.md"

@@ -14,6 +14,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/decide"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
+	"github.com/rahulnakmol/agentic-ayudha/internal/production"
 	"github.com/rahulnakmol/agentic-ayudha/internal/seats"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
@@ -71,6 +72,9 @@ func checkPersona(c Case, pr seats.Practice, grounding, out string) []string {
 	if c.Skill == "chart" {
 		found = append(found, chart.CheckStructure(out, c.Persona.Kind)...)
 	}
+	if slices.Contains(production.Skills, c.Skill) {
+		found = append(found, production.CheckDoc(c.Skill, out, grounding)...)
+	}
 	return found
 }
 
@@ -98,8 +102,8 @@ func tier1Persona(c Case, assets fs.FS) []string {
 		if err != nil {
 			return append(out, err.Error())
 		}
-		if len(seats.CheckGrounding(planted, grounding)) == 0 {
-			out = append(out, c.Persona.Planted+": the planted uncited claim was not caught by the evidence rule")
+		if len(checkPersona(c, pr, grounding, planted)) == 0 {
+			out = append(out, c.Persona.Planted+": the planted defect was not caught by the deterministic checks")
 		}
 	}
 	return out
@@ -140,6 +144,17 @@ func (h *Harness) runPersona(ctx context.Context, c Case, lane verbs.LaneID, bod
 	}
 	if c.Skill == "chart" {
 		checks += fmt.Sprintf("; it has every part of a %s chart note in order, each naming what the part must name", c.Persona.Kind)
+	}
+	if slices.Contains(production.Skills, c.Skill) {
+		checks += "; it has every part of its document in order, each naming what the part must name; every proposed action is a catalog action " +
+			"the grounding lists; it claims no executed change and gives no production command outside the catalog; every query and query template " +
+			"is bounded by a window and a limit"
+		switch c.Skill {
+		case "investigate":
+			checks += "; it cites at least two bounded queries"
+		case "respond":
+			checks += "; it uses no blaming language"
+		}
 	}
 	judged, err := h.judge(ctx, "## Task\n\n"+c.Persona.Task+"\n\n## Team stage\n\n"+c.Persona.Stage+
 		"\n\n## Persona the skill speaks in\n\n"+persona.Prompt(c.Persona.Stage, "set by the case")+

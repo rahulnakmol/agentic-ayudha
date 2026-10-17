@@ -25,8 +25,8 @@ var Investigation = Kind{
 			must: []rule{must(`\bH1\b`, "label the hypotheses H1, H2, …"), must(`\bH2\b`, "keep at least two competing hypotheses (H1 and H2)"), must(`counter-?evidence`, "give each hypothesis its counter-evidence")}},
 		{Title: "Implicated code", What: "The code the evidence implicates at the deployed revision, as `path:line`, and the change that introduced it; or `Unverified:` with what would show it.",
 			must: []rule{must(`(\.\w+:\d+|unverified)`, "cite the implicated code as path:line, or mark it Unverified: with what is missing")}},
-		{Title: "Mitigation", What: "The immediate mitigation as one `aayu respond <incident> --action <name> --params …` proposal from the catalog, with its rationale, risk, the signal that verifies it, and its rollback or stop condition. Proposed, never executed.",
-			must: []rule{must(`aayu respond\s+#?\d+\s+--action\s+\S+`, "propose the mitigation as `aayu respond <incident> --action <name>` from the catalog"), must(`\bverif`, "say how the mitigation is verified"), must(`(\brollback\b[^-]|\broll back\b|\bstop (condition|if|when)\b)`, "give the mitigation's rollback or stop condition")}},
+		{Title: "Mitigation", What: "The immediate mitigation as one `aayu respond <incident> --action <name> --params …` proposal from the catalog (or, when none fits, \"no catalog action\" and the action a person should add), with its rationale, risk, the signal that verifies it, and its rollback or stop condition. Proposed, never executed.",
+			must: []rule{must(`(aayu respond\s+#?\d+\s+--action\s+\S+|no catalog action)`, "propose the mitigation as `aayu respond <incident> --action <name>` from the catalog, or say no catalog action fits and name the one to add"), must(`\bverif`, "say how the mitigation is verified"), must(`(\brollback\b[^-]|\broll back\b|\bstop (condition|if|when)\b)`, "give the mitigation's rollback or stop condition")}},
 		{Title: "Durable fix", What: "The fix that prevents a recurrence, for the follow-up Bug: the owning boundary, the paths, the regression test or scenario, how it is verified, and its rollback.",
 			must: []rule{must(`regression`, "name the regression test or scenario"), must(`\bverif`, "say how the fix is verified"), must(`(\brollback\b[^-]|\broll back\b|\brevert)`, "give the fix's rollback")}},
 		{Title: "Missing evidence and next queries", What: "What is not known yet, and the next bounded queries (source, window, scope, limit) or sanitised exports that would settle it."},
@@ -87,4 +87,62 @@ func HandOff(md string) string {
 		}
 	}
 	return strings.TrimSpace(b.String())
+}
+
+// Skills are the Production Engineer skills whose documents CheckDoc checks.
+var Skills = []string{"investigate", "slo", "runbook", "respond"}
+
+// CheckDoc runs the deterministic floors on a document a Production Engineer
+// skill wrote, from the text and its grounding alone (the eval harness's
+// tier-1 floors): every part of the skill's kind in order (respond writes the
+// postmortem); every proposed catalog action one the grounding lists; no
+// claimed execution and no production command outside the catalog; bounded
+// queries and query templates; an investigation cites at least two queries
+// and a postmortem is blameless. The evidence rule and the stage's artefact
+// are checked by the caller.
+func CheckDoc(skill, md, grounding string) []string {
+	var out []string
+	inCatalog := func(name string) {
+		if !strings.Contains(grounding, "Catalog action `"+name+"`") {
+			out = append(out, fmt.Sprintf("proposed action %q is not in the catalog the grounding lists", name))
+		}
+	}
+	switch skill {
+	case "investigate":
+		out = Investigation.CheckParts(md)
+		if qs := CitedQueries(md); len(qs) < 2 {
+			out = append(out, fmt.Sprintf("the note cites %d bounded queries; cite at least two as `query qN`", len(qs)))
+		}
+		for _, m := range respondCmd.FindAllStringSubmatch(md, -1) {
+			inCatalog(m[2])
+		}
+		out = append(out, checkNoExecution(md, "Mitigation")...)
+	case "runbook":
+		out = Runbook.CheckParts(md)
+		for _, m := range runbookRespond.FindAllStringSubmatch(md, -1) {
+			inCatalog(m[1])
+		}
+		for _, m := range queryArg.FindAllStringSubmatch(md, -1) {
+			if err := boundedQuery(m[1]); err != nil {
+				out = append(out, fmt.Sprintf("query %q: %v", m[1], err))
+			}
+		}
+		out = append(out, checkNoExecution(md, "Mitigate")...)
+	case "slo":
+		out = SLODoc.CheckParts(md)
+		if _, err := ProposedSLOs(md); err != nil {
+			out = append(out, err.Error())
+		}
+		out = append(out, checkNoExecution(md, "Budget policy")...)
+	case "respond":
+		out = Postmortem.CheckParts(md)
+		for _, re := range blame {
+			for _, m := range re.FindAllString(md, -1) {
+				out = append(out, fmt.Sprintf("%q blames a person; a blameless postmortem names the system, the conditions, and the decisions", m))
+			}
+		}
+	default:
+		return []string{fmt.Sprintf("%q is not a Production Engineer skill (%s)", skill, strings.Join(Skills, ", "))}
+	}
+	return append(out, checkQueryTemplates(md)...)
 }
