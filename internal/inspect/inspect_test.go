@@ -297,3 +297,211 @@ func TestBuilderOf(t *testing.T) {
 		}
 	}
 }
+
+const testFileDiff = `diff --git a/internal/report/percent_test.go b/internal/report/percent_test.go
+--- a/internal/report/percent_test.go
++++ b/internal/report/percent_test.go
+@@ -1,3 +1,6 @@ package report
+ package report
+ 
++func TestPercentNegative(t *testing.T) {
++	if Percent(1, -1) != 0 {
++		t.Fatal("negative total")
++	}
++}
+`
+
+// Test gaps on a test file become criterion verdicts, never line findings
+// (research P1: all 8 of inspect's seeded-set false positives were these):
+// a P2 gap makes its met criterion unclear and the fix it alone caused is
+// lifted to merge; a P1 gap makes its criterion unmet, which still blocks; a
+// gap naming no criterion is a note; a test that restates the code is
+// counted as test-value and never posted.
+func TestTestGapsBecomeVerdicts(t *testing.T) {
+	in := testInput("")
+	in.Diff = pkgDiff + testFileDiff
+	gap := finding("P2", "test", "internal/report/percent_test.go", "func TestPercentNegative(t *testing.T) {", "No test for a zero total", 0.85)
+	gap["criterion"] = 1
+	restates := finding("P3", "test-value", "internal/report/percent_test.go", `t.Fatal("negative total")`, "asserts the implementation's branch", 0.9)
+	bugInTest := finding("P2", "bug", "internal/report/percent_test.go", "if Percent(1, -1) != 0 {", "compares with the wrong operand", 0.9)
+	a, _ := scripted("gpt-6.1-sol", reply("fix", gap, restates))
+	res, _, err := Runner{Reviewers: []Reviewer{a}}.Run(context.Background(), in, State{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Findings) != 0 || res.Criteria[0].Verdict != "unclear" || !strings.Contains(res.Criteria[0].Evidence, "No test for a zero total") || res.Disposition != Merge {
+		t.Fatalf("P2 gap: findings %+v criteria %+v disposition %s", res.Findings, res.Criteria, res.Disposition)
+	}
+	if got := whys(res.Dropped); !slices.Equal(got, []string{DropTestGap, DropTestValue}) {
+		t.Fatalf("dropped %v", got)
+	}
+	if c := Comment(res, State{}, 1); !strings.Contains(c, "1 test-gap, 1 test-value") {
+		t.Fatalf("comment does not count them:\n%s", c)
+	}
+
+	gap["severity"] = "P1"
+	noCrit := finding("P2", "test", "internal/report/percent_test.go", "", "missing table test", 0.9)
+	a, _ = scripted("gpt-6.1-sol", reply("merge", gap, noCrit, bugInTest))
+	res, _, _ = Runner{Reviewers: []Reviewer{a}}.Run(context.Background(), in, State{})
+	if res.Criteria[0].Verdict != "unmet" || res.Disposition != Fix || !strings.Contains(res.Overridden, "criterion 1 unmet") {
+		t.Fatalf("P1 gap: %+v %s %q", res.Criteria, res.Disposition, res.Overridden)
+	}
+	if len(res.Findings) != 1 || res.Findings[0].Title != "compares with the wrong operand" {
+		t.Fatalf("a real defect in a test file is still a finding: %+v", res.Findings)
+	}
+	if !slices.ContainsFunc(res.Notes, func(n string) bool { return strings.Contains(n, "missing table test") }) {
+		t.Fatalf("a gap without a criterion is a note: %v", res.Notes)
+	}
+}
+
+// The sealed coverage manifest: every changed file is reviewed, skipped with
+// a reason, or unreviewed; a file past the prompt's diff cap is unreviewed,
+// so the run is partial and merge becomes fix. The seal changes with the list.
+func TestCoverageManifest(t *testing.T) {
+	in := testInput("")
+	in.Diff = pkgDiff + testFileDiff + "diff --git a/old.go b/old.go\n--- a/old.go\n+++ /dev/null\n@@ -1,1 +0,0 @@\n-package old\n"
+	a, _ := scripted("gpt-6.1-sol", reply("merge"))
+	res, _, _ := Runner{Reviewers: []Reviewer{a}, Filter: Filter{Generated: []string{"LAYERS.md"}}}.Run(context.Background(), in, State{})
+	m := res.Coverage
+	want := []Coverage{
+		{Path: "internal/report/percent.go", Status: Reviewed},
+		{Path: "LAYERS.md", Status: SkippedCov, Why: "generated: the drift check owns it"},
+		{Path: "internal/report/percent_test.go", Status: Reviewed},
+		{Path: "old.go", Status: SkippedCov, Why: "deleted"},
+	}
+	if m == nil || !slices.Equal(m.Files, want) || m.State != "complete" || res.Disposition != Merge {
+		t.Fatalf("manifest %+v, disposition %s", m, res.Disposition)
+	}
+	big := "diff --git a/internal/big/big.go b/internal/big/big.go\n--- /dev/null\n+++ b/internal/big/big.go\n@@ -0,0 +1,1 @@\n+// " + strings.Repeat("x", maxDiffBytes) + "\n"
+	in.Diff = pkgDiff + big
+	a, _ = scripted("gpt-6.1-sol", reply("merge"))
+	res2, _, _ := Runner{Reviewers: []Reviewer{a}}.Run(context.Background(), in, State{})
+	if res2.Coverage.State != "partial" || !slices.Equal(res2.Coverage.Unreviewed(), []string{"internal/big/big.go"}) ||
+		res2.Disposition != Fix || !strings.Contains(res2.Overridden, "left unreviewed: internal/big/big.go") || res2.Coverage.SHA256 == m.SHA256 {
+		t.Fatalf("over the cap: %+v %s %q", res2.Coverage, res2.Disposition, res2.Overridden)
+	}
+}
+
+// A PR may edit its own checks; each weakening is flagged, and tightening or
+// adding checks is not.
+func TestWeakenedChecks(t *testing.T) {
+	diff := `diff --git a/internal/report/percent_test.go b/internal/report/percent_test.go
+--- a/internal/report/percent_test.go
++++ b/internal/report/percent_test.go
+@@ -1,8 +1,6 @@
+ func TestPercent(t *testing.T) {
+-	if Percent(1, 2) != 50 {
+-		t.Fatal("half")
+-	}
+-	if Percent(0, 2) != 0 { t.Errorf("zero") }
++	t.Skip("flaky")
++	if Percent(1, 2) != 50 { t.Fatal("half") }
+ }
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -5,6 +5,5 @@
+       - uses: actions/checkout@v7
+-      - name: Lint
+-        run: golangci-lint run
+       - name: Test
++        continue-on-error: true
+         run: go test ./...
+diff --git a/.aayudha/config.toml b/.aayudha/config.toml
+--- a/.aayudha/config.toml
++++ b/.aayudha/config.toml
+@@ -1,4 +1,4 @@
+ [verify.floors.coverage]
+-threshold = 90
++threshold = 80
+-per_pr_inspect_max = 2.0
++per_pr_inspect_max = 5.0
+-min_score = 3
++min_score = 4
+`
+	got := Weakened(ParseDiff(diff))
+	want := []Weakening{
+		{"internal/report/percent_test.go", "fewer assertions (2 removed, 1 added)"},
+		{"internal/report/percent_test.go", "a test is skipped or narrowed (skip or only added)"},
+		{".github/workflows/ci.yml", "fewer steps (1 removed, 0 added)"},
+		{".github/workflows/ci.yml", "continue-on-error added: a failing step no longer fails the job"},
+		{".aayudha/config.toml", "threshold `threshold` loosened from 90 to 80"},
+		{".aayudha/config.toml", "threshold `per_pr_inspect_max` loosened from 2 to 5"},
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("weakened:\n%+v\nwant\n%+v", got, want)
+	}
+	if w := Weakened(ParseDiff(pkgDiff + testFileDiff)); len(w) != 0 {
+		t.Fatalf("adding a test is not a weakening: %+v", w)
+	}
+	// D-4.5b.9: a feature map's behaviour checks. Renaming a handle is not a
+	// weakening; dropping an assertion or a check is, and so is deleting the file.
+	fm := "examples/app/.agents/skills/verify-app/features/"
+	mapDiff := "diff --git a/" + fm + "ask.md b/" + fm + "ask.md\n--- a/" + fm + "ask.md\n+++ b/" + fm + "ask.md\n@@ -1,9 +1,4 @@\n" +
+		"-  {\"click\": {\"role\": \"button\", \"name\": \"Ask\"}},\n+  {\"click\": {\"role\": \"button\", \"name\": \"Send\"}},\n" +
+		"-  {\"expectText\": \"50 dollars\"},\n" +
+		" ]}\n" +
+		"-```check\n-{\"id\": \"empty\", \"kind\": \"ui\", \"steps\": [{\"goto\": \"/\"}, {\"expect\": {\"role\": \"heading\"}}]}\n-```\n" +
+		"diff --git a/" + fm + "refer.md b/" + fm + "refer.md\ndeleted file mode 100644\n--- a/" + fm + "refer.md\n+++ /dev/null\n@@ -1 +0,0 @@\n-# Refer\n"
+	want = []Weakening{
+		{fm + "ask.md", "fewer behaviour checks (1 removed, 0 added)"},
+		{fm + "ask.md", "fewer behaviour assertions (2 removed, 0 added)"},
+		{fm + "refer.md", "deleted"},
+	}
+	if got := Weakened(ParseDiff(mapDiff)); !slices.Equal(got, want) {
+		t.Fatalf("feature map weakened:\n%+v\nwant\n%+v", got, want)
+	}
+	rename := "diff --git a/" + fm + "ask.md b/" + fm + "ask.md\n--- a/" + fm + "ask.md\n+++ b/" + fm + "ask.md\n@@ -1 +1 @@\n" +
+		"-  {\"click\": {\"name\": \"Ask\"}}, {\"expectText\": \"x\"},\n+  {\"click\": {\"name\": \"Send\"}}, {\"expectText\": \"x\"},\n"
+	if w := Weakened(ParseDiff(rename)); len(w) != 0 {
+		t.Fatalf("a renamed handle is not a weakening: %+v", w)
+	}
+}
+
+func TestRiskOf(t *testing.T) {
+	file := func(p string, added, removed int) DiffFile {
+		h := Hunk{NewStart: 1}
+		for i := range added {
+			h.Lines = append(h.Lines, DiffLine{N: i + 1, Text: "x", Added: true})
+		}
+		for range removed {
+			h.Removed = append(h.Removed, "y")
+		}
+		return DiffFile{Path: p, Hunks: []Hunk{h}}
+	}
+	layer := func(paths []string) []string {
+		var out []string
+		for _, p := range paths {
+			l := "L" + strings.SplitN(p, "/", 2)[0]
+			if !slices.Contains(out, l) {
+				out = append(out, l)
+			}
+		}
+		slices.Sort(out)
+		return out
+	}
+	protected := func(p string) bool { return strings.HasPrefix(p, ".github/") }
+	tests := []struct {
+		name    string
+		files   []DiffFile
+		tier    string
+		reasons []string
+		look    []string
+	}{
+		{"small change in two layers", []DiffFile{file("01/a.go", 10, 2), file("02/b.go", 30, 0)}, RiskLow, nil, []string{"02/b.go", "01/a.go"}},
+		{"three layers", []DiffFile{file("01/a.go", 1, 0), file("02/b.go", 1, 0), file("03/c.go", 1, 0)}, RiskMedium, []string{"3 layers: L01, L02, L03"}, nil},
+		{"401 changed lines", []DiffFile{file("01/a.go", 300, 101)}, RiskMedium, []string{"large diff: 1 files, 401 changed lines"}, []string{"01/a.go"}},
+		{"400 changed lines", []DiffFile{file("01/a.go", 300, 100)}, RiskLow, nil, nil},
+		{"never-layer", []DiffFile{file("01/a.go", 500, 0), file("09/deploy.go", 1, 0)}, RiskHigh, []string{"never-layer L09: 09/deploy.go"}, []string{"09/deploy.go"}},
+		{"protected path and a migration", []DiffFile{file(".github/workflows/ci.yml", 1, 0), file("01/db/migrations/0002_add.sql", 3, 0)}, RiskHigh,
+			[]string{"protected path: .github/workflows/ci.yml", "migration: 01/db/migrations/0002_add.sql"}, []string{".github/workflows/ci.yml", "01/db/migrations/0002_add.sql"}},
+		{"dependency added", []DiffFile{file("go.mod", 1, 0)}, RiskHigh, []string{"dependency manifest changed: go.mod"}, nil},
+		{"dependency removed only", []DiffFile{file("go.mod", 0, 1)}, RiskLow, nil, nil},
+	}
+	for _, tt := range tests {
+		got := RiskOf(tt.files, layer, []string{"L09"}, protected)
+		if got.Tier != tt.tier || (tt.reasons != nil || got.Tier == RiskLow) && !slices.Equal(got.Reasons, append([]string{}, tt.reasons...)) || tt.look != nil && !slices.Equal(got.Look, tt.look) {
+			t.Errorf("%s: %+v", tt.name, got)
+		}
+	}
+}

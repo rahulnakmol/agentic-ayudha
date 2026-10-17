@@ -1,0 +1,111 @@
+{
+  "request": "The PDP needs a CTA for B2B catering orders, and keep PII out of the logs. It belongs under Feature #60 (Catering).",
+  "exchanges": [
+    {
+      "say": "Your request has four abbreviations to pin down before anything else: PDP, CTA, B2B, and PII. PDP is the riskiest: this app has no product pages, only product tiles on the menu (component:ProductTile), and orders go through POST /api/orders (route:/api/orders). It also names no outcome yet.",
+      "questions": [
+        {
+          "topic": "term/pdp",
+          "ask": "PDP usually means product detail page, but this app has no product pages: products show as tiles on the menu (component:ProductTile). Which page do you mean?",
+          "default": "The menu, since that is where products show today.",
+          "facts": [
+            "component:ProductTile"
+          ]
+        },
+        {
+          "topic": "term/b2b",
+          "ask": "B2B can mean orders from companies, or a separate portal for business customers. Which one?",
+          "default": "Orders from companies through the same app, because a portal is a much bigger build."
+        },
+        {
+          "topic": "term/cta",
+          "ask": "By CTA you mean one call-to-action button that starts a catering order?",
+          "default": "One button."
+        },
+        {
+          "topic": "term/pii",
+          "ask": "And PII: the personal data a catering form collects, such as names, emails, and phone numbers?",
+          "default": "Names, emails, and phone numbers."
+        }
+      ],
+      "answers": [
+        {
+          "kind": "confirm",
+          "text": "By PDP I mean the menu, /menu, where each product has its tile. We don't have separate product pages."
+        },
+        {
+          "kind": "confirm",
+          "text": "B2B means offices that order trays of pastries for meetings. Not a separate portal."
+        },
+        {
+          "kind": "confirm",
+          "text": "Yes, a call to action: one button that starts a catering order."
+        },
+        {
+          "kind": "confirm",
+          "text": "PII is personal data: customer names, emails, and phone numbers. None of it may show up in any of our logs: the server's logs or the analytics events."
+        }
+      ]
+    },
+    {
+      "say": "So: the menu, one call-to-action button, offices ordering for meetings, and names, emails, and phones as the personal data. Now who it is for and what success looks like.",
+      "questions": [
+        {
+          "topic": "idea.who/user",
+          "ask": "Who places these orders, and for how many people?",
+          "default": "Office managers ordering for a meeting."
+        },
+        {
+          "topic": "idea.outcome/change",
+          "ask": "What changes when this works, and how would we know? Orders already go through POST /api/orders (route:/api/orders).",
+          "default": "Every catering request arrives as an order, counted per week.",
+          "facts": [
+            "route:/api/orders",
+            "event:order_submitted"
+          ]
+        },
+        {
+          "topic": "idea.slice/smallest-slice",
+          "ask": "What is the smallest version an office manager could try: one button and a short request form, no prices?",
+          "default": "One button and a short form that sends the request as an order."
+        },
+        {
+          "topic": "request/scope",
+          "ask": "Is keeping PII out of the logs part of this story, or its own story?",
+          "default": "Part of this one, limited to the form's data."
+        },
+        {
+          "topic": "idea.out-of-scope/not-in-scope",
+          "ask": "What is out: prices, invoices, company accounts, delivery?",
+          "default": "All of those out."
+        }
+      ],
+      "answers": [
+        {
+          "kind": "confirm",
+          "text": "Office managers ordering for a meeting of 10 or more people."
+        },
+        {
+          "kind": "confirm",
+          "text": "Office orders come by phone today and get lost. Every catering request should arrive as an order we can see. I'd like 5 a week through the form to start."
+        },
+        {
+          "kind": "confirm",
+          "text": "Just an 'Order for your office' button on the menu page and a short form: company, name, email, phone, date, and how many people. It sends us the request as an order; no prices or invoices yet."
+        },
+        {
+          "kind": "confirm",
+          "text": "Keeping PII out of the logs is part of this: no customer name, email, or phone number may show up in any of our logs, the server's or the analytics events, whatever page or order it came from."
+        },
+        {
+          "kind": "confirm",
+          "text": "No prices, invoices, company accounts, or delivery."
+        }
+      ]
+    },
+    {
+      "say": "Here is what done looks like. Goal: office managers send catering requests through the menu instead of phoning, so none get lost; measured as catering requests received through the form, met at 5 a week. Done when: the menu page shows one \"Order for your office\" button; it opens a form for company, name, email, phone, date, and people; sending it creates 1 order holding those; and the app logs hold 0 lines with the seeded name, email, or phone. Terms: PDP is the menu, CTA is that one button, B2B is offices ordering for meetings, PII is names, emails, and phone numbers. Prices, invoices, company accounts, and delivery are out.",
+      "done": true
+    }
+  ]
+}

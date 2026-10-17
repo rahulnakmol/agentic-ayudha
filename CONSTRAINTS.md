@@ -15,6 +15,8 @@ its value, and WP0.5 chose it.
 | Key | Default | Meaning | Source |
 |---|---|---|---|
 | `verify.dast` | `false` | Run the ZAP baseline DAST floor against the running app. | WP4.6 (opt-in) |
+| `verify.red_on_base_blocking_from` | `"2026-11-13"` | Date (UTC) from which a Bug story whose mapped proving test passes on the base commit fails the merge gate (red-on-base, P5). Before it the check is advisory: four weeks after the founder decision of 2026-10-15. | 0.2 (P5) |
+| `verify.drift_blocking_from` | `"2026-11-13"` | Date (UTC) from which feature-map drift (`aayu verify --map`) fails the merge gate's feature-map floor. Before it drift is a warning: four weeks after the founder decision of 2026-10-16. | 0.2 (WP4.5b) |
 | `verify.floors.coverage.min_diff_percent` | `90.0` | Minimum coverage of changed lines (lcov, cobertura, or Go coverprofile). 89.9 fails, 90.0 passes. | WP4.3 |
 | `verify.floors.sast.max_critical` | `0` | Critical semgrep findings allowed. | WP4.4 |
 | `verify.floors.sast.max_high` | `0` | High semgrep findings allowed. | WP4.4 |

@@ -5,7 +5,7 @@
   "description": "Interview a human until a work item of the given type is complete and passes validation, then write it as an issue.",
   "properties": {
     "assess": {
-      "description": "Read-only fact pass for the idea: its vague qualifiers with the dimensions to ask about, and the routes, states, components, tokens, tests, events, related stories, floors, and layers it touches (repository content is reported as untrusted data).",
+      "description": "Read-only fact pass for the idea: the vagueness gate (unpack or pass, with its reasons), its vague qualifiers, abbreviations, and missing outcome with the dimensions to ask about, the product types, and the routes, states, components, tokens, tests, events, related stories, floors, and layers it touches (repository content is reported as untrusted data).",
       "type": "boolean",
       "x-aayu-type": "bool"
     },

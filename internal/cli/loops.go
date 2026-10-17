@@ -33,7 +33,8 @@ type loopGuard struct {
 // while the [budget] breaker has paused agent lanes or, in Actions, the loops'
 // runs this month have used [budget] ci_minutes_month; otherwise it says
 // whether this run is the scheduled one (in Actions, written to GITHUB_OUTPUT
-// as due=true|false). It writes nothing anywhere else.
+// as due=true|false); an event loop is due whenever its host's trigger
+// started it. It writes nothing anywhere else.
 func runLoopGuard(ctx context.Context, e *Env, name string) error {
 	root := config.RepoRoot(e.Dir)
 	if root == "" {

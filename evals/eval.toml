@@ -70,11 +70,12 @@ events = ["workflow_dispatch"]
 # run at the fallback rate (13.42 USD for both cases in run 38687921977), in their own group with their own cap so they
 # never fail or starve the skills group. Advisory until a run meets the bar (D-5.3b.g): results are computed and
 # printed, evals-gate skips them; then the gate line goes. It never runs nightly or on promotion: on dispatch, and on
-# pushes to dev that change grill files (evals.yml, D-5.3b.h).
+# pushes to dev that change grill files (evals.yml, D-5.3b.h). WP5.8 adds four cases (motion, terms, a CLI's
+# "simple", and a concrete request the gate passes, which is one call a run), so the cap is 40 USD (D-5.8c).
 [[groups]]
 name = "conversations"
-prefixes = ["grill/bakery-ux", "grill/search-fast"]
-max_usd = 20.0
+prefixes = ["grill/bakery-ux", "grill/search-fast", "grill/bakery-motion", "grill/bakery-terms", "grill/tally-simple", "grill/bakery-concrete", "grill/quotes-fast", "grill/slugkit-simple"]
+max_usd = 60.0 # 8 cases x 5 runs at about 1.3 USD (run 38841610907: 30 runs, 38.97 USD); the founder allows about 180 USD over at most 4 runs (D-5.8f)
 gate = "advisory"
 events = ["workflow_dispatch", "push"]
 
@@ -85,7 +86,8 @@ max_usd = 8.0 # the single-reply cases cost 4.57 USD in run 38681630586; run 387
 # Output caps per call. Reasoning models may spend part of the cap on reasoning; a cap is not a charge. A reply that
 # stops at its cap is recorded as an error marked truncated, without a retry. Complete drafts measured 1700-2430 output
 # tokens (run 38185993917). Run 38200697472 truncated two ste brief drafts at 4000 (one reply held only a thinking
-# block), so the skill cap is 8000. Every call's stop reason and tokens are in the results file.
+# block), so the skill cap was 8000. Grill conversations reached 7819 and 8000 tokens in a reply (runs 38871247156 and
+# 38879696010, D-5.8h), so it is 12000. Every call's stop reason and tokens are in the results file.
 [max_tokens]
-skill = 8000
+skill = 12000
 judge = 2000

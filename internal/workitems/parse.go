@@ -195,3 +195,20 @@ func CompletionGoalHash(it Item) string {
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])
 }
+
+// BareTitle is a work item's title without the "<Type>: " prefix its issue
+// form starts it with ("Story: Add mathx sum" is "Add mathx sum"), for the
+// branch, commit, and pull-request titles built from it (Appendix B
+// D-5.5c.19). Any type's prefix is dropped, in any case; a title that is only
+// the prefix keeps it.
+func BareTitle(title string) string {
+	t := strings.TrimSpace(title)
+	for _, ty := range Types {
+		if len(t) > len(ty.Name)+1 && strings.EqualFold(t[:len(ty.Name)], ty.Name) && t[len(ty.Name)] == ':' {
+			if rest := strings.TrimSpace(t[len(ty.Name)+1:]); rest != "" {
+				return rest
+			}
+		}
+	}
+	return t
+}

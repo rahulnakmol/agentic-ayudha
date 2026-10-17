@@ -7,6 +7,10 @@ name: ux-review-live
 # environment is restricted to dev, rolling, and main, so this never runs on pull requests or forks. Dispatch only,
 # because every run costs model spend: nine ui-review calls with two screenshots each, plus one build-lane call.
 # Skips cleanly (green) while the environment's secret is not set.
+#
+# Non-gating (founder decision 2026-10-16, Appendix B D-2.9b): a check of aayudha's own model code only. It is
+# never a required check, never part of a promotion gate (ci.yml rolling or stable), and never installed into a
+# product repository; workflows_test.go holds the rules a file can show.
 on:
   workflow_dispatch:
 

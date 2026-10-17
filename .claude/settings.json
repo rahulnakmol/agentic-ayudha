@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "if [ \"${CLAUDE_CODE_REMOTE:-}\" = true ]; then cd \"$CLAUDE_PROJECT_DIR\" && { bash .agents/setup; } > /tmp/aayu-env.log 2>&1 || { tail -n 40 /tmp/aayu-env.log >&2; exit 1; }; fi",
+            "timeout": 900,
+            "type": "command"
+          }
+        ],
+        "matcher": "startup|resume"
+      }
+    ]
+  }
+}

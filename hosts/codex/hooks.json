@@ -1,0 +1,25 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "aayu hook session-start --host codex --skills 0.0.0"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "aayu hook pre-tool --host codex --skills 0.0.0"
+          }
+        ]
+      }
+    ]
+  }
+}

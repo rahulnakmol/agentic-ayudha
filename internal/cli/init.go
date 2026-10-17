@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -9,11 +10,13 @@ import (
 
 	gh "github.com/google/go-github/v90/github"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/agentenv"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/initrepo"
+	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 )
 
 func init() {
@@ -143,7 +146,7 @@ func runInit(ctx context.Context, e *Env, in Values) error {
 	if runErr == nil {
 		x := initrepo.Extras{
 			Projects: in.Bool("projects"), Gates: in.Bool("gates"), Identity: in.Bool("identity"), Integrations: in.Bool("integrations"),
-			Version: e.Build.Version,
+			VerifySkill: in.Bool("verify-skill"), Assets: e.Assets, Version: e.Build.Version,
 			Confirm: func(summary string) bool {
 				fmt.Fprintln(e.Err, summary)
 				return e.confirm("Continue? [y/N] ")
@@ -151,6 +154,9 @@ func runInit(ctx context.Context, e *Env, in Values) error {
 			Ask:          e.askLine,
 			Print:        func(text string) { fmt.Fprintln(e.Err, text) },
 			ManifestCode: e.manifestCode,
+		}
+		if x.VerifySkill {
+			x.Maintainer = e.chooseMaintainer(ctx, it.Root, it.Repo.FullName)
 		}
 		if x.Gates {
 			if x.Loops, err = e.loopFiles(it); err != nil {
@@ -230,4 +236,47 @@ func runUninit(ctx context.Context, e *Env, in Values) error {
 		return err
 	}
 	return runErr
+}
+
+// chooseMaintainer asks the human which agent maintains the feature maps
+// (init --verify-skill, D-4.5b.8), offering only the agents detected for this
+// repository: amp, codex, cursor, or claude whose CLI is installed and signed
+// in here (agentenv.Detect), or whose GitHub app answered on the repository
+// (inspect.DetectApps). With none detected, no terminal, or no answer, it
+// returns "" and init says how to set [verify] maintainer.
+func (e *Env) chooseMaintainer(ctx context.Context, root, repo string) string {
+	found := map[string]bool{}
+	exec := e.Exec
+	if exec == nil {
+		exec = agentenv.CombinedExec
+	}
+	for _, a := range agentenv.Detect(ctx, agentenv.Probe{Root: root, Repo: repo, LookPath: e.lookPath(), Exec: exec, Getenv: e.Getenv}) {
+		if a.CLI != "" && a.SignedIn {
+			found[a.Name] = true
+		}
+	}
+	if tok, err := e.Resolver().Human(ctx); err == nil {
+		for _, d := range inspect.DetectApps(ctx, func(ctx context.Context, path string, out any) error { return e.githubGet(ctx, tok, path, out) }, repo) {
+			found[d.App] = true
+		}
+	}
+	var offer []string
+	for _, n := range []string{"amp", "codex", "cursor", "claude"} {
+		if found[n] {
+			offer = append(offer, n)
+		}
+	}
+	if len(offer) == 0 {
+		fmt.Fprintln(e.Err, "init --verify-skill: no agent detected to maintain the feature maps (amp, codex, cursor, or claude); set [verify] maintainer when you have one")
+		return ""
+	}
+	if !e.isTerminal(e.In) {
+		return ""
+	}
+	fmt.Fprintf(e.Err, "Which agent maintains the feature maps? Detected: %s. [%s, or Enter to skip]: ", strings.Join(offer, ", "), strings.Join(offer, "/"))
+	line, _ := bufio.NewReader(e.In).ReadString('\n')
+	if ans := strings.ToLower(strings.TrimSpace(line)); slices.Contains(offer, ans) {
+		return ans
+	}
+	return ""
 }

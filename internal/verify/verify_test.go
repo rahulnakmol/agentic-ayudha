@@ -316,6 +316,23 @@ func TestTestEvidence(t *testing.T) {
 	if un := Unmapped(r, p); !slices.Equal(un, []int{2}) {
 		t.Fatalf("unmapped: %v", un)
 	}
+
+	// What a delegated receiver wrote on megaman (Appendix B D-5.5c.14): a
+	// directory path with "./" and a subtest. A failing sibling subtest does
+	// not count against it; a failing child of a named subtest does.
+	_ = os.WriteFile(EvidencePath(root, 7), []byte("[[criterion]]\nid = 1\ntests = [\"./mathx:TestSum/positive\"]\n\n[[criterion]]\nid = 2\ntests = [\"./mathx:TestSum/negative\"]\n"), 0o644)
+	r.TestEvents = []byte(`{"Action":"run","Package":"m/mathx","Test":"TestSum"}
+{"Action":"run","Package":"m/mathx","Test":"TestSum/positive"}
+{"Action":"pass","Package":"m/mathx","Test":"TestSum/positive"}
+{"Action":"run","Package":"m/mathx","Test":"TestSum/negative"}
+{"Action":"fail","Package":"m/mathx","Test":"TestSum/negative/zero"}
+{"Action":"fail","Package":"m/mathx","Test":"TestSum/negative"}
+{"Action":"fail","Package":"m/mathx","Test":"TestSum"}
+`)
+	ev, problems, _ = TestEvidence(r)
+	if len(ev) != 1 || !slices.Equal(ev[0].Criteria, []int{1}) || !slices.Equal(problems, []string{"criterion 2: test ./mathx:TestSum/negative did not pass in this run"}) {
+		t.Fatalf("./ path and subtests: %+v %q", ev, problems)
+	}
 }
 
 // The deps floor names the lockfiles git tracks rather than scanning

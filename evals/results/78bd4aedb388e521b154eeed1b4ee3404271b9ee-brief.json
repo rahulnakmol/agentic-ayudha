@@ -1,0 +1,292 @@
+{
+  "version": 1,
+  "sha": "78bd4aedb388e521b154eeed1b4ee3404271b9ee",
+  "ref": "main",
+  "time": "2026-10-15T18:16:27.303640123Z",
+  "judge": "gpt-6.1-sol",
+  "judge_family": "openai",
+  "k": 5,
+  "cases": [
+    {
+      "case": "brief/engineer-ideate",
+      "skill": "brief",
+      "lane": "spec",
+      "model": "claude-opus-5-5",
+      "fallback": "claude-sonnet-5-5",
+      "family": "anthropic",
+      "runs": [
+        {
+          "status": "fail",
+          "score": 3,
+          "pass": false,
+          "reason": "The brief is compact, evidence-led, and useful for engineering ideation, with three clearly labeled proposals grounded in the Result and evidence gaps. However, it says the Linux merge gate \"has no screen reader\"; P1 says only that the gate cannot run a screen reader, not that one is absent. That is an unsupported explanation. The takeaway also drops the target's \u003e= operator, reporting a target of 3 rather than \u003e= 3.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 7457,
+              "tokens_out": 3291,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3742,
+              "tokens_out": 233,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The brief accurately reports the criterion evidence, floor results, inspect disposition, and export metric without inventing outcomes or UI details. It preserves the distinction between export counts and resolution of the underlying problem, and describes evidence gaps as absence of evidence rather than failed work. All three ideas are explicit proposals motivated by the grounding, with the large-list completeness inference clearly labeled. The compact, evidence-led presentation fits an engineer brief for ideation.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 7457,
+              "tokens_out": 2419,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3714,
+              "tokens_out": 182,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The brief accurately reports the released story, pack provenance, floor results, mapped criterion evidence, and Result without inventing implementation details or claiming that export counts prove offline auditing outcomes. It correctly treats the skipped screen-reader floor as an evidence gap and labels PDF, scheduled exports, and other-list exports as outside scope. The engineer register is compact and precise, and four explicitly framed proposals are motivated by the grounding. The bias check usefully distinguishes the achieved export target from unshown reductions in hand copying or lost r…",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 7457,
+              "tokens_out": 2941,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3700,
+              "tokens_out": 279,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 4,
+          "pass": true,
+          "reason": "The brief accurately reports the mapped criteria, floor results, release status, and export metric without implying that exports prove time savings or fewer lost rows. Its three explicit proposals are motivated by the grounding. One minor precision lapse prevents a 5: the a11y entry gives the severity detail but omits its recorded value of 0 and threshold of 0, despite the requirement to name floor values and thresholds exactly.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 7457,
+              "tokens_out": 2677,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3696,
+              "tokens_out": 313,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The brief accurately reports the release, floor results, criterion evidence, and export metric without turning export counts into claims about offline auditing or reduced manual work. It distinguishes the skipped screen-reader floor and recording-based responsiveness evidence, and its four explicitly labeled proposals are grounded in those limits, the stated problem, and the scope exclusions. The takeaway is correct, and the register is compact and engineer-focused.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 7457,
+              "tokens_out": 2706,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3698,
+              "tokens_out": 160,
+              "max_tokens": 2000
+            }
+          ]
+        }
+      ],
+      "errors": 0,
+      "pass_k": 0,
+      "mean": 4.4
+    },
+    {
+      "case": "brief/regulatory-close",
+      "skill": "brief",
+      "lane": "spec",
+      "model": "claude-opus-5-5",
+      "fallback": "claude-sonnet-5-5",
+      "family": "anthropic",
+      "runs": [
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The brief accurately states the measured outcome against the target, preserves the exports-per-reviewer-per-week unit, and distinguishes the feature's open state from its released status. It identifies the authoritative pack, reports its floor results and skipped screen-reader floor, and maps each criterion to the supporting evidence without inventing outcomes. The limits explicitly explain that export usage does not establish audit time saved or fewer lost rows, and appropriately bound the screen-reader, measurement-window, list-size, and scope evidence. The formal, traceable register fits a …",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 7456,
+              "tokens_out": 2692,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3855,
+              "tokens_out": 183,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The brief accurately records the target and measured outcome, released/open feature status, authoritative pack and floor results, and the evidence supporting all three criteria. It clearly distinguishes the skipped screen-reader floor from passed checks. Its limits appropriately state that export counts do not establish audit time saved, fewer lost rows, or offline audit use. The register is formal and traceable, with no invented controls, outcomes, or compliance claims.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 7456,
+              "tokens_out": 1550,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3721,
+              "tokens_out": 158,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The brief accurately records the target outcome, measurement unit and window, authoritative pack, floor results, and evidence supporting each criterion. It distinguishes released status from issue state and reports the inspect disposition without claiming approval or compliance. Its limits explicitly identify the skipped screen-reader floor, explain that export counts do not establish time saved or fewer lost rows, and preserve the stated scope exclusions. The register is formal and traceable, and the brief serves the closure purpose without unsupported claims.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 7456,
+              "tokens_out": 1768,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3683,
+              "tokens_out": 172,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The brief accurately records the measured outcome against the target, identifies the authoritative pack and floor results, and ties each criterion to its mapped evidence. Its limits explicitly address the skipped screen-reader floor and explain that export counts do not establish time saved, fewer lost rows, or completed offline audits. It preserves the distinction between released status and open issue state, uses appropriate scope language, and makes no unsupported compliance or approval claims.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 7456,
+              "tokens_out": 2829,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3803,
+              "tokens_out": 154,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "revised": true,
+          "reason": "The brief accurately states the measured outcome against the target, preserves the metric’s units and measurement window, and traces all three criteria to their mapped evidence. It reports the authoritative pack’s floor results, including the explicitly skipped screen-reader floor, without claiming broader compliance or approval. Its limits distinguish export counts from time saved, fewer lost rows, or actual offline audits, identify scope exclusions, and preserve the feature’s open/released status. No unsupported claims are apparent.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 7456,
+              "tokens_out": 2693,
+              "max_tokens": 8000
+            },
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 8629,
+              "tokens_out": 1479,
+              "max_tokens": 8000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3768,
+              "tokens_out": 173,
+              "max_tokens": 2000
+            }
+          ]
+        }
+      ],
+      "errors": 0,
+      "pass_k": 1,
+      "mean": 5
+    }
+  ],
+  "pass_k": 0.5,
+  "mean": 4.7,
+  "errors": 0,
+  "cost_usd": 3.98751,
+  "group": "brief",
+  "verdict": "pass"
+}

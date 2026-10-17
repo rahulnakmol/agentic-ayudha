@@ -154,11 +154,27 @@ A release record, from `git show origin/ledger:releases/144/rolling.json`, trimm
 
 ## Who may write
 
-`aayu init` makes sure a ruleset protects `refs/heads/ledger` with the `deletion`, `non_fast_forward`, and `update`
-rules. It adopts an existing ruleset that already does this, or creates one named `aayudha-ledger`, whose bypass actor
-is the repository admin role. `aayu init --identity` creates the bot GitHub App and adds it as a second bypass actor,
-for agent lanes with broker tokens. The admin role stays: `aayu ship` writes the ship record and lands the merge
-gate's pack with the human's own token.
+`aayu init` makes sure the ledger is protected by two rulesets. It adopts an existing ruleset that already blocks
+`deletion` and `non_fast_forward` on `refs/heads/ledger`, or creates:
+
+- **`aayudha-ledger`**, with the `update` rule. Its bypass actor is the repository's write role, which also covers
+  maintain and admin, so anyone with write access can run `aayu ship` and land the merge gate's pack and the ship
+  record with their own token.
+- **`aayudha-ledger-history`**, with `deletion` and `non_fast_forward` and no bypass actor. A bypass actor bypasses
+  every rule of its ruleset, so these rules live apart, and nobody, an admin included, force-pushes or deletes the
+  ledger without first changing a ruleset (an audited event).
+
+`aayu init --identity` creates the bot GitHub App and adds it as a second bypass actor of `aayudha-ledger`, for agent
+lanes with broker tokens. Rerunning `aayu init` on a repository set up before 0.2, whose single `aayudha-ledger`
+ruleset let only admins write, creates `aayudha-ledger-history` first and then narrows `aayudha-ledger` to updates with
+the write role added. Shipping merges into `dev` only; promotion to `rolling` and `main` stays a separate release step
+behind its own admin-only rulesets.
+
+A private personal repository on GitHub Free has no rulesets: GitHub answers 403 "Upgrade to GitHub Pro or make this
+repository public". `aayu init` then says the rulesets were not applied and why, records it in `.aayudha/state.json`,
+and finishes the other steps. The ledger branch stays unprotected, so anyone with write access can force-push or
+delete it, and the `ledger-rulesets` row of `aayu doctor` warns until you make the repository public or upgrade and run
+`aayu init` again.
 
 CI writes nothing to the ledger. On a personal repository the GitHub Actions app cannot be a ruleset bypass actor, so
 `GITHUB_TOKEN` can never write the ledger, and the proof design does not need it to: the merge gate keeps its pack as
@@ -189,8 +205,9 @@ proof verify` reads both.
 2. A write that changes nothing pushes nothing, and `--dry-run` writes nothing. Enforced in `internal/ledger/ledger.go`
    (`TestNoopDryRunAndErrors`).
 3. Actions segments are appended, never replaced. Enforced in `ledger.Sink` (`TestSink`).
-4. The ledger cannot be deleted or force-pushed, and only the bypass actor can update it. Enforced by the ruleset that
-   `internal/initrepo/init.go` creates or adopts (`TestInitAdoptsLedgerAndUninit`).
+4. The ledger cannot be deleted or force-pushed by anyone, and only a human with write access or the bot App can
+   update it. Enforced by the two rulesets that `internal/initrepo/init.go` creates (`TestInitTwiceDryRunPublicCoexistence`,
+   `TestLiveLedgerWriters`) or the one it adopts (`TestInitAdoptsLedgerAndUninit`).
 5. Proof media never go to the ledger or Git LFS, and CI never writes the ledger. Enforced in
    `internal/proof/ledger.go` (`TestMediaNeedABucket`) and `internal/cli/proof.go` (`TestProofPushVerifyCLI`,
    `TestProofCommentInMergeGate`).
@@ -205,10 +222,11 @@ proof verify` reads both.
 - [internal/cli/lease.go](../../internal/cli/lease.go): story leases.
 - [internal/cli/release.go](../../internal/cli/release.go): release records.
 - [internal/initrepo/init.go](../../internal/initrepo/init.go) and
-  [internal/initrepo/extras.go](../../internal/initrepo/extras.go): the ledger branch, its ruleset, and the App bypass.
+  [internal/initrepo/extras.go](../../internal/initrepo/extras.go): the ledger branch, its rulesets, and the App bypass.
 
-> **Honest status:** no bot GitHub App is installed on this repository yet, so its ruleset, `ledger-writers`, lists
-> the repository admin role as the only bypass actor, and agents write under the founder's account. CI does not write
+> **Honest status:** no bot GitHub App is installed on this repository yet, and agents write under the founder's
+> account. Its own rulesets predate `aayu init`: `ledger-writers` restricts updates, with the write role as its bypass
+> actor, and `ledger-history` blocks force pushes and deletion for everyone (Appendix B D-4.2b.h). CI does not write
 > the ledger: the merge gate leaves the authoritative pack as a run artifact, and `aayu ship` lands it under the
 > founder's identity, saying so in `pack_landed`. 91 ledger commits so far carry the
 > `identity:human-fallback` trailer. The ledger README predates the current layout: its table still names `packs/`,

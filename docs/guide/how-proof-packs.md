@@ -16,7 +16,12 @@ A builder agent can say anything about its own work. The pack design keeps the a
 evidence for a criterion is the output of a test that `verify` ran itself, the pack is tied to one head commit and
 one Completion Goal hash, and only the pack that the base-branch merge gate built on that head counts for `ship`.
 The agent still chooses which of its tests prove each promise, in the evidence map it commits; that is why `inspect`
-reads the pack and judges whether the mapped tests really show each promise. In this repository's Go stories, an
+reads the pack and judges whether the mapped tests really show each promise. For a Bug story the gate also checks
+it deterministically: `verify --ci` copies the pull request's test files onto the base commit and runs the mapped
+tests there. A test that passes on the base (`green on base`) does not show the fix; one that fails there (`red on
+base`) does; one that does not build there, such as a test of a new function, is `inconclusive`. The
+`red-on-base` check is in the pack and the floor table. It is advisory until `[verify] red_on_base_blocking_from`
+(2026-11-13), and from that date a green-on-base criterion fails the gate. In this repository's Go stories, an
 `api-trace` evidence file holds the `go test` events of the mapped test.
 
 The flow for one pull request:

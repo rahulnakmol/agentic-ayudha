@@ -28,7 +28,7 @@ installed; the merge gate runs them)". That is fine. The checks that count run i
 
 Every build has limits: by default 8 hours, 25 USD of model spend that aayudha can see, and 3 failed attempts. If
 the budget runs out, or a risky layer fails twice, the agent stops, marks the story blocked, and pages a person
-through Slack, email, or a GitHub mention. The code your agent writes is billed by your Amp, Cursor, or Claude Code
+through Slack, email, or a GitHub mention. The code your agent writes is billed by your agent's own
 plan as usual.
 
 On your Monday the brake was pulled once, and the alert landed on you. Story 134's local checks failed twice on its
@@ -36,6 +36,11 @@ platform layer, a risky one, so the agent stopped and marked the story blocked. 
 code: it was a stale local copy of `aayu`, built before a fix to the accessibility check, and CI, on the current
 version, had already passed every check. You rebuilt the binary, ran `aayu ready 134` to restart the budget, and the
 build carried on. The brake did its job: it stopped an agent that was failing and handed the question to you.
+
+> **Since then:** on that Monday the agent you were talking to built every story. Now you can hand a Ready story to
+> another agent's cloud instead, Codex, Cursor, Claude Code, or Amp, with `/codex` and its siblings, and aayudha
+> prepares and checks the cloud environment it builds in. The pull request comes back through the same gate:
+> [hand work to an agent](guide-build.md).
 
 ## If your story has a screen
 

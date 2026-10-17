@@ -43,6 +43,10 @@ assumption: that the plan text really covers the questions people ask.
 **Your agent** asks, pushes back on vague answers, writes what you said into the Goal's sections, checks that every
 required section is there, fetches the baseline where it can, and files the issue only when everything passes.
 
+> **Since then:** the interview no longer waits for you to ask for it. Whenever you give any aayudha verb or hand-off
+> a vague request, in Claude Code, Codex, Cursor, or Amp, it stops and unpacks the request with you first, and a
+> concrete one goes straight through. [How aayudha unpacks a vague ask](unpack.md) shows a real conversation.
+
 ## What you learn
 
 A number with a baseline turns an opinion into a bet you can win or lose. It also tells the agents what matters,

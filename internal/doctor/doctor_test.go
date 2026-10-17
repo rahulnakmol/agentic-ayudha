@@ -15,6 +15,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/agentenv"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations"
@@ -71,6 +72,31 @@ func overlay(p *Probe, table map[string]string) {
 	}
 }
 
+// staleEnv is a repository whose agent environment was generated and
+// verified for go 1.25.0, after which go.mod moved to 1.26.0.
+func staleEnv(t *testing.T) string {
+	root := repoWith(t, map[string]string{"go.mod": "module m\n\ngo 1.25.0\n"})
+	d, err := agentenv.Discover(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := agentenv.Settle(d, map[string]agentenv.Answer{"hosts": {Value: "amp,cursor", Source: "stated"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Tools[0].Version, s.Tools[0].SHA256 = "1.25.8", map[string]string{"amd64": strings.Repeat("a", 64), "arm64": strings.Repeat("b", 64)}
+	if err := agentenv.Write(root, s); err != nil {
+		t.Fatal(err)
+	}
+	if err := agentenv.RecordContainer(root, agentenv.Amp, s, agentenv.Result{Image: "debian:12"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module m\n\ngo 1.26.0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
 // fakeExec answers commands from a table keyed by "name args...".
 func fakeExec(table map[string]string) func(context.Context, string, string, ...string) (string, error) {
 	return func(_ context.Context, _ string, name string, args ...string) (string, error) {
@@ -111,7 +137,7 @@ func healthy(t *testing.T) *Probe {
 			"git for-each-ref --format=%(refname:short) refs/heads refs/remotes/origin": "dev\nmain\norigin/HEAD\norigin/dev\n",
 			"git symbolic-ref --short refs/remotes/origin/HEAD":                         "origin/dev\n",
 		}),
-		Config:  load(t, "identity.app_id=42", "identity.app_slug=aayudha-bot", "integrations.posthog.secret=posthog", "integrations.posthog.scope=read", "integrations.posthog.project=12345"),
+		Config:  load(t, "identity.app_id=42", "identity.app_slug=aayudha-bot", "integrations.posthog.secret=posthog", "integrations.posthog.scope=read", "integrations.posthog.project=12345", "inspect.apps=codex"),
 		Secrets: secrets.New(down{}, secrets.Env{Getenv: getenv}, secrets.File{Path: "/tmp/s.age", IdentityPath: "/tmp/id"}),
 		Human: func(context.Context) (identity.Token, error) {
 			return identity.Token{Value: "t", Source: "AAYU_GITHUB_TOKEN"}, nil
@@ -124,8 +150,16 @@ func healthy(t *testing.T) *Probe {
 			"/repos/o/r/rulesets": []any{},
 			"/repos/o/r/issues?state=open&labels=aayudha:leased&per_page=100": []any{map[string]any{"number": 9}},
 			"/repos/o/r/issues/9/comments?per_page=100":                       []any{map[string]any{"body": "<!-- aayudha:lease holder=bot@ci expires=2099-01-01T00:00:00Z -->"}},
+			"/orgs/o/installations?per_page=100":                              map[string]any{"installations": []any{map[string]any{"app_slug": "chatgpt-codex-connector"}}},
 		}),
-		Repo:      "o/r",
+		Repo: "o/r",
+		Combined: fakeExec(map[string]string{
+			"/usr/bin/x --version":          "1.0.0\n",
+			"/usr/bin/x login status":       "Logged in using ChatGPT\n",
+			"/usr/bin/x status":             "Logged in as dev@example.com\n",
+			"/usr/bin/x auth status --json": `{"loggedIn": true, "authMethod": "claude.ai"}`,
+			"/usr/bin/x account list":       "* dev@example.com\n",
+		}),
 		Version:   "1.2.0",
 		Latest:    func(context.Context) (string, error) { return "v1.2.0", nil },
 		TracePath: ".aayudha/telemetry/traces.jsonl",
@@ -214,8 +248,38 @@ func failing(t *testing.T) map[string]func(*Probe) {
 				return "", errors.New("not found")
 			}
 		},
-		"delegate-env": func(p *Probe) {
-			p.Root = repoWith(t, map[string]string{".agents/setup": "#!/usr/bin/env bash\nGO_VERSION=\"1.24.0\"\n", "go.mod": "module m\n\ngo 1.25.0\n"})
+		"agent-env": func(p *Probe) {
+			p.Root = staleEnv(t)
+		},
+		// Codex replied on a PR, but config does not name it; Cursor's family is unknown.
+		"reviewer-apps": func(p *Probe) {
+			p.Config = load(t)
+			p.API = fakeAPI(map[string]any{
+				"/repos/o/r/pulls?state=all&per_page=10":         []any{map[string]any{"number": 3, "head": map[string]any{"sha": "abc"}}},
+				"/repos/o/r/issues/3/comments?per_page=100":      []any{map[string]any{"user": map[string]any{"login": "chatgpt-codex-connector[bot]"}}},
+				"/repos/o/r/pulls/3/reviews?per_page=100":        []any{},
+				"/repos/o/r/commits/abc/check-runs?per_page=100": map[string]any{"check_runs": []any{map[string]any{"name": "Cursor Bugbot", "app": map[string]any{"slug": "cursor"}}}},
+			})
+		},
+		// A 0.1 triage workflow, still installed; a product's own file of the same name would not count.
+		"retired-workflows": func(p *Probe) {
+			p.Root = repoWith(t, map[string]string{".github/workflows/aayudha-triage.yml": "name: aayudha-triage\non:\n  issues:\njobs: {}\n"})
+		},
+		// S-7.1d, S-7.1e, D-7.1f: the digest needs no agent (Actions runs it), no tool runs the review (missing),
+		// and triage is recorded in amp and codex (double).
+		"loops": func(p *Probe) {
+			p.Root = repoWith(t, map[string]string{
+				"loops/digest.toml": "description = \"Founder digest.\"\ncommand = [\"status\", \"--digest\"]\ncron = \"5 9 * * 1-5\"\nagent = false\n",
+				"loops/review.toml": "description = \"Review.\"\ncommand = [\"seat\", \"list\"]\ncron = \"0 11 1 * *\"\n",
+				"loops/triage.toml": "description = \"Triage.\"\ncommand = [\"triage\"]\ncron = \"0 9 * * *\"\nhosts = [\"amp\", \"codex\"]\n",
+				"loops/active.json": `{"amp": {"triage": {"digest": "000000000000", "id": "s-1", "at": "2026-10-16"}}, "codex": {"triage": {"digest": "000000000000", "id": "t-1", "at": "2026-10-16"}}}`,
+			})
+			p.LookPath = func(b string) (string, error) {
+				if b == "codex" {
+					return "/usr/bin/codex", nil
+				}
+				return "", os.ErrNotExist
+			}
 		},
 		"worktrees": func(p *Probe) {
 			overlay(p, map[string]string{"git worktree list --porcelain": "worktree /repo\nHEAD a\n\nworktree /tmp/wt-x\nHEAD b\nprunable gitdir file points to non-existent location\n"})
@@ -232,12 +296,30 @@ func failing(t *testing.T) map[string]func(*Probe) {
 			p.API = fakeAPI(map[string]any{"/repos/o/r/rulesets": []any{map[string]any{"name": "protect-master"}}})
 		},
 		"telemetry": func(p *Probe) { p.Config = load(t, "telemetry.disabled=true") },
+		// D-3.2b.a: the enabled Codex plugin's hooks were never trusted in /hooks.
+		"codex-hooks": func(p *Probe) {
+			home := t.TempDir()
+			cache := filepath.Join(home, ".codex", "plugins", "cache", "aayudha", "aayudha", "0.0.0", "hosts", "codex")
+			_ = os.MkdirAll(cache, 0o755)
+			_ = os.WriteFile(filepath.Join(cache, "hooks.json"), []byte(`{"hooks": {"PreToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": "aayu hook pre-tool --host codex --skills 0.0.0"}]}]}}`), 0o644)
+			_ = os.WriteFile(filepath.Join(home, ".codex", "config.toml"), []byte("[plugins.\"aayudha@aayudha\"]\nenabled = true\n"), 0o644)
+			getenv := p.Getenv
+			p.Getenv = func(k string) string {
+				if k == "HOME" {
+					return home
+				}
+				return getenv(k)
+			}
+		},
 		"mcp": func(p *Probe) {
 			overlay(p, map[string]string{"/usr/bin/aayu version": "aayu 1.1.0\n"})
 		},
 		"proof": func(p *Probe) {
 			p.Root = repoWith(t, map[string]string{".aayudha/config.toml": "version = 1\n", "loops/proof-purge.toml": "command = [\"proof\", \"purge\"]\n",
 				".github/workflows/aayudha-merge-gate.yml": "jobs:\n  pack:\n    steps:\n      - run: aayudha proof push \"$STORY\" --ci\n"})
+		},
+		"ledger-rulesets": func(p *Probe) {
+			p.Root = repoWith(t, map[string]string{".aayudha/state.json": `{"schema_version": 1, "rulesets_unapplied": "GitHub answered 403: Upgrade to GitHub Pro or make this repository public to enable this feature."}`})
 		},
 		"ledger-media": func(p *Probe) {
 			overlay(p, map[string]string{"git ls-tree --name-only origin/ledger": ".gitattributes\n.lfsconfig\nREADME.md\n"})

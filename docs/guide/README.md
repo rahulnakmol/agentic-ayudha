@@ -2,12 +2,13 @@
 
 Your coding agent can write a feature in an afternoon. Whether that feature does what you promised, is safe to
 merge, and helps anyone at all is a different question. aayudha is the delivery team around the agent you already
-use, Amp, Cursor, or Claude Code. It answers that question with evidence at every step, from a fuzzy idea to a
+use: Claude Code, Codex, Cursor, or Amp. It answers that question with evidence at every step, from a fuzzy idea to a
 number that moved.
 
 > **Start here:** there are two ways in. [Read the story](journey.md): you, a team of agents, one goal, one Monday,
 > and every setback is real. Or [see how it works](how-it-works.md): the architecture, the file formats, and the
-> guarantees, written for engineers. Ready to try it yourself? Spend [your first hour](start.md).
+> guarantees, written for engineers. Ready to try it yourself? Spend [your first hour](start.md): one install and
+> `aayu tour`.
 
 ## The story in one minute
 
@@ -49,13 +50,13 @@ and the checks that run in CI (the automated checks GitHub runs on every pull re
 ## Will it fit, and what does it cost?
 
 - **Price:** aayudha is free and open source, under the BSD-3-Clause licence.
-- **Where it works:** GitHub repositories, with Amp, Cursor, or Claude Code. Use your existing repository: if you
+- **Where it works:** GitHub repositories, with Claude Code, Codex, Cursor, or Amp. Use your existing repository: if you
   only have a `main` branch, aayudha works with it and renames nothing.
 - **To start (Level 1):** no keys, no CI changes, about an hour. Your agent's own model does the interviewing.
-- **For proof on every pull request (Level 2):** one model key for the reviewer (by default an OpenAI model, so an
-  OpenAI key or one AI gateway key), about 10 CI minutes per push in this repository, and at most 5 USD of review
-  per pull request by default. In the story, all the reviews of one pull request cost 0.37 USD together.
-- **Your code:** the checks run in your own CI. The model vendors whose keys you add see what they review.
+- **For proof on every pull request (Level 2):** no AI key in your CI. The review comes from an agent app from
+  another vendor that you install on your GitHub account, such as Claude or Codex, billed through your own
+  subscription to it. The checks take about 10 CI minutes per push in this repository.
+- **Your code:** the checks run in your own CI. The reviewer app you install sees the pull requests it reviews.
 - **Changed your mind?** `aayu uninit` removes what aayudha set up.
 
 [Adopt at your own pace](adopt.md) has the full costs and benefits of each level.
@@ -67,18 +68,32 @@ and the checks that run in CI (the automated checks GitHub runs on every pull re
 | Feel what it is like to work this way | [The story](journey.md), nine short chapters |
 | Set it up and try it | [Your first hour](start.md) |
 | Find the right command for your situation | [When to use what](when-to-use-what.md) |
+| See how a vague ask ("make it slick") becomes a spec | [How aayudha unpacks a vague ask](unpack.md) |
+| Get a pull request reviewed and merged | [A pull request is ready](guide-review.md) |
+| Hand a story to another agent | [Hand work to an agent](guide-build.md) |
+| Check what your product actually does | [Prove a behaviour change](guide-prove-behaviour.md) |
+| Let work happen on a schedule or an event | [Keep things moving with loops](guide-loops.md) |
+| Find out whether it helped | [Did it work?](guide-learn.md) |
+| Fix something that went wrong | [Troubleshooting](troubleshooting.md) |
 | Try it without touching CI or adding keys | [Adopt at your own pace](adopt.md) |
 | Understand the ideas | [Seats](concepts-seats.md), [layers](concepts-layers.md), [proof packs](concepts-proof.md), [floors](concepts-floors.md), [the human pass](concepts-human-pass.md), [dev, rolling, main](concepts-ladder.md) |
-| Know exactly how it works | [How it works](how-it-works.md), thirteen technical deep dives |
+| Know exactly how it works | [How it works](how-it-works.md), fifteen technical deep dives |
 | See how aayudha was built with itself | [Epilogue: built with itself](built-with-itself.md) |
-| Look up a term or a flag | [Glossary](../../GLOSSARY.md), the [project overview](../../README.md), and the verb pages |
+| Look up a term or a flag | [Glossary](../../GLOSSARY.md), the [project reference](../README.md), and the verb pages |
+
+## If you are an agent
+
+Helping someone adopt aayudha? Send them to [your first hour](start.md) and let them run `aayu tour` in their own
+terminal: it is for people and refuses agents. After that, `aayu next` names the next step, and every GitHub write
+goes through an `aayu` verb, never `gh`. Each page here has a Markdown twin at the same path ending in `.md`, listed
+in `llms.txt`.
 
 ## Where things stand
 
-aayudha is young. The first stable release, v0.1.0, has not been cut yet, so [your first hour](start.md) shows how
-to install the latest snapshot instead. Some parts need setup you may not have yet, such as a model key for CI
-reviews or a GitHub App for the agents. Each page says so plainly where it matters, with the next step. You can get
-real value on day one without any of it.
+aayudha is young. Its first stable release, v0.1.0, came out on 15 October 2026, and the install script installs it.
+Some parts need setup you may not have yet, such as a reviewer app on your GitHub account or a GitHub App for the
+agents. Each page says so plainly where it matters, with the next step. You can get real value on day one without
+any of it.
 
 ## What's next
 

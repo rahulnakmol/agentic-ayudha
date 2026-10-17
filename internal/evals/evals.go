@@ -20,6 +20,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/grill"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -159,6 +160,9 @@ type Case struct {
 	Transcript string `toml:"transcript"`
 	// Cite is how many criteria must cite an assessment fact.
 	Cite int `toml:"cite"`
+	// Gate is the vagueness gate's expected verdict on the request (WP5.8):
+	// "unpack" (the skill must stop and ask) or "pass" (it must ask nothing).
+	Gate string `toml:"gate"`
 	// Persona makes a persona case (WP5.1b): the input is the grounding, the
 	// output the seat twin's Markdown answer at a team stage.
 	Persona *PersonaSpec `toml:"persona"`
@@ -183,7 +187,32 @@ type Case struct {
 type Scope struct {
 	Pattern string `toml:"pattern"`
 	Why     string `toml:"why"`
+	// Allow, when set, matches phrases that honour the rule rather than break
+	// it ("no price" where the human ruled prices out); they are removed before
+	// Pattern is matched (WP5.8).
+	Allow   string `toml:"allow"`
 	re      *regexp.Regexp
+	allowRE *regexp.Regexp
+}
+
+// find returns the rule's first match in text, outside the allowed phrases,
+// and the clause around it, so a floor shows what the skill wrote.
+func (r Scope) find(text string) (match, clause string) {
+	if r.allowRE != nil {
+		text = r.allowRE.ReplaceAllStringFunc(text, func(m string) string { return strings.Repeat(" ", len(m)) })
+	}
+	loc := r.re.FindStringIndex(text)
+	if loc == nil {
+		return "", ""
+	}
+	start, end := max(0, loc[0]-80), min(len(text), loc[1]+80)
+	if i := strings.LastIndexAny(text[start:loc[0]], ".;\n\""); i >= 0 {
+		start += i + 1
+	}
+	if i := strings.IndexAny(text[loc[1]:end], ".;\n\""); i >= 0 {
+		end = loc[1] + i
+	}
+	return text[loc[0]:loc[1]], strings.Join(strings.Fields(text[start:end]), " ")
 }
 
 // OutOfScope returns one line per scope rule the item breaks. A grilled
@@ -210,8 +239,8 @@ func (c Case) OutOfScope(it workitems.Item) []string {
 func (c Case) outOfScopeText(text string) []string {
 	var out []string
 	for _, r := range c.Scope {
-		if m := r.re.FindString(text); m != "" {
-			out = append(out, fmt.Sprintf("adds %s (%q)", r.Why, m))
+		if m, clause := r.find(text); m != "" {
+			out = append(out, fmt.Sprintf("adds %s (%q in %q)", r.Why, m, clause))
 		}
 	}
 	return out
@@ -323,9 +352,20 @@ func LoadCase(dir string) (Case, error) {
 			return c, fmt.Errorf("%s: scope rule %d: why is required", c.ID, i+1)
 		}
 		c.Scope[i].re = re
+		if r.Allow != "" {
+			if c.Scope[i].allowRE, err = regexp.Compile(r.Allow); err != nil {
+				return c, fmt.Errorf("%s: scope rule %d allow: %w", c.ID, i+1, err)
+			}
+		}
 	}
 	if c.Skill == "" || c.Input == "" {
 		return c, fmt.Errorf("%s: skill and input are required", c.ID)
+	}
+	if c.Gate != "" && c.Gate != grill.GateUnpack && c.Gate != grill.GatePass {
+		return c, fmt.Errorf("%s: gate %q: want %q or %q", c.ID, c.Gate, grill.GateUnpack, grill.GatePass)
+	}
+	if c.Gate != "" && c.Transcript == "" {
+		return c, fmt.Errorf("%s: gate needs a transcript", c.ID)
 	}
 	if c.Transcript != "" && c.Repo == "" {
 		return c, fmt.Errorf("%s: a transcript needs the repo fixture it was grilled in", c.ID)

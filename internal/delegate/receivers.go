@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
@@ -237,64 +238,93 @@ func (a AmpCLI) bin() string {
 	return a.Bin
 }
 
-// --- Claude Code: the @claude mention (anthropics/claude-code-action) -------
+// --- Claude Code: a cloud session on the web (claude --cloud) ---------------
 
-// GitHubOps is the GitHub access the Claude adapter needs, through aayu's
-// actions-logged client.
+// GitHubOps is the GitHub access the Claude adapter needs: the branches on
+// origin, read through aayu's client.
 type GitHubOps interface {
-	Comment(ctx context.Context, issue int, body string) (url string, err error)
 	Branches(ctx context.Context, prefix string) ([]string, error)
 }
 
-// ClaudeMention mentions @claude on the story with the brief; claude-code-action
-// pushes a claude/issue-<n>-… branch, from which aayu opens the PR (the action
-// does not open PRs by default). Follow-ups mention @claude on the PR, where
-// the action pushes to the PR's branch.
-type ClaudeMention struct {
-	GitHub  GitHubOps
-	Trigger string // "@claude" unless the workflow sets another trigger_phrase
+// ClaudeCloud starts a Claude Code on the web session from the user's own
+// signed-in CLI (`claude --cloud "<brief>"`), run in the repository so the
+// session clones its GitHub remote. It needs a claude.ai sign-in and no key in
+// the repository's CI (claude-code-action, which does, is not used; Appendix B
+// D-5.5c.4). A session pushes its branch; aayu opens the PR from it. Follow-ups
+// queue a message on the session (`claude -p <msg> --cloud <session>`).
+type ClaudeCloud struct {
+	Exec   Exec
+	Bin    string // claude
+	Dir    string // the repository root
+	Env    []string
+	GitHub GitHubOps
 }
 
-func (c ClaudeMention) trigger() string {
-	if c.Trigger == "" {
-		return "@claude"
-	}
-	return c.Trigger
-}
+var (
+	claudeSessionURL = regexp.MustCompile(`https://claude\.ai/code/(session_[A-Za-z0-9_-]+)`)
+	claudeSessionID  = regexp.MustCompile(`Session ID:\s*(session_[A-Za-z0-9_-]+)`)
+)
 
-// Handoff comments the brief on the story.
-func (c ClaudeMention) Handoff(ctx context.Context, h Handoff) (Task, error) {
-	body := fmt.Sprintf("%s please build this story as the brief below says, on a new branch from `%s`.\n\n%s", c.trigger(), h.Base, h.Brief)
-	url, err := c.GitHub.Comment(ctx, h.Story, body)
+// Handoff creates the cloud session with the brief.
+func (c ClaudeCloud) Handoff(ctx context.Context, h Handoff) (Task, error) {
+	out, err := c.Exec(ctx, c.Dir, c.Env, "", c.bin(), "--cloud", h.Brief)
 	if err != nil {
 		return Task{}, fmt.Errorf("claude: %w", err)
 	}
-	return Task{ID: url, URL: url, Status: TaskWorking}, nil
-}
-
-// Status finds the branch the action pushed for the story.
-func (c ClaudeMention) Status(ctx context.Context, st State) (Task, error) {
-	t := Task{ID: st.Task, URL: st.TaskURL, Status: TaskWorking}
-	bs, err := c.GitHub.Branches(ctx, fmt.Sprintf("claude/issue-%d-", st.Story))
-	if err != nil {
-		return t, err
+	t := Task{Status: TaskWorking}
+	if m := claudeSessionURL.FindStringSubmatch(out); m != nil {
+		t.ID, t.URL = m[1], m[0]
 	}
-	if len(bs) > 0 {
-		t.Branch = bs[len(bs)-1] // the newest name sorts last (the action appends a timestamp)
+	if m := claudeSessionID.FindStringSubmatch(out); m != nil {
+		t.ID = m[1]
+	}
+	if t.ID == "" {
+		return Task{}, fmt.Errorf("claude: no cloud session in the CLI's output: %s", clip(out, 200))
+	}
+	if t.URL == "" {
+		t.URL = "https://claude.ai/code/" + t.ID
 	}
 	return t, nil
 }
 
-// FollowUp mentions @claude on the PR with the findings.
-func (c ClaudeMention) FollowUp(ctx context.Context, st State, msg string) (Task, error) {
-	if st.PR == 0 {
-		return Task{}, errors.New("claude: no PR to follow up on")
+// Status finds the branch the brief named once the session has pushed it.
+func (c ClaudeCloud) Status(ctx context.Context, st State) (Task, error) {
+	t := Task{ID: st.Task, URL: st.TaskURL, Status: TaskWorking}
+	if st.Branch == "" {
+		return t, nil
 	}
-	url, err := c.GitHub.Comment(ctx, st.PR, c.trigger()+" "+msg)
+	bs, err := c.GitHub.Branches(ctx, st.Branch)
+	if err != nil {
+		return t, err
+	}
+	if slices.Contains(bs, st.Branch) {
+		t.Branch = st.Branch
+	}
+	return t, nil
+}
+
+// FollowUp queues the findings on the session.
+func (c ClaudeCloud) FollowUp(ctx context.Context, st State, msg string) (Task, error) {
+	out, err := c.Exec(ctx, c.Dir, c.Env, "", c.bin(), "-p", msg, "--cloud", st.Task, "--output-format", "json")
 	if err != nil {
 		return Task{}, fmt.Errorf("claude: %w", err)
 	}
-	return Task{ID: st.Task, URL: url, Status: TaskWorking}, nil
+	var r struct {
+		OK        bool   `json:"ok"`
+		SessionID string `json:"session_id"`
+		URL       string `json:"url"`
+	}
+	if json.Unmarshal([]byte(strings.TrimSpace(out)), &r) != nil || !r.OK {
+		return Task{}, fmt.Errorf("claude: the follow-up was not queued: %s", clip(out, 200))
+	}
+	return Task{ID: st.Task, URL: st.TaskURL, Status: TaskWorking}, nil
+}
+
+func (c ClaudeCloud) bin() string {
+	if c.Bin == "" {
+		return "claude"
+	}
+	return c.Bin
 }
 
 // --- Codex: cloud tasks through the codex CLI (experimental), diff return ---

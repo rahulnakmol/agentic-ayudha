@@ -16,6 +16,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
 	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
+	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/upgrade"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
@@ -42,7 +43,7 @@ func (e *Env) installOptions() (hosts.Options, error) {
 	if e.Assets == nil {
 		return hosts.Options{}, errors.New("this binary has no embedded skills")
 	}
-	return hosts.Options{Root: root, Home: e.homeDir(), Assets: e.Assets, Version: e.Build.Version,
+	return hosts.Options{Root: root, Home: e.homeDir(), CodexHome: hosts.CodexHome(e.homeDir(), e.Getenv), Assets: e.Assets, Version: e.Build.Version,
 		SkillsVersion: verbs.SkillVersion, Windows: runtime.GOOS == "windows"}, nil
 }
 
@@ -81,6 +82,12 @@ type installEdit struct {
 }
 
 func runInstall(ctx context.Context, e *Env, in Values) error {
+	if in.Bool("loops") {
+		return runInstallLoops(ctx, e, in)
+	}
+	if in.Bool("env") || in.Bool("verify") || in.Bool("cloud") || in.String("record") != "" {
+		return runInstallEnv(ctx, e, in)
+	}
 	apply := in.Bool("apply")
 	if apply && e.Agent() {
 		return Errorf(ExitBlocked, "install --apply writes the hooks that govern agents; a human runs it (AAYU_AGENT=1)")
@@ -107,6 +114,7 @@ func runInstall(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return Wrap(ExitUsage, fmt.Errorf("install: %w", err))
 	}
+	res.Notes = append(res.Notes, e.reviewerAppsNote(ctx)...)
 	var repo, home []hosts.Edit
 	rep := installReport{Notes: res.Notes, Applied: apply}
 	for _, ed := range res.Edits {
@@ -216,13 +224,31 @@ func runHook(ctx context.Context, e *Env, in Values) error {
 	if e.Host == "" { // a marketplace plugin shared by several hosts names none
 		e.Host, _ = doctor.DetectHost("", e.Getenv)
 	}
-	r, err := hosts.RunHook(name, verbs.HostID(e.Host), config.RepoRoot(e.Dir), e.PauseFile(), event)
-	if err != nil {
-		return Wrap(ExitUsage, err)
+	root := config.RepoRoot(e.Dir)
+	var r hosts.HookResult
+	if in.String("skills") != "" && root != "" && hosts.RepoHooks(root, verbs.HostID(e.Host)) {
+		// A marketplace plugin's hook (it passes --skills) stands aside where
+		// `aayu install` registered the repository's own hooks for this host, so
+		// each hook runs once (D-3.2b.d); install drops the repository's copies
+		// once the plugin is enabled.
+		switch {
+		case name == "pre-tool":
+			r = hosts.Deny(verbs.HostID(e.Host), "")
+		case e.Host == string(verbs.HostCursor):
+			r.Stdout = "{}\n"
+		default:
+			r.Stdout = fmt.Sprintf("aayudha: the aayudha plugin and `aayu install` both register hooks and an MCP server for %s here; the repository's hooks run. A person runs `aayu install --host %s --apply` to keep only the plugin's.\n", e.Host, e.Host)
+		}
+	} else {
+		var err error
+		if r, err = hosts.RunHook(name, verbs.HostID(e.Host), root, e.PauseFile(), event); err != nil {
+			return Wrap(ExitUsage, err)
+		}
 	}
 	if name == "pre-tool" {
 		if reason := e.haltCached(ctx); reason != "" {
 			r = hosts.Deny(verbs.HostID(e.Host), fmt.Sprintf("aayudha: the repository is halted (%s): %s. A human clears it with `aayu resume`.", HaltVariable, reason))
+			r.Next = "a person clears the halt with `aayu resume`"
 		}
 	}
 	// A marketplace plugin calls aayu from PATH and passes the skills version it
@@ -232,7 +258,7 @@ func runHook(ctx context.Context, e *Env, in Values) error {
 	}
 	fmt.Fprint(e.Out, r.Stdout)
 	if r.Code != 0 {
-		return &Error{Code: r.Code, Err: errors.New(strings.TrimSpace(r.Stderr)), Next: "aayu resume"}
+		return &Error{Code: r.Code, Err: errors.New(strings.TrimSpace(r.Stderr)), Next: r.Next}
 	}
 	return nil
 }
@@ -261,4 +287,28 @@ func (e *Env) statusLine() string {
 		}
 	}
 	return strings.Join(parts, " | ")
+}
+
+// reviewerAppsNote reports, best effort, the agent apps that can review this
+// repository's PRs in the merge gate (founder decision 2026-10-15), so the
+// person installing knows what to put in [inspect] apps. Nothing without a
+// token or a repository.
+func (e *Env) reviewerAppsNote(ctx context.Context) []string {
+	tok, err := e.Resolver().Human(ctx)
+	if err != nil {
+		return nil
+	}
+	repo, err := e.RepoName(ctx)
+	if err != nil {
+		return nil
+	}
+	found := inspect.DetectApps(ctx, func(ctx context.Context, path string, out any) error { return e.githubGet(ctx, tok, path, out) }, repo)
+	var names []string
+	for _, d := range found {
+		names = append(names, d.App+" ("+d.Source+")")
+	}
+	if len(names) == 0 {
+		return []string{"reviewer apps: none detected on " + repo + "; the merge gate needs one installed on the org or account (Claude, Codex, or Cursor) named in [inspect] apps, else it asks a human"}
+	}
+	return []string{"reviewer apps detected on " + repo + ": " + strings.Join(names, ", ") + "; name them in [inspect] apps for the merge gate (`aayu doctor` shows the choice)"}
 }

@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
@@ -69,6 +71,9 @@ type CallLog struct {
 	TokensOut  int    `json:"tokens_out"`
 	MaxTokens  int    `json:"max_tokens"`
 	Error      string `json:"error,omitempty"`
+	// Retried is the dropped connection a call was retried after, once (WP5.8):
+	// the network's error, never the skill's, so it does not cost the run.
+	Retried string `json:"retried,omitempty"`
 }
 
 // CaseResult is a case's k runs.
@@ -227,18 +232,32 @@ func (h *Harness) call(ctx context.Context, gw *models.Gateway, lane verbs.LaneI
 	if spent := h.spentUSD(); spent >= h.Config.MaxUSD {
 		return models.Response{}, fmt.Errorf("%w: %.2f of %.2f USD", ErrBudget, spent, h.Config.MaxUSD)
 	}
-	resp, m, err := gw.Do(ctx, models.Call{Story: "evals", Seat: string(verbs.AINativeEngineer), Lane: lane, Host: verbs.DirectHost, Req: req})
+	c := models.Call{Story: "evals", Seat: string(verbs.AINativeEngineer), Lane: lane, Host: verbs.DirectHost, Req: req}
+	resp, m, err := gw.Do(ctx, c)
+	var retried string
+	if dropped(err) && ctx.Err() == nil {
+		retried = clip(actions.RedactString(err.Error()), 200)
+		resp, m, err = gw.Do(ctx, c)
+	}
 	usd, _ := models.Cost(gw.Models.Prices, m.Model, resp)
 	h.mu.Lock()
 	h.spent += usd
 	h.mu.Unlock()
 	l := CallLog{Role: role, Model: m.Model, StopReason: resp.StopReason, Truncated: resp.Truncated,
-		TokensIn: resp.TokensIn, TokensOut: resp.TokensOut, MaxTokens: req.MaxTokens}
+		TokensIn: resp.TokensIn, TokensOut: resp.TokensOut, MaxTokens: req.MaxTokens, Retried: retried}
 	if err != nil {
 		l.Error = clip(actions.RedactString(err.Error()), 200)
 	}
 	*log = append(*log, l)
 	return resp, err
+}
+
+// dropped reports a connection the network dropped before a reply arrived (a
+// reset, a broken pipe, or a cut-off stream): repeating the call cannot
+// double anything the skill did, since a model call writes nothing.
+func dropped(err error) bool {
+	return errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.EPIPE) ||
+		errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF)
 }
 
 // untrusted wraps eval input the way every model call wraps untrusted text
@@ -613,6 +632,12 @@ func (h *Harness) runConversation(ctx context.Context, c Case, lane verbs.LaneID
 				return Run{Status: RunFail, Score: 1, Floor: "turn is not valid: " + err.Error()}, nil
 			}
 			return Run{}, err
+		}
+		if round == 1 {
+			if f := GateFloor(a.Gate.Verdict, t); f != "" {
+				rt.Exchanges = append(rt.Exchanges, Exchange{Say: clip(actions.RedactString(t.Say), 1200), Questions: t.Questions, Done: t.Done})
+				return Run{Status: RunFail, Score: 1, Floor: "gate: " + f}, nil
+			}
 		}
 		x := Exchange{Say: clip(actions.RedactString(t.Say), 1200), Questions: t.Questions, Done: t.Done}
 		if t.Done {

@@ -39,6 +39,10 @@ type Run struct {
 	// which TestEvidence maps to criteria.
 	TestEvents []byte
 
+	// Checks selects behaviour checks (--check): <feature>, <feature>.<check>,
+	// or "all"; empty runs those the change touches and the criteria map.
+	Checks string
+
 	CI      bool // running in CI (the screen-reader floor runs there only on its label or nightly)
 	Nightly bool // a scheduled run
 

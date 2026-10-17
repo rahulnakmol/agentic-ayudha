@@ -1,0 +1,27 @@
+{
+  "type": "story",
+  "title": "Get a first slug from one import and one call",
+  "fields": {
+    "summary": "As a developer trying slugkit for the first time, I want a slug from one import and one call, so that I stop getting `invalid options`.",
+    "completion_goal": "1. [api-trace] state: a new Node project with only slugkit installed, importing slugify and calling `slugify('Hello World')` with no options; expected: it returns 'hello-world' after 1 import and 1 call\n2. [api-trace] state: the same new project calling `slugify('Hello World')` with no options; expected: the words are joined by a dash, the result is all lowercase, and it is not shortened (0 = no length limit)\n3. [metric] state: the existing tests in test/index.test.js, which call createSlugger with all five options; expected: 0 failures, with 0 test files changed\n4. [metric] state: README.md; expected: its first code example has 2 lines: the import of slugify and `slugify('Hello World')`",
+    "measure": "Completion Goal criteria observed",
+    "threshold": "all 4 criteria",
+    "scenario": "In a new Node project with only slugkit installed, import slugify and call `slugify('Hello World')`; run the existing tests; read the README's first example.",
+    "environment": "a new Node project on linux with only slugkit installed; synthetic input only",
+    "checkpoints": "1. `slugify('Hello World')` returns 'hello-world' from one import and one call, with the agreed defaults (criteria 1, 2)\n2. Existing createSlugger users see no change (criterion 3)\n3. The README opens with that two-line example (criterion 4)",
+    "assumptions": "- slugify is exported next to createSlugger from the same entry file.",
+    "open_questions": "- answered: whether createSlugger changes (no: it keeps working as today)",
+    "parked_ideas": "- option names: renaming options such as transliterate (the human parked it)",
+    "provenance": "Request: \"Make slugkit simple to use. People keep getting it wrong. It belongs under Feature #90 (Developer experience).\"\nVague: \"simple\" → criteria 1, 2, 4\n1. confirmed (simple.lib-surface/calls-to-first-result): \"One import and one call: `slugify('Hello World')` should give 'hello-world'\"; facts: export:slugkit\n2. confirmed (simple.lib-surface/defaults): \"Every option should be optional: a dash, lowercase, and no length limit unless you ask.\" / \"`slugify('Hello World')` should give 'hello-world'\"; facts: export:slugkit\n3. confirmed (request/existing-behaviour): \"Keep createSlugger working exactly as it does for people who already use it.\"; facts: test:test/index.test.js, export:slugkit\n4. confirmed (simple.lib-surface/calls-to-first-result): \"One import and one call: `slugify('Hello World')`\" / \"that should be the first example in the README\"; facts: export:slugkit"
+  },
+  "labels": [
+    "type:story",
+    "status:planned",
+    "effort:S"
+  ],
+  "parent": {
+    "number": 90,
+    "type": "feature"
+  },
+  "number": 91
+}

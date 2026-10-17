@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -97,4 +99,44 @@ func TestLiveAmp(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("amp thread %s", task.URL)
+}
+
+// Local headless mode with only the receiver's CLI installed and nothing set
+// up in the cloud (WP5.5c): each CLI on PATH runs the documented headless
+// command (LocalArgs) in a scratch git repository with the scrubbed
+// environment, writes one file, and reports what it proved. A CLI that is not
+// signed in skips, naming the receiver.
+//
+//	AAYU_LIVE=1 go test ./internal/delegate -run LiveLocal -v
+func TestLiveLocalReceivers(t *testing.T) {
+	live(t)
+	for _, r := range Receivers {
+		t.Run(r, func(t *testing.T) {
+			bin, ok := LookLocal(r, exec.LookPath)
+			if !ok {
+				t.Skipf("%s: no %s on PATH", r, strings.Join(LocalBins[r], " or "))
+			}
+			wt := t.TempDir()
+			if out, err := run(context.Background(), wt, os.Environ(), "", "git", "init", "--quiet"); err != nil {
+				t.Fatalf("git init: %v %s", err, out)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			defer cancel()
+			gh := t.TempDir()
+			prompt := "Create a file named LIVE_SMOKE.md in the current directory containing exactly the word ok. Then end your final message with this section:\n\n" +
+				ProvedHeading + "\n1. proved: <how you checked that LIVE_SMOKE.md contains ok>\n"
+			out, err := run(ctx, wt, ScrubEnv(os.Environ(), r, gh), "", bin, LocalArgs(r, bin, wt, prompt)...)
+			if err != nil && regexp.MustCompile(`(?i)authenticat|log ?in|sign ?in|api key|unauthori`).MatchString(out) {
+				t.Skipf("%s is not signed in: %s", r, clip(out, 200))
+			}
+			if err != nil {
+				t.Fatalf("%s %v: %v\n%s", bin, LocalArgs(r, bin, wt, "…"), err, clip(out, 2000))
+			}
+			b, _ := os.ReadFile(filepath.Join(wt, "LIVE_SMOKE.md"))
+			if strings.TrimSpace(string(b)) != "ok" || Proved(out, prompt) == "" {
+				t.Fatalf("%s: LIVE_SMOKE.md %q, proved %q\n%s", r, b, Proved(out, prompt), clip(out, 2000))
+			}
+			t.Logf("%s (%s) proved: %s", r, bin, Proved(out, prompt))
+		})
+	}
 }

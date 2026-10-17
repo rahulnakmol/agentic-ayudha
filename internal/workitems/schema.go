@@ -114,6 +114,7 @@ const (
 	FieldOwner       = "technical_owner"
 
 	// Grilled spec record (WP5.3b): written by grill, checked by grill and ready.
+	FieldCheckpoints   = "checkpoints"
 	FieldAssumptions   = "assumptions"
 	FieldOpenQuestions = "open_questions"
 	FieldParked        = "parked_ideas"
@@ -198,6 +199,7 @@ func criteriaFields() []Field {
 // check them when Provenance is present (internal/grill).
 func specRecord() []Field {
 	return []Field{
+		{ID: FieldCheckpoints, Label: "Checkpoints", Kind: KindMarkdown, Description: "What the human can see or try at each step of the build, in order, one per line: \"N. <what you can see or run> (criteria 1, 2)\"."},
 		{ID: FieldAssumptions, Label: "Assumptions", Kind: KindMarkdown, Description: "What the spec takes as given, one per line; \"none\" when there are none."},
 		{ID: FieldOpenQuestions, Label: "Open questions", Kind: KindMarkdown, Description: "One per line, each \"answered: …\" or \"deferred: … (why it can wait)\"."},
 		{ID: FieldParked, Label: "Parked ideas", Kind: KindMarkdown, Description: "Ideas raised while grilling that the human did not confirm. Out of scope: never built or checked for this item."},
@@ -269,10 +271,12 @@ var Types = []Type{
 	},
 	{
 		ID: "story", Name: "Story", Color: "yellow", LabelColor: "fbca04",
-		Description: "An XS-L slice of a Feature with a Completion Goal.",
-		Parents:     []string{"feature"}, ParentAt: StageReady,
-		Links:  []string{"depends-on"},
-		Effort: true,
+		Description: "An XS-L slice of work with a Completion Goal, under a Feature when there is one.",
+		// A Story stands on its own: a vague single-feature ask must not need a
+		// Goal, an Initiative, and a Feature first (megaman, D-5.5c.12 (8), D-2.1c).
+		Parents: []string{"feature"},
+		Links:   []string{"depends-on"},
+		Effort:  true,
 		Sections: []Section{
 			{StageCreate, []Field{
 				{ID: FieldSummary, Label: "Summary", Kind: KindMarkdown, RequiredAt: StageCreate, Description: "As a <who>, I want <what>, so that <why>."},

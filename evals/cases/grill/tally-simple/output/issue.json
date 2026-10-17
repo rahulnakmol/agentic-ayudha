@@ -1,0 +1,27 @@
+{
+  "type": "story",
+  "title": "Log a first expense with one plain command",
+  "fields": {
+    "summary": "As someone who just installed tally, I want to log my first expense with one plain command, so that I do not get lost before I start.",
+    "completion_goal": "1. [api-trace] state: a fresh home directory with no tally configuration or data, running `tally add 12.50 lunch`; expected: exit code 0, and `tally list` then shows 1 expense of 12.50 GBP in category lunch\n2. [api-trace] state: `tally add --help` in the seeded home directory; expected: 0 required flags, and the amount and the category accepted as the first two words\n3. [api-trace] state: running `tally add` with no arguments; expected: exit code 2 and a message naming the missing amount with the example `tally add 12.50 lunch`\n4. [api-trace] state: `tally --help` in an 80-column terminal; expected: at most 24 lines, including a usage line and the example `tally add 12.50 lunch`",
+    "measure": "Completion Goal criteria observed",
+    "threshold": "all 4 criteria",
+    "scenario": "In a fresh home directory, run `tally add 12.50 lunch` and `tally list`; then `tally add --help`, `tally add` with no arguments, and `tally --help`, recording each command's output and exit code.",
+    "environment": "a fresh temporary home directory on linux with synthetic expenses only; never a real user's data",
+    "checkpoints": "1. `tally add 12.50 lunch` works on a fresh machine without `tally init` (criterion 1)\n2. `tally add` takes the amount and category as words, with no required flag (criterion 2)\n3. A bare `tally add` says what to type, and `tally --help` fits one screen (criteria 3, 4)",
+    "assumptions": "- The default currency is GBP, as `tally init` sets today.\n- Usage errors exit 2 and other failures exit 1 (the accepted default).",
+    "open_questions": "- answered: whether the first `tally add` needs `tally init` (no: it creates what it needs)",
+    "parked_ideas": "- fewer commands: dropping report and export (raised by grill; the human parked it)\n- remembered choices: remembering the last category (the human parked it)",
+    "provenance": "Request: \"Make the tally CLI simple to use. New users get lost. It belongs under Feature #70 (Getting started).\"\nVague: \"simple\" → criteria 1, 2, 3, 4\n1. confirmed (simple.cli-first-run/first-command): \"It should just work: create what it needs on first use, in GBP\"; facts: command:tally add, command:tally init\n2. confirmed (simple.cli-surface/command-count): \"`tally add` should take the amount and a category as plain words, with every flag optional\"; facts: command:tally add\n3. default (simple.cli-errors/exit-codes): \"Your default is fine.\" / \"it should say what to type instead\"; facts: code:cmd/tally/main.go\n4. confirmed (simple.cli-help/help-text): \"one screen, 24 lines is fine, with an example of add\"; facts: command:tally"
+  },
+  "labels": [
+    "type:story",
+    "status:planned",
+    "effort:M"
+  ],
+  "parent": {
+    "number": 70,
+    "type": "feature"
+  },
+  "number": 71
+}

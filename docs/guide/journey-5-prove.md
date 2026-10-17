@@ -14,9 +14,12 @@ An agent saying "done, all tests pass" is a claim. This chapter is where claims 
    accessibility, and page speed ([floors](concepts-floors.md)).
 2. It writes the **proof pack**: a file that ties each of the story's promises to its evidence, with every check's
    result ([proof packs](concepts-proof.md)). The pack, screenshots and recordings included, stays on the CI run, and
-   a comment on the pull request shows each promise's verdict, the checks, and the pack's fingerprint.
-3. **`inspect`** hands the promises, the change, and the pack to a reviewer model from a different family, that is,
-   another vendor, than the one that wrote the code. It answers `merge`, `fix`, or `rebuild`, with a verdict and evidence for each promise.
+   a comment on the pull request shows each promise's verdict, the checks, and the pack's fingerprint. It opens with
+   a risk line, high, medium, or low, that tells the person who merges where to look first. For a Bug, the gate also
+   runs the proving tests on the code before the fix: a test that passes there does not show the fix.
+3. **`inspect`** asks a reviewer from a different family, that is, another vendor, than the agent that wrote the
+   code, to review the change. aayu reads its reply as `merge`, `fix`, or `rebuild`, with a verdict for each promise.
+   No reply means no merge.
 
 A pull request gets two rounds of fixes. If it still is not right, aayudha stops spending and asks for a fresh start:
 the pull request is closed, and the story is built again from the latest code.
@@ -78,6 +81,12 @@ page-speed score of 100 against a budget of 90. Both records are on the ledger b
 and the
 [pack for story 134](https://github.com/rahulnakmol/agentic-ayudha/blob/ledger/proof/134/8e01a42142d028066c3026ca9201bb640b0e6914/authoritative/pack.json).
 
+> **Since then:** on 12 October the reviewer was a model the merge gate called with a key held in CI. Now your CI
+> holds no AI key at all: the reviewer is an agent app from another vendor that you install on your account, such as
+> Claude or Codex, and aayu reads its reply. The gate can also run behaviour checks from a feature map, which drive
+> your product the way a person would, and for a Bug it shows the proving tests failing on the base commit first.
+> See [a pull request is ready](guide-review.md) and [prove a behaviour change](guide-prove-behaviour.md).
+
 ## What you do, and what the agent does
 
 **You** read the verdict and the proof comment on the pull request. They are short on purpose. Then you go back to
@@ -91,8 +100,8 @@ capped pull request is rebuilt.
 Two reviewers that disagree, one building and one checking, find more than one reviewer that agrees with itself. And
 when a model and a measurement disagree, believe the measurement.
 
-> **Needs setup:** the merge gate comes with `aayu init --gates`. `inspect` in CI needs a model key stored as a
-> repository secret. The proof needs nothing else: no bot App, bucket, or secret. The pack waits as a file on the CI
+> **Needs setup:** the merge gate comes with `aayu init --gates`, and the review needs a reviewer app installed on
+> your account and named in `[inspect] apps`. The proof needs nothing else: no bot App, bucket, or secret. The pack waits as a file on the CI
 > run for `[proof] retention_days` (90 by default), and `ship` checks it came from that run and records it under your
 > name. An agent's own preview, even with screenshots and video in your thread, never counts. See
 > [Adopt at your own pace](adopt.md).
@@ -104,7 +113,7 @@ when a model and a measurement disagree, believe the measurement.
 | Verb | What it does |
 |---|---|
 | [`verify`](../../skills/verify/SKILL.md) | Runs the fixed checks (tests, security, secrets, dependencies, accessibility, speed) and records the results. |
-| [`inspect`](../../skills/inspect/SKILL.md) | A second model, from another vendor, reviews the pull request against every promise and says merge, fix, or rebuild. |
+| [`inspect`](../../skills/inspect/SKILL.md) | An agent app from another vendor, installed on your account, reviews the pull request against every promise; aayu reads its reply as merge, fix, or rebuild. |
 | [`proof`](../../skills/proof/SKILL.md) | Stores, fetches, and checks the proof packs that hold the evidence for each change. |
 
 <!-- END GENERATED: stage-verbs -->

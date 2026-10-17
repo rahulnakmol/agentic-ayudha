@@ -103,6 +103,10 @@ type Walker struct {
 	// criterion and its floors passed or were waived (WP2.8, M4); nil leaves
 	// proof coverage n/a (no checkout to read the ledger from).
 	Proof func(ctx context.Context, story int) (bool, error)
+	// InFlight holds the stories and bugs an open pull request builds (its
+	// body says Refs #n, or its branch is story/<n>-…): one still labelled
+	// status:ready counts as in progress (D-5.5c.18).
+	InFlight map[int]bool
 
 	proofs map[int]bool
 }
@@ -151,6 +155,9 @@ func (w *Walker) roll(ctx context.Context, n node, depth int) (*Rollup, error) {
 	}
 	for _, s := range subs {
 		c := fromIssue((*gh.Issue)(s))
+		if c.status == "ready" && w.InFlight[c.number] {
+			c.status = "in-progress"
+		}
 		r.leaves = append(r.leaves, c)
 		if container(c.typ) {
 			child, err := w.roll(ctx, c, depth+1)

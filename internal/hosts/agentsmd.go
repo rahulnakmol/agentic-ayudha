@@ -89,3 +89,23 @@ func RemoveAgentsSection(existing []byte, id string) []byte {
 	}
 	return []byte(strings.TrimRight(head+tail, "\n") + "\n")
 }
+
+// wrapText breaks s into lines of at most width bytes at spaces.
+func wrapText(s string, width int) string {
+	var b strings.Builder
+	n := 0
+	for i, w := range strings.Fields(s) {
+		switch {
+		case i == 0:
+		case n+1+len(w) > width:
+			b.WriteByte('\n')
+			n = 0
+		default:
+			b.WriteByte(' ')
+			n++
+		}
+		b.WriteString(w)
+		n += len(w)
+	}
+	return b.String()
+}

@@ -14,7 +14,9 @@ import (
 // Finding categories. Style belongs to the linters and formatters; security,
 // data, and concurrency are protected: no confidence threshold, learned
 // suppression, or peer refutation removes a P0 in them (WP4.8b).
-var Categories = []string{"bug", "security", "data", "concurrency", "contract", "test", "performance", "maintainability", "style", "docs"}
+// test-value marks a test that only restates the code or duplicates another:
+// counted, never posted (research P2, docs/research/video-learnings-2026-10.md).
+var Categories = []string{"bug", "security", "data", "concurrency", "contract", "test", "test-value", "performance", "maintainability", "style", "docs"}
 
 // Protected reports whether a category is never suppressed at P0.
 func Protected(category string) bool {
@@ -31,6 +33,8 @@ const (
 	DropDuplicate     = "duplicate"      // merged into another finding
 	DropDismissed     = "dismissed"      // resembles findings a human dismissed in this repository
 	DropRefuted       = "refuted"        // the peer reviewer showed it is wrong (peer mode)
+	DropTestGap       = "test-gap"       // a missing or weak test noted on a test file: judged in the criterion's verdict instead
+	DropTestValue     = "test-value"     // a test that only restates the code: counted, never posted
 )
 
 // Dropped is a finding that was not posted, and why.
@@ -60,6 +64,18 @@ type Filter struct {
 }
 
 var lintNit = regexp.MustCompile(`(?i)\b(typo|spelling|misspell|formatting|gofmt|goimports|whitespace|indentation|import order|naming convention|unused import|trailing space|line length|comment style|doc comment)\b`)
+
+// testGapRe reads a finding as a test gap ("no test for …", "not covered").
+var testGapRe = regexp.MustCompile(`(?i)\b(no|missing|lacks?|without|add(s|ing)?|needs?)( an?| the)?( unit| regression| table| edge[- ]case| negative)? (tests?|test cases?|coverage|assertions?)\b|\bnot (covered|tested|exercised|asserted)\b|\buntested\b`)
+
+// TestGap reports whether f is a test gap noted on a test file: a test
+// finding, or one worded as a missing test, in a file that is itself a test.
+// Such notes are judged in the criterion's verdict, never posted as line
+// findings (the research measured all 8 of inspect's false positives on the
+// seeded set as these, docs/research/verification-skills-2026-10.md §8.2).
+func TestGap(f Finding) bool {
+	return isTestPath(f.File) && !Protected(f.Category) && (f.Category == "test" || testGapRe.MatchString(f.Title+" "+f.Detail))
+}
 
 var wordRe = regexp.MustCompile(`[a-z0-9]+`)
 
@@ -130,6 +146,10 @@ func (fl Filter) Clean(fs []Finding, diff []DiffFile, areas []Area, reviewer str
 		}
 		f.ID = FindingID(f.File, f.Category, f.Title)
 		switch {
+		case f.Category == "test-value":
+			drop = append(drop, Dropped{f, DropTestValue})
+		case TestGap(f):
+			drop = append(drop, Dropped{f, DropTestGap})
 		case generated[f.File] || fl.isGenerated(f.File):
 			drop = append(drop, Dropped{f, DropGenerated})
 		case f.Category == "style" || (f.Severity != "P0" && f.Severity != "P1" && lintNit.MatchString(f.Title)):

@@ -87,20 +87,36 @@ func TestDue(t *testing.T) {
 
 func TestParseRefuses(t *testing.T) {
 	for name, body := range map[string]string{
-		"--yes":              `command = ["status", "--digest", "--yes"]` + "\ncron = \"0 9 * * *\"",
-		"a human-only flag":  `command = ["decide", "4", "--accept", "A"]` + "\ncron = \"0 9 * * *\"",
-		"a human pass":       `command = ["ship", "4"]` + "\ncron = \"0 9 * * *\"",
-		"a terminal":         `command = ["init"]` + "\ncron = \"0 9 * * *\"",
-		"not a command":      `command = ["rm", "-rf"]` + "\ncron = \"0 9 * * *\"",
-		"day of both kinds":  `command = ["status"]` + "\ncron = \"0 9 1 * 1\"",
-		"two minutes":        `command = ["status"]` + "\ncron = \"0,30 9 * * *\"",
-		"unknown key":        `command = ["status"]` + "\ncron = \"0 9 * * *\"\nshell = \"x\"",
-		"unknown host":       `command = ["status"]` + "\ncron = \"0 9 * * *\"\nhosts = [\"jenkins\"]",
-		"hourly on weekdays": `command = ["status"]` + "\ncron = \"0 * * * 1-5\"",
+		"--yes":               `command = ["status", "--digest", "--yes"]` + "\ncron = \"0 9 * * *\"",
+		"a human-only flag":   `command = ["decide", "4", "--accept", "A"]` + "\ncron = \"0 9 * * *\"",
+		"a human pass":        `command = ["ship", "4"]` + "\ncron = \"0 9 * * *\"",
+		"a terminal":          `command = ["init"]` + "\ncron = \"0 9 * * *\"",
+		"not a command":       `command = ["rm", "-rf"]` + "\ncron = \"0 9 * * *\"",
+		"day of both kinds":   `command = ["status"]` + "\ncron = \"0 9 1 * 1\"",
+		"two minutes":         `command = ["status"]` + "\ncron = \"0,30 9 * * *\"",
+		"unknown key":         `command = ["status"]` + "\ncron = \"0 9 * * *\"\nshell = \"x\"",
+		"unknown host":        `command = ["status"]` + "\ncron = \"0 9 * * *\"\nhosts = [\"jenkins\"]",
+		"hourly on weekdays":  `command = ["status"]` + "\ncron = \"0 * * * 1-5\"",
+		"an unpinned setup":   `command = ["status"]` + "\ncron = \"0 9 * * *\"\nsetup = [\"python\"]",
+		"no cron":             `command = ["status"]`,
+		"a scheduled subject": `command = ["triage", "{number}"]` + "\ncron = \"0 9 * * *\"",
+		"an event loop":       `command = ["triage"]` + "\non = \"issues.opened\"",
+		"cron and an event":   `command = ["status"]` + "\ncron = \"0 9 * * *\"\non = \"issues.opened\"",
+		"an event filter":     `command = ["status"]` + "\ncron = \"0 9 * * *\"\nfilter = { label = \"x\" }",
+		// D-7.1f: the Actions fallback runs only loops that need no agent, and those need neither a tool nor the bot.
+		"an agent loop in Actions":    `command = ["triage"]` + "\ncron = \"0 9 * * *\"\nhosts = [\"amp\", \"actions\"]",
+		"Actions setup, agent loop":   `command = ["triage"]` + "\ncron = \"0 9 * * *\"\nsetup = [\"node\"]",
+		"no agent, in an agent tool":  `command = ["status"]` + "\ncron = \"0 9 * * *\"\nagent = false\nhosts = [\"amp\"]",
+		"no agent, writes as the bot": `command = ["decide"]` + "\ncron = \"0 9 * * *\"\nagent = false\nbot = true",
+		"no agent, a prompt":          `command = ["status"]` + "\ncron = \"0 9 * * *\"\nagent = false\nprompt = \"x\"",
 	} {
 		if _, err := Parse("x", []byte("description = \"x\"\n"+body+"\n")); err == nil {
 			t.Errorf("%s: parsed", name)
 		}
+	}
+	// Event loops are deferred (Appendix B S-7.1e): the error says so, rather than "unknown key".
+	if _, err := Parse("x", []byte("description = \"x\"\ncommand = [\"triage\"]\non = \"issues.opened\"\n")); err == nil || !strings.Contains(err.Error(), "deferred") {
+		t.Errorf("an event loop: %v", err)
 	}
 }
 

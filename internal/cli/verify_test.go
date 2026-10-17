@@ -8,7 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verify"
 )
 
 // verify through the CLI: the PR's story comes from "Refs #n", the Ready
@@ -221,5 +223,134 @@ func TestVerifyGateCI(t *testing.T) {
 	g.Mu.Unlock()
 	if code, res, errOut := gate(); code != 0 || len(res.Checks) != 0 || res.Story != 0 {
 		t.Fatalf("PR without a story: %d %+v %s", code, res, errOut)
+	}
+	// WP4.5b.2: it still runs the feature-map floors, and only them: a
+	// behaviour check of a feature it touches fails the gate.
+	fdir := filepath.Join(dir, ".agents", "skills", "verify-app", "features")
+	_ = os.MkdirAll(fdir, 0o755)
+	_ = os.WriteFile(filepath.Join(fdir, "README.md"), []byte("# app\n\n```map\n{\"product\": \"app\", \"control\": [\"sh\", \"-c\", \"echo '{\\\"status\\\": \\\"failed\\\", \\\"reason\\\": \\\"exit 1\\\"}'\"]}\n```\n\n1. [Cov](cov.md)\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(fdir, "cov.md"), []byte("# Cov\n\nx\n\n```feature\n{\"id\": \"cov\", \"sources\": [\"cov.info\"], \"verified_at\": \"\"}\n```\n\n## Sub-features\n\n## How to reach it\n\n## Behaviour checks\n\n```check\n{\"id\": \"read\", \"kind\": \"cli\", \"evidence\": \"api-trace\", \"steps\": [{\"run\": [\"cat\"]}]}\n```\n\n## Gotchas\n"), 0o644)
+	git(t, dir, "add", "-A")
+	git(t, dir, "commit", "--quiet", "--amend", "-m", "docs: tidy")
+	g.Mu.Lock()
+	pr.Head.SHA = git(t, dir, "rev-parse", "HEAD")
+	g.Mu.Unlock()
+	code, out, errOut := run(t, ci, opts, "verify", strconv.Itoa(pr.Number), "--ci", "--repo", "o/r", "--json")
+	var nostory VerifyResult
+	_ = json.NewDecoder(strings.NewReader(out)).Decode(&nostory)
+	var floors []string
+	for _, c := range nostory.Checks {
+		floors = append(floors, c.Floor+" "+c.Result)
+	}
+	if code != ExitFloor || strings.Join(floors, ", ") != "feature-map pass, behaviour fail" || nostory.Pack != "" {
+		t.Fatalf("no-story PR touching a feature: %d %q %s %s", code, floors, out, errOut)
+	}
+}
+
+// WP4.5b.1: verify --map needs no GitHub and no story; it exits 0 without a
+// map or with a map in sync, and 3 when the map drifted from the source.
+func TestVerifyMapExitCodes(t *testing.T) {
+	dir := t.TempDir()
+	git(t, dir, "init", "--quiet", "-b", "dev")
+	env := map[string]string{"PATH": os.Getenv("PATH")}
+	if code, out, errOut := run(t, env, Options{Dir: dir}, "verify", "--map"); code != 0 || !strings.Contains(out, "no feature map here") {
+		t.Fatalf("no map: %d %s %s", code, out, errOut)
+	}
+	fdir := filepath.Join(dir, ".agents", "skills", "verify-app", "features")
+	_ = os.MkdirAll(fdir, 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "app.sh"), []byte("case $1 in hello) echo hi;; esac # cmd hello\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(fdir, "README.md"), []byte("# app\n\n```map\n{\"product\": \"app\", \"control\": [\"sh\", \"control.sh\"], \"surfaces\": [{\"kind\": \"command\", \"files\": [\"app.sh\"], \"pattern\": \"cmd ([a-z]+)\"}]}\n```\n\n1. [Hello](hello.md)\n"), 0o644)
+	feature := "# Hello\n\nSays hi.\n\n```feature\n{\"id\": \"hello\", \"sources\": [\"app.sh\"], \"surfaces\": {\"command\": [\"hello\"]}, \"verified_at\": \"\"}\n```\n\n## Sub-features\n\n## How to reach it\n\n## Behaviour checks\n\n```check\n{\"id\": \"hi\", \"kind\": \"cli\", \"evidence\": \"api-trace\", \"steps\": [{\"run\": [\"hello\"], \"stdout\": \"hi\"}]}\n```\n\n## Gotchas\n"
+	_ = os.WriteFile(filepath.Join(fdir, "hello.md"), []byte(feature), 0o644)
+	if code, out, errOut := run(t, env, Options{Dir: dir}, "verify", "--map", "--json"); code != 0 || !strings.Contains(out, `"verdict": "stale"`) {
+		t.Fatalf("in sync (never verified): %d %s %s", code, out, errOut)
+	}
+	_ = os.WriteFile(filepath.Join(dir, "app.sh"), []byte("case $1 in greet) echo hi;; esac # cmd greet\n"), 0o644)
+	code, out, errOut := run(t, env, Options{Dir: dir}, "verify", "--map")
+	if code != ExitFloor || !strings.Contains(out, `unmapped command "greet" (app.sh)`) || !strings.Contains(out, `command "hello" of feature hello is no longer in the source`) || !strings.Contains(errOut, "feature map drift") {
+		t.Fatalf("drift: %d %s %s", code, out, errOut)
+	}
+}
+
+// WP4.5b.4 accept: --maintain posts the maintain brief on one tracking issue
+// with [verify] maintainer's mention when the map drifted or a check failed,
+// not twice for the same report, and every time with always; nothing drifted
+// and nothing failed hands nothing off in drift mode.
+func TestVerifyMaintainHandoff(t *testing.T) {
+	g := fake.New(t, "o/r", "User")
+	dir := checkout(t)
+	env := map[string]string{"PATH": os.Getenv("PATH"), "AAYU_GITHUB_TOKEN": "human-token"}
+	opts := Options{Dir: dir, GitHubAPI: g.URL(), GitHubGap: -1}
+	_ = os.MkdirAll(filepath.Join(dir, ".aayudha"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[verify]\nmaintainer = \"claude\"\n"), 0o644)
+	sk := filepath.Join(dir, ".agents", "skills", "verify-app")
+	_ = os.MkdirAll(filepath.Join(sk, "features"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "app.sh"), []byte("case $1 in hello) echo hi;; esac # cmd hello\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(sk, "control.sh"), []byte("cat >/dev/null\necho '{\"status\": \"failed\", \"reason\": \"printed nothing\", \"artifacts\": []}'\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(sk, "features", "README.md"), []byte("# app\n\n```map\n{\"product\": \"app\", \"control\": [\"sh\", \".agents/skills/verify-app/control.sh\"], \"surfaces\": [{\"kind\": \"command\", \"files\": [\"app.sh\"], \"pattern\": \"cmd ([a-z]+)\"}]}\n```\n\n1. [Hello](hello.md)\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(sk, "features", "hello.md"), []byte("# Hello\n\nSays hi.\n\n```feature\n{\"id\": \"hello\", \"sources\": [\"app.sh\"], \"surfaces\": {\"command\": [\"hello\"]}, \"verified_at\": \"\"}\n```\n\n## Sub-features\n\n## How to reach it\n\n## Behaviour checks\n\n```check\n{\"id\": \"hi\", \"kind\": \"cli\", \"evidence\": \"api-trace\", \"steps\": [{\"run\": [\"hello\"], \"stdout\": \"hi\"}]}\n```\n\n## Gotchas\n"), 0o644)
+	briefs := func() []string {
+		g.Mu.Lock()
+		defer g.Mu.Unlock()
+		var out []string
+		for _, is := range g.Issues {
+			for _, c := range is.Comments {
+				if strings.Contains(c.Body, verify.BriefMarker) {
+					out = append(out, c.Body)
+				}
+			}
+		}
+		return out
+	}
+
+	// In sync, drift mode: no hand-off, no issue.
+	if code, _, errOut := run(t, env, opts, "verify", "--map", "--maintain", "drift"); code != 0 || !strings.Contains(errOut, "no hand-off") || len(briefs()) != 0 {
+		t.Fatalf("clean map: %d %s %v", code, errOut, briefs())
+	}
+	// A renamed command: the brief goes to @claude on a new tracking issue; the same drift again posts nothing.
+	_ = os.WriteFile(filepath.Join(dir, "app.sh"), []byte("case $1 in greet) echo hi;; esac # cmd greet\n"), 0o644)
+	if code, _, errOut := run(t, env, opts, "verify", "--map", "--maintain", "drift"); code != ExitFloor || !strings.Contains(errOut, "for @claude") {
+		t.Fatalf("drift: %d %s", code, errOut)
+	}
+	if b := briefs(); len(b) != 1 || !strings.Contains(b[0], "@claude please run the **maintain** procedure") || !strings.Contains(b[0], `unmapped command "greet" (app.sh)`) || !strings.Contains(b[0], "Edit only `.agents/skills/verify-app/`") {
+		t.Fatalf("brief: %v", b)
+	}
+	if code, _, errOut := run(t, env, opts, "verify", "--map", "--maintain", "drift"); code != ExitFloor || !strings.Contains(errOut, "already") || len(briefs()) != 1 {
+		t.Fatalf("same drift again: %d %s %d briefs", code, errOut, len(briefs()))
+	}
+	// The sweep adds the failing check: a different report, so a second brief on the same issue.
+	git(t, dir, "add", "-A")
+	git(t, dir, "commit", "--quiet", "-m", "app")
+	git(t, dir, "update-ref", "refs/remotes/origin/dev", "HEAD")
+	// D-4.5b.7: the Actions sweep only records it, with no mention, once; the record does not stop the person's run.
+	ci := map[string]string{"PATH": os.Getenv("PATH"), "GITHUB_TOKEN": "human-token", "AAYU_BOT_TOKEN": "bot-token"}
+	for i := 0; i < 2; i++ {
+		if code, _, errOut := run(t, ci, opts, "verify", "--check", "all", "--maintain", "drift", "--ci", "--repo", "o/r"); code != ExitFloor || len(briefs()) != 2 {
+			t.Fatalf("CI sweep %d: %d %s %d briefs", i, code, errOut, len(briefs()))
+		}
+	}
+	if b := briefs()[1]; !strings.Contains(b, "Recorded by the Actions loop; no agent was woken") || strings.Contains(b, "@claude") {
+		t.Fatalf("record: %s", b)
+	}
+	if code, _, errOut := run(t, env, opts, "verify", "--check", "all", "--maintain", "drift"); code != ExitFloor || len(briefs()) != 3 || !strings.Contains(briefs()[2], "@claude please") || !strings.Contains(briefs()[2], "`hello.hi` failed: printed nothing") {
+		t.Fatalf("sweep: %d %s %v", code, errOut, briefs())
+	}
+	// always posts even an unchanged report.
+	if code, _, errOut := run(t, env, opts, "verify", "--map", "--maintain", "always"); code != ExitFloor || len(briefs()) != 4 {
+		t.Fatalf("always: %d %s %d briefs", code, errOut, len(briefs()))
+	}
+	if code, _, _ := run(t, env, opts, "verify", "--maintain", "drift"); code != ExitUsage {
+		t.Errorf("--maintain alone: exit %d", code)
+	}
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+	n := 0
+	for _, is := range g.Issues {
+		if strings.Contains(is.Body, verify.MaintainMarker) {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("%d tracking issues, want 1", n)
 	}
 }

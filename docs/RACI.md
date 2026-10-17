@@ -20,7 +20,7 @@ Charters: `seats/<seat>/CHARTER.md`.
 | `slice` | Product Strategist | Product Strategist twin, plan lane | Product Strategist | Code Architect, Engineering Manager | AI Native Engineer (+SRE hat) | all | bot | host | read |
 | `plan` | Code Architect | Code Architect twin, plan lane | Code Architect | Engineering Manager, Quality Architect | AI Native Engineer (+SRE hat) | all | bot | host | read |
 | `decide` | Founder | Founder twin, spec lane | Founder | Product Strategist, Code Architect | Engineering Manager, Auditor | all | human | host | read |
-| `triage` | Product Strategist | Product Strategist twin, chore lane | Product Strategist | — | Engineering Manager | none | bot | hybrid (direct in Actions) | write |
+| `triage` | Product Strategist | Product Strategist twin, chore lane | Product Strategist | — | Engineering Manager | none | bot | hybrid (the host's model passes --as; never in product CI) | write |
 | `build` | AI Native Engineer (+SRE hat) | AI Native Engineer (+SRE hat) twin, build lane | AI Native Engineer (+SRE hat) | Code Architect | Engineering Manager | all | bot | host | write |
 | `verify` | AI Native Engineer (+SRE hat) | AI Native Engineer (+SRE hat) twin, chore lane | Quality Architect | — | Engineering Manager | all | bot | none | write |
 | `inspect` | Engineering Manager | Engineering Manager twin, review lane | Engineering Manager | Quality Architect, Code Architect | AI Native Engineer (+SRE hat) | all | bot | direct | write |

@@ -19,6 +19,7 @@ import (
 	gh "github.com/google/go-github/v90/github"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
+	"github.com/rahulnakmol/agentic-ayudha/internal/agentenv"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/delegate"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
@@ -27,6 +28,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ui"
 )
 
 // Delegation is the part of a build result a delegated story adds.
@@ -38,6 +40,7 @@ type Delegation struct {
 	Task     string         `json:"task,omitempty"`
 	TaskURL  string         `json:"task_url,omitempty"`
 	PR       int            `json:"pr,omitempty"`
+	Proved   string         `json:"proved,omitempty"` // the receiver's own "What I proved" (a preview; the merge gate's proof decides)
 	FollowUp bool           `json:"follow_up_sent,omitempty"`
 	State    delegate.State `json:"-"`
 }
@@ -46,6 +49,8 @@ type Delegation struct {
 type delegation struct {
 	receiver string
 	local    bool
+	fresh    bool // this run hands off: a new branch and, locally, a new worktree
+	handoff  int  // which hand-off of the story this is (from 1)
 	reason   string
 	adapter  delegate.Adapter
 	state    delegate.State
@@ -103,26 +108,12 @@ func clipText(s string, n int) string {
 	return s
 }
 
-// ghOps gives the Claude adapter aayu's actions-logged GitHub writes and the
-// branches on origin.
+// ghOps gives the Claude adapter the branches on origin.
 type ghOps struct {
 	e    *Env
 	c    *github.Client
 	repo string
 	root string
-}
-
-func (o ghOps) Comment(ctx context.Context, n int, body string) (string, error) {
-	owner, name, _ := github.SplitRepo(o.repo)
-	url := ""
-	_, err := o.c.Write(ctx, actions.Action{Kind: "github.issue.comment", Target: fmt.Sprintf("%s#%d", o.repo, n),
-		Request: &actions.Request{Method: http.MethodPost, Path: fmt.Sprintf("/repos/%s/issues/%d/comments", o.repo, n)}, Payload: map[string]any{"kind": "delegate"}},
-		func(ctx context.Context) (any, error) {
-			cm, _, err := o.c.REST.Issues.CreateComment(ctx, owner, name, n, &gh.IssueComment{Body: &body})
-			url = cm.GetHTMLURL()
-			return map[string]any{"id": cm.GetID()}, err
-		})
-	return url, err
 }
 
 func (o ghOps) Branches(ctx context.Context, prefix string) ([]string, error) {
@@ -140,65 +131,104 @@ func (o ghOps) Branches(ctx context.Context, prefix string) ([]string, error) {
 	return bs, nil
 }
 
-// connected reports which receivers' cloud agents are set up here, without
-// any network call: a Cursor API key; Codex's CLI with a cloud environment;
-// a claude-code-action workflow on the base branch; Amp's CLI with its key.
-func (e *Env) connected(root string) map[string]bool {
-	l, _ := e.Config()
-	out := map[string]bool{}
-	if l == nil {
-		return out
+// agents detects the four receivers here (agentenv.Detect: PATH, version,
+// each CLI's local sign-in, aayu's secret store and config, the recorded Amp
+// project; no network, model, or task call), by receiver name.
+func (e *Env) agents(ctx context.Context, root, repo string) map[string]agentenv.Agent {
+	p := agentenv.Probe{Root: root, Repo: repo, LookPath: e.lookPath(), Exec: e.Exec, Getenv: e.Getenv,
+		HasSecret: func(name string) bool { v, _, err := e.SecretStore().Get(name); return err == nil && v != "" }}
+	if p.Exec == nil {
+		p.Exec = agentenv.CombinedExec
 	}
-	cfg := l.Config.Delegate
-	if v, _, err := e.SecretStore().Get(orDefault(cfg.CursorSecret, "cursor-api-key")); err == nil && v != "" {
-		out[delegate.Cursor] = true
+	if l, err := e.Config(); err == nil {
+		p.CodexEnv, p.CursorSecret = l.Config.Delegate.CodexEnv, l.Config.Delegate.CursorSecret
 	}
-	if _, err := e.lookPath()("codex"); err == nil && cfg.CodexEnv != "" {
-		out[delegate.Codex] = true
-	}
-	if _, err := e.lookPath()("amp"); err == nil && (e.Getenv("AMP_API_KEY") != "") {
-		out[delegate.Amp] = true
-	}
-	if claudeWorkflow(root) != "" {
-		out[delegate.Claude] = true
+	out := map[string]agentenv.Agent{}
+	for _, a := range agentenv.Detect(ctx, p) {
+		out[a.Name] = a
 	}
 	return out
 }
 
-var claudeAction = regexp.MustCompile(`uses:\s*anthropics/claude-code-action@`)
+// runsLocally reports whether a's CLI can run here: installed, and signed in
+// or holding its own key (delegate.OwnKey), which the scrubbed environment
+// passes to it.
+func (e *Env) runsLocally(a agentenv.Agent) bool {
+	return a.CLI != "" && (a.SignedIn || delegate.OwnKey(a.Name, e.Getenv))
+}
 
-// claudeWorkflow is the workflow file that runs claude-code-action, if any.
-func claudeWorkflow(root string) string {
-	fs, _ := filepath.Glob(filepath.Join(root, ".github", "workflows", "*.y*ml"))
-	for _, f := range fs {
-		if b, err := os.ReadFile(f); err == nil && claudeAction.Match(b) {
-			return f
+// receiverHelp says plainly what is missing for receiver r ("" for auto),
+// with the exact install and sign-in commands from agentenv.Detect and what
+// to connect for its cloud agent, and offers what is available instead: the
+// same receiver in the other mode, and every other receiver available in the
+// mode asked for. aayu never installs or signs in for the user.
+func (e *Env) receiverHelp(r string, agents map[string]agentenv.Agent, wantLocal bool) string {
+	var b strings.Builder
+	if a, ok := agents[r]; ok {
+		cli := "not installed"
+		switch {
+		case e.runsLocally(a):
+			cli = "installed (" + a.CLI + "), signed in"
+		case a.CLI != "":
+			cli = "installed (" + a.CLI + "), not signed in"
+		}
+		fmt.Fprintf(&b, "%s here: CLI %s; cloud: %s.\n", delegate.Names[r], cli, a.CloudDetail)
+		if a.CLI == "" {
+			fmt.Fprintf(&b, "- Install it: %s\n", strings.Join(a.Install, "; "))
+		}
+		if !e.runsLocally(a) {
+			fmt.Fprintf(&b, "- Sign in: %s\n", strings.Join(a.SignIn, "; "))
+		}
+		switch {
+		case !wantLocal && e.runsLocally(a):
+			b.WriteString("- Or add `--local` to run its CLI on this machine in a fresh aayu worktree.\n")
+		case wantLocal && a.Cloud:
+			b.WriteString("- Or drop `--local`: its cloud agent is connected.\n")
 		}
 	}
-	return ""
+	for _, x := range delegate.Receivers {
+		a := agents[x]
+		switch {
+		case x == r:
+		case !wantLocal && a.Cloud:
+			fmt.Fprintf(&b, "- %s's cloud agent is connected: `--delegate %s`.\n", delegate.Names[x], x)
+		case wantLocal && e.runsLocally(a):
+			fmt.Fprintf(&b, "- %s's CLI is ready here: `--delegate %s --local`.\n", delegate.Names[x], x)
+		}
+	}
+	b.WriteString("aayu never installs or signs in for you; `aayu doctor` lists every agent.")
+	return b.String()
 }
 
 // newDelegation resolves the receiver (auto picks one), the mode (cloud
-// unless --local or the cloud agent is not connected), and the adapter, and
-// reads the story's delegation state from the ledger.
+// unless --local), and the adapter, and reads the story's delegation state
+// from the ledger. A receiver not available in that mode is refused with
+// receiverHelp.
 func (e *Env) newDelegation(ctx context.Context, in Values, c *github.Client, bot identity.Bot, w *ledger.Writer, repo, root string, n int, chk ready.Result, body string, labels []string) (*delegation, error) {
 	l, err := e.Config()
 	if err != nil {
 		return nil, err
 	}
+	if r := e.Getenv("AAYU_DELEGATED"); r != "" {
+		return nil, Errorf(ExitBlocked, "build #%d --delegate: this run is %s working on a delegated story, and a receiver never hands work on to another agent", n, r)
+	}
 	cfg := l.Config.Delegate
 	d := &delegation{receiver: in.String("delegate"), local: in.Bool("local"), c: c, w: w, repo: repo, story: n, title: chk.Title,
-		branch: fmt.Sprintf("story/%d-%s", n, slug(chk.Title)), dev: e.devBranch(), root: root, bot: bot, body: body}
+		dev: e.devBranch(), root: root, bot: bot, body: body}
 	if _, err := readLedgerJSON(ctx, w, delegate.LedgerPath(n), &d.state); err != nil {
 		return nil, Wrap(ExitExternal, err)
 	}
-	if d.receiver == "auto" && d.state.Receiver != "" && d.state.Status != dlgFailed && d.state.Status != dlgMerged {
+	ongoing := d.state.Receiver != "" && d.state.Status != dlgFailed && d.state.Status != dlgMerged
+	if d.receiver == "auto" && ongoing {
 		d.receiver, d.local, d.reason = d.state.Receiver, d.state.Mode == "local", d.state.Reason
 	}
-	cloud := e.connected(root)
-	local := map[string]bool{}
+	if ongoing && d.receiver == d.state.Receiver && d.state.Mode == "local" {
+		d.local = true // a sync keeps its hand-off's mode
+	}
+	agents := e.agents(ctx, root, repo)
+	cloud, local := map[string]bool{}, map[string]bool{}
 	for _, r := range delegate.Receivers {
-		_, local[r] = delegate.LookLocal(r, e.lookPath())
+		cloud[r], local[r] = agents[r].Cloud, e.runsLocally(agents[r])
 	}
 	if d.receiver == "auto" {
 		effort := ""
@@ -207,26 +237,30 @@ func (e *Env) newDelegation(ctx context.Context, in Values, c *github.Client, bo
 				effort = v
 			}
 		}
+		// Cloud by default: auto picks among cloud agents, and among local CLIs
+		// only with --local.
+		pickCloud, pickLocal := cloud, map[string]bool{}
 		if d.local {
-			cloud = map[string]bool{}
+			pickCloud, pickLocal = map[string]bool{}, local
 		}
-		ch, err := delegate.Choose(effort, cloud, local)
+		ch, err := delegate.Choose(effort, pickCloud, pickLocal)
 		if err != nil {
-			return nil, Errorf(ExitBlocked, "build #%d --delegate auto: %v; see docs/research/agent-delegation-and-review.md §10 for what to connect", n, err)
+			return nil, Errorf(ExitBlocked, "build #%d --delegate auto: %v\n%s", n, err, e.receiverHelp("", agents, d.local))
 		}
 		d.receiver, d.local, d.reason = ch.Receiver, ch.Local, ch.Reason
 	}
+	// Cloud by default; the local CLI only on the user's explicit --local. A
+	// receiver that is not available is named plainly, with what to do.
+	if !slices.Contains(delegate.Receivers, d.receiver) {
+		return nil, Errorf(ExitUsage, "build --delegate %q: want one of %s or auto", d.receiver, strings.Join(delegate.Receivers, ", "))
+	}
 	if !d.local && !cloud[d.receiver] {
-		if !local[d.receiver] {
-			return nil, Errorf(ExitBlocked, "build #%d --delegate %s: the %s cloud agent is not connected here and its CLI is not on PATH; connect it (docs/research/agent-delegation-and-review.md §10) or install the CLI for --local", n, d.receiver, d.receiver)
-		}
-		d.local = true
-		d.reason = strings.TrimPrefix(d.reason+"; ", "; ") + d.receiver + "'s cloud agent is not connected, so its CLI runs in an aayu worktree"
+		return nil, Errorf(ExitBlocked, "build #%d --delegate %s: %s's cloud agent is not connected here.\n%s", n, d.receiver, delegate.Names[d.receiver], e.receiverHelp(d.receiver, agents, false))
 	}
 	if d.local {
 		bin, ok := delegate.LookLocal(d.receiver, e.lookPath())
-		if !ok {
-			return nil, Errorf(ExitBlocked, "build #%d --delegate %s --local: no %s on PATH", n, d.receiver, strings.Join(delegate.LocalBins[d.receiver], " or "))
+		if !ok || !local[d.receiver] {
+			return nil, Errorf(ExitBlocked, "build #%d --delegate %s --local: %s's CLI is not ready here.\n%s", n, d.receiver, delegate.Names[d.receiver], e.receiverHelp(d.receiver, agents, true))
 		}
 		d.bin = bin
 	}
@@ -238,13 +272,38 @@ func (e *Env) newDelegation(ctx context.Context, in Values, c *github.Client, bo
 	case delegate.Amp:
 		d.adapter = delegate.AmpCLI{Exec: ex, OrbSize: cfg.AmpOrbSize, Env: delegate.ScrubEnv(e.Environ, delegate.Amp, os.TempDir())}
 	case delegate.Claude:
-		d.adapter = delegate.ClaudeMention{GitHub: ghOps{e, c, repo, root}, Trigger: cfg.ClaudeTrigger}
+		d.adapter = delegate.ClaudeCloud{Exec: ex, Dir: root, Env: delegate.ScrubEnv(e.Environ, delegate.Claude, os.TempDir()), GitHub: ghOps{e, c, repo, root}}
 	case delegate.Codex:
 		d.adapter = delegate.CodexCloud{Exec: ex, EnvID: cfg.CodexEnv, Env: delegate.ScrubEnv(e.Environ, delegate.Codex, os.TempDir())}
 	default:
 		return nil, Errorf(ExitUsage, "build --delegate %q: want one of %s or auto", d.receiver, strings.Join(delegate.Receivers, ", "))
 	}
+	// Every hand-off is fresh: a new branch and, locally, a new worktree; a
+	// sync keeps the hand-off's own.
+	d.fresh = d.state.Receiver == "" || d.state.Receiver != d.receiver || d.state.Status == dlgFailed || d.state.Status == dlgMerged
+	d.handoff = max(d.state.Handoffs, 1)
+	if d.state.Receiver == "" {
+		d.handoff = 0
+	}
+	d.branch = d.state.Branch
+	if d.fresh {
+		d.handoff++
+		for d.local && e.taken(ctx, root, delegate.Worktree(root, n, d.receiver, d.handoff), delegate.Branch(n, slug(chk.Title), d.handoff)) {
+			d.handoff++
+		}
+		d.branch = delegate.Branch(n, slug(chk.Title), d.handoff)
+	}
 	return d, nil
+}
+
+// taken reports a worktree directory or a branch on origin that an earlier
+// hand-off left, so a fresh local hand-off takes the next number.
+func (e *Env) taken(ctx context.Context, root, wt, branch string) bool {
+	if _, err := os.Stat(wt); err == nil {
+		return true
+	}
+	out, _ := run2(ctx, root, "git", "ls-remote", "--heads", "origin", branch)
+	return strings.TrimSpace(out) != ""
 }
 
 // writeBrief renders the story's brief from the Ready snapshot on the
@@ -360,17 +419,21 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 	now := e.Now()
 	res.Delegation = &Delegation{Receiver: d.receiver, Mode: mode(d.local), Reason: d.reason}
 	report := func() { d.fill(res.Delegation) }
-	fresh := d.state.Receiver == "" || d.state.Receiver != d.receiver || d.state.Status == dlgFailed || d.state.Status == dlgMerged
-	if fresh {
+	if d.fresh {
 		if err := e.writeBrief(ctx, d, chk); err != nil {
 			return nil, true, err
 		}
 		d.state = delegate.State{Story: d.story, Receiver: d.receiver, Mode: mode(d.local), Model: d.model(), Family: delegate.Family(d.receiver, d.model()),
-			BriefHash: delegate.BriefHash(d.brief), StartedAt: now.UTC().Format(time.RFC3339), Reason: d.reason, Branch: d.branch}
+			BriefHash: delegate.BriefHash(d.brief), StartedAt: now.UTC().Format(time.RFC3339), Reason: d.reason, Branch: d.branch, Handoffs: d.handoff}
 		if d.local {
-			d.event(now, dlgWorking, "local "+filepath.Base(d.bin)+" in "+filepath.Base(delegate.Worktree(d.root, d.story, d.receiver)))
+			d.event(now, dlgWorking, "local "+filepath.Base(d.bin)+" in "+filepath.Base(delegate.Worktree(d.root, d.story, d.receiver, d.handoff)))
 			report()
 			return e.localWriter(d, d.brief), false, nil
+		}
+		// The receiver's cloud environment is verified first: set up and
+		// checked in a clean container when missing or stale (agentenv).
+		if err := e.ensureCloudEnv(ctx, d, res); err != nil {
+			return nil, true, err
 		}
 		var task delegate.Task
 		err := e.act(ctx, d, "delegate.handoff", map[string]any{"brief_sha256": d.state.BriefHash}, func(ctx context.Context) error {
@@ -439,6 +502,32 @@ func (e *Env) delegateStep(ctx context.Context, d *delegation, chk ready.Result,
 	return e.reviewLoop(ctx, d, res)
 }
 
+// ensureCloudEnv runs agentenv.Ensure for the receiver before a cloud
+// hand-off. A verified environment whose files are not on the default branch
+// yet, or one that fails verification, stops the hand-off with the exact
+// next step; --local stays available.
+func (e *Env) ensureCloudEnv(ctx context.Context, d *delegation, res *BuildResult) error {
+	ensure := e.EnsureEnv
+	if ensure == nil {
+		ensure = func(ctx context.Context, root, host string) (agentenv.HostStatus, error) {
+			return agentenv.Ensure(ctx, root, host, agentenv.EnsureOptions{Run: e.envRunner(), Fetch: e.envFetch()})
+		}
+	}
+	pp := e.progress(fmt.Sprintf("Checking %s's cloud environment", delegate.Names[d.receiver]))
+	st, err := ensure(ctx, d.root, d.receiver)
+	switch {
+	case errors.Is(err, agentenv.ErrNotLanded):
+		pp.Done(ui.StatusFail, "verified, not on the default branch yet")
+		return Errorf(ExitBlocked, "build #%d --delegate %s: %s's cloud environment is verified here but its cloud agent reads it from the default branch, which does not have it yet: %v. Then hand off again, or add `--local`", d.story, d.receiver, delegate.Names[d.receiver], err)
+	case err != nil:
+		pp.Done(ui.StatusFail, err.Error())
+		return Errorf(ExitBlocked, "build #%d --delegate %s: %s's cloud environment could not be set up and verified: %v. `aayu install --env --host %s --apply --verify` shows each step; or add `--local`", d.story, d.receiver, delegate.Names[d.receiver], err, d.receiver)
+	}
+	pp.Done(ui.StatusPass, st.State)
+	res.Notes = append(res.Notes, fmt.Sprintf("%s's cloud environment: %s", d.receiver, strings.TrimSpace(st.State+" "+st.Detail)))
+	return nil
+}
+
 func (d *delegation) model() string {
 	if d.receiver == delegate.Cursor {
 		if a, ok := d.adapter.(delegate.CursorAPI); ok {
@@ -449,7 +538,7 @@ func (d *delegation) model() string {
 }
 
 func (d *delegation) fill(r *Delegation) {
-	r.Status, r.Task, r.TaskURL, r.PR, r.State = d.state.Status, d.state.Task, d.state.TaskURL, d.state.PR, d.state
+	r.Status, r.Task, r.TaskURL, r.PR, r.Proved, r.State = d.state.Status, d.state.Task, d.state.TaskURL, d.state.PR, d.state.Proved, d.state
 }
 
 // findDelegatedPR finds the receiver's PR: the receiver's own PR URL, an open
@@ -502,6 +591,9 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 		return nil, true, Wrap(ExitExternal, err)
 	}
 	res.PRURL = pr.GetHTMLURL()
+	if p := delegate.Proved(pr.GetBody(), ""); p != "" {
+		d.state.Proved = p
+	}
 	head := pr.GetHead().GetSHA()
 	if d.state.Branch == "" || d.state.Branch != pr.GetHead().GetRef() {
 		d.state.Branch = pr.GetHead().GetRef()
@@ -536,6 +628,48 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 			Body: fmt.Sprintf("%s#%d (delegated to %s, PR #%d): %s.", d.repo, d.story, d.receiver, d.state.PR, why)})
 		res.Notes = append(res.Notes, "page: "+sent)
 	}
+	sentFor := slices.ContainsFunc(d.state.FollowUps, func(f delegate.FollowUp) bool { return f.Head == head })
+	// P3: a failed required check goes back to the builder, one round per head,
+	// within the same cap as inspect's fix cycles. The merge gate still decides.
+	var upstream []string
+	if l, err := e.Config(); err == nil {
+		upstream = l.Config.Verify.UpstreamChecks
+	}
+	if fails, err := failedRequired(ctx, d.c, owner, name, head, upstream); err != nil {
+		res.Notes = append(res.Notes, "required checks not read: "+oneLineErr(err))
+	} else if len(fails) > 0 && !sentFor {
+		var names []string
+		for _, f := range fails {
+			names = append(names, f.Name)
+		}
+		round := len(d.state.FollowUps)
+		if round >= inspect.MaxCycles {
+			d.event(now, dlgCapped, fmt.Sprintf("%d follow-up rounds; %s failed on %s", round, strings.Join(names, ", "), short(head)))
+			page(fmt.Sprintf("%d follow-up rounds reached the cap and %s still failed", round, strings.Join(names, ", ")))
+			report()
+			_ = e.saveDelegation(ctx, d)
+			return nil, true, Errorf(ExitBlocked, "build #%d: PR #%d reached the %d-cycle cap with %s failing; a human takes over (paged)", d.story, d.state.PR, inspect.MaxCycles, strings.Join(names, ", "))
+		}
+		msg := delegate.CIFollowUpMessage(d.story, d.state.PR, round+1, inspect.MaxCycles, fails)
+		d.state.FollowUps = append(d.state.FollowUps, delegate.FollowUp{At: now.UTC().Format(time.RFC3339), Head: head, Cycle: round, Findings: []string{}, Checks: names})
+		d.event(now, dlgFix, fmt.Sprintf("round %d: %s failed on %s", round+1, strings.Join(names, ", "), short(head)))
+		res.Delegation.FollowUp = true
+		report()
+		if d.local {
+			return e.localWriter(d, msg), false, nil
+		}
+		if err := e.act(ctx, d, "delegate.follow-up", map[string]any{"pr": d.state.PR, "head": head, "cycle": round, "checks": names}, func(ctx context.Context) error {
+			t, err := d.adapter.FollowUp(ctx, d.state, msg)
+			if err == nil && t.ID != "" {
+				d.state.Task = t.ID
+			}
+			return err
+		}); err != nil {
+			return nil, true, Errorf(ExitExternal, "build #%d: follow-up to %s: %v", d.story, d.receiver, err)
+		}
+		res.Next = fmt.Sprintf("%s failed; sent to %s; sync again after its new commits", strings.Join(names, ", "), d.receiver)
+		return nil, true, e.saveDelegation(ctx, d)
+	}
 	switch {
 	case (r == nil || r.Head != head) && st.Cycles >= inspect.MaxCycles:
 		// inspect stops at its cap and will not review this head: a human takes over.
@@ -547,6 +681,9 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 	case r == nil || r.Head != head:
 		d.event(now, dlgPROpen, "")
 		report()
+		if note := e.requestReview(ctx, d.state.PR); note != "" {
+			res.Notes = append(res.Notes, note)
+		}
 		res.Next = fmt.Sprintf("waiting for the merge gate's inspect on PR #%d at %s", d.state.PR, short(head))
 		return nil, true, e.saveDelegation(ctx, d)
 	case r.Disposition == inspect.Merge:
@@ -560,7 +697,7 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 		report()
 		_ = e.saveDelegation(ctx, d)
 		return nil, true, Errorf(ExitBlocked, "build #%d: inspect asked for a rebuild of PR #%d; a human reviews the story and plan", d.story, d.state.PR)
-	case slices.ContainsFunc(d.state.FollowUps, func(f delegate.FollowUp) bool { return f.Head == head }):
+	case sentFor:
 		report()
 		res.Next = fmt.Sprintf("the findings on %s were sent to %s; waiting for its new commits on PR #%d", short(head), d.receiver, d.state.PR)
 		return nil, true, e.saveDelegation(ctx, d)
@@ -614,7 +751,10 @@ func (e *Env) localWriter(d *delegation, prompt string) func(context.Context, st
 		defer cancel()
 		env := delegate.ScrubEnv(e.Environ, d.receiver, gh)
 		return e.act(ctx, d, "delegate.local-run", map[string]any{"bin": filepath.Base(d.bin), "worktree": wt, "prompt_sha256": delegate.BriefHash(prompt)}, func(ctx context.Context) error {
-			_, err := e.delegateExec()(ctx, wt, env, "", d.bin, delegate.LocalArgs(d.receiver, d.bin, wt, prompt)...)
+			out, err := e.delegateExec()(ctx, wt, env, "", d.bin, delegate.LocalArgs(d.receiver, d.bin, wt, prompt)...)
+			if p := delegate.Proved(out, prompt); p != "" {
+				d.state.Proved = p
+			}
 			return err
 		})
 	}
@@ -639,6 +779,12 @@ func applyDiff(diff string) func(context.Context, string) error {
 	}
 }
 
+// quoteLines quotes text as a Markdown block quote, so a receiver's report
+// cannot add headings or other structure to a PR body.
+func quoteLines(text string) string {
+	return "> " + strings.ReplaceAll(strings.TrimSpace(text), "\n", "\n> ")
+}
+
 // emitDelegation reports a delegation step.
 func (e *Env) emitDelegation(res BuildResult) error {
 	return e.Emit(res, func(w io.Writer) error {
@@ -657,6 +803,12 @@ func (e *Env) emitDelegation(res BuildResult) error {
 		if d.Reason != "" {
 			fmt.Fprintf(w, "  why: %s\n", d.Reason)
 		}
+		if d.Proved != "" {
+			fmt.Fprintf(w, "  %s says it proved (a preview; the merge gate's proof decides):\n", d.Receiver)
+			for _, l := range strings.Split(d.Proved, "\n") {
+				fmt.Fprintf(w, "    %s\n", l)
+			}
+		}
 		if d.FollowUp {
 			fmt.Fprintln(w, "  follow-up sent with inspect's findings")
 		}
@@ -670,34 +822,42 @@ func (e *Env) emitDelegation(res BuildResult) error {
 	})
 }
 
-// fixDelegateEnv writes .cursor/environment.json from the environment source
-// (doctor --fix, WP5.5b), keeping every key but name and install, and shows
-// what changed. Codex's environment lives in its UI; Amp reads .agents/setup.
+// fixDelegateEnv re-syncs the agent environments' generated files with
+// .aayudha/env.toml (doctor --fix), offline: the spec holds every pin, so
+// nothing is resolved or verified here (aayu install --env does both).
 func (e *Env) fixDelegateEnv() (string, error) {
 	root := config.RepoRoot(e.Dir)
 	if root == "" {
 		return "", nil
 	}
-	if _, err := os.Stat(filepath.Join(root, delegate.SetupPath)); err != nil {
-		return "--fix: no " + delegate.SetupPath + ", so no delegation environment to generate", nil
-	}
-	p := filepath.Join(root, filepath.FromSlash(delegate.CursorEnvPath))
-	old, _ := os.ReadFile(p)
-	b, err := delegate.CursorEnvironment(old)
+	s, ok, err := agentenv.LoadSpec(root)
 	if err != nil {
 		return "", Wrap(ExitBlocked, fmt.Errorf("doctor --fix: %w", err))
 	}
-	if string(old) == string(b) {
-		return "--fix: " + delegate.CursorEnvPath + " already installs with " + delegate.SetupCommand, nil
+	if !ok {
+		return "--fix: no " + agentenv.SpecPath + ", so no agent environment to re-sync; `aayu install --env` sets one up", nil
+	}
+	files, _, err := agentenv.Generate(root, s)
+	if err != nil {
+		return "", Wrap(ExitBlocked, fmt.Errorf("doctor --fix: %w", err))
+	}
+	var changed []string
+	for _, f := range files {
+		old, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(f.Path)))
+		fi, _ := os.Stat(filepath.Join(root, filepath.FromSlash(f.Path)))
+		if err == nil && string(old) == string(f.Content) && (!f.Exec || fi.Mode()&0o111 != 0) {
+			continue
+		}
+		changed = append(changed, f.Path)
+	}
+	if len(changed) == 0 {
+		return "--fix: the agent environment files match " + agentenv.SpecPath, nil
 	}
 	if e.DryRun {
-		return "--fix (dry run): would write " + delegate.CursorEnvPath + ":\n" + string(b), nil
+		return "--fix (dry run): would rewrite " + strings.Join(changed, ", ") + " from " + agentenv.SpecPath, nil
 	}
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+	if err := agentenv.Write(root, s); err != nil {
 		return "", err
 	}
-	if err := os.WriteFile(p, b, 0o644); err != nil {
-		return "", err
-	}
-	return "--fix: wrote " + delegate.CursorEnvPath + " (install: " + delegate.SetupCommand + "); commit it to the default branch for Cursor's cloud agents:\n" + string(b), nil
+	return "--fix: rewrote " + strings.Join(changed, ", ") + " from " + agentenv.SpecPath + "; commit them to the default branch, then `aayu install --env --verify`", nil
 }

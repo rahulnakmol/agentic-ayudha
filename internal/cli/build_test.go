@@ -56,6 +56,11 @@ func TestBuildLeaseAttemptsResume(t *testing.T) {
 	if !contains(g.LabelNames(2), LeaseLabel) || len(assignees) != 1 || assignees[0].Login != "founder" || comment(g, 2, "<!-- aayudha:lease holder=founder@") == "" {
 		t.Fatalf("lease after build: labels %v assignees %v", g.LabelNames(2), assignees)
 	}
+	// build moves the story from status:ready to status:in-progress, and its
+	// later runs accept that (D-5.5c.17).
+	if labels := g.LabelNames(2); !contains(labels, "status:in-progress") || contains(labels, "status:ready") {
+		t.Fatalf("labels while building: %v", labels)
+	}
 	if p := comment(g, 2, progressMarker); !strings.Contains(p, "| 1/1 | 1 |") || !strings.Contains(p, "hold: floors hold") || !strings.Contains(p, "PR #"+strconv.Itoa(prN)) {
 		t.Fatalf("progress comment:\n%s", p)
 	}
@@ -646,5 +651,39 @@ func TestBuildRecordsCheckpointWhenPRCreationFails(t *testing.T) {
 	code, res, errOut := build("c.txt")
 	if code != 0 || res.Checkpoint != "2/2" || res.Attempt != 1 || res.PR == 0 {
 		t.Fatalf("next checkpoint: %d %+v %s", code, res, errOut)
+	}
+}
+
+// A story titled with its issue form's prefix ("Story: …") gets a branch and
+// a PR title without it (megaman: `feat: story: …`, `story/4-story-…`;
+// D-5.5c.19).
+func TestBuildDropsTheTypePrefix(t *testing.T) {
+	g := readyTree(t)
+	g.Mu.Lock()
+	g.Issues[2].Title = "Story: Show empty list"
+	g.Mu.Unlock()
+	dir, _ := ledgerCheckout(t)
+	git(t, dir, "config", "user.name", "Builder")
+	git(t, dir, "config", "user.email", "builder@example.com")
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH")}
+	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, CheckpointVerify: holds}
+	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready: %s", errOut)
+	}
+	code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r", "--json")
+	var res BuildResult
+	_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)
+	if code != 0 || res.Branch != "story/2-show-empty-list" {
+		t.Fatalf("branch: %d %+v %s", code, res, errOut)
+	}
+	_ = os.WriteFile(filepath.Join(res.Worktree, "empty.txt"), []byte("Your cart is empty\n"), 0o644)
+	code, out, errOut = run(t, env, opts, "build", "2", "--repo", "o/r", "--json")
+	res = BuildResult{}
+	_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)
+	g.Mu.Lock()
+	pr := g.Pulls[res.PR]
+	g.Mu.Unlock()
+	if code != 0 || pr == nil || pr.Title != "feat: show empty list" || !strings.HasPrefix(git(t, res.Worktree, "log", "-1", "--format=%s"), "feat: show empty list (#2,") {
+		t.Fatalf("PR title: %d %+v %s", code, pr, errOut)
 	}
 }

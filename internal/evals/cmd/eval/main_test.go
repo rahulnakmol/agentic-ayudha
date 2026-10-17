@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/rahulnakmol/agentic-ayudha/internal/evals"
 )
 
 func git(t *testing.T, dir string, args ...string) string {
@@ -109,6 +111,8 @@ func TestEvolveGateCI(t *testing.T) {
 		{"unreadable case", "evolve/stub-5", "x", []map[string]string{{"evals/cases/stub/broken/case.toml": "skill = \"stub\"\nunknown = 1\n"}, skillDiff}, "evolve gate"},
 		{"new run fails tier 1", "evolve/stub-5", "x", []map[string]string{evolveCase(t, "Export orders as text/csv "), skillDiff,
 			{"evals/cases/stub/no-content-type/output/issue.json": "{}"}}, "evolve gate"},
+		{"skill diff that only appends a rule (P4: rewrite, not append)", "evolve/stub-5", "x", []map[string]string{evolveCase(t, "Export orders as text/csv "),
+			{"evals/skills/stub/SKILL.md": "# stub\n\nDraft a Story.\n\nNever add a content type the request does not state.\n"}}, "evolve gate"},
 		{"eval-first evolve PR", "evolve/stub-5", "feat(skills): evolve stub\n\nAayudha-Evolve: #5", []map[string]string{evolveCase(t, "Export orders as text/csv "), skillDiff}, ""},
 		{"not an evolve PR, whatever its labels", "feat/stub", "feat: x", []map[string]string{skillDiff}, ""},
 	} {
@@ -156,13 +160,13 @@ func TestEvolveGateAfterTestMergeRecomputed(t *testing.T) {
 	work := filepath.Join(tmp, "work")
 	git(t, tmp, "clone", "--quiet", bare, work)
 	git(t, work, "checkout", "--quiet", "-b", "dev")
-	write(t, work, map[string]string{"evals/schemas/workitem.json": string(schema), "evals/skills/stub/SKILL.md": "# stub\n"})
+	write(t, work, map[string]string{"evals/schemas/workitem.json": string(schema), "evals/skills/stub/SKILL.md": "# stub\n\nDraft a Story.\n"})
 	git(t, work, "add", ".")
 	git(t, work, "commit", "--quiet", "-m", "base")
 	base := git(t, work, "rev-parse", "HEAD")
 	git(t, work, "checkout", "--quiet", "-b", "evolve/stub-5")
 	write(t, work, evolveCase(t, "Export orders as text/csv "))
-	write(t, work, map[string]string{"evals/skills/stub/SKILL.md": "# stub\n\nNever add a content type.\n"})
+	write(t, work, map[string]string{"evals/skills/stub/SKILL.md": "# stub\n\nDraft a Story. Never add a content type.\n"})
 	git(t, work, "add", ".")
 	git(t, work, "commit", "--quiet", "-m", "feat(skills): evolve stub\n\nAayudha-Evolve: #5")
 	head := git(t, work, "rev-parse", "HEAD")
@@ -226,4 +230,19 @@ func withCase(files map[string]string, edit func(string) string) map[string]stri
 	k := "evals/cases/stub/no-content-type/case.toml"
 	files[k] = edit(files[k])
 	return files
+}
+
+// TestHarnessBudget: a group whose cap is above [budget] per_story_usd (25 by
+// default) gets its whole cap, since every eval call is charged to one story;
+// a smaller cap leaves the breaker as configured (D-5.8d).
+func TestHarnessBudget(t *testing.T) {
+	for cap, want := range map[float64]float64{50: 50, 6: 25} {
+		h, err := harness(t.TempDir(), evals.Config{MaxUSD: cap})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := h.Gateway.Breaker.Budget.PerStoryUSD; got != want {
+			t.Errorf("max_usd %v: per_story_usd %v, want %v", cap, got, want)
+		}
+	}
 }

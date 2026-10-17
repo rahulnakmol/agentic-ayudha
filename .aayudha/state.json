@@ -363,11 +363,6 @@
       "path": ".github/workflows/aayudha-token.yml",
       "sha256": "3afebda06dbd223d67019d6b708b72288e0b7af667a8e3936fec22eef089879c",
       "created": true
-    },
-    {
-      "path": ".github/workflows/aayudha-triage.yml",
-      "sha256": "a46d7c9fbb3c99c53bfc36d911fee9c5071f0d0cfd6b09f49044c37dae1486b9",
-      "created": true
     }
   ]
 }

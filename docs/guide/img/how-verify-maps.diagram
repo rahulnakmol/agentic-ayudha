@@ -1,0 +1,22 @@
+# Verify skills, feature maps, and behaviour checks (docs/guide/how-verify-maps.md).
+title: A failed behaviour check blocks the gate at once, map drift is a warning until a dated config value, and an agent app the user installed fixes the map in its own pull request
+direction: down
+run: Pull request in the merge gate, or the nightly sweep
+map: feature-map floor: compare each map with the source
+sel: Pick checks: touched features and mapped criteria
+ctl: Control tool in the product's stack runs each check
+res: passed, failed, or unreachable, with artifacts
+gate: A failed check fails the floor: gate red
+drift: Drift: advisory until drift_blocking_from
+brief: verify --maintain posts the brief on one issue
+app: Agent app opens at most one map pull request
+red: Bug story: proving tests rerun on the base commit
+run -> map
+run -> sel
+run -> red: type:bug story
+sel -> ctl: check JSON on stdin
+ctl -> res: result JSON on stdout
+res -> gate: any failed
+map -> drift: drift found
+drift -> brief: weekly loop
+brief -> app

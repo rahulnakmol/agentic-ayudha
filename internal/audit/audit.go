@@ -22,6 +22,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/autonomy"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 )
@@ -75,6 +76,7 @@ type PR struct {
 	Author   string    `json:"author"`
 	MergedAt time.Time `json:"merged_at"`
 	MergeSHA string    `json:"merge_sha"`
+	HeadSHA  string    `json:"head_sha,omitempty"`       // read for retro's flow metrics only
 	Refs     []int     `json:"refs,omitempty"`           // stories it delivers: a story/<n>- branch, Refs/Closes/Fixes/Resolves #n
 	Mentions []int     `json:"story_mentions,omitempty"` // "Story #n" in its body
 	Body     string    `json:"-"`                        // read by LinkStories when Refs and Mentions are unset
@@ -90,6 +92,7 @@ type Item struct {
 	Labels    []string  `json:"labels"` // at Until
 	Events    []Event   `json:"events"` // nil when the timeline was not read (no change since Since)
 	ClosedAt  time.Time `json:"closed_at,omitzero"`
+	Inspect   *Review   `json:"inspect,omitempty"` // a PR's inspect state, read for retro's flow metrics only
 }
 
 // Event is one timeline event.
@@ -104,6 +107,7 @@ type Event struct {
 	Suites   []int64   `json:"rule_suites,omitempty"` // rule-suite IDs a comment names (read before Body is cut)
 	ID       int64     `json:"id,omitempty"`
 	State    string    `json:"state,omitempty"` // reviewed
+	Aayu     bool      `json:"aayu,omitempty"`  // a comment carrying an aayudha marker (retro's flow metrics only)
 }
 
 // Run is a workflow run.
@@ -116,6 +120,7 @@ type Run struct {
 	HeadSHA    string    `json:"head_sha"`
 	Conclusion string    `json:"conclusion"`
 	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at,omitzero"` // merge gate runs only: when the run completed
 }
 
 // Pack is a proof pack on the ledger and whether it covers its story.
@@ -214,6 +219,11 @@ type Data struct {
 	Corrections  []autonomy.Correction
 	NeverMerges  []NeverMerge
 	AgentPRs     []AgentPR
+	GateRuns     []Run            // the merge gate's runs (retro's flow metrics)
+	Bugs         []Bug            // Bug issues and what they link (retro's escape rate)
+	Builds       map[int]BuildLog // build/<n>/state.json on the ledger
+	Dismissed    []inspect.Dismissal
+	Days         int // [autonomy] correction_days: the escape window
 	Streaks      []autonomy.LayerStreak
 	Subjects     map[string]string // commit SHA -> subject (promotion commits)
 	OnMain       map[string]bool   // tag commit -> reachable from main

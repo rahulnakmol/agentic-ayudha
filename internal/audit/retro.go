@@ -3,9 +3,11 @@ package audit
 import (
 	"bytes"
 	"fmt"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/autonomy"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
@@ -60,6 +62,8 @@ type Retro struct {
 	Streaks     []autonomy.LayerStreak `json:"streaks"`
 	FloorMisses []string               `json:"floor_misses"`
 	Findings    []Finding              `json:"findings"`
+	Flow        Flow                   `json:"flow"`
+	Recurrence  []Recurrence           `json:"evolve_recurrence"`
 }
 
 // BuildRetro computes the retro for the window. perStoryUSD is [budget] per_story_usd.
@@ -126,6 +130,7 @@ func BuildRetro(in Inputs, d *Data, perStoryUSD float64) *Retro {
 				Detail: fmt.Sprintf("%s merged without an authoritative pack that covers it: %s.", ref, s.Reason)})
 		}
 	}
+	r.Flow = d.flow(in, r.Stories)
 	skills := map[string]*SkillRate{}
 	for _, a := range d.AgentPRs {
 		if !d.in(in, a.MergedAt) {
@@ -170,13 +175,26 @@ func BuildRetro(in Inputs, d *Data, perStoryUSD float64) *Retro {
 			}
 		}
 	}
-	for i := range r.Findings {
-		for _, it := range d.Items {
-			if !it.PR && it.Title == FeedbackPrefix+r.Findings[i].Title {
-				r.Findings[i].Issue = it.Number
+	match := func() {
+		for i := range r.Findings {
+			for _, it := range d.Items {
+				if !it.PR && it.Title == FeedbackPrefix+r.Findings[i].Title {
+					r.Findings[i].Issue = it.Number
+				}
 			}
 		}
 	}
+	match()
+	r.Recurrence = d.recurrences(in, r.Findings)
+	for _, rc := range r.Recurrence {
+		if len(rc.Back) > 0 {
+			r.Findings = append(r.Findings, Finding{Title: fmt.Sprintf("%sskill `%s` (PR #%d, Feedback #%d) came back", RecurrencePrefix, rc.Skill, rc.PR, rc.Feedback),
+				Detail: fmt.Sprintf("Evolve PR #%d changed skill `%s` for Feedback #%d and merged %s; within %d days the problem came back: %s. "+
+					"Roll the skill back with `aayu install --pin <the version before #%d>` or rewrite it again with new evidence.",
+					rc.PR, rc.Skill, rc.Feedback, stamp(rc.Merged), RecurrenceDays, strings.Join(rc.Back, ", "), rc.PR)})
+		}
+	}
+	match()
 	return r
 }
 
@@ -202,6 +220,7 @@ func (r *Retro) Markdown() []byte {
 		}
 		p("\n")
 	}
+	r.Flow.markdown(p, len(r.Stories))
 	p("## Corrections and streaks\n\n")
 	p("Agent PRs merged in the window: %d; corrected: %d.\n\n", r.AgentMerges, r.Corrected)
 	for _, c := range r.Corrections {
@@ -217,6 +236,20 @@ func (r *Retro) Markdown() []byte {
 		p("\n| Layer | Streak | Agent merges | Never-layer | Autonomous |\n|---|---|---|---|---|\n")
 		for _, s := range r.Streaks {
 			p("| %s | %d | %d | %t | %t |\n", s.Layer, s.Streak, s.Merges, s.Never, s.Autonomous)
+		}
+	}
+	p("\n## Evolve recurrence\n\n")
+	if len(r.Recurrence) == 0 {
+		p("No evolve PR merged in the %d days before the cursor.\n", RecurrenceDays)
+	} else {
+		p("Evolve PRs merged in the %d days before the cursor; the problem came back when a retro Feedback issue opened after the merge, or a finding of this window, names the same skill.\n\n", RecurrenceDays)
+		p("| PR | Skill | Feedback | Merged | Came back |\n|---|---|---|---|---|\n")
+		for _, rc := range r.Recurrence {
+			back := "no"
+			if len(rc.Back) > 0 {
+				back = "**yes**: " + cell(strings.Join(rc.Back, ", "))
+			}
+			p("| #%d | `%s` | #%d | %s | %s |\n", rc.PR, rc.Skill, rc.Feedback, stamp(rc.Merged), back)
 		}
 	}
 	p("\n## Floor misses\n\n")
@@ -253,3 +286,58 @@ func sortedKeys[V any](m map[string]V) []string {
 }
 
 func round2(f float64) float64 { return float64(int(f*100+0.5)) / 100 }
+
+// RecurrenceDays is how long after an evolve PR merged retro watches for the
+// problem it fixed to come back (P4, Appendix B S-7.7c).
+const RecurrenceDays = 30
+
+// RecurrencePrefix starts the title of the finding filed when it came back;
+// such a finding is not itself evidence that a problem came back.
+const RecurrencePrefix = "evolve did not hold: "
+
+var (
+	evolveBranch = regexp.MustCompile(`^evolve/([a-z][a-z0-9-]*)-([0-9]+)$`)
+	namedSkill   = regexp.MustCompile("skill `([a-z][a-z0-9-]*)`")
+)
+
+// Recurrence is an evolve PR merged within RecurrenceDays before the cursor
+// and whether the problem it fixed came back.
+type Recurrence struct {
+	PR       int       `json:"pr"`
+	Skill    string    `json:"skill"`
+	Feedback int       `json:"feedback"`
+	Merged   time.Time `json:"merged_at"`
+	Back     []string  `json:"came_back,omitempty"` // the Feedback issues and findings that name the skill after the merge
+}
+
+// recurrences checks every evolve PR (an evolve/<skill>-<n> branch) merged
+// into dev within RecurrenceDays before the cursor: the problem came back when
+// a retro Feedback issue opened after the merge, or a finding of this window,
+// names the same skill.
+func (d *Data) recurrences(in Inputs, findings []Finding) []Recurrence {
+	out := []Recurrence{}
+	for _, p := range d.PRs {
+		m := evolveBranch.FindStringSubmatch(p.Head)
+		if m == nil || p.Base != d.Dev || !p.MergedAt.Before(in.Until) || p.MergedAt.Before(in.Until.AddDate(0, 0, -RecurrenceDays)) {
+			continue
+		}
+		rc := Recurrence{PR: p.Number, Skill: m[1], Merged: p.MergedAt}
+		rc.Feedback, _ = strconv.Atoi(m[2])
+		names := func(title string) bool {
+			s := namedSkill.FindStringSubmatch(title)
+			return s != nil && s[1] == rc.Skill && !strings.HasPrefix(strings.TrimPrefix(title, FeedbackPrefix), RecurrencePrefix)
+		}
+		for _, it := range d.Items {
+			if !it.PR && strings.HasPrefix(it.Title, FeedbackPrefix) && it.CreatedAt.After(p.MergedAt) && it.CreatedAt.Before(in.Until) && names(it.Title) {
+				rc.Back = append(rc.Back, fmt.Sprintf("Feedback #%d", it.Number))
+			}
+		}
+		for _, f := range findings {
+			if names(f.Title) && f.Issue == 0 {
+				rc.Back = append(rc.Back, "this retro's finding \""+f.Title+"\"")
+			}
+		}
+		out = append(out, rc)
+	}
+	return out
+}
