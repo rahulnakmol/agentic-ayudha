@@ -13,5 +13,5 @@ Questions the skill lists under "open questions" are not requirements: they neve
   story is planned.
 - 4: As 5, with one minor gap, such as instrumentation that could be more specific.
 - 3: Usable, but the rollback is vague ("revert the change") or a criterion's test is only implied.
-- 2: The plan changes things the story does not ask for, or its tests cannot prove the criteria.
+- 2: The plan changes things the story does not ask for.
 - 1: Not a usable plan.
