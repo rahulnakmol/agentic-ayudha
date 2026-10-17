@@ -1,0 +1,2110 @@
+{
+  "cases": [
+    {
+      "id": "abbrev",
+      "set": "S1",
+      "area": "footnotes-abbreviations",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/abbrev.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "abbreviations",
+      "set": "S1",
+      "area": "footnotes-abbreviations",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/abbreviations.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "abbreviations2",
+      "set": "S1",
+      "area": "footnotes-abbreviations",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/abbreviations2.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "alt",
+      "set": "S1",
+      "area": "links-images",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/alt.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "amps",
+      "set": "S1",
+      "area": "core",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/amps.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "attribute_sanitize",
+      "set": "S1",
+      "area": "core",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/attribute_sanitize.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "attributes-att2",
+      "set": "S1",
+      "area": "attributes",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/attributes/att2.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "attributes-att3",
+      "set": "S1",
+      "area": "attributes",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/attributes/att3.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "attributes-attributes",
+      "set": "S1",
+      "area": "attributes",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/attributes/attributes.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "attributes-circular",
+      "set": "S1",
+      "area": "attributes",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/attributes/circular.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "attributes-default",
+      "set": "S1",
+      "area": "attributes",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/attributes/default.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "atx_headers",
+      "set": "S1",
+      "area": "headers",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/atx_headers.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "auto_cdata",
+      "set": "S1",
+      "area": "html",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/auto_cdata.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "bad_cites",
+      "set": "S1",
+      "area": "footnotes-abbreviations",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/bad_cites.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "bad_divrefs",
+      "set": "S1",
+      "area": "core",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/bad_divrefs.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "blank",
+      "set": "S1",
+      "area": "core",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/blank.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "blanks_in_code",
+      "set": "S1",
+      "area": "code",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/blanks_in_code.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "block_quotes",
+      "set": "S1",
+      "area": "core",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/block_quotes.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "bug_def",
+      "set": "S1",
+      "area": "core",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/bug_def.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "bug_table",
+      "set": "S1",
+      "area": "tables",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/bug_table.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "cites",
+      "set": "S1",
+      "area": "footnotes-abbreviations",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/cites.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "code",
+      "set": "S1",
+      "area": "code",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/code.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "code2",
+      "set": "S1",
+      "area": "code",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/code2.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "code3",
+      "set": "S1",
+      "area": "code",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/code3.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "code4",
+      "set": "S1",
+      "area": "code",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/code4.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "data_loss",
+      "set": "S1",
+      "area": "core",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/data_loss.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "div_without_newline",
+      "set": "S1",
+      "area": "core",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/div_without_newline.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "divs-div1",
+      "set": "S1",
+      "area": "divs",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/divs/div1.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "divs-div2",
+      "set": "S1",
+      "area": "divs",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/divs/div2.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "divs-div3_nest",
+      "set": "S1",
+      "area": "divs",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/divs/div3_nest.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "easy",
+      "set": "S1",
+      "area": "core",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/easy.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "email",
+      "set": "S1",
+      "area": "links-images",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/email.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "empty_cells",
+      "set": "S1",
+      "area": "tables",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/empty_cells.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "encoding-iso-8859-1",
+      "set": "S1",
+      "area": "encoding",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/encoding/iso-8859-1.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "encoding-utf-8",
+      "set": "S1",
+      "area": "encoding",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/encoding/utf-8.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "entities",
+      "set": "S1",
+      "area": "core",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/entities.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "escape",
+      "set": "S1",
+      "area": "core",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/escape.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "escaping",
+      "set": "S1",
+      "area": "core",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/escaping.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "extra_dl",
+      "set": "S1",
+      "area": "core",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/extra_dl.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "extra_header_id",
+      "set": "S1",
+      "area": "headers",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/extra_header_id.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "extra_table1",
+      "set": "S1",
+      "area": "tables",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/extra_table1.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "fenced_code_blocks",
+      "set": "S1",
+      "area": "code",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/fenced_code_blocks.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "fenced_code_blocks_highlighted",
+      "set": "S1",
+      "area": "code",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/fenced_code_blocks_highlighted.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "footnotes",
+      "set": "S1",
+      "area": "footnotes-abbreviations",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/footnotes.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "footnotes2",
+      "set": "S1",
+      "area": "footnotes-abbreviations",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/footnotes2.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "hard",
+      "set": "S1",
+      "area": "core",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/hard.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "header_after_par",
+      "set": "S1",
+      "area": "headers",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/header_after_par.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "headers",
+      "set": "S1",
+      "area": "headers",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/headers.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "hex_entities",
+      "set": "S1",
+      "area": "core",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/hex_entities.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "hrule",
+      "set": "S1",
+      "area": "core",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/hrule.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "html3",
+      "set": "S1",
+      "area": "html",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/html3.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "html4",
+      "set": "S1",
+      "area": "html",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/html4.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "html5",
+      "set": "S1",
+      "area": "html",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/html5.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "html_block_in_para",
+      "set": "S1",
+      "area": "html",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/html_block_in_para.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "html_inline",
+      "set": "S1",
+      "area": "html",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/html_inline.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "html_trailing",
+      "set": "S1",
+      "area": "html",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/html_trailing.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "ie",
+      "set": "S1",
+      "area": "html",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/ie.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "iframe",
+      "set": "S1",
+      "area": "core",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/iframe.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "ignore_bad_header",
+      "set": "S1",
+      "area": "headers",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/ignore_bad_header.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "images",
+      "set": "S1",
+      "area": "links-images",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/images.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "images2",
+      "set": "S1",
+      "area": "links-images",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/images2.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "inline_html",
+      "set": "S1",
+      "area": "html",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/inline_html.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "inline_html2",
+      "set": "S1",
+      "area": "html",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/inline_html2.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "inline_html_beginning",
+      "set": "S1",
+      "area": "html",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/inline_html_beginning.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "issue106",
+      "set": "S1",
+      "area": "regressions",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/issue106.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "issue115",
+      "set": "S1",
+      "area": "regressions",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/issue115.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "issue117",
+      "set": "S1",
+      "area": "regressions",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/issue117.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "issue120",
+      "set": "S1",
+      "area": "regressions",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/issue120.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "issue123",
+      "set": "S1",
+      "area": "regressions",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/issue123.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "issue124",
+      "set": "S1",
+      "area": "regressions",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/issue124.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "issue126",
+      "set": "S1",
+      "area": "regressions",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/issue126.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "issue130",
+      "set": "S1",
+      "area": "regressions",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/issue130.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "issue20",
+      "set": "S1",
+      "area": "regressions",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/issue20.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "issue26",
+      "set": "S1",
+      "area": "regressions",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/issue26.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "issue29",
+      "set": "S1",
+      "area": "regressions",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/issue29.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "issue30",
+      "set": "S1",
+      "area": "regressions",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/issue30.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "issue31",
+      "set": "S1",
+      "area": "regressions",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/issue31.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "issue40",
+      "set": "S1",
+      "area": "regressions",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/issue40.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "issue64",
+      "set": "S1",
+      "area": "regressions",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/issue64.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "issue67",
+      "set": "S1",
+      "area": "regressions",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/issue67.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "issue70",
+      "set": "S1",
+      "area": "regressions",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/issue70.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "issue72",
+      "set": "S1",
+      "area": "regressions",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/issue72.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "issue74",
+      "set": "S1",
+      "area": "regressions",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/issue74.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "issue79",
+      "set": "S1",
+      "area": "regressions",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/issue79.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "issue83",
+      "set": "S1",
+      "area": "regressions",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/issue83.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "issue85",
+      "set": "S1",
+      "area": "regressions",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/issue85.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "issue88",
+      "set": "S1",
+      "area": "regressions",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/issue88.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "issue89",
+      "set": "S1",
+      "area": "regressions",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/issue89.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "issue90",
+      "set": "S1",
+      "area": "regressions",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/issue90.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "link",
+      "set": "S1",
+      "area": "links-images",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/link.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "links",
+      "set": "S1",
+      "area": "links-images",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/links.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "links2",
+      "set": "S1",
+      "area": "links-images",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/links2.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "list1",
+      "set": "S1",
+      "area": "lists",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/list1.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "list12",
+      "set": "S1",
+      "area": "lists",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/list12.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "list2",
+      "set": "S1",
+      "area": "lists",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/list2.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "list_multipara",
+      "set": "S1",
+      "area": "lists",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/list_multipara.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "lists",
+      "set": "S1",
+      "area": "lists",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/lists.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "lists10",
+      "set": "S1",
+      "area": "lists",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/lists10.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "lists11",
+      "set": "S1",
+      "area": "lists",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/lists11.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "lists12",
+      "set": "S1",
+      "area": "lists",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/lists12.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "lists13",
+      "set": "S1",
+      "area": "lists",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/lists13.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "lists14",
+      "set": "S1",
+      "area": "lists",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/lists14.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "lists15",
+      "set": "S1",
+      "area": "lists",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/lists15.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "lists6",
+      "set": "S1",
+      "area": "lists",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/lists6.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "lists7b",
+      "set": "S1",
+      "area": "lists",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/lists7b.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "lists9",
+      "set": "S1",
+      "area": "lists",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/lists9.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "lists_after_paragraph",
+      "set": "S1",
+      "area": "lists",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/lists_after_paragraph.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "lists_blank",
+      "set": "S1",
+      "area": "lists",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/lists_blank.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "lists_blockquote_code",
+      "set": "S1",
+      "area": "lists",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/lists_blockquote_code.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "lists_need_blank_line",
+      "set": "S1",
+      "area": "lists",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/lists_need_blank_line.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "lists_nested",
+      "set": "S1",
+      "area": "lists",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/lists_nested.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "lists_nested_blankline",
+      "set": "S1",
+      "area": "lists",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/lists_nested_blankline.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "lists_nested_deep",
+      "set": "S1",
+      "area": "lists",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/lists_nested_deep.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "lists_ol",
+      "set": "S1",
+      "area": "lists",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/lists_ol.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "lists_ol2",
+      "set": "S1",
+      "area": "lists",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/lists_ol2.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "lists_paraindent",
+      "set": "S1",
+      "area": "lists",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/lists_paraindent.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "lists_tab",
+      "set": "S1",
+      "area": "lists",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/lists_tab.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "loss",
+      "set": "S1",
+      "area": "core",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/loss.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "math-blahtex-equations",
+      "set": "S1",
+      "area": "math-blahtex",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/math-blahtex/equations.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "math-blahtex-inline",
+      "set": "S1",
+      "area": "math-blahtex",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/math-blahtex/inline.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "math-blahtex-math2",
+      "set": "S1",
+      "area": "math-blahtex",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/math-blahtex/math2.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "math-blahtex-table",
+      "set": "S1",
+      "area": "math-blahtex",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/math-blahtex/table.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "math-Instiki_Issue_52",
+      "set": "S1",
+      "area": "math",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/math/Instiki_Issue_52.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "math-Instiki_Issue_52_bis",
+      "set": "S1",
+      "area": "math",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/math/Instiki_Issue_52_bis.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "math-embedded_invalid_svg",
+      "set": "S1",
+      "area": "math",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/math/embedded_invalid_svg.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "math-embedded_svg",
+      "set": "S1",
+      "area": "math",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/math/embedded_svg.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "math-equations",
+      "set": "S1",
+      "area": "math",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/math/equations.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "math-inline",
+      "set": "S1",
+      "area": "math",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/math/inline.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "math-math2",
+      "set": "S1",
+      "area": "math",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/math/math2.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "math-notmath",
+      "set": "S1",
+      "area": "math",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/math/notmath.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "math-raw_mathml",
+      "set": "S1",
+      "area": "math",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/math/raw_mathml.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "math-spaces_after_inline_math",
+      "set": "S1",
+      "area": "math",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/math/spaces_after_inline_math.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "math-table",
+      "set": "S1",
+      "area": "math",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/math/table.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "math-table2",
+      "set": "S1",
+      "area": "math",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/math/table2.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "misc_sw",
+      "set": "S1",
+      "area": "core",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/misc_sw.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "olist",
+      "set": "S1",
+      "area": "lists",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/olist.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "one",
+      "set": "S1",
+      "area": "core",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/one.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "paragraph",
+      "set": "S1",
+      "area": "core",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/paragraph.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "paragraph_rules-dont_merge_ref",
+      "set": "S1",
+      "area": "paragraph_rules",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/paragraph_rules/dont_merge_ref.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "paragraph_rules-tab_is_blank",
+      "set": "S1",
+      "area": "paragraph_rules",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/paragraph_rules/tab_is_blank.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "paragraphs",
+      "set": "S1",
+      "area": "core",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/paragraphs.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "recover-recover_links",
+      "set": "S1",
+      "area": "recover",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/recover/recover_links.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "ref_with_period",
+      "set": "S1",
+      "area": "links-images",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/ref_with_period.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "ref_with_title",
+      "set": "S1",
+      "area": "links-images",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/ref_with_title.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "references-long_example",
+      "set": "S1",
+      "area": "references",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/references/long_example.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "references-spaces_and_numbers",
+      "set": "S1",
+      "area": "references",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/references/spaces_and_numbers.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "smartypants",
+      "set": "S1",
+      "area": "core",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/smartypants.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "syntax_hl",
+      "set": "S1",
+      "area": "code",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/syntax_hl.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "table_attributes",
+      "set": "S1",
+      "area": "tables",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/table_attributes.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "table_colspan",
+      "set": "S1",
+      "area": "tables",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/table_colspan.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "tables",
+      "set": "S1",
+      "area": "tables",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/tables.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "tables2",
+      "set": "S1",
+      "area": "tables",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/tables2.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "test",
+      "set": "S1",
+      "area": "core",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/test.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "ticks",
+      "set": "S1",
+      "area": "code",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/ticks.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "toc",
+      "set": "S1",
+      "area": "headers",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/toc.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "triggering",
+      "set": "S1",
+      "area": "core",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/triggering.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "underscore_in_words",
+      "set": "S1",
+      "area": "core",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/underscore_in_words.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "wrapping",
+      "set": "S1",
+      "area": "core",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/wrapping.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "xml",
+      "set": "S1",
+      "area": "html",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/xml.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "xml3",
+      "set": "S1",
+      "area": "html",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/xml3.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "xml_comments",
+      "set": "S1",
+      "area": "html",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/xml_comments.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    },
+    {
+      "id": "xml_instruction",
+      "set": "S1",
+      "area": "html",
+      "argv": [
+        "ruby",
+        "{bin}",
+        "spec/block_docs/xml_instruction.md"
+      ],
+      "env": [
+        "GEM_PATH=/home/user/.local/share/gem/ruby/3.1.0:/var/lib/gems/3.1.0:/usr/local/lib/ruby/gems/3.1.0:/usr/lib/ruby/gems/3.1.0:/usr/lib/x86_64-linux-gnu/ruby/gems/3.1.0:/usr/share/rubygems-integration/3.1.0:/usr/share/rubygems-integration/all:/usr/lib/x86_64-linux-gnu/rubygems-integration/3.1.0"
+      ]
+    }
+  ]
+}

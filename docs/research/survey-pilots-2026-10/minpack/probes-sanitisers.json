@@ -1,0 +1,36 @@
+{
+  "bin": "/tmp/mp/legacy",
+  "bin_sha256": "",
+  "cases": "cases.json",
+  "ran": [
+    "every case twice with HOME a scratch directory, LC_ALL=C, TZ=UTC (legacy)",
+    "every case with TZ=Asia/Kathmandu",
+    "every case with LC_ALL=de_DE.UTF-8 LANG=de_DE.UTF-8",
+    "every case with another HOME holding a dotfile",
+    "every case under strace -f -y -e trace=open,openat,creat",
+    "every case on the checker build O1-fcheck-all-asan-ubsan"
+  ],
+  "facts": [
+    {
+      "id": "probe:check-differs:lmder1",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build O1-fcheck-all-asan-ubsan changes stdout: line 496: as captured \" exit parameter 3\", checker build \" exit parameter 2\"",
+      "count": 1
+    },
+    {
+      "id": "probe:check-differs:lmdif1",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build O1-fcheck-all-asan-ubsan changes stdout: line 496: as captured \" exit parameter 1\", checker build \" exit parameter 2\"",
+      "count": 1
+    },
+    {
+      "id": "probe:check-differs:lmstr1",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build O1-fcheck-all-asan-ubsan changes stdout: line 510: as captured \" final l2 norm of the residuals 0.7966656D+03\", checker build \" final l2 norm of the residuals 0.8011018D+03\"",
+      "count": 1
+    }
+  ]
+}

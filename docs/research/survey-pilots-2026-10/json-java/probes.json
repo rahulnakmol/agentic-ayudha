@@ -1,0 +1,63 @@
+{
+  "bin": "/tmp/jj/legacy.sh",
+  "bin_sha256": "da9de549d2bb22dbf14bfd5dab6fe17ea9469af93767bebefe3f7fe362eb941c",
+  "cases": "cases.json",
+  "ran": [
+    "every case twice with HOME a scratch directory, LC_ALL=C, TZ=UTC (legacy.sh)",
+    "every case with TZ=Asia/Kathmandu",
+    "every case with LC_ALL=de_DE.UTF-8 LANG=de_DE.UTF-8",
+    "every case with another HOME holding a dotfile",
+    "every case under strace -f -y -e trace=open,openat,creat"
+  ],
+  "facts": [
+    {
+      "id": "probe:reads:/etc/java-17-openjdk/jvm-amd64.cfg",
+      "kind": "reads",
+      "at": "cases.json",
+      "detail": "reads /etc/java-17-openjdk/jvm-amd64.cfg in 5 case(s): bean, pointer-oob, roundtrip, strict-error, xml",
+      "count": 5
+    },
+    {
+      "id": "probe:reads:/tmp/jj/classes/Driver$Bean.class",
+      "kind": "reads",
+      "at": "cases.json",
+      "detail": "reads /tmp/jj/classes/Driver$Bean.class in 1 case(s): bean",
+      "count": 1
+    },
+    {
+      "id": "probe:reads:/tmp/jj/classes/Driver.class",
+      "kind": "reads",
+      "at": "cases.json",
+      "detail": "reads /tmp/jj/classes/Driver.class in 5 case(s): bean, pointer-oob, roundtrip, strict-error, xml",
+      "count": 5
+    },
+    {
+      "id": "probe:reads:/tmp/jj/classes/org/json/",
+      "kind": "reads",
+      "at": "cases.json",
+      "detail": "reads 16 files under /tmp/jj/classes/org/json/ in 5 case(s): bean, pointer-oob, roundtrip, strict-error, xml",
+      "count": 5
+    },
+    {
+      "id": "probe:reads:/tmp/pilot/json-java/drv/in.json",
+      "kind": "reads",
+      "at": "cases.json",
+      "detail": "reads /tmp/pilot/json-java/drv/in.json in 2 case(s): pointer-oob, roundtrip",
+      "count": 2
+    },
+    {
+      "id": "probe:reads:/tmp/pilot/json-java/drv/in.xml",
+      "kind": "reads",
+      "at": "cases.json",
+      "detail": "reads /tmp/pilot/json-java/drv/in.xml in 1 case(s): xml",
+      "count": 1
+    },
+    {
+      "id": "probe:reads:/tmp/pilot/json-java/drv/strict.json",
+      "kind": "reads",
+      "at": "cases.json",
+      "detail": "reads /tmp/pilot/json-java/drv/strict.json in 1 case(s): strict-error",
+      "count": 1
+    }
+  ]
+}

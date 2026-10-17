@@ -1,0 +1,1122 @@
+{
+  "bin": "/tmp/pilot/maruku/compat/legacy.rb",
+  "bin_sha256": "becb190c4b4fb730fb7369cbff8db1d32b938e2b386d1781f38f7926c13ce796",
+  "cases": "cases.json",
+  "ran": [
+    "every case twice with HOME a scratch directory, LC_ALL=C, TZ=UTC (legacy.rb)",
+    "every case with TZ=Asia/Kathmandu",
+    "every case with LC_ALL=de_DE.UTF-8 LANG=de_DE.UTF-8",
+    "every case with another HOME holding a dotfile",
+    "every case under strace -f -y -e trace=open,openat,creat",
+    "every case on the checker build legacy-checked.rb",
+    "112 file(s) read under GEM_PATH entry /home/user/.local/share/gem/ruby/3.1.0, which the cases set as a library path, not listed as dependencies"
+  ],
+  "facts": [
+    {
+      "id": "probe:check-differs:abbrev",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/parse_span.rb:722:in `push_char': can't modify frozen String: \"\" (Froz…): line 2: as captured \"\u003ch1 id=\\\"we…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:abbreviations",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eThe \u003cabb…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:abbreviations2",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/parse_span.rb:722:in `push_char': can't modify frozen String: \"\" (Froz…): line 1: as captured \"\u003ctable\u003e\u003cthe…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:alt",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003e\u003cimg src…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:amps",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/output/to_html.rb:71:in `block in to_html': can't modify frozen String: \"\" (…): line 2: as captured \"\u003cpre\u003e\u003ccode\u003e…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:attribute_sanitize",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003e\u003cem styl…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:attributes-att3",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp id=\\\"par…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:attributes-attributes",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/parse_span.rb:452:in `read_simple': can't modify frozen String: \"\" (Fr…): line 2: as captured \"\u003ch2 id=\\\"he…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:attributes-circular",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eParagrap…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:attributes-default",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp id=\\\"2\\\"…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:atx_headers",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/parse_span.rb:728:in `push_space': can't modify frozen String: \"\" (Fro…): line 2: as captured \"\u003ch4 id=\\\"a_…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:auto_cdata",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: | |#\u003cFrozenError: can't modify frozen String: \"\"\u003e): line 1: as captured \"\u003cscript\u003e//\u003c![CDATA[\", checker build \"\"",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:bad_cites",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003e11111111…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:bad_divrefs",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003e11111111…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:blank",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eLinea 1\u003c…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:blanks_in_code",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eThis blo…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:block_quotes",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cblockquote…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:bug_def",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003e[test][]…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:bug_table",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp class=\\\"…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:cites",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eThis is …",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:code",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eHere is …",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:code2",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cblockquote…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:code3",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eThis is …",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:code4",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eThis is …",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:data_loss",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003col\u003e\", chec…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:div_without_newline",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eHeres so…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:divs-div1",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cdiv\u003e\", che…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:divs-div2",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cdiv\u003e\", che…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:divs-div3_nest",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/parse_span.rb:452:in `read_simple': can't modify frozen String: \"\" (Fr…): line 2: as captured \"\u003cdiv class=…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:easy",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003e\u003cem\u003eHell…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:email",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eThis is …",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:empty_cells",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/parse_span.rb:722:in `push_char': can't modify frozen String: \"\" (Froz…): line 1: as captured \"\u003ctable\u003e\u003cthe…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:encoding-iso-8859-1",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eThis is …",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:encoding-utf-8",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eJapanese…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:entities",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eMaruku t…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:escape",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003e\u003ccode\u003e\\\\…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:escaping",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eHello: !…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:extra_dl",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cdl\u003e\", chec…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:extra_header_id",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/parse_span.rb:452:in `read_simple': can't modify frozen String: \"\" (Fr…): line 2: as captured \"\u003ch1 id=\\\"he…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:extra_table1",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/parse_span.rb:722:in `push_char': can't modify frozen String: \"\" (Froz…): line 1: as captured \"\u003ctable\u003e\u003cthe…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:fenced_code_blocks",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/output/to_html.rb:71:in `block in to_html': can't modify frozen String: \"\" (…): line 2: as captured \"\u003cpre class=…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:fenced_code_blocks_highlighted",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/output/to_html.rb:71:in `block in to_html': can't modify frozen String: \"\" (…): line 2: as captured \"\u003cpre class=…",
+      "count": 1
+    },
+    {
+      "id": "probe:check-differs:footnotes",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eThat’s s…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:footnotes2",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eRuby on …",
+      "count": 1
+    },
+    {
+      "id": "probe:check-differs:hard",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003e\u003cem\u003eThis…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:header_after_par",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eParagrap…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:headers",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/parse_span.rb:722:in `push_char': can't modify frozen String: \"\" (Froz…): line 2: as captured \"\u003ch1 id=\\\"a_…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:hex_entities",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eExamples…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:hrule",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/output/to_html.rb:71:in `block in to_html': can't modify frozen String: \"\" (…): line 1: as captured \"\u003chr /\u003e\u003chr /…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:html3",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003etaking p…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:html4",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: | |#\u003cFrozenError: can't modify frozen String: \"\"\u003e): line 1: as captured \"\u003cdiv class='frame'\u003e\", checker build \"\"",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:html5",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: | |#\u003cFrozenError: can't modify frozen String: \"\"\u003e): line 1: as captured \"\u003cdiv class='frame'\u003e\", checker build \"\"",
+      "count": 1
+    },
+    {
+      "id": "probe:check-differs:html_block_in_para",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eOne\u003c/p\u003e\"…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:html_inline",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eOne \u003cspa…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:html_trailing",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003ebefore\u003c/…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:ie",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003e\u003ccode\u003e\u0026l…",
+      "count": 1
+    },
+    {
+      "id": "probe:check-differs:iframe",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eParagrap…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:ignore_bad_header",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003e= Markdo…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:images",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eThis pag…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:images2",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eThis is …",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:inline_html",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eInput:\u003c/…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:inline_html2",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: | |#\u003cFrozenError: can't modify frozen String: \"\"\u003e): line 1: as captured \"\u003cdiv\u003e\", checker build \"\"",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:inline_html_beginning",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: | |#\u003cFrozenError: can't modify frozen String: \"\"\u003e): line 2: as captured \"\u003cp\u003e\u003cdel\u003eTwo\u003c/del\u003e Half\u003c/p\u003e\", checker build \"\"",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:issue106",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eThis is …",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:issue115",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: | |#\u003cFrozenError: can't modify frozen String: \"\"\u003e): line 1: as captured \"\u003c!--\", checker build \"\"",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:issue117",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: | |#\u003cFrozenError: can't modify frozen String: \"\"\u003e): line 1: as captured \"\u003csection\u003e\", checker build \"\"",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:issue120",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: | |#\u003cFrozenError: can't modify frozen String: \"\"\u003e): line 1: as captured \"\u003cstyle type='text/css'\u003e/*\u003c![CDATA[*/\", checker build \"\"",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:issue123",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eLets add…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:issue124",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eWhat fol…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:issue126",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003e\u003ca href=…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:issue130",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eA paragr…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:issue20",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/parse_span.rb:452:in `read_simple': can't modify frozen String: \"\" (Fr…): line 2: as captured \"\u003ch1 id=\\\"hi…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:issue26",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cul\u003e\", chec…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:issue29",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/parse_span.rb:728:in `push_space': can't modify frozen String: \"\" (Fro…): line 2: as captured \"\u003ch1 id=\\\"be…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:issue30",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eThis is …",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:issue31",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: | |#\u003cFrozenError: can't modify frozen String: \"\"\u003e): line 2: as captured \"\u003cp\u003e\u003cspan\u003e\u003cem\u003ehello\u003c/em\u003e\u003c/span\u003e\u003c/p\u003e\", checker build \"\"",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:issue40",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: | |#\u003cFrozenError: can't modify frozen String: \"\"\u003e): line 1: as captured \"\u003cscript\u003e//\u003c![CDATA[\", checker build \"\"",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:issue64",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eA nested…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:issue67",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cul\u003e\", chec…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:issue70",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003e@ foo\u003c/p…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:issue72",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003col\u003e\", chec…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:issue74",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/parse_span.rb:728:in `push_space': can't modify frozen String: \"\" (Fro…): line 2: as captured \"\u003ch2 id=\\\"co…",
+      "count": 1
+    },
+    {
+      "id": "probe:check-differs:issue79",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: | |#\u003cFrozenError: can't modify frozen String: \"\"\u003e): line 1: as captured \"\u003cp\u003eá é í ó ú\u003c/p\u003e\u003cpre\u003e\", checker build \"\"",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:issue83",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: | |#\u003cFrozenError: can't modify frozen String: \"\"\u003e): line 1: as captured \"\u003cdiv\u003e\u003cspan\u003e@Foo\u003c/span\u003e\", checker build \"\"",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:issue85",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: | |#\u003cFrozenError: can't modify frozen String: \"\"\u003e): line 1: as captured \"\u003cpre\u003e\u003cspan class='cp'\u003e#include \u0026lt;foo\u0026gt; \u0026#x201c;\u003c/span\u003e\u003c/pr…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:issue88",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: | |#\u003cFrozenError: can't modify frozen String: \"\"\u003e): line 2: as captured \"\u003cp\u003e\u003cspan\u003e hello \u003c/span\u003e\u003c/p\u003e\", checker build \"\"",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:issue89",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003e\u003ca href=…",
+      "count": 1
+    },
+    {
+      "id": "probe:check-differs:issue90",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 1: as captured \"\u003cdiv class=…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:link",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003e\u003ca href=…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:links",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eSearch o…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:links2",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eSee \u003ca h…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:list1",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cul\u003e\", chec…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:list12",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cul\u003e\", chec…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:list2",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cul\u003e\", chec…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:list_multipara",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cul\u003e\", chec…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:lists",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cul\u003e\", chec…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:lists10",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eList:\u003c/p…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:lists11",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cul\u003e\", chec…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:lists12",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cul\u003e\", chec…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:lists13",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/parse_span.rb:452:in `read_simple': can't modify frozen String: \"\" (Fr…): line 2: as captured \"\u003cul\u003e\", chec…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:lists14",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003col\u003e\", chec…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:lists15",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cul style=\\…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:lists6",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eHere’s a…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:lists7b",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cul\u003e\", chec…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:lists9",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cul\u003e\", chec…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:lists_after_paragraph",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eParagrap…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:lists_blank",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cul\u003e\", chec…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:lists_blockquote_code",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cul\u003e\", chec…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:lists_need_blank_line",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eThis is …",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:lists_nested",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cul\u003e\", chec…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:lists_nested_blankline",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cul\u003e\", chec…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:lists_nested_deep",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cul\u003e\", chec…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:lists_ol",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003col\u003e\", chec…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:lists_ol2",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003col\u003e\", chec…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:lists_paraindent",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cul\u003e\", chec…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:lists_tab",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eCiao\u003c/p\u003e…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:loss",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: | |#\u003cFrozenError: can't modify frozen String: \"\"\u003e): line 2: as captured \"\u003cp\u003e\u003cbr /\u003e123\u003c/p\u003e\", checker build \"\"",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:math-Instiki_Issue_52",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eThis is …",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:math-Instiki_Issue_52_bis",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eHere is …",
+      "count": 1
+    },
+    {
+      "id": "probe:check-differs:math-embedded_invalid_svg",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eIn \u003ccode…",
+      "count": 1
+    },
+    {
+      "id": "probe:check-differs:math-embedded_svg",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eIn \u003ccode…",
+      "count": 1
+    },
+    {
+      "id": "probe:check-differs:math-equations",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/output/to_html.rb:71:in `block in to_html': can't modify frozen String: \"\" (…): line 1: as captured \"\u003cdiv class=…",
+      "count": 1
+    },
+    {
+      "id": "probe:check-differs:math-inline",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eHere are…",
+      "count": 1
+    },
+    {
+      "id": "probe:check-differs:math-math2",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/output/to_html.rb:71:in `block in to_html': can't modify frozen String: \"\" (…): line 1: as captured \"\u003cdiv class=…",
+      "count": 1
+    },
+    {
+      "id": "probe:check-differs:math-notmath",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eThis is …",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:math-raw_mathml",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eIn \u003cmath…",
+      "count": 1
+    },
+    {
+      "id": "probe:check-differs:math-spaces_after_inline_math",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eThis \u003cem…",
+      "count": 1
+    },
+    {
+      "id": "probe:check-differs:math-table",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: | |#\u003cFrozenError: can't modify frozen String: \"\"\u003e): line 1: as captured \"\u003ctable\u003e\", checker build \"\"",
+      "count": 1
+    },
+    {
+      "id": "probe:check-differs:math-table2",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/parse_span.rb:722:in `push_char': can't modify frozen String: \"\" (Froz…): line 1: as captured \"\u003ctable\u003e\u003cthe…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:misc_sw",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/parse_span.rb:728:in `push_space': can't modify frozen String: \"\" (Fro…): line 2: as captured \"\u003ch3 id=\\\"ge…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:olist",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eThis is …",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:one",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eOne line…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:paragraph",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eParagrap…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:paragraph_rules-dont_merge_ref",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eParagrap…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:paragraph_rules-tab_is_blank",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eParagrap…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:paragraphs",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eParagrap…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:recover-recover_links",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eSearch o…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:ref_with_period",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003e\u003ca href=…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:ref_with_title",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003e\u003ca href=…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:references-long_example",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003efilters …",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:smartypants",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cpre\u003e\u003ccode\u003e…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:syntax_hl",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eThis is …",
+      "count": 1
+    },
+    {
+      "id": "probe:check-differs:table_attributes",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/parse_span.rb:722:in `push_char': can't modify frozen String: \"\" (Froz…): line 1: as captured \"\u003ctable clas…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:table_colspan",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/parse_span.rb:722:in `push_char': can't modify frozen String: \"\" (Froz…): line 1: as captured \"\u003ctable clas…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:tables",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/parse_span.rb:722:in `push_char': can't modify frozen String: \"\" (Froz…): line 1: as captured \"\u003ctable\u003e\u003cthe…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:tables2",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/parse_span.rb:722:in `push_char': can't modify frozen String: \"\" (Froz…): line 1: as captured \"\u003ctable\u003e\u003cthe…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:test",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/output/to_html.rb:71:in `block in to_html': can't modify frozen String: \"\" (…): line 2: as captured \"\u003cpre\u003e\u003ccode\u003e…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:ticks",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003e\u003ccode\u003eTh…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:toc",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 1: as captured \"\u003cdiv class=…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:triggering",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eParagrap…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:underscore_in_words",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eOk, this…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:wrapping",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 2: as captured \"\u003cp\u003eLorem ip…",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:xml",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/errors.rb:30:in `maruku_error': (MaRuKu::Exception)): line 1: as captured \"\u003csvg /\u003e\u003csvg:svg height='400px' xmlns:…",
+      "count": 1
+    },
+    {
+      "id": "probe:check-differs:xml3",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: | |#\u003cFrozenError: can't modify frozen String: \"\"\u003e): line 1: as captured \"\u003ctable\u003e\", checker build \"\"",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:xml_comments",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: | |#\u003cFrozenError: can't modify frozen String: \"\"\u003e): line 1: as captured \"\u003c!--\", checker build \"\"",
+      "count": 2
+    },
+    {
+      "id": "probe:check-differs:xml_instruction",
+      "kind": "check-differs",
+      "at": "cases.json",
+      "detail": "the checker build legacy-checked.rb changes stdout (its stderr: /tmp/maruku/lib/maruku/input/linesource.rb:83:in `block in tell_me_the_future': can't modify frozen…): line 1: as captured \"\u0026lt;? noTar…",
+      "count": 2
+    },
+    {
+      "id": "probe:reads:/tmp/pilot/maruku/compat/harness.rb",
+      "kind": "reads",
+      "at": "cases.json",
+      "detail": "reads /tmp/pilot/maruku/compat/harness.rb in 162 case(s): abbrev, abbreviations, abbreviations2, alt, amps",
+      "count": 162
+    },
+    {
+      "id": "probe:reads:data/entities.xml",
+      "kind": "reads",
+      "at": "cases.json",
+      "detail": "reads data/entities.xml in 19 case(s): abbrev, block_quotes, entities, footnotes, hex_entities",
+      "count": 19
+    }
+  ]
+}

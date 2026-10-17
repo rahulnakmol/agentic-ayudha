@@ -1,0 +1,666 @@
+{
+ "product": "minpack",
+ "request": "This is the original MINPACK, fixed-form Fortran 77, that our numerical code calls; it has a readme and no other product docs. Tell us what it does, which traps a modern port must check, what we should not carry over, and how we would move it to modern Fortran (free form, modules) so that every caller gets the same results.",
+ "summary": "MINPACK is a library of FORTRAN 77 subroutines for solving systems of nonlinear equations and nonlinear least-squares problems, in five algorithmic paths that each pair a core routine with an easy-to-use driver, plus a Jacobian checker. This checkout keeps the original fixed-form code to test the LFortran compiler; modern development moved to fortran-lang/minpack. Who calls it in the person's code, through which entry points, and how exact 'the same results' must be are unknown and asked. Running it showed that its results depend on how it is built: the project's own Release flags change the output of all six legacy test drivers.",
+ "engineering": [
+  {
+   "id": "E1",
+   "topic": "architecture",
+   "claim": "A flat library of independent subroutines with no modules or shared state: each easy-to-use driver (hybrd1, hybrj1, lmdif1, lmder1, lmstr1) checks its inputs, sets default tolerances and limits, and calls its core routine, which calls shared linear-algebra helpers (qrfac, qrsolv, lmpar, dogleg, enorm).",
+   "basis": "observed",
+   "cites": [
+    "sym:src/lmder1.f#lmder1",
+    "src/lmder1.f:129-151",
+    "sym:src/lmder.f#lmder",
+    "doc:README.rst"
+   ]
+  },
+  {
+   "id": "E2",
+   "topic": "interfaces",
+   "claim": "lmder1 sets ftol and xtol to the caller's tol, gtol to zero, maxfev to 100*(n+1), mode 1, factor 100, and nprint 0, rejects m < n, ldfjac < m, tol < 0, or lwa < 5*n+m with info 0, and maps the core's info 8 to 4.",
+   "basis": "observed",
+   "cites": [
+    "src/lmder1.f:131-151"
+   ]
+  },
+  {
+   "id": "E3",
+   "topic": "interfaces",
+   "claim": "The caller passes the user function as an EXTERNAL procedure (fcn) that receives iflag and fills the function values or the Jacobian; the calling sequence has no argument for the caller's own data.",
+   "basis": "observed",
+   "cites": [
+    "trap:fortran-external:src/lmder1.f:7",
+    "src/lmder1.f:1-7",
+    "sym:ex/lmddrv.f#fcn"
+   ]
+  },
+  {
+   "id": "E4",
+   "topic": "interfaces",
+   "claim": "The caller allocates every work array and passes its length (wa and lwa for lmder1, at least 5*n+m); lmder1 slices wa into the core routine's diag, qtf, and four work vectors.",
+   "basis": "observed",
+   "cites": [
+    "src/lmder1.f:115-117",
+    "src/lmder1.f:147-149"
+   ]
+  },
+  {
+   "id": "E5",
+   "topic": "interfaces",
+   "claim": "src/minpack.f90 is a module named minpack holding explicit interfaces for dpmpar, enorm, hybrd, hybrd1, lmder1, lmdif1, and chkder only; the examples call the library through it (use minpack, only: …), while the ex/ drivers call the F77 names directly.",
+   "basis": "observed",
+   "cites": [
+    "sym:src/minpack.f90#minpack",
+    "src/minpack.f90:1-89",
+    "examples/example_lmder1.f90:46",
+    "src/lmder1.f:1"
+   ]
+  },
+  {
+   "id": "E6",
+   "topic": "build",
+   "claim": "CMake builds one library target from every file in src/, including the test-problem routines, with -std=legacy; an unset build type becomes Debug; UserOverride.cmake sets Release to -O3 -march=native -ffast-math -funroll-loops for gfortran. fpm builds the same sources with only the examples as executables.",
+   "basis": "observed",
+   "cites": [
+    "build:src/CMakeLists.txt#minpack",
+    "src/CMakeLists.txt:1-13",
+    "CMakeLists.txt:10-14",
+    "cmake/UserOverride.cmake:8-12",
+    "fpm.toml:12-21"
+   ]
+  },
+  {
+   "id": "E7",
+   "topic": "tests",
+   "claim": "There is no automated test: the ex/ drivers are main programs that read problem numbers, sizes, and repetitions from unit 5 (the netlib data files ex/file21-23), run one solver per problem from a standard starting point scaled by 1, 10, and 100, and print norms, evaluation counts, the exit parameter, and the solution to unit 6; nothing compares the output with expected values.",
+   "basis": "observed",
+   "cites": [
+    "entry:ex/lmddrv.f:25",
+    "ex/lmddrv.f:37-77",
+    "io:unit-io:ex/lmddrv.f:45",
+    "ex/file22:1-4"
+   ]
+  },
+  {
+   "id": "E8",
+   "topic": "data",
+   "claim": "dpmpar's comment says machine constants come from DATA statements activated per machine, but its code returns the intrinsics epsilon, tiny, and huge of a double: the comment is stale and the constants follow the compiler.",
+   "basis": "observed",
+   "cites": [
+    "src/dpmpar.f:7-11",
+    "src/dpmpar.f:35-40"
+   ]
+  },
+  {
+   "id": "E9",
+   "topic": "data",
+   "claim": "enorm avoids overflow and underflow with two hard-coded constants, rdwarf 3.834d-20 and rgiant 1.304d19, rather than machine constants.",
+   "basis": "observed",
+   "cites": [
+    "src/enorm.f:44",
+    "src/enorm.f:16-22"
+   ]
+  },
+  {
+   "id": "E10",
+   "topic": "risks",
+   "claim": "The same code built two other ways prints different results: the Release flags change the output of all six drivers (a different solution vector for lmder1, one more function evaluation for lmdif1), and an -O1 build with -fcheck=all and the address and undefined-behaviour sanitisers ends lmder1 and lmdif1 with a different exit parameter; that build reported no runtime error.",
+   "basis": "observed",
+   "cites": [
+    "probe:check-differs:lmder1",
+    "probe:check-differs:lmdif1",
+    "probe:check-differs:hybrd1",
+    "probe:check-differs:chkder"
+   ]
+  },
+  {
+   "id": "E11",
+   "topic": "risks",
+   "claim": "Three files define a subroutine named initpt (hybipt.f, lmdipt.f, ocpipt.f) and two define hesfcn (hesfcn.f, lhesfcn.f), and the CMake library target lists all of them, so which one a program gets depends on the linker.",
+   "basis": "observed",
+   "cites": [
+    "sym:src/hybipt.f#initpt",
+    "sym:src/lmdipt.f#initpt",
+    "sym:src/ocpipt.f#initpt",
+    "sym:src/hesfcn.f#hesfcn",
+    "sym:src/lhesfcn.f#hesfcn",
+    "src/CMakeLists.txt:1-13"
+   ]
+  },
+  {
+   "id": "E12",
+   "topic": "tests",
+   "claim": "No driver calls covar: running the six drivers under coverage never reaches it.",
+   "basis": "observed",
+   "cites": [
+    "probe:unreached:src/covar.f#covar",
+    "sym:src/covar.f#covar"
+   ]
+  },
+  {
+   "id": "E13",
+   "topic": "dependencies",
+   "claim": "The library calls nothing outside itself and the Fortran intrinsics; the build declares no dependency.",
+   "basis": "inferred",
+   "cites": [
+    "src/CMakeLists.txt:1-13",
+    "fpm.toml:1-15"
+   ],
+   "reasoning": "The index records no dependency facts and no file, network, or environment surface in src/; the only I/O is in the drivers and examples."
+  }
+ ],
+ "capabilities": [
+  {
+   "id": "C1",
+   "name": "Solve a system of nonlinear equations from the functions alone",
+   "claim": "Find a zero of n equations in n unknowns when the caller supplies only the functions; the Jacobian is approximated by forward differences (hybrd, hybrd1).",
+   "basis": "observed",
+   "cites": [
+    "sym:src/hybrd1.f#hybrd1",
+    "doc:README.rst"
+   ]
+  },
+  {
+   "id": "C2",
+   "name": "Solve a system of nonlinear equations with a supplied Jacobian",
+   "claim": "The same, with the caller's analytic Jacobian (hybrj, hybrj1).",
+   "basis": "observed",
+   "cites": [
+    "sym:src/hybrj1.f#hybrj1"
+   ]
+  },
+  {
+   "id": "C3",
+   "name": "Fit a model by nonlinear least squares",
+   "claim": "Minimise the sum of squares of m functions in n unknowns by Levenberg-Marquardt, with a finite-difference Jacobian (lmdif1), an analytic one (lmder1), or one row at a time to save memory (lmstr1).",
+   "basis": "observed",
+   "cites": [
+    "sym:src/lmdif1.f#lmdif1",
+    "sym:src/lmder1.f#lmder1",
+    "sym:src/lmstr1.f#lmstr1"
+   ]
+  },
+  {
+   "id": "C4",
+   "name": "Check a Jacobian against its functions",
+   "claim": "Report, per function, how consistent a supplied Jacobian is with finite differences of the functions (chkder).",
+   "basis": "observed",
+   "cites": [
+    "sym:src/chkder.f#chkder"
+   ]
+  },
+  {
+   "id": "C5",
+   "name": "Estimate the covariance of a fit",
+   "claim": "Compute the covariance matrix from the factorisation a least-squares solver returns (covar); nothing in this checkout exercises it.",
+   "basis": "observed",
+   "cites": [
+    "sym:src/covar.f#covar",
+    "probe:unreached:src/covar.f#covar"
+   ]
+  }
+ ],
+ "product_claims": [
+  {
+   "id": "P1",
+   "topic": "context",
+   "claim": "This repository keeps MINPACK in its original fixed form to test the LFortran compiler on F77-style code; modern development moved to fortran-lang/minpack.",
+   "basis": "stated",
+   "cites": [
+    "README.rst:1-5"
+   ]
+  },
+  {
+   "id": "P2",
+   "topic": "jobs",
+   "claim": "It serves people who need to solve nonlinear equations or nonlinear least-squares problems, with or without an analytic Jacobian.",
+   "basis": "stated",
+   "cites": [
+    "README.rst:20-27"
+   ]
+  },
+  {
+   "id": "P3",
+   "topic": "users",
+   "claim": "Which of the person's programs call it, and through which entry points, is not in the code.",
+   "basis": "unknown",
+   "question": "Q1"
+  },
+  {
+   "id": "P4",
+   "topic": "constraints",
+   "claim": "How exact 'the same results' must be, and on which compiler and flags, is not in the code.",
+   "basis": "unknown",
+   "question": "Q2"
+  }
+ ],
+ "questions": [
+  {
+   "id": "Q1",
+   "question": "Which of your programs call MINPACK, through which entry points (the F77 names such as lmder1, the minpack interface module, or both), and can they be recompiled?",
+   "why": "It decides whether the modern library must keep the F77 external names and argument lists (a shim) or only the module interface (E5, K2, K3).",
+   "default": "Keep both through a thin shim until every caller uses the module, since recompiling every caller is not known to be possible.",
+   "affects": [
+    "P3",
+    "K2",
+    "K3"
+   ],
+   "status": "open"
+  },
+  {
+   "id": "Q2",
+   "question": "Must results be bit-identical, and on which compiler and flags, or is agreement within a tolerance enough?",
+   "why": "The same code gives different results under the project's own Release flags and under an -O1 checker build (E10), so 'the same results' needs a reference build or a tolerance (K1, G1).",
+   "default": "Bit-identical against a legacy build with a pinned gfortran at -O2 and no fast-math, since that build matched the modern library exactly in the pilot.",
+   "affects": [
+    "P4",
+    "K1",
+    "G1",
+    "N4",
+    "T1"
+   ],
+   "status": "open"
+  },
+  {
+   "id": "Q3",
+   "question": "Do any callers read the work array wa after a call, or size it beyond the documented minimum on purpose?",
+   "why": "Replacing caller-allocated work arrays (N2) changes the calling sequence; a caller that reads wa (lmder1 passes wa(1:n) as diag) would break.",
+   "default": "Keep wa and lwa in the shim and allocate internally in the new module API.",
+   "affects": [
+    "N2"
+   ],
+   "status": "open"
+  },
+  {
+   "id": "Q4",
+   "question": "Does any caller use the test-problem routines (initpt, ssqfcn, vecfcn, hesfcn, …) from the library?",
+   "why": "They are compiled into the library with duplicate names (E11); moving them to the tests (N3) removes them from the library.",
+   "default": "Move them to the test suite, since only the drivers call them in this checkout.",
+   "affects": [
+    "N3",
+    "E11"
+   ],
+   "status": "open"
+  },
+  {
+   "id": "Q5",
+   "question": "Which flags will the modern library ship with, and may they include -ffast-math or -march=native?",
+   "why": "Those flags change results (E10, T1); keeping them as the Release default would carry a source of differences into the modern version (N4).",
+   "default": "Ship with IEEE-preserving flags (no -ffast-math, a portable -march) and offer fast flags only as an opt-in build.",
+   "affects": [
+    "N4",
+    "T1"
+   ],
+   "status": "open"
+  }
+ ],
+ "traps": [
+  {
+   "id": "T1",
+   "rule": "build-semantic-flags",
+   "check": "Do the build's flags change results, and which build were the goldens captured with?",
+   "claim": "Yes: the Release flags (-O3 -march=native -ffast-math) change the output of all six drivers, and the default build type is Debug, so two builds from the same CMake files disagree.",
+   "basis": "observed",
+   "cites": [
+    "trap:build-semantic-flags:cmake/UserOverride.cmake:11",
+    "CMakeLists.txt:10-14",
+    "probe:check-differs:lmder1",
+    "probe:check-differs:lmstr1"
+   ]
+  },
+  {
+   "id": "T2",
+   "rule": "fortran-common",
+   "check": "What state do COMMON blocks share, and between which units?",
+   "claim": "Only the drivers use COMMON: /refnum/ carries the problem number and the evaluation counters from the driver to its fcn callback, because fcn's calling sequence has no slot for caller data. The library in src/ has none.",
+   "basis": "observed",
+   "cites": [
+    "trap:fortran-common:ex/lmddrv.f:32",
+    "ex/lmddrv.f:32",
+    "ex/lmddrv.f:114-119"
+   ]
+  },
+  {
+   "id": "T3",
+   "rule": "fortran-implicit-typing",
+   "check": "Does any unit rely on implicit typing (an undeclared name starting I-N is INTEGER)?",
+   "claim": "No unit declares IMPLICIT NONE, but none relies on implicit typing: every file in src/ and ex/ compiles with gfortran -fimplicit-none.",
+   "basis": "inferred",
+   "cites": [
+    "trap:fortran-implicit-typing:src/lmder1.f:1",
+    "src/lmder1.f:3-6",
+    "src/lmder1.f:129-130"
+   ],
+   "reasoning": "Compiling each src/*.f and ex/*drv.f with gfortran -std=legacy -fimplicit-none -fsyntax-only reported no undeclared name; the declarations at the cited lines show the pattern."
+  },
+  {
+   "id": "T4",
+   "rule": "fortran-machine-constants",
+   "check": "Which machine constants does it hard-code, and does the port keep their values?",
+   "claim": "enorm hard-codes rdwarf and rgiant, while dpmpar returns the compiler's epsilon, tiny, and huge despite a comment describing per-machine DATA statements, and the drivers derive their tolerance from it (tol = sqrt(dpmpar(1))); a port keeps enorm's two literals and dpmpar's values to keep the results.",
+   "basis": "observed",
+   "cites": [
+    "trap:fortran-machine-constants:src/dpmpar.f:1",
+    "src/enorm.f:44",
+    "src/dpmpar.f:7-11",
+    "src/dpmpar.f:35-38",
+    "ex/lmddrv.f:40"
+   ]
+  },
+  {
+   "id": "T5",
+   "rule": "fortran-hollerith",
+   "check": "Where are Hollerith constants, and does any output depend on them?",
+   "claim": "Only the drivers' FORMAT statements use Hollerith text (8h problem, 33h initial l2 norm …); it is the text of the output the goldens capture, so a port of the drivers must print the same characters.",
+   "basis": "observed",
+   "cites": [
+    "trap:fortran-hollerith:ex/lmddrv.f:80",
+    "ex/lmddrv.f:79-89"
+   ]
+  },
+  {
+   "id": "T6",
+   "rule": "fortran-external",
+   "check": "Is each EXTERNAL procedure's interface checked anywhere?",
+   "claim": "No: fcn is declared EXTERNAL with no interface in the library, so a callback with the wrong argument list compiles and fails at run time; src/minpack.f90 gives interfaces only for the routines it lists.",
+   "basis": "observed",
+   "cites": [
+    "trap:fortran-external:src/lmder1.f:7",
+    "src/minpack.f90:50-63"
+   ]
+  },
+  {
+   "id": "T7",
+   "rule": "stack",
+   "check": "Are arrays column-major with explicit leading dimensions, and does any caller pass a leading dimension larger than the row count?",
+   "claim": "Jacobians are column-major with an explicit leading dimension (fjac(ldfjac,n)); the drivers pass ldfjac 65 for m up to 65, so the modern interface must keep ldfjac rather than assume a contiguous m-by-n array.",
+   "basis": "observed",
+   "cites": [
+    "src/lmder1.f:6",
+    "ex/lmddrv.f:29",
+    "ex/lmddrv.f:41"
+   ]
+  },
+  {
+   "id": "T8",
+   "rule": "fortran-save-data",
+   "check": "Does any DATA-initialised local change between calls (implicit SAVE)?",
+   "claim": "In the routines read, DATA initialises constants that are never assigned (factor and zero in lmder1; one, zero, rdwarf, rgiant in enorm), so the implicit SAVE carries no state between calls there.",
+   "basis": "observed",
+   "cites": [
+    "trap:fortran-save-data:src/lmder1.f:131",
+    "src/lmder1.f:131-151",
+    "src/enorm.f:44-51"
+   ]
+  }
+ ],
+ "do_not_carry": [
+  {
+   "id": "N1",
+   "feature": "Caller state passed to the callback through a COMMON block",
+   "cites": [
+    "ex/lmddrv.f:32",
+    "ex/lmddrv.f:114-119"
+   ],
+   "traps": [
+    "T2"
+   ],
+   "risk": "Global mutable state makes two solves in one program, or a solve on two threads, share counters and problem numbers.",
+   "replacement": "Give the callback the caller's data: a module procedure with a derived-type argument or an internal procedure, as fortran-lang/minpack's interfaces allow.",
+   "question": "Q1",
+   "status": "proposed"
+  },
+  {
+   "id": "N2",
+   "feature": "Caller-allocated work arrays with size rules (wa, lwa ≥ 5*n+m)",
+   "cites": [
+    "src/lmder1.f:115-117",
+    "src/lmder1.f:136-137"
+   ],
+   "risk": "A short work array fails with info 0 at run time; a wrong slice silently corrupts results.",
+   "replacement": "Allocate work space inside the modern API and keep the legacy calling sequence only in the shim (SH1).",
+   "question": "Q3",
+   "status": "proposed"
+  },
+  {
+   "id": "N3",
+   "feature": "Test-problem routines with duplicate names compiled into the library",
+   "cites": [
+    "sym:src/hybipt.f#initpt",
+    "sym:src/lmdipt.f#initpt",
+    "sym:src/hesfcn.f#hesfcn",
+    "src/CMakeLists.txt:1-13"
+   ],
+   "risk": "Which initpt or hesfcn a program links is decided by the linker, not the code.",
+   "replacement": "Move the test problems out of the library into the test suite, one name per routine.",
+   "question": "Q4",
+   "status": "proposed"
+  },
+  {
+   "id": "N4",
+   "feature": "-ffast-math and -march=native as the Release default",
+   "cites": [
+    "cmake/UserOverride.cmake:11",
+    "probe:check-differs:lmder1"
+   ],
+   "traps": [
+    "T1"
+   ],
+   "risk": "Results change with the flags and with the machine that builds them (E10).",
+   "replacement": "IEEE-preserving release flags with a portable target; fast flags only as an opt-in build that is not the parity reference.",
+   "question": "Q5",
+   "status": "proposed"
+  }
+ ],
+ "compatibility": [
+  {
+   "id": "K1",
+   "kind": "api",
+   "name": "The numbers every solver returns: x, fvec, info, and the evaluation counts, for the same inputs",
+   "cites": [
+    "src/lmder1.f:86-106",
+    "src/lmder1.f:147-151"
+   ],
+   "consumers": "the person's numerical code (which programs: Q1)",
+   "level": "exact",
+   "decided_by": "request",
+   "proof": [
+    "G1",
+    "G2"
+   ]
+  },
+  {
+   "id": "K2",
+   "kind": "api",
+   "name": "The F77 external names and argument lists (lmder1(fcn,m,n,x,fvec,fjac,ldfjac,tol,info,ipvt,wa,lwa) and the others)",
+   "cites": [
+    "src/lmder1.f:1-7",
+    "src/hybrd1.f:1-5"
+   ],
+   "consumers": "callers linking the library without a module (unknown which: Q1)",
+   "level": "undecided",
+   "decided_by": "Q1",
+   "proof": [
+    "G1"
+   ]
+  },
+  {
+   "id": "K3",
+   "kind": "api",
+   "name": "The minpack interface module and its names (use minpack, only: lmder1, …)",
+   "cites": [
+    "src/minpack.f90:1-89",
+    "examples/example_lmder1.f90:46"
+   ],
+   "consumers": "the examples; other callers unknown (Q1)",
+   "level": "undecided",
+   "decided_by": "Q1",
+   "proof": [
+    "G2"
+   ]
+  }
+ ],
+ "modernisation": {
+  "target": "Modern Fortran (free form, modules)",
+  "target_source": "request",
+  "strategy": "Characterise first: capture the six drivers' and five examples' output from a legacy build with pinned flags (Q2's default). Then port the library to free-form modules routine by routine behind the same algorithms and constants, keep the F77 names through a shim while callers move (Q1), and shadow the legacy and modern libraries under the same drivers until every case matches. fortran-lang/minpack is a reference port to compare with.",
+  "cites": [
+   "entry:ex/lmddrv.f:25",
+   "README.rst:1-5"
+  ],
+  "steps": [
+   {
+    "id": "M1",
+    "title": "Pin the reference build and capture golden output from the drivers and examples",
+    "modules": [
+     "mod:ex",
+     "mod:examples",
+     "mod:cmake"
+    ],
+    "claims": [
+     "E7",
+     "E10"
+    ],
+    "parity": [
+     "G1",
+     "G2"
+    ],
+    "avoids": [
+     "N1",
+     "N4"
+    ]
+   },
+   {
+    "id": "M2",
+    "title": "Port the linear-algebra helpers and enorm/dpmpar to a module with explicit interfaces",
+    "modules": [
+     "mod:src#1",
+     "mod:src#3",
+     "mod:src#4"
+    ],
+    "claims": [
+     "E1",
+     "E8",
+     "E9"
+    ],
+    "depends_on": [
+     "M1"
+    ],
+    "parity": [
+     "G1"
+    ],
+    "avoids": [
+     "N3"
+    ]
+   },
+   {
+    "id": "M3",
+    "title": "Port the five solver paths and chkder, allocating work space internally",
+    "modules": [
+     "mod:src#2",
+     "mod:src#3"
+    ],
+    "claims": [
+     "E2",
+     "E3",
+     "E4"
+    ],
+    "depends_on": [
+     "M2"
+    ],
+    "parity": [
+     "G1",
+     "G2"
+    ],
+    "avoids": [
+     "N2",
+     "N3"
+    ]
+   },
+   {
+    "id": "M4",
+    "title": "Keep the F77 names through a shim and shadow both libraries under the drivers",
+    "modules": [
+     "mod:ex"
+    ],
+    "claims": [
+     "E5"
+    ],
+    "depends_on": [
+     "M3"
+    ],
+    "parity": [
+     "G1"
+    ],
+    "avoids": [
+     "N1"
+    ]
+   }
+  ],
+  "case_sets": [
+   {
+    "id": "G1",
+    "title": "The six netlib drivers on their data files (hybrd1, hybrj1, lmder1, lmdif1, lmstr1, chkder)",
+    "from": [
+     "entry:ex/lmddrv.f:25",
+     "entry:ex/hybdrv.f:25",
+     "entry:ex/chkdrv.f:20",
+     "ex/file21:1-23",
+     "ex/file22:1-29",
+     "ex/file23:1-15"
+    ],
+    "compare": "exact stdout and exit code, legacy and modern built with the same compiler and flags"
+   },
+   {
+    "id": "G2",
+    "title": "The five examples through the minpack module",
+    "from": [
+     "entry:examples/example_lmder1.f90:45",
+     "entry:examples/example_hybrd.f90:6",
+     "entry:examples/example_primes.f90:67"
+    ],
+    "compare": "exact stdout and exit code"
+   }
+  ],
+  "risks": [
+   {
+    "id": "R1",
+    "claim": "Exact parity holds only between builds with the same compiler and flags: the Release flags and an -O1 checker build already change the legacy results.",
+    "basis": "observed",
+    "cites": [
+     "probe:check-differs:lmder1",
+     "probe:check-differs:hybrj1"
+    ]
+   },
+   {
+    "id": "R2",
+    "claim": "Module procedures get module-qualified link names, so callers that call the F77 names will not link against a module-only library without a shim; check every caller's link line.",
+    "basis": "inferred",
+    "cites": [
+     "src/minpack.f90:1-3",
+     "ex/lmddrv.f:56-57"
+    ],
+    "reasoning": "The drivers call lmder1 as an external procedure; a procedure inside a module is not an external procedure of that name."
+   }
+  ],
+  "coexistence": {
+   "mode": "shadow",
+   "how": "Link the legacy drivers to the legacy library and, through the shim, to the modern one; run both on G1 and on the callers' own inputs and report every difference.",
+   "compare": [
+    "G1"
+   ],
+   "cut_over": "Every G1 and G2 case matches on the pinned build, and the callers' inputs show no difference for a release cycle.",
+   "rollback": "Relink the callers against the legacy library, which stays built until the shim is removed."
+  },
+  "shims": [
+   {
+    "id": "SH1",
+    "interface": "K2",
+    "behaviour": "The F77 external names and argument lists, forwarding to the module procedures",
+    "mechanism": "a legacy_names source file in the library that defines each F77 routine and calls the module procedure",
+    "removal": "When every caller named in Q1 uses the module, deprecate the shim for one release, then delete it."
+   }
+  ]
+ }
+}
