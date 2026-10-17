@@ -75,6 +75,7 @@ every input of every verb.
 | `install` | Install skill copies, lock.toml, MCP registration, and hooks for each host; shows a diff unless --apply. | DevOps & DevEx Tinkerer | chore | L09 | human | cli |
 | `doctor` | Check tools, tokens, identity, config, host installs, and existing CI; --fix re-syncs copies after showing a diff. | DevOps & DevEx Tinkerer | chore | L09 | human | cli, skill, mcp |
 | `chart` | Chart an issue's data or AI design before planning: decisions, metrics, sources, platform, and retention; or evidence, permissions, abstention, and evals. | Data & AI Architect | spec | L05, L07, L08 | bot | cli, skill, mcp |
+| `survey` | Survey a codebase with no product docs: index it, check an evidence-backed analysis and backlog, and capture golden outputs for parity. | Code Architect | plan | all | bot | cli, skill, mcp |
 
 <!-- END GENERATED: verbs -->
 

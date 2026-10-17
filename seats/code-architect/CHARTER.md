@@ -92,5 +92,6 @@ Sources:
 | `ready` | Consulted |
 | `prototype` | Consulted |
 | `chart` | Consulted |
+| `survey` | Accountable; the twin executes it (plan lane); owns thresholds and policy |
 
 <!-- END GENERATED: raci -->

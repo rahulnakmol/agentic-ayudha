@@ -153,7 +153,7 @@ Use **`doctor`**. It checks tools, sign-in, configuration, installed skills, age
 loops, and existing CI, and says what to fix. `aayu doctor --fix` re-syncs skill copies after an upgrade. Not sure
 what to do next at all? `aayu next` names one step. A specific error? See [troubleshooting](troubleshooting.md).
 
-## All 33 verbs, by journey stage
+## All 34 verbs, by journey stage
 
 This map is generated from the verb registry, the same source as the command line, so it always lists every verb.
 The descriptions are the registry's own one-liners, written for agents, so they are terser than the rest of this
@@ -168,6 +168,7 @@ are not verbs; the verbs reference lists them.
 |  | `install` | Installs the aayudha skills, tools, and hooks into your agent, and sets up its cloud environment and loops. |
 |  | [`doctor`](../../skills/doctor/SKILL.md) | Checks your machine and setup, and says exactly what to fix. |
 | [Shape the goal](journey-1-shape.md) | [`grill`](../../skills/grill/SKILL.md) | Interviews you, one question at a time, until an idea is a complete work item, then files it on GitHub. |
+|  | [`survey`](../../skills/survey/SKILL.md) | Reads a codebase nobody documented, says what it does with a citation for every claim, and drafts the backlog to modernise it. |
 | [Break it down](journey-2-break-down.md) | [`slice`](../../skills/slice/SKILL.md) | Splits a Feature into small stories, each with checkable promises, the parts of the code it touches, and its order. |
 |  | [`plan`](../../skills/plan/SKILL.md) | Plans a story one layer at a time: what changes, how it is tested, and how to roll it back. |
 |  | [`decide`](../../skills/decide/SKILL.md) | Records a real choice with its options and a recommendation; only a person with the authority accepts it. |

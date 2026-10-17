@@ -112,7 +112,7 @@ seat's twin, consult the Consulted seats before acting, and leave paired humans'
 | Seat | Twin | Layers owned | Accountable for |
 |---|---|---|---|
 | Product Strategist (`product-strategist`) | Metis | — | `grill`, `slice`, `triage`, `ready` |
-| Code Architect (`code-architect`) | Daedalus | L02, L06 | `plan` |
+| Code Architect (`code-architect`) | Daedalus | L02, L06 | `plan`, `survey` |
 | Data & AI Architect (`data-ai-architect`) | Mnemosyne | L05, L08 | `measure`, `chart` |
 | Engineering Manager (`engineering-manager`) | Athena | L03 | `inspect`, `ship`, `status`, `retro`, `next` |
 | AI Native Engineer (+SRE hat) (`ai-native-engineer`) | Talos | L07 | `build`, `verify`, `respond`, `evolve` |

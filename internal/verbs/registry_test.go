@@ -8,10 +8,11 @@ import (
 )
 
 // wantVerbs is the verb list from docs/BUILD-PLAN.md V7 / WP0.3, in plan order,
-// then chart, the Data & AI Architect's verb (Decision #283, Appendix B S-5.1g).
+// then chart, the Data & AI Architect's verb (Decision #283, Appendix B S-5.1g),
+// then survey (WP5.9, Decision #287).
 var wantVerbs = strings.Fields(`grill slice plan decide triage build verify inspect ship release proof ready
 research wireframe mockup prototype review polish baseline experiment readout respond status audit retro
-measure evolve brief tell init install doctor chart`)
+measure evolve brief tell init install doctor chart survey`)
 
 // wantPlumbing is the plumbing list from docs/BUILD-PLAN.md V7, in plan order,
 // then the three WP1.1b adds by founder request (Appendix B S-1.1b).
@@ -33,8 +34,8 @@ func TestRegistry(t *testing.T) {
 		name  string
 		check func() error
 	}{
-		{"32 verbs in plan order, then chart", func() error {
-			if got := names(Verbs); !slices.Equal(got, wantVerbs) || len(got) != 33 {
+		{"32 verbs in plan order, then chart and survey", func() error {
+			if got := names(Verbs); !slices.Equal(got, wantVerbs) || len(got) != 34 {
 				return fmt.Errorf("verbs = %v, want %v", got, wantVerbs)
 			}
 			return nil
