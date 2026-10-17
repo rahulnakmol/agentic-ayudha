@@ -1,0 +1,301 @@
+{
+  "version": 1,
+  "sha": "aeedef7e7ed55d0d1c52d3958924a2ce26020bef",
+  "ref": "main",
+  "time": "2026-10-17T00:57:22.621913626Z",
+  "judge": "gpt-6.1-sol",
+  "judge_family": "openai",
+  "k": 5,
+  "cases": [
+    {
+      "case": "brief/eli5-explain",
+      "skill": "brief",
+      "lane": "spec",
+      "model": "claude-opus-5-5",
+      "fallback": "claude-sonnet-5-5",
+      "family": "anthropic",
+      "runs": [
+        {
+          "status": "fail",
+          "score": 3,
+          "pass": false,
+          "reason": "The brief clearly explains what changed, why it helps, and the evidence, while preserving export units and scope limits. However, saying the pack “ran seven safety checks” overstates the grounding: seven checks are listed, but six passed and the screen-reader check was skipped. The later explanation acknowledges the skip but does not make the earlier claim accurate.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 7456,
+              "tokens_out": 3024,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3614,
+              "tokens_out": 192,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The brief accurately explains what changed, why it helps, and how the evidence supports it. The claims, visible-column behavior, scrolling example, release status, and export rate all match the grounding. It uses short, everyday sentences and a concrete card analogy, preserves exports as the measured unit, and does not infer time savings or fewer lost rows from that count. Scope limits and the skipped screen-reader check are accurately described.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 7456,
+              "tokens_out": 2614,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3549,
+              "tokens_out": 235,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "fail",
+          "score": 3,
+          "pass": false,
+          "reason": "The brief clearly explains the change, its purpose, and the evidence in accessible language, and it preserves the export count's unit and the scope limits. However, “Reviewers check claims away from the screen” is unsupported: the source says they audit offline, which can still involve using a screen. This changes a source fact rather than merely simplifying it.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 7456,
+              "tokens_out": 2175,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3528,
+              "tokens_out": 163,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 4,
+          "pass": true,
+          "reason": "The brief accurately explains the change, its purpose, the three demonstrated criteria, and the export count without claiming measured time savings or fewer lost rows. Scope and numerical results match the grounding, and the copying analogy helps make the problem concrete. One sentence slips out of the ten-year-old register: “the Linux merge gate cannot run a screen reader” repeats technical jargon without an everyday explanation.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 7456,
+              "tokens_out": 2475,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3563,
+              "tokens_out": 278,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The brief accurately explains what changed, why it helps, and how the evidence supports it. Its claims about matching filters, visible columns, large-list responsiveness, and export counts match the grounding. It preserves the count’s unit, identifies out-of-scope items correctly, and does not claim proven time savings or fewer lost rows. Short sentences and the notebook analogy make the explanation accessible to a ten-year-old.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 7456,
+              "tokens_out": 2393,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3519,
+              "tokens_out": 214,
+              "max_tokens": 2000
+            }
+          ]
+        }
+      ],
+      "errors": 0,
+      "pass_k": 0,
+      "mean": 4
+    },
+    {
+      "case": "brief/ste-explain",
+      "skill": "brief",
+      "lane": "spec",
+      "model": "claude-opus-5-5",
+      "fallback": "claude-sonnet-5-5",
+      "family": "anthropic",
+      "runs": [
+        {
+          "status": "pass",
+          "score": 4,
+          "pass": true,
+          "reason": "The brief accurately explains the filtered CSV export, visible columns, mapped evidence, floor results, and measured export rate. It preserves the measure's unit and does not claim that exports prove time savings or fewer lost rows. It also avoids inventing controls or steps. One minor STE lapse is 'the list still moves': this is ambiguous compared with the source's precise statement that the list scrolls while the export is prepared.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 9434,
+              "tokens_out": 4630,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3548,
+              "tokens_out": 334,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 4,
+          "pass": true,
+          "reason": "The takeaway, export scope, proof results, and export-rate measure match the grounding. The brief explains the purpose without inventing controls or steps, and it distinguishes measured exports from unproved audit benefits. One minor clarity lapse is “the list still worked,” which is less precise than the supported result that the list kept responding while the export was prepared.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 9434,
+              "tokens_out": 6622,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3606,
+              "tokens_out": 311,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "revised": true,
+          "reason": "The brief accurately explains the filtered-claims CSV export and visible-column behavior, with a correct takeaway first. Its claims match the criterion evidence, floor results, release status, and measured export rate. It preserves the measure's unit and does not infer faster audits or fewer lost rows. It also distinguishes the skipped screen-reader check from evidence of a result. The clear, active explanations fit the purpose without inventing UI controls or usage steps.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 9434,
+              "tokens_out": 5318,
+              "max_tokens": 12000
+            },
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 10252,
+              "tokens_out": 923,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3625,
+              "tokens_out": 193,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "reason": "The brief accurately explains the export’s purpose, filtered-claim coverage, and visible-column behavior without inventing controls or steps. It ties each goal to the mapped evidence and reports the export rate without claiming time savings or fewer lost rows. Floor results and the screen-reader evidence gap are described accurately. The takeaway comes first, and the language is clear and appropriate for the requested register.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 9434,
+              "tokens_out": 7117,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3604,
+              "tokens_out": 186,
+              "max_tokens": 2000
+            }
+          ]
+        },
+        {
+          "status": "pass",
+          "score": 5,
+          "pass": true,
+          "revised": true,
+          "reason": "The brief accurately explains the filtered CSV export and its offline-audit purpose without inventing controls or steps. Its claims match the criterion evidence, floor results, release states, and measured export rate. It keeps exports as the measured unit and clearly distinguishes that result from unproven time savings or file use. The takeaway comes first, and the direct, single-topic sentences fit the requested register.",
+          "calls": [
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 9434,
+              "tokens_out": 5143,
+              "max_tokens": 12000
+            },
+            {
+              "role": "skill",
+              "model": "claude-opus-5-5",
+              "stop_reason": "end_turn",
+              "tokens_in": 10302,
+              "tokens_out": 1283,
+              "max_tokens": 12000
+            },
+            {
+              "role": "judge",
+              "model": "gpt-6.1-sol",
+              "stop_reason": "completed",
+              "tokens_in": 3628,
+              "tokens_out": 238,
+              "max_tokens": 2000
+            }
+          ]
+        }
+      ],
+      "errors": 0,
+      "pass_k": 1,
+      "mean": 4.6
+    }
+  ],
+  "pass_k": 0.5,
+  "mean": 4.3,
+  "errors": 0,
+  "cost_usd": 5.566394999999999,
+  "group": "brief-plain",
+  "verdict": "pass"
+}
