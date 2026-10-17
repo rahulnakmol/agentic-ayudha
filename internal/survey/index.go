@@ -58,7 +58,7 @@ type Fact struct {
 // is set; the index never picks one.
 type Edge struct {
 	Kind      string   `json:"kind"` // include, import, call
-	From      string   `json:"from"` // file:<path> or a symbol ID
+	From      string   `json:"from"` // file:<path>, a symbol ID, or a Python main guard's entry ID
 	To        []string `json:"to"`
 	At        string   `json:"at"`
 	Ambiguous bool     `json:"ambiguous,omitempty"`
@@ -412,6 +412,7 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 			}
 			ix.Edges = append(ix.Edges, Edge{Kind: "call", From: from, To: to, At: p + ":" + itoa(c.line), Ambiguous: len(to) > 1})
 		}
+		ix.guardCalls(p, s, byName)
 	}
 	ix.builtins(files, byName)
 	ix.history(ctx, root, opt.Git)
@@ -419,6 +420,39 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 	ix.modules(opt.Budget)
 	ix.finish()
 	return ix, nil
+}
+
+// guardCalls records the calls a Python main guard makes as edges from its
+// entry: the guard runs at file scope, where no function holds the calls, so
+// a runner chosen by its guard reaches only what the guard calls.
+func (ix *Index) guardCalls(p string, s *scanned, byName map[string][]string) {
+	k, ok := ix.byPath[p]
+	if !ok || ix.Files[k].Lang != "python" {
+		return
+	}
+	m := pyMain.FindStringIndex(s.raw)
+	if m == nil {
+		return
+	}
+	guard := strings.Count(s.raw[:m[0]], "\n") + 1
+	from := "entry:" + p + ":" + itoa(guard)
+	lines := strings.Split(s.code, "\n")
+	seen := map[string]bool{}
+	for ln := guard; ln <= len(lines); ln++ {
+		text := lines[ln-1]
+		if ln > guard && strings.TrimSpace(text) != "" && text[0] != ' ' && text[0] != '\t' {
+			break // the guard's block ends at the next line at file scope
+		}
+		if ln == guard {
+			text = text[strings.Index(text, ":")+1:]
+		}
+		for _, c := range callName.FindAllStringSubmatch(text, -1) {
+			if to := byName[c[1]]; len(to) > 0 && !cKeywords[c[1]] && !seen[c[1]] {
+				seen[c[1]] = true
+				ix.Edges = append(ix.Edges, Edge{Kind: "call", From: from, To: to[:min(len(to), 8)], At: p + ":" + itoa(ln), Ambiguous: len(to) > 1})
+			}
+		}
+	}
 }
 
 // scanned is one file read while building the index.
@@ -882,6 +916,9 @@ func fileOf(id string) string {
 		return id[5:]
 	case strings.HasPrefix(id, "sym:"):
 		return strings.SplitN(id[4:], "#", 2)[0]
+	case strings.HasPrefix(id, "entry:"): // a main guard's calls (guardCalls)
+		f, _ := splitAt(id[6:])
+		return f
 	}
 	return ""
 }

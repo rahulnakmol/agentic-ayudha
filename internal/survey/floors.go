@@ -190,8 +190,9 @@ func checkRunners(ix *Index, m *Modernisation, add func(string, ...any)) {
 // runnerReach returns whether any of a builtin's registrations is reachable
 // from a runner: in a function the runner's main reaches through call edges
 // (ambiguous edges count, so the floor never fails on a call it cannot
-// resolve), or at file scope in a file the runner loads (its own, one
-// defining a function it reaches, or one those import or include). It also returns whether a runner drives
+// resolve), or at file scope in a file the runner loads (its own, one built
+// into the same executable, one defining a function it reaches, or one those
+// import or include). It also returns whether a runner drives
 // the program: it reaches a function defined outside the test files, or
 // imports or includes such a file.
 func runnerReach(ix *Index) (reach func(Fact, []Fact) bool, drives func(Fact) bool) {
@@ -230,13 +231,7 @@ func runnerReach(ix *Index) (reach func(Fact, []Fact) bool, drives func(Fact) bo
 				queue = append(queue, s.ID)
 			}
 		}
-		if len(queue) == 0 { // a main guard at file scope (__main__): it may call any function of its file
-			for _, s := range byFile[f] {
-				if isDefKind(s.Kind) {
-					queue = append(queue, s.ID)
-				}
-			}
-		}
+		queue = append(queue, next[r.ID]...) // a main guard's calls (Index.guardCalls)
 		for len(queue) > 0 {
 			id := queue[0]
 			queue = queue[1:]
@@ -273,6 +268,16 @@ func runnerReach(ix *Index) (reach func(Fact, []Fact) bool, drives func(Fact) bo
 		f, _ := splitAt(r.At)
 		m := map[string]bool{f: true}
 		queue := []string{f}
+		for _, t := range ix.Targets { // the translation units linked with the runner's file
+			if (t.Kind == "executable" || t.Kind == "test") && slices.Contains(t.Sources, f) {
+				for _, src := range t.Sources {
+					if !m[src] {
+						m[src] = true
+						queue = append(queue, src)
+					}
+				}
+			}
+		}
 		for g, syms := range byFile {
 			for _, s := range syms {
 				if !m[g] && reached(r)[s.ID] {

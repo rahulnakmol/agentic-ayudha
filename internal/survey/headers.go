@@ -9,7 +9,9 @@ var (
 	accessLabel = regexp.MustCompile(`\b(public|private|protected)\s*:($|[^:])`)
 	typeOpen    = regexp.MustCompile(`^(?:template\s*<[^{}]*>\s*)?(class|struct|union)\s+(?:[A-Z_][A-Z0-9_]*\s+)?([A-Za-z_]\w*)\b[^(]*$`)
 	scopeOpen   = regexp.MustCompile(`^(?:namespace\b[\w\s:]*|extern\s*"[^"]*")$`)
-	notDecl     = regexp.MustCompile(`^(?:typedef|using|friend|return|static_assert|enum|template\s*<[^>]*>\s*(?:class|struct))\b`)
+	// annotation names the function-like attributes a declaration may start with.
+	annotation = map[string]bool{"__declspec": true, "__attribute__": true, "alignas": true, "_Alignas": true, "__pragma": true, "_Pragma": true}
+	notDecl    = regexp.MustCompile(`^(?:typedef|using|friend|return|static_assert|enum|template\s*<[^>]*>\s*(?:class|struct))\b`)
 )
 
 // headerAPI finds the functions a C or C++ header declares without a body
@@ -63,8 +65,8 @@ func headerAPI(code string) []Symbol {
 		}
 		for _, m := range funcName.FindAllStringSubmatchIndex(h, -1) {
 			nm := h[m[2]:m[3]]
-			if cKeywords[nm] {
-				continue
+			if cKeywords[nm] || annotation[nm] {
+				continue // __declspec(dllexport) int f(); declares f
 			}
 			before := strings.TrimSpace(h[:m[2]])
 			owner := ""

@@ -87,8 +87,9 @@ a misspelt field never silently drops a claim.
 - At most five questions are `open` at a time: one interview round. Merge questions one answer settles; a choice with
   a safe default is a risk that carries the default.
 - A case set's `runners` are the programs that run it: `main` or `script` entries, or a `test:` harness that drives the
-  library. They are required when the index lists more than one program. `inputs` are the checkout's files the cases
-  run on (paths or globs), when they come from the checkout. Each runner must register every builtin the cases call
+  library. They are required when the index lists more than one program; with one, it is the runner when none is
+  named. `inputs` are the checkout's files the cases run on (paths or globs), when they come from the checkout; with
+  none named, the `test:` files in `from` are the inputs. Each runner must register every builtin the cases call
   (`builtin:` facts; a call in an input file, or a dotted builtin such as `Math.sqrt` named in `title` or
   `compare`): a case that needs a builtin only one runner registers belongs in that runner's case set, or in
   `exclude` with the file and the claim or question that decided it.
