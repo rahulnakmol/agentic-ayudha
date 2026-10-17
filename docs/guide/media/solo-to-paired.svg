@@ -1,0 +1,35 @@
+<!-- Hand-made for docs/guide/guide-solo-founder.md; edit by hand. Facts: internal/seats/seat.go (Add, Remove, policy). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 536" width="460" height="536" role="img" aria-labelledby="pairing-title pairing-desc" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+<title id="pairing-title">A seat goes from solo to paired in one command, and its layers then need that person's review</title>
+<desc id="pairing-desc">A solo seat's twin works alone and the founder holds every gate. aayu seat add pairs a person with the seat: it writes the config, names the person in CODEOWNERS for the seat's layers, and opens an onboarding issue with the charter. Paired, the twin drafts and the person answers, reviews, and approves. Once two people are in the repository, protected paths need native CODEOWNER review and the solo-mode bypass is refused. aayu seat remove returns the seat to solo and hands its open stories back to the twin.</desc>
+<defs><marker id="arrow-pairing" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1f5bd1"/></marker></defs>
+<rect width="460" height="536" fill="#ffffff"/>
+<rect x="12" y="12" width="400" height="98" rx="12" fill="#f5f6f8" stroke="#d9dde4" stroke-width="2"/>
+<text x="26" y="36" font-size="16" fill="#1d2330" font-weight="bold" text-anchor="start">Solo seat</text>
+<text x="26" y="58" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">The twin works alone. The founder holds every</text>
+<text x="26" y="76" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">gate; protected paths merge through the</text>
+<text x="26" y="94" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">founder's recorded admin bypass.</text>
+<line x1="212.0" y1="110" x2="212.0" y2="164" stroke="#1f5bd1" stroke-width="2" marker-end="url(#arrow-pairing)"/>
+<rect x="52" y="122" width="320" height="30" rx="15" fill="#ffffff" stroke="#1f5bd1" stroke-width="1.5"/>
+<text x="212.0" y="142" font-size="12.5" fill="#1f5bd1" font-weight="bold" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">aayu seat add &lt;seat&gt; --human &lt;login&gt;</text>
+<rect x="12" y="168" width="400" height="116" rx="12" fill="#fdf6e3" stroke="#9a6700" stroke-width="2"/>
+<text x="26" y="192" font-size="16" fill="#1d2330" font-weight="bold" text-anchor="start">What the command writes</text>
+<text x="26" y="214" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">▪ [seats.&lt;seat&gt;] in .aayudha/config.toml</text>
+<text x="26" y="232" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">▪ CODEOWNERS: the seat's layers name the person</text>
+<text x="26" y="250" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">▪ an onboarding issue with the seat's charter</text>
+<text x="26" y="268" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">▪ a record on the ledger</text>
+<line x1="212.0" y1="284" x2="212.0" y2="310" stroke="#1f5bd1" stroke-width="2" marker-end="url(#arrow-pairing)"/>
+<rect x="12" y="314" width="400" height="98" rx="12" fill="#f3f0fa" stroke="#6941c6" stroke-width="2"/>
+<text x="26" y="338" font-size="16" fill="#1d2330" font-weight="bold" text-anchor="start">Paired seat</text>
+<text x="26" y="360" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">The twin drafts, runs, and files. The person</text>
+<text x="26" y="378" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">answers its questions, reviews its work in the</text>
+<text x="26" y="396" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">seat's layers, and gives the approvals.</text>
+<line x1="212.0" y1="412" x2="212.0" y2="438" stroke="#1f5bd1" stroke-width="2" marker-end="url(#arrow-pairing)"/>
+<text x="220.0" y="430" font-size="12.5" fill="#535b6b" font-weight="normal" text-anchor="start" font-style="italic">once there are two people</text>
+<rect x="12" y="442" width="400" height="80" rx="12" fill="#edf7ee" stroke="#2e7d32" stroke-width="2"/>
+<text x="26" y="466" font-size="16" fill="#1d2330" font-weight="bold" text-anchor="start">Two-person review</text>
+<text x="26" y="488" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">Protected paths need one CODEOWNER approval.</text>
+<text x="26" y="506" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">The solo-mode bypass is refused.</text>
+<path d="M412,344 H434 V42 H416" fill="none" stroke="#1f5bd1" stroke-width="2" marker-end="url(#arrow-pairing)"/>
+<text x="442" y="193.0" font-size="12.5" fill="#1f5bd1" font-weight="bold" transform="rotate(90 442 193.0)" text-anchor="middle">aayu seat remove</text>
+</svg>
