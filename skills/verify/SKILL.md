@@ -121,8 +121,11 @@ summary alone does not tell them what to do next.
 
 ## When a branch changes the product
 
-Update the map in the same branch (drift fails the gate from `drift_blocking_from`). Tell the person what you will
-change before you change it: the surfaces, and each new check with its steps and assertions. Then end your turn and
+Update the map in the same branch (drift fails the gate from `drift_blocking_from`). First read the story's criteria
+(`aayu ready <story> --check --json`): the checks you propose are for them, so never propose one before reading them.
+Prefer adding to the feature the change belongs to; a new feature file follows the contract in
+[references/feature-maps.md](references/feature-maps.md) (its headings in order, and an entry in the index). Tell
+the person what you will change before you change it: the surfaces, and each new check with its steps and assertions. Then end your turn and
 wait for their yes, unless they already asked you to make the change without hearing it first; "tell me first" means
 wait. Each new check proves one criterion. Copy the criterion's state into the check's steps literally: the same
 records in the same order, and the same one marked done, paid, or selected (when the criterion says "the second done",

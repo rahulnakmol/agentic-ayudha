@@ -34,8 +34,14 @@ pass.
 ## Evidence
 
 Each check writes `transcript.jsonl` (kind `api-trace`): every command with its exit code, stdout, and stderr, and
-every test event. To prove a story's criterion with a check, name it in `.aayudha/evidence/<story>.toml`
-(`checks = ["mark-done.done"]`).
+every test event. To prove a story's criterion with a check, name it under the criterion in
+`.aayudha/evidence/<story>.toml`:
+
+```toml
+[[criterion]]
+id = 1
+checks = ["mark-done.done"]
+```
 
 ## Cleanup
 
