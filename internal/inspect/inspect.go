@@ -384,16 +384,18 @@ func (res *Result) peer(ctx context.Context, b, a Reviewer, in Input, fl Filter,
 	}
 	res.Reviewers = append(res.Reviewers, b.Model)
 	keepB, droppedB := fl.Clean(replyB.Findings, in.Files, in.Areas, "B")
-	refutedByB, usd, errB := crossCheck(ctx, b, in, singleSource(keepA, keepB))
+	pair := pairPeer(keepA, keepB)
+	onlyA, onlyB := unpaired(keepA, keepB, pair)
+	refutedByB, usd, errB := crossCheck(ctx, b, in, onlyA)
 	res.CostUSD += usd
-	refutedByA, usd, errA := crossCheck(ctx, a, in, singleSource(keepB, keepA))
+	refutedByA, usd, errA := crossCheck(ctx, a, in, onlyB)
 	res.CostUSD += usd
 	for _, e := range []error{errB, errA} {
 		if e != nil {
 			res.Notes = append(res.Notes, "a cross-check failed ("+oneLine(e.Error(), 200)+"); its findings are kept unchecked")
 		}
 	}
-	keep, drop := mergePeer(keepA, keepB, refutedByB, refutedByA)
+	keep, drop := mergePeer(keepA, keepB, pair, refutedByB, refutedByA)
 	res.Findings, res.Dropped = keep, append(append(droppedA, droppedB...), drop...)
 	res.Disposition = worst(replyA.Disposition, replyB.Disposition)
 	res.Criteria = mergeCriteria(replyA.Criteria, replyB.Criteria)

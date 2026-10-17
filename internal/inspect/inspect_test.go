@@ -505,3 +505,53 @@ func TestRiskOf(t *testing.T) {
 		}
 	}
 }
+
+// Peer mode pairs each of B's findings with at most one of A's (D-4.8d.8),
+// from findings the review eval recorded: one leak anchored on its cause and
+// its symptom four lines apart, and one parse defect on the same line under
+// two categories, merge; distinct problems on the same or nearby lines stay
+// apart, and a finding pairs with its own problem, not with the first one
+// nearby.
+func TestPeerPairsOneDefectOnce(t *testing.T) {
+	f := func(src string, line int, cat, title, detail string) Finding {
+		return Finding{Severity: "P1", Category: cat, File: "x.go", Line: line, Title: title, Detail: detail, Sources: []string{src},
+			ID: FindingID("x.go", cat, title)}
+	}
+	cases := []struct {
+		name  string
+		a, b  []Finding
+		posts []string // titles posted, each with its sources
+	}{
+		{"leak, cause and symptom",
+			[]Finding{f("A", 23, "bug", "Response body is never closed", "Any Fetch that gets a response, including a 404, returns without closing resp.Body. net/http then keeps the connection out of the idle pool, and repeated conversions leak sockets.")},
+			[]Finding{f("B", 27, "bug", "Close the response body on every successful HTTP request", "After c.HTTP.Do returns a response without an error, Fetch reaches the status check without arranging to close resp.Body; repeated calls leave response resources unreleased.")},
+			[]string{"Response body is never closed A+B"}},
+		{"parse defect, two categories",
+			[]Finding{f("A", 15, "bug", "Include the first invoice line in the total", "The loop starts at index 1, so the subtotal skips the first line and returns 45 rather than 225."),
+				f("A", 23, "contract", "Reject invalid and nonpositive form quantities", "ParseQty(\"abc\") discards the conversion error and returns (0, nil); ParseQty(\"0\") also returns (0, nil). Both violate criterion 2.")},
+			[]Finding{f("B", 23, "bug", "ParseQty never returns an error", "ParseQty(\"abc\") makes strconv.Atoi fail, but the error is discarded and n is 0, so it returns (0, nil). ParseQty(\"0\") also returns (0, nil). Criterion 2 requires an error for both.")},
+			[]string{"Include the first invoice line in the total A", "Reject invalid and nonpositive form quantities A+B"}},
+		{"distinct problems on one line and nearby",
+			[]Finding{f("A", 13, "security", "Customer search input is executable SQL", "SearchHandler forwards q unchanged; interpolating it into a quoted SQL expression lets ' OR 1=1 -- replace the filter.")},
+			[]Finding{f("B", 13, "bug", "Name match is case-sensitive, so q=ann misses Ann Lee", "Search uses LIKE with the raw text and no LOWER, so under a case-sensitive collation '%ann%' does not match Ann Lee."),
+				f("B", 19, "contract", "No-match search encodes as JSON null", "out stays nil when rows.Next never runs, and encoding/json encodes a nil slice as null.")},
+			[]string{"Customer search input is executable SQL A", "Name match is case-sensitive, so q=ann misses Ann Lee B", "No-match search encodes as JSON null B"}},
+		{"each pairs with its own problem",
+			[]Finding{f("A", 20, "bug", "Cap the initial wait as well as subsequent waits", "Retry(ctx, 3, time.Minute, f) waits a full minute after the first failure."),
+				f("A", 22, "bug", "Check cancellation before invoking each attempt", "Retry invokes f without checking ctx.Err().")},
+			[]Finding{f("B", 22, "bug", "Check cancellation before each attempt", "An already-cancelled request still calls f."),
+				f("B", 21, "bug", "Cap the first wait too", "A one-minute base waits a minute, against the 30 s cap.")},
+			[]string{"Cap the initial wait as well as subsequent waits A+B", "Check cancellation before invoking each attempt A+B"}},
+	}
+	for _, c := range cases {
+		pair := pairPeer(c.a, c.b)
+		keep, _ := mergePeer(c.a, c.b, pair, nil, nil)
+		var got []string
+		for _, k := range keep {
+			got = append(got, k.Title+" "+strings.Join(k.Sources, "+"))
+		}
+		if !slices.Equal(got, c.posts) {
+			t.Errorf("%s: posted %q, want %q", c.name, got, c.posts)
+		}
+	}
+}

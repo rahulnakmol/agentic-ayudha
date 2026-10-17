@@ -92,6 +92,24 @@ func tokens(s string) []string {
 	return out
 }
 
+// stems is tokens with common English endings cut (closed, closes, closing,
+// close: clos), so two reviewers' wordings of one problem compare by root.
+func stems(s string) []string {
+	var out []string
+	for _, w := range tokens(s) {
+		for _, suf := range []string{"ing", "ed", "es", "s", "e", "ly"} {
+			if len(w) > len(suf)+3 && strings.HasSuffix(w, suf) {
+				w = strings.TrimSuffix(w, suf)
+				break
+			}
+		}
+		if !slices.Contains(out, w) {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
 func jaccard(a, b []string) float64 {
 	if len(a) == 0 || len(b) == 0 {
 		return 0
@@ -199,22 +217,27 @@ func Dedupe(fs []Finding) (keep []Finding, dropped []Dropped) {
 			keep = append(keep, f)
 			continue
 		}
-		k := &keep[i]
-		if sevRank[f.Severity] < sevRank[k.Severity] {
-			k.Severity, k.Title, k.Detail, k.Fix, k.Category, k.ID = f.Severity, f.Title, f.Detail, f.Fix, f.Category, f.ID
-		}
-		if k.Line == 0 {
-			k.Line, k.Quote = f.Line, f.Quote
-		}
-		k.Confidence = max(k.Confidence, f.Confidence)
-		for _, s := range f.Sources {
-			if !slices.Contains(k.Sources, s) {
-				k.Sources = append(k.Sources, s)
-			}
-		}
+		absorb(&keep[i], f)
 		dropped = append(dropped, Dropped{f, DropDuplicate})
 	}
 	return keep, dropped
+}
+
+// absorb merges duplicate f into k: the higher severity with its wording, an
+// anchored line, the higher confidence, and every source.
+func absorb(k *Finding, f Finding) {
+	if sevRank[f.Severity] < sevRank[k.Severity] {
+		k.Severity, k.Title, k.Detail, k.Fix, k.Category, k.ID = f.Severity, f.Title, f.Detail, f.Fix, f.Category, f.ID
+	}
+	if k.Line == 0 {
+		k.Line, k.Quote = f.Line, f.Quote
+	}
+	k.Confidence = max(k.Confidence, f.Confidence)
+	for _, s := range f.Sources {
+		if !slices.Contains(k.Sources, s) {
+			k.Sources = append(k.Sources, s)
+		}
+	}
 }
 
 // Suppress drops findings that resemble ones a human dismissed in this
