@@ -141,7 +141,8 @@ citation.
    recorded. Never route or escalate to a seat or a person the facts do not name.
 3. `## Options`: two or three numbered top-level items, each `N. **Name.** what it does` with a citation, and its
    trade-offs as indented sub-items (one `- Gains:` and one `- Costs:` line, each cited), so only the options are
-   top-level. Say each fact once: a number, a price, or a quote stated in Facts is referred to in an option in a
+   top-level. With three options, Facts holds four items at most and each option has one cited trade-off line
+   (`- Trade-off: gains …; costs …`) instead of two, so three options fit the budget two did. Say each fact once: a number, a price, or a quote stated in Facts is referred to in an option in a
    few words with the same citation ("the annual price", "the six weeks"), never restated. Put
    each option in its viable form, with what it would take to work (what must change first, what moves elsewhere).
    An option you would never pick is a straw man; leave it out. When an option does not meet a criterion or a
@@ -161,7 +162,7 @@ citation.
    how the recommended option must be carried out (a reader that refuses what the option writes, a Decision on older
    shapes, a dependency), the recommendation names it as a condition of the option in one cited clause; listing it
    in Facts is not enough. When the owning twin is
-   the Founder, one cited sentence before `Door:` says which perspective dominates this decision (operations: cost,
+   the Founder, one of those sentences (not an extra one) says which perspective dominates this decision (operations: cost,
    risk, people, process; technology: architecture, build or buy, technical risk; product: what, for whom, why) and
    why it outweighs the other two; the Facts carry the deciding fact of each perspective (the money left and what
    each option commits, the people and weeks it takes, the layers or adapters it adds, and who asked for what), and
@@ -196,7 +197,8 @@ Before you show the pack, check each sentence against the facts, as a reviewer w
   serves another; what an option will or will not cover; what data a type holds) is either left out or asked as a
   question in part 7. A reviewer who reads only the cited lines must reach the same claim. An absolute (no spend, no
   records, nothing is written, the only, never) is a claim too: write it only when a source states it, else say what
-  the source does state ("no third-party fee").
+  the source does state ("no third-party fee"). A measurement holds where it was taken: coverage at checkpoint 4 is
+  not the coverage at merge, and a count in a pilot is not a forecast, unless a source says so.
 - Cite only what you read for this decision (issues, code, `LAYERS.md`, the ledger, `CONSTRAINTS.md`), never your
   own charter, persona, or this skill. Every list item and paragraph that names code, a layer, a risk, a floor, or
   progress carries its citation in itself, not once for the list.
