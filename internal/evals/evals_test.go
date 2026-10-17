@@ -3,6 +3,7 @@ package evals
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"net"
 	"net/url"
 	"os"
@@ -21,6 +22,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/planning"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -256,6 +258,44 @@ func TestTier2WithFakeModels(t *testing.T) {
 	}
 	if !strings.Contains(fake.Requests[0].Messages[0].Content, `<untrusted source="eval-input">`) {
 		t.Fatal("eval input reached the skill model unwrapped")
+	}
+	// Charged at the list prices (D-3.4p): five runs of claude-opus-5-5 (4 and 20 USD per
+	// million input and output tokens) and gpt-6.1-sol (2 and 10), with nothing unpriced.
+	if want := 5 * (900*4 + 300*20 + 1500*2 + 40*10) / 1e6; math.Abs(res.CostUSD-want) > 1e-12 || len(res.Warnings) != 0 {
+		t.Errorf("cost %.6f USD, want %.6f; warnings %q", res.CostUSD, want, res.Warnings)
+	}
+	// A model with no price is charged at the fallback rate and named in the results.
+	fake = &models.Fake{Replies: replies}
+	res, err = harness(t, fake, "gpt-9-unpriced").Tier2(context.Background(), cases, "abc", "dev", time.Unix(0, 0))
+	if err != nil || len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "gpt-9-unpriced has no price") || !strings.Contains(res.Warnings[0], "5 call(s)") {
+		t.Errorf("unpriced judge: %v, warnings %q", err, res.Warnings)
+	}
+}
+
+// Every model the harness can call for evals/eval.toml has a published price
+// (D-3.4p): the judge, each lane's direct-host default, alternative, and
+// escalation, and inspect's peer reviewers. A new model, or a new judge, fails
+// here until its price, with its source, is in models.ListPrices.
+func TestEvalModelsArePriced(t *testing.T) {
+	cfg, err := LoadConfig(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	used := append([]string{cfg.Judge}, verbs.PeerReviewCandidates...)
+	for _, l := range verbs.Lanes {
+		for _, d := range l.Defaults {
+			if d.Host == verbs.DirectHost {
+				used = append(used, d.ID, d.AlternativeID, d.EscalationID)
+			}
+		}
+	}
+	for _, m := range used {
+		if m == "" {
+			continue
+		}
+		if p, src, ok := models.PriceOf(nil, m); !ok || src != models.CostListPrice || p.Short.Input <= 0 || p.Short.Output <= 0 || p.Source == "" || p.Read == "" {
+			t.Errorf("%s: no list price with a source and date (%+v)", m, p)
+		}
 	}
 }
 

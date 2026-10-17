@@ -26,19 +26,31 @@ const (
 	FallbackOutputPerMTok = 75.0
 )
 
-// Cost prices a reply: the endpoint's own figure, else the configured price,
-// else the fallback rate.
+// Cost prices a reply: the endpoint's own figure, else the model's price
+// (PriceOf: config, then the list price), else the fallback rate. Cache reads
+// and writes, which TokensIn includes, are charged at their own rates, and a
+// prompt past the long-context threshold at the long-context rates.
 func Cost(prices []config.Price, model string, r Response) (usd float64, source string) {
 	if r.CostUSD > 0 {
-		return r.CostUSD, "reported"
+		return r.CostUSD, CostReported
 	}
-	in, out, source := FallbackInputPerMTok, FallbackOutputPerMTok, "fallback-rate"
-	for _, p := range prices {
-		if p.Model == model {
-			in, out, source = p.InputPerMTok, p.OutputPerMTok, "price-table"
+	p, source, ok := PriceOf(prices, model)
+	if !ok {
+		p, source = ListPrice{Short: Rates{Input: FallbackInputPerMTok, Output: FallbackOutputPerMTok}}, CostFallback
+	}
+	rt := p.Short
+	if p.LongAbove > 0 && r.TokensIn > p.LongAbove {
+		rt = p.Long
+	}
+	or := func(v float64) float64 {
+		if v == 0 {
+			return rt.Input
 		}
+		return v
 	}
-	return (float64(r.TokensIn)*in + float64(r.TokensOut)*out) / 1e6, source
+	plain := max(r.TokensIn-r.CachedIn-r.CacheWriteIn, 0)
+	return (float64(plain)*rt.Input + float64(r.CachedIn)*or(rt.CachedInput) + float64(r.CacheWriteIn)*or(rt.CacheWrite) +
+		float64(r.TokensOut)*rt.Output) / 1e6, source
 }
 
 // ErrBudget means the [budget] circuit breaker has tripped: agent lanes are

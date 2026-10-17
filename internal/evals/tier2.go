@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -120,6 +122,9 @@ type Results struct {
 	Baseline string       `json:"baseline,omitempty"` // SHA of the results compared against
 	Verdict  string       `json:"verdict"`            // pass or fail
 	Reasons  []string     `json:"reasons,omitempty"`
+	// Warnings are problems with the run's accounting, such as a model with no
+	// price, that do not change its verdict.
+	Warnings []string `json:"warnings,omitempty"`
 	// Review is the seeded-defect precision and recall per inspect variant (WP4.8b).
 	Review []ReviewSummary `json:"review,omitempty"`
 }
@@ -139,6 +144,9 @@ type Harness struct {
 	Inspect config.Inspect
 	mu      sync.Mutex
 	spent   float64
+	// unpriced counts the calls charged at the fallback rate, by model: such a
+	// model has no price, so its cost (and the max_usd cap) is a guess.
+	unpriced map[string]int
 
 	fallback string // the current case's skill-lane fallback model
 }
@@ -251,9 +259,15 @@ func (h *Harness) call(ctx context.Context, gw *models.Gateway, lane verbs.LaneI
 		retried = clip(actions.RedactString(err.Error()), 200)
 		resp, m, err = gw.Do(ctx, c)
 	}
-	usd, _ := models.Cost(gw.Models.Prices, m.Model, resp)
+	usd, source := models.Cost(gw.Models.Prices, m.Model, resp)
 	h.mu.Lock()
 	h.spent += usd
+	if source == models.CostFallback && err == nil {
+		if h.unpriced == nil {
+			h.unpriced = map[string]int{}
+		}
+		h.unpriced[m.Model]++
+	}
 	h.mu.Unlock()
 	l := CallLog{Role: role, Model: m.Model, StopReason: resp.StopReason, Truncated: resp.Truncated,
 		TokensIn: resp.TokensIn, TokensOut: resp.TokensOut, MaxTokens: req.MaxTokens, Retried: retried}
@@ -425,7 +439,20 @@ func (h *Harness) Tier2(ctx context.Context, cases []Case, sha, ref string, now 
 	}
 	res.Mean = mean(scores)
 	res.CostUSD = h.spentUSD()
+	res.Warnings = h.priceWarnings()
 	return res, nil
+}
+
+// priceWarnings names every model the run charged at the fallback rate.
+func (h *Harness) priceWarnings() []string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	var out []string
+	for _, m := range slices.Sorted(maps.Keys(h.unpriced)) {
+		out = append(out, fmt.Sprintf("%s has no price (models.ListPrices or [[models.prices]]): its %d call(s) were charged at the fallback rate, %g/%g USD per million input/output tokens, so cost_usd and the max_usd cap are estimates",
+			m, h.unpriced[m], models.FallbackInputPerMTok, models.FallbackOutputPerMTok))
+	}
+	return out
 }
 
 // draft is a skill's tier-2 reply: the work item plus the questions the skill
