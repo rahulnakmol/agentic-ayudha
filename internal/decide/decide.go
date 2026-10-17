@@ -322,8 +322,8 @@ func Options(it workitems.Item) ([]workitems.Option, int) {
 			}
 		}
 	}
-	if rec >= 0 {
-		os[rec].Recommended = true
+	for i := range os { // one recommendation, even where a draft marks two
+		os[i].Recommended = i == rec
 	}
 	return os, rec
 }

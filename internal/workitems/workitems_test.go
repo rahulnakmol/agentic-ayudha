@@ -120,6 +120,11 @@ func TestReadyFailures(t *testing.T) {
 				"write each as a top-level line \"N. **Name.** what it does\", including the option of not doing it"}},
 		{"decision with options numbered out of order", with(decision, func(c *Item) { c.Fields["options"] = "1. **A.** a\n3. **B.** b" }), StageReady,
 			[]string{"options: option 3 is numbered out of order; want 2, so each option keeps the number the person picks it by"}},
+		{"decision with two recommendations", with(decision, func(c *Item) { c.Fields["options"] = "1. **A.** a (recommended)\n2. **B.** b (recommended)" }), StageReady,
+			[]string{"options: 2 options are marked \"(recommended)\"; mark one, the one the Recommendation names"}},
+		{"decision with ten options", with(decision, func(c *Item) {
+			c.Fields["options"] = "1. a\n2. b\n3. c\n4. d\n5. e\n6. f\n7. g\n8. h\n9. i\n10. j"
+		}), StageReady, []string{"options: 10 options; offer at most 9, so the person picks each with one key"}},
 		{"decision with one option still passes Create", with(decision, func(c *Item) { c.Fields["options"] = "1. **Waive.** Ship." }), StageCreate, nil},
 		{"decision without reversible still passes Create", with(decision, func(c *Item) { delete(c.Fields, FieldReversible) }), StageCreate, nil},
 		{"story under an initiative", with(story, func(c *Item) { c.Parent = &Ref{2, "initiative"} }), StageReady,
@@ -320,6 +325,7 @@ func TestParseOptions(t *testing.T) {
 		"   - Trade-off: gains a; costs b.\n" +
 		"   1. not an option\n" +
 		"```\n2. not an option either\n```\n" +
+		"~~~\n2. nor this\n~~~\n" +
 		"2. **Keep the hat** (L07 stays put).\n" +
 		"3. Do nothing: nothing changes.")
 	want := []Option{

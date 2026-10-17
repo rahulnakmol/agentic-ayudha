@@ -12,6 +12,10 @@ import (
 // makes a real choice (founder rule, 2026-10-17). Three is the aim.
 const MinOptions = 2
 
+// MaxOptions is the most options a Decision offers, so the inbox picks each
+// with one key.
+const MaxOptions = 9
+
 // Option is one numbered top-level item of a Decision's Options field,
 // "N. **Name.** what it does". N is the Decision's own number for it: the
 // inbox, the approval batch, and decide all show and accept it by N.
@@ -40,7 +44,7 @@ func ParseOptions(s string) ([]Option, []Problem) {
 	var ps []Problem
 	fence := false
 	for _, line := range strings.Split(strings.ReplaceAll(s, "\r\n", "\n"), "\n") {
-		if strings.HasPrefix(strings.TrimSpace(line), "```") {
+		if t := strings.TrimSpace(line); strings.HasPrefix(t, "```") || strings.HasPrefix(t, "~~~") {
 			fence = !fence
 		}
 		if fence {
@@ -57,6 +61,18 @@ func ParseOptions(s string) ([]Option, []Problem) {
 			}
 			os = append(os, optionOf(n, strings.TrimSpace(m[2])))
 		}
+	}
+	marked := 0
+	for _, o := range os {
+		if o.Recommended {
+			marked++
+		}
+	}
+	switch {
+	case marked > 1:
+		ps = append(ps, Problem{"options", fmt.Sprintf("%d options are marked \"(recommended)\"; mark one, the one the Recommendation names", marked)})
+	case len(os) > MaxOptions:
+		ps = append(ps, Problem{"options", fmt.Sprintf("%d options; offer at most %d, so the person picks each with one key", len(os), MaxOptions)})
 	}
 	if len(os) < MinOptions {
 		ps = append(ps, Problem{"options", fmt.Sprintf("%d numbered option(s); a Decision offers at least %d, and aims for 3, so the person makes a real choice: "+
