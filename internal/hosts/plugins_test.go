@@ -25,7 +25,7 @@ func TestHumanOnlyCommand(t *testing.T) {
 		shell, cmd string
 	}{
 		{"aayu ship 4", "aayu ship 4"},
-		{"cd repo && /usr/local/bin/aayu release 7 --to main", "aayu release 7 --to main"},
+		{"cd repo && /usr/local/bin/aayu ship 7 --solo-bypass", "aayu ship 7 --solo-bypass"},
 		{`"C:\Program Files\aayudha\aayudha.exe" decide 9 --accept B`, "aayu decide 9 --accept B"},
 		{"aayu install --host claude --apply", "aayu install --host claude --apply"},
 		{"aayu tell release --publish", "aayu tell release --publish"},
@@ -37,6 +37,7 @@ func TestHumanOnlyCommand(t *testing.T) {
 		{"aayu build 12", ""},
 		{"aayu tell release --from notes.md", ""},
 		{"aayu plan 5 --create", ""},
+		{"aayu release 7 --to main", ""}, // an agent promotes behind the gate (Story #430)
 		{"echo aayushipment ship", ""},
 		{"git commit -m 'aayu ship later'", ""},
 		{"aayu status; aayu ship 4", "aayu ship 4"},
@@ -57,12 +58,34 @@ func TestPreToolBlocksHumanOnlyShell(t *testing.T) {
 			t.Errorf("%s: %+v", h, r)
 		}
 	}
-	r, _ := RunHook("pre-tool", verbs.HostCursor, "", filepath.Join(t.TempDir(), "none"), []byte(`{"command":"aayu release 3 --to rolling"}`))
+	r, _ := RunHook("pre-tool", verbs.HostCursor, "", filepath.Join(t.TempDir(), "none"), []byte(`{"command":"aayu decide 3 --accept A"}`))
 	if r.Code != 2 || !strings.Contains(r.Stdout, `"permission":"deny"`) {
 		t.Errorf("cursor: %+v", r)
 	}
 	if r, _ := RunHook("pre-tool", verbs.HostClaude, "", filepath.Join(t.TempDir(), "none"), []byte(`{"tool_name":"Bash","tool_input":{"command":"aayu build 4"}}`)); r.Code != 0 {
 		t.Errorf("build was blocked: %+v", r)
+	}
+	// An agent never writes the stable-release request that `release --to main`
+	// needs (Story #430), with whatever tool posts it; reading it, or the word in a
+	// commit, passes.
+	for _, tt := range []struct {
+		cmd     string
+		blocked bool
+	}{
+		{`gh issue comment 268 --body "Stable release: v0.3.0"`, true},
+		{`gh api repos/o/r/issues/268/comments -f body='stable release: v0.3.0'`, true},
+		{`curl -X POST -d '{"body":"Stable release: v0.3.0"}' https://api.github.com/repos/o/r/issues/268/comments`, true},
+		{`aayu release 268 --to main`, false},
+		{`gh issue view 268 --comments`, false},
+		{`git commit -m "docs: the Stable release: request form"`, false},
+	} {
+		ev, _ := json.Marshal(map[string]any{"tool_name": "Bash", "tool_input": map[string]string{"command": tt.cmd}, "command": tt.cmd})
+		for _, h := range []verbs.HostID{verbs.HostClaude, verbs.HostCodex, verbs.HostCursor} {
+			r, _ := RunHook("pre-tool", h, "", filepath.Join(t.TempDir(), "none"), ev)
+			if blocked := r.Code == 2; blocked != tt.blocked || blocked && !strings.Contains(r.Stderr+r.Stdout, "Ask the person to comment `Stable release: <version>`") {
+				t.Errorf("%s: %s: %+v", h, tt.cmd, r)
+			}
+		}
 	}
 	// The delegate commands' calls pass on every host.
 	for _, cmd := range []string{

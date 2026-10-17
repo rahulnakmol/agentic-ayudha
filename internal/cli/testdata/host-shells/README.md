@@ -1,7 +1,8 @@
 # Human-only commands from host agent shells (Bug #170)
 
 Recorded on 2026-10-15 with the binary built from `fix/170-agent-detection`, each human-only command with
-`--dry-run` against this repository (every refusal comes before any GitHub call):
+`--dry-run` against this repository (every refusal comes before any GitHub call). `release` was human-only then;
+since Story #430 an agent may run it, so its recorded refusal is history, not current behaviour:
 
 - `amp-shell.txt`: from the shell of the Amp thread that fixed the Bug, which sets `AGENT=amp` and `AMP_THREAD_ID`
   and not `AAYU_AGENT`.

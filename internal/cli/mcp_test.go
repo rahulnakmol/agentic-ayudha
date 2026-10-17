@@ -95,7 +95,7 @@ func call(t *testing.T, cs *sdk.ClientSession, name string, args map[string]any)
 }
 
 // The never-exposed verbs: human-only or admin (registry Exposure never).
-var neverExposed = []string{"ship", "release", "respond", "init", "install"}
+var neverExposed = []string{"ship", "respond", "init", "install"}
 
 func TestMCPDefaultExposure(t *testing.T) {
 	cs := serveMCP(t, gitInit(t, "dev", nil))
@@ -173,7 +173,7 @@ func TestMCPWritesAndDryRun(t *testing.T) {
 	repo := gitInit(t, "dev", nil)
 	cs := serveMCP(t, repo, "--set", "mcp.expose_writes=true")
 	names, tools := toolNames(t, cs)
-	for _, w := range []string{"triage", "build", "verify", "inspect", "tell", "evolve"} {
+	for _, w := range []string{"triage", "build", "verify", "inspect", "tell", "evolve", "release"} {
 		if !slices.Contains(names, w) {
 			t.Errorf("write verb %s missing with expose_writes", w)
 		}

@@ -25,7 +25,7 @@ Charters: `seats/<seat>/CHARTER.md`.
 | `verify` | AI Native Engineer | AI Native Engineer twin, chore lane | Quality Architect | — | Engineering Manager | all | bot | none | write |
 | `inspect` | Engineering Manager | Engineering Manager twin, review lane | Engineering Manager | Quality Architect, Code Architect | AI Native Engineer | all | bot | direct | write |
 | `ship` | Engineering Manager | Engineering Manager twin, chore lane | Engineering Manager | Quality Architect | Product Strategist, Marketer & Documenter | all | human | none | never |
-| `release` | DevOps & DevEx Tinkerer | DevOps & DevEx Tinkerer twin, chore lane | DevOps & DevEx Tinkerer | Quality Architect, Engineering Manager, Production Engineer | Marketer & Documenter, Founder | L09 | human | none | never |
+| `release` | DevOps & DevEx Tinkerer | DevOps & DevEx Tinkerer twin, chore lane | DevOps & DevEx Tinkerer | Quality Architect, Engineering Manager, Production Engineer | Marketer & Documenter, Founder | L09 | human | none | write |
 | `proof` | Quality Architect | Quality Architect twin, chore lane | Quality Architect | AI Native Engineer | Auditor | all | bot | none | read |
 | `ready` | Product Strategist | Product Strategist twin, chore lane | Product Strategist | Code Architect, Quality Architect | Engineering Manager | all | bot | none | read |
 | `research` | UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, spec lane | UX Researcher & Evolutionist | Product Strategist | Marketer & Documenter | L01 | bot | host | read |

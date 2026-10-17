@@ -14,7 +14,8 @@ A human pass is an approving review on the pull request from a person's GitHub a
 when the account is not a bot, and not one of the bot logins you have configured. That is why agents and CI write
 as a bot identity at Level 3: so an agent's approval can never be mistaken for yours.
 
-`ship` will not merge without one. `release` and publishing with `tell` refuse agents altogether.
+`ship` will not merge without one. Publishing with `tell` refuses agents altogether. `release` lets an agent
+promote behind the full gate, but `main` moves only on a person's stable-release request.
 
 ## Solo mode
 

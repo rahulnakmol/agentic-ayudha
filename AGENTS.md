@@ -89,6 +89,9 @@ are never skipped. The full procedure, with commands, is in
 
 Promote `dev` → `rolling` on the release schedule or an explicit release request, and `rolling` → `main` on an
 explicit stable-release request; the absence of a human approval step does not make promotion continuous.
+`aayu release <release> --to rolling|main` runs these steps for an agent. The stable-release request is a
+person's comment on the Release issue whose first line is `Stable release: vX.Y.Z`, written after the rolling
+snapshot from an account with write access; never write one yourself.
 
 ## Safety
 

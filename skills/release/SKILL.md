@@ -3,7 +3,7 @@
 # Source: internal/verbs/registry.go. Only this frontmatter is generated; the body below is hand-authored.
 name: release
 description: "Promote a Release along dev, rolling, main; stamp included stories released and trigger measurement."
-disable-model-invocation: true
+disable-model-invocation: false
 user-invocable: true
 version: "0.0.0"
 aayu:
@@ -30,7 +30,7 @@ aayu:
     - "release-notes"
   gates:
     - "human-identity"
-    - "tty-confirm"
+    - "stable-request"
     - "halt"
   identity: human
   mode: none
@@ -75,13 +75,25 @@ Promote a Release along dev, rolling, main; stamp included stories released and 
 
 A Release issue (`type:release`) climbs the ladder one rung at a time. It must pass Ready: a Version (`vX.Y.Z`
 before it can reach main) and `includes #N` links to the stories, bugs, or Features it ships. Each rung is
-CONTRIBUTING.md's promotion procedure, run by the binary under the human's own account:
+CONTRIBUTING.md's promotion procedure, run by the binary under a person's own account. An agent may run it
+(founder policy, AGENTS.md "Promotion and release"); the gate decides, not a prompt:
 
 ```sh
 aayu release 120 --to rolling --dry-run   # what would ship and which stories would be stamped
-aayu release 120 --to rolling --yes       # dev → rolling: Rolling snapshot: <ts>, tag rolling-<date>[.n]
-aayu release 120 --to main --yes          # rolling → main: Release: vX.Y.Z, annotated tag vX.Y.Z
+aayu release 120 --to rolling             # dev → rolling: Rolling snapshot: <ts>, tag rolling-<date>[.n]
+aayu release 120 --to main                # rolling → main: Release: vX.Y.Z, annotated tag vX.Y.Z
 ```
+
+`--to main` needs the explicit stable-release request: a person with write, maintain, or admin access comments
+on the Release issue, after its rolling snapshot, with this first line (no bot account, no aayudha marker):
+
+```text
+Stable release: v1.2.0
+```
+
+Without it the rung refuses (exit 4) and promotes nothing. Never write that comment yourself, in any form: it is
+the person's decision, and the pre-tool hook refuses a shell command that would post it. A person running
+`release` at their own terminal is asked to confirm instead (or passes `--yes`), and that yes is the request.
 
 Each rung builds a `promote/…` candidate holding the exact merge commit, runs the evals (rolling) and the
 `ci.yml` gate on it, re-runs failed gate jobs once, pushes that commit as a fast-forward, and tags it. For main,
@@ -99,7 +111,7 @@ After landing, the rung:
 - records the artifact identity and shipping evidence on the ledger and in the Release;
 - makes the Goals and Initiatives above those stories due for `measure`.
 
-Releasing is a human's act: agents are refused, and a terminal or `--yes` from the human confirms it. Never run
-it to work around a red gate; fix the cause through dev.
+CI and bot accounts are refused. Promote only on the release schedule or an explicit release request; a green
+gate alone is not a reason. Never run it to work around a red gate; fix the cause through dev.
 
 Format and lint: skills/README.md.

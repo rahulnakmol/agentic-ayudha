@@ -49,6 +49,9 @@ func RunHook(name string, host verbs.HostID, root, pauseFile string, event []byt
 		} else if cmd, why := HumanOnlyCommand(shellCommand(event)); why != "" {
 			msg = fmt.Sprintf("aayudha: %s is for a person, not an agent (%s); ask them to run `%s` in their own terminal.", firstWords(cmd), why, cmd)
 			next = "a person runs `" + cmd + "` in their own terminal"
+		} else if StableRequestCommand(shellCommand(event)) {
+			msg = "aayudha: a stable-release request is the person's own words on the Release issue; an agent never writes one. Ask the person to comment `Stable release: <version>` there themselves."
+			next = "a person comments `Stable release: <version>` on the Release issue"
 		}
 		r := Deny(host, msg)
 		r.Next = next
@@ -254,6 +257,17 @@ func AgentMarker(getenv func(string) string) string {
 		}
 	}
 	return ""
+}
+
+// stableWriters are the commands that can post a GitHub comment from a shell.
+var stableWriters = regexp.MustCompile(`(?i)(^|[\s;&|(])(gh|curl|wget|http|xh)\s`)
+
+// StableRequestCommand reports a shell command that would write a
+// stable-release request ("Stable release: v1.2.0", which `aayu release --to
+// main` reads from the Release issue, Story #430): the words and a command that
+// can post them to GitHub. aayu itself never writes one.
+func StableRequestCommand(shell string) bool {
+	return strings.Contains(strings.ToLower(shell), "stable release:") && stableWriters.MatchString(shell)
 }
 
 // shellCommand is the shell command in a pre-tool event: tool_input.command

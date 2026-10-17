@@ -40,9 +40,11 @@ type IssueType struct {
 
 // Comment is an issue comment.
 type Comment struct {
-	ID   int64  `json:"id"`
-	Body string `json:"body"`
-	User struct {
+	ID        int64     `json:"id"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"created_at,omitzero"`
+	HTMLURL   string    `json:"html_url,omitempty"`
+	User      struct {
 		Login string `json:"login"`
 		Type  string `json:"type"`
 	} `json:"user"`
@@ -169,20 +171,24 @@ type GitHub struct {
 	Default    string
 	Viewer     string
 	ViewerType string // GET /user type; default User
-	Labels     []*Label
-	IssueTypes []*IssueType
-	Rulesets   []map[string]any
-	Refs       map[string]string           // "heads/ledger" -> sha
-	Trees      map[string][]map[string]any // sha -> entries
-	Commits    map[string]map[string]any   // sha -> commit
-	Issues     map[int]*Issue
-	Pulls      map[int]*PR
-	CheckRuns  map[string][]CheckRun   // commit SHA -> check runs, newest first
-	JobLogs    map[int64]string        // Actions job (check run) ID -> its log, behind a redirect like GitHub's
-	Runs       []WorkflowRun           // Actions workflow runs
-	Artifacts  map[int64][]ArtifactZip // run ID -> artifacts
-	Releases   map[string]*Release     // tag -> GitHub Release
-	Workflows  []string                // workflow file names GET actions/workflows lists
+	// Permissions is each login's repository permission (GET
+	// /repos/{o}/{r}/collaborators/{login}/permission): admin, write,
+	// maintain, read, or none. The Viewer defaults to admin, others to read.
+	Permissions map[string]string
+	Labels      []*Label
+	IssueTypes  []*IssueType
+	Rulesets    []map[string]any
+	Refs        map[string]string           // "heads/ledger" -> sha
+	Trees       map[string][]map[string]any // sha -> entries
+	Commits     map[string]map[string]any   // sha -> commit
+	Issues      map[int]*Issue
+	Pulls       map[int]*PR
+	CheckRuns   map[string][]CheckRun   // commit SHA -> check runs, newest first
+	JobLogs     map[int64]string        // Actions job (check run) ID -> its log, behind a redirect like GitHub's
+	Runs        []WorkflowRun           // Actions workflow runs
+	Artifacts   map[int64][]ArtifactZip // run ID -> artifacts
+	Releases    map[string]*Release     // tag -> GitHub Release
+	Workflows   []string                // workflow file names GET actions/workflows lists
 	// OnDispatch, when set, describes the run a workflow_dispatch starts (the
 	// fake assigns its ID, path, and event). OnRerun re-runs a run's failed
 	// jobs. Both run with Mu held and must not lock it.
@@ -319,6 +325,7 @@ var (
 	reLabel     = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/labels/(.+)$`)
 	reComments  = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/comments$`)
 	reComment   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/comments/([0-9]+)$`)
+	rePerm      = regexp.MustCompile(`^/repos/[^/]+/[^/]+/collaborators/([^/]+)/permission$`)
 	reSubs      = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/sub_issues$`)
 	reParent    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/parent$`)
 	reAssignees = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/assignees$`)
@@ -894,7 +901,8 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		if m == "POST" {
 			g.seq++
-			c := &Comment{ID: g.seq, Body: str("body")}
+			c := &Comment{ID: g.seq, Body: str("body"), CreatedAt: time.Now().UTC()}
+			c.HTMLURL = fmt.Sprintf("https://github.com/%s/%s/issues/%d#issuecomment-%d", g.Owner, g.Repo, is.Number, c.ID)
 			c.User.Login, c.User.Type = g.Viewer, "User"
 			is.Comments = append(is.Comments, c)
 			reply(201, c)
@@ -903,6 +911,17 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		out := []*Comment{}
 		out = append(out, is.Comments...)
 		reply(200, out)
+	case rePerm.MatchString(p) && m == "GET":
+		login := rePerm.FindStringSubmatch(p)[1]
+		perm := g.Permissions[login]
+		if perm == "" {
+			perm = "read"
+		}
+		role := perm
+		if perm == "maintain" {
+			perm = "write" // GitHub reports maintain as write, with role_name maintain
+		}
+		reply(200, map[string]any{"permission": perm, "role_name": role, "user": map[string]any{"login": login}})
 	case reComment.MatchString(p) && m == "PATCH":
 		id, _ := strconv.ParseInt(reComment.FindStringSubmatch(p)[1], 10, 64)
 		for _, is := range g.Issues {
