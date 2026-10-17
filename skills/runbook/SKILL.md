@@ -86,7 +86,10 @@ in order as `##` headings:
 1. **Symptom.** The alert or what a person sees, and the SLO it protects by its name in backticks (`ask-availability`).
 2. **Confirm.** The bounded query that confirms it, as `aayu investigate <incident> --telemetry <dir> --query "errors
    by version,route limit 20"`, or a fenced template for the live system (`kql`, `cwl`, `gcl`, `sentry`, `hogql`) with
-   a time window and a row limit. Aggregates first.
+   a time window and a row limit. Aggregates first. Confirm by the failure's signature when the grounding has one
+   (the exception type and its `path:line` frame, or the dependency's timeout), not only by its timing; tell it apart
+   from its look-alike with a deploy-marker or timeline query (a bad deploy starts at a marker and only on the new
+   revision; a slow dependency starts on its own and crosses revisions); and say what to do when it does not match.
 3. **Mitigate.** One catalog action as `aayu respond <incident> --action <name> --params key=value`, its risk and blast
    radius, and when not to use it. When no catalog action fixes this failure (a slow dependency is not fixed by a
    restart or a rollback), write "no catalog action" and name the action a person should add, and who to escalate to
@@ -98,8 +101,16 @@ in order as `##` headings:
 6. **Tried.** When it was last tried end to end, in a drill or an incident, with the aayudha-ops run or incident that
    shows it, or `not yet`. Release requires every rollback action in the catalog to have run once.
 
-Every fact cites its source: `ops/actions.toml`, `ops/slos.toml`, an incident (`#41`), a run. Never write that an
-action was run by you.
+**What the check reads as a citation**, in the same paragraph, list item, or table row as the claim: `query qN`; the
+incident as `#N` (its body, timeline, investigation note, and comments are all `#N`); a commit in backticks; a
+`path:line`; a file the grounding names, such as `ops/actions.toml`, `ops/slos.toml`, or an aayudha-ops run as `run <id>`. Words such as "(grounding)",
+"(investigation note)", or "(export …)" are not citations. A number you work out cites the sources of its inputs. A
+proposal (a test to add, a fix and its rollback, an alert, an action and its Bug or Story) cites the evidence it
+answers, such as the `path:line` it fixes or `#N`. Never cite a file that does not exist yet (a runbook you propose,
+the file you save the draft in). What you cannot cite starts `Unverified:` or `Assumption:`. The document is its
+title and its parts only: no preamble before it, and no steps for the reader (how to check, save, or open a pull
+request) inside it. Never write that an action was run by you. A
+startup runbook entry is at most 400 words of prose: one entry, short steps, no repeated facts.
 
 ## 3. Check and create
 

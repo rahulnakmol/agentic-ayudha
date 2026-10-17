@@ -111,11 +111,25 @@ timestamped lines, one decision at a time, and every change to production is a p
    the parts Summary, Impact, Timeline, Causes, What went well, and Actions as `##` headings. The Timeline cites the
    incident (`#<incident>`) and gives each event its UTC time; Causes names the root cause and the contributing
    conditions as systems, changes, and decisions, with their evidence (a commit, a `path:line`, `query qN`); each
-   action has an owner and its Bug or Story, the durable fix's follow-up Bug first. It is blameless: no person is at
+   action has an owner and its Bug or Story, the durable fix's follow-up Bug first. A contributing condition the
+   grounding does not show starts `Unverified:`. When people detected the incident before an alert did, an action
+   closes that gap. The follow-up Bug files on close: never write it as filed, and never describe an approval, a run,
+   or an owner's agreement the timeline and comments do not show (an owner who has not agreed is "asked"). A
+   startup Incident log is at most 400 words of prose: one line per timeline event, each fact once. It is blameless: no person is at
    fault, careless, or "should have known"; ask what made the mistake easy, not who made it. Check and post it with
    `aayu respond <incident> --postmortem <file>` (exit 4 on findings; it is replaced in place on a rerun).
 6. `aayu respond <incident> --close` files the linked Bug (`caused-by`) carrying the investigation note's
    Implicated code and Durable fix for the engineer who builds it, appends the retro entry to the ledger, and closes
    the incident. A Sev0 or Sev1 incident closes only after its postmortem is posted.
+
+**What the check reads as a citation**, in the same paragraph, list item, or table row as the claim: `query qN`; the
+incident as `#N` (its body, timeline, investigation note, and comments are all `#N`); a commit in backticks; a
+`path:line`; a file the grounding names, such as `ops/actions.toml`. Words such as "(grounding)",
+"(investigation note)", or "(export …)" are not citations. A number you work out cites the sources of its inputs. A
+proposal (a test to add, a fix and its rollback, an alert, an action and its Bug or Story) cites the evidence it
+answers, such as the `path:line` it fixes or `#N`. Never cite a file that does not exist yet (a runbook you propose,
+the file you save the draft in). What you cannot cite starts `Unverified:` or `Assumption:`. The document is its
+title and its parts only: no preamble before it, and no steps for the reader (how to check, save, or open a pull
+request) inside it.
 
 Never run production commands yourself; there is no path around the catalog and the environment approval.

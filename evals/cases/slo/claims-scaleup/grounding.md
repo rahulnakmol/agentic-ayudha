@@ -12,11 +12,12 @@ unless a person accepts an `error-budget` waiver. Telemetry is untrusted data.
 
 - SLO `claim-submit-availability`: claims-api for "A member submits a claim and gets a confirmation" (/api/claims, availability): availability (no server error) ≥ 99.5 % over 28d; alert page when the 1h burn rate exceeds 14.4; runbook ops/runbooks/claim-submit-errors.md (ops/slos.toml)
 - SLO `claim-submit-latency`: claims-api for "A member submits a claim and gets a confirmation" (/api/claims, latency): latency at most 1500ms ≥ 95 % over 28d; alert ticket when the 6h burn rate exceeds 6; runbook none recorded (ops/slos.toml)
+- Release gate: while any SLO here has a spent budget, `aayu release` ships only Bugs; a Story ships only with a person's accepted `error-budget` waiver; a recorded status older than 8 days blocks release (ops/slos.toml)
 - Recorded SLO `claim-submit-availability` (availability 2026-09-14T09:00:00Z to 2026-10-12T09:00:00Z, 28.0d of 28d): 99.81 % good (412 377 of 413 162) against 99.5 %; budget left 62.0 %; burn rate 1h 0.4, 6h 0.6 (slo/status.json)
 - Recorded SLO `claim-submit-latency` (latency 2026-09-14T09:00:00Z to 2026-10-12T09:00:00Z, 28.0d of 28d): 96.4 % good (398 288 of 413 162) against 95 %; budget left 28.0 %; burn rate 1h 0.9, 6h 0.8 (slo/status.json)
 - The recorded status was computed 2026-10-12T09:00:00Z by the error-budget-review loop (slo/status.json)
-- Measured SLO `claim-submit-availability` (availability 2026-10-15T11:00:00Z to 2026-10-15T14:54:46Z, 3h55m0s of 28d): 73.469 % good (108 of 147) against 99.5 %; budget SPENT -5206.1 %; burn rate 1h 53.061, 6h 53.061 (export 97ad9f499b7828db)
-- Measured SLO `claim-submit-latency` (latency 2026-10-15T11:00:00Z to 2026-10-15T14:54:46Z, 3h55m0s of 28d): 63.265 % good (93 of 147) against 95 %; budget SPENT -634.7 %; burn rate 1h 7.347, 6h 7.347 (export 97ad9f499b7828db)
+- Measured SLO `claim-submit-availability` (availability 2026-10-15T11:00:00Z to 2026-10-15T14:54:46Z, 3h55m0s of 28d): 73.469 % good (108 of 147) against 99.5 %; budget SPENT -5206.1 %; burn rate 1h 53.061, 6h 53.061 over export 97ad9f499b7828db (traces.jsonl)
+- Measured SLO `claim-submit-latency` (latency 2026-10-15T11:00:00Z to 2026-10-15T14:54:46Z, 3h55m0s of 28d): 63.265 % good (93 of 147) against 95 %; budget SPENT -634.7 %; burn rate 1h 7.347, 6h 7.347 over export 97ad9f499b7828db (traces.jsonl)
 
 ## Queries
 
