@@ -153,7 +153,7 @@ func TestSaveSections(t *testing.T) {
 	if err := SaveSection(dir, SavedSection{Section: "product", Commit: "old", Problems: []string{"claim P1: …"}, Content: parts["product"]}); err != nil {
 		t.Fatal(err)
 	}
-	saved, stale, err := LoadSections(dir, "abc")
+	saved, stale, err := LoadSections(dir, "abc", "")
 	if err != nil || len(saved) != 1 || !slices.Equal(stale, []string{"product"}) || compact(saved["engineering"].Content) != compact(parts["engineering"]) {
 		t.Errorf("saved %v, stale %v, err %v", saved, stale, err)
 	}

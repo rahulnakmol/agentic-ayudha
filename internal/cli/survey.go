@@ -271,7 +271,7 @@ type SurveyDraftResult struct {
 	// Saved lists the sections this run wrote under Dir, each with its
 	// findings, before the next was checked; Resumed the saved sections it
 	// merged without rewriting; Stale the saved sections against another
-	// index commit, which must be written again.
+	// index (another commit or other content), which must be written again.
 	Dir     string   `json:"sections_dir"`
 	Saved   []string `json:"saved,omitempty"`
 	Resumed []string `json:"resumed,omitempty"`
@@ -297,7 +297,7 @@ func (e *Env) surveyDraft(indexFile, out, file string) error {
 		return Wrap(ExitUsage, err)
 	}
 	res := SurveyDraftResult{Dir: filepath.Join(out, "sections")}
-	saved, stale, err := survey.LoadSections(res.Dir, ix.Commit)
+	saved, stale, err := survey.LoadSections(res.Dir, ix.Commit, ix.Digest)
 	if err != nil {
 		return Wrap(ExitUsage, err)
 	}
@@ -333,7 +333,7 @@ func (e *Env) surveyDraft(indexFile, out, file string) error {
 			continue
 		}
 		ps := rep.Sections[name]
-		if err := survey.SaveSection(res.Dir, survey.SavedSection{Section: name, Commit: ix.Commit, Pass: len(ps) == 0, Problems: ps, Content: b}); err != nil {
+		if err := survey.SaveSection(res.Dir, survey.SavedSection{Section: name, Commit: ix.Commit, Digest: ix.Digest, Pass: len(ps) == 0, Problems: ps, Content: b}); err != nil {
 			return Wrap(ExitInternal, err)
 		}
 		res.Saved = append(res.Saved, name)

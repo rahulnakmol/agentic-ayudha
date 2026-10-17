@@ -250,6 +250,10 @@ func Check(ix *Index, d Draft) Report {
 				add("%s: cite %v", where, err)
 				continue
 			}
+			if m, ok := strings.CutPrefix(c, "doc:manual:"); ok {
+				add("%s: cite the lines of manual %s that say it (manual:%s:<line> or <start>-<end>), not the whole manual", where, m, m)
+				continue
+			}
 			citedIDs[c] = true
 			if f := citeFile(ix, c); f != "" {
 				cited[f] = true

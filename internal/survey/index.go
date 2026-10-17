@@ -11,6 +11,8 @@ package survey
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io/fs"
 	"os"
@@ -92,8 +94,12 @@ type Count struct {
 // Index is the deterministic survey of one checkout: the same commit gives
 // the same bytes (no clock, sorted lists).
 type Index struct {
-	Version    int      `json:"version"`
-	Commit     string   `json:"commit,omitempty"`
+	Version int    `json:"version"`
+	Commit  string `json:"commit,omitempty"`
+	// Digest is the SHA-256 of every indexed file's path and content, and of
+	// the manuals': saved survey sections are stale when it changes, at the
+	// same commit too (an uncommitted edit, a checkout with no git).
+	Digest     string   `json:"digest,omitempty"`
 	History    *History `json:"history,omitempty"`
 	Languages  []Count  `json:"languages"`
 	NotIndexed []Count  `json:"not_indexed,omitempty"` // file extensions with no language the index knows
@@ -428,6 +434,7 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 		ix.Files = append(ix.Files, File{Path: p, Role: "doc", Lines: lines, Bytes: len(text)})
 		ix.Docs = append(ix.Docs, Fact{ID: "doc:" + p, Kind: "manual", At: p + ":1", Detail: firstHeading(text)})
 	}
+	ix.digest(files, opt.Manuals)
 	ix.history(ctx, root, opt.Git)
 	ix.counts()
 	ix.modules(opt.Budget)
@@ -520,6 +527,22 @@ func callEdge(from, name string, to []string, at string) Edge {
 		e.To, e.Name = to[:8], name
 	}
 	return e
+}
+
+// digest sets Index.Digest from the files in path order: each path with its
+// size, and the content of every file the index read.
+func (ix *Index) digest(files map[string]*scanned, manuals map[string]string) {
+	h := sha256.New()
+	for _, f := range ix.Files {
+		fmt.Fprintf(h, "%s\x00%d\x00", f.Path, f.Bytes)
+		if s, ok := files[f.Path]; ok {
+			h.Write([]byte(s.raw))
+		} else if text, ok := manuals[strings.TrimPrefix(f.Path, "manual:")]; ok && strings.HasPrefix(f.Path, "manual:") {
+			h.Write([]byte(text))
+		}
+		h.Write([]byte{0})
+	}
+	ix.Digest = hex.EncodeToString(h.Sum(nil))
 }
 
 // scanned is one file read while building the index.

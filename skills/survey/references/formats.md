@@ -82,7 +82,8 @@ a misspelt field never silently drops a claim.
 - Citations: a fact ID the index printed (`file:`, `sym:`, `build:`, `dep:`, `entry:`, `io:`, `trap:`, `test:`,
   `doc:`, `marker:`, `mod:`, `builtin:`), or `path:line` / `path:start-end` inside the file. A manual or note given
   with `--docs` is cited the same way, by its name: `manual:operator-notes.md:12` or `manual:guide.pdf.txt:40-52`
-  (a PDF is cited by the lines of its text, written under `<out>/manuals`).
+  (a PDF is cited by the lines of its text, written under `<out>/manuals`). A claim cites the lines that say it, never
+  the whole manual's `doc:manual:` fact.
 - `SURVEY.md` labels each claim a fact (`observed` in the code, `stated` by a cited document or manual, or
   `confirmed` by the person), an inference (`inferred`, with its reasoning), or an unknown with its question.
 - Capabilities cover the index's entry points: each `entry:` the index lists (a program's main, a script, an
@@ -113,6 +114,9 @@ a misspelt field never silently drops a claim.
 
   An assignment to an item that is not waiting with `"?"`, or to a question that does not exist, is a problem of the
   questions section. The merged `survey.json` carries the questions in place of `"?"` and no `assign`.
+  When the person asked only to describe the product, submit the modernisation section empty:
+  `{"modernisation": null}`. A saved section is stale, and written again, when the index changes: another commit, or
+  other content at the same commit (an uncommitted edit, a checkout with no git, a changed manual).
 - A question's `affects` lists the claims, do-not-carry entries, interfaces, and modernisation steps, case sets, suites,
   migrations, and shims its answer changes.
 - `target_source` is `"request"` only when the request names the target; otherwise ask, and use the answered
