@@ -1,11 +1,14 @@
 package cli
 
 import (
+	"cmp"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -79,8 +82,11 @@ func runSurvey(ctx context.Context, e *Env, in Values) error {
 	if in.Has("create") || in.Has("reviewed") || in.Has("limit") {
 		return Errorf(ExitUsage, "survey --create, --reviewed, and --limit go with --backlog <file> --draft <file>")
 	}
-	if in.Has("draft") {
+	if in.Has("draft") || in.Bool("sections") {
 		return e.surveyDraft(indexFile, out, in.String("draft"))
+	}
+	if in.Has("docs") && in.Has("module") {
+		return Errorf(ExitUsage, "survey --docs goes with indexing (no mode flag): it adds manuals and notes to the index")
 	}
 	if id := in.String("module"); id != "" {
 		ix, err := survey.Load(indexFile)
@@ -93,7 +99,11 @@ func runSurvey(ctx context.Context, e *Env, in Values) error {
 		}
 		return e.Emit(p, func(w io.Writer) error { return writePack(w, p) })
 	}
-	ix, err := survey.Build(ctx, root, survey.Options{Budget: in.Int("budget")})
+	manuals, err := surveyManuals(ctx, in.String("docs"), filepath.Join(out, "manuals"))
+	if err != nil {
+		return Wrap(ExitUsage, err)
+	}
+	ix, err := survey.Build(ctx, root, survey.Options{Budget: in.Int("budget"), Manuals: manuals})
 	if err != nil {
 		return Wrap(ExitUsage, err)
 	}
@@ -254,15 +264,30 @@ func (u untrustedWriter) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
-// SurveyDraftResult is the check of a survey draft and where its report went.
+// SurveyDraftResult is the check of a survey draft, whole or in sections,
+// and where its report went.
 type SurveyDraftResult struct {
-	survey.Report
-	Survey string `json:"survey_md"`
-	Next   string `json:"next"`
+	survey.SectionReport
+	// Saved lists the sections this run wrote under Dir, each with its
+	// findings, before the next was checked; Resumed the saved sections it
+	// merged without rewriting; Stale the saved sections against another
+	// index commit, which must be written again.
+	Dir     string   `json:"sections_dir"`
+	Saved   []string `json:"saved,omitempty"`
+	Resumed []string `json:"resumed,omitempty"`
+	Stale   []string `json:"stale,omitempty"`
+	Merged  string   `json:"survey_json,omitempty"`
+	Survey  string   `json:"survey_md,omitempty"`
+	Next    string   `json:"next"`
 }
 
-// surveyDraft checks a survey draft against the index and renders SURVEY.md,
-// with the problems listed in it while the draft does not pass.
+// surveyDraft checks a survey draft, whole or some of its sections, against
+// the index. Each section in the file is saved with its findings under
+// <out>/sections as it is checked; sections saved earlier are resumed, so a
+// survey can be written and fixed one section at a time and an error never
+// loses the sections before it. With every section present it writes the
+// merged survey.json and renders SURVEY.md, as for a whole draft. With no
+// file (--sections) it reports what is saved.
 func (e *Env) surveyDraft(indexFile, out, file string) error {
 	ix, err := survey.Load(indexFile)
 	if err != nil {
@@ -271,43 +296,121 @@ func (e *Env) surveyDraft(indexFile, out, file string) error {
 	if err := ix.LoadProbes(out); err != nil {
 		return Wrap(ExitUsage, err)
 	}
-	b, err := os.ReadFile(file)
+	res := SurveyDraftResult{Dir: filepath.Join(out, "sections")}
+	saved, stale, err := survey.LoadSections(res.Dir, ix.Commit)
 	if err != nil {
 		return Wrap(ExitUsage, err)
 	}
-	d, err := survey.ParseDraft(b)
+	res.Stale = stale
+	parts := map[string]json.RawMessage{}
+	for name, s := range saved {
+		parts[name] = s.Content
+	}
+	fromFile := map[string]json.RawMessage{}
+	if file != "" {
+		b, err := os.ReadFile(file)
+		if err != nil {
+			return Wrap(ExitUsage, err)
+		}
+		if fromFile, err = survey.SplitDraft(b); err != nil {
+			return Errorf(ExitUsage, "%s: %v", file, err)
+		}
+	}
+	for name, b := range fromFile {
+		parts[name] = b
+	}
+	d, rep, err := survey.CheckSections(ix, parts)
 	if err != nil {
-		return Errorf(ExitUsage, "%s: %v", file, err)
+		return Errorf(ExitUsage, "%s: %v", cmp.Or(file, res.Dir), err)
 	}
-	res := SurveyDraftResult{Report: survey.Check(ix, d), Survey: filepath.Join(out, "SURVEY.md")}
-	if err := os.WriteFile(res.Survey, []byte(survey.Render(ix, d, res.Report)), 0o644); err != nil {
-		return Wrap(ExitInternal, err)
+	res.SectionReport = rep
+	for _, name := range survey.SectionNames() {
+		b, ok := fromFile[name]
+		if !ok {
+			if _, ok := parts[name]; ok {
+				res.Resumed = append(res.Resumed, name)
+			}
+			continue
+		}
+		ps := rep.Sections[name]
+		if err := survey.SaveSection(res.Dir, survey.SavedSection{Section: name, Commit: ix.Commit, Pass: len(ps) == 0, Problems: ps, Content: b}); err != nil {
+			return Wrap(ExitInternal, err)
+		}
+		res.Saved = append(res.Saved, name)
 	}
-	res.Next = "fix every problem, then run again"
-	if res.Pass {
-		res.Next = "interview the person on the open questions (skills/survey), record their answers in the draft, then draft the backlog"
-		if res.Coverage.OpenQuestions == 0 {
-			res.Next = "draft the backlog from the survey (skills/survey), then `aayu survey --backlog <file> --draft " + file + "`"
+	switch {
+	case len(rep.Missing) > 0:
+		res.Next = "write the next section (" + rep.Missing[0] + ", skills/survey), then run `aayu survey --draft <file>` with it; saved sections are kept"
+		if len(rep.Problems) > 0 {
+			res.Next = "fix every problem in the sections you wrote, then run again; saved sections are kept"
+		}
+	default:
+		res.Merged, res.Survey = filepath.Join(out, "survey.json"), filepath.Join(out, "SURVEY.md")
+		b, err := json.MarshalIndent(d, "", "  ")
+		if err != nil {
+			return Wrap(ExitInternal, err)
+		}
+		if err := os.WriteFile(res.Merged, append(b, '\n'), 0o644); err != nil {
+			return Wrap(ExitInternal, err)
+		}
+		if err := os.WriteFile(res.Survey, []byte(survey.Render(ix, d, rep.Report)), 0o644); err != nil {
+			return Wrap(ExitInternal, err)
+		}
+		res.Next = "fix every problem, then run again"
+		if res.Pass {
+			res.Next = "interview the person on the open questions (skills/survey), record their answers in the draft, then draft the backlog"
+			if res.Coverage.OpenQuestions == 0 {
+				res.Next = "draft the backlog from the survey (skills/survey), then `aayu survey --backlog <file> --draft " + res.Merged + "`"
+			}
 		}
 	}
-	if err := e.Emit(res, func(w io.Writer) error {
-		verdict := "passes"
-		if !res.Pass {
-			verdict = "does not pass yet"
-		}
-		c := res.Coverage
-		fmt.Fprintf(w, "survey draft %s: %s; modules cited %d of %d, entry points %d of %d, markers %d of %d; %d open questions, %d unknown claims\n",
-			file, verdict, c.ModulesCited, c.Modules, c.EntriesCited, c.Entries, c.MarkersCited, c.Markers, c.OpenQuestions, c.Unknowns)
-		for _, p := range res.Problems {
-			fmt.Fprintf(w, "  problem: %s\n", p)
-		}
-		fmt.Fprintf(w, "  wrote %s\n  next: %s\n", res.Survey, res.Next)
-		return nil
-	}); err != nil {
+	if err := e.Emit(res, func(w io.Writer) error { return writeSurveyDraft(w, file, res) }); err != nil {
 		return err
 	}
-	if !res.Pass {
+	if len(res.Problems) > 0 {
 		return Errorf(ExitBlocked, "the survey draft has %d problem(s); revise it", len(res.Problems))
 	}
+	return nil
+}
+
+func writeSurveyDraft(w io.Writer, file string, res SurveyDraftResult) error {
+	verdict := "passes"
+	switch {
+	case len(res.Problems) > 0:
+		verdict = "does not pass yet"
+	case len(res.Missing) > 0:
+		verdict = "passes so far; sections still to write: " + strings.Join(res.Missing, ", ")
+	}
+	c := res.Coverage
+	fmt.Fprintf(w, "survey draft %s: %s; modules cited %d of %d, entry points covered %d of %d, markers %d of %d; %d open questions, %d unknown claims\n",
+		cmp.Or(file, res.Dir), verdict, c.ModulesCited, c.Modules, c.EntriesCovered, c.Entries, c.MarkersCited, c.Markers, c.OpenQuestions, c.Unknowns)
+	for _, name := range survey.SectionNames() {
+		ps, ok := res.Sections[name]
+		state := "missing"
+		switch {
+		case !ok:
+		case len(ps) == 0:
+			state = "passes"
+		default:
+			state = fmt.Sprintf("%d problem(s)", len(ps))
+		}
+		how := ""
+		if slices.Contains(res.Saved, name) {
+			how = ", saved"
+		} else if slices.Contains(res.Resumed, name) {
+			how = ", resumed"
+		}
+		fmt.Fprintf(w, "  section %s: %s%s\n", name, state, how)
+		for _, p := range ps {
+			fmt.Fprintf(w, "    problem: %s\n", p)
+		}
+	}
+	for _, s := range res.Stale {
+		fmt.Fprintf(w, "  section %s: saved against another index commit; write it again\n", s)
+	}
+	if res.Survey != "" {
+		fmt.Fprintf(w, "  wrote %s and %s\n", res.Merged, res.Survey)
+	}
+	fmt.Fprintf(w, "  sections in %s\n  next: %s\n", res.Dir, res.Next)
 	return nil
 }

@@ -136,6 +136,10 @@ type Options struct {
 	// Git runs git in the checkout; nil runs the git binary. It returns ""
 	// when git fails (not a repository), and the index then walks the tree.
 	Git func(ctx context.Context, dir string, args ...string) string
+	// Manuals are user manuals and notes from outside the checkout, by name,
+	// as text: each is indexed as a document (manual:<name>), cited by line
+	// like a file, so a claim a manual states is traced to it.
+	Manuals map[string]string
 }
 
 var (
@@ -413,6 +417,17 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 		ix.scriptCalls(p, s, byName)
 	}
 	ix.builtins(files, byName)
+	for _, name := range sortedKeys(opt.Manuals) {
+		text := opt.Manuals[name]
+		p := "manual:" + name
+		lines := strings.Count(text, "\n")
+		if text != "" && !strings.HasSuffix(text, "\n") {
+			lines++
+		}
+		ix.byPath[p] = len(ix.Files)
+		ix.Files = append(ix.Files, File{Path: p, Role: "doc", Lines: lines, Bytes: len(text)})
+		ix.Docs = append(ix.Docs, Fact{ID: "doc:" + p, Kind: "manual", At: p + ":1", Detail: firstHeading(text)})
+	}
 	ix.history(ctx, root, opt.Git)
 	ix.counts()
 	ix.modules(opt.Budget)
