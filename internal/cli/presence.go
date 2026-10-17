@@ -160,7 +160,7 @@ func (e *Env) presenceCheck(ctx context.Context, what string, need Access, refus
 		return nil, Errorf(ExitBlocked, "%s: approved by @%s, but aayu acts as @%s here; the person whose account acts must approve it", what, who.Login, me.Login)
 	}
 	a := &Approval{Login: who.Login, Via: "device-flow"}
-	if c != nil {
+	if need != AccessAny { // an action that needs no repository access never asks the repository
 		perm, _, err := c.REST.Repositories.GetPermissionLevel(ctx, owner, name, who.Login)
 		if err != nil {
 			return nil, Wrap(ExitExternal, err)

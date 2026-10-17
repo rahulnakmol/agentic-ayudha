@@ -118,6 +118,18 @@ func TestPresenceCheckAccess(t *testing.T) {
 	}
 	e.Repo = "o/r"
 	ctx := context.Background()
+	// An action that needs no repository access never asks the repository: the
+	// token may not reach it (a checkout cloned with other credentials).
+	g.Mu.Lock()
+	g.Fail = "GET /repos/o/r/collaborators/founder/permission"
+	g.Mu.Unlock()
+	if err := e.requireHuman(ctx, "auth set-secret github-token", AccessAny); err != nil {
+		t.Fatalf("a no-repository action asked the repository: %v\n%s", err, errb.String())
+	}
+	g.Mu.Lock()
+	g.Fail, g.Device.Started = "", 0
+	g.Mu.Unlock()
+	e.approval = nil
 	if err := e.requireHuman(ctx, "plan --solo-bypass", AccessAdmin); err == nil || !strings.Contains(err.Error(), "needs admin access; @founder has write") {
 		t.Fatalf("admin action approved at maintain: %v\n%s", err, errb.String())
 	}
