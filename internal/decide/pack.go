@@ -49,7 +49,8 @@ var route = []struct {
 	{verbs.DataAIArchitect, regexp.MustCompile(`(?i)\b(data (pipelines?|warehouse|lake|lakehouse|platform|quality|contracts?|products?|lineage|retention)|warehouse|lakehouse|analytics|dashboards?|semantic layer|lineage|etl|elt|cdc|rag|retrieval|embeddings?|vector (index|store|database|db)|knowledge graphs?|graphrag|machine learning|ml|llm|eval sets?|hallucinat\w*|grounded answers?)\b`)},
 	{verbs.RevenueArchitect, regexp.MustCompile(`(?i)\b(metrics?|conversion|revenue|pricing|price|experiments?|growth|retention|activation|north star|churn|readout)\b`)},
 	{verbs.QualityArchitect, regexp.MustCompile(`(?i)\b(tests?|testing|flak\w*|coverage|floors?|quality|defects?|regression|waive\w*|proof packs?)\b`)},
-	{verbs.AINativeEngineer, regexp.MustCompile(`(?i)\b(incident|outage|slo|error budget|latency|on-?call|rollback|production)\b`)},
+	// Running production (Decision #324): incidents, SLOs, runbooks, and rollback belong to the Production Engineer.
+	{verbs.ProductionEngineer, regexp.MustCompile(`(?i)\b(incidents?|outages?|slos?|error budgets?|latency|on-?call|rollbacks?|production|postmortems?|runbooks?|telemetry|alerts?)\b`)},
 	{verbs.DevOps, regexp.MustCompile(`(?i)\b(ci|pipeline|release|install|deploy\w*|workflow|runner|promotion|devex)\b`)},
 	{verbs.UXResearcher, regexp.MustCompile(`(?i)\b(ux|ui|screen|wireframe|mockup|prototype|accessibility|a11y|design system|usability)\b`)},
 	{verbs.CodeArchitect, regexp.MustCompile(`(?i)\b(design|architecture|contracts?|api|schema|interface|boundar(y|ies)|data model|struct|field|index|migration|layers?|refactor)\b`)},
@@ -63,7 +64,7 @@ var route = []struct {
 // typeSeat is the owning seat for an issue type when no topic word matches.
 var typeSeat = map[string]verbs.SeatID{
 	"goal": verbs.Founder, "initiative": verbs.Founder, "experiment": verbs.RevenueArchitect,
-	"incident": verbs.AINativeEngineer, "bug": verbs.AINativeEngineer, "feedback": verbs.ProductStrategist,
+	"incident": verbs.ProductionEngineer, "bug": verbs.AINativeEngineer, "feedback": verbs.ProductStrategist,
 	"release": verbs.DevOps,
 }
 

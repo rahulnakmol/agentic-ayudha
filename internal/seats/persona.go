@@ -85,7 +85,7 @@ func (p Persona) Practice(id string) (Practice, bool) {
 // PersonaPath is where a seat's persona lives.
 func PersonaPath(id verbs.SeatID) string { return path.Join("seats", string(id), "persona.toml") }
 
-// LoadPersonas reads and validates the thirteen personas from fsys (the
+// LoadPersonas reads and validates the fourteen personas from fsys (the
 // repository root, or the embedded assets).
 func LoadPersonas(fsys fs.FS) (map[verbs.SeatID]Persona, error) {
 	out := map[verbs.SeatID]Persona{}

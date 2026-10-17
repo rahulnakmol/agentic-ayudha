@@ -17,16 +17,16 @@ Charters: `seats/<seat>/CHARTER.md`.
 | Verb | A | R (executes) | Owns thresholds / policy | C | I | Layers | Identity | Model calling | MCP |
 |---|---|---|---|---|---|---|---|---|---|
 | `grill` | Product Strategist | Product Strategist twin, spec lane | Product Strategist | Code Architect, UX Researcher & Evolutionist | Engineering Manager | all | bot | host | read |
-| `slice` | Product Strategist | Product Strategist twin, plan lane | Product Strategist | Code Architect, Engineering Manager | AI Native Engineer (+SRE hat) | all | bot | host | read |
-| `plan` | Code Architect | Code Architect twin, plan lane | Code Architect | Engineering Manager, Quality Architect, Data & AI Architect | AI Native Engineer (+SRE hat) | all | bot | host | read |
+| `slice` | Product Strategist | Product Strategist twin, plan lane | Product Strategist | Code Architect, Engineering Manager | AI Native Engineer | all | bot | host | read |
+| `plan` | Code Architect | Code Architect twin, plan lane | Code Architect | Engineering Manager, Quality Architect, Data & AI Architect, Production Engineer | AI Native Engineer | all | bot | host | read |
 | `decide` | Founder | Founder twin, spec lane | Founder | Product Strategist, Code Architect | Engineering Manager, Auditor | all | human | host | read |
 | `triage` | Product Strategist | Product Strategist twin, chore lane | Product Strategist | — | Engineering Manager | none | bot | hybrid (the host's model passes --as; never in product CI) | write |
-| `build` | AI Native Engineer (+SRE hat) | AI Native Engineer (+SRE hat) twin, build lane | AI Native Engineer (+SRE hat) | Code Architect | Engineering Manager | all | bot | host | write |
-| `verify` | AI Native Engineer (+SRE hat) | AI Native Engineer (+SRE hat) twin, chore lane | Quality Architect | — | Engineering Manager | all | bot | none | write |
-| `inspect` | Engineering Manager | Engineering Manager twin, review lane | Engineering Manager | Quality Architect, Code Architect | AI Native Engineer (+SRE hat) | all | bot | direct | write |
+| `build` | AI Native Engineer | AI Native Engineer twin, build lane | AI Native Engineer | Code Architect, Production Engineer | Engineering Manager | all | bot | host | write |
+| `verify` | AI Native Engineer | AI Native Engineer twin, chore lane | Quality Architect | — | Engineering Manager | all | bot | none | write |
+| `inspect` | Engineering Manager | Engineering Manager twin, review lane | Engineering Manager | Quality Architect, Code Architect | AI Native Engineer | all | bot | direct | write |
 | `ship` | Engineering Manager | Engineering Manager twin, chore lane | Engineering Manager | Quality Architect | Product Strategist, Marketer & Documenter | all | human | none | never |
-| `release` | DevOps & DevEx Tinkerer | DevOps & DevEx Tinkerer twin, chore lane | DevOps & DevEx Tinkerer | Quality Architect, Engineering Manager | Marketer & Documenter, Founder | L09 | human | none | never |
-| `proof` | Quality Architect | Quality Architect twin, chore lane | Quality Architect | AI Native Engineer (+SRE hat) | Auditor | all | bot | none | read |
+| `release` | DevOps & DevEx Tinkerer | DevOps & DevEx Tinkerer twin, chore lane | DevOps & DevEx Tinkerer | Quality Architect, Engineering Manager, Production Engineer | Marketer & Documenter, Founder | L09 | human | none | never |
+| `proof` | Quality Architect | Quality Architect twin, chore lane | Quality Architect | AI Native Engineer | Auditor | all | bot | none | read |
 | `ready` | Product Strategist | Product Strategist twin, chore lane | Product Strategist | Code Architect, Quality Architect | Engineering Manager | all | bot | none | read |
 | `research` | UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, spec lane | UX Researcher & Evolutionist | Product Strategist | Marketer & Documenter | L01 | bot | host | read |
 | `wireframe` | UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, build lane | UX Researcher & Evolutionist | Product Strategist | Engineering Manager | L01 | bot | host | write |
@@ -37,18 +37,18 @@ Charters: `seats/<seat>/CHARTER.md`.
 | `baseline` | UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, chore lane | UX Researcher & Evolutionist | Quality Architect | Engineering Manager | L01 | bot | none | write |
 | `experiment` | Revenue Architect | Revenue Architect twin, plan lane | Revenue Architect | Product Strategist, UX Researcher & Evolutionist, Data & AI Architect | Founder | L03, L08 | bot | host | write |
 | `readout` | Revenue Architect | Revenue Architect twin, spec lane | Revenue Architect | Product Strategist | Founder, Marketer & Documenter | L08 | bot | host | write |
-| `respond` | AI Native Engineer (+SRE hat) | AI Native Engineer (+SRE hat) twin, build lane | AI Native Engineer (+SRE hat) | DevOps & DevEx Tinkerer | Engineering Manager, Founder | L07, L09 | human | host | never |
+| `respond` | Production Engineer | Production Engineer twin, build lane | Production Engineer | AI Native Engineer, DevOps & DevEx Tinkerer | Engineering Manager, Founder | L07, L09 | human | host | never |
 | `status` | Engineering Manager | Engineering Manager twin, chore lane | Engineering Manager | — | Founder | all | bot | none | read |
 | `audit` | Auditor | Auditor twin, review lane | Auditor | Quality Architect | Founder | all | bot | none | write |
-| `retro` | Engineering Manager | Engineering Manager twin, spec lane | Engineering Manager | Auditor, AI Native Engineer (+SRE hat) | Founder | all | bot | host | write |
+| `retro` | Engineering Manager | Engineering Manager twin, spec lane | Engineering Manager | Auditor, AI Native Engineer | Founder | all | bot | host | write |
 | `measure` | Data & AI Architect | Data & AI Architect twin, spec lane | Revenue Architect | Product Strategist | Founder | L08 | bot | none | write |
-| `evolve` | AI Native Engineer (+SRE hat) | AI Native Engineer (+SRE hat) twin, build lane | AI Native Engineer (+SRE hat) | Quality Architect, Data & AI Architect | Engineering Manager | L05 | bot | host | write |
+| `evolve` | AI Native Engineer | AI Native Engineer twin, build lane | AI Native Engineer | Quality Architect, Data & AI Architect | Engineering Manager | L05 | bot | host | write |
 | `brief` | Mentalist | Mentalist twin, spec lane | Mentalist | Product Strategist | Marketer & Documenter | all | bot | hybrid (adversarial pass direct) | read |
 | `tell` | Marketer & Documenter | Marketer & Documenter twin, spec lane | Marketer & Documenter | Mentalist, Product Strategist | Founder | L01 | human | host (publish requires the human identity) | write |
 | `init` | Founder | Founder twin, chore lane | Founder | DevOps & DevEx Tinkerer | Engineering Manager | L09 | human | none | never |
 | `install` | DevOps & DevEx Tinkerer | DevOps & DevEx Tinkerer twin, chore lane | DevOps & DevEx Tinkerer | — | Engineering Manager | L09 | human | none | never |
 | `doctor` | DevOps & DevEx Tinkerer | DevOps & DevEx Tinkerer twin, chore lane | DevOps & DevEx Tinkerer | — | Engineering Manager | L09 | human | none | read |
-| `chart` | Data & AI Architect | Data & AI Architect twin, spec lane | Data & AI Architect | Code Architect, Revenue Architect | AI Native Engineer (+SRE hat), Quality Architect | L05, L07, L08 | bot | host | read |
+| `chart` | Data & AI Architect | Data & AI Architect twin, spec lane | Data & AI Architect | Code Architect, Revenue Architect | AI Native Engineer, Quality Architect | L05, L07, L08 | bot | host | read |
 | `survey` | Code Architect | Code Architect twin, plan lane | Code Architect | Product Strategist, Quality Architect | Engineering Manager | all | bot | host | read |
 
 Model calling: `none` is deterministic; `host` means the host's model reasons inside the skill;
@@ -87,7 +87,8 @@ Model calling: `none` is deterministic; `host` means the host's model reasons in
 | Code Architect | `code-architect` |
 | Data & AI Architect | `data-ai-architect` |
 | Engineering Manager | `engineering-manager` |
-| AI Native Engineer (+SRE hat) | `ai-native-engineer` |
+| AI Native Engineer | `ai-native-engineer` |
+| Production Engineer | `production-engineer` |
 | UX Researcher & Evolutionist | `ux-researcher-evolutionist` |
 | DevOps & DevEx Tinkerer | `devops-devex-tinkerer` |
 | Quality Architect | `quality-architect` |

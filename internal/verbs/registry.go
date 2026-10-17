@@ -14,7 +14,7 @@ const SkillVersion = "0.0.0"
 // SeatID is the stable slug of a seat.
 type SeatID string
 
-// Seat is one of the thirteen pod seats. Each seat runs solo (agent only) or
+// Seat is one of the fourteen pod seats. Each seat runs solo (agent only) or
 // paired (agent twin plus a human); the mode is configuration, not registry data.
 type Seat struct {
 	ID   SeatID
@@ -295,6 +295,7 @@ const (
 	DataAIArchitect    SeatID = "data-ai-architect" // the Code Architect's counterpart for data and AI (Decision #283)
 	EngineeringManager SeatID = "engineering-manager"
 	AINativeEngineer   SeatID = "ai-native-engineer"
+	ProductionEngineer SeatID = "production-engineer" // runs the software the AI Native Engineer builds (Decision #324)
 	UXResearcher       SeatID = "ux-researcher-evolutionist"
 	DevOps             SeatID = "devops-devex-tinkerer"
 	QualityArchitect   SeatID = "quality-architect"
@@ -305,13 +306,14 @@ const (
 	Founder            SeatID = "founder"
 )
 
-// Seats lists the thirteen seats in charter order.
+// Seats lists the fourteen seats in charter order.
 var Seats = []Seat{
 	{ProductStrategist, "Product Strategist"},
 	{CodeArchitect, "Code Architect"},
 	{DataAIArchitect, "Data & AI Architect"},
 	{EngineeringManager, "Engineering Manager"},
-	{AINativeEngineer, "AI Native Engineer (+SRE hat)"},
+	{AINativeEngineer, "AI Native Engineer"},
+	{ProductionEngineer, "Production Engineer"},
 	{UXResearcher, "UX Researcher & Evolutionist"},
 	{DevOps, "DevOps & DevEx Tinkerer"},
 	{QualityArchitect, "Quality Architect"},
@@ -341,10 +343,10 @@ var LayerTable = []Layer{
 	{L01, "Experience", UXResearcher, []string{"packages/design-system/**", "examples/benefits-qa/web/**"}},
 	{L02, "Interaction / API boundary", CodeArchitect, []string{"cmd/**", "internal/cli/**", "internal/mcp/**", "examples/benefits-qa/api/**", "examples/benefits-qa/cmd/**"}},
 	{L03, "Application / workflow", EngineeringManager, []string{"internal/verbs/**", "internal/workitems/**", "internal/loops/**", "loops/**", "work-items/**", "skills/**", "seats/**", "examples/benefits-qa/ask/**"}},
-	{L04, "Domain / policy", QualityArchitect, []string{"internal/verify/**", "internal/proof/**", "ops/**", "CONSTRAINTS.md", "examples/benefits-qa/policy/**"}},
+	{L04, "Domain / policy", QualityArchitect, []string{"internal/verify/**", "internal/proof/**", "CONSTRAINTS.md", "examples/benefits-qa/policy/**"}},
 	{L05, "Intelligence", DataAIArchitect, []string{"internal/models/**", "internal/evals/**", "evals/**", "examples/benefits-qa/answer/**"}},
 	{L06, "Contracts / integration", CodeArchitect, []string{"internal/github/**", "internal/hosts/**", "internal/notify/**", "hosts/**", "examples/benefits-qa/contracts/**"}},
-	{L07, "Operational data / state", AINativeEngineer, []string{"internal/ledger/**", "internal/config/**", "internal/secrets/**", "internal/identity/**", "internal/actions/**", "examples/benefits-qa/store/**"}},
+	{L07, "Operational data / state", ProductionEngineer, []string{"internal/ledger/**", "internal/config/**", "internal/secrets/**", "internal/identity/**", "internal/actions/**", "ops/**", "examples/benefits-qa/store/**"}},
 	{L08, "Analytics / reporting", DataAIArchitect, []string{"internal/telemetry/**", "examples/benefits-qa/analytics/**"}},
 	{L09, "Platform / operations", DevOps, []string{".github/**", ".agents/**", "embed.go", "go.mod", "go.sum", "examples/benefits-qa/deploy/**"}},
 }
@@ -829,7 +831,7 @@ var Verbs = []Command{
 		Name: "respond", WP: "WP5.6", Stage: StageOperate,
 		Summary: "Respond to an incident: propose an ops catalog action, execute it only through human approval, keep the timeline.",
 		Reader:  "Helps handle an incident: proposes a fix from your runbook, runs it only after a person approves, and keeps the timeline.",
-		Seat:    AINativeEngineer, Lane: LaneBuild, Layers: OnlyLayers(L07, L09),
+		Seat:    ProductionEngineer, Lane: LaneBuild, Layers: OnlyLayers(L07, L09),
 		Inputs: []Input{
 			pos("incident", TypeIssue, "Incident issue."),
 			flag("action", TypeString, "Catalog action to propose."),

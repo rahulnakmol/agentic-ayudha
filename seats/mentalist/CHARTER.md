@@ -1,6 +1,6 @@
 # Mentalist charter
 
-Seat `mentalist`, one of the thirteen seats (docs/BUILD-PLAN.md WP5.1). Everything outside the generated
+Seat `mentalist`, one of the fourteen seats (docs/BUILD-PLAN.md WP5.1). Everything outside the generated
 regions is hand-authored; `go generate ./...` rewrites the Persona region from `persona.toml` beside this file
 (WP5.1b) and the RACI region from `internal/verbs/registry.go`.
 

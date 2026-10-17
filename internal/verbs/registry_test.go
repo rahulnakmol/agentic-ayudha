@@ -88,7 +88,7 @@ func TestRegistry(t *testing.T) {
 			}
 			return nil
 		}},
-		{"13 seats with unique IDs (the thirteenth is Decision #283)", func() error {
+		{"14 seats with unique IDs (the thirteenth is Decision #283, the fourteenth Decision #324)", func() error {
 			ids := make([]string, len(Seats))
 			for i, s := range Seats {
 				ids[i] = string(s.ID)
@@ -96,8 +96,8 @@ func TestRegistry(t *testing.T) {
 					return fmt.Errorf("seat %q has no name", s.ID)
 				}
 			}
-			if len(Seats) != 13 {
-				return fmt.Errorf("%d seats, want 13", len(Seats))
+			if len(Seats) != 14 {
+				return fmt.Errorf("%d seats, want 14", len(Seats))
 			}
 			return unique(ids)
 		}},

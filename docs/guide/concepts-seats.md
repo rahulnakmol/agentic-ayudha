@@ -1,6 +1,6 @@
 # Seats and pairing
 
-A delivery team works because everyone knows their job. aayudha gives its agents the same clarity: thirteen **seats**,
+A delivery team works because everyone knows their job. aayudha gives its agents the same clarity: fourteen **seats**,
 each a role with its own responsibilities, such as Product Strategist or Engineering Manager. Every verb belongs to
 exactly one seat, so there is never a question of who is accountable for a step.
 
@@ -24,7 +24,7 @@ aayu seat add product-strategist --human <github-login>
 aayu seat list
 ```
 
-## The thirteen seats
+## The fourteen seats
 
 | Seat | In plain words | Some of its verbs |
 |---|---|---|
@@ -33,7 +33,8 @@ aayu seat list
 | Code Architect | Plans how each story is built, layer by layer | `plan` |
 | Data & AI Architect | Designs the data and evidence behind numbers and AI answers, and measures them | `chart`, `measure` |
 | Engineering Manager | Reviews, ships, and keeps delivery healthy | `inspect`, `ship`, `status`, `retro` |
-| AI Native Engineer | Builds, runs the checks, handles incidents | `build`, `verify`, `respond`, `evolve` |
+| AI Native Engineer | Builds the software and runs the checks | `build`, `verify`, `evolve` |
+| Production Engineer | Runs the software in production: incidents, SLOs, runbooks, rollbacks | `respond` |
 | Quality Architect | Owns the floors and the proof packs | `proof` |
 | UX Researcher | Designs and reviews the screens | `research`, `wireframe`, `review`, `polish` |
 | DevOps Tinkerer | Releases, installs, and keeps the tooling working | `release`, `install`, `doctor` |
@@ -53,7 +54,7 @@ aayu seat list
 - **Room to grow.** Start solo. Pair a teammate with the seats they care about when they join, and their reviews
   become required for their layers.
 
-On a small team you do not manage thirteen seats. They all run solo by default; you pair a person only where you want
+On a small team you do not manage fourteen seats. They all run solo by default; you pair a person only where you want
 their review.
 
 Full details are in the [RACI table](../RACI.md). Terms are defined in the [glossary](../../GLOSSARY.md).

@@ -47,8 +47,8 @@ every input of every verb.
 | `plan` | Plan a story: one checkpoint per layer, contracts, tests, instrumentation, and rollback. | Code Architect | plan | all | bot | cli, skill, mcp |
 | `decide` | Record a Decision with options, evaluation, and recommendation; accept it, supersede it, or file a floor waiver. | Founder | spec | all | human | cli, skill, mcp |
 | `triage` | Classify intake issues as Feedback, Bug, or Incident by label only; never edits bodies or touches non-intake issues. | Product Strategist | chore | none | bot | cli, skill, mcp |
-| `build` | Build a Ready story or bug in a worktree with checkpoint commits per layer, verify each checkpoint, and open a PR. | AI Native Engineer (+SRE hat) | build | all | bot | cli, skill, mcp |
-| `verify` | Run the deterministic floors (coverage, SAST, secrets, deps, a11y, perf) and record results in a proof pack. | AI Native Engineer (+SRE hat) | chore | all | bot | cli, skill, mcp |
+| `build` | Build a Ready story or bug in a worktree with checkpoint commits per layer, verify each checkpoint, and open a PR. | AI Native Engineer | build | all | bot | cli, skill, mcp |
+| `verify` | Run the deterministic floors (coverage, SAST, secrets, deps, a11y, perf) and record results in a proof pack. | AI Native Engineer | chore | all | bot | cli, skill, mcp |
 | `inspect` | Adversarially review a PR against its plan, pack, and criteria; return a structured disposition: merge, fix, or rebuild. | Engineering Manager | review | all | bot | cli, skill, mcp |
 | `ship` | Squash-merge a PR after a green merge gate and a human pass, write the Complete section, and clean up. | Engineering Manager | chore | all | human | cli, skill |
 | `release` | Promote a Release along dev, rolling, main; stamp included stories released and trigger measurement. | DevOps & DevEx Tinkerer | chore | L09 | human | cli, skill |
@@ -63,12 +63,12 @@ every input of every verb.
 | `baseline` | Capture visual baselines for a commit SHA. | UX Researcher & Evolutionist | chore | L01 | bot | cli, skill, mcp |
 | `experiment` | Design an experiment for a Feature: hypothesis, metric, flag, and minimum sample size. | Revenue Architect | plan | L03, L08 | bot | cli, skill, mcp |
 | `readout` | Read out an experiment's lift once it reaches minimum sample and write the Result. | Revenue Architect | spec | L08 | bot | cli, skill, mcp |
-| `respond` | Respond to an incident: propose an ops catalog action, execute it only through human approval, keep the timeline. | AI Native Engineer (+SRE hat) | build | L07, L09 | human | cli, skill |
+| `respond` | Respond to an incident: propose an ops catalog action, execute it only through human approval, keep the timeline. | Production Engineer | build | L07, L09 | human | cli, skill |
 | `status` | Roll up status, health, risk, proof coverage, decisions, and cost per Goal, Initiative, and Feature. | Engineering Manager | chore | all | bot | cli, skill, mcp |
 | `audit` | Audit floors, proof coverage, waivers, decision SLAs, autonomy exceptions, and unlogged writes; write a reproducible report. | Auditor | review | all | bot | cli, skill, mcp |
 | `retro` | Compare estimates with observed delivery, corrections, floor misses, and cost; file findings as Feedback issues. | Engineering Manager | spec | all | bot | cli, skill, mcp |
 | `measure` | Measure a Goal or Initiative against its baseline from analytics exports or live cloud pulls and write the Result. | Data & AI Architect | spec | L08 | bot | cli, skill, mcp |
-| `evolve` | Turn accepted retro Feedback into a failing eval case, then a skill diff that passes it, opened as an agent-authored PR. | AI Native Engineer (+SRE hat) | build | L05 | bot | cli, skill, mcp |
+| `evolve` | Turn accepted retro Feedback into a failing eval case, then a skill diff that passes it, opened as an agent-authored PR. | AI Native Engineer | build | L05 | bot | cli, skill, mcp |
 | `brief` | Explain work to an audience in a chosen register and purpose as a grounded, accessible HTML brief. | Mentalist | spec | all | bot | cli, skill, mcp |
 | `tell` | Write docs, guides, changelogs, release notes, launch copy, or brand copy that cite only proven Features; publish is human-only. | Marketer & Documenter | spec | L01 | human | cli, skill, mcp |
 | `init` | Set up a product repo: labels, issue types, forms, config, ledger branch, and optionally projects, gates, identity, integrations. | Founder | chore | L09 | human | cli |
