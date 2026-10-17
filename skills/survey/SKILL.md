@@ -216,7 +216,8 @@ Write `survey.json` ([references/formats.md](references/formats.md) has every fi
   quality, operations): the shape of the system, its contracts and data, how it is built and tested, and what is
   dangerous. Cite every known-issue marker or say why it does not matter.
 - **Capabilities** (`C1`…, each with a name): what the system can do for its user, in their words, one capability
-  per claim. Together they are the capability map.
+  per claim. Together they are the capability map, and it covers every public interface the engineering view names:
+  an API a host calls (reading and setting its variables, say) is something the system does for that host.
 - **Product** (`P1`…, topics users, jobs, outcomes, value, constraints, context, competition): who uses it, for what,
   and what outcome it serves, as far as documents state it, with unknowns for the rest. Use the Product
   Strategist's standard: plain customer language, the person who would read the announcement.
@@ -233,12 +234,16 @@ Write `survey.json` ([references/formats.md](references/formats.md) has every fi
   projects that shipped drop-in replacements did it.
 - **Questions** (`Q1`…): each gap the code cannot close, with why it changes the plan and your default with its
   reason. Ask first what only the person knows about use: who runs it, on what input (trusted or not), and which
-  entry points are the product. A gap a probe or a read can close is not a question; close it.
+  entry points are the product. A gap a probe or a read can close is not a question; close it. Each question must
+  change the backlog or the modernisation path; a choice with a safe default that changes neither is a risk that
+  carries the default, not a question. Merge questions that one answer would settle, and order the rest by how much
+  the answer changes.
 - **Modernisation**, when asked for a modern version: the `target` comes from the request's own words
   (`target_source: "request"`) or an answered question; never choose it yourself. A `strategy`, ordered `steps` (each
   naming the modules it replaces, the claims it rests on, and the case sets that prove it), `case_sets` (where the
-  inputs come from, how outputs compare, and any behaviour deliberately excluded, with the claim or question that
-  decided it), `risks`, and, for compatibility, `suites` (the legacy project's own tests run against the new build),
+  inputs come from, which program runs them, how outputs compare, and any behaviour deliberately excluded, with the
+  claim or question that decided it; a case uses only what the program that runs it provides, so a builtin one runner
+  registers and another does not belongs in the first runner's case set), `risks`, and, for compatibility, `suites` (the legacy project's own tests run against the new build),
   `migrations` (each with a tested rollback), `coexistence` (shadow, side-by-side, or switch, with cut-over criteria),
   and `shims` (each with its removal plan). A step lists in `avoids` the do-not-carry entries in the code it
   replaces. [references/modernisation.md](references/modernisation.md) has notes per stack (C++ to Rust, PHP in
