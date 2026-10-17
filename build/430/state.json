@@ -35,6 +35,19 @@
       "verify": "hold",
       "detail": "floors hold; not run here (tool not installed; the merge gate runs them): sast, secrets, deps",
       "at": "2026-10-17T20:07:47Z"
+    },
+    {
+      "k": 2,
+      "n": 3,
+      "attempt": 1,
+      "commit": "d266afd95a61e5501ccdfd67084f7bccfef6e7ee",
+      "layers": [
+        "L02",
+        "L06"
+      ],
+      "verify": "hold",
+      "detail": "floors hold; not run here (tool not installed; the merge gate runs them): sast, secrets, deps",
+      "at": "2026-10-17T20:17:14Z"
     }
   ]
 }
