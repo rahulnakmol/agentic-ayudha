@@ -8,7 +8,9 @@ contains; the answer carries the stage's artefact as its title; a startup answer
 not re-check those; judge the following.
 
 1. Verdict first: it leads with what the Result (or the refusal) says, with the value, baseline, target, population,
-   and window, and a rate is never given without its counts.
+   and window, and a rate from the run is never given without its counts; a rate the grounding gives without counts
+   (a baseline from an earlier run) is quoted with its source and the fact that its counts are not shown, which is
+   not a lapse.
 2. Correct numbers: every number comes from the grounding or from arithmetic on it, the arithmetic is right (rates,
    differences, dates such as when a cohort completes), and nothing is invented (no causes, sizes, dates, or people
    beyond the grounding).

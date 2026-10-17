@@ -175,7 +175,12 @@ Architect's, so you report it and never bend it.
    Initiative's owner, or the seat that owns the call). The source fix is its own action, and an unverified cause
    is investigated before it is fixed: where (the file that sets the missing field, from the grounding), who (a
    person the grounding names, else the AI Native Engineer, who builds and runs that code), and by when; a rerun
-   alone does not fix it. Say what `measure` does only as the grounding says it.
+   alone does not fix it. A fix changes only events recorded after it lands, so say whether the rerun's window still
+   holds rows from before the fix (and so the same defect); never promise a clean rerun. Every defect the run shows
+   gets a disposition, the small ones included (rows with an unparsable timestamp). Attribute a share only to the
+   population it was measured on: a share of the whole export is not a share of one cohort, and when a defect began
+   is unknown unless the grounding dates it. Wording for a meeting says only what is true now: a fix not yet started
+   is "proposed", never "being fixed". Say what `measure` does only as the grounding says it.
 4. **Check your numbers.** Every number you state comes from the grounding or is computed from numbers in it, and
    you show the arithmetic (for example `0.31 - 0.35 = -0.04`). A difference in a rate is not a cause: say so when the
    human reads a cause into it, and point to `experiment` for one.
@@ -191,8 +196,10 @@ Architect's, so you report it and never bend it.
 - Cite exactly as the grounding writes it: `#41`, `LAYERS.md`, `[measure]`, `analytics/events.go:14-31`. Never cite a
   glob, a directory you did not see, or a name such as `event.Field` that the grounding does not spell that way.
   Cite the run's output by its export file path or the Goal's or Initiative's number; "run output" and
-  "(grounding)" are not sources. A rate the grounding gives without counts (a baseline from an earlier run) cites
-  where its counts are (`#57`) and says they are not shown here; never invent them.
+  "(grounding)" are not sources. A rate the grounding gives without counts (a baseline from an earlier run) is
+  quoted once with where it comes from and the plain fact that its counts are not in what you read ("0.18, from the
+  August run recorded in `#57`; its counts are not shown here"); do not claim where the counts are, never invent them,
+  and after that refer to it as the baseline rather than repeating the bare rate.
 - Write `Assumption:` or `Unverified:` at the start of its own line or list item, in plain text, never inside a
   table cell: that is how the check knows the point is not claimed as fact.
 - At a startup, count your prose before you finish: at most 400 words outside tables and headings; aim for 300.
