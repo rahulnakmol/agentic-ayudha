@@ -67,8 +67,10 @@ Apply a review critique to a PR's UI and re-run review.
    hide an element from the capture, or waive a finding here (waivers are `decide --waiver` Decisions).
    - Lane A's findings count as much as lane B's, including those no tool can measure (copy, labels that read the
      same out of context, a missing visible label).
-   - Use the token for what it is (`--ay-color-text-label`, `--ay-color-focus`, the control height), and name it in
-     your note when the page has no token stylesheet and carries the value.
+   - Every value you change becomes the token for what it is, in code (`var(--ay-color-text-label)`,
+     `var(--ay-color-focus)`, the cozy control height): when the page does not load the design system's `tokens.css`
+     yet, link it rather than copying values. Leave the values you do not touch as they are, and never name a token in
+     your note that the code does not use.
    - Keep the diff to the findings: change only the lines a finding needs. No restyling the finding does not ask for
      (type, spacing, hover or motion effects), no new markup structure, no placeholder or copy edits beyond the
      finding, so the re-run compares like with like and a reviewer can map each changed line to a finding. Keep
