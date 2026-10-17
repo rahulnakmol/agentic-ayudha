@@ -163,7 +163,7 @@ func (h *Harness) runPersona(ctx context.Context, c Case, lane verbs.LaneID, bod
 		"\n\n## Persona the skill speaks in\n\n"+persona.Prompt(c.Persona.Stage, "set by the case")+
 		"\n\n## Grounding (the only source)\n\n"+input+"\n\n## Checks\n\n"+checks+".", rubric, answer, nil, &calls)
 	if err != nil {
-		return Run{}, err
+		return Run{Revised: run.Revised, RevisedFor: run.RevisedFor, Answer: answerOf(answer)}, err
 	}
 	judged.Revised, judged.RevisedFor = run.Revised, run.RevisedFor
 	judged.Answer = answerOf(answer)
@@ -296,7 +296,7 @@ func (h *Harness) runPack(ctx context.Context, c Case, lane verbs.LaneID, body, 
 		", at the "+c.Pack.Stage+" stage\n\n## Grounding (the only source)\n\n"+input+"\n\n## Checks\n\n"+checks,
 		rubric, pack, nil, &calls)
 	if err != nil {
-		return Run{}, err
+		return Run{Revised: len(first) > 0, RevisedFor: revisedFor(first), Answer: answerOf(pack)}, err
 	}
 	judged.Revised, judged.RevisedFor = len(first) > 0, revisedFor(first)
 	judged.Answer = answerOf(pack)

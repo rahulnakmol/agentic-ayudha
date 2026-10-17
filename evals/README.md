@@ -95,10 +95,14 @@ least `pass_score`, else 0; the suite's is the mean over cases. More than one er
 reply that stops at its token cap is an `error` marked `truncated` and is not retried. A provider fault is not the
 skill's: a dropped connection, a 5xx (the gateway's 524 included) or a 429, a server error inside a stream, a stream
 that stalls past the client's timeout, or a reply that loops on one token to the cap is retried, at most twice a run
-across its calls (`ProviderRetries`, D-3.4y); a run whose faults pass that cap is an `error` as before. Each run records
-every model call: role, model, stop reason, input and output tokens, the cap, and each provider retry with its fault
-and cost. When the group's `max_usd` is reached, the remaining runs
-are recorded as errors and the results file is still written.
+across its calls (`ProviderRetries`); a run whose faults pass that cap is an `error` as before. A retry after a 429
+waits about 10 s, and after a 5xx or a stream server error about 20 s, times the retry's number, plus up to half
+again at random, so the runs that meet one gateway outage do not all retry into it at once. Each run records every
+model call: role, model, stop reason, input and output tokens, the cap, its cost, and each provider retry with its
+fault and cost. An errored run keeps what it produced before the call that failed (its draft, the floor findings
+its first draft was revised for, and a survey's first-draft score and self-check), so the results show what it made
+and what it cost. When the group's `max_usd` is reached, the remaining runs are recorded as errors and the results
+file is still written.
 
 A brief case's skill replies with its Markdown draft. Its grounding gives each pack's criterion → evidence map (and
 inspect's verdicts when the pack's head has them), and a draft cites evidence only through it (`[P1.c3]`); a case

@@ -320,10 +320,20 @@ func (r *resetting) Complete(ctx context.Context, req models.Request) (models.Re
 	return r.Fake.Complete(ctx, req)
 }
 
+// noPause records the retries' pauses instead of waiting them out.
+func noPause(t *testing.T) *[]time.Duration {
+	var waits []time.Duration
+	old := pause
+	pause = func(_ context.Context, d time.Duration) error { waits = append(waits, d); return nil }
+	t.Cleanup(func() { pause = old })
+	return &waits
+}
+
 // TestTier2RetriesServerErrors: the gateway's 524 and a server error inside a
 // stream are retried once, like a reset (host-skills runs 39025583374 and
 // 39032651481, D-3.4o); a 400 is the request's fault and is not.
 func TestTier2RetriesServerErrors(t *testing.T) {
+	noPause(t)
 	cases, _ := stubCases(root)
 	item, _ := os.ReadFile(filepath.Join(root, "evals", "cases", "stub", "csv-export", "output", "issue.json"))
 	var replies []models.Response
@@ -395,8 +405,7 @@ func (stall) Temporary() bool { return true }
 // and each retry is recorded with its cost; a run whose faults pass the cap
 // errors as before. Only that run counts against the case's one allowed error.
 func TestTier2RetriesProviderFaults(t *testing.T) {
-	rateLimitWait = 0
-	t.Cleanup(func() { rateLimitWait = 10 * time.Second })
+	waits := noPause(t)
 	cases, _ := stubCases(root)
 	item, _ := os.ReadFile(filepath.Join(root, "evals", "cases", "stub", "csv-export", "output", "issue.json"))
 	ok := models.Response{Text: string(item)}
@@ -434,6 +443,17 @@ func TestTier2RetriesProviderFaults(t *testing.T) {
 	}
 	if c := res.Cases[0]; c.Errors != 1 || c.Mean != 5 {
 		t.Errorf("errors %d, mean %v: only run 4 is an error", c.Errors, c.Mean)
+	}
+	// A server error backs off like a 429, so the retries of an outage do not all fail at once: the 429 waits
+	// 10-15 s, the 524 20-30 s, each overloaded stream 20-30 s and then 40-60 s; a stall and a looping reply do not wait.
+	bounds := [][2]time.Duration{{10, 15}, {20, 30}, {20, 30}, {40, 60}}
+	if len(*waits) != len(bounds) {
+		t.Fatalf("pauses %v, want %d", *waits, len(bounds))
+	}
+	for i, b := range bounds {
+		if w := (*waits)[i]; w < b[0]*time.Second || w > b[1]*time.Second {
+			t.Errorf("pause %d is %v, want %d-%d s", i+1, w, b[0], b[1])
+		}
 	}
 }
 

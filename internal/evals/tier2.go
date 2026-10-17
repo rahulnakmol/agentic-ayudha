@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/fs"
 	"maps"
+	"math/rand/v2"
 	"net"
 	"os"
 	"path"
@@ -89,10 +90,11 @@ type CallLog struct {
 	TokensOut  int    `json:"tokens_out"`
 	// CachedIn and CacheWriteIn are the parts of TokensIn read from and
 	// written to the provider's prompt cache.
-	CachedIn     int    `json:"cached_in,omitempty"`
-	CacheWriteIn int    `json:"cache_write_in,omitempty"`
-	MaxTokens    int    `json:"max_tokens"`
-	Error        string `json:"error,omitempty"`
+	CachedIn     int     `json:"cached_in,omitempty"`
+	CacheWriteIn int     `json:"cache_write_in,omitempty"`
+	MaxTokens    int     `json:"max_tokens"`
+	Error        string  `json:"error,omitempty"`
+	CostUSD      float64 `json:"cost_usd"` // this attempt; each retry's cost is on the retry
 	// Retries are the provider faults the call was retried after (WP5.8,
 	// D-3.4o, D-3.4r, D-3.4y), each with what it cost: the provider's error,
 	// never the skill's, so it does not cost the run its one allowed error.
@@ -285,10 +287,8 @@ func (h *Harness) call(ctx context.Context, gw *models.Gateway, lane verbs.LaneI
 		h.charge(usd)
 		retries = append(retries, Retry{Fault: fault, Model: m.Model, TokensIn: resp.TokensIn, TokensOut: resp.TokensOut, CostUSD: usd})
 		if wait := providerWait(err, len(retries)); wait > 0 {
-			select {
-			case <-ctx.Done():
-				return models.Response{}, ctx.Err()
-			case <-time.After(wait):
+			if err := pause(ctx, wait); err != nil {
+				return models.Response{}, err
 			}
 		}
 		resp, m, err = gw.Do(ctx, c)
@@ -304,7 +304,7 @@ func (h *Harness) call(ctx context.Context, gw *models.Gateway, lane verbs.LaneI
 		h.mu.Unlock()
 	}
 	l := CallLog{Role: role, Model: m.Model, StopReason: resp.StopReason, Truncated: resp.Truncated,
-		TokensIn: resp.TokensIn, TokensOut: resp.TokensOut, CachedIn: resp.CachedIn, CacheWriteIn: resp.CacheWriteIn, MaxTokens: req.MaxTokens, Retries: retries}
+		TokensIn: resp.TokensIn, TokensOut: resp.TokensOut, CachedIn: resp.CachedIn, CacheWriteIn: resp.CacheWriteIn, MaxTokens: req.MaxTokens, CostUSD: usd, Retries: retries}
 	if err != nil {
 		l.Error = clip(actions.RedactString(err.Error()), 200)
 	}
@@ -323,8 +323,23 @@ func (h *Harness) charge(usd float64) {
 // before, so an outage cannot spend a group's budget (D-3.4y).
 const ProviderRetries = 2
 
-// rateLimitWait is the pause before retrying a 429, times the retry's number.
-var rateLimitWait = 10 * time.Second
+// retryWait is the pause before the nth retry of a 429 or a server error:
+// n times its base, plus up to half again at random, so the retries of
+// parallel runs spread over a gateway outage instead of failing together.
+var retryWait = func(n int, base time.Duration) time.Duration {
+	d := time.Duration(n) * base
+	return d + rand.N(d/2+1)
+}
+
+// pause waits d, or until ctx is done.
+var pause = func(ctx context.Context, d time.Duration) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(d):
+		return nil
+	}
+}
 
 func runRetries(log []CallLog) int {
 	n := 0
@@ -362,10 +377,17 @@ func providerFault(ctx context.Context, resp models.Response, err error) string 
 	return ""
 }
 
+// providerWait is the pause before the nth retry: a 429 waits about 10 s a
+// retry, a 5xx or a stream server error about 20 s, with jitter (retryWait). A
+// drop, a stall (already minutes long), and a looping reply retry at once.
 func providerWait(err error, n int) time.Duration {
 	var se *models.StatusError
-	if errors.As(err, &se) && se.Code == 429 {
-		return time.Duration(n) * rateLimitWait
+	var st *models.StreamError
+	switch {
+	case errors.As(err, &se) && se.Code == 429:
+		return retryWait(n, 10*time.Second)
+	case errors.As(err, &se) && se.Code >= 500, errors.As(err, &st):
+		return retryWait(n, 20*time.Second)
 	}
 	return 0
 }
@@ -523,9 +545,10 @@ func (h *Harness) Tier2(ctx context.Context, cases []Case, sha, ref string, now 
 				budgetErr = err
 			}
 			if err != nil {
-				calls := run.Calls
-				run = errorRun(err)
-				run.Calls = calls
+				// An error in a later call (a judge, a revision) keeps what the run already produced, its
+				// draft, floor findings, and first-draft scores, and every call it paid for.
+				e := errorRun(err)
+				run.Status, run.Score, run.Pass, run.Error, run.Excerpt = e.Status, 0, false, e.Error, e.Excerpt
 			}
 			cr.Runs = append(cr.Runs, run)
 		}

@@ -333,7 +333,7 @@ func (h *Harness) runSurvey(ctx context.Context, c Case, lane verbs.LaneID, body
 	// every item against its evidence and only the corrected draft is scored.
 	firstJudged, err := h.judge(ctx, judgeInput, rubric, prettyJSON(reply), nil, &calls)
 	if err != nil {
-		return Run{}, err
+		return Run{Revised: run.Revised, RevisedFor: run.RevisedFor, Answer: answerOf(reply)}, err
 	}
 	sc := &SelfCheck{FirstScore: firstJudged.Score, FirstReason: firstJudged.Reason, FirstDraft: actions.RedactString(reply)}
 	// The self-check replies with corrections only (D-5.9n), applied to the
@@ -354,7 +354,7 @@ func (h *Harness) runSurvey(ctx context.Context, c Case, lane verbs.LaneID, body
 		return checkSurvey(c, w, corrected)
 	}, "Fix every finding and reply with the whole corrections object again, for the "+file+" you self-checked, never the draft itself.")
 	if err != nil {
-		return Run{}, err
+		return Run{Revised: run.Revised, RevisedFor: run.RevisedFor, SelfCheck: sc, Answer: answerOf(reply)}, err
 	}
 	sc.Corrections, sc.Revised = actions.RedactString(patch), len(again) > 0
 	if len(problems) > 0 {
@@ -363,7 +363,7 @@ func (h *Harness) runSurvey(ctx context.Context, c Case, lane verbs.LaneID, body
 	}
 	judged, err := h.judge(ctx, judgeInput, rubric, prettyJSON(corrected), nil, &calls)
 	if err != nil {
-		return Run{}, err
+		return Run{Revised: run.Revised, RevisedFor: run.RevisedFor, SelfCheck: sc, Answer: answerOf(corrected)}, err
 	}
 	judged.Revised, judged.RevisedFor, judged.SelfCheck = run.Revised, run.RevisedFor, sc
 	judged.Answer = answerOf(corrected)
