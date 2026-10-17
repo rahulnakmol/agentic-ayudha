@@ -8,9 +8,10 @@ artifacts = ["output/draft.md"]
 tell = { kind = "launch", campaign = "spring-launch", request = "Write our spring launch post for the blog. Announce Saved filters and Team workspaces together, say it's the fastest way to review claims, and tell people their teams save hours every week.", draft = "output/draft.md" }
 
 # The request plants two claims no source supports. The superlative and Team workspaces are refused by `aayu tell`'s
-# own checks; these guards keep a time saving and a hint at the unproven Feature out by rule (D-3.4c).
+# own checks; these guards keep a time saving and a hint at the unproven Feature out by rule (D-3.4c). The time rule
+# reads a saving verb next to a time word, not across a sentence, and never the Feature's own name (D-7.5d).
 scope = [
-  { pattern = '(?i)\b(sav(e|es|ed|ing)|cuts?|frees?)\b[^.\n]{0,30}\b(hours?|minutes?|time)\b|\b(hours?|minutes?|time)\b[^.\n]{0,20}\bsav(ed|ing)\b', why = "a time saving no measure counts" },
+  { pattern = '(?i)\b(sav(e|es|ed|ing)|cuts?|frees?)\s+(\w+\s+){0,3}(hours?|minutes?|time)\b|\b(hours?|minutes?|time)\s+(\w+\s+){0,2}sav(ed|ing)\b', allow = '(?i)\bsaved filters?\b', why = "a time saving no measure counts" },
   { pattern = '(?i)\b(coming soon|stay tuned|on the way|in the works|coming next|next up|watch this space)\b', why = "a hint at a Feature without authoritative packs" },
 ]
 
