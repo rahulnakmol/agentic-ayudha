@@ -381,7 +381,7 @@ func TestVerifyScreenshotReview(t *testing.T) {
 		return e
 	}
 	png := []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR")
-	arts := []verify.Evidence{{Path: "screens/1.png", Kind: "screenshot", Data: png}, {Path: "reports/a11y.json", Kind: "report", Data: []byte("{}")}}
+	arts := []verify.Evidence{{Path: "screens/1.png", Kind: "screenshot", Data: png, OCRScanned: true}, {Path: "reports/a11y.json", Kind: "report", Data: []byte("{}")}}
 	sr := newE(fakeModel).screenshotReview(context.Background(), arts, 0, "")
 	if sr == nil || !sr.Advisory || sr.Skipped != "" || sr.Model != verbs.ModelGemini || sr.Effort != "high" || len(sr.Findings) != 1 || sr.Findings[0].Kind != "contrast" {
 		t.Fatalf("screenshot review: %+v", sr)
@@ -389,8 +389,11 @@ func TestVerifyScreenshotReview(t *testing.T) {
 	if len(fakeModel.Requests) != uireview.K {
 		t.Fatalf("%d lane A calls, want %d", len(fakeModel.Requests), uireview.K)
 	}
-	if r := fakeModel.Requests[0]; r.Effort != "high" || r.Model != verbs.ModelGemini || len(r.Messages[0].Images) != 1 {
-		t.Fatalf("lane A request: model %s, effort %q, %d images", r.Model, r.Effort, len(r.Messages[0].Images))
+	// One image, and a prompt that says it is the only input (no focused
+	// screenshot, markup, or tree to judge focus or labels from).
+	if r := fakeModel.Requests[0]; r.Effort != "high" || r.Model != verbs.ModelGemini || len(r.Messages[0].Images) != 1 ||
+		!strings.Contains(r.System, "no markup") || strings.Contains(r.Messages[0].Content, "<untrusted") {
+		t.Fatalf("lane A request: model %s, effort %q, %d images, system %q", r.Model, r.Effort, len(r.Messages[0].Images), r.System)
 	}
 	broken := &models.Fake{Err: errors.New("gateway down")}
 	if sr := newE(broken).screenshotReview(context.Background(), arts, 0, ""); sr == nil || !sr.Advisory || sr.Skipped == "" {
@@ -406,14 +409,14 @@ func TestVerifyScreenshotReview(t *testing.T) {
 		t.Fatalf("storyless model calls carry a story key (%v):\n%s", err, log)
 	}
 	// A Google-built head gets no Google review (reviewer ≠ builder), and a
-	// behaviour control's screenshot, which no redaction pass has seen, is
-	// never sent to the model.
+	// screenshot the redaction pass did not read with OCR (a behaviour
+	// control's, or any when tesseract is missing) is never sent to the model.
 	calls := len(fakeModel.Requests)
 	if sr := e.screenshotReview(context.Background(), arts, 0, verbs.ModelGemini); sr == nil || !strings.Contains(sr.Skipped, "google") {
 		t.Fatalf("Google builder: %+v", sr)
 	}
-	behaviour := []verify.Evidence{{Path: "behaviour/f/c/shot.png", Kind: "screenshot", Data: png}}
-	if sr := e.screenshotReview(context.Background(), behaviour, 0, ""); sr != nil || len(fakeModel.Requests) != calls {
-		t.Fatalf("behaviour screenshot: %+v, %d calls", sr, len(fakeModel.Requests)-calls)
+	unscanned := []verify.Evidence{{Path: "screens/2.png", Kind: "screenshot", Data: png}, {Path: "behaviour/f/c/shot.png", Kind: "screenshot", Data: png}}
+	if sr := e.screenshotReview(context.Background(), unscanned, 0, ""); sr == nil || !strings.Contains(sr.Skipped, "OCR") || len(fakeModel.Requests) != calls {
+		t.Fatalf("unscanned screenshots: %+v, %d calls", sr, len(fakeModel.Requests)-calls)
 	}
 }

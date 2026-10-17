@@ -45,7 +45,8 @@ interim until the AI gateway routes the target, `gemini-4-argon-high`, which nee
 
 > **Needs setup:** the ui-review lane needs a model key: the AI gateway's (`[models.gateway]`) or Google's. Without
 > one, and in the merge gate, which has no model key, `aayu verify` records `screenshot_review.skipped` with the reason
-> instead of findings, and `aayu review` stops. Set the key with `aayu auth set-secret <name>`.
+> instead of findings, and `aayu review` stops. Set the key with `aayu auth set-secret <name>`. Verify sends only
+> screenshots that its redaction pass read with OCR, so it also needs `tesseract` installed.
 
 ## How `aayu models` resolves a lane
 
@@ -82,7 +83,9 @@ family equals the builder's, and a reviewer with no concrete family at all.
 
 `RouteFor` in `internal/models/client.go` decides where a call goes. When `[models.gateway] base_url` is set, every
 model goes to that one AI gateway, with the key from the secret that `[models.gateway] secret` names, sent as a Bearer
-token. Otherwise each family goes to its own provider, with a key in a secret named after the family.
+token. Otherwise each family goes to its own provider, with a key in a secret named after the family. `base_url` and
+`secret` are read only from the user config, `AAYU_MODELS__GATEWAY__*` variables, or `--set`, never from the checkout:
+a PR's `.aayudha/config.toml` cannot choose where your keys are sent (`Load` in `internal/config/load.go`).
 
 The client speaks three wire formats:
 

@@ -75,23 +75,32 @@ type ScreenshotReview struct {
 	Skipped     string             `json:"skipped,omitempty"` // why no judgement was made
 }
 
-// screenshotReview runs the ui-review lane on the web floor's captures
-// (screens/N.png), the only screenshots that have passed its PII redaction
-// pass; a behaviour control's screenshots are not sent to a model.
+// screenshotReview runs the ui-review lane on the screenshots whose pixels
+// the web floor's redaction pass read with OCR and found free of personal
+// data (OCRScanned); no other screenshot is sent to a model.
 // builderModel is the head's Aayudha-Model trailer, for the family check. Any
 // failure (no model key, a family clash, a gateway error) is recorded as
 // skipped: the judgement is advisory and never stops verify.
 func (e *Env) screenshotReview(ctx context.Context, arts []verify.Evidence, story int, builderModel string) *ScreenshotReview {
 	var shots []verify.Evidence
+	unscanned := 0
 	for _, a := range arts {
-		if a.Kind == "screenshot" && strings.HasPrefix(a.Path, "screens/") {
+		switch {
+		case a.Kind != "screenshot":
+		case a.OCRScanned:
 			shots = append(shots, a)
+		default:
+			unscanned++
 		}
 	}
-	if len(shots) == 0 {
+	if len(shots)+unscanned == 0 {
 		return nil
 	}
 	sr := &ScreenshotReview{Advisory: true}
+	if len(shots) == 0 {
+		sr.Skipped = fmt.Sprintf("no screenshot passed the OCR redaction scan (%d not scanned; is tesseract installed?)", unscanned)
+		return sr
+	}
 	rv, err := e.reviewer(ctx, nil, story, false, builderModel)
 	if err != nil {
 		sr.Skipped = err.Error()

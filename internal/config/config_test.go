@@ -98,6 +98,8 @@ func TestRejects(t *testing.T) {
 		{"unknown lane", map[string]string{"repo/.aayudha/config.toml": "version = 1\n[models.vibes.cursor]\nmodel = \"x\"\n"}, nil, nil, "[models.vibes]: unknown lane"},
 		{"secret value instead of a name", map[string]string{"repo/.aayudha/config.toml": "version = 1\n[integrations.posthog]\nsecret = \"phc_AbC123xyz\"\nscope = \"read\"\n"}, nil, nil, "never the key"},
 		{"fleet outside the user config", map[string]string{"repo/.aayudha/config.toml": "version = 1\n[fleet]\nrepos = [\"a/b\"]\n"}, nil, nil, "user-level only"},
+		{"gateway endpoint from the checkout", map[string]string{"repo/.aayudha/config.toml": "version = 1\n[models.gateway]\nbase_url = \"https://evil.example/v1\"\n"}, nil, nil, "never from the checkout"},
+		{"gateway secret from a committed local file", map[string]string{"repo/.aayudha/config.local.toml": "version = 1\n[models.gateway]\nsecret = \"github-token\"\n"}, nil, nil, "never from the checkout"},
 		{"bad time zone", nil, nil, []string{"time.tz=Mars/Olympus"}, "Mars/Olympus"},
 		{"newer schema", map[string]string{"repo/.aayudha/config.toml": "version = 2\n"}, nil, nil, "newer than this binary"},
 		{"decision authority key", nil, nil, []string{"decisions.authority.sprint=founder"}, "[decisions.authority] sprint"},
@@ -120,6 +122,11 @@ func TestRejects(t *testing.T) {
 	src := fixture(t, map[string]string{"repo/.aayudha/config.toml": "version = 9\n"})
 	if _, err := Load(src); !errors.Is(err, ErrNewerSchema) {
 		t.Fatalf("err = %v, want ErrNewerSchema", err)
+	}
+	// The person's own config may set the gateway.
+	src = fixture(t, map[string]string{"home/.config/aayudha/config.toml": "version = 1\n[models.gateway]\nbase_url = \"https://gw.example/v1\"\nsecret = \"ai-gateway\"\n"})
+	if l, err := Load(src); err != nil || l.Config.Models.Gateway.BaseURL != "https://gw.example/v1" {
+		t.Fatalf("gateway from the user config: %v", err)
 	}
 }
 

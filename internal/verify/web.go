@@ -268,10 +268,12 @@ func (A11y) Run(ctx context.Context, r *Run) (Result, error) {
 	// Redaction first: any personal data blocks the pack, and no capture of
 	// this run is kept.
 	var pii []string
+	scanned := map[int]bool{} // states whose screenshot OCR read
 	for i, s := range w.States {
 		if s.Screenshot != "" {
 			if txt, ok := ocr(ctx, r, s.Screenshot); ok {
 				w.States[i].PII = append(w.States[i].PII, ScanPII(txt)...)
+				scanned[s.N] = true
 			}
 		}
 		for _, p := range w.States[i].PII {
@@ -354,7 +356,7 @@ func (A11y) Run(ctx context.Context, r *Run) (Result, error) {
 	for _, s := range w.States {
 		if s.Screenshot != "" {
 			if b, err := os.ReadFile(s.Screenshot); err == nil {
-				res.Artifacts = append(res.Artifacts, Evidence{Path: fmt.Sprintf("screens/%d.png", s.N), Kind: "screenshot", Data: b, Criteria: []int{s.N}})
+				res.Artifacts = append(res.Artifacts, Evidence{Path: fmt.Sprintf("screens/%d.png", s.N), Kind: "screenshot", Data: b, Criteria: []int{s.N}, OCRScanned: scanned[s.N]})
 			}
 		}
 		if s.Video != "" {
