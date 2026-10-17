@@ -47,7 +47,7 @@ aayu review <pr>
 | Input | Required | What it does |
 |---|---|---|
 | `<pr>` | yes | Pull request whose UI to review. |
-| `--deep` | no | Run lane A at high effort. |
+| `--deep` | no | Run lane A at high effort when the lane's default effort is lower. |
 
 <!-- END GENERATED: skill-usage -->
 
