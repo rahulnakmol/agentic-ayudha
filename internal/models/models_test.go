@@ -440,7 +440,7 @@ func TestStopReasons(t *testing.T) {
 // answers JSON still decodes; an error event is an error.
 func TestMessagesStream(t *testing.T) {
 	sse := "event: message_start\n" +
-		`data: {"type":"message_start","message":{"model":"claude-opus-5-5","usage":{"input_tokens":5,"cache_read_input_tokens":100,"output_tokens":1}}}` + "\n\n" +
+		`data: {"type":"message_start","message":{"model":"claude-opus-5-5","usage":{"input_tokens":5,"cache_read_input_tokens":100,"cache_creation_input_tokens":300,"cache_creation":{"ephemeral_5m_input_tokens":100,"ephemeral_1h_input_tokens":200},"output_tokens":1}}}` + "\n\n" +
 		"event: ping\ndata: {\"type\":\"ping\"}\n\n" +
 		`data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}` + "\n\n" +
 		`data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"{\"a\":"}}` + "\n\n" +
@@ -452,7 +452,7 @@ func TestMessagesStream(t *testing.T) {
 		in, out                 int
 		truncated, wantErr      bool
 	}{
-		{"stream", "text/event-stream; charset=utf-8", sse, `{"a": 1}`, 105, 42, true, false},
+		{"stream", "text/event-stream; charset=utf-8", sse, `{"a": 1}`, 405, 42, true, false},
 		{"json", "application/json", `{"model":"m","content":[{"type":"text","text":"{}"}],"stop_reason":"end_turn","usage":{"input_tokens":3,"output_tokens":4}}`, "{}", 3, 4, false, false},
 		{"error", "text/event-stream", `data: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}` + "\n\n", "", 0, 0, false, true},
 	} {
@@ -476,6 +476,14 @@ func TestMessagesStream(t *testing.T) {
 		}
 		if err != nil || r.Text != tc.text || r.TokensIn != tc.in || r.TokensOut != tc.out || r.Truncated != tc.truncated {
 			t.Errorf("%s: %+v %v", tc.name, r, err)
+		}
+		// A streamed reply's cache reads and writes bill at their own rates too (the survey,
+		// session, and ux evals stream): Opus 5.5 input 4, read 0.20, 5-minute write 5, 1-hour write 8.
+		if tc.name == "stream" {
+			want := (5*4 + 100*0.20 + 100*5 + 200*8 + 42*20) / 1e6
+			if usd, _ := Cost(nil, "claude-opus-5-5", r); math.Abs(usd-want) > 1e-12 {
+				t.Errorf("stream cost %.6f, want %.6f", usd, want)
+			}
 		}
 	}
 }
@@ -529,6 +537,21 @@ func TestCostAtListPrices(t *testing.T) {
 			`{"model":"gpt-6.1-sol","status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"ok"}]}],
 			"usage":{"input_tokens":15000,"input_tokens_details":{"cached_tokens":12000,"cache_write_tokens":3000},"output_tokens":900,"total_tokens":15900}}`,
 			nil, (12000*0.10 + 3000*2.50 + 900*10) / 1e6, CostListPrice},
+		// Anthropic splits cache writes by TTL; the gateway's 1-hour writes bill at 2x input (8), the
+		// 5-minute ones at 1.25x (5). Charging all 1,548 at 5 would give 0.04173.
+		{"claude-opus-5-5, 5-minute and 1-hour cache writes", StyleMessages,
+			`{"model":"claude-opus-5-5","content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":2,
+			"cache_creation_input_tokens":1548,"cache_read_input_tokens":310,"output_tokens":1696,
+			"cache_creation":{"ephemeral_5m_input_tokens":548,"ephemeral_1h_input_tokens":1000}}}`,
+			nil, (2*4 + 548*5 + 1000*8 + 310*0.20 + 1696*20) / 1e6, CostListPrice},
+		{"claude-haiku-5-5, long prompt with 1-hour writes", StyleMessages,
+			`{"model":"claude-haiku-5-5","content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":90000,
+			"cache_creation_input_tokens":20000,"output_tokens":1000,"cache_creation":{"ephemeral_1h_input_tokens":20000}}}`,
+			nil, (90000*0.50 + 20000*1 + 1000*2.50) / 1e6, CostListPrice},
+		{"config price with one cache-write rate bills 1-hour writes at it", StyleMessages,
+			`{"model":"claude-opus-5-5","content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":10,
+			"cache_creation_input_tokens":1000,"output_tokens":100,"cache_creation":{"ephemeral_1h_input_tokens":1000}}}`,
+			[]config.Price{{Model: "claude-opus-5-5", InputPerMTok: 3, CacheWritePerMTok: 6, OutputPerMTok: 12}}, (10*3 + 1000*6 + 100*12) / 1e6, CostPriceTable},
 		{"grok-4.7, reasoning outside completion_tokens", StyleChat,
 			`{"model":"grok-4.7","choices":[{"message":{"content":"ok"},"finish_reason":"stop"}],
 			"usage":{"prompt_tokens":4000,"prompt_tokens_details":{"cached_tokens":1000},"completion_tokens":300,"total_tokens":5300}}`,
