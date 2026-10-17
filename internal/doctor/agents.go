@@ -59,7 +59,7 @@ func checkAgents(ctx context.Context, p *Probe) Result {
 	for _, a := range agentenv.Detect(ctx, pr) {
 		state := "not installed"
 		if a.CLI != "" {
-			state = a.CLI + " " + a.Version
+			state = strings.TrimSpace(a.CLI + " " + a.Version)
 			if a.SignedIn && a.Via != "" {
 				state += ", runs through " + strings.TrimPrefix(a.Via, "the ")
 				local = append(local, a.Name)
@@ -74,6 +74,11 @@ func checkAgents(ctx context.Context, p *Probe) Result {
 			cloud = append(cloud, a.Name)
 		}
 		lines = append(lines, fmt.Sprintf("%s: %s; cloud: %s", a.Name, state, a.CloudDetail))
+		if p.Verbose {
+			for _, w := range a.Warnings {
+				lines = append(lines, "  "+a.Name+" printed: "+w)
+			}
+		}
 		switch {
 		case a.CLI == "":
 			lines = append(lines, "  install: "+strings.Join(a.Install, "; "))

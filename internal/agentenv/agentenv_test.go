@@ -391,13 +391,15 @@ func TestFix(t *testing.T) {
 	}
 }
 
+const codexWarning = `WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir "/tmp" (codex_home: AbsolutePathBuf("/tmp/h/codex"))`
+
 func TestDetect(t *testing.T) {
 	type ans struct {
 		out string
 		ok  bool
 	}
 	table := map[string]ans{
-		"/bin/codex --version":           {"codex-cli 0.163.0", true},
+		"/bin/codex --version":           {codexWarning + "\ncodex-cli 0.163.0", true},
 		"/bin/codex login status":        {"Logged in using an API key - sk-***", true},
 		"/bin/claude --version":          {"2.1.301 (Claude Code)", true},
 		"/bin/claude auth status --json": {`{"loggedIn": true, "authMethod": "api_key"}`, true},
@@ -426,6 +428,10 @@ func TestDetect(t *testing.T) {
 	got := map[string]Agent{}
 	for _, a := range Detect(context.Background(), p) {
 		got[a.Name] = a
+	}
+	// Codex's stderr warning is not its version (seen on megaman, codex-cli 0.163.0).
+	if c := got["codex"]; c.Version != "codex-cli 0.163.0" || !slices.Equal(c.Warnings, []string{codexWarning}) {
+		t.Errorf("codex version %q, warnings %q", c.Version, c.Warnings)
 	}
 	if c := got["codex"]; !c.SignedIn || c.Cloud || !strings.Contains(c.CloudDetail, "API key") {
 		t.Errorf("codex with an API key login: %+v; want signed in but not cloud-capable", c)

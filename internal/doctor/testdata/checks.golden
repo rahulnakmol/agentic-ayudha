@@ -51,7 +51,7 @@ FAIL  skills-copies  skill copies differ from .aayudha/lock.toml; aayu doctor --
                        .claude/skills/ready is missing
                        .claude/skills/status was edited or is stale
 ## mcp pass
-PASS  mcp  aayudha MCP server registered for claude at this aayu's version
+PASS  mcp  aayudha MCP server: claude from .mcp.json at this aayu's version
 ## mcp fail
 FAIL  mcp  MCP registrations need aayu install --apply
              claude: /usr/bin/aayu reports "aayu 1.1.0"; this aayu is 1.2.0

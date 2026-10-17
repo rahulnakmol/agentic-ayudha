@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -28,8 +29,9 @@ type Agent struct {
 	Name        string   `json:"name"`
 	CLI         string   `json:"cli,omitempty"` // the CLI's path; "" when not installed
 	Version     string   `json:"version,omitempty"`
-	SignedIn    bool     `json:"signed_in"`     // the CLI can answer here: signed in, or (Codex) a model provider with its own credentials
-	Via         string   `json:"via,omitempty"` // how it answers when that is not its own sign-in: "the model provider <id>"
+	Warnings    []string `json:"warnings,omitempty"` // what the CLI printed beside its version, such as a stderr warning
+	SignedIn    bool     `json:"signed_in"`          // the CLI can answer here: signed in, or (Codex) a model provider with its own credentials
+	Via         string   `json:"via,omitempty"`      // how it answers when that is not its own sign-in: "the model provider <id>"
 	Cloud       bool     `json:"cloud"`
 	CloudDetail string   `json:"cloud_detail"`
 	Install     []string `json:"install,omitempty"`
@@ -118,9 +120,9 @@ func Detect(ctx context.Context, p Probe) []Agent {
 		}
 		return ""
 	}
-	version := func(bin string) string {
+	version := func(bin string) (string, []string) {
 		out, _ := run(bin, "--version")
-		return firstLine(out)
+		return cliVersion(out)
 	}
 	var out []Agent
 
@@ -130,7 +132,7 @@ func Detect(ctx context.Context, p Probe) []Agent {
 		SignIn:  []string{"codex login"}}
 	chatgpt := false
 	if cx.CLI != "" {
-		cx.Version = version(cx.CLI)
+		cx.Version, cx.Warnings = version(cx.CLI)
 		st, ok := run(cx.CLI, "login", "status")
 		cx.SignedIn = ok && !strings.Contains(strings.ToLower(st), "not logged in")
 		chatgpt = cx.SignedIn && strings.Contains(st, "ChatGPT")
@@ -159,7 +161,7 @@ func Detect(ctx context.Context, p Probe) []Agent {
 		Install: []string{"curl https://cursor.com/install -fsS | bash"},
 		SignIn:  []string{"cursor-agent login"}}
 	if cu.CLI != "" {
-		cu.Version = version(cu.CLI)
+		cu.Version, cu.Warnings = version(cu.CLI)
 		st, ok := run(cu.CLI, "status")
 		cu.SignedIn = ok && st != "" && !strings.Contains(strings.ToLower(st), "not logged in")
 	}
@@ -180,7 +182,7 @@ func Detect(ctx context.Context, p Probe) []Agent {
 		SignIn:  []string{"claude auth login"}}
 	method := ""
 	if cl.CLI != "" {
-		cl.Version = version(cl.CLI)
+		cl.Version, cl.Warnings = version(cl.CLI)
 		if st, _ := run(cl.CLI, "auth", "status", "--json"); strings.Contains(st, "{") {
 			var a struct {
 				LoggedIn   bool   `json:"loggedIn"`
@@ -208,7 +210,7 @@ func Detect(ctx context.Context, p Probe) []Agent {
 		Install: []string{"curl -fsSL https://ampcode.com/install.sh | bash"},
 		SignIn:  []string{"amp login"}}
 	if am.CLI != "" {
-		am.Version = version(am.CLI)
+		am.Version, am.Warnings = version(am.CLI)
 		st, ok := run(am.CLI, "account", "list")
 		am.SignedIn = p.Getenv("AMP_API_KEY") != "" || (ok && st != "" && !strings.Contains(st, "No saved accounts"))
 	}
@@ -234,7 +236,25 @@ func Detect(ctx context.Context, p Probe) []Agent {
 	return out
 }
 
-func firstLine(s string) string {
-	l, _, _ := strings.Cut(strings.TrimSpace(s), "\n")
-	return strings.TrimSpace(l)
+var (
+	versionLine = regexp.MustCompile(`\d+\.\d+`)
+	warningLine = regexp.MustCompile(`(?i)^(warning|warn|error|note)\b`)
+)
+
+// cliVersion splits a CLI's --version output, stdout and stderr together,
+// into its version line and the other lines it printed: Codex can print
+// "WARNING: proceeding, even though we could not create PATH aliases: …"
+// on stderr before its version.
+func cliVersion(out string) (string, []string) {
+	version, rest := "", []string(nil)
+	for _, l := range strings.Split(out, "\n") {
+		switch l = strings.TrimSpace(l); {
+		case l == "":
+		case version == "" && versionLine.MatchString(l) && !warningLine.MatchString(l):
+			version = l
+		default:
+			rest = append(rest, l)
+		}
+	}
+	return version, rest
 }
