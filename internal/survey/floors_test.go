@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -99,10 +100,18 @@ func TestFloorRunners(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(ix.Builtins) != 2 {
-		t.Fatalf("builtins = %v; want print and Math.sqrt only (not the commented registration, strcmp, or printf)", ix.Builtins)
+	if len(ix.Builtins) != 3 {
+		t.Fatalf("builtins = %v; want print, Math.sqrt, and the file-scope Extra.f only (not the commented registration, strcmp, or printf)", ix.Builtins)
 	}
-	const cli, tests = "entry:cli.cpp:3", "entry:run_tests.cpp:3"
+	// Two declarations on one header line are two entry points.
+	if !slices.ContainsFunc(ix.Entries, func(e Fact) bool { return e.ID == "entry:interp.h:20#beta" && e.At == "interp.h:20" }) {
+		t.Errorf("entries = %v; want beta beside alpha on interp.h:20", ix.Entries)
+	}
+	// A builtin citation counts toward its file's module.
+	if r := Check(ix, Draft{Engineering: []Claim{{ID: "E1", Topic: "interfaces", Text: "Math.sqrt is a native.", Basis: "observed", Cites: []string{"builtin:interp.cpp:29"}}}}); !slices.Equal(r.Coverage.UncitedModule, []string{"mod:tests"}) {
+		t.Errorf("coverage = %+v; the builtin cite covers interp.cpp's module", r.Coverage)
+	}
+	const cli, tests = "entry:cli.cpp:3", "entry:run_tests.cpp:5"
 	base := func() Draft {
 		return Draft{Questions: []Question{{ID: "Q1", Text: "Which scripts use Math?", Why: "It decides G1.", Status: "open"}}, Modernisation: &Modernisation{CaseSets: []CaseSet{{ID: "G1", Title: "Scripts", From: []string{cli}, Compare: "exact stdout",
 			Runners: []string{cli}, Inputs: []string{"tests/hello.js"}}}}}
@@ -121,8 +130,11 @@ func TestFloorRunners(t *testing.T) {
 		{"negated", "the runner that registers it", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{tests}, []string{"tests/math.js"} }), "case set G1", false},
 		{"negated", "a builtin both runners register", set(func(g *CaseSet) { g.Inputs = []string{"tests/hello.js"} }), "case set G1", false},
 		{"negated", "the file excluded, naming what decided it", set(func(g *CaseSet) {
-			g.Inputs, g.Exclude = []string{"tests/*.js"}, []string{"tests/math.js needs Math (Q1)"}
+			g.Inputs, g.Exclude = []string{"tests/*.js"}, []string{"tests/math.js needs Math (Q1)", "tests/extra.js needs Extra (Q1)"}
 		}), "case set G1", false},
+		{"match", "a file-scope registration in a file the runner never loads", set(func(g *CaseSet) { g.Inputs = []string{"tests/extra.js"} }),
+			"tests/extra.js:1 calls Extra.f, which runner entry:cli.cpp:3 does not register", true},
+		{"negated", "the runner that loads that file", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{tests}, []string{"tests/extra.js"} }), "case set G1", false},
 		{"near miss", "a comment, a string, and another object's sqrt", set(func(g *CaseSet) { g.Inputs = []string{"tests/nearmiss.js"} }), "case set G1", false},
 		{"near miss", "a title about Math without naming a builtin", set(func(g *CaseSet) { g.Title = "Math results (sqrt) and myMath.sqrt" }), "case set G1", false},
 	})

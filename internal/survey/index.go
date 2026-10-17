@@ -532,10 +532,14 @@ func (ix *Index) headerEntries(file, code string) {
 		have[e.ID] = true
 	}
 	for _, d := range headerAPI(code) {
-		id := "entry:" + file + ":" + itoa(d.line)
+		at := file + ":" + itoa(d.line)
+		id := "entry:" + at
+		if have[id] { // another declaration on the same line: its name tells them apart
+			id += "#" + d.Name
+		}
 		if !have[id] {
 			have[id] = true
-			ix.Entries = append(ix.Entries, Fact{ID: id, Kind: "api", At: file + ":" + itoa(d.line), Detail: d.Kind + " " + d.Name})
+			ix.Entries = append(ix.Entries, Fact{ID: id, Kind: "api", At: at, Detail: d.Kind + " " + d.Name})
 		}
 	}
 }
