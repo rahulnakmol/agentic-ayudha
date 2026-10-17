@@ -68,8 +68,19 @@ You speak as Iris.
 Produce wireframes for a Feature's states from its research and criteria.
 
 1. Read the research stage (`design/<feature>/research/` on the ledger) and the stories' Completion Goal states.
-2. Draw one low-fidelity wireframe per UI state: structure, content, and controls, no styling. Use SVG, HTML,
-   or Markdown (an image is accepted but cannot be checked). Never trace a Mobbin screen.
+2. Draw one low-fidelity wireframe per UI state, with the state IDs the stories use: structure, content, and
+   controls, no styling (no colours or fonts; those are the mockup's). Use SVG, HTML, or Markdown (an image is
+   accepted but cannot be checked). Never trace a Mobbin screen. Each wireframe shows:
+   - **what its Completion Goal says the state shows**, every part of it, in real copy in the user's words;
+   - **the research it answers**, citing the finding (participant, ticket, or question) a design choice rests on;
+   - **accessibility designed in, in every state**: name the first focus stop and the keyboard order (Tab sequence)
+     of that state, the empty and error states included; what a screen reader announces (headings, labels, a
+     message that appears, and where focus goes when it does); status and errors in words rather than colour alone;
+     and every control's minimum target (44 × 44 px), stated on the wireframe, not left to the mockup;
+   - **the layout on a phone** (390 px) when the product is used on phones, without hiding content;
+   - **assumptions marked as such** where the research leaves a choice open, for the test to settle, instead of
+     presented as settled. Nothing the stories and research do not ask for: no links, navigation, or controls they
+     do not name, and no reassurance the system cannot back ("your orders are safe"); copy says only what is known.
 3. List the states in `stage.json` in the same directory:
 
    ```json

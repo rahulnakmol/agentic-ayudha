@@ -927,7 +927,7 @@ func TestGroups(t *testing.T) {
 		}
 	}
 	uxg, _ := cfg.Group("ux")
-	if err != nil || ug.MaxUSD != 35 || cfg.Gates("ux") || len(perSkill) != 7 || uxg.RunsOn("push") || uxg.RunsOn("schedule") {
+	if err != nil || ug.MaxUSD != 35 || ug.MaxTokens.Skill != 24000 || cfg.Gates("ux") || len(perSkill) != 7 || uxg.RunsOn("push") || uxg.RunsOn("schedule") {
 		t.Fatalf("ux group: %v, cap %v, gates %v, cases per skill %v, events %v", err, ug.MaxUSD, cfg.Gates("ux"), perSkill, uxg.Events)
 	}
 	for skill, n := range perSkill {
@@ -941,7 +941,7 @@ func TestGroups(t *testing.T) {
 		t.Fatalf("data-ai group: %v, cap %v, %d cases, gates %v", err, dg.MaxUSD, len(dataAI), cfg.Gates("data-ai"))
 	}
 	o, other, err := cfg.ForGroup("skills", all)
-	if err != nil || o.MaxUSD != 8 || o.K != cfg.K || !cfg.Gates("skills") || len(brief)+len(plain)+len(personas)+len(review)+len(convs)+len(tells)+len(hosts)+len(ux)+len(dataAI)+len(other) != len(all) {
+	if err != nil || o.MaxUSD != 8 || o.K != cfg.K || o.MaxTokens.Skill != cfg.MaxTokens.Skill || !cfg.Gates("skills") || len(brief)+len(plain)+len(personas)+len(review)+len(convs)+len(tells)+len(hosts)+len(ux)+len(dataAI)+len(other) != len(all) {
 		t.Fatalf("skills group: %v, cap %v, %d+%d+%d+%d+%d+%d+%d+%d+%d+%d of %d cases", err, o.MaxUSD, len(brief), len(plain), len(personas), len(review), len(convs), len(tells), len(hosts), len(ux), len(dataAI), len(other), len(all))
 	}
 	for _, c := range other {

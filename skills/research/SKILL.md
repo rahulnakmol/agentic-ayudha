@@ -82,8 +82,28 @@ Gather pinned design references (URLs and IDs only) and user research for a Feat
 
 1. Read the Feature and its stories. Collect references that show how others solve the same problem:
    Mobbin screens, guidelines, competitor pages. Keep each as a page URL and an ID, never as an image:
-   do not download, screenshot, or paste Mobbin pixels anywhere (Mobbin's terms; the binary refuses them).
-2. Write what you learned from users (seeded or synthetic data only) as Markdown notes.
+   do not download, screenshot, or paste Mobbin pixels anywhere (Mobbin's terms; the binary refuses them). Use only
+   pages you or the human actually found; never write a URL from memory. Drop image results (a preview `.png`, a
+   CDN link) and say so. Give each kept reference one line on why it bears on the job.
+2. Write what you learned from users (seeded or synthetic data only) as Markdown notes:
+   - **The team stage's artefact first**, as a heading named exactly as the stage table above names it (a startup's
+     Job story, a scaleup's Research plan or Job map, …), and no other stage's artefact as a heading.
+   - **People's words, word for word**: a quotation is copied exactly from the data, with its source (ticket,
+     participant, survey answer), in a blockquote or quotation marks. Paraphrase without quotation marks.
+   - **Numbers as the data states them, with their population** ("29 of 41 tickets", "3 of 5 sessions"); never "most
+     users" from five sessions.
+   - **What people did**, each finding traceable to its source; accessibility findings (a screen reader, zoom, a
+     phone's width) are research findings, never dropped.
+   - **What the data does not say**, and the open questions that follow. No finding is claimed that nobody observed;
+     where there is no usability evidence yet, the stage is a plan to get it.
+   - **Implications per state**: tie each to the stories' Completion Goal states by their IDs, without designing the
+     screens.
+   - **How findings reach the backlog** (in a plan, its own part): a finding that changes a story or its Completion
+     Goal is filed as a Feedback issue (`aayu grill feedback`, the intake type) naming the story, for the story's owner to
+     settle before the wireframe or mockup stage is pinned; say who runs the sessions and when the findings are due
+     relative to the design stages. Never edit a Ready story's body yourself.
+   - **Tasks as the person's goal** ("You want your parcel on a day you are home"), never as steps that name the
+     interface ("Pick a slot and press Save").
 3. Put both in a directory with a `stage.json`:
 
    ```json

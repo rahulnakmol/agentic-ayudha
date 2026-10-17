@@ -61,16 +61,33 @@ You speak as Iris.
 
 Capture visual baselines for a commit SHA.
 
-Check out the commit, start the app on the `[verify.environments]` target, and run:
+A baseline is the picture later reviews compare against, so it must be of exactly the commit it names, on a target
+that is not production, without touching anyone's work in progress.
 
-```sh
-aayu baseline
-aayu baseline --sha 4f2c1a9
-```
+1. **The named commit, never the checkout.** If the checkout is elsewhere, check the commit out; never change
+   `--sha` to match what happens to be checked out, which would record other work under that commit's name. When
+   `aayu baseline` refused because the checkout differs, the refusal was right: say so and why.
+2. **Leave work in progress alone.** With uncommitted or untracked changes, baseline in a separate worktree
+   (`git worktree add --detach ../<repo>-<sha> <sha>`) instead of switching this checkout; never `reset --hard`,
+   `clean`, `restore`, or a stash you do not restore. Fetch first (`git fetch origin --tags`) so the commit exists.
+3. **The app on the target, ready.** Install from the lockfile at that commit and start the app on the
+   `[verify.environments]` target (`AAYU_ENV=<env>`, never production). Wait until the target's URL answers, and stop
+   with an error if it never does: a baseline of an app that is not up is worse than none.
+4. **Run it with the same target.** `aayu baseline` reads `AAYU_ENV` for its target, so set it for the call too:
+
+   ```sh
+   AAYU_ENV=preview aayu baseline --sha 4f2c1a9
+   ```
+
+5. **Clean up even on failure** (a `trap`): stop the app, remove the worktree or switch back to where you were.
+6. **Report** the commit, the target, the `[review] baseline` paths captured, the manifest path on the ledger
+   (`baselines/<sha>/manifest.json`), and where the screenshots went: the `[proof] media` bucket; Git LFS on a private
+   repository without one; or, on a public repository without a bucket, only their SHA-256 hashes. Say what the last
+   means: a later run can tell that a page changed, but there is no stored image of this commit to look at; a
+   maintainer who wants the images sets `[proof] media` and runs the baseline again. State only what the commands
+   showed; do not invent results.
 
 The binary captures every `[review] baseline` path and pins the screenshots in `baselines/<sha>/manifest.json`
-on the ledger. Screenshots go to the `[proof] media` bucket, or Git LFS on a private repository. On a public
-repository without a bucket, only their hashes are kept. It refuses (exit 4) when the checkout is not at
-`--sha`.
+on the ledger. It refuses (exit 4) when the checkout is not at `--sha`; `aayu baseline` without `--sha` takes HEAD.
 
 Format and lint: skills/README.md.

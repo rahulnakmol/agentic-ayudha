@@ -70,7 +70,18 @@ Produce design-system mockups for a Feature from its wireframes.
 1. Read the wireframe stage (`design/<feature>/wireframe/` on the ledger).
 2. Make one mockup per wireframe state, with the same state IDs, in SVG or HTML. Use only the design system:
    its components, its density modes, and its token colours and type scale (`[design] tokens`; on the web,
-   the `--ay-*` custom properties). A colour that is not a token fails the check.
+   the `--ay-*` custom properties). A colour that is not a token fails the check. In HTML:
+   - **Tokens for every value the system defines**: colour, type size and weight, spacing, radii, and control and row
+     heights (`var(--ay-…)`); load them from the design system's stylesheet rather than copying values.
+   - **The density the product needs**: cozy (44 px controls) for anything used on phones; compact is for dense,
+     pointer-only screens.
+   - **The floors by design**: body text on a token pair that meets 4.5:1, a visible focus ring in the focus token
+     on every control, every control at least 44 × 44 px (a radio or checkbox input itself, not only its label), and
+     names for every control.
+   - **Semantics that carry the research**: tables with captions and headers, a single choice as radio inputs in a
+     fieldset with a legend, a message that appears as an alert or status, one primary action per state.
+   - **Every state the wireframe describes**, including a transient one it names (loading, retrying), or a note
+     saying where the mockup leaves it to the prototype; keep the wireframe's assumptions marked.
 3. List the states in `stage.json` (`{"states": [{"id", "title", "file"}]}`) and pin them:
 
    ```sh

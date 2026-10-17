@@ -125,7 +125,8 @@ one group cannot use up another's cap: `brief` (the `brief/` cases, 12 USD), `pe
 persona cases, 20 USD), `conversations` (the grill conversation cases of WP5.3b and WP5.8, 60 USD, advisory until a run meets
 the bar, D-5.3b.g), `tell` (the `tell/` cases, 8 USD, advisory and run on dispatch only until it holds a mean of at least 4.0 on two
 consecutive full runs, D-7.5b), `host-skills` (the build, verify, and ready session cases, 37 USD, advisory and on
-dispatch only, D-3.4f), `ux` (the UX Researcher's skills, 35 USD, advisory and on dispatch only, D-6.5b), and
+dispatch only, D-3.4f), `ux` (the UX Researcher's skills, 35 USD, advisory and on dispatch only, D-6.5b; its `max_tokens` raises the skill
+call's output cap to 24000 for multi-file stages, D-6.5c), and
 `skills` (every other case, 6 USD).
 Pushes to `dev` do not run the `brief` group; it runs nightly, on dispatch (input `group` picks one group), and on
 pushes to `rolling` and `main`. The advisory `conversations` and `personas` groups never run nightly or on promotion
