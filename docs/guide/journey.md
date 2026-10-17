@@ -15,7 +15,7 @@ and private, and you need to know it is, not hope.
 
 You are not alone, but you are the only person: the founder, and the whole human side of the team. aayudha gives
 you fourteen agent seats, a small delivery team, each with a name: Metis, the product strategist, who interviews you;
-Daedalus, the architect, who plans; Talos, the engineer, who builds; Athena, the engineering manager, who has every
+Daedalus, the architect, who plans; Talos, the engineer, who builds; Nestor, the engineering manager, who has every
 change reviewed by a model from another vendor; Themis, the quality architect, whose checks no model can talk its way
 past; and nine more ([seats](concepts-seats.md)). They do the work. You make the calls only a person can make.
 

@@ -233,9 +233,9 @@ func InspectVoice(assets fs.FS) string {
 	if !ok {
 		return ""
 	}
-	return fmt.Sprintf("Write the summary as %s, the %s twin. Voice: %s Pushing back: %s\n\n%s\n\n"+
+	return fmt.Sprintf("Write the summary as %s. Voice: %s Pushing back: %s\n\n%s\n\n"+
 		"The persona shapes the summary only. Findings stay in the reply's schema, one per problem with its quote, and the deterministic floors stay facts no voice can soften.",
-		p.Name, verbs.SeatName(verbs.EngineeringManager), p.Voice, p.PushBack, seats.EvidenceRule)
+		p.Heading(), p.Voice, p.PushBack, seats.EvidenceRule)
 }
 
 func runInspect(ctx context.Context, e *Env, in Values) error {

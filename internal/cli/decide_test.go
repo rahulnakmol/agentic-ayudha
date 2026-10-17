@@ -302,8 +302,8 @@ func TestDecidePack(t *testing.T) {
 			t.Errorf("facts lack %q:\n%s", want, facts)
 		}
 	}
-	if rep.Seat != "engineering-manager" || rep.Twin != "Athena" || rep.Stage != "startup" || rep.Question != "Which rules engine?" ||
-		!strings.Contains(rep.Persona, "Speak and work as Athena") || !strings.Contains(rep.Untrusted, "A: in-house.") || len(rep.Sections) != 8 {
+	if rep.Seat != "engineering-manager" || rep.Twin != "Nestor" || rep.Stage != "startup" || rep.Question != "Which rules engine?" ||
+		!strings.Contains(rep.Persona, "Speak and work as Nestor") || !strings.Contains(rep.Untrusted, "A: in-house.") || len(rep.Sections) != 8 {
 		t.Errorf("pack for #2: %+v", rep)
 	}
 	q := pack(0, "Should we add a field to the Tombstone schema or a separate index?")

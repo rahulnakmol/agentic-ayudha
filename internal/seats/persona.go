@@ -21,6 +21,7 @@ import (
 type Persona struct {
 	Seat        verbs.SeatID `toml:"-"`
 	Name        string       `toml:"name"`        // the twin's short name
+	Title       string       `toml:"title"`       // optional role title ("Founder's Sage"); defaults to the seat name
 	Purpose     string       `toml:"purpose"`     // one line
 	Temperament string       `toml:"temperament"` // how it carries itself
 	Voice       string       `toml:"voice"`       // how it sounds
@@ -127,6 +128,8 @@ var (
 	notAnEmploy = regexp.MustCompile(`(?i)\b(worked at|works at|used to work|alumn\w*|formerly at|ex-employee)\b`)
 	// companies: a twin never claims to have worked at one, imitates its people,
 	// or wears its trademark. Sources may name them; persona text may not.
+	// olympian is the twelve Olympians and Hades, Greek and Roman names (D-5.1v).
+	olympian  = regexp.MustCompile(`(?i)^(zeus|jupiter|hera|juno|poseidon|neptune|demeter|ceres|athena|minerva|apollo|artemis|diana|ares|mars|aphrodite|venus|hephaestus|vulcan|hermes|mercury|dionysus|bacchus|hestia|vesta|hades|pluto)$`)
 	companies = regexp.MustCompile(`(?i)\b(faang|maang|google|alphabet|amazon|aws|meta|facebook|apple|microsoft|netflix|stripe|uber|airbnb|spotify|linkedin|twitter|etsy|shopify|atlassian|salesforce|pagerduty|intuit|openai|anthropic)\b`)
 )
 
@@ -137,6 +140,9 @@ func (p Persona) Validate() []string {
 	if !twinName.MatchString(p.Name) {
 		bad("name %q: want one capitalised word of 2-12 letters", p.Name)
 	}
+	if olympian.MatchString(p.Name) {
+		bad("name %q: an Olympian god; the human founder is Zeus, and a twin is a lesser figure (D-5.1v)", p.Name)
+	}
 	for k, v := range map[string]string{"purpose": p.Purpose, "temperament": p.Temperament, "voice": p.Voice,
 		"pushback": p.PushBack, "praise": p.Praise, "grounding": p.Grounding, "paired": p.Paired} {
 		if strings.TrimSpace(v) == "" {
@@ -145,6 +151,9 @@ func (p Persona) Validate() []string {
 	}
 	if strings.Contains(strings.TrimSpace(p.Purpose), "\n") {
 		bad("purpose: want one line")
+	}
+	if t := p.Title; t != "" && (strings.ContainsAny(t, "\n,") || strings.HasPrefix(strings.ToLower(t), "the ") || len(t) > 40) {
+		bad("title %q: want a short role without a leading \"the\", such as \"Founder's Sage\"", t)
 	}
 	for k, v := range map[string][]string{"values": p.Values, "habits": p.Habits, "questions": p.Questions, "never": p.Never} {
 		if len(v) < 2 {
@@ -215,7 +224,7 @@ func (p Persona) Validate() []string {
 
 // texts is every persona string except the sources.
 func (p Persona) texts() []string {
-	out := []string{p.Name, p.Purpose, p.Temperament, p.Voice, p.PushBack, p.Praise, p.Grounding, p.Paired}
+	out := []string{p.Name, p.Title, p.Purpose, p.Temperament, p.Voice, p.PushBack, p.Praise, p.Grounding, p.Paired}
 	out = append(out, p.Values...)
 	out = append(out, p.Habits...)
 	out = append(out, p.Questions...)
@@ -265,8 +274,21 @@ func quoted(xs []string) string {
 	return strings.Join(out, " ")
 }
 
-// title is "Athena, the Engineering Manager twin".
-func (p Persona) title() string {
+// Role is how the twin is introduced beside its name: its title when the
+// persona gives one ("Founder's Sage"), else its seat ("Engineering Manager").
+func (p Persona) Role() string {
+	if p.Title != "" {
+		return p.Title
+	}
+	return verbs.SeatName(p.Seat)
+}
+
+// Heading is "Mentor, the Engineering Manager twin", or "Vasishtha, the
+// Founder's Sage" when the persona has a title.
+func (p Persona) Heading() string {
+	if p.Title != "" {
+		return p.Name + ", the " + p.Title
+	}
 	return p.Name + ", the " + verbs.SeatName(p.Seat) + " twin"
 }
 
@@ -311,7 +333,7 @@ func (p Persona) CharterSection() string {
 	b.WriteString("## Persona (generated)\n\n")
 	fmt.Fprintf(&b, "Source: %s. `go generate ./...` renders it here, at the top of the SKILL.md of every verb this seat is\n", code(PersonaPath(p.Seat)))
 	b.WriteString("Accountable for, into the AGENTS.md seat section, and into the MCP `persona` prompt. Edit the TOML, not this region.\n\n")
-	fmt.Fprintf(&b, "**%s**.\n\n", p.title())
+	fmt.Fprintf(&b, "**%s**.\n\n", p.Heading())
 	b.WriteString(p.character())
 	b.WriteString("\n### Practice playbook\n\n")
 	b.WriteString(p.playbook())
@@ -338,7 +360,7 @@ func (p Persona) CharterSection() string {
 // applies.
 func (p Persona) SkillBlock(c verbs.Command, owner Persona) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Voice: %s\n\n", p.title())
+	fmt.Fprintf(&b, "## Voice: %s\n\n", p.Heading())
 	fmt.Fprintf(&b, "Generated from %s; the full persona, sources included, is in %s.\n\n", code(PersonaPath(p.Seat)),
 		code(path.Join("seats", string(p.Seat), "CHARTER.md")))
 	fmt.Fprintf(&b, "You speak as %s.\n\n", p.Name)
@@ -358,7 +380,7 @@ func (p Persona) SkillBlock(c verbs.Command, owner Persona) string {
 // Prompt is the MCP `persona` prompt: the persona at one team stage.
 func (p Persona) Prompt(stage, why string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Speak and work as %s.\n\n", p.title())
+	fmt.Fprintf(&b, "Speak and work as %s.\n\n", p.Heading())
 	b.WriteString(p.character())
 	fmt.Fprintf(&b, "\nTeam stage: %s (%s). Use each practice at that depth. When your output is one of these artefacts, give it "+
 		"that artefact's name as a heading; do not add the others unasked, and a task with its own outline (a decision pack) keeps it.\n\n", stage, why)
@@ -380,7 +402,7 @@ func agentsVoices(personas map[verbs.SeatID]Persona) string {
 		if !ok {
 			continue
 		}
-		fmt.Fprintf(&b, "- **%s**, %s: %s %s\n", p.Name, s.Name, p.Purpose, p.Voice)
+		fmt.Fprintf(&b, "- **%s**, %s: %s %s\n", p.Name, p.Role(), p.Purpose, p.Voice)
 	}
 	b.WriteString("\n" + StageRule + "\n\n" + EvidenceRule + "\n")
 	return b.String()
