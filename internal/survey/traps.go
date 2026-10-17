@@ -3,6 +3,7 @@ package survey
 import (
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -54,6 +55,8 @@ var trapRules = []trapRule{
 	{name: "ruby-eval", langs: []string{"ruby"}, re: regexp.MustCompile(`\b(?:instance_eval|class_eval|module_eval|instance_exec|class_exec|eval|binding)\b`)},
 	{name: "ruby-send", langs: []string{"ruby"}, re: regexp.MustCompile(`\.(?:send|__send__|public_send)\b`)},
 	{name: "ruby-dynamic-require", langs: []string{"ruby"}, re: regexp.MustCompile(`(?m)\b(?:require|require_relative|load)\b[ \t(]+[^'"\s(]|\bautoload\b`)},
+	// … and a path built by interpolation, which the blanked code no longer shows: read raw, not on a commented-out line.
+	{name: "ruby-dynamic-require", langs: []string{"ruby"}, raw: true, re: regexp.MustCompile(`(?m)^[^#\n]*\b(?:require|require_relative|load)\b[ \t(]+"[^"\n]*#\{`)},
 	{name: "ruby-globals", langs: []string{"ruby"}, re: regexp.MustCompile(`\$[a-z_]\w*`), skip: func(m string) bool {
 		switch m {
 		case "$stdout", "$stderr", "$stdin", "$0", "$PROGRAM_NAME", "$LOAD_PATH", "$LOADED_FEATURES", "$DEBUG", "$VERBOSE":
@@ -245,7 +248,9 @@ func (ix *Index) buildTraps(file, raw string) {
 func TrapRules() []string {
 	out := []string{"build-semantic-flags", "fortran-implicit-typing", "generated-code", "vb-no-option-explicit"}
 	for _, r := range trapRules {
-		out = append(out, r.name)
+		if !slices.Contains(out, r.name) {
+			out = append(out, r.name)
+		}
 	}
 	return out
 }

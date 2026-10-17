@@ -222,7 +222,7 @@ func Probe(ctx context.Context, ix *Index, root, bin, casesFile string, c Cases,
 	} else {
 		p.Skipped = append(p.Skipped, "files read and written: strace is not installed")
 	}
-	reads, writes := map[string][]string{}, map[string][]string{}
+	reads, writes, libReads := map[string][]string{}, map[string][]string{}, map[string]map[string]bool{}
 	for _, k := range c.Cases {
 		first, err := runCase(ctx, root, bin, home, k)
 		if err != nil {
@@ -264,9 +264,17 @@ func Probe(ctx context.Context, ix *Index, root, bin, casesFile string, c Cases,
 			for _, a := range k.Argv {
 				inputs[filepath.ToSlash(filepath.Join(k.Cwd, a))] = true
 			}
+			libs := libraryPaths(k.Env)
 			for _, f := range r {
 				if ix.isCode(f) || inputs[f] {
 					continue // an interpreter loading the program's own source, or the input the case names, is not a dependency
+				}
+				if v := underLibrary(f, libs); v != "" {
+					if libReads[v] == nil {
+						libReads[v] = map[string]bool{}
+					}
+					libReads[v][f] = true // the case declared that library path in its env: a load from it is expected, not hidden
+					continue
 				}
 				reads[f] = append(reads[f], k.ID)
 			}
@@ -295,12 +303,20 @@ func Probe(ctx context.Context, ix *Index, root, bin, casesFile string, c Cases,
 				out.Compare = []string{"stdout", "exit"} // stderr carries the checker's own report
 			}
 			if ds := compareStreams(out, "as captured", "checker build", first, o); len(out.Compare) > 0 && len(ds) > 0 {
-				add("check-differs", k.ID, fmt.Sprintf("the checker build %s changes %s: %s", filepath.Base(opt.CheckBin), ds[0].Stream, ds[0].Detail), len(ds))
+				why := ""
+				if l := newLine(o.stderr, first.stderr); l != "" {
+					// The error that stopped it, which the stdout difference does not show, with the checkout's paths relative.
+					why = fmt.Sprintf(" (its stderr: %s)", clip(strings.ReplaceAll(l, root+string(filepath.Separator), ""), 140))
+				}
+				add("check-differs", k.ID, fmt.Sprintf("the checker build %s changes %s%s: %s", filepath.Base(opt.CheckBin), ds[0].Stream, why, ds[0].Detail), len(ds))
 			}
 		}
 	}
 	if opt.CheckBin != "" {
 		p.Ran = append(p.Ran, "every case on the checker build "+filepath.Base(opt.CheckBin))
+	}
+	for _, v := range sortedKeys(libReads) {
+		p.Ran = append(p.Ran, fmt.Sprintf("%d file(s) read under %s, which the cases set as a library path, not listed as dependencies", len(libReads[v]), v))
 	}
 	for _, kind := range []string{"reads", "writes"} {
 		m := reads
@@ -411,6 +427,62 @@ func traceFiles(ctx context.Context, root, strace, bin, home string, k Case) (re
 	}
 	return reads, writes, sc.Err()
 }
+
+// libraryPaths lists the directories a case's env puts on a library search
+// path (GEM_PATH, PYTHONPATH, CLASSPATH, NODE_PATH, PERL5LIB, RUBYLIB,
+// R_LIBS), keyed by the label the report uses, such as "GEM_PATH entry
+// /var/lib/gems/3.1.0". Other variables (a config directory) stay
+// dependencies: what is read under them is reported.
+func libraryPaths(env []string) map[string]string {
+	m := map[string]string{}
+	for _, e := range env {
+		name, val, ok := strings.Cut(e, "=")
+		if !ok || name == "PATH" || !strings.HasSuffix(name, "PATH") && !slices.Contains([]string{"GEM_HOME", "PERL5LIB", "RUBYLIB", "R_LIBS", "R_LIBS_USER"}, name) {
+			continue
+		}
+		for _, d := range filepath.SplitList(val) {
+			if fi, err := os.Stat(d); err == nil && fi.IsDir() && filepath.IsAbs(d) {
+				m[name+" entry "+filepath.Clean(d)] = filepath.Clean(d)
+			}
+		}
+	}
+	return m
+}
+
+// underLibrary returns the label of the library path an absolute file lies
+// under, or "".
+func underLibrary(f string, libs map[string]string) string {
+	for _, label := range sortedKeys(libs) {
+		if rel, err := filepath.Rel(libs[label], f); err == nil && filepath.IsAbs(f) && !strings.HasPrefix(rel, "..") {
+			return label
+		}
+	}
+	return ""
+}
+
+// newLine is the line of b, not also in a, that says why the run failed: the
+// first that reads like an error (a warning often comes first), else the first.
+func newLine(b, a []byte) string {
+	had := map[string]bool{}
+	for _, l := range strings.Split(string(a), "\n") {
+		had[strings.TrimSpace(l)] = true
+	}
+	first := ""
+	for _, l := range strings.Split(string(b), "\n") {
+		if l = strings.TrimSpace(l); l == "" || had[l] {
+			continue
+		}
+		if errorLine.MatchString(l) {
+			return l
+		}
+		if first == "" {
+			first = l
+		}
+	}
+	return first
+}
+
+var errorLine = regexp.MustCompile(`(?i)\b(error|exception|panic|abort(ed)?|fatal|traceback|segmentation fault)\b|Error\b`)
 
 // isCode reports whether p is one of the checkout's source, test, or
 // vendored files.
