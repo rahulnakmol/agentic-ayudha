@@ -166,8 +166,10 @@ Tier 2 runs in groups (`[[groups]]` in `eval.toml`), one `evals.yml` job per gro
 one group cannot use up another's cap. Every call is charged at its model's list price (`models.ListPrices`, D-3.4p), and
 each cap is about twice the group's latest full run at that price, rounded up to a whole dollar, so it stops a runaway
 run and never cuts a normal one short (D-3.4q; the basis is on each `max_usd` line). The groups: `brief-plain` (the
-`eli5` and `ste` registers, 4 USD), `brief` (the other `brief/` cases, 3 USD), `personas` (the `retro/` and `decide/`
-persona cases, 14 USD), `data-ai` (the `chart/` and `measure/` cases, 8 USD), `production` (the `investigate/`, `slo/`,
+`eli5` and `ste` registers, 4 USD), `brief` (the other `brief/` cases, 3 USD), `personas` (the `decide/`
+persona cases, 8 USD, advisory, D-5.1t), `retro` (the Engineering Manager's `retro/` cases, 4 USD, gating since two
+consecutive filtered runs on the same skill text held every run at 4 or more, D-5.1y; like `tell`, on dispatch and on
+pushes to `rolling` and `main`), `data-ai` (the `chart/` and `measure/` cases, 8 USD), `production` (the `investigate/`, `slo/`,
 `runbook/`, and `respond/` cases, 15 USD, advisory and on dispatch only, D-5.10d), `review` (the `inspect/` seeded-defect
 cases, 5 USD), `conversations` (the grill conversation cases of WP5.3b and WP5.8, 37 USD, advisory until a run meets
 the bar, D-5.3b.g), `tell` (the `tell/` cases, 3 USD, gating since two consecutive full runs held a mean of 5.00, D-7.5e; it runs on
@@ -178,14 +180,14 @@ dispatch only, its skill output cap 48000 for a whole survey draft, WP5.9 and D-
 Pushes to `dev` do not run the `brief` group; it runs nightly, on dispatch (input `group` picks one group), and on
 pushes to `rolling` and `main`. The advisory `conversations` and `personas` groups never run nightly or on promotion
 (`events` in `eval.toml`): only on dispatch and on pushes to `dev` that change their own files (`skills/grill/`, the
-grill cases, `internal/grill/`; `seats/*/persona.toml`, `internal/seats/persona.go`, the `retro/` and `decide/` cases;
+grill cases, `internal/grill/`; `seats/*/persona.toml`, `internal/seats/persona.go`, the `decide/` cases;
 and each one's harness file), so a pull request that changes them gets tier 2 once it merges (D-5.3b.h). Each group's results go to `results/<sha>-<group>.json`, uploaded as the artifact
 `eval-results-<sha>-<group>`; the promotion gate (`ci.yml` job `evals-gate`) fetches every group's results for the
 commit being promoted and for `main`, runs `eval -compare` on each, and fails when any group is missing or fails. A group with
 `pass_k = "advisory"` (`brief`, D-7.3g) passes on the mean bar and the drop rule; its pass^k findings print as
 advisories. A group with `gate = "advisory"` (`brief-plain`: the eli5 and ste cases, D-7.3h) is reported but never gates:
 `eval -compare` exits 0 for it, and `evals-gate` compares only `eval -groups -gating`. The `personas` group is advisory
-too until a run meets the bar (D-5.1d).
+too (D-5.1d, D-5.1t).
 
 Tier 2 calls models through the AI gateway in the `ai-gateway` environment (dev, rolling, and main only), so it never
 runs on pull requests. Spend is capped by `[budget]` and by the group's `max_usd` in `eval.toml`.
