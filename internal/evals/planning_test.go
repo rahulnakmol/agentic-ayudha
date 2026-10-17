@@ -148,6 +148,11 @@ func TestPlanScope(t *testing.T) {
 			d.Checkpoints[0].Contracts = append(d.Checkpoints[0].Contracts, "config load does not reject legacy retention_days; it keeps reading them until the migration runs")
 			d.Checkpoints[0].Tests = append(d.Checkpoints[0].Tests, "internal/config:loading never refuses old configs")
 		})},
+		// Push runs 39013697227 and 39014607367 floored plans that rule a
+		// downgrade out; the story's rollback is the restore (D-5.4f).
+		{"rules out a downgrade", "", edit(func(d *planning.PlanDraft) {
+			d.Checkpoints[0].Rollback += "; no downgrade transform or re-serialisation is used, and no downgrade path other than restoring the backup"
+		})},
 		{"asked instead", "", edit(func(d *planning.PlanDraft) {
 			d.OpenQuestions = append(d.OpenQuestions, "Should config load reject legacy retention_days, and is a downgrade needed?")
 		})},
