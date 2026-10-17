@@ -95,7 +95,7 @@ aayu:
       type: string
       required: false
       positional: false
-      description: "With --probe: a sanitiser or checker build of the legacy program; cases whose stderr carries a checker report are recorded."
+      description: "With --probe: a sanitiser, checker, or differently optimised build of the legacy program; cases whose stderr carries a checker report, or whose stdout or exit code differs from the capture, are recorded."
     - name: coverage
       type: path
       required: false
@@ -321,7 +321,8 @@ Before any line of the legacy system changes, capture what it does:
    which exits 3 on any difference and names the first differing line.
 4. Gather the evidence the code alone cannot give, before writing the traps: add `--probe` to the capture (each case
    twice for non-determinism, under a changed TZ, locale, and HOME, and under strace for files read and written),
-   `--check-bin <sanitiser or checker build>` for memory and undefined-behaviour reports, and `--coverage <lcov file>`
+   `--check-bin <sanitiser or checker build>` for memory and undefined-behaviour reports (a build with the project's
+   release flags shows whether they change results: any stdout or exit difference is recorded), and `--coverage <lcov file>`
    from running the cases under coverage for the functions they never reach. Each finding is a `probe:` fact the
    draft cites; a probe that could not run says so.
 5. When the project has its own test suite, make it the compatibility reference: a cases file with one test per

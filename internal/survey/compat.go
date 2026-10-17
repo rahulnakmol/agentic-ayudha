@@ -260,9 +260,13 @@ func Probe(ctx context.Context, ix *Index, root, bin, casesFile string, c Cases,
 			if err != nil {
 				return nil, err
 			}
+			inputs := map[string]bool{filepath.ToSlash(filepath.Clean(k.Stdin)): k.Stdin != ""}
+			for _, a := range k.Argv {
+				inputs[filepath.ToSlash(filepath.Join(k.Cwd, a))] = true
+			}
 			for _, f := range r {
-				if ix.isCode(f) {
-					continue // an interpreter loading the program's own source is not a dependency
+				if ix.isCode(f) || inputs[f] {
+					continue // an interpreter loading the program's own source, or the input the case names, is not a dependency
 				}
 				reads[f] = append(reads[f], k.ID)
 			}
@@ -277,6 +281,21 @@ func Probe(ctx context.Context, ix *Index, root, bin, casesFile string, c Cases,
 			}
 			if m := checkerReport.Find(o.stderr); m != nil {
 				add("checker", k.ID, fmt.Sprintf("%s reports: %s", filepath.Base(opt.CheckBin), strings.TrimSpace(string(m))), len(checkerReport.FindAll(o.stderr, -1)))
+			}
+			// The same code built another way should print the same: a
+			// difference is undefined behaviour or a flag that changes results.
+			out := k
+			out.Compare = []string{}
+			for _, st := range k.Compare {
+				if st != "stderr" {
+					out.Compare = append(out.Compare, st)
+				}
+			}
+			if len(k.Compare) == 0 {
+				out.Compare = []string{"stdout", "exit"} // stderr carries the checker's own report
+			}
+			if ds := compareStreams(out, "as captured", "checker build", first, o); len(out.Compare) > 0 && len(ds) > 0 {
+				add("check-differs", k.ID, fmt.Sprintf("the checker build %s changes %s: %s", filepath.Base(opt.CheckBin), ds[0].Stream, ds[0].Detail), len(ds))
 			}
 		}
 	}

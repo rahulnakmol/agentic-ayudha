@@ -19,6 +19,16 @@ func isKeywordSyntax(s string) bool {
 
 // fixedForm reports whether a Fortran file is in fixed (card) form: the
 // FORTRAN 77 extensions, unless the file says otherwise.
+// mainProgramFile reports whether a Fortran file may hold a main program:
+// a source file, not an include file (.inc, .h, .fi, .cmn).
+func mainProgramFile(file string) bool {
+	switch strings.ToLower(path.Ext(file)) {
+	case ".f", ".for", ".ftn", ".f77", ".fpp", ".f90", ".f95", ".f03", ".f08":
+		return true
+	}
+	return false
+}
+
 func fixedForm(file string) bool {
 	switch strings.ToLower(path.Ext(file)) {
 	case ".f", ".for", ".ftn", ".f77", ".fpp":
@@ -332,7 +342,13 @@ func fortranSymbols(file string, lines []string) ([]Symbol, []call, []Fact) {
 			kind, name = "type", m[1]
 		}
 		if kind == "" {
-			continue
+			// A statement outside every unit starts a main program with no
+			// PROGRAM statement, as FORTRAN 77 drivers are written; an
+			// include file's declarations are not one.
+			if len(stack) > 0 || !mainProgramFile(file) || fInclude.MatchString(st) {
+				continue
+			}
+			kind, name = "program", strings.ToLower(strings.TrimSuffix(path.Base(file), path.Ext(file)))
 		}
 		q := name
 		inherited := false

@@ -25,6 +25,7 @@ program main
   use grid
   use iso_fortran_env, only: real64
   implicit none
+  integer, parameter :: primes(*) = [2, 3, 5] ! an implied-shape constant, not an assumed-size dummy
   call resize(10)
   print *, area(point(1d0, 2d0)) ! a comment with call fake()
 end program main

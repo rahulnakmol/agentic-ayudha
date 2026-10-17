@@ -1049,7 +1049,7 @@ var Verbs = []Command{
 			readOnlyWith(flag("run", TypeBool, "With --golden, --parity, or --compat: run the cases' program; without it the cases file is only checked."), "false"),
 			flag("shadow", TypeString, "With --golden --bin <legacy> --run: the new program, run beside the legacy one on the same inputs; reports every difference without golden files, exit 3 on any."),
 			readOnlyWith(flag("probe", TypeBool, "With --golden --bin --run: also run each case twice and under a changed time zone, locale, and HOME (and under strace when installed), writing non-determinism, environment dependencies, and files read and written to probes.json."), "false"),
-			flag("check-bin", TypeString, "With --probe: a sanitiser or checker build of the legacy program; cases whose stderr carries a checker report are recorded."),
+			flag("check-bin", TypeString, "With --probe: a sanitiser, checker, or differently optimised build of the legacy program; cases whose stderr carries a checker report, or whose stdout or exit code differs from the capture, are recorded."),
 			flag("coverage", TypePath, "With --probe: an lcov tracefile from running the cases under coverage; records the index's functions the cases never reach."),
 		},
 		Outputs:  []string{"index", "fact-pack", "survey-report", "backlog", "issues", "golden", "parity", "compat", "shadow", "probes"},

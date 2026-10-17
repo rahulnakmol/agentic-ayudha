@@ -36,7 +36,9 @@ var trapRules = []trapRule{
 	{name: "fortran-goto", langs: []string{"fortran"}, re: regexp.MustCompile(`\bgo[ \t]*to\b`)},
 	{name: "fortran-arithmetic-if", langs: []string{"fortran"}, re: regexp.MustCompile(`\bif[ \t]*\([^\n]*\)[ \t]*\d+[ \t]*,[ \t]*\d+[ \t]*,[ \t]*\d+`)},
 	{name: "fortran-entry", langs: []string{"fortran"}, re: regexp.MustCompile(`(?m)^[ \t]*entry[ \t]+\w+`)},
-	{name: "fortran-assumed-size", langs: []string{"fortran"}, re: regexp.MustCompile(`(?m)^[ \t]*(?:dimension|real|integer|double[ \t]*precision|complex|logical|character)\b[^\n]*\w[ \t]*\((?:[^()\n]*,)?[ \t]*\*[ \t]*\)`)},
+	{name: "fortran-assumed-size", langs: []string{"fortran"}, re: regexp.MustCompile(`(?m)^[ \t]*(?:dimension|real|integer|double[ \t]*precision|complex|logical|character)\b[^\n]*\w[ \t]*\((?:[^()\n]*,)?[ \t]*\*[ \t]*\)`), skip: func(m string) bool {
+		return strings.Contains(strings.ToLower(m), "parameter") // an implied-shape constant, y(*) = [...]
+	}},
 	{name: "fortran-custom-bounds", langs: []string{"fortran"}, re: regexp.MustCompile(`(?m)^[ \t]*(?:dimension|real|integer|double[ \t]*precision|complex|logical|character|type[ \t]*\()[^\n]*\([ \t]*(?:-[ \t]*\d+|0|[a-z]\w*)[ \t]*:`)},
 	{name: "fortran-single-precision", langs: []string{"fortran"}, re: regexp.MustCompile(`(?m)^[ \t]*real[ \t]*(?:\*[ \t]*4)?(?:[ \t]*,|[ \t]*::|[ \t]+[a-z])`)},
 	{name: "fortran-machine-constants", langs: []string{"fortran"}, re: regexp.MustCompile(`\b(?:d1mach|r1mach|i1mach|dpmpar|epsilon|tiny|huge)[ \t]*\(`)},
