@@ -104,7 +104,8 @@ cost of a vague promise very concrete: 17 reviews where 10 were planned.
   the run and `ship` records it), but separating agent writes from the founder's does. Installing the App is a browser
   step only the founder can take.
 - **Package managers.** v0.1.0 shipped on 15 October 2026, signed, with provenance. Its Homebrew, Scoop, and winget
-  jobs failed, so those three still need their repositories' tokens; `install.sh` works.
+  jobs failed, so at that release only `install.sh` worked. Since v0.2.0, Homebrew and Scoop have aayudha; winget is
+  waiting for a moderator in [microsoft/winget-pkgs pull request 454680](https://github.com/microsoft/winget-pkgs/pull/454680).
 - **Measurement with real time.** The benefits-qa result is seeded; the real 28-day measurement is due after
   9 November 2026.
 - **Reviews owed after the fact.** The founder still has to review the three plan bypasses and five solo ships from
