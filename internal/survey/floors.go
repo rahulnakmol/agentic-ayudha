@@ -32,9 +32,32 @@ func checkCapabilityMap(ix *Index, d Draft, cov *Coverage, add func(string, ...a
 	for _, c := range d.Capabilities {
 		cites = append(cites, c.Cites...)
 	}
+	// A definition's symbol covers the declaration of its name. When several
+	// definitions share the name (overloads), each cited one covers one
+	// declaration, so every overload needs its own cite.
+	defs, cited := map[string]int{}, map[string]map[string]bool{}
+	for _, sy := range ix.Symbols {
+		if isDefKind(sy.Kind) {
+			defs[sy.Name]++
+		}
+	}
+	for _, c := range cites {
+		if sy, ok := syms[strings.TrimSpace(c)]; ok && isDefKind(sy.Kind) {
+			if cited[sy.Name] == nil {
+				cited[sy.Name] = map[string]bool{}
+			}
+			cited[sy.Name][sy.ID] = true
+		}
+	}
+	used := map[string]int{}
 	missing := map[string][]string{}
 	for _, e := range ix.Entries {
-		if slices.ContainsFunc(cites, func(c string) bool { return coversEntry(ix, syms, strings.TrimSpace(c), e) }) {
+		direct := slices.ContainsFunc(cites, func(c string) bool { return coversEntry(ix, syms, strings.TrimSpace(c), e) })
+		if n := entryName(ix, e); !direct && n != "" && len(cited[n]) > 0 && (defs[n] <= 1 || used[n] < len(cited[n])) {
+			used[n]++
+			direct = true
+		}
+		if direct {
 			cov.EntriesCovered++
 			continue
 		}
@@ -55,7 +78,7 @@ func coversEntry(ix *Index, syms map[string]Symbol, c string, e Fact) bool {
 	}
 	file, line := splitAt(e.At)
 	if s, ok := syms[c]; ok {
-		return s.At == e.At || isDefKind(s.Kind) && s.Name == entryName(ix, e)
+		return s.At == e.At // a definition elsewhere covers by name (checkCapabilityMap)
 	}
 	j := strings.LastIndex(c, ":")
 	if j < 0 || c[:j] != file {
@@ -125,7 +148,7 @@ func checkRunners(ix *Index, m *Modernisation, add func(string, ...any)) {
 			case k >= 0:
 				runners = append(runners, runnable[k])
 			case t >= 0: // a test harness that runs the cases through the library
-				h := Fact{ID: ix.Tests[t].ID, Kind: "script", At: ix.Tests[t].At}
+				h := Fact{ID: ix.Tests[t].ID, Kind: "test", At: ix.Tests[t].At}
 				if !drives(h) {
 					add("case set %s: runner %s is a test file that calls no function and loads no file outside the tests, so it cannot run the cases through the program: name a program or a harness that drives it", g.ID, r)
 					continue
@@ -157,8 +180,9 @@ func checkRunners(ix *Index, m *Modernisation, add func(string, ...any)) {
 			}
 		}
 		for f := range files {
+			named := regexp.MustCompile(`(?:^|[^\w./-])` + regexp.QuoteMeta(f) + `(?:$|[^\w/-]|\.(?:$|\s))`)
 			for _, x := range g.Exclude {
-				if strings.Contains(x, f) {
+				if named.MatchString(x) { // the exclusion names this path, not one that ends with it
 					delete(files, f)
 				}
 			}
@@ -227,11 +251,11 @@ func runnerReach(ix *Index) (reach func(Fact, []Fact) bool, drives func(Fact) bo
 		var queue []string
 		f, _ := splitAt(r.At)
 		for _, s := range byFile[f] {
-			if isDefKind(s.Kind) && (s.At == r.At || r.Kind == "script") {
+			if isDefKind(s.Kind) && (s.At == r.At || r.Kind == "test") { // a test framework runs every test function
 				queue = append(queue, s.ID)
 			}
 		}
-		queue = append(queue, next[r.ID]...) // a main guard's calls (Index.guardCalls)
+		queue = append(queue, next[r.ID]...) // a script's or main guard's calls at file scope
 		for len(queue) > 0 {
 			id := queue[0]
 			queue = queue[1:]

@@ -14,6 +14,62 @@ var (
 	notDecl    = regexp.MustCompile(`^(?:typedef|using|friend|return|static_assert|enum|template\s*<[^>]*>\s*(?:class|struct))\b`)
 )
 
+// blankAnnotations blanks the attributes a declaration may carry, with
+// their arguments ([[deprecated("old")]], __attribute__((visibility(…))),
+// __declspec(dllexport), alignas(16)), keeping every offset and line break.
+func blankAnnotations(h string) string {
+	b := []byte(h)
+	blank := func(from, to int) {
+		for k := from; k < to; k++ {
+			if b[k] != '\n' {
+				b[k] = ' '
+			}
+		}
+	}
+	for i := 0; i < len(b); i++ {
+		if b[i] == '[' && i+1 < len(b) && b[i+1] == '[' {
+			if j := strings.Index(string(b[i+2:]), "]]"); j >= 0 {
+				blank(i, i+2+j+2)
+				i += j + 3
+			}
+			continue
+		}
+		if (i > 0 && (isWord(b[i-1]))) || !isWord(b[i]) {
+			continue
+		}
+		j := i
+		for j < len(b) && isWord(b[j]) {
+			j++
+		}
+		k := j
+		for k < len(b) && (b[k] == ' ' || b[k] == '\t' || b[k] == '\n') {
+			k++
+		}
+		if !annotation[string(b[i:j])] || k >= len(b) || b[k] != '(' {
+			i = j - 1
+			continue
+		}
+		depth, end := 0, len(b)
+		for e := k; e < len(b); e++ {
+			if b[e] == '(' {
+				depth++
+			} else if b[e] == ')' {
+				if depth--; depth == 0 {
+					end = e + 1
+					break
+				}
+			}
+		}
+		blank(i, end)
+		i = end - 1
+	}
+	return string(b)
+}
+
+func isWord(c byte) bool {
+	return c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
+}
+
 // headerAPI finds the functions a C or C++ header declares without a body
 // (in its stripped code: comments, literals, and directives blanked):
 // prototypes at file, namespace, or extern "C" scope, and the member
@@ -59,14 +115,14 @@ func headerAPI(code string) []Symbol {
 		if !reachable() {
 			return
 		}
-		h := strings.TrimSpace(text)
-		if h == "" || notDecl.MatchString(h) {
+		h := blankAnnotations(strings.TrimSpace(text)) // __declspec(dllexport) int f(); declares f
+		if strings.TrimSpace(h) == "" || notDecl.MatchString(h) {
 			return
 		}
 		for _, m := range funcName.FindAllStringSubmatchIndex(h, -1) {
 			nm := h[m[2]:m[3]]
-			if cKeywords[nm] || annotation[nm] {
-				continue // __declspec(dllexport) int f(); declares f
+			if cKeywords[nm] {
+				continue
 			}
 			before := strings.TrimSpace(h[:m[2]])
 			owner := ""
