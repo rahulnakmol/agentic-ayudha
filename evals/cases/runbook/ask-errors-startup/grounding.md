@@ -2,7 +2,7 @@
 
 Everything below is the real output of `aayu runbook` in a checkout of the example product benefits-qa (examples/benefits-qa), after its first SLO merged, followed by the checked investigation note of its last incident, #1, which the twin read.
 
-Twin: Atlas, the Production Engineer. Team stage: startup (the pod's humans (1)), so a runbook's title is `# Runbook entry: <failure>`.
+Twin: Shesha, the Production Engineer. Team stage: startup (the pod's humans (1)), so a runbook's title is `# Runbook entry: <failure>`.
 
 A runbook confirms a known failure with a bounded query, mitigates it only with a catalog action proposed through
 `aayu respond <incident> --action <name>` (a person approves it through the Environment), verifies it, and rolls it back.

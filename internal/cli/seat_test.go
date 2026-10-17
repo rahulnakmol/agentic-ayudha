@@ -113,7 +113,7 @@ func TestSeatAddRemove(t *testing.T) {
 	if is == nil || is.Title != "Seat onboarding: UX Researcher & Evolutionist (@alice)" || g.LabelNames(res.Issue)[0] != seats.OnboardingLabel {
 		t.Fatalf("onboarding issue #%d: %+v", res.Issue, is)
 	}
-	for _, want := range []string{"@alice, you are now the paired human", "## How we work", "| L01 | Experience |", "`review` | Accountable", "### Purpose", "Owns the experience", "**Iris, the UX Researcher & Evolutionist twin**", "**When paired with a human:**"} {
+	for _, want := range []string{"@alice, you are now the paired human", "## How we work", "| L01 | Experience |", "`review` | Accountable", "### Purpose", "Owns the experience", "**Hanu, the UX Researcher & Evolutionist twin**", "**When paired with a human:**"} {
 		if !strings.Contains(is.Body, want) {
 			t.Errorf("onboarding issue body lacks %q:\n%s", want, is.Body)
 		}

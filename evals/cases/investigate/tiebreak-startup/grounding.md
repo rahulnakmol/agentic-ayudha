@@ -2,7 +2,7 @@
 
 Everything below is the real output of `aayu investigate 1 --telemetry <export>` on the instrumented example product benefits-qa (examples/benefits-qa): one revision served, then another was deployed, under real traffic; the timestamps are spread over 40 minutes for this eval. The incident and the catalog come from a fake GitHub.
 
-Twin: Atlas, the Production Engineer. Team stage: startup (the pod's humans (1)), so the note's title is `# Investigation note`.
+Twin: Shesha, the Production Engineer. Team stage: startup (the pod's humans (1)), so the note's title is `# Investigation note`.
 Scope: service benefits-qa, environment production, window 2026-10-16T09:01:32Z..2026-10-16T09:39:53Z (UTC).
 
 Establish the deployed revision before reading code. Start from these bounded aggregates; run more with

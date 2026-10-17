@@ -1,8 +1,8 @@
 # Decision-pack case (WP5.1b, D-5.6b): a stuck human asks a delivery question about story #212; the topic routes it to
-# the Engineering Manager twin (Nestor), who writes the pack at the startup stage. planted/pack.md is the same pack
+# the Engineering Manager twin (Drona), who writes the pack at the startup stage. planted/pack.md is the same pack
 # without its pre-mortem, which tier 1 must refuse. Tier 2 has the decide skill write the pack again for the judge.
 skill = "decide"
-description = "Nestor's decision pack: split #212 or re-plan it as an M."
+description = "Drona's decision pack: split #212 or re-plan it as an M."
 input = "../grounding.md"
 artifacts = ["output/pack.md", "planted/pack.md"]
 

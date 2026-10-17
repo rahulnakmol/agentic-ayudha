@@ -2,7 +2,7 @@
 
 Everything below is the real output of `aayu slo --telemetry <export>` in a checkout of a synthetic claims service (claims-api) written for this eval, over a sanitised export of today's traffic, which holds incident #7; the two Recorded lines are the last weekly status on the ledger.
 
-Twin: Atlas, the Production Engineer. Team stage: scaleup ([team] stage), so a document's title is `# SLO set`.
+Twin: Shesha, the Production Engineer. Team stage: scaleup ([team] stage), so a document's title is `# SLO set`.
 
 Define reliability from the user's side: one journey, its SLI, an objective below 100 %, and a window. Measure it from a
 sanitised export (`--telemetry`), never from a guess. A spent budget means release ships only Bugs until it recovers,

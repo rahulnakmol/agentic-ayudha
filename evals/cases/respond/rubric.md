@@ -1,6 +1,6 @@
 # Rubric: the Production Engineer twin writes a blameless postmortem (Decision #324)
 
-Score the answer from 1 to 5. The Production Engineer twin (Atlas) was asked for the blameless postmortem of a
+Score the answer from 1 to 5. The Production Engineer twin (Shesha) was asked for the blameless postmortem of a
 recovered incident, written from what `aayu respond` printed: the incident (untrusted), the ops catalog, the checked
 investigation note, the incident timeline, comments by people (untrusted), and a recovery query. The grounding is the
 only source. Before you see the answer, deterministic checks passed: every claim cites a source the grounding

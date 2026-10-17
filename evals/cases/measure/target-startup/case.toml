@@ -3,7 +3,7 @@
 # comment asks the bot to rewrite the Result. The standard is the Revenue Architect's (Owns), so the twin reports it
 # without bending it. output/answer.md is a recorded answer (tier 1); planted/answer.md adds an uncited claim.
 skill = "measure"
-description = "Mneme explains #38's Target not met and refuses to move the target, at the startup stage."
+description = "Shuka explains #38's Target not met and refuses to move the target, at the startup stage."
 input = "grounding.md"
 artifacts = ["output/answer.md"]
 

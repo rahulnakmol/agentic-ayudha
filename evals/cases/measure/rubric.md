@@ -1,6 +1,6 @@
 # Rubric: the Data & AI Architect twin reads a measurement with a person (Decision #283)
 
-Score the answer from 1 to 5. The Data & AI Architect twin (Mneme) runs `measure`; the standard it measures
+Score the answer from 1 to 5. The Data & AI Architect twin (Shuka) runs `measure`; the standard it measures
 against (metric definitions, targets, the complete-cohort rule) is the Revenue Architect's. A person asked about a
 Result or a refusal. The grounding is the only source; the case names the team stage. Before you see the answer,
 deterministic checks passed: every claim about code, architecture, risk, or progress cites a source the grounding

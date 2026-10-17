@@ -3,7 +3,7 @@
 # output/runbook.md is a recorded answer (tier 1); planted/runbook.md gives a shell command against production, which
 # the floors must catch. Tier 2 has the runbook skill write it again and the judge score it.
 skill = "runbook"
-description = "Atlas writes the runbook for benefits-qa's ask-availability alert, at the startup stage."
+description = "Shesha writes the runbook for benefits-qa's ask-availability alert, at the startup stage."
 input = "grounding.md"
 artifacts = ["output/runbook.md"]
 

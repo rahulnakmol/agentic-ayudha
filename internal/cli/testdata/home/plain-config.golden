@@ -15,5 +15,5 @@ WARN 1 open Feedback issue(s) without a fix layer (#5 Feedback: persona outputs 
 Next: aayu ship 4
   Why: PR #4 (story #1) waits for a person: review and approve it on GitHub, then ship it. (Engineering Manager, for a person to run)
 -- stderr --
-Nestor (Engineering Manager): Here is where the work stands.
--- Nestor (Engineering Manager): Small steps, real proof?
+Drona (Engineering Manager): Here is where the work stands.
+-- Drona (Engineering Manager): Small steps, real proof?

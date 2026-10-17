@@ -14,9 +14,9 @@ on a guess. And an answer about another person's claim would be a breach. Whatev
 and private, and you need to know it is, not hope.
 
 You are not alone, but you are the only person: the founder, and the whole human side of the team. aayudha gives
-you fourteen agent seats, a small delivery team, each with a name: Metis, the product strategist, who interviews you;
-Daedalus, the architect, who plans; Talos, the engineer, who builds; Nestor, the engineering manager, who has every
-change reviewed by a model from another vendor; Themis, the quality architect, whose checks no model can talk its way
+you fourteen agent seats, a small delivery team, each with a name: Arjun, the product strategist, who interviews you;
+Vishwa, the architect, who plans; Nakul, the engineer, who builds; Drona, the engineering manager, who has every
+change reviewed by a model from another vendor; Yama, the quality architect, whose checks no model can talk its way
 past; and nine more ([seats](concepts-seats.md)). They do the work. You make the calls only a person can make.
 
 > **In the story:** you stand in for the one person who ran this, in this repository, on Monday 12 October 2026.

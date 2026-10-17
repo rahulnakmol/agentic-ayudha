@@ -5,7 +5,7 @@
 # change's author, which the blameless check must catch. Tier 2 has the respond skill write it again and the judge
 # score it.
 skill = "respond"
-description = "Atlas writes the Incident log of a bad deploy that a catalog rollback fixed, at the startup stage."
+description = "Shesha writes the Incident log of a bad deploy that a catalog rollback fixed, at the startup stage."
 input = "grounding.md"
 artifacts = ["output/postmortem.md"]
 

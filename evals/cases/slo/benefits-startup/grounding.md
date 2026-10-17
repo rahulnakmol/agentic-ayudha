@@ -2,7 +2,7 @@
 
 Everything below is the real output of `aayu slo --telemetry <export>` in a checkout of the example product benefits-qa (examples/benefits-qa), which has no SLOs yet, over the export of its last 40 minutes of real traffic (timestamps spread for this eval). Incident #1, a 500 on some questions after a deploy, is inside that window and was mitigated by a rollback.
 
-Twin: Atlas, the Production Engineer. Team stage: startup (the pod's humans (1)), so a document's title is `# SLO line`.
+Twin: Shesha, the Production Engineer. Team stage: startup (the pod's humans (1)), so a document's title is `# SLO line`.
 
 Define reliability from the user's side: one journey, its SLI, an objective below 100 %, and a window. Measure it from a
 sanitised export (`--telemetry`), never from a guess. A spent budget means release ships only Bugs until it recovers,

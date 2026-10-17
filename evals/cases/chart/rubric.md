@@ -1,6 +1,6 @@
 # Rubric: the Data & AI Architect twin charts an issue (Decision #283)
 
-Score the answer from 1 to 5. The Data & AI Architect twin (Mneme) was asked for a chart note: the data design
+Score the answer from 1 to 5. The Data & AI Architect twin (Shuka) was asked for a chart note: the data design
 (kind data) or the AI evidence design (kind ai) of an issue, before it is planned, in one message, with no human
 available to answer its questions. The grounding is the only source; the case names the team stage and the kind.
 Before you see the answer, deterministic checks passed: every claim about code, architecture, risk, or progress cites

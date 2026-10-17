@@ -160,9 +160,9 @@ func TestErrorsEndWithNext(t *testing.T) {
 }
 
 func TestVoiceReadsThePersona(t *testing.T) {
-	persona := "name = \"Nestor\"\npurpose = \"Keeps work flowing to a proven merge: elevates the concept.\"\nquestions = [\"Who owns the next step, and by when?\", \"What does the pack say?\"]\n"
+	persona := "name = \"Drona\"\npurpose = \"Keeps work flowing to a proven merge: elevates the concept.\"\nquestions = [\"Who owns the next step, and by when?\", \"What does the pack say?\"]\n"
 	v := voiceOf(t, map[string]string{"seats/engineering-manager/persona.toml": persona}, "status")
-	if v.Name != "Nestor" || v.Intro != "Keeps work flowing to a proven merge." || v.Speaker() != "Nestor (Engineering Manager)" {
+	if v.Name != "Drona" || v.Intro != "Keeps work flowing to a proven merge." || v.Speaker() != "Drona (Engineering Manager)" {
 		t.Errorf("persona: %+v", v)
 	}
 	if v.SignOff != "Who owns the next step, and by when?" && v.SignOff != "What does the pack say?" {
@@ -181,7 +181,7 @@ func TestVoiceReadsThePersona(t *testing.T) {
 // seat speaking without churning when the real charters change.
 func testAssets(t *testing.T) fstest.MapFS {
 	t.Helper()
-	return fstest.MapFS{"seats/engineering-manager/persona.toml": {Data: []byte("name = \"Nestor\"\npurpose = \"Here is where the work stands: and the rest.\"\nquestions = [\"Small steps, real proof?\"]\n")}}
+	return fstest.MapFS{"seats/engineering-manager/persona.toml": {Data: []byte("name = \"Drona\"\npurpose = \"Here is where the work stands: and the rest.\"\nquestions = [\"Small steps, real proof?\"]\n")}}
 }
 
 func voiceOf(t *testing.T, files map[string]string, command string) ui.Voice {

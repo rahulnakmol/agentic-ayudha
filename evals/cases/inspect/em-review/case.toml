@@ -3,7 +3,7 @@
 # uncited architectural claim ("the ledger package already stores the kind"); the evidence rule must catch it.
 # inspect runs in the review lane, which the tier-2 judge also uses, so this case has no tier 2 (the retro cases do).
 skill = "inspect"
-description = "Nestor reviews PR #219 with grounded citations; a planted uncited claim fails."
+description = "Drona reviews PR #219 with grounded citations; a planted uncited claim fails."
 input = "../../retro/grounding.md"
 artifacts = ["output/review.md", "planted/review.md"]
 
