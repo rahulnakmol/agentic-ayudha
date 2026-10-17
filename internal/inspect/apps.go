@@ -184,7 +184,7 @@ func Request(c Choice, in Input, head string) string {
 		}
 		b.WriteString("\n")
 	}
-	b.WriteString("Report real defects only (P0 breaks production, security, or data; P1 a defect a user or caller would hit, or an unmet criterion; P2 should be fixed; P3 a nit). Do not report a missing test as a finding on a test file: judge it in the criterion's verdict. A test that only restates the code is category `test-value`.\n\n")
+	b.WriteString(defectRule + " Report real defects only (P0 breaks production, security, or data; P1 a defect a user or caller would hit, or an unmet criterion; P2 should be fixed; P3 a nit). Do not report a missing test as a finding on a test file: judge it in the criterion's verdict. A test that only restates the code is category `test-value`.\n\n")
 	fmt.Fprintf(&b, "Reply on this pull request with one comment or review holding exactly one fenced block whose info string is `%s`, with one JSON object (every key required):\n\n", ReplyFence)
 	fmt.Fprintf(&b, "````\n```%s\n", ReplyFence)
 	fmt.Fprintf(&b, `{"head": %q, "disposition": "merge|fix|rebuild", "summary": "…", "reviewed": ["every changed file you reviewed"], "findings": [{"severity": "P0|P1|P2|P3", "category": "bug|security|data|concurrency|contract|test|test-value|performance|maintainability|docs", "file": "path", "line": 0, "quote": "the exact added line", "title": "…", "detail": "…", "fix": "…", "confidence": 0.9, "criterion": 0}], "criteria": [{"id": 1, "verdict": "met|unmet|unclear", "evidence": "…"}]}`, head)

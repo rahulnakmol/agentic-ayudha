@@ -16,6 +16,8 @@ criteria = [
 
 [[review.defects]]
 file = "internal/session/store.go"
-lines = [13, 13]
+# From the constructor that leaves the map nil (13) to the write that panics on it (20): a finding on either line
+# names this defect (Appendix B D-4.8d.2).
+lines = [13, 20]
 kind = "bug"
 title = "the values map is never made, so Set panics"

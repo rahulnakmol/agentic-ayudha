@@ -9,7 +9,7 @@ import (
 
 func TestRetrySucceedsOnThirdCall(t *testing.T) {
 	calls := 0
-	err := Retry(context.Background(), 3, time.Millisecond, func(context.Context) error {
+	err := Retry(context.Background(), 3, 10*time.Millisecond, func(context.Context) error {
 		calls++
 		if calls < 3 {
 			return errors.New("busy")
@@ -21,12 +21,13 @@ func TestRetrySucceedsOnThirdCall(t *testing.T) {
 	}
 }
 
-func TestRetryStopsWhenCancelled(t *testing.T) {
+func TestRetryStopsWhenCancelledDuringTheFirstWait(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	calls := 0
 	err := Retry(ctx, 3, time.Second, func(context.Context) error {
 		calls++
-		cancel()
+		time.AfterFunc(10*time.Millisecond, cancel) // fires during the 1 s wait
 		return errors.New("busy")
 	})
 	if !errors.Is(err, context.Canceled) || calls != 1 {
@@ -34,8 +35,28 @@ func TestRetryStopsWhenCancelled(t *testing.T) {
 	}
 }
 
-func TestRetryNeedsAnAttempt(t *testing.T) {
-	if err := Retry(context.Background(), 0, time.Millisecond, nil); err == nil {
-		t.Fatal("0 attempts accepted")
+func TestRetryReturnsTheLastError(t *testing.T) {
+	calls := 0
+	last := errors.New("still busy")
+	err := Retry(context.Background(), 2, time.Millisecond, func(context.Context) error {
+		calls++
+		if calls == 2 {
+			return last
+		}
+		return errors.New("busy")
+	})
+	if !errors.Is(err, last) || calls != 2 {
+		t.Fatalf("err %v after %d calls", err, calls)
+	}
+}
+
+func TestRetryRefusesBadArguments(t *testing.T) {
+	for _, c := range []struct {
+		attempts int
+		base     time.Duration
+	}{{0, time.Millisecond}, {3, 0}} {
+		if err := Retry(context.Background(), c.attempts, c.base, nil); err == nil {
+			t.Errorf("Retry(%d, %v) accepted", c.attempts, c.base)
+		}
 	}
 }

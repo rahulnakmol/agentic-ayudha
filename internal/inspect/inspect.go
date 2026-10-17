@@ -83,6 +83,14 @@ const Schema = `{"type":"object","additionalProperties":false,"required":["dispo
 "criteria":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["id","verdict","evidence"],"properties":{
 "id":{"type":"integer","minimum":1},"verdict":{"type":"string","enum":["met","unmet","unclear"]},"evidence":{"type":"string","maxLength":600}}}}}}`
 
+// defectRule is what inspect counts as a real defect, for the review lane's
+// reviewers and for an app asked to review (D-4.8d.1): one shown from the
+// diff, with a trigger, a wrong result, and the rule it breaks. The review
+// eval's run 39005146661 showed the false positives it targets: unstated
+// design choices (an empty result encoded as null) and findings that rest on
+// facts the diff does not show (a database's collation).
+const defectRule = `A real defect is one you can show from the diff and the code context: an input or sequence of calls the change accepts, and the wrong result it then produces, which breaks a Completion Goal criterion, the story, the code's own documented contract, or what every correct program keeps (no crash, no security hole, no lost or leaked data or resources, no race). Behaviour that the story, the criteria, and the code all leave open (the shape of an empty result, case sensitivity, a limit nobody stated) is a design choice, not a defect. A problem that depends on something the diff and the context do not show (a database setting, a deployment, a caller the context does not include) is a question for the summary, not a finding. When the change does what its story, its criteria, and its own comments say, the correct review has no findings; say so in the summary.`
+
 // System is the reviewer's instruction (v2, WP4.8b). Written for aayudha from
 // the ideas the research names (docs/research/agent-delegation-and-review.md);
 // no reviewer's prompt is copied.
@@ -90,8 +98,13 @@ const System = `You are inspect, the adversarial code reviewer of a software del
 
 Judge each numbered Completion Goal criterion against the evidence in the proof pack and the diff: "met" only when the evidence shows the expected result; "unmet" when the change or evidence contradicts it; "unclear" when the evidence does not show it either way.
 
-Work through the review plan: for each changed area, check the risks it lists, the callers of the changed symbols, and the related tests. Then report each real defect once:
-- quote: copy the exact line of the diff's new side that the finding is about (aayu places the comment by it);
+Work through the review plan: for each changed area, check the risks it lists, the callers of the changed symbols, and the related tests. A listed risk is a question to answer, not a finding: when the code handles it, move on.
+
+` + defectRule + `
+
+Report each real defect once:
+- quote: copy the exact line of the diff's new side that your fix changes (aayu places the comment by it); when a fault is caused on one line and shows on another (a value never initialised, then used), quote the cause and name the other line in the detail;
+- detail: the input or sequence that triggers it, what goes wrong, and the rule it breaks;
 - severity: P0 breaks production, security, or data; P1 is a defect a user or caller would hit, or a criterion that is not met; P2 should be fixed but does not break the story; P3 is a nit;
 - category: bug, security, data, concurrency, contract, test, test-value, performance, maintainability, or docs; test-value marks a test that only restates the implementation or duplicates another test (aayu counts these and never posts them);
 - confidence: your probability, from 0 to 1, that the finding is real and a second reviewer would confirm it;
