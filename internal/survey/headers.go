@@ -79,9 +79,11 @@ func headerAPI(code string) []Symbol {
 				!strings.Contains(h[m[3]:], ")"):
 				return
 			}
-			q := nm
-			if owner != "" {
-				q = owner + "::" + nm
+			q := nm // qualified by every named scope, as the definition's symbol is: a::Foo::bar
+			for k := len(stack) - 1; k >= 0; k-- {
+				if stack[k].name != "" {
+					q = stack[k].name + "::" + q
+				}
 			}
 			at := off + len(text) - len(strings.TrimLeft(text, " \t\r\n")) + m[2]
 			ln := line + strings.Count(chunk[:at], "\n")
@@ -119,6 +121,9 @@ func headerAPI(code string) []Symbol {
 					o = open{class: true, name: m[2], reachable: r, public: r && m[1] != "class"}
 				} else if scopeOpen.MatchString(h) {
 					o = open{}
+					if f := strings.Fields(h); len(f) > 1 && f[0] == "namespace" {
+						o.name = strings.Join(f[1:], "")
+					}
 				}
 			}
 			stack = append(stack, o)
