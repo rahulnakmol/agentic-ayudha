@@ -144,6 +144,12 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 	if in.Bool("map") {
 		return e.verifyMap(ctx, root, maintain)
 	}
+	if in.Bool("security") {
+		return e.verifySecurity(ctx, root, l, in.String("since"))
+	}
+	if in.Has("since") {
+		return Errorf(ExitUsage, "verify --since runs with --security")
+	}
 	head, err := gitIn(ctx, root, "rev-parse", "HEAD")
 	if err != nil {
 		return Wrap(ExitUsage, err)

@@ -16,8 +16,32 @@ import (
 // Severity counts of a scanner's findings.
 type Severity struct {
 	Critical, High, Medium, Low int
-	Uncalled                    int      // osv-scanner call analysis: vulnerable code the module never calls (not counted)
-	Top                         []string // the first critical/high findings, for the pack detail
+	Uncalled                    int       // osv-scanner call analysis: vulnerable code the module never calls (not counted)
+	Top                         []string  // the first critical/high findings, for the pack detail
+	Found                       []Finding // every critical/high finding, for the security workflow's Bugs
+}
+
+// Finding is one finding at a level that fails its floor: what the security
+// workflow (`verify --security`) files a Bug for.
+type Finding struct {
+	Floor string `json:"floor"`
+	ID    string `json:"id"`    // rule or advisory ID
+	Path  string `json:"path"`  // the file or lockfile
+	Where string `json:"where"` // file:line, or package@version
+	Level string `json:"level"`
+}
+
+// Fingerprint identifies a finding across runs: its floor, ID, and path,
+// never a line number, so a moved line stays the same finding.
+func (f Finding) Fingerprint() string { return f.Floor + " " + f.ID + " " + f.Path }
+
+// found records a finding; critical and high ones are kept.
+func (s *Severity) found(level, what string, f Finding) {
+	s.add(level, what)
+	if level == "critical" || level == "high" {
+		f.Level = level
+		s.Found = append(s.Found, f)
+	}
 }
 
 func (s *Severity) add(level, what string) {
@@ -154,12 +178,12 @@ func (SAST) Run(ctx context.Context, r *Run) (Result, error) {
 	}
 	var s Severity
 	for _, f := range doc.Results {
-		s.add(semgrepLevel(f.Extra.Severity, f.Extra.Metadata.Impact), fmt.Sprintf("%s %s:%d", f.CheckID, f.Path, f.Start.Line))
+		s.found(semgrepLevel(f.Extra.Severity, f.Extra.Metadata.Impact), fmt.Sprintf("%s %s:%d", f.CheckID, f.Path, f.Start.Line), Finding{Floor: "sast", ID: f.CheckID, Path: f.Path, Where: fmt.Sprintf("%s:%d", f.Path, f.Start.Line)})
 	}
 	c := severityCheck(s, r.Floors.SAST.MaxCritical, r.Floors.SAST.MaxHigh)
 	c.Tool, c.Version, c.Network = res.Check.Tool, res.Check.Version, o.Network
 	c.Detail = strings.Join(packs, " ") + ": " + c.Detail
-	res.Check = c
+	res.Check, res.Findings = c, s.Found
 	res.Artifacts = append(res.Artifacts, Evidence{Path: "reports/semgrep.json", Kind: "report", Data: b})
 	return res, nil
 }
@@ -200,8 +224,14 @@ func (Secrets) Run(ctx context.Context, r *Run) (Result, error) {
 	res.Check.Version = version(ctx, r, "gitleaks", "version")
 	out := r.tempFile("gitleaks.json")
 	args := []string{"git", "--no-banner", "--redact", "--exit-code", "0", "--report-format", "json", "--report-path", out}
+	// Without a base, the whole history of the commit under test: never
+	// `git log --all`, which would also scan every other fetched branch.
+	logOpts := r.Head
 	if r.Base != "" {
-		args = append(args, "--log-opts", r.Base+".."+r.Head)
+		logOpts = r.Base + ".." + r.Head
+	}
+	if logOpts != "" {
+		args = append(args, "--log-opts", logOpts)
 	}
 	args = append(args, ".")
 	o, err := r.Sandbox.Run(ctx, Cmd{Dir: r.Root, Name: "gitleaks", Args: args})
@@ -223,6 +253,7 @@ func (Secrets) Run(ctx context.Context, r *Run) (Result, error) {
 	res.Check.Result = proof.Pass
 	var top []string
 	for _, f := range findings {
+		res.Findings = append(res.Findings, Finding{Floor: "secrets", ID: f.RuleID, Path: f.File, Where: fmt.Sprintf("%s:%d (%s)", f.File, f.Line, short(f.Commit)), Level: "high"})
 		if len(top) < 5 {
 			top = append(top, fmt.Sprintf("%s %s:%d (%s)", f.RuleID, f.File, f.Line, short(f.Commit)))
 		}
@@ -281,7 +312,7 @@ func (Deps) Run(ctx context.Context, r *Run) (Result, error) {
 	c := severityCheck(s, r.Floors.Deps.MaxCritical, r.Floors.Deps.MaxHigh)
 	c.Tool, c.Version, c.Network = res.Check.Tool, res.Check.Version, o.Network
 	c.Detail = strings.Join(lockfiles, " ") + ": " + c.Detail
-	res.Check = c
+	res.Check, res.Findings = c, s.Found
 	res.Artifacts = append(res.Artifacts, Evidence{Path: "reports/osv-scanner.json", Kind: "report", Data: b})
 	return res, nil
 }
@@ -314,6 +345,9 @@ func TrackedLockfiles(ctx context.Context, root string) []string {
 func ParseOSV(b []byte) (Severity, error) {
 	var doc struct {
 		Results []struct {
+			Source struct {
+				Path string `json:"path"`
+			} `json:"source"`
 			Packages []struct {
 				Package struct {
 					Name      string `json:"name"`
@@ -383,7 +417,15 @@ func ParseOSV(b []byte) (Severity, error) {
 						level = "high" // unscored: treated as high until someone looks (rule 7 errs closed)
 					}
 				}
-				s.add(level, fmt.Sprintf("%s %s@%s (%s)", strings.Join(g.IDs, ","), p.Package.Name, p.Package.Version, p.Package.Ecosystem))
+				// The ID is the group's least ID, so a finding keeps its fingerprint while
+				// its version changes; the path is the lockfile.
+				ids := slices.Sorted(slices.Values(g.IDs))
+				id := strings.Join(ids, ",")
+				if len(ids) > 0 {
+					id = ids[0] + " " + p.Package.Name
+				}
+				what := fmt.Sprintf("%s %s@%s (%s)", strings.Join(g.IDs, ","), p.Package.Name, p.Package.Version, p.Package.Ecosystem)
+				s.found(level, what, Finding{Floor: "deps", ID: id, Path: res.Source.Path, Where: what})
 			}
 		}
 	}
@@ -401,6 +443,10 @@ func short(s string) string {
 func Standard() []Floor {
 	return []Floor{Coverage{}, SAST{}, Secrets{}, Deps{}, A11y{}, Perf{}, ScreenReader{}, DAST{}, API{}, Mobile{}, MapFloor{}, Behaviour{}, Parity{}}
 }
+
+// SecurityFloors are the floors `verify --security` runs on a pushed commit
+// and nightly (aayudha-security.yml, Decision #480).
+func SecurityFloors() []Floor { return []Floor{SAST{}, Secrets{}, Deps{}} }
 
 // ByName selects one floor.
 func ByName(floors []Floor, name string) ([]Floor, error) {

@@ -1,0 +1,113 @@
+# aayudha security workflow (Decision #480, Story #487). Installed into product repos by `aayu init --gates` as
+# .github/workflows/aayudha-security.yml; the template is embedded in the aayudha binary. Protected path.
+#
+# The merge gate scans each pull request; this scans every commit that reaches dev, rolling, main by any route (a
+# merge, a promotion, a direct or admin push), and nightly scans each of their tips again, so a new advisory against
+# an unchanged dependency is found too. It runs `aayudha verify --security --ci`: verify's sast (semgrep), secrets
+# (gitleaks, the pushed commits; nightly the whole history), and deps (osv-scanner) floors, with the merge gate's
+# pinned tools. Each failing finding files or updates one Bug labelled aayudha:security; an open one seen on rolling
+# or main blocks the next `aayu release` until it is fixed or a person accepts a floor waiver on it.
+#
+# No AI key, no bot App, no secret: the workflow token writes the Bugs (issues: write).
+name: aayudha-security
+
+on:
+  push:
+    branches: [dev, rolling, main]
+  schedule:
+    - cron: "23 3 * * *" # nightly: new advisories against dependencies that did not change
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  actions: read
+
+env:
+  AAYU_VERSION: "dev"
+  REPO: ${{ github.repository }}
+  # aayu halt (WP5.7): the verbs read the halt variable from here; the workflow token cannot read it through the API.
+  AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+
+jobs:
+  security:
+    name: aayudha/security (${{ matrix.branch }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # A push scans its own branch; the nightly run and a dispatch scan every tip.
+        branch: ${{ github.event_name == 'push' && fromJSON(format('["{0}"]', github.ref_name)) || fromJSON('["dev","rolling","main"]') }}
+    concurrency:
+      group: aayudha-security-${{ matrix.branch }}
+      cancel-in-progress: false
+    env:
+      GITLEAKS_VERSION: "8.30.1"
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb # linux_x64
+      OSV_SCANNER_VERSION: "2.6.0"
+      OSV_SCANNER_SHA256: ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108 # linux_amd64
+      SEMGREP_VERSION: "1.180.0"
+      # The push's before: the secrets floor scans only the pushed commits. Empty (nightly, dispatch) or all zeros
+      # (a new branch): the whole history of the tip.
+      BEFORE: ${{ github.event_name == 'push' && github.event.before || '' }}
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - name: Check out the branch tip
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'push' && github.sha || matrix.branch }}
+          fetch-depth: 0
+          persist-credentials: false
+          path: head
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.25.x"
+          cache: false
+      - name: Install aayudha dev
+        run: |
+          set -euo pipefail
+          # dev is a branch: fetch it from GitHub directly rather than a possibly stale proxy copy. Go then runs git in
+          # its module cache, and each git fetch starts a detached `git maintenance run --auto` whose repack rewrites
+          # .git/shallow while Go's next fetch reads it ("fatal: shallow file has changed since we read it"). No maintenance.
+          if [ "$AAYU_VERSION" = dev ]; then
+            export GOPROXY=direct GONOSUMDB=github.com/rahulnakmol/agentic-ayudha
+            export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=maintenance.auto GIT_CONFIG_VALUE_0=false
+          fi
+          go install "github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@$AAYU_VERSION"
+      - name: Floor tools (pinned, SHA-256 checked)
+        run: |
+          set -euo pipefail
+          curl -fsSLo "$RUNNER_TEMP/gitleaks.tgz" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/gitleaks.tgz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/bin"
+          tar -xzf "$RUNNER_TEMP/gitleaks.tgz" -C "$RUNNER_TEMP/bin" gitleaks
+          curl -fsSLo "$RUNNER_TEMP/bin/osv-scanner" "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64"
+          echo "${OSV_SCANNER_SHA256}  $RUNNER_TEMP/bin/osv-scanner" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/bin/osv-scanner"
+          pipx install "semgrep==${SEMGREP_VERSION}"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          # Unprivileged user and network namespaces for the no-network sandbox (Ubuntu restricts them by default).
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+      - name: Security floors on the commit
+        working-directory: head
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BRANCH: ${{ matrix.branch }}
+        run: |
+          set +e
+          # The checkout of a pushed commit is detached: name its branch for the Bugs.
+          git checkout --quiet -B "$BRANCH"
+          args=(verify --security --ci --repo "$REPO" --json)
+          if [ -n "$BEFORE" ]; then args+=(--since "$BEFORE"); fi
+          aayudha "${args[@]}" > "$RUNNER_TEMP/security.json"
+          code=$?
+          set -e
+          jq -s -r '.[0] | "### aayudha security: \(.branch // "?") at \(.head[0:7] // "?")\n\n| Floor | Result | Detail |\n|---|---|---|\n" + ([.checks[]? | "| \(.floor) | \(.result) | \(.detail) |"] | join("\n")) + "\n\n" + ([.bugs[]? | "- Bug #\(.number) \(.action): \(.fingerprint)"] | join("\n")) + "\n" + ([.unfiled[]? | "- not filed this run (limit reached): \(.)"] | join("\n"))' "$RUNNER_TEMP/security.json" >> "$GITHUB_STEP_SUMMARY"
+          jq -s -c '.' "$RUNNER_TEMP/security.json"
+          exit "$code"
