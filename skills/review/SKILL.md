@@ -20,7 +20,7 @@ aayu:
       type: bool
       required: false
       positional: false
-      description: "Run lane A at high effort."
+      description: "Run lane A at high effort when the lane's default effort is lower."
   outputs:
     - "critique"
     - "disposition (recapture|rebuild|fix|ship)"
@@ -79,8 +79,8 @@ captures, apart from each other:
 
 - Lane A is the ui-review lane's model, called by the binary, never by you. It scores Nielsen's 10 heuristics
   and walks the page as keyboard-only, screen-reader, low-vision, and first-time users. It runs 3 times per
-  state, and a finding counts only when 2 of the 3 runs report it at severity 2 or more. `--deep` runs it at
-  high effort.
+  state, and a finding counts only when 2 of the 3 runs report it at severity 2 or more. It runs at the lane's
+  reasoning effort (high by default); `--deep` asks for high when a configured lane's effort is lower.
 - Lane B is deterministic: impeccable's detector, axe, and the focus-indicator and target-size probes. No lane A
   answer overrides a lane B finding.
 

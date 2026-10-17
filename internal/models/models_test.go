@@ -40,7 +40,7 @@ func TestLaneResolution(t *testing.T) {
 		{verbs.LaneBuild, verbs.HostAmp, false, false, "", verbs.FamilyHostManaged, SourceDefault, ""},
 		{verbs.LaneBuild, verbs.HostCursor, false, false, verbs.ModelClaudeOpus, verbs.FamilyAnthropic, SourceDefault, ""},
 		{verbs.LaneReview, verbs.HostAmp, false, false, verbs.ModelGPTSol, verbs.FamilyOpenAI, SourceDefault, ""},
-		{verbs.LaneUIReview, verbs.HostCursor, false, false, verbs.ModelGemini, verbs.FamilyGoogle, SourceDefault, ""},
+		{verbs.LaneUIReview, verbs.HostCursor, false, false, verbs.ModelGemini, verbs.FamilyGoogle, SourceDefault, "high"},
 		{verbs.LaneChore, verbs.HostClaude, false, false, verbs.ModelClaudeHaiku, verbs.FamilyAnthropic, SourceDefault, ""},
 		// Config overrides.
 		{verbs.LaneBuild, verbs.HostClaude, false, false, verbs.ModelClaudeSonnet, verbs.FamilyAnthropic, SourceConfig, ""},
@@ -49,7 +49,7 @@ func TestLaneResolution(t *testing.T) {
 		{verbs.LaneReview, verbs.HostCursor, false, false, verbs.ModelGrok, verbs.FamilyXAI, SourceFallback, ""},
 		// The binary's own calls cannot use a host-managed mode.
 		{verbs.LaneChore, verbs.HostAmp, true, false, verbs.ModelClaudeHaiku, verbs.FamilyAnthropic, SourceDirect, ""},
-		{verbs.LaneUIReview, verbs.HostAmp, true, false, verbs.ModelGemini, verbs.FamilyGoogle, SourceDirect, ""},
+		{verbs.LaneUIReview, verbs.HostAmp, true, false, verbs.ModelGemini, verbs.FamilyGoogle, SourceDirect, "high"},
 		// Heavy reviews escalate to GPT-6 Astra at high effort.
 		{verbs.LaneReview, verbs.HostAmp, true, true, verbs.ModelGPTAstra, verbs.FamilyOpenAI, SourceDefault, "high"},
 	}
@@ -579,6 +579,12 @@ func TestCostAtListPrices(t *testing.T) {
 			`{"model":"grok-4.7","choices":[{"message":{"content":"ok"},"finish_reason":"stop"}],
 			"usage":{"prompt_tokens":4000,"prompt_tokens_details":{"cached_tokens":1000},"completion_tokens":300,"total_tokens":5300}}`,
 			nil, (3000*2 + 1000*0.50 + 1300*6) / 1e6, CostListPrice},
+		// Gemini through the gateway's chat endpoint: thinking at high effort is in total_tokens (and
+		// completion_tokens_details), not completion_tokens; it bills as output.
+		{"gemini-3.8-flash, high-effort reasoning tokens", StyleChat,
+			`{"model":"gemini-3.8-flash","choices":[{"message":{"content":"ok"},"finish_reason":"stop"}],
+			"usage":{"prompt_tokens":3917,"completion_tokens":1200,"completion_tokens_details":{"reasoning_tokens":4845},"total_tokens":9962}}`,
+			nil, (3917*0.75 + 6045*3.75) / 1e6, CostListPrice},
 		{"claude-haiku-5-5, long prompt", StyleMessages,
 			`{"model":"claude-haiku-5-5","content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":100001,"output_tokens":1000}}`,
 			nil, (100001*0.50 + 1000*2.50) / 1e6, CostListPrice},
@@ -597,6 +603,41 @@ func TestCostAtListPrices(t *testing.T) {
 		}
 		if usd, src := Cost(c.prices, r.Model, r); math.Abs(usd-c.want) > 1e-12 || src != c.source {
 			t.Errorf("%s: %.6f USD (%s), want %.6f (%s)", c.name, usd, src, c.want, c.source)
+		}
+	}
+}
+
+// TestUIReviewLaneEffort: a ui-review call that sets no effort goes out at the
+// lane's (high for gemini-3.8-flash), on the chat route Gemini uses and on a
+// Responses route a gateway may map it to.
+func TestUIReviewLaneEffort(t *testing.T) {
+	var body map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		body = nil
+		_ = json.Unmarshal(b, &body)
+		if r.URL.Path == "/v1/responses" {
+			_, _ = w.Write([]byte(`{"model":"gemini-3.8-flash","status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"ok"}]}],"usage":{"input_tokens":1,"output_tokens":1}}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"model":"gemini-3.8-flash","choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}`))
+	}))
+	defer srv.Close()
+	log, _ := actions.Open(filepath.Join(t.TempDir(), "actions.jsonl"), actions.Options{})
+	for _, styles := range [][]string{nil, {"google=responses"}} {
+		m := config.Models{Gateway: config.Gateway{BaseURL: srv.URL + "/v1", Secret: "ai-gateway", Styles: styles}}
+		gw := &Gateway{Resolver: Resolver{Models: m}, Models: m, Actions: log, Key: func(string) (string, error) { return "k", nil }}
+		_, res, err := gw.Do(context.Background(), Call{Story: "#1", Lane: verbs.LaneUIReview, Host: verbs.HostClaude,
+			Req: Request{Messages: []Message{{Role: "user", Content: "critique"}}, MaxTokens: 10}})
+		if err != nil || res.Model != verbs.ModelGemini || res.Effort != "high" {
+			t.Fatalf("%v: resolved %+v, %v", styles, res, err)
+		}
+		effort := body["reasoning_effort"]
+		if r, ok := body["reasoning"].(map[string]any); ok {
+			effort = r["effort"]
+		}
+		if effort != "high" {
+			t.Errorf("%v: the request carries effort %v, want high: %v", styles, effort, body)
 		}
 	}
 }

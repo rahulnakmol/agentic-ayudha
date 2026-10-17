@@ -18,7 +18,7 @@ type Reviewer struct {
 	Tools       Tools
 	Complete    func(context.Context, models.Request) (models.Response, error) // lane A's model call (the ui-review lane through the gateway)
 	Model       string
-	Effort      string // medium; high with --deep
+	Effort      string // the ui-review lane's effort; high with --deep
 	K           int
 	MinTargetPx int
 	Now         func() time.Time
