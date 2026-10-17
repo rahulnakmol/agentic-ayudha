@@ -112,6 +112,15 @@ func TestReadyFailures(t *testing.T) {
 			[]string{"reversible: Reversible is required at Decision-ready"}},
 		{"decision reversible maybe", with(decision, func(c *Item) { c.Fields[FieldReversible] = "maybe" }), StageReady,
 			[]string{`reversible: Reversible = "maybe": want one of true, false`}},
+		{"decision with one option", with(decision, func(c *Item) { c.Fields["options"] = "1. **Waive.** Ship with the floor waived." }), StageReady,
+			[]string{"options: 1 numbered option(s); a Decision offers at least 2, and aims for 3, so the person makes a real choice: " +
+				"write each as a top-level line \"N. **Name.** what it does\", including the option of not doing it"}},
+		{"decision with options that are not numbered", with(decision, func(c *Item) { c.Fields["options"] = "A: in-house. B: SurveyJS." }), StageReady,
+			[]string{"options: 0 numbered option(s); a Decision offers at least 2, and aims for 3, so the person makes a real choice: " +
+				"write each as a top-level line \"N. **Name.** what it does\", including the option of not doing it"}},
+		{"decision with options numbered out of order", with(decision, func(c *Item) { c.Fields["options"] = "1. **A.** a\n3. **B.** b" }), StageReady,
+			[]string{"options: option 3 is numbered out of order; want 2, so each option keeps the number the person picks it by"}},
+		{"decision with one option still passes Create", with(decision, func(c *Item) { c.Fields["options"] = "1. **Waive.** Ship." }), StageCreate, nil},
 		{"decision without reversible still passes Create", with(decision, func(c *Item) { delete(c.Fields, FieldReversible) }), StageCreate, nil},
 		{"story under an initiative", with(story, func(c *Item) { c.Parent = &Ref{2, "initiative"} }), StageReady,
 			[]string{"parent: #2 is a initiative; a Story's parent must be a feature"}},
@@ -300,5 +309,30 @@ func TestFormsPassGitHubFormSchema(t *testing.T) {
 		if len(checkForm([]byte(broken))) == 0 {
 			t.Errorf("checker accepted a broken form:\n%s", broken)
 		}
+	}
+}
+
+// An option's label is its bold title, without a "(recommended …)" marker,
+// and a ** inside a code span does not end it; indented trade-offs and
+// fenced lines are not options.
+func TestParseOptions(t *testing.T) {
+	os, ps := ParseOptions("1. **Seat `p` owning L07 (with `ops/**` moved) (recommended, see the Evaluation).** It owns L07.\n" +
+		"   - Trade-off: gains a; costs b.\n" +
+		"   1. not an option\n" +
+		"```\n2. not an option either\n```\n" +
+		"2. **Keep the hat** (L07 stays put).\n" +
+		"3. Do nothing: nothing changes.")
+	want := []Option{
+		{N: 1, Name: "Seat `p` owning L07 (with `ops/**` moved)", Text: "It owns L07.", Recommended: true},
+		{N: 2, Name: "Keep the hat", Text: "(L07 stays put)."},
+		{N: 3, Name: "Do nothing", Text: "nothing changes."},
+	}
+	if len(ps) != 0 || !slices.Equal(os, want) {
+		t.Errorf("ParseOptions = %+v %v\nwant %+v", os, ps, want)
+	}
+	// Options numbered inline on one line count, in sequence only.
+	os, ps = ParseOptions("1. Keep CALC_DEBUG. 2. Replace it with a --debug flag, as step 4. says.")
+	if len(ps) != 0 || len(os) != 2 || os[0].Name != "Keep CALC_DEBUG" || os[1].N != 2 || os[1].Name != "Replace it with a --debug flag, as step 4" {
+		t.Errorf("inline options = %+v %v", os, ps)
 	}
 }

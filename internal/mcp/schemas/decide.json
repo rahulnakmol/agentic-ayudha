@@ -5,7 +5,7 @@
   "description": "Record a Decision with options, evaluation, and recommendation; accept it, supersede it, or file a floor waiver.",
   "properties": {
     "accept": {
-      "description": "Option to accept (human identity only).",
+      "description": "Option to accept, by its number or its name (human identity only).",
       "type": "string",
       "x-aayu-human-only": true,
       "x-aayu-type": "string"

@@ -69,21 +69,30 @@ func TestInbox(t *testing.T) {
 		t.Fatalf("refused inbox wrote: %v", w)
 	}
 
-	// Criteria 2 and 3: the six steps, in order, each with its recommendation;
-	// accept on each.
+	// Criteria 2 and 3: the six steps, in order, each with its options and its
+	// choices in words; accept the recommendation on each (the waiver, a
+	// one-way door, after its confirmation).
 	env := newEnv()
-	code, out, errOut := runIn(t, env, opts, "aaaaaa", "inbox", "--repo", "o/r")
+	code, out, errOut := runIn(t, env, opts, "ay aaaaa", "inbox", "--repo", "o/r")
 	if code != 0 {
 		t.Fatalf("inbox: exit %d: %s\n%s", code, errOut, out)
 	}
 	for _, want := range []string{
-		"o/r: 6 human-only step(s) wait for you, @o. Keys: a accept the recommendation, c choose another, s skip, o open, q quit.",
-		"[1/6] Decision #1: Waive the eval-bar floor on #10\n  a floor waiver: only a person accepts it, and it is never applied provisionally (rule 7).\n  the Decision recommends: accept fix\n  other 1: accept waive",
-		"[2/6] Provisional Decision #2: Choose the rules engine\n  its recommendation applies provisionally (V8): ratify it, or revert to another option, by 2026-10-22 09:00 UTC.\n  the Decision recommends: ratify: accept A\n  other 1: revert: accept B",
-		"[3/6] PR at inspect's cycle cap #9: fix(cli): capped\n  inspect ran 2 of 2 fix/rebuild cycles and stopped (last disposition: fix); a person reviews it before anything else runs.\n  Drona (Engineering Manager) recommends: open it and review it\n  other 1: ship PR #9 now (ship's gates still apply)",
-		"[4/6] Story merged without ship #5: Merged story\n  PR #6 merged into dev (fffffff) without `aayu ship`, so no ship record or human pass exists; the Story is still status:in-progress.\n  Vidhi (Auditor) recommends: mark #5 merged without proof (it stays uncovered)",
-		"[5/6] Bug with its fix merged #7: A bug\n  its fix, PR #8, merged into dev (fffffff), and the Bug is still open.\n  Drona (Engineering Manager) recommends: close #7 as completed, fixed in #8",
-		"[6/6] Replaced #3: Old story\n  #4 says it replaces #3, and #3 is still open.\n  Arjun (Product Strategist) recommends: close #3 as not planned, replaced by #4",
+		"o/r: 6 human-only step(s) wait for you, @o. Each step lists its choices.",
+		"[1/6] Decision #1: Waive the eval-bar floor on #10\n  a floor waiver: only a person accepts it, and it is never applied provisionally (rule 7).\n  1. Waive\n  2. Don't waive (recommended)\n" +
+			"  a or Enter = accept the recommendation (option 2) · 1-2 = accept that option · s = skip for now · o = open on GitHub · q = quit\n  > a\n" +
+			"  This accepts option 2 (Don't waive) as the answer to Decision #1 and closes it; it is a one-way door, so it is not undone later. Apply it? y = yes · n = no, go back\n  > y\n",
+		"[2/6] Provisional Decision #2: Choose the rules engine\n  its recommendation applies provisionally (V8): ratify it by accepting it, or revert to another option, by 2026-10-22 09:00 UTC.\n  1. A (recommended)\n  2. B\n" +
+			"  a or Enter = accept the recommendation (option 1) · 1-2 = accept that option · s = skip for now · o = open on GitHub · q = quit\n  > a\n#2 accepted: A, by @o",
+		"[3/6] PR at inspect's cycle cap #9: fix(cli): capped\n  inspect ran 2 of 2 fix/rebuild cycles and stopped (last disposition: fix); a person reviews it before anything else runs.\n" +
+			"  Drona (Engineering Manager) recommends option 1.\n  1. open it and review it (recommended)\n  2. ship PR #9 now (ship's gates still apply)\n" +
+			"  a or Enter = do the recommendation (option 1) · 1-2 = do that option · s = skip for now · o = open on GitHub · q = quit\n",
+		"[4/6] Story merged without ship #5: Merged story\n  PR #6 merged into dev (fffffff) without `aayu ship`, so no ship record or human pass exists; the Story is still status:in-progress.\n  Vidhi (Auditor) recommends: mark #5 merged without proof (it stays uncovered)\n" +
+			"  a or Enter = mark #5 merged without proof (it stays uncovered) · s = skip for now · o = open on GitHub · q = quit\n",
+		"[5/6] Bug with its fix merged #7: A bug\n  its fix, PR #8, merged into dev (fffffff), and the Bug is still open.\n  Drona (Engineering Manager) recommends: close #7 as completed, fixed in #8\n" +
+			"  a or Enter = close #7 as completed, fixed in #8 · s = skip for now · o = open on GitHub · q = quit\n",
+		"[6/6] Replaced #3: Old story\n  #4 says it replaces #3, and #3 is still open.\n  Arjun (Product Strategist) recommends: close #3 as not planned, replaced by #4\n" +
+			"  a or Enter = close #3 as not planned, replaced by #4 · s = skip for now · o = open on GitHub · q = quit\n",
 		"inbox: 5 done, 0 skipped, 0 left",
 	} {
 		if !strings.Contains(out, want) {
@@ -97,7 +106,7 @@ func TestInbox(t *testing.T) {
 	}
 	g.Mu.Lock()
 	is := func(n int) fake.Issue { return *g.Issues[n] }
-	if d := is(1); d.State != "closed" || !strings.Contains(d.Body, "fix, accepted by @o") {
+	if d := is(1); d.State != "closed" || !strings.Contains(d.Body, "Don't waive, accepted by @o") {
 		t.Errorf("#1 after accept: %s\n%s", d.State, d.Body)
 	}
 	if s := is(3); s.State != "closed" || s.StateReason != "not_planned" || len(s.Comments) != 1 || !strings.Contains(s.Comments[0].Body, "Replaced by #4. Closed as not planned by @o") {
@@ -145,11 +154,12 @@ func TestInbox(t *testing.T) {
 		t.Errorf("%d writes logged, want each of the four acts' writes", writes)
 	}
 
-	// Criterion 4: choose another on the provisional Decision reverts it to B
-	// and clears its label; skip on the waiver writes nothing.
+	// Criterion 4: option 2 on the provisional Decision, confirmed because it
+	// is not the recommendation, reverts it to B and clears its label; skip on
+	// the waiver writes nothing.
 	g = inboxRepo(t)
 	opts.GitHubAPI = g.URL()
-	if code, out, errOut := runIn(t, newEnv(), opts, "s c q", "inbox", "--repo", "o/r"); code != 0 || !strings.Contains(out, "#2 accepted: B, by @o") || !strings.Contains(out, "inbox: 1 done, 1 skipped, 4 left") {
+	if code, out, errOut := runIn(t, newEnv(), opts, "s 2 y q", "inbox", "--repo", "o/r"); code != 0 || !strings.Contains(out, "#2 accepted: B, by @o") || !strings.Contains(out, "inbox: 1 done, 1 skipped, 4 left") {
 		t.Fatalf("skip, choose another: exit %d: %s\n%s", code, errOut, out)
 	}
 	g.Mu.Lock()
@@ -161,15 +171,18 @@ func TestInbox(t *testing.T) {
 		t.Errorf("labels after choose another: #2 %v, #1 %v", g.LabelNames(2), g.LabelNames(1))
 	}
 	// The keys on steps that lack an answer: an incomplete Decision has no
-	// option to accept, a numbered pick must name one of the others, a failed
-	// act (ship's gates) is reported and counts as not done, and the end of
-	// input stops the inbox with the rest left.
+	// option to accept, and an unknown key (c among them: it is no key now)
+	// shows the step's choices again. A digit is the Decision's own option
+	// number: with the recommendation on option 2, 3 accepts option 3, after a
+	// confirmation that n declines. A failed act (ship's gates) is reported
+	// and counts as not done, and the end of input stops the inbox with the
+	// rest left.
 	g = fake.New(t, "o/r", "User")
 	tw, _ := workitems.FindType("decision")
 	st, _ := json.Marshal(inspect.State{Cycles: inspect.MaxCycles})
 	g.AddIssue("Pick a queue", "x", "type:decision", "status:planned") // #1
 	g.AddIssue("Choose the cache", workitems.Render(tw, map[string]string{workitems.FieldSummary: "Which cache?",
-		"options": "- **Keep it**: the current one.\n- **Swap it** for a managed one.\n- **Drop it** entirely.", "evaluation": "Swap is cheaper.",
+		"options": "1. **Keep it**: the current one.\n2. **Swap it** for a managed one.\n3. **Drop it** entirely.", "evaluation": "Swap is cheaper.",
 		"recommendation": "Option 2, because it is cheaper.", workitems.FieldReversible: "true"}), "type:decision", "status:planned") // #2
 	g.AddIssue("Old story", "x", "type:story", "status:backlog") // #3
 	g.AddIssue("New story", "Replaces #3.", "type:story", "status:ready")
@@ -180,18 +193,23 @@ func TestInbox(t *testing.T) {
 	g.Mu.Unlock()
 	// Without persona assets a step names the seat alone.
 	bare := Options{GitHubAPI: g.URL(), GitHubGap: -1, IsTerminal: tty}
-	code, out, errOut = runIn(t, newEnv(), bare, "x a c o s  c 9 c 2  c  c", "inbox", "--repo", "o/r")
+	code, out, errOut = runIn(t, newEnv(), bare, "x a c o s  9 3 n 3 y  2 y", "inbox", "--repo", "o/r")
 	if code != 0 {
 		t.Fatalf("inbox: exit %d: %s\n%s", code, errOut, out)
 	}
 	for _, want := range []string{
 		"[1/4] Decision #1: Pick a queue\n  not Decision-ready (",
-		"  Founder has no recommendation to accept here.",
-		"  > x\n  keys: a, c, s, o, q\n  > a\n  no recommendation: choose another (c), open (o), or skip (s)\n  > c\n  no other option: accept (a), open (o), or skip (s)\n  > o\n  open: ",
-		"  the Decision recommends: accept Swap it\n  other 1: accept Keep it\n  other 2: accept Drop it\n",
-		"  > c\n  which other (1-2)? 9\n  not one of the others\n  > c\n  which other (1-2)? 2\n#2 accepted: Drop it, by @o",
+		"  Founder has no option to accept here.\n  s = skip for now · o = open on GitHub to complete it · q = quit\n",
+		"  > x\n  s = skip for now · o = open on GitHub to complete it · q = quit\n  > a\n  s = skip for now · o = open on GitHub to complete it · q = quit\n" +
+			"  > c\n  s = skip for now · o = open on GitHub to complete it · q = quit\n  > o\n  open: ",
+		"  1. Keep it\n  2. Swap it (recommended)\n  3. Drop it\n  a or Enter = accept the recommendation (option 2) · 1-3 = accept that option · s = skip for now · o = open on GitHub · q = quit\n",
+		"  > 9\n  a or Enter = accept the recommendation (option 2) · 1-3 = accept that option · s = skip for now · o = open on GitHub · q = quit\n" +
+			"  > 3\n  This accepts option 3 (Drop it) as the answer to Decision #2 and closes it, instead of the recommendation (option 2, Swap it). Apply it? y = yes · n = no, go back\n" +
+			"  > n\n  not applied\n  a or Enter = accept the recommendation (option 2) · 1-3 = accept that option · s = skip for now · o = open on GitHub · q = quit\n" +
+			"  > 3\n  This accepts option 3 (Drop it)",
+		"  > y\n#2 accepted: Drop it, by @o",
 		"[3/4] PR at inspect's cycle cap #6",
-		"  > c\n  not done: ",
+		"  > 2\n  This will ship PR #6 now (ship's gates still apply), instead of the recommendation (option 1, open it and review it). Apply it? y = yes · n = no, go back\n  > y\n  not done: ",
 		"[4/4] Replaced #3: Old story",
 		"inbox: 1 done, 1 skipped, 1 left",
 	} {
@@ -210,13 +228,15 @@ func TestInbox(t *testing.T) {
 	if code, out, _ := runIn(t, newEnv(), opts, "", "inbox", "--repo", "o/r"); code != 0 || out != "o/r: nothing waits for you.\n" {
 		t.Errorf("empty inbox: exit %d: %q", code, out)
 	}
-	// An option marked "(recommended)" is the recommendation; input that ends
-	// at the pick of another leaves the step undone.
+	// An option marked "(recommended)" is the recommendation; c is no key (it
+	// read as "cancel"), so it shows the choices; input that ends leaves the
+	// step undone.
 	g.AddIssue("Choose the CDN", workitems.Render(tw, map[string]string{workitems.FieldSummary: "Which CDN?",
 		"options": "1. **Ours**\n2. **Theirs** (recommended)\n3. **None**", "evaluation": "Theirs is faster.",
 		"recommendation": "The managed one.", workitems.FieldReversible: "true"}), "type:decision", "status:planned")
 	if code, out, _ := runIn(t, newEnv(), opts, "c", "inbox", "--repo", "o/r"); code != 0 ||
-		!strings.Contains(out, "  the Decision recommends: accept Theirs\n  other 1: accept Ours\n  other 2: accept None\n  > c\n  which other (1-2)? \ninbox: 0 done, 0 skipped, 1 left") {
+		!strings.Contains(out, "  1. Ours\n  2. Theirs (recommended)\n  3. None\n  a or Enter = accept the recommendation (option 2) · 1-3 = accept that option · s = skip for now · o = open on GitHub · q = quit\n"+
+			"  > c\n  a or Enter = accept the recommendation (option 2) · 1-3 = accept that option · s = skip for now · o = open on GitHub · q = quit\n  > \n\ninbox: 0 done, 0 skipped, 1 left") {
 		t.Errorf("recommended option, input ends at the pick: exit %d:\n%s", code, out)
 	}
 	g.ViewerType = "Bot"

@@ -49,7 +49,7 @@ aayu decide [<decision>]
 | Input | Required | What it does |
 |---|---|---|
 | `<decision>` | no | Decision issue; without one, the SLA sweep over every open Decision. With --waiver, the story or bug to waive a floor on. With --pack, any issue, or a question in quotes. |
-| `--accept` | no | Option to accept (human identity only). **Person only.** |
+| `--accept` | no | Option to accept, by its number or its name (human identity only). **Person only.** |
 | `--waiver` | no | Floor to waive; creates a floor-waiver Decision. |
 | `--pack` | no | On demand, read-only: the owning seat's twin, its persona at the team stage, the cited facts, and the decision-pack outline. |
 | `--seat` | no | With --pack: the seat whose twin works the decision instead of the one the topic picks. |
@@ -57,8 +57,10 @@ aayu decide [<decision>]
 
 <!-- END GENERATED: skill-usage -->
 
-To file the Decision itself, use its issue form or `aayu grill decision`. A person then accepts it with
-`aayu decide 42 --accept <option>`.
+To file the Decision itself, use its issue form or `aayu grill decision`. A Decision offers at least two numbered
+options, three when it can, each `N. **Name.** what it does`; `aayu ready --check` refuses one with fewer. A person then
+accepts one by its number or its name, for example `aayu decide 42 --accept 2`. A floor waiver is filed with two
+options, 1. Waive and 2. Don't waive, and the waiver is never the default recommendation.
 
 ## What you get back
 
@@ -92,7 +94,7 @@ It checks these before it acts, and stops when one fails:
 - It writes under a person's own GitHub identity.
 - Only a person who holds `[decisions] authority` for its type or layer accepts it.
 - It runs only under a person's identity, never the bot's.
-- `--accept`: Option to accept (human identity only).
+- `--accept`: Option to accept, by its number or its name (human identity only).
 
 <!-- END GENERATED: skill-human -->
 

@@ -28,7 +28,7 @@ type PackSection struct {
 var PackSections = []PackSection{
 	{"Question", "The question in one sentence, and whether it is the right question."},
 	{"Facts", "The grounded facts first: code, LAYERS.md, packs, metrics, open issues, each cited."},
-	{"Options", "Two or three options as top-level list items or ### headings, each with its trade-offs."},
+	{"Options", "Two or three numbered top-level options, each `N. **Name.** what it does` with its trade-offs: a Decision offers at least two, and the person picks one by its number."},
 	{"Recommendation", "The recommended option, why, and its door: one-way (irreversible) or two-way (reversible)."},
 	{"Cost of waiting", "What waiting a day or a week costs, cited where it can be."},
 	{"Pre-mortem", "The Mentalist twin's pressure test: assume the recommendation failed; the likeliest reasons and the check that warns early."},

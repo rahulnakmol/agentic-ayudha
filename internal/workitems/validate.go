@@ -85,6 +85,11 @@ func Validate(it Item, stage Stage) []Problem {
 		case KindCriteria:
 			_, cps := ParseCriteria(v)
 			ps = append(ps, cps...)
+		case KindOptions: // a draft Decision may still be collecting its options
+			if f.RequiredAt.index() <= stage.index() {
+				_, ops := ParseOptions(v)
+				ps = append(ps, ops...)
+			}
 		case KindLinks:
 			ps = append(ps, checkLinks(t, it, v)...)
 		}

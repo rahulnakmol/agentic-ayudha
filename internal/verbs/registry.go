@@ -588,7 +588,7 @@ var Verbs = []Command{
 		Seat:    Founder, Lane: LaneSpec, Layers: AllLayers(),
 		Inputs: []Input{
 			optPos("decision", TypeString, "Decision issue; without one, the SLA sweep over every open Decision. With --waiver, the story or bug to waive a floor on. With --pack, any issue, or a question in quotes."),
-			humanOnly(flag("accept", TypeString, "Option to accept (human identity only).")),
+			humanOnly(flag("accept", TypeString, "Option to accept, by its number or its name (human identity only).")),
 			flag("waiver", TypeString, "Floor to waive; creates a floor-waiver Decision."),
 			readOnlyWith(flag("pack", TypeBool, "On demand, read-only: the owning seat's twin, its persona at the team stage, the cited facts, and the decision-pack outline (WP5.1b)."), "true"),
 			flag("seat", TypeString, "With --pack: the seat whose twin works the decision instead of the one the topic picks."),

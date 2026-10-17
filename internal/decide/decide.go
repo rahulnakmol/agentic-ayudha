@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -297,6 +298,49 @@ func MatchOption(options, option string) bool {
 	return err == nil && re.MatchString(options)
 }
 
+var optionRef = regexp.MustCompile(`(?i)^\s*([0-9]+)(?:[.):,]|\s*$)|\boption\s+([0-9]+)\b`)
+
+// Options are a Decision's numbered options, each under the Decision's own
+// number, and the index of the recommended one (-1 when none is): the option
+// marked "(recommended)", else the one its Recommendation names by number
+// ("Option 2", "2."), else by name (the longest name it names, so "Don't
+// waive" wins over "Waive"). The inbox, the approval batch, and decide's
+// output all show options this way, and decide --accept takes the number.
+func Options(it workitems.Item) ([]workitems.Option, int) {
+	os, _ := workitems.ParseOptions(it.Fields["options"])
+	rec := slices.IndexFunc(os, func(o workitems.Option) bool { return o.Recommended })
+	r := strings.TrimSpace(it.Fields["recommendation"])
+	if m := optionRef.FindStringSubmatch(r); rec < 0 && m != nil {
+		if i, _ := strconv.Atoi(m[1] + m[2]); i >= 1 && i <= len(os) {
+			rec = i - 1
+		}
+	}
+	if rec < 0 {
+		for i, o := range os {
+			if MatchOption(r, o.Name) && (rec < 0 || len(o.Name) > len(os[rec].Name)) {
+				rec = i
+			}
+		}
+	}
+	if rec >= 0 {
+		os[rec].Recommended = true
+	}
+	return os, rec
+}
+
+// Pick resolves what a person typed to accept, an option's number or its
+// name, to that option of it; ok is false when it names none.
+func Pick(it workitems.Item, typed string) (workitems.Option, bool) {
+	os, _ := Options(it)
+	typed = strings.TrimSpace(typed)
+	for _, o := range os {
+		if typed == strconv.Itoa(o.N) || strings.EqualFold(typed, o.Name) {
+			return o, true
+		}
+	}
+	return workitems.Option{}, false
+}
+
 // WaiverItem is the body of a floor-waiver Decision for floor on story n.
 func WaiverItem(floor string, n int, why string) (title string, fields map[string]string) {
 	title = fmt.Sprintf("Waive the %s floor on #%d", floor, n)
@@ -306,10 +350,11 @@ func WaiverItem(floor string, n int, why string) (title string, fields map[strin
 	}
 	return title, map[string]string{
 		workitems.FieldSummary: q,
-		"options": fmt.Sprintf("waive: #%d ships with the `%s` floor recorded as waived by this Decision.\n"+
-			"fix: no waiver; #%d fixes the miss before it ships.", n, floor, n),
-		"evaluation":              "A waiver is the only way past a floor miss (rule 7). The floor's report is in the story's proof pack.",
-		"recommendation":          "fix",
+		"options": fmt.Sprintf("1. **Waive.** #%d ships with the `%s` floor recorded as waived by this Decision.\n"+
+			"2. **Don't waive.** No waiver: the work is fixed until the floor holds, and #%d stays blocked until then.", n, floor, n),
+		"evaluation": "A waiver is the only way past a floor miss (rule 7). The floor's report is in the story's proof pack.",
+		// Never the waiver by default: recommending it is the floor's owner seat's call, with evidence.
+		"recommendation":          "Option 2, don't waive, until the seat that owns the floor recommends the waiver with evidence.",
 		workitems.FieldReversible: "false",
 		workitems.FieldLinks:      fmt.Sprintf("waives #%d", n),
 	}
