@@ -269,6 +269,11 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	}
 	ins := inspect.Input{Repo: repo, PR: n, Title: pr.GetTitle(), Body: pr.GetBody(), Draft: pr.GetDraft(), Diff: diff}
 	ins.Story = StoryOf(pr.GetBody(), "", pr.GetHead().GetRef())
+	if ins.Story == 0 { // the Aayudha-Story trailer on the head commit, as verify reads it
+		if hc, _, err := c.REST.Git.GetCommit(ctx, owner, name, pr.GetHead().GetSHA()); err == nil {
+			ins.Story = StoryOf("", hc.GetMessage(), "")
+		}
+	}
 	res := inspect.Result{PR: n, Head: pr.GetHead().GetSHA()}
 	var deleg delegate.State
 	checkpoints := map[string]string{} // checkpoint commit -> model, from build's ledger record (Bug #171)

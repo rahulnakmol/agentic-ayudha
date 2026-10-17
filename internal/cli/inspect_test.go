@@ -562,6 +562,19 @@ func TestInspectWithoutStory(t *testing.T) {
 		t.Fatalf("docs-only PR: exit %d %+v %s", code, res, errOut)
 	}
 
+	// A PR that names its story only in the head commit's Aayudha-Story
+	// trailer is a story PR, judged against its pack (here missing, so the
+	// gate fails closed), never as storyless.
+	shead := strings.Repeat("a", 40)
+	trailer := g.AddPR("fix: percent", "No reference here.", "founder", "fix/percent-trailer", shead, "dev")
+	g.Mu.Lock()
+	trailer.Diff = cleanDiff
+	g.Commits[shead] = map[string]any{"sha": shead, "message": "fix: percent\n\nAayudha-Story: #2\n"}
+	g.Mu.Unlock()
+	if code, _, errOut := inspectApp(t, env, opts, trailer.Number, "--ci"); code != ExitBlocked || !strings.Contains(errOut, "no proof pack") {
+		t.Fatalf("a story named only by the head trailer: exit %d %s", code, errOut)
+	}
+
 	// With no criteria to judge test gaps in, a test file is reviewed like any
 	// other: a reply that covers nothing leaves it unreviewed.
 	thead := strings.Repeat("f", 40)
