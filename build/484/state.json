@@ -2,6 +2,24 @@
   "story": 484,
   "branch": "story/484-every-posthog-or-sentry-read-through-a-h",
   "started_at": "2026-10-17T23:19:32Z",
-  "failed_attempts": 0,
-  "checkpoints": null
+  "failed_attempts": 1,
+  "failures_by_layer": {
+    "L02": 1,
+    "L06": 1
+  },
+  "checkpoints": [
+    {
+      "k": 1,
+      "n": 2,
+      "attempt": 1,
+      "commit": "22fe960e897c9e6037fabf28c817a2b986fb4039",
+      "layers": [
+        "L02",
+        "L06"
+      ],
+      "verify": "miss",
+      "detail": "coverage fail",
+      "at": "2026-10-17T23:25:36Z"
+    }
+  ]
 }
