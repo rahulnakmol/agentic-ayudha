@@ -563,8 +563,8 @@ func TestMessagesStreamCutInsideAnEvent(t *testing.T) {
 			t.Errorf("%s: %+v %v, want %v with the usage so far", name, r, err, tc.want)
 		}
 	}
-	if _, err := decodeMessagesStream(strings.NewReader(start + "data: {not json}\n\ndata: {\"type\":\"message_stop\"}\n\n")); err == nil || !strings.Contains(err.Error(), "decode messages stream") {
-		t.Errorf("a malformed event mid-stream is still a decode error: %v", err)
+	if r, err := decodeMessagesStream(strings.NewReader(start + "data: {not json}\n\ndata: {\"type\":\"message_stop\"}\n\n")); err == nil || !strings.Contains(err.Error(), "decode messages stream") || r.TokensIn != 7 {
+		t.Errorf("a malformed event mid-stream is still a decode error, with the usage so far: %+v %v", r, err)
 	}
 }
 

@@ -370,8 +370,8 @@ func runRetries(log []CallLog) int {
 // fault of the request or of the reply itself (another 4xx, a long reply at the
 // cap, malformed JSON), which stay the run's.
 func providerFault(ctx context.Context, resp models.Response, err error) string {
-	if ctx.Err() != nil {
-		return ""
+	if ctx.Err() != nil || errors.Is(err, models.ErrBudget) {
+		return "" // a tripped breaker refuses every retry
 	}
 	var se *models.StatusError
 	var st *models.StreamError

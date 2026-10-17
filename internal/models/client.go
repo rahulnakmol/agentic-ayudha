@@ -292,7 +292,7 @@ func decodeMessagesStream(body io.Reader) (Response, error) {
 				// error (a dropped connection), not the partial line.
 				return r, fmt.Errorf("read messages stream: %w", cmp.Or(sc.Err(), io.ErrUnexpectedEOF))
 			}
-			return Response{}, fmt.Errorf("decode messages stream: %w", err)
+			return r, fmt.Errorf("decode messages stream: %w", err)
 		}
 		switch ev.Type {
 		case "message_start":

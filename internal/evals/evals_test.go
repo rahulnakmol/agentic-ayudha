@@ -3,6 +3,7 @@ package evals
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"math"
 	"net"
 	"net/url"
@@ -538,6 +539,26 @@ func TestTier2LogsACallCancelledInItsBackoff(t *testing.T) {
 	if r.Status != RunError || len(r.Calls) != 1 || len(r.Calls[0].Retries) != 1 || !strings.Contains(r.Calls[0].Retries[0].Fault, "503") ||
 		!strings.Contains(r.Calls[0].Error, "context canceled") {
 		t.Fatalf("run 1, cancelled in its backoff: %+v", r)
+	}
+}
+
+// A failed stream whose cost trips the budget breaker comes back as the
+// stream's error joined to ErrBudget; it is not retried into the breaker.
+func TestTier2DoesNotRetryATrippedBreaker(t *testing.T) {
+	waits := noPause(t)
+	c := copyCase(t, "stub/csv-export")
+	tripped := errors.Join(&models.StreamError{Type: "overloaded_error", Message: "Overloaded"}, models.ErrBudget)
+	client := &resetting{Fake: &models.Fake{}, fail: map[int]error{1: tripped, 2: tripped}}
+	h := harness(t, nil, "gpt-6.1-sol")
+	h.Config.K = 1
+	h.Gateway.Client = func(models.Route, string) models.Client { return client }
+	res, err := h.Tier2(context.Background(), []Case{c}, "abc", "dev", time.Unix(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := res.Cases[0].Runs[0]
+	if r.Status != RunError || !strings.Contains(r.Error, "budget") || len(r.Calls) == 0 || len(r.Calls[0].Retries) != 0 || len(*waits) != 0 {
+		t.Fatalf("a tripped breaker was retried: %+v, pauses %v", r, *waits)
 	}
 }
 
