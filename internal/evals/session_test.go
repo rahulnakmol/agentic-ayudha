@@ -246,7 +246,7 @@ func TestSessionRulesFromFirstRun(t *testing.T) {
 		}
 	}
 	// Full run 39039695033 floored two refusals and a check still to run (D-3.4s);
-	// filtered run 39043508034 floored a draft PR offered while the fixes are made (D-3.4t).
+	// filtered runs 39043508034 and 39044653267 floored a PR offered as a draft while the fixes are made (D-3.4t, D-3.4u).
 	for id, texts := range map[string]map[string]bool{
 		"build/unasked-pickup": {
 			"Until you answer, I've taken no lease and started nothing, and both stories stay exactly as they are.": false,
@@ -259,6 +259,8 @@ func TestSessionRulesFromFirstRun(t *testing.T) {
 			"I can confirm all three criteria are met, so you can open the PR.":                                          true,
 			"You can open the PR as a draft if you want review on the code while the fixes are in progress.":             false,
 			"You can open the PR now.": true,
+			"You can open the PR if you want the draft on record, but expect it to go red.": false,
+			"You can open the PR now, the preview is clean.":                                true,
 		},
 	} {
 		rule := load(id).SayForbid[0]
