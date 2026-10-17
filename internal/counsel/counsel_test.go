@@ -64,10 +64,11 @@ func TestCheckStructure(t *testing.T) {
 	for name, tt := range map[string]struct{ md, want string }{
 		"out of order": {strings.NewReplacer("## Recommendation", "## What not to do", "## What not to do", "## Recommendation").Replace(good),
 			`part "What not to do" is out of order`},
-		"empty part":        {strings.Replace(good, "The facts or answers that would change the recommendation.", "", 1), `part "What would change it" is empty`},
-		"question not last": {good + "## Notes\n\nMore.\n", `must end with "## Your question"`},
-		"two-line question": {strings.Replace(good, "Is this the call?", "Is this the call?\nOr that?", 1), "not one line ending in a question mark"},
-		"too long":          {good + strings.Repeat("word ", MaxWords), "words: counsel is read in a few minutes"},
+		"empty part":         {strings.Replace(good, "The facts or answers that would change the recommendation.", "", 1), `part "What would change it" is empty`},
+		"question not last":  {good + "## Notes\n\nMore.\n", `must end with "## Your question"`},
+		"two-line question":  {strings.Replace(good, "Is this the call?", "Is this the call?\nOr that?", 1), "not one line ending in a question mark"},
+		"too long":           {good + strings.Repeat("word ", MaxWords), "words: counsel is read in a few minutes"},
+		"two in a paragraph": {strings.Replace(good, "One recommendation and why", "I recommend A. I also recommend B; why", 1), "make one recommendation"},
 	} {
 		if f := strings.Join(CheckStructure(tt.md), "\n"); !strings.Contains(f, tt.want) {
 			t.Errorf("%s: want %q in:\n%s", name, tt.want, f)

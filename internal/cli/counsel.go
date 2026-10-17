@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	gh "github.com/google/go-github/v90/github"
@@ -112,6 +113,15 @@ func runCounsel(ctx context.Context, e *Env, in Values) error {
 				cite, what = "`"+rel+"/`", "a directory"
 			}
 			layers := globs.Footprint([]string{rel, rel + "/x"})
+			if st.IsDir() {
+				// A directory above the layers' globs (internal/) holds every layer with a glob inside it.
+				for id, gs := range globs {
+					if !slices.Contains(layers, id) && slices.ContainsFunc(gs, func(g string) bool { return strings.HasPrefix(g, rel+"/") }) {
+						layers = append(layers, id)
+					}
+				}
+				slices.Sort(layers)
+			}
 			rep.Facts = append(rep.Facts, packFact{Text: fmt.Sprintf("Path %s in this checkout: %s, in %s", rel, what, layerNames(layers)), Cite: cite + ", LAYERS.md"})
 		}
 	}
@@ -277,9 +287,14 @@ func (e *Env) counselPR(ctx context.Context, c *github.Client, owner, name strin
 	if story > 0 {
 		pack, _, _ = e.packFor(ctx, c, story, head)
 	}
-	if pack == nil {
+	_, credErr := e.Resolver().Human(ctx)
+	switch {
+	case pack == nil && credErr != nil:
+		// Without the human credential the ledger is not read: the pack and build's records are unknown, not absent.
+		rep.Facts = append(rep.Facts, packFact{Text: fmt.Sprintf("Unverified: the ledger was not read (no human credential), so the proof pack for the PR head %.7s and build's records are unknown, not absent", head), Cite: cite})
+	case pack == nil:
 		rep.Facts = append(rep.Facts, packFact{Text: fmt.Sprintf("No proof pack for the PR head %.7s", head), Cite: cite})
-	} else {
+	default:
 		var floors []string
 		for _, ch := range pack.Checks {
 			s := ch.Floor + " " + ch.Result
@@ -296,7 +311,11 @@ func (e *Env) counselPR(ctx context.Context, c *github.Client, owner, name strin
 	}
 	b := e.prBuilder(ctx, c, owner, name, pr, story, pack)
 	rep.Builder = &b
-	rep.Facts = append(rep.Facts, packFact{Text: "Builder: " + b.Note(), Cite: cite})
+	note := "Builder: " + b.Note()
+	if credErr != nil {
+		note += "; the ledger was not read (no human credential), so build's records are unknown, not absent"
+	}
+	rep.Facts = append(rep.Facts, packFact{Text: note, Cite: cite})
 	return nil
 }
 

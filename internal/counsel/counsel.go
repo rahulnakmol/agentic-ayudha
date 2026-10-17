@@ -62,6 +62,12 @@ var (
 	// claim's own words next to each other.
 	claimed = regexp.MustCompile(`(?i)(?:^|[.!?:;]\s+|[*_]+)LGTM\b|\b(?:I|we)\s+(?:have\s+)?(?:approve[sd]?|sign(?:ed)?\s+off|reviewed)\b|` +
 		`\bapproved\s+(?:it|this|the)\b|\bmy\s+(?:approval|ruling)\b`)
+	// asserted is the claim without "I": a sentence that opens with "Approved", "Reviewed", or "Signed off", or the
+	// twin or this counsel named as approving or reviewing ("Atri approves this PR").
+	asserted = regexp.MustCompile(`(?i)(?:^|[.!?:;]\s+|[*_]+)(?:approved|reviewed|signed[ -]off)\b|` +
+		`\b(?:Atri|the sage|the founder's sage|the twin|this counsel|counsel)\s+(?:has\s+)?(?:approve[sd]?|review(?:s|ed)|signs?\s+off|signed\s+off)\b`)
+	// recommends counts recommendation statements: a counsel makes one.
+	recommends = regexp.MustCompile(`(?i)\brecommend(?:s|ed|ing)?\b|\balternatively\b`)
 	// passive is the same claim in the passive ("the PR has been reviewed"); it is a claim of a review only when
 	// its line cites no record of one, since a cited record reports what happened.
 	passive = regexp.MustCompile(`(?i)\b(?:is|are|has been|have been)\s+(?:approved|reviewed|signed off)\b`)
@@ -112,7 +118,7 @@ func CheckStructure(md string) []string {
 			}
 		}
 	}
-	if _, r := find("Recommendation"); r != "" && (listItem.MatchString(r) || strings.Contains(r, "\n\n")) {
+	if _, r := find("Recommendation"); r != "" && (listItem.MatchString(r) || strings.Contains(r, "\n\n") || len(recommends.FindAllString(r, -1)) > 1) {
 		out = append(out, "the recommendation is more than one paragraph or a list; make one recommendation")
 	}
 	if i, q := find("Your question"); i >= 0 {
@@ -124,7 +130,7 @@ func CheckStructure(md string) []string {
 		}
 	}
 	for _, line := range strings.Split(md, "\n") {
-		ms := claimed.FindAllString(line, -1)
+		ms := append(claimed.FindAllString(line, -1), asserted.FindAllString(line, -1)...)
 		if m := passive.FindString(line); m != "" && !seats.Cited(line) {
 			ms = append(ms, m)
 		}

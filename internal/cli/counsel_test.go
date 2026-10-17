@@ -106,6 +106,9 @@ func TestCounsel(t *testing.T) {
 		!strings.Contains(out, "## The call") || !strings.Contains(out, "Speak and work as Atri") {
 		t.Errorf("text grounding: exit %d: %s%s", code, out, errOut)
 	}
+	if p := counselRun(env, 0, "internal"); !strings.Contains(factText(p), "a directory, in L02 Interaction / API boundary (owner Code Architect), L03 ") {
+		t.Errorf("directory above the layers: %s", factText(p))
+	}
 	if p := counselRun(env, 0, "notes"); !strings.Contains(factText(p), "Path notes in this checkout: a directory, in no layer") {
 		t.Errorf("path in no layer: %s", factText(p))
 	}
