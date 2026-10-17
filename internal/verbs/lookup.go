@@ -108,3 +108,11 @@ func FamilyOf(modelID string) Family {
 	}
 	return ""
 }
+
+// CopilotSelector reports whether id is a Copilot selector (Auto, an Auto tier,
+// or HydraFusion) rather than a model: the family is whichever model Copilot
+// reports for the response.
+func CopilotSelector(id string) bool {
+	id = strings.ToLower(id)
+	return id == "auto" || strings.HasPrefix(id, "auto:") || strings.HasPrefix(id, CopilotHydraFusion)
+}

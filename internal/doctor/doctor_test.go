@@ -323,6 +323,14 @@ func failing(t *testing.T) map[string]func(*Probe) {
 				return getenv(k)
 			}
 		},
+		// No hooks file, and aayu's token is Copilot's own: aayu would write
+		// as Copilot's account.
+		"copilot": func(p *Probe) {
+			p.Root = repoWith(t, map[string]string{".aayudha/lock.toml": "version = 1\nskills_version = \"0.0.0\"\nhosts = [\"copilot\"]\n[skills]\n"})
+			env := map[string]string{"COPILOT_GITHUB_TOKEN": "t", "HOME": t.TempDir()}
+			p.Getenv = func(k string) string { return env[k] }
+			p.LookPath = func(string) (string, error) { return "", errors.New("not found") }
+		},
 		"mcp": func(p *Probe) {
 			overlay(p, map[string]string{"/usr/bin/aayu version": "aayu 1.1.0\n"})
 		},

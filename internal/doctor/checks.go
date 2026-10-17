@@ -175,7 +175,7 @@ func DetectHost(flag string, getenv func(string) string) (host, how string) {
 func checkHost(_ context.Context, p *Probe) Result {
 	host, how := DetectHost(p.Host, p.Getenv)
 	if host == "" {
-		return Result{Status: Warn, Detail: "no host detected (Amp, Claude Code, OpenAI Codex, or Cursor); pass --host when running outside one"}
+		return Result{Status: Warn, Detail: "no host detected (Amp, Claude Code, OpenAI Codex, GitHub Copilot, or Cursor); pass --host when running outside one"}
 	}
 	return Result{Status: Pass, Detail: fmt.Sprintf("host %s (from %s)", host, how)}
 }
@@ -556,9 +556,60 @@ func checkMCP(ctx context.Context, p *Probe) Result {
 		return Result{Status: Warn, Detail: detail, Lines: steps}
 	}
 	if len(fine) == 0 {
-		return Result{Status: Warn, Detail: "no host has the aayudha MCP server: this repository is not installed for one, and no aayudha plugin is on; run `aayu install --host <claude|codex|cursor|amp> --apply`, or add the aayudha plugin to your host"}
+		return Result{Status: Warn, Detail: "no host has the aayudha MCP server: this repository is not installed for one, and no aayudha plugin is on; run `aayu install --host <claude|codex|copilot|cursor|amp> --apply`, or add the aayudha plugin to your host"}
 	}
 	return Result{Status: Pass, Detail: "aayudha MCP server: " + strings.Join(fine, "; ")}
+}
+
+// checkCopilot reports what GitHub Copilot needs from a person here: the
+// hooks file, trust in the folder (Copilot CLI loads the project's MCP server
+// and hooks only then), and a sign-in kept apart from aayu's GitHub identity.
+// Copilot CLI signs in with COPILOT_GITHUB_TOKEN, then GH_TOKEN, then
+// GITHUB_TOKEN, before a stored copilot login; aayu never reads
+// COPILOT_GITHUB_TOKEN, so with it set each keeps its own account.
+func checkCopilot(ctx context.Context, p *Probe) Result {
+	if p.Root == "" {
+		return Result{Status: Pass, Detail: "not in a repository"}
+	}
+	if l, ok, err := hosts.ReadLock(p.Root); err != nil || !ok || !slices.Contains(l.Hosts, string(verbs.HostCopilot)) {
+		return Result{Status: Pass, Detail: "not installed for GitHub Copilot here"}
+	}
+	var problems, steps, lines []string
+	if b, err := os.ReadFile(filepath.Join(p.Root, filepath.FromSlash(hosts.CopilotHooks))); err != nil || !strings.Contains(string(b), "hook pre-tool") {
+		problems = append(problems, "no aayudha hooks in "+hosts.CopilotHooks+", so nothing stops an agent in Copilot from running a human-only verb: run `aayu install --host copilot --apply`")
+	}
+	if path, err := p.LookPath("copilot"); err == nil {
+		if out, err := p.Exec(ctx, "", path, "--version"); err == nil {
+			lines = append(lines, strings.TrimSpace(strings.SplitN(out, "\n", 2)[0]))
+		}
+		if !hosts.CopilotTrusted(p.Root, hosts.CopilotHome(p.Getenv("HOME"), p.Getenv)) {
+			steps = append(steps, "trust this folder in Copilot CLI: start `copilot` here once and answer yes; until then it loads neither the aayudha MCP server nor the hooks")
+		}
+	} else {
+		lines = append(lines, "Copilot CLI is not on PATH; VS Code agent mode asks through Workspace Trust")
+	}
+	switch ct := p.Getenv("COPILOT_GITHUB_TOKEN"); {
+	case ct != "" && p.Human != nil:
+		if tok, err := p.Human(ctx); err == nil && tok.Value == ct {
+			problems = append(problems, "aayu's GitHub token ("+tok.Source+") is Copilot's COPILOT_GITHUB_TOKEN, so aayu would write as Copilot's account: give aayu its own token")
+		} else {
+			lines = append(lines, "Copilot signs in with COPILOT_GITHUB_TOKEN; aayu's GitHub writes never use it")
+		}
+	case ct != "":
+		lines = append(lines, "Copilot signs in with COPILOT_GITHUB_TOKEN; aayu's GitHub writes never use it")
+	case p.Getenv("GH_TOKEN") != "" || p.Getenv("GITHUB_TOKEN") != "":
+		lines = append(lines, "Copilot CLI signs in with GH_TOKEN or GITHUB_TOKEN here, ahead of a stored copilot login; to run Copilot on another account, set COPILOT_GITHUB_TOKEN for it")
+	default:
+		lines = append(lines, "Copilot signs in with its own login (copilot login, or VS Code's GitHub account)")
+	}
+	lines = append(lines, hosts.CopilotProven)
+	switch {
+	case len(problems) > 0:
+		return Result{Status: Fail, Detail: "GitHub Copilot is not set up safely here; the lines say what to fix", Lines: append(append(problems, steps...), lines...)}
+	case len(steps) > 0:
+		return Result{Status: Warn, Detail: "GitHub Copilot needs a person's step; the lines say which", Lines: append(steps, lines...)}
+	}
+	return Result{Status: Pass, Detail: "GitHub Copilot has the aayudha hooks and trusts this folder", Lines: lines}
 }
 
 // checkCodexHooks reports aayudha's Codex hooks that Codex would skip (WP3.2b,

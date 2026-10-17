@@ -42,7 +42,7 @@ aayu install
 
 | Input | Required | What it does |
 |---|---|---|
-| `--host` | no | Host to install for. One of: `amp`, `cursor`, `claude`, `codex`, `all`. |
+| `--host` | no | Host to install for. One of: `amp`, `cursor`, `claude`, `codex`, `copilot`, `all`. |
 | `--apply` | no | Write the changes instead of showing a diff. |
 | `--pin` | no | Skill version to pin. |
 | `--env` | no | Set up agent environments instead: discover them from the code, ask what it cannot say, and show each host's generated configuration and UI values. |

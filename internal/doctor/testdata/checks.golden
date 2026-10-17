@@ -37,7 +37,7 @@ FAIL  schema  repository schema is newer than this aayu: .aayudha/config.toml is
 ## host pass
 PASS  host  host amp (from AMP_THREAD_ID)
 ## host fail
-WARN  host  no host detected (Amp, Claude Code, OpenAI Codex, or Cursor); pass --host when running outside one
+WARN  host  no host detected (Amp, Claude Code, OpenAI Codex, GitHub Copilot, or Cursor); pass --host when running outside one
 ## secrets pass
 PASS  secrets  secrets backends: env, file
                  unavailable: keychain (no Secret Service)
@@ -60,6 +60,14 @@ PASS  codex-hooks  no aayudha hooks for OpenAI Codex here
 ## codex-hooks fail
 FAIL  codex-hooks  Codex skips aayudha hooks it does not trust, so no guard rail stops an agent from running a human-only verb there: open /hooks in Codex and trust them
                      plugin aayudha@aayudha: the PreToolUse hook is not trusted yet; trust it in Codex's /hooks
+## copilot pass
+PASS  copilot  not installed for GitHub Copilot here
+## copilot fail
+FAIL  copilot  GitHub Copilot is not set up safely here; the lines say what to fix
+                 no aayudha hooks in .github/hooks/aayudha.json, so nothing stops an agent in Copilot from running a human-only verb: run `aayu install --host copilot --apply`
+                 aayu's GitHub token (AAYU_GITHUB_TOKEN) is Copilot's COPILOT_GITHUB_TOKEN, so aayu would write as Copilot's account: give aayu its own token
+                 Copilot CLI is not on PATH; VS Code agent mode asks through Workspace Trust
+                 live-proven with Copilot CLI 1.0.98 on 2026-10-17 (skills, the aayudha MCP tool, the hooks, each Auto tier, a HydraFusion Critique turn); VS Code agent mode is not live-proven
 ## lfs-quota pass
 N/A  lfs-quota  LFS quota: GitHub has no quota API for this account; watch Settings > Billing > Git LFS (warn at 80 %)
 ## ledger-media pass
