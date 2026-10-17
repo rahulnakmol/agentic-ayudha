@@ -138,7 +138,9 @@ func runCounsel(ctx context.Context, e *Env, in Values) error {
 	for _, q := range []struct {
 		label, state, what string
 	}{{"type:decision", "open", "Open Decision"}, {"decision:waiver", "all", "Floor waiver"}} {
-		list, _, err := c.REST.Issues.ListByRepo(ctx, owner, name, &gh.IssueListByRepoOptions{State: q.state, Labels: []string{q.label}, ListOptions: gh.ListOptions{PerPage: 20}})
+		list, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.Issue, *gh.Response, error) {
+			return c.REST.Issues.ListByRepo(ctx, owner, name, &gh.IssueListByRepoOptions{State: q.state, Labels: []string{q.label}, ListOptions: o})
+		})
 		if err != nil {
 			return wrapExternal(err)
 		}
@@ -176,8 +178,14 @@ func runCounsel(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return Wrap(ExitUsage, err)
 	}
+	// A citation resolves against the facts aayu gathered, never against the untrusted bodies or the persona's
+	// examples that the printed grounding also carries.
+	var facts strings.Builder
+	for _, f := range rep.Facts {
+		facts.WriteString(f.Text + " (" + f.Cite + ")\n")
+	}
 	known := func(cite string) bool {
-		if strings.Contains(grounding, cite) {
+		if strings.Contains(facts.String(), cite) {
 			return true
 		}
 		// A path the twin read in this checkout is a fact too.
