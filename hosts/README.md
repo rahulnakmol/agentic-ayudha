@@ -15,8 +15,8 @@ whole templates live here.
 `SKILL.md`, a feature map with no features yet, and a control tool in the stack the checkout already has (`go.mod`:
 [`go/control/main.go`](verify-skill/go/control/main.go); `package.json`: [`node/control.mjs`](verify-skill/node/control.mjs);
 neither: a [stub](verify-skill/other/control.sh) to replace). The examples' control tools are these templates
-(`TestInitVerifySkill`). `aayu install` copies a product's `.agents/skills/verify-*/` to `.claude/skills/` and records
-it under `[product_skills]` in `.aayudha/lock.toml`.
+(`TestInitVerifySkill`). `aayu install` gives Claude Code a pointer to each product `.agents/skills/verify-*/` in
+`.claude/commands/aayudha/` and records it under `[product_skills]` in `.aayudha/lock.toml`.
 
 Every hook runs `"<absolute path to aayu>" hook <name> --host <host>` and nothing else. Copies are real files, never
 symlinks (V2), recorded with their hashes in `.aayudha/lock.toml`.
@@ -53,7 +53,11 @@ does: `enabledPlugins` `false` in `.claude/settings.json` (Claude Code; project 
 switch, so its plugin and `install` together list each skill twice. Skill copies go to one folder per reader:
 `.claude/skills/` for Claude Code, `.agents/skills/` for Codex, and Cursor and Amp share whichever exists (Cursor reads
 both through Third-Party Imports); only Claude Code plus Codex plus Cursor leaves Cursor two copies. The product's
-`verify-*` skills are still mirrored to `.claude/skills/`. A plugin hook (it passes `--skills`) stands aside where the
+`verify-*` skills stay in `.agents/skills/`, and Claude Code reaches each through a pointer command in
+`.claude/commands/aayudha/`, so Cursor lists each once. Because the plugin is off there, `install` writes the plugin's
+commands itself: Claude Code's in `.claude/commands/aayudha/` (the same `/aayudha:<name>`), and Codex's as skills in
+`.agents/skills/aayudha-source-command-<name>/` (the same `aayudha:source-command-<name>`). A Claude Code hook that
+Cursor runs (Third-Party Imports) stands aside where Cursor has its own aayudha hooks, so each event is checked once. A plugin hook (it passes `--skills`) stands aside where the
 host runs the repository's hooks. `aayu doctor`'s `skills-copies` row reports a host that lists the skills twice. Amp
 keeps the first skill of each name, so it never lists one twice.
 

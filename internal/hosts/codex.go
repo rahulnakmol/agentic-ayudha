@@ -40,10 +40,29 @@ func RepoHooksRun(root string, host verbs.HostID, codexHome string) bool {
 		return false
 	}
 	if host == verbs.HostCodex {
-		c, _ := readCodexConfig(codexHome)
-		return codexTrusts(c, root)
+		return CodexTrusted(root, codexHome)
 	}
 	return true
+}
+
+// CursorEvent reports whether Cursor sent the hook event: Cursor puts
+// cursor_version in the input of every hook it runs, its own and those it
+// imports from Claude Code's settings and plugins (cursor.com/docs/hooks);
+// Claude Code never sends it.
+func CursorEvent(event []byte) bool {
+	var e struct {
+		Version *string `json:"cursor_version"`
+	}
+	return json.Unmarshal(event, &e) == nil && e.Version != nil
+}
+
+// CursorRunsAnother reports whether, for a Claude Code hook that Cursor runs
+// through Third-Party Imports, Cursor also runs another aayudha hook for the
+// same event: its own (the repository's .cursor/hooks.json, or the plugin in
+// Cursor's local plugin folder) or, for a plugin hook, the repository's Claude
+// Code hooks, which Cursor imports too (D-3.2b.j).
+func CursorRunsAnother(root, home string, plugin bool) bool {
+	return RepoHooks(root, verbs.HostCursor) || PluginEnabled(verbs.HostCursor, root, home, "") || plugin && RepoHooks(root, verbs.HostClaude)
 }
 
 // RepoHooks reports whether `aayu install` registered the repository's own
@@ -127,6 +146,19 @@ func PluginEnabled(host verbs.HostID, root, home, codexHome string) bool {
 	return false
 }
 
+// CodexTrustStep is the person's step when Codex does not trust the project
+// at root yet (doctor's codex-hooks and mcp rows say it the same way).
+func CodexTrustStep(root, codexHome string) string {
+	return "Codex does not trust this project, so it loads nothing from .codex/ (hooks or MCP): trust it when Codex asks, or set [projects." + fmt.Sprintf("%q", root) + "] trust_level = \"trusted\" in " + filepath.Join(codexHome, "config.toml")
+}
+
+// CodexTrusted reports whether Codex trusts the project at root, so it reads
+// the project's .codex/ files; an unreadable config counts as untrusted.
+func CodexTrusted(root, codexHome string) bool {
+	c, _ := readCodexConfig(codexHome)
+	return codexTrusts(c, root)
+}
+
 // codexTrusts reports whether Codex trusts the project at root, so it reads
 // the project's .codex/ files.
 func codexTrusts(c codexConfig, root string) bool {
@@ -189,7 +221,7 @@ func CodexHookTrust(root, codexHome string) (found int, problems []string, err e
 		file := filepath.Join(root, filepath.FromSlash(CodexHooks))
 		sources = append(sources, source{CodexHooks, file, file})
 		if !codexTrusts(cfg, root) {
-			problems = append(problems, "Codex does not trust this project, so it loads nothing from .codex/ (hooks or MCP): trust it when Codex asks, or set [projects."+fmt.Sprintf("%q", root)+"] trust_level = \"trusted\" in "+filepath.Join(codexHome, "config.toml"))
+			problems = append(problems, CodexTrustStep(root, codexHome))
 		}
 	}
 	ids := make([]string, 0, len(cfg.Plugins))

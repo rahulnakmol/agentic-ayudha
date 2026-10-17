@@ -461,11 +461,17 @@ func checkMCP(ctx context.Context, p *Probe) Result {
 	if err != nil || !ok {
 		return Result{Status: Pass, Detail: "no MCP registrations (skills are not installed; aayu install)"}
 	}
-	var problems, fine []string
+	var problems, steps, fine []string
 	home := p.Getenv("HOME")
+	codexHome := hosts.CodexHome(home, p.Getenv)
 	for _, r := range hosts.Registrations(p.Root, home, lock.Hosts) {
-		plugin := hosts.PluginEnabled(r.Host, p.Root, home, hosts.CodexHome(home, p.Getenv))
+		plugin := hosts.PluginEnabled(r.Host, p.Root, home, codexHome)
 		switch {
+		case r.Host == "codex" && r.Err == nil && r.Command != "" && !hosts.CodexTrusted(p.Root, codexHome):
+			// Codex reads .codex/config.toml only once the person trusts the
+			// project: a setup step, not a fault (D-3.2b.m). Until then any
+			// plugin server is the one Codex lists, once.
+			steps = append(steps, "codex: "+hosts.CodexTrustStep(p.Root, codexHome))
 		case plugin && r.Command != "":
 			problems = append(problems, fmt.Sprintf("%s: the aayudha plugin's server and %s both register %q, so the host lists it twice", r.Host, r.File, hosts.ServerName))
 		case plugin:
@@ -486,7 +492,10 @@ func checkMCP(ctx context.Context, p *Probe) Result {
 		}
 	}
 	if len(problems) > 0 {
-		return Result{Status: Fail, Detail: "MCP registrations need aayu install --apply", Lines: problems}
+		return Result{Status: Fail, Detail: "MCP registrations need aayu install --apply", Lines: append(problems, steps...)}
+	}
+	if len(steps) > 0 {
+		return Result{Status: Warn, Detail: "trust this project in Codex, so it loads the aayudha MCP server from " + hosts.CodexConfig, Lines: steps}
 	}
 	return Result{Status: Pass, Detail: fmt.Sprintf("aayudha MCP server registered for %s at this aayu's version", strings.Join(fine, ", "))}
 }

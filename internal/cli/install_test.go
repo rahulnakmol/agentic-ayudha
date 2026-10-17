@@ -73,10 +73,15 @@ func TestInstall(t *testing.T) {
 	if err != nil || !ok || len(lock.Skills) != 30 || strings.Join(lock.Hosts, ",") != "amp,cursor,claude,codex" {
 		t.Fatalf("lock: %v %v %d skills, hosts %v", ok, err, len(lock.Skills), lock.Hosts)
 	}
-	// The installed copies pass the WP3.1 lint on disk, which includes the no-symlink rule.
+	// The installed copies pass the WP3.1 lint on disk, which includes the
+	// no-symlink rule. The plugin's commands that install gives Codex as
+	// skills (D-3.2b.k) take the form Codex gives a plugin's commands, not a
+	// verb skill's, so the lint leaves them to TestInstallKeepsThePluginsCommands.
 	for _, d := range []string{hosts.AgentsSkills, hosts.ClaudeSkills} {
 		for _, f := range skills.Lint(os.DirFS(repo), d) {
-			t.Errorf("%s: %s", d, f)
+			if !strings.HasPrefix(f.Path, "aayudha-source-command-") {
+				t.Errorf("%s: %s", d, f)
+			}
 		}
 	}
 
@@ -134,26 +139,37 @@ func TestHookCommand(t *testing.T) {
 	}
 }
 
-// WP4.5b.3 accept: install mirrors the product's own verify skill from
-// .agents/skills, where Amp, Cursor, and Codex read it, to .claude/skills;
-// doctor sees a copy behind its source and --fix catches it up; a skill the
-// product deleted loses its copy.
+// WP4.5b.3 accept: Claude Code reads the product's own verify skill, kept in
+// .agents/skills where Amp, Cursor, and Codex read it, through a pointer
+// command (D-3.2b.l): one copy for Cursor, which reads .claude/skills too. A
+// pointer reads its source, so a changed feature map needs no re-sync; doctor
+// sees one behind a changed description and --fix catches it up; a skill the
+// product deleted loses its pointer; an earlier install's full copy goes.
 func TestInstallMirrorsVerifySkill(t *testing.T) {
 	repo, home, opts := installEnv(t)
 	env := map[string]string{"HOME": home}
 	src := filepath.Join(repo, ".agents", "skills", "verify-shop")
 	_ = os.MkdirAll(filepath.Join(src, "features"), 0o755)
-	_ = os.WriteFile(filepath.Join(src, "SKILL.md"), []byte("---\nname: verify-shop\n---\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(src, "SKILL.md"), []byte("---\nname: verify-shop\ndescription: Check the shop.\n---\n"), 0o644)
 	_ = os.WriteFile(filepath.Join(src, "features", "README.md"), []byte("# map\n"), 0o644)
+	// What install before D-3.2b.l left: a full copy in .claude/skills.
+	old := filepath.Join(repo, ".claude", "skills", "verify-shop")
+	_ = os.MkdirAll(old, 0o755)
+	_ = os.WriteFile(filepath.Join(old, "SKILL.md"), []byte("---\nname: verify-shop\ndescription: Check the shop.\n---\n"), 0o644)
+	_ = os.MkdirAll(filepath.Join(repo, ".aayudha"), 0o755)
+	_ = os.WriteFile(filepath.Join(repo, ".aayudha", "lock.toml"), []byte("version = 1\nhosts = [\"claude\"]\n[product_skills]\nverify-shop = { source = \".agents/skills/verify-shop\", sha256 = \"x\" }\n"), 0o644)
 	if code, out, errs := run(t, env, opts, "install", "--apply", "--yes"); code != 0 {
 		t.Fatalf("install: exit %d\n%s%s", code, out, errs)
 	}
-	mirror := filepath.Join(repo, ".claude", "skills", "verify-shop")
-	// install writes text with CRLF line endings on Windows (hosts.Options.Windows).
-	if b, err := os.ReadFile(filepath.Join(mirror, "features", "README.md")); err != nil || strings.ReplaceAll(string(b), "\r\n", "\n") != "# map\n" {
-		t.Fatalf("mirror: %v %q", err, b)
+	if _, err := os.Stat(old); !os.IsNotExist(err) {
+		t.Fatalf("the earlier full copy stayed, so Cursor lists verify-shop twice: %v", err)
 	}
-	if b, _ := os.ReadFile(filepath.Join(src, "SKILL.md")); string(b) != "---\nname: verify-shop\n---\n" {
+	pointer := filepath.Join(repo, ".claude", "commands", "aayudha", "verify-shop.md")
+	read := func() string { b, _ := os.ReadFile(pointer); return strings.ReplaceAll(string(b), "\r\n", "\n") }
+	if p := read(); !strings.HasPrefix(p, "---\ndescription: Check the shop.\n---\n") || !strings.Contains(p, "Read `.agents/skills/verify-shop/SKILL.md` and follow it") {
+		t.Fatalf("pointer: %q", p)
+	}
+	if b, _ := os.ReadFile(filepath.Join(src, "SKILL.md")); !strings.Contains(string(b), "name: verify-shop") {
 		t.Fatalf("install changed the source skill: %q", b)
 	}
 	if lock, _, _ := hosts.ReadLock(repo); lock.ProductSkills["verify-shop"].Source != ".agents/skills/verify-shop" {
@@ -161,22 +177,26 @@ func TestInstallMirrorsVerifySkill(t *testing.T) {
 	}
 
 	_ = os.WriteFile(filepath.Join(src, "features", "README.md"), []byte("# map, with a feature\n"), 0o644)
-	if _, out, _ := run(t, env, opts, "doctor"); !strings.Contains(out, ".claude/skills/verify-shop is behind its source .agents/skills/verify-shop") {
-		t.Fatalf("doctor on a changed source:\n%s", out)
+	if _, out, _ := run(t, env, opts, "doctor"); strings.Contains(out, "verify-shop") {
+		t.Fatalf("doctor on a changed feature map:\n%s", out)
+	}
+	_ = os.WriteFile(filepath.Join(src, "SKILL.md"), []byte("---\nname: verify-shop\ndescription: Check the shop and its cart.\n---\n"), 0o644)
+	if _, out, _ := run(t, env, opts, "doctor"); !strings.Contains(out, ".claude/commands/aayudha/verify-shop.md is behind its source .agents/skills/verify-shop") {
+		t.Fatalf("doctor on a changed description:\n%s", out)
 	}
 	if _, out, _ := run(t, env, opts, "doctor", "--fix"); strings.Contains(out, "FAIL  skills-copies") {
 		t.Fatalf("doctor --fix:\n%s", out)
 	}
-	if b, _ := os.ReadFile(filepath.Join(mirror, "features", "README.md")); strings.ReplaceAll(string(b), "\r\n", "\n") != "# map, with a feature\n" {
-		t.Fatalf("mirror after --fix: %q", b)
+	if p := read(); !strings.Contains(p, "description: Check the shop and its cart.") {
+		t.Fatalf("pointer after --fix: %q", p)
 	}
 
 	_ = os.RemoveAll(src)
 	if code, out, errs := run(t, env, opts, "install", "--apply", "--yes"); code != 0 {
 		t.Fatalf("install after delete: exit %d\n%s%s", code, out, errs)
 	}
-	if _, err := os.Stat(mirror); !os.IsNotExist(err) {
-		t.Errorf("mirror of a deleted skill: %v", err)
+	if _, err := os.Stat(pointer); !os.IsNotExist(err) {
+		t.Errorf("pointer to a deleted skill: %v", err)
 	}
 	if lock, _, _ := hosts.ReadLock(repo); len(lock.ProductSkills) != 0 {
 		t.Errorf("lock after delete: %v", lock.ProductSkills)

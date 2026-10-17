@@ -13,7 +13,7 @@ const AAYU = "/opt/aayudha/bin/aayu"
 const VERSION = "1.2.3"
 // hosts/commands/*/*.md, the host-neutral command sources the Claude Code,
 // Codex, and Cursor plugins load too, without /amp (home and next are native below).
-const SHARED: { name: string; description: string; hint?: string; body: string }[] = []
+const SHARED: { name: string; description: string; hint?: string; body: string }[] = [{"name":"codex","description":"Hand a story to Codex.","hint":"\u003cstory\u003e","body":"# Codex\n\nRun `aayu build n --delegate codex`."},{"name":"next","description":"The next step.","body":"# Next\n\nRun `aayu next --json`."}]
 
 // The verbs an agent may run, each sent to the thread as a request to use its skill.
 const SKILL_COMMANDS: { verb: string; title: string; ask?: string; prompt: (n: string) => string }[] = [

@@ -68,6 +68,46 @@ func TestPluginHooksAndStatusLine(t *testing.T) {
 	if _, out, _ := hook("{}", codex, "session-start", "--host", "codex", "--skills", "0.0.0"); !strings.Contains(out, "turns the plugin off for this repository") || strings.Contains(out, "grill") {
 		t.Errorf("the plugin's session-start beside the repository's: %q", out)
 	}
+	// Cursor runs Claude Code's hooks too (Third-Party Imports), so with both
+	// installed one shell command reaches Claude Code's pre-tool and Cursor's.
+	// Exactly one refuses it, in Cursor's format (D-3.2b.j).
+	_ = os.MkdirAll(filepath.Join(repo, ".claude"), 0o755)
+	_ = os.WriteFile(filepath.Join(repo, ".claude", "settings.json"), []byte(`{"hooks": {"PreToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": "\"/usr/bin/aayu\" hook pre-tool --host claude"}]}]}}`), 0o644)
+	cursorShip := `{"tool_name":"Shell","tool_input":{"command":"aayu ship 4"},"cursor_version":"2.4.1","hook_event_name":"preToolUse"}`
+	cursorHooks := filepath.Join(repo, ".cursor", "hooks.json")
+	_ = os.MkdirAll(filepath.Dir(cursorHooks), 0o755)
+	_ = os.WriteFile(cursorHooks, []byte(`{"version": 1, "hooks": {"beforeShellExecution": [{"command": "\"/usr/bin/aayu\" hook pre-tool --host cursor"}]}}`), 0o644)
+	refusals := 0
+	for _, h := range []struct{ event, host, skills string }{
+		{cursorShip, "claude", ""}, // Claude Code's repository hook, imported
+		{cursorShip, "", "0.0.0"},  // Claude Code's plugin hook, imported
+		{`{"command":"aayu ship 4","cursor_version":"2.4.1","hook_event_name":"beforeShellExecution"}`, "cursor", ""},
+	} {
+		args := []string{"pre-tool"}
+		if h.host != "" {
+			args = append(args, "--host", h.host)
+		}
+		if h.skills != "" {
+			args = append(args, "--skills", h.skills)
+		}
+		code, out, _ := hook(h.event, nil, args...)
+		if code == 2 {
+			refusals++
+		} else if out != `{"permission":"allow"}`+"\n" {
+			t.Errorf("pre-tool %v in Cursor: exit %d %q", args, code, out)
+		}
+	}
+	if refusals != 1 {
+		t.Errorf("Cursor refused one shell command %d times", refusals)
+	}
+	// Without Cursor's own hooks, Claude Code's is the one that refuses, in Cursor's format.
+	_ = os.Remove(cursorHooks)
+	if code, out, _ := hook(cursorShip, nil, "pre-tool", "--host", "claude"); code != 2 || !strings.Contains(out, `"permission":"deny"`) {
+		t.Errorf("Claude Code's pre-tool in Cursor alone: exit %d %q", code, out)
+	}
+	if code, _, _ := hook(ship, nil, "pre-tool", "--host", "claude"); code != 2 {
+		t.Errorf("Claude Code's pre-tool in Claude Code: exit %d", code)
+	}
 	if code, _, _ := hook(`{"tool_name":"Bash","tool_input":{"command":"aayu build 4"}}`, nil, "pre-tool", "--host", "claude"); code != 0 {
 		t.Errorf("build blocked: exit %d", code)
 	}
