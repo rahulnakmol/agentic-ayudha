@@ -305,6 +305,7 @@ type resetting struct {
 	*models.Fake
 	n     int
 	drops []int
+	fail  map[int]error // other failures, by call
 }
 
 func (r *resetting) Complete(ctx context.Context, req models.Request) (models.Response, error) {
@@ -312,7 +313,45 @@ func (r *resetting) Complete(ctx context.Context, req models.Request) (models.Re
 	if slices.Contains(r.drops, r.n) {
 		return models.Response{}, &url.Error{Op: "Post", URL: "https://gateway.example/v1/messages", Err: &net.OpError{Op: "read", Net: "tcp", Err: syscall.ECONNRESET}}
 	}
+	if err := r.fail[r.n]; err != nil {
+		return models.Response{}, err
+	}
 	return r.Fake.Complete(ctx, req)
+}
+
+// TestTier2RetriesServerErrors: the gateway's 524 and a server error inside a
+// stream are retried once, like a reset (host-skills runs 39025583374 and
+// 39032651481, D-3.4o); a 400 is the request's fault and is not.
+func TestTier2RetriesServerErrors(t *testing.T) {
+	cases, _ := stubCases(root)
+	item, _ := os.ReadFile(filepath.Join(root, "evals", "cases", "stub", "csv-export", "output", "issue.json"))
+	var replies []models.Response
+	for i := 0; i < 5; i++ {
+		replies = append(replies, models.Response{Text: string(item)}, models.Response{Text: `{"score": 5, "reason": "covers the request"}`})
+	}
+	// Call 1 (run 1's skill) gets a 524 and call 2 retries it; call 4 (run 2's skill) a stream api_error, retried
+	// by call 5; call 7 (run 3's skill) a 400, which is not retried but goes to the lane's fallback model.
+	client := &resetting{Fake: &models.Fake{Replies: replies}, fail: map[int]error{
+		1: &models.StatusError{Code: 524, Body: "error code: 524"},
+		4: &models.StreamError{Type: "api_error", Message: "Internal server error"},
+		7: &models.StatusError{Code: 400, Body: "bad request"},
+	}}
+	h := harness(t, nil, "gpt-6.1-sol")
+	h.Gateway.Client = func(models.Route, string) models.Client { return client }
+	res, err := h.Tier2(context.Background(), cases, "abc", "dev", time.Unix(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs := res.Cases[0].Runs
+	if r := runs[0]; r.Status == RunError || !strings.Contains(r.Calls[0].Retried, "524") {
+		t.Errorf("run 1, a 524: %+v", r)
+	}
+	if r := runs[1]; r.Status == RunError || !strings.Contains(r.Calls[0].Retried, "api_error") {
+		t.Errorf("run 2, a stream api_error: %+v", r)
+	}
+	if r := runs[2]; r.Calls[0].Retried != "" || !strings.Contains(r.Calls[0].Error, "400") {
+		t.Errorf("run 3, a 400 is not retried: %+v", r)
+	}
 }
 
 // TestTier2RetriesDroppedConnection: a reset is retried once and recorded on

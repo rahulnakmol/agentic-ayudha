@@ -255,7 +255,7 @@ func (h *Harness) call(ctx context.Context, gw *models.Gateway, lane verbs.LaneI
 	c := models.Call{Story: "evals", Seat: string(verbs.AINativeEngineer), Lane: lane, Host: verbs.DirectHost, Req: req}
 	resp, m, err := gw.Do(ctx, c)
 	var retried string
-	if dropped(err) && ctx.Err() == nil {
+	if transient(err) && ctx.Err() == nil {
 		retried = clip(actions.RedactString(err.Error()), 200)
 		resp, m, err = gw.Do(ctx, c)
 	}
@@ -276,6 +276,17 @@ func (h *Harness) call(ctx context.Context, gw *models.Gateway, lane verbs.LaneI
 	}
 	*log = append(*log, l)
 	return resp, err
+}
+
+// transient reports a failure of the call itself, not of the reply: a dropped
+// connection, a 5xx from the endpoint or the gateway in front of it, or a
+// server error inside a streamed reply (api_error, overloaded_error). Like a
+// drop, it is retried once (D-3.4o); a 4xx or an invalid request is not.
+func transient(err error) bool {
+	var se *models.StatusError
+	var st *models.StreamError
+	return dropped(err) || errors.As(err, &se) && se.Code >= 500 ||
+		errors.As(err, &st) && (st.Type == "api_error" || st.Type == "overloaded_error")
 }
 
 // dropped reports a connection the network dropped before a reply arrived (a
