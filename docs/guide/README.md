@@ -74,6 +74,7 @@ and the checks that run in CI (the automated checks GitHub runs on every pull re
 | Check what your product actually does | [Prove a behaviour change](guide-prove-behaviour.md) |
 | Let work happen on a schedule or an event | [Keep things moving with loops](guide-loops.md) |
 | Find out whether it helped | [Did it work?](guide-learn.md) |
+| Read baselines from PostHog or Sentry | [PostHog and Sentry](guide-integrations.md) |
 | Fix something that went wrong | [Troubleshooting](troubleshooting.md) |
 | Try it without touching CI or adding keys | [Adopt at your own pace](adopt.md) |
 | See the whole loop: who does what, and where it can stop | [The delivery loop](concepts-loop.md) |

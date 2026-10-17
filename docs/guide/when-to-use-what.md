@@ -103,8 +103,9 @@ switch, until a person runs `aayu resume`.
 
 **You get back** a timeline, an approved fix, and a Bug that makes sure it does not happen again.
 
-> **Needs setup:** `respond` runs actions from `ops/actions.toml`, a catalog you write and review. Connect Sentry
-> with `aayu init --integrations` if you want error data in the timeline.
+> **Needs setup:** `respond` runs actions from `ops/actions.toml`, a catalog you write and review. `investigate`
+> reads a sanitised telemetry export; for Sentry or PostHog it writes bounded queries for you to run
+> ([PostHog and Sentry](guide-integrations.md)).
 
 ## I need to explain this to my boss
 
