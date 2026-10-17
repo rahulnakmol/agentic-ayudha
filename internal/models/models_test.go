@@ -599,6 +599,42 @@ func TestCacheTokensCount(t *testing.T) {
 	}
 }
 
+// A call that fails after using tokens (a stream that errored after
+// message_start) is charged too: the action ledger records its cost and the
+// breaker counts it, and the error stays the provider's.
+func TestGatewayChargesAFailedCall(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "actions.jsonl")
+	log, _ := actions.Open(path, actions.Options{})
+	clock, _ := config.NewClock("Europe/London", "Mon-Fri 09:00-18:00")
+	br := &Breaker{Budget: config.Budget{PerStoryUSD: 0.01}, Clock: clock, Now: time.Now, PauseFile: filepath.Join(dir, "paused")}
+	gw := &Gateway{Resolver: Resolver{}, Actions: log, Breaker: br, Key: func(string) (string, error) { return "k", nil },
+		Client: func(Route, string) Client {
+			return failing{Response{Model: "claude-opus-5-5", TokensIn: 5000}, &StreamError{Type: "overloaded_error", Message: "Overloaded"}}
+		}}
+	_, _, err := gw.Do(context.Background(), Call{Story: "#9", Lane: verbs.LaneSpec, Host: verbs.HostClaude, Req: Request{Messages: []Message{{Role: "user", Content: "draft"}}}})
+	var st *StreamError
+	if !errors.As(err, &st) || !errors.Is(err, ErrBudget) || !br.Paused() {
+		t.Fatalf("5000 input tokens at 4 USD per million (0.02) against 0.01: %v, paused %v", err, br.Paused())
+	}
+	b, _ := os.ReadFile(path)
+	var rec struct {
+		Status  string  `json:"status"`
+		CostUSD float64 `json:"cost_usd"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(string(b))), &rec); err != nil || rec.Status != actions.StatusFailed || math.Abs(rec.CostUSD-0.02) > 1e-9 {
+		t.Fatalf("ledger record %s: %+v %v", b, rec, err)
+	}
+}
+
+// failing returns its partial response with its error.
+type failing struct {
+	resp Response
+	err  error
+}
+
+func (f failing) Complete(context.Context, Request) (Response, error) { return f.resp, f.err }
+
 // Each provider's usage block is priced at that model's list rates: OpenAI's
 // implicit cache writes at 1.25x input and reads at its cached rate, xAI's
 // reasoning tokens (in total_tokens, not completion_tokens) as output, a long
