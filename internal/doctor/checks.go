@@ -602,7 +602,7 @@ func checkCopilot(ctx context.Context, p *Probe) Result {
 		return Result{Status: Pass, Detail: "not installed for GitHub Copilot here"}
 	}
 	var problems, steps, lines []string
-	if b, err := os.ReadFile(filepath.Join(p.Root, filepath.FromSlash(hosts.CopilotHooks))); err != nil || !strings.Contains(string(b), "hook pre-tool") {
+	if !hosts.CopilotGuarded(p.Root) {
 		problems = append(problems, "no aayudha hooks in "+hosts.CopilotHooks+", so nothing stops an agent in Copilot from running a human-only verb: run `aayu install --host copilot --apply`")
 	}
 	home := p.Getenv("HOME")

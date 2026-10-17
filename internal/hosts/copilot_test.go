@@ -83,6 +83,14 @@ func TestCopilotSessionLog(t *testing.T) {
 	if got := CopilotSessionLog(root, home, time.Hour, now.Add(2*time.Hour)); got != "" {
 		t.Errorf("stale record: %q", got)
 	}
+	recordCopilotSession(root, []byte(`{"sessionId":"abc-2","toolName":"aayudha-build","toolArgs":{"issue":4}}`), "")
+	if got := CopilotSessionLog(root, home, time.Hour, now); !strings.HasSuffix(got, filepath.Join("abc-2", "events.jsonl")) {
+		t.Errorf("the MCP build tool's session: %q", got)
+	}
+	recordCopilotSession(root, []byte(`{"sessionId":"abc-3","toolName":"aayudha-status"}`), "")
+	if got := CopilotSessionLog(root, home, time.Hour, now); got != "" {
+		t.Errorf("a status call noted a build: %q", got)
+	}
 	if got := CopilotHome("/h", func(k string) string { return map[string]string{"COPILOT_HOME": "/c"}[k] }); got != "/c" {
 		t.Errorf("COPILOT_HOME: %q", got)
 	}
