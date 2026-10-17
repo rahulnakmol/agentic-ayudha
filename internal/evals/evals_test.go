@@ -897,9 +897,10 @@ func TestTier1UnmappedCriterionClaim(t *testing.T) {
 	}
 }
 
-// Tier-2 groups (D-7.3d): the brief cases form their own group with a 12 USD
-// cap and every other case falls to the catch-all group with 6, so one
-// group cannot use up another's cap; an unknown group is refused.
+// Tier-2 groups (D-7.3d): the brief cases form their own group with its own
+// cap and every other case falls to the catch-all group, so one group cannot
+// use up another's cap; an unknown group is refused. Each cap is about twice
+// the group's latest full run at list price (D-3.4q).
 func TestGroups(t *testing.T) {
 	cfg, err := LoadConfig(root)
 	if err != nil {
@@ -910,29 +911,28 @@ func TestGroups(t *testing.T) {
 		t.Fatal(err)
 	}
 	b, brief, err := cfg.ForGroup("brief", all)
-	if err != nil || b.MaxUSD != 6 {
+	if err != nil || b.MaxUSD != 3 {
 		t.Fatalf("brief group: %v, cap %v", err, b.MaxUSD)
 	}
 	p, plain, err := cfg.ForGroup("brief-plain", all)
-	if err != nil || p.MaxUSD != 6 {
+	if err != nil || p.MaxUSD != 4 {
 		t.Fatalf("brief-plain group: %v, cap %v", err, p.MaxUSD)
 	}
 	pg, personas, err := cfg.ForGroup("personas", all)
-	if err != nil || pg.MaxUSD != 22.5 || len(personas) != 7 {
+	if err != nil || pg.MaxUSD != 14 || len(personas) != 7 {
 		t.Fatalf("personas group: %v, cap %v, %d cases", err, pg.MaxUSD, len(personas))
 	}
 	rv, review, err := cfg.ForGroup("review", all)
-	if err != nil || rv.MaxUSD != 25 || rv.K != 2 { // D-4.8d.8: thirteen cases fit
+	if err != nil || rv.MaxUSD != 5 || rv.K != 2 {
 		t.Fatalf("review group: %v, cap %v, k %d", err, rv.MaxUSD, rv.K)
 	}
-	// D-5.3b.g: the grill conversations have their own capped, advisory group; skills is back to 6 USD without them.
-	// D-5.8c: six conversation cases, 40 USD.
+	// D-5.3b.g: the grill conversations have their own capped, advisory group.
 	cg, convs, err := cfg.ForGroup("conversations", all)
 	var convIDs []string
 	for _, c := range convs {
 		convIDs = append(convIDs, c.ID)
 	}
-	if err != nil || cg.MaxUSD != 60 || strings.Join(convIDs, " ") != "grill/bakery-concrete grill/bakery-motion grill/bakery-terms grill/bakery-ux grill/quotes-fast grill/search-fast grill/slugkit-simple grill/tally-simple" || cfg.Gates("conversations") {
+	if err != nil || cg.MaxUSD != 37 || strings.Join(convIDs, " ") != "grill/bakery-concrete grill/bakery-motion grill/bakery-terms grill/bakery-ux grill/quotes-fast grill/search-fast grill/slugkit-simple grill/tally-simple" || cfg.Gates("conversations") {
 		t.Fatalf("conversations group: %v, cap %v, %d cases, gates %v", err, cg.MaxUSD, len(convs), cfg.Gates("conversations"))
 	}
 	// D-5.3b.h: the advisory conversation and persona groups never run nightly (evals.yml scopes their pushes to dev).
@@ -944,7 +944,7 @@ func TestGroups(t *testing.T) {
 	// D-7.5e: the tell cases are their own gating group, run on dispatch and on pushes (evals.yml skips pushes to dev),
 	// never nightly.
 	tg, tells, err := cfg.ForGroup("tell", all)
-	if g, _ := cfg.Group("tell"); err != nil || tg.MaxUSD != 8 || len(tells) != 3 || !cfg.Gates("tell") || !g.RunsOn("push") || g.RunsOn("schedule") || !g.RunsOn("workflow_dispatch") {
+	if g, _ := cfg.Group("tell"); err != nil || tg.MaxUSD != 3 || len(tells) != 3 || !cfg.Gates("tell") || !g.RunsOn("push") || g.RunsOn("schedule") || !g.RunsOn("workflow_dispatch") {
 		t.Fatalf("tell group: %v, cap %v, %d cases, gates %v, events %v", err, tg.MaxUSD, len(tells), cfg.Gates("tell"), g.Events)
 	}
 	// D-3.4f: the host-skill session cases have their own advisory group, run on dispatch only; ready/story-ready, a
@@ -954,7 +954,7 @@ func TestGroups(t *testing.T) {
 	for _, c := range hosts {
 		hostIDs = append(hostIDs, c.ID)
 	}
-	if g, _ := cfg.Group("host-skills"); err != nil || hg.MaxUSD != 37 || cfg.Gates("host-skills") || g.RunsOn("push") || g.RunsOn("schedule") ||
+	if g, _ := cfg.Group("host-skills"); err != nil || hg.MaxUSD != 12 || cfg.Gates("host-skills") || g.RunsOn("push") || g.RunsOn("schedule") ||
 		strings.Join(hostIDs, " ") != "build/small-story build/unasked-pickup ready/readback-pass ready/refuse-unready verify/map-drift verify/preview-honest" {
 		t.Fatalf("host-skills group: %v, cap %v, cases %v, events %v", err, hg.MaxUSD, hostIDs, g.Events)
 	}
@@ -968,7 +968,7 @@ func TestGroups(t *testing.T) {
 		}
 	}
 	uxg, _ := cfg.Group("ux")
-	if err != nil || ug.MaxUSD != 35 || ug.MaxTokens.Skill != 32000 || cfg.Gates("ux") || len(perSkill) != 7 || uxg.RunsOn("push") || uxg.RunsOn("schedule") {
+	if err != nil || ug.MaxUSD != 45 || ug.MaxTokens.Skill != 32000 || cfg.Gates("ux") || len(perSkill) != 7 || uxg.RunsOn("push") || uxg.RunsOn("schedule") {
 		t.Fatalf("ux group: %v, cap %v, gates %v, cases per skill %v, events %v", err, ug.MaxUSD, cfg.Gates("ux"), perSkill, uxg.Events)
 	}
 	for skill, n := range perSkill {
@@ -976,18 +976,18 @@ func TestGroups(t *testing.T) {
 			t.Errorf("ux group: %s has %d case(s), want at least 2", skill, n)
 		}
 	}
-	// Decision #283: the Data & AI Architect's chart and measure cases, advisory, on dispatch only, capped at 30 USD a run.
+	// Decision #283: the Data & AI Architect's chart and measure cases, advisory, on dispatch only.
 	dg, dataAI, err := cfg.ForGroup("data-ai", all)
-	if g, _ := cfg.Group("data-ai"); err != nil || dg.MaxUSD != 30 || len(dataAI) != 4 || cfg.Gates("data-ai") || g.RunsOn("push") || g.RunsOn("schedule") {
+	if g, _ := cfg.Group("data-ai"); err != nil || dg.MaxUSD != 8 || len(dataAI) != 4 || cfg.Gates("data-ai") || g.RunsOn("push") || g.RunsOn("schedule") {
 		t.Fatalf("data-ai group: %v, cap %v, %d cases, gates %v", err, dg.MaxUSD, len(dataAI), cfg.Gates("data-ai"))
 	}
-	// WP5.9: the survey skill's cases, advisory, on dispatch only, capped where a full run fits (90 USD, D-5.9g).
+	// WP5.9: the survey skill's cases, advisory, on dispatch only, capped at twice a full run's estimate (D-3.4q).
 	sg, surveys, err := cfg.ForGroup("survey", all)
-	if g, _ := cfg.Group("survey"); err != nil || sg.MaxUSD != 90 || sg.MaxTokens.Skill != 48000 || len(surveys) < 2 || cfg.Gates("survey") || g.RunsOn("push") || g.RunsOn("schedule") {
+	if g, _ := cfg.Group("survey"); err != nil || sg.MaxUSD != 65 || sg.MaxTokens.Skill != 48000 || len(surveys) < 2 || cfg.Gates("survey") || g.RunsOn("push") || g.RunsOn("schedule") {
 		t.Fatalf("survey group: %v, cap %v, %d cases, gates %v", err, sg.MaxUSD, len(surveys), cfg.Gates("survey"))
 	}
 	o, other, err := cfg.ForGroup("skills", all)
-	if err != nil || o.MaxUSD != 8 || o.K != cfg.K || o.MaxTokens.Skill != cfg.MaxTokens.Skill || !cfg.Gates("skills") || len(brief)+len(plain)+len(personas)+len(review)+len(convs)+len(tells)+len(hosts)+len(ux)+len(dataAI)+len(surveys)+len(other) != len(all) {
+	if err != nil || o.MaxUSD != 4 || o.K != cfg.K || o.MaxTokens.Skill != cfg.MaxTokens.Skill || !cfg.Gates("skills") || len(brief)+len(plain)+len(personas)+len(review)+len(convs)+len(tells)+len(hosts)+len(ux)+len(dataAI)+len(surveys)+len(other) != len(all) {
 		t.Fatalf("skills group: %v, cap %v, %d+%d+%d+%d+%d+%d+%d+%d+%d+%d+%d of %d cases", err, o.MaxUSD, len(brief), len(plain), len(personas), len(review), len(convs), len(tells), len(hosts), len(ux), len(dataAI), len(surveys), len(other), len(all))
 	}
 	for _, c := range other {
