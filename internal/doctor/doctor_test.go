@@ -326,6 +326,15 @@ func failing(t *testing.T) map[string]func(*Probe) {
 		"mcp": func(p *Probe) {
 			overlay(p, map[string]string{"/usr/bin/aayu version": "aayu 1.1.0\n"})
 		},
+		// Decision #449: a PostHog server with its key written into the shared
+		// .mcp.json and no read-only switch, a hosted Sentry server on OAuth with
+		// every skill, and a Sentry stdio server set up to read only.
+		"provider-mcp": func(p *Probe) {
+			p.Root = repoWith(t, map[string]string{".aayudha/config.toml": "version = 1\n", ".mcp.json": `{"mcpServers": {
+  "posthog": {"type": "http", "url": "https://mcp.posthog.com/mcp", "headers": {"Authorization": "Bearer phx_0123456789abcdefABCDEF"}},
+  "sentry": {"type": "http", "url": "https://mcp.sentry.dev/mcp"},
+  "sentry-local": {"command": "npx", "args": ["@sentry/mcp-server", "--access-token=${SENTRY_ACCESS_TOKEN}", "--skills=inspect"]}}}`})
+		},
 		"proof": func(p *Probe) {
 			p.Root = repoWith(t, map[string]string{".aayudha/config.toml": "version = 1\n", "loops/proof-purge.toml": "command = [\"proof\", \"purge\"]\n",
 				".github/workflows/aayudha-merge-gate.yml": "jobs:\n  pack:\n    steps:\n      - run: aayudha proof push \"$STORY\" --ci\n"})
@@ -540,5 +549,36 @@ func TestCheckStates(t *testing.T) {
 		if r := c(context.Background(), p); r.Status != Pass || r.Detail != "not in a repository" {
 			t.Errorf("outside a repository: %s %q", r.Status, r.Detail)
 		}
+	}
+}
+
+// TestIntegrationCapabilities (Decision #449): for a reachable integration,
+// doctor shows each capability as working or not, with the exact fix, and a
+// failing capability fails the row; a failure the adapter can explain
+// replaces the raw provider error.
+func TestIntegrationCapabilities(t *testing.T) {
+	p := healthy(t)
+	p.Capabilities = func(_ context.Context, name string) ([]integrations.Check, error) {
+		return []integrations.Check{
+			{Capability: "HogQL queries", Scopes: []string{"query:read"}, Verbs: []string{"measure"}, OK: true, Detail: "project 12345 answered SELECT 1"},
+			{Capability: "error tracking", Scopes: []string{"error_tracking:read"}, Detail: "the key lacks error_tracking:read", Fix: "add the scope error_tracking:read"},
+		}, nil
+	}
+	r := checkIntegrations(context.Background(), p)
+	text := strings.Join(r.Lines, "\n")
+	if r.Status != Fail ||
+		!strings.Contains(text, "  posthog, HogQL queries (query:read; used by measure): works: project 12345 answered SELECT 1") ||
+		!strings.Contains(text, "  posthog, error tracking (error_tracking:read): does not work: the key lacks error_tracking:read. Fix: add the scope error_tracking:read") {
+		t.Fatalf("status %s:\n%s", r.Status, text)
+	}
+	// The scope read itself fails: the adapter's explanation, not the raw error.
+	p.Integration = realIntegrations(p, providerAPI{})
+	p.Capabilities = func(context.Context, string) ([]integrations.Check, error) {
+		return []integrations.Check{{Capability: "HogQL queries", Detail: "PostHog at https://us.posthog.com does not accept the key", Fix: `set url = "https://eu.posthog.com"`}}, nil
+	}
+	r = checkIntegrations(context.Background(), p)
+	text = strings.Join(r.Lines, "\n")
+	if r.Status != Fail || !strings.Contains(text, `posthog: PostHog at https://us.posthog.com does not accept the key. Fix: set url = "https://eu.posthog.com"`) || strings.Contains(text, "unreachable") {
+		t.Fatalf("status %s:\n%s", r.Status, text)
 	}
 }

@@ -21,9 +21,15 @@ import (
 // registers each of them with every host it installs for.
 var Hooks = []struct{ Name, Summary string }{
 	{"session-start", "Report skill copies that differ from .aayudha/lock.toml."},
-	{"pre-tool", "Block agent tool calls while the repository is halted or the [budget] breaker has paused agent lanes."},
+	{"pre-tool", "Block agent tool calls while the repository is halted or the [budget] breaker has paused agent lanes, a human-only aayu command, and a PostHog or Sentry write through a host's MCP server or CLI."},
+	{"post-tool", "Log each PostHog or Sentry call an agent made through a host's MCP server or CLI, so it can be cited (Decision #449)."},
 	{"status-line", "Print one line of journey state for a host's status line, from the last home screen (no network)."},
 }
+
+// PostToolMatcher is the tool-name pattern the post-tool hook registers for in
+// Claude Code and Codex: MCP tools and the shell, the only ways a host reaches
+// PostHog or Sentry, so no other tool call starts a process.
+const PostToolMatcher = "mcp__.*|Bash"
 
 // HookResult is what a hook prints and its exit code. Exit code 2 blocks the
 // tool call in Claude Code, Cursor, and the Amp plugin.
@@ -56,6 +62,13 @@ func RunHook(name string, host verbs.HostID, root, pauseFile string, event []byt
 		r := Deny(host, msg)
 		r.Next = next
 		return r, nil
+	case "post-tool":
+		// The CLI logs the call (it knows the state directory); the hook
+		// itself never blocks or changes a result.
+		if host == verbs.HostCursor {
+			return HookResult{Stdout: "{}\n"}, nil
+		}
+		return HookResult{}, nil
 	case "session-start":
 		msg := ""
 		if root != "" {

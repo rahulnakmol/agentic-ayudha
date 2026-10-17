@@ -17,6 +17,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
 	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/hostcall"
 	"github.com/rahulnakmol/agentic-ayudha/internal/journey"
 	"github.com/rahulnakmol/agentic-ayudha/internal/upgrade"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
@@ -216,8 +217,10 @@ func runHook(ctx context.Context, e *Env, in Values) error {
 		_, err := fmt.Fprintln(e.Out, e.statusLine())
 		return err
 	}
-	var event []byte // hosts send the event as JSON on stdin; pre-tool reads the shell command in it
-	if !e.isTerminal(e.In) {
+	var event []byte // hosts send the event as JSON on stdin (the Amp plugin as --event); pre-tool reads the tool call in it
+	if ev := in.String("event"); ev != "" {
+		event = []byte(ev)
+	} else if !e.isTerminal(e.In) {
 		event, _ = io.ReadAll(io.LimitReader(e.In, 1<<20))
 	}
 	root := config.RepoRoot(e.Dir)
@@ -249,6 +252,8 @@ func runHook(ctx context.Context, e *Env, in Values) error {
 		switch {
 		case name == "pre-tool":
 			r = hosts.Deny(verbs.HostID(e.Host), "")
+		case name == "post-tool" && e.Host != string(verbs.HostCursor):
+			// silent: the repository's own post-tool hook logs the call
 		case e.Host == string(verbs.HostCursor):
 			r.Stdout = "{}\n"
 		default:
@@ -270,6 +275,19 @@ func runHook(ctx context.Context, e *Env, in Values) error {
 			r.Next = "a person clears the halt with `aayu resume`"
 		}
 	}
+	// A host's own PostHog or Sentry MCP server or CLI may only read (Decision
+	// #449): a write is a catalog action a person approves.
+	if name == "pre-tool" && !standAside && r.Code == 0 {
+		if ev, ok := hostcall.FromHook(event); ok {
+			if v := hostcall.Decide(ev, e.hostcallOptions()); !v.Allow {
+				r = hosts.Deny(verbs.HostID(e.Host), v.Reason)
+				r.Next = "read instead, or propose the write with the verb that owns it"
+			}
+		}
+	}
+	if name == "post-tool" && !standAside {
+		e.logHostCall(event)
+	}
 	// A marketplace plugin calls aayu from PATH and passes the skills version it
 	// carries; session-start says so when this binary carries another.
 	if v := in.String("skills"); name == "session-start" && v != "" && v != verbs.SkillVersion && e.Host != string(verbs.HostCursor) {
@@ -280,6 +298,36 @@ func runHook(ctx context.Context, e *Env, in Values) error {
 		return &Error{Code: r.Code, Err: errors.New(strings.TrimSpace(r.Stderr)), Next: r.Next}
 	}
 	return nil
+}
+
+// hostcallOptions are the repository's choices for host PostHog and Sentry
+// calls. Without a readable config every opt-in stays off.
+func (e *Env) hostcallOptions() hostcall.Options {
+	o := hostcall.Options{AllowPII: map[string]bool{}}
+	if l, err := e.Config(); err == nil {
+		for _, p := range []string{hostcall.PostHog, hostcall.Sentry} {
+			o.AllowPII[p] = l.Config.Integrations[p].AllowPII
+		}
+	}
+	return o
+}
+
+// logHostCall appends a PostHog or Sentry call the host ran to the session's
+// call log (.aayudha/state/calls). A failure to log is reported on stderr and
+// never fails the hook: the call has already run.
+func (e *Env) logHostCall(event []byte) {
+	ev, res, session, ok := hostcall.FromPostHook(event)
+	if !ok {
+		return
+	}
+	v := hostcall.Decide(ev, e.hostcallOptions())
+	if v.Provider == "" || !v.Allow {
+		return
+	}
+	en := hostcall.NewEntry(ev, v, res, e.Host, session, e.Now())
+	if _, err := hostcall.Append(filepath.Join(e.stateDir(), "state", "calls"), en); err != nil {
+		fmt.Fprintf(e.Err, "aayudha: could not log the %s call: %v\n", v.Provider, err)
+	}
 }
 
 // statusLine is one line of journey state from the last home screen, for a

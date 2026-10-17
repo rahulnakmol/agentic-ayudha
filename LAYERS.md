@@ -13,7 +13,7 @@ Each layer has exactly one owner seat; its charter is `seats/<seat>/CHARTER.md`.
 | L03 | Application / workflow | Engineering Manager | `internal/verbs/**`<br>`internal/workitems/**`<br>`internal/loops/**`<br>`loops/**`<br>`work-items/**`<br>`skills/**`<br>`seats/**`<br>`examples/benefits-qa/ask/**` |
 | L04 | Domain / policy | Quality Architect | `internal/verify/**`<br>`internal/proof/**`<br>`CONSTRAINTS.md`<br>`examples/benefits-qa/policy/**` |
 | L05 | Intelligence | Data & AI Architect | `internal/models/**`<br>`internal/evals/**`<br>`evals/**`<br>`examples/benefits-qa/answer/**` |
-| L06 | Contracts / integration | Code Architect | `internal/github/**`<br>`internal/hosts/**`<br>`internal/notify/**`<br>`hosts/**`<br>`examples/benefits-qa/contracts/**` |
+| L06 | Contracts / integration | Code Architect | `internal/github/**`<br>`internal/hosts/**`<br>`internal/integrations/**`<br>`internal/notify/**`<br>`hosts/**`<br>`examples/benefits-qa/contracts/**` |
 | L07 | Operational data / state | Production Engineer | `internal/ledger/**`<br>`internal/config/**`<br>`internal/secrets/**`<br>`internal/identity/**`<br>`internal/actions/**`<br>`ops/**`<br>`examples/benefits-qa/store/**` |
 | L08 | Analytics / reporting | Data & AI Architect | `internal/telemetry/**`<br>`examples/benefits-qa/analytics/**` |
 | L09 | Platform / operations | DevOps & DevEx Tinkerer | `.github/**`<br>`.agents/**`<br>`embed.go`<br>`go.mod`<br>`go.sum`<br>`examples/benefits-qa/deploy/**` |

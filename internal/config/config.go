@@ -267,6 +267,7 @@ type Integration struct {
 	URL       string `koanf:"url" jsonschema_description:"Provider base URL when not the adapter's default (EU region, self-hosted), e.g. https://eu.posthog.com."`
 	Org       string `koanf:"org" jsonschema_description:"Provider organization: the Sentry organization slug, or the Microsoft Entra tenant ID (azure)."`
 	Project   string `koanf:"project" jsonschema_description:"Provider project: the PostHog project ID, the Sentry project ID, the owner/name GitHub baselines read (default: the current repository), the Azure resource ID of the Log Analytics workspace or Application Insights component (azure), the CloudWatch RUM app monitor name (aws), or <project>.<dataset> of the GA4 BigQuery export (gcp)."`
+	AllowPII  bool   `koanf:"allow_pii" jsonschema_description:"posthog, sentry: let an agent call the host MCP tools that return personal data (person records, replay content, raw LLM prompts, support tickets). Off by default (Decision #449)."`
 	Transport string `koanf:"transport" jsonschema:"enum=rest,enum=mcp" jsonschema_description:"Figma only: rest (personal access token, the default) or mcp (the remote MCP server, opt-in; the secret is an OAuth access token)."`
 	// Cloud integrations (azure, aws, gcp; WP7.2b).
 	Auth       string `koanf:"auth" jsonschema:"enum=key,enum=oidc,enum=cli" jsonschema_description:"azure, aws, gcp: key (a credential in the secret, the default), oidc (GitHub Actions OIDC federation: short-lived tokens, no stored key), or cli (the az, aws, or gcloud login on this machine)."`
