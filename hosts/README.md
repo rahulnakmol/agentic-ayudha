@@ -7,7 +7,7 @@ whole templates live here.
 | Host | Skill copies | MCP registration | Hooks | Other |
 |---|---|---|---|---|
 | Amp | `.agents/skills/<verb>/` | `amp.mcpServers` in `~/.config/amp/settings.json` (a home edit, confirmed separately) | `.amp/plugins/aayudha.ts`, from [`amp/aayudha.ts`](amp/aayudha.ts) | `AGENTS.md` sections |
-| Cursor | `.agents/skills/<verb>/` | `.cursor/mcp.json` | `.cursor/hooks.json` | `AGENTS.md` sections |
+| Cursor | `.agents/skills/<verb>/` | `.cursor/mcp.json` | `.cursor/hooks.json` | `AGENTS.md` sections, `.cursor/commands/aayudha-<name>.md`, `.cursor/cli.json` permissions |
 | Claude Code | `.claude/skills/<verb>/` | `.mcp.json`, enabled in `.claude/settings.json` | `.claude/settings.json` (and its `statusLine`) | `CLAUDE.md` stub importing `@AGENTS.md` |
 | OpenAI Codex | `.agents/skills/<verb>/` | `[mcp_servers.aayudha]` in a marked block of `.codex/config.toml` (trusted projects only) | `.codex/hooks.json` | `AGENTS.md` sections |
 

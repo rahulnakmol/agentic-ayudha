@@ -526,11 +526,27 @@ func checkMCP(ctx context.Context, p *Probe) Result {
 			}
 		}
 	}
+	// Cursor starts the server with only a few of the person's variables, so
+	// a token the shell finds through another may not reach it (D-3.2b.p).
+	if slices.Contains(lock.Hosts, "cursor") && p.Human != nil && p.CursorMCPHuman != nil {
+		if tok, err := p.Human(ctx); err == nil {
+			if _, err := p.CursorMCPHuman(ctx); err != nil {
+				steps = append(steps, "cursor: Cursor starts the aayudha MCP server with only HOME, LOGNAME, PATH, SHELL, TERM, USER, and PWD, so it finds no GitHub token there (this shell's comes from "+tok.Source+"): run `gh auth login` with gh's default config folder, or `aayu auth set-secret "+identity.HumanTokenSecret+"`")
+			}
+		}
+	}
 	if len(problems) > 0 {
 		return Result{Status: Fail, Detail: "MCP registrations need aayu install --apply", Lines: append(problems, steps...)}
 	}
 	if len(steps) > 0 {
-		return Result{Status: Warn, Detail: "trust this project in Codex, so it loads the aayudha MCP server from " + hosts.CodexConfig, Lines: steps}
+		detail := "trust this project in Codex, so it loads the aayudha MCP server from " + hosts.CodexConfig
+		if !strings.HasPrefix(steps[len(steps)-1], "codex: ") {
+			detail = "the aayudha MCP server in Cursor finds no GitHub token; the lines say what a person does"
+			if len(steps) > 1 {
+				detail = "the aayudha MCP server needs a person's step in Codex and in Cursor; the lines say which"
+			}
+		}
+		return Result{Status: Warn, Detail: detail, Lines: steps}
 	}
 	return Result{Status: Pass, Detail: fmt.Sprintf("aayudha MCP server registered for %s at this aayu's version", strings.Join(fine, ", "))}
 }

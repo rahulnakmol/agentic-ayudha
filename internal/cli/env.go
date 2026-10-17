@@ -67,6 +67,8 @@ type Options struct {
 	// IsTerminal reports whether a stream (e.In, e.Out, or e.Err) is a person's
 	// terminal (WP1.1b); nil checks the file descriptor. Tests force a level with it.
 	IsTerminal func(stream any) bool
+	// MCP marks a verb the MCP server runs for a host's agent (WP3.3).
+	MCP bool
 	// UIStatic renders spinners and celebrations as their final frame only, so
 	// rich output is byte-stable (golden tests, recordings).
 	UIStatic bool

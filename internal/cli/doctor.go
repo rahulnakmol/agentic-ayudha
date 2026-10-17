@@ -38,6 +38,7 @@ func (e *Env) probe(ctx context.Context) *doctor.Probe {
 	p.Config, p.ConfigErr = e.Config()
 	r := e.Resolver()
 	p.Human = r.Human
+	p.CursorMCPHuman = e.cursorMCPResolver().Human
 	p.WhoAmI = func(ctx context.Context, t identity.Token) (identity.User, error) {
 		return identity.WhoAmI(ctx, e.HTTP, e.githubAPI(), t)
 	}
