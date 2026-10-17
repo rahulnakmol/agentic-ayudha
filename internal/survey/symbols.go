@@ -35,7 +35,11 @@ var (
 	typeHeader = regexp.MustCompile(`\b(class|struct|union|interface|trait|enum|namespace|impl|object|record)\b\s+(?:class\s+|struct\s+)?([A-Za-z_][\w]*(?:::[A-Za-z_][\w]*)*)`)
 	funcName   = regexp.MustCompile(`(operator\s*(?:\(\)|[^\s(\w]+)|~?[A-Za-z_$][\w$]*(?:(?:::|\.)~?[A-Za-z_$][\w$]*)*)\s*(?:<[^(){};]*>)?\s*\(`)
 	callName   = regexp.MustCompile(`([A-Za-z_$][\w$]*)\s*\(`)
-	cKeywords  = map[string]bool{"if": true, "for": true, "while": true, "switch": true, "catch": true, "return": true, "sizeof": true, "foreach": true,
+	// ctorUse is a C++ construction that names its type without a call: a
+	// local or static object (Engine e; Engine e{…}; Engine e(…)), new Engine
+	// with no parentheses, or make_unique<Engine>. Each calls Engine::Engine.
+	ctorUse   = regexp.MustCompile(`(?:(?:^|[;{}])\s*(?:(?:static|const|thread_local)\s+)*([A-Za-z_]\w*(?:::[A-Za-z_]\w*)*)(?:\s*<[^;{}()]*>)?\s+[A-Za-z_]\w*\s*[;({=\[]|\bnew\s+([A-Za-z_]\w*(?:::[A-Za-z_]\w*)*)|\bmake_(?:unique|shared)\s*<\s*([A-Za-z_]\w*(?:::[A-Za-z_]\w*)*))`)
+	cKeywords = map[string]bool{"if": true, "for": true, "while": true, "switch": true, "catch": true, "return": true, "sizeof": true, "foreach": true,
 		"elseif": true, "else": true, "do": true, "try": true, "function": true, "fn": true, "func": true, "fun": true, "new": true, "delete": true, "throw": true,
 		"typeof": true, "instanceof": true, "using": true, "lock": true, "synchronized": true, "defined": true, "decltype": true, "alignof": true, "static_assert": true,
 		"assert": true, "array": true, "list": true, "isset": true, "unset": true, "empty": true, "echo": true, "print": true, "match": false, "with": true, "when": true,
@@ -164,6 +168,17 @@ func braceSymbols(file, code, lang string) ([]Symbol, []call) {
 			}
 			for _, m := range callName.FindAllStringSubmatch(text, -1) {
 				n := m[1]
+				if cKeywords[n] || seen[n] {
+					continue
+				}
+				seen[n] = true
+				calls = append(calls, call{from: k, name: n, line: ln})
+			}
+			if lang != "cpp" {
+				continue
+			}
+			for _, m := range ctorUse.FindAllStringSubmatch(text, -1) {
+				n := lastName(m[1] + m[2] + m[3])
 				if cKeywords[n] || seen[n] {
 					continue
 				}
