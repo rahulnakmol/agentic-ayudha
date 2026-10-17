@@ -95,11 +95,16 @@ You (the host's model) slice; the binary checks and writes.
      story's layer footprint;
    - `depends_on`: the positions (1-based) of stories in this draft it needs first.
    Cover every layer of the Feature's footprint with some story.
-4. Keep to the Feature's scope. Every criterion restates something the Feature asks for; never require behaviour it
-   does not name: no extra flags or options (`--dry-run`, repeatable flags), retries or limits, workflow triggers
-   beyond the one it asks for, reports, counts, or outputs of your own. A builder will need such details; write each
-   as a question in `open_questions`, which never counts against the slice. Example values in a criterion's state
-   are fine when they are fixture values (`a recording 40 days old, recordings kept 30 days`).
+4. Keep to the Feature's scope. Every criterion restates something the Feature asks for, so before you write one,
+   find the Feature's words it restates. Never require behaviour the Feature does not name, in either direction:
+   - nothing added: no extra flags or options (`--dry-run`, repeatable flags), retries or limits, workflow triggers
+     beyond the one it asks for, reports, counts, or outputs of your own;
+   - nothing restricted: no input the story must reject, no validation or error rule, and no "only", "never", or
+     "exactly" the Feature does not state. "A scheduled purge workflow" asks for a schedule; it says nothing against
+     other triggers. "Per-kind retention" asks for a value per kind; it sets no format for the value.
+   A criterion with no Feature words behind it is a question for `open_questions`, which never counts against the
+   slice; a builder will need those answers. Example values in a criterion's state are fine when they are fixture
+   values (`a recording 40 days old, recordings kept 30 days`).
 5. Write the draft as JSON, `{"feature": N, "stories": [...], "open_questions": [...]}`, and check it (read-only):
 
    `aayu slice <feature> --draft slice.json`

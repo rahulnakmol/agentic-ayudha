@@ -16,6 +16,14 @@ calls = [
   ["ready", "45", "--check"],
 ]
 
+# Restrictions the Feature does not state, each caught once by the judge in a skills run on dev (D-5.4e): runs
+# 39005126929 (191cd26, "its only trigger is the schedule") and 39009127596 (ef41886, "reject retention values that are
+# not whole numbers of days").
+scope = [
+  { pattern = '(?i)\b(?:only|sole)\s+trigger|\btrigger(?:ed|s)?\s+only\b|\bno other trigger', why = "restricts the workflow's triggers, which the Feature does not" },
+  { pattern = '(?i)\breject\w*\b[^\n]{0,80}\b(?:whole|integer|fraction\w*|non-?integer|decimal)\b|\bnot a whole number', why = "adds a format validation for retention values, which the Feature does not ask for" },
+]
+
 [tier2]
 rubric = "rubric.md"
 draft = "slice"
