@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -145,7 +146,7 @@ func main() {
 			t.Errorf("unexpected probe fact %s", no)
 		}
 	}
-	if _, err := exec.LookPath("strace"); err == nil {
+	if _, err := exec.LookPath("strace"); err == nil && runtime.GOOS == "linux" {
 		if f, ok := got["probe:writes:~/out.log"]; !ok || !strings.Contains(f.Detail, "write") {
 			t.Errorf("strace is installed, but no write of out.log: %v", p.Facts)
 		}
@@ -175,7 +176,7 @@ func main() {
 		if _, ok := got["probe:reads:"+filepath.Join(libdir, "m0.rb")]; ok {
 			t.Error("a file of a grouped directory is reported on its own")
 		}
-	} else if !strings.Contains(strings.Join(p.Skipped, " "), "strace is not installed") {
+	} else if !strings.Contains(strings.Join(p.Skipped, " "), "files read and written: strace") || strings.Contains(strings.Join(p.Ran, " "), "strace") {
 		t.Errorf("a skipped probe must say so: %v", p.Skipped)
 	}
 	// A draft cites a probe fact once probes.json sits next to the capture.
