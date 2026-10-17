@@ -290,8 +290,11 @@ func (h *Harness) call(ctx context.Context, gw *models.Gateway, lane verbs.LaneI
 		h.charge(usd)
 		retries = append(retries, Retry{Fault: fault, Model: m.Model, TokensIn: resp.TokensIn, TokensOut: resp.TokensOut, CostUSD: usd})
 		if wait := providerWait(err, len(retries)); wait > 0 {
-			if err := pause(ctx, wait); err != nil {
-				return models.Response{}, err
+			if perr := pause(ctx, wait); perr != nil {
+				// Cancelled while backing off: the attempts so far are charged,
+				// so the call is still logged with them.
+				resp, err = models.Response{}, perr
+				break
 			}
 		}
 		resp, m, err = gw.Do(ctx, c)

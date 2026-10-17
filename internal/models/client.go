@@ -257,10 +257,11 @@ func (c HTTPClient) Complete(ctx context.Context, r Request) (Response, error) {
 // decodeMessagesStream reads an Anthropic Messages event stream: the text
 // deltas in order, the stop reason, and the usage from message_start and
 // message_delta. An error event is an error, and so is a stream cut off
-// inside an event; both come back with the usage so far.
+// before message_stop; both come back with the usage so far.
 func decodeMessagesStream(body io.Reader) (Response, error) {
 	var r Response
 	var sb strings.Builder
+	var stopped bool
 	sc := bufio.NewScanner(body)
 	sc.Buffer(make([]byte, 64<<10), 8<<20)
 	for sc.Scan() {
@@ -314,6 +315,8 @@ func decodeMessagesStream(body io.Reader) (Response, error) {
 			if ev.Usage.Cost != nil {
 				r.CostUSD = *ev.Usage.Cost
 			}
+		case "message_stop":
+			stopped = true
 		case "error":
 			// The usage so far comes back with the error: the attempt may be
 			// billed, so a caller charges and records it.
@@ -322,6 +325,11 @@ func decodeMessagesStream(body io.Reader) (Response, error) {
 	}
 	if err := sc.Err(); err != nil {
 		return r, fmt.Errorf("read messages stream: %w", err)
+	}
+	if !stopped {
+		// The stream ended between events, before message_stop: what arrived
+		// is a prefix of the reply, not the reply.
+		return r, fmt.Errorf("read messages stream: no message_stop: %w", io.ErrUnexpectedEOF)
 	}
 	r.Text = sb.String()
 	if r.Text == "" {

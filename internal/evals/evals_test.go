@@ -508,6 +508,39 @@ func TestTier2RetriesTheModelBeforeItsFallback(t *testing.T) {
 	}
 }
 
+// A run cancelled while a retry backs off still logs the call and the attempt
+// it already paid for, so the results' calls add up to their cost.
+func TestTier2LogsACallCancelledInItsBackoff(t *testing.T) {
+	old := pause
+	cancelled := false
+	pause = func(context.Context, time.Duration) error {
+		if cancelled {
+			return nil
+		}
+		cancelled = true
+		return context.Canceled
+	}
+	t.Cleanup(func() { pause = old })
+	cases, _ := stubCases(root)
+	item, _ := os.ReadFile(filepath.Join(root, "evals", "cases", "stub", "csv-export", "output", "issue.json"))
+	var replies []models.Response
+	for i := 0; i < 5; i++ {
+		replies = append(replies, models.Response{Text: string(item)}, models.Response{Text: `{"score": 5, "reason": "covers the request"}`})
+	}
+	client := &resetting{Fake: &models.Fake{Replies: replies}, fail: map[int]error{1: &models.StatusError{Code: 503, Body: "unavailable"}}}
+	h := harness(t, nil, "gpt-6.1-sol")
+	h.Gateway.Client = func(models.Route, string) models.Client { return client }
+	res, err := h.Tier2(context.Background(), cases, "abc", "dev", time.Unix(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := res.Cases[0].Runs[0]
+	if r.Status != RunError || len(r.Calls) != 1 || len(r.Calls[0].Retries) != 1 || !strings.Contains(r.Calls[0].Retries[0].Fault, "503") ||
+		!strings.Contains(r.Calls[0].Error, "context canceled") {
+		t.Fatalf("run 1, cancelled in its backoff: %+v", r)
+	}
+}
+
 type completeFunc func(context.Context, models.Request) (models.Response, error)
 
 func (f completeFunc) Complete(ctx context.Context, req models.Request) (models.Response, error) {

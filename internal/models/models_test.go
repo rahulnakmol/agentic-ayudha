@@ -543,9 +543,9 @@ func TestMessagesStream(t *testing.T) {
 	}
 }
 
-// A stream cut off inside a data line is a dropped connection, not a reply
-// that does not decode: the read error (or an unexpected EOF when the stream
-// just ends) comes back, with the usage so far, so the caller retries it.
+// A stream cut off inside a data line, or before message_stop, is a dropped
+// connection, not a reply: the read error (or an unexpected EOF when the
+// stream just ends) comes back, with the usage so far, so the caller retries it.
 func TestMessagesStreamCutInsideAnEvent(t *testing.T) {
 	start := `data: {"type":"message_start","message":{"model":"m","usage":{"input_tokens":7}}}` + "\n\n"
 	partial := start + `data: {"type":"content_block_delta","index":0,"delta":{"type":"text_d`
@@ -555,13 +555,15 @@ func TestMessagesStreamCutInsideAnEvent(t *testing.T) {
 	}{
 		"reset": {io.MultiReader(strings.NewReader(partial), iotest.ErrReader(syscall.ECONNRESET)), syscall.ECONNRESET},
 		"ended": {strings.NewReader(partial), io.ErrUnexpectedEOF},
+		// A prefix that ends between events, before message_stop, even one that is valid JSON so far.
+		"no stop": {strings.NewReader(start + `data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"{}"}}` + "\n\n"), io.ErrUnexpectedEOF},
 	} {
 		r, err := decodeMessagesStream(tc.body)
 		if !errors.Is(err, tc.want) || r.TokensIn != 7 {
 			t.Errorf("%s: %+v %v, want %v with the usage so far", name, r, err, tc.want)
 		}
 	}
-	if _, err := decodeMessagesStream(strings.NewReader(start + "data: {not json}\n\ndata: {}\n\n")); err == nil || !strings.Contains(err.Error(), "decode messages stream") {
+	if _, err := decodeMessagesStream(strings.NewReader(start + "data: {not json}\n\ndata: {\"type\":\"message_stop\"}\n\n")); err == nil || !strings.Contains(err.Error(), "decode messages stream") {
 		t.Errorf("a malformed event mid-stream is still a decode error: %v", err)
 	}
 }
