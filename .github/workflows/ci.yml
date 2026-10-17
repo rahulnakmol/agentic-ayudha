@@ -574,7 +574,9 @@ jobs:
           AAYU_GITHUB_TOKEN: ${{ secrets.AAYU_GITHUB_TOKEN }}
           # Survey filing runs on rahulnakmol/aayu-survey-scratch with a token limited to it (D-5.9n); unset, it skips.
           AAYU_SURVEY_SCRATCH_TOKEN: ${{ secrets.AAYU_SURVEY_SCRATCH_TOKEN }}
-        run: go test -race -count=1 -tags integration ./...
+        # The live tests in internal/cli run to completion against real workflows (TestReleaseLive waits for the
+        # scratch gate and release runs), which with -race takes internal/cli past go test's 10-minute default.
+        run: go test -race -count=1 -timeout 30m -tags integration ./...
 
   smoke:
     name: smoke (${{ matrix.os }})
