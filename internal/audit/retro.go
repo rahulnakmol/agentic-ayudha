@@ -11,6 +11,7 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/autonomy"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
+	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
 // CheckpointBudget is the most checkpoints a story of each Effort should take
@@ -64,6 +65,35 @@ type Retro struct {
 	Findings    []Finding              `json:"findings"`
 	Flow        Flow                   `json:"flow"`
 	Recurrence  []Recurrence           `json:"evolve_recurrence"`
+	FixLayers   []FixCount             `json:"fix_layers"`
+}
+
+// FixCount is the Feedback issues recorded at one fix layer (S-7.7d), or
+// "unclassified".
+type FixCount struct {
+	Layer    string `json:"layer"`
+	Feedback []int  `json:"feedback"`
+}
+
+// fixLayers counts every Feedback issue opened before the cursor by its
+// fix:<layer> label at the cursor.
+func (d *Data) fixLayers(in Inputs) []FixCount {
+	by := map[string][]int{}
+	for _, it := range d.Items {
+		if it.PR || !slices.Contains(it.Labels, "type:feedback") || !it.CreatedAt.Before(in.Until) {
+			continue
+		}
+		l := workitems.FixLayerOf(it.Labels)
+		if l == "" {
+			l = "unclassified"
+		}
+		by[l] = append(by[l], it.Number)
+	}
+	out := []FixCount{}
+	for _, l := range append(slices.Clone(workitems.FixLayers), "unclassified") {
+		out = append(out, FixCount{Layer: l, Feedback: by[l]})
+	}
+	return out
 }
 
 // BuildRetro computes the retro for the window. perStoryUSD is [budget] per_story_usd.
@@ -195,6 +225,7 @@ func BuildRetro(in Inputs, d *Data, perStoryUSD float64) *Retro {
 		}
 	}
 	match()
+	r.FixLayers = d.fixLayers(in)
 	return r
 }
 
@@ -252,6 +283,18 @@ func (r *Retro) Markdown() []byte {
 			p("| #%d | `%s` | #%d | %s | %s |\n", rc.PR, rc.Skill, rc.Feedback, stamp(rc.Merged), back)
 		}
 	}
+	p("\n## Fix layer of Feedback\n\n")
+	p("Every Feedback issue opened before the cursor, by the highest layer that can fix its correction for good (ETHOS 10): a codebase or " +
+		"static-check correction becomes a Story, only a prose one goes to `aayu evolve`, and a review one changes what is surfaced for review. " +
+		"The layer is a judgement recorded with `aayu retro --classify`.\n\n")
+	p("| Layer | Feedback | Issues |\n|---|---|---|\n")
+	for _, f := range r.FixLayers {
+		var ns []string
+		for _, n := range f.Feedback {
+			ns = append(ns, fmt.Sprintf("#%d", n))
+		}
+		p("| %s | %d | %s |\n", f.Layer, len(f.Feedback), or(strings.Join(ns, ", "), "—"))
+	}
 	p("\n## Floor misses\n\n")
 	if len(r.FloorMisses) == 0 {
 		p("None.\n\n")
@@ -272,7 +315,9 @@ func (r *Retro) Markdown() []byte {
 // FeedbackBody is the issue-form body of the Feedback issue for a finding.
 func (r *Retro) FeedbackBody(f Finding, path string) string {
 	return fmt.Sprintf("### What happened or what you need\n\n%s\n\n### Context\n\nFiled by `aayu retro` (WP7.6) from the retro report `%s` on the ledger "+
-		"(window %s to %s, ledger `%s`). Accept it to have it acted on; `aayu evolve` takes accepted Feedback about a skill.\n",
+		"(window %s to %s, ledger `%s`). Accept it to have it acted on. First classify it by the highest layer that can fix it for good "+
+		"(`aayu retro --classify <this issue> --layer codebase|check|prose|review --reason …`): a codebase or check correction becomes a Story, "+
+		"only a prose one goes to `aayu evolve`.\n",
 		f.Detail, path, stamp(r.Inputs.Since), stamp(r.Inputs.Until), short(r.Inputs.Ledger))
 }
 

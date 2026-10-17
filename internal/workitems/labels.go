@@ -1,5 +1,10 @@
 package workitems
 
+import (
+	"slices"
+	"strings"
+)
+
 // LabelDef is a label init creates (WP2.2).
 type LabelDef struct {
 	Name        string `json:"name"`
@@ -18,7 +23,33 @@ const (
 	LabelCorrection    = "aayu:correction"         // manual correction marker for the streak (WP5.7)
 	LabelAgentAuthored = "agent-authored"          // PRs opened by an agent lane (evolve, WP7.7)
 	LabelScreenReader  = "aayudha:screen-reader"   // runs the screen-reader floor on a PR (macOS and Windows runners, WP4.7)
+	LabelFixPrefix     = "fix:"                    // fix:<layer>, the highest layer that can fix a Feedback's correction for good (S-7.7d)
 )
+
+// Fix layers of a correction, highest first (ETHOS 10, the inverse pyramid):
+// the codebase (a type, invariant, or boundary that makes the mistake
+// impossible), a static check (a lint rule, test, or CI check that catches
+// it), prose (skill or AGENTS.md guidance, for what needs judgement), and
+// human review (what the environment surfaces for a person to look at).
+const (
+	FixCodebase = "codebase"
+	FixCheck    = "check"
+	FixProse    = "prose"
+	FixReview   = "review"
+)
+
+// FixLayers lists the fix layers, highest first.
+var FixLayers = []string{FixCodebase, FixCheck, FixProse, FixReview}
+
+// FixLayerOf is the fix layer a label set records, "" when none.
+func FixLayerOf(labels []string) string {
+	for _, l := range labels {
+		if v, ok := strings.CutPrefix(l, LabelFixPrefix); ok && slices.Contains(FixLayers, v) {
+			return v
+		}
+	}
+	return ""
+}
 
 var labelColors = map[string]string{
 	"status": "ededed", "priority": "b60205", "effort": "c2e0c6", "risk": "f9d0c4", "health": "0e8a16", "horizon": "d4c5f9",
@@ -47,6 +78,10 @@ func Labels() []LabelDef {
 		LabelDef{LabelCorrection, "b60205", "A human corrected an agent's merge (resets the streak)"},
 		LabelDef{LabelAgentAuthored, "c5def5", "Opened by an agent lane"},
 		LabelDef{LabelScreenReader, "5319e7", "Run the VoiceOver and NVDA screen-reader floor on this PR"},
+		LabelDef{LabelFixPrefix + FixCodebase, "0e8a16", "Fix layer: a type, invariant, or boundary makes the mistake impossible"},
+		LabelDef{LabelFixPrefix + FixCheck, "1d76db", "Fix layer: a lint rule, test, or CI check catches the mistake"},
+		LabelDef{LabelFixPrefix + FixProse, "fbca04", "Fix layer: skill or AGENTS.md guidance, for what needs judgement"},
+		LabelDef{LabelFixPrefix + FixReview, "d93f0b", "Fix layer: change what the environment surfaces for human review"},
 	)
 }
 

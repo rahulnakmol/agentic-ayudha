@@ -110,14 +110,14 @@ func TestEvolveVerb(t *testing.T) {
 	if code, out, _ := run(); code != 0 || !strings.Contains(out, "no accepted Feedback from retro is waiting") {
 		t.Fatalf("listing with nothing accepted: %d %s", code, out)
 	}
-	g.AddIssue("Feedback: retro: skill `stub` correction rate 2/3 above 20 %", "### What happened or what you need\n\nx\n", "type:feedback", "status:backlog", "intake", "needs:grill")
+	g.AddIssue("Feedback: retro: skill `stub` correction rate 2/3 above 20 %", "### What happened or what you need\n\nx\n", "type:feedback", "status:backlog", "intake", "needs:grill", "fix:prose")
 	g.AddIssue("Feedback: retro: not accepted yet", "x", "type:feedback", "status:backlog", "intake")
 	g.AddIssue("Feedback: retro: correction rate 3/4 above 20 %", "x", "type:feedback", "status:backlog", "intake", "needs:grill")
 	if code, out, errOut := run(); code != 0 || !strings.Contains(out, "#7 Feedback: retro: correction rate 3/4 above 20 %\n  names no skill") {
 		t.Fatalf("a finding that names no skill: %d %s %s", code, out, errOut)
 	}
 	// P4 (S-7.7c): a skill changes only on two accepted Feedback issues that name it.
-	if code, out, errOut := run(); code != 0 || !strings.Contains(out, "waiting: skill `stub` needs 2 accepted Feedback issues, has 1") || strings.Contains(out, "--feedback 5") {
+	if code, out, errOut := run(); code != 0 || !strings.Contains(out, "waiting: skill `stub` needs 2 accepted prose Feedback issues, has 1") || strings.Contains(out, "--feedback 5") {
 		t.Fatalf("listing one Feedback for a skill: %d %s %s", code, out, errOut)
 	}
 	if code, _, errOut := run("--skill", "stub", "--feedback", "5"); code != cli.ExitBlocked || !strings.Contains(errOut, "skill `stub` has #5 only") {
@@ -126,7 +126,25 @@ func TestEvolveVerb(t *testing.T) {
 	if code, _, errOut := run("--skill", "stub", "--feedback", "7"); code != cli.ExitBlocked || !strings.Contains(errOut, "#7 does not name skill `stub`") {
 		t.Fatalf("evolve on Feedback about no skill: %d %s", code, errOut)
 	}
+	// S-7.7d: only a prose correction goes to a skill rewrite. An unclassified Feedback, and a codebase one whose
+	// classification does not say why code or a check cannot catch it, are refused and are not evidence.
 	g.AddIssue("Feedback: retro: skill `stub` correction rate 3/3 above 20 %, a later window", "x", "type:feedback", "status:backlog", "intake", "needs:grill")
+	if code, _, errOut := run("--skill", "stub", "--feedback", "8"); code != cli.ExitBlocked || !strings.Contains(errOut, "Feedback #8 has no fix layer") {
+		t.Fatalf("evolve on unclassified Feedback: %d %s", code, errOut)
+	}
+	g.Mu.Lock()
+	g.Issues[8].Labels = append(g.Issues[8].Labels, fake.Label{Name: "fix:codebase"})
+	g.Mu.Unlock()
+	if code, _, errOut := run("--skill", "stub", "--feedback", "8"); code != cli.ExitBlocked || !strings.Contains(errOut, "Feedback #8 is a codebase correction") {
+		t.Fatalf("evolve on a codebase correction: %d %s", code, errOut)
+	}
+	if code, out, errOut := run(); code != 0 || !strings.Contains(out, "not for evolve: Feedback #8 is a codebase correction") || !strings.Contains(out, "has 1") {
+		t.Fatalf("listing a codebase correction: %d %s %s", code, out, errOut)
+	}
+	g.Mu.Lock()
+	g.Issues[8].Comments = append(g.Issues[8].Comments, &fake.Comment{ID: 801, Body: cli.FixLayerMarker + "\n<!-- aayudha:fix-layer-state " +
+		`{"feedback":8,"layer":"codebase","reason":"a typed field","not_catchable":"the wording is judged per request","story":12}` + " -->"})
+	g.Mu.Unlock()
 	if code, out, errOut := run(); code != 0 || !strings.Contains(out, "#5 Feedback: retro: skill `stub`") || !strings.Contains(out, "aayu evolve --skill stub --feedback 5") || strings.Contains(out, "#6") {
 		t.Fatalf("listing accepted retro Feedback: %d %s %s", code, out, errOut)
 	}

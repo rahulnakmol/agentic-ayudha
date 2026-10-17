@@ -132,9 +132,11 @@ Guide: [did it work?](guide-learn.md) In the story: [the number](journey-8-learn
 
 ## The agents keep making the same mistake
 
-Use **`retro`** to find the pattern, accept the Feedback it files, then **`evolve`** to turn it into a tested skill
-change that a person reviews. `evolve` waits for at least two accepted Feedback issues about the same skill and
-changes a skill at most once a month.
+Use **`retro`** to find the pattern and classify each Feedback it files by the highest layer that can fix it for
+good: the code (a type or invariant), a static check (a lint rule or test), prose (a skill), or human review. A code or
+check fix becomes a Story; only a prose fix goes to **`evolve`**, which turns it into a tested skill change that a
+person reviews. `evolve` waits for at least two accepted prose Feedback issues about the same skill and changes a
+skill at most once a month.
 
 **You get back** a skill that no longer makes that mistake, with a test that keeps it that way.
 Guide: [did it work?](guide-learn.md#stop-repeating-mistakes-evolve)

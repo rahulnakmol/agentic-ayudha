@@ -33,6 +33,14 @@ type RetroResult struct {
 // written to retro/<date>/ on the ledger; each finding not filed before
 // becomes a Feedback issue on this repository (never a PR).
 func runRetro(ctx context.Context, e *Env, in Values) error {
+	if in.Has("classify") {
+		return retroClassify(ctx, e, in)
+	}
+	for _, f := range []string{"layer", "reason", "not-catchable", "criterion"} {
+		if in.Has(f) {
+			return Errorf(ExitUsage, "retro --%s goes with --classify <feedback>", f)
+		}
+	}
 	a, err := e.openAudit(ctx, in, "retro", true)
 	if err != nil {
 		return err
