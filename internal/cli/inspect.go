@@ -268,12 +268,14 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		return Wrap(ExitExternal, err)
 	}
 	ins := inspect.Input{Repo: repo, PR: n, Title: pr.GetTitle(), Body: pr.GetBody(), Draft: pr.GetDraft(), Diff: diff}
-	ins.Story = StoryOf(pr.GetBody(), "", pr.GetHead().GetRef())
-	if ins.Story == 0 { // the Aayudha-Story trailer on the head commit, as verify reads it
-		if hc, _, err := c.REST.Git.GetCommit(ctx, owner, name, pr.GetHead().GetSHA()); err == nil {
-			ins.Story = StoryOf("", hc.GetMessage(), "")
-		}
+	// The story as verify finds it: the body's reference, then the head
+	// commit's Aayudha-Story trailer, then the branch. A failed read fails
+	// closed rather than judging a story PR as storyless.
+	hc, hr, err := c.REST.Git.GetCommit(ctx, owner, name, pr.GetHead().GetSHA())
+	if err != nil && (hr == nil || hr.StatusCode != http.StatusNotFound) {
+		return Wrap(ExitExternal, err)
 	}
+	ins.Story = StoryOf(pr.GetBody(), hc.GetMessage(), pr.GetHead().GetRef())
 	res := inspect.Result{PR: n, Head: pr.GetHead().GetSHA()}
 	var deleg delegate.State
 	checkpoints := map[string]string{} // checkpoint commit -> model, from build's ledger record (Bug #171)

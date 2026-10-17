@@ -562,18 +562,29 @@ func TestInspectWithoutStory(t *testing.T) {
 		t.Fatalf("docs-only PR: exit %d %+v %s", code, res, errOut)
 	}
 
-	// A PR that names its story only in the head commit's Aayudha-Story
-	// trailer is a story PR, judged against its pack (here missing, so the
-	// gate fails closed), never as storyless.
+	// A PR that names its story in the head commit's Aayudha-Story trailer is
+	// that story's PR, as verify finds it (the trailer before a story-shaped
+	// branch), judged against its pack (here missing, so the gate fails
+	// closed), never as storyless; when the head commit cannot be read, the
+	// gate fails closed too.
 	shead := strings.Repeat("a", 40)
-	trailer := g.AddPR("fix: percent", "No reference here.", "founder", "fix/percent-trailer", shead, "dev")
+	trailer := g.AddPR("fix: percent", "No reference here.", "founder", "story/9-percent", shead, "dev")
 	g.Mu.Lock()
 	trailer.Diff = cleanDiff
 	g.Commits[shead] = map[string]any{"sha": shead, "message": "fix: percent\n\nAayudha-Story: #2\n"}
 	g.Mu.Unlock()
 	if code, _, errOut := inspectApp(t, env, opts, trailer.Number, "--ci"); code != ExitBlocked || !strings.Contains(errOut, "no proof pack") {
-		t.Fatalf("a story named only by the head trailer: exit %d %s", code, errOut)
+		t.Fatalf("a story named by the head trailer: exit %d %s", code, errOut)
 	}
+	g.Mu.Lock()
+	g.Fail = "GET /repos/o/r/git/commits/" + shead
+	g.Mu.Unlock()
+	if code, _, errOut := inspectApp(t, env, opts, trailer.Number, "--ci"); code != ExitExternal {
+		t.Fatalf("an unreadable head commit: exit %d %s", code, errOut)
+	}
+	g.Mu.Lock()
+	g.Fail = ""
+	g.Mu.Unlock()
 
 	// With no criteria to judge test gaps in, a test file is reviewed like any
 	// other: a reply that covers nothing leaves it unreviewed.
