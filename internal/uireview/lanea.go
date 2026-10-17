@@ -73,9 +73,9 @@ Report each problem a real user would hit as one finding, classified by kind:
 - contrast: text or meaningful graphics below the contrast floor
 - target-size: a control smaller than the target floor
 - keyboard, labels, hierarchy, layout, copy, feedback, consistency, error-prevention, other: as named
-Base every finding on what the screenshots, markup, and tree show; compute contrast ratios and sizes from the CSS where you can. Do not invent problems or report taste: a polished page has no findings at severity 2 or above. element names the control or text (its label or a short CSS selector).
+Base every finding on what the screenshots, markup, and tree show; compute contrast ratios and sizes from the CSS where you can. Do not invent problems or report taste: a polished page has no findings at severity 2 or above. element names the control or text (its label or a short CSS selector). fix corrects it inside the page's own design system: reuse a colour, size, or style the page already defines (for contrast, an existing text colour that meets the floor; for focus, a :focus-visible ring in the page's focus or accent colour), never a new value.
 nielsen lists, for heuristics 1 to 10 in order, the worst severity you found for that heuristic (0 when none).
-personas gives one entry per persona: blocked is true when that person cannot complete the page's task.
+personas gives one entry per persona: blocked is true when that person cannot complete the page's task, or can only by guessing (a keyboard-only user who cannot see where focus is, is blocked).
 rebuild is true only when the layout or flow is wrong at its root and needs a new design rather than fixes.`, minTargetPx, minTargetPx)
 }
 
