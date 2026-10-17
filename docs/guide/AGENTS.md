@@ -54,6 +54,7 @@ critical findings), and run lychee on the built site.
 | `journey*.md` | Timed scene, what happened, what you do and what the agent does, what you learn, the generated verbs, Under the hood, What's next, then You are here |
 | `how-*.md` | Diagram, How it works, key formats with verbatim excerpts, invariants naming their tests, code links, Read next |
 | `concepts-*.md` | Why it exists, one picture, the rule, a link to the deep dive |
+| `skills/<verb>.md` | Problem and purpose, the generated card, When to use it, Run it (the prompt, then the generated usage), What you get back with "You should see", Gates, What only a person does, What's next. `go generate` writes the regions and a new verb's page |
 | `troubleshooting.md` | What you see, why, the exact fix |
 
 ## The story stays true to the day

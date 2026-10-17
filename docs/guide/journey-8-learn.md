@@ -74,11 +74,11 @@ A result you can reproduce is worth more than a bigger one you cannot. Say what 
 
 | Verb | What it does |
 |---|---|
-| [`experiment`](../../skills/experiment/SKILL.md) | Designs an A/B test for a Feature: what you expect, what you measure, and how many people you need. |
-| [`readout`](../../skills/readout/SKILL.md) | Reads out an experiment once it has enough people, and writes down the measured lift. |
-| [`retro`](../../skills/retro/SKILL.md) | Compares plans with what happened and files what to improve as feedback you can accept or reject. |
-| [`measure`](../../skills/measure/SKILL.md) | Measures a Goal against its baseline, the same way as before, and writes the result into the Goal. |
-| [`evolve`](../../skills/evolve/SKILL.md) | Turns accepted feedback into a test for a skill, then a skill change that passes it, for a person to review. |
+| [`experiment`](skills/experiment.md) | Designs an A/B test for a Feature: what you expect, what you measure, and how many people you need. |
+| [`readout`](skills/readout.md) | Reads out an experiment once it has enough people, and writes down the measured lift. |
+| [`retro`](skills/retro.md) | Compares plans with what happened and files what to improve as feedback you can accept or reject. |
+| [`measure`](skills/measure.md) | Measures a Goal against its baseline, the same way as before, and writes the result into the Goal. |
+| [`evolve`](skills/evolve.md) | Turns accepted feedback into a test for a skill, then a skill change that passes it, for a person to review. |
 
 <!-- END GENERATED: stage-verbs -->
 

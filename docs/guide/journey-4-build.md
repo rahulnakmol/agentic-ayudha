@@ -70,14 +70,14 @@ Checking every small step is cheaper than reviewing one big change. And a clear 
 
 | Verb | What it does |
 |---|---|
-| [`build`](../../skills/build/SKILL.md) | Writes the code for a Ready story in small checked steps, one layer at a time, and opens a pull request. |
-| [`research`](../../skills/research/SKILL.md) | Collects design references and user research for a Feature. |
-| [`wireframe`](../../skills/wireframe/SKILL.md) | Sketches the screens a Feature needs, from its research and promises. |
-| [`mockup`](../../skills/mockup/SKILL.md) | Turns wireframes into mockups that use your design system. |
-| [`prototype`](../../skills/prototype/SKILL.md) | Builds a working prototype behind a flag and compares it with the design. |
-| [`review`](../../skills/review/SKILL.md) | Critiques a pull request's screens with a model and with fixed accessibility checks. |
-| [`polish`](../../skills/polish/SKILL.md) | Applies a design critique to a pull request and reviews it again. |
-| [`baseline`](../../skills/baseline/SKILL.md) | Captures reference screenshots of a commit to compare later changes against. |
+| [`build`](skills/build.md) | Writes the code for a Ready story in small checked steps, one layer at a time, and opens a pull request. |
+| [`research`](skills/research.md) | Collects design references and user research for a Feature. |
+| [`wireframe`](skills/wireframe.md) | Sketches the screens a Feature needs, from its research and promises. |
+| [`mockup`](skills/mockup.md) | Turns wireframes into mockups that use your design system. |
+| [`prototype`](skills/prototype.md) | Builds a working prototype behind a flag and compares it with the design. |
+| [`review`](skills/review.md) | Critiques a pull request's screens with a model and with fixed accessibility checks. |
+| [`polish`](skills/polish.md) | Applies a design critique to a pull request and reviews it again. |
+| [`baseline`](skills/baseline.md) | Captures reference screenshots of a commit to compare later changes against. |
 
 <!-- END GENERATED: stage-verbs -->
 
