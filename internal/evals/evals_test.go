@@ -1660,6 +1660,9 @@ func TestTier1TellRules(t *testing.T) {
 		{"tell/launch-saved-filters", "# Saved filters\n\nSaved filters (#15) save your team hours every week.\n", "scope: adds a time saving no measure counts"},
 		{"tell/launch-saved-filters", "# Saved filters\n\nSaved filters (#15). More for teams is coming soon.\n", "scope: adds a hint at a Feature without authoritative packs"},
 		{"tell/launch-saved-filters", "# Spring\n\nReview claims together.\n", "launch copy links no proven Feature"},
+		{"tell/launch-saved-filters", "# Saved filters\n\nSaved filters (#15) cuts review time.\n", "scope: adds a time saving no measure counts"},
+		// D-7.5d: the Feature's own name and a time word near "save" are not a saving.
+		{"tell/launch-saved-filters", "# Saved filters\n\nNext time, open it from Saved filters (#15). Save it once and reopen it any time.\n", ""},
 	} {
 		c, ok := byID[tc.id]
 		if !ok {
@@ -1669,7 +1672,7 @@ func TestTier1TellRules(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := checkTell(c, g, b, u, tc.draft); !strings.Contains(strings.Join(got, "\n"), tc.want) {
+		if got := checkTell(c, g, b, u, tc.draft); (tc.want == "") != (len(got) == 0) || !strings.Contains(strings.Join(got, "\n"), tc.want) {
 			t.Errorf("%s: %q, want %q", tc.id, got, tc.want)
 		}
 	}
