@@ -13,6 +13,7 @@ It never gives a shell command against production.
 - Catalog action `deploy-claims-api`: Deploy one revision of claims-api.; argv deploy/deploy.sh {revision}; params revision (string ^[0-9a-f]{7,40}$); approval human; environments production; max 4/h; rollback rollback-claims-api; blast radius service (ops/actions.toml)
 - Catalog action `rollback-claims-api`: Redeploy the revision the current deploy replaced.; argv deploy/deploy.sh --rollback; params none recorded; approval human; environments production; max 2/h; rollback deploy-claims-api; blast radius service (ops/actions.toml)
 - Catalog action `restart-claims-api`: Restart the claims-api pods one at a time.; argv deploy/restart.sh; params none recorded; approval human; environments production; max 2/h; rollback none; blast radius service (ops/actions.toml)
+- Release gate: each catalog action named as a rollback needs one successful aayudha-ops run before `aayu release` ships (ops/actions.toml)
 - SLO `claim-submit-availability`: claims-api for "A member submits a claim and gets a confirmation" (/api/claims, availability): availability (no server error) ≥ 99.5 % over 28d; alert page when the 1h burn rate exceeds 14.4; runbook ops/runbooks/claim-submit-errors.md (ops/slos.toml)
 - SLO `claim-submit-latency`: claims-api for "A member submits a claim and gets a confirmation" (/api/claims, latency): latency at most 1500ms ≥ 95 % over 28d; alert ticket when the 6h burn rate exceeds 6; runbook none recorded (ops/slos.toml)
 

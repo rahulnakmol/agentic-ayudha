@@ -106,10 +106,17 @@ Start from the journey that matters most to the people who use the product, not 
 - **SLI.** `availability` (the share of requests with no server error) or `latency` (the share faster than a
   threshold, such as `500ms`), on the route that serves the journey.
 - **Objective.** Below 100 %: the gap is the error budget. Pick it from the measured baseline (cite the query) and
-  what users tolerate; never above what the system achieves today without a plan to get there.
+  what users tolerate; never above what the system achieves today without a plan to get there. An objective chosen
+  without a full-window baseline starts `Assumption:` with the reason.
 - **Window.** A rolling window, usually `28d`.
 - **Alert.** On burn rate, not single errors: for example page when the 1h burn rate exceeds 14.4 and the 6h one
-  exceeds 6, and open a ticket on a slow burn. Each alert names its runbook (`aayu runbook`).
+  exceeds 6, and open a ticket on a slow burn. Each alert names its runbook (`aayu runbook`). Never claim an alert
+  would have fired unless the grounding's measured burn rates at its windows exceed its thresholds.
+- **Budget left.** When the measured span is shorter than the window, the budget left over the window is unknown:
+  state the allowance (100 % minus the objective, of the window's events), what the span showed for itself, and the
+  last recorded value if there is one. Never extrapolate a short span to the window, and never record (`--record`) a
+  partial export that holds an incident as the window's budget; the weekly record needs an export that covers the
+  window.
 
 ## 3. The budget policy
 
@@ -142,14 +149,14 @@ runbook = "ops/runbooks/ask-errors.md"
 
 **What the check reads as a citation**, in the same paragraph, list item, or table row as the claim: `query qN`; the
 incident as `#N` (its body, timeline, investigation note, and comments are all `#N`); a commit in backticks; a
-`path:line`; a file the grounding names, such as `ops/actions.toml`, `ops/slos.toml`, `slo/status.json` (only when the grounding shows a recorded status), or `traces.jsonl` (a measured SLO). Words such as "(grounding)",
+`path:line`; a file the grounding itself shows: `ops/slos.toml`, `slo/status.json` (only when the grounding shows a recorded status), or `traces.jsonl` (a measured SLO), and no other. Words such as "(grounding)",
 "(investigation note)", or "(export …)" are not citations. A number you work out cites the sources of its inputs. A
 proposal (a test to add, a fix and its rollback, an alert, an action and its Bug or Story) cites the evidence it
 answers, such as the `path:line` it fixes or `#N`. Never cite a file that does not exist yet (a runbook you propose,
 the file you save the draft in). What you cannot cite starts `Unverified:` or `Assumption:`. The document is its
 title and its parts only: no preamble before it, and no steps for the reader (how to check, save, or open a pull
 request) inside it. The release gate is a fact of `ops/slos.toml` in the
-grounding. A startup SLO line is at most 400 words of prose. Check the draft with `aayu slo --telemetry <dir> --draft <file>`: it refuses (exit 4) a missing part, the
+grounding. A startup SLO line is at most 400 words of prose, so aim for about 300. Check the draft with `aayu slo --telemetry <dir> --draft <file>`: it refuses (exit 4) a missing part, the
 wrong title, an uncited claim, an objective without a percentage or a window, no burn-rate alert, no release policy,
 an SLO of `ops/slos.toml` the objectives do not name, and a toml block that does not parse. Once it passes and the
 person agrees, `--create` writes the block to `ops/slos.toml` in the checkout; they open the pull request (a protected

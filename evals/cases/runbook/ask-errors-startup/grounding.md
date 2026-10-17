@@ -12,6 +12,7 @@ It never gives a shell command against production.
 
 - Catalog action `deploy-benefits-qa`: Deploy one revision of benefits-qa.; argv examples/benefits-qa/deploy/deploy.sh {revision}; params revision (string ^[0-9a-f]{7,40}$); approval human; environments production; max 4/h; rollback rollback-benefits-qa; blast radius service (ops/actions.toml)
 - Catalog action `rollback-benefits-qa`: Redeploy the revision the current deploy replaced (the deploy marker's previous).; argv examples/benefits-qa/deploy/deploy.sh --rollback; params none recorded; approval human; environments production; max 2/h; rollback deploy-benefits-qa; blast radius service (ops/actions.toml)
+- Release gate: each catalog action named as a rollback needs one successful aayudha-ops run before `aayu release` ships (ops/actions.toml)
 - SLO `ask-availability`: benefits-qa for "An employee asks a benefits question and gets a cited answer" (/api/ask, availability): availability (no server error) ≥ 99.5 % over 28d; alert page when the 1h burn rate exceeds 14.4; ticket when the 6h burn rate exceeds 6; runbook ops/runbooks/ask-errors.md (ops/slos.toml)
 
 Alerting SLOs with no runbook yet: ask-availability.
