@@ -354,7 +354,7 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 				s.syms, s.calls = lineSymbols(f.Path, code, lang.Name)
 			default:
 				s.syms, s.calls = braceSymbols(f.Path, code, lang.Name)
-				if strings.HasSuffix(f.Path, ".h") || strings.HasSuffix(f.Path, ".hpp") || strings.HasSuffix(f.Path, ".hh") {
+				if isHeader(f.Path) {
 					for k := range s.syms {
 						s.syms[k].Public = s.syms[k].Public && !isDefKind(s.syms[k].Kind) || s.syms[k].Public && strings.Contains(s.syms[k].Name, "::")
 					}

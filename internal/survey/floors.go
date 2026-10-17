@@ -91,7 +91,8 @@ func entryName(ix *Index, e Fact) string {
 // program (main or script entries), each case set names the runners that run
 // it (a program, or a test harness that drives the library); every input it names is a file of the checkout; and every builtin its
 // cases call (in an input file, or named in the case set's title or
-// comparison) is registered by each of its runners. A builtin is a name a source file registers for the
+// comparison) is registered by each of its runners. With no inputs named,
+// the checkout's test files the case set draws on (from) are its inputs. A builtin is a name a source file registers for the
 // program it embeds (Index.Builtins); a runner registers it when the
 // registration is reachable from the runner's main through the call graph.
 func checkRunners(ix *Index, m *Modernisation, add func(string, ...any)) {
@@ -131,7 +132,15 @@ func checkRunners(ix *Index, m *Modernisation, add func(string, ...any)) {
 			}
 		}
 		files := map[string]bool{}
-		for _, in := range g.Inputs {
+		inputs := g.Inputs
+		if len(inputs) == 0 { // the checkout's test files the case set draws on are its inputs
+			for _, from := range g.From {
+				if slices.ContainsFunc(ix.Tests, func(e Fact) bool { return e.ID == from }) && !slices.ContainsFunc(g.Runners, func(r string) bool { return r == from }) {
+					inputs = append(inputs, strings.TrimPrefix(from, "test:"))
+				}
+			}
+		}
+		for _, in := range inputs {
 			n := 0
 			for _, f := range ix.Files {
 				if ok, _ := path.Match(in, f.Path); ok || in == f.Path {
@@ -215,6 +224,13 @@ func runnerReach(ix *Index) (reach func(Fact, []Fact) bool, drives func(Fact) bo
 		for _, s := range byFile[f] {
 			if isDefKind(s.Kind) && (s.At == r.At || r.Kind == "script") {
 				queue = append(queue, s.ID)
+			}
+		}
+		if len(queue) == 0 { // a main guard at file scope (__main__): it may call any function of its file
+			for _, s := range byFile[f] {
+				if isDefKind(s.Kind) {
+					queue = append(queue, s.ID)
+				}
 			}
 		}
 		for len(queue) > 0 {
