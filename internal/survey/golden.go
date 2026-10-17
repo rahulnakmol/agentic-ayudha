@@ -33,6 +33,10 @@ type Case struct {
 	Cwd     string   `json:"cwd,omitempty"`     // relative to the surveyed checkout; default its root
 	Compare []string `json:"compare,omitempty"` // stdout, stderr, exit; default all three
 	Timeout int      `json:"timeout_s,omitempty"`
+	// Env is what the case needs beyond the hermetic default (PATH, a scratch
+	// HOME, LC_ALL=C, TZ=UTC), as NAME=value: GEM_PATH, JAVA_HOME, a config
+	// file's variable. Each one is a dependency the survey can cite.
+	Env []string `json:"env,omitempty"`
 	// Area groups a compatibility suite's tests for its score (--compat);
 	// Unfixable says why a test can never pass on the new build, so it is
 	// left out of the score.
@@ -112,6 +116,11 @@ func ParseCases(b []byte) (Cases, []string, error) {
 				add("case %s: compare %q is not stdout, stderr, or exit", k.ID, s)
 			}
 		}
+		for _, kv := range k.Env {
+			if name, _, ok := strings.Cut(kv, "="); !ok || name == "" {
+				add("case %s: env %q is not NAME=value", k.ID, kv)
+			}
+		}
 		if k.Timeout < 0 || k.Timeout > 600 {
 			add("case %s: timeout_s is 1 to 600 (default 30)", k.ID)
 		}
@@ -143,7 +152,7 @@ func runCase(ctx context.Context, root, bin, home string, k Case, env ...string)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	cmd.Dir = filepath.Join(root, k.Cwd)
-	cmd.Env = withEnv([]string{"PATH=" + os.Getenv("PATH"), "HOME=" + home, "LC_ALL=C", "LANG=C", "TZ=UTC"}, env)
+	cmd.Env = withEnv(withEnv([]string{"PATH=" + os.Getenv("PATH"), "HOME=" + home, "LC_ALL=C", "LANG=C", "TZ=UTC"}, k.Env), env)
 	var out, errb capped
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	if k.Stdin != "" {

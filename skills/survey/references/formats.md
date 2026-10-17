@@ -145,3 +145,7 @@ a misspelt field never silently drops a claim.
 - `argv` must run `{bin}`, the `--bin` program; an interpreter may come first.
 - `stdin` and `cwd` are paths inside the surveyed checkout; commit the inputs with the cases file.
 - `compare`: any of `stdout`, `stderr`, `exit`; default all three. Compare less only with a reason in the case set.
+- A case runs hermetically: `PATH`, a scratch `HOME`, `LC_ALL=C`, and `TZ=UTC`, nothing else from the caller.
+  `env` adds what it needs as `NAME=value` (`GEM_PATH`, `JAVA_HOME`, a variable the program reads); each one is
+  an environment dependency the survey records. A JVM or Python under `LC_ALL=C` writes non-ASCII output as `?`;
+  when the locale probe shows that, capture with `"env": ["LC_ALL=C.UTF-8"]` so the goldens are not lossy.

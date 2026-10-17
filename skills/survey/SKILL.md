@@ -95,7 +95,7 @@ aayu:
       type: string
       required: false
       positional: false
-      description: "With --probe: a sanitiser or checker build of the legacy program; cases whose stderr carries a checker report are recorded."
+      description: "With --probe: a sanitiser, checker, or differently optimised build of the legacy program; cases whose stderr carries a checker report, or whose stdout or exit code differs from the capture, are recorded."
     - name: coverage
       type: path
       required: false
@@ -243,6 +243,15 @@ Write `survey.json` ([references/formats.md](references/formats.md) has every fi
   replaces. [references/modernisation.md](references/modernisation.md) has notes per stack (C++ to Rust, PHP in
   place, Fortran, Ruby, VB6, COBOL, and others).
 
+Before you check it, review the scope of every claim against the code, not against your notes. For each claim with
+never, always, only, every, all, none, or cannot, and each claim about what happens after an error, name the path
+that would make it false and look at it: another entry point or argument (a runner that skips files when it
+discovers them may still run a file named on its command line), a helper that differs from the constructor (a
+registration function may add what the default set lacks), an error handler that throws rather than continues, a
+caller in another module. Then write the claim for the scope it holds in ("discovery skips …", "the command-line
+runner registers …"), or make it a risk to check or a question. Quote output and error text only from the line that
+prints it, for the path that prints it.
+
 Check it, and fix every problem the check reports:
 
 `aayu survey --draft survey.json`
@@ -312,7 +321,8 @@ Before any line of the legacy system changes, capture what it does:
    which exits 3 on any difference and names the first differing line.
 4. Gather the evidence the code alone cannot give, before writing the traps: add `--probe` to the capture (each case
    twice for non-determinism, under a changed TZ, locale, and HOME, and under strace for files read and written),
-   `--check-bin <sanitiser or checker build>` for memory and undefined-behaviour reports, and `--coverage <lcov file>`
+   `--check-bin <sanitiser or checker build>` for memory and undefined-behaviour reports (a build with the project's
+   release flags shows whether they change results: any stdout or exit difference is recorded), and `--coverage <lcov file>`
    from running the cases under coverage for the functions they never reach. Each finding is a `probe:` fact the
    draft cites; a probe that could not run says so.
 5. When the project has its own test suite, make it the compatibility reference: a cases file with one test per

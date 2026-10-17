@@ -156,7 +156,7 @@ func TestSurveyGoldenParity(t *testing.T) {
 	t.Setenv("GH_TOKEN", "sekrit-token")
 	script := func(name, warn string) string {
 		p := filepath.Join(dir, name)
-		body := "#!/bin/sh\nread x\necho \"out:$1:$x:${GH_TOKEN}\"\necho " + warn + " >&2\nexit $2\n"
+		body := "#!/bin/sh\nread x\necho \"out:$1:$x:${GH_TOKEN}${MODE}\"\necho " + warn + " >&2\nexit $2\n"
 		if err := os.WriteFile(p, []byte(body), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -169,7 +169,7 @@ func TestSurveyGoldenParity(t *testing.T) {
 	cases := filepath.Join(dir, "cases.json")
 	if err := os.WriteFile(cases, []byte(`{"cases": [
   {"id": "c1", "set": "G1", "argv": ["{bin}", "a", "0"], "stdin": "in.txt"},
-  {"id": "c2", "set": "G1", "argv": ["{bin}", "b", "3"], "stdin": "in.txt", "compare": ["stdout", "exit"]}
+  {"id": "c2", "set": "G1", "argv": ["{bin}", "b", "3"], "stdin": "in.txt", "compare": ["stdout", "exit"], "env": ["MODE=strict"]}
 ]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -191,6 +191,9 @@ func TestSurveyGoldenParity(t *testing.T) {
 	}
 	if b, err := os.ReadFile(filepath.Join(out, "golden", "cases", "c1.stdout")); err != nil || string(b) != "out:a:hello:\n" {
 		t.Fatalf("golden c1.stdout = %q, %v (the token must not reach the program)", b, err)
+	}
+	if b, err := os.ReadFile(filepath.Join(out, "golden", "cases", "c2.stdout")); err != nil || string(b) != "out:b:hello:strict\n" {
+		t.Fatalf("golden c2.stdout = %q, %v (the case's env reaches its program, and only its own)", b, err)
 	}
 
 	if code, _, stderr := run(t, nil, opts, append(base, "--parity", cases, "--bin", same, "--run")...); code != 0 {

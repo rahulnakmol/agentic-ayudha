@@ -36,7 +36,9 @@ var trapRules = []trapRule{
 	{name: "fortran-goto", langs: []string{"fortran"}, re: regexp.MustCompile(`\bgo[ \t]*to\b`)},
 	{name: "fortran-arithmetic-if", langs: []string{"fortran"}, re: regexp.MustCompile(`\bif[ \t]*\([^\n]*\)[ \t]*\d+[ \t]*,[ \t]*\d+[ \t]*,[ \t]*\d+`)},
 	{name: "fortran-entry", langs: []string{"fortran"}, re: regexp.MustCompile(`(?m)^[ \t]*entry[ \t]+\w+`)},
-	{name: "fortran-assumed-size", langs: []string{"fortran"}, re: regexp.MustCompile(`(?m)^[ \t]*(?:dimension|real|integer|double[ \t]*precision|complex|logical|character)\b[^\n]*\w[ \t]*\((?:[^()\n]*,)?[ \t]*\*[ \t]*\)`)},
+	{name: "fortran-assumed-size", langs: []string{"fortran"}, re: regexp.MustCompile(`(?m)^[ \t]*(?:dimension|real|integer|double[ \t]*precision|complex|logical|character)\b[^\n]*\w[ \t]*\((?:[^()\n]*,)?[ \t]*\*[ \t]*\)`), skip: func(m string) bool {
+		return strings.Contains(strings.ToLower(m), "parameter") // an implied-shape constant, y(*) = [...]
+	}},
 	{name: "fortran-custom-bounds", langs: []string{"fortran"}, re: regexp.MustCompile(`(?m)^[ \t]*(?:dimension|real|integer|double[ \t]*precision|complex|logical|character|type[ \t]*\()[^\n]*\([ \t]*(?:-[ \t]*\d+|0|[a-z]\w*)[ \t]*:`)},
 	{name: "fortran-single-precision", langs: []string{"fortran"}, re: regexp.MustCompile(`(?m)^[ \t]*real[ \t]*(?:\*[ \t]*4)?(?:[ \t]*,|[ \t]*::|[ \t]+[a-z])`)},
 	{name: "fortran-machine-constants", langs: []string{"fortran"}, re: regexp.MustCompile(`\b(?:d1mach|r1mach|i1mach|dpmpar|epsilon|tiny|huge)[ \t]*\(`)},
@@ -73,7 +75,7 @@ var trapRules = []trapRule{
 	{name: "java-serialization", langs: []string{"java", "kotlin", "scala"}, re: regexp.MustCompile(`\bimplements\b[^{]*\bSerializable\b|\b(?:ObjectInputStream|ObjectOutputStream|Externalizable)\b|\bserialVersionUID\b|\b(?:readObject|writeObject|readResolve|writeReplace)[ \t]*\(`)},
 	{name: "java-jni", langs: []string{"java", "kotlin"}, re: regexp.MustCompile(`\bnative[ \t]+[\w<>\[\]]+[ \t]+\w+[ \t]*\(|System\.load(?:Library)?[ \t]*\(`)},
 	{name: "java-default-charset", langs: []string{"java", "kotlin", "scala", "groovy"}, re: regexp.MustCompile(`\.getBytes[ \t]*\([ \t]*\)|new[ \t]+(?:InputStreamReader|OutputStreamWriter|FileReader|FileWriter|PrintStream|PrintWriter|Scanner)[ \t]*\([^,()]*(?:\([^()]*\))?[^,()]*\)|Charset\.defaultCharset`)},
-	{name: "java-default-locale", langs: []string{"java", "kotlin", "scala", "groovy"}, re: regexp.MustCompile(`\.to(?:Lower|Upper)Case[ \t]*\([ \t]*\)|String\.format[ \t]*\([ \t]*"|Locale\.getDefault|new[ \t]+SimpleDateFormat[ \t]*\([ \t]*"[^"]*"[ \t]*\)|NumberFormat\.get\w*Instance[ \t]*\([ \t]*\)|new[ \t]+DecimalFormat\b`)},
+	{name: "java-default-locale", langs: []string{"java", "kotlin", "scala", "groovy"}, re: regexp.MustCompile(`\.to(?:Lower|Upper)Case[ \t]*\([ \t]*\)|String\.format[ \t]*\([ \t]*"|import[ \t]+static[ \t]+java\.lang\.String\.format\b|Locale\.getDefault|new[ \t]+SimpleDateFormat[ \t]*\([ \t]*"[^"]*"[ \t]*\)|NumberFormat\.get\w*Instance[ \t]*\([ \t]*\)|new[ \t]+DecimalFormat\b`)},
 	{name: "java-default-timezone", langs: []string{"java", "kotlin", "scala", "groovy"}, re: regexp.MustCompile(`TimeZone\.(?:getDefault|setDefault)|new[ \t]+Date[ \t]*\([ \t]*\)|Calendar\.getInstance[ \t]*\([ \t]*\)|\b(?:LocalDate|LocalDateTime|LocalTime)\.now[ \t]*\([ \t]*\)|ZoneId\.systemDefault`)},
 	{name: "java-threads", langs: []string{"java", "kotlin", "scala"}, re: regexp.MustCompile(`\bsynchronized\b|\bvolatile\b|new[ \t]+Thread[ \t]*\(|\bThreadLocal\b|\bExecutorService\b|\.wait[ \t]*\([ \t]*\)|\.notify(?:All)?[ \t]*\(`)},
 	{name: "java-mutable-static", langs: []string{"java"}, re: regexp.MustCompile(`(?m)^[ \t]*(?:(?:public|private|protected)[ \t]+)?static[ \t]+(?:(?:transient|volatile|final)[ \t]+)?[\w<>\[\], .?]+[ \t]+\w+[ \t]*(?:=|;)`), skip: func(m string) bool {

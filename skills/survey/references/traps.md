@@ -258,8 +258,9 @@ pattern the index can match; ask them of every module in that stack.
 
 ### java-default-locale
 
-- `toLowerCase()`, `toUpperCase()`, `String.format`, and number or date formatting without a `Locale` follow the
-  default locale (the Turkish dotless i, the decimal comma). Pin the locale in the goldens and decide which the new
+- `toLowerCase()`, `toUpperCase()`, `String.format` (also a static-imported `format`), and number or date formatting
+  without a `Locale` follow the default locale (the Turkish dotless i, the decimal comma; `%d` prints the locale's
+  digits, Arabic-Indic in some locales). Pin the locale in the goldens and decide which the new
   version uses.
 
 ### java-default-timezone

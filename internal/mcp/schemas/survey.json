@@ -20,7 +20,7 @@
       "x-aayu-type": "int"
     },
     "check-bin": {
-      "description": "With --probe: a sanitiser or checker build of the legacy program; cases whose stderr carries a checker report are recorded.",
+      "description": "With --probe: a sanitiser, checker, or differently optimised build of the legacy program; cases whose stderr carries a checker report, or whose stdout or exit code differs from the capture, are recorded.",
       "type": "string",
       "x-aayu-type": "string"
     },

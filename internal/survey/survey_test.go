@@ -227,6 +227,7 @@ func TestKeywordLanguages(t *testing.T) {
 		"sym:src/solver.f#solve":                 "program src/solver.f:2-10",
 		"sym:src/solver.f#step":                  "subroutine src/solver.f:20-26", // a continued argument list
 		"sym:src/solver.f#fnorm":                 "function src/solver.f:27-32",   // a typed function
+		"sym:src/drv.f#drv":                      "program src/drv.f:2-9",         // a main program with no PROGRAM statement
 		"sym:lib/grid.f90#grid":                  "module lib/grid.f90:2-22",
 		"sym:lib/grid.f90#grid::area":            "function lib/grid.f90:14-18", // pure, with result()
 		"sym:lib/grid.f90#grid::clear":           "subroutine lib/grid.f90:19-21",
@@ -240,6 +241,14 @@ func TestKeywordLanguages(t *testing.T) {
 			t.Errorf("%s = %q, want %q", id, got, want)
 		}
 	}
+	if _, ok := sym["sym:src/params.inc#params"]; ok {
+		t.Error("an include file's declarations are a main program")
+	}
+	for _, id := range []string{"entry:src/drv.f:2", "io:unit-io:src/drv.f:5"} { // READ (NREAD, …): a unit chosen at run time
+		if err := ix.Resolve(id); err != nil {
+			t.Error(err)
+		}
+	}
 	if _, ok := sym["sym:src/units.pas#fake"]; ok {
 		t.Error("a procedure inside a { } comment is a symbol")
 	}
@@ -250,6 +259,7 @@ func TestKeywordLanguages(t *testing.T) {
 	for _, want := range []string{
 		"call sym:src/solver.f#step sym:src/solver.f#init",                                   // CALL in a fixed-form unit (sequence columns ignored)
 		"call sym:src/solver.f#solve sym:src/solver.f#fnorm",                                 // a function reference, not a CALL
+		"call sym:src/drv.f#drv sym:src/solver.f#init",                                       // ... and from the unnamed main program
 		"call sym:lib/grid.f90#main sym:lib/grid.f90#grid::resize",                           // a program calls a module procedure
 		"call sym:lib/grid.f90#grid::resize sym:lib/grid.f90#grid::clear",                    // ... and the procedure, not its module, calls on
 		"call sym:src/billing.cbl#billing::main-para sym:src/billing.cbl#billing::calc-exit", // PERFORM … THRU
@@ -293,7 +303,7 @@ func TestKeywordLanguages(t *testing.T) {
 		}
 	}
 	// STEP and FNORM declare IMPLICIT NONE; module procedures inherit the module's.
-	for _, no := range []string{"trap:fortran-implicit-typing:src/solver.f:20", "trap:fortran-implicit-typing:src/solver.f:27", "trap:fortran-implicit-typing:lib/grid.f90:9"} {
+	for _, no := range []string{"trap:fortran-implicit-typing:src/solver.f:20", "trap:fortran-implicit-typing:src/solver.f:27", "trap:fortran-implicit-typing:lib/grid.f90:9", "trap:fortran-assumed-size:lib/grid.f90:28"} {
 		if traps[no] {
 			t.Errorf("unexpected trap %s", no)
 		}

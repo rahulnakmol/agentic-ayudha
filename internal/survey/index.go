@@ -180,6 +180,8 @@ var langSurfaceRules = map[string][]struct {
 		{"time", regexp.MustCompile(`\b(?:cpu_time|date_and_time|system_clock|etime|dtime|secnds)\b`)},
 		{"random", regexp.MustCompile(`\b(?:random_number|random_seed|rand|ran|irand)\s*\(`)},
 		{"dynamic-dispatch", regexp.MustCompile(`(?m)^\s*external\b|\bprocedure\s*\(\s*\w*\s*\)\s*,\s*pointer`)},
+		// A unit number held in a variable (data nread /5/): stdin, stdout, a file, or an internal file, decided at run time.
+		{"unit-io", regexp.MustCompile(`\b(?:read|write)\s*\(\s*(?:unit\s*=\s*)?[a-z]\w*\s*[,)]`)},
 	},
 	"cobol": {
 		{"file", regexp.MustCompile(`\bselect\b[^.]*\bassign\b|\b(?:open|read|write|rewrite|delete)\s+(?:input|output|i-o|extend)?\s*[a-z]`)},
