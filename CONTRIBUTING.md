@@ -216,6 +216,13 @@ generated from it by `go generate ./...`:
 embedded in the binary (WP0.5). The generator in `internal/config/gen` holds each key's meaning and plan source
 and fails if a key is added or removed without updating it.
 
+Appendix B of the build plan, the deviations and decisions recorded while implementing it, is one file per row
+under `docs/appendix-b/` (`<NNN>-<section>/<NNN>-<ID>.md`; [docs/appendix-b/README.md](docs/appendix-b/README.md)
+has the format). Add a row as a new file, never in `docs/BUILD-PLAN.md`: two branches that each add a file merge
+without a conflict. `go generate ./...` checks every row (an ID used twice fails it), keeps the generated end of
+Appendix B in `docs/BUILD-PLAN.md`, and moves a row written there by hand into its own file and says so. Print the
+whole appendix as tables with `go run ./internal/appendixb/gen -print`.
+
 Do not edit generated output by hand. Change the registry, run `go generate ./...`, and commit both. The CI
 job `generate-drift` fails on any difference.
 

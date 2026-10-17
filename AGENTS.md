@@ -8,7 +8,7 @@ the end is generated (WP5.1); the full table is [docs/RACI.md](docs/RACI.md).
 
 - Scope and sequencing: [docs/BUILD-PLAN.md](docs/BUILD-PLAN.md). Work one work package (WP) at a time and meet
   its acceptance as written. Where the plan cannot be enforced as written, build the closest enforceable
-  alternative and add a row to Appendix B named after the WP (`D-1.2a`, …).
+  alternative and add an Appendix B row named after the WP (`D-1.2a`, …), as a file (see "Appendix B rows" below).
 - Principles: [ETHOS.md](ETHOS.md). Terms: [GLOSSARY.md](GLOSSARY.md). Threats: [docs/threat-model.md](docs/threat-model.md).
 - A feature planned for a later WP is "n/a until WPx.y" (rule 1a). Do not build ahead; do not report it as a
   failure.
@@ -38,7 +38,16 @@ the end is generated (WP5.1); the full table is [docs/RACI.md](docs/RACI.md).
   - from `internal/verbs/registry.go`: the tables in `docs/README.md`, `LAYERS.md`, `docs/RACI.md`, `skills/*/SKILL.md`
     frontmatter, `internal/mcp/schemas/*.json`;
   - from `internal/config/defaults.toml` (the embedded base config layer): `CONSTRAINTS.md`. A new key in a
-    rendered section needs a row in `internal/config/gen`, or generation fails.
+    rendered section needs a row in `internal/config/gen`, or generation fails;
+  - from `docs/appendix-b/`: the end of Appendix B in `docs/BUILD-PLAN.md`, a pointer to the rows.
+
+- Appendix B rows: one file per row, `docs/appendix-b/<NNN>-<section>/<NNN>-<ID>.md`; never a row in
+  `docs/BUILD-PLAN.md`, so parallel branches add files instead of colliding in one table. Add the file with the next
+  free number in your WP's section (or start a section directory with its `README.md`), an ID no other row uses
+  (`ls docs/appendix-b/*/*-<ID>.md` finds nothing), and the format in
+  [docs/appendix-b/README.md](docs/appendix-b/README.md). `go generate ./...` fails on a duplicate ID and moves a
+  row written in `docs/BUILD-PLAN.md` into its own file; on a rebase conflict there, keep both sides and run it.
+  Print every row as tables with `go run ./internal/appendixb/gen -print`.
 
 ## Branches, PRs, commits
 
