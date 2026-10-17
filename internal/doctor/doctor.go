@@ -96,6 +96,7 @@ var Checks = []Check{
 	{"retired-workflows", checkRetiredWorkflows},
 	{"loops", checkLoops},
 	{"leases", checkLeases},
+	{"feedback-layers", checkFeedbackLayers},
 	{"coexistence", checkCoexistence},
 	{"telemetry", checkTelemetry},
 }

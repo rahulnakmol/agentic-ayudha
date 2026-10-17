@@ -37,7 +37,9 @@ type HookResult struct {
 // pauseFile is the [budget] breaker's pause file; event is the JSON the host
 // sent on stdin (nil when it sent none). The CLI checks halt (WP5.7) before it
 // runs pre-tool and answers with Deny itself when the repository is halted.
-func RunHook(name string, host verbs.HostID, root, pauseFile string, event []byte) (HookResult, error) {
+// notes are lines session-start adds after its own (the CLI's, from the last
+// home screen).
+func RunHook(name string, host verbs.HostID, root, pauseFile string, event []byte, notes ...string) (HookResult, error) {
 	switch name {
 	case "pre-tool":
 		msg, next := "", ""
@@ -63,6 +65,7 @@ func RunHook(name string, host verbs.HostID, root, pauseFile string, event []byt
 				msg = strings.TrimSpace(Routing + "\n" + msg)
 			}
 		}
+		msg = strings.TrimSpace(strings.Join(append([]string{msg}, notes...), "\n"))
 		if host == verbs.HostCursor {
 			if msg == "" {
 				return HookResult{Stdout: "{}\n"}, nil

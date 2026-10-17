@@ -10,6 +10,7 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/ui"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
+	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
 // Item is a work item or pull request the home screen lists.
@@ -61,6 +62,7 @@ type State struct {
 	AwaitingHuman []Item   `json:"awaiting_human"` // story PRs without a human pass
 	FailingFloors []Floor  `json:"failing_floors"`
 	MeasureDue    []Due    `json:"measure_due"`
+	Unclassified  []Item   `json:"unclassified_feedback"` // open Feedback with no fix:<layer> label (D-7.7e)
 }
 
 // Level is the adoption level the repository has reached (docs/guide/adopt.md).
@@ -234,6 +236,9 @@ func Render(p *ui.Printer, s State, next Step) {
 			p.Println(line)
 		}
 	}
+	if note := UnclassifiedNote(s.Unclassified); note != "" {
+		p.Println(p.Mark(ui.StatusWarn) + " " + note)
+	}
 	switch {
 	case s.GitHub == GitHubNoToken:
 		p.Println(p.Mark(ui.StatusWarn) + " GitHub: not signed in, so issues and pull requests are not shown.")
@@ -310,6 +315,16 @@ func journeyLine(p *ui.Printer, at verbs.StageID) string {
 		lead = p.Style(ui.Muted, "Journey  ")
 	}
 	return lead + strings.Join(parts, sep)
+}
+
+// UnclassifiedNote lists the open Feedback issues that have no fix layer with
+// the command that records one (D-7.7e); "" when there are none.
+func UnclassifiedNote(xs []Item) string {
+	if len(xs) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%d open Feedback issue(s) without a fix layer (%s); classify each by the highest layer that can fix it for good: `%s`",
+		len(xs), items(xs, "#"), workitems.ClassifyCommand)
 }
 
 func count(n int) string { return fmt.Sprint(n) }

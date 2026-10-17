@@ -284,13 +284,20 @@ classified by the highest layer that can fix its correction for good, with the r
 `aayu retro --classify <feedback> --layer <layer> --reason "…"` records it: a `fix:<layer>` label on the Feedback issue
 and one replace-in-place comment holding the reason. For `prose` and `review` it also needs `--not-catchable`, why no
 type, invariant, lint rule, or test can catch it. For the other three layers it needs `--criterion`, the Story's
-Completion Goal criterion, and files the Story once. The layer is a model judgement; aayu checks only that the
-record is complete. Running the command again reclassifies.
+Completion Goal criterion, and files the Story once. The Story carries the same `fix:<layer>` label, so fix work is
+filterable by layer. The layer is a model judgement; aayu checks only that the record is complete. Running the
+command again reclassifies, and the Story's label follows (a Story loses it when the correction moves to `prose`).
+
+Unclassified Feedback does not wait for evolve to refuse it. `aayu doctor`'s `feedback-layers` row, the home screen,
+the status line, and the session-start hook list every open Feedback issue without a `fix:<layer>` label, with the
+command that classifies it. The hook reads the last home screen and makes no network call, so it is as fresh as the
+last `aayu` or `aayu next`.
 
 evolve then refuses (exit 4) a Feedback issue that is unclassified, a `review` correction, or a `codebase` or `check`
 correction whose classification gives no `--not-catchable` reason, and only the Feedback it accepts counts toward
 the two-issue rule. Every retro report ends with a "Fix layer of Feedback" table that counts every Feedback issue by
-its label, unclassified included.
+its label, unclassified included, with the fix Stories that carry each layer's label and those shipped by the
+cursor.
 
 The `evolve` loop in `loops/evolve.toml` runs monthly, on the 2nd at 10:00 in `[time] tz`. It only lists the skills
 that have the evidence; it changes no skill itself.

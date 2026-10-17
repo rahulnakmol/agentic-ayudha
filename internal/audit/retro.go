@@ -69,15 +69,32 @@ type Retro struct {
 }
 
 // FixCount is the Feedback issues recorded at one fix layer (S-7.7d), or
-// "unclassified".
+// "unclassified", and the fix Stories that carry the layer's label (D-7.7e).
 type FixCount struct {
 	Layer    string `json:"layer"`
 	Feedback []int  `json:"feedback"`
+	Stories  []int  `json:"stories"` // fix Stories opened before the cursor
+	Shipped  []int  `json:"shipped"` // of those, the ones delivered by the cursor
 }
 
 // fixLayers counts every Feedback issue opened before the cursor by its
-// fix:<layer> label at the cursor.
+// fix:<layer> label at the cursor, and the Stories carrying that label.
 func (d *Data) fixLayers(in Inputs) []FixCount {
+	stories, shipped := map[string][]int{}, map[string][]int{}
+	delivered := map[int]bool{}
+	for _, s := range d.stories(in) {
+		delivered[s.Number] = s.PR == 0 || s.Merged.Before(in.Until)
+	}
+	for _, it := range d.Items {
+		l := workitems.FixLayerOf(it.Labels)
+		if it.PR || l == "" || !slices.Contains(it.Labels, "type:story") || !it.CreatedAt.Before(in.Until) {
+			continue
+		}
+		stories[l] = append(stories[l], it.Number)
+		if delivered[it.Number] {
+			shipped[l] = append(shipped[l], it.Number)
+		}
+	}
 	by := map[string][]int{}
 	for _, it := range d.Items {
 		if it.PR || !slices.Contains(it.Labels, "type:feedback") || !it.CreatedAt.Before(in.Until) {
@@ -91,7 +108,7 @@ func (d *Data) fixLayers(in Inputs) []FixCount {
 	}
 	out := []FixCount{}
 	for _, l := range append(slices.Clone(workitems.FixLayers), "unclassified") {
-		out = append(out, FixCount{Layer: l, Feedback: by[l]})
+		out = append(out, FixCount{Layer: l, Feedback: by[l], Stories: stories[l], Shipped: shipped[l]})
 	}
 	return out
 }
@@ -286,14 +303,17 @@ func (r *Retro) Markdown() []byte {
 	p("\n## Fix layer of Feedback\n\n")
 	p("Every Feedback issue opened before the cursor, by the highest layer that can fix its correction for good (ETHOS 10): a codebase or " +
 		"static-check correction becomes a Story, only a prose one goes to `aayu evolve`, and a review one changes what is surfaced for review. " +
-		"The layer is a judgement recorded with `aayu retro --classify`.\n\n")
-	p("| Layer | Feedback | Issues |\n|---|---|---|\n")
-	for _, f := range r.FixLayers {
-		var ns []string
-		for _, n := range f.Feedback {
-			ns = append(ns, fmt.Sprintf("#%d", n))
+		"The layer is a judgement recorded with `aayu retro --classify`. Fix Stories carry the same `fix:<layer>` label; shipped means delivered by the cursor.\n\n")
+	p("| Layer | Feedback | Issues | Fix Stories | Shipped |\n|---|---|---|---|---|\n")
+	refs := func(ns []int) string {
+		var out []string
+		for _, n := range ns {
+			out = append(out, fmt.Sprintf("#%d", n))
 		}
-		p("| %s | %d | %s |\n", f.Layer, len(f.Feedback), or(strings.Join(ns, ", "), "—"))
+		return or(strings.Join(out, ", "), "—")
+	}
+	for _, f := range r.FixLayers {
+		p("| %s | %d | %s | %d | %s |\n", f.Layer, len(f.Feedback), refs(f.Feedback), len(f.Stories), refs(f.Shipped))
 	}
 	p("\n## Floor misses\n\n")
 	if len(r.FloorMisses) == 0 {

@@ -103,22 +103,23 @@ func retroClassify(ctx context.Context, e *Env, in Values) error {
 			return Wrap(ExitExternal, err)
 		}
 	}
-	target := fmt.Sprintf("%s#%d", repo, n)
 	want := workitems.LabelFixPrefix + fl.Layer
-	for _, l := range labels {
-		if strings.HasPrefix(l, workitems.LabelFixPrefix) && l != want {
-			if err := removeLabel(ctx, c, repo, n, l); err != nil {
-				return Wrap(ExitExternal, err)
-			}
-		}
+	if err := setFixLabel(ctx, c, repo, n, labels, want); err != nil {
+		return Wrap(ExitExternal, err)
 	}
-	if !slices.Contains(labels, want) {
-		if _, err := c.Write(ctx, actions.Action{Kind: "github.issue.labels.add", Target: target, Seat: "engineering-manager",
-			Request: &actions.Request{Method: http.MethodPost, Path: fmt.Sprintf("/repos/%s/issues/%d/labels", repo, n)}, Payload: map[string]any{"labels": []string{want}}},
-			func(ctx context.Context) (any, error) {
-				_, _, err := c.REST.Issues.AddLabelsToIssue(ctx, owner, name, n, []string{want})
-				return nil, err
-			}); err != nil {
+	// The Story carries its Feedback's fix:<layer> label, so fix work is
+	// filterable and retro counts fix Stories shipped per layer (D-7.7e). A
+	// Story filed earlier follows a reclassification, and loses the label when
+	// the correction moves to prose, which no Story fixes.
+	if prev.Story != 0 {
+		st, _, err := c.REST.Issues.Get(ctx, owner, name, prev.Story)
+		if err != nil {
+			return Wrap(ExitExternal, err)
+		}
+		if fl.Layer == workitems.FixProse {
+			want = ""
+		}
+		if err := setFixLabel(ctx, c, repo, prev.Story, github.IssueLabels(st), want); err != nil {
 			return Wrap(ExitExternal, err)
 		}
 	}
@@ -143,6 +144,29 @@ func retroClassify(ctx context.Context, e *Env, in Values) error {
 	})
 }
 
+// setFixLabel makes want the only fix:<layer> label of issue n, whose labels
+// are labels; an empty want removes them all.
+func setFixLabel(ctx context.Context, c *github.Client, repo string, n int, labels []string, want string) error {
+	for _, l := range labels {
+		if strings.HasPrefix(l, workitems.LabelFixPrefix) && l != want {
+			if err := removeLabel(ctx, c, repo, n, l); err != nil {
+				return err
+			}
+		}
+	}
+	if want == "" || slices.Contains(labels, want) {
+		return nil
+	}
+	owner, name, _ := github.SplitRepo(repo)
+	_, err := c.Write(ctx, actions.Action{Kind: "github.issue.labels.add", Target: fmt.Sprintf("%s#%d", repo, n), Seat: "engineering-manager",
+		Request: &actions.Request{Method: http.MethodPost, Path: fmt.Sprintf("/repos/%s/issues/%d/labels", repo, n)}, Payload: map[string]any{"labels": []string{want}}},
+		func(ctx context.Context) (any, error) {
+			_, _, err := c.REST.Issues.AddLabelsToIssue(ctx, owner, name, n, []string{want})
+			return nil, err
+		})
+	return err
+}
+
 func proofOf(layer string) string {
 	switch layer {
 	case workitems.FixCodebase:
@@ -157,7 +181,7 @@ func proofOf(layer string) string {
 // correction where it belongs.
 func fileFixStory(ctx context.Context, c *github.Client, repo string, fb *gh.Issue, fl FixLayer, criterion, tag string) (int, error) {
 	owner, name, _ := github.SplitRepo(repo)
-	what := strings.TrimPrefix(fb.GetTitle(), audit.FeedbackPrefix)
+	what := strings.TrimPrefix(strings.TrimPrefix(fb.GetTitle(), audit.FeedbackPrefix), "Feedback: ")
 	title := fmt.Sprintf("Fix at the %s layer (Feedback #%d): %s", layerName[fl.Layer], fl.Feedback, what)
 	summary := fmt.Sprintf("Feedback #%d is a correction classified at the %s layer: %s\n\nThis Story fixes it there, so the mistake becomes "+
 		"impossible or caught rather than warned against in a skill. Its proof is the new %s that the Completion Goal names.", fl.Feedback, layerName[fl.Layer], fl.Reason, proofOf(fl.Layer))
@@ -168,7 +192,7 @@ func fileFixStory(ctx context.Context, c *github.Client, repo string, fb *gh.Iss
 	}
 	t, _ := workitems.FindType("story")
 	body := workitems.Render(t, map[string]string{workitems.FieldSummary: summary, workitems.FieldCriteria: criterion})
-	labels := []string{"type:story", "status:backlog"}
+	labels := []string{"type:story", "status:backlog", workitems.LabelFixPrefix + fl.Layer}
 	if tag != "" {
 		labels = append(labels, tag)
 	}

@@ -21,6 +21,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/journey"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
+	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
 func init() { register("next", runNext) }
@@ -57,7 +58,7 @@ func runNext(ctx context.Context, e *Env, _ Values) error {
 // fail the home screen: it says so and shows the local facts.
 func (e *Env) gatherHome(ctx context.Context) Home {
 	s := journey.State{Ready: []journey.Item{}, InProgress: []journey.Item{}, Blocked: []journey.Item{}, AwaitingHuman: []journey.Item{},
-		FailingFloors: []journey.Floor{}, MeasureDue: []journey.Due{}, Hosts: []string{}}
+		FailingFloors: []journey.Floor{}, MeasureDue: []journey.Due{}, Hosts: []string{}, Unclassified: []journey.Item{}}
 	s.Host, _ = doctor.DetectHost(e.Host, e.Getenv)
 	root := config.RepoRoot(e.Dir)
 	s.InRepo = root != ""
@@ -124,6 +125,15 @@ func (e *Env) githubHome(ctx context.Context, repo string, s *journey.State) str
 	for label, dst := range map[string]*[]journey.Item{"status:ready": &s.Ready, "status:in-progress": &s.InProgress, "status:blocked": &s.Blocked} {
 		if *dst, err = byLabel(label); err != nil {
 			return "unreachable (" + shortErr(err) + ")"
+		}
+	}
+	fbs, _, err := c.REST.Issues.ListByRepo(ctx, owner, name, &gh.IssueListByRepoOptions{State: "open", Labels: []string{"type:feedback"}, ListOptions: gh.ListOptions{PerPage: 100}})
+	if err != nil {
+		return "unreachable (" + shortErr(err) + ")"
+	}
+	for _, i := range fbs {
+		if !i.IsPullRequest() && workitems.FixLayerOf(github.IssueLabels(i)) == "" {
+			s.Unclassified = append(s.Unclassified, journey.Item{Number: i.GetNumber(), Title: i.GetTitle()})
 		}
 	}
 	prs, _, err := c.REST.PullRequests.List(ctx, owner, name, &gh.PullRequestListOptions{State: "open", ListOptions: gh.ListOptions{PerPage: 30}})
