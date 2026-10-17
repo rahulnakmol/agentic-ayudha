@@ -1,0 +1,7 @@
+[[criterion]]
+id = 1
+tests = ["./internal/appendixb:TestParallelRowsMergeCleanly", "./internal/appendixb:TestDecisionIDsUnique"]
+
+[[criterion]]
+id = 2
+tests = ["./internal/appendixb:TestAdoptHandWrittenRows"]
