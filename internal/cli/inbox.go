@@ -18,6 +18,7 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/audit"
+	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/decide"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
@@ -123,14 +124,8 @@ func gatherInbox(ctx context.Context, c *github.Client, repo, dev string) ([]Inb
 	if err != nil {
 		return nil, err
 	}
-	closed, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.PullRequest, *gh.Response, error) {
-		return c.REST.PullRequests.List(ctx, owner, name, &gh.PullRequestListOptions{State: "closed", ListOptions: o})
-	})
-	if err != nil {
-		return nil, err
-	}
-	open, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.PullRequest, *gh.Response, error) {
-		return c.REST.PullRequests.List(ctx, owner, name, &gh.PullRequestListOptions{State: "open", ListOptions: o})
+	prs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.PullRequest, *gh.Response, error) {
+		return c.REST.PullRequests.List(ctx, owner, name, &gh.PullRequestListOptions{State: "all", ListOptions: o})
 	})
 	if err != nil {
 		return nil, err
@@ -138,16 +133,16 @@ func gatherInbox(ctx context.Context, c *github.Client, repo, dev string) ([]Inb
 	// The first PR merged into dev that delivers each item, by the link
 	// convention audit and ship use (a story/<n>- branch, or Refs #n).
 	var merged []audit.PR
-	for _, p := range closed {
-		if p.GetBase().GetRef() != dev || (p.MergedAt == nil && !p.GetMerged()) {
-			continue
+	var open []*gh.PullRequest
+	for _, p := range prs {
+		switch {
+		case p.GetState() == "open":
+			open = append(open, p)
+		case p.GetBase().GetRef() == dev && (p.MergedAt != nil || p.GetMerged()):
+			ap := audit.PR{Number: p.GetNumber(), Base: dev, Head: p.GetHead().GetRef(), Body: p.GetBody(), MergeSHA: p.GetMergeCommitSHA(), MergedAt: p.GetMergedAt().Time}
+			ap.LinkStories()
+			merged = append(merged, ap)
 		}
-		ap := audit.PR{Number: p.GetNumber(), Base: dev, Head: p.GetHead().GetRef(), Body: p.GetBody(), MergeSHA: p.GetMergeCommitSHA()}
-		if p.MergedAt != nil {
-			ap.MergedAt = p.MergedAt.Time
-		}
-		ap.LinkStories()
-		merged = append(merged, ap)
 	}
 	slices.SortFunc(merged, func(a, b audit.PR) int { return a.MergedAt.Compare(b.MergedAt) })
 	delivered := func(n int) *audit.PR {
@@ -385,7 +380,7 @@ func runInbox(ctx context.Context, e *Env, _ Values) error {
 				if act.Command == "open" {
 					fmt.Fprintf(w, "  open: %s\n", it.URL)
 					e.openURL(it.URL)
-				} else if err := e.inboxAct(ctx, c, repo, login, it, *act); err != nil {
+				} else if err := e.inboxAct(ctx, &l.Config, c, repo, login, it, *act); err != nil {
 					fmt.Fprintf(w, "  not done: %v\n", err)
 					var ae *Error
 					if errors.As(err, &ae) && ae.Next != "" {
@@ -435,14 +430,10 @@ func (e *Env) twin(seat verbs.SeatID) string {
 // inboxAct performs one action on an item under the person's client c. A
 // Decision goes through `decide --accept`, a capped PR through `ship`; the
 // rest are the inbox's own human-only steps.
-func (e *Env) inboxAct(ctx context.Context, c *github.Client, repo, login string, it InboxItem, a InboxAction) error {
-	l, err := e.Config()
-	if err != nil {
-		return err
-	}
+func (e *Env) inboxAct(ctx context.Context, cfg *config.Config, c *github.Client, repo, login string, it InboxItem, a InboxAction) error {
 	switch it.Kind {
 	case InboxDecision:
-		return decideAccept(ctx, e, &l.Config, repo, it.Number, a.Option)
+		return decideAccept(ctx, e, cfg, repo, it.Number, a.Option)
 	case InboxCapped:
 		return handlers["ship"](ctx, e, Values{"pr": strconv.Itoa(it.Number)})
 	}
@@ -465,21 +456,19 @@ func (e *Env) inboxAct(ctx context.Context, c *github.Client, repo, login string
 	if it.Kind == InboxUnshipped {
 		marker = PostGateMarker
 	}
-	if err := setStatus(ctx, c, repo, it.Number, it.labels, status); err != nil {
+	// In order, stopping at the first failure: status, lease, comment, close.
+	err := setStatus(ctx, c, repo, it.Number, it.labels, status)
+	if err == nil && slices.Contains(it.labels, LeaseLabel) {
+		err = removeLabel(ctx, c, repo, it.Number, LeaseLabel)
+	}
+	if err == nil {
+		_, err = c.UpsertComment(ctx, repo, it.Number, marker, marker+"\n"+note+"\n", actions.Action{Kind: "github.comment.inbox", Payload: map[string]any{"kind": it.Kind, "by": login}})
+	}
+	if err == nil && reason != "" {
+		err = closeIssue(ctx, c, repo, it.Number, reason)
+	}
+	if err != nil {
 		return Wrap(ExitExternal, err)
-	}
-	if slices.Contains(it.labels, LeaseLabel) {
-		if err := removeLabel(ctx, c, repo, it.Number, LeaseLabel); err != nil {
-			return Wrap(ExitExternal, err)
-		}
-	}
-	if _, err := c.UpsertComment(ctx, repo, it.Number, marker, marker+"\n"+note+"\n", actions.Action{Kind: "github.comment.inbox", Payload: map[string]any{"kind": it.Kind, "by": login}}); err != nil {
-		return Wrap(ExitExternal, err)
-	}
-	if reason != "" {
-		if err := closeIssue(ctx, c, repo, it.Number, reason); err != nil {
-			return Wrap(ExitExternal, err)
-		}
 	}
 	fmt.Fprintf(e.Out, "  done: %s\n", a.Label)
 	return nil
@@ -509,17 +498,11 @@ func (e *Env) readKey() (byte, error) {
 // openURL opens url in the browser, best effort, when aayu runs on a real
 // terminal; the URL is always printed as well.
 func (e *Env) openURL(url string) {
-	if f, ok := e.In.(*os.File); !ok || !term.IsTerminal(f.Fd()) {
-		return
-	}
-	name, args := "xdg-open", []string{url}
-	switch runtime.GOOS {
-	case "darwin":
-		name = "open"
-	case "windows":
-		name, args = "rundll32", []string{"url.dll,FileProtocolHandler", url}
-	}
-	if p, err := exec.LookPath(name); err == nil {
-		_ = exec.Command(p, args...).Start() // #nosec G204 -- a fixed opener with the item's GitHub URL
+	if f, ok := e.In.(*os.File); ok && term.IsTerminal(f.Fd()) {
+		opener := map[string][]string{"darwin": {"open"}, "windows": {"rundll32", "url.dll,FileProtocolHandler"}}[runtime.GOOS]
+		if opener == nil {
+			opener = []string{"xdg-open"}
+		}
+		_ = exec.Command(opener[0], append(opener[1:], url)...).Start() // #nosec G204 -- a fixed opener with the item's GitHub URL
 	}
 }

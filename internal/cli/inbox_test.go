@@ -160,6 +160,54 @@ func TestInbox(t *testing.T) {
 	if slices.Contains(g.LabelNames(2), workitems.LabelProvisional) || slices.Contains(g.LabelNames(1), "status:done") {
 		t.Errorf("labels after choose another: #2 %v, #1 %v", g.LabelNames(2), g.LabelNames(1))
 	}
+	// The keys on steps that lack an answer: an incomplete Decision has no
+	// option to accept, a numbered pick must name one of the others, a failed
+	// act (ship's gates) is reported and counts as not done, and the end of
+	// input stops the inbox with the rest left.
+	g = fake.New(t, "o/r", "User")
+	tw, _ := workitems.FindType("decision")
+	st, _ := json.Marshal(inspect.State{Cycles: inspect.MaxCycles})
+	g.AddIssue("Pick a queue", "x", "type:decision", "status:planned") // #1
+	g.AddIssue("Choose the cache", workitems.Render(tw, map[string]string{workitems.FieldSummary: "Which cache?",
+		"options": "- **Keep it**: the current one.\n- **Swap it** for a managed one.\n- **Drop it** entirely.", "evaluation": "Swap is cheaper.",
+		"recommendation": "Option 2, because it is cheaper.", workitems.FieldReversible: "true"}), "type:decision", "status:planned") // #2
+	g.AddIssue("Old story", "x", "type:story", "status:backlog")                                       // #3
+	g.AddIssue("New story", "Replaces #3.", "type:story", "status:ready")                              // #4
+	capped := g.AddPR("fix(cli): capped", "Refs #170", "o", "fix/170", strings.Repeat("d", 40), "dev") // #5
+	g.Mu.Lock()
+	g.Issues[capped.Number].Comments = append(g.Issues[capped.Number].Comments, &fake.Comment{ID: 78, Body: inspect.Marker + "\n<!-- aayudha:inspect-state " + string(st) + " -->\n"})
+	g.Mu.Unlock()
+	opts.GitHubAPI = g.URL()
+	code, out, errOut = runIn(t, newEnv(), opts, "x a c o s  c 9 c 2  c  c", "inbox", "--repo", "o/r")
+	if code != 0 {
+		t.Fatalf("inbox: exit %d: %s\n%s", code, errOut, out)
+	}
+	for _, want := range []string{
+		"[1/4] Decision #1: Pick a queue\n  not Decision-ready (",
+		") has no recommendation to accept here.",
+		"  > x\n  keys: a, c, s, o, q\n  > a\n  no recommendation: choose another (c), open (o), or skip (s)\n  > c\n  no other option: accept (a), open (o), or skip (s)\n  > o\n  open: ",
+		"  the Decision recommends: accept Swap it\n  other 1: accept Keep it\n  other 2: accept Drop it\n",
+		"  > c\n  which other (1-2)? 9\n  not one of the others\n  > c\n  which other (1-2)? 2\n#2 accepted: Drop it, by @o",
+		"[3/4] PR at inspect's cycle cap #5",
+		"  > c\n  not done: ",
+		"[4/4] Replaced #3: Old story",
+		"inbox: 1 done, 1 skipped, 1 left",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("inbox output lacks %q:\n%s", want, out)
+		}
+	}
+	g.Mu.Lock()
+	if g.Issues[1].State != "open" || g.Issues[3].State != "open" || !strings.Contains(g.Issues[2].Body, "Drop it, accepted by @o") {
+		t.Errorf("after the picks: #1 %s, #3 %s, #2:\n%s", g.Issues[1].State, g.Issues[3].State, g.Issues[2].Body)
+	}
+	g.Mu.Unlock()
+	// With nothing waiting, it says so.
+	opts.GitHubAPI = fake.New(t, "o/r", "User").URL()
+	if code, out, _ := runIn(t, newEnv(), opts, "", "inbox", "--repo", "o/r"); code != 0 || out != "o/r: nothing waits for you.\n" {
+		t.Errorf("empty inbox: exit %d: %q", code, out)
+	}
+
 	// Criterion 6: a host agent's `aayu inbox` is blocked at the pre-tool hook.
 	if code, _, errOut := runIn(t, nil, Options{}, `{"tool_name":"Bash","tool_input":{"command":"aayu inbox"}}`, "hook", "pre-tool", "--host", "claude"); code != 2 || !strings.Contains(errOut, "aayu inbox is for a person, not an agent") {
 		t.Errorf("pre-tool hook on aayu inbox: exit %d: %s", code, errOut)
