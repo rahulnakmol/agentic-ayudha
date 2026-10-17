@@ -35,12 +35,12 @@ aayu:
       type: path
       required: false
       positional: false
-      description: "Survey draft to check (JSON: claims at the engineering, capability, and product levels, unknowns, answers, modernisation path): every claim cites the index or is marked unknown; renders SURVEY.md."
+      description: "Survey draft to check (JSON: claims at the engineering, capability, and product levels, trap findings, the do-not-carry list, the compatibility contract, unknowns, answers, modernisation path): every claim cites the index or a probe, or is marked unknown; renders SURVEY.md."
     - name: backlog
       type: path
       required: false
       positional: false
-      description: "Backlog draft to check (JSON: Goal, Initiatives, Features, Stories, Bugs) against the work-item schema and the survey draft; renders backlog.md and its review digest."
+      description: "Backlog draft to check (JSON: Goal, Initiatives, Features, Stories, Bugs, and do-not-carry Decisions) against the work-item schema, the survey draft, and its compatibility contract; renders backlog.md and its review digest."
     - name: create
       type: bool
       required: false
@@ -66,16 +66,41 @@ aayu:
       required: false
       positional: false
       description: "Characterisation cases (JSON) to replay against the new build (--bin) and compare with the golden outputs; exit 3 on any difference."
+    - name: compat
+      type: path
+      required: false
+      positional: false
+      description: "A legacy test suite as cases (JSON, each test with its suite and area) to run against the new build (--bin) after --golden ran it on the legacy build: scores passes per area, appends to compat-history.jsonl, exit 3 when a test the legacy build passes fails."
     - name: bin
       type: string
       required: false
       positional: false
-      description: "With --golden or --parity: the program the cases run as {bin}."
+      description: "With --golden, --parity, or --compat: the program the cases run as {bin}."
     - name: run
       type: bool
       required: false
       positional: false
-      description: "With --golden or --parity: run the cases' program; without it the cases file is only checked."
+      description: "With --golden, --parity, or --compat: run the cases' program; without it the cases file is only checked."
+    - name: shadow
+      type: string
+      required: false
+      positional: false
+      description: "With --golden --bin <legacy> --run: the new program, run beside the legacy one on the same inputs; reports every difference without golden files, exit 3 on any."
+    - name: probe
+      type: bool
+      required: false
+      positional: false
+      description: "With --golden --bin --run: also run each case twice and under a changed time zone, locale, and HOME (and under strace when installed), writing non-determinism, environment dependencies, and files read and written to probes.json."
+    - name: check-bin
+      type: string
+      required: false
+      positional: false
+      description: "With --probe: a sanitiser or checker build of the legacy program; cases whose stderr carries a checker report are recorded."
+    - name: coverage
+      type: path
+      required: false
+      positional: false
+      description: "With --probe: an lcov tracefile from running the cases under coverage; records the index's functions the cases never reach."
   outputs:
     - "index"
     - "fact-pack"
@@ -84,6 +109,9 @@ aayu:
     - "issues"
     - "golden"
     - "parity"
+    - "compat"
+    - "shadow"
+    - "probes"
   gates:
     - "validator"
     - "halt"
@@ -177,7 +205,8 @@ gap is an `unknown` with a question, and a backlog item never rests on one.
 4. Check the traps. The index reports `trap:<rule>:<path>:<line>` facts where a stack's semantics differ from what a
    port would assume (COMMON blocks, implicit typing, monkey patches, reflection, default charsets, compiler flags
    that change arithmetic). [references/traps.md](references/traps.md) has the questions to ask of each rule, and the
-   per-stack questions no rule can match. A trap fact says where to look, never what is true.
+   per-stack questions no rule can match. A trap fact says where to look, never what is true: write each check as a
+   trap finding, and run the probes in step 5 when the answer depends on running the code.
 
 ## 2. Write the survey draft at three levels
 
@@ -191,14 +220,28 @@ Write `survey.json` ([references/formats.md](references/formats.md) has every fi
 - **Product** (`P1`…, topics users, jobs, outcomes, value, constraints, context, competition): who uses it, for what,
   and what outcome it serves, as far as documents state it, with unknowns for the rest. Use the Product
   Strategist's standard: plain customer language, the person who would read the announcement.
+- **Traps** (`T1`…): each trap rule you checked, the question you asked of the code, and what you found, with its
+  basis like a claim. Unchecked trap facts are listed in `SURVEY.md` as not checked.
+- **Do not carry over** (`N1`…): the technical features and anti-patterns the modern version should deliberately not
+  reproduce (global mutable state, COMMON blocks, monkey patches, reflection-driven wiring, swallowed errors), each
+  with its evidence, the risk of copying it, the replacement, and the question the person decides it with.
+- **Compatibility contract** (`K1`…): every interface others depend on (flags, exit codes, output and error text,
+  environment, locale, file and data formats, configuration, extension points, protocols, public APIs, and for
+  desktop applications the forms, shortcuts, printing, clipboard, file associations, OS integration, COM
+  components, and the user's data), each with the level the person decides: `exact`, `differ` with the decision,
+  `drop` with a deprecation path, or `undecided`. [references/compatibility.md](references/compatibility.md) says how
+  projects that shipped drop-in replacements did it.
 - **Questions** (`Q1`…): each gap the code cannot close, with why it changes the plan and your default with its
   reason.
 - **Modernisation**, when asked for a modern version: the `target` comes from the request's own words
   (`target_source: "request"`) or an answered question; never choose it yourself. A `strategy`, ordered `steps` (each
   naming the modules it replaces, the claims it rests on, and the case sets that prove it), `case_sets` (where the
   inputs come from, how outputs compare, and any behaviour deliberately excluded, with the claim or question that
-  decided it), and `risks`. [references/modernisation.md](references/modernisation.md) has notes per stack (C++ to
-  Rust, PHP in place, and others).
+  decided it), `risks`, and, for compatibility, `suites` (the legacy project's own tests run against the new build),
+  `migrations` (each with a tested rollback), `coexistence` (shadow, side-by-side, or switch, with cut-over criteria),
+  and `shims` (each with its removal plan). A step lists in `avoids` the do-not-carry entries in the code it
+  replaces. [references/modernisation.md](references/modernisation.md) has notes per stack (C++ to Rust, PHP in
+  place, Fortran, Ruby, VB6, COBOL, and others).
 
 Check it, and fix every problem the check reports:
 
@@ -212,7 +255,8 @@ coverage (modules, entry points, and markers cited) and the index's limits. Exit
 Open questions go to the person in rounds, like `grill`:
 
 1. Three to five questions a round, riskiest first: the ones whose answer changes the backlog or the modernisation
-   path most (the target, which interfaces must stay, which quirks must be kept).
+   path most (the target, the level of each interface others depend on, which quirks must be kept, and whether each
+   do-not-carry entry is dropped).
 2. For each: the question, why it matters (cite the claim), the options you see, and your default with its reason.
    One question settles one decision, and one decision has one question: merge questions that overlap before you
    ask (in the draft too), and list in `affects` every claim, step, or case set the answer changes.
@@ -235,8 +279,12 @@ epics), and Stories and Bugs under the Features.
   unlock into `open_questions` instead ("no item fixes the known gaps until Q2 is answered").
 - Every Story and Bug is executable: a Completion Goal of numbered, observable criteria, each with its evidence kind
   (`N. [api-trace] state: …; expected: …`), and a measure, threshold, scenario, and environment.
-- A modernisation Story names its `step` and the case sets (`parity`) its Completion Goal proves with
-  `aayu survey --parity`.
+- A modernisation Story names its `step` and the case sets and suites (`parity`) its Completion Goal proves with
+  `aayu survey --parity` and `--compat`.
+- Compatibility: a Story or Bug that keeps an interface lists it in `contract`; an `exact` one is closed only by the
+  evidence the contract names, and every `exact` interface is kept by some Story or Bug. An `undecided` one waits.
+- Do not carry over: each Story whose step `avoids` an entry lists it too, and a `decision` item (basis the entry,
+  `constrains` those Stories) lets the person accept the Decision; the Stories show blocked until they do.
 
 `aayu survey --backlog backlog.json --draft survey.json` checks every item against the work-item schema and the
 survey, renders `backlog.md`, and prints a review digest. Nothing is filed. Show the person `backlog.md`; when they
@@ -262,10 +310,23 @@ Before any line of the legacy system changes, capture what it does:
    `TZ=UTC`.
 3. Each modernisation Story's Completion Goal runs `aayu survey --parity cases.json --bin <new program> --run`,
    which exits 3 on any difference and names the first differing line.
+4. Gather the evidence the code alone cannot give, before writing the traps: add `--probe` to the capture (each case
+   twice for non-determinism, under a changed TZ, locale, and HOME, and under strace for files read and written),
+   `--check-bin <sanitiser or checker build>` for memory and undefined-behaviour reports, and `--coverage <lcov file>`
+   from running the cases under coverage for the functions they never reach. Each finding is a `probe:` fact the
+   draft cites; a probe that could not run says so.
+5. When the project has its own test suite, make it the compatibility reference: a cases file with one test per
+   case, its suite (`S1`) and `area`, run on the legacy build with `--golden`, then on the new one with
+   `aayu survey --compat suite.json --bin <new program> --run`, which scores passes per area and appends to
+   `compat-history.jsonl`. Before cut-over, `--golden <cases> --bin <legacy> --shadow <new> --run` runs both on the
+   same inputs and reports every difference.
 
 ## What good looks like
 
 - Every claim cites; every unknown has a question; nothing in the backlog rests on a guess.
+- The traps that matter are checked in the code or by a probe, and what the port must not copy is on the
+  do-not-carry list with its replacement, decided by the person.
+- Every interface others depend on is in the contract with a level the person chose and the evidence that proves it.
 - Stated claims are checked against the code, and contradictions are findings.
 - Inferred claims were probed when a probe was cheap.
 - The interview's questions are few, ordered by risk, and each carries a default with a reason.

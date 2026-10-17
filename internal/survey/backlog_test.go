@@ -41,7 +41,7 @@ func TestCheckBacklog(t *testing.T) {
 	if !r.Pass {
 		t.Fatalf("fixture backlog: %v %+v", r.Problems, r.Items)
 	}
-	if got := strings.Join(r.Order, " "); got != "goal rust-engine evaluate capture-golden port-eval div-zero" {
+	if got := strings.Join(r.Order, " "); got != "goal rust-engine evaluate capture-golden port-eval div-zero no-env-debug" {
 		t.Errorf("order = %s", got)
 	}
 	cases := []struct {
@@ -69,6 +69,47 @@ func TestCheckBacklog(t *testing.T) {
 			g.Key = "goal-2"
 			bl.Items = append(bl.Items, g)
 		}, "has one Goal; it has 2"},
+		// The do-not-carry list becomes Decisions that constrain the Stories porting its code.
+		{"story ports a do-not-carry", func(bl *Backlog) { item(bl, "port-eval").Avoids = nil }, "avoids: step M1 does not carry over N1"},
+		{"no Decision for it", func(bl *Backlog) { bl.Items = bl.Items[:len(bl.Items)-1] }, "avoids N1, but no Decision item decides it"},
+		{"Decision misses a Story", func(bl *Backlog) { item(bl, "no-env-debug").Constrains = []string{"capture-golden"} }, "avoids N1: its Decision no-env-debug must constrain this item"},
+		{"Decision on a claim", func(bl *Backlog) { item(bl, "no-env-debug").Basis = []string{"E4"} }, "a survey Decision decides a do-not-carry entry"},
+		{"constrains from a Story", func(bl *Backlog) { item(bl, "port-eval").Constrains = []string{"div-zero"} }, "only a Decision constrains other items"},
+		// The compatibility contract: undecided levels block, exact ones need their own evidence.
+		{"keeps an undecided interface", func(bl *Backlog) { item(bl, "port-eval").Contract = []string{"K1"} }, "contract K1: its level is undecided (Q1 asks)"},
+	}
+	exact := func(d Draft) Draft {
+		d.Compatibility = append([]Interface(nil), d.Compatibility...)
+		d.Compatibility[0].Level, d.Compatibility[0].DecidedBy = "exact", "request"
+		d.Modernisation.Suites = append([]Suite(nil), d.Modernisation.Suites...)
+		d.Compatibility[0].Proof = []string{"G1", "S1"}
+		return d
+	}
+	for _, tc := range []struct {
+		name string
+		edit func(bl *Backlog)
+		want string
+	}{
+		{"exact interface nobody keeps", func(*Backlog) {}, "interface K1 must match exactly, but no Story or Bug keeps it"},
+		{"exact interface on other evidence", func(bl *Backlog) { item(bl, "port-eval").Contract = []string{"K1"} }, "contract K1 must match exactly: parity must include S1"},
+	} {
+		bl := fixtureBacklog(t)
+		tc.edit(&bl)
+		r := CheckBacklog(ix, exact(d), bl)
+		all := append([]string(nil), r.Problems...)
+		for _, ir := range r.Items {
+			all = append(all, ir.Problems...)
+		}
+		if r.Pass || !strings.Contains(strings.Join(all, "\n"), tc.want) {
+			t.Errorf("%s: pass %v, problems %v; want %q", tc.name, r.Pass, all, tc.want)
+		}
+	}
+	bl := fixtureBacklog(t)
+	pe := item(&bl, "port-eval")
+	pe.Contract, pe.Parity = []string{"K1"}, []string{"G1", "S1"}
+	pe.Fields[workitems.FieldCriteria] += "\n2. [api-trace] state: the Rust build and suite S1; expected: aayu survey --compat scores every area as the C++ build does"
+	if r := CheckBacklog(ix, exact(d), bl); !r.Pass {
+		t.Errorf("exact interface kept with its own evidence: %v %+v", r.Problems, r.Items)
 	}
 	for _, tc := range cases {
 		bl := fixtureBacklog(t)
@@ -85,7 +126,11 @@ func TestCheckBacklog(t *testing.T) {
 	}
 	// An answered question turns the unknown into a basis the Goal may rest on.
 	d.Questions[0].Status, d.Questions[0].Answer = "answered", "the billing team runs it nightly"
-	bl := fixtureBacklog(t)
+	for k := range d.Compatibility {
+		d.Compatibility[k].Level = "differ" // the person's answer decides the level
+		d.Compatibility[k].Difference = "the billing script only reads the number"
+	}
+	bl = fixtureBacklog(t)
 	item(&bl, "goal").Basis = []string{"Q1"}
 	if r := CheckBacklog(ix, d, bl); !r.Pass {
 		t.Errorf("goal on an answered question: %v %+v", r.Problems, r.Items)

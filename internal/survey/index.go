@@ -943,8 +943,11 @@ func (ix *Index) Resolve(cite string) error {
 	if ix.ids[cite] {
 		return nil
 	}
-	for _, pre := range []string{"file:", "sym:", "build:", "dep:", "entry:", "io:", "trap:", "test:", "doc:", "marker:", "mod:"} {
+	for _, pre := range []string{"file:", "sym:", "build:", "dep:", "entry:", "io:", "trap:", "test:", "doc:", "marker:", "mod:", "probe:"} {
 		if strings.HasPrefix(cite, pre) {
+			if pre == "probe:" {
+				return fmt.Errorf("%s: no such probe fact (run `aayu survey --golden <cases> --bin <legacy> --run --probe` first)", cite)
+			}
 			return fmt.Errorf("%s: no such fact in the index", cite)
 		}
 	}

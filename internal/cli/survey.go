@@ -67,11 +67,11 @@ func surveyDirs(e *Env, in Values) (root, out string) {
 func runSurvey(ctx context.Context, e *Env, in Values) error {
 	root, out := surveyDirs(e, in)
 	indexFile := filepath.Join(out, "index.json")
-	if in.Has("golden") || in.Has("parity") {
+	if in.Has("golden") || in.Has("parity") || in.Has("compat") {
 		return e.surveyGolden(ctx, in, root, out, indexFile)
 	}
-	if in.Has("bin") || in.Has("run") {
-		return Errorf(ExitUsage, "survey --bin and --run go with --golden or --parity <cases file>")
+	if in.Has("bin") || in.Has("run") || in.Has("shadow") || in.Has("probe") || in.Has("check-bin") || in.Has("coverage") {
+		return Errorf(ExitUsage, "survey --bin, --run, --shadow, --probe, --check-bin, and --coverage go with --golden, --parity, or --compat <cases file>")
 	}
 	if in.Has("backlog") {
 		return e.surveyBacklog(ctx, in, indexFile, out)
@@ -267,6 +267,9 @@ func (e *Env) surveyDraft(indexFile, out, file string) error {
 	ix, err := survey.Load(indexFile)
 	if err != nil {
 		return Errorf(ExitUsage, "survey --draft: %v; run `aayu survey` first", err)
+	}
+	if err := ix.LoadProbes(out); err != nil {
+		return Wrap(ExitUsage, err)
 	}
 	b, err := os.ReadFile(file)
 	if err != nil {

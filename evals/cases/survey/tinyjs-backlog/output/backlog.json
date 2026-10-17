@@ -192,7 +192,10 @@
         "threshold": "0 in G1, G2, and G3",
         "scenario": "Replay the three case sets on the Rust build.",
         "environment": "Linux, cargo, the repository's tests/"
-      }
+      },
+      "contract": [
+        "K2"
+      ]
     },
     {
       "key": "rust-builtins",
@@ -289,7 +292,10 @@
         "threshold": "0",
         "scenario": "Build the C host against the ABI, then replay the three case sets.",
         "environment": "Linux, cargo, cc, the repository's tests/"
-      }
+      },
+      "contract": [
+        "K1"
+      ]
     },
     {
       "key": "stale-known-issues",

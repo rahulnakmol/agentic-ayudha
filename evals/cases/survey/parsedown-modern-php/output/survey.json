@@ -495,5 +495,48 @@
         ]
       }
     ]
-  }
+  },
+  "compatibility": [
+    {
+      "id": "K1",
+      "kind": "api",
+      "name": "Public API output: text, line, and the setters setBreaksEnabled, setMarkupEscaped, setUrlsLinked, setSafeMode",
+      "cites": [
+        "Parsedown.php:24",
+        "Parsedown.php:59-86",
+        "Parsedown.php:1130"
+      ],
+      "consumers": "the person's applications",
+      "level": "exact",
+      "decided_by": "request",
+      "proof": [
+        "G1",
+        "G2",
+        "G3"
+      ]
+    },
+    {
+      "id": "K2",
+      "kind": "plugin",
+      "name": "Extension by subclassing: protected block and inline methods and the BlockTypes and InlineTypes tables",
+      "cites": [
+        "Parsedown.php:37",
+        "Parsedown.php:167",
+        "Parsedown.php:1135"
+      ],
+      "consumers": "subclasses such as Parsedown Extra (unknown which; Q1 asks)",
+      "level": "undecided",
+      "decided_by": "Q1"
+    },
+    {
+      "id": "K3",
+      "kind": "api",
+      "name": "Parsedown::instance(), a shared instance per name",
+      "cites": [
+        "Parsedown.php:1939"
+      ],
+      "level": "undecided",
+      "decided_by": "Q3"
+    }
+  ]
 }

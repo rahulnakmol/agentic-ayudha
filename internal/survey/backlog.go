@@ -31,12 +31,19 @@ type Item struct {
 	Labels    []string          `json:"labels,omitempty"`
 	Basis     []string          `json:"basis"`                // survey claim, question, step, or case set IDs, or index citations
 	Step      string            `json:"step,omitempty"`       // a modernisation step (M1) the item delivers
-	Parity    []string          `json:"parity,omitempty"`     // case sets (G1) its Completion Goal proves
+	Parity    []string          `json:"parity,omitempty"`     // case sets (G1) or suites (S1) its Completion Goal proves
 	DependsOn []string          `json:"depends_on,omitempty"` // keys of items that must merge first
+	// Contract names the compatibility interfaces (K1) the item keeps; an
+	// exact one is closed only by the evidence the contract names.
+	Contract []string `json:"contract,omitempty"`
+	// Avoids names the do-not-carry entries (N1) in the code the item ports.
+	Avoids []string `json:"avoids,omitempty"`
+	// Constrains (a Decision only) lists the keys of the items it constrains.
+	Constrains []string `json:"constrains,omitempty"`
 }
 
 // BacklogTypes are the work-item types a survey backlog files.
-var BacklogTypes = []string{"goal", "initiative", "feature", "story", "bug"}
+var BacklogTypes = []string{"goal", "initiative", "feature", "story", "bug", "decision"}
 
 // stageFor is the stage each type must pass before it is filed: a Story or
 // Bug is executable (Ready, with its Completion Goal), a Feature has its
@@ -44,7 +51,7 @@ var BacklogTypes = []string{"goal", "initiative", "feature", "story", "bug"}
 // since its baseline comes from `measure` later, never from a guess.
 func stageFor(typ string) workitems.Stage {
 	switch typ {
-	case "story", "bug", "feature":
+	case "story", "bug", "feature", "decision":
 		return workitems.StageReady
 	}
 	return workitems.StageCreate
@@ -99,7 +106,28 @@ func CheckBacklog(ix *Index, d Draft, bl Backlog) BacklogReport {
 		for _, g := range m.CaseSets {
 			sets[g.ID] = true
 		}
+		for _, su := range m.Suites {
+			sets[su.ID] = true
+		}
 	}
+	carries, ifaces := map[string]Carry{}, map[string]Interface{}
+	for _, n := range d.DoNotCarry {
+		carries[n.ID] = n
+	}
+	for _, k := range d.Compatibility {
+		ifaces[k.ID] = k
+	}
+	decisions := map[string]string{} // do-not-carry ID → the key of its Decision
+	for _, it := range bl.Items {
+		if it.Type == "decision" {
+			for _, ref := range it.Basis {
+				if _, ok := carries[ref]; ok {
+					decisions[ref] = it.Key
+				}
+			}
+		}
+	}
+	closed := map[string]bool{} // exact interfaces a Story or Bug keeps
 	byKey := map[string]Item{}
 	for _, it := range bl.Items {
 		if _, dup := byKey[it.Key]; dup {
@@ -169,6 +197,10 @@ func CheckBacklog(ix *Index, d Draft, bl Backlog) BacklogReport {
 				}
 			case steps[ref].ID != "" || sets[ref]:
 				levels = append(levels, "modernisation")
+			case carries[ref].ID != "":
+				levels = append(levels, "carry:"+carries[ref].Status)
+			case ifaces[ref].ID != "":
+				levels = append(levels, "interface")
 			default:
 				if err := ix.Resolve(ref); err != nil {
 					bad("basis %v", err)
@@ -194,6 +226,71 @@ func CheckBacklog(ix *Index, d Draft, bl Backlog) BacklogReport {
 		case "bug":
 			if !marker && !has(func(l string) bool { return strings.HasSuffix(l, ":risks") && !strings.Contains(l, ":inferred:") }) {
 				bad("basis: a Bug rests on a known-issue marker (marker:…) or an observed or stated risk claim")
+			}
+		case "decision":
+			// The one item a pending answer may back: a Decision is how the
+			// person decides a do-not-carry entry, and it constrains the items
+			// that port its code until it is accepted.
+			if !has(func(l string) bool { return l == "carry:proposed" || l == "carry:confirmed" }) {
+				bad("basis: a survey Decision decides a do-not-carry entry (N…) that is proposed or confirmed")
+			}
+			if len(it.Constrains) == 0 {
+				bad("constrains: list the items whose code holds what this Decision keeps out")
+			}
+		}
+		if it.Type != "decision" && len(it.Constrains) > 0 {
+			bad("constrains: only a Decision constrains other items")
+		}
+		for _, c := range it.Constrains {
+			if p, ok := byKey[c]; !ok || !slices.Contains([]string{"goal", "initiative", "feature", "story", "bug"}, p.Type) {
+				bad("constrains %q is not a Goal, Initiative, Feature, Story, or Bug of this backlog", c)
+			}
+		}
+		// What the item's step keeps out, and the contract it keeps.
+		if st, ok := steps[it.Step]; ok {
+			for _, n := range st.Avoids {
+				if carries[n].Status != "rejected" && !slices.Contains(it.Avoids, n) {
+					bad("avoids: step %s does not carry over %s; list it so the Story is constrained by its Decision", it.Step, n)
+				}
+			}
+		}
+		for _, n := range it.Avoids {
+			c, ok := carries[n]
+			switch {
+			case !ok:
+				bad("avoids %s is not on the survey's do-not-carry list", n)
+			case c.Status == "rejected":
+				bad("avoids %s, which the person decided to keep (%s)", n, c.Question)
+			case decisions[n] == "":
+				bad("avoids %s, but no Decision item decides it: add one with basis %s that constrains this item", n, n)
+			case !slices.Contains(byKey[decisions[n]].Constrains, it.Key):
+				bad("avoids %s: its Decision %s must constrain this item", n, decisions[n])
+			}
+		}
+		for _, kid := range it.Contract {
+			k, ok := ifaces[kid]
+			switch {
+			case !ok:
+				bad("contract %s is not an interface of the survey's compatibility contract", kid)
+				continue
+			case k.Level == "undecided":
+				bad("contract %s: its level is undecided (%s asks); no item can claim to keep it until the person decides", kid, k.DecidedBy)
+				continue
+			case k.Level != "exact":
+				continue
+			}
+			// Must match: only the contract's own evidence closes it.
+			for _, p := range k.Proof {
+				if strings.HasPrefix(p, "check:") {
+					if !strings.Contains(it.Fields[workitems.FieldCriteria], p) {
+						bad("contract %s must match exactly: the Completion Goal must replay %s", kid, p)
+					}
+				} else if !slices.Contains(it.Parity, p) {
+					bad("contract %s must match exactly: parity must include %s, the evidence the contract names", kid, p)
+				}
+			}
+			if it.Type == "story" || it.Type == "bug" {
+				closed[kid] = true
 			}
 		}
 		// A modernisation item proves parity in its Completion Goal.
@@ -224,6 +321,12 @@ func CheckBacklog(ix *Index, d Draft, bl Backlog) BacklogReport {
 	}
 	if goals > 1 {
 		add("a survey backlog has one Goal; it has %d", goals)
+	}
+	ported := slices.ContainsFunc(bl.Items, func(it Item) bool { return it.Step != "" })
+	for _, k := range d.Compatibility {
+		if ported && k.Level == "exact" && !closed[k.ID] {
+			add("interface %s must match exactly, but no Story or Bug keeps it (contract): the modernisation would close without proving it", k.ID)
+		}
 	}
 	if len(bl.Items) == 0 {
 		add("no items")
@@ -273,7 +376,7 @@ func fileOrder(items []Item, byKey map[string]Item) ([]string, string) {
 		}
 		state[k] = 1
 		path = append(path, k)
-		for _, dep := range append([]string{it.Parent}, it.DependsOn...) {
+		for _, dep := range slices.Concat([]string{it.Parent}, it.DependsOn, it.Constrains) {
 			if dep == "" {
 				continue
 			}
@@ -335,7 +438,13 @@ func Body(product string, it Item, links string) string {
 	}
 	head := KeyMarker(product, it.Key) + "\n\n> From the survey of " + product + ": rests on " + strings.Join(it.Basis, ", ")
 	if len(it.Parity) > 0 {
-		head += "; proves parity with case sets " + strings.Join(it.Parity, ", ")
+		head += "; proves parity with " + strings.Join(it.Parity, ", ")
+	}
+	if len(it.Contract) > 0 {
+		head += "; keeps compatibility interfaces " + strings.Join(it.Contract, ", ")
+	}
+	if len(it.Avoids) > 0 {
+		head += "; does not carry over " + strings.Join(it.Avoids, ", ")
 	}
 	return head + ".\n\n" + workitems.Render(t, fields)
 }
@@ -351,6 +460,9 @@ func Digest(bl Backlog, order []string) string {
 	for _, k := range order {
 		it := byKey[k]
 		fmt.Fprintf(h, "%s\x00%s\x00%s\x00%s\x00%s\x00%s\x00%s\x00", it.Key, it.Type, it.Parent, strings.Join(it.DependsOn, ","), it.Title, strings.Join(it.Labels, ","), Body(bl.Product, it, ""))
+		if len(it.Constrains) > 0 { // added only when present, so a digest without one is unchanged
+			fmt.Fprintf(h, "constrains\x00%s\x00", strings.Join(it.Constrains, ","))
+		}
 	}
 	return hex.EncodeToString(h.Sum(nil))[:16]
 }
@@ -411,6 +523,9 @@ func RenderBacklog(bl Backlog, r BacklogReport, draftFile, backlogFile string) s
 		}
 		if len(it.DependsOn) > 0 {
 			meta = append(meta, "after "+citeText(it.DependsOn))
+		}
+		if len(it.Constrains) > 0 {
+			meta = append(meta, "constrains "+citeText(it.Constrains))
 		}
 		if len(it.Labels) > 0 {
 			meta = append(meta, "labels "+citeText(it.Labels))

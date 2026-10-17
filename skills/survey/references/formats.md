@@ -27,6 +27,20 @@ a misspelt field never silently drops a claim.
     {"id": "Q2", "question": "…", "why": "…", "status": "answered", "answer": "the person's exact words"},
     {"id": "Q3", "question": "…", "why": "…", "status": "deferred", "reason": "why it can wait"}
   ],
+  "traps": [
+    {"id": "T1", "rule": "c-locale", "check": "Does the printed number depend on the C locale?", "claim": "…", "basis": "observed",
+     "cites": ["trap:c-locale:src/util.cpp:7", "src/util.cpp:5-10"]}
+  ],
+  "do_not_carry": [
+    {"id": "N1", "feature": "Debug tracing switched on by an environment variable", "cites": ["io:env:src/util.cpp:6"], "traps": ["T1"],
+     "risk": "what copying it would cost", "replacement": "what the new version does instead", "question": "Q2", "status": "proposed"}
+  ],
+  "compatibility": [
+    {"id": "K1", "kind": "stdout", "name": "The integer result on stdout", "cites": ["src/util.cpp:14"], "consumers": "who depends on it",
+     "level": "undecided", "decided_by": "Q1", "proof": ["G1"]},
+    {"id": "K2", "kind": "ui-form", "name": "The invoice form's fields and tab order", "cites": ["Invoice.frm:1"], "level": "exact",
+     "decided_by": "Q4", "proof": ["check:invoicing/invoice-form.enter-invoice"]}
+  ],
   "modernisation": {
     "target": "Rust",
     "target_source": "request",
@@ -41,6 +55,19 @@ a misspelt field never silently drops a claim.
     ],
     "risks": [
       {"id": "R1", "claim": "…", "basis": "observed", "cites": ["src/main.cpp:7-8"]}
+    ],
+    "suites": [
+      {"id": "S1", "title": "The legacy project's own tests", "from": ["test:tests/test001.js"], "cases": "compat.json",
+       "areas": ["expressions", "errors"], "unfixable": ["t-ld-preload: intercepts glibc internals the new build never calls"]}
+    ],
+    "migrations": [
+      {"id": "MG1", "what": "The history file", "cites": ["src/util.cpp:20-31"], "rollback": "how a user goes back, tested",
+       "proof": ["G4"]}
+    ],
+    "coexistence": {"mode": "shadow", "how": "both run on the same inputs; differences are reported", "compare": ["G1", "S1"],
+      "cut_over": "the criteria", "rollback": "how to switch back"},
+    "shims": [
+      {"id": "SH1", "interface": "K1", "behaviour": "the old behaviour kept", "mechanism": "--legacy-output", "removal": "when and how it goes"}
     ]
   }
 }
@@ -54,6 +81,19 @@ a misspelt field never silently drops a claim.
 - A question's `affects` lists the claims, modernisation steps, and case sets its answer changes.
 - `target_source` is `"request"` only when the request names the target; otherwise ask, and use the answered
   question's ID.
+- `traps`: one finding per trap rule checked (`rule` is a heading of [traps.md](traps.md), or `"stack"` for a
+  per-stack question no rule matches), with `check` (the question you asked) and a claim's basis and citations.
+- `do_not_carry`: `status` is `proposed` while its `question` is open, then `confirmed` or `rejected` (the person keeps
+  it) once answered. A step whose modules hold its code lists it in `avoids`.
+- `compatibility`: `kind` is one of cli, exit-code, stdout, stderr, env, locale, file-format, config, plugin, protocol,
+  api, data-store, ui-form, ui-shortcut, ui-print, ui-clipboard, ui-file-association, os-integration, com. `level` is
+  `exact`, `differ` (with `difference`), `drop` (with `deprecation`: the warning, the release, the removal), or
+  `undecided`. Only the person decides a level: `decided_by` is `"request"` when their request says it, an answered
+  question, or, while `undecided`, the open question that will decide. `proof` names case sets, suites, or user
+  behaviour checks that replay a user journey (`check:<product>/<feature>.<check>`, from the product's feature map, `aayu verify --map`); an `exact` interface needs exact evidence,
+  and a user-visible one (`ui-…`, `os-integration`) a check.
+- `suites`, `migrations` (each with a tested `rollback`), `coexistence` (`mode`: shadow, side-by-side, or switch), and
+  `shims` (each with its `removal` plan) are described in [compatibility.md](compatibility.md).
 
 ## backlog.json (`--backlog`)
 
@@ -72,13 +112,22 @@ a misspelt field never silently drops a claim.
        "measure": "…", "threshold": "…", "scenario": "…", "environment": "…"}},
     {"key": "div-zero", "type": "bug", "parent": "evaluate", "title": "…", "labels": ["effort:S"], "basis": ["marker:src/engine.cpp:5"],
      "fields": {"summary": "…", "reproduce": "…", "expected": "…", "actual": "…",
-       "completion_goal": "1. [api-trace] state: …; expected: …", "measure": "…", "threshold": "…", "scenario": "…", "environment": "…"}}
+       "completion_goal": "1. [api-trace] state: …; expected: …", "measure": "…", "threshold": "…", "scenario": "…", "environment": "…"}},
+    {"key": "no-env-debug", "type": "decision", "parent": "evaluate", "title": "Do not carry over …", "basis": ["N1"],
+     "constrains": ["port-eval"],
+     "fields": {"summary": "the question (Q2)", "options": "1. Keep it. 2. Replace it with …", "evaluation": "the risk, cited",
+       "recommendation": "…", "reversible": "true"}}
   ],
   "open_questions": ["Q1 (open): what the answer would unlock"]
 }
 ```
 
-- `key`: lower-case slug, unique; a re-run finds the issue by it. `parent` and `depends_on` name keys.
+- `key`: lower-case slug, unique; a re-run finds the issue by it. `parent`, `depends_on`, and `constrains` name keys.
+- `contract` (Story or Bug): the interfaces (K1) the item keeps. An `exact` one needs every case set and suite its
+  `proof` names in `parity`, and every feature-map check in the Completion Goal; when the backlog ports anything, each `exact`
+  interface is kept by some Story or Bug. An `undecided` one cannot be kept until the person decides.
+- `avoids` (Story or Bug): the do-not-carry entries (N1) its step lists. Each needs a `decision` item with that entry
+  as its basis that `constrains` the item; it is filed after the items it constrains, with `constrains #N` links.
 - Evidence kinds in a Completion Goal: `screenshot`, `recording`, `sr-transcript`, `api-trace`, `metric`.
 - A Story or Bug passes the Ready stage of the work-item schema before it can be filed.
 

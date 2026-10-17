@@ -552,5 +552,57 @@
         ]
       }
     ]
-  }
+  },
+  "compatibility": [
+    {
+      "id": "K1",
+      "kind": "api",
+      "name": "Embedding API: CTinyJS execute, evaluate, evaluateComplex, addNative, and the CScriptVar classes",
+      "cites": [
+        "TinyJS.h:288-318"
+      ],
+      "consumers": "applications that embed the interpreter (unknown; Q1 asks)",
+      "level": "undecided",
+      "decided_by": "Q1"
+    },
+    {
+      "id": "K2",
+      "kind": "stdout",
+      "name": "Script output and ERROR lines printed by the command-line runner",
+      "cites": [
+        "Script.cpp:86-95"
+      ],
+      "level": "exact",
+      "decided_by": "request",
+      "proof": [
+        "G2",
+        "G3"
+      ]
+    },
+    {
+      "id": "K3",
+      "kind": "exit-code",
+      "name": "Runner exit code: 0 after the scripts run, 1 on a script error",
+      "cites": [
+        "Script.cpp:86-95"
+      ],
+      "level": "exact",
+      "decided_by": "request",
+      "proof": [
+        "G2",
+        "G3"
+      ]
+    },
+    {
+      "id": "K4",
+      "kind": "cli",
+      "name": "Command-line runner: script paths as arguments, interactive mode without them",
+      "cites": [
+        "Script.cpp:74-100"
+      ],
+      "consumers": "unknown; Q4 asks whether the runner is part of the product",
+      "level": "undecided",
+      "decided_by": "Q4"
+    }
+  ]
 }
