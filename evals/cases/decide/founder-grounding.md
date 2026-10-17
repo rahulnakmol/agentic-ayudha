@@ -19,9 +19,13 @@ found on GitHub) plus the ledger, budget, and code excerpts the twin read before
 
 - Budget `ops/budget/2026-Q4.md`: third-party services 6,000 USD for the quarter, 2,400 USD committed. The hosted rules
   engine's quote is 1,200 USD a month on an annual contract (14,400 USD over twelve months, no exit), or 1,500 USD a
-  month month to month. The hosted engine evaluates rules on the vendor's servers, so it processes appointment data.
+  month month to month. The hosted engine evaluates rules on the vendor's servers, so it processes appointment data;
+  clinic staff edit its rules in the vendor's console, per clinic or per clinician.
 - Estimate `ledger/plans/301/estimate.json` (Code Architect twin): an in-house rules engine is 3 stories of effort L,
-  about 6 weeks of the one engineer; hard-coding the three rules of #310 is 1 story of effort M, about 1.5 weeks.
+  about 6 weeks of the one engineer, and stores rules as data that clinic staff edit per clinic or per clinician;
+  hard-coding the three rules of #310 is 1 story of effort M, about 1.5 weeks, and serves those three rules only, so
+  each further rule is a code change. Either in-house option needs the patient's insurance plan, which `Patient`
+  already carries (`internal/booking/patient.go:5-12`).
 - Retro report `retro/2026-10-09/report.md`: one engineer (@dev1, paired with the AI Native Engineer seat) with two
   stories in flight and a 20 % on-call share.
 - `LAYERS.md`: L04 Domain / policy is `internal/booking/**`, owner seat Quality Architect; L06 Contracts / integration
@@ -32,6 +36,7 @@ found on GitHub) plus the ledger, budget, and code excerpts the twin read before
 ```go
 // Eligible reports whether patient p may book slot s online.
 // Today it checks only that the slot's clinician is the patient's clinician.
+// It reads p and s and writes nothing.
 func Eligible(p Patient, s Slot) bool
 ```
 
