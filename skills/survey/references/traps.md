@@ -13,7 +13,9 @@ For each trap fact in a module you read:
    `unknown` with a question for the person. A probe beats reading when it is cheap: `aayu survey --golden <cases>
    --bin <legacy> --run --probe` runs each case twice and under a changed time zone, locale, and HOME, records files
    read and written, and with `--check-bin` and `--coverage` adds a sanitiser build's reports and the functions the
-   cases never reach. Cite its `probe:` facts.
+   cases never reach. Cite its `probe:` facts. A `reads` or `writes` fact names a file inside the checkout by its
+   path relative to it, a file in the scratch HOME as `~/…`, and any other file by its absolute path: that file is
+   outside the checkout (a harness, a library, configuration elsewhere on the machine).
 3. If the modern version must not reproduce it, add it to `do_not_carry` with its evidence, the risk of copying it,
    and the replacement, and ask the person to confirm it. The modernisation steps that replace its code list it in
    `avoids`, and the backlog turns it into a Decision that constrains their Stories.
