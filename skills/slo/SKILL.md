@@ -117,6 +117,8 @@ Start from the journey that matters most to the people who use the product, not 
   last recorded value if there is one. Never extrapolate a short span to the window, and never record (`--record`) a
   partial export that holds an incident as the window's budget; the weekly record needs an export that covers the
   window.
+- **Release risk.** Which SLO is most at risk follows from the numbers you give: name the one whose projection
+  spends its budget first, and rank nothing the numbers do not support.
 
 ## 3. The budget policy
 
@@ -147,6 +149,9 @@ alert = "page when the 1h burn rate exceeds 14.4"
 runbook = "ops/runbooks/ask-errors.md"
 ```
 
+A runbook path in the block is a proposal. In prose, a runbook the grounding does not show is a runbook to write
+(`aayu runbook`), never cited by its path.
+
 **What the check reads as a citation**, in the same paragraph, list item, or table row as the claim: `query qN`; the
 incident as `#N` (its body, timeline, investigation note, and comments are all `#N`); a commit in backticks; a
 `path:line`; a file the grounding itself shows: `ops/slos.toml`, `slo/status.json` (only when the grounding shows a recorded status), or `traces.jsonl` (a measured SLO), and no other. Words such as "(grounding)",
@@ -156,7 +161,8 @@ answers, such as the `path:line` it fixes or `#N`. Never cite a file that does n
 the file you save the draft in). What you cannot cite starts `Unverified:` or `Assumption:`. The marker opens its own paragraph or list item, never a table cell or a line after a bold label: the check reads a row or a `**Label:** …` item as starting with that label. Never state that something did not exist or did not happen (a gate, an alert, a test, a check) unless the record says so; write `Unverified:` and what would show it. The document is its
 title and its parts only: no preamble before it, and no steps for the reader (how to check, save, or open a pull
 request) inside it. The release gate is a fact of `ops/slos.toml` in the
-grounding. A startup SLO line is at most 400 words of prose: the check counts only prose (paragraphs and list items; headings, tables, and code are not counted), so put steps, events, and actions in table rows and keep the prose near 300 words; when the check says it is over, move lists into a table or cut repeated facts until the prose is under 350, never just under 400. Who decides a waiver cites `ops/slos.toml` (the release gate) or `#N`. Check the draft with `aayu slo --telemetry <dir> --draft <file>`: it refuses (exit 4) a missing part, the
+grounding. A startup SLO line is at most 400 words of prose: the check counts only prose (paragraphs and list items; headings, tables, and code are not counted), so put steps, events, and actions in table rows and keep the prose near 300 words; when the check says it is over, move lists into a table or cut repeated facts until the prose is under 350, never just under 400. When you fix findings, add the citation to the line it fixes rather than a new sentence, and
+keep the prose under 350 words. Who decides a waiver cites `ops/slos.toml` (the release gate) or `#N`. Check the draft with `aayu slo --telemetry <dir> --draft <file>`: it refuses (exit 4) a missing part, the
 wrong title, an uncited claim, an objective without a percentage or a window, no burn-rate alert, no release policy,
 an SLO of `ops/slos.toml` the objectives do not name, and a toml block that does not parse. Once it passes and the
 person agrees, `--create` writes the block to `ops/slos.toml` in the checkout; they open the pull request (a protected
