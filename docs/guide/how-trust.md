@@ -141,7 +141,7 @@ checks the approving account, and refuses unless all of these hold:
 - it has the repository access the command needs: admin for the bypasses, `init`, `uninit`, `seat`,
   `install --apply`, and `upgrade --apply`; write for `decide --accept`, `inbox`, `resume`, `plan --approve`,
   `inspect --dismiss`, `tell --publish`, and the stable-release yes of `release --to main`. `auth set-secret` and
-  `self-update` need only a person.
+  `self-update` need only a person, so a fresh runner with no token yet can still store its first one.
 
 A denied, expired, or mismatched approval refuses, and nothing is done. The approval is recorded in the actions log
 (`presence.approve`, with the command, the approver, and the method). `release --to main` records it as the
@@ -159,7 +159,8 @@ command you started: GitHub's page names the app, not the command.
 any homepage and callback URL), tick **Enable Device Flow**, and save its client ID as the repository variable
 `AAYUDHA_DEVICE_CLIENT_ID` (`gh variable set AAYUDHA_DEVICE_CLIENT_ID --body <client-id>`). A repository with
 aayudha's GitHub App (`AAYUDHA_APP_CLIENT_ID`) can instead tick **Enable Device Flow** on that App. A client ID is
-public; no secret is involved. Without either, a marked shell is refused as before.
+public; no secret is involved. `[identity] device_client_id` in `.aayudha/config.toml` sets it too, for a machine with
+no token yet. Without any of them, a marked shell is refused as before.
 
 > **Honest status:** two layers stand between an agent and a human-only command. In Claude Code, Codex, and Cursor the
 > installed pre-tool hook blocks the shell command before it runs (`hosts.HumanOnlyCommand`); the Amp plugin does not

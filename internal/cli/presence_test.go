@@ -128,3 +128,40 @@ func TestPresenceCheckAccess(t *testing.T) {
 		t.Fatalf("an admin step after a write approval asked again and was refused: %v, device codes %d", err, g.Device.Started)
 	}
 }
+
+// A fresh runner has no token and maybe no checkout: an action that needs no
+// repository access is still approved, with the client ID from config, and
+// the approval is refused when it cannot be recorded.
+func TestPresenceCheckBootstrapAndRecord(t *testing.T) {
+	g := fake.New(t, "o/r", "User")
+	g.Device = &fake.DeviceFlow{ClientID: "c", Approver: "founder", Outcome: "approve"}
+	newMarked := func(state string) (*Env, *bytes.Buffer) {
+		var errb bytes.Buffer
+		vars := map[string]string{"AMP_THREAD_ID": "T-0000", "XDG_STATE_HOME": state, "HOME": t.TempDir()}
+		e, err := newEnv(IO{In: strings.NewReader(""), Out: &bytes.Buffer{}, Err: &errb}, Options{
+			Getenv: func(k string) string { return vars[k] }, Environ: []string{"AAYU_IDENTITY__DEVICE_CLIENT_ID=c"},
+			GitHubAPI: g.URL(), GitHubGap: -1, Dir: t.TempDir(), DevicePoll: time.Millisecond,
+			GHToken: func(context.Context) (string, error) { return "", os.ErrNotExist },
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return e, &errb
+	}
+	ctx := context.Background()
+	e, errb := newMarked(t.TempDir())
+	if err := e.requireHuman(ctx, "auth set-secret github-token", AccessAny); err != nil || !strings.Contains(errb.String(), "auth set-secret github-token needs a person's approval.") ||
+		!strings.Contains(errb.String(), "Approved by @founder (device-flow, no repository access)") {
+		t.Fatalf("bootstrap approval: %v\n%s", err, errb)
+	}
+	if err := e.requireHuman(ctx, "resume", AccessWrite); err == nil {
+		t.Fatal("a write action was approved with no repository to check the approver against")
+	}
+	blocked := filepath.Join(t.TempDir(), "file")
+	_ = os.WriteFile(blocked, nil, 0o644)
+	e, errb = newMarked(filepath.Join(blocked, "state")) // the actions log cannot be created under a file
+	if err := e.requireHuman(ctx, "self-update", AccessAny); err == nil || !strings.Contains(err.Error(), "recording the approval in the actions log") ||
+		strings.Contains(errb.String(), "Approved by") || e.approval != nil {
+		t.Fatalf("an unrecorded approval: %v\n%s", err, errb)
+	}
+}

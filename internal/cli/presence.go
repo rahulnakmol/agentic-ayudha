@@ -40,8 +40,18 @@ type Approval struct {
 	Via        string `json:"via"`        // device-flow
 }
 
+// covers reports whether the approval already allows an action that needs need.
 func (a *Approval) covers(need Access) bool {
-	return a != nil && (need != AccessAdmin || a.Permission == "admin")
+	if a == nil {
+		return false
+	}
+	switch need {
+	case AccessAdmin:
+		return a.Permission == "admin"
+	case AccessWrite:
+		return a.Permission == "admin" || a.Permission == "write"
+	}
+	return true
 }
 
 // requireHuman guards a human-only action (§0.1, Bug #170). A person at an
@@ -78,8 +88,9 @@ func (e *Env) requireHuman(ctx context.Context, what string, need Access) error 
 //
 // It returns refusal unchanged when no approval can be asked for: aayu's own
 // agent lanes (AAYU_AGENT=1: the MCP server and loops, which run unattended),
-// no repository or token to check the approver against, or no client ID
-// (DeviceClientVariables). An approval covers later human-only steps of the
+// no repository or token to check the approver against (unless need is
+// AccessAny), or no client ID ([identity] device_client_id, else
+// DeviceClientVariables). An approval covers later human-only steps of the
 // same command at the same or a lower permission.
 func (e *Env) presenceCheck(ctx context.Context, what string, need Access, refusal error) (*Approval, error) {
 	if e.approval.covers(need) {
@@ -88,68 +99,91 @@ func (e *Env) presenceCheck(ctx context.Context, what string, need Access, refus
 	if e.Getenv("AAYU_AGENT") == "1" {
 		return nil, refusal
 	}
-	repo, err := e.RepoName(ctx)
+	l, err := e.Config()
 	if err != nil {
-		return nil, refusal
+		return nil, err
 	}
-	c, tok, err := e.HumanGitHub(ctx)
-	if err != nil {
-		return nil, refusal
+	// The account aayu acts as, and the repository the approver needs access
+	// to. An action that needs no repository access (AccessAny: auth
+	// set-secret, self-update) can be approved without them, so a fresh
+	// runner can provision its first token.
+	var c *github.Client
+	var me *identity.User
+	repo, rerr := e.RepoName(ctx)
+	if rerr == nil {
+		if hc, tok, err := e.HumanGitHub(ctx); err == nil {
+			if u, err := identity.WhoAmI(ctx, e.HTTP, e.githubAPI(), tok); err == nil {
+				c, me = hc, &u
+			}
+		}
 	}
-	me, err := identity.WhoAmI(ctx, e.HTTP, e.githubAPI(), tok)
-	if err != nil {
+	if need != AccessAny && c == nil {
 		return nil, refusal
 	}
 	owner, name, _ := github.SplitRepo(repo)
-	client := ""
+	client := l.Config.Identity.DeviceClientID
 	for _, v := range DeviceClientVariables {
-		if variable, _, err := c.REST.Actions.GetRepoVariable(ctx, owner, name, v); err == nil && variable.Value != "" {
-			client = variable.Value
+		if client != "" || c == nil {
 			break
+		}
+		if variable, _, err := c.REST.Actions.GetRepoVariable(ctx, owner, name, v); err == nil {
+			client = variable.Value
 		}
 	}
 	if client == "" {
-		return nil, WithNext(refusal, fmt.Sprintf("to approve it as yourself from any device, set the repository variable %s to the client ID of a GitHub OAuth App (or of aayudha's GitHub App) with Device Flow enabled", DeviceClientVariables[0]))
+		return nil, WithNext(refusal, fmt.Sprintf("to approve it as yourself from any device, set the repository variable %s (or [identity] device_client_id) to the client ID of a GitHub OAuth App (or of aayudha's GitHub App) with Device Flow enabled", DeviceClientVariables[0]))
+	}
+	on := ""
+	if c != nil {
+		on = " on " + repo
 	}
 
 	code, err := e.deviceCode(ctx, client)
 	if err != nil {
 		return nil, Wrap(ExitExternal, fmt.Errorf("%s: the presence check could not start: %w", what, err))
 	}
-	fmt.Fprintf(e.Err, "%s on %s needs a person's approval.\n  On any device, open %s and enter %s (expires in %d minutes).\n  Approve only if you started this command yourself. Waiting...\n",
-		what, repo, code.VerificationURI, code.UserCode, max(code.ExpiresIn/60, 1))
+	fmt.Fprintf(e.Err, "%s%s needs a person's approval.\n  On any device, open %s and enter %s (expires in %d minutes).\n  Approve only if you started this command yourself. Waiting...\n",
+		what, on, code.VerificationURI, code.UserCode, max(code.ExpiresIn/60, 1))
 	devTok, err := e.deviceToken(ctx, client, code)
 	if err != nil {
-		return nil, Errorf(ExitBlocked, "%s on %s was not approved: %v; nothing was done", what, repo, err)
+		return nil, Errorf(ExitBlocked, "%s%s was not approved: %v; nothing was done", what, on, err)
 	}
 	who, err := identity.WhoAmI(ctx, e.HTTP, e.githubAPI(), identity.Token{Value: devTok, Source: "device flow"}) // its only use; never stored
 	if err != nil {
 		return nil, Wrap(ExitExternal, fmt.Errorf("%s: reading the approving account: %w", what, err))
 	}
-	l, err := e.Config()
-	if err != nil {
-		return nil, err
-	}
 	switch {
 	case identity.IsBot(identity.Account{Login: who.Login, Type: who.Type}, l.Config.Identity.BotLogins):
 		return nil, Errorf(ExitBlocked, "%s: approved by %s, a bot identity; only a person may approve it", what, who.Login)
-	case !strings.EqualFold(who.Login, me.Login):
+	case me != nil && !strings.EqualFold(who.Login, me.Login):
 		return nil, Errorf(ExitBlocked, "%s: approved by @%s, but aayu acts as @%s here; the person whose account acts must approve it", what, who.Login, me.Login)
 	}
-	perm, _, err := c.REST.Repositories.GetPermissionLevel(ctx, owner, name, who.Login)
-	if err != nil {
-		return nil, Wrap(ExitExternal, err)
+	a := &Approval{Login: who.Login, Via: "device-flow"}
+	if c != nil {
+		perm, _, err := c.REST.Repositories.GetPermissionLevel(ctx, owner, name, who.Login)
+		if err != nil {
+			return nil, Wrap(ExitExternal, err)
+		}
+		a.Permission = permissionOf(perm)
 	}
-	a := &Approval{Login: who.Login, Permission: permissionOf(perm), Via: "device-flow"}
-	if a.Permission != "admin" && (need == AccessAdmin || need == AccessWrite && a.Permission != "write") {
-		return nil, Errorf(ExitBlocked, "%s on %s needs %s access; @%s has %s", what, repo, need, a.Login, a.Permission)
+	if !a.covers(need) {
+		return nil, Errorf(ExitBlocked, "%s%s needs %s access; @%s has %s", what, on, need, a.Login, a.Permission)
 	}
-	if log, err := e.Actions(); err == nil {
-		_, _ = log.Do(ctx, actions.Action{Kind: "presence.approve", Target: repo, Identity: "human",
+	// No record, no approval: the actions log is where the approval is kept.
+	log, err := e.Actions()
+	if err == nil {
+		_, err = log.Do(ctx, actions.Action{Kind: "presence.approve", Target: repo, Identity: "human",
 			Payload: map[string]any{"command": what, "approver": a.Login, "via": a.Via, "permission": a.Permission}},
 			func(context.Context) (actions.Outcome, error) { return actions.Outcome{}, nil })
 	}
-	fmt.Fprintf(e.Err, "Approved by @%s (%s, %s access).\n", a.Login, a.Via, a.Permission)
+	if err != nil {
+		return nil, Wrap(ExitInternal, fmt.Errorf("%s: recording the approval in the actions log: %w; nothing was done", what, err))
+	}
+	access := a.Permission
+	if access == "" {
+		access = "no repository"
+	}
+	fmt.Fprintf(e.Err, "Approved by @%s (%s, %s access).\n", a.Login, a.Via, access)
 	e.approval = a
 	return a, nil
 }
