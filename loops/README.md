@@ -11,7 +11,7 @@ agent = false                      # needs no model and runs with the workflow t
 hosts = ["amp", "cursor"]          # optional; default amp, cursor, claude, codex (agent = false: actions)
 prompt = "…"                       # optional, agent loops: what the tool's agent does with the output
 bot = false                        # true when the command writes as the bot: an agent loop (the workflow token is not)
-setup = ["node", "pnpm"]           # optional, agent = false only: pinned tool setups, once the guard says it is due
+setup = ["node", "pnpm"]           # optional, agent = false only: pinned tool setups (node, pnpm, bun), once due
 setup_run = ["pnpm install --frozen-lockfile"]  # optional, agent = false only: the product's own commands, after setup
 ```
 
@@ -23,8 +23,11 @@ refuses a mix: `actions` or `setup` on an agent loop, and an agent tool, `bot = 
 `agent = false` loop. Here `digest` and `verify-sweep` have `agent = false`; every other loop is an agent loop.
 
 This repository's loops are also the defaults a product gets: `aayu install --loops` in a repository with no
-`loops/*.toml` writes them, without `setup` and `setup_run` (this repository's own), and renders them for every tool
-(Appendix B D-7.1g). `triage-daily` (each weekday morning) replaces the
+`loops/*.toml` writes them and renders them for every tool (Appendix B D-7.1g). This repository's own `setup` and
+`setup_run` are replaced by the product's, from its lockfile (D-7.1h): `pnpm-lock.yaml` sets up node and pnpm, `bun.lock`
+or `bun.lockb` sets up Bun, both set up all three and install with pnpm, and `package-lock.json` sets up node and runs
+`npm ci`. Each then installs the Playwright browser through the same package manager; with no lockfile there is no
+setup. `triage-daily` (each weekday morning) replaces the
 retired aayudha-triage workflow and the weekly `triage` loop: `aayu triage` lists every open intake issue with no
 model, and the agent in your own session classifies each one with `--as`. `housekeeping` (weekly) runs `aayu gc`, then reports doctor drift,
 feature-map drift, and stale Ready issues. `ci-failed` (each weekday morning) sends a delegated story's failed

@@ -171,7 +171,8 @@ local time, which picks the right one of the two UTC crons.
 
 **The default loops.** This repository's loops are also the defaults a product gets: they are embedded in the
 binary, and `install --loops` in a repository with no `loops/*.toml` writes them and every tool's render first
-(`loops.Defaults`, which leaves out this repository's own `setup` and `setup_run`). What the
+(`loops.Defaults`, which swaps this repository's own `setup` and `setup_run` for the product's, read from its pnpm,
+Bun, or npm lockfile by `loops.ProductSetup`). What the
 deferred event loops did now runs on a schedule:
 
 | Loop | Starts | Runs |

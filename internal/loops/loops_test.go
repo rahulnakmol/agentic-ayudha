@@ -165,3 +165,48 @@ func TestRepositoryLoops(t *testing.T) {
 		t.Fatalf("%d loops: %v", len(ls), err)
 	}
 }
+
+// D-7.1h: a product's default verify-sweep sets up what its lockfile names, installs through that package manager,
+// and installs the Playwright browser with it; with no lockfile it has no setup. The workflow pins each tool setup.
+func TestDefaultsSetup(t *testing.T) {
+	const browser = "playwright install --with-deps chromium"
+	for _, tt := range []struct {
+		name  string
+		locks []string
+		tools []string
+		run   []string
+	}{
+		{"pnpm", []string{"pnpm-lock.yaml"}, []string{"node", "pnpm"}, []string{"pnpm install --frozen-lockfile", "pnpm exec " + browser}},
+		{"bun", []string{"bun.lock"}, []string{"bun"}, []string{"bun install --frozen-lockfile", "bunx " + browser}},
+		{"bun binary lock", []string{"bun.lockb"}, []string{"bun"}, []string{"bun install --frozen-lockfile", "bunx " + browser}},
+		{"pnpm and bun", []string{"pnpm-lock.yaml", "bun.lock"}, []string{"node", "pnpm", "bun"}, []string{"pnpm install --frozen-lockfile", "pnpm exec " + browser}},
+		{"npm", []string{"package-lock.json"}, []string{"node"}, []string{"npm ci", "npx " + browser}},
+		{"no lockfile", nil, nil, nil},
+	} {
+		dir := t.TempDir()
+		for _, f := range tt.locks {
+			_ = os.WriteFile(filepath.Join(dir, f), []byte("{}\n"), 0o644)
+		}
+		defs, err := Defaults(os.DirFS(filepath.Join("..", "..")), dir)
+		if err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+		l, err := Parse("verify-sweep", defs["loops/verify-sweep.toml"])
+		if err != nil || !slices.Equal(l.Setup, tt.tools) || !slices.Equal(l.SetupRun, tt.run) {
+			t.Errorf("%s: setup %q, setup_run %q, %v; want %q, %q", tt.name, l.Setup, l.SetupRun, err, tt.tools, tt.run)
+			continue
+		}
+		wf, err := ActionsWorkflow([]Loop{l}, "UTC", time.UTC, "v0.4.0", func(string) bool { return true })
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, x := range tt.tools {
+			if !strings.Contains(string(wf), "uses: "+strings.SplitN(setupActions[x], "\n", 2)[0]) {
+				t.Errorf("%s: the workflow does not set up %s", tt.name, x)
+			}
+		}
+		if tt.tools == nil && strings.Contains(string(wf), "Set up for") {
+			t.Errorf("%s: a setup step with no lockfile", tt.name)
+		}
+	}
+}
