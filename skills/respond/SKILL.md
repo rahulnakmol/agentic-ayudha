@@ -112,15 +112,16 @@ timestamped lines, one decision at a time, and every change to production is a p
    incident (`#<incident>`) and gives each event its UTC time; Causes names the root cause and the contributing
    conditions as systems, changes, and decisions, with their evidence (a commit, a `path:line`, `query qN`); each
    action has an owner and its Bug or Story, the durable fix's follow-up Bug first. A contributing condition the
-   grounding does not show starts `Unverified:`. Say how the incident was detected only as the grounding shows it (people
-   reporting it, an alert firing); never assert that an alert did or did not fire when the record does not say, and
-   give a detection gap an action only when the grounding shows the gap. Measure the impact from the first observed
+   grounding does not show is its own list item that starts `Unverified: contributing condition, …`. Keep the
+   investigation's confidence: a hypothesis the note weighed against stays "unlikely", never "ruled out", unless
+   the note rules it out. Say how the incident was detected only as the grounding shows it (people
+   reporting it, an alert firing); never assert that an alert did or did not fire when the record does not say. When people
+   reported it, add an action for an SLO burn-rate alert on that journey, owned by the Production Engineer. Measure the impact from the first observed
    failure to the start of the verified recovery window, say the end is approximate when no query covers it, and
    quote counts per window as the queries give them. Never call a run a first try or a clean run unless the record
    shows its history. The follow-up Bug files on close: never write it as filed, and never describe an approval, a run,
-   or an owner's agreement the timeline and comments do not show (an owner who has not agreed is "asked"). A
-   startup Incident log is at most 400 words of prose, so aim for about 300: one line per timeline event, each fact
-   once. It is blameless: no person is at
+   or an owner's agreement the timeline and comments do not show (an owner who has not agreed in the record is "to confirm", never "asked" or "agreed"). A
+   startup Incident log is at most 400 words of prose: the check counts only prose (paragraphs and list items; headings, tables, and code are not counted), so put steps, events, and actions in table rows and keep the prose near 300 words; when the check says it is over, move lists into a table or cut repeated facts until the prose is under 350, never just under 400. It is blameless: no person is at
    fault, careless, or "should have known"; ask what made the mistake easy, not who made it. Check and post it with
    `aayu respond <incident> --postmortem <file>` (exit 4 on findings; it is replaced in place on a rerun).
 6. `aayu respond <incident> --close` files the linked Bug (`caused-by`) carrying the investigation note's

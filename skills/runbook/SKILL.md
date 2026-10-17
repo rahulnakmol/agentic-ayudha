@@ -113,8 +113,7 @@ answers, such as the `path:line` it fixes or `#N`. Never cite a file that does n
 the file you save the draft in). What you cannot cite starts `Unverified:` or `Assumption:`. The document is its
 title and its parts only: no preamble before it, and no steps for the reader (how to check, save, or open a pull
 request) inside it. Never write that an action was run by you. A
-startup runbook entry is at most 400 words of prose, so aim for about 300: one entry, short steps, no repeated
-facts.
+startup runbook entry is at most 400 words of prose: the check counts only prose (paragraphs and list items; headings, tables, and code are not counted), so put steps, events, and actions in table rows and keep the prose near 300 words; when the check says it is over, move lists into a table or cut repeated facts until the prose is under 350, never just under 400.
 
 ## 3. Check and create
 

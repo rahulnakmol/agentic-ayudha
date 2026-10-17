@@ -156,7 +156,7 @@ answers, such as the `path:line` it fixes or `#N`. Never cite a file that does n
 the file you save the draft in). What you cannot cite starts `Unverified:` or `Assumption:`. The document is its
 title and its parts only: no preamble before it, and no steps for the reader (how to check, save, or open a pull
 request) inside it. The release gate is a fact of `ops/slos.toml` in the
-grounding. A startup SLO line is at most 400 words of prose, so aim for about 300. Check the draft with `aayu slo --telemetry <dir> --draft <file>`: it refuses (exit 4) a missing part, the
+grounding. A startup SLO line is at most 400 words of prose: the check counts only prose (paragraphs and list items; headings, tables, and code are not counted), so put steps, events, and actions in table rows and keep the prose near 300 words; when the check says it is over, move lists into a table or cut repeated facts until the prose is under 350, never just under 400. Who decides a waiver cites `ops/slos.toml` (the release gate) or `#N`. Check the draft with `aayu slo --telemetry <dir> --draft <file>`: it refuses (exit 4) a missing part, the
 wrong title, an uncited claim, an objective without a percentage or a window, no burn-rate alert, no release policy,
 an SLO of `ops/slos.toml` the objectives do not name, and a toml block that does not parse. Once it passes and the
 person agrees, `--create` writes the block to `ops/slos.toml` in the checkout; they open the pull request (a protected
