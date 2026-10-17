@@ -189,6 +189,66 @@ func TestGitleaksScansOnlyTheCommitUnderTest(t *testing.T) {
 	}
 }
 
+// TestSnapshotNamesItselfFromTheNewestRelease: goreleaser names a snapshot `incpatch .Version` from its current
+// tag. v* tags sit on main's Release merge commits, which dev and rolling never contain, and a rolling commit
+// carries a rolling-<date> tag, which goreleaser takes first and cannot parse as a version (release-snapshot failed
+// on every rolling push). Each workflow running `release --snapshot` must first set GORELEASER_CURRENT_TAG to the
+// newest v* tag by version, here v0.10.0: not an ancestor of HEAD, and after v0.9.0 only in version order.
+func TestSnapshotNamesItselfFromTheNewestRelease(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash steps")
+	}
+	repo := t.TempDir()
+	gitIn := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = repo
+		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.com", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.com")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	gitIn("init", "-q", "-b", "rolling")
+	gitIn("commit", "-q", "--allow-empty", "-m", "base")
+	gitIn("checkout", "-q", "-b", "main")
+	gitIn("commit", "-q", "--allow-empty", "-m", "Release: v0.9.0")
+	gitIn("tag", "v0.9.0")
+	gitIn("commit", "-q", "--allow-empty", "-m", "Release: v0.10.0")
+	gitIn("tag", "-a", "-m", "v0.10.0", "v0.10.0")
+	gitIn("checkout", "-q", "rolling")
+	gitIn("commit", "-q", "--allow-empty", "-m", "Rolling snapshot")
+	gitIn("tag", "rolling-2026-10-16.2")
+	step := regexp.MustCompile(`(?m)^\s*run: (.*GORELEASER_CURRENT_TAG=.*)$`)
+	files, _ := filepath.Glob(".github/workflows/*.yml")
+	found := 0
+	for _, f := range files {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if snap := strings.Index(string(b), "release --snapshot"); snap >= 0 {
+			if m := step.FindStringSubmatchIndex(string(b)); m == nil || m[0] > snap {
+				t.Errorf("%s runs `goreleaser release --snapshot` without first setting GORELEASER_CURRENT_TAG", f)
+			}
+		}
+		for _, m := range step.FindAllStringSubmatch(string(b), -1) {
+			found++
+			env := filepath.Join(t.TempDir(), "env")
+			cmd := exec.Command("bash", "-c", m[1])
+			cmd.Dir = repo
+			cmd.Env = append(os.Environ(), "GITHUB_ENV="+env)
+			out, err := cmd.CombinedOutput()
+			got, _ := os.ReadFile(env)
+			if err != nil || strings.TrimSpace(string(got)) != "GORELEASER_CURRENT_TAG=v0.10.0" {
+				t.Errorf("%s: %q wrote %q (%v, %s); want GORELEASER_CURRENT_TAG=v0.10.0", f, m[1], got, err, out)
+			}
+		}
+	}
+	if found == 0 {
+		t.Fatal("found no GORELEASER_CURRENT_TAG step in the workflows")
+	}
+}
+
 // Founder decisions of 2026-10-15 and 2026-10-16 (Appendix B S-4.8c, S-2.9b, D-2.9b): product CI never calls a model,
 // and this repository's model checks never gate. Every workflow `init --gates` installs holds no model key or
 // AI-gateway environment; the four workflows that call the gateway for aayudha's own model code run on no pull
