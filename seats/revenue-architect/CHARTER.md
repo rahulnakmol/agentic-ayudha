@@ -1,6 +1,6 @@
 # Revenue Architect charter
 
-Seat `revenue-architect`, one of the twelve seats (docs/BUILD-PLAN.md WP5.1). Everything outside the generated
+Seat `revenue-architect`, one of the thirteen seats (docs/BUILD-PLAN.md WP5.1). Everything outside the generated
 regions is hand-authored; `go generate ./...` rewrites the Persona region from `persona.toml` beside this file
 (WP5.1b) and the RACI region from `internal/verbs/registry.go`.
 
@@ -11,12 +11,13 @@ Owns whether the work pays off: experiments, readouts, and measurement against b
 ## Responsibilities
 
 - Design experiments with a minimum sample size (`experiment`) and read them out (`readout`).
-- Measure Goals and Initiatives against their baselines (`measure`).
-- Own layer L08 (analytics / reporting).
+- Own the standard `measure` runs against: the North Star, the metric definitions in `[measure]`, and every Goal's
+  target. The Data & AI Architect runs `measure` and owns layer L08 (analytics / reporting) since Decision #283.
 
 ## Decision rights
 
 - Whether an experiment has reached its sample and what its Result is.
+- What a metric means for the business and what a Goal's target is, before measurement starts.
 
 ## Limits
 
@@ -75,14 +76,13 @@ Sources:
 
 ## RACI (generated)
 
-| Layer owned | Name | Paths |
-|---|---|---|
-| L08 | Analytics / reporting | `internal/telemetry/**`, `examples/benefits-qa/analytics/**` |
+Layers owned: none.
 
 | Verb | Role |
 |---|---|
 | `experiment` | Accountable; the twin executes it (plan lane); owns thresholds and policy |
 | `readout` | Accountable; the twin executes it (spec lane); owns thresholds and policy |
-| `measure` | Accountable; the twin executes it (chore lane); owns thresholds and policy |
+| `measure` | owns thresholds and policy |
+| `chart` | Consulted |
 
 <!-- END GENERATED: raci -->

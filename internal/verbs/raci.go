@@ -23,7 +23,7 @@ type Roles struct {
 var RACI = map[string]Roles{
 	"grill":      {Consulted: []SeatID{CodeArchitect, UXResearcher}, Informed: []SeatID{EngineeringManager}},
 	"slice":      {Consulted: []SeatID{CodeArchitect, EngineeringManager}, Informed: []SeatID{AINativeEngineer}},
-	"plan":       {Consulted: []SeatID{EngineeringManager, QualityArchitect}, Informed: []SeatID{AINativeEngineer}},
+	"plan":       {Consulted: []SeatID{EngineeringManager, QualityArchitect, DataAIArchitect}, Informed: []SeatID{AINativeEngineer}},
 	"decide":     {Consulted: []SeatID{ProductStrategist, CodeArchitect}, Informed: []SeatID{EngineeringManager, Auditor}},
 	"triage":     {Informed: []SeatID{EngineeringManager}},
 	"build":      {Consulted: []SeatID{CodeArchitect}, Informed: []SeatID{EngineeringManager}},
@@ -40,19 +40,20 @@ var RACI = map[string]Roles{
 	"review":     {Consulted: []SeatID{QualityArchitect}, Informed: []SeatID{EngineeringManager}},
 	"polish":     {Informed: []SeatID{EngineeringManager}},
 	"baseline":   {Consulted: []SeatID{QualityArchitect}, Informed: []SeatID{EngineeringManager}},
-	"experiment": {Consulted: []SeatID{ProductStrategist, UXResearcher}, Informed: []SeatID{Founder}},
+	"experiment": {Consulted: []SeatID{ProductStrategist, UXResearcher, DataAIArchitect}, Informed: []SeatID{Founder}},
 	"readout":    {Consulted: []SeatID{ProductStrategist}, Informed: []SeatID{Founder, Marketer}},
 	"respond":    {Consulted: []SeatID{DevOps}, Informed: []SeatID{EngineeringManager, Founder}},
 	"status":     {Informed: []SeatID{Founder}},
 	"audit":      {Consulted: []SeatID{QualityArchitect}, Informed: []SeatID{Founder}},
 	"retro":      {Consulted: []SeatID{Auditor, AINativeEngineer}, Informed: []SeatID{Founder}},
 	"measure":    {Consulted: []SeatID{ProductStrategist}, Informed: []SeatID{Founder}},
-	"evolve":     {Consulted: []SeatID{QualityArchitect}, Informed: []SeatID{EngineeringManager}},
+	"evolve":     {Consulted: []SeatID{QualityArchitect, DataAIArchitect}, Informed: []SeatID{EngineeringManager}},
 	"brief":      {Consulted: []SeatID{ProductStrategist}, Informed: []SeatID{Marketer}},
 	"tell":       {Consulted: []SeatID{Mentalist, ProductStrategist}, Informed: []SeatID{Founder}},
 	"init":       {Consulted: []SeatID{DevOps}, Informed: []SeatID{EngineeringManager}},
 	"install":    {Informed: []SeatID{EngineeringManager}},
 	"doctor":     {Informed: []SeatID{EngineeringManager}},
+	"chart":      {Consulted: []SeatID{CodeArchitect, RevenueArchitect}, Informed: []SeatID{AINativeEngineer, QualityArchitect}},
 }
 
 // PolicyOwner is the seat that owns a command's thresholds or policy.
@@ -74,7 +75,7 @@ func LintRACI() error {
 	known := func(id SeatID) bool { _, ok := FindSeat(id); return ok }
 	for _, c := range append(slices.Clone(Verbs), Plumbing...) {
 		if !known(c.Seat) {
-			bad("%s: Accountable seat %q is not one of the twelve seats", c.Name, c.Seat)
+			bad("%s: Accountable seat %q is not one of the thirteen seats", c.Name, c.Seat)
 		}
 		if c.Owns != "" && !known(c.Owns) {
 			bad("%s: threshold owner %q is not a seat", c.Name, c.Owns)

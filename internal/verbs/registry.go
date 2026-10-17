@@ -14,7 +14,7 @@ const SkillVersion = "0.0.0"
 // SeatID is the stable slug of a seat.
 type SeatID string
 
-// Seat is one of the twelve pod seats. Each seat runs solo (agent only) or
+// Seat is one of the thirteen pod seats. Each seat runs solo (agent only) or
 // paired (agent twin plus a human); the mode is configuration, not registry data.
 type Seat struct {
 	ID   SeatID
@@ -292,6 +292,7 @@ func (c Command) Has(s Surface) bool {
 const (
 	ProductStrategist  SeatID = "product-strategist"
 	CodeArchitect      SeatID = "code-architect"
+	DataAIArchitect    SeatID = "data-ai-architect" // the Code Architect's counterpart for data and AI (Decision #283)
 	EngineeringManager SeatID = "engineering-manager"
 	AINativeEngineer   SeatID = "ai-native-engineer"
 	UXResearcher       SeatID = "ux-researcher-evolutionist"
@@ -304,10 +305,11 @@ const (
 	Founder            SeatID = "founder"
 )
 
-// Seats lists the twelve seats in charter order.
+// Seats lists the thirteen seats in charter order.
 var Seats = []Seat{
 	{ProductStrategist, "Product Strategist"},
 	{CodeArchitect, "Code Architect"},
+	{DataAIArchitect, "Data & AI Architect"},
 	{EngineeringManager, "Engineering Manager"},
 	{AINativeEngineer, "AI Native Engineer (+SRE hat)"},
 	{UXResearcher, "UX Researcher & Evolutionist"},
@@ -340,10 +342,10 @@ var LayerTable = []Layer{
 	{L02, "Interaction / API boundary", CodeArchitect, []string{"cmd/**", "internal/cli/**", "internal/mcp/**", "examples/benefits-qa/api/**", "examples/benefits-qa/cmd/**"}},
 	{L03, "Application / workflow", EngineeringManager, []string{"internal/verbs/**", "internal/workitems/**", "internal/loops/**", "loops/**", "work-items/**", "skills/**", "seats/**", "examples/benefits-qa/ask/**"}},
 	{L04, "Domain / policy", QualityArchitect, []string{"internal/verify/**", "internal/proof/**", "ops/**", "CONSTRAINTS.md", "examples/benefits-qa/policy/**"}},
-	{L05, "Intelligence", AINativeEngineer, []string{"internal/models/**", "internal/evals/**", "evals/**", "examples/benefits-qa/answer/**"}},
+	{L05, "Intelligence", DataAIArchitect, []string{"internal/models/**", "internal/evals/**", "evals/**", "examples/benefits-qa/answer/**"}},
 	{L06, "Contracts / integration", CodeArchitect, []string{"internal/github/**", "internal/hosts/**", "internal/notify/**", "hosts/**", "examples/benefits-qa/contracts/**"}},
 	{L07, "Operational data / state", AINativeEngineer, []string{"internal/ledger/**", "internal/config/**", "internal/secrets/**", "internal/identity/**", "internal/actions/**", "examples/benefits-qa/store/**"}},
-	{L08, "Analytics / reporting", RevenueArchitect, []string{"internal/telemetry/**", "examples/benefits-qa/analytics/**"}},
+	{L08, "Analytics / reporting", DataAIArchitect, []string{"internal/telemetry/**", "examples/benefits-qa/analytics/**"}},
 	{L09, "Platform / operations", DevOps, []string{".github/**", ".agents/**", "embed.go", "go.mod", "go.sum", "examples/benefits-qa/deploy/**"}},
 }
 
@@ -517,7 +519,8 @@ func enumIn(name string, required, positional bool, desc string, values ...strin
 	return Input{Name: name, Type: TypeEnum, Required: required, Positional: positional, Enum: values, Description: desc}
 }
 
-// Verbs lists the 32 verbs in plan order (V7, WP0.3).
+// Verbs lists the 32 verbs in plan order (V7, WP0.3), then chart, the Data & AI
+// Architect's verb (Decision #283, Appendix B S-5.1g).
 var Verbs = []Command{
 	{
 		Name: "grill", WP: "WP5.3", Stage: StageShape,
@@ -888,7 +891,7 @@ var Verbs = []Command{
 		Name: "measure", WP: "WP7.2", Stage: StageLearn,
 		Summary: "Measure a Goal or Initiative against its baseline from analytics exports or live cloud pulls and write the Result.",
 		Reader:  "Measures a Goal against its baseline, the same way as before, and writes the result into the Goal.",
-		Seat:    RevenueArchitect, Lane: LaneChore, Layers: OnlyLayers(L08),
+		Seat:    DataAIArchitect, Owns: RevenueArchitect, Lane: LaneChore, Layers: OnlyLayers(L08),
 		Inputs: []Input{
 			optPos("issue", TypeIssue, "Goal or Initiative to measure; without it, only the cohorts and North Star are reported."),
 			flag("metric", TypeString, "acquisition, activation, retention, referral, revenue, north_star, or <source>:<metric> [filter]; default the issue's Metric."),
@@ -998,6 +1001,21 @@ var Verbs = []Command{
 		},
 		Outputs:  []string{"report"},
 		Surfaces: cliSkillMCP, Identity: IdentityHuman, Mode: ModeNone, Exposure: ExposeRead, ReadOnly: true,
+	},
+	{
+		Name: "chart", WP: "WP5.1g", Stage: StageBreakDown,
+		Summary: "Chart an issue's data or AI design before planning: decisions, metrics, sources, platform, and retention; or evidence, permissions, abstention, and evals.",
+		Reader:  "Before a data or AI change is planned, works out with you which decisions it serves, which data or evidence answers them, and how to prove it right.",
+		Seat:    DataAIArchitect, Lane: LaneSpec, Layers: OnlyLayers(L05, L07, L08),
+		Inputs: []Input{
+			pos("issue", TypeIssue, "Feature, Initiative, Story, or Bug whose data or AI design to chart."),
+			enumIn("kind", true, false, "data: decisions, metrics with grain and window, sources, platform and its trigger, retention and deletion; ai: simpler options, evidence and permissions, abstention, and an evaluation set.", "data", "ai"),
+			flag("draft", TypePath, "Markdown chart note the host's model wrote; chart checks every part, the stage's artefact, and every citation. Without it, chart prints the grounding and the outline."),
+			readOnlyWith(flag("create", TypeBool, "Post the checked note on the issue as one comment per kind, replaced in place on a rerun (through the actions log); needs --draft."), "false"),
+		},
+		Outputs:  []string{"chart-note", "grounding"},
+		Gates:    []GateID{GateHalt},
+		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeRead,
 	},
 }
 

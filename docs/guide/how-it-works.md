@@ -13,7 +13,7 @@ diagram, real excerpts from this repository, a list of invariants, and links int
 | Page | What you will learn |
 |---|---|
 | [Architecture](how-architecture.md) | One static binary, four hosts, four surfaces per verb, which steps your agent's model reasons in versus the binary's own model calls, and the vagueness gate |
-| [The verb registry and code generation](how-registry.md) | How 32 verbs are declared once, what `go generate` builds from them, and how CI catches drift |
+| [The verb registry and code generation](how-registry.md) | How 33 verbs are declared once, what `go generate` builds from them, and how CI catches drift |
 
 ## Who may do what
 

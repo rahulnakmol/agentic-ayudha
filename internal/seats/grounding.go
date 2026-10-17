@@ -18,7 +18,9 @@ import (
 // it, because an illustration never replaces evidence. Headings are not
 // claims, including a unit that is only a bold label or a short lead-in ending
 // with a colon; nor is a statement about a template path (retro/<date>/),
-// which needs no grounding and counts as no evidence. With a grounding text,
+// which needs no grounding and counts as no evidence; nor is a unit marked
+// "Assumption:" or "Unverified:", which the rule asks for when a claim cannot be
+// cited. With a grounding text,
 // every citation must name something the grounding contains, so a citation
 // cannot be invented; a twin's own charter or persona.toml is always known
 // (D-5.1d).
@@ -39,6 +41,10 @@ var (
 	}
 
 	illustration = regexp.MustCompile(`^(?:[*_]{1,2})?(Analogy|Anecdote)\b`)
+	// marked is a unit the twin marks as not evidenced, as the evidence rule asks
+	// of a claim it cannot cite ("Assumption: …", "Unverified: …"): it claims
+	// nothing as fact, so it needs no citation (Decision #283).
+	marked = regexp.MustCompile("^(?:[*_`]{1,2})?(Assumption|Unverified)\\b")
 	// boldLabel is a unit that is only a bold label, such as an option heading
 	// ("**A. Add the field.**"); a heading claims nothing.
 	boldLabel = regexp.MustCompile(`^\*\*[^*]+\*\*:?$`)
@@ -179,6 +185,8 @@ func CheckGroundingWith(md string, known func(cite string) bool) []string {
 			}
 		case strings.HasSuffix(u.text, "?") && !strings.Contains(strings.TrimSuffix(u.text, "?"), ". "):
 			// a question to the reader claims nothing
+		case marked.MatchString(u.text):
+			// an assumption or an unverified point, marked as such, is not stated as fact
 		case isLabel(u.text):
 			// an option or section heading written as a bold label or a short lead-in claims nothing
 		case template[i] && !cited[i]:

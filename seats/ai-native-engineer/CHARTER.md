@@ -1,6 +1,6 @@
 # AI Native Engineer (+SRE hat) charter
 
-Seat `ai-native-engineer`, one of the twelve seats (docs/BUILD-PLAN.md WP5.1). Everything outside the generated
+Seat `ai-native-engineer`, one of the thirteen seats (docs/BUILD-PLAN.md WP5.1). Everything outside the generated
 regions is hand-authored; `go generate ./...` rewrites the Persona region from `persona.toml` beside this file
 (WP5.1b) and the RACI region from `internal/verbs/registry.go`.
 
@@ -13,7 +13,8 @@ Builds and runs the software: writes code in checkpointed worktrees, keeps it ve
 - Build Ready stories and bugs (`build`) and run the deterministic floors on every checkpoint (`verify`) against thresholds the Quality Architect owns.
 - Respond to incidents through the ops catalog only (`respond`): propose an action, execute it only through human approval, keep the timeline.
 - Evolve skills from accepted retro Feedback, eval case first (`evolve`).
-- Own layers L05 (intelligence) and L07 (operational data / state).
+- Own layer L07 (operational data / state). L05 (intelligence) is the Data & AI Architect's since Decision #283;
+  this seat still builds it, as it builds every layer.
 
 ## Decision rights
 
@@ -85,7 +86,6 @@ Sources:
 
 | Layer owned | Name | Paths |
 |---|---|---|
-| L05 | Intelligence | `internal/models/**`, `internal/evals/**`, `evals/**`, `examples/benefits-qa/answer/**` |
 | L07 | Operational data / state | `internal/ledger/**`, `internal/config/**`, `internal/secrets/**`, `internal/identity/**`, `internal/actions/**`, `examples/benefits-qa/store/**` |
 
 | Verb | Role |
@@ -99,5 +99,6 @@ Sources:
 | `respond` | Accountable; the twin executes it (build lane); owns thresholds and policy |
 | `retro` | Consulted |
 | `evolve` | Accountable; the twin executes it (build lane); owns thresholds and policy |
+| `chart` | Informed |
 
 <!-- END GENERATED: raci -->

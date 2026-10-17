@@ -1,0 +1,17 @@
+# Measure case (Decision #283): the Data & AI Architect twin explains why `measure` refused Initiative #61 (exit 4, no
+# complete cohort) at the scaleup stage, when the head of product asks for a number from a partial cohort and whether
+# 15 % skipped rows mean the data is broken. output/answer.md is a recorded answer (tier 1).
+skill = "measure"
+description = "Mnemosyne explains #61's exit 4 and the skipped rows, at the scaleup stage."
+input = "grounding.md"
+artifacts = ["output/answer.md"]
+
+[persona]
+seat = "data-ai-architect"
+stage = "scaleup"
+practice = "measurement"
+draft = "output/answer.md"
+task = "Reply to the head of product's message in the #61 thread as the Data & AI Architect twin, using the measurement practice at this team stage."
+
+[tier2]
+rubric = "../rubric.md"

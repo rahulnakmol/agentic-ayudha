@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
+	"github.com/rahulnakmol/agentic-ayudha/internal/chart"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/decide"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
@@ -33,6 +34,9 @@ type PersonaSpec struct {
 	// Planted is a recorded output with a planted uncited claim; tier 1 fails
 	// unless the evidence rule catches it.
 	Planted string `toml:"planted"`
+	// Kind is the chart note's kind (data or ai) for a chart case: its output
+	// must also be a complete chart note of that kind (chart.CheckStructure).
+	Kind string `toml:"kind"`
 }
 
 // personaOf loads the case's persona and practice from the embedded seats/.
@@ -49,6 +53,9 @@ func personaOf(c Case, assets fs.FS) (seats.Persona, seats.Practice, error) {
 	if !slices.Contains(config.TeamStages, p.Stage) {
 		return seats.Persona{}, seats.Practice{}, fmt.Errorf("stage %q: want one of %s", p.Stage, strings.Join(config.TeamStages, ", "))
 	}
+	if c.Skill == "chart" && (!slices.Contains(chart.Kinds, p.Kind) || p.Practice != chart.Practice(p.Kind)) {
+		return seats.Persona{}, seats.Practice{}, fmt.Errorf("a chart case needs kind data or ai and that kind's practice (%s for %q)", chart.Practice(p.Kind), p.Kind)
+	}
 	persona := ps[verbs.SeatID(p.Seat)]
 	pr, ok := persona.Practice(p.Practice)
 	if !ok {
@@ -57,9 +64,14 @@ func personaOf(c Case, assets fs.FS) (seats.Persona, seats.Practice, error) {
 	return persona, pr, nil
 }
 
-// checkPersona runs the deterministic checks on one output.
+// checkPersona runs the deterministic checks on one output; a chart case's
+// output must also have every part of its kind of note.
 func checkPersona(c Case, pr seats.Practice, grounding, out string) []string {
-	return append(seats.CheckGrounding(out, grounding), seats.CheckStage(out, pr, c.Persona.Stage)...)
+	found := append(seats.CheckGrounding(out, grounding), seats.CheckStage(out, pr, c.Persona.Stage)...)
+	if c.Skill == "chart" {
+		found = append(found, chart.CheckStructure(out, c.Persona.Kind)...)
+	}
+	return found
 }
 
 // tier1Persona checks the recorded output and that the planted one fails.
@@ -125,6 +137,9 @@ func (h *Harness) runPersona(ctx context.Context, c Case, lane verbs.LaneID, bod
 		"the grounding contains; the output carries the %s artefact %q of practice %q and no other stage's artefact", c.Persona.Stage, d.Artefact, pr.Name)
 	if c.Persona.Stage == config.StageStartup {
 		checks += fmt.Sprintf("; it is at most %d words", seats.StartupMaxWords)
+	}
+	if c.Skill == "chart" {
+		checks += fmt.Sprintf("; it has every part of a %s chart note in order, each naming what the part must name", c.Persona.Kind)
 	}
 	judged, err := h.judge(ctx, "## Task\n\n"+c.Persona.Task+"\n\n## Team stage\n\n"+c.Persona.Stage+
 		"\n\n## Persona the skill speaks in\n\n"+persona.Prompt(c.Persona.Stage, "set by the case")+

@@ -44,6 +44,9 @@ var route = []struct {
 	re   *regexp.Regexp
 }{
 	{verbs.Auditor, regexp.MustCompile(`(?i)\b(audit|control|compliance|bypass|evidence trail|unlogged)\b`)},
+	// Data and AI design (Decision #283): before the Revenue Architect's metrics and the DevOps "pipeline", so "data
+	// pipeline" and "analytics dashboard" reach the data seat while "conversion metric" and "CI pipeline" do not.
+	{verbs.DataAIArchitect, regexp.MustCompile(`(?i)\b(data (pipelines?|warehouse|lake|lakehouse|platform|quality|contracts?|products?|lineage|retention)|warehouse|lakehouse|analytics|dashboards?|semantic layer|lineage|etl|elt|cdc|rag|retrieval|embeddings?|vector (index|store|database|db)|knowledge graphs?|graphrag|machine learning|ml|llm|eval sets?|hallucinat\w*|grounded answers?)\b`)},
 	{verbs.RevenueArchitect, regexp.MustCompile(`(?i)\b(metrics?|conversion|revenue|pricing|price|experiments?|growth|retention|activation|north star|churn|readout)\b`)},
 	{verbs.QualityArchitect, regexp.MustCompile(`(?i)\b(tests?|testing|flak\w*|coverage|floors?|quality|defects?|regression|waive\w*|proof packs?)\b`)},
 	{verbs.AINativeEngineer, regexp.MustCompile(`(?i)\b(incident|outage|slo|error budget|latency|on-?call|rollback|production)\b`)},

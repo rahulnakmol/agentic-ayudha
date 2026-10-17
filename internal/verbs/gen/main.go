@@ -36,7 +36,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
-// personas are the twelve seat personas (WP5.1b), loaded once by run.
+// personas are the thirteen seat personas (WP5.1b), loaded once by run.
 var personas map[verbs.SeatID]seats.Persona
 
 const (
@@ -395,7 +395,7 @@ func genCharters() error {
 	}
 	for _, e := range entries {
 		if e.IsDir() && !want[e.Name()] {
-			return fmt.Errorf("seats/%s is not one of the twelve registry seats", e.Name())
+			return fmt.Errorf("seats/%s is not one of the thirteen registry seats", e.Name())
 		}
 	}
 	return nil
