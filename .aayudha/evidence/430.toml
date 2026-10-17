@@ -1,0 +1,26 @@
+# Which tests prove story #430's Completion Goal (verify maps the go test -json events of these tests, from the
+# run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # an agent promotes dev → rolling behind a green gate, recorded as an agent run
+tests = ["internal/cli:TestReleaseLadder"]
+
+[[criterion]]
+id = 2 # a red gate refuses the agent: nothing pushed, no tag
+tests = ["internal/cli:TestReleaseLadder"]
+
+[[criterion]]
+id = 3 # main without a valid stable-release request is refused
+tests = ["internal/cli:TestReleaseLadder"]
+
+[[criterion]]
+id = 4 # a person's request lets the agent promote rolling → main
+tests = ["internal/cli:TestReleaseLadder"]
+
+[[criterion]]
+id = 5 # the pre-tool hook denies an agent writing the request
+tests = ["internal/hosts:TestPreToolBlocksHumanOnlyShell"]
+
+[[criterion]]
+id = 6 # decide --accept, ship --solo-bypass, and plan --solo-bypass still refuse agents
+tests = ["internal/cli:TestDecideSLA", "internal/cli:TestShipMobileWaiverAndSoloBypass", "internal/cli:TestPlan"]

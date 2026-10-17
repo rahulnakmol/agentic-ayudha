@@ -108,6 +108,8 @@ func newLadderFixture(t *testing.T) *ladderFixture {
 	f.env = env
 	f.opts = opts
 	f.opts.RunPoll = time.Millisecond
+	// f.env is a person at a terminal (stdin is one; stdout is not, so output stays plain); an agent has none.
+	f.opts.IsTerminal = func(stream any) bool { _, ok := stream.(*strings.Reader); return ok }
 	return f
 }
 
@@ -165,8 +167,7 @@ func TestReleaseLadder(t *testing.T) {
 		args []string
 		want string
 	}{
-		{"agent lane", agent, []string{rel, "--to", "rolling"}, "refused for an agent lane"},
-		{"no confirmation off a terminal", f.env, []string{rel, "--to", "rolling"}, "release not confirmed"},
+		{"agent says --yes", agent, []string{rel, "--to", "rolling", "--yes"}, "--yes is for humans only"},
 		{"main before rolling", f.env, []string{rel, "--to", "main", "--yes"}, "has not been promoted to rolling yet"},
 		{"includes unmerged work", f.env, []string{strconv.Itoa(f.wide), "--to", "rolling", "--yes"}, fmt.Sprintf("#%d (status in-progress) is not in rolling..dev", f.pending)},
 		{"not a Release", f.env, []string{"2", "--to", "rolling", "--yes"}, `is a "story", not a Release`},
@@ -228,9 +229,15 @@ func TestReleaseLadder(t *testing.T) {
 		t.Fatal("the dry run moved rolling")
 	}
 
-	// A gate that still fails after one re-run of its failed jobs stops the promotion: nothing lands.
+	// A person at a terminal is still asked; a no promotes nothing.
+	if code, _, errOut := runIn(t, f.env, opts, "n\n", "release", rel, "--to", "rolling", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "release not confirmed") || len(f.dispatched) != 0 {
+		t.Fatalf("a person's no at a terminal: %d %s", code, errOut)
+	}
+
+	// An agent (D-7.8c) runs it with no terminal and no --yes. A gate that still fails after one re-run of its
+	// failed jobs stops the promotion: nothing lands.
 	f.gateFails = 2
-	if code, _, errOut := f.run(t, day, f.env, rel, "--to", "rolling", "--yes"); code != ExitBlocked || !strings.Contains(errOut, "the rolling gate failed") {
+	if code, _, errOut := f.run(t, day, agent, rel, "--to", "rolling"); code != ExitBlocked || !strings.Contains(errOut, "the rolling gate failed") {
 		t.Fatalf("failing gate: %d %s", code, errOut)
 	}
 	if git(t, f.bare, "rev-parse", "refs/heads/rolling") != rolling0 || git(t, f.bare, "tag", "--list") != "" || git(t, f.bare, "branch", "--list", "promote/*") != "" {
@@ -242,8 +249,9 @@ func TestReleaseLadder(t *testing.T) {
 	f.dispatched = nil
 
 	f.gateFails = 1 // the first gate attempt fails (a transient signing timeout); release re-runs its failed jobs once
-	code, out, errOut = run(t, f.env, opts, "release", rel, "--to", "rolling", "--yes", "--repo", "o/r")
-	if code != 0 || !strings.Contains(out, fmt.Sprintf("  measure due: #%d (goal) after 2026-11-09\n", f.goal)) || !strings.Contains(out, "  ci.yml: success https://github.com/o/r/actions/runs/") {
+	code, out, errOut = run(t, agent, opts, "release", rel, "--to", "rolling", "--repo", "o/r")
+	if code != 0 || !strings.Contains(out, fmt.Sprintf("  measure due: #%d (goal) after 2026-11-09\n", f.goal)) || !strings.Contains(out, "  ci.yml: success https://github.com/o/r/actions/runs/") ||
+		!strings.Contains(out, "  run by an agent (AAYU_AGENT=1) under @founder\n") {
 		t.Fatalf("release to rolling: %d\n%s%s", code, out, errOut)
 	}
 	var p Promotion
@@ -278,7 +286,7 @@ func TestReleaseLadder(t *testing.T) {
 		!strings.Contains(notes, "- Show empty list") || !strings.Contains(notes, "1 more change(s) shipped under Features without authoritative packs") || strings.Contains(notes, "Upload a CSV") {
 		t.Fatalf("release notes:\n%s", notes)
 	}
-	if p.Tree == "" || p.Notes != "tell/release/rolling-2026-10-12.md" || p.PromotedBy != "founder" || p.SourceSHA != git(t, f.bare, "rev-parse", "refs/heads/dev") {
+	if p.Tree == "" || p.Notes != "tell/release/rolling-2026-10-12.md" || p.PromotedBy != "founder" || p.Agent != "AAYU_AGENT=1" || p.Request != nil || p.SourceSHA != git(t, f.bare, "rev-parse", "refs/heads/dev") {
 		t.Fatalf("promotion record: %+v", p)
 	}
 	var due MeasureDue
@@ -291,7 +299,7 @@ func TestReleaseLadder(t *testing.T) {
 	body := f.g.Issues[f.release].Body
 	f.g.Mu.Unlock()
 	for _, want := range []string{"### Shipping evidence", "**dev → rolling** on 2026-10-12T09:41:00Z by @founder", "commit `" + tip + "`",
-		"ci.yml run", "success (attempts 2)", fmt.Sprintf("Stories released: #2, #%d", f.other), fmt.Sprintf("Measure due: #%d (goal) after 2026-11-09", f.goal)} {
+		"ci.yml run", "success (attempts 2)", "- Run by an agent (`AAYU_AGENT=1`) under @founder's account", fmt.Sprintf("Stories released: #2, #%d", f.other), fmt.Sprintf("Measure due: #%d (goal) after 2026-11-09", f.goal)} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("Shipping evidence lacks %q:\n%s", want, body)
 		}
@@ -344,9 +352,51 @@ func TestReleaseLadder(t *testing.T) {
 	}
 	git(t, f.bare, "update-ref", "refs/heads/rolling", rollingTip)
 
+	// Main needs the explicit stable-release request (D-7.8c): a comment "Stable release: v0.1.0" on the Release,
+	// after its rolling snapshot (10:41), by a non-bot account with write access and no aayudha marker. Each near
+	// miss alone is refused, with nothing pushed.
+	rollingAt := day.Add(time.Hour)
+	comment := func(login, typ, body string, at time.Time) {
+		f.g.Mu.Lock()
+		defer f.g.Mu.Unlock()
+		c := &fake.Comment{ID: at.Unix(), Body: body, CreatedAt: at, HTMLURL: fmt.Sprintf("https://github.com/o/r/issues/%d#issuecomment-%d", f.release, at.Unix())}
+		c.User.Login, c.User.Type = login, typ
+		f.g.Issues[f.release].Comments = append(f.g.Issues[f.release].Comments, c)
+	}
+	f.g.Mu.Lock()
+	f.g.Permissions = map[string]string{"maintainer": "maintain", "visitor": "read"}
+	f.g.Mu.Unlock()
+	mainTip0 := git(t, f.bare, "rev-parse", "refs/heads/main")
+	for i, miss := range []struct{ login, typ, body string }{
+		{"", "", ""}, // no request at all
+		{"aayudha-bot[bot]", "Bot", "Stable release: v0.1.0"},
+		{"visitor", "User", "Stable release: v0.1.0"},
+		{"maintainer", "User", "Stable release: v0.2.0"},
+		{"maintainer", "User", "<!-- aayudha:release -->\nStable release: v0.1.0"},
+		{"maintainer", "User", "Stable release: v0.1.0 (before the snapshot)"},
+	} {
+		at := rollingAt.Add(time.Duration(i+1) * time.Minute)
+		switch {
+		case i == 5:
+			comment(miss.login, miss.typ, "Stable release: v0.1.0", rollingAt.Add(-time.Minute))
+		case miss.login != "":
+			comment(miss.login, miss.typ, miss.body, at)
+		}
+		code, _, errOut := f.run(t, day.Add(2*time.Hour), agent, rel, "--to", "main")
+		if code != ExitBlocked || !strings.Contains(errOut, `needs the explicit stable-release request: a person with write access comments "Stable release: v0.1.0" on Release #`) ||
+			git(t, f.bare, "rev-parse", "refs/heads/main") != mainTip0 || git(t, f.bare, "tag", "--list", "v0.1.0") != "" {
+			t.Fatalf("main with request miss %d (%+v): %d %s", i, miss, code, errOut)
+		}
+	}
+	if strings.Contains(fmt.Sprint(f.dispatched), "promote/main") {
+		t.Fatalf("a refused main rung dispatched its gate: %v", f.dispatched)
+	}
+	comment("maintainer", "User", "Stable release: v0.1.0\n\nShip it.", rollingAt.Add(30*time.Minute))
+
 	// Main: Release: v0.1.0, an annotated tag, and the Release closed.
-	code, p, errOut = f.run(t, day.Add(2*time.Hour), f.env, rel, "--to", "main", "--yes")
-	if code != 0 || p.Message != "Release: v0.1.0" || p.Gate == nil || !strings.Contains(fmt.Sprint(f.dispatched), "ci.yml@promote/main map[gate:stable]") {
+	code, p, errOut = f.run(t, day.Add(2*time.Hour), agent, rel, "--to", "main")
+	if code != 0 || p.Message != "Release: v0.1.0" || p.Gate == nil || !strings.Contains(fmt.Sprint(f.dispatched), "ci.yml@promote/main map[gate:stable]") ||
+		p.Request == nil || p.Request.Author != "maintainer" || p.Request.Via != "comment" || !strings.HasSuffix(p.Request.URL, "#issuecomment-"+strconv.FormatInt(rollingAt.Add(30*time.Minute).Unix(), 10)) {
 		t.Fatalf("release to main: %d %+v %s", code, p, errOut)
 	}
 	if p.ReleaseRun == nil || p.ReleaseRun.Conclusion != "success" || p.ReleaseRun.Attempts != 2 ||
@@ -365,7 +415,7 @@ func TestReleaseLadder(t *testing.T) {
 	f.g.Mu.Lock()
 	state, body := f.g.Issues[f.release].State, f.g.Issues[f.release].Body
 	f.g.Mu.Unlock()
-	if state != "closed" || !strings.Contains(body, "**dev → rolling**") || !strings.Contains(body, "**rolling → main**") {
+	if state != "closed" || !strings.Contains(body, "**dev → rolling**") || !strings.Contains(body, "**rolling → main**") || !strings.Contains(body, "- Stable release requested by @maintainer (comment) https://github.com/o/r/issues/") {
 		t.Fatalf("Release after main: %s\n%s", state, body)
 	}
 	if code, _, errOut := f.run(t, day.Add(3*time.Hour), f.env, rel, "--to", "main", "--yes"); code == 0 || !strings.Contains(errOut, "closed") {

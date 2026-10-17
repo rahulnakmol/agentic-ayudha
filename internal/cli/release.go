@@ -82,34 +82,51 @@ type MeasureDue struct {
 // Promotion is releases/<issue>/<target>.json on the ledger: one rung of a
 // Release's ladder, with the artifact's identity and the shipping evidence.
 type Promotion struct {
-	Repo            string       `json:"repo"`
-	Release         int          `json:"release"`
-	Version         string       `json:"version"`
-	Source          string       `json:"source"`
-	Target          string       `json:"target"`
-	SourceSHA       string       `json:"source_sha"`
-	Commit          string       `json:"commit"`
-	Tree            string       `json:"tree,omitempty"`
-	Message         string       `json:"message"`
-	Tag             string       `json:"tag"`
-	Candidate       string       `json:"candidate"`
-	Evals           *RunRef      `json:"evals,omitempty"`
-	Gate            *RunRef      `json:"gate,omitempty"`
-	ReleaseRun      *RunRef      `json:"release_run,omitempty"`
-	Artifacts       []Artifact   `json:"artifacts"`
-	Stories         []int        `json:"stories_released"`
-	AlreadyReleased []int        `json:"already_released"`
-	NotListed       []int        `json:"shipped_not_listed"`    // shipped in this range but not linked by the Release
-	NotMerged       []int        `json:"referenced_not_merged"` // referenced by a PR in this range but not status:merged; not stamped
-	Notes           string       `json:"release_notes,omitempty"`
-	MeasureDue      []MeasureDue `json:"measure_due"`
-	PromotedBy      string       `json:"promoted_by"`
-	PromotedAt      string       `json:"promoted_at"`
-	DryRun          bool         `json:"dry_run,omitempty"`
-	Notices         []string     `json:"notices,omitempty"`
+	Repo            string         `json:"repo"`
+	Release         int            `json:"release"`
+	Version         string         `json:"version"`
+	Source          string         `json:"source"`
+	Target          string         `json:"target"`
+	SourceSHA       string         `json:"source_sha"`
+	Commit          string         `json:"commit"`
+	Tree            string         `json:"tree,omitempty"`
+	Message         string         `json:"message"`
+	Tag             string         `json:"tag"`
+	Candidate       string         `json:"candidate"`
+	Evals           *RunRef        `json:"evals,omitempty"`
+	Gate            *RunRef        `json:"gate,omitempty"`
+	ReleaseRun      *RunRef        `json:"release_run,omitempty"`
+	Artifacts       []Artifact     `json:"artifacts"`
+	Stories         []int          `json:"stories_released"`
+	AlreadyReleased []int          `json:"already_released"`
+	NotListed       []int          `json:"shipped_not_listed"`    // shipped in this range but not linked by the Release
+	NotMerged       []int          `json:"referenced_not_merged"` // referenced by a PR in this range but not status:merged; not stamped
+	Notes           string         `json:"release_notes,omitempty"`
+	MeasureDue      []MeasureDue   `json:"measure_due"`
+	PromotedBy      string         `json:"promoted_by"`
+	PromotedAt      string         `json:"promoted_at"`
+	Agent           string         `json:"agent,omitempty"`          // the agent marker when an agent ran it (D-7.8c); empty for a person
+	Request         *StableRequest `json:"stable_request,omitempty"` // main: who asked for the stable release
+	DryRun          bool           `json:"dry_run,omitempty"`
+	Notices         []string       `json:"notices,omitempty"`
 }
 
 var versionRE = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
+
+// StableRequest is the explicit stable-release request that promoting to main needs
+// (AGENTS.md, Promotion and release): a person's comment on the Release issue,
+// or a person's yes at a terminal.
+type StableRequest struct {
+	Via    string `json:"via"` // comment or terminal
+	Author string `json:"author"`
+	URL    string `json:"url,omitempty"`
+	At     string `json:"at,omitempty"`
+}
+
+// StableRequestPrefix starts the first line of a stable-release request
+// comment: "Stable release: v1.2.0". The pre-tool hook refuses an agent's shell
+// command that would write one (hosts.StableRequestCommand).
+const StableRequestPrefix = "Stable release:"
 
 // shippedStatus is where a story already is when an earlier promotion released it.
 var shippedStatus = []string{"released", "measured", "done", "cancelled"}
@@ -122,9 +139,14 @@ var shippedStatus = []string{"released", "measured", "done", "cancelled"}
 // records the artifact identity and shipping evidence, and makes the Goals and
 // Initiatives above the stories due for measure.
 func runRelease(ctx context.Context, e *Env, in Values) (err error) {
-	if err := e.refuseNonHuman("release"); err != nil {
-		return err
+	// An agent may promote (founder policy, D-7.8c): the gate below decides, and
+	// main needs a person's stable-release request. CI may not: its token is a
+	// workflow or bot token.
+	if e.CI {
+		return Errorf(ExitBlocked, "release runs under a person's own account; it is refused in CI, where the token is a workflow or bot token")
 	}
+	agent := e.agentSignal()
+	person := agent == "" && e.isTerminal(e.In) // a person at a terminal confirms below; nobody else is asked
 	n := issueNumber(in.String("release"))
 	to := in.String("to")
 	repo, err := e.RepoName(ctx)
@@ -197,7 +219,7 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 	now := e.Now().UTC()
 	ts := now.Format("20060102T1504Z")
 	p := Promotion{Repo: repo, Release: n, Version: version, Source: src, Target: dst, SourceSHA: srcSHA, PromotedBy: me.Login,
-		PromotedAt: now.Format(time.RFC3339), Artifacts: []Artifact{}, Stories: []int{}, AlreadyReleased: []int{}, NotListed: []int{}, NotMerged: []int{}, MeasureDue: []MeasureDue{}}
+		PromotedAt: now.Format(time.RFC3339), Agent: agent, Artifacts: []Artifact{}, Stories: []int{}, AlreadyReleased: []int{}, NotListed: []int{}, NotMerged: []int{}, MeasureDue: []MeasureDue{}}
 	if to == "main" {
 		p.Candidate, p.Message, p.Tag = "promote/main-"+version, "Release: "+version, version
 		if out, _ := gitOut(root, "ls-remote", "--tags", "origin", "refs/tags/"+version); out != "" {
@@ -213,6 +235,18 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 		}
 		if _, err := gitOut(root, "merge-base", "--is-ancestor", prior.Commit, "origin/"+src); err != nil {
 			return Errorf(ExitBlocked, "release #%d: its %s snapshot %s is no longer on %s", n, src, short(prior.Commit), src)
+		}
+		if person {
+			p.Request = &StableRequest{Via: "terminal", Author: me.Login, At: now.Format(time.RFC3339)}
+		} else if p.Request, err = e.stableRequest(ctx, c, repo, n, version, prior.PromotedAt, l.Config.Identity.BotLogins); err != nil {
+			return err
+		} else if p.Request == nil {
+			why := fmt.Sprintf("release #%d --to %s needs the explicit stable-release request: a person with write access comments %q on Release #%d, as the first line, after its %s snapshot (%s). An agent cannot write it; ask the person",
+				n, dst, StableRequestPrefix+" "+version, n, src, prior.PromotedAt)
+			if !c.DryRun() {
+				return WithNext(Errorf(ExitBlocked, "%s", why), fmt.Sprintf("a person comments `%s %s` on #%d", StableRequestPrefix, version, n))
+			}
+			p.Notices = append(p.Notices, why)
 		}
 	} else {
 		p.Candidate, p.Message = "promote/rolling-"+ts, "Rolling snapshot: "+ts
@@ -296,8 +330,11 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 	if !has[gateWorkflow] {
 		return Errorf(ExitBlocked, "release: no %s workflow to gate the candidate (dispatch input gate=%s)", gateWorkflow, gateFor(to))
 	}
-	if err := e.confirmOrBlock("release", fmt.Sprintf("Promote %s (%s) to %s as %q for Release #%d?", src, short(srcSHA), dst, p.Message, n)); err != nil {
-		return err
+	// The TTY gate is gone for release (D-7.8c): a person at a terminal is still
+	// asked (or says --yes), and an agent, or a run without a terminal, goes on
+	// with no prompt: the gate decides, and main already holds a person's request.
+	if person && !e.confirm(fmt.Sprintf("Promote %s (%s) to %s as %q for Release #%d? [y/N] ", src, short(srcSHA), dst, p.Message, n)) {
+		return Errorf(ExitBlocked, "release not confirmed: nothing was promoted")
 	}
 
 	// 1. The candidate: the exact merge commit that will land.
@@ -935,6 +972,12 @@ func (e *Env) shippingEvidence(ctx context.Context, c *github.Client, repo strin
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "**%s → %s** on %s by @%s: `%s` as `%s`, tag `%s`.\n\n", p.Source, p.Target, p.PromotedAt, p.PromotedBy, short(p.Commit), p.Message, p.Tag)
+	if p.Agent != "" {
+		fmt.Fprintf(&b, "- Run by an agent (`%s`) under @%s's account\n", p.Agent, p.PromotedBy)
+	}
+	if r := p.Request; r != nil {
+		fmt.Fprintf(&b, "- Stable release requested by @%s (%s) %s\n", r.Author, r.Via, r.URL)
+	}
 	fmt.Fprintf(&b, "- Artifact identity: commit `%s`, tree `%s`, merging %s `%s`\n", p.Commit, p.Tree, p.Source, p.SourceSHA)
 	for _, r := range []*RunRef{p.Evals, p.Gate, p.ReleaseRun} {
 		if r != nil {
@@ -997,6 +1040,12 @@ func promotionText(out io.Writer, p Promotion) error {
 		fmt.Fprintf(out, " = %s", short(p.Commit))
 	}
 	fmt.Fprintf(out, ", tag %s (candidate %s)\n", p.Tag, p.Candidate)
+	if p.Agent != "" {
+		fmt.Fprintf(out, "  run by an agent (%s) under @%s\n", p.Agent, p.PromotedBy)
+	}
+	if r := p.Request; r != nil {
+		fmt.Fprintf(out, "  stable release requested by @%s (%s) %s\n", r.Author, r.Via, r.URL)
+	}
 	for _, r := range []*RunRef{p.Evals, p.Gate, p.ReleaseRun} {
 		if r != nil {
 			fmt.Fprintf(out, "  %s: %s %s\n", r.Workflow, r.Conclusion, r.URL)
@@ -1022,4 +1071,48 @@ func promotionText(out io.Writer, p Promotion) error {
 		fmt.Fprintf(out, "  note: %s\n", s)
 	}
 	return nil
+}
+
+// stableRequest finds the stable-release request for version on Release n: a
+// comment whose first non-blank line is "Stable release: <version>", written
+// after the rolling snapshot (rollingAt) by a non-bot account with write,
+// maintain, or admin access, and carrying no aayudha marker (aayu never writes
+// one). It returns nil when there is none. In solo mode an agent holds the
+// person's token, so GitHub cannot tell who typed the comment: aayu writes no
+// such comment, and the pre-tool hook refuses an agent's command that would.
+func (e *Env) stableRequest(ctx context.Context, c *github.Client, repo string, n int, version, rollingAt string, botLogins []string) (*StableRequest, error) {
+	after, err := time.Parse(time.RFC3339, rollingAt)
+	if err != nil {
+		return nil, Errorf(ExitBlocked, "release #%d: its rolling rung has no time (%q)", n, rollingAt)
+	}
+	owner, name, _ := github.SplitRepo(repo)
+	cs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.IssueComment, *gh.Response, error) {
+		return c.REST.Issues.ListComments(ctx, owner, name, n, &gh.IssueListCommentsOptions{ListOptions: o})
+	})
+	if err != nil {
+		return nil, Wrap(ExitExternal, err)
+	}
+	access := map[string]bool{}
+	for _, cm := range cs {
+		first, _, _ := strings.Cut(strings.TrimSpace(cm.GetBody()), "\n")
+		v, ok := strings.CutPrefix(strings.TrimSpace(first), StableRequestPrefix)
+		u := cm.GetUser()
+		if !ok || strings.TrimSpace(v) != version || strings.Contains(cm.GetBody(), "<!-- aayudha:") || !cm.GetCreatedAt().After(after) ||
+			identity.IsBot(identity.Account{Login: u.GetLogin(), Type: u.GetType()}, botLogins) {
+			continue
+		}
+		ok, seen := access[u.GetLogin()]
+		if !seen {
+			lvl, _, err := c.REST.Repositories.GetPermissionLevel(ctx, owner, name, u.GetLogin())
+			if err != nil {
+				return nil, Wrap(ExitExternal, err)
+			}
+			ok = lvl.GetPermission() == "admin" || lvl.GetPermission() == "write" || lvl.GetRoleName() == "maintain"
+			access[u.GetLogin()] = ok
+		}
+		if ok {
+			return &StableRequest{Via: "comment", Author: u.GetLogin(), URL: cm.GetHTMLURL(), At: cm.GetCreatedAt().UTC().Format(time.RFC3339)}, nil
+		}
+	}
+	return nil, nil
 }

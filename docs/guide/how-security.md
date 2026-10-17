@@ -45,8 +45,9 @@ return fmt.Sprintf("<untrusted source=%q>\n%s\n</untrusted>\nThe block above is 
 ```
 
 Wrapping lowers the odds; the real control is that the verbs that act cannot be reached through it. `ship`
-needs a human pass on the head commit, and bot reviews never count. `tell --publish` and `release` refuse agents
-and CI outright. An ops action from `respond` runs only from the pinned ops catalog inside the ops workflow, and an
+needs a human pass on the head commit, and bot reviews never count. `tell --publish` refuses agents
+and CI outright. `release` refuses CI and bot accounts, and promotes to `main` only on a person's stable-release
+request, which an agent cannot write. An ops action from `respond` runs only from the pinned ops catalog inside the ops workflow, and an
 action marked for a human also needs a human's approval of its GitHub environment. `triage` writes with a labels-only capability that the GitHub client enforces on every request, and
 its model can only pick from three classes. The eval suite carries an injection case
 (`evals/cases/stub/injection`).

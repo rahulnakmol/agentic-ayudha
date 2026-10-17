@@ -339,7 +339,7 @@ func (e *Env) provenFeatures(ctx context.Context, c *github.Client, repo string)
 	return proven, unproven, note, nil
 }
 
-// refuseNonHuman refuses a human-only act (tell --publish, release) for agent
+// refuseNonHuman refuses a human-only act (tell --publish) for agent
 // lanes and in CI, where the token is a workflow or bot token.
 func (e *Env) refuseNonHuman(what string) error {
 	if e.CI {

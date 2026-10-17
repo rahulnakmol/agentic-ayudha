@@ -470,6 +470,7 @@ const (
 	GateEvalFirst     GateID = "eval-first"
 	GateCodeowner     GateID = "codeowner-review"
 	GateTTY           GateID = "tty-confirm"
+	GateStableRequest GateID = "stable-request"
 )
 
 // Gates lists every gate a command may declare.
@@ -493,6 +494,7 @@ var Gates = []Gate{
 	{GateEvalFirst, "A failing eval case reproducing the finding exists before the skill diff."},
 	{GateCodeowner, "A human CODEOWNER review on protected paths."},
 	{GateTTY, "Interactive confirmation on a TTY; refused for agents."},
+	{GateStableRequest, "Promoting to main needs a person's stable-release request: their comment \"Stable release: <version>\" on the Release issue after its rolling snapshot, or their yes at a terminal."},
 }
 
 var (
@@ -677,8 +679,8 @@ var Verbs = []Command{
 			enumIn("to", true, false, "Branch to promote to.", "rolling", "main"),
 		},
 		Outputs:  []string{"tag", "released-stories", "release-notes"},
-		Gates:    []GateID{GateHumanIdentity, GateTTY, GateHalt},
-		Surfaces: cliSkill, Identity: IdentityHuman, Mode: ModeNone, Exposure: ExposeNever,
+		Gates:    []GateID{GateHumanIdentity, GateStableRequest, GateHalt},
+		Surfaces: cliSkillMCP, Identity: IdentityHuman, Mode: ModeNone, Exposure: ExposeWrite,
 	},
 	{
 		Name: "proof", WP: "WP4.2", Stage: StageProve,
