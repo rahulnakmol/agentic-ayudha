@@ -294,7 +294,10 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   Every paragraph and list item counts, the lines under the title included. Give each part a budget and count it
   as you finish that part: the line under the title 25 words, `## Decision` 50, the prose of `## Metrics` (its
   `Assumption:` lines and the finalisation rule) 60, `## Design` 80, `## Privacy and retention` 70, `## Checks` a
-  table only, `## Open questions` 70. A part over its budget says something twice or restates a table. When the check reports too many words,
+  table only, `## Open questions` 70. A part over its budget says something twice or restates a table: a figure that a table
+  already shows (a count, a row total, a share) is not repeated in prose, an open question is one line of at most
+  25 words (the question, why it matters in a clause, its default, its source), and a point the note already
+  decides (when a week becomes final) is not asked again. When the check reports too many words,
   cut well below the bound (to about 320), not just to it: first delete prose that restates a table or the
   grounding, then any paragraph before the first part, then move remaining lists into tables.
   Put the metrics with their edge-case rules, the copies with their retention, and the checks in tables (three at
