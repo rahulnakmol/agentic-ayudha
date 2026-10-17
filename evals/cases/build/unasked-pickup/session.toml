@@ -10,13 +10,16 @@ human = [
   "Thanks.",
 ]
 
-[[reply]]
+[[reply]] # the rollup as `aayu status` prints it outside a terminal (status.Table, then each root's line)
 match = '^aayu status\b'
 code = 0
-out = '''o/r: 2 Ready, 0 in progress, 0 blocked
-  Ready      #41 Clear done notes (story, effort:S, priority:P2) under #20 Notes basics
-  Ready      #44 Edit a note's text (story, effort:S, priority:P3) under #20 Notes basics
-  next: aayu build <story> to start one'''
+out = '''| Item | Items | Done | Ready | In progress | Blocked | Health (on/at/off) | Risk (l/m/h) | Decisions near SLA | Shipped, unmeasured | Proof | Streak | Cost |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| #1 goal Notes that stay tidy | 3 | 0 | 2 | 0 | 0 | 0/0/0 | 0/0/0 | 0 | 0 | 0/2 | 0 | $0.00 |
+| · #20 feature Notes basics | 2 | 0 | 2 | 0 | 0 | 0/0/0 | 0/0/0 | 0 | 0 | 0/2 | 0 | $0.00 |
+| · · #41 story Clear done notes | 1 | 0 | 1 | 0 | 0 | 0/0/0 | 0/0/0 | 0 | 0 | 0/1 | 0 | $0.00 |
+| · · #44 story Edit a note's text | 1 | 0 | 1 | 0 | 0 | 0/0/0 | 0/0/0 | 0 | 0 | 0/1 | 0 | $0.00 |
+#1 goal "Notes that stay tidy": 3 items (ready 2, no status 1)'''
 
 [[reply]] # the confirmation gate (#280): held before the lease, the label change, and the worktree
 match = '^aayu build #?41\s*$'

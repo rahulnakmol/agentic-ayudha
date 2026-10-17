@@ -94,14 +94,13 @@ events = ["workflow_dispatch"]
 # The skill runs commands against the case's world (session.toml): real `aayu` verbs that only read, recorded answers
 # for the ones that lease, commit, or run code, and a scripted person. The hard rules each skill's verb enforces are
 # tier-1 floors on the recorded session and on every run (session.go). Build runs on its own lane (claude-opus-5-5),
-# verify and ready on the chore lane. Estimated at about 21 USD a run at the fallback rate (six cases, five runs,
-# build about 1.3 USD a run). Advisory until it holds the bar (mean 4.0 per case) on two consecutive full runs; that
+# verify and ready on the chore lane, all charged at the fallback rate (15 and 75 USD per million tokens). Advisory until it holds the bar (mean 4.0 per case) on two consecutive full runs; that
 # switch is proposed in a PR. It runs on dispatch only, so its spend is chosen run by run (the founder's cap for the
 # workstream is 60 USD).
 [[groups]]
 name = "host-skills"
 prefixes = ["build/", "verify/", "ready/readback-", "ready/refuse-"]
-max_usd = 25.0
+max_usd = 37.0 # run 39007904376 charged 22.43 USD for five of the six cases (D-3.4g); the workstream's cap is 60 USD in all
 gate = "advisory"
 events = ["workflow_dispatch"]
 

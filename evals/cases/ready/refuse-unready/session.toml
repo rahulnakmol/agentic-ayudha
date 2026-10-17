@@ -11,7 +11,7 @@ human = [
 ]
 
 [[require]]
-pattern = '^aayu ready #?57 --check\b'
+pattern = '^aayu ready (?:#?57(?: \S+)* --check|--check(?: \S+)* #?57)(?:\s|$)' # the flag before or after the number (D-3.4g)
 why = "the read-only check, which is where the refusal comes from"
 
 [[forbid]]

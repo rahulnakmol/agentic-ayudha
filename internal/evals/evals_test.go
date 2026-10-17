@@ -913,7 +913,7 @@ func TestGroups(t *testing.T) {
 	for _, c := range hosts {
 		hostIDs = append(hostIDs, c.ID)
 	}
-	if g, _ := cfg.Group("host-skills"); err != nil || hg.MaxUSD != 25 || cfg.Gates("host-skills") || g.RunsOn("push") || g.RunsOn("schedule") ||
+	if g, _ := cfg.Group("host-skills"); err != nil || hg.MaxUSD != 37 || cfg.Gates("host-skills") || g.RunsOn("push") || g.RunsOn("schedule") ||
 		strings.Join(hostIDs, " ") != "build/small-story build/unasked-pickup ready/readback-pass ready/refuse-unready verify/map-drift verify/preview-honest" {
 		t.Fatalf("host-skills group: %v, cap %v, cases %v, events %v", err, hg.MaxUSD, hostIDs, g.Events)
 	}

@@ -549,7 +549,12 @@ func (w *world) succeeded(re *regexp.Regexp) bool {
 // that read, never ones that run the repository's code (verify's floors and
 // checks, build's commits), since a session's code is the model's.
 func inProcess(args []string) bool {
+	if len(args) == 0 {
+		return true // the home screen
+	}
 	switch args[0] {
+	case "help", "--help", "-h":
+		return true
 	case "ready", "config", "version", "status":
 		return true
 	case "verify":
@@ -562,8 +567,8 @@ func inProcess(args []string) bool {
 
 // aayu runs the real binary in-process, as runCalls does.
 func (w *world) aayu(ctx context.Context, args []string) CommandResult {
-	if len(args) == 0 || !cli.Implemented(args[0]) {
-		return CommandResult{Code: 2, Out: fmt.Sprintf("aayu: unknown command %q", strings.Join(args, " "))}
+	if len(args) > 0 && !inProcess(args) && !cli.Implemented(args[0]) {
+		return CommandResult{Code: 2, Out: fmt.Sprintf("aayu: unknown command %q\n  next: aayu --help", strings.Join(args, " "))}
 	}
 	if !inProcess(args) {
 		return CommandResult{Code: 2, Out: fmt.Sprintf("eval: `aayu %s` has no recorded answer in this case and does not run here; the command was recorded", strings.Join(args, " "))}
@@ -729,7 +734,9 @@ func (w *world) sessionFloors(ctx context.Context, steps []SessionStep, finished
 		if err != nil || len(args) < 2 || args[0] != "aayu" {
 			continue
 		}
-		if v, ok := verbs.Find(args[1]); ok && v.Exposure == verbs.ExposeNever {
+		// `aayu config show` only reads, and every persona block tells the
+		// skill to run it for the team stage (D-3.4g).
+		if v, ok := verbs.Find(args[1]); ok && v.Exposure == verbs.ExposeNever && (args[1] != "config" || len(args) < 3 || args[2] != "show") {
 			out = append(out, fmt.Sprintf("ran `%s`: %s is a human-only verb", r.Command, args[1]))
 		}
 		for i, a := range args {

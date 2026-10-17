@@ -52,5 +52,5 @@ why = "changes the story, the build, or the thresholds when the person asked for
 
 [[say_forbid]]
 pattern = '(?i)\b(?:criteri(?:on|a)\s+[0-9, and]+\s+(?:is|are)\s+(?:now\s+)?proven|story is (?:proven|done|complete)|(?:is|are) (?:now )?proven)\b'
-allow = '''(?i)\b(?:not|isn't|aren't|can't|cannot|never|until|once|after|before|when|if)\b[^.\n]{0,50}'''
+allow = '''(?i)\b(?:not|no|nothing|never|neither|won't|isn't|aren't|can't|cannot|don't|doesn't|until|unless|once|after|before|when|if|without)\b[^.\n]{0,50}''' # a negated or conditional claim is not a claim (D-3.4g)
 why = "claims proof from a local preview; only the merge gate's pack for the PR head is proof"

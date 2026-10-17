@@ -97,6 +97,38 @@ read them, and report them in the Quality Architect's terms.
 - A story's criteria are evidenced by the tests and behaviour checks named in `.aayudha/evidence/<story>.toml`
   (`tests = [...]`, `checks = ["<feature>.<check>"]`), each by an artifact of the criterion's own kind.
 
+## Say where a story stands
+
+When the person asks whether a story is done (before a PR, after a fix), answer criterion by criterion. A floor
+summary alone does not tell them what to do next.
+
+1. Run `aayu verify` once, and read the story's criteria (`aayu ready <story> --check --json`) and its evidence map
+   (`.aayudha/evidence/<story>.toml`). When a criterion has nothing mapped, `aayu verify --map` shows whether any
+   check could reach it.
+2. Give every criterion its own verdict and its evidence:
+   - **met in this preview**: the check or test that passed;
+   - **unmet**: the check that failed, what it expected, and what the product did;
+   - **unreachable**: no check or test in the map can drive the state the criterion names. Say what the map is
+     missing (the command, route, flag, or function). Unreachable is not "no evidence yet": nothing can prove it
+     until the map can drive it.
+3. For a failing check, compare the criterion, the check, and what the product did. When the check and the criterion
+   agree, the product is wrong: name the change that broke it when the branch shows it (file and function). When the
+   check contradicts the criterion, the check is wrong (maintain it). Never call a check flaky without evidence.
+4. Report every floor as result, value, and threshold: `coverage pass 91.7 against 90`, `behaviour fail: 1 failing
+   check against 0`, feature-map drift and the date it starts to block (`[verify] drift_blocking_from`).
+5. Lead with the answer: done or not, and whether the PR should wait. Then give the smallest fixes, each concrete and
+   in the order that unblocks the most, for the person to choose. Change nothing they did not ask you to change.
+
+## When a branch changes the product
+
+Update the map in the same branch (drift fails the gate from `drift_blocking_from`). Tell the person what you will
+change before you change it: the surfaces, and each new check with its steps and assertions. Then wait for their yes,
+unless they already asked you to make the change. Each new check proves one criterion. It sets up the exact state
+the criterion names (the same notes, data, or page) and asserts the exact result it expects, so the check fails
+when the behaviour is wrong. Read the feature file before you change it, and write it once. Then run
+`aayu verify --map` (it must be clean) and `aayu verify --check <feature>`. Report what is still missing, such as the
+story's criteria in its evidence map.
+
 ## Feature maps and behaviour checks (WP4.5b)
 
 A product describes what it can do in a feature map: the project skill `.agents/skills/verify-<product>/`, with
