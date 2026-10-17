@@ -17,5 +17,6 @@ private:
 
 void registerCore(Interp *in);
 void registerMath(Interp *in);
+int alpha(); int beta();
 
 #endif

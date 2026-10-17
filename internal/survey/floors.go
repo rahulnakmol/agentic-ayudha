@@ -169,7 +169,8 @@ func checkRunners(ix *Index, m *Modernisation, add func(string, ...any)) {
 // runnerReach returns whether any of a builtin's registrations is reachable
 // from a runner: in a function the runner's main reaches through call edges
 // (ambiguous edges count, so the floor never fails on a call it cannot
-// resolve), or at file scope, which runs whenever the file is loaded.
+// resolve), or at file scope in a file the runner loads (its own, or one
+// defining a function it reaches).
 func runnerReach(ix *Index) func(Fact, []Fact) bool {
 	next := map[string][]string{}
 	for _, e := range ix.Edges {
@@ -218,9 +219,23 @@ func runnerReach(ix *Index) func(Fact, []Fact) bool {
 		memo[r.ID] = seen
 		return seen
 	}
+	// loads reports whether a runner loads a file: the runner's own file, or a
+	// file defining a function the runner reaches.
+	loads := func(r Fact, file string) bool {
+		if f, _ := splitAt(r.At); f == file {
+			return true
+		}
+		for _, s := range byFile[file] {
+			if reached(r)[s.ID] {
+				return true
+			}
+		}
+		return false
+	}
 	return func(r Fact, regs []Fact) bool {
 		for _, b := range regs {
-			if enc := enclosing(b.At); enc == "" || reached(r)[enc] {
+			enc := enclosing(b.At)
+			if f, _ := splitAt(b.At); enc == "" && loads(r, f) || enc != "" && reached(r)[enc] {
 				return true
 			}
 		}
