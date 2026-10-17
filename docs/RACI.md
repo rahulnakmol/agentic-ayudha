@@ -129,9 +129,9 @@ The reviewer model family must differ from the builder model family on every sto
 | `review` (adversarial) | Claude Code | GPT-6.1 Sol | `gpt-6.1-sol` | openai | escalation: GPT-6 Astra at high reasoning effort for heavy reviews (`gpt-6-astra`) |
 | `review` (adversarial) | OpenAI Codex | Claude Opus 5.5 | `claude-opus-5-5` | anthropic | or Grok 4.7 (grok-4.7) |
 | `ui-review` (adversarial) | Amp | Amp high | host-managed | host-managed | — |
-| `ui-review` (adversarial) | Cursor | Gemini 3.1 Pro | `gemini-3.1-pro-low` | google | or Fable 5.1 (claude-fable-5-1; anthropic family, so only when the builder is not anthropic); note: the gateway serves only gemini-3.1-pro-low; there is no plain gemini-3.1-pro |
-| `ui-review` (adversarial) | Claude Code | Gemini 3.1 Pro | `gemini-3.1-pro-low` | google | or Fable 5.1 (claude-fable-5-1; anthropic family, so only when the builder is not anthropic); note: the gateway serves only gemini-3.1-pro-low; there is no plain gemini-3.1-pro |
-| `ui-review` (adversarial) | OpenAI Codex | Gemini 3.1 Pro | `gemini-3.1-pro-low` | google | or Fable 5.1 (claude-fable-5-1; anthropic family, so only when the builder is not anthropic); note: the gateway serves only gemini-3.1-pro-low; there is no plain gemini-3.1-pro |
+| `ui-review` (adversarial) | Cursor | Gemini 3.8 Flash | `gemini-3.8-flash` | google | or Fable 5.1 (claude-fable-5-1; anthropic family, so only when the builder is not anthropic) |
+| `ui-review` (adversarial) | Claude Code | Gemini 3.8 Flash | `gemini-3.8-flash` | google | or Fable 5.1 (claude-fable-5-1; anthropic family, so only when the builder is not anthropic) |
+| `ui-review` (adversarial) | OpenAI Codex | Gemini 3.8 Flash | `gemini-3.8-flash` | google | or Fable 5.1 (claude-fable-5-1; anthropic family, so only when the builder is not anthropic) |
 | `chore` | Amp | Amp low | host-managed | host-managed | — |
 | `chore` | Cursor | Haiku 5.5 (100k context) | `claude-haiku-5-5` | anthropic | — |
 | `chore` | Claude Code | Haiku 5.5 (100k context) | `claude-haiku-5-5` | anthropic | — |

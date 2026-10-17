@@ -386,15 +386,16 @@ const (
 	ModelGPTSol       = "gpt-6.1-sol"
 	ModelGPTAstra     = "gpt-6-astra"
 	ModelGrok         = "grok-4.7"
-	ModelGeminiPro    = "gemini-3.1-pro-low"
+	// ModelGemini is the ui-review lane's model. gemini-3.8-flash is interim
+	// (D-6.6b, founder: "gemini-3.8-flash — use this until argon shows up");
+	// the target is gemini-4-argon-high, which the gateway does not route yet.
+	ModelGemini = "gemini-3.8-flash"
 )
 
 // PeerReviewCandidates are the review-lane models inspect's peer mode picks
 // its second reviewer from, in order: the first whose family differs from the
 // builder's and the first reviewer's (WP4.8b).
-var PeerReviewCandidates = []string{ModelGPTSol, ModelGrok, ModelGeminiPro, ModelClaudeOpus}
-
-const geminiNote = "the gateway serves only gemini-3.1-pro-low; there is no plain gemini-3.1-pro"
+var PeerReviewCandidates = []string{ModelGPTSol, ModelGrok, ModelGemini, ModelClaudeOpus}
 
 func builderDefaults() []ModelDefault {
 	return []ModelDefault{
@@ -411,8 +412,8 @@ func reviewDefault(h HostID) ModelDefault {
 }
 
 func geminiDefault(h HostID) ModelDefault {
-	return ModelDefault{Host: h, Model: "Gemini 3.1 Pro", ID: ModelGeminiPro, Family: FamilyGoogle,
-		Alternative: "Fable 5.1 (" + ModelClaudeFable + "; anthropic family, so only when the builder is not anthropic)", Note: geminiNote}
+	return ModelDefault{Host: h, Model: "Gemini 3.8 Flash", ID: ModelGemini, Family: FamilyGoogle,
+		Alternative: "Fable 5.1 (" + ModelClaudeFable + "; anthropic family, so only when the builder is not anthropic)"}
 }
 
 // Lanes lists the model lanes with their settled per-host defaults.
@@ -427,6 +428,8 @@ var Lanes = []Lane{
 		// Codex builds with OpenAI, so its reviewer is another family.
 		{Host: HostCodex, Model: "Claude Opus 5.5", ID: ModelClaudeOpus, Family: FamilyAnthropic, Alternative: "Grok 4.7 (" + ModelGrok + ")", AlternativeID: ModelGrok},
 	}},
+	// Interim model gemini-3.8-flash; the target is gemini-4-argon-high once the
+	// gateway routes it (ModelGemini, D-6.6b).
 	{ID: LaneUIReview, Summary: "Visual and interaction critique of UI.", Adversarial: true, Defaults: []ModelDefault{
 		{Host: HostAmp, Model: "Amp high", Family: FamilyHostManaged},
 		geminiDefault(HostCursor),

@@ -1,4 +1,4 @@
-# review (WP6.6), lane A: the ui-review lane's model (gemini-3.1-pro-low on the direct host) critiques a recorded
+# review (WP6.6), lane A: the ui-review lane's model (gemini-3.8-flash on the direct host) critiques a recorded
 # capture exactly as `aayu review` asks it (uireview.Prompt: both screenshots, the markup, and the accessibility tree),
 # once per eval run; the binary's 3-run consensus is TestLaneAConsensus and TestReviewLive. output/reply.json is a
 # recorded reply (tier 1); tier 2 reruns it. The floors: nothing lane B measured clean (focus indicator, contrast, target size) may be reported at severity 2 or more; every finding within its heuristic's score; all four

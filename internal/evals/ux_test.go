@@ -11,6 +11,7 @@ import (
 
 	aayudha "github.com/rahulnakmol/agentic-ayudha"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
 func uxCase(t *testing.T, id string) Case {
@@ -219,7 +220,7 @@ func TestTier2UXRuns(t *testing.T) {
 	}
 	runs := res.Cases[0].Runs
 	if len(fake.Requests) != 3 || runs[0].Score != 1 || !strings.Contains(runs[0].Floor, "missed the target-size defect") || runs[1].Score != 5 ||
-		res.Cases[0].Model != "gemini-3.1-pro-low" {
+		res.Cases[0].Model != verbs.ModelGemini {
 		t.Fatalf("%d calls, %s, runs %+v", len(fake.Requests), res.Cases[0].Model, runs)
 	}
 	if lane := fake.Requests[0]; len(lane.Messages[0].Images) != 2 || !strings.Contains(lane.System, "You are lane A of a UI review") {
