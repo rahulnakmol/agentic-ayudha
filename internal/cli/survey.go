@@ -65,12 +65,13 @@ func surveyDirs(e *Env, in Values) (root, out string) {
 // writes the survey draft; the binary never calls a model.
 func runSurvey(ctx context.Context, e *Env, in Values) error {
 	root, out := surveyDirs(e, in)
-	for _, f := range []string{"golden", "parity", "bin", "run"} {
-		if in.Has(f) {
-			return Errorf(ExitUsage, "survey --%s is n/a until a later part of WP5.9 (Decision #287); this binary indexes (`aayu survey`), prints module packs (`--module`), checks a survey draft (`--draft`), and checks and files a backlog (`--backlog`)", f)
-		}
-	}
 	indexFile := filepath.Join(out, "index.json")
+	if in.Has("golden") || in.Has("parity") {
+		return e.surveyGolden(ctx, in, root, out, indexFile)
+	}
+	if in.Has("bin") || in.Has("run") {
+		return Errorf(ExitUsage, "survey --bin and --run go with --golden or --parity <cases file>")
+	}
 	if in.Has("backlog") {
 		return e.surveyBacklog(ctx, in, indexFile, out)
 	}

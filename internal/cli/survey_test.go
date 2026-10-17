@@ -15,8 +15,7 @@ import (
 
 // WP5.9: `aayu survey <path>` indexes a checkout with no model and writes
 // index.json under --out; `--module` prints one module's pack from that index
-// with the repository's text inside an untrusted block; a later part's flag
-// is refused as n/a.
+// with the repository's text inside an untrusted block.
 func TestSurveyIndexAndPack(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.CopyFS(dir, os.DirFS(filepath.Join("..", "survey", "testdata", "legacy"))); err != nil {
@@ -138,5 +137,60 @@ func TestSurveyBacklogCreate(t *testing.T) {
 	g.Reset()
 	if code, stdout, _ = run(t, env, opts, create...); code != 0 || len(g.Writes()) != 0 {
 		t.Fatalf("third create wrote: %d %v %s", code, g.Writes(), stdout)
+	}
+}
+
+// WP5.9: `survey --golden` captures a legacy program's outputs in a scrubbed
+// environment; `--parity` replays the same cases against a new program and
+// exits 3 only on a stream the case compares.
+func TestSurveyGoldenParity(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("GH_TOKEN", "sekrit-token")
+	script := func(name, warn string) string {
+		p := filepath.Join(dir, name)
+		body := "#!/bin/sh\nread x\necho \"out:$1:$x:${GH_TOKEN}\"\necho " + warn + " >&2\nexit $2\n"
+		if err := os.WriteFile(p, []byte(body), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	legacy, same, changed := script("legacy.sh", "warn"), script("same.sh", "warn"), script("new.sh", "WARN")
+	if err := os.WriteFile(filepath.Join(dir, "in.txt"), []byte("hello\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cases := filepath.Join(dir, "cases.json")
+	if err := os.WriteFile(cases, []byte(`{"cases": [
+  {"id": "c1", "set": "G1", "argv": ["{bin}", "a", "0"], "stdin": "in.txt"},
+  {"id": "c2", "set": "G1", "argv": ["{bin}", "b", "3"], "stdin": "in.txt", "compare": ["stdout", "exit"]}
+]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(t.TempDir(), "survey")
+	opts := Options{Dir: dir, GitHubGap: -1}
+	base := []string{"survey", dir, "--out", out}
+
+	// Without --run the cases are only checked; nothing runs.
+	if code, stdout, stderr := run(t, nil, opts, append(base, "--golden", cases, "--plain")...); code != 0 || !strings.Contains(stdout, "2 cases (G1 2)") || strings.Contains(stdout, "ran ") {
+		t.Fatalf("check only: %d %s %s", code, stdout, stderr)
+	}
+	if code, _, _ := run(t, nil, opts, append(base, "--golden", cases, "--run")...); code != ExitUsage {
+		t.Fatalf("--run without --bin: %d", code)
+	}
+	code, stdout, stderr := run(t, nil, opts, append(base, "--golden", cases, "--bin", legacy, "--run", "--json")...)
+	var res SurveyGoldenResult
+	if err := json.Unmarshal([]byte(stdout), &res); code != 0 || err != nil || len(res.Golden.Cases) != 2 || res.Golden.Cases[1].Exit != 3 {
+		t.Fatalf("capture: %d %v %s %s", code, err, stdout, stderr)
+	}
+	if b, err := os.ReadFile(filepath.Join(out, "golden", "cases", "c1.stdout")); err != nil || string(b) != "out:a:hello:\n" {
+		t.Fatalf("golden c1.stdout = %q, %v (the token must not reach the program)", b, err)
+	}
+
+	if code, _, stderr := run(t, nil, opts, append(base, "--parity", cases, "--bin", same, "--run")...); code != 0 {
+		t.Fatalf("parity with the same behaviour: %d %s", code, stderr)
+	}
+	code, stdout, _ = run(t, nil, opts, append(base, "--parity", cases, "--bin", changed, "--run", "--json")...)
+	res = SurveyGoldenResult{}
+	if err := json.NewDecoder(strings.NewReader(stdout)).Decode(&res); code != ExitFloor || err != nil || len(res.Diffs) != 1 || res.Diffs[0].ID != "c1" || res.Diffs[0].Stream != "stderr" {
+		t.Fatalf("parity with changed stderr: %d %v %+v", code, err, res.Diffs)
 	}
 }
