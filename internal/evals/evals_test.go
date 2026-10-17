@@ -882,7 +882,7 @@ func TestGroups(t *testing.T) {
 		t.Fatalf("personas group: %v, cap %v, %d cases", err, pg.MaxUSD, len(personas))
 	}
 	rv, review, err := cfg.ForGroup("review", all)
-	if err != nil || rv.MaxUSD != 20 || rv.K != 2 {
+	if err != nil || rv.MaxUSD != 25 || rv.K != 2 { // D-4.8d.8: thirteen cases fit
 		t.Fatalf("review group: %v, cap %v, k %d", err, rv.MaxUSD, rv.K)
 	}
 	// D-5.3b.g: the grill conversations have their own capped, advisory group; skills is back to 6 USD without them.

@@ -71,7 +71,7 @@ events = ["workflow_dispatch"]
 [[groups]]
 name = "review"
 prefixes = ["inspect/"]
-max_usd = 20.0
+max_usd = 25.0 # thirteen cases at run 38980397572's rate are about 20.5 USD (founder, 2026-10-17; D-4.8d.8)
 k = 2
 pass_k = "advisory"
 gate = "advisory"
