@@ -50,7 +50,7 @@ A cohort is the users acquired in one week from the window start; its week ends 
 observed for the whole horizon, `max(activation_days, 14)` days, inside the window: its week end plus 14 days must be
 on or before the window end. `--to` is the window's exclusive end (`--to 2026-10-12` ends it at
 2026-10-12T00:00:00Z). Rates count complete cohorts only. A skipped row is an export row that could not be
-parsed into an event (here, events with no user ID); an excluded row is a parsed row that does not count.
+parsed into an event (here, events with no user ID); an excluded row is a parsed row that does not count. `measure` closes a Goal or Initiative when its target is met and every child has shipped (the parent-close rule).
 
 ## Founder's message in the #38 thread
 

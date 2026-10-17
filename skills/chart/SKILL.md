@@ -148,7 +148,9 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   definitions in `[measure]`; the North Star and every Goal's target are the Revenue Architect's standard, so propose
   a change as an open question, never make it. Show counts beside rates. Then test each definition against the
   events in the grounding: every event it needs exists, and each edge case has a rule (an item with no outcome event,
-  a late or repeated event, an empty field); a check you write must accept every case the definition allows.
+  a late or repeated event, an empty field); a check you write must accept every case the definition allows. A rule
+  you choose (deduplication, which outcome wins) is a design choice: write it as an `Assumption:`, never as a fact
+  about the data.
 - `## Design`: the smallest model, store, and pipeline that serve today's decision, and the option it beat. Keep the
   system of record (L07) apart from the analytical copy (L08). Prefer, in order: the exports and snapshot that
   `aayu measure` already builds (SQLite, or DuckDB); views on a read replica; a warehouse or lakehouse; streaming only
@@ -157,8 +159,9 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   hour, or a second team consuming the table), never as a user count and never as "a bound we agree".
 - `## Privacy and retention`: what personal data appears (free text often holds it), who sees per-person rows and who
   only aggregates (suppress small groups), how long each copy is kept (export, snapshot, aggregate), and how a deletion
-  reaches every copy: the person's rows are removed from each export and snapshot, and aggregates are rebuilt from
-  them. A pseudonymous ID does not anonymise free text: say who may read the text itself and what is redacted.
+  reaches every copy: the person's rows are removed from the source system (the telemetry store or database the
+  events come from; if it cannot delete, say so, give its retention, and make it an open question), from each export
+  and snapshot, and aggregates are rebuilt from them. A pseudonymous ID does not anonymise free text: say who may read the text itself and what is redacted.
 - `## Checks`: how we will know the numbers are right: a reconciliation against the source, quality checks with
   thresholds (skipped rows, duplicates, nulls), the metric computed by hand on a synthetic fixture, and the
   Completion Goal criteria (`metric` evidence) that `plan` turns into checkpoints.
@@ -188,7 +191,9 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   recall at k, evidence support, citation accuracy, correct abstention on unanswerable cases, task success, and the
   latency and cost budgets, each a number measured on this set now, not deferred to a later option. A case passes
   under one rule: an adversarial case passes when the answer abstains or answers safely from permitted, current
-  evidence, and the aggregate threshold counts it the same way. Thresholds nobody has agreed yet are `Assumption:` lines. A startup set is small (about
+  evidence, and the aggregate threshold counts it the same way. Measure each kind of answer with its own metric
+  (recall at k for passages, exact match for a number from a table, correct abstention for cases with no answer),
+  and every trigger you mention for a later option gives its number here. Thresholds nobody has agreed yet are `Assumption:` lines. A startup set is small (about
   twenty cases, a quarter adversarial); a scaleup slices results; an enterprise adds red-team and isolation tests.
 - A predictive model instead of retrieval: beat a simple baseline first, split by time or entity so nothing leaks,
   pick the metric that matches the decision, and say what drift you watch after launch.
@@ -212,6 +217,12 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
 - Write `Assumption:` or `Unverified:` at the start of its own line or list item, in plain text, never inside a
   table cell: that is how the check knows the point is not claimed as fact.
 - At a startup, count your prose before you finish: at most 400 words outside tables and headings; aim for 300.
+  Put every list of like things (metrics, edge-case rules, copies and their retention, checks, evaluation cases) in a
+  table, and keep the prose for the decision, the design choice, and the assumptions.
+- Each part must use its key words, or the check refuses it: `## Metrics` says "grain" and "window"; `## Design`
+  says "trigger" (write `Trigger:` before the threshold); `## Privacy and retention` says how long data is "kept" or
+  its "retention" and how a "deletion" reaches every copy; `## Evidence and permissions` says "permission" and
+  "injection"; `## Evaluation` says "adversarial" and gives numbers.
 
 ## 4. Check, read back, post
 
