@@ -342,6 +342,11 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			}
 			dlg.event(e.Now(), dlgFailed, clipText(err.Error(), 200))
 			_ = e.saveDelegation(ctx, dlg)
+			// A receiver stopped at the wall-time deadline is the budget running
+			// out, so the story is blocked and its owner paged, as at a checkpoint.
+			if !dlg.wallEnd.IsZero() && !e.Now().Before(dlg.wallEnd) {
+				return block(fmt.Sprintf("wall-time budget breached: %s was still running when the %g h budget ended", delegate.Names[dlg.receiver], b.WallHours))
+			}
 			return Errorf(ExitExternal, "build #%d --delegate %s: %v", n, dlg.receiver, err)
 		}
 		dlg.fill(res.Delegation) // what the receiver says it proved, for the PR body

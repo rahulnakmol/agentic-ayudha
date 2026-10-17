@@ -607,6 +607,21 @@ func TestDelegateLocalUsageLimitPause(t *testing.T) {
 		t.Fatalf("no pause event: %+v", ds.Events)
 	}
 
+	// A receiver still running when the wall-time budget ends is stopped, and
+	// the story is blocked for the budget, not left in progress.
+	g, env, opts, _, _ = delegateFixture(t)
+	opts.LookPath = func(name string) (string, error) { return "/usr/local/bin/" + name, nil }
+	now = opts.Now()
+	opts.Now = func() time.Time { return now }
+	opts.DelegateExec = func(context.Context, string, []string, string, string, ...string) (string, error) {
+		now = now.Add(8 * time.Hour)
+		return "", context.DeadlineExceeded
+	}
+	code, _, errOut = delegateRun(t, env, opts, "--delegate", "codex", "--local")
+	if code != ExitBlocked || !strings.Contains(errOut, "wall-time budget breached: Codex was still running when the 8 h budget ended") || !slices.Contains(g.LabelNames(2), "status:blocked") {
+		t.Fatalf("receiver at the wall deadline: %d %s %v", code, errOut, g.LabelNames(2))
+	}
+
 	// A reset two days out is after the 8-hour wall budget, and one less than a
 	// minute before it leaves no time to run again: no wait, a pause.
 	for _, after := range []time.Duration{48 * time.Hour, 8*time.Hour - 30*time.Second} {
