@@ -101,10 +101,15 @@ and where the cost came from. `Cost` in `internal/models/gateway.go` picks the f
 
 1. `reported`: the cost the endpoint returned in `usage.cost`.
 2. `price-table`: tokens times the `[[models.prices]]` entry for the model ID.
-3. `fallback-rate`: 15 USD per million input tokens and 75 USD per million output tokens. This is deliberately high,
-   so an unpriced model trips the breaker early rather than never.
+3. `list-price`: tokens times the model's published price in `models.ListPrices` (`internal/models/prices.go`), each
+   with its provider's pricing page and the date it was read. The AI gateway the evals use reports no cost, so this
+   is what they are charged (Appendix B D-3.4p).
+4. `fallback-rate`: 15 USD per million input tokens and 75 USD per million output tokens. This is deliberately high,
+   so an unpriced model trips the breaker early rather than never; the evals name such a model in their results'
+   warnings.
 
-Anthropic cache read and cache write tokens count as input at the full input rate.
+Cache reads and cache writes are charged at their own rates when the price has them, and a prompt past a model's
+long-context threshold is charged at its long-context rates.
 
 The **breaker** enforces `[budget]`. Before each call, `Check` refuses if agent lanes are paused, or if the story or
 the local day has already reached its limit. After each call, `Add` adds the spend. When a story reaches

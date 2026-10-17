@@ -137,20 +137,20 @@ max_drop = 0.3
 [[groups]]
 name = "brief-plain"
 prefixes = ["brief/eli5-", "brief/ste-"]
-max_usd = 6.0
+max_usd = 4.0 # run 39012708292 (70559ea): 1.70 USD for 9 of 10 runs, …
 pass_k = "advisory"
 gate = "advisory"
 
 [[groups]]
 name = "brief"
 prefixes = ["brief/"]
-max_usd = 6.0 # engineer-ideate and regulatory-close (the plain registers moved to brief-plain, D-7.3h)
+max_usd = 3.0 # engineer-ideate and regulatory-close (the plain registers moved to brief-plain, D-7.3h); …
 …
 pass_k = "advisory"
 
 [[groups]]
 name = "skills" # every other case
-max_usd = 8.0 # the single-reply cases cost 4.57 USD in run 38681630586; …
+max_usd = 4.0 # run 39017055049 (dae0662): 1.97 USD
 ```
 
 The pass^k computation, from `Tier2` in `internal/evals/tier2.go`:

@@ -79,7 +79,7 @@ It failed five rounds in a row, each after a real fix. The registers are `eli5` 
 
 The remaining failures were not bugs a rule could decide. The judge marked the simplest register down for everyday
 restatements that the register itself asks for, and the controlled-English register down for passive voice. Six
-charged runs cost 49.43 USD.
+charged runs were recorded at 49.43 USD, at a fallback rate about four times the models' list prices (D-3.4p).
 
 Rather than loosen the test quietly, the founder decided in the open: the `brief` group passes on the mean score, and
 pass^5 is still computed and printed, marked advisory. When even the mean failed for the two plain registers on the
