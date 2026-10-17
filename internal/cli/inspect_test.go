@@ -522,3 +522,43 @@ func lastInspect(t *testing.T, g *fake.GitHub, n int) string {
 	}
 	return ""
 }
+
+// Every PR that is ready for review gets a review, not only a story's: a PR
+// without a story is judged on the reviewer's disposition and the sealed
+// coverage manifest, with no pack and no criteria; one without a reply fails
+// closed; one that changes only docs passes without a review.
+func TestInspectWithoutStory(t *testing.T) {
+	g, env, opts, _ := inspectFixture(t, cleanDiff, "Refs #2")
+	_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
+	if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\napps = [\"codex\"]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	head := strings.Repeat("d", 40)
+	pr := g.AddPR("fix: guard an empty total", "Guards Percent against an empty total.", "founder", "fix/percent-empty", head, "dev")
+	g.Mu.Lock()
+	pr.Diff = cleanDiff
+	g.Static = map[string]any{"/repos/o/r/pulls/" + strconv.Itoa(pr.Number) + "/commits": jsonOf(t, `[{"sha":"`+head+`","commit":{"message":"fix: guard\n\nAayudha-Model: claude-opus-5-5\n"}}]`)}
+	g.Mu.Unlock()
+
+	code, res, errOut := inspectApp(t, env, opts, pr.Number, "--ci")
+	if code != ExitBlocked || res.Disposition != NoReply || strings.Contains(errOut, "no story") || strings.Contains(errOut, "no proof pack") {
+		t.Fatalf("no reply: exit %d %s %s", code, res.Disposition, errOut)
+	}
+	addComment(g, pr.Number, "chatgpt-codex-connector[bot]", "Bot", statedReply(head, "merge", "internal/report/percent.go"))
+	code, res, errOut = inspectApp(t, env, opts, pr.Number, "--ci")
+	if code != 0 || res.Disposition != inspect.Merge || res.Coverage == nil || res.Coverage.State != "complete" || res.Model != "chatgpt-codex-connector[bot]" {
+		t.Fatalf("reply on a PR without a story: exit %d %+v %s", code, res, errOut)
+	}
+	addComment(g, pr.Number, "chatgpt-codex-connector[bot]", "Bot", statedReply(head, "merge"))
+	if code, res, _ = inspectApp(t, env, opts, pr.Number, "--ci"); code != ExitBlocked || !strings.Contains(res.Overridden, "left unreviewed: internal/report/percent.go") {
+		t.Fatalf("an unreviewed file on a PR without a story: %d %s %q", code, res.Disposition, res.Overridden)
+	}
+
+	docs := g.AddPR("docs: explain Percent", "Docs.", "founder", "docs/percent", strings.Repeat("e", 40), "dev")
+	g.Mu.Lock()
+	docs.Diff = "diff --git a/docs/guide/percent.md b/docs/guide/percent.md\nnew file mode 100644\n--- /dev/null\n+++ b/docs/guide/percent.md\n@@ -0,0 +1 @@\n+# Percent\n"
+	g.Mu.Unlock()
+	if code, res, errOut = inspectApp(t, env, opts, docs.Number, "--ci"); code != 0 || res.Disposition != inspect.Skipped || !strings.Contains(res.Summary, "only documentation") {
+		t.Fatalf("docs-only PR: exit %d %+v %s", code, res, errOut)
+	}
+}

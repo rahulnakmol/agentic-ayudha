@@ -54,10 +54,13 @@ shows the fix; one that passes there does not. The check is advisory until the d
 `[verify] red_on_base_blocking_from` (`2026-11-13` by default, four weeks after the founder's decision): before it, a
 test that is green on the base is reported and skipped; from it, the check fails. Only Go modules are run today.
 
-**`aayudha/inspect`** runs only after the gate job succeeds. It holds no AI key (founder decision of 2026-10-15): it
-reads the reviewer app's reply on the pull request and has `pull-requests: write` to post its comment. It checks out
-the base branch only, downloads the `aayudha-pack` artifact, and reads the diff through the GitHub API. It never runs
-pull request code.
+**`aayudha/inspect`** runs after the gate job succeeds, on every pull request that is ready for review, whether or not
+it serves a story. It holds no AI key (founder decision of 2026-10-15): it reads the reviewer app's reply on the pull
+request and has `pull-requests: write` to post its comment. It checks out the base branch only, downloads the
+`aayudha-pack` artifact when the pull request serves a story, and reads the diff through the GitHub API. It never runs
+pull request code. A pull request without a story is judged on the reviewer's disposition and the coverage manifest,
+with no criteria. One that changes only documentation (files under `docs/`, or Markdown outside the skills, seats,
+hosts, work items, evals, and agent and workflow config, other than an `AGENTS.md`) passes without a review.
 
 **`aayudha/inspect-reply`** (the `reply` job) runs on `issue_comment` and `pull_request_review` events, never on
 `pull_request_target`. It checks out the default branch, holds `actions: write` and read access, and runs
@@ -124,7 +127,9 @@ one reviewer, never two. `reviewer = "model"` keeps the 0.1 model lane for a rep
    that person's account: the mention, the criteria, and the stated format, a fenced `aayudha-review` JSON block with
    the head, a disposition (`merge`, `fix`, or `rebuild`), a summary, the files reviewed, findings with severity P0 to
    P3, and a verdict per criterion (`met`, `unmet`, `unclear`). The apps answer the people who connected them, never
-   a workflow token, so CI cannot ask. `build` and a `delegate` sync post the request for you.
+   a workflow token, so CI cannot ask. `build` posts the request after each push, and a `delegate` sync posts it
+   too; after the last push to a pull request `build` did not open, run `aayu inspect <pr>` yourself. An app's own
+   automatic review of the exact head (Codex's) counts as well.
 3. **Read.** Only posts by the reviewer's own login count. The newest `aayudha-review` block for the head is checked
    against the schema. Codex will not use a custom format, so its own review counts instead: a receipt naming the
    exact head commit, and its inline findings on that commit, each with a P0 to P3 badge. A person's review counts

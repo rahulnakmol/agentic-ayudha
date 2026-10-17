@@ -143,3 +143,25 @@ func isTestPath(p string) bool {
 	return strings.HasSuffix(b, "_test.go") || strings.Contains(b, ".test.") || strings.Contains(b, ".spec.") ||
 		strings.HasPrefix(b, "test_") || strings.HasSuffix(strings.TrimSuffix(b, path.Ext(b)), "_test")
 }
+
+// DocsOnly reports whether every file a diff touches is documentation: under
+// docs/, or a Markdown file outside the directories whose Markdown steers the
+// product or its agents (skills, seats, hosts, work items, evals, agent and
+// workflow config) and other than an AGENTS.md. Such a PR merges without a
+// review; any other file needs one. An empty diff is not docs-only.
+func DocsOnly(files []DiffFile) bool {
+	for _, f := range files {
+		p := f.Path
+		if strings.HasPrefix(p, "docs/") {
+			continue
+		}
+		steers := false
+		for _, d := range []string{"skills/", "seats/", "hosts/", "work-items/", "evals/", ".agents/", ".claude/", ".github/", ".cursor/"} {
+			steers = steers || strings.HasPrefix(p, d) || strings.Contains(p, "/"+d)
+		}
+		if !strings.HasSuffix(strings.ToLower(p), ".md") || steers || path.Base(p) == "AGENTS.md" {
+			return false
+		}
+	}
+	return len(files) > 0
+}

@@ -270,9 +270,6 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	ins := inspect.Input{Repo: repo, PR: n, Title: pr.GetTitle(), Body: pr.GetBody(), Draft: pr.GetDraft(), Diff: diff}
 	ins.Story = StoryOf(pr.GetBody(), "", pr.GetHead().GetRef())
 	res := inspect.Result{PR: n, Head: pr.GetHead().GetSHA()}
-	if ins.Story == 0 && !ins.Draft {
-		return Errorf(ExitBlocked, "inspect #%d: no story (Refs #n in the PR body or a story/<n>- branch); inspect judges a PR against its story", n)
-	}
 	var deleg delegate.State
 	checkpoints := map[string]string{} // checkpoint commit -> model, from build's ledger record (Bug #171)
 	if ins.Story > 0 {
@@ -314,7 +311,7 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	if m := in.String("mode"); m != "" {
 		ins.Mode = m
 	}
-	if !ins.Draft && ins.Pack != nil {
+	if !ins.Draft && (ins.Pack != nil || ins.Story == 0) {
 		ins.Files = inspect.ParseDiff(diff)
 		lg := autonomy.ReadLayers(config.RepoRoot(e.Dir))
 		ins.Areas = inspect.BuildContext(ctx, ins.Files, headSource{c, owner, name, pr.GetHead().GetSHA()}, lg.Footprint)
@@ -365,6 +362,11 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	builder := inspect.BuilderOf(inspect.Records{Receiver: deleg.Receiver, Delegated: deleg.Family, Checkpoints: checkpoints}, commits, claim, lane)
 	if cfg.Reviewer != inspect.ReviewerModel {
 		return e.inspectThroughApp(ctx, appInspect{c: c, repo: repo, pr: pr, in: ins, prev: prev, builder: builder, cfg: l.Config})
+	}
+	// The review lane's model judges a PR against its story's pack; a PR
+	// without a story goes to a reviewer app (the merge gate's default).
+	if ins.Story == 0 && !ins.Draft {
+		return Errorf(ExitBlocked, "inspect #%d: no story (Refs #n in the PR body or a story/<n>- branch); a model reviewer judges a PR against its story, so a PR without one needs a reviewer app ([inspect] reviewer)", n)
 	}
 	story := fmt.Sprintf("#%d", ins.Story)
 	picked, notes, err := reviewerModels(gw, builder.Candidates, ins.Mode == inspect.ModePeer, cfg.PeerModel, story)

@@ -301,8 +301,8 @@ func (r Runner) begin(ctx context.Context, in *Input, prev State, salt string) (
 		res.Disposition, res.Summary = Skipped, "draft pull request: inspect runs when it is ready for review"
 		return res, prev, nil
 	}
-	if in.Pack == nil {
-		return res, prev, ErrNoPack
+	if in.Pack == nil && in.Story > 0 {
+		return res, prev, ErrNoPack // a story PR is judged against its pack; a PR without a story has none
 	}
 	if in.Files == nil {
 		in.Files = ParseDiff(in.Diff)

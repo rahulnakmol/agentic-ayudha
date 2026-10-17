@@ -555,3 +555,35 @@ func TestPeerPairsOneDefectOnce(t *testing.T) {
 		}
 	}
 }
+
+// A PR that touches only documentation merges without a review; any file
+// that steers the product or its agents, even Markdown, needs one.
+func TestDocsOnly(t *testing.T) {
+	files := func(ps ...string) []DiffFile {
+		var out []DiffFile
+		for _, p := range ps {
+			out = append(out, DiffFile{Path: p})
+		}
+		return out
+	}
+	for _, tc := range []struct {
+		paths []string
+		want  bool
+	}{
+		{[]string{"docs/guide/how-trust.md", "README.md", "examples/benefits-qa/README.md"}, true},
+		{[]string{"docs/img/flow.png"}, true},
+		{nil, false},
+		{[]string{"docs/guide/how-trust.md", "internal/inspect/diff.go"}, false},
+		{[]string{"skills/build/SKILL.md"}, false},
+		{[]string{"AGENTS.md"}, false},
+		{[]string{"internal/cli/AGENTS.md"}, false},
+		{[]string{"evals/cases/grill/bakery-ux/rubric.md"}, false},
+		{[]string{".github/PULL_REQUEST_TEMPLATE.md"}, false},
+		{[]string{"internal/hosts/testdata/skills/x.md"}, false},
+		{[]string{"CHANGELOG.txt"}, false},
+	} {
+		if got := DocsOnly(files(tc.paths...)); got != tc.want {
+			t.Errorf("DocsOnly(%v) = %v, want %v", tc.paths, got, tc.want)
+		}
+	}
+}

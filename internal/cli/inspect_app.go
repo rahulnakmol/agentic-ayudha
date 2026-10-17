@@ -60,12 +60,16 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		res.Disposition, res.Summary = inspect.Skipped, "draft pull request: inspect runs when it is ready for review"
 		return e.emitInspect(res, notes)
 	}
+	if inspect.DocsOnly(inspect.ParseDiff(a.in.Diff)) {
+		res.Disposition, res.Summary = inspect.Skipped, "the PR changes only documentation, which merges without a review"
+		return e.emitInspect(res, notes)
+	}
 	posts, err := prPosts(ctx, a.c, owner, name, n)
 	if err != nil {
 		return Wrap(ExitExternal, err)
 	}
 	replyEvent := e.CI && (e.Getenv("GITHUB_EVENT_NAME") == "issue_comment" || e.Getenv("GITHUB_EVENT_NAME") == "pull_request_review")
-	if a.in.Pack == nil && e.CI && !replyEvent {
+	if a.in.Pack == nil && a.in.Story > 0 && e.CI && !replyEvent {
 		return Errorf(ExitBlocked, "inspect #%d: %v", n, inspect.ErrNoPack)
 	}
 	var since time.Time
@@ -111,7 +115,7 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		}}
 	st := a.prev
 	switch {
-	case rerr == nil && a.in.Pack == nil:
+	case rerr == nil && a.in.Pack == nil && a.in.Story > 0:
 		res.Disposition, res.Summary = NoReply, fmt.Sprintf("%s replied (%s); the merge gate judges the reply against its pack for `%s`", choice.Kind(), rep.Source, short(head))
 		res.Next = "the merge gate's inspect check reads it"
 	case errors.Is(rerr, inspect.ErrNoReply), errors.Is(rerr, inspect.ErrMalformed):
