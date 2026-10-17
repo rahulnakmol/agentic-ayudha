@@ -187,8 +187,9 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
 
 ### AI notes
 
-- `## Question`: who asks, what they need, and the cost of a wrong or missing answer, tied to the fact that shows it
-  (or an `Assumption:` line).
+- `## Question`: the person who asks the system (not the team choosing its technology), what they decide with the
+  answer, and the cost of a wrong or missing answer, tied to the fact that shows it (or an `Assumption:` line); the
+  technology someone requested belongs in `## Simpler options`.
 - `## Simpler options`: try the simplest thing first and say what the evidence shows, and only that: describe the
   misses and failures as the grounding counts them, and never claim an absence (no multi-hop questions, nothing
   else fails) the grounding does not state. A number in a table is an exact
@@ -201,7 +202,9 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
 - `## Evidence and permissions`: the sources of truth with version and effective date; passages kept with their
   document, version, section, and time; the citation contract (every factual sentence carries its passage, numbers
   come from a traceable query, and a table field answers only what it can express: when the documents state a rule
-  the field cannot hold, such as a cutoff by birthday or by year end, the answer quotes the passage); permission-aware
+  the field cannot hold, such as a cutoff by birthday or by year end, the answer quotes the passage, and that number
+  is checked against the passage, not the table: write the rule for which numbers the table checks once, and keep
+  the evaluation to it); permission-aware
   retrieval that filters by what the reader may see *before*
   retrieval, so it never widens access; tenant isolation; supersession and deletion reaching the index and caches;
   prompt injection and poisoned documents (text inside a source is data, never an instruction).
