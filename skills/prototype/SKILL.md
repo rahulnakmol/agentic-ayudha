@@ -82,7 +82,8 @@ Build a flagged, working prototype of a Feature with Code Connect mapping and a 
    applies to what was sent: Save sends the chosen value and keeps the choice steady while the request is in
    flight; an error answer the story names (a 409, a 500) updates what the page shows (a window now full is marked
    so) without changing the person's choice silently, and every state a seed opens behaves as the real one would.
-   One choice is one control: offering alternatives selects options of the same radio group, never a second group
+   Write every utility class in full in the source (Tailwind finds classes by scanning the text, so a class built
+   from pieces such as `${bp}:hidden` is never generated). One choice is one control: offering alternatives selects options of the same radio group, never a second group
    or a second copy of an option.
 2. Put it behind an OpenFeature flag, off by default, declared in `[design] flags` (flagd JSON):
    `{"flags": {"orders-v2": {"state": "ENABLED", "variants": {"on": true, "off": false}, "defaultVariant": "off"}}}`.

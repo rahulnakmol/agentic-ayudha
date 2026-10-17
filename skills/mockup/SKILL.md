@@ -80,8 +80,10 @@ Produce design-system mockups for a Feature from its wireframes.
      names for every control.
    - **Semantics that carry the research**: tables with captions and headers, a single choice as radio inputs in a
      fieldset with a legend, a message that appears as an alert or status, one primary action per state.
-   - **Every state the wireframe describes**, including a transient one it names (loading, retrying), or a note
-     saying where the mockup leaves it to the prototype; keep the wireframe's assumptions marked.
+   - **Every state the wireframe describes, as the wireframe describes it**: the same items, windows, choices, and
+     copy (a mockup styles the structure; it does not change what a state offers), and its assumptions still marked.
+     Each file shows one state as a person would see it: a transient state the wireframe names (loading, retrying)
+     goes in a note, or in its own file, never as a second visible panel on the state it follows.
 3. List the states in `stage.json` (`{"states": [{"id", "title", "file"}]}`) and pin them:
 
    ```sh

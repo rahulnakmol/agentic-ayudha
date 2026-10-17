@@ -73,7 +73,9 @@ jobs:
         group: ${{ fromJSON(needs.groups.outputs.groups) }}
     runs-on: ubuntu-latest
     environment: ai-gateway
-    timeout-minutes: 90 # nine tier-2 cases of five runs each took about 30 minutes (WP5.4); grill conversations add about 30 (WP5.3b)
+    # nine tier-2 cases of five runs each took about 30 minutes (WP5.4); grill conversations add about 30 (WP5.3b). The ux
+    # group's prototype runs take about 5 minutes each, and its first full run was cancelled at 90 with no results (D-6.5h).
+    timeout-minutes: ${{ matrix.group == 'ux' && 180 || 90 }}
     env:
       AAYU_MODELS__GATEWAY__BASE_URL: ${{ vars.AAYU_AI_GATEWAY_URL }}
       AAYU_MODELS__GATEWAY__SECRET: ai-gateway

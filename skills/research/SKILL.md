@@ -84,7 +84,9 @@ Gather pinned design references (URLs and IDs only) and user research for a Feat
    Mobbin screens, guidelines, competitor pages. Keep each as a page URL and an ID, never as an image:
    do not download, screenshot, or paste Mobbin pixels anywhere (Mobbin's terms; the binary refuses them). Use only
    pages you or the human actually found; never write a URL from memory. Drop image results (a preview `.png`, a
-   CDN link) and say so. Give each kept reference one line on why it bears on the job.
+   CDN link) and say so. Give each kept reference one line on why it was kept, from what its search result says (its
+   source, kind, and any title or snippet): what you will look at it for, never what you imagine the page shows. A
+   page nobody has opened is marked not yet reviewed.
 2. Write what you learned from users (seeded or synthetic data only) as Markdown notes:
    - **The team stage's artefact first**, as a heading named exactly as the stage table above names it (a startup's
      Job story, a scaleup's Research plan or Job map, …), and no other stage's artefact as a heading.
@@ -96,12 +98,16 @@ Gather pinned design references (URLs and IDs only) and user research for a Feat
      phone's width) are research findings, never dropped.
    - **What the data does not say**, and the open questions that follow. No finding is claimed that nobody observed;
      where there is no usability evidence yet, the stage is a plan to get it.
-   - **Implications per state**: tie each to the stories' Completion Goal states by their IDs, without designing the
-     screens.
-   - **How findings reach the backlog** (in a plan, its own part): a finding that changes a story or its Completion
+   - **Implications per state**: for each Completion Goal state, by its ID, what the state must make clear to the
+     person and the finding behind it (not only that it needs testing), without designing the screens.
+   - **How findings reach the backlog** (in a scaleup or enterprise plan, its own part; a startup's page names none
+     of this): a finding that changes a story or its Completion
      Goal is filed as a Feedback issue (`aayu grill feedback`, the intake type) naming the story, for the story's owner to
      settle before the wireframe or mockup stage is pinned; say who runs the sessions and when the findings are due
      relative to the design stages. Never edit a Ready story's body yourself.
+   - **A startup's one page fits by design**: the Job story with its quote, one line per finding with its source,
+     one line per state, and at most three open questions; a reference's reason stays in its one line. Count before
+     you reply: the whole notes file is at most 400 words.
    - **Tasks as the person's goal** ("You want your parcel on a day you are home"), never as steps that name the
      interface ("Pick a slot and press Save").
 3. Put both in a directory with a `stage.json`:

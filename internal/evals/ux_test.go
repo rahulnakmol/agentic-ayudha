@@ -88,6 +88,13 @@ func TestUXFloorsCatchLapses(t *testing.T) {
 		{"baseline/wrong-checkout", "commands.sh", "AAYU_ENV=staging aayu baseline --sha 77aa31c", "SHA=77aa31c\nTARGET=staging\nAAYU_ENV=\"$TARGET\" aayu baseline --sha \"$SHA\"", ""},
 		{"baseline/wrong-checkout", "commands.sh", "git worktree add --detach ../shop-v0.3.0 77aa31c", "SHA=5d1e0b2\ngit worktree add --detach ../shop-v0.3.0 \"$SHA\"", "no checkout of 77aa31c"},
 		{"baseline/release-candidate", "commands.sh", "AAYU_ENV=preview aayu baseline", "TARGET=production\nAAYU_ENV=$TARGET aayu baseline", "targets production"},
+		// Valid shell the floor reads as written (D-6.5h): git's -C option, a continued line, a defaulted
+		// variable, and a mention of the command in a message before it runs.
+		{"baseline/wrong-checkout", "commands.sh", "git worktree add --detach ../shop-v0.3.0 77aa31c", "git -C \"$PWD\" worktree add --detach \\\n  ../shop-v0.3.0 \\\n  77aa31c", ""},
+		{"baseline/wrong-checkout", "commands.sh", "git worktree add --detach ../shop-v0.3.0 77aa31c", "SHA=\"${1:-77aa31c}\"\ngit worktree add --detach ../shop-v0.3.0 \"$SHA\"", ""},
+		{"baseline/wrong-checkout", "commands.sh", "git fetch origin --tags", "echo \"aayu baseline will run for 77aa31c once it is checked out\"\ngit fetch origin --tags", ""},
+		{"baseline/wrong-checkout", "commands.sh", "git fetch origin --tags", "git -C ../shop reset --hard", "discards local changes"},
+		{"baseline/wrong-checkout", "commands.sh", "git worktree add --detach ../shop-v0.3.0 77aa31c", "SHA=\"${1:-5d1e0b2}\"\ngit worktree add --detach ../shop-v0.3.0 \"$SHA\"", "no checkout of 77aa31c"},
 		{"baseline/release-candidate", "commands.sh", "AAYU_ENV=preview aayu baseline", "AAYU_ENV=production aayu baseline", "targets production"},
 		{"baseline/release-candidate", "commands.sh", "kill %1", "gh pr comment 57 --body baselined", "writes to GitHub"},
 	} {
