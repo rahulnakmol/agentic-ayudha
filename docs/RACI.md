@@ -18,7 +18,7 @@ Charters: `seats/<seat>/CHARTER.md`.
 |---|---|---|---|---|---|---|---|---|---|
 | `grill` | Product Strategist | Product Strategist twin, spec lane | Product Strategist | Code Architect, UX Researcher & Evolutionist | Engineering Manager | all | bot | host | read |
 | `slice` | Product Strategist | Product Strategist twin, plan lane | Product Strategist | Code Architect, Engineering Manager | AI Native Engineer (+SRE hat) | all | bot | host | read |
-| `plan` | Code Architect | Code Architect twin, plan lane | Code Architect | Engineering Manager, Quality Architect | AI Native Engineer (+SRE hat) | all | bot | host | read |
+| `plan` | Code Architect | Code Architect twin, plan lane | Code Architect | Engineering Manager, Quality Architect, Data & AI Architect | AI Native Engineer (+SRE hat) | all | bot | host | read |
 | `decide` | Founder | Founder twin, spec lane | Founder | Product Strategist, Code Architect | Engineering Manager, Auditor | all | human | host | read |
 | `triage` | Product Strategist | Product Strategist twin, chore lane | Product Strategist | — | Engineering Manager | none | bot | hybrid (the host's model passes --as; never in product CI) | write |
 | `build` | AI Native Engineer (+SRE hat) | AI Native Engineer (+SRE hat) twin, build lane | AI Native Engineer (+SRE hat) | Code Architect | Engineering Manager | all | bot | host | write |
@@ -35,19 +35,20 @@ Charters: `seats/<seat>/CHARTER.md`.
 | `review` | UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, ui-review lane | UX Researcher & Evolutionist | Quality Architect | Engineering Manager | L01 | bot | hybrid (lane A direct) | write |
 | `polish` | UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, build lane | UX Researcher & Evolutionist | — | Engineering Manager | L01 | bot | host | write |
 | `baseline` | UX Researcher & Evolutionist | UX Researcher & Evolutionist twin, chore lane | UX Researcher & Evolutionist | Quality Architect | Engineering Manager | L01 | bot | none | write |
-| `experiment` | Revenue Architect | Revenue Architect twin, plan lane | Revenue Architect | Product Strategist, UX Researcher & Evolutionist | Founder | L03, L08 | bot | host | write |
+| `experiment` | Revenue Architect | Revenue Architect twin, plan lane | Revenue Architect | Product Strategist, UX Researcher & Evolutionist, Data & AI Architect | Founder | L03, L08 | bot | host | write |
 | `readout` | Revenue Architect | Revenue Architect twin, spec lane | Revenue Architect | Product Strategist | Founder, Marketer & Documenter | L08 | bot | host | write |
 | `respond` | AI Native Engineer (+SRE hat) | AI Native Engineer (+SRE hat) twin, build lane | AI Native Engineer (+SRE hat) | DevOps & DevEx Tinkerer | Engineering Manager, Founder | L07, L09 | human | host | never |
 | `status` | Engineering Manager | Engineering Manager twin, chore lane | Engineering Manager | — | Founder | all | bot | none | read |
 | `audit` | Auditor | Auditor twin, review lane | Auditor | Quality Architect | Founder | all | bot | none | write |
 | `retro` | Engineering Manager | Engineering Manager twin, spec lane | Engineering Manager | Auditor, AI Native Engineer (+SRE hat) | Founder | all | bot | host | write |
-| `measure` | Revenue Architect | Revenue Architect twin, chore lane | Revenue Architect | Product Strategist | Founder | L08 | bot | none | write |
-| `evolve` | AI Native Engineer (+SRE hat) | AI Native Engineer (+SRE hat) twin, build lane | AI Native Engineer (+SRE hat) | Quality Architect | Engineering Manager | L05 | bot | host | write |
+| `measure` | Data & AI Architect | Data & AI Architect twin, chore lane | Revenue Architect | Product Strategist | Founder | L08 | bot | none | write |
+| `evolve` | AI Native Engineer (+SRE hat) | AI Native Engineer (+SRE hat) twin, build lane | AI Native Engineer (+SRE hat) | Quality Architect, Data & AI Architect | Engineering Manager | L05 | bot | host | write |
 | `brief` | Mentalist | Mentalist twin, spec lane | Mentalist | Product Strategist | Marketer & Documenter | all | bot | hybrid (adversarial pass direct) | read |
 | `tell` | Marketer & Documenter | Marketer & Documenter twin, spec lane | Marketer & Documenter | Mentalist, Product Strategist | Founder | L01 | human | host (publish requires the human identity) | write |
 | `init` | Founder | Founder twin, chore lane | Founder | DevOps & DevEx Tinkerer | Engineering Manager | L09 | human | none | never |
 | `install` | DevOps & DevEx Tinkerer | DevOps & DevEx Tinkerer twin, chore lane | DevOps & DevEx Tinkerer | — | Engineering Manager | L09 | human | none | never |
 | `doctor` | DevOps & DevEx Tinkerer | DevOps & DevEx Tinkerer twin, chore lane | DevOps & DevEx Tinkerer | — | Engineering Manager | L09 | human | none | read |
+| `chart` | Data & AI Architect | Data & AI Architect twin, spec lane | Data & AI Architect | Code Architect, Revenue Architect | AI Native Engineer (+SRE hat), Quality Architect | L05, L07, L08 | bot | host | read |
 
 Model calling: `none` is deterministic; `host` means the host's model reasons inside the skill;
 `direct` means the binary calls a model itself; `hybrid` is host reasoning plus a direct pass
@@ -83,6 +84,7 @@ Model calling: `none` is deterministic; `host` means the host's model reasons in
 |---|---|
 | Product Strategist | `product-strategist` |
 | Code Architect | `code-architect` |
+| Data & AI Architect | `data-ai-architect` |
 | Engineering Manager | `engineering-manager` |
 | AI Native Engineer (+SRE hat) | `ai-native-engineer` |
 | UX Researcher & Evolutionist | `ux-researcher-evolutionist` |

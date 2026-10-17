@@ -101,13 +101,17 @@ func TestMCPDefaultExposure(t *testing.T) {
 	cs := serveMCP(t, gitInit(t, "dev", nil))
 	names, tools := toolNames(t, cs)
 	// Read and authoring verbs only (the SDK lists tools by name).
-	want := []string{"brief", "decide", "doctor", "grill", "plan", "proof", "ready", "research", "slice", "status"}
+	want := []string{"brief", "chart", "decide", "doctor", "grill", "plan", "proof", "ready", "research", "slice", "status"}
 	if !slices.Equal(names, want) {
 		t.Fatalf("tools = %v, want %v", names, want)
 	}
 	// decide is exposed as decide --pack (WP5.1b): read-only, and never with the human-only --accept.
 	if p := props(t, tools["decide"]); p["pack"] != nil || p["accept"] != nil || p["seat"] == nil {
 		t.Errorf("decide tool properties %v: want --pack pinned, no --accept", p)
+	}
+	// chart is exposed read-only (Decision #283): it grounds and checks a note, and never posts it.
+	if p := props(t, tools["chart"]); p["create"] != nil || p["kind"] == nil || p["draft"] == nil {
+		t.Errorf("chart tool properties %v: want --create pinned off, --kind and --draft exposed", p)
 	}
 	// ready is exposed as ready --check: the caller cannot choose to write.
 	if _, ok := props(t, tools["ready"])["check"]; ok {

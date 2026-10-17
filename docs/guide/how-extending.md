@@ -23,7 +23,7 @@ otherwise. A new dependency needs its licence in `THIRD_PARTY_NOTICES.md` in the
 
 ## Add a verb
 
-The verb set is a design decision, not just code. `TestRegistry` pins the list: "32 verbs in plan order". So a new
+The verb set is a design decision, not just code. `TestRegistry` pins the list: "32 verbs in plan order, then chart". So a new
 verb starts with a change to [the build plan](../BUILD-PLAN.md) and the `wantVerbs` list in
 `internal/verbs/registry_test.go`. A new plumbing command is lighter: add a `plumb(...)` line to `Plumbing` and
 update `wantPlumbing`.

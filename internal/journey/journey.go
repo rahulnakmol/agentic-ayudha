@@ -136,7 +136,7 @@ func Candidates(s State) []Step {
 		break
 	}
 	for _, d := range s.MeasureDue {
-		add(Step{Command: fmt.Sprintf("aayu measure %d", d.Issue), Why: fmt.Sprintf("%s #%d shipped in %s and its measurement was due on %s.", d.Type, d.Issue, d.Tag, d.Due), Seat: verbs.RevenueArchitect, Stage: verbs.StageLearn})
+		add(Step{Command: fmt.Sprintf("aayu measure %d", d.Issue), Why: fmt.Sprintf("%s #%d shipped in %s and its measurement was due on %s.", d.Type, d.Issue, d.Tag, d.Due), Seat: verbs.DataAIArchitect, Stage: verbs.StageLearn})
 		break
 	}
 	if s.Configured {

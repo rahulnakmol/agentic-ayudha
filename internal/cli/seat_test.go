@@ -174,7 +174,7 @@ func TestSeatAddRemove(t *testing.T) {
 
 	// seat list shows the seats from config; agents may list but never change seats.
 	code, out, _ := run(t, map[string]string{"AAYU_AGENT": "1"}, Options{Dir: dir}, "seat", "list", "--json")
-	if code != 0 || !strings.Contains(out, `"policy": "solo"`) || strings.Count(out, `"mode": "solo"`) != 12 {
+	if code != 0 || !strings.Contains(out, `"policy": "solo"`) || strings.Count(out, `"mode": "solo"`) != 13 {
 		t.Errorf("seat list: exit %d\n%s", code, out)
 	}
 	if code, _, _ := run(t, map[string]string{"AAYU_AGENT": "1"}, Options{Dir: dir}, "seat", "add", "auditor", "--human", "bob"); code != ExitBlocked {

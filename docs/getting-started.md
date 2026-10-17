@@ -97,7 +97,7 @@ the verb through the binary, so every GitHub write goes through the actions log.
 4. `inspect` reviews the pull request against its plan and proof pack.
 5. `ship` squash-merges it after a green merge gate and a human pass.
 
-`aayu status` rolls up progress and proof coverage. The [verbs reference](README.md#verbs) lists all 32
+`aayu status` rolls up progress and proof coverage. The [verbs reference](README.md#verbs) lists all 33
 verbs; each skill's page explains its steps.
 
 ## Where to go next

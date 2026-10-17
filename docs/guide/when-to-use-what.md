@@ -153,7 +153,7 @@ Use **`doctor`**. It checks tools, sign-in, configuration, installed skills, age
 loops, and existing CI, and says what to fix. `aayu doctor --fix` re-syncs skill copies after an upgrade. Not sure
 what to do next at all? `aayu next` names one step. A specific error? See [troubleshooting](troubleshooting.md).
 
-## All 32 verbs, by journey stage
+## All 33 verbs, by journey stage
 
 This map is generated from the verb registry, the same source as the command line, so it always lists every verb.
 The descriptions are the registry's own one-liners, written for agents, so they are terser than the rest of this
@@ -171,6 +171,7 @@ are not verbs; the verbs reference lists them.
 | [Break it down](journey-2-break-down.md) | [`slice`](../../skills/slice/SKILL.md) | Splits a Feature into small stories, each with checkable promises, the parts of the code it touches, and its order. |
 |  | [`plan`](../../skills/plan/SKILL.md) | Plans a story one layer at a time: what changes, how it is tested, and how to roll it back. |
 |  | [`decide`](../../skills/decide/SKILL.md) | Records a real choice with its options and a recommendation; only a person with the authority accepts it. |
+|  | [`chart`](../../skills/chart/SKILL.md) | Before a data or AI change is planned, works out with you which decisions it serves, which data or evidence answers them, and how to prove it right. |
 | [Get a story Ready](journey-3-ready.md) | [`ready`](../../skills/ready/SKILL.md) | Checks that a work item is complete and freezes exactly what was agreed, so later edits are visible. |
 | [Design the screens](journey-4-build.md#if-your-story-has-a-screen) | [`research`](../../skills/research/SKILL.md) | Collects design references and user research for a Feature. |
 |  | [`wireframe`](../../skills/wireframe/SKILL.md) | Sketches the screens a Feature needs, from its research and promises. |

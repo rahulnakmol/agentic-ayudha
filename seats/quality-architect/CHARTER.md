@@ -1,6 +1,6 @@
 # Quality Architect charter
 
-Seat `quality-architect`, one of the twelve seats (docs/BUILD-PLAN.md WP5.1). Everything outside the generated
+Seat `quality-architect`, one of the thirteen seats (docs/BUILD-PLAN.md WP5.1). Everything outside the generated
 regions is hand-authored; `go generate ./...` rewrites the Persona region from `persona.toml` beside this file
 (WP5.1b) and the RACI region from `internal/verbs/registry.go`.
 
@@ -93,5 +93,6 @@ Sources:
 | `baseline` | Consulted |
 | `audit` | Consulted |
 | `evolve` | Consulted |
+| `chart` | Informed |
 
 <!-- END GENERATED: raci -->

@@ -935,9 +935,14 @@ func TestGroups(t *testing.T) {
 			t.Errorf("ux group: %s has %d case(s), want at least 2", skill, n)
 		}
 	}
+	// Decision #283: the Data & AI Architect's chart and measure cases, advisory, on dispatch only, capped at 30 USD a run.
+	dg, dataAI, err := cfg.ForGroup("data-ai", all)
+	if g, _ := cfg.Group("data-ai"); err != nil || dg.MaxUSD != 30 || len(dataAI) != 4 || cfg.Gates("data-ai") || g.RunsOn("push") || g.RunsOn("schedule") {
+		t.Fatalf("data-ai group: %v, cap %v, %d cases, gates %v", err, dg.MaxUSD, len(dataAI), cfg.Gates("data-ai"))
+	}
 	o, other, err := cfg.ForGroup("skills", all)
-	if err != nil || o.MaxUSD != 8 || o.K != cfg.K || !cfg.Gates("skills") || len(brief)+len(plain)+len(personas)+len(review)+len(convs)+len(tells)+len(hosts)+len(ux)+len(other) != len(all) {
-		t.Fatalf("skills group: %v, cap %v, %d+%d+%d+%d+%d+%d+%d+%d+%d of %d cases", err, o.MaxUSD, len(brief), len(plain), len(personas), len(review), len(convs), len(tells), len(hosts), len(ux), len(other), len(all))
+	if err != nil || o.MaxUSD != 8 || o.K != cfg.K || !cfg.Gates("skills") || len(brief)+len(plain)+len(personas)+len(review)+len(convs)+len(tells)+len(hosts)+len(ux)+len(dataAI)+len(other) != len(all) {
+		t.Fatalf("skills group: %v, cap %v, %d+%d+%d+%d+%d+%d+%d+%d+%d+%d of %d cases", err, o.MaxUSD, len(brief), len(plain), len(personas), len(review), len(convs), len(tells), len(hosts), len(ux), len(dataAI), len(other), len(all))
 	}
 	for _, c := range other {
 		if c.Tier2 != nil && c.Tier2.Human != "" {

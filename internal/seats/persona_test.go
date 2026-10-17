@@ -23,7 +23,7 @@ func repoPersonas(t *testing.T) map[verbs.SeatID]Persona {
 	return ps
 }
 
-// TestPersonas: all twelve personas are complete, every playbook entry has a
+// TestPersonas: all thirteen personas are complete, every playbook entry has a
 // public source, and no persona text uses a word on the brand's avoid list or
 // an exclamation mark (design/brand.yaml).
 func TestPersonas(t *testing.T) {
@@ -166,6 +166,12 @@ func TestCheckGrounding(t *testing.T) {
 		{"bold label then a claim", "**A. Add `Kind` to `Tombstone`.** Every tombstone needs a migration.", "uncited claim"},
 		{"short lead-in", "When a criterion changes stored state in L07, the plan includes:\n\n- an L07 checkpoint (#212)", ""},
 		{"long claim ending with a colon", "The ledger package already stores the kind of every purged object in a separate migration file, as follows:", "uncited claim"},
+		// Decision #283: a point marked as not evidenced is not stated as fact; its citations are still checked.
+		{"marked assumption", "Assumption: the latency budget is two seconds until the human sets one.\n\nThe tombstone lacks the kind (#212).", ""},
+		{"marked in code or bold", "`Assumption:` the latency budget is two seconds.\n\n**Unverified:** the cost is low.\n\nThe tombstone lacks the kind (#212).", ""},
+		{"marked unverified", "Unverified: the ledger may hold 40 000 tombstones.\n\nThe tombstone lacks the kind (#212).", ""},
+		{"unmarked assumption", "We assume the latency budget is two seconds.\n\nThe tombstone lacks the kind (#212).", "uncited claim"},
+		{"a marked point still cites only real sources", "Assumption: the migration in #300 is small.\n\nThe tombstone lacks the kind (#212).", "cites #300"},
 		{"code fences are evidence quotes", "The struct (#212):\n\n```go\ntype Tombstone struct{ SHA string } // the migration\n```", ""},
 	}
 	for _, tt := range tests {

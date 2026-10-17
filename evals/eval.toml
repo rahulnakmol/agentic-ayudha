@@ -54,6 +54,17 @@ max_usd = 30.0 # six cases, one per skill and team stage (D-5.1f): 30 runs; run 
 gate = "advisory"
 events = ["workflow_dispatch", "push"]
 
+# Data & AI Architect cases (Decision #283, Appendix B S-5.1g): the chart notes (data at a startup, AI at a scaleup) and
+# two readings of a measure Result (startup and scaleup), persona cases answered in the twin's voice and revised once
+# on the checks' findings. Advisory until a run meets the bar of a mean of at least 4.0 per skill; the founder capped
+# this work's tier-2 spend at 60 USD in all, so a run is capped at 30 and the group runs on dispatch only.
+[[groups]]
+name = "data-ai"
+prefixes = ["chart/", "measure/"]
+max_usd = 30.0
+gate = "advisory"
+events = ["workflow_dispatch"]
+
 # Seeded-defect PRs for inspect (WP4.8b): each case runs in three variants (the 0.1 prompt, general, peer) and is
 # scored by precision and recall against its planted defects, with no judge. Reported, never gating, and run on
 # dispatch only (about 80 review calls per k; run 38980397572 charged 18.89 USD for twelve cases, D-4.8d).
