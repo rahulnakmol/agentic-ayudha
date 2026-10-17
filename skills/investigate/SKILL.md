@@ -219,7 +219,7 @@ incident as `#N` (its body, timeline, investigation note, and comments are all `
 "(investigation note)", or "(export …)" are not citations. A number you work out cites the sources of its inputs. A
 proposal (a test to add, a fix and its rollback, an alert, an action and its Bug or Story) cites the evidence it
 answers, such as the `path:line` it fixes or `#N`. Never cite a file that does not exist yet (a runbook you propose,
-the file you save the draft in). What you cannot cite starts `Unverified:` or `Assumption:`. The document is its
+the file you save the draft in). What you cannot cite starts `Unverified:` or `Assumption:`. The marker opens its own paragraph or list item, never a table cell or a line after a bold label: the check reads a row or a `**Label:** …` item as starting with that label. Never state that something did not exist or did not happen (a gate, an alert, a test, a check) unless the record says so; write `Unverified:` and what would show it. In Missing evidence and next queries, every unknown and instrumentation gap starts `Unverified:`, and every next query cites the query it extends (`query qN`); a catalog action you name there cites `ops/actions.toml`. The document is its
 title and its parts only: no preamble before it, and no steps for the reader (how to check, save, or open a pull
 request) inside it. An inference names the evidence it rests on.
 
