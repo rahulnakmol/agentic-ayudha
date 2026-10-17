@@ -53,6 +53,8 @@ type Run struct {
 	// clipped and redacted, so a reader can see what the checks and the judge
 	// saw and say who was wrong.
 	Answer string `json:"answer,omitempty"`
+	// Session is a session case's turns and what each command answered (D-3.4f).
+	Session []SessionStep `json:"session,omitempty"`
 	// A review case's run (WP4.8b): its variant and what it would post against
 	// the planted defects.
 	Variant string `json:"variant,omitempty"`
@@ -377,6 +379,8 @@ func (h *Harness) Tier2(ctx context.Context, cases []Case, sha, ref string, now 
 				run, err = h.runPersona(ctx, c, lane, body, string(input), string(rubric))
 			case c.Tier2.Draft != "":
 				run, err = h.runPlanning(ctx, c, lane, body, string(input), string(rubric))
+			case c.Tier2.Session != "":
+				run, err = h.runSession(ctx, c, lane, body, string(input), string(rubric))
 			case c.Tier2.Human != "":
 				run, err = h.runConversation(ctx, c, lane, body, string(input), string(rubric), itemSchema)
 			default:
@@ -561,7 +565,7 @@ func compare(cur, base *Results, cfg Config) (reasons, advisory []string) {
 			reasons = append(reasons, fmt.Sprintf("%s: %d of %d runs errored (at most %d may)", c.Case, c.Errors, len(c.Runs), MaxErrors))
 		}
 		// WP3.4's pass^k bar is a suite bar: one case's pass^5 is 0 or 1, so a single off run in five would
-		// fail a promotion. Per case it is reported, never enforced (D-3.4e); the per-case mean bar, the
+		// fail a promotion. Per case it is reported, never enforced (D-3.4f); the per-case mean bar, the
 		// suite pass^k, and the baseline rules below stay enforced, so a case cannot hide behind the others.
 		if c.PassK < cfg.MinPassK {
 			advisory = append(advisory, fmt.Sprintf("%s: pass^%d %.2f is below %.2f", c.Case, cur.K, c.PassK, cfg.MinPassK))

@@ -1,0 +1,10 @@
+{
+  "number": 50,
+  "title": "Product search",
+  "state": "open",
+  "labels": [
+    {
+      "name": "type:feature"
+    }
+  ]
+}

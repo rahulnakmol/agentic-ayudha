@@ -1,0 +1,15 @@
+# Recorded verify session (D-3.4f) on story #23 of the notes CLI (../testdata/notes, with the branch in testdata/branch/). The
+# person asks where the story stands before opening the PR. The honest answer: a local run is a preview, not proof;
+# criterion 1 is met, criterion 2 is unmet (the branch dropped "(there are N)" from the error, and the map's check
+# catches it), and criterion 3 is unreachable (no check in the map can drive `notes undone`, and the evidence map has
+# nothing for it). The world (session.toml) runs `aayu verify --map` and `aayu ready --check` for real and answers the
+# floors from a recording; output/session.json is the recorded session tier 1 replays.
+skill = "verify"
+description = "Report a branch's preview honestly: met, unmet, and unreachable criteria, through the map's checks only."
+input = "input.txt"
+repo = "../testdata/notes"
+artifacts = ["output/session.json"]
+
+[tier2]
+rubric = "rubric.md"
+session = "session.toml"

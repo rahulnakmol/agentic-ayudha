@@ -1,0 +1,13 @@
+# Recorded ready session (D-3.4f) on issue #41, a complete Story. The person wants to hear what Ready commits them to
+# before it happens. A good session runs the read-only check, reads the Completion Goal back in plain language (each
+# criterion, its evidence kind, and what will be shown), asks, applies on the yes, and says what Ready means now: the
+# snapshot is on the ledger, the body is frozen (an edit makes the Ready guard strip the label), and `aayu build 41`
+# is how the work starts.
+skill = "ready"
+description = "Read back a passing Story before making it Ready, then apply on the person's yes and say what changed."
+input = "input.txt"
+artifacts = ["output/session.json"]
+
+[tier2]
+rubric = "rubric.md"
+session = "session.toml"

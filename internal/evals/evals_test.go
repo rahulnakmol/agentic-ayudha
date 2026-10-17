@@ -906,9 +906,20 @@ func TestGroups(t *testing.T) {
 	if g, _ := cfg.Group("tell"); err != nil || tg.MaxUSD != 8 || len(tells) != 3 || cfg.Gates("tell") || g.RunsOn("push") || g.RunsOn("schedule") || !g.RunsOn("workflow_dispatch") {
 		t.Fatalf("tell group: %v, cap %v, %d cases, gates %v, events %v", err, tg.MaxUSD, len(tells), cfg.Gates("tell"), g.Events)
 	}
+	// D-3.4f: the host-skill session cases have their own advisory group, run on dispatch only; ready/story-ready, a
+	// tier-1 case with no tier 2, stays where it was.
+	hg, hosts, err := cfg.ForGroup("host-skills", all)
+	var hostIDs []string
+	for _, c := range hosts {
+		hostIDs = append(hostIDs, c.ID)
+	}
+	if g, _ := cfg.Group("host-skills"); err != nil || hg.MaxUSD != 25 || cfg.Gates("host-skills") || g.RunsOn("push") || g.RunsOn("schedule") ||
+		strings.Join(hostIDs, " ") != "build/small-story build/unasked-pickup ready/readback-pass ready/refuse-unready verify/map-drift verify/preview-honest" {
+		t.Fatalf("host-skills group: %v, cap %v, cases %v, events %v", err, hg.MaxUSD, hostIDs, g.Events)
+	}
 	o, other, err := cfg.ForGroup("skills", all)
-	if err != nil || o.MaxUSD != 8 || o.K != cfg.K || !cfg.Gates("skills") || len(brief)+len(plain)+len(personas)+len(review)+len(convs)+len(tells)+len(other) != len(all) {
-		t.Fatalf("skills group: %v, cap %v, %d+%d+%d+%d+%d+%d+%d of %d cases", err, o.MaxUSD, len(brief), len(plain), len(personas), len(review), len(convs), len(tells), len(other), len(all))
+	if err != nil || o.MaxUSD != 8 || o.K != cfg.K || !cfg.Gates("skills") || len(brief)+len(plain)+len(personas)+len(review)+len(convs)+len(tells)+len(hosts)+len(other) != len(all) {
+		t.Fatalf("skills group: %v, cap %v, %d+%d+%d+%d+%d+%d+%d+%d of %d cases", err, o.MaxUSD, len(brief), len(plain), len(personas), len(review), len(convs), len(tells), len(hosts), len(other), len(all))
 	}
 	for _, c := range other {
 		if c.Tier2 != nil && c.Tier2.Human != "" {
@@ -1246,7 +1257,7 @@ func TestGroupGatePolicy(t *testing.T) {
 	}
 }
 
-// WP3.4's pass^k bar applies to the suite (D-3.4e): run 38235020071's skills
+// WP3.4's pass^k bar applies to the suite (D-3.4f): run 38235020071's skills
 // group, one case at pass^5 0 among five, passes at suite pass^5 0.80 with the
 // case reported; two such cases fail the suite, and a case mean under 3.5 or a
 // case falling below its baseline pass^k still fails on its own.

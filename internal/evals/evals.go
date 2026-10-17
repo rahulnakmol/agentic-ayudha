@@ -274,6 +274,10 @@ type Tier2Spec struct {
 	// Human is the scripted human (conversation.go) of a grill conversation
 	// case: the skill asks in rounds and the script answers by dimension.
 	Human string `toml:"human"`
+	// Session is the session.toml (session.go) of a host-skill session case
+	// (D-3.4f): the skill works in turns, running commands against the case's
+	// world, and the finished session is checked against its floors.
+	Session string `toml:"session"`
 }
 
 var groupName = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)

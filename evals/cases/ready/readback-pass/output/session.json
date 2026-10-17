@@ -1,0 +1,47 @@
+[
+  {
+    "turn": {
+      "say": "I'll run the read-only check first; it changes nothing.",
+      "commands": [
+        "aayu ready 41 --check --json"
+      ],
+      "done": false
+    },
+    "results": [
+      {
+        "command": "aayu ready 41 --check --json",
+        "code": 0,
+        "out": "{\n  \"repo\": \"o/r\",\n  \"issue\": 41,\n  \"title\": \"Show the pickup time on the order confirmation\",\n  \"type\": \"story\",\n  \"pass\": true,\n  \"problems\": [],\n  \"body_hash\": \"630cc5113c3e5c51a319523a9f8f6950a5cea7b4967e44b2e081ac44137c67e9\",\n  \"completion_goal_hash\": \"b395e41fa3a83f52287f2783e710e19851479f3068fdcd999650c79165c065c2\",\n  \"criteria\": [\n    {\n      \"n\": 1,\n      \"evidence_kind\": \"screenshot\",\n      \"state\": \"the order confirmation after the seeded customer pays for the 09:30 pickup slot on Saturday 18 October\",\n      \"expected\": \"the order number and \\\"Pickup Sat 18 Oct, 09:30\\\" under it\"\n    },\n    {\n      \"n\": 2,\n      \"evidence_kind\": \"api-trace\",\n      \"state\": \"GET /api/orders/1001 for the seeded order\",\n      \"expected\": \"200 with pickup_at \\\"2026-10-18T09:30:00+01:00\\\"\"\n    },\n    {\n      \"n\": 3,\n      \"evidence_kind\": \"screenshot\",\n      \"state\": \"the same confirmation at 390 px wide\",\n      \"expected\": \"the order number and the pickup time show without horizontal scrolling\"\n    }\n  ],\n  \"technical_owner\": \"the Code Architect twin\"\n}\n"
+      }
+    ]
+  },
+  {
+    "turn": {
+      "say": "#41 \"Show the pickup time on the order confirmation\" passes the Ready check: no problems.\n\n**What Ready commits us to.** The story is done when all 3 of these are shown, in the local app with the seeded customer and the payment stub (never production):\n\n1. **Screenshot**: after the seeded customer pays for the 09:30 slot on Saturday 18 October, the order confirmation shows the order number with \"Pickup Sat 18 Oct, 09:30\" under it.\n2. **API trace**: `GET /api/orders/1001` for that seeded order answers 200 with `pickup_at` \"2026-10-18T09:30:00+01:00\".\n3. **Screenshot**: the same confirmation at 390 px wide shows the order number and the pickup time without horizontal scrolling.\n\nThe threshold is all 3. Making it Ready also freezes the issue body: the Ready snapshot records it, and if the body changes afterwards the Ready guard removes `status:ready` until it is checked again.\n\nShall I make #41 Ready?",
+      "done": false
+    },
+    "human": "Yes, that's what we agreed. Go ahead."
+  },
+  {
+    "turn": {
+      "say": "Making #41 Ready.",
+      "commands": [
+        "aayu ready 41"
+      ],
+      "done": false
+    },
+    "results": [
+      {
+        "command": "aayu ready 41",
+        "code": 0,
+        "out": "#41 Show the pickup time on the order confirmation (story): passes Ready\n  labelled status:ready; snapshot posted and written to ledger specs/41/ready.md (8d2f0a4)\n  written as aayudha-bot[bot], tagged aayudha-bot"
+      }
+    ]
+  },
+  {
+    "turn": {
+      "say": "#41 is Ready.\n\n- It is labelled `status:ready`, and the Ready snapshot is posted on the issue and written to the ledger (`specs/41/ready.md`), by aayudha-bot.\n- From now on, leave the issue body as it is: an edit makes the Ready guard remove the label. If the scope needs to change, change the body and run `aayu ready 41` again, or file a follow-up story.\n- Next: `aayu build 41` starts the build when you want it; I haven't started it.",
+      "done": true
+    }
+  }
+]
