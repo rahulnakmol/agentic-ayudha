@@ -72,6 +72,9 @@ func runCounsel(ctx context.Context, e *Env, in Values) error {
 	} else if issueArg.MatchString(topic) {
 		rep.Issue = issueNumber(topic)
 	}
+	if rep.PR > 0 && rep.Issue > 0 {
+		return Errorf(ExitUsage, "counsel takes one target: a pull request (--pr) or an issue (--issue or #N), not both")
+	}
 	if topic == "" && rep.PR == 0 && rep.Issue == 0 {
 		return Errorf(ExitUsage, "counsel needs a topic: a question in quotes, #N, a path, --pr N, or --issue N")
 	}

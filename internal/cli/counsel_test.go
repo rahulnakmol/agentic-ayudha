@@ -271,7 +271,8 @@ Which options belong on #5?
 	}
 
 	for _, args := range [][]string{{"counsel", "--repo", "o/r"}, {"counsel", "--repo", "o/r", "a question?", "--draft", p, "--post"},
-		{"counsel", "--repo", "o/r", "a question?", "--draft", filepath.Join(dir, "missing.md")}} {
+		{"counsel", "--repo", "o/r", "a question?", "--draft", filepath.Join(dir, "missing.md")},
+		{"counsel", "--repo", "o/r", "--pr", pr, "--issue", "5", "--draft", p, "--post"}, {"counsel", "--repo", "o/r", "#5", "--pr", pr}} {
 		if code, _, errOut := run(t, env, opts, args...); code != 2 {
 			t.Errorf("%v: exit %d, want 2: %s", args, code, errOut)
 		}
