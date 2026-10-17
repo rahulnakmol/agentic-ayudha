@@ -503,6 +503,17 @@ func TestInspectThroughApp(t *testing.T) {
 	if code, res, _ = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Rung != inspect.RungA || res.ReviewerFamily != "anthropic" {
 		t.Fatalf("a reported model of another family: %d rung %q %q", code, res.Rung, res.ReviewerFamily)
 	}
+	// Declaring a builder model of the reviewer's family afterwards turns the
+	// cached judgement into a same-family review, in the record ship reads.
+	g.Mu.Lock()
+	g.Pulls[prN].Body += "\n\nAayudha-Model: claude-sonnet-5-5\n"
+	g.Mu.Unlock()
+	if code, res, _ = inspectApp(t, env, opts, prN, "--ci"); code != 0 || !res.Cached || res.Rung != inspect.RungC {
+		t.Fatalf("a cached review after the builder changed: %d cached %v rung %q", code, res.Cached, res.Rung)
+	}
+	if st := inspect.ParseState(lastInspect(t, g, prN)); st.Result == nil || st.Result.Rung != inspect.RungC {
+		t.Fatalf("the record keeps the stale rung: %+v", st.Result)
+	}
 	// A person reviews when config asks for one.
 	_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\nreviewer = \"human\"\napps = [\"codex\"]\n"), 0o644)
 	addComment(g, prN, "founder", "User", statedReply(head, "merge", "internal/report/percent.go"))

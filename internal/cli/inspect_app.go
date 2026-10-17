@@ -140,12 +140,16 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		}
 	}
 	res.Notes = append(notes, res.Notes...)
+	// A cached judgement keeps its reply, but the rung follows the builder as
+	// declared now: a changed label rewrites the record ship reads.
+	relabel := false
 	if st.Result != nil && st.Result.DiffHash == res.DiffHash {
+		relabel = st.Result.Review != res.Review
 		// The state the comment records is what ship and audit read later.
 		st.Result.Notes, st.Result.Head, st.Result.Builder = res.Notes, res.Head, res.Builder
 		st.Result.Rung, st.Result.ReviewerFamily, st.Result.Review = res.Rung, res.ReviewerFamily, res.Review
 	}
-	if e.CI && res.Disposition != inspect.Skipped && !res.Cached {
+	if e.CI && res.Disposition != inspect.Skipped && (!res.Cached || relabel) {
 		if _, err := a.c.UpsertComment(ctx, a.repo, n, inspect.Marker, inspect.Comment(res, st, 0), actions.Action{Kind: "github.comment.inspect",
 			Payload: map[string]any{"disposition": res.Disposition, "diff_hash": res.DiffHash, "reviewer": choice.Kind(), "rung": res.Rung}}); err != nil {
 			return err
