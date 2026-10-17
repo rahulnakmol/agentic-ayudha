@@ -185,7 +185,7 @@ func runCounsel(ctx context.Context, e *Env, in Values) error {
 		facts.WriteString(f.Text + " (" + f.Cite + ")\n")
 	}
 	known := func(cite string) bool {
-		if strings.Contains(facts.String(), cite) {
+		if hasCite(facts.String(), cite) {
 			return true
 		}
 		// A path the twin read in this checkout is a fact too.
@@ -416,4 +416,26 @@ func (r counselReport) markdown() string {
 	b.WriteString(counsel.Template(r.Artefact))
 	b.WriteString("## Persona\n\n" + r.Persona)
 	return b.String()
+}
+
+// hasCite reports whether text cites cite as a whole token: #12 is not in #123, nor percent.go in report/percent.go;
+// a directory (ledger/) is a prefix of the paths under it.
+func hasCite(text, cite string) bool {
+	word := func(b byte) bool {
+		return b == '_' || b >= '0' && b <= '9' || b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z'
+	}
+	for i := 0; ; {
+		j := strings.Index(text[i:], cite)
+		if j < 0 {
+			return false
+		}
+		j += i
+		end := j + len(cite)
+		left := j == 0 || !word(text[j-1]) && !strings.ContainsRune("/.-#", rune(text[j-1]))
+		right := strings.HasSuffix(cite, "/") || end == len(text) || !word(text[end])
+		if left && right {
+			return true
+		}
+		i = j + 1
+	}
 }

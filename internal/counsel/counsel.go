@@ -68,8 +68,9 @@ var (
 		`\b(?:Atri|the sage|the founder's sage|the twin|this counsel|counsel)\s+(?:has\s+)?(?:approve[sd]?|review(?:s|ed)|signs?\s+off|signed\s+off)\b`)
 	// recommends counts recommendation statements: a counsel makes one.
 	recommends = regexp.MustCompile(`(?i)\brecommend(?:s|ed|ing)?\b|\balternatively\b`)
-	// passive is the same claim in the passive ("the PR has been reviewed"); it is a claim of a review only when
-	// its line cites no record of one, since a cited record reports what happened.
+	// passive is the same claim in the passive ("the PR has been reviewed"), cited or not: a citation shows a source
+	// exists, not that it records a review, so counsel reports a review as what a record shows ("the record shows
+	// @lead's review (#12)").
 	passive = regexp.MustCompile(`(?i)\b(?:is|are|has been|have been)\s+(?:approved|reviewed|signed off)\b`)
 )
 
@@ -131,9 +132,7 @@ func CheckStructure(md string) []string {
 	}
 	for _, line := range strings.Split(md, "\n") {
 		ms := append(claimed.FindAllString(line, -1), asserted.FindAllString(line, -1)...)
-		if m := passive.FindString(line); m != "" && !seats.Cited(line) {
-			ms = append(ms, m)
-		}
+		ms = append(ms, passive.FindAllString(line, -1)...)
 		for _, m := range ms {
 			out = append(out, fmt.Sprintf("claims a review, an approval, or a ruling (%q): counsel is advice and never one", m))
 		}

@@ -7,8 +7,8 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
-// Counsel never claims a review or an approval, but it may say it is not one, and it may report a cited record of
-// one (Story #478).
+// Counsel never claims a review or an approval, but it may say it is not one, and it may report what a cited record
+// shows (Story #478).
 func TestReviewClaims(t *testing.T) {
 	for line, claims := range map[string]bool{
 		"LGTM.": true,
@@ -16,7 +16,8 @@ func TestReviewClaims(t *testing.T) {
 		"We approve this change.":                      true,
 		"The PR has been reviewed.":                    true,
 		"This counsel is not a review or an approval.": false,
-		"The PR has been reviewed by @lead (#12).":     false,
+		"The PR has been reviewed and may merge (#2).": true,
+		"The record shows @lead's review (#12).":       false,
 		"Ask for a review with `aayu inspect 12`.":     false,
 		"Who approves the waiver?":                     false,
 	} {

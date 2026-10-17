@@ -216,11 +216,6 @@ func CheckGroundingWith(md string, known func(cite string) bool) []string {
 	return out
 }
 
-// Cited reports whether text carries a citation of a real source (not a template path such as retro/<date>/).
-func Cited(text string) bool {
-	return slices.ContainsFunc(citations(text), func(c string) bool { return !isPlaceholder(c) })
-}
-
 // isPlaceholder reports whether a citation is a template path such as
 // retro/<date>/ or ledger/plans/<story>/plan.json: it names no real source,
 // so it needs no grounding and is no evidence either.

@@ -172,6 +172,7 @@ Is the zero case the behaviour you want?
 		"invented citation":    {"(LAYERS.md)", "(#99)", "cites #99"},
 		"cited from the body":  {"(LAYERS.md)", "(#2, internal/safe.go)", "cites internal/safe.go"},
 		"persona's example":    {"(LAYERS.md)", "(#41)", "cites #41"},
+		"part of a path":       {"(LAYERS.md)", "(percent.go)", "cites percent.go,"},
 	} {
 		want := tt.want
 		if want == "" {
