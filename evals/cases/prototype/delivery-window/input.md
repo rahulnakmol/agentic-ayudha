@@ -25,6 +25,8 @@ Stories (Ready):
 
 - React 19 with the design system (`@aayudha/design-system`: `Button`, `Badge`, `Table`, `Alert`, `Card`, the
   `ListReport` floorplan), styled with its Tailwind utilities and `--ay-*` tokens. Routes live in `src/app/<route>/page.tsx`.
+- Today `src/app/preferences/page.tsx` renders `<PreferencesPage />` from `src/preferences/PreferencesPage.tsx`: the
+  customer's address and the notice "We deliver between 8:00 and 20:00".
 - OpenFeature is set up with the flagd provider (`src/flags/provider.tsx`); components read flags with
   `useBooleanFlagValue(key, false)` from `@openfeature/react-sdk`. `[design] flags = "flags.flagd.json"` (flagd JSON
   at the repository root, empty today: `{"flags": {}}`). flagd's targeting sees the context property
