@@ -512,7 +512,7 @@ func citeFile(ix *Index, c string) string {
 	if strings.HasPrefix(c, "mod:") || strings.HasPrefix(c, "build:") || strings.HasPrefix(c, "dep:") || strings.HasPrefix(c, "probe:") {
 		return ""
 	}
-	for _, pre := range []string{"entry:", "io:", "trap:", "marker:", "test:", "doc:"} {
+	for _, pre := range []string{"entry:", "io:", "trap:", "marker:", "test:", "doc:", "builtin:"} {
 		if strings.HasPrefix(c, pre) {
 			c = c[len(pre):]
 			if pre == "io:" || pre == "trap:" {
