@@ -10,10 +10,10 @@ on the ledger.
 |---|---|
 | In plain words | Captures reference screenshots of a commit to compare later changes against. |
 | Journey stage | [Design the screens](../journey-4-build.md#if-your-story-has-a-screen) |
-| Accountable seat | [UX Researcher & Evolutionist](../../../seats/ux-researcher-evolutionist/CHARTER.md) (Iris) |
-| Does the work | Iris, the Accountable seat's twin, in the [`chore`](../how-models.md) model lane, with the seat's paired human when it has one |
-| Consulted | [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Themis) |
-| Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Nestor) |
+| Accountable seat | [UX Researcher & Evolutionist](../../../seats/ux-researcher-evolutionist/CHARTER.md) (Hanu) |
+| Does the work | Hanu, the Accountable seat's twin, in the [`chore`](../how-models.md) model lane, with the seat's paired human when it has one |
+| Consulted | [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Yama) |
+| Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |
 | Layers it can touch | [L01 Experience](../concepts-layers.md) |
 | Who reasons | no model: it is deterministic |
 | Writes as | the bot identity (a GitHub App); without one, your identity, tagged as human fallback |

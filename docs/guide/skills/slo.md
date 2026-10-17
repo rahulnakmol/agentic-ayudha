@@ -10,10 +10,10 @@ ships only Bugs while a budget is spent.
 |---|---|
 | In plain words | Sets how reliable the product must be for its users, measures how much room for failure is left, and holds back risky releases when it runs out. |
 | Journey stage | [Keep it running](../when-to-use-what.md#something-broke-in-production) |
-| Accountable seat | [Production Engineer](../../../seats/production-engineer/CHARTER.md) (Atlas) |
-| Does the work | Atlas, the Accountable seat's twin, in the [`spec`](../how-models.md) model lane, with the seat's paired human when it has one |
-| Consulted | [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Metis), [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Themis) |
-| Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Nestor), [DevOps & DevEx Tinkerer](../../../seats/devops-devex-tinkerer/CHARTER.md) (Hercules) |
+| Accountable seat | [Production Engineer](../../../seats/production-engineer/CHARTER.md) (Shesha) |
+| Does the work | Shesha, the Accountable seat's twin, in the [`spec`](../how-models.md) model lane, with the seat's paired human when it has one |
+| Consulted | [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Arjun), [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Yama) |
+| Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona), [DevOps & DevEx Tinkerer](../../../seats/devops-devex-tinkerer/CHARTER.md) (Nala) |
 | Layers it can touch | [every layer](../concepts-layers.md) |
 | Who reasons | your agent's own model, inside the skill |
 | Writes as | the bot identity (a GitHub App); without one, your identity, tagged as human fallback |

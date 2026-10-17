@@ -9,11 +9,11 @@ Goal's metric exactly as its baseline was computed, over a new window, and write
 |---|---|
 | In plain words | Measures a Goal against its baseline, the same way as before, and writes the result into the Goal. |
 | Journey stage | [Measure and learn](../journey-8-learn.md) |
-| Accountable seat | [Data & AI Architect](../../../seats/data-ai-architect/CHARTER.md) (Mneme) |
-| Owns the thresholds | [Revenue Architect](../../../seats/revenue-architect/CHARTER.md) (Plutus) |
-| Does the work | Mneme, the Accountable seat's twin, in the [`spec`](../how-models.md) model lane, with the seat's paired human when it has one |
-| Consulted | [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Metis) |
-| Informed | [Founder](../../../seats/founder/CHARTER.md) (Prometheus) |
+| Accountable seat | [Data & AI Architect](../../../seats/data-ai-architect/CHARTER.md) (Shuka) |
+| Owns the thresholds | [Revenue Architect](../../../seats/revenue-architect/CHARTER.md) (Kuber) |
+| Does the work | Shuka, the Accountable seat's twin, in the [`spec`](../how-models.md) model lane, with the seat's paired human when it has one |
+| Consulted | [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Arjun) |
+| Informed | [Founder](../../../seats/founder/CHARTER.md) (Atri) |
 | Layers it can touch | [L08 Analytics / reporting](../concepts-layers.md) |
 | Who reasons | no model: it is deterministic |
 | Writes as | the bot identity (a GitHub App); without one, your identity, tagged as human fallback |

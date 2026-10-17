@@ -10,10 +10,10 @@ number of people each arm needs. It files all of that as an Experiment issue und
 |---|---|
 | In plain words | Designs an A/B test for a Feature: what you expect, what you measure, and how many people you need. |
 | Journey stage | [Measure and learn](../journey-8-learn.md) |
-| Accountable seat | [Revenue Architect](../../../seats/revenue-architect/CHARTER.md) (Plutus) |
-| Does the work | Plutus, the Accountable seat's twin, in the [`plan`](../how-models.md) model lane, with the seat's paired human when it has one |
-| Consulted | [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Metis), [UX Researcher & Evolutionist](../../../seats/ux-researcher-evolutionist/CHARTER.md) (Iris), [Data & AI Architect](../../../seats/data-ai-architect/CHARTER.md) (Mneme) |
-| Informed | [Founder](../../../seats/founder/CHARTER.md) (Prometheus) |
+| Accountable seat | [Revenue Architect](../../../seats/revenue-architect/CHARTER.md) (Kuber) |
+| Does the work | Kuber, the Accountable seat's twin, in the [`plan`](../how-models.md) model lane, with the seat's paired human when it has one |
+| Consulted | [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Arjun), [UX Researcher & Evolutionist](../../../seats/ux-researcher-evolutionist/CHARTER.md) (Hanu), [Data & AI Architect](../../../seats/data-ai-architect/CHARTER.md) (Shuka) |
+| Informed | [Founder](../../../seats/founder/CHARTER.md) (Atri) |
 | Layers it can touch | [L03 Application / workflow, L08 Analytics / reporting](../concepts-layers.md) |
 | Who reasons | your agent's own model, inside the skill |
 | Writes as | the bot identity (a GitHub App); without one, your identity, tagged as human fallback |

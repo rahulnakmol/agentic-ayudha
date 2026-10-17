@@ -9,10 +9,10 @@ own worktree, one layer at a time, checks each step, and opens a pull request.
 |---|---|
 | In plain words | Writes the code for a Ready story in small checked steps, one layer at a time, and opens a pull request. |
 | Journey stage | [Build it](../journey-4-build.md) |
-| Accountable seat | [AI Native Engineer](../../../seats/ai-native-engineer/CHARTER.md) (Talos) |
-| Does the work | Talos, the Accountable seat's twin, in the [`build`](../how-models.md) model lane, with the seat's paired human when it has one |
-| Consulted | [Code Architect](../../../seats/code-architect/CHARTER.md) (Daedalus), [Production Engineer](../../../seats/production-engineer/CHARTER.md) (Atlas) |
-| Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Nestor) |
+| Accountable seat | [AI Native Engineer](../../../seats/ai-native-engineer/CHARTER.md) (Nakul) |
+| Does the work | Nakul, the Accountable seat's twin, in the [`build`](../how-models.md) model lane, with the seat's paired human when it has one |
+| Consulted | [Code Architect](../../../seats/code-architect/CHARTER.md) (Vishwa), [Production Engineer](../../../seats/production-engineer/CHARTER.md) (Shesha) |
+| Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |
 | Layers it can touch | [every layer](../concepts-layers.md) |
 | Who reasons | your agent's own model, inside the skill |
 | Writes as | the bot identity (a GitHub App); without one, your identity, tagged as human fallback |

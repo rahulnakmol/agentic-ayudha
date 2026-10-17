@@ -108,7 +108,7 @@ func skillRegion(c verbs.Command, region string) string {
 	}
 }
 
-// seatWithTwin is "Product Strategist (Metis)", linked to the seat's charter.
+// seatWithTwin is "Product Strategist (Arjun)", linked to the seat's charter.
 func seatWithTwin(id verbs.SeatID) string {
 	return fmt.Sprintf("[%s](../../../seats/%s/CHARTER.md) (%s)", verbs.SeatName(id), id, personas[id].Name)
 }

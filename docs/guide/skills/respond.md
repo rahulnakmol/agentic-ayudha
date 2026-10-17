@@ -10,10 +10,10 @@ follow-up Bug.
 |---|---|
 | In plain words | Helps handle an incident: proposes a fix from your runbook, runs it only after a person approves, and keeps the timeline. |
 | Journey stage | [Keep it running](../when-to-use-what.md#something-broke-in-production) |
-| Accountable seat | [Production Engineer](../../../seats/production-engineer/CHARTER.md) (Atlas) |
-| Does the work | Atlas, the Accountable seat's twin, in the [`build`](../how-models.md) model lane, with the seat's paired human when it has one |
-| Consulted | [AI Native Engineer](../../../seats/ai-native-engineer/CHARTER.md) (Talos), [DevOps & DevEx Tinkerer](../../../seats/devops-devex-tinkerer/CHARTER.md) (Hercules) |
-| Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Nestor), [Founder](../../../seats/founder/CHARTER.md) (Prometheus) |
+| Accountable seat | [Production Engineer](../../../seats/production-engineer/CHARTER.md) (Shesha) |
+| Does the work | Shesha, the Accountable seat's twin, in the [`build`](../how-models.md) model lane, with the seat's paired human when it has one |
+| Consulted | [AI Native Engineer](../../../seats/ai-native-engineer/CHARTER.md) (Nakul), [DevOps & DevEx Tinkerer](../../../seats/devops-devex-tinkerer/CHARTER.md) (Nala) |
+| Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona), [Founder](../../../seats/founder/CHARTER.md) (Atri) |
 | Layers it can touch | [L07 Operational data / state, L09 Platform / operations](../concepts-layers.md) |
 | Who reasons | your agent's own model, inside the skill |
 | Writes as | a person's own GitHub identity |

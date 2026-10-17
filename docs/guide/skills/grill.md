@@ -9,10 +9,10 @@ time, until every vague word is something a person can check, then files the res
 |---|---|
 | In plain words | Interviews you, one question at a time, until an idea is a complete work item, then files it on GitHub. |
 | Journey stage | [Shape the goal](../journey-1-shape.md) |
-| Accountable seat | [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Metis) |
-| Does the work | Metis, the Accountable seat's twin, in the [`spec`](../how-models.md) model lane, with the seat's paired human when it has one |
-| Consulted | [Code Architect](../../../seats/code-architect/CHARTER.md) (Daedalus), [UX Researcher & Evolutionist](../../../seats/ux-researcher-evolutionist/CHARTER.md) (Iris) |
-| Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Nestor) |
+| Accountable seat | [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Arjun) |
+| Does the work | Arjun, the Accountable seat's twin, in the [`spec`](../how-models.md) model lane, with the seat's paired human when it has one |
+| Consulted | [Code Architect](../../../seats/code-architect/CHARTER.md) (Vishwa), [UX Researcher & Evolutionist](../../../seats/ux-researcher-evolutionist/CHARTER.md) (Hanu) |
+| Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |
 | Layers it can touch | [every layer](../concepts-layers.md) |
 | Who reasons | your agent's own model, inside the skill |
 | Writes as | the bot identity (a GitHub App); without one, your identity, tagged as human fallback |

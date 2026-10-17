@@ -9,10 +9,10 @@ registers the MCP server and hooks, and, on request, sets up cloud environments 
 |---|---|
 | In plain words | Installs the aayudha skills, tools, and hooks into your agent, and sets up its cloud environment and loops. |
 | Journey stage | [Set up](../start.md) |
-| Accountable seat | [DevOps & DevEx Tinkerer](../../../seats/devops-devex-tinkerer/CHARTER.md) (Hercules) |
-| Does the work | Hercules, the Accountable seat's twin, in the [`chore`](../how-models.md) model lane, with the seat's paired human when it has one |
+| Accountable seat | [DevOps & DevEx Tinkerer](../../../seats/devops-devex-tinkerer/CHARTER.md) (Nala) |
+| Does the work | Nala, the Accountable seat's twin, in the [`chore`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | none |
-| Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Nestor) |
+| Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |
 | Layers it can touch | [L09 Platform / operations](../concepts-layers.md) |
 | Who reasons | no model: it is deterministic |
 | Writes as | a person's own GitHub identity |

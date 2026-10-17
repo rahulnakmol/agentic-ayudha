@@ -9,10 +9,10 @@ sorts each intake issue into Feedback, Bug, or Incident by label, and never edit
 |---|---|
 | In plain words | Sorts incoming reports into feedback, bugs, and incidents by label, without editing what people wrote. |
 | Journey stage | [Keep it running](../when-to-use-what.md#something-broke-in-production) |
-| Accountable seat | [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Metis) |
-| Does the work | Metis, the Accountable seat's twin, in the [`chore`](../how-models.md) model lane, with the seat's paired human when it has one |
+| Accountable seat | [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Arjun) |
+| Does the work | Arjun, the Accountable seat's twin, in the [`chore`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | none |
-| Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Nestor) |
+| Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |
 | Layers it can touch | none: it changes no product code |
 | Who reasons | your agent's model, plus a direct pass by aayu (the host's model passes --as; never in product CI) |
 | Writes as | the bot identity (a GitHub App); without one, your identity, tagged as human fallback |

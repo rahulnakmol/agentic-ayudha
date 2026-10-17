@@ -9,10 +9,10 @@ one rung up, `dev` to `rolling` or `rolling` to `main`, after a full gate on the
 |---|---|
 | In plain words | Moves shipped work up to a snapshot or stable release, after a full gate, and schedules the measurement. |
 | Journey stage | [Release it](../journey-7-release.md) |
-| Accountable seat | [DevOps & DevEx Tinkerer](../../../seats/devops-devex-tinkerer/CHARTER.md) (Hercules) |
-| Does the work | Hercules, the Accountable seat's twin, in the [`chore`](../how-models.md) model lane, with the seat's paired human when it has one |
-| Consulted | [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Themis), [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Nestor), [Production Engineer](../../../seats/production-engineer/CHARTER.md) (Atlas) |
-| Informed | [Marketer & Documenter](../../../seats/marketer-documenter/CHARTER.md) (Clio), [Founder](../../../seats/founder/CHARTER.md) (Prometheus) |
+| Accountable seat | [DevOps & DevEx Tinkerer](../../../seats/devops-devex-tinkerer/CHARTER.md) (Nala) |
+| Does the work | Nala, the Accountable seat's twin, in the [`chore`](../how-models.md) model lane, with the seat's paired human when it has one |
+| Consulted | [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Yama), [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona), [Production Engineer](../../../seats/production-engineer/CHARTER.md) (Shesha) |
+| Informed | [Marketer & Documenter](../../../seats/marketer-documenter/CHARTER.md) (Sauti), [Founder](../../../seats/founder/CHARTER.md) (Atri) |
 | Layers it can touch | [L09 Platform / operations](../concepts-layers.md) |
 | Who reasons | no model: it is deterministic |
 | Writes as | a person's own GitHub identity |

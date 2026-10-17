@@ -10,10 +10,10 @@ gives one verdict: recapture, rebuild, fix, or ship.
 |---|---|
 | In plain words | Critiques a pull request's screens with a model and with fixed accessibility checks. |
 | Journey stage | [Design the screens](../journey-4-build.md#if-your-story-has-a-screen) |
-| Accountable seat | [UX Researcher & Evolutionist](../../../seats/ux-researcher-evolutionist/CHARTER.md) (Iris) |
-| Does the work | Iris, the Accountable seat's twin, in the [`ui-review`](../how-models.md) model lane, with the seat's paired human when it has one |
-| Consulted | [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Themis) |
-| Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Nestor) |
+| Accountable seat | [UX Researcher & Evolutionist](../../../seats/ux-researcher-evolutionist/CHARTER.md) (Hanu) |
+| Does the work | Hanu, the Accountable seat's twin, in the [`ui-review`](../how-models.md) model lane, with the seat's paired human when it has one |
+| Consulted | [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Yama) |
+| Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |
 | Layers it can touch | [L01 Experience](../concepts-layers.md) |
 | Who reasons | your agent's model, plus a direct pass by aayu (lane A direct) |
 | Writes as | the bot identity (a GitHub App); without one, your identity, tagged as human fallback |
@@ -47,7 +47,7 @@ aayu review <pr>
 | Input | Required | What it does |
 |---|---|---|
 | `<pr>` | yes | Pull request whose UI to review. |
-| `--deep` | no | Run lane A at high effort. |
+| `--deep` | no | Run lane A at high effort when the lane's default effort is lower. |
 
 <!-- END GENERATED: skill-usage -->
 

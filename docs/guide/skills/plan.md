@@ -10,10 +10,10 @@ that prove it, and how to roll it back, checked and kept on the ledger before an
 |---|---|
 | In plain words | Plans a story one layer at a time: what changes, how it is tested, and how to roll it back. |
 | Journey stage | [Break it down](../journey-2-break-down.md) |
-| Accountable seat | [Code Architect](../../../seats/code-architect/CHARTER.md) (Daedalus) |
-| Does the work | Daedalus, the Accountable seat's twin, in the [`plan`](../how-models.md) model lane, with the seat's paired human when it has one |
-| Consulted | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Nestor), [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Themis), [Data & AI Architect](../../../seats/data-ai-architect/CHARTER.md) (Mneme), [Production Engineer](../../../seats/production-engineer/CHARTER.md) (Atlas) |
-| Informed | [AI Native Engineer](../../../seats/ai-native-engineer/CHARTER.md) (Talos) |
+| Accountable seat | [Code Architect](../../../seats/code-architect/CHARTER.md) (Vishwa) |
+| Does the work | Vishwa, the Accountable seat's twin, in the [`plan`](../how-models.md) model lane, with the seat's paired human when it has one |
+| Consulted | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona), [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Yama), [Data & AI Architect](../../../seats/data-ai-architect/CHARTER.md) (Shuka), [Production Engineer](../../../seats/production-engineer/CHARTER.md) (Shesha) |
+| Informed | [AI Native Engineer](../../../seats/ai-native-engineer/CHARTER.md) (Nakul) |
 | Layers it can touch | [every layer](../concepts-layers.md) |
 | Who reasons | your agent's own model, inside the skill |
 | Writes as | the bot identity (a GitHub App); without one, your identity, tagged as human fallback |

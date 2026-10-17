@@ -10,10 +10,10 @@ and the confidence interval into the Experiment as its Result.
 |---|---|
 | In plain words | Reads out an experiment once it has enough people, and writes down the measured lift. |
 | Journey stage | [Measure and learn](../journey-8-learn.md) |
-| Accountable seat | [Revenue Architect](../../../seats/revenue-architect/CHARTER.md) (Plutus) |
-| Does the work | Plutus, the Accountable seat's twin, in the [`spec`](../how-models.md) model lane, with the seat's paired human when it has one |
-| Consulted | [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Metis) |
-| Informed | [Founder](../../../seats/founder/CHARTER.md) (Prometheus), [Marketer & Documenter](../../../seats/marketer-documenter/CHARTER.md) (Clio) |
+| Accountable seat | [Revenue Architect](../../../seats/revenue-architect/CHARTER.md) (Kuber) |
+| Does the work | Kuber, the Accountable seat's twin, in the [`spec`](../how-models.md) model lane, with the seat's paired human when it has one |
+| Consulted | [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Arjun) |
+| Informed | [Founder](../../../seats/founder/CHARTER.md) (Atri), [Marketer & Documenter](../../../seats/marketer-documenter/CHARTER.md) (Sauti) |
 | Layers it can touch | [L08 Analytics / reporting](../concepts-layers.md) |
 | Who reasons | your agent's own model, inside the skill |
 | Writes as | the bot identity (a GitHub App); without one, your identity, tagged as human fallback |

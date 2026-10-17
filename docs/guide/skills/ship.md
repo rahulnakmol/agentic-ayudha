@@ -9,10 +9,10 @@ the evidence again on the exact commit, needs a person's yes, then merges and wr
 |---|---|
 | In plain words | Merges a proven pull request after your yes, and writes down who approved what, on which evidence. |
 | Journey stage | [Ship it](../journey-6-ship.md) |
-| Accountable seat | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Nestor) |
-| Does the work | Nestor, the Accountable seat's twin, in the [`chore`](../how-models.md) model lane, with the seat's paired human when it has one |
-| Consulted | [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Themis) |
-| Informed | [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Metis), [Marketer & Documenter](../../../seats/marketer-documenter/CHARTER.md) (Clio) |
+| Accountable seat | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |
+| Does the work | Drona, the Accountable seat's twin, in the [`chore`](../how-models.md) model lane, with the seat's paired human when it has one |
+| Consulted | [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Yama) |
+| Informed | [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Arjun), [Marketer & Documenter](../../../seats/marketer-documenter/CHARTER.md) (Sauti) |
 | Layers it can touch | [every layer](../concepts-layers.md) |
 | Who reasons | no model: it is deterministic |
 | Writes as | a person's own GitHub identity |

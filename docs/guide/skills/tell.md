@@ -9,10 +9,10 @@ brand's voice, and links a piece of work only when it is a Feature whose shipped
 |---|---|
 | In plain words | Writes docs, release notes, and launch copy in your brand's voice, linking only work that is proven. |
 | Journey stage | [Explain it](../journey-9-explain.md) |
-| Accountable seat | [Marketer & Documenter](../../../seats/marketer-documenter/CHARTER.md) (Clio) |
-| Does the work | Clio, the Accountable seat's twin, in the [`spec`](../how-models.md) model lane, with the seat's paired human when it has one |
-| Consulted | [Mentalist](../../../seats/mentalist/CHARTER.md) (Pythia), [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Metis) |
-| Informed | [Founder](../../../seats/founder/CHARTER.md) (Prometheus) |
+| Accountable seat | [Marketer & Documenter](../../../seats/marketer-documenter/CHARTER.md) (Sauti) |
+| Does the work | Sauti, the Accountable seat's twin, in the [`spec`](../how-models.md) model lane, with the seat's paired human when it has one |
+| Consulted | [Mentalist](../../../seats/mentalist/CHARTER.md) (Sanjay), [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Arjun) |
+| Informed | [Founder](../../../seats/founder/CHARTER.md) (Atri) |
 | Layers it can touch | [L01 Experience](../concepts-layers.md) |
 | Who reasons | your agent's own model, inside the skill (publish requires the human identity) |
 | Writes as | a person's own GitHub identity |

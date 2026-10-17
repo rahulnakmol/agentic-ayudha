@@ -10,10 +10,10 @@ claims the sources do not support.
 |---|---|
 | In plain words | Explains a piece of work to one audience in a short page, where every claim is checked against its sources. |
 | Journey stage | [Explain it](../journey-9-explain.md) |
-| Accountable seat | [Mentalist](../../../seats/mentalist/CHARTER.md) (Pythia) |
-| Does the work | Pythia, the Accountable seat's twin, in the [`spec`](../how-models.md) model lane, with the seat's paired human when it has one |
-| Consulted | [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Metis) |
-| Informed | [Marketer & Documenter](../../../seats/marketer-documenter/CHARTER.md) (Clio) |
+| Accountable seat | [Mentalist](../../../seats/mentalist/CHARTER.md) (Sanjay) |
+| Does the work | Sanjay, the Accountable seat's twin, in the [`spec`](../how-models.md) model lane, with the seat's paired human when it has one |
+| Consulted | [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Arjun) |
+| Informed | [Marketer & Documenter](../../../seats/marketer-documenter/CHARTER.md) (Sauti) |
 | Layers it can touch | [every layer](../concepts-layers.md) |
 | Who reasons | your agent's model, plus a direct pass by aayu (adversarial pass direct) |
 | Writes as | the bot identity (a GitHub App); without one, your identity, tagged as human fallback |
