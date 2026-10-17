@@ -101,7 +101,9 @@ in order as `##` headings:
 4. **Verify.** The query to rerun and the value to expect (for example the serving revision's error rate back to 0 %
    in `requests by version`), and how long to watch.
 5. **Rollback.** The catalog's rollback of the mitigation action (the checker requires it when the catalog names one),
-   or `none` and why.
+   or `none` and why. Say when to use it: only when the mitigation itself made things worse, never as the reflex to new
+   errors on the restored revision (then stop and page), and never to put back a revision the evidence shows is bad
+   without a person deciding so.
 6. **Tried.** When it was last tried end to end, in a drill or an incident, with the aayudha-ops run or incident that
    shows it, or `not yet`. Release requires every rollback action in the catalog to have run once.
 

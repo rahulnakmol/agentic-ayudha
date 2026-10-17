@@ -190,11 +190,16 @@ serving). State your confidence and why, and what is still missing.
   condition for the escalation: one escalation and at most one action to add, each with what it does, its setting,
   its risk, the signal that verifies it (a query that gives the rate: requests and errors), and its stop condition,
   never alternatives side by side. The action to add must not bet on a value the evidence does not show (a longer
-  timeout the dependency has not been seen to meet); prefer one that degrades safely whatever the dependency does; never give a shell command instead, and never propose a rollback or restart the
+  timeout the dependency has not been seen to meet); prefer one that degrades whatever the dependency does, and say
+  what it would need to be safe (such as persistence and retry) rather than claiming it is; never give a shell command instead, and never propose a rollback or restart the
   evidence shows cannot help.
 - **Durable fix.** The change that prevents a recurrence, written for the engineer who builds the follow-up Bug: the
   owning boundary and paths, the regression test or scenario that must fail before the fix, the instrumentation gap
   if any, how it is verified, and its rollback.
+
+The rollback of a mitigation undoes it only when the mitigation itself made things worse; when the restored revision
+shows new errors, the stop condition is to stop and page, never to redeploy a revision the evidence shows is bad.
+Check every number you derive against the query rows it comes from.
 
 Never write that a mitigation, a rollback, a restart, or a deploy was done: you propose; a person approves; `aayu
 respond` records what ran. Never restart, deploy, change an alert threshold, or run a destructive diagnostic. Do not
