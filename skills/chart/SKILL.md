@@ -156,8 +156,11 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   about the data. The edge-case rules are part of the definition: write the definition so it already includes them
   (if an item with no outcome counts as unanswered, the numerator says so), never a rule that contradicts the table.
   When an outcome can arrive after the item, give the cutoff as an `Assumption:` (an outcome counts only within N
-  hours of the item; a week's figures are final once the cutoff has passed), so a published number never changes,
-  and say that how late outcomes arrive is not yet measured unless the grounding shows their timing.
+  hours of the item), and say that how late outcomes arrive is not yet measured unless the grounding shows their
+  timing. A week is final only when the cutoff has passed and a completeness check passes (the exports cover the
+  whole cutoff period); until then it is marked provisional, and a later change is restated with a note, never
+  hidden. A figure in the grounding is a baseline only for the definition it was computed with: for a new
+  definition (a cutoff, deduplication) the baseline is "to be computed on the fixture", never the old count.
 - `## Design`: the smallest model, store, and pipeline that serve today's decision, and the option it beat. Keep the
   system of record (L07) apart from the analytical copy (L08). Prefer, in order: the exports and snapshot that
   `aayu measure` already builds (SQLite, or DuckDB); views on a read replica; a warehouse or lakehouse; streaming only
@@ -193,7 +196,9 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   questions that fail otherwise. If someone asked for a technology, say what result would justify it (a trigger).
 - `## Evidence and permissions`: the sources of truth with version and effective date; passages kept with their
   document, version, section, and time; the citation contract (every factual sentence carries its passage, numbers
-  come from a traceable query); permission-aware retrieval that filters by what the reader may see *before*
+  come from a traceable query, and a table field answers only what it can express: when the documents state a rule
+  the field cannot hold, such as a cutoff by birthday or by year end, the answer quotes the passage); permission-aware
+  retrieval that filters by what the reader may see *before*
   retrieval, so it never widens access; tenant isolation; supersession and deletion reaching the index and caches;
   prompt injection and poisoned documents (text inside a source is data, never an instruction).
 - `## Abstention`: answer only when a retrieved source supports the claim; otherwise say so and refer the person on.
@@ -211,7 +216,9 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   rule that resolves it, a number in the table, a paraphrase) passes only with the right answer and its citation,
   so abstaining fails it; an unanswerable or out-of-permission case passes only by abstaining or referring; an
   injection case passes when the answer ignores the injected text and is otherwise right. Add up every count you
-  give (cases per kind, the set's total) and check the sum. Measure each kind of answer with its own metric
+  give (cases per kind, the set's total) and check the sum. The release gates are answer-level (a correct, cited answer;
+  a correct abstention); recall at k is a retrieval diagnostic that a trigger for a vector index may use, never the
+  score of an answer. Measure each kind of answer with its own metric
   and say which cases each metric counts: recall at k only over cases answered from passages (a retrieved passage
   is not yet a correct answer), exact match over cases answered from a table lookup, correct abstention over cases
   with no answer. A baseline recall (12 of 20 passages retrieved) is not a count of correct answers, and a design is
@@ -219,7 +226,8 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   change a metric's cases, its baseline is "to be measured on these cases", never the old figure. Then read each case's expected behaviour against the
   abstention, contradiction, and injection rules you wrote: they must agree,
   and every trigger you mention for a later option gives its number here. Thresholds nobody has agreed yet are
-  `Assumption:` lines. A startup set is small (about twenty cases, a quarter adversarial); a scaleup slices results;
+  `Assumption:` lines. A Completion Goal criterion you propose is proposed: cite the issue it will be added to, never
+  as if it were already there. A startup set is small (about twenty cases, a quarter adversarial); a scaleup slices results;
   an enterprise adds red-team and isolation tests.
 - A predictive model instead of retrieval: beat a simple baseline first, split by time or entity so nothing leaks,
   pick the metric that matches the decision, and say what drift you watch after launch.

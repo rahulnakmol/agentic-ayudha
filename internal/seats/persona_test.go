@@ -139,7 +139,7 @@ func TestSkillBlockVoiceAndStandard(t *testing.T) {
 // TestCheckGrounding: the evidence rule on a twin's output. Each case differs
 // from a passing one by the single thing the rule must catch.
 func TestCheckGrounding(t *testing.T) {
-	grounding := "Tombstone in internal/ledger/tombstone.go:12-16; LAYERS.md L07; #212; PR #219; commit `a41c9e2`; run 38259017355"
+	grounding := "Tombstone in internal/ledger/tombstone.go:12-16; LAYERS.md L07; #212; PR #219; commit `a41c9e2`; run 38259017355; infra/appinsights.bicep:12"
 	tests := []struct {
 		name, md string
 		want     string // "" passes
@@ -172,6 +172,9 @@ func TestCheckGrounding(t *testing.T) {
 		{"marked unverified", "Unverified: the ledger may hold 40 000 tombstones.\n\nThe tombstone lacks the kind (#212).", ""},
 		{"unmarked assumption", "We assume the latency budget is two seconds.\n\nThe tombstone lacks the kind (#212).", "uncited claim"},
 		{"a marked point still cites only real sources", "Assumption: the migration in #300 is small.\n\nThe tombstone lacks the kind (#212).", "cites #300"},
+		// D-5.1g.j: infrastructure files are sources too, resolved like any other path.
+		{"an infrastructure file", "Events are kept for 90 days, with no per-person delete shown (`infra/appinsights.bicep:12`).", ""},
+		{"an invented infrastructure file", "Events are kept for 90 days (`infra/logs.bicep:3`).", "cites infra/logs.bicep"},
 		{"code fences are evidence quotes", "The struct (#212):\n\n```go\ntype Tombstone struct{ SHA string } // the migration\n```", ""},
 	}
 	for _, tt := range tests {
