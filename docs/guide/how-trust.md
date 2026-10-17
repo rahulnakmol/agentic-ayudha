@@ -108,16 +108,24 @@ Instead the human records that there was none:
 
 Both commands refuse the bypass when:
 
-- the process is an agent lane (`AAYU_AGENT=1`, which the MCP server sets for every verb it runs);
+- the process is an agent lane: `AAYU_AGENT=1` (the MCP server and the loops set it), or a marker a host sets in every
+  command its agent runs (`CLAUDECODE`, `CODEX_THREAD_ID`, `CURSOR_AGENT`, `AGENT`, `AMP_THREAD_ID`, and the others in
+  `hosts.AgentMarkers`), so a skill's shell call is an agent lane too;
+- no such marker is set and standard input is not an interactive terminal, because then nothing tells a person from an
+  agent using the person's token (this applies to every human-only action: `--yes`, `init`, `release`, `resume`,
+  `decide --accept`, `tell --publish`, `inspect --dismiss`, `seat`, `install --apply`, `upgrade --apply`,
+  `self-update`);
 - a bot identity is configured, because then the agent can author and the human can approve;
 - a second human holds a paired seat, because then they can review;
 - no comment from the caller starts with `Solo-mode bypass:` (checked by `soloModeComment` in `internal/cli/ship.go`).
 
-> **Honest status:** the agent-lane check reads `AAYU_AGENT=1`, which the MCP server sets. An agent that runs the CLI
-> directly through a shell, with the founder's token and without that marker, is treated as the founder. So in solo
-> mode nothing technical stops an agent from posting the comment and running `ship --solo-bypass` itself. What
-> protects you then is the record: the comment, the ship record, and `audit`'s list of every bypass. Install the bot
-> App, or pair a second person, and the bypass is refused outright.
+> **Honest status:** two layers stand between an agent and a human-only command. In Claude Code, Codex, and Cursor the
+> installed pre-tool hook blocks the shell command before it runs (`hosts.HumanOnlyCommand`); the Amp plugin does not
+> forward the command, so on Amp the binary's check is the first one. The binary then refuses any process carrying a
+> host's agent marker, and with no marker it needs an interactive terminal. An agent that deliberately clears its
+> host's variables and runs inside a pseudo-terminal still looks like a person: the markers are honest-agent signals,
+> not authentication. What protects you then is the record: the comment, the ship record, and `audit`'s list of every
+> bypass. Install the bot App, or pair a second person, and the bypass is refused outright.
 
 A plan bypass is never an approval: `approved_by` stays empty. Protected-path merges in solo mode use the same comment,
 then `gh pr merge --squash --admin`, and `aayu audit` reports one whose comment came after the merge as "recorded late".
@@ -221,9 +229,11 @@ comment, the commit, and a note saying that no review happened.
 4. The human token is looked up in a fixed order. Enforced in `internal/identity/human.go` (`TestHumanTokenOrder`).
 5. A broker token that is expired or lives longer than one hour is refused, and the artifact is deleted after
    download. Enforced in `internal/identity/broker.go` (`TestBrokerRoundTrip`).
-6. Agent lanes cannot bypass: `ship --solo-bypass` and `plan --solo-bypass` refuse when `AAYU_AGENT=1`, when a bot identity
-   exists, when a second human holds a seat, or without the `Solo-mode bypass:` comment. Enforced in
-   `internal/cli/ship.go` and `internal/cli/plan.go` (`TestShipMobileWaiverAndSoloBypass`, `TestShipEMSeatApprover`, `TestPlan`).
+6. Agent lanes cannot bypass: `ship --solo-bypass` and `plan --solo-bypass` refuse an agent lane (`AAYU_AGENT=1` or a
+   host's agent marker), a process with neither a marker nor a terminal, a repository with a bot identity, a second
+   human in a seat, or a missing `Solo-mode bypass:` comment. Enforced in `Env.requireHuman` in `internal/cli/env.go`,
+   `internal/cli/ship.go`, and `internal/cli/plan.go` (`TestShipMobileWaiverAndSoloBypass`,
+   `TestHumanOnlyRefusedInHostShells`, `TestShipEMSeatApprover`, `TestPlan`).
 7. Only the merge gate's own run artifact for the exact head becomes the authoritative pack, landed by a person's
    `ship`. Enforced in `internal/cli/ship.go` (`TestShipRefusals`).
 8. Every bypass is written down and counted. `ship` writes it to `ship.json`, the story's Complete section, and the
@@ -245,9 +255,10 @@ comment, the commit, and a note saying that no review happened.
 
 > **Honest status:** no bot GitHub App is installed on this repository yet, and it runs in solo mode with one human.
 > So every agent write here so far has gone out under the founder's token with the `identity:human-fallback` tag, and
-> `aayu ship` lands the pack CI built under the founder's identity, as the design intends for every repository. Every merge needs a
-> recorded solo-mode bypass. Agent detection relies on `AAYU_AGENT=1`, which the MCP server sets; a process that
-> runs the CLI directly without it is treated as a human.
+> `aayu ship` lands the pack CI built under the founder's identity, as the design intends for every repository. Every
+> merge needs a recorded solo-mode bypass. An agent lane is `AAYU_AGENT=1` or a host's agent marker
+> (`internal/hosts.AgentMarkers`). The orchestrating agents that ran this repository's solo-mode ships and releases
+> from Amp before Bug 170 was fixed are now refused; those steps need the founder at a terminal.
 
 ## Read next
 

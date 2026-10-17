@@ -67,8 +67,8 @@ type ghRelease struct {
 }
 
 func runSelfUpdate(ctx context.Context, e *Env, _ Values) error {
-	if e.Agent() {
-		return Errorf(ExitBlocked, "self-update replaces the binary and is refused when AAYU_AGENT=1; ask a human to run it")
+	if err := e.requireHuman("self-update"); err != nil {
+		return err
 	}
 	exe, err := e.Executable()
 	if err != nil {

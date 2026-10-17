@@ -45,7 +45,7 @@ path filters that let a pull request skip jobs are off for dispatches. On top of
 `aayu release <release> --to rolling|main` drives those three steps for one Release work item, then does the
 bookkeeping. It lives in `internal/cli/release.go`.
 
-- **Refusals first.** It refuses agents (`AAYU_AGENT=1`), refuses CI, and refuses a token that belongs to a bot or
+- **Refusals first.** It refuses agent lanes (`AAYU_AGENT=1` or a host's agent marker), refuses CI, needs an interactive terminal, and refuses a token that belongs to a bot or
   to a login in `[identity] bot_logins`. The registry marks it human identity, TTY confirmation, and halt gate, and
   never exposes it over MCP (the Model Context Protocol server that hosts call).
 - **Checks before anything moves.** The Release issue must pass Ready. Every story it lists must be in the

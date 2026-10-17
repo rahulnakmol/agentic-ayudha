@@ -32,7 +32,7 @@ func TestUpgradeAndNewerSchemaGuard(t *testing.T) {
 	if code, _, _ := run(t, map[string]string{"AAYU_AGENT": "1"}, Options{Dir: repo}, "upgrade", "--apply"); code != ExitBlocked {
 		t.Fatalf("agent --apply: exit %d", code)
 	}
-	if code, _, errs := run(t, nil, Options{Dir: repo}, "upgrade", "--apply"); code != 0 {
+	if code, _, errs := run(t, nil, Options{IsTerminal: stdinTTY, Dir: repo}, "upgrade", "--apply"); code != 0 {
 		t.Fatal(errs)
 	}
 	if b, _ := os.ReadFile(cfg); string(b) != "version = 1\n\n[lfs]\n" {

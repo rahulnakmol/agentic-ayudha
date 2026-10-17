@@ -50,7 +50,7 @@ func seatFixture(t *testing.T) (dir, bare string, g *fake.GitHub, files map[stri
 
 func seatRun(t *testing.T, dir string, g *fake.GitHub, args ...string) (int, seats.Result, string) {
 	t.Helper()
-	opts := Options{Dir: dir, GitHubAPI: g.URL(), GitHubGap: -1, Assets: aayudha.Assets}
+	opts := Options{IsTerminal: stdinTTY, Dir: dir, GitHubAPI: g.URL(), GitHubGap: -1, Assets: aayudha.Assets}
 	code, out, errOut := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "t"}, opts, append([]string{"seat", "--repo", "o/r", "--json", "--yes"}, args...)...)
 	var res seats.Result
 	_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)

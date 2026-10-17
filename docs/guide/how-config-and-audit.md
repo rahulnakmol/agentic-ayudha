@@ -71,7 +71,8 @@ and `_`), so a pasted key fails validation with a message that ends "never the k
    encrypted to an identity in `~/.config/aayudha/age-identity.txt`. Both are written with mode 0600.
 
 `aayu auth set-secret <name>` reads the value from standard input, never from arguments, and stores it in the first
-writable backend. It is refused when `AAYU_AGENT=1`. `aayu auth list-secrets` reports which backend each name resolves
+writable backend. It is refused for an agent lane (`AAYU_AGENT=1` or a host's agent marker); it needs no terminal, so
+a person can pipe the value in. `aayu auth list-secrets` reports which backend each name resolves
 to, never the value. `[integrations.<name>] scope` marks a key `read` or write-capable, and a read-only verb refuses a
 write-capable key (`secrets.CheckScope`).
 

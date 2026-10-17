@@ -21,8 +21,10 @@ func runUpgrade(_ context.Context, e *Env, in Values) error {
 		return Wrap(ExitUsage, err)
 	}
 	apply := in.Bool("apply") && !e.DryRun
-	if apply && e.Agent() {
-		return Errorf(ExitBlocked, "upgrade --apply rewrites protected files (.aayudha/config.toml) and is refused when AAYU_AGENT=1; a human applies it")
+	if apply {
+		if err := e.requireHuman("upgrade --apply (it rewrites protected files)"); err != nil {
+			return err
+		}
 	}
 	if apply {
 		if err := upgrade.Apply(root, changes); err != nil {

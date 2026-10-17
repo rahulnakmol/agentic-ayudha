@@ -1,0 +1,18 @@
+# Claude Code 2.1.300 (Claude Code) SessionStart hook, 2026-10-15T07:08:22Z
+AAYU_AGENT=<unset> CLAUDECODE=1
+stdin: not a terminal
+$ aayu ship 189 --solo-bypass --dry-run --repo rahulnakmol/agentic-ayudha
+aayu: ship --solo-bypass is a person's decision and is refused for an agent lane (CLAUDECODE=1); ask a person to run it in their own terminal
+exit=4
+$ aayu plan 170 --solo-bypass --dry-run --repo rahulnakmol/agentic-ayudha
+aayu: plan --solo-bypass is a person's decision and is refused for an agent lane (CLAUDECODE=1); ask a person to run it in their own terminal
+exit=4
+$ aayu decide 170 --accept A --dry-run --repo rahulnakmol/agentic-ayudha
+aayu: decide --accept is a person's decision and is refused for an agent lane (CLAUDECODE=1); ask a person to run it in their own terminal
+exit=4
+$ aayu release 177 --to rolling --dry-run --repo rahulnakmol/agentic-ayudha
+aayu: release is a person's decision and is refused for an agent lane (CLAUDECODE=1); ask a person to run it in their own terminal
+exit=4
+$ aayu resume --dry-run --repo rahulnakmol/agentic-ayudha
+aayu: resume is a person's decision and is refused for an agent lane (CLAUDECODE=1); ask a person to run it in their own terminal
+exit=4

@@ -99,8 +99,10 @@ type ShipResult struct {
 // rule, and the streak state) beside the pack, the lease released, and
 // cleanup.
 func runShip(ctx context.Context, e *Env, in Values) error {
-	if in.Bool("solo-bypass") && e.Agent() {
-		return Errorf(ExitBlocked, "ship --solo-bypass is a human's decision; it is refused for agents")
+	if in.Bool("solo-bypass") {
+		if err := e.requireHuman("ship --solo-bypass"); err != nil {
+			return err
+		}
 	}
 	repo, err := e.RepoName(ctx)
 	if err != nil {
