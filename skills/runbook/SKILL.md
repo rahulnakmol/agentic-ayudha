@@ -89,8 +89,11 @@ in order as `##` headings:
    a time window and a row limit. Aggregates first. Confirm by the failure's signature when the grounding has one
    (the exception type and its `path:line` frame, or the dependency's timeout), not only by its timing; tell it apart
    from its look-alike with a deploy-marker or timeline query (a bad deploy starts at a marker and only on the new
-   revision; a slow dependency starts on its own and crosses revisions); and say what to do when it does not match.
-3. **Mitigate.** One catalog action as `aayu respond <incident> --action <name> --params key=value`, its risk and blast
+   revision; a slow dependency starts on its own and crosses revisions). First establish the serving revision and the
+   one before it with a `deploys` query. The entry applies only when the signature matches: when it does not, it says
+   to stop and investigate (`aayu investigate`), never to apply this mitigation or to declare another cause.
+3. **Mitigate.** One catalog action as `aayu respond <incident> --action <name> --params key=value` (quote its limits,
+   such as runs per hour and approval, exactly as the catalog gives them), its risk and blast
    radius, and when not to use it. When no catalog action fixes this failure (a slow dependency is not fixed by a
    restart or a rollback), write "no catalog action" and name the action a person should add, and who to escalate to
    meanwhile; never offer a catalog action that does not address the cause.
@@ -103,14 +106,15 @@ in order as `##` headings:
 
 **What the check reads as a citation**, in the same paragraph, list item, or table row as the claim: `query qN`; the
 incident as `#N` (its body, timeline, investigation note, and comments are all `#N`); a commit in backticks; a
-`path:line`; a file the grounding names, such as `ops/actions.toml`, `ops/slos.toml`, or an aayudha-ops run as `run <id>`. Words such as "(grounding)",
+`path:line`; a file the grounding itself shows, such as `ops/actions.toml` or `ops/slos.toml`, and no other; or an aayudha-ops run as `run <id>`. Words such as "(grounding)",
 "(investigation note)", or "(export …)" are not citations. A number you work out cites the sources of its inputs. A
 proposal (a test to add, a fix and its rollback, an alert, an action and its Bug or Story) cites the evidence it
 answers, such as the `path:line` it fixes or `#N`. Never cite a file that does not exist yet (a runbook you propose,
 the file you save the draft in). What you cannot cite starts `Unverified:` or `Assumption:`. The document is its
 title and its parts only: no preamble before it, and no steps for the reader (how to check, save, or open a pull
 request) inside it. Never write that an action was run by you. A
-startup runbook entry is at most 400 words of prose: one entry, short steps, no repeated facts.
+startup runbook entry is at most 400 words of prose, so aim for about 300: one entry, short steps, no repeated
+facts.
 
 ## 3. Check and create
 

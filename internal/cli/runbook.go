@@ -90,6 +90,7 @@ func runRunbook(ctx context.Context, e *Env, in Values) error {
 		for _, a := range cat.Actions {
 			rep.Facts = append(rep.Facts, packFact{Text: actionFact(a), Cite: ops.Path})
 		}
+		rep.Facts = append(rep.Facts, packFact{Text: "Release gate: each catalog action named as a rollback needs one successful aayudha-ops run before `aayu release` ships", Cite: ops.Path})
 	}
 	if defs != nil {
 		for _, o := range defs.SLOs {

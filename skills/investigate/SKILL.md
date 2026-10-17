@@ -165,8 +165,9 @@ operational telemetry for cause.
 
 Keep at least two hypotheses (H1, H2, …). For each: the evidence for it, the counter-evidence (what does not fit,
 labelled `Counter-evidence`, or "none found"), and the smallest observation that would rule it out: one the hypothesis
-predicts will not happen (for a bad deploy, errors on the previous revision as well), never one it would also
-explain. Separate the symptom, the contributing conditions, and the root
+predicts will not happen (for a bad deploy, errors on the previous revision as well), never one it or another cause
+would also explain. Never state as fact what the grounding does not show about the infrastructure (that a deploy
+replaced every instance, that a cache was cleared): mark it `Assumption:` and build no conclusion on it. Separate the symptom, the contributing conditions, and the root
 cause. Two events at the same time are a correlation, not a cause: say what would prove the link (the errors appear
 only on the new revision; the exception's frame is in the changed lines; the errors stop when the revision stops
 serving). State your confidence and why, and what is still missing.
@@ -180,7 +181,8 @@ serving). State your confidence and why, and what is still missing.
   when the mitigation finished, never the incident's window), and its rollback or stop condition. A rollback of a bad deploy is usually the right first mitigation when the evidence points at the
   revision. If no catalog action fits, say so and name the action a person should add to `ops/actions.toml`
   (protected path, human review), who to escalate to meanwhile, the signal that shows recovery, and the stop
-  condition for the escalation; never give a shell command instead, and never propose a rollback or restart the
+  condition for the escalation: one escalation and at most one action to add, each with its risk, never alternatives
+  side by side; never give a shell command instead, and never propose a rollback or restart the
   evidence shows cannot help.
 - **Durable fix.** The change that prevents a recurrence, written for the engineer who builds the follow-up Bug: the
   owning boundary and paths, the regression test or scenario that must fail before the fix, the instrumentation gap
@@ -201,7 +203,7 @@ query's provenance and the data handling.
 
 **What the check reads as a citation**, in the same paragraph, list item, or table row as the claim: `query qN`; the
 incident as `#N` (its body, timeline, investigation note, and comments are all `#N`); a commit in backticks; a
-`path:line`; a file the grounding names, such as `ops/actions.toml`, or a telemetry file (`traces.jsonl`, `deploys.jsonl`). Words such as "(grounding)",
+`path:line`; a file the grounding itself shows, such as `ops/actions.toml` or a telemetry file (`traces.jsonl`, `deploys.jsonl`), and no other. Words such as "(grounding)",
 "(investigation note)", or "(export …)" are not citations. A number you work out cites the sources of its inputs. A
 proposal (a test to add, a fix and its rollback, an alert, an action and its Bug or Story) cites the evidence it
 answers, such as the `path:line` it fixes or `#N`. Never cite a file that does not exist yet (a runbook you propose,

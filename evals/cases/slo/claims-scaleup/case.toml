@@ -15,7 +15,7 @@ stage = "scaleup"
 practice = "slo-error-budgets"
 draft = "output/slo.md"
 planted = "planted/slo.md"
-task = "The weekly error-budget review is due and the release is on Thursday. From the grounding, write the SLO set for claim submission at this team stage, with ops/slos.toml as you would keep it, and say what the budget means for Thursday's release."
+task = "It is Thursday 15 October, after incident #7; the weekly error-budget review is due and the release is tomorrow, Friday 16 October. From the grounding, write the SLO set for claim submission at this team stage, with ops/slos.toml as you would keep it, and say what the budget means for tomorrow's release."
 
 [tier2]
 rubric = "../rubric.md"
