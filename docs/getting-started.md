@@ -32,7 +32,7 @@ It installs `aayudha` only; add `alias aayu=aayudha` for the short name. It is n
 ### Windows
 
 In Git Bash, run the same `install.sh` line; it installs `aayudha.exe` and `aayu.exe`. In PowerShell, use
-[Scoop](https://scoop.sh) once the bucket is published:
+[Scoop](https://scoop.sh):
 
 ```powershell
 scoop bucket add rahulnakmol https://github.com/rahulnakmol/scoop-bucket
@@ -43,8 +43,10 @@ Homebrew (`brew install --cask rahulnakmol/tap/aayudha`) and winget (`winget ins
 come the same way. Scoop and winget check the archive's SHA-256 from their manifest; only
 `install.sh` checks the cosign signature.
 
-> **Honest status:** none of the three package managers has aayudha yet. The v0.1.0 release's Homebrew, Scoop, and
-> winget jobs did not complete, so the tap and the bucket are empty. Use `install.sh`, in Git Bash on Windows.
+> **Honest status:** Homebrew and Scoop have v0.2.0. winget does not have it yet: the package
+> (`Rahulnakmol.AgenticAyudha`, v0.2.0) has passed validation and is waiting for a moderator in
+> [microsoft/winget-pkgs pull request 454680](https://github.com/microsoft/winget-pkgs/pull/454680). Until it merges,
+> use Scoop or `install.sh` on Windows.
 
 ### Check the machine
 
