@@ -586,6 +586,7 @@ func TestDocsOnly(t *testing.T) {
 		{[]string{"internal/hosts/testdata/skills/x.md"}, false},
 		{[]string{"internal/production/testdata/runbook.md"}, false},
 		{[]string{"internal/report/notes.md"}, false},
+		{[]string{"docs/guide/skills/build.md", "docs/guide/hosts/codex.md"}, true},
 		{[]string{"CHANGELOG.txt"}, false},
 	} {
 		if got := DocsOnly(files(tc.paths...)); got != tc.want {

@@ -168,9 +168,9 @@ func isTestPath(p string) bool {
 // A steering document (an AGENTS.md or CLAUDE.md, and the sources of truth:
 // the build plan, the constraints, the contributing guide, the ethos, the
 // glossary, the threat model, the security policy) is never documentation,
-// nor is anything under a test fixture directory or a directory whose files
-// steer the product or its agents (skills, seats, hosts, work items, evals,
-// agent and workflow config); other Markdown, such as a fixture a test loads,
+// nor is anything under a test fixture directory, or under a root directory
+// whose files steer the product or its agents (skills, seats, hosts, work
+// items, evals, agent and workflow config); other Markdown, such as a fixture a test loads,
 // is not either. A renamed file is documentation only when both its old and
 // new paths are. Such a PR merges without a review; any other file needs one.
 // An empty diff is not docs-only.
@@ -188,8 +188,13 @@ func docsPath(p string) bool {
 	case "AGENTS.md", "CLAUDE.md", "BUILD-PLAN.md", "CONSTRAINTS.md", "CONTRIBUTING.md", "ETHOS.md", "GLOSSARY.md", "threat-model.md", "SECURITY.md":
 		return false
 	}
-	for _, d := range []string{"testdata/", "fixtures/", "skills/", "seats/", "hosts/", "work-items/", "evals/", ".agents/", ".claude/", ".github/", ".cursor/"} {
+	for _, d := range []string{"testdata/", "fixtures/"} {
 		if strings.HasPrefix(p, d) || strings.Contains(p, "/"+d) {
+			return false
+		}
+	}
+	for _, d := range []string{"skills/", "seats/", "hosts/", "work-items/", "evals/", ".agents/", ".claude/", ".github/", ".cursor/"} {
+		if strings.HasPrefix(p, d) {
 			return false
 		}
 	}
