@@ -6,6 +6,8 @@
 # Floors: `aayu survey --backlog` (work-item schema; every item on what the survey knows; parity case sets and suites
 # on porting Stories; contract levels; each step's do-not-carry entries listed in `avoids` and constrained by a
 # Decision) and the scope rules: no work on the syntax, options, command, or features the person ruled out.
+# survey.json is amended for the capability-map and runner floors: its capabilities cite every entry point, and its
+# case sets name their runners.
 skill = "survey"
 description = "Draft the backlog for moving off a legacy library: compatibility stories with contract levels and suites, and do-not-carry Decisions."
 input = "request.txt"
