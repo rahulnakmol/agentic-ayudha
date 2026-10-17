@@ -136,14 +136,15 @@ events = ["workflow_dispatch", "push"]
 # The skill runs commands against the case's world (session.toml): real `aayu` verbs that only read, recorded answers
 # for the ones that lease, commit, or run code, and a scripted person. The hard rules each skill's verb enforces are
 # tier-1 floors on the recorded session and on every run (session.go). Build runs on its own lane (claude-opus-5-5),
-# verify and ready on the chore lane. Advisory until it holds the bar (mean 4.0 per case) on two consecutive full runs; that
-# switch is proposed in a PR. It runs on dispatch only, so its spend is chosen run by run.
+# verify and ready on the chore lane. It gates since two consecutive full runs held a mean of at least 4.0 on every
+# case (39055371933 at 4.72, 39057649097 at 4.70; D-3.4x). Like tell, it runs on dispatch (aayu release dispatches
+# evals.yml on dev before a rolling gate) and on pushes to rolling and main, so every promoted commit has results for
+# the next gate; never nightly, and never on pushes to dev (evals.yml), so its spend is still chosen run by run.
 [[groups]]
 name = "host-skills"
 prefixes = ["build/", "verify/", "ready/readback-", "ready/refuse-"]
-max_usd = 12.0 # run 39010585213 (c2dc891): 5.98 USD
-gate = "advisory"
-events = ["workflow_dispatch"]
+max_usd = 13.0 # run 39057649097 (d282d17): 6.24 USD
+events = ["workflow_dispatch", "push"]
 # A session turn writes whole files (a command, its tests, a feature file): run 39027788820 stopped a map-drift turn
 # at the 12000-token cap, and earlier turns reached 10.1k, so the group's cap is 32000, a ceiling and not a charge
 # (D-3.4m).

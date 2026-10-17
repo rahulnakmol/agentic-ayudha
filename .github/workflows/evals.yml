@@ -112,9 +112,9 @@ jobs:
             run=false
           fi
           # The brief register cases cost about 3 USD a run at list price: nightly, dispatch, and promotion run them, pushes
-          # to dev do not (D-7.3c). The tell cases (about 1.50 USD) run on dispatch and promotion only (events in eval.toml,
-          # D-7.5e).
-          if [ "$EVENT" = push ] && [ "$REF" = dev ] && { [ "$GROUP" = brief ] || [ "$GROUP" = brief-plain ] || [ "$GROUP" = tell ]; }; then
+          # to dev do not (D-7.3c). The tell cases (about 1.50 USD) and the host-skills cases (about 6 USD) run on dispatch
+          # and promotion only (events in eval.toml, D-7.5e and D-3.4x).
+          if [ "$EVENT" = push ] && [ "$REF" = dev ] && { [ "$GROUP" = brief ] || [ "$GROUP" = brief-plain ] || [ "$GROUP" = tell ] || [ "$GROUP" = host-skills ]; }; then
             echo "::notice::Push to dev: the $GROUP group runs nightly, on dispatch, and on promotion."
             run=false
           fi
