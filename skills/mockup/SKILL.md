@@ -80,8 +80,9 @@ Produce design-system mockups for a Feature from its wireframes.
      names for every control.
    - **Semantics that carry the research**: tables with captions and headers, a single choice as radio inputs in one
      fieldset with one legend and one name (a choice that spans days stays one fieldset, laid out as the wireframe
-     draws it: its tabs or sections, never swapped for another pattern, each day's windows filled in), a message
-     that appears as an alert or status, one primary action per state.
+     draws it: its tabs or sections, never swapped for another pattern, each day's windows filled in, and each option
+     in it once: a message that offers other options points to their radios in the group or names them, never a
+     second radio for the same option), a message that appears as an alert or status, one primary action per state.
    - **Every state the wireframe describes, as the wireframe describes it**: the same items, windows, choices, and
      copy (a mockup styles the structure; it does not change what a state offers), and its assumptions still marked.
      Each file shows one state as a person would see it: a transient state the wireframe names (loading, retrying)
