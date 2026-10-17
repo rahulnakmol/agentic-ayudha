@@ -163,8 +163,10 @@ operational telemetry for cause.
 
 ## 4. Reason with competing hypotheses
 
-Keep at least two hypotheses (H1, H2, …). For each: the evidence for it, the counter-evidence (what does not fit), and
-the smallest observation that would rule it out. Separate the symptom, the contributing conditions, and the root
+Keep at least two hypotheses (H1, H2, …). For each: the evidence for it, the counter-evidence (what does not fit,
+labelled `Counter-evidence`, or "none found"), and the smallest observation that would rule it out: one the hypothesis
+predicts will not happen (for a bad deploy, errors on the previous revision as well), never one it would also
+explain. Separate the symptom, the contributing conditions, and the root
 cause. Two events at the same time are a correlation, not a cause: say what would prove the link (the errors appear
 only on the new revision; the exception's frame is in the changed lines; the errors stop when the revision stops
 serving). State your confidence and why, and what is still missing.
@@ -174,10 +176,12 @@ serving). State your confidence and why, and what is still missing.
 - **Mitigation.** The immediate step that stops the harm, as one proposal from the catalog in the grounding:
   `aayu respond <incident> --action <name> --params key=value` (only actions and parameters the catalog has). Give
   its rationale, its risk and blast radius, the signal that verifies it (the bounded query and the value you expect,
-  for example the error rate of the serving revision back to 0 % in `requests by version`), and its rollback or stop
-  condition. A rollback of a bad deploy is usually the right first mitigation when the evidence points at the
+  for example the error rate of the serving revision back to 0 % in `requests by version`, over a window that starts
+  when the mitigation finished, never the incident's window), and its rollback or stop condition. A rollback of a bad deploy is usually the right first mitigation when the evidence points at the
   revision. If no catalog action fits, say so and name the action a person should add to `ops/actions.toml`
-  (protected path, human review); never give a shell command instead.
+  (protected path, human review), who to escalate to meanwhile, the signal that shows recovery, and the stop
+  condition for the escalation; never give a shell command instead, and never propose a rollback or restart the
+  evidence shows cannot help.
 - **Durable fix.** The change that prevents a recurrence, written for the engineer who builds the follow-up Bug: the
   owning boundary and paths, the regression test or scenario that must fail before the fix, the instrumentation gap
   if any, how it is verified, and its rollback.
@@ -195,9 +199,15 @@ fix, Missing evidence and next queries. A startup note is at most 400 words of p
 queries, hypotheses, and actions in tables); a scaleup note reads in five minutes; an enterprise record adds each
 query's provenance and the data handling.
 
-Every fact cites its source in the same sentence or table row: `query qN`, the deployed revision as a commit in
-backticks, a `path:line`, the incident (`#41`), a catalog action in `ops/actions.toml`. Label what is not observed:
-an inference names the evidence it rests on, and a point you cannot cite starts `Unverified:` with what would show it.
+**What the check reads as a citation**, in the same paragraph, list item, or table row as the claim: `query qN`; the
+incident as `#N` (its body, timeline, investigation note, and comments are all `#N`); a commit in backticks; a
+`path:line`; a file the grounding names, such as `ops/actions.toml`, or a telemetry file (`traces.jsonl`, `deploys.jsonl`). Words such as "(grounding)",
+"(investigation note)", or "(export …)" are not citations. A number you work out cites the sources of its inputs. A
+proposal (a test to add, a fix and its rollback, an alert, an action and its Bug or Story) cites the evidence it
+answers, such as the `path:line` it fixes or `#N`. Never cite a file that does not exist yet (a runbook you propose,
+the file you save the draft in). What you cannot cite starts `Unverified:` or `Assumption:`. The document is its
+title and its parts only: no preamble before it, and no steps for the reader (how to check, save, or open a pull
+request) inside it. An inference names the evidence it rests on.
 
 Check the draft with `aayu investigate <incident> --telemetry <dir> --draft <file>`. It refuses (exit 4) a missing or
 out-of-order part, the wrong title for the stage, an uncited claim or a citation the grounding and the query log do

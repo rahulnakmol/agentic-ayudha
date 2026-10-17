@@ -27,8 +27,8 @@ questions answered normally (query q2).
 
 - Root cause: the tie-break added in `a0eca65` reads `ranked[1]` without checking that a second passage matched, so
   a single-match question panics at examples/benefits-qa/answer/answer.go:118 (query q3).
-- Contributing: no test asks a question that matches one passage, so the change passed its checks (#1); and the
-  deploy went to every employee at once with no canary, so the first error was already the whole service's (query q5).
+- Contributing: the deploy went to every employee at once with no canary, so the first error was already the whole service's (query q5).
+- Unverified: whether any test covered a question that matches one passage; the fix adds one (#1).
 
 ## What went well
 

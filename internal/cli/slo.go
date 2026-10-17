@@ -92,6 +92,7 @@ func runSLO(ctx context.Context, e *Env, in Values) error {
 	} else {
 		rep.Facts = append(rep.Facts, packFact{Text: "No SLOs are defined yet: draft the first one for the journey that matters most", Cite: production.SLOPath})
 	}
+	rep.Facts = append(rep.Facts, packFact{Text: "Release gate: while any SLO here has a spent budget, `aayu release` ships only Bugs; a Story ships only with a person's accepted `error-budget` waiver; a recorded status older than 8 days blocks release", Cite: production.SLOPath})
 
 	c, bot, err := e.BotGitHub(ctx, "")
 	if err != nil {
@@ -133,7 +134,9 @@ func runSLO(ctx context.Context, e *Env, in Values) error {
 			for _, o := range defs.SLOs {
 				m := production.Measure(exp, o, to)
 				rep.Measured = append(rep.Measured, m)
-				rep.Facts = append(rep.Facts, packFact{Text: "Measured " + measuredFact(m), Cite: "export " + digest})
+				// Cited as the export's spans file, which the evidence rule reads as a path
+				// (as investigate's facts are), with the export's digest in the text.
+				rep.Facts = append(rep.Facts, packFact{Text: "Measured " + measuredFact(m) + " over export " + digest, Cite: "traces.jsonl"})
 			}
 		}
 		service := in.String("service")
