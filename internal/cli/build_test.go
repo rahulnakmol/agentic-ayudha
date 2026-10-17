@@ -759,9 +759,10 @@ func TestBuildHoldsAStoryThePersonDidNotAskFor(t *testing.T) {
 // Under GitHub Copilot, aayu cannot name the model: the checkpoint commit
 // records every model Copilot reported in the session that ran build, most
 // recent first, and a HydraFusion critic apart from them, for inspect's
-// different-family rule.
+// different-family rule. The build record holds one model, so with two
+// families it names none: naming the latest would hide the other.
 func TestBuildRecordsCopilotModels(t *testing.T) {
-	_, env, opts, dir, _ := buildSetup(t)
+	_, env, opts, dir, bare := buildSetup(t)
 	copilotHome := t.TempDir()
 	env["COPILOT_HOME"] = copilotHome
 	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
@@ -788,5 +789,9 @@ func TestBuildRecordsCopilotModels(t *testing.T) {
 	msg := git(t, res.Worktree, "log", "-1", "--format=%B")
 	if want := "Aayudha-Host: copilot\nAayudha-Model: claude-opus-5.5\nAayudha-Model: gpt-6-luna\nAayudha-Critic-Model: gpt-6-luna"; !strings.Contains(msg, want) {
 		t.Fatalf("checkpoint commit lacks the Copilot trailers:\n%s", msg)
+	}
+	var st BuildState
+	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &st); err != nil || len(st.Checkpoints) != 1 || st.Checkpoints[0].Model != "" {
+		t.Fatalf("build record: %v %+v", err, st.Checkpoints)
 	}
 }
