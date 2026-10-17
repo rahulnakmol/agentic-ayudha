@@ -896,9 +896,14 @@ func TestGroups(t *testing.T) {
 			t.Errorf("%s group events: %v", name, g.Events)
 		}
 	}
+	// D-7.5b: the tell cases are their own advisory group, run on dispatch only.
+	tg, tells, err := cfg.ForGroup("tell", all)
+	if g, _ := cfg.Group("tell"); err != nil || tg.MaxUSD != 8 || len(tells) != 3 || cfg.Gates("tell") || g.RunsOn("push") || g.RunsOn("schedule") || !g.RunsOn("workflow_dispatch") {
+		t.Fatalf("tell group: %v, cap %v, %d cases, gates %v, events %v", err, tg.MaxUSD, len(tells), cfg.Gates("tell"), g.Events)
+	}
 	o, other, err := cfg.ForGroup("skills", all)
-	if err != nil || o.MaxUSD != 8 || o.K != cfg.K || !cfg.Gates("skills") || len(brief)+len(plain)+len(personas)+len(review)+len(convs)+len(other) != len(all) {
-		t.Fatalf("skills group: %v, cap %v, %d+%d+%d+%d+%d+%d of %d cases", err, o.MaxUSD, len(brief), len(plain), len(personas), len(review), len(convs), len(other), len(all))
+	if err != nil || o.MaxUSD != 8 || o.K != cfg.K || !cfg.Gates("skills") || len(brief)+len(plain)+len(personas)+len(review)+len(convs)+len(tells)+len(other) != len(all) {
+		t.Fatalf("skills group: %v, cap %v, %d+%d+%d+%d+%d+%d+%d of %d cases", err, o.MaxUSD, len(brief), len(plain), len(personas), len(review), len(convs), len(tells), len(other), len(all))
 	}
 	for _, c := range other {
 		if c.Tier2 != nil && c.Tier2.Human != "" {
@@ -1592,5 +1597,90 @@ func TestGrillScopeAllowsNegation(t *testing.T) {
 				t.Errorf("%s %q: %v", id, crit, bad)
 			}
 		}
+	}
+}
+
+// D-7.5b tell cases, tier 1: planted drafts on the recorded cases fail the
+// floors the copy's hard rules map to: a change from an unproven Feature
+// described, a superlative or a word the case's brand avoids, and the launch
+// request's planted time saving and hint at Team workspaces.
+func TestTier1TellRules(t *testing.T) {
+	all, err := LoadCases(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]Case{}
+	for _, c := range all {
+		byID[c.ID] = c
+	}
+	for _, tc := range []struct{ id, draft, want string }{
+		{"tell/release-notes", "# v1.5.0\n\nSaved filters (#15). Bulk reassignment moves the claims you select.\n", `names #9 "Bulk reassignment"`},
+		{"tell/guide-export", "# Export\n\nExport filtered claims (#7) is just one step.\n", `"just" is on the brand's avoid list`},
+		{"tell/guide-export", "# Export\n\nThe fastest export (#7).\n", `"fastest" is a superlative`},
+		{"tell/launch-saved-filters", "# Saved filters\n\nSaved filters (#15) save your team hours every week.\n", "scope: adds a time saving no measure counts"},
+		{"tell/launch-saved-filters", "# Saved filters\n\nSaved filters (#15). More for teams is coming soon.\n", "scope: adds a hint at a Feature without authoritative packs"},
+		{"tell/launch-saved-filters", "# Spring\n\nReview claims together.\n", "launch copy links no proven Feature"},
+	} {
+		c, ok := byID[tc.id]
+		if !ok {
+			t.Fatalf("no case %s", tc.id)
+		}
+		g, b, u, err := tellSetup(c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := checkTell(c, g, b, u, tc.draft); !strings.Contains(strings.Join(got, "\n"), tc.want) {
+			t.Errorf("%s: %q, want %q", tc.id, got, tc.want)
+		}
+	}
+}
+
+// D-7.5b: a tell case sends the brief, the brand, and the grounding as
+// untrusted data; copy that `aayu tell --from` refuses is revised once with
+// the findings and judged only when it passes; copy refused twice scores 1
+// without the judge.
+func TestTier2TellRevisesOnceThenJudges(t *testing.T) {
+	all, err := LoadCases(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []Case
+	for _, c := range all {
+		if c.ID == "tell/release-notes" {
+			cases = append(cases, c)
+		}
+	}
+	good, err := os.ReadFile(filepath.Join(root, "evals", "cases", "tell", "release-notes", "output", "draft.md"))
+	if err != nil || len(cases) != 1 {
+		t.Fatalf("case: %v", err)
+	}
+	bad := "# v1.5.0\n\nThe most powerful release yet: Saved filters (#15) and Bulk reassignment (#9).\n"
+	judge := models.Response{Text: `{"score": 5, "reason": "traces to the packs"}`}
+	replies := []models.Response{{Text: bad}, {Text: "```markdown\n" + string(good) + "```"}, judge}
+	for i := 0; i < 3; i++ {
+		replies = append(replies, models.Response{Text: string(good)}, judge)
+	}
+	replies = append(replies, models.Response{Text: bad}, models.Response{Text: bad}, judge)
+	fake := &models.Fake{Replies: replies}
+	h := harness(t, fake, "gpt-6.1-sol")
+	res, err := h.Tier2(context.Background(), cases, "abc", "dev", time.Unix(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs := res.Cases[0].Runs
+	if len(fake.Requests) != 11 || !runs[0].Revised || runs[0].Status != RunPass || runs[1].Revised || runs[4].Score != 1 || !strings.Contains(runs[4].Floor, "is not a Feature with authoritative packs") {
+		t.Fatalf("%d calls, runs %+v", len(fake.Requests), runs)
+	}
+	first, revise, judged := fake.Requests[0], fake.Requests[1], fake.Requests[2]
+	for _, want := range []string{`<untrusted source="aayu tell release">`, "#15 Saved filters", `<untrusted source="design/brand.yaml">`, "- marketing adjectives in release notes", `<untrusted source="grounding">`, "The human asks: Write the release notes for v1.5.0"} {
+		if !strings.Contains(first.Messages[0].Content, want) {
+			t.Errorf("the skill prompt lacks %q", want)
+		}
+	}
+	if len(revise.Messages) != 3 || !strings.Contains(revise.Messages[2].Content, `"most powerful" is a superlative`) || !strings.Contains(revise.Messages[2].Content, `names #9 "Bulk reassignment"`) {
+		t.Errorf("revision request: %+v", revise.Messages)
+	}
+	if judged.Model != "gpt-6.1-sol" || !strings.Contains(judged.System, "Rubric: tell, release notes") || !strings.Contains(judged.Messages[0].Content, "no superlative") {
+		t.Errorf("judge request: %s %.200s", judged.Model, judged.Messages[0].Content)
 	}
 }

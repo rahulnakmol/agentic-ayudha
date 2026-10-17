@@ -1,0 +1,17 @@
+# Brand written by `aayu grill brand` (WP5.3); the tell eval reads its voice.
+version: 1
+name: Benefits QA Help
+voice:
+  tone:
+    - warm
+    - encouraging
+    - direct
+    - second person
+  avoid:
+    - simply
+    - just
+    - easy
+    - easily
+    - obviously
+    - exclamation marks
+    - jargon without an explanation the first time it appears

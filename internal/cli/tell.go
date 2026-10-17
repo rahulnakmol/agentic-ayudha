@@ -135,7 +135,7 @@ func runTell(ctx context.Context, e *Env, in Values) error {
 			return err
 		}
 	} else if draft != nil {
-		d, probs := tell.Check(string(draft), repo, proven, brand, rep.UTM)
+		d, probs := tell.CheckDraft(string(draft), repo, kind, proven, rep.Unproven, brand, rep.UTM)
 		rep.Draft, rep.Problems = &d, probs
 		if len(probs) == 0 {
 			rep.CopyPath = filepath.Join(e.stateDir(), "tell", kind, campaign+".md")
