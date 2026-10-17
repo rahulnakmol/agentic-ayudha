@@ -18,6 +18,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/hostcall"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/providers"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
@@ -273,6 +274,11 @@ func checkIntegrations(ctx context.Context, p *Probe) Result {
 			r.Lines = append(r.Lines, fmt.Sprintf("%s: %v", n, err))
 		case err != nil:
 			worse(Fail)
+			// An adapter that can explain the failure says what to fix.
+			if checks := capabilities(ctx, p, n); len(checks) > 0 && !checks[0].OK && checks[0].Fix != "" {
+				r.Lines = append(r.Lines, fmt.Sprintf("%s: %s. Fix: %s", n, checks[0].Detail, checks[0].Fix))
+				continue
+			}
 			r.Lines = append(r.Lines, fmt.Sprintf("%s: unreachable: %v", n, err))
 		case len(sc.Write) > 0:
 			worse(Fail)
@@ -280,6 +286,18 @@ func checkIntegrations(ctx context.Context, p *Probe) Result {
 		case sc.Verified:
 			reachable++
 			r.Lines = append(r.Lines, fmt.Sprintf("%s: reachable as %s; read-only scope verified (%s per %s)", n, sc.Account, strings.Join(sc.Scopes, ", "), sc.Endpoint))
+			for _, ch := range capabilities(ctx, p, n) {
+				what := fmt.Sprintf("  %s, %s (%s", n, ch.Capability, strings.Join(ch.Scopes, ", "))
+				if len(ch.Verbs) > 0 {
+					what += "; used by " + strings.Join(ch.Verbs, ", ")
+				}
+				if ch.OK {
+					r.Lines = append(r.Lines, what+"): works: "+ch.Detail)
+					continue
+				}
+				worse(Fail)
+				r.Lines = append(r.Lines, what+"): does not work: "+ch.Detail+". Fix: "+ch.Fix)
+			}
 		default:
 			reachable++
 			r.Lines = append(r.Lines, fmt.Sprintf("%s: reachable as %s; the provider does not report this key's scope, so configured scope %s is trusted", n, sc.Account, in.Scope))
@@ -288,6 +306,60 @@ func checkIntegrations(ctx context.Context, p *Probe) Result {
 	r.Detail = fmt.Sprintf("%d of %d configured integration(s) reachable with a read-only key", reachable, len(configured))
 	if len(configured) == 0 {
 		r.Detail = "no integrations configured"
+	}
+	return r
+}
+
+// capabilities asks the integration's adapter to try each capability with a
+// cheap read; nil when doctor cannot or the adapter has no checks.
+func capabilities(ctx context.Context, p *Probe, name string) []integrations.Check {
+	if p.Capabilities == nil {
+		return nil
+	}
+	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	checks, err := p.Capabilities(cctx, name)
+	if err != nil {
+		return nil
+	}
+	return checks
+}
+
+// checkProviderMCP reads every PostHog and Sentry MCP server a host has
+// registered (Decision #449) and says what to change so it reads only, is
+// pinned to one project, and keeps no key in a file the repository shares.
+// aayudha's pre-tool hook refuses their writes either way, so a loose setting
+// is a warning; a shared key fails.
+func checkProviderMCP(_ context.Context, p *Probe) Result {
+	home := p.Getenv("HOME")
+	servers := hosts.ProviderServers(p.Root, home, hosts.CodexHome(home, p.Getenv))
+	if len(servers) == 0 {
+		return Result{Status: Pass, Detail: "no PostHog or Sentry MCP server registered with a host"}
+	}
+	r := Result{Status: Pass}
+	var ok []string
+	for _, s := range servers {
+		provider, findings := hostcall.Audit(hostcall.Server{URL: s.URL, Command: s.Command, Args: s.Args, Env: s.Env, Headers: s.Headers, Committed: s.Committed})
+		where := fmt.Sprintf("%s %q (%s, %s)", provider, s.Name, s.Host, s.File)
+		if len(findings) == 0 {
+			ok = append(ok, where)
+			continue
+		}
+		for _, f := range findings {
+			if f.Secret {
+				r.Status = Fail
+			} else if r.Status == Pass {
+				r.Status = Warn
+			}
+			r.Lines = append(r.Lines, fmt.Sprintf("%s: %s. Fix: %s", where, f.Problem, f.Fix))
+		}
+	}
+	for _, w := range ok {
+		r.Lines = append(r.Lines, w+": set up to read only")
+	}
+	r.Detail = fmt.Sprintf("%d PostHog or Sentry MCP server(s); aayudha's pre-tool hook lets them read and refuses their writes", len(servers))
+	if r.Status != Pass {
+		r.Detail += "; the lines say what to tighten"
 	}
 	return r
 }

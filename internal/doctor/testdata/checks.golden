@@ -55,6 +55,17 @@ PASS  mcp  aayudha MCP server: claude from .mcp.json at this aayu's version
 ## mcp fail
 FAIL  mcp  MCP registrations need aayu install --apply
              claude: /usr/bin/aayu reports "aayu 1.1.0"; this aayu is 1.2.0
+## provider-mcp pass
+PASS  provider-mcp  no PostHog or Sentry MCP server registered with a host
+## provider-mcp fail
+FAIL  provider-mcp  3 PostHog or Sentry MCP server(s); aayudha's pre-tool hook lets them read and refuses their writes; the lines say what to tighten
+                      posthog "posthog" (claude, .mcp.json): a PostHog or Sentry key is written into this file, which the repository shares. Fix: revoke that key now, then reference an environment variable instead (for example "Authorization": "Bearer ${POSTHOG_API_KEY}") or move the server to your user config
+                      posthog "posthog" (claude, .mcp.json): the server offers PostHog's write tools. Fix: add readonly=true to the URL (https://mcp.posthog.com/mcp?readonly=true) or the header x-posthog-read-only: true, so it lists only read tools
+                      posthog "posthog" (claude, .mcp.json): the server is not pinned to one project, so an agent can switch projects. Fix: add project_id=<your project ID> to the URL, or the header x-posthog-project-id
+                      sentry "sentry" (claude, .mcp.json): the server offers Sentry skills beyond inspect (seer starts paid runs; triage and project-management write). Fix: limit it to the inspect skill: ?skills=inspect on https://mcp.sentry.dev/mcp, or --skills=inspect for npx @sentry/mcp-server
+                      sentry "sentry" (claude, .mcp.json): the server is not limited to one organization. Fix: use https://mcp.sentry.dev/mcp/<org>/<project>
+                      sentry "sentry" (claude, .mcp.json): the hosted server signs in with OAuth, and Sentry grants that token write scopes whatever skills you pick. Fix: prefer a read-only token: run npx @sentry/mcp-server --access-token=${SENTRY_ACCESS_TOKEN} --skills=inspect (stdio), with the token aayudha's doctor accepts
+                      sentry "sentry-local" (claude, .mcp.json): set up to read only
 ## codex-hooks pass
 PASS  codex-hooks  no aayudha hooks for OpenAI Codex here
 ## codex-hooks fail

@@ -80,6 +80,9 @@ func TestDoctorIntegrations(t *testing.T) {
 	}
 	r := &fixture.Replayer{T: t, Rec: &fixture.Recording{Interactions: []fixture.Interaction{
 		ok("https://eu.posthog.com/api/personal_api_keys/@current/", "", `{"label":"aayudha","scopes":["query:read","insight:read"]}`),
+		// Decision #449: doctor then tries each PostHog capability with a cheap read.
+		ok("https://eu.posthog.com/api/personal_api_keys/@current/", "", `{"label":"aayudha","scopes":["query:read","insight:read"]}`),
+		{Method: "POST", URL: "https://eu.posthog.com/api/projects/12345/query/", Status: 200, Response: []byte(`{"results":[[1]]}`)},
 		ok("https://sentry.io/api/0/", "", `{"auth":{"scopes":["event:read","project:write"]},"user":{"username":"founder"}}`),
 		ok("https://api.github.com/user", "", `{"login":"rahulnakmol","type":"User"}`), // fine-grained: no X-OAuth-Scopes
 		ok("https://api.figma.com/v1/me", "", `{"id":"1197346","handle":"Rahul"}`),
@@ -117,6 +120,7 @@ url = "` + mobbin.URL + `"
 	}
 	for _, want := range []string{
 		"posthog: reachable as personal API key aayudha; read-only scope verified (query:read, insight:read per GET /api/personal_api_keys/@current/)",
+		"posthog, HogQL queries (query:read; used by measure, grill, experiment, readout): works: project 12345 answered SELECT 1",
 		"sentry: reachable, but the key is write-capable (project:write per GET /api/0/); read verbs refuse it",
 		"github: reachable as rahulnakmol; the provider does not report this key's scope, so configured scope read is trusted",
 		"figma: reachable as Rahul; the provider does not report this key's scope, so configured scope read is trusted",

@@ -1,0 +1,44 @@
+{
+  "source": "Shaped from PostHog's OpenAPI spec (https://us.posthog.com/api/schema/, OpenAPI 3.1, info.version 1.0.0, read 2026-10-17) and its source at 8bb4013: posthog/api/personal_api_key.py (@current), posthog/permissions.py (\"API key missing required scope '\u2026'\", \"API key does not have access to the requested project: ID \u2026\"), posthog/auth.py (\"Personal API key found in request Authorization header is invalid.\"), and the {type, code, detail, attr} error shape of posthog/exceptions.py. Not live-proven: no PostHog account recorded this.",
+  "interactions": [
+    {
+      "method": "GET",
+      "url": "https://us.posthog.com/api/personal_api_keys/@current/",
+      "status": 200,
+      "response": {
+        "id": "0192c3a4-5b6c-7d8e-9f00-112233445566",
+        "label": "aayudha",
+        "mask_value": "phx_...Qx7k",
+        "created_at": "2026-09-30T10:00:00Z",
+        "last_used_at": null,
+        "user_id": 101,
+        "scopes": [
+          "query:read",
+          "error_tracking:read"
+        ],
+        "scoped_teams": [
+          12345
+        ],
+        "scoped_organizations": []
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://us.posthog.com/api/projects/12345/query/",
+      "body": {
+        "query": {
+          "kind": "HogQLQuery",
+          "query": "SELECT 1"
+        },
+        "name": "aayudha doctor"
+      },
+      "status": 404,
+      "response": {
+        "type": "invalid_request",
+        "code": "not_found",
+        "detail": "Not found.",
+        "attr": null
+      }
+    }
+  ]
+}
