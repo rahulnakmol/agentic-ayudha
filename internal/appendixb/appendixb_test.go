@@ -2,6 +2,7 @@ package appendixb
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -125,7 +126,7 @@ func TestAdoptHandWrittenRows(t *testing.T) {
 	hand := "\n### Deviations recorded while implementing WP1\n\n" + header +
 		"| D-1a | WP1: one table | Parallel rows collide | One file per row |\n" +
 		"| D-1b | Links | See [the research](research/x.md) and [a run](https://example.com/r) | #12: `a \\| b` |\n" +
-		"\n### Scope addition recorded while adding a thing (WP9)\n\nNew.\n\n" + header +
+		"\n### Scope addition recorded while adding the first of many longer things to the plan (WP9)\n\nNew.\n\n" + header +
 		"| S-9 | p | f | i |\n"
 	put(t, root, Plan, "# Plan\n\n## Appendix B\n\n"+Pointer+hand)
 
@@ -136,8 +137,8 @@ func TestAdoptHandWrittenRows(t *testing.T) {
 	want := "::error file=docs/BUILD-PLAN.md::docs/BUILD-PLAN.md had Appendix B rows written by hand; go generate moved them to their own files. " +
 		"Appendix B rows live one file per row in docs/appendix-b/ (AGENTS.md, \"Appendix B rows\"); do not add them to docs/BUILD-PLAN.md. Commit the moved files.\n" +
 		"  docs/appendix-b/001-wp1/002-D-1b.md\n" +
-		"  docs/appendix-b/002-a-thing-wp9/README.md\n" +
-		"  docs/appendix-b/002-a-thing-wp9/001-S-9.md\n"
+		"  docs/appendix-b/002-the-first-of-many-longer-things-to-the/README.md\n" +
+		"  docs/appendix-b/002-the-first-of-many-longer-things-to-the/001-S-9.md\n"
 	if out.String() != want {
 		t.Fatalf("output:\n%s\nwant:\n%s", out.String(), want)
 	}
@@ -174,9 +175,22 @@ func TestAdoptHandWrittenRows(t *testing.T) {
 	}
 }
 
+// No plan, and no rows yet.
+func TestEmpty(t *testing.T) {
+	root := t.TempDir()
+	if secs, err := Load(root); secs != nil || err != nil {
+		t.Fatalf("Load with no rows: %v, %v", secs, err)
+	}
+	if err := Generate(root, &bytes.Buffer{}, false); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("Generate with no plan: %v", err)
+	}
+}
+
 func TestGenerateRefuses(t *testing.T) {
 	for _, tc := range []struct{ name, plan, file, data, want string }{
 		{"no marker", "# Plan\n", "", "", "docs/BUILD-PLAN.md: missing the"},
+		{"hand-written section without an ID column", "", "", "### New\n\n| A | B |\n|---|---|\n| x | y |\n", "needs a table whose first column is \"#\""},
+		{"hand-written section with other columns", "", "", "### Deviations recorded while implementing WP1\n\n| # | A |\n|---|---|\n| D-2 | y |\n", "section \"Deviations recorded while implementing WP1\" has columns"},
 		{"hand-written ID used in another section", "", "", "### Deviations recorded while implementing WP2\n\n" + header + "| D-1a | a | b | c |\n",
 			"Appendix B row ID D-1a is already used in section \"Deviations recorded while implementing WP1\""},
 		{"row without a section", "", "", "| D-2 | a | b | c |\n", "has no \"### \" section"},

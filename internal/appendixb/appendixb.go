@@ -270,9 +270,6 @@ func Generate(root string, w io.Writer, annotate bool) error {
 	if err != nil {
 		return err
 	}
-	if _, err := Load(root); err != nil {
-		return err
-	}
 	if err := os.WriteFile(planPath, []byte(plan[:i]+Pointer), 0o644); err != nil {
 		return err
 	}
@@ -370,7 +367,7 @@ func adopt(root string, secs []Section, hand []Section) ([]string, error) {
 		if !slices.Equal(s.Columns, h.Columns) {
 			return nil, fmt.Errorf("%s: section %q has columns %q, its files %q", Plan, h.Title, h.Columns, s.Columns)
 		}
-		if isNew || h.Intro != "" && h.Intro != s.Intro { // a heading copied without its intro keeps the intro // a heading copied without its intro keeps the intro
+		if isNew || h.Intro != "" && h.Intro != s.Intro { // a heading copied without its intro keeps the intro
 			if f, changed, err := writeSection(root, *s, h.Intro); err != nil {
 				return nil, err
 			} else if changed {
