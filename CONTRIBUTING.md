@@ -62,7 +62,7 @@ a throwaway `promote/…` branch, so what was tested is what ships.
 
 The explicit stable-release request is a comment on the Release issue whose first line is
 `Stable release: vX.Y.Z`, written after the Release's rolling snapshot by a person (not a bot) with write, maintain,
-or admin access. An agent never writes it; `aayu release --to main` refuses without it (Story #430).
+or admin access. An agent never writes it; `aayu release --to main` refuses without it.
 
 `aayu release <release-issue> --to rolling|main` (WP7.8), which an agent may run, executes exactly the steps below
 for a Release issue.
