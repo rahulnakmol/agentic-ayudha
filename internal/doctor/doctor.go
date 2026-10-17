@@ -58,6 +58,7 @@ type Probe struct {
 	Version        string
 	Latest         func(ctx context.Context) (string, error)
 	Host           string // --host
+	Verbose        bool   // --verbose: rows add what they would leave out, such as an agent CLI's warnings
 	// Integration resolves a configured integration and asks its provider for
 	// the key's account and scope (providers.Check); nil when unavailable.
 	Integration func(ctx context.Context, name string) (integrations.Scope, error)

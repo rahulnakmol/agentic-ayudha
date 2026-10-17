@@ -484,19 +484,28 @@ func checkSkillCopies(_ context.Context, p *Probe) Result {
 	return Result{Status: Pass, Detail: fmt.Sprintf("%d skill(s) for %s in sync with %s (skills %s)", len(lock.Skills), strings.Join(lock.Hosts, ", "), hosts.LockPath, lock.SkillsVersion), Lines: cursor}
 }
 
-// checkMCP checks each installed host's aayudha MCP registration: present, and
-// its absolute binary path runs and reports this aayu's version (WP3.3).
+// checkMCP checks where each host gets the aayudha MCP server: an
+// installed host's registration (present, and its absolute binary path runs
+// and reports this aayu's version, WP3.3), or an enabled aayudha plugin. It
+// warns when no host has the server at all.
 func checkMCP(ctx context.Context, p *Probe) Result {
 	if p.Root == "" {
 		return Result{Status: Pass, Detail: "not in a repository"}
 	}
-	lock, ok, err := hosts.ReadLock(p.Root)
-	if err != nil || !ok {
-		return Result{Status: Pass, Detail: "no MCP registrations (skills are not installed; aayu install)"}
+	var lock hosts.Lock
+	if l, ok, err := hosts.ReadLock(p.Root); err == nil && ok {
+		lock = l
 	}
 	var problems, steps, fine []string
 	home := p.Getenv("HOME")
 	codexHome := hosts.CodexHome(home, p.Getenv)
+	// A host this repository is not installed for still has the server when
+	// its aayudha plugin is on.
+	for _, h := range []verbs.HostID{verbs.HostClaude, verbs.HostCodex, verbs.HostCursor} {
+		if !slices.Contains(lock.Hosts, string(h)) && hosts.PluginEnabled(h, p.Root, home, codexHome) {
+			fine = append(fine, string(h)+" from the aayudha plugin")
+		}
+	}
 	for _, r := range hosts.Registrations(p.Root, home, lock.Hosts) {
 		plugin := hosts.PluginEnabled(r.Host, p.Root, home, codexHome)
 		switch {
@@ -508,7 +517,7 @@ func checkMCP(ctx context.Context, p *Probe) Result {
 		case plugin && r.Command != "":
 			problems = append(problems, fmt.Sprintf("%s: the aayudha plugin's server and %s both register %q, so the host lists it twice", r.Host, r.File, hosts.ServerName))
 		case plugin:
-			fine = append(fine, string(r.Host)+" (the plugin's)")
+			fine = append(fine, string(r.Host)+" from the aayudha plugin")
 		case r.Err != nil:
 			problems = append(problems, fmt.Sprintf("%s: %s: %v", r.Host, r.File, r.Err))
 		case r.Command == "":
@@ -520,7 +529,7 @@ func checkMCP(ctx context.Context, p *Probe) Result {
 			} else if !strings.Contains(out, " "+p.Version) {
 				problems = append(problems, fmt.Sprintf("%s: %s reports %q; this aayu is %s", r.Host, r.Command, strings.TrimSpace(out), p.Version))
 			} else {
-				fine = append(fine, string(r.Host))
+				fine = append(fine, string(r.Host)+" from "+r.File+" at this aayu's version")
 			}
 		}
 	}
@@ -546,7 +555,10 @@ func checkMCP(ctx context.Context, p *Probe) Result {
 		}
 		return Result{Status: Warn, Detail: detail, Lines: steps}
 	}
-	return Result{Status: Pass, Detail: fmt.Sprintf("aayudha MCP server registered for %s at this aayu's version", strings.Join(fine, ", "))}
+	if len(fine) == 0 {
+		return Result{Status: Warn, Detail: "no host has the aayudha MCP server: this repository is not installed for one, and no aayudha plugin is on; run `aayu install --host <claude|codex|cursor|amp> --apply`, or add the aayudha plugin to your host"}
+	}
+	return Result{Status: Pass, Detail: "aayudha MCP server: " + strings.Join(fine, "; ")}
 }
 
 // checkCodexHooks reports aayudha's Codex hooks that Codex would skip (WP3.2b,

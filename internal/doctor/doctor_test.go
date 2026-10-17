@@ -505,6 +505,25 @@ func TestCheckStates(t *testing.T) {
 				return getenv(k)
 			}
 		}, Warn, "trust this project in Codex"},
+		// Without aayu install, an enabled aayudha plugin still gives a host
+		// the server, and with neither no host has it: doctor said "no MCP
+		// registrations" and passed in both cases.
+		{"Codex plugin, no install", checkMCP, func(p *Probe) {
+			p.Root = repoWith(t, map[string]string{".aayudha/config.toml": "version = 1\n"})
+			home := t.TempDir()
+			_ = os.MkdirAll(filepath.Join(home, ".codex"), 0o755)
+			_ = os.WriteFile(filepath.Join(home, ".codex", "config.toml"), []byte("[plugins.\"aayudha@aayudha\"]\nenabled = true\n"), 0o644)
+			getenv := p.Getenv
+			p.Getenv = func(k string) string {
+				if k == "HOME" {
+					return home
+				}
+				return getenv(k)
+			}
+		}, Pass, "aayudha MCP server: codex from the aayudha plugin"},
+		{"no install, no plugin", checkMCP, func(p *Probe) {
+			p.Root = repoWith(t, map[string]string{".aayudha/config.toml": "version = 1\n"})
+		}, Warn, "no host has the aayudha MCP server"},
 	}
 	for _, tt := range tests {
 		p := healthy(t)
