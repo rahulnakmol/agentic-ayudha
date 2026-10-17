@@ -13,7 +13,7 @@ conditions at that moment.
 ## Share it with a link
 
 Copy link gives you a link that opens the claims list with the same filter for any signed-in reviewer. They can apply
-your filter, and it stays yours: they cannot rename or delete it.
+your filter, but they cannot rename or delete it.
 
 ## Take the list with you
 

@@ -151,18 +151,28 @@ in the brand's voice. Every sentence traces to an authoritative pack; publishing
 
 - A proven Feature is one whose shipped stories all have authoritative packs; the brief lists them. Claim only those,
   and link each as `#N` the first time you name it. A link in its heading counts:
-  `## Reorder ([#42](https://github.com/o/r/issues/42))`. Never link stories, bugs, pull requests,
-  or other Features.
+  `## Reorder ([#42](https://github.com/o/r/issues/42))`. Never link stories, bugs, pull requests, or other Features.
 - Say what changed by restating a criterion whose evidence is met: its state and expected result, in the reader's
   words. For "state: a past order; expected: Reorder adds its items to the basket", write "Reorder puts a past
-  order's items back in your basket". Who it
-  helps comes from the Feature's problem or summary. Anything else is a claim you cannot make.
+  order's items back in your basket". Anything else is a claim you cannot make.
+- Restate; never extrapolate. Keep each criterion's own scope:
+  - A control does only what its criterion shows. If the export keeps the columns in the order shown, the column
+    picker is not proven to reorder them.
+  - No interaction count ("one click away"), no exclusive or inverse rule ("a viewer cannot edit it" is not "only
+    you can"), no "always", "every", or "any" the criterion does not say, and no time it does not name ("today's").
+  - An optional behaviour stays optional: "you can add a note" is not "every order now carries its reason".
+- Who it helps is the reader and the problem from the Feature's problem or summary, as a need: "for customers who
+  rebuild the same basket every week". Never as an outcome: "no longer", "never again", "stays with", or "the problem
+  is gone" claim a result only a measure can show.
 - Name only the controls, screens, steps, file names, and values that a criterion or an inspect judgement names.
   Never invent a button, menu, setting, shortcut, page, URL, or file name, and never fill a gap in the steps with a
   guess.
 - A criterion proves its own state, nothing wider. "The page keeps responding while 10,000 rows load" does not prove
-  the export of those rows is complete or quick. A skipped floor proves nothing: promise no accessibility beyond the
-  floors that passed.
+  the export of those rows is complete or quick, or that the reader can do other work meanwhile.
+- Floors (coverage, accessibility, keyboard) are how the pod checked the work, not what the reader gets. Leave them
+  out of release, launch, and brand copy. Where a reader needs one, as in an accessibility note in the docs, state
+  exactly what the floor checked and found ("the WCAG 2.2 AA check found 0 critical and 0 serious issues"), never a
+  wider promise ("accessible to everyone"). A skipped floor proves nothing.
 - Numbers come only from a Result or a criterion, with their own unit and population: "3.1 reorders per customer per
   month, against a target of 2". Never claim speed, time saved, a percentage, adoption, or satisfaction that no
   measure counts, even when the human asks for it. A Feature without a Result gets no usage claim.
@@ -187,20 +197,24 @@ in the brand's voice. Every sentence traces to an authoritative pack; publishing
 
 ## Shapes by kind
 
-The team stage sizes the copy; the copy is the stage's artefact, under its own title. At a startup a release is the
-Release note (what changed, who it helps, the proof), a guide is one Doc page, and a launch opens with the Positioning
-line; keep it to one page.
+The team stage sizes the copy, and the copy is the stage's artefact under its own title. At a startup a release is
+the Release note (what changed, who it helps, the proof), a guide is one Doc page, and a launch opens with the
+Positioning line; keep it to one page. Never write the artefact's name into the copy: no "Positioning line",
+"Release note", or "Doc page" heading or label. Readers see the copy, not your method.
 
 - `release` and `changelog`: `# <product> <version>`, then the date and a one-sentence summary. For each proven
   Feature that shipped, a `##` heading with its link, what changed (one short sentence or bullet per criterion), and
-  who it helps. Then the count of the changes you cannot describe. No marketing.
+  who it helps, as a need. Then the count of the changes you cannot describe. No marketing.
 - `guide` and `docs`: one page of one kind: a how-to (one task), a tutorial (learning by doing), a reference, or an
   explanation. A how-to has a title that names the task; one paragraph on when to use it, with the Feature's link;
   "Before you start", linking existing docs pages by path; numbered steps, one action each, naming the control; what
-  to expect, with the criteria's limits and the scope's exclusions; and the outcome the reader now has.
-- `launch`: the positioning line first: for this reader, who today does the Feature's problem by hand, the Feature
-  now does this, with its proof link. Then two or three short sections on what the reader does and sees, a Result if
-  the Feature has one, and an action the reader can take in the product. No invented URL, offer, price, or date.
+  to expect, with the criteria's limits and the scope's exclusions; and the outcome the reader now has. Leave usage
+  numbers out of a how-to: they do not help the reader do the task.
+- `launch`: open with the positioning sentence: for this reader, who today does the Feature's problem by hand, the
+  Feature now does this, with its proof link. Then two or three short sections on what the reader does and sees, a
+  Result if the Feature has one, and an action the reader can take in the product. A launch says what the reader can
+  do now: no sections on scope, limits, or how the work was checked; those belong in the docs. No invented URL,
+  offer, price, or date.
 - `brand`: taglines, about text, and descriptions in the voice; every claim still traces to a pack.
 
 Format and lint: skills/README.md.

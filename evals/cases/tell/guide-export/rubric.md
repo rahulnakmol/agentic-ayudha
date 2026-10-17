@@ -10,7 +10,8 @@ those; judge whether each claim traces to a pack, the voice, and whether a reade
 
 A claim is any statement of what the product does, a control, a step, a result, or a number. A claim traces to a pack
 when it restates a criterion of Feature #7's authoritative pack P1 whose inspect verdict is met (its state and
-expected result, or the inspect judgement), or the Feature's summary, problem, or scope. The controls the sources name
+expected result, or the inspect judgement), a floor that passed, stated as exactly what it checked, the Feature's
+summary, problem, or scope, or its Result in its own unit and population. The controls the sources name
 are the Columns picker, Export CSV, and the list toolbar; the file name `claims.csv` comes from an inspect judgement.
 Anything else is an unsupported claim: a menu, button, dialog, format choice, setting, or step no source names; a
 limit, duration, row count, or file size no source gives; a behaviour beyond a criterion (criterion 3 shows the list

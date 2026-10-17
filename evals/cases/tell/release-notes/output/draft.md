@@ -18,7 +18,7 @@ This helps reviewers who rebuild the same status and date-range filters by hand 
 - On a claim's page, Add note saves a plain-text note with your name and the time you added it.
 - Another reviewer who opens the claim sees its notes, newest first.
 
-The reason a claim was held or queried now stays with the claim.
+This is for reviewers who need to know why a claim was held or queried before them.
 
 ## Also in this release
 

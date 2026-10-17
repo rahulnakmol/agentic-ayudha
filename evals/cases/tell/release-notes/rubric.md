@@ -9,7 +9,8 @@ those; judge whether each claim traces to a pack, the voice, and usefulness.
 
 A claim is any statement of what the product does, what changed, who it helps, or a number. A claim traces to a pack
 when it restates a criterion of an authoritative pack whose inspect verdict is met (its state and expected result, or
-the inspect judgement), or the Feature's summary, problem, or scope. Anything else is an unsupported claim: a control,
+the inspect judgement), a floor that passed, stated as exactly what it checked, the Feature's summary, problem, or
+scope, or a Result in its own unit and population. Anything else is an unsupported claim: a control,
 step, or behaviour no criterion names; a number, date, or count no source gives; a benefit stated as
 measured (neither #15 nor #16 has a Result yet); a change described as part of v1.5.0 that the grounding lists under
 another release (#7 shipped in v1.4.0).
