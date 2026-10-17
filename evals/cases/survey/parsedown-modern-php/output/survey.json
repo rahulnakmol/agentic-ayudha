@@ -453,7 +453,8 @@
           "test:test/ParsedownTest.php",
           "test/ParsedownTest.php:44-59"
         ],
-        "compare": "exact stdout (the HTML) and exit code"
+        "compare": "exact stdout (the HTML) and exit code",
+        "reference": "Parsedown at commit 4e433a8 on the PHP 8.2.34 CLI, no build step"
       },
       {
         "id": "G2",
@@ -463,7 +464,8 @@
           "entry:Parsedown.php:59",
           "entry:Parsedown.php:77"
         ],
-        "compare": "exact stdout and exit code"
+        "compare": "exact stdout and exit code",
+        "reference": "Parsedown at commit 4e433a8 on the PHP 8.2.34 CLI, no build step"
       },
       {
         "id": "G3",
@@ -472,7 +474,8 @@
           "readme.md:48-74",
           "sym:Parsedown.php#Parsedown::sanitiseElement"
         ],
-        "compare": "exact stdout and exit code"
+        "compare": "exact stdout and exit code",
+        "reference": "Parsedown at commit 4e433a8 on the PHP 8.2.34 CLI, no build step"
       }
     ],
     "risks": [
@@ -513,7 +516,8 @@
         "G1",
         "G2",
         "G3"
-      ]
+      ],
+      "quote": "without changing a byte of its output"
     },
     {
       "id": "K2",

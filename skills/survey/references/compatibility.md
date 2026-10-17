@@ -69,7 +69,11 @@ a default per interface with its reason (usually `exact` for anything scripts or
 ## 3. Prove it: golden cases, the legacy suite, and journeys
 
 - **Golden cases** (`case_sets`, `aayu survey --golden`, then `--parity`): characterisation of what the legacy
-  build does, including its bugs, compared exactly unless the person decided a tolerance.
+  build does, including its bugs, compared exactly unless the person decided a tolerance. Capture them from one
+  pinned reference build (the commit, the toolchain and its version, the flags) and name it in the case set's
+  `reference`: MINPACK's own Release flags change the numbers all six of its test drivers print. Commit the
+  capture (`.aayudha/survey/golden/<cases file>/`) and the cases file: the merge gate's `parity` floor replays them
+  against each modernisation Story's new build.
 - **The legacy suite as the reference** (`suites`, `aayu survey --compat`): when the project has its own tests, turn
   them into a cases file, one test per case with its `area`, run it on the legacy build with `--golden`, then on
   the new build with `--compat`. The score is per area: of the tests the legacy build passes, how many the new

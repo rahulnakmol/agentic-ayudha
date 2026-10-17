@@ -468,7 +468,8 @@
    "proof": [
     "G1",
     "G2"
-   ]
+   ],
+   "quote": "so that every caller gets the same results"
   },
   {
    "id": "K2",
@@ -610,7 +611,8 @@
      "ex/file22:1-29",
      "ex/file23:1-15"
     ],
-    "compare": "exact stdout and exit code, legacy and modern built with the same compiler and flags"
+    "compare": "exact stdout and exit code, legacy and modern built with the same compiler and flags",
+    "reference": "MINPACK at commit 12f30bc, built with GNU Fortran 12.2.0 at -O2 and no other flags; the Release flags (-O3 -march=native -ffast-math) print other numbers (probe:check-differs:hybrd1), so goldens come only from this build"
    },
    {
     "id": "G2",
@@ -620,7 +622,8 @@
      "entry:examples/example_hybrd.f90:6",
      "entry:examples/example_primes.f90:67"
     ],
-    "compare": "exact stdout and exit code"
+    "compare": "exact stdout and exit code",
+    "reference": "MINPACK at commit 12f30bc, built with GNU Fortran 12.2.0 at -O2 and no other flags; the Release flags (-O3 -march=native -ffast-math) print other numbers (probe:check-differs:hybrd1), so goldens come only from this build"
    }
   ],
   "risks": [

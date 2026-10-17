@@ -364,7 +364,12 @@ Before any line of the legacy system changes, capture what it does:
    exit codes with their SHA-256 under `golden/<cases file>/`, in an environment with no tokens, `LC_ALL=C`, and
    `TZ=UTC`.
 3. Each modernisation Story's Completion Goal runs `aayu survey --parity cases.json --bin <new program> --run`,
-   which exits 3 on any difference and names the first differing line.
+   which exits 3 on any difference and names the first differing line. In the merge gate, `aayu verify`'s `parity`
+   floor runs it: the Story's evidence map (`.aayudha/evidence/<story>.toml`) gives each such criterion a
+   `[[criterion.parity]]` or `[[criterion.compat]]` run (`cases`, `bin`, an optional `build` command, and `ids` or
+   `areas` for the part the Story delivers), replayed against the committed capture of the case sets or suites the
+   criterion names. A difference or a regression fails the floor and a criterion with no run blocks it, so the
+   rewrite cannot merge while its contract fails; the floor cannot be waived.
 4. Gather the evidence the code alone cannot give, before writing the traps: add `--probe` to the capture (each case
    twice for non-determinism, under a changed TZ, locale, and HOME, and under strace for files read and written),
    `--check-bin <sanitiser or checker build>` for memory and undefined-behaviour reports (a build with the project's

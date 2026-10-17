@@ -39,6 +39,7 @@ type Interface struct {
 	Consumers   string   `json:"consumers,omitempty"` // who depends on it, as far as known
 	Level       string   `json:"level"`               // exact, differ, drop, or undecided
 	DecidedBy   string   `json:"decided_by"`          // "request" or an answered question; while undecided, the open question that will decide
+	Quote       string   `json:"quote,omitempty"`     // with decided_by "request": the request's own words that decide the level
 	Difference  string   `json:"difference,omitempty"`
 	Deprecation string   `json:"deprecation,omitempty"`
 	Proof       []string `json:"proof,omitempty"` // case sets (G1), suites (S1), or behaviour checks replaying a user journey (check:<product>/<feature>.<check>, a verify feature map)
@@ -108,6 +109,10 @@ func uiKind(k string) bool { return strings.HasPrefix(k, "ui-") || k == "os-inte
 func exactCompare(compare string) bool {
 	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(compare)), "exact")
 }
+
+// normalSpace lower-cases s and collapses its white space, so a quote matches
+// its request across line breaks.
+func normalSpace(s string) string { return strings.Join(strings.Fields(strings.ToLower(s)), " ") }
 
 // checkContract checks the trap findings, the do-not-carry list, the
 // compatibility contract, and the modernisation's suites, migrations,
@@ -189,6 +194,8 @@ func checkContract(ix *Index, d Draft, questions map[string]Question, add func(s
 		case "exact", "differ", "drop":
 			if k.DecidedBy != "request" {
 				decided(where, k.DecidedBy, false)
+			} else if q := normalSpace(k.Quote); q == "" || !strings.Contains(normalSpace(d.Request), q) {
+				add("%s: decided by the request: quote the request's words that decide its level (quote), exactly as they appear in the request", where)
 			}
 		default:
 			add("%s: level %q; want exact, differ, drop, or undecided", where, k.Level)
@@ -205,6 +212,9 @@ func checkContract(ix *Index, d Draft, questions map[string]Question, add func(s
 			case isSet:
 				if k.Level == "exact" && !exactCompare(g.Compare) {
 					add("%s must match exactly, but case set %s compares %q: an exact interface needs exact evidence", where, p, g.Compare)
+				}
+				if k.Level == "exact" && strings.TrimSpace(g.Reference) == "" {
+					add("%s must match exactly, but case set %s names no pinned reference build: give the commit, the toolchain and its version, and the build flags its goldens come from (reference), since another build can print other results", where, p)
 				}
 			case suites[p]:
 			case journeyRE.MatchString(p):

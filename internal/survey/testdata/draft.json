@@ -28,7 +28,7 @@
       {"id": "M2", "title": "Retire the C++ build", "depends_on": ["M1"], "claims": ["E2"], "parity": ["G1"]}
     ],
     "case_sets": [
-      {"id": "G1", "title": "Command-line expressions", "from": ["entry:src/main.cpp:4", "test:tests/test001.js"], "compare": "exact stdout, stderr, and exit code", "exclude": ["the division-by-zero crash (E3)"]}
+      {"id": "G1", "title": "Command-line expressions", "from": ["entry:src/main.cpp:4", "test:tests/test001.js"], "compare": "exact stdout, stderr, and exit code", "reference": "the C++ build at the surveyed commit, made by `make` with the Makefile's flags and the g++ the capture records", "exclude": ["the division-by-zero crash (E3)"]}
     ],
     "risks": [
       {"id": "R1", "claim": "The usage message goes to stderr with exit 2; scripts may rely on it.", "basis": "observed", "cites": ["src/main.cpp:7-8"]}
