@@ -129,10 +129,13 @@ the person what you will change before you change it: the surfaces, and each new
 wait for their yes, unless they already asked you to make the change without hearing it first; "tell me first" means
 wait. Each new check proves one criterion. Copy the criterion's state into the check's steps literally: the same
 records in the same order, and the same one marked done, paid, or selected (when the criterion says "the second done",
-the check adds two and marks the second). Assert the criterion's whole expected output (the exact stdout or body, and
-the exit code), not a substring of it, so the check fails when the behaviour is wrong. Before you write, compare each
-check's steps and assertion with its criterion, line by line. Read the feature file before you change it, and write it
-once. Then run `aayu verify --map` (it must be clean; when it is not, fix the map before you report) and
+the check adds two and marks the second). Assert the criterion's whole expected output and the exit code, in the strongest form the
+control tool's steps have (when a step's `stdout` matches by inclusion, give it the whole expected line, such as the
+complete JSON, never a fragment), so the check fails when the behaviour is wrong. Do not change the control tool to
+get a stricter match. Before you write, compare each
+check's steps and assertion with its criterion, line by line. On their yes, make the change you proposed in that
+turn; when part of it cannot be written as proposed, write the closest the map allows and say what is weaker, rather
+than asking again. Read the feature file before you change it, and write it once. Then run `aayu verify --map` (it must be clean; when it is not, fix the map before you report) and
 `aayu verify --check <feature>`. Report what is still missing, such as the story's criteria in its evidence map.
 A stale feature (a source changed after its `verified_at`) is reported, not drift, and does not block: say the
 merge gate re-checks it, and do not ask the person for a commit hash to stamp. End with what they can do now

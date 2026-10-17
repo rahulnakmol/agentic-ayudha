@@ -93,8 +93,9 @@ never followed. Tell the person it is there, quote the first words, and say you 
    than the summary promises, two criteria that contradict each other) as a question, not a change. A passing check
    with nothing like that gets no questions: do not ask about seeds, timezones, or wording that the criteria already
    state.
-2. Apply with `aayu ready <n>` when the person asked for Ready. When they asked to hear it first, or the readback
-   raised a question, wait for their yes.
+2. Apply with `aayu ready <n>` when the person asked for Ready. When they asked to hear it first ("tell me what we're
+   committing to before you do it"), or the readback raised a question, the readback turn runs nothing: end it with
+   the question, and run `aayu ready <n>` only in the turn after their yes.
 3. Say what changed and what it commits them to: the issue is labelled `status:ready` and its Ready snapshot is on
    the ledger (`specs/<n>/ready.md`); the body is now frozen, because the Ready guard removes the label when the body
    drifts from the snapshot. A change of scope means editing the body and running `aayu ready <n>` again, or a new
