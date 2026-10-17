@@ -45,9 +45,11 @@ analytics/exports/2026-09-14_10-11.jsonl sha256 5c1e09a2b7d4….
 
 ## How `measure` counts (`internal/measure/measure.go`, `docs/BUILD-PLAN.md` D-7.2a)
 
-A cohort is the users acquired in one week from the window start. A cohort is complete when its last user can be
+A cohort is the users acquired in one week from the window start; its week ends seven days after its start
+(exclusive: the 2026-09-14 cohort's week ends at 2026-09-21T00:00:00Z). A cohort is complete when its last user can be
 observed for the whole horizon, `max(activation_days, 14)` days, inside the window: its week end plus 14 days must be
-on or before the window end. Rates count complete cohorts only. A skipped row is an export row that could not be
+on or before the window end. `--to` is the window's exclusive end (`--to 2026-10-12` ends it at
+2026-10-12T00:00:00Z). Rates count complete cohorts only. A skipped row is an export row that could not be
 parsed into an event (here, events with no user ID); an excluded row is a parsed row that does not count.
 
 ## Founder's message in the #38 thread

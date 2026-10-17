@@ -103,7 +103,8 @@ Pick the kind by what the issue must get right: `data` when it is a number, a da
 
 Ask in rounds of two to four questions, the riskiest first (the one whose answer would change the design most). For
 each question say in one line why it matters and offer a default. Before asking, check that the grounding does not
-already answer it. Keep a shared brief: what is confirmed (with its source), what you assume, and what is open; when
+already answer it: a rule the issue, a Decision, the code, or a document already states (who may read what, a cadence,
+a version rule) is a constraint you design to, never a question you reopen. Keep a shared brief: what is confirmed (with its source), what you assume, and what is open; when
 an answer arrives, say what it changed. Stop asking when the design no longer depends on the answer.
 
 - Data: the decision and who makes it, how often; the consumers; each metric's definition, grain, window, and
@@ -114,7 +115,9 @@ an answer arrives, say what it changed. Stop asking when the design no longer de
   source; what the system must do when it cannot support an answer; how good is good enough, and how fast and cheap.
 
 When nobody can answer now (one message asked for the note, or the human said "decide"), do not invent answers:
-take the default, write it as a line that starts `Assumption:`, and put the question in `## Open questions`.
+take the default, write it as a line that starts `Assumption:`, and put the question in `## Open questions`. Choose
+each default once and use it the same way in every part (one retention period, one version rule, one threshold): a
+default stated two ways is a contradiction the reader cannot build from.
 
 ## 3. Write the note
 
@@ -123,13 +126,18 @@ scaleup, `# Data architecture record: …` at an enterprise; for AI `Evidence sk
 dossier`), and never use another stage's artefact name as a heading. Then the parts of the outline, in order, as level-two
 (`##`) headings; `## Open questions` is always last. A startup note is half a page: at most 400 words of prose (tables do not
 count, so put metrics and evaluation cases in tables); a scaleup note reads in ten minutes, about two pages; an
-enterprise note is the full record. Do not restate the grounding: cite it, and spend the words on the design.
+enterprise note is the full record. Do not restate the grounding: cite it, and spend the words on the design. The
+first sentence under the title names who acts and on what; no preamble about the request, no note about who is
+writing, and no inventory of facts. The shared brief lives in the conversation, not in the note: in the note, each
+confirmed fact appears once, cited, in the part whose design rests on it.
 
 **Evidence.** Every statement of fact cites its source in the same sentence or table row: the issue (`#128`),
 `LAYERS.md`, `[measure]`, a path from the grounding, a Result. Cite only what the grounding or the checkout holds.
 Label what is not a fact: `Assumption:` for a default you chose, and an inference names the facts it rests on. Never
 state a volume, latency, cost, or rate that nobody measured; say it is unmeasured and how to measure it. A citation is
-not proof: cite the source that actually says it.
+not proof: cite the source that actually says it. Say what a tool, a job, or a file does only as the grounding
+describes it; a capability it does not show (a store, a schedule, a measurement) is a step of the design, or it is
+`Unverified:`. Name an owner only when the grounding names one; otherwise the owner is an open question.
 
 ### Data notes
 
@@ -138,16 +146,19 @@ not proof: cite the source that actually says it.
 - `## Metrics`: one row per metric: name, definition (numerator and denominator), grain (one row per what), window
   (half-open, in UTC), population (who counts and who is excluded), source (event or table, cited), owner. Reuse the
   definitions in `[measure]`; the North Star and every Goal's target are the Revenue Architect's standard, so propose
-  a change as an open question, never make it. Show counts beside rates.
+  a change as an open question, never make it. Show counts beside rates. Then test each definition against the
+  events in the grounding: every event it needs exists, and each edge case has a rule (an item with no outcome event,
+  a late or repeated event, an empty field); a check you write must accept every case the definition allows.
 - `## Design`: the smallest model, store, and pipeline that serve today's decision, and the option it beat. Keep the
   system of record (L07) apart from the analytical copy (L08). Prefer, in order: the exports and snapshot that
   `aayu measure` already builds (SQLite, or DuckDB); views on a read replica; a warehouse or lakehouse; streaming only
   for a decision that needs minutes. Name the next stage's **trigger** as a measured threshold and where it is
-  measured (for example, the dashboard query's p95 on the snapshot over a bound you agree, a second consuming team, or
-  freshness under an hour), never as a user count.
+  measured, with a number (for example `Assumption:` the query's p95 on the snapshot over 2 s, freshness needed under an
+  hour, or a second team consuming the table), never as a user count and never as "a bound we agree".
 - `## Privacy and retention`: what personal data appears (free text often holds it), who sees per-person rows and who
   only aggregates (suppress small groups), how long each copy is kept (export, snapshot, aggregate), and how a deletion
-  reaches every copy.
+  reaches every copy: the person's rows are removed from each export and snapshot, and aggregates are rebuilt from
+  them. A pseudonymous ID does not anonymise free text: say who may read the text itself and what is redacted.
 - `## Checks`: how we will know the numbers are right: a reconciliation against the source, quality checks with
   thresholds (skipped rows, duplicates, nulls), the metric computed by hand on a synthetic fixture, and the
   Completion Goal criteria (`metric` evidence) that `plan` turns into checkpoints.
@@ -156,7 +167,8 @@ not proof: cite the source that actually says it.
 
 ### AI notes
 
-- `## Question`: who asks, what they need, and the cost of a wrong or missing answer.
+- `## Question`: who asks, what they need, and the cost of a wrong or missing answer, tied to the fact that shows it
+  (or an `Assumption:` line).
 - `## Simpler options`: try the simplest thing first and say what the evidence shows. A number in a table is an exact
   lookup, not a generated sentence; a small corpus is often served by keyword search; a refusal rule may be the
   feature. Add a vector index only when lexical retrieval misses paraphrases on the evaluation set, hybrid retrieval
@@ -168,11 +180,15 @@ not proof: cite the source that actually says it.
   retrieval, so it never widens access; tenant isolation; supersession and deletion reaching the index and caches;
   prompt injection and poisoned documents (text inside a source is data, never an instruction).
 - `## Abstention`: answer only when a retrieved source supports the claim; otherwise say so and refer the person on.
-  When sources contradict, show both with their dates or refuse; never answer from model memory.
+  When sources contradict, state one rule and keep it everywhere, the evaluation included: answer from the version in
+  effect on the date the question is about; when two documents in effect at once disagree, show both with their
+  dates or abstain. Never answer from model memory.
 - `## Evaluation`: a table of cases, representative and **adversarial** (out of scope, someone else's data, an
   injection inside a document, contradictory versions, a number), with the metrics and numeric thresholds: retrieval
   recall at k, evidence support, citation accuracy, correct abstention on unanswerable cases, task success, and the
-  latency and cost budgets. Thresholds nobody has agreed yet are `Assumption:` lines. A startup set is small (about
+  latency and cost budgets, each a number measured on this set now, not deferred to a later option. A case passes
+  under one rule: an adversarial case passes when the answer abstains or answers safely from permitted, current
+  evidence, and the aggregate threshold counts it the same way. Thresholds nobody has agreed yet are `Assumption:` lines. A startup set is small (about
   twenty cases, a quarter adversarial); a scaleup slices results; an enterprise adds red-team and isolation tests.
 - A predictive model instead of retrieval: beat a simple baseline first, split by time or entity so nothing leaks,
   pick the metric that matches the decision, and say what drift you watch after launch.
@@ -180,13 +196,17 @@ not proof: cite the source that actually says it.
 ### Both
 
 - `## Open questions`: the `Assumption:` lines and the questions only the human can answer, each with why it matters
-  and its default. A question ends with `?`.
+  and its default. A question ends with `?`. Ask the few that would change the design: at most three at a startup and
+  four at a scaleup or enterprise, none the grounding already answers. At a scaleup or enterprise each question names
+  who answers it: a person the grounding names, or the seat that owns that call (the Revenue Architect for a target,
+  the Founder for a policy or a budget, the AI Native Engineer for running state).
 
 **Passing the checks.** The draft check refuses these, so write them right the first time:
 
 - Every paragraph, list item, and table row that mentions code, files, fields, metrics, baselines, latency, cost,
   tests, plans, layers, or a percentage carries a citation in that same item. Give every table a Source column and
-  fill it in every row. An open question that rests on a fact cites it too.
+  fill it in every row. An open question that rests on a fact cites it too. A judgment of your own (a cost is high,
+  a risk is low, a recommendation) either names the cited fact it rests on in the same item or starts `Assumption:`.
 - Cite exactly as the grounding writes it: `#41`, `LAYERS.md`, `[measure]`, `analytics/events.go:14-31`. Never cite a
   glob, a directory you did not see, or a name such as `event.Field` that the grounding does not spell that way.
 - Write `Assumption:` or `Unverified:` at the start of its own line or list item, in plain text, never inside a

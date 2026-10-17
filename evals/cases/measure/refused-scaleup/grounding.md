@@ -35,9 +35,10 @@ Nothing was written to #61.
 
 ## How `measure` counts (`internal/measure/measure.go`, `docs/BUILD-PLAN.md` D-7.2a)
 
-A cohort is the users acquired in one week from the window start. Retained means active (the retention event) in days
-7 to 13 after acquisition. A cohort is complete when its week end plus `max(activation_days, 14)` days is on or before
-the window end. Rates count complete cohorts only; with none complete, `measure` refuses with exit 4 and writes
+A cohort is the users acquired in one week from the window start; its week ends seven days after its start
+(exclusive). Retained means active (the retention event) in days 7 to 13 after acquisition. A cohort is complete when
+its week end plus `max(activation_days, 14)` days is on or before the window end. The window is UTC and half-open:
+`--to` is its exclusive end (`--to 2026-10-12` ends it at 2026-10-12T00:00:00Z). Rates count complete cohorts only; with none complete, `measure` refuses with exit 4 and writes
 nothing. A skipped row is an export row that could not be parsed into an event; an excluded row is a parsed row that
 does not count.
 
