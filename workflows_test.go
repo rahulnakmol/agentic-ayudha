@@ -193,7 +193,8 @@ func TestGitleaksScansOnlyTheCommitUnderTest(t *testing.T) {
 // tag. v* tags sit on main's Release merge commits, which dev and rolling never contain, and a rolling commit
 // carries a rolling-<date> tag, which goreleaser takes first and cannot parse as a version (release-snapshot failed
 // on every rolling push). Each workflow running `release --snapshot` must first set GORELEASER_CURRENT_TAG to the
-// newest v* tag by version, here v0.10.0: not an ancestor of HEAD, and after v0.9.0 only in version order.
+// newest v* tag by version, here v0.10.0: not an ancestor of HEAD, after v0.9.0 only in version order, and above
+// its prereleases v0.10.0-rc.1 and v0.10.0-rc.2.
 func TestSnapshotNamesItselfFromTheNewestRelease(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("bash steps")
@@ -213,8 +214,10 @@ func TestSnapshotNamesItselfFromTheNewestRelease(t *testing.T) {
 	gitIn("checkout", "-q", "-b", "main")
 	gitIn("commit", "-q", "--allow-empty", "-m", "Release: v0.9.0")
 	gitIn("tag", "v0.9.0")
+	gitIn("tag", "v0.10.0-rc.1")
 	gitIn("commit", "-q", "--allow-empty", "-m", "Release: v0.10.0")
 	gitIn("tag", "-a", "-m", "v0.10.0", "v0.10.0")
+	gitIn("tag", "v0.10.0-rc.2") // tagged late; a prerelease still ranks below its release
 	gitIn("checkout", "-q", "rolling")
 	gitIn("commit", "-q", "--allow-empty", "-m", "Rolling snapshot")
 	gitIn("tag", "rolling-2026-10-16.2")
