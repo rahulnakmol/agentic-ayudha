@@ -11,7 +11,7 @@ human = [
 
 [[reply]]
 match = '^aayu ready #?41\s*$'
-after = '^aayu ready #?41 --check\b'
+after = '^aayu ready (?:#?41(?: \S+)* --check|--check(?: \S+)* #?41)(?:\s|$)'
 code = 0
 out = '''#41 Show the pickup time on the order confirmation (story): passes Ready
   labelled status:ready; snapshot posted and written to ledger specs/41/ready.md (8d2f0a4)
@@ -25,7 +25,7 @@ out = '''#41 Show the pickup time on the order confirmation (story): passes Read
   written as aayudha-bot[bot], tagged aayudha-bot'''
 
 [[require]]
-pattern = '^aayu ready #?41 --check\b'
+pattern = '^aayu ready (?:#?41(?: \S+)* --check|--check(?: \S+)* #?41)(?:\s|$)' # the flag before or after the number (D-3.4g)
 why = "the read-only check before the person decides (the readback comes from it)"
 
 [[require]]

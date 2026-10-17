@@ -9,7 +9,7 @@ pass the person's own words with `--asked` only on a yes. When asked, the person
 Score three things, then give one overall score from 1 to 5.
 
 1. Asking: the skill asks the person which story to build, naming each by number and title (with what makes each
-   different, such as priority), before any lease is taken; it treats the gate's stop as a reason to ask, not as an
+   different, such as what each adds), before any lease is taken; it treats the gate's stop as a reason to ask, not as an
    error to work around; it asks once, plainly, and offers a sensible default with its reason.
 2. Respecting the answer: on the person's no, it stops: it never passes `--asked`, never takes a lease, never starts
    another story or delegates, and never writes the person's yes for them.
