@@ -355,11 +355,7 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 				s.syms, s.calls = lineSymbols(f.Path, code, lang.Name)
 			default:
 				s.syms, s.calls = braceSymbols(f.Path, code, lang.Name)
-				if isHeader(f.Path) {
-					for k := range s.syms {
-						s.syms[k].Public = s.syms[k].Public && !isDefKind(s.syms[k].Kind) || s.syms[k].Public && strings.Contains(s.syms[k].Name, "::")
-					}
-				} else if lang.Name == "c" || lang.Name == "cpp" {
+				if !isHeader(f.Path) && (lang.Name == "c" || lang.Name == "cpp") {
 					for k := range s.syms {
 						s.syms[k].Public = false // a .cpp file's definitions implement the headers' API
 					}
@@ -573,7 +569,9 @@ func (ix *Index) entries(file, role, lang, raw string, syms []Symbol) {
 		case isDefKind(s.Kind) && (n == "main" || n == "WinMain" || n == "wmain") && !strings.Contains(s.Name, "::"):
 			add("main", s.line, s.Name)
 		case s.Public && role == "source" && (lang == "php" || lang == "python" || lang == "ruby" || lang == "javascript" || lang == "typescript" || lang == "java" || lang == "csharp" || lang == "go" || lang == "cpp" || lang == "c" || lang == "rust"):
-			if isDefKind(s.Kind) && strings.Contains(s.Name, "::") || !isDefKind(s.Kind) && (s.Kind == "class" || s.Kind == "struct" || s.Kind == "interface" || s.Kind == "trait") {
+			// A function defined in a C or C++ header (inline int parse(…) {…}) is
+			// part of the API every includer calls, as a method is.
+			if isDefKind(s.Kind) && (strings.Contains(s.Name, "::") || (lang == "c" || lang == "cpp") && isHeader(file)) || !isDefKind(s.Kind) && (s.Kind == "class" || s.Kind == "struct" || s.Kind == "interface" || s.Kind == "trait") {
 				add("api", s.line, s.Kind+" "+s.Name)
 			}
 		}
@@ -591,20 +589,24 @@ func (ix *Index) entries(file, role, lang, raw string, syms []Symbol) {
 // headerEntries adds the functions a header declares without a body
 // (headerAPI) as api entry points, once per line.
 func (ix *Index) headerEntries(file, code string) {
-	have := map[string]bool{}
+	have, seen := map[string]bool{}, map[string]bool{}
 	for _, e := range ix.Entries {
-		have[e.ID] = true
+		have[e.ID], seen[e.At+" "+e.Detail] = true, true
 	}
 	for _, d := range headerAPI(code) {
-		at := file + ":" + itoa(d.line)
+		at, detail := file+":"+itoa(d.line), d.Kind+" "+d.Name
+		if seen[at+" "+detail] { // the symbol path already listed it
+			continue
+		}
 		id := "entry:" + at
 		if have[id] { // another declaration on the same line: its name tells them apart
 			id += "#" + d.Name
 		}
-		if !have[id] {
-			have[id] = true
-			ix.Entries = append(ix.Entries, Fact{ID: id, Kind: "api", At: at, Detail: d.Kind + " " + d.Name})
+		for n := 2; have[id]; n++ { // and an ordinal tells same-line overloads apart
+			id = "entry:" + at + "#" + d.Name + "~" + itoa(n)
 		}
+		have[id] = true
+		ix.Entries = append(ix.Entries, Fact{ID: id, Kind: "api", At: at, Detail: detail})
 	}
 }
 
