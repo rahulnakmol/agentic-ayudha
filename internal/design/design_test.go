@@ -124,6 +124,22 @@ func TestMockupLiteralsAndFigmaVariables(t *testing.T) {
 	if got := tok.CheckLiterals("list.svg", svg); len(got) != 2 || got[0].Value != "#ff00aa" || got[1].Value != "#00ff00" {
 		t.Fatalf("literals: %v", got)
 	}
+	// Story references in a title, a comment, and text are prose (D-6.5i); the same value in a style, a
+	// presentation attribute, or a script's string is a colour.
+	html := []byte(`<title>Choose a window (mockup: default, #571)</title><!-- state default (#571), see #572, #573 -->` +
+		`<p>Stories #571, #572</p><style>.a { background: linear-gradient(#1f5bd1, #574); }</style>` +
+		`<svg><rect fill="#575"/></svg><script>const c = ["#fff", "#576"]</script>`)
+	got := tok.CheckLiterals("default.html", html)
+	var vals []string
+	for _, m := range got {
+		vals = append(vals, m.Value)
+	}
+	if strings.Join(vals, " ") != "#557744 #557755 #557766" {
+		t.Fatalf("html literals: %v", got)
+	}
+	if got := tok.CheckLiterals("Page.tsx", []byte(`<p>Stories #571, #572</p>`)); len(got) != 1 {
+		t.Fatalf("code is read whole: %v", got)
+	}
 	colour, typo := tok.CheckVariables([]Variable{
 		{Name: "color/brand/default", Type: "COLOR", Value: "#1f5bd1"},
 		{Name: "color/text/default", Type: "COLOR", Value: "#000000"},

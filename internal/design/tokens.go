@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"path"
 	"regexp"
 	"sort"
 	"strconv"
@@ -218,13 +219,42 @@ func pxValue(s string) (float64, bool) {
 // parentheses, "(#423)", is not read as a colour.
 var literalColor = regexp.MustCompile(`(?:[:="',]|[\w-]\()\s*(#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\))`)
 
+// In HTML and SVG, comments and text content are prose, not styles: a title
+// "(mockup: default, #571)" names a story. The text of <style> and <script>
+// stays, since it is code.
+var (
+	markupComment = regexp.MustCompile(`(?s)<!--.*?-->`)
+	markupCode    = regexp.MustCompile(`(?is)<style\b[^>]*>.*?</style\s*>|<script\b[^>]*>.*?</script\s*>`)
+	markupText    = regexp.MustCompile(`>[^<]+<`)
+)
+
+// markupProse blanks the comments and text content of HTML or SVG markup,
+// keeping tags, attributes, and the code of <style> and <script> blocks.
+func markupProse(s string) string {
+	s = markupComment.ReplaceAllString(s, " ")
+	var b strings.Builder
+	last := 0
+	for _, loc := range append(markupCode.FindAllStringIndex(s, -1), []int{len(s), len(s)}) {
+		b.WriteString(markupText.ReplaceAllString(s[last:loc[0]], "> <"))
+		b.WriteString(s[loc[0]:loc[1]])
+		last = loc[1]
+	}
+	return b.String()
+}
+
 // CheckLiterals returns the colour literals in a text artifact (an SVG or HTML
-// mockup) that are not token values. CSS custom properties (var(--…)) are
-// token references and pass.
+// mockup, or code) that are not token values. CSS custom properties (var(--…))
+// are token references and pass. In an .html, .htm, or .svg file, comments
+// and text content are not read.
 func (t *Tokens) CheckLiterals(where string, text []byte) []Mismatch {
 	var out []Mismatch
 	seen := map[string]bool{}
-	for _, m := range literalColor.FindAllStringSubmatch(string(text), -1) {
+	s := string(text)
+	switch strings.ToLower(path.Ext(where)) {
+	case ".html", ".htm", ".svg":
+		s = markupProse(s)
+	}
+	for _, m := range literalColor.FindAllStringSubmatch(s, -1) {
 		hex, ok := ParseColor(m[1])
 		if !ok || seen[hex] {
 			continue
