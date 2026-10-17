@@ -34,7 +34,7 @@ exit 4
 
 Nothing was written to #61.
 
-## How `measure` counts (`internal/measure/measure.go`, `docs/BUILD-PLAN.md` D-7.2a)
+## How `measure` counts (`internal/measure/measure.go`)
 
 A cohort is the users acquired in one week from the window start; its week ends seven days after its start
 (exclusive). Retained means active (the retention event) in days 7 to 13 after acquisition. A cohort is complete when
