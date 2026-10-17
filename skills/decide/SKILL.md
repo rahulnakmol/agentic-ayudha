@@ -141,7 +141,8 @@ citation.
    recorded. Never route or escalate to a seat or a person the facts do not name.
 3. `## Options`: two or three numbered top-level items, each `N. **Name.** what it does` with a citation, and its
    trade-offs as indented sub-items (one `- Gains:` and one `- Costs:` line, each cited), so only the options are
-   top-level. Put
+   top-level. Say each fact once: a number, a price, or a quote stated in Facts is referred to in an option in a
+   few words with the same citation ("the annual price", "the six weeks"), never restated. Put
    each option in its viable form, with what it would take to work (what must change first, what moves elsewhere).
    An option you would never pick is a straw man; leave it out. When an option does not meet a criterion or a
    Decision as written, say which one and what would have to change. A gain claims only what the option itself
