@@ -153,7 +153,7 @@ incident as `#N` (its body, timeline, investigation note, and comments are all `
 "(investigation note)", or "(export …)" are not citations. A number you work out cites the sources of its inputs. A
 proposal (a test to add, a fix and its rollback, an alert, an action and its Bug or Story) cites the evidence it
 answers, such as the `path:line` it fixes or `#N`. Never cite a file that does not exist yet (a runbook you propose,
-the file you save the draft in). What you cannot cite starts `Unverified:` or `Assumption:`. The document is its
+the file you save the draft in). What you cannot cite starts `Unverified:` or `Assumption:`. The marker opens its own paragraph or list item, never a table cell or a line after a bold label: the check reads a row or a `**Label:** …` item as starting with that label. Never state that something did not exist or did not happen (a gate, an alert, a test, a check) unless the record says so; write `Unverified:` and what would show it. The document is its
 title and its parts only: no preamble before it, and no steps for the reader (how to check, save, or open a pull
 request) inside it. The release gate is a fact of `ops/slos.toml` in the
 grounding. A startup SLO line is at most 400 words of prose: the check counts only prose (paragraphs and list items; headings, tables, and code are not counted), so put steps, events, and actions in table rows and keep the prose near 300 words; when the check says it is over, move lists into a table or cut repeated facts until the prose is under 350, never just under 400. Who decides a waiver cites `ops/slos.toml` (the release gate) or `#N`. Check the draft with `aayu slo --telemetry <dir> --draft <file>`: it refuses (exit 4) a missing part, the
