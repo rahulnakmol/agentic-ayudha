@@ -41,7 +41,7 @@ generated from `defaults.toml`, and the `generate-drift` check fails when the tw
 loosened quietly. The `local`, `env`, and `flag` layers can still change these keys on one machine; that changes what
 an agent on that machine does, but not what the protected files or CI's gate workflows say.
 
-One key is stricter. `[decisions] solo_provisional_after_hours` (default 24, Story #432) is read only from
+One key is stricter. `[decisions] solo_provisional_after_hours` (default 24) is read only from
 `.aayudha/config.toml` and the embedded defaults: a value in the user, `local`, `env`, or `flag` layer fails the load,
 and so does a value under 12, the hard minimum in code (`config.MinSoloProvisionalHours`). With at most one human
 configured (paired seats' humans and `[autonomy] approver`), a reversible, Decision-ready Decision's recommendation
