@@ -103,7 +103,9 @@ func TestPersonaValidateRejects(t *testing.T) {
 		{"stage artefacts overlap", clone(func(p *Persona) {
 			p.Practices[0].Enterprise = Depth{Artefact: p.Practices[0].Startup.Artefact + " in full", Shape: "x"}
 		}), "stage artefacts must be distinct"},
-		{"two-word name", clone(func(p *Persona) { p.Name = "Athena Pallas" }), "want one capitalised word"},
+		{"Olympian name", clone(func(p *Persona) { p.Name = "Hermes" }), "an Olympian god"},
+		{"title with article", clone(func(p *Persona) { p.Title = "the Founder's Sage" }), "without a leading"},
+		{"two-word name", clone(func(p *Persona) { p.Name = "Nestor Pylos" }), "want one capitalised word"},
 	}
 	for _, tt := range tests {
 		got := strings.Join(tt.p.Validate(), "\n")
@@ -116,6 +118,22 @@ func TestPersonaValidateRejects(t *testing.T) {
 // TestSkillBlockVoiceAndStandard: verify is spoken by the AI Native Engineer
 // twin against the Quality Architect's standard; inspect is the EM's voice and
 // standard, executed in the review lane.
+// A title replaces the seat beside the twin's name everywhere it is introduced;
+// without one the seat name stays (D-5.1v).
+func TestPersonaTitle(t *testing.T) {
+	sage := Persona{Seat: verbs.Founder, Name: "Prometheus", Title: "Founder's Sage"}
+	if got := sage.Heading(); got != "Prometheus, the Founder's Sage" {
+		t.Errorf("Heading with a title = %q", got)
+	}
+	if got := agentsVoices(map[verbs.SeatID]Persona{verbs.Founder: sage}); !strings.Contains(got, "- **Prometheus**, Founder's Sage: ") {
+		t.Errorf("AGENTS.md line with a title: %q", got)
+	}
+	em := Persona{Seat: verbs.EngineeringManager, Name: "Nestor"}
+	if got, role := em.Heading(), em.Role(); got != "Nestor, the Engineering Manager twin" || role != "Engineering Manager" {
+		t.Errorf("without a title: Heading %q, Role %q", got, role)
+	}
+}
+
 func TestSkillBlockVoiceAndStandard(t *testing.T) {
 	ps := repoPersonas(t)
 	v, _ := verbs.Find("verify")
@@ -126,7 +144,7 @@ func TestSkillBlockVoiceAndStandard(t *testing.T) {
 	}
 	in, _ := verbs.Find("inspect")
 	b = ps[in.Seat].SkillBlock(in, ps[verbs.PolicyOwner(in)])
-	if !strings.Contains(b, "`inspect` runs in the review lane; Athena owns both the voice and the standard.") {
+	if !strings.Contains(b, "`inspect` runs in the review lane; Nestor owns both the voice and the standard.") {
 		t.Errorf("inspect block:\n%s", b)
 	}
 	for _, must := range []string{EvidenceRule, StageRule, "**When paired with a human:**", "| Practice | Startup | Scaleup | Enterprise |"} {

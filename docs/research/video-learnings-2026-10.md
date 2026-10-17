@@ -1,6 +1,6 @@
 # What six talks and posts on software factories teach aayudha
 
-Research, 2026-10-15. Owner: the Engineering Manager (Athena) and Quality Architect (Themis) twins, at the
+Research, 2026-10-15. Owner: the Engineering Manager (Nestor) and Quality Architect (Themis) twins, at the
 founder's request. Status: proposal only. Nothing here is implemented; each change becomes a WP and an Appendix B
 row in [BUILD-PLAN.md](../BUILD-PLAN.md) only after the founder answers §8.
 
@@ -292,7 +292,7 @@ effect on human wait, touches, and escapes.
   are proposed from real data.
 - **Proof.** A `retro --replay` test on a fixture snapshot with hand-computed, asymmetric expected values (one story
   with a long human wait, one with an escape). Metric: this repository's first four weekly reports form the baseline.
-- **Owner.** Engineering Manager (Athena), with the Quality Architect for the review proxies.
+- **Owner.** Engineering Manager (Nestor), with the Quality Architect for the review proxies.
 
 ### P2: a "test value" category in `inspect` (extension, XS)
 

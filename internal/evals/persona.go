@@ -283,8 +283,8 @@ func (h *Harness) runPack(ctx context.Context, c Case, lane verbs.LaneID, body, 
 	}
 	checks := "Deterministic checks passed: every part is present in order, the question is one sentence, there are two or three " +
 		"options, the recommendation names its door, the pack ends with the one decision, and every claim cites a source the grounding contains."
-	judged, err := h.judge(ctx, "## The human's question\n\n"+c.Pack.Question+"\n\n## Owning twin and team stage\n\n"+persona.Name+", the "+
-		verbs.SeatName(persona.Seat)+" twin, at the "+c.Pack.Stage+" stage\n\n## Grounding (the only source)\n\n"+input+"\n\n## Checks\n\n"+checks,
+	judged, err := h.judge(ctx, "## The human's question\n\n"+c.Pack.Question+"\n\n## Owning twin and team stage\n\n"+persona.Heading()+
+		", at the "+c.Pack.Stage+" stage\n\n## Grounding (the only source)\n\n"+input+"\n\n## Checks\n\n"+checks,
 		rubric, pack, nil, &calls)
 	if err != nil {
 		return Run{}, err
