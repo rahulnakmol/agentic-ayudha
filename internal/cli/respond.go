@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
 	"regexp"
 	"slices"
@@ -26,7 +27,10 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/initrepo"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ops"
+	"github.com/rahulnakmol/agentic-ayudha/internal/production"
+	"github.com/rahulnakmol/agentic-ayudha/internal/seats"
 	"github.com/rahulnakmol/agentic-ayudha/internal/triage"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -148,8 +152,8 @@ func runRespond(ctx context.Context, e *Env, in Values) error {
 	if e.CI {
 		return respondExec(ctx, e, &l.Config, repo, n, in)
 	}
-	if in.Bool("close") && in.Has("action") {
-		return Errorf(ExitUsage, "respond: --close and --action do not combine")
+	if n := btoi(in.Bool("close")) + btoi(in.Has("action")) + btoi(in.Has("postmortem")); n > 1 {
+		return Errorf(ExitUsage, "respond: --action, --postmortem, and --close do not combine")
 	}
 	c, tok, err := e.HumanGitHub(ctx)
 	if err != nil {
@@ -168,8 +172,11 @@ func runRespond(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return err
 	}
+	if in.Has("postmortem") {
+		return respondPostmortem(ctx, e, c, repo, is, it.Fields["severity"], timeline, in.String("postmortem"))
+	}
 	if in.Bool("close") {
-		return respondClose(ctx, e, c, tok, repo, is, timeline, rep)
+		return respondClose(ctx, e, c, tok, repo, is, it.Fields["severity"], timeline, rep)
 	}
 	if is.GetState() != "open" {
 		return Errorf(ExitBlocked, "respond: incident #%d is closed", n)
@@ -609,9 +616,16 @@ var linkedBug = regexp.MustCompile(`linked Bug #([0-9]+)`)
 
 // respondClose files the incident's linked Bug (caused-by), appends the retro
 // entry to the ledger, and closes the incident.
-func respondClose(ctx context.Context, e *Env, c *github.Client, tok identity.Token, repo string, is *gh.Issue, timeline []string, rep respondReport) error {
+func respondClose(ctx context.Context, e *Env, c *github.Client, tok identity.Token, repo string, is *gh.Issue, severity string, timeline []string, rep respondReport) error {
 	owner, name, _ := github.SplitRepo(repo)
 	n := is.GetNumber()
+	notes, err := markedComments(ctx, c, repo, n)
+	if err != nil {
+		return err
+	}
+	if sev := strings.TrimSpace(severity); (sev == "Sev0" || sev == "Sev1") && notes[production.Postmortem.Marker] == "" {
+		return Errorf(ExitBlocked, "respond: incident #%d is %s, so it closes only after its blameless postmortem: `aayu respond %d --postmortem <draft>`", n, sev, n)
+	}
 	for _, l := range timeline {
 		if m := linkedBug.FindStringSubmatch(l); m != nil {
 			rep.Bug, _ = strconv.Atoi(m[1])
@@ -620,8 +634,12 @@ func respondClose(ctx context.Context, e *Env, c *github.Client, tok identity.To
 	if rep.Bug == 0 {
 		t, _ := workitems.FindType("bug")
 		title := fmt.Sprintf("Fix the cause of incident #%d: %s", n, is.GetTitle())
+		summary := fmt.Sprintf("Found through incident #%d; its timeline holds what was observed and done.", n)
+		if h := production.HandOff(notes[production.Investigation.Marker]); h != "" {
+			summary += "\n\nFrom its checked investigation note:\n\n" + h
+		}
 		body := workitems.Render(t, map[string]string{
-			workitems.FieldSummary: fmt.Sprintf("Found through incident #%d; its timeline holds what was observed and done.", n),
+			workitems.FieldSummary: summary,
 			"reproduce":            fmt.Sprintf("See the timeline of #%d.", n),
 			"expected":             "The service behaves as it did before the incident.",
 			"actual":               fmt.Sprintf("Incident #%d: %s", n, is.GetTitle()),
@@ -652,7 +670,6 @@ func respondClose(ctx context.Context, e *Env, c *github.Client, tok identity.To
 			return err
 		}
 	}
-	var err error
 	if rep.Timeline, err = writeTimeline(ctx, c, repo, n, timeline, []string{"retro entry appended to ledger retro/incidents.jsonl; incident closed"}, e.Now()); err != nil {
 		return err
 	}
@@ -671,4 +688,113 @@ func respondClose(ctx context.Context, e *Env, c *github.Client, tok identity.To
 		fmt.Fprintf(w, "incident #%d closed; linked Bug #%d; retro entry on ledger retro/incidents.jsonl\n", n, rep.Bug)
 		return nil
 	})
+}
+
+func btoi(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// markedComments returns the incident's comments that open with an aayudha
+// marker (`<!-- aayudha:… -->`), by marker.
+func markedComments(ctx context.Context, c *github.Client, repo string, n int) (map[string]string, error) {
+	owner, name, _ := github.SplitRepo(repo)
+	cs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.IssueComment, *gh.Response, error) {
+		return c.REST.Issues.ListComments(ctx, owner, name, n, &gh.IssueListCommentsOptions{ListOptions: o})
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for _, cm := range cs {
+		b := cm.GetBody()
+		if strings.HasPrefix(b, "<!-- aayudha:") {
+			marker, _, _ := strings.Cut(b, "\n")
+			out[strings.TrimSpace(marker)] = b
+		}
+	}
+	return out, nil
+}
+
+var runCite = regexp.MustCompile(`^run (\d+)$`)
+
+// respondPostmortem checks a blameless postmortem against the incident, its
+// timeline, and its investigation note, and posts it on the incident
+// (replaced in place) with a timeline line. Exit 4 on findings.
+func respondPostmortem(ctx context.Context, e *Env, c *github.Client, repo string, is *gh.Issue, severity string, timeline []string, draft string) error {
+	n := is.GetNumber()
+	b, err := os.ReadFile(draft)
+	if err != nil {
+		return Wrap(ExitUsage, err)
+	}
+	l, err := e.Config()
+	if err != nil {
+		return err
+	}
+	personas, err := seats.LoadPersonas(e.Assets)
+	if err != nil {
+		return err
+	}
+	pr, _ := personas[verbs.ProductionEngineer].Practice(production.Postmortem.Practice)
+	stage, _ := l.Config.TeamStage()
+	notes, err := markedComments(ctx, c, repo, n)
+	if err != nil {
+		return err
+	}
+	evidence := is.GetTitle() + "\n" + is.GetBody() + "\n" + strings.Join(timeline, "\n")
+	for marker, body := range notes {
+		if marker != production.Postmortem.Marker {
+			evidence += "\n" + body
+		}
+	}
+	root := config.RepoRoot(e.Dir)
+	known := func(cite string) bool {
+		if cite == fmt.Sprintf("#%d", n) || strings.Contains(evidence, cite) || fileIn(root, cite) {
+			return true
+		}
+		if m := runCite.FindStringSubmatch(cite); m != nil {
+			return strings.Contains(evidence, "/runs/"+m[1])
+		}
+		return false
+	}
+	findings := production.CheckPostmortem(string(b), n, stage, pr, known)
+	rep := map[string]any{"incident": n, "severity": severity, "stage": stage, "draft": draft, "findings": findings}
+	posted := false
+	if len(findings) == 0 {
+		posted, err = c.UpsertComment(ctx, repo, n, production.Postmortem.Marker,
+			production.Postmortem.Comment(string(b), "Blameless postmortem, checked by `aayu respond --postmortem`."),
+			actions.Action{Kind: "github.comment.postmortem", Seat: string(verbs.ProductionEngineer)})
+		if err != nil {
+			return wrapExternal(err)
+		}
+		if posted {
+			if _, err := writeTimeline(ctx, c, repo, n, timeline, []string{"blameless postmortem posted by `aayu respond --postmortem`"}, e.Now()); err != nil {
+				return wrapExternal(err)
+			}
+		}
+		rep["posted"] = posted
+	}
+	if err := e.Emit(rep, func(w io.Writer) error {
+		if len(findings) > 0 {
+			fmt.Fprintf(w, "%s: not a complete postmortem yet:\n", draft)
+			for _, f := range findings {
+				fmt.Fprintf(w, "- %s\n", f)
+			}
+			return nil
+		}
+		if posted {
+			_, err := fmt.Fprintf(w, "%s: complete and blameless; posted on #%d (one postmortem comment, replaced in place) and added to its timeline.\n", draft, n)
+			return err
+		}
+		_, err := fmt.Fprintf(w, "%s: complete and blameless; #%d already carries it.\n", draft, n)
+		return err
+	}); err != nil {
+		return err
+	}
+	if len(findings) > 0 {
+		return Errorf(ExitBlocked, "respond --postmortem: %d findings", len(findings))
+	}
+	return nil
 }

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	aayudha "github.com/rahulnakmol/agentic-ayudha"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ops"
 )
@@ -208,6 +209,54 @@ func TestRespondClose(t *testing.T) {
 	}
 	if entry := git(t, bare, "show", "ledger:retro/incidents.jsonl"); !strings.Contains(entry, `"incident":1`) || !strings.Contains(entry, `"bug":2`) {
 		t.Errorf("retro entry: %s", entry)
+	}
+}
+
+// Decision #324: a Sev1 incident closes only after a checked, blameless
+// postmortem, and its follow-up Bug carries the investigation note's
+// implicated code and durable fix.
+func TestRespondPostmortem(t *testing.T) {
+	g, env, opts := respondFixture(t)
+	dir, _ := ledgerCheckout(t)
+	opts.Dir, opts.Assets = dir, aayudha.Assets
+	note, _ := os.ReadFile("../production/testdata/note.md")
+	pm, _ := os.ReadFile("../production/testdata/postmortem.md")
+	g.Mu.Lock()
+	g.Issues[1].Body = "### Impact\n\nAsks fail.\n\n### Severity\n\nSev1\n\n### Started at\n\n2026-10-17T09:10Z"
+	g.Issues[1].Comments = append(g.Issues[1].Comments, &fake.Comment{ID: 900, Body: "<!-- aayudha:investigation -->\n" + string(note)})
+	g.Mu.Unlock()
+	respond := func(want int, args ...string) string {
+		t.Helper()
+		code, out, errOut := run(t, env, opts, append([]string{"respond", "1", "--repo", "o/r"}, args...)...)
+		if code != want {
+			t.Fatalf("respond %v: exit %d, want %d: %s %s", args, code, want, out, errOut)
+		}
+		return out + errOut
+	}
+	if out := respond(ExitBlocked, "--close"); !strings.Contains(out, "is Sev1, so it closes only after its blameless postmortem") {
+		t.Fatalf("Sev1 close without a postmortem:\n%s", out)
+	}
+	draft := filepath.Join(t.TempDir(), "pm.md")
+	_ = os.WriteFile(draft, []byte(strings.Replace(string(pm), "- Contributing: the tests", "- Contributing: @dev forgot to test it, and the tests", 1)), 0o644)
+	if out := respond(ExitBlocked, "--postmortem", draft); !strings.Contains(out, `"@dev forgot" blames a person`) {
+		t.Fatalf("a blaming postmortem:\n%s", out)
+	}
+	_ = os.WriteFile(draft, pm, 0o644)
+	respond(0, "--postmortem", draft)
+	respond(0, "--close")
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+	bug := g.Issues[2]
+	if bug == nil || !strings.Contains(bug.Body, "**Implicated code.**") || !strings.Contains(bug.Body, "**Durable fix.**") || !strings.Contains(bug.Body, "src/app/answer/answer.go:120") {
+		t.Fatalf("the follow-up Bug lacks the hand-off: %+v", bug)
+	}
+	var bodies []string
+	for _, c := range g.Issues[1].Comments {
+		bodies = append(bodies, c.Body)
+	}
+	all := strings.Join(bodies, "\n")
+	if !strings.Contains(all, "<!-- aayudha:postmortem -->\n# Incident log:") || !strings.Contains(all, "blameless postmortem posted by `aayu respond --postmortem`") {
+		t.Fatalf("incident comments:\n%s", all)
 	}
 }
 

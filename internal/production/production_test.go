@@ -272,3 +272,38 @@ func TestCheckRunbook(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckPostmortem(t *testing.T) {
+	good, err := os.ReadFile("testdata/postmortem.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pr := seats.Practice{ID: "incident-command", Startup: seats.Depth{Artefact: "Incident log", Shape: "x"},
+		Scaleup: seats.Depth{Artefact: "Postmortem", Shape: "x"}, Enterprise: seats.Depth{Artefact: "Incident review", Shape: "x"}}
+	check := func(md, stage string) string {
+		return strings.Join(CheckPostmortem(md, 1, stage, pr, func(c string) bool { return c != "query q9" }), "\n")
+	}
+	if f := check(string(good), "startup"); f != "" {
+		t.Fatalf("the recorded postmortem: %s", f)
+	}
+	for name, tt := range map[string]struct{ old, new, want string }{
+		"a person blamed":    {"- Contributing: the tests", "- Contributing: @dev forgot to test it, and the tests", `"@dev forgot" blames a person`},
+		"human error":        {"Root cause: the tie-break", "Root cause: human error; the tie-break", `"human error" blames a person`},
+		"no contributing":    {"- Contributing:", "- Also:", "name the contributing conditions"},
+		"no owners":          {"| Action | Owner | Tracking |", "| Action | Who | Tracking |", "give each action an owner"},
+		"an invented query":  {"(query q5).\n- The catalog", "(query q9).\n- The catalog", "cites query q9"},
+		"the wrong artefact": {"# Incident log:", "# Postmortem:", "Incident log"},
+	} {
+		bad := strings.Replace(string(good), tt.old, tt.new, 1)
+		if bad == string(good) {
+			t.Fatalf("%s: %q is not in the postmortem", name, tt.old)
+		}
+		if f := check(bad, "startup"); !strings.Contains(f, tt.want) {
+			t.Errorf("%s: findings %q, want %q", name, f, tt.want)
+		}
+	}
+	noIncident := strings.ReplaceAll(strings.ReplaceAll(string(good), " | #1 |", " | query q1 |"), "#1, query q5", "query q5")
+	if f := check(noIncident, "startup"); !strings.Contains(f, `cite the incident's timeline (#1)`) {
+		t.Errorf("a timeline that never cites the incident: %q", f)
+	}
+}
