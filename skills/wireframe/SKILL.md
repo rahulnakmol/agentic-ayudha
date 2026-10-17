@@ -77,11 +77,13 @@ Produce wireframes for a Feature's states from its research and criteria.
    - **accessibility designed in, in every state**: name the first focus stop and the keyboard order (Tab sequence)
      of that state, the empty and error states included; what a screen reader announces (headings, labels, a
      message that appears, and where focus goes when it does, to the message itself or a heading that names what
-     happened); a single choice as a named group (a legend); status and errors in words rather than colour alone;
+     happened); a single choice as one named group (a legend), even when it spans days or sections, so one
+     selection holds across all of them; status and errors in words rather than colour alone;
      and every control's minimum target (44 × 44 px), stated on the wireframe, not left to the mockup;
    - **the layout on a phone** (390 px) when the product is used on phones, without hiding content;
    - **assumptions marked as such** where the research leaves a choice open, for the test to settle, instead of
-     presented as settled. Nothing the stories and research do not ask for: no links, navigation, or controls they
+     presented as settled, including what an action offered depends on (whether, and until when, a change is
+     allowed). Nothing the stories and research do not ask for: no links, navigation, or controls they
      do not name, and no reassurance the system cannot back ("your orders are safe"); copy says only what is known.
 3. List the states in `stage.json` in the same directory:
 
