@@ -160,7 +160,7 @@ type Seat struct {
 // Models is [models]: [models.<lane>.<host>] overrides plus [models.gateway].
 type Models struct {
 	Gateway Gateway `koanf:"gateway"`
-	Prices  []Price `koanf:"prices" jsonschema_description:"USD per million tokens per model ID, for cost accounting and the [budget] breaker. A response that reports its own cost wins; an unpriced model is charged at the conservative fallback rate."`
+	Prices  []Price `koanf:"prices" jsonschema_description:"USD per million tokens per model ID, for cost accounting and the [budget] breaker. A response that reports its own cost wins; an entry here overrides the model's built-in list price (models.ListPrices); a model with neither is charged at the conservative fallback rate, with a warning in eval results."`
 	// Lanes holds [models.<lane>.<host>] keyed by lane, then host.
 	Lanes map[string]map[string]ModelChoice `koanf:",remain"`
 }
@@ -170,6 +170,9 @@ type Price struct {
 	Model         string  `koanf:"model"`
 	InputPerMTok  float64 `koanf:"input_usd_per_mtok" jsonschema:"minimum=0"`
 	OutputPerMTok float64 `koanf:"output_usd_per_mtok" jsonschema:"minimum=0"`
+	// Cache reads and writes; 0 charges them at the input rate.
+	CachedInputPerMTok float64 `koanf:"cached_input_usd_per_mtok" jsonschema:"minimum=0"`
+	CacheWritePerMTok  float64 `koanf:"cache_write_usd_per_mtok" jsonschema:"minimum=0"`
 }
 
 // ModelChoice is [models.<lane>.<host>].

@@ -96,8 +96,12 @@ type Response struct {
 	Text      string
 	Model     string
 	TokensIn  int
-	TokensOut int
-	CostUSD   float64 // reported by the endpoint, when it reports one; else 0
+	TokensOut int // reasoning and thinking tokens included: they bill as output
+	// CachedIn and CacheWriteIn are the parts of TokensIn read from and written
+	// to the provider's prompt cache, which bill at their own rates (Cost).
+	CachedIn     int
+	CacheWriteIn int
+	CostUSD      float64 // reported by the endpoint, when it reports one; else 0
 	// StopReason is why the model stopped, as the endpoint reports it: Messages
 	// stop_reason, Responses status (with incomplete_details.reason), Chat
 	// finish_reason. Truncated is set when it stopped at the token cap.
@@ -324,7 +328,17 @@ type usage struct {
 	OutputTokens             int      `json:"output_tokens"`
 	PromptTokens             int      `json:"prompt_tokens"`
 	CompletionTokens         int      `json:"completion_tokens"`
+	TotalTokens              int      `json:"total_tokens"`
 	Cost                     *float64 `json:"cost"` // some gateways report the charge
+	// OpenAI Responses: cached_tokens and cache_write_tokens are parts of
+	// input_tokens; Chat Completions (xAI, Gemini): cached_tokens of prompt_tokens.
+	InputTokensDetails struct {
+		CachedTokens     int `json:"cached_tokens"`
+		CacheWriteTokens int `json:"cache_write_tokens"`
+	} `json:"input_tokens_details"`
+	PromptTokensDetails struct {
+		CachedTokens int `json:"cached_tokens"`
+	} `json:"prompt_tokens_details"`
 }
 
 func decode(style string, raw []byte) (Response, error) {
@@ -360,7 +374,14 @@ func decode(style string, raw []byte) (Response, error) {
 	}
 	u := v.Usage
 	r := Response{Model: v.Model, TokensIn: u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens + u.PromptTokens,
-		TokensOut: u.OutputTokens + u.CompletionTokens}
+		TokensOut:    u.OutputTokens + u.CompletionTokens,
+		CachedIn:     u.CacheReadInputTokens + u.InputTokensDetails.CachedTokens + u.PromptTokensDetails.CachedTokens,
+		CacheWriteIn: u.CacheCreationInputTokens + u.InputTokensDetails.CacheWriteTokens}
+	// Some chat endpoints (xAI) leave reasoning tokens out of completion_tokens
+	// but in total_tokens; they bill as output, so the difference counts.
+	if extra := u.TotalTokens - r.TokensIn - r.TokensOut; u.TotalTokens > 0 && extra > 0 {
+		r.TokensOut += extra
+	}
 	if v.Usage.Cost != nil {
 		r.CostUSD = *v.Usage.Cost
 	}

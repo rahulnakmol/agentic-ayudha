@@ -19,8 +19,11 @@ max_drop = 0.3
 # group can never use up another's (D-7.3d); the promotion gate needs every group to pass. pass_k = "advisory" holds a
 # group to the mean bar and the drop rule only (D-7.3g); "required" (the default) is the full WP3.4 bar. gate = "advisory" reports a group's
 # results without gating promotion (D-7.3h); "enforced" is the default. A case belongs to the first
-# group with a prefix of its ID, else to the group without prefixes. Unpriced models are charged at the gateway's
-# conservative fallback rate, so real spend is lower. The four brief register cases were charged 6.21 (run 38200697472)
+# group with a prefix of its ID, else to the group without prefixes. Every call is charged at its model's published
+# list price (models.ListPrices, with source and date; D-3.4p), since the AI gateway reports no cost; until 2026-10-17
+# every model was unpriced and charged at the 15/75 USD fallback rate, about 4x the list price, so the USD figures in
+# the comments below are fallback-rate figures. A model without a price is still charged at the fallback rate and named
+# in the results' warnings. The four brief register cases were charged 6.21 (run 38200697472)
 # and about 7 USD (run 38207049608); the stub, grill, slice, and plan cases together about 4.5 in that run.
 # The plain registers (eli5, ste) do not gate (D-7.3h): their rubric asks for everyday restatement and STE phrasing
 # that the fact-fidelity bar marks down (Feedback in D-7.3h). Results are computed and printed; evals-gate skips them.

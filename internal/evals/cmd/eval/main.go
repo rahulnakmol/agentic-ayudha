@@ -162,6 +162,9 @@ func run(ctx context.Context) error {
 			return err
 		}
 		fmt.Printf("wrote %s (%.4f USD at the charged rate)\n", *out, res.CostUSD)
+		for _, w := range res.Warnings {
+			fmt.Printf("::warning::%s\n", w)
+		}
 		return verdict(res, base, cfg)
 	}
 	return errors.New("pass -tier 1, -tier 2, or -compare <file>")

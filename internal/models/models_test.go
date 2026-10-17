@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -480,7 +481,7 @@ func TestMessagesStream(t *testing.T) {
 }
 
 // Anthropic's cached prompt input counts as input tokens, so cost and the
-// [budget] breaker see it. The usage block has the shape the gateway returns
+// [budget] breaker see it, each at its own rate. The usage block has the shape the gateway returns
 // for Messages calls (run 38185993917 recorded input_tokens 2 on every skill
 // call); the cache counts here are illustrative, since the harness did not keep raw replies.
 func TestCacheTokensCount(t *testing.T) {
@@ -492,21 +493,64 @@ func TestCacheTokensCount(t *testing.T) {
 	if err != nil || r.TokensIn != 1860 || r.TokensOut != 1696 {
 		t.Fatalf("decode: %+v %v", r, err)
 	}
-	want := (1860*FallbackInputPerMTok + 1696*FallbackOutputPerMTok) / 1e6 // 0.1551; 0.1272 without the cache
-	if usd, _ := Cost(nil, r.Model, r); usd < want-1e-9 || usd > want+1e-9 {
-		t.Fatalf("cost %.6f, want %.6f", usd, want)
+	// Opus 5.5's list price: input 4, cache write 5, cache read 0.20, output 20 USD per million tokens.
+	want := (2*4 + 1548*5 + 310*0.20 + 1696*20) / 1e6 // 0.04173; 0.033928 without the cache
+	if usd, src := Cost(nil, r.Model, r); usd < want-1e-9 || usd > want+1e-9 || src != CostListPrice {
+		t.Fatalf("cost %.6f (%s), want %.6f", usd, src, want)
 	}
 	// A per-story limit between the two costs trips only when cached input counts.
 	dir := t.TempDir()
 	log, _ := actions.Open(filepath.Join(dir, "actions.jsonl"), actions.Options{})
 	clock, _ := config.NewClock("Europe/London", "Mon-Fri 09:00-18:00")
-	br := &Breaker{Budget: config.Budget{PerStoryUSD: 0.14}, Clock: clock, Now: time.Now, PauseFile: filepath.Join(dir, "paused")}
+	br := &Breaker{Budget: config.Budget{PerStoryUSD: 0.04}, Clock: clock, Now: time.Now, PauseFile: filepath.Join(dir, "paused")}
 	gw := &Gateway{Resolver: Resolver{}, Actions: log, Breaker: br, Key: func(string) (string, error) { return "k", nil },
 		Client: func(Route, string) Client {
 			return HTTPClient{BaseURL: srv.URL, Style: StyleMessages, Key: "k", HTTP: srv.Client()}
 		}}
 	_, _, err = gw.Do(context.Background(), Call{Story: "#9", Lane: verbs.LaneSpec, Host: verbs.HostClaude, Req: Request{Messages: []Message{{Role: "user", Content: "draft"}}}})
 	if !errors.Is(err, ErrBudget) || !br.Paused() {
-		t.Fatalf("breaker did not trip on 0.155 USD against 0.14: %v", err)
+		t.Fatalf("breaker did not trip on 0.0417 USD against 0.04: %v", err)
+	}
+}
+
+// Each provider's usage block is priced at that model's list rates: OpenAI's
+// implicit cache writes at 1.25x input and reads at its cached rate, xAI's
+// reasoning tokens (in total_tokens, not completion_tokens) as output, a long
+// prompt at the long-context rates for the whole call, an unknown model at the
+// fallback rate, and a [[models.prices]] entry over the list price.
+func TestCostAtListPrices(t *testing.T) {
+	cases := []struct {
+		name, style, body string
+		prices            []config.Price
+		want              float64
+		source            string
+	}{
+		{"gpt-6.1-sol, cache write and read", StyleResponses,
+			`{"model":"gpt-6.1-sol","status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"ok"}]}],
+			"usage":{"input_tokens":15000,"input_tokens_details":{"cached_tokens":12000,"cache_write_tokens":3000},"output_tokens":900,"total_tokens":15900}}`,
+			nil, (12000*0.10 + 3000*2.50 + 900*10) / 1e6, CostListPrice},
+		{"grok-4.7, reasoning outside completion_tokens", StyleChat,
+			`{"model":"grok-4.7","choices":[{"message":{"content":"ok"},"finish_reason":"stop"}],
+			"usage":{"prompt_tokens":4000,"prompt_tokens_details":{"cached_tokens":1000},"completion_tokens":300,"total_tokens":5300}}`,
+			nil, (3000*2 + 1000*0.50 + 1300*6) / 1e6, CostListPrice},
+		{"claude-haiku-5-5, long prompt", StyleMessages,
+			`{"model":"claude-haiku-5-5","content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":100001,"output_tokens":1000}}`,
+			nil, (100001*0.50 + 1000*2.50) / 1e6, CostListPrice},
+		{"unknown model", StyleMessages,
+			`{"model":"acme-1","content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":1000,"output_tokens":100}}`,
+			nil, (1000*FallbackInputPerMTok + 100*FallbackOutputPerMTok) / 1e6, CostFallback},
+		{"config overrides the list price", StyleResponses,
+			`{"model":"gpt-6.1-sol","status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"ok"}]}],
+			"usage":{"input_tokens":1000,"input_tokens_details":{"cached_tokens":400},"output_tokens":100}}`,
+			[]config.Price{{Model: "gpt-6.1-sol", InputPerMTok: 3, OutputPerMTok: 12}}, (1000*3 + 100*12) / 1e6, CostPriceTable},
+	}
+	for _, c := range cases {
+		r, err := decode(c.style, []byte(c.body))
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if usd, src := Cost(c.prices, r.Model, r); math.Abs(usd-c.want) > 1e-12 || src != c.source {
+			t.Errorf("%s: %.6f USD (%s), want %.6f (%s)", c.name, usd, src, c.want, c.source)
+		}
 	}
 }
