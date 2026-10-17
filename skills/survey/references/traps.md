@@ -32,7 +32,9 @@ pattern the index can match; ask them of every module in that stack.
 ### build-semantic-flags
 
 - Which flag changes the program's meaning, not just its speed? `-ffast-math`, `-Ofast`, `/fp:fast`, and
-  `-fp-model fast` reorder floating-point operations and drop NaN and infinity handling; `-fdefault-real-8`,
+  `-fp-model fast` reorder floating-point operations and drop NaN and infinity handling; `-march=native`, `-xHOST`,
+  and `-ffp-contract=fast` let the compiler fuse multiply-adds, so results depend on the build machine;
+  `-no-prec-div` relaxes division; `-fdefault-real-8`,
   `-freal-4-real-8`, and `-r8` make every `REAL` a double; `-fno-automatic` makes every local `SAVE`d (static);
   `-fwrapv` defines signed overflow; `-funsigned-char` changes `char` comparisons; `-m32` changes sizes;
   `-Dfile.encoding`, `-Duser.timezone`, and `-source 1.x` pin a JVM's defaults.

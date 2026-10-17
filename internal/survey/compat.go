@@ -388,6 +388,9 @@ func unreached(ix *Index, root, tracefile string, add func(kind, key, detail str
 		return 0, err
 	}
 	defer func() { _ = f.Close() }()
+	if abs, err := filepath.Abs(root); err == nil {
+		root = abs // lcov writes absolute paths; the checkout may be given as "."
+	}
 	hits := map[string]map[int]int{} // file → line → count
 	cur := ""
 	sc := bufio.NewScanner(f)

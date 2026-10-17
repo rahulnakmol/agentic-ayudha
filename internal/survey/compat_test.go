@@ -34,14 +34,23 @@ esac
 		{ID: "home", Set: "G1", Argv: []string{"{bin}", "home"}},
 		{ID: "write", Set: "G1", Argv: []string{"{bin}", "write"}},
 	}}
-	ix := buildFixture(t, 0)
+	// The index is read back from index.json, as `aayu survey --golden` reads it.
+	idx := filepath.Join(dir, "index.json")
+	if err := buildFixture(t, 0).Save(idx); err != nil {
+		t.Fatal(err)
+	}
+	ix, err := Load(idx)
+	if err != nil {
+		t.Fatal(err)
+	}
 	root, _ := filepath.Abs(filepath.Join("testdata", "legacy"))
 	lcov := filepath.Join(dir, "cov.info")
 	// parse (src/util.cpp:5-10) never runs; report (12-16) does.
 	if err := os.WriteFile(lcov, []byte("SF:"+filepath.Join(root, "src", "util.cpp")+"\nDA:6,0\nDA:7,0\nDA:9,0\nDA:14,3\nDA:15,3\nend_of_record\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	p, err := Probe(context.Background(), ix, root, bin, "cases.json", c, ProbeOptions{Coverage: lcov})
+	// The checkout is given relative, as `aayu survey .` gives it; lcov's paths are absolute.
+	p, err := Probe(context.Background(), ix, filepath.Join("testdata", "legacy"), bin, "cases.json", c, ProbeOptions{Coverage: lcov})
 	if err != nil {
 		t.Fatal(err)
 	}
