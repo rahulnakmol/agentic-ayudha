@@ -78,8 +78,8 @@ Produce design-system mockups for a Feature from its wireframes.
    - **The floors by design**: body text on a token pair that meets 4.5:1, a visible focus ring in the focus token
      on every control, every control at least 44 × 44 px (a radio or checkbox input itself, not only its label), and
      names for every control.
-   - **Semantics that carry the research**: tables with captions and headers, a single choice as radio inputs in a
-     fieldset with a legend, a message that appears as an alert or status, one primary action per state.
+   - **Semantics that carry the research**: tables with captions and headers, a single choice as radio inputs in one
+     fieldset with one legend (a choice that spans days stays one fieldset, with the days as headings inside it), a message that appears as an alert or status, one primary action per state.
    - **Every state the wireframe describes, as the wireframe describes it**: the same items, windows, choices, and
      copy (a mockup styles the structure; it does not change what a state offers), and its assumptions still marked.
      Each file shows one state as a person would see it: a transient state the wireframe names (loading, retrying)

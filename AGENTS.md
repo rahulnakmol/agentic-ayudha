@@ -31,6 +31,8 @@ the end is generated (WP5.1); the full table is [docs/RACI.md](docs/RACI.md).
   and on a PR when coverage holds well above it. Then run
   `go test -coverprofile=coverage.out ./... && go run ./internal/ratchet/cmd/ratchet -update -coverprofile coverage.out`
   and commit `ratchets.toml`. Never lower the floor by hand: that needs an accepted floor waiver (the file says how).
+  The same step fails a PR that lowers a skill-eval bar (a bar in `evals/eval.toml`, a case's rule, or a rubric item;
+  `evals/README.md`, "The bars only rise"). Fix the work, never the eval; only an accepted `eval-bar` waiver lowers one.
 
 - Generated files (never edit by hand; change the source and run `go generate ./...`):
   - from `internal/verbs/registry.go`: the tables in `docs/README.md`, `LAYERS.md`, `docs/RACI.md`, `skills/*/SKILL.md`
