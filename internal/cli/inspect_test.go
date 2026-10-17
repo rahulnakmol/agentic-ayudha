@@ -494,6 +494,9 @@ func TestInspectThroughApp(t *testing.T) {
 		!strings.Contains(lastInspect(t, g, prN), "**Review:** same-family review (C): codex (openai), builder openai (declared, not recorded); it never counts toward autonomy") {
 		t.Fatalf("a same-family app's reply: %d %s rung %q\n%s", code, res.Disposition, res.Rung, lastInspect(t, g, prN))
 	}
+	if st := inspect.ParseState(lastInspect(t, g, prN)); st.Result == nil || st.Result.Rung != inspect.RungC || st.Result.Head != head {
+		t.Fatalf("the recorded state lacks the rung or the head: %+v", st.Result)
+	}
 	// A reply that reports a model of another family settles the rung at A,
 	// whatever the app's default family.
 	addComment(g, prN, "chatgpt-codex-connector[bot]", "Bot", strings.Replace(statedReply(head, "merge", "internal/report/percent.go"), `"disposition":`, `"model":"claude-opus-5-5","disposition":`, 1))

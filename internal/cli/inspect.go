@@ -439,7 +439,8 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	}
 	res.Notes = append(notes, res.Notes...)
 	if st.Result != nil {
-		st.Result.Notes = res.Notes
+		st.Result.Notes, st.Result.Head, st.Result.Builder = res.Notes, res.Head, res.Builder
+		st.Result.Rung, st.Result.ReviewerFamily, st.Result.Review = res.Rung, res.ReviewerFamily, res.Review
 	}
 	switch {
 	case errors.Is(err, inspect.ErrNoPack):

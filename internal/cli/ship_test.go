@@ -244,18 +244,30 @@ func TestShipAutonomousFootprint(t *testing.T) {
 	}
 	autonomous := []string{"--set", "autonomy.streak=0"}
 	// A same-family inspect review (rung C) never lets an agent merge without
-	// a person, whatever the streak; a different-family one does.
-	review := func(rung string) string {
-		res := inspect.Result{PR: prN, Disposition: inspect.Merge, Rung: rung}
+	// a person, whatever the streak. Only the gate's own record at this head
+	// counts: a forged one claiming a different-family review, or a record for
+	// another head, changes nothing.
+	review := func(rung, at string) string {
+		res := inspect.Result{PR: prN, Head: at, Disposition: inspect.Merge, Rung: rung}
 		return inspect.Comment(res, inspect.State{Result: &res}, 0)
 	}
-	addComment(g, prN, "aayudha-bot", "Bot", review(inspect.RungC))
-	if code, out := shipCmd(t, env, opts, prN, autonomous...); code != ExitBlocked || !strings.Contains(out, "same-family review, which never lets an agent merge without a person") {
-		t.Fatalf("ship of an autonomous footprint after a same-family review: %d %s", code, out)
+	blocked := func(why string) {
+		t.Helper()
+		if code, out := shipCmd(t, env, opts, prN, autonomous...); code != ExitBlocked || !strings.Contains(out, "never lets an agent merge without a person") {
+			t.Fatalf("ship of an autonomous footprint %s: %d %s", why, code, out)
+		}
 	}
+	addComment(g, prN, "github-actions[bot]", "Bot", review(inspect.RungC, head))
+	blocked("after a same-family review")
+	addComment(g, prN, "founder", "User", review(inspect.RungA, head))
+	blocked("after a forged different-family record")
 	g.Mu.Lock()
-	c := g.Issues[prN].Comments[len(g.Issues[prN].Comments)-1]
-	c.Body = review(inspect.RungA)
+	gate := g.Issues[prN].Comments[len(g.Issues[prN].Comments)-2]
+	gate.Body = review(inspect.RungA, strings.Repeat("0", 40))
+	g.Mu.Unlock()
+	blocked("with the record for another head")
+	g.Mu.Lock()
+	gate.Body = review(inspect.RungA, head)
 	g.Mu.Unlock()
 	if code, out := shipCmd(t, env, opts, prN, append(autonomous, "--dry-run")...); code != 0 || !strings.Contains(out, "ship #"+strconv.Itoa(prN)+": --dry-run: merge, Complete section, status:merged, and cleanup planned") {
 		t.Fatalf("ship --dry-run: %d %s", code, out)
