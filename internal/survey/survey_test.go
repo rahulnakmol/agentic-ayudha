@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -208,5 +209,115 @@ func TestDeterministicAndBounded(t *testing.T) {
 	}
 	if _, err := ix.ModulePack("mod:nope", 0); err == nil || !strings.Contains(err.Error(), "mod:src#1") {
 		t.Errorf("unknown module error = %v, want the module list", err)
+	}
+}
+
+// Fortran (fixed and free form), COBOL, Pascal, and VB6 are read for symbols,
+// calls, includes, and traps; Lua is counted only, and says so.
+func TestKeywordLanguages(t *testing.T) {
+	ix, err := Build(context.Background(), filepath.Join("testdata", "keyword"), Options{Git: noGit})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sym := map[string]Symbol{}
+	for _, s := range ix.Symbols {
+		sym[s.ID] = s
+	}
+	for id, want := range map[string]string{
+		"sym:src/solver.f#solve":                 "program src/solver.f:2-10",
+		"sym:src/solver.f#step":                  "subroutine src/solver.f:20-26", // a continued argument list
+		"sym:src/solver.f#fnorm":                 "function src/solver.f:27-32",   // a typed function
+		"sym:lib/grid.f90#grid":                  "module lib/grid.f90:2-22",
+		"sym:lib/grid.f90#grid::area":            "function lib/grid.f90:14-18", // pure, with result()
+		"sym:lib/grid.f90#grid::clear":           "subroutine lib/grid.f90:19-21",
+		"sym:lib/grid.f90#grid::point":           "type lib/grid.f90:5-7",
+		"sym:src/billing.cbl#billing::calc-para": "paragraph src/billing.cbl:13-14",
+		"sym:src/units.pas#convert":              "function src/units.pas:13-17",
+		"sym:vb/Ledger.bas#ledger::fee":          "method vb/Ledger.bas:10-12",
+	} {
+		s, ok := sym[id]
+		if got := s.Kind + " " + s.At + "-" + itoa(s.End); !ok || got != want {
+			t.Errorf("%s = %q, want %q", id, got, want)
+		}
+	}
+	if _, ok := sym["sym:src/units.pas#fake"]; ok {
+		t.Error("a procedure inside a { } comment is a symbol")
+	}
+	calls := map[string]bool{}
+	for _, e := range ix.Edges {
+		calls[e.Kind+" "+e.From+" "+strings.Join(e.To, ",")] = true
+	}
+	for _, want := range []string{
+		"call sym:src/solver.f#step sym:src/solver.f#init",                                   // CALL in a fixed-form unit (sequence columns ignored)
+		"call sym:src/solver.f#solve sym:src/solver.f#fnorm",                                 // a function reference, not a CALL
+		"call sym:lib/grid.f90#main sym:lib/grid.f90#grid::resize",                           // a program calls a module procedure
+		"call sym:lib/grid.f90#grid::resize sym:lib/grid.f90#grid::clear",                    // ... and the procedure, not its module, calls on
+		"call sym:src/billing.cbl#billing::main-para sym:src/billing.cbl#billing::calc-exit", // PERFORM … THRU
+		"call sym:src/units.pas#convert sym:src/units.pas#scale",                             // a Pascal call
+		"call sym:vb/Ledger.bas#ledger::save sym:vb/Ledger.bas#ledger::total",                // a VB call without parentheses' Call keyword
+		"include file:src/solver.f file:src/params.inc",                                      // INCLUDE (an .inc file in a Fortran checkout)
+		"import file:src/units.pas file:lib/helpers.pas",                                     // uses
+		"import file:lib/grid.f90 ext:iso_fortran_env",                                       // USE of an intrinsic module
+	} {
+		if !calls[want] {
+			t.Errorf("no edge %q", want)
+		}
+	}
+	for e := range calls {
+		if strings.HasPrefix(e, "call sym:lib/grid.f90#grid ") || strings.Contains(e, "fake") || strings.Contains(e, "billing::calc-para sym:src/billing.cbl#billing::calc-exit") {
+			t.Errorf("unexpected edge %q", e)
+		}
+	}
+	traps := map[string]bool{}
+	for _, f := range ix.Traps {
+		traps[f.ID] = true
+	}
+	for _, want := range []string{
+		"trap:fortran-common:src/solver.f:3", "trap:fortran-equivalence:src/solver.f:14", "trap:fortran-assumed-size:src/solver.f:24",
+		"trap:fortran-implicit-typing:src/solver.f:2", "trap:fortran-implicit-typing:src/solver.f:12", "trap:build-semantic-flags:Makefile:3",
+		"trap:cobol-redefines:src/billing.cbl:7", "trap:cobol-binary-decimal:src/billing.cbl:6", "trap:pascal-directives:src/units.pas:2",
+		"trap:vb-on-error:vb/Ledger.bas:6", "trap:vb-no-option-explicit:vb/Ledger.bas:1", "trap:vb-16bit-integer:vb/Ledger.bas:5",
+	} {
+		if !traps[want] {
+			t.Errorf("no trap %s", want)
+		}
+		if err := ix.Resolve(want); err != nil {
+			t.Errorf("trap does not resolve as a citation: %v", err)
+		}
+	}
+	// A commented-out flag is not in the build.
+	for _, f := range ix.Traps {
+		if f.Kind == "build-semantic-flags" && f.Detail != "-fno-automatic" {
+			t.Errorf("build flags %q, want only -fno-automatic (the others are commented out)", f.Detail)
+		}
+	}
+	// STEP and FNORM declare IMPLICIT NONE; module procedures inherit the module's.
+	for _, no := range []string{"trap:fortran-implicit-typing:src/solver.f:20", "trap:fortran-implicit-typing:src/solver.f:27", "trap:fortran-implicit-typing:lib/grid.f90:9"} {
+		if traps[no] {
+			t.Errorf("unexpected trap %s", no)
+		}
+	}
+	var counted []string
+	for _, l := range ix.Languages {
+		if l.CountedOnly {
+			counted = append(counted, l.Name)
+		}
+	}
+	if !slices.Equal(counted, []string{"lua"}) || !strings.Contains(Render(ix, Draft{}, Report{}), "Counted by file and line only, never read (no symbols, calls, imports, or traps, so no claim about them comes from the index): lua (1 files, 1 lines)") {
+		t.Errorf("counted-only languages %v, or SURVEY.md does not say so", counted)
+	}
+}
+
+// Every trap rule the index can report has its questions in the skill's
+// reference, under a heading with the rule's name.
+func TestTrapRulesHaveQuestions(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("..", "..", "skills", "survey", "references", "traps.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range TrapRules() {
+		if !strings.Contains(string(b), "\n### "+r+"\n") {
+			t.Errorf("skills/survey/references/traps.md has no heading for trap rule %s", r)
+		}
 	}
 }

@@ -981,9 +981,9 @@ func TestGroups(t *testing.T) {
 	if g, _ := cfg.Group("data-ai"); err != nil || dg.MaxUSD != 30 || len(dataAI) != 4 || cfg.Gates("data-ai") || g.RunsOn("push") || g.RunsOn("schedule") {
 		t.Fatalf("data-ai group: %v, cap %v, %d cases, gates %v", err, dg.MaxUSD, len(dataAI), cfg.Gates("data-ai"))
 	}
-	// WP5.9: the survey skill's cases, advisory, on dispatch only, capped at 30 USD a run.
+	// WP5.9: the survey skill's cases, advisory, on dispatch only, capped where a full run fits (90 USD, D-5.9g).
 	sg, surveys, err := cfg.ForGroup("survey", all)
-	if g, _ := cfg.Group("survey"); err != nil || sg.MaxUSD != 30 || len(surveys) < 2 || cfg.Gates("survey") || g.RunsOn("push") || g.RunsOn("schedule") {
+	if g, _ := cfg.Group("survey"); err != nil || sg.MaxUSD != 90 || sg.MaxTokens.Skill != 48000 || len(surveys) < 2 || cfg.Gates("survey") || g.RunsOn("push") || g.RunsOn("schedule") {
 		t.Fatalf("survey group: %v, cap %v, %d cases, gates %v", err, sg.MaxUSD, len(surveys), cfg.Gates("survey"))
 	}
 	o, other, err := cfg.ForGroup("skills", all)

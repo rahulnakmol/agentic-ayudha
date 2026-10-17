@@ -28,6 +28,7 @@ type SurveyResult struct {
 	Targets    []survey.Target `json:"targets"`
 	Entries    map[string]int  `json:"entries"`
 	Surfaces   map[string]int  `json:"surfaces"`
+	Traps      map[string]int  `json:"traps"`
 	Markers    int             `json:"markers"`
 	Tests      int             `json:"tests"`
 	Docs       []string        `json:"docs"`
@@ -108,13 +109,16 @@ func surveyResult(ix *survey.Index, root, file string, budget int) SurveyResult 
 		budget = survey.DefaultBudget
 	}
 	res := SurveyResult{Root: root, Commit: ix.Commit, Index: file, Files: len(ix.Files), Languages: ix.Languages, NotIndexed: ix.NotIndexed,
-		Systems: ix.Systems, Targets: ix.Targets, Entries: map[string]int{}, Surfaces: map[string]int{}, Markers: len(ix.Markers), Tests: len(ix.Tests),
+		Systems: ix.Systems, Targets: ix.Targets, Entries: map[string]int{}, Surfaces: map[string]int{}, Traps: map[string]int{}, Markers: len(ix.Markers), Tests: len(ix.Tests),
 		Docs: []string{}, Symbols: len(ix.Symbols), History: ix.History, Modules: ix.Modules, Budget: budget}
 	for _, f := range ix.Entries {
 		res.Entries[f.Kind]++
 	}
 	for _, f := range ix.Surfaces {
 		res.Surfaces[f.Kind]++
+	}
+	for _, f := range ix.Traps {
+		res.Traps[f.Kind]++
 	}
 	for _, d := range ix.Docs {
 		res.Docs = append(res.Docs, strings.TrimPrefix(d.ID, "doc:"))
@@ -142,7 +146,11 @@ func writeSurvey(w io.Writer, r SurveyResult) error {
 	fmt.Fprintf(w, "survey of %s (%s): %d files\n", r.Root, commit, r.Files)
 	var ls []string
 	for _, l := range r.Languages {
-		ls = append(ls, fmt.Sprintf("%s %d lines in %d files", l.Name, l.Lines, l.Files))
+		only := ""
+		if l.CountedOnly {
+			only = " (counted only: no symbols, calls, or traps read)"
+		}
+		ls = append(ls, fmt.Sprintf("%s %d lines in %d files%s", l.Name, l.Lines, l.Files, only))
 	}
 	fmt.Fprintf(w, "  languages: %s\n", listOrNone(ls))
 	if len(r.NotIndexed) > 0 {
@@ -157,6 +165,7 @@ func writeSurvey(w io.Writer, r SurveyResult) error {
 		fmt.Fprintf(w, "    %s %s (%s, %s), %d sources\n", t.System, t.Name, t.Kind, t.At, len(t.Sources))
 	}
 	fmt.Fprintf(w, "  entry points: %s; surfaces: %s\n", countsText(r.Entries), countsText(r.Surfaces))
+	fmt.Fprintf(w, "  traps to check: %s\n", countsText(r.Traps))
 	fmt.Fprintf(w, "  symbols %d, calls %d (%d ambiguous by name), markers %d, tests %d, documents %s\n", r.Symbols, r.Calls, r.Ambiguous, r.Markers, r.Tests, listOrNone(r.Docs))
 	if h := r.History; h != nil {
 		shallow := ""
@@ -210,6 +219,9 @@ func writePack(w io.Writer, p *survey.Pack) error {
 	}
 	for _, f := range p.Surfaces {
 		fmt.Fprintf(w, "  surface %s: %s ×%d\n", f.ID, f.Detail, f.Count)
+	}
+	for _, f := range p.Traps {
+		fmt.Fprintf(w, "  trap %s: %s ×%d\n", f.ID, f.Detail, f.Count)
 	}
 	for _, mk := range p.Markers {
 		fmt.Fprintf(w, "  marker %s: %s: %s\n", mk.ID, mk.Kind, mk.Text)

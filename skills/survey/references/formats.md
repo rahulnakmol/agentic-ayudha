@@ -49,8 +49,9 @@ a misspelt field never silently drops a claim.
 - Topics. Engineering: architecture, modules, data, interfaces, build, dependencies, tests, risks, quality,
   operations. Product: users, jobs, outcomes, value, constraints, context, competition. Capabilities have a `name`
   instead.
-- Citations: a fact ID the index printed (`file:`, `sym:`, `build:`, `dep:`, `entry:`, `io:`, `test:`, `doc:`,
-  `marker:`, `mod:`), or `path:line` / `path:start-end` inside the file.
+- Citations: a fact ID the index printed (`file:`, `sym:`, `build:`, `dep:`, `entry:`, `io:`, `trap:`, `test:`,
+  `doc:`, `marker:`, `mod:`), or `path:line` / `path:start-end` inside the file.
+- A question's `affects` lists the claims, modernisation steps, and case sets its answer changes.
 - `target_source` is `"request"` only when the request names the target; otherwise ask, and use the answered
   question's ID.
 

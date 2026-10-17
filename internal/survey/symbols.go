@@ -433,7 +433,9 @@ func uniqueIDs(syms []Symbol) {
 }
 
 // isDefKind reports whether kind can be called.
-func isDefKind(kind string) bool { return slices.Contains([]string{"function", "method"}, kind) }
+func isDefKind(kind string) bool {
+	return slices.Contains([]string{"function", "method", "subroutine", "program", "paragraph", "section"}, kind)
+}
 
 // explicitDef matches a definition keyword in a header.
 var explicitDef = regexp.MustCompile(`\b(function|fn|func|fun|def|sub)\b`)

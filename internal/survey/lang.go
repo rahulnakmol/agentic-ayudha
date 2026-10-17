@@ -1,6 +1,7 @@
 package survey
 
 import (
+	"bytes"
 	"path"
 	"strings"
 )
@@ -12,6 +13,12 @@ const (
 	syntaxNone  = ""      // not scanned for symbols (data, markup)
 	syntaxSQL   = "sql"   // -- comments
 	syntaxBuild = "build" // build files: # comments, parsed for targets only
+	// Keyword languages (keyword.go): case-insensitive, line-oriented, with
+	// their own comment rules and definitions closed by END-style keywords.
+	syntaxFortran = "fortran" // fixed form (C, *, ! in column 1; columns 73+ ignored) and free form (!)
+	syntaxCOBOL   = "cobol"   // fixed form (columns 1-6 sequence, * or / in column 7) and free form (*>)
+	syntaxPascal  = "pascal"  // { }, (* *), and // comments
+	syntaxVB      = "vb"      // ' and Rem comments (VB6, VBA, VBScript, VB.NET)
 )
 
 // Lang is one language the index recognises: its name, how its comments are
@@ -38,11 +45,57 @@ var langs = map[string]Lang{
 	".php": {"php", syntaxC, true}, ".inc": {"php", syntaxC, true},
 	".py": {"python", syntaxHash, true}, ".rb": {"ruby", syntaxHash, true}, ".pl": {"perl", syntaxHash, true}, ".pm": {"perl", syntaxHash, true},
 	".sh": {"shell", syntaxHash, true}, ".bash": {"shell", syntaxHash, true}, ".zsh": {"shell", syntaxHash, true},
-	".lua": {"lua", syntaxNone, false}, ".r": {"r", syntaxHash, false}, ".tcl": {"tcl", syntaxHash, false},
-	".f": {"fortran", syntaxNone, false}, ".f90": {"fortran", syntaxNone, false}, ".cob": {"cobol", syntaxNone, false}, ".cbl": {"cobol", syntaxNone, false},
-	".pas": {"pascal", syntaxNone, false}, ".vb": {"vb", syntaxNone, false}, ".bas": {"basic", syntaxNone, false},
+	".f": {"fortran", syntaxFortran, true}, ".for": {"fortran", syntaxFortran, true}, ".ftn": {"fortran", syntaxFortran, true}, ".f77": {"fortran", syntaxFortran, true},
+	".fpp": {"fortran", syntaxFortran, true}, ".f90": {"fortran", syntaxFortran, true}, ".f95": {"fortran", syntaxFortran, true}, ".f03": {"fortran", syntaxFortran, true},
+	".f08": {"fortran", syntaxFortran, true}, ".f18": {"fortran", syntaxFortran, true},
+	".cob": {"cobol", syntaxCOBOL, true}, ".cbl": {"cobol", syntaxCOBOL, true}, ".cobol": {"cobol", syntaxCOBOL, true}, ".cpy": {"cobol", syntaxCOBOL, true},
+	".pas": {"pascal", syntaxPascal, true}, ".pp": {"pascal", syntaxPascal, true}, ".dpr": {"pascal", syntaxPascal, true}, ".lpr": {"pascal", syntaxPascal, true},
+	".vb": {"vb", syntaxVB, true}, ".bas": {"vb", syntaxVB, true}, ".cls": {"vb", syntaxVB, true}, ".frm": {"vb", syntaxVB, true}, ".ctl": {"vb", syntaxVB, true},
+	".vbs": {"vb", syntaxVB, true}, ".vba": {"vb", syntaxVB, true},
+	// Counted by file and line only: no symbols, calls, or traps are read, and
+	// SURVEY.md says so (D-5.9h).
+	".lua": {"lua", syntaxNone, false}, ".r": {"r", syntaxNone, false}, ".tcl": {"tcl", syntaxNone, false}, ".adb": {"ada", syntaxNone, false}, ".ads": {"ada", syntaxNone, false},
+	".pli": {"pl/i", syntaxNone, false}, ".pl1": {"pl/i", syntaxNone, false}, ".rpgle": {"rpg", syntaxNone, false}, ".abap": {"abap", syntaxNone, false},
+	".asm": {"assembly", syntaxNone, false}, ".s": {"assembly", syntaxNone, false}, ".jcl": {"jcl", syntaxNone, false}, ".clp": {"cl", syntaxNone, false},
 	".sql":   {"sql", syntaxSQL, false},
 	".cmake": {"cmake", syntaxBuild, false}, ".mk": {"make", syntaxBuild, false}, ".gradle": {"gradle", syntaxC, false},
+}
+
+// shebangLang is the language of a script from its #! line.
+func shebangLang(raw []byte) (Lang, bool) {
+	if !bytes.HasPrefix(raw, []byte("#!")) {
+		return Lang{}, false
+	}
+	first, _, _ := bytes.Cut(raw, []byte("\n"))
+	f := strings.Fields(strings.TrimPrefix(string(first), "#!"))
+	if len(f) == 0 {
+		return Lang{}, false
+	}
+	interp := path.Base(f[0])
+	if interp == "env" && len(f) > 1 {
+		interp = f[1]
+		if strings.HasPrefix(interp, "-") && len(f) > 2 {
+			interp = f[2] // env -S ruby
+		}
+	}
+	interp = strings.TrimRight(interp, "0123456789.")
+	ext := map[string]string{"ruby": ".rb", "python": ".py", "perl": ".pl", "sh": ".sh", "bash": ".sh", "zsh": ".sh", "dash": ".sh", "ksh": ".sh", "php": ".php", "node": ".js"}[interp]
+	l, ok := langs[ext]
+	return l, ok
+}
+
+// indexedLang reports whether the index reads symbols and calls from a
+// language, by its name.
+func indexedLang(name string) bool {
+	if name == "cmake" || name == "make" || name == "gradle" {
+		return true // build files: read for targets, not symbols
+	}
+	for _, l := range langs {
+		if l.Name == name {
+			return l.Symbols
+		}
+	}
+	return false
 }
 
 // docExt are the extensions of human-written documents.
@@ -55,10 +108,11 @@ var buildNames = map[string]string{
 	"go.mod": "go", "cargo.toml": "cargo", "package.json": "npm", "composer.json": "composer", "pom.xml": "maven", "build.gradle": "gradle",
 	"build.gradle.kts": "gradle", "settings.gradle": "gradle", "setup.py": "setuptools", "pyproject.toml": "python", "setup.cfg": "setuptools",
 	"requirements.txt": "pip", "gemfile": "bundler", "build.xml": "ant", "build.sbt": "sbt", "package.swift": "swiftpm", "rakefile": "rake",
+	"fpm.toml": "fpm",
 }
 
 // buildExt are build files recognised by extension.
-var buildExt = map[string]string{".vcxproj": "msbuild", ".vcproj": "msbuild", ".sln": "msbuild", ".csproj": "msbuild", ".pro": "qmake", ".gemspec": "rubygems"}
+var buildExt = map[string]string{".vcxproj": "msbuild", ".vcproj": "msbuild", ".sln": "msbuild", ".csproj": "msbuild", ".pro": "qmake", ".gemspec": "rubygems", ".vbp": "vb6", ".vbproj": "msbuild", ".dproj": "msbuild", ".lpi": "lazarus"}
 
 // vendorDirs are directory names whose contents are third-party code: indexed
 // as vendored, so their symbols never count as the product's.

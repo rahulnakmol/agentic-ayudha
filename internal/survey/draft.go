@@ -280,10 +280,19 @@ func Check(ix *Index, d Draft) Report {
 	for _, c := range d.ProductClaims {
 		claim("product", c)
 	}
+	planned := map[string]bool{} // modernisation steps and case sets a question may also affect
+	if m := d.Modernisation; m != nil {
+		for _, st := range m.Steps {
+			planned[st.ID] = true
+		}
+		for _, g := range m.CaseSets {
+			planned[g.ID] = true
+		}
+	}
 	for _, q := range d.Questions {
 		for _, a := range q.Affects {
-			if !seen[a] {
-				add("question %s: affects %s, which is not a claim", q.ID, a)
+			if !seen[a] && !planned[a] {
+				add("question %s: affects %s, which is not a claim, a modernisation step, or a case set", q.ID, a)
 			}
 		}
 	}
@@ -451,10 +460,10 @@ func citeFile(ix *Index, c string) string {
 	if strings.HasPrefix(c, "mod:") || strings.HasPrefix(c, "build:") || strings.HasPrefix(c, "dep:") {
 		return ""
 	}
-	for _, pre := range []string{"entry:", "io:", "marker:", "test:", "doc:"} {
+	for _, pre := range []string{"entry:", "io:", "trap:", "marker:", "test:", "doc:"} {
 		if strings.HasPrefix(c, pre) {
 			c = c[len(pre):]
-			if pre == "io:" {
+			if pre == "io:" || pre == "trap:" {
 				if _, rest, ok := strings.Cut(c, ":"); ok {
 					c = rest
 				}
