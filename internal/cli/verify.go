@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -76,31 +75,23 @@ type ScreenshotReview struct {
 	Skipped     string             `json:"skipped,omitempty"` // why no judgement was made
 }
 
-// screenshotReview runs the ui-review lane on each PNG screenshot artifact
-// (lane A sends images as PNG; a control's other formats are left out).
+// screenshotReview runs the ui-review lane on the web floor's captures
+// (screens/N.png), the only screenshots that have passed its PII redaction
+// pass; a behaviour control's screenshots are not sent to a model.
 // builderModel is the head's Aayudha-Model trailer, for the family check. Any
 // failure (no model key, a family clash, a gateway error) is recorded as
 // skipped: the judgement is advisory and never stops verify.
 func (e *Env) screenshotReview(ctx context.Context, arts []verify.Evidence, story int, builderModel string) *ScreenshotReview {
 	var shots []verify.Evidence
-	others := 0
 	for _, a := range arts {
-		switch {
-		case a.Kind != "screenshot":
-		case http.DetectContentType(a.Data) == "image/png":
+		if a.Kind == "screenshot" && strings.HasPrefix(a.Path, "screens/") {
 			shots = append(shots, a)
-		default:
-			others++
 		}
 	}
-	if len(shots)+others == 0 {
+	if len(shots) == 0 {
 		return nil
 	}
 	sr := &ScreenshotReview{Advisory: true}
-	if len(shots) == 0 {
-		sr.Skipped = fmt.Sprintf("no PNG screenshots (%d in another format)", others)
-		return sr
-	}
 	rv, err := e.reviewer(ctx, nil, story, false, builderModel)
 	if err != nil {
 		sr.Skipped = err.Error()

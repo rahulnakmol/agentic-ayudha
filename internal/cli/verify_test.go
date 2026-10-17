@@ -399,14 +399,21 @@ func TestVerifyScreenshotReview(t *testing.T) {
 	if sr := newE(fakeModel).screenshotReview(context.Background(), arts[1:], 0, ""); sr != nil {
 		t.Fatalf("no screenshots: %+v", sr)
 	}
+	// A storyless run is charged to the day, not to a synthetic story #0.
+	e := newE(fakeModel)
+	log, err := os.ReadFile(e.ActionsPath())
+	if err != nil || !strings.Contains(string(log), `"kind":"model.call"`) || strings.Contains(string(log), `"story":`) {
+		t.Fatalf("storyless model calls carry a story key (%v):\n%s", err, log)
+	}
 	// A Google-built head gets no Google review (reviewer ≠ builder), and a
-	// screenshot lane A cannot send as PNG is left out.
+	// behaviour control's screenshot, which no redaction pass has seen, is
+	// never sent to the model.
 	calls := len(fakeModel.Requests)
-	if sr := newE(fakeModel).screenshotReview(context.Background(), arts, 0, verbs.ModelGemini); sr == nil || !strings.Contains(sr.Skipped, "google") {
+	if sr := e.screenshotReview(context.Background(), arts, 0, verbs.ModelGemini); sr == nil || !strings.Contains(sr.Skipped, "google") {
 		t.Fatalf("Google builder: %+v", sr)
 	}
-	jpeg := []verify.Evidence{{Path: "screens/2.jpg", Kind: "screenshot", Data: []byte("\xff\xd8\xff\xe0\x00\x10JFIF")}}
-	if sr := newE(fakeModel).screenshotReview(context.Background(), jpeg, 0, ""); sr == nil || !strings.Contains(sr.Skipped, "no PNG") || len(fakeModel.Requests) != calls {
-		t.Fatalf("JPEG only: %+v, %d calls", sr, len(fakeModel.Requests)-calls)
+	behaviour := []verify.Evidence{{Path: "behaviour/f/c/shot.png", Kind: "screenshot", Data: png}}
+	if sr := e.screenshotReview(context.Background(), behaviour, 0, ""); sr != nil || len(fakeModel.Requests) != calls {
+		t.Fatalf("behaviour screenshot: %+v, %d calls", sr, len(fakeModel.Requests)-calls)
 	}
 }

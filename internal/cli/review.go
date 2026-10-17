@@ -157,7 +157,12 @@ func (e *Env) reviewer(ctx context.Context, b *uireview.Browser, story int, deep
 			builder = bm.Family
 		}
 	}
-	key := fmt.Sprintf("#%d", story)
+	// The budget's per-story key: a storyless run (story 0) is charged to the
+	// day only, never to a synthetic story.
+	key := ""
+	if story > 0 {
+		key = fmt.Sprintf("#%d", story)
+	}
 	if err := models.CheckFamilies(key, builder, rev.Family); err != nil {
 		return nil, Wrap(ExitBlocked, err)
 	}
