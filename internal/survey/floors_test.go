@@ -129,8 +129,8 @@ func TestFloorRunners(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(ix.Builtins) != 4 {
-		t.Fatalf("builtins = %v; want print, Math.sqrt, the file-scope Extra.f, and the constructor's JSON.parse only (not the commented registration, strcmp, or printf)", ix.Builtins)
+	if len(ix.Builtins) != 5 {
+		t.Fatalf("builtins = %v; want print, Math.sqrt, the file-scope Extra.f and Boot.go, and the constructor's JSON.parse only (not the commented registration, strcmp, or printf)", ix.Builtins)
 	}
 	// Two declarations on one header line are two entry points.
 	if !slices.ContainsFunc(ix.Entries, func(e Fact) bool { return e.ID == "entry:interp.h:20#beta" && e.At == "interp.h:20" }) {
@@ -139,6 +139,10 @@ func TestFloorRunners(t *testing.T) {
 	// A .hxx header is a header: its class is an entry point, as a .h header's is.
 	if !slices.ContainsFunc(ix.Entries, func(e Fact) bool { return e.At == "util.hxx:3" && e.Detail == "class Box" }) {
 		t.Errorf("entries = %v; want class Box in util.hxx", ix.Entries)
+	}
+	// An export annotation before a declaration does not hide it.
+	if !slices.ContainsFunc(ix.Entries, func(e Fact) bool { return e.At == "util.hxx:7" && e.Detail == "function exported_api" }) {
+		t.Errorf("entries = %v; want exported_api after its __declspec", ix.Entries)
 	}
 	// A builtin citation counts toward its file's module.
 	if r := Check(ix, Draft{Engineering: []Claim{{ID: "E1", Topic: "interfaces", Text: "Math.sqrt is a native.", Basis: "observed", Cites: []string{"builtin:interp.cpp:29"}}}}); !slices.Equal(r.Coverage.UncitedModule, []string{"mod:tests"}) {
@@ -163,7 +167,7 @@ func TestFloorRunners(t *testing.T) {
 		{"negated", "the runner that registers it", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{tests}, []string{"tests/math.js"} }), "case set G1", false},
 		{"negated", "a builtin both runners register", set(func(g *CaseSet) { g.Inputs = []string{"tests/hello.js"} }), "case set G1", false},
 		{"negated", "the file excluded, naming what decided it", set(func(g *CaseSet) {
-			g.Inputs, g.Exclude = []string{"tests/*.js"}, []string{"tests/math.js needs Math (Q1)", "tests/extra.js needs Extra (Q1)", "tests/json.js needs JSON (Q1)"}
+			g.Inputs, g.Exclude = []string{"tests/*.js"}, []string{"tests/math.js needs Math (Q1)", "tests/extra.js needs Extra (Q1)", "tests/json.js needs JSON (Q1)", "tests/boot.js needs Boot (Q1)"}
 		}), "case set G1", false},
 		{"match", "a file-scope registration in a file the runner never loads", set(func(g *CaseSet) { g.Inputs = []string{"tests/extra.js"} }),
 			"tests/extra.js:1 calls Extra.f, which runner entry:cli.cpp:3 does not register", true},
@@ -177,6 +181,9 @@ func TestFloorRunners(t *testing.T) {
 			"case set G1: tests/math.js:1 calls Math.sqrt, " + notCLI, true},
 		{"negated", "no inputs, and the test file it draws on calls only what the runner registers", set(func(g *CaseSet) { g.From, g.Inputs = []string{cli, "test:tests/hello.js"}, nil }), "case set G1", false},
 		{"near miss", "a test file it draws on, with inputs that name other files", set(func(g *CaseSet) { g.From = []string{cli, "test:tests/math.js"} }), "case set G1", false},
+		{"negated", "a file-scope registration in a file the runner's executable links", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{tests}, []string{"tests/boot.js"} }), "case set G1", false},
+		{"match", "the same registration, from an executable that does not link it", set(func(g *CaseSet) { g.Inputs = []string{"tests/boot.js"} }),
+			"tests/boot.js:1 calls Boot.go, which runner entry:cli.cpp:3 does not register", true},
 		{"near miss", "a comment, a string, and another object's sqrt", set(func(g *CaseSet) { g.Inputs = []string{"tests/nearmiss.js"} }), "case set G1", false},
 		{"near miss", "a title about Math without naming a builtin", set(func(g *CaseSet) { g.Title = "Math results (sqrt) and myMath.sqrt" }), "case set G1", false},
 	})
@@ -197,7 +204,8 @@ func TestFloorRunnerPrograms(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("tool.py", "#!/usr/bin/env python3\nimport lib\nimport plugins\n\n\ndef run(env):\n    lib.setup(env)\n    print(lib.render(1))\n\n\nif __name__ == \"__main__\":\n    run(lib.Env())\n")
+	write("tool.py", "#!/usr/bin/env python3\nimport lib\nimport plugins\n\n\ndef run(env):\n    lib.setup(env)\n    print(lib.render(1))\n\n\nif __name__ == \"__main__\":\n    run(lib.Env())\n\n\ndef hum(x):\n    return x\n\n\ndef unused(env):\n    env.register('hum', hum)\n")
+	write("cases/hum.js", "hum(1);\n")
 	write("lib.py", "def render(x):\n    return str(x)\n\n\ndef shout(x):\n    return str(x).upper()\n\n\ndef setup(env):\n    env.register('shout', shout)\n")
 	write("cases/loud.js", "shout(\"hi\");\n")
 	write("plugins.py", "import lib\n\n\ndef yell(x):\n    return x\n\n\nlib.REG.register('yell', yell)\n")
@@ -239,6 +247,8 @@ func TestFloorRunnerPrograms(t *testing.T) {
 		{"negated", "the main guard's runner, whose guard calls the function that registers it", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:tool.py:11"}, []string{"cases/loud.js"} }), "case set G1", false},
 		{"match", "a program that never calls that function", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/loud.js"} }),
 			"cases/loud.js:1 calls shout, which runner entry:other.py:1 does not register", true},
+		{"match", "a function of the guard's file the guard never calls", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:tool.py:11"}, []string{"cases/hum.js"} }),
+			"cases/hum.js:1 calls hum, which runner entry:tool.py:11 does not register", true},
 		{"negated", "a file-scope registration in a module the runner imports", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:tool.py:11"}, []string{"cases/yell.js"} }), "case set G1", false},
 		{"match", "the same registration, from a program that never imports it", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/yell.js"} }),
 			"cases/yell.js:1 calls yell, which runner entry:other.py:1 does not register", true},
