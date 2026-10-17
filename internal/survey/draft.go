@@ -300,7 +300,7 @@ func Check(ix *Index, d Draft) Report {
 		claim("product", c)
 	}
 	checkContract(ix, d, questions, add, checkCites, claim)
-	planned := map[string]bool{} // modernisation steps and case sets a question may also affect
+	planned := map[string]bool{} // the modernisation's steps, case sets, suites, migrations, and shims a question may also affect
 	if m := d.Modernisation; m != nil {
 		for _, st := range m.Steps {
 			planned[st.ID] = true
@@ -308,11 +308,20 @@ func Check(ix *Index, d Draft) Report {
 		for _, g := range m.CaseSets {
 			planned[g.ID] = true
 		}
+		for _, s := range m.Suites {
+			planned[s.ID] = true
+		}
+		for _, mg := range m.Migrations {
+			planned[mg.ID] = true
+		}
+		for _, sh := range m.Shims {
+			planned[sh.ID] = true
+		}
 	}
 	for _, q := range d.Questions {
 		for _, a := range q.Affects {
 			if !seen[a] && !planned[a] && !contractIDs(d)[a] {
-				add("question %s: affects %s, which is not a claim, a modernisation step, a case set, a do-not-carry entry, or an interface", q.ID, a)
+				add("question %s: affects %s, which is not a claim, a modernisation step, case set, suite, migration, or shim, a do-not-carry entry, or an interface", q.ID, a)
 			}
 		}
 	}

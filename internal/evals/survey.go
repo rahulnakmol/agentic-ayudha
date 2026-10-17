@@ -32,6 +32,10 @@ type SurveySpec struct {
 	Read   []string `toml:"read"`   // files the host read, as paths under the repo, or path:start-end
 	Survey string   `toml:"survey"` // backlog: the checked survey draft the backlog comes from
 	Draft  string   `toml:"draft"`  // the recorded run's reply (survey.json or backlog.json), checked in tier 1
+	// Probes are probes.json files recorded by `aayu survey --golden … --run
+	// --probe` on the fixture's legacy build: the runtime evidence the host
+	// saw, printed as the CLI prints it, and citable as probe: facts.
+	Probes []string `toml:"probes"`
 }
 
 func (s *SurveySpec) check() error {
@@ -108,6 +112,37 @@ func surveySetup(ctx context.Context, c Case, assets fs.FS) (surveyWorld, error)
 			return w, err
 		}
 		p.WriteString("\n$ aayu survey --module " + m.ID + "\n" + pack)
+	}
+	for i, f := range c.Survey.Probes {
+		b, err := os.ReadFile(filepath.Join(c.Dir, filepath.FromSlash(f)))
+		if err != nil {
+			return w, err
+		}
+		var pr survey.Probes
+		if err := json.Unmarshal(b, &pr); err != nil {
+			return w, fmt.Errorf("%s: %w", f, err)
+		}
+		dir := filepath.Join(out, "golden", strconv.Itoa(i))
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return w, err
+		}
+		if err := os.WriteFile(filepath.Join(dir, "probes.json"), b, 0o644); err != nil {
+			return w, err
+		}
+		fmt.Fprintf(&p, "\n$ aayu survey --golden %s --bin %s --run --probe\n", pr.Cases, filepath.Base(pr.Bin))
+		for _, r := range pr.Ran {
+			p.WriteString("  probe ran: " + r + "\n")
+		}
+		for _, r := range pr.Skipped {
+			p.WriteString("  probe skipped: " + r + "\n")
+		}
+		fmt.Fprintf(&p, "  %d probe fact(s):\n", len(pr.Facts))
+		for _, ft := range pr.Facts {
+			p.WriteString("  " + ft.ID + ": " + ft.Detail + "\n")
+		}
+	}
+	if err := w.ix.LoadProbes(out); err != nil {
+		return w, err
 	}
 	w.printed = p.String()
 	var r strings.Builder
@@ -198,12 +233,40 @@ func checkSurvey(c Case, w surveyWorld, reply string) []string {
 			}
 		}
 	}
+	text := reply
+	if c.Survey.Kind == "backlog" {
+		text = withoutDecisionOptions(reply)
+	}
 	for _, r := range c.Scope {
-		if m, clause := r.find(reply); m != "" {
+		if m, clause := r.find(text); m != "" {
 			out = append(out, fmt.Sprintf("scope: adds %s (%q in %q)", r.Why, m, clause))
 		}
 	}
 	return out
+}
+
+// withoutDecisionOptions blanks each Decision item's options: a Decision
+// names the alternatives it rejects ("1. Keep the patch"), which is not work
+// the backlog adds. Its recommendation and every other item stay checked.
+func withoutDecisionOptions(reply string) string {
+	var v map[string]any
+	if json.Unmarshal([]byte(reply), &v) != nil {
+		return reply
+	}
+	items, _ := v["items"].([]any)
+	for _, x := range items {
+		it, _ := x.(map[string]any)
+		if f, ok := it["fields"].(map[string]any); ok && it["type"] == "decision" {
+			delete(f, "options")
+		}
+	}
+	var b strings.Builder
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false) // keep "<?maruku" as written, or a pattern for it never matches
+	if enc.Encode(v) != nil {
+		return reply
+	}
+	return b.String()
 }
 
 // tier1Survey checks the recorded reply.

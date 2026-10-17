@@ -1,0 +1,595 @@
+{
+  "product": "maruku",
+  "request": "Our sites render Markdown with Maruku, which its own readme calls obsolete. Tell us what it does, what our existing pages depend on that must keep working, what we should not carry over, and how we move to a maintained Ruby Markdown library without breaking existing pages.",
+  "summary": "Maruku is a Ruby library and command-line tool that parses a superset of Markdown (the original syntax, PHP Markdown Extra, and its own meta-data, attribute, div, and math syntax) into a document tree and renders it as HTML, LaTeX, Markdown, or S5 slides. Its readme calls it obsolete and points to kramdown. The person's pages use tables, footnotes, and header attribute lists with fenced code blocks, and need equivalent HTML, not byte-identical (Q1, Q2, Q3). Its own block-doc suite, input and expected HTML per feature, is the natural compatibility reference. It also patches Ruby's Array class for every program that loads it and can execute Ruby code embedded in a document when unsafe features are on.",
+  "engineering": [
+    {
+      "id": "E1",
+      "topic": "architecture",
+      "claim": "Maruku.new(text, options) merges the options into the document's attributes and parses the text into a tree of MDElement nodes; to_html renders the tree's children as an HTML fragment and appends the footnotes, and to_html_document wraps it in an XHTML 1.1 plus MathML document.",
+      "basis": "observed",
+      "cites": [
+        "lib/maruku/maruku.rb:6-11",
+        "lib/maruku/output/to_html.rb:68-94"
+      ]
+    },
+    {
+      "id": "E2",
+      "topic": "interfaces",
+      "claim": "Settings come from the document's own attributes first and the process-wide MaRuKu::Globals hash otherwise; the defaults include unsafe_features off, on_error :warning, html_parser 'rexml', fenced_code_blocks off, and no math engine.",
+      "basis": "observed",
+      "cites": [
+        "lib/maruku/defaults.rb:3-38",
+        "lib/maruku/defaults.rb:40-44"
+      ]
+    },
+    {
+      "id": "E3",
+      "topic": "interfaces",
+      "claim": "The maruku command converts each file named on the command line, or standard input, to HTML, an HTML fragment, LaTeX (and PDF through pdflatex), Markdown, S5, or the parse tree; its -u, -m, and -i options set process-wide Globals, and --ext requires maruku/ext/<name> for each name given.",
+      "basis": "observed",
+      "cites": [
+        "entry:bin/maruku:1",
+        "bin/maruku:27-87",
+        "bin/maruku:99-130"
+      ]
+    },
+    {
+      "id": "E4",
+      "topic": "data",
+      "claim": "Raw HTML inside a document is parsed by REXML unless html_parser is 'nokogiri'; when Nokogiri fails to load, Maruku warns once, sets $warned_nokogiri, and uses REXML for the rest of the process.",
+      "basis": "observed",
+      "cites": [
+        "lib/maruku/html.rb:29-43",
+        "trap:ruby-globals:lib/maruku/html.rb:3"
+      ]
+    },
+    {
+      "id": "E5",
+      "topic": "tests",
+      "claim": "The block-doc suite (spec/block_spec.rb) reads each spec/block_docs/*.md file as a comment, parameters, Markdown input, the expected tree, and the expected to_html and to_latex output, and compares HTML through nokogiri-diff, ignoring whitespace-only text nodes; PENDING docs are skipped.",
+      "basis": "observed",
+      "cites": [
+        "test:spec/block_spec.rb",
+        "spec/block_spec.rb:46-62",
+        "spec/block_spec.rb:79-97"
+      ]
+    },
+    {
+      "id": "E6",
+      "topic": "dependencies",
+      "claim": "The gem declares no runtime dependency and Ruby 1.8.7 or later; Nokogiri, syntax highlighting, and itextomml are optional, listed only for testing.",
+      "basis": "observed",
+      "cites": [
+        "maruku.gemspec:27",
+        "Gemfile:7-13"
+      ]
+    },
+    {
+      "id": "E7",
+      "topic": "risks",
+      "claim": "With maruku_signature on, rendering a whole HTML document fails: nice_date calls t.day and t.strftime, and t is never assigned.",
+      "basis": "inferred",
+      "cites": [
+        "lib/maruku/output/to_html.rb:259-263",
+        "lib/maruku/output/to_html.rb:224-226"
+      ],
+      "reasoning": "Running Maruku.new('hello', :maruku_signature => true).to_html_document raised NameError: undefined local variable or method `t'. The setting is off by default (lib/maruku/defaults.rb:9)."
+    },
+    {
+      "id": "E8",
+      "topic": "quality",
+      "claim": "A TODO at the code-execution hook says executed code blocks are never removed from the document.",
+      "basis": "observed",
+      "cites": [
+        "marker:lib/maruku/input/parse_doc.rb:67"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "id": "C1",
+      "name": "Render Markdown to HTML",
+      "claim": "Turn Markdown with PHP Markdown Extra additions (tables, footnotes, abbreviations, definition lists) into an HTML fragment or a full XHTML document.",
+      "basis": "observed",
+      "cites": [
+        "lib/maruku/output/to_html.rb:68-94",
+        "README.md:5-9"
+      ]
+    },
+    {
+      "id": "C2",
+      "name": "Use Maruku's own extensions",
+      "claim": "Attach attributes to elements with attribute lists, add document meta-data, wrap content in divs, and write inline and display math.",
+      "basis": "observed",
+      "cites": [
+        "lib/maruku/ext/div.rb:11-15",
+        "lib/maruku/input/parse_doc.rb:98-106",
+        "README.md:9-11"
+      ]
+    },
+    {
+      "id": "C3",
+      "name": "Export to other formats",
+      "claim": "Render the same document as LaTeX (and PDF), Markdown, or an S5 slideshow.",
+      "basis": "observed",
+      "cites": [
+        "bin/maruku:120-143"
+      ]
+    },
+    {
+      "id": "C4",
+      "name": "Convert files from the command line",
+      "claim": "Convert one or more files, or standard input, with the maruku command.",
+      "basis": "observed",
+      "cites": [
+        "entry:bin/maruku:1",
+        "bin/maruku:99-113"
+      ]
+    }
+  ],
+  "product_claims": [
+    {
+      "id": "P1",
+      "topic": "context",
+      "claim": "Maruku is a Markdown-superset interpreter implementing the original syntax, PHP Markdown Extra, and its own meta-data syntax.",
+      "basis": "stated",
+      "cites": [
+        "README.md:3-9"
+      ]
+    },
+    {
+      "id": "P2",
+      "topic": "competition",
+      "claim": "Its readme says it should be considered obsolete, superseded by libraries like kramdown.",
+      "basis": "stated",
+      "cites": [
+        "README.md:17"
+      ]
+    },
+    {
+      "id": "P3",
+      "topic": "users",
+      "claim": "The sites' pages use tables, footnotes, and attribute lists on headers, rendered with fenced code blocks on; no page uses divs, math, meta-data headers, or <?maruku ?> instructions.",
+      "basis": "confirmed",
+      "answer": "Q2"
+    },
+    {
+      "id": "P4",
+      "topic": "constraints",
+      "claim": "Not breaking existing pages means equivalent HTML: the same elements, attributes, and text, with whitespace between tags free.",
+      "basis": "confirmed",
+      "answer": "Q1"
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q1",
+      "question": "Must existing pages render to byte-identical HTML, or is equivalent HTML enough (the same elements, attributes, and text, with whitespace between tags free, as Maruku's own suite compares)?",
+      "why": "It sets the level of the HTML interface (K1) and how the suite and the shadow run compare.",
+      "default": "Equivalent HTML, compared as block_spec.rb compares it, since pages are read in browsers and the suite already accepts whitespace changes.",
+      "affects": [
+        "K1",
+        "P4",
+        "S1"
+      ],
+      "status": "answered",
+      "answer": "Equivalent is enough. Nobody diffs our HTML; it only has to look and read the same in a browser."
+    },
+    {
+      "id": "Q2",
+      "question": "Which Maruku syntax do your pages use beyond Markdown: tables, footnotes, abbreviations, definition lists, attribute lists, meta-data headers, divs, or math?",
+      "why": "Each extension a maintained library lacks becomes an adapter or a page migration (K2, M3).",
+      "default": "Scan the pages for each extension's markers before deciding, since nothing in this repository says.",
+      "affects": [
+        "K2",
+        "P3",
+        "M3"
+      ],
+      "status": "answered",
+      "answer": "Tables, footnotes, and attribute lists on headers, that's it. We never used divs, math, or the meta-data headers."
+    },
+    {
+      "id": "Q3",
+      "question": "Which options do your sites set, and where: per document (Maruku.new(text, options)) or process-wide in MaRuKu::Globals?",
+      "why": "Options decide the output (E2) and process-wide settings are on the do-not-carry list (N3).",
+      "default": "Carry the options you set as per-document options of the adapter.",
+      "affects": [
+        "K3",
+        "N3"
+      ],
+      "status": "answered",
+      "answer": "Our render helper passes fenced_code_blocks: true per document. We never touch MaRuKu::Globals."
+    },
+    {
+      "id": "Q4",
+      "question": "Does anything run the maruku command, and with which options?",
+      "why": "The command and its flags are an interface only if a build or a person uses them (K4).",
+      "default": "Treat the command as unused unless a build script names it.",
+      "affects": [
+        "K4"
+      ],
+      "status": "answered",
+      "answer": "Nothing runs the command. It can go."
+    },
+    {
+      "id": "Q5",
+      "question": "Does any of your code call replace_each_string on an Array, or depend on Maruku having added it?",
+      "why": "Maruku adds the method to every Array in the process (T1); dropping it (N1) breaks any such caller.",
+      "default": "Drop it; a search of your code for replace_each_string settles it.",
+      "affects": [
+        "N1"
+      ],
+      "status": "answered",
+      "answer": "No, grep finds nothing."
+    },
+    {
+      "id": "Q6",
+      "question": "Do any pages contain <?maruku … ?> instructions, and does anything render them with unsafe features on (-u or :unsafe_features)?",
+      "why": "Maruku executes such instructions as Ruby when unsafe features are on (T3); not carrying that over (N2) changes those pages.",
+      "default": "Do not carry it over; pages that use it get a reviewed replacement.",
+      "affects": [
+        "N2"
+      ],
+      "status": "answered",
+      "answer": "No page has them, and unsafe features were never on."
+    }
+  ],
+  "traps": [
+    {
+      "id": "T1",
+      "rule": "ruby-monkey-patch",
+      "check": "Which core classes does Maruku reopen, and is the patch loaded by every program that requires maruku?",
+      "claim": "Array gains replace_each_string in lib/maruku/element.rb, which lib/maruku.rb requires, so every program that loads Maruku has it; the String additions in input_textile2 load only through maruku/textile2, which lib/maruku.rb does not require.",
+      "basis": "observed",
+      "cites": [
+        "trap:ruby-monkey-patch:lib/maruku/element.rb:130",
+        "lib/maruku/element.rb:130-138",
+        "lib/maruku.rb:66",
+        "trap:ruby-monkey-patch:lib/maruku/input_textile2/t2_parser.rb:1"
+      ]
+    },
+    {
+      "id": "T2",
+      "rule": "ruby-method-missing",
+      "check": "Which class answers unknown methods through method_missing, and is it ever used?",
+      "claim": "Only CharSourceDebug, which runs two character sources side by side and compares them; it is commented out, and CharSource is CharSourceManual.",
+      "basis": "observed",
+      "cites": [
+        "trap:ruby-method-missing:lib/maruku/input/charsource.rb:240",
+        "lib/maruku/input/charsource.rb:17-19",
+        "lib/maruku/input/charsource.rb:234-244"
+      ]
+    },
+    {
+      "id": "T3",
+      "rule": "ruby-eval",
+      "check": "Does any document content reach eval or instance_eval?",
+      "claim": "Yes, when unsafe features are on: each <?maruku … ?> processing instruction in a document is passed to instance_eval; the setting is off by default and the command's -u option turns it on process-wide.",
+      "basis": "observed",
+      "cites": [
+        "trap:ruby-eval:lib/maruku/input/parse_doc.rb:113",
+        "lib/maruku/input/parse_doc.rb:65-68",
+        "lib/maruku/input/parse_doc.rb:111-131",
+        "bin/maruku:34-36",
+        "lib/maruku/defaults.rb:4"
+      ]
+    },
+    {
+      "id": "T4",
+      "rule": "ruby-string-mutation",
+      "check": "Does the code mutate strings in place, and does it still run when string literals are frozen?",
+      "claim": "It builds strings by appending to literals in the line source, the span parser, and to_html, and on the checker build with frozen string literals every one of the 20 cases prints nothing: FrozenError at four places (lib/maruku/input/linesource.rb:83, lib/maruku/input/parse_span.rb:452 and :722, lib/maruku/output/to_html.rb:71).",
+      "basis": "observed",
+      "cites": [
+        "trap:ruby-string-mutation:lib/maruku/output/to_html.rb:52",
+        "lib/maruku/input/linesource.rb:83",
+        "lib/maruku/input/parse_span.rb:452",
+        "lib/maruku/input/parse_span.rb:722",
+        "lib/maruku/output/to_html.rb:71",
+        "probe:check-differs:abbreviations",
+        "probe:check-differs:attributes-attributes",
+        "probe:check-differs:headers",
+        "probe:check-differs:fenced_code_blocks"
+      ],
+      "reasoning": "aayu survey --golden --probe --check-bin legacy-checked.rb (ruby --enable=frozen-string-literal -W:deprecated) recorded check-differs for all 20 cases, each with its FrozenError line from stderr."
+    },
+    {
+      "id": "T5",
+      "rule": "ruby-removed-api",
+      "check": "Does it call APIs that current Ruby versions removed?",
+      "claim": "The blahtex math engine calls File.exists?, which references/traps.md lists as removed in Ruby 3.2, so that engine fails there; the default engine is none.",
+      "basis": "observed",
+      "cites": [
+        "trap:ruby-removed-api:lib/maruku/ext/math/mathml_engines/blahtex.rb:15",
+        "lib/maruku/defaults.rb:18"
+      ]
+    },
+    {
+      "id": "T6",
+      "rule": "ruby-globals",
+      "check": "Which global variables change behaviour for the rest of the process?",
+      "claim": "$warned_nokogiri makes a failed Nokogiri load permanent for the process, so with html_parser 'nokogiri' the HTML parser depends on whether the gem loads; other globals mark one-time warnings and lazy loads ($syntax_loaded, $already_warned_itex2mml).",
+      "basis": "observed",
+      "cites": [
+        "trap:ruby-globals:lib/maruku/html.rb:3",
+        "lib/maruku/html.rb:29-41",
+        "trap:ruby-globals:lib/maruku/output/to_html.rb:518"
+      ]
+    },
+    {
+      "id": "T7",
+      "rule": "ruby-dynamic-require",
+      "check": "Is any require built from input?",
+      "claim": "The maruku command's --ext option requires \"maruku/ext/#{name}\" for each comma-separated name the user passes.",
+      "basis": "observed",
+      "cites": [
+        "bin/maruku:85-87"
+      ]
+    },
+    {
+      "id": "T8",
+      "rule": "ruby-symbol-string-keys",
+      "check": "Where do strings from documents become symbols, and does a port keep the same keys?",
+      "claim": "Attribute and meta-data keys read from a document become symbols, so a document's \"Title:\" header is looked up as :title.",
+      "basis": "observed",
+      "cites": [
+        "trap:ruby-symbol-string-keys:lib/maruku/input/parse_doc.rb:103",
+        "lib/maruku/input/parse_doc.rb:98-106"
+      ]
+    }
+  ],
+  "do_not_carry": [
+    {
+      "id": "N1",
+      "feature": "Reopening Array to add replace_each_string",
+      "cites": [
+        "lib/maruku/element.rb:130-138"
+      ],
+      "traps": [
+        "T1"
+      ],
+      "risk": "Every program that loads the library gets a changed core class, which can clash with another library's method of the same name.",
+      "replacement": "A private helper on the document tree, or a refinement used only inside the library.",
+      "question": "Q5",
+      "status": "confirmed"
+    },
+    {
+      "id": "N2",
+      "feature": "Executing Ruby code embedded in a document (<?maruku … ?> with unsafe features on)",
+      "cites": [
+        "lib/maruku/input/parse_doc.rb:111-131",
+        "bin/maruku:34-36"
+      ],
+      "traps": [
+        "T3"
+      ],
+      "risk": "Whoever writes a page runs code on the machine that renders it.",
+      "replacement": "Never execute document content; anything a page computed becomes a reviewed template helper outside the document.",
+      "question": "Q6",
+      "status": "confirmed"
+    },
+    {
+      "id": "N3",
+      "feature": "Process-wide settings in MaRuKu::Globals and sticky globals",
+      "cites": [
+        "lib/maruku/defaults.rb:3-38",
+        "lib/maruku/html.rb:29-41",
+        "bin/maruku:30-58"
+      ],
+      "traps": [
+        "T6"
+      ],
+      "risk": "One caller's settings, or one failed gem load, change the output of every other document in the process.",
+      "replacement": "Options passed per document to the adapter, with no global state.",
+      "question": "Q3",
+      "status": "confirmed"
+    }
+  ],
+  "compatibility": [
+    {
+      "id": "K1",
+      "kind": "api",
+      "name": "Maruku.new(text, options).to_html and to_html_document: the HTML each page renders to",
+      "cites": [
+        "lib/maruku/maruku.rb:6-11",
+        "lib/maruku/output/to_html.rb:68-94"
+      ],
+      "consumers": "the person's sites (which pages: Q2)",
+      "level": "differ",
+      "decided_by": "Q1",
+      "proof": [
+        "S1",
+        "G1"
+      ],
+      "difference": "Whitespace between tags may differ; elements, attributes, and text stay as Maruku renders them, compared as spec/block_spec.rb compares HTML."
+    },
+    {
+      "id": "K2",
+      "kind": "file-format",
+      "name": "Maruku's Markdown dialect: PHP Markdown Extra plus attribute lists, meta-data, divs, and math",
+      "cites": [
+        "README.md:5-11",
+        "lib/maruku/ext/div.rb:11-15",
+        "lib/maruku/input/parse_doc.rb:98-106"
+      ],
+      "consumers": "the pages' authors and their existing documents",
+      "level": "differ",
+      "decided_by": "Q2",
+      "proof": [
+        "S1"
+      ],
+      "difference": "Only tables, footnotes, and attribute lists on headers are kept; divs, math, and meta-data headers are not supported, since no page uses them."
+    },
+    {
+      "id": "K3",
+      "kind": "config",
+      "name": "Document options and MaRuKu::Globals settings",
+      "cites": [
+        "lib/maruku/defaults.rb:3-38",
+        "lib/maruku/maruku.rb:9"
+      ],
+      "level": "differ",
+      "decided_by": "Q3",
+      "difference": "Only the per-document fenced_code_blocks option is kept; MaRuKu::Globals and the other options are not."
+    },
+    {
+      "id": "K4",
+      "kind": "cli",
+      "name": "The maruku command and its options",
+      "cites": [
+        "bin/maruku:27-87"
+      ],
+      "consumers": "unknown (Q4)",
+      "level": "drop",
+      "decided_by": "Q4",
+      "deprecation": "Nothing runs the command (Q4): the adapter gem ships none, its first release's notes say the maruku command is gone, and the command is removed with Maruku itself at cut-over."
+    }
+  ],
+  "modernisation": {
+    "target": "A maintained Ruby Markdown library",
+    "target_source": "request",
+    "strategy": "Make Maruku's own block docs the compatibility reference and capture the legacy results, then put the maintained library behind an adapter that keeps Maruku.new(text, options).to_html, add back only the Maruku extensions the pages use (Q2), and shadow both renderers on the real pages until the differences are the ones the person accepted.",
+    "cites": [
+      "test:spec/block_spec.rb",
+      "README.md:17"
+    ],
+    "steps": [
+      {
+        "id": "M1",
+        "title": "Capture the legacy results of the block-doc suite and of the sites' pages",
+        "modules": [
+          "mod:spec"
+        ],
+        "claims": [
+          "E5"
+        ],
+        "parity": [
+          "G1"
+        ]
+      },
+      {
+        "id": "M2",
+        "title": "An adapter with Maruku's entry points over the maintained library, with per-document options",
+        "modules": [
+          "mod:lib",
+          "mod:lib/maruku"
+        ],
+        "claims": [
+          "E1",
+          "E2"
+        ],
+        "depends_on": [
+          "M1"
+        ],
+        "parity": [
+          "G1"
+        ],
+        "avoids": [
+          "N1",
+          "N3"
+        ]
+      },
+      {
+        "id": "M3",
+        "title": "The Maruku-only syntax the pages use, as extensions of the new library",
+        "modules": [
+          "mod:lib/maruku/ext",
+          "mod:lib/maruku/input"
+        ],
+        "claims": [
+          "C2",
+          "T8"
+        ],
+        "depends_on": [
+          "M2"
+        ],
+        "parity": [
+          "G1"
+        ],
+        "avoids": [
+          "N2"
+        ]
+      }
+    ],
+    "case_sets": [
+      {
+        "id": "G1",
+        "title": "The block docs' Markdown inputs and expected HTML",
+        "from": [
+          "test:spec/block_spec.rb",
+          "spec/block_docs/tables.md:1-5",
+          "spec/block_docs/attributes/attributes.md:1-5"
+        ],
+        "compare": "equivalent HTML as spec/block_spec.rb compares it (whitespace-only text nodes ignored), through each case's exit code (Q1)",
+        "exclude": [
+          "divs, math, and meta-data documents (Q2: no page uses them)"
+        ]
+      }
+    ],
+    "risks": [
+      {
+        "id": "R1",
+        "claim": "Maruku-only syntax (attribute lists, divs, meta-data, math) has no counterpart in a plain Markdown library; check each extension the pages use against the candidate before choosing it.",
+        "basis": "observed",
+        "cites": [
+          "lib/maruku/ext/div.rb:11-15",
+          "README.md:9-11"
+        ]
+      },
+      {
+        "id": "R2",
+        "claim": "Raw HTML in pages passes through REXML by default and Nokogiri by option, so the legacy output already depends on the parser setting; capture the goldens with the setting the sites use.",
+        "basis": "observed",
+        "cites": [
+          "lib/maruku/html.rb:29-43",
+          "lib/maruku/defaults.rb:15"
+        ]
+      }
+    ],
+    "suites": [
+      {
+        "id": "S1",
+        "title": "Maruku's block docs, one test per document",
+        "from": [
+          "test:spec/block_spec.rb",
+          "spec/block_docs/tables.md:1-5"
+        ],
+        "cases": "compat.json",
+        "areas": [
+          "core",
+          "lists",
+          "code",
+          "tables",
+          "html",
+          "links-images",
+          "headers",
+          "footnotes-abbreviations",
+          "attributes",
+          "divs",
+          "encoding",
+          "math"
+        ]
+      }
+    ],
+    "coexistence": {
+      "mode": "shadow",
+      "how": "Render every page with Maruku and with the adapter on each build and report the pages whose HTML differs beyond what Q1 allows.",
+      "compare": [
+        "G1",
+        "S1"
+      ],
+      "cut_over": "S1 passes every test the legacy build passes, except differences the person accepted and recorded, and the sites' pages show no unaccepted difference over a shadow period the person sets.",
+      "rollback": "Switch the sites' renderer setting back to Maruku, which stays installed until the shims are removed."
+    },
+    "shims": [
+      {
+        "id": "SH1",
+        "interface": "K1",
+        "behaviour": "Maruku.new(text, options).to_html and to_html_document keep their names and signatures",
+        "mechanism": "a Maruku class in the adapter gem that calls the new library",
+        "removal": "When the sites call the new library directly, deprecate the Maruku class for one release, then remove it."
+      }
+    ]
+  }
+}

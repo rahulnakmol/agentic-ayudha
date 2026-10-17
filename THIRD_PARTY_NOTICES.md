@@ -121,13 +121,19 @@ These run only in this repository's GitHub Actions workflows. Versions are pinne
 
 ### Eval fixtures (not distributed)
 
-Two open-source codebases are kept as they are, with their licence files, as fixtures for the `survey` skill's
-evals (`evals/cases/survey/repos/`, WP5.9). They are test data: never built, linked, or embedded in the binary.
+Four open-source codebases are kept, with their licence files, as fixtures for the `survey` skill's evals
+(`evals/cases/survey/repos/`, WP5.9): two whole, two as the subsets named below. They are test data: never built,
+linked, or embedded in the binary.
 
 | Component | Version | Licence | Use | Source |
 |---|---|---|---|---|
 | tiny-js | commit 8214477 (2026-02-24) | MIT | C++ fixture for `survey/tinyjs-rust` and `survey/tinyjs-backlog`; line endings normalised to LF, `.gitignore` dropped | <https://github.com/gfwilliams/tiny-js> |
 | Parsedown | commit 4e433a8 (2026-02-18) | MIT | PHP fixture for `survey/parsedown-modern-php`; `.github/`, `.gitignore`, and `.gitattributes` dropped | <https://github.com/erusev/parsedown> |
+| MINPACK | commit 12f30bc (2022-10-06) | MIT (repository, Ondřej Čertík) and the Minpack Copyright Notice (1999) of the University of Chicago, a BSD-style licence with an acknowledgment clause (the MINPACK code), both in its `LICENSE` | Fortran fixture for `survey/minpack-traps`; a subset: `src/`, `examples/`, the seven `ex/` drivers and their data files `ex/file21`-`ex/file23`, the build files, `fpm.toml`, the readme, and the licence | <https://github.com/certik/minpack> |
+| Maruku | commit 4d88d0e (2025-01-04) | MIT | Ruby fixture for `survey/maruku-compat` and `survey/maruku-backlog`; a subset: `lib/`, `bin/`, `data/entities.xml`, `spec/*.rb`, 20 of the 162 `spec/block_docs`, the readme, licence, gemspec, Gemfile, and Rakefile | <https://github.com/bhollis/maruku> |
+
+The MINPACK fixture includes software developed by the University of Chicago, as Operator of Argonne National
+Laboratory (the acknowledgment its licence asks for).
 
 ### Design system (`packages/design-system/`, WP6.1–6.3)
 
