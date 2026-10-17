@@ -12,6 +12,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/chart"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/counsel"
 	"github.com/rahulnakmol/agentic-ayudha/internal/decide"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/production"
@@ -66,11 +67,15 @@ func personaOf(c Case, assets fs.FS) (seats.Persona, seats.Practice, error) {
 }
 
 // checkPersona runs the deterministic checks on one output; a chart case's
-// output must also have every part of its kind of note.
+// output must also have every part of its kind of note, and a counsel case's
+// every part of a counsel with no claim of a review (counsel.CheckStructure).
 func checkPersona(c Case, pr seats.Practice, grounding, out string) []string {
 	found := append(seats.CheckGrounding(out, grounding), seats.CheckStage(out, pr, c.Persona.Stage)...)
 	if c.Skill == "chart" {
 		found = append(found, chart.CheckStructure(out, c.Persona.Kind)...)
+	}
+	if c.Skill == "counsel" {
+		found = append(found, counsel.CheckStructure(out)...)
 	}
 	if slices.Contains(production.Skills, c.Skill) {
 		found = append(found, production.CheckDoc(c.Skill, out, grounding)...)
@@ -144,6 +149,11 @@ func (h *Harness) runPersona(ctx context.Context, c Case, lane verbs.LaneID, bod
 	}
 	if c.Skill == "chart" {
 		checks += fmt.Sprintf("; it has every part of a %s chart note in order, each naming what the part must name", c.Persona.Kind)
+	}
+	if c.Skill == "counsel" {
+		checks += "; it has every part of a counsel in order, names a door, the three readings, and the dominant one, makes one " +
+			"recommendation in one paragraph, gives an `aayu` command as the next step, ends with a one-line question, claims no " +
+			"review, approval, or LGTM, and is at most 500 words"
 	}
 	if slices.Contains(production.Skills, c.Skill) {
 		checks += "; it has every part of its document in order, each naming what the part must name; every proposed action is a catalog action " +

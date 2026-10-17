@@ -1,0 +1,22 @@
+# Which tests prove story #478's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # grounding for a free question, a Decision, a path, and a PR with a proof pack; no write
+tests = ["internal/cli:TestCounsel"]
+
+[[criterion]]
+id = 2 # --draft: exit 0 when complete, exit 4 naming each defect
+tests = ["internal/cli:TestCounsel", "internal/counsel:TestReviewClaims"]
+
+[[criterion]]
+id = 3 # --post: one labelled counsel comment, same/different-family, replaced in place, no review; no target exits 2
+tests = ["internal/cli:TestCounsel", "internal/counsel:TestLabel"]
+
+[[criterion]]
+id = 4 # registry, MCP read-only, model-invocable skill with Atri's persona block, the hook lets it run
+tests = ["internal/verbs:TestRegistry", "internal/cli:TestMCPDefaultExposure", "internal/hosts:TestPreToolBlocksHumanOnlyShell", "internal/cli:TestInstall"]
+
+[[criterion]]
+id = 5 # tier-1 counsel cases: recorded counsel passes, planted counsel fails
+tests = ["internal/evals:TestTier1"]

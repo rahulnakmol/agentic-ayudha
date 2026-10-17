@@ -81,6 +81,7 @@ Layers owned: none.
 | Verb | Role |
 |---|---|
 | `decide` | Accountable; the twin executes it (spec lane); owns thresholds and policy |
+| `counsel` | Accountable; the twin executes it (spec lane); owns thresholds and policy |
 | `release` | Informed |
 | `experiment` | Informed |
 | `readout` | Informed |

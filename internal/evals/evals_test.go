@@ -1128,9 +1128,14 @@ func TestGroups(t *testing.T) {
 	if g, _ := cfg.Group("survey"); err != nil || sg.MaxUSD != 14 || sg.MaxTokens.Skill != 48000 || len(surveys) < 2 || cfg.Gates("survey") || g.RunsOn("push") || g.RunsOn("schedule") {
 		t.Fatalf("survey group: %v, cap %v, %d cases, gates %v", err, sg.MaxUSD, len(surveys), cfg.Gates("survey"))
 	}
+	// Story #478: Atri's counsel cases, advisory until two consecutive full runs meet the bar, on dispatch only.
+	cg, counsels, err := cfg.ForGroup("counsel", all)
+	if g, _ := cfg.Group("counsel"); err != nil || cg.MaxUSD != 3 || len(counsels) != 2 || cfg.Gates("counsel") || g.RunsOn("push") || g.RunsOn("schedule") {
+		t.Fatalf("counsel group: %v, cap %v, %d cases, gates %v", err, cg.MaxUSD, len(counsels), cfg.Gates("counsel"))
+	}
 	o, other, err := cfg.ForGroup("skills", all)
-	if err != nil || o.MaxUSD != 4 || o.K != cfg.K || o.MaxTokens.Skill != cfg.MaxTokens.Skill || !cfg.Gates("skills") || len(brief)+len(plain)+len(personas)+len(retros)+len(review)+len(convs)+len(tells)+len(hosts)+len(ux)+len(dataAI)+len(prod)+len(surveys)+len(other) != len(all) {
-		t.Fatalf("skills group: %v, cap %v, %d+%d+%d+%d+%d+%d+%d+%d+%d+%d+%d+%d+%d of %d cases", err, o.MaxUSD, len(brief), len(plain), len(personas), len(retros), len(review), len(convs), len(tells), len(hosts), len(ux), len(dataAI), len(prod), len(surveys), len(other), len(all))
+	if err != nil || o.MaxUSD != 4 || o.K != cfg.K || o.MaxTokens.Skill != cfg.MaxTokens.Skill || !cfg.Gates("skills") || len(brief)+len(plain)+len(personas)+len(retros)+len(review)+len(convs)+len(tells)+len(hosts)+len(ux)+len(dataAI)+len(prod)+len(surveys)+len(counsels)+len(other) != len(all) {
+		t.Fatalf("skills group: %v, cap %v, %d+%d+%d+%d+%d+%d+%d+%d+%d+%d+%d+%d+%d+%d of %d cases", err, o.MaxUSD, len(brief), len(plain), len(personas), len(retros), len(review), len(convs), len(tells), len(hosts), len(ux), len(dataAI), len(prod), len(surveys), len(counsels), len(other), len(all))
 	}
 	for _, c := range other {
 		if c.Tier2 != nil && c.Tier2.Human != "" {

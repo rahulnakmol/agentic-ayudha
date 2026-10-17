@@ -149,7 +149,7 @@ seat's twin, consult the Consulted seats before acting, and leave paired humans'
 | Auditor (`auditor`) | Vidhi | — | `audit` |
 | Marketer & Documenter (`marketer-documenter`) | Sauti | — | `tell` |
 | Revenue Architect (`revenue-architect`) | Kuber | — | `experiment`, `readout` |
-| Founder (`founder`) | Atri | — | `decide`, `init`, `halt`, `resume`, `seat`, `tour`, `inbox` |
+| Founder (`founder`) | Atri | — | `decide`, `counsel`, `init`, `halt`, `resume`, `seat`, `tour`, `inbox` |
 
 Each twin has a persona (`seats/<slug>/persona.toml`, rendered into its charter and its skills): speak in
 the Accountable seat's voice and use its practice playbook at the team's stage.
