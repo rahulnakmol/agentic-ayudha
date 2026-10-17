@@ -19,7 +19,7 @@ func decisionBody(reversible, links string) string {
 	t, _ := workitems.FindType("decision")
 	return workitems.Render(t, map[string]string{
 		workitems.FieldSummary:    "Which rules engine?",
-		"options":                 "A: in-house. B: a vendor engine.",
+		"options":                 "1. **A.** in-house.\n2. **B.** a vendor engine.",
 		"evaluation":              "A is cheaper to run; B is faster to build.",
 		"recommendation":          "A",
 		workitems.FieldReversible: reversible,
@@ -304,7 +304,7 @@ func TestDecidePack(t *testing.T) {
 		}
 	}
 	if rep.Seat != "engineering-manager" || rep.Twin != "Drona" || rep.Stage != "startup" || rep.Question != "Which rules engine?" ||
-		!strings.Contains(rep.Persona, "Speak and work as Drona") || !strings.Contains(rep.Untrusted, "A: in-house.") || len(rep.Sections) != 8 {
+		!strings.Contains(rep.Persona, "Speak and work as Drona") || !strings.Contains(rep.Untrusted, "1. **A.** in-house.") || len(rep.Sections) != 8 {
 		t.Errorf("pack for #2: %+v", rep)
 	}
 	q := pack(0, "Should we add a field to the Tombstone schema or a separate index?")
