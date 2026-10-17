@@ -206,7 +206,9 @@ func TestInstallMirrorsVerifySkill(t *testing.T) {
 // TestInstallEnv: an agent may set up and verify agent environments (they land
 // through review like any file); a clean-container failure is fixed and retried.
 func TestInstallEnv(t *testing.T) {
-	repo := gitInit(t, "dev", map[string]string{"go.mod": "module m\n\ngo 1.25.0\n"})
+	repo := gitInit(t, "dev", map[string]string{"go.mod": "module m\n\ngo 1.25.0\n",
+		".github/workflows/ci.yml": "on: pull_request\njobs:\n  test: {runs-on: x, steps: [{run: go test ./...}]}\n"})
+	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(t.TempDir(), "none")) // no machine-wide core.hooksPath
 	sum := strings.Repeat("a", 64)
 	runs := 0
 	opts := Options{Dir: repo, Build: BuildInfo{Version: "1.0.0"},
@@ -248,6 +250,13 @@ func TestInstallEnv(t *testing.T) {
 	}
 	if sts[0].Host != "amp" || sts[0].State != agentenv.Verified || sts[1].State != agentenv.Missing {
 		t.Fatalf("status after verifying amp: %+v", sts)
+	}
+	// The local gate (Story #399): the CI job is listed, it has no local step yet, and the clone's pre-push hook runs it.
+	if !strings.Contains(out, "Local gate gaps") || !strings.Contains(out, "test (.github/workflows/ci.yml)") {
+		t.Errorf("readback does not name the gate's gap:\n%s", out)
+	}
+	if hook, err := os.ReadFile(filepath.Join(repo, ".git", "hooks", "pre-push")); err != nil || string(hook) != agentenv.PrePushHook {
+		t.Errorf("pre-push hook = %q, %v; want the local gate's hook", hook, err)
 	}
 	spec, _ := os.ReadFile(filepath.Join(repo, agentenv.SpecPath))
 	if !strings.Contains(string(spec), "'unzip'") || !strings.Contains(string(spec), "fix: unzip was missing in a clean container") {

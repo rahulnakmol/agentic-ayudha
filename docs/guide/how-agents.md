@@ -108,6 +108,14 @@ verified.
 - `--host <h> --record '<reply>'` records a probe reply you copied from Cursor's or Claude Code's UI. A reply counts
   only when it carries the current fingerprint.
 
+**The local gate.** `.agents/check --full` runs, job by job, the checks of every CI job a pull request must pass, so
+a failure shows before a push instead of in remote CI. Discovery lists the pull-request jobs of `ci.yml` and
+`protected-paths.yml`; each needs a `[[gate]]` entry in `.aayudha/env.toml` with its commands, or the reason it runs
+only in CI. The gate prints `aayu-gate: FAIL: CI job "<job>"` for each failed job and `NOT RUN LOCALLY` for each
+part that only CI runs, such as a scanner that is not installed. A job with neither fails the gate. `--apply`
+installs a git pre-push hook that runs the gate, and `.agents/setup` installs it in cloud clones;
+`git push --no-verify` skips it once.
+
 Results land in `.aayudha/env-verified.toml`. Agents may run `--apply` and `--verify`: they write only repository
 files.
 

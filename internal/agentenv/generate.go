@@ -236,6 +236,7 @@ trap 'rm -rf "$tmp"' EXIT
 	steps("Dependencies", s.Deps)
 	steps("Browsers", s.Browsers)
 	steps("Step", s.Steps)
+	b.WriteString(setupHook(s))
 	b.WriteString("step \"Setup complete (environment " + fp + ")\"\n")
 	return b.String()
 }
@@ -489,6 +490,7 @@ func checkScript(s Spec, fp string) string {
 			b.WriteString("rustc --version\n")
 		}
 	}
+	b.WriteString(gateScript(s))
 	if len(s.Services) > 0 {
 		b.WriteString(StartCommand + "\n")
 	}

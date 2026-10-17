@@ -285,6 +285,7 @@ func KeepPins(s *Spec, old Spec) {
 	if c := old.Tool("corepack"); c != nil && s.Tool("corepack") == nil && (s.Tool("pnpm") != nil || s.Tool("yarn") != nil) {
 		s.Tools = append(s.Tools, *c)
 	}
+	keepGate(s, old)
 }
 
 // notLanded lists the host's files that ref does not have as they are here.
