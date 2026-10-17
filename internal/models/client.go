@@ -99,9 +99,12 @@ type Response struct {
 	TokensOut int // reasoning and thinking tokens included: they bill as output
 	// CachedIn and CacheWriteIn are the parts of TokensIn read from and written
 	// to the provider's prompt cache, which bill at their own rates (Cost).
-	CachedIn     int
-	CacheWriteIn int
-	CostUSD      float64 // reported by the endpoint, when it reports one; else 0
+	// CacheWrite1hIn is the part of CacheWriteIn written to Anthropic's 1-hour
+	// cache, billed at 2x input instead of the 5-minute 1.25x.
+	CachedIn       int
+	CacheWriteIn   int
+	CacheWrite1hIn int
+	CostUSD        float64 // reported by the endpoint, when it reports one; else 0
 	// StopReason is why the model stopped, as the endpoint reports it: Messages
 	// stop_reason, Responses status (with incomplete_details.reason), Chat
 	// finish_reason. Truncated is set when it stopped at the token cap.
@@ -272,6 +275,7 @@ func decodeMessagesStream(body io.Reader) (Response, error) {
 			u := ev.Message.Usage
 			r.Model = ev.Message.Model
 			r.TokensIn = u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens
+			r.CachedIn, r.CacheWriteIn, r.CacheWrite1hIn = u.CacheReadInputTokens, u.CacheCreationInputTokens, u.CacheCreation.Ephemeral1hInputTokens
 			r.TokensOut = u.OutputTokens
 		case "content_block_delta":
 			if ev.Delta.Type == "text_delta" {
@@ -333,15 +337,19 @@ func truncate(s string, n int) string {
 type usage struct {
 	InputTokens int `json:"input_tokens"`
 	// Anthropic Messages reports cached prompt input apart from input_tokens;
-	// both count as input (conservatively at the full input rate) for cost and
-	// the [budget] breaker.
-	CacheReadInputTokens     int      `json:"cache_read_input_tokens"`
-	CacheCreationInputTokens int      `json:"cache_creation_input_tokens"`
-	OutputTokens             int      `json:"output_tokens"`
-	PromptTokens             int      `json:"prompt_tokens"`
-	CompletionTokens         int      `json:"completion_tokens"`
-	TotalTokens              int      `json:"total_tokens"`
-	Cost                     *float64 `json:"cost"` // some gateways report the charge
+	// both count as input for cost and the [budget] breaker, each at its own
+	// rate. cache_creation splits the writes by TTL (its parts sum to
+	// cache_creation_input_tokens); the 1-hour part bills at CacheWrite1h.
+	CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+	CacheCreation            struct {
+		Ephemeral1hInputTokens int `json:"ephemeral_1h_input_tokens"`
+	} `json:"cache_creation"`
+	OutputTokens     int      `json:"output_tokens"`
+	PromptTokens     int      `json:"prompt_tokens"`
+	CompletionTokens int      `json:"completion_tokens"`
+	TotalTokens      int      `json:"total_tokens"`
+	Cost             *float64 `json:"cost"` // some gateways report the charge
 	// OpenAI Responses: cached_tokens and cache_write_tokens are parts of
 	// input_tokens; Chat Completions (xAI, Gemini): cached_tokens of prompt_tokens.
 	InputTokensDetails struct {
@@ -388,7 +396,7 @@ func decode(style string, raw []byte) (Response, error) {
 	r := Response{Model: v.Model, TokensIn: u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens + u.PromptTokens,
 		TokensOut:    u.OutputTokens + u.CompletionTokens,
 		CachedIn:     u.CacheReadInputTokens + u.InputTokensDetails.CachedTokens + u.PromptTokensDetails.CachedTokens,
-		CacheWriteIn: u.CacheCreationInputTokens + u.InputTokensDetails.CacheWriteTokens}
+		CacheWriteIn: u.CacheCreationInputTokens + u.InputTokensDetails.CacheWriteTokens, CacheWrite1hIn: u.CacheCreation.Ephemeral1hInputTokens}
 	// Some chat endpoints (xAI) leave reasoning tokens out of completion_tokens
 	// but in total_tokens; they bill as output, so the difference counts.
 	if extra := u.TotalTokens - r.TokensIn - r.TokensOut; u.TotalTokens > 0 && extra > 0 {

@@ -4,9 +4,11 @@ import "github.com/rahulnakmol/agentic-ayudha/internal/config"
 
 // Rates are USD per million tokens. CachedInput is a cache read and
 // CacheWrite a prompt written to the provider's cache; either at 0 is charged
-// at the Input rate.
+// at the Input rate. CacheWrite1h is a write to Anthropic's 1-hour cache (2x
+// input, where CacheWrite is the 5-minute write at 1.25x); at 0 it is charged
+// at CacheWrite.
 type Rates struct {
-	Input, CachedInput, CacheWrite, Output float64
+	Input, CachedInput, CacheWrite, CacheWrite1h, Output float64
 }
 
 // ListPrice is a model's price as its provider publishes it, with where and
@@ -28,17 +30,19 @@ type ListPrice struct {
 // rate on every provider; the clients count them as output (decode). The AI
 // gateway the evals use returns no cost of its own (D-3.4p), so these are what
 // the evals and the [budget] breaker charge; a [[models.prices]] entry in
-// config overrides one, for a gateway that bills otherwise. Anthropic cache
-// writes are at the 5-minute rate; the clients never ask for the 1-hour cache.
+// config overrides one, for a gateway that bills otherwise. Anthropic bills a
+// cache write by its TTL: 5-minute writes at CacheWrite (1.25x input), 1-hour
+// writes at CacheWrite1h (2x input). The AI gateway upgrades Claude cache writes
+// to the 1-hour TTL, and the usage block says which tokens went to which.
 var ListPrices = []ListPrice{
-	{Model: "claude-opus-5-5", Short: Rates{Input: 4, CachedInput: 0.20, CacheWrite: 5, Output: 20},
+	{Model: "claude-opus-5-5", Short: Rates{Input: 4, CachedInput: 0.20, CacheWrite: 5, CacheWrite1h: 8, Output: 20},
 		Source: "https://platform.claude.com/docs/en/about-claude/pricing", Read: "2026-10-17"},
-	{Model: "claude-sonnet-5-5", Short: Rates{Input: 2, CachedInput: 0.10, CacheWrite: 2.50, Output: 10},
+	{Model: "claude-sonnet-5-5", Short: Rates{Input: 2, CachedInput: 0.10, CacheWrite: 2.50, CacheWrite1h: 4, Output: 10},
 		Source: "https://platform.claude.com/docs/en/about-claude/pricing", Read: "2026-10-17"},
-	{Model: "claude-haiku-5-5", Short: Rates{Input: 0.10, CachedInput: 0.01, CacheWrite: 0.125, Output: 0.50},
-		LongAbove: 100000, Long: Rates{Input: 0.50, CachedInput: 0.05, CacheWrite: 0.625, Output: 2.50},
+	{Model: "claude-haiku-5-5", Short: Rates{Input: 0.10, CachedInput: 0.01, CacheWrite: 0.125, CacheWrite1h: 0.20, Output: 0.50},
+		LongAbove: 100000, Long: Rates{Input: 0.50, CachedInput: 0.05, CacheWrite: 0.625, CacheWrite1h: 1, Output: 2.50},
 		Source: "https://platform.claude.com/docs/en/about-claude/pricing", Read: "2026-10-17"},
-	{Model: "claude-fable-5-1", Short: Rates{Input: 10, CachedInput: 0.25, CacheWrite: 12.50, Output: 50},
+	{Model: "claude-fable-5-1", Short: Rates{Input: 10, CachedInput: 0.25, CacheWrite: 12.50, CacheWrite1h: 20, Output: 50},
 		Source: "https://platform.claude.com/docs/en/about-claude/pricing", Read: "2026-10-17"},
 	// OpenAI writes a prompt to its cache implicitly (GPT-5.6 and later) and bills
 	// the write at 1.25x input: https://developers.openai.com/api/docs/guides/prompt-caching

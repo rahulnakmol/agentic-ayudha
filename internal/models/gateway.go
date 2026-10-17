@@ -28,7 +28,8 @@ const (
 
 // Cost prices a reply: the endpoint's own figure, else the model's price
 // (PriceOf: config, then the list price), else the fallback rate. Cache reads
-// and writes, which TokensIn includes, are charged at their own rates, and a
+// and writes, which TokensIn includes, are charged at their own rates (a
+// 1-hour cache write at CacheWrite1h), and a
 // prompt past the long-context threshold at the long-context rates.
 func Cost(prices []config.Price, model string, r Response) (usd float64, source string) {
 	if r.CostUSD > 0 {
@@ -48,9 +49,14 @@ func Cost(prices []config.Price, model string, r Response) (usd float64, source 
 		}
 		return v
 	}
+	write1h := or(rt.CacheWrite)
+	if rt.CacheWrite1h > 0 {
+		write1h = rt.CacheWrite1h
+	}
 	plain := max(r.TokensIn-r.CachedIn-r.CacheWriteIn, 0)
-	return (float64(plain)*rt.Input + float64(r.CachedIn)*or(rt.CachedInput) + float64(r.CacheWriteIn)*or(rt.CacheWrite) +
-		float64(r.TokensOut)*rt.Output) / 1e6, source
+	w1h := min(r.CacheWrite1hIn, r.CacheWriteIn)
+	return (float64(plain)*rt.Input + float64(r.CachedIn)*or(rt.CachedInput) + float64(r.CacheWriteIn-w1h)*or(rt.CacheWrite) +
+		float64(w1h)*write1h + float64(r.TokensOut)*rt.Output) / 1e6, source
 }
 
 // ErrBudget means the [budget] circuit breaker has tripped: agent lanes are
