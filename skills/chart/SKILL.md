@@ -166,7 +166,11 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   aggregates only, no free text, the shortest retention the decision needs), how long each copy is kept (export, snapshot, aggregate), and how a deletion
   reaches every copy: the person's rows are removed from the source system (the telemetry store or database the
   events come from; if it cannot delete, say so, give its retention, and make it an open question), from each export
-  and snapshot, and aggregates are rebuilt from them. A pseudonymous ID does not anonymise free text: say who may read the text itself and what is redacted.
+  and snapshot, and aggregates are rebuilt from them. No copy derived from personal data outlives the copy it is
+  rebuilt from: an aggregate kept longer than its source must be anonymous by construction (counts only, no text, no
+  IDs, small groups suppressed), say so, and that is why a deletion need not touch it; otherwise keep it no longer
+  than its source. A source that only ages data out (a fixed retention, no per-person delete) does not meet a
+  deletion request: say that plainly, with its retention, as the open risk. A pseudonymous ID does not anonymise free text: say who may read the text itself and what is redacted.
 - `## Checks`: how we will know the numbers are right: a reconciliation against the source, quality checks with
   thresholds (skipped rows, duplicates, nulls), the metric computed by hand on a synthetic fixture, and the
   Completion Goal criteria (`metric` evidence) that `plan` turns into checkpoints.
@@ -177,7 +181,9 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
 
 - `## Question`: who asks, what they need, and the cost of a wrong or missing answer, tied to the fact that shows it
   (or an `Assumption:` line).
-- `## Simpler options`: try the simplest thing first and say what the evidence shows. A number in a table is an exact
+- `## Simpler options`: try the simplest thing first and say what the evidence shows, and only that: describe the
+  misses and failures as the grounding counts them, and never claim an absence (no multi-hop questions, nothing
+  else fails) the grounding does not state. A number in a table is an exact
   lookup, not a generated sentence; a small corpus is often served by keyword search; a refusal rule may be the
   feature. Add a vector index only when lexical retrieval misses paraphrases on the evaluation set, hybrid retrieval
   and reranking when both kinds of miss happen, and a knowledge graph only for named multi-hop or relationship
@@ -194,12 +200,16 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
 - `## Evaluation`: a table of cases, representative and **adversarial** (out of scope, someone else's data, an
   injection inside a document, contradictory versions, a number), with the metrics and numeric thresholds: retrieval
   recall at k, evidence support, citation accuracy, correct abstention on unanswerable cases, task success, and the
-  latency and cost budgets, each a number measured on this set now, not deferred to a later option. A case passes
-  under one rule: an adversarial case passes when the answer abstains or answers safely from permitted, current
-  evidence, and the aggregate threshold counts it the same way. Measure each kind of answer with its own metric
+  latency and cost budgets, each a number measured on this set now, not deferred to a later option. Every case
+  states its own expected behaviour, and that is how it is scored: an answerable case (a contradictory version with a
+  rule that resolves it, a number in the table, a paraphrase) passes only with the right answer and its citation,
+  so abstaining fails it; an unanswerable or out-of-permission case passes only by abstaining or referring; an
+  injection case passes when the answer ignores the injected text and is otherwise right. Add up every count you
+  give (cases per kind, the set's total) and check the sum. Measure each kind of answer with its own metric
   (recall at k for passages, exact match for a number from a table, correct abstention for cases with no answer),
-  and every trigger you mention for a later option gives its number here. Thresholds nobody has agreed yet are `Assumption:` lines. A startup set is small (about
-  twenty cases, a quarter adversarial); a scaleup slices results; an enterprise adds red-team and isolation tests.
+  and every trigger you mention for a later option gives its number here. Thresholds nobody has agreed yet are
+  `Assumption:` lines. A startup set is small (about twenty cases, a quarter adversarial); a scaleup slices results;
+  an enterprise adds red-team and isolation tests.
 - A predictive model instead of retrieval: beat a simple baseline first, split by time or entity so nothing leaks,
   pick the metric that matches the decision, and say what drift you watch after launch.
 
