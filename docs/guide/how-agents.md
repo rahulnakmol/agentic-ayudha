@@ -112,8 +112,11 @@ Results land in `.aayudha/env-verified.toml`. Agents may run `--apply` and `--ve
 files.
 
 **Detect and Ensure.** `agentenv.Detect` reports, per agent, the CLI path and version, whether it is signed in,
-whether its cloud can take a hand-off, and the exact install and sign-in commands. It makes no network, model, or
-task call. Cloud needs: for Codex, a ChatGPT login and `[delegate] codex_env`; for Cursor, an API key in aayu's
+whether its cloud can take a hand-off, and the exact install and sign-in commands. It makes no model or task call,
+and it reads only local state: PATH, `--version`, each CLI's sign-in status, aayu's secret store and config, and the
+verification record. One probe reaches the network: when `codex login status` says "Not logged in", Detect asks
+`codex doctor --json`, which also checks that Codex's model provider answers
+([Codex through your own model provider](hosts/codex.md#codex-through-your-own-model-provider)). Cloud needs: for Codex, a ChatGPT login and `[delegate] codex_env`; for Cursor, an API key in aayu's
 secret store or `CURSOR_API_KEY`; for Claude Code, a claude.ai sign-in; for Amp, a sign-in and a recorded Amp project
 for this repository. Before a fresh cloud hand-off, `build --delegate` calls `agentenv.Ensure` for the receiver. It
 regenerates and verifies a missing or stale environment, which takes minutes. When the verified files are not on the
@@ -287,8 +290,10 @@ type State struct {
    `TestDelegateCIRepair`, `TestDelegateCycleCapPages`, and `TestDelegateCursorReviewLoop`.
 6. No host offers a hand-off to itself, and every host command uses only tokens Codex accepts. Enforced in
    [internal/hosts](../../internal/hosts), `TestPluginManifests` and `TestHostPluginsLoad`.
-7. Detection makes no network, model, or task call and reports exact install and sign-in commands. Enforced by
-   `agentenv.Detect` with injected probes, `TestDetect`.
+7. Detection makes no model or task call, observes only through its `Probe` (local commands and files), and reports
+   exact install and sign-in commands. Its one network probe is `codex doctor --json`, run only when Codex is not
+   signed in. Enforced by `agentenv.Detect` with injected probes, `TestDetect`, which also covers the model-provider
+   path; no test can show the absence of a network call, so that part rests on the `Probe` boundary.
 8. An environment is verified only when its record carries the spec's current fingerprint; edited files or changed
    code make it stale. Enforced by `agentenv.Status`, `TestStatus`; generation keeps the owner's own keys,
    `TestGenerateKeepsTheOwnersKeys`; `install --env` end to end, `TestInstallEnv`.
