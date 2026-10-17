@@ -39,7 +39,7 @@ scoop bucket add rahulnakmol https://github.com/rahulnakmol/scoop-bucket
 scoop install aayudha
 ```
 
-Homebrew (`brew install --cask rahulnakmol/tap/aayudha`) and winget (`winget install rahulnakmol.aayudha`)
+Homebrew (`brew install --cask rahulnakmol/tap/aayudha`) and winget (`winget install --id Rahulnakmol.AgenticAyudha`, or `winget install aayudha`)
 come the same way. Scoop and winget check the archive's SHA-256 from their manifest; only
 `install.sh` checks the cosign signature.
 
