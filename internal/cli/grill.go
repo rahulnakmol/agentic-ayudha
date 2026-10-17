@@ -181,6 +181,12 @@ func runGrill(ctx context.Context, e *Env, in Values) error {
 		}
 		if created != nil {
 			res.Issue, res.URL = created.GetNumber(), created.GetHTMLURL()
+			// The person asked for what their grill files: build may pick it up
+			// in this session without asking again (D-5.5c.20). The issue
+			// exists, so a failed note only means build asks.
+			if err := e.recordGrilled(repo, res.Issue); err != nil {
+				e.Logf("grill: noting #%d as asked: %v", res.Issue, err)
+			}
 			if res.Parent > 0 {
 				id := created.GetID()
 				_, err := c.Write(ctx, actions.Action{Kind: "github.issue.sub-issue.add", Target: fmt.Sprintf("%s#%d", repo, res.Parent),

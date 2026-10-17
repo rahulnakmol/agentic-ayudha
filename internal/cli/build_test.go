@@ -687,3 +687,59 @@ func TestBuildDropsTheTypePrefix(t *testing.T) {
 		t.Fatalf("PR title: %d %+v %s", code, pr, errOut)
 	}
 }
+
+// D-5.5c.20: an agent does not pick up a Ready story the person did not ask
+// for. build warns and stops before the lease; the person's words (--asked) or
+// the person's own grill in the same session let it start.
+func TestBuildHoldsAStoryThePersonDidNotAskFor(t *testing.T) {
+	g := readyTree(t)
+	dir, _ := ledgerCheckout(t)
+	git(t, dir, "config", "user.name", "Builder")
+	git(t, dir, "config", "user.email", "builder@example.com")
+	person := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH")}
+	agent := func(session string) map[string]string {
+		return map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH"), "CODEX_THREAD_ID": session}
+	}
+	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, CheckpointVerify: holds}
+	if code, _, errOut := run(t, person, opts, "ready", "2", "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready: %s", errOut)
+	}
+	code, _, errOut := run(t, agent("s1"), opts, "build", "2", "--repo", "o/r")
+	g.Mu.Lock()
+	assignees := len(g.Issues[2].Assignees)
+	g.Mu.Unlock()
+	if code != ExitBlocked || !strings.Contains(errOut, `build #2 "Show empty list": the person has not asked for this story in this session (CODEX_THREAD_ID)`) ||
+		!strings.Contains(errOut, `aayu build 2 --asked "<their words>"`) {
+		t.Fatalf("unasked pickup: %d %s", code, errOut)
+	}
+	if labels := g.LabelNames(2); !contains(labels, "status:ready") || contains(labels, LeaseLabel) || assignees != 0 {
+		t.Fatalf("held story was taken: labels %v assignees %d", labels, assignees)
+	}
+	if _, err := os.Stat(BuildWorktree(dir, 2)); err == nil {
+		t.Fatal("held story got a worktree")
+	}
+	if code, _, errOut := run(t, agent("s1"), opts, "build", "2", "--repo", "o/r", "--asked", "yes, build #2"); code != 0 || !contains(g.LabelNames(2), LeaseLabel) {
+		t.Fatalf("asked pickup: %d %s", code, errOut)
+	}
+	if log, _ := os.ReadFile(filepath.Join(dir, ".aayudha", "telemetry", "actions.jsonl")); !strings.Contains(string(log), `"words":"yes, build #2"`) {
+		t.Fatalf("the person's words are not in the actions log:\n%s", log)
+	}
+	// A story the person's grill filed passes in that session only.
+	body := fixtureBody(t, "story", nil)
+	code, out, errOut := run(t, agent("s1"), opts, "grill", "story", "--repo", "o/r", "--json", "--title", "Show totals", "--body", body, "--labels", "effort:S", "--create")
+	var res GrillResult
+	_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)
+	if code != 0 || res.Issue == 0 {
+		t.Fatalf("grill: %d %s", code, errOut)
+	}
+	n := strconv.Itoa(res.Issue)
+	if code, _, errOut := run(t, person, opts, "ready", n, "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready %s: %s", n, errOut)
+	}
+	if code, _, errOut := run(t, agent("s2"), opts, "build", n, "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "has not asked") {
+		t.Fatalf("another session's grilled story: %d %s", code, errOut)
+	}
+	if code, _, errOut := run(t, agent("s1"), opts, "build", n, "--repo", "o/r"); code != 0 {
+		t.Fatalf("own grilled story: %d %s", code, errOut)
+	}
+}

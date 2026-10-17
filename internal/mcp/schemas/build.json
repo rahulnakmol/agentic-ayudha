@@ -4,6 +4,11 @@
   "additionalProperties": false,
   "description": "Build a Ready story or bug in a worktree with checkpoint commits per layer, verify each checkpoint, and open a PR.",
   "properties": {
+    "asked": {
+      "description": "The person's own words asking for this story. An agent needs them to pick up a Ready story that did not come out of grill in this session; without them build stops with a warning before taking the story.",
+      "type": "string",
+      "x-aayu-type": "string"
+    },
     "delegate": {
       "description": "Hand the story to another agent's cloud agent with the delegation brief, or sync it: its PR, inspect's findings, and follow-ups (auto picks the cheapest adequate connected one).",
       "enum": [
