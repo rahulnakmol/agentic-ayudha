@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/decide"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
@@ -111,13 +112,13 @@ func (h *Harness) runPersona(ctx context.Context, c Case, lane verbs.LaneID, bod
 		Messages:  []models.Message{{Role: "user", Content: untrusted("grounding", input) + "\n\n" + c.Persona.Task}},
 		MaxTokens: h.Config.MaxTokens.Skill,
 	}
-	answer, problems, revised, err := reviseOnce(ctx, h.complete(lane, "skill", &calls), req, func(a string) []string { return checkPersona(c, pr, input, a) })
+	answer, problems, first, err := reviseOnce(ctx, h.complete(lane, "skill", &calls), req, func(a string) []string { return checkPersona(c, pr, input, a) })
 	if err != nil {
 		return Run{}, err
 	}
-	run.Revised = revised
+	run.Revised, run.RevisedFor = len(first) > 0, revisedFor(first)
 	if len(problems) > 0 {
-		return Run{Status: RunFail, Score: 1, Revised: true, Floor: "persona checks: " + clip(strings.Join(problems, "; "), 600)}, nil
+		return Run{Status: RunFail, Score: 1, Revised: true, RevisedFor: run.RevisedFor, Floor: "persona checks: " + clip(strings.Join(problems, "; "), 600), Answer: answerOf(answer)}, nil
 	}
 	d := pr.At(c.Persona.Stage)
 	checks := fmt.Sprintf("Deterministic checks passed: every claim about code, architecture, risk, or progress cites a source "+
@@ -131,32 +132,37 @@ func (h *Harness) runPersona(ctx context.Context, c Case, lane verbs.LaneID, bod
 	if err != nil {
 		return Run{}, err
 	}
-	judged.Revised = run.Revised
+	judged.Revised, judged.RevisedFor = run.Revised, run.RevisedFor
+	judged.Answer = answerOf(answer)
 	return judged, nil
 }
 
 // reviseOnce asks the skill for its Markdown answer and, when check finds
 // problems, gives it the findings once to revise, as a host would. It returns
-// the last answer, its remaining problems, and whether it was revised.
+// the last answer, its remaining problems, and the first draft's findings
+// (none when the first draft passed).
 func reviseOnce(ctx context.Context, complete func(context.Context, models.Request) (models.Response, error), req models.Request,
-	check func(string) []string) (answer string, problems []string, revised bool, err error) {
+	check func(string) []string) (answer string, problems, first []string, err error) {
 	for attempt := 0; attempt < 2; attempt++ {
 		resp, err := complete(ctx, req)
 		if err != nil {
-			return "", nil, false, err
+			return "", nil, nil, err
 		}
 		if resp.Truncated {
-			return "", nil, false, &models.ReplyError{Err: fmt.Errorf("the answer stopped at the %d-token cap", req.MaxTokens), Reply: resp.Text, Truncated: true}
+			return "", nil, nil, &models.ReplyError{Err: fmt.Errorf("the answer stopped at the %d-token cap", req.MaxTokens), Reply: resp.Text, Truncated: true}
 		}
 		answer = draftOnly(resp.Text)
 		if problems = check(answer); len(problems) == 0 {
-			return answer, nil, attempt > 0, nil
+			return answer, nil, first, nil
+		}
+		if attempt == 0 {
+			first = problems
 		}
 		req.Messages = append(req.Messages, models.Message{Role: "assistant", Content: answer},
 			models.Message{Role: "user", Content: "The deterministic checks reported:\n- " + strings.Join(problems, "\n- ") +
 				"\n\nFix every finding and reply with the whole revised answer only."})
 	}
-	return answer, problems, true, nil
+	return answer, problems, first, nil
 }
 
 // PackSpec makes a case a decision-pack case (WP5.1b, D-5.6b): the human asks
@@ -238,12 +244,12 @@ func (h *Harness) runPack(ctx context.Context, c Case, lane verbs.LaneID, body, 
 		Messages:  []models.Message{{Role: "user", Content: untrusted("grounding", input) + "\n\nThe human is stuck and asks: " + c.Pack.Question}},
 		MaxTokens: h.Config.MaxTokens.Skill,
 	}
-	pack, problems, revised, err := reviseOnce(ctx, h.complete(lane, "skill", &calls), req, func(a string) []string { return decide.CheckPack(a, input) })
+	pack, problems, first, err := reviseOnce(ctx, h.complete(lane, "skill", &calls), req, func(a string) []string { return decide.CheckPack(a, input) })
 	if err != nil {
 		return Run{}, err
 	}
 	if len(problems) > 0 {
-		return Run{Status: RunFail, Score: 1, Revised: true, Floor: "pack checks: " + clip(strings.Join(problems, "; "), 600)}, nil
+		return Run{Status: RunFail, Score: 1, Revised: true, RevisedFor: revisedFor(first), Floor: "pack checks: " + clip(strings.Join(problems, "; "), 600), Answer: answerOf(pack)}, nil
 	}
 	checks := "Deterministic checks passed: every part is present in order, the question is one sentence, there are two or three " +
 		"options, the recommendation names its door, the pack ends with the one decision, and every claim cites a source the grounding contains."
@@ -253,6 +259,15 @@ func (h *Harness) runPack(ctx context.Context, c Case, lane verbs.LaneID, body, 
 	if err != nil {
 		return Run{}, err
 	}
-	judged.Revised = revised
+	judged.Revised, judged.RevisedFor = len(first) > 0, revisedFor(first)
+	judged.Answer = answerOf(pack)
 	return judged, nil
+}
+
+// answerOf is the answer as a run records it: redacted and clipped.
+func answerOf(s string) string { return clip(actions.RedactString(s), 8000) }
+
+// revisedFor is the first draft's findings as a run records them.
+func revisedFor(first []string) string {
+	return clip(actions.RedactString(strings.Join(first, "; ")), 600)
 }

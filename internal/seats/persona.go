@@ -360,7 +360,8 @@ func (p Persona) Prompt(stage, why string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Speak and work as %s.\n\n", p.title())
 	b.WriteString(p.character())
-	fmt.Fprintf(&b, "\nTeam stage: %s (%s). Use each practice at that depth and put its artefact in your output as a heading.\n\n", stage, why)
+	fmt.Fprintf(&b, "\nTeam stage: %s (%s). Use each practice at that depth. When your output is one of these artefacts, give it "+
+		"that artefact's name as a heading; do not add the others unasked, and a task with its own outline (a decision pack) keeps it.\n\n", stage, why)
 	for _, pr := range p.Practices {
 		d := pr.At(stage)
 		fmt.Fprintf(&b, "- %s: **%s**: %s\n", pr.Name, d.Artefact, d.Shape)
