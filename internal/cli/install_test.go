@@ -263,3 +263,47 @@ func TestInstallEnv(t *testing.T) {
 		t.Errorf("the fix is not recorded in the spec:\n%s", spec)
 	}
 }
+
+// TestHookProviderCalls (Decision #449): the pre-tool hook lets a host's
+// PostHog or Sentry MCP server and CLI read, and refuses a write, in each
+// host's own event format.
+func TestHookProviderCalls(t *testing.T) {
+	repo, home, opts := installEnv(t)
+	opts.IsTerminal = nil // the host pipes its event in
+	env := map[string]string{"HOME": home}
+	for _, tt := range []struct {
+		name, stdin string
+		args        []string
+		code        int
+		out, errs   string
+	}{
+		{"claude posthog write", `{"tool_name":"mcp__posthog__update-feature-flag","tool_input":{"id":3,"active":false}}`,
+			[]string{"--host", "claude"}, 2, "", "catalog action a person approves"},
+		{"claude posthog read", `{"tool_name":"mcp__posthog__feature-flag-get-all","tool_input":{}}`,
+			[]string{"--host", "claude"}, 0, "", ""},
+		{"codex sentry-cli release", `{"tool_name":"Bash","tool_input":{"command":"sentry-cli releases new 1.2.3"}}`,
+			[]string{"--host", "codex"}, 2, "", "product's CI"},
+		{"claude sentry person data", `{"tool_name":"mcp__sentry__get_replay_details","tool_input":{}}`,
+			[]string{"--host", "claude"}, 2, "", "allow_pii = true"},
+		{"cursor posthog exec write", `{"hook_event_name":"beforeMCPExecution","tool_name":"exec","tool_input":"{\"command\":\"call experiment-launch {\\\"id\\\": 7}\"}","url":"https://mcp.posthog.com/mcp"}`,
+			[]string{"--host", "cursor"}, 2, `"permission":"deny"`, "experiment-launch"},
+		{"amp event flag", "", []string{"--host", "amp", "--event", `{"tool_name":"mcp__sentry__execute_sentry_tool","tool_input":{"name":"update_issue"}}`}, 2, "", "`update_issue`"},
+		{"other MCP server", `{"tool_name":"mcp__github__create_issue","tool_input":{}}`, []string{"--host", "claude"}, 0, "", ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			code, out, errs := runIn(t, env, opts, tt.stdin, append([]string{"hook", "pre-tool"}, tt.args...)...)
+			if code != tt.code || !strings.Contains(out, tt.out) || !strings.Contains(errs, tt.errs) {
+				t.Fatalf("exit %d, stdout %q, stderr %q; want exit %d with %q and %q", code, out, errs, tt.code, tt.out, tt.errs)
+			}
+		})
+	}
+	// The repository's protected config opts in to personal data.
+	cfg := filepath.Join(repo, ".aayudha", "config.toml")
+	_ = os.MkdirAll(filepath.Dir(cfg), 0o755)
+	if err := os.WriteFile(cfg, []byte("version = 1\n[integrations.sentry]\nsecret = \"sentry\"\nscope = \"read\"\norg = \"acme\"\nproject = \"1\"\nallow_pii = true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, errs := runIn(t, env, opts, `{"tool_name":"mcp__sentry__get_replay_details","tool_input":{}}`, "hook", "pre-tool", "--host", "claude"); code != 0 {
+		t.Fatalf("allow_pii = true: exit %d %s", code, errs)
+	}
+}

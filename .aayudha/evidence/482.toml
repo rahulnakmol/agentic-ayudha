@@ -1,0 +1,19 @@
+[[criterion]]
+id = 1
+tests = ["./internal/integrations/hostcall:TestDecide", "./internal/integrations/hostcall:TestFromHook", "./internal/cli:TestHookProviderCalls"]
+
+[[criterion]]
+id = 2
+tests = ["./internal/integrations/hostcall:TestDecide", "./internal/cli:TestHookProviderCalls"]
+
+[[criterion]]
+id = 3
+tests = ["./internal/integrations/hostcall:TestDecide", "./internal/cli:TestHookProviderCalls", "./internal/config:TestAllowPIIRepoOnly"]
+
+[[criterion]]
+id = 4
+tests = ["./internal/integrations/hostcall:TestAllowlists"]
+
+[[criterion]]
+id = 5
+tests = ["./internal/verbs:TestRegistry"]
