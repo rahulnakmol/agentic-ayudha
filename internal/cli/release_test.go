@@ -589,3 +589,85 @@ func TestStoriesOfEveryRefsLine(t *testing.T) {
 		}
 	}
 }
+
+// Decision #324: once dev defines SLOs, release refuses a missing or stale
+// error-budget status, lets only Bugs through while a budget is spent, and
+// refuses a catalog rollback that has never run once through aayudha-ops.
+func TestReleaseProductionGate(t *testing.T) {
+	f := newLadderFixture(t)
+	day := time.Date(2026, 10, 12, 9, 41, 0, 0, time.UTC)
+	rel := strconv.Itoa(f.release)
+	_ = os.MkdirAll(filepath.Join(f.dir, "ops"), 0o755)
+	_ = os.WriteFile(filepath.Join(f.dir, "ops", "slos.toml"), []byte(`version = 1
+[[slo]]
+name = "ask-availability"
+service = "app"
+journey = "Ask a question"
+sli = "availability"
+objective = 99.5
+window = "28d"
+`), 0o644)
+	_ = os.WriteFile(filepath.Join(f.dir, "ops", "actions.toml"), []byte(`version = 1
+[[action]]
+name = "deploy-app"
+summary = "Deploy a revision."
+argv_template = ["deploy.sh", "{revision}"]
+approval = "human"
+environments = ["production"]
+max_per_hour = 2
+rollback = "rollback-app"
+blast_radius = "service"
+[action.params.revision]
+type = "string"
+pattern = "^[0-9a-f]{7,40}$"
+[[action]]
+name = "rollback-app"
+summary = "Roll back to the previous revision."
+argv_template = ["deploy.sh", "--rollback"]
+approval = "human"
+environments = ["production"]
+max_per_hour = 2
+rollback = "none"
+blast_radius = "service"
+`), 0o644)
+	git(t, f.dir, "add", "ops")
+	f.commit(t, "feat(ops): SLOs and the catalog", 0, "", "")
+	status := func(at time.Time, remaining float64) {
+		t.Helper()
+		scratch := filepath.Join(t.TempDir(), "l")
+		git(t, filepath.Dir(scratch), "clone", "--quiet", "--branch", "ledger", f.bare, scratch)
+		_ = os.MkdirAll(filepath.Join(scratch, "slo"), 0o755)
+		b, _ := json.Marshal(map[string]any{"computed_at": at, "slos": []map[string]any{{"name": "ask-availability", "budget_remaining": remaining, "spent": remaining <= 0}}})
+		_ = os.WriteFile(filepath.Join(scratch, "slo", "status.json"), b, 0o644)
+		git(t, scratch, "add", ".")
+		git(t, scratch, "commit", "--quiet", "-m", "slo: status")
+		git(t, scratch, "push", "--quiet", "origin", "HEAD:ledger")
+	}
+	dry := func() (int, string) {
+		code, _, errOut := f.run(t, day, f.env, rel, "--to", "rolling", "--dry-run")
+		return code, errOut
+	}
+	if code, errOut := dry(); code != ExitBlocked || !strings.Contains(errOut, "no error budget is recorded") {
+		t.Fatalf("no status: %d %s", code, errOut)
+	}
+	status(day.Add(-9*24*time.Hour), 0.8)
+	if code, errOut := dry(); code != ExitBlocked || !strings.Contains(errOut, "the error-budget status is 9.0d old") {
+		t.Fatalf("stale status: %d %s", code, errOut)
+	}
+	status(day.Add(-time.Hour), -0.4)
+	if code, errOut := dry(); code != ExitBlocked || !strings.Contains(errOut, "error budget of ask-availability is spent") ||
+		!strings.Contains(errOut, fmt.Sprintf("#2 (story), #%d (story) would ship", f.other)) {
+		t.Fatalf("spent budget: %d %s", code, errOut)
+	}
+	status(day.Add(-time.Hour), 0.3)
+	if code, errOut := dry(); code != ExitBlocked || !strings.Contains(errOut, "rollback action(s) rollback-app") {
+		t.Fatalf("untried rollback: %d %s", code, errOut)
+	}
+	f.g.Mu.Lock()
+	f.g.Static["/repos/o/r/actions/workflows/aayudha-ops.yml/runs"] = map[string]any{"total_count": 1, "workflow_runs": []any{
+		map[string]any{"id": 11, "name": "aayudha-ops rollback-app for #9 (r-000000000001)", "status": "completed", "conclusion": "success"}}}
+	f.g.Mu.Unlock()
+	if code, errOut := dry(); code != 0 {
+		t.Fatalf("fresh budget and a tried rollback: %d %s", code, errOut)
+	}
+}

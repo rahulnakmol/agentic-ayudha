@@ -85,7 +85,14 @@ aayu release 120 --to main --yes          # rolling → main: Release: vX.Y.Z, a
 
 Each rung builds a `promote/…` candidate holding the exact merge commit, runs the evals (rolling) and the
 `ci.yml` gate on it, re-runs failed gate jobs once, pushes that commit as a fast-forward, and tags it. For main,
-it then watches `release.yml`. A failing gate promotes nothing. After landing, the rung:
+it then watches `release.yml`. A failing gate promotes nothing.
+
+Before the candidate, the Production Engineer's gate reads the source branch. When it defines SLOs
+(`ops/slos.toml`), the error budget recorded by `aayu slo --record` must be at most 8 days old, and while any budget
+is spent only Bugs ship: a Story needs an accepted `error-budget` waiver. When its catalog (`ops/actions.toml`) names
+rollback actions, each must have run successfully through `aayudha-ops.yml` once. Either refusal promotes nothing.
+
+After landing, the rung:
 
 - stamps every story the promoted range shipped `released`;
 - publishes release notes that cite only proven Features (`tell release`);

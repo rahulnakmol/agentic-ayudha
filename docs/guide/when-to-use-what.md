@@ -201,6 +201,8 @@ are not verbs; the verbs reference lists them.
 | [Keep it running](when-to-use-what.md#something-broke-in-production) | [`triage`](../../skills/triage/SKILL.md) | Sorts incoming reports into feedback, bugs, and incidents by label, without editing what people wrote. |
 |  | [`respond`](../../skills/respond/SKILL.md) | Helps handle an incident: proposes a fix from your runbook, runs it only after a person approves, and keeps the timeline. |
 |  | [`investigate`](../../skills/investigate/SKILL.md) | Works out what went wrong in production from your telemetry and the code that was actually deployed, and suggests a fix for a person to approve. |
+|  | [`slo`](../../skills/slo/SKILL.md) | Sets how reliable the product must be for its users, measures how much room for failure is left, and holds back risky releases when it runs out. |
+|  | [`runbook`](../../skills/runbook/SKILL.md) | Writes down how to spot and fix each known production problem with the approved actions, so whoever is on call can follow it. |
 
 <!-- END GENERATED: verb-map -->
 

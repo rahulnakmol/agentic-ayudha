@@ -22,10 +22,14 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
+	"github.com/rahulnakmol/agentic-ayudha/internal/initrepo"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ops"
+	"github.com/rahulnakmol/agentic-ayudha/internal/production"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/tell"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ui"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verify"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -231,7 +235,7 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 	if err != nil {
 		return err
 	}
-	status := map[int]string{}
+	status, kind := map[int]string{}, map[int]string{}
 	for _, s := range append(slices.Clone(listed), shipped...) {
 		if _, ok := status[s]; !ok {
 			x, _, err := c.REST.Issues.Get(ctx, owner, name, s)
@@ -239,6 +243,7 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 				return err
 			}
 			status[s] = workitems.Item{Labels: github.IssueLabels(x)}.Label("status")
+			kind[s], _ = workitems.TypeOf(x.GetType().GetName(), github.IssueLabels(x))
 		}
 	}
 	var problems []string
@@ -268,6 +273,9 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 		if !slices.Contains(listed, s) {
 			p.NotListed = append(p.NotListed, s)
 		}
+	}
+	if err := e.productionGate(ctx, c, tok, gitOut, root, repo, src, p.Stories, kind); err != nil {
+		return err
 	}
 	notes, utm, err := e.releaseNotes(ctx, c, repo, &p, shipped)
 	if err != nil {
@@ -443,6 +451,100 @@ func (e *Env) bookkeep(ctx context.Context, c *github.Client, tok identity.Token
 		return err
 	}
 	return e.shippingEvidence(ctx, c, repo, is, *p, final)
+}
+
+// productionGate is the Production Engineer's release gate (Decision #324),
+// read from the source branch being promoted. When it defines SLOs, the error
+// budget recorded on the ledger must be fresh (production.StaleAfter), and
+// while any budget is spent only Bugs ship: a Story ships only with an
+// accepted error-budget waiver. When its ops catalog names rollback actions,
+// each must have run successfully through aayudha-ops at least once, so no
+// release depends on a rollback nobody has tried.
+func (e *Env) productionGate(ctx context.Context, c *github.Client, tok identity.Token, gitOut func(string, ...string) (string, error), root, repo, src string, shipping []int, kind map[int]string) error {
+	if b, err := gitOut(root, "show", "origin/"+src+":"+production.SLOPath); err == nil && strings.TrimSpace(b) != "" {
+		defs, err := production.ParseSLOs([]byte(b))
+		if err != nil {
+			return Errorf(ExitBlocked, "release: %v", err)
+		}
+		st, err := e.sloStatus(ctx, tok.Value)
+		switch {
+		case err != nil:
+			return Wrap(ExitExternal, err)
+		case st == nil:
+			return Errorf(ExitBlocked, "release: %s defines SLOs but no error budget is recorded; run `aayu slo --telemetry <export> --record` first", production.SLOPath)
+		}
+		if why := st.Stale(e.Now().UTC(), defs); why != "" {
+			return Errorf(ExitBlocked, "release: %s; run `aayu slo --telemetry <export> --record` first", why)
+		}
+		if spent := st.Spent(); len(spent) > 0 {
+			var held []string
+			for _, s := range shipping {
+				if kind[s] == "bug" {
+					continue
+				}
+				ws, err := e.waivers(ctx, repo, s)
+				if err != nil {
+					return err
+				}
+				if !slices.ContainsFunc(ws, func(w verify.Waiver) bool { return strings.HasPrefix(w.Title, "Waive the error-budget floor on #") }) {
+					held = append(held, fmt.Sprintf("#%d (%s)", s, pick(kind[s], "unknown type")))
+				}
+			}
+			if len(held) > 0 {
+				return Errorf(ExitBlocked, "release: the error budget of %s is spent (%s), so only Bugs ship until it recovers; %s would ship. Ship the fixes first, or a person accepts an error-budget waiver on each (`aayu decide --waiver error-budget <n>`)",
+					strings.Join(spent, ", "), production.StatusPath, strings.Join(held, ", "))
+			}
+		}
+	}
+	b, err := gitOut(root, "show", "origin/"+src+":"+ops.Path)
+	if err != nil || strings.TrimSpace(b) == "" {
+		return nil
+	}
+	cat, err := ops.Parse([]byte(b))
+	if err != nil {
+		return Errorf(ExitBlocked, "release: %v", err)
+	}
+	var rollbacks []string
+	for _, a := range cat.Actions {
+		if a.Rollback != "" && a.Rollback != "none" && !slices.Contains(rollbacks, a.Rollback) {
+			rollbacks = append(rollbacks, a.Rollback)
+		}
+	}
+	if len(rollbacks) == 0 {
+		return nil
+	}
+	owner, name, _ := github.SplitRepo(repo)
+	tried := map[string]bool{}
+	opts := &gh.ListWorkflowRunsOptions{Status: "success", ListOptions: gh.ListOptions{PerPage: 100}}
+	for page := 0; page < 10; page++ {
+		runs, resp, err := c.REST.Actions.ListWorkflowRunsByFileName(ctx, owner, name, initrepo.OpsWorkflow, opts)
+		if github.NotFound(err) {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		for _, r := range runs.WorkflowRuns {
+			if m := runNameRE.FindStringSubmatch(r.GetName()); m != nil && r.GetConclusion() == "success" {
+				tried[m[1]] = true
+			}
+		}
+		if resp == nil || resp.NextPage == 0 {
+			break
+		}
+		opts.Page = resp.NextPage
+	}
+	var untried []string
+	for _, r := range rollbacks {
+		if !tried[r] {
+			untried = append(untried, r)
+		}
+	}
+	if len(untried) > 0 {
+		return Errorf(ExitBlocked, "release: rollback action(s) %s in %s have never run successfully through %s; try each once (`aayu respond <incident> --action <name>`, approved by a person) before a release depends on it",
+			strings.Join(untried, ", "), ops.Path, initrepo.OpsWorkflow)
+	}
+	return nil
 }
 
 func pick(v, def string) string {

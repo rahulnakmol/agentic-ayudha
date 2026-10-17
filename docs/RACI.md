@@ -51,6 +51,8 @@ Charters: `seats/<seat>/CHARTER.md`.
 | `chart` | Data & AI Architect | Data & AI Architect twin, spec lane | Data & AI Architect | Code Architect, Revenue Architect | AI Native Engineer, Quality Architect | L05, L07, L08 | bot | host | read |
 | `survey` | Code Architect | Code Architect twin, plan lane | Code Architect | Product Strategist, Quality Architect | Engineering Manager | all | bot | host | read |
 | `investigate` | Production Engineer | Production Engineer twin, spec lane | Production Engineer | AI Native Engineer | Engineering Manager | all | bot | host | read |
+| `slo` | Production Engineer | Production Engineer twin, spec lane | Production Engineer | Product Strategist, Quality Architect | Engineering Manager, DevOps & DevEx Tinkerer | all | bot | host | read |
+| `runbook` | Production Engineer | Production Engineer twin, spec lane | Production Engineer | AI Native Engineer, DevOps & DevEx Tinkerer | Engineering Manager | all | bot | host | read |
 
 Model calling: `none` is deterministic; `host` means the host's model reasons inside the skill;
 `direct` means the binary calls a model itself; `hybrid` is host reasoning plus a direct pass
