@@ -3,5 +3,19 @@
   "branch": "story/432-solo-mode-a-reversible-decision-applies",
   "started_at": "2026-10-17T20:07:58Z",
   "failed_attempts": 0,
-  "checkpoints": null
+  "checkpoints": [
+    {
+      "k": 1,
+      "n": 2,
+      "attempt": 1,
+      "commit": "ad8bac4c82828e4241b31749f4585c0edc182bd2",
+      "layers": [
+        "L02",
+        "L07"
+      ],
+      "verify": "hold",
+      "detail": "floors hold; not run here (tool not installed; the merge gate runs them): sast, secrets, deps",
+      "at": "2026-10-17T20:23:35Z"
+    }
+  ]
 }
