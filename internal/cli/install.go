@@ -17,6 +17,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
 	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
+	"github.com/rahulnakmol/agentic-ayudha/internal/journey"
 	"github.com/rahulnakmol/agentic-ayudha/internal/upgrade"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
@@ -257,7 +258,11 @@ func runHook(ctx context.Context, e *Env, in Values) error {
 		}
 	} else {
 		var err error
-		if r, err = hosts.RunHook(name, verbs.HostID(e.Host), root, e.PauseFile(), event); err != nil {
+		var notes []string
+		if name == "session-start" {
+			notes = e.sessionNotes()
+		}
+		if r, err = hosts.RunHook(name, verbs.HostID(e.Host), root, e.PauseFile(), event, notes...); err != nil {
 			return Wrap(ExitUsage, err)
 		}
 	}
@@ -291,7 +296,8 @@ func (e *Env) statusLine() string {
 	for _, c := range []struct {
 		label string
 		n     int
-	}{{"Ready", len(h.Ready)}, {"building", len(h.InProgress)}, {"waiting for you", len(h.AwaitingHuman)}, {"blocked", len(h.Blocked)}, {"floor misses", len(h.FailingFloors)}} {
+	}{{"Ready", len(h.Ready)}, {"building", len(h.InProgress)}, {"waiting for you", len(h.AwaitingHuman)}, {"blocked", len(h.Blocked)}, {"floor misses", len(h.FailingFloors)},
+		{"Feedback to classify", len(h.Unclassified)}} {
 		if c.n > 0 {
 			parts = append(parts, fmt.Sprintf("%s %d", c.label, c.n))
 		}
@@ -303,6 +309,27 @@ func (e *Env) statusLine() string {
 		}
 	}
 	return strings.Join(parts, " | ")
+}
+
+// sessionNotes is what a session starts with from the last home screen,
+// without touching the network: the open Feedback that has no fix layer
+// (D-7.7e), with the home screen's age when it is older than ten minutes.
+func (e *Env) sessionNotes() []string {
+	b, err := os.ReadFile(e.homeCacheFile())
+	var h Home
+	if err != nil || json.Unmarshal(b, &h) != nil {
+		return nil
+	}
+	note := journey.UnclassifiedNote(h.Unclassified)
+	if note == "" {
+		return nil
+	}
+	if at, err := time.Parse(time.RFC3339, h.At); err == nil {
+		if age := e.Now().Sub(at); age > 10*time.Minute {
+			note += fmt.Sprintf(" (as of %s ago; `aayu` refreshes it)", age.Truncate(time.Minute))
+		}
+	}
+	return []string{"aayudha: " + note}
 }
 
 // reviewerAppsNote reports, best effort, the agent apps that can review this

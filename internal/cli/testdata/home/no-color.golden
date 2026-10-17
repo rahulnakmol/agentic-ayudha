@@ -10,6 +10,7 @@ Journey  ✓ Set up → ✓ Shape → ✓ Ready → ✓ Build → ✓ Prove → 
   Blocked                0
   Failing floors         0
   Measurements due       0
+! WARN 1 open Feedback issue(s) without a fix layer (#5 Feedback: persona outputs present inferences as facts); classify each by the highest layer that can fix it for good: `aayu retro --classify <issue> --layer codebase|check|prose|review --reason "<why this layer>"`
 
 Next → aayu ship 4
   PR #4 (story #1) waits for a person: review and approve it on GitHub, then ship it. (Engineering Manager, for a person to run)

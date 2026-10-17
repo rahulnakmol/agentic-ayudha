@@ -59,13 +59,37 @@ func TestRetroClassify(t *testing.T) {
 		!strings.Contains(fb.Comments[0].Body, "### Fix layer: static check") || !strings.Contains(fb.Comments[0].Body, "Story #3") {
 		t.Fatalf("Feedback #1 after check: labels %s, comments %d", labels, len(fb.Comments))
 	}
+	// The Story carries its Feedback's layer label and follows a
+	// reclassification without a second Story (D-7.7e).
+	if labels := strings.Join(g.LabelNames(3), ","); !strings.Contains(labels, "fix:check") {
+		t.Errorf("Story #3 labels %s; want fix:check", labels)
+	}
+	if code, out, errOut := classify("--layer", "codebase", "--reason", "a type can hold the worktree path", "--criterion", crit); code != 0 || !strings.Contains(out, "fixed by Story #3") {
+		t.Fatalf("reclassify as codebase: exit %d: %s %s", code, out, errOut)
+	}
+	if labels := strings.Join(g.LabelNames(3), ","); strings.Contains(labels, "fix:check") || !strings.Contains(labels, "fix:codebase") {
+		t.Errorf("Story #3 after codebase: labels %s", labels)
+	}
 	if code, out, errOut := classify("--layer", "prose", "--reason", "the wording is judged per request", "--not-catchable", "no rule sees intent"); code != 0 || !strings.Contains(out, "aayu evolve") {
 		t.Fatalf("reclassify as prose: exit %d: %s %s", code, out, errOut)
 	}
 	labels := strings.Join(g.LabelNames(1), ",")
+	storyLabels := strings.Join(g.LabelNames(3), ",")
+	if strings.Contains(storyLabels, "fix:") {
+		t.Errorf("Story #3 after prose keeps a fix label: %s", storyLabels)
+	}
+	// A Feedback titled by the issue form ("Feedback: …") names its Story
+	// without the prefix.
+	g.AddIssue("Feedback: agents lower an eval bar", "x", "type:feedback", "status:backlog") // #4
+	if code, out, errOut := run(t, env, opts, "retro", "--repo", "o/r", "--classify", "4", "--layer", "check", "--reason", "a ratchet can", "--criterion", crit); code != 0 || !strings.Contains(out, "fixed by Story #5") {
+		t.Fatalf("classify #4: exit %d: %s %s", code, out, errOut)
+	}
 	g.Mu.Lock()
 	defer g.Mu.Unlock()
-	if strings.Contains(labels, "fix:check") || !strings.Contains(labels, "fix:prose") || len(g.Issues) != 3 ||
+	if title := g.Issues[5].Title; title != "Fix at the static check layer (Feedback #4): agents lower an eval bar" {
+		t.Errorf("Story #5 title %q", title)
+	}
+	if strings.Contains(labels, "fix:check") || !strings.Contains(labels, "fix:prose") || len(g.Issues) != 5 ||
 		len(fb.Comments) != 1 || !strings.Contains(fb.Comments[0].Body, "no rule sees intent") {
 		t.Errorf("Feedback #1 after prose: labels %s, issues %d, comments %d", labels, len(g.Issues), len(fb.Comments))
 	}

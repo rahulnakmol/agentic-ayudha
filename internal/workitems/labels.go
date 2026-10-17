@@ -41,6 +41,11 @@ const (
 // FixLayers lists the fix layers, highest first.
 var FixLayers = []string{FixCodebase, FixCheck, FixProse, FixReview}
 
+// ClassifyCommand records a Feedback issue's fix layer. An open Feedback issue
+// without one is listed by `aayu doctor`, the home screen, and the
+// session-start hook until it is classified (D-7.7e).
+const ClassifyCommand = `aayu retro --classify <issue> --layer codebase|check|prose|review --reason "<why this layer>"`
+
 // FixLayerOf is the fix layer a label set records, "" when none.
 func FixLayerOf(labels []string) string {
 	for _, l := range labels {

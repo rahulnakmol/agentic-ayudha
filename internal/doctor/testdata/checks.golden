@@ -166,6 +166,12 @@ PASS  leases  1 live build lease(s)
 WARN  leases  2 stale build lease(s); `aayu gc` reclaims them
                 #9: bot@ci, expired 2026-01-01T00:00:00Z
                 #10: labelled leased without a lock comment
+## feedback-layers pass
+PASS  feedback-layers  1 open Feedback issue(s), each with a fix layer
+## feedback-layers fail
+WARN  feedback-layers  2 open Feedback issue(s) without a fix layer; evolve refuses them until each is classified: `aayu retro --classify <issue> --layer codebase|check|prose|review --reason "<why this layer>"`
+                         #6 Feedback: b
+                         #8 Feedback: c
 ## coexistence pass
 PASS  coexistence  coexistence report: nothing to coexist with
 ## coexistence fail

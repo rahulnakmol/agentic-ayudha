@@ -16,7 +16,8 @@ import (
 )
 
 // homeRepo is a set-up checkout (Level 1, Claude Code installed) whose GitHub
-// has a Ready story, a story in progress, and a story PR without a human pass.
+// has a Ready story, a story in progress, a story PR without a human pass, and
+// two open Feedback issues, one without a fix layer (D-7.7e).
 func homeRepo(t *testing.T) (string, *fake.GitHub) {
 	t.Helper()
 	repo := gitInit(t, "dev", map[string]string{
@@ -28,6 +29,8 @@ func homeRepo(t *testing.T) (string, *fake.GitHub) {
 	g.AddIssue("Sign in with a passkey", "", "type:story", "status:in-progress")                                        // #2
 	g.AddIssue("Make Ready stories easy to find", "", "type:feature", "status:ready")                                   // #3: not a story
 	g.AddPR("Export the report as CSV", "Refs #1", "aayudha-bot", "story/1-export-csv", strings.Repeat("a", 40), "dev") // #4
+	g.AddIssue("Feedback: persona outputs present inferences as facts", "", "type:feedback", "status:backlog")          // #5
+	g.AddIssue("Feedback: checks fail only after push", "", "type:feedback", "status:backlog", "fix:check")             // #6
 	return repo, g
 }
 

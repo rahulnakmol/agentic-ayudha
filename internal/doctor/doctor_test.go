@@ -150,7 +150,9 @@ func healthy(t *testing.T) *Probe {
 			"/repos/o/r/rulesets": []any{},
 			"/repos/o/r/issues?state=open&labels=aayudha:leased&per_page=100": []any{map[string]any{"number": 9}},
 			"/repos/o/r/issues/9/comments?per_page=100":                       []any{map[string]any{"body": "<!-- aayudha:lease holder=bot@ci expires=2099-01-01T00:00:00Z -->"}},
-			"/orgs/o/installations?per_page=100":                              map[string]any{"installations": []any{map[string]any{"app_slug": "chatgpt-codex-connector"}}},
+			"/repos/o/r/issues?state=open&labels=type:feedback&per_page=100": []any{map[string]any{"number": 5, "title": "Feedback: a",
+				"labels": []any{map[string]any{"name": "type:feedback"}, map[string]any{"name": "fix:check"}}}},
+			"/orgs/o/installations?per_page=100": map[string]any{"installations": []any{map[string]any{"app_slug": "chatgpt-codex-connector"}}},
 		}),
 		Repo: "o/r",
 		Combined: fakeExec(map[string]string{
@@ -229,6 +231,16 @@ func failing(t *testing.T) map[string]func(*Probe) {
 				"/repos/o/r/issues/9/comments?per_page=100":                       []any{map[string]any{"body": "<!-- aayudha:lease holder=bot@ci expires=2026-01-01T00:00:00Z -->"}},
 				"/repos/o/r/issues/10/comments?per_page=100":                      []any{},
 			})
+		},
+		// An unclassified Feedback issue is listed; a classified one and a pull
+		// request carrying the label are not (D-7.7e).
+		"feedback-layers": func(p *Probe) {
+			p.API = fakeAPI(map[string]any{"/repos/o/r/issues?state=open&labels=type:feedback&per_page=100": []any{
+				map[string]any{"number": 5, "title": "Feedback: a", "labels": []any{map[string]any{"name": "type:feedback"}, map[string]any{"name": "fix:check"}}},
+				map[string]any{"number": 6, "title": "Feedback: b", "labels": []any{map[string]any{"name": "type:feedback"}, map[string]any{"name": "fix:unknown"}}},
+				map[string]any{"number": 7, "title": "A PR", "labels": []any{map[string]any{"name": "type:feedback"}}, "pull_request": map[string]any{}},
+				map[string]any{"number": 8, "title": "Feedback: c", "labels": []any{map[string]any{"name": "type:feedback"}, map[string]any{"name": "needs:grill"}}},
+			}})
 		},
 		// Each state a configured integration can be in: a write-scoped key
 		// (refused, not sent), an unreachable provider, an unset secret, and an

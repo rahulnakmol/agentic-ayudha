@@ -32,6 +32,23 @@ func TestPluginHooksAndStatusLine(t *testing.T) {
 	if _, out, _ := hook("{}", nil, "status-line", "--host", "claude"); out != "aayudha | Ready 2 | waiting for you 1 | next: aayu ship 4 | as of 1h0m0s ago\n" {
 		t.Errorf("status-line: %q", out)
 	}
+	// Open Feedback without a fix layer surfaces on its own at session start
+	// and in the status line, with the command that classifies it (D-7.7e).
+	if _, out, _ := hook("{}", nil, "session-start", "--host", "claude"); out != "" {
+		t.Errorf("session-start with nothing to classify: %q", out)
+	}
+	_ = os.WriteFile(cache, []byte(`{"unclassified_feedback":[{"number":190,"title":"Persona outputs present inferences as facts"},{"number":152,"title":"Feedback: brief eli5"}],"next":{"command":"aayu next"},"at":"2026-10-15T09:00:00Z"}`), 0o644)
+	if _, out, _ := hook("{}", nil, "status-line", "--host", "claude"); !strings.Contains(out, "| Feedback to classify 2 |") {
+		t.Errorf("status-line with unclassified Feedback: %q", out)
+	}
+	if _, out, _ := hook("{}", nil, "session-start", "--host", "claude"); !strings.HasPrefix(out, "aayudha: 2 open Feedback issue(s) without a fix layer (#190 Persona outputs present inferences as facts; #152 Feedback: brief eli5)") ||
+		!strings.Contains(out, "`aayu retro --classify <issue> --layer codebase|check|prose|review") || !strings.Contains(out, "(as of 1h0m0s ago; `aayu` refreshes it)") {
+		t.Errorf("session-start with unclassified Feedback: %q", out)
+	}
+	if _, out, _ := hook("{}", nil, "session-start", "--host", "cursor"); !strings.HasPrefix(out, `{"additional_context":"aayudha: 2 open Feedback issue(s) without a fix layer`) {
+		t.Errorf("cursor session-start with unclassified Feedback: %q", out)
+	}
+	_ = os.Remove(cache)
 	// pre-tool from the shared plugin names no host: it is detected, and a
 	// human-only verb in a shell command is blocked (exit 2) with the command to hand over.
 	code, _, errs := hook(`{"tool_name":"Bash","tool_input":{"command":"aayu ship 4"}}`, map[string]string{"CODEX_THREAD_ID": "t1"}, "pre-tool", "--skills", "0.0.0")

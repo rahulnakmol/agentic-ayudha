@@ -351,9 +351,18 @@ func TestRetroFixLayers(t *testing.T) {
 	}
 	d := &Data{Dev: "dev", Items: []Item{fb(1, at(1), "fix:codebase"), fb(2, at(2), "fix:check"), fb(3, at(3), "fix:check", "needs:grill"),
 		fb(4, at(4), "fix:prose"), fb(5, at(5)), fb(6, at(50), "fix:review"), {Number: 7, PR: true, Labels: []string{"type:feedback", "fix:prose"}, CreatedAt: at(1)},
-		{Number: 8, Labels: []string{"type:story", "fix:check"}, CreatedAt: at(1)}}}
+		{Number: 8, Labels: []string{"type:story", "fix:check"}, CreatedAt: at(1)},
+		// Fix Stories by their fix:<layer> label (D-7.7e): #9 merged by the
+		// cursor, #10 done without a PR, #11 merged after the cursor, #12 a
+		// Story opened after it, #13 a Story with no fix label.
+		{Number: 9, Labels: []string{"type:story", "fix:check"}, CreatedAt: at(2)},
+		{Number: 10, Labels: []string{"type:story", "status:done", "fix:codebase"}, CreatedAt: at(2)},
+		{Number: 11, Labels: []string{"type:story", "fix:check"}, CreatedAt: at(2)},
+		{Number: 12, Labels: []string{"type:story", "fix:review"}, CreatedAt: at(49)},
+		{Number: 13, Labels: []string{"type:story", "status:done"}, CreatedAt: at(2)}},
+		PRs: []PR{{Number: 20, Base: "dev", MergedAt: at(10), Refs: []int{9}}, {Number: 21, Base: "dev", MergedAt: at(50), Refs: []int{11}}}}
 	md := string(BuildRetro(in, d, 0).Markdown())
-	for _, want := range []string{"| codebase | 1 | #1 |", "| check | 2 | #2, #3 |", "| prose | 1 | #4 |", "| review | 0 | — |", "| unclassified | 1 | #5 |"} {
+	for _, want := range []string{"| codebase | 1 | #1 | 1 | #10 |", "| check | 2 | #2, #3 | 3 | #9 |", "| prose | 1 | #4 | 0 | — |", "| review | 0 | — | 0 | — |", "| unclassified | 1 | #5 | 0 | — |"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("report lacks %q:\n%s", want, md)
 		}

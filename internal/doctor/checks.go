@@ -22,6 +22,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
 	"github.com/rahulnakmol/agentic-ayudha/internal/upgrade"
+	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
 func checkBinary(ctx context.Context, p *Probe) Result {
@@ -404,6 +405,40 @@ func checkLeases(ctx context.Context, p *Probe) Result {
 		return Result{Status: Warn, Detail: fmt.Sprintf("%d stale build lease(s); `aayu gc` reclaims them", len(stale)), Lines: stale}
 	}
 	return Result{Status: Pass, Detail: fmt.Sprintf("%d live build lease(s)", len(issues))}
+}
+
+// checkFeedbackLayers lists the open Feedback issues with no fix:<layer> label
+// (D-7.7e): evolve refuses them and nothing else acts on them until someone
+// records the highest layer that can fix them for good.
+func checkFeedbackLayers(ctx context.Context, p *Probe) Result {
+	if p.API == nil || p.Repo == "" {
+		return Result{Status: Warn, Detail: "could not check Feedback fix layers (no GitHub token or repository)"}
+	}
+	var issues []struct {
+		Number int    `json:"number"`
+		Title  string `json:"title"`
+		Labels []struct {
+			Name string `json:"name"`
+		} `json:"labels"`
+		PR any `json:"pull_request"`
+	}
+	if err := p.API(ctx, "/repos/"+p.Repo+"/issues?state=open&labels=type:feedback&per_page=100", &issues); err != nil {
+		return Result{Status: Warn, Detail: "could not list open Feedback: " + err.Error()}
+	}
+	var open []string
+	for _, is := range issues {
+		var names []string
+		for _, l := range is.Labels {
+			names = append(names, l.Name)
+		}
+		if is.PR == nil && workitems.FixLayerOf(names) == "" {
+			open = append(open, fmt.Sprintf("#%d %s", is.Number, is.Title))
+		}
+	}
+	if len(open) > 0 {
+		return Result{Status: Warn, Detail: fmt.Sprintf("%d open Feedback issue(s) without a fix layer; evolve refuses them until each is classified: `%s`", len(open), workitems.ClassifyCommand), Lines: open}
+	}
+	return Result{Status: Pass, Detail: fmt.Sprintf("%d open Feedback issue(s), each with a fix layer", len(issues))}
 }
 
 func checkTelemetry(_ context.Context, p *Probe) Result {
