@@ -45,13 +45,13 @@ Analytics (`metrics/orders-page.json`, last 30 days): 38 % of `/orders` visits a
 
 | Source | Kind | ID | URL |
 |---|---|---|---|
-| mobbin | screen | 7c1d2e3f-0a4b-4c5d-8e6f-1a2b3c4d5e6f | <https://mobbin.com/screens/7c1d2e3f-0a4b-4c5d-8e6f-1a2b3c4d5e6f> |
-| mobbin | screen (preview image) | 7c1d2e3f-0a4b-4c5d-8e6f-1a2b3c4d5e6f | <https://cdn.bytescale.com/mobbin/7c1d2e3f-preview.png> |
-| mobbin | flow | 2b9e8d7c-6f5a-4b3c-9d2e-8f7a6b5c4d3e | <https://mobbin.com/flows/2b9e8d7c-6f5a-4b3c-9d2e-8f7a6b5c4d3e> |
-| web | guideline | gov-uk-summary-list | <https://design-system.service.gov.uk/components/summary-list/> |
-| web | guideline | wcag-2.2-1.3.1 | <https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships.html> |
-| web | article | nng-empty-states | <https://www.nngroup.com/articles/empty-state-interface-design/> |
-| web | image | dribbble-orders-shot | <https://cdn.dribbble.com/userupload/orders-status.png> |
+| mobbin | screen | 7c1d2e3f-0a4b-4c5d-8e6f-1a2b3c4d5e6f | `https://mobbin.com/screens/7c1d2e3f-0a4b-4c5d-8e6f-1a2b3c4d5e6f` |
+| mobbin | screen (preview image) | 7c1d2e3f-0a4b-4c5d-8e6f-1a2b3c4d5e6f | `https://cdn.bytescale.com/mobbin/7c1d2e3f-preview.png` |
+| mobbin | flow | 2b9e8d7c-6f5a-4b3c-9d2e-8f7a6b5c4d3e | `https://mobbin.com/flows/2b9e8d7c-6f5a-4b3c-9d2e-8f7a6b5c4d3e` |
+| web | guideline | gov-uk-summary-list | `https://design-system.service.gov.uk/components/summary-list/` |
+| web | guideline | wcag-2.2-1.3.1 | `https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships.html` |
+| web | article | nng-empty-states | `https://www.nngroup.com/articles/empty-state-interface-design/` |
+| web | image | dribbble-orders-shot | `https://cdn.dribbble.com/userupload/orders-status.png` |
 
 The team stage and the stories' states are fixed; the research question is how customers check where an order is
 and what the list must show for them to stop asking support.

@@ -35,13 +35,13 @@ Stories (Ready):
 
 | Source | Kind | ID | URL |
 |---|---|---|---|
-| mobbin | screen | 5e4d3c2b-1a09-4f8e-8d7c-6b5a4f3e2d1c | <https://mobbin.com/screens/5e4d3c2b-1a09-4f8e-8d7c-6b5a4f3e2d1c> |
-| mobbin | screen (preview image) | 5e4d3c2b-1a09-4f8e-8d7c-6b5a4f3e2d1c | <https://cdn.bytescale.com/mobbin/5e4d3c2b-preview.webp> |
-| mobbin | flow | 9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d | <https://mobbin.com/flows/9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d> |
-| web | guideline | gov-uk-radios | <https://design-system.service.gov.uk/components/radios/> |
-| web | guideline | wcag-2.2-3.3.1 | <https://www.w3.org/WAI/WCAG22/Understanding/error-identification.html> |
-| web | article | baymard-delivery-dates | <https://baymard.com/blog/delivery-date-selection> |
-| web | image | pinterest-slot-picker | <https://i.pinimg.com/originals/slot-picker.jpg> |
+| mobbin | screen | 5e4d3c2b-1a09-4f8e-8d7c-6b5a4f3e2d1c | `https://mobbin.com/screens/5e4d3c2b-1a09-4f8e-8d7c-6b5a4f3e2d1c` |
+| mobbin | screen (preview image) | 5e4d3c2b-1a09-4f8e-8d7c-6b5a4f3e2d1c | `https://cdn.bytescale.com/mobbin/5e4d3c2b-preview.webp` |
+| mobbin | flow | 9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d | `https://mobbin.com/flows/9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d` |
+| web | guideline | gov-uk-radios | `https://design-system.service.gov.uk/components/radios/` |
+| web | guideline | wcag-2.2-3.3.1 | `https://www.w3.org/WAI/WCAG22/Understanding/error-identification.html` |
+| web | article | baymard-delivery-dates | `https://baymard.com/blog/delivery-date-selection` |
+| web | image | pinterest-slot-picker | `https://i.pinimg.com/originals/slot-picker.jpg` |
 
 The team stage and the stories' states are fixed. There is no usability evidence on choosing a window yet, so the
 stage must say what to learn before the design is settled, and how.
