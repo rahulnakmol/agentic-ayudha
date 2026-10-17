@@ -259,7 +259,18 @@ func (h *Harness) call(ctx context.Context, gw *models.Gateway, lane verbs.LaneI
 		retried = clip(actions.RedactString(err.Error()), 200)
 		resp, m, err = gw.Do(ctx, c)
 	}
+	var wasted float64
+	if err == nil && resp.Truncated && ctx.Err() == nil {
+		if unit := repeating(resp.Text); unit != "" {
+			// Sampling that loops on one token until the cap is the model's fault, not the reply's
+			// content: a new sample is the call retried, never the run (D-3.4r). It is paid for.
+			wasted, _ = models.Cost(gw.Models.Prices, m.Model, resp)
+			retried = clip(fmt.Sprintf("degenerate reply: %d tokens repeating %q", resp.TokensOut, unit), 200)
+			resp, m, err = gw.Do(ctx, c)
+		}
+	}
 	usd, source := models.Cost(gw.Models.Prices, m.Model, resp)
+	usd += wasted
 	h.mu.Lock()
 	h.spent += usd
 	if source == models.CostFallback && err == nil {
@@ -287,6 +298,27 @@ func transient(err error) bool {
 	var st *models.StreamError
 	return dropped(err) || errors.As(err, &se) && se.Code >= 500 ||
 		errors.As(err, &st) && (st.Type == "api_error" || st.Type == "overloaded_error")
+}
+
+// repeating returns the unit a reply ends on when its last 2000 characters
+// (whitespace collapsed) are one unit of at most 64 repeated, such as "<br>";
+// otherwise "". A long reply that stopped at the cap honestly does not repeat.
+func repeating(s string) string {
+	rs := []rune(strings.Join(strings.Fields(s), " "))
+	if len(rs) < 2000 {
+		return ""
+	}
+	rs = rs[len(rs)-2000:]
+	for p := 1; p <= 64; p++ {
+		i := p
+		for i < len(rs) && rs[i] == rs[i-p] {
+			i++
+		}
+		if i == len(rs) {
+			return strings.TrimSpace(string(rs[:p]))
+		}
+	}
+	return ""
 }
 
 // dropped reports a connection the network dropped before a reply arrived (a
