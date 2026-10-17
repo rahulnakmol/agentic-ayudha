@@ -40,7 +40,7 @@ func TestLaneResolution(t *testing.T) {
 		{verbs.LaneBuild, verbs.HostAmp, false, false, "", verbs.FamilyHostManaged, SourceDefault, ""},
 		{verbs.LaneBuild, verbs.HostCursor, false, false, verbs.ModelClaudeOpus, verbs.FamilyAnthropic, SourceDefault, ""},
 		{verbs.LaneReview, verbs.HostAmp, false, false, verbs.ModelGPTSol, verbs.FamilyOpenAI, SourceDefault, ""},
-		{verbs.LaneUIReview, verbs.HostCursor, false, false, verbs.ModelGeminiPro, verbs.FamilyGoogle, SourceDefault, ""},
+		{verbs.LaneUIReview, verbs.HostCursor, false, false, verbs.ModelGemini, verbs.FamilyGoogle, SourceDefault, ""},
 		{verbs.LaneChore, verbs.HostClaude, false, false, verbs.ModelClaudeHaiku, verbs.FamilyAnthropic, SourceDefault, ""},
 		// Config overrides.
 		{verbs.LaneBuild, verbs.HostClaude, false, false, verbs.ModelClaudeSonnet, verbs.FamilyAnthropic, SourceConfig, ""},
@@ -49,7 +49,7 @@ func TestLaneResolution(t *testing.T) {
 		{verbs.LaneReview, verbs.HostCursor, false, false, verbs.ModelGrok, verbs.FamilyXAI, SourceFallback, ""},
 		// The binary's own calls cannot use a host-managed mode.
 		{verbs.LaneChore, verbs.HostAmp, true, false, verbs.ModelClaudeHaiku, verbs.FamilyAnthropic, SourceDirect, ""},
-		{verbs.LaneUIReview, verbs.HostAmp, true, false, verbs.ModelGeminiPro, verbs.FamilyGoogle, SourceDirect, ""},
+		{verbs.LaneUIReview, verbs.HostAmp, true, false, verbs.ModelGemini, verbs.FamilyGoogle, SourceDirect, ""},
 		// Heavy reviews escalate to GPT-6 Astra at high effort.
 		{verbs.LaneReview, verbs.HostAmp, true, true, verbs.ModelGPTAstra, verbs.FamilyOpenAI, SourceDefault, "high"},
 	}
@@ -108,7 +108,7 @@ func TestRouting(t *testing.T) {
 		{"anthropic via gateway: messages", gw, verbs.ModelClaudeOpus, "gateway", StyleMessages, "ai-gateway"},
 		{"openai via gateway: responses", gw, verbs.ModelGPTSol, "gateway", StyleResponses, "ai-gateway"},
 		{"xai via gateway: chat", gw, verbs.ModelGrok, "gateway", StyleChat, "ai-gateway"},
-		{"google via gateway: chat", gw, verbs.ModelGeminiPro, "gateway", StyleChat, "ai-gateway"},
+		{"google via gateway: chat", gw, verbs.ModelGemini, "gateway", StyleChat, "ai-gateway"},
 		{"model entry beats family entry", styled, verbs.ModelGrok, "gateway", StyleChat, "ai-gateway"},
 		{"family entry applies to other models", styled, "grok-5", "gateway", StyleResponses, "ai-gateway"},
 		{"per-model override of a family default", styled, verbs.ModelGPTAstra, "gateway", StyleChat, "ai-gateway"},

@@ -52,10 +52,18 @@ var ListPrices = []ListPrice{
 	{Model: "grok-4.7", Short: Rates{Input: 2, CachedInput: 0.50, Output: 6},
 		LongAbove: 199999, Long: Rates{Input: 4, CachedInput: 1, Output: 12},
 		Source: "https://docs.x.ai/developers/pricing", Read: "2026-10-17"},
-	// The gateway's gemini-3.1-pro-low is Gemini 3.1 Pro (Google lists it as
-	// gemini-3.1-pro-preview) at low thinking; the price is the model's.
-	{Model: "gemini-3.1-pro-low", Short: Rates{Input: 2, CachedInput: 0.20, Output: 12},
-		LongAbove: 200000, Long: Rates{Input: 4, CachedInput: 0.40, Output: 18},
+	// Google's Gemini rates below are the standard tier, one rate at every
+	// prompt length, and double on the date named; update them then.
+	// gemini-3.8-flash: the ui-review lane's interim model (D-6.6b); this rate
+	// runs through 2026-12-31 (from 2027-01-01: input 1.50, cached 0.15,
+	// output 7.50).
+	{Model: "gemini-3.8-flash", Short: Rates{Input: 0.75, CachedInput: 0.075, Output: 3.75},
+		Source: "https://ai.google.dev/gemini-api/docs/pricing", Read: "2026-10-17"},
+	// gemini-4-argon-high, the lane's target: the gateway's name for Gemini 4
+	// Argon (Google's gemini-4-argon) at its high reasoning tier, the same model
+	// at the same price (thinking bills as output). This rate runs through
+	// 2026-11-30 (from 2026-12-01: input 4, cached 0.20, output 20).
+	{Model: "gemini-4-argon-high", Short: Rates{Input: 2, CachedInput: 0.10, Output: 10},
 		Source: "https://ai.google.dev/gemini-api/docs/pricing", Read: "2026-10-17"},
 }
 
