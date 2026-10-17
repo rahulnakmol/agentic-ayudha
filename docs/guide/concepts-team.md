@@ -102,4 +102,5 @@ Terms are defined in the [glossary](../../GLOSSARY.md).
 
 ## What's next
 
-Working alone for now? See [run it alone: the solo founder](guide-solo-founder.md).
+Working alone for now? See [run it alone: the solo founder](guide-solo-founder.md). Planning to grow? See
+[from MVP to scale](growth.md).
