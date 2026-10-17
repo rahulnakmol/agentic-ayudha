@@ -240,6 +240,9 @@ func (h *Harness) runSurvey(ctx context.Context, c Case, lane verbs.LaneID, body
 		System:    body + "\n\nYou have indexed the repository and read every module's pack and the files that follow. Reply with " + file + " only: one JSON object, nothing before or after it.",
 		Messages:  []models.Message{{Role: "user", Content: ctxText + "The person asks:\n\n" + untrusted("request", input) + "\n\n" + task}},
 		MaxTokens: h.Config.MaxTokens.Skill,
+		// A survey draft runs for minutes; streaming keeps the gateway from
+		// closing the idle connection (HTTP 524 in run 39014616715).
+		Stream: true,
 	}
 	reply, problems, first, err := reviseOnce(ctx, h.complete(lane, "skill", &calls), req, func(d string) []string { return checkSurvey(c, w, d) })
 	if err != nil {

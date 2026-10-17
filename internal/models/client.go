@@ -1,6 +1,7 @@
 package models
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -73,6 +74,11 @@ type Request struct {
 	MaxTokens int
 	Effort    string  // reasoning effort; empty for the provider default
 	Format    *Format // ask for JSON matching a schema where the wire format supports it; nil for free text
+	// Stream asks an Anthropic Messages endpoint to stream the reply, so a long
+	// generation keeps bytes flowing past a proxy's idle timeout (a gateway
+	// behind Cloudflare answers 524 after 100 seconds of silence). Other wire
+	// formats ignore it, and a reply that arrives as plain JSON still decodes.
+	Stream bool
 }
 
 // Format asks the endpoint for structured output: OpenAI Responses
@@ -145,6 +151,9 @@ func (c HTTPClient) Complete(ctx context.Context, r Request) (Response, error) {
 		if r.System != "" {
 			b["system"] = r.System
 		}
+		if r.Stream {
+			b["stream"] = true
+		}
 		body = b
 	case StyleResponses:
 		path = "/responses"
@@ -202,6 +211,9 @@ func (c HTTPClient) Complete(ctx context.Context, r Request) (Response, error) {
 		return Response{}, err
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode/100 == 2 && c.Style == StyleMessages && strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") {
+		return decodeMessagesStream(io.LimitReader(resp.Body, 32<<20))
+	}
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
 	if err != nil {
 		return Response{}, err
@@ -216,6 +228,73 @@ func (c HTTPClient) Complete(ctx context.Context, r Request) (Response, error) {
 		return Response{}, &StatusError{Code: resp.StatusCode, Body: truncate(string(raw), 300)}
 	}
 	return decode(c.Style, raw)
+}
+
+// decodeMessagesStream reads an Anthropic Messages event stream: the text
+// deltas in order, the stop reason, and the usage from message_start and
+// message_delta. An error event is an error.
+func decodeMessagesStream(body io.Reader) (Response, error) {
+	var r Response
+	var sb strings.Builder
+	sc := bufio.NewScanner(body)
+	sc.Buffer(make([]byte, 64<<10), 8<<20)
+	for sc.Scan() {
+		data, ok := strings.CutPrefix(sc.Text(), "data:")
+		if !ok {
+			continue
+		}
+		var ev struct {
+			Type    string `json:"type"`
+			Message struct {
+				Model string `json:"model"`
+				Usage usage  `json:"usage"`
+			} `json:"message"`
+			Delta struct {
+				Type       string `json:"type"`
+				Text       string `json:"text"`
+				StopReason string `json:"stop_reason"`
+			} `json:"delta"`
+			Usage usage `json:"usage"`
+			Error struct {
+				Type    string `json:"type"`
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		if err := json.Unmarshal([]byte(strings.TrimSpace(data)), &ev); err != nil {
+			return Response{}, fmt.Errorf("decode messages stream: %w", err)
+		}
+		switch ev.Type {
+		case "message_start":
+			u := ev.Message.Usage
+			r.Model = ev.Message.Model
+			r.TokensIn = u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens
+			r.TokensOut = u.OutputTokens
+		case "content_block_delta":
+			if ev.Delta.Type == "text_delta" {
+				sb.WriteString(ev.Delta.Text)
+			}
+		case "message_delta":
+			if ev.Delta.StopReason != "" {
+				r.StopReason, r.Truncated = ev.Delta.StopReason, ev.Delta.StopReason == "max_tokens"
+			}
+			if ev.Usage.OutputTokens > 0 {
+				r.TokensOut = ev.Usage.OutputTokens
+			}
+			if ev.Usage.Cost != nil {
+				r.CostUSD = *ev.Usage.Cost
+			}
+		case "error":
+			return Response{}, fmt.Errorf("messages stream error: %s: %s", ev.Error.Type, truncate(ev.Error.Message, 300))
+		}
+	}
+	if err := sc.Err(); err != nil {
+		return Response{}, fmt.Errorf("read messages stream: %w", err)
+	}
+	r.Text = sb.String()
+	if r.Text == "" {
+		return r, fmt.Errorf("messages stream has no text (stop reason %q)", r.StopReason)
+	}
+	return r, nil
 }
 
 // StatusError is a non-2xx reply.

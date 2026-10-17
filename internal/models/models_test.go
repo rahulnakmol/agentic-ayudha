@@ -433,6 +433,52 @@ func TestStopReasons(t *testing.T) {
 	}
 }
 
+// A streamed Messages reply decodes to the same Response as the plain JSON
+// one: text deltas in order, cached input counted, the final output tokens
+// and stop reason from message_delta. A gateway that ignores "stream" and
+// answers JSON still decodes; an error event is an error.
+func TestMessagesStream(t *testing.T) {
+	sse := "event: message_start\n" +
+		`data: {"type":"message_start","message":{"model":"claude-opus-5-5","usage":{"input_tokens":5,"cache_read_input_tokens":100,"output_tokens":1}}}` + "\n\n" +
+		"event: ping\ndata: {\"type\":\"ping\"}\n\n" +
+		`data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}` + "\n\n" +
+		`data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"{\"a\":"}}` + "\n\n" +
+		`data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" 1}"}}` + "\n\n" +
+		`data: {"type":"message_delta","delta":{"stop_reason":"max_tokens"},"usage":{"output_tokens":42}}` + "\n\n" +
+		`data: {"type":"message_stop"}` + "\n\n"
+	for _, tc := range []struct {
+		name, ctype, body, text string
+		in, out                 int
+		truncated, wantErr      bool
+	}{
+		{"stream", "text/event-stream; charset=utf-8", sse, `{"a": 1}`, 105, 42, true, false},
+		{"json", "application/json", `{"model":"m","content":[{"type":"text","text":"{}"}],"stop_reason":"end_turn","usage":{"input_tokens":3,"output_tokens":4}}`, "{}", 3, 4, false, false},
+		{"error", "text/event-stream", `data: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}` + "\n\n", "", 0, 0, false, true},
+	} {
+		var sent map[string]any
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_ = json.NewDecoder(r.Body).Decode(&sent)
+			w.Header().Set("Content-Type", tc.ctype)
+			_, _ = w.Write([]byte(tc.body))
+		}))
+		c := HTTPClient{BaseURL: srv.URL, Style: StyleMessages, Key: "k", HTTP: srv.Client()}
+		r, err := c.Complete(context.Background(), Request{Model: "m", MaxTokens: 100, Stream: true})
+		srv.Close()
+		if sent["stream"] != true {
+			t.Errorf("%s: request did not ask to stream: %v", tc.name, sent)
+		}
+		if tc.wantErr {
+			if err == nil || !strings.Contains(err.Error(), "overloaded_error") {
+				t.Errorf("%s: want the stream's error, got %+v %v", tc.name, r, err)
+			}
+			continue
+		}
+		if err != nil || r.Text != tc.text || r.TokensIn != tc.in || r.TokensOut != tc.out || r.Truncated != tc.truncated {
+			t.Errorf("%s: %+v %v", tc.name, r, err)
+		}
+	}
+}
+
 // Anthropic's cached prompt input counts as input tokens, so cost and the
 // [budget] breaker see it. The usage block has the shape the gateway returns
 // for Messages calls (run 38185993917 recorded input_tokens 2 on every skill
