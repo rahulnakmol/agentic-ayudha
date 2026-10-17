@@ -9,6 +9,7 @@ three employers, about 41 000 employees). Today is Monday 2026-10-12.
 - Baseline: 0.18 (retained users over the complete cohorts of August, from the run recorded in #57)
 - Target: >= 0.25
 - Measurement plan: retention over complete weekly cohorts, starting from the Globex launch on 2026-10-01.
+- Children: #59 "Onboard Globex" (feature, closed, shipped); #60 "Weekly answer digest" (feature, open).
 
 ## `[measure]` (`.aayudha/config.toml`)
 

@@ -10,6 +10,8 @@ employer's 2 400 employees). Today is Monday 2026-10-12.
   visit, from `analytics/exports/hr-ticket-2026-08.jsonl`)
 - Target: >= 0.35
 - Measurement plan: activation over the complete weekly cohorts from the launch on 2026-09-14.
+- Children: #41 "Unanswered questions view for HR" (feature, open); #40 "Answer from the plan FAQ" (feature, closed,
+  shipped).
 
 ## `[measure]` (`.aayudha/config.toml`)
 
