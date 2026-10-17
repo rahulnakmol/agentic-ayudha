@@ -135,7 +135,9 @@ confirmed fact appears once, cited, in the part whose design rests on it.
 `LAYERS.md`, `[measure]`, a path from the grounding, a Result. Cite only what the grounding or the checkout holds.
 Label what is not a fact: `Assumption:` for a default you chose, and an inference names the facts it rests on. Never
 state a volume, latency, cost, or rate that nobody measured; say it is unmeasured and how to measure it. A citation is
-not proof: cite the source that actually says it. Say what a tool, a job, or a file does only as the grounding
+not proof: cite the source that actually says it. Anything the design needs that the grounding does not show it
+already has (an index rebuilt on removal, a latency that stays within budget, a cutoff) is written as a
+requirement ("must") with how it is checked, or as an `Assumption:`, never as how the system behaves. Say what a tool, a job, or a file does only as the grounding
 describes it; a capability it does not show (a store, a schedule, a measurement) is a step of the design, or it is
 `Unverified:`. Name an owner only when the grounding names one; otherwise the owner is an open question.
 
@@ -153,8 +155,9 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   you choose (deduplication, which outcome wins) is a design choice: write it as an `Assumption:`, never as a fact
   about the data. The edge-case rules are part of the definition: write the definition so it already includes them
   (if an item with no outcome counts as unanswered, the numerator says so), never a rule that contradicts the table.
-  When an outcome can arrive after the item, give the cutoff (an outcome counts only within N hours of the item, and
-  a week's figures are final once the cutoff has passed), so a published number never changes later.
+  When an outcome can arrive after the item, give the cutoff as an `Assumption:` (an outcome counts only within N
+  hours of the item; a week's figures are final once the cutoff has passed), so a published number never changes,
+  and say that how late outcomes arrive is not yet measured unless the grounding shows their timing.
 - `## Design`: the smallest model, store, and pipeline that serve today's decision, and the option it beat. Keep the
   system of record (L07) apart from the analytical copy (L08). Prefer, in order: the exports and snapshot that
   `aayu measure` already builds (SQLite, or DuckDB); views on a read replica; a warehouse or lakehouse; streaming only
@@ -166,10 +169,10 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   aggregates only, no free text, the shortest retention the decision needs), how long each copy is kept (export, snapshot, aggregate), and how a deletion
   reaches every copy: the person's rows are removed from the source system (the telemetry store or database the
   events come from; if it cannot delete, say so, give its retention, and make it an open question), from each export
-  and snapshot, and aggregates are rebuilt from them. No copy derived from personal data outlives the copy it is
-  rebuilt from: an aggregate kept longer than its source must be anonymous by construction (counts only, no text, no
-  IDs, small groups suppressed), say so, and that is why a deletion need not touch it; otherwise keep it no longer
-  than its source. A source that only ages data out (a fixed retention, no per-person delete) does not meet a
+  and snapshot, and aggregates are rebuilt from them. Keep every copy derived from personal data no longer than the copy
+  it is rebuilt from, aggregates included, so a deletion can always reach it by a rebuild. If the decision needs a
+  longer history, that is an open question for the human (and a privacy review), never solved by calling counts
+  anonymous: suppressing small groups lowers the risk of re-identification, it does not prove anonymity. A source that only ages data out (a fixed retention, no per-person delete) does not meet a
   deletion request: say that plainly, with its retention, as the open risk. A pseudonymous ID does not anonymise free text: say who may read the text itself and what is redacted.
 - `## Checks`: how we will know the numbers are right: a reconciliation against the source, quality checks with
   thresholds (skipped rows, duplicates, nulls), the metric computed by hand on a synthetic fixture, and the
@@ -212,7 +215,8 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   and say which cases each metric counts: recall at k only over cases answered from passages (a retrieved passage
   is not yet a correct answer), exact match over cases answered from a table lookup, correct abstention over cases
   with no answer. A baseline recall (12 of 20 passages retrieved) is not a count of correct answers, and a design is
-  "expected to" fix a kind of miss until the set shows it. Then read each case's expected behaviour against the
+  "expected to" fix a kind of miss until the set shows it. A baseline compares only on the same cases: when you
+  change a metric's cases, its baseline is "to be measured on these cases", never the old figure. Then read each case's expected behaviour against the
   abstention, contradiction, and injection rules you wrote: they must agree,
   and every trigger you mention for a later option gives its number here. Thresholds nobody has agreed yet are
   `Assumption:` lines. A startup set is small (about twenty cases, a quarter adversarial); a scaleup slices results;
