@@ -13,7 +13,7 @@ func Render(ix *Index, d Draft, r Report) string {
 	var b strings.Builder
 	p := func(format string, args ...any) { fmt.Fprintf(&b, format, args...) }
 	p("# Survey: %s\n\n", oneLine(d.Product))
-	p("%s\n\n", strings.TrimSpace(d.Summary))
+	p("%s\n\n", oneLine(d.Summary))
 	p("Asked for: %q. Indexed at commit `%s`: %d files", oneLine(d.Request), short(ix.Commit), len(ix.Files))
 	var ls []string
 	for _, l := range ix.Languages {
@@ -109,7 +109,7 @@ func Render(ix *Index, d Draft, r Report) string {
 		if m.TargetSource != "request" {
 			src = "the answer to " + m.TargetSource
 		}
-		p("Target from %s. %s", src, strings.TrimSpace(m.Strategy))
+		p("Target from %s. %s", src, oneLine(m.Strategy))
 		if len(m.Cites) > 0 {
 			p(" (%s)", citeText(m.Cites))
 		}
@@ -139,7 +139,7 @@ func Render(ix *Index, d Draft, r Report) string {
 			p("\n")
 		}
 		if len(m.Risks) > 0 {
-			p("\n### Risks\n\n")
+			p("\n### Modernisation risks\n\n")
 			for _, c := range m.Risks {
 				p("- %s\n", claimLine(c))
 			}
@@ -196,7 +196,21 @@ func citeText(cs []string) string {
 	return strings.Join(out, ", ")
 }
 
-func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
+// oneLine puts model-written text on one line and escapes what Markdown would
+// otherwise read as HTML or emphasis (`block<Type>Continue`, `xss*`), outside
+// code spans, so the report shows the text as written.
+func oneLine(s string) string {
+	parts := strings.Split(strings.Join(strings.Fields(s), " "), "`")
+	for i := 0; i < len(parts); i += 2 {
+		if i == len(parts)-1 && len(parts)%2 == 0 {
+			break // an unclosed backtick: leave the tail as it is
+		}
+		parts[i] = mdEscape.Replace(parts[i])
+	}
+	return strings.Join(parts, "`")
+}
+
+var mdEscape = strings.NewReplacer(`\`, `\\`, "*", `\*`, "_", `\_`, "<", `\<`)
 
 func cell(s string) string { return strings.ReplaceAll(oneLine(s), "|", `\|`) }
 
