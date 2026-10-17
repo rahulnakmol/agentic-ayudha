@@ -118,12 +118,15 @@ Start from the journey that matters most to the people who use the product, not 
   partial export that holds an incident as the window's budget; the weekly record needs an export that covers the
   window.
 - **Release risk.** Which SLO is most at risk follows from the numbers you give: name the one whose projection
-  spends its budget first, and rank nothing the numbers do not support.
+  spends its budget first, and rank nothing the numbers do not support. A projection of when a budget runs out shows
+  its arithmetic from cited numbers (budget left divided by what the burn rate spends per day); when the numbers do
+  not allow one, say it is unknown, never that a budget will or will not run out.
 
 ## 3. The budget policy
 
-A spent budget changes what ships: `aayu release` lets only Bugs through while any SLO's budget is spent, and refuses
-when the recorded status is stale. A Story ships anyway only when a person accepts an `error-budget` waiver on it
+A spent budget changes what ships: `aayu release` lets only Bugs through while any SLO's budget is spent. A missing
+or stale recorded status (older than the gate allows, or without a measure of every SLO) is different: it blocks every
+release, Bugs included, and no waiver lifts it; only a fresh `aayu slo --telemetry <export> --record` does. A Story ships anyway only when a person accepts an `error-budget` waiver on it
 (`aayu decide --waiver error-budget <story>`, then `aayu decide <n> --accept waive`). Write down who decides and how
 it escalates. Never lower an objective or edit a budget to let a release through.
 
