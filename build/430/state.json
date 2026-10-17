@@ -2,6 +2,26 @@
   "story": 430,
   "branch": "story/430-agents-run-release-behind-the-full-gate",
   "started_at": "2026-10-17T19:12:30Z",
-  "failed_attempts": 0,
-  "checkpoints": null
+  "failed_attempts": 1,
+  "failures_by_layer": {
+    "L02": 1,
+    "L03": 1,
+    "L06": 1
+  },
+  "checkpoints": [
+    {
+      "k": 1,
+      "n": 3,
+      "attempt": 1,
+      "commit": "d096a9dd032f3e1e57bc8a9d58f5285c361e407f",
+      "layers": [
+        "L02",
+        "L03",
+        "L06"
+      ],
+      "verify": "miss",
+      "detail": "coverage fail",
+      "at": "2026-10-17T19:51:13Z"
+    }
+  ]
 }
