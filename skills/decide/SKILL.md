@@ -125,7 +125,9 @@ citation.
    that starts "Why this question:" and says, with a citation, why it is the real decision and not a symptom. When
    the human's framing assumes what the facts contradict (that one change unblocks the work, say), restate the
    question so it does not, and say so here. When an option the human named cannot reach the aim they gave it (other
-   blockers remain), say so here, and offer in Options only the choices that can.
+   blockers remain), say so here, and offer in Options only the choices that can. An option blocked only until an
+   open Decision is accepted can still reach the aim: keep it, conditional on that Decision, with its full costs
+   (every price or term the sources give), and say what it needs first.
 2. `## Facts`: four to six list items of at most 25 words each, each with its citation in the same item. Lead with the facts
    that constrain the options: Decisions in force (quote what they say, no more), the readers or consumers of what
    changes, floors and their results, open reviews, and what is blocked, including facts that argue against your
@@ -143,7 +145,10 @@ citation.
    each option in its viable form, with what it would take to work (what must change first, what moves elsewhere).
    An option you would never pick is a straw man; leave it out. When an option does not meet a criterion or a
    Decision as written, say which one and what would have to change. A gain claims only what the option itself
-   changes with every other fact still true: when other blockers remain, the gain says so.
+   changes with every other fact still true: when other blockers remain, the gain says so. Likewise a cost: a
+   floor waiver waives that floor only, so every other gate (criteria, reviews) still applies to the waiver option
+   and is not one of its costs; charge an option only with what it alone changes. A count stays what the source
+   counts (50 requests is not 50 kinds).
 4. `## Recommendation`: the option and why, in two or three cited sentences that follow from the facts. Then one
    line that starts `Door:`, contains the words "one-way door" or "two-way door", and cites what the option leaves
    behind: anything written to an append-only record, published, or relied on by another reader is a one-way door for
