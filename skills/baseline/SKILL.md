@@ -79,13 +79,16 @@ that is not production, without touching anyone's work in progress.
    AAYU_ENV=preview aayu baseline --sha 4f2c1a9
    ```
 
-5. **Clean up even on failure** (a `trap` on `EXIT`): stop the app by the PID you started it with, and remove the
+5. **Clean up even on failure** (a `trap` on `EXIT`): stop the whole app, not only the command that launched it (start
+   it in its own process group, `setsid`, and stop the group, `kill -- -"$pid"`, so the servers it spawned stop
+   too), and remove the
    worktree from the original checkout whatever directory the failure left you in (`git -C "$repo" worktree remove
    --force "$wt"`, with `repo` and `wt` set as absolute paths before the first `cd`), or switch back to where you were.
 6. **Report** the commit, the target, the `[review] baseline` paths captured, the manifest path on the ledger
-   (`baselines/<sha>/manifest.json`), and where the screenshots went: the `[proof] media` bucket; Git LFS on a private
-   repository without one; or, on a public repository without a bucket, only their SHA-256 hashes. Say what the last
-   means: a later run can tell that a page changed, but there is no stored image of this commit to look at; a
+   (`baselines/<sha>/manifest.json`), and the one place the screenshots go for this repository, read from its config
+   and visibility rather than listed as possibilities: the `[proof] media` bucket when one is set (name it); Git LFS on
+   a private repository without one; or, on a public repository without a bucket, only their SHA-256 hashes. For the
+   last, say what it means: a later run can tell that a page changed, but there is no stored image of this commit to look at; a
    maintainer who wants the images sets `[proof] media` and runs the baseline again. State only what the commands
    showed; do not invent results.
 

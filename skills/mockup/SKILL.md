@@ -83,7 +83,9 @@ Produce design-system mockups for a Feature from its wireframes.
    - **Every state the wireframe describes, as the wireframe describes it**: the same items, windows, choices, and
      copy (a mockup styles the structure; it does not change what a state offers), and its assumptions still marked.
      Each file shows one state as a person would see it: a transient state the wireframe names (loading, retrying)
-     goes in a note, or in its own file, never as a second visible panel on the state it follows.
+     goes in a note, or in its own file, never as a second visible panel on the state it follows. Links between the
+     state files, if you add them, follow the story with the same data (what was chosen stays chosen, and Change
+     returns to it); a link that would show the wrong data is left out.
 3. List the states in `stage.json` (`{"states": [{"id", "title", "file"}]}`) and pin them:
 
    ```sh

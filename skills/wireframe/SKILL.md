@@ -71,11 +71,13 @@ Produce wireframes for a Feature's states from its research and criteria.
 2. Draw one low-fidelity wireframe per UI state, with the state IDs the stories use: structure, content, and
    controls, no styling (no colours or fonts; those are the mockup's). Use SVG, HTML, or Markdown (an image is
    accepted but cannot be checked). Never trace a Mobbin screen. Each wireframe shows:
-   - **what its Completion Goal says the state shows**, every part of it, in real copy in the user's words;
+   - **what its Completion Goal says the state shows**, every part of it, in real copy in the user's words, every
+     row and item written out (no placeholder rows such as "…" or "more windows here");
    - **the research it answers**, citing the finding (participant, ticket, or question) a design choice rests on;
    - **accessibility designed in, in every state**: name the first focus stop and the keyboard order (Tab sequence)
      of that state, the empty and error states included; what a screen reader announces (headings, labels, a
-     message that appears, and where focus goes when it does); status and errors in words rather than colour alone;
+     message that appears, and where focus goes when it does, to the message itself or a heading that names what
+     happened); a single choice as a named group (a legend); status and errors in words rather than colour alone;
      and every control's minimum target (44 × 44 px), stated on the wireframe, not left to the mockup;
    - **the layout on a phone** (390 px) when the product is used on phones, without hiding content;
    - **assumptions marked as such** where the research leaves a choice open, for the test to settle, instead of
