@@ -10,6 +10,7 @@ import (
 // DiffFile is one file of a unified diff, with the new side of its hunks.
 type DiffFile struct {
 	Path    string // the new path; the old path when the file was deleted
+	From    string // the old path of a renamed file
 	Deleted bool
 	New     bool // the PR adds the file
 	Hunks   []Hunk
@@ -49,9 +50,14 @@ func ParseDiff(diff string) []DiffFile {
 				f.Path = b
 			}
 		case f == nil:
+		case h == nil && strings.HasPrefix(line, "rename from "):
+			f.From = strings.TrimPrefix(line, "rename from ")
 		case h == nil && strings.HasPrefix(line, "--- "):
 			oldPath = strings.TrimPrefix(strings.TrimPrefix(line, "--- "), "a/")
 			f.New = oldPath == "/dev/null"
+			if !f.New && oldPath != f.Path {
+				f.From = oldPath
+			}
 		case h == nil && strings.HasPrefix(line, "+++ "):
 			p := strings.TrimPrefix(line, "+++ ")
 			if p == "/dev/null" {
@@ -149,25 +155,30 @@ func isTestPath(p string) bool {
 // product or its agents (skills, seats, hosts, work items, evals, agent and
 // workflow config). A steering document (an AGENTS.md or CLAUDE.md, the build
 // plan, the constraints, the contributing guide, the ethos) is never
-// documentation, under docs/ or not. Such a PR merges without a review; any
-// other file needs one. An empty diff is not docs-only.
+// documentation, under docs/ or not. A renamed file is documentation only when
+// both its old and new paths are. Such a PR merges without a review; any other
+// file needs one. An empty diff is not docs-only.
 func DocsOnly(files []DiffFile) bool {
 	for _, f := range files {
-		p := f.Path
-		switch path.Base(p) {
-		case "AGENTS.md", "CLAUDE.md", "BUILD-PLAN.md", "CONSTRAINTS.md", "CONTRIBUTING.md", "ETHOS.md":
-			return false
-		}
-		if strings.HasPrefix(p, "docs/") {
-			continue
-		}
-		steers := false
-		for _, d := range []string{"skills/", "seats/", "hosts/", "work-items/", "evals/", ".agents/", ".claude/", ".github/", ".cursor/"} {
-			steers = steers || strings.HasPrefix(p, d) || strings.Contains(p, "/"+d)
-		}
-		if !strings.HasSuffix(strings.ToLower(p), ".md") || steers {
+		if !docsPath(f.Path) || (f.From != "" && !docsPath(f.From)) {
 			return false
 		}
 	}
 	return len(files) > 0
+}
+
+func docsPath(p string) bool {
+	switch path.Base(p) {
+	case "AGENTS.md", "CLAUDE.md", "BUILD-PLAN.md", "CONSTRAINTS.md", "CONTRIBUTING.md", "ETHOS.md":
+		return false
+	}
+	if strings.HasPrefix(p, "docs/") {
+		return true
+	}
+	for _, d := range []string{"skills/", "seats/", "hosts/", "work-items/", "evals/", ".agents/", ".claude/", ".github/", ".cursor/"} {
+		if strings.HasPrefix(p, d) || strings.Contains(p, "/"+d) {
+			return false
+		}
+	}
+	return strings.HasSuffix(strings.ToLower(p), ".md")
 }
