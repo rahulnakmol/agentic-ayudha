@@ -45,12 +45,21 @@ artifacts kept in .aayudha/state/verify/ (a preview): transcript.jsonl per check
 [[forbid]]
 pattern = '^(?:\./)?notes\b|^go\s+run\b|^(?:ba|z)?sh\b|^python3?\b|^node\b'
 why = "drives the product outside the feature map's checks (the skill: drive the product only through the map's checks)"
+match = ['go run ./cmd/notes undone 1', './notes undone 1', "sh -c 'notes list'"]
+negated = ['aayu verify']
+near_miss = ['go test ./...', 'notesctl list']
 
 [[forbid]]
 pattern = '^aayu\s+(?:build|ship|config\s+set)\b|^aayu\s+ready\s+#?\d+\s*$'
 why = "changes the story, the build, or the thresholds when the person asked for verify"
+match = ['aayu build 23', 'aayu config set floors.coverage 80', 'aayu ready 23']
+negated = ['aayu ready 23 --check']
+near_miss = ['aayu config show floors', 'aayu verify --map']
 
 [[say_forbid]]
 pattern = '(?i)\b(?:criteri(?:on|a)\s+[0-9, and]+\s+(?:is|are)\s+(?:now\s+)?proven|story is (?:proven|done|complete)|(?:is|are) (?:now )?proven)\b'
 allow = '''(?i)\b(?:not|no|nothing|never|neither|won't|isn't|aren't|can't|cannot|don't|doesn't|until|unless|once|after|before|when|if|without)\b[^.\n]{0,50}''' # a negated or conditional claim is not a claim (D-3.4g)
 why = "claims proof from a local preview; only the merge gate's pack for the PR head is proof"
+match = ['Criteria 1 and 2 are proven.', 'The story is done.']
+negated = ['Criterion 3 is not proven: nothing in the map covers it.']
+near_miss = ['Once the gate runs, criteria 1 and 2 are proven.', 'The proven checks are listed below.']

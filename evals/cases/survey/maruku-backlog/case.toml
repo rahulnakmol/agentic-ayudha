@@ -11,11 +11,6 @@ description = "Draft the backlog for moving off a legacy library: compatibility 
 input = "request.txt"
 repo = "../repos/maruku"
 artifacts = ["output/backlog.json"]
-scope = [
-  { pattern = '(?i)\b(support|supports|port|ports|implement|implements|add|adds|keep|keeps|render|renders)\b[^.\n"]{0,40}\b(divs?|math|meta-?data headers?|blahtex|itex|abbreviations?|definition lists?)\b', why = "syntax the person said no page uses (Q2)", allow = '(?i)(\b(no|not|never|without|nor|neither|excluded?|except)\b|\bout:)[^.\n"]{0,60}' },
-  { pattern = '(?i)\b(support|supports|keep|keeps|carry|carries|port|ports|implement|implements|preserve|preserves)\b[^.\n"]{0,40}(<\?maruku|instance_eval|MaRuKu::Globals|replace_each_string|unsafe[_ ]features)', why = "a do-not-carry entry the person confirmed (Q3, Q5, Q6)", allow = '(?i)(\b(no|not|never|without|nor|neither)\b|\bout:)[^.\n"]{0,60}' },
-  { pattern = '(?i)\b(port|ports|keep|keeps|ship|ships|support|supports|implement|implements|rewrite|rewrites)\b[^.\n"]{0,30}\bmaruku command\b', why = "the command the person said nothing runs (Q4)", allow = '(?i)(\b(no|not|never|without|nor)\b|\bout:)[^.\n"]{0,60}' },
-]
 
 [survey]
 kind = "backlog"
@@ -26,3 +21,27 @@ probes = ["../maruku-compat/probes/frozen-literals.json"] # the survey cites the
 [tier2]
 rubric = "rubric.md"
 references = ["formats.md", "compatibility.md"]
+
+[[scope]]
+pattern = '(?i)\b(support|supports|port|ports|implement|implements|add|adds|keep|keeps|render|renders)\b[^.\n"]{0,40}\b(divs?|math|meta-?data headers?|blahtex|itex|abbreviations?|definition lists?)\b'
+why = "syntax the person said no page uses (Q2)"
+allow = '(?i)(\b(no|not|never|without|nor|neither|excluded?|except)\b|\bout:)[^.\n"]{0,60}'
+match = ['The port supports math and definition lists.']
+negated = ['The port does not support math or divs.']
+near_miss = ['It renders the headers and lists of every page.']
+
+[[scope]]
+pattern = '(?i)\b(support|supports|keep|keeps|carry|carries|port|ports|implement|implements|preserve|preserves)\b[^.\n"]{0,40}(<\?maruku|instance_eval|MaRuKu::Globals|replace_each_string|unsafe[_ ]features)'
+why = "a do-not-carry entry the person confirmed (Q3, Q5, Q6)"
+allow = '(?i)(\b(no|not|never|without|nor|neither)\b|\bout:)[^.\n"]{0,60}'
+match = ['Keep the <?maruku instruction support.']
+negated = ['Do not keep instance_eval.']
+near_miss = ['Port the parser; instance variables stay private.']
+
+[[scope]]
+pattern = '(?i)\b(port|ports|keep|keeps|ship|ships|support|supports|implement|implements|rewrite|rewrites)\b[^.\n"]{0,30}\bmaruku command\b'
+why = "the command the person said nothing runs (Q4)"
+allow = '(?i)(\b(no|not|never|without|nor)\b|\bout:)[^.\n"]{0,60}'
+match = ['Port the maruku command as a CLI.']
+negated = ['Do not port the maruku command; nothing runs it.']
+near_miss = ["Port the maruku library's parser."]

@@ -1,0 +1,6 @@
+# Which tests prove story #401's Completion Goal (WP4.3: verify maps the go test -json events of these tests, from
+# the run it makes, to the criteria).
+
+[[criterion]]
+id = 1 # a deterministic rule without a match, a negated, and a near-miss fixture fails TestCaseRulesHaveFixtures, naming the rule and the missing kind
+tests = ["internal/evals:TestCaseRulesHaveFixtures"]

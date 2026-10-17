@@ -17,13 +17,17 @@ calls = [
   ["ready", "61", "--check"],
 ]
 
-# The human ruled out prices, invoices, company accounts, and delivery: none may become a criterion. A criterion that
-# honours that ("with no price and no invoice") is allowed: the rule matched it in run 38841610907 (WP5.8, D-5.8f).
-scope = [
-  { pattern = '(?i)\b(price[sd]?|pricing|invoic\w*|deliver(y|ies)|company accounts?|portal)\b', why = "prices, invoices, company accounts, delivery, or a portal, which the human ruled out", allow = '(?i)\b(no|without|not)\s+(an?\s+|any\s+)?(price[sd]?|pricing|invoic\w*|deliver(y|ies)|company accounts?|portal)(\s*(,|and|or|nor)\s+(no\s+)?(an?\s+|any\s+)?(price[sd]?|pricing|invoic\w*|deliver(y|ies)|company accounts?|portal))*\b' },
-]
-
 [tier2]
 rubric = "rubric.md"
 human = "human.toml"
 references = ["story.md", "jargon.md", "vague/idea.md"]
+
+# The human ruled out prices, invoices, company accounts, and delivery: none may become a criterion. A criterion that
+# honours that ("with no price and no invoice") is allowed: the rule matched it in run 38841610907 (WP5.8, D-5.8f).
+[[scope]]
+pattern = '(?i)\b(price[sd]?|pricing|invoic\w*|deliver(y|ies)|company accounts?|portal)\b'
+why = "prices, invoices, company accounts, delivery, or a portal, which the human ruled out"
+allow = '(?i)\b(no|without|not)\s+(an?\s+|any\s+)?(price[sd]?|pricing|invoic\w*|deliver(y|ies)|company accounts?|portal)(\s*(,|and|or|nor)\s+(no\s+)?(an?\s+|any\s+)?(price[sd]?|pricing|invoic\w*|deliver(y|ies)|company accounts?|portal))*\b'
+match = ['expected: the order shows its price', 'an invoice is emailed to the company']
+negated = ['expected: a form with no price and no invoice']
+near_miss = ["the request is delivered to the bakery's inbox", 'a priceless smile']

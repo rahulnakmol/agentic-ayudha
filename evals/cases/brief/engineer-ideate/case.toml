@@ -6,12 +6,15 @@ input = "../grounding.json"
 artifacts = ["output/brief.md"]
 brief = { register = "engineer", purpose = "ideate", draft = "output/brief.md" }
 
-# Known defect classes caught once by the judge (run 38210971285), kept as deterministic guards (D-3.4c): a measure
-# read as the behaviour behind it.
-scope = [
-  { pattern = '(?i)\b(shows?|means?|proves?)\s+(that\s+)?(people|reviewers?|users?)\s+(use|used|read|open|audit|like|want|need)\b', why = "a behaviour behind the count the Result does not measure" },
-]
-
 [tier2]
 rubric = "rubric.md"
 
+# Known defect classes caught once by the judge (run 38210971285), kept as deterministic guards (D-3.4c): a measure
+# read as the behaviour behind it.
+[[scope]]
+pattern = '(?i)\b(shows?|means?|proves?)\s+(that\s+)?(people|reviewers?|users?)\s+(use|used|read|open|audit|like|want|need)\b'
+why = "a behaviour behind the count the Result does not measure"
+allow = '''(?i)\b(?:not|never|cannot|can't|doesn't|don't|didn't|won't)\s+(?:\w+\s+){0,2}?(?:shows?|means?|proves?)\b''' # saying the count does not show it is the honest reading (Story #401, D-4.3t)
+match = ['The count shows that reviewers read every brief.', 'It means users like the export.']
+negated = ['The count does not show that reviewers read the brief.']
+near_miss = ['The chart shows the users who opened it: 41.', 'Reviewers read it on Monday.']

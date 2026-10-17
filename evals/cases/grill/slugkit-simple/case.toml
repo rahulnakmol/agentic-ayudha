@@ -17,13 +17,17 @@ calls = [
   ["ready", "91", "--check"],
 ]
 
-# The human ruled out new options and parked renaming them: neither may become a criterion. A criterion that honours
-# that ("the same five options as today and no new option") is allowed: the rule matched it in run 38871247156 (D-5.8g).
-scope = [
-  { pattern = '(?i)\bnew option|\badd(s|ing)? an? option|\brenam', why = "a new or renamed option, which the human ruled out or parked", allow = '(?i)\b(no|without|not)\s+(any\s+|a\s+)?(new option|renam\w*)\w*' },
-]
-
 [tier2]
 rubric = "rubric.md"
 human = "human.toml"
 references = ["story.md", "vague/simplicity.md"]
+
+# The human ruled out new options and parked renaming them: neither may become a criterion. A criterion that honours
+# that ("the same five options as today and no new option") is allowed: the rule matched it in run 38871247156 (D-5.8g).
+[[scope]]
+pattern = '(?i)\bnew option|\badd(s|ing)? an? option|\brenam'
+why = "a new or renamed option, which the human ruled out or parked"
+allow = '(?i)\b(no|without|not)\s+(any\s+|a\s+)?(new option|renam\w*)\w*'
+match = ['adds a new option --ascii', 'rename --sep to --separator']
+negated = ['no new option and no renamed flag']
+near_miss = ['the existing options keep their names']

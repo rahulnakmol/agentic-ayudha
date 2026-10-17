@@ -6,18 +6,56 @@ artifacts = ["output/issue.json"]
 schemas = [{ file = "output/issue.json", schema = "evals/schemas/workitem.json" }]
 ready = ["output/issue.json"]
 
-# Invented specifics: requirements the request does not state. A tier-2 run scored 2 for adding the first two (evals.yml run 38184730879);
-# the case keeps them as deterministic guards, checked before the judge.
-scope = [
-  { pattern = '(?i)content[- ]?type|\btext/csv\b|\bmime\b', why = "a content type the request does not state" },
-  { pattern = '(?i)\b(column|display(ed)?|list|same|screen)\s+order\b|\bordered\b|\bsorted\b', why = "an ordering the request does not state" },
-  { pattern = '(?i)\butf-?8\b|\bbom\b|\bdelimiter\b|\bfile ?name\b', why = "a file format detail the request does not state" },
-  { pattern = '(?i)\b\d+(\.\d+)?\s*(ms|milliseconds?|seconds?|s)\b', why = "a time limit the request does not state" },
-  { pattern = '(?i)\b(at most|up to|no more than|maximum of|limited to)\s+[\d,]+', why = "a size limit the request does not state" },
-]
 # Conventions that come with the format the request names are not invented: a CSV has a header row naming its
 # columns, so no rule may match "header row" (TestScopeConventionVersusInvented).
 
 [tier2]
 rubric = "rubric.md"
 verb = "grill" # the stub drafts a Story as `grill story` does, so it runs on grill's lane (spec)
+
+# Invented specifics: requirements the request does not state. A tier-2 run scored 2 for adding the first two (evals.yml run 38184730879);
+# the case keeps them as deterministic guards, checked before the judge.
+[[scope]]
+pattern = '(?i)content[- ]?type|\btext/csv\b|\bmime\b'
+why = "a content type the request does not state"
+# the request does not state this: a criterion that rules it out is still a criterion it does not ask for
+match = ['Content-Type: text/csv', 'the MIME type']
+negated = ['no content type is required']
+near_miss = ['the type of content']
+negated_fires = true
+
+[[scope]]
+pattern = '(?i)\b(column|display(ed)?|list|same|screen)\s+order\b|\bordered\b|\bsorted\b'
+why = "an ordering the request does not state"
+# the request does not state this: a criterion that rules it out is still a criterion it does not ask for
+match = ['columns in the same order as the screen', 'sorted by date']
+negated = ['not sorted by date']
+near_miss = ['export the order list']
+negated_fires = true
+
+[[scope]]
+pattern = '(?i)\butf-?8\b|\bbom\b|\bdelimiter\b|\bfile ?name\b'
+why = "a file format detail the request does not state"
+# the request does not state this: a criterion that rules it out is still a criterion it does not ask for
+match = ['UTF-8 with a BOM', 'a semicolon delimiter']
+negated = ['no BOM']
+near_miss = ['the file is named by the browser']
+negated_fires = true
+
+[[scope]]
+pattern = '(?i)\b\d+(\.\d+)?\s*(ms|milliseconds?|seconds?|s)\b'
+why = "a time limit the request does not state"
+# the request does not state this: a criterion that rules it out is still a criterion it does not ask for
+match = ['the export finishes within 2 s']
+negated = ['the export need not finish within 2 s']
+near_miss = ['2 sheets']
+negated_fires = true
+
+[[scope]]
+pattern = '(?i)\b(at most|up to|no more than|maximum of|limited to)\s+[\d,]+'
+why = "a size limit the request does not state"
+# the request does not state this: a criterion that rules it out is still a criterion it does not ask for
+match = ['at most 10,000 rows', 'up to 500 rows']
+negated = ['no more than 10,000 rows is not a limit we set']
+near_miss = ['most rows export']
+negated_fires = true

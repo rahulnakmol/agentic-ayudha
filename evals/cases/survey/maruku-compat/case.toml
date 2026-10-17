@@ -13,10 +13,6 @@ description = "Survey a legacy Ruby library: traps with runtime evidence, a do-n
 input = "request.txt"
 repo = "../repos/maruku"
 artifacts = ["output/survey.json"]
-scope = [
-  { pattern = '(?i)\b\d+(\.\d+)?\s*(ms|milliseconds|x faster|times faster|% faster)\b', why = "a performance figure nothing in the repository measures" },
-  { pattern = '(?i)\bdrop-in\b', why = "a maintained library called a drop-in replacement, which nothing the host ran shows", allow = '(?i)(\b(no|not|never|isn.t|is not|unless|whether|until)\b)[^.\n"]{0,60}' },
-]
 
 [survey]
 kind = "draft"
@@ -32,3 +28,20 @@ read = [
 [tier2]
 rubric = "rubric.md"
 references = ["formats.md", "traps.md", "compatibility.md", "modernisation.md"]
+
+[[scope]]
+pattern = '(?i)\b\d+(\.\d+)?\s*(ms|milliseconds|x faster|times faster|% faster)\b'
+why = "a performance figure nothing in the repository measures"
+# no measure backs the figure, whether the sentence asserts or denies it
+match = ['The port is 3x faster.', 'It renders a page in 12 ms.']
+negated = ['The port is not 3x faster.']
+near_miss = ['It parses 12 files.', 'The suite has 12 messages.']
+negated_fires = true
+
+[[scope]]
+pattern = '(?i)\bdrop-in\b'
+why = "a maintained library called a drop-in replacement, which nothing the host ran shows"
+allow = '(?i)(\b(no|not|never|isn.t|is not|unless|whether|until)\b)[^.\n"]{0,60}'
+match = ['The library is a drop-in replacement.']
+negated = ['The library is not a drop-in replacement.']
+near_miss = ['Drop in the new parser behind the same function.']
