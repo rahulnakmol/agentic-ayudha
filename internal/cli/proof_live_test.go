@@ -136,7 +136,7 @@ func TestLiveShipFromGateArtifact(t *testing.T) {
 	})
 	api("POST", fmt.Sprintf("/repos/%s/issues/%d/sub_issues", repo, feature), map[string]any{"sub_issue_id": storyID})
 	env := map[string]string{"AAYU_GITHUB_TOKEN": tok, "PATH": os.Getenv("PATH")}
-	opts := Options{Dir: dir}
+	opts := Options{Dir: dir, IsTerminal: stdinTTY} // ship --solo-bypass is a person's act at a terminal
 	if code, out, errOut := run(t, env, opts, "ready", strconv.Itoa(story), "--repo", repo); code != 0 {
 		t.Fatalf("ready: %d %s %s", code, out, errOut)
 	}
