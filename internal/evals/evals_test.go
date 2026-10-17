@@ -1054,7 +1054,7 @@ func TestGroups(t *testing.T) {
 	}
 	// WP5.9: the survey skill's cases, advisory, on dispatch only, capped at twice a full run's estimate with the self-check (D-3.4q, D-5.9l).
 	sg, surveys, err := cfg.ForGroup("survey", all)
-	if g, _ := cfg.Group("survey"); err != nil || sg.MaxUSD != 160 || sg.MaxTokens.Skill != 48000 || len(surveys) < 2 || cfg.Gates("survey") || g.RunsOn("push") || g.RunsOn("schedule") {
+	if g, _ := cfg.Group("survey"); err != nil || sg.MaxUSD != 14 || sg.MaxTokens.Skill != 48000 || len(surveys) < 2 || cfg.Gates("survey") || g.RunsOn("push") || g.RunsOn("schedule") {
 		t.Fatalf("survey group: %v, cap %v, %d cases, gates %v", err, sg.MaxUSD, len(surveys), cfg.Gates("survey"))
 	}
 	o, other, err := cfg.ForGroup("skills", all)

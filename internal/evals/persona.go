@@ -173,6 +173,12 @@ func (h *Harness) runPersona(ctx context.Context, c Case, lane verbs.LaneID, bod
 // (none when the first draft passed).
 func reviseOnce(ctx context.Context, complete func(context.Context, models.Request) (models.Response, error), req models.Request,
 	check func(string) []string) (answer string, problems, first []string, err error) {
+	return reviseOnceAsking(ctx, complete, req, check, "Fix every finding and reply with the whole revised answer only.")
+}
+
+// reviseOnceAsking is reviseOnce with its own request for the revision.
+func reviseOnceAsking(ctx context.Context, complete func(context.Context, models.Request) (models.Response, error), req models.Request,
+	check func(string) []string, ask string) (answer string, problems, first []string, err error) {
 	for attempt := 0; attempt < 2; attempt++ {
 		resp, err := complete(ctx, req)
 		if err != nil {
@@ -189,8 +195,7 @@ func reviseOnce(ctx context.Context, complete func(context.Context, models.Reque
 			first = problems
 		}
 		req.Messages = append(req.Messages, models.Message{Role: "assistant", Content: answer},
-			models.Message{Role: "user", Content: "The deterministic checks reported:\n- " + strings.Join(problems, "\n- ") +
-				"\n\nFix every finding and reply with the whole revised answer only."})
+			models.Message{Role: "user", Content: "The deterministic checks reported:\n- " + strings.Join(problems, "\n- ") + "\n\n" + ask})
 	}
 	return answer, problems, first, nil
 }

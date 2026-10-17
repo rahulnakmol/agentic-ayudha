@@ -572,6 +572,8 @@ jobs:
         env:
           AAYU_LIVE: "1"
           AAYU_GITHUB_TOKEN: ${{ secrets.AAYU_GITHUB_TOKEN }}
+          # Survey filing runs on rahulnakmol/aayu-survey-scratch with a token limited to it (D-5.9n); unset, it skips.
+          AAYU_SURVEY_SCRATCH_TOKEN: ${{ secrets.AAYU_SURVEY_SCRATCH_TOKEN }}
         run: go test -race -count=1 -tags integration ./...
 
   smoke:
