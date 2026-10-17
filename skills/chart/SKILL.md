@@ -187,7 +187,10 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   events come from), from each export and snapshot, and aggregates are rebuilt from them within a stated time
   (an `Assumption:` that fits the pipeline's own schedule). Whether the source can delete one person's rows is a fact only
   when the grounding says so: a retention setting shows how long data is kept, not that nothing can be deleted
-  sooner. Otherwise write it as `Unverified:`, with the retention as the worst case, and ask it in `## Open questions`. Keep every copy derived from personal data no longer than the copy
+  sooner. Otherwise write it as `Unverified:`, with the retention as the worst case, and ask it in `## Open questions`. A
+  deletion deadline you propose covers only the copies the design controls (the exports, the snapshot, the
+  aggregates); the source whose delete is unverified is named as the exception, with its worst case, never folded
+  into the same deadline. Keep every copy derived from personal data no longer than the copy
   it is rebuilt from, aggregates included, so a deletion can always reach it by a rebuild. If the decision needs a
   longer history, that is an open question for the human (and a privacy review), never solved by calling counts
   anonymous: suppressing small groups lowers the risk of re-identification, it does not prove anonymity. If the grounding shows that a source cannot delete one person's rows, a deletion request is not met until its

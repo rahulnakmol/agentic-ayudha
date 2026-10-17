@@ -45,7 +45,7 @@ activation rate over 2 complete cohort(s): 412 of 1329 acquired users. Window: 2
 Snapshot: 38-20261012T081500Z.sqlite (SHA-256 9f2b61c0e844…, engine sqlite) from appinsights
 analytics/exports/2026-09-14_10-11.jsonl sha256 5c1e09a2b7d4….
 
-## How `measure` counts (`internal/measure/measure.go`, `docs/BUILD-PLAN.md` D-7.2a)
+## How `measure` counts (`internal/measure/measure.go`)
 
 A cohort is the users acquired in one week from the window start; its week ends seven days after its start
 (exclusive: the 2026-09-14 cohort's week ends at 2026-09-21T00:00:00Z). A cohort is complete when its last user can be
