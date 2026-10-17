@@ -56,7 +56,7 @@ events = ["workflow_dispatch", "push"]
 
 # Seeded-defect PRs for inspect (WP4.8b): each case runs in three variants (the 0.1 prompt, general, peer) and is
 # scored by precision and recall against its planted defects, with no judge. Reported, never gating, and run on
-# dispatch only (about 70 review calls per k).
+# dispatch only (about 80 review calls per k; run 38980397572 charged 18.89 USD for twelve cases, D-4.8d).
 [[groups]]
 name = "review"
 prefixes = ["inspect/"]
