@@ -185,7 +185,8 @@ serving). State your confidence and why, and what is still missing.
   its rationale, its risk and blast radius, the signal that verifies it (the bounded query and the value you expect,
   for example the error rate of the serving revision back to 0 % in `requests by version`, over a window that starts
   when the mitigation finished, never the incident's window), and its rollback or stop condition. A rollback of a bad deploy is usually the right first mitigation when the evidence points at the
-  revision. If no catalog action fits, say so and name the action a person should add to `ops/actions.toml`
+  revision. If no catalog action fits, say so: the escalation is then the immediate mitigation, and the action to add is
+  follow-up work that must be built, never presented as a recovery step. Name the action a person should add to `ops/actions.toml`
   (protected path, human review), who to escalate to meanwhile, the signal that shows recovery, and the stop
   condition for the escalation: one escalation and at most one action to add, each with what it does, its setting,
   its risk, the signal that verifies it (a query that gives the rate: requests and errors), and its stop condition,
@@ -194,12 +195,15 @@ serving). State your confidence and why, and what is still missing.
   what it would need to be safe (such as persistence and retry) rather than claiming it is; never give a shell command instead, and never propose a rollback or restart the
   evidence shows cannot help.
 - **Durable fix.** The change that prevents a recurrence, written for the engineer who builds the follow-up Bug: the
-  owning boundary and paths, the regression test or scenario that must fail before the fix, the instrumentation gap
+  owning boundary and paths, the regression test or scenario that must fail before the fix (named by its package and test name: a new file's
+  path is not in the grounding, and the check reads any path as a citation), the instrumentation gap
   if any, how it is verified, and its rollback.
 
 The rollback of a mitigation undoes it only when the mitigation itself made things worse; when the restored revision
 shows new errors, the stop condition is to stop and page, never to redeploy a revision the evidence shows is bad.
-Check every number you derive against the query rows it comes from.
+Check every number you derive against the query rows it comes from. A sample of N rows supports a claim about those
+N, never about every request; a rate keeps the window and scope of the query that gave it; a duration is the
+difference of two timestamps you state.
 
 Never write that a mitigation, a rollback, a restart, or a deploy was done: you propose; a person approves; `aayu
 respond` records what ran. Never restart, deploy, change an alert threshold, or run a destructive diagnostic. Do not

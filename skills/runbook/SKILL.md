@@ -89,24 +89,26 @@ in order as `##` headings:
    a time window and a row limit. Aggregates first. Confirm by the failure's signature when the grounding has one
    (the exception type and its `path:line` frame, or the dependency's timeout), not only by its timing; tell it apart
    from its look-alike with a deploy-marker or timeline query (errors that start at a marker and stay on the new
-   revision suggest a bad deploy; errors that start on their own and cross revisions suggest a slow dependency;
-   these patterns point, they do not prove, so the signature decides). First establish the serving revision and the
+   revision point at a bad deploy; errors that start on their own and cross revisions point at a slow dependency).
+   Neither the timing nor the signature is proof alone: a bad deploy can produce a dependency's timeout. First establish the serving revision and the
    one before it with a `deploys` query. Write the exact signature from the grounding (exception type, message, and
-   `path:line`) as the match condition, not "an exception in changed code". The entry applies only when it matches: when it does not, it says
+   `path:line`) as the match condition, not "an exception in changed code". The entry applies only when both match, the signature and the timeline this failure has (for a dependency entry,
+   errors that also hit the revision before the latest deploy): when either does not, it says
    to stop and investigate (`aayu investigate`), never to apply this mitigation or to declare another cause.
 3. **Mitigate.** One catalog action as `aayu respond <incident> --action <name> --params key=value` (quote its limits,
    such as runs per hour and approval, exactly as the catalog gives them), its risk and blast
    radius, and when not to use it. When no catalog action fixes this failure (a slow dependency is not fixed by a
    restart or a rollback), write "no catalog action" and name the action a person should add, and who to escalate to
    meanwhile; never offer a catalog action that does not address the cause.
-4. **Verify.** The query to rerun and the value to expect (for example the serving revision's error rate back to 0 %
-   in `requests by version`), and how long to watch.
+4. **Verify.** For each alert and SLO the entry covers, its own query to rerun and the value to expect (for example
+   the serving revision's error rate back to 0 % in `requests by version`, or the latency SLO's percentile back under
+   its threshold), and how long to watch.
 5. **Rollback.** The catalog's rollback of the mitigation action (the checker requires it when the catalog names one),
    or `none` and why. Say when to use it: only when the mitigation itself made things worse, never as the reflex to new
    errors on the restored revision (then stop and page), and never to put back a revision the evidence shows is bad
    without a person deciding so.
 6. **Tried.** When it was last tried end to end, in a drill or an incident, with the aayudha-ops run or incident that
-   shows it, or `not yet`. Release requires every rollback action in the catalog to have run once.
+   shows it, or `not yet`. Claim only what ran: a query the entry proposes but nobody ran was not tried. Release requires every rollback action in the catalog to have run once.
 
 **What the check reads as a citation**, in the same paragraph, list item, or table row as the claim: `query qN`; the
 incident as `#N` (its body, timeline, investigation note, and comments are all `#N`); a commit in backticks; a
