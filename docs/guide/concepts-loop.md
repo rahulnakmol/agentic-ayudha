@@ -1,8 +1,9 @@
 # The delivery loop
 
 A coding agent can write a change in minutes. What it cannot tell you is who agreed what the change should do, who
-checked it, who said yes, and whether it helped anyone. aayudha answers those questions by running every piece of
-work through the same seven steps, with an agent twin doing the work at each step and a person holding the gates.
+checked it, who said yes, and whether it helped anyone. aayudha answers those questions by running work through the
+same seven steps, with an agent twin doing the work at each step and a person holding the gates. Work toward a Goal
+starts at Shape; a Bug from triage or an incident has nothing to shape and enters at Ready.
 
 An **agent twin** is the agent half of a **seat**, a role on the team such as Product Strategist
 ([seats and pairing](concepts-seats.md)). A **gate** is a check a step must pass before the next one starts.

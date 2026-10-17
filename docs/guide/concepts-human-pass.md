@@ -50,6 +50,9 @@ Terms are defined in the [glossary](../../GLOSSARY.md).
 > **Under the hood:** how a person's approval is told apart from a bot's, and what solo mode checks, is in
 > [trust and identities](how-trust.md).
 
+Working alone every day? [Run it alone: the solo founder](guide-solo-founder.md) has the whole routine, including
+the inbox.
+
 ## What's next
 
 Once a change is merged, it climbs the release ladder. See [dev, rolling, main](concepts-ladder.md).

@@ -57,7 +57,8 @@ aayu seat list
 On a small team you do not manage fourteen seats. They all run solo by default; you pair a person only where you want
 their review.
 
-Full details are in the [RACI table](../RACI.md). Terms are defined in the [glossary](../../GLOSSARY.md).
+Every twin, its layers, and its model lanes are on [your agentic team](concepts-team.md). Full details are in the
+[RACI table](../RACI.md). Terms are defined in the [glossary](../../GLOSSARY.md).
 > **Under the hood:** seats, verbs, and their RACI are declared once in the verb registry; see
 > [the verb registry and code generation](how-registry.md).
 
