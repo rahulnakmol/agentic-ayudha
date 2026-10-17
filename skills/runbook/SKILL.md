@@ -90,7 +90,8 @@ in order as `##` headings:
    (the exception type and its `path:line` frame, or the dependency's timeout), not only by its timing; tell it apart
    from its look-alike with a deploy-marker or timeline query (a bad deploy starts at a marker and only on the new
    revision; a slow dependency starts on its own and crosses revisions). First establish the serving revision and the
-   one before it with a `deploys` query. The entry applies only when the signature matches: when it does not, it says
+   one before it with a `deploys` query. Write the exact signature from the grounding (exception type, message, and
+   `path:line`) as the match condition, not "an exception in changed code". The entry applies only when it matches: when it does not, it says
    to stop and investigate (`aayu investigate`), never to apply this mitigation or to declare another cause.
 3. **Mitigate.** One catalog action as `aayu respond <incident> --action <name> --params key=value` (quote its limits,
    such as runs per hour and approval, exactly as the catalog gives them), its risk and blast
