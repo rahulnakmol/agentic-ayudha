@@ -17,6 +17,7 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/survey"
+	"github.com/rahulnakmol/agentic-ayudha/internal/testbin"
 )
 
 // WP5.9: `aayu survey <path>` indexes a checkout with no model and writes
@@ -249,15 +250,28 @@ func closeSurveyLive(t *testing.T, tok, repo, label string) {
 func TestSurveyGoldenParity(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("GH_TOKEN", "sekrit-token")
+	// The programs are Go fixtures, so survey runs them by path as it runs a legacy build, on every OS.
 	script := func(name, warn string) string {
-		p := filepath.Join(dir, name)
-		body := "#!/bin/sh\nread x\necho \"out:$1:$x:${GH_TOKEN}${MODE}\"\necho " + warn + " >&2\nexit $2\n"
-		if err := os.WriteFile(p, []byte(body), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		return p
+		return testbin.Build(t, dir, name, `package main
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
+)
+
+func main() {
+	x, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+	fmt.Printf("out:%s:%s:%s%s\n", os.Args[1], strings.TrimRight(x, "\r\n"), os.Getenv("GH_TOKEN"), os.Getenv("MODE"))
+	fmt.Fprintln(os.Stderr, "`+warn+`")
+	code, _ := strconv.Atoi(os.Args[2])
+	os.Exit(code)
+}
+`)
 	}
-	legacy, same, changed := script("legacy.sh", "warn"), script("same.sh", "warn"), script("new.sh", "WARN")
+	legacy, same, changed := script("legacy", "warn"), script("same", "warn"), script("new", "WARN")
 	if err := os.WriteFile(filepath.Join(dir, "in.txt"), []byte("hello\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -326,10 +340,8 @@ func TestSurveyGoldenParity(t *testing.T) {
 	if code, _, stderr := run(t, nil, opts, append(base, "--golden", suite, "--bin", legacy, "--run")...); code != 0 {
 		t.Fatalf("legacy suite run: %d %s", code, stderr)
 	}
-	port := filepath.Join(dir, "port.sh") // fails t1 (a regression), passes t2 (which the legacy build fails)
-	if err := os.WriteFile(port, []byte("#!/bin/sh\ncase $1 in t1) exit 1;; *) exit 0;; esac\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	// fails t1 (a regression), passes t2 (which the legacy build fails)
+	port := testbin.Build(t, dir, "port", "package main\n\nimport \"os\"\n\nfunc main() {\n\tif os.Args[1] == \"t1\" {\n\t\tos.Exit(1)\n\t}\n}\n")
 	code, stdout, _ = run(t, nil, opts, append(base, "--compat", suite, "--bin", port, "--run", "--json")...)
 	res = SurveyGoldenResult{}
 	if err := json.NewDecoder(strings.NewReader(stdout)).Decode(&res); code != ExitFloor || err != nil || res.Compat == nil {

@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"sort"
 	"strconv"
@@ -216,10 +217,18 @@ func Probe(ctx context.Context, ix *Index, root, bin, casesFile string, c Cases,
 			p.Ran = append(p.Ran, "every case with "+strings.Join(v.env, " "))
 		}
 	}
-	strace, _ := exec.LookPath("strace")
-	if strace != "" {
+	// strace traces system calls only on Linux; the strace.exe Git for Windows
+	// ships traces MSYS calls and writes nothing this parser reads.
+	strace := ""
+	if runtime.GOOS == "linux" {
+		strace, _ = exec.LookPath("strace")
+	}
+	switch {
+	case strace != "":
 		p.Ran = append(p.Ran, "every case under strace -f -y -e trace=open,openat,creat")
-	} else {
+	case runtime.GOOS != "linux":
+		p.Skipped = append(p.Skipped, "files read and written: strace runs only on Linux")
+	default:
 		p.Skipped = append(p.Skipped, "files read and written: strace is not installed")
 	}
 	reads, writes, libReads := map[string][]string{}, map[string][]string{}, map[string]map[string]bool{}
