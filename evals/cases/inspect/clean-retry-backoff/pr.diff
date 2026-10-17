@@ -1,9 +1,9 @@
 diff --git a/internal/rates/retry.go b/internal/rates/retry.go
 new file mode 100644
-index 0000000..1f3cfdb
+index 0000000..30662f5
 --- /dev/null
 +++ b/internal/rates/retry.go
-@@ -0,0 +1,44 @@
+@@ -0,0 +1,45 @@
 +package rates
 +
 +import (
@@ -16,9 +16,10 @@ index 0000000..1f3cfdb
 +const maxWait = 30 * time.Second
 +
 +// Retry calls f up to attempts times. It waits base before the second call and
-+// twice as long before each later one, never more than maxWait. It returns nil
-+// on the first success, else f's last error. Once ctx is done it makes no
-+// further call and returns ctx's error, also when ctx ends during the last call.
++// twice as long before each later one, never more than maxWait. A call that
++// succeeds ends Retry with nil, even if ctx ended during it. Once ctx is done,
++// Retry makes no further call and returns ctx's error. Otherwise, when every
++// call fails, it returns f's last error. It refuses attempts < 1 and base <= 0.
 +func Retry(ctx context.Context, attempts int, base time.Duration, f func(context.Context) error) error {
 +	if attempts < 1 || base <= 0 {
 +		return errors.New("rates: attempts and base must be positive")
