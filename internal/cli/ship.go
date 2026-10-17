@@ -25,6 +25,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
+	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/planning"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
@@ -262,7 +263,9 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		rec.HumanPass = HumanPass{Kind: "review", Login: r.User.Login, ReviewID: ids[strings.ToLower(r.User.Login)], Commit: head}
 		break
 	}
-	if rec.HumanPass.Kind == "" && rec.Streak.Autonomous && !in.Bool("solo-bypass") {
+	if rec.HumanPass.Kind == "" && rec.Streak.Autonomous && !in.Bool("solo-bypass") && sameFamilyReview(ctx, c, owner, name, n) {
+		why = append(why, "the inspect review was a same-family review, which never lets an agent merge without a person")
+	} else if rec.HumanPass.Kind == "" && rec.Streak.Autonomous && !in.Bool("solo-bypass") {
 		rec.HumanPass = HumanPass{Kind: "autonomous", Login: me.Login, Commit: head,
 			Note: fmt.Sprintf("every layer of footprint %s has a streak of at least %d correction-free agent merges and none is a never layer (WP5.7)", strings.Join(rec.Footprint, ", "), rec.Streak.Threshold)}
 	}
@@ -657,4 +660,24 @@ func setSection(body, label, value string) string {
 		}
 	}
 	return strings.Join(out, "\n")
+}
+
+// sameFamilyReview reports whether the PR's inspection was a same-family
+// review (rung C of the review ladder, Decision #469), or the PR's comments
+// cannot be read; either way an autonomous pass is refused and a person must
+// pass it.
+func sameFamilyReview(ctx context.Context, c *github.Client, owner, name string, n int) bool {
+	posts, err := prPosts(ctx, c, owner, name, n)
+	if err != nil {
+		return true
+	}
+	rung := ""
+	for _, p := range posts {
+		if p.Kind == "comment" && strings.Contains(p.Body, inspect.Marker) {
+			if st := inspect.ParseState(p.Body); st.Result != nil {
+				rung = st.Result.Rung
+			}
+		}
+	}
+	return rung == inspect.RungC
 }

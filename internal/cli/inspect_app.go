@@ -18,6 +18,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
 // Dispositions of a review that has no usable reply yet: both fail the gate
@@ -50,7 +51,7 @@ type appInspect struct {
 func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 	n, head := a.pr.GetNumber(), a.pr.GetHead().GetSHA()
 	owner, name, _ := github.SplitRepo(a.repo)
-	choice := inspect.ChooseReviewer(a.cfg.Inspect.Reviewer, a.cfg.Inspect.Apps, a.cfg.Inspect.AppFamilies, a.builder.Candidates, a.cfg.Autonomy.Approver)
+	choice := inspect.ChooseReviewer(a.cfg.Inspect.Reviewer, a.cfg.Inspect.Apps, a.cfg.Inspect.AppFamilies, a.builder, a.cfg.Autonomy.Approver)
 	notes := append([]string{a.builder.Note(), "reviewer: " + choice.Kind() + "; the merge gate holds no AI key and reads its reply"}, choice.Notes...)
 	if a.in.Mode == inspect.ModePeer {
 		notes = append(notes, "peer mode needs two model reviewers; a reviewer app reviews alone, high-risk PRs included")
@@ -118,6 +119,8 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 			res.Disposition = Malformed
 		}
 		res.Summary = fmt.Sprintf("No usable review of `%s` from %s yet, so the gate fails closed: %v.", short(head), choice.Kind(), rerr)
+		res.Rung, res.ReviewerFamily = choice.Rung, choice.Family
+		res.Review = "requested: " + a.builder.RungLabel(choice.Rung, choice.Kind(), choice.Family)
 		res.Next = fmt.Sprintf("the reviewer replies on this PR in the stated format (a review request: `aayu inspect %d`, run by the builder or a person under their own account); the reply re-runs this check", n)
 		if since.IsZero() {
 			notes = append(notes, "no review request for this head on the PR yet")
@@ -128,6 +131,7 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		var err error
 		res, st, err = r.Judge(ctx, a.in, a.prev, rep)
 		res.Head, res.Builder = head, a.builder
+		res.Rung, res.ReviewerFamily, res.Review = reviewRung(a.builder, choice, rep)
 		switch {
 		case errors.Is(err, inspect.ErrCycles):
 			return Errorf(ExitBlocked, "inspect #%d: %v (paged)", n, err)
@@ -141,7 +145,7 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 	}
 	if e.CI && res.Disposition != inspect.Skipped && !res.Cached {
 		if _, err := a.c.UpsertComment(ctx, a.repo, n, inspect.Marker, inspect.Comment(res, st, 0), actions.Action{Kind: "github.comment.inspect",
-			Payload: map[string]any{"disposition": res.Disposition, "diff_hash": res.DiffHash, "reviewer": choice.Kind()}}); err != nil {
+			Payload: map[string]any{"disposition": res.Disposition, "diff_hash": res.DiffHash, "reviewer": choice.Kind(), "rung": res.Rung}}); err != nil {
 			return err
 		}
 	}
@@ -152,6 +156,23 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		return Errorf(ExitBlocked, "inspect #%d: %s", n, res.Disposition)
 	}
 	return nil
+}
+
+// reviewRung settles the review ladder's rung from the reply (Decision
+// #469): the family of the model the reviewer reports, else the app's
+// configured family. A reported model aayu cannot place, or one of the
+// builder's candidate families, is a same-family review (C) whatever was
+// planned; a person's review is human.
+func reviewRung(b inspect.Builder, c inspect.Choice, rep inspect.AppReply) (string, verbs.Family, string) {
+	if c.App == "" {
+		return inspect.RungHuman, "", b.RungLabel(inspect.RungHuman, rep.Login, "")
+	}
+	f, who := c.Family, c.App
+	if rep.Model != "" {
+		f, who = verbs.FamilyOf(rep.Model), c.App+" with "+rep.Model
+	}
+	rung := b.Rung(f)
+	return rung, f, b.RungLabel(rung, who, f)
 }
 
 func (e *Env) emitInspect(res inspect.Result, notes []string) error {
@@ -165,6 +186,9 @@ func (e *Env) emitInspect(res inspect.Result, notes []string) error {
 			fmt.Fprintf(w, " (reviewed by %s)", res.Model)
 		}
 		fmt.Fprintln(w)
+		if res.Review != "" {
+			fmt.Fprintf(w, "  review: %s\n", res.Review)
+		}
 		if res.Overridden != "" {
 			fmt.Fprintf(w, "  %s\n", res.Overridden)
 		}

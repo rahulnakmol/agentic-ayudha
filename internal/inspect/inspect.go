@@ -21,6 +21,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/triage"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -183,6 +184,12 @@ type Result struct {
 	CostUSD     float64   `json:"cost_usd"`
 	Next        string    `json:"next,omitempty"` // the re-entry step
 	Builder     Builder   `json:"builder"`        // the builder's family and where it came from (Bug #171)
+	// Rung is the review ladder's rung the review reached (Decision #469):
+	// A or B count; C, a same-family review, never counts toward autonomy;
+	// human is a person's review. Review is its label, shown on the PR.
+	Rung           string       `json:"rung,omitempty"`
+	ReviewerFamily verbs.Family `json:"reviewer_family,omitempty"`
+	Review         string       `json:"review,omitempty"`
 	// Coverage is the sealed manifest of what the review covered; Weakened
 	// lists the checks this PR made weaker (flags, not verdicts).
 	Coverage *Manifest   `json:"coverage,omitempty"`
@@ -674,6 +681,9 @@ func Comment(res Result, st State, maxUSD float64) string {
 	var b strings.Builder
 	b.WriteString(Marker + "\n")
 	fmt.Fprintf(&b, "### inspect: %s\n\n", res.Disposition)
+	if res.Review != "" {
+		fmt.Fprintf(&b, "**Review:** %s.\n\n", res.Review)
+	}
 	if res.Cached {
 		b.WriteString("Unchanged inputs since the last inspection (cached; no model call).\n\n")
 	}

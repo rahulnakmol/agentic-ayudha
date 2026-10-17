@@ -268,30 +268,43 @@ func TestBuilderOf(t *testing.T) {
 		name    string
 		rec     Records
 		commits []string
-		claim   string
+		claims  []string
+		host    string
 		lane    verbs.Family
 		family  verbs.Family
 		cands   []verbs.Family
 		source  string
 	}{
-		{"record covers every commit", cp(map[string]string{"a": "claude-opus-5-5", "b": "claude-sonnet-5-5"}), []string{"a", "b"}, "", verbs.FamilyOpenAI,
+		{"record covers every commit", cp(map[string]string{"a": "claude-opus-5-5", "b": "claude-sonnet-5-5"}), []string{"a", "b"}, nil, "", verbs.FamilyOpenAI,
 			verbs.FamilyAnthropic, []verbs.Family{verbs.FamilyAnthropic}, "attributed, not verified"},
-		{"a hand-made commit the record lacks", cp(map[string]string{"a": "claude-opus-5-5"}), []string{"a", "b"}, "", verbs.FamilyOpenAI,
+		{"a hand-made commit the record lacks", cp(map[string]string{"a": "claude-opus-5-5"}), []string{"a", "b"}, nil, "", verbs.FamilyOpenAI,
 			"", []verbs.Family{verbs.FamilyAnthropic}, "names a model family for 1 of 2 commits"},
-		{"a checkpoint without a model does not cover its commit", cp(map[string]string{"a": "claude-opus-5-5", "b": ""}), []string{"a", "b"}, "", "",
+		{"a checkpoint without a model does not cover its commit", cp(map[string]string{"a": "claude-opus-5-5", "b": ""}), []string{"a", "b"}, nil, "", "",
 			"", []verbs.Family{verbs.FamilyAnthropic}, "for 1 of 2 commits"},
-		{"two families in the record", cp(map[string]string{"a": "claude-opus-5-5", "b": "gpt-6.1-sol"}), []string{"a", "b"}, "", "",
+		{"two families in the record", cp(map[string]string{"a": "claude-opus-5-5", "b": "gpt-6.1-sol"}), []string{"a", "b"}, nil, "", "",
 			"", []verbs.Family{verbs.FamilyAnthropic, verbs.FamilyOpenAI}, "name 2 families"},
-		{"a host-managed build records no model", cp(map[string]string{"a": ""}), []string{"a"}, "", verbs.FamilyHostManaged,
+		{"a host-managed build records no model", cp(map[string]string{"a": ""}), []string{"a"}, nil, "", verbs.FamilyHostManaged,
 			"", nil, "no build or delegation record"},
-		{"no record: the claim and the lane are candidates", Records{}, []string{"a"}, "grok-4.7", verbs.FamilyAnthropic,
-			"", []verbs.Family{verbs.FamilyXAI, verbs.FamilyAnthropic}, "trailer claims grok-4.7 (self-reported, unverified)"},
-		{"a delegation covers the PR", Records{Receiver: "codex", Delegated: verbs.FamilyOpenAI}, []string{"a", "b"}, "", verbs.FamilyAnthropic,
+		{"no record: the claim and the lane are candidates", Records{}, []string{"a"}, []string{"grok-4.7"}, "", verbs.FamilyAnthropic,
+			"", []verbs.Family{verbs.FamilyXAI, verbs.FamilyAnthropic}, "declarations claim [xai] (self-reported, unverified)"},
+		{"a delegation covers the PR", Records{Receiver: "codex", Delegated: verbs.FamilyOpenAI}, []string{"a", "b"}, nil, "", verbs.FamilyAnthropic,
 			verbs.FamilyOpenAI, []verbs.Family{verbs.FamilyOpenAI}, "handed the story to codex"},
-		{"a trailer contradicting the delegation", Records{Receiver: "codex", Delegated: verbs.FamilyOpenAI}, []string{"a"}, "claude-opus-5-5", "",
+		{"a trailer contradicting the delegation", Records{Receiver: "codex", Delegated: verbs.FamilyOpenAI}, []string{"a"}, []string{"claude-opus-5-5"}, "", "",
 			"", []verbs.Family{verbs.FamilyOpenAI, verbs.FamilyAnthropic}, "the records say openai"},
+		{"amp declared, no model: its modes' families", Records{}, []string{"a"}, nil, "amp", "",
+			verbs.FamilyHostManaged, []verbs.Family{verbs.FamilyAnthropic, verbs.FamilyOpenAI}, "may be any of [anthropic openai]"},
+		{"amp declares host-managed", Records{}, []string{"a"}, []string{"host-managed"}, "amp", "",
+			verbs.FamilyHostManaged, []verbs.Family{verbs.FamilyAnthropic, verbs.FamilyOpenAI}, "host-managed"},
+		{"copilot declared, no model: unknown", Records{}, []string{"a"}, nil, "copilot", "",
+			"", nil, "copilot declares no model"},
+		{"a model aayu cannot place: unknown", Records{}, []string{"a"}, []string{"claude-sonnet-4.5", "composer-2.5"}, "copilot", "",
+			"", nil, "cannot place in a model family"},
+		{"a session that changed model: every family", Records{}, []string{"a"}, []string{"claude-sonnet-4.5", "gpt-5.4"}, "copilot", "",
+			"", []verbs.Family{verbs.FamilyAnthropic, verbs.FamilyOpenAI}, "claim [anthropic openai]"},
+		{"nothing declared at all: unknown", Records{}, []string{"a"}, nil, "", "",
+			"", nil, "every review is a labelled same-family review"},
 	} {
-		got := BuilderOf(tt.rec, tt.commits, tt.claim, tt.lane)
+		got := BuilderOf(tt.rec, tt.commits, tt.claims, tt.host, tt.lane)
 		if got.Family != tt.family || !slices.Equal(got.Candidates, tt.cands) || !strings.Contains(got.Note(), tt.source) {
 			t.Errorf("%s: %+v; want family %q, candidates %v, a note with %q", tt.name, got, tt.family, tt.cands, tt.source)
 		}
@@ -607,5 +620,48 @@ func TestDocsOnly(t *testing.T) {
 		if got := DocsOnly(ParseDiff(tc.diff)); got != tc.want {
 			t.Errorf("DocsOnly(%q) = %v, want %v", tc.diff, got, tc.want)
 		}
+	}
+}
+
+// The review ladder (Decision #469): an installed app of a family the builder
+// cannot be gives a different-family review (A); with none, the first app
+// that can review gives a labelled same-family review (C), the default for a
+// single-family user; an unknown builder is C with any app, never blocked;
+// with no app, a person reviews.
+func TestReviewLadder(t *testing.T) {
+	anthropic := Builder{Family: verbs.FamilyAnthropic, Candidates: []verbs.Family{verbs.FamilyAnthropic}}
+	amp := BuilderOf(Records{}, []string{"a"}, nil, "amp", "")
+	unknown := BuilderOf(Records{}, []string{"a"}, nil, "copilot", "")
+	xaiCursor := map[string]string{"cursor": "xai"}
+	for _, tt := range []struct {
+		name      string
+		b         Builder
+		installed []string
+		families  map[string]string
+		app, rung string
+	}{
+		{"another family installed: A, even listed second", anthropic, []string{"claude", "codex"}, nil, "codex", RungA},
+		{"only the builder's family: C, not a person", anthropic, []string{"claude"}, nil, "claude", RungC},
+		{"unknown builder: C with any app", unknown, []string{"codex"}, nil, "codex", RungC},
+		{"amp may be anthropic or openai: both apps are C", amp, []string{"claude", "codex"}, nil, "claude", RungC},
+		{"amp builder, Cursor on Grok: A", amp, []string{"claude", "codex", "cursor"}, xaiCursor, "cursor", RungA},
+		{"Cursor of unknown family is only C", anthropic, []string{"cursor"}, nil, "cursor", RungC},
+		{"no app: a person", anthropic, nil, nil, "", RungHuman},
+	} {
+		c := ChooseReviewer(ReviewerAuto, tt.installed, tt.families, tt.b, "founder")
+		if c.App != tt.app || c.Rung != tt.rung {
+			t.Errorf("%s: chose %q at rung %q; want %q at %q (%v)", tt.name, c.App, c.Rung, tt.app, tt.rung, c.Notes)
+		}
+	}
+	// The reported model settles the rung: a reply by an openai model on an
+	// anthropic build counts; the same app reporting an anthropic model does not.
+	if anthropic.Rung(verbs.FamilyOf("gpt-6.1-sol")) != RungA || anthropic.Rung(verbs.FamilyOf("claude-sonnet-5-5")) != RungC || anthropic.Rung(verbs.FamilyOf("composer-2.5")) != RungC {
+		t.Error("the reported model's family does not settle the rung")
+	}
+	if l := anthropic.RungLabel(RungC, "claude", verbs.FamilyAnthropic); !strings.Contains(l, "same-family review (C)") || !strings.Contains(l, "never counts toward autonomy") {
+		t.Errorf("C label: %q", l)
+	}
+	if l := unknown.RungLabel(RungC, "codex", verbs.FamilyOpenAI); !strings.Contains(l, "builder family unknown") {
+		t.Errorf("unknown builder's label: %q", l)
 	}
 }

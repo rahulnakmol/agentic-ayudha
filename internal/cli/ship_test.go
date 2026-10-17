@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
+	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
@@ -242,6 +243,20 @@ func TestShipAutonomousFootprint(t *testing.T) {
 		t.Fatalf("ship without a review below the streak: %d %s", code, out)
 	}
 	autonomous := []string{"--set", "autonomy.streak=0"}
+	// A same-family inspect review (rung C) never lets an agent merge without
+	// a person, whatever the streak; a different-family one does.
+	review := func(rung string) string {
+		res := inspect.Result{PR: prN, Disposition: inspect.Merge, Rung: rung}
+		return inspect.Comment(res, inspect.State{Result: &res}, 0)
+	}
+	addComment(g, prN, "aayudha-bot", "Bot", review(inspect.RungC))
+	if code, out := shipCmd(t, env, opts, prN, autonomous...); code != ExitBlocked || !strings.Contains(out, "same-family review, which never lets an agent merge without a person") {
+		t.Fatalf("ship of an autonomous footprint after a same-family review: %d %s", code, out)
+	}
+	g.Mu.Lock()
+	c := g.Issues[prN].Comments[len(g.Issues[prN].Comments)-1]
+	c.Body = review(inspect.RungA)
+	g.Mu.Unlock()
 	if code, out := shipCmd(t, env, opts, prN, append(autonomous, "--dry-run")...); code != 0 || !strings.Contains(out, "ship #"+strconv.Itoa(prN)+": --dry-run: merge, Complete section, status:merged, and cleanup planned") {
 		t.Fatalf("ship --dry-run: %d %s", code, out)
 	}

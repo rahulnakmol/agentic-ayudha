@@ -346,27 +346,52 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	// commit trailer, is only a claim. When they are missing or disagree the
 	// family is unknown, and every reviewer differs from every candidate
 	// (Bug #171).
-	var commits []string
-	claim, lane := "", verbs.Family("")
+	// Every model the PR declares is a claim (Decision #469): the
+	// Aayudha-Model trailers of all its commits (a session that changed model
+	// writes one per model), the body's Aayudha-Model lines for a PR built
+	// outside aayu build, and the pack's model. The host comes from an
+	// Aayudha-Host trailer or body line, else a pack host aayu knows.
+	var commits, claims []string
+	host, lane := "", verbs.Family("")
+	claim := func(m string) {
+		if m = strings.ToLower(m); !slices.Contains(claims, m) {
+			claims = append(claims, m)
+		}
+	}
+	for _, m := range modelTrailer.FindAllStringSubmatch(pr.GetBody(), -1) {
+		claim(m[1])
+	}
+	if m := hostTrailer.FindStringSubmatch(pr.GetBody()); m != nil {
+		host = strings.ToLower(m[1])
+	}
 	if cs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.RepositoryCommit, *gh.Response, error) {
 		return c.REST.PullRequests.ListCommits(ctx, owner, name, n, &o)
 	}); err == nil {
 		for _, x := range cs {
 			commits = append(commits, x.GetSHA())
-			// Without a pack (a review request, a reply event), the head's trailer is the
-			// same claim verify writes into the pack, so every run picks the same reviewer.
-			if m := modelTrailer.FindStringSubmatch(x.GetCommit().GetMessage()); m != nil && x.GetSHA() == pr.GetHead().GetSHA() {
-				claim = m[1]
+			msg := x.GetCommit().GetMessage()
+			for _, m := range modelTrailer.FindAllStringSubmatch(msg, -1) {
+				claim(m[1])
+			}
+			if m := hostTrailer.FindStringSubmatch(msg); m != nil && host == "" {
+				host = strings.ToLower(m[1])
 			}
 		}
 	}
 	if ins.Pack != nil {
-		claim = ins.Pack.Model
-		if b, err := gw.Resolver.Resolve(verbs.LaneBuild, verbs.HostID(ins.Pack.Host)); err == nil {
-			lane = b.Family
+		if ins.Pack.Model != "" {
+			claim(ins.Pack.Model)
+		}
+		if _, ok := verbs.FindHost(verbs.HostID(ins.Pack.Host)); ok {
+			if host == "" {
+				host = ins.Pack.Host
+			}
+			if b, err := gw.Resolver.Resolve(verbs.LaneBuild, verbs.HostID(ins.Pack.Host)); err == nil {
+				lane = b.Family
+			}
 		}
 	}
-	builder := inspect.BuilderOf(inspect.Records{Receiver: deleg.Receiver, Delegated: deleg.Family, Checkpoints: checkpoints}, commits, claim, lane)
+	builder := inspect.BuilderOf(inspect.Records{Receiver: deleg.Receiver, Delegated: deleg.Family, Checkpoints: checkpoints}, commits, claims, host, lane)
 	// A docs-only PR merges without a review, whichever backend reviews.
 	if !ins.Draft && inspect.DocsOnly(inspect.ParseDiff(ins.Diff)) {
 		return e.emitInspect(inspect.Result{PR: n, Head: pr.GetHead().GetSHA(), Findings: []inspect.Finding{}, Criteria: []inspect.Verdict{}, Builder: builder,
@@ -407,6 +432,11 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	}
 	res, st, err := r.Run(ctx, ins, prev)
 	res.Head, res.Builder = pr.GetHead().GetSHA(), builder
+	if res.Model != "" {
+		res.ReviewerFamily = verbs.FamilyOf(res.Model)
+		res.Rung = builder.Rung(res.ReviewerFamily)
+		res.Review = builder.RungLabel(res.Rung, res.Model, res.ReviewerFamily)
+	}
 	res.Notes = append(notes, res.Notes...)
 	if st.Result != nil {
 		st.Result.Notes = res.Notes

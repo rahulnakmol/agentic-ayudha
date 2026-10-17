@@ -336,7 +336,7 @@ func TestInspectBuilderFamily(t *testing.T) {
 		wantSource                                   []string
 	}{
 		{"the trailer names anthropic, the build record openai", "gpt-6.1-sol", "claude-opus-5-5", "grok-4.7", "",
-			[]string{"the records say openai", "trailer claims claude-opus-5-5 (self-reported, unverified)", "none of [openai anthropic]"}},
+			[]string{"the records say openai", "declarations claim [anthropic] (self-reported, unverified)", "none of [openai anthropic]"}},
 		{"no trailer and no build record", "", "", "gpt-6.1-sol", "",
 			[]string{"no build or delegation record on the ledger names a model family", "the build lane's family on the pack's host is anthropic"}},
 		{"honest: record and trailer agree on anthropic", "claude-opus-5-5", "claude-opus-5-5", "gpt-6.1-sol", "anthropic",
@@ -482,20 +482,30 @@ func TestInspectThroughApp(t *testing.T) {
 		t.Fatalf("rerun on a reply: exit %d, %d reruns %s", code, reruns, errOut)
 	}
 
-	// A builder of the app's family (OpenAI): codex may not review, and its
-	// reply counts for nothing; a human's reply in the format does.
+	// A builder of the app's family (OpenAI) with only Codex installed: Codex
+	// reviews on the ladder's default rung, a labelled same-family review (C),
+	// shown on the PR; it is never passed off as different-family.
 	g, env, opts, prN = inspectFixture(t, cleanDiff, "Refs #2")
 	_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
 	_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\napps = [\"codex\"]\n"), 0o644)
 	writeInspectPackAs(t, opts.Dir, prN, head, nil, "codex", "gpt-6.1-sol")
 	addComment(g, prN, "chatgpt-codex-connector[bot]", "Bot", statedReply(head, "merge", "internal/report/percent.go"))
-	if code, res, _ = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || res.Disposition != NoReply {
-		t.Fatalf("a same-family app's reply counted: %d %s", code, res.Disposition)
+	if code, res, _ = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Disposition != inspect.Merge || res.Rung != inspect.RungC ||
+		!strings.Contains(lastInspect(t, g, prN), "**Review:** same-family review (C): codex (openai), builder openai (declared, not recorded); it never counts toward autonomy") {
+		t.Fatalf("a same-family app's reply: %d %s rung %q\n%s", code, res.Disposition, res.Rung, lastInspect(t, g, prN))
 	}
+	// A reply that reports a model of another family settles the rung at A,
+	// whatever the app's default family.
+	addComment(g, prN, "chatgpt-codex-connector[bot]", "Bot", strings.Replace(statedReply(head, "merge", "internal/report/percent.go"), `"disposition":`, `"model":"claude-opus-5-5","disposition":`, 1))
+	if code, res, _ = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Rung != inspect.RungA || res.ReviewerFamily != "anthropic" {
+		t.Fatalf("a reported model of another family: %d rung %q %q", code, res.Rung, res.ReviewerFamily)
+	}
+	// A person reviews when config asks for one.
+	_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\nreviewer = \"human\"\napps = [\"codex\"]\n"), 0o644)
 	addComment(g, prN, "founder", "User", statedReply(head, "merge", "internal/report/percent.go"))
 	code, res, errOut = inspectApp(t, env, opts, prN, "--ci")
-	if code != 0 || res.Disposition != inspect.Merge || res.Model != "founder" || !slices.ContainsFunc(res.Notes, func(n string) bool { return strings.Contains(n, "falling back to a human review") }) {
-		t.Fatalf("same-family app falls back to a human: %d %+v %s", code, res, errOut)
+	if code != 0 || res.Disposition != inspect.Merge || res.Model != "founder" || res.Rung != inspect.RungHuman {
+		t.Fatalf("a human review: %d %+v %s", code, res, errOut)
 	}
 
 	// With no pack (a request before the gate ran, or a reply event), the

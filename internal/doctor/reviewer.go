@@ -47,7 +47,7 @@ func checkReviewerApps(ctx context.Context, p *Probe) Result {
 			lines = append(lines, "  "+a.Note)
 		}
 	}
-	c := inspect.ChooseReviewer(cfg.Reviewer, cfg.Apps, cfg.AppFamilies, nil, p.Config.Config.Autonomy.Approver)
+	c := inspect.ChooseReviewer(cfg.Reviewer, cfg.Apps, cfg.AppFamilies, inspect.Builder{}, p.Config.Config.Autonomy.Approver)
 	lines = append(lines, c.Notes...)
 	switch {
 	case len(missing) > 0:
@@ -55,7 +55,7 @@ func checkReviewerApps(ctx context.Context, p *Probe) Result {
 	case c.App == "":
 		return Result{Status: Warn, Detail: "no reviewer app configured: the merge gate falls back to a human review (install the Claude, Codex, or Cursor app on the org or account and add it to [inspect] apps)", Lines: lines}
 	}
-	return Result{Status: Pass, Detail: fmt.Sprintf("merge-gate reviewer: %s (%s), unless it is of the builder's family; then the next app, else a human", c.App, c.Family), Lines: lines}
+	return Result{Status: Pass, Detail: fmt.Sprintf("merge-gate reviewer: %s (%s); its review counts as different-family only for a builder of another family, and is labelled same-family otherwise", c.App, c.Family), Lines: lines}
 }
 
 func orNone(s string) string {
