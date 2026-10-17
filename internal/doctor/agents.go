@@ -60,7 +60,10 @@ func checkAgents(ctx context.Context, p *Probe) Result {
 		state := "not installed"
 		if a.CLI != "" {
 			state = a.CLI + " " + a.Version
-			if a.SignedIn {
+			if a.SignedIn && a.Via != "" {
+				state += ", runs through " + strings.TrimPrefix(a.Via, "the ")
+				local = append(local, a.Name)
+			} else if a.SignedIn {
 				state += ", signed in"
 				local = append(local, a.Name)
 			} else {

@@ -3,7 +3,10 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -135,3 +138,37 @@ func TestPluginHooksAndStatusLine(t *testing.T) {
 		t.Errorf("mcp mismatch: exit %d %s", code, errs)
 	}
 }
+
+// Cursor starts the aayudha MCP server with only HOME, LOGNAME, PATH, SHELL,
+// TERM, USER, and PWD (D-3.2b.p), so a token this shell finds through
+// AAYU_GITHUB_TOKEN never reaches it. doctor resolves the token as that
+// server would and names the fix; the server's own error says why.
+func TestCursorMCPToken(t *testing.T) {
+	repo, home, opts := installEnv(t)
+	opts.GHToken = func(context.Context) (string, error) { return "", errors.New("gh: not logged in") }
+	opts.HTTP = &http.Client{Transport: roundTrip(func(*http.Request) (*http.Response, error) { return nil, errors.New("offline") })}
+	env := map[string]string{"HOME": home, "AAYU_GITHUB_TOKEN": "ghp_shell"}
+	if code, out, errs := run(t, env, opts, "install", "--host", "cursor", "--apply", "--yes"); code != 0 {
+		t.Fatalf("install: exit %d\n%s%s", code, out, errs)
+	}
+	_, out, _ := run(t, env, opts, "doctor")
+	if !strings.Contains(out, "cursor: Cursor starts the aayudha MCP server with only HOME") || !strings.Contains(out, "comes from AAYU_GITHUB_TOKEN") {
+		t.Errorf("doctor does not say the MCP server in Cursor finds no token:\n%s", out)
+	}
+	// With the token where the server finds it too, the line goes.
+	opts.GHToken = func(context.Context) (string, error) { return "gho_store", nil }
+	if _, out, _ := run(t, env, opts, "doctor"); strings.Contains(out, "Cursor starts the aayudha MCP server") {
+		t.Errorf("doctor warns although gh's token reaches the server:\n%s", out)
+	}
+	e, err := newEnv(IO{In: strings.NewReader(""), Out: io.Discard, Err: io.Discard}, Options{Dir: repo, GHToken: func(context.Context) (string, error) { return "", errors.New("no") }, MCP: true, Getenv: func(k string) string { return map[string]string{"HOME": home}[k] }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Resolver().Human(context.Background()); err == nil || !strings.Contains(err.Error(), "Cursor passes it only HOME") {
+		t.Errorf("the MCP server's no-token error: %v", err)
+	}
+}
+
+type roundTrip func(*http.Request) (*http.Response, error)
+
+func (f roundTrip) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }

@@ -49,12 +49,15 @@ type Probe struct {
 	ConfigErr error
 	Secrets   *secrets.Store
 	Human     func(ctx context.Context) (identity.Token, error)
-	WhoAmI    func(ctx context.Context, t identity.Token) (identity.User, error)
-	API       func(ctx context.Context, path string, out any) error // GitHub REST GET; nil without a token
-	Repo      string                                                // owner/name; "" when unknown
-	Version   string
-	Latest    func(ctx context.Context) (string, error)
-	Host      string // --host
+	// CursorMCPHuman resolves the human token as the aayudha MCP server does
+	// when Cursor starts it, with only Cursor's variables (D-3.2b.p).
+	CursorMCPHuman func(ctx context.Context) (identity.Token, error)
+	WhoAmI         func(ctx context.Context, t identity.Token) (identity.User, error)
+	API            func(ctx context.Context, path string, out any) error // GitHub REST GET; nil without a token
+	Repo           string                                                // owner/name; "" when unknown
+	Version        string
+	Latest         func(ctx context.Context) (string, error)
+	Host           string // --host
 	// Integration resolves a configured integration and asks its provider for
 	// the key's account and scope (providers.Check); nil when unavailable.
 	Integration func(ctx context.Context, name string) (integrations.Scope, error)

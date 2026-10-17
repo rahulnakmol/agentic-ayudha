@@ -439,6 +439,30 @@ func TestDetect(t *testing.T) {
 	if a := got["amp"]; a.SignedIn || a.Cloud || len(a.Install) != 1 || a.SignIn[0] != "amp login" {
 		t.Errorf("amp: %+v", a)
 	}
+	// D-5.5c.24: a Codex that is not signed in but answers through its own
+	// model provider (megaman's gateway wrapper) runs locally; one whose
+	// provider key is in an environment variable does not, since the local
+	// receiver never gets a model provider's key.
+	report := func(env string) string {
+		d := `"model provider requires OpenAI auth":"false"`
+		if env != "" {
+			d += `,"provider auth env var":"` + env + ` (present)"`
+		}
+		// The shape of codex 0.163.0's report: checks keyed by ID, details
+		// holding strings and lists, a warning before it.
+		return "WARNING: proceeding (codex_home: AbsolutePathBuf(\"/x\"))\n{\n\"schemaVersion\": 1,\n\"checks\": {" +
+			"\"config.load\": {\"id\": \"config.load\", \"status\": \"ok\", \"details\": {\"model provider\": \"private_gateway\", \"PATH entries\": [\"/bin\"]}, \"durationMs\": 4}," +
+			"\"auth.credentials\": {\"id\": \"auth.credentials\", \"status\": \"ok\", \"details\": {" + d + "}, \"remediation\": null}}}\n"
+	}
+	table["/bin/codex login status"] = ans{"Not logged in", false}
+	for env, want := range map[string]bool{"": true, "GATEWAY_KEY": false, "CODEX_API_KEY": true} {
+		table["/bin/codex doctor --json"] = ans{report(env), true}
+		for _, a := range Detect(context.Background(), p) {
+			if a.Name == "codex" && (a.SignedIn != want || want && a.Via != "the model provider private_gateway" || a.Cloud) {
+				t.Errorf("codex through a model provider (key in %q): %+v; want runs locally %v, not cloud", env, a, want)
+			}
+		}
+	}
 	table["/bin/codex login status"] = ans{"Logged in using ChatGPT", true}
 	table["/bin/claude auth status --json"] = ans{`{"loggedIn": true, "authMethod": "claude.ai"}`, true}
 	table["/bin/amp account list"] = ans{"* me@example.com", true}

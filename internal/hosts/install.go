@@ -35,6 +35,8 @@ const (
 	ClaudeSettings = ".claude/settings.json"
 	CursorMCP      = ".cursor/mcp.json"
 	CursorHooks    = ".cursor/hooks.json"
+	CursorCommands = ".cursor/commands"   // Cursor reads only the top-level files: aayudha-<name>.md is /aayudha-<name>
+	CursorCLI      = ".cursor/cli.json"   // the Cursor CLI's project permissions
 	CodexConfig    = ".codex/config.toml" // project config: Codex loads it for trusted projects only
 	CodexHooks     = ".codex/hooks.json"
 	AmpPlugin      = ".amp/plugins/aayudha.ts"
@@ -587,6 +589,32 @@ func (p *planner) commands(hostList []string, src map[string][]skillFile, lock *
 			return err
 		}
 	}
+	if slices.Contains(hostList, string(verbs.HostCursor)) {
+		// Cursor reads neither .claude/commands/aayudha/ nor a subfolder of
+		// its own commands folder, so it gets top-level files named
+		// aayudha-<name>.md (D-3.2b.n). Its command format has no
+		// frontmatter: the first line, the body's heading, is the title.
+		cmds, err := SlashCommands(p.o.Assets, verbs.HostCursor)
+		if err != nil {
+			return err
+		}
+		want := map[string]bool{}
+		for _, c := range cmds {
+			rel := CursorCommands + "/" + ServerName + "-" + c.Name + ".md"
+			want[rel] = true
+			if err := p.write(rel, false, p.o.text([]byte(c.Body+"\n"))); err != nil {
+				return err
+			}
+		}
+		entries, _ := os.ReadDir(p.abs(CursorCommands, false))
+		for _, e := range entries {
+			rel := CursorCommands + "/" + e.Name()
+			if !e.IsDir() && strings.HasPrefix(e.Name(), ServerName+"-") && strings.HasSuffix(e.Name(), ".md") && !want[rel] {
+				old, _ := os.ReadFile(p.abs(rel, false))
+				p.edits = append(p.edits, Edit{Kind: Delete, Path: rel, Old: old})
+			}
+		}
+	}
 	if slices.Contains(hostList, string(verbs.HostCodex)) {
 		cmds, err := SlashCommands(p.o.Assets, verbs.HostCodex)
 		if err != nil {
@@ -715,7 +743,20 @@ func (p *planner) hostFiles(hosts map[verbs.HostID]bool, lock Lock) error {
 		}); err != nil {
 			return err
 		}
-		p.notes = append(p.notes, cursorPlugin)
+		// Cursor's print mode (`cursor-agent -p`) runs a shell command or an
+		// MCP tool only when the CLI's permissions allow it (D-3.2b.o). The
+		// hooks still refuse a human-only verb, and the MCP server never
+		// offers one.
+		if err := p.mergeJSON(CursorCLI, false, func(m map[string]any) {
+			perms := obj(m, "permissions")
+			perms["allow"] = addString(addString(perms["allow"], "Shell(aayu)"), "Mcp("+ServerName+":*)")
+			if _, ok := perms["deny"].([]any); !ok { // Cursor refuses a cli.json without both lists
+				perms["deny"] = []any{}
+			}
+		}); err != nil {
+			return err
+		}
+		p.notes = append(p.notes, cursorPlugin, cursorApprove)
 	}
 	if hosts[verbs.HostCodex] {
 		if err := p.codexConfig(); err != nil {
@@ -889,8 +930,9 @@ const PluginID = ServerName + "@" + ServerName
 // The install notes for Cursor, whose plugin aayu cannot turn off per
 // repository and which also reads .claude/skills (D-3.2b.g, D-3.2b.h).
 const (
-	cursorPlugin = "Cursor has no setting a repository can commit to turn a plugin off, so if you also use the aayudha Cursor plugin here, Cursor lists each aayudha skill and the MCP server twice: disable the plugin for this workspace in Cursor. aayu doctor sees a plugin only in ~/.cursor/plugins/local, not one installed from a marketplace"
-	cursorBoth   = "Claude Code needs the copies in .claude/skills and Codex those in .agents/skills, and Cursor reads both (with Third-Party Imports, on by default), so Cursor lists each aayudha skill twice; turn off Third-Party Imports in Cursor's settings, or install for Claude Code or Codex, not both"
+	cursorApprove = "Cursor's CLI loads a project's MCP server only after its person approves it: run `cursor-agent mcp enable " + ServerName + "` once in this repository (the Cursor IDE asks on its own), and again if " + CursorMCP + " changes"
+	cursorPlugin  = "Cursor has no setting a repository can commit to turn a plugin off, so if you also use the aayudha Cursor plugin here, Cursor lists each aayudha skill and the MCP server twice: disable the plugin for this workspace in Cursor. aayu doctor sees a plugin only in ~/.cursor/plugins/local, not one installed from a marketplace"
+	cursorBoth    = "Claude Code needs the copies in .claude/skills and Codex those in .agents/skills, and Cursor reads both (with Third-Party Imports, on by default), so Cursor lists each aayudha skill twice; turn off Third-Party Imports in Cursor's settings, or install for Claude Code or Codex, not both"
 )
 
 // setHooks puts aayudha's entry for each event into m's hooks, replacing the

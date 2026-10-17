@@ -236,7 +236,9 @@ func readJSON(t *testing.T, path string, v any) {
 // loads the plugin and lists its commands, where it has a headless way to.
 // It skips a host whose CLI is not on PATH (CI has none); the run that
 // produced the Appendix B evidence used Claude Code 2.1.300, Codex 0.162.1,
-// and Amp's `amp plugins list`.
+// and Amp's `amp plugins list`. Cursor is not covered here: its CLI has no
+// headless way to list a plugin's skills or commands, so the subtest says so
+// and skips (D-3.2b.q).
 func TestHostPluginsLoad(t *testing.T) {
 	repo, _ := filepath.Abs("../..")
 	run := func(t *testing.T, env []string, dir, name string, args ...string) string {
@@ -371,6 +373,19 @@ func TestHostPluginsLoad(t *testing.T) {
 			t.Errorf("Amp offers a hand-off to itself")
 		}
 	})
+	t.Run("cursor", func(t *testing.T) {
+		// What the Cursor CLI (2026.10.16-e3cb207) can show about a plugin,
+		// recorded on megaman (Appendix B D-5.5c.23): with `--plugin-dir` or a
+		// copy in ~/.cursor/plugins/local/aayudha, a signed-in `cursor-agent -p`
+		// loads the plugin's MCP server and runs its hook. It does not load a
+		// symlinked local plugin. No command lists a plugin's skills or
+		// commands (`plugin` has only `marketplace`, `mcp list` omits plugin
+		// servers, and the stream-json init event carries no catalog), and a
+		// run needs a Cursor sign-in and a model call. So this test proves
+		// nothing about Cursor; TestPluginManifests checks its manifest, and
+		// the golden trees its install.
+		t.Skip("Cursor: no headless way to list a plugin's skills or commands; its MCP server and hook were proven live only (D-3.2b.q)")
+	})
 }
 
 // Codex runs a plugin's or a project's hooks only after the person trusts
@@ -424,9 +439,11 @@ trusted_hash = "sha256:0000"
 // install turns the plugin off for Claude Code and Codex, so it gives each of
 // them every command its plugin manifest carries, under the plugin's name
 // (D-3.2b.k): Claude Code's /aayudha:<name>, and the aayudha:source-command-<name>
-// skill Codex makes of a plugin command.
+// skill Codex makes of a plugin command. Cursor, which reads neither, gets the
+// same commands as /aayudha-<name> (D-3.2b.n), and the CLI permissions its
+// print mode needs to run aayu and the aayudha MCP tools (D-3.2b.o).
 func TestInstallKeepsThePluginsCommands(t *testing.T) {
-	for host, manifest := range map[verbs.HostID]string{verbs.HostClaude: ".claude-plugin/plugin.json", verbs.HostCodex: ".codex-plugin/plugin.json"} {
+	for host, manifest := range map[verbs.HostID]string{verbs.HostClaude: ".claude-plugin/plugin.json", verbs.HostCodex: ".codex-plugin/plugin.json", verbs.HostCursor: ".cursor-plugin/plugin.json"} {
 		root := t.TempDir()
 		o := Options{Root: root, Home: t.TempDir(), Hosts: []verbs.HostID{host}, Assets: os.DirFS("../.."), Binary: "/opt/aayudha/bin/aayu", Version: "1.2.3", SkillsVersion: "0.0.0"}
 		res, err := Plan(o)
@@ -456,7 +473,27 @@ func TestInstallKeepsThePluginsCommands(t *testing.T) {
 					if err != nil || !strings.HasPrefix(string(got), "---\nname: \"aayudha:source-command-"+name+"\"\n") {
 						t.Errorf("Codex: no aayudha:source-command-%s skill from install: %q %v", name, got, err)
 					}
+				case verbs.HostCursor:
+					// Cursor takes a command's first line as its title, so
+					// the file starts with the command's own heading.
+					got, err := os.ReadFile(filepath.Join(root, ".cursor/commands/aayudha-"+name+".md"))
+					if err != nil || !strings.HasPrefix(string(got), "# ") || !strings.Contains(string(src), string(got)) {
+						t.Errorf("Cursor: no /aayudha-%s from install: %q %v", name, got, err)
+					}
 				}
+			}
+		}
+		if host == verbs.HostCursor {
+			// Cursor rejects the whole file unless allow and deny are both lists.
+			var cli struct {
+				Permissions struct{ Allow, Deny []string }
+			}
+			b, _ := os.ReadFile(filepath.Join(root, ".cursor/cli.json"))
+			if json.Unmarshal(b, &cli) != nil || !slices.Contains(cli.Permissions.Allow, "Shell(aayu)") || !slices.Contains(cli.Permissions.Allow, "Mcp(aayudha:*)") || cli.Permissions.Deny == nil {
+				t.Errorf("Cursor's print mode cannot run aayu or its MCP tools: .cursor/cli.json %s", b)
+			}
+			if !slices.ContainsFunc(res.Notes, func(n string) bool { return strings.Contains(n, "cursor-agent mcp enable aayudha") }) {
+				t.Errorf("install does not say to approve the MCP server in Cursor's CLI: %q", res.Notes)
 			}
 		}
 	}
