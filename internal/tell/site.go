@@ -98,6 +98,7 @@ var sitePages = []SitePage{
 	{Out: "how-releases.html", Nav: "Releases and supply chain", Group: "How it works", Source: "docs/guide/how-releases.md"},
 	{Out: "how-security.html", Nav: "Security and threat model", Group: "How it works", Source: "docs/guide/how-security.md"},
 	{Out: "how-extending.html", Nav: "Extending aayudha", Group: "How it works", Source: "docs/guide/how-extending.md"},
+	{Out: "concepts-loop.html", Summary: "The seven steps every change takes, who does what at each, where the gates and floors sit, and how the loops run.", Nav: "The delivery loop", Group: "Concepts", Source: "docs/guide/concepts-loop.md"},
 	{Out: "concepts-seats.html", Nav: "Seats and pairing", Group: "Concepts", Source: "docs/guide/concepts-seats.md"},
 	{Out: "concepts-layers.html", Nav: "The nine layers", Group: "Concepts", Source: "docs/guide/concepts-layers.md"},
 	{Out: "concepts-proof.html", Nav: "Proof packs", Group: "Concepts", Source: "docs/guide/concepts-proof.md"},
