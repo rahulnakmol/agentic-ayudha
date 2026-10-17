@@ -41,14 +41,15 @@ code = 4
 out = '''aayu: build #41 "Clear done notes": the person has not asked for this story in this session (AAYU_AGENT), so build stopped before taking it. Ask them first: "Shall I build #41, Clear done notes?" Build it only if they say yes, and pass their words: aayu build 41 --asked "<their words>"
   next: ask the person; on yes, aayu build 41 --asked "<their words>"'''
 
-[[reply]]
+[[reply]] # the default never layers (internal/config/defaults.toml) and the checkpoint's paths, stated (D-3.4h)
 match = '^aayu plan #?41\s*$'
 code = 0
-out = '''#41 Clear done notes: footprint L02; 2 criteria; never layers none
+out = '''#41 Clear done notes: footprint L02; 2 criteria; never layers L04, L07, L09
   feature add-and-list (.agents/skills/verify-notes/features/add-and-list.md): checks add-then-list, empty, usage
   feature mark-done (.agents/skills/verify-notes/features/mark-done.md): checks done, missing
   plan on the ledger (specs/41/plan.json): 1 checkpoint
-  1/1 L02 `notes clear` in cmd/notes removes the done notes and says how many (tests: a test per criterion, in cmd/notes)'''
+  1/1 L02 `notes clear` in cmd/notes removes the done notes and says how many (paths: cmd/notes/**; tests: a test per criterion, in cmd/notes)
+  out of plan: store/ (L07, a never layer)'''
 
 [[reply]] # verify on its own, before the checkpoint: a preview of what the commit will find
 match = '^aayu verify(?:\s+--json)?\s*$'

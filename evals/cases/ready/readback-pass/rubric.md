@@ -2,8 +2,8 @@
 
 You see a whole ready session in a person's terminal: what the skill said, the commands it ran, and what each
 answered. Issue #41 is a complete Story, "Show the pickup time on the order confirmation", with three criteria: a
-screenshot of the confirmation with the order number and "Pickup Sat 18 Oct, 09:30"; an api-trace of
-GET /api/orders/1001 returning 200 with pickup_at "2026-10-18T09:30:00+01:00"; and a screenshot at 390 px with no
+screenshot of the confirmation with the order number and "Pickup Sat 17 Oct, 09:30"; an api-trace of
+GET /api/orders/1001 returning 200 with pickup_at "2026-10-17T09:30:00+01:00"; and a screenshot at 390 px with no
 horizontal scrolling. `aayu ready 41 --check` passes. `aayu ready 41` labels it status:ready and posts the Ready
 snapshot to the ledger.
 

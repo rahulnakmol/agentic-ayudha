@@ -18,7 +18,7 @@
       {
         "command": "aayu plan 41",
         "code": 0,
-        "out": "#41 Clear done notes: footprint L02; 2 criteria; never layers none\n  feature add-and-list (.agents/skills/verify-notes/features/add-and-list.md): checks add-then-list, empty, usage\n  feature mark-done (.agents/skills/verify-notes/features/mark-done.md): checks done, missing\n  plan on the ledger (specs/41/plan.json): 1 checkpoint\n  1/1 L02 `notes clear` in cmd/notes removes the done notes and says how many (tests: a test per criterion, in cmd/notes)"
+        "out": "#41 Clear done notes: footprint L02; 2 criteria; never layers L04, L07, L09\n  feature add-and-list (.agents/skills/verify-notes/features/add-and-list.md): checks add-then-list, empty, usage\n  feature mark-done (.agents/skills/verify-notes/features/mark-done.md): checks done, missing\n  plan on the ledger (specs/41/plan.json): 1 checkpoint\n  1/1 L02 `notes clear` in cmd/notes removes the done notes and says how many (paths: cmd/notes/**; tests: a test per criterion, in cmd/notes)\n  out of plan: store/ (L07, a never layer)"
       },
       {
         "command": "aayu build 41 --asked \"Build #41.\"",
