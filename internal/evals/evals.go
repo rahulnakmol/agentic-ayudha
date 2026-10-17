@@ -17,6 +17,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/pelletier/go-toml/v2"
 
@@ -215,7 +216,21 @@ type Scope struct {
 // and the clause around it, so a floor shows what the skill wrote.
 func (r Scope) find(text string) (match, clause string) {
 	if r.allowRE != nil {
-		text = r.allowRE.ReplaceAllStringFunc(text, func(m string) string { return strings.Repeat(" ", len(m)) })
+		// Allowed phrases may overlap ("no pack …, so I can't say …"): search again from the
+		// next word after each match's start, not its end, and blank every match (D-3.4w).
+		b := []byte(text)
+		for i := 0; i < len(text); {
+			loc := r.allowRE.FindStringIndex(text[i:])
+			if loc == nil {
+				break
+			}
+			s := i + loc[0]
+			for j := s; j < i+loc[1]; j++ {
+				b[j] = ' '
+			}
+			i = nextWord(text, s)
+		}
+		text = string(b)
 	}
 	loc := r.re.FindStringIndex(text)
 	if loc == nil {
@@ -229,6 +244,24 @@ func (r Scope) find(text string) (match, clause string) {
 		end = loc[1] + i
 	}
 	return text[loc[0]:loc[1]], strings.Join(strings.Fields(text[start:end]), " ")
+}
+
+// nextWord is the index of the first word after the one at s (always past s).
+func nextWord(text string, s int) int {
+	if s >= len(text) {
+		return len(text)
+	}
+	word := func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '\'' }
+	i := s + 1
+	if j := strings.IndexFunc(text[i:], func(r rune) bool { return !word(r) }); j >= 0 {
+		i += j
+	} else {
+		return len(text)
+	}
+	if j := strings.IndexFunc(text[i:], word); j >= 0 {
+		return i + j
+	}
+	return len(text)
 }
 
 // OutOfScope returns one line per scope rule the item breaks. A grilled
