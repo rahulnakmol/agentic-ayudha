@@ -1,0 +1,36 @@
+{
+  "source": "Shaped from Sentry's OpenAPI spec (getsentry/sentry-api-schema openapi-derefed.json at b1eac6b, 2026-10-16, read 2026-10-17), operationId listOrganizationEvents (dataset=logs; the spec's dataset enum is errors, logs, profile_functions, spans, tracemetrics, uptime_results, so there is no ourlogs): the 200 body is shaped from the documented response schema ({data, meta} with meta.fields and meta.units) after the spec's QueryEvents example. Query keys are in url.Values.Encode order; repeated field values keep their order. Not live-proven: no Sentry account recorded this.",
+  "interactions": [
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/organizations/acme/events/?dataset=logs&field=timestamp&field=severity&field=message&per_page=50&project=4507&query=severity%3Aerror&sort=-timestamp&statsPeriod=24h",
+      "status": 200,
+      "response": {
+        "data": [
+          {
+            "timestamp": "2026-10-17T08:41:12+00:00",
+            "severity": "error",
+            "message": "payment provider timeout after 5000ms"
+          },
+          {
+            "timestamp": "2026-10-17T08:39:57+00:00",
+            "severity": "error",
+            "message": "division by zero in compute_total"
+          }
+        ],
+        "meta": {
+          "fields": {
+            "timestamp": "date",
+            "severity": "string",
+            "message": "string"
+          },
+          "units": {
+            "timestamp": null,
+            "severity": null,
+            "message": null
+          }
+        }
+      }
+    }
+  ]
+}

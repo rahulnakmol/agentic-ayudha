@@ -1,0 +1,13 @@
+{
+  "source": "Shaped from Sentry's OpenAPI spec (getsentry/sentry-api-schema openapi-derefed.json at b1eac6b, 2026-10-16, read 2026-10-17), operationId getOrganizationIssue: the spec documents 404 Not Found with no body; the body is DRF's not-found answer; error bodies are Sentry's DRF answers (getsentry/sentry at 5218028). Not live-proven: no Sentry account recorded this.",
+  "interactions": [
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/organizations/acme/issues/999999/",
+      "status": 404,
+      "response": {
+        "detail": "The requested resource does not exist"
+      }
+    }
+  ]
+}

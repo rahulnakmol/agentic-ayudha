@@ -1,0 +1,177 @@
+{
+  "source": "Shaped from Sentry's OpenAPI spec (getsentry/sentry-api-schema openapi-derefed.json at b1eac6b, 2026-10-16, read 2026-10-17), operationId getOrganizationIssueAutofixState (GET only; the adapter never starts a Seer run): the 200 body is the spec's response example (AutofixInProgress) with request.project_id changed to 4507. Not live-proven: no Sentry account recorded this.",
+  "interactions": [
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/organizations/acme/issues/1/autofix/",
+      "status": 200,
+      "response": {
+        "autofix": {
+          "run_id": 12345,
+          "request": {
+            "organization_id": 1,
+            "project_id": 4507,
+            "repos": [
+              {
+                "integration_id": "12345",
+                "provider": "github",
+                "owner": "getsentry",
+                "name": "seer",
+                "external_id": "439438299",
+                "branch_name": "main",
+                "base_commit_sha": "4ebb4f342e308fda87d6ccb3cced25f2701bd60c"
+              }
+            ],
+            "tags_overview": {
+              "tags_overview": [
+                {
+                  "key": "environment",
+                  "name": "Environment",
+                  "top_values": [
+                    {
+                      "count": 1,
+                      "percentage": "100%",
+                      "value": "production"
+                    }
+                  ]
+                },
+                {
+                  "key": "run_id",
+                  "name": "Run Id",
+                  "top_values": [
+                    {
+                      "count": 1,
+                      "percentage": "100%",
+                      "value": "1372444"
+                    }
+                  ]
+                }
+              ]
+            },
+            "options": {
+              "auto_run_source": "issue_summary_on_post_process_fixability"
+            }
+          },
+          "updated_at": "2025-09-23T21:02:18.160885",
+          "status": "COMPLETED",
+          "codebases": {
+            "439438299": {
+              "repo_external_id": "439438299",
+              "file_changes": [],
+              "is_readable": true,
+              "is_writeable": true
+            }
+          },
+          "steps": [
+            {
+              "active_comment_thread": null,
+              "agent_comment_thread": null,
+              "completedMessage": null,
+              "id": "0872381c-7d71-46cd-a62b-fbc196846965",
+              "index": 0,
+              "initial_memory_length": 1,
+              "insights": [],
+              "key": "root_cause_analysis_processing",
+              "output_confidence_score": null,
+              "output_stream": null,
+              "proceed_confidence_score": null,
+              "progress": [
+                {
+                  "data": null,
+                  "message": "Figuring out the root cause...",
+                  "timestamp": "2025-09-12T23:20:31.304114",
+                  "type": "INFO"
+                },
+                {
+                  "data": null,
+                  "message": "Looking at `src/seer/automation/autofix/tools/tools.py` in `getsentry/seer`...",
+                  "timestamp": "2025-09-12T23:20:49.671212",
+                  "type": "INFO"
+                },
+                {
+                  "data": null,
+                  "message": "Simulating profound thought...",
+                  "timestamp": "2025-09-12T23:20:58.229135",
+                  "type": "INFO"
+                },
+                {
+                  "data": null,
+                  "message": "Arranging data in a way that looks intentional...",
+                  "timestamp": "2025-09-12T23:21:22.696531",
+                  "type": "INFO"
+                }
+              ],
+              "queued_user_messages": [],
+              "status": "COMPLETED",
+              "title": "Analyzing the Issue",
+              "type": "default"
+            },
+            {
+              "active_comment_thread": null,
+              "agent_comment_thread": null,
+              "causes": [
+                {
+                  "description": "`BaseTools.run_ripgrep` called without required `query` argument, causing `TypeError`.",
+                  "id": 0,
+                  "relevant_repos": [
+                    "getsentry/seer"
+                  ],
+                  "reproduction_urls": [],
+                  "root_cause_reproduction": [
+                    {
+                      "code_snippet_and_analysis": "The process begins with an HTTP request to the `autofix_start_endpoint`. This is the entry point for the autofix workflow.",
+                      "is_most_important_event": false,
+                      "relevant_code_file": {
+                        "file_path": "seer/app.py",
+                        "repo_name": "getsentry/seer"
+                      },
+                      "timeline_item_type": "internal_code",
+                      "title": "Autofix process initiated via API endpoint."
+                    }
+                  ]
+                }
+              ],
+              "completedMessage": null,
+              "id": "e6ae64b6-e4d4-44f5-bac7-6ecf6780a6dc",
+              "index": 1,
+              "key": "root_cause_analysis",
+              "output_stream": null,
+              "progress": [
+                {
+                  "data": null,
+                  "message": "Here is Autofix's proposed root cause.",
+                  "timestamp": "2025-09-12T23:21:30.662818",
+                  "type": "INFO"
+                }
+              ],
+              "queued_user_messages": [],
+              "selection": {
+                "cause_id": 0,
+                "instruction": null
+              },
+              "status": "COMPLETED",
+              "termination_reason": null,
+              "title": "Root Cause Analysis",
+              "type": "root_cause_analysis"
+            }
+          ],
+          "coding_agents": {},
+          "last_triggered_at": "2025-09-23T21:00:46.696678",
+          "completed_at": null,
+          "repositories": [
+            {
+              "integration_id": 2933,
+              "url": "https://github.com/getsentry/seer",
+              "external_id": "439438299",
+              "name": "getsentry/seer",
+              "provider": "integrations:github",
+              "default_branch": "main",
+              "is_readable": true,
+              "is_writeable": true
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "source": "Shaped from PostHog's OpenAPI spec (https://us.posthog.com/api/schema/, OpenAPI 3.1, info.version 1.0.0, read 2026-10-17), operationId query_create (POST /api/projects/{project_id}/query/, scope query:read): the request body follows QueryRequest with the ErrorTrackingQuery fields of frontend/src/queries/schema/schema-general.ts at 8bb4013 (dateRange, orderBy and volumeResolution are required), and the 200 body is shaped from ErrorTrackingQueryResponse (results: ErrorTrackingIssue[], each with its required id, status, first_seen and last_seen) plus the hasMore/limit/offset that products/error_tracking/backend/hogql_queries/error_tracking_query_runner.py adds; the spec has no example. Not live-proven: no PostHog account recorded this.",
+  "interactions": [
+    {
+      "method": "POST",
+      "url": "https://eu.posthog.com/api/projects/12345/query/",
+      "body": {
+        "query": {
+          "kind": "ErrorTrackingQuery",
+          "dateRange": {
+            "date_from": "-24h"
+          },
+          "orderBy": "occurrences",
+          "orderDirection": "DESC",
+          "status": "active",
+          "volumeResolution": 1,
+          "withAggregations": true,
+          "limit": 25
+        },
+        "name": "aayudha investigate"
+      },
+      "status": 200,
+      "response": {
+        "results": [
+          {
+            "id": "01929e8a-7b1c-7d2e-9f30-4a5b6c7d8e01",
+            "status": "active",
+            "name": "TypeError",
+            "description": "Cannot read properties of undefined (reading 'id')",
+            "assignee": null,
+            "first_seen": "2026-10-15T09:12:44Z",
+            "last_seen": "2026-10-17T08:41:12Z",
+            "library": "web",
+            "aggregations": {
+              "occurrences": 312,
+              "sessions": 140,
+              "users": 97,
+              "volume_buckets": [
+                {
+                  "label": "2026-10-16T09:00:00Z",
+                  "value": 312
+                }
+              ]
+            }
+          },
+          {
+            "id": "01929e8a-7b1c-7d2e-9f30-4a5b6c7d8e02",
+            "status": "active",
+            "name": "ZeroDivisionError",
+            "description": "division by zero",
+            "assignee": null,
+            "first_seen": "2026-10-16T21:03:10Z",
+            "last_seen": "2026-10-17T08:39:57Z",
+            "library": "posthog-python",
+            "aggregations": {
+              "occurrences": 58,
+              "sessions": 0,
+              "users": 21,
+              "volume_buckets": [
+                {
+                  "label": "2026-10-16T09:00:00Z",
+                  "value": 58
+                }
+              ]
+            }
+          }
+        ],
+        "hasMore": false,
+        "limit": 25,
+        "offset": 0
+      }
+    }
+  ]
+}

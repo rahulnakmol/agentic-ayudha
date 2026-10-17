@@ -1,0 +1,111 @@
+{
+  "source": "Shaped from Sentry's OpenAPI spec (getsentry/sentry-api-schema openapi-derefed.json at b1eac6b, 2026-10-16, read 2026-10-17), operationId listOrganizationReleases, then getOrganizationSessions: the releases body is the spec's response example (ReturnAListOfReleasesForAnOrganization) with its project changed to web (4507) and hasHealthData true; the sessions body is shaped from the documented response schema after the spec's QuerySessions example, grouped by release with totals and a 7-point daily series per field. Query keys are in url.Values.Encode order. Not live-proven: no Sentry account recorded this.",
+  "interactions": [
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/organizations/acme/releases/?per_page=10&project=4507",
+      "status": 200,
+      "response": [
+        {
+          "id": 1,
+          "version": "frontend@1.0.0",
+          "shortVersion": "frontend@1.0.0",
+          "status": "open",
+          "versionInfo": {
+            "package": "frontend",
+            "version": {
+              "raw": "1.0.0",
+              "major": 1,
+              "minor": 0,
+              "patch": 0,
+              "pre": null,
+              "buildCode": null,
+              "components": 3
+            },
+            "description": "1.0.0",
+            "buildHash": null
+          },
+          "ref": null,
+          "url": null,
+          "dateReleased": null,
+          "dateCreated": "2024-01-01T00:00:00Z",
+          "data": {},
+          "newGroups": 0,
+          "owner": null,
+          "commitCount": 0,
+          "lastCommit": null,
+          "deployCount": 0,
+          "lastDeploy": null,
+          "authors": [],
+          "projects": [
+            {
+              "id": 4507,
+              "slug": "web",
+              "name": "web",
+              "newGroups": 0,
+              "platform": "javascript",
+              "platforms": [
+                "javascript"
+              ],
+              "hasHealthData": true
+            }
+          ],
+          "firstEvent": null,
+          "lastEvent": null,
+          "currentProjectMeta": {},
+          "userAgent": null
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/organizations/acme/sessions/?field=crash_free_rate%28session%29&field=sum%28session%29&groupBy=release&interval=1d&project=4507&statsPeriod=7d",
+      "status": 200,
+      "response": {
+        "start": "2026-10-10T00:00:00Z",
+        "end": "2026-10-17T00:00:00Z",
+        "intervals": [
+          "2026-10-10T00:00:00Z",
+          "2026-10-11T00:00:00Z",
+          "2026-10-12T00:00:00Z",
+          "2026-10-13T00:00:00Z",
+          "2026-10-14T00:00:00Z",
+          "2026-10-15T00:00:00Z",
+          "2026-10-16T00:00:00Z"
+        ],
+        "groups": [
+          {
+            "by": {
+              "release": "frontend@1.0.0"
+            },
+            "totals": {
+              "crash_free_rate(session)": 0.9962,
+              "sum(session)": 48210
+            },
+            "series": {
+              "crash_free_rate(session)": [
+                0.9971,
+                0.9968,
+                0.9965,
+                0.996,
+                0.9958,
+                0.9955,
+                0.9957
+              ],
+              "sum(session)": [
+                6812,
+                6930,
+                7004,
+                6875,
+                6950,
+                6789,
+                6850
+              ]
+            }
+          }
+        ],
+        "query": ""
+      }
+    }
+  ]
+}

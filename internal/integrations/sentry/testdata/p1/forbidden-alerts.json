@@ -1,0 +1,13 @@
+{
+  "source": "Shaped from Sentry's OpenAPI spec (getsentry/sentry-api-schema openapi-derefed.json at b1eac6b, 2026-10-16, read 2026-10-17), operationId listOrganizationDetectors: the spec documents 403 Forbidden with no body; the token lacks alerts:read (the operation's auth_token scopes are alerts:read, org:admin, org:read, org:write), and the body is DRF's permission answer; error bodies are Sentry's DRF answers (getsentry/sentry at 5218028). Query keys are in url.Values.Encode order. Not live-proven: no Sentry account recorded this.",
+  "interactions": [
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/organizations/acme/detectors/?project=4507",
+      "status": 403,
+      "response": {
+        "detail": "You do not have permission to perform this action."
+      }
+    }
+  ]
+}

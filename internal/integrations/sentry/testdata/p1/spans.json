@@ -1,0 +1,41 @@
+{
+  "source": "Shaped from Sentry's OpenAPI spec (getsentry/sentry-api-schema openapi-derefed.json at b1eac6b, 2026-10-16, read 2026-10-17), operationId listOrganizationEvents (dataset=spans): the 200 body is shaped from the documented response schema ({data, meta} with meta.fields and meta.units) after the spec's QueryEvents example, with rows for the requested fields. Query keys are in url.Values.Encode order; repeated field values keep their order. Not live-proven: no Sentry account recorded this.",
+  "interactions": [
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/organizations/acme/events/?dataset=spans&field=transaction&field=p95%28span.duration%29&field=count%28%29&per_page=10&project=4507&sort=-count%28%29&statsPeriod=24h",
+      "status": 200,
+      "response": {
+        "data": [
+          {
+            "transaction": "POST /api/checkout/",
+            "p95(span.duration)": 812.5,
+            "count()": 1840
+          },
+          {
+            "transaction": "GET /api/cart/",
+            "p95(span.duration)": 143.0,
+            "count()": 1215
+          },
+          {
+            "transaction": "GET /api/products/",
+            "p95(span.duration)": 96.25,
+            "count()": 930
+          }
+        ],
+        "meta": {
+          "fields": {
+            "transaction": "string",
+            "p95(span.duration)": "duration",
+            "count()": "integer"
+          },
+          "units": {
+            "transaction": null,
+            "p95(span.duration)": "millisecond",
+            "count()": null
+          }
+        }
+      }
+    }
+  ]
+}

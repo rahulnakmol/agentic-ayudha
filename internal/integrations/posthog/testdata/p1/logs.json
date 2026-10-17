@@ -1,0 +1,74 @@
+{
+  "source": "Shaped from PostHog's OpenAPI spec (https://us.posthog.com/api/schema/, OpenAPI 3.1, info.version 1.0.0, read 2026-10-17), operationId query_create (POST /api/projects/{project_id}/query/, scope query:read): the request body follows QueryRequest with the LogsQuery fields of frontend/src/queries/schema/schema-general.ts at 8bb4013 (dateRange, severityLevels, filterGroup and serviceNames are required); LogsQueryResponse types results as unknown, so each row has the keys products/logs/backend/logs_query_runner.py emits (LogMessage plus resource_fingerprint), with hasMore/limit/offset from its paginator; the spec has no example. Not live-proven: no PostHog account recorded this.",
+  "interactions": [
+    {
+      "method": "POST",
+      "url": "https://eu.posthog.com/api/projects/12345/query/",
+      "body": {
+        "query": {
+          "kind": "LogsQuery",
+          "dateRange": {
+            "date_from": "-24h"
+          },
+          "severityLevels": [
+            "error"
+          ],
+          "serviceNames": [],
+          "filterGroup": {
+            "type": "AND",
+            "values": []
+          },
+          "orderBy": "latest",
+          "limit": 50
+        },
+        "name": "aayudha investigate"
+      },
+      "status": 200,
+      "response": {
+        "results": [
+          {
+            "uuid": "01929e8b-0001-7000-8000-000000000001",
+            "trace_id": "DA6CAABCD90E45FDB81F6655824A5F88",
+            "span_id": "83DB1AD17E67DFE7",
+            "body": "payment provider timeout after 5000ms",
+            "attributes": {},
+            "timestamp": "2026-10-17T08:41:12Z",
+            "observed_timestamp": "2026-10-17T08:41:12Z",
+            "severity_text": "error",
+            "severity_number": 17,
+            "level": "error",
+            "resource_attributes": {
+              "service.name": "web"
+            },
+            "resource_fingerprint": "1234567890",
+            "instrumentation_scope": "",
+            "event_name": "",
+            "live_logs_checkpoint": null
+          },
+          {
+            "uuid": "01929e8b-0002-7000-8000-000000000002",
+            "trace_id": "DA6CAABCD90E45FDB81F6655824A5F88",
+            "span_id": "93DB1AD17E67DFE8",
+            "body": "division by zero in compute_total",
+            "attributes": {},
+            "timestamp": "2026-10-17T08:39:57Z",
+            "observed_timestamp": "2026-10-17T08:39:57Z",
+            "severity_text": "error",
+            "severity_number": 17,
+            "level": "error",
+            "resource_attributes": {
+              "service.name": "web"
+            },
+            "resource_fingerprint": "1234567890",
+            "instrumentation_scope": "",
+            "event_name": "",
+            "live_logs_checkpoint": null
+          }
+        ],
+        "hasMore": false,
+        "limit": 50,
+        "offset": 0
+      }
+    }
+  ]
+}

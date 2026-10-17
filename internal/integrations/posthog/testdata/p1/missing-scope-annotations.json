@@ -1,0 +1,16 @@
+{
+  "source": "Shaped from PostHog's OpenAPI spec (https://us.posthog.com/api/schema/, OpenAPI 3.1, info.version 1.0.0, read 2026-10-17), operationId annotations_list (security PersonalAPIKeyAuth: annotation:read): the 403 body is the {type, code, detail, attr} error shape of posthog/exceptions.py (drf-exceptions-hog) with the detail posthog/permissions.py at 8bb4013 raises for a missing scope (\"API key missing required scope '…'\"). Not live-proven: no PostHog account recorded this.",
+  "interactions": [
+    {
+      "method": "GET",
+      "url": "https://eu.posthog.com/api/projects/12345/annotations/?limit=20",
+      "status": 403,
+      "response": {
+        "type": "authentication_error",
+        "code": "permission_denied",
+        "detail": "API key missing required scope 'annotation:read'",
+        "attr": null
+      }
+    }
+  ]
+}
