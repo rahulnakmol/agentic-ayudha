@@ -257,6 +257,7 @@ func TestShipAutonomousFootprint(t *testing.T) {
 			t.Fatalf("ship of an autonomous footprint %s: %d %s", why, code, out)
 		}
 	}
+	blocked("with no inspect record")
 	addComment(g, prN, "github-actions[bot]", "Bot", review(inspect.RungC, head))
 	blocked("after a same-family review")
 	addComment(g, prN, "founder", "User", review(inspect.RungA, head))

@@ -264,7 +264,7 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		break
 	}
 	if rec.HumanPass.Kind == "" && rec.Streak.Autonomous && !in.Bool("solo-bypass") && sameFamilyReview(ctx, c, owner, name, n, head, l.Config.Identity) {
-		why = append(why, "the inspect review at this head was a same-family review, or its record is missing for this head, which never lets an agent merge without a person")
+		why = append(why, "the merge gate's inspect record for this head is missing or a same-family review, which never lets an agent merge without a person")
 	} else if rec.HumanPass.Kind == "" && rec.Streak.Autonomous && !in.Bool("solo-bypass") {
 		rec.HumanPass = HumanPass{Kind: "autonomous", Login: me.Login, Commit: head,
 			Note: fmt.Sprintf("every layer of footprint %s has a streak of at least %d correction-free agent merges and none is a never layer (WP5.7)", strings.Join(rec.Footprint, ", "), rec.Streak.Threshold)}
@@ -665,9 +665,9 @@ func setSection(body, label, value string) string {
 // sameFamilyReview reports whether the PR's inspection at head was a
 // same-family review (rung C of the review ladder, Decision #469). Only the
 // inspect comment the merge gate itself wrote counts: one by GitHub Actions
-// or aayu's own bot identity, never a comment anyone could forge. A record
-// for another head, or comments that cannot be read, also refuse an
-// autonomous pass, so a person must pass the PR.
+// or aayu's own bot identity, never a comment anyone could forge. No such
+// record, a record for another head, or comments that cannot be read also
+// refuse an autonomous pass, so a person must pass the PR.
 func sameFamilyReview(ctx context.Context, c *github.Client, owner, name string, n int, head string, id config.Identity) bool {
 	posts, err := prPosts(ctx, c, owner, name, n)
 	if err != nil {
@@ -686,8 +686,5 @@ func sameFamilyReview(ctx context.Context, c *github.Client, owner, name string,
 			st = inspect.ParseState(p.Body).Result
 		}
 	}
-	if st == nil {
-		return false // no inspection recorded: the gate's own checks decide
-	}
-	return st.Head != head || st.Rung == inspect.RungC
+	return st == nil || st.Head != head || st.Rung == inspect.RungC
 }

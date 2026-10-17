@@ -131,7 +131,8 @@ The review the gate records, and shows as the first line of the inspect comment,
 
 The reviewer's family is the one its reply reports in the optional `model` field, else the app's family. A reply
 that reports a model of the builder's family is a same-family review, whatever was planned. `aayu ship` refuses an
-autonomous pass after a same-family review, so a person passes it. `reviewer = "model"` keeps the 0.1 model lane for a repository that accepts a key in CI.
+autonomous pass after a same-family review, or when the merge gate's own inspect record for the head is missing, so a
+person passes it. `reviewer = "model"` keeps the 0.1 model lane for a repository that accepts a key in CI.
 
 1. **Family check.** The builder's family comes from what aayu recorded on the ledger, outside the pull request: the
    delegation record (`aayu delegate`), or the model `aayu build` wrote for each checkpoint commit

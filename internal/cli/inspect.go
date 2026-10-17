@@ -476,6 +476,9 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 			fmt.Fprintf(w, " (%s: %s)", res.Mode, strings.Join(res.Reviewers, " + "))
 		}
 		fmt.Fprintln(w)
+		if res.Review != "" {
+			fmt.Fprintf(w, "  review: %s\n", res.Review)
+		}
 		if res.Overridden != "" {
 			fmt.Fprintf(w, "  %s\n", res.Overridden)
 		}
