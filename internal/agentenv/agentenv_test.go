@@ -563,20 +563,35 @@ jobs:
   integration: {if: "inputs.gate == 'rolling' || inputs.gate == 'stable'", runs-on: x, steps: [{run: "true"}]}
   docs: {if: "github.event_name == 'pull_request' || inputs.gate == 'x'", runs-on: x, steps: [{run: "true"}]}
 `,
-		".github/workflows/protected-paths.yml": "on: [push]\njobs:\n  pushed: {runs-on: x, steps: [{run: \"true\"}]}\n",
+		".github/workflows/ci.yaml":             "on: pull_request\njobs: [unclosed\n",
+		".github/workflows/protected-paths.yml": "on: [push, pull_request_target]\njobs:\n  protected-paths: {runs-on: x, steps: [{run: \"true\"}]}\n",
 	})
 	d, err = Discover(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := gateJobs(d.Spec); strings.Join(got, " ") != "vet lint docs" {
-		t.Errorf("gate jobs = %v, want vet lint docs", got)
+	if got := gateJobs(d.Spec); strings.Join(got, " ") != "vet lint docs protected-paths" {
+		t.Errorf("gate jobs = %v, want vet lint docs protected-paths", got)
+	}
+	if !slices.ContainsFunc(d.Spec.Notes, func(n string) bool { return strings.HasPrefix(n, ".github/workflows/ci.yaml: ") }) {
+		t.Errorf("notes = %v: an unreadable workflow must be named, not skipped silently", d.Spec.Notes)
+	}
+	for src, want := range map[string]string{
+		"":                                      "",
+		"- a list\n":                            "",
+		"on: push\njobs: {a: {}}\n":             "",
+		"on: pull_request\njobs: {a: {}}\n":     "a",
+		"on: {pull_request: {}}\njobs: {a: {}}": "a",
+	} {
+		if got, err := PullRequestJobs([]byte(src)); err != nil || strings.Join(got, " ") != want {
+			t.Errorf("PullRequestJobs(%q) = %v, %v; want %q", src, got, err, want)
+		}
 	}
 	// A spec written before the docs job existed keeps its commands and
 	// reasons, and reports the new job as a gap.
 	s := d.Spec
 	KeepPins(&s, Spec{Gate: []GateJob{{Job: "vet", Run: []string{"go vet ./..."}}, {Job: "lint", Remote: "only in CI"}}})
-	if gaps := GateGaps(s); strings.Join(gaps, " ") != "docs (.github/workflows/ci.yml)" {
+	if gaps := GateGaps(s); strings.Join(gaps, " ") != "docs (.github/workflows/ci.yml) protected-paths (.github/workflows/protected-paths.yml)" {
 		t.Errorf("gaps = %v, want the new docs job", gaps)
 	}
 	if s.Gate[0].Run[0] != "go vet ./..." || s.Gate[1].Remote != "only in CI" {
@@ -662,6 +677,34 @@ func TestInstallPrePush(t *testing.T) {
 		got, _ := os.ReadFile(p)
 		if replaced := err == nil && string(got) == PrePushHook; replaced != c.replace {
 			t.Errorf("old hook %q: replaced = %v (err %v), want %v", c.old, replaced, err, c.replace)
+		}
+	}
+	// .agents/setup does the same in a cloud host's clone.
+	if _, err := exec.LookPath("bash"); err == nil {
+		for _, c := range []struct {
+			old     string
+			replace bool
+		}{{"", true}, {stock, true}, {stock + "./scripts/my-check\n", false}} {
+			clone := t.TempDir()
+			if out, err := exec.Command("git", "init", "-q", clone).CombinedOutput(); err != nil {
+				t.Fatalf("git init: %v %s", err, out)
+			}
+			hook := filepath.Join(clone, ".git", "hooks", "pre-push")
+			if c.old != "" {
+				if err := os.WriteFile(hook, []byte(c.old), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			cmd := exec.Command("bash", "-ec", "step() { :; }\n"+setupHook(Spec{Gate: []GateJob{{Job: "build"}}}))
+			cmd.Dir = clone
+			cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL="+filepath.Join(clone, "none")) // no machine-wide core.hooksPath
+			if out, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("setup hook step: %v %s", err, out)
+			}
+			got, _ := os.ReadFile(hook)
+			if (string(got) == PrePushHook) != c.replace {
+				t.Errorf("setup with old hook %q: hook = %q, want replaced %v", c.old, got, c.replace)
+			}
 		}
 	}
 	if !strings.Contains(PrePushHook, `exec git lfs pre-push "$@"`) || !strings.Contains(PrePushHook, "--full </dev/null") {
