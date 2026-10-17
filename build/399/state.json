@@ -2,6 +2,24 @@
   "story": 399,
   "branch": "story/399-fix-at-the-static-check-layer-feedback-3",
   "started_at": "2026-10-17T15:18:57Z",
-  "failed_attempts": 0,
-  "checkpoints": null
+  "failed_attempts": 1,
+  "failures_by_layer": {
+    "L02": 1,
+    "L09": 1
+  },
+  "checkpoints": [
+    {
+      "k": 1,
+      "n": 2,
+      "attempt": 1,
+      "commit": "8ecb17fba3653cc148fe7388584f7c70721d13b8",
+      "layers": [
+        "L02",
+        "L09"
+      ],
+      "verify": "miss",
+      "detail": "coverage fail",
+      "at": "2026-10-17T16:14:27Z"
+    }
+  ]
 }
