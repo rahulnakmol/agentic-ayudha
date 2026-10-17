@@ -55,7 +55,7 @@ func TestLiveLedgerWriters(t *testing.T) {
 	env := map[string]string{"AAYU_GITHUB_TOKEN": admin, "PATH": os.Getenv("PATH")}
 	initRepo := func() {
 		t.Helper()
-		if code, out, errOut := run(t, env, Options{Dir: dir}, "init", "--yes", "--repo", repo); code != 0 {
+		if code, out, errOut := run(t, env, Options{Dir: dir, IsTerminal: stdinTTY}, "init", "--yes", "--repo", repo); code != 0 {
 			t.Fatalf("init: %d %s %s", code, out, errOut)
 		}
 	}
@@ -84,7 +84,7 @@ func TestLiveLedgerWriters(t *testing.T) {
 	t.Logf("rulesets after init: %s", rulesets())
 
 	// Uninit removes the rulesets first, so it can delete the untouched ledger; then init again.
-	if code, out, errOut := run(t, env, Options{Dir: dir}, "uninit", "--yes", "--repo", repo); code != 0 {
+	if code, out, errOut := run(t, env, Options{Dir: dir, IsTerminal: stdinTTY}, "uninit", "--yes", "--repo", repo); code != 0 {
 		t.Fatalf("uninit: %d %s %s", code, out, errOut)
 	}
 	if out, _ := g.Output(t.Context(), dir, "ls-remote", "origin", "refs/heads/ledger"); out != "" || rulesets() != "" {

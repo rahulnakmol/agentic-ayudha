@@ -220,7 +220,7 @@ func TestReleaseLive(t *testing.T) {
 	}
 
 	env := map[string]string{"AAYU_GITHUB_TOKEN": tok, "PATH": os.Getenv("PATH")}
-	opts := Options{Dir: dir, RunPoll: 5 * time.Second}
+	opts := Options{Dir: dir, RunPoll: 5 * time.Second, IsTerminal: stdinTTY} // a person at a terminal: --to main needs no request comment
 	release := func(to string) (Promotion, string) {
 		t.Helper()
 		var (

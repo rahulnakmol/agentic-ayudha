@@ -161,7 +161,7 @@ func TestHaltLive(t *testing.T) {
 	repo := scratch.Repo(t, admin)
 	const poll = 3 * time.Second
 	dir := t.TempDir()
-	opts := Options{HaltPoll: poll, Dir: dir}
+	opts := Options{IsTerminal: stdinTTY, HaltPoll: poll, Dir: dir} // resume is a person's act at a terminal
 	env := map[string]string{"AAYU_GITHUB_TOKEN": tok, "XDG_STATE_HOME": filepath.Join(dir, "state")}
 	agent := map[string]string{"AAYU_GITHUB_TOKEN": tok, "AAYU_AGENT": "1", "XDG_STATE_HOME": filepath.Join(dir, "state")}
 	started := make(chan struct{}, 1)
