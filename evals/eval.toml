@@ -137,8 +137,10 @@ gate = "advisory"
 events = ["workflow_dispatch"]
 # A prototype writes several code files: in run 39009788787 all five prototype runs spent the 12000-token cap on
 # thinking and returned no text, and mockups reached 10k (run 39008592764), so the group's skill cap was 24000 (D-6.5c).
-# Streamed, all five prototype runs still stopped at 24000 while writing files (run 39018074896), so it is 32000 (D-6.5e).
-max_tokens = 32000
+# Streamed, all five prototype runs still stopped at 24000 while writing files (run 39018074896), so it was 32000 (D-6.5e).
+# Run 39022787117 stopped four of five at 32000: a first reply plans the whole feature before writing it (one revision
+# rewrote every file in 12k), so the cap is 64000, a ceiling and not a charge (D-6.5g).
+max_tokens = 64000
 
 # The survey skill (WP5.9): two survey drafts on real legacy codebases (C++ and PHP fixtures under
 # evals/cases/survey/repos) and one backlog from a survey with a recorded interview. Each run indexes the fixture

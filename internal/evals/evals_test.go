@@ -968,7 +968,7 @@ func TestGroups(t *testing.T) {
 		}
 	}
 	uxg, _ := cfg.Group("ux")
-	if err != nil || ug.MaxUSD != 45 || ug.MaxTokens.Skill != 32000 || cfg.Gates("ux") || len(perSkill) != 7 || uxg.RunsOn("push") || uxg.RunsOn("schedule") {
+	if err != nil || ug.MaxUSD != 45 || ug.MaxTokens.Skill != 64000 || cfg.Gates("ux") || len(perSkill) != 7 || uxg.RunsOn("push") || uxg.RunsOn("schedule") {
 		t.Fatalf("ux group: %v, cap %v, gates %v, cases per skill %v, events %v", err, ug.MaxUSD, cfg.Gates("ux"), perSkill, uxg.Events)
 	}
 	for skill, n := range perSkill {
