@@ -171,6 +171,7 @@ func TestPluginManifests(t *testing.T) {
 			MCPServers map[string]struct {
 				Command string   `json:"command"`
 				Args    []string `json:"args"`
+				EnvVars []string `json:"env_vars"`
 			} `json:"mcpServers"`
 		}
 		readJSON(t, "../../"+m.manifest, &plugin)
@@ -185,6 +186,11 @@ func TestPluginManifests(t *testing.T) {
 		srv := plugin.MCPServers[ServerName]
 		if srv.Command != "aayu" || !slices.Equal(srv.Args, []string{"mcp", "--skills", verbs.SkillVersion}) {
 			t.Errorf("%s: MCP server %+v", m.host, srv)
+		}
+		// Codex gives a plugin's server only the variables it names, so
+		// without these the server finds no GitHub token the shell finds.
+		if m.host == verbs.HostCodex && !slices.Equal(srv.EnvVars, CodexMCPEnv) {
+			t.Errorf("codex: MCP server env_vars %v, want %v", srv.EnvVars, CodexMCPEnv)
 		}
 		want := []string{"./hosts/commands/common/"}
 		for _, h := range []verbs.HostID{verbs.HostAmp, verbs.HostClaude, verbs.HostCodex, verbs.HostCursor} {

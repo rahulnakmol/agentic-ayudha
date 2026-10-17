@@ -95,6 +95,11 @@ model as one Responses API `namespace` tool. If you route Codex through your own
 `namespace` tools through. One that drops them leaves the model with Codex's own resource tools only: it can read
 aayudha's resources but cannot call a verb. The skills still work then, because they run `aayu` in the shell.
 
+Codex starts the `aayudha` server with only a few of your variables, such as `HOME` and `PATH`. The plugin and the
+`install` block also pass it `AAYU_GITHUB_TOKEN`, `GH_TOKEN`, `GH_CONFIG_DIR`, and `XDG_CONFIG_HOME`, the places aayu
+looks for your GitHub token, so the server finds the token your shell finds. You should see the `status` tool answer
+with your repository's state, not "no GitHub token found".
+
 ## Codex through your own model provider
 
 A Codex that answers through a custom model provider (a `[model_providers.<id>]` entry, perhaps behind a wrapper that
