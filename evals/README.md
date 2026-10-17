@@ -76,8 +76,12 @@ output (OpenAI `json_schema`, strict) and its reply is validated by the WP1.6 st
 judgement once. A run whose judge reply, or skill reply, still is not usable JSON is an `error`: it is not scored, and
 the results file keeps a short redacted excerpt of the reply. A case's pass^k is 1 when all its completed runs score at
 least `pass_score`, else 0; the suite's is the mean over cases. More than one errored run in a case fails the tier. A
-reply that stops at its token cap is an `error` marked `truncated` and is not retried. Each run records every model
-call: role, model, stop reason, input and output tokens, and the cap. When the group's `max_usd` is reached, the remaining runs
+reply that stops at its token cap is an `error` marked `truncated` and is not retried. A provider fault is not the
+skill's: a dropped connection, a 5xx (the gateway's 524 included) or a 429, a server error inside a stream, a stream
+that stalls past the client's timeout, or a reply that loops on one token to the cap is retried, at most twice a run
+across its calls (`ProviderRetries`, D-3.4y); a run whose faults pass that cap is an `error` as before. Each run records
+every model call: role, model, stop reason, input and output tokens, the cap, and each provider retry with its fault
+and cost. When the group's `max_usd` is reached, the remaining runs
 are recorded as errors and the results file is still written.
 
 A brief case's skill replies with its Markdown draft. Its grounding gives each pack's criterion → evidence map (and
