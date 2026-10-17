@@ -488,7 +488,8 @@ func TestStopReasons(t *testing.T) {
 // A streamed Messages reply decodes to the same Response as the plain JSON
 // one: text deltas in order, cached input counted, the final output tokens
 // and stop reason from message_delta. A gateway that ignores "stream" and
-// answers JSON still decodes; an error event is an error.
+// answers JSON still decodes; an error event is an error, returned with the
+// usage so far.
 func TestMessagesStream(t *testing.T) {
 	sse := "event: message_start\n" +
 		`data: {"type":"message_start","message":{"model":"claude-opus-5-5","usage":{"input_tokens":5,"cache_read_input_tokens":100,"cache_creation_input_tokens":300,"cache_creation":{"ephemeral_5m_input_tokens":100,"ephemeral_1h_input_tokens":200},"output_tokens":1}}}` + "\n\n" +
@@ -505,7 +506,8 @@ func TestMessagesStream(t *testing.T) {
 	}{
 		{"stream", "text/event-stream; charset=utf-8", sse, `{"a": 1}`, 405, 42, true, false},
 		{"json", "application/json", `{"model":"m","content":[{"type":"text","text":"{}"}],"stop_reason":"end_turn","usage":{"input_tokens":3,"output_tokens":4}}`, "{}", 3, 4, false, false},
-		{"error", "text/event-stream", `data: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}` + "\n\n", "", 0, 0, false, true},
+		// An error after message_start keeps the usage so far: the attempt may be billed.
+		{"error", "text/event-stream", sse[:strings.Index(sse, "event: ping")] + `data: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}` + "\n\n", "", 405, 1, false, true},
 	} {
 		var sent map[string]any
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -520,8 +522,8 @@ func TestMessagesStream(t *testing.T) {
 			t.Errorf("%s: request did not ask to stream: %v", tc.name, sent)
 		}
 		if tc.wantErr {
-			if err == nil || !strings.Contains(err.Error(), "overloaded_error") {
-				t.Errorf("%s: want the stream's error, got %+v %v", tc.name, r, err)
+			if err == nil || !strings.Contains(err.Error(), "overloaded_error") || r.TokensIn != tc.in || r.TokensOut != tc.out || r.CachedIn != 100 {
+				t.Errorf("%s: want the stream's error with its usage so far, got %+v %v", tc.name, r, err)
 			}
 			continue
 		}

@@ -308,11 +308,13 @@ func decodeMessagesStream(body io.Reader) (Response, error) {
 				r.CostUSD = *ev.Usage.Cost
 			}
 		case "error":
-			return Response{}, &StreamError{Type: ev.Error.Type, Message: truncate(ev.Error.Message, 300)}
+			// The usage so far comes back with the error: the attempt may be
+			// billed, so a caller charges and records it.
+			return r, &StreamError{Type: ev.Error.Type, Message: truncate(ev.Error.Message, 300)}
 		}
 	}
 	if err := sc.Err(); err != nil {
-		return Response{}, fmt.Errorf("read messages stream: %w", err)
+		return r, fmt.Errorf("read messages stream: %w", err)
 	}
 	r.Text = sb.String()
 	if r.Text == "" {
