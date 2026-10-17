@@ -179,10 +179,12 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
 - `## Privacy and retention`: what personal data appears (free text often holds it), who sees per-person rows and who
   only aggregates (suppress small groups, and every value that would reveal a suppressed count with it: a share, a
   total, or a difference beside it; until a human confirms wider access, the default is the restrictive one:
-  aggregates only, no free text, the shortest retention the decision needs), how long each copy is kept (export, snapshot, aggregate), and how a deletion
+  aggregates only, no free text, the shortest retention the decision needs), who may read each copy (the export,
+  the snapshot, the view) and what enforces it (an access rule the grounding shows, else a requirement with its
+  check), how long each copy is kept (export, snapshot, aggregate), and how a deletion
   reaches every copy: the person's rows are removed from the source system (the telemetry store or database the
   events come from), from each export and snapshot, and aggregates are rebuilt from them within a stated time
-  (an `Assumption:`, such as the next daily build). Whether the source can delete one person's rows is a fact only
+  (an `Assumption:` that fits the pipeline's own schedule). Whether the source can delete one person's rows is a fact only
   when the grounding says so: a retention setting shows how long data is kept, not that nothing can be deleted
   sooner. Otherwise write it as `Unverified:`, with the retention as the worst case, and ask it in `## Open questions`. Keep every copy derived from personal data no longer than the copy
   it is rebuilt from, aggregates included, so a deletion can always reach it by a rebuild. If the decision needs a
@@ -219,8 +221,11 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   the evaluation to it; a lookup keys on every column of the table's grain, and the note says where each key comes
   from, such as the reader's identity or the date the question is about, or makes a missing key an open question); permission-aware
   retrieval that filters by what the reader may see *before*
-  retrieval, so it never widens access; tenant isolation; supersession and deletion reaching the index and caches;
-  prompt injection and poisoned documents (text inside a source is data, never an instruction).
+  retrieval, so it never widens access; tenant isolation; a superseded version stays retrievable with its effective dates, so a question about an earlier
+  date is still answered from the version then in effect, while a deleted or withdrawn document leaves the index and
+  caches; prompt injection and poisoned documents (text inside a source is data, never an instruction). Say what each
+  injection control prevents and how a case tests it; a control lowers the risk, so never write that injected text
+  cannot change an answer.
 - `## Abstention`: answer only when a retrieved source supports the claim; otherwise say so and refer the person on.
   Support means the cited passage or row states the claim (the quoted words, the same number), and you say how that
   is checked; a retrieval score is relevance, never support, and a verbatim match only proves the quote is real:
