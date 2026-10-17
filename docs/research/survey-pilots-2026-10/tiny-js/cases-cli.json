@@ -1,0 +1,353 @@
+{
+ "cases": [
+  {
+   "id": "g2-test001",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test001.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test002",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test002.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test003",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test003.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test004",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test004.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test005",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test005.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test006",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test006.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test007",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test007.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test008",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test008.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test009",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test009.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test010",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test010.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test011",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test011.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test012",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test012.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test013",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test013.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test014",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test014.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test015",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test015.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test016",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test016.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test017",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test017.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test018",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test018.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test020",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test020.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test021",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test021.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test022",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test022.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test023",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test023.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test024",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test024.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test025",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test025.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test026",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test026.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test027",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test027.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test028",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test028.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test029",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test029.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test030",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test030.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test031",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test031.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test032",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test032.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test033",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test033.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test034",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test034.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test035",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test035.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test036",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test036.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test037",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test037.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g2-test038",
+   "set": "G2",
+   "argv": [
+    "{bin}",
+    "tests/test038.js",
+    "print-result.js"
+   ]
+  },
+  {
+   "id": "g3-err-syntax",
+   "set": "G3",
+   "argv": [
+    "{bin}",
+    "err-syntax.js"
+   ]
+  },
+  {
+   "id": "g3-err-undefined-call",
+   "set": "G3",
+   "argv": [
+    "{bin}",
+    "err-undefined-call.js"
+   ]
+  }
+ ]
+}

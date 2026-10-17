@@ -1,0 +1,422 @@
+{
+ "cases": [
+  {
+   "id": "g1-test001",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test001.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test002",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test002.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test003",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test003.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test004",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test004.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test005",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test005.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test006",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test006.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test007",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test007.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test008",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test008.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test009",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test009.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test010",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test010.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test011",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test011.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test012",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test012.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test013",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test013.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test014",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test014.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test015",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test015.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test016",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test016.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test017",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test017.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test018",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test018.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test019",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test019.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test020",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test020.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test021",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test021.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test022",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test022.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test023",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test023.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test024",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test024.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test025",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test025.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test026",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test026.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test027",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test027.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test028",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test028.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test029",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test029.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test030",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test030.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test031",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test031.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test032",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test032.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test033",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test033.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test034",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test034.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test035",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test035.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test036",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test036.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test037",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test037.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  },
+  {
+   "id": "g1-test038",
+   "set": "G1",
+   "argv": [
+    "{bin}",
+    "tests/test038.js"
+   ],
+   "compare": [
+    "exit"
+   ]
+  }
+ ]
+}

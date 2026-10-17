@@ -1,0 +1,5 @@
+[xss](javascript:alert%281%29)
+
+<script>alert(1)</script>
+
+<a href="javascript:alert(1)">x</a>
