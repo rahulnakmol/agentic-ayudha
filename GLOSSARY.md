@@ -6,7 +6,7 @@ WP in brackets is where the term is built; "n/a until" means it does not exist y
 | Term | Meaning |
 |---|---|
 | `aayudha`, `aayu` | The binary and its short alias. One static Go binary. |
-| Verb | One of the 33 user-facing commands (`grill`, `build`, `ship`, …) declared in the verb registry. Each runs as a CLI command, and most also as a host skill and an MCP tool. |
+| Verb | One of the 34 user-facing commands (`grill`, `build`, `ship`, …) declared in the verb registry. Each runs as a CLI command, and most also as a host skill and an MCP tool. |
 | Plumbing command | A supporting command that is not a verb (`config`, `auth`, `halt`, `upgrade`, …). |
 | Verb registry | `internal/verbs/registry.go`, the single source for verbs, seats, layers, lanes, and gates. Several files are generated from it [WP0.3]. |
 | Seat | One of thirteen roles in the pod (Product Strategist, Code Architect, …). Every verb has one Accountable seat; every layer has one owner seat. |

@@ -101,7 +101,7 @@ func TestMCPDefaultExposure(t *testing.T) {
 	cs := serveMCP(t, gitInit(t, "dev", nil))
 	names, tools := toolNames(t, cs)
 	// Read and authoring verbs only (the SDK lists tools by name).
-	want := []string{"brief", "chart", "decide", "doctor", "grill", "plan", "proof", "ready", "research", "slice", "status"}
+	want := []string{"brief", "chart", "decide", "doctor", "grill", "plan", "proof", "ready", "research", "slice", "status", "survey"}
 	if !slices.Equal(names, want) {
 		t.Fatalf("tools = %v, want %v", names, want)
 	}

@@ -520,7 +520,8 @@ func enumIn(name string, required, positional bool, desc string, values ...strin
 }
 
 // Verbs lists the 32 verbs in plan order (V7, WP0.3), then chart, the Data & AI
-// Architect's verb (Decision #283, Appendix B S-5.1g).
+// Architect's verb (Decision #283, Appendix B S-5.1g), then survey (WP5.9,
+// Decision #287).
 var Verbs = []Command{
 	{
 		Name: "grill", WP: "WP5.3", Stage: StageShape,
@@ -1015,6 +1016,30 @@ var Verbs = []Command{
 		},
 		Outputs:  []string{"chart-note", "grounding"},
 		Gates:    []GateID{GateHalt},
+		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeRead,
+	},
+	{
+		Name: "survey", WP: "WP5.9", Stage: StageShape,
+		Summary: "Survey a codebase with no product docs: index it, check an evidence-backed analysis and backlog, and capture golden outputs for parity.",
+		Reader:  "Reads a codebase nobody documented, says what it does with a citation for every claim, and drafts the backlog to modernise it.",
+		Seat:    CodeArchitect, Lane: LanePlan, Layers: AllLayers(),
+		Inputs: []Input{
+			optPos("path", TypePath, "Checkout to survey; default the repository root."),
+			flag("out", TypePath, "Directory for the survey's files (index.json, SURVEY.md, backlog.md, golden/); default .aayudha/survey under the surveyed checkout."),
+			flag("budget", TypeInt, "Module size in tokens (about four bytes each) when grouping files; default 20000."),
+			flag("module", TypeString, "Print one module's fact pack (files, targets, entry points, surfaces, markers, symbols, calls in and out) from the index; read-only."),
+			flag("draft", TypePath, "Survey draft to check (JSON: claims at the engineering, capability, and product levels, unknowns, answers, modernisation path): every claim cites the index or is marked unknown; renders SURVEY.md."),
+			flag("backlog", TypePath, "Backlog draft to check (JSON: Goal, Initiatives, Features, Stories, Bugs) against the work-item schema and the survey draft; renders backlog.md and its review digest."),
+			readOnlyWith(flag("create", TypeBool, "With --backlog: file the reviewed backlog as issues through the actions log, skipping items already filed; needs --reviewed."), "false"),
+			flag("reviewed", TypeString, "With --create: the review digest of the exact backlog the person reviewed (printed by --backlog)."),
+			flag("limit", TypeInt, "With --create: the most issues one run files; default 25."),
+			flag("golden", TypePath, "Characterisation cases (JSON) to run against the legacy build (--bin), writing each case's stdout, stderr, and exit code with SHA-256 under golden/."),
+			flag("parity", TypePath, "Characterisation cases (JSON) to replay against the new build (--bin) and compare with the golden outputs; exit 3 on any difference."),
+			flag("bin", TypeString, "With --golden or --parity: the program the cases run as {bin}."),
+			readOnlyWith(flag("run", TypeBool, "With --golden or --parity: run the cases' program; without it the cases file is only checked."), "false"),
+		},
+		Outputs:  []string{"index", "fact-pack", "survey-report", "backlog", "issues", "golden", "parity"},
+		Gates:    []GateID{GateValidator, GateHalt},
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeRead,
 	},
 }

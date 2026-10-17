@@ -49,6 +49,7 @@ Charters: `seats/<seat>/CHARTER.md`.
 | `install` | DevOps & DevEx Tinkerer | DevOps & DevEx Tinkerer twin, chore lane | DevOps & DevEx Tinkerer | — | Engineering Manager | L09 | human | none | never |
 | `doctor` | DevOps & DevEx Tinkerer | DevOps & DevEx Tinkerer twin, chore lane | DevOps & DevEx Tinkerer | — | Engineering Manager | L09 | human | none | read |
 | `chart` | Data & AI Architect | Data & AI Architect twin, spec lane | Data & AI Architect | Code Architect, Revenue Architect | AI Native Engineer (+SRE hat), Quality Architect | L05, L07, L08 | bot | host | read |
+| `survey` | Code Architect | Code Architect twin, plan lane | Code Architect | Product Strategist, Quality Architect | Engineering Manager | all | bot | host | read |
 
 Model calling: `none` is deterministic; `host` means the host's model reasons inside the skill;
 `direct` means the binary calls a model itself; `hybrid` is host reasoning plus a direct pass

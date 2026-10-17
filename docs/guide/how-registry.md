@@ -18,7 +18,7 @@ there is one Go value per command, unit tests check that value, and every other 
 
 The registry holds more than verbs:
 
-- `Verbs`: the 33 verbs, in plan order.
+- `Verbs`: the 34 verbs: the 32 of the plan, in plan order, then `chart` (WP5.1g) and `survey` (WP5.9).
 - `Plumbing`: the 15 plumbing commands, built with the `plumb` helper (no lane, no layers, CLI only).
 - `Seats`: the thirteen seats.
 - `LayerTable`: the nine layers (L01 to L09), each with one owner seat and the path globs that place a file in it.
@@ -170,7 +170,7 @@ Before it writes anything, `internal/verbs/gen` runs `verbs.LintRACI`. The lint 
 per command, a RACI entry for every verb whose Consulted and Informed seats are known, unique, and distinct from the
 Accountable seat, and one known owner seat per layer. A registry that breaks it fails `go generate` and CI.
 
-`TestRegistry` in `internal/verbs/registry_test.go` checks the rest: exactly 33 verbs and 15 plumbing commands in
+`TestRegistry` in `internal/verbs/registry_test.go` checks the rest: exactly 34 verbs and 15 plumbing commands in
 plan order, unique names, one stage per verb, thirteen seats, nine layers, known gates and lanes, one-line summaries
 of at most 200 characters, valid modes and exposures, surfaces that follow exposure, input rules (an enum has
 values, a human-only input is never required), and a default for every lane on every host.
@@ -196,7 +196,7 @@ if the second run changes anything.
 
 1. Every command has exactly one Accountable seat, and every layer exactly one owner. Enforced by `verbs.LintRACI`
    in `internal/verbs/raci.go` (`TestLintRACI`), run first by `internal/verbs/gen/main.go`.
-2. The registry holds 33 verbs and 15 plumbing commands, each with valid fields. Enforced in
+2. The registry holds 34 verbs and 15 plumbing commands, each with valid fields. Enforced in
    `internal/verbs/registry_test.go` (`TestRegistry`).
 3. Generated files match the registry byte for byte. Enforced by the `generate-drift` job in
    `.github/workflows/ci.yml`.

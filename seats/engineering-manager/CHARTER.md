@@ -107,6 +107,7 @@ Sources:
 | `init` | Informed |
 | `install` | Informed |
 | `doctor` | Informed |
+| `survey` | Informed |
 
 Plumbing commands accountable for: `next`.
 

@@ -1,0 +1,891 @@
+// Package survey indexes a repository that has code but no product
+// documentation, deterministically and with no model (WP5.9): files and
+// languages, build systems and their targets, symbols, the include and import
+// graph, a name-resolved call graph, entry points, I/O surfaces, tests,
+// known-issue markers, documents, and git churn, grouped into modules sized
+// for a model to read one at a time. Every fact has a stable ID and a
+// path:line, so the analysis the host's model writes from it (the survey
+// draft) can be checked claim by claim (Decision #287).
+package survey
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"io/fs"
+	"os"
+	"os/exec"
+	"path"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+)
+
+// Version is the index schema version.
+const Version = 1
+
+// DefaultBudget is a module's default size in tokens (about four bytes each).
+const DefaultBudget = 20000
+
+// maxFileBytes is the largest file scanned for symbols; a larger one is listed
+// with its size and marked not scanned (generated or data files).
+const maxFileBytes = 2 << 20
+
+// File is one file of the checkout.
+type File struct {
+	Path    string `json:"path"`
+	Role    string `json:"role"` // source, test, build, doc, vendored, data
+	Lang    string `json:"lang,omitempty"`
+	Lines   int    `json:"lines"`
+	Bytes   int    `json:"bytes"`
+	Scanned bool   `json:"scanned,omitempty"` // symbols, calls, and surfaces were extracted
+	Commits int    `json:"commits,omitempty"` // commits touching it (git churn)
+}
+
+// Fact is an entry point, an I/O surface, a test, or a document.
+type Fact struct {
+	ID     string `json:"id"`
+	Kind   string `json:"kind"`
+	At     string `json:"at"`
+	Detail string `json:"detail,omitempty"`
+	Count  int    `json:"count,omitempty"` // occurrences in the file, for a surface
+}
+
+// Edge is an include, an import, or a call. A call is resolved by name only:
+// when several definitions share the name, To lists them all and Ambiguous
+// is set; the index never picks one.
+type Edge struct {
+	Kind      string   `json:"kind"` // include, import, call
+	From      string   `json:"from"` // file:<path> or a symbol ID
+	To        []string `json:"to"`
+	At        string   `json:"at"`
+	Ambiguous bool     `json:"ambiguous,omitempty"`
+}
+
+// Module is a group of files read together: a directory, split to the token
+// budget along file stems (TinyJS.cpp with TinyJS.h).
+type Module struct {
+	ID      string   `json:"id"`
+	Dir     string   `json:"dir"`
+	Files   []string `json:"files"`
+	Lines   int      `json:"lines"`
+	Tokens  int      `json:"tokens"` // estimate, bytes / 4
+	Symbols int      `json:"symbols"`
+	FanIn   int      `json:"fan_in"`  // edges from other modules into this one
+	FanOut  int      `json:"fan_out"` // edges from this module to others
+}
+
+// Count is a number of files and lines for a language or extension.
+type Count struct {
+	Name  string `json:"name"`
+	Files int    `json:"files"`
+	Lines int    `json:"lines"`
+}
+
+// Index is the deterministic survey of one checkout: the same commit gives
+// the same bytes (no clock, sorted lists).
+type Index struct {
+	Version    int      `json:"version"`
+	Commit     string   `json:"commit,omitempty"`
+	History    *History `json:"history,omitempty"`
+	Languages  []Count  `json:"languages"`
+	NotIndexed []Count  `json:"not_indexed,omitempty"` // file extensions with no language the index knows
+	Systems    []string `json:"build_systems"`
+	Targets    []Target `json:"targets"`
+	Deps       []Dep    `json:"deps"`
+	Entries    []Fact   `json:"entries"`
+	Surfaces   []Fact   `json:"surfaces"`
+	Tests      []Fact   `json:"tests"`
+	Docs       []Fact   `json:"docs"`
+	Markers    []Marker `json:"markers"`
+	Modules    []Module `json:"modules"`
+	Symbols    []Symbol `json:"symbols"`
+	Edges      []Edge   `json:"edges"`
+	Files      []File   `json:"files"`
+
+	byPath map[string]int
+	ids    map[string]bool
+}
+
+// History is what git says about the checkout.
+type History struct {
+	Commits int    `json:"commits"`
+	First   string `json:"first,omitempty"` // date of the oldest commit read
+	Last    string `json:"last,omitempty"`
+	Authors int    `json:"authors"`
+	Shallow bool   `json:"shallow,omitempty"`
+}
+
+// Options tune Build.
+type Options struct {
+	Budget int // module size in tokens; 0 is DefaultBudget
+	// Git runs git in the checkout; nil runs the git binary. It returns ""
+	// when git fails (not a repository), and the index then walks the tree.
+	Git func(ctx context.Context, dir string, args ...string) string
+}
+
+var (
+	cInclude   = regexp.MustCompile(`(?m)^[ \t]*#[ \t]*include[ \t]*([<"])([^>"]+)[>"]`)
+	pyImport   = regexp.MustCompile(`(?m)^[ \t]*(?:from[ \t]+(\.*[\w.]*)[ \t]+import|import[ \t]+([\w.]+))`)
+	phpInclude = regexp.MustCompile(`(?m)\b(?:require|include)(?:_once)?[ \t]*\(?[ \t]*(?:__DIR__[ \t]*\.[ \t]*)?['"]([^'"]+)['"]`)
+	phpUse     = regexp.MustCompile(`(?m)^[ \t]*use[ \t]+\\?([\w\\]+)`)
+	jsImport   = regexp.MustCompile(`(?m)(?:^[ \t]*import\b[^'"\n]*['"]([^'"]+)['"]|\brequire\(\s*['"]([^'"]+)['"]\s*\))`)
+	javaImport = regexp.MustCompile(`(?m)^[ \t]*import[ \t]+(?:static[ \t]+)?([\w.]+)`)
+	rustMod    = regexp.MustCompile(`(?m)^[ \t]*(?:pub(?:\([^)]*\))?[ \t]+)?mod[ \t]+(\w+)[ \t]*;`)
+	rustUse    = regexp.MustCompile(`(?m)^[ \t]*(?:pub[ \t]+)?use[ \t]+(\w+)::`)
+	rubyReq    = regexp.MustCompile(`(?m)^[ \t]*require(_relative)?[ \t(]+['"]([^'"]+)['"]`)
+	csUsing    = regexp.MustCompile(`(?m)^[ \t]*using[ \t]+([\w.]+)[ \t]*;`)
+	pyMain     = regexp.MustCompile(`(?m)^if[ \t]+__name__[ \t]*==[ \t]*['"]__main__['"]`)
+	shebang    = regexp.MustCompile(`^#!`)
+)
+
+// surfaceRules find a file's I/O surfaces in its stripped code (string
+// contents blanked, so a word in a message never counts).
+var surfaceRules = []struct {
+	kind string
+	re   *regexp.Regexp
+}{
+	{"cli-args", regexp.MustCompile(`\b(argv|argc|getopt\w*|sys\.argv|argparse|optparse|click\.command|os\.Args|flag\.(?:String|Bool|Int|Parse)|process\.argv|\$argv|ARGV|yargs|commander|clap::|CommandLine)\b`)},
+	{"file", regexp.MustCompile(`\b(fopen|fopen_s|freopen|ifstream|ofstream|fstream|file_get_contents|file_put_contents|fwrite|fread|fgets|readFileSync|writeFileSync|readFile|writeFile|os\.Open|os\.Create|os\.ReadFile|os\.WriteFile|FileInputStream|FileOutputStream|FileReader|FileWriter|File\.open|File\.read|Files\.\w+|std::fs::\w+|File::open|File::create)\s*[(<]|\bopen\s*\(`)},
+	{"net", regexp.MustCompile(`\b(socket|connect|bind|listen|accept|getaddrinfo|gethostbyname|curl_\w+|fsockopen|stream_socket_\w+|http\.Get|http\.Post|http\.ListenAndServe|net\.Dial|net\.Listen|urlopen|requests\.\w+|fetch|XMLHttpRequest|HttpClient|HttpURLConnection|TcpStream|TcpListener|reqwest::\w+)\s*\(`)},
+	{"env", regexp.MustCompile(`\b(getenv|setenv|putenv|os\.Getenv|os\.environ|process\.env|System\.getenv|std::env::var|env::var|\$_ENV|\$_SERVER|ENV\[)`)},
+	{"process", regexp.MustCompile(`\b(system|popen|execl|execlp|execle|execv|execvp|execve|fork|CreateProcess\w*|ShellExecute\w*|subprocess\.\w+|os\.system|shell_exec|proc_open|passthru|exec\.Command|Runtime\.getRuntime|ProcessBuilder|Command::new)\s*\(`)},
+	{"stdout", regexp.MustCompile(`\b(printf|puts|std::cout|cout|cerr|std::cerr|println!?|print!?|console\.log|fmt\.Print\w*|System\.out\.\w+|echo|sys\.stdout)\b`)},
+	{"stdin", regexp.MustCompile(`\b(scanf|getchar|std::cin|cin|fgets\s*\(\s*\w*,\s*\w+,\s*stdin|sys\.stdin|input\s*\(|readline|STDIN|php://stdin|bufio\.NewReader\(os\.Stdin\))`)},
+	{"database", regexp.MustCompile(`\b(sqlite3_\w+|mysql_\w+|mysqli\w*|PDO|pg_\w+|psycopg2|sqlalchemy|sql\.Open|DriverManager|JdbcTemplate|SqlConnection|rusqlite)\b`)},
+	{"dynamic-dispatch", regexp.MustCompile(`(\$\w+->\{|->\$\w+\s*\(|\bcall_user_func\w*\s*\(|\bgetattr\s*\(|__getattr__|\bmethod_missing\b|\.send\s*\(|\beval\s*\(|\bReflection\w+|\breflect\.\w+|\bdlsym\s*\(|\bGetProcAddress\s*\(|\bClass\.forName\s*\()`)},
+	{"time", regexp.MustCompile(`\b(time\s*\(|clock\s*\(|gettimeofday|localtime|strftime|time\.Now|datetime\.now|Date\.now|new Date\(|System\.currentTimeMillis|microtime|date\s*\()`)},
+	{"random", regexp.MustCompile(`\b(rand|srand|random|drand48|mt_rand|Math\.random|rand::\w+|random\.\w+|math/rand)\b\s*[(:]`)},
+}
+
+// Build indexes the checkout at root.
+func Build(ctx context.Context, root string, opt Options) (*Index, error) {
+	if opt.Budget <= 0 {
+		opt.Budget = DefaultBudget
+	}
+	if opt.Git == nil {
+		opt.Git = runGit
+	}
+	paths, err := listFiles(ctx, root, opt.Git)
+	if err != nil {
+		return nil, err
+	}
+	ix := &Index{Version: Version, byPath: map[string]int{}}
+	ix.Commit = strings.TrimSpace(opt.Git(ctx, root, "rev-parse", "HEAD"))
+	exists := func(p string) bool { _, ok := ix.byPath[p]; return ok }
+	type scanned struct {
+		code  string
+		raw   string
+		calls []call
+		syms  []Symbol
+	}
+	files := map[string]*scanned{}
+	cpp := false
+	for _, p := range paths {
+		if l, ok := langs[strings.ToLower(path.Ext(p))]; ok && l.Name == "cpp" {
+			cpp = true
+		}
+	}
+	for _, p := range paths {
+		info, err := os.Lstat(filepath.Join(root, filepath.FromSlash(p)))
+		if err != nil || !info.Mode().IsRegular() {
+			continue
+		}
+		role, lang, _ := classify(p)
+		if lang.Name == "c" && cpp {
+			lang.Name = "cpp" // a header in a C++ project is C++
+		}
+		f := File{Path: p, Role: role, Lang: lang.Name, Bytes: int(info.Size())}
+		ix.byPath[p] = len(ix.Files)
+		ix.Files = append(ix.Files, f)
+	}
+	for k := range ix.Files {
+		f := &ix.Files[k]
+		if f.Bytes > maxFileBytes {
+			continue
+		}
+		raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(f.Path)))
+		if err != nil || bytes.IndexByte(raw[:min(len(raw), 8000)], 0) >= 0 {
+			continue // unreadable or binary
+		}
+		f.Lines = bytes.Count(raw, []byte("\n"))
+		if len(raw) > 0 && raw[len(raw)-1] != '\n' {
+			f.Lines++
+		}
+		_, lang, system := classify(f.Path)
+		if lang.Name == "c" && cpp {
+			lang.Name = "cpp"
+		}
+		s := &scanned{raw: string(raw)}
+		files[f.Path] = s
+		switch {
+		case f.Role == "build":
+			code, _ := strip(s.raw, syntaxBuild, lang.Name)
+			ts, ds := buildFacts(f.Path, system, code, s.raw, exists)
+			ix.Targets = append(ix.Targets, ts...)
+			ix.Deps = append(ix.Deps, ds...)
+			ix.Systems = append(ix.Systems, system)
+		case f.Role == "doc":
+			ix.Docs = append(ix.Docs, Fact{ID: "doc:" + f.Path, Kind: "doc", At: f.Path + ":1", Detail: firstHeading(s.raw)})
+		case lang.Syntax != syntaxNone && (f.Role == "source" || f.Role == "test" || f.Role == "vendored"):
+			code, cs := strip(s.raw, lang.Syntax, lang.Name)
+			s.code = code
+			ix.Markers = append(ix.Markers, markers(f.Path, cs)...)
+			if f.Role == "vendored" || !lang.Symbols {
+				break
+			}
+			f.Scanned = true
+			switch {
+			case lang.Name == "go":
+				var imps []string
+				s.syms, s.calls, imps = goSymbols(f.Path, raw)
+				for _, im := range imps {
+					ix.Edges = append(ix.Edges, Edge{Kind: "import", From: "file:" + f.Path, To: []string{"ext:" + im}, At: f.Path + ":1"})
+				}
+			case lang.Syntax == syntaxHash:
+				s.syms, s.calls = lineSymbols(f.Path, code, lang.Name)
+			default:
+				s.syms, s.calls = braceSymbols(f.Path, code, lang.Name)
+				if strings.HasSuffix(f.Path, ".h") || strings.HasSuffix(f.Path, ".hpp") || strings.HasSuffix(f.Path, ".hh") {
+					for k := range s.syms {
+						s.syms[k].Public = s.syms[k].Public && !isDefKind(s.syms[k].Kind) || s.syms[k].Public && strings.Contains(s.syms[k].Name, "::")
+					}
+				} else if lang.Name == "c" || lang.Name == "cpp" {
+					for k := range s.syms {
+						s.syms[k].Public = false // a .cpp file's definitions implement the headers' API
+					}
+				}
+			}
+			uniqueIDs(s.syms)
+			ix.Symbols = append(ix.Symbols, s.syms...)
+			ix.surfaces(f.Path, code)
+			ix.entries(f.Path, f.Role, lang.Name, s.raw, s.syms)
+		}
+		if f.Role == "test" {
+			ix.Tests = append(ix.Tests, Fact{ID: "test:" + f.Path, Kind: "test", At: f.Path + ":1"})
+		}
+		if lang.Name != "" && f.Role != "build" {
+			ix.imports(f.Path, lang.Name, s.raw, exists)
+		}
+	}
+	// The call graph, resolved by the called name's last component.
+	byName := map[string][]string{}
+	for _, s := range ix.Symbols {
+		if isDefKind(s.Kind) {
+			n := lastName(s.Name)
+			byName[n] = append(byName[n], s.ID)
+		}
+	}
+	for _, p := range sortedKeys(files) {
+		s := files[p]
+		for _, c := range s.calls {
+			to := byName[c.name]
+			if len(to) == 0 || c.from >= len(s.syms) {
+				continue
+			}
+			from := s.syms[c.from].ID
+			to = without(to, from)
+			if len(to) == 0 {
+				continue
+			}
+			if len(to) > 8 {
+				to = to[:8]
+			}
+			ix.Edges = append(ix.Edges, Edge{Kind: "call", From: from, To: to, At: p + ":" + itoa(c.line), Ambiguous: len(to) > 1})
+		}
+	}
+	ix.history(ctx, root, opt.Git)
+	ix.counts()
+	ix.modules(opt.Budget)
+	ix.finish()
+	return ix, nil
+}
+
+// listFiles lists the checkout's files: git's tracked files when root is a
+// repository, else a walk that skips tool state and build output.
+func listFiles(ctx context.Context, root string, git func(context.Context, string, ...string) string) ([]string, error) {
+	var out []string
+	if ls := git(ctx, root, "ls-files", "-z", "--cached", "--others", "--exclude-standard"); ls != "" {
+		for _, p := range strings.Split(ls, "\x00") {
+			if p == "" || skipped(p) {
+				continue
+			}
+			out = append(out, p)
+		}
+		sort.Strings(out)
+		return dedupe(out), nil
+	}
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(root, p)
+		rel = filepath.ToSlash(rel)
+		if d.IsDir() {
+			if rel != "." && skipDirs[d.Name()] {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		out = append(out, rel)
+		return nil
+	})
+	sort.Strings(out)
+	return out, err
+}
+
+func skipped(p string) bool {
+	for _, d := range strings.Split(path.Dir(p), "/") {
+		if skipDirs[d] {
+			return true
+		}
+	}
+	return false
+}
+
+func runGit(ctx context.Context, dir string, args ...string) string {
+	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return string(out)
+}
+
+func (ix *Index) surfaces(file, code string) {
+	for _, r := range surfaceRules {
+		locs := r.re.FindAllStringIndex(code, -1)
+		if len(locs) == 0 {
+			continue
+		}
+		line := strings.Count(code[:locs[0][0]], "\n") + 1
+		ix.Surfaces = append(ix.Surfaces, Fact{ID: "io:" + r.kind + ":" + file + ":" + itoa(line), Kind: r.kind, At: file + ":" + itoa(line),
+			Detail: strings.TrimSpace(strings.TrimRight(code[locs[0][0]:locs[0][1]], "(<:")), Count: len(locs)})
+	}
+}
+
+func (ix *Index) entries(file, role, lang, raw string, syms []Symbol) {
+	add := func(kind string, line int, detail string) {
+		ix.Entries = append(ix.Entries, Fact{ID: "entry:" + file + ":" + itoa(line), Kind: kind, At: file + ":" + itoa(line), Detail: detail})
+	}
+	for _, s := range syms {
+		n := lastName(s.Name)
+		switch {
+		case isDefKind(s.Kind) && (n == "main" || n == "WinMain" || n == "wmain") && !strings.Contains(s.Name, "::"):
+			add("main", s.line, s.Name)
+		case s.Public && role == "source" && (lang == "php" || lang == "python" || lang == "ruby" || lang == "javascript" || lang == "typescript" || lang == "java" || lang == "csharp" || lang == "go" || lang == "cpp" || lang == "c" || lang == "rust"):
+			if isDefKind(s.Kind) && strings.Contains(s.Name, "::") || !isDefKind(s.Kind) && (s.Kind == "class" || s.Kind == "struct" || s.Kind == "interface" || s.Kind == "trait") {
+				add("api", s.line, s.Kind+" "+s.Name)
+			}
+		}
+	}
+	if lang == "python" {
+		if m := pyMain.FindStringIndex(raw); m != nil {
+			add("main", strings.Count(raw[:m[0]], "\n")+1, "__main__")
+		}
+	}
+	if shebang.MatchString(raw) && (lang == "shell" || lang == "perl" || lang == "python" || lang == "ruby" || lang == "php") {
+		add("script", 1, strings.SplitN(raw, "\n", 2)[0])
+	}
+}
+
+// imports records include and import edges: to a file of the checkout when the
+// target resolves to one, else to an external dependency (counted in Deps).
+func (ix *Index) imports(file, lang, raw string, exists func(string) bool) {
+	dir := path.Dir(file)
+	lineOf := func(off int) string { return file + ":" + itoa(strings.Count(raw[:off], "\n")+1) }
+	ext := func(kind, name string, at string) {
+		ix.Edges = append(ix.Edges, Edge{Kind: kind, From: "file:" + file, To: []string{"ext:" + name}, At: at})
+	}
+	local := func(kind, target, at string) {
+		ix.Edges = append(ix.Edges, Edge{Kind: kind, From: "file:" + file, To: []string{"file:" + target}, At: at})
+	}
+	resolve := func(cands ...string) string {
+		for _, c := range cands {
+			if c = path.Clean(c); exists(c) {
+				return c
+			}
+		}
+		return ""
+	}
+	switch lang {
+	case "c", "cpp", "objc":
+		for _, m := range cInclude.FindAllStringSubmatchIndex(raw, -1) {
+			name := raw[m[4]:m[5]]
+			if t := resolve(path.Join(dir, name), name); t != "" {
+				local("include", t, lineOf(m[0]))
+			} else if t := ix.suffix(name); t != "" && raw[m[2]:m[3]] == `"` {
+				local("include", t, lineOf(m[0]))
+			} else {
+				ext("include", name, lineOf(m[0]))
+			}
+		}
+	case "python":
+		for _, m := range pyImport.FindAllStringSubmatchIndex(raw, -1) {
+			var mod string
+			if m[2] >= 0 {
+				mod = raw[m[2]:m[3]]
+			} else {
+				mod = raw[m[4]:m[5]]
+			}
+			p := strings.ReplaceAll(strings.TrimLeft(mod, "."), ".", "/")
+			if t := resolve(path.Join(dir, p+".py"), p+".py", path.Join(p, "__init__.py"), path.Join(dir, p, "__init__.py")); t != "" && p != "" {
+				local("import", t, lineOf(m[0]))
+			} else if p != "" {
+				ext("import", strings.Split(mod, ".")[0], lineOf(m[0]))
+			}
+		}
+	case "php":
+		for _, m := range phpInclude.FindAllStringSubmatchIndex(raw, -1) {
+			name := raw[m[2]:m[3]]
+			if t := resolve(path.Join(dir, name), name); t != "" {
+				local("include", t, lineOf(m[0]))
+			}
+		}
+		for _, m := range phpUse.FindAllStringSubmatchIndex(raw, -1) {
+			name := raw[m[2]:m[3]]
+			if t := ix.suffix(strings.ReplaceAll(name, `\`, "/") + ".php"); t != "" {
+				local("import", t, lineOf(m[0]))
+			} else {
+				ext("import", strings.Split(name, `\`)[0], lineOf(m[0]))
+			}
+		}
+	case "javascript", "typescript":
+		for _, m := range jsImport.FindAllStringSubmatchIndex(raw, -1) {
+			var name string
+			if m[2] >= 0 {
+				name = raw[m[2]:m[3]]
+			} else {
+				name = raw[m[4]:m[5]]
+			}
+			if strings.HasPrefix(name, ".") {
+				p := path.Join(dir, name)
+				if t := resolve(p, p+".js", p+".ts", p+".tsx", p+".jsx", p+".mjs", path.Join(p, "index.js"), path.Join(p, "index.ts")); t != "" {
+					local("import", t, lineOf(m[0]))
+				}
+				continue
+			}
+			parts := strings.Split(name, "/")
+			n := parts[0]
+			if strings.HasPrefix(n, "@") && len(parts) > 1 {
+				n += "/" + parts[1]
+			}
+			ext("import", n, lineOf(m[0]))
+		}
+	case "java", "kotlin", "scala", "groovy":
+		for _, m := range javaImport.FindAllStringSubmatchIndex(raw, -1) {
+			name := raw[m[2]:m[3]]
+			if t := ix.suffix(strings.ReplaceAll(name, ".", "/") + path.Ext(file)); t != "" {
+				local("import", t, lineOf(m[0]))
+			} else {
+				ps := strings.Split(name, ".")
+				ext("import", strings.Join(ps[:min(2, len(ps))], "."), lineOf(m[0]))
+			}
+		}
+	case "rust":
+		for _, m := range rustMod.FindAllStringSubmatchIndex(raw, -1) {
+			name := raw[m[2]:m[3]]
+			if t := resolve(path.Join(dir, name+".rs"), path.Join(dir, name, "mod.rs")); t != "" {
+				local("import", t, lineOf(m[0]))
+			}
+		}
+		for _, m := range rustUse.FindAllStringSubmatchIndex(raw, -1) {
+			if n := raw[m[2]:m[3]]; n != "crate" && n != "self" && n != "super" && n != "std" && n != "core" && n != "alloc" {
+				ext("import", n, lineOf(m[0]))
+			}
+		}
+	case "ruby":
+		for _, m := range rubyReq.FindAllStringSubmatchIndex(raw, -1) {
+			name := raw[m[4]:m[5]]
+			if t := resolve(path.Join(dir, name+".rb"), path.Join(dir, name), name+".rb", path.Join("lib", name+".rb")); t != "" {
+				local("import", t, lineOf(m[0]))
+			} else if m[2] < 0 {
+				ext("import", strings.Split(name, "/")[0], lineOf(m[0]))
+			}
+		}
+	case "csharp":
+		for _, m := range csUsing.FindAllStringSubmatchIndex(raw, -1) {
+			ps := strings.Split(raw[m[2]:m[3]], ".")
+			ext("import", strings.Join(ps[:min(2, len(ps))], "."), lineOf(m[0]))
+		}
+	}
+}
+
+// suffix finds the one checkout file whose path ends with p, or "".
+func (ix *Index) suffix(p string) string {
+	var found string
+	for _, f := range ix.Files {
+		if f.Path == p || strings.HasSuffix(f.Path, "/"+p) {
+			if found != "" {
+				return "" // ambiguous: do not guess
+			}
+			found = f.Path
+		}
+	}
+	return found
+}
+
+func (ix *Index) history(ctx context.Context, root string, git func(context.Context, string, ...string) string) {
+	log := git(ctx, root, "log", "--no-merges", "--format=@%ad %ae", "--date=short", "--name-only", "-n", "5000")
+	if log == "" {
+		return
+	}
+	h := &History{}
+	authors := map[string]bool{}
+	churn := map[string]int{}
+	for _, l := range strings.Split(log, "\n") {
+		switch {
+		case strings.HasPrefix(l, "@"):
+			fs := strings.Fields(l[1:])
+			h.Commits++
+			if len(fs) > 0 {
+				if h.Last == "" {
+					h.Last = fs[0]
+				}
+				h.First = fs[0]
+			}
+			if len(fs) > 1 {
+				authors[fs[1]] = true // counted, never written: an address is personal data
+			}
+		case strings.TrimSpace(l) != "":
+			churn[strings.TrimSpace(l)]++
+		}
+	}
+	h.Authors = len(authors)
+	h.Shallow = strings.TrimSpace(git(ctx, root, "rev-parse", "--is-shallow-repository")) == "true"
+	ix.History = h
+	for k := range ix.Files {
+		ix.Files[k].Commits = churn[ix.Files[k].Path]
+	}
+}
+
+func (ix *Index) counts() {
+	langs, other := map[string]*Count{}, map[string]*Count{}
+	for _, f := range ix.Files {
+		switch {
+		case f.Lang != "" && f.Role != "build" && f.Role != "doc":
+			c := langs[f.Lang]
+			if c == nil {
+				c = &Count{Name: f.Lang}
+				langs[f.Lang] = c
+			}
+			c.Files++
+			c.Lines += f.Lines
+		case f.Role == "data":
+			ext := strings.ToLower(path.Ext(f.Path))
+			if ext == "" {
+				ext = "(none)"
+			}
+			c := other[ext]
+			if c == nil {
+				c = &Count{Name: ext}
+				other[ext] = c
+			}
+			c.Files++
+			c.Lines += f.Lines
+		}
+	}
+	sortCounts := func(m map[string]*Count) []Count {
+		var out []Count
+		for _, c := range m {
+			out = append(out, *c)
+		}
+		sort.Slice(out, func(i, j int) bool {
+			if out[i].Lines != out[j].Lines {
+				return out[i].Lines > out[j].Lines
+			}
+			return out[i].Name < out[j].Name
+		})
+		return out
+	}
+	ix.Languages, ix.NotIndexed = sortCounts(langs), sortCounts(other)
+	// Dependencies included or imported from outside the checkout.
+	uses := map[string]int{}
+	first := map[string]string{}
+	for _, e := range ix.Edges {
+		if e.Kind == "call" || !strings.HasPrefix(e.To[0], "ext:") {
+			continue
+		}
+		n := strings.TrimPrefix(e.To[0], "ext:")
+		uses[n]++
+		if _, ok := first[n]; !ok {
+			first[n] = e.At
+		}
+	}
+	for n, u := range uses {
+		ix.Deps = append(ix.Deps, Dep{ID: "dep:include:" + n, Name: n, Source: "include", At: first[n], Uses: u})
+	}
+}
+
+// modules groups the indexed files (source, test, and vendored code) by
+// directory, then splits a directory larger than the budget along file stems.
+func (ix *Index) modules(budget int) {
+	byDir := map[string][]File{}
+	for _, f := range ix.Files {
+		if f.Lang == "" || f.Role == "build" || f.Role == "doc" || f.Role == "data" {
+			continue
+		}
+		byDir[path.Dir(f.Path)] = append(byDir[path.Dir(f.Path)], f)
+	}
+	fileMod := map[string]string{}
+	for _, dir := range sortedKeys(byDir) {
+		fs := byDir[dir]
+		// Stems keep a header with its implementation (TinyJS.h, TinyJS.cpp).
+		stems := map[string][]File{}
+		for _, f := range fs {
+			stem := strings.TrimSuffix(path.Base(f.Path), path.Ext(f.Path))
+			stems[stem] = append(stems[stem], f)
+		}
+		name := dir
+		if name == "." {
+			name = "(root)"
+		}
+		var cur *Module
+		part := 0
+		flush := func() {
+			if cur != nil {
+				ix.Modules = append(ix.Modules, *cur)
+				cur = nil
+			}
+		}
+		for _, stem := range sortedKeys(stems) {
+			group := stems[stem]
+			tokens := 0
+			for _, f := range group {
+				tokens += f.Bytes / 4
+			}
+			if cur != nil && cur.Tokens+tokens > budget {
+				flush()
+			}
+			if cur == nil {
+				part++
+				id := "mod:" + name
+				if part > 1 {
+					id += "#" + itoa(part)
+				}
+				cur = &Module{ID: id, Dir: dir}
+			}
+			for _, f := range group {
+				cur.Files = append(cur.Files, f.Path)
+				cur.Lines += f.Lines
+				cur.Tokens += f.Bytes / 4
+				fileMod[f.Path] = cur.ID
+			}
+		}
+		flush()
+	}
+	// A directory split in parts: name the first part #1 too.
+	parts := map[string]int{}
+	for _, m := range ix.Modules {
+		parts[strings.SplitN(m.ID, "#", 2)[0]]++
+	}
+	for k, m := range ix.Modules {
+		if parts[m.ID] > 1 && !strings.Contains(m.ID, "#") {
+			old := m.ID
+			ix.Modules[k].ID = m.ID + "#1"
+			for f, id := range fileMod {
+				if id == old {
+					fileMod[f] = ix.Modules[k].ID
+				}
+			}
+		}
+	}
+	idx := map[string]int{}
+	for k, m := range ix.Modules {
+		idx[m.ID] = k
+	}
+	for _, s := range ix.Symbols {
+		if k, ok := idx[fileMod[s.file]]; ok {
+			ix.Modules[k].Symbols++
+		}
+	}
+	for _, e := range ix.Edges {
+		from := fileMod[fileOf(e.From)]
+		for _, t := range e.To {
+			to := fileMod[fileOf(t)]
+			if from == "" || to == "" || from == to {
+				continue
+			}
+			ix.Modules[idx[from]].FanOut++
+			ix.Modules[idx[to]].FanIn++
+		}
+	}
+}
+
+// fileOf is the file of a fact ID: file:<p>, sym:<p>#<name>.
+func fileOf(id string) string {
+	switch {
+	case strings.HasPrefix(id, "file:"):
+		return id[5:]
+	case strings.HasPrefix(id, "sym:"):
+		return strings.SplitN(id[4:], "#", 2)[0]
+	}
+	return ""
+}
+
+// finish sorts every list and records the fact IDs for Resolve.
+func (ix *Index) finish() {
+	sort.Strings(ix.Systems)
+	ix.Systems = dedupe(ix.Systems)
+	byID := func(n int, id func(int) string) func(i, j int) bool {
+		return func(i, j int) bool { return id(i) < id(j) }
+	}
+	sort.SliceStable(ix.Targets, byID(len(ix.Targets), func(i int) string { return ix.Targets[i].ID }))
+	sort.SliceStable(ix.Deps, byID(len(ix.Deps), func(i int) string { return ix.Deps[i].ID }))
+	ix.Deps = dedupeDeps(ix.Deps)
+	for _, l := range []*[]Fact{&ix.Entries, &ix.Surfaces, &ix.Tests, &ix.Docs} {
+		fs := *l
+		sort.SliceStable(fs, func(i, j int) bool { return fs[i].ID < fs[j].ID })
+	}
+	sort.SliceStable(ix.Markers, func(i, j int) bool { return lessAt(ix.Markers[i].At, ix.Markers[j].At) })
+	sort.SliceStable(ix.Symbols, func(i, j int) bool { return lessAt(ix.Symbols[i].At, ix.Symbols[j].At) })
+	sort.SliceStable(ix.Edges, func(i, j int) bool {
+		if ix.Edges[i].At != ix.Edges[j].At {
+			return lessAt(ix.Edges[i].At, ix.Edges[j].At)
+		}
+		return ix.Edges[i].From+strings.Join(ix.Edges[i].To, ",") < ix.Edges[j].From+strings.Join(ix.Edges[j].To, ",")
+	})
+	if ix.Targets == nil {
+		ix.Targets = []Target{}
+	}
+	ix.index()
+}
+
+// index builds the lookup tables of a built or loaded index.
+func (ix *Index) index() {
+	ix.byPath = map[string]int{}
+	for k, f := range ix.Files {
+		ix.byPath[f.Path] = k
+	}
+	ix.ids = map[string]bool{}
+	for _, f := range ix.Files {
+		ix.ids["file:"+f.Path] = true
+	}
+	for _, s := range ix.Symbols {
+		ix.ids[s.ID] = true
+	}
+	for _, t := range ix.Targets {
+		ix.ids[t.ID] = true
+	}
+	for _, d := range ix.Deps {
+		ix.ids[d.ID] = true
+	}
+	for _, l := range [][]Fact{ix.Entries, ix.Surfaces, ix.Tests, ix.Docs} {
+		for _, f := range l {
+			ix.ids[f.ID] = true
+		}
+	}
+	for _, m := range ix.Markers {
+		ix.ids[m.ID] = true
+	}
+	for _, m := range ix.Modules {
+		ix.ids[m.ID] = true
+	}
+}
+
+func dedupeDeps(ds []Dep) []Dep {
+	var out []Dep
+	for _, d := range ds {
+		if n := len(out); n > 0 && out[n-1].ID == d.ID {
+			out[n-1].Uses += d.Uses
+			continue
+		}
+		out = append(out, d)
+	}
+	return out
+}
+
+// lessAt orders path:line locations by path, then line as a number.
+func lessAt(a, b string) bool {
+	pa, la := splitAt(a)
+	pb, lb := splitAt(b)
+	if pa != pb {
+		return pa < pb
+	}
+	return la < lb
+}
+
+func splitAt(at string) (string, int) {
+	j := strings.LastIndex(at, ":")
+	if j < 0 {
+		return at, 0
+	}
+	n, _ := strconv.Atoi(at[j+1:])
+	return at[:j], n
+}
+
+// Resolve checks one citation against the index: a fact ID (file:, sym:,
+// build:, dep:, entry:, io:, test:, doc:, marker:, mod:), or a location
+// path:line or path:first-last whose lines exist in the file.
+func (ix *Index) Resolve(cite string) error {
+	cite = strings.TrimSpace(cite)
+	if ix.ids[cite] {
+		return nil
+	}
+	for _, pre := range []string{"file:", "sym:", "build:", "dep:", "entry:", "io:", "test:", "doc:", "marker:", "mod:"} {
+		if strings.HasPrefix(cite, pre) {
+			return fmt.Errorf("%s: no such fact in the index", cite)
+		}
+	}
+	j := strings.LastIndex(cite, ":")
+	if j < 0 {
+		if _, ok := ix.byPath[cite]; ok {
+			return nil
+		}
+		return fmt.Errorf("%s: not a fact ID or path:line", cite)
+	}
+	p, span := cite[:j], cite[j+1:]
+	k, ok := ix.byPath[p]
+	if !ok {
+		return fmt.Errorf("%s: %s is not a file of the checkout", cite, p)
+	}
+	first, last := span, span
+	if a, b, ok := strings.Cut(span, "-"); ok {
+		first, last = a, b
+	}
+	f, err1 := strconv.Atoi(first)
+	l, err2 := strconv.Atoi(last)
+	if err1 != nil || err2 != nil || f < 1 || l < f {
+		return fmt.Errorf("%s: want path:line or path:first-last", cite)
+	}
+	if n := ix.Files[k].Lines; l > n {
+		return fmt.Errorf("%s: %s has %d lines", cite, p, n)
+	}
+	return nil
+}
+
+// HasFile reports whether p is a file of the checkout.
+func (ix *Index) HasFile(p string) bool { _, ok := ix.byPath[p]; return ok }
+
+func firstHeading(s string) string {
+	for _, l := range strings.Split(s, "\n") {
+		if t := strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(l), "#=*-")); t != "" {
+			return clip(t, 80)
+		}
+	}
+	return ""
+}
+
+func itoa(n int) string { return strconv.Itoa(n) }
+
+func sortedKeys[V any](m map[string]V) []string {
+	ks := make([]string, 0, len(m))
+	for k := range m {
+		ks = append(ks, k)
+	}
+	sort.Strings(ks)
+	return ks
+}
+
+func without(xs []string, x string) []string {
+	var out []string
+	for _, y := range xs {
+		if y != x {
+			out = append(out, y)
+		}
+	}
+	return out
+}
