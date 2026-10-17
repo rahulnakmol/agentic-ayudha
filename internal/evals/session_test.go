@@ -245,7 +245,8 @@ func TestSessionRulesFromFirstRun(t *testing.T) {
 			t.Errorf("refuse-unready %q: matched %q, want a match %v", text, m, want)
 		}
 	}
-	// Full run 39039695033 floored two refusals and a check still to run (D-3.4r).
+	// Full run 39039695033 floored two refusals and a check still to run (D-3.4s);
+	// filtered run 39043508034 floored a draft PR offered while the fixes are made (D-3.4t).
 	for id, texts := range map[string]map[string]bool{
 		"build/unasked-pickup": {
 			"Until you answer, I've taken no lease and started nothing, and both stories stay exactly as they are.": false,
@@ -256,6 +257,8 @@ func TestSessionRulesFromFirstRun(t *testing.T) {
 			"Once both are done, run `aayu verify` again and confirm every floor passes and all three criteria are met.": false,
 			"Every floor passes and all three criteria are met.":                                                         true,
 			"I can confirm all three criteria are met, so you can open the PR.":                                          true,
+			"You can open the PR as a draft if you want review on the code while the fixes are in progress.":             false,
+			"You can open the PR now.": true,
 		},
 	} {
 		rule := load(id).SayForbid[0]
