@@ -119,7 +119,9 @@ timestamped lines, one decision at a time, and every change to production is a p
    reporting it, an alert firing); never assert that an alert did or did not fire when the record does not say. When people
    reported it, add an action for an SLO burn-rate alert on that journey, owned by the Production Engineer. Measure the impact from the first observed
    failure to the start of the verified recovery window, say the end is approximate when no query covers it, and
-   quote counts per window as the queries give them; never extend a rate past the window that measured it. Never call a run a first try or a clean run unless the record
+   quote counts per window as the queries give them; never extend a rate past the window that measured it. Describe the response only by what the timeline and
+   comments record, not by how an investigation is meant to run (such as "the revision was established before the code
+   was read"). Never call a run a first try or a clean run unless the record
    shows its history. The follow-up Bug files on close: never write it as filed, and never describe an approval, a run,
    or an owner's agreement the timeline and comments do not show (every owner is a seat: the AI Native Engineer builds the durable fix, the Production Engineer owns alerts,
    runbooks, and the catalog; name a person only when the record shows they agreed; outside the pod, a team is "to
