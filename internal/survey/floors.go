@@ -96,19 +96,22 @@ func entryName(ix *Index, e Fact) string {
 // registration is reachable from the runner's main through the call graph.
 func checkRunners(ix *Index, m *Modernisation, add func(string, ...any)) {
 	var runnable []Fact
+	programs := map[string]bool{} // a file with a shebang and a main guard is one program
 	for _, e := range ix.Entries {
 		if e.Kind == "main" || e.Kind == "script" {
 			runnable = append(runnable, e)
+			f, _ := splitAt(e.At)
+			programs[f] = true
 		}
 	}
 	registered := map[string][]Fact{}
 	for _, b := range ix.Builtins {
 		registered[b.Detail] = append(registered[b.Detail], b)
 	}
-	reach := runnerReach(ix)
+	reach, drives := runnerReach(ix)
 	for _, g := range m.CaseSets {
-		if len(runnable) > 1 && len(g.Runners) == 0 {
-			add("case set %s: name its runners (the programs that run it, of %s), and its inputs when they are files of the checkout: this checkout has %d programs", g.ID, listAt(runnable, 4), len(runnable))
+		if len(programs) > 1 && len(g.Runners) == 0 {
+			add("case set %s: name its runners (the programs that run it, of %s), and its inputs when they are files of the checkout: this checkout has %d programs", g.ID, listAt(runnable, 4), len(programs))
 		}
 		var runners []Fact
 		for _, r := range g.Runners {
@@ -117,7 +120,12 @@ func checkRunners(ix *Index, m *Modernisation, add func(string, ...any)) {
 			case k >= 0:
 				runners = append(runners, runnable[k])
 			case t >= 0: // a test harness that runs the cases through the library
-				runners = append(runners, Fact{ID: ix.Tests[t].ID, Kind: "script", At: ix.Tests[t].At})
+				h := Fact{ID: ix.Tests[t].ID, Kind: "script", At: ix.Tests[t].At}
+				if !drives(h) {
+					add("case set %s: runner %s is a test file that calls no function and loads no file outside the tests, so it cannot run the cases through the program: name a program or a harness that drives it", g.ID, r)
+					continue
+				}
+				runners = append(runners, h)
 			default:
 				add("case set %s: runner %q is not a main or script entry of the index (%s), nor a test file", g.ID, r, listAt(runnable, 4))
 			}
@@ -170,8 +178,10 @@ func checkRunners(ix *Index, m *Modernisation, add func(string, ...any)) {
 // from a runner: in a function the runner's main reaches through call edges
 // (ambiguous edges count, so the floor never fails on a call it cannot
 // resolve), or at file scope in a file the runner loads (its own, or one
-// defining a function it reaches).
-func runnerReach(ix *Index) func(Fact, []Fact) bool {
+// defining a function it reaches). It also returns whether a runner drives
+// the program: it reaches a function defined outside the test files, or
+// imports or includes such a file.
+func runnerReach(ix *Index) (reach func(Fact, []Fact) bool, drives func(Fact) bool) {
 	next := map[string][]string{}
 	for _, e := range ix.Edges {
 		if e.Kind == "call" {
@@ -232,7 +242,7 @@ func runnerReach(ix *Index) func(Fact, []Fact) bool {
 		}
 		return false
 	}
-	return func(r Fact, regs []Fact) bool {
+	reach = func(r Fact, regs []Fact) bool {
 		for _, b := range regs {
 			enc := enclosing(b.At)
 			if f, _ := splitAt(b.At); enc == "" && loads(r, f) || enc != "" && reached(r)[enc] {
@@ -241,6 +251,47 @@ func runnerReach(ix *Index) func(Fact, []Fact) bool {
 		}
 		return false
 	}
+	test := map[string]bool{}
+	for _, f := range ix.Files {
+		test[f.Path] = f.Role == "test"
+	}
+	loaded := map[string][]string{} // file → the checkout files it imports or includes
+	for _, e := range ix.Edges {
+		if e.Kind != "call" && strings.HasPrefix(e.From, "file:") {
+			for _, to := range e.To {
+				if f, ok := strings.CutPrefix(to, "file:"); ok {
+					loaded[strings.TrimPrefix(e.From, "file:")] = append(loaded[strings.TrimPrefix(e.From, "file:")], f)
+				}
+			}
+		}
+	}
+	drives = func(r Fact) bool {
+		for f, syms := range byFile {
+			for _, s := range syms {
+				if !test[f] && reached(r)[s.ID] {
+					return true
+				}
+			}
+		}
+		// A spec calls the program at file scope, where the index records no
+		// calls: it drives the program when it loads a file outside the tests,
+		// itself or through a test helper.
+		f, _ := splitAt(r.At)
+		seen := map[string]bool{f: true}
+		for queue := []string{f}; len(queue) > 0; queue = queue[1:] {
+			for _, to := range loaded[queue[0]] {
+				if _, ok := test[to]; ok && !test[to] {
+					return true
+				}
+				if !seen[to] {
+					seen[to] = true
+					queue = append(queue, to)
+				}
+			}
+		}
+		return false
+	}
+	return reach, drives
 }
 
 // mentions reports whether text names a builtin: a dotted name anywhere

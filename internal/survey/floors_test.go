@@ -3,6 +3,7 @@ package survey
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -100,8 +101,8 @@ func TestFloorRunners(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(ix.Builtins) != 3 {
-		t.Fatalf("builtins = %v; want print, Math.sqrt, and the file-scope Extra.f only (not the commented registration, strcmp, or printf)", ix.Builtins)
+	if len(ix.Builtins) != 4 {
+		t.Fatalf("builtins = %v; want print, Math.sqrt, the file-scope Extra.f, and the constructor's JSON.parse only (not the commented registration, strcmp, or printf)", ix.Builtins)
 	}
 	// Two declarations on one header line are two entry points.
 	if !slices.ContainsFunc(ix.Entries, func(e Fact) bool { return e.ID == "entry:interp.h:20#beta" && e.At == "interp.h:20" }) {
@@ -130,12 +131,66 @@ func TestFloorRunners(t *testing.T) {
 		{"negated", "the runner that registers it", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{tests}, []string{"tests/math.js"} }), "case set G1", false},
 		{"negated", "a builtin both runners register", set(func(g *CaseSet) { g.Inputs = []string{"tests/hello.js"} }), "case set G1", false},
 		{"negated", "the file excluded, naming what decided it", set(func(g *CaseSet) {
-			g.Inputs, g.Exclude = []string{"tests/*.js"}, []string{"tests/math.js needs Math (Q1)", "tests/extra.js needs Extra (Q1)"}
+			g.Inputs, g.Exclude = []string{"tests/*.js"}, []string{"tests/math.js needs Math (Q1)", "tests/extra.js needs Extra (Q1)", "tests/json.js needs JSON (Q1)"}
 		}), "case set G1", false},
 		{"match", "a file-scope registration in a file the runner never loads", set(func(g *CaseSet) { g.Inputs = []string{"tests/extra.js"} }),
 			"tests/extra.js:1 calls Extra.f, which runner entry:cli.cpp:3 does not register", true},
 		{"negated", "the runner that loads that file", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{tests}, []string{"tests/extra.js"} }), "case set G1", false},
+		{"negated", "a runner that constructs the object whose constructor registers it", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{tests}, []string{"tests/json.js"} }), "case set G1", false},
+		{"match", "a runner that only declares a pointer to that object", set(func(g *CaseSet) { g.Inputs = []string{"tests/json.js"} }),
+			"tests/json.js:1 calls JSON.parse, which runner entry:cli.cpp:3 does not register", true},
+		{"match", "a test file that drives nothing as the runner", set(func(g *CaseSet) { g.Runners = []string{"test:tests/hello.js"} }),
+			"runner test:tests/hello.js is a test file that calls no function and loads no file outside the tests", true},
 		{"near miss", "a comment, a string, and another object's sqrt", set(func(g *CaseSet) { g.Inputs = []string{"tests/nearmiss.js"} }), "case set G1", false},
 		{"near miss", "a title about Math without naming a builtin", set(func(g *CaseSet) { g.Title = "Math results (sqrt) and myMath.sqrt" }), "case set G1", false},
+	})
+}
+
+// A program counts once however many entries it has (a shebang and a main
+// guard), and a test file runs cases only when it drives the program: it
+// reaches a function outside the test files, or loads such a file, directly
+// or through a helper.
+func TestFloorRunnerPrograms(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, body string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("tool.py", "#!/usr/bin/env python3\nimport lib\n\n\ndef run():\n    print(lib.render(1))\n\n\nif __name__ == \"__main__\":\n    run()\n")
+	write("lib.py", "def render(x):\n    return str(x)\n")
+	write("tests/test_render.py", "import helpers\n\n\ndef test_render():\n    assert helpers.check(1)\n")
+	write("tests/helpers.py", "import lib\n\n\ndef check(x):\n    return lib.render(x) == str(x)\n")
+	write("tests/make_data.py", "def make():\n    return [1, 2]\n")
+	write("spec/render_spec.py", "import lib\n\nassert lib.render(3) == \"3\"\n")
+	build := func() *Index {
+		ix, err := Build(context.Background(), dir, Options{Git: noGit})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return ix
+	}
+	ix := build()
+	if n := len(slices.DeleteFunc(slices.Clone(ix.Entries), func(e Fact) bool { return e.Kind != "main" && e.Kind != "script" })); n != 2 {
+		t.Fatalf("entries = %v; want tool.py's shebang and its main guard", ix.Entries)
+	}
+	base := func() Draft {
+		return Draft{Modernisation: &Modernisation{CaseSets: []CaseSet{{ID: "G1", Title: "Rendering", From: []string{"sym:lib.py#render"}, Compare: "exact stdout"}}}}
+	}
+	set := func(f func(g *CaseSet)) func(d *Draft) { return func(d *Draft) { f(&d.Modernisation.CaseSets[0]) } }
+	runFloorCases(t, ix, base, []floorCase{
+		{"negated", "one program with a shebang and a main guard, no runners", func(*Draft) {}, "name its runners", false},
+		{"match", "a test file that calls no program function", set(func(g *CaseSet) { g.Runners = []string{"test:tests/make_data.py"} }),
+			"runner test:tests/make_data.py is a test file that calls no function and loads no file outside the tests", true},
+		{"near miss", "a test that drives the program through a helper", set(func(g *CaseSet) { g.Runners = []string{"test:tests/test_render.py"} }), "case set G1", false},
+		{"near miss", "a spec that calls the program only at file scope, after importing it", set(func(g *CaseSet) { g.Runners = []string{"test:spec/render_spec.py"} }), "case set G1", false},
+	})
+	write("other.py", "#!/usr/bin/env python3\nimport lib\nprint(lib.render(2))\n")
+	runFloorCases(t, build(), base, []floorCase{
+		{"match", "a second program, no runners", func(*Draft) {}, "case set G1: name its runners", true},
 	})
 }
