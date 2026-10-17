@@ -84,8 +84,10 @@ type Options struct {
 	EnsureEnv func(ctx context.Context, root, host string) (agentenv.HostStatus, error)
 	// DelegateExec runs a delegation receiver's CLI (build --delegate, tests); nil runs the command.
 	DelegateExec delegate.Exec
-	RunPoll      time.Duration // how often release polls a workflow run; 0 is DefaultRunPoll (WP7.8)
-	DevicePoll   time.Duration // how often the presence check polls GitHub's device flow (tests); 0 uses GitHub's interval
+	// Sleep waits during a build's usage-limit pause (tests); nil waits on a timer.
+	Sleep      func(ctx context.Context, d time.Duration) error
+	RunPoll    time.Duration // how often release polls a workflow run; 0 is DefaultRunPoll (WP7.8)
+	DevicePoll time.Duration // how often the presence check polls GitHub's device flow (tests); 0 uses GitHub's interval
 	// EvolveGate is the eval-first gate (internal/evals.Gate) for `evolve`
 	// (WP7.7). The binary injects it: internal/evals replays CLI calls, so it
 	// imports this package and cannot be imported by it.

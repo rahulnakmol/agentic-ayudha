@@ -276,6 +276,9 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		}
 		res.Worktree, res.Branch = delegate.Worktree(root, n, dlg.receiver, dlg.handoff), dlg.branch
 		st.Branch = res.Branch
+		if started, err := time.Parse(time.RFC3339, st.StartedAt); err == nil && b.WallHours > 0 {
+			dlg.wallEnd = started.Add(time.Duration(b.WallHours * float64(time.Hour)))
+		}
 	}
 
 	// The worktree: cut from origin/dev, or resumed from the story branch.
@@ -320,6 +323,23 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 
 	if write != nil {
 		if err := write(ctx, res.Worktree); err != nil {
+			// A usage limit build cannot wait out here is a pause, not a
+			// failure: no attempt is counted, and the wall clock runs on.
+			var pause *usagePause
+			if errors.As(err, &pause) {
+				dlg.event(e.Now(), dlgPaused, pause.why)
+				dlg.fill(res.Delegation)
+				_ = e.saveDelegation(ctx, dlg)
+				res.Next = fmt.Sprintf("run `aayu build %d --delegate %s --local` again once the limit resets; a pause is no failed attempt", n, dlg.receiver)
+				if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
+					return err
+				}
+				_ = e.Emit(res, func(w io.Writer) error {
+					_, err := fmt.Fprintf(w, "#%d: paused, not failed: %s\n  budget: %s\n  next: %s\n", n, pause.why, res.Budget.Line(), res.Next)
+					return err
+				})
+				return WithNext(Errorf(ExitBlocked, "build #%d paused: %s", n, pause.why), res.Next)
+			}
 			dlg.event(e.Now(), dlgFailed, clipText(err.Error(), 200))
 			_ = e.saveDelegation(ctx, dlg)
 			return Errorf(ExitExternal, "build #%d --delegate %s: %v", n, dlg.receiver, err)

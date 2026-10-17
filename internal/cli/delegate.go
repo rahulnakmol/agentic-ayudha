@@ -66,6 +66,7 @@ type delegation struct {
 	root     string
 	body     string // the story's body (untrusted; quoted in the brief as data)
 	bot      identity.Bot
+	wallEnd  time.Time // when the build's wall-time budget ends; zero without one
 }
 
 // Delegation statuses (delegate.State.Status).
@@ -78,6 +79,7 @@ const (
 	dlgCapped    = "capped"
 	dlgFailed    = "failed"
 	dlgMerged    = "merged"
+	dlgPaused    = "paused" // the local receiver hit its subscription usage limit
 )
 
 const delegateMarker = "<!-- aayudha:delegate -->"
@@ -747,16 +749,70 @@ func (e *Env) localWriter(d *delegation, prompt string) func(context.Context, st
 		if l, err := e.Config(); err == nil && l.Config.Delegate.LocalTimeoutMinutes > 0 {
 			limit = time.Duration(l.Config.Delegate.LocalTimeoutMinutes) * time.Minute
 		}
-		ctx, cancel := context.WithTimeout(ctx, limit)
-		defer cancel()
 		env := delegate.ScrubEnv(e.Environ, d.receiver, gh)
-		return e.act(ctx, d, "delegate.local-run", map[string]any{"bin": filepath.Base(d.bin), "worktree": wt, "prompt_sha256": delegate.BriefHash(prompt)}, func(ctx context.Context) error {
-			out, err := e.delegateExec()(ctx, wt, env, "", d.bin, delegate.LocalArgs(d.receiver, d.bin, wt, prompt)...)
-			if p := delegate.Proved(out, prompt); p != "" {
-				d.state.Proved = p
+		for {
+			var out string
+			err := func() error {
+				ctx, cancel := context.WithTimeout(ctx, limit)
+				defer cancel()
+				return e.act(ctx, d, "delegate.local-run", map[string]any{"bin": filepath.Base(d.bin), "worktree": wt, "prompt_sha256": delegate.BriefHash(prompt)}, func(ctx context.Context) error {
+					var err error
+					out, err = e.delegateExec()(ctx, wt, env, "", d.bin, delegate.LocalArgs(d.receiver, d.bin, wt, prompt)...)
+					if p := delegate.Proved(out, prompt); p != "" {
+						d.state.Proved = p
+					}
+					return err
+				})
+			}()
+			if err == nil {
+				return nil
 			}
-			return err
-		})
+			// A subscription usage limit pauses the build until its window
+			// resets, then runs the receiver again (founder decision,
+			// 2026-10-17). A pause is no failed attempt; the wall clock runs on.
+			limited, resets := delegate.UsageLimit(out, e.Now(), time.Local)
+			if !limited {
+				return err
+			}
+			name := delegate.Names[d.receiver]
+			switch {
+			case resets.IsZero():
+				return &usagePause{fmt.Sprintf("%s's subscription usage limit was reached and it printed no reset time", name)}
+			case !d.wallEnd.IsZero() && resets.After(d.wallEnd):
+				return &usagePause{fmt.Sprintf("%s's subscription usage limit resets at %s, after the build's wall-time budget ends at %s",
+					name, resets.UTC().Format(time.RFC3339), d.wallEnd.UTC().Format(time.RFC3339))}
+			}
+			d.event(e.Now(), dlgPaused, fmt.Sprintf("%s's subscription usage limit; resumes at %s", name, resets.UTC().Format(time.RFC3339)))
+			_ = e.saveDelegation(ctx, d)
+			pp := e.progress(fmt.Sprintf("Paused: %s's subscription usage limit; resuming at %s", name, resets.Local().Format("15:04 MST")))
+			if err := e.pauseFor(ctx, resets.Sub(e.Now())+time.Minute); err != nil {
+				pp.Done(ui.StatusFail, "stopped while paused")
+				return err
+			}
+			pp.Done(ui.StatusPass, "the window reset")
+			d.event(e.Now(), dlgWorking, "resumed after the usage limit reset")
+		}
+	}
+}
+
+// usagePause is a local receiver's subscription usage limit that build cannot
+// wait out in this run: no reset time, or one after the wall-time budget.
+type usagePause struct{ why string }
+
+func (p *usagePause) Error() string { return p.why }
+
+// pauseFor waits for d or until ctx ends (Options.Sleep in tests).
+func (e *Env) pauseFor(ctx context.Context, d time.Duration) error {
+	if e.Sleep != nil {
+		return e.Sleep(ctx, d)
+	}
+	t := time.NewTimer(max(d, 0))
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
 	}
 }
 
