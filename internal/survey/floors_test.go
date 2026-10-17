@@ -144,10 +144,14 @@ func TestFloorRunners(t *testing.T) {
 		t.Errorf("entries = %v; want class Box in util.hxx", ix.Entries)
 	}
 	// An export annotation before a declaration does not hide it.
-	for at, name := range map[string]string{"util.hxx:7": "function exported_api", "util.hxx:8": "function exported_attr", "util.hxx:9": "function exported_old", "util.hxx:12": "method Exported::run"} {
+	for at, name := range map[string]string{"util.hxx:7": "function exported_api", "util.hxx:8": "function exported_attr", "util.hxx:9": "function exported_old", "util.hxx:12": "method Exported::run", "util.hxx:14": "function twice"} {
 		if !slices.ContainsFunc(ix.Entries, func(e Fact) bool { return e.At == at && e.Detail == name }) {
-			t.Errorf("entries = %v; want %s after its attribute", ix.Entries, name)
+			t.Errorf("entries = %v; want %s at %s", ix.Entries, name, at)
 		}
+	}
+	// Three overloads on one line are three entry points.
+	if n := len(slices.DeleteFunc(slices.Clone(ix.Entries), func(e Fact) bool { return e.At != "util.hxx:15" })); n != 3 {
+		t.Errorf("entries = %v; want the three overloads of over on util.hxx:15", ix.Entries)
 	}
 	if slices.ContainsFunc(ix.Entries, func(e Fact) bool {
 		return strings.Contains(e.Detail, "visibility") || strings.Contains(e.Detail, "deprecated")

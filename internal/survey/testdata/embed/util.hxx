@@ -11,3 +11,5 @@ class __declspec(dllexport) Exported {
 public:
   void run();
 };
+inline int twice(int x) { return 2 * x; }
+void over(int a); void over(double b); void over(char c);
