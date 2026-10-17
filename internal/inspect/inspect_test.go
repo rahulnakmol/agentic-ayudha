@@ -597,6 +597,7 @@ func TestDocsOnly(t *testing.T) {
 		{"diff --git a/internal/auth.go b/docs/auth.go\nsimilarity index 100%\nrename from internal/auth.go\nrename to docs/auth.go\n", false},
 		{"diff --git a/docs/BUILD-PLAN.md b/docs/archive/plan.md\nsimilarity index 90%\nrename from docs/BUILD-PLAN.md\nrename to docs/archive/plan.md\n--- a/docs/BUILD-PLAN.md\n+++ b/docs/archive/plan.md\n@@ -1 +1 @@\n-# Plan\n+# Old plan\n", false},
 		{"diff --git a/docs/a.md b/docs/guide/a.md\nsimilarity index 100%\nrename from docs/a.md\nrename to docs/guide/a.md\n", true},
+		{"diff --git \"a/docs/\\303\\251.md\" \"b/docs/\\303\\251.md\"\n--- \"a/docs/\\303\\251.md\"\n+++ \"b/docs/\\303\\251.md\"\n@@ -1 +1 @@\n-a\n+b\n", true},
 	} {
 		if got := DocsOnly(ParseDiff(tc.diff)); got != tc.want {
 			t.Errorf("DocsOnly(%q) = %v, want %v", tc.diff, got, tc.want)

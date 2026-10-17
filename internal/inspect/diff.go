@@ -51,15 +51,17 @@ func ParseDiff(diff string) []DiffFile {
 			}
 		case f == nil:
 		case h == nil && strings.HasPrefix(line, "rename from "):
-			f.From = strings.TrimPrefix(line, "rename from ")
+			f.From = gitPath(strings.TrimPrefix(line, "rename from "))
+		case h == nil && strings.HasPrefix(line, "rename to "):
+			f.Path = gitPath(strings.TrimPrefix(line, "rename to "))
 		case h == nil && strings.HasPrefix(line, "--- "):
-			oldPath = strings.TrimPrefix(strings.TrimPrefix(line, "--- "), "a/")
+			oldPath = strings.TrimPrefix(gitPath(strings.TrimPrefix(line, "--- ")), "a/")
 			f.New = oldPath == "/dev/null"
 			if !f.New && oldPath != f.Path {
 				f.From = oldPath
 			}
 		case h == nil && strings.HasPrefix(line, "+++ "):
-			p := strings.TrimPrefix(line, "+++ ")
+			p := gitPath(strings.TrimPrefix(line, "+++ "))
 			if p == "/dev/null" {
 				f.Deleted, f.Path = true, oldPath
 			} else {
@@ -141,6 +143,17 @@ func (f DiffFile) Find(quote string) int {
 		}
 	}
 	return found
+}
+
+// gitPath decodes a path git quoted because it holds non-ASCII or control
+// characters ("b/docs/\303\251.md").
+func gitPath(p string) string {
+	if strings.HasPrefix(p, `"`) {
+		if u, err := strconv.Unquote(p); err == nil {
+			return u
+		}
+	}
+	return p
 }
 
 // isTestPath reports whether p is a test file in a common convention.
