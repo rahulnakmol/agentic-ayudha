@@ -147,7 +147,10 @@ citation.
    behind: anything written to an append-only record, published, or relied on by another reader is a one-way door for
    that data, while a plan, a scope, or a split is a two-way door. Count what the option writes now as well as what
    it defers: records written now in the old shape stay that way, and a code change is a two-way door only until
-   records that depend on it are written. When an option has both, say which part is which.
+   records that depend on it are written. When an option has both, say which part is which. When the owning twin is
+   the Founder, one cited sentence before `Door:` says which perspective dominates this decision (operations: cost,
+   risk, people, process; technology: architecture, build or buy, technical risk; product: what, for whom, why) and
+   why it outweighs the other two; the Facts carry at least one cited fact for each perspective.
 5. `## Cost of waiting`: one or two items, what waiting a day or a week costs, cited; no projected numbers.
 6. `## Pre-mortem`: "Pythia's pre-mortem: assume option N failed." in your own voice, then two items, each a
    likely reason specific to the recommended option (not a risk every option shares), with its citation, and "Early warning:" with the observable check
