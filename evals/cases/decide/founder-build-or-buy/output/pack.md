@@ -38,7 +38,8 @@ Option 1: it serves 41 of 50 requests at the lowest cost (#310, `ledger/plans/30
 dominates: Goal #300 is won by the rules clinics ask for, and the other perspectives only add cost or a dependency
 (`ops/goals/300.md`). Not doing: an engine of either kind this quarter (#311).
 Door: two-way door; three rules in `Eligible`, which writes nothing, commit no contract (`internal/booking/eligible.go:10-24`).
-The engine is weeks of build spent and the annual contract has no exit (`ops/budget/2026-Q4.md`).
+The engine is a one-way door for six weeks of the only engineer, and the annual contract one for its money
+(`ledger/plans/301/estimate.json`, `ops/budget/2026-Q4.md`).
 
 ## Cost of waiting
 

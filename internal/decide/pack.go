@@ -161,7 +161,10 @@ func CheckPackWith(md string, known func(cite string) bool) []string {
 		}
 	}
 	if n := seats.Words(md); n > PackMaxWords {
-		out = append(out, fmt.Sprintf("%d words: a pack a busy human decides from in five minutes is at most %d; cite detail instead of pasting it", n, PackMaxWords))
+		// The target sits a tenth under the limit, so a revision that cuts exactly what it is told lands inside it.
+		aim := PackMaxWords * 9 / 10
+		out = append(out, fmt.Sprintf("%d words: a pack a busy human decides from in five minutes is at most %d; cut at least %d words, to about %d, "+
+			"by dropping the weakest fact, trade-off, or question and citing detail instead of pasting it", n, PackMaxWords, n-aim, aim))
 	}
 	return append(out, seats.CheckGroundingWith(md, known)...)
 }

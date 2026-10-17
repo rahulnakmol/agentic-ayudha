@@ -147,7 +147,9 @@ citation.
 4. `## Recommendation`: the option and why, in two or three cited sentences that follow from the facts. Then one
    line that starts `Door:`, contains the words "one-way door" or "two-way door", and cites what the option leaves
    behind: anything written to an append-only record, published, or relied on by another reader is a one-way door for
-   that data, while a plan, a scope, or a split is a two-way door. Count what the option writes now as well as what
+   that data, while a plan, a scope, or a split is a two-way door. Time is spent for good: an option that commits
+   weeks of a scarce team (or money under a contract with no exit) is a one-way door for that time or money, even
+   when its code could later change; only a change small enough to undo cheaply is a two-way door. Count what the option writes now as well as what
    it defers: records written now in the old shape stay that way, and a code change is a two-way door only until
    records that depend on it are written. When an option has both, say which part is which. When a fact constrains
    how the recommended option must be carried out (a reader that refuses what the option writes, a Decision on older
