@@ -2,6 +2,22 @@
   "story": 397,
   "branch": "story/397-fix-at-the-codebase-layer-feedback-330-p",
   "started_at": "2026-10-17T15:18:01Z",
-  "failed_attempts": 0,
-  "checkpoints": null
+  "failed_attempts": 1,
+  "failures_by_layer": {
+    "L09": 1
+  },
+  "checkpoints": [
+    {
+      "k": 1,
+      "n": 1,
+      "attempt": 1,
+      "commit": "5efdf267f529cb5734c13b4512395e60f750c22a",
+      "layers": [
+        "L09"
+      ],
+      "verify": "miss",
+      "detail": "coverage fail",
+      "at": "2026-10-17T15:32:04Z"
+    }
+  ]
 }
