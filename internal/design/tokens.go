@@ -213,9 +213,10 @@ func pxValue(s string) (float64, bool) {
 }
 
 // literalColor finds colour values in markup and CSS: after an attribute's
-// quote, a declaration's colon, or an argument separator, so text such as
-// "#1042" is not read as a colour.
-var literalColor = regexp.MustCompile(`[:=("',]\s*(#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\))`)
+// quote, a declaration's colon, a function's opening parenthesis, or an
+// argument separator, so text such as "#1042" or an issue reference in
+// parentheses, "(#423)", is not read as a colour.
+var literalColor = regexp.MustCompile(`(?:[:="',]|[\w-]\()\s*(#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\))`)
 
 // CheckLiterals returns the colour literals in a text artifact (an SVG or HTML
 // mockup) that are not token values. CSS custom properties (var(--…)) are

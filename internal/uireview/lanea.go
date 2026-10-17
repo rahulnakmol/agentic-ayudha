@@ -46,7 +46,8 @@ type Run struct {
 	Error string `json:"error,omitempty"`
 }
 
-func schema() []byte {
+// Schema is the JSON Schema of a lane A reply.
+func Schema() []byte {
 	kinds, _ := json.Marshal(Kinds)
 	personas, _ := json.Marshal(Personas)
 	return []byte(`{"type":"object","additionalProperties":false,"required":["findings","nielsen","personas","rebuild"],"properties":{
@@ -102,7 +103,7 @@ func Prompt(c Capture, minTargetPx int, effort string) (models.Request, error) {
 // A state where fewer than Agree runs answer makes the lane fail.
 func LaneA(ctx context.Context, complete func(context.Context, models.Request) (models.Response, error), caps []Capture, k, minTargetPx int, effort, model string) (Lane, error) {
 	l := Lane{Name: "A", Disposition: Ship, Findings: []Finding{}, Tools: model}
-	sch := schema()
+	sch := Schema()
 	for _, c := range caps {
 		if c.Error != "" || c.Rest == "" {
 			l.Errors = append(l.Errors, fmt.Sprintf("%s: no capture to review: %s", c.ID, c.Error))

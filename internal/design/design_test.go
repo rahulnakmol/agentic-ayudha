@@ -119,8 +119,9 @@ func TestNonTokenColourFailsRegardlessOfPixels(t *testing.T) {
 
 func TestMockupLiteralsAndFigmaVariables(t *testing.T) {
 	tok := tokens(t)
-	svg := []byte(`<svg><rect fill="#1F5BD1"/><rect fill="var(--ay-color-surface)"/><text fill="#fff">ok</text><rect stroke="#ff00aa"/></svg>`)
-	if got := tok.CheckLiterals("list.svg", svg); len(got) != 1 || got[0].Value != "#ff00aa" {
+	svg := []byte(`<svg><rect fill="#1F5BD1"/><rect fill="var(--ay-color-surface)"/><text fill="#fff">ok</text><rect stroke="#ff00aa"/>` +
+		`<text>Order #1042 (#423)</text><rect style="filter: drop-shadow(#00ff00 0 1px)"/></svg>`)
+	if got := tok.CheckLiterals("list.svg", svg); len(got) != 2 || got[0].Value != "#ff00aa" || got[1].Value != "#00ff00" {
 		t.Fatalf("literals: %v", got)
 	}
 	colour, typo := tok.CheckVariables([]Variable{
@@ -160,8 +161,9 @@ func TestFlagAndCodeConnect(t *testing.T) {
 	mapped := CodeConnect(map[string][]byte{
 		"src/Button.figma.tsx": []byte(`figma.connect(Button, "https://www.figma.com/design/AbCdEf123/Aayudha-UI?node-id=1-2&m=dev", {})`),
 		"Badge.kt":             []byte(`@FigmaConnect(url = "https://figma.com/file/AbCdEf123/x?node-id=9%3A4")`),
+		"Table.figma.tsx":      []byte(`figma.connect(Table, "https://www.figma.com/design/AbCdEf123/x?node-id=3-30")`), // a second part that starts with 3
 	})
-	if got := mapped["AbCdEf123"]; len(got) != 2 || got[0] != "1:2" || got[1] != "9:4" {
+	if got := mapped["AbCdEf123"]; len(got) != 3 || got[0] != "1:2" || got[1] != "3:30" || got[2] != "9:4" {
 		t.Fatalf("code connect: %v", mapped)
 	}
 	if miss := Unmapped(mapped, "AbCdEf123", []string{"1:2", "3:3"}); len(miss) != 1 || miss[0] != "3:3" {

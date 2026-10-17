@@ -23,6 +23,7 @@ adds a failing case here before any skill diff.
 | `persona` | `{ seat, stage, practice, task, draft, planted }`: a persona case (WP5.1b). `input` is the grounding (Markdown) and `draft` the seat twin's recorded answer at the team `stage`. Tier 1 runs the evidence rule (`seats.CheckGrounding`: every claim about code, architecture, risk, or progress cited, every citation found in the grounding) and the stage check (`seats.CheckStage`: the `practice`'s artefact for the stage as a heading, no other stage's, at most 400 words at a startup); `seat` must be the skill's Accountable seat. `planted`, when set, is the same answer with a planted uncited claim, which the evidence rule must catch |
 | `pack` | `{ seat, stage, question, draft, incomplete }`: a decision-pack case (WP5.1b, D-5.6b). `question` must route to `seat` (`decide.OwningSeat`); `input` is the grounding (what `aayu decide --pack` printed plus what the twin read) and `draft` the recorded pack, which must pass `decide.CheckPack` (every part in order, one-sentence question, two or three options, a named door, the decision last, at most 500 words, every claim cited from the grounding). `incomplete`, when set, is a pack missing a part, which must fail. Tier 2 has the decide skill write the pack in the owning twin's persona and revise once on the findings; the rubric's first item is "a busy human can decide from this in under five minutes" |
 | `feedback`, `reproduce` | An evolve case (WP7.7): the accepted Feedback issue it reproduces, and the directory holding the old skill's recorded run (the `output/` artifacts under that name). Tier 1 must fail on that run and pass on `output/` |
+| `[ux]` | A UX case (`internal/evals/ux.go`) for one of the UX Researcher's skills: `output` is the recorded run's files. The design stages (`research`, `wireframe`, `mockup`, `prototype`) take `feature`, `upstream` (the earlier stages' recorded directories, research first, built and pinned as the ledger holds them), `states` (the Completion Goal states every stage must have), `team`, `practice` (research: the playbook entry whose team-stage artefact the notes carry), and `context` (more files the host reads: tokens, the design-system summary, a Figma file); `review` takes `capture` (a recorded `aayu review` capture with both screenshots) and `planted` or `clean` (the kinds lane B measured as defects or as clean); `polish` takes `page` (the page before the fix), `planted`, and `context` (the critique); `baseline` takes `sha` and `env`. Tier 1 runs each skill's floors on `output` (below) |
 | `[tier2]` | `rubric` (file), `verb`: the registry verb the skill stands in for, when the skill is not itself a verb (the skill model is that verb's registry lane on the direct host, with the lane's registry alternative as the fallback), and `references`: files under the skill's `references/` that the host reads for this case, sent after the skill body; `draft` (`slice` or `plan`) and `issue`: the skill replies with that verb's draft, which runs through `aayu slice` or `aayu plan`'s checks against the case's `github/` fixture of `issue` before the judge (WP5.4); `human`: the scripted human of a grill conversation case (WP5.3b, below); `session`: the world of a session case (D-3.4f, below) |
 
 ## Tier 1: every PR
@@ -103,12 +104,29 @@ fails scores 1 without the judge. The judge sees the persona, the stage, and the
 helpful nudging, grounded citations, senior-practitioner realism for the seat, and stage fit: `retro/em-startup` and
 `retro/em-enterprise` run the same scenario, so their depth must differ while both stay grounded.
 
+A UX case's skill replies with the files it produces (JSON `{files: [{path, content}]}`), and its floors run before
+the judge; a reply that fails them gets the findings once and revises, as a host does when the binary refuses, and one
+that still fails scores 1. The floors: for the design stages, `aayu <stage>`'s own checks (`design.Build` against the
+upstream manifests; the prototype's figma-diff gate needs a Figma file and a running app, so only its static checks run),
+every Completion Goal state, research references only from the host's search results and quotations word for word from
+the data plus the team stage's artefact, and token-only colours in a prototype's code; for `polish`, token-only colours,
+every control kept, and every finding reported in `polish.md`; for `baseline`, the commit checked out before `aayu
+baseline --sha`, the app on the case's target and never production, no GitHub write, and nothing discarded. The
+mockups' and polished pages' HTML also go through lane B in Chromium (impeccable, axe, the focus-indicator and 44 px
+probes): no contrast, focus, target, label, or keyboard finding may remain (tier 1 reports this floor n/a without
+`AAYU_FLOOR_WEB=1`; CI `floors-web` runs it). A `review` run is lane A itself: the ui-review lane's model gets
+`uireview.Prompt` on the recorded capture (both screenshots, the markup, the tree), once per eval run with no revision,
+and must report every planted kind at severity 2 or more and no clean kind. The judge reads the files (or lane A's
+JSON), never a rendering: it cannot see pixels, so layout and visual hierarchy are judged from the markup and styles
+(D-6.5b).
+
 Tier 2 runs in groups (`[[groups]]` in `eval.toml`), one `evals.yml` job per group, each with its own `max_usd`, so
 one group cannot use up another's cap: `brief` (the `brief/` cases, 12 USD), `personas` (the `retro/` and `decide/`
 persona cases, 20 USD), `conversations` (the grill conversation cases of WP5.3b and WP5.8, 60 USD, advisory until a run meets
 the bar, D-5.3b.g), `tell` (the `tell/` cases, 8 USD, advisory and run on dispatch only until it holds a mean of at least 4.0 on two
 consecutive full runs, D-7.5b), `host-skills` (the build, verify, and ready session cases, 25 USD, advisory and on
-dispatch only, D-3.4f), and `skills` (every other case, 6 USD).
+dispatch only, D-3.4f), `ux` (the UX Researcher's skills, 35 USD, advisory and on dispatch only, D-6.5b), and
+`skills` (every other case, 6 USD).
 Pushes to `dev` do not run the `brief` group; it runs nightly, on dispatch (input `group` picks one group), and on
 pushes to `rolling` and `main`. The advisory `conversations` and `personas` groups never run nightly or on promotion
 (`events` in `eval.toml`): only on dispatch and on pushes to `dev` that change their own files (`skills/grill/`, the

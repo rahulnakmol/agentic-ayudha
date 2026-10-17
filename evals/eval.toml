@@ -105,6 +105,18 @@ max_usd = 25.0
 gate = "advisory"
 events = ["workflow_dispatch"]
 
+# The UX Researcher's skills (research, wireframe, mockup, prototype, review, polish, baseline): two cases each, with
+# deterministic floors per skill (internal/evals/ux.go) before the judge. Advisory until two consecutive full runs hold
+# a mean of 4.0 for every skill (founder, 2026-10-17); then a PR proposes making it gate. Dispatch only, so every run's
+# spend is chosen: 14 cases x 5 runs. The mockup and polish floors render pages in Chromium, so its evals.yml job
+# installs packages/floors and Playwright first.
+[[groups]]
+name = "ux"
+prefixes = ["research/", "wireframe/", "mockup/", "prototype/", "review/", "polish/", "baseline/"]
+max_usd = 35.0
+gate = "advisory"
+events = ["workflow_dispatch"]
+
 [[groups]]
 name = "skills" # every other case
 max_usd = 8.0 # the single-reply cases cost 4.57 USD in run 38681630586; run 38747551788 hit a 6 USD cap at 6.03 and cut its last run to 0, so the cap is 8 (founder, 2026-10-15)

@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "repo": "o/shop",
+  "pr": 57,
+  "head": "8c41d2e",
+  "created_at": "2026-10-17T09:12:00Z",
+  "states": [{"id": "preferences", "url": "https://preview.shop.example/preferences"}],
+  "lane_a": {
+    "name": "A",
+    "disposition": "fix",
+    "tools": "gemini-3.1-pro-low",
+    "findings": [
+      {"state": "preferences", "kind": "contrast", "severity": 3, "heuristic": 8, "element": "main > p", "summary": "Help text #838383 on #ffffff is about 3.8:1, below 4.5:1; low-vision users may miss the five-day depot rule.", "fix": "Use the label text token.", "source": "gemini-3.1-pro-low", "runs": 3},
+      {"state": "preferences", "kind": "focus-visible", "severity": 3, "heuristic": 1, "element": "select#window, button", "summary": "`outline: none` on :focus removes the focus indicator from every control.", "fix": "A :focus-visible outline in the focus token.", "source": "gemini-3.1-pro-low", "runs": 3},
+      {"state": "preferences", "kind": "target-size", "severity": 2, "heuristic": 7, "element": "button.icon", "summary": "The help button is 32 x 32 px, under the 44 px floor, next to Save.", "fix": "44 x 44 px.", "source": "gemini-3.1-pro-low", "runs": 2}
+    ]
+  },
+  "lane_b": {
+    "name": "B",
+    "disposition": "fix",
+    "tools": "impeccable 4.5.2",
+    "findings": [
+      {"state": "preferences", "kind": "contrast", "severity": 2, "element": "p", "summary": "Low contrast text: 3.8:1 (need 4.5:1) — text #838383 on #ffffff", "source": "impeccable:low-contrast"},
+      {"state": "preferences", "kind": "contrast", "severity": 3, "element": "p", "summary": "Elements must meet minimum color contrast ratio thresholds (serious, 1 node(s))", "source": "axe:color-contrast"},
+      {"state": "preferences", "kind": "focus-visible", "severity": 3, "element": "Delivery window", "summary": "keyboard focus changes nothing visible on Delivery window", "fix": "give :focus-visible an outline in the focus token colour", "source": "probe:focus-indicator"},
+      {"state": "preferences", "kind": "focus-visible", "severity": 3, "element": "Save preferences", "summary": "keyboard focus changes nothing visible on Save preferences", "fix": "give :focus-visible an outline in the focus token colour", "source": "probe:focus-indicator"},
+      {"state": "preferences", "kind": "focus-visible", "severity": 3, "element": "Help with delivery windows", "summary": "keyboard focus changes nothing visible on Help with delivery windows", "fix": "give :focus-visible an outline in the focus token colour", "source": "probe:focus-indicator"},
+      {"state": "preferences", "kind": "target-size", "severity": 2, "element": "Help with delivery windows (32x32)", "summary": "target smaller than the floor: Help with delivery windows (32x32)", "fix": "make the control at least the [verify.floors.a11y] min_target_px square", "source": "probe:target-size"}
+    ]
+  },
+  "disposition": "fix"
+}

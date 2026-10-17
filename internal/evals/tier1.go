@@ -150,6 +150,11 @@ func Tier1(ctx context.Context, root string, c Case, assets fs.FS) Tier1Result {
 		add("pack", tier1Pack(c, assets), false)
 	}
 
+	if c.UX != nil {
+		lines, na := tier1UX(ctx, root, c, assets)
+		add("ux", lines, na)
+	}
+
 	if c.Transcript != "" {
 		add("concrete", tier1Concrete(c, assets), false)
 	}

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Your orders</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ay-color-background); color: var(--ay-color-text-default); font-family: var(--ay-font-family-sans); font-size: var(--ay-font-size-large); line-height: 1.5; }
+  main { max-width: 760px; margin: var(--ay-space-page) auto; padding: 0 var(--ay-space-gap); }
+  h1 { font-size: var(--ay-font-size-header-2); font-weight: var(--ay-font-weight-semibold); margin: 0 0 var(--ay-space-section); }
+  .card { background: var(--ay-color-surface); border: 1px solid var(--ay-color-border); border-radius: var(--ay-radius-container); padding: var(--ay-space-section); }
+  .primary { display: inline-flex; align-items: center; justify-content: center; min-height: var(--ay-size-control-height); padding: 0 var(--ay-space-control-inline); border: 0; border-radius: var(--ay-radius-control); background: var(--ay-color-brand-default); color: var(--ay-color-brand-contrast); font: inherit; font-weight: var(--ay-font-weight-semibold); text-decoration: none; cursor: pointer; }
+  .primary:hover { background: var(--ay-color-brand-hover); }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--ay-color-focus); outline-offset: 2px; }
+  @media (max-width: 480px) { .primary { width: 100%; } }
+  .alert { border: 1px solid var(--ay-color-negative-default); background: var(--ay-color-negative-background); border-radius: var(--ay-radius-control); padding: var(--ay-space-gap) var(--ay-space-section); margin-bottom: var(--ay-space-section); }
+  .alert h2 { font-size: var(--ay-font-size-large); font-weight: var(--ay-font-weight-semibold); color: var(--ay-color-negative-default); margin: 0 0 4px; }
+  .alert p { margin: 0; color: var(--ay-color-text-default); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Your orders</h1>
+  <div class="card">
+    <div class="alert" role="alert">
+      <h2>We could not load your orders</h2>
+      <p>This is on our side, and your orders are safe. Try again in a moment.</p>
+    </div>
+    <button class="primary" type="button">Retry</button>
+  </div>
+</main>
+</body>
+</html>

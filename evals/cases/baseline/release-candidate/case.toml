@@ -1,0 +1,17 @@
+# baseline (WP6.6, mode none): the host checks out the commit, starts the app on a [verify.environments] target, and
+# runs `aayu baseline --sha`, here for the release candidate on a private repository with a media bucket, checked out from dev. output/ is a recorded run (commands.sh and report.md, tier 1);
+# tier 2 reruns it. The floors: the commit is checked out before `aayu baseline --sha 4f2c1a9` (never the SHA changed to
+# match the checkout), the app runs on preview and never production, nothing writes to GitHub, and no local change is
+# discarded.
+skill = "baseline"
+description = "Baseline commit 4f2c1a9: the release candidate on a private repository with a media bucket, checked out from dev."
+input = "input.md"
+artifacts = ["output/commands.sh", "output/report.md"]
+
+[ux]
+output = "output"
+sha = "4f2c1a9"
+env = "preview"
+
+[tier2]
+rubric = "rubric.md"

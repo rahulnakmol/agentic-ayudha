@@ -369,6 +369,8 @@ func (h *Harness) Tier2(ctx context.Context, cases []Case, sha, ref string, now 
 			}
 			var run Run
 			switch {
+			case c.UX != nil:
+				run, err = h.runUX(ctx, c, lane, body, string(input), string(rubric))
 			case c.Brief != nil:
 				run, err = h.runBrief(ctx, c, lane, body, string(input), string(rubric))
 			case c.Tell != nil:

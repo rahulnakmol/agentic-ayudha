@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "repo": "o/shop",
+  "pr": 64,
+  "head": "e19f0a7",
+  "created_at": "2026-10-17T10:40:00Z",
+  "states": [{"id": "orders", "url": "https://preview.shop.example/orders"}],
+  "lane_a": {
+    "name": "A",
+    "disposition": "fix",
+    "tools": "gemini-3.1-pro-low",
+    "findings": [
+      {"state": "orders", "kind": "contrast", "severity": 3, "heuristic": 1, "element": ".row .status", "summary": "Delivery status, the column people come for, is light grey (#9aa1ab) on white, about 2.6:1.", "fix": "Show status in words on its status token pair.", "source": "gemini-3.1-pro-low", "runs": 3},
+      {"state": "orders", "kind": "labels", "severity": 3, "heuristic": 6, "element": "input[type=search], .toolbar > button", "summary": "The search field's only label is its placeholder, which disappears on typing; the filter button is an icon with no name, so a screen reader says only \"button\".", "fix": "A visible label for search; an accessible name for the filter button.", "source": "gemini-3.1-pro-low", "runs": 3},
+      {"state": "orders", "kind": "target-size", "severity": 2, "heuristic": 7, "element": ".row button \"Track\"", "summary": "The Track buttons are 32 px tall (compact size) on a page used on phones.", "fix": "Use the cozy control height.", "source": "gemini-3.1-pro-low", "runs": 2},
+      {"state": "orders", "kind": "copy", "severity": 2, "heuristic": 4, "element": ".row button \"Track\"", "summary": "Three buttons are all named \"Track\"; out of context a screen-reader user cannot tell which order each tracks.", "fix": "Name each button with its order, at least for assistive technology.", "source": "gemini-3.1-pro-low", "runs": 2}
+    ]
+  },
+  "lane_b": {
+    "name": "B",
+    "disposition": "fix",
+    "tools": "impeccable 4.5.2",
+    "findings": [
+      {"state": "orders", "kind": "contrast", "severity": 2, "element": "div.row:nth-of-type(1) > span.status", "summary": "Low contrast text: 2.6:1 (need 4.5:1) — text #9aa1ab on #ffffff", "source": "impeccable:low-contrast"},
+      {"state": "orders", "kind": "contrast", "severity": 3, "element": ".row:nth-child(1) > .status", "summary": "Elements must meet minimum color contrast ratio thresholds (serious, 3 node(s))", "source": "axe:color-contrast"},
+      {"state": "orders", "kind": "labels", "severity": 4, "element": ".toolbar > button", "summary": "Buttons must have discernible text (critical, 1 node(s))", "source": "axe:button-name"},
+      {"state": "orders", "kind": "target-size", "severity": 2, "element": "Track (57x32)", "summary": "target smaller than the floor: Track (57x32)", "fix": "make the control at least the [verify.floors.a11y] min_target_px square", "source": "probe:target-size"}
+    ]
+  },
+  "disposition": "fix"
+}

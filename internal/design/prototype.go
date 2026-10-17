@@ -50,7 +50,7 @@ func CheckFlag(defs []byte, key string) error {
 	return nil
 }
 
-var figmaURL = regexp.MustCompile(`https://(?:www\.)?figma\.com/(?:design|file)/([A-Za-z0-9]+)/[^\s"'` + "`" + `)]*?node-id=([0-9]+)[-:%3A]+([0-9]+)`)
+var figmaURL = regexp.MustCompile(`https://(?:www\.)?figma\.com/(?:design|file)/([A-Za-z0-9]+)/[^\s"'` + "`" + `)]*?node-id=([0-9]+)(?:-|:|%3[Aa])([0-9]+)`)
 
 // CodeConnect returns the Figma nodes (file key → node IDs as 1:2) that Code
 // Connect files map to code: every figma.com design URL with a node-id in

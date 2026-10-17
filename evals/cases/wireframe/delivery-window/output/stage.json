@@ -1,0 +1,7 @@
+{
+  "states": [
+    {"id": "default", "title": "Choose a delivery window", "file": "default.md"},
+    {"id": "slot-full", "title": "The chosen window filled up", "file": "slot-full.md"},
+    {"id": "saved", "title": "Delivery window saved", "file": "saved.md"}
+  ]
+}

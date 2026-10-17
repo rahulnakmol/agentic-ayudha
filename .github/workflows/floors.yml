@@ -15,6 +15,9 @@ on:
       - "internal/uireview/**"
       - "internal/cli/review*.go"
       - "internal/brief/**"
+      - "internal/evals/ux*.go"
+      - "evals/cases/mockup/**"
+      - "evals/cases/polish/**"
       - "packages/floors/**"
       - "pnpm-lock.yaml"
       - ".github/workflows/floors.yml"
@@ -26,6 +29,9 @@ on:
       - "internal/uireview/**"
       - "internal/cli/review*.go"
       - "internal/brief/**"
+      - "internal/evals/ux*.go"
+      - "evals/cases/mockup/**"
+      - "evals/cases/polish/**"
       - "packages/floors/**"
       - "pnpm-lock.yaml"
       - ".github/workflows/floors.yml"
@@ -81,6 +87,10 @@ jobs:
         env:
           AAYU_FLOOR_WEB: "1"
         run: go test ./internal/uireview ./internal/cli -run 'TestLaneBWithBrowser|TestReviewAndPolish|TestBaseline' -count=1 -v
+      - name: UX eval floors in Chromium (the recorded mockups and polished pages pass lane B; planted defects fail it)
+        env:
+          AAYU_FLOOR_WEB: "1"
+        run: go test ./internal/evals -run 'TestUXA11yFloor|TestTier1$' -count=1 -v
       - name: Brief page (axe on the rendered brief, WP7.3)
         env:
           AAYU_FLOOR_WEB: "1"
