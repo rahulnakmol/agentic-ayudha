@@ -54,7 +54,7 @@ a misspelt field never silently drops a claim.
     ],
     "case_sets": [
       {"id": "G1", "title": "…", "from": ["test:tests/test001.js", "entry:src/main.cpp:4"], "compare": "exact stdout and exit code", "exclude": ["random output (E7; Q4 asks whether it matters)"],
-       "reference": "commit 8214477, g++ 12.2.0, the Makefile's CFLAGS -c -g -Wall"}
+       "reference": "commit 8214477, g++ 12.2.0, the Makefile's CFLAGS -c -g -Wall", "runners": ["entry:src/main.cpp:4"], "inputs": ["tests/test*.js"]}
     ],
     "risks": [
       {"id": "R1", "claim": "…", "basis": "observed", "cites": ["src/main.cpp:7-8"]}
@@ -80,7 +80,18 @@ a misspelt field never silently drops a claim.
   operations. Product: users, jobs, outcomes, value, constraints, context, competition. Capabilities have a `name`
   instead.
 - Citations: a fact ID the index printed (`file:`, `sym:`, `build:`, `dep:`, `entry:`, `io:`, `trap:`, `test:`,
-  `doc:`, `marker:`, `mod:`), or `path:line` / `path:start-end` inside the file.
+  `doc:`, `marker:`, `mod:`, `builtin:`), or `path:line` / `path:start-end` inside the file.
+- Capabilities cover the index's entry points: each `entry:` the index lists (a program's main, a script, an
+  exported function or type, a header's public declarations) is cited by a capability claim, by its entry ID, its
+  `path:line`, a `path:start-end` range that holds it, or the `sym:` of its definition. A file cited whole covers none.
+- At most five questions are `open` at a time: one interview round. Merge questions one answer settles; a choice with
+  a safe default is a risk that carries the default.
+- A case set's `runners` are the programs that run it: `main` or `script` entries, or a `test:` harness that drives the
+  library. They are required when the index lists more than one program. `inputs` are the checkout's files the cases
+  run on (paths or globs), when they come from the checkout. Each runner must register every builtin the cases call
+  (`builtin:` facts; a call in an input file, or a dotted builtin such as `Math.sqrt` named in `title` or
+  `compare`): a case that needs a builtin only one runner registers belongs in that runner's case set, or in
+  `exclude` with the file and the claim or question that decided it.
 - A question's `affects` lists the claims, do-not-carry entries, interfaces, and modernisation steps, case sets, suites,
   migrations, and shims its answer changes.
 - `target_source` is `"request"` only when the request names the target; otherwise ask, and use the answered

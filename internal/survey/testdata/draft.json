@@ -9,7 +9,9 @@
     {"id": "E4", "topic": "interfaces", "claim": "CALC_DEBUG switches on a trace of each parse.", "basis": "inferred", "cites": ["io:env:src/util.cpp:6"], "reasoning": "parse reads the variable and prints only when it is set."}
   ],
   "capabilities": [
-    {"id": "C1", "name": "Evaluate an expression", "claim": "Given an expression argument, prints its integer value.", "basis": "observed", "cites": ["entry:src/main.cpp:4", "sym:src/engine.cpp#Engine::eval"]}
+    {"id": "C1", "name": "Evaluate an expression", "claim": "Given an expression argument, prints its integer value.", "basis": "observed", "cites": ["entry:src/main.cpp:4", "sym:src/engine.cpp#Engine::eval", "src/engine.h:6-10", "src/util.h:2-3"]},
+    {"id": "C2", "name": "Render text", "claim": "A PHP Render class renders text by passing it to its block step.", "basis": "observed", "cites": ["lib/Render.php:4-8"]},
+    {"id": "C3", "name": "Load a JSON store", "claim": "Run as a script, tool.py loads the JSON file named by the STORE environment variable and reports it.", "basis": "observed", "cites": ["entry:lib/tool.py:19", "lib/tool.py:6-9"]}
   ],
   "product_claims": [
     {"id": "P1", "topic": "users", "claim": "Who runs calc, and in which scripts, is not in the code.", "basis": "unknown", "question": "Q1"},
@@ -28,7 +30,7 @@
       {"id": "M2", "title": "Retire the C++ build", "depends_on": ["M1"], "claims": ["E2"], "parity": ["G1"]}
     ],
     "case_sets": [
-      {"id": "G1", "title": "Command-line expressions", "from": ["entry:src/main.cpp:4", "test:tests/test001.js"], "compare": "exact stdout, stderr, and exit code", "reference": "the C++ build at the surveyed commit, made by `make` with the Makefile's flags and the g++ the capture records", "exclude": ["the division-by-zero crash (E3)"]}
+      {"id": "G1", "title": "Command-line expressions", "from": ["entry:src/main.cpp:4", "test:tests/test001.js"], "compare": "exact stdout, stderr, and exit code", "reference": "the C++ build at the surveyed commit, made by `make` with the Makefile's flags and the g++ the capture records", "exclude": ["the division-by-zero crash (E3)"], "runners": ["entry:src/main.cpp:4"], "inputs": ["tests/test001.js"]}
     ],
     "risks": [
       {"id": "R1", "claim": "The usage message goes to stderr with exit 2; scripts may rely on it.", "basis": "observed", "cites": ["src/main.cpp:7-8"]}

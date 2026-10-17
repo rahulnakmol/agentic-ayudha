@@ -24,7 +24,7 @@ import (
 )
 
 // Version is the index schema version.
-const Version = 2
+const Version = 3
 
 // DefaultBudget is a module's default size in tokens (about four bytes each).
 const DefaultBudget = 20000
@@ -99,15 +99,21 @@ type Index struct {
 	Targets    []Target `json:"targets"`
 	Deps       []Dep    `json:"deps"`
 	Entries    []Fact   `json:"entries"`
-	Surfaces   []Fact   `json:"surfaces"`
-	Traps      []Fact   `json:"traps"` // trap rules that match (traps.go): where to check a semantic the port could get wrong
-	Tests      []Fact   `json:"tests"`
-	Docs       []Fact   `json:"docs"`
-	Markers    []Marker `json:"markers"`
-	Modules    []Module `json:"modules"`
-	Symbols    []Symbol `json:"symbols"`
-	Edges      []Edge   `json:"edges"`
-	Files      []File   `json:"files"`
+	// Builtins are the names source files register for the programs they
+	// embed (an interpreter's natives, a shell's commands), and Uses where an
+	// input file calls one: a case set's runner must register what its inputs
+	// call.
+	Builtins []Fact   `json:"builtins,omitempty"`
+	Uses     []Fact   `json:"uses,omitempty"`
+	Surfaces []Fact   `json:"surfaces"`
+	Traps    []Fact   `json:"traps"` // trap rules that match (traps.go): where to check a semantic the port could get wrong
+	Tests    []Fact   `json:"tests"`
+	Docs     []Fact   `json:"docs"`
+	Markers  []Marker `json:"markers"`
+	Modules  []Module `json:"modules"`
+	Symbols  []Symbol `json:"symbols"`
+	Edges    []Edge   `json:"edges"`
+	Files    []File   `json:"files"`
 
 	byPath map[string]int
 	ids    map[string]bool
@@ -233,12 +239,6 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 	ix := &Index{Version: Version, byPath: map[string]int{}}
 	ix.Commit = strings.TrimSpace(opt.Git(ctx, root, "rev-parse", "HEAD"))
 	exists := func(p string) bool { _, ok := ix.byPath[p]; return ok }
-	type scanned struct {
-		code  string
-		raw   string
-		calls []call
-		syms  []Symbol
-	}
 	files := map[string]*scanned{}
 	present := map[string]bool{}
 	for _, p := range paths {
@@ -369,6 +369,9 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 			ix.surfaces(f.Path, lang.Name, code)
 			ix.traps(f.Path, lang.Name, code, s.raw)
 			ix.entries(f.Path, f.Role, lang.Name, s.raw, s.syms)
+			if f.Role == "source" && (lang.Name == "c" || lang.Name == "cpp") && isHeader(f.Path) {
+				ix.headerEntries(f.Path, s.code)
+			}
 		}
 		if f.Role == "test" {
 			ix.Tests = append(ix.Tests, Fact{ID: "test:" + f.Path, Kind: "test", At: f.Path + ":1"})
@@ -410,11 +413,20 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 			ix.Edges = append(ix.Edges, Edge{Kind: "call", From: from, To: to, At: p + ":" + itoa(c.line), Ambiguous: len(to) > 1})
 		}
 	}
+	ix.builtins(files, byName)
 	ix.history(ctx, root, opt.Git)
 	ix.counts()
 	ix.modules(opt.Budget)
 	ix.finish()
 	return ix, nil
+}
+
+// scanned is one file read while building the index.
+type scanned struct {
+	code  string // comments, literals, and (C family) directives blanked
+	raw   string
+	calls []call
+	syms  []Symbol
 }
 
 // listFiles lists the checkout's files: git's tracked files when root is a
@@ -510,6 +522,30 @@ func (ix *Index) entries(file, role, lang, raw string, syms []Symbol) {
 	if shebang.MatchString(raw) && (lang == "shell" || lang == "perl" || lang == "python" || lang == "ruby" || lang == "php") {
 		add("script", 1, strings.SplitN(raw, "\n", 2)[0])
 	}
+}
+
+// headerEntries adds the functions a header declares without a body
+// (headerAPI) as api entry points, once per line.
+func (ix *Index) headerEntries(file, code string) {
+	have := map[string]bool{}
+	for _, e := range ix.Entries {
+		have[e.ID] = true
+	}
+	for _, d := range headerAPI(code) {
+		id := "entry:" + file + ":" + itoa(d.line)
+		if !have[id] {
+			have[id] = true
+			ix.Entries = append(ix.Entries, Fact{ID: id, Kind: "api", At: file + ":" + itoa(d.line), Detail: d.Kind + " " + d.Name})
+		}
+	}
+}
+
+func isHeader(p string) bool {
+	switch path.Ext(p) {
+	case ".h", ".hh", ".hpp", ".hxx":
+		return true
+	}
+	return false
 }
 
 // imports records include and import edges: to a file of the checkout when the
@@ -856,7 +892,7 @@ func (ix *Index) finish() {
 	sort.SliceStable(ix.Targets, byID(len(ix.Targets), func(i int) string { return ix.Targets[i].ID }))
 	sort.SliceStable(ix.Deps, byID(len(ix.Deps), func(i int) string { return ix.Deps[i].ID }))
 	ix.Deps = dedupeDeps(ix.Deps)
-	for _, l := range []*[]Fact{&ix.Entries, &ix.Surfaces, &ix.Traps, &ix.Tests, &ix.Docs} {
+	for _, l := range []*[]Fact{&ix.Entries, &ix.Surfaces, &ix.Traps, &ix.Tests, &ix.Docs, &ix.Builtins, &ix.Uses} {
 		fs := *l
 		sort.SliceStable(fs, func(i, j int) bool { return fs[i].ID < fs[j].ID })
 	}
@@ -899,7 +935,7 @@ func (ix *Index) index() {
 	for _, d := range ix.Deps {
 		ix.ids[d.ID] = true
 	}
-	for _, l := range [][]Fact{ix.Entries, ix.Surfaces, ix.Traps, ix.Tests, ix.Docs} {
+	for _, l := range [][]Fact{ix.Entries, ix.Surfaces, ix.Traps, ix.Tests, ix.Docs, ix.Builtins} {
 		for _, f := range l {
 			ix.ids[f.ID] = true
 		}
@@ -944,14 +980,14 @@ func splitAt(at string) (string, int) {
 }
 
 // Resolve checks one citation against the index: a fact ID (file:, sym:,
-// build:, dep:, entry:, io:, test:, doc:, marker:, mod:), or a location
+// build:, dep:, entry:, io:, test:, doc:, marker:, mod:, builtin:), or a location
 // path:line or path:first-last whose lines exist in the file.
 func (ix *Index) Resolve(cite string) error {
 	cite = strings.TrimSpace(cite)
 	if ix.ids[cite] {
 		return nil
 	}
-	for _, pre := range []string{"file:", "sym:", "build:", "dep:", "entry:", "io:", "trap:", "test:", "doc:", "marker:", "mod:", "probe:"} {
+	for _, pre := range []string{"file:", "sym:", "build:", "dep:", "entry:", "io:", "trap:", "test:", "doc:", "marker:", "mod:", "builtin:", "probe:"} {
 		if strings.HasPrefix(cite, pre) {
 			if pre == "probe:" {
 				return fmt.Errorf("%s: no such probe fact (run `aayu survey --golden <cases> --bin <legacy> --run --probe` first)", cite)

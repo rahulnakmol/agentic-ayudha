@@ -1,7 +1,8 @@
 # survey (WP5.9): Parsedown (github.com/erusev/parsedown at 4e433a8, MIT; repos/parsedown without its .github,
 # .gitignore, and .gitattributes), a PHP Markdown library with a readme and no other product docs. The person asks for
 # the analysis and a move to modern PHP in place with byte-identical output, so the target is a language version, not a
-# new language. Same session and floors as tinyjs-rust. output/survey.json is the pilot's draft.
+# new language. Same session and floors as tinyjs-rust. output/survey.json is the pilot's draft,
+# amended for the capability-map floor (the class, parse, instance, and setUrlsLinked entry points).
 skill = "survey"
 description = "Survey a legacy PHP library at three levels and plan an in-place modernisation with byte-identical output."
 input = "request.txt"

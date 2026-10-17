@@ -29,7 +29,7 @@ func TestCheckDraft(t *testing.T) {
 	if !r.Pass {
 		t.Fatalf("fixture draft: %v", r.Problems)
 	}
-	if c := r.Coverage; c.ModulesCited != 2 || c.Modules != 3 || c.MarkersCited != 1 || c.Markers != 4 || c.OpenQuestions != 2 || c.Unknowns != 1 || c.EntriesCited < 1 || c.Traps != 1 || c.TrapsChecked != 1 {
+	if c := r.Coverage; c.ModulesCited != 3 || c.Modules != 3 || c.EntriesCovered != c.Entries || c.MarkersCited != 1 || c.Markers != 4 || c.OpenQuestions != 2 || c.Unknowns != 1 || c.EntriesCited < 1 || c.Traps != 1 || c.TrapsChecked != 1 {
 		t.Errorf("coverage = %+v", c)
 	}
 	cases := []struct {
