@@ -127,7 +127,7 @@ persona cases, 20 USD), `conversations` (the grill conversation cases of WP5.3b 
 the bar, D-5.3b.g), `tell` (the `tell/` cases, 8 USD, gating since two consecutive full runs held a mean of 5.00, D-7.5e; it runs on
 dispatch and on pushes to `rolling` and `main`, never nightly or on pushes to `dev`), `host-skills` (the build, verify, and ready session cases, 37 USD, advisory and on
 dispatch only, D-3.4f), `ux` (the UX Researcher's skills, 35 USD, advisory and on dispatch only, D-6.5b; its `max_tokens` raises the skill
-call's output cap to 24000 for multi-file stages, D-6.5c), `survey` (the `survey/` cases, 30 USD, advisory and on
+call's output cap to 32000 for multi-file stages, D-6.5c and D-6.5e), `survey` (the `survey/` cases, 30 USD, advisory and on
 dispatch only, its skill output cap 24000 for a whole survey draft, WP5.9), and `skills` (every other case, 6 USD).
 Pushes to `dev` do not run the `brief` group; it runs nightly, on dispatch (input `group` picks one group), and on
 pushes to `rolling` and `main`. The advisory `conversations` and `personas` groups never run nightly or on promotion
