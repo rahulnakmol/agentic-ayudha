@@ -24,7 +24,7 @@ case "$1" in
   tz) echo "zone ${TZ}" ;;
   home) cat "$HOME/.aayu-probe" 2>/dev/null || echo none ;;
   write) cd "$HOME" && echo saved > out.log; echo ok ;;
-  load) cat lib/tool.py README.md "$LIBDIR"/*.rb "$2" > /dev/null; echo ok ;;
+  load) cat lib/tool.py README.md "$LIBDIR"/*.rb "${GEM_PATH##*:}"/gems/x.rb "$2" > /dev/null; echo ok ;;
 esac
 `
 	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
@@ -36,7 +36,7 @@ esac
 	if err := os.WriteFile(checker, []byte(`#!/bin/sh
 case "$1" in
   home) echo "Fortran runtime error: Index '11' of dimension 1 of array 'x' above upper bound of 10" >&2; cat "$HOME/.aayu-probe" 2>/dev/null || echo none ;;
-  write) echo ok-but-different ;;
+  write) echo "previous warning" >&2; echo "$PWD/lib/write.rb:3:in 'save': can't modify frozen String: \"\" (FrozenError)" >&2 ;;
   *) exec `+bin+` "$@" ;;
 esac
 `), 0o755); err != nil {
@@ -48,12 +48,19 @@ esac
 			t.Fatal(err)
 		}
 	}
+	gems := t.TempDir() // a library path the case sets: loads from it are expected
+	if err := os.MkdirAll(filepath.Join(gems, "gems"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(gems, "gems", "x.rb"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	c := Cases{Cases: []Case{
 		{ID: "pid", Set: "G1", Argv: []string{"{bin}", "pid"}},
 		{ID: "tz", Set: "G1", Argv: []string{"{bin}", "tz"}},
 		{ID: "home", Set: "G1", Argv: []string{"{bin}", "home"}},
 		{ID: "write", Set: "G1", Argv: []string{"{bin}", "write"}},
-		{ID: "load", Set: "G1", Argv: []string{"{bin}", "load", "Makefile"}, Env: []string{"LIBDIR=" + libdir}},
+		{ID: "load", Set: "G1", Argv: []string{"{bin}", "load", "Makefile"}, Env: []string{"LIBDIR=" + libdir, "GEM_PATH=/no/such/dir:" + gems}},
 	}}
 	// The index is read back from index.json, as `aayu survey --golden` reads it.
 	idx := filepath.Join(dir, "index.json")
@@ -84,6 +91,10 @@ esac
 			t.Errorf("no probe fact %s in %v", want, p.Facts)
 		}
 	}
+	// A difference on the checker build says why: its error, not a warning before it.
+	if f := got["probe:check-differs:write"]; !strings.Contains(f.Detail, "(its stderr: lib/write.rb:3:in 'save'") || !strings.Contains(f.Detail, "(FrozenError)") {
+		t.Errorf("the check-differs fact does not carry the checker's error: %q", f.Detail)
+	}
 	// A case that differs between identical runs says nothing about its environment.
 	for _, no := range []string{"probe:nondeterministic:tz", "probe:env-tz:pid", "probe:unreached:src/util.cpp#report", "probe:env-home:tz", "probe:reads:" + bin, "probe:check-differs:home"} { // stderr is the checker's report, not a difference
 		if _, ok := got[no]; ok {
@@ -107,6 +118,15 @@ esac
 		// Many files under one directory outside the checkout are one dependency.
 		if f, ok := got["probe:reads:"+libdir+"/"]; !ok || !strings.Contains(f.Detail, "6 files under") {
 			t.Errorf("no single read of %s/: %v", libdir, p.Facts)
+		}
+		// A library path the case sets (GEM_PATH) is expected, not a dependency; LIBDIR above is not one.
+		for id := range got {
+			if strings.Contains(id, gems) {
+				t.Errorf("a load from the case's GEM_PATH is reported as a dependency: %s", id)
+			}
+		}
+		if !strings.Contains(strings.Join(p.Ran, "\n"), "1 file(s) read under GEM_PATH entry "+gems) {
+			t.Errorf("the library-path reads are not summarised: %v", p.Ran)
 		}
 		if _, ok := got["probe:reads:"+filepath.Join(libdir, "m0.rb")]; ok {
 			t.Error("a file of a grouped directory is reported on its own")

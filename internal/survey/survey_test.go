@@ -288,6 +288,7 @@ func TestKeywordLanguages(t *testing.T) {
 		"trap:build-semantic-flags:cmake/Flags.cmake:2", // an included build file; a flag after "("
 		"trap:cobol-redefines:src/billing.cbl:7", "trap:cobol-binary-decimal:src/billing.cbl:6", "trap:pascal-directives:src/units.pas:2",
 		"trap:vb-on-error:vb/Ledger.bas:6", "trap:vb-no-option-explicit:vb/Ledger.bas:1", "trap:vb-16bit-integer:vb/Ledger.bas:5",
+		"trap:ruby-dynamic-require:lib/plugins.rb:2", // a path built by interpolation, which blanked strings hide
 	} {
 		if !traps[want] {
 			t.Errorf("no trap %s", want)
@@ -303,7 +304,7 @@ func TestKeywordLanguages(t *testing.T) {
 		}
 	}
 	// STEP and FNORM declare IMPLICIT NONE; module procedures inherit the module's.
-	for _, no := range []string{"trap:fortran-implicit-typing:src/solver.f:20", "trap:fortran-implicit-typing:src/solver.f:27", "trap:fortran-implicit-typing:lib/grid.f90:9", "trap:fortran-assumed-size:lib/grid.f90:28"} {
+	for _, no := range []string{"trap:fortran-implicit-typing:src/solver.f:20", "trap:fortran-implicit-typing:src/solver.f:27", "trap:fortran-implicit-typing:lib/grid.f90:9", "trap:fortran-assumed-size:lib/grid.f90:28", "trap:ruby-dynamic-require:lib/plugins.rb:1", "trap:ruby-dynamic-require:lib/plugins.rb:3"} {
 		if traps[no] {
 			t.Errorf("unexpected trap %s", no)
 		}
