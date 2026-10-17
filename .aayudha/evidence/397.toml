@@ -1,7 +1,11 @@
+# Story #397's proving tests (TestParallelRowsMergeCleanly, TestDecisionIDsUnique, TestAdoptHandWrittenRows) were deleted
+# on 2026-10-17 with the Appendix B generator; the decision log is archived privately and no new rows are added. The
+# authoritative pack on the ledger holds the proof from when #397 shipped.
+
 [[criterion]]
 id = 1
-tests = ["./internal/appendixb:TestParallelRowsMergeCleanly", "./internal/appendixb:TestDecisionIDsUnique"]
+tests = []
 
 [[criterion]]
 id = 2
-tests = ["./internal/appendixb:TestAdoptHandWrittenRows"]
+tests = []

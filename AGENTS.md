@@ -8,7 +8,11 @@ the end is generated (WP5.1); the full table is [docs/RACI.md](docs/RACI.md).
 
 - Scope and sequencing: [docs/BUILD-PLAN.md](docs/BUILD-PLAN.md). Work one work package (WP) at a time and meet
   its acceptance as written. Where the plan cannot be enforced as written, build the closest enforceable
-  alternative and add an Appendix B row named after the WP (`D-1.2a`, …), as a file (see "Appendix B rows" below).
+  alternative and record it in the PR description under a "Deviation from the plan:" heading: what the plan
+  assumed, what you found, and what you built instead. The squash commit message keeps it, so `git log` is the
+  record. Real decisions (a choice with options that a person with authority accepts) are aayu Decision issues.
+  Appendix B of the plan, the decision log up to 2026-10-17, is archived privately; IDs such as D-5.5c.24 or S-4.5b
+  in code and docs refer to it. Add no new decision rows anywhere.
 - Principles: [ETHOS.md](ETHOS.md). Terms: [GLOSSARY.md](GLOSSARY.md). Threats: [docs/threat-model.md](docs/threat-model.md).
 - A feature planned for a later WP is "n/a until WPx.y" (rule 1a). Do not build ahead; do not report it as a
   failure.
@@ -43,16 +47,14 @@ the end is generated (WP5.1); the full table is [docs/RACI.md](docs/RACI.md).
   - from `internal/verbs/registry.go`: the tables in `docs/README.md`, `LAYERS.md`, `docs/RACI.md`, `skills/*/SKILL.md`
     frontmatter, `internal/mcp/schemas/*.json`;
   - from `internal/config/defaults.toml` (the embedded base config layer): `CONSTRAINTS.md`. A new key in a
-    rendered section needs a row in `internal/config/gen`, or generation fails;
-  - from `docs/appendix-b/`: the end of Appendix B in `docs/BUILD-PLAN.md`, a pointer to the rows.
+    rendered section needs a row in `internal/config/gen`, or generation fails.
 
-- Appendix B rows: one file per row, `docs/appendix-b/<NNN>-<section>/<NNN>-<ID>.md`; never a row in
-  `docs/BUILD-PLAN.md`, so parallel branches add files instead of colliding in one table. Add the file with the next
-  free number in your WP's section (or start a section directory with its `README.md`), an ID no other row uses
-  (`ls docs/appendix-b/*/*-<ID>.md` finds nothing), and the format in
-  [docs/appendix-b/README.md](docs/appendix-b/README.md). `go generate ./...` fails on a duplicate ID and moves a
-  row written in `docs/BUILD-PLAN.md` into its own file; on a rebase conflict there, keep both sides and run it.
-  Print every row as tables with `go run ./internal/appendixb/gen -print`.
+- Appendix B rows: none are added any more. A deviation goes in the PR description under "Deviation from the
+  plan:" (see "Source of truth"); a real decision is an aayu Decision issue. Cite an archived row by its ID as plain
+  text, never a link or a path.
+- Research notes live in the private repository `rahulnakmol/agentic-ayudha-research`; cite one as "private research note `<file>`", with its
+  section (P1, §8.2), never a link or a path. `TestPrivateRecordsStayOut` fails if the archived research
+  notes or decision log, the deleted Bug #173 halt runs, or the deleted Appendix B generator is tracked again.
 
 ## Branches, PRs, commits
 

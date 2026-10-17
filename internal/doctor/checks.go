@@ -608,7 +608,7 @@ func checkLedgerMedia(ctx context.Context, p *Probe) Result {
 	}
 	return Result{Status: Fail, Blocking: true,
 		Detail: "repository is public but its ledger tracks media in Git LFS (V3): LFS objects cannot be purged from GitHub",
-		Lines:  []string{"remove .lfsconfig and the LFS lines of .gitattributes from ledger and delete media already pushed there; proof media stay in run artifacts (S-4.2b), and design media need [proof] media"}}
+		Lines:  []string{"remove .lfsconfig and the LFS lines of .gitattributes from ledger and delete media already pushed there; proof media stay in run artifacts, and design media need [proof] media"}}
 }
 
 // checkLedgerRulesets reports whether `aayu init` could protect the ledger

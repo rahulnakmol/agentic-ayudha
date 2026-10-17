@@ -106,13 +106,13 @@ func TestLintBad(t *testing.T) {
 // plain link, and does not enter skipped directories.
 func TestMobbinImagesAnywhere(t *testing.T) {
 	m := fstest.MapFS{
-		"docs/research.md":              {Data: []byte("Reference: [Monzo login](https://mobbin.com/screens/9).\n\n<img src=\"https://bytescale.mobbin.com/p/9.png\">\n")},
+		"docs/references.md":            {Data: []byte("Reference: [Monzo login](https://mobbin.com/screens/9).\n\n<img src=\"https://bytescale.mobbin.com/p/9.png\">\n")},
 		"ledger/design/f1/ref.webp":     {Data: []byte("RIFF....WEBPVP8 mobbin.com/screens/9")},
 		"design/own.png":                {Data: []byte("\x89PNG\r\n\x1a\n")},
 		"node_modules/x/mobbin-cat.png": {Data: []byte("\x89PNG")},
 	}
 	got := MobbinImages(m, ".", "node_modules")
-	if len(got) != 2 || got[0].Path != "docs/research.md" || got[1].Path != "ledger/design/f1/ref.webp" || got[0].Rule != RuleMobbin {
+	if len(got) != 2 || got[0].Path != "docs/references.md" || got[1].Path != "ledger/design/f1/ref.webp" || got[0].Rule != RuleMobbin {
 		t.Fatalf("findings = %v", got)
 	}
 }

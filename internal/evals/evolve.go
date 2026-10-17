@@ -143,7 +143,7 @@ func EvolveGate(ctx context.Context, root string, changes []Change, assets fs.FS
 			bad("the change has no diff to skill %q (skills/%s/ or evals/skills/%s/)", c.Skill, c.Skill, c.Skill)
 		} else if added, rewritten, counted := appendOnly(changes, skill); counted && !rewritten {
 			bad("the skill diff only appends (%d lines added, none removed or rewritten): rewrite the guidance the Feedback is about "+
-				"instead of adding a rule beside it (P4, Appendix B S-7.7c)", added)
+				"instead of adding a rule beside it", added)
 		}
 		if r := Tier1(ctx, root, c, assets); !r.Passed() {
 			bad("the new skill's recorded run fails tier 1:\n%s", r)

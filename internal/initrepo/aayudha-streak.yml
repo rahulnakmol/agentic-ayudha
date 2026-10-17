@@ -7,7 +7,7 @@
 # correction_days, or the aayu:correction label). Nothing stores the streak where an agent could write it.
 #
 # New corrections are appended to autonomy/corrections.jsonl on the ledger branch, which only the bot App
-# may push (Appendix B D1): the workflow token can never write it. Without the App (AAYUDHA_APP_CLIENT_ID and
+# may push: the workflow token can never write it. Without the App (AAYUDHA_APP_CLIENT_ID and
 # AAYUDHA_APP_PRIVATE_KEY, set by `aayu init --identity`) the streak is still computed and shown in the job
 # summary, and the ledger write is skipped with a notice.
 name: aayudha-streak

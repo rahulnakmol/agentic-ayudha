@@ -47,7 +47,7 @@ const (
 
 var skillName = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 
-// P4 of docs/research/video-learnings-2026-10.md (Appendix B S-7.7c): a
+// P4 of the private research note video-learnings-2026-10.md (Appendix B S-7.7c): a
 // skill changes only on evidence from at least two accepted Feedback issues,
 // and at most once a month.
 const (
@@ -102,7 +102,7 @@ func runEvolve(ctx context.Context, e *Env, in Values) error {
 	var evidence []int
 	for _, x := range all {
 		if x.Feedback == n && x.Skill == skill && x.Refused != "" {
-			return Errorf(ExitBlocked, "evolve: %s (S-7.7d)", x.Refused)
+			return Errorf(ExitBlocked, "evolve: %s", x.Refused)
 		}
 		if x.Skill == skill && x.Refused == "" {
 			evidence = append(evidence, x.Feedback)
@@ -112,7 +112,7 @@ func runEvolve(ctx context.Context, e *Env, in Values) error {
 	case !slices.Contains(evidence, n):
 		return Errorf(ExitBlocked, "evolve: Feedback #%d does not name skill `%s` in its title", n, skill)
 	case len(evidence) < EvolveMinFeedback:
-		return Errorf(ExitBlocked, "evolve: a skill changes only on at least %d accepted retro Feedback issues that name it and are prose corrections; skill `%s` has #%d only (P4, S-7.7d)", EvolveMinFeedback, skill, n)
+		return Errorf(ExitBlocked, "evolve: a skill changes only on at least %d accepted retro Feedback issues that name it and are prose corrections; skill `%s` has #%d only", EvolveMinFeedback, skill, n)
 	}
 	dev := e.devBranch()
 	res := EvolveResult{Evidence: evidence, Feedback: n, Skill: skill, Worktree: filepath.Join(root, ".aayudha", "worktrees", fmt.Sprintf("evolve-%s-%d", skill, n)), Branch: fmt.Sprintf("%s%s-%d", EvolveBranchPrefix, skill, n)}
@@ -329,7 +329,7 @@ func openEvolvePR(ctx context.Context, c *github.Client, repo, dev, tag string, 
 		}
 		body := fmt.Sprintf("Refs #%d\n\nOpened by `aayu evolve` (WP7.7), eval-first: %s reproduces the accepted Feedback on the current `%s` skill "+
 			"(its `before/` run fails tier 1) and passes with this skill diff. CI's eval-first gate re-checks it.\n\n"+
-			"- Evidence: %s, the accepted retro Feedback that names this skill, each classified as a prose correction (at least two; P4, S-7.7d).\n"+
+			"- Evidence: %s, the accepted retro Feedback that names this skill, each classified as a prose correction (at least two).\n"+
 			"- Correction rate of agent PRs that changed this skill: the skills table of `aayu retro`, before and after this merges.\n"+
 			"- Never auto-merged: `skills/` is a protected path, so a human CODEOWNER reviews it. It ships through `rolling`.\n"+
 			"- Rollback: `aayu install --pin <previous version>`. `aayu retro` reports whether the problem comes back.\n",

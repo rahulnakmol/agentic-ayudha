@@ -181,7 +181,7 @@ func TestInitTwiceDryRunPublicCoexistence(t *testing.T) {
 		t.Fatalf("ledger rulesets after the migration: %s", got)
 	}
 
-	if code, _, errOut := run(t, nil, Options{IsTerminal: stdinTTY, Dir: dir}, "proof", "push", "--media"); code != ExitBlocked || !strings.Contains(errOut, "S-4.2b") {
+	if code, _, errOut := run(t, nil, Options{IsTerminal: stdinTTY, Dir: dir}, "proof", "push", "--media"); code != ExitBlocked || !strings.Contains(errOut, "aayudha-pack run artifact") {
 		t.Errorf("proof push --media on a public repo: exit %d %s", code, errOut)
 	}
 }

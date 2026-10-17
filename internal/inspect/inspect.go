@@ -92,7 +92,7 @@ const Schema = `{"type":"object","additionalProperties":false,"required":["dispo
 const defectRule = `A real defect is one you can show from the diff and the code context: an input or sequence of calls the change accepts, and the wrong result it then produces, which breaks a Completion Goal criterion, the story, the code's own documented contract, or what every correct program keeps (no crash, no security hole, no lost or leaked data or resources, no race). Behaviour that the story, the criteria, and the code all leave open (the shape of an empty result, case sensitivity, a limit nobody stated) is a design choice, not a defect. A problem that depends on something the diff and the context do not show (a database setting, a deployment, a caller the context does not include) is a question for the summary, not a finding. When the change does what its story, its criteria, and its own comments say, the correct review has no findings; say so in the summary.`
 
 // System is the reviewer's instruction (v2, WP4.8b). Written for aayudha from
-// the ideas the research names (docs/research/agent-delegation-and-review.md);
+// the ideas the research names (private research note agent-delegation-and-review.md);
 // no reviewer's prompt is copied.
 const System = `You are inspect, the adversarial code reviewer of a software delivery pipeline. You review one pull request against the story it implements. Another agent wrote it; assume nothing it says about itself.
 

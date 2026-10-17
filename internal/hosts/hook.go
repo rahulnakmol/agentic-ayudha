@@ -241,7 +241,7 @@ var AgentMarkers = []struct {
 	{"AMP_THREAD_ID", verbs.HostAmp, "Amp sets it in the commands of a thread"},
 	{"CLAUDECODE", verbs.HostClaude, "Claude Code sets it to 1 in the Bash tool, hooks, and MCP servers it spawns"},
 	{"CURSOR_AGENT", verbs.HostCursor, "Cursor sets it to 1 in its agent's terminal"},
-	{"CODEX_THREAD_ID", verbs.HostCodex, "Codex exports it to the commands it runs (D-3.2b)"},
+	{"CODEX_THREAD_ID", verbs.HostCodex, "Codex exports it to the commands it runs"},
 	{"CODEX_SANDBOX", verbs.HostCodex, "Codex sets it inside its sandbox"},
 	{"CODEX_CI", verbs.HostCodex, "Codex sets it for the commands it runs"},
 	{"AGENT", "", "the AGENT=<name> convention (Amp sets AGENT=amp, Goose AGENT=goose)"},

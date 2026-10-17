@@ -204,7 +204,7 @@ func productSetupTOML(root string) string {
 	}
 	q := func(s string) string { b, _ := json.Marshal(s); return string(b) }
 	var b strings.Builder
-	fmt.Fprintf(&b, "# From this repository's %s (aayu install --loops, Appendix B D-7.1h); edit it as the product needs.\n", strings.Join(from, " and "))
+	fmt.Fprintf(&b, "# From this repository's %s (aayu install --loops); edit it as the product needs.\n", strings.Join(from, " and "))
 	ts := make([]string, len(tools))
 	for i, t := range tools {
 		ts[i] = q(t)
@@ -279,7 +279,7 @@ func Parse(name string, data []byte) (Loop, error) {
 			bad("hosts: an agent = false loop runs only in the Actions fallback (actions)")
 		}
 		if l.Bot {
-			bad("bot: the workflow token is never the bot identity (D1); a loop that writes as the bot is an agent loop")
+			bad("bot: the workflow token is never the bot identity; a loop that writes as the bot is an agent loop")
 		}
 		if l.Prompt != "" {
 			bad("prompt: no agent reads it in an agent = false loop")
@@ -290,7 +290,7 @@ func Parse(name string, data []byte) (Loop, error) {
 	}
 	switch {
 	case l.On != "" || l.Filter != nil:
-		bad("on and filter: event loops are deferred to a later version (Appendix B S-7.1e); set cron, a schedule")
+		bad("on and filter: event loops are deferred to a later version; set cron, a schedule")
 	case l.Cron == "":
 		bad("cron is required: five fields in [time] tz")
 	default:

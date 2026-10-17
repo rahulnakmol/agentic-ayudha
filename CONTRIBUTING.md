@@ -45,6 +45,13 @@ Never open a PR against `rolling` or `main`. Promotions are done by the maintain
    git worktree remove ../wt-<branch> && git branch -D <branch>
    ```
 
+When the build plan cannot be enforced as written, build the closest enforceable alternative and record it in the PR
+description under a "Deviation from the plan:" heading: what the plan assumed, what you found, and what you built
+instead. The squash commit message keeps it, so `git log` is the record. Real decisions are aayu Decision issues.
+Appendix B of the plan, the decision log up to 2026-10-17, is archived privately; IDs such as D-5.5c.24 in code and
+docs refer to it, and no new rows are added. Research notes live in the private repository `rahulnakmol/agentic-ayudha-research`; cite one as
+"private research note `<file>`" with its section, never as a link or a path.
+
 From PR11 onward every work package is tracked as a Story issue on this repository with a Completion Goal
 (ground rule 1); before that, work is tracked in the build plan.
 
@@ -220,13 +227,6 @@ generated from it by `go generate ./...`:
 `CONSTRAINTS.md` is generated the same way from `internal/config/defaults.toml`, the default configuration
 embedded in the binary (WP0.5). The generator in `internal/config/gen` holds each key's meaning and plan source
 and fails if a key is added or removed without updating it.
-
-Appendix B of the build plan, the deviations and decisions recorded while implementing it, is one file per row
-under `docs/appendix-b/` (`<NNN>-<section>/<NNN>-<ID>.md`; [docs/appendix-b/README.md](docs/appendix-b/README.md)
-has the format). Add a row as a new file, never in `docs/BUILD-PLAN.md`: two branches that each add a file merge
-without a conflict. `go generate ./...` checks every row (an ID used twice fails it), keeps the generated end of
-Appendix B in `docs/BUILD-PLAN.md`, and moves a row written there by hand into its own file and says so. Print the
-whole appendix as tables with `go run ./internal/appendixb/gen -print`.
 
 Do not edit generated output by hand. Change the registry, run `go generate ./...`, and commit both. The CI
 job `generate-drift` fails on any difference.

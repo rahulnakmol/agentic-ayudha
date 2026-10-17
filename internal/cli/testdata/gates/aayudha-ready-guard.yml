@@ -4,7 +4,7 @@
 # When an issue labelled status:ready is labelled or edited, the guard re-validates it against the Ready
 # stage and compares its body hash with the Ready snapshot. On a failure or drift it removes status:ready
 # and says why in a comment. It writes labels and comments only, with this workflow's own token, and
-# never writes the ledger (Appendix B D1).
+# never writes the ledger.
 name: aayudha-ready-guard
 
 on:

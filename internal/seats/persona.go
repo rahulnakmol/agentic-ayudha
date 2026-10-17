@@ -141,7 +141,7 @@ func (p Persona) Validate() []string {
 		bad("name %q: want one capitalised word of 2-12 letters", p.Name)
 	}
 	if olympian.MatchString(p.Name) {
-		bad("name %q: an Olympian god; the human founder is Zeus, and a twin is a lesser figure (D-5.1v)", p.Name)
+		bad("name %q: an Olympian god; the human founder is Zeus, and a twin is a lesser figure", p.Name)
 	}
 	for k, v := range map[string]string{"purpose": p.Purpose, "temperament": p.Temperament, "voice": p.Voice,
 		"pushback": p.PushBack, "praise": p.Praise, "grounding": p.Grounding, "paired": p.Paired} {

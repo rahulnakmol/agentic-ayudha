@@ -19,7 +19,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 )
 
-// Flow metrics (docs/research/video-learnings-2026-10.md P1, Appendix B
+// Flow metrics (private research note video-learnings-2026-10.md P1, Appendix B
 // S-7.6e): how long each delivered story waited in each stage, how often a
 // person had to step in, how much of inspect's advice was acted on, how many
 // stories escaped as Bugs, and what kind of change merged. They come from
@@ -370,7 +370,7 @@ func hoursCell(from, to time.Time) string {
 // markdown renders the flow section.
 func (f Flow) markdown(p func(string, ...any), stories int) {
 	p("## Flow (reported, not gated)\n\n")
-	p("No finding comes from this section (P1 of docs/research/video-learnings-2026-10.md). Ready is the story's first `status:ready` label; " +
+	p("No finding comes from this section (P1 of the private research note video-learnings-2026-10.md). Ready is the story's first `status:ready` label; " +
 		"the first checkpoint is the earliest in `build/<n>/state.json` on the ledger; gate green is when the first successful `aayudha-merge-gate.yml` run " +
 		"on the merged head completed; ship is the merge. A stage counts only the stories that have both of its ends.\n\n")
 	if len(f.Stories) == 0 {

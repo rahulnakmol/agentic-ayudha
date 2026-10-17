@@ -20,7 +20,7 @@ aayu:
       type: bool
       required: false
       positional: false
-      description: "Solo mode only (one human, no bot App): merge without a second person's approval, recorded in the PR, the ship record, and the actions log (Appendix B D2)."
+      description: "Solo mode only (one human, no bot App): merge without a second person's approval, recorded in the PR, the ship record, and the actions log."
   outputs:
     - "merge-commit"
     - "complete-section"

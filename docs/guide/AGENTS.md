@@ -2,7 +2,7 @@
 
 Rules for coding agents that edit `docs/guide/` or the root `README.md`. The root [AGENTS.md](../../AGENTS.md) still
 applies. The reasons behind these rules are in
-[docs/research/docs-style-2026-10.md](../research/docs-style-2026-10.md).
+private research note docs-style-2026-10.md.
 
 ## Build and check
 
@@ -22,7 +22,8 @@ critical findings), and run lychee on the built site.
 - Never write a work item reference as `#123`. The site links only Features whose shipped stories all have proof, and
   `tell` refuses any other. Write "pull request 148" or "story 131", with no link.
 - Never invent a customer, a number, a quote, or a result. Every number in the story comes from GitHub, the ledger, or
-  an Appendix B row of [the build plan](../BUILD-PLAN.md) (one file per row in [docs/appendix-b/](../appendix-b/README.md)).
+  a pull request's "Deviation from the plan:" section, or an archived Appendix B row of [the build plan](../BUILD-PLAN.md),
+  cited by ID.
 - Never use the words `design/brand.yaml` avoids (seamless, effortless, guaranteed, magical, …) or exclamation marks.
 - Never write work package numbers, Appendix B row IDs, or rule numbers outside the How it works pages' code and
   honest-status sections.

@@ -66,7 +66,7 @@ N/A  lfs-quota  LFS quota: GitHub has no quota API for this account; watch Setti
 PASS  ledger-media  no ledger branch fetched (origin/ledger)
 ## ledger-media fail
 FAIL  ledger-media  repository is public but its ledger tracks media in Git LFS (V3): LFS objects cannot be purged from GitHub [blocking]
-                      remove .lfsconfig and the LFS lines of .gitattributes from ledger and delete media already pushed there; proof media stay in run artifacts (S-4.2b), and design media need [proof] media
+                      remove .lfsconfig and the LFS lines of .gitattributes from ledger and delete media already pushed there; proof media stay in run artifacts, and design media need [proof] media
 ## ledger-rulesets pass
 N/A  ledger-rulesets  aayu init has not run here (no .aayudha/state.json)
 ## ledger-rulesets fail
@@ -151,7 +151,7 @@ WARN  reviewer-apps  reviewer apps detected but not configured: codex, cursor; a
 PASS  retired-workflows  no retired aayudha workflow in .github/workflows
 ## retired-workflows fail
 WARN  retired-workflows  1 retired aayudha workflow(s): run `aayu init` and confirm to remove, or delete by hand
-                           .github/workflows/aayudha-triage.yml classifies intake issues with a model in CI, and product CI never calls a model (Appendix B S-2.9b); triage runs from your own agent (`aayu triage <issue> --as …`) or an agent app you @-mention
+                           .github/workflows/aayudha-triage.yml classifies intake issues with a model in CI, and product CI never calls a model; triage runs from your own agent (`aayu triage <issue> --as …`) or an agent app you @-mention
 ## loops pass
 PASS  loops  no loops/*.toml
 ## loops fail
