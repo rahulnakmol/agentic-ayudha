@@ -33,6 +33,11 @@ type Case struct {
 	Cwd     string   `json:"cwd,omitempty"`     // relative to the surveyed checkout; default its root
 	Compare []string `json:"compare,omitempty"` // stdout, stderr, exit; default all three
 	Timeout int      `json:"timeout_s,omitempty"`
+	// Area groups a compatibility suite's tests for its score (--compat);
+	// Unfixable says why a test can never pass on the new build, so it is
+	// left out of the score.
+	Area      string `json:"area,omitempty"`
+	Unfixable string `json:"unfixable,omitempty"`
 }
 
 // Golden is the manifest of a capture: what ran, from which commit, and the
@@ -88,8 +93,11 @@ func ParseCases(b []byte) (Cases, []string, error) {
 			add("case %q: IDs are file-safe ([A-Za-z0-9._-]) and unique", k.ID)
 		}
 		seen[k.ID] = true
-		if !gID.MatchString(k.Set) {
-			add("case %s: set must name the survey's case set (G1, G2, …)", k.ID)
+		if !gID.MatchString(k.Set) && !sID.MatchString(k.Set) {
+			add("case %s: set must name the survey's case set (G1, G2, …) or suite (S1, …)", k.ID)
+		}
+		if sID.MatchString(k.Set) && k.Area == "" {
+			add("case %s: a suite's test names its area, the group it is scored in", k.ID)
 		}
 		if !strings.Contains(strings.Join(k.Argv, "\x00"), "{bin}") {
 			add("case %s: argv must run {bin}", k.ID)
@@ -122,7 +130,7 @@ type output struct {
 // only from the caller, with HOME a scratch directory, LC_ALL=C, and TZ=UTC,
 // so no token or credential reaches the program and its output does not
 // depend on who ran it.
-func runCase(ctx context.Context, root, bin, home string, k Case) (output, error) {
+func runCase(ctx context.Context, root, bin, home string, k Case, env ...string) (output, error) {
 	argv := make([]string, len(k.Argv))
 	for i, a := range k.Argv {
 		argv[i] = strings.ReplaceAll(a, "{bin}", bin)
@@ -135,7 +143,7 @@ func runCase(ctx context.Context, root, bin, home string, k Case) (output, error
 	defer cancel()
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	cmd.Dir = filepath.Join(root, k.Cwd)
-	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + home, "LC_ALL=C", "LANG=C", "TZ=UTC"}
+	cmd.Env = withEnv([]string{"PATH=" + os.Getenv("PATH"), "HOME=" + home, "LC_ALL=C", "LANG=C", "TZ=UTC"}, env)
 	var out, errb capped
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	if k.Stdin != "" {
@@ -278,7 +286,10 @@ func Replay(ctx context.Context, root, bin, dir string, c Cases) ([]Diff, *Golde
 }
 
 // firstDiff names the first line where two outputs part, clipped.
-func firstDiff(want, have []byte) string {
+func firstDiff(want, have []byte) string { return lineDiff("golden", "got", want, have) }
+
+// lineDiff names the first line where two labelled outputs part, clipped.
+func lineDiff(aName, bName string, want, have []byte) string {
 	wl, hl := strings.Split(string(want), "\n"), strings.Split(string(have), "\n")
 	for i := 0; i < len(wl) || i < len(hl); i++ {
 		var w, h string
@@ -289,7 +300,7 @@ func firstDiff(want, have []byte) string {
 			h = hl[i]
 		}
 		if w != h || i >= len(wl) || i >= len(hl) {
-			return fmt.Sprintf("line %d: golden %q, got %q", i+1, clipRaw(w), clipRaw(h))
+			return fmt.Sprintf("line %d: %s %q, %s %q", i+1, aName, clipRaw(w), bName, clipRaw(h))
 		}
 	}
 	return "outputs differ"
@@ -301,4 +312,49 @@ func clipRaw(s string) string {
 		return string(r[:80]) + "…"
 	}
 	return s
+}
+
+// withEnv replaces or adds KEY=value entries.
+func withEnv(base, over []string) []string {
+	out := append([]string(nil), base...)
+	for _, kv := range over {
+		k, _, _ := strings.Cut(kv, "=")
+		replaced := false
+		for i, b := range out {
+			if strings.HasPrefix(b, k+"=") {
+				out[i], replaced = kv, true
+			}
+		}
+		if !replaced {
+			out = append(out, kv)
+		}
+	}
+	return out
+}
+
+// compareStreams lists the streams a case compares on which two runs differ;
+// the names label the runs in each difference.
+func compareStreams(k Case, aName, bName string, a, b output) []Diff {
+	compare := k.Compare
+	if len(compare) == 0 {
+		compare = []string{"stdout", "stderr", "exit"}
+	}
+	var ds []Diff
+	for _, s := range compare {
+		switch s {
+		case "exit":
+			if a.exit != b.exit {
+				ds = append(ds, Diff{ID: k.ID, Set: k.Set, Stream: "exit", Detail: fmt.Sprintf("%s exit %d, %s exit %d", aName, a.exit, bName, b.exit)})
+			}
+		case "stdout":
+			if !bytes.Equal(a.stdout, b.stdout) {
+				ds = append(ds, Diff{ID: k.ID, Set: k.Set, Stream: "stdout", Detail: lineDiff(aName, bName, a.stdout, b.stdout)})
+			}
+		case "stderr":
+			if !bytes.Equal(a.stderr, b.stderr) {
+				ds = append(ds, Diff{ID: k.ID, Set: k.Set, Stream: "stderr", Detail: lineDiff(aName, bName, a.stderr, b.stderr)})
+			}
+		}
+	}
+	return ds
 }

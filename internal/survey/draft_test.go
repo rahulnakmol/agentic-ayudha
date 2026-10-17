@@ -29,7 +29,7 @@ func TestCheckDraft(t *testing.T) {
 	if !r.Pass {
 		t.Fatalf("fixture draft: %v", r.Problems)
 	}
-	if c := r.Coverage; c.ModulesCited != 2 || c.Modules != 3 || c.MarkersCited != 1 || c.Markers != 4 || c.OpenQuestions != 1 || c.Unknowns != 1 || c.EntriesCited < 1 {
+	if c := r.Coverage; c.ModulesCited != 2 || c.Modules != 3 || c.MarkersCited != 1 || c.Markers != 4 || c.OpenQuestions != 2 || c.Unknowns != 1 || c.EntriesCited < 1 || c.Traps != 1 || c.TrapsChecked != 1 {
 		t.Errorf("coverage = %+v", c)
 	}
 	cases := []struct {
@@ -51,6 +51,28 @@ func TestCheckDraft(t *testing.T) {
 		{"unknown module", func(d *Draft) { d.Modernisation.Steps[0].Modules = []string{"mod:engine"} }, "\"mod:engine\" is not a module"},
 		{"exclusion with no reason", func(d *Draft) { d.Modernisation.CaseSets[0].Exclude = []string{"the crash"} }, "must name the question or claim"},
 		{"wrong level ID", func(d *Draft) { d.Capabilities[0].ID = "E9" }, "IDs at this level are C1"},
+		// Traps, the do-not-carry list, and the compatibility contract.
+		{"trap rule invented", func(d *Draft) { d.Traps[0].Rule = "c-locales" }, "rule \"c-locales\" is not a trap rule"},
+		{"trap without evidence", func(d *Draft) { d.Traps[0].Cites = nil }, "claim T1: observed needs at least one citation"},
+		{"do-not-carry decided without the person", func(d *Draft) { d.DoNotCarry[0].Status = "confirmed" }, "do-not-carry N1: Q2 is not answered"},
+		{"step ports a do-not-carry", func(d *Draft) { d.Modernisation.Steps[0].Avoids = nil }, "step M1 replaces mod:src, where do-not-carry N1 is"},
+		{"level chosen for the person", func(d *Draft) { d.Compatibility[0].Level = "exact" }, "interface K1: Q1 is not answered"},
+		{"exact on normalised evidence", func(d *Draft) {
+			d.Compatibility[0].Level, d.Compatibility[0].DecidedBy = "exact", "request"
+			d.Modernisation.CaseSets[0].Compare = "stdout with trailing spaces trimmed"
+		}, "K1 must match exactly, but case set G1 compares"},
+		{"screen proved by stdout", func(d *Draft) {
+			d.Compatibility[1].Kind, d.Compatibility[1].Level, d.Compatibility[1].DecidedBy = "ui-form", "exact", "request"
+		}, "K2 is user-visible (ui-form): prove it with a user journey"},
+		{"dropped with no path", func(d *Draft) { d.Compatibility[1].Level, d.Compatibility[1].DecidedBy = "drop", "request" }, "deprecation does not give the path"},
+		{"no contract", func(d *Draft) { d.Compatibility = nil }, "list the compatibility contract"},
+		{"migration with no way back", func(d *Draft) {
+			d.Modernisation.Migrations = []Migration{{ID: "MG1", What: "calc history file", Cites: []string{"src/util.cpp:5"}, Proof: []string{"G1"}}}
+		}, "migration MG1: give the tested way back"},
+		{"shim forever", func(d *Draft) {
+			d.Modernisation.Shims = []Shim{{ID: "SH1", Interface: "K2", Behaviour: "usage on stderr", Mechanism: "CALC_COMPAT=1"}}
+		}, "shim SH1: needs the behaviour kept, how it is turned on, and the plan to remove it"},
+		{"suite unfixable with no reason", func(d *Draft) { d.Modernisation.Suites[0].Unfixable = []string{"test001"} }, "unfixable \"test001\" needs its reason"},
 	}
 	for _, tc := range cases {
 		d := fixtureDraft(t)
@@ -64,7 +86,10 @@ func TestCheckDraft(t *testing.T) {
 	d := fixtureDraft(t)
 	d.Questions[0].Status, d.Questions[0].Answer = "answered", "our nightly billing script pipes it"
 	d.ProductClaims[0].Basis, d.ProductClaims[0].Answer, d.ProductClaims[0].Question = "confirmed", "Q1", ""
-	if r := Check(ix, d); !r.Pass || r.Coverage.OpenQuestions != 0 || r.Coverage.Unknowns != 0 {
+	for k := range d.Compatibility {
+		d.Compatibility[k].Level = "exact" // the person's answer decides the level
+	}
+	if r := Check(ix, d); !r.Pass || r.Coverage.OpenQuestions != 1 || r.Coverage.Unknowns != 0 {
 		t.Errorf("answered draft: %v %+v", r.Problems, r.Coverage)
 	}
 	if _, err := ParseDraft([]byte(`{"product": "x", "claims": []}`)); err == nil {
@@ -77,7 +102,9 @@ func TestRenderSurvey(t *testing.T) {
 	d := fixtureDraft(t)
 	md := Render(ix, d, Check(ix, d))
 	for _, want := range []string{"# Survey: calc", "## Limits of this survey", "| C1 | Evaluate an expression |", "**P1** (unknown, Q1)",
-		"## Modernisation path: Rust", "Parity: G1.", "Known-issue markers cited: 1 of 4. Not cited: `marker:lib/tool.py:1`"} {
+		"## Modernisation path: Rust", "Parity: G1.", "Known-issue markers cited: 1 of 4. Not cited: `marker:lib/tool.py:1`",
+		"## Traps checked", "Rule `c-locale`", "| N1 | Debug tracing switched on", "proposed (Q2) |", "| K2 | exit-code |", "Does not carry over N1.",
+		"### Coexistence before cut-over: shadow", "Trap facts checked: 1 of 1."} {
 		if !strings.Contains(md, want) {
 			t.Errorf("SURVEY.md lacks %q:\n%s", want, md)
 		}

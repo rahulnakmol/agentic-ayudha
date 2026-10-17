@@ -16,14 +16,15 @@
     {"id": "P2", "topic": "context", "claim": "The README calls it a calculator.", "basis": "stated", "cites": ["doc:README.md"]}
   ],
   "questions": [
-    {"id": "Q1", "question": "Who runs calc today, and from what?", "why": "It decides which outputs must stay byte-identical.", "default": "Scripts that read its stdout, so stdout and exit codes stay exact.", "affects": ["P1"], "status": "open"}
+    {"id": "Q1", "question": "Who runs calc today, and from what?", "why": "It decides which outputs must stay byte-identical.", "default": "Scripts that read its stdout, so stdout and exit codes stay exact.", "affects": ["P1"], "status": "open"},
+    {"id": "Q2", "question": "Should the Rust version keep reading CALC_DEBUG from the environment?", "why": "It decides whether N1 is dropped or kept.", "default": "Drop it: a --debug flag replaces it.", "affects": ["N1", "E4"], "status": "open"}
   ],
   "modernisation": {
     "target": "Rust",
     "target_source": "request",
     "strategy": "Port the engine first behind the same command line, then retire the C++ build.",
     "steps": [
-      {"id": "M1", "title": "Port the engine", "modules": ["mod:src"], "claims": ["E1", "C1"], "parity": ["G1"]},
+      {"id": "M1", "title": "Port the engine", "modules": ["mod:src"], "claims": ["E1", "C1"], "parity": ["G1"], "avoids": ["N1"]},
       {"id": "M2", "title": "Retire the C++ build", "depends_on": ["M1"], "claims": ["E2"], "parity": ["G1"]}
     ],
     "case_sets": [
@@ -31,6 +32,20 @@
     ],
     "risks": [
       {"id": "R1", "claim": "The usage message goes to stderr with exit 2; scripts may rely on it.", "basis": "observed", "cites": ["src/main.cpp:7-8"]}
-    ]
-  }
+    ],
+    "suites": [
+      {"id": "S1", "title": "The legacy expression tests", "from": ["test:tests/test001.js"], "areas": ["expressions"]}
+    ],
+    "coexistence": {"mode": "shadow", "how": "Scripts call a wrapper that runs both builds on the same expression and logs any difference in stdout or exit code.", "compare": ["G1"], "cut_over": "A week of nightly runs with no difference.", "rollback": "Point the wrapper back at the C++ build."}
+  },
+  "traps": [
+    {"id": "T1", "rule": "c-locale", "check": "Does parse's printf output, or atoi, depend on the C locale?", "claim": "parse reads its argument with atoi and prints the trace with %s, so neither depends on the locale's decimal point.", "basis": "observed", "cites": ["trap:c-locale:src/util.cpp:7", "src/util.cpp:5-10"]}
+  ],
+  "do_not_carry": [
+    {"id": "N1", "feature": "Debug tracing switched on by an environment variable read deep inside parse", "cites": ["io:env:src/util.cpp:6"], "traps": ["T1"], "risk": "An environment variable silently changes stdout, so a script's output depends on its caller's environment.", "replacement": "An explicit --debug flag that writes to stderr.", "question": "Q2", "status": "proposed"}
+  ],
+  "compatibility": [
+    {"id": "K1", "kind": "stdout", "name": "The integer result on stdout", "cites": ["src/util.cpp:14"], "consumers": "Unknown (Q1)", "level": "undecided", "decided_by": "Q1", "proof": ["G1"]},
+    {"id": "K2", "kind": "exit-code", "name": "Exit 2 with a usage line on stderr when no expression is given", "cites": ["src/main.cpp:6-9"], "level": "undecided", "decided_by": "Q1", "proof": ["G1"]}
+  ]
 }

@@ -101,6 +101,13 @@ func Render(ix *Index, d Draft, r Report) string {
 	for _, c := range d.ProductClaims {
 		p("- %s\n", claimLine(c))
 	}
+	if len(d.Traps) > 0 {
+		p("\n## Traps checked\n\n")
+		p("Places where the stack's semantics differ from what a port would assume, each checked in the code (references/traps.md).\n\n")
+		for _, t := range d.Traps {
+			p("- %s Rule `%s`: %s\n", claimLine(t.Claim), t.Rule, oneLine(t.Check))
+		}
+	}
 	p("\n## Questions for the person\n\n")
 	if len(d.Questions) == 0 {
 		p("None.\n\n")
@@ -115,6 +122,35 @@ func Render(ix *Index, d Draft, r Report) string {
 				status = "deferred: " + oneLine(q.Reason)
 			}
 			p("| %s | %s | %s | %s | %s |\n", q.ID, cell(q.Text), cell(q.Why), cell(orDash(q.Default)), cell(status))
+		}
+		p("\n")
+	}
+	if len(d.DoNotCarry) > 0 {
+		p("## Do not carry over\n\n")
+		p("What the modern version deliberately does not reproduce. The person decides each; a confirmed entry becomes a Decision that constrains the Stories porting its code.\n\n")
+		p("| ID | Feature | Evidence | Risk of copying it | Replacement | Decision |\n|---|---|---|---|---|---|\n")
+		for _, n := range d.DoNotCarry {
+			ev := citeText(n.Cites)
+			if len(n.Traps) > 0 {
+				ev += "; " + strings.Join(n.Traps, ", ")
+			}
+			p("| %s | %s | %s | %s | %s | %s (%s) |\n", n.ID, cell(n.Feature), cell(ev), cell(n.Risk), cell(n.Replacement), n.Status, n.Question)
+		}
+		p("\n")
+	}
+	if len(d.Compatibility) > 0 {
+		p("## Compatibility contract\n\n")
+		p("Every interface others depend on, at the level the person decides: **exact** (must match), **differ** (may differ, with the recorded decision), **drop** (removed, with a deprecation path), or **undecided** (a question asks).\n\n")
+		p("| ID | Kind | Interface | Level | Decided by | Proof | Who depends on it |\n|---|---|---|---|---|---|---|\n")
+		for _, k := range d.Compatibility {
+			level := k.Level
+			switch k.Level {
+			case "differ":
+				level += ": " + oneLine(k.Difference)
+			case "drop":
+				level += ": " + oneLine(k.Deprecation)
+			}
+			p("| %s | %s | %s %s | %s | %s | %s | %s |\n", k.ID, k.Kind, cell(k.Name), cell(citeText(k.Cites)), cell(level), k.DecidedBy, cell(orDash(strings.Join(k.Proof, ", "))), cell(orDash(k.Consumers)))
 		}
 		p("\n")
 	}
@@ -140,6 +176,9 @@ func Render(ix *Index, d Draft, r Report) string {
 			if len(s.Claims) > 0 {
 				p(" Rests on %s.", strings.Join(s.Claims, ", "))
 			}
+			if len(s.Avoids) > 0 {
+				p(" Does not carry over %s.", strings.Join(s.Avoids, ", "))
+			}
 			p(" Parity: %s.\n", strings.Join(s.Parity, ", "))
 		}
 		p("\n### Parity case sets\n\n")
@@ -152,6 +191,35 @@ func Render(ix *Index, d Draft, r Report) string {
 				p(" Not kept: %s.", strings.Join(g.Exclude, "; "))
 			}
 			p("\n")
+		}
+		if len(m.Suites) > 0 {
+			p("\n### Compatibility suites\n\n")
+			for _, su := range m.Suites {
+				p("- **%s** %s. From %s; scored per area: %s.", su.ID, strings.TrimSuffix(oneLine(su.Title), "."), citeText(su.From), strings.Join(su.Areas, ", "))
+				if su.Cases != "" {
+					p(" Cases: `%s`.", su.Cases)
+				}
+				if len(su.Unfixable) > 0 {
+					p(" Left out of the score: %s.", oneLine(strings.Join(su.Unfixable, "; ")))
+				}
+				p("\n")
+			}
+		}
+		if len(m.Migrations) > 0 {
+			p("\n### Migrations\n\n")
+			for _, mg := range m.Migrations {
+				p("- **%s** %s %s. Rollback: %s. Proved by %s.\n", mg.ID, strings.TrimSuffix(oneLine(mg.What), "."), citeText(mg.Cites), oneLine(mg.Rollback), strings.Join(mg.Proof, ", "))
+			}
+		}
+		if c := m.Coexistence; c != nil {
+			p("\n### Coexistence before cut-over: %s\n\n", c.Mode)
+			p("%s Compared on %s. Cut over when %s Rollback: %s\n", oneLine(c.How), strings.Join(c.Compare, ", "), oneLine(c.CutOver), oneLine(c.Rollback))
+		}
+		if len(m.Shims) > 0 {
+			p("\n### Compatibility shims\n\n")
+			for _, sh := range m.Shims {
+				p("- **%s** for %s: %s, turned on by %s. Removal: %s.\n", sh.ID, sh.Interface, oneLine(sh.Behaviour), oneLine(sh.Mechanism), oneLine(sh.Removal))
+			}
 		}
 		if len(m.Risks) > 0 {
 			p("\n### Modernisation risks\n\n")
@@ -171,6 +239,15 @@ func Render(ix *Index, d Draft, r Report) string {
 	p("- Known-issue markers cited: %d of %d.", cov.MarkersCited, cov.Markers)
 	if len(cov.UncitedMarker) > 0 {
 		p(" Not cited: %s.", citeText(cov.UncitedMarker))
+	}
+	p("\n- Trap facts checked: %d of %d.", cov.TrapsChecked, cov.Traps)
+	if n := len(cov.UncheckedTrap); n > 0 {
+		shown := cov.UncheckedTrap[:min(n, 20)]
+		p(" Not checked: %s", citeText(shown))
+		if n > len(shown) {
+			p(" and %d more (the index lists them)", n-len(shown))
+		}
+		p(".")
 	}
 	p("\n- Open questions: %d; unknown claims: %d.\n", cov.OpenQuestions, cov.Unknowns)
 	if !r.Pass {

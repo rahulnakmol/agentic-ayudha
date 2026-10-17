@@ -162,7 +162,7 @@ var generatedRule = regexp.MustCompile(`(?i)\b(?:generated[ \t]+by|do[ \t]+not[ 
 // buildFlagRule finds compiler and runtime flags in build files that change
 // a program's semantics: arithmetic, default kinds, static locals, the
 // language level, encodings and time zones.
-var buildFlagRule = regexp.MustCompile(`(?:^|[\s"'=])(-ffast-math|-Ofast|-funsafe-math-optimizations|-ffloat-store|-mfpmath=387|-fno-strict-aliasing|-fwrapv|-fpermissive|-funsigned-char|-fdefault-real-8|-fdefault-double-8|-fdefault-integer-8|-freal-4-real-8|-fno-automatic|-finit-local-zero|-finit-real=\w+|-std=legacy|-ff2c|-fno-range-check|-fcray-pointer|-fdec\S*|-fbackslash|-r8|-i8|-m32|/fp:fast|-fp-model[= ]fast\S*|-Dfile\.encoding=\S+|-Duser\.timezone=\S+|-Duser\.language=\S+|-source[ \t]+1\.[1-7]|-target[ \t]+1\.[1-7])`)
+var buildFlagRule = regexp.MustCompile(`(?:^|[\s"'=(,])(-ffast-math|-Ofast|-march=native|-xHOST|-no-prec-div|-ffp-contract=fast|-funsafe-math-optimizations|-ffloat-store|-mfpmath=387|-fno-strict-aliasing|-fwrapv|-fpermissive|-funsigned-char|-fdefault-real-8|-fdefault-double-8|-fdefault-integer-8|-freal-4-real-8|-fno-automatic|-finit-local-zero|-finit-real=\w+|-std=legacy|-ff2c|-fno-range-check|-fcray-pointer|-fdec\S*|-fbackslash|-r8|-i8|-m32|/fp:fast|-fp-model[= ]fast\S*|-Dfile\.encoding=\S+|-Duser\.timezone=\S+|-Duser\.language=\S+|-source[ \t]+1\.[1-7]|-target[ \t]+1\.[1-7])`)
 
 // buildComment is a # or // comment in a build file: at a line's start or
 // after a space, so a URL or "a#b" is left alone.

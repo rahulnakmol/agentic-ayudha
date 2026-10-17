@@ -310,6 +310,9 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 		}
 		s := &scanned{raw: string(raw)}
 		files[f.Path] = s
+		if f.Role != "build" && lang.Syntax == syntaxBuild {
+			ix.buildTraps(f.Path, s.raw) // an included build file: cmake/UserOverride.cmake, rules.mk
+		}
 		switch {
 		case f.Role == "build":
 			code, _ := strip(s.raw, syntaxBuild, lang.Name)
@@ -882,8 +885,11 @@ func (ix *Index) index() {
 	for _, f := range ix.Files {
 		ix.ids["file:"+f.Path] = true
 	}
-	for _, s := range ix.Symbols {
+	for i, s := range ix.Symbols {
 		ix.ids[s.ID] = true
+		if s.file == "" { // read back from index.json, which keeps only At
+			ix.Symbols[i].file, ix.Symbols[i].line = splitAt(s.At)
+		}
 	}
 	for _, t := range ix.Targets {
 		ix.ids[t.ID] = true
@@ -943,8 +949,11 @@ func (ix *Index) Resolve(cite string) error {
 	if ix.ids[cite] {
 		return nil
 	}
-	for _, pre := range []string{"file:", "sym:", "build:", "dep:", "entry:", "io:", "trap:", "test:", "doc:", "marker:", "mod:"} {
+	for _, pre := range []string{"file:", "sym:", "build:", "dep:", "entry:", "io:", "trap:", "test:", "doc:", "marker:", "mod:", "probe:"} {
 		if strings.HasPrefix(cite, pre) {
+			if pre == "probe:" {
+				return fmt.Errorf("%s: no such probe fact (run `aayu survey --golden <cases> --bin <legacy> --run --probe` first)", cite)
+			}
 			return fmt.Errorf("%s: no such fact in the index", cite)
 		}
 	}

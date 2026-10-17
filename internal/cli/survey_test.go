@@ -97,7 +97,7 @@ func TestSurveyBacklogCreate(t *testing.T) {
 	create := append(args, "--create", "--reviewed", res.Digest, "--limit", "4")
 	code, stdout, stderr = run(t, env, opts, create...)
 	res = SurveyBacklogResult{}
-	if err := json.Unmarshal([]byte(stdout), &res); code != 0 || err != nil || len(res.Filed) != 4 || len(res.Waiting) != 2 {
+	if err := json.Unmarshal([]byte(stdout), &res); code != 0 || err != nil || len(res.Filed) != 4 || len(res.Waiting) != 3 {
 		t.Fatalf("first create: %d %v filed %v waiting %v %s", code, err, res.Filed, res.Waiting, stderr)
 	}
 	g.Mu.Lock()
@@ -115,11 +115,11 @@ func TestSurveyBacklogCreate(t *testing.T) {
 	if subs != 3 {
 		t.Errorf("sub-issue links = %d, want 3 (initiative, feature, story)", subs)
 	}
-	// The second run files the two that waited, with the dependency's number, and edits nothing.
+	// The second run files the three that waited, with their links' numbers, and edits nothing.
 	g.Reset()
 	code, stdout, _ = run(t, env, opts, create...)
 	res = SurveyBacklogResult{}
-	if err := json.Unmarshal([]byte(stdout), &res); code != 0 || err != nil || len(res.Filed) != 2 || len(res.Existing) != 4 || len(res.Waiting) != 0 {
+	if err := json.Unmarshal([]byte(stdout), &res); code != 0 || err != nil || len(res.Filed) != 3 || len(res.Existing) != 4 || len(res.Waiting) != 0 {
 		t.Fatalf("second create: %d %v %+v", code, err, res)
 	}
 	for _, w := range g.Writes() {
@@ -132,6 +132,14 @@ func TestSurveyBacklogCreate(t *testing.T) {
 	g.Mu.Unlock()
 	if !strings.Contains(port.Body, fmt.Sprintf("depends-on #%d", res.Existing["capture-golden"])) {
 		t.Errorf("port-eval body lacks its dependency:\n%s", port.Body)
+	}
+	// The do-not-carry Decision is filed after the Stories it constrains, with their numbers.
+	g.Mu.Lock()
+	dec := g.Issues[res.Filed["no-env-debug"]]
+	g.Mu.Unlock()
+	if !strings.Contains(dec.Body, fmt.Sprintf("constrains #%d", res.Existing["capture-golden"])) || !strings.Contains(dec.Body, fmt.Sprintf("constrains #%d", res.Filed["port-eval"])) ||
+		!slices.Contains(g.LabelNames(dec.Number), "type:decision") {
+		t.Errorf("decision body or labels:\n%s %v", dec.Body, g.LabelNames(dec.Number))
 	}
 	// A third run finds every key by its marker and files nothing.
 	g.Reset()
@@ -192,5 +200,50 @@ func TestSurveyGoldenParity(t *testing.T) {
 	res = SurveyGoldenResult{}
 	if err := json.NewDecoder(strings.NewReader(stdout)).Decode(&res); code != ExitFloor || err != nil || len(res.Diffs) != 1 || res.Diffs[0].ID != "c1" || res.Diffs[0].Stream != "stderr" {
 		t.Fatalf("parity with changed stderr: %d %v %+v", code, err, res.Diffs)
+	}
+
+	// --shadow runs both builds on the same inputs, with no golden files.
+	if code, _, stderr := run(t, nil, opts, append(base, "--golden", cases, "--bin", legacy, "--shadow", same, "--run")...); code != 0 {
+		t.Fatalf("shadow with the same behaviour: %d %s", code, stderr)
+	}
+	code, stdout, _ = run(t, nil, opts, append(base, "--golden", cases, "--bin", legacy, "--shadow", changed, "--run", "--json")...)
+	res = SurveyGoldenResult{}
+	if err := json.NewDecoder(strings.NewReader(stdout)).Decode(&res); code != ExitFloor || err != nil || res.Mode != "shadow" || len(res.Diffs) != 1 || res.Diffs[0].ID != "c1" {
+		t.Fatalf("shadow with changed stderr: %d %v %+v", code, err, res.Diffs)
+	}
+	if code, _, _ := run(t, nil, opts, append(base, "--parity", cases, "--bin", same, "--probe", "--run")...); code != ExitUsage {
+		t.Fatalf("--probe outside --golden: %d", code)
+	}
+
+	// --compat scores the legacy suite on the new build against the legacy run.
+	suite := filepath.Join(dir, "suite.json")
+	if err := os.WriteFile(suite, []byte(`{"cases": [
+  {"id": "t1", "set": "S1", "area": "parse", "argv": ["{bin}", "t1", "0"], "stdin": "in.txt"},
+  {"id": "t2", "set": "S1", "area": "parse", "argv": ["{bin}", "t2", "1"], "stdin": "in.txt"},
+  {"id": "t3", "set": "S1", "area": "print", "argv": ["{bin}", "t3", "0"], "stdin": "in.txt"},
+  {"id": "t4", "set": "S1", "area": "print", "argv": ["{bin}", "t4", "1"], "stdin": "in.txt", "unfixable": "intercepts glibc with LD_PRELOAD"}
+]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, stderr := run(t, nil, opts, append(base, "--golden", suite, "--bin", legacy, "--run")...); code != 0 {
+		t.Fatalf("legacy suite run: %d %s", code, stderr)
+	}
+	port := filepath.Join(dir, "port.sh") // fails t1 (a regression), passes t2 (which the legacy build fails)
+	if err := os.WriteFile(port, []byte("#!/bin/sh\ncase $1 in t1) exit 1;; *) exit 0;; esac\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, _ = run(t, nil, opts, append(base, "--compat", suite, "--bin", port, "--run", "--json")...)
+	res = SurveyGoldenResult{}
+	if err := json.NewDecoder(strings.NewReader(stdout)).Decode(&res); code != ExitFloor || err != nil || res.Compat == nil {
+		t.Fatalf("compat: %d %v %s", code, err, stdout)
+	}
+	if c := res.Compat; c.LegacyPass != 2 || c.Pass != 1 || c.Regressions != 1 || len(c.Areas) != 2 || c.Areas[0].Regressions[0] != "t1" || c.Areas[0].Fixed[0] != "t2" || c.Areas[1].Unfixable != 1 {
+		t.Errorf("compat score: %+v", c)
+	}
+	if b, err := os.ReadFile(filepath.Join(out, "golden", "suite", "compat-history.jsonl")); err != nil || strings.Count(string(b), "\n") != 1 {
+		t.Errorf("history: %q %v", b, err)
+	}
+	if code, _, _ := run(t, nil, opts, append(base, "--compat", cases)...); code != ExitBlocked {
+		t.Errorf("a compat run of cases with no suite or area must be blocked: %d", code)
 	}
 }

@@ -54,6 +54,9 @@ func (e *Env) surveyBacklog(ctx context.Context, in Values, indexFile, out strin
 	if err != nil {
 		return Errorf(ExitUsage, "survey --backlog: %v; run `aayu survey` first", err)
 	}
+	if err := ix.LoadProbes(out); err != nil {
+		return Wrap(ExitUsage, err)
+	}
 	b, err := os.ReadFile(in.String("draft"))
 	if err != nil {
 		return Wrap(ExitUsage, err)
@@ -158,7 +161,7 @@ func (e *Env) fileBacklog(ctx context.Context, in Values, bl survey.Backlog, out
 		}
 		var deps []string
 		ready := true
-		for _, dep := range append([]string{it.Parent}, it.DependsOn...) {
+		for _, dep := range slices.Concat([]string{it.Parent}, it.DependsOn, it.Constrains) {
 			if dep == "" {
 				continue
 			}
@@ -167,7 +170,10 @@ func (e *Env) fileBacklog(ctx context.Context, in Values, bl survey.Backlog, out
 				ready = false
 				break
 			}
-			if dep != it.Parent {
+			switch {
+			case slices.Contains(it.Constrains, dep):
+				deps = append(deps, fmt.Sprintf("constrains #%d", n))
+			case dep != it.Parent:
 				deps = append(deps, fmt.Sprintf("depends-on #%d", n))
 			}
 		}

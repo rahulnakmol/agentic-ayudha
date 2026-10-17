@@ -32,14 +32,21 @@ var Topics = map[string][]string{
 // module, then rolls up: claims at three levels, the questions the code cannot
 // answer (and the person's answers), and the modernisation path.
 type Draft struct {
-	Product       string         `json:"product"`
-	Request       string         `json:"request"` // the person's own words asking for the survey
-	Commit        string         `json:"commit,omitempty"`
-	Summary       string         `json:"summary"`
-	Engineering   []Claim        `json:"engineering"`
-	Capabilities  []Claim        `json:"capabilities"`
-	ProductClaims []Claim        `json:"product_claims"`
-	Questions     []Question     `json:"questions"`
+	Product       string     `json:"product"`
+	Request       string     `json:"request"` // the person's own words asking for the survey
+	Commit        string     `json:"commit,omitempty"`
+	Summary       string     `json:"summary"`
+	Engineering   []Claim    `json:"engineering"`
+	Capabilities  []Claim    `json:"capabilities"`
+	ProductClaims []Claim    `json:"product_claims"`
+	Questions     []Question `json:"questions"`
+	// Traps are the trap rules' questions asked of the code (references/traps.md).
+	Traps []Trap `json:"traps,omitempty"`
+	// DoNotCarry lists what the modern version deliberately does not reproduce.
+	DoNotCarry []Carry `json:"do_not_carry,omitempty"`
+	// Compatibility is the contract: every interface others depend on, at the
+	// level the person decides.
+	Compatibility []Interface    `json:"compatibility,omitempty"`
 	Modernisation *Modernisation `json:"modernisation,omitempty"`
 }
 
@@ -78,6 +85,11 @@ type Modernisation struct {
 	Steps        []Step    `json:"steps"`
 	CaseSets     []CaseSet `json:"case_sets"`
 	Risks        []Claim   `json:"risks,omitempty"`
+	// Suites are the legacy project's own tests, run against the new version.
+	Suites      []Suite      `json:"suites,omitempty"`
+	Migrations  []Migration  `json:"migrations,omitempty"`
+	Coexistence *Coexistence `json:"coexistence,omitempty"`
+	Shims       []Shim       `json:"shims,omitempty"`
 }
 
 // Step is one stage of the modernisation, in dependency order.
@@ -87,7 +99,8 @@ type Step struct {
 	Modules   []string `json:"modules,omitempty"` // mod: IDs it replaces
 	Claims    []string `json:"claims,omitempty"`  // the claims it rests on
 	DependsOn []string `json:"depends_on,omitempty"`
-	Parity    []string `json:"parity"` // case set IDs that prove the step
+	Parity    []string `json:"parity"`           // case set or suite IDs that prove the step
+	Avoids    []string `json:"avoids,omitempty"` // do-not-carry entries (N1) in the code it replaces
 }
 
 // CaseSet is a group of characterisation cases: inputs run on the legacy
@@ -111,6 +124,9 @@ type Coverage struct {
 	MarkersCited  int      `json:"markers_cited"`
 	UncitedModule []string `json:"uncited_modules,omitempty"`
 	UncitedMarker []string `json:"uncited_markers,omitempty"`
+	Traps         int      `json:"traps"`
+	TrapsChecked  int      `json:"traps_checked"` // trap facts a trap finding or claim cites
+	UncheckedTrap []string `json:"unchecked_traps,omitempty"`
 	OpenQuestions int      `json:"open_questions"`
 	Unknowns      int      `json:"unknown_claims"`
 }
@@ -123,7 +139,7 @@ type Report struct {
 }
 
 var (
-	claimID = map[string]*regexp.Regexp{"engineering": regexp.MustCompile(`^E[1-9][0-9]*$`), "capability": regexp.MustCompile(`^C[1-9][0-9]*$`), "product": regexp.MustCompile(`^P[1-9][0-9]*$`)}
+	claimID = map[string]*regexp.Regexp{"engineering": regexp.MustCompile(`^E[1-9][0-9]*$`), "capability": regexp.MustCompile(`^C[1-9][0-9]*$`), "product": regexp.MustCompile(`^P[1-9][0-9]*$`), "trap": tID}
 	qID     = regexp.MustCompile(`^Q[1-9][0-9]*$`)
 	mID     = regexp.MustCompile(`^M[1-9][0-9]*$`)
 	gID     = regexp.MustCompile(`^G[1-9][0-9]*$`)
@@ -152,6 +168,9 @@ func (d Draft) Claims() map[string]Claim {
 		for _, c := range d.Modernisation.Risks {
 			out[c.ID] = c
 		}
+	}
+	for _, t := range d.Traps {
+		out[t.ID] = t.Claim
 	}
 	return out
 }
@@ -233,7 +252,7 @@ func Check(ix *Index, d Draft) Report {
 		if level == "capability" && strings.TrimSpace(c.Name) == "" {
 			add("%s: a capability needs a name", where)
 		}
-		if level != "capability" && !slices.Contains(Topics[level], c.Topic) {
+		if level != "capability" && level != "trap" && !slices.Contains(Topics[level], c.Topic) {
 			add("%s: topic %q; want one of %s", where, c.Topic, strings.Join(Topics[level], ", "))
 		}
 		checkCites(where, c.Cites)
@@ -280,6 +299,7 @@ func Check(ix *Index, d Draft) Report {
 	for _, c := range d.ProductClaims {
 		claim("product", c)
 	}
+	checkContract(ix, d, questions, add, checkCites, claim)
 	planned := map[string]bool{} // modernisation steps and case sets a question may also affect
 	if m := d.Modernisation; m != nil {
 		for _, st := range m.Steps {
@@ -291,8 +311,8 @@ func Check(ix *Index, d Draft) Report {
 	}
 	for _, q := range d.Questions {
 		for _, a := range q.Affects {
-			if !seen[a] && !planned[a] {
-				add("question %s: affects %s, which is not a claim, a modernisation step, or a case set", q.ID, a)
+			if !seen[a] && !planned[a] && !contractIDs(d)[a] {
+				add("question %s: affects %s, which is not a claim, a modernisation step, a case set, a do-not-carry entry, or an interface", q.ID, a)
 			}
 		}
 	}
@@ -375,8 +395,8 @@ func checkModernisation(ix *Index, d Draft, m *Modernisation, questions map[stri
 			add("step %s: name the case sets that prove it keeps the legacy behaviour (parity)", s.ID)
 		}
 		for _, g := range s.Parity {
-			if !sets[g] {
-				add("step %s: parity %s is not a case set", s.ID, g)
+			if !sets[g] && !slices.ContainsFunc(m.Suites, func(x Suite) bool { return x.ID == g }) {
+				add("step %s: parity %s is not a case set or a suite", s.ID, g)
 			}
 		}
 	}
@@ -396,7 +416,7 @@ func checkModernisation(ix *Index, d Draft, m *Modernisation, questions map[stri
 }
 
 func refersTo(s string, questions map[string]Question, claims map[string]bool) bool {
-	for _, w := range regexp.MustCompile(`\b[QECPR][1-9][0-9]*\b`).FindAllString(s, -1) {
+	for _, w := range regexp.MustCompile(`\b[QECPRTNK][1-9][0-9]*\b`).FindAllString(s, -1) {
 		if _, ok := questions[w]; ok || claims[w] {
 			return true
 		}
@@ -457,7 +477,7 @@ func citeFile(ix *Index, c string) string {
 	if f := fileOf(c); f != "" {
 		return f
 	}
-	if strings.HasPrefix(c, "mod:") || strings.HasPrefix(c, "build:") || strings.HasPrefix(c, "dep:") {
+	if strings.HasPrefix(c, "mod:") || strings.HasPrefix(c, "build:") || strings.HasPrefix(c, "dep:") || strings.HasPrefix(c, "probe:") {
 		return ""
 	}
 	for _, pre := range []string{"entry:", "io:", "trap:", "marker:", "test:", "doc:"} {
@@ -511,6 +531,14 @@ func coverage(ix *Index, files, ids map[string]bool) Coverage {
 			cov.UncitedMarker = append(cov.UncitedMarker, mk.ID)
 		}
 	}
+	for _, t := range ix.Traps {
+		cov.Traps++
+		if ids[t.ID] {
+			cov.TrapsChecked++
+		} else {
+			cov.UncheckedTrap = append(cov.UncheckedTrap, t.ID)
+		}
+	}
 	sort.Strings(cov.UncitedModule)
 	return cov
 }
@@ -523,4 +551,16 @@ func citesSymbolAt(ix *Index, ids map[string]bool, at string) bool {
 		}
 	}
 	return false
+}
+
+// contractIDs are the do-not-carry entries and interfaces of a draft.
+func contractIDs(d Draft) map[string]bool {
+	out := map[string]bool{}
+	for _, n := range d.DoNotCarry {
+		out[n.ID] = true
+	}
+	for _, k := range d.Compatibility {
+		out[k.ID] = true
+	}
+	return out
 }

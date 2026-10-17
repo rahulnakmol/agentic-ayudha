@@ -5,12 +5,12 @@
   "description": "Survey a codebase with no product docs: index it, check an evidence-backed analysis and backlog, and capture golden outputs for parity.",
   "properties": {
     "backlog": {
-      "description": "Backlog draft to check (JSON: Goal, Initiatives, Features, Stories, Bugs) against the work-item schema and the survey draft; renders backlog.md and its review digest.",
+      "description": "Backlog draft to check (JSON: Goal, Initiatives, Features, Stories, Bugs, and do-not-carry Decisions) against the work-item schema, the survey draft, and its compatibility contract; renders backlog.md and its review digest.",
       "type": "string",
       "x-aayu-type": "path"
     },
     "bin": {
-      "description": "With --golden or --parity: the program the cases run as {bin}.",
+      "description": "With --golden, --parity, or --compat: the program the cases run as {bin}.",
       "type": "string",
       "x-aayu-type": "string"
     },
@@ -18,6 +18,21 @@
       "description": "Module size in tokens (about four bytes each) when grouping files; default 20000.",
       "type": "integer",
       "x-aayu-type": "int"
+    },
+    "check-bin": {
+      "description": "With --probe: a sanitiser or checker build of the legacy program; cases whose stderr carries a checker report are recorded.",
+      "type": "string",
+      "x-aayu-type": "string"
+    },
+    "compat": {
+      "description": "A legacy test suite as cases (JSON, each test with its suite and area) to run against the new build (--bin) after --golden ran it on the legacy build: scores passes per area, appends to compat-history.jsonl, exit 3 when a test the legacy build passes fails.",
+      "type": "string",
+      "x-aayu-type": "path"
+    },
+    "coverage": {
+      "description": "With --probe: an lcov tracefile from running the cases under coverage; records the index's functions the cases never reach.",
+      "type": "string",
+      "x-aayu-type": "path"
     },
     "create": {
       "description": "With --backlog: file the reviewed backlog as issues through the actions log, skipping items already filed; needs --reviewed.",
@@ -28,7 +43,7 @@
       "x-aayu-type": "bool"
     },
     "draft": {
-      "description": "Survey draft to check (JSON: claims at the engineering, capability, and product levels, unknowns, answers, modernisation path): every claim cites the index or is marked unknown; renders SURVEY.md.",
+      "description": "Survey draft to check (JSON: claims at the engineering, capability, and product levels, trap findings, the do-not-carry list, the compatibility contract, unknowns, answers, modernisation path): every claim cites the index or a probe, or is marked unknown; renders SURVEY.md.",
       "type": "string",
       "x-aayu-type": "path"
     },
@@ -62,18 +77,31 @@
       "type": "string",
       "x-aayu-type": "path"
     },
+    "probe": {
+      "description": "With --golden --bin --run: also run each case twice and under a changed time zone, locale, and HOME (and under strace when installed), writing non-determinism, environment dependencies, and files read and written to probes.json.",
+      "type": "boolean",
+      "x-aayu-read-only-values": [
+        "false"
+      ],
+      "x-aayu-type": "bool"
+    },
     "reviewed": {
       "description": "With --create: the review digest of the exact backlog the person reviewed (printed by --backlog).",
       "type": "string",
       "x-aayu-type": "string"
     },
     "run": {
-      "description": "With --golden or --parity: run the cases' program; without it the cases file is only checked.",
+      "description": "With --golden, --parity, or --compat: run the cases' program; without it the cases file is only checked.",
       "type": "boolean",
       "x-aayu-read-only-values": [
         "false"
       ],
       "x-aayu-type": "bool"
+    },
+    "shadow": {
+      "description": "With --golden --bin <legacy> --run: the new program, run beside the legacy one on the same inputs; reports every difference without golden files, exit 3 on any.",
+      "type": "string",
+      "x-aayu-type": "string"
     }
   },
   "required": [],

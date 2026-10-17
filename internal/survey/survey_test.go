@@ -275,6 +275,7 @@ func TestKeywordLanguages(t *testing.T) {
 	for _, want := range []string{
 		"trap:fortran-common:src/solver.f:3", "trap:fortran-equivalence:src/solver.f:14", "trap:fortran-assumed-size:src/solver.f:24",
 		"trap:fortran-implicit-typing:src/solver.f:2", "trap:fortran-implicit-typing:src/solver.f:12", "trap:build-semantic-flags:Makefile:3",
+		"trap:build-semantic-flags:cmake/Flags.cmake:2", // an included build file; a flag after "("
 		"trap:cobol-redefines:src/billing.cbl:7", "trap:cobol-binary-decimal:src/billing.cbl:6", "trap:pascal-directives:src/units.pas:2",
 		"trap:vb-on-error:vb/Ledger.bas:6", "trap:vb-no-option-explicit:vb/Ledger.bas:1", "trap:vb-16bit-integer:vb/Ledger.bas:5",
 	} {
@@ -287,8 +288,8 @@ func TestKeywordLanguages(t *testing.T) {
 	}
 	// A commented-out flag is not in the build.
 	for _, f := range ix.Traps {
-		if f.Kind == "build-semantic-flags" && f.Detail != "-fno-automatic" {
-			t.Errorf("build flags %q, want only -fno-automatic (the others are commented out)", f.Detail)
+		if want := map[string]string{"Makefile:3": "-fno-automatic", "cmake/Flags.cmake:2": "-march=native -ffast-math"}[f.At]; f.Kind == "build-semantic-flags" && f.Detail != want {
+			t.Errorf("build flags at %s %q, want %q (commented-out flags are not in the build)", f.At, f.Detail, want)
 		}
 	}
 	// STEP and FNORM declare IMPLICIT NONE; module procedures inherit the module's.

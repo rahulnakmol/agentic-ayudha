@@ -564,5 +564,47 @@
         ]
       }
     ]
-  }
+  },
+  "compatibility": [
+    {
+      "id": "K1",
+      "kind": "api",
+      "name": "Embedding API used by the two internal tools: execute, evaluate, addNative",
+      "cites": [
+        "TinyJS.h:293-318"
+      ],
+      "consumers": "two internal tools (Q1)",
+      "level": "exact",
+      "decided_by": "Q1",
+      "proof": [
+        "G2",
+        "G3"
+      ]
+    },
+    {
+      "id": "K2",
+      "kind": "stdout",
+      "name": "Script output and ERROR lines, quirks included",
+      "cites": [
+        "Script.cpp:86-95"
+      ],
+      "level": "exact",
+      "decided_by": "Q2",
+      "proof": [
+        "G2",
+        "G3"
+      ]
+    },
+    {
+      "id": "K3",
+      "kind": "cli",
+      "name": "Command-line runner",
+      "cites": [
+        "Script.cpp:74-100"
+      ],
+      "level": "differ",
+      "decided_by": "Q4",
+      "difference": "A demo (Q4): the Rust runner keeps only what G2 and G3 need (run each script argument, print output and ERROR lines); the interactive mode and banner may differ."
+    }
+  ]
 }

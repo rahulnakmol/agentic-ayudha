@@ -8,11 +8,15 @@ fact (in the index, `aayu survey`'s summary, and each module pack). A fact says 
 For each trap fact in a module you read:
 
 1. Ask the rule's questions of the cited code, and of the callers the pack lists.
-2. Record what you found as an engineering claim (topic `risks`) that cites the trap fact: `observed` when the code
-   shows it, `inferred` with reasoning, or `unknown` with a question for the person. A probe (run the goldens twice,
-   run under a sanitiser) beats reading when it is cheap.
-3. If the modern version must not reproduce it, say so in a modernisation risk with the replacement, and ask the
-   person to confirm it.
+2. Write what you found as a trap finding (`traps` in [formats.md](formats.md)): the rule, the question you asked
+   (`check`), and the answer with its basis: `observed` when the code shows it, `inferred` with reasoning, or
+   `unknown` with a question for the person. A probe beats reading when it is cheap: `aayu survey --golden <cases>
+   --bin <legacy> --run --probe` runs each case twice and under a changed time zone, locale, and HOME, records files
+   read and written, and with `--check-bin` and `--coverage` adds a sanitiser build's reports and the functions the
+   cases never reach. Cite its `probe:` facts.
+3. If the modern version must not reproduce it, add it to `do_not_carry` with its evidence, the risk of copying it,
+   and the replacement, and ask the person to confirm it. The modernisation steps that replace its code list it in
+   `avoids`, and the backlog turns it into a Decision that constrains their Stories.
 
 A rule that matched but turns out harmless is still a finding ("checked: `common /state/` is read-only after
 `init`"); an unchecked trap fact is listed in `SURVEY.md` as not checked. The questions under "No rule" have no
@@ -28,7 +32,9 @@ pattern the index can match; ask them of every module in that stack.
 ### build-semantic-flags
 
 - Which flag changes the program's meaning, not just its speed? `-ffast-math`, `-Ofast`, `/fp:fast`, and
-  `-fp-model fast` reorder floating-point operations and drop NaN and infinity handling; `-fdefault-real-8`,
+  `-fp-model fast` reorder floating-point operations and drop NaN and infinity handling; `-march=native`, `-xHOST`,
+  and `-ffp-contract=fast` let the compiler fuse multiply-adds, so results depend on the build machine;
+  `-no-prec-div` relaxes division; `-fdefault-real-8`,
   `-freal-4-real-8`, and `-r8` make every `REAL` a double; `-fno-automatic` makes every local `SAVE`d (static);
   `-fwrapv` defines signed overflow; `-funsigned-char` changes `char` comparisons; `-m32` changes sizes;
   `-Dfile.encoding`, `-Duser.timezone`, and `-source 1.x` pin a JVM's defaults.
