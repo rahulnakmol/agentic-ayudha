@@ -95,6 +95,9 @@ func TestTier2SurveyRevisesOnceThenJudges(t *testing.T) {
 		t.Fatalf("%d calls, runs %+v", len(fake.Requests), runs)
 	}
 	first, revise, judged := fake.Requests[0], fake.Requests[1], fake.Requests[2]
+	if !first.Stream || !revise.Stream {
+		t.Error("the survey skill call does not stream")
+	}
 	for _, want := range []string{`<untrusted source="aayu survey and aayu survey --module">`, "$ aayu survey --module mod:(root)#2", "marker marker:TinyJS.cpp:111",
 		`<untrusted source="Script.cpp">`, "74: int main(int argc, char **argv)", "TinyJS.cpp, lines 1-200 of 2200", `<untrusted source="request">`, "leave every question open"} {
 		if !strings.Contains(first.Messages[0].Content, want) {
