@@ -32,3 +32,13 @@ go run ./examples/benefits-qa/analytics/simulate -channel hr-ticket -seed 1 -fro
 go run ./examples/benefits-qa/analytics/simulate -channel benefits-qa -seed 2 -from 2026-09-14 \
   -out examples/benefits-qa/analytics/testdata/benefits-qa-seed2-2026-09-14.jsonl
 ```
+
+## Running it in production (WP5.10)
+
+With `-telemetry <dir>` the server writes OpenTelemetry traces (`traces.jsonl`, OTLP JSON; a recovered panic becomes
+a 500 with an `exception` event and its stack trace) and JSON logs that carry each span's `trace_id`
+(`logs.jsonl`), tagged with the revision it was built from (`service.version`) and its environment
+(`api.Observe`). `deploy/deploy.sh <revision>` deploys one commit as a production-like service on port 8788 and
+appends a deploy marker to `deploys.jsonl`; `deploy/deploy.sh --rollback` redeploys the revision it replaced. Those
+three files are the sanitised export `aayu investigate` reads, and the two deploy commands are what the example's
+catalog actions run through `aayu respond`, after a person approves them.

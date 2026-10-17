@@ -108,6 +108,7 @@ Sources:
 | `install` | Informed |
 | `doctor` | Informed |
 | `survey` | Informed |
+| `investigate` | Informed |
 
 Plumbing commands accountable for: `next`.
 

@@ -28,7 +28,7 @@ import (
 var (
 	claimCue = regexp.MustCompile(`(?i)\b(code|files?|functions?|methods?|packages?|modules?|layers?|L0[1-9]|architecture|boundar(y|ies)|contracts?|interfaces?|api|schemas?|migrations?|registry|gates?|floors?|thresholds?|coverage|tests?|checkpoints?|packs?|proof|merged?|PRs?|pull requests?|commits?|branch(es)?|builds?|deploy\w*|releases?|incidents?|risks?|regress\w*|bugs?|defects?|estimates?|effort|budgets?|cost|spent|velocity|progress|shipped|blocked|latency|metrics?|baselines?|stor(y|ies)|corrections?|overr?an|flak\w*|struct|fields?|tombstones?|ledger|plan)\b|\d+(\.\d+)?\s?%`)
 
-	citationKinds = []string{"path", "dir", "issue", "adr", "symbol", "commit", "run", "config"}
+	citationKinds = []string{"path", "dir", "issue", "adr", "symbol", "commit", "run", "config", "query"}
 	citationREs   = map[string]*regexp.Regexp{
 		"path":   regexp.MustCompile(`(?:[A-Za-z0-9_.<>-]+/)*[A-Za-z0-9_<>-][A-Za-z0-9_.<>-]*\.(?:go|md|toml|ya?ml|jsonl?|tsx?|m?js|sh|sql|txt|csv|html|css|py)\b(?::\d+(?:-\d+)?)?`),
 		"dir":    regexp.MustCompile("`[A-Za-z0-9_.-]+/[A-Za-z0-9_.*<>/-]*`"),
@@ -38,6 +38,8 @@ var (
 		"commit": regexp.MustCompile("`([0-9a-f]{7,40})`"),
 		"run":    regexp.MustCompile(`\brun (\d{6,})\b`),
 		"config": regexp.MustCompile("`\\[[a-z_.]+\\]`"),
+		// A bounded telemetry query `aayu investigate` ran and logged (Decision #324), cited as "query q3".
+		"query": regexp.MustCompile(`\bquery (q\d+)\b`),
 	}
 
 	illustration = regexp.MustCompile(`^(?:[*_]{1,2})?(Analogy|Anecdote)\b`)
@@ -134,6 +136,8 @@ func citations(s string) []string {
 				out = append(out, "#"+m[1])
 			case "symbol", "commit", "run":
 				out = append(out, m[1])
+			case "query":
+				out = append(out, "query "+m[1])
 			default:
 				out = append(out, strings.Trim(m[0], "`"))
 			}

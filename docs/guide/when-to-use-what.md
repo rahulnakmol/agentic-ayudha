@@ -200,6 +200,7 @@ are not verbs; the verbs reference lists them.
 |  | [`tell`](../../skills/tell/SKILL.md) | Writes docs, release notes, and launch copy in your brand's voice, linking only work that is proven. |
 | [Keep it running](when-to-use-what.md#something-broke-in-production) | [`triage`](../../skills/triage/SKILL.md) | Sorts incoming reports into feedback, bugs, and incidents by label, without editing what people wrote. |
 |  | [`respond`](../../skills/respond/SKILL.md) | Helps handle an incident: proposes a fix from your runbook, runs it only after a person approves, and keeps the timeline. |
+|  | [`investigate`](../../skills/investigate/SKILL.md) | Works out what went wrong in production from your telemetry and the code that was actually deployed, and suggests a fix for a person to approve. |
 
 <!-- END GENERATED: verb-map -->
 

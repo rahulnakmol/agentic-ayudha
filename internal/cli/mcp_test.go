@@ -101,7 +101,7 @@ func TestMCPDefaultExposure(t *testing.T) {
 	cs := serveMCP(t, gitInit(t, "dev", nil))
 	names, tools := toolNames(t, cs)
 	// Read and authoring verbs only (the SDK lists tools by name).
-	want := []string{"brief", "chart", "decide", "doctor", "grill", "plan", "proof", "ready", "research", "slice", "status", "survey"}
+	want := []string{"brief", "chart", "decide", "doctor", "grill", "investigate", "plan", "proof", "ready", "research", "slice", "status", "survey"}
 	if !slices.Equal(names, want) {
 		t.Fatalf("tools = %v, want %v", names, want)
 	}
@@ -112,6 +112,10 @@ func TestMCPDefaultExposure(t *testing.T) {
 	// chart is exposed read-only (Decision #283): it grounds and checks a note, and never posts it.
 	if p := props(t, tools["chart"]); p["create"] != nil || p["kind"] == nil || p["draft"] == nil {
 		t.Errorf("chart tool properties %v: want --create pinned off, --kind and --draft exposed", p)
+	}
+	// investigate is exposed read-only (Decision #324): it queries an export and checks a note, and never posts it.
+	if p := props(t, tools["investigate"]); p["create"] != nil || p["telemetry"] == nil || p["query"] == nil {
+		t.Errorf("investigate tool properties %v: want --create pinned off, --telemetry and --query exposed", p)
 	}
 	// ready is exposed as ready --check: the caller cannot choose to write.
 	if _, ok := props(t, tools["ready"])["check"]; ok {

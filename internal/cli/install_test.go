@@ -70,7 +70,7 @@ func TestInstall(t *testing.T) {
 		t.Fatalf("home edit applied without confirmation: %v", err)
 	}
 	lock, ok, err := hosts.ReadLock(repo)
-	if err != nil || !ok || len(lock.Skills) != 32 || strings.Join(lock.Hosts, ",") != "amp,cursor,claude,codex" {
+	if err != nil || !ok || len(lock.Skills) != 33 || strings.Join(lock.Hosts, ",") != "amp,cursor,claude,codex" {
 		t.Fatalf("lock: %v %v %d skills, hosts %v", ok, err, len(lock.Skills), lock.Hosts)
 	}
 	// The installed copies pass the WP3.1 lint on disk, which includes the

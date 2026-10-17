@@ -116,7 +116,7 @@ seat's twin, consult the Consulted seats before acting, and leave paired humans'
 | Data & AI Architect (`data-ai-architect`) | Mneme | L05, L08 | `measure`, `chart` |
 | Engineering Manager (`engineering-manager`) | Athena | L03 | `inspect`, `ship`, `status`, `retro`, `next` |
 | AI Native Engineer (`ai-native-engineer`) | Talos | — | `build`, `verify`, `evolve` |
-| Production Engineer (`production-engineer`) | Atlas | L07 | `respond` |
+| Production Engineer (`production-engineer`) | Atlas | L07 | `respond`, `investigate` |
 | UX Researcher & Evolutionist (`ux-researcher-evolutionist`) | Iris | L01 | `research`, `wireframe`, `mockup`, `prototype`, `review`, `polish`, `baseline` |
 | DevOps & DevEx Tinkerer (`devops-devex-tinkerer`) | Hermes | L09 | `release`, `install`, `doctor`, `config`, `auth`, `actions`, `models`, `mcp`, `self-update`, `upgrade`, `version`, `gc`, `uninit`, `hook`, `lfs-agent`, `completion` |
 | Quality Architect (`quality-architect`) | Themis | L04 | `proof` |
