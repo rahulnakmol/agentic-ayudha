@@ -306,7 +306,7 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   Put the metrics with their edge-case rules, the copies with their retention, and the checks in tables (three at
   most), and keep the prose for the decision, the design choice, and the assumptions. Tables do not count as prose,
   but they count as the page: a startup data sketch is half a page in all, so its tables together hold about
-  twelve rows (an evidence sketch's evaluation table keeps every case its set needs), each table only the rows the decision needs (the metrics it reads, the copies that hold personal data, and the checks `## Checks` asks for,
+  twelve rows (an evidence sketch's evaluation table keeps every case its set needs), each table only the rows the decision needs (the metrics it reads, every copy derived from personal data, aggregates included, and the checks `## Checks` asks for,
   combined into rows: reconciliation with the quality thresholds for skipped rows, duplicates, and nulls;
   completeness; a hand-counted fixture; the proposed Completion Goal criterion), with one trigger in `## Design`. More rows and
   thresholds are a scaleup's data design, not a better sketch.
