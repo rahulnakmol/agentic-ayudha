@@ -20,7 +20,8 @@ found on GitHub) plus the code and ledger excerpts the twin read before writing 
 - Plan `ledger/plans/212/plan.json`: two L04 checkpoints, no L07 checkpoint, no rollback step.
 - Pack `ledger/packs/212/pack.json`: criterion 2 ("a purge of kind `recording` leaves a tombstone that records the
   kind") has no evidence; coverage of changed lines 86.4 % at checkpoint 4 against the 90.0 floor in `CONSTRAINTS.md`.
-- `LAYERS.md`: L04 Domain / policy is `internal/proof/**`; L07 Operational data / state is `internal/ledger/**`.
+- `LAYERS.md`: L04 Domain / policy is `internal/proof/**`, owner seat Quality Architect; L07 Operational data / state
+  is `internal/ledger/**`, owner seat AI Native Engineer (+SRE hat).
 - `CONSTRAINTS.md`: `verify.floors.coverage.min_diff_percent` is 90.0. A floor is waived only by a floor-waiver
   Decision filed with `aayu decide <story> --waiver <floor>`; it is never reversible, never provisional, and only a
   human's `--accept waive` waives the floor (`skills/decide/SKILL.md`).
