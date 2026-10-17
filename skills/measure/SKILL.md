@@ -198,7 +198,7 @@ Architect's, so you report it and never bend it.
   Cite the run's output by its export file path or the Goal's or Initiative's number; "run output" and
   "(grounding)" are not sources. A rate the grounding gives without counts (a baseline from an earlier run) is
   quoted once with where it comes from and the plain fact that its counts are not in what you read ("0.18, from the
-  August run recorded in #57; its counts are not shown here"); do not claim where the counts are, never invent them,
+  August run recorded in `#57`; its counts are not shown here"); do not claim where the counts are, never invent them,
   and after that refer to it as the baseline rather than repeating the bare rate.
 - Write `Assumption:` or `Unverified:` at the start of its own line or list item, in plain text, never inside a
   table cell: that is how the check knows the point is not claimed as fact.
