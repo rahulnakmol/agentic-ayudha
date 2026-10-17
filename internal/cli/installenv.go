@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -53,6 +54,9 @@ func runInstallEnv(ctx context.Context, e *Env, in Values) error {
 	}
 	hosts := agentenv.Hosts
 	if e.Host != "" && e.Host != "all" {
+		if !slices.Contains(agentenv.Hosts, e.Host) {
+			return Errorf(ExitUsage, "install --env: aayu sets up no agent environment for %s yet; name one of %s with --host", e.Host, strings.Join(agentenv.Hosts, ", "))
+		}
 		hosts = []string{e.Host}
 	}
 	if r := in.String("record"); r != "" {

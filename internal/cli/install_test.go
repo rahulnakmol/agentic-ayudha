@@ -346,3 +346,19 @@ func TestHookLogsProviderCalls(t *testing.T) {
 		t.Fatalf("unwritable log: exit %d %q %q; want exit 0 and the failure on stderr", code, out, errs)
 	}
 }
+
+// Copilot gets the host files but no agent environment or loops yet, so
+// install says so instead of succeeding without doing anything for it.
+func TestInstallRefusesCopilotEnvAndLoops(t *testing.T) {
+	repo, home, opts := installEnv(t)
+	env := map[string]string{"HOME": home}
+	before := treeHash(t, repo)
+	for _, args := range [][]string{{"install", "--env", "--host", "copilot"}, {"install", "--loops", "--host", "copilot", "--repo", "o/r"}} {
+		if code, _, errs := run(t, env, opts, args...); code != ExitUsage || !strings.Contains(errs, "copilot") {
+			t.Errorf("%v: exit %d %s", args, code, errs)
+		}
+	}
+	if treeHash(t, repo) != before {
+		t.Error("a refused install wrote to the repository")
+	}
+}
