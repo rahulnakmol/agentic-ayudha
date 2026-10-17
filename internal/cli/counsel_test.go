@@ -19,6 +19,7 @@ import (
 // place, and never a review.
 func TestCounsel(t *testing.T) {
 	g, env, opts, n := inspectFixture(t, "", "Refs #2")
+	head := strings.Repeat("c", 40)
 	files := []string{"internal/verify/floors.go", "internal/report/percent.go"}
 	for i := range 13 {
 		files = append(files, fmt.Sprintf("docs/guide/page%02d.md", i))
@@ -26,7 +27,7 @@ func TestCounsel(t *testing.T) {
 	g.Mu.Lock()
 	g.Pulls[n].Files = files
 	g.Mu.Unlock()
-	writeInspectPack(t, opts.Dir, n, strings.Repeat("c", 40), []proof.Check{
+	writeInspectPack(t, opts.Dir, n, head, []proof.Check{
 		{Floor: "coverage", Result: proof.Pass, Value: 100, Threshold: 90, Tool: "aayudha", Version: "1"},
 		{Floor: "sast", Result: proof.Pass, Tool: "semgrep", Version: "1.180.0", Waiver: "#9"},
 	})
@@ -37,10 +38,17 @@ func TestCounsel(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(opts.Dir, "LAYERS.md"), layers, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(opts.Dir, "internal", "cli"), 0o755); err != nil {
-		t.Fatal(err)
+	for _, d := range []string{"internal/cli", "notes"} {
+		if err := os.MkdirAll(filepath.Join(opts.Dir, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
 	}
 	pr := strconv.Itoa(n)
+	g.Mu.Lock()
+	g.Static = map[string]any{"/repos/o/r/pulls/" + pr + "/commits": []any{map[string]any{"sha": head}}}
+	g.Mu.Unlock()
+	st, _ := json.Marshal(BuildState{Story: 2, Checkpoints: []CheckpointRecord{{K: 1, N: 1, Attempt: 1, Commit: head, Verify: "pass", Model: "claude-opus-5-5"}}})
+	putLedger(t, filepath.Join(filepath.Dir(opts.Dir), "origin.git"), BuildLedgerPath(2), string(st))
 	writes := len(g.Writes())
 	counselRun := func(env map[string]string, want int, args ...string) counselReport {
 		t.Helper()
@@ -68,7 +76,7 @@ func TestCounsel(t *testing.T) {
 	for _, want := range []string{
 		fmt.Sprintf(`PR #%d "Add Percent for the status table": open`, n),
 		"Changed in L04: internal/verify/floors.go", "internal/report/percent.go", "and 2 more", "Story: #2", "Proof pack for #2 at ccccccc", "coverage pass (100, floor 90)",
-		"sast pass waived by #9",
+		"sast pass waived by #9", "Builder: builder family anthropic",
 		"Builder:", "Open Decision: #5", "CONSTRAINTS.md", "L03 ",
 	} {
 		if !strings.Contains(facts, want) {
@@ -97,6 +105,9 @@ func TestCounsel(t *testing.T) {
 		!strings.Contains(out, "# Counsel grounding: Add Percent for the status table") || !strings.Contains(out, "<untrusted source=\"pr-body\">") ||
 		!strings.Contains(out, "## The call") || !strings.Contains(out, "Speak and work as Atri") {
 		t.Errorf("text grounding: exit %d: %s%s", code, out, errOut)
+	}
+	if p := counselRun(env, 0, "notes"); !strings.Contains(factText(p), "Path notes in this checkout: a directory, in no layer") {
+		t.Errorf("path in no layer: %s", factText(p))
 	}
 	if w := len(g.Writes()); w != writes {
 		t.Fatalf("counsel grounding wrote %d times", w-writes)
@@ -174,12 +185,12 @@ Is the zero case the behaviour you want?
 		t.Fatalf("counsel without a passing --post wrote %d times", w-writes)
 	}
 
-	// --post: one labelled comment, replaced in place, and no review. The head's Aayudha-Model trailer is only a
-	// claim, so the builder's family is unknown and the counsel is labelled same-family (Decision #469).
+	// --post: one labelled comment, replaced in place, and no review. Build's record on the ledger names the
+	// builder's family, so a counsel from another family is labelled different-family (Decision #469).
 	gpt := maps.Clone(env)
 	gpt["AAYU_MODEL"] = "gpt-6.1-sol"
 	p := write("good.md", good)
-	if r := counselRun(gpt, 0, "--pr", pr, "--draft", p, "--post"); !r.Posted || r.Label != "same-family counsel: gpt-6.1-sol (openai), builder family unknown" {
+	if r := counselRun(gpt, 0, "--pr", pr, "--draft", p, "--post"); !r.Posted || r.Label != "different-family counsel: gpt-6.1-sol (openai) vs builder anthropic" {
 		t.Errorf("--post: posted %v, label %q", r.Posted, r.Label)
 	}
 	if r := counselRun(gpt, 0, "--pr", pr, "--draft", p, "--post"); r.Posted {
@@ -187,7 +198,7 @@ Is the zero case the behaviour you want?
 	}
 	claude := maps.Clone(env)
 	claude["AAYU_MODEL"] = "claude-opus-5-5"
-	if r := counselRun(claude, 0, "--pr", pr, "--draft", p, "--post"); !r.Posted || r.Label != "same-family counsel: claude-opus-5-5 (anthropic), builder family unknown" {
+	if r := counselRun(claude, 0, "--pr", pr, "--draft", p, "--post"); !r.Posted || r.Label != "same-family counsel: claude-opus-5-5 (anthropic), builder anthropic" {
 		t.Errorf("same-family rerun: posted %v, label %q", r.Posted, r.Label)
 	}
 	onDecision := write("decision.md", fmt.Sprintf(`# %s: the engine
@@ -220,13 +231,13 @@ The founder runs `+"`aayu decide 5`"+`.
 
 Which options belong on #5?
 `, onPR.Artefact))
-	if r := counselRun(gpt, 0, "--issue", "5", "--draft", onDecision, "--post"); !r.Posted || r.Label != "written by gpt-6.1-sol (openai)" {
+	if r := counselRun(env, 0, "--issue", "5", "--draft", onDecision, "--post"); !r.Posted || r.Label != "written by model not reported" {
 		t.Errorf("--post on an issue: posted %v, label %q", r.Posted, r.Label)
 	}
 	// Text mode, and the writer named from the spec lane's model when AAYU_MODEL is unset.
 	if code, out, errOut := run(t, env, opts, "counsel", "--repo", "o/r", "--pr", pr, "--draft", p, "--post", "--host", "claude",
 		"--set", "models.spec.claude.model=claude-fable-5-1"); code != 0 || !strings.Contains(out, "complete: every part is there") ||
-		!strings.Contains(out, "Posted as counsel (same-family counsel: claude-fable-5-1 (anthropic), builder family unknown)") {
+		!strings.Contains(out, "Posted as counsel (same-family counsel: claude-fable-5-1 (anthropic), builder anthropic)") {
 		t.Errorf("text post: exit %d: %s%s", code, out, errOut)
 	}
 	if code, out, _ := run(t, env, opts, "counsel", "--repo", "o/r", "--pr", pr, "--draft", p, "--post", "--host", "claude",
@@ -253,7 +264,8 @@ Which options belong on #5?
 		t.Errorf("counsel created %d reviews", reviews)
 	}
 
-	for _, args := range [][]string{{"counsel", "--repo", "o/r"}, {"counsel", "--repo", "o/r", "a question?", "--draft", p, "--post"}} {
+	for _, args := range [][]string{{"counsel", "--repo", "o/r"}, {"counsel", "--repo", "o/r", "a question?", "--draft", p, "--post"},
+		{"counsel", "--repo", "o/r", "a question?", "--draft", filepath.Join(dir, "missing.md")}} {
 		if code, _, errOut := run(t, env, opts, args...); code != 2 {
 			t.Errorf("%v: exit %d, want 2: %s", args, code, errOut)
 		}

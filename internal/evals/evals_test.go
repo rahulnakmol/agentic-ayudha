@@ -871,6 +871,42 @@ func TestTier2PersonaRevisesOnceThenJudges(t *testing.T) {
 	}
 }
 
+// Story #478: a counsel that says LGTM is sent back once with the finding, and the judge is told the counsel checks
+// passed.
+func TestTier2CounselRevisesOnClaimedApproval(t *testing.T) {
+	all, err := LoadCases(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []Case
+	for _, c := range all {
+		if c.ID == "counsel/question-startup" {
+			cases = append(cases, c)
+		}
+	}
+	good, err := os.ReadFile(filepath.Join(root, "evals", "cases", "counsel", "question-startup", "output", "counsel.md"))
+	if err != nil || len(cases) != 1 {
+		t.Fatalf("case: %v", err)
+	}
+	lgtm := strings.Replace(string(good), "## Recommendation\n\n", "## Recommendation\n\nLGTM. ", 1)
+	judge := models.Response{Text: `{"score": 5, "reason": "grounded"}`}
+	replies := []models.Response{{Text: lgtm}, {Text: string(good)}, judge}
+	for range 4 {
+		replies = append(replies, models.Response{Text: string(good)}, judge)
+	}
+	fake := &models.Fake{Replies: replies}
+	res, err := harness(t, fake, "gpt-6.1-sol").Tier2(context.Background(), cases, "abc", "dev", time.Unix(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r := res.Cases[0].Runs[0]; !r.Revised || r.Status != RunPass || !strings.Contains(r.RevisedFor, "claims a review, an approval, or a ruling") {
+		t.Fatalf("run 1: %+v", r)
+	}
+	if j := fake.Requests[2].Messages[0].Content; !strings.Contains(j, "claims no review, approval, or LGTM") || !strings.Contains(j, "Speak and work as Atri") {
+		t.Errorf("judge request: %.400s", j)
+	}
+}
+
 // TestTier2PackRevisesOnceThenJudges (WP5.1b, D-5.6b): the decide skill writes
 // the pack in the owning twin's persona (the Code Architect's for a design
 // question); a pack without its pre-mortem is sent back once with the finding.

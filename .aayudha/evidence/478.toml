@@ -19,4 +19,4 @@ tests = ["internal/verbs:TestRegistry", "internal/cli:TestMCPDefaultExposure", "
 
 [[criterion]]
 id = 5 # tier-1 counsel cases: recorded counsel passes, planted counsel fails
-tests = ["internal/evals:TestTier1"]
+tests = ["internal/evals:TestTier1", "internal/evals:TestTier2CounselRevisesOnClaimedApproval"]
