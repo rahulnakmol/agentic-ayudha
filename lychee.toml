@@ -1,0 +1,3 @@
+# lychee configuration (the CI docs job reads it from the repository root).
+# The survey eval fixtures are third-party codebases kept as they are (WP5.9); their links are not ours to check.
+exclude_path = ["evals/cases/survey/repos"]

@@ -9,3 +9,4 @@ globs:
   - "**/*.md"
 ignores:
   - "**/node_modules/**"
+  - "evals/cases/survey/repos/**" # third-party codebases kept as they are for the survey evals (WP5.9)

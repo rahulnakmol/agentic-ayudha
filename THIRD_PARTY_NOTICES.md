@@ -119,6 +119,16 @@ These run only in this repository's GitHub Actions workflows. Versions are pinne
 | [markdownlint-cli2](https://github.com/DavidAnson/markdownlint-cli2) | MIT | Markdown lint |
 | [lychee](https://github.com/lycheeverse/lychee) | Apache-2.0 OR MIT | Link check |
 
+### Eval fixtures (not distributed)
+
+Two open-source codebases are kept as they are, with their licence files, as fixtures for the `survey` skill's
+evals (`evals/cases/survey/repos/`, WP5.9). They are test data: never built, linked, or embedded in the binary.
+
+| Component | Version | Licence | Use | Source |
+|---|---|---|---|---|
+| tiny-js | commit 8214477 (2026-02-24) | MIT | C++ fixture for `survey/tinyjs-rust` and `survey/tinyjs-backlog`; line endings normalised to LF, `.gitignore` dropped | <https://github.com/gfwilliams/tiny-js> |
+| Parsedown | commit 4e433a8 (2026-02-18) | MIT | PHP fixture for `survey/parsedown-modern-php`; `.github/`, `.gitignore`, and `.gitattributes` dropped | <https://github.com/erusev/parsedown> |
+
 ### Design system (`packages/design-system/`, WP6.1–6.3)
 
 The package is private (not published) and ships as source; versions are pinned in `pnpm-lock.yaml`.

@@ -1,0 +1,1 @@
+This is a legacy C++ JavaScript interpreter with no product docs. Tell me what it does, who it is for, and how we would rebuild it in Rust with the same behaviour.

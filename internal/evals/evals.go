@@ -188,6 +188,9 @@ type Case struct {
 	Review *ReviewSpec `toml:"review"`
 	// UX makes a case for one of the UX Researcher's skills (ux.go).
 	UX *UXSpec `toml:"ux"`
+	// Survey makes a survey case (WP5.9, survey.go): the repo fixture is a
+	// codebase with no product docs and the reply a survey draft or backlog.
+	Survey *SurveySpec `toml:"survey"`
 }
 
 // Scope is one known way a skill invents a requirement for this case's input,
@@ -392,6 +395,14 @@ func LoadCase(dir string) (Case, error) {
 	}
 	if p := c.Persona; p != nil && (p.Seat == "" || p.Stage == "" || p.Practice == "" || p.Task == "" || p.Draft == "") {
 		return c, fmt.Errorf("%s: [persona] needs seat, stage, practice, task, and draft", c.ID)
+	}
+	if c.Survey != nil {
+		if err := c.Survey.check(); err != nil {
+			return c, fmt.Errorf("%s: %w", c.ID, err)
+		}
+		if c.Repo == "" {
+			return c, fmt.Errorf("%s: a survey case needs repo, the codebase fixture", c.ID)
+		}
 	}
 	if c.UX != nil {
 		if err := c.UX.check(c.Skill); err != nil {
