@@ -1,0 +1,26 @@
+# survey (WP5.9): Parsedown (github.com/erusev/parsedown at 4e433a8, MIT; repos/parsedown without its .github,
+# .gitignore, and .gitattributes), a PHP Markdown library with a readme and no other product docs. The person asks for
+# the analysis and a move to modern PHP in place with byte-identical output, so the target is a language version, not a
+# new language. Same session and floors as tinyjs-rust. output/survey.json is the pilot's draft.
+skill = "survey"
+description = "Survey a legacy PHP library at three levels and plan an in-place modernisation with byte-identical output."
+input = "request.txt"
+repo = "../repos/parsedown"
+artifacts = ["output/survey.json"]
+scope = [
+  { pattern = '(?i)\b\d+(\.\d+)?\s*(ms|milliseconds|x faster|times faster|% faster)\b', why = "a performance figure nothing in the repository measures" },
+]
+
+[survey]
+kind = "draft"
+draft = "output/survey.json"
+read = [
+  "readme.md", "composer.json", "Parsedown.php:1-330", "Parsedown.php:400-420", "Parsedown.php:539-560",
+  "Parsedown.php:825-860", "Parsedown.php:1105-1260", "Parsedown.php:1455-1600", "Parsedown.php:1680-1800",
+  "Parsedown.php:1850-1995", "test/ParsedownTest.php", "test/SampleExtensions.php", "test/CommonMarkTestStrict.php",
+  "test/data/xss_bad_url.md", "test/data/xss_bad_url.html",
+]
+
+[tier2]
+rubric = "rubric.md"
+references = ["formats.md", "modernisation.md"]

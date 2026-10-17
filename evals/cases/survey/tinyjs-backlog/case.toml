@@ -1,0 +1,24 @@
+# survey (WP5.9): the backlog step on tiny-js. survey.json is the pilot's survey after a recorded interview: the
+# person said two internal tools embed it through execute, evaluate, and addNative only (Q1), every quirk stays for
+# the first Rust release (Q2), scripts are trusted configuration (Q3), the command-line runner is a demo (Q4), and
+# deferred the Math.rand question (Q5). The skill writes backlog.json. Floors: `aayu survey --backlog` (work-item
+# schema, every item on what the survey knows, parity case sets on modernisation Stories) and the scope rules: no item
+# fixes a quirk the person kept, and no sandbox or limit for scripts the person called trusted.
+skill = "survey"
+description = "Draft the Goal, Initiatives, Features, Stories, and Bugs from a checked survey and its interview."
+input = "request.txt"
+repo = "../repos/tiny-js"
+artifacts = ["output/backlog.json"]
+scope = [
+  { pattern = '(?i)\b(fix|fixes|fixed|fixing|support|supports|implement|implements|add|adds)\b[^.\n"]{0,40}(prefix (increment|\+\+)|Array\(5\)|settable length|setting length)', why = "a fix for a quirk the person kept for the first release (Q2)", allow = '(?i)(\b(no|not|never|without|keeps?|kept)\b|\bout:)[^.\n"]{0,50}' },
+  { pattern = '(?i)\b(sandbox\w*|execution[- ]time limit|time limit|memory limit|untrusted scripts?)\b', why = "limits for scripts the person said are trusted (Q3)", allow = '(?i)(\b(no|not|never|without)\b|\btrusted\b)[^.\n"]{0,50}' },
+]
+
+[survey]
+kind = "backlog"
+survey = "survey.json"
+draft = "output/backlog.json"
+
+[tier2]
+rubric = "rubric.md"
+references = ["formats.md"]

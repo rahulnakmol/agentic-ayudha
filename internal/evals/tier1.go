@@ -143,6 +143,9 @@ func Tier1(ctx context.Context, root string, c Case, assets fs.FS) Tier1Result {
 	if c.Tell != nil {
 		add("tell", tier1Tell(c), false)
 	}
+	if c.Survey != nil {
+		add("survey", tier1Survey(ctx, c, assets), false)
+	}
 	if c.Persona != nil {
 		add("persona", tier1Persona(c, assets), false)
 	}

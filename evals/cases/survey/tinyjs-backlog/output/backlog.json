@@ -1,0 +1,368 @@
+{
+  "product": "tiny-js",
+  "items": [
+    {
+      "key": "goal",
+      "type": "goal",
+      "title": "Our two embedding tools keep their scripting behaviour while tiny-js moves to Rust",
+      "basis": [
+        "P1",
+        "P2",
+        "P4"
+      ],
+      "fields": {
+        "summary": "The two internal tools that embed tiny-js for scripting from their own configuration files (P4, P6) keep the same behaviour while the engine is rebuilt in Rust."
+      }
+    },
+    {
+      "key": "characterise",
+      "type": "initiative",
+      "parent": "goal",
+      "title": "Characterise the C++ interpreter before changing it",
+      "basis": [
+        "M1",
+        "E5",
+        "E11"
+      ],
+      "fields": {
+        "summary": "Capture what the C++ build does today, as golden outputs, so every later change is measured against it."
+      }
+    },
+    {
+      "key": "rust-engine",
+      "type": "initiative",
+      "parent": "goal",
+      "title": "Rebuild the interpreter in Rust behind the same interfaces",
+      "basis": [
+        "M2",
+        "M3",
+        "M4",
+        "M5",
+        "E1",
+        "E2"
+      ],
+      "fields": {
+        "summary": "Port the values, parser, built-ins, and embedding API to Rust, one step at a time, each proved against the golden outputs."
+      }
+    },
+    {
+      "key": "golden-behaviour",
+      "type": "feature",
+      "parent": "characterise",
+      "title": "Golden outputs of the C++ build",
+      "basis": [
+        "E5",
+        "E6",
+        "E11",
+        "C7"
+      ],
+      "fields": {
+        "summary": "The 38 test scripts and the command-line runner's output and errors, captured from the C++ build at a pinned commit.",
+        "problem": "There is no product documentation, so the only definition of correct behaviour is what the C++ build does (E5, E6, E11).",
+        "scope": "In: run_tests per script (G1), the command-line runner's stdout on each script (G2), its error output (G3). Out: the *.42.js tests and tests/42tests, which run_tests never runs (E11); Math.rand sequences (E16)."
+      }
+    },
+    {
+      "key": "capture-g1",
+      "type": "story",
+      "parent": "golden-behaviour",
+      "title": "Capture pass or fail of the 38 test scripts from the C++ build",
+      "labels": [
+        "effort:S"
+      ],
+      "basis": [
+        "E11",
+        "test:run_tests.cpp"
+      ],
+      "step": "M1",
+      "parity": [
+        "G1"
+      ],
+      "fields": {
+        "summary": "As the maintainer, I want each test script's pass or fail captured from the C++ build, so that the Rust build is held to the same results.",
+        "completion_goal": "1. [api-trace] state: run_tests built with make from commit 8214477 and the cases file for case set G1; expected: aayu survey --golden writes 38 cases, each with exit code 0, and a manifest with the build's SHA-256",
+        "measure": "cases captured with exit 0",
+        "threshold": "38 of 38 in G1",
+        "scenario": "Build with make, then run the G1 capture once.",
+        "environment": "Linux, g++ and make, the repository's tests/ only"
+      }
+    },
+    {
+      "key": "capture-g2-g3",
+      "type": "story",
+      "parent": "golden-behaviour",
+      "title": "Capture the command-line runner's output and errors",
+      "labels": [
+        "effort:S"
+      ],
+      "basis": [
+        "E5",
+        "E6",
+        "C7"
+      ],
+      "step": "M1",
+      "parity": [
+        "G2",
+        "G3"
+      ],
+      "fields": {
+        "summary": "As the maintainer, I want the command-line runner's output on every test script and on script errors captured, so that what a person sees stays the same.",
+        "completion_goal": "1. [api-trace] state: Script built with make from commit 8214477 and case set G2 (37 scripts, test019 excluded for Math.rand); expected: aayu survey --golden captures each case's stdout and exit code 0\n2. [api-trace] state: case set G3, a syntax error and a call of an undefined function; expected: the capture records an ERROR line with line and column on stdout and exit code 1",
+        "measure": "cases captured",
+        "threshold": "all of G2 and G3",
+        "scenario": "Build with make, then run the G2 and G3 capture once.",
+        "environment": "Linux, g++ and make, the repository's tests/ only"
+      }
+    },
+    {
+      "key": "rust-execution",
+      "type": "feature",
+      "parent": "rust-engine",
+      "title": "Script execution in Rust",
+      "basis": [
+        "C1",
+        "E2",
+        "E3",
+        "E4",
+        "P5"
+      ],
+      "fields": {
+        "summary": "The lexer, values, and recursive-descent parser in Rust, running the same scripts with the same results.",
+        "problem": "The C++ engine manages memory by reference counting that leaks cycles (E4), keeps children in linked lists (E3), and leaks every caught error (E15).",
+        "scope": "In: lexer, values, parser, execution, error messages with positions (R1), and every known quirk exactly as it is (Q2). Out: new language features and fixes to the known gaps (the person keeps them for the first release, Q2)."
+      }
+    },
+    {
+      "key": "port-values",
+      "type": "story",
+      "parent": "rust-execution",
+      "title": "Port the lexer and value model to Rust",
+      "labels": [
+        "effort:M"
+      ],
+      "basis": [
+        "E3",
+        "E4",
+        "M2"
+      ],
+      "step": "M2",
+      "parity": [
+        "G1"
+      ],
+      "depends_on": [
+        "capture-g1"
+      ],
+      "fields": {
+        "summary": "As the maintainer, I want the lexer and values in Rust with ownership instead of manual reference counts, so that cycles no longer leak.",
+        "completion_goal": "1. [api-trace] state: the Rust test runner built from this branch and case set G1; expected: aayu survey --parity reports no difference for every G1 case whose script uses only literals, variables, and objects\n2. [api-trace] state: a script that sets a.foo = a, run 10,000 times in one process; expected: resident memory after the last run is within 5% of after the first",
+        "measure": "G1 differences; memory growth",
+        "threshold": "0 differences; 5% growth or less",
+        "scenario": "Replay G1, then run the cycle script in a loop.",
+        "environment": "Linux, cargo, the repository's tests/"
+      }
+    },
+    {
+      "key": "port-parser",
+      "type": "story",
+      "parent": "rust-execution",
+      "title": "Port the parser and execution to Rust",
+      "labels": [
+        "effort:L"
+      ],
+      "basis": [
+        "E1",
+        "E2",
+        "R1",
+        "M3"
+      ],
+      "step": "M3",
+      "parity": [
+        "G1",
+        "G2",
+        "G3"
+      ],
+      "depends_on": [
+        "port-values",
+        "capture-g2-g3"
+      ],
+      "fields": {
+        "summary": "As the maintainer, I want the parser and execution in Rust, so that every script runs as it did in C++.",
+        "completion_goal": "1. [api-trace] state: the Rust test runner and case set G1; expected: aayu survey --parity reports no difference\n2. [api-trace] state: the Rust command-line runner and case sets G2 and G3; expected: aayu survey --parity reports no difference, including the ERROR line's line and column",
+        "measure": "differences from the golden outputs",
+        "threshold": "0 in G1, G2, and G3",
+        "scenario": "Replay the three case sets on the Rust build.",
+        "environment": "Linux, cargo, the repository's tests/"
+      }
+    },
+    {
+      "key": "rust-builtins",
+      "type": "feature",
+      "parent": "rust-engine",
+      "title": "Built-in and Math libraries in Rust",
+      "basis": [
+        "C6",
+        "E7",
+        "E8"
+      ],
+      "fields": {
+        "summary": "The string, array, integer, object, JSON, exec, eval, and Math built-ins in Rust.",
+        "problem": "The built-ins are C++ callbacks registered by name (C6); the command-line runner registers only half of them (E7).",
+        "scope": "In: every function registered today, with the same names and signatures. Out: registering Math in the command-line runner, which is a demo (Q4); reproducing Math.rand's sequence (Q5, deferred)."
+      }
+    },
+    {
+      "key": "port-builtins",
+      "type": "story",
+      "parent": "rust-builtins",
+      "title": "Port the built-in and Math functions to Rust",
+      "labels": [
+        "effort:M"
+      ],
+      "basis": [
+        "C6",
+        "E8",
+        "M4"
+      ],
+      "step": "M4",
+      "parity": [
+        "G1",
+        "G2"
+      ],
+      "depends_on": [
+        "port-parser"
+      ],
+      "fields": {
+        "summary": "As the maintainer, I want every built-in function in Rust under the same name, so that scripts that call them keep working.",
+        "completion_goal": "1. [api-trace] state: the Rust test runner and case set G1; expected: aayu survey --parity reports no difference\n2. [api-trace] state: the Rust command-line runner and case set G2; expected: aayu survey --parity reports no difference\n3. [api-trace] state: Math.randInt(1,6) called 1,000 times; expected: every value is an integer from 1 to 6",
+        "measure": "differences; out-of-range values",
+        "threshold": "0; 0",
+        "scenario": "Replay G1 and G2, then call randInt in a loop.",
+        "environment": "Linux, cargo, the repository's tests/"
+      }
+    },
+    {
+      "key": "embedding-api",
+      "type": "feature",
+      "parent": "rust-engine",
+      "title": "Embedding API for host applications",
+      "basis": [
+        "E1",
+        "C2",
+        "C3",
+        "C8"
+      ],
+      "fields": {
+        "summary": "The two hosts create an interpreter, register native functions, and execute and evaluate script through a Rust crate and a C ABI.",
+        "problem": "Hosts call the C++ classes directly today (E1); a Rust engine needs an interface they can switch to.",
+        "scope": "In: execute, evaluate, and addNative, the three calls the hosts make (Q1), as a Rust crate and a C ABI. Out: getVariable, setVariable, and the CScriptVar class API, which no host uses (Q1)."
+      }
+    },
+    {
+      "key": "rust-api-and-abi",
+      "type": "story",
+      "parent": "embedding-api",
+      "title": "Ship the Rust crate and a C ABI for execute, evaluate, and addNative, then retire the C++ build",
+      "labels": [
+        "effort:M"
+      ],
+      "basis": [
+        "E1",
+        "C2",
+        "C3",
+        "C8",
+        "E9",
+        "M5"
+      ],
+      "step": "M5",
+      "parity": [
+        "G1",
+        "G2",
+        "G3"
+      ],
+      "depends_on": [
+        "port-builtins"
+      ],
+      "fields": {
+        "summary": "As the maintainer of the two embedding tools, I want them to call the Rust engine through the same three calls, so that the C++ build can go.",
+        "completion_goal": "1. [api-trace] state: a C host program that registers print through the C ABI and executes tests/test001.js; expected: it prints the same output as the golden G2 case for test001 and exits 0\n2. [api-trace] state: the Rust build and case sets G1, G2, and G3; expected: aayu survey --parity reports no difference in any of them",
+        "measure": "differences from the golden outputs",
+        "threshold": "0",
+        "scenario": "Build the C host against the ABI, then replay the three case sets.",
+        "environment": "Linux, cargo, cc, the repository's tests/"
+      }
+    },
+    {
+      "key": "stale-known-issues",
+      "type": "bug",
+      "parent": "golden-behaviour",
+      "title": "The known-issue list says postfix ++ is broken, but the code fixed it in 0.31",
+      "labels": [
+        "effort:XS"
+      ],
+      "basis": [
+        "E12",
+        "marker:TinyJS.cpp:111"
+      ],
+      "fields": {
+        "summary": "The NOTE block at the top of TinyJS.cpp lists a bug the version history says was fixed and the code no longer has.",
+        "reproduce": "Run Script on: var a=1; var b=a++; print(b);",
+        "expected": "The NOTE block lists only issues that still occur.",
+        "actual": "It prints 1 (the previous value, which is correct), while TinyJS.cpp:111 says the current value is returned.",
+        "completion_goal": "1. [api-trace] state: TinyJS.cpp after the fix; expected: the NOTE block no longer lists the postfix increment, and aayu survey --parity on case set G1 reports no difference",
+        "measure": "stale entries in the NOTE block",
+        "threshold": "0",
+        "scenario": "Read the NOTE block against the golden outputs.",
+        "environment": "the repository"
+      }
+    },
+    {
+      "key": "fail-path-overflow",
+      "type": "bug",
+      "parent": "golden-behaviour",
+      "title": "run_tests overflows a 64-byte buffer for a long test path",
+      "labels": [
+        "effort:XS"
+      ],
+      "basis": [
+        "E14"
+      ],
+      "fields": {
+        "summary": "A failing test whose path is longer than 55 characters overflows the buffer that holds its .fail.js name.",
+        "reproduce": "Copy a failing test to a path of 60 characters and run run_tests on it.",
+        "expected": "The runner writes <path>.fail.js and reports FAIL.",
+        "actual": "sprintf writes past the 64-byte stack buffer fn (run_tests.cpp:228-229).",
+        "completion_goal": "1. [api-trace] state: run_tests built with -fsanitize=address and a failing test at a 60-character path; expected: FAIL is printed, the .fail.js file is written, and the sanitizer reports nothing",
+        "measure": "sanitizer reports",
+        "threshold": "0",
+        "scenario": "Run the long-path failing test under AddressSanitizer.",
+        "environment": "Linux, g++ with AddressSanitizer"
+      }
+    },
+    {
+      "key": "error-leak",
+      "type": "bug",
+      "parent": "golden-behaviour",
+      "title": "Every caught script error leaks its exception object",
+      "labels": [
+        "effort:S"
+      ],
+      "basis": [
+        "E15"
+      ],
+      "fields": {
+        "summary": "Errors are thrown as heap pointers and the command-line runner never deletes them.",
+        "reproduce": "Run Script interactively and type a line with a syntax error 1,000 times.",
+        "expected": "Memory stays flat across errors.",
+        "actual": "Each error allocates a CScriptException that is never freed (TinyJS.cpp:1344, Script.cpp:103-105).",
+        "completion_goal": "1. [api-trace] state: Script under valgrind fed 100 lines with a syntax error; expected: valgrind reports 0 bytes definitely lost, and aayu survey --parity on case set G3 reports no difference",
+        "measure": "bytes definitely lost",
+        "threshold": "0",
+        "scenario": "Feed the error lines on stdin under valgrind.",
+        "environment": "Linux, valgrind"
+      }
+    }
+  ],
+  "open_questions": [
+    "Q5 (deferred): whether Math.rand's sequence matters; G2 excludes it until someone checks"
+  ]
+}
