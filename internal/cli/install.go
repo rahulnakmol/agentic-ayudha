@@ -189,7 +189,9 @@ func (e *Env) confirm(question string) bool {
 		return true
 	}
 	if !e.isTerminal(e.In) {
-		return false
+		// Off a terminal, a person's device-flow approval of this command
+		// (presence.go) is its yes: nobody is there to answer the prompt.
+		return e.approval != nil
 	}
 	fmt.Fprint(e.Err, question)
 	line, _ := bufio.NewReader(e.In).ReadString('\n')

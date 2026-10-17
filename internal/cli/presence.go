@@ -87,7 +87,8 @@ func (e *Env) requireHuman(ctx context.Context, what string, need Access) error 
 // no flag, variable, or file that supplies an approval.
 //
 // It returns refusal unchanged when no approval can be asked for: aayu's own
-// agent lanes (AAYU_AGENT=1: the MCP server and loops, which run unattended),
+// agent lanes (AAYU_AGENT=1: the MCP server and loops, which run unattended)
+// and CI (--ci, where the acting account is a workflow or bot token),
 // no repository or token to check the approver against (unless need is
 // AccessAny), or no client ID ([identity] device_client_id, else
 // DeviceClientVariables). An approval covers later human-only steps of the
@@ -96,7 +97,7 @@ func (e *Env) presenceCheck(ctx context.Context, what string, need Access, refus
 	if e.approval.covers(need) {
 		return e.approval, nil
 	}
-	if e.Getenv("AAYU_AGENT") == "1" {
+	if e.Getenv("AAYU_AGENT") == "1" || e.CI {
 		return nil, refusal
 	}
 	l, err := e.Config()

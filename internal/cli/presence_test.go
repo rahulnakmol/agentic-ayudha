@@ -21,6 +21,7 @@ func TestPresenceCheckDeviceFlow(t *testing.T) {
 	for _, tt := range []struct {
 		name   string
 		env    map[string]string // added to the marked shell's environment
+		args   []string          // added to the command
 		vars   map[string]string // repository variables besides the halt
 		perm   string            // the founder's repository permission; "" is the fake's default (admin)
 		device fake.DeviceFlow
@@ -40,6 +41,8 @@ func TestPresenceCheckDeviceFlow(t *testing.T) {
 			want: "refused for an agent lane (AMP_THREAD_ID=T-0000)"},
 		{name: "aayu's own agent lane", env: map[string]string{"AAYU_AGENT": "1"}, device: fake.DeviceFlow{Approver: "founder", Outcome: "approve"},
 			want: "refused for an agent lane (AAYU_AGENT=1)"},
+		{name: "in CI", args: []string{"--ci"}, device: fake.DeviceFlow{Approver: "founder", Outcome: "approve"},
+			want: "refused for an agent lane (AMP_THREAD_ID=T-0000)"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			g := fake.New(t, "o/r", "User")
@@ -69,7 +72,7 @@ func TestPresenceCheckDeviceFlow(t *testing.T) {
 			}
 			// Even at a terminal: the marked shell may be an agent typing into it.
 			opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, DevicePoll: 10 * time.Millisecond}
-			code, _, errOut := run(t, env, opts, "resume", "--repo", "o/r")
+			code, _, errOut := run(t, env, opts, append([]string{"resume", "--repo", "o/r"}, tt.args...)...)
 			g.Mu.Lock()
 			_, halted := g.Variables[HaltVariable]
 			started := g.Device.Started
@@ -86,7 +89,7 @@ func TestPresenceCheckDeviceFlow(t *testing.T) {
 			if code != ExitBlocked || !halted || !strings.Contains(errOut, tt.want) || bytes.Contains(log, []byte("presence.approve")) {
 				t.Fatalf("exit %d, halted %v, want %q: %s\n%s", code, halted, tt.want, errOut, log)
 			}
-			if asked := started > 0; asked != (tt.name != "no client ID" && tt.name != "aayu's own agent lane") {
+			if asked := started > 0; asked != (tt.name != "no client ID" && tt.name != "aayu's own agent lane" && tt.name != "in CI") {
 				t.Errorf("device codes issued: %d", started)
 			}
 		})
@@ -150,9 +153,15 @@ func TestPresenceCheckBootstrapAndRecord(t *testing.T) {
 	}
 	ctx := context.Background()
 	e, errb := newMarked(t.TempDir())
+	if e.confirm("Also edit your home directory? [y/N] ") {
+		t.Fatal("confirmed off a terminal with no approval")
+	}
 	if err := e.requireHuman(ctx, "auth set-secret github-token", AccessAny); err != nil || !strings.Contains(errb.String(), "auth set-secret github-token needs a person's approval.") ||
 		!strings.Contains(errb.String(), "Approved by @founder (device-flow, no repository access)") {
 		t.Fatalf("bootstrap approval: %v\n%s", err, errb)
+	}
+	if !e.confirm("Also edit your home directory? [y/N] ") { // nobody can answer here: the approval of the command is its yes
+		t.Fatal("an approved command's own confirmation was refused off a terminal")
 	}
 	if err := e.requireHuman(ctx, "resume", AccessWrite); err == nil {
 		t.Fatal("a write action was approved with no repository to check the approver against")
