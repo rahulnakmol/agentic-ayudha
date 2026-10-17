@@ -4,44 +4,44 @@
   "version": "v0.2.0",
   "source": "dev",
   "target": "rolling",
-  "source_sha": "5d134d92c622048b1f21711e28a3293ee4e7e833",
-  "commit": "b5147581ee42e4860d098941a8c6fc1e3ab298f1",
-  "tree": "9fc7e125d8d10486163950d8885571e11ba4cd40",
-  "message": "Rolling snapshot: 20261016T2131Z",
-  "tag": "rolling-2026-10-16",
-  "candidate": "promote/rolling-20261016T2131Z",
+  "source_sha": "7542b850b78d56f26bced96ab838dc1738858e25",
+  "commit": "a7efe408a50baba80bbede0a7b9fa717db388ced",
+  "tree": "b76feae8b3c0d7914d8217d01bc7927089a01b5e",
+  "message": "Rolling snapshot: 20261016T2314Z",
+  "tag": "rolling-2026-10-16.2",
+  "candidate": "promote/rolling-20261016T2314Z",
   "evals": {
     "workflow": "evals.yml",
-    "id": 38970050211,
-    "url": "https://github.com/rahulnakmol/agentic-ayudha/actions/runs/38970050211",
+    "id": 38980397572,
+    "url": "https://github.com/rahulnakmol/agentic-ayudha/actions/runs/38980397572",
     "conclusion": "success",
     "attempts": 1
   },
   "gate": {
     "workflow": "ci.yml",
-    "id": 38976186493,
-    "url": "https://github.com/rahulnakmol/agentic-ayudha/actions/runs/38976186493",
+    "id": 38985171033,
+    "url": "https://github.com/rahulnakmol/agentic-ayudha/actions/runs/38985171033",
     "conclusion": "success",
     "attempts": 1
   },
   "artifacts": [
     {
-      "name": "release-snapshot",
-      "digest": "sha256:8d42a884e8dba682e4f040969a5ad724a0cf864bc38f96a3c541e1fe3a7a7fe8",
-      "size": 72780342
+      "name": "benchmarks",
+      "digest": "sha256:72a01eecb02679a3fc96b0c2848a94b7d974bb28bdcb5db247b44b35a0a6844c",
+      "size": 861
     },
     {
-      "name": "benchmarks",
-      "digest": "sha256:55851077529566ffd9dfa8a414036405e71c96bc00304c1398bed28e95466c7f",
-      "size": 875
+      "name": "release-snapshot",
+      "digest": "sha256:26b46a1babfb63e6947f00e171112ce9287543e58b96f6a88391faa3ad4e1b58",
+      "size": 72780177
     }
   ],
   "stories_released": [],
   "already_released": [],
   "shipped_not_listed": [],
   "referenced_not_merged": [],
-  "release_notes": "tell/release/rolling-2026-10-16.md",
+  "release_notes": "tell/release/rolling-2026-10-16.2.md",
   "measure_due": [],
   "promoted_by": "rahulnakmol",
-  "promoted_at": "2026-10-16T21:31:50Z"
+  "promoted_at": "2026-10-16T23:14:49Z"
 }
