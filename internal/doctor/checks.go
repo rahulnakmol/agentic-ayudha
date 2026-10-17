@@ -594,6 +594,10 @@ func checkMCP(ctx context.Context, p *Probe) Result {
 			problems = append(problems, fmt.Sprintf("%s: %s: %v", r.Host, r.File, r.Err))
 		case r.Command == "":
 			problems = append(problems, fmt.Sprintf("%s: no %q server in %s", r.Host, hosts.ServerName, r.File))
+		case repoLocal(p.Root, r.Command):
+			// A registration is repository content anyone can change; doctor
+			// runs only an absolute binary outside the checkout.
+			problems = append(problems, fmt.Sprintf("%s: %s points the %q server at %s, which is relative or inside this repository, so doctor does not run it; install writes aayu's absolute path", r.Host, r.File, hosts.ServerName, r.Command))
 		default:
 			out, err := p.Exec(ctx, "", r.Command, "version")
 			if err != nil {
@@ -631,6 +635,29 @@ func checkMCP(ctx context.Context, p *Probe) Result {
 		return Result{Status: Warn, Detail: "no host has the aayudha MCP server: this repository is not installed for one, and no aayudha plugin is on; run `aayu install --host <claude|codex|copilot|cursor|amp> --apply`, or add the aayudha plugin to your host"}
 	}
 	return Result{Status: Pass, Detail: "aayudha MCP server: " + strings.Join(fine, "; ")}
+}
+
+// repoLocal reports whether command is relative or lies inside root, after
+// resolving symbolic links: a file the repository itself can supply.
+func repoLocal(root, command string) bool {
+	if !filepath.IsAbs(command) {
+		return true
+	}
+	for _, r := range []string{root, evalOr(root)} {
+		for _, c := range []string{command, evalOr(command)} {
+			if rel, err := filepath.Rel(r, c); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func evalOr(p string) string {
+	if r, err := filepath.EvalSymlinks(p); err == nil {
+		return r
+	}
+	return p
 }
 
 // checkCopilot reports what GitHub Copilot needs from a person here: the
