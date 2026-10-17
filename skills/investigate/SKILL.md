@@ -166,9 +166,12 @@ operational telemetry for cause.
 Keep at least two hypotheses (H1, H2, …). For each: the evidence for it, the counter-evidence (what does not fit,
 labelled `Counter-evidence`, or "none found"), and the smallest observation that would rule it out: one the hypothesis
 predicts will not happen. Test each one: if you saw it, would you drop the hypothesis? If you would keep it, it is
-not a rule-out. For "the deploy caused it" a rule-out is the same failures on the previous revision; for "a
-traffic or input change caused it" it is the new kind of request succeeding on the previous revision, or failing
-before the deploy. Read a telemetry field only as its name and values show (a duration field is a measured duration,
+not a rule-out. Hypotheses are rivals: each explains the symptom without the others. A trigger that exposes a defect
+(a new kind of input reaching the changed code) is part of that hypothesis, not a rival to it; a rival is a different
+cause, such as a dependency or infrastructure fault that coincided with the deploy. For "the deploy caused it" a
+rule-out is the same failures on the previous revision; for "a dependency fault caused it" it is failures only on
+the new revision, with the frame in the changed lines. Give the leading hypothesis its counter-evidence too, and name
+the query that tells the rivals apart. Read a telemetry field only as its name and values show (a duration field is a measured duration,
 not a configured deadline, unless the grounding says so). Never state as fact what the grounding does not show about the infrastructure (that a deploy
 replaced every instance, that a cache was cleared): mark it `Assumption:` and build no conclusion on it. Separate the symptom, the contributing conditions, and the root
 cause. Two events at the same time are a correlation, not a cause: say what would prove the link (the errors appear
@@ -185,7 +188,9 @@ serving). State your confidence and why, and what is still missing.
   revision. If no catalog action fits, say so and name the action a person should add to `ops/actions.toml`
   (protected path, human review), who to escalate to meanwhile, the signal that shows recovery, and the stop
   condition for the escalation: one escalation and at most one action to add, each with what it does, its setting,
-  its risk, the signal that verifies it, and its stop condition, never alternatives side by side; never give a shell command instead, and never propose a rollback or restart the
+  its risk, the signal that verifies it (a query that gives the rate: requests and errors), and its stop condition,
+  never alternatives side by side. The action to add must not bet on a value the evidence does not show (a longer
+  timeout the dependency has not been seen to meet); prefer one that degrades safely whatever the dependency does; never give a shell command instead, and never propose a rollback or restart the
   evidence shows cannot help.
 - **Durable fix.** The change that prevents a recurrence, written for the engineer who builds the follow-up Bug: the
   owning boundary and paths, the regression test or scenario that must fail before the fix, the instrumentation gap
