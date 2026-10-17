@@ -56,7 +56,8 @@ approver = ""
 correction_days = 14
 
 # A build's budget. cost_usd applies only when aayu's own model calls are pay-as-you-go (a [models.gateway] endpoint or a
-# direct provider's key is configured); otherwise there is no cost limit, since subscription use reports no cost.
+# direct provider's key is configured, or a host reports spend in AAYU_COST_USD); otherwise there is no cost limit,
+# since subscription use reports no cost.
 [autonomy.budget]
 wall_hours = 8
 cost_usd = 60.0

@@ -197,6 +197,12 @@ func TestBuildNeverLayerAndCost(t *testing.T) {
 		!strings.Contains(out, "metered spend 100.00 USD, no cost limit: no pay-as-you-go model key or endpoint is configured (subscription use not counted)") {
 		t.Fatalf("no metered key, 100 USD logged: %s %s", out, errOut)
 	}
+	// Spend a host reports in AAYU_COST_USD is metered: it counts, and the
+	// limit applies to it.
+	env["AAYU_COST_USD"] = "0.01"
+	if code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(out+errOut, "cost budget breached: metered spend 100.01 USD of 60 (subscription use not counted)") {
+		t.Fatalf("AAYU_COST_USD reported, over the cost budget: %d %s %s", code, out, errOut)
+	}
 }
 
 // WP5.5 accept: a stale lease is reclaimed by gc (comment, label, and

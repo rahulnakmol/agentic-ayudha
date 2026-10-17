@@ -75,7 +75,7 @@ var sections = []section{
 			{"autonomy.approver", "GitHub login that gives the human pass in solo mode. Empty until `init` sets it.", "WP5.5"},
 			{"autonomy.correction_days", "Days after a merge in which a Bug or Incident that links the PR counts as a correction and resets the streak of every layer the PR touched.", "proposed (WP5.7)"},
 			{"autonomy.budget.wall_hours", "Wall-clock hours one `build` may run before the story is marked `status:blocked` and the owner is paged.", proposed},
-			{"autonomy.budget.cost_usd", "Metered model spend, in USD, one `build` may use before it is blocked. It applies only when aayu's own model calls are pay-as-you-go: a `[models.gateway]` endpoint or a direct provider's key (anthropic, openai, google, xai) is configured. With neither there is no cost limit, because subscription use reports no cost; build and status say so.", proposed},
+			{"autonomy.budget.cost_usd", "Metered model spend, in USD, one `build` may use before it is blocked. It applies only when aayu's own model calls are pay-as-you-go: a `[models.gateway]` endpoint or a direct provider's key (anthropic, openai, google, xai) is configured, or a host reports pay-as-you-go spend in `AAYU_COST_USD`. With neither there is no cost limit, because subscription use reports no cost; build and status say so.", proposed},
 			{"autonomy.budget.attempts", "Failed checkpoint attempts before a story is blocked. A second failure on a never-layer blocks regardless.", proposed},
 		},
 	},

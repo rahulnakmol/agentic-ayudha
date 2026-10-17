@@ -618,6 +618,10 @@ func (e *Env) meteredBy(c *config.Config) string {
 			return "the " + name + " key"
 		}
 	}
+	// A host or wrapper that reports its pay-as-you-go spend is metered too.
+	if v, err := strconv.ParseFloat(e.Getenv("AAYU_COST_USD"), 64); err == nil && v > 0 {
+		return "AAYU_COST_USD"
+	}
 	return ""
 }
 
