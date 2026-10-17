@@ -126,7 +126,9 @@ func (e *Env) reviewSetup(ctx context.Context, n int) (head string, story int, s
 
 // reviewer builds the two lanes: lane A on the ui-review lane through the
 // model gateway, its family checked against the builder's (reviewer ≠ builder).
-func (e *Env) reviewer(ctx context.Context, b *uireview.Browser, story int, deep bool) (*uireview.Reviewer, error) {
+// builderModel is the head's builder when the caller knows it; else the
+// story's local pack names it, if that pack proves the current head.
+func (e *Env) reviewer(ctx context.Context, b *uireview.Browser, story int, deep bool, builderModel string) (*uireview.Reviewer, error) {
 	l, err := e.Config()
 	if err != nil {
 		return nil, err
@@ -143,9 +145,10 @@ func (e *Env) reviewer(ctx context.Context, b *uireview.Browser, story int, deep
 	if host == "" {
 		host = verbs.DirectHost
 	}
-	builder := verbs.Family("")
-	if root := config.RepoRoot(e.Dir); root != "" && story > 0 {
-		if p, err := proof.LoadLocal(proof.LocalDir(root, story)); err == nil && p.Model != "" {
+	builder := verbs.FamilyOf(builderModel)
+	if root := config.RepoRoot(e.Dir); builder == "" && root != "" && story > 0 {
+		head, _ := gitIn(ctx, root, "rev-parse", "HEAD")
+		if p, err := proof.LoadLocal(proof.LocalDir(root, story)); err == nil && p.Model != "" && p.PRHeadSHA == head {
 			builder = verbs.FamilyOf(p.Model)
 		}
 	}
@@ -190,7 +193,7 @@ func (e *Env) review(ctx context.Context, n int, deep bool) (*uireview.Critique,
 		return nil, "", err
 	}
 	defer done()
-	r, err := e.reviewer(ctx, b, story, deep)
+	r, err := e.reviewer(ctx, b, story, deep, "")
 	if err != nil {
 		return nil, "", err
 	}

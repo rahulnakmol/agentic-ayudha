@@ -380,8 +380,9 @@ func TestVerifyScreenshotReview(t *testing.T) {
 		}
 		return e
 	}
-	arts := []verify.Evidence{{Path: "screens/1.png", Kind: "screenshot", Data: []byte("png")}, {Path: "reports/a11y.json", Kind: "report", Data: []byte("{}")}}
-	sr := newE(fakeModel).screenshotReview(context.Background(), arts, 0)
+	png := []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR")
+	arts := []verify.Evidence{{Path: "screens/1.png", Kind: "screenshot", Data: png}, {Path: "reports/a11y.json", Kind: "report", Data: []byte("{}")}}
+	sr := newE(fakeModel).screenshotReview(context.Background(), arts, 0, "")
 	if sr == nil || !sr.Advisory || sr.Skipped != "" || sr.Model != verbs.ModelGemini || sr.Effort != "high" || len(sr.Findings) != 1 || sr.Findings[0].Kind != "contrast" {
 		t.Fatalf("screenshot review: %+v", sr)
 	}
@@ -392,10 +393,20 @@ func TestVerifyScreenshotReview(t *testing.T) {
 		t.Fatalf("lane A request: model %s, effort %q, %d images", r.Model, r.Effort, len(r.Messages[0].Images))
 	}
 	broken := &models.Fake{Err: errors.New("gateway down")}
-	if sr := newE(broken).screenshotReview(context.Background(), arts, 0); sr == nil || !sr.Advisory || sr.Skipped == "" {
+	if sr := newE(broken).screenshotReview(context.Background(), arts, 0, ""); sr == nil || !sr.Advisory || sr.Skipped == "" {
 		t.Fatalf("a failing gateway: %+v", sr)
 	}
-	if sr := newE(fakeModel).screenshotReview(context.Background(), arts[1:], 0); sr != nil {
+	if sr := newE(fakeModel).screenshotReview(context.Background(), arts[1:], 0, ""); sr != nil {
 		t.Fatalf("no screenshots: %+v", sr)
+	}
+	// A Google-built head gets no Google review (reviewer ≠ builder), and a
+	// screenshot lane A cannot send as PNG is left out.
+	calls := len(fakeModel.Requests)
+	if sr := newE(fakeModel).screenshotReview(context.Background(), arts, 0, verbs.ModelGemini); sr == nil || !strings.Contains(sr.Skipped, "google") {
+		t.Fatalf("Google builder: %+v", sr)
+	}
+	jpeg := []verify.Evidence{{Path: "screens/2.jpg", Kind: "screenshot", Data: []byte("\xff\xd8\xff\xe0\x00\x10JFIF")}}
+	if sr := newE(fakeModel).screenshotReview(context.Background(), jpeg, 0, ""); sr == nil || !strings.Contains(sr.Skipped, "no PNG") || len(fakeModel.Requests) != calls {
+		t.Fatalf("JPEG only: %+v, %d calls", sr, len(fakeModel.Requests)-calls)
 	}
 }

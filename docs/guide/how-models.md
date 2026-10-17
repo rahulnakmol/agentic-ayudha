@@ -43,6 +43,10 @@ model judgement of a UI goes through this lane: `aayu review`'s lane A, `polish`
 advisory look at its screenshots, which never decides whether a floor holds. It is
 interim until the AI gateway routes the target, `gemini-4-argon-high`, which needs a paid Google plan.
 
+> **Needs setup:** the ui-review lane needs a model key: the AI gateway's (`[models.gateway]`) or Google's. Without
+> one, and in the merge gate, which has no model key, `aayu verify` records `screenshot_review.skipped` with the reason
+> instead of findings, and `aayu review` stops. Set the key with `aayu auth set-secret <name>`.
+
 ## How `aayu models` resolves a lane
 
 `aayu models` prints the model, family, source, and route for every lane on every host (or only one host with

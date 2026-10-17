@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -75,21 +76,32 @@ type ScreenshotReview struct {
 	Skipped     string             `json:"skipped,omitempty"` // why no judgement was made
 }
 
-// screenshotReview runs the ui-review lane on each screenshot artifact. Any
+// screenshotReview runs the ui-review lane on each PNG screenshot artifact
+// (lane A sends images as PNG; a control's other formats are left out).
+// builderModel is the head's Aayudha-Model trailer, for the family check. Any
 // failure (no model key, a family clash, a gateway error) is recorded as
 // skipped: the judgement is advisory and never stops verify.
-func (e *Env) screenshotReview(ctx context.Context, arts []verify.Evidence, story int) *ScreenshotReview {
+func (e *Env) screenshotReview(ctx context.Context, arts []verify.Evidence, story int, builderModel string) *ScreenshotReview {
 	var shots []verify.Evidence
+	others := 0
 	for _, a := range arts {
-		if a.Kind == "screenshot" {
+		switch {
+		case a.Kind != "screenshot":
+		case http.DetectContentType(a.Data) == "image/png":
 			shots = append(shots, a)
+		default:
+			others++
 		}
 	}
-	if len(shots) == 0 {
+	if len(shots)+others == 0 {
 		return nil
 	}
 	sr := &ScreenshotReview{Advisory: true}
-	rv, err := e.reviewer(ctx, nil, story, false)
+	if len(shots) == 0 {
+		sr.Skipped = fmt.Sprintf("no PNG screenshots (%d in another format)", others)
+		return sr
+	}
+	rv, err := e.reviewer(ctx, nil, story, false, builderModel)
 	if err != nil {
 		sr.Skipped = err.Error()
 		return sr
@@ -367,7 +379,11 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 	res.Checks, res.Hold, res.Problems = rep.Checks, rep.Hold, problems
 	// The advisory screenshot judgement, after Hold is settled: it is
 	// recorded in the pack and never changes the verdict (ground rule 7).
-	if sr := e.screenshotReview(ctx, rep.Artifacts, res.Story); sr != nil {
+	builderModel := ""
+	if m := modelTrailer.FindStringSubmatch(msg); m != nil {
+		builderModel = m[1]
+	}
+	if sr := e.screenshotReview(ctx, rep.Artifacts, res.Story, builderModel); sr != nil {
 		res.ScreenshotReview = sr
 		b, _ := json.MarshalIndent(sr, "", "  ")
 		rep.Artifacts = append(rep.Artifacts, verify.Evidence{Path: "reports/screenshot-review.json", Kind: "report", Data: b})
