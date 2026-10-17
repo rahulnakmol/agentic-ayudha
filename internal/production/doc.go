@@ -123,7 +123,7 @@ func checkCommon(md, stage string, pr seats.Practice, known func(string) bool) [
 // change has already been made by the writer: the twin only proposes, and a
 // person approves a catalog action through the GitHub Environment.
 var executed = []*regexp.Regexp{
-	regexp.MustCompile(`(?i)\b(I|we|Atlas)\s+(have\s+|already\s+|just\s+)?(restarted|rolled\s+back|redeployed|deployed|reverted|executed|ran|scaled|flushed|applied|disabled|enabled|killed|purged|failed\s+over|mitigated)\b`),
+	regexp.MustCompile(`(?i)\b(I|we|Shesha)\s+(have\s+|already\s+|just\s+)?(restarted|rolled\s+back|redeployed|deployed|reverted|executed|ran|scaled|flushed|applied|disabled|enabled|killed|purged|failed\s+over|mitigated)\b`),
 	regexp.MustCompile(`(?i)\b(the\s+)?(rollback|restart|redeploy|mitigation|catalog\s+action|action)\s+(was|has\s+been|is\s+now)\s+(executed|applied|run|completed|performed|done|deployed)\b`),
 }
 

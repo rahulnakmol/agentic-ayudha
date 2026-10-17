@@ -139,7 +139,7 @@ func TestInspectDispositions(t *testing.T) {
 		t.Fatalf("defect: exit %d %+v %s", code, res, errOut)
 	}
 	req := model.Requests[0]
-	if !strings.Contains(req.System, "Write the summary as Nestor, the Engineering Manager twin") || !strings.Contains(req.System, "Evidence rule (every seat)") {
+	if !strings.Contains(req.System, "Write the summary as Drona, the Engineering Manager twin") || !strings.Contains(req.System, "Evidence rule (every seat)") {
 		t.Fatalf("inspect's summary voice is not the EM twin's:\n%s", req.System)
 	}
 	if req.Model != "gpt-6.1-sol" || strings.Count(req.Messages[0].Content, `<untrusted source="pull-request">`) != 1 ||

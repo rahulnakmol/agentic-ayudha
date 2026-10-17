@@ -4,7 +4,7 @@
 # recorded answer (tier 1); planted/runbook.md adds an uncited cause, which the evidence rule must catch. Tier 2 has
 # the runbook skill write it again and the judge score it.
 skill = "runbook"
-description = "Atlas writes the runbook for a dependency timeout that no catalog action fixes, at the scaleup stage."
+description = "Shesha writes the runbook for a dependency timeout that no catalog action fixes, at the scaleup stage."
 input = "grounding.md"
 artifacts = ["output/runbook.md"]
 

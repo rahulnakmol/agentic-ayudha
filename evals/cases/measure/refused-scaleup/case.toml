@@ -2,7 +2,7 @@
 # complete cohort) at the scaleup stage, when the head of product asks for a number from a partial cohort and whether
 # 15 % skipped rows mean the data is broken. output/answer.md is a recorded answer (tier 1).
 skill = "measure"
-description = "Mneme explains #61's exit 4 and the skipped rows, at the scaleup stage."
+description = "Shuka explains #61's exit 4 and the skipped rows, at the scaleup stage."
 input = "grounding.md"
 artifacts = ["output/answer.md"]
 

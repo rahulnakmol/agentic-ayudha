@@ -2,7 +2,7 @@
 
 Everything below is the real output of `aayu runbook` in a checkout of a synthetic claims service (claims-api) written for this eval, followed by the checked investigation note of its last incident, #7, which the twin read.
 
-Twin: Atlas, the Production Engineer. Team stage: scaleup ([team] stage), so a runbook's title is `# Runbook set: <failure>`.
+Twin: Shesha, the Production Engineer. Team stage: scaleup ([team] stage), so a runbook's title is `# Runbook set: <failure>`.
 
 A runbook confirms a known failure with a bounded query, mitigates it only with a catalog action proposed through
 `aayu respond <incident> --action <name>` (a person approves it through the Environment), verifies it, and rolls it back.

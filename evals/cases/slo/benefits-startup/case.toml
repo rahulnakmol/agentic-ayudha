@@ -4,7 +4,7 @@
 # objective, which leaves no budget and the floors must catch. Tier 2 has the slo skill write it again and the judge
 # score it.
 skill = "slo"
-description = "Atlas defines the first SLO of benefits-qa from an export that holds an incident, at the startup stage."
+description = "Shesha defines the first SLO of benefits-qa from an export that holds an incident, at the startup stage."
 input = "grounding.md"
 artifacts = ["output/slo.md"]
 

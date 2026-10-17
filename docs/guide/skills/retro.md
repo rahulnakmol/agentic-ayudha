@@ -9,10 +9,10 @@ happened and files each lesson as a Feedback issue a person accepts or rejects.
 |---|---|
 | In plain words | Compares plans with what happened and files what to improve as feedback you can accept or reject. |
 | Journey stage | [Measure and learn](../journey-8-learn.md) |
-| Accountable seat | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Nestor) |
-| Does the work | Nestor, the Accountable seat's twin, in the [`spec`](../how-models.md) model lane, with the seat's paired human when it has one |
-| Consulted | [Auditor](../../../seats/auditor/CHARTER.md) (Argus), [AI Native Engineer](../../../seats/ai-native-engineer/CHARTER.md) (Talos) |
-| Informed | [Founder](../../../seats/founder/CHARTER.md) (Prometheus) |
+| Accountable seat | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |
+| Does the work | Drona, the Accountable seat's twin, in the [`spec`](../how-models.md) model lane, with the seat's paired human when it has one |
+| Consulted | [Auditor](../../../seats/auditor/CHARTER.md) (Vidhi), [AI Native Engineer](../../../seats/ai-native-engineer/CHARTER.md) (Nakul) |
+| Informed | [Founder](../../../seats/founder/CHARTER.md) (Atri) |
 | Layers it can touch | [every layer](../concepts-layers.md) |
 | Who reasons | your agent's own model, inside the skill |
 | Writes as | the bot identity (a GitHub App); without one, your identity, tagged as human fallback |

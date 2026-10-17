@@ -103,14 +103,23 @@ func TestPersonaValidateRejects(t *testing.T) {
 		{"stage artefacts overlap", clone(func(p *Persona) {
 			p.Practices[0].Enterprise = Depth{Artefact: p.Practices[0].Startup.Artefact + " in full", Shape: "x"}
 		}), "stage artefacts must be distinct"},
-		{"Olympian name", clone(func(p *Persona) { p.Name = "Hermes" }), "an Olympian god"},
+		{"Olympian name", clone(func(p *Persona) { p.Name = "Hermes" }), "a Greek or Roman name"},
+		{"retired Greek twin name", clone(func(p *Persona) { p.Name = "Nestor" }), "a Greek or Roman name"},
+		{"principal deity", clone(func(p *Persona) { p.Name = "Vishnu" }), "a principal deity"},
+		{"principal deity's consort", clone(func(p *Persona) { p.Name = "Lakshmi" }), "a principal deity"},
 		{"title with article", clone(func(p *Persona) { p.Title = "the Founder's Sage" }), "without a leading"},
-		{"two-word name", clone(func(p *Persona) { p.Name = "Nestor Pylos" }), "want one capitalised word"},
+		{"two-word name", clone(func(p *Persona) { p.Name = "Drona Acharya" }), "want one capitalised word"},
 	}
 	for _, tt := range tests {
 		got := strings.Join(tt.p.Validate(), "\n")
 		if !strings.Contains(got, tt.want) {
 			t.Errorf("%s: got %q, want it to mention %q", tt.name, got, tt.want)
+		}
+	}
+	// The founder's names for the fourteen twins (2026-10-17) all pass.
+	for _, name := range []string{"Atri", "Arjun", "Vishwa", "Shuka", "Drona", "Nakul", "Shesha", "Hanu", "Nala", "Yama", "Sanjay", "Vidhi", "Sauti", "Kuber"} {
+		if v := clone(func(p *Persona) { p.Name = name }).Validate(); len(v) > 0 {
+			t.Errorf("name %q refused: %v", name, v)
 		}
 	}
 }
@@ -121,15 +130,15 @@ func TestPersonaValidateRejects(t *testing.T) {
 // A title replaces the seat beside the twin's name everywhere it is introduced;
 // without one the seat name stays (D-5.1v).
 func TestPersonaTitle(t *testing.T) {
-	sage := Persona{Seat: verbs.Founder, Name: "Prometheus", Title: "Founder's Sage"}
-	if got := sage.Heading(); got != "Prometheus, the Founder's Sage" {
+	sage := Persona{Seat: verbs.Founder, Name: "Atri", Title: "Founder's Sage"}
+	if got := sage.Heading(); got != "Atri, the Founder's Sage" {
 		t.Errorf("Heading with a title = %q", got)
 	}
-	if got := agentsVoices(map[verbs.SeatID]Persona{verbs.Founder: sage}); !strings.Contains(got, "- **Prometheus**, Founder's Sage: ") {
+	if got := agentsVoices(map[verbs.SeatID]Persona{verbs.Founder: sage}); !strings.Contains(got, "- **Atri**, Founder's Sage: ") {
 		t.Errorf("AGENTS.md line with a title: %q", got)
 	}
-	em := Persona{Seat: verbs.EngineeringManager, Name: "Nestor"}
-	if got, role := em.Heading(), em.Role(); got != "Nestor, the Engineering Manager twin" || role != "Engineering Manager" {
+	em := Persona{Seat: verbs.EngineeringManager, Name: "Drona"}
+	if got, role := em.Heading(), em.Role(); got != "Drona, the Engineering Manager twin" || role != "Engineering Manager" {
 		t.Errorf("without a title: Heading %q, Role %q", got, role)
 	}
 }
@@ -138,13 +147,13 @@ func TestSkillBlockVoiceAndStandard(t *testing.T) {
 	ps := repoPersonas(t)
 	v, _ := verbs.Find("verify")
 	b := ps[v.Seat].SkillBlock(v, ps[verbs.PolicyOwner(v)])
-	if !strings.Contains(b, "## Voice: Talos, the AI Native Engineer twin") ||
-		!strings.Contains(b, "Talos speaks and runs `verify` in the chore lane; the standard is Themis's, the Quality Architect's") {
+	if !strings.Contains(b, "## Voice: Nakul, the AI Native Engineer twin") ||
+		!strings.Contains(b, "Nakul speaks and runs `verify` in the chore lane; the standard is Yama's, the Quality Architect's") {
 		t.Errorf("verify block does not split voice and standard:\n%s", b)
 	}
 	in, _ := verbs.Find("inspect")
 	b = ps[in.Seat].SkillBlock(in, ps[verbs.PolicyOwner(in)])
-	if !strings.Contains(b, "`inspect` runs in the review lane; Nestor owns both the voice and the standard.") {
+	if !strings.Contains(b, "`inspect` runs in the review lane; Drona owns both the voice and the standard.") {
 		t.Errorf("inspect block:\n%s", b)
 	}
 	for _, must := range []string{EvidenceRule, StageRule, "**When paired with a human:**", "| Practice | Startup | Scaleup | Enterprise |"} {

@@ -34,7 +34,7 @@ remove marketer-documenter` returns it to solo and hands the human's open storie
 Source: `seats/marketer-documenter/persona.toml`. `go generate ./...` renders it here, at the top of the SKILL.md of every verb this seat is
 Accountable for, into the AGENTS.md seat section, and into the MCP `persona` prompt. Edit the TOML, not this region.
 
-**Clio, the Marketer & Documenter twin**.
+**Sauti, the Marketer & Documenter twin**.
 
 - **Purpose:** Tells the world what the pod has proven: positioning, launches, and docs that help, with every claim traced to a pack.
 - **Temperament:** Enthusiastic about the reader and sceptical about hype; would rather under-promise and link the proof.

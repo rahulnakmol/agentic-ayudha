@@ -80,10 +80,10 @@ func TestInbox(t *testing.T) {
 		"o/r: 6 human-only step(s) wait for you, @o. Keys: a accept the recommendation, c choose another, s skip, o open, q quit.",
 		"[1/6] Decision #1: Waive the eval-bar floor on #10\n  a floor waiver: only a person accepts it, and it is never applied provisionally (rule 7).\n  the Decision recommends: accept fix\n  other 1: accept waive",
 		"[2/6] Provisional Decision #2: Choose the rules engine\n  its recommendation applies provisionally (V8): ratify it, or revert to another option, by 2026-10-22 09:00 UTC.\n  the Decision recommends: ratify: accept A\n  other 1: revert: accept B",
-		"[3/6] PR at inspect's cycle cap #9: fix(cli): capped\n  inspect ran 2 of 2 fix/rebuild cycles and stopped (last disposition: fix); a person reviews it before anything else runs.\n  Nestor (Engineering Manager) recommends: open it and review it\n  other 1: ship PR #9 now (ship's gates still apply)",
-		"[4/6] Story merged without ship #5: Merged story\n  PR #6 merged into dev (fffffff) without `aayu ship`, so no ship record or human pass exists; the Story is still status:in-progress.\n  Argus (Auditor) recommends: mark #5 merged without proof (it stays uncovered)",
-		"[5/6] Bug with its fix merged #7: A bug\n  its fix, PR #8, merged into dev (fffffff), and the Bug is still open.\n  Nestor (Engineering Manager) recommends: close #7 as completed, fixed in #8",
-		"[6/6] Replaced #3: Old story\n  #4 says it replaces #3, and #3 is still open.\n  Metis (Product Strategist) recommends: close #3 as not planned, replaced by #4",
+		"[3/6] PR at inspect's cycle cap #9: fix(cli): capped\n  inspect ran 2 of 2 fix/rebuild cycles and stopped (last disposition: fix); a person reviews it before anything else runs.\n  Drona (Engineering Manager) recommends: open it and review it\n  other 1: ship PR #9 now (ship's gates still apply)",
+		"[4/6] Story merged without ship #5: Merged story\n  PR #6 merged into dev (fffffff) without `aayu ship`, so no ship record or human pass exists; the Story is still status:in-progress.\n  Vidhi (Auditor) recommends: mark #5 merged without proof (it stays uncovered)",
+		"[5/6] Bug with its fix merged #7: A bug\n  its fix, PR #8, merged into dev (fffffff), and the Bug is still open.\n  Drona (Engineering Manager) recommends: close #7 as completed, fixed in #8",
+		"[6/6] Replaced #3: Old story\n  #4 says it replaces #3, and #3 is still open.\n  Arjun (Product Strategist) recommends: close #3 as not planned, replaced by #4",
 		"inbox: 5 done, 0 skipped, 0 left",
 	} {
 		if !strings.Contains(out, want) {

@@ -2,7 +2,7 @@
 
 Everything below is the real output of `aayu investigate 7 --telemetry <export>` on a synthetic claims service (claims-api) and its telemetry, written for this eval. The incident and the catalog come from a fake GitHub. The checkout also holds ops/slos.toml (the two claim-submission SLOs), which the draft check resolves as a checkout file.
 
-Twin: Atlas, the Production Engineer. Team stage: scaleup ([team] stage), so the note's title is `# Incident assessment`.
+Twin: Shesha, the Production Engineer. Team stage: scaleup ([team] stage), so the note's title is `# Incident assessment`.
 Scope: service claims-api, environment production, window 2026-10-15T13:35:00Z..2026-10-15T14:54:46Z (UTC).
 
 Establish the deployed revision before reading code. Start from these bounded aggregates; run more with

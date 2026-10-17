@@ -10,10 +10,10 @@ lets only a person with the authority accept it.
 |---|---|
 | In plain words | Records a real choice with its options and a recommendation; only a person with the authority accepts it. |
 | Journey stage | [Break it down](../journey-2-break-down.md) |
-| Accountable seat | [Founder](../../../seats/founder/CHARTER.md) (Prometheus) |
-| Does the work | Prometheus, the Accountable seat's twin, in the [`spec`](../how-models.md) model lane, with the seat's paired human when it has one |
-| Consulted | [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Metis), [Code Architect](../../../seats/code-architect/CHARTER.md) (Daedalus) |
-| Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Nestor), [Auditor](../../../seats/auditor/CHARTER.md) (Argus) |
+| Accountable seat | [Founder](../../../seats/founder/CHARTER.md) (Atri) |
+| Does the work | Atri, the Accountable seat's twin, in the [`spec`](../how-models.md) model lane, with the seat's paired human when it has one |
+| Consulted | [Product Strategist](../../../seats/product-strategist/CHARTER.md) (Arjun), [Code Architect](../../../seats/code-architect/CHARTER.md) (Vishwa) |
+| Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona), [Auditor](../../../seats/auditor/CHARTER.md) (Vidhi) |
 | Layers it can touch | [every layer](../concepts-layers.md) |
 | Who reasons | your agent's own model, inside the skill |
 | Writes as | a person's own GitHub identity |

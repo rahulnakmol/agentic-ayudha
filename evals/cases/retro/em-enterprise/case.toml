@@ -2,7 +2,7 @@
 # scenario and task run as em-startup, em-scaleup, and em-enterprise, so the depth must differ while each stays grounded.
 # output/retro.md is a recorded answer (tier 1); tier 2 has the retro skill answer again and the judge score it.
 skill = "retro"
-description = "Nestor explains the #212 overrun at the enterprise stage."
+description = "Drona explains the #212 overrun at the enterprise stage."
 input = "../grounding.md"
 artifacts = ["output/retro.md"]
 

@@ -858,7 +858,7 @@ func TestTier2PersonaRevisesOnceThenJudges(t *testing.T) {
 		t.Errorf("recorded: %q / %q / %.40q / %.40q", runs[0].RevisedFor, runs[1].RevisedFor, runs[0].Answer, runs[4].Answer)
 	}
 	first, revise, judged := fake.Requests[0], fake.Requests[1], fake.Requests[2]
-	if !strings.Contains(first.System, "## Voice: Nestor, the Engineering Manager twin") || !strings.Contains(first.System, "Team stage for this run: startup") ||
+	if !strings.Contains(first.System, "## Voice: Drona, the Engineering Manager twin") || !strings.Contains(first.System, "Team stage for this run: startup") ||
 		!strings.Contains(first.Messages[0].Content, `<untrusted source="grounding">`) {
 		t.Error("the skill prompt lacks the persona block, the stage, or the wrapped grounding")
 	}
@@ -866,7 +866,7 @@ func TestTier2PersonaRevisesOnceThenJudges(t *testing.T) {
 		t.Errorf("revision request: %+v", revise.Messages)
 	}
 	if judged.Model != "gpt-6.1-sol" || !strings.Contains(judged.Messages[0].Content, `startup artefact "Retro note"`) ||
-		!strings.Contains(judged.Messages[0].Content, "Speak and work as Nestor") {
+		!strings.Contains(judged.Messages[0].Content, "Speak and work as Drona") {
 		t.Errorf("judge request: %s %.300s", judged.Model, judged.Messages[0].Content)
 	}
 }
@@ -906,13 +906,13 @@ func TestTier2PackRevisesOnceThenJudges(t *testing.T) {
 		t.Fatalf("%d calls, runs %+v", len(fake.Requests), runs)
 	}
 	first, revise, judged := fake.Requests[0], fake.Requests[1], fake.Requests[2]
-	if !strings.Contains(first.System, "Speak and work as Daedalus, the Code Architect twin") || !strings.Contains(first.Messages[0].Content, "The human is stuck and asks:") {
+	if !strings.Contains(first.System, "Speak and work as Vishwa, the Code Architect twin") || !strings.Contains(first.Messages[0].Content, "The human is stuck and asks:") {
 		t.Errorf("skill prompt: %.300s", first.System)
 	}
 	if !strings.Contains(revise.Messages[2].Content, `missing part "## Pre-mortem"`) {
 		t.Errorf("revision request: %s", revise.Messages[2].Content)
 	}
-	if !strings.Contains(judged.Messages[0].Content, "Daedalus, the Code Architect twin, at the scaleup stage") {
+	if !strings.Contains(judged.Messages[0].Content, "Vishwa, the Code Architect twin, at the scaleup stage") {
 		t.Errorf("judge request: %.300s", judged.Messages[0].Content)
 	}
 }

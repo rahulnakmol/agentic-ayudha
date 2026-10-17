@@ -4,7 +4,7 @@ Everything below is synthetic and was written for this eval: `aayu chart 41 --ki
 repository o/r (perkdesk, a benefits question-and-answer app for one employer's 2 400 employees), followed by the files
 the twin read in the checkout. Code excerpts are quoted with their path and line numbers.
 
-Twin: Mneme, the Data & AI Architect. Team stage: startup (`[team] stage = "startup"`), so the note's title is
+Twin: Shuka, the Data & AI Architect. Team stage: startup (`[team] stage = "startup"`), so the note's title is
 `# Data sketch`.
 
 ## Facts

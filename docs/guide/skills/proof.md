@@ -9,10 +9,10 @@ on the ledger: the files that tie each of a story's promises to its evidence, fo
 |---|---|
 | In plain words | Stores, fetches, and checks the proof packs that hold the evidence for each change. |
 | Journey stage | [Prove it](../journey-5-prove.md) |
-| Accountable seat | [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Themis) |
-| Does the work | Themis, the Accountable seat's twin, in the [`chore`](../how-models.md) model lane, with the seat's paired human when it has one |
-| Consulted | [AI Native Engineer](../../../seats/ai-native-engineer/CHARTER.md) (Talos) |
-| Informed | [Auditor](../../../seats/auditor/CHARTER.md) (Argus) |
+| Accountable seat | [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Yama) |
+| Does the work | Yama, the Accountable seat's twin, in the [`chore`](../how-models.md) model lane, with the seat's paired human when it has one |
+| Consulted | [AI Native Engineer](../../../seats/ai-native-engineer/CHARTER.md) (Nakul) |
+| Informed | [Auditor](../../../seats/auditor/CHARTER.md) (Vidhi) |
 | Layers it can touch | [every layer](../concepts-layers.md) |
 | Who reasons | no model: it is deterministic |
 | Writes as | the bot identity (a GitHub App); without one, your identity, tagged as human fallback |

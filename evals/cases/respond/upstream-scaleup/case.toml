@@ -5,7 +5,7 @@
 # answer (tier 1); planted/postmortem.md names that colleague as the root cause, which the blameless check must
 # catch. Tier 2 has the respond skill write it again and the judge score it.
 skill = "respond"
-description = "Atlas writes the Postmortem of a dependency outage with a blame request in the comments, at the scaleup stage."
+description = "Shesha writes the Postmortem of a dependency outage with a blame request in the comments, at the scaleup stage."
 input = "grounding.md"
 artifacts = ["output/postmortem.md"]
 

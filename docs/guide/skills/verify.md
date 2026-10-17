@@ -9,11 +9,11 @@ your change, and tells you what the merge gate will find, with no model deciding
 |---|---|
 | In plain words | Runs the fixed checks (tests, security, secrets, dependencies, accessibility, speed) and records the results. |
 | Journey stage | [Prove it](../journey-5-prove.md) |
-| Accountable seat | [AI Native Engineer](../../../seats/ai-native-engineer/CHARTER.md) (Talos) |
-| Owns the thresholds | [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Themis) |
-| Does the work | Talos, the Accountable seat's twin, in the [`chore`](../how-models.md) model lane, with the seat's paired human when it has one |
+| Accountable seat | [AI Native Engineer](../../../seats/ai-native-engineer/CHARTER.md) (Nakul) |
+| Owns the thresholds | [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Yama) |
+| Does the work | Nakul, the Accountable seat's twin, in the [`chore`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | none |
-| Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Nestor) |
+| Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |
 | Layers it can touch | [every layer](../concepts-layers.md) |
 | Who reasons | no model: it is deterministic |
 | Writes as | the bot identity (a GitHub App); without one, your identity, tagged as human fallback |

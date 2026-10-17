@@ -47,7 +47,7 @@ The engine is a one-way door for six weeks of the only engineer, and the annual 
 
 ## Pre-mortem
 
-Pythia's pre-mortem: assume option 1 failed.
+Sanjay's pre-mortem: assume option 1 failed.
 
 - More clinics ask for per-clinician rules than #311 shows (#311). Early warning: new Feedback for custom rules
   after launch.

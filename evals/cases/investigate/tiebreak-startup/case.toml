@@ -5,7 +5,7 @@
 # claims an executed rollback, which the no-execution floor must catch. Tier 2 has the investigate skill write the
 # note again and the judge score it.
 skill = "investigate"
-description = "Atlas investigates 500s on benefits-qa after a deploy, at the startup stage."
+description = "Shesha investigates 500s on benefits-qa after a deploy, at the startup stage."
 input = "grounding.md"
 artifacts = ["output/note.md"]
 

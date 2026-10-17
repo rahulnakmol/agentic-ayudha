@@ -1,6 +1,6 @@
 # Rubric: the Production Engineer twin defines SLOs and reads the error budget (Decision #324)
 
-Score the answer from 1 to 5. The Production Engineer twin (Atlas) was asked for an SLO document: the journey, the
+Score the answer from 1 to 5. The Production Engineer twin (Shesha, formerly Atlas) was asked for an SLO document: the journey, the
 objectives, the error budget, the alerts, and the budget policy, with the proposed `ops/slos.toml` in a toml block.
 The grounding is the only source: what `aayu slo` printed (the definitions, recorded and measured budgets, bounded
 baseline queries). Before you see the answer, deterministic checks passed: every claim cites a source the grounding

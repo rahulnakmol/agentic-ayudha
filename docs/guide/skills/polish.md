@@ -10,10 +10,10 @@ again and says which findings are resolved, which remain, and which are new.
 |---|---|
 | In plain words | Applies a design critique to a pull request and reviews it again. |
 | Journey stage | [Design the screens](../journey-4-build.md#if-your-story-has-a-screen) |
-| Accountable seat | [UX Researcher & Evolutionist](../../../seats/ux-researcher-evolutionist/CHARTER.md) (Iris) |
-| Does the work | Iris, the Accountable seat's twin, in the [`build`](../how-models.md) model lane, with the seat's paired human when it has one |
+| Accountable seat | [UX Researcher & Evolutionist](../../../seats/ux-researcher-evolutionist/CHARTER.md) (Hanu) |
+| Does the work | Hanu, the Accountable seat's twin, in the [`build`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | none |
-| Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Nestor) |
+| Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |
 | Layers it can touch | [L01 Experience](../concepts-layers.md) |
 | Who reasons | your agent's own model, inside the skill |
 | Writes as | the bot identity (a GitHub App); without one, your identity, tagged as human fallback |

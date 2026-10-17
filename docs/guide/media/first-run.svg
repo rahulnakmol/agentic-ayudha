@@ -8,7 +8,7 @@
 <text x="430" y="21" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#c9cfdb">~/your-project</text>
 <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13">
 <text x="20" y="54" fill="#ffd479" xml:space="preserve" font-weight="bold">$ aayu tour</text>
-<text x="20" y="74" fill="#b3bbca" xml:space="preserve">Prometheus (Founder's Sage): Counsels the founder as a rajguru counsels a king.</text>
+<text x="20" y="74" fill="#b3bbca" xml:space="preserve">Atri (Founder's Sage): Counsels the founder as a rajguru counsels a king.</text>
 <text x="20" y="94" fill="#e8ebf1" xml:space="preserve">Welcome to aayudha. Three steps take this repository to Level 1: clear work items.</text>
 <text x="20" y="114" fill="#b3bbca" xml:space="preserve">Level 1 adds labels, issue forms, a config file, AGENTS.md, and a records branch. No workflows,</text>
 <text x="20" y="134" fill="#b3bbca" xml:space="preserve">no secrets, no CI minutes.</text>

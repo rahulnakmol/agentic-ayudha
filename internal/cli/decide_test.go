@@ -303,15 +303,15 @@ func TestDecidePack(t *testing.T) {
 			t.Errorf("facts lack %q:\n%s", want, facts)
 		}
 	}
-	if rep.Seat != "engineering-manager" || rep.Twin != "Nestor" || rep.Stage != "startup" || rep.Question != "Which rules engine?" ||
-		!strings.Contains(rep.Persona, "Speak and work as Nestor") || !strings.Contains(rep.Untrusted, "A: in-house.") || len(rep.Sections) != 8 {
+	if rep.Seat != "engineering-manager" || rep.Twin != "Drona" || rep.Stage != "startup" || rep.Question != "Which rules engine?" ||
+		!strings.Contains(rep.Persona, "Speak and work as Drona") || !strings.Contains(rep.Untrusted, "A: in-house.") || len(rep.Sections) != 8 {
 		t.Errorf("pack for #2: %+v", rep)
 	}
 	q := pack(0, "Should we add a field to the Tombstone schema or a separate index?")
-	if q.Seat != "code-architect" || q.Twin != "Daedalus" || q.Issue != 0 || !strings.Contains(q.SeatWhy, `"field"`) {
+	if q.Seat != "code-architect" || q.Twin != "Vishwa" || q.Issue != 0 || !strings.Contains(q.SeatWhy, `"field"`) {
 		t.Errorf("pack for a question: %+v", q)
 	}
-	if o := pack(0, "2", "--seat", "quality-architect"); o.Twin != "Themis" || o.SeatWhy != "--seat" {
+	if o := pack(0, "2", "--seat", "quality-architect"); o.Twin != "Yama" || o.SeatWhy != "--seat" {
 		t.Errorf("--seat: %+v", o)
 	}
 
@@ -341,7 +341,7 @@ In-house, as #2 recommends; a two-way door until #6 ships.
 
 ## Pre-mortem
 
-Pythia: in-house failed because the rules outgrew it; early warning: #6 needs a rule type #2 did not list.
+Sanjay: in-house failed because the rules outgrew it; early warning: #6 needs a rule type #2 did not list.
 
 ## Questions that would change the answer
 

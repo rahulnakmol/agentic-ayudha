@@ -1,6 +1,6 @@
 # Rubric: the Production Engineer twin investigates an incident (Decision #324)
 
-Score the answer from 1 to 5. The Production Engineer twin (Atlas) was asked for an investigation note on an open
+Score the answer from 1 to 5. The Production Engineer twin (Shesha, formerly Atlas) was asked for an investigation note on an open
 incident: from bounded telemetry queries to the deployed revision and the implicated code, with a mitigation proposed
 for a person to approve. The grounding is the only source: what `aayu investigate` printed (the incident, the deploy
 markers, the bounded queries with their results, the code at the deployed revision, the ops catalog). Before you see

@@ -5,7 +5,7 @@
 # planted/note.md gives a kubectl command and an uncited cause, which the floors must catch. Tier 2 has the
 # investigate skill write the note again and the judge score it.
 skill = "investigate"
-description = "Atlas investigates failing claim submissions with a deploy in the window, at the scaleup stage."
+description = "Shesha investigates failing claim submissions with a deploy in the window, at the scaleup stage."
 input = "grounding.md"
 artifacts = ["output/note.md"]
 

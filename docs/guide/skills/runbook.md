@@ -10,10 +10,10 @@ recovery, and how to roll back.
 |---|---|
 | In plain words | Writes down how to spot and fix each known production problem with the approved actions, so whoever is on call can follow it. |
 | Journey stage | [Keep it running](../when-to-use-what.md#something-broke-in-production) |
-| Accountable seat | [Production Engineer](../../../seats/production-engineer/CHARTER.md) (Atlas) |
-| Does the work | Atlas, the Accountable seat's twin, in the [`spec`](../how-models.md) model lane, with the seat's paired human when it has one |
-| Consulted | [AI Native Engineer](../../../seats/ai-native-engineer/CHARTER.md) (Talos), [DevOps & DevEx Tinkerer](../../../seats/devops-devex-tinkerer/CHARTER.md) (Hercules) |
-| Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Nestor) |
+| Accountable seat | [Production Engineer](../../../seats/production-engineer/CHARTER.md) (Shesha) |
+| Does the work | Shesha, the Accountable seat's twin, in the [`spec`](../how-models.md) model lane, with the seat's paired human when it has one |
+| Consulted | [AI Native Engineer](../../../seats/ai-native-engineer/CHARTER.md) (Nakul), [DevOps & DevEx Tinkerer](../../../seats/devops-devex-tinkerer/CHARTER.md) (Nala) |
+| Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |
 | Layers it can touch | [every layer](../concepts-layers.md) |
 | Who reasons | your agent's own model, inside the skill |
 | Writes as | the bot identity (a GitHub App); without one, your identity, tagged as human fallback |

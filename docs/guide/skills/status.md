@@ -9,10 +9,10 @@ risk, proof, open decisions, and cost for each Goal, Initiative, and Feature, wi
 |---|---|
 | In plain words | Rolls up progress, risk, proof, open decisions, and cost for each Goal, Initiative, and Feature. |
 | Journey stage | [Explain it](../journey-9-explain.md) |
-| Accountable seat | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Nestor) |
-| Does the work | Nestor, the Accountable seat's twin, in the [`chore`](../how-models.md) model lane, with the seat's paired human when it has one |
+| Accountable seat | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |
+| Does the work | Drona, the Accountable seat's twin, in the [`chore`](../how-models.md) model lane, with the seat's paired human when it has one |
 | Consulted | none |
-| Informed | [Founder](../../../seats/founder/CHARTER.md) (Prometheus) |
+| Informed | [Founder](../../../seats/founder/CHARTER.md) (Atri) |
 | Layers it can touch | [every layer](../concepts-layers.md) |
 | Who reasons | no model: it is deterministic |
 | Writes as | the bot identity (a GitHub App); without one, your identity, tagged as human fallback |

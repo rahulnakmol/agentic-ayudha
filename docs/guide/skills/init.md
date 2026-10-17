@@ -9,10 +9,10 @@ records. `init` adds them, shows what it will change, and asks before it uses yo
 |---|---|
 | In plain words | Sets up a repository for aayudha: labels, issue forms, config, and the records branch; more on request. |
 | Journey stage | [Set up](../start.md) |
-| Accountable seat | [Founder](../../../seats/founder/CHARTER.md) (Prometheus) |
-| Does the work | Prometheus, the Accountable seat's twin, in the [`chore`](../how-models.md) model lane, with the seat's paired human when it has one |
-| Consulted | [DevOps & DevEx Tinkerer](../../../seats/devops-devex-tinkerer/CHARTER.md) (Hercules) |
-| Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Nestor) |
+| Accountable seat | [Founder](../../../seats/founder/CHARTER.md) (Atri) |
+| Does the work | Atri, the Accountable seat's twin, in the [`chore`](../how-models.md) model lane, with the seat's paired human when it has one |
+| Consulted | [DevOps & DevEx Tinkerer](../../../seats/devops-devex-tinkerer/CHARTER.md) (Nala) |
+| Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |
 | Layers it can touch | [L09 Platform / operations](../concepts-layers.md) |
 | Who reasons | no model: it is deterministic |
 | Writes as | a person's own GitHub identity |

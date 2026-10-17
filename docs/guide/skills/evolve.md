@@ -10,10 +10,10 @@ opened as a pull request a person reviews.
 |---|---|
 | In plain words | Turns accepted feedback into a test for a skill, then a skill change that passes it, for a person to review. |
 | Journey stage | [Measure and learn](../journey-8-learn.md) |
-| Accountable seat | [AI Native Engineer](../../../seats/ai-native-engineer/CHARTER.md) (Talos) |
-| Does the work | Talos, the Accountable seat's twin, in the [`build`](../how-models.md) model lane, with the seat's paired human when it has one |
-| Consulted | [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Themis), [Data & AI Architect](../../../seats/data-ai-architect/CHARTER.md) (Mneme) |
-| Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Nestor) |
+| Accountable seat | [AI Native Engineer](../../../seats/ai-native-engineer/CHARTER.md) (Nakul) |
+| Does the work | Nakul, the Accountable seat's twin, in the [`build`](../how-models.md) model lane, with the seat's paired human when it has one |
+| Consulted | [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Yama), [Data & AI Architect](../../../seats/data-ai-architect/CHARTER.md) (Shuka) |
+| Informed | [Engineering Manager](../../../seats/engineering-manager/CHARTER.md) (Drona) |
 | Layers it can touch | [L05 Intelligence](../concepts-layers.md) |
 | Who reasons | your agent's own model, inside the skill |
 | Writes as | the bot identity (a GitHub App); without one, your identity, tagged as human fallback |

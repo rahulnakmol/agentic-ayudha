@@ -128,9 +128,14 @@ var (
 	notAnEmploy = regexp.MustCompile(`(?i)\b(worked at|works at|used to work|alumn\w*|formerly at|ex-employee)\b`)
 	// companies: a twin never claims to have worked at one, imitates its people,
 	// or wears its trademark. Sources may name them; persona text may not.
-	// olympian is the twelve Olympians and Hades, Greek and Roman names (D-5.1v).
-	olympian  = regexp.MustCompile(`(?i)^(zeus|jupiter|hera|juno|poseidon|neptune|demeter|ceres|athena|minerva|apollo|artemis|diana|ares|mars|aphrodite|venus|hephaestus|vulcan|hermes|mercury|dionysus|bacchus|hestia|vesta|hades|pluto)$`)
-	companies = regexp.MustCompile(`(?i)\b(faang|maang|google|alphabet|amazon|aws|meta|facebook|apple|microsoft|netflix|stripe|uber|airbnb|spotify|linkedin|twitter|etsy|shopify|atlassian|salesforce|pagerduty|intuit|openai|anthropic)\b`)
+	// Twins are named for figures of the Hindu epics and the rishi tradition,
+	// never a principal deity (founder, 2026-10-17). principalDeity is the
+	// Trimurti and their consorts. greekOrRoman is the twelve Olympians and
+	// Hades by their Greek and Roman names, and the Greek names the twins
+	// carried before the move.
+	principalDeity = regexp.MustCompile(`(?i)^(brahma|vishnu|shiva|saraswati|lakshmi|parvati)$`)
+	greekOrRoman   = regexp.MustCompile(`(?i)^(zeus|jupiter|hera|juno|poseidon|neptune|demeter|ceres|athena|minerva|apollo|artemis|diana|ares|mars|aphrodite|venus|hephaestus|vulcan|hermes|mercury|dionysus|bacchus|hestia|vesta|hades|pluto|prometheus|metis|daedalus|mneme|nestor|talos|atlas|iris|hercules|themis|pythia|argus|clio|plutus)$`)
+	companies      = regexp.MustCompile(`(?i)\b(faang|maang|google|alphabet|amazon|aws|meta|facebook|apple|microsoft|netflix|stripe|uber|airbnb|spotify|linkedin|twitter|etsy|shopify|atlassian|salesforce|pagerduty|intuit|openai|anthropic)\b`)
 )
 
 // Validate returns what makes the persona incomplete or unsafe to render.
@@ -140,8 +145,11 @@ func (p Persona) Validate() []string {
 	if !twinName.MatchString(p.Name) {
 		bad("name %q: want one capitalised word of 2-12 letters", p.Name)
 	}
-	if olympian.MatchString(p.Name) {
-		bad("name %q: an Olympian god; the human founder is Zeus, and a twin is a lesser figure", p.Name)
+	if principalDeity.MatchString(p.Name) {
+		bad("name %q: a principal deity; a twin is a figure of the epics or the rishi tradition, never a principal deity", p.Name)
+	}
+	if greekOrRoman.MatchString(p.Name) {
+		bad("name %q: a Greek or Roman name; a twin is named for a figure of the Hindu epics or the rishi tradition", p.Name)
 	}
 	for k, v := range map[string]string{"purpose": p.Purpose, "temperament": p.Temperament, "voice": p.Voice,
 		"pushback": p.PushBack, "praise": p.Praise, "grounding": p.Grounding, "paired": p.Paired} {

@@ -1,8 +1,8 @@
 # Decision-pack case (WP5.1b, D-5.1f): a stuck human asks whether to waive a floor; the topic routes it to the Quality
-# Architect twin (Themis), who writes the pack at the enterprise stage, so the three decide cases cover the three team
+# Architect twin (Yama), who writes the pack at the enterprise stage, so the three decide cases cover the three team
 # stages. Tier 2 has the decide skill write the pack again for the judge.
 skill = "decide"
-description = "Themis's decision pack: waive the coverage floor for #212 or hold PR #219 for tests."
+description = "Yama's decision pack: waive the coverage floor for #212 or hold PR #219 for tests."
 input = "../grounding.md"
 artifacts = ["output/pack.md"]
 

@@ -10,10 +10,10 @@ skipped the log.
 |---|---|
 | In plain words | Writes a report anyone can reproduce: checks, proof, waivers, deadlines, bypasses, and any write that skipped the log. |
 | Journey stage | [Explain it](../journey-9-explain.md) |
-| Accountable seat | [Auditor](../../../seats/auditor/CHARTER.md) (Argus) |
-| Does the work | Argus, the Accountable seat's twin, in the [`review`](../how-models.md) model lane, with the seat's paired human when it has one |
-| Consulted | [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Themis) |
-| Informed | [Founder](../../../seats/founder/CHARTER.md) (Prometheus) |
+| Accountable seat | [Auditor](../../../seats/auditor/CHARTER.md) (Vidhi) |
+| Does the work | Vidhi, the Accountable seat's twin, in the [`review`](../how-models.md) model lane, with the seat's paired human when it has one |
+| Consulted | [Quality Architect](../../../seats/quality-architect/CHARTER.md) (Yama) |
+| Informed | [Founder](../../../seats/founder/CHARTER.md) (Atri) |
 | Layers it can touch | [every layer](../concepts-layers.md) |
 | Who reasons | no model: it is deterministic |
 | Writes as | the bot identity (a GitHub App); without one, your identity, tagged as human fallback |

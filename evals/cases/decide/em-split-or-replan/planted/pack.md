@@ -1,4 +1,4 @@
-# Decision pack: #212 split or re-plan (Nestor, Engineering Manager twin; startup)
+# Decision pack: #212 split or re-plan (Drona, Engineering Manager twin; startup)
 
 ## Question
 

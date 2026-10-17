@@ -1,6 +1,6 @@
 # Rubric: the Production Engineer twin writes a runbook (Decision #324)
 
-Score the answer from 1 to 5. The Production Engineer twin (Atlas) was asked for a runbook: how to confirm a known
+Score the answer from 1 to 5. The Production Engineer twin (Shesha, formerly Atlas) was asked for a runbook: how to confirm a known
 production failure with a bounded query, mitigate it only through the ops catalog, verify the mitigation, and roll
 it back, and when it was last tried. The grounding is the only source: what `aayu runbook` printed (the catalog, the
 SLOs, the runbooks that exist) and the last incident's investigation note. Before you see the answer, deterministic

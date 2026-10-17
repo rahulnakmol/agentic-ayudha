@@ -1,4 +1,4 @@
-# Decision pack: waive the coverage floor for #212 or hold PR #219 (Themis, Quality Architect twin; enterprise)
+# Decision pack: waive the coverage floor for #212 or hold PR #219 (Yama, Quality Architect twin; enterprise)
 
 ## Question
 
@@ -39,7 +39,7 @@ Story #231 stays blocked while #212 is open (#231), and PR #219 keeps its change
 
 ## Pre-mortem
 
-Pythia's pre-mortem: assume option 2 failed.
+Sanjay's pre-mortem: assume option 2 failed.
 
 - The new tests cover lines but not criterion 2, so the pack still has no evidence for it (`ledger/packs/212/pack.json`). Early warning: the next pack lists criterion 2 without evidence.
 - The tests chase the percentage while the tombstone change stays unreviewed (#219). Early warning: @maintainer's review stays at changes requested after the tests land (#219).
