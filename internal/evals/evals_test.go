@@ -415,9 +415,9 @@ func TestTier2RetriesProviderFaults(t *testing.T) {
 	// 11, 12, and 13 are overloaded, one past the cap. Run 5 has no fault.
 	overloaded := &models.StreamError{Type: "overloaded_error", Message: "Overloaded"}
 	client := &resetting{Fake: &models.Fake{Replies: []models.Response{ok, judged, ok, judged, looping, ok, judged, ok, judged}}, fail: map[int]error{
-		1:  &models.StatusError{Code: 429, Body: "rate limited"},
+		1:  &models.StatusError{Code: 429, Body: "rate limited", RetryAfter: 40 * time.Second},
 		4:  stall{},
-		7:  &models.StatusError{Code: 524, Body: "error code: 524"},
+		7:  &models.StatusError{Code: 524, Body: "error code: 524", RetryAfter: 5 * time.Minute},
 		11: overloaded, 12: overloaded, 13: overloaded,
 	}}
 	h := harness(t, nil, "gpt-6.1-sol")
@@ -444,9 +444,10 @@ func TestTier2RetriesProviderFaults(t *testing.T) {
 	if c := res.Cases[0]; c.Errors != 1 || c.Mean != 5 {
 		t.Errorf("errors %d, mean %v: only run 4 is an error", c.Errors, c.Mean)
 	}
-	// A server error backs off like a 429, so the retries of an outage do not all fail at once: the 429 waits
-	// 10-15 s, the 524 20-30 s, each overloaded stream 20-30 s and then 40-60 s; a stall and a looping reply do not wait.
-	bounds := [][2]time.Duration{{10, 15}, {20, 30}, {20, 30}, {40, 60}}
+	// A server error backs off like a 429, so the retries of an outage do not all fail at once: the 429 waits the
+	// 40 s its Retry-After asks (longer than its own 10-15 s), the 524 the 2-minute cap (its Retry-After asks 5),
+	// each overloaded stream 30-45 s and then 60-90 s; a stall and a looping reply do not wait.
+	bounds := [][2]time.Duration{{40, 40}, {120, 120}, {30, 45}, {60, 90}}
 	if len(*waits) != len(bounds) {
 		t.Fatalf("pauses %v, want %d", *waits, len(bounds))
 	}
@@ -455,6 +456,56 @@ func TestTier2RetriesProviderFaults(t *testing.T) {
 			t.Errorf("pause %d is %v, want %d-%d s", i+1, w, b[0], b[1])
 		}
 	}
+}
+
+// TestTier2RetriesTheModelBeforeItsFallback: a gateway outage answers 502
+// with no tokens (Cloudflare's "error code: 502" while the gateway swaps its
+// binary). The skill's own model is retried, with a pause before each retry,
+// and only then is the lane's fallback called; the skill call streams, so a
+// long reply cannot idle into a 524.
+func TestTier2RetriesTheModelBeforeItsFallback(t *testing.T) {
+	var events []string
+	old := pause
+	pause = func(context.Context, time.Duration) error { events = append(events, "pause"); return nil }
+	t.Cleanup(func() { pause = old })
+	cases, _ := stubCases(root)
+	item, _ := os.ReadFile(filepath.Join(root, "evals", "cases", "stub", "csv-export", "output", "issue.json"))
+	var replies []models.Response
+	for i := 0; i < 5; i++ {
+		replies = append(replies, models.Response{Text: string(item)}, models.Response{Text: `{"score": 5, "reason": "covers the request"}`})
+	}
+	outage := &models.StatusError{Code: 502, Body: "error code: 502"}
+	client := &resetting{Fake: &models.Fake{Replies: replies}, fail: map[int]error{1: outage, 2: outage, 3: outage}}
+	h := harness(t, nil, "gpt-6.1-sol")
+	h.Gateway.Client = func(models.Route, string) models.Client {
+		return completeFunc(func(ctx context.Context, req models.Request) (models.Response, error) {
+			events = append(events, req.Model)
+			return client.Complete(ctx, req)
+		})
+	}
+	res, err := h.Tier2(context.Background(), cases, "abc", "dev", time.Unix(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := res.Cases[0].Runs[0]
+	if r.Status != RunPass || len(r.Calls) != 3 || len(r.Calls[0].Retries) != ProviderRetries || r.Calls[1].Model == r.Calls[0].Model {
+		t.Fatalf("run 1: %+v", r)
+	}
+	own, fb := r.Calls[0].Model, r.Calls[1].Model
+	if want := []string{own, "pause", own, "pause", own, fb}; !slices.Equal(events[:6], want) {
+		t.Errorf("calls and pauses %v, want %v first", events[:6], want)
+	}
+	for _, req := range client.Requests {
+		if req.Model != "gpt-6.1-sol" && !req.Stream {
+			t.Errorf("a skill call to %s does not stream", req.Model)
+		}
+	}
+}
+
+type completeFunc func(context.Context, models.Request) (models.Response, error)
+
+func (f completeFunc) Complete(ctx context.Context, req models.Request) (models.Response, error) {
+	return f(ctx, req)
 }
 
 // TestTier2RetriesDroppedConnection: a reset is retried and recorded on the
@@ -820,6 +871,9 @@ func TestTier2BriefRevisesOnceThenJudges(t *testing.T) {
 		t.Fatalf("%d calls, runs %+v", len(fake.Requests), runs)
 	}
 	first, revise, judged := fake.Requests[0], fake.Requests[1], fake.Requests[2]
+	if !first.Stream || !revise.Stream {
+		t.Error("the brief skill call does not stream; a long draft would time out at the gateway (524)")
+	}
 	if !strings.Contains(first.System, "## references/ste-words.md") || !strings.Contains(first.Messages[0].Content, `<untrusted source="grounding">`) {
 		t.Error("the skill prompt lacks the word list or the wrapped grounding")
 	}
@@ -891,6 +945,41 @@ func TestTier2PersonaRevisesOnceThenJudges(t *testing.T) {
 	if judged.Model != "gpt-6.1-sol" || !strings.Contains(judged.Messages[0].Content, `startup artefact "Retro note"`) ||
 		!strings.Contains(judged.Messages[0].Content, "Speak and work as Drona") {
 		t.Errorf("judge request: %s %.300s", judged.Model, judged.Messages[0].Content)
+	}
+}
+
+// A persona run whose revision call fails (three resets, past the run's
+// retries) errors but keeps the first draft and what the checks found in it,
+// so the results still show what was produced and what it cost.
+func TestTier2PersonaErroredRevisionKeepsTheDraft(t *testing.T) {
+	all, err := LoadCases(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := slices.IndexFunc(all, func(c Case) bool { return c.ID == "retro/em-startup" })
+	good, err := os.ReadFile(filepath.Join(root, "evals", "cases", "retro", "em-startup", "output", "retro.md"))
+	if err != nil || i < 0 {
+		t.Fatalf("case: %v", err)
+	}
+	c := all[i]
+	uncited := string(good) + "\nThe ledger package already stores the kind elsewhere, so the migration was small.\n"
+	client := &resetting{Fake: &models.Fake{Replies: []models.Response{{Text: uncited, CostUSD: 0.2}}}, drops: []int{2, 3, 4}}
+	h := harness(t, nil, "gpt-6.1-sol")
+	h.Config.K = 1
+	h.Gateway.Client = func(models.Route, string) models.Client { return client }
+	res, err := h.Tier2(context.Background(), []Case{c}, "abc", "dev", time.Unix(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := res.Cases[0].Runs[0]
+	if r.Status != RunError || !strings.Contains(r.Error, "connection reset") {
+		t.Fatalf("not an errored run: %+v", r)
+	}
+	if !r.Revised || !strings.Contains(r.RevisedFor, "uncited claim") || !strings.Contains(r.Answer, "already stores the kind") {
+		t.Errorf("the errored run lost its first draft: revised for %q, answer %.60q", r.RevisedFor, r.Answer)
+	}
+	if len(r.Calls) != 2 || r.Calls[0].CostUSD != 0.2 || len(r.Calls[1].Retries) != ProviderRetries {
+		t.Errorf("calls %+v: want the draft (0.2 USD) and the revision with its retries", r.Calls)
 	}
 }
 
@@ -1005,6 +1094,9 @@ func TestTier2PlanningDrafts(t *testing.T) {
 		}
 		if !strings.Contains(fake.Requests[0].System, "Reply with the draft you produce as JSON: {"+map[string]string{"slice": "feature", "plan": "story"}[c.Tier2.Draft]) {
 			t.Errorf("%s: the skill was not asked for its draft", tc.id)
+		}
+		if !fake.Requests[0].Stream {
+			t.Errorf("%s: the skill call does not stream; a long draft would time out at the gateway (524)", tc.id)
 		}
 	}
 }
@@ -1717,6 +1809,11 @@ func TestTier2GrillConversation(t *testing.T) {
 	if run.Score != 5 || len(fake.Requests) != 5 || run.Transcript == nil || len(run.Transcript.Exchanges) != 4 || !strings.Contains(run.Transcript.Criteria, "at most 3 screens") {
 		t.Fatalf("run: %+v, %d model calls", run, len(fake.Requests))
 	}
+	for i, r := range fake.Requests[:4] {
+		if !r.Stream {
+			t.Errorf("round %d's skill call does not stream; a long turn would time out at the gateway (524)", i+1)
+		}
+	}
 	first := fake.Requests[0].Messages[0].Content
 	if !strings.Contains(first, `<untrusted source="eval-input">`) || !strings.Contains(first, `<untrusted source="repo">`) || !strings.Contains(first, `"id": "gap:error:/order"`) {
 		t.Fatalf("the skill did not get the request and the assessment as untrusted data:\n%s", first)
@@ -1955,6 +2052,9 @@ func TestTier2TellRevisesOnceThenJudges(t *testing.T) {
 		t.Fatalf("%d calls, runs %+v", len(fake.Requests), runs)
 	}
 	first, revise, judged := fake.Requests[0], fake.Requests[1], fake.Requests[2]
+	if !first.Stream || !revise.Stream {
+		t.Error("the tell skill call does not stream; a long draft would time out at the gateway (524)")
+	}
 	for _, want := range []string{`<untrusted source="aayu tell release">`, "#15 Saved filters", `<untrusted source="design/brand.yaml">`, "- marketing adjectives in release notes", `<untrusted source="grounding">`, "The human asks: Write the release notes for v1.5.0"} {
 		if !strings.Contains(first.Messages[0].Content, want) {
 			t.Errorf("the skill prompt lacks %q", want)

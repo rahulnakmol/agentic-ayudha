@@ -2,13 +2,14 @@ package evals
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"maps"
-	"math/rand/v2"
+	"math/big"
 	"net"
 	"os"
 	"path"
@@ -326,10 +327,18 @@ const ProviderRetries = 2
 // retryWait is the pause before the nth retry of a 429 or a server error:
 // n times its base, plus up to half again at random, so the retries of
 // parallel runs spread over a gateway outage instead of failing together.
-var retryWait = func(n int, base time.Duration) time.Duration {
+func retryWait(n int, base time.Duration) time.Duration {
 	d := time.Duration(n) * base
-	return d + rand.N(d/2+1)
+	j, err := rand.Int(rand.Reader, big.NewInt(int64(d/2)+1))
+	if err != nil {
+		return d
+	}
+	return d + time.Duration(j.Int64())
 }
+
+// maxRetryWait caps one retry's pause, Retry-After included: the gateway's
+// outages while it swaps its binary lasted 40 s to 2 minutes.
+const maxRetryWait = 2 * time.Minute
 
 // pause waits d, or until ctx is done.
 var pause = func(ctx context.Context, d time.Duration) error {
@@ -378,18 +387,26 @@ func providerFault(ctx context.Context, resp models.Response, err error) string 
 }
 
 // providerWait is the pause before the nth retry: a 429 waits about 10 s a
-// retry, a 5xx or a stream server error about 20 s, with jitter (retryWait). A
-// drop, a stall (already minutes long), and a looping reply retry at once.
+// retry, a 5xx or a stream server error about 30 s (so the two retries span
+// 90-135 s of a gateway outage), with jitter (retryWait), or the reply's
+// Retry-After when that is longer, up to maxRetryWait. A drop, a stall
+// (already minutes long), and a looping reply retry at once.
 func providerWait(err error, n int) time.Duration {
 	var se *models.StatusError
 	var st *models.StreamError
+	var d time.Duration
 	switch {
 	case errors.As(err, &se) && se.Code == 429:
-		return retryWait(n, 10*time.Second)
+		d = retryWait(n, 10*time.Second)
 	case errors.As(err, &se) && se.Code >= 500, errors.As(err, &st):
-		return retryWait(n, 20*time.Second)
+		d = retryWait(n, 30*time.Second)
+	default:
+		return 0
 	}
-	return 0
+	if se != nil {
+		d = max(d, se.RetryAfter)
+	}
+	return min(d, maxRetryWait)
 }
 
 // repeating returns the unit a reply ends on when its last 2000 characters
@@ -608,6 +625,9 @@ func (h *Harness) run(ctx context.Context, c Case, lane verbs.LaneID, body, inpu
 		System:    body + "\n\nReply with the work item you produce as JSON: {type, title, fields, labels, parent, open_questions}.",
 		Messages:  []models.Message{{Role: "user", Content: untrusted("eval-input", input)}},
 		MaxTokens: h.Config.MaxTokens.Skill,
+		// Every skill call streams: a long reply sends no bytes for minutes
+		// unstreamed, and the gateway's proxy closes it with a 524 at 100 s.
+		Stream: true,
 	}
 	if err := models.Structured(ctx, h.complete(lane, "skill", &calls), req, itemSchema, &d); err != nil {
 		var re *models.ReplyError
@@ -629,7 +649,11 @@ func (h *Harness) run(ctx context.Context, c Case, lane verbs.LaneID, body, inpu
 		return Run{Status: RunFail, Score: 1, Floor: "out of scope: " + strings.Join(bad, "; ")}, nil
 	}
 	out, _ := json.MarshalIndent(it, "", "  ")
-	return h.judge(ctx, input, rubric, string(out), d.OpenQuestions, &calls)
+	judged, err := h.judge(ctx, input, rubric, string(out), d.OpenQuestions, &calls)
+	if err != nil {
+		return Run{Answer: answerOf(string(out))}, err // the work item outlives a failed judge
+	}
+	return judged, nil
 }
 
 // judge has the pinned judge score a skill's output against the rubric.
@@ -814,7 +838,7 @@ func (h *Harness) runConversation(ctx context.Context, c Case, lane verbs.LaneID
 	var last Turn
 	for round := 1; ; round++ {
 		var t Turn
-		req := models.Request{System: body + "\n\n" + conversationProtocol, Messages: msgs, MaxTokens: h.Config.MaxTokens.Skill}
+		req := models.Request{System: body + "\n\n" + conversationProtocol, Messages: msgs, MaxTokens: h.Config.MaxTokens.Skill, Stream: true}
 		if err := models.Structured(ctx, h.complete(lane, "skill", &calls), req, schema, &t); err != nil {
 			var re *models.ReplyError
 			if errors.As(err, &re) && !re.Parse && !re.Truncated {

@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -247,7 +248,7 @@ func (c HTTPClient) Complete(ctx context.Context, r Request) (Response, error) {
 		return c.Complete(ctx, r)
 	}
 	if resp.StatusCode/100 != 2 {
-		return Response{}, &StatusError{Code: resp.StatusCode, Body: truncate(string(raw), 300)}
+		return Response{}, &StatusError{Code: resp.StatusCode, Body: truncate(string(raw), 300), RetryAfter: retryAfter(resp.Header.Get("Retry-After"), time.Now())}
 	}
 	return decode(c.Style, raw)
 }
@@ -320,7 +321,6 @@ func decodeMessagesStream(body io.Reader) (Response, error) {
 	return r, nil
 }
 
-// StatusError is a non-2xx reply.
 // StreamError is an error event inside a streamed Messages reply, after the
 // endpoint answered 200: its Type is the provider's (api_error, overloaded_error,
 // invalid_request_error, ...).
@@ -333,9 +333,27 @@ func (e *StreamError) Error() string {
 	return fmt.Sprintf("messages stream error: %s: %s", e.Type, e.Message)
 }
 
+// StatusError is a non-2xx reply.
 type StatusError struct {
 	Code int
 	Body string
+	// RetryAfter is the reply's Retry-After header (seconds or an HTTP date),
+	// 0 when it has none.
+	RetryAfter time.Duration
+}
+
+// retryAfter parses a Retry-After header value at now.
+func retryAfter(v string, now time.Time) time.Duration {
+	if v == "" {
+		return 0
+	}
+	if s, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
+		return max(time.Duration(s)*time.Second, 0)
+	}
+	if t, err := http.ParseTime(v); err == nil {
+		return max(t.Sub(now), 0)
+	}
+	return 0
 }
 
 func (e *StatusError) Error() string {

@@ -313,7 +313,7 @@ func (h *Harness) runSurvey(ctx context.Context, c Case, lane verbs.LaneID, body
 	}
 	reply, problems, first, err := reviseOnce(ctx, h.complete(lane, "skill", &calls), req, func(d string) []string { return checkSurvey(c, w, d) })
 	if err != nil {
-		return Run{}, err
+		return Run{Revised: len(first) > 0, RevisedFor: revisedFor(first), Answer: answerOf(reply)}, err
 	}
 	run.Revised, run.RevisedFor = len(first) > 0, revisedFor(first)
 	if len(problems) > 0 {

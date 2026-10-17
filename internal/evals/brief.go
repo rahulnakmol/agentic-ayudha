@@ -149,6 +149,7 @@ func (h *Harness) runBrief(ctx context.Context, c Case, lane verbs.LaneID, body,
 		System:    body + "\n\nYou have the grounding already. Reply with the Markdown draft only, nothing before or after it.",
 		Messages:  []models.Message{{Role: "user", Content: untrusted("grounding", input) + "\n\n" + task}},
 		MaxTokens: h.Config.MaxTokens.Skill,
+		Stream:    true,
 	}
 	complete := h.complete(lane, "skill", &calls)
 	var draft string
@@ -157,10 +158,10 @@ func (h *Harness) runBrief(ctx context.Context, c Case, lane verbs.LaneID, body,
 	for attempt := 0; attempt < 2; attempt++ {
 		resp, err := complete(ctx, req)
 		if err != nil {
-			return Run{}, err
+			return Run{Revised: attempt > 0, Answer: answerOf(draft)}, err
 		}
 		if resp.Truncated {
-			return Run{}, &models.ReplyError{Err: fmt.Errorf("the draft stopped at the %d-token cap", req.MaxTokens), Reply: resp.Text, Truncated: true}
+			return Run{Revised: attempt > 0, Answer: answerOf(draft)}, &models.ReplyError{Err: fmt.Errorf("the draft stopped at the %d-token cap", req.MaxTokens), Reply: resp.Text, Truncated: true}
 		}
 		draft = draftOnly(resp.Text)
 		if problems, reading = checkBrief(ctx, c, g, words, []byte(draft)); len(problems) == 0 {
@@ -195,7 +196,7 @@ func (h *Harness) runBrief(ctx context.Context, c Case, lane verbs.LaneID, body,
 		Format:    &models.Format{Name: "rubric_score", Schema: judgeSchema, Strict: true},
 	}
 	if err := models.Structured(ctx, h.complete(judgeLane, "judge", &calls), jreq, judgeSchema, &v); err != nil {
-		return Run{}, err
+		return Run{Revised: run.Revised, Answer: answerOf(draft)}, err
 	}
 	revised := run.Revised
 	run = Run{Status: RunFail, Score: v.Score, Pass: v.Score >= h.Config.PassScore, Reason: clip(v.Reason, 600), Revised: revised}

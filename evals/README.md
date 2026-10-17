@@ -96,8 +96,12 @@ reply that stops at its token cap is an `error` marked `truncated` and is not re
 skill's: a dropped connection, a 5xx (the gateway's 524 included) or a 429, a server error inside a stream, a stream
 that stalls past the client's timeout, or a reply that loops on one token to the cap is retried, at most twice a run
 across its calls (`ProviderRetries`); a run whose faults pass that cap is an `error` as before. A retry after a 429
-waits about 10 s, and after a 5xx or a stream server error about 20 s, times the retry's number, plus up to half
-again at random, so the runs that meet one gateway outage do not all retry into it at once. Each run records every
+waits about 10 s, and after a 5xx or a stream server error about 30 s, times the retry's number, plus up to half
+again at random, so the runs that meet one gateway outage do not all retry into it at once: the two retries of a 5xx
+span 90 to 135 s, as long as the gateway's restarts last. A reply's `Retry-After` is honoured when it asks for longer,
+up to 2 minutes a retry. The skill's own model is retried first; its lane's fallback is called only after those
+retries fail. Every skill call streams, so a long reply keeps bytes flowing and the gateway's proxy does not cut it
+with a 524 after 100 s of silence. Each run records every
 model call: role, model, stop reason, input and output tokens, the cap, its cost, and each provider retry with its
 fault and cost. An errored run keeps what it produced before the call that failed (its draft, the floor findings
 its first draft was revised for, and a survey's first-draft score and self-check), so the results show what it made

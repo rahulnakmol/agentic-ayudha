@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -426,6 +427,33 @@ func TestFormatFallback(t *testing.T) {
 	r, err := c.Complete(context.Background(), Request{Format: &Format{Name: "x", Schema: json.RawMessage(`{}`)}})
 	if err != nil || r.Text != "{}" || len(calls) != 2 || !calls[0] || calls[1] {
 		t.Fatalf("fallback: %+v %v, calls with format %v", r, err, calls)
+	}
+}
+
+// A 503 or a 429 carries its Retry-After, in seconds or as an HTTP date, so a
+// caller can wait as long as the endpoint asked; a 502 without one has none.
+func TestStatusErrorRetryAfter(t *testing.T) {
+	for _, tc := range []struct {
+		code     int
+		header   string
+		min, max time.Duration
+	}{
+		{503, "7", 7 * time.Second, 7 * time.Second},
+		{429, time.Now().Add(90 * time.Second).UTC().Format(http.TimeFormat), 85 * time.Second, 90 * time.Second},
+		{502, "", 0, 0},
+	} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			if tc.header != "" {
+				w.Header().Set("Retry-After", tc.header)
+			}
+			http.Error(w, "error code: "+strconv.Itoa(tc.code), tc.code)
+		}))
+		_, err := HTTPClient{BaseURL: srv.URL, Style: StyleMessages, Key: "k", HTTP: srv.Client()}.Complete(context.Background(), Request{})
+		srv.Close()
+		var se *StatusError
+		if !errors.As(err, &se) || se.Code != tc.code || se.RetryAfter < tc.min || se.RetryAfter > tc.max {
+			t.Errorf("%d with Retry-After %q: %v (%+v), want %v-%v", tc.code, tc.header, err, se, tc.min, tc.max)
+		}
 	}
 }
 
