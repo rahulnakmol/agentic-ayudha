@@ -49,5 +49,5 @@ why = "hands the stories on or changes them when the person declined"
 
 [[say_forbid]]
 pattern = '''(?i)\b(?:I(?:'ve| have)|I'm|I am) (?:started|starting|building|picked up|taken|leased)\b'''
-allow = '''(?i)\b(?:not|haven't|didn't|won't|nothing)\b[^.\n]{0,40}|\b(?:started|taken|leased|picked up)\s+(?:no|nothing|none|neither)\b''' # "I've taken no lease" is a refusal (D-3.4r)
+allow = '''(?i)\b(?:not|haven't|didn't|won't|nothing)\b[^.\n]{0,40}|\b(?:started|taken|leased|picked up)\s+(?:no|nothing|none|neither)\b''' # "I've taken no lease" is a refusal (D-3.4s)
 why = "says it started a build the person did not ask for"
