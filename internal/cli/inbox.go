@@ -280,9 +280,11 @@ func decisionItem(is *gh.Issue, it InboxItem, labels []string) InboxItem {
 
 // runInbox is `aayu inbox`.
 func runInbox(ctx context.Context, e *Env, _ Values) error {
-	if e.Agent() {
+	if e.Getenv("AAYU_AGENT") == "1" {
 		return Errorf(ExitBlocked, "inbox is human-only: it acts as you on human-only steps, so it is refused when AAYU_AGENT=1")
 	}
+	// A host's agent marker (an orb's Terminal tab inherits one) does not refuse it
+	// here: humanCaller asks the person to approve from any device (presence.go).
 	if !e.isTerminal(e.In) {
 		return WithNext(Errorf(ExitBlocked, "inbox is human-only and asks for one keypress per step, so it needs a terminal"), "aayu next")
 	}

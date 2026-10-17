@@ -53,8 +53,8 @@ func (e *Env) originRepo(ctx context.Context) string {
 
 // confirmOrBlock asks on a terminal (or takes a human's --yes) and turns a no
 // into exit 4.
-func (e *Env) confirmOrBlock(verb, question string) error {
-	if err := e.requireHuman(verb); err != nil {
+func (e *Env) confirmOrBlock(ctx context.Context, verb, question string) error {
+	if err := e.requireHuman(ctx, verb, AccessAdmin); err != nil {
 		return err
 	}
 	if !e.confirm(question + " [y/N] ") {
@@ -140,7 +140,7 @@ func runInit(ctx context.Context, e *Env, in Values) error {
 		if it.Repo.Private {
 			vis = "private"
 		}
-		if err := e.confirmOrBlock("init", fmt.Sprintf("init uses your admin access on %s (%s) to create labels, %s, the ledger branch, and its ruleset, and writes forms, .aayudha/, and AGENTS.md here. Continue?",
+		if err := e.confirmOrBlock(ctx, "init", fmt.Sprintf("init uses your admin access on %s (%s) to create labels, %s, the ledger branch, and its ruleset, and writes forms, .aayudha/, and AGENTS.md here. Continue?",
 			it.Repo.FullName, vis, map[bool]string{true: "issue types", false: "no issue types (personal repository)"}[it.Repo.Org])); err != nil {
 			return err
 		}
@@ -230,7 +230,7 @@ func runUninit(ctx context.Context, e *Env, in Values) error {
 		})
 	}
 	if !e.DryRun {
-		if err := e.confirmOrBlock("uninit", "uninit deletes the labels, issue types, rulesets, ledger branch, and files init created on "+it.Repo.FullName+". Continue?"); err != nil {
+		if err := e.confirmOrBlock(ctx, "uninit", "uninit deletes the labels, issue types, rulesets, ledger branch, and files init created on "+it.Repo.FullName+". Continue?"); err != nil {
 			return err
 		}
 	}

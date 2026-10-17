@@ -251,7 +251,7 @@ func runPlan(ctx context.Context, e *Env, in Values) error {
 // (never an agent) who is the EM seat's paired human, else the [autonomy]
 // approver, else, in solo mode, the one human, recorded as such.
 func (e *Env) approvePlan(ctx context.Context, repo string, n int, cfg *config.Config) error {
-	if err := e.requireHuman("plan --approve (the Engineering Manager's review)"); err != nil {
+	if err := e.requireHuman(ctx, "plan --approve (the Engineering Manager's review)", AccessWrite); err != nil {
 		return err
 	}
 	_, tok, err := e.HumanGitHub(ctx)
@@ -307,7 +307,7 @@ func (e *Env) approvePlan(ctx context.Context, repo string, n int, cfg *config.C
 // a bypass (em_review.bypass), never as an approval, so `ship` accepts it,
 // and the ship record and `audit` list it as a plan-review bypass.
 func (e *Env) bypassPlanReview(ctx context.Context, repo string, n int, cfg *config.Config) error {
-	if err := e.requireHuman("plan --solo-bypass"); err != nil {
+	if err := e.requireHuman(ctx, "plan --solo-bypass", AccessAdmin); err != nil {
 		return err
 	}
 	c, tok, err := e.HumanGitHub(ctx)

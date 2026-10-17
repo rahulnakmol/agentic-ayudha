@@ -323,7 +323,7 @@ func closeIssue(ctx context.Context, c *github.Client, repo string, n int, reaso
 // humanCaller resolves the human running a human-only action and refuses
 // agents and bot identities (trust model §0.1).
 func humanCaller(ctx context.Context, e *Env, cfg *config.Config, what string) (*github.Client, string, error) {
-	if err := e.requireHuman(what); err != nil {
+	if err := e.requireHuman(ctx, what, AccessWrite); err != nil {
 		return nil, "", err
 	}
 	c, tok, err := e.HumanGitHub(ctx)

@@ -617,6 +617,10 @@
           },
           "type": "array",
           "description": "Logins whose reviews never count as a human pass (machine users and other bots)."
+        },
+        "device_client_id": {
+          "type": "string",
+          "description": "Client ID (public) of the GitHub OAuth App or GitHub App, with Device Flow enabled, that a person approves human-only commands through from any device; unset, the repository variable AAYUDHA_DEVICE_CLIENT_ID or AAYUDHA_APP_CLIENT_ID."
         }
       },
       "additionalProperties": false,

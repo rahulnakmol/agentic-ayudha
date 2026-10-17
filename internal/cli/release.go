@@ -117,7 +117,7 @@ var versionRE = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
 // (AGENTS.md, Promotion and release): a person's comment on the Release issue,
 // or a person's yes at a terminal.
 type StableRequest struct {
-	Via    string `json:"via"` // comment or terminal
+	Via    string `json:"via"` // comment, terminal, or device-flow
 	Author string `json:"author"`
 	URL    string `json:"url,omitempty"`
 	At     string `json:"at,omitempty"`
@@ -243,10 +243,18 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 		} else if p.Request == nil {
 			why := fmt.Sprintf("release #%d --to %s needs the explicit stable-release request: a person with write access comments %q on Release #%d, as the first line, after its %s snapshot (%s). An agent cannot write it; ask the person",
 				n, dst, StableRequestPrefix+" "+version, n, src, prior.PromotedAt)
-			if !c.DryRun() {
-				return WithNext(Errorf(ExitBlocked, "%s", why), fmt.Sprintf("a person comments `%s %s` on #%d", StableRequestPrefix, version, n))
+			if c.DryRun() {
+				p.Notices = append(p.Notices, why)
+			} else {
+				// Or the person approves it from any device (presence.go): their yes,
+				// as at a terminal.
+				refusal := WithNext(Errorf(ExitBlocked, "%s", why), fmt.Sprintf("a person comments `%s %s` on #%d", StableRequestPrefix, version, n))
+				a, err := e.presenceCheck(ctx, fmt.Sprintf("release #%d --to main (%s)", n, version), AccessWrite, refusal)
+				if err != nil {
+					return err
+				}
+				p.Request = &StableRequest{Via: a.Via, Author: a.Login, At: e.Now().UTC().Format(time.RFC3339)}
 			}
-			p.Notices = append(p.Notices, why)
 		}
 	} else {
 		p.Candidate, p.Message = "promote/rolling-"+ts, "Rolling snapshot: "+ts

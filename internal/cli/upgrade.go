@@ -11,7 +11,7 @@ import (
 
 func init() { register("upgrade", runUpgrade) }
 
-func runUpgrade(_ context.Context, e *Env, in Values) error {
+func runUpgrade(ctx context.Context, e *Env, in Values) error {
 	root := config.RepoRoot(e.Dir)
 	if root == "" {
 		return Errorf(ExitUsage, "upgrade: not inside a git repository")
@@ -22,7 +22,7 @@ func runUpgrade(_ context.Context, e *Env, in Values) error {
 	}
 	apply := in.Bool("apply") && !e.DryRun
 	if apply {
-		if err := e.requireHuman("upgrade --apply (it rewrites protected files)"); err != nil {
+		if err := e.requireHuman(ctx, "upgrade --apply (it rewrites protected files)", AccessAdmin); err != nil {
 			return err
 		}
 	}

@@ -369,6 +369,7 @@ type Identity struct {
 	MachineUser       string   `koanf:"machine_user" jsonschema_description:"Machine-user login, the fallback bot identity."`
 	MachineUserSecret string   `koanf:"machine_user_secret" jsonschema_description:"Name of the secret holding the machine user's token."`
 	BotLogins         []string `koanf:"bot_logins" jsonschema_description:"Logins whose reviews never count as a human pass (machine users and other bots)."`
+	DeviceClientID    string   `koanf:"device_client_id" jsonschema_description:"Client ID (public) of the GitHub OAuth App or GitHub App, with Device Flow enabled, that a person approves human-only commands through from any device; unset, the repository variable AAYUDHA_DEVICE_CLIENT_ID or AAYUDHA_APP_CLIENT_ID."`
 }
 
 // Telemetry is [telemetry].

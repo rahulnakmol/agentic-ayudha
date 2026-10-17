@@ -200,6 +200,9 @@ type GitHub struct {
 	Variables  map[string]string
 	PublicKey  string         // base64 Curve25519 key for Actions secrets
 	App        map[string]any // what /app-manifests/{code}/conversions returns
+	// Device is GitHub's OAuth device flow (/login/device/code and
+	// /login/oauth/access_token, both form-encoded): nil serves no device flow.
+	Device *DeviceFlow
 
 	Files map[string]string // repository file path -> content, served by the contents API for any ref
 	// RefFiles serves the contents API for one ref (a commit SHA or branch)
@@ -334,6 +337,10 @@ var (
 func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 	g.Mu.Lock()
 	defer g.Mu.Unlock()
+	if strings.HasPrefix(r.URL.Path, "/login/") {
+		g.serveDevice(w, r)
+		return
+	}
 	var body map[string]any
 	var list []any
 	if r.Body != nil {
@@ -369,6 +376,12 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch m, p := r.Method, path; {
+	case m == "GET" && p == "/user" && g.Device != nil && r.Header.Get("Authorization") == "Bearer "+DeviceToken:
+		typ := g.Device.ApproverType
+		if typ == "" {
+			typ = "User"
+		}
+		reply(200, map[string]any{"login": g.Device.Approver, "type": typ})
 	case m == "GET" && p == "/user":
 		typ := g.ViewerType
 		if typ == "" {
@@ -914,7 +927,10 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 	case rePerm.MatchString(p) && m == "GET":
 		login := rePerm.FindStringSubmatch(p)[1]
 		perm := g.Permissions[login]
-		if perm == "" {
+		switch {
+		case perm == "" && login == g.Viewer:
+			perm = "admin"
+		case perm == "":
 			perm = "read"
 		}
 		role := perm
@@ -990,3 +1006,53 @@ func commitJSON(c map[string]any) map[string]any {
 }
 
 func atoi(s string) int { n, _ := strconv.Atoi(s); return n }
+
+// DeviceToken is the access token the fake device flow issues on approval.
+const DeviceToken = "device-flow-token"
+
+// DeviceFlow scripts GitHub's OAuth device flow.
+type DeviceFlow struct {
+	ClientID     string // the client ID it accepts
+	Approver     string // GET /user login for DeviceToken
+	ApproverType string // GET /user type for DeviceToken; default User
+	Pending      int    // polls answered authorization_pending before Outcome
+	Outcome      string // approve, deny, or "" (pending until the code expires)
+	ExpiresIn    int    // seconds; default 900
+	Started      int    // device codes issued
+	Polls        int    // token polls answered
+}
+
+func (g *GitHub) serveDevice(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	g.Requests = append(g.Requests, Request{r.Method, r.URL.Path, nil})
+	reply := func(v any) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(v)
+	}
+	d := g.Device
+	switch {
+	case d == nil || r.Method != "POST":
+		http.NotFound(w, r)
+	case r.Form.Get("client_id") != d.ClientID:
+		reply(map[string]any{"error": "incorrect_client_credentials"})
+	case r.URL.Path == "/login/device/code":
+		d.Started++
+		exp := d.ExpiresIn
+		if exp == 0 {
+			exp = 900
+		}
+		reply(map[string]any{"device_code": "dc-1", "user_code": "WDJB-MJHT", "verification_uri": "https://github.com/login/device", "expires_in": exp, "interval": 5})
+	case r.URL.Path == "/login/oauth/access_token" && r.Form.Get("device_code") == "dc-1" && r.Form.Get("grant_type") == "urn:ietf:params:oauth:grant-type:device_code":
+		d.Polls++
+		switch {
+		case d.Polls <= d.Pending || d.Outcome == "":
+			reply(map[string]any{"error": "authorization_pending"})
+		case d.Outcome == "approve":
+			reply(map[string]any{"access_token": DeviceToken, "token_type": "bearer", "scope": ""})
+		default:
+			reply(map[string]any{"error": "access_denied"})
+		}
+	default:
+		reply(map[string]any{"error": "bad_verification_code"})
+	}
+}
