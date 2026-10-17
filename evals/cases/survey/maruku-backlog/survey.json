@@ -419,7 +419,7 @@
       "proof": [
         "S1"
       ],
-      "difference": "Only tables, footnotes, and attribute lists on headers are kept; divs, math, and meta-data headers are not supported, since no page uses them."
+      "difference": "Only tables, footnotes, and attribute lists on headers are kept; every other Maruku extension (abbreviations, definition lists, attribute lists on anything but headers, divs, math, and meta-data headers) is not supported, since no page uses it (Q2: \"that's it\")."
     },
     {
       "id": "K3",
@@ -523,7 +523,7 @@
         ],
         "compare": "equivalent HTML as spec/block_spec.rb compares it (whitespace-only text nodes ignored), through each case's exit code (Q1)",
         "exclude": [
-          "divs, math, and meta-data documents (Q2: no page uses them)"
+          "documents of the extensions no page uses: abbreviations, definition lists, attribute lists on anything but headers, divs, math, and meta-data headers (Q2)"
         ]
       }
     ],
@@ -564,8 +564,10 @@
           "html",
           "links-images",
           "headers",
-          "footnotes-abbreviations",
-          "attributes",
+          "footnotes",
+          "abbreviations",
+          "header-attributes",
+          "other-attributes",
           "divs",
           "encoding",
           "math"

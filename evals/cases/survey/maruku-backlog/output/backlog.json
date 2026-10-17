@@ -53,7 +53,7 @@
       "fields": {
         "summary": "The block docs' inputs and expected HTML, run on Maruku, are case set G1 and suite S1.",
         "problem": "Nothing records which documents Maruku itself renders as expected, so a difference on the new library could be an old failure, not a regression.",
-        "scope": "In: every spec/block_docs document, run on Maruku, as golden outputs (G1) and as the legacy side of the suite (S1). Out: the divs, math, and meta-data documents for parity (Q2)."
+        "scope": "In: every spec/block_docs document, run on Maruku, as golden outputs (G1) and as the legacy side of the suite (S1). Out: for parity, the documents of extensions no page uses (Q2)."
       }
     },
     {
@@ -213,8 +213,8 @@
       ],
       "fields": {
         "summary": "As an editor of the sites, I want my tables, footnotes, and header attributes to render as before, so that no page changes when the renderer does.",
-        "completion_goal": "1. [api-trace] state: the adapter as --bin and suite S1; expected: aayu survey --compat reports 0 regressions in the tables, footnotes-abbreviations, attributes, and headers areas\n2. [api-trace] state: case set G1; expected: aayu survey --parity reports no difference",
-        "measure": "S1 regressions in the tables, footnotes-abbreviations, attributes, and headers areas",
+        "completion_goal": "1. [api-trace] state: the adapter as --bin and suite S1; expected: aayu survey --compat reports 0 regressions in the tables, footnotes, header-attributes, and headers areas\n2. [api-trace] state: case set G1; expected: aayu survey --parity reports no difference",
+        "measure": "S1 regressions in the tables, footnotes, header-attributes, and headers areas",
         "threshold": "0",
         "scenario": "Run --compat for S1 and --parity for G1 with the adapter.",
         "environment": "Ruby 3.1 with the Gemfile's gems; the adapter gem and Maruku 4d88d0e side by side; spec/block_docs only"
