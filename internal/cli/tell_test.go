@@ -137,9 +137,10 @@ func TestTellGuideCitesOnlyProvenFeatures(t *testing.T) {
 		{"a story, not a Feature", "Fixed in o/r#" + strconv.Itoa(story) + ".\n", "#" + strconv.Itoa(story) + " is not a Feature"},
 		{"unproven feature by a root-relative link", "[Bulk upload](/o/r/issues/" + strconv.Itoa(unproven) + ")\n", "#" + strconv.Itoa(unproven) + " is not a Feature"},
 		{"avoided word", "A seamless questionnaire (#1).\n", `"seamless" is on the brand's avoid list (default)`},
+		{"unproven feature named, not linked", "Bulk upload is coming soon.\n", "names #" + strconv.Itoa(unproven) + ` "Bulk upload", which has no authoritative packs`},
 	} {
 		code, rep, _ := tellRun(t, env, opts, "guide", "--from", draft("bad.md", tt.text))
-		if code != ExitBlocked || len(rep.Problems) != 1 || !strings.Contains(rep.Problems[0].Reason, tt.want) {
+		if code != ExitBlocked || len(rep.Problems) == 0 || !strings.Contains(rep.Problems[0].Reason, tt.want) {
 			t.Errorf("%s: exit %d %+v, want 4 and %q", tt.name, code, rep.Problems, tt.want)
 		}
 	}

@@ -21,6 +21,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/grill"
+	"github.com/rahulnakmol/agentic-ayudha/internal/tell"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -152,6 +153,7 @@ type Case struct {
 	Calls       [][]string `toml:"calls"` // the recorded run's `aayu` calls, without the program name
 	Scope       []Scope    `toml:"scope"` // requirements the input does not state; a work item that adds one fails
 	Brief       *BriefSpec `toml:"brief"` // a brief case: the input is the grounding, the output a Markdown draft
+	Tell        *TellSpec  `toml:"tell"`  // a tell case: the input is the grounding, the output Markdown copy (D-7.5b)
 	// Repo is a repository fixture (a directory relative to the case) the
 	// recorded calls run in and grill's --assess reads (WP5.3b).
 	Repo string `toml:"repo"`
@@ -372,6 +374,9 @@ func LoadCase(dir string) (Case, error) {
 	}
 	if b := c.Brief; b != nil && (b.Register == "" || b.Purpose == "" || b.Draft == "") {
 		return c, fmt.Errorf("%s: [brief] needs register, purpose, and draft", c.ID)
+	}
+	if t := c.Tell; t != nil && (!slices.Contains(tell.Kinds, t.Kind) || t.Request == "" || t.Draft == "") {
+		return c, fmt.Errorf("%s: [tell] needs a kind (%s), request, and draft", c.ID, strings.Join(tell.Kinds, ", "))
 	}
 	if p := c.Persona; p != nil && (p.Seat == "" || p.Stage == "" || p.Practice == "" || p.Task == "" || p.Draft == "") {
 		return c, fmt.Errorf("%s: [persona] needs seat, stage, practice, task, and draft", c.ID)

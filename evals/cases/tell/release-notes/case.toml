@@ -1,0 +1,12 @@
+# tell (D-7.5b): release notes for v1.5.0. Five items shipped: two proven Features (#15 Saved filters, two stories; #16
+# Claim notes), a story under the unproven #9 Bulk reassignment, and a bug with no Feature. The notes describe only the
+# proven Features, each linked to its proof, and count the other two changes without describing them. The grounding is
+# shared by the tell cases; output/draft.md is a recorded draft (tier 1), and tier 2 has the skill write it again.
+skill = "tell"
+description = "Release notes for v1.5.0: describe the two proven Features from their packs, count the rest."
+input = "../grounding.json"
+artifacts = ["output/draft.md"]
+tell = { kind = "release", campaign = "v1.5.0", request = "Write the release notes for v1.5.0 for the claims teams who use Benefits QA.", draft = "output/draft.md" }
+
+[tier2]
+rubric = "rubric.md"
