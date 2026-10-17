@@ -7,7 +7,7 @@
 # must keep working, not how exactly), and every do-not-carry entry stays proposed. Floors: `aayu survey --draft`
 # (citations resolve, probe: facts included; bases; trap rules; do-not-carry and contract shape; a level only the
 # request or an answer decides), no answered question, and the scope rules. output/survey.json is the pilot's draft
-# (docs/research/survey-pilots-2026-10.md).
+# (private research note survey-pilots-2026-10.md).
 skill = "survey"
 description = "Survey a legacy Ruby library: traps with runtime evidence, a do-not-carry list, and a compatibility contract and suite for a move to a maintained library."
 input = "request.txt"
