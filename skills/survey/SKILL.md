@@ -243,14 +243,44 @@ Write `survey.json` ([references/formats.md](references/formats.md) has every fi
   replaces. [references/modernisation.md](references/modernisation.md) has notes per stack (C++ to Rust, PHP in
   place, Fortran, Ruby, VB6, COBOL, and others).
 
-Before you check it, review the scope of every claim against the code, not against your notes. For each claim with
-never, always, only, every, all, none, or cannot, and each claim about what happens after an error, name the path
-that would make it false and look at it: another entry point or argument (a runner that skips files when it
-discovers them may still run a file named on its command line), a helper that differs from the constructor (a
-registration function may add what the default set lacks), an error handler that throws rather than continues, a
-caller in another module. Then write the claim for the scope it holds in ("discovery skips …", "the command-line
-runner registers …"), or make it a risk to check or a question. Quote output and error text only from the line that
-prints it, for the path that prints it.
+Before you check it, verify every claim against the code, not against your notes. A claim the code you read
+contradicts, or a claim about code you did not read, is a fabrication, however small; one is enough to make the
+survey untrustworthy. Go through the draft claim by claim (traps, interfaces, defaults, and risks included):
+
+- **Scope.** For each claim with never, always, only, every, all, none, or cannot, and each claim about what happens
+  after an error, name the path that would make it false and look at it: another entry point or argument (a runner
+  that skips files when it discovers them may still run a file named on its command line), a helper that differs
+  from the constructor (a registration function may add what the default set lacks), an error handler that throws
+  rather than continues, a caller in another module, an input the code treats specially (a non-finite number, an
+  empty array). Then write the claim for the scope it holds in ("discovery skips …", "the command-line runner
+  registers …"), or make it a risk to check or a question.
+- **Outcomes from their path.** Exit codes, output and error text, and number, date, and locale formatting come
+  from the code that produces them: trace from the entry point to the return, the exit, or the print, through every
+  catch block on the way. Quote text only from the line that prints it, for the path that prints it.
+- **Behaviour, not declarations.** A token, keyword table, enum, option name, or comment shows that a name exists,
+  not that it works. "The lexer reserves `break`" is a claim; "scripts can use `break`" needs the code that executes
+  it.
+- **Read before you claim.** Describe only code you read. For behaviour in code you did not read (an operator, an
+  iteration order, a branch of a printer), read it now, or make it a question or a probe to run.
+- **The target is not evidence.** How the new language, library, or platform will behave (that a Rust function
+  prints other digits, that another library renders tables the same) is a risk the case sets measure, never a
+  claim.
+- **One example is not all.** A pattern seen in one file (one driver's input format, one caller's calls, one
+  example's callback) is claimed for that file, or checked in every other one before it is claimed for all.
+- **Numbers are counted.** Every count in a claim (sources in a target, settings in a table, ambiguous calls) is one
+  you counted in the cited lines; otherwise leave the number out.
+- **One probe, one result.** Attribute each runtime finding to the run that showed it (which build, which flags,
+  which case, which stream). Two checker builds are two findings, and a build that changes several flags at once
+  does not show which flag caused a difference.
+- **Implications are risks.** What a finding means for the plan (that identical output is impossible, that an
+  upgrade is blocked, that a TODO changes nothing) is a risk to check or a question, unless the code or a probe shows
+  it.
+- **Defaults and interfaces too.** A question's default and an interface's consumers are claims: "callers use only
+  these calls" must hold for every caller the index shows.
+
+Then list, for each modernisation step, every do-not-carry entry (except one the person rejected) whose citations
+fall in a module the step names, in that step's `avoids`: the check matches by module, so two steps that replace the
+same module both list its entries.
 
 Check it, and fix every problem the check reports:
 
@@ -280,7 +310,9 @@ Stop when every question that changes what gets built is answered or deferred. I
 ## 4. Draft the backlog, show it, then file it
 
 Write `backlog.json` ([references/formats.md](references/formats.md)): one Goal, Initiatives under it, Features (the
-epics), and Stories and Bugs under the Features.
+epics), and Stories and Bugs under the Features. For a modernisation or a move, one Initiative records today's
+behaviour (golden capture and the legacy side of every suite, including the cases the legacy build itself fails) and
+another builds the replacement, so the record is done before anything changes.
 
 - The Goal rests on a product claim a document states or the person confirmed; Features and Stories rest on
   engineering or capability claims; a Bug rests on a known-issue marker or an observed or stated risk.
@@ -289,7 +321,10 @@ epics), and Stories and Bugs under the Features.
 - Every Story and Bug is executable: a Completion Goal of numbered, observable criteria, each with its evidence kind
   (`N. [api-trace] state: …; expected: …`), and a measure, threshold, scenario, and environment.
 - A modernisation Story names its `step` and the case sets and suites (`parity`) its Completion Goal proves with
-  `aayu survey --parity` and `--compat`.
+  `aayu survey --parity` and `--compat`. Each Story proves the areas it delivers (by suite area or by the cases of a
+  case set); parity on everything is the Story before cut-over, never a Story whose dependants deliver the rest.
+- Every shim has a Story that carries out its removal plan, and coexistence has Stories for the shadow or
+  side-by-side run, the switch, and a tested way back.
 - Compatibility: a Story or Bug that keeps an interface lists it in `contract`; an `exact` one is closed only by the
   evidence the contract names, and every `exact` interface is kept by some Story or Bug. An `undecided` one waits.
 - Do not carry over: each Story whose step `avoids` an entry lists it too, and a `decision` item (basis the entry,
@@ -324,7 +359,8 @@ Before any line of the legacy system changes, capture what it does:
    `--check-bin <sanitiser or checker build>` for memory and undefined-behaviour reports (a build with the project's
    release flags shows whether they change results: any stdout or exit difference is recorded), and `--coverage <lcov file>`
    from running the cases under coverage for the functions they never reach. Each finding is a `probe:` fact the
-   draft cites; a probe that could not run says so.
+   draft cites; a probe that could not run says so. A file a probe names by an absolute path is outside the
+   checkout; one inside it is named relative to it.
 5. When the project has its own test suite, make it the compatibility reference: a cases file with one test per
    case, its suite (`S1`) and `area`, run on the legacy build with `--golden`, then on the new one with
    `aayu survey --compat suite.json --bin <new program> --run`, which scores passes per area and appends to
