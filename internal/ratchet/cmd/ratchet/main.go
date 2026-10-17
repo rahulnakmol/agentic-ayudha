@@ -9,15 +9,12 @@
 package main
 
 import (
-	"archive/tar"
 	"context"
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/evals"
@@ -77,105 +74,20 @@ func run(profile, base string, update bool) error {
 		}
 	}
 	fmt.Printf("coverage %.1f %%; floor %.1f %% (margin %.1f)\n", measured, cur.Coverage.Floor, cur.Coverage.Margin)
-	var barProblems []string
+	for i, p := range problems {
+		problems[i] = "coverage ratchet: " + p
+	}
 	if base != "" {
-		if barProblems, err = evalBars(base); err != nil {
+		bars, err := ratchet.EvalBarReport(os.Stdout, ".", base, func(n int) error { return checkWaiver(n, evals.BarFloor) })
+		if err != nil {
 			return err
 		}
+		problems = append(problems, bars...)
 	}
-	var all []string
-	for _, p := range problems {
-		all = append(all, "coverage ratchet: "+p)
-	}
-	for _, p := range barProblems {
-		all = append(all, "eval-bar ratchet: "+p)
-	}
-	if len(all) > 0 {
-		return errors.New(strings.Join(all, "\n::error::"))
+	if len(problems) > 0 {
+		return errors.New(strings.Join(problems, "\n::error::"))
 	}
 	return nil
-}
-
-// evalBars checks that the change from base lowers no skill-eval bar
-// (evals.CheckBars): base's evals/ is read from git, the change's from the
-// working tree.
-func evalBars(base string) ([]string, error) {
-	dir, err := os.MkdirTemp("", "eval-bars-")
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = os.RemoveAll(dir) }()
-	if err := extract(base, "evals", dir); err != nil {
-		return nil, err
-	}
-	lowered, problems, err := evals.CheckBars(dir, ".", func(n int) error { return checkWaiver(n, evals.BarFloor) })
-	if err != nil {
-		return nil, fmt.Errorf("eval-bar ratchet: %w", err)
-	}
-	for _, l := range lowered {
-		fmt.Printf("eval bar lowered: %s\n", l)
-	}
-	if len(lowered) == 0 {
-		fmt.Println("eval bars: none lowered")
-	}
-	return problems, nil
-}
-
-// extract writes the tree at sha:dir under root, as `git archive` gives it.
-func extract(sha, dir, root string) error {
-	cmd := exec.Command("git", "archive", "--format=tar", sha, dir)
-	out, err := cmd.StdoutPipe()
-	if err != nil {
-		return err
-	}
-	var stderr strings.Builder
-	cmd.Stderr = &stderr
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-	tr := tar.NewReader(out)
-	for {
-		h, err := tr.Next()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			_ = cmd.Wait()
-			return fmt.Errorf("git archive %s %s: %w", sha, dir, err)
-		}
-		name := filepath.Join(root, filepath.FromSlash(h.Name))
-		if !strings.HasPrefix(name, filepath.Clean(root)+string(os.PathSeparator)) {
-			continue
-		}
-		switch h.Typeflag {
-		case tar.TypeDir:
-			err = os.MkdirAll(name, 0o755)
-		case tar.TypeReg:
-			if err = os.MkdirAll(filepath.Dir(name), 0o755); err == nil {
-				err = writeFrom(name, tr)
-			}
-		}
-		if err != nil {
-			_ = cmd.Wait()
-			return err
-		}
-	}
-	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf("git archive %s %s: %w: %s", sha, dir, err, strings.TrimSpace(stderr.String()))
-	}
-	return nil
-}
-
-func writeFrom(name string, r io.Reader) error {
-	f, err := os.Create(name)
-	if err != nil {
-		return err
-	}
-	_, err = io.Copy(f, r)
-	if cerr := f.Close(); err == nil {
-		err = cerr
-	}
-	return err
 }
 
 // baseRatchet reads the base commit's ratchet; the floor before the ratchet

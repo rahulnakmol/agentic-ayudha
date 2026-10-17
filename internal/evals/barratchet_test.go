@@ -5,10 +5,6 @@ import (
 	"maps"
 	"strings"
 	"testing"
-
-	gh "github.com/google/go-github/v90/github"
-
-	"github.com/rahulnakmol/agentic-ayudha/internal/ratchet"
 )
 
 // barTree is a small evals/ tree: a gating group and an advisory one, a case
@@ -185,17 +181,38 @@ func TestEvalBarRatchet(t *testing.T) {
 		t.Error("a lowering passed on the base's own waiver")
 	}
 
-	// The waiver is a floor-waiver Decision for eval-bar, closed by the person who accepted it.
-	is := &gh.Issue{Number: gh.Ptr(412), Title: gh.Ptr("Waive the " + BarFloor + " floor on #400"), State: gh.Ptr("closed"), StateReason: gh.Ptr("completed"),
-		Labels:   []*gh.Label{{Name: "type:decision"}, {Name: "decision:waiver"}},
-		Body:     gh.Ptr("### Decision\n\nwaive, accepted by @founder on 2026-10-17.\n"),
-		ClosedBy: &gh.User{Login: gh.Ptr("founder"), Type: gh.Ptr("User")}}
-	if err := ratchet.AcceptedWaiver(is, BarFloor, nil); err != nil {
-		t.Errorf("an accepted eval-bar waiver was refused: %v", err)
+	// A tree that does not load is an error, never a pass; the base's says so.
+	for name, tc := range map[string]struct {
+		base bool
+		path string
+		body string
+	}{
+		"base eval.toml": {true, "evals/eval.toml", "judge = \"\"\n"},
+		"head eval.toml": {false, "evals/eval.toml", "judge = \"\"\n"},
+		"base case":      {true, "evals/cases/stub/one/case.toml", "skill = \"stub\"\n"},
+		"head case":      {false, "evals/cases/stub/one/case.toml", "skill = \"stub\"\n"},
+		"base session":   {true, "evals/cases/build/two/session.toml", "max_turns = 0\n"},
+		"head session":   {false, "evals/cases/build/two/session.toml", "max_turns = 0\n"},
+	} {
+		broken := barTree()
+		broken[tc.path] = tc.body
+		b, h := base, barRoot(t, broken)
+		if tc.base {
+			b, h = h, base
+		}
+		_, _, err := CheckBars(b, h, accepted)
+		if err == nil || tc.base != strings.HasPrefix(err.Error(), "base: ") {
+			t.Errorf("%s: err %v", name, err)
+		}
 	}
-	is.Title = gh.Ptr("Waive the coverage floor on #400")
-	if err := ratchet.AcceptedWaiver(is, BarFloor, nil); err == nil {
-		t.Error("a coverage waiver was taken for an eval-bar waiver")
+
+	// A long rubric item is named by its start.
+	long := barTree()
+	long["evals/cases/build/two/rubric.md"] = "- 5: " + strings.Repeat("It builds the story and proves it. ", 5) + "\n"
+	cut := maps.Clone(long)
+	cut["evals/cases/build/two/rubric.md"] = "- 5: It builds the story.\n"
+	if lowered, _, _ := CheckBars(barRoot(t, long), barRoot(t, cut), accepted); len(lowered) != 1 || !strings.HasSuffix(lowered[0].What, "…\"") {
+		t.Errorf("long item: %v", lowered)
 	}
 
 	// The repository's own evals load in both roles and lower nothing against themselves.

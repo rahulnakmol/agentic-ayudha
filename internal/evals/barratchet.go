@@ -122,12 +122,16 @@ func loweredBars(base, head string, bc, hc Config) ([]Lowering, error) {
 		if err != nil {
 			return nil, fmt.Errorf("base: %w", err)
 		}
-		hr, err := caseRules(h)
+		hr, err := rules(h)
 		if err != nil {
 			return nil, err
 		}
+		kept := map[string]bool{}
+		for _, r := range hr {
+			kept[r.key] = true
+		}
 		for _, r := range br {
-			if !hr[r.key] {
+			if !kept[r.key] {
 				low(b.ID, "removes or changes its %s rule %q (%s)", r.kind, r.Pattern, r.Why)
 			}
 		}
@@ -138,10 +142,7 @@ func loweredBars(base, head string, bc, hc Config) ([]Lowering, error) {
 	}
 	sort.Strings(paths)
 	for _, p := range paths {
-		bt, err := readText(filepath.Join(base, p))
-		if err != nil {
-			return nil, fmt.Errorf("base: %w", err)
-		}
+		bt, _ := readText(filepath.Join(base, p)) // a rubric the base lacks has nothing to lower
 		ht, err := readText(filepath.Join(head, p))
 		if err != nil {
 			low(p, "the rubric is removed")
@@ -161,16 +162,6 @@ func loweredBars(base, head string, bc, hc Config) ([]Lowering, error) {
 type ruleOf struct {
 	Scope
 	kind, key string
-}
-
-// caseRules returns a case's deterministic rules (rules) keyed by identity.
-func caseRules(c Case) (map[string]bool, error) {
-	rs, err := rules(c)
-	keys := map[string]bool{}
-	for _, r := range rs {
-		keys[r.key] = true
-	}
-	return keys, err
 }
 
 // rules lists a case's deterministic rules: its case.toml scope rules and,
