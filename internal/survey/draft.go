@@ -117,6 +117,12 @@ type CaseSet struct {
 	// proves an exact interface needs it, since another build of the same
 	// source can print other results (MINPACK's Release flags, D-5.9j).
 	Reference string `json:"reference,omitempty"`
+	// Runners are the entry points (main or script entries of the index) that
+	// run the cases, required when the index has more than one; Inputs are the
+	// checkout's files the cases run on, as paths or globs, when they come
+	// from the checkout. Each runner must register every builtin the cases call.
+	Runners []string `json:"runners,omitempty"`
+	Inputs  []string `json:"inputs,omitempty"`
 }
 
 // Coverage says how much of the index the draft cites.
@@ -134,6 +140,11 @@ type Coverage struct {
 	UncheckedTrap []string `json:"unchecked_traps,omitempty"`
 	OpenQuestions int      `json:"open_questions"`
 	Unknowns      int      `json:"unknown_claims"`
+	// EntriesCovered counts the entry points a capability claim cites;
+	// UncoveredEntry lists the rest (a floor: the capability map covers every
+	// entry point of the index).
+	EntriesCovered int      `json:"entries_covered"`
+	UncoveredEntry []string `json:"uncovered_entries,omitempty"`
 }
 
 // Report is the check of a draft.
@@ -340,6 +351,13 @@ func Check(ix *Index, d Draft) Report {
 		}
 	}
 	cov.Unknowns = unknowns
+	checkCapabilityMap(ix, d, &cov, add)
+	if cov.OpenQuestions > MaxOpenQuestions {
+		add("questions: %d open; the interview asks at most %d a round, riskiest first: merge questions one answer settles, and make a choice with a safe default a risk that carries the default", cov.OpenQuestions, MaxOpenQuestions)
+	}
+	if m := d.Modernisation; m != nil {
+		checkRunners(ix, m, add)
+	}
 	if ps == nil {
 		ps = []string{}
 	}

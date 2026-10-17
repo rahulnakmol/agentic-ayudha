@@ -8,7 +8,8 @@
 # do-not-carry entry stays proposed. Floors: `aayu survey --draft` (citations resolve, probe: facts included; bases;
 # trap rules; do-not-carry and contract shape; a level only the request or an answer decides; exact needs exact
 # evidence; steps avoid the do-not-carry entries in their modules), no answered question, and the scope rule.
-# output/survey.json is the pilot's draft (private research note survey-pilots-2026-10.md).
+# output/survey.json is the pilot's draft (private research note survey-pilots-2026-10.md),
+# amended for the capability-map and runner floors (the sample drivers and examples, ucodrv, each case set's runners).
 skill = "survey"
 description = "Survey legacy fixed-form Fortran: traps checked with runtime evidence, a do-not-carry list, and a compatibility contract for a modern-Fortran port."
 input = "request.txt"

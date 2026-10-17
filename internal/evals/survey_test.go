@@ -46,6 +46,10 @@ func TestSurveyFloors(t *testing.T) {
 		{"survey/tinyjs-rust", `"Script.cpp:93-95"`, `"Script.cpp:930-950"`, "Script.cpp"},
 		{"survey/tinyjs-rust", `"target": "Rust"`, `"target": "Go"`, `the request does not name "Go"`},
 		{"survey/tinyjs-rust", `slow loops are accepted.`, `slow loops are accepted, though it runs 10x faster than Duktape.`, "scope: adds a performance figure"},
+		// The case-set and capability-map floors on the stage-1 misses: Math cases under the
+		// command-line runner, which never registers Math, and host variable access left out of the map.
+		{"survey/tinyjs-rust", `"title": "Command-line runner output on each test script followed by print(result)"`, `"title": "Command-line runner output on each test script, and Math.sqrt of a negative number"`, "calls Math.sqrt, which runner entry:Script.cpp:74 does not register"},
+		{"survey/tinyjs-rust", `"TinyJS.h:320-328"`, `"TinyJS.h:327-328"`, "TinyJS.h:321 (method CTinyJS::getScriptVariable), 323 (method CTinyJS::getVariable), 325 (method CTinyJS::setVariable)"},
 		{"survey/tinyjs-backlog", `"title": "Port the parser and execution to Rust"`, `"title": "Port the parser and fix the prefix increment operator"`, "scope: adds a fix for a quirk the person kept"},
 		{"survey/tinyjs-backlog", `"title": "Port the built-in and Math functions to Rust"`, `"title": "Port the built-ins and add a time limit for each script"`, "scope: adds limits for scripts the person said are trusted"},
 		{"survey/tinyjs-backlog", `"E14"`, `"Q5"`, "basis Q5 is a question that is not answered yet"},
