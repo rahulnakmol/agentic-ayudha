@@ -14,7 +14,7 @@ ledger, and floor are explained in [GLOSSARY.md](GLOSSARY.md).
 Unreleased: these changes are on `dev` and in the v0.3.0 freeze. The list is final when v0.3.0 is tagged.
 
 With v0.3.0, aayu builds its own repository, agentic-ayudha, with one person, @rahulnakmol. With `[autonomy] proof` on,
-`aayu ship` merges an agent's pull request into dev on proof alone, and only a narrow set of paths and settings always
+`aayu ship` merges an agent's Story pull request into dev on proof alone, and only a narrow set of paths and settings always
 waits for a person (#617). Two new seats, the Production Engineer and the Data & AI Architect, bring
 skills for incidents, SLOs, runbooks, and data designs, and `aayu survey` maps legacy code. Every pull request that is not docs-only
 now gets a review, and the merge gate records how independent that review was. You approve the human-only steps
@@ -61,7 +61,7 @@ for this release.
 - The autonomy streak counts only merges whose review was of another family or a person's (#510).
 - Rung B is an opt-in paid reviewer in the merge gate: it runs only when you name a model in `[inspect] paid_reviewer` and add that provider's key (#550).
 - `[inspect] paid_effort` sets the paid reviewer's reasoning effort, and a paid review runs only for pull requests whose author has write or admin access to the repository (#579).
-- `[inspect] reviewer` names the one review tool: `codex`, `coderabbit`, `greptile`, `claude`, `cursor`, `grok` (the rung B paid reviewer), or `human`; unset, a person reviews every pull request, `aayu install --apply` asks you to choose, and `aayu doctor` fails `reviewer-apps` and `review-rung` until you do (#641).
+- `[inspect] reviewer` names the one review tool: `codex`, `coderabbit`, `greptile`, `claude`, `cursor`, `grok` (the rung B paid reviewer), or `human`; unset, a person reviews every pull request that is not docs-only, `aayu install --apply` asks you to choose, and `aayu doctor` fails `reviewer-apps` and `review-rung` until you do (#641).
 - A review from CodeRabbit or Greptile counts as rung A whatever the builder's model family (#641).
 - When the chosen tool answers with a usage-limit or quota message, or still has not replied when inspect runs again at least 30 minutes after the request (on a push, a rerun, or a new comment or review), the next installed app in a fixed order reviews (Codex, CodeRabbit, Greptile, Claude, Cursor), then the rung B reviewer, then a person, and the comment names the tool that took over and why (#634, #641).
 - A paid review asks for priority serving where the provider offers it (xAI and OpenAI, not Anthropic), and the review budget charges the priority rate for xAI models (#634).
@@ -121,7 +121,7 @@ for this release.
 
 ### Breaking changes
 
-- `[inspect] reviewer = "auto"` is removed with no deprecation release: each repository names one review tool, and a repository left on `auto` or unset gets a person's review on every pull request until you choose one with `aayu install --apply` or `[inspect] reviewer` (#641).
+- `[inspect] reviewer = "auto"` is removed with no deprecation release: each repository names one review tool, and a repository left on `auto` or unset gets a person's review on every pull request that is not docs-only until you choose one with `aayu install --apply` or `[inspect] reviewer` (#641).
 
 ### Fixes
 
