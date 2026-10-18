@@ -54,6 +54,13 @@ streak = 20
 never = ["L04", "L07", "L09"]
 approver = ""
 correction_days = 14
+# Merge on proof (Decision #593): off unless a repository turns it on. A PR touching the narrow set below, or a workflow
+# that reads a secret or names an environment, always needs a person per PR.
+proof = false
+proof_rungs = ["A", "B"]
+always_person = [".github/CODEOWNERS"]
+always_person_config = [".aayudha/config.toml"]
+always_person_sections = ["identity", "approvals", "autonomy", "seats"]
 
 # A build's budget. cost_usd applies only when aayu's own model calls are pay-as-you-go (a [models.gateway] endpoint or a
 # direct provider's key is configured, or a host reports spend in AAYU_COST_USD); otherwise there is no cost limit,
