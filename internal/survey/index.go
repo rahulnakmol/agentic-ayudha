@@ -63,6 +63,7 @@ type Edge struct {
 	To        []string `json:"to"`
 	At        string   `json:"at"`
 	Ambiguous bool     `json:"ambiguous,omitempty"`
+	Name      string   `json:"name,omitempty"` // the called name, when To lists only the first eight definitions
 }
 
 // Module is a group of files read together: a directory, split to the token
@@ -404,10 +405,7 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 			if len(to) == 0 {
 				continue
 			}
-			if len(to) > 8 {
-				to = to[:8]
-			}
-			ix.Edges = append(ix.Edges, Edge{Kind: "call", From: from, To: to, At: p + ":" + itoa(c.line), Ambiguous: len(to) > 1})
+			ix.Edges = append(ix.Edges, callEdge(from, c.name, to, p+":"+itoa(c.line)))
 		}
 		ix.guardCalls(p, s, byName)
 		ix.scriptCalls(p, s, byName)
@@ -451,7 +449,7 @@ func (ix *Index) guardCalls(p string, s *scanned, byName map[string][]string) {
 		for _, c := range callName.FindAllStringSubmatch(text, -1) {
 			if to := byName[c[1]]; len(to) > 0 && !cKeywords[c[1]] && !seen[c[1]] {
 				seen[c[1]] = true
-				ix.Edges = append(ix.Edges, Edge{Kind: "call", From: from, To: to[:min(len(to), 8)], At: p + ":" + itoa(ln), Ambiguous: len(to) > 1})
+				ix.Edges = append(ix.Edges, callEdge(from, c[1], to, p+":"+itoa(ln)))
 			}
 		}
 	}
@@ -477,13 +475,24 @@ func (ix *Index) scriptCalls(p string, s *scanned, byName map[string][]string) {
 		for _, w := range wordRe.FindAllString(text, -1) {
 			if to := byName[w]; len(to) > 0 && !cKeywords[w] && !seen[w] {
 				seen[w] = true
-				ix.Edges = append(ix.Edges, Edge{Kind: "call", From: from, To: to[:min(len(to), 8)], At: p + ":" + itoa(k+1), Ambiguous: len(to) > 1})
+				ix.Edges = append(ix.Edges, callEdge(from, w, to, p+":"+itoa(k+1)))
 			}
 		}
 	}
 }
 
 var wordRe = regexp.MustCompile(`[A-Za-z_][\w]*`)
+
+// callEdge is a call resolved by name. An edge lists at most eight of the
+// definitions the name could mean; when it lists fewer than there are, Name
+// keeps the called name, so a reader can resolve the rest (runnerReach).
+func callEdge(from, name string, to []string, at string) Edge {
+	e := Edge{Kind: "call", From: from, To: to, At: at, Ambiguous: len(to) > 1}
+	if len(to) > 8 {
+		e.To, e.Name = to[:8], name
+	}
+	return e
+}
 
 // scanned is one file read while building the index.
 type scanned struct {
@@ -629,7 +638,7 @@ func (ix *Index) headerEntries(file, code string) {
 }
 
 func isHeader(p string) bool {
-	switch path.Ext(p) {
+	switch strings.ToLower(path.Ext(p)) { // API.HPP is a header too
 	case ".h", ".hh", ".hpp", ".hxx":
 		return true
 	}

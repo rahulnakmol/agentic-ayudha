@@ -10,9 +10,10 @@ var (
 	// registerCall is a call that registers a builtin: a string literal naming
 	// it followed by a reference to the function that implements it
 	// (addNative("function Math.abs(a)", scMathAbs, 0), lua_register(L, "f", f),
-	// register("f", handlers.f),
+	// register("f", handlers.f), and an inline callback: register("f", [](…) {…}),
+	// register("f", function(…) {…}), register("f", lambda x: …), register("f", (x) => …)),
 	// Tcl_CreateObjCommand(interp, "cmd", Cmd, …), register('name', fn)).
-	registerCall = regexp.MustCompile(`\b[A-Za-z_]\w*\s*\(\s*(?:[^()"';{}]*?,\s*)?(?:"([^"\\\n]{1,200})"|'([^'\\\n]{1,200})')\s*,\s*&?\s*([A-Za-z_][\w:.]*)\s*[,)]`)
+	registerCall = regexp.MustCompile(`\b[A-Za-z_]\w*\s*\(\s*(?:[^()"';{}]*?,\s*)?(?:"([^"\\\n]{1,200})"|'([^'\\\n]{1,200})')\s*,\s*(?:&?\s*([A-Za-z_][\w:.]*)\s*[,)]|(\[[^\]\n]*\]\s*\(|\bfunction\b|\blambda\b|\([^()\n]*\)\s*=>))`)
 	builtinName  = regexp.MustCompile(`^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$`)
 )
 
@@ -37,7 +38,8 @@ func registeredName(s string) string {
 // and where any file calls one (Index.Uses; an input of the same language as
 // the host counts too), so a case set can be
 // checked against the builtins its runner registers. A registration counts
-// only when its function argument is a function of the index and its call is
+// only when its function argument is a function of the index (or an inline
+// lambda) and its call is
 // code, not a comment.
 func (ix *Index) builtins(files map[string]*scanned, defs map[string][]string) {
 	names := map[string]bool{}
@@ -56,7 +58,7 @@ func (ix *Index) builtins(files map[string]*scanned, defs map[string][]string) {
 				lit = m[4:6]
 			}
 			name := registeredName(s.raw[lit[0]:lit[1]])
-			if name == "" || len(defs[lastName(strings.ReplaceAll(s.raw[m[6]:m[7]], ".", "::"))]) == 0 {
+			if name == "" || m[6] >= 0 && len(defs[lastName(strings.ReplaceAll(s.raw[m[6]:m[7]], ".", "::"))]) == 0 {
 				continue
 			}
 			at := p + ":" + itoa(strings.Count(s.raw[:lit[0]], "\n")+1)
