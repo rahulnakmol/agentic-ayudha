@@ -1,6 +1,7 @@
 package models
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -287,7 +288,7 @@ func (g *Gateway) client(route Route, key string) Client {
 		return g.Client(route, key)
 	}
 	if route.Via == CopilotRoute.Via {
-		return CopilotCLI{Token: key, Path: os.Getenv("PATH")}
+		return CopilotCLI{Token: key, Path: os.Getenv("PATH"), Host: cmp.Or(os.Getenv("COPILOT_GH_HOST"), os.Getenv("GH_HOST"))}
 	}
 	return HTTPClient{BaseURL: route.BaseURL, Style: route.Style, Key: key, KeyAuth: route.KeyAuth, HTTP: g.HTTP}
 }

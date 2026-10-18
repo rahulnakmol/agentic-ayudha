@@ -42,6 +42,7 @@ type CopilotCLI struct {
 	Bin   string // the copilot executable; "" looks it up on Path
 	Token string // COPILOT_GITHUB_TOKEN for the process
 	Path  string // PATH for the process
+	Host  string // COPILOT_GH_HOST for the process: the GitHub host to sign in to ("" is github.com)
 }
 
 // Complete implements Client.
@@ -99,6 +100,9 @@ func (c CopilotCLI) Complete(ctx context.Context, r Request) (Response, error) {
 	cmd.Stdin = strings.NewReader(copilotPrompt(r))
 	cmd.Env = []string{"PATH=" + c.Path, "HOME=" + home, "COPILOT_HOME=" + home, "TERM=dumb",
 		"COPILOT_AUTO_UPDATE=false", "DBUS_SESSION_BUS_ADDRESS=disabled:", "COPILOT_GITHUB_TOKEN=" + c.Token}
+	if c.Host != "" {
+		cmd.Env = append(cmd.Env, "COPILOT_GH_HOST="+c.Host)
+	}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Start(); err != nil {

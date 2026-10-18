@@ -66,7 +66,7 @@ func TestCopilotCLI(t *testing.T) {
 	png := []byte("\x89PNG\r\n\x1a\nrest")
 	req := Request{Model: "gemini-4-argon", Effort: "high", System: "You are lane A.",
 		Messages: []Message{{Role: "user", Content: "State \"s\".", Images: []Image{{MediaType: "image/png", Data: png}}}}}
-	resp, err := CopilotCLI{Token: "copilot-tok", Path: dir}.Complete(context.Background(), req)
+	resp, err := CopilotCLI{Token: "copilot-tok", Path: dir, Host: "acme.ghe.com"}.Complete(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestCopilotCLI(t *testing.T) {
 	env, _ := os.ReadFile(rec + ".env")
 	home, _ := os.UserHomeDir()
 	if !strings.Contains(string(env), "COPILOT_GITHUB_TOKEN=copilot-tok\n") || strings.Contains(string(env), "must-not-leak") ||
-		strings.Contains(string(env), "HOME="+home+"\n") || !strings.Contains(string(env), "COPILOT_AUTO_UPDATE=false\n") {
+		strings.Contains(string(env), "HOME="+home+"\n") || !strings.Contains(string(env), "COPILOT_AUTO_UPDATE=false\n") || !strings.Contains(string(env), "COPILOT_GH_HOST=acme.ghe.com\n") {
 		t.Errorf("environment:\n%s", env)
 	}
 	if wd, _ := os.ReadFile(rec + ".pwd"); !strings.Contains(string(wd), "aayu-copilot-") {
