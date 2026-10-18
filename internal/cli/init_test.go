@@ -683,10 +683,16 @@ var noHook = map[string]any{"url": "https://example.invalid/aayudha-no-webhook",
 // which returns that one-time code; without it the real flow runs.
 func runIdentity(t *testing.T, api, code string, env map[string]string) (int, string) {
 	t.Helper()
-	e := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "HOME": t.TempDir()}
+	return runIdentityIn(t, checkout(t), t.TempDir(), api, code, env)
+}
+
+// runIdentityIn is runIdentity in a given checkout and home, for a rerun.
+func runIdentityIn(t *testing.T, dir, home, api, code string, env map[string]string) (int, string) {
+	t.Helper()
+	e := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "HOME": home}
 	maps.Copy(e, env)
 	var out, errOut bytes.Buffer
-	opts := Options{GitHubAPI: api, GitHubGap: -1, Dir: checkout(t), Build: BuildInfo{Version: "0.4.0"}, DevicePoll: time.Millisecond,
+	opts := Options{GitHubAPI: api, GitHubGap: -1, Dir: dir, Build: BuildInfo{Version: "0.4.0"}, DevicePoll: time.Millisecond,
 		IsTerminal: func(any) bool { return true },
 		Getenv:     func(k string) string { return e[k] },
 		GHToken:    func(context.Context) (string, error) { return "", errors.New("gh disabled in tests") },
@@ -838,6 +844,31 @@ func TestInitIdentityRefusesTheApp(t *testing.T) {
 			}
 		})
 	}
+	// After a refused App, the person deletes it and reruns: the new App's
+	// code is converted, not answered from the refused run's record, and the
+	// actions log never holds a code.
+	g = identityGitHub(t, "mallory", nil)
+	dir, home := checkout(t), t.TempDir()
+	if code, printed := runIdentityIn(t, dir, home, g.URL(), "c0de1234c0de5678", nil); code != ExitBlocked {
+		t.Fatalf("the refused App: exit %d:\n%s", code, printed)
+	}
+	g.App["owner"] = map[string]any{"login": "o"}
+	if code, printed := runIdentityIn(t, dir, home, g.URL(), "n3wc0de9n3wc0de9", nil); code != 0 || g.Secrets["AAYUDHA_APP_PRIVATE_KEY"] == "" {
+		t.Fatalf("the rerun after a refused App: exit %d, secrets %v:\n%s", code, g.Secrets, printed)
+	}
+	var convs []string
+	for _, r := range g.Requests {
+		if strings.HasPrefix(r.Path, "/app-manifests/") {
+			convs = append(convs, r.Path)
+		}
+	}
+	if !slices.Equal(convs, []string{"/app-manifests/c0de1234c0de5678/conversions", "/app-manifests/n3wc0de9n3wc0de9/conversions"}) {
+		t.Errorf("conversions = %v", convs)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, ".aayudha", "telemetry", "actions.jsonl")); strings.Contains(string(b), "c0de1234c0de5678") || strings.Contains(string(b), "n3wc0de9n3wc0de9") {
+		t.Error("a one-time code is in the actions log")
+	}
+
 	// The App aayu asked for is stored, and only then is the Install link printed.
 	g = identityGitHub(t, "o", nil)
 	code, printed := runIdentity(t, g.URL(), "c0de1234c0de5678", nil)

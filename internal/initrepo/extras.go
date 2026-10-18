@@ -10,6 +10,7 @@ import (
 	"crypto/x509"
 	"embed"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -422,8 +423,12 @@ func (in *Init) app(ctx context.Context, x Extras) error {
 		Permissions map[string]string `json:"permissions"`
 		Events      []string          `json:"events"`
 	}
-	_, err = in.GH.Write(ctx, actions.Action{Kind: "github.app.create", Target: r.Owner, IdempotencyKey: in.key("app"),
-		Request: &actions.Request{Method: http.MethodPost, Path: "/app-manifests/" + code + "/conversions"}},
+	// One action per one-time code: a rerun after a refused App converts its
+	// new code instead of reusing the refused one's record. The log keeps a
+	// hash of the code, never the code.
+	sum := sha256.Sum256([]byte(code))
+	_, err = in.GH.Write(ctx, actions.Action{Kind: "github.app.create", Target: r.Owner, IdempotencyKey: in.key("app", hex.EncodeToString(sum[:6])),
+		Request: &actions.Request{Method: http.MethodPost, Path: "/app-manifests/{code}/conversions"}},
 		func(ctx context.Context) (any, error) {
 			err := in.rest(ctx, http.MethodPost, "/app-manifests/"+code+"/conversions", nil, &conv)
 			return map[string]any{"id": conv.ID, "slug": conv.Slug}, err // the PEM is never logged
