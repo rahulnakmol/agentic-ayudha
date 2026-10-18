@@ -319,7 +319,7 @@ func (e *Env) hostcallDecide(ctx context.Context, ev hostcall.Event) hostcall.Ve
 	if strings.HasPrefix(ev.Tool, "mcp__") || ev.Dashed {
 		o.Servers = map[string]string{}
 		root, home := config.RepoRoot(e.Dir), e.homeDir()
-		for _, s := range hosts.ProviderServers(root, home, hosts.CodexHome(home, e.Getenv)) {
+		for _, s := range hosts.ProviderServers(root, home, hosts.CodexHome(home, e.Getenv), hosts.CopilotHome(home, e.Getenv)) {
 			o.Servers[s.Name] = hostcall.ProviderOf(strings.Join(append([]string{s.Name, s.URL, s.Command}, s.Args...), " "))
 		}
 	}

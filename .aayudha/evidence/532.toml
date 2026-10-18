@@ -1,6 +1,6 @@
 [[criterion]]
 id = 1
-tests = ["./internal/cli:TestHookProviderCalls", "./internal/integrations/hostcall:TestFromHook"]
+tests = ["./internal/cli:TestHookProviderCalls", "./internal/cli:TestHookLogsProviderCalls", "./internal/integrations/hostcall:TestFromHook", "./internal/integrations/hostcall:TestFromPostHook"]
 
 [[criterion]]
 id = 2

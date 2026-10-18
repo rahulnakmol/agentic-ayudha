@@ -131,7 +131,7 @@ after the metric is a Sentry search query that narrows it.
 
 Your agent may have PostHog's or Sentry's own MCP server or CLI connected beside aayu. In Claude Code, Codex, Cursor,
 Amp, and GitHub Copilot, the hooks that `aayu install` sets up judge each of their tool calls and CLI commands before
-it runs, and log it after (not yet under Copilot, whose post-tool hook aayu does not install):
+it runs, and log it after (not yet under Copilot, whose post-tool hooks `aayu install` does not register yet):
 
 - **Reads pass.** aayu keeps a read allowlist pinned to each provider's published tool definitions. It also looks
   inside PostHog's single `exec` tool and Sentry's `execute_sentry_tool`.

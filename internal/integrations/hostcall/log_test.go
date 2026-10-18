@@ -152,6 +152,17 @@ func TestFromPostHook(t *testing.T) {
 		{"claude mcp error", `{"session_id":"abc","tool_name":"mcp__sentry__find_releases","tool_input":{},"tool_response":{"isError":true,"content":[]}}`, "abc", `{"isError":true,"content":[]}`, true},
 		{"cursor", `{"conversation_id":"c9","hook_event_name":"afterMCPExecution","tool_name":"find_releases","tool_input":"{}","url":"https://mcp.sentry.dev/mcp","result_json":"[]"}`, "c9", `[]`, false},
 		{"amp", `{"thread_id":"T-1","tool_name":"mcp__posthog__feature-flag-get-all","tool_input":{},"status":"error","output":null}`, "T-1", `null`, true},
+		// GitHub Copilot CLI 1.0.98, captured live on 2026-10-18: postToolUse
+		// fires only for a call that succeeded; postToolUseFailure carries error
+		// and no toolResult. A shell command's exit code is only in the text.
+		{"copilot mcp", `{"sessionId":"7db7e57f-6287-4deb-ae28-bc210b820067","timestamp":1792293989252,"cwd":"/r","toolName":"sentry-find_releases","toolArgs":{},"toolResult":{"resultType":"success","textResultForLlm":"[{\"version\":\"1\"}]"}}`,
+			"7db7e57f-6287-4deb-ae28-bc210b820067", `[{"version":"1"}]`, false},
+		{"copilot shell", `{"sessionId":"e93f66af","timestamp":1792293853248,"cwd":"/r","toolName":"bash","toolArgs":{"command":"sentry-cli releases list --limit 5","description":"list releases"},"toolResult":{"resultType":"success","textResultForLlm":"error: no org\n<shellId: 1 completed with exit code 2>"}}`,
+			"e93f66af", "error: no org\n<shellId: 1 completed with exit code 2>", false},
+		{"copilot failure", `{"sessionId":"7db7e57f","timestamp":1792293990785,"cwd":"/r","toolName":"sentry-find_releases","toolArgs":{},"error":"MCP server 'sentry': exit 2"}`,
+			"7db7e57f", "", true},
+		{"vs code form failure", `{"session_id":"v1","hook_event_name":"PostToolUseFailure","tool_name":"mcp__sentry__find_releases","tool_input":{}}`, "v1", "", true},
+		{"vs code form", `{"session_id":"v1","hook_event_name":"PostToolUse","tool_name":"mcp__sentry__find_releases","tool_input":{},"tool_result":{"result_type":"success","text_result_for_llm":"[]"}}`, "v1", "[]", false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			_, r, session, ok := FromPostHook([]byte(tt.event))
