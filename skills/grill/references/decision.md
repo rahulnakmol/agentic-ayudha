@@ -24,7 +24,7 @@ human leaves open goes into an open question, not into the item.
 
 ### Recommendation (`recommendation`, required)
 
-- Which option do you recommend, and why?
+- Which option do you recommend, and why? Open with it, `Option N, because …`, so the inbox knows which one it is.
 
 ### Reversible (`reversible`, required)
 

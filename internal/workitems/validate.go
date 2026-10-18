@@ -271,69 +271,24 @@ func checkLinks(t Type, it Item, v string) []Problem {
 	return ps
 }
 
-// checkRecommendation checks that a Decision's Recommendation resolves to one
-// of its options: one marked "(recommended)", one it names by number, or one
-// it names by name; and that a marked option and a number agree.
+// checkRecommendation checks that a Decision's Recommendation designates one
+// of its options: it opens with the option (RecommendedOption), or an option
+// is marked "(recommended)"; when both, they agree.
 func checkRecommendation(os []Option, rec string) []Problem {
 	if len(os) == 0 || Empty(rec) {
 		return nil
 	}
 	marked := slices.IndexFunc(os, func(o Option) bool { return o.Recommended })
-	if m := OptionRef.FindStringSubmatch(rec); m != nil {
-		n, _ := strconv.Atoi(m[1] + m[2])
-		switch {
-		case n < 1 || n > len(os):
-			return []Problem{{"recommendation", fmt.Sprintf("names option %d, but the Decision has options 1-%d", n, len(os))}}
-		case marked >= 0 && os[marked].N != n:
-			return []Problem{{"options", fmt.Sprintf("option %d is marked \"(recommended)\" but the Recommendation names option %d; make them agree", os[marked].N, n)}}
-		}
-		return nil
+	n := RecommendedOption(os, rec)
+	switch {
+	case n > len(os):
+		return []Problem{{"recommendation", fmt.Sprintf("opens with option %d, but the Decision has options 1-%d", n, len(os))}}
+	case n > 0 && marked >= 0 && os[marked].N != n:
+		return []Problem{{"options", fmt.Sprintf("option %d is marked \"(recommended)\" but the Recommendation opens with option %d; make them agree", os[marked].N, n)}}
+	case n == 0 && marked < 0:
+		return []Problem{{"recommendation", "opens with none of the options: open it with the one it recommends, \"Option 2, because ...\" or the option's name"}}
 	}
-	if marked >= 0 || NamedOption(os, rec) >= 0 {
-		return nil
-	}
-	if named := namedOptions(os, rec); len(named) > 1 {
-		return []Problem{{"recommendation", fmt.Sprintf("names options %s by name, so which one it recommends is unclear: name it by its number (\"Option %d, because ...\")", joinNums(named), named[0])}}
-	}
-	return []Problem{{"recommendation", "names none of the options: name one by its number (\"Option 2, because ...\") or its name"}}
-}
-
-// NamedOption is the index of the one option text names by name, or -1 when
-// it names none or several. A name inside another named option's name ("Waive"
-// in "Don't waive") does not count as a second.
-func NamedOption(os []Option, text string) int {
-	named := namedOptions(os, text)
-	if len(named) != 1 {
-		return -1
-	}
-	return slices.IndexFunc(os, func(o Option) bool { return o.N == named[0] })
-}
-
-func namedOptions(os []Option, text string) []int {
-	var hits []Option
-	for _, o := range os {
-		if MentionsOption(text, o.Name) {
-			hits = append(hits, o)
-		}
-	}
-	var out []int
-	for _, h := range hits {
-		inside := slices.ContainsFunc(hits, func(o Option) bool {
-			return o.N != h.N && len(o.Name) > len(h.Name) && MentionsOption(o.Name, h.Name)
-		})
-		if !inside {
-			out = append(out, h.N)
-		}
-	}
-	return out
-}
-
-func joinNums(ns []int) string {
-	s := make([]string, len(ns))
-	for i, n := range ns {
-		s[i] = strconv.Itoa(n)
-	}
-	return strings.Join(s, " and ")
+	return nil
 }
 
 // MentionsOption reports whether text names option as a whole word or
