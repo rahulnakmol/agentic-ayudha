@@ -290,3 +290,21 @@ func TestAllowPIIRepoOnly(t *testing.T) {
 		t.Errorf("repository config: %v; want posthog allow_pii on and sentry off", err)
 	}
 }
+
+// TestBuildBudgetDefaults (founder decision, 2026-10-17): a build may run 8
+// wall hours, 3 failed attempts, and 60 USD of metered spend, and the
+// gateway breaker's per-story limit is never below the build's, so the
+// breaker does not stop a story before its build budget does.
+func TestBuildBudgetDefaults(t *testing.T) {
+	l, err := Load(Sources{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, g := l.Config.Autonomy.Budget, l.Config.Budget
+	if b.WallHours != 8 || b.Attempts != 3 || b.CostUSD != 60 || g.PerDayUSD != 100 {
+		t.Errorf("[autonomy.budget] %+v, [budget] per_day_usd %g", b, g.PerDayUSD)
+	}
+	if g.PerStoryUSD < b.CostUSD {
+		t.Errorf("[budget] per_story_usd %g is below [autonomy.budget] cost_usd %g", g.PerStoryUSD, b.CostUSD)
+	}
+}

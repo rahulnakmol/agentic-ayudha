@@ -32,7 +32,8 @@ The gates are where work can stop:
 
 - **Baseline:** no target without today's number, measured.
 - **Ready snapshot:** the promises are frozen. An edit afterwards drops Ready, so nothing changes quietly.
-- **Budget:** a build stops at its budget (by default 8 hours, 25 USD, and 3 failed attempts) and asks a person.
+- **Budget:** a build stops at its budget (by default 8 hours, 3 failed attempts, and 60 USD of metered spend, which
+  applies only to pay-as-you-go model calls; subscription use is not counted) and asks a person.
 - **Merge gate:** CI re-runs the checks on the exact commit and keeps the authoritative **proof pack**: the record
   that maps each promise to its evidence ([proof packs](concepts-proof.md)).
 - **Human pass:** a person's approval of the pull request. A layer that has earned autonomy, a long run of merges
