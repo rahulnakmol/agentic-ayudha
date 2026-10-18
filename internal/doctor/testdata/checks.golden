@@ -79,6 +79,11 @@ FAIL  copilot  GitHub Copilot is not set up safely here; the lines say what to f
                  aayu's GitHub token (AAYU_GITHUB_TOKEN) is Copilot's COPILOT_GITHUB_TOKEN, so aayu would write as Copilot's account: give aayu its own token
                  Copilot CLI is not on PATH, so aayu cannot check trust: in VS Code, trust this folder (Workspace Trust), or it loads neither the aayudha MCP server nor the hooks
                  live-proven with Copilot CLI 1.0.98 on 2026-10-17 (skills, the aayudha MCP tool, the hooks, each Auto tier, a HydraFusion Critique turn); VS Code agent mode is not live-proven
+## host-config pass
+PASS  host-config  not installed for a host here
+## host-config fail
+FAIL  host-config  a hook or MCP entry differs from what aayu install writes, so a host may run a command aayu did not install: read the diff with `aayu install`, then run `aayu install --apply` [blocking]
+                     .github/hooks/aayudha.json
 ## lfs-quota pass
 N/A  lfs-quota  LFS quota: GitHub has no quota API for this account; watch Settings > Billing > Git LFS (warn at 80 %)
 ## ledger-media pass

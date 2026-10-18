@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -57,6 +58,21 @@ func (e *Env) probe(ctx context.Context) *doctor.Probe {
 	}
 	if tok, err := r.Human(ctx); err == nil {
 		p.API = func(ctx context.Context, path string, out any) error { return e.githubGet(ctx, tok, path, out) }
+	}
+	if p.Root != "" {
+		_, ok, err := hosts.ReadLock(p.Root)
+		switch found := hosts.AayudhaConfig(p.Root); {
+		case err == nil && ok:
+			p.HostConfig = e.hostConfigDrift
+		case len(found) > 0:
+			// The lock says what install wrote; without it, aayudha's entries cannot be checked.
+			if err == nil {
+				err = errors.New(hosts.LockPath + " is missing")
+			}
+			p.HostConfig = func(context.Context) ([]string, error) {
+				return nil, fmt.Errorf("%s carry aayudha's hooks or MCP server, but %w: run `aayu install --apply` to rewrite them", strings.Join(found, ", "), err)
+			}
+		}
 	}
 	p.Latest = func(ctx context.Context) (string, error) {
 		var rel struct {
@@ -224,4 +240,21 @@ func renderDoctorHuman(p *ui.Printer, rs []doctor.Result) {
 	}
 	p.Printf("%s", p.Table([]string{"Status", "Check", "Detail"}, rows))
 	p.Println(fmt.Sprintf("%d pass, %d warn, %d fail, %d not yet available", tally[doctor.Pass], tally[doctor.Warn], tally[doctor.Fail], tally[doctor.NA]))
+}
+
+// hostConfigDrift plans aayu install as this binary would run it and names
+// the executable host config files that would change.
+func (e *Env) hostConfigDrift(ctx context.Context) ([]string, error) {
+	o, err := e.installOptions()
+	if err != nil {
+		return nil, err
+	}
+	if o.Binary, err = e.binaryPath(ctx); err != nil {
+		return nil, err
+	}
+	res, err := hosts.Plan(o)
+	if err != nil {
+		return nil, err
+	}
+	return append(hosts.ConfigDrift(res.Edits), res.Unmanaged...), nil
 }

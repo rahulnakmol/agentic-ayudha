@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"slices"
 	"sort"
@@ -44,6 +45,54 @@ const (
 	ServerName     = "aayudha"                   // MCP server name in every host
 	LockVersion    = 1
 )
+
+// ExecutableConfig are the repository files install writes that a host runs
+// or obeys: hooks, MCP server commands, permissions, and plugins. A host reads
+// them from whatever branch is checked out, so doctor fails when one differs
+// from what install writes (ConfigDrift), and init --gates makes their
+// changes need a code owner (HostConfigOwners).
+var ExecutableConfig = []string{ClaudeMCP, ClaudeSettings, CursorMCP, CursorHooks, CursorCLI, CodexConfig, CodexHooks, CopilotHooks, AmpPlugin}
+
+// HostConfigOwners are the root-anchored CODEOWNERS patterns that cover
+// ExecutableConfig, and .agents/, whose setup script the hosts' clouds run.
+var HostConfigOwners = []string{"/.mcp.json", "/.claude/", "/.cursor/", "/.codex/", "/.amp/plugins/", "/.github/hooks/", "/.agents/"}
+
+// AayudhaConfig names the ExecutableConfig files under root that carry an
+// aayudha hook, MCP server, or plugin. Without a readable lock.toml doctor
+// cannot plan, so these are what it cannot vouch for.
+func AayudhaConfig(root string) []string {
+	var out []string
+	for _, f := range ExecutableConfig {
+		b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(f)))
+		if err == nil && (f == AmpPlugin || aayuHookLike.Match(b) || bytes.Contains(b, []byte(`"`+ServerName+`"`)) || bytes.Contains(b, []byte("mcp_servers."+ServerName))) {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// ConfigDrift names the ExecutableConfig files among a plan's repository
+// edits whose content would change in meaning: a JSON file is compared parsed,
+// so key order and spacing alone are no drift.
+func ConfigDrift(edits []Edit) []string {
+	var out []string
+	for _, e := range edits {
+		if e.Home || !slices.Contains(ExecutableConfig, e.Path) || sameConfig(e.Old, e.New) {
+			continue
+		}
+		out = append(out, e.Path)
+	}
+	return out
+}
+
+func sameConfig(a, b []byte) bool {
+	var x, y any
+	if json.Unmarshal(a, &x) == nil && json.Unmarshal(b, &y) == nil {
+		return reflect.DeepEqual(x, y)
+	}
+	norm := func(b []byte) string { return strings.TrimSpace(strings.ReplaceAll(string(b), "\r\n", "\n")) }
+	return a != nil && b != nil && norm(a) == norm(b)
+}
 
 // AllHosts returns every host ID in registry order.
 func AllHosts() []verbs.HostID {
@@ -299,9 +348,10 @@ func (o Options) text(b []byte) []byte {
 
 // planner accumulates edits, and notes for edits it could not plan.
 type planner struct {
-	o     Options
-	edits []Edit
-	notes []string
+	o         Options
+	edits     []Edit
+	notes     []string
+	unmanaged []string
 }
 
 func (p *planner) abs(rel string, home bool) string {
@@ -359,6 +409,10 @@ type Result struct {
 	Edits []Edit
 	Lock  Lock
 	Notes []string // edits install could not plan and a human must make
+	// Unmanaged are ExecutableConfig files holding an aayudha entry install
+	// leaves alone because it is outside aayudha's block: drift doctor cannot
+	// repair, since install will not rewrite it.
+	Unmanaged []string
 }
 
 // Plan computes every edit install would make. It reads the repository and the
@@ -471,7 +525,7 @@ func Plan(o Options) (*Result, error) {
 		}
 		return a.Path < b.Path
 	})
-	return &Result{Edits: p.edits, Lock: lock, Notes: p.notes}, nil
+	return &Result{Edits: p.edits, Lock: lock, Notes: p.notes, Unmanaged: p.unmanaged}, nil
 }
 
 // skillCopies plans real copies of every source skill under dir, removes files
@@ -711,6 +765,14 @@ var importsAgents = regexp.MustCompile(`(?m)^@AGENTS\.md\s*$`)
 // ourHook matches the commands HookCommand writes, for any binary path.
 var ourHook = regexp.MustCompile(`^(& )?"[^"]+" hook [a-z][a-z0-9-]* --host (amp|cursor|claude|codex|copilot)$`)
 
+// aayuHookLike matches any command that runs an aayu binary's hook verb, such
+// as one of ours with something appended. Install replaces it like its own,
+// so an altered aayudha hook is drift that a repair removes, never a
+// product hook it keeps next to the real one.
+var aayuHookLike = regexp.MustCompile(`(^|[\s"'/\\&;|])aayu(\.exe)?(\\?")?\s+hook\b`)
+
+func aayuHook(c string) bool { return ourHook.MatchString(c) || aayuHookLike.MatchString(c) }
+
 func (p *planner) hostFiles(hosts map[verbs.HostID]bool, lock Lock) error {
 	existing, err := p.read(AgentsMD, false)
 	if err != nil {
@@ -755,7 +817,7 @@ func (p *planner) hostFiles(hosts map[verbs.HostID]bool, lock Lock) error {
 			// shared project setting overrides the user's (D-3.2b.h).
 			obj(m, "enabledPlugins")[PluginID] = false
 			// The status line shows journey state (WP3.2b); one the product set itself stays.
-			if sl, ok := m["statusLine"].(map[string]any); !ok || ourHook.MatchString(fmt.Sprint(sl["command"])) {
+			if sl, ok := m["statusLine"].(map[string]any); !ok || aayuHook(fmt.Sprint(sl["command"])) {
 				m["statusLine"] = map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "status-line", verbs.HostClaude)}
 			} else {
 				p.notes = append(p.notes, ClaudeSettings+" already has a statusLine, so install leaves it: add `"+HookCommand(p.o.Binary, "status-line", verbs.HostClaude)+"` to it for the aayudha journey state")
@@ -909,6 +971,7 @@ func (p *planner) codexConfig() error {
 		text = codexBlock.ReplaceAllLiteralString(text, block)
 	case strings.Contains(text, "[mcp_servers."+ServerName+"]"):
 		p.notes = append(p.notes, CodexConfig+" already defines [mcp_servers."+ServerName+"] outside aayudha's block, so install leaves it: point its command at "+string(cmd)+" with args [\"mcp\"]")
+		p.unmanaged = append(p.unmanaged, CodexConfig)
 		return nil
 	case text == "":
 		text = block
@@ -1051,7 +1114,7 @@ func isOurs(e any) bool {
 		return false
 	}
 	if c, ok := m["command"].(string); ok {
-		return ourHook.MatchString(c)
+		return aayuHook(c)
 	}
 	inner, ok := m["hooks"].([]any)
 	if !ok || len(inner) == 0 {
@@ -1060,7 +1123,7 @@ func isOurs(e any) bool {
 	for _, h := range inner {
 		hm, _ := h.(map[string]any)
 		c, _ := hm["command"].(string)
-		if !ourHook.MatchString(c) {
+		if !aayuHook(c) {
 			return false
 		}
 	}

@@ -409,6 +409,10 @@ func TestInitExtras(t *testing.T) {
 		files["loops/amp/triage.json"] == "" || files["loops/amp/digest.json"] != "" || !strings.Contains(files["loops/cursor/aayudha-loops.tf"], `"0 8 * * 1-5"`) {
 		t.Errorf("loops rendered by --gates: %v", slices.Collect(maps.Keys(files)))
 	}
+	// Every host's executable config needs a code owner (the host-config block).
+	if co := files[".github/CODEOWNERS"]; !strings.Contains(co, initrepo.HostConfigBegin) || !strings.Contains(co, "\n/.mcp.json  @") || !strings.Contains(co, "\n/.codex/  @") || !strings.Contains(co, "\n/.github/hooks/  @") {
+		t.Errorf("CODEOWNERS after --gates:\n%s", co)
+	}
 	cfg := files[".aayudha/config.toml"]
 	for _, want := range []string{"[identity]\napp_id = 4242\napp_slug = \"aayudha-r\"\nbroker = \"aayudha-token.yml\"", "[integrations.posthog]", "[integrations.sentry]", "[integrations.growthbook]",
 		"[integrations.azure]\nscope = \"read\"\nauth = \"oidc\"", "[integrations.aws]\nscope = \"read\"\nauth = \"oidc\"", "[integrations.gcp]\nscope = \"read\"\nauth = \"oidc\""} {
@@ -488,6 +492,9 @@ func TestInitExtras(t *testing.T) {
 	// uninit removes what lives in the repository and lists the rest.
 	if code, _, errOut := run(t, env, opts, "uninit", "--yes"); code != 0 {
 		t.Fatalf("uninit: %d %s", code, errOut)
+	}
+	if b, err := os.ReadFile(filepath.Join(dir, ".github", "CODEOWNERS")); err == nil {
+		t.Errorf("uninit left the CODEOWNERS that init created for the host-config block: %q", b)
 	}
 	code, out, _ = run(t, env, opts, "uninit", "--external", "--json")
 	var ext struct {

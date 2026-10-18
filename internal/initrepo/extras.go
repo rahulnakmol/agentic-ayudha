@@ -24,10 +24,12 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
+	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/posthog"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/sentry"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
+	"github.com/rahulnakmol/agentic-ayudha/internal/seats"
 )
 
 // The Ready guard (WP2.7) template init --gates installs.
@@ -168,6 +170,9 @@ func (in *Init) gates(_ context.Context, x Extras) error {
 		if err := in.writeFile("gates", p, x.Loops[p]); err != nil {
 			return err
 		}
+	}
+	if err := in.hostConfigOwners(); err != nil {
+		return err
 	}
 	in.note("gates", "secrets", "AAYUDHA_APP_CLIENT_ID, AAYUDHA_APP_PRIVATE_KEY", "unchanged",
 		"the broker needs the bot App's client ID (repository variable) and private key (repository secret); init --identity sets both. Model keys for CI lanes go in repository or environment secrets")
@@ -594,4 +599,110 @@ func (in *Init) updateFile(step, path string, content []byte) error {
 	in.State.PutFile(File{Path: path, SHA256: hash(content), Created: errors.Is(statErr, os.ErrNotExist)})
 	in.note(step, "file", path, "written", "")
 	return nil
+}
+
+// The CODEOWNERS block init --gates owns: the files a host runs from the
+// checkout (hosts.HostConfigOwners). Lines outside it are never changed, and
+// it never loosens one: each path keeps the owners a hand-written line gives it.
+const (
+	hostConfigSection = "host-config" // its File.Section, so uninit removes only the block
+	HostConfigBegin   = "# BEGIN aayudha:host-config (written by `aayu init --gates`: the hooks, MCP servers, and plugins a host runs from this repository)"
+	HostConfigEnd     = "# END aayudha:host-config"
+)
+
+// hostConfigOwners makes a change to any host's executable config need a code
+// owner: a branch can change a hook or MCP command, and a host runs it from
+// the checkout. Each pattern is owned by the person who ran init and by every
+// owner a hand-written line already gives that path, since the block's line
+// is the last match. The block goes before aayu seat's, whose lines win.
+func (in *Init) hostConfigOwners() error {
+	if !seats.ValidLogin(in.Repo.HumanLogin) {
+		in.note("gates", "file", "CODEOWNERS", "kept", "no human login to own the host config")
+		return nil
+	}
+	path := seats.CodeownersPath(in.Root)
+	full := filepath.Join(in.Root, filepath.FromSlash(path))
+	old, err := os.ReadFile(full)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	next := []byte(RenderHostConfigOwners(string(old), in.Repo.HumanLogin))
+	switch {
+	case bytes.Equal(old, next):
+		in.note("gates", "file", path, "unchanged", "")
+		return nil
+	case in.dry():
+		in.note("gates", "file", path, "planned", "block aayudha:host-config")
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(full, next, 0o644); err != nil {
+		return err
+	}
+	in.State.PutFile(File{Path: path, SHA256: hash(next), Created: len(old) == 0, Section: hostConfigSection})
+	in.note("gates", "file", path, "written", "block aayudha:host-config: changes to host hooks and MCP servers need a code owner")
+	return nil
+}
+
+// RenderHostConfigOwners returns existing CODEOWNERS text with the
+// host-config block rebuilt for login, or removed when login is "".
+func RenderHostConfigOwners(existing, login string) string {
+	var hand, seatsBlock []string
+	inHost, inSeats := false, false
+	for _, l := range strings.Split(strings.TrimRight(existing, "\n"), "\n") {
+		switch {
+		case strings.HasPrefix(l, "# BEGIN aayudha:host-config"):
+			inHost = true
+		case inHost:
+			inHost = strings.TrimSpace(l) != HostConfigEnd
+		case strings.HasPrefix(l, "# BEGIN aayudha:seats"):
+			inSeats = true
+			seatsBlock = append(seatsBlock, l)
+		case inSeats:
+			seatsBlock = append(seatsBlock, l)
+			inSeats = strings.TrimSpace(l) != seats.BlockEnd
+		default:
+			hand = append(hand, l)
+		}
+	}
+	rules := identity.ParseCodeowners(strings.Join(hand, "\n"))
+	block := []string{HostConfigBegin}
+	for _, pat := range hosts.HostConfigOwners {
+		path := strings.TrimPrefix(pat, "/")
+		// A path a hand-written line already protects keeps exactly its
+		// owners: adding the login would let it alone approve.
+		owners := []string{login}
+		if o, _, ok := identity.Owners(rules, path); ok && len(o) > 0 {
+			owners = o
+		}
+		block = append(block, pat+"  @"+strings.Join(owners, " @"))
+		// A narrower hand-written line under pat would lose to the block's
+		// line, the later match: restate it after, with its owners.
+		var seen []string
+		for _, r := range rules {
+			sub := strings.TrimPrefix(r.Pattern, "/")
+			if !strings.HasSuffix(path, "/") || sub == path || !strings.HasPrefix(sub, path) || slices.Contains(seen, sub) {
+				continue
+			}
+			seen = append(seen, sub)
+			if o, _, ok := identity.Owners(rules, sub); ok && len(o) > 0 {
+				block = append(block, r.Pattern+"  @"+strings.Join(o, " @"))
+			}
+		}
+	}
+	block = append(block, HostConfigEnd)
+	text := strings.TrimRight(strings.Join(hand, "\n"), "\n")
+	parts := []string{}
+	if strings.TrimSpace(text) != "" {
+		parts = append(parts, text)
+	}
+	if login != "" {
+		parts = append(parts, strings.Join(block, "\n"))
+	}
+	if len(seatsBlock) > 0 {
+		parts = append(parts, strings.Join(seatsBlock, "\n"))
+	}
+	return strings.Join(parts, "\n\n") + "\n"
 }

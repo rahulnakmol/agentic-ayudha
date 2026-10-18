@@ -336,6 +336,9 @@ func failing(t *testing.T) map[string]func(*Probe) {
 			p.Getenv = func(k string) string { return env[k] }
 			p.LookPath = func(string) (string, error) { return "", errors.New("not found") }
 		},
+		"host-config": func(p *Probe) {
+			p.HostConfig = func(context.Context) ([]string, error) { return []string{".github/hooks/aayudha.json"}, nil }
+		},
 		"mcp": func(p *Probe) {
 			overlay(p, map[string]string{"/usr/bin/aayu version": "aayu 1.1.0\n"})
 		},
@@ -420,7 +423,7 @@ func TestBlockingOnlyOnFloorFailures(t *testing.T) {
 	for id, f := range failing(t) {
 		p := healthy(t)
 		f(p)
-		want := id == "git" || id == "git-lfs" || id == "config" || id == "schema" || id == "ledger-media"
+		want := id == "git" || id == "git-lfs" || id == "config" || id == "schema" || id == "ledger-media" || id == "host-config"
 		if got := Blocking(Run(ctx, p)); got != want {
 			t.Errorf("%s failing: blocking = %v, want %v", id, got, want)
 		}

@@ -59,6 +59,10 @@ type Probe struct {
 	Latest         func(ctx context.Context) (string, error)
 	Host           string // --host
 	Verbose        bool   // --verbose: rows add what they would leave out, such as an agent CLI's warnings
+	// HostConfig plans aayu install for the hosts in lock.toml and returns the
+	// executable host config files (hosts.ExecutableConfig) whose content
+	// differs from what it would write; nil outside an installed repository.
+	HostConfig func(ctx context.Context) ([]string, error)
 	// Integration resolves a configured integration and asks its provider for
 	// the key's account and scope (providers.Check); nil when unavailable.
 	Integration func(ctx context.Context, name string) (integrations.Scope, error)
@@ -91,6 +95,7 @@ var Checks = []Check{
 	{"provider-mcp", checkProviderMCP},
 	{"codex-hooks", checkCodexHooks},
 	{"copilot", checkCopilot},
+	{"host-config", checkHostConfig},
 	{"lfs-quota", checkLFSQuota},
 	{"ledger-media", checkLedgerMedia},
 	{"ledger-rulesets", checkLedgerRulesets},

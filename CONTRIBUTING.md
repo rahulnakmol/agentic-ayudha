@@ -247,7 +247,10 @@ job `generate-drift` fails on any difference.
 These paths need a human CODEOWNER review (see [.github/CODEOWNERS](.github/CODEOWNERS)):
 
 `.github/`, `skills/`, `ops/`, `seats/`, `CONSTRAINTS.md`, `internal/config/defaults.toml`, `.aayudha/config.toml`,
-`.agents/`, `.claude/`.
+`.agents/`, `.claude/`; the plugin bundle (`.claude-plugin/`, `.codex-plugin/`, `.cursor-plugin/`, the
+`hosts/*/hooks.json` files, `hosts/amp/aayudha.ts`); and every host's executable config in the checkout
+(`.mcp.json`, `.cursor/`, `.codex/`, `.amp/plugins/`, `.github/hooks/`), the `aayudha:host-config` block that
+`aayu init --gates` writes.
 
 ## Identities and approvals
 
