@@ -85,6 +85,12 @@ func Validate(it Item, stage Stage) []Problem {
 		case KindCriteria:
 			_, cps := ParseCriteria(v)
 			ps = append(ps, cps...)
+		case KindOptions: // a draft Decision may still be collecting its options
+			if f.RequiredAt.index() <= stage.index() {
+				os, ops := ParseOptions(v)
+				ps = append(ps, ops...)
+				ps = append(ps, checkRecommendation(os, it.Fields["recommendation"])...)
+			}
 		case KindLinks:
 			ps = append(ps, checkLinks(t, it, v)...)
 		}
@@ -263,4 +269,35 @@ func checkLinks(t Type, it Item, v string) []Problem {
 		}
 	}
 	return ps
+}
+
+// checkRecommendation checks that a Decision's Recommendation designates one
+// of its options: it opens with the option (RecommendedOption), or an option
+// is marked "(recommended)"; when both, they agree.
+func checkRecommendation(os []Option, rec string) []Problem {
+	if len(os) == 0 || Empty(rec) {
+		return nil
+	}
+	marked := slices.IndexFunc(os, func(o Option) bool { return o.Recommended })
+	n := RecommendedOption(os, rec)
+	switch {
+	case n > len(os):
+		return []Problem{{"recommendation", fmt.Sprintf("opens with option %d, but the Decision has options 1-%d", n, len(os))}}
+	case n > 0 && marked >= 0 && os[marked].N != n:
+		return []Problem{{"options", fmt.Sprintf("option %d is marked \"(recommended)\" but the Recommendation opens with option %d; make them agree", os[marked].N, n)}}
+	case n == 0 && marked < 0:
+		return []Problem{{"recommendation", "opens with none of the options: open it with the one it recommends, \"Option 2, because ...\" or the option's name"}}
+	}
+	return nil
+}
+
+// MentionsOption reports whether text names option as a whole word or
+// phrase, case-insensitively.
+func MentionsOption(text, option string) bool {
+	o := strings.TrimSpace(option)
+	if o == "" {
+		return false
+	}
+	re, err := regexp.Compile(`(?i)(^|[^\pL\pN])` + regexp.QuoteMeta(o) + `($|[^\pL\pN])`)
+	return err == nil && re.MatchString(text)
 }

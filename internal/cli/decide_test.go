@@ -19,7 +19,7 @@ func decisionBody(reversible, links string) string {
 	t, _ := workitems.FindType("decision")
 	return workitems.Render(t, map[string]string{
 		workitems.FieldSummary:    "Which rules engine?",
-		"options":                 "A: in-house. B: a vendor engine.",
+		"options":                 "1. **A.** in-house.\n2. **B.** a vendor engine.",
 		"evaluation":              "A is cheaper to run; B is faster to build.",
 		"recommendation":          "A",
 		workitems.FieldReversible: reversible,
@@ -158,8 +158,10 @@ func TestDecideSLA(t *testing.T) {
 	if code, _, _ := run(t, env, opts, "decide", "2", "--repo", "o/r", "--accept", "A", "--set", "autonomy.approver=someone-else"); code != ExitBlocked {
 		t.Errorf("accept by a human who is not the authority: exit %d, want %d", code, ExitBlocked)
 	}
-	if code, _, _ := run(t, env, opts, "decide", "2", "--repo", "o/r", "--accept", "C"); code != ExitUsage {
-		t.Errorf("accept of an option the Decision does not list: exit %d, want %d", code, ExitUsage)
+	for _, typed := range []string{"C", "3", "in-house"} { // "in-house" is only prose under option A
+		if code, _, _ := run(t, env, opts, "decide", "2", "--repo", "o/r", "--accept", typed); code != ExitUsage {
+			t.Errorf("accept of %q, which is not an option of the Decision: exit %d, want %d", typed, code, ExitUsage)
+		}
 	}
 	if code, out, errOut := run(t, env, opts, "decide", "2", "--repo", "o/r", "--accept", "A"); code != 0 || !strings.Contains(out, "#2 accepted: A, by @o") {
 		t.Fatalf("accept: exit %d: %s %s", code, out, errOut)
@@ -304,7 +306,7 @@ func TestDecidePack(t *testing.T) {
 		}
 	}
 	if rep.Seat != "engineering-manager" || rep.Twin != "Drona" || rep.Stage != "startup" || rep.Question != "Which rules engine?" ||
-		!strings.Contains(rep.Persona, "Speak and work as Drona") || !strings.Contains(rep.Untrusted, "A: in-house.") || len(rep.Sections) != 8 {
+		!strings.Contains(rep.Persona, "Speak and work as Drona") || !strings.Contains(rep.Untrusted, "1. **A.** in-house.") || len(rep.Sections) != 8 {
 		t.Errorf("pack for #2: %+v", rep)
 	}
 	q := pack(0, "Should we add a field to the Tombstone schema or a separate index?")

@@ -22,7 +22,7 @@ func policy(t *testing.T, escalate string) Policy {
 }
 
 func decision(reversible string, labels ...string) Decision {
-	fields := map[string]string{workitems.FieldSummary: "Q", "options": "A: one. B: two.", "evaluation": "E", "recommendation": "A", workitems.FieldReversible: reversible}
+	fields := map[string]string{workitems.FieldSummary: "Q", "options": "1. **A.** one.\n2. **B.** two.", "evaluation": "E", "recommendation": "A", workitems.FieldReversible: reversible}
 	return Decision{Number: 7, State: "open", Labels: append([]string{"type:decision"}, labels...), Created: time.Date(2026, 10, 12, 9, 0, 0, 0, time.UTC),
 		Item: workitems.Item{Number: 7, Title: "Choose", Type: "decision", Fields: fields, Labels: append([]string{"type:decision"}, labels...)}}
 }
@@ -97,6 +97,20 @@ func TestEvaluateAndTexts(t *testing.T) {
 	title, fields := WaiverItem("coverage", 4, "Generated code.")
 	if title != "Waive the coverage floor on #4" || !strings.Contains(fields[workitems.FieldSummary], "Generated code.") || fields[workitems.FieldReversible] != "false" {
 		t.Errorf("waiver item: %s %v", title, fields)
+	}
+	// A generated waiver offers both choices, is Decision-ready, and never
+	// recommends the waiver by default; accepting "waive" names option 1.
+	it := workitems.Item{Type: "decision", Title: title, Fields: fields}
+	opts, rec := Options(it)
+	if ps := workitems.Validate(it, workitems.StageReady); len(ps) != 0 || len(opts) != 2 ||
+		opts[0] != (workitems.Option{N: 1, Name: "Waive", Text: "#4 ships with the `coverage` floor recorded as waived by this Decision."}) ||
+		opts[1].N != 2 || opts[1].Name != "Don't waive" || !strings.Contains(opts[1].Text, "#4 stays blocked") || rec != 1 || !opts[1].Recommended {
+		t.Errorf("waiver options: %v %+v rec %d", ps, opts, rec)
+	}
+	for typed, want := range map[string]int{"waive": 1, "1": 1, "Don't waive": 2, "2": 2, "3": 0, "fix": 0} {
+		if o, ok := Pick(it, typed); o.N != want || ok != (want != 0) {
+			t.Errorf("Pick(%q) = %+v %v, want option %d", typed, o, ok, want)
+		}
 	}
 	if !strings.HasSuffix(Accepted("A", "o", at48, false), "on 2026-10-19.") {
 		t.Error(Accepted("A", "o", at48, false))

@@ -15,7 +15,8 @@ human leaves open goes into an open question, not into the item.
 
 ### Options (`options`, required)
 
-- Which options are on the table, including doing nothing? One per line.
+- Which options are on the table, including doing nothing? At least two, three when you can, each a numbered line
+  `N. **Name.** what it does`; the person accepts one by its number.
 
 ### Evaluation (`evaluation`, required)
 
@@ -23,7 +24,7 @@ human leaves open goes into an open question, not into the item.
 
 ### Recommendation (`recommendation`, required)
 
-- Which option do you recommend, and why?
+- Which option do you recommend, and why? Open with it, `Option N, because …`, so the inbox knows which one it is.
 
 ### Reversible (`reversible`, required)
 

@@ -37,6 +37,7 @@ const (
 	KindMarkdown Kind = "markdown" // free text (form textarea)
 	KindEnum     Kind = "enum"     // one of Options (form dropdown)
 	KindCriteria Kind = "criteria" // numbered observable criteria (form textarea, see ParseCriteria)
+	KindOptions  Kind = "options"  // a Decision's numbered options, at least MinOptions (form textarea, see ParseOptions)
 	KindRefs     Kind = "refs"     // issue references, one per line, e.g. "#12" (form textarea)
 	KindLinks    Kind = "links"    // typed links, one per line, e.g. "supersedes #12" (form textarea)
 )
@@ -322,7 +323,8 @@ var Types = []Type{
 				{ID: FieldSummary, Label: "Question", Kind: KindMarkdown, RequiredAt: StageCreate, Description: "The decision to make and why now."},
 			}},
 			{StageReady, []Field{
-				{ID: "options", Label: "Options", Kind: KindMarkdown, RequiredAt: StageReady},
+				{ID: "options", Label: "Options", Kind: KindOptions, RequiredAt: StageReady,
+					Description: "At least two numbered options, three when you can, each a top-level line \"N. **Name.** what it does\"."},
 				{ID: "evaluation", Label: "Evaluation", Kind: KindMarkdown, RequiredAt: StageReady},
 				{ID: "recommendation", Label: "Recommendation", Kind: KindMarkdown, RequiredAt: StageReady},
 				{ID: FieldReversible, Label: "Reversible", Kind: KindEnum, Options: []string{"true", "false"}, RequiredAt: StageReady,
