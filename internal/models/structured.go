@@ -60,8 +60,9 @@ func Structured(ctx context.Context, complete func(context.Context, Request) (Re
 }
 
 // ReplyError is a structured reply that failed twice, not JSON (Parse) or not
-// valid against the schema, or once by stopping at the token cap (Truncated).
-// Reply is the last reply, verbatim.
+// valid against the schema, or once by stopping at the token cap (Truncated),
+// or any reply that stopped at the cap before writing text. Reply is the last
+// reply, verbatim.
 type ReplyError struct {
 	Reply     string
 	Parse     bool

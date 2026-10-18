@@ -18,16 +18,19 @@ import (
 
 // surveySectionSettings are each section's first output cap and reasoning
 // effort (survey-sections-2026-10.md): about five times the largest section
-// JSON of the pilots plus a reasoning allowance the effort bounds.
+// JSON of the pilots plus a reasoning allowance the effort bounds. In run
+// 39101367105 (tiny-js) engineering, modernisation, and questions each stopped
+// at that first cap and finished at twice it (engineering used 30648 of
+// 32000), so they start there: a cap is not a charge, a draft cut off is.
 var surveySectionSettings = map[string]struct {
 	cap    int
 	effort string
 }{
-	"engineering":   {16000, "high"},
+	"engineering":   {32000, "high"},
 	"capabilities":  {8000, "medium"},
 	"product":       {4000, "medium"},
-	"modernisation": {16000, "high"},
-	"questions":     {8000, "medium"},
+	"modernisation": {32000, "high"},
+	"questions":     {16000, "medium"},
 }
 
 // maxSectionCap is the highest cap a truncated section is rerun at.

@@ -509,6 +509,33 @@ func TestStopReasons(t *testing.T) {
 	}
 }
 
+// A reply that spent its whole cap on thinking has no text: it is a truncated
+// reply (a ReplyError a caller can rerun at a larger cap), while one that ended
+// without text is a plain error.
+func TestNoTextAtCap(t *testing.T) {
+	for _, tc := range []struct {
+		stop      string
+		truncated bool
+	}{{"max_tokens", true}, {"end_turn", false}} {
+		sse := `data: {"type":"message_start","message":{"model":"m","usage":{"input_tokens":5,"output_tokens":1}}}` + "\n\n" +
+			`data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}}` + "\n\n" +
+			`data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"weighing the build files"}}` + "\n\n" +
+			`data: {"type":"message_delta","delta":{"stop_reason":"` + tc.stop + `"},"usage":{"output_tokens":100}}` + "\n\n" +
+			`data: {"type":"message_stop"}` + "\n\n"
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/event-stream")
+			_, _ = w.Write([]byte(sse))
+		}))
+		c := HTTPClient{BaseURL: srv.URL, Style: StyleMessages, Key: "k", HTTP: srv.Client()}
+		r, err := c.Complete(context.Background(), Request{Model: "m", MaxTokens: 100, Stream: true})
+		srv.Close()
+		var re *ReplyError
+		if err == nil || errors.As(err, &re) != tc.truncated || tc.truncated && !re.Truncated || r.TokensOut != 100 {
+			t.Errorf("%s: want truncated=%v, got %+v %v", tc.stop, tc.truncated, r, err)
+		}
+	}
+}
+
 // A streamed Messages reply decodes to the same Response as the plain JSON
 // one: text deltas in order, cached input counted, the final output tokens
 // and stop reason from message_delta. A gateway that ignores "stream" and

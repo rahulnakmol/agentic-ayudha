@@ -328,14 +328,14 @@ func TestTier2SurveySections(t *testing.T) {
 		t.Fatalf("run: status %s, score %d (want 3: two sections at 4), %d sections, floor %q, error %q", r.Status, r.Score, len(r.Sections), r.Floor, r.Error)
 	}
 	eng := r.Sections[0]
-	if eng.Name != "engineering" || eng.Truncations != 1 || eng.MaxTokens != 32000 || eng.FirstScore != 3 || eng.Score != 5 {
-		t.Errorf("engineering: %+v; want one truncation, rerun at 32000, first 3, scored 5", eng)
+	if eng.Name != "engineering" || eng.Truncations != 1 || eng.MaxTokens != 64000 || eng.FirstScore != 3 || eng.Score != 5 {
+		t.Errorf("engineering: %+v; want one truncation, rerun at 64000, first 3, scored 5", eng)
 	}
-	if got := fake.Requests[0]; got.MaxTokens != 16000 || got.Effort != "high" || !got.Messages[0].CacheBreak || !strings.Contains(got.Messages[1].Content, "Write the engineering section") {
+	if got := fake.Requests[0]; got.MaxTokens != 32000 || got.Effort != "high" || !got.Messages[0].CacheBreak || !strings.Contains(got.Messages[1].Content, "Write the engineering section") {
 		t.Errorf("first engineering call: cap %d, effort %q", got.MaxTokens, got.Effort)
 	}
-	if got := fake.Requests[1]; got.MaxTokens != 32000 {
-		t.Errorf("the truncated section reran at %d, want 32000", got.MaxTokens)
+	if got := fake.Requests[1]; got.MaxTokens != 64000 {
+		t.Errorf("the truncated section reran at %d, want 64000", got.MaxTokens)
 	}
 	capCall, capJudge := fake.Requests[5], fake.Requests[6]
 	if capCall.MaxTokens != 8000 || capCall.Effort != "medium" || !strings.Contains(capCall.Messages[1].Content, `"engineering"`) ||

@@ -218,7 +218,9 @@ prefixes = ["survey/"]
 # runs with the full-redraft self-check) cost 14.11 USD; with corrections only, a case is about 11.5 to 12.6. Stage 1
 # runs survey/tinyjs-rust alone for about 15 USD or less: the breaker is checked before each call, and one call costs up
 # to about 1.1 USD, so it is 14. A later stage raises it in its own PR. A case with [survey] rubrics runs section by
-# section (survey-sections-2026-10.md), projected at about 6.8 USD a case of five runs, so 14 is about twice that.
+# section (survey-sections-2026-10.md), projected at about 6.8 USD a case of five runs. Measured on run 39101367105
+# (946065d), one completed run of tinyjs-rust cost 7.86 USD (each section drafted, judged, self-checked, judged again;
+# output and thinking are most of it), so five runs are about 40 USD and 14 stops a case after its first runs.
 max_usd = 14.0
 gate = "advisory"
 events = ["workflow_dispatch"]
