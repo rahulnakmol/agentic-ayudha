@@ -72,6 +72,9 @@ func (s Sentry) Run(ctx context.Context, q Query, resolve Resolver) (Result, Pro
 		b, req, err := s.API.Get(ctx, path, v)
 		pv.Requests = append(pv.Requests, req)
 		if err != nil {
+			// A failed read keeps its place with no answer, so every body
+			// stays paired with the request that fetched it.
+			bodies = append(bodies, nil)
 			return nil, err
 		}
 		bodies = append(bodies, b)
