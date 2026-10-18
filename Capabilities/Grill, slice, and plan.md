@@ -32,15 +32,3 @@ A Goal with a baseline and Stories with criteria can.
 
 It serves the person with the idea, and the twins that build from it.
 See [[Completion Goal (term)]].
-
-## Implementation history
-
-<!-- BEGIN aayudha:brain:history -->
-- Delivered in [[v0.1.0]] by #53, #54, #55, #56, #112.
-<!-- END aayudha:brain:history -->
-
-## Record
-
-<!-- BEGIN aayudha:brain:record -->
-- Recorded in #33 Feature: M5 Seats.
-<!-- END aayudha:brain:record -->
