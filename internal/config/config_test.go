@@ -595,6 +595,16 @@ func TestCaseVariantFileNamesIgnored(t *testing.T) {
 	}
 }
 
+// TestConfigDirUnlistable (Bug #640): files are read only by exact name from
+// the directory's listing, so a config directory that cannot be listed fails
+// the load, naming it, rather than reading as if it held no config.
+func TestConfigDirUnlistable(t *testing.T) {
+	src := fixture(t, map[string]string{"repo/.aayudha": "not a directory\n"})
+	if _, err := Load(src); err == nil || !strings.Contains(err.Error(), filepath.Join(src.RepoDir, ".aayudha")) {
+		t.Fatalf("err = %v; want a failure naming %s", err, filepath.Join(src.RepoDir, ".aayudha"))
+	}
+}
+
 // TestMalformedLocalConfigInCI (Bug #640): CI never parses the local layer,
 // so a committed config.local.toml that is not valid TOML does not fail the
 // load and still gets the notice; outside CI it fails as before.
