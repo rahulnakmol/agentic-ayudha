@@ -34,7 +34,7 @@ and budget used.
 ### The session review loop
 
 Before each push, `build` has a reviewer model of a different family from the builder review the branch's change
-(Decision #656). It uses inspect's own review: the same prompt, schema, and rules as the merge gate's model review.
+(decision 656). It uses inspect's own review: the same prompt, schema, and rules as the merge gate's model review.
 When the reviewer says `fix`, the checkpoint is committed but not pushed. `build` lists each open item: a P0 to P2
 finding with its file, line, and fix, or an unmet criterion (`C<n>`). The agent then does one of two things for each:
 

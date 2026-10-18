@@ -556,7 +556,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		if err != nil {
 			return err
 		}
-		wait, rep, err := e.reviewSession(ctx, &sr, sessionReviewIn{cfg: &l.Config, w: w, repo: repo, n: n, chk: chk, body: is.GetBody(), prBody: pr.GetBody(), wt: res.Worktree, dev: dev, head: head, st: st})
+		wait, rep, err := e.reviewSession(ctx, &sr, sessionReviewIn{cfg: &l.Config, w: w, repo: repo, n: n, chk: chk, body: is.GetBody(), pr: pr, wt: res.Worktree, dev: dev, head: head, st: st})
 		if serr := sr.save(ctx, res.Worktree); serr != nil && err == nil {
 			err = Wrap(ExitInternal, serr)
 		}

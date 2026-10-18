@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	gh "github.com/google/go-github/v90/github"
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/autonomy"
@@ -172,8 +173,8 @@ type sessionReviewIn struct {
 	repo    string
 	n       int
 	chk     ready.Result
-	body    string // the story's body
-	prBody  string // the open PR's body, "" before the first push
+	body    string          // the story's body
+	pr      *gh.PullRequest // the open PR, nil before the first push
 	wt, dev string
 	head    string
 	st      BuildState
@@ -228,7 +229,13 @@ func (e *Env) reviewSession(ctx context.Context, s *sessionReview, a sessionRevi
 			}
 		}
 	}
-	in := inspect.Input{Repo: a.repo, Title: "feat: " + a.chk.Title, Diff: diff, Story: a.n, StoryTitle: a.chk.Title, StoryBody: a.body,
+	// The reviewer reads the open PR's title and body, as the merge gate's does;
+	// before the first push, the title build will open it with.
+	title := "feat: " + strings.ToLower(a.chk.Title[:1]) + a.chk.Title[1:]
+	if a.pr != nil {
+		title = a.pr.GetTitle()
+	}
+	in := inspect.Input{Repo: a.repo, PR: a.pr.GetNumber(), Title: title, Body: a.pr.GetBody(), Diff: diff, Story: a.n, StoryTitle: a.chk.Title, StoryBody: a.body,
 		Criteria: a.chk.Criteria, Pack: pack, Head: a.head, At: e.Now(), Reopened: s.PushedAt, Mode: inspect.ModeGeneral, Voice: InspectVoice(e.Assets)}
 	in.Files = inspect.ParseDiff(diff)
 	in.Areas = inspect.BuildContext(ctx, in.Files, gitSource(a.wt), autonomy.ReadLayers(a.wt).Footprint)
@@ -303,7 +310,7 @@ func (e *Env) sessionBuilder(ctx context.Context, gw *models.Gateway, a sessionR
 		recs[c.Commit] = c.Model
 	}
 	var d declarations
-	d.trailers(a.prBody)
+	d.trailers(a.pr.GetBody())
 	commits, msgs := branchCommits(ctx, a.wt, a.dev)
 	for _, m := range msgs {
 		d.trailers(m)
