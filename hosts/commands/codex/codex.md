@@ -1,7 +1,7 @@
 ---
 description: Hand a Ready story or a goal in words to the Codex cloud agent, or to the Codex CLI (`codex exec`) with --local, then follow its PR through inspect's review.
 argument-hint: <story number | goal in words> [--local]
-allowed-tools: Bash(aayu ready:*), Bash(aayu grill:*), Bash(aayu build:*), Bash(aayu status --work:*)
+allowed-tools: Bash(aayu ready:*), Bash(aayu grill:*), Bash(aayu build:*), Bash(aayu status --work:*), Bash(aayu ship:*)
 ---
 
 # Delegate to Codex

@@ -1,7 +1,7 @@
 ---
 description: Hand a Ready story or a goal in words to an Amp thread in an orb, or to the Amp CLI (`amp -x`) with --local, then follow its PR through inspect's review.
 argument-hint: <story number | goal in words> [--local]
-allowed-tools: Bash(aayu ready:*), Bash(aayu grill:*), Bash(aayu build:*), Bash(aayu status --work:*)
+allowed-tools: Bash(aayu ready:*), Bash(aayu grill:*), Bash(aayu build:*), Bash(aayu status --work:*), Bash(aayu ship:*)
 ---
 
 # Delegate to Amp

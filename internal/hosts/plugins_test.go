@@ -263,12 +263,19 @@ func TestPluginManifests(t *testing.T) {
 	for _, c := range cmds {
 		f, _ := filepath.Glob("../../hosts/commands/*/" + c.Name + ".md")
 		b, _ := os.ReadFile(f[0])
+		granted := ""
 		for _, m := range tools.FindAllStringSubmatch(string(b), -1) {
+			granted += m[1]
 			for _, call := range regexp.MustCompile(`Bash\(([^)]*)\)`).FindAllStringSubmatch(m[1], -1) {
 				if cmd, _ := HumanOnlyCommand(strings.TrimSuffix(call[1], ":*")); cmd != "" {
 					t.Errorf("%s grants %s, a human-only command", c.Name, call[1])
 				}
 			}
+		}
+		// A delegated workflow that tells the agent to ship must let it,
+		// or Claude Code prompts (or refuses) at merge-ready.
+		if strings.Contains(c.Body, "`aayu ship <pr>`") && granted != "" && !strings.Contains(granted, "Bash(aayu ship:*)") {
+			t.Errorf("%s tells the agent to run aayu ship but does not grant it", c.Name)
 		}
 	}
 	amp, _ := os.ReadFile("../../hosts/amp/aayudha.ts")

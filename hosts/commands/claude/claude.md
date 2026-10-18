@@ -1,7 +1,7 @@
 ---
 description: Hand a Ready story or a goal in words to Claude Code on the web (`claude --cloud`), or to the Claude Code CLI (`claude -p`) with --local, then follow its PR through inspect's review.
 argument-hint: <story number | goal in words> [--local]
-allowed-tools: Bash(aayu ready:*), Bash(aayu grill:*), Bash(aayu build:*), Bash(aayu status --work:*)
+allowed-tools: Bash(aayu ready:*), Bash(aayu grill:*), Bash(aayu build:*), Bash(aayu status --work:*), Bash(aayu ship:*)
 ---
 
 # Delegate to Claude Code
