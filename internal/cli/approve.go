@@ -140,10 +140,10 @@ func batchDecision(d decide.Decision, o workitems.Option) batchItem {
 	if os, _ := decide.Options(d.Item); len(os) > 0 {
 		b.WriteString("Options:\n")
 		for _, o := range os {
-			b.WriteString(clip(termText(optionLine(o)), 300) + "\n")
+			b.WriteString(termText(optionLine(o)) + "\n") // in full: the person decides from this alone
 		}
 	}
-	if rec := clip(strings.TrimSpace(d.Item.Fields["recommendation"]), 500); rec != "" {
+	if rec := strings.TrimSpace(d.Item.Fields["recommendation"]); rec != "" {
 		b.WriteString("Recommendation: " + termText(strings.ReplaceAll(rec, "\n", " ")) + "\n")
 	}
 	it.Detail = b.String() // untrusted issue text: render shows it only inside a code fence

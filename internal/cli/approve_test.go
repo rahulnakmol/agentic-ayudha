@@ -537,14 +537,16 @@ func TestBatchFallsBackWhenApproverCredentialIsReachable(t *testing.T) {
 	// A locked macOS or Windows keychain may hold the founder's token once unlocked: it counts.
 	lockableKeychain = true
 	t.Cleanup(func() { lockableKeychain = runtime.GOOS == "darwin" || runtime.GOOS == "windows" })
-	d9 := g.AddIssue("Choose the queue store", decisionBody("true", ""), "type:decision", "status:ready")
+	// A long Recommendation is shown in full: the person decides from the batch alone.
+	longRec := "A, because " + strings.Repeat("it is cheaper to run and we know it well; ", 20) + "and the vendor's exit clause costs a year's fee."
+	d9 := g.AddIssue("Choose the queue store", strings.Replace(decisionBody("true", ""), "### Recommendation\n\nA\n", "### Recommendation\n\n"+longRec+"\n", 1), "type:decision", "status:ready")
 	code, _, errOut = run(t, map[string]string{"AAYU_GITHUB_TOKEN": "founder-token", "AAYU_BOT_TOKEN": "bot-token", "AMP_THREAD_ID": "T-1"},
 		Options{GitHubAPI: g.URL(), GitHubGap: -1, DevicePoll: time.Millisecond, Secrets: secrets.New(lockedKeychain{})},
 		"decide", strconv.Itoa(d9.Number), "--accept", "A", "--repo", "o/r", "--set", "identity.app_id=42", "--set", "identity.app_slug=aayudha-bot", "--set", "approvals.approvers=someone")
 	g.Mu.Lock()
 	body = g.Issues[d9.Number].Comments[len(g.Issues[d9.Number].Comments)-1].Body
 	g.Mu.Unlock()
-	if code != ExitBlocked || !strings.Contains(body, "aayu secrets store (unreadable now)") {
+	if code != ExitBlocked || !strings.Contains(body, "aayu secrets store (unreadable now)") || !strings.Contains(body, "Recommendation: "+longRec+"\n") {
 		t.Fatalf("locked keychain: exit %d %s\n%s", code, errOut, body)
 	}
 	lockableKeychain = false // Linux without a Secret Service: nothing to hold
