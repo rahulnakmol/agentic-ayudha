@@ -1,0 +1,475 @@
+{
+  "source": "Shaped from Sentry's OpenAPI spec (getsentry/sentry-api-schema openapi-derefed.json at b1eac6b, 2026-10-16, read 2026-10-17), operations listOrganizationDetectors, listOrganizationWorkflows, and listOrganizationMonitors: the detector and workflow bodies are the spec's examples; the monitor body follows the monitor schema (the spec has no example). Not live-proven: no Sentry account recorded this.",
+  "interactions": [
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/organizations/acme/detectors/?project=4507",
+      "status": 200,
+      "response": [
+        {
+          "id": "123",
+          "projectId": "4507",
+          "name": "Error Monitor",
+          "description": null,
+          "type": "error",
+          "workflowIds": [
+            "12345"
+          ],
+          "owner": null,
+          "createdBy": null,
+          "dateCreated": "2025-03-12T11:15:50.764865Z",
+          "dateUpdated": "2025-06-17T14:04:02.485354Z",
+          "dataSources": null,
+          "conditionGroup": null,
+          "config": {},
+          "enabled": true,
+          "latestGroup": {
+            "id": "123456789",
+            "title": "This is an example Python exception",
+            "culprit": "/api/0/test/example/",
+            "shortId": "WEB-1",
+            "level": "info",
+            "status": "unresolved",
+            "substatus": "escalating",
+            "platform": "python",
+            "project": {
+              "id": "4507",
+              "name": "Web",
+              "slug": "web",
+              "platform": "python"
+            },
+            "type": "default",
+            "issueType": "error",
+            "issueCategory": "error",
+            "metadata": {
+              "title": "This is an example Python exception",
+              "sdk": {
+                "name": "sentry.python.django",
+                "name_normalized": "sentry.python"
+              },
+              "severity": 0,
+              "severity_reason": "log_level_info",
+              "initial_priority": 25
+            },
+            "numComments": 0,
+            "firstSeen": "2026-01-08T21:00:59.737468Z",
+            "lastSeen": "2026-01-08T21:23:45.723716Z"
+          }
+        },
+        {
+          "id": "234567891",
+          "projectId": "4507",
+          "name": "[us] Example",
+          "description": null,
+          "type": "uptime_domain_failure",
+          "workflowIds": [],
+          "owner": {
+            "type": "team",
+            "id": "1234",
+            "name": "abc"
+          },
+          "createdBy": null,
+          "dateCreated": "2025-04-21T21:56:32.445528Z",
+          "dateUpdated": "2025-10-23T00:07:24.809466Z",
+          "dataSources": [
+            {
+              "id": "271218",
+              "organizationId": "1",
+              "type": "uptime_subscription",
+              "sourceId": "267409",
+              "queryObj": {
+                "url": "https://example.com",
+                "method": "POST",
+                "body": "{\n  \"level\": \"info\",\n  \"message\": \"Test-Event\",\n  \"platform\": \"javascript\"\n}",
+                "headers": [
+                  [
+                    "content-type",
+                    "application/json"
+                  ],
+                  [
+                    "user-agent",
+                    "Sentry Test"
+                  ]
+                ],
+                "intervalSeconds": 60,
+                "timeoutMs": 5000,
+                "traceSampling": false
+              }
+            }
+          ],
+          "conditionGroup": {
+            "id": "56789",
+            "organizationId": "1",
+            "logicType": "any",
+            "conditions": [
+              {
+                "id": "123456",
+                "type": "eq",
+                "comparison": "failure",
+                "conditionResult": 75
+              },
+              {
+                "id": "234567",
+                "type": "eq",
+                "comparison": "success",
+                "conditionResult": 0
+              }
+            ],
+            "actions": []
+          },
+          "config": {
+            "mode": 1,
+            "environment": "us",
+            "downtimeThreshold": 3,
+            "recoveryThreshold": 1
+          },
+          "enabled": true,
+          "latestGroup": null
+        },
+        {
+          "id": "1234567",
+          "projectId": "4507",
+          "name": "Test Alert",
+          "description": null,
+          "type": "metric_issue",
+          "workflowIds": [
+            "1234567"
+          ],
+          "owner": {
+            "type": "user",
+            "id": "12345",
+            "name": "jane@example.com",
+            "email": "jane@example.com"
+          },
+          "createdBy": "12345",
+          "dateCreated": "2025-04-28T22:46:12.469771Z",
+          "dateUpdated": "2025-07-29T20:57:06.680844Z",
+          "dataSources": [
+            {
+              "id": "56789",
+              "organizationId": "1",
+              "type": "snuba_query_subscription",
+              "sourceId": "45678",
+              "queryObj": {
+                "id": "34567",
+                "status": 0,
+                "subscription": "12/3456789",
+                "snubaQuery": {
+                  "id": "56789",
+                  "dataset": "events_analytics_platform",
+                  "query": "",
+                  "aggregate": "avg(span.duration)",
+                  "timeWindow": 14400,
+                  "environment": null,
+                  "eventTypes": [
+                    "trace_item_span"
+                  ],
+                  "extrapolationMode": "unknown"
+                }
+              }
+            }
+          ],
+          "conditionGroup": {
+            "id": "12345",
+            "organizationId": "1",
+            "logicType": "any",
+            "conditions": [
+              {
+                "id": "456789",
+                "type": "gt",
+                "comparison": 1600,
+                "conditionResult": 75
+              },
+              {
+                "id": "345678",
+                "type": "lte",
+                "comparison": 1600,
+                "conditionResult": 0
+              }
+            ],
+            "actions": []
+          },
+          "config": {
+            "detectionType": "static",
+            "comparisonDelta": null
+          },
+          "enabled": true,
+          "latestGroup": null
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/organizations/acme/workflows/",
+      "status": 200,
+      "response": [
+        {
+          "id": "123",
+          "name": "Send a notification for high priority issues",
+          "organizationId": "1",
+          "createdBy": null,
+          "dateCreated": "2025-03-18T20:48:55.495059Z",
+          "dateUpdated": "2025-03-18T20:48:55.579094Z",
+          "triggers": {
+            "id": "12345",
+            "organizationId": "1",
+            "logicType": "any-short",
+            "conditions": [
+              {
+                "id": "2345",
+                "type": "new_high_priority_issue",
+                "comparison": true,
+                "conditionResult": true
+              },
+              {
+                "id": "3456",
+                "type": "existing_high_priority_issue",
+                "comparison": true,
+                "conditionResult": true
+              }
+            ],
+            "actions": []
+          },
+          "actionFilters": [
+            {
+              "id": "5678",
+              "organizationId": "1",
+              "logicType": "all",
+              "conditions": [],
+              "actions": [
+                {
+                  "id": "234",
+                  "type": "email",
+                  "integrationId": null,
+                  "data": {
+                    "fallthroughType": "ActiveMembers"
+                  },
+                  "config": {
+                    "targetType": "issue_owners",
+                    "targetDisplay": null,
+                    "targetIdentifier": null
+                  },
+                  "status": "active"
+                }
+              ]
+            }
+          ],
+          "environment": null,
+          "config": {
+            "frequency": 30
+          },
+          "detectorIds": [],
+          "enabled": true,
+          "lastTriggered": null,
+          "owner": "user:123456"
+        },
+        {
+          "id": "456",
+          "name": "Notify team #example-team",
+          "organizationId": "1",
+          "createdBy": "34567",
+          "dateCreated": "2026-01-15T23:46:39.594915Z",
+          "dateUpdated": "2026-01-15T23:46:39.594903Z",
+          "triggers": {
+            "id": "12345",
+            "organizationId": "1",
+            "logicType": "any-short",
+            "conditions": [],
+            "actions": []
+          },
+          "actionFilters": [
+            {
+              "id": "6789",
+              "organizationId": "1",
+              "logicType": "any-short",
+              "conditions": [
+                {
+                  "id": "5678",
+                  "type": "event_frequency_count",
+                  "comparison": {
+                    "value": 100,
+                    "interval": "1h"
+                  },
+                  "conditionResult": true
+                }
+              ],
+              "actions": [
+                {
+                  "id": "1234",
+                  "type": "email",
+                  "integrationId": null,
+                  "data": {},
+                  "config": {
+                    "targetType": "team",
+                    "targetDisplay": null,
+                    "targetIdentifier": "1234567890"
+                  },
+                  "status": "active"
+                }
+              ]
+            }
+          ],
+          "environment": null,
+          "config": {
+            "frequency": 1440
+          },
+          "detectorIds": [],
+          "enabled": true,
+          "lastTriggered": null,
+          "owner": "team:456789"
+        },
+        {
+          "id": "789",
+          "name": "Notify Jane Doe",
+          "organizationId": "1",
+          "createdBy": "2345",
+          "dateCreated": "2026-01-15T23:46:39.594915Z",
+          "dateUpdated": "2026-01-15T23:49:57.697583Z",
+          "triggers": {
+            "id": "56789",
+            "organizationId": "1",
+            "logicType": "any-short",
+            "conditions": [],
+            "actions": []
+          },
+          "actionFilters": [
+            {
+              "id": "56789",
+              "organizationId": "1",
+              "logicType": "any-short",
+              "conditions": [
+                {
+                  "id": "234567",
+                  "type": "event_unique_user_frequency_count",
+                  "comparison": {
+                    "value": 100,
+                    "filters": [
+                      {
+                        "key": "foo",
+                        "match": "eq",
+                        "value": "bar"
+                      }
+                    ],
+                    "interval": "1h"
+                  },
+                  "conditionResult": true
+                }
+              ],
+              "actions": [
+                {
+                  "id": "456789",
+                  "type": "email",
+                  "integrationId": null,
+                  "data": {},
+                  "config": {
+                    "targetType": "user",
+                    "targetDisplay": null,
+                    "targetIdentifier": "123456"
+                  },
+                  "status": "active"
+                }
+              ]
+            }
+          ],
+          "environment": null,
+          "config": {
+            "frequency": 1440
+          },
+          "detectorIds": [],
+          "enabled": true,
+          "lastTriggered": null,
+          "owner": null
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/organizations/acme/monitors/?project=4507",
+      "status": 200,
+      "response": [
+        {
+          "id": "c1d2e3f4-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+          "name": "Nightly billing job",
+          "slug": "nightly-billing",
+          "status": "active",
+          "isMuted": false,
+          "isUpserting": false,
+          "config": {
+            "schedule_type": "crontab",
+            "schedule": "0 2 * * *",
+            "checkin_margin": 5,
+            "max_runtime": 30,
+            "timezone": "UTC",
+            "failure_issue_threshold": 1,
+            "recovery_threshold": 1,
+            "alert_rule_id": null
+          },
+          "dateCreated": "2026-09-01T10:00:00Z",
+          "project": {
+            "id": "4507",
+            "slug": "web",
+            "name": "Web",
+            "platform": "python",
+            "dateCreated": "2018-11-06T21:19:58.536Z",
+            "isBookmarked": false,
+            "isMember": true,
+            "features": [
+              "releases"
+            ],
+            "firstEvent": null,
+            "firstTransactionEvent": true,
+            "access": [],
+            "hasAccess": true,
+            "hasFeedbacks": false,
+            "hasFlags": true,
+            "hasMinifiedStackTrace": false,
+            "hasMonitors": true,
+            "hasNewFeedbacks": false,
+            "hasProfiles": true,
+            "hasReplays": true,
+            "hasSessions": true,
+            "hasInsightsHttp": true,
+            "hasInsightsDb": false,
+            "hasInsightsAssets": true,
+            "hasInsightsAppStart": false,
+            "hasInsightsScreenLoad": false,
+            "hasInsightsVitals": false,
+            "hasInsightsCaches": false,
+            "hasInsightsQueues": false,
+            "hasInsightsAgentMonitoring": false,
+            "hasInsightsMCP": false,
+            "hasLogs": false,
+            "hasTraceMetrics": false,
+            "isInternal": false,
+            "isPublic": false,
+            "avatar": {
+              "avatarType": "letter_avatar",
+              "avatarUuid": null
+            },
+            "color": "#3f70bf",
+            "status": "active"
+          },
+          "environments": {
+            "name": "production",
+            "status": "error",
+            "isMuted": false,
+            "dateCreated": "2026-09-01T10:00:00Z",
+            "lastCheckIn": "2026-10-17T02:00:04Z",
+            "nextCheckIn": "2026-10-18T02:00:00Z",
+            "nextCheckInLatest": "2026-10-18T02:05:00Z",
+            "activeIncident": {
+              "startingTimestamp": "2026-10-17T02:00:04Z",
+              "resolvingTimestamp": "2026-10-17T02:00:04Z",
+              "brokenNotice": null
+            }
+          },
+          "owner": {
+            "type": "team",
+            "id": "2",
+            "name": "powerful-abolitionist"
+          }
+        }
+      ]
+    }
+  ]
+}
