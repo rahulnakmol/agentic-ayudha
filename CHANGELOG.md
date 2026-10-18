@@ -108,6 +108,7 @@ for this release.
 
 - GitHub Copilot is a host: `aayu install --host copilot --apply` writes its skills, MCP server, hooks, and post-tool hook (#491, #549).
 - `aayu install --env --apply` installs a pre-push hook that runs the `[[gate]]` checks in `.aayudha/env.toml`, one local gate that mirrors your required CI jobs (#418).
+- The `triage-daily` loop runs at 09:00, 13:00, 17:00, and 21:00 each weekday instead of once each morning, and a loop whose local hour falls on the next day in UTC now runs in every timezone (#682).
 - `aayu build` has a 60 USD cost limit that applies only to metered spend, and pauses at a subscription's usage limit (#490).
 - UI review runs on Gemini 4 Argon through GitHub Copilot when Copilot is signed in, and on Gemini 3.8 Flash at high effort through the AI gateway otherwise (#434, #460, #548).
 - `[hosts.cursor] plan` picks lane defaults that your Cursor plan includes (#535).
