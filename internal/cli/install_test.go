@@ -297,6 +297,14 @@ func TestHookProviderCalls(t *testing.T) {
 			}
 		})
 	}
+	// A Sentry MCP server registered under a name that does not say so is
+	// known by its package.
+	if err := os.WriteFile(filepath.Join(repo, ".mcp.json"), []byte(`{"mcpServers":{"errors":{"command":"npx","args":["-y","@sentry/mcp-server@latest"]}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, errs := runIn(t, env, opts, `{"tool_name":"mcp__errors__update_issue","tool_input":{}}`, "hook", "pre-tool", "--host", "claude"); code != 2 || !strings.Contains(errs, "`update_issue`") {
+		t.Fatalf("a renamed Sentry server's write: exit %d %s; want it refused", code, errs)
+	}
 	// The repository's protected config opts in to personal data.
 	cfg := filepath.Join(repo, ".aayudha", "config.toml")
 	_ = os.MkdirAll(filepath.Dir(cfg), 0o755)

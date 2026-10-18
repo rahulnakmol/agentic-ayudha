@@ -154,10 +154,10 @@ In Codex, trust the three aayudha hooks in `/hooks` first, or none of this runs.
 
 > **Honest status:** the hook has known gaps.
 >
-> - It recognises a provider's MCP server by name. In Claude Code, Codex, and Amp the registered name must contain
->   `posthog` or `sentry`; in Cursor its URL or command must. Keep the provider's name in it.
-> - It sees a provider CLI only when it is the command itself. One wrapped in a subshell, such as
->   `sh -c 'sentry-cli releases new 1.2.3'`, is not checked.
+> - It recognises a provider's MCP server by its registered name, URL, command, or package, as your host configs
+>   record them. A server reached through a generic proxy that never mentions `posthog` or `sentry` is not recognised.
+> - It sees a provider CLI behind `sh -c`, `bash -c`, `env`, `timeout`, `xargs`, `nohup`, a subshell, or a command
+>   substitution, but not one started from a script file or through an alias.
 > - `allow_pii` gates only the tools on the lists' `[pii]` sections and the `sentry` CLI's `replay` and `feedback`
 >   reads. A general query, such as HogQL through `execute-sql` or `posthog-cli exp query run`, can still select
 >   person properties.
