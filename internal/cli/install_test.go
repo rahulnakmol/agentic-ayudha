@@ -494,3 +494,17 @@ func TestInstallRefusesCopilotEnvAndLoops(t *testing.T) {
 		t.Error("a refused install wrote to the repository")
 	}
 }
+
+// setInspectReviewer writes the chosen tool into [inspect], adding the line or
+// the section as needed and leaving the other sections alone.
+func TestSetInspectReviewer(t *testing.T) {
+	for _, c := range []struct{ in, want string }{
+		{"version = 1", "version = 1\n\n[inspect]\nreviewer = \"codex\"\n"},
+		{"version = 1\n\n[inspect]\nmode = \"general\"\n\n[budget]\nreviewer = \"x\"\n", "version = 1\n\n[inspect]\nreviewer = \"codex\"\nmode = \"general\"\n\n[budget]\nreviewer = \"x\"\n"},
+		{"[inspect]\nreviewer = \"auto\"\n", "[inspect]\nreviewer = \"codex\"\n"},
+	} {
+		if got := setInspectReviewer(c.in, "codex"); got != c.want {
+			t.Errorf("setInspectReviewer(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}

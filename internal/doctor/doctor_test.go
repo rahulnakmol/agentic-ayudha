@@ -564,6 +564,12 @@ func TestCheckStates(t *testing.T) {
 			p.Config = load(t, "inspect.apps=codex", "inspect.reviewer=codex")
 		}, Pass, "move up: no reviewer can be shown to differ from an unknown builder"},
 		{"a person reviews by configuration", checkReviewRung, func(p *Probe) { p.Config = load(t, "inspect.reviewer=human") }, Pass, `human  a person reviews every PR ([inspect] reviewer = "human")`},
+		{"grok with no paid reviewer", checkReviewRung, func(p *Probe) { p.Config = load(t, "inspect.reviewer=grok") }, Fail, `[inspect] reviewer = "grok" needs [inspect] paid_reviewer`},
+		{"a same-family app with a paid reviewer of another family", checkReviewRung, func(p *Probe) {
+			p.Host = "claude"
+			p.Config = load(t, "inspect.apps=claude", "inspect.reviewer=claude", "inspect.paid_reviewer=grok-4.7")
+		}, Pass, `move up (paid, opt-in): set [inspect] reviewer = "grok" to have grok-4.7 (xai) review`},
+		{"the review lane's model", checkReviewerApps, func(p *Probe) { p.Config = load(t, "inspect.reviewer=model") }, Warn, `[inspect] reviewer = "model": the merge gate calls the review lane's model`},
 		{"rung C for a Claude Code build", checkReviewRung, func(p *Probe) {
 			p.Host = "claude"
 			p.Config = load(t, "inspect.apps=claude", "inspect.reviewer=claude")

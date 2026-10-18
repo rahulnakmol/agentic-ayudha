@@ -12,6 +12,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
+	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
 const pkgDiff = `diff --git a/internal/report/percent.go b/internal/report/percent.go
@@ -861,5 +862,54 @@ func TestJudgeCarriesClassInstances(t *testing.T) {
 	res, _, _ = Runner{}.Judge(context.Background(), in, st, AppReply{Reply: Reply{Disposition: Merge, Summary: "s", Findings: []Finding{}}, Head: in.Head, Reviewed: both})
 	if res.Disposition != Merge || len(res.Findings) != 0 {
 		t.Fatalf("every instance's file changed: %s %+v", res.Disposition, res.Findings)
+	}
+}
+
+// CodeRabbit's and Greptile's own reviews of the head are read
+// deterministically (Story #635): the receipt, then each inline comment on the
+// head with a severity badge is a finding; a thread reply, a comment on another
+// commit, or no receipt for the head is not a reply.
+func TestReadServiceReply(t *testing.T) {
+	head, old := strings.Repeat("a", 40), strings.Repeat("b", 40)
+	at := time.Date(2026, 10, 18, 14, 0, 0, 0, time.UTC)
+	criteria := []workitems.Criterion{{N: 1}, {N: 2}}
+	choice := func(app string) Choice { return ChooseReviewer(app, []string{app}, nil, Builder{}, "") }
+	const rabbit, greptile = "coderabbitai[bot]", "greptile-apps[bot]"
+	major := "**🔒 Security** | **🟠 Major** | **⚡ Quick win**\n\n**Guard an empty total.**\n\n`Percent(0, 0)` divides by zero, so criterion 1 is not met.\n\n<!-- This is an auto-generated comment by CodeRabbit -->"
+	trivial := "**🧹 Nitpick** | **🔵 Trivial**\n\n**Name the constant.**\n\nA magic number."
+	rabbitPosts := []Post{
+		{Kind: "comment", ID: 1, Login: rabbit, Body: "<!-- walkthrough -->\n## Walkthrough\nAdds Percent.", Updated: at},
+		{Kind: "review", ID: 2, Login: rabbit, Commit: head, Body: "**Actionable comments posted: 1**", Updated: at},
+		{Kind: "inline", ID: 3, Login: rabbit, Commit: head, Path: "internal/report/percent.go", Line: 9, Body: major, Updated: at},
+		{Kind: "inline", ID: 4, Login: rabbit, Commit: head, Path: "internal/report/percent.go", Line: 2, Body: trivial, Updated: at},
+		{Kind: "inline", ID: 5, Login: rabbit, Commit: head, Path: "internal/report/percent.go", Line: 3, Body: "Thanks, noted.", Updated: at},
+		{Kind: "inline", ID: 6, Login: rabbit, Commit: old, Path: "internal/report/percent.go", Line: 4, Body: major, Updated: at},
+	}
+	r, err := ReadReply(choice(AppCodeRabbit), rabbitPosts, head, time.Time{}, nil, criteria, []string{"internal/report/percent.go"})
+	if err != nil || r.Disposition != Fix || len(r.Findings) != 2 || r.Findings[0].Severity != "P1" || r.Findings[0].Title != "Guard an empty total." ||
+		r.Findings[0].Line != 9 || r.Findings[0].Category != "security" || r.Findings[1].Severity != "P3" || r.Findings[1].Category != "bug" || r.Criteria[0].Verdict != "unmet" || r.Criteria[1].Verdict != "unclear" {
+		t.Fatalf("coderabbit: %v %+v", err, r)
+	}
+	// Without its review of the head, CodeRabbit has not replied; a rate-limit
+	// comment after the request makes it unavailable.
+	if _, err := ReadReply(choice(AppCodeRabbit), rabbitPosts[2:], head, time.Time{}, nil, criteria, nil); !errors.Is(err, ErrNoReply) {
+		t.Fatalf("coderabbit without a review of the head: %v", err)
+	}
+	limited := append(slices.Clone(rabbitPosts[:1]), Post{Kind: "comment", ID: 7, Login: rabbit, Body: "Rate limit exceeded: wait 12 minutes.", Updated: at})
+	if _, err := ReadReply(choice(AppCodeRabbit), limited, head, at.Add(-time.Minute), nil, criteria, nil); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("coderabbit at its rate limit: %v", err)
+	}
+	// Greptile: its summary names the head; a P2 does not block.
+	greptilePosts := []Post{
+		{Kind: "comment", ID: 8, Login: greptile, Body: "<!-- greptile_summary -->\n\n<sub>Last reviewed commit: [\"feat\"](https://github.com/o/r/commit/" + head + ")</sub>", Updated: at},
+		{Kind: "inline", ID: 9, Login: greptile, Commit: head, Path: "internal/report/percent.go", Line: 4,
+			Body: `<a href="#"><img alt="P2" src="https://greptile-static-assets.s3.amazonaws.com/badges/p2.svg" align="top"></a> **Comment restates the code**` + "\n\nThe doc comment repeats the function."},
+	}
+	r, err = ReadReply(choice(AppGreptile), greptilePosts, head, time.Time{}, nil, criteria, nil)
+	if err != nil || r.Disposition != Merge || len(r.Findings) != 1 || r.Findings[0].Severity != "P2" || r.Findings[0].Title != "Comment restates the code" {
+		t.Fatalf("greptile: %v %+v", err, r)
+	}
+	if _, err := ReadReply(choice(AppGreptile), greptilePosts, old, time.Time{}, nil, criteria, nil); !errors.Is(err, ErrNoReply) {
+		t.Fatalf("greptile's summary of another head: %v", err)
 	}
 }
