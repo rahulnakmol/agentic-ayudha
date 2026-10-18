@@ -46,13 +46,13 @@ var runUserDir = func() (string, error) {
 // starting anything. go-keyring's D-Bus library otherwise runs dbus-launch,
 // which forks a session dbus-daemon that outlives aayu: one per probe on a
 // headless machine. It mirrors the lookup godbus v5 runs before it falls back
-// to dbus-launch: an address it would dial, which an empty or autolaunch: one
+// to dbus-launch: an address it would dial, which an empty one or exactly autolaunch:
 // is not. macOS and Windows use no D-Bus.
 func sessionBus() error {
 	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
 		return nil
 	}
-	dialable := func(a string) bool { return a != "" && !strings.HasPrefix(a, "autolaunch:") }
+	dialable := func(a string) bool { return a != "" && a != "autolaunch:" } // godbus launches for exactly these; it dials any other list as is
 	if dialable(os.Getenv("DBUS_SESSION_BUS_ADDRESS")) {
 		return nil
 	}

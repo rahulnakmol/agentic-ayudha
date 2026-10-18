@@ -62,3 +62,19 @@ func TestKeychainStartsNoSessionBus(t *testing.T) {
 		t.Errorf("the keychain started %d session dbus-daemon(s)", after-before)
 	}
 }
+
+// godbus launches only for an empty address or exactly autolaunch:; any other
+// list it dials as is, so the keychain stays available for it.
+func TestSessionBusAddressList(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("the session-bus check is for Linux")
+	}
+	old := runUserDir
+	run := t.TempDir()
+	runUserDir = func() (string, error) { return run, nil }
+	t.Cleanup(func() { runUserDir = old })
+	t.Setenv("DBUS_SESSION_BUS_ADDRESS", "autolaunch:;unix:path=/run/user/1000/bus")
+	if err := sessionBus(); err != nil {
+		t.Errorf("a list with a usable address after autolaunch: was refused: %v", err)
+	}
+}
