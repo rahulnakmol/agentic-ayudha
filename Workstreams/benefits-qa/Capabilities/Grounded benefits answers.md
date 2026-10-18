@@ -39,9 +39,9 @@ Release #144 shipped it on a rolling snapshot.
 ## Record
 
 <!-- BEGIN aayudha:brain:record -->
-- Recorded in #127 Feature: Grounded answers API (benefits-qa).
-- Recorded in #128 Feature: Answer analytics (benefits-qa).
-- Recorded in #129 Feature: Ask page (benefits-qa).
+- Recorded in #127 Feature: Grounded answers API \(benefits-qa\).
+- Recorded in #128 Feature: Answer analytics \(benefits-qa\).
+- Recorded in #129 Feature: Ask page \(benefits-qa\).
 <!-- END aayudha:brain:record -->
 
 ## Implementation history

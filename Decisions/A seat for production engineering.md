@@ -44,5 +44,5 @@ See [[Production engineering]].
 ## Record
 
 <!-- BEGIN aayudha:brain:record -->
-- Recorded in #324 Decision: Decision: the Production Engineer seat (Atlas): persona, layers, verbs, telemetry access, and gates.
+- Recorded in #324 Decision: Decision: the Production Engineer seat \(Atlas\): persona, layers, verbs, telemetry access, and gates.
 <!-- END aayudha:brain:record -->

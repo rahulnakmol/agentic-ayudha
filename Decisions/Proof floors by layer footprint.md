@@ -45,5 +45,5 @@ See [[Proof floors by layer footprint, revised]].
 ## Record
 
 <!-- BEGIN aayudha:brain:record -->
-- Recorded in #480 Decision: Decision: proof floors by layer footprint (code quality, UX, API and CLI developer experience, DAST on by default) and a push-and-nightly security workflow.
+- Recorded in #480 Decision: Decision: proof floors by layer footprint \(code quality, UX, API and CLI developer experience, DAST on by default\) and a push-and-nightly security workflow.
 <!-- END aayudha:brain:record -->

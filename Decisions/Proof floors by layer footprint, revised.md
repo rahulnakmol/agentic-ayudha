@@ -45,5 +45,5 @@ PR #500 adds the push and nightly security scan.
 ## Record
 
 <!-- BEGIN aayudha:brain:record -->
-- Recorded in #485 Decision: Decision: proof floors by layer footprint, revised: #480 with the founder's DAST guardrails (active scan only of apps verify starts, web and api only, Docker or Podman, measured cost).
+- Recorded in #485 Decision: Decision: proof floors by layer footprint, revised: \#480 with the founder's DAST guardrails \(active scan only of apps verify starts, web and api only, Docker or Podman, measured cost\).
 <!-- END aayudha:brain:record -->

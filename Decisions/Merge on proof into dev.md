@@ -46,5 +46,5 @@ PR #617 and PR #621 build it.
 ## Record
 
 <!-- BEGIN aayudha:brain:record -->
-- Recorded in #593 Decision: Agent PRs into dev merge on proof through aayu ship; which narrow set still needs a person (supersedes #572 for dev).
+- Recorded in #593 Decision: Agent PRs into dev merge on proof through aayu ship; which narrow set still needs a person \(supersedes \#572 for dev\).
 <!-- END aayudha:brain:record -->

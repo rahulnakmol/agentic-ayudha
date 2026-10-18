@@ -40,7 +40,7 @@ See [[Grounded benefits answers]].
 ## Record
 
 <!-- BEGIN aayudha:brain:record -->
-- Recorded in #125 Goal: Example Co employees get benefits answers within a week (benefits-qa example).
+- Recorded in #125 Goal: Example Co employees get benefits answers within a week \(benefits-qa example\).
 - Recorded in #126 Initiative: Self-serve benefits answers quoted from the plan documents.
 <!-- END aayudha:brain:record -->
 
