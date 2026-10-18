@@ -209,6 +209,11 @@ func runCounsel(ctx context.Context, e *Env, in Values) error {
 		if hasCite(facts.String(), cite) {
 			return true
 		}
+		if commitCite.MatchString(cite) {
+			// A commit the twin read is evidence when this checkout's Git has it.
+			_, err := gitIn(ctx, root, "cat-file", "-e", cite+"^{commit}")
+			return root != "" && err == nil
+		}
 		if m := symbolCite.FindStringSubmatch(cite); m != nil {
 			return root != "" && declares(root, m[1], m[2], m[3])
 		}
@@ -498,7 +503,7 @@ func (r counselReport) markdown() string {
 }
 
 // hasCite reports whether text cites cite as a whole token: #12 is not in #123, nor percent.go in report/percent.go
-// or percent.go.bak;
+// or percent.go.bak; the sources are separated by spaces, commas, and line breaks;
 // a directory (ledger/) is a prefix of the paths under it.
 func hasCite(text, cite string) bool {
 	word := func(b byte) bool {
@@ -512,9 +517,9 @@ func hasCite(text, cite string) bool {
 		j += i
 		end := j + len(cite)
 		left := j == 0 || !word(text[j-1]) && !strings.ContainsRune("/.-#", rune(text[j-1]))
-		// foo.go is not in foo.go.bak or foo.go-old: a path character on the right continues the token.
-		right := strings.HasSuffix(cite, "/") || end == len(text) ||
-			!word(text[end]) && (!strings.ContainsRune("/.-", rune(text[end])) || end+1 == len(text) || !word(text[end+1]))
+		// foo.go is not in foo.go.bak, foo.go..bak, or foo.go-old: any path character on the right continues the
+		// source's token, so the cite must reach the token's end.
+		right := strings.HasSuffix(cite, "/") || end == len(text) || !word(text[end]) && !strings.ContainsRune("/.-", rune(text[end]))
 		if left && right {
 			return true
 		}
@@ -540,6 +545,9 @@ func inRoot(root, rel string) bool {
 	inside, err := filepath.Rel(base, real)
 	return err == nil && inside != ".." && !strings.HasPrefix(inside, ".."+string(filepath.Separator))
 }
+
+// commitCite is a cited commit hash (seats' evidence rule: `abc1234`).
+var commitCite = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
 
 // symbolCite is a cited Go symbol: pkg.Name, or pkg.Type.Member for a method or a struct field.
 var symbolCite = regexp.MustCompile(`^([a-z][A-Za-z0-9_]*)\.([A-Z][A-Za-z0-9_]*)(?:\.([A-Za-z0-9_]+))?$`)
