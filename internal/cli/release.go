@@ -831,7 +831,9 @@ func (e *Env) evaluated(ctx context.Context, c *github.Client, gitOut func(strin
 	// results reports the newest completed run of commit h, and the gating
 	// groups of h's own evals/eval.toml (what the gate checks when h is
 	// promoted) none of h's completed runs has results for. It asks for h's
-	// runs by commit, so a commit whose run is far down dev's run list still counts.
+	// runs by commit, so a commit whose run is far down dev's run list still
+	// counts, and looks only where the gate's evals-gate looks: h's newest 20
+	// runs (ci.yml, `gh run list --commit h --limit 20`).
 	results := func(h string) (*RunRef, []string, error) {
 		var cfg struct {
 			Groups []struct {
@@ -851,15 +853,19 @@ func (e *Env) evaluated(ctx context.Context, c *github.Client, gitOut func(strin
 			}
 		}
 		runs, _, err := c.REST.Actions.ListWorkflowRunsByFileName(ctx, owner, name, evalsWorkflow,
-			&gh.ListWorkflowRunsOptions{HeadSHA: h, Status: "completed", ListOptions: gh.ListOptions{PerPage: 100}})
+			&gh.ListWorkflowRunsOptions{HeadSHA: h, ListOptions: gh.ListOptions{PerPage: 20}})
 		if err != nil {
 			return nil, nil, Wrap(ExitExternal, err)
 		}
 		have := map[string]bool{}
-		var ref *RunRef
+		var ref, newest *RunRef // the newest completed run with results, and the newest completed run
 		for _, r := range runs.WorkflowRuns {
 			if r.GetHeadSHA() != h || r.GetStatus() != "completed" {
 				continue
+			}
+			run := &RunRef{Workflow: evalsWorkflow, ID: r.GetID(), URL: r.GetHTMLURL(), Conclusion: r.GetConclusion(), Attempts: max(r.GetRunAttempt(), 1)}
+			if newest == nil {
+				newest = run
 			}
 			arts, _, err := c.REST.Actions.ListWorkflowRunArtifacts(ctx, owner, name, r.GetID(), &gh.ListOptions{PerPage: 100})
 			if err != nil {
@@ -868,11 +874,14 @@ func (e *Env) evaluated(ctx context.Context, c *github.Client, gitOut func(strin
 			for _, a := range arts.Artifacts {
 				if g, ok := strings.CutPrefix(a.GetName(), "eval-results-"+h+"-"); ok && !a.GetExpired() {
 					have[g] = true
+					if ref == nil {
+						ref = run
+					}
 				}
 			}
-			if ref == nil {
-				ref = &RunRef{Workflow: evalsWorkflow, ID: r.GetID(), URL: r.GetHTMLURL(), Conclusion: r.GetConclusion(), Attempts: max(r.GetRunAttempt(), 1)}
-			}
+		}
+		if ref == nil {
+			ref = newest
 		}
 		var missing []string
 		for _, g := range gating {

@@ -765,6 +765,12 @@ func TestReleasePicksAnEvaluatedCommit(t *testing.T) {
 	}
 	f.g.Mu.Unlock()
 	older := f.commit(t, "feat: evaluated (#34)", 34, "Refs #2", "story/2-evaluated")
+	buried := f.commit(t, "chore: re-dispatched", 0, "", "")
+	f.g.Mu.Lock()
+	for i := 0; i < 20; i++ { // its results are on a run older than its newest 20, which is all the gate looks at
+		f.g.Runs = append(f.g.Runs, fake.WorkflowRun{ID: int64(9500 + i), Path: ".github/workflows/evals.yml", HeadSHA: buried, HeadBranch: "dev", Event: "workflow_dispatch", Status: "completed", Conclusion: "cancelled"})
+	}
+	f.g.Mu.Unlock()
 	f.noEvals = true
 	// The newest commit adds a gating group; the older commit is judged by its own groups, as the gate would judge it.
 	_ = os.WriteFile(filepath.Join(f.dir, "evals", "eval.toml"), []byte("[[groups]]\nname = \"skills\"\n\n[[groups]]\nname = \"survey\"\n\n[[groups]]\nname = \"ux\"\n"), 0o644)
