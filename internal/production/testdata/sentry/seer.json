@@ -1,0 +1,64 @@
+{
+  "source": "Shaped from Sentry's OpenAPI spec (getsentry/sentry-api-schema openapi-derefed.json at b1eac6b, 2026-10-16, read 2026-10-17), operation \"Retrieve Seer Issue Fix State\" (experimental) and its AutofixInProgress example: the root-cause step keeps the example's shape with an invented description; the solution step's shape (solution[].title) is not in the example and follows the step the example's run would produce next. Not live-proven: no Sentry account recorded this.",
+  "interactions": [
+    {
+      "method": "GET",
+      "url": "https://sentry.io/api/0/organizations/acme/issues/7/autofix/",
+      "status": 200,
+      "response": {
+        "autofix": {
+          "run_id": 12345,
+          "status": "COMPLETED",
+          "updated_at": "2025-09-23T21:02:18.160885",
+          "steps": [
+            {
+              "id": "e6ae64b6-e4d4-44f5-bac7-6ecf6780a6dc",
+              "index": 1,
+              "key": "root_cause_analysis",
+              "status": "COMPLETED",
+              "title": "Root Cause Analysis",
+              "type": "root_cause_analysis",
+              "causes": [
+                {
+                  "description": "`automation.RunRipgrep` in seer/automation/tools.py is called without its required `query` argument since commit `4ebb4f342e30` (see #4512, query q2); reported by dev@example.com.",
+                  "id": 0,
+                  "relevant_repos": [
+                    "getsentry/seer"
+                  ],
+                  "reproduction_urls": [],
+                  "root_cause_reproduction": [
+                    {
+                      "code_snippet_and_analysis": "The process begins with an HTTP request to the `autofix_start_endpoint`. This is the entry point for the autofix workflow.",
+                      "is_most_important_event": false,
+                      "relevant_code_file": {
+                        "file_path": "seer/app.py",
+                        "repo_name": "getsentry/seer"
+                      },
+                      "timeline_item_type": "internal_code",
+                      "title": "Autofix process initiated via API endpoint."
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "5b1c",
+              "index": 2,
+              "key": "solution",
+              "status": "COMPLETED",
+              "title": "Planning Solution",
+              "type": "solution",
+              "solution": [
+                {
+                  "title": "Pass the query argument in `run_ripgrep` callers in seer/automation/tools.py",
+                  "timeline_item_type": "internal_code",
+                  "is_most_important_event": true
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

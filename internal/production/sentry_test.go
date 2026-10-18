@@ -16,6 +16,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/fixture"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/posthog"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/sentry"
+	"github.com/rahulnakmol/agentic-ayudha/internal/seats"
 )
 
 // TestSentrySource (Decision #449, phase P1) replays Sentry answers shaped
@@ -371,5 +372,50 @@ func TestRunbookAlerts(t *testing.T) {
 	}
 	if Slug("[us] High error-rate!") != "us-high-error-rate" {
 		t.Errorf("Slug = %q", Slug("[us] High error-rate!"))
+	}
+}
+
+// TestSeerOpinion: Seer's existing analysis is read with one GET, rendered
+// as an untrusted block labelled as Seer's opinion, and carries no citable
+// form: a note that cites a path, an issue, or a query only Seer named is
+// refused by the evidence floor.
+func TestSeerOpinion(t *testing.T) {
+	src, r := sentrySource(t, "seer")
+	op, pv, err := Seer(context.Background(), src.API, "7")
+	r.Done()
+	if err != nil || op.Status != "COMPLETED" || len(op.RootCause) != 1 || len(op.Solution) != 1 {
+		t.Fatalf("opinion %+v, err %v; want a completed analysis with one cause and one step", op, err)
+	}
+	if len(pv.Requests) != 1 || !strings.HasPrefix(pv.Requests[0], "GET https://sentry.io/api/0/organizations/acme/issues/7/autofix/") || len(pv.Digest) != 64 {
+		t.Errorf("provenance %+v; want one GET of the issue-fix state and a SHA-256", pv)
+	}
+	md := op.Markdown()
+	for _, want := range []string{"Seer's opinion", "never evidence", `<untrusted source="sentry seer">`, "Seer's root cause:", "Seer's proposed step:", "[email]"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("block lacks %q:\n%s", want, md)
+		}
+	}
+	if strings.Contains(md, "dev@example.com") {
+		t.Errorf("block holds an email address:\n%s", md)
+	}
+	note := "The crash comes from seer/automation/tools.py, as in #4512 and query q2, since `4ebb4f342e30`; `automation.RunRipgrep` is the bug."
+	findings := strings.Join(seats.CheckGrounding(note, md), "\n")
+	for _, c := range []string{"seer/automation/tools.py", "#4512", "q2", "4ebb4f342e30", "automation.RunRipgrep"} {
+		if !strings.Contains(findings, c) {
+			t.Errorf("the evidence floor accepted %s from Seer's text; findings:\n%s", c, findings)
+		}
+	}
+
+	src, r = sentrySource(t, "seer-none")
+	op, _, err = Seer(context.Background(), src.API, "8")
+	r.Done()
+	if err != nil || op.Status != "" || !strings.Contains(op.Markdown(), "No Seer analysis") {
+		t.Errorf("never analysed: %+v, %v; want no analysis and no error", op, err)
+	}
+	if _, _, err := Seer(context.Background(), answer{`["not the shape"]`}, "9"); err == nil || !strings.Contains(err.Error(), "undecodable") {
+		t.Errorf("wrong shape: err %v; want an undecodable answer", err)
+	}
+	if _, pv, err := Seer(context.Background(), routes{}, "10"); err == nil || len(pv.Requests) != 1 || pv.Digest != "" {
+		t.Errorf("a failed read: %+v, %v; want the error with its request and no digest", pv, err)
 	}
 }
