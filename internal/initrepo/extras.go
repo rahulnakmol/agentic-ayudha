@@ -427,26 +427,34 @@ func (in *Init) app(ctx context.Context, x Extras) error {
 	// new code instead of reusing the refused one's record. The log keeps a
 	// hash of the code, never the code.
 	sum := sha256.Sum256([]byte(code))
+	status := 0 // GitHub's answer to a failed conversion; 0 when none arrived
 	_, err = in.GH.Write(ctx, actions.Action{Kind: "github.app.create", Target: r.Owner, IdempotencyKey: in.key("app", hex.EncodeToString(sum[:6])),
 		Request: &actions.Request{Method: http.MethodPost, Path: "/app-manifests/{code}/conversions"}},
 		func(ctx context.Context) (any, error) {
-			err := in.rest(ctx, http.MethodPost, "/app-manifests/"+code+"/conversions", nil, &conv)
-			return map[string]any{"id": conv.ID, "slug": conv.Slug}, err // the PEM is never logged
+			// The error names the conversion URL, which carries the one-time
+			// code, and the actions log records the error: return only
+			// GitHub's status, never the error itself.
+			if err := in.rest(ctx, http.MethodPost, "/app-manifests/"+code+"/conversions", nil, &conv); err != nil {
+				var er *gh.ErrorResponse
+				if errors.As(err, &er) && er.Response != nil {
+					status = er.Response.StatusCode
+					return nil, fmt.Errorf("the conversion failed: GitHub answered %d", status)
+				}
+				return nil, errors.New("the conversion failed: the request did not complete")
+			}
+			return map[string]any{"id": conv.ID, "slug": conv.Slug}, nil // the PEM is never logged
 		})
-	var er *gh.ErrorResponse
-	if errors.As(err, &er) && er.Response != nil && (er.Response.StatusCode == http.StatusNotFound || er.Response.StatusCode == http.StatusUnprocessableEntity) {
-		in.note("identity", "app", "*", "not converted", fmt.Sprintf("GitHub answered %d: the code may already have been used by someone else, who would then hold the App's key. Do not install the App: delete it at %s, then run aayu init --identity again", er.Response.StatusCode, appSettings(r)))
-		return fmt.Errorf("%w (GitHub answered %d); do not install the App: delete it at %s", ErrAppNotConverted, er.Response.StatusCode, appSettings(r))
+	if status == http.StatusNotFound || status == http.StatusUnprocessableEntity {
+		in.note("identity", "app", "*", "not converted", fmt.Sprintf("GitHub answered %d: the code may already have been used by someone else, who would then hold the App's key. Do not install the App: delete it at %s, then run aayu init --identity again", status, appSettings(r)))
+		return fmt.Errorf("%w (GitHub answered %d); do not install the App: delete it at %s", ErrAppNotConverted, status, appSettings(r))
 	}
 	if err != nil {
 		// A 5xx or a lost connection: GitHub created the App when it
 		// redirected, and may have converted the code, so the App is not
 		// one aayu holds the key of.
-		// The error names the conversion URL, which carries the one-time
-		// code: report only GitHub's status, never the error itself.
 		why := "the request did not complete"
-		if errors.As(err, &er) && er.Response != nil {
-			why = fmt.Sprintf("GitHub answered %d", er.Response.StatusCode)
+		if status != 0 {
+			why = fmt.Sprintf("GitHub answered %d", status)
 		}
 		in.note("identity", "app", "*", "not converted", fmt.Sprintf("the conversion failed (%s). Do not install the App: delete it at %s, then run aayu init --identity again", why, appSettings(r)))
 		return fmt.Errorf("%w (%s); do not install the App: delete it at %s", ErrAppNotConverted, why, appSettings(r))

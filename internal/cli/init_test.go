@@ -802,7 +802,13 @@ func TestInitIdentityRefusesTheApp(t *testing.T) {
 	t.Cleanup(srv.Close)
 	for _, status := range []int{http.StatusUnprocessableEntity, http.StatusBadGateway} {
 		convStatus = status
-		code, printed := runIdentity(t, srv.URL, "c0de1234c0de5678", nil)
+		dir := checkout(t)
+		code, printed := runIdentityIn(t, dir, t.TempDir(), srv.URL, "c0de1234c0de5678", nil)
+		// A code GitHub did not consume is still live: the failed action's
+		// record must not hold it.
+		if b, _ := os.ReadFile(filepath.Join(dir, ".aayudha", "telemetry", "actions.jsonl")); len(b) == 0 || strings.Contains(string(b), "c0de1234c0de5678") {
+			t.Errorf("a %d conversion: the actions log is empty or holds the one-time code:\n%s", status, b)
+		}
 		if code != ExitBlocked || len(g.Secrets) != 0 || strings.Contains(printed, "installations/new") ||
 			!strings.Contains(printed, "do not install the App: delete it at https://github.com/settings/apps") || !strings.Contains(printed, "aayu init --identity") {
 			t.Fatalf("a %d conversion: exit %d, secrets %v:\n%s", status, code, g.Secrets, printed)
