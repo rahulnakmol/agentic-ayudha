@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
-	"slices"
 	"strings"
 
 	gh "github.com/google/go-github/v90/github"
@@ -24,10 +23,9 @@ var preFindingRe = regexp.MustCompile("inspect finding `([0-9a-f]{10})`")
 // (Decision #544, point 2), under the person's client c, outside CI where a
 // checkout exists: `git blame` at head names the commit that last changed
 // each line, which the PR left unchanged. A finding an open Bug already holds
-// (by finding ID) is not filed again. The Bug is always priority:P1, and a
-// protected P0 among them pages. It returns a note for the result, "" when
-// there was nothing to file.
-func (e *Env) filePreExisting(ctx context.Context, c *github.Client, repo string, n int, head string, res *inspect.Result, page func(subject, body string)) (string, error) {
+// (by finding ID) is not filed again. The Bug is always priority:P1. It
+// returns a note for the result, "" when there was nothing to file.
+func (e *Env) filePreExisting(ctx context.Context, c *github.Client, repo string, n int, head string, res *inspect.Result) (string, error) {
 	if res == nil || res.Head != head {
 		return "", nil
 	}
@@ -71,7 +69,6 @@ func (e *Env) filePreExisting(ctx context.Context, c *github.Client, repo string
 		return "pre-existing findings already filed: " + strings.Join(already, ", "), nil
 	}
 	root := config.RepoRoot(e.Dir)
-	urgent := slices.ContainsFunc(fresh, func(f inspect.Finding) bool { return f.Severity == "P0" && inspect.Protected(f.Category) })
 	// The checkout may not hold the PR's head (someone else's PR): fetch it
 	// from the PR's ref on origin, so blame can name each line's commit.
 	if _, err := gitIn(ctx, root, "cat-file", "-e", head+"^{commit}"); err != nil {
@@ -115,9 +112,6 @@ func (e *Env) filePreExisting(ctx context.Context, c *github.Client, repo string
 			return map[string]any{"number": bug}, err
 		}); err != nil {
 		return "", err
-	}
-	if urgent && page != nil {
-		page(fmt.Sprintf("inspect: a pre-existing P0 found on PR #%d", n), fmt.Sprintf("%s#%d holds a protected P0 on a line PR #%d does not change; filed as #%d.", repo, bug, n, bug))
 	}
 	note := fmt.Sprintf("pre-existing findings filed as Bug #%d", bug)
 	if len(already) > 0 {

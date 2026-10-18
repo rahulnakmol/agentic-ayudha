@@ -833,24 +833,29 @@ func TestInspectPreExisting(t *testing.T) {
 	g.Mu.Unlock()
 	writeInspectPack(t, opts.Dir, prN, head, nil)
 
-	// A stated reply: a P1 on the unchanged division and a P0 security
-	// finding on the unchanged signature; the reply says merge, and merge it
-	// stays. A low-confidence P2 on an unchanged line is noise, as it would
-	// be on an added line, so it is never filed.
+	// A stated reply: a P1 on the unchanged division is pre-existing, but a
+	// P0 security finding on the unchanged signature, and a P1 security one on
+	// the unchanged comment, are never pre-existing
+	// (founder, #568): it may be a control the PR removed, so the merge reply
+	// becomes fix. A low-confidence P2 on an unchanged line is noise, as it
+	// would be on an added line, so it is never filed.
 	unsure := appFinding("P2", "bug", "func Percent(covered, total int) float64 {", "Percent may want a doc comment on rounding", "")
 	unsure["confidence"] = 0.2
 	// The P1 names a criterion: the quoted line decides, not the link.
 	zero := appFinding("P1", "bug", "return float64(covered) / float64(total) * 100", "Percent divides by a zero total", "")
 	zero["criterion"] = 1
 	addComment(g, prN, "chatgpt-codex-connector[bot]", "Bot", replyWith(head, "merge", zero,
-		appFinding("P0", "security", "func Percent(covered, total int) float64 {", "Percent trusts a caller-controlled total", ""), unsure))
+		appFinding("P0", "security", "func Percent(covered, total int) float64 {", "Percent trusts a caller-controlled total", ""),
+		appFinding("P1", "security", "// Percent is covered as a percentage of total.", "The documented contract hides an authorisation check", ""), unsure))
 	code, res, errOut := inspectApp(t, env, opts, prN, "--ci")
-	if code != 0 || res.Disposition != inspect.Merge || len(res.Findings) != 0 || len(inspect.PreExisting(res)) != 2 || !strings.Contains(lastInspect(t, g, prN), "**Pre-existing**") {
+	if code != ExitBlocked || res.Disposition != inspect.Fix || len(res.Findings) != 2 || res.Findings[0].Severity != "P0" || res.Findings[1].Category != "security" ||
+		len(inspect.PreExisting(res)) != 1 || inspect.PreExisting(res)[0].Category != "bug" ||
+		!strings.Contains(lastInspect(t, g, prN), "**Pre-existing**") {
 		t.Fatalf("stated reply: exit %d %s findings %+v %s\n%s", code, res.Disposition, res.Findings, errOut, lastInspect(t, g, prN))
 	}
 
-	// Outside CI: one Bug, the blamed commit for each line, priority:P1, a
-	// page; a decoy Bug by another account naming both findings stops neither.
+	// Outside CI: one Bug, the blamed commit for each line, priority:P1; a
+	// decoy Bug by another account naming the finding does not stop it.
 	var decoy []string
 	for _, f := range inspect.PreExisting(res) {
 		decoy = append(decoy, "inspect finding `"+f.ID+"`")
@@ -867,7 +872,7 @@ func TestInspectPreExisting(t *testing.T) {
 	g.Mu.Unlock()
 	sink := opts.NotifySink.(*notify.Fake)
 	if len(bugs) != 1 || !strings.Contains(bugs[0].Body, "last changed by commit "+base[:12]) || !slices.ContainsFunc(bugs[0].Labels, func(l fake.Label) bool { return l.Name == "priority:P1" }) ||
-		len(sink.Pages) != 1 || !slices.ContainsFunc(res.Notes, func(n string) bool { return strings.Contains(n, "pre-existing findings filed as Bug #") }) {
+		!slices.ContainsFunc(res.Notes, func(n string) bool { return strings.Contains(n, "pre-existing findings filed as Bug #") }) {
 		t.Fatalf("filing: %d bug(s) %+v, pages %+v, notes %q", len(bugs), bugs, sink.Pages, res.Notes)
 	}
 	if _, res, _ = inspectApp(t, env, opts, prN); !slices.ContainsFunc(res.Notes, func(n string) bool { return strings.Contains(n, "already filed") }) {
@@ -900,8 +905,9 @@ func TestInspectPreExisting(t *testing.T) {
 		t.Fatalf("a forged state: notes %q, %d new pages", res.Notes, len(sink.Pages)-pages)
 	}
 
-	// Codex's own review: its P1 on the unchanged line gives fix natively,
-	// and the gate lifts it to merge.
+	// Codex's own review: its P1 on the unchanged line is pre-existing, and
+	// the P0 security finding of the first review, on the same unchanged
+	// patch, is still open: it carries, and blocks.
 	h2 := strings.Repeat("9", 40)
 	g.Mu.Lock()
 	g.Pulls[prN].Head.SHA = h2
@@ -910,8 +916,8 @@ func TestInspectPreExisting(t *testing.T) {
 		Comments: []fake.ReviewComment{{Path: "internal/report/percent.go", Line: 8, Body: "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Guard a zero total**\n\nDivides by zero.\n\n<!-- codex-code-review-finding:v1 -->"}}})
 	g.Mu.Unlock()
 	writeInspectPack(t, opts.Dir, prN, h2, nil)
-	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Disposition != inspect.Merge || len(inspect.PreExisting(res)) != 1 {
-		t.Fatalf("codex native: exit %d %s pre %+v %s", code, res.Disposition, inspect.PreExisting(res), errOut)
+	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || len(inspect.PreExisting(res)) != 1 || len(res.Findings) != 1 || res.Findings[0].Severity != "P0" || res.Findings[0].Repeat == 0 {
+		t.Fatalf("codex native: exit %d %s pre %+v findings %+v %s", code, res.Disposition, inspect.PreExisting(res), res.Findings, errOut)
 	}
 }
 

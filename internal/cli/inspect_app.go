@@ -218,21 +218,15 @@ func (e *Env) replyEvent() bool {
 }
 
 // preExistingBug files the pre-existing findings of res, the review of head,
-// as one Bug under the person's account (filePreExisting), paging for a
-// protected P0. Every backend calls it outside CI: the reviewer apps with the
-// gate's result, the review lane's model with its own.
+// as one Bug under the person's account (filePreExisting). Every backend
+// calls it outside CI: the reviewer apps with the gate's result, the review
+// lane's model with its own.
 func (e *Env) preExistingBug(ctx context.Context, repo string, n int, head string, res *inspect.Result) (string, error) {
 	hc, _, err := e.HumanGitHub(ctx)
 	if err != nil {
 		return "", err
 	}
-	pager, err := e.Notifier(ctx)
-	if err != nil {
-		return "", err
-	}
-	return e.filePreExisting(ctx, hc, repo, n, head, res, func(subject, body string) {
-		_, _ = pager.Page(ctx, notify.Page{Key: fmt.Sprintf("inspect-pre:%s#%d", repo, n), Subject: subject, Body: body})
-	})
+	return e.filePreExisting(ctx, hc, repo, n, head, res)
 }
 
 // reopenedAt is when a person last reopened a stopped review (State.Reopen):

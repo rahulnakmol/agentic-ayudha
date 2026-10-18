@@ -75,6 +75,10 @@ type Finding struct {
 	// fixes (a reviewer app's stated reply; Decision #544).
 	Class     string     `json:"class,omitempty"`
 	Instances []Instance `json:"instances,omitempty"`
+	// carried is the patch hashes a carried finding was first raised on
+	// (carryForward): its round keeps them, so it closes once every one of
+	// its files has changed, however many rounds it carried through.
+	carried map[string]string
 	// Repeat is the earlier round that reported this P0 or P1 finding: it
 	// still counts, but is not posted again.
 	Repeat int `json:"repeat,omitempty"`
@@ -525,7 +529,7 @@ func carryForward(fs []Finding, rounds []Round, head string, reopened time.Time,
 				continue
 			}
 			fs = append(fs, Finding{ID: e.ID, Severity: e.Severity, Category: e.Category, File: e.File, Line: e.Line, Title: e.Title, Class: e.Class,
-				Detail: fmt.Sprintf("raised in round %d and still open: the file's patch is unchanged since that round", i+1), Repeat: i + 1, Sources: []string{}})
+				Detail: fmt.Sprintf("raised in round %d and still open: the file's patch is unchanged since that round", i+1), Repeat: i + 1, Sources: []string{}, carried: e.Hashes})
 		}
 	}
 	return fs

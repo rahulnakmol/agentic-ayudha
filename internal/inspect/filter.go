@@ -179,14 +179,16 @@ func (fl Filter) Clean(fs []Finding, diff []DiffFile, areas []Area, reviewer str
 			drop = append(drop, Dropped{f, DropLowConfidence})
 		case f.Severity == "P3":
 			drop = append(drop, Dropped{f, DropNit})
-		case f.Line > 0 && !df.AddedAt(f.Line):
+		case f.Line > 0 && !df.AddedAt(f.Line) && f.Severity != "P0" && (f.Severity != "P1" || f.Category != "security"):
 			// The quoted line is a context line the PR leaves unchanged,
 			// whether or not the finding names a criterion (the criterion's
 			// own verdict still counts). It comes after the noise rules, so
 			// only a finding that would count on an added line is filed as a
 			// pre-existing defect. A quote found nowhere stays an unanchored
 			// finding of this PR, so a paraphrased quote never hides a defect
-			// the PR wrote.
+			// the PR wrote. A P0, and a P1 security finding, is never
+			// pre-existing: anchored to an unchanged line it may still be a
+			// control the PR removed nearby, so it blocks (founder, #568).
 			drop = append(drop, Dropped{f, DropPreExisting})
 		default:
 			keep = append(keep, f)
@@ -241,10 +243,13 @@ func repeats(f Finding, e Earlier) bool {
 func earlier(fs []Finding, hashes map[string]string) []Earlier {
 	var out []Earlier
 	for _, f := range fs {
-		e := Earlier{ID: f.ID, Severity: f.Severity, Category: f.Category, File: f.File, Line: f.Line, Title: oneLine(f.Title, 200), Class: oneLine(f.Class, 200), Hashes: map[string]string{}}
-		for _, in := range append([]Instance{{File: f.File}}, f.Instances...) {
-			if hashes[in.File] != "" {
-				e.Hashes[in.File] = hashes[in.File]
+		e := Earlier{ID: f.ID, Severity: f.Severity, Category: f.Category, File: f.File, Line: f.Line, Title: oneLine(f.Title, 200), Class: oneLine(f.Class, 200), Hashes: f.carried}
+		if e.Hashes == nil {
+			e.Hashes = map[string]string{}
+			for _, in := range append([]Instance{{File: f.File}}, f.Instances...) {
+				if hashes[in.File] != "" {
+					e.Hashes[in.File] = hashes[in.File]
+				}
 			}
 		}
 		out = append(out, e)

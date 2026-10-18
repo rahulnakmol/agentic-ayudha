@@ -223,7 +223,8 @@ State drives three limits:
   names a `class` lists every instance and asks for all of them to be fixed.
 - **Pre-existing findings.** A finding whose quote is an unchanged context line of the diff is pre-existing, whether or
   not it names a criterion: it never changes the disposition and is listed apart. Outside CI, inspect files them as
-  one Bug naming the commit `git blame` gives for each line (`priority:P1`, and a page for a P0 security finding), once.
+  one Bug naming the commit `git blame` gives for each line (`priority:P1`), once. A P0, and a P1 security finding,
+  is never pre-existing: anchored to an unchanged line it may be a control the PR removed nearby, so it blocks.
   `aayu audit` reports the rounds each agent merge's review took to pass.
 
 inspect exits 0 on `merge` and 4 on anything else, so its check stays red until the reviewer says `merge`.
