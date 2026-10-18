@@ -75,7 +75,8 @@ func TestStatusStreak(t *testing.T) {
 		got[s.Layer] = s
 	}
 	if rep.Scanned != 3 || len(rep.Corrections) != 1 || rep.Corrections[0].PR != 2 || rep.Corrections[0].Kind != autonomy.KindChangesRequested ||
-		got["L02"].Streak != 1 || got["L02"].Merges != 2 || got["L02"].LastBreak != 2 || got["L06"].Streak != 0 || got["L01"].Merges != 0 {
+		got["L02"].Streak != 1 || got["L02"].Merges != 2 || got["L02"].LastBreak != 2 || got["L06"].Streak != 0 || got["L01"].Merges != 0 ||
+		rep.Rungs["A"] != 1 || rep.Rungs[""] != 1 || len(rep.Rungs) != 2 {
 		t.Fatalf("report: %+v", rep)
 	}
 
