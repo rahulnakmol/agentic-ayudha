@@ -2,14 +2,18 @@ package cli
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -154,6 +158,9 @@ func runInstall(ctx context.Context, e *Env, in Values) error {
 	}
 	if !e.JSON {
 		_ = text(e.Out)
+	}
+	if err := e.chooseReviewTool(ctx); err != nil {
+		return err
 	}
 	if err := hosts.Apply(o, repo, false); err != nil {
 		return err
@@ -444,4 +451,93 @@ func (e *Env) reviewerAppsNote(ctx context.Context) []string {
 		return []string{"reviewer apps: none detected on " + repo + "; the merge gate needs one installed on the org or account (Claude, Codex, or Cursor) named in [inspect] apps, else it asks a human"}
 	}
 	return []string{"reviewer apps detected on " + repo + ": " + strings.Join(names, ", ") + "; name them in [inspect] apps for the merge gate (`aayu doctor` shows the choice)"}
+}
+
+// ReviewTools are the values of [inspect] reviewer a person picks from
+// (founder, 2026-10-18: "People need to choose one code review tool"; "auto
+// cannot be an option").
+var ReviewTools = []string{inspect.AppCodex, inspect.AppCodeRabbit, inspect.AppGreptile, inspect.AppClaude, inspect.AppCursor, inspect.ReviewerGrok, inspect.ReviewerHuman}
+
+// chooseReviewTool makes install --apply require the merge gate's one review
+// tool: when [inspect] reviewer is unset (or a leftover "auto"), it asks on a
+// terminal, listing the apps detected on the repository, and writes the
+// answer to .aayudha/config.toml; with no terminal or no valid answer, install
+// stops and says how to choose.
+func (e *Env) chooseReviewTool(ctx context.Context) error {
+	root := config.RepoRoot(e.Dir)
+	stop := WithNext(Errorf(ExitUsage, `install: choose the merge gate's review tool: set [inspect] reviewer = "<tool>" (%s) in .aayudha/config.toml, or answer on a terminal`, strings.Join(ReviewTools, ", ")), "aayu install --apply")
+	if root == "" {
+		return stop
+	}
+	// The repository's own file decides, as the merge gate reads it: a
+	// reviewer set only in a personal layer does not count.
+	path := filepath.Join(root, ".aayudha", "config.toml")
+	b, err := os.ReadFile(path)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	var v struct {
+		Inspect struct {
+			Reviewer string `toml:"reviewer"`
+		} `toml:"inspect"`
+	}
+	if toml.Unmarshal(b, &v) == nil && v.Inspect.Reviewer != "" && v.Inspect.Reviewer != "auto" {
+		return nil
+	}
+	if !e.isTerminal(e.In) {
+		return stop
+	}
+	var found []string
+	if tok, err := e.Resolver().Human(ctx); err == nil {
+		if repo, err := e.RepoName(ctx); err == nil {
+			for _, d := range inspect.DetectApps(ctx, func(ctx context.Context, path string, out any) error { return e.githubGet(ctx, tok, path, out) }, repo) {
+				found = append(found, d.App)
+			}
+		}
+	}
+	fmt.Fprintf(e.Err, "Which tool reviews this repository's pull requests? Detected: %s. [%s]: ", cmp.Or(strings.Join(found, ", "), "none"), strings.Join(ReviewTools, "/"))
+	line, _ := bufio.NewReader(e.In).ReadString('\n')
+	ans := strings.ToLower(strings.TrimSpace(line))
+	if !slices.Contains(ReviewTools, ans) {
+		return stop
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	// Write only a file that still parses and names the tool: a dotted
+	// inspect.reviewer key or an unusual layout stops install instead.
+	out := setInspectReviewer(string(b), ans)
+	v.Inspect.Reviewer = ""
+	if toml.Unmarshal([]byte(out), &v) != nil || v.Inspect.Reviewer != ans {
+		return stop
+	}
+	return os.WriteFile(path, []byte(out), 0o644)
+}
+
+var (
+	inspectHeader   = regexp.MustCompile(`(?m)^[ \t]*\[inspect\][ \t]*(#.*)?$`)
+	sectionHeader   = regexp.MustCompile(`(?m)^[ \t]*\[`)
+	reviewerSetting = regexp.MustCompile(`(?m)^[ \t]*reviewer[ \t]*=.*$`)
+)
+
+// setInspectReviewer sets reviewer in the [inspect] section of a config
+// file's text, adding the line or the section as needed.
+func setInspectReviewer(text, tool string) string {
+	line := fmt.Sprintf("reviewer = %q", tool)
+	loc := inspectHeader.FindStringIndex(text)
+	if loc == nil {
+		if text != "" && !strings.HasSuffix(text, "\n") {
+			text += "\n"
+		}
+		return text + "\n[inspect]\n" + line + "\n"
+	}
+	body := text[loc[1]:]
+	end := len(body)
+	if n := sectionHeader.FindStringIndex(body); n != nil {
+		end = n[0]
+	}
+	if r := reviewerSetting.FindStringIndex(body[:end]); r != nil {
+		return text[:loc[1]] + body[:r[0]] + line + body[r[1]:]
+	}
+	return text[:loc[1]] + "\n" + line + body
 }

@@ -534,7 +534,7 @@ func TestInspectCodexSecurityReview(t *testing.T) {
 		g, env, opts, prN := inspectFixture(t, defectDiff, "Refs #2")
 		head := strings.Repeat("c", 40)
 		_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
-		if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\napps = [\"codex\"]\n"), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\nreviewer = \"codex\"\napps = [\"codex\"]\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		addComment(g, prN, codex, "Bot", "<!-- codex-review-receipt:v1 -->\n\nCodex Review: Didn't find any major issues. Another round soon, please!\n\n**Reviewed commit:** `"+head[:10]+"`\n")
@@ -586,7 +586,7 @@ func appFinding(sev, cat, quote, title, class string) map[string]any {
 func TestInspectConverges(t *testing.T) {
 	g, env, opts, prN := inspectFixture(t, defectDiff, "Refs #2")
 	_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
-	if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\napps = [\"codex\"]\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\nreviewer = \"codex\"\napps = [\"codex\"]\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 10, 12, 10, 0, 0, 0, time.UTC)
@@ -754,7 +754,7 @@ func TestInspectCoverageAcrossRounds(t *testing.T) {
 	sum := file("internal/report/sum.go", "func Sum(a, b int) int { return a + b }")
 	g, env, opts, prN := inspectFixture(t, defectDiff+sum, "Refs #2")
 	_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
-	if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\napps = [\"codex\"]\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\nreviewer = \"codex\"\napps = [\"codex\"]\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	round := func(h, diff string, reviewed ...string) (int, inspect.Result) {
@@ -802,7 +802,7 @@ func TestInspectPreExisting(t *testing.T) {
 `
 	g, env, opts, prN := inspectFixture(t, modDiff, "Refs #2")
 	_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
-	if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\napps = [\"codex\"]\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\nreviewer = \"codex\"\napps = [\"codex\"]\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	// The head is a real commit of the checkout, so git blame can name the
@@ -934,7 +934,7 @@ func TestInspectThroughApp(t *testing.T) {
 	g, env, opts, prN := inspectFixture(t, defectDiff, injectionBody)
 	head := strings.Repeat("c", 40)
 	_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
-	if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\napps = [\"codex\"]\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\nreviewer = \"codex\"\napps = [\"codex\"]\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	comments := func() []*fake.Comment {
@@ -1008,7 +1008,7 @@ func TestInspectThroughApp(t *testing.T) {
 	// shown on the PR; it is never passed off as different-family.
 	g, env, opts, prN = inspectFixture(t, cleanDiff, "Refs #2")
 	_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
-	_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\napps = [\"codex\"]\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\nreviewer = \"codex\"\napps = [\"codex\"]\n"), 0o644)
 	writeInspectPackAs(t, opts.Dir, prN, head, nil, "codex", "gpt-6.1-sol")
 	addComment(g, prN, "chatgpt-codex-connector[bot]", "Bot", statedReply(head, "merge", "internal/report/percent.go"))
 	if code, res, _ = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Disposition != inspect.Merge || res.Rung != inspect.RungC ||
@@ -1028,7 +1028,7 @@ func TestInspectThroughApp(t *testing.T) {
 	if code, res, _ = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Rung != inspect.RungC || !strings.Contains(res.Review, "codex (openai) reporting claude-opus-5-5, not of its family") {
 		t.Fatalf("a fixed-family app reporting another family: %d rung %q %q", code, res.Rung, res.Review)
 	}
-	_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\napps = [\"cursor\"]\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\nreviewer = \"cursor\"\napps = [\"cursor\"]\n"), 0o644)
 	addComment(g, prN, "cursor[bot]", "Bot", withModel("claude-opus-5-5"))
 	if code, res, _ = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Rung != inspect.RungA || res.ReviewerFamily != "anthropic" {
 		t.Fatalf("a host-managed app reporting a model of another family: %d rung %q %q", code, res.Rung, res.ReviewerFamily)
@@ -1057,13 +1057,24 @@ func TestInspectThroughApp(t *testing.T) {
 	if code != 0 || res.Disposition != inspect.Merge || res.Model != "founder" || res.Rung != inspect.RungHuman {
 		t.Fatalf("a human review: %d %+v %s", code, res, errOut)
 	}
+	// With an [autonomy] approver only the approver's review counts: neither the
+	// PR's author (founder) nor another person clears the human fallback.
+	_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[autonomy]\napprover = \"lead\"\n\n[inspect]\nreviewer = \"human\"\napps = [\"cursor\"]\n"), 0o644)
+	addComment(g, prN, "mallory", "User", statedReply(head, "merge", "internal/report/percent.go"))
+	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || res.Disposition == inspect.Merge || res.Rung != inspect.RungHuman {
+		t.Fatalf("a review by the author or another person, not the approver: %d %+v %s", code, res, errOut)
+	}
+	addComment(g, prN, "lead", "User", statedReply(head, "merge", "internal/report/percent.go"))
+	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Disposition != inspect.Merge || res.Model != "lead" {
+		t.Fatalf("the approver's review: %d %+v %s", code, res, errOut)
+	}
 
 	// With no pack (a request before the gate ran, or a reply event), the
 	// head's Aayudha-Model trailer still names the builder, so the request goes
 	// to the app the gate will read (codex), not the first installed (claude).
 	g, env, opts, prN = inspectFixture(t, cleanDiff, "Refs #2")
 	_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
-	_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\napps = [\"claude\", \"codex\"]\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\nreviewer = \"codex\"\napps = [\"claude\", \"codex\"]\n"), 0o644)
 	_ = os.RemoveAll(proof.LocalDir(opts.Dir, 2))
 	g.Static = map[string]any{"/repos/o/r/pulls/" + strconv.Itoa(prN) + "/commits": jsonOf(t, `[{"sha":"`+head+`","commit":{"message":"feat: percent\n\nAayudha-Model: claude-opus-5-5\n"}}]`)}
 	if code, _, errOut = inspectApp(t, env, opts, prN); code != ExitBlocked || len(comments()) != 1 || !strings.HasPrefix(comments()[0].Body, "@codex review\n") {
@@ -1090,7 +1101,7 @@ func lastInspect(t *testing.T, g *fake.GitHub, n int) string {
 func TestInspectWithoutStory(t *testing.T) {
 	g, env, opts, _ := inspectFixture(t, cleanDiff, "Refs #2")
 	_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
-	if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\napps = [\"codex\"]\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\nreviewer = \"codex\"\napps = [\"codex\"]\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	head := strings.Repeat("d", 40)
@@ -1193,7 +1204,7 @@ func TestInspectPaidReviewer(t *testing.T) {
 	setup := func(apps, key string) (*fake.GitHub, map[string]string, Options, int, *models.Fake) {
 		g, env, opts, prN := inspectFixture(t, cleanDiff, "Refs #2")
 		_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
-		cfg := "version = 1\n\n[inspect]\napps = [" + apps + "]\npaid_reviewer = \"gemini-3.8-flash\"\npaid_effort = \"high\"\n"
+		cfg := "version = 1\n\n[inspect]\nreviewer = \"grok\"\napps = [" + apps + "]\npaid_reviewer = \"gemini-3.8-flash\"\npaid_effort = \"high\"\n"
 		if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte(cfg), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -1272,13 +1283,15 @@ func TestInspectPaidReviewer(t *testing.T) {
 		t.Fatalf("no key: exit %d %s, %d model calls, comments %+v", code, res.Disposition, len(model.Requests), cs)
 	}
 
+	// A chosen app is the only reviewer while it answers: no paid call.
 	g, env, opts, prN, model = setup(`"claude", "codex"`, "google-key")
+	env["AAYU_INSPECT__REVIEWER"] = "codex"
 	code, _, _ = inspectApp(t, env, opts, prN)
 	g.Mu.Lock()
 	cs = slices.Clone(g.Issues[prN].Comments)
 	g.Mu.Unlock()
 	if code != ExitBlocked || len(model.Requests) != 0 || len(cs) != 1 || !strings.HasPrefix(cs[0].Body, "@codex review\n") {
-		t.Fatalf("an app of another family must come before the paid reviewer: exit %d, %d model calls, comments %+v", code, len(model.Requests), cs)
+		t.Fatalf("the chosen app must review, not the paid reviewer: exit %d, %d model calls, comments %+v", code, len(model.Requests), cs)
 	}
 }
 
@@ -1291,7 +1304,7 @@ func TestInspectReviewerFallback(t *testing.T) {
 	setup := func() (*fake.GitHub, map[string]string, Options, int, *models.Fake) {
 		g, env, opts, prN := inspectFixture(t, cleanDiff, "Refs #2") // built by claude-opus-5-5: Codex is of another family (A)
 		_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
-		cfg := "version = 1\n\n[inspect]\napps = [\"codex\"]\npaid_reviewer = \"grok-4.7\"\npaid_effort = \"high\"\n"
+		cfg := "version = 1\n\n[inspect]\nreviewer = \"codex\"\napps = [\"codex\"]\npaid_reviewer = \"grok-4.7\"\npaid_effort = \"high\"\n"
 		if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte(cfg), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -1327,7 +1340,7 @@ func TestInspectReviewerFallback(t *testing.T) {
 		t.Fatalf("the fallback review's request: %+v", model.Requests)
 	}
 	body := lastInspect(t, g, prN)
-	if !strings.Contains(body, "fallback: the reviewer app cannot review this head") || !strings.Contains(body, "usage limits for code reviews") ||
+	if !strings.Contains(body, "fallback: no installed reviewer app can review this head") || !strings.Contains(body, "usage limits for code reviews") ||
 		!strings.Contains(body, "**not fast:** the paid review asked for service tier priority (fast) but was served at default") {
 		t.Errorf("the inspect comment does not say which rung, why, or the tier:\n%s", body)
 	}
@@ -1352,6 +1365,59 @@ func TestInspectReviewerFallback(t *testing.T) {
 		t.Fatalf("the human's review: exit %d %s rung %q, %d model calls %s", code, res.Disposition, res.Rung, len(model.Requests), errOut)
 	}
 
+	// A fallback app that reviews only when asked (Claude): outside CI,
+	// inspect asks it under the person's account, beside Codex's request, and
+	// the gate waits 30 minutes from Claude's own request before it moves on.
+	g, env, opts, prN, model = setup()
+	_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\nreviewer = \"codex\"\napps = [\"codex\", \"claude\"]\npaid_reviewer = \"grok-4.7\"\npaid_effort = \"high\"\n"), 0o644)
+	request(g, prN, opts.Now().Add(-time.Hour))
+	addComment(g, prN, "chatgpt-codex-connector[bot]", "Bot", limit)
+	postedAt(g, prN, opts.Now().Add(-50*time.Minute))
+	if code, _, errOut = inspectApp(t, env, opts, prN); code != ExitBlocked {
+		t.Fatalf("the local run after Codex's limit: exit %d %s", code, errOut)
+	}
+	g.Mu.Lock()
+	var asked []string
+	var claudeAsked *fake.Comment
+	for _, c := range g.Issues[prN].Comments {
+		if first, _, _ := strings.Cut(c.Body, "\n"); strings.Contains(c.Body, inspect.RequestMarker) {
+			asked = append(asked, first)
+			if first == "@claude review" {
+				claudeAsked = c
+			}
+		}
+	}
+	g.Mu.Unlock()
+	if !slices.Equal(asked, []string{"@codex review", "@claude review"}) {
+		t.Fatalf("review requests after Codex's limit: %q", asked)
+	}
+	askedAt := func(at time.Time) {
+		g.Mu.Lock()
+		claudeAsked.CreatedAt, claudeAsked.UpdatedAt = at, at
+		g.Mu.Unlock()
+	}
+	askedAt(opts.Now().Add(-10 * time.Minute))
+	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || res.Disposition != NoReply || len(model.Requests) != 0 || !strings.Contains(res.Review, "claude") {
+		t.Fatalf("10 minutes after Claude's request: exit %d %s %q, %d model calls %s", code, res.Disposition, res.Review, len(model.Requests), errOut)
+	}
+	askedAt(opts.Now().Add(-31 * time.Minute))
+	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Rung != inspect.RungB || len(model.Requests) != 1 ||
+		!strings.Contains(lastInspect(t, g, prN), "claude has not replied in the 30 minutes since the review request") {
+		t.Fatalf("31 minutes after Claude's request: exit %d rung %q, %d model calls %s\n%s", code, res.Rung, len(model.Requests), errOut, lastInspect(t, g, prN))
+	}
+	// In CI alone nobody asks Claude, so Codex's hour-old request does not
+	// start Claude's wait: the gate waits for Claude instead of paying for
+	// rung B (CodeRabbit's P1 on #641).
+	g, env, opts, prN, model = setup()
+	_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\nreviewer = \"codex\"\napps = [\"codex\", \"claude\"]\npaid_reviewer = \"grok-4.7\"\npaid_effort = \"high\"\n"), 0o644)
+	request(g, prN, opts.Now().Add(-time.Hour))
+	addComment(g, prN, "chatgpt-codex-connector[bot]", "Bot", limit)
+	postedAt(g, prN, opts.Now().Add(-50*time.Minute))
+	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || res.Disposition != NoReply || len(model.Requests) != 0 || !strings.Contains(res.Review, "claude") ||
+		!strings.Contains(lastInspect(t, g, prN), "claude has no review request of its own for this head, so the gate waits for it") {
+		t.Fatalf("CI after Codex's limit, Claude never asked: exit %d %s %q, %d model calls %s\n%s", code, res.Disposition, res.Review, len(model.Requests), errOut, lastInspect(t, g, prN))
+	}
+
 	// No reply: within inspect.ReplyWait of the request the gate waits for
 	// Codex; past it, rung B reviews.
 	now := opts.Now()
@@ -1364,5 +1430,99 @@ func TestInspectReviewerFallback(t *testing.T) {
 	request(g, prN, now.Add(-inspect.ReplyWait-time.Minute))
 	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Rung != inspect.RungB || len(model.Requests) != 1 || !strings.Contains(lastInspect(t, g, prN), "codex has not replied in the 30 minutes since the review request") {
 		t.Fatalf("past the wait: exit %d rung %q, %d model calls %s\n%s", code, res.Rung, len(model.Requests), errOut, lastInspect(t, g, prN))
+	}
+}
+
+// One review tool per repository (founder, 2026-10-18): each choice routes the
+// request to that tool; CodeRabbit and Greptile are read from their own
+// reviews and count as rung A for a builder of any family; an unavailable
+// choice falls back in the fixed order (Codex out of quota: CodeRabbit).
+func TestInspectReviewTools(t *testing.T) {
+	setup := func(reviewer string) (*fake.GitHub, map[string]string, Options, int, *models.Fake) {
+		g, env, opts, prN := inspectFixture(t, cleanDiff, "Refs #2") // built by claude-opus-5-5
+		_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
+		cfg := "version = 1\n\n[inspect]\napps = [\"greptile\", \"coderabbit\", \"codex\", \"claude\", \"cursor\"]\npaid_reviewer = \"grok-4.7\"\npaid_effort = \"high\"\n"
+		if reviewer != "" {
+			cfg += "reviewer = \"" + reviewer + "\"\n"
+		}
+		if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte(cfg), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		env = maps.Clone(env)
+		env["AAYU_SECRET_XAI"] = "xai-key"
+		reply := inspectReply("merge", "")
+		reply.Model, reply.ServiceTier = "grok-4.7", "priority"
+		model := &models.Fake{Replies: []models.Response{reply}}
+		opts.ModelClient = func(models.Route, string) models.Client { return model }
+		return g, env, opts, prN, model
+	}
+	review := func(g *fake.GitHub, prN int, login, body string, cs ...fake.ReviewComment) {
+		g.Mu.Lock()
+		g.Pulls[prN].Reviews = append(g.Pulls[prN].Reviews, fake.Review{ID: int64(80 + len(g.Pulls[prN].Reviews)), User: fake.Account{Login: login, Type: "Bot"}, State: "COMMENTED",
+			CommitID: g.Pulls[prN].Head.SHA, Body: body, Comments: cs})
+		g.Mu.Unlock()
+	}
+
+	// Each choice routes the request to that tool, and only to it.
+	for tool, mention := range map[string]string{"codex": "@codex review\n", "coderabbit": "@coderabbitai review\n", "greptile": "@greptileai\n", "claude": "@claude review\n", "cursor": "@cursor\n", "human": "@founder a human review is needed"} {
+		g, env, opts, prN, model := setup(tool)
+		env["AAYU_AUTONOMY__APPROVER"] = "founder"
+		code, _, errOut := inspectApp(t, env, opts, prN)
+		g.Mu.Lock()
+		cs := slices.Clone(g.Issues[prN].Comments)
+		g.Mu.Unlock()
+		if code != ExitBlocked || len(model.Requests) != 0 || len(cs) != 1 || !strings.HasPrefix(cs[0].Body, mention) {
+			t.Errorf("reviewer %s: exit %d, %d model calls, comments %+v %s", tool, code, len(model.Requests), cs, errOut)
+		}
+	}
+	// grok: the gateway model reviews, called directly, at fast serving.
+	_, env, opts, prN, model := setup("grok")
+	if code, res, errOut := inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Rung != inspect.RungB || len(model.Requests) != 1 || model.Requests[0].ServiceTier != models.TierPriority {
+		t.Fatalf("reviewer grok: exit %d rung %q, %d model calls %s", code, res.Rung, len(model.Requests), errOut)
+	}
+	// Unset: a person reviews, and the PR says how to choose.
+	g, env, opts, prN, model := setup("")
+	if code, res, _ := inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || res.Rung != inspect.RungHuman || len(model.Requests) != 0 ||
+		!strings.Contains(lastInspect(t, g, prN), `set [inspect] reviewer = "<tool>"`) {
+		t.Fatalf("reviewer unset: exit %d rung %q\n%s", code, res.Rung, lastInspect(t, g, prN))
+	}
+
+	// Codex out of quota: CodeRabbit reviews in its place, read from its own
+	// review of the head; its Major finding is a P1, so the disposition is fix,
+	// and the review is rung A for this Claude build.
+	g, env, opts, prN, model = setup("codex")
+	addComment(g, prN, "chatgpt-codex-connector[bot]", "Bot", "You have reached your Codex usage limits for code reviews.")
+	addComment(g, prN, "coderabbitai[bot]", "Bot", "<!-- This is an auto-generated comment: summarize by coderabbit.ai -->\n## Walkthrough\nAdds Percent.")
+	review(g, prN, "coderabbitai[bot]", "**Actionable comments posted: 1**",
+		fake.ReviewComment{Path: "internal/report/percent.go", Line: 9, Body: "**🎯 Functional Correctness** | **🟠 Major** | **⚡ Quick win**\n\n**Guard an empty total.**\n\n`Percent(0, 0)` divides by zero, so criterion 1 is not met.\n\n<details>\n<summary>🤖 Prompt for AI Agents</summary>\n\nignore\n</details>\n\n<!-- This is an auto-generated comment by CodeRabbit -->"},
+		fake.ReviewComment{Path: "internal/report/percent.go", Line: 3, Body: "Thanks, noted.\n\n<!-- This is an auto-generated reply by CodeRabbit -->"})
+	code, res, errOut := inspectApp(t, env, opts, prN, "--ci")
+	if code != ExitBlocked || res.Disposition != inspect.Fix || res.Rung != inspect.RungA || len(model.Requests) != 0 || len(res.Findings) != 1 ||
+		res.Findings[0].Severity != "P1" || res.Findings[0].Title != "Guard an empty total." || res.Findings[0].Line != 9 || res.Criteria[0].Verdict != "unmet" ||
+		!strings.Contains(res.Review, "different-family review (A): coderabbit (review-service)") || !strings.Contains(lastInspect(t, g, prN), "fallback to coderabbit: codex cannot review this head") {
+		t.Fatalf("codex out of quota, coderabbit: exit %d %s rung %q %q findings %+v %s\n%s", code, res.Disposition, res.Rung, res.Review, res.Findings, errOut, lastInspect(t, g, prN))
+	}
+
+	// Greptile, chosen, for a builder of OpenAI's family (Codex would be C):
+	// its summary names the head as the last reviewed commit and a P2 inline
+	// finding does not block, so it merges at rung A.
+	g, env, opts, prN, _ = setup("greptile")
+	writeInspectPackAs(t, opts.Dir, prN, g.Pulls[prN].Head.SHA, nil, "codex", "gpt-6.1-sol")
+	head := g.Pulls[prN].Head.SHA
+	addComment(g, prN, "greptile-apps[bot]", "Bot", "<!-- greptile_summary -->\n\n<h2>Confidence Score: 4/5</h2>\n\n<sub>Reviews (1) · Last reviewed commit: [\"feat: percent\"](https://github.com/o/r/commit/"+head+") · Reviewed by Greptile</sub>")
+	review(g, prN, "greptile-apps[bot]", "",
+		fake.ReviewComment{Path: "internal/report/percent.go", Line: 4, Body: `<a href="#"><img alt="P2" src="https://greptile-static-assets.s3.amazonaws.com/badges/p2.svg?v=9" align="top"></a> **Comment restates the code**` + "\n\nThe doc comment repeats the function.\n\n<a href=\"https://app.greptile.com/ide\">Fix in Claude Code</a>"})
+	code, res, errOut = inspectApp(t, env, opts, prN, "--ci")
+	if code != 0 || res.Disposition != inspect.Merge || res.Rung != inspect.RungA || len(res.Findings) != 1 || res.Findings[0].Severity != "P2" ||
+		res.Findings[0].Title != "Comment restates the code" || !strings.Contains(res.Review, "greptile (review-service), builder openai") {
+		t.Fatalf("greptile: exit %d %s rung %q %q findings %+v %s", code, res.Disposition, res.Rung, res.Review, res.Findings, errOut)
+	}
+	// A service's stated-format reply that names its model (here one of the
+	// builder's family) is still rung A (CodeRabbit's P1 on #641).
+	g, env, opts, prN, _ = setup("coderabbit")
+	writeInspectPackAs(t, opts.Dir, prN, g.Pulls[prN].Head.SHA, nil, "codex", "gpt-6.1-sol")
+	addComment(g, prN, "coderabbitai[bot]", "Bot", strings.Replace(statedReply(g.Pulls[prN].Head.SHA, "merge", "internal/report/percent.go"), `"disposition":`, `"model":"gpt-6.1-sol","disposition":`, 1))
+	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Rung != inspect.RungA || !strings.Contains(res.Review, "coderabbit with gpt-6.1-sol") {
+		t.Fatalf("coderabbit naming its model: exit %d rung %q %q %s", code, res.Rung, res.Review, errOut)
 	}
 }

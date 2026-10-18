@@ -168,6 +168,9 @@ const (
 // family is known well enough and f is none of its candidates, else C (f
 // unknown or host-managed included).
 func (b Builder) Rung(f verbs.Family) string {
+	if f == FamilyService {
+		return RungA // founder, 2026-10-18: a review service counts whatever the builder's family
+	}
 	if f == "" || f == verbs.FamilyHostManaged || b.Unknown() || slices.Contains(b.Candidates, f) {
 		return RungC
 	}

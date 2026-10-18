@@ -22,7 +22,7 @@ import (
 // at an absolute path that reports this build's version.
 func installEnv(t *testing.T) (repo, home string, opts Options) {
 	t.Helper()
-	repo = gitInit(t, "dev", map[string]string{"README.md": "x\n"})
+	repo = gitInit(t, "dev", map[string]string{"README.md": "x\n", ".aayudha/config.toml": "version = 1\n\n[inspect]\nreviewer = \"codex\"\n"})
 	home = t.TempDir()
 	bin, _ := filepath.Abs(filepath.FromSlash("/opt/aayudha/bin/aayu")) // binaryPath makes it absolute: D:\opt\… on Windows
 	opts = Options{IsTerminal: stdinTTY, Dir: repo, Assets: aayudha.Assets, Build: BuildInfo{Version: "1.0.0"}, LookPath: noTools,
@@ -61,8 +61,28 @@ func TestInstall(t *testing.T) {
 		t.Fatalf("agent install --apply: exit %d %s", code, errs)
 	}
 
+	// --apply requires the merge gate's one review tool (founder, 2026-10-18:
+	// no auto): with none chosen it stops, and an answer is written to config.
+	cfgPath := filepath.Join(repo, ".aayudha", "config.toml")
+	_ = os.WriteFile(cfgPath, []byte("version = 1\n\n[inspect] # how PRs are reviewed\nmode = \"general\"\nreviewer = \"auto\"\n\n[budget]\nper_pr_inspect_max = 5.0\n"), 0o644)
+	if code, _, errs := run(t, env, opts, "install", "--apply"); code != ExitUsage || !strings.Contains(errs, `choose the merge gate's review tool: set [inspect] reviewer = "<tool>"`) {
+		t.Fatalf("install --apply with no review tool: exit %d %s", code, errs)
+	}
+	// A dotted inspect.reviewer key it cannot rewrite safely: install stops and writes nothing.
+	dotted := "version = 1\ninspect.reviewer = \"auto\"\n"
+	_ = os.WriteFile(cfgPath, []byte(dotted), 0o644)
+	if code, _, errs := runIn(t, env, opts, "codex\n", "install", "--apply"); code != ExitUsage || !strings.Contains(errs, "choose the merge gate's review tool") {
+		t.Fatalf("install --apply on a dotted key: exit %d %s", code, errs)
+	}
+	if b, _ := os.ReadFile(cfgPath); string(b) != dotted {
+		t.Fatalf("install rewrote a dotted key:\n%s", b)
+	}
+	_ = os.WriteFile(cfgPath, []byte("version = 1\n\n[inspect] # how PRs are reviewed\nmode = \"general\"\nreviewer = \"auto\"\n\n[budget]\nper_pr_inspect_max = 5.0\n"), 0o644)
 	// --apply without confirmation writes the repository but not the home directory, and says so.
-	code, _, errs = run(t, env, opts, "install", "--apply")
+	code, _, errs = runIn(t, env, opts, "coderabbit\n", "install", "--apply")
+	if b, _ := os.ReadFile(cfgPath); string(b) != "version = 1\n\n[inspect] # how PRs are reviewed\nmode = \"general\"\nreviewer = \"coderabbit\"\n\n[budget]\nper_pr_inspect_max = 5.0\n" {
+		t.Fatalf("the chosen tool is not in [inspect]:\n%s", b)
+	}
 	if code != ExitBlocked || !strings.Contains(errs, "1 home-directory edit(s) not applied") {
 		t.Fatalf("install --apply without confirmation: exit %d %s", code, errs)
 	}
@@ -482,5 +502,20 @@ func TestInstallRefusesCopilotEnvAndLoops(t *testing.T) {
 	}
 	if treeHash(t, repo) != before {
 		t.Error("a refused install wrote to the repository")
+	}
+}
+
+// setInspectReviewer writes the chosen tool into [inspect], adding the line or
+// the section as needed and leaving the other sections alone.
+func TestSetInspectReviewer(t *testing.T) {
+	for _, c := range []struct{ in, want string }{
+		{"version = 1", "version = 1\n\n[inspect]\nreviewer = \"codex\"\n"},
+		{"version = 1\n\n[inspect]\nmode = \"general\"\n\n[budget]\nreviewer = \"x\"\n", "version = 1\n\n[inspect]\nreviewer = \"codex\"\nmode = \"general\"\n\n[budget]\nreviewer = \"x\"\n"},
+		{"[inspect]\nreviewer = \"auto\"\n", "[inspect]\nreviewer = \"codex\"\n"},
+		{"  [inspect]\n  reviewer = \"auto\"\n", "  [inspect]\nreviewer = \"codex\"\n"},
+	} {
+		if got := setInspectReviewer(c.in, "codex"); got != c.want {
+			t.Errorf("setInspectReviewer(%q) = %q, want %q", c.in, got, c.want)
+		}
 	}
 }

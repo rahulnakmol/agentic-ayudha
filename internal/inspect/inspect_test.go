@@ -12,6 +12,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
+	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
 const pkgDiff = `diff --git a/internal/report/percent.go b/internal/report/percent.go
@@ -724,24 +725,40 @@ func TestReviewLadder(t *testing.T) {
 	amp := BuilderOf(Records{}, []string{"a"}, nil, []string{"amp"}, "")
 	unknown := BuilderOf(Records{}, []string{"a"}, nil, []string{"copilot"}, "")
 	xaiCursor := map[string]string{"cursor": "xai"}
+	all := []string{"claude", "cursor", "greptile", "coderabbit", "codex"} // config order does not matter
 	for _, tt := range []struct {
 		name      string
 		b         Builder
+		reviewer  string
 		installed []string
 		families  map[string]string
+		skip      []string
 		app, rung string
 	}{
-		{"another family installed: A, even listed second", anthropic, []string{"claude", "codex"}, nil, "codex", RungA},
-		{"only the builder's family: C, not a person", anthropic, []string{"claude"}, nil, "claude", RungC},
-		{"unknown builder: C with any app", unknown, []string{"codex"}, nil, "codex", RungC},
-		{"amp may be anthropic or openai: both apps are C", amp, []string{"claude", "codex"}, nil, "claude", RungC},
-		{"amp builder, Cursor on Grok: A", amp, []string{"claude", "codex", "cursor"}, xaiCursor, "cursor", RungA},
-		{"Cursor of unknown family is only C", anthropic, []string{"cursor"}, nil, "cursor", RungC},
-		{"no app: a person", anthropic, nil, nil, "", RungHuman},
+		{"codex chosen, another family: A", anthropic, "codex", all, nil, nil, "codex", RungA},
+		{"claude chosen, the builder's family: a labelled C, not replaced", anthropic, "claude", all, nil, nil, "claude", RungC},
+		{"coderabbit is A for an anthropic builder", anthropic, "coderabbit", all, nil, nil, "coderabbit", RungA},
+		{"greptile is A even for an unknown builder", unknown, "greptile", all, nil, nil, "greptile", RungA},
+		{"coderabbit is A for amp (anthropic or openai)", amp, "coderabbit", all, nil, nil, "coderabbit", RungA},
+		{"unknown builder: codex is C", unknown, "codex", all, nil, nil, "codex", RungC},
+		{"amp builder, Cursor on Grok: A", amp, "cursor", all, xaiCursor, nil, "cursor", RungA},
+		{"Cursor of unknown family is only C", anthropic, "cursor", all, nil, nil, "cursor", RungC},
+		{"a chosen app that is not installed is still asked", anthropic, "codex", nil, nil, nil, "codex", RungA},
+		{"codex cannot review: the next installed app in the fixed order", anthropic, "codex", all, nil, []string{"codex"}, "coderabbit", RungA},
+		{"codex and coderabbit cannot: greptile", anthropic, "codex", all, nil, []string{"codex", "coderabbit"}, "greptile", RungA},
+		{"claude cannot: codex comes first in the order", anthropic, "claude", all, nil, []string{"claude"}, "codex", RungA},
+		{"no installed app left: a person (grok is the caller's step)", anthropic, "codex", []string{"codex"}, nil, []string{"codex"}, "", RungHuman},
+		{"grok's own fallback: the first installed app in the order", anthropic, "grok", []string{"claude", "greptile"}, nil, nil, "greptile", RungA},
+		{"human", anthropic, "human", all, nil, nil, "", RungHuman},
+		{"unset: a person", anthropic, "", all, nil, nil, "", RungHuman},
+		{"a leftover auto: a person", anthropic, "auto", all, nil, nil, "", RungHuman},
 	} {
-		c := ChooseReviewer(ReviewerAuto, tt.installed, tt.families, tt.b, "founder")
+		c := ChooseReviewer(tt.reviewer, tt.installed, tt.families, tt.b, "founder", tt.skip...)
 		if c.App != tt.app || c.Rung != tt.rung {
 			t.Errorf("%s: chose %q at rung %q; want %q at %q (%v)", tt.name, c.App, c.Rung, tt.app, tt.rung, c.Notes)
+		}
+		if (tt.reviewer == "" || tt.reviewer == "auto") && !strings.Contains(strings.Join(c.Notes, " "), `set [inspect] reviewer = "<tool>"`) {
+			t.Errorf("%s: the notes do not say how to choose: %v", tt.name, c.Notes)
 		}
 	}
 	// The reported model settles the rung: a reply by an openai model on an
@@ -845,5 +862,77 @@ func TestJudgeCarriesClassInstances(t *testing.T) {
 	res, _, _ = Runner{}.Judge(context.Background(), in, st, AppReply{Reply: Reply{Disposition: Merge, Summary: "s", Findings: []Finding{}}, Head: in.Head, Reviewed: both})
 	if res.Disposition != Merge || len(res.Findings) != 0 {
 		t.Fatalf("every instance's file changed: %s %+v", res.Disposition, res.Findings)
+	}
+}
+
+// CodeRabbit's and Greptile's own reviews of the head are read
+// deterministically (Story #635): the receipt, then each inline comment on the
+// head with a severity badge is a finding; a thread reply, a comment on another
+// commit, or no receipt for the head is not a reply.
+func TestReadServiceReply(t *testing.T) {
+	head, old := strings.Repeat("a", 40), strings.Repeat("b", 40)
+	at := time.Date(2026, 10, 18, 14, 0, 0, 0, time.UTC)
+	criteria := []workitems.Criterion{{N: 1}, {N: 2}}
+	choice := func(app string) Choice { return ChooseReviewer(app, []string{app}, nil, Builder{}, "") }
+	const rabbit, greptile = "coderabbitai[bot]", "greptile-apps[bot]"
+	major := "**🔒 Security** | **🟠 Major** | **⚡ Quick win**\n\n**Guard an empty total.**\n\n`Percent(0, 0)` divides by zero, so criterion 1 is not met.\n\n<!-- This is an auto-generated comment by CodeRabbit -->"
+	trivial := "**🧹 Nitpick** | **🔵 Trivial**\n\n**Name the constant.**\n\nA magic number."
+	rabbitPosts := []Post{
+		{Kind: "comment", ID: 1, Login: rabbit, Body: "<!-- walkthrough -->\n## Walkthrough\nAdds Percent.", Updated: at},
+		{Kind: "review", ID: 2, Login: rabbit, Commit: head, Body: "**Actionable comments posted: 1**", Updated: at},
+		{Kind: "inline", ID: 3, Login: rabbit, Commit: head, Path: "internal/report/percent.go", Line: 9, Body: major, Updated: at},
+		{Kind: "inline", ID: 4, Login: rabbit, Commit: head, Path: "internal/report/percent.go", Line: 2, Body: trivial, Updated: at},
+		{Kind: "inline", ID: 5, Login: rabbit, Commit: head, Path: "internal/report/percent.go", Line: 3, Body: "Thanks, noted.", Updated: at},
+		{Kind: "inline", ID: 6, Login: rabbit, Commit: old, Path: "internal/report/percent.go", Line: 4, Body: major, Updated: at},
+	}
+	r, err := ReadReply(choice(AppCodeRabbit), rabbitPosts, head, time.Time{}, nil, criteria, []string{"internal/report/percent.go"})
+	if err != nil || r.Disposition != Fix || len(r.Findings) != 2 || r.Findings[0].Severity != "P1" || r.Findings[0].Title != "Guard an empty total." ||
+		r.Findings[0].Line != 9 || r.Findings[0].Category != "security" || r.Findings[1].Severity != "P3" || r.Findings[1].Category != "bug" || r.Criteria[0].Verdict != "unmet" || r.Criteria[1].Verdict != "unclear" {
+		t.Fatalf("coderabbit: %v %+v", err, r)
+	}
+	// Without its review of the head, CodeRabbit has not replied; a rate-limit
+	// comment after the request makes it unavailable.
+	if _, err := ReadReply(choice(AppCodeRabbit), rabbitPosts[2:], head, time.Time{}, nil, criteria, nil); !errors.Is(err, ErrNoReply) {
+		t.Fatalf("coderabbit without a review of the head: %v", err)
+	}
+	limited := append(slices.Clone(rabbitPosts[:1]), Post{Kind: "comment", ID: 7, Login: rabbit, Body: "Rate limit exceeded: wait 12 minutes.", Updated: at})
+	if _, err := ReadReply(choice(AppCodeRabbit), limited, head, at.Add(-time.Minute), nil, criteria, nil); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("coderabbit at its rate limit: %v", err)
+	}
+	// A walkthrough about quota code is not a limit notice: still no reply. A
+	// review of the head that says it hit a limit is never a clean review.
+	walk := []Post{{Kind: "comment", ID: 10, Login: rabbit, Body: "<!-- This is an auto-generated comment: summarize by coderabbit.ai -->\n## Walkthrough\nFalls back when Codex reaches its usage limits or quota.", Updated: at}}
+	if _, err := ReadReply(choice(AppCodeRabbit), walk, head, at.Add(-time.Minute), nil, criteria, nil); !errors.Is(err, ErrNoReply) {
+		t.Fatalf("a walkthrough about quotas: %v", err)
+	}
+	skipped := []Post{{Kind: "review", ID: 11, Login: rabbit, Commit: head, Body: "> [!WARNING]\n> ## Rate limit exceeded\n> Review skipped.", Updated: at}}
+	if _, err := ReadReply(choice(AppCodeRabbit), skipped, head, time.Time{}, nil, criteria, nil); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("a rate-limited review of the head: %v", err)
+	}
+	// CodeRabbit's findings outside the diff are in its review's body; a review
+	// that discusses quotas is still a review, and a Codex comment that does is
+	// malformed, never a limit notice.
+	outside := "**Actionable comments posted: 0**\n\nThis PR changes quota handling.\n\n> [!CAUTION]\n> **⚠️ Outside diff range comments (1)**\n> \n> <details>\n> <summary><strong>🟠 Major</strong> · Preserve the response service tier when calculating cost. · <code>gateway.go:50</code></summary><blockquote>\n> \n> `internal/models/gateway.go:50`\n> **🗄️ Data Integrity** | **🟠 Major**\n> \n> **Preserve the response service tier when calculating cost.**\n> </blockquote></details>\n"
+	r, err = ReadReply(choice(AppCodeRabbit), []Post{{Kind: "review", ID: 12, Login: rabbit, Commit: head, Body: outside, Updated: at}}, head, time.Time{}, nil, criteria, nil)
+	if err != nil || r.Disposition != Fix || len(r.Findings) != 1 || r.Findings[0].Severity != "P1" || r.Findings[0].File != "internal/models/gateway.go" || r.Findings[0].Line != 50 ||
+		r.Findings[0].Title != "Preserve the response service tier when calculating cost." {
+		t.Fatalf("coderabbit's outside-diff finding: %v %+v", err, r)
+	}
+	prose := []Post{{Kind: "comment", ID: 13, Login: "chatgpt-codex-connector[bot]", Body: "This review checks quota handling and usage limits in the fallback.", Updated: at}}
+	if _, err := ReadReply(choice(AppCodex), prose, head, at.Add(-time.Minute), nil, criteria, nil); !errors.Is(err, ErrMalformed) {
+		t.Fatalf("a codex comment about quotas: %v", err)
+	}
+	// Greptile: its summary names the head; a P2 does not block.
+	greptilePosts := []Post{
+		{Kind: "comment", ID: 8, Login: greptile, Body: "<!-- greptile_summary -->\n\n<sub>Last reviewed commit: [\"feat\"](https://github.com/o/r/commit/" + head + ")</sub>", Updated: at},
+		{Kind: "inline", ID: 9, Login: greptile, Commit: head, Path: "internal/report/percent.go", Line: 4,
+			Body: `<a href="#"><img alt="P2" src="https://greptile-static-assets.s3.amazonaws.com/badges/p2.svg" align="top"></a> **Comment restates the code**` + "\n\nThe doc comment repeats the function."},
+	}
+	r, err = ReadReply(choice(AppGreptile), greptilePosts, head, time.Time{}, nil, criteria, nil)
+	if err != nil || r.Disposition != Merge || len(r.Findings) != 1 || r.Findings[0].Severity != "P2" || r.Findings[0].Title != "Comment restates the code" {
+		t.Fatalf("greptile: %v %+v", err, r)
+	}
+	if _, err := ReadReply(choice(AppGreptile), greptilePosts, old, time.Time{}, nil, criteria, nil); !errors.Is(err, ErrNoReply) {
+		t.Fatalf("greptile's summary of another head: %v", err)
 	}
 }

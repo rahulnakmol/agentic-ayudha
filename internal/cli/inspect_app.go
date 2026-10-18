@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -44,8 +45,8 @@ type appInspect struct {
 	// carries something new the gate must keep (a failed paid call's head).
 	record bool
 	// paidTried: rung B already reviewed and failed on this head, or cannot
-	// step in, so an app that cannot review (inspect.ErrUnavailable) falls to
-	// a human. Without it that error is returned for rung B to step in.
+	// step in, so when no installed app can review (inspect.ErrUnavailable)
+	// a human does. Without it that error is returned for rung B to step in.
 	paidTried bool
 }
 
@@ -113,24 +114,61 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 	if !a.in.Reopened.IsZero() && a.prev.Judged(head, time.Time{}) && !a.prev.Judged(head, a.in.Reopened) {
 		floor = a.in.Reopened
 	}
-	var since time.Time
-	for _, p := range posts {
-		if rs, ok := inspect.ParseRequest(p.Body); ok && p.Kind == "comment" && rs.Head == head && p.Updated.After(floor) && (since.IsZero() || p.Updated.Before(since)) {
-			since = p.Updated
+	// Each reviewer's wait starts from its own review request for the head. A
+	// review service with none of its own starts from the head's first
+	// request, since it reviews every head unasked; a mention-only app with
+	// none (a fallback the gate cannot ask, since the apps answer only the
+	// people who connected them) has no wait to run out until `aayu inspect`
+	// outside CI asks it (CodeRabbit's P1 on #641).
+	requested := func(c inspect.Choice) (own, first time.Time) {
+		for _, p := range posts {
+			rs, ok := inspect.ParseRequest(p.Body)
+			if !ok || p.Kind != "comment" || rs.Head != head || !p.Updated.After(floor) {
+				continue
+			}
+			if first.IsZero() || p.Updated.Before(first) {
+				first = p.Updated
+			}
+			if rs.Reviewer == c.Kind() && (own.IsZero() || p.Updated.Before(own)) {
+				own = p.Updated
+			}
 		}
+		return own, first
 	}
-	if !e.CI && since.IsZero() {
+	var since time.Time
+	// switchTo makes c the reviewer: outside CI it posts c's own request under
+	// the person's account when there is none, and its wait starts now.
+	switchTo := func(c inspect.Choice) error {
+		choice = c
+		own, first := requested(c)
+		since = own
+		if c.Family == inspect.FamilyService {
+			since = cmp.Or(own, first)
+		}
+		if !own.IsZero() {
+			return nil
+		}
+		if e.CI {
+			if !first.IsZero() && c.Family != inspect.FamilyService {
+				notes = append(notes, fmt.Sprintf("%s has no review request of its own for this head, so the gate waits for it; `aayu inspect %d` outside CI asks it", c.Kind(), n))
+			}
+			return nil
+		}
 		hc, _, err := e.HumanGitHub(ctx)
 		if err != nil {
 			return err
 		}
-		marker := fmt.Sprintf(`%s{"head":%q`, inspect.RequestMarker, head)
-		if _, err := hc.UpsertComment(ctx, a.repo, n, marker, inspect.Request(choice, a.in, head, a.prev), actions.Action{Kind: "github.comment.review-request",
-			Payload: map[string]any{"head": head, "reviewer": choice.Kind()}}); err != nil {
+		marker := fmt.Sprintf(`%s{"head":%q,"reviewer":%q}`, inspect.RequestMarker, head, c.Kind())
+		if _, err := hc.UpsertComment(ctx, a.repo, n, marker, inspect.Request(c, a.in, head, a.prev), actions.Action{Kind: "github.comment.review-request",
+			Payload: map[string]any{"head": head, "reviewer": c.Kind()}}); err != nil {
 			return Wrap(ExitExternal, err)
 		}
-		notes = append(notes, "review requested from "+choice.Kind()+" under your account")
+		notes = append(notes, "review requested from "+c.Kind()+" under your account")
 		since = e.Now()
+		return nil
+	}
+	if err := switchTo(choice); err != nil {
+		return err
 	}
 	if !e.CI {
 		if note, err := e.preExistingBug(ctx, a.repo, n, head, a.prev.Result); err != nil {
@@ -148,9 +186,27 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 	if !floor.IsZero() {
 		replies = slices.DeleteFunc(slices.Clone(posts), func(p inspect.Post) bool { return !p.Updated.After(floor) })
 	}
-	rep, rerr := inspect.ReadReply(choice, replies, head, since, human, a.in.Criteria, changed)
-	if errors.Is(rerr, inspect.ErrNoReply) && choice.App != "" && !since.IsZero() && e.Now().Sub(since) > inspect.ReplyWait {
-		rerr = fmt.Errorf("%w: %s has not replied in the %.0f minutes since the review request", inspect.ErrUnavailable, choice.App, inspect.ReplyWait.Minutes())
+	read := func(c inspect.Choice) (inspect.AppReply, error) {
+		rep, err := inspect.ReadReply(c, replies, head, since, human, a.in.Criteria, changed)
+		if errors.Is(err, inspect.ErrNoReply) && c.App != "" && !since.IsZero() && e.Now().Sub(since) > inspect.ReplyWait {
+			err = fmt.Errorf("%w: %s has not replied in the %.0f minutes since the review request", inspect.ErrUnavailable, c.App, inspect.ReplyWait.Minutes())
+		}
+		return rep, err
+	}
+	rep, rerr := read(choice)
+	// The chosen app cannot review this head: the next installed app in the
+	// fixed order (inspect.Apps) reviews in its place, then rung B, then a person.
+	for skip := []string{}; errors.Is(rerr, inspect.ErrUnavailable) && choice.App != ""; {
+		skip = append(skip, choice.App)
+		next := inspect.ChooseReviewer(a.cfg.Inspect.Reviewer, a.cfg.Inspect.Apps, a.cfg.Inspect.AppFamilies, a.builder, a.cfg.Autonomy.Approver, skip...)
+		if next.App == "" {
+			break
+		}
+		notes = append(notes, fmt.Sprintf("fallback to %s: %s cannot review this head (%s)", next.App, choice.App, oneLineErr(rerr)))
+		if err := switchTo(next); err != nil {
+			return err
+		}
+		rep, rerr = read(choice)
 	}
 	if replyEvent {
 		return e.rerunInspect(ctx, a.c, owner, name, n, head, choice, rerr)
@@ -161,8 +217,10 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		}
 		h := inspect.ChooseReviewer(inspect.ReviewerHuman, nil, nil, a.builder, a.cfg.Autonomy.Approver)
 		notes = append(notes, fmt.Sprintf("fallback to %s: %s cannot review this head (%s), and rung B ([inspect] paid_reviewer) cannot review it either", h.Kind(), choice.Kind(), oneLineErr(rerr)))
-		choice = h
-		rep, rerr = inspect.ReadReply(choice, replies, head, since, human, a.in.Criteria, changed)
+		if err := switchTo(h); err != nil {
+			return err
+		}
+		rep, rerr = read(choice)
 	}
 	pager, err := e.Notifier(ctx)
 	if err != nil {
@@ -296,6 +354,8 @@ func reviewRung(b inspect.Builder, c inspect.Choice, rep inspect.AppReply) (stri
 	switch {
 	case rep.Model != "" && !modelID.MatchString(rep.Model):
 		f, who = "", c.App+" with a model ID aayu does not accept" // reviewer text never reaches the label
+	case rep.Model != "" && c.Family == inspect.FamilyService:
+		who = c.App + " with " + rep.Model // a service's review is rung A whatever model it names (inspect.FamilyService)
 	case rep.Model != "" && c.Family != "" && c.Family != verbs.FamilyHostManaged && verbs.FamilyOf(rep.Model) != c.Family:
 		// An app of one family cannot run another's model: the claim is
 		// reviewer text (a hallucination or injected PR content), not a fact.

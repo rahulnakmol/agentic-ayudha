@@ -874,22 +874,23 @@
         "reviewer": {
           "type": "string",
           "enum": [
-            "auto",
-            "claude",
             "codex",
+            "coderabbit",
+            "greptile",
+            "claude",
             "cursor",
-            "amp",
+            "grok",
             "human",
             "model"
           ],
-          "description": "Who reviews in the merge gate. auto: the first installed agent app (apps) of a family other than the builder's, else a human; claude, codex, cursor: that app (a same-family app falls back); human: a human review; model: the review lane's model, called with a key (aayudha's evals, or a person who holds one)."
+          "description": "The one review tool of the merge gate; every repository names it (aayu install asks). codex, coderabbit, greptile, claude, cursor: that installed app (a same-family app is a labelled rung-C review; CodeRabbit and Greptile count as rung A for any builder); grok: [inspect] paid_reviewer through the AI gateway; human: a person; model: the review lane's model (aayudha's evals). When the chosen tool cannot review (a usage-limit or quota reply, or no reply within 30 minutes), the next installed app in the order codex, coderabbit, greptile, claude, cursor reviews, then grok, then a person. Unset, a person reviews every PR."
         },
         "apps": {
           "items": {
             "type": "string"
           },
           "type": "array",
-          "description": "Agent apps installed on the repository's org or account that answer an @-mention with a review: claude, codex, cursor. aayu doctor and aayu install detect them."
+          "description": "Agent apps installed on the repository's org or account that review pull requests: codex, coderabbit, greptile, claude, cursor. aayu doctor and aayu install detect them."
         },
         "app_families": {
           "additionalProperties": {

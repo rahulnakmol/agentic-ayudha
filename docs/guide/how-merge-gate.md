@@ -109,17 +109,26 @@ with an @-mention and reads its reply deterministically:
 
 | App | Request | Replies as | Family |
 |---|---|---|---|
-| Claude | `@claude review` | `claude[bot]` | Anthropic |
 | Codex | `@codex review` | `chatgpt-codex-connector[bot]` | OpenAI |
+| CodeRabbit | `@coderabbitai review` | `coderabbitai[bot]` | review service: a different-family review for any builder |
+| Greptile | `@greptileai` | `greptile-apps[bot]` | review service: a different-family review for any builder |
+| Claude | `@claude review` | `claude[bot]` | Anthropic |
 | Cursor | `@cursor` | `cursor[bot]` | none until `[inspect] app_families.cursor` names one: Cursor runs several vendors' models |
 | Amp | — | — | cannot review: Amp acts as the account that runs it, so its reply cannot be told from a person's |
 
 `[inspect] apps` lists the apps installed (`aayu doctor`'s `reviewer-apps` row and `aayu install` detect them from
 the account's installations, and from the comments, reviews, and checks on the last ten pull requests).
-`[inspect] reviewer` picks one on the review ladder. `auto`, the default, takes the first listed app whose family the
-builder cannot be: a different-family review. With none, it takes the first listed app that can review: a
-same-family review, the default for a user with one subscription. With no app at all, a person reviews,
-`[autonomy] approver`. A high-risk pull request still gets this one reviewer, never two. `aayu doctor`'s
+`[inspect] reviewer` names the one review tool: `codex`, `coderabbit`, `greptile`, `claude`, `cursor`, `grok` (the
+paid reviewer through the AI gateway, called directly), or `human`. There is no automatic choice (founder,
+2026-10-18). `aayu install --apply` asks for it and writes it. Unset, a person reviews every pull request, the inspect
+comment says how to choose, and `aayu doctor` fails with the same step. The chosen tool is the only reviewer while it
+answers; a same-family app gives a labelled same-family review.
+
+CodeRabbit and Greptile are dedicated review services. Their review counts as different-family whatever the builder's
+family. The founder decided this on 2026-10-18: "When CodeRabbit or Greptile is used for code review we don't need to
+worry about model family, as they are more robust." It is a deliberate exception to the family rule. aayu reads their
+own review of the head: its inline comments on the head commit, with CodeRabbit's Critical, Major, Minor, and Trivial
+as P0 to P3, and Greptile's P0 to P2 badges. A high-risk pull request still gets this one reviewer, never two. `aayu doctor`'s
 `review-rung` row shows the rung this checkout's builds get, from the detected host's build lane and the listed
 apps, and names the apps that would move it up; it calls no model.
 
@@ -128,7 +137,7 @@ The review the gate records, and shows as the first line of the inspect comment,
 | Review | When | Counts toward autonomy |
 |---|---|---|
 | Different-family | The reviewer's model is of a family outside every family the builder may be | yes |
-| Different-family, paid (rung B) | No listed app reaches a different family, and the repository opted into a paid reviewer of one | yes |
+| Different-family, paid (rung B) | `reviewer = "grok"`, or no installed app can review the head, and the repository opted into a paid reviewer of another family | yes |
 | Same-family | The reviewer is of the builder's family, or the builder's family is unknown | never; never layers and protected paths still need a person |
 | Human | A person reviewed | a person's review |
 
@@ -153,23 +162,25 @@ Every paid review asks for fast serving (`service_tier` `priority`) and is charg
 standard rate for Grok 4.7, so the cap holds. The inspect comment records the tier the reply was served at, and flags
 one that is not fast.
 
-**When the reviewer app cannot review.** The app always reviews first. When it replies that it reached a usage limit or
-quota (Codex: "You have reached your Codex usage limits for code reviews"), or has not replied 30 minutes after the
-review request, the paid reviewer reviews in its place, with the same key, cap, and checks. The inspect comment's note
-names the rung and why. When the paid reviewer is not configured, cannot be used, or fails too, a person reviews
-(`[autonomy] approver`). The reviewer is never of a family the builder may be, at any step. The gate notices the
-30 minutes only when its inspect job runs again: a push, a re-run of the failed job, or a bot's comment or a review on
-the pull request.
+**When the chosen tool cannot review.** An app cannot review a head when it replies that it reached a usage limit,
+quota, or rate limit (Codex: "You have reached your Codex usage limits for code reviews"), or has not replied 30
+minutes after the review request. Then the next installed app reviews, in a fixed order: codex, coderabbit, greptile,
+claude, cursor. After the apps comes the paid reviewer, with the same key, cap, and checks, then a person
+(`[autonomy] approver`). When `grok` is chosen and cannot review, the apps review in that order, then a person. The
+inspect comment's note names each step and why. A same-family app is labelled so at any step, and the paid reviewer
+is never of a family the builder may be. The gate notices the 30 minutes only when its inspect job runs again: a push,
+a re-run of the failed job, or a bot's comment or a review on the pull request. The 30 minutes run from that app's own
+request. CodeRabbit and Greptile review every head unasked, so for them they run from the head's first request; an app
+that reviews only when asked (Claude, Cursor) waits until `aayu inspect <pr>` outside CI asks it.
 
-The gate tries the ladder in order: an app of another family first (free), then the paid reviewer, then a same-family
-app. When it uses the paid reviewer, the inspect job calls the model with the key and does not @-mention an app. It
+When the gate uses the paid reviewer, the inspect job calls the model with the key and does not @-mention an app. It
 reviews a PR that serves no story against its title, description, and diff. `[budget] per_pr_inspect_max` (5 USD by
 default) caps one PR's spend across its cycles, and a cap of 0 turns rung B off. Only a PR whose author has write access
 to the repository (GitHub's permission level, not the author association) gets a paid review, so a person who can
 only read cannot open PRs to spend the key. The review is labelled
 `different-family review (B, paid)` everywhere and counts toward autonomy as rung A does. If the secret is missing, the
 model is of a family the builder may be, the cap is 0, the paid call fails (a gateway timeout on a large diff), or the PR
-has spent its cap, the gate logs why and the app reviews. A failed call's cost still counts toward the cap. A failed paid
+has spent its cap, the gate logs why and the apps review. A failed call's cost still counts toward the cap. A failed paid
 call is recorded against the head: later runs on that head, such as the one a reply triggers, go straight to the app, and
 the next push tries the paid reviewer again. A run triggered by a reply makes no paid call itself. It only re-runs the
 head's inspect job. `aayu doctor`'s

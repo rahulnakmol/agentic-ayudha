@@ -1,0 +1,15 @@
+[[criterion]]
+id = 1
+tests = ["./internal/cli:TestInspectReviewTools", "./internal/inspect:TestReviewLadder"]
+
+[[criterion]]
+id = 2
+tests = ["./internal/cli:TestInspectReviewTools"]
+
+[[criterion]]
+id = 3
+tests = ["./internal/cli:TestInspectReviewTools"]
+
+[[criterion]]
+id = 4
+tests = ["./internal/cli:TestInspectReviewTools", "./internal/doctor:TestCheckStates", "./internal/cli:TestInstall"]
