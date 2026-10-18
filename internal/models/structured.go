@@ -59,6 +59,27 @@ func Structured(ctx context.Context, complete func(context.Context, Request) (Re
 	return last
 }
 
+// ValidReply reports why text is not a reply that validates against the
+// schema f asks for (nil when it is, or when f asks for none), the check
+// Structured makes; a route can use it to fall back before Structured retries.
+func ValidReply(text string, f *Format) error {
+	if f == nil {
+		return nil
+	}
+	var s Schema
+	if err := json.Unmarshal(f.Schema, &s); err != nil {
+		return fmt.Errorf("schema: %w", err)
+	}
+	var v any
+	if err := json.Unmarshal([]byte(extractJSON(text)), &v); err != nil {
+		return fmt.Errorf("reply is not JSON: %w", err)
+	}
+	if errs := s.Validate(v); len(errs) > 0 {
+		return fmt.Errorf("reply does not validate: %s", strings.Join(errs, "; "))
+	}
+	return nil
+}
+
 // ReplyError is a structured reply that failed twice, not JSON (Parse) or not
 // valid against the schema, or once by stopping at the token cap (Truncated).
 // Reply is the last reply, verbatim.

@@ -174,11 +174,55 @@ func (e *Env) reviewer(ctx context.Context, b *uireview.Browser, story int, deep
 	if deep {
 		effort = "high"
 	}
-	return &uireview.Reviewer{Tools: b, Model: rev.Model, Effort: effort, K: uireview.K, MinTargetPx: l.Config.Verify.Floors.A11y.MinTargetPx, Now: e.Now,
-		Complete: func(ctx context.Context, req models.Request) (models.Response, error) {
-			resp, _, err := gw.Do(ctx, models.Call{Story: key, Seat: string(verbs.UXResearcher), Lane: verbs.LaneUIReview, Host: verbs.DirectHost, Req: req})
-			return resp, err
-		}}, nil
+	r := &uireview.Reviewer{Tools: b, Model: rev.Model, Effort: effort, K: uireview.K, MinTargetPx: l.Config.Verify.Floors.A11y.MinTargetPx, Now: e.Now}
+	call := func(ctx context.Context, host verbs.HostID, req models.Request) (models.Response, error) {
+		resp, _, err := gw.Do(ctx, models.Call{Story: key, Seat: string(verbs.UXResearcher), Lane: verbs.LaneUIReview, Host: host, Req: req})
+		return resp, err
+	}
+	r.Complete = func(ctx context.Context, req models.Request) (models.Response, error) {
+		return call(ctx, verbs.DirectHost, req)
+	}
+	// The opt-in Copilot route: a [models.ui-review.copilot] row naming a
+	// concrete Copilot model sends lane A through copilot -p. It fails closed:
+	// a call it cannot make or read goes to the lane's normal route, which every
+	// later call then uses, and the label says so. It never skips the review.
+	cp, err := gw.Resolver.ResolveDirect(verbs.LaneUIReview, verbs.HostCopilot, false)
+	if err != nil || !models.CopilotOptIn(cp) {
+		return r, nil
+	}
+	if err := models.CheckFamilies(key, builder, cp.Family); err != nil {
+		return nil, Wrap(ExitBlocked, err)
+	}
+	via, used, failed := cp.Model+" via Copilot", false, ""
+	r.Model = via
+	r.Used = func() string {
+		switch {
+		case failed == "":
+			return via
+		case used:
+			return via + ", then " + rev.Model + " (the Copilot route failed: " + failed + ")"
+		}
+		return rev.Model + " (the Copilot route failed: " + failed + ")"
+	}
+	r.Complete = func(ctx context.Context, req models.Request) (models.Response, error) {
+		if failed == "" {
+			resp, err := call(ctx, verbs.HostCopilot, req)
+			if err == nil {
+				err = models.ValidReply(resp.Text, req.Format)
+			}
+			if err == nil || errors.Is(err, models.ErrBudget) {
+				used = used || err == nil
+				return resp, err
+			}
+			failed = strings.SplitN(err.Error(), "\n", 2)[0]
+			if len(failed) > 160 {
+				failed = failed[:160] + "…"
+			}
+			fmt.Fprintf(e.Err, "ui-review: the Copilot route (%s) failed: %s; lane A falls back to %s (%s)\n", cp.Model, failed, rev.Model, effort)
+		}
+		return call(ctx, verbs.DirectHost, req)
+	}
+	return r, nil
 }
 
 // review runs both lanes on the PR's states and keeps the critique and the

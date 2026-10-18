@@ -58,6 +58,25 @@ interim until the AI gateway routes the target, `gemini-4-argon-high`, which nee
 > instead of findings, and `aayu review` stops. Set the key with `aayu auth set-secret <name>`. Verify sends only
 > screenshots that its redaction pass read with OCR, so it also needs `tesseract` installed.
 
+**Gemini 4 Argon through Copilot (opt-in).** With a Copilot plan that enables Gemini 4 Argon, you can send the
+ui-review lane's calls through Copilot instead:
+
+```toml
+[models.ui-review.copilot]
+model = "gemini-4-argon"
+```
+
+When that row names a model rather than an Auto selector, the binary runs the lane's calls with Copilot CLI
+(`copilot -p --model gemini-4-argon --reasoning-effort high`, the screenshots as attachments, no tools). It runs in an
+empty directory with a fresh `COPILOT_HOME`, so no repository hooks, MCP servers, or custom instructions load. It signs
+in with the `copilot` secret, else `COPILOT_GITHUB_TOKEN`, which goes to that process only. Each call is charged the AI
+credits Copilot reports: input at 2 USD and visible output at 10 USD per million tokens, with reasoning not billed,
+about 0.043 USD for a lane A call (two probes, 2026-10-18). The route fails closed: when `copilot` is not installed or
+not signed in, or a reply does not parse, that call and every later one go to the default route. `aayu` says so on
+stderr and in the label (`gemini-3.8-flash (the Copilot route failed: …)`), and the review still runs. It is opt-in
+until the ux evals pass on it; the defaults stay Gemini 3.8 Flash. `CopilotCLI` in `internal/models/copilot.go`,
+`TestCopilotCLI` and `TestCopilotUIReviewRoute`.
+
 ## How `aayu models` resolves a lane
 
 `aayu models` prints the model, family, source, and route for every lane on every host (or only one host with

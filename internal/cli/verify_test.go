@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -428,5 +429,75 @@ func TestVerifyScreenshotReview(t *testing.T) {
 	leaky := &models.Fake{Replies: []models.Response{leak, leak, leak}}
 	if sr := newE(leaky).screenshotReview(context.Background(), arts, 0, ""); sr == nil || len(sr.Findings) != 0 || !strings.Contains(sr.Skipped, "personal data") || strings.Contains(sr.Skipped, "jane.doe@acme.io") {
 		t.Fatalf("findings quoting personal data: %+v", sr)
+	}
+}
+
+// TestCopilotUIReviewRoute: a [models.ui-review.copilot] row naming a concrete
+// model opts the binary's ui-review calls into the Copilot route, at the
+// lane's effort, charged the credits Copilot reports. It fails closed: when
+// copilot cannot be run or its reply does not parse, that call and every
+// later one go to the normal flash-high route, the label says so, and the
+// review still happens.
+func TestCopilotUIReviewRoute(t *testing.T) {
+	png := []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR")
+	arts := []verify.Evidence{{Path: "screens/1.png", Kind: "screenshot", Data: png, OCRScanned: true}}
+	argon := laneAReply("contrast")
+	argon.CostUSD = 0.043
+	setup := func(copilot models.Client) (*Env, *models.Fake, string) {
+		dir := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(dir, ".config", "aayudha"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, ".config", "aayudha", "config.toml"), []byte("version = 1\n[models.ui-review.copilot]\nmodel = \"gemini-4-argon\"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		gateway := &models.Fake{Replies: []models.Response{laneAReply("contrast"), laneAReply("contrast"), laneAReply()}}
+		var log strings.Builder
+		e, err := newEnv(IO{In: strings.NewReader(""), Out: io.Discard, Err: &log}, Options{Dir: dir,
+			Getenv: func(k string) string {
+				return map[string]string{"HOME": dir, "XDG_STATE_HOME": dir, "AAYU_SECRET_GOOGLE": "k", "COPILOT_GITHUB_TOKEN": "copilot-tok"}[k]
+			},
+			GHToken: func(context.Context) (string, error) { return "", os.ErrNotExist },
+			ModelClient: func(r models.Route, key string) models.Client {
+				if r.Via == models.CopilotRoute.Via {
+					if key != "copilot-tok" {
+						t.Errorf("the Copilot route got key %q, want COPILOT_GITHUB_TOKEN", key)
+					}
+					return copilot
+				}
+				return gateway
+			}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return e, gateway, e.ActionsPath()
+	}
+
+	cp := &models.Fake{Replies: []models.Response{argon}}
+	e, gateway, logPath := setup(cp)
+	sr := e.screenshotReview(context.Background(), arts, 0, "")
+	if sr == nil || sr.Skipped != "" || sr.Model != "gemini-4-argon via Copilot" || len(sr.Findings) != 1 || len(cp.Requests) != uireview.K || len(gateway.Requests) != 0 {
+		t.Fatalf("Copilot route: %+v, %d Copilot and %d gateway calls", sr, len(cp.Requests), len(gateway.Requests))
+	}
+	if r := cp.Requests[0]; r.Model != "gemini-4-argon" || r.Effort != "high" || len(r.Messages[0].Images) != 1 {
+		t.Fatalf("Copilot request: model %s, effort %q", r.Model, r.Effort)
+	}
+	if b, _ := os.ReadFile(logPath); !strings.Contains(string(b), `"via":"copilot"`) || !strings.Contains(string(b), `"cost_source":"reported"`) || !strings.Contains(string(b), `"cost_usd":0.043`) {
+		t.Fatalf("actions log does not charge the reported credits:\n%s", b)
+	}
+
+	for name, copilot := range map[string]*models.Fake{
+		"copilot missing":   {Err: fmt.Errorf("%w: copilot (GitHub Copilot CLI) is not installed", models.ErrCopilot)},
+		"reply is not JSON": {Replies: []models.Response{{Text: "Sure! Here is my review."}}},
+	} {
+		e, gateway, _ := setup(copilot)
+		sr := e.screenshotReview(context.Background(), arts, 0, "")
+		if sr == nil || sr.Skipped != "" || len(sr.Findings) != 1 || len(copilot.Requests) != 1 || len(gateway.Requests) != uireview.K ||
+			!strings.HasPrefix(sr.Model, verbs.ModelGemini+" (the Copilot route failed: ") {
+			t.Errorf("%s: %+v, %d Copilot and %d gateway calls", name, sr, len(copilot.Requests), len(gateway.Requests))
+		}
+		if !strings.Contains(e.IO.Err.(*strings.Builder).String(), "lane A falls back to "+verbs.ModelGemini+" (high)") {
+			t.Errorf("%s: the fallback is not reported: %q", name, e.IO.Err.(*strings.Builder).String())
+		}
 	}
 }

@@ -227,6 +227,9 @@ func (g *Gateway) Do(ctx context.Context, c Call) (Response, Resolved, error) {
 		}
 	}
 	route, err := RouteFor(g.Models, m.Model, m.Family)
+	if CopilotOptIn(m) {
+		route, err = CopilotRoute, nil
+	}
 	if err != nil {
 		return Response{}, m, err
 	}
@@ -285,6 +288,9 @@ func (g *Gateway) WithModel(lane verbs.LaneID, host verbs.HostID, model string) 
 func (g *Gateway) client(route Route, key string) Client {
 	if g.Client != nil {
 		return g.Client(route, key)
+	}
+	if route.Via == CopilotRoute.Via {
+		return CopilotCLI{Token: key, Path: os.Getenv("PATH")}
 	}
 	return HTTPClient{BaseURL: route.BaseURL, Style: route.Style, Key: key, KeyAuth: route.KeyAuth, HTTP: g.HTTP}
 }
