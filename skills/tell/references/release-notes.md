@@ -130,7 +130,7 @@ The reader the request or the brief names comes first. Without one, the stage de
   everyone, one line serves both: do not invent a team benefit.
 - Leave out a part with no source. Keep the limit only when a reader would otherwise expect more. Say "does not",
   never "not yet" or "today": those hint at work that is not proven.
-- A number appears only from a Result, with its unit, population, and window.
+- A number appears only from a Result or a criterion, in its own unit and population (and, for a Result, its window).
 - A picture is a claim too. Use the pack's own screenshot or recording only when the grounding gives its full URL,
   with alt text that restates the criterion. Never build a URL from an evidence path.
 
