@@ -5,7 +5,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 )
 
 // MinOptions is the fewest options a Decision offers at Ready, so the person
@@ -45,12 +44,13 @@ func ParseOptions(s string) ([]Option, []Problem) {
 	var ps []Problem
 	fence := "" // the open fence's delimiter run; only a run of the same character at least as long closes it
 	for _, line := range strings.Split(strings.ReplaceAll(s, "\r\n", "\n"), "\n") {
-		if f := fenceRun.FindString(strings.TrimSpace(line)); f != "" {
+		t := strings.TrimSpace(line)
+		if f := fenceRun.FindString(t); f != "" {
 			switch {
 			case fence == "":
 				fence = f
 				continue
-			case f[0] == fence[0] && len(f) >= len(fence):
+			case f[0] == fence[0] && len(f) >= len(fence) && strings.Trim(t, string(f[0])) == "": // a closer carries nothing after its run
 				fence = ""
 				continue
 			}
@@ -71,9 +71,15 @@ func ParseOptions(s string) ([]Option, []Problem) {
 		}
 	}
 	marked := 0
+	seen := map[string]int{}
 	for _, o := range os {
 		if o.Recommended {
 			marked++
+		}
+		if k := strings.ToLower(o.Name); seen[k] != 0 {
+			ps = append(ps, Problem{"options", fmt.Sprintf("options %d and %d are both named %q; give each its own name, so accepting it by name is unambiguous", seen[k], o.N, o.Name)})
+		} else {
+			seen[k] = o.N
 		}
 	}
 	switch {
@@ -116,10 +122,6 @@ func optionOf(n int, rest string) Option {
 	name, text := rest, ""
 	if m := optionPlain.FindStringSubmatch(rest); m != nil {
 		name, text = m[1], m[2]
-	}
-	if utf8.RuneCountInString(name) > 60 {
-		r := []rune(name)
-		name = strings.TrimSpace(string(r[:59])) + "…"
 	}
 	return Option{N: n, Name: strings.TrimRight(name, ".:"), Text: text, Recommended: marked}
 }
