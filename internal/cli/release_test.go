@@ -766,6 +766,9 @@ func TestReleasePicksAnEvaluatedCommit(t *testing.T) {
 	f.g.Mu.Unlock()
 	older := f.commit(t, "feat: evaluated (#34)", 34, "Refs #2", "story/2-evaluated")
 	f.noEvals = true
+	// The newest commit adds a gating group; the older commit is judged by its own groups, as the gate would judge it.
+	_ = os.WriteFile(filepath.Join(f.dir, "evals", "eval.toml"), []byte("[[groups]]\nname = \"skills\"\n\n[[groups]]\nname = \"survey\"\n\n[[groups]]\nname = \"ux\"\n"), 0o644)
+	git(t, f.dir, "add", "evals")
 	newest := f.commit(t, "feat: not evaluated yet (#35)", 35, "Refs #2", "story/2-newest")
 
 	for _, mode := range []string{"--dry-run", "--yes"} { // a dry run refuses as the promotion would

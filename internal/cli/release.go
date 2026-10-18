@@ -828,27 +828,28 @@ func (e *Env) dispatchAndWait(ctx context.Context, c *github.Client, repo, workf
 func (e *Env) evaluated(ctx context.Context, c *github.Client, gitOut func(string, ...string) (string, error), root, repo string, n int,
 	src, dst, sha string, chosen bool) (*RunRef, error) {
 	owner, name, _ := github.SplitRepo(repo)
-	var cfg struct {
-		Groups []struct {
-			Name string `toml:"name"`
-			Gate string `toml:"gate"`
-		} `toml:"groups"`
-	}
-	if b, err := gitOut(root, "show", sha+":evals/eval.toml"); err == nil {
-		if err := toml.Unmarshal([]byte(b), &cfg); err != nil {
-			return nil, Errorf(ExitBlocked, "release: evals/eval.toml at %s: %v", short(sha), err)
-		}
-	}
-	var gating []string
-	for _, g := range cfg.Groups {
-		if g.Gate != "advisory" { // as evals.Config.Gates
-			gating = append(gating, g.Name)
-		}
-	}
 	// results reports the newest completed run of commit h, and the gating
-	// groups none of h's completed runs has results for. It asks for h's runs
-	// by commit, so a commit whose run is far down dev's run list still counts.
+	// groups of h's own evals/eval.toml (what the gate checks when h is
+	// promoted) none of h's completed runs has results for. It asks for h's
+	// runs by commit, so a commit whose run is far down dev's run list still counts.
 	results := func(h string) (*RunRef, []string, error) {
+		var cfg struct {
+			Groups []struct {
+				Name string `toml:"name"`
+				Gate string `toml:"gate"`
+			} `toml:"groups"`
+		}
+		if b, err := gitOut(root, "show", h+":evals/eval.toml"); err == nil {
+			if err := toml.Unmarshal([]byte(b), &cfg); err != nil {
+				return nil, nil, Errorf(ExitBlocked, "release: evals/eval.toml at %s: %v", short(h), err)
+			}
+		}
+		var gating []string
+		for _, g := range cfg.Groups {
+			if g.Gate != "advisory" { // as evals.Config.Gates
+				gating = append(gating, g.Name)
+			}
+		}
 		runs, _, err := c.REST.Actions.ListWorkflowRunsByFileName(ctx, owner, name, evalsWorkflow,
 			&gh.ListWorkflowRunsOptions{HeadSHA: h, Status: "completed", ListOptions: gh.ListOptions{PerPage: 100}})
 		if err != nil {
