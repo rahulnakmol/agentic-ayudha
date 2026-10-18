@@ -3,5 +3,18 @@
   "branch": "story/513-a-runbook-s-alert-is-checked-against-the",
   "started_at": "2026-10-18T03:40:24Z",
   "failed_attempts": 0,
-  "checkpoints": null
+  "checkpoints": [
+    {
+      "k": 1,
+      "n": 1,
+      "attempt": 1,
+      "commit": "fe388f15efd327ac1dbe5eb8077376cf8016cbae",
+      "layers": [
+        "L06"
+      ],
+      "verify": "hold",
+      "detail": "floors hold; not run here (tool not installed; the merge gate runs them): sast, secrets, deps",
+      "at": "2026-10-18T03:44:46Z"
+    }
+  ]
 }
