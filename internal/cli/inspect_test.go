@@ -1418,13 +1418,12 @@ func TestInspectPaidReviewer(t *testing.T) {
 		t.Fatalf("a spent cap: exit %d %s, %d model calls, state %+v %s", code, res.Disposition, len(model.Requests), inspect.ParseState(lastInspect(t, g, prN)), errOut)
 	}
 
-	// The build session's review spends from the same cap: a PR body that
-	// records 4 USD of it leaves 1 of 5, and a gate record of 1 spends that.
+	// The build session's review spends from the same cap: a build record on
+	// the ledger of 4 USD leaves 1 of 5, and a gate record of 1 spends that.
 	// The session's figure stays off the gate's record.
 	g, env, opts, prN, model = setup(`"claude"`, "google-key")
-	g.Mu.Lock()
-	g.Pulls[prN].Body += "\n\n" + sessionReviewStart + "\nSpent on the session review: 4.0000 USD.\n\n" + sessionReviewEnd
-	g.Mu.Unlock()
+	rec, _ := json.Marshal(BuildState{Story: 2, ReviewUSD: 4})
+	putLedger(t, filepath.Join(filepath.Dir(opts.Dir), "origin.git"), BuildLedgerPath(2), string(rec))
 	addComment(g, prN, "github-actions[bot]", "Bot", inspect.Marker+"\n<!-- aayudha:inspect-state {\"diff_hash\":\"x\",\"cycles\":0,\"spent_usd\":1,\"hashes\":[]} -->\n")
 	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || res.Disposition != NoReply || len(model.Requests) != 0 || inspect.ParseState(lastInspect(t, g, prN)).SpentUSD != 1 {
 		t.Fatalf("a cap the session review shares: exit %d %s, %d model calls, state %+v %s", code, res.Disposition, len(model.Requests), inspect.ParseState(lastInspect(t, g, prN)), errOut)

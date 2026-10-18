@@ -1041,6 +1041,16 @@ func TestBuildSessionReviewLoop(t *testing.T) {
 	if code, _, errOut := build("--decline", res.Review.Open[0].ID+": the story asks for this approach"); code != 0 {
 		t.Fatalf("declining the verdict: %d %s", code, errOut)
 	}
+	// A decline answers its round only: the first round's declined finding,
+	// raised again on a later head, is open again.
+	model.Replies = []models.Response{sessionReply("first")}
+	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("first again\n"), 0o644)
+	if code, res, errOut = build(); code != ExitBlocked || len(res.Review.Open) != 1 || res.Review.Open[0].ID != id {
+		t.Fatalf("a declined finding raised again: %d %+v %s", code, res.Review, errOut)
+	}
+	if code, _, errOut := build("--decline", id+": still the story's own example"); code != 0 || !strings.Contains(body(), "`"+id+"` P1 first is wrong (a.go:3): still the story's own example") {
+		t.Fatalf("declining it again: %d %s\n%s", code, errOut, body())
+	}
 
 	// A P2 that a later round raises again stays open, though inspect does not
 	// post it twice.
@@ -1070,9 +1080,9 @@ func TestBuildSessionReviewLoop(t *testing.T) {
 	}
 	model.Err = nil
 
-	// The spend the PR body records still caps the PR when the worktree's
-	// own state is gone, as on a resume elsewhere, with the merge gate's
-	// spend: no new review call.
+	// The spend the build's ledger record keeps still caps the PR when the
+	// worktree's own state is gone, as on a resume elsewhere, with the merge
+	// gate's spend: no new review call. The PR body's figure is not read.
 	stateFile := filepath.Join(git(t, wt, "rev-parse", "--absolute-git-dir"), sessionReviewFile)
 	_ = os.Remove(stateFile)
 	paid := sessionReply("")
@@ -1082,10 +1092,16 @@ func TestBuildSessionReviewLoop(t *testing.T) {
 	if code, res, errOut := build(); code != 0 || len(res.Review.Open) != 0 {
 		t.Fatalf("a paid round that merges: %d %+v %s", code, res.Review, errOut)
 	}
-	spent := sessionSpent(body())
+	var rec BuildState
+	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &rec)
+	spent := rec.ReviewUSD
 	if spent <= 0 || !strings.Contains(body(), "Spent on the session review: ") {
-		t.Fatalf("the PR body records no session review spend:\n%s", body())
+		t.Fatalf("no session review spend on the ledger (%v) or in the PR body:\n%s", spent, body())
 	}
+	g.Mu.Lock()
+	g.Pulls[prN].Body = strings.ReplaceAll(g.Pulls[prN].Body, "Spent on the session review: ", "Spent: ")
+	g.Issues[prN].Body = g.Pulls[prN].Body
+	g.Mu.Unlock()
 	if err := os.Remove(stateFile); err != nil {
 		t.Fatal(err)
 	}

@@ -54,10 +54,9 @@ const (
 
 // sessionReview is the build session's review loop for one story.
 type sessionReview struct {
-	State    inspect.State     `json:"state"` // inspect's rounds, carried findings, cache, and spend
-	Rounds   []sessionRound    `json:"rounds,omitempty"`
-	Declined map[string]string `json:"declined,omitempty"` // item ID -> the builder's reason
-	Pushed   int               `json:"pushed"`             // rounds before this index went out with an earlier push
+	State  inspect.State  `json:"state"` // inspect's rounds, carried findings, cache, and spend
+	Rounds []sessionRound `json:"rounds,omitempty"`
+	Pushed int            `json:"pushed"` // rounds before this index went out with an earlier push
 	// PushedAt is when the last push went out: inspect's round cap counts the
 	// rounds since, as after a person's reopen, while open P0s and P1s of
 	// earlier rounds still carry forward.
@@ -92,6 +91,9 @@ type sessionItem struct {
 	Title    string `json:"title"`
 	Detail   string `json:"detail,omitempty"`
 	Fix      string `json:"fix,omitempty"`
+	// Declined is the builder's reason for declining the item in this round:
+	// a later round that raises it again asks again.
+	Declined string `json:"declined,omitempty"`
 }
 
 // SessionReview is what build reports of the session review.
@@ -141,7 +143,7 @@ func (s *sessionReview) open() []sessionItem {
 	if len(s.Rounds) == 0 {
 		return nil
 	}
-	return slices.DeleteFunc(slices.Clone(s.Rounds[len(s.Rounds)-1].Items), func(it sessionItem) bool { return s.Declined[it.ID] != "" })
+	return slices.DeleteFunc(slices.Clone(s.Rounds[len(s.Rounds)-1].Items), func(it sessionItem) bool { return it.Declined != "" })
 }
 
 // decline records the builder's reasons, one "<id>: <why>" a line, for items
@@ -153,13 +155,14 @@ func (s *sessionReview) decline(text string) error {
 		if !ok || why == "" {
 			return fmt.Errorf("--decline %q: write \"<id>: <why>\", one a line", line)
 		}
-		if !slices.ContainsFunc(s.open(), func(it sessionItem) bool { return it.ID == id }) {
+		i := -1
+		if len(s.Rounds) > 0 {
+			i = slices.IndexFunc(s.Rounds[len(s.Rounds)-1].Items, func(it sessionItem) bool { return it.ID == id && it.Declined == "" })
+		}
+		if i < 0 {
 			return fmt.Errorf("--decline: %s is not an open item of the last session review", id)
 		}
-		if s.Declined == nil {
-			s.Declined = map[string]string{}
-		}
-		s.Declined[id] = why
+		s.Rounds[len(s.Rounds)-1].Items[i].Declined = why
 	}
 	return nil
 }
@@ -260,9 +263,9 @@ func (e *Env) reviewSession(ctx context.Context, s *sessionReview, a sessionRevi
 		Filter:    inspect.Filter{MinConfidence: cfg.Inspect.MinConfidence, SuppressAfter: cfg.Inspect.SuppressAfter, Generated: cfg.Inspect.Generated},
 		Reviewers: []inspect.Reviewer{{Model: m.Model, Complete: e.reviewCall(gw, &cfg, m.Model, story, &served)}}}
 	// The spend outlives the worktree: a resumed build on another machine
-	// starts from what the PR body says was spent, so per_pr_inspect_max
-	// still caps the PR.
-	s.State.SpentUSD = max(s.State.SpentUSD, sessionSpent(a.pr.GetBody()))
+	// starts from what the build's ledger record says was spent, so
+	// per_pr_inspect_max still caps the PR.
+	s.State.SpentUSD = max(s.State.SpentUSD, a.st.ReviewUSD)
 	// inspect's cache key leaves out the builder's declarations: a result
 	// another reviewer gave, before a declaration changed the pick, is not
 	// this reviewer's.
@@ -464,26 +467,31 @@ func (s *sessionReview) summary() string {
 		if last.Serving != "" {
 			fmt.Fprintf(&b, "Last round's serving: %s.\n\n", sessionCell(last.Serving))
 		}
-		seen := map[string]bool{}
-		var fixed, declined, open []string
+		// Each item as the last round that raised it left it.
+		var ids []string
+		latest := map[string]sessionItem{}
 		for _, r := range s.Rounds {
 			for _, it := range r.Items {
-				if seen[it.ID] {
-					continue
+				if _, ok := latest[it.ID]; !ok {
+					ids = append(ids, it.ID)
 				}
-				seen[it.ID] = true
-				line := fmt.Sprintf("`%s` %s %s", it.ID, it.Severity, sessionCell(it.Title))
-				if it.File != "" {
-					line += fmt.Sprintf(" (%s:%d)", sessionCell(it.File), it.Line)
-				}
-				switch {
-				case s.Declined[it.ID] != "":
-					declined = append(declined, line+": "+sessionCell(s.Declined[it.ID]))
-				case slices.ContainsFunc(last.Items, func(x sessionItem) bool { return x.ID == it.ID }):
-					open = append(open, line)
-				default:
-					fixed = append(fixed, line)
-				}
+				latest[it.ID] = it
+			}
+		}
+		var fixed, declined, open []string
+		for _, id := range ids {
+			it := latest[id]
+			line := fmt.Sprintf("`%s` %s %s", it.ID, it.Severity, sessionCell(it.Title))
+			if it.File != "" {
+				line += fmt.Sprintf(" (%s:%d)", sessionCell(it.File), it.Line)
+			}
+			switch {
+			case it.Declined != "":
+				declined = append(declined, line+": "+sessionCell(it.Declined))
+			case slices.ContainsFunc(last.Items, func(x sessionItem) bool { return x.ID == it.ID }):
+				open = append(open, line)
+			default:
+				fixed = append(fixed, line)
 			}
 		}
 		for _, g := range []struct {
@@ -507,27 +515,6 @@ func (s *sessionReview) summary() string {
 	}
 	b.WriteString(sessionReviewEnd)
 	return b.String()
-}
-
-// spentLine is the summary's spend line; rows, bullets, and the other lines
-// start otherwise, so builder- and model-written text cannot forge one.
-var spentLine = regexp.MustCompile(`(?m)^Spent on the session review: ([0-9]+(?:\.[0-9]+)?) USD\.$`)
-
-// sessionSpent is the session review's spend that a PR body's section records.
-func sessionSpent(body string) float64 {
-	i := strings.Index(body, sessionReviewStart)
-	if i < 0 {
-		return 0
-	}
-	sec, _, _ := strings.Cut(body[i:], sessionReviewEnd)
-	var usd float64
-	for _, m := range spentLine.FindAllStringSubmatch(sec, -1) {
-		var v float64
-		if _, err := fmt.Sscan(m[1], &v); err == nil {
-			usd = max(usd, v)
-		}
-	}
-	return usd
 }
 
 // withSessionSummary replaces the session review section of a PR body, or

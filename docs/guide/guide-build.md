@@ -41,7 +41,8 @@ or, when a `fix` or `rebuild` verdict names nothing else, the verdict itself (`D
 two things for each:
 
 - fixes it, and runs `aayu build <story>` again: the fix is the same checkpoint's next attempt, not a failed one;
-- declines it with a reason: `aayu build <story> --decline "<id>: <why>"`, one item a line.
+- declines it with a reason: `aayu build <story> --decline "<id>: <why>"`, one item a line. A decline answers that
+  round only: a later round that raises the item again asks again.
 
 The loop ends when nothing is left open, or after 3 rounds since the last push. Then `build` pushes. The pull
 request's description gets a **Session review (self-attested)** section, replaced in place on each push. It lists the
@@ -62,8 +63,8 @@ It must be of a family the builder cannot be (`AAYU_MODEL`, or the host's build 
 and keeps any a person adds there; the reviewer is of none of the families they name. When none can be called, the
 push goes out without a session review, and the section says why. A build delegated to another agent is reviewed by
 the merge gate only. Each round is metered spend, within `[budget] per_pr_inspect_max`, one cap that the merge gate's
-review shares. The section records what the rounds spent, so a build resumed on another machine and the merge gate
-both count it against that cap. A cap of 0 means no cap to inspect, so the session review does not run.
+review shares. The build's record on the ledger keeps what the rounds spent, so a build resumed on another machine
+and the merge gate both count it against that cap. A cap of 0 means no cap to inspect, so the session review does not run.
 
 ## Hand it to another agent
 

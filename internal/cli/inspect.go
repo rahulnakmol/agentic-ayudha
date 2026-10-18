@@ -331,6 +331,7 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	res := inspect.Result{PR: n, Head: pr.GetHead().GetSHA()}
 	var deleg delegate.State
 	checkpoints := map[string]string{} // checkpoint commit -> model, from build's ledger record (Bug #171)
+	var sessionUSD float64             // the build session's review spend, from the same record
 	if ins.Story > 0 {
 		if is, _, err := c.REST.Issues.Get(ctx, owner, name, ins.Story); err == nil {
 			ins.StoryTitle, ins.StoryBody = is.GetTitle(), is.GetBody()
@@ -354,6 +355,7 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 					for _, cp := range st.Checkpoints {
 						checkpoints[cp.Commit] = cp.Model
 					}
+					sessionUSD = st.ReviewUSD
 				}
 				t.Close()
 			}
@@ -572,7 +574,7 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		return err
 	}
 	// The build session's review spends from the same per-PR cap.
-	r := inspect.Runner{MaxUSD: l.Config.Budget.PerPRInspectMax, SpentElsewhere: sessionSpent(pr.GetBody()),
+	r := inspect.Runner{MaxUSD: l.Config.Budget.PerPRInspectMax, SpentElsewhere: sessionUSD,
 		Filter: inspect.Filter{MinConfidence: cfg.MinConfidence, SuppressAfter: cfg.SuppressAfter, Generated: cfg.Generated},
 		Page: func(ctx context.Context, subject, body string) error {
 			_, err := pager.Page(ctx, notify.Page{Key: fmt.Sprintf("inspect:%s#%d", repo, n), Subject: subject, Body: body})

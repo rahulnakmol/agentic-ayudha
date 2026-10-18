@@ -102,6 +102,10 @@ type BuildState struct {
 	Checkpoints []CheckpointRecord `json:"checkpoints"`
 	Blocked     string             `json:"blocked,omitempty"`
 	Unblocked   []string           `json:"unblocked,omitempty"` // when a human made the story Ready again after a block
+	// ReviewUSD is what the session review spent on the story's PR: on the
+	// ledger, which the PR cannot change, so a resumed build and the merge
+	// gate count it against [budget] per_pr_inspect_max.
+	ReviewUSD float64 `json:"session_review_usd,omitempty"`
 }
 
 // CheckpointRecord is one checkpoint commit and what verify said of it.
@@ -231,7 +235,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	now := e.Now().UTC()
 	if st.Blocked != "" {
 		// A human made the story Ready again after the block: the budget starts over.
-		st = BuildState{Unblocked: append(st.Unblocked, now.Format(time.RFC3339)+" after: "+st.Blocked), Checkpoints: st.Checkpoints}
+		st = BuildState{Unblocked: append(st.Unblocked, now.Format(time.RFC3339)+" after: "+st.Blocked), Checkpoints: st.Checkpoints, ReviewUSD: st.ReviewUSD}
 	}
 	if st.StartedAt == "" {
 		st.StartedAt = now.Format(time.RFC3339)
@@ -569,6 +573,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			ciSpent = inspectState(comments, viewer(ctx, c), l.Config.Identity).SpentUSD
 		}
 		wait, rep, err := e.reviewSession(ctx, &sr, sessionReviewIn{cfg: &l.Config, w: w, repo: repo, n: n, chk: chk, body: is.GetBody(), pr: pr, ciSpent: ciSpent, wt: res.Worktree, dev: dev, head: head, st: st})
+		st.ReviewUSD = max(st.ReviewUSD, sr.State.SpentUSD)
 		if serr := sr.save(ctx, res.Worktree); serr != nil && err == nil {
 			err = Wrap(ExitInternal, serr)
 		}
