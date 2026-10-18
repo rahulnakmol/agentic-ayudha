@@ -154,6 +154,7 @@ for this release.
 - The `doctor` mcp row counts plugin servers, and the agents row shows versions (#459).
 - The design token check skips story references in JS and CSS comments and names each literal's line (#506).
 - The keychain probe never starts a session dbus-daemon, and the credential scan never reads WTW variables (#533, #545, #564).
+- `aayu ship`, the inspect reply job, and the inbox ignore the skipped merge-gate checks of a reply run, so a comment on a pull request no longer hides the gate's passing checks (#690, #643, #693).
 
 ## v0.2.0
 
