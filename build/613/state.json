@@ -3,5 +3,18 @@
   "branch": "story/613-the-production-engineer-s-skills-use-the",
   "started_at": "2026-10-18T08:53:22Z",
   "failed_attempts": 0,
-  "checkpoints": null
+  "checkpoints": [
+    {
+      "k": 1,
+      "n": 1,
+      "attempt": 1,
+      "commit": "9acfaeff20a93c19fbc071ab05388be9337e1156",
+      "layers": [
+        "L03"
+      ],
+      "verify": "error",
+      "detail": "config: /home/user/workspace/repo/.aayudha/worktrees/613/.aayudha/config.toml: decoding failed due to the following error(s):\n\n'inspect' has invalid keys: paid_effort",
+      "at": "2026-10-18T09:01:14Z"
+    }
+  ]
 }
