@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/user"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -24,8 +26,57 @@ type Keychain struct{}
 
 func (Keychain) Name() string { return "keychain" }
 
+// errNoSessionBus is the Secret Service's answer before it is asked: there is
+// no D-Bus session bus to ask it on.
+var errNoSessionBus = errors.New("OS keychain unavailable: no D-Bus session bus (DBUS_SESSION_BUS_ADDRESS is unset or autolaunch:, and /run/user/<uid> has no bus or dbus-session)")
+
+// runUserDir is where godbus looks for a running session bus when
+// DBUS_SESSION_BUS_ADDRESS is unset (conn_other.go, getRuntimeDirectory):
+// /run/user/<uid> from user.Current, never XDG_RUNTIME_DIR. When the lookup
+// fails, godbus skips this discovery and runs dbus-launch.
+var runUserDir = func() (string, error) {
+	u, err := user.Current()
+	if err != nil {
+		return "", err
+	}
+	return "/run/user/" + u.Uid, nil
+}
+
+// sessionBus reports whether the Secret Service can be reached without
+// starting anything. go-keyring's D-Bus library otherwise runs dbus-launch,
+// which forks a session dbus-daemon that outlives aayu: one per probe on a
+// headless machine. It mirrors the lookup godbus v5 runs before it falls back
+// to dbus-launch: an address it would dial, which an empty or autolaunch: one
+// is not. macOS and Windows use no D-Bus.
+func sessionBus() error {
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+		return nil
+	}
+	dialable := func(a string) bool { return a != "" && !strings.HasPrefix(a, "autolaunch:") }
+	if dialable(os.Getenv("DBUS_SESSION_BUS_ADDRESS")) {
+		return nil
+	}
+	dir, err := runUserDir()
+	if err != nil {
+		return errNoSessionBus
+	}
+	// godbus's discovery, in its order: the bus socket, then a file naming the address.
+	if _, err := os.Stat(filepath.Join(dir, "bus")); err == nil {
+		return nil
+	}
+	if b, err := os.ReadFile(filepath.Join(dir, "dbus-session")); err == nil {
+		if a, ok := strings.CutPrefix(string(b), "DBUS_SESSION_BUS_ADDRESS="); ok && dialable(strings.TrimSpace(a)) {
+			return nil
+		}
+	}
+	return errNoSessionBus
+}
+
 // Available probes the keychain; headless Linux without a Secret Service fails here.
 func (Keychain) Available() error {
+	if err := sessionBus(); err != nil {
+		return err
+	}
 	_, err := keyring.Get(keyringService, "aayudha-probe")
 	if err == nil || errors.Is(err, keyring.ErrNotFound) {
 		return nil
@@ -34,6 +85,9 @@ func (Keychain) Available() error {
 }
 
 func (Keychain) Get(name string) (string, error) {
+	if err := sessionBus(); err != nil {
+		return "", err
+	}
 	v, err := keyring.Get(keyringService, name)
 	if errors.Is(err, keyring.ErrNotFound) {
 		return "", ErrNotFound
@@ -41,9 +95,17 @@ func (Keychain) Get(name string) (string, error) {
 	return v, err
 }
 
-func (Keychain) Set(name, value string) error { return keyring.Set(keyringService, name, value) }
+func (Keychain) Set(name, value string) error {
+	if err := sessionBus(); err != nil {
+		return err
+	}
+	return keyring.Set(keyringService, name, value)
+}
 
 func (Keychain) Delete(name string) error {
+	if err := sessionBus(); err != nil {
+		return err
+	}
 	err := keyring.Delete(keyringService, name)
 	if errors.Is(err, keyring.ErrNotFound) {
 		return ErrNotFound
