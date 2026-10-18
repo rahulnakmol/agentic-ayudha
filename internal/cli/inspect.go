@@ -382,13 +382,17 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		}
 	}
 	trailers(pr.GetBody())
-	if cs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.RepositoryCommit, *gh.Response, error) {
+	// Without the commits' declarations a family could be missing, so a
+	// failed listing fails the run rather than reviewing on the rest.
+	cs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.RepositoryCommit, *gh.Response, error) {
 		return c.REST.PullRequests.ListCommits(ctx, owner, name, n, &o)
-	}); err == nil {
-		for _, x := range cs {
-			commits = append(commits, x.GetSHA())
-			trailers(x.GetCommit().GetMessage())
-		}
+	})
+	if err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	for _, x := range cs {
+		commits = append(commits, x.GetSHA())
+		trailers(x.GetCommit().GetMessage())
 	}
 	if ins.Pack != nil {
 		_, known := verbs.FindHost(verbs.HostID(ins.Pack.Host))
@@ -448,6 +452,11 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	if res.Model != "" {
 		res.ReviewerFamily = verbs.FamilyOf(res.Model)
 		res.Rung = builder.Rung(res.ReviewerFamily)
+		// A cached result comes from a PR comment anyone can write, so its
+		// model counts only when it is one the review lane picks now.
+		if !slices.ContainsFunc(picked, func(m models.Resolved) bool { return m.Model == res.Model }) {
+			res.Rung = inspect.RungC
+		}
 		res.Review = builder.RungLabel(res.Rung, res.Model, res.ReviewerFamily)
 	}
 	res.Notes = append(notes, res.Notes...)

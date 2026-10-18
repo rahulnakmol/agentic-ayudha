@@ -394,6 +394,14 @@ func TestInspectBuilderFamily(t *testing.T) {
 			if st := inspect.ParseState(comment); st.Result == nil || st.Result.Rung != inspect.RungC || !strings.Contains(comment, "same-family review (C)") {
 				t.Fatalf("the comment keeps the stale rung: %+v\n%s", st.Result, comment)
 			}
+			// Anyone can write the cached state: a reviewer model the lane did
+			// not pick, of a family the builder is not, never makes it A.
+			g.Mu.Lock()
+			g.Issues[prN].Comments[0].Body = strings.ReplaceAll(comment, `"model":"`+tc.wantModel+`"`, `"model":"gemini-3.8-flash"`)
+			g.Mu.Unlock()
+			if code, res, errOut = inspectRun(t, env, opts, model, prN); code != 0 || !res.Cached || res.Model != "gemini-3.8-flash" || res.Rung != inspect.RungC {
+				t.Fatalf("a forged cached model: %d cached %v model %q rung %q: %s", code, res.Cached, res.Model, res.Rung, errOut)
+			}
 		})
 	}
 }

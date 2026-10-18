@@ -324,7 +324,7 @@ var (
 	reJobLogs   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/jobs/([0-9]+)/logs$`)
 	reRunJobs   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/runs/([0-9]+)/jobs$`)
 	reArtZip    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/artifacts/([0-9]+)/zip$`)
-	rePull      = regexp.MustCompile(`^/repos/[^/]+/[^/]+/pulls/([0-9]+)(/reviews|/files|/merge|/comments)?$`)
+	rePull      = regexp.MustCompile(`^/repos/[^/]+/[^/]+/pulls/([0-9]+)(/reviews|/files|/merge|/comments|/commits)?$`)
 	reIssue     = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)$`)
 	reLabels    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/labels$`)
 	reLabel     = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/labels/(.+)$`)
@@ -823,6 +823,8 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			reply(200, out)
+		case sm[2] == "/commits" && m == "GET": // the head commit alone; Static gives a PR more
+			reply(200, []map[string]any{{"sha": pr.Head.SHA, "commit": map[string]any{"message": ""}}})
 		case sm[2] == "/files" && m == "GET":
 			out := []map[string]any{}
 			for _, f := range pr.Files {
