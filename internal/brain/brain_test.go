@@ -109,6 +109,22 @@ func TestCheckpointKeepsHumanTextAndRefreshesGeneratedBlocks(t *testing.T) {
 	if err != nil || len(again.Paths) != 0 {
 		t.Errorf("a second checkpoint with the same records changed %v (%v)", again.Paths, err)
 	}
+
+	// A main rung releases a version that has no GitHub Release; a person who
+	// lost every role keeps a note that no longer claims one.
+	r.Rungs = append(r.Rungs, Rung{Path: "releases/300/main.json", Release: 300, Version: "v0.3.0", Target: "main", Tag: "v0.3.0"})
+	merged["People/olduser.md"] = note("id: person-olduser\ntype: person\ntitle: olduser\nowner: founder\nstatus: alumni\nupdated: 2026-10-01\nsources: [\"file .aayudha/config.toml\"]\nup: \"[[People]]\"\ntags: [type/person]\n",
+		"# olduser\n\n## Roles\n\n"+Block("roles", "- [[Founder]]")+"\n")
+	third, err := Run(merged, r, today, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := Parse("", third.Files["Releases/v0.3.0.md"]); n.Str("status") != "released" {
+		t.Errorf("a version on main is %q, want released", n.Str("status"))
+	}
+	if got := string(third.Files["People/olduser.md"]); !strings.Contains(got, "- No role in the current records.") || strings.Contains(got, "[[Founder]]") {
+		t.Errorf("a person who lost every role still claims one:\n%s", got)
+	}
 }
 
 func TestCheckpointRendersThePlanAndItsDrift(t *testing.T) {
@@ -202,19 +218,21 @@ func TestCheckObjectionsAndSupersedesLinkBothWays(t *testing.T) {
 	}
 	files["Decisions/A.md"] = note(dec("a", "supersedes: [\"[[B]]\"]\nobjections: [\"[[Too slow]]\"]\n"), "# A\n")
 	files["Decisions/B.md"] = note(dec("b", ""), "# B\n")
-	files["Objections/Too slow.md"] = note("id: objection-slow\ntype: objection\ntitle: Too slow\nowner: product-strategist\nstatus: answered\nupdated: 2026-10-18\nsources: [\"issue #2\"]\nup: \"[[Objections]]\"\nraised_by: rahulnakmol\nobjects_to: \"[[B]]\"\ntags: [type/objection]\n", "# Too slow\n")
+	files["Objections/Too slow.md"] = note("id: objection-slow\ntype: objection\ntitle: Too slow\nowner: product-strategist\nstatus: answered\nupdated: 2026-10-18\nsources: [\"issue #2\"]\nup: \"[[Objections]]\"\nraised_by: the founder\nobjects_to: \"[[B]]\"\ntags: [type/objection]\n", "# Too slow\n")
 	got := rules(Check(files))
 	for _, want := range []string{
 		"two-way supersedes: [[B]] does not link back under superseded_by",
 		"two-way objections: [[Too slow]] does not link back under objects_to",
 		"two-way objects_to: [[B]] does not link back under objections",
 		"objection status answered needs a resolution",
+		"objection raised_by \"the founder\" is neither a seat slug nor a GitHub login",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("want %q, got:\n%s", want, got)
 		}
 	}
 	files["Decisions/B.md"] = note(dec("b", "superseded_by: [\"[[A]]\"]\n"), "# B\n")
+	files["Objections/Too slow.md"] = []byte(strings.Replace(string(files["Objections/Too slow.md"]), "raised_by: the founder", "raised_by: founder", 1))
 	files["Objections/Too slow.md"] = []byte(strings.Replace(strings.Replace(string(files["Objections/Too slow.md"]), `"[[B]]"`, `"[[A]]"`, 1), "raised_by:", "resolution: The cache answers it.\nraised_by:", 1))
 	if got := rules(Check(files)); got != "" {
 		t.Errorf("two-way links in place, yet:\n%s", got)

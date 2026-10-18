@@ -344,6 +344,9 @@ func (c *cp) releases() {
 		}
 		for _, g := range c.r.Rungs {
 			if g.Version == ver {
+				if g.Target == "main" {
+					status = "released" // the main rung proves it, with or without a GitHub Release
+				}
 				issue = g.Release
 				src = append(src, "issue #"+strconv.Itoa(g.Release), "ledger "+g.Path)
 				rec = append(rec, fmt.Sprintf("- Promoted to %s as %s by Release #%d (ledger `%s`).", g.Target, g.Tag, g.Release, g.Path))
@@ -581,6 +584,13 @@ func (c *cp) seats() {
 			return n
 		}, map[string]any{"sources": []string{"file seats/" + s.ID + "/persona.toml", "file internal/verbs/registry.go"}},
 			map[string]string{"facts": strings.Join(facts, "\n")})
+	}
+	// A person who no longer holds a role keeps their note; its generated
+	// roles say so, rather than a role they lost.
+	for _, p := range slices.Sorted(mapKeys(c.v.Notes)) {
+		if n := c.v.Notes[p]; n.Str("type") == "person" && people[strings.TrimSuffix(strings.TrimPrefix(p, "People/"), ".md")] == nil && Blocks(n.Body)["roles"] != "" {
+			c.upsert(p, nil, nil, map[string]string{"roles": "- No role in the current records."})
+		}
 	}
 	for _, login := range slices.Sorted(maps.Keys(people)) {
 		p := "People/" + strings.ToLower(login) + ".md"

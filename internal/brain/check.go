@@ -272,6 +272,11 @@ func Check(files map[string][]byte) Report {
 			if st := n.Str("status"); st != "open" && strings.TrimSpace(n.Str("resolution")) == "" {
 				fail(p, "objection", "status %s needs a resolution: say why it was answered, accepted, or set aside", st)
 			}
+			if rb := n.Str("raised_by"); rb == "" {
+				fail(p, "objection", "no raised_by: name who raised it, by GitHub login or seat slug")
+			} else if _, seat := verbs.FindSeat(verbs.SeatID(rb)); !seat && !loginRE.MatchString(rb) {
+				fail(p, "objection", "raised_by %q is neither a seat slug nor a GitHub login", rb)
+			}
 			if lt := linkTarget(n.Str("objects_to")); lt == "" {
 				fail(p, "objection", "no objects_to link: name the note this objection is against")
 			}
