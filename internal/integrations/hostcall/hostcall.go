@@ -105,12 +105,18 @@ func check(v Verdict, tool string, o Options) Verdict {
 	case l.pii[tool] && o.AllowPII[v.Provider]:
 		v.Allow = true
 	case l.pii[tool]:
-		v.Reason = fmt.Sprintf("aayudha: %s %s returns personal data, which is opt-in: a person sets [integrations.%s] allow_pii = true in .aayudha/config.toml to allow it.", name, quote(tool), v.Provider)
+		v.Reason = piiReason(v.Provider, quote(tool))
 	default:
 		v.Reason = fmt.Sprintf("aayudha: %s %s is not on aayudha's read allowlist, so it may write or spend: agents only read %s through a host. "+
 			"A write is a catalog action a person approves: propose it with the verb that owns it, which runs it through ops/actions.toml.", name, quote(tool), name)
 	}
 	return v
+}
+
+// piiReason refuses a read that returns personal data while allow_pii is off.
+func piiReason(provider, call string) string {
+	name := map[string]string{PostHog: "PostHog", Sentry: "Sentry"}[provider]
+	return fmt.Sprintf("aayudha: %s %s returns personal data, which is opt-in: a person sets [integrations.%s] allow_pii = true in .aayudha/config.toml to allow it.", name, call, provider)
 }
 
 func quote(s string) string {
@@ -282,8 +288,12 @@ var cliReads = map[string][]string{
 }
 
 // sentryNouns are the new sentry CLI's nouns whose list, view, and events
-// subcommands read.
-var sentryNouns = []string{"issue", "event", "span", "trace", "log", "replay", "feedback", "dashboard", "release", "monitor", "org", "project", "team", "repo", "dsn"}
+// subcommands read; replays and user feedback return personal data, so they
+// read only with allow_pii.
+var (
+	sentryNouns = []string{"issue", "event", "span", "trace", "log", "replay", "feedback", "dashboard", "release", "monitor", "org", "project", "team", "repo", "dsn"}
+	sentryPII   = []string{"replay", "feedback"}
+)
 
 func decideCLI(cli string, args []string, o Options) Verdict {
 	if cli == "" {
@@ -302,6 +312,10 @@ func decideCLI(cli string, args []string, o Options) Verdict {
 		return r
 	}
 	if cli == "sentry" && len(w) >= 2 && slices.Contains(sentryNouns, w[0]) && slices.Contains([]string{"list", "view", "events"}, w[1]) {
+		if slices.Contains(sentryPII, w[0]) && !o.AllowPII[Sentry] {
+			v.Reason = piiReason(Sentry, "`"+cmd+"`")
+			return v
+		}
 		v.Allow = true
 		return v
 	}

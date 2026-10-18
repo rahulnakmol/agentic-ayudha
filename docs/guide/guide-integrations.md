@@ -138,10 +138,11 @@ it after:
 - **Writes are refused.** Changing a flag, launching an experiment, resolving an issue, or creating an alert or a
   release is a catalog action a person approves. A tool aayu does not know is refused too, and so is one that spends
   paid AI credits, such as Sentry's Seer analysis.
-- **Personal data is opt-in for MCP tools.** PostHog's person, support-ticket, and raw LLM conversation tools, and
-  Sentry's replay content, attachment, and AI conversation tools, stay refused until `.aayudha/config.toml` sets
-  `allow_pii = true` under `[integrations.posthog]` or `[integrations.sentry]`. aayu reads that setting only from the
-  repository's config file, not from your user config or the environment.
+- **Personal data is opt-in.** PostHog's person, session-recording, support-ticket, and raw LLM conversation tools,
+  Sentry's replay, attachment, and AI conversation tools, and the `sentry` CLI's `replay` and `feedback` reads stay
+  refused until `.aayudha/config.toml` sets `allow_pii = true` under `[integrations.posthog]` or
+  `[integrations.sentry]`. aayu reads that setting only from the repository's config file, not from your user config
+  or the environment.
 - **Reads are logged.** The post-tool hook appends each read it let through to
   `.aayudha/state/calls/<session>.jsonl`: the tool, its arguments, the window and row limit it
   asked for, the rows returned, and a SHA-256 of the result, never the result itself. A call that names a window and
@@ -157,8 +158,9 @@ In Codex, trust the three aayudha hooks in `/hooks` first, or none of this runs.
 >   `posthog` or `sentry`; in Cursor its URL or command must. Keep the provider's name in it.
 > - It sees a provider CLI only when it is the command itself. One wrapped in a subshell, such as
 >   `sh -c 'sentry-cli releases new 1.2.3'`, is not checked.
-> - `allow_pii` gates MCP tools only, and only those on the lists. PostHog's session-recording tools pass without
->   it, and so does a CLI read that returns personal data, such as `sentry replay view`.
+> - `allow_pii` gates only the tools on the lists' `[pii]` sections and the `sentry` CLI's `replay` and `feedback`
+>   reads. A general query, such as HogQL through `execute-sql` or `posthog-cli exp query run`, can still select
+>   person properties.
 > - `allow_pii` is read from the working tree, so an uncommitted edit takes effect at once. CODEOWNERS review applies
 >   only when the change is merged.
 > - The call log redacts GitHub, OpenAI, and Slack tokens, not PostHog or Sentry ones. Keep provider tokens in the

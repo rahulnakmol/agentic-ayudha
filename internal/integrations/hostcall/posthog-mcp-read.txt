@@ -4,8 +4,8 @@
 # annotated readOnlyHint whose required scopes are all <object>:read and that needs no AI consent (so spends no AI
 # credits), minus agent-feedback, debug-mcp-ui-apps, the LLM provider-key tools, and
 # surveys-summarize-responses-create (it runs an LLM although PostHog marks it read). Tools that return personal data
-# (person:read, raw LLM prompts and completions, support tickets) are in the [pii] section and pass only when
-# [integrations.posthog] allow_pii = true. Every tool not listed here is refused.
+# (person:read, session_recording:read, raw LLM prompts and completions, support tickets) are in the [pii] section
+# and pass only when [integrations.posthog] allow_pii = true. Every tool not listed here is refused.
 
 access-control-default-objects-list
 access-control-default-properties-list
@@ -205,7 +205,6 @@ experiment-saved-metrics-retrieve
 experiment-setup-context
 experiment-stats
 experiment-timeseries-results
-experiments-session-event-deltas-create
 external-data-destinations-list
 external-data-destinations-retrieve
 external-data-schemas-list
@@ -390,7 +389,6 @@ query-mcp-tool-top-users
 query-metrics
 query-paths
 query-retention
-query-session-recordings-list
 query-stickiness
 query-trends
 query-web-overview
@@ -423,9 +421,6 @@ scout-runs-list
 scout-runs-recent-emissions
 scout-runs-retrieve
 scout-scratchpad-search
-session-recording-get
-session-recording-playlist-get
-session-recording-playlists-list
 signals-scout-config-list
 signals-scout-members-list
 signals-scout-project-profile-get
@@ -483,26 +478,12 @@ view-run-history
 vision-alerts-events-list
 vision-alerts-get
 vision-alerts-list
-vision-observations-get
-vision-observations-list
-vision-observations-signal-reports-list
 vision-quota-get
 vision-quota-spend-series-get
-vision-scanners-backfills-get
-vision-scanners-backfills-list
 vision-scanners-counts
-vision-scanners-estimate
 vision-scanners-get
-vision-scanners-impact-get
 vision-scanners-list
-vision-scanners-observations-get
-vision-scanners-observations-list
-vision-scanners-observations-stats
-vision-scanners-scout-reports-get
-vision-scanners-scout-reports-list
 vision-scanners-self-driving-stats
-vision-scanners-variants-list
-vision-scanners-watch-feed
 visual-review-repos-flakiness-retrieve
 visual-review-repos-list
 visual-review-repos-quarantine-list
@@ -544,6 +525,7 @@ workflows-version-stats
 conversations-tickets-list
 conversations-tickets-messages-retrieve
 conversations-tickets-retrieve
+experiments-session-event-deltas-create
 llma-dataset-item-get
 llma-dataset-item-list
 llma-dataset-item-version-list
@@ -565,8 +547,26 @@ query-llm-trace
 query-llm-traces-list
 query-paths-actors
 query-retention-actors
+query-session-recordings-list
 query-stickiness-actors
 query-trends-actors
+session-recording-get
+session-recording-playlist-get
+session-recording-playlists-list
+vision-observations-get
+vision-observations-list
+vision-observations-signal-reports-list
+vision-scanners-backfills-get
+vision-scanners-backfills-list
+vision-scanners-estimate
+vision-scanners-impact-get
+vision-scanners-observations-get
+vision-scanners-observations-list
+vision-scanners-observations-stats
+vision-scanners-scout-reports-get
+vision-scanners-scout-reports-list
+vision-scanners-variants-list
+vision-scanners-watch-feed
 workflows-blast-radius
 workflows-get-invocation
 workflows-list-invocations
