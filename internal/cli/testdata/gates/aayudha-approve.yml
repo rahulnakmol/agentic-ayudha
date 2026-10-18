@@ -1,0 +1,68 @@
+# aayudha approvals (Decision #488, Story #481). Installed into product repos by `aayu init --gates` as
+# .github/workflows/aayudha-approve.yml; the template is embedded in the aayudha binary.
+#
+# An agent's human-only steps go to a person as one numbered batch comment. Where agents write only as the
+# aayudha bot and no agent can reach a recorded approver's GitHub credential, the approver answers with a reply:
+# `/aayu approve all`, `/aayu approve 1 3`, or `/aayu skip 2`. This job runs the default branch's copy of
+# this file on every new comment (issue_comment never runs a PR's own workflow file, unlike
+# pull_request_review), and `aayudha inbox --ci` checks the reply:
+#   - its author is a recorded approver (`[approvals] approvers`) with write access, and not a bot;
+#   - neither the reply nor the batch was edited, the reply came after the batch, and the hash matches;
+#   - each Decision is unchanged since the batch, and no item is a door `[approvals] device_for` keeps on
+#     the device code.
+# Only then does it apply the steps as the bot and reply with each result, recording "approved by @x in <URL>".
+# Any failed check applies nothing, and the reply says why and gives the one next step.
+#
+# Setup: the aayudha App (`aayu init --identity`: variable AAYUDHA_APP_CLIENT_ID, secret AAYUDHA_APP_PRIVATE_KEY)
+# and `[approvals] approvers` in .aayudha/config.toml. Without them, every reply is refused and batches use the
+# device code.
+name: aayudha-approve
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: aayudha-approve-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  approve:
+    name: aayudha/approve
+    if: startsWith(github.event.comment.body, '/aayu approve') || startsWith(github.event.comment.body, '/aayu skip')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Halt check (aayu halt, WP5.7)
+        if: vars.AAYUDHA_HALT != ''
+        shell: bash
+        env:
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+        run: echo "::error::Halted by aayu halt ($AAYUDHA_HALT); a human clears it with aayu resume." && exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.25.x"
+          cache: false
+      - name: Install aayudha v0.4.0
+        run: go install github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@v0.4.0
+      - name: Mint the bot's installation token
+        id: app
+        if: vars.AAYUDHA_APP_CLIENT_ID != ''
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.AAYUDHA_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AAYUDHA_APP_PRIVATE_KEY }}
+      - name: Apply the reply
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          AAYU_BOT_TOKEN: ${{ steps.app.outputs.token }}
+          AAYUDHA_HALT: ${{ vars.AAYUDHA_HALT }}
+          REPO: ${{ github.repository }}
+        run: aayudha inbox --ci --repo "$REPO"

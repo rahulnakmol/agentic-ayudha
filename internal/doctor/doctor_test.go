@@ -137,7 +137,12 @@ func healthy(t *testing.T) *Probe {
 			"git for-each-ref --format=%(refname:short) refs/heads refs/remotes/origin": "dev\nmain\norigin/HEAD\norigin/dev\n",
 			"git symbolic-ref --short refs/remotes/origin/HEAD":                         "origin/dev\n",
 		}),
-		Config:  load(t, "identity.app_id=42", "identity.app_slug=aayudha-bot", "integrations.posthog.secret=posthog", "integrations.posthog.scope=read", "integrations.posthog.project=12345", "inspect.apps=codex"),
+		Config: load(t, "identity.app_id=42", "identity.app_slug=aayudha-bot", "integrations.posthog.secret=posthog", "integrations.posthog.scope=read", "integrations.posthog.project=12345", "inspect.apps=codex", "approvals.approvers=rahulnakmol"),
+		// Decision #488: this agent session reaches only the bot's token.
+		Reachable: func(context.Context) []identity.Reach {
+			return []identity.Reach{{Source: "GH_TOKEN", Login: "aayudha-bot[bot]"}}
+		},
+		Agent:   "AMP_THREAD_ID",
 		Secrets: secrets.New(down{}, secrets.Env{Getenv: getenv}, secrets.File{Path: "/tmp/s.age", IdentityPath: "/tmp/id"}),
 		Human: func(context.Context) (identity.Token, error) {
 			return identity.Token{Value: "t", Source: "AAYU_GITHUB_TOKEN"}, nil
@@ -216,6 +221,11 @@ func failing(t *testing.T) map[string]func(*Probe) {
 			}
 		},
 		"bot-identity": func(p *Probe) { p.Config = load(t) },
+		"approvals": func(p *Probe) {
+			p.Reachable = func(context.Context) []identity.Reach {
+				return []identity.Reach{{Source: "GH_TOKEN", Login: "aayudha-bot[bot]"}, {Source: "git credential helper", Login: "rahulnakmol"}}
+			}
+		},
 		"config": func(p *Probe) {
 			p.Config, p.ConfigErr = nil, errors.New("config: .aayudha/config.toml: '' has invalid keys: colour")
 		},

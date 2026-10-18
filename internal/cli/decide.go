@@ -40,6 +40,7 @@ type decideReport struct {
 	Repo      string         `json:"repo"`
 	Decisions []decisionStep `json:"decisions,omitempty"`
 	Accepted  *acceptReport  `json:"accepted,omitempty"`
+	Batch     []acceptReport `json:"batch,omitempty"` // every Decision of a batch (decide a,b --accept x,y), Accepted first
 	Waiver    *waiverReport  `json:"waiver,omitempty"`
 	DryRun    bool           `json:"dry_run,omitempty"`
 }
@@ -86,11 +87,18 @@ func runDecide(ctx context.Context, e *Env, in Values) error {
 		return Errorf(ExitUsage, "decide: --seat and --draft need --pack")
 	}
 	n := 0
+	var nums []int // a batch: decide 324,283 --accept 1,2
 	if in.Has("decision") {
-		if !issueArg.MatchString(in.String("decision")) {
-			return Errorf(ExitUsage, "decide: %q is not an issue; a question needs --pack", in.String("decision"))
+		for _, part := range strings.Split(in.String("decision"), ",") {
+			if !issueArg.MatchString(strings.TrimSpace(part)) {
+				return Errorf(ExitUsage, "decide: %q is not an issue; a question needs --pack", in.String("decision"))
+			}
+			nums = append(nums, issueNumber(strings.TrimSpace(part)))
 		}
-		n = issueNumber(in.String("decision"))
+		n = nums[0]
+		if len(nums) > 1 && !in.Has("accept") {
+			return Errorf(ExitUsage, "decide: a list of Decisions is a batch for --accept (aayu decide 324,283 --accept 1,2)")
+		}
 	}
 	switch {
 	case in.Has("accept") && in.Has("waiver"):
@@ -104,7 +112,14 @@ func runDecide(ctx context.Context, e *Env, in Values) error {
 		if n == 0 {
 			return Errorf(ExitUsage, "decide --accept <option> needs the Decision")
 		}
-		return decideAccept(ctx, e, &l.Config, repo, n, strings.TrimSpace(in.String("accept")))
+		options := []string{strings.TrimSpace(in.String("accept"))}
+		if len(nums) > 1 {
+			options = strings.Split(in.String("accept"), ",")
+			for i := range options {
+				options[i] = strings.TrimSpace(options[i])
+			}
+		}
+		return decideAccept(ctx, e, &l.Config, repo, nums, options)
 	}
 	return decideSweep(ctx, e, &l.Config, pol, repo, n)
 }
@@ -340,63 +355,213 @@ func humanCaller(ctx context.Context, e *Env, cfg *config.Config, what string) (
 	return c, u.Login, nil
 }
 
-// decideAccept records a human's acceptance of an option: the Decision
-// section, status:done, decision:provisional cleared (ratified or reverted),
-// the issue closed, and every Decision it supersedes closed.
-func decideAccept(ctx context.Context, e *Env, cfg *config.Config, repo string, n int, option string) error {
-	c, login, err := humanCaller(ctx, e, cfg, "decide --accept")
-	if err != nil {
-		return err
-	}
-	owner, name, _ := github.SplitRepo(repo)
-	is, _, err := c.REST.Issues.Get(ctx, owner, name, n)
-	if err != nil {
-		return err
-	}
-	d, err := loadDecision(ctx, c, repo, is)
-	if err != nil {
-		return err
-	}
+// acceptable checks that login may accept option of the open, Decision-ready
+// Decision d: the checks decide --accept makes before it writes anything.
+func acceptable(cfg *config.Config, d decide.Decision, option, login string) error {
 	if d.State != "open" {
-		return Errorf(ExitBlocked, "decide: #%d is closed", n)
+		return Errorf(ExitBlocked, "decide: #%d is closed", d.Number)
 	}
 	if ps := workitems.Validate(d.Item, workitems.StageReady); len(ps) > 0 {
 		msgs := make([]string, len(ps))
 		for i, p := range ps {
 			msgs[i] = p.String()
 		}
-		return Errorf(ExitBlocked, "decide: #%d is not Decision-ready: %s", n, strings.Join(msgs, "; "))
+		return Errorf(ExitBlocked, "decide: #%d is not Decision-ready: %s", d.Number, strings.Join(msgs, "; "))
 	}
 	key, value := decide.Authority(cfg, d)
 	if want := decide.Login(cfg, value); want != "" && !strings.EqualFold(want, login) {
-		return Errorf(ExitBlocked, "decide: the authority for #%d is %s (%s = %s); %s cannot accept it", n, want, key, value, login)
+		return Errorf(ExitBlocked, "decide: the authority for #%d is %s (%s = %s); %s cannot accept it", d.Number, want, key, value, login)
 	}
 	if !decide.MatchOption(d.Item.Fields["options"], option) {
-		return Errorf(ExitUsage, "decide: %q is not one of the options of #%d", option, n)
+		return Errorf(ExitUsage, "decide: %q is not one of the options of #%d", option, d.Number)
 	}
-	provisional := slices.Contains(d.Labels, workitems.LabelProvisional)
-	if err := setStatus(ctx, c, repo, n, d.Labels, "done"); err != nil {
+	return nil
+}
+
+// decideAccept records a person's acceptance of one option for each of the
+// Decisions in nums, as one batch (Story #481): every Decision is checked
+// before anything is written. A person at their own terminal accepts by
+// running it. Anywhere else the batch goes to the person as one comment on
+// the first Decision: approved by an approver's reply when comment approvals
+// are on (approve.go; the command then exits 4 and accepts nothing itself),
+// else by one device code that covers every item.
+func decideAccept(ctx context.Context, e *Env, cfg *config.Config, repo string, nums []int, options []string) error {
+	if len(nums) != len(options) {
+		return Errorf(ExitUsage, "decide --accept: %d Decision(s) but %d option(s); give one option per Decision, in order (aayu decide 324,283 --accept 1,2)", len(nums), len(options))
+	}
+	if len(nums) > batchMax {
+		return Errorf(ExitUsage, "decide --accept: at most %d Decisions in one batch", batchMax)
+	}
+	c, tok, err := e.HumanGitHub(ctx)
+	if err != nil {
 		return err
 	}
-	body := workitems.SetSection(d.Body, "Decision", decide.Accepted(option, login, e.Now(), provisional))
-	_, err = c.Write(ctx, actions.Action{Kind: "github.issue.decision-accept", Target: fmt.Sprintf("%s#%d", repo, n),
-		Request: &actions.Request{Method: http.MethodPatch, Path: fmt.Sprintf("/repos/%s/issues/%d", repo, n)}, Payload: map[string]any{"option": option, "by": login}},
+	u, err := identity.WhoAmI(ctx, e.HTTP, e.githubAPI(), tok)
+	if err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	login := u.Login
+	if identity.IsBot(identity.Account{Login: u.Login, Type: u.Type}, cfg.Identity.BotLogins) {
+		return Errorf(ExitBlocked, "decide --accept: %s is a bot identity; only a human may do this", u.Login)
+	}
+	owner, name, _ := github.SplitRepo(repo)
+	ds := make([]decide.Decision, len(nums))
+	b := &batch{Repo: repo, Issue: nums[0], Command: e.commandLine()}
+	for i, n := range nums {
+		if slices.Contains(nums[:i], n) {
+			return Errorf(ExitUsage, "decide --accept: #%d is in the batch twice", n)
+		}
+		is, _, err := c.REST.Issues.Get(ctx, owner, name, n)
+		if err != nil {
+			return err
+		}
+		if ds[i], err = loadDecision(ctx, c, repo, is); err != nil {
+			return err
+		}
+		if err := acceptable(cfg, ds[i], options[i], login); err != nil {
+			return err
+		}
+		b.Items = append(b.Items, batchDecision(ds[i], options[i]))
+	}
+	via, writer := "", c
+	if e.agentSignal() != "" || !e.isTerminal(e.In) {
+		if bc, bot, err := e.BotGitHub(ctx, ""); err == nil {
+			writer = bc
+			if why := e.commentApprovalsOff(ctx, cfg, bot, b.Items); why == "" {
+				return e.postCommentBatch(ctx, writer, cfg, b)
+			} else {
+				b.Why = why
+			}
+		} else {
+			b.Why = fmt.Sprintf("the bot identity is not available (%v).", err)
+		}
+		if err := e.deviceBatch(ctx, writer, b, login); err != nil {
+			return err
+		}
+		via = "approved through GitHub's device flow"
+	}
+	rep := decideReport{Repo: repo, DryRun: c.DryRun()}
+	for i, d := range ds {
+		ar, err := acceptDecision(ctx, e, c, repo, d, options[i], login, via)
+		if err != nil {
+			return err
+		}
+		if via != "" {
+			line := fmt.Sprintf("#%d accepted: option %s, by @%s through the device code", d.Number, options[i], login)
+			if _, err := writer.UpsertComment(ctx, repo, d.Number, fmt.Sprintf("<!-- aayudha:batch-accepted %s -->", b.hash()),
+				fmt.Sprintf("<!-- aayudha:batch-accepted %s -->\n%s (batch `%s`).\n", b.hash(), line, b.hash()), actions.Action{Kind: "github.comment.batch-result"}); err != nil {
+				return err
+			}
+		}
+		if i == 0 {
+			rep.Accepted = &ar
+		}
+		rep.Batch = append(rep.Batch, ar)
+	}
+	if len(rep.Batch) == 1 {
+		rep.Batch = nil
+	}
+	return e.Emit(rep, func(w io.Writer) error {
+		for _, a := range append([]acceptReport{*rep.Accepted}, rep.Batch[min(1, len(rep.Batch)):]...) {
+			fmt.Fprintf(w, "#%d accepted: %s, by @%s", a.Decision, a.Option, a.By)
+			if via != "" {
+				fmt.Fprint(w, " through the device code")
+			}
+			if len(a.Superseded) > 0 {
+				fmt.Fprintf(w, "; superseded %s", refsOf(a.Superseded))
+			}
+			fmt.Fprintln(w)
+		}
+		return nil
+	})
+}
+
+// postCommentBatch posts b for an approver's reply and accepts nothing: the
+// aayudha-approve workflow applies the reply (approve.go).
+func (e *Env) postCommentBatch(ctx context.Context, c *github.Client, cfg *config.Config, b *batch) error {
+	b.Mode, b.Mention = batchByComment, cfg.Approvals.Approvers
+	if _, bot, err := e.BotGitHub(ctx, ""); err == nil {
+		if open, _, shown, err := openBatch(ctx, c, b.Repo, b.Issue, bot.Login, e.Now()); err != nil {
+			return Wrap(ExitExternal, err)
+		} else if open != nil {
+			return WithNext(Errorf(ExitBlocked, "batch %s is still open on #%d; one batch at a time per issue, so an approver never has to name it", shown, b.Issue),
+				fmt.Sprintf("wait for the approver's reply on #%d, or start the batch on another Decision", b.Issue))
+		}
+	}
+	if _, err := c.UpsertComment(ctx, b.Repo, b.Issue, b.marker(), b.render(batchStatus{}), actions.Action{Kind: "github.comment.batch"}); err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	return WithNext(Errorf(ExitBlocked, "posted batch %s on #%d for %s; nothing is accepted until an approver replies `/aayu approve all` (or `approve 1 3`, `skip 2`) there", b.hash(), b.Issue, strings.Join(b.Mention, ", ")),
+		fmt.Sprintf("wait for the approver's reply on #%d; the aayudha-approve workflow applies it", b.Issue))
+}
+
+// deviceBatch asks for one device code that covers every item of b. The
+// batch comment carries the code to the person's phone and, when no
+// approval comes, says what happened and the one next step.
+func (e *Env) deviceBatch(ctx context.Context, c *github.Client, b *batch, login string) error {
+	b.Mode, b.Mention = batchByDevice, []string{login}
+	effects := make([]string, len(b.Items))
+	for i, it := range b.Items {
+		effects[i] = it.Effect + " " + it.Door
+	}
+	p := Pending{What: "decide --accept", Effect: effects,
+		Code: func(ctx context.Context, code deviceCodeReply, expires time.Time) error {
+			if _, err := c.UpsertComment(ctx, b.Repo, b.Issue, b.marker(), b.render(batchStatus{Code: &code, Expires: expires}), actions.Action{Kind: "github.comment.batch"}); err != nil {
+				return Wrap(ExitExternal, fmt.Errorf("posting the batch on #%d: %w", b.Issue, err))
+			}
+			fmt.Fprintf(e.Err, "Posted batch %s on #%d with the code.\n", b.hash(), b.Issue)
+			return nil
+		},
+		Failed: func(ctx context.Context, what, next string) {
+			_, _ = c.UpsertComment(ctx, b.Repo, b.Issue, b.marker(), b.render(batchStatus{Done: what, Next: next}), actions.Action{Kind: "github.comment.batch"})
+		},
+	}
+	if err := e.requireApproval(ctx, p, AccessWrite); err != nil {
+		return err
+	}
+	if e.approval != nil {
+		done := fmt.Sprintf("Approved by @%s through the device code at %s.", e.approval.Login, e.Now().UTC().Format("15:04 UTC"))
+		if _, err := c.UpsertComment(ctx, b.Repo, b.Issue, b.marker(), b.render(batchStatus{Done: done}), actions.Action{Kind: "github.comment.batch"}); err != nil {
+			return Wrap(ExitExternal, err)
+		}
+	}
+	return nil
+}
+
+// acceptDecision writes the acceptance of option on Decision d, by login:
+// the Decision section (with how it was approved, when via says), status:done,
+// decision:provisional cleared (ratified or reverted), the issue closed, and
+// every Decision it supersedes closed.
+func acceptDecision(ctx context.Context, e *Env, c *github.Client, repo string, d decide.Decision, option, login, via string) (acceptReport, error) {
+	owner, name, _ := github.SplitRepo(repo)
+	n := d.Number
+	provisional := slices.Contains(d.Labels, workitems.LabelProvisional)
+	if err := setStatus(ctx, c, repo, n, d.Labels, "done"); err != nil {
+		return acceptReport{}, err
+	}
+	text := decide.Accepted(option, login, e.Now(), provisional)
+	if via != "" {
+		text += " " + strings.ToUpper(via[:1]) + via[1:] + "."
+	}
+	body := workitems.SetSection(d.Body, "Decision", text)
+	_, err := c.Write(ctx, actions.Action{Kind: "github.issue.decision-accept", Target: fmt.Sprintf("%s#%d", repo, n),
+		Request: &actions.Request{Method: http.MethodPatch, Path: fmt.Sprintf("/repos/%s/issues/%d", repo, n)}, Payload: map[string]any{"option": option, "by": login, "via": via}},
 		func(ctx context.Context) (any, error) {
 			_, _, err := c.REST.Issues.Update(ctx, owner, name, n, gh.UpdateIssueRequest{Body: gh.Ptr(body)})
 			return nil, err
 		})
 	if err != nil {
-		return err
+		return acceptReport{}, err
 	}
 	if provisional {
 		if err := removeLabel(ctx, c, repo, n, workitems.LabelProvisional); err != nil {
-			return err
+			return acceptReport{}, err
 		}
 	}
 	if err := closeIssue(ctx, c, repo, n, "completed"); err != nil {
-		return err
+		return acceptReport{}, err
 	}
-	rep := decideReport{Repo: repo, Accepted: &acceptReport{Decision: n, Option: option, By: login}, DryRun: c.DryRun()}
+	ar := acceptReport{Decision: n, Option: option, By: login}
 	links, _ := workitems.ParseLinks(d.Item.Fields[workitems.FieldLinks])
 	for _, lk := range links {
 		if lk.Kind != "supersedes" {
@@ -404,31 +569,24 @@ func decideAccept(ctx context.Context, e *Env, cfg *config.Config, repo string, 
 		}
 		old, _, err := c.REST.Issues.Get(ctx, owner, name, lk.Number)
 		if err != nil {
-			return err
+			return ar, err
 		}
 		_, err = c.UpsertComment(ctx, repo, lk.Number, decide.SupersededMarker,
 			fmt.Sprintf("%s\nSuperseded by #%d, accepted by @%s (%s).\n", decide.SupersededMarker, n, login, option), actions.Action{Kind: "github.comment.decision-superseded"})
 		if err != nil {
-			return err
+			return ar, err
 		}
 		if old.GetState() == "open" {
 			if err := setStatus(ctx, c, repo, lk.Number, github.IssueLabels(old), "cancelled"); err != nil {
-				return err
+				return ar, err
 			}
 			if err := closeIssue(ctx, c, repo, lk.Number, "not_planned"); err != nil {
-				return err
+				return ar, err
 			}
 		}
-		rep.Accepted.Superseded = append(rep.Accepted.Superseded, lk.Number)
+		ar.Superseded = append(ar.Superseded, lk.Number)
 	}
-	return e.Emit(rep, func(w io.Writer) error {
-		fmt.Fprintf(w, "#%d accepted: %s, by @%s", n, option, login)
-		if len(rep.Accepted.Superseded) > 0 {
-			fmt.Fprintf(w, "; superseded %s", refsOf(rep.Accepted.Superseded))
-		}
-		fmt.Fprintln(w)
-		return nil
-	})
+	return ar, nil
 }
 
 // decideWaiver files a floor-waiver Decision on story or bug n: never

@@ -280,6 +280,9 @@ func decisionItem(is *gh.Issue, it InboxItem, labels []string) InboxItem {
 
 // runInbox is `aayu inbox`.
 func runInbox(ctx context.Context, e *Env, _ Values) error {
+	if e.CI { // the aayudha-approve workflow: an approver's reply to a batch (approve.go)
+		return e.approveFromComment(ctx)
+	}
 	if e.Getenv("AAYU_AGENT") == "1" {
 		return Errorf(ExitBlocked, "inbox is human-only: it acts as you on human-only steps, so it is refused when AAYU_AGENT=1")
 	}
@@ -429,7 +432,7 @@ func (e *Env) twin(seat verbs.SeatID) string {
 func (e *Env) inboxAct(ctx context.Context, cfg *config.Config, c *github.Client, repo, login string, it InboxItem, a InboxAction) error {
 	switch it.Kind {
 	case InboxDecision:
-		return decideAccept(ctx, e, cfg, repo, it.Number, a.Option)
+		return decideAccept(ctx, e, cfg, repo, []int{it.Number}, []string{a.Option})
 	case InboxCapped:
 		return handlers["ship"](ctx, e, Values{"pr": strconv.Itoa(it.Number)})
 	}

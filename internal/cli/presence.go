@@ -32,6 +32,26 @@ const (
 // aayudha GitHub App. A client ID is public; neither is a secret.
 var DeviceClientVariables = []string{"AAYUDHA_DEVICE_CLIENT_ID", "AAYUDHA_APP_CLIENT_ID"}
 
+// DefaultDeviceClientID is the public client ID of the project's OAuth App
+// ("aayudha presence check", Device Flow enabled), so every aayu user can
+// approve from any device with no setup (Story #481). Its owner never sees a
+// token: GitHub hands each token only to the aayu process that polls for it.
+// [identity] device_client_id or DeviceClientVariables replace it.
+const DefaultDeviceClientID = "Ov23liYH5hBtWnXKVO1Y"
+
+// Pending is what a person approves through the presence check: the command,
+// what each change it makes does, and the batch comment that carries the code
+// to the person's phone (approve.go), shown in the terminal next to the code.
+type Pending struct {
+	What   string   // the short name used in messages: "decide --accept"
+	Effect []string // one plain line per change: "Accepts option 1 of Decision #324, ..."
+	// Code, when set, is told the device code before aayu waits for it; Failed
+	// is told why no approval came and the one next step. The batch comment
+	// uses them (approve.go); a failure in Code stops the check.
+	Code   func(ctx context.Context, code deviceCodeReply, expires time.Time) error
+	Failed func(ctx context.Context, what, next string)
+}
+
 // Approval is a person's approval of a human-only action through GitHub's
 // device flow (presence check).
 type Approval struct {
@@ -64,36 +84,57 @@ func (a *Approval) covers(need Access) bool {
 // commands, the pre-tool hook stops most agent calls first
 // (hosts.HumanOnlyCommand); this check holds for whatever reaches the binary.
 func (e *Env) requireHuman(ctx context.Context, what string, need Access) error {
+	return e.requireApproval(ctx, Pending{What: what}, need)
+}
+
+// requireApproval is requireHuman for an action that says what approving it
+// does (Pending), such as a batch of Decisions.
+func (e *Env) requireApproval(ctx context.Context, p Pending, need Access) error {
 	sig := e.agentSignal()
 	if sig == "" && e.isTerminal(e.In) {
 		return nil
 	}
-	refusal := Errorf(ExitBlocked, "%s is a person's decision and needs an interactive terminal: with neither a terminal nor an agent marker, aayu cannot tell a person from an agent using the person's token", what)
+	refusal := Errorf(ExitBlocked, "%s is a person's decision and needs an interactive terminal: with neither a terminal nor an agent marker, aayu cannot tell a person from an agent using the person's token", p.What)
 	if sig != "" {
-		refusal = Errorf(ExitBlocked, "%s is a person's decision and is refused for an agent lane (%s); ask a person to run it in their own terminal", what, sig)
+		refusal = Errorf(ExitBlocked, "%s is a person's decision and is refused for an agent lane (%s); ask a person to run it in their own terminal", p.What, sig)
 	}
-	_, err := e.presenceCheck(ctx, what, need, refusal)
+	_, err := e.presenceCheck(ctx, p, need, refusal)
 	return err
 }
 
-// presenceCheck proves that a person approved what, through GitHub's OAuth
-// device flow: aayu prints a one-time code and https://github.com/login/device,
-// and the person enters it on any device, signed in to GitHub with their own
-// password and second factor. The approver must be a person (not a bot or a
-// configured bot login), the same account as the token aayu acts with, and
-// hold the repository permission need asks for. The device-flow token proves
-// who approved and nothing else: it asks for no scopes, reads only /user, and
-// is never stored. aayu offers an agent no way to complete the flow: there is
-// no flag, variable, or file that supplies an approval.
+// commandLine is the command this process runs, as the person would type it.
+func (e *Env) commandLine() string {
+	parts := []string{"aayu"}
+	for _, a := range e.args {
+		if a == "" || strings.ContainsAny(a, " \t'\"$`\\|&;<>()*?[]#~") {
+			a = "'" + strings.ReplaceAll(a, "'", `'\''`) + "'"
+		}
+		parts = append(parts, a)
+	}
+	return strings.Join(parts, " ")
+}
+
+// presenceCheck proves that a person approved p, through GitHub's OAuth
+// device flow: aayu prints a one-time code and https://github.com/login/device
+// next to the exact command and what approving it does, and the person enters
+// the code on any device, signed in to GitHub with their own password and
+// second factor. The approver must be a person (not a bot or a configured bot
+// login), the same account as the token aayu acts with, and hold the
+// repository permission need asks for. The device-flow token proves who
+// approved and nothing else: it asks for no scopes, reads only /user, and is
+// never stored. aayu offers an agent no way to complete the flow: there is no
+// flag, variable, or file that supplies an approval.
 //
 // It returns refusal unchanged when no approval can be asked for: aayu's own
 // agent lanes (AAYU_AGENT=1: the MCP server and loops, which run unattended)
-// and CI (--ci, where the acting account is a workflow or bot token),
-// no repository or token to check the approver against (unless need is
-// AccessAny), or no client ID ([identity] device_client_id, else
-// DeviceClientVariables). An approval covers later human-only steps of the
-// same command at the same or a lower permission.
-func (e *Env) presenceCheck(ctx context.Context, what string, need Access, refusal error) (*Approval, error) {
+// and CI (--ci, where the acting account is a workflow or bot token), and no
+// repository or token to check the approver against (unless need is
+// AccessAny). The client ID is [identity] device_client_id, else
+// DeviceClientVariables, else DefaultDeviceClientID. An approval covers later
+// human-only steps of the same command at the same or a lower permission, and
+// nothing outside this process.
+func (e *Env) presenceCheck(ctx context.Context, p Pending, need Access, refusal error) (*Approval, error) {
+	what := p.What
 	if e.approval.covers(need) {
 		return e.approval, nil
 	}
@@ -132,22 +173,46 @@ func (e *Env) presenceCheck(ctx context.Context, what string, need Access, refus
 		}
 	}
 	if client == "" {
-		return nil, WithNext(refusal, fmt.Sprintf("to approve it as yourself from any device, set the repository variable %s (or [identity] device_client_id) to the client ID of a GitHub OAuth App (or of aayudha's GitHub App) with Device Flow enabled", DeviceClientVariables[0]))
+		client = DefaultDeviceClientID
 	}
 	on := ""
 	if c != nil {
 		on = " on " + repo
+	}
+	fail := func(err error, why, next string) (*Approval, error) {
+		if p.Failed != nil {
+			p.Failed(ctx, why, next)
+		}
+		return nil, WithNext(err, next)
 	}
 
 	code, err := e.deviceCode(ctx, client)
 	if err != nil {
 		return nil, Wrap(ExitExternal, fmt.Errorf("%s: the presence check could not start: %w", what, err))
 	}
-	fmt.Fprintf(e.Err, "%s%s needs a person's approval.\n  On any device, open %s and enter %s (expires in %d minutes).\n  Approve only if you started this command yourself. Waiting...\n",
-		what, on, code.VerificationURI, code.UserCode, max(code.ExpiresIn/60, 1))
+	expires := e.Now().Add(time.Duration(code.ExpiresIn) * time.Second)
+	if p.Code != nil {
+		if err := p.Code(ctx, code, expires); err != nil {
+			return nil, err
+		}
+	}
+	fmt.Fprintf(e.Err, "%s%s needs a person's approval.\n  Command: %s\n", what, on, e.commandLine())
+	for _, line := range p.Effect {
+		fmt.Fprintf(e.Err, "  Approving: %s\n", line)
+	}
+	fmt.Fprintf(e.Err, "  On any device, open %s and enter %s (expires in %d minutes, at %s).\n  Approve only if you asked for this command. Waiting...\n",
+		code.VerificationURI, code.UserCode, max(code.ExpiresIn/60, 1), expires.UTC().Format("15:04 UTC"))
+	again := "ask for the command again to get a new code: " + e.commandLine()
 	devTok, err := e.deviceToken(ctx, client, code)
-	if err != nil {
-		return nil, Errorf(ExitBlocked, "%s%s was not approved: %v; nothing was done", what, on, err)
+	switch {
+	case err != nil && strings.Contains(err.Error(), "expired"):
+		return fail(Errorf(ExitBlocked, "%s%s was not approved: the code expired; nothing was done", what, on),
+			fmt.Sprintf("The code expired at %s; nothing was done.", expires.UTC().Format("15:04 UTC")), again)
+	case err != nil && strings.Contains(err.Error(), "denied"):
+		return fail(Errorf(ExitBlocked, "%s%s was not approved: the request was denied; nothing was done", what, on),
+			"The request was cancelled on GitHub; nothing was done.", "if you meant to approve it, "+again)
+	case err != nil:
+		return fail(Errorf(ExitBlocked, "%s%s was not approved: %v; nothing was done", what, on, err), fmt.Sprintf("No approval: %v; nothing was done.", err), again)
 	}
 	who, err := identity.WhoAmI(ctx, e.HTTP, e.githubAPI(), identity.Token{Value: devTok, Source: "device flow"}) // its only use; never stored
 	if err != nil {
@@ -155,9 +220,11 @@ func (e *Env) presenceCheck(ctx context.Context, what string, need Access, refus
 	}
 	switch {
 	case identity.IsBot(identity.Account{Login: who.Login, Type: who.Type}, l.Config.Identity.BotLogins):
-		return nil, Errorf(ExitBlocked, "%s: approved by %s, a bot identity; only a person may approve it", what, who.Login)
+		return fail(Errorf(ExitBlocked, "%s: approved by %s, a bot identity; only a person may approve it", what, who.Login),
+			fmt.Sprintf("@%s, a bot identity, approved it; nothing was done.", who.Login), "approve it signed in to GitHub as a person, "+again)
 	case me != nil && !strings.EqualFold(who.Login, me.Login):
-		return nil, Errorf(ExitBlocked, "%s: approved by @%s, but aayu acts as @%s here; the person whose account acts must approve it", what, who.Login, me.Login)
+		return fail(Errorf(ExitBlocked, "%s: approved by @%s, but aayu acts as @%s here; the person whose account acts must approve it", what, who.Login, me.Login),
+			fmt.Sprintf("@%s approved it, but aayu acts as @%s here; nothing was done.", who.Login, me.Login), fmt.Sprintf("approve it signed in to GitHub as @%s; %s", me.Login, again))
 	}
 	a := &Approval{Login: who.Login, Via: "device-flow"}
 	if need != AccessAny { // an action that needs no repository access never asks the repository
@@ -168,13 +235,18 @@ func (e *Env) presenceCheck(ctx context.Context, what string, need Access, refus
 		a.Permission = permissionOf(perm)
 	}
 	if !a.covers(need) {
-		return nil, Errorf(ExitBlocked, "%s%s needs %s access; @%s has %s", what, on, need, a.Login, a.Permission)
+		return fail(Errorf(ExitBlocked, "%s%s needs %s access; @%s has %s", what, on, need, a.Login, a.Permission),
+			fmt.Sprintf("@%s has %s access to %s, and this needs %s; nothing was done.", a.Login, a.Permission, repo, need),
+			fmt.Sprintf("a repository admin gives @%s %s access, or a person with %s access approves it", a.Login, need, need))
 	}
 	// No record, no approval: the actions log is where the approval is kept.
 	log, err := e.Actions()
 	if err == nil {
-		_, err = log.Do(ctx, actions.Action{Kind: "presence.approve", Target: repo, Identity: "human",
-			Payload: map[string]any{"command": what, "approver": a.Login, "via": a.Via, "permission": a.Permission}},
+		payload := map[string]any{"command": what, "command_line": e.commandLine(), "approver": a.Login, "via": a.Via, "permission": a.Permission}
+		if len(p.Effect) > 0 {
+			payload["items"] = p.Effect
+		}
+		_, err = log.Do(ctx, actions.Action{Kind: "presence.approve", Target: repo, Identity: "human", Payload: payload},
 			func(context.Context) (actions.Outcome, error) { return actions.Outcome{}, nil })
 	}
 	if err != nil {

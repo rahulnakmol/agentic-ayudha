@@ -1,0 +1,30 @@
+# Which tests prove story #481's Completion Goal (Decision #488 option 1: approval batches, replies, and the
+# device code as the fallback).
+
+[[criterion]]
+id = 1 # the built-in client ID, an override, and the command next to the code
+tests = ["internal/cli:TestPresenceCheckDeviceFlow", "internal/cli:TestHumanOnlyRefusedInHostShells"]
+
+[[criterion]]
+id = 2 # one batch comment, one device code for three Decisions, the record and the replies
+tests = ["internal/cli:TestDecideBatchDeviceCode"]
+
+[[criterion]]
+id = 3 # the batch posted as the bot, and `/aayu approve 1 3` applied by inbox --ci
+tests = ["internal/cli:TestDecideBatchApprovedByReply"]
+
+[[criterion]]
+id = 4 # every refused reply: nothing accepted, the reason and the next step
+tests = ["internal/cli:TestDecideBatchApprovedByReply"]
+
+[[criterion]]
+id = 5 # one-way doors and a reachable approver credential stay on the device code; doctor fails its row
+tests = ["internal/cli:TestDecideBatchApprovedByReply", "internal/cli:TestBatchFallsBackWhenApproverCredentialIsReachable", "internal/doctor:TestChecksGolden"]
+
+[[criterion]]
+id = 6 # expired, cancelled, another account, too little access: nothing written, the batch says what happened
+tests = ["internal/cli:TestDecideBatchDeviceCode"]
+
+[[criterion]]
+id = 7 # a stable release approved through the device code names the person
+tests = ["internal/cli:TestReleaseMainApprovedThroughDeviceCode"]

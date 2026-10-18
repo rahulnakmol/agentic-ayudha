@@ -79,6 +79,8 @@ func TestDoctorIntegrations(t *testing.T) {
 		return in
 	}
 	r := &fixture.Replayer{T: t, Rec: &fixture.Recording{Interactions: []fixture.Interaction{
+		// The approvals row asks who each token-shaped variable is (Story #481): the GitHub key is one.
+		ok("https://api.github.com/user", "", `{"login":"rahulnakmol","type":"User"}`),
 		ok("https://eu.posthog.com/api/personal_api_keys/@current/", "", `{"label":"aayudha","scopes":["query:read","insight:read"]}`),
 		ok("https://sentry.io/api/0/", "", `{"auth":{"scopes":["event:read","project:write"]},"user":{"username":"founder"}}`),
 		ok("https://api.github.com/user", "", `{"login":"rahulnakmol","type":"User"}`), // fine-grained: no X-OAuth-Scopes
