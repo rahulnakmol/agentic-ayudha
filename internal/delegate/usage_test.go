@@ -24,6 +24,7 @@ func TestUsageLimit(t *testing.T) {
 		{"codex, no reset time", "ERROR: You’ve hit your usage limit. Try again later.", true, time.Time{}},
 		{"claude, later today", "You've hit your limit · resets 8:10pm (America/Los_Angeles)", true, time.Date(2026, 10, 17, 20, 10, 0, 0, la)},
 		{"claude, the hour has passed today", "You've hit your limit · resets 12pm (America/Los_Angeles)", true, time.Date(2026, 10, 18, 12, 0, 0, 0, la)},
+		{"claude, a reset a minute or two past is today's", "You've hit your limit · resets 1:58pm (America/Los_Angeles)", true, time.Date(2026, 10, 17, 13, 58, 0, 0, la)},
 		{"claude, the older form", "Claude usage limit reached. Your limit will reset at 7am (Asia/Singapore).", true,
 			time.Date(2026, 10, 18, 7, 0, 0, 0, time.FixedZone("SGT", 8*3600))},
 		{"an unverified weekly wording is not guessed at", "You've hit your weekly limit", false, time.Time{}},

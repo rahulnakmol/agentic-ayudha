@@ -336,6 +336,9 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 				dlg.fill(res.Delegation)
 				_ = e.saveDelegation(ctx, dlg)
 				res.Next = fmt.Sprintf("run `aayu build %d --delegate %s --local` again once the limit resets; a pause is no failed attempt", n, dlg.receiver)
+				if pause.afterWall {
+					res.Next = fmt.Sprintf("the wall-time budget ends before the limit resets: once it has reset, a person runs `aayu ready %d` for a fresh budget, then `aayu build %d --delegate %s --local`", n, n, dlg.receiver)
+				}
 				if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
 					return err
 				}

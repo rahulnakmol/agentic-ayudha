@@ -632,7 +632,8 @@ func TestDelegateLocalUsageLimitPause(t *testing.T) {
 			return limit(opts.Now().Add(after)), errors.New("codex: exit status 1")
 		}
 		code, res, errOut = delegateRun(t, env, opts, "--delegate", "codex", "--local")
-		if code != ExitBlocked || !strings.Contains(errOut, "paused") || !strings.Contains(errOut, "after the build's wall-time budget ends") || res.Budget.Attempts != 0 || res.Delegation.Status != dlgPaused {
+		if code != ExitBlocked || !strings.Contains(errOut, "paused") || !strings.Contains(errOut, "after the build's wall-time budget ends") || res.Budget.Attempts != 0 || res.Delegation.Status != dlgPaused ||
+			!strings.Contains(res.Next, "a person runs `aayu ready 2` for a fresh budget") {
 			t.Fatalf("reset %s out: %d %+v %s", after, code, res, errOut)
 		}
 		st = BuildState{}

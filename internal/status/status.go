@@ -376,7 +376,7 @@ func refs(ns []int) string {
 // SpendNote says what the spend columns count: aayu's metered model calls
 // (the gateway and AAYU_COST_USD). Work in a subscription host session
 // reports no cost, so 0.00 USD is not the real cost.
-const SpendNote = "Metered spend: aayu's own model calls; subscription use not counted."
+const SpendNote = "Metered spend: aayu's own model calls from the actions log; subscription use not counted, and spend a host reports in AAYU_COST_USD shows in build's output only."
 
 // Table renders a rollup tree as markdown, one row per Goal, Initiative, and Feature.
 func Table(roots []*Rollup) string {

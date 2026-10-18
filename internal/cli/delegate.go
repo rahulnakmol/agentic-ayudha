@@ -782,9 +782,9 @@ func (e *Env) localWriter(d *delegation, prompt string) func(context.Context, st
 			name := delegate.Names[d.receiver]
 			switch {
 			case resets.IsZero():
-				return &usagePause{fmt.Sprintf("%s's subscription usage limit was reached and it printed no reset time", name)}
+				return &usagePause{why: fmt.Sprintf("%s's subscription usage limit was reached and it printed no reset time", name)}
 			case !d.wallEnd.IsZero() && !resets.Add(time.Minute).Before(d.wallEnd):
-				return &usagePause{fmt.Sprintf("%s's subscription usage limit resets at %s, after the build's wall-time budget ends at %s",
+				return &usagePause{afterWall: true, why: fmt.Sprintf("%s's subscription usage limit resets at %s, after the build's wall-time budget ends at %s",
 					name, resets.UTC().Format(time.RFC3339), d.wallEnd.UTC().Format(time.RFC3339))}
 			}
 			d.event(e.Now(), dlgPaused, fmt.Sprintf("%s's subscription usage limit; resumes at %s", name, resets.UTC().Format(time.RFC3339)))
@@ -812,7 +812,10 @@ func (e *Env) localWriter(d *delegation, prompt string) func(context.Context, st
 
 // usagePause is a local receiver's subscription usage limit that build cannot
 // wait out in this run: no reset time, or one after the wall-time budget.
-type usagePause struct{ why string }
+type usagePause struct {
+	why       string
+	afterWall bool // the reset comes after the wall-time budget: a rerun then needs a fresh budget
+}
 
 func (p *usagePause) Error() string { return p.why }
 

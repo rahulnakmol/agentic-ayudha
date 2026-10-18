@@ -67,7 +67,9 @@ func UsageLimit(out string, now time.Time, loc *time.Location) (bool, time.Time)
 		}
 		n := now.In(zone)
 		at := time.Date(n.Year(), n.Month(), n.Day(), t.Hour(), t.Minute(), 0, 0, zone)
-		if at.Before(now) { // the next time the clock shows it
+		// The next time the clock shows it; a reset in the current minute, or a
+		// few minutes past (the host's clock may lag), is today's.
+		if now.Sub(at) > 5*time.Minute {
 			at = at.AddDate(0, 0, 1)
 		}
 		return true, at
