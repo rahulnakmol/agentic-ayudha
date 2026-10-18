@@ -35,8 +35,10 @@ and budget used.
 
 Before each push, `build` has a reviewer model of a different family from the builder review the branch's change
 (decision 656). It uses inspect's own review: the same prompt, schema, and rules as the merge gate's model review.
-When the reviewer says `fix`, the checkpoint is committed but not pushed. `build` lists each open item: a P0 to P2
-finding with its file, line, and fix, or an unmet criterion (`C<n>`). The agent then does one of two things for each:
+When the reviewer finds something, the checkpoint is committed but not pushed. `build` lists each open item: a P0 to
+P2 finding with its file, line, and fix; an unmet criterion (`C<n>`), or an unclear one when the verdict is not merge;
+or, when a `fix` or `rebuild` verdict names nothing else, the verdict itself (`D<head>`). The agent then does one of
+two things for each:
 
 - fixes it, and runs `aayu build <story>` again: the fix is the same checkpoint's next attempt, not a failed one;
 - declines it with a reason: `aayu build <story> --decline "<id>: <why>"`, one item a line.

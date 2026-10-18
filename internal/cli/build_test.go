@@ -1025,6 +1025,23 @@ func TestBuildSessionReviewLoop(t *testing.T) {
 		t.Fatalf("a review that cannot run: %d %+v %s\n%s", code, res.Review, errOut, body())
 	}
 
+	// A rebuild with no finding holds the push too: the builder answers the
+	// verdict itself.
+	model.Err = nil
+	model.Replies = []models.Response{{Model: "grok-4.7", Text: `{"disposition":"rebuild","summary":"the approach is wrong","findings":[],"criteria":[{"id":1,"verdict":"unclear","evidence":"no trace"},{"id":2,"verdict":"met","evidence":"e"}]}`}}
+	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("rebuild\n"), 0o644)
+	if code, res, errOut = build(); code != ExitBlocked || len(res.Review.Open) != 1 || res.Review.Open[0].ID != "C1" || res.Review.Open[0].Title != "criterion 1 unclear" {
+		t.Fatalf("a rebuild with an unclear criterion: %d %+v %s", code, res.Review, errOut)
+	}
+	model.Replies = []models.Response{{Model: "grok-4.7", Text: `{"disposition":"rebuild","summary":"the approach is wrong","findings":[],"criteria":[]}`}}
+	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("rebuild again\n"), 0o644)
+	if code, res, errOut = build(); code != ExitBlocked || len(res.Review.Open) != 1 || res.Review.Open[0].Severity != "verdict" || res.Review.Open[0].Detail != "the approach is wrong" {
+		t.Fatalf("a rebuild with nothing behind it: %d %+v %s", code, res.Review, errOut)
+	}
+	if code, _, errOut := build("--decline", res.Review.Open[0].ID+": the story asks for this approach"); code != 0 {
+		t.Fatalf("declining the verdict: %d %s", code, errOut)
+	}
+
 	// A P2 that a later round raises again stays open, though inspect does not
 	// post it twice.
 	model.Err = nil

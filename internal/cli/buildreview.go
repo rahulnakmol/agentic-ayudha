@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -273,9 +274,18 @@ func (e *Env) reviewSession(ctx context.Context, s *sessionReview, a sessionRevi
 			}
 		}
 		for _, v := range res.Criteria {
-			if v.Verdict == "unmet" {
-				rd.Items = append(rd.Items, sessionItem{ID: fmt.Sprintf("C%d", v.ID), Severity: "criterion", Title: fmt.Sprintf("criterion %d unmet", v.ID), Detail: clipText(oneLine(v.Evidence), 600)})
+			// Under a verdict that is not merge, an unclear criterion is
+			// something to show too.
+			if v.Verdict == "unmet" || v.Verdict == "unclear" && res.Disposition != inspect.Merge {
+				rd.Items = append(rd.Items, sessionItem{ID: fmt.Sprintf("C%d", v.ID), Severity: "criterion", Title: fmt.Sprintf("criterion %d %s", v.ID, v.Verdict), Detail: clipText(oneLine(v.Evidence), 600)})
 			}
+		}
+		// A verdict that is not merge holds the push even with no finding
+		// behind it (a rebuild, or a merge the floors turned into fix): the
+		// builder answers the verdict itself.
+		if res.Disposition != inspect.Merge && len(rd.Items) == 0 {
+			rd.Items = append(rd.Items, sessionItem{ID: "D" + short(a.head), Severity: "verdict", Title: "the reviewer says " + res.Disposition,
+				Detail: clipText(oneLine(cmp.Or(res.Overridden, res.Summary)), 600)})
 		}
 		s.Rounds = append(s.Rounds, rd)
 	}
