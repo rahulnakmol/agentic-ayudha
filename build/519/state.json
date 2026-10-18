@@ -3,5 +3,18 @@
   "branch": "story/519-host-posthog-and-sentry-recording-replay",
   "started_at": "2026-10-18T02:00:13Z",
   "failed_attempts": 0,
-  "checkpoints": null
+  "checkpoints": [
+    {
+      "k": 1,
+      "n": 1,
+      "attempt": 1,
+      "commit": "d3f5584f933fa64e475e16d861d015fadc255a6c",
+      "layers": [
+        "L06"
+      ],
+      "verify": "hold",
+      "detail": "floors hold; not run here (tool not installed; the merge gate runs them): sast, secrets, deps",
+      "at": "2026-10-18T02:01:01Z"
+    }
+  ]
 }
