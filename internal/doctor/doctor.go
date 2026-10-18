@@ -42,6 +42,7 @@ type Result struct {
 // Probe is everything checks may observe. Tests supply fakes.
 type Probe struct {
 	Root     string // repository root; "" outside a repository
+	CI       bool   // --ci or GITHUB_ACTIONS=true: the local config layer is not read
 	Getenv   func(string) string
 	LookPath func(string) (string, error)
 	Exec     func(ctx context.Context, dir, name string, args ...string) (string, error)

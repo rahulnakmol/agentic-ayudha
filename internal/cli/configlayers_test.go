@@ -102,6 +102,10 @@ func TestNewerLocalConfigIgnoredInCI(t *testing.T) {
 		{"--ci", map[string]string{HaltVariable: ""}, []string{"verify", "--ci"}, ExitOK},
 		{"GITHUB_ACTIONS=true", map[string]string{HaltVariable: "", "GITHUB_ACTIONS": "true"}, []string{"verify"}, ExitOK},
 		{"outside CI", map[string]string{HaltVariable: ""}, []string{"verify"}, ExitUsage},
+		// aayu upgrade and doctor plan the schema with the same rule.
+		{"upgrade --ci", map[string]string{HaltVariable: ""}, []string{"upgrade", "--ci"}, ExitOK},
+		{"upgrade, GITHUB_ACTIONS=true", map[string]string{HaltVariable: "", "GITHUB_ACTIONS": "true"}, []string{"upgrade"}, ExitOK},
+		{"upgrade outside CI", map[string]string{HaltVariable: ""}, []string{"upgrade"}, ExitUsage},
 	} {
 		code, out, errOut := run(t, tt.env, Options{Dir: dir}, tt.args...)
 		if code != tt.want {
@@ -109,6 +113,14 @@ func TestNewerLocalConfigIgnoredInCI(t *testing.T) {
 		}
 		if tt.want == ExitUsage && !strings.Contains(errOut, "config.local.toml is config schema v99") {
 			t.Errorf("%s: stderr %q; want the newer config.local.toml named", tt.name, errOut)
+		}
+	}
+	for args, want := range map[string]string{
+		"doctor --ci --json": "repository schema current",
+		"doctor --json":      "repository schema is newer than this aayu: .aayudha/config.local.toml is config schema v99",
+	} {
+		if _, out, errOut := run(t, map[string]string{HaltVariable: ""}, Options{Dir: dir}, strings.Fields(args)...); !strings.Contains(out, want) {
+			t.Errorf("%s: stdout %q, stderr %q; want the schema row %q", args, out, errOut, want)
 		}
 	}
 }

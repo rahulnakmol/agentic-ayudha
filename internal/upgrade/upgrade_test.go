@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -54,7 +55,7 @@ var v2Migrations = Migrations{
 
 func TestUpgradeV1ToV2ByteExact(t *testing.T) {
 	root := copyTree(t, "v1")
-	changes, err := Plan(root, v2, v2Migrations)
+	changes, err := Plan(root, v2, v2Migrations, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +70,7 @@ func TestUpgradeV1ToV2ByteExact(t *testing.T) {
 	if err := Apply(root, changes); err != nil {
 		t.Fatal(err)
 	}
-	if again, err := Plan(root, v2, v2Migrations); err != nil || len(again) != 0 {
+	if again, err := Plan(root, v2, v2Migrations, false); err != nil || len(again) != 0 {
 		t.Fatalf("second run: %d changes, %v; want none", len(again), err)
 	}
 }
@@ -101,6 +102,19 @@ func TestLocalConfigNewerSkippedInCI(t *testing.T) {
 	if err := Check(root, v2, false); !errors.Is(err, ErrNewer) || !strings.Contains(err.Error(), "config.local.toml") {
 		t.Fatalf("v3 config.local.toml outside CI: %v; want ErrNewer naming it", err)
 	}
+	// Nor does aayu upgrade in CI plan to rewrite an older one.
+	if err := os.WriteFile(filepath.Join(root, ".aayudha/config.local.toml"), []byte("version = 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	local := func(cs []Change) bool {
+		return slices.ContainsFunc(cs, func(c Change) bool { return c.Path == ".aayudha/config.local.toml" })
+	}
+	if cs, err := Plan(root, v2, v2Migrations, true); err != nil || local(cs) {
+		t.Fatalf("v1 config.local.toml in CI: %v %v; want it left out of the plan", cs, err)
+	}
+	if cs, err := Plan(root, v2, v2Migrations, false); err != nil || !local(cs) {
+		t.Fatalf("v1 config.local.toml outside CI: %v %v; want it planned", cs, err)
+	}
 }
 
 func TestConfigV0Migration(t *testing.T) {
@@ -108,7 +122,7 @@ func TestConfigV0Migration(t *testing.T) {
 	_ = os.MkdirAll(filepath.Join(root, ".aayudha"), 0o755)
 	v0 := "# product config\n\n[lfs]\nserver = \"github\" # plan v0.1\n\n[budget]\nper_day_usd = 5.0\n"
 	_ = os.WriteFile(filepath.Join(root, ".aayudha/config.toml"), []byte(v0), 0o644)
-	changes, err := Plan(root, Current, Default)
+	changes, err := Plan(root, Current, Default, false)
 	if err != nil || len(changes) != 1 {
 		t.Fatalf("%v %v", changes, err)
 	}
@@ -117,7 +131,7 @@ func TestConfigV0Migration(t *testing.T) {
 		t.Fatalf("got:\n%s\nwant:\n%s", changes[0].New, want)
 	}
 	_ = os.WriteFile(filepath.Join(root, ".aayudha/config.toml"), []byte(strings.Replace(v0, `"github"`, `"s3://b"`, 1)), 0o644)
-	if _, err := Plan(root, Current, Default); err == nil || !strings.Contains(err.Error(), "only GitHub LFS") {
+	if _, err := Plan(root, Current, Default, false); err == nil || !strings.Contains(err.Error(), "only GitHub LFS") {
 		t.Fatalf("S3 server: %v", err)
 	}
 }

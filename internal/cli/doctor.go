@@ -32,7 +32,7 @@ var originRepo = regexp.MustCompile(`github\.com[:/]([A-Za-z0-9-]+/[A-Za-z0-9._-
 // probe builds the doctor probe for this invocation.
 func (e *Env) probe(ctx context.Context) *doctor.Probe {
 	p := &doctor.Probe{
-		Root: config.RepoRoot(e.Dir), Getenv: e.Getenv, LookPath: e.lookPath(), Exec: e.exec(), Combined: e.Exec,
+		Root: config.RepoRoot(e.Dir), CI: e.CI || config.InCI(e.Getenv), Getenv: e.Getenv, LookPath: e.lookPath(), Exec: e.exec(), Combined: e.Exec,
 		Secrets: e.SecretStore(), Version: e.Build.Version, Host: e.Host, TracePath: e.TracePath(), Repo: e.Repo, Verbose: e.Verbose, Now: e.Now,
 	}
 	if p.Combined == nil {

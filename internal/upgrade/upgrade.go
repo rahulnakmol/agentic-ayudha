@@ -124,12 +124,11 @@ func setVersion(kind Kind, b []byte, n int) ([]byte, error) {
 }
 
 // Plan computes the changes that bring root's files to binary's versions. It
-// fails with ErrNewer when any file is newer than the binary.
-func Plan(root string, binary Versions, m Migrations) ([]Change, error) {
-	return plan(root, binary, m, false)
-}
-
-func plan(root string, binary Versions, m Migrations, ci bool) ([]Change, error) {
+// fails with ErrNewer when any file is newer than the binary. In CI (ci set by
+// --ci or GITHUB_ACTIONS=true, as for config.Load) it skips
+// .aayudha/config.local.toml: CI never reads the local layer, so a committed
+// one neither refuses nor is rewritten there (Bug #640).
+func Plan(root string, binary Versions, m Migrations, ci bool) ([]Change, error) {
 	var out []Change
 	for _, f := range files {
 		if ci && f.local {
@@ -173,12 +172,9 @@ func plan(root string, binary Versions, m Migrations, ci bool) ([]Change, error)
 }
 
 // Check returns ErrNewer when any of root's files is newer than binary. Write
-// verbs call it before running (exit 2 with the upgrade hint). In CI (ci set
-// by --ci or GITHUB_ACTIONS=true, as for config.Load) it skips
-// .aayudha/config.local.toml: CI never reads the local layer, so a committed
-// one with a newer version must not refuse every write verb (Bug #640).
+// verbs call it before running (exit 2 with the upgrade hint); ci is as for Plan.
 func Check(root string, binary Versions, ci bool) error {
-	_, err := plan(root, binary, nil, ci)
+	_, err := Plan(root, binary, nil, ci)
 	return err
 }
 

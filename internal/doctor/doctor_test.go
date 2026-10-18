@@ -544,6 +544,12 @@ func TestCheckStates(t *testing.T) {
 		{"machine-user bot", checkBot, func(p *Probe) {
 			p.Config = load(t, "identity.machine_user=aayu-machine", "identity.machine_user_secret=machine")
 		}, Pass, "bot identity: machine user aayu-machine"},
+		{"newer local config in CI", checkSchema, func(p *Probe) {
+			p.CI, p.Root = true, repoWith(t, map[string]string{".aayudha/config.toml": "version = 1\n", ".aayudha/config.local.toml": "version = 99\n"})
+		}, Pass, "repository schema current"},
+		{"newer local config outside CI", checkSchema, func(p *Probe) {
+			p.Root = repoWith(t, map[string]string{".aayudha/config.toml": "version = 1\n", ".aayudha/config.local.toml": "version = 99\n"})
+		}, Fail, ".aayudha/config.local.toml is config schema v99"},
 		{"older schema", checkSchema, func(p *Probe) { p.Root = repoWith(t, map[string]string{".aayudha/config.toml": "version = 0\n"}) }, Warn, "repository files are at an older schema; run aayu upgrade"},
 		{"host from --host", checkHost, func(p *Probe) { p.Host = "cursor" }, Pass, "host cursor (from --host)"},
 		{"personal repository", checkIssueTypes, func(p *Probe) {

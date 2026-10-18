@@ -30,10 +30,10 @@ schema `version`; an older file is migrated in memory with a notice, and a newer
 only in the user layer.
 
 In CI (`--ci`, or `GITHUB_ACTIONS=true`), the `local` layer never applies: config loading skips
-`.aayudha/config.local.toml` and `.aayudha/config.local.json` and warns, naming each file it skipped. Git ignores only
-the TOML file, and `git add -f` still commits it, so a pull request could otherwise commit a local file that changes
-policy in every workflow, for example clearing an environment's `production` flag. Outside CI the local file applies
-as before.
+`.aayudha/config.local.toml` and `.aayudha/config.local.json` and warns, naming each file it skipped. Git ignores both
+files, but `git add -f` still commits either one, so a pull request could otherwise commit a local file that changes
+policy in every workflow, for example clearing an environment's `production` flag. `aayu upgrade` and `aayu doctor`
+skip the local file in CI too. Outside CI the local file applies as before.
 
 `aayu config show --origin` prints every merged key with the layer and source that set it, for example
 `autonomy.streak = 20  # default: defaults.toml (embedded)`. `aayu config validate` loads and checks without printing.
