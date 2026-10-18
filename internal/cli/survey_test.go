@@ -286,6 +286,10 @@ func TestSurveyDocs(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(docs, "operator-notes.md"), []byte("# Operator notes\n\nThe night shift runs calc on each batch total.\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// A man page outside section 1 is read by its section suffix.
+	if err := os.WriteFile(filepath.Join(docs, "calc.3p"), []byte(".TH CALC 3P\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	out := filepath.Join(t.TempDir(), "survey")
 	opts := Options{Dir: dir, GitHubGap: -1}
 	if code, _, stderr := run(t, nil, opts, "survey", dir, "--out", out, "--docs", docs); code != 0 {
@@ -293,6 +297,9 @@ func TestSurveyDocs(t *testing.T) {
 	}
 	if b, err := os.ReadFile(filepath.Join(out, "manuals", "operator-notes.md")); err != nil || !strings.Contains(string(b), "night shift") {
 		t.Fatalf("manual copy: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(out, "manuals", "calc.3p")); err != nil {
+		t.Fatalf("man page copy: %v", err)
 	}
 	b, err := os.ReadFile(filepath.Join("..", "survey", "testdata", "draft.json"))
 	if err != nil {

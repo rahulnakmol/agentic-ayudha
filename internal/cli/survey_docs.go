@@ -12,9 +12,19 @@ import (
 )
 
 // manualExts are the manual and note formats survey --docs reads as text; a
-// PDF is converted with pdftotext when it is installed.
+// PDF is converted with pdftotext when it is installed. Man pages also come
+// as their section number (manPage).
 var manualExts = map[string]bool{".txt": true, ".text": true, ".md": true, ".markdown": true, ".rst": true, ".adoc": true,
-	".html": true, ".htm": true, ".1": true, ".man": true, ".pdf": true}
+	".html": true, ".htm": true, ".man": true, ".pdf": true}
+
+// manPage reports whether ext is a man page's section suffix: a section
+// digit, then any letters, as in .1, .3p, .5, or .8.
+func manPage(ext string) bool {
+	if len(ext) < 2 || ext[1] < '1' || ext[1] > '9' {
+		return false
+	}
+	return strings.Trim(ext[2:], "abcdefghijklmnopqrstuvwxyz") == ""
+}
 
 // surveyManuals reads the user manuals and notes at path (a file or a
 // directory) for the index, and writes the exact text each is cited by to
@@ -50,7 +60,7 @@ func surveyManuals(ctx context.Context, path, dir string) (map[string]string, er
 	names, from := map[string]string{}, map[string]string{}
 	for _, f := range files {
 		ext := strings.ToLower(filepath.Ext(f))
-		if !manualExts[ext] {
+		if !manualExts[ext] && !manPage(ext) {
 			return nil, fmt.Errorf("survey --docs: %s: not a format it reads (text, Markdown, reStructuredText, AsciiDoc, HTML, man pages, or PDF through pdftotext)", f)
 		}
 		rel, _ := filepath.Rel(base, f)
