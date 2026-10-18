@@ -1037,6 +1037,19 @@ func TestBuildSessionReviewLoop(t *testing.T) {
 		t.Fatalf("the P2 raised again: %d %+v %s", code, res.Review, errOut)
 	}
 
+	// A review that trips the budget breaker stops the build: nothing is pushed.
+	costly := sessionReply("")
+	costly.TokensIn = 50_000_000
+	model.Replies = []models.Response{costly}
+	env["AAYU_BUDGET__PER_DAY_USD"] = "1"
+	before = pushed()
+	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("budget\n"), 0o644)
+	if code, _, errOut := build(); code != ExitBudget || pushed() != before {
+		t.Fatalf("a tripped breaker: %d %s", code, errOut)
+	}
+	delete(env, "AAYU_BUDGET__PER_DAY_USD")
+	_ = os.Remove(filepath.Join(opts.Dir, ".aayudha", "state", "paused"))
+
 	// A review endpoint that is not https is refused before any call.
 	env[inspect.ReviewModelURLVar] = "http://review.example/v1"
 	calls := len(model.Requests)
