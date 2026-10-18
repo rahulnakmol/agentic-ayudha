@@ -17,6 +17,7 @@ func TestReachable(t *testing.T) {
 	sources := map[string]func(context.Context) (string, error){
 		"gh auth token":         func(context.Context) (string, error) { return "ghu_same\n", nil },
 		"git credential helper": func(context.Context) (string, error) { return "", errors.New("no helper") },
+		"keychain":              func(context.Context) (string, error) { return "  \n", nil },
 	}
 	logins := map[string]string{"ghu_same": "founder", "ghp_other": "machine"}
 	asked := map[string]int{}

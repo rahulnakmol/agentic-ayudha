@@ -25,6 +25,8 @@ func TestDecideBatchApprovedByReply(t *testing.T) {
 	d1 := g.AddIssue("Choose the rules engine", decisionBody("true", ""), "type:decision", "status:ready")
 	d2 := g.AddIssue("Choose the queue", decisionBody("true", ""), "type:decision", "status:ready")
 	d4 := g.AddIssue("Choose the cache", decisionBody("true", ""), "type:decision", "status:ready")
+	d5 := g.AddIssue("Choose the CDN", decisionBody("true", ""), "type:decision", "status:ready")
+	d6 := g.AddIssue("Choose the CI runner", decisionBody("true", ""), "type:decision", "status:ready")
 	d3 := g.AddIssue("Choose the data store", decisionBody("false", ""), "type:decision", "status:ready")
 	sets := []string{"--repo", "o/r", "--set", "identity.app_id=42", "--set", "identity.app_slug=aayudha-bot", "--set", "approvals.approvers=founder"}
 	agent := map[string]string{"AAYU_GITHUB_TOKEN": "founder-token", "AAYU_BOT_TOKEN": "bot-token", "CODEX_THREAD_ID": "019a"}
@@ -97,6 +99,7 @@ func TestDecideBatchApprovedByReply(t *testing.T) {
 		list:                   "a list of Decisions is a batch for --accept",
 		list + " --accept A,A": "3 Decision(s) but 2 option(s)",
 		strconv.Itoa(d2.Number) + "," + strconv.Itoa(d2.Number) + " --accept A,A": "is in the batch twice",
+		"1,2,3,4,5,6,7,8,9,10,11 --accept A,A,A,A,A,A,A,A,A,A,A":                  "at most 10 Decisions in one batch",
 	} {
 		if code, _, errOut := run(t, agent, opts, append(append([]string{"decide"}, strings.Fields(args)...), sets...)...); code != ExitUsage || !strings.Contains(errOut, want) {
 			t.Fatalf("decide %s: %d %s", args, code, errOut)
@@ -156,6 +159,17 @@ func TestDecideBatchApprovedByReply(t *testing.T) {
 			t.Fatalf("%s: %d %s\n%s", cfg, code, out, last(d1.Number))
 		}
 	}
+	// The job cannot read its event: nothing is applied.
+	for name, raw := range map[string]string{"missing": "", "malformed": "{"} {
+		ev := filepath.Join(t.TempDir(), "event.json")
+		if raw != "" {
+			_ = os.WriteFile(ev, []byte(raw), 0o644)
+		}
+		ci := map[string]string{"AAYU_GITHUB_TOKEN": "workflow-token", "AAYU_BOT_TOKEN": "bot-token", "GITHUB_EVENT_NAME": "issue_comment", "GITHUB_EVENT_PATH": ev}
+		if code, _, errOut := run(t, ci, opts, append([]string{"inbox", "--ci"}, sets...)...); code != ExitUsage || !strings.Contains(errOut, "inbox --ci:") || !none() {
+			t.Fatalf("%s event: %d %s", name, code, errOut)
+		}
+	}
 	// Only a new reply on an issue counts: another event or an edit is not an approval.
 	id := reply("founder", "/aayu approve all", false)
 	if code, _ := workflow(id, "pull_request_review", "submitted"); code != ExitUsage || !none() {
@@ -164,14 +178,22 @@ func TestDecideBatchApprovedByReply(t *testing.T) {
 	if code, out := workflow(id, "issue_comment", "edited"); code != 0 || !strings.Contains(out, "a edited comment is never an approval") || !none() {
 		t.Fatalf("an edit event: %d %s", code, out)
 	}
+	// The Decision's authority is someone else: the reply is not theirs to give.
+	authority := append(append([]string{}, sets...), "--set", "seats.founder.mode=paired", "--set", "seats.founder.human=boss")
+	if code, out := workflow(reply("founder", "/aayu approve 1", false), authority...); code != ExitBlocked || !strings.Contains(last(d1.Number), "the authority for #"+strconv.Itoa(d1.Number)+" is boss") || !none() {
+		t.Fatalf("not the authority: %d %s\n%s", code, out, last(d1.Number))
+	}
 	// A bot's reply, one without write access, and one that is not a command get no answer and change nothing.
 	g.Mu.Lock()
 	g.Permissions["visitor"] = "read"
 	g.Mu.Unlock()
-	for _, who := range []string{"aayudha-bot[bot]", "visitor", "founder"} {
+	for _, who := range []string{"aayudha-bot[bot]", "visitor", "founder", "founder "} {
 		body := "/aayu approve all"
-		if who == "founder" {
+		switch who {
+		case "founder":
 			body = "thanks!"
+		case "founder ":
+			who, body = "founder", "/aayu skip all"
 		}
 		n := len(comments(d1.Number))
 		if code, out := workflow(reply(who, body, false)); code != 0 || len(comments(d1.Number)) != n+1 || !none() {
@@ -212,6 +234,50 @@ func TestDecideBatchApprovedByReply(t *testing.T) {
 		t.Fatalf("edited batch: %d\n%s", code, last(d2.Number))
 	}
 
+	// A batch the bot's comment does not match (its shown hash is not its
+	// record's) never counts.
+	thread = d5.Number
+	if code, _, _ := run(t, agent, opts, append([]string{"decide", strconv.Itoa(d5.Number) + "," + strconv.Itoa(d6.Number), "--accept", "A,A"}, sets...)...); code != ExitBlocked {
+		t.Fatalf("batch on #%d: %d", d5.Number, code)
+	}
+	g.Mu.Lock()
+	bc := g.Issues[d5.Number].Comments[len(g.Issues[d5.Number].Comments)-1]
+	real := bc.Body
+	_, rest, _ := strings.Cut(real, "\n")
+	bc.Body = batchMarker + "000000000000 -->\n" + rest
+	g.Mu.Unlock()
+	if code, _ := workflow(reply("founder", "/aayu approve all", false)); code != ExitBlocked || !strings.Contains(last(d5.Number), "the batch's hash does not match its record") || accepted(d5.Number) {
+		t.Fatalf("forged hash: %d\n%s", code, last(d5.Number))
+	}
+	// GitHub fails on the second item: the first stays accepted, and the
+	// result says the rest was not applied.
+	g.Mu.Lock()
+	bc.Body = real
+	g.Fail = "PATCH /repos/o/r/issues/" + strconv.Itoa(d6.Number)
+	g.Mu.Unlock()
+	if code, _ := workflow(reply("founder", "/aayu approve all", false)); code != ExitExternal || !accepted(d5.Number) || accepted(d6.Number) ||
+		!strings.Contains(last(d5.Number), "2. #"+strconv.Itoa(d6.Number)+" was not accepted") || !strings.Contains(last(d5.Number), "The rest was not applied.") {
+		t.Fatalf("partial failure: %d\n%s", code, last(d5.Number))
+	}
+
+	// An agent that loosens its own config (device_for = []) gets a one-way
+	// door into a reply batch, and the workflow, which reads the repository's
+	// config, still refuses it.
+	thread = d3.Number
+	loose := t.TempDir()
+	_ = os.MkdirAll(filepath.Join(loose, "aayudha"), 0o755)
+	_ = os.WriteFile(filepath.Join(loose, "aayudha", "config.toml"), []byte("version = 1\n[approvals]\ndevice_for = []\n"), 0o644)
+	agentLoose := map[string]string{"XDG_CONFIG_HOME": loose}
+	for k, v := range agent {
+		agentLoose[k] = v
+	}
+	if code, _, errOut := run(t, agentLoose, opts, append([]string{"decide", strconv.Itoa(d3.Number), "--accept", "A"}, sets...)...); code != ExitBlocked || !strings.Contains(last(d3.Number), "/aayu approve all") {
+		t.Fatalf("loosened batch: %d %s\n%s", code, errOut, last(d3.Number))
+	}
+	if code, _ := workflow(reply("founder", "/aayu approve all", false)); code != ExitBlocked || !strings.Contains(last(d3.Number), "item 1 is a one-way door") || accepted(d3.Number) {
+		t.Fatalf("one-way door by reply: %d\n%s", code, last(d3.Number))
+	}
+
 	// A one-way door stays on the device code (device_for = ["one-way"] by
 	// default): the batch carries the code, and a denial says so on the thread.
 	g.Mu.Lock()
@@ -236,7 +302,7 @@ func TestDecideBatchApprovedByReply(t *testing.T) {
 
 // The approver's own credential in this session turns comment approval off:
 // an agent here could write the reply. The batch falls back to the device
-// code and says why.
+// code and says why; so does `[approvals] device_for = ["all"]`.
 func TestBatchFallsBackWhenApproverCredentialIsReachable(t *testing.T) {
 	g := fake.New(t, "o/r", "User")
 	g.Viewer = "founder"
@@ -252,9 +318,20 @@ func TestBatchFallsBackWhenApproverCredentialIsReachable(t *testing.T) {
 	if code != ExitBlocked || !strings.Contains(body, "this session can reach @founder's GitHub credential (GH_TOKEN)") || strings.Contains(body, "/aayu approve all") || strings.Contains(body, "ghu_") {
 		t.Fatalf("exit %d %s\n%s", code, errOut, body)
 	}
+	// device_for = ["all"] keeps every batch on the code, whatever the session holds.
+	d2 := g.AddIssue("Choose the queue", decisionBody("true", ""), "type:decision", "status:ready")
+	delete(env, "GH_TOKEN")
+	code, _, errOut = run(t, env, Options{GitHubAPI: g.URL(), GitHubGap: -1, DevicePoll: time.Millisecond},
+		"decide", strconv.Itoa(d2.Number), "--accept", "A", "--repo", "o/r", "--set", "identity.app_id=42", "--set", "identity.app_slug=aayudha-bot", "--set", "approvals.approvers=founder", "--set", "approvals.device_for=all")
+	g.Mu.Lock()
+	body = g.Issues[d2.Number].Comments[len(g.Issues[d2.Number].Comments)-1].Body
+	g.Mu.Unlock()
+	if code != ExitBlocked || !strings.Contains(body, "keeps every batch on the device code") {
+		t.Fatalf("device_for all: exit %d %s\n%s", code, errOut, body)
+	}
 }
 
-// Story #481: with no bot identity, an agent's batch of three Decisions asks
+// Story #481: with an approver recorded but no bot identity, an agent's batch of three Decisions asks
 // for one device code in one comment, which says why replies are off. Each
 // failure (expired, cancelled, another account, too little access) writes no
 // Decision and replaces the code with what happened and the next step; each
@@ -308,7 +385,7 @@ func TestDecideBatchDeviceCode(t *testing.T) {
 		g.Device = &d
 		g.Permissions = map[string]string{"founder": orDefault(tt.perm, "admin")}
 		g.Mu.Unlock()
-		code, _, errOut := run(t, env, opts, "decide", list, "--accept", "A,A,B", "--repo", "o/r")
+		code, _, errOut := run(t, env, opts, "decide", list, "--accept", "A,A,B", "--repo", "o/r", "--set", "approvals.approvers=founder")
 		if b := batch(); code != ExitBlocked || closed() != 0 || d.Started != 1 || !strings.Contains(b, tt.want) || !strings.Contains(b, "\nNext: ") ||
 			strings.Contains(b, "WDJB-MJHT") {
 			t.Fatalf("%s: exit %d, %d closed, %d codes: %s\n%s", tt.name, code, closed(), d.Started, errOut, b)
@@ -320,7 +397,7 @@ func TestDecideBatchDeviceCode(t *testing.T) {
 	g.Permissions = map[string]string{"founder": "admin"}
 	g.Mu.Unlock()
 	g.Reset()
-	code, out, errOut := run(t, env, opts, "decide", list, "--accept", "A,A,B", "--repo", "o/r")
+	code, out, errOut := run(t, env, opts, "decide", list, "--accept", "A,A,B", "--repo", "o/r", "--set", "approvals.approvers=founder")
 	// The code reached the batch comment before aayu waited for it.
 	shown := ""
 	for _, w := range g.Writes() {
@@ -334,7 +411,7 @@ func TestDecideBatchDeviceCode(t *testing.T) {
 	for _, want := range []string{"**3 human-only steps wait for your approval**", "1. **Accepts option A of Decision #" + strconv.Itoa(ds[0].Number) + ": Choose the rules engine.** Two-way door",
 		"3. **Accepts option B of Decision #" + strconv.Itoa(ds[2].Number) + ": Choose the data store. This is not the recommendation.** One-way door",
 		"Recommendation: A", "**To approve all of it, enter this code** at https://github.com/login/device before", "```text\nWDJB-MJHT\n```",
-		"Comment approval is off for this batch: no approver is recorded"} {
+		"Comment approval is off for this batch: agents here write as @founder (no bot identity), so a reply from that account could be an agent's."} {
 		if !strings.Contains(shown, want) {
 			t.Fatalf("the batch with the code lacks %q:\n%s", want, shown)
 		}
