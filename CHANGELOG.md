@@ -63,6 +63,7 @@ for this release.
 - `aayu init --gates` creates the `code-review` environment with Grok 4.7 at `https://api.x.ai/v1` filled in, lets only the base branches and the default branch deploy to it, and removes every other deployment rule; on a plan with no environments it says so and continues (#657).
 - The CI review fails closed and names the missing setting, refuses a URL with a key, a query, or an operation path such as `/chat/completions`, and skips a docs-only pull request before it reads the settings (#657).
 - Rung B is a paid review model of another family: the CI review, or `[inspect] paid_reviewer`, which names the model when `AAYU_REVIEW_MODEL` names none and serves as the fallback (#550, #657).
+- The work-items guidance that `aayu init` writes into AGENTS.md names the CI review as the default review, so agents follow the new review loop after you run `aayu init` again (#683).
 - `[inspect] paid_effort` sets every review call's reasoning effort (empty: high, or medium for Claude Opus, Claude Fable, and GPT-6 Astra), and a paid review runs only for pull requests whose author has write or admin access to the repository (#579, #657).
 - `[inspect] reviewer` names the one review tool: `ci` (the default), `codex`, `coderabbit`, `greptile`, `claude`, `cursor`, or `human` (`model` stays for aayu's own evals); `aayu install --apply` asks for a value the gate cannot use, and Enter picks `ci` (#641, #657).
 - A review from CodeRabbit or Greptile counts as rung A whatever the builder's model family (#641).
