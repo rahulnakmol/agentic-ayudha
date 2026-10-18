@@ -7,6 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
+	_ "image/jpeg" // attachment dimensions for the unmetered bound
+	_ "image/png"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -78,10 +81,11 @@ func (c CopilotCLI) Complete(ctx context.Context, r Request) (Response, error) {
 	if r.Effort != "" {
 		args = append(args, "--reasoning-effort", r.Effort)
 	}
-	n := 0
+	n, imageTokens := 0, 0
 	for _, m := range r.Messages {
 		for _, im := range m.Images {
 			n++
+			imageTokens += copilotMaxImage(im)
 			ext := strings.TrimPrefix(im.MediaType, "image/")
 			f := filepath.Join(dir, fmt.Sprintf("image-%d.%s", n, ext))
 			if err := os.WriteFile(f, im.Data, 0o600); err != nil {
@@ -97,17 +101,21 @@ func (c CopilotCLI) Complete(ctx context.Context, r Request) (Response, error) {
 		"COPILOT_AUTO_UPDATE=false", "DBUS_SESSION_BUS_ADDRESS=disabled:", "COPILOT_GITHUB_TOKEN=" + c.Token}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	runErr := cmd.Run()
+	if err := cmd.Start(); err != nil {
+		// Nothing ran, so nothing was spent.
+		return Response{}, fmt.Errorf("%w: copilot did not start: %w", ErrCopilot, err)
+	}
+	runErr := cmd.Wait()
 	u, _ := os.ReadFile(usage)
 	resp, err := parseCopilot(stdout.Bytes(), u)
 	if resp.TokensIn == 0 {
-		// Once copilot has run, a call with no usable usage report (a reply
+		// Once copilot has started, a call with no usable usage report (a reply
 		// without one, or a crash or kill after the request went out) is not
 		// accounted: report upper-bound token counts, which the gateway prices
 		// as any other call (configured prices, long-context rates), so the
 		// breaker still sees the spend; and fail so the caller falls back
 		// rather than trusting a route it cannot meter.
-		resp.TokensIn, resp.TokensOut, resp.CachedIn = copilotMaxInput(r, n), copilotMaxOutput, 0
+		resp.TokensIn, resp.TokensOut, resp.CachedIn = len(copilotPrompt(r))+copilotOwnPrompt+imageTokens, copilotMaxOutput, 0
 		if err == nil {
 			err = fmt.Errorf("%w: copilot returned no usage report; charged as %d input and %d output tokens", ErrCopilot, resp.TokensIn, resp.TokensOut)
 		}
@@ -188,11 +196,22 @@ func parseCopilot(jsonl, usage []byte) (Response, error) {
 	return resp, nil
 }
 
-// copilotMaxInput is the most input a call can have used when Copilot reports
-// no usage: the prompt at one token per two characters, Copilot's own prompt
-// (about 15k tokens in the probes) rounded up to 25k, and 2k per image.
-func copilotMaxInput(r Request, images int) int {
-	return len(copilotPrompt(r))/2 + 25000 + 2000*images
+// The most input an unmetered call can have used: the prompt at one token per
+// byte (a byte-level tokenizer never emits more), Copilot's own prompt (about
+// 15k tokens in the probes) as copilotOwnPrompt, and copilotMaxImage per
+// attachment.
+const copilotOwnPrompt = 25000
+
+// copilotMaxImage bounds an attachment's input tokens: one per 750 pixels
+// (Claude's rate, above Gemini's 258 per 768×768 tile and GPT's 170 per
+// 512×512 tile), at least 2,000 (above Gemini's 1,120 at high resolution);
+// one per byte when its dimensions cannot be read.
+func copilotMaxImage(im Image) int {
+	c, _, err := image.DecodeConfig(bytes.NewReader(im.Data))
+	if err != nil {
+		return max(len(im.Data), 2000)
+	}
+	return max(c.Width*c.Height/750, 2000)
 }
 
 // copilotMaxOutput is the output an unmetered call is charged: 128k

@@ -1,8 +1,11 @@
 package models
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"image"
+	pngenc "image/png"
 	"math"
 	"os"
 	"path/filepath"
@@ -142,10 +145,28 @@ func TestCopilotCLI(t *testing.T) {
 	if usd, _ := Cost(nil, req.Model, resp); !errors.Is(err, ErrCopilot) || usd < 1.28 {
 		t.Errorf("a copilot that died charged %v USD (%v)", usd, err)
 	}
-	// So does a long-context rate: a 200k-character prompt is 100k + 25k = 125k
-	// input tokens, over Haiku 5.5's 100k, so 125k × 0.50 + 128k × 2.50 per
-	// million = 0.3825 USD (the short rate gives 0.0765).
-	big := Request{Model: "claude-haiku-5-5", System: strings.Repeat("x", 200000)}
+	// One that never starts (not an executable) spent nothing.
+	junk := filepath.Join(t.TempDir(), "copilot")
+	if err := os.WriteFile(junk, []byte("not a program"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if resp, err := (CopilotCLI{Token: "t", Bin: junk, Path: unmetered}).Complete(context.Background(), req); !errors.Is(err, ErrCopilot) || resp.TokensIn+resp.TokensOut != 0 {
+		t.Errorf("a copilot that never started: %d+%d tokens (%v)", resp.TokensIn, resp.TokensOut, err)
+	}
+	// The bound counts a token per prompt byte, 25k for Copilot's own prompt,
+	// and a token per 750 pixels of each attachment: 1 + 25,000 + 3000×1500/750.
+	var pic bytes.Buffer
+	if err := pngenc.Encode(&pic, image.NewGray(image.Rect(0, 0, 3000, 1500))); err != nil {
+		t.Fatal(err)
+	}
+	wide := Request{Model: req.Model, System: "s", Messages: []Message{{Role: "user", Images: []Image{{MediaType: "image/png", Data: pic.Bytes()}}}}}
+	if resp, _ := (CopilotCLI{Token: "t", Path: unmetered}).Complete(context.Background(), wide); resp.TokensIn != 1+25000+6000 {
+		t.Errorf("unmetered input bound %d tokens, want 31001", resp.TokensIn)
+	}
+	// It is priced at the long-context rate past the threshold: a 100k-byte
+	// prompt is 100k + 25k = 125k input tokens, over Haiku 5.5's 100k, so
+	// 125k × 0.50 + 128k × 2.50 per million = 0.3825 USD.
+	big := Request{Model: "claude-haiku-5-5", System: strings.Repeat("x", 100000)}
 	resp, _ = (CopilotCLI{Token: "t", Path: unmetered}).Complete(context.Background(), big)
 	if usd, _ := Cost(nil, big.Model, resp); math.Abs(usd-0.3825) > 1e-9 {
 		t.Errorf("long-context unmetered reply charged %v USD, want 0.3825", usd)
