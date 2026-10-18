@@ -785,7 +785,19 @@ func TestShipOnProof(t *testing.T) {
 	g.JobLogs[7788] = strings.Replace(strings.Replace(g.JobLogs[7701], ": merge (reviewed by codex)", ": merge (cached) (reviewed by codex)", 1), "same-family review (C): codex (openai)", "different-family review (A): claude (anthropic)", 1)
 	g.Mu.Unlock()
 
+	// The audit's label goes on before the merge: when it cannot, nothing
+	// merges, so no merge on proof escapes the look after merge.
+	g.Mu.Lock()
+	g.Fail, g.FailAfter = fmt.Sprintf("POST /repos/o/r/issues/%d/labels", prN), 0
+	g.Mu.Unlock()
 	code, out := shipCmd(t, env, opts, prN)
+	g.Mu.Lock()
+	early := g.Pulls[prN].Merged
+	g.Mu.Unlock()
+	if code != ExitExternal || early || !strings.Contains(out, "not merged: the aayu:audit label") {
+		t.Fatalf("ship with the audit label failing: %d merged %t %s", code, early, out)
+	}
+	code, out = shipCmd(t, env, opts, prN)
 	if code != 0 || !strings.Contains(out, "human pass: proof by founder") {
 		t.Fatalf("ship on proof: %d %s", code, out)
 	}
@@ -861,9 +873,16 @@ func TestShipOnProof(t *testing.T) {
 	if git(t, bare, "show", "ledger:"+AuditLedgerPath(prN)) == "" || n != pulls || slices.Contains(g.LabelNames(prN), autonomy.LabelCorrection) {
 		t.Fatalf("an agent lane wrote: audit entry gone, %d PRs (was %d), labels %v", n, pulls, g.LabelNames(prN))
 	}
-	// Looks right: a clean sample, and the entry and the label are gone.
-	if out := inbox(env, "a"); !strings.Contains(out, "done: sample of #"+strconv.Itoa(prN)) {
-		t.Fatalf("looks right:\n%s", out)
+	// Looks right: a clean sample, and the entry and the label are gone. A
+	// look whose label removal failed is finished by the next look.
+	g.Mu.Lock()
+	g.Fail, g.FailAfter = fmt.Sprintf("DELETE /repos/o/r/issues/%d/labels/%s", prN, AuditLabel), 0
+	g.Mu.Unlock()
+	if out := inbox(env, "a"); !strings.Contains(out, "done: sample of #"+strconv.Itoa(prN)) && !slices.Contains(g.LabelNames(prN), AuditLabel) {
+		t.Fatalf("looks right, label removal failing:\n%s", out)
+	}
+	if out := inbox(env, "a"); !strings.Contains(out, "done: the sample of #"+strconv.Itoa(prN)+" was already in "+SamplesLedgerPath) {
+		t.Fatalf("looks right, again:\n%s", out)
 	}
 	if s := samples(); len(s) != 1 || s[0].PR != prN || s[0].Correction || s[0].By != "founder" || slices.Contains(g.LabelNames(prN), AuditLabel) ||
 		strings.Contains(git(t, bare, "ls-tree", "-r", "--name-only", "ledger"), AuditLedgerPath(prN)) {
@@ -871,8 +890,9 @@ func TestShipOnProof(t *testing.T) {
 	}
 	// A correction: the correction label (the streak's reset) and a PR that
 	// reverts the merge into dev, Refs the story.
+	entryJSON := []byte(git(t, bare, "show", "ledger~1:"+AuditLedgerPath(prN)))
 	if _, err := (&ledger.Writer{Dir: dir}).Write(context.Background(), ledger.Commit{Message: "audit again",
-		Files: map[string][]byte{AuditLedgerPath(prN): []byte(git(t, bare, "show", "ledger~1:"+AuditLedgerPath(prN)))}}); err != nil {
+		Files: map[string][]byte{AuditLedgerPath(prN): entryJSON}}); err != nil {
 		t.Fatal(err)
 	}
 	g.Mu.Lock()
@@ -882,9 +902,22 @@ func TestShipOnProof(t *testing.T) {
 	if s := samples(); len(s) != 2 || s[1].PR != prN || !s[1].Correction || !slices.Contains(g.LabelNames(prN), autonomy.LabelCorrection) {
 		t.Fatalf("correction: %+v, labels %v\n%s", s, g.LabelNames(prN), out)
 	}
+	// An interrupted correction run again reuses its revert PR.
+	if _, err := (&ledger.Writer{Dir: dir}).Write(context.Background(), ledger.Commit{Message: "audit again",
+		Files: map[string][]byte{AuditLedgerPath(prN): entryJSON}}); err != nil {
+		t.Fatal(err)
+	}
+	g.Mu.Lock()
+	g.Issues[prN].Labels = append(g.Issues[prN].Labels, fake.Label{Name: AuditLabel})
+	before := len(g.Pulls)
+	g.Mu.Unlock()
+	again := inbox(env, "2 y")
 	g.Mu.Lock()
 	defer g.Mu.Unlock()
 	rev := g.Pulls[len(g.Issues)]
+	if len(g.Pulls) != before || rev == nil || !strings.Contains(again, "revert PR: https://github.com/o/r/pull/"+strconv.Itoa(rev.Number)) {
+		t.Fatalf("a second correction opened another revert PR (%d, was %d):\n%s", len(g.Pulls), before, again)
+	}
 	if rev == nil || rev.Title != "revert: "+g.Pulls[prN].Title+" (#"+strconv.Itoa(prN)+")" || !strings.Contains(rev.Body, "Refs #2") || rev.Base.Ref != "dev" ||
 		!strings.Contains(out, "revert PR: https://github.com/o/r/pull/"+strconv.Itoa(rev.Number)) {
 		t.Fatalf("revert PR: %+v\n%s", rev, out)

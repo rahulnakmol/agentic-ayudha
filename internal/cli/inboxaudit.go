@@ -1,11 +1,15 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"slices"
+	"strings"
 	"time"
 
 	gh "github.com/google/go-github/v90/github"
@@ -16,6 +20,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
+	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
 // The sampled audit after merge (Decision #593): a PR ship merged with no
@@ -26,7 +31,7 @@ import (
 // touched and opens a PR that reverts it. The look never blocks the merge.
 
 // AuditLabel marks a merged PR whose audit entry waits for a person.
-const AuditLabel = "aayu:audit"
+const AuditLabel = workitems.LabelAudit
 
 // AuditLedgerPath is where a merged PR's audit entry waits on the ledger.
 func AuditLedgerPath(pr int) string { return fmt.Sprintf("autonomy/audit/%d.json", pr) }
@@ -83,7 +88,18 @@ func (e *Env) auditAct(ctx context.Context, c *github.Client, repo, login string
 	if ok, err := readLedgerJSON(ctx, w, AuditLedgerPath(it.Number), &entry); err != nil {
 		return Wrap(ExitExternal, err)
 	} else if !ok {
-		return Errorf(ExitBlocked, "inbox: PR #%d has no audit entry at %s; only ship writes one", it.Number, AuditLedgerPath(it.Number))
+		// An earlier look recorded its sample and removed the entry, then
+		// failed to remove the label: finish it.
+		if sampled, err := ledgerSampled(ctx, w, it.Number); err != nil {
+			return Wrap(ExitExternal, err)
+		} else if !sampled {
+			return Errorf(ExitBlocked, "inbox: PR #%d has no audit entry at %s; only ship writes one", it.Number, AuditLedgerPath(it.Number))
+		}
+		if err := removeLabel(ctx, c, repo, it.Number, AuditLabel); err != nil {
+			return Wrap(ExitExternal, err)
+		}
+		fmt.Fprintf(e.Out, "  done: the sample of #%d was already in %s; its %s label is removed\n", it.Number, SamplesLedgerPath, AuditLabel)
+		return nil
 	}
 	if correction {
 		if err := addLabel(ctx, c, repo, it.Number, autonomy.LabelCorrection); err != nil {
@@ -107,12 +123,50 @@ func (e *Env) auditAct(ctx context.Context, c *github.Client, repo, login string
 	return nil
 }
 
+// ledgerSampled reports whether SamplesLedgerPath holds a sample of PR n.
+func ledgerSampled(ctx context.Context, w *ledger.Writer, n int) (bool, error) {
+	t, err := w.Read(ctx)
+	if errors.Is(err, ledger.ErrNoLedger) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	defer t.Close()
+	b, err := t.File(ctx, SamplesLedgerPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	for _, l := range bytes.Split(b, []byte("\n")) {
+		var s Sample
+		if json.Unmarshal(l, &s) == nil && s.PR == n {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // revertPR opens a PR that reverts merged PR n (GitHub's revertPullRequest)
-// and returns its URL.
+// and returns its URL. A revert PR an earlier, interrupted correction opened
+// is reused, so a retry opens no second one.
 func revertPR(ctx context.Context, c *github.Client, repo string, n, story int) (string, error) {
 	owner, name, _ := github.SplitRepo(repo)
+	prs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.PullRequest, *gh.Response, error) {
+		return c.REST.PullRequests.List(ctx, owner, name, &gh.PullRequestListOptions{State: "all", ListOptions: o})
+	})
+	if err != nil {
+		return "", err
+	}
+	for _, p := range prs {
+		if strings.HasPrefix(p.GetBody(), revertBody(n)) {
+			return p.GetHTMLURL(), nil
+		}
+	}
 	var url string
-	_, err := c.Write(ctx, actions.Action{Kind: "github.pull.revert", Target: fmt.Sprintf("%s#%d", repo, n),
+	_, err = c.Write(ctx, actions.Action{Kind: "github.pull.revert", Target: fmt.Sprintf("%s#%d", repo, n),
 		Request: &actions.Request{Method: http.MethodPost, Path: "/graphql"}, Payload: map[string]any{"pr": n}},
 		func(ctx context.Context) (any, error) {
 			p, _, err := c.REST.PullRequests.Get(ctx, owner, name, n)
@@ -125,10 +179,13 @@ func revertPR(ctx context.Context, c *github.Client, repo string, n, story int) 
 				} `graphql:"revertPullRequest(input: $input)"`
 			}
 			title := githubv4.String(fmt.Sprintf("revert: %s (#%d)", p.GetTitle(), n))
-			body := githubv4.String(fmt.Sprintf("Reverts #%d: a person marked it a correction in its sampled audit after merge (`aayu inbox`).\n\nRefs #%d\n", n, story))
+			body := githubv4.String(fmt.Sprintf("%s a person marked it a correction in its sampled audit after merge (`aayu inbox`).\n\nRefs #%d\n", revertBody(n), story))
 			err = c.GraphQL.Mutate(ctx, &m, githubv4.RevertPullRequestInput{PullRequestID: githubv4.ID(p.GetNodeID()), Title: &title, Body: &body}, nil)
 			url = string(m.RevertPullRequest.RevertPullRequest.URL)
 			return url, err
 		})
 	return url, err
 }
+
+// revertBody starts the body of the PR that reverts PR n.
+func revertBody(n int) string { return fmt.Sprintf("Reverts #%d:", n) }

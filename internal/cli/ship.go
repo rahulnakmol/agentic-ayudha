@@ -402,6 +402,18 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 			return Errorf(ExitBlocked, "ship #%d: %s moved from %s to %s while ship judged the PR on proof; run ship again so its current policy judges it", n, pr.GetBase().GetRef(), short(rec.Proof.Policy), short(tip))
 		}
 	}
+	// A merge with no person's pass (on proof, or an autonomous footprint)
+	// waits for a person's look after merge: every one is audited, so the
+	// paths that judge later PRs (internal/models, inspect, verify, proof,
+	// evals) never go unseen (founder, 2026-10-18). The inbox finds the look
+	// by its label, so the label goes on before the merge: a merge the inbox
+	// would miss never happens.
+	audited := rec.HumanPass.Kind == "proof" || rec.HumanPass.Kind == "autonomous"
+	if audited && !c.DryRun() {
+		if err := addLabel(ctx, c, repo, n, AuditLabel); err != nil {
+			return Errorf(ExitExternal, "ship #%d: not merged: the %s label, by which the inbox finds the look after merge, was not added: %v", n, AuditLabel, err)
+		}
+	}
 	var merged *gh.PullRequestMergeResult
 	if _, err := c.Write(ctx, actions.Action{Kind: "github.pull.merge", Target: fmt.Sprintf("%s#%d", repo, n), Story: fmt.Sprintf("#%d", story),
 		Request: &actions.Request{Method: http.MethodPut, Path: fmt.Sprintf("/repos/%s/pulls/%d/merge", repo, n)},
@@ -431,11 +443,6 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	res := ShipResult{ShipRecord: rec, Record: path.Join(path.Dir(rec.Pack), "ship.json")}
 	b, _ := json.MarshalIndent(rec, "", "  ")
 	files := map[string][]byte{res.Record: append(b, '\n')}
-	// A merge with no person's pass (on proof, or an autonomous footprint)
-	// waits for a person's look after merge: every one is audited, so the
-	// paths that judge later PRs (internal/models, inspect, verify, proof,
-	// evals) never go unseen (founder, 2026-10-18).
-	audited := rec.HumanPass.Kind == "proof" || rec.HumanPass.Kind == "autonomous"
 	if audited {
 		ab, _ := json.MarshalIndent(AuditEntry{PR: n, Story: story, Head: head, Merge: rec.MergeCommit, Footprint: rec.Footprint, Pass: rec.HumanPass.Kind, MergedAt: rec.ShippedAt}, "", "  ")
 		files[AuditLedgerPath(n)] = append(ab, '\n')
@@ -443,9 +450,9 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	if _, err := s.Ledger.Write(ctx, ledger.Commit{Message: fmt.Sprintf("proof: ship record of #%d (PR #%d)", story, n), Files: files}); err != nil {
 		return Wrap(ExitExternal, err)
 	}
-	if audited {
-		if err := addLabel(ctx, c, repo, n, AuditLabel); err != nil {
-			fmt.Fprintf(e.Err, "aayu: warning: PR #%d's audit entry is on the ledger, but the %s label was not added: %v\n", n, AuditLabel, err)
+	if !audited && prLabelled(now, AuditLabel) { // an earlier ship labelled it, then did not merge
+		if err := removeLabel(ctx, c, repo, n, AuditLabel); err != nil {
+			fmt.Fprintf(e.Err, "aayu: warning: a person passed PR #%d, but the %s label an earlier ship added was not removed: %v\n", n, AuditLabel, err)
 		}
 	}
 	if ref := pr.GetHead().GetRef(); pr.GetHead().GetRepo().GetFullName() == repo || pr.GetHead().GetRepo() == nil {

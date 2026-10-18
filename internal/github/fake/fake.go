@@ -587,8 +587,9 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			is := g.addIssue(title, text, nil)
 			pr := &PR{Number: is.Number, Title: title, Body: text, State: "open", User: Account{Login: g.Viewer, Type: "User"},
 				Head: Branch{Ref: fmt.Sprintf("revert-%d-%s", orig.Number, orig.Head.Ref)}, Base: orig.Base, CreatedAt: time.Now().UTC()}
-			g.Pulls[is.Number] = pr
 			url := fmt.Sprintf("https://github.com/%s/%s/pull/%d", g.Owner, g.Repo, pr.Number)
+			pr.URL = url
+			g.Pulls[is.Number] = pr
 			reply(200, map[string]any{"data": map[string]any{"revertPullRequest": map[string]any{"revertPullRequest": map[string]any{"url": url}}}})
 			return
 		}
