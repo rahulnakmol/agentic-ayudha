@@ -1,6 +1,6 @@
 [[criterion]]
 id = 3
-tests = ["./internal/cli:TestInitIdentityRefusesTheApp"]
+tests = ["./internal/cli:TestInitIdentityRefusesTheApp", "./internal/initrepo:TestAppHookURL"]
 
 [[criterion]]
 id = 4
