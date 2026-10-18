@@ -140,10 +140,18 @@ func CheckStructure(md string) []string {
 		out = append(out, "the recommendation is more than one paragraph or a list; make one recommendation")
 	}
 	if _, next := find("Next step"); next != "" {
+		var cmds []string
 		for _, m := range codeSpan.FindAllStringSubmatch(next, -1) {
-			if command.MatchString(m[1]) && !strings.HasPrefix(m[1], "aayu ") {
+			if !command.MatchString(m[1]) {
+				continue
+			}
+			cmds = append(cmds, m[1])
+			if !strings.HasPrefix(m[1], "aayu ") {
 				out = append(out, fmt.Sprintf("part %q: `%s` is not an aayu command; the next step goes through aayu", "Next step", m[1]))
 			}
+		}
+		if len(cmds) > 1 {
+			out = append(out, fmt.Sprintf("part %q gives %d commands; give the one next command", "Next step", len(cmds)))
 		}
 	}
 	if i, q := find("Your question"); i >= 0 {
@@ -154,7 +162,17 @@ func CheckStructure(md string) []string {
 			out = append(out, "the question to answer is not one question on one line ending in a question mark")
 		}
 	}
+	// A claim is read per paragraph or list item, with its wrapped lines joined, as Markdown renders it.
+	var units []string
 	for _, line := range strings.Split(md, "\n") {
+		t := strings.TrimSpace(line)
+		if n := len(units); n > 0 && t != "" && units[n-1] != "" && !strings.HasPrefix(t, "#") && !listItem.MatchString(t) {
+			units[n-1] += " " + t
+			continue
+		}
+		units = append(units, listItem.ReplaceAllString(t, ""))
+	}
+	for _, line := range units {
 		ms := append(claimed.FindAllString(line, -1), asserted.FindAllString(line, -1)...)
 		ms = append(ms, passive.FindAllString(line, -1)...)
 		for _, m := range ms {

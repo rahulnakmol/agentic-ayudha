@@ -11,6 +11,8 @@ import (
 // shows (Story #478).
 func TestReviewClaims(t *testing.T) {
 	for line, claims := range map[string]bool{
+		"I\napprove this PR (#2).":                true,
+		"- One point (#2).\n- Approved. Ship it.": true,
 		"LGTM.": true,
 		"I have reviewed the diff and it is fine.":     true,
 		"We approve this change.":                      true,
@@ -73,6 +75,7 @@ func TestCheckStructure(t *testing.T) {
 		"extra part":               {strings.Replace(good, "## What not to do", "## Alternative\n\nChoose B (#2).\n\n## What not to do", 1), `part "Alternative" is not a part of a counsel`},
 		"two questions":            {strings.Replace(good, "Is this the call?", "Ship now? Or wait?", 1), "not one question on one line"},
 		"another command":          {strings.Replace(good, "Run `aayu decide 5`:", "Run `aayu decide 5`, then `gh pr merge 5`:", 1), "`gh pr merge 5` is not an aayu command"},
+		"two commands":             {strings.Replace(good, "Run `aayu decide 5`:", "Run `aayu inspect 2`, then `aayu ship 2`:", 1), "gives 2 commands"},
 		"two in a paragraph":       {strings.Replace(good, "One recommendation and why", "I recommend A. I also recommend B; why", 1), "make one recommendation"},
 	} {
 		if f := strings.Join(CheckStructure(tt.md), "\n"); !strings.Contains(f, tt.want) {
