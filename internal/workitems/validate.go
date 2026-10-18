@@ -289,10 +289,51 @@ func checkRecommendation(os []Option, rec string) []Problem {
 		}
 		return nil
 	}
-	if marked >= 0 || slices.ContainsFunc(os, func(o Option) bool { return MentionsOption(rec, o.Name) }) {
+	if marked >= 0 || NamedOption(os, rec) >= 0 {
 		return nil
 	}
+	if named := namedOptions(os, rec); len(named) > 1 {
+		return []Problem{{"recommendation", fmt.Sprintf("names options %s by name, so which one it recommends is unclear: name it by its number (\"Option %d, because ...\")", joinNums(named), named[0])}}
+	}
 	return []Problem{{"recommendation", "names none of the options: name one by its number (\"Option 2, because ...\") or its name"}}
+}
+
+// NamedOption is the index of the one option text names by name, or -1 when
+// it names none or several. A name inside another named option's name ("Waive"
+// in "Don't waive") does not count as a second.
+func NamedOption(os []Option, text string) int {
+	named := namedOptions(os, text)
+	if len(named) != 1 {
+		return -1
+	}
+	return slices.IndexFunc(os, func(o Option) bool { return o.N == named[0] })
+}
+
+func namedOptions(os []Option, text string) []int {
+	var hits []Option
+	for _, o := range os {
+		if MentionsOption(text, o.Name) {
+			hits = append(hits, o)
+		}
+	}
+	var out []int
+	for _, h := range hits {
+		inside := slices.ContainsFunc(hits, func(o Option) bool {
+			return o.N != h.N && len(o.Name) > len(h.Name) && MentionsOption(o.Name, h.Name)
+		})
+		if !inside {
+			out = append(out, h.N)
+		}
+	}
+	return out
+}
+
+func joinNums(ns []int) string {
+	s := make([]string, len(ns))
+	for i, n := range ns {
+		s[i] = strconv.Itoa(n)
+	}
+	return strings.Join(s, " and ")
 }
 
 // MentionsOption reports whether text names option as a whole word or

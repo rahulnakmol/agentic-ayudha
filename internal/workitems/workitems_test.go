@@ -137,6 +137,10 @@ func TestReadyFailures(t *testing.T) {
 			[]string{"recommendation: names option 3, but the Decision has options 1-2"}},
 		{"decision recommending nothing it offers", with(decision, func(c *Item) { c.Fields["recommendation"] = "Something else entirely." }), StageReady,
 			[]string{"recommendation: names none of the options: name one by its number (\"Option 2, because ...\") or its name"}},
+		{"decision recommending by two names", with(decision, func(c *Item) {
+			c.Fields["options"] = "1. **Buy.** a\n2. **Build.** b"
+			c.Fields["recommendation"] = "Buy, because it is faster than Build."
+		}), StageReady, []string{"recommendation: names options 1 and 2 by name, so which one it recommends is unclear: name it by its number (\"Option 1, because ...\")"}},
 		{"decision with one option still passes Create", with(decision, func(c *Item) { c.Fields["options"] = "1. **Waive.** Ship." }), StageCreate, nil},
 		{"decision without reversible still passes Create", with(decision, func(c *Item) { delete(c.Fields, FieldReversible) }), StageCreate, nil},
 		{"story under an initiative", with(story, func(c *Item) { c.Parent = &Ref{2, "initiative"} }), StageReady,
