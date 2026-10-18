@@ -510,8 +510,9 @@ func hasCite(text, cite string) bool {
 	}
 }
 
-// titledFact is a fact issueFact wrote: an optional lead-in ("Parent: "), the issue number, and its quoted title.
-var titledFact = regexp.MustCompile(`^((?:[A-Z][A-Za-z ]*: )*)#(\d+) ("(?:[^"\\]|\\.)*"): `)
+// titledFact is where issueFact quotes a title, after any lead-in ("Parent: ", "Linked (depends-on): "): the issue
+// number and its quoted title.
+var titledFact = regexp.MustCompile(`#(\d+) ("(?:[^"\\]|\\.)*"): `)
 
 // untrustTitles moves every issue title out of the facts into one untrusted block: a title is its author's text, so
 // the twin reads it as data, never as a trusted fact (counsel's facts are what aayu itself established).
@@ -522,12 +523,12 @@ func untrustTitles(facts []packFact, untrusted []chartUntrusted) ([]packFact, []
 		if m == nil {
 			continue
 		}
-		title, err := strconv.Unquote(f.Text[m[6]:m[7]])
+		title, err := strconv.Unquote(f.Text[m[4]:m[5]])
 		if err != nil {
 			continue
 		}
-		titles = append(titles, "#"+f.Text[m[4]:m[5]]+": "+title)
-		facts[i].Text = f.Text[:m[5]] + f.Text[m[7]:]
+		titles = append(titles, "#"+f.Text[m[2]:m[3]]+": "+title)
+		facts[i].Text = f.Text[:m[3]] + f.Text[m[5]:]
 	}
 	if len(titles) > 0 {
 		untrusted = append(untrusted, chartUntrusted{"issue-titles", strings.Join(titles, "\n")})

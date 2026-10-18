@@ -102,6 +102,9 @@ func TestCounsel(t *testing.T) {
 		!strings.Contains(f, "Parent: #1: feature, open") {
 		t.Errorf("issue titles in the facts: %s", f)
 	}
+	if f := factText(counselRun(env, 0, "#1")); strings.Contains(f, "Add Percent") || !strings.Contains(f, "(depends-on): #7: ") {
+		t.Errorf("a linked issue's title in the facts: %s", f)
+	}
 	if is := counselRun(env, 0, "#2"); is.Issue != 2 || is.Topic != "#2" || is.Untrusted[0] != (chartUntrusted{"issue-title", "Show empty list"}) || !strings.Contains(factText(is), "#1") {
 		t.Errorf("issue topic: issue %d, topic %q, facts %s", is.Issue, is.Topic, factText(is))
 	}

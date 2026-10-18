@@ -74,13 +74,19 @@ var (
 	// passive is the same claim in the passive ("the PR has been reviewed"), cited or not: a citation shows a source
 	// exists, not that it records a review, so counsel reports a review as what a record shows ("the record shows
 	// @lead's review (#12)").
-	passive = regexp.MustCompile(`(?i)\b(?:is|are|has been|have been)\s+(?:approved|reviewed|signed off)\b`)
+	passive = regexp.MustCompile(`(?i)\b(?:is|are|was|were|has been|have been|had been)\s+(?:approved|reviewed|signed off)\b`)
+	// fence opens or closes a code block: a counsel is prose, and a fenced part would escape the checks.
+	fence = regexp.MustCompile("(?m)^\\s{0,3}(?:```|~~~)")
 )
 
 // CheckStructure returns what keeps a counsel from being complete: a missing, empty, or out-of-order part, a part
 // that leaves out what it must say, more than one recommendation, a question that is not the last part or not one
 // line, a claim of a review, an approval, or a ruling, and more than MaxWords words.
 func CheckStructure(md string) []string {
+	if fence.MatchString(md) {
+		// The evidence rule skips fenced text, so parts inside a fence would pass unchecked.
+		return []string{"the counsel has a code block; write every part as prose, with commands in `inline code`"}
+	}
 	type part struct{ title, body string }
 	var parts []part
 	locs := h2RE.FindAllStringSubmatchIndex(md, -1)
