@@ -199,6 +199,25 @@ func TestSurveyDraftSections(t *testing.T) {
 		t.Fatalf("content changed: %d %+v", code, r)
 	}
 
+	// An output directory inside the checkout is not indexed: re-indexing an
+	// unchanged checkout keeps every saved section.
+	in := filepath.Join(dir, "survey-out")
+	for k := 0; k < 2; k++ {
+		if code, _, stderr := run(t, nil, opts, "survey", dir, "--out", in); code != 0 {
+			t.Fatalf("index into the checkout: %d %s", code, stderr)
+		}
+		if k == 0 {
+			if code, _, stderr := run(t, nil, opts, "survey", dir, "--out", in, "--draft", a, "--json"); code != 0 {
+				t.Fatalf("draft into the checkout: %d %s", code, stderr)
+			}
+		}
+	}
+	code, stdout, _ := run(t, nil, opts, "survey", dir, "--out", in, "--sections", "--json")
+	var kept SurveyDraftResult
+	if err := json.NewDecoder(strings.NewReader(stdout)).Decode(&kept); err != nil || code != 0 || !slices.Equal(kept.Resumed, []string{"engineering", "capabilities"}) || len(kept.Stale) != 0 {
+		t.Fatalf("output inside the checkout: %d %v %s", code, err, stdout)
+	}
+
 	// A survey that describes the product without a modernisation plan
 	// submits the section empty, and completes.
 	out = filepath.Join(t.TempDir(), "survey")
