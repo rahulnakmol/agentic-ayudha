@@ -173,6 +173,9 @@ func TestSLOs(t *testing.T) {
 		{"version = 1\n[[slo]]\nname = \"a\"\nservice = \"app\"\njourney = \"j\"\nsli = \"latency\"\nobjective = 99.0\nwindow = \"28d\"\n", "needs a threshold"},
 		{"version = 1\n[[slo]]\nname = \"a\"\nservice = \"app\"\njourney = \"j\"\nsli = \"availability\"\nobjective = 99.0\nwindow = \"2h\"\n", "between 1d and 90d"},
 		{"version = 1\n[[slo]]\nname = \"a\"\nservice = \"app\"\njourney = \"j\"\nsli = \"availability\"\nobjective = 99.0\nwindow = \"28d\"\nowner = \"x\"\n", "unknown keys"},
+		{"version = 1\n[[slo]]\nname = \"a\"\nservice = \"app\"\njourney = \"j\"\nsli = \"crash-free\"\nthreshold = \"1s\"\nobjective = 99.0\nwindow = \"28d\"\n", "no threshold and no route"},
+		{"version = 1\n[[slo]]\nname = \"a\"\nservice = \"app\"\njourney = \"j\"\nsli = \"crash-free\"\nroute = \"/x\"\nobjective = 99.0\nwindow = \"28d\"\n", "no threshold and no route"},
+		{"version = 1\n[[slo]]\nname = \"a\"\nservice = \"app\"\njourney = \"j\"\nsli = \"uptime\"\nobjective = 99.0\nwindow = \"28d\"\n", "want availability, latency, or crash-free"},
 	} {
 		if _, err := ParseSLOs([]byte(tt.toml)); err == nil || !strings.Contains(err.Error(), tt.want) {
 			t.Errorf("ParseSLOs: %v, want %q", err, tt.want)

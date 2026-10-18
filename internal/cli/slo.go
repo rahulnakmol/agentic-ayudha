@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/providers"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/sentry"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/production"
 	"github.com/rahulnakmol/agentic-ayudha/internal/seats"
@@ -117,9 +119,11 @@ func runSLO(ctx context.Context, e *Env, in Values) error {
 		rep.Facts = append(rep.Facts, packFact{Text: "Release is blocked until the status is fresh: " + rep.Stale, Cite: production.StatusPath})
 	}
 
-	// Measure from the export, and run the baseline queries the document cites.
+	// Measure from the export (and a crash-free SLO from Sentry), and run the
+	// baseline queries the document cites.
 	var ql *queryLog
 	var digest string
+	var unmeasured []string
 	if in.Has("telemetry") {
 		exp, err := production.LoadExport(in.String("telemetry"))
 		if err != nil {
@@ -132,6 +136,17 @@ func runSLO(ctx context.Context, e *Env, in Values) error {
 		to := last.Add(time.Second)
 		if defs != nil {
 			for _, o := range defs.SLOs {
+				if o.FromSentry() {
+					m, err := e.measureSentry(ctx, repo, o, to)
+					if err != nil {
+						unmeasured = append(unmeasured, fmt.Sprintf("%s (%v)", o.Name, err))
+						rep.Facts = append(rep.Facts, packFact{Text: fmt.Sprintf("Not measured: SLO %q is %s, read from Sentry: %v", o.Name, o.SLI, err), Cite: production.SLOPath})
+						continue
+					}
+					rep.Measured = append(rep.Measured, m)
+					rep.Facts = append(rep.Facts, packFact{Text: "Measured " + measuredFact(m) + " from " + m.Source + " (sha256 " + m.Digest + ")", Cite: production.SLOPath})
+					continue
+				}
 				m := production.Measure(exp, o, to)
 				rep.Measured = append(rep.Measured, m)
 				// Cited as the export's spans file, which the evidence rule reads as a path
@@ -179,6 +194,10 @@ func runSLO(ctx context.Context, e *Env, in Values) error {
 	if in.Bool("record") {
 		if defs == nil {
 			return Errorf(ExitBlocked, "slo --record: there is no %s to measure; define the SLOs first (a reviewed pull request)", production.SLOPath)
+		}
+		if len(unmeasured) > 0 {
+			return Errorf(ExitBlocked, "slo --record: not every SLO was measured, so no status is recorded: %s. A crash-free SLO is read from Sentry: configure [integrations.sentry] with a read-only token (`aayu init --integrations`, then `aayu doctor`) and run again",
+				strings.Join(unmeasured, "; "))
 		}
 		me := "aayudha"
 		if bot.Login != "" {
@@ -383,4 +402,23 @@ func writeIn(root, rel string, b []byte) error {
 		return err
 	}
 	return os.WriteFile(p, b, 0o644)
+}
+
+// measureSentry measures a crash-free SLO from the Sentry project's release
+// health (Decision #449, phase P1). Like every adapter read, it refuses a
+// token Sentry reports as able to write before the data call.
+func (e *Env) measureSentry(ctx context.Context, repo string, o production.SLO, to time.Time) (production.Measured, error) {
+	c, err := providers.Sentry(e.integrationDeps(repo))
+	if err != nil {
+		return production.Measured{}, err
+	}
+	sc, err := c.Scope(ctx)
+	if err != nil {
+		return production.Measured{}, err
+	}
+	if len(sc.Write) > 0 {
+		return production.Measured{}, fmt.Errorf("the Sentry token can write (%s); aayudha reads with read-only tokens only: create one with %s", strings.Join(sc.Write, ", "), strings.Join(sentry.Scopes(), ", "))
+	}
+	m, _, err := production.MeasureSentry(ctx, c, o, to)
+	return m, err
 }

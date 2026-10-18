@@ -419,3 +419,54 @@ func TestSeerOpinion(t *testing.T) {
 		t.Errorf("a failed read: %+v, %v; want the error with its request and no digest", pv, err)
 	}
 }
+
+// TestMeasureSentry: a crash-free SLO is measured from Sentry's session
+// counts over the whole SLO window, as aggregates: every session that did not
+// crash is good (errored and abnormal sessions count as good), and the last
+// hour's and six hours' crashes give the burn rates.
+func TestMeasureSentry(t *testing.T) {
+	defs, err := ParseSLOs([]byte("version = 1\n[[slo]]\nname = \"app-crash-free\"\nservice = \"app\"\njourney = \"Open the app\"\nsli = \"crash-free\"\nobjective = 99.9\nwindow = \"28d\"\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	to := time.Date(2026, 10, 17, 9, 0, 0, 0, time.UTC)
+	var digest string
+	for range 2 {
+		src, r := sentrySource(t, "sessions")
+		m, pv, err := MeasureSentry(context.Background(), src.API, defs.SLOs[0], to)
+		r.Done()
+		if err != nil {
+			t.Fatal(err)
+		}
+		// 672 hours of 100 healthy and 2 errored sessions, one abnormal, and 25
+		// crashed: 3 in each of hours 6 to 2 before the end and 10 in the last.
+		want := Measured{Name: "app-crash-free", SLI: "crash-free", Objective: 99.9, From: to.Add(-28 * 24 * time.Hour), To: to, Covered: "28.0d of 28d",
+			Good: 68545, Total: 68570, Value: 99.964, BudgetRemaining: 0.635, Burn1h: 89.286, Burn6h: 39.246, Source: "sentry project 4507 sessions", Digest: pv.Digest}
+		if m != want {
+			t.Fatalf("measured %+v\nwant     %+v", m, want)
+		}
+		if len(pv.Requests) != 1 || !strings.Contains(pv.Requests[0], "/organizations/acme/sessions/?") || len(pv.Digest) != 64 {
+			t.Errorf("provenance %+v; want one sessions request and a SHA-256", pv)
+		}
+		if digest != "" && digest != pv.Digest {
+			t.Errorf("digest %s, then %s; want the same answer to give the same digest", digest, pv.Digest)
+		}
+		digest = pv.Digest
+	}
+	if _, _, err := MeasureSentry(context.Background(), answer{`{"groups":"no"}`}, defs.SLOs[0], to); err == nil || !strings.Contains(err.Error(), "undecodable") {
+		t.Errorf("wrong shape: err %v; want an undecodable answer", err)
+	}
+	if _, pv, err := MeasureSentry(context.Background(), routes{}, defs.SLOs[0], to); err == nil || len(pv.Requests) != 1 || pv.Digest != "" {
+		t.Errorf("a failed read: %+v, %v; want the error with its request and no digest", pv, err)
+	}
+	// A group with no session total (Sentry's null) counts nothing, even crashed.
+	m, _, err := MeasureSentry(context.Background(), answer{`{"groups":[{"by":{"session.status":"crashed"},"totals":{"sum(session)":null}},` +
+		`{"by":{"session.status":"healthy"},"totals":{"sum(session)":40},"series":{"sum(session)":[null,30,10]}}]}`}, defs.SLOs[0], to)
+	if err != nil || m.Good != 40 || m.Total != 40 {
+		t.Errorf("a null crashed total: %+v, %v; want 40 good of 40", m, err)
+	}
+	spans := SLO{Name: "a", SLI: "availability"}
+	if _, _, err := MeasureSentry(context.Background(), noCalls{t}, spans, to); err == nil {
+		t.Error("an availability SLO was measured from Sentry; want it refused before any request")
+	}
+}
