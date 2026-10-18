@@ -3,5 +3,19 @@
   "branch": "story/532-host-guard-does-not-check-posthog-or-sen",
   "started_at": "2026-10-18T03:16:41Z",
   "failed_attempts": 0,
-  "checkpoints": null
+  "checkpoints": [
+    {
+      "k": 1,
+      "n": 2,
+      "attempt": 1,
+      "commit": "e9733bd6108617f1cf94a56a524d4da91a55526e",
+      "layers": [
+        "L02",
+        "L06"
+      ],
+      "verify": "hold",
+      "detail": "floors hold; not run here (tool not installed; the merge gate runs them): sast, secrets, deps",
+      "at": "2026-10-18T03:17:28Z"
+    }
+  ]
 }
