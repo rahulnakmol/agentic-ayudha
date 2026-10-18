@@ -49,7 +49,8 @@ it once. None of this needs an adjective.
 At a startup stage this fits on one page. With no step and no break, it is the title, the summary, the short reader
 block when readers need different sections, one section per proven Feature, and the count, in at most 400
 words. When the parts do not fit, keep every proven Feature with what changed and its link, and cut first the
-limits, then the solo and team lines, then how to start. Never drop a Feature, a step, or a break to fit.
+limits, then the solo and team lines, then how to start. Never drop a Feature, a step, or a break to fit: if the
+page is still over 400 words, keep it complete, and say in your reply how long it is and why.
 
 ## Readers: from one person to a medium team
 
@@ -162,10 +163,10 @@ because the binary does not check these:
    here.
 2. In the first ten lines, the reader knows what they get, sees each step or break a source names, and, when readers
    need different sections, knows which ones to read.
-3. Every step comes before the changes, with its check and who can do it. Every break is in the table, with what
-   replaces it.
-4. Each Feature section has what changed, then who it helps, how to start, and what it means on your own and in a
-   team, in the skeleton's order, each only where a source gives it.
+3. Every step comes before the changes, with its check and who can do it. Every break is in the table (in a
+   changelog, a "Breaking:" bullet), with what replaces it.
+4. Each Feature section has what changed, then who it helps, what it means on your own and in a team, how to
+   start, and a limit, in the skeleton's order, each only where a source gives it.
 5. The sections are in the skeleton's order, and none is empty.
 6. Plain, calm, second person, one idea per sentence; no avoided word, superlative, or exclamation mark.
 7. Every number has its unit, population, and source.
