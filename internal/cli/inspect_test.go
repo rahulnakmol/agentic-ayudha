@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"maps"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -1278,5 +1279,90 @@ func TestInspectPaidReviewer(t *testing.T) {
 	g.Mu.Unlock()
 	if code != ExitBlocked || len(model.Requests) != 0 || len(cs) != 1 || !strings.HasPrefix(cs[0].Body, "@codex review\n") {
 		t.Fatalf("an app of another family must come before the paid reviewer: exit %d, %d model calls, comments %+v", code, len(model.Requests), cs)
+	}
+}
+
+// Codex reviews first, always; when it cannot review the head (its usage-limit
+// reply on #509, 2026-10-18, or no reply within inspect.ReplyWait), rung B
+// steps in through the gateway at fast serving, labelled with why, and when
+// rung B fails too a human reviews.
+func TestInspectReviewerFallback(t *testing.T) {
+	const limit = "You have reached your Codex usage limits for code reviews. You can see your limits in the [Codex usage dashboard](https://chatgpt.com/codex/cloud/settings/usage).\nTo continue using code reviews, add credits to your account and enable them for code reviews in your [settings](https://chatgpt.com/codex/cloud/settings/code-review)."
+	setup := func() (*fake.GitHub, map[string]string, Options, int, *models.Fake) {
+		g, env, opts, prN := inspectFixture(t, cleanDiff, "Refs #2") // built by claude-opus-5-5: Codex is of another family (A)
+		_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
+		cfg := "version = 1\n\n[inspect]\napps = [\"codex\"]\npaid_reviewer = \"grok-4.7\"\npaid_effort = \"high\"\n"
+		if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte(cfg), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		env = maps.Clone(env)
+		env["AAYU_SECRET_XAI"] = "xai-key"
+		reply := inspectReply("merge", "")
+		reply.Model, reply.ServiceTier, reply.TokensIn, reply.TokensOut = "grok-4.7", "default", 1200, 300
+		model := &models.Fake{Replies: []models.Response{reply}}
+		opts.ModelClient = func(models.Route, string) models.Client { return model }
+		return g, env, opts, prN, model
+	}
+	postedAt := func(g *fake.GitHub, prN int, at time.Time) { // the newest comment's time
+		g.Mu.Lock()
+		cs := g.Issues[prN].Comments
+		cs[len(cs)-1].CreatedAt, cs[len(cs)-1].UpdatedAt = at, at
+		g.Mu.Unlock()
+	}
+	request := func(g *fake.GitHub, prN int, at time.Time) {
+		addComment(g, prN, "founder", "User", "@codex review\n\n"+inspect.RequestMarker+`{"head":"`+g.Pulls[prN].Head.SHA+`","reviewer":"codex"} -->`)
+		postedAt(g, prN, at)
+	}
+
+	// Codex's usage-limit reply: Grok 4.7 reviews at high effort and fast
+	// serving, labelled (B, paid) with why. The reply was served at the default
+	// tier, which the comment flags; it is charged at the priority rate (2x).
+	g, env, opts, prN, model := setup()
+	addComment(g, prN, "chatgpt-codex-connector[bot]", "Bot", limit)
+	code, res, errOut := inspectApp(t, env, opts, prN, "--ci")
+	if code != 0 || res.Disposition != inspect.Merge || res.Rung != inspect.RungB || !strings.Contains(res.Review, "different-family review (B, paid): grok-4.7 (xai)") {
+		t.Fatalf("codex at its usage limit: exit %d %s rung %q %q %s", code, res.Disposition, res.Rung, res.Review, errOut)
+	}
+	if len(model.Requests) != 1 || model.Requests[0].Model != "grok-4.7" || model.Requests[0].Effort != "high" || model.Requests[0].ServiceTier != models.TierPriority {
+		t.Fatalf("the fallback review's request: %+v", model.Requests)
+	}
+	body := lastInspect(t, g, prN)
+	if !strings.Contains(body, "fallback: the reviewer app cannot review this head") || !strings.Contains(body, "usage limits for code reviews") ||
+		!strings.Contains(body, "**not fast:** the paid review asked for service tier priority (fast) but was served at default") {
+		t.Errorf("the inspect comment does not say which rung, why, or the tier:\n%s", body)
+	}
+	if want := (1200*2.0 + 300*6.0) * 2 / 1e6; math.Abs(res.CostUSD-want) > 1e-12 {
+		t.Errorf("the fallback review cost %.6f USD, want %.6f at the priority rate", res.CostUSD, want)
+	}
+
+	// Rung B fails too (the gateway's 524): a human reviews, and the gate
+	// fails closed until one replies; the next run makes no second paid call.
+	// The person's review request for Codex is not the human's reply.
+	g, env, opts, prN, model = setup()
+	model.Err = errors.New("model endpoint returned 524: error code: 524")
+	request(g, prN, opts.Now().Add(-time.Minute))
+	addComment(g, prN, "chatgpt-codex-connector[bot]", "Bot", limit)
+	postedAt(g, prN, opts.Now())
+	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || res.Disposition != NoReply || !strings.HasPrefix(res.Review, "requested: human review") ||
+		!strings.Contains(lastInspect(t, g, prN), "fallback to a human review: codex cannot review this head") {
+		t.Fatalf("rung B failed as well: exit %d %s %q %s\n%s", code, res.Disposition, res.Review, errOut, lastInspect(t, g, prN))
+	}
+	addComment(g, prN, "founder", "User", statedReply(g.Pulls[prN].Head.SHA, "merge", "internal/report/percent.go"))
+	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Disposition != inspect.Merge || res.Rung != inspect.RungHuman || len(model.Requests) != 1 {
+		t.Fatalf("the human's review: exit %d %s rung %q, %d model calls %s", code, res.Disposition, res.Rung, len(model.Requests), errOut)
+	}
+
+	// No reply: within inspect.ReplyWait of the request the gate waits for
+	// Codex; past it, rung B reviews.
+	now := opts.Now()
+	g, env, opts, prN, model = setup()
+	request(g, prN, now.Add(-inspect.ReplyWait+time.Minute))
+	if code, res, _ = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || res.Disposition != NoReply || len(model.Requests) != 0 {
+		t.Fatalf("inside the wait: exit %d %s, %d model calls", code, res.Disposition, len(model.Requests))
+	}
+	g, env, opts, prN, model = setup()
+	request(g, prN, now.Add(-inspect.ReplyWait-time.Minute))
+	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Rung != inspect.RungB || len(model.Requests) != 1 || !strings.Contains(lastInspect(t, g, prN), "codex has not replied in the 30 minutes since the review request") {
+		t.Fatalf("past the wait: exit %d rung %q, %d model calls %s\n%s", code, res.Rung, len(model.Requests), errOut, lastInspect(t, g, prN))
 	}
 }

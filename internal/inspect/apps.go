@@ -243,11 +243,24 @@ type Post struct {
 	Approved bool      `json:"approved,omitempty"` // an APPROVED review
 }
 
-// Errors of reading a reply. Both fail the gate closed.
+// Errors of reading a reply. Each fails the gate closed; ErrUnavailable lets
+// rung B step in first (inspect in the CLI).
 var (
 	ErrNoReply   = errors.New("no reply from the reviewer for this head")
 	ErrMalformed = errors.New("the reviewer's reply is malformed")
+	// ErrUnavailable: the reviewer app cannot review this head. It replied that
+	// it reached a usage limit or quota (Codex on #509, 2026-10-18), or it has
+	// not replied within ReplyWait of the request.
+	ErrUnavailable = errors.New("the reviewer app cannot review")
 )
+
+// ReplyWait is how long the gate waits for a reviewer app's reply to a review
+// request before it treats the app as unavailable.
+const ReplyWait = 30 * time.Minute
+
+// usageLimit is a reviewer app's reply that it cannot review now: Codex's "You
+// have reached your Codex usage limits for code reviews", or a quota message.
+var usageLimit = regexp.MustCompile(`(?i)\busage limits?\b|\bquota\b`)
 
 // AppReply is a reviewer's reply turned into what the gate needs.
 type AppReply struct {
@@ -279,7 +292,8 @@ func sameHead(got, head string) bool {
 // stated format from the reviewer's account (newest first), else for Codex its
 // own review of the exact head. human decides whether an account may give a
 // human review. A post by the reviewer updated after the request that is in
-// neither format is malformed; nothing at all is a missing reply.
+// neither format is malformed, or unavailable when it says the app reached a
+// usage limit or quota; nothing at all is a missing reply.
 func ReadReply(c Choice, posts []Post, head string, since time.Time, human func(login, typ string) bool, criteria []workitems.Criterion, changed []string) (AppReply, error) {
 	from := func(p Post) bool {
 		if c.App != "" {
@@ -294,7 +308,7 @@ func ReadReply(c Choice, posts []Post, head string, since time.Time, human func(
 	_ = json.Unmarshal([]byte(AppSchema), &schema)
 	mine := []Post{}
 	for _, p := range posts {
-		if p.Kind != "inline" && from(p) {
+		if p.Kind != "inline" && from(p) && !strings.Contains(p.Body, RequestMarker) { // a review request is never a reply
 			mine = append(mine, p)
 		}
 	}
@@ -347,6 +361,9 @@ func ReadReply(c Choice, posts []Post, head string, since time.Time, human func(
 		}
 		if c.App == AppCodex && (strings.Contains(p.Body, "codex-pull-request-review-summary") || codexReceipt.MatchString(p.Body)) {
 			continue // Codex's summary, or its receipt for another commit
+		}
+		if c.App != "" && usageLimit.MatchString(p.Body) {
+			return AppReply{}, fmt.Errorf("%w: %s %d by %s: %q", ErrUnavailable, p.Kind, p.ID, p.Login, oneLine(p.Body, 160))
 		}
 		return AppReply{}, fmt.Errorf("%w: %s %d by %s has no `%s` block for %s: %q", ErrMalformed, p.Kind, p.ID, p.Login, ReplyFence, short(head), oneLine(p.Body, 160))
 	}

@@ -420,13 +420,14 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		return e.emitInspect(inspect.Result{PR: n, Head: pr.GetHead().GetSHA(), Findings: []inspect.Finding{}, Criteria: []inspect.Verdict{}, Builder: builder,
 			Disposition: inspect.Skipped, Summary: "the PR changes only documentation, which merges without a review"}, []string{builder.Note()})
 	}
-	paid := paidReviewer(gw, &l.Config, builder, func() string {
+	perm := func() string {
 		p, _, err := c.REST.Repositories.GetPermissionLevel(ctx, owner, name, pr.GetUser().GetLogin())
 		if err != nil {
 			return ""
 		}
 		return permissionOf(p)
-	}, e.Logf)
+	}
+	paid := paidReviewer(gw, &l.Config, builder, "", perm, e.Logf)
 	switch {
 	case paid == nil:
 	case e.replyEvent():
@@ -438,8 +439,23 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		e.Logf("inspect: [inspect] paid_reviewer %s already failed on %s; the reviewer app reviews, and the next push tries it again", paid.Model, short(prev.PaidFailed))
 		paid = nil
 	}
+	// The reviewer app (Codex here) always reviews first. When it cannot
+	// review this head (a usage-limit or quota reply, or no reply within
+	// inspect.ReplyWait), rung B steps in for it, and when rung B cannot, a
+	// human reviews.
+	unavailable := ""
 	if cfg.Reviewer != inspect.ReviewerModel && paid == nil {
-		return e.inspectThroughApp(ctx, appInspect{c: c, repo: repo, pr: pr, in: ins, prev: prev, builder: builder, cfg: l.Config})
+		a := appInspect{c: c, repo: repo, pr: pr, in: ins, prev: prev, builder: builder, cfg: l.Config,
+			paidTried: e.replyEvent() || prev.PaidFailed == pr.GetHead().GetSHA()}
+		err := e.inspectThroughApp(ctx, a)
+		if a.paidTried || !errors.Is(err, inspect.ErrUnavailable) {
+			return err
+		}
+		unavailable = oneLineErr(err)
+		if paid = paidReviewer(gw, &l.Config, builder, unavailable, perm, e.Logf); paid == nil {
+			a.paidTried = true
+			return e.inspectThroughApp(ctx, a)
+		}
 	}
 	// The review lane's model judges a PR against its story's pack; a PR
 	// without a story goes to a reviewer app (the merge gate's default), or
@@ -451,7 +467,11 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	picked, notes, err := reviewerModels(gw, builder.Candidates, ins.Mode == inspect.ModePeer, cfg.PeerModel, story)
 	if paid != nil {
 		picked, err = []models.Resolved{*paid}, nil
-		notes = []string{fmt.Sprintf("paid reviewer (rung B, opt-in): no installed app is of a family the builder cannot be, so [inspect] paid_reviewer %s (%s) reviews with the repository's key, within %.2f USD for this PR", paid.Model, paid.Family, l.Config.Budget.PerPRInspectMax)}
+		why := "no installed app is of a family the builder cannot be"
+		if unavailable != "" {
+			why = "fallback: the reviewer app cannot review this head (" + unavailable + ")"
+		}
+		notes = []string{fmt.Sprintf("paid reviewer (rung B, opt-in): %s, so [inspect] paid_reviewer %s (%s) reviews with the repository's key, within %.2f USD for this PR", why, paid.Model, paid.Family, l.Config.Budget.PerPRInspectMax)}
 	}
 	if err != nil {
 		return err
@@ -467,15 +487,24 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 			_, err := pager.Page(ctx, notify.Page{Key: fmt.Sprintf("inspect:%s#%d", repo, n), Subject: subject, Body: body})
 			return err
 		}}
+	var served []string // the service tier of each paid call's reply ("" when it states none)
 	for _, m := range picked {
 		g := gw.WithModel(verbs.LaneReview, verbs.DirectHost, m.Model)
 		r.Reviewers = append(r.Reviewers, inspect.Reviewer{Model: m.Model,
 			Complete: func(ctx context.Context, req models.Request) (models.Response, float64, error) {
-				if paid != nil && req.Effort == "" {
-					req.Effort = paid.Effort // [inspect] paid_effort
+				if paid != nil {
+					if req.Effort == "" {
+						req.Effort = paid.Effort // [inspect] paid_effort
+					}
+					// Every paid review asks for fast serving (founder, 2026-10-18)
+					// and is charged at its rate, so per_pr_inspect_max holds.
+					req.ServiceTier = models.TierPriority
 				}
 				resp, rm, err := g.Do(ctx, models.Call{Story: story, Seat: string(verbs.EngineeringManager), Lane: verbs.LaneReview, Host: verbs.DirectHost, Req: req})
-				usd, _ := models.Cost(l.Config.Models.Prices, rm.Model, resp)
+				usd, _ := models.Cost(l.Config.Models.Prices, rm.Model, models.Billed(req, resp))
+				if paid != nil && err == nil {
+					served = append(served, resp.ServiceTier)
+				}
 				if err == nil {
 					// The gate run's log shows what the review was served at and
 					// used; a subscription credential makes the USD an estimate.
@@ -487,6 +516,9 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	}
 	res, st, err := r.Run(ctx, ins, prev)
 	res.Head, res.Builder = pr.GetHead().GetSHA(), builder
+	if len(served) > 0 {
+		notes = append(notes, tierNote(served))
+	}
 	if res.Model != "" {
 		res.ReviewerFamily = verbs.FamilyOf(res.Model)
 		res.Rung = builder.Rung(res.ReviewerFamily)
@@ -523,13 +555,13 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		// A paid review that fails (the gateway timed out on a large diff, the
 		// provider is down) or whose PR spent its [budget] per_pr_inspect_max
 		// leaves the PR to the reviewer app, as an unset key does: the gate
-		// still needs that app's reply, so it fails closed without one. What
-		// the failed call cost stays on the PR's record, so retries cannot
-		// spend past the cap.
+		// still needs that app's reply (a human's when the app cannot review),
+		// so it fails closed without one. What the failed call cost stays on
+		// the PR's record, so retries cannot spend past the cap.
 		e.Logf("inspect: [inspect] paid_reviewer %s not used (%s); the reviewer app reviews", paid.Model, oneLineErr(err))
 		fb := prev
 		fb.SpentUSD, fb.PaidFailed = max(prev.SpentUSD, st.SpentUSD), pr.GetHead().GetSHA()
-		return e.inspectThroughApp(ctx, appInspect{c: c, repo: repo, pr: pr, in: ins, prev: fb, builder: builder, cfg: l.Config, record: fb.PaidFailed != prev.PaidFailed})
+		return e.inspectThroughApp(ctx, appInspect{c: c, repo: repo, pr: pr, in: ins, prev: fb, builder: builder, cfg: l.Config, record: fb.PaidFailed != prev.PaidFailed, paidTried: true})
 	case errors.Is(err, inspect.ErrBudget), errors.Is(err, models.ErrBudget):
 		return Errorf(ExitBudget, "inspect #%d: %v", n, err)
 	case err != nil:
@@ -690,13 +722,17 @@ func (e *Env) inspectDismiss(ctx context.Context, in Values) error {
 // is no proof: an organization member may have read access only. perm is
 // called only when everything else allows a paid review. nil leaves the
 // review to the reviewer app.
-func paidReviewer(gw *models.Gateway, cfg *config.Config, b inspect.Builder, perm func() string, logf func(string, ...any)) *models.Resolved {
+//
+// unavailable, when set, is why the reviewer app cannot review this head (a
+// usage-limit reply, or none in time): rung B then steps in for an app at
+// rung A too, as its fallback, and nil leaves the review to a human.
+func paidReviewer(gw *models.Gateway, cfg *config.Config, b inspect.Builder, unavailable string, perm func() string, logf func(string, ...any)) *models.Resolved {
 	ic := cfg.Inspect
 	m := ic.PaidReviewer
 	if m == "" || ic.Reviewer == inspect.ReviewerHuman || ic.Reviewer == inspect.ReviewerModel {
 		return nil
 	}
-	if inspect.ChooseReviewer(ic.Reviewer, ic.Apps, ic.AppFamilies, b, cfg.Autonomy.Approver).Rung == inspect.RungA {
+	if unavailable == "" && inspect.ChooseReviewer(ic.Reviewer, ic.Apps, ic.AppFamilies, b, cfg.Autonomy.Approver).Rung == inspect.RungA {
 		return nil // A costs nothing, so it comes first
 	}
 	f := verbs.FamilyOf(m)
@@ -717,10 +753,29 @@ func paidReviewer(gw *models.Gateway, cfg *config.Config, b inspect.Builder, per
 		}
 	}
 	if why != "" {
-		logf("inspect: [inspect] paid_reviewer %s is not used: %s; the reviewer app reviews", m, why)
+		next := "the reviewer app reviews"
+		if unavailable != "" {
+			next = "a human reviews"
+		}
+		logf("inspect: [inspect] paid_reviewer %s is not used: %s; %s", m, why, next)
 		return nil
 	}
 	return &models.Resolved{Lane: verbs.LaneReview, Host: verbs.DirectHost, Model: m, Display: m, Family: f, Effort: ic.PaidEffort, Source: models.SourceConfig}
+}
+
+// tierNote records the service tier the paid review was served at, and flags
+// one that is not fast: the review asked for priority (fast) serving.
+func tierNote(served []string) string {
+	var slow []string
+	for _, t := range served {
+		if t != models.TierPriority && t != "fast" {
+			slow = append(slow, cmp.Or(t, "none stated"))
+		}
+	}
+	if len(slow) > 0 {
+		return fmt.Sprintf("**not fast:** the paid review asked for service tier %s (fast) but was served at %s; it is charged at the %s rate", models.TierPriority, strings.Join(slow, ", "), models.TierPriority)
+	}
+	return fmt.Sprintf("served at service tier %s (fast), as asked", served[len(served)-1])
 }
 
 // viewer is the account c writes as, or "" when the token cannot say (a

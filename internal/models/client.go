@@ -93,7 +93,15 @@ type Request struct {
 	// gateway behind Cloudflare answers 524 after 100 seconds of silence,
 	// Bug #608). A reply that arrives as plain JSON still decodes.
 	Stream bool
+	// ServiceTier asks Responses and Chat endpoints to serve the call at that
+	// tier (service_tier; TierPriority is xAI's and OpenAI's fast serving).
+	// Messages has no priority tier, so Anthropic never gets it.
+	ServiceTier string
 }
+
+// TierPriority is the service_tier that asks for fast serving, billed at the
+// model's priority rate (ListPrice.Priority).
+const TierPriority = "priority"
 
 // Format asks the endpoint for structured output: OpenAI Responses
 // text.format and Chat Completions response_format (json_schema). Anthropic
@@ -206,6 +214,9 @@ func (c HTTPClient) Complete(ctx context.Context, r Request) (Response, error) {
 		if r.CacheKey != "" {
 			b["prompt_cache_key"] = r.CacheKey
 		}
+		if r.ServiceTier != "" {
+			b["service_tier"] = r.ServiceTier
+		}
 		if r.Stream {
 			b["stream"] = true
 		}
@@ -219,6 +230,9 @@ func (c HTTPClient) Complete(ctx context.Context, r Request) (Response, error) {
 		b := map[string]any{"model": r.Model, "messages": wire(c.Style, msgs), "max_tokens": r.MaxTokens}
 		if r.Effort != "" {
 			b["reasoning_effort"] = r.Effort
+		}
+		if r.ServiceTier != "" {
+			b["service_tier"] = r.ServiceTier
 		}
 		if f := r.Format; f != nil {
 			b["response_format"] = map[string]any{"type": "json_schema", "json_schema": map[string]any{"name": f.Name, "schema": f.Schema, "strict": f.Strict}}

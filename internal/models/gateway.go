@@ -44,6 +44,10 @@ func Cost(prices []config.Price, model string, r Response) (usd float64, source 
 	if p.LongAbove > 0 && r.TokensIn > p.LongAbove {
 		rt = p.Long
 	}
+	if r.ServiceTier == TierPriority && p.Priority > 0 {
+		x := p.Priority
+		rt = Rates{Input: rt.Input * x, CachedInput: rt.CachedInput * x, CacheWrite: rt.CacheWrite * x, CacheWrite1h: rt.CacheWrite1h * x, Output: rt.Output * x}
+	}
 	or := func(v float64) float64 {
 		if v == 0 {
 			return rt.Input
@@ -58,6 +62,16 @@ func Cost(prices []config.Price, model string, r Response) (usd float64, source 
 	w1h := min(r.CacheWrite1hIn, r.CacheWriteIn)
 	return (float64(plain)*rt.Input + float64(r.CachedIn)*or(rt.CachedInput) + float64(r.CacheWriteIn-w1h)*or(rt.CacheWrite) +
 		float64(w1h)*write1h + float64(r.TokensOut)*rt.Output) / 1e6, source
+}
+
+// Billed is resp as Cost prices it for req: a call that asked for priority
+// serving is charged at the priority rate whatever tier its reply states, or
+// when it states none, so a spend cap holds.
+func Billed(req Request, resp Response) Response {
+	if req.ServiceTier == TierPriority {
+		resp.ServiceTier = TierPriority
+	}
+	return resp
 }
 
 // ErrBudget means the [budget] circuit breaker has tripped: agent lanes are
@@ -259,7 +273,7 @@ func (g *Gateway) Do(ctx context.Context, c Call) (Response, Resolved, error) {
 		// message_start returns its usage so far): record and charge them.
 		resp, err = client.Complete(ctx, req)
 		var source string
-		usd, source = Cost(g.Models.Prices, m.Model, resp)
+		usd, source = Cost(g.Models.Prices, m.Model, Billed(req, resp))
 		return actions.Outcome{TokensIn: resp.TokensIn, TokensOut: resp.TokensOut, CostUSD: usd, Attempts: 1,
 			Result: map[string]any{"cost_source": source, "model": resp.Model}}, err
 	})

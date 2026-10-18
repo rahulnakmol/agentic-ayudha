@@ -1,0 +1,15 @@
+[[criterion]]
+id = 1
+tests = ["./internal/cli:TestInspectReviewerFallback"]
+
+[[criterion]]
+id = 2
+tests = ["./internal/cli:TestInspectReviewerFallback"]
+
+[[criterion]]
+id = 3
+tests = ["./internal/cli:TestInspectReviewerFallback"]
+
+[[criterion]]
+id = 4
+tests = ["./internal/models:TestWireFormats", "./internal/models:TestCostAtListPrices", "./internal/cli:TestInspectReviewerFallback"]

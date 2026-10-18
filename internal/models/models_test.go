@@ -174,7 +174,9 @@ func TestWireFormats(t *testing.T) {
 		}
 	}))
 	defer srv.Close()
-	req := Request{System: "be brief", Messages: []Message{{Role: "user", Content: "hi"}}, MaxTokens: 50, Effort: "high"}
+	// Fast serving (inspect's paid review asks for it): service_tier on
+	// Responses and Chat; Messages has no priority tier, so never on it.
+	req := Request{System: "be brief", Messages: []Message{{Role: "user", Content: "hi"}}, MaxTokens: 50, Effort: "high", ServiceTier: TierPriority}
 	tests := []struct {
 		style, path string
 		in, out     int
@@ -183,14 +185,14 @@ func TestWireFormats(t *testing.T) {
 	}{
 		{StyleMessages, "/v1/messages", 11, 3, 0, func(b map[string]any) bool {
 			oc, _ := b["output_config"].(map[string]any)
-			return b["system"] == "be brief" && b["max_tokens"] == 50.0 && oc["effort"] == "high"
+			return b["system"] == "be brief" && b["max_tokens"] == 50.0 && oc["effort"] == "high" && b["service_tier"] == nil
 		}},
 		{StyleResponses, "/v1/responses", 12, 4, 0, func(b map[string]any) bool {
-			return b["instructions"] == "be brief" && b["reasoning"].(map[string]any)["effort"] == "high"
+			return b["instructions"] == "be brief" && b["reasoning"].(map[string]any)["effort"] == "high" && b["service_tier"] == "priority"
 		}},
 		{StyleChat, "/v1/chat/completions", 13, 5, 0.0042, func(b map[string]any) bool {
 			msgs := b["messages"].([]any)
-			return msgs[0].(map[string]any)["role"] == "system" && b["reasoning_effort"] == "high"
+			return msgs[0].(map[string]any)["role"] == "system" && b["reasoning_effort"] == "high" && b["service_tier"] == "priority"
 		}},
 	}
 	// Structured output: Responses text.format and Chat response_format; Messages has none.
@@ -732,6 +734,10 @@ func TestCostAtListPrices(t *testing.T) {
 			`{"model":"grok-4.7","choices":[{"message":{"content":"ok"},"finish_reason":"stop"}],
 			"usage":{"prompt_tokens":4000,"prompt_tokens_details":{"cached_tokens":1000},"completion_tokens":300,"total_tokens":5300}}`,
 			nil, (3000*2 + 1000*0.50 + 1300*6) / 1e6, CostListPrice},
+		{"grok-4.7 served at priority: 2x every rate, the cached one included", StyleChat,
+			`{"model":"grok-4.7","service_tier":"priority","choices":[{"message":{"content":"ok"},"finish_reason":"stop"}],
+			"usage":{"prompt_tokens":4000,"prompt_tokens_details":{"cached_tokens":1000},"completion_tokens":300,"total_tokens":5300}}`,
+			nil, (3000*4 + 1000*1 + 1300*12) / 1e6, CostListPrice},
 		// Gemini through the gateway's chat endpoint: thinking at high effort is in total_tokens (and
 		// completion_tokens_details), not completion_tokens; it bills as output.
 		{"gemini-3.8-flash, high-effort reasoning tokens", StyleChat,

@@ -149,6 +149,17 @@ CI" (2026-10-18), off by default. It needs both steps:
 
 `[inspect] paid_effort` (`low`, `medium`, `high`, or `xhigh`) sets the reasoning effort the paid reviewer is called at;
 empty leaves the provider's default.
+Every paid review asks for fast serving (`service_tier` `priority`) and is charged at the model's priority rate, 2x the
+standard rate for Grok 4.7, so the cap holds. The inspect comment records the tier the reply was served at, and flags
+one that is not fast.
+
+**When the reviewer app cannot review.** The app always reviews first. When it replies that it reached a usage limit or
+quota (Codex: "You have reached your Codex usage limits for code reviews"), or has not replied 30 minutes after the
+review request, the paid reviewer reviews in its place, with the same key, cap, and checks. The inspect comment's note
+names the rung and why. When the paid reviewer is not configured, cannot be used, or fails too, a person reviews
+(`[autonomy] approver`). The reviewer is never of a family the builder may be, at any step. The gate notices the
+30 minutes only when its inspect job runs again: a push, a re-run of the failed job, or a bot's comment or a review on
+the pull request.
 
 The gate tries the ladder in order: an app of another family first (free), then the paid reviewer, then a same-family
 app. When it uses the paid reviewer, the inspect job calls the model with the key and does not @-mention an app. It

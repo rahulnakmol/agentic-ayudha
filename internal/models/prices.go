@@ -20,20 +20,25 @@ type ListPrice struct {
 	Short     Rates
 	LongAbove int
 	Long      Rates
-	Source    string // the provider's official pricing page
-	Read      string // the date the price was read there
+	// Priority multiplies every rate for a call served at TierPriority (fast
+	// serving); 0 when the provider publishes no priority price here.
+	Priority float64
+	Source   string // the provider's official pricing page
+	Read     string // the date the price was read there
 }
 
 // ListPrices are the published API prices of every model in the registry
 // (verbs.Model*), standard tier, global endpoints, no batch, fast mode, or
-// data-residency uplift. Reasoning and thinking tokens bill at the output
-// rate on every provider; the clients count them as output (decode). The AI
-// gateway the evals use returns no cost of its own (D-3.4p), so these are what
-// the evals and the [budget] breaker charge; a [[models.prices]] entry in
-// config overrides one, for a gateway that bills otherwise. Anthropic bills a
-// cache write by its TTL: 5-minute writes at CacheWrite (1.25x input), 1-hour
-// writes at CacheWrite1h (2x input). The AI gateway upgrades Claude cache writes
-// to the 1-hour TTL, and the usage block says which tokens went to which.
+// data-residency uplift; Priority is a model's fast-serving (service_tier
+// priority) multiplier, where the provider publishes one. Reasoning and
+// thinking tokens bill at the output rate on every provider; the clients count
+// them as output (decode). The AI gateway the evals use returns no cost of its
+// own (D-3.4p), so these are what the evals and the [budget] breaker charge;
+// a [[models.prices]] entry in config overrides one, for a gateway that bills
+// otherwise. Anthropic bills a cache write by its TTL: 5-minute writes at
+// CacheWrite (1.25x input), 1-hour writes at CacheWrite1h (2x input). The AI
+// gateway upgrades Claude cache writes to the 1-hour TTL, and the usage block
+// says which tokens went to which.
 var ListPrices = []ListPrice{
 	{Model: "claude-opus-5-5", Short: Rates{Input: 4, CachedInput: 0.20, CacheWrite: 5, CacheWrite1h: 8, Output: 20},
 		Source: "https://platform.claude.com/docs/en/about-claude/pricing", Read: "2026-10-17"},
@@ -53,8 +58,12 @@ var ListPrices = []ListPrice{
 		LongAbove: 272000, Long: Rates{Input: 20, CachedInput: 2, CacheWrite: 25, Output: 75},
 		Source: "https://developers.openai.com/api/docs/pricing", Read: "2026-10-17"},
 	// xAI's long-context rate starts when the prompt reaches 200k tokens.
+	// Priority Processing (service_tier priority) bills 2x every token type,
+	// after the cache discount, and only when the reply confirms priority:
+	// https://docs.x.ai/developers/advanced-api-usage/priority-processing
+	// (read 2026-10-18). inspect charges it whenever it asked, so the cap holds.
 	{Model: "grok-4.7", Short: Rates{Input: 2, CachedInput: 0.50, Output: 6},
-		LongAbove: 199999, Long: Rates{Input: 4, CachedInput: 1, Output: 12},
+		LongAbove: 199999, Long: Rates{Input: 4, CachedInput: 1, Output: 12}, Priority: 2,
 		Source: "https://docs.x.ai/developers/pricing", Read: "2026-10-17"},
 	// Google's Gemini rates below are the standard tier, one rate at every
 	// prompt length, and double on the date named; update them then.
