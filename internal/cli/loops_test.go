@@ -29,6 +29,11 @@ func TestLoopDigestOnSchedule(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = os.WriteFile(filepath.Join(dir, "loops", "digest.toml"), digest, 0o644)
+	opened, err := os.ReadFile(filepath.Join("..", "..", "loops", "triage-opened.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(dir, "loops", "triage-opened.toml"), opened, 0o644)
 	cfg, err := os.ReadFile(filepath.Join("..", "..", ".aayudha", "config.toml")) // aayudha's own: [notify] channel = "file"
 	if err != nil {
 		t.Fatal(err)
@@ -49,6 +54,15 @@ func TestLoopDigestOnSchedule(t *testing.T) {
 		code, _, errOut := run(t, env(halt), opts, append([]string{"hook", "loop:digest", "--ci", "--repo", "o/r"}, extra...)...)
 		out, _ := os.ReadFile(output)
 		return code, string(out) + errOut
+	}
+	// An event loop is due whenever its tool's trigger starts it, at any time, but halt and the breaker still stop it.
+	eventGuard := func(halt string) (int, string) {
+		t.Helper()
+		code, out, errOut := run(t, map[string]string{"GITHUB_TOKEN": "workflow-token", "AAYUDHA_HALT": halt, "AAYU_AGENT": "1"}, opts, "hook", "loop:triage-opened", "--repo", "o/r")
+		return code, out + errOut
+	}
+	if code, out := eventGuard(""); code != 0 || !strings.Contains(out, "event: When an issue opens with the label intake") {
+		t.Errorf("event loop at 09:05 on a Monday: exit %d, %q", code, out)
 	}
 	outbox := filepath.Join(dir, filepath.FromSlash(loops.OutboxPath))
 	pages := func() int {
@@ -78,6 +92,9 @@ func TestLoopDigestOnSchedule(t *testing.T) {
 	if code, _, _ := run(t, env("founder at 2026-10-12: test"), opts, "status", "--digest", "--ci", "--repo", "o/r"); code != ExitBlocked {
 		t.Errorf("halted status --digest: exit %d, want %d", code, ExitBlocked)
 	}
+	if code, _ := eventGuard("founder at 2026-10-12: test"); code != ExitBlocked {
+		t.Errorf("halted event loop: exit %d, want %d", code, ExitBlocked)
+	}
 	if w := g.Writes(); len(w) != 0 || pages() != 1 {
 		t.Errorf("halted run wrote %v; %d pages", w, pages())
 	}
@@ -100,6 +117,9 @@ func TestLoopDigestOnSchedule(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "state", "paused"), []byte("per_day_usd"), 0o644)
 	if code, _ := guard("5 8 * * 1-5", ""); code != ExitBudget {
 		t.Errorf("paused: exit %d, want %d", code, ExitBudget)
+	}
+	if code, _ := eventGuard(""); code != ExitBudget {
+		t.Errorf("paused event loop: exit %d, want %d", code, ExitBudget)
 	}
 }
 

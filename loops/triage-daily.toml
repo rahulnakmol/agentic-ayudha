@@ -1,5 +1,6 @@
-# Weekday triage (WP2.9, WP7.1). Event loops are deferred to a later version, so intake issues are triaged four
-# times each weekday (09:00, 13:00, 17:00 and 21:00) instead of on arrival. It replaces the aayudha-triage workflow retired
+# Weekday triage (WP2.9, WP7.1). Intake issues are triaged four times each weekday (09:00, 13:00, 17:00 and 21:00). It
+# is the fallback of triage-opened, which triages on arrival in Amp and Cursor: it covers Claude Code, Codex, an issue
+# opened without a form (no intake label), and any event a tool drops. It replaces the aayudha-triage workflow retired
 # from product CI (#243) and the weekly triage loop, whose scope it already had: the binary lists every open intake
 # issue, oldest first, with no model, and the agent in the user's own session classifies each one (--as), so no model
 # key reaches CI. The cron is in [time] tz.

@@ -76,6 +76,9 @@ func checkLoops(_ context.Context, p *Probe) Result {
 		lines = append(lines, line)
 	}
 	detail := fmt.Sprintf("%d active (%d in Actions), %d stale, %d missing, %d double", count[loops.Active], actions, count[loops.Stale], count[loops.Missing], count[loops.Double])
+	if n := count[loops.Fallback]; n > 0 {
+		detail += fmt.Sprintf(", %d event loops on a schedule (no trigger in the tool)", n)
+	}
 	if len(owners) > 1 {
 		lines = append(lines, "the loops are split across tools; one tool should run them all")
 	}

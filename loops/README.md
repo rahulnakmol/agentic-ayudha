@@ -1,7 +1,7 @@
 # loops
 
-Loops (WP7.1), one file each: `loops/<name>.toml`. A loop runs on a schedule (`cron`). Event loops (`on`, `filter`) are
-deferred to a later version (Appendix B S-7.1e): `loops.Parse` refuses them.
+Loops (WP7.1), one file each: `loops/<name>.toml`. A loop runs on a schedule (`cron`) or, as an event loop, when a
+GitHub event happens (`on`, `filter`; see [Event loops](#event-loops)). The first event loop is `triage-opened`.
 
 ```toml
 description = "Founder digest: the status rollup of every open Goal, paged through [notify]."
@@ -32,8 +32,48 @@ retired aayudha-triage workflow and the weekly `triage` loop: `aayu triage` list
 model, and the agent in your own session classifies each one with `--as`. `housekeeping` (weekly) runs `aayu gc`, then reports doctor drift,
 feature-map drift, and stale Ready issues. `ci-failed` (each weekday morning) sends a delegated story's failed
 required check back to its builder (#231), `release-measure` (weekly) runs `measure` when a release was published
-that week, and `evolve` (monthly) takes the Feedback filed since. They do on a schedule what the deferred event loops
-did on arrival.
+that week, and `evolve` (monthly) takes the Feedback filed since. `triage-opened` triages on arrival where the tool
+has a trigger for it; `triage-daily` stays as its fallback.
+
+## Event loops
+
+An event loop starts when a GitHub event happens, in your own tool, and has no `cron`:
+
+```toml
+description = "Triage on arrival: classify each new intake issue as feedback, bug, or incident, by label only."
+command = ["triage"]               # the same command as triage-daily: it lists what to act on
+on = "issues.opened"               # the one event for now; other events can follow
+filter = { label = "intake" }      # required: the label the issue has when it opens
+prompt = "…"
+```
+
+`loops.Parse` accepts only `issues.opened`, and requires `filter.label`. It refuses `cron` with `on`, `agent = false`,
+a `{…}` subject in the command, and a host with no trigger for the event. The run does not read the event's text: the
+command lists the open intake issues, and the agent reads each one as untrusted data and changes its labels only
+(`aayu triage <n> --as`). The guard still starts every run: `aayu hook loop:triage-opened` exits 4 while the
+repository is halted and 6 while the `[budget]` breaker has paused agent lanes. Otherwise it is always due.
+
+Which tools have a trigger for an issue that opens (checked 2026-10-18):
+
+| Tool | Trigger | What `triage-opened` renders |
+|---|---|---|
+| Amp | An orb spawner: a GitHub subscription that starts a new thread in an orb for each newly opened issue, filtered by a label the issue has when it opens ([docs](https://ampcode.com/docs/github)) | `loops/amp/triage-opened.json`, the input of `create_github_subscription` (`filter_kind` `issue-opened`, `issue_label` `intake`, `destination` `new-orb`) |
+| Cursor | No issue-opened trigger. The `git_label` trigger fires when a label is added to an issue ([docs](https://cursor.com/docs/cloud-agent/automations), and the `cursor_platform_workflow` resource of the `cursor/cursor` provider) | A `git_label` trigger on issues, label `intake`, on added, in `loops/cursor/aayudha-loops.tf`, and an `/automate` prompt |
+| Claude Code | None: a routine's GitHub trigger takes pull request and release events only ([docs](https://code.claude.com/docs/en/routines)) | A note in `loops/claude/routines.md`; `triage-daily` covers it |
+| Codex | None: event tasks take GitHub pull request activity only, on the web ([docs](https://learn.chatgpt.com/docs/automations)) | A note in `loops/codex/scheduled-tasks.md`; `triage-daily` covers it |
+
+Some issues have no intake label when they open: an issue opened without a form, or through the API. The event loop
+does not start for them. `triage-daily` lists every open intake issue on its schedule, so it covers those issues too,
+and any issue that a run missed. The Cursor trigger depends on GitHub's `labeled` event for the label the form adds as
+the issue opens: we expect this, but we have not seen it in a live Cursor run yet.
+
+No event loop runs in GitHub Actions, and no model key or tool token goes to Actions for one. An Amp spawner starts
+one orb for each matching issue. A flood of intake issues starts a flood of runs, each billed to you; the guard stops
+them when you run `aayu halt` or when the `[budget]` breaker trips, and you can pause the spawner in Amp.
+
+In `loops/active.json` an event loop is recorded like any loop: Amp's ID is `subscription <ID>`. `aayu doctor` shows
+it as `fallback`, not `missing`, when the tool that runs your loops has no trigger for its event, and names the
+scheduled loop with the same command that covers it.
 
 The Production Engineer's loops (WP5.10, Decision #324) are agent loops, so telemetry and its credentials stay in your
 own session: `alert-triage` (twice each weekday) reports fast-burning SLOs and open incidents with no investigation
@@ -75,7 +115,8 @@ This repository's `[verify] maintainer` is `amp`: the headless Amp run reads the
 - `.github/workflows/aayudha-loops.yml`: the GitHub Actions fallback, with a job for each `agent = false` loop only.
   Actions cron is UTC, so each loop has one cron per UTC offset of the zone, and the guard runs only the one for
   today's offset.
-- `loops/amp/<name>.json`: the input of Amp's `set_schedule` (an RFC 5545 rule in the zone, `run_mode` fresh).
+- `loops/amp/<name>.json`: the input of Amp's `set_schedule` (an RFC 5545 rule in the zone, `run_mode` fresh), or,
+  for an event loop, of `create_github_subscription`.
 - `loops/cursor/aayudha-loops.tf`: Cursor Automations as `cursor_platform_workflow` resources of Cursor's Terraform
   provider; apply them with `terraform apply` and `CURSOR_TOKEN`. `loops/cursor/automate.md` has the same loops as
   prompts for Cursor's `/automate` skill, for a user without Terraform or a key.
@@ -91,7 +132,8 @@ loop twice. It sets up no `agent = false` loop, and says that Actions runs those
 codex), or takes `--host`, and warns when `loops/active.json` records loops in another tool. Then:
 
 - Amp: with `--apply`, one headless Amp thread per loop in an orb of the project (`amp -ox`) calls `set_schedule` with
-  the rendered input and keeps that schedule (one schedule per thread); each loop is recorded.
+  the rendered input and keeps that schedule (one schedule per thread), or, for an event loop,
+  `create_github_subscription` with the project's ID added; each loop is recorded.
 - Cursor: with `--apply`, `terraform apply` of `loops/cursor/aayudha-loops.tf` when `terraform` and `CURSOR_TOKEN` are
   there, recording each loop; without them, the `/automate` prompts in `loops/cursor/automate.md`.
 - Claude Code and Codex: the prompts in `loops/claude/routines.md` and `loops/codex/scheduled-tasks.md` to paste.
