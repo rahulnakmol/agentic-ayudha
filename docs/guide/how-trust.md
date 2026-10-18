@@ -338,9 +338,11 @@ the count, and `aayu next` names `aayu inbox`, whenever it has steps (`gatherInb
 
 Shipping several Story PRs takes one device code per inbox session: the session's approval covers each ship that
 follows, and `--solo-bypass` too when you have admin access. Each ship still checks its own gates on its own head.
+
 Use `aayu inbox` to approve several PRs that need your review with one code, too. Each approval is the same record
-as `aayu inspect <pr> --approve`, for the head the card showed, and only the `[autonomy] approver` can make it. A
-host's agent marker (an orb's Terminal tab) is no refusal there, because the device code proves the person; aayu's
+as `aayu inspect <pr> --approve`, for the head the card showed, and only the `[autonomy] approver` can make it.
+
+A host's agent marker (an orb's Terminal tab) is no refusal there, because the device code proves the person; aayu's
 own lanes (`AAYU_AGENT=1`) and CI are refused. No token, time window, or approval is kept after the session.
 
 ## Protected paths and CODEOWNERS
