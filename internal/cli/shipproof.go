@@ -16,10 +16,12 @@ import (
 	"github.com/pelletier/go-toml/v2"
 	"go.yaml.in/yaml/v4"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/autonomy"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/seats"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verify"
 )
 
 // Merge on proof (Decision #593): a PR into the integration branch merges
@@ -45,6 +47,57 @@ func branchTip(ctx context.Context, c *github.Client, owner, name, branch string
 		return "", Wrap(ExitExternal, err)
 	}
 	return ref.GetObject().GetSHA(), nil
+}
+
+// shipPolicy is the policy ship judges a PR by (#645): the embedded defaults
+// and the base branch's committed .aayudha/config.toml and LAYERS.md at its
+// tip when ship read it, never the invoking checkout, the user config, AAYU_*
+// variables or --set, which the agent running ship controls.
+type shipPolicy struct {
+	Tip    string // the base branch's tip it was read at
+	Config *config.Config
+	Layers verify.LayerGlobs
+}
+
+// basePolicy reads the shipPolicy at the tip of branch.
+func basePolicy(ctx context.Context, c *github.Client, owner, name, branch string) (*shipPolicy, error) {
+	tip, err := branchTip(ctx, c, owner, name, branch)
+	if err != nil {
+		return nil, err
+	}
+	read := func(p string) (string, error) { // "" when absent at the tip
+		fc, _, _, err := c.REST.Repositories.GetContents(ctx, owner, name, p, &gh.RepositoryContentGetOptions{Ref: tip})
+		if github.NotFound(err) {
+			return "", nil
+		}
+		if err != nil {
+			return "", Wrap(ExitExternal, err)
+		}
+		return fc.GetContent()
+	}
+	// The loader merges config.json and config.local.* into the same layers
+	// as config.toml; ship reads only config.toml, so it refuses a base whose
+	// policy could be split across them rather than judge a part of it.
+	for _, f := range []string{".aayudha/config.json", ".aayudha/config.local.toml", ".aayudha/config.local.json"} {
+		if text, err := read(f); err != nil {
+			return nil, err
+		} else if text != "" {
+			return nil, Errorf(ExitBlocked, "%s holds %s at %s, and ship judges the pass only from .aayudha/config.toml; move its settings there", branch, f, short(tip))
+		}
+	}
+	conf, err := read(".aayudha/config.toml")
+	if err != nil {
+		return nil, err
+	}
+	layers, err := read("LAYERS.md")
+	if err != nil {
+		return nil, err
+	}
+	l, err := config.Load(config.Sources{RepoTOML: []byte(conf), RepoSource: ".aayudha/config.toml at " + short(tip)})
+	if err != nil {
+		return nil, Errorf(ExitBlocked, "%s's config at %s does not load, so ship cannot judge the pass: %v", branch, short(tip), err)
+	}
+	return &shipPolicy{Tip: tip, Config: &l.Config, Layers: autonomy.LayersFrom(layers)}, nil
 }
 
 // requiredChecks checks that every required status check of the base
@@ -147,7 +200,7 @@ func checkState(runs []*gh.CheckRun, statuses []*gh.RepoStatus, sc *gh.RuleStatu
 // the PR's own or the checkout's: a PR could otherwise empty the narrow set
 // it is judged by, or call main the integration branch, and a policy that
 // tightened on the base while ship ran still applies.
-func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name string, pr *gh.PullRequest, rung, gate string) (pp *ProofPass, why string, person bool, err error) {
+func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name string, pr *gh.PullRequest, pol *shipPolicy, rung, gate string) (pp *ProofPass, why string, person bool, err error) {
 	base, head := pr.GetBase().GetSHA(), pr.GetHead().GetSHA()
 	var readErr error
 	read := func(p, ref string) string { // "" when absent at ref
@@ -161,28 +214,10 @@ func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name strin
 		s, _ := fc.GetContent()
 		return s
 	}
-	policy, err := branchTip(ctx, c, owner, name, pr.GetBase().GetRef())
-	if err != nil {
-		return nil, "", false, err
-	}
-	l, err := config.Load(config.Sources{RepoTOML: []byte(read(".aayudha/config.toml", policy)), RepoSource: ".aayudha/config.toml at " + short(policy)})
-	switch {
-	case readErr != nil:
-		return nil, "", false, Wrap(ExitExternal, readErr)
-	case err != nil:
-		return nil, "", false, Errorf(ExitBlocked, "the base revision's config does not load, so ship cannot judge the narrow set: %v", err)
-	}
-	a, dev := l.Config.Autonomy, or(l.Config.Branches.Dev, "dev")
+	policy, cfg := pol.Tip, pol.Config
+	a, dev := cfg.Autonomy, or(cfg.Branches.Dev, "dev")
 	if !a.Proof {
 		return nil, "", false, nil
-	}
-	// The loader merges config.json and config.local.* into the same layers;
-	// ship judges only config.toml, so a base whose policy is split across
-	// them is not judged on proof.
-	for _, f := range []string{".aayudha/config.json", ".aayudha/config.local.toml", ".aayudha/config.local.json"} {
-		if read(f, policy) != "" {
-			return nil, fmt.Sprintf("%s holds %s, which ship does not judge the policy from", pr.GetBase().GetRef(), f), true, nil
-		}
 	}
 	// The files are the comparison of the captured base and head, never the
 	// live PR's listing, which a push or a base change during ship could
@@ -261,7 +296,7 @@ func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name strin
 		rv = append(rv, identity.Review{User: identity.Account{Login: r.GetUser().GetLogin(), Type: r.GetUser().GetType()}, State: r.GetState(), CommitID: r.GetCommitID()})
 	}
 	pp.Protected = identity.ProtectedPathsGate(identity.GateInput{Codeowners: read(".github/CODEOWNERS", policy), Changed: changed,
-		Author: pr.GetUser().GetLogin(), HeadSHA: head, Reviews: rv, BotLogins: l.Config.Identity.BotLogins}).Unapproved
+		Author: pr.GetUser().GetLogin(), HeadSHA: head, Reviews: rv, BotLogins: cfg.Identity.BotLogins}).Unapproved
 	switch {
 	case readErr != nil: // a file the narrow set judges could not be read
 		return nil, "", false, Wrap(ExitExternal, readErr)

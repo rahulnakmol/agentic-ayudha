@@ -273,7 +273,15 @@ func TestShipAutonomousFootprint(t *testing.T) {
 	if code, out := shipCmd(t, env, opts, prN); code != ExitBlocked || !strings.Contains(out, "no human pass: no approving review") || closedPullLists(g) == 0 {
 		t.Fatalf("ship without a review below the streak (the streak must be read): %d %s", code, out)
 	}
-	autonomous := []string{"--set", "autonomy.streak=0"}
+	// The base branch's committed policy makes every layer autonomous (#645:
+	// never the caller's --set).
+	g.Mu.Lock()
+	if g.Files == nil {
+		g.Files = map[string]string{}
+	}
+	g.Files[".aayudha/config.toml"] = "version = 1\n[autonomy]\nstreak = 0\n"
+	g.Mu.Unlock()
+	var autonomous []string
 	// A same-family inspect review (rung C) never lets an agent merge without
 	// a person, whatever the streak. The rung is read only from the log of the
 	// inspect job in the base branch's pull_request_target merge gate run at
@@ -438,6 +446,22 @@ func TestShipOnProof(t *testing.T) {
 			t.Fatalf("merged although %q", want)
 		}
 	}
+	// streakAll is refused with the base branch's committed policy making
+	// every layer autonomous (#645: never the caller's --set), at the base
+	// and the head alike, so the PR changes no [autonomy].
+	streakAll := func(want string) {
+		t.Helper()
+		g.Mu.Lock()
+		b, h := g.RefFiles[base][".aayudha/config.toml"], g.RefFiles[head][".aayudha/config.toml"]
+		for ref, text := range map[string]string{base: b, head: h} {
+			g.RefFiles[ref][".aayudha/config.toml"] = strings.Replace(text, "[autonomy]\n", "[autonomy]\nstreak = 0\nnever = []\n", 1)
+		}
+		g.Mu.Unlock()
+		refused(want)
+		g.Mu.Lock()
+		g.RefFiles[base][".aayudha/config.toml"], g.RefFiles[head][".aayudha/config.toml"] = b, h
+		g.Mu.Unlock()
+	}
 	refused("required check build is failure on " + short(head) + "; never merge with a red required check")
 	g.Mu.Lock()
 	g.CheckRuns[head][slices.IndexFunc(g.CheckRuns[head], func(r fake.CheckRun) bool { return r.App == actions })].Conclusion = "success" // the rerun
@@ -474,7 +498,7 @@ func TestShipOnProof(t *testing.T) {
 	logC := g.JobLogs[7701]
 	g.JobLogs[7701] = strings.Replace(logC, "same-family review (C): codex (openai), builder openai", "different-family review (A): claude (anthropic), builder openai", 1)
 	g.Mu.Unlock()
-	refused("no merge on proof: it touches internal/identity/review.go", "--set", "autonomy.streak=0", "--set", "autonomy.never=")
+	streakAll("no merge on proof: it touches internal/identity/review.go")
 	g.Mu.Lock()
 	g.JobLogs[7701] = logC
 	g.RefFiles[base][".aayudha/config.toml"] = strings.Replace(conf, `"internal/identity/"]`, `"internal/identity/", ".github/workflows/protected-paths*.yml"]`, 1)
@@ -512,7 +536,7 @@ func TestShipOnProof(t *testing.T) {
 	g.Pulls[prN].Compared = nil
 	g.RefFiles[base][".aayudha/config.toml"] = conf + "unknown_key = 1\n"
 	g.Mu.Unlock()
-	refused("the base revision's config does not load, so ship cannot judge the narrow set")
+	refused("dev's config at " + short(base) + " does not load, so ship cannot judge the pass")
 	g.Mu.Lock()
 	g.RefFiles[base][".aayudha/config.toml"] = conf
 	g.RefFiles[head][".github/workflows/broken.yml"] = "on: [push\njobs: {\n"
@@ -578,7 +602,7 @@ func TestShipOnProof(t *testing.T) {
 	logC = g.JobLogs[7701]
 	g.JobLogs[7701] = strings.Replace(logC, "same-family review (C): codex (openai), builder openai", "different-family review (A): claude (anthropic), builder openai", 1)
 	g.Mu.Unlock()
-	refused("required check protected-paths is failure, and only a person's pass merges past it", "--set", "autonomy.streak=0", "--set", "autonomy.never=")
+	streakAll("required check protected-paths is failure, and only a person's pass merges past it")
 	g.Mu.Lock()
 	g.JobLogs[7701] = logC
 	g.Mu.Unlock()
@@ -627,7 +651,7 @@ func TestShipOnProof(t *testing.T) {
 	pp := slices.IndexFunc(g.CheckRuns[head], func(r fake.CheckRun) bool { return r.Name == "protected-paths" })
 	g.CheckRuns[head][pp].Conclusion = "success"
 	g.Mu.Unlock()
-	refused("did not record a different-family review", "--set", "autonomy.streak=0", "--set", "autonomy.never=")
+	streakAll("did not record a different-family review")
 	g.Mu.Lock()
 	g.CheckRuns[head][pp].Conclusion = "failure"
 	g.Mu.Unlock()
@@ -664,7 +688,7 @@ func TestShipOnProof(t *testing.T) {
 		}
 	}
 	g.Mu.Unlock()
-	refused(fmt.Sprintf("dev moved from %s to %s while ship judged the PR on proof", short(tip), short(strings.Repeat("d", 40))))
+	refused(fmt.Sprintf("dev moved from %s to %s while ship judged the PR; run ship again", short(tip), short(strings.Repeat("d", 40))))
 	g.Mu.Lock()
 	g.Hook = nil
 	delete(g.Refs, "heads/dev")
@@ -694,12 +718,12 @@ func TestShipOnProof(t *testing.T) {
 	g.RefFiles[head][".aayudha/config.toml"] = conf + "[delegate]\ncursor_api = \"https://attacker\"\n"
 	g.Mu.Unlock()
 	refused("no merge on proof: it changes [delegate] in .aayudha/config.toml")
-	// A base whose policy is split across config.json is not judged on proof.
+	// A base whose policy is split across config.json is not judged at all.
 	g.Mu.Lock()
 	g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(conf, `"auto"`, `"saffron"`, 1)
 	g.RefFiles[base][".aayudha/config.json"] = `{"autonomy": {"always_person": ["skills/"]}}`
 	g.Mu.Unlock()
-	refused("no merge on proof: dev holds .aayudha/config.json, which ship does not judge the policy from")
+	refused("dev holds .aayudha/config.json at " + short(base) + ", and ship judges the pass only from .aayudha/config.toml")
 	g.Mu.Lock()
 	delete(g.RefFiles[base], ".aayudha/config.json")
 	g.Mu.Unlock()
@@ -935,16 +959,62 @@ func TestShipEMSeatApprover(t *testing.T) {
 	g.Mu.Lock()
 	g.Pulls[prN].Reviews = []fake.Review{review("reviewer", "User", "APPROVED", head)}
 	g.Mu.Unlock()
-	seat := []string{"--set", "seats.engineering-manager.mode=paired", "--set", "seats.engineering-manager.human=em-lead"}
+	// The seat is the base branch's committed policy (#645), which also
+	// names the agent's second account a machine account.
+	policy := "version = 1\n[identity]\nbot_logins = [\"agent-alt\"]\n[seats.engineering-manager]\nmode = \"paired\"\nhuman = \"em-lead\"\n"
+	g.Mu.Lock()
+	if g.Files == nil {
+		g.Files = map[string]string{}
+	}
+	g.Files[".aayudha/config.toml"] = policy
+	g.Mu.Unlock()
+	var seat []string
 	if code, out := shipCmd(t, env, opts, prN, seat...); code != ExitBlocked || !strings.Contains(out, "approval by reviewer is not the human pass: it must come from em-lead (seat)") {
 		t.Fatalf("ship with a non-EM approval: %d %s", code, out)
 	}
+	// #645: an agent cannot pass its own second account by loosening the
+	// policy for one run, through --set or a config in its checkout.
+	g.Mu.Lock()
+	g.Pulls[prN].Reviews = append(g.Pulls[prN].Reviews, review("agent-alt", "User", "APPROVED", head))
+	g.Mu.Unlock()
+	for _, c := range []struct {
+		why, local string
+		args       []string
+		want       string
+	}{
+		{"--set the seat's human", "", []string{"--set", "seats.engineering-manager.human=agent-alt"}, "[seats.engineering-manager] is not paired with em-lead"},
+		{"--set no bot logins", "", []string{"--set", "identity.bot_logins=", "--set", "seats.engineering-manager.mode=solo"}, "[identity] bot_logins drops agent-alt; [seats.engineering-manager] is not paired with em-lead"},
+		{"a local config", "[seats.engineering-manager]\nmode = \"paired\"\nhuman = \"agent-alt\"\n", nil, "[seats.engineering-manager] is not paired with em-lead"},
+	} {
+		local := filepath.Join(dir, ".aayudha", "config.local.toml")
+		_ = os.MkdirAll(filepath.Dir(local), 0o755)
+		if c.local != "" {
+			_ = os.WriteFile(local, []byte("version = 1\n"+c.local), 0o644)
+		}
+		code, out := shipCmd(t, env, opts, prN, c.args...)
+		_ = os.Remove(local)
+		g.Mu.Lock()
+		merged := g.Pulls[prN].Merged
+		g.Mu.Unlock()
+		if code != ExitBlocked || merged || !strings.Contains(out, "the human pass is judged by dev's committed .aayudha/config.toml") || !strings.Contains(out, "would loosen it: "+c.want) {
+			t.Fatalf("ship with %s: %d merged %t %s", c.why, code, merged, out)
+		}
+	}
+	g.Mu.Lock()
+	g.Pulls[prN].Reviews = g.Pulls[prN].Reviews[:1]
+	g.Mu.Unlock()
 	if code, out := shipCmd(t, env, opts, prN, append(seat, "--solo-bypass")...); code != ExitBlocked || !strings.Contains(out, "a second human (em-lead) holds a seat") {
 		t.Fatalf("solo bypass with a paired seat: %d %s", code, out)
 	}
-	if code, out := shipCmd(t, env, opts, prN, append(seat, "--solo-bypass", "--set", "identity.app_id=42", "--set", "identity.app_slug=aayudha-bot")...); code != ExitBlocked || !strings.Contains(out, "this repository has a bot identity") {
+	g.Mu.Lock()
+	g.Files[".aayudha/config.toml"] = strings.Replace(policy, "[identity]\n", "[identity]\napp_id = 42\napp_slug = \"aayudha-bot\"\n", 1)
+	g.Mu.Unlock()
+	if code, out := shipCmd(t, env, opts, prN, append(seat, "--solo-bypass")...); code != ExitBlocked || !strings.Contains(out, "this repository has a bot identity") {
 		t.Fatalf("solo bypass with a bot App: %d %s", code, out)
 	}
+	g.Mu.Lock()
+	g.Files[".aayudha/config.toml"] = policy
+	g.Mu.Unlock()
 
 	g.Mu.Lock()
 	g.Pulls[prN].Reviews = append(g.Pulls[prN].Reviews, review("em-lead", "User", "APPROVED", head))

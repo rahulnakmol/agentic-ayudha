@@ -361,6 +361,15 @@ func ReadLayers(root string) verify.LayerGlobs {
 	if l := verify.ReadLayers(root); len(l) > 0 && root != "" {
 		return l
 	}
+	return LayersFrom("")
+}
+
+// LayersFrom is ReadLayers for LAYERS.md's text, read from elsewhere (a base
+// revision): the registry's layers when it names none.
+func LayersFrom(text string) verify.LayerGlobs {
+	if l := verify.ParseLayers(text); len(l) > 0 {
+		return l
+	}
 	out := verify.LayerGlobs{}
 	for _, l := range verbs.LayerTable {
 		out[string(l.ID)] = l.Paths

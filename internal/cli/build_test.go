@@ -298,10 +298,12 @@ func TestShipPassRules(t *testing.T) {
 	g.Pulls[prN].Files = []string{"internal/cli/x.go", "internal/config/x.go", "internal/ledger/x.go"}
 	g.Files = map[string]string{}
 	g.Files[".github/CODEOWNERS"] = "/internal/config/ @owner1 @reviewer2\n/internal/ledger/ @reviewer2 @owner1\n"
+	// The approver is the base branch's committed policy (#645).
+	g.Files[".aayudha/config.toml"] = "version = 1\n[autonomy]\napprover = \"reviewer2\"\n"
 	g.Pulls[prN].Reviews = []fake.Review{review("aayudha-bot[bot]", "Bot", "APPROVED", head), review("reviewer", "User", "APPROVED", head)}
 	g.Mu.Unlock()
 	ship := func(args ...string) (int, string) {
-		code, out, errOut := run(t, env, opts, append([]string{"ship", strconv.Itoa(prN), "--repo", "o/r", "--set", "autonomy.approver=reviewer2"}, args...)...)
+		code, out, errOut := run(t, env, opts, append([]string{"ship", strconv.Itoa(prN), "--repo", "o/r"}, args...)...)
 		return code, out + errOut
 	}
 	if code, out := ship(); code != ExitBlocked || !strings.Contains(out, "plan-time review is required") {
