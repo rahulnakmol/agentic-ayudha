@@ -357,6 +357,15 @@ func TestSurveyDocs(t *testing.T) {
 	if code, _, stderr = run(t, nil, opts, "survey", dir); code != ExitUsage || !strings.Contains(stderr, ".aayudha is a symbolic link") {
 		t.Fatalf("a linked .aayudha: %d %s", code, stderr)
 	}
+	// A directory whose name only starts with .. is inside the checkout.
+	elsewhere := t.TempDir()
+	if err := os.Symlink(elsewhere, filepath.Join(dir, "..cache")); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr = run(t, nil, opts, "survey", dir, "--out", filepath.Join(dir, "..cache", "result"))
+	if left, _ := os.ReadDir(elsewhere); code != ExitUsage || !strings.Contains(stderr, "..cache is a symbolic link") || len(left) != 0 {
+		t.Fatalf("a linked ..cache: %d %s; wrote %v", code, stderr, left)
+	}
 }
 
 // WP5.9: `survey --backlog` renders backlog.md and its digest and files

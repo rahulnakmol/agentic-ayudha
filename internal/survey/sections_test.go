@@ -2,6 +2,7 @@ package survey
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -168,4 +169,34 @@ func compact(b []byte) string {
 		return string(b)
 	}
 	return out.String()
+}
+
+// A saved section is stale after any edit, a same-size edit to a file the
+// scanner skips (binary or too large) included: the digest hashes its bytes.
+func TestDigestSkippedFiles(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, body string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("main.c", "int main(void) { return 0; }\n")
+	write("table.bin", "\x00\x01aaaa")
+	digest := func() string {
+		t.Helper()
+		ix, err := Build(context.Background(), dir, Options{Git: noGit})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.ContainsFunc(ix.Files, func(f File) bool { return f.Path == "table.bin" }) {
+			t.Fatalf("files = %v; want table.bin indexed", ix.Files)
+		}
+		return ix.Digest
+	}
+	before := digest()
+	write("table.bin", "\x00\x01bbbb")
+	if digest() == before {
+		t.Fatal("a same-size edit to a binary file left the digest unchanged")
+	}
 }

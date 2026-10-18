@@ -64,6 +64,16 @@ func surveyDirs(e *Env, in Values) (root, out string) {
 	return root, out
 }
 
+// under reports whether p lies below dir, and its path relative to dir: a
+// first component of .. leaves it, ..cache does not.
+func under(dir, p string) (string, bool) {
+	rel, err := filepath.Rel(absPath(dir), absPath(p))
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+	return rel, true
+}
+
 // surveyOutSafe refuses an output directory a symbolic link could redirect:
 // the default one sits in the surveyed checkout, which the survey does not
 // trust, so a link committed at .aayudha/survey/index.json or under
@@ -74,7 +84,7 @@ func surveyOutSafe(root, out string) error {
 	refuse := func(p string) error {
 		return fmt.Errorf("survey: %s is a symbolic link; the survey writes only real files under its output directory %s (remove the link, or give --out a real directory)", p, out)
 	}
-	if rel, err := filepath.Rel(absPath(root), absPath(out)); err == nil && rel != "." && !strings.HasPrefix(rel, "..") {
+	if rel, ok := under(root, out); ok {
 		p := absPath(root)
 		for _, part := range strings.Split(rel, string(filepath.Separator)) {
 			p = filepath.Join(p, part)
@@ -141,7 +151,7 @@ func runSurvey(ctx context.Context, e *Env, in Values) error {
 		return Wrap(ExitUsage, err)
 	}
 	opt := survey.Options{Budget: in.Int("budget"), Manuals: manuals}
-	if rel, err := filepath.Rel(absPath(root), absPath(out)); err == nil && rel != "." && !strings.HasPrefix(rel, "..") {
+	if rel, ok := under(root, out); ok {
 		opt.Out = filepath.ToSlash(rel)
 	}
 	ix, err := survey.Build(ctx, root, opt)

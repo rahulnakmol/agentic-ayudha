@@ -14,6 +14,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -441,7 +442,9 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 		ix.Files = append(ix.Files, File{Path: p, Role: "doc", Lines: lines, Bytes: len(text)})
 		ix.Docs = append(ix.Docs, Fact{ID: "doc:" + p, Kind: "manual", At: p + ":1", Detail: firstHeading(text)})
 	}
-	ix.digest(files, opt.Manuals)
+	if err := ix.digest(root, files, opt.Manuals); err != nil {
+		return nil, err
+	}
 	ix.history(ctx, root, opt.Git)
 	ix.counts()
 	ix.modules(opt.Budget)
@@ -537,8 +540,9 @@ func callEdge(from, name string, to []string, at string) Edge {
 }
 
 // digest sets Index.Digest from the files in path order: each path with its
-// size, and the content of every file the index read.
-func (ix *Index) digest(files map[string]*scanned, manuals map[string]string) {
+// size and its content, the files the scanner skipped (too large, binary)
+// included, so any edit makes the saved survey sections stale.
+func (ix *Index) digest(root string, files map[string]*scanned, manuals map[string]string) error {
 	h := sha256.New()
 	for _, f := range ix.Files {
 		fmt.Fprintf(h, "%s\x00%d\x00", f.Path, f.Bytes)
@@ -546,10 +550,24 @@ func (ix *Index) digest(files map[string]*scanned, manuals map[string]string) {
 			h.Write([]byte(s.raw))
 		} else if text, ok := manuals[strings.TrimPrefix(f.Path, "manual:")]; ok && strings.HasPrefix(f.Path, "manual:") {
 			h.Write([]byte(text))
+		} else if err := hashFile(h, filepath.Join(root, filepath.FromSlash(f.Path))); err != nil {
+			return err
 		}
 		h.Write([]byte{0})
 	}
 	ix.Digest = hex.EncodeToString(h.Sum(nil))
+	return nil
+}
+
+// hashFile writes a file's bytes to w.
+func hashFile(w io.Writer, p string) error {
+	fh, err := os.Open(p)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = fh.Close() }()
+	_, err = io.Copy(w, fh)
+	return err
 }
 
 // scanned is one file read while building the index.
