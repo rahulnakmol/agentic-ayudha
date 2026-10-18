@@ -2,6 +2,7 @@ package doctor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verify"
 )
 
@@ -164,6 +166,9 @@ func checkDAST(ctx context.Context, p *Probe) Result {
 	case !httpURL(target):
 		status = Fail
 		lines = append(lines, "target: "+target+" is not an absolute http or https URL ([verify.environments."+env+"] url), so verify blocks the dast floor: write it as http://host:port")
+	case isProduction(v, p.Getenv):
+		status = Fail
+		lines = append(lines, "target: "+target+" is a production environment ([verify.environments] production = true for its host), so verify refuses it and blocks the dast floor: set AAYU_ENV to a non-production environment")
 	case v.Environments[env].ActiveScan:
 		lines = append(lines, "target: "+target+", active scan ([verify.environments."+env+"] active_scan = true)")
 	case len(v.Seed) > 0 && verify.IsLoopback(hostname(target)):
@@ -201,9 +206,16 @@ func checkDAST(ctx context.Context, p *Probe) Result {
 	case Warn:
 		detail = "the dast floor cannot run here as configured"
 	case Fail:
-		detail = "the dast floor is blocked here: its target is not a URL it can scan"
+		detail = "the dast floor is blocked here: verify cannot scan its target"
 	}
 	return Result{Status: status, Detail: detail, Lines: lines}
+}
+
+// isProduction asks verify itself, so doctor agrees with it on which
+// targets are production (a host shared with a production environment too).
+func isProduction(v config.Verify, getenv func(string) string) bool {
+	_, err := verify.ResolveTarget(&verify.Run{Verify: v, Env: getenv})
+	return errors.Is(err, verify.ErrProduction)
 }
 
 func httpURL(raw string) bool {

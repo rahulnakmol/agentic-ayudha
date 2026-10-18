@@ -166,6 +166,17 @@ func TestContainerRuntimeRow(t *testing.T) {
 	if r := checkDAST(ctx, p); r.Status != Pass || !strings.Contains(strings.Join(r.Lines, "\n"), "passive scan only") {
 		t.Errorf("a URL verify does not start: %+v", r)
 	}
+	// CodeRabbit on #509: verify refuses a production target, by its own flag or by a host it shares with one.
+	for name, envs := range map[string]map[string]config.Environment{
+		"flagged":     {"local": {URL: "https://app.example.com", Production: true}},
+		"shared host": {"local": {URL: "https://app.example.com:8443"}, "prod": {URL: "https://app.example.com", Production: true}},
+	} {
+		p = probe("docker")
+		p.Config.Config.Verify.Environments = envs
+		if r := checkDAST(ctx, p); r.Status != Fail || !strings.Contains(strings.Join(r.Lines, "\n"), "is a production environment") {
+			t.Errorf("%s: %+v", name, r)
+		}
+	}
 	// A host and port with no scheme is not a URL verify can scan: it blocks the floor, so doctor must not pass it.
 	for _, bad := range []string{"127.0.0.1:8080", "localhost:8080", "//127.0.0.1:8080"} {
 		// With or without a container runtime: a missing runtime must not soften the failure.

@@ -124,6 +124,9 @@ func TestDASTGuardrails(t *testing.T) {
 		}{
 			{"seeded loopback", "http://127.0.0.1:FREE", true, false, true},
 			{"seeded localhost", "http://localhost:FREE", true, false, true},
+			// CodeRabbit on #509: a host name's case and trailing dot do not change what it is.
+			{"seeded LOCALHOST", "http://LOCALHOST:FREE", true, false, true},
+			{"seeded localhost.", "http://localhost.:FREE", true, false, true},
 			// Codex review of #509: a seed that only loads fixtures into an app
 			// the person already runs did not start it.
 			{"seeded, but the app was already up", "UP", true, false, false},
@@ -278,6 +281,9 @@ func TestDASTGuardrails(t *testing.T) {
 	// so an active_scan opt-in the PR adds waits until it is merged.
 	t.Run("an opt-in the change adds is passive until merged", func(t *testing.T) {
 		const shared = "https://staging.example.test"
+		// The person's git config (signing, hooks) must not reach this repository.
+		t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+		t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 		root := t.TempDir()
 		g := func(args ...string) string {
 			out, err := gitOut(context.Background(), root, args...)

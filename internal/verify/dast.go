@@ -99,6 +99,7 @@ func ContainerRuntime(env []string) string {
 // IsLoopback reports whether a URL host name is a loopback host: the
 // active rules run only against an app verify started on one (G1).
 func IsLoopback(host string) bool {
+	host = strings.TrimSuffix(strings.ToLower(host), ".")
 	if host == "localhost" {
 		return true
 	}
