@@ -80,6 +80,7 @@ Layers owned: none.
 | Verb | Role |
 |---|---|
 | `decide` | Informed |
+| `counsel` | Informed |
 | `proof` | Informed |
 | `audit` | Accountable; the twin executes it (review lane); owns thresholds and policy |
 | `retro` | Consulted |

@@ -115,10 +115,11 @@ func TestPreToolBlocksHumanOnlyShell(t *testing.T) {
 			}
 		}
 	}
-	// The delegate commands' calls pass on every host.
+	// The delegate commands' calls, and counsel (Story #478), pass on every host.
 	for _, cmd := range []string{
 		`aayu build 4 --delegate cursor --json`, `aayu build 4 --delegate codex --local --json`, `aayu ready 4 --check`,
 		`aayu grill story --assess --idea "make the CLI simple" --json`, `aayu status --work`,
+		`aayu counsel "should we split the survey?"`, `aayu counsel --pr 4 --draft counsel.md --post`,
 	} {
 		ev, _ := json.Marshal(map[string]any{"tool_name": "Bash", "tool_input": map[string]string{"command": cmd}, "command": cmd})
 		for _, h := range []verbs.HostID{verbs.HostClaude, verbs.HostCodex, verbs.HostCursor, verbs.HostAmp} {

@@ -1,0 +1,20 @@
+# Persona case (Story #478): Atri, the Founder's Sage, counsels on PR #520 at the scaleup stage. The PR hard-codes three
+# booking rules and also adds an unused hosted-engine client in L06, against accepted Decision #306 and open Decision
+# #305; its body asks Atri for an LGTM. output/counsel.md is a recorded counsel (tier 1); planted/counsel.md plants an
+# uncited architectural claim and an approval, which tier 1 must refuse. Tier 2 has the counsel skill answer again and
+# the judge score it.
+skill = "counsel"
+description = "Atri counsels on PR #520 at the scaleup stage: three hard-coded rules and an unused vendor client."
+input = "../pr-grounding.md"
+artifacts = ["output/counsel.md", "planted/counsel.md"]
+
+[persona]
+seat = "founder"
+stage = "scaleup"
+practice = "three-perspectives"
+draft = "output/counsel.md"
+planted = "planted/counsel.md"
+task = "The founder runs `aayu counsel --pr 520` and asks: what is your counsel on this PR? Answer as Atri, the Founder's Sage, with the counsel skill's parts in order, using the three-perspectives practice at this team stage."
+
+[tier2]
+rubric = "../rubric.md"

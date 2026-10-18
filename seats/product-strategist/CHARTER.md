@@ -83,6 +83,7 @@ Layers owned: none.
 | `grill` | Accountable; the twin executes it (spec lane); owns thresholds and policy |
 | `slice` | Accountable; the twin executes it (plan lane); owns thresholds and policy |
 | `decide` | Consulted |
+| `counsel` | Consulted |
 | `triage` | Accountable; the twin executes it (chore lane); owns thresholds and policy |
 | `ship` | Informed |
 | `ready` | Accountable; the twin executes it (chore lane); owns thresholds and policy |

@@ -669,6 +669,22 @@ var Verbs = []Command{
 		Surfaces: cliSkillMCP, Identity: IdentityHuman, Mode: ModeHost, Exposure: ExposeRead,
 	},
 	{
+		Name: "counsel", WP: "WP5.6d", Stage: StageExplain,
+		Summary: "Consult the Founder's Sage on any topic, issue, Decision, path, or PR: the call and its door, three readings, one recommendation, cited proof, and the next aayu step; advice only, never a review.",
+		Reader:  "Asks the founder's sage for a steer on anything, with the evidence behind it and the next step; it advises and never approves or decides.",
+		Seat:    Founder, Lane: LaneSpec, Layers: AllLayers(),
+		Inputs: []Input{
+			optPos("topic", TypeString, "A question in quotes, an issue or Decision as #N, or a path in this checkout; or use --pr or --issue."),
+			flag("pr", TypePR, "Pull request to counsel on: its changed files by layer, its proof pack, and its builder family."),
+			flag("issue", TypeIssue, "Issue or Decision to counsel on: it, its parent, and its links."),
+			flag("draft", TypePath, "Markdown counsel the host's model wrote; counsel checks every part, the stage's artefact, and every citation. Without it, counsel prints the grounding and the outline."),
+			readOnlyWith(flag("post", TypeBool, "Post the checked counsel on the PR or issue as one comment labelled counsel, replaced in place on a rerun (through the actions log); needs --draft and --pr or --issue. Never a review or an approval."), "false"),
+		},
+		Outputs:  []string{"counsel", "grounding"},
+		Gates:    []GateID{GateHalt},
+		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeRead,
+	},
+	{
 		Name: "triage", WP: "WP2.9", Stage: StageOperate,
 		Summary: "Classify intake issues as Feedback, Bug, or Incident by label only; never edits bodies or touches non-intake issues.",
 		Reader:  "Sorts incoming reports into feedback, bugs, and incidents by label, without editing what people wrote.",
