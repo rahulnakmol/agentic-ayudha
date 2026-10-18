@@ -925,6 +925,9 @@ func (e *Env) reviewCall(gw *models.Gateway, cfg *config.Config, model, story st
 // [inspect] paid_reviewer. A URL with credentials or a query is refused, and
 // never echoed, so no log or comment shows a secret; only its host is named.
 func (e *Env) useReviewModel(c *config.Config) error {
+	if r := c.Inspect.Reviewer; r == inspect.ReviewerModel || r == inspect.ReviewerHuman {
+		return nil // the review lane's configured gateway, or no model at all
+	}
 	if raw := e.Getenv(inspect.ReviewModelURLVar); raw != "" {
 		u, err := url.Parse(raw)
 		if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {

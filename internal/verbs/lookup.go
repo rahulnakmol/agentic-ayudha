@@ -96,6 +96,10 @@ func (l Layers) String() string {
 // endpoint that serves it. It returns "" for an unrecognised ID.
 func FamilyOf(modelID string) Family {
 	id := strings.ToLower(modelID)
+	// A gateway-qualified ID (OpenRouter's anthropic/claude-…) names the model after its last slash.
+	if i := strings.LastIndex(id, "/"); i >= 0 {
+		id = id[i+1:]
+	}
 	switch {
 	case strings.HasPrefix(id, "claude-"):
 		return FamilyAnthropic

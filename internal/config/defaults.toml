@@ -56,9 +56,10 @@ approver = ""
 correction_days = 14
 # Merge on proof (Decision #593): off unless a repository turns it on. A PR touching the narrow set below, or a workflow
 # that holds a credential (a secret, the workflow token, an environment, or a write permission), always needs a person
-# per PR.
+# per PR. Every rung counts by default, the same-family C too (@rahulnakmol, 2026-10-18: "proof_rungs = ["A", "B", "C"]
+# this should be default").
 proof = false
-proof_rungs = ["A", "B"]
+proof_rungs = ["A", "B", "C"]
 always_person = [".github/CODEOWNERS", ".aayudha/config.json", ".aayudha/config.local.toml", ".aayudha/config.local.json"]
 always_person_config = [".aayudha/config.toml"]
 always_person_sections = ["identity", "approvals", "autonomy", "seats", "verify", "inspect", "review", "models", "branches", "decisions", "proof", "delegate", "notify", "integrations", "telemetry", "mcp", "hosts", "lfs", "measure", "budget"]

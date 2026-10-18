@@ -1612,6 +1612,7 @@ func TestInspectReviewTools(t *testing.T) {
 	// Claude Fable, and GPT-6 Astra; [inspect] paid_effort, set to high in this fixture, overrides both.
 	for _, c := range []struct{ model, builder, effort string }{
 		{"grok-4.7", "claude", "high"},
+		{"x-ai/grok-4.7", "claude", "high"}, // a gateway-qualified ID (OpenRouter's) keeps its family
 		{"claude-opus-5-5", "codex", "medium"},
 		{"claude-fable-5-1", "codex", "medium"},
 		{"gpt-6-astra", "claude", "medium"},
@@ -1647,6 +1648,17 @@ func TestInspectReviewTools(t *testing.T) {
 		code, _, errOut := inspectApp(t, env, opts, prN, "--ci")
 		if code == 0 || len(model.Requests) != 0 || !strings.Contains(errOut, c.want) || strings.Contains(errOut, "hunter2") {
 			t.Errorf("code-review without %s: exit %d, %d model calls %s", cmp.Or(c.drop, c.set), code, len(model.Requests), errOut)
+		}
+	}
+	// reviewer = "model" keeps the review lane's configured gateway: the code-review environment does not replace it.
+	{
+		_, env, opts, prN, model := setup("model")
+		env["AAYU_MODELS__GATEWAY__BASE_URL"], env["AAYU_MODELS__GATEWAY__SECRET"], env["AAYU_SECRET_LANE"] = "https://lane.example/v1", "lane", "lane-key"
+		var bases []string
+		opts.ModelClient = func(r models.Route, _ string) models.Client { bases = append(bases, r.BaseURL); return model }
+		_, _, errOut := inspectApp(t, env, opts, prN, "--ci")
+		if len(bases) == 0 || slices.ContainsFunc(bases, func(b string) bool { return b != "https://lane.example/v1" }) {
+			t.Errorf("reviewer model called %v, want the configured gateway only: %s", bases, errOut)
 		}
 	}
 	// Emptied: a person reviews, and the PR says how to choose.

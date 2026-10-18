@@ -45,8 +45,8 @@ apps = ["coderabbit"]      # installed; reviews only when the CI review cannot
 paid_reviewer = "grok-4.7" # when the environment names no model
 paid_effort = "high"
 
-# Merge on proof into dev (Decision #593, option 1, accepted 2026-10-18). Rung C stays accepted, and recorded, until
-# rung B is live in the merge gate (founder, 2026-10-18). The narrow set always needs a person per PR, because a
+# Merge on proof into dev (Decision #593, option 1, accepted 2026-10-18). Rungs A, B, and C count, as the default now
+# says (@rahulnakmol, 2026-10-18: "proof_rungs = ["A", "B", "C"] this should be default"). The narrow set always needs a person per PR, because a
 # change merged into dev reaches main with no human step: who may approve or bypass, the gate's own code, and releases.
 # A workflow that holds a credential (a secret, the token, an environment, a write permission) is in it too, by rule.
 [autonomy]
