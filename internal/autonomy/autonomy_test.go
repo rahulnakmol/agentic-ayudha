@@ -176,6 +176,11 @@ func TestAgentCommitTrailers(t *testing.T) {
 		"fix: a\n\nAayudha-Host:":                                        true,
 		"fix: a\n\nAmp-Thread-ID: see the thread":                        true,
 		"fix: a\n\nAayudha-Host: amp\nAayudha-Host: codex":               true,
+		// A body that quotes a trailer is not a trailer block.
+		"fix: a\n\nAayudha-Host: amp\nwas wrong, so I fixed it by hand":                    true,
+		"fix: a\n\nAayudha-Host: amp\n\nSigned-off-by: R <r@example.com>":                  true,
+		"fix: a\n\nAayudha-Checkpoint: 1/1 was quoted\n\nSigned-off-by: R <r@example.com>": true,
+		"fix: a\n\nBody.\n\nAayudha-Host: amp\nSigned-off-by: R <r@example.com>":           false,
 	} {
 		p := PR{Number: 1, Author: "founder", Labels: []string{LabelAgentAuthored}, MergedAt: t0,
 			Commits: []Commit{{SHA: "c1", Login: "founder", Message: msg, Parents: 1}}}
