@@ -204,7 +204,7 @@ func runNode(ctx context.Context, r *Run, input any) (Out, error) {
 
 // seed runs [verify] seed once per verify run, before the first capture.
 func seed(ctx context.Context, r *Run) error {
-	if len(r.Verify.Seed) == 0 || r.seeded {
+	if len(r.Verify.Seed) == 0 || r.seeded || r.NoSeed {
 		return nil
 	}
 	// A seed may only load fixtures into an app the person already runs:

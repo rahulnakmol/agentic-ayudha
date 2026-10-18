@@ -140,6 +140,11 @@ func (DAST) Run(ctx context.Context, r *Run) (Result, error) {
 		}
 		return skip(why + ". " + DASTFix)
 	}
+	// Without the seed nothing starts a loopback app, so only a deployed
+	// environment's URL is scanned; a story's verify scans the app the seed starts.
+	if u, err := url.Parse(t.URL); r.NoSeed && err == nil && IsLoopback(u.Hostname()) {
+		return skip("skipped: dast, nothing to scan: this run never runs [verify] seed, which is repository code, beside its Bug-writing token, so it scans only a deployed environment (set AAYU_ENV to one with a non-loopback url); a story's verify scans the app the seed starts")
+	}
 	rt := ContainerRuntime(r.Sandbox.Env(Cmd{}, NetAllowed))
 	if rt == "" {
 		if r.CI {

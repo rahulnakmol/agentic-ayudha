@@ -87,7 +87,7 @@ main without one. `aayu init --gates` therefore also installs `aayudha-security.
 `aayudha verify --security --ci` on every push to those branches, as `[branches]` maps them, and nightly on each
 tip. That covers verify's sast, secrets, deps, and dast floors with the merge gate's pinned tools; a push scans
 secrets in the pushed commits, the nightly run in the whole history. For a web or api product, dast runs the pinned
-ZAP image against the app `[verify] seed` starts; with no runnable target the job summary shows `skipped: dast`, which does not fail the run (a story's verify blocks on it instead). Each failing finding files one Bug labelled
+ZAP image against a deployed environment's url (`AAYU_ENV`). It never runs `[verify] seed`, which is repository code, beside the token that writes the Bugs; with a loopback target or none the job summary shows `skipped: dast`, which does not fail the run (a story's verify scans the app the seed starts, and blocks on the skip instead). Each failing finding files one Bug labelled
 `aayudha:security`, keyed by floor, rule or advisory ID, and path; later runs comment on it instead of filing again.
 Only Bugs and comments written by the workflow token (`github-actions[bot]`) count, so a labelled issue or comment
 from anyone else neither holds nor releases a promotion. A sast scan that leaves a file unanalysed (a syntax error,

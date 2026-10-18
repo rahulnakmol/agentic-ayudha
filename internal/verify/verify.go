@@ -46,6 +46,11 @@ type Run struct {
 	CI      bool // running in CI (the screen-reader floor runs there only on its label or nightly)
 	Nightly bool // a scheduled run
 
+	// NoSeed: never run [verify] seed. `verify --security` sets it: its job holds
+	// the token that writes Bugs as github-actions[bot], and the seed is
+	// repository code that could read that token (Codex security review of #509).
+	NoSeed bool
+
 	seeded bool // [verify] seed ran in this run
 	// upBeforeSeed: the target URL already answered before [verify] seed ran,
 	// so verify did not start the app there (G1: passive scan only).

@@ -213,6 +213,34 @@ func TestDASTGuardrails(t *testing.T) {
 		}
 	})
 
+	// Codex security review of #509: verify --security holds the Bug-writing
+	// token, so it never runs the seed, the repository's own code. A loopback
+	// target, which only the seed could start, is a non-blocking skip; a
+	// deployed URL still gets its passive scan.
+	t.Run("no seed beside the security token", func(t *testing.T) {
+		for _, tc := range []struct{ url, want string }{
+			{"http://127.0.0.1:" + freePort(t), "never runs [verify] seed"},
+			{"https://staging.example.test", "passive scan only"},
+		} {
+			bin := t.TempDir()
+			standInRuntime(t, bin, "docker", zapClean)
+			r := dastRun(t, bin, tc.url, "web")
+			ran := filepath.Join(bin, "seed-ran")
+			withSeed(t, r, bin)
+			if err := os.WriteFile(r.Verify.Seed[0], []byte("#!/bin/sh\n: > '"+ran+"'\n"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			r.Story, r.NoSeed = 0, true
+			c, rep := dastCheck(t, r)
+			if _, err := os.Stat(ran); err == nil {
+				t.Fatalf("%s: the seed ran", tc.url)
+			}
+			if !strings.Contains(c.Detail, tc.want) || !rep.Hold || proof.BlocksShip(c) {
+				t.Fatalf("%s: %+v hold=%v", tc.url, c, rep.Hold)
+			}
+		}
+	})
+
 	t.Run("a target that is not an absolute URL is blocked", func(t *testing.T) {
 		bin := t.TempDir()
 		standInRuntime(t, bin, "docker", zapClean)
