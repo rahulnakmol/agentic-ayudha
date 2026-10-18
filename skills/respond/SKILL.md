@@ -115,7 +115,9 @@ timestamped lines, one decision at a time, and every change to production is a p
    another team reports in a comment is the root cause, labelled "reported by the owning team (`#N`), not in our telemetry"), with their evidence (a commit, a `path:line`, `query qN`); each
    action has an owner and its Bug or Story, the durable fix's follow-up Bug first. Contributing conditions come from the record (the note's
    evidence, the timeline, the queries); when it shows none, write "No contributing condition is established" with
-   the citation, and turn open questions into actions rather than causes. Keep the
+   the citation, and turn open questions into actions rather than causes. Never infer why a change reached
+   production (a missing test, review, or load check) unless the record says so; that is an open question and an
+   action. Keep the
    investigation's confidence: a hypothesis the note weighed against stays "unlikely", never "ruled out", unless
    the note rules it out. Say how the incident was detected only as the grounding shows it (people
    reporting it, an alert firing); never assert that an alert did or did not fire when the record does not say. When the record

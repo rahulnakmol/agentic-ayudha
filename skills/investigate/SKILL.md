@@ -174,11 +174,11 @@ the new revision, with the frame in the changed lines. Give the leading hypothes
 the query that tells the rivals apart. Test a rival only with an observation it predicts differently from the
 leading hypothesis (the previous revision serving the same inputs, the same input failing on both revisions); an
 observation both predict tests neither, and when no query in the grounding separates them, keep the rival open and
-name the query that would. A rule-out names an observation that has not been made: write it as its own list item
-starting `Unverified:` that names the bounded query to run in plain text, never behind a bold label; cite `query qN`
+name the query that would. A rule-out names an observation that has not been made: write it in the hypothesis's table row, or as its own
+list item starting `Unverified:`, naming the bounded query to run in plain text, never behind a bold label; cite `query qN`
 only for a query that already ran, such as the one the new query extends. A
-prediction about a fix is written the same way, and still named for what it is: `Unverified: regression test
-TestName in package <name> fails before the fix and passes after it`. Read a telemetry field only as its name and values show (a duration field is a measured duration,
+prediction about a fix is written the same way, and still named for what it is: the regression test, `TestName` in
+package `<name>`, fails before the fix and passes after it. Read a telemetry field only as its name and values show (a duration field is a measured duration,
 not a configured deadline, unless the grounding says so). Never state as fact what the grounding does not show about the infrastructure (that a deploy
 replaced every instance, that a cache was cleared): mark it `Assumption:` and build no conclusion on it. Separate the symptom, the contributing conditions, and the root
 cause. Two events at the same time are a correlation, not a cause: say what would prove the link (the errors appear
@@ -224,7 +224,9 @@ repeat a secret-bearing log line or a customer identifier, and never put one int
 Title it with the stage's artefact from the grounding (`# Investigation note: …` at a startup, `# Incident
 assessment: …` at a scaleup, `# Investigation record: …` at an enterprise). Then the parts of the outline in order as
 `##` headings: Impact and timeline, Deployed revision, Evidence, Hypotheses, Implicated code, Mitigation, Durable
-fix, Missing evidence and next queries. A startup note is at most 400 words of prose: the check counts only prose (paragraphs and list items; headings, tables, and code are not counted), so put steps, events, and actions in table rows and keep the prose near 300 words; when the check says it is over, move lists into a table or cut repeated facts until the prose is under 350, never just under 400; a scaleup note reads in five minutes; an enterprise record adds each
+fix, Missing evidence and next queries. At the startup stage write Hypotheses as a table, one row per hypothesis (evidence, counter-evidence, the rule-out
+and the query it extends), and the Durable fix as rows (boundary, regression test, verification, rollback), each row
+carrying its citation; only an item with nothing to cite becomes an `Unverified:` list item. A startup note is at most 400 words of prose: the check counts only prose (paragraphs and list items; headings, tables, and code are not counted), so put steps, events, and actions in table rows and keep the prose near 300 words; when the check says it is over, move lists into a table or cut repeated facts until the prose is under 350, never just under 400; a scaleup note reads in five minutes; an enterprise record adds each
 query's provenance and the data handling.
 
 **What the check reads as a citation**, in the same paragraph, list item, or table row as the claim: `query qN`; the
