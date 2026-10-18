@@ -13,7 +13,9 @@ ledger, and floor are explained in [GLOSSARY.md](GLOSSARY.md).
 
 Unreleased: these changes are on `dev` and in the v0.3.0 freeze. The list is final when v0.3.0 is tagged.
 
-v0.3.0 gives a solo founder a working pod. Two new seats, the Production Engineer and the Data & AI Architect, bring
+With v0.3.0, aayu builds its own repository, agentic-ayudha, with one founder. With `[autonomy] proof` on, `aayu ship`
+merges an agent's pull request into dev on proof alone, and only a narrow set of paths and settings always waits for
+the founder (#617). Two new seats, the Production Engineer and the Data & AI Architect, bring
 skills for incidents, SLOs, runbooks, data designs, and legacy-code surveys. Every pull request that is not docs-only
 now gets a review, and the merge gate records how independent that review was. You approve the human-only steps
 agents queue for you from any device, one at a time in `aayu inbox` or as one batch. No Feature is claimed as proven
@@ -65,7 +67,10 @@ for this release.
 - inspect's review settles within three rounds, and findings in code the pull request did not change are tagged as pre-existing (#583).
 - Agents run `aayu ship` on their Story pull requests; when only your approval is missing, the pull request waits in your inbox as Ready to ship (#577).
 - Agent pull requests count toward the autonomy streak (#577).
-- The config accepts the `[autonomy]` keys `proof`, `proof_rungs`, `always_person`, `always_person_config`, and `always_person_sections`, off by default; in this version they change nothing (#621).
+- With `[autonomy] proof` on, `aayu ship` merges a pull request into dev with no person's pass when every required check is green, the proof pack verifies with its floors holding, inspect is at merge with a review rung listed in `[autonomy] proof_rungs`, and the pull request touches nothing in the narrow set (#617, #621).
+- The narrow set is the `always_person` paths, a change to an `always_person_sections` table of an `always_person_config` file (by default the tables that set identity, approvals, autonomy, seats, review, models, proof, and branches, and every table that names where a credential or data goes), and any workflow that holds a credential; a pull request in it waits for a person (#617).
+- Merging on proof is off by default, and `proof_rungs` defaults to rungs A and B (#617).
+- `aayu ship` never merges with a red required check, whoever passes it (#617).
 - `aayu init --gates` installs a security workflow that scans every push to dev, rolling, and main, and each tip nightly, with verify's security floors (#500).
 - verify takes an advisory UI review of its own screenshots (#479).
 - A floor waiver counts only when the floor-waiver authority accepted it (#624).
