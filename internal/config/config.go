@@ -446,7 +446,9 @@ func (c *Config) Validate() error {
 			if _, ok := verbs.FindHost(verbs.HostID(host)); !ok {
 				bad("[models.%s.%s]: unknown host", lane, host)
 			}
-			if m.Model == "" {
+			// model = "" on the ui-review lane's copilot row turns the binary's
+			// Copilot route off; every other row names a model.
+			if m.Model == "" && (lane != string(verbs.LaneUIReview) || host != string(verbs.HostCopilot)) {
 				bad("[models.%s.%s]: model is required", lane, host)
 			}
 			if !slices.Contains(families, m.Family) {

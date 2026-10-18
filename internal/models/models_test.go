@@ -62,7 +62,9 @@ func TestLaneResolution(t *testing.T) {
 		{verbs.LaneReview, verbs.HostCopilot, false, false, "claude-haiku-5.5", verbs.FamilyAnthropic, SourceConfig, ""},
 		{verbs.LaneReview, verbs.HostCopilot, true, false, "my-model", verbs.FamilyXAI, SourceDirect, ""},
 		{verbs.LaneChore, verbs.HostCopilot, true, false, verbs.ModelClaudeHaiku, verbs.FamilyAnthropic, SourceDirect, ""},
-		{verbs.LaneUIReview, verbs.HostCopilot, false, false, verbs.ModelGemini, verbs.FamilyGoogle, SourceDefault, "high"},
+		// UI review on Copilot defaults to Gemini 4 Argon, which the binary
+		// calls through Copilot CLI (CopilotRouted), never the gateway.
+		{verbs.LaneUIReview, verbs.HostCopilot, false, false, verbs.CopilotGeminiArgon, verbs.FamilyGoogle, SourceDefault, "high"},
 		// Heavy reviews escalate to GPT-6 Astra at high effort.
 		{verbs.LaneReview, verbs.HostAmp, true, true, verbs.ModelGPTAstra, verbs.FamilyOpenAI, SourceDefault, "high"},
 	}

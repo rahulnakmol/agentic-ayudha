@@ -182,19 +182,27 @@ func (e *Env) reviewer(ctx context.Context, b *uireview.Browser, story int, deep
 	r.Complete = func(ctx context.Context, req models.Request) (models.Response, error) {
 		return call(ctx, verbs.DirectHost, req)
 	}
-	// The opt-in Copilot route: a [models.ui-review.copilot] row naming a
-	// concrete Copilot model sends lane A through Copilot CLI. It fails closed:
-	// a call it cannot make or read goes to the lane's normal route, which every
-	// later call then uses, and the label says so. It never skips the review.
+	// The Copilot route: lane A runs on the copilot row's model (Gemini 4
+	// Argon at high effort by default) through Copilot CLI wherever copilot is
+	// installed and signed in. It fails closed: when Copilot is unavailable,
+	// or a call fails or misses the schema, that call and every later one go
+	// to the lane's gateway route, and stderr and the label say so. It never
+	// skips the review. [models.ui-review.copilot] model = "" turns it off.
 	cp, err := gw.Resolver.Resolve(verbs.LaneUIReview, verbs.HostCopilot)
 	if err != nil {
 		return nil, Wrap(ExitUsage, err)
 	}
-	if !models.CopilotOptIn(cp) {
+	if !models.CopilotRouted(cp) {
 		return r, nil
 	}
 	if err := models.CheckFamilies(key, builder, cp.Family); err != nil {
 		return nil, Wrap(ExitBlocked, err)
+	}
+	if err := gw.CopilotReady(); err != nil {
+		why := strings.TrimPrefix(err.Error(), models.ErrCopilot.Error()+": ")
+		fmt.Fprintf(e.Err, "ui-review: %s through Copilot is unavailable (%s); lane A uses %s (%s)\n", cp.Model, why, rev.Model, effort)
+		r.Used = func() string { return rev.Model + " (" + cp.Model + " through Copilot is unavailable: " + why + ")" }
+		return r, nil
 	}
 	via, used, failed := cp.Model+" via Copilot", false, ""
 	r.Model = via

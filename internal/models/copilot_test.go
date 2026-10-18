@@ -54,7 +54,7 @@ exit ` + map[bool]string{true: "0", false: "1"}[exit == 0] + `
 	return dir + string(os.PathListSeparator) + "/usr/bin" + string(os.PathListSeparator) + "/bin", record
 }
 
-// TestCopilotCLI: the opt-in Copilot route runs Copilot CLI with the prompt
+// TestCopilotCLI: the Copilot route runs Copilot CLI with the prompt
 // on stdin, the request's model and effort, the image as an attachment, no tools, in an empty
 // directory with a fresh COPILOT_HOME and only COPILOT_GITHUB_TOKEN of the
 // caller's credentials; it reads the reply and charges the AI credits Copilot

@@ -22,6 +22,7 @@ const (
 	SourceConfig   = "config"   // [models.<lane>.<host>]
 	SourceFallback = "fallback" // configured family not available on the host; registry default used
 	SourceDirect   = "direct"   // host-managed, or a Copilot catalog model, on this host; the binary's direct call uses DirectHost's row
+	SourceOff      = "off"      // [models.ui-review.copilot] model = "": the binary's Copilot route is off
 )
 
 // Resolved is the model a lane uses on a host.
@@ -88,6 +89,10 @@ func (r Resolver) Resolve(lane verbs.LaneID, host verbs.HostID) (Resolved, error
 	def := Resolved{Lane: lane, Host: host, Model: d.ID, Display: d.Model, Family: d.Family, Effort: d.Effort, Source: SourceDefault, Note: d.Note}
 	c, ok := r.Models.Lanes[string(lane)][string(host)]
 	if !ok {
+		return def, nil
+	}
+	if c.Model == "" && lane == verbs.LaneUIReview && host == verbs.HostCopilot {
+		def.Source, def.Note = SourceOff, "the Copilot route is off ([models.ui-review.copilot] model = \"\")"
 		return def, nil
 	}
 	fam := verbs.Family(c.Family)

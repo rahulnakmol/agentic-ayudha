@@ -218,14 +218,14 @@ type Call struct {
 // through the gateway or its direct provider, records tokens and cost in the
 // actions log, and trips the breaker when the call reaches a limit.
 func (g *Gateway) Do(ctx context.Context, c Call) (Response, Resolved, error) {
-	// The opt-in Copilot route keeps the person's Copilot row; every other
+	// The Copilot route keeps the ui-review lane's copilot row; every other
 	// call resolves its direct model.
 	var m Resolved
 	var err error
 	if c.Lane == verbs.LaneUIReview && c.Host == verbs.HostCopilot {
 		m, err = g.Resolver.Resolve(c.Lane, c.Host)
 	}
-	if err == nil && !CopilotOptIn(m) {
+	if err == nil && !CopilotRouted(m) {
 		m, err = g.Resolver.ResolveDirect(c.Lane, c.Host, c.Heavy)
 	}
 	if err != nil {

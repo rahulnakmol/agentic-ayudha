@@ -53,29 +53,42 @@ model judgement of a UI goes through this lane: `aayu review`'s lane A, `polish`
 advisory look at its screenshots, which never decides whether a floor holds. It is
 interim until the AI gateway routes the target, `gemini-4-argon-high`, which needs a paid Google plan.
 
-> **Needs setup:** the ui-review lane needs a model key: the AI gateway's (`[models.gateway]`) or Google's. Without
-> one, and in the merge gate, which has no model key, `aayu verify` records `screenshot_review.skipped` with the reason
+> **Needs setup:** without Copilot (below), the ui-review lane needs a model key: the AI gateway's
+> (`[models.gateway]`) or Google's. Without one, and in the merge gate, which has no model key, `aayu verify` records `screenshot_review.skipped` with the reason
 > instead of findings, and `aayu review` stops. Set the key with `aayu auth set-secret <name>`. Verify sends only
 > screenshots that its redaction pass read with OCR, so it also needs `tesseract` installed.
 
-**Gemini 4 Argon through Copilot (opt-in).** With a Copilot plan that enables Gemini 4 Argon, you can send the
-ui-review lane's calls through Copilot instead:
+**Gemini 4 Argon through Copilot (the default where Copilot is set up).** The binary's ui-review calls (review lane
+A, `aayu polish`, and verify's screenshot review) run on Gemini 4 Argon at high effort through Copilot CLI whenever
+`copilot` is on your `PATH` and signed in, on any host. Otherwise they run on `gemini-3.8-flash` at high effort through
+the AI gateway, as above.
 
-```toml
-[models.ui-review.copilot]
-model = "gemini-4-argon"
-```
+- **How it runs.** `copilot --model gemini-4-argon --reasoning-effort high`, the prompt on stdin, the screenshots as
+  attachments, no tools, in an empty directory with a fresh `COPILOT_HOME`, so no repository hooks, MCP servers, or
+  custom instructions load. It signs in with the `copilot` secret, else `COPILOT_GITHUB_TOKEN`, which goes to that
+  process only, with `COPILOT_GH_HOST` (else `GH_HOST`) for a GitHub Enterprise host.
+- **What it costs.** Each call is charged the AI credits Copilot reports: input at 2 USD and visible output at 10 USD per
+  million tokens, with reasoning not billed, about 0.043 USD for a lane A call (two probes, 2026-10-18). The budget
+  breaker counts it like any other call.
+- **When it falls back.** When `copilot` is not installed or not signed in, lane A uses flash from the start, and
+  stderr and the label say why (`gemini-3.8-flash (gemini-4-argon through Copilot is unavailable: …)`). When a call
+  fails or its reply misses the schema, that call and every later one go to flash (`… (the Copilot route failed: …)`).
+  The review always runs.
+- **Reviewer and builder.** Argon is google family, so it still never reviews a google builder's work.
+- **Turning it off.** In your user config (a repository's config cannot set this row):
 
-When that row names a model rather than an Auto selector, the binary runs the lane's calls with Copilot CLI
-(`copilot --model gemini-4-argon --reasoning-effort high`, the prompt on stdin, the screenshots as attachments, no
-tools). It runs in an empty directory with a fresh `COPILOT_HOME`, so no repository hooks, MCP servers, or custom
-instructions load. It signs in with the `copilot` secret, else `COPILOT_GITHUB_TOKEN`, which goes to that process
-only, with `COPILOT_GH_HOST` (else `GH_HOST`) for a GitHub Enterprise host. Each call is charged the AI credits Copilot reports: input at 2 USD and visible output at 10 USD per million
-tokens, with reasoning not billed, about 0.043 USD for a lane A call (two probes, 2026-10-18). The route fails closed: when `copilot` is not installed or
-not signed in, or a reply does not parse, that call and every later one go to the default route. `aayu` says so on
-stderr and in the label (`gemini-3.8-flash (the Copilot route failed: …)`), and the review still runs. It stays a local
-opt-in: the ux evals gate Gemini 3.8 Flash, which stays the default on every host, and never run through Copilot. `CopilotCLI` in `internal/models/copilot.go`,
-`TestCopilotCLI` and `TestCopilotUIReviewRoute`.
+  ```toml
+  [models.ui-review.copilot]
+  model = ""   # lane A always uses gemini-3.8-flash through the gateway
+  ```
+
+  Another Copilot model ID in that row runs that model through Copilot instead.
+
+> **Honest status:** the ux evals that gate this lane measured `gemini-3.8-flash` only. CI has no Copilot credential,
+> so it always takes the fallback, and its numbers are flash's. A local run with Copilot signed in reviews on Argon,
+> which those gating runs did not measure.
+
+`CopilotCLI` and `CopilotReady` in `internal/models/copilot.go`, `TestCopilotCLI` and `TestCopilotUIReviewRoute`.
 
 ## How `aayu models` resolves a lane
 

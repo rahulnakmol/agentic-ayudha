@@ -20,9 +20,10 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
-// CopilotRoute is the route of a call through GitHub Copilot's own client: a
-// [models.ui-review.copilot] row that names a concrete Copilot model (not an
-// Auto selector) opts the ui-review lane's direct calls into it. The key is the
+// CopilotRoute is the route of a call through GitHub Copilot's own client:
+// the ui-review lane's direct calls take it when the lane's copilot row names
+// a concrete Copilot model (Gemini 4 Argon by default; not an Auto selector),
+// and copilot is installed and signed in (Gateway.CopilotReady). The key is the
 // "copilot" secret, else COPILOT_GITHUB_TOKEN, and goes to that process only.
 var CopilotRoute = Route{Via: "copilot", Style: "copilot-cli", Secret: "copilot"}
 
@@ -49,22 +50,13 @@ type CopilotCLI struct {
 func (c CopilotCLI) Complete(ctx context.Context, r Request) (Response, error) {
 	bin := c.Bin
 	if bin == "" {
-		name := "copilot"
-		if runtime.GOOS == "windows" {
-			name += ".exe"
-		}
-		for _, d := range filepath.SplitList(c.Path) {
-			if p := filepath.Join(d, name); isExec(p) {
-				bin = p
-				break
-			}
-		}
+		bin = copilotBin(c.Path)
 		if bin == "" {
-			return Response{}, fmt.Errorf("%w: copilot (GitHub Copilot CLI) is not installed", ErrCopilot)
+			return Response{}, errCopilotMissing
 		}
 	}
 	if c.Token == "" {
-		return Response{}, fmt.Errorf("%w: not signed in: set the copilot secret or COPILOT_GITHUB_TOKEN", ErrCopilot)
+		return Response{}, errCopilotSignedOut
 	}
 	dir, err := os.MkdirTemp("", "aayu-copilot-")
 	if err != nil {
@@ -224,21 +216,56 @@ func copilotMaxImage(im Image) int {
 // no output cap.
 const copilotMaxOutput = 128000
 
-// RouteOf is the route a resolved model's direct call takes: the opt-in
-// Copilot route for a copilot row that names a concrete model, else RouteFor.
-// Gateway.Do and `aayu models` both use it.
+// RouteOf is the route a resolved model's direct call takes: the Copilot
+// route for the ui-review lane's copilot row, else RouteFor. Gateway.Do and
+// `aayu models` both use it.
 func RouteOf(m config.Models, res Resolved) (Route, error) {
-	if CopilotOptIn(res) {
+	if CopilotRouted(res) {
 		return CopilotRoute, nil
 	}
 	return RouteFor(m, res.Model, res.Family)
 }
 
-// CopilotOptIn reports whether a resolved model routes the ui-review lane's
-// direct calls through Copilot: a [models.ui-review.copilot] row (read only
-// from the person's own configuration) that names a concrete model.
-func CopilotOptIn(m Resolved) bool {
-	return m.Lane == verbs.LaneUIReview && m.Host == verbs.HostCopilot && m.Source == SourceConfig && m.Family != verbs.FamilyHostManaged
+// CopilotRouted reports whether a resolved model sends the ui-review lane's
+// direct calls through Copilot: the lane's copilot row, the registry default
+// (Gemini 4 Argon) or a person's [models.ui-review.copilot] (read only from
+// their own configuration), naming a concrete model. model = "" turns the
+// route off (SourceOff).
+func CopilotRouted(m Resolved) bool {
+	return m.Lane == verbs.LaneUIReview && m.Host == verbs.HostCopilot && (m.Source == SourceDefault || m.Source == SourceConfig) &&
+		m.Family != "" && m.Family != verbs.FamilyHostManaged
+}
+
+var (
+	errCopilotMissing   = fmt.Errorf("%w: copilot (GitHub Copilot CLI) is not installed", ErrCopilot)
+	errCopilotSignedOut = fmt.Errorf("%w: not signed in: set the copilot secret or COPILOT_GITHUB_TOKEN", ErrCopilot)
+)
+
+// CopilotReady reports why the Copilot route cannot run here (ErrCopilot),
+// or nil: copilot must be on PATH (unless g.Client stands in for it) and the
+// copilot secret or COPILOT_GITHUB_TOKEN must be set.
+func (g *Gateway) CopilotReady() error {
+	if g.Client == nil && copilotBin(os.Getenv("PATH")) == "" {
+		return errCopilotMissing
+	}
+	if k, err := g.Key(CopilotRoute.Secret); err != nil || k == "" {
+		return errCopilotSignedOut
+	}
+	return nil
+}
+
+// copilotBin is the copilot executable on path, or "".
+func copilotBin(path string) string {
+	name := "copilot"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	for _, d := range filepath.SplitList(path) {
+		if p := filepath.Join(d, name); isExec(p) {
+			return p
+		}
+	}
+	return ""
 }
 
 func isExec(p string) bool {
