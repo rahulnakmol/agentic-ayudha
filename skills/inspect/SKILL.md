@@ -33,7 +33,7 @@ aayu:
       type: bool
       required: false
       positional: false
-      description: "As the [autonomy] approver, record your review of the PR's head on the ledger and post it as the human review the merge gate reads; a person-verified step, and the only way a human review counts."
+      description: "As the [autonomy] approver, record your review of the PR's head on the ledger and post it as the human review the merge gate reads; a person-verified step, and the only way a human review counts. To approve several such PRs with one device code, use `aayu inbox`."
     - name: reason
       type: string
       required: false

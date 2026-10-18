@@ -159,8 +159,9 @@ factor. aayu then checks the approving account, and refuses unless all of these 
 - it is the same account as the token aayu acts with;
 - it has the repository access the command needs: admin for the bypasses, `init`, `uninit`, `seat`,
   `install --apply`, and `upgrade --apply`; write for `decide --accept`, `inbox`, `resume`, `plan --approve`,
-  `inspect --dismiss`, `tell --publish`, and the stable-release yes of `release --to main`. `auth set-secret` and
-  `self-update` need only a person, so a fresh runner with no token yet can still store its first one.
+  `inspect --dismiss`, `inspect --approve`, `tell --publish`, and the stable-release yes of `release --to main`.
+  `auth set-secret` and `self-update` need only a person, so a fresh runner with no token yet can still store its
+  first one.
 
 Each failure says what happened and the one next step: the code expired, the request was cancelled on GitHub, a bot
 or another account approved it, or the account lacks the access. Nothing is done in any of them. The approval is
@@ -322,6 +323,7 @@ Every card offers its choices and `s` to skip, so no card is a forced choice. Th
 |---|---|---|---|
 | Decision | an open Decision, a floor waiver, or a provisional one (V8) | the Decision's own Recommendation (ratify, for a provisional one) | `aayu decide <n> --accept <number>` |
 | Story PR ready to ship | `aayu ship` stopped on an open Story PR only for the human pass and commented "Ready to ship", and the merge gate is still green on that head | ship it (another: open it and review it) | `aayu ship <pr>`; in solo mode it first posts your `Solo-mode bypass:` comment and ships with `--solo-bypass` |
+| PR that needs your review | the merge gate's inspect waits at the human rung for the PR's head: no reviewer app or paid model could review it | open it and review it (another: approve its head, after one line on what you checked) | the record `aayu inspect <pr> --approve` writes: your review of that head on the ledger, and the human-review reply the gate reads |
 | PR whose review stopped | inspect's review ran 3 rounds on distinct heads without converging and asked the builder to step back | open it and review it (another: `aayu ship <pr>`, with every gate of ship) | opens the PR |
 | Story merged without ship | a PR merged into dev that links the Story, which is still before `status:merged` | mark it merged without proof (it stays uncovered) | `status:merged`, the merged-without-proof comment, the lease removed |
 | Bug with its fix merged | a PR merged into dev that links the open Bug | close it as completed | `status:done`, a "Fixed in #PR" comment, closed |
@@ -337,6 +339,14 @@ the count, and `aayu next` names `aayu inbox`, whenever it has steps (`gatherInb
 
 Shipping several Story PRs takes one device code per inbox session: the session's approval covers each ship that
 follows, and `--solo-bypass` too when you have admin access. Each ship still checks its own gates on its own head.
+
+Use `aayu inbox` to approve several PRs that need your review with one code, too. Each approval is the same record
+as `aayu inspect <pr> --approve`, for the head the card showed, and only the `[autonomy] approver` can make it.
+
+A host's agent marker (an orb's Terminal tab) is no refusal there once the code is approved. The code confirms the
+approving GitHub account, not who entered it; aayu's own lanes (`AAYU_AGENT=1`) and CI are refused.
+
+No device-flow token or session approval is kept after the session. Each PR review stays on the ledger.
 
 ## Protected paths and CODEOWNERS
 

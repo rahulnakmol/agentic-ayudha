@@ -50,7 +50,7 @@ aayu inspect <pr>
 | `<pr>` | yes | Pull request to inspect. |
 | `--mode` | no | general: one reviewer; peer: two reviewers of different families cross-check each other (default from [inspect]). One of: `general`, `peer`. |
 | `--dismiss` | no | Record the finding with this ID as dismissed in this repository, so inspect stops raising findings like it. **Person only.** |
-| `--approve` | no | As the [autonomy] approver, record your review of the PR's head on the ledger and post it as the human review the merge gate reads; a person-verified step, and the only way a human review counts. **Person only.** |
+| `--approve` | no | As the [autonomy] approver, record your review of the PR's head on the ledger and post it as the human review the merge gate reads; a person-verified step, and the only way a human review counts. To approve several such PRs with one device code, use `aayu inbox`. **Person only.** |
 | `--reason` | no | Why the finding is dismissed (with --dismiss), or what you checked (with --approve). **Person only.** |
 
 <!-- END GENERATED: skill-usage -->
@@ -88,7 +88,7 @@ The reviewer reads only after the merge gate has written its proof pack. After t
 <!-- BEGIN GENERATED: skill-human -->
 
 - `--dismiss`: Record the finding with this ID as dismissed in this repository, so inspect stops raising findings like it.
-- `--approve`: As the [autonomy] approver, record your review of the PR's head on the ledger and post it as the human review the merge gate reads; a person-verified step, and the only way a human review counts.
+- `--approve`: As the [autonomy] approver, record your review of the PR's head on the ledger and post it as the human review the merge gate reads; a person-verified step, and the only way a human review counts. To approve several such PRs with one device code, use `aayu inbox`.
 - `--reason`: Why the finding is dismissed (with --dismiss), or what you checked (with --approve).
 
 <!-- END GENERATED: skill-human -->

@@ -761,7 +761,7 @@ var Verbs = []Command{
 			pos("pr", TypePR, "Pull request to inspect."),
 			enumIn("mode", false, false, "general: one reviewer; peer: two reviewers of different families cross-check each other (default from [inspect]).", "general", "peer"),
 			humanOnly(flag("dismiss", TypeString, "Record the finding with this ID as dismissed in this repository, so inspect stops raising findings like it.")),
-			humanOnly(flag("approve", TypeBool, "As the [autonomy] approver, record your review of the PR's head on the ledger and post it as the human review the merge gate reads; a person-verified step, and the only way a human review counts.")),
+			humanOnly(flag("approve", TypeBool, "As the [autonomy] approver, record your review of the PR's head on the ledger and post it as the human review the merge gate reads; a person-verified step, and the only way a human review counts. To approve several such PRs with one device code, use `aayu inbox`.")),
 			humanOnly(flag("reason", TypeString, "Why the finding is dismissed (with --dismiss), or what you checked (with --approve).")),
 		},
 		Outputs:  []string{"disposition (merge|fix|rebuild)", "findings", "review-comments"},

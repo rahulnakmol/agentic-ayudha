@@ -604,7 +604,12 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	case err != nil:
 		return Wrap(ExitExternal, err)
 	}
-	if res.Disposition != inspect.Skipped && (!res.Cached || relabel) {
+	// The review lane's model reviewed this head, so no person's review is
+	// awaited: a human wait an earlier run recorded is cleared, even on a
+	// cached judgement, or the inbox would still offer it (Codex's P2 on #678).
+	waited := st.Human != ""
+	st.Human = ""
+	if res.Disposition != inspect.Skipped && (!res.Cached || relabel || waited) {
 		if lines := inspect.InlineComments(res, st.Posted); len(lines) > 0 && !res.Cached {
 			if err := e.postInline(ctx, c, repo, n, res, lines); err != nil {
 				res.Notes = append(res.Notes, "inline review comments not posted: "+oneLineErr(err))
@@ -754,10 +759,6 @@ func (e *Env) inspectDismiss(ctx context.Context, in Values) error {
 // such a record names its exact head, because a comment alone may be an agent
 // holding the person's token (Codex's P2 on #634).
 func (e *Env) inspectApprove(ctx context.Context, in Values) error {
-	reason := strings.TrimSpace(in.String("reason"))
-	if reason == "" {
-		return Errorf(ExitUsage, "inspect --approve: say what you reviewed with --reason")
-	}
 	repo, err := e.RepoName(ctx)
 	if err != nil {
 		return err
@@ -766,44 +767,86 @@ func (e *Env) inspectApprove(ctx context.Context, in Values) error {
 	if err != nil {
 		return err
 	}
-	approver := strings.TrimPrefix(strings.TrimSpace(l.Config.Autonomy.Approver), "@")
-	if approver == "" {
-		return Errorf(ExitBlocked, "inspect --approve: no [autonomy] approver is set; name the person who approves in .aayudha/config.toml")
-	}
-	n := issueNumber(in.String("pr"))
-	c, tok, err := e.HumanGitHub(ctx)
+	a, err := e.approveHead(ctx, &l.Config, repo, issueNumber(in.String("pr")), "", in.String("reason"))
 	if err != nil {
 		return err
 	}
+	return e.Emit(a, func(w io.Writer) error {
+		_, err := fmt.Fprintf(w, "approved #%d at %s as %s, recorded on the ledger; the merge gate's inspect check reads it\n", a.PR, short(a.Head), a.By)
+		return err
+	})
+}
+
+// approveHead is the record step of `aayu inspect --approve`, and of the
+// inbox's human-review card (Story #675): as the [autonomy] approver, after
+// the presence check, it records the approval of PR n's head on the ledger and
+// posts the human-review reply the merge gate reads. want, when set, is the
+// head the person was shown: a PR now at another head records nothing. A
+// session's earlier approval covers the presence check (presence.go), so one
+// inbox session approves several PRs with one device code.
+func (e *Env) approveHead(ctx context.Context, cfg *config.Config, repo string, n int, want, reason string) (headApproval, error) {
+	if reason = strings.TrimSpace(reason); reason == "" {
+		return headApproval{}, Errorf(ExitUsage, "inspect --approve: say what you reviewed with --reason; nothing was recorded")
+	}
+	approver := strings.TrimPrefix(strings.TrimSpace(cfg.Autonomy.Approver), "@")
+	if approver == "" {
+		return headApproval{}, Errorf(ExitBlocked, "inspect --approve: no [autonomy] approver is set; name the person who approves in .aayudha/config.toml")
+	}
+	c, tok, err := e.HumanGitHub(ctx)
+	if err != nil {
+		return headApproval{}, err
+	}
 	if login := viewer(ctx, c); !strings.EqualFold(login, approver) {
-		return Errorf(ExitBlocked, "inspect --approve: the [autonomy] approver is %s, not %s", approver, cmp.Or(login, "an unknown account"))
+		return headApproval{}, Errorf(ExitBlocked, "inspect --approve: the [autonomy] approver is %s, not %s", approver, cmp.Or(login, "an unknown account"))
 	}
 	owner, name, _ := github.SplitRepo(repo)
+	// headOf is the PR's head while it is open and ready for review, else
+	// none: a closed or draft PR gets no approval (CodeRabbit on #678).
 	headOf := func() (string, error) {
 		pr, _, err := c.REST.PullRequests.Get(ctx, owner, name, n)
+		if err == nil && (pr.GetState() != "open" || pr.GetDraft()) {
+			return "", Errorf(ExitBlocked, "inspect --approve: PR #%d is closed or a draft, so nothing was recorded", n)
+		}
 		return pr.GetHead().GetSHA(), err
 	}
 	head, err := headOf()
+	var ae *Error
+	if errors.As(err, &ae) {
+		return headApproval{}, err
+	}
 	if err != nil {
-		return Wrap(ExitExternal, err)
+		return headApproval{}, Wrap(ExitExternal, err)
+	}
+	if want != "" && head != want {
+		return headApproval{}, Errorf(ExitBlocked, "inspect --approve: PR #%d's head moved from %s to %s since you read it, so nothing was recorded; review the new head", n, short(want), short(head))
 	}
 	// The person approves this head by name through the device flow, always:
 	// a terminal without an agent marker is not proof of a person here, since
 	// this record is what the gate trusts over a comment written with the
-	// person's token (CodeRabbit's Major on #647). A push after it voids it.
+	// person's token (CodeRabbit's Major on #647). A host's agent marker (an
+	// orb's Terminal tab) is no refusal: the device code proves the person.
+	// aayu's own lanes (AAYU_AGENT=1) and CI are refused. A push after it
+	// voids it.
 	refusal := Errorf(ExitBlocked, "inspect --approve needs GitHub's device-flow presence check, which is not available here; run it where a person can enter the code")
-	if sig := e.agentSignal(); sig != "" {
-		refusal = Errorf(ExitBlocked, "inspect --approve is a person's decision and is refused for an agent lane (%s); ask a person to run it in their own terminal", sig)
+	lane := ""
+	switch {
+	case e.Getenv("AAYU_AGENT") == "1":
+		lane = "AAYU_AGENT=1"
+	case e.CI:
+		lane = "--ci"
+	}
+	if lane != "" {
+		refusal = Errorf(ExitBlocked, "inspect --approve is a person's decision and is refused for an agent lane (%s); ask a person to run it in their own terminal", lane)
 	}
 	if _, err := e.presenceCheck(ctx, Pending{What: "inspect --approve", Effect: []string{fmt.Sprintf("Records your review of PR #%d at commit %s as the human review the merge gate reads.", n, short(head))}}, AccessWrite, refusal); err != nil {
-		return err
+		return headApproval{}, err
 	}
 	if now, err := headOf(); err != nil || now != head {
-		return Errorf(ExitBlocked, "inspect --approve: PR #%d's head moved from %s while you approved; review the new head and run it again", n, short(head))
+		return headApproval{}, Errorf(ExitBlocked, "inspect --approve: PR #%d's head moved from %s while you approved; review the new head and run it again", n, short(head))
 	}
 	diff, _, err := c.REST.PullRequests.GetRaw(ctx, owner, name, n, gh.RawOptions{Type: gh.Diff})
 	if err != nil {
-		return Wrap(ExitExternal, err)
+		return headApproval{}, Wrap(ExitExternal, err)
 	}
 	reviewed := []string{} // every changed path, as the gate reads the diff
 	for _, f := range inspect.ParseDiff(diff) {
@@ -817,20 +860,17 @@ func (e *Env) inspectApprove(ctx context.Context, in Values) error {
 	if !c.DryRun() {
 		w, err := e.Ledger(ctx, tok, "human", "")
 		if err != nil {
-			return err
+			return headApproval{}, err
 		}
 		b, _ := json.Marshal(a)
 		if _, err := w.Write(ctx, ledger.Commit{Message: fmt.Sprintf("inspect: approve #%d at %s", n, short(head)), Append: map[string][]byte{ApprovedPath: append(b, '\n')}}); err != nil {
-			return Wrap(ExitExternal, err)
+			return headApproval{}, Wrap(ExitExternal, err)
 		}
 	}
 	if _, err := c.UpsertComment(ctx, repo, n, marker, body, actions.Action{Kind: "github.comment.inspect-approval", Payload: map[string]any{"head": head}}); err != nil {
-		return Wrap(ExitExternal, err)
+		return headApproval{}, Wrap(ExitExternal, err)
 	}
-	return e.Emit(a, func(w io.Writer) error {
-		_, err := fmt.Fprintf(w, "approved #%d at %s as %s, recorded on the ledger; the merge gate's inspect check reads it\n", n, short(head), approver)
-		return err
-	})
+	return a, nil
 }
 
 // paidReviewer is rung B of the review ladder (Decision #469; founder,

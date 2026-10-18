@@ -236,6 +236,9 @@ type inboxAsk struct {
 	title string
 	lines []string
 	jobs  []inboxJob
+	// prompt, when set, asks for the person's one line (InboxAction.Ask)
+	// first: text is what they typed, and Enter with none writes nothing.
+	prompt, text string
 }
 
 // inboxHit is one line of the finder: an item (or the housekeeping line), or
@@ -781,6 +784,27 @@ func (m *inboxModel) key(msg tea.KeyPressMsg) tea.Cmd {
 		return tea.Quit
 	case busy:
 		return nil // a running write finishes; keys wait for it
+	case m.ask != nil && m.ask.prompt != "":
+		switch k {
+		case "enter":
+			if strings.TrimSpace(m.ask.text) == "" {
+				m.refuse("Say what you checked first; nothing was written.")
+				return nil
+			}
+			jobs := m.ask.jobs
+			jobs[0].a.Answer = strings.TrimSpace(m.ask.text)
+			m.ask = nil
+			return m.start(jobs)
+		case "esc":
+			m.ask, m.status = nil, "Not applied; nothing was written."
+		case "backspace":
+			if r := []rune(m.ask.text); len(r) > 0 {
+				m.ask.text = string(r[:len(r)-1])
+			}
+		default:
+			m.ask.text += msg.Key().Text
+		}
+		return nil
 	case m.ask != nil:
 		switch k {
 		case "enter", "y", "Y":
@@ -898,6 +922,9 @@ func (m *inboxModel) enter() tea.Cmd {
 	case c.Command == "open":
 		m.open(it.URL)
 		m.status = "Opened " + it.URL
+	case c.Ask != "":
+		m.ask = &inboxAsk{title: fmt.Sprintf("%s #%d: %s", it.kind().Word, it.Number, it.button(c)), lines: []string{inboxEffect(it, c)}, jobs: []inboxJob{{it, c}}, prompt: c.Ask}
+		m.status = "Nothing is written until you type what you checked and press Enter."
 	case (!c.Recommended || it.OneWay) && !m.armed:
 		m.armed = true
 		m.status = "Nothing is written until you press Enter again."
@@ -1447,6 +1474,9 @@ func (m *inboxModel) askView(w, h int) []string {
 	for _, l := range lines {
 		out = append(out, m.wrap(l, w)...)
 	}
+	if a.prompt != "" {
+		return append(out, "", inboxBold.Render(a.prompt+" ")+a.text+"█", "", inboxBold.Render("Enter applies it · Esc cancels"))
+	}
 	return append(out, "", inboxBold.Render("Enter applies all · Esc cancels"))
 }
 
@@ -1537,6 +1567,8 @@ func (m *inboxModel) keysLine(w int) string {
 	switch {
 	case len(m.rows) == 0:
 		keys = []kb{{"q", "quit", 0}}
+	case m.ask != nil && m.ask.prompt != "":
+		keys = []kb{{"type", "what you checked", 1}, {"Enter", "apply it", 0}, {"Esc", "cancel", 0}}
 	case m.ask != nil:
 		keys = []kb{{"Enter", "apply all", 0}, {"Esc", "cancel", 0}}
 	case m.help:

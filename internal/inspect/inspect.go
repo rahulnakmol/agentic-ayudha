@@ -254,6 +254,10 @@ type State struct {
 	// Reopened is the last reopen a judged round followed (RFC 3339): kept,
 	// so a later round that rewrites an older head's time cannot undo it.
 	Reopened string `json:"reopened,omitempty"`
+	// Human is the head the review waits on a person for: the human rung,
+	// with no recorded `aayu inspect --approve` for it yet. `aayu inbox`
+	// shows it as a human-review card (Story #675).
+	Human string `json:"human,omitempty"`
 }
 
 // Round is one review round: a judged reply or model review on a distinct
