@@ -1,0 +1,56 @@
+{
+  "repo": "rahulnakmol/agentic-ayudha",
+  "story": 639,
+  "pr": 647,
+  "pr_head_sha": "31278ca86dee2af37b36eb40b5a3b2940301e731",
+  "merge_commit": "70299dbdb55b72eab234733debadab223985b9fa",
+  "pack": "proof/639/31278ca86dee2af37b36eb40b5a3b2940301e731/authoritative/pack.json",
+  "pack_landed": "artifact 12147145604 of run 39154286338 of the base branch's aayudha-merge-gate.yml (https://github.com/rahulnakmol/agentic-ayudha/actions/runs/39154286338), checked and landed by rahulnakmol through aayu ship",
+  "gate_run": 39154286338,
+  "artifact": 12147145604,
+  "pack_sha256": "012c475743ae89a8935958547a753117e95fdaacbf7c647a22742bfb3a21ea9c",
+  "human_pass": {
+    "kind": "proof",
+    "login": "rahulnakmol",
+    "commit": "31278ca86dee2af37b36eb40b5a3b2940301e731",
+    "note": "merged on proof (Decision #593): required checks build, generate-drift, lint, commits, security, docs, release-snapshot green, the pack verified with its floors holding, inspect at merge with review rung A, and nothing in the narrow set; CODEOWNERS paths skills/inspect/SKILL.md merged with no code owner's review"
+  },
+  "proof": {
+    "rung": "A",
+    "required_checks": [
+      "build",
+      "generate-drift",
+      "lint",
+      "commits",
+      "security",
+      "docs",
+      "release-snapshot"
+    ],
+    "protected": [
+      "skills/inspect/SKILL.md"
+    ],
+    "policy": "124a080ccc50fdd048811313cf6f8977d8c14285"
+  },
+  "review_rung": "A",
+  "footprint": [
+    "L02",
+    "L03"
+  ],
+  "pass_rule": {
+    "approvers": [
+      "rahulnakmol"
+    ],
+    "as": "approver"
+  },
+  "streak": {
+    "threshold": 20,
+    "layers": {
+      "L02": 0,
+      "L03": 1
+    },
+    "autonomous": false
+  },
+  "actions_segment": "actions/2026-10-18/cli-20261018T184620Z.jsonl",
+  "shipped_at": "2026-10-18T18:48:16Z",
+  "shipped_by": "rahulnakmol"
+}
