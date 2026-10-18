@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -219,7 +220,10 @@ func TestDASTAndAPIFloors(t *testing.T) {
 	srv := fixtureApp(t)
 	ctx := context.Background()
 	// Two apps whose home page links to a search page; one reflects the query unescaped.
-	app := func(escape bool) string {
+	// [verify] seed really starts each one: nothing listens on its port until the seed
+	// touches "started", and the seed waits for "up", so verify's probe before the seed
+	// finds the port closed and the active rules run (Decision #485, G1).
+	run := func(escape bool) *Run {
 		mux := http.NewServeMux()
 		mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 			fmt.Fprint(w, `<!doctype html><html lang="en"><body><a href="/search?q=hello">Search</a></body></html>`)
@@ -231,25 +235,39 @@ func TestDASTAndAPIFloors(t *testing.T) {
 			}
 			fmt.Fprint(w, `<!doctype html><html lang="en"><body><p>Results for `+q+`</p></body></html>`)
 		})
-		s := httptest.NewServer(mux)
-		t.Cleanup(s.Close)
-		return s.URL
-	}
-	run := func(url string) *Run {
-		r := browserRun(t, url)
-		// verify "starts" the app (a seed that succeeds) on loopback, so the active rules run (Decision #485, G1).
-		r.Verify.DAST, r.Verify.Platforms, r.Verify.Seed = true, []string{"web"}, []string{"true"}
+		l, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		addr := l.Addr().String()
+		_ = l.Close()
+		s := &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+		t.Cleanup(func() { _ = s.Close() })
+		r := browserRun(t, "http://"+addr)
+		go func() {
+			for deadline := time.Now().Add(5 * time.Minute); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+				if _, err := os.Stat(filepath.Join(r.Root, "started")); err == nil {
+					if l, err := net.Listen("tcp", addr); err == nil {
+						go func() { _ = s.Serve(l) }()
+					}
+					_ = os.WriteFile(filepath.Join(r.Root, "up"), nil, 0o644)
+					return
+				}
+			}
+		}()
+		r.Verify.DAST, r.Verify.Platforms = true, []string{"web"}
+		r.Verify.Seed = []string{"sh", "-c", "touch started; while [ ! -e up ]; do sleep 0.05; done"}
 		r.Floors.DAST.SkippedBlocksShip = true
 		r.Now = func() time.Time { return time.Date(2026, 11, 14, 0, 0, 0, 0, time.UTC) }
 		r.Verify.NewFloorsBlockingFrom = "2026-11-14"
 		return r
 	}
-	rep := Execute(ctx, run(app(false)), []Floor{DAST{}})
+	rep := Execute(ctx, run(false), []Floor{DAST{}})
 	if c := checkOf(rep, "dast"); c.Result != proof.Fail || !strings.Contains(c.Detail, "Cross Site Scripting") {
 		t.Fatalf("reflected XSS: %+v", c)
 	}
 	t.Logf("xss: %s", checkOf(rep, "dast").Detail)
-	if c := checkOf(Execute(ctx, run(app(true)), []Floor{DAST{}}), "dast"); c.Result != proof.Pass {
+	if c := checkOf(Execute(ctx, run(true), []Floor{DAST{}}), "dast"); c.Result != proof.Pass {
 		t.Fatalf("escaped route: %+v", c)
 	}
 
