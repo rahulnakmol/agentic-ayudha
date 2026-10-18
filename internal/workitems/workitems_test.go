@@ -115,7 +115,12 @@ func TestReadyFailures(t *testing.T) {
 		{"decision with one option", with(decision, func(c *Item) { c.Fields["options"] = "1. **Waive.** Ship with the floor waived." }), StageReady,
 			[]string{"options: 1 numbered option(s); a Decision offers at least 2, and aims for 3, so the person makes a real choice: " +
 				"write each as a top-level line \"N. **Name.** what it does\", including the option of not doing it"}},
-		{"decision with options that are not numbered", with(decision, func(c *Item) { c.Fields["options"] = "A: in-house. B: SurveyJS." }), StageReady,
+		// A Decision written before options were numbered reads its letters
+		// as numbers, A = 1 (founder, 2026-10-18); ready --check warns.
+		{"decision with lettered options", with(decision, func(c *Item) { c.Fields["options"] = "A: in-house. B: SurveyJS." }), StageReady, nil},
+		{"decision with options lettered out of order", with(decision, func(c *Item) { c.Fields["options"] = "A: in-house.\nC: SurveyJS." }), StageReady,
+			[]string{"options: option C is lettered out of order; want B, so each option keeps the letter the person knows it by"}},
+		{"decision with prose and no options", with(decision, func(c *Item) { c.Fields["options"] = "We could build it or buy it." }), StageReady,
 			[]string{"options: 0 numbered option(s); a Decision offers at least 2, and aims for 3, so the person makes a real choice: " +
 				"write each as a top-level line \"N. **Name.** what it does\", including the option of not doing it"}},
 		{"decision with options numbered out of order", with(decision, func(c *Item) { c.Fields["options"] = "1. **A.** a\n3. **B.** b" }), StageReady,
@@ -382,6 +387,28 @@ func TestParseOptions(t *testing.T) {
 	// Prose that names a number is not a second option.
 	if os, ps := ParseOptions("1. **Keep.** Complete phase 2. before launch."); len(os) != 1 || len(ps) != 1 {
 		t.Errorf("prose with a number = %+v %v", os, ps)
+	}
+	// A Decision written before options were numbered: its lettered, bulleted,
+	// or named top-level lines are options 1, 2, … with their own letters, or
+	// A, B, … by position; a Recommendation may open with the letter.
+	for in, want := range map[string][]Option{
+		"A: in-house.\nB) SurveyJS: a vendor.\n  - Trade-off: indented, not an option.": {{N: 1, Name: "in-house", Letter: "A"}, {N: 2, Name: "SurveyJS", Text: "a vendor.", Letter: "B"}},
+		"(A) Keep it.\n**B.** Drop it.":                                 {{N: 1, Name: "Keep it", Letter: "A"}, {N: 2, Name: "Drop it", Letter: "B"}},
+		"- **Keep it**: as is.\n- **Drop it** (recommended): now.":      {{N: 1, Name: "Keep it", Text: "as is.", Letter: "A"}, {N: 2, Name: "Drop it", Text: "now.", Letter: "B", Recommended: true}},
+		"A vendor engine is cheaper.\nwaive: ship it.\nfix: no waiver.": {{N: 1, Name: "waive", Text: "ship it.", Letter: "A"}, {N: 2, Name: "fix", Text: "no waiver.", Letter: "B"}},
+	} {
+		if os, ps := ParseOptions(in); len(ps) != 0 || !slices.Equal(os, want) || !Lettered(os) || os[1].Ref() != "2 (B)" {
+			t.Errorf("lettered ParseOptions(%q) = %+v %v\nwant %+v", in, os, ps, want)
+		}
+	}
+	lettered, _ := ParseOptions("A: in-house.\nB: SurveyJS.")
+	for rec, want := range map[string]int{"Option B, because it is faster.": 2, "B.": 2, "b, the vendor.": -1, "A vendor is faster.": -1, "SurveyJS.": 2, "Option 1.": 1, "D.": 4} {
+		if got := RecommendedOption(lettered, rec); got != want {
+			t.Errorf("lettered RecommendedOption(%q) = %d, want %d", rec, got, want)
+		}
+	}
+	if got := RecommendedOption(waiver, "B."); got != -1 || Lettered(waiver) || waiver[1].Ref() != "2" {
+		t.Errorf("a letter designates only a lettered option: RecommendedOption(B.) = %d, Ref %q", got, waiver[1].Ref())
 	}
 	// Options numbered inline on one line count, in sequence only.
 	os, ps = ParseOptions("1. Keep CALC_DEBUG. 2. Replace it with a --debug flag, as step 4. says.")

@@ -259,9 +259,10 @@ func decideSweep(ctx context.Context, e *Env, cfg *config.Config, pol decide.Pol
 	})
 }
 
-// optionLine is one option as every surface shows it: "2. Name (recommended)".
+// optionLine is one option as every surface shows it: "2. Name (recommended)",
+// or "2 (B). Name" for a lettered option.
 func optionLine(o workitems.Option) string {
-	s := fmt.Sprintf("%d. %s", o.N, o.Name)
+	s := fmt.Sprintf("%s. %s", o.Ref(), o.Name)
 	if o.Recommended {
 		s += " (recommended)"
 	}

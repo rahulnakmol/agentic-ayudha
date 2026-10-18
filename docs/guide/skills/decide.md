@@ -62,6 +62,10 @@ options, three when it can, each `N. **Name.** what it does`; `aayu ready --chec
 accepts one by its number or its name, for example `aayu decide 42 --accept 2`. A floor waiver is filed with two
 options, 1. Waive and 2. Don't waive, and the waiver is never the default recommendation.
 
+A Decision written before options were numbered, with lettered lines such as `A: in-house.` or named ones such as
+`waive: …`, still works: its options read as 1 (A), 2 (B), and so on, and you accept one by its number, its letter,
+or its name. `aayu ready --check` warns about it, so that it gets rewritten as numbered lines.
+
 ## What you get back
 
 - **A decision pack:** a page with the question, cited facts, two or three options, a recommendation, the cost of
