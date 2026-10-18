@@ -135,7 +135,12 @@ func (d *Drift) GetRelease() int {
 }
 
 // Over reports whether the drift is beyond its budget.
-func (d Drift) Over() bool { return d.DriftPct > d.BudgetPct }
+func (d Drift) Over() bool {
+	if d.BaselinePoints > 0 { // the exact ratio: DriftPct is rounded for people to read
+		return float64(d.ChangedPoints)*100/float64(d.BaselinePoints) > d.BudgetPct
+	}
+	return d.DriftPct > d.BudgetPct
+}
 
 // DraftPath, BaselinePath, and DriftPath are the ledger paths for version.
 func DraftPath(version string) string { return "releases/" + version + "/draft.json" }

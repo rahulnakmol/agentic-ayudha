@@ -42,6 +42,10 @@ func TestMeasure(t *testing.T) {
 	if edge.DriftPct != 20 || edge.Over() {
 		t.Fatalf("one of five points = %v, over %v", edge.DriftPct, edge.Over())
 	}
+	// The budget compares the exact ratio: 20.01% rounds to 20.0% for people, yet is over a 20.0% budget.
+	if d := (Drift{BudgetPct: 20, BaselinePoints: 10000, ChangedPoints: 2001, DriftPct: 20}); !d.Over() {
+		t.Fatal("20.01% is within a 20.0% budget")
+	}
 	// Points come from the table, not from what a record stored.
 	stale := Baseline{BudgetPct: 20, Items: []Item{{Number: 2, Type: "story", Effort: "M", Points: 99}}}
 	if d := Measure(stale, []Item{story(2, "M", 0)}, table); d.ChangedPoints != 0 || d.BaselinePoints != 3 {

@@ -66,7 +66,6 @@ aayu:
     - "scope-baseline"
     - "scope-drift"
   gates:
-    - "validator"
     - "scope-budget"
     - "halt"
   identity: bot

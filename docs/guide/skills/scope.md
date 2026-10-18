@@ -70,7 +70,13 @@ aayu scope <release>
 
 ## What you get back
 
-release-plan, scope-draft, scope-baseline, scope-drift.
+The plan of the release: each item with its type, effort, and points, and the total. After a baseline, the drift from
+it in percent against the budget, with the items added, removed, and resized. `--draft` writes
+`releases/<version>/draft.json` on the ledger and a request on the Release. A person's `--accept` writes
+`baseline-<n>.json` and `drift.json`. `--handoff` writes the Release's `includes` links and posts the plan on it.
+
+**You should see** the plan's items and points, then a line such as `baseline 1: drift 12.5% of 40 points, budget 20.0%`. Over the budget,
+scope stops and names the next step: file a Decision, and a person accepts it.
 
 ## Gates
 
@@ -78,7 +84,6 @@ release-plan, scope-draft, scope-baseline, scope-drift.
 
 It checks these before it acts, and stops when one fails:
 
-- **validator:** The work item passes stage validation for its type.
 - **scope-budget:** After a person accepts a release's baseline, drift stays within [scope] budget_percent, or a person accepts the change through GitHub's device flow against an accepted Decision.
 - **halt:** The repository is not halted (aayu halt).
 

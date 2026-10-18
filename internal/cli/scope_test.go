@@ -118,9 +118,14 @@ func TestScope(t *testing.T) {
 	// Within budget goes ahead; past it is refused and points to a Decision.
 	g.Mu.Lock()
 	g.Issues[5].Labels = []fake.Label{{Name: "type:story"}, {Name: "effort:XS"}}
+	g.Issues[5].Milestone = g.Issues[3].Milestone // an earlier --add set the milestone, then its drift write failed
 	g.Mu.Unlock()
 	if code, rep, out := scopeRun(agent, "--add", "5"); code != 0 || rep.Drift == nil || rep.Drift.DriftPct != 12.5 || milestone(5) != "v0.3.0" {
 		t.Fatalf("--add within budget: exit %d: %s", code, out)
+	}
+	var repaired scope.Drift
+	if ledgerJSON(scope.DriftPath("v0.3.0"), &repaired); repaired.DriftPct != 12.5 || len(repaired.Added) != 1 {
+		t.Fatalf("the retry did not repair drift.json: %+v", repaired)
 	}
 	if code, _, out := scopeRun(agent, "--drop", "3"); code != ExitBlocked || !strings.Contains(out, "50.0% drift") || !strings.Contains(out, "aayu decide") || milestone(3) != "v0.3.0" {
 		t.Fatalf("--drop over budget: exit %d: %s", code, out)

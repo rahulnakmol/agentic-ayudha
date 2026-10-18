@@ -1248,7 +1248,7 @@ var Verbs = []Command{
 			flag("handoff", TypeBool, "Hand the baselined plan off: write the Release's includes links and post the plan on it."),
 		},
 		Outputs:  []string{"release-plan", "scope-draft", "scope-baseline", "scope-drift"},
-		Gates:    []GateID{GateValidator, GateScopeBudget, GateHalt},
+		Gates:    []GateID{GateScopeBudget, GateHalt},
 		Surfaces: cliSkillMCP, Identity: IdentityBot, Mode: ModeHost, Exposure: ExposeWrite,
 	},
 }

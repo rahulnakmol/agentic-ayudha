@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -349,6 +350,14 @@ func (r *scopeRun) measure(items []scope.Item) *scope.Drift {
 	return &d
 }
 
+// sameDrift reports whether two drift records say the same, whenever measured.
+func sameDrift(a, b scope.Drift) bool {
+	a.MeasuredAt = b.MeasuredAt
+	x, _ := json.Marshal(a)
+	y, _ := json.Marshal(b)
+	return bytes.Equal(x, y)
+}
+
 // within reports whether every change in d is one the recorded drift already
 // holds, unchanged: a Decision covers the changes a person accepted with it,
 // or fewer, and never a change made after it.
@@ -482,6 +491,13 @@ func (r *scopeRun) change(ctx context.Context, op string, n, decision int) error
 	case !slices.Contains(scope.Types, it.Type):
 		return Errorf(ExitUsage, "scope: #%d is a %s; a plan holds Initiatives, Features, Stories, and Bugs (assign Feedback with --assign)", n, or(it.Type, "issue"))
 	case op == "add" && in, op == "drop" && !in:
+		// A retry after the milestone changed but the drift write failed: the
+		// drift record catches up, so an old Decision never outlives its change.
+		if d := r.measure(r.items); d != nil && (r.drift == nil || !sameDrift(*d, *r.drift)) {
+			if err := r.writeDrift(ctx, *d, fmt.Sprintf("%s #%d", op, n)); err != nil {
+				return err
+			}
+		}
 		rep.Done = fmt.Sprintf("#%d is already %s the plan; nothing to do", n, map[string]string{"add": "in", "drop": "not in"}[op])
 		return r.emit(rep)
 	case op == "add" && is.GetState() != "open":
@@ -495,7 +511,7 @@ func (r *scopeRun) change(ctx context.Context, op string, n, decision int) error
 		next = append(next, it)
 	}
 	cur, d := r.measure(r.items), r.measure(next)
-	if d != nil && d.Over() && d.DriftPct > cur.DriftPct {
+	if d != nil && d.Over() && d.ChangedPoints > cur.ChangedPoints {
 		q := scopeRequest{Kind: op, Item: n, DriftPct: d.DriftPct, Over: true, Decision: decision}
 		if decision == 0 {
 			return WithNext(Errorf(ExitBlocked, "scope: %s #%d takes %s to %.1f%% drift from baseline %d, over the %.1f%% budget; a person decides",
