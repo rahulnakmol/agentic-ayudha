@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	gh "github.com/google/go-github/v90/github"
 
@@ -488,6 +489,12 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		}
 	}
 	paid := paidReviewer(gw, &l.Config, builder, "", perm, e.Logf)
+	// A head whose rung B failed says why on every later run, whichever
+	// reviewer comes first.
+	fallback := ""
+	if prev.PaidFailed != "" && prev.PaidFailed == pr.GetHead().GetSHA() {
+		fallback = fmt.Sprintf("fallback: rung B ([inspect] paid_reviewer %s) failed on %s (%s); the reviewer app reviews, and the next push tries it again", l.Config.Inspect.PaidReviewer, short(prev.PaidFailed), cmp.Or(prev.PaidFailedWhy, "reason not recorded"))
+	}
 	switch {
 	case paid == nil:
 	case e.replyEvent():
@@ -496,7 +503,7 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		e.Logf("inspect: [inspect] paid_reviewer %s is not called on a reply event; the head's inspect job reviews", paid.Model)
 		paid = nil
 	case prev.PaidFailed != "" && prev.PaidFailed == pr.GetHead().GetSHA():
-		e.Logf("inspect: [inspect] paid_reviewer %s already failed on %s; the reviewer app reviews, and the next push tries it again", paid.Model, short(prev.PaidFailed))
+		e.Logf("inspect: %s", fallback)
 		paid = nil
 	}
 	// The chosen tool is the only reviewer while it answers. When an app
@@ -506,7 +513,7 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	unavailable := ""
 	if cfg.Reviewer != inspect.ReviewerModel && paid == nil {
 		a := appInspect{c: c, repo: repo, pr: pr, in: ins, prev: prev, builder: builder, cfg: l.Config,
-			paidTried: e.replyEvent() || prev.PaidFailed == pr.GetHead().GetSHA() || cfg.Reviewer == inspect.ReviewerCI}
+			paidTried: e.replyEvent() || prev.PaidFailed == pr.GetHead().GetSHA() || cfg.Reviewer == inspect.ReviewerCI, fallback: fallback}
 		err := e.inspectThroughApp(ctx, a)
 		if a.paidTried || !errors.Is(err, inspect.ErrUnavailable) {
 			return err
@@ -595,10 +602,22 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		// still needs that app's reply (a human's when the app cannot review),
 		// so it fails closed without one. What the failed call cost stays on
 		// the PR's record, so retries cannot spend past the cap.
-		e.Logf("inspect: [inspect] paid_reviewer %s not used (%s); the reviewer app reviews", paid.Model, oneLineErr(err))
+		// The comment says why, so a failure shows without --verbose; the
+		// endpoint's URL is never shown (useReviewModel).
+		why := err.Error()
+		if base := strings.TrimSuffix(l.Config.Models.Gateway.BaseURL, "/"); base != "" {
+			why = strings.ReplaceAll(why, base, "<endpoint>")
+			// A dial, TLS, or proxy error names the host again, outside the URL.
+			if u, err := url.Parse(base); err == nil && u.Hostname() != "" {
+				why = strings.ReplaceAll(why, u.Hostname(), "<endpoint host>")
+			}
+		}
+		why = oneLineErr(errors.New(why))
+		fallback := fmt.Sprintf("fallback: rung B ([inspect] paid_reviewer %s) failed on this head (%s); the reviewer app reviews, and the next push tries it again", paid.Model, why)
+		e.Logf("inspect: %s", fallback)
 		fb := prev
-		fb.SpentUSD, fb.PaidFailed = max(prev.SpentUSD, st.SpentUSD), pr.GetHead().GetSHA()
-		return e.inspectThroughApp(ctx, appInspect{c: c, repo: repo, pr: pr, in: ins, prev: fb, builder: builder, cfg: l.Config, record: fb.PaidFailed != prev.PaidFailed, paidTried: true})
+		fb.SpentUSD, fb.PaidFailed, fb.PaidFailedWhy = max(prev.SpentUSD, st.SpentUSD), pr.GetHead().GetSHA(), why
+		return e.inspectThroughApp(ctx, appInspect{c: c, repo: repo, pr: pr, in: ins, prev: fb, builder: builder, cfg: l.Config, record: fb.PaidFailed != prev.PaidFailed, paidTried: true, fallback: fallback})
 	case errors.Is(err, inspect.ErrBudget), errors.Is(err, models.ErrBudget):
 		return Errorf(ExitBudget, "inspect #%d: %v", n, err)
 	case err != nil:
@@ -665,9 +684,12 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 }
 
 func oneLineErr(err error) string {
-	s := strings.Join(strings.Fields(err.Error()), " ")
+	s := strings.ToValidUTF8(strings.Join(strings.Fields(err.Error()), " "), "\uFFFD")
 	if len(s) > 200 {
 		s = s[:200]
+		for !utf8.ValidString(s) { // a cut inside a multibyte rune
+			s = s[:len(s)-1]
+		}
 	}
 	return s
 }

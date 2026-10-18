@@ -48,6 +48,8 @@ type appInspect struct {
 	// step in, so when no installed app can review (inspect.ErrUnavailable)
 	// a human does. Without it that error is returned for rung B to step in.
 	paidTried bool
+	// fallback says why rung B did not review this head, for the comment.
+	fallback string
 }
 
 // inspectThroughApp is inspect without a model key (founder decision
@@ -64,6 +66,9 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 	owner, name, _ := github.SplitRepo(a.repo)
 	choice := inspect.ChooseReviewer(a.cfg.Inspect.Reviewer, a.cfg.Inspect.Apps, a.cfg.Inspect.AppFamilies, a.builder, a.cfg.Autonomy.Approver)
 	notes := append([]string{a.builder.Note(), "reviewer: " + choice.Kind() + "; the gate reads its reply and calls no model for it"}, choice.Notes...)
+	if a.fallback != "" {
+		notes = append(notes, a.fallback)
+	}
 	if a.in.Mode == inspect.ModePeer {
 		notes = append(notes, "peer mode needs two model reviewers; a reviewer app reviews alone, high-risk PRs included")
 	}
