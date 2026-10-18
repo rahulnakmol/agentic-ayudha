@@ -311,13 +311,20 @@ func Options(it workitems.Item) ([]workitems.Option, int) {
 	return os, rec
 }
 
-// Pick resolves what a person typed to accept, an option's number or its
-// name, to that option of it; ok is false when it names none.
+// Pick resolves what a person typed to accept, an option's number, a lettered
+// option's letter, or its name, to that option of it, in that order, as
+// workitems.RecommendedOption reads them (so "B" is option 2 (B) even when
+// option 1 is named B); ok is false when it names none.
 func Pick(it workitems.Item, typed string) (workitems.Option, bool) {
 	os, _ := Options(it)
 	typed = strings.TrimSpace(typed)
 	for _, o := range os {
-		if typed == strconv.Itoa(o.N) || strings.EqualFold(typed, o.Name) {
+		if typed == strconv.Itoa(o.N) || o.Letter != "" && strings.EqualFold(typed, o.Letter) {
+			return o, true
+		}
+	}
+	for _, o := range os {
+		if strings.EqualFold(typed, o.Name) {
 			return o, true
 		}
 	}

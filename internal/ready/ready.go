@@ -40,6 +40,7 @@ type Result struct {
 	Type               string                `json:"type"`
 	Pass               bool                  `json:"pass"`
 	Problems           []workitems.Problem   `json:"problems"`
+	Warnings           []workitems.Problem   `json:"warnings,omitempty"` // what passes Ready but should be rewritten
 	BodyHash           string                `json:"body_hash"`
 	CompletionGoalHash string                `json:"completion_goal_hash,omitempty"`
 	Criteria           []workitems.Criterion `json:"criteria,omitempty"`
@@ -111,6 +112,10 @@ func (r *Ready) Check(ctx context.Context, n int) (Result, *gh.Issue, error) {
 			it.LinkTypes[l.Number], _ = workitems.TypeOf(target.GetType().GetName(), github.IssueLabels(target))
 		}
 		ps = append(ps, workitems.Validate(it, workitems.StageReady)...)
+		if os, _ := workitems.ParseOptions(it.Fields["options"]); workitems.Lettered(os) {
+			res.Warnings = append(res.Warnings, workitems.Problem{Field: "options", Message: "lettered or named, not numbered, so they read as 1 (A), 2 (B), … in order: " +
+				"rewrite each as a top-level line \"N. **Name.** what it does\""})
+		}
 		if r.Concrete != nil {
 			ps = append(ps, r.Concrete(it)...)
 		}

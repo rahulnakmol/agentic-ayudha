@@ -52,8 +52,9 @@ const InboxMarker = "<!-- aayudha:inbox -->"
 // the Decision's own numbers (decide.Options), as the approval batch does.
 type InboxAction struct {
 	N           int    `json:"n"`
-	Label       string `json:"label"`   // a Decision option's bold title, or the step's action
-	Command     string `json:"command"` // what it does, as the verb or inbox step that does it
+	Letter      string `json:"letter,omitempty"` // a lettered Decision option's own letter (workitems.Option)
+	Label       string `json:"label"`            // a Decision option's bold title, or the step's action
+	Command     string `json:"command"`          // what it does, as the verb or inbox step that does it
 	Recommended bool   `json:"recommended,omitempty"`
 }
 
@@ -75,6 +76,9 @@ type InboxItem struct {
 }
 
 var replacesRE = regexp.MustCompile(`(?i)\breplaces #([0-9]+)\b`)
+
+// ref is the action's number as the inbox shows it: "2", or "2 (B)".
+func (a InboxAction) ref() string { return workitems.Option{N: a.N, Letter: a.Letter}.Ref() }
 
 // recommended is the option the item recommends, or nil.
 func (it InboxItem) recommended() *InboxAction {
@@ -245,7 +249,7 @@ func decisionItem(is *gh.Issue, it InboxItem, labels []string) InboxItem {
 	}
 	opts, _ := decide.Options(w)
 	for _, o := range opts {
-		it.Options = append(it.Options, InboxAction{N: o.N, Label: clip(o.Name, 60), Recommended: o.Recommended,
+		it.Options = append(it.Options, InboxAction{N: o.N, Letter: o.Letter, Label: clip(o.Name, 60), Recommended: o.Recommended,
 			Command: fmt.Sprintf("aayu decide %d --accept %d", it.Number, o.N)})
 	}
 	return it
@@ -260,7 +264,7 @@ func inboxChoices(it InboxItem) string {
 	var parts []string
 	switch r := it.recommended(); {
 	case r != nil && len(it.Options) > 1:
-		parts = append(parts, fmt.Sprintf("a or Enter = %s the recommendation (option %d)", verb, r.N))
+		parts = append(parts, fmt.Sprintf("a or Enter = %s the recommendation (option %s)", verb, r.ref()))
 	case r != nil:
 		parts = append(parts, "a or Enter = "+r.Label)
 	}
@@ -279,14 +283,14 @@ func inboxChoices(it InboxItem) string {
 func inboxConfirm(it InboxItem, a InboxAction) string {
 	var s string
 	if it.Kind == InboxDecision {
-		s = fmt.Sprintf("This accepts option %d (%s) as the answer to Decision #%d and closes it", a.N, a.Label, it.Number)
+		s = fmt.Sprintf("This accepts option %s (%s) as the answer to Decision #%d and closes it", a.ref(), a.Label, it.Number)
 	} else {
 		s = "This will " + a.Label
 	}
 	switch r := it.recommended(); {
 	case a.Recommended:
 	case r != nil:
-		s += fmt.Sprintf(", instead of the recommendation (option %d, %s)", r.N, r.Label)
+		s += fmt.Sprintf(", instead of the recommendation (option %s, %s)", r.ref(), r.Label)
 	default:
 		s += "; it names no recommendation"
 	}
@@ -349,7 +353,7 @@ func runInbox(ctx context.Context, e *Env, _ Values) error {
 				if o.Recommended {
 					mark = " (recommended)"
 				}
-				fmt.Fprintf(w, "  %d. %s%s\n", o.N, o.Label, mark)
+				fmt.Fprintf(w, "  %s. %s%s\n", o.ref(), o.Label, mark)
 			}
 		}
 		choices := inboxChoices(it)

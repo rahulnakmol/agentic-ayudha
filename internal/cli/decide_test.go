@@ -416,3 +416,55 @@ func TestSoloProvisional(t *testing.T) {
 		t.Errorf("status: exit %d, want %q:\n%s", code, want, out)
 	}
 }
+
+// legacyWaiverBody is a Decision written before options were numbered: the
+// real body of a waiver accepted on 2026-10-17, with its Decision section
+// removed so it is open again. Its options are named lines, not numbered.
+const legacyWaiverBody = "### Question\n\nShould #401 ship with its `eval-bar` floor miss waived?\n\n" +
+	"### Options\n\nwaive: #401 ships with the `eval-bar` floor recorded as waived by this Decision.\nfix: no waiver; #401 fixes the miss before it ships.\n\n" +
+	"### Evaluation\n\nA waiver is the only way past a floor miss (rule 7). The floor's report is in the story's proof pack.\n\n" +
+	"### Recommendation\n\nfix\n\n### Reversible\n\nfalse\n\n### Links\n\nwaives #401\n"
+
+// A lettered or named Decision reads as options 1 (A), 2 (B), … (founder,
+// 2026-10-18): Ready accepts it with a warning to rewrite it as numbered
+// lines, decide and the inbox show each option's letter with its number, and
+// accepting it by number, letter, or name records the option's name.
+func TestLetteredDecision(t *testing.T) {
+	g := fake.New(t, "o/r", "User")
+	g.AddIssue("Waive the eval-bar floor on #401", legacyWaiverBody, "type:decision", "status:planned", workitems.LabelWaiver) // #1
+	story := g.AddIssue("Story with an eval-bar miss", "x", "type:story", "status:in-progress")
+	g.Mu.Lock()
+	delete(g.Issues, story.Number)
+	story.Number = 401
+	g.Issues[401] = story
+	g.Mu.Unlock()
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "XDG_STATE_HOME": t.TempDir()}
+	opts := Options{IsTerminal: func(any) bool { return true }, GitHubAPI: g.URL(), GitHubGap: -1, Assets: aayudha.Assets}
+
+	code, out, errOut := run(t, env, opts, "ready", "1", "--check", "--repo", "o/r")
+	if want := "#1 Waive the eval-bar floor on #401 (decision): passes Ready\n  - warning: options: lettered or named, not numbered, so they read as 1 (A), 2 (B), … in order: " +
+		"rewrite each as a top-level line \"N. **Name.** what it does\"\n"; code != 0 || out != want {
+		t.Errorf("ready --check: exit %d %s\n%q\nwant %q", code, errOut, out, want)
+	}
+	if code, out, _ := run(t, env, opts, "decide", "--repo", "o/r"); code != 0 || !strings.Contains(out, "\n  1 (A). waive\n  2 (B). fix (recommended)\n") {
+		t.Errorf("decide: exit %d:\n%s", code, out)
+	}
+	if code, out, _ := runIn(t, env, opts, "q", "inbox", "--repo", "o/r"); code != 0 || !strings.Contains(out, "\n  1 (A). waive\n  2 (B). fix (recommended)\n"+
+		"  a or Enter = accept the recommendation (option 2 (B)) · 1-2 = accept that option") {
+		t.Errorf("inbox: exit %d:\n%s", code, out)
+	}
+	it, _ := workitems.Parse(1, "Waive the eval-bar floor on #401", legacyWaiverBody, "", []string{"type:decision"})
+	for typed, want := range map[string]string{"1": "waive", "A": "waive", "a": "waive", "WAIVE": "waive", "B": "fix", "2": "fix", "C": ""} {
+		if o, ok := decide.Pick(it, typed); o.Name != want || ok != (want != "") {
+			t.Errorf("Pick(%q) = %+v %v, want %q", typed, o, ok, want)
+		}
+	}
+	// A letter wins over another option's name, as the Recommendation reads it.
+	collide := workitems.Item{Type: "decision", Fields: map[string]string{"options": "A: B\nB: C"}}
+	if o, ok := decide.Pick(collide, "B"); !ok || o.N != 2 {
+		t.Errorf("Pick(B) with option 1 named B = %+v %v, want 2 (B)", o, ok)
+	}
+	if code, out, errOut := run(t, env, opts, "decide", "1", "--repo", "o/r", "--accept", "A"); code != 0 || !strings.Contains(out, "#1 accepted: waive, by @o") {
+		t.Fatalf("accept A: exit %d: %s %s", code, out, errOut)
+	}
+}
