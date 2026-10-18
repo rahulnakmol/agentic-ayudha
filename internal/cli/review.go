@@ -186,7 +186,7 @@ func (e *Env) reviewer(ctx context.Context, b *uireview.Browser, story int, deep
 	// concrete Copilot model sends lane A through Copilot CLI. It fails closed:
 	// a call it cannot make or read goes to the lane's normal route, which every
 	// later call then uses, and the label says so. It never skips the review.
-	cp, err := gw.Resolver.ResolveDirect(verbs.LaneUIReview, verbs.HostCopilot, false)
+	cp, err := gw.Resolver.Resolve(verbs.LaneUIReview, verbs.HostCopilot)
 	if err != nil {
 		return nil, Wrap(ExitUsage, err)
 	}
