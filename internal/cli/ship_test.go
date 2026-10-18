@@ -1030,6 +1030,22 @@ func TestShipOnProof(t *testing.T) {
 	g.Mu.Lock()
 	rev = g.Pulls[len(g.Issues)]
 	g.Mu.Unlock()
+	// A revert PR it cannot look up records nothing, and the look stays.
+	for _, f := range []struct {
+		call  string
+		after int
+	}{{"GET /repos/o/r/pulls", 2}, {fmt.Sprintf("GET /repos/o/r/pulls/%d", prN), 0}} {
+		audit(entryJSON)
+		g.Mu.Lock()
+		g.Fail, g.FailAfter = f.call, f.after
+		g.Mu.Unlock()
+		if failed := inbox(env, "2 y"); strings.Contains(failed, "done: sample") || !strings.Contains(failed, "500") || !slices.Contains(g.LabelNames(prN), AuditLabel) {
+			t.Fatalf("a correction whose %s failed was recorded:\n%s", f.call, failed)
+		}
+		if again := inbox(env, "2 y"); !strings.Contains(again, "revert PR: "+rev.URL) || slices.Contains(g.LabelNames(prN), AuditLabel) {
+			t.Fatalf("a correction run again after its %s failed:\n%s", f.call, again)
+		}
+	}
 	// A correction sample someone wrote to the ledger, with the entry gone,
 	// does not stand in for the correction: its label and revert PR still
 	// come, and no second sample is written.
@@ -1048,6 +1064,12 @@ func TestShipOnProof(t *testing.T) {
 	// Ship merged and labelled the PR but wrote no entry: the label is
 	// enough, and the look is recorded from the PR.
 	audit(nil)
+	g.Mu.Lock()
+	g.Fail, g.FailAfter = fmt.Sprintf("GET /repos/o/r/pulls/%d", prN), 1
+	g.Mu.Unlock()
+	if failed := inbox(env, "a"); strings.Contains(failed, "done: sample") {
+		t.Fatalf("a look whose PR could not be read was recorded:\n%s", failed)
+	}
 	if out := inbox(env, "a"); !strings.Contains(out, "done: sample of #"+strconv.Itoa(prN)) {
 		t.Fatalf("a look with no audit entry:\n%s", out)
 	}
