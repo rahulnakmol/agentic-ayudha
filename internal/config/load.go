@@ -209,7 +209,7 @@ func Load(src Sources) (*Loaded, error) {
 		}
 		if src.CI { // not even parsed: a committed local file has no effect in CI
 			for _, ext := range []string{".json", ".toml"} {
-				if p := filepath.Join(dir, "config.local"+ext); fileExists(p) {
+				if p := filepath.Join(dir, "config.local"+ext); hasEntry(dir, "config.local"+ext) {
 					l.Notices = append(l.Notices, fmt.Sprintf("%s ignored: in CI (--ci or GITHUB_ACTIONS=true) the local config layer never applies, so a committed local file cannot change policy", p))
 				}
 			}
@@ -283,6 +283,11 @@ func decode(k *koanf.Koanf, out *Config) error {
 			ErrorUnused:      true,
 			WeaklyTypedInput: true, // env and --set values arrive as strings
 			DecodeHook:       mapstructure.StringToSliceHookFunc(","),
+			// Exact case: the per-layer rules in Load test keys with exact
+			// case, so a case-insensitive match would let Allow_PII or
+			// Base_URL set the field they guard. A case variant is an
+			// unused key, and ErrorUnused refuses it. envMap lowercases.
+			MatchName: func(mapKey, fieldName string) bool { return mapKey == fieldName },
 		},
 	})
 }
@@ -292,20 +297,51 @@ type file struct {
 	m    map[string]any
 }
 
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
+// readFile is os.ReadFile; a test swaps in a case-insensitive open to stand
+// in for macOS and Windows.
+var readFile = os.ReadFile
+
+// entries returns the names in dir, or nil when dir does not exist.
+func entries(dir string) (map[string]bool, error) {
+	des, err := os.ReadDir(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	names := make(map[string]bool, len(des))
+	for _, de := range des {
+		names[de.Name()] = true
+	}
+	return names, nil
 }
 
-// readDir returns base.json then base.toml from dir, so TOML wins when both exist.
+// hasEntry reports whether dir holds an entry named exactly name. On a
+// case-insensitive filesystem (macOS, Windows) os.Stat finds Config.json for
+// config.json, but CODEOWNERS and the protected-paths gate match exact case,
+// so a case variant must never count as the file (Bug #640).
+func hasEntry(dir, name string) bool {
+	names, err := entries(dir)
+	return err == nil && names[name]
+}
+
+// readDir returns base.json then base.toml from dir, so TOML wins when both
+// exist. It reads a file only if dir has an entry named exactly that, so a
+// case variant such as Config.json is never read (see hasEntry).
 func readDir(dir, base string, errs *[]error) []file {
+	names, err := entries(dir)
+	if err != nil {
+		*errs = append(*errs, err)
+		return nil
+	}
 	var out []file
 	for _, ext := range []string{".json", ".toml"} {
-		path := filepath.Join(dir, base+ext)
-		b, err := os.ReadFile(path)
-		if errors.Is(err, os.ErrNotExist) {
+		if !names[base+ext] {
 			continue
 		}
+		path := filepath.Join(dir, base+ext)
+		b, err := readFile(path)
 		if err != nil {
 			*errs = append(*errs, err)
 			continue

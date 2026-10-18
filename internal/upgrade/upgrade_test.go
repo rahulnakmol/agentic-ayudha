@@ -79,11 +79,27 @@ func TestNewerRepoIsRefused(t *testing.T) {
 	cfg := filepath.Join(root, ".aayudha/config.toml")
 	b, _ := os.ReadFile(cfg)
 	_ = os.WriteFile(cfg, bytes.Replace(b, []byte("version = 1"), []byte("version = 3"), 1), 0o644)
-	if err := Check(root, v2); !errors.Is(err, ErrNewer) || !strings.Contains(err.Error(), "v3, this aayu supports up to v2") {
+	if err := Check(root, v2, false); !errors.Is(err, ErrNewer) || !strings.Contains(err.Error(), "v3, this aayu supports up to v2") {
 		t.Fatalf("v3 repo on a v2 binary: %v", err)
 	}
-	if err := Check(copyTree(t, "v1"), v2); err != nil {
+	if err := Check(copyTree(t, "v1"), v2, false); err != nil {
 		t.Fatalf("v1 repo on a v2 binary: %v", err)
+	}
+}
+
+// TestLocalConfigNewerSkippedInCI (Bug #640): CI never reads the local config
+// layer, so a committed .aayudha/config.local.toml with a newer version does
+// not refuse write verbs there; outside CI it still does.
+func TestLocalConfigNewerSkippedInCI(t *testing.T) {
+	root := copyTree(t, "v1")
+	if err := os.WriteFile(filepath.Join(root, ".aayudha/config.local.toml"), []byte("version = 3\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := Check(root, v2, true); err != nil {
+		t.Fatalf("v3 config.local.toml in CI: %v; want it skipped", err)
+	}
+	if err := Check(root, v2, false); !errors.Is(err, ErrNewer) || !strings.Contains(err.Error(), "config.local.toml") {
+		t.Fatalf("v3 config.local.toml outside CI: %v; want ErrNewer naming it", err)
 	}
 }
 

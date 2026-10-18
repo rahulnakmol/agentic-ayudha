@@ -50,13 +50,14 @@ var Default = Migrations{
 
 // files lists the files upgrade manages, relative to the repo root.
 var files = []struct {
-	path string
-	kind Kind
+	path  string
+	kind  Kind
+	local bool // the local config layer, which CI never reads (Bug #640)
 }{
-	{".aayudha/config.toml", KindConfig},
-	{".aayudha/config.local.toml", KindConfig},
-	{".aayudha/lock.toml", KindLock},
-	{".aayudha/state.json", KindState},
+	{".aayudha/config.toml", KindConfig, false},
+	{".aayudha/config.local.toml", KindConfig, true},
+	{".aayudha/lock.toml", KindLock, false},
+	{".aayudha/state.json", KindState, false},
 }
 
 // ErrNewer means a repository file was written by a newer aayudha.
@@ -125,8 +126,15 @@ func setVersion(kind Kind, b []byte, n int) ([]byte, error) {
 // Plan computes the changes that bring root's files to binary's versions. It
 // fails with ErrNewer when any file is newer than the binary.
 func Plan(root string, binary Versions, m Migrations) ([]Change, error) {
+	return plan(root, binary, m, false)
+}
+
+func plan(root string, binary Versions, m Migrations, ci bool) ([]Change, error) {
 	var out []Change
 	for _, f := range files {
+		if ci && f.local {
+			continue
+		}
 		old, err := os.ReadFile(filepath.Join(root, f.path))
 		if errors.Is(err, os.ErrNotExist) {
 			continue
@@ -165,9 +173,12 @@ func Plan(root string, binary Versions, m Migrations) ([]Change, error) {
 }
 
 // Check returns ErrNewer when any of root's files is newer than binary. Write
-// verbs call it before running (exit 2 with the upgrade hint).
-func Check(root string, binary Versions) error {
-	_, err := Plan(root, binary, nil)
+// verbs call it before running (exit 2 with the upgrade hint). In CI (ci set
+// by --ci or GITHUB_ACTIONS=true, as for config.Load) it skips
+// .aayudha/config.local.toml: CI never reads the local layer, so a committed
+// one with a newer version must not refuse every write verb (Bug #640).
+func Check(root string, binary Versions, ci bool) error {
+	_, err := plan(root, binary, nil, ci)
 	return err
 }
 

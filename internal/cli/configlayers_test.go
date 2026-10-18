@@ -69,3 +69,46 @@ func TestLocalConfigIgnoredInCI(t *testing.T) {
 		}
 	}
 }
+
+// TestNewerLocalConfigIgnoredInCI (Bug #640): CI never reads the local config
+// layer, so a committed .aayudha/config.local.toml with a newer schema version
+// does not refuse a write verb under --ci or GITHUB_ACTIONS=true; outside CI
+// it still does.
+func TestNewerLocalConfigIgnoredInCI(t *testing.T) {
+	withHandler(t, "verify", func(_ context.Context, e *Env, _ Values) error {
+		fmt.Fprintln(e.Out, "ran")
+		return nil
+	})
+	dir := t.TempDir()
+	for name, body := range map[string]string{
+		".git/HEAD":                  "ref: refs/heads/dev\n",
+		".aayudha/config.toml":       "version = 1\n",
+		".aayudha/config.local.toml": "version = 99\n",
+	} {
+		p := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tt := range []struct {
+		name string
+		env  map[string]string
+		args []string
+		want int
+	}{
+		{"--ci", map[string]string{HaltVariable: ""}, []string{"verify", "--ci"}, ExitOK},
+		{"GITHUB_ACTIONS=true", map[string]string{HaltVariable: "", "GITHUB_ACTIONS": "true"}, []string{"verify"}, ExitOK},
+		{"outside CI", map[string]string{HaltVariable: ""}, []string{"verify"}, ExitUsage},
+	} {
+		code, out, errOut := run(t, tt.env, Options{Dir: dir}, tt.args...)
+		if code != tt.want {
+			t.Errorf("%s: exit %d, stdout %q, stderr %q; want exit %d", tt.name, code, out, errOut, tt.want)
+		}
+		if tt.want == ExitUsage && !strings.Contains(errOut, "config.local.toml is config schema v99") {
+			t.Errorf("%s: stderr %q; want the newer config.local.toml named", tt.name, errOut)
+		}
+	}
+}

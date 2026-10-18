@@ -537,3 +537,78 @@ func TestProtectedOnlyKeysFromTOML(t *testing.T) {
 		t.Errorf("base config.toml: %v; want the key applied", err)
 	}
 }
+
+// TestCaseVariantKeysRefused (Bug #640): keys match the schema with exact
+// case, so a case variant of a key a per-layer rule guards is an unknown key,
+// refused, and never sets the field.
+func TestCaseVariantKeysRefused(t *testing.T) {
+	for _, tt := range []struct{ name, file, body, key string }{
+		{"allow_pii", "config.json", `{"version": 1, "integrations": {"posthog": {"Allow_PII": true, "secret": "posthog", "scope": "read", "project": "1"}}}`, "Allow_PII"},
+		{"solo_provisional_after_hours", "config.json", `{"version": 1, "decisions": {"Solo_Provisional_After_Hours": 12}}`, "Solo_Provisional_After_Hours"},
+		{"solo_provisional_after_hours", "config.local.json", `{"version": 1, "decisions": {"SOLO_PROVISIONAL_AFTER_HOURS": 12}}`, "SOLO_PROVISIONAL_AFTER_HOURS"},
+		{"models.gateway.base_url", "config.local.json", `{"version": 1, "models": {"gateway": {"Base_URL": "https://evil.example.com"}}}`, "Base_URL"},
+	} {
+		l, err := Load(fixture(t, map[string]string{"repo/.aayudha/" + tt.file: tt.body}))
+		if err == nil || !strings.Contains(err.Error(), tt.file+": ") || !strings.Contains(err.Error(), tt.key) {
+			got := ""
+			if l != nil {
+				got = fmt.Sprintf("allow_pii=%v solo=%v base_url=%q", l.Config.Integrations["posthog"].AllowPII, l.Config.Decisions.SoloProvisional, l.Config.Models.Gateway.BaseURL)
+			}
+			t.Errorf("%s as %s in %s: err = %v (%s); want it refused as an unknown key", tt.name, tt.key, tt.file, err, got)
+		}
+	}
+}
+
+// TestCaseVariantFileNamesIgnored (Bug #640): only a directory entry named
+// exactly config.json or config.local.json is read. On macOS and Windows
+// opening config.json finds Config.json, which CODEOWNERS does not own; the
+// case-insensitive readFile below stands in for that filesystem.
+func TestCaseVariantFileNamesIgnored(t *testing.T) {
+	old := readFile
+	t.Cleanup(func() { readFile = old })
+	readFile = func(path string) ([]byte, error) {
+		dir, base := filepath.Split(path)
+		des, err := os.ReadDir(dir)
+		if err != nil {
+			return nil, err
+		}
+		for _, de := range des {
+			if strings.EqualFold(de.Name(), base) {
+				return os.ReadFile(filepath.Join(dir, de.Name()))
+			}
+		}
+		return nil, os.ErrNotExist
+	}
+	body := `{"version": 1, "budget": {"per_day_usd": 7}}`
+	for _, name := range []string{"Config.json", "CONFIG.LOCAL.JSON"} {
+		for _, ci := range []bool{false, true} {
+			src := fixture(t, map[string]string{"repo/.aayudha/" + name: body})
+			src.CI = ci
+			l, err := Load(src)
+			if err != nil {
+				t.Fatalf("%s, CI=%v: %v", name, ci, err)
+			}
+			if layer, source := l.Origin("budget.per_day_usd"); layer != LayerDefault || len(l.Notices) != 0 {
+				t.Errorf("%s, CI=%v: per_day_usd = %v from %s (%s), notices %q; want the file ignored", name, ci, l.Config.Budget.PerDayUSD, layer, source, l.Notices)
+			}
+		}
+	}
+}
+
+// TestMalformedLocalConfigInCI (Bug #640): CI never parses the local layer,
+// so a committed config.local.toml that is not valid TOML does not fail the
+// load and still gets the notice; outside CI it fails as before.
+func TestMalformedLocalConfigInCI(t *testing.T) {
+	files := map[string]string{"repo/.aayudha/config.local.toml": "version = 1\n[budget\nper_day_usd = = 3\n"}
+	src := fixture(t, files)
+	src.CI = true
+	l, err := Load(src)
+	file := filepath.Join(src.RepoDir, ".aayudha", "config.local.toml")
+	if err != nil || len(l.Notices) != 1 || !strings.Contains(l.Notices[0], file+" ignored") {
+		t.Fatalf("CI: err = %v; want no error and one notice naming %s", err, file)
+	}
+	src = fixture(t, files)
+	if _, err := Load(src); err == nil || !strings.Contains(err.Error(), "config.local.toml") {
+		t.Fatalf("outside CI: err = %v; want the parse error naming config.local.toml", err)
+	}
+}

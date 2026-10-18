@@ -272,6 +272,10 @@ func TestInitWithoutRulesets(t *testing.T) {
 	if files[".aayudha/config.toml"] == "" || !strings.Contains(files["AGENTS.md"], "aayudha:work-items") {
 		t.Fatal("init stopped before the config and agents steps")
 	}
+	// Both local config files stay out of git (Bug #640).
+	if gi := files[".aayudha/.gitignore"]; !strings.Contains(gi, "\nconfig.local.toml\n") || !strings.Contains(gi, "\nconfig.local.json\n") {
+		t.Fatalf(".aayudha/.gitignore does not ignore both local config files:\n%s", gi)
+	}
 	if !strings.Contains(files[initrepo.StatePath], `"rulesets_unapplied": "GitHub answered 403: Upgrade to GitHub Pro`) {
 		t.Fatalf("state.json does not record why:\n%s", files[initrepo.StatePath])
 	}
