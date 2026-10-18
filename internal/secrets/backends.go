@@ -65,7 +65,7 @@ func sessionBus() error {
 		return nil
 	}
 	if b, err := os.ReadFile(filepath.Join(dir, "dbus-session")); err == nil {
-		if a, ok := strings.CutPrefix(string(b), "DBUS_SESSION_BUS_ADDRESS="); ok && dialable(strings.TrimRight(a, "\n\r")) {
+		if a, ok := strings.CutPrefix(string(b), "DBUS_SESSION_BUS_ADDRESS="); ok && dialable(strings.TrimSpace(a)) {
 			return nil
 		}
 	}

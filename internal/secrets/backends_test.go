@@ -38,7 +38,7 @@ func TestKeychainStartsNoSessionBus(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", xdg)
 	// Nor is a dbus-session file that names no address.
 	run := t.TempDir()
-	if err := os.WriteFile(filepath.Join(run, "dbus-session"), []byte("DBUS_SESSION_BUS_ADDRESS=\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(run, "dbus-session"), []byte("DBUS_SESSION_BUS_ADDRESS= \t\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	old := runUserDir
