@@ -118,6 +118,12 @@ func (r Record) noTrigger(l Loop) string {
 	return out
 }
 
+// has reports whether loop is recorded as set up on host.
+func (r Record) has(host, loop string) bool {
+	_, ok := r[host][loop]
+	return ok
+}
+
 // State is one loop and the tool that owns it.
 type State struct {
 	Loop   string `json:"loop"`
@@ -146,10 +152,10 @@ func States(ls []Loop, rec Record, repo, branch, tz string) []State {
 			s.Status, s.Detail = Double, "needs no agent and runs in the Actions fallback, but is recorded in "+strings.Join(owners, " and ")+" as well; delete it there, then forget it with `aayu install --loops --host "+owners[0]+" --record "+l.Name+"=`"
 		case len(owners) == 0 && l.IsEvent() && rec.noTrigger(l) != "":
 			h := rec.noTrigger(l)
-			if c, ok := Covers(ls, l, h); ok {
+			if c, ok := Covers(ls, l, h); ok && rec.has(h, c.Name) {
 				s.Owner, s.Status, s.Detail = h, Fallback, fmt.Sprintf("%s has no %s trigger; the scheduled loop %s covers it", h, l.On, c.Name)
 			} else {
-				s.Status, s.Detail = Missing, fmt.Sprintf("%s has no %s trigger, and no scheduled loop with the same command runs there", h, l.On)
+				s.Status, s.Detail = Missing, fmt.Sprintf("%s has no %s trigger, and no scheduled loop with the same command is set up there", h, l.On)
 			}
 		case len(owners) == 0:
 			s.Status = Missing

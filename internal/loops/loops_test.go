@@ -166,6 +166,7 @@ func TestEventLoop(t *testing.T) {
 	}{
 		{"no tool recorded", Record{}, Missing, "", ""},
 		{"Claude Code runs the loops", Record{HostClaude: {"daily": e}}, Fallback, HostClaude, "the scheduled loop daily covers it"},
+		{"Claude Code runs the others, not the daily loop", Record{HostClaude: {"status": e}}, Missing, "", "no scheduled loop"},
 		{"Amp runs the others", Record{HostAmp: {"daily": e}}, Missing, "", ""},
 		{"Amp holds the subscription", Record{HostAmp: {"daily": e, "arrival": e}}, Active, HostAmp, "subscription s-1"},
 	} {

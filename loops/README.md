@@ -74,8 +74,8 @@ one orb for each matching issue. A flood of intake issues starts a flood of runs
 them when you run `aayu halt` or when the `[budget]` breaker trips, and you can pause the spawner in Amp.
 
 In `loops/active.json` an event loop is recorded like any loop: Amp's ID is `subscription <ID>`. `aayu doctor` shows
-it as `fallback`, not `missing`, when the tool that runs your loops has no trigger for its event, and names the
-scheduled loop with the same command that covers it.
+it as `fallback`, not `missing`, when the tool that runs your loops has no trigger for its event and has the
+scheduled loop with the same command set up, and names that loop. With no such loop set up there, it is `missing`.
 
 The Production Engineer's loops (WP5.10, Decision #324) are agent loops, so telemetry and its credentials stay in your
 own session: `alert-triage` (twice each weekday) reports fast-burning SLOs and open incidents with no investigation
