@@ -328,6 +328,37 @@ func TestSASTUnanalysed(t *testing.T) {
 	}
 }
 
+// Codex review of #500: a gitleaks or osv-scanner run that exits with an error
+// never passes, whatever report it left; osv-scanner's own codes for found
+// vulnerabilities (1) and no packages (128) are results.
+func TestScannerErrorExits(t *testing.T) {
+	root, base, head := repo(t, map[string]string{"main.go": "package main\n", "go.mod": "module example.com/m\n\ngo 1.22\n"}, map[string]string{"main.go": "package main\n\nfunc main() {}\n"})
+	osvHigh := `{"results":[{"packages":[{"package":{"name":"golang.org/x/text","version":"0.3.0","ecosystem":"Go"},"groups":[{"ids":["GO-2020-0015"],"max_severity":"7.5"}]}]}]}`
+	cases := []struct {
+		name  string
+		floor Floor
+		tool  string
+		flag  string
+		code  int
+		out   string
+		want  string
+	}{
+		{"gitleaks error", Secrets{}, "gitleaks", "--report-path", 1, `[]`, proof.Blocked},
+		{"gitleaks clean", Secrets{}, "gitleaks", "--report-path", 0, `[]`, proof.Pass},
+		{"osv general error", Deps{}, "osv-scanner", "--output", 127, `{"results":[]}`, proof.Blocked},
+		{"osv found", Deps{}, "osv-scanner", "--output", 1, osvHigh, proof.Fail},
+		{"osv no packages", Deps{}, "osv-scanner", "--output", 128, `{"results":[]}`, proof.Pass},
+	}
+	for _, c := range cases {
+		bin := t.TempDir()
+		fakeTool(t, bin, c.tool, c.flag, c.out, c.code)
+		r := newRun(t, root, base, head, bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+		if got := Execute(context.Background(), r, []Floor{c.floor}).Checks[0]; got.Result != c.want {
+			t.Errorf("%s: %s (%s), want %s", c.name, got.Result, got.Detail, c.want)
+		}
+	}
+}
+
 // WP4.4 accept with the real tools (run by the CI security job, which
 // installs the pinned semgrep, gitleaks, and osv-scanner): planted findings
 // fail each floor; a clean fixture passes. The planted fixtures are written

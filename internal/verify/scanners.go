@@ -302,6 +302,10 @@ func (Secrets) Run(ctx context.Context, r *Run) (Result, error) {
 	if err := json.Unmarshal(b, &findings); err != nil {
 		return res, fmt.Errorf("gitleaks exited %d without a JSON report: %s", o.Code, tail(o.Stderr))
 	}
+	// --exit-code 0: any other exit is gitleaks failing, whatever report it left.
+	if o.Code != 0 {
+		return res, fmt.Errorf("gitleaks exited %d, so its report is not a complete scan: %s", o.Code, tail(o.Stderr))
+	}
 	res.Check.Network = o.Network
 	res.Check.Value = float64(len(findings))
 	res.Check.Result = proof.Pass
@@ -362,6 +366,11 @@ func (Deps) Run(ctx context.Context, r *Run) (Result, error) {
 	s, err := ParseOSV(b)
 	if err != nil {
 		return res, fmt.Errorf("osv-scanner exited %d without a JSON report for %s: %s", o.Code, strings.Join(lockfiles, ", "), tail(o.Stderr))
+	}
+	// osv-scanner's return codes: 0 none found, 1 vulnerabilities found, 128 no packages in the lockfiles; any other
+	// (127 is its general error) means the scan did not finish, whatever report it left.
+	if o.Code != 0 && o.Code != 1 && o.Code != 128 {
+		return res, fmt.Errorf("osv-scanner exited %d for %s, so its report is not a complete scan: %s", o.Code, strings.Join(lockfiles, ", "), tail(o.Stderr))
 	}
 	c := severityCheck(s, r.Floors.Deps.MaxCritical, r.Floors.Deps.MaxHigh)
 	c.Tool, c.Version, c.Network = res.Check.Tool, res.Check.Version, o.Network

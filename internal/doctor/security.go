@@ -6,7 +6,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -64,11 +63,8 @@ func checkSecurityWorkflow(ctx context.Context, p *Probe) Result {
 				SHA string `json:"sha"`
 			} `json:"commit"`
 		}
-		segs := strings.Split(br, "/")
-		for i := range segs {
-			segs[i] = url.PathEscape(segs[i])
-		}
-		if err := p.API(ctx, "/repos/"+p.Repo+"/branches/"+strings.Join(segs, "/"), &tip); err != nil {
+		// One path parameter: a slash in the name is escaped too, as go-github does.
+		if err := p.API(ctx, "/repos/"+p.Repo+"/branches/"+url.PathEscape(br), &tip); err != nil {
 			return Result{Status: Warn, Detail: "installed; the tip of " + br + " could not be read: " + err.Error()}
 		}
 		switch {

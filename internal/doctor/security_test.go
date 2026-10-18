@@ -107,10 +107,11 @@ func TestSecurityWorkflowRow(t *testing.T) {
 			t.Errorf("%s: %+v", name, r)
 		}
 	}
-	// Mapped branches (coexistence, no rolling): the rows follow the map.
-	p, asked := probe(true, []string{"branches.dev=trunk", "branches.main=prod"}, green)
+	// Mapped branches (coexistence, no rolling): the rows follow the map. A slash in a name is part of the one
+	// {branch} parameter (Codex review of #500).
+	p, asked := probe(true, []string{"branches.dev=trunk", "branches.main=release/2026"}, green)
 	r := checkSecurityWorkflow(ctx, p)
-	if got := strings.Join(*asked, " "); !strings.Contains(got, "branch=trunk") || !strings.Contains(got, "branch=prod") || strings.Contains(got, "branch=rolling") || strings.Contains(got, "branch=dev") {
+	if got := strings.Join(*asked, " "); !strings.Contains(got, "branch=trunk") || !strings.Contains(got, "/branches/release%2F2026") || strings.Contains(got, "branch=rolling") || strings.Contains(got, "branch=dev") {
 		t.Fatalf("mapped branches asked: %s (%+v)", got, r)
 	}
 }
