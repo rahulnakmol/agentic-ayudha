@@ -290,8 +290,9 @@ func TestSecurityWorkflowSteps(t *testing.T) {
 	}
 	stand := map[string]string{
 		// curl -fsSLo <out> <url>: copies the fixture named by the URL's last segment, and logs the URL.
-		"curl":    "#!/bin/sh\nout=$2; url=$3\necho \"$url\" >> \"$LOG/curl\"\ncp \"$FIXTURES/${url##*/}\" \"$out\"\n",
-		"pipx":    "#!/bin/sh\necho \"$@\" >> \"$LOG/pipx\"\n",
+		"curl": "#!/bin/sh\nout=$2; url=$3\necho \"$url\" >> \"$LOG/curl\"\ncp \"$FIXTURES/${url##*/}\" \"$out\"\n",
+		// python3 -m venv <dir>: a venv whose pip logs its arguments and keeps the requirements file it read.
+		"python3": "#!/bin/sh\nmkdir -p \"$3/bin\"\nprintf '#!/bin/sh\\necho \"$*\" >> \"$LOG/pip\"\\nwhile [ $# -gt 0 ]; do [ \"$1\" = -r ] && cp \"$2\" \"$LOG/lock\"; shift; done\\n' > \"$3/bin/pip\"\nchmod +x \"$3/bin/pip\"\n",
 		"sudo":    "#!/bin/sh\nexit 0\n",
 		"go":      "#!/bin/sh\necho \"$@\" >> \"$LOG/go\"\n",
 		"aayudha": "#!/bin/sh\necho \"$@\" > \"$LOG/aayudha\"\necho '{\"branch\":\"dev\",\"head\":\"0123456789\",\"checks\":[{\"floor\":\"sast\",\"result\":\"fail\",\"detail\":\"1 high\"}],\"bugs\":[{\"number\":12,\"action\":\"filed\",\"fingerprint\":\"sast r main.go\"}]}'\nexit 3\n",
@@ -336,7 +337,7 @@ func TestSecurityWorkflowSteps(t *testing.T) {
 			}
 		}
 		got := map[string]string{}
-		for _, f := range []string{"curl", "pipx", "go", "aayudha"} {
+		for _, f := range []string{"curl", "pip", "lock", "go", "aayudha"} {
 			b, _ := os.ReadFile(filepath.Join(logs, f))
 			got[f] = string(b)
 		}
@@ -355,8 +356,13 @@ func TestSecurityWorkflowSteps(t *testing.T) {
 	if !strings.Contains(got["curl"], "/gitleaks/releases/download/v"+job.Env["GITLEAKS_VERSION"]+"/") || !strings.Contains(got["curl"], "/osv-scanner/releases/download/v"+job.Env["OSV_SCANNER_VERSION"]+"/") {
 		t.Errorf("downloads: %q", got["curl"])
 	}
-	if got["pipx"] != "install semgrep=="+job.Env["SEMGREP_VERSION"]+"\n" || !strings.Contains(got["go"], "install github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@dev") {
-		t.Errorf("installs: pipx %q, go %q", got["pipx"], got["go"])
+	// semgrep comes only from the hashed lock, the one aayudha embeds, with pip refusing unlisted bytes.
+	if !strings.Contains(got["pip"], "install --quiet --require-hashes --only-binary :all: --no-deps -r ") || !strings.Contains(got["go"], "install github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@dev") {
+		t.Errorf("installs: pip %q, go %q", got["pip"], got["go"])
+	}
+	if !strings.Contains(got["lock"], "semgrep==1.180.0 --hash=sha256:16db2e2706ab814a975eeec25debfad49abba846b7c513d88e041447152f8447\n") || strings.Count(got["lock"], "==") < 60 ||
+		strings.Count(got["lock"], "==") != strings.Count(got["lock"], "--hash=sha256:") {
+		t.Errorf("the requirements pip read are not the hashed lock: %q", got["lock"])
 	}
 	if want := "verify --security --ci --repo o/r --json --since " + before + "\n"; got["aayudha"] != want {
 		t.Errorf("aayudha %q, want %q", got["aayudha"], want)

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -230,5 +231,75 @@ func TestVerifySecurityCapsNewBugs(t *testing.T) {
 	last := g.Issues[res.Bugs[len(res.Bugs)-1].Number]
 	if len(last.Comments) != 1 || !strings.Contains(last.Comments[0].Body, "sast rule-11 main.go") {
 		t.Fatalf("unfiled findings not listed on the last Bug: %+v", last.Comments)
+	}
+}
+
+// Story #487: what a person sees from `verify --security` without --json on
+// the workflow's detached checkout: the branch from GITHUB_REF_NAME, the
+// secrets scope, and each floor; a miss exits 3 and files nothing without --ci.
+func TestVerifySecurityText(t *testing.T) {
+	dir := t.TempDir()
+	git(t, dir, "init", "--quiet", "-b", "dev")
+	_ = os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n"), 0o644)
+	git(t, dir, "add", ".")
+	git(t, dir, "commit", "--quiet", "-m", "feat: one")
+	base := git(t, dir, "rev-parse", "HEAD")
+	git(t, dir, "commit", "--quiet", "--allow-empty", "-m", "feat: two")
+	git(t, dir, "checkout", "--quiet", "--detach")
+	bin, reports := securityTools(t)
+	env := map[string]string{"GITHUB_REF_NAME": "rolling", "PATH": bin + string(os.PathListSeparator) + os.Getenv("PATH")}
+	opts := Options{Dir: dir}
+	writeReports(t, reports, map[string]string{"semgrep": fmt.Sprintf(semgrepHigh, 1), "gitleaks": "[]", "osv-scanner": `{"results":[]}`})
+	code, out, errOut := run(t, env, opts, "verify", "--security", "--since", base)
+	if code != ExitFloor || !strings.Contains(out, "verify --security rolling at ") || !strings.Contains(out, "(secrets: "+base[:7]+"..") ||
+		!strings.Contains(out, "sast     fail") || !strings.Contains(out, "secrets  pass") || strings.Contains(out, "Bug #") {
+		t.Fatalf("%d\n%s\n%s", code, out, errOut)
+	}
+	// A new branch's all-zeros before: the whole history.
+	writeReports(t, reports, map[string]string{"semgrep": semgrepMedium})
+	if code, out, errOut := run(t, env, opts, "verify", "--security", "--since", strings.Repeat("0", 40)); code != 0 || !strings.Contains(out, "(secrets: the whole history)") {
+		t.Fatalf("%d\n%s\n%s", code, out, errOut)
+	}
+}
+
+// Story #487: a scan whose Bug writes fail is an external error (exit 5),
+// never a quiet floor miss, whichever GitHub call fails: the list of open
+// security Bugs, a Bug's comments, a new Bug, or a comment on an old one.
+func TestVerifySecurityGitHubFails(t *testing.T) {
+	for _, tc := range []struct {
+		fail  string
+		after int
+	}{
+		{"GET /repos/o/r/issues", 0},
+		{"GET /repos/o/r/issues/%d/comments", 0},
+		{"POST /repos/o/r/issues", 0},
+		{"POST /repos/o/r/issues/%d/comments", 0},
+	} {
+		dir := t.TempDir()
+		git(t, dir, "init", "--quiet", "-b", "dev")
+		_ = os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n"), 0o644)
+		git(t, dir, "add", ".")
+		git(t, dir, "commit", "--quiet", "-m", "feat: one")
+		g := fake.New(t, "o/r", "User")
+		bin, reports := securityTools(t)
+		env := map[string]string{"GITHUB_TOKEN": "workflow-token", "PATH": bin + string(os.PathListSeparator) + os.Getenv("PATH")}
+		opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+		writeReports(t, reports, map[string]string{"semgrep": fmt.Sprintf(semgrepHigh, 1), "gitleaks": "[]", "osv-scanner": `{"results":[]}`})
+		// An open Bug for a second finding, so the run comments on it as well as filing a new one.
+		if code, out, errOut := run(t, env, opts, "verify", "--security", "--ci", "--repo", "o/r"); code != ExitFloor {
+			t.Fatalf("first run: %d %s %s", code, out, errOut)
+		}
+		var bug int
+		for n := range g.Issues {
+			bug = n
+		}
+		writeReports(t, reports, map[string]string{"semgrep": `{"results":[{"check_id":"go.lang.security.audit.sqli","path":"main.go","start":{"line":1},"extra":{"severity":"ERROR"}},{"check_id":"other-rule","path":"main.go","start":{"line":1},"extra":{"severity":"ERROR"}}],"errors":[]}`})
+		git(t, dir, "commit", "--quiet", "--allow-empty", "-m", "feat: two")
+		g.Mu.Lock()
+		g.Fail, g.FailAfter = strings.ReplaceAll(tc.fail, "%d", strconv.Itoa(bug)), tc.after
+		g.Mu.Unlock()
+		if code, out, errOut := run(t, env, opts, "verify", "--security", "--ci", "--repo", "o/r"); code != ExitExternal {
+			t.Errorf("%s fails: %d %s %s", tc.fail, code, out, errOut)
+		}
 	}
 }

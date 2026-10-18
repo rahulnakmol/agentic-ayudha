@@ -83,7 +83,7 @@ attested; see [releases and the supply chain](how-releases.md).
 
 **A vulnerability that arrives without a pull request.** The merge gate scans pull requests only. A promotion
 merge, a direct or admin push, or a new advisory against a dependency that did not change reaches dev, rolling, or
-main without one. `aayu init --gates` therefore also installs `aayudha-security.yml` (Decision #480). It runs
+main without one. `aayu init --gates` therefore also installs `aayudha-security.yml`. It runs
 `aayudha verify --security --ci` on every push to those branches, as `[branches]` maps them, and nightly on each
 tip. That covers verify's sast, secrets, and deps floors with the merge gate's pinned tools; a push scans secrets
 in the pushed commits, the nightly run in the whole history. Each failing finding files one Bug labelled

@@ -3,6 +3,7 @@ package doctor
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -27,7 +28,9 @@ func TestSecurityWorkflowRow(t *testing.T) {
 				asked = append(asked, path)
 				key := path[strings.Index(path, "event="):]
 				var rs []map[string]any
-				if r, ok := runs[key]; ok {
+				if r, ok := runs[key]; ok && r["error"] == true {
+					return errors.New("403 Forbidden")
+				} else if ok {
 					rs = append(rs, r)
 				}
 				b, _ := json.Marshal(map[string]any{"workflow_runs": rs})
@@ -68,6 +71,31 @@ func TestSecurityWorkflowRow(t *testing.T) {
 	p, _ = probe(true, nil, stale)
 	if r := checkSecurityWorkflow(ctx, p); r.Status != Warn || !strings.Contains(r.Lines[3], "more than 48 hours ago") {
 		t.Fatalf("stale nightly: %+v", r)
+	}
+	// No completed result is not green: a tip never scanned or still scanning,
+	// and a fresh nightly run that failed or has not finished.
+	for name, change := range map[string]func(map[string]map[string]any){
+		"rolling never scanned": func(m map[string]map[string]any) { delete(m, "event=push&branch=rolling") },
+		"rolling in progress": func(m map[string]map[string]any) {
+			m["event=push&branch=rolling"] = map[string]any{"head_sha": "abcdef1234567", "status": "in_progress", "created_at": now}
+		},
+		"nightly failed":   func(m map[string]map[string]any) { m["event=schedule"] = run("failure", now.Add(-time.Hour)) },
+		"no nightly run":   func(m map[string]map[string]any) { delete(m, "event=schedule") },
+		"nightly unread":   func(m map[string]map[string]any) { m["event=schedule"] = map[string]any{"error": true} },
+		"push runs unread": func(m map[string]map[string]any) { m["event=push&branch=dev"] = map[string]any{"error": true} },
+		"nightly running": func(m map[string]map[string]any) {
+			m["event=schedule"] = map[string]any{"head_sha": "abcdef1234567", "status": "in_progress", "created_at": now}
+		},
+	} {
+		m := map[string]map[string]any{}
+		for k, v := range green {
+			m[k] = v
+		}
+		change(m)
+		p, _ = probe(true, nil, m)
+		if r := checkSecurityWorkflow(ctx, p); r.Status != Warn || strings.Contains(r.Detail, "every scanned tip is green") {
+			t.Errorf("%s: %+v", name, r)
+		}
 	}
 	// Mapped branches (coexistence, no rolling): the rows follow the map.
 	p, asked := probe(true, []string{"branches.dev=trunk", "branches.main=prod"}, green)

@@ -52,7 +52,7 @@ func checkSecurityWorkflow(ctx context.Context, p *Probe) Result {
 		}
 	}
 	base := "/repos/" + p.Repo + "/actions/workflows/" + SecurityWorkflow + "/runs?per_page=1"
-	status, problems := Pass, 0
+	status, problems, unscanned := Pass, 0, 0
 	var lines []string
 	for _, br := range branches {
 		var runs workflowRuns
@@ -61,9 +61,11 @@ func checkSecurityWorkflow(ctx context.Context, p *Probe) Result {
 		}
 		switch {
 		case len(runs.Runs) == 0:
+			status, unscanned = Warn, unscanned+1
 			lines = append(lines, br+": no push run yet")
 		case runs.Runs[0].Status != "completed":
-			lines = append(lines, fmt.Sprintf("%s: %s at %s", br, runs.Runs[0].Status, short(runs.Runs[0].HeadSHA)))
+			status, unscanned = Warn, unscanned+1
+			lines = append(lines, fmt.Sprintf("%s: %s at %s, no completed scan", br, runs.Runs[0].Status, short(runs.Runs[0].HeadSHA)))
 		default:
 			r := runs.Runs[0]
 			lines = append(lines, fmt.Sprintf("%s: %s at %s", br, r.Conclusion, short(r.HeadSHA)))
@@ -87,6 +89,13 @@ func checkSecurityWorkflow(ctx context.Context, p *Probe) Result {
 	case now().Sub(nightly.Runs[0].CreatedAt) > SecurityNightlyMaxAge:
 		status = Warn
 		lines = append(lines, fmt.Sprintf("nightly: last run %s, more than %d hours ago (a schedule stops after 60 days without activity; re-enable it in Actions)", nightly.Runs[0].CreatedAt.UTC().Format(time.RFC3339), int(SecurityNightlyMaxAge.Hours())))
+	case nightly.Runs[0].Status != "completed" || nightly.Runs[0].Conclusion != "success":
+		status = Warn
+		state := nightly.Runs[0].Conclusion
+		if nightly.Runs[0].Status != "completed" {
+			state = nightly.Runs[0].Status
+		}
+		lines = append(lines, fmt.Sprintf("nightly: %s, %s, so the last refresh of advisories did not complete green", state, nightly.Runs[0].CreatedAt.UTC().Format(time.RFC3339)))
 	default:
 		lines = append(lines, fmt.Sprintf("nightly: %s, %s", nightly.Runs[0].Conclusion, nightly.Runs[0].CreatedAt.UTC().Format(time.RFC3339)))
 	}
@@ -94,6 +103,8 @@ func checkSecurityWorkflow(ctx context.Context, p *Probe) Result {
 	switch {
 	case problems > 0:
 		detail = fmt.Sprintf("installed; %d branch tip(s) failed their last scan: see the aayudha:security Bugs", problems)
+	case unscanned > 0:
+		detail = fmt.Sprintf("installed; %d branch tip(s) have no completed scan", unscanned)
 	case status == Warn:
 		detail = "installed; the nightly scan is not current"
 	}

@@ -42,6 +42,12 @@ var mergeGateTemplate string
 //go:embed aayudha-ops.yml
 var opsTemplate string
 
+// PythonTools is the hashed lock of the Python floor tools (semgrep, lizard,
+// and their dependencies): one CPython 3.12 manylinux x86_64 wheel each.
+//
+//go:embed python-tools.txt
+var PythonTools string
+
 //go:embed aayudha-security.yml
 var securityTemplate string
 
@@ -76,7 +82,8 @@ func GateWorkflows(version string, branches ...string) map[string][]byte {
 		quoted[i] = strconv.Quote(b)
 	}
 	security := strings.NewReplacer("{{VERSION}}", GuardVersion(version), "{{BRANCHES}}", "["+strings.Join(on, ", ")+"]",
-		"{{BRANCHES_JSON}}", "["+strings.Join(quoted, ",")+"]", "{{BRANCH_LIST}}", strings.Join(on, ", ")).Replace(securityTemplate)
+		"{{BRANCHES_JSON}}", "["+strings.Join(quoted, ",")+"]", "{{BRANCH_LIST}}", strings.Join(on, ", "),
+		"{{PYTHON_TOOLS}}", pythonToolLines("          ")).Replace(securityTemplate)
 	return map[string][]byte{
 		SecurityWorkflow:   []byte(security),
 		TokenWorkflow:      identity.BrokerWorkflow,
@@ -616,4 +623,16 @@ func (in *Init) updateFile(step, path string, content []byte) error {
 	in.State.PutFile(File{Path: path, SHA256: hash(content), Created: errors.Is(statErr, os.ErrNotExist)})
 	in.note(step, "file", path, "written", "")
 	return nil
+}
+
+// pythonToolLines is the lock's requirement lines (no comments), each after
+// the first indented for a workflow's run block.
+func pythonToolLines(indent string) string {
+	var lines []string
+	for _, l := range strings.Split(PythonTools, "\n") {
+		if l = strings.TrimSpace(l); l != "" && !strings.HasPrefix(l, "#") {
+			lines = append(lines, l)
+		}
+	}
+	return strings.Join(lines, "\n"+indent)
 }

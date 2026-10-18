@@ -430,7 +430,10 @@ func TestReleaseLadder(t *testing.T) {
 		t.Fatalf("main with a red rolling scan: %d %s", code, errOut)
 	}
 	f.g.Mu.Lock()
-	f.g.Runs = append(f.g.Runs[:len(f.g.Runs)-1], WorkflowRunFor(SecurityWorkflow, 8003, rollingNow, "success"))
+	// A newer run of the same tip still in progress (a re-run) does not hide the completed green scan.
+	rerun := WorkflowRunFor(SecurityWorkflow, 8004, rollingNow, "")
+	rerun.Status = "in_progress"
+	f.g.Runs = append(f.g.Runs[:len(f.g.Runs)-1], rerun, WorkflowRunFor(SecurityWorkflow, 8003, rollingNow, "success"))
 	f.g.Mu.Unlock()
 	if code, out, errOut := run(t, agent, later, "release", rel, "--to", "main", "--dry-run", "--repo", "o/r"); code != 0 ||
 		!strings.Contains(out, "  stable release requested by @maintainer (comment) https://github.com/o/r/issues/") {

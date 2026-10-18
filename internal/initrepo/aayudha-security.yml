@@ -36,6 +36,9 @@ jobs:
     timeout-minutes: 30
     strategy:
       fail-fast: false
+      # One branch at a time: each scan reads the open security Bugs and then files or comments, so two branches
+      # with the same new finding scanned at once would each file it.
+      max-parallel: 1
       matrix:
         # A push scans its own branch; the nightly run and a dispatch scan every tip.
         branch: ${{ github.event_name == 'push' && fromJSON(format('["{0}"]', github.ref_name)) || fromJSON('{{BRANCHES_JSON}}') }}
@@ -47,7 +50,6 @@ jobs:
       GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb # linux_x64
       OSV_SCANNER_VERSION: "2.6.0"
       OSV_SCANNER_SHA256: ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108 # linux_amd64
-      SEMGREP_VERSION: "1.180.0"
       # The push's before: the secrets floor scans only the pushed commits. Empty (nightly, dispatch) or all zeros
       # (a new branch): the whole history of the tip.
       BEFORE: ${{ github.event_name == 'push' && github.event.before || '' }}
@@ -69,6 +71,9 @@ jobs:
         with:
           go-version: "1.25.x"
           cache: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12" # the hashed lock below holds CPython 3.12 wheels
       - name: Install aayudha {{VERSION}}
         run: |
           set -euo pipefail
@@ -90,8 +95,14 @@ jobs:
           curl -fsSLo "$RUNNER_TEMP/bin/osv-scanner" "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64"
           echo "${OSV_SCANNER_SHA256}  $RUNNER_TEMP/bin/osv-scanner" | sha256sum -c -
           chmod +x "$RUNNER_TEMP/bin/osv-scanner"
-          pipx install "semgrep==${SEMGREP_VERSION}"
+          # semgrep and every dependency, one wheel each, from a hashed lock: pip refuses any bytes it does not list.
+          cat > "$RUNNER_TEMP/python-tools.txt" <<'LOCK'
+          {{PYTHON_TOOLS}}
+          LOCK
+          python3 -m venv "$RUNNER_TEMP/py"
+          "$RUNNER_TEMP/py/bin/pip" install --quiet --require-hashes --only-binary :all: --no-deps -r "$RUNNER_TEMP/python-tools.txt"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          echo "$RUNNER_TEMP/py/bin" >> "$GITHUB_PATH"
           # Unprivileged user and network namespaces for the no-network sandbox (Ubuntu restricts them by default).
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
       - name: Security floors on the commit
