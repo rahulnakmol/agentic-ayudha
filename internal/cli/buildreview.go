@@ -120,10 +120,10 @@ func loadSessionReview(ctx context.Context, wt string) (sessionReview, error) {
 	if errors.Is(err, os.ErrNotExist) {
 		return s, nil
 	}
-	if err != nil {
-		return s, err
+	if err == nil {
+		err = json.Unmarshal(b, &s)
 	}
-	return s, json.Unmarshal(b, &s)
+	return s, err
 }
 
 func (s *sessionReview) save(ctx context.Context, wt string) error {
@@ -131,10 +131,7 @@ func (s *sessionReview) save(ctx context.Context, wt string) error {
 	if err != nil {
 		return err
 	}
-	b, err := json.MarshalIndent(s, "", "  ")
-	if err != nil {
-		return err
-	}
+	b, _ := json.MarshalIndent(s, "", "  ") // strings, numbers, and times: it cannot fail
 	return os.WriteFile(p, b, 0o600)
 }
 
@@ -286,7 +283,7 @@ func (e *Env) reviewSession(ctx context.Context, s *sessionReview, a sessionRevi
 	last := s.Rounds[len(s.Rounds)-1]
 	rep = SessionReview{Round: len(s.Rounds), Model: last.Model, Disposition: last.Disposition, Open: s.open()}
 	switch {
-	case len(rep.Open) == 0 || last.Disposition == inspect.Merge:
+	case len(rep.Open) == 0:
 		p.Done(ui.StatusPass, fmt.Sprintf("round %d: %s, %d left open", rep.Round, last.Disposition, len(rep.Open)))
 	case len(s.Rounds)-s.Pushed >= inspect.MaxRounds:
 		p.Done(ui.StatusWarn, fmt.Sprintf("round %d: %d left open at the cap of %d rounds; the merge gate decides", rep.Round, len(rep.Open), inspect.MaxRounds))
@@ -459,7 +456,7 @@ func (s *sessionReview) summary() string {
 		for _, g := range []struct {
 			head  string
 			items []string
-		}{{"Fixed (not raised by a later round)", fixed}, {"Declined by the builder, with its reason", declined}, {"Left open when it pushed (the reviewer said merge, or the round cap was reached)", open}} {
+		}{{"Fixed (not raised by a later round)", fixed}, {"Declined by the builder, with its reason", declined}, {"Left open at the round cap", open}} {
 			if len(g.items) > 0 {
 				b.WriteString("**" + g.head + ":**\n\n")
 				for _, x := range g.items {
