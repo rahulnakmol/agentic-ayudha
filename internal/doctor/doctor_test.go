@@ -336,6 +336,9 @@ func failing(t *testing.T) map[string]func(*Probe) {
 			p.Getenv = func(k string) string { return env[k] }
 			p.LookPath = func(string) (string, error) { return "", errors.New("not found") }
 		},
+		"host-config": func(p *Probe) {
+			p.HostConfig = func(context.Context) ([]string, error) { return []string{".github/hooks/aayudha.json"}, nil }
+		},
 		"mcp": func(p *Probe) {
 			overlay(p, map[string]string{"/usr/bin/aayu version": "aayu 1.1.0\n"})
 		},

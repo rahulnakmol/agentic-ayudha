@@ -153,6 +153,9 @@ func (in *Init) removeFile(f File) error {
 	}
 	if f.Section != "" {
 		next := hosts.RemoveAgentsSection(cur, f.Section)
+		if f.Section == hostConfigSection {
+			next = []byte(RenderHostConfigOwners(string(cur), ""))
+		}
 		if bytes.Equal(next, cur) {
 			in.forgetFile(f.Path)
 			return nil

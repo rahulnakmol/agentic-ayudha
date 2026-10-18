@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"slices"
 	"sort"
@@ -44,6 +45,40 @@ const (
 	ServerName     = "aayudha"                   // MCP server name in every host
 	LockVersion    = 1
 )
+
+// ExecutableConfig are the repository files install writes that a host runs
+// or obeys: hooks, MCP server commands, permissions, and plugins. A host reads
+// them from whatever branch is checked out, so doctor fails when one differs
+// from what install writes (ConfigDrift), and init --gates makes their
+// changes need a code owner (HostConfigOwners).
+var ExecutableConfig = []string{ClaudeMCP, ClaudeSettings, CursorMCP, CursorHooks, CursorCLI, CodexConfig, CodexHooks, CopilotHooks, AmpPlugin}
+
+// HostConfigOwners are the root-anchored CODEOWNERS patterns that cover
+// ExecutableConfig, and .agents/, whose setup script the hosts' clouds run.
+var HostConfigOwners = []string{"/.mcp.json", "/.claude/", "/.cursor/", "/.codex/", "/.amp/plugins/", "/.github/hooks/", "/.agents/"}
+
+// ConfigDrift names the ExecutableConfig files among a plan's repository
+// edits whose content would change in meaning: a JSON file is compared parsed,
+// so key order and spacing alone are no drift.
+func ConfigDrift(edits []Edit) []string {
+	var out []string
+	for _, e := range edits {
+		if e.Home || !slices.Contains(ExecutableConfig, e.Path) || sameConfig(e.Old, e.New) {
+			continue
+		}
+		out = append(out, e.Path)
+	}
+	return out
+}
+
+func sameConfig(a, b []byte) bool {
+	var x, y any
+	if json.Unmarshal(a, &x) == nil && json.Unmarshal(b, &y) == nil {
+		return reflect.DeepEqual(x, y)
+	}
+	norm := func(b []byte) string { return strings.TrimSpace(strings.ReplaceAll(string(b), "\r\n", "\n")) }
+	return a != nil && b != nil && norm(a) == norm(b)
+}
 
 // AllHosts returns every host ID in registry order.
 func AllHosts() []verbs.HostID {

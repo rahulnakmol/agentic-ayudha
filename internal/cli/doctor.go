@@ -58,6 +58,11 @@ func (e *Env) probe(ctx context.Context) *doctor.Probe {
 	if tok, err := r.Human(ctx); err == nil {
 		p.API = func(ctx context.Context, path string, out any) error { return e.githubGet(ctx, tok, path, out) }
 	}
+	if p.Root != "" {
+		if _, ok, err := hosts.ReadLock(p.Root); err == nil && ok {
+			p.HostConfig = e.hostConfigDrift
+		}
+	}
 	p.Latest = func(ctx context.Context) (string, error) {
 		var rel struct {
 			TagName string `json:"tag_name"`
@@ -224,4 +229,21 @@ func renderDoctorHuman(p *ui.Printer, rs []doctor.Result) {
 	}
 	p.Printf("%s", p.Table([]string{"Status", "Check", "Detail"}, rows))
 	p.Println(fmt.Sprintf("%d pass, %d warn, %d fail, %d not yet available", tally[doctor.Pass], tally[doctor.Warn], tally[doctor.Fail], tally[doctor.NA]))
+}
+
+// hostConfigDrift plans aayu install as this binary would run it and names
+// the executable host config files that would change.
+func (e *Env) hostConfigDrift(ctx context.Context) ([]string, error) {
+	o, err := e.installOptions()
+	if err != nil {
+		return nil, err
+	}
+	if o.Binary, err = e.binaryPath(ctx); err != nil {
+		return nil, err
+	}
+	res, err := hosts.Plan(o)
+	if err != nil {
+		return nil, err
+	}
+	return hosts.ConfigDrift(res.Edits), nil
 }

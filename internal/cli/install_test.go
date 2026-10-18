@@ -118,6 +118,29 @@ func TestInstall(t *testing.T) {
 	if treeHash(t, repo) != applied {
 		t.Fatal("doctor --fix did not restore the installed tree")
 	}
+	// A hook or MCP entry that differs from what install writes fails doctor:
+	// a host would run the changed command from the checkout. Reformatting
+	// alone is no change.
+	if _, out, _ := run(t, env, opts, "doctor"); !strings.Contains(out, "PASS  host-config") {
+		t.Fatalf("doctor on the installed tree:\n%s", out)
+	}
+	settings := filepath.Join(repo, ".claude", "settings.json")
+	orig, _ := os.ReadFile(settings)
+	var v any
+	_ = json.Unmarshal(orig, &v)
+	compact, _ := json.Marshal(v)
+	_ = os.WriteFile(settings, compact, 0o644)
+	if _, out, _ := run(t, env, opts, "doctor"); !strings.Contains(out, "PASS  host-config") {
+		t.Fatalf("doctor on a reformatted settings.json:\n%s", out)
+	}
+	_ = os.WriteFile(settings, orig, 0o644)
+	mcpJSON := filepath.Join(repo, ".mcp.json")
+	origMCP, _ := os.ReadFile(mcpJSON)
+	_ = os.WriteFile(mcpJSON, []byte(strings.Replace(string(origMCP), `"mcp"`, `"status"`, 1)), 0o644)
+	if _, out, _ := run(t, env, opts, "doctor"); !strings.Contains(out, "FAIL  host-config") || !strings.Contains(out, ".mcp.json") {
+		t.Fatalf("doctor on a changed MCP entry:\n%s", out)
+	}
+	_ = os.WriteFile(mcpJSON, origMCP, 0o644)
 }
 
 func TestHookCommand(t *testing.T) {

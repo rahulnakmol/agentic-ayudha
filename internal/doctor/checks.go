@@ -728,6 +728,25 @@ func checkCopilot(ctx context.Context, p *Probe) Result {
 	return Result{Status: Pass, Detail: "GitHub Copilot has the aayudha hooks and trusts this folder", Lines: lines}
 }
 
+// checkHostConfig fails when a hook, MCP server entry, permission, or plugin
+// file a host runs from this repository differs from what aayu install
+// writes. A host reads them from whatever branch is checked out, before any
+// review, so a changed one is treated as a fault, never a note.
+func checkHostConfig(ctx context.Context, p *Probe) Result {
+	if p.HostConfig == nil {
+		return Result{Status: Pass, Detail: "not installed for a host here"}
+	}
+	drift, err := p.HostConfig(ctx)
+	switch {
+	case err != nil:
+		return Result{Status: Warn, Detail: "cannot compare the hosts' hooks and MCP entries with what aayu install writes: " + err.Error()}
+	case len(drift) > 0:
+		return Result{Status: Fail, Detail: "a hook or MCP entry differs from what aayu install writes, so a host may run a command aayu did not install: read the diff with `aayu install`, then run `aayu install --apply`",
+			Lines: drift}
+	}
+	return Result{Status: Pass, Detail: "the hosts' hooks and MCP entries are what aayu install writes"}
+}
+
 // checkCodexHooks reports aayudha's Codex hooks that Codex would skip (WP3.2b,
 // D-3.2b.a): Codex runs a plugin's or a project's hooks only after the person
 // trusts them in /hooks, so until then nothing stops an agent in Codex from
