@@ -502,6 +502,10 @@ func TestCheckStates(t *testing.T) {
 			p.Host = "claude"
 			p.Config = load(t, "inspect.apps=claude,codex", "inspect.reviewer=claude")
 		}, Pass, `codex (openai): already listed; set [inspect] reviewer = "auto" or "codex"`},
+		{"a fixed same-family reviewer, the other family not listed", checkReviewRung, func(p *Probe) {
+			p.Host = "claude"
+			p.Config = load(t, "inspect.apps=claude", "inspect.reviewer=claude")
+		}, Pass, `codex (openai): install it and add it to [inspect] apps, and set [inspect] reviewer = "auto" or "codex"`},
 		{"an unknown builder cannot move up", checkReviewRung, func(p *Probe) { p.Getenv = func(string) string { return "" }; p.Config = load(t, "inspect.apps=codex") }, Pass, "move up: no reviewer can be shown to differ from an unknown builder"},
 		{"a person reviews by configuration", checkReviewRung, func(p *Probe) { p.Config = load(t, "inspect.reviewer=human") }, Pass, `human  a person reviews every PR ([inspect] reviewer = "human")`},
 		{"rung C for a Claude Code build", checkReviewRung, func(p *Probe) { p.Host = "claude"; p.Config = load(t, "inspect.apps=claude") }, Pass, "C  same-family review: claude (anthropic)"},

@@ -122,14 +122,20 @@ func checkReviewRung(_ context.Context, p *Probe) Result {
 		if !listed {
 			add = "install it and add it to [inspect] apps, then "
 		}
+		// A fixed reviewer keeps picking itself, so the move names the switch.
+		pick := ""
+		fixed := cfg.Inspect.Reviewer != "" && cfg.Inspect.Reviewer != inspect.ReviewerAuto
+		if fixed && cfg.Inspect.Reviewer != a.Name {
+			pick = fmt.Sprintf(`, and set [inspect] reviewer = "auto" or %q`, a.Name)
+		}
 		switch {
 		case a.Login == "" || b.Unknown():
 		case f == verbs.FamilyHostManaged:
-			up = append(up, fmt.Sprintf("%s: %sset [inspect] app_families.%s to the family it runs, outside the builder's", a.Name, add, a.Name))
+			up = append(up, fmt.Sprintf("%s: %sset [inspect] app_families.%s to the family it runs, outside the builder's%s", a.Name, add, a.Name, pick))
 		case b.Rung(f) != inspect.RungA:
 		case !listed:
-			up = append(up, fmt.Sprintf("%s (%s): install it and add it to [inspect] apps", a.Name, f))
-		case cfg.Inspect.Reviewer != "" && cfg.Inspect.Reviewer != inspect.ReviewerAuto:
+			up = append(up, fmt.Sprintf("%s (%s): install it and add it to [inspect] apps%s", a.Name, f, pick))
+		case fixed:
 			up = append(up, fmt.Sprintf(`%s (%s): already listed; set [inspect] reviewer = "auto" or %q`, a.Name, f, a.Name))
 		}
 	}
