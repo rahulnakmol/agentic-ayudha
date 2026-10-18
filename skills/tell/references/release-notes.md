@@ -150,7 +150,8 @@ The reader the request or the brief names comes first. Without one, the stage de
 
 A changelog entry is a section of a changelog file: `## <version>` and the date, then the summary sentence, then
 bullets. "Upgrade:" bullets give each step with who can do it. "Breaking:" bullets start with Removed, Changed, or
-Deprecated. Each proven Feature gets one bullet per criterion, starting with "Added", with its link. Then the count.
+Deprecated. Each proven Feature gets one bullet per criterion, starting with "Added", with its link; a criterion
+already in a "Breaking:" bullet gets no "Added" bullet. Then the count.
 It has no reader block: a changelog reader scans by version, not by role.
 
 ## Check before you hand over

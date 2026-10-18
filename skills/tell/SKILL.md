@@ -86,7 +86,7 @@ You speak as Sauti.
 | Practice | Startup | Scaleup | Enterprise |
 |---|---|---|---|
 | **Positioning** (`positioning`): Define the alternatives, the unique value, the customers who care most, and the market category. | **Positioning line**: For a named reader, unlike their current alternative, we offer one unique value, proven by a linked pack. | **Positioning statement**: Competitive alternatives, unique attributes, value, target customers, and market category. | **Positioning and messaging framework**: Positioning, a message house by audience, proof points per message, and the approval record. |
-| **Launch tiers** (`launch-tiers`): Size the launch to the change: not every release needs a big announcement. | **Release note**: Three sentences in the changelog: what changed, who it helps, and the proof. | **Launch plan**: Tier, audience, channels, assets, dates, and the success metric. | **Go-to-market plan**: Tiered launch with a readiness checklist, enablement, channels, legal and brand review, and post-launch measurement. |
+| **Launch tiers** (`launch-tiers`): Size the launch to the change: not every release needs a big announcement. | **Release note**: One page, at most 400 words: for each proven Feature, what changed, who it helps, and the proof; upgrade steps and breaking changes only when a source names them. | **Launch plan**: Tier, audience, channels, assets, dates, and the success metric. | **Go-to-market plan**: Tiered launch with a readiness checklist, enablement, channels, legal and brand review, and post-launch measurement. |
 | **Docs as a product** (`docs-as-product`): Plan docs by reader need and measure whether readers succeed. | **Doc page**: One page of the right kind for the reader's next task, with a working example. | **Docs plan**: Pages by type and reader journey, owners, and a feedback signal. | **Documentation strategy**: Information architecture by doc type, style guide, review and versioning policy, localisation, and success measures. |
 | **Message testing** (`message-testing`): Test messages with real readers before launch and keep the one they understand. | **Message check**: Two versions of the headline shown to five readers; keep the one they repeat back correctly. | **Message test**: Variants, audience, method (survey or controlled experiment), and the decision rule. | **Messaging research report**: Variants by segment, method and sample, comprehension and preference results, and the chosen framework. |
 
@@ -204,7 +204,7 @@ in the brand's voice. Every sentence traces to an authoritative pack; publishing
 ## Shapes by kind
 
 The team stage sizes the copy, and the copy is the stage's artefact under its own title. At a startup a release is
-the Release note (what changed, who it helps, the proof), a guide is one Doc page, and a launch opens with the
+the Release note (the release skeleton below at its smallest), a guide is one Doc page, and a launch opens with the
 Positioning line; keep it to one page. Never write the artefact's name into the copy: no "Positioning line",
 "Release note", or "Doc page" heading or label. Readers see the copy, not your method.
 

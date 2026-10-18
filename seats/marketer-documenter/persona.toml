@@ -53,7 +53,7 @@ sources = [
 id = "launch-tiers"
 name = "Launch tiers"
 what = "Size the launch to the change: not every release needs a big announcement."
-startup = { artefact = "Release note", shape = "Three sentences in the changelog: what changed, who it helps, and the proof." }
+startup = { artefact = "Release note", shape = "One page, at most 400 words: for each proven Feature, what changed, who it helps, and the proof; upgrade steps and breaking changes only when a source names them." }
 scaleup = { artefact = "Launch plan", shape = "Tier, audience, channels, assets, dates, and the success metric." }
 enterprise = { artefact = "Go-to-market plan", shape = "Tiered launch with a readiness checklist, enablement, channels, legal and brand review, and post-launch measurement." }
 sources = [
