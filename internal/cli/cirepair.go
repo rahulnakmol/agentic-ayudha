@@ -2,14 +2,12 @@ package cli
 
 import (
 	"context"
-	"io"
-	"net/http"
 	"slices"
 	"strings"
-	"time"
 
 	gh "github.com/google/go-github/v90/github"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/autonomy"
 	"github.com/rahulnakmol/agentic-ayudha/internal/delegate"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 )
@@ -45,7 +43,7 @@ func failedRequired(ctx context.Context, c *github.Client, owner, name, head str
 // jobTail is the last tailLines lines of an Actions job's log (a check run's
 // ID is its job's), or "" when the log cannot be read.
 func jobTail(ctx context.Context, c *github.Client, owner, name string, job int64) string {
-	b := jobLog(ctx, c, owner, name, job)
+	b := autonomy.JobLog(ctx, c, owner, name, job)
 	if b == "" {
 		return ""
 	}
@@ -54,26 +52,4 @@ func jobTail(ctx context.Context, c *github.Client, owner, name string, job int6
 		lines = lines[len(lines)-tailLines:]
 	}
 	return strings.Join(lines, "\n")
-}
-
-// jobLog is an Actions job's log (up to 8 MiB), or "" when it cannot be read.
-func jobLog(ctx context.Context, c *github.Client, owner, name string, job int64) string {
-	u, _, err := c.REST.Actions.GetWorkflowJobLogs(ctx, owner, name, job, 2)
-	if err != nil {
-		return ""
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
-	if err != nil {
-		return ""
-	}
-	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
-	if err != nil {
-		return ""
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		return ""
-	}
-	b, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
-	return string(b)
 }
