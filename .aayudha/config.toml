@@ -65,5 +65,8 @@ always_person = [
   ".github/workflows/aayudha-token.yml",
   ".goreleaser.yaml",
   "install.sh",
+  ".aayudha/config.json",
+  ".aayudha/config.local.toml",
+  ".aayudha/config.local.json",
 ]
 always_person_config = [".aayudha/config.toml", "internal/config/defaults.toml"]

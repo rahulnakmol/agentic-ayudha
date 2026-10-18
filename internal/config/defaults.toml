@@ -59,7 +59,7 @@ correction_days = 14
 # per PR.
 proof = false
 proof_rungs = ["A", "B"]
-always_person = [".github/CODEOWNERS"]
+always_person = [".github/CODEOWNERS", ".aayudha/config.json", ".aayudha/config.local.toml", ".aayudha/config.local.json"]
 always_person_config = [".aayudha/config.toml"]
 always_person_sections = ["identity", "approvals", "autonomy", "seats"]
 
