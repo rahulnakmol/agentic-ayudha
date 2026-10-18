@@ -748,10 +748,66 @@ func TestBuildHoldsAStoryThePersonDidNotAskFor(t *testing.T) {
 	if code, _, errOut := run(t, agent("s1"), opts, "build", n, "--repo", "o/r"); code != 0 {
 		t.Fatalf("own grilled story: %d %s", code, errOut)
 	}
+	// The same holds across two Copilot sessions.
+	copilot := func(session string) map[string]string {
+		return map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH"), "COPILOT_AGENT_SESSION_ID": session}
+	}
+	code, out, errOut = run(t, copilot("c1"), opts, "grill", "story", "--repo", "o/r", "--json", "--title", "Show averages", "--body", body, "--labels", "effort:S", "--create")
+	res = GrillResult{}
+	_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)
+	if code != 0 || res.Issue == 0 {
+		t.Fatalf("grill in Copilot: %d %s", code, errOut)
+	}
+	if code, _, errOut := run(t, person, opts, "ready", strconv.Itoa(res.Issue), "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready %d: %s", res.Issue, errOut)
+	}
+	if code, _, errOut := run(t, copilot("c2"), opts, "build", strconv.Itoa(res.Issue), "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "has not asked") {
+		t.Fatalf("another Copilot session's grilled story: %d %s", code, errOut)
+	}
 	if code, _, errOut := run(t, person, opts, "ready", "6", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready 6: %s", errOut)
 	}
 	if code, _, errOut := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH"), "CURSOR_TRACE_ID": "t"}, opts, "build", "6", "--repo", "o/r"); code != 0 {
 		t.Fatalf("a person in Cursor's terminal: %d %s", code, errOut)
+	}
+}
+
+// Under GitHub Copilot, aayu cannot name the model: the checkpoint commit
+// records every model Copilot reported in the session that ran build, most
+// recent first, and a HydraFusion critic apart from them, for inspect's
+// different-family rule. The build record holds one model, so with two
+// families it names none: naming the latest would hide the other.
+func TestBuildRecordsCopilotModels(t *testing.T) {
+	_, env, opts, dir, bare := buildSetup(t)
+	copilotHome := t.TempDir()
+	env["COPILOT_HOME"] = copilotHome
+	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready: %s", errOut)
+	}
+	session := filepath.Join(copilotHome, "session-state", "s-1")
+	_ = os.MkdirAll(session, 0o755)
+	_ = os.WriteFile(filepath.Join(session, "events.jsonl"), []byte(`{"type":"assistant.message","data":{"model":"gpt-6-luna"}}
+{"type":"session.fusion_resolved","data":{"pattern":"critique","secondaryModel":"gpt-6-luna"}}
+{"type":"assistant.message","data":{"model":"claude-opus-5.5","fusion":{"phaseKind":"draft","sourceModel":"claude-opus-5.5"}}}
+`), 0o644)
+	_ = os.MkdirAll(filepath.Join(dir, ".aayudha", "state"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "state", "copilot-session.json"), []byte(`{"session_id":"s-1"}`), 0o644)
+	code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r", "--json")
+	var res BuildResult
+	_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)
+	if code != 0 {
+		t.Fatalf("build: %d %s", code, errOut)
+	}
+	_ = os.WriteFile(filepath.Join(res.Worktree, "empty.txt"), []byte("Your cart is empty\n"), 0o644)
+	if code, _, errOut := run(t, env, opts, "build", "2", "--repo", "o/r", "--json"); code != 0 {
+		t.Fatalf("build (checkpoint): %d %s", code, errOut)
+	}
+	msg := git(t, res.Worktree, "log", "-1", "--format=%B")
+	if want := "Aayudha-Host: copilot\nAayudha-Model: claude-opus-5.5\nAayudha-Model: gpt-6-luna\nAayudha-Critic-Model: gpt-6-luna"; !strings.Contains(msg, want) {
+		t.Fatalf("checkpoint commit lacks the Copilot trailers:\n%s", msg)
+	}
+	var st BuildState
+	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &st); err != nil || len(st.Checkpoints) != 1 || st.Checkpoints[0].Model != "" {
+		t.Fatalf("build record: %v %+v", err, st.Checkpoints)
 	}
 }

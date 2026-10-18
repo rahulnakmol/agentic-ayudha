@@ -32,7 +32,7 @@ var Hooks = []struct{ Name, Summary string }{
 const PostToolMatcher = "mcp__.*|Bash"
 
 // HookResult is what a hook prints and its exit code. Exit code 2 blocks the
-// tool call in Claude Code, Cursor, and the Amp plugin.
+// tool call in Claude Code, Cursor, Copilot, and the Amp plugin.
 type HookResult struct {
 	Stdout, Stderr string
 	Code           int
@@ -58,6 +58,9 @@ func RunHook(name string, host verbs.HostID, root, pauseFile string, event []byt
 		} else if StableRequestCommand(shellCommand(event)) {
 			msg = "aayudha: a stable-release request is the person's own words on the Release issue; an agent never writes one. Ask the person to comment `Stable release: <version>` there themselves."
 			next = "a person comments `Stable release: <version>` on the Release issue"
+		}
+		if msg == "" && host == verbs.HostCopilot {
+			recordCopilotSession(root, event, shellCommand(event))
 		}
 		r := Deny(host, msg)
 		r.Next = next
@@ -89,6 +92,13 @@ func RunHook(name string, host verbs.HostID, root, pauseFile string, event []byt
 			out, _ := json.Marshal(map[string]string{"additional_context": msg})
 			return HookResult{Stdout: string(out) + "\n"}, nil
 		}
+		if host == verbs.HostCopilot { // Copilot reads only additionalContext from a sessionStart hook
+			if msg == "" {
+				return HookResult{Stdout: "{}\n"}, nil
+			}
+			out, _ := json.Marshal(map[string]string{"additionalContext": msg})
+			return HookResult{Stdout: string(out) + "\n"}, nil
+		}
 		if msg == "" {
 			return HookResult{}, nil
 		}
@@ -113,6 +123,12 @@ func Deny(host verbs.HostID, msg string) HookResult {
 			return HookResult{Stdout: `{"permission":"allow"}` + "\n"}
 		}
 		out, _ := json.Marshal(map[string]string{"permission": "deny", "user_message": msg, "agent_message": msg})
+		return HookResult{Stdout: string(out) + "\n", Stderr: msg + "\n", Code: 2}
+	}
+	if host == verbs.HostCopilot && msg != "" {
+		// Exit 2 denies in Copilot whatever stdout says; the JSON carries the
+		// reason to the agent.
+		out, _ := json.Marshal(map[string]string{"permissionDecision": "deny", "permissionDecisionReason": msg})
 		return HookResult{Stdout: string(out) + "\n", Stderr: msg + "\n", Code: 2}
 	}
 	if msg == "" {
@@ -212,7 +228,7 @@ var aayuWord = regexp.MustCompile(`(?:^|[\s;&|(/\\])aayu(?:dha)?(?:\.exe)?"?\s+(
 // verb (WP3.2b): a verb the MCP server never exposes, a human-only flag, or
 // a person's plumbing command. It returns the aayu command and why, or "".
 // Hosts that send the shell command to their pre-tool hook (Claude Code,
-// Codex, Cursor) block it, so an agent is never the one that ships or releases.
+// Codex, Cursor, Copilot) block it, so an agent is never the one that ships or releases.
 func HumanOnlyCommand(shell string) (cmd, why string) {
 	for _, m := range aayuWord.FindAllStringSubmatch(shell, -1) {
 		name, rest := m[1], m[2]
@@ -257,6 +273,7 @@ var AgentMarkers = []struct {
 	{"CODEX_THREAD_ID", verbs.HostCodex, "Codex exports it to the commands it runs"},
 	{"CODEX_SANDBOX", verbs.HostCodex, "Codex sets it inside its sandbox"},
 	{"CODEX_CI", verbs.HostCodex, "Codex sets it for the commands it runs"},
+	{"COPILOT_AGENT_SESSION_ID", verbs.HostCopilot, "Copilot CLI sets it in the commands its agent runs (seen with Copilot CLI 1.0.98)"},
 	{"AGENT", "", "the AGENT=<name> convention (Amp sets AGENT=amp, Goose AGENT=goose)"},
 	{"AI_AGENT", "", "the AI_AGENT=<name> convention"},
 }
@@ -284,19 +301,35 @@ func StableRequestCommand(shell string) bool {
 }
 
 // shellCommand is the shell command in a pre-tool event: tool_input.command
-// (Claude Code, Codex) or command (Cursor's beforeShellExecution).
+// (Claude Code, Codex), command (Cursor's beforeShellExecution), or
+// toolArgs.command (Copilot's preToolUse, whose toolArgs may arrive as an
+// object or as a JSON string).
 func shellCommand(event []byte) string {
 	var e struct {
 		Command   string `json:"command"`
 		ToolInput struct {
 			Command string `json:"command"`
 		} `json:"tool_input"`
+		ToolArgs json.RawMessage `json:"toolArgs"`
 	}
 	if json.Unmarshal(event, &e) != nil {
 		return ""
 	}
 	if e.ToolInput.Command != "" {
 		return e.ToolInput.Command
+	}
+	if len(e.ToolArgs) > 0 {
+		args := e.ToolArgs
+		var str string
+		if json.Unmarshal(args, &str) == nil {
+			args = []byte(str)
+		}
+		var a struct {
+			Command string `json:"command"`
+		}
+		if json.Unmarshal(args, &a) == nil && a.Command != "" {
+			return a.Command
+		}
 	}
 	return e.Command
 }

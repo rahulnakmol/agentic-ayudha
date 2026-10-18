@@ -25,11 +25,13 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/delegate"
 	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
+	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ui"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -336,11 +338,26 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			msg += fmt.Sprintf("\nAayudha-Attempt: %d", attempt)
 		}
 		model := e.builderModel()
+		cm, copilot := hosts.CopilotModels{}, false
+		if dlg == nil && e.Getenv("AAYU_MODEL") == "" {
+			cm, copilot = e.copilotModels(root)
+		}
 		switch {
 		case dlg != nil:
 			msg += "\nAayudha-Delegate: " + dlg.receiver
 			if model = dlg.model(); model != "" {
 				msg += "\nAayudha-Model: " + model
+			}
+		case copilot:
+			// Auto may answer with several models, of several families: the
+			// trailers name each one. The build record holds one model, so it
+			// names one only when every model Copilot reported is of its family;
+			// otherwise it names none, and inspect sees an unknown builder
+			// rather than a single family that hides the others.
+			msg += "\n" + cm.Trailers()
+			model = ""
+			if len(cm.Models) > 0 && !slices.ContainsFunc(cm.Models, func(m string) bool { return verbs.FamilyOf(m) != verbs.FamilyOf(cm.Models[0]) }) {
+				model = cm.Models[0]
 			}
 		case model != "":
 			msg += "\nAayudha-Model: " + model
@@ -731,6 +748,23 @@ func contains(xs []string, x string) bool {
 		}
 	}
 	return false
+}
+
+// copilotModels reads the models Copilot reported in the Copilot session that
+// ran this build in root, which its pre-tool hook recorded within the last
+// quarter hour. ok is false when no Copilot session ran it.
+func (e *Env) copilotModels(root string) (hosts.CopilotModels, bool) {
+	log := hosts.CopilotSessionLog(root, hosts.CopilotHome(e.homeDir(), e.Getenv), 15*time.Minute, e.Now())
+	if log == "" {
+		return hosts.CopilotModels{}, false
+	}
+	f, err := os.Open(log)
+	if err != nil {
+		return hosts.CopilotModels{}, true // Copilot built it; which model is unknown
+	}
+	defer func() { _ = f.Close() }()
+	m, _ := hosts.ReadCopilotSession(f)
+	return m, true
 }
 
 // builderModel is the model the building agent runs on, when known: the

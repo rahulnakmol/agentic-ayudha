@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -323,6 +324,14 @@ func failing(t *testing.T) map[string]func(*Probe) {
 				return getenv(k)
 			}
 		},
+		// No hooks file, and aayu's token is Copilot's own: aayu would write
+		// as Copilot's account.
+		"copilot": func(p *Probe) {
+			p.Root = repoWith(t, map[string]string{".aayudha/lock.toml": "version = 1\nskills_version = \"0.0.0\"\nhosts = [\"copilot\"]\n[skills]\n"})
+			env := map[string]string{"COPILOT_GITHUB_TOKEN": "t", "HOME": t.TempDir()}
+			p.Getenv = func(k string) string { return env[k] }
+			p.LookPath = func(string) (string, error) { return "", errors.New("not found") }
+		},
 		"mcp": func(p *Probe) {
 			overlay(p, map[string]string{"/usr/bin/aayu version": "aayu 1.1.0\n"})
 		},
@@ -540,5 +549,78 @@ func TestCheckStates(t *testing.T) {
 		if r := c(context.Background(), p); r.Status != Pass || r.Detail != "not in a repository" {
 			t.Errorf("outside a repository: %s %q", r.Status, r.Detail)
 		}
+	}
+}
+
+// The copilot row passes only on a Copilot CLI that runs and trust it can read: Copilot CLI's, found
+// through USERPROFILE where HOME is unset (Windows). Without Copilot CLI,
+// VS Code's Workspace Trust is out of reach, so the row asks for it; and a
+// hooks file only counts when Copilot would run aayu's pre-tool hook from it.
+func TestCopilotTrustRow(t *testing.T) {
+	profile := t.TempDir()
+	p := healthy(t)
+	p.Root = repoWith(t, map[string]string{".aayudha/lock.toml": "version = 1\nskills_version = \"0.0.0\"\nhosts = [\"copilot\"]\n[skills]\n",
+		".github/hooks/aayudha.json": `{"version":1,"hooks":{"preToolUse":[{"type":"command","bash":"\"/usr/bin/aayu\" hook pre-tool --host copilot"}]}}`})
+	_ = os.MkdirAll(filepath.Join(profile, ".copilot"), 0o755)
+	_ = os.WriteFile(filepath.Join(profile, ".copilot", "config.json"), []byte("// managed\n"+`{"trustedFolders":[`+strconv.Quote(p.Root)+`]}`), 0o644)
+	env := map[string]string{"USERPROFILE": profile}
+	p.Getenv = func(k string) string { return env[k] }
+	overlay(p, map[string]string{"/usr/bin/x --version": "GitHub Copilot CLI 1.0.98.\n"})
+	if r := checkCopilot(context.Background(), p); r.Status != Pass {
+		t.Errorf("trusted through USERPROFILE: %s %s %v", r.Status, r.Detail, r.Lines)
+	}
+	exec := p.Exec
+	overlay(p, map[string]string{"/usr/bin/x --version": "ERR"})
+	if r := checkCopilot(context.Background(), p); r.Status != Warn {
+		t.Errorf("a copilot that does not run: %s %s", r.Status, r.Detail)
+	}
+	p.Exec = exec
+	p.LookPath = func(string) (string, error) { return "", errors.New("not found") }
+	if r := checkCopilot(context.Background(), p); r.Status != Warn {
+		t.Errorf("VS Code only: %s %s", r.Status, r.Detail)
+	}
+	// A file that only mentions the hook guards nothing.
+	_ = os.WriteFile(filepath.Join(p.Root, ".github", "hooks", "aayudha.json"), []byte(`{"version":1,"hooks":{"preToolUse":[{"type":"command","bash":"echo aayu hook pre-tool --host copilot"}]}}`), 0o644)
+	if r := checkCopilot(context.Background(), p); r.Status != Fail {
+		t.Errorf("a hook that is not aayu's: %s %s", r.Status, r.Detail)
+	}
+}
+
+// Doctor never runs an MCP registration's command from the repository itself:
+// .mcp.json is repository content, so a branch could point it at a committed
+// script. A relative path is refused the same way.
+func TestMCPDoesNotRunARepositoryCommand(t *testing.T) {
+	for _, cmd := range []string{"<root>/bin/aayu", "bin/aayu"} {
+		p := healthy(t)
+		ran := false
+		exec := p.Exec
+		p.Exec = func(ctx context.Context, dir, name string, args ...string) (string, error) {
+			ran = ran || strings.Contains(name, "bin/aayu") && name != "/usr/bin/aayu"
+			return exec(ctx, dir, name, args...)
+		}
+		c := strings.ReplaceAll(cmd, "<root>", p.Root)
+		_ = os.WriteFile(filepath.Join(p.Root, ".mcp.json"), []byte(`{"mcpServers": {"aayudha": {"command": `+strconv.Quote(c)+`, "args": ["mcp"]}}}`), 0o644)
+		if r := checkMCP(context.Background(), p); r.Status != Fail || ran {
+			t.Errorf("%s: %s ran=%v %s %v", cmd, r.Status, ran, r.Detail, r.Lines)
+		}
+	}
+}
+
+// Copilot starts the aayudha server with only PATH and the entry's env, and
+// offers only the tools it lists, so an entry with the right command but not
+// install's env and tools fails the mcp row; so does any host's entry whose
+// args do not start the server.
+func TestMCPChecksCopilotEntry(t *testing.T) {
+	p := healthy(t)
+	p.Root = repoWith(t, map[string]string{".aayudha/lock.toml": "version = 1\nskills_version = \"0.0.0\"\nhosts = [\"copilot\"]\n[skills]\n",
+		".mcp.json": `{"mcpServers": {"aayudha": {"command": "/usr/bin/aayu", "args": ["mcp"]}}}`})
+	if r := checkMCP(context.Background(), p); r.Status != Fail || !strings.Contains(strings.Join(r.Lines, " "), "COPILOT_HOME") {
+		t.Errorf("stale Copilot entry: %s %s %v", r.Status, r.Detail, r.Lines)
+	}
+	// Any host: without args ["mcp"] the host starts the CLI, not the server.
+	p = healthy(t)
+	_ = os.WriteFile(filepath.Join(p.Root, ".mcp.json"), []byte(`{"mcpServers": {"aayudha": {"command": "/usr/bin/aayu", "args": ["status"]}}}`), 0o644)
+	if r := checkMCP(context.Background(), p); r.Status != Fail {
+		t.Errorf("an entry that does not start the server: %s %s", r.Status, r.Detail)
 	}
 }

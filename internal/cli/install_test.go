@@ -70,7 +70,7 @@ func TestInstall(t *testing.T) {
 		t.Fatalf("home edit applied without confirmation: %v", err)
 	}
 	lock, ok, err := hosts.ReadLock(repo)
-	if err != nil || !ok || len(lock.Skills) != 35 || strings.Join(lock.Hosts, ",") != "amp,cursor,claude,codex" {
+	if err != nil || !ok || len(lock.Skills) != 35 || strings.Join(lock.Hosts, ",") != "amp,cursor,claude,codex,copilot" {
 		t.Fatalf("lock: %v %v %d skills, hosts %v", ok, err, len(lock.Skills), lock.Hosts)
 	}
 	// The installed copies pass the WP3.1 lint on disk, which includes the
@@ -344,5 +344,21 @@ func TestHookLogsProviderCalls(t *testing.T) {
 	code, out, errs := runIn(t, env, opts, strings.Replace(calls[0], "s-42", "s-43", 1), "hook", "post-tool", "--host", "claude")
 	if code != 0 || out != "" || !strings.Contains(errs, "could not log the sentry call") {
 		t.Fatalf("unwritable log: exit %d %q %q; want exit 0 and the failure on stderr", code, out, errs)
+	}
+}
+
+// Copilot gets the host files but no agent environment or loops yet, so
+// install says so instead of succeeding without doing anything for it.
+func TestInstallRefusesCopilotEnvAndLoops(t *testing.T) {
+	repo, home, opts := installEnv(t)
+	env := map[string]string{"HOME": home}
+	before := treeHash(t, repo)
+	for _, args := range [][]string{{"install", "--env", "--host", "copilot"}, {"install", "--loops", "--host", "copilot", "--repo", "o/r"}} {
+		if code, _, errs := run(t, env, opts, args...); code != ExitUsage || !strings.Contains(errs, "copilot") {
+			t.Errorf("%v: exit %d %s", args, code, errs)
+		}
+	}
+	if treeHash(t, repo) != before {
+		t.Error("a refused install wrote to the repository")
 	}
 }
