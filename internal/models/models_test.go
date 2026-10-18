@@ -974,3 +974,30 @@ func TestStreamPastAProxyIdleLimit(t *testing.T) {
 		t.Errorf("a failed responses stream: %+v %v", r, err)
 	}
 }
+
+// A caller's own HTTP client with a shorter timeout (the CLI's general
+// 5-minute client) does not cut a model call before CallTimeout: the merge
+// gate's CI review streamed past 5 minutes and was cut on every PR (#674, #682, #666).
+func TestCallTimeoutOutlastsTheCallersClient(t *testing.T) {
+	defer func(d time.Duration) { CallTimeout = d }(CallTimeout)
+	CallTimeout = 5 * time.Second
+	events := []string{
+		`{"model":"grok-4.7","choices":[{"delta":{"role":"assistant","content":""}}]}`,
+		`{"model":"grok-4.7","choices":[{"delta":{"content":"done"},"finish_reason":"stop"}]}`,
+		`{"model":"grok-4.7","choices":[],"usage":{"prompt_tokens":11,"completion_tokens":7,"total_tokens":18}}`,
+		`[DONE]`}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		for _, ev := range events {
+			_, _ = io.WriteString(w, "data: "+ev+"\n\n")
+			w.(http.Flusher).Flush()
+			time.Sleep(150 * time.Millisecond) // 600 ms in all, past the caller's 200 ms
+		}
+	}))
+	defer srv.Close()
+	c := HTTPClient{BaseURL: srv.URL, Style: StyleChat, Key: "k", HTTP: &http.Client{Timeout: 200 * time.Millisecond}}
+	resp, err := c.Complete(context.Background(), Request{Model: "grok-4.7", MaxTokens: 100, Stream: true, Messages: []Message{{Role: "user", Content: "review"}}})
+	if err != nil || resp.Text != "done" {
+		t.Fatalf("a stream past the caller's client timeout: %q %v", resp.Text, err)
+	}
+}

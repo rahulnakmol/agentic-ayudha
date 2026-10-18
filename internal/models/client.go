@@ -262,9 +262,13 @@ func (c HTTPClient) Complete(ctx context.Context, r Request) (Response, error) {
 	if c.Style == StyleMessages {
 		req.Header.Set("anthropic-version", "2023-06-01")
 	}
-	hc := c.HTTP
-	if hc == nil {
-		hc = &http.Client{Timeout: CallTimeout}
+	// A caller's shorter timeout (the CLI's general 5-minute client) would cut
+	// a long review mid-stream, so a model call always gets CallTimeout.
+	hc := &http.Client{Timeout: CallTimeout}
+	if c.HTTP != nil {
+		cp := *c.HTTP
+		cp.Timeout = max(cp.Timeout, CallTimeout)
+		hc = &cp
 	}
 	resp, err := hc.Do(req)
 	if err != nil {
