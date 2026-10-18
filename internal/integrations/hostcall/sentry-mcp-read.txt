@@ -3,7 +3,7 @@
 # Generated from packages/mcp-core/src/toolDefinitions.json at getsentry/sentry-mcp commit 5044167 (2026-10-17):
 # every tool whose required scopes are all <resource>:read, and the inspect skill's tools that need no scope, minus
 # onboarding_status_update (it writes) and analyze_issue_with_seer (it starts a paid Seer run). Tools that return
-# personal data (replay content, attachments, AI conversations) are in the [pii] section and pass only when
+# personal data (replays and their content, attachments, AI conversations) are in the [pii] section and pass only when
 # [integrations.sentry] allow_pii = true. execute_sentry_tool is judged by the tool it names. Every tool not listed
 # here is refused.
 
@@ -49,7 +49,6 @@ search_issues
 search_logs
 search_metrics
 search_profiles
-search_replays
 search_sentry_tools
 search_traces
 whoami
@@ -61,3 +60,4 @@ get_event_attachment
 get_replay_details
 search_agent_conversations
 search_ai_conversations
+search_replays
