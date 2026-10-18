@@ -693,7 +693,11 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 				out = append(out, run)
 			}
 		}
-		reply(200, map[string]any{"total_count": len(out), "workflow_runs": out})
+		total := len(out)
+		if per := atoi(q.Get("per_page")); per > 0 && len(out) > per { // one page, as GitHub serves it
+			out = out[:per]
+		}
+		reply(200, map[string]any{"total_count": total, "workflow_runs": out})
 	case m == "GET" && p == repo+"/actions/workflows":
 		out := []map[string]any{}
 		for _, f := range g.Workflows {

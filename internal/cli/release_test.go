@@ -759,6 +759,11 @@ func TestReleasePicksAnEvaluatedCommit(t *testing.T) {
 	f.groups = []string{"skills"} // survey's results are missing: not every gating group
 	partial := f.commit(t, "chore: eval groups", 0, "", "")
 	f.groups = []string{"skills", "survey"} // the advisory group's are not needed
+	f.g.Mu.Lock()
+	for i := 0; i < 120; i++ { // a busy week of runs ahead of it: the commit's own run is not on dev's first page
+		f.g.Runs = append(f.g.Runs, fake.WorkflowRun{ID: int64(9000 + i), Path: ".github/workflows/evals.yml", HeadSHA: fmt.Sprintf("%040x", i), HeadBranch: "dev", Event: "push", Status: "completed", Conclusion: "success"})
+	}
+	f.g.Mu.Unlock()
 	older := f.commit(t, "feat: evaluated (#34)", 34, "Refs #2", "story/2-evaluated")
 	f.noEvals = true
 	newest := f.commit(t, "feat: not evaluated yet (#35)", 35, "Refs #2", "story/2-newest")
@@ -783,7 +788,7 @@ func TestReleasePicksAnEvaluatedCommit(t *testing.T) {
 
 	code, p, errOut := f.run(t, day, f.env, rel, "--to", "rolling", "--yes", "--at", older[:7])
 	tip := git(t, f.bare, "rev-parse", "refs/heads/rolling")
-	if code != 0 || p.SourceSHA != older || p.Evals == nil || !strings.HasPrefix(p.Evals.URL, "https://github.com/o/r/actions/runs/80") || git(t, f.bare, "rev-parse", tip+"^2") != older {
+	if code != 0 || p.SourceSHA != older || p.Evals == nil || !strings.HasPrefix(p.Evals.URL, "https://github.com/o/r/actions/runs/8") || git(t, f.bare, "rev-parse", tip+"^2") != older {
 		t.Fatalf("--at %s: %d %+v %s", older[:7], code, p, errOut)
 	}
 	if fmt.Sprint(f.dispatched) != "[ci.yml@promote/rolling map[gate:rolling]]" {

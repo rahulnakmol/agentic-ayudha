@@ -844,14 +844,15 @@ func (e *Env) evaluated(ctx context.Context, c *github.Client, gitOut func(strin
 			gating = append(gating, g.Name)
 		}
 	}
-	runs, _, err := c.REST.Actions.ListWorkflowRunsByFileName(ctx, owner, name, evalsWorkflow,
-		&gh.ListWorkflowRunsOptions{Branch: src, Status: "completed", ListOptions: gh.ListOptions{PerPage: 100}})
-	if err != nil {
-		return nil, Wrap(ExitExternal, err)
-	}
-	// results reports the run of commit h with every gating group's results
-	// (the newest that has each), or the groups none of its runs has.
+	// results reports the newest completed run of commit h, and the gating
+	// groups none of h's completed runs has results for. It asks for h's runs
+	// by commit, so a commit whose run is far down dev's run list still counts.
 	results := func(h string) (*RunRef, []string, error) {
+		runs, _, err := c.REST.Actions.ListWorkflowRunsByFileName(ctx, owner, name, evalsWorkflow,
+			&gh.ListWorkflowRunsOptions{HeadSHA: h, Status: "completed", ListOptions: gh.ListOptions{PerPage: 100}})
+		if err != nil {
+			return nil, nil, Wrap(ExitExternal, err)
+		}
 		have := map[string]bool{}
 		var ref *RunRef
 		for _, r := range runs.WorkflowRuns {
