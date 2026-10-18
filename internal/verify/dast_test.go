@@ -166,7 +166,13 @@ func TestDASTGuardrails(t *testing.T) {
 				t.Fatalf("the waiver does not release it: %v %+v", got, rep.Checks)
 			}
 		}
+		// Before the blocking date the same skip names the fix but does not block.
 		r := dastRun(t, bin, "", "web")
+		r.Now = func() time.Time { return time.Date(2026, 11, 13, 0, 0, 0, 0, time.UTC) }
+		if c, _ := dastCheck(t, r); c.Result != proof.Skipped || proof.BlocksShip(c) || !strings.Contains(c.Detail, "advisory until 2026-11-14") || !strings.Contains(c.Detail, "[verify] seed") {
+			t.Fatalf("no target before the date: %+v", c)
+		}
+		r = dastRun(t, bin, "", "web")
 		r.Floors.DAST.SkippedBlocksShip = false
 		if c, rep := dastCheck(t, r); c.Result != proof.Skipped || !rep.Hold {
 			t.Fatalf("skipped_blocks_ship = false: %+v", c)

@@ -69,8 +69,8 @@ A few details matter in practice:
   `.aayudha/config.toml` can set that. A CLI or library is `n/a`. A web or api story with no target records a
   `skipped: dast: no runnable target` that blocks `ship` like the mobile skip, and names the fix: a `[verify] seed`
   and a `[verify.environments.local] url`, or a waiver. ZAP runs under Docker, or Podman (rootless too) when there is
-  no Docker. With neither, a local run skips and leaves the scan to CI; in CI it is `blocked`. A high-risk alert is
-  advisory until `[verify] new_floors_blocking_from` (2026-11-14), then it fails. `aayu doctor` shows the target,
+  no Docker. With neither, a local run skips and leaves the scan to CI; in CI it is `blocked`. A high-risk alert and the
+  no-target skip are advisory until `[verify] new_floors_blocking_from` (2026-11-14), then they fail and block. `aayu doctor` shows the target,
   the scan mode, and the runtime.
 
 ### What a miss does

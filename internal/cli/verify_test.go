@@ -159,7 +159,8 @@ func skipAndWaiver(t *testing.T, floor, platforms string, detail func(string) bo
 	_ = os.WriteFile(filepath.Join(dir, "cov.info"), []byte("SF:x\nend_of_record\n"), 0o644)
 	git(t, dir, "add", "cov.info")
 	git(t, dir, "commit", "--quiet", "-m", "feat: "+floor)
-	cfg := "version = 1\n[verify]\nplatforms = " + platforms + "\n[verify.floors.coverage]\ncommand = [\"true\"]\nreport = \"cov.info\"\n"
+	// Past the new floors' advisory period, so a new blocking skip blocks.
+	cfg := "version = 1\n[verify]\nplatforms = " + platforms + "\nnew_floors_blocking_from = \"2026-01-01\"\n[verify.floors.coverage]\ncommand = [\"true\"]\nreport = \"cov.info\"\n"
 	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte(cfg), 0o644)
 	verifyFloor := func() (int, string) {
 		code, out, errOut := run(t, env, opts, "verify", "--floor", floor, "--repo", "o/r")

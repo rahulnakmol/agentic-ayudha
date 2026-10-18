@@ -128,6 +128,10 @@ func (DAST) Run(ctx context.Context, r *Run) (Result, error) {
 		if !r.Floors.DAST.SkippedBlocksShip {
 			return skip("skipped: dast, nothing to scan (not blocking: [verify.floors.dast] skipped_blocks_ship = false)")
 		}
+		// A new blocking skip is advisory until the date, too (Decision #485, Rollout).
+		if adv, advisory := newFloorAdvisory(r); advisory {
+			return skip("skipped: " + adv + ": dast:" + strings.TrimPrefix(why, proof.SkippedDAST) + ". " + DASTFix)
+		}
 		return skip(why + ". " + DASTFix)
 	}
 	rt := ContainerRuntime(r.Sandbox.Env(Cmd{}, NetAllowed))
