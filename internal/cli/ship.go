@@ -235,7 +235,7 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	// The review ladder's rung at the head, from the merge gate's own inspect log.
 	rec.Review = autonomy.GateRung(ctx, c, owner, name, n, head)
 	// Merge on proof (Decision #593): with it, no human pass is needed.
-	proofOK, proofWhy, err := e.proofPass(ctx, c, owner, name, pr, rec.Review, &l.Config)
+	proofOK, proofWhy, err := e.proofPass(ctx, c, owner, name, pr, rec.Review)
 	if err != nil {
 		return err
 	}
@@ -266,7 +266,7 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		}
 		if !ok || (plan.Review.ApprovedBy == "" && plan.Review.Bypass == nil) {
 			msg := fmt.Sprintf("ship #%d: the footprint touches never layer(s) %s, so the Engineering Manager's plan-time review is required: `aayu plan %d --draft <file> --create`, then a human runs `aayu plan %d --approve` (solo mode: `aayu plan %d --solo-bypass`)", n, strings.Join(rec.Pass.Never, ", "), story, story, story)
-			if l.Config.Autonomy.Proof {
+			if proofWhy != "" {
 				msg += "; no merge on proof: " + proofWhy
 			}
 			return Errorf(ExitBlocked, "%s", msg)
@@ -307,7 +307,7 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 			note += fmt.Sprintf("; CODEOWNERS paths %s merged with no code owner's review", strings.Join(proofOK.Protected, ", "))
 		}
 		rec.HumanPass = HumanPass{Kind: "proof", Login: me.Login, Commit: head, Note: note}
-	} else if rec.HumanPass.Kind == "" && proofWhy != "" && l.Config.Autonomy.Proof {
+	} else if rec.HumanPass.Kind == "" && proofWhy != "" {
 		why = append(why, "no merge on proof: "+proofWhy)
 	}
 	// Only a different-family review (A, or B through a paid key) lets an

@@ -3,7 +3,10 @@ package cli
 import (
 	"context"
 	"fmt"
+	"os"
 	"path"
+	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -59,9 +62,8 @@ func requiredChecks(ctx context.Context, c *github.Client, owner, name string, n
 			if concl == "skipped" {
 				continue
 			}
-			if state == "missing" || state == "success" {
-				state = concl // every run of the name must be green
-			}
+			state = concl
+			break // the API lists the newest run of a name first; a rerun's success replaces a failure
 		}
 		if state != "success" {
 			return nil, Errorf(ExitBlocked, "ship #%d: required check %s is %s on %s; never merge with a red required check", n, w, state, short(head))
@@ -70,24 +72,11 @@ func requiredChecks(ctx context.Context, c *github.Client, owner, name string, n
 	return want, nil
 }
 
-// proofPass says whether PR pr may merge on proof at rung, or why not. The
-// gate, the pack, and the required checks are checked before it.
-func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name string, pr *gh.PullRequest, rung string, cfg *config.Config) (*ProofPass, string, error) {
-	a := cfg.Autonomy
-	switch {
-	case !a.Proof:
-		return nil, "merging on proof is off ([autonomy] proof)", nil
-	case pr.GetBase().GetRef() != e.devBranch():
-		return nil, fmt.Sprintf("it merges into %s, not the integration branch %s", pr.GetBase().GetRef(), e.devBranch()), nil
-	case !slices.Contains(a.ProofRungs, rung):
-		return nil, fmt.Sprintf("the review rung at the head is %s, not one of %s ([autonomy] proof_rungs)", or(rung, "none recorded"), strings.Join(a.ProofRungs, ", ")), nil
-	}
-	files, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.CommitFile, *gh.Response, error) {
-		return c.REST.PullRequests.ListFiles(ctx, owner, name, pr.GetNumber(), &o)
-	})
-	if err != nil {
-		return nil, "", Wrap(ExitExternal, err)
-	}
+// proofPass says whether PR pr may merge on proof at rung, or why not ("" when
+// proof is off). The gate, the pack, and the required checks are checked
+// before it. The policy is the base revision's [autonomy], never the PR's own
+// or the checkout's: a PR could otherwise empty the narrow set it is judged by.
+func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name string, pr *gh.PullRequest, rung string) (*ProofPass, string, error) {
 	base, head := pr.GetBase().GetSHA(), pr.GetHead().GetSHA()
 	var readErr error
 	read := func(p, ref string) string { // "" when absent at ref
@@ -100,6 +89,28 @@ func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name strin
 		}
 		s, _ := fc.GetContent()
 		return s
+	}
+	baseConfig := read(".aayudha/config.toml", base)
+	if readErr != nil {
+		return nil, "", Wrap(ExitExternal, readErr)
+	}
+	a, err := protectedAutonomy(baseConfig)
+	if err != nil {
+		return nil, "", err
+	}
+	switch {
+	case !a.Proof:
+		return nil, "", nil
+	case pr.GetBase().GetRef() != e.devBranch():
+		return nil, fmt.Sprintf("it merges into %s, not the integration branch %s", pr.GetBase().GetRef(), e.devBranch()), nil
+	case !slices.Contains(a.ProofRungs, rung):
+		return nil, fmt.Sprintf("the review rung at the head is %s, not one of %s ([autonomy] proof_rungs)", or(rung, "none recorded"), strings.Join(a.ProofRungs, ", ")), nil
+	}
+	files, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.CommitFile, *gh.Response, error) {
+		return c.REST.PullRequests.ListFiles(ctx, owner, name, pr.GetNumber(), &o)
+	})
+	if err != nil {
+		return nil, "", Wrap(ExitExternal, err)
 	}
 	codeowners := identity.ParseCodeowners(read(".github/CODEOWNERS", base))
 	pp := &ProofPass{Rung: rung}
@@ -130,6 +141,29 @@ func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name strin
 	return pp, "", nil
 }
 
+// protectedAutonomy is [autonomy] as a revision's .aayudha/config.toml (text,
+// "" when absent) sets it over the defaults.
+func protectedAutonomy(text string) (config.Autonomy, error) {
+	dir, err := os.MkdirTemp("", "aayu-base-config-")
+	if err != nil {
+		return config.Autonomy{}, Wrap(ExitExternal, err)
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+	if text != "" {
+		if err := os.MkdirAll(filepath.Join(dir, ".aayudha"), 0o755); err != nil {
+			return config.Autonomy{}, Wrap(ExitExternal, err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte(text), 0o644); err != nil {
+			return config.Autonomy{}, Wrap(ExitExternal, err)
+		}
+	}
+	l, err := config.Load(config.Sources{RepoDir: dir})
+	if err != nil {
+		return config.Autonomy{}, Errorf(ExitBlocked, "the base revision's .aayudha/config.toml does not load, so no merge on proof: %v", err)
+	}
+	return l.Config.Autonomy, nil
+}
+
 // alwaysPerson matches p against the narrow set: a pattern ending in "/"
 // covers a directory, any other is a path.Match glob.
 func alwaysPerson(patterns []string, p string) (string, bool) {
@@ -144,11 +178,14 @@ func alwaysPerson(patterns []string, p string) (string, bool) {
 	return "", false
 }
 
+// secretRef is any mention of the secrets context (secrets.X, secrets['X'],
+// toJSON(secrets), secrets: inherit) or an environment key. It errs towards a
+// person: a comment that says "secrets" counts too.
+var secretRef = regexp.MustCompile(`\bsecrets\b|\benvironment\s*:`)
+
 // holdsSecrets reports whether a workflow reads a secret or names an
 // environment (an environment holds secrets and deployment rights).
-func holdsSecrets(workflow string) bool {
-	return strings.Contains(workflow, "secrets.") || strings.Contains(workflow, "environment:")
-}
+func holdsSecrets(workflow string) bool { return secretRef.MatchString(workflow) }
 
 // changedSections lists the TOML tables, by their first key segment in
 // names, whose text differs between two versions of a file.

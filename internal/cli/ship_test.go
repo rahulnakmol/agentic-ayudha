@@ -338,23 +338,23 @@ func TestShipOnProof(t *testing.T) {
 	g, env, opts, dir, bare, prN, head := thinFixture(t)
 	gateRun(t, g, dir, prN, head, coverageHolds, "L07")
 	base := strings.Repeat("b", 40)
-	cfg := func(rungs string) {
-		t.Helper()
-		_ = os.MkdirAll(filepath.Join(dir, ".aayudha"), 0o755)
-		_ = os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte("version = 1\n[autonomy]\nproof = true\nproof_rungs = "+rungs+
-			"\nalways_person = [\".github/CODEOWNERS\", \"internal/identity/\"]\nalways_person_config = [\".aayudha/config.toml\"]\n"), 0o644)
-	}
-	cfg(`["A", "B", "C"]`)
+	// The checkout (the PR's own config) turns proof off and empties the
+	// narrow set; the base revision's config is the policy, so it is ignored.
+	_ = os.MkdirAll(filepath.Join(dir, ".aayudha"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte("version = 1\n[autonomy]\nproof = false\nalways_person = []\nalways_person_config = []\n"), 0o644)
 	g.Mu.Lock()
 	gate := slices.IndexFunc(g.Runs, func(r fake.WorkflowRun) bool { return r.HeadSHA == head && r.Event == "pull_request_target" })
 	g.RunJobs = map[int64][]fake.CheckRun{g.Runs[gate].ID: {{ID: 7701, Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}}}
 	g.JobLogs = map[int64]string{7701: "2026-10-17T23:00:00.0000000Z inspect #" + strconv.Itoa(prN) + " at abc: merge (reviewed by codex)\n2026-10-17T23:00:00.0000000Z   review: same-family review (C): codex (openai), builder openai\n"}
 	g.RequiredChecks = []string{"build", "lint", "protected-paths"}
+	// build was rerun green: its newest run counts, not the stale failure.
 	g.CheckRuns[head] = append(g.CheckRuns[head], fake.CheckRun{Name: "build", Status: "completed", Conclusion: "success"},
+		fake.CheckRun{Name: "build", Status: "completed", Conclusion: "failure"},
 		fake.CheckRun{Name: "lint", Status: "completed", Conclusion: "failure"}, fake.CheckRun{Name: "protected-paths", Status: "completed", Conclusion: "failure"})
 	g.Files = map[string]string{".github/CODEOWNERS": "/skills/ @founder\n"}
-	secrets := "on: push\njobs:\n  x:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ${{ secrets.TOKEN }}\n"
-	conf := "version = 1\n\n[notify]\nchannel = \"file\"\n\n[autonomy]\napprover = \"\"\n"
+	secrets := "on: push\njobs:\n  x:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ${{ secrets['TOKEN'] }}\n"
+	conf := "version = 1\n\n[notify]\nchannel = \"file\"\n\n[autonomy]\napprover = \"\"\nproof = true\nproof_rungs = [\"A\", \"B\", \"C\"]\n" +
+		"always_person = [\".github/CODEOWNERS\", \"internal/identity/\"]\nalways_person_config = [\".aayudha/config.toml\"]\n"
 	g.RefFiles = map[string]map[string]string{
 		base: {".github/CODEOWNERS": "/skills/ @founder\n", ".github/workflows/ci.yml": secrets, ".aayudha/config.toml": conf},
 		head: {".github/workflows/ci.yml": secrets, ".aayudha/config.toml": strings.Replace(conf, `approver = ""`, `approver = "mallory"`, 1)},
@@ -374,7 +374,7 @@ func TestShipOnProof(t *testing.T) {
 	}
 	refused("required check lint is failure on " + short(head) + "; never merge with a red required check")
 	g.Mu.Lock()
-	g.CheckRuns[head][len(g.CheckRuns[head])-2].Conclusion = "success"
+	g.CheckRuns[head][len(g.CheckRuns[head])-2].Conclusion = "success" // lint
 	g.Pulls[prN].Files = []string{"empty.txt", "internal/identity/review.go"}
 	g.Mu.Unlock()
 	refused("no merge on proof: it touches internal/identity/review.go, in the narrow set that always needs a person ([autonomy] always_person: internal/identity/)")
@@ -386,13 +386,16 @@ func TestShipOnProof(t *testing.T) {
 	g.Pulls[prN].Files = []string{"empty.txt", ".aayudha/config.toml"}
 	g.Mu.Unlock()
 	refused("no merge on proof: it changes [autonomy] in .aayudha/config.toml, which decides who may approve or bypass")
-	cfg(`["A", "B"]`)
 	g.Mu.Lock()
-	g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(conf, `"file"`, `"slack"`, 1) // another table: no person needed
+	g.RefFiles[base][".aayudha/config.toml"] = strings.Replace(conf, `"C"]`, `]`, 1)
+	g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(g.RefFiles[base][".aayudha/config.toml"], `"file"`, `"slack"`, 1) // another table: no person needed
 	g.Pulls[prN].Files = []string{"empty.txt", ".aayudha/config.toml", "skills/build/SKILL.md"}
 	g.Mu.Unlock()
 	refused("no merge on proof: the review rung at the head is C, not one of A, B ([autonomy] proof_rungs)")
-	cfg(`["A", "B", "C"]`)
+	g.Mu.Lock()
+	g.RefFiles[base][".aayudha/config.toml"] = conf
+	g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(conf, `"file"`, `"slack"`, 1)
+	g.Mu.Unlock()
 
 	code, out := shipCmd(t, env, opts, prN)
 	if code != 0 || !strings.Contains(out, "human pass: proof by founder") {
