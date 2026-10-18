@@ -68,10 +68,19 @@ the end is generated (WP5.1); the full table is [docs/RACI.md](docs/RACI.md).
 - **Every PR to `dev` squash-merges once every required check is green and inspect's disposition at the head
   is `merge`** (no open fix finding); never with a red required check or an open finding, and only into `dev`.
   Run `aayu inspect` after the last push. A PR whose body says `Refs #n` for a Story is a Story PR: run
-  `aayu ship <pr>` first; when it merges, the proof lands. If ship refuses only for a human pass, a plan review,
-  or a solo-mode bypass comment, squash-merge it yourself on green (a protected path still takes the
+  `aayu ship <pr>` first; when it merges, the proof lands. If ship refuses for anything else, do not merge.
+- **The `gh` fallback for a Story PR is temporary and narrow.** It applies only until `aayu ship` merges on proof
+  by itself (Decision #593's Story), and only when all of these hold: ship's sole refusal is the human pass, the
+  plan review, or the solo-mode bypass comment; every required check is green; inspect's disposition at the head is
+  `merge`; and the PR touches no path in #593's narrow set (until the founder settles that set, its recommended
+  list: `.github/CODEOWNERS`; the `[identity]`, `[approvals]`, `[autonomy]` and `[seats.*]` sections of
+  `internal/config/defaults.toml` and `.aayudha/config.toml`; `internal/cli/ship.go`, `internal/cli/shippass.go`,
+  `internal/cli/presence.go`, `internal/identity/`, `internal/autonomy/`; `.github/workflows/aayudha-merge-gate.yml`,
+  `.github/workflows/protected-paths*.yml`, `.github/workflows/release.yml`, `.github/workflows/aayudha-approve.yml`,
+  `.github/workflows/aayudha-token.yml`, and any workflow that reads a secret or names an environment;
+  `.goreleaser.yaml`, `install.sh`). Then squash-merge it on green (a protected path still takes the
   `Solo-mode bypass:` comment and `--admin`). That merge has no ship record, and `aayu audit` counts it as
-  uncovered, until ship merges on proof by itself (Decision #593). If ship refuses for anything else, do not merge.
+  uncovered. A PR in the narrow set waits for a person.
 - **Every agent PR declares itself**, so `aayu status --streak` counts it: open it with the label
   `agent-authored` (`gh pr create --label agent-authored`), and put `Aayudha-Host: <host>` in its body, plus one
   `Aayudha-Model: <model>` line per model you know you used (none when the host picks the model and does not say).
