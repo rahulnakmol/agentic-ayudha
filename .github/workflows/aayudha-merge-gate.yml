@@ -179,6 +179,10 @@ jobs:
     needs: gate
     if: github.event_name == 'pull_request_target'
     runs-on: ubuntu-latest
+    # This repository's rung B goes through the AI gateway (founder, 2026-10-18: grok-4.7 at high effort). The
+    # environment admits only dev, rolling, and main, which a pull_request_target run on dev is; the job checks out the
+    # base branch and runs no PR code.
+    environment: ai-gateway
     timeout-minutes: 15
     permissions:
       contents: read
@@ -229,6 +233,9 @@ jobs:
           AAYU_SECRET_OPENAI: ${{ secrets.AAYU_SECRET_OPENAI }}
           AAYU_SECRET_GOOGLE: ${{ secrets.AAYU_SECRET_GOOGLE }}
           AAYU_SECRET_XAI: ${{ secrets.AAYU_SECRET_XAI }}
+          AAYU_MODELS__GATEWAY__BASE_URL: ${{ vars.AAYU_AI_GATEWAY_URL }}
+          AAYU_MODELS__GATEWAY__SECRET: ai-gateway
+          AAYU_SECRET_AI_GATEWAY: ${{ secrets.AAYU_SECRET_AI_GATEWAY }}
         run: aayudha inspect "$PR" --ci --repo "$REPO"
 
   pack:
