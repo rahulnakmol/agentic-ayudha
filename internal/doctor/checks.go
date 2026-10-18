@@ -116,6 +116,63 @@ func checkBot(_ context.Context, p *Probe) Result {
 	return Result{Status: Warn, Detail: "bot identity: not configured; agent writes run under the human identity, tagged " + identity.HumanFallbackTag}
 }
 
+// checkApprovals reports whether a recorded approver's reply can approve a
+// batch (Decision #488): only when agents write as a bot and no process an
+// agent runs can reach an approver's GitHub credential. It fails when this
+// process can, naming where the credential was found and whose it is, never
+// its value. The failure does not block: comment approvals are refused from
+// such a session anyway (commentApprovalsOff), and the device code still works.
+func checkApprovals(ctx context.Context, p *Probe) Result {
+	if p.Config == nil {
+		return Result{Status: Warn, Detail: "approvals: unknown (config does not load)"}
+	}
+	cfg := p.Config.Config
+	ap := cfg.Approvals
+	var reach []identity.Reach
+	if p.Reachable != nil {
+		reach = p.Reachable(ctx)
+	}
+	var lines []string
+	for _, r := range reach {
+		lines = append(lines, fmt.Sprintf("%s -> @%s", r.Source, r.Login))
+	}
+	device := "every batch needs the device code"
+	if ex := identity.Exposed(reach, ap.Approvers); len(ex) > 0 {
+		var who []string
+		for _, r := range ex {
+			who = append(who, fmt.Sprintf("@%s (%s)", r.Login, r.Source))
+		}
+		where := "this process"
+		if p.Agent != "" {
+			where = "this agent session (" + p.Agent + ")"
+		}
+		return Result{Status: Fail, Lines: lines, Detail: fmt.Sprintf("approvals: %s can reach an approver's GitHub credential: %s. An agent here could write an `/aayu approve` reply in their name, so batches from here need the device code. Remove it from every agent's environment (docs/guide/how-trust.md, Approving by reply)", where, strings.Join(who, ", "))}
+	}
+	if p.Agent != "" {
+		for _, r := range reach {
+			if !identity.IsBot(identity.Account{Login: r.Login}, cfg.Identity.BotLogins) {
+				lines = append(lines, fmt.Sprintf("this agent session can act as @%s, which is not a bot identity", r.Login))
+			}
+		}
+	}
+	switch {
+	case len(ap.Approvers) == 0:
+		return Result{Status: Warn, Lines: lines, Detail: "approvals: no `[approvals] approvers`, so " + device}
+	case identity.Configured(cfg.Identity) == "":
+		return Result{Status: Warn, Lines: lines, Detail: "approvals: no bot identity, so agents write as a person and " + device}
+	case identity.Configured(cfg.Identity) != identity.KindApp:
+		return Result{Status: Warn, Lines: lines, Detail: "approvals: the bot is a machine user, and the aayudha-approve workflow acts only as the aayudha GitHub App, so " + device}
+	}
+	keep := "one-way doors need the device code"
+	switch {
+	case slices.Contains(ap.DeviceFor, "all"):
+		keep = device
+	case !slices.Contains(ap.DeviceFor, "one-way"):
+		keep = "no door needs the device code"
+	}
+	return Result{Status: Pass, Lines: lines, Detail: fmt.Sprintf("approvals: a reply from %s approves a batch; %s", strings.Join(ap.Approvers, ", "), keep)}
+}
+
 func orDefault(s, d string) string {
 	if s == "" {
 		return d

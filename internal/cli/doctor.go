@@ -74,6 +74,8 @@ func (e *Env) probe(ctx context.Context) *doctor.Probe {
 			}
 		}
 	}
+	p.Reachable = func(ctx context.Context) []identity.Reach { return e.reachable(ctx, p.Repo) }
+	p.Agent = e.agentSignal()
 	p.Latest = func(ctx context.Context) (string, error) {
 		var rel struct {
 			TagName string `json:"tag_name"`

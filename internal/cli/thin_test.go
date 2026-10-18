@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
@@ -266,18 +267,23 @@ func TestShipMobileWaiverAndSoloBypass(t *testing.T) {
 	g.Issues[prN].Comments = append(g.Issues[prN].Comments, bypass)
 	g.Mu.Unlock()
 	// Bug #170: with every solo-mode condition met, an agent running ship --solo-bypass through its host's shell
-	// with the founder's token (no AAYU_AGENT) is refused, even on a terminal, and nothing is merged; with no
-	// terminal and no marker it fails closed.
+	// with the founder's token (no AAYU_AGENT) never completes it, even on a terminal: it waits for a person's
+	// device code (Story #481), and when none comes nothing is merged; with no terminal and no marker, the same.
+	g.Mu.Lock()
+	g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "deny"}
+	g.Mu.Unlock()
+	agentOpts := opts
+	agentOpts.DevicePoll = time.Millisecond
 	for host, marker := range hostShells {
 		agentEnv := maps.Clone(env)
 		maps.Copy(agentEnv, marker)
-		if code, _, errOut := run(t, agentEnv, opts, "ship", strconv.Itoa(prN), "--solo-bypass", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "refused for an agent lane") {
+		if code, _, errOut := run(t, agentEnv, agentOpts, "ship", strconv.Itoa(prN), "--solo-bypass", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "was not approved: the request was denied") {
 			t.Fatalf("solo bypass from a %s shell: %d %s", host, code, errOut)
 		}
 	}
-	noTTY := opts
+	noTTY := agentOpts
 	noTTY.IsTerminal = nil
-	if code, _, errOut := run(t, env, noTTY, "ship", strconv.Itoa(prN), "--solo-bypass", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "needs an interactive terminal") {
+	if code, _, errOut := run(t, env, noTTY, "ship", strconv.Itoa(prN), "--solo-bypass", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "was not approved") {
 		t.Fatalf("solo bypass with no terminal and no marker: %d %s", code, errOut)
 	}
 	g.Mu.Lock()

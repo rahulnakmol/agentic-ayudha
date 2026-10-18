@@ -70,6 +70,10 @@ type Probe struct {
 	// cheap read (providers.Capabilities); nil when unavailable.
 	Capabilities func(ctx context.Context, name string) ([]integrations.Check, error)
 	TracePath    string
+	// Reachable lists the GitHub credentials this process can reach, by
+	// source and account (Decision #488); nil skips the approvals row's check.
+	Reachable func(ctx context.Context) []identity.Reach
+	Agent     string // the agent marker this process runs under, or ""
 }
 
 // Check is one named check.
@@ -86,6 +90,7 @@ var Checks = []Check{
 	{"gh", checkGH},
 	{"token", checkToken},
 	{"bot-identity", checkBot},
+	{"approvals", checkApprovals},
 	{"config", checkConfig},
 	{"schema", checkSchema},
 	{"host", checkHost},

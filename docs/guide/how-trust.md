@@ -128,13 +128,15 @@ it, aayu asks the person to prove they are there, through GitHub's OAuth device 
 
 ```text
 resume on rahulnakmol/agentic-ayudha needs a person's approval.
-  On any device, open https://github.com/login/device and enter WDJB-MJHT (expires in 15 minutes).
-  Approve only if you started this command yourself. Waiting...
+  Command: aayu resume
+  On any device, open https://github.com/login/device and enter WDJB-MJHT (expires in 15 minutes, at 22:41 UTC).
+  Approve only if you asked for this command. Waiting...
 Approved by @rahulnakmol (device-flow, admin access).
 ```
 
-You approve on any device, your phone included, signed in to GitHub with your password and second factor. aayu then
-checks the approving account, and refuses unless all of these hold:
+A command that changes more than one thing adds an `Approving:` line for each change, in plain words, under the
+`Command:` line. You approve on any device, your phone included, signed in to GitHub with your password and second
+factor. aayu then checks the approving account, and refuses unless all of these hold:
 
 - it is a person, not a bot and not one of `[identity] bot_logins`;
 - it is the same account as the token aayu acts with;
@@ -143,32 +145,120 @@ checks the approving account, and refuses unless all of these hold:
   `inspect --dismiss`, `tell --publish`, and the stable-release yes of `release --to main`. `auth set-secret` and
   `self-update` need only a person, so a fresh runner with no token yet can still store its first one.
 
-A denied, expired, or mismatched approval refuses, and nothing is done. The approval is recorded in the actions log
-(`presence.approve`, with the command, the approver, and the method). `release --to main` records it as the
-stable-release request (`via: device-flow`). One approval covers the later steps of the same command at its access
-level, so the inbox asks once per run.
+Each failure says what happened and the one next step: the code expired, the request was cancelled on GitHub, a bot
+or another account approved it, or the account lacks the access. Nothing is done in any of them. The approval is
+recorded in the actions log (`presence.approve`, with the command line, each `Approving:` line, the approver, and the
+method). `release --to main` records it as the stable-release request (`via: device-flow`), and its promotion record
+names the approving person next to the agent marker. One approval covers the later steps of the same command at its
+access level, so the inbox asks once per run; it never covers another command, or one started after it.
 
 The device-flow token proves who approved and nothing else. It asks for no scopes, aayu reads only `/user` with it,
 and it is never stored; every write still goes out with the token it always used. aayu offers an agent no way to
 complete an approval: no flag, variable, or file supplies one, and the device flow needs your GitHub web session.
 aayu's own unattended lanes (`AAYU_AGENT=1`: the MCP server and the loops) never wait for an approval; they are
-refused at once. The pre-tool hooks still block human-only commands an agent tries to run. Approve only a code from a
-command you started: GitHub's page names the app, not the command.
+refused at once. The pre-tool hooks still block human-only commands an agent tries to run.
 
-**Setup, once per repository:** create a GitHub OAuth App (Settings, Developer settings, OAuth Apps, New OAuth App;
-any homepage and callback URL), tick **Enable Device Flow**, and save its client ID as the repository variable
-`AAYUDHA_DEVICE_CLIENT_ID` (`gh variable set AAYUDHA_DEVICE_CLIENT_ID --body <client-id>`). A repository with
-aayudha's GitHub App (`AAYUDHA_APP_CLIENT_ID`) can instead tick **Enable Device Flow** on that App. A client ID is
-public; no secret is involved. `[identity] device_client_id` in `.aayudha/config.toml` sets it too, for a machine with
-no token yet. Without any of them, a marked shell is refused as before.
+**No setup.** aayu ships the client ID of the project's OAuth App, "aayudha presence check", with Device Flow enabled
+(`DefaultDeviceClientID` in `internal/cli/presence.go`). A client ID is public; no secret is involved. The App's owner
+never sees your token or your approvals: GitHub hands the token only to the aayu process that polls for it, and the
+owner's settings show only how many people have authorised the App. GitHub's approval page shows the App's name and
+owner. A team that wants its own App sets the repository variable `AAYUDHA_DEVICE_CLIENT_ID` (`gh variable set
+AAYUDHA_DEVICE_CLIENT_ID --body <client-id>`), or `[identity] device_client_id` in `.aayudha/config.toml` for a
+machine with no token yet. A repository with aayudha's GitHub App can tick **Enable Device Flow** on that App and set
+`AAYUDHA_APP_CLIENT_ID` instead.
 
-> **Honest status:** two layers stand between an agent and a human-only command. In Claude Code, Codex, and Cursor the
-> installed pre-tool hook blocks the shell command before it runs (`hosts.HumanOnlyCommand`); the Amp plugin does not
-> forward the command, so on Amp the binary's check is the first one. The binary then asks for a device-flow approval
-> from any process carrying a host's agent marker, or with neither a marker nor an interactive terminal. An agent that deliberately clears its
-> host's variables and runs inside a pseudo-terminal still looks like a person: the markers are honest-agent signals,
-> not authentication. What protects you then is the record: the comment, the ship record, and `audit`'s list of every
-> bypass. Install the bot App, or pair a second person, and the bypass is refused outright.
+> **Honest status:** GitHub's page names the App, not the command, so the terminal and the batch comment carry the
+> command; approve only a code next to a command you asked for. Device flow can be off for you: an organisation that
+> restricts OAuth Apps must approve the App, Enterprise Managed Users may not be allowed to authorise it, and GitHub
+> Enterprise Server needs its own App with Device Flow enabled. Two layers stand between an agent and a human-only
+> command. In Claude Code, Codex, and Cursor the installed pre-tool hook blocks the shell command before it runs
+> (`hosts.HumanOnlyCommand`); the Amp plugin does not forward the command, so on Amp the binary's check is the first
+> one. An agent that deliberately clears its host's variables and runs inside a pseudo-terminal still looks like a
+> person: the markers are honest-agent signals, not authentication. An agent driving a browser signed in as you
+> could enter a code; keep agents out of such browsers. What protects you then is the record: the comment, the ship
+> record, and `audit`'s list of every bypass. Install the bot App, or pair a second person, and the bypass is refused
+> outright.
+
+### Approving a batch from your phone
+
+You never need a terminal. Ask the agent, in its chat or in a GitHub comment, to run the human-only command, for
+example `aayu decide 324,283 --accept 1,2`. The agent starts it; it cannot finish it. aayu groups the steps
+into one comment on the first item's issue, so it reaches GitHub mobile (and Slack or email, when the repository's
+notifications are set up):
+
+```text
+@rahulnakmol 2 human-only steps wait for your approval (batch 3f9c0a1b2d4e).
+
+1. Accepts option 1 (Add the seat) of Decision #324: Production Engineer seat. Two-way door: a later Decision can
+   change it.
+   Options: 1. Add the seat (recommended) / 2. Wait a quarter   Recommendation: ...
+2. Accepts option 3 (Drop it) of Decision #283: Queue. This is not the recommendation. One-way door: ...
+```
+
+Option numbers are the Decision's own (`decide.Options`); item numbers are the batch's. Each item says what
+approving does, whether it is easy to undo, the options, and the recommendation, so you can
+decide without opening anything else. Under the items is one way to approve, chosen by what this repository can
+prove:
+
+- **The device code**, the default. The comment shows the code in a block that is easy to copy, the
+  github.com/login/device link, and the expiry. One code approves every item listed, and nothing else. After it runs,
+  aayu updates the comment and replies on each Decision, for example
+  `#324 accepted: option 1, by @rahulnakmol through the device code`. An expired, cancelled, or refused code is
+  written into the comment with the one next step. If a Decision or the batch comment changes while the code waits,
+  the approval is void and nothing is done: it covered only what you saw.
+- **A reply**, when comment approvals are on (below). Reply `/aayu approve all 3f9c0a1b2d4e`,
+  `/aayu approve 1 3 3f9c0a1b2d4e`, or `/aayu skip 2 3f9c0a1b2d4e`: the line ends in the batch's hash, copied from
+  the batch, so the reply approves the batch you read and never a newer one posted meanwhile. The
+  `aayudha-approve` workflow checks the reply and applies the steps as the bot, recording "approved in" the reply's
+  URL, and runs one approval at a time across the repository. A pick that is not the recommendation, or a one-way
+  door, is approved only when you name its item number; `all` and `skip` leave it out and say so.
+
+The workflow (`approveFromComment` in `internal/cli/approve.go`) applies nothing unless every check passes, and it
+answers a refusal on the thread with the reason and the next step:
+
+| Check | Why |
+|---|---|
+| The repository has the aayudha GitHub App, so agents write as `aayudha[bot]`, not as you (a machine-user bot keeps batches on the device code: the workflow can act only as the App) | Otherwise an agent could write the reply in your name |
+| The author is in `[approvals] approvers`, has write access, and is not a bot | The workflow reads the default branch's `.aayudha/config.toml`, a protected path, so an agent cannot add itself |
+| The reply names the batch by its hash, was not edited, and came after the batch | An edited reply could have said something else when it was read |
+| The batch was not edited, was posted by the bot, is still open, its hash matches its record, and its text is exactly what aayu renders from that record and the Decisions | The steps are exactly the ones you were shown, even if someone else posted as the bot |
+| Each Decision's body is unchanged since the batch, and the Decision's authority is the author | A later edit voids the approval |
+| No item is a door `[approvals] device_for` keeps on the device code | One-way doors need the device code by default |
+
+`[approvals] device_for = ["one-way"]` is the default: an irreversible Decision or a floor waiver always needs the
+device code, even when replies are on. `["all"]` keeps every batch on the device code.
+
+**The trust boundary.** An approval counts only when it arrives through a credential no agent holds. A comment, a
+reaction, a `workflow_dispatch`, an environment approval, or a Slack message made with a token an agent may hold is
+not proof of a person: the agent could have made it. The device code works because it mints a fresh credential on
+your own device. A reply works only when agents never hold your GitHub credential, which is why aayu refuses replies,
+with that reason, whenever a session can reach it. `aayu doctor`'s approvals row lists every GitHub credential the
+session can reach (a token-shaped environment variable, `gh auth token`, the git credential helper, and the token
+aayu itself would use, including one in its secrets store) by source and account, never by value, and fails when one
+belongs to an approver. An agent with only the bot's token (`AAYU_BOT_TOKEN`) reads and posts the batch as the bot;
+it cannot ask for a device code, which proves the person's own account, so a one-way door waits for the person.
+
+**Setup for replies, once per repository (about 20 minutes):**
+
+1. Create and install the aayudha GitHub App: `aayu init --identity` (10 minutes). It sets the variable
+   `AAYUDHA_APP_CLIENT_ID` and the secret `AAYUDHA_APP_PRIVATE_KEY`.
+2. Add `approvers = ["<your-login>"]` under `[approvals]` in `.aayudha/config.toml`, through a reviewed PR
+   (2 minutes).
+3. Install the workflow: `aayu init --gates` writes `.github/workflows/aayudha-approve.yml` (2 minutes).
+4. Point every agent environment at the bot, not at you (5 minutes per host): agents get the bot's installation
+   token (from the broker, `aayudha-token.yml`), and no personal token, `gh` login, or git credential in their
+   environment. Then run `aayu doctor` in each; the approvals row passes.
+
+> **Honest status:** step 4 is credential hygiene that aayu checks but cannot enforce on your machine or in a
+> host's sandbox. In an Amp orb, `git push` and `gh` use your own GitHub connection: the git credential helper
+> returns your user token to any process in the orb, through variables the agent can read, and a project secret
+> with `.agents/setup` cannot hide it (tested 17 October 2026). Overriding `GH_TOKEN` and the git credential helper
+> changes what `gh` and `git` use, but the helper can still be called directly. The routes that work are connecting
+> Amp's GitHub as an agent-only machine account, or disconnecting GitHub in Amp and supplying a bot token through
+> project secrets, which turns off Amp's GitHub webhooks and pull request previews. Until then, batches from an orb
+> use the device code. Native Slack buttons would need a hosted endpoint that verifies Slack's signature and a Slack
+> App that maps a Slack user to a GitHub login; aayu does not build them, and a Slack message is not proof of a
+> person.
 
 A plan bypass is never an approval: `approved_by` stays empty. Protected-path merges in solo mode use the same comment,
 then `gh pr merge --squash --admin`, and `aayu audit` reports one whose comment came after the merge as "recorded late".

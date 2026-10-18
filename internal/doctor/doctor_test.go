@@ -138,7 +138,12 @@ func healthy(t *testing.T) *Probe {
 			"git for-each-ref --format=%(refname:short) refs/heads refs/remotes/origin": "dev\nmain\norigin/HEAD\norigin/dev\n",
 			"git symbolic-ref --short refs/remotes/origin/HEAD":                         "origin/dev\n",
 		}),
-		Config:  load(t, "identity.app_id=42", "identity.app_slug=aayudha-bot", "integrations.posthog.secret=posthog", "integrations.posthog.scope=read", "integrations.posthog.project=12345", "inspect.apps=codex"),
+		Config: load(t, "identity.app_id=42", "identity.app_slug=aayudha-bot", "integrations.posthog.secret=posthog", "integrations.posthog.scope=read", "integrations.posthog.project=12345", "inspect.apps=codex", "approvals.approvers=rahulnakmol"),
+		// Decision #488: this agent session reaches only the bot's token.
+		Reachable: func(context.Context) []identity.Reach {
+			return []identity.Reach{{Source: "GH_TOKEN", Login: "aayudha-bot[bot]"}}
+		},
+		Agent:   "AMP_THREAD_ID",
 		Secrets: secrets.New(down{}, secrets.Env{Getenv: getenv}, secrets.File{Path: "/tmp/s.age", IdentityPath: "/tmp/id"}),
 		Human: func(context.Context) (identity.Token, error) {
 			return identity.Token{Value: "t", Source: "AAYU_GITHUB_TOKEN"}, nil
@@ -217,6 +222,11 @@ func failing(t *testing.T) map[string]func(*Probe) {
 			}
 		},
 		"bot-identity": func(p *Probe) { p.Config = load(t) },
+		"approvals": func(p *Probe) {
+			p.Reachable = func(context.Context) []identity.Reach {
+				return []identity.Reach{{Source: "GH_TOKEN", Login: "aayudha-bot[bot]"}, {Source: "git credential helper", Login: "rahulnakmol"}}
+			}
+		},
 		"config": func(p *Probe) {
 			p.Config, p.ConfigErr = nil, errors.New("config: .aayudha/config.toml: '' has invalid keys: colour")
 		},
@@ -716,5 +726,46 @@ func TestMCPChecksCopilotEntry(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(p.Root, ".mcp.json"), []byte(`{"mcpServers": {"aayudha": {"command": "/usr/bin/aayu", "args": ["status"]}}}`), 0o644)
 	if r := checkMCP(context.Background(), p); r.Status != Fail {
 		t.Errorf("an entry that does not start the server: %s %s", r.Status, r.Detail)
+	}
+}
+
+// Story #481, criterion 5: the approvals row says when a reply can approve a
+// batch. Without approvers or a bot it warns that every batch needs the
+// device code; an agent session that can act as a person is named; and
+// device_for decides which doors stay on the code.
+func TestApprovals(t *testing.T) {
+	ctx := context.Background()
+	for _, tt := range []struct {
+		name  string
+		sets  []string
+		reach []identity.Reach
+		want  string
+	}{
+		{"no approvers", []string{"identity.app_id=42", "identity.app_slug=aayudha-bot"}, nil, "warn approvals: no `[approvals] approvers`, so every batch needs the device code"},
+		{"no bot", []string{"approvals.approvers=rahulnakmol"}, nil, "warn approvals: no bot identity, so agents write as a person and every batch needs the device code"},
+		{"every batch on the code", []string{"identity.app_id=42", "identity.app_slug=aayudha-bot", "approvals.approvers=rahulnakmol", "approvals.device_for=all"}, nil,
+			"pass approvals: a reply from rahulnakmol approves a batch; every batch needs the device code"},
+		{"machine user", []string{"identity.machine_user=aayu-machine", "identity.machine_user_secret=mu-token", "approvals.approvers=rahulnakmol"}, nil,
+			"warn approvals: the bot is a machine user, and the aayudha-approve workflow acts only as the aayudha GitHub App, so every batch needs the device code"},
+		{"no door on the code", []string{"identity.app_id=42", "identity.app_slug=aayudha-bot", "approvals.approvers=rahulnakmol"}, nil,
+			"pass approvals: a reply from rahulnakmol approves a batch; no door needs the device code"},
+		{"agent acts as another person", []string{"identity.app_id=42", "identity.app_slug=aayudha-bot", "approvals.approvers=rahulnakmol"},
+			[]identity.Reach{{Source: "GH_PAT", Login: "machine-user"}},
+			"pass approvals: a reply from rahulnakmol approves a batch; one-way doors need the device code | GH_PAT -> @machine-user | this agent session can act as @machine-user, which is not a bot identity"},
+	} {
+		p := healthy(t)
+		p.Config = load(t, tt.sets...)
+		if tt.name == "no door on the code" {
+			p.Config.Config.Approvals.DeviceFor = nil // device_for = [] in .aayudha/config.toml
+		}
+		p.Reachable = func(context.Context) []identity.Reach { return tt.reach }
+		r := checkApprovals(ctx, p)
+		got := fmt.Sprintf("%s %s", r.Status, r.Detail)
+		for _, l := range r.Lines {
+			got += " | " + l
+		}
+		if got != tt.want {
+			t.Errorf("%s:\n got %s\nwant %s", tt.name, got, tt.want)
+		}
 	}
 }

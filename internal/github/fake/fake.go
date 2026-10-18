@@ -44,6 +44,7 @@ type Comment struct {
 	ID        int64     `json:"id"`
 	Body      string    `json:"body"`
 	CreatedAt time.Time `json:"created_at,omitzero"`
+	UpdatedAt time.Time `json:"updated_at,omitzero"` // set when the comment is edited (PATCH); zero means never edited
 	HTMLURL   string    `json:"html_url,omitempty"`
 	User      struct {
 		Login string `json:"login"`
@@ -168,14 +169,18 @@ type Request struct {
 
 // GitHub is the fake. Lock Mu to read or change state from a test.
 type GitHub struct {
-	Mu         sync.Mutex
-	Owner      string // login of the repository owner
-	OwnerType  string // User or Organization
-	Repo       string // name
-	Private    bool
-	Default    string
-	Viewer     string
-	ViewerType string // GET /user type; default User
+	Mu        sync.Mutex
+	Owner     string // login of the repository owner
+	OwnerType string // User or Organization
+	Repo      string // name
+	Private   bool
+	Default   string
+	Viewer    string
+	// TokenLogins names the account behind a bearer token other than the
+	// Viewer's (a bot's installation token): GET /user and the comments it
+	// posts answer as that account.
+	TokenLogins map[string]Account
+	ViewerType  string // GET /user type; default User
 	// Permissions is each login's repository permission (GET
 	// /repos/{o}/{r}/collaborators/{login}/permission): admin, write,
 	// maintain, read, or none. The Viewer defaults to admin, others to read.
@@ -225,7 +230,10 @@ type GitHub struct {
 	RulesetsUnavailable bool
 	// Fail makes the request with this "METHOD /path" fail with a 500 once
 	// it has succeeded After times.
-	Fail      string
+	Fail string
+	// Hook, when set, runs first on every request with the fake locked: a
+	// test changes state between two of aayu's writes.
+	Hook      func(method, path string)
 	FailAfter int
 	seq       int64
 	failSeen  int
@@ -347,6 +355,9 @@ var (
 func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 	g.Mu.Lock()
 	defer g.Mu.Unlock()
+	if g.Hook != nil {
+		g.Hook(r.Method, r.URL.Path)
+	}
 	if strings.HasPrefix(r.URL.Path, "/login/") {
 		g.serveDevice(w, r)
 		return
@@ -392,6 +403,9 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			typ = "User"
 		}
 		reply(200, map[string]any{"login": g.Device.Approver, "type": typ})
+	case m == "GET" && p == "/user" && g.TokenLogins[strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")].Login != "":
+		a := g.TokenLogins[strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")]
+		reply(200, map[string]any{"login": a.Login, "type": a.Type})
 	case m == "GET" && p == "/user":
 		typ := g.ViewerType
 		if typ == "" {
@@ -937,6 +951,9 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			c := &Comment{ID: g.seq, Body: str("body"), CreatedAt: time.Now().UTC()}
 			c.HTMLURL = fmt.Sprintf("https://github.com/%s/%s/issues/%d#issuecomment-%d", g.Owner, g.Repo, is.Number, c.ID)
 			c.User.Login, c.User.Type = g.Viewer, "User"
+			if a := g.TokenLogins[strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")]; a.Login != "" {
+				c.User.Login, c.User.Type = a.Login, a.Type
+			}
 			is.Comments = append(is.Comments, c)
 			reply(201, c)
 			return
@@ -958,12 +975,14 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			perm = "write" // GitHub reports maintain as write, with role_name maintain
 		}
 		reply(200, map[string]any{"permission": perm, "role_name": role, "user": map[string]any{"login": login}})
-	case reComment.MatchString(p) && m == "PATCH":
+	case reComment.MatchString(p) && (m == "PATCH" || m == "GET"):
 		id, _ := strconv.ParseInt(reComment.FindStringSubmatch(p)[1], 10, 64)
 		for _, is := range g.Issues {
 			for _, c := range is.Comments {
 				if c.ID == id {
-					c.Body = str("body")
+					if m == "PATCH" {
+						c.Body, c.UpdatedAt = str("body"), time.Now().UTC().Add(time.Second)
+					}
 					reply(200, c)
 					return
 				}
@@ -1040,6 +1059,9 @@ type DeviceFlow struct {
 	ExpiresIn    int    // seconds; default 900
 	Started      int    // device codes issued
 	Polls        int    // token polls answered
+	// OnPoll, when set, runs at each token poll with the fake locked: a test
+	// changes state while a person is entering the code.
+	OnPoll func(poll int)
 }
 
 func (g *GitHub) serveDevice(w http.ResponseWriter, r *http.Request) {
@@ -1064,6 +1086,9 @@ func (g *GitHub) serveDevice(w http.ResponseWriter, r *http.Request) {
 		reply(map[string]any{"device_code": "dc-1", "user_code": "WDJB-MJHT", "verification_uri": "https://github.com/login/device", "expires_in": exp, "interval": 5})
 	case r.URL.Path == "/login/oauth/access_token" && r.Form.Get("device_code") == "dc-1" && r.Form.Get("grant_type") == "urn:ietf:params:oauth:grant-type:device_code":
 		d.Polls++
+		if d.OnPoll != nil {
+			d.OnPoll(d.Polls)
+		}
 		switch {
 		case d.Polls <= d.Pending || d.Outcome == "":
 			reply(map[string]any{"error": "authorization_pending"})

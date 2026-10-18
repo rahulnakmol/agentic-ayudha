@@ -79,6 +79,8 @@ func TestDoctorIntegrations(t *testing.T) {
 		return in
 	}
 	r := &fixture.Replayer{T: t, Rec: &fixture.Recording{Interactions: []fixture.Interaction{
+		// The approvals row asks who each token-shaped variable is (Story #481): the GitHub key is one.
+		ok("https://api.github.com/user", "", `{"login":"rahulnakmol","type":"User"}`),
 		ok("https://eu.posthog.com/api/personal_api_keys/@current/", "", `{"label":"aayudha","scopes":["query:read","insight:read"]}`),
 		// Decision #449: doctor then tries each PostHog capability with a cheap read.
 		ok("https://eu.posthog.com/api/personal_api_keys/@current/", "", `{"label":"aayudha","scopes":["query:read","insight:read"]}`),

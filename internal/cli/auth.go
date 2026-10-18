@@ -99,7 +99,7 @@ func runAuth(ctx context.Context, e *Env, in Values) error {
 	case "set-secret":
 		if sig := e.agentSignal(); sig != "" { // no terminal needed: a person may pipe the value in
 			refusal := Errorf(ExitBlocked, "auth set-secret is for humans only and is refused for an agent lane (%s)", sig)
-			if _, err := e.presenceCheck(ctx, "auth set-secret "+name, AccessAny, refusal); err != nil {
+			if _, err := e.presenceCheck(ctx, Pending{What: "auth set-secret " + name}, AccessAny, refusal); err != nil {
 				return err
 			}
 		}
