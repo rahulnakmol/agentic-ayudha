@@ -68,9 +68,10 @@ the end is generated (WP5.1); the full table is [docs/RACI.md](docs/RACI.md).
 - **Every PR to `dev` squash-merges once every required check is green and inspect's disposition at the head
   is `merge`** (no open fix finding); never with a red required check or an open finding, and only into `dev`.
   Run `aayu inspect` after the last push. A PR whose body says `Refs #n` for a Story is a Story PR: run
-  `aayu ship <pr>` first, so the proof lands. If ship refuses only for a human pass, a plan review, or a
-  solo-mode bypass comment, squash-merge it yourself on green (a protected path still takes the
-  `Solo-mode bypass:` comment and `--admin`); if it refuses for anything else, do not merge.
+  `aayu ship <pr>` first; when it merges, the proof lands. If ship refuses only for a human pass, a plan review,
+  or a solo-mode bypass comment, squash-merge it yourself on green (a protected path still takes the
+  `Solo-mode bypass:` comment and `--admin`). That merge has no ship record, and `aayu audit` counts it as
+  uncovered, until ship merges on proof by itself (Decision #593). If ship refuses for anything else, do not merge.
 - **Every agent PR declares itself**, so `aayu status --streak` counts it: open it with the label
   `agent-authored` (`gh pr create --label agent-authored`), and put `Aayudha-Host: <host>` in its body, plus one
   `Aayudha-Model: <model>` line per model you know you used (none when the host picks the model and does not say).
