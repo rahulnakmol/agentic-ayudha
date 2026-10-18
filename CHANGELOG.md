@@ -18,7 +18,7 @@ With v0.3.0, aayu builds its own repository, agentic-ayudha, with one person, @r
 waits for a person (#617). Two new seats, the Production Engineer and the Data & AI Architect, bring
 skills for incidents, SLOs, runbooks, and data designs, and `aayu survey` maps legacy code. Every pull request that is not docs-only
 now gets a review, by default from a model you choose in your own CI, and the merge gate records how independent that review was. You approve the human-only steps
-agents queue for you from any device, one at a time in `aayu inbox` or as one batch. No Feature is claimed as proven
+agents queue for you from any device, one at a time in `aayu inbox`, and can accept several Decisions with one reply. No Feature is claimed as proven
 for this release.
 
 ### New verbs and skills
