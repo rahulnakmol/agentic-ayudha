@@ -491,14 +491,14 @@ func TestShipOnProof(t *testing.T) {
 	g.Pulls[prN].Files = []string{"empty.txt", ".aayudha/config.toml"}
 	g.Mu.Unlock()
 	// protected-paths is red only for the CODEOWNERS paths a PR touches.
-	refused("no merge on proof: required check protected-paths is failure, and the PR touches no CODEOWNERS path that would explain it")
+	refused("no merge on proof: required check protected-paths is failure, and the gate, rerun on the base's CODEOWNERS, finds no CODEOWNERS path without an approval that would explain it")
 	// Each rule that requires it counts: a second one, from another app
 	// whose run is green, does not hide the first one's failure.
 	g.Mu.Lock()
 	g.RequiredChecks = append(g.RequiredChecks, "protected-paths@77")
 	g.CheckRuns[head] = append(g.CheckRuns[head], fake.CheckRun{Name: "protected-paths", Status: "completed", Conclusion: "success", App: &fake.App{ID: 77}})
 	g.Mu.Unlock()
-	refused("no merge on proof: required check protected-paths is failure, and the PR touches no CODEOWNERS path that would explain it")
+	refused("no merge on proof: required check protected-paths is failure, and the gate, rerun on the base's CODEOWNERS, finds no CODEOWNERS path without an approval that would explain it")
 	g.Mu.Lock()
 	g.RequiredChecks = g.RequiredChecks[:len(g.RequiredChecks)-1]
 	g.CheckRuns[head] = g.CheckRuns[head][:len(g.CheckRuns[head])-1]
@@ -512,8 +512,16 @@ func TestShipOnProof(t *testing.T) {
 	g.Mu.Lock()
 	g.JobLogs[7701] = logC
 	g.Mu.Unlock()
+	// It is excused only for the gate's own reason, rerun on the base's
+	// CODEOWNERS: not when the gate fails closed on a pattern it cannot
+	// judge.
 	g.Mu.Lock()
 	g.Pulls[prN].Files = []string{"empty.txt", ".aayudha/config.toml", "skills/build/SKILL.md"}
+	g.RefFiles[base][".github/CODEOWNERS"] = "/skills/ @founder\n*.go @founder\n"
+	g.Mu.Unlock()
+	refused("no merge on proof: required check protected-paths is failure, and the gate, rerun on the base's CODEOWNERS, finds no CODEOWNERS path without an approval that would explain it")
+	g.Mu.Lock()
+	g.RefFiles[base][".github/CODEOWNERS"] = "/skills/ @founder\n"
 	g.CheckRuns[head] = append([]fake.CheckRun{{Name: "protected-paths", Status: "queued"}}, g.CheckRuns[head]...)
 	g.Mu.Unlock()
 	// Only its failure is excused: a run not yet done has judged nothing.

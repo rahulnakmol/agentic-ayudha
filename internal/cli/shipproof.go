@@ -32,7 +32,7 @@ import (
 type ProofPass struct {
 	Rung      string   `json:"rung"`                // the review rung at the head (inspect.Rung*)
 	Checks    []string `json:"required_checks"`     // the base branch's required checks, all green
-	Protected []string `json:"protected,omitempty"` // CODEOWNERS paths it merged with no code owner's review
+	Protected []string `json:"protected,omitempty"` // CODEOWNERS paths it merged with no code owner's approval
 }
 
 // requiredChecks checks that every required status check of the base
@@ -154,8 +154,8 @@ func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name strin
 	if len(files) != pr.GetChangedFiles() {
 		return nil, fmt.Sprintf("GitHub listed %d of its %d changed files (it lists at most 3,000), so the narrow set cannot be judged", len(files), pr.GetChangedFiles()), true, nil
 	}
-	codeowners := identity.ParseCodeowners(read(".github/CODEOWNERS", base))
 	pp = &ProofPass{Rung: rung}
+	var changed []string
 	for _, f := range files {
 		for _, p := range []string{f.GetFilename(), f.GetPreviousFilename()} {
 			switch {
@@ -170,11 +170,25 @@ func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name strin
 			case strings.HasPrefix(p, ".github/workflows/") && (holdsCredentials(read(p, base)) || holdsCredentials(read(p, head))):
 				return nil, fmt.Sprintf("it touches %s, a workflow that holds a credential (a secret, the workflow token, an environment, or a write permission)", p), true, nil
 			}
-			if owners, _, _ := identity.Owners(codeowners, p); len(owners) > 0 && !slices.Contains(pp.Protected, p) {
-				pp.Protected = append(pp.Protected, p)
-			}
+			changed = append(changed, p)
 		}
 	}
+	// The CODEOWNERS check's failure is excused only for the reason the gate
+	// itself, rerun here on the base's CODEOWNERS, gives: protected paths
+	// with no CODEOWNER's approval. A pattern it cannot judge, or a failure
+	// the gate would not give (the paths are approved), excuses nothing.
+	reviews, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.PullRequestReview, *gh.Response, error) {
+		return c.REST.PullRequests.ListReviews(ctx, owner, name, pr.GetNumber(), &o)
+	})
+	if err != nil {
+		return nil, "", false, Wrap(ExitExternal, err)
+	}
+	var rv []identity.Review
+	for _, r := range reviews {
+		rv = append(rv, identity.Review{User: identity.Account{Login: r.GetUser().GetLogin(), Type: r.GetUser().GetType()}, State: r.GetState(), CommitID: r.GetCommitID()})
+	}
+	pp.Protected = identity.ProtectedPathsGate(identity.GateInput{Codeowners: read(".github/CODEOWNERS", base), Changed: changed,
+		Author: pr.GetUser().GetLogin(), HeadSHA: head, Reviews: rv, BotLogins: l.Config.Identity.BotLogins}).Unapproved
 	switch {
 	case readErr != nil: // a file the narrow set judges could not be read
 		return nil, "", false, Wrap(ExitExternal, readErr)
@@ -185,7 +199,7 @@ func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name strin
 	case gate != "" && gate != "success" && gate != "failure":
 		return nil, fmt.Sprintf("required check %s is %s; only its failure for the CODEOWNERS paths a PR touches is accepted", seats.GateCheck, gate), false, nil
 	case gate == "failure" && len(pp.Protected) == 0:
-		return nil, fmt.Sprintf("required check %s is failure, and the PR touches no CODEOWNERS path that would explain it", seats.GateCheck), false, nil
+		return nil, fmt.Sprintf("required check %s is failure, and the gate, rerun on the base's CODEOWNERS, finds no CODEOWNERS path without an approval that would explain it", seats.GateCheck), false, nil
 	}
 	return pp, "", false, nil
 }
