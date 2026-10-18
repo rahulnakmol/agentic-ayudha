@@ -68,6 +68,13 @@ func TestCapabilities(t *testing.T) {
 				}
 			}
 			rp.Done()
+			// A recording says where it came from: the provider's spec, its
+			// version, the date it was read, and that no account recorded it.
+			src := rp.Rec.Source
+			spec := map[string]string{"sentry": "getsentry/sentry-api-schema", "posthog": "OpenAPI"}[tt.source]
+			if !strings.Contains(src, spec) || !strings.Contains(src, "read 2026-10-17") || !strings.Contains(src, "Not live-proven") {
+				t.Errorf("source %q does not cite the %s spec, the date read, and that it is not live-proven", src, spec)
+			}
 		})
 	}
 }

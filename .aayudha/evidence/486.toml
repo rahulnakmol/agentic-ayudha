@@ -12,4 +12,4 @@ tests = ["./internal/integrations/hostcall:TestAudit", "./internal/doctor:TestCh
 
 [[criterion]]
 id = 4
-tests = ["./internal/integrations/providers:TestCapabilities", "./internal/integrations/providers:TestLive"]
+tests = ["./internal/integrations/providers:TestCapabilities"]
