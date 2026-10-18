@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
@@ -100,11 +101,14 @@ func checkReviewRung(_ context.Context, p *Probe) Result {
 	case host != "":
 		builder = fmt.Sprintf("builder family unknown (%s declares no model aayu can place)", host)
 	}
-	c := inspect.ChooseReviewer(cfg.Inspect.Reviewer, cfg.Inspect.Apps, cfg.Inspect.AppFamilies, b, cfg.Autonomy.Approver)
 	lines := []string{builder}
-	if cfg.Inspect.Reviewer == inspect.ReviewerHuman {
+	switch cfg.Inspect.Reviewer {
+	case inspect.ReviewerHuman:
 		return Result{Status: Pass, Detail: `human  a person reviews every PR ([inspect] reviewer = "human"); it counts toward autonomy`, Lines: lines}
+	case inspect.ReviewerModel:
+		return reviewModelRung(cfg.Models, b, lines)
 	}
+	c := inspect.ChooseReviewer(cfg.Inspect.Reviewer, cfg.Inspect.Apps, cfg.Inspect.AppFamilies, b, cfg.Autonomy.Approver)
 	// How to reach A: an app of a family the builder cannot be, added to
 	// [inspect] apps, and picked (auto picks it; a fixed reviewer does not).
 	var up []string
@@ -143,4 +147,30 @@ func checkReviewRung(_ context.Context, p *Probe) Result {
 		return Result{Status: Pass, Detail: fmt.Sprintf("C  same-family review: %s (%s), no other family reachable; it never counts toward autonomy, so a person passes every PR", c.App, c.Family), Lines: lines}
 	}
 	return Result{Status: Warn, Detail: "no reviewer app can review: a person reviews every PR", Lines: lines}
+}
+
+// reviewModelRung is the rung of [inspect] reviewer = "model": the review
+// lane's direct model, chosen as inspect chooses it (internal/cli
+// reviewerModels): a default of a family the builder may be gives way to the
+// first peer candidate outside them; a configured one blocks every PR.
+func reviewModelRung(cfg config.Models, b inspect.Builder, lines []string) Result {
+	m, err := (models.Resolver{Models: cfg}).ResolveDirect(verbs.LaneReview, verbs.DirectHost, false)
+	if err != nil {
+		return Result{Status: Fail, Detail: "model  the review lane resolves no model: " + err.Error(), Lines: lines}
+	}
+	if m.Family == "" || m.Family == verbs.FamilyHostManaged || slices.Contains(b.Candidates, m.Family) {
+		i := slices.IndexFunc(verbs.PeerReviewCandidates, func(id string) bool {
+			f := verbs.FamilyOf(id)
+			return f != "" && !slices.Contains(b.Candidates, f)
+		})
+		if m.Source == models.SourceConfig || i < 0 {
+			return Result{Status: Fail, Detail: fmt.Sprintf("model  the review lane's %s is of a family the builder may be (%v); inspect blocks every PR until [models] names a review model of another family", m.Model, b.Candidates), Lines: lines}
+		}
+		lines = append(lines, fmt.Sprintf("the review lane's %s is of a family the builder may be; inspect calls %s instead", m.Model, verbs.PeerReviewCandidates[i]))
+		m.Model, m.Family = verbs.PeerReviewCandidates[i], verbs.FamilyOf(verbs.PeerReviewCandidates[i])
+	}
+	if b.Rung(m.Family) == inspect.RungA {
+		return Result{Status: Pass, Detail: fmt.Sprintf("A  different-family review: the review lane's %s (%s), called through the AI gateway; it counts toward autonomy", m.Model, m.Family), Lines: lines}
+	}
+	return Result{Status: Pass, Detail: fmt.Sprintf("C  same-family review: the review lane's %s (%s) cannot be shown to differ from the builder; it never counts toward autonomy, so a person passes every PR", m.Model, m.Family), Lines: lines}
 }

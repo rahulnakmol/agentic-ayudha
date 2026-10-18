@@ -505,6 +505,12 @@ func TestCheckStates(t *testing.T) {
 		{"an unknown builder cannot move up", checkReviewRung, func(p *Probe) { p.Getenv = func(string) string { return "" }; p.Config = load(t, "inspect.apps=codex") }, Pass, "move up: no reviewer can be shown to differ from an unknown builder"},
 		{"a person reviews by configuration", checkReviewRung, func(p *Probe) { p.Config = load(t, "inspect.reviewer=human") }, Pass, `human  a person reviews every PR ([inspect] reviewer = "human")`},
 		{"rung C for a Claude Code build", checkReviewRung, func(p *Probe) { p.Host = "claude"; p.Config = load(t, "inspect.apps=claude") }, Pass, "C  same-family review: claude (anthropic)"},
+		// reviewer "model" calls the review lane, not an app: Amp may be
+		// anthropic or openai, so inspect passes over both to Grok.
+		{"a model reviewer for an Amp build", checkReviewRung, func(p *Probe) { p.Config = load(t, "inspect.reviewer=model") }, Pass, "A  different-family review: the review lane's grok-"},
+		{"a configured same-family model reviewer", checkReviewRung, func(p *Probe) {
+			p.Config = load(t, "inspect.reviewer=model", "models.review.claude.model=gpt-6.1-sol")
+		}, Fail, "the review lane's gpt-6.1-sol is of a family the builder may be"},
 		{"OTLP opted in", checkTelemetry, func(p *Probe) { p.Config = load(t, "telemetry.otlp_endpoint=https://otel.example.com") }, Pass, "and, opted in, OTLP https://otel.example.com"},
 		{"ledger without LFS", checkLedgerMedia, func(p *Probe) { overlay(p, map[string]string{"git ls-tree --name-only origin/ledger": "README.md\n"}) }, Pass, "ledger stores no proof media in Git LFS"},
 		{"LFS ledger, no token", checkLedgerMedia, func(p *Probe) { overlay(p, lfsLedger); p.API = nil }, Warn, "repository visibility unknown (no GitHub token or repository)"},
