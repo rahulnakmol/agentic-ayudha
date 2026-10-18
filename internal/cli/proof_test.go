@@ -104,6 +104,20 @@ func TestProofPushVerifyCLI(t *testing.T) {
 			t.Fatalf("push with %v: %d %s", args, code, errOut)
 		}
 	}
+	// XDG_CONFIG_HOME is the run's environment: a user config it points at,
+	// here in the checkout, is not the account's and names no secret.
+	xdg := filepath.Join(dir, ".evil")
+	if err := os.MkdirAll(filepath.Join(xdg, "aayudha"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(xdg, "aayudha", "config.toml"), []byte("version = 1\n[proof]\nmedia_secret = \"other\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	env["XDG_CONFIG_HOME"] = xdg
+	if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, `media_secret "other"`) {
+		t.Fatalf("push with a user config XDG_CONFIG_HOME points into the checkout: %d %s", code, errOut)
+	}
+	delete(env, "XDG_CONFIG_HOME")
 	// dev's config that cannot be read, or does not load, trusts nothing.
 	for _, f := range []struct{ fail, file, want string }{
 		{"GET /repos/o/r/git/ref/heads/dev", cfg, "500"},
@@ -117,9 +131,32 @@ func TestProofPushVerifyCLI(t *testing.T) {
 			t.Fatalf("push when %q fails with %q committed: %d %s", f.fail, f.file, code, errOut)
 		}
 	}
+	// A directory where dev's config should be is no config either.
 	fgh.Mu.Lock()
-	fgh.Fail, fgh.Files[".aayudha/config.toml"] = "", cfg
+	fgh.Fail = ""
+	delete(fgh.Files, ".aayudha/config.toml")
+	fgh.Files[".aayudha/config.toml/x"] = ""
 	fgh.Mu.Unlock()
+	if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "it is a directory") {
+		t.Fatalf("push when dev's config is a directory: %d %s", code, errOut)
+	}
+	fgh.Mu.Lock()
+	delete(fgh.Files, ".aayudha/config.toml/x")
+	fgh.Files[".aayudha/config.toml"] = cfg
+	fgh.Mu.Unlock()
+	// The account's own user config that does not load trusts nothing.
+	badHome := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(badHome, ".config", "aayudha"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(badHome, ".config", "aayudha", "config.toml"), []byte("version = ["), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	badOpts := opts
+	badOpts.UserHome = func() (string, error) { return badHome, nil }
+	if code, _, errOut := run(t, env, badOpts, "proof", "push", "2", "--media", "--repo", "o/r"); code != ExitUsage || !strings.Contains(errOut, "config:") {
+		t.Fatalf("push when the account's user config does not load: %d %s", code, errOut)
+	}
 	if len(evil.Objects) != 0 || len(s3.Objects) != 0 {
 		t.Fatalf("a refused push uploaded: %d to the checkout's bucket, %d to dev's", len(evil.Objects), len(s3.Objects))
 	}
@@ -290,4 +327,13 @@ func must(b []byte, err error) []byte {
 		panic(err)
 	}
 	return b
+}
+
+// #667: the trusted user config is the account's, so the run's HOME, which an
+// agent's environment can set, does not move it.
+func TestAccountHomeIgnoresHOME(t *testing.T) {
+	t.Setenv("HOME", filepath.Join(t.TempDir(), "agent-home"))
+	if h, err := accountHome(); err != nil || h == "" || h == os.Getenv("HOME") {
+		t.Fatalf("accountHome() = %q, %v; HOME is %q", h, err, os.Getenv("HOME"))
+	}
 }

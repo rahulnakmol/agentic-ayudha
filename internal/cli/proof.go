@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	osuser "os/user"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -108,7 +109,8 @@ func (e *Env) proofStore(ctx context.Context, c *github.Client, tok identity.Tok
 
 // trustedProof is the [proof] media bucket, the name of its secret, and the
 // retention its lifecycle rule sets, from sources the person controls
-// (#667): the defaults, the user config, and the integration branch's
+// (#667): the defaults, the account's user config (~/.config/aayudha, from
+// the system's user database), and the integration branch's
 // committed .aayudha/config.toml at its tip (only the defaults and the user
 // config when that file cannot be found). The integration branch is the
 // user config's [branches] dev, else a dev branch, else the one the
@@ -119,8 +121,18 @@ func (e *Env) proofStore(ctx context.Context, c *github.Client, tok identity.Tok
 // would send the person's local secret to it, so a run whose values differ
 // is refused before any secret is read.
 func (e *Env) trustedProof(ctx context.Context, c *github.Client, repo string, run *config.Loaded) (config.Proof, error) {
-	src := config.DefaultSources(e.Getenv, e.Dir, nil, nil)
-	user, err := config.Load(config.Sources{UserDir: src.UserDir})
+	// The user config is the account's (~/.config/aayudha), found from the
+	// system's user database: XDG_CONFIG_HOME and HOME are the run's
+	// environment, which could name a directory in the checkout.
+	var userDir string
+	home := e.UserHome
+	if home == nil {
+		home = accountHome
+	}
+	if h, err := home(); err == nil && h != "" {
+		userDir = filepath.Join(h, ".config", "aayudha")
+	}
+	user, err := config.Load(config.Sources{UserDir: userDir})
 	if err != nil {
 		return config.Proof{}, Wrap(ExitUsage, fmt.Errorf("config: %w", err))
 	}
@@ -148,7 +160,7 @@ func (e *Env) trustedProof(ctx context.Context, c *github.Client, repo string, r
 			text, err = fc.GetContent()
 		}
 		if err == nil {
-			l, err = config.Load(config.Sources{UserDir: src.UserDir, RepoTOML: []byte(text), RepoSource: ".aayudha/config.toml on " + branch})
+			l, err = config.Load(config.Sources{UserDir: userDir, RepoTOML: []byte(text), RepoSource: ".aayudha/config.toml on " + branch})
 		}
 		if err != nil {
 			return nil, true, Errorf(ExitBlocked, "%s's .aayudha/config.toml cannot be read or does not load, so the proof media bucket cannot be trusted: %v", branch, err)
@@ -178,6 +190,16 @@ func (e *Env) trustedProof(ctx context.Context, c *github.Client, repo string, r
 			"remove those settings, or change %s through a reviewed PR", branch, r.Media, r.MediaSecret, r.RetentionDays, t.Media, t.MediaSecret, t.RetentionDays, branch)
 	}
 	return t, nil
+}
+
+// accountHome is the home directory of the account running aayu, from the
+// system's user database (os/user), which the run's HOME does not change.
+func accountHome() (string, error) {
+	u, err := osuser.Current()
+	if err != nil {
+		return "", err
+	}
+	return u.HomeDir, nil
 }
 
 // inMergeGate reports whether this process is the base-branch merge gate in

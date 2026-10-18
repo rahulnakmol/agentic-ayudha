@@ -58,16 +58,20 @@ type Options struct {
 	ModelClient func(route models.Route, key string) models.Client // replaces the model provider (tests)
 	// AppManifestCode replaces the browser step of init --identity (tests).
 	AppManifestCode func(ctx context.Context, postURL string, manifest func(redirect string) string) (string, error)
-	GitHubGap       time.Duration                                                               // gap between GitHub writes; 0 is the client default (1s), negative none (tests)
-	GHToken         func(ctx context.Context) (string, error)                                   // `gh auth token`; nil runs gh
-	GitCredential   func(ctx context.Context, repo string) (string, error)                      // the git credential helper's token for github.com (approvals, doctor); nil runs git credential fill
-	GHAccounts      func(ctx context.Context) (map[string]string, error)                        // every account gh stores for github.com, active or not, login to token (approvals, doctor); nil runs gh
-	Secrets         *secrets.Store                                                              // nil uses keychain, env, then the age file
-	LookPath        func(string) (string, error)                                                // nil uses exec.LookPath (doctor)
-	Exec            func(ctx context.Context, dir, name string, args ...string) (string, error) // nil runs the command (doctor, install)
-	Assets          fs.FS                                                                       // embedded skills/ and hosts/ (root embed.go); install needs it
-	HaltPoll        time.Duration                                                               // how often a running verb re-reads the halt variable; 0 is DefaultHaltPoll (WP5.7)
-	TUI             func(m tea.Model) error                                                     // runs an interactive model in place of the terminal (tests); nil uses bubbletea on In/Out
+	GitHubGap       time.Duration                                          // gap between GitHub writes; 0 is the client default (1s), negative none (tests)
+	GHToken         func(ctx context.Context) (string, error)              // `gh auth token`; nil runs gh
+	GitCredential   func(ctx context.Context, repo string) (string, error) // the git credential helper's token for github.com (approvals, doctor); nil runs git credential fill
+	GHAccounts      func(ctx context.Context) (map[string]string, error)   // every account gh stores for github.com, active or not, login to token (approvals, doctor); nil runs gh
+	Secrets         *secrets.Store                                         // nil uses keychain, env, then the age file
+	LookPath        func(string) (string, error)                           // nil uses exec.LookPath (doctor)
+	// UserHome is the account's home directory from the system's user
+	// database, never $HOME or XDG_CONFIG_HOME, which the run's environment
+	// sets (#667); nil uses os/user.
+	UserHome func() (string, error)
+	Exec     func(ctx context.Context, dir, name string, args ...string) (string, error) // nil runs the command (doctor, install)
+	Assets   fs.FS                                                                       // embedded skills/ and hosts/ (root embed.go); install needs it
+	HaltPoll time.Duration                                                               // how often a running verb re-reads the halt variable; 0 is DefaultHaltPoll (WP5.7)
+	TUI      func(m tea.Model) error                                                     // runs an interactive model in place of the terminal (tests); nil uses bubbletea on In/Out
 	// IsTerminal reports whether a stream (e.In, e.Out, or e.Err) is a person's
 	// terminal (WP1.1b); nil checks the file descriptor. Tests force a level with it.
 	IsTerminal func(stream any) bool
