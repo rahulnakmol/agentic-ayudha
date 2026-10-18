@@ -203,6 +203,19 @@ func TestBuildNeverLayerAndCost(t *testing.T) {
 	if code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(out+errOut, "cost budget breached: metered spend 100.01 USD of 60 (subscription use not counted)") {
 		t.Fatalf("AAYU_COST_USD reported, over the cost budget: %d %s %s", code, out, errOut)
 	}
+	// A cap set to 0 on purpose says so, rather than blaming a missing key;
+	// a per_story_usd kept below cost_usd is the limit that stops the story.
+	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready again: %s", errOut)
+	}
+	_ = os.WriteFile(filepath.Join(wt, "notes2.txt"), []byte("another checkpoint\n"), 0o644)
+	_, out, errOut = run(t, env, opts, "build", "2", "--repo", "o/r", "--set", "autonomy.budget.cost_usd=0", "--set", "budget.per_story_usd=0")
+	if strings.Contains(out+errOut, "cost budget breached") || !strings.Contains(out, "metered spend 100.01 USD, no cost limit: autonomy.budget.cost_usd is 0 (subscription use not counted)") {
+		t.Fatalf("cost_usd = 0: %s %s", out, errOut)
+	}
+	if code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r", "--set", "budget.per_story_usd=25"); code != ExitBlocked || !strings.Contains(out+errOut, "cost budget breached: metered spend 100.01 USD of 25 (subscription use not counted)") {
+		t.Fatalf("per_story_usd 25 below cost_usd 60: %d %s %s", code, out, errOut)
+	}
 }
 
 // WP5.5 accept: a stale lease is reclaimed by gc (comment, label, and

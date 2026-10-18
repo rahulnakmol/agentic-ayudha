@@ -76,8 +76,11 @@ type Usage struct {
 // cost, so 0.00 USD is not the real cost of a build done there.
 func (u Usage) Line() string {
 	spend := fmt.Sprintf("metered spend %.2f USD of %g (subscription use not counted)", u.CostUSD, u.MaxCost)
-	if u.MeteredBy == "" || u.MaxCost <= 0 {
+	switch {
+	case u.MeteredBy == "":
 		spend = fmt.Sprintf("metered spend %.2f USD, no cost limit: no pay-as-you-go model key or endpoint is configured (subscription use not counted)", u.CostUSD)
+	case u.MaxCost <= 0:
+		spend = fmt.Sprintf("metered spend %.2f USD, no cost limit: autonomy.budget.cost_usd is 0 (subscription use not counted)", u.CostUSD)
 	}
 	return fmt.Sprintf("%.1f of %g h, %s, %d of %d failed attempts", u.WallHours, u.MaxWall, spend, u.Attempts, u.MaxAttempts)
 }
@@ -241,6 +244,12 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		labels = append(slices.DeleteFunc(labels, func(l string) bool { return strings.HasPrefix(l, "status:") }), labelInProgress)
 	}
 	b := l.Config.Autonomy.Budget
+	// A story's spend is capped by the lower of the build budget and the
+	// breaker's per-story limit, so a config that keeps a lower per_story_usd
+	// is reported, and blocks, at the limit that actually stops it.
+	if p := l.Config.Budget.PerStoryUSD; p > 0 && (b.CostUSD <= 0 || p < b.CostUSD) && e.meteredBy(&l.Config) != "" {
+		b.CostUSD = p
+	}
 	res.Budget = Usage{MaxWall: b.WallHours, MaxCost: b.CostUSD, MaxAttempts: b.Attempts, Attempts: st.Attempts, CostUSD: e.buildCost(repo, n), MeteredBy: e.meteredBy(&l.Config)}
 	if started, err := time.Parse(time.RFC3339, st.StartedAt); err == nil {
 		res.Budget.WallHours = now.Sub(started).Hours()
