@@ -35,7 +35,10 @@ const (
 	ScopePlanMarker    = "<!-- aayudha:scope-plan -->"
 )
 
-var scopeRequestRE = regexp.MustCompile(`<!-- scope-request (\{.*\}) -->`)
+var (
+	scopeRequestRE   = regexp.MustCompile(`<!-- scope-request (\{.*\}) -->`)
+	milestoneOwnerRE = regexp.MustCompile(`^Release #([0-9]+):`)
+)
 
 // scopeRequest is what waits for a person on a Release: accept the draft
 // with Hash as the next baseline, or apply one change (add or drop Item).
@@ -215,6 +218,11 @@ func (r *scopeRun) load(ctx context.Context) error {
 			r.ms = m
 		}
 	}
+	if r.ms != nil {
+		if m := milestoneOwnerRE.FindStringSubmatch(r.ms.GetDescription()); m != nil && m[1] != strconv.Itoa(r.n) {
+			return Errorf(ExitBlocked, "scope: milestone %s belongs to Release #%s, not #%d; two Releases cannot plan one version", r.version, m[1], r.n)
+		}
+	}
 	if err := r.readPlan(ctx); err != nil {
 		return err
 	}
@@ -316,6 +324,13 @@ func (r *scopeRun) readLedger(ctx context.Context) error {
 		return err
 	} else if !ok || r.base == nil || r.drift.Baseline != r.base.Baseline {
 		r.drift = nil
+	}
+	// One version, one Release: another Release's records are never this one's.
+	for _, owner := range []int{r.base.GetRelease(), r.draft.GetRelease(), r.drift.GetRelease()} {
+		if owner != 0 && owner != r.n {
+			return WithNext(Errorf(ExitBlocked, "scope: ledger releases/%s/ belongs to Release #%d, not #%d; two Releases cannot plan one version", r.version, owner, r.n),
+				fmt.Sprintf("aayu scope %d", owner))
+		}
 	}
 	return nil
 }
@@ -687,17 +702,23 @@ func (r *scopeRun) ask(ctx context.Context, q scopeRequest) error {
 	body := fmt.Sprintf("%s\n**Waiting for a person (aayu scope):** %s.\n\nAccept it with `aayu scope %d --accept`, or in `aayu inbox`. "+
 		"Accepting is a person's call, through GitHub's device code; an agent only asks.\n<!-- scope-request %s -->\n",
 		ScopeRequestMarker, q.describe(r.version), r.n, b)
+	return r.upsertOwn(ctx, ScopeRequestMarker, body, "github.comment.scope-request")
+}
+
+// upsertOwn keeps the writer's own comment with marker: anyone may post the
+// marker, so another account's comment is never edited or trusted.
+func (r *scopeRun) upsertOwn(ctx context.Context, marker, body, kind string) error {
 	comments, err := r.comments(ctx)
 	if err != nil {
 		return err
 	}
-	var own *gh.IssueComment // only the writer's own request comment is edited: anyone may post the marker
+	var own *gh.IssueComment
 	for _, cm := range comments {
-		if strings.Contains(cm.GetBody(), ScopeRequestMarker) && strings.EqualFold(cm.GetUser().GetLogin(), r.who) {
+		if strings.Contains(cm.GetBody(), marker) && strings.EqualFold(cm.GetUser().GetLogin(), r.who) {
 			own = cm
 		}
 	}
-	return r.writeComment(ctx, own, body, "github.comment.scope-request")
+	return r.writeComment(ctx, own, body, kind)
 }
 
 func (r *scopeRun) comments(ctx context.Context) ([]*gh.IssueComment, error) {
@@ -1034,8 +1055,8 @@ func (r *scopeRun) handoff(ctx context.Context) error {
 		fmt.Fprintf(&b, "| #%d | %s | %s | %s |\n", it.Number, it.Type, it.Effort, parent)
 	}
 	fmt.Fprintf(&b, "\nThis is the plan of record, not a promise: a slip moves an item to the next release. A change that takes drift past %.1f%% waits for a person's accepted Decision.\n", d.BudgetPct)
-	if _, err := r.c.UpsertComment(ctx, r.repo, r.n, ScopePlanMarker, b.String(), actions.Action{Kind: "github.comment.scope-plan"}); err != nil {
-		return Wrap(ExitExternal, err)
+	if err := r.upsertOwn(ctx, ScopePlanMarker, b.String(), "github.comment.scope-plan"); err != nil {
+		return err
 	}
 	if err := r.writeDrift(ctx, *d, "hand-off"); err != nil {
 		return err

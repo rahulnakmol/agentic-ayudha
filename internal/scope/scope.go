@@ -110,6 +110,30 @@ type Drift struct {
 	Resized            []Resize `json:"resized"`
 }
 
+// GetRelease is the Release issue a record belongs to, 0 for none.
+func (b *Baseline) GetRelease() int {
+	if b == nil {
+		return 0
+	}
+	return b.ReleaseIssue
+}
+
+// GetRelease is the Release issue a draft belongs to, 0 for none.
+func (d *Draft) GetRelease() int {
+	if d == nil {
+		return 0
+	}
+	return d.ReleaseIssue
+}
+
+// GetRelease is the Release issue a drift record belongs to, 0 for none.
+func (d *Drift) GetRelease() int {
+	if d == nil {
+		return 0
+	}
+	return d.ReleaseIssue
+}
+
 // Over reports whether the drift is beyond its budget.
 func (d Drift) Over() bool { return d.DriftPct > d.BudgetPct }
 

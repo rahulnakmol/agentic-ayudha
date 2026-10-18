@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -187,6 +188,11 @@ func TestScope(t *testing.T) {
 	// Hand-off: the planned Stories, not their Feature, which aayu release would expand to every Story under it.
 	if code, _, out := scopeRun(agent, "--handoff"); code != 0 {
 		t.Fatalf("--handoff: exit %d: %s", code, out)
+	}
+	// One version, one Release: a second Release for v0.3.0 cannot use the first one's records.
+	twin := g.AddIssue("v0.3.0 again", fixtureBody(t, "release", func(f map[string]string) { f["version"], f[workitems.FieldLinks] = "v0.3.0", "" }), "type:release")
+	if code, _, errOut := run(t, agent, opts, "scope", strconv.Itoa(twin.Number), "--repo", "o/r", "--add", "3"); code != ExitBlocked || !strings.Contains(errOut, "belongs to Release #1") || milestone(3) != "" {
+		t.Fatalf("a second Release for one version: exit %d: %s", code, errOut)
 	}
 	g.Mu.Lock()
 	rel, _ := workitems.Parse(1, release.Title, release.Body, "", []string{"type:release"})
