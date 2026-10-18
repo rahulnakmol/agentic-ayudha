@@ -62,7 +62,7 @@ for this release.
 - Rung B is an opt-in paid reviewer in the merge gate: it runs only when you name a model in `[inspect] paid_reviewer` and add that provider's key (#550).
 - `[inspect] paid_effort` sets the paid reviewer's reasoning effort, and a paid review runs only for pull requests from owners, members, and collaborators (#579).
 - When the reviewer app answers with a usage-limit or quota message, or has not replied 30 minutes after the request, the rung B reviewer reviews instead, and a person reviews when rung B cannot (#634).
-- Every paid review asks for priority serving and is charged at the priority rate (#634).
+- A paid review on a provider with priority serving, such as xAI or OpenAI, asks for it and is charged at the priority rate; Anthropic models have no priority tier and run at the standard rate (#634).
 - inspect makes one paid review call per head commit, and none on a reply event (#623).
 - inspect's review settles within three rounds, and findings in code the pull request did not change are tagged as pre-existing (#583).
 - Agents run `aayu ship` on their Story pull requests; when only your approval is missing, the pull request waits in your inbox as Ready to ship (#577).
