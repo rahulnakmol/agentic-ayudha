@@ -34,6 +34,12 @@ acquisition = "benefits_visit"
 activation = "answer_grounded"
 activation_days = 7
 
+# The person who approves when autonomy does not apply (founder, 2026-10-18, on Codex's P2 on #634: "do it"): the only
+# account whose review is inspect's human review, ship's human pass, plan --approve, and a Decision's authority for an
+# unpaired seat. Its review is still a comment, which an agent with this account's token could write (#634's P2).
+[autonomy]
+approver = "rahulnakmol"
+
 # The merge gate's reviewer: the ChatGPT Codex Connector is installed on this account and answered `@codex review`
 # live (founder decision 2026-10-15: no AI key in the merge gate). Cursor is installed too, but its family is the
 # model its user picks, so it reviews only once [inspect.app_families] names one.

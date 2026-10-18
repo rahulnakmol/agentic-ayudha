@@ -1057,6 +1057,17 @@ func TestInspectThroughApp(t *testing.T) {
 	if code != 0 || res.Disposition != inspect.Merge || res.Model != "founder" || res.Rung != inspect.RungHuman {
 		t.Fatalf("a human review: %d %+v %s", code, res, errOut)
 	}
+	// With an [autonomy] approver only the approver's review counts: neither the
+	// PR's author (founder) nor another person clears the human fallback.
+	_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[autonomy]\napprover = \"lead\"\n\n[inspect]\nreviewer = \"human\"\napps = [\"cursor\"]\n"), 0o644)
+	addComment(g, prN, "mallory", "User", statedReply(head, "merge", "internal/report/percent.go"))
+	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || res.Disposition == inspect.Merge || res.Rung != inspect.RungHuman {
+		t.Fatalf("a review by the author or another person, not the approver: %d %+v %s", code, res, errOut)
+	}
+	addComment(g, prN, "lead", "User", statedReply(head, "merge", "internal/report/percent.go"))
+	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Disposition != inspect.Merge || res.Model != "lead" {
+		t.Fatalf("the approver's review: %d %+v %s", code, res, errOut)
+	}
 
 	// With no pack (a request before the gate ran, or a reply event), the
 	// head's Aayudha-Model trailer still names the builder, so the request goes
