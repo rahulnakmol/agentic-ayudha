@@ -186,7 +186,8 @@ func parseCopilot(jsonl, usage []byte) (Response, error) {
 // copilotUpperBound is the most a call can have cost when Copilot reports no
 // usage: the prompt at one token per two characters, Copilot's own prompt
 // (about 15k tokens in the probes) rounded up to 25k, 2k per image, and
-// copilotMaxOutput output tokens, at the model's price or the fallback rate.
+// copilotMaxOutput output tokens, at the model's price (its long-context rate
+// above LongAbove, as Cost charges) or the fallback rate.
 // The request's MaxTokens does not bound it: Copilot CLI takes no output cap.
 func copilotUpperBound(r Request, images int) float64 {
 	p, _, ok := PriceOf(nil, r.Model)
@@ -194,7 +195,11 @@ func copilotUpperBound(r Request, images int) float64 {
 		p = ListPrice{Short: Rates{Input: FallbackInputPerMTok, Output: FallbackOutputPerMTok}}
 	}
 	in := len(copilotPrompt(r))/2 + 25000 + 2000*images
-	return (float64(in)*p.Short.Input + float64(copilotMaxOutput)*p.Short.Output) / 1e6
+	rt := p.Short
+	if p.LongAbove > 0 && in > p.LongAbove {
+		rt = p.Long
+	}
+	return (float64(in)*rt.Input + float64(copilotMaxOutput)*rt.Output) / 1e6
 }
 
 // copilotMaxOutput is the output ceiling the upper bound charges: 128k

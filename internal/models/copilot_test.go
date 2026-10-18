@@ -129,4 +129,11 @@ func TestCopilotCLI(t *testing.T) {
 	if resp, _ := (CopilotCLI{Token: "t", Path: unmetered}).Complete(context.Background(), req); resp.CostUSD < 1.28 {
 		t.Errorf("unmetered reply charged %v USD", resp.CostUSD)
 	}
+	// Above a model's long-context threshold the bound uses the long rate: a
+	// 200k-character prompt is 100k + 25k = 125k input tokens, over Haiku 5.5's
+	// 100k, so 125k × 0.50 + 128k × 2.50 per million = 0.3825 USD (short: 0.0765).
+	big := Request{Model: "claude-haiku-5-5", System: strings.Repeat("x", 200000)}
+	if resp, _ := (CopilotCLI{Token: "t", Path: unmetered}).Complete(context.Background(), big); math.Abs(resp.CostUSD-0.3825) > 1e-9 {
+		t.Errorf("long-context unmetered reply charged %v USD, want 0.3825", resp.CostUSD)
+	}
 }
