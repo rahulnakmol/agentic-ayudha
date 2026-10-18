@@ -63,7 +63,7 @@ and keeps any a person adds there; the reviewer is of none of the families they 
 push goes out without a session review, and the section says why. A build delegated to another agent is reviewed by
 the merge gate only. Each round is metered spend, within `[budget] per_pr_inspect_max`, one cap that the merge gate's
 review shares. The section records what the rounds spent, so a build resumed on another machine and the merge gate
-both count it against that cap.
+both count it against that cap. A cap of 0 means no cap to inspect, so the session review does not run.
 
 ## Hand it to another agent
 

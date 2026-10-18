@@ -207,6 +207,10 @@ func (e *Env) reviewSession(ctx context.Context, s *sessionReview, a sessionRevi
 	gw.Models, gw.Resolver.Models = cfg.Models, cfg.Models
 	builder := e.sessionBuilder(ctx, gw, a)
 	story := fmt.Sprintf("#%d", a.n)
+	if cfg.Budget.PerPRInspectMax <= 0 {
+		// inspect reads 0 as no cap at all: no session review spends uncapped.
+		return skip("[budget] per_pr_inspect_max is 0, so nothing caps the session review's spend")
+	}
 	m := paidReviewer(gw, &cfg, builder, "a build session has no reviewer app", func() string { return "write" }, e.Logf)
 	if m == nil {
 		if picked, _, err := reviewerModels(gw, builder.Candidates, false, "", story); err == nil && builder.Rung(picked[0].Family) == inspect.RungA {
