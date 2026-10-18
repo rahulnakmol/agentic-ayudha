@@ -340,6 +340,15 @@ func (e *Env) surveyDraft(indexFile, out, file string) error {
 	}
 	switch {
 	case len(rep.Missing) > 0:
+		// A merged survey from an earlier run no longer holds: its sections are
+		// missing or stale, and a backlog must never be drafted from it.
+		for _, f := range []string{filepath.Join(out, "survey.json"), filepath.Join(out, "SURVEY.md")} {
+			if same, _ := sameFile(f, file); !same {
+				if err := os.Remove(f); err != nil && !os.IsNotExist(err) {
+					return Wrap(ExitInternal, err)
+				}
+			}
+		}
 		res.Next = "write the next section (" + rep.Missing[0] + ", skills/survey), then run `aayu survey --draft <file>` with it; saved sections are kept"
 		if len(rep.Problems) > 0 {
 			res.Next = "fix every problem in the sections you wrote, then run again; saved sections are kept"
@@ -413,4 +422,21 @@ func writeSurveyDraft(w io.Writer, file string, res SurveyDraftResult) error {
 	}
 	fmt.Fprintf(w, "  sections in %s\n  next: %s\n", res.Dir, res.Next)
 	return nil
+}
+
+// sameFile reports whether a and b name one existing file (the draft given
+// may itself be <out>/survey.json).
+func sameFile(a, b string) (bool, error) {
+	if b == "" {
+		return false, nil
+	}
+	ia, err := os.Stat(a)
+	if err != nil {
+		return false, err
+	}
+	ib, err := os.Stat(b)
+	if err != nil {
+		return false, err
+	}
+	return os.SameFile(ia, ib), nil
 }

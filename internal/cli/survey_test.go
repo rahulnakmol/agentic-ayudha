@@ -174,6 +174,13 @@ func TestSurveyDraftSections(t *testing.T) {
 	if code, r = draft("--sections"); code != 0 || !slices.Equal(r.Stale, []string{"product"}) || !slices.Equal(r.Missing, []string{"product"}) || r.Merged != "" {
 		t.Fatalf("stale: %d %+v", code, r)
 	}
+	// The merged survey of the earlier run is removed: a backlog is never
+	// drafted from sections that no longer hold.
+	for _, f := range []string{"survey.json", "SURVEY.md"} {
+		if _, err := os.Stat(filepath.Join(out, f)); !os.IsNotExist(err) {
+			t.Fatalf("%s kept after a section went stale: %v", f, err)
+		}
+	}
 	// So is every section once the checkout's content changes, at the same
 	// commit (this checkout has no git): the claims were checked against
 	// other code.
