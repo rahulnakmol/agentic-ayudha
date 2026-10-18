@@ -143,6 +143,12 @@ func TestRunCacheKeyCoversPRText(t *testing.T) {
 	if res, _, _ := r.Run(context.Background(), in, st); !res.Cached || *calls != 1 {
 		t.Fatalf("a changed declaration: cached %v, %d calls", res.Cached, *calls)
 	}
+	// CodeRabbit's release-notes block in the body is not the author's input (#689: its edit re-ran the gate).
+	bot := in
+	bot.Body += "\n<!-- This is an auto-generated comment: release notes by coderabbit.ai -->\n## Summary by CodeRabbit\n\n* **Bug Fixes**\n  * Percent no longer divides by zero.\n<!-- end of auto-generated comment: release notes by coderabbit.ai -->\n"
+	if res, _, _ := r.Run(context.Background(), bot, st); !res.Cached || *calls != 1 {
+		t.Fatalf("CodeRabbit's summary in the body: cached %v, %d calls", res.Cached, *calls)
+	}
 	in.Body += "Aayudha-Model: rounds half up now\n" // not a declaration aayu reads: it is description
 	if res, _, _ := r.Run(context.Background(), in, st); res.Cached || *calls != 2 {
 		t.Fatalf("an edited description: cached %v, %d calls", res.Cached, *calls)

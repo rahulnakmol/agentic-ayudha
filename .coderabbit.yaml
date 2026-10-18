@@ -1,0 +1,5 @@
+# CodeRabbit writes its high-level summary into the walkthrough comment, not
+# the PR description: an edit of the description re-runs the merge gate and
+# cancels the inspect job reviewing the head.
+reviews:
+  high_level_summary_in_walkthrough: true
