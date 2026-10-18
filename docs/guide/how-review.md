@@ -47,6 +47,10 @@ pull request can reach the key.
 `[inspect] reviewer = "ci"` in `.aayudha/config.toml` selects this review. It is the default, so a repository that
 names no reviewer uses it.
 
+`aayu inspect <pr>` in your own terminal cannot reach the key, so it asks no app and no person. It reports the gate's
+verdict for the head, or `no-reply` until the gate's inspect check finishes. You should see
+`inspect #42 at 1a2b3c4: merge (cached)` once the gate has reviewed the head.
+
 ## Choosing a model
 
 The review model must come from a vendor other than the agent that built the change, so the builder never grades its
@@ -101,6 +105,8 @@ installed app reviews, then the code-review environment's model, then a person. 
    [internal/cli/inspect.go](../../internal/cli/inspect.go), `TestInspectPaidReviewer`.
 5. When the CI review cannot run, the installed apps review, then a person. Enforced by `inspect.ChooseReviewer` in
    [internal/inspect/apps.go](../../internal/inspect/apps.go), `TestInspectReviewerFallback`.
+6. Under `reviewer = "ci"`, a run outside CI without the key posts nothing; it reports the gate's verdict. Enforced
+   by `runInspect` in [internal/cli/inspect.go](../../internal/cli/inspect.go), `TestInspectPaidReviewer`.
 
 ## Where it lives in the code
 

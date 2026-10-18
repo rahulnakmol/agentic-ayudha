@@ -569,14 +569,18 @@ func (e *Env) rerunInspect(ctx context.Context, c *github.Client, owner, name st
 // syncs, so no one has to remember it. It returns a note; an error never stops
 // the caller, since the merge gate fails closed without a reply anyway.
 func (e *Env) requestReview(ctx context.Context, n int) string {
-	if l, err := e.Config(); err != nil || l.Config.Inspect.Reviewer == inspect.ReviewerModel || e.CI {
+	l, err := e.Config()
+	if err != nil || l.Config.Inspect.Reviewer == inspect.ReviewerModel || e.CI {
 		return ""
+	}
+	if l.Config.Inspect.Reviewer == inspect.ReviewerCI {
+		return fmt.Sprintf("the merge gate's CI review reviews PR #%d's head; nobody is asked", n)
 	}
 	sub := *e
 	sub.JSON = true
 	var out bytes.Buffer
 	sub.Out, sub.Err = &out, io.Discard
-	err := runInspect(ctx, &sub, Values{"pr": strconv.Itoa(n)})
+	err = runInspect(ctx, &sub, Values{"pr": strconv.Itoa(n)})
 	var res inspect.Result
 	if json.NewDecoder(&out).Decode(&res) != nil {
 		if err != nil {

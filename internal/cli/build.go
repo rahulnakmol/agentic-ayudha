@@ -548,11 +548,12 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	}
 	// Every push asks the reviewer app for a review of the new head, under the
 	// person's account, so the merge gate's inspect has a reply to read even
-	// when the app reviews by itself only when a PR opens.
+	// when the app reviews by itself only when a PR opens. Under the CI review
+	// the gate reviews the head itself, so nobody is asked.
 	if note := e.requestReview(ctx, res.PR); note != "" {
 		res.Notes = append(res.Notes, note)
 	}
-	res.Next = fmt.Sprintf("the merge gate re-runs verify and inspect on PR #%d (the reviewer app was asked to review this head); `aayu ship %d` after a human pass", res.PR, res.PR)
+	res.Next = fmt.Sprintf("the merge gate re-runs verify and inspect on PR #%d; `aayu ship %d` after a human pass", res.PR, res.PR)
 	return e.Emit(res, func(w io.Writer) error {
 		if res.Commit != "" {
 			fmt.Fprintf(w, "#%d: checkpoint %s committed (%s); verify: %s\n  budget: %s\n", n, res.Checkpoint, short(res.Commit), res.Verify, res.Budget.Line())

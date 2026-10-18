@@ -488,6 +488,26 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 				n, inspect.ReviewEnvironment, strings.Join(miss, " and "), inspect.ReviewEnvironment)
 		}
 	}
+	// Outside CI the CI review's key is out of reach: the run reports the
+	// gate's judgement of this head and asks no app and no person, since the
+	// gate's own fallback asks them when the CI review cannot review.
+	if !e.CI && cfg.Reviewer == inspect.ReviewerCI && len(missingReviewModel(gw, &l.Config)) > 0 {
+		head := pr.GetHead().GetSHA()
+		res := inspect.Result{PR: n, Head: head, Findings: []inspect.Finding{}, Criteria: []inspect.Verdict{}, Builder: builder, Disposition: NoReply,
+			Summary: fmt.Sprintf("[inspect] reviewer = \"ci\": the merge gate's inspect job reviews `%s` with the model the %s environment names; this run cannot reach its key, so it asks no one", short(head), inspect.ReviewEnvironment),
+			Next:    "the merge gate's inspect check reviews this head; run `aayu inspect` again after it finishes"}
+		if prev.Result != nil && prev.Result.Head == head {
+			res = *prev.Result
+			res.Cached = true
+		}
+		if err := e.emitInspect(res, nil); err != nil {
+			return err
+		}
+		if res.Disposition != inspect.Merge && res.Disposition != inspect.Skipped {
+			return Errorf(ExitBlocked, "inspect #%d: %s", n, res.Disposition)
+		}
+		return nil
+	}
 	paid := paidReviewer(gw, &l.Config, builder, "", perm, e.Logf)
 	// A head whose rung B failed says why on every later run, whichever
 	// reviewer comes first.
