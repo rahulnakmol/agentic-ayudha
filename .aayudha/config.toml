@@ -34,12 +34,6 @@ acquisition = "benefits_visit"
 activation = "answer_grounded"
 activation_days = 7
 
-# The person who approves when autonomy does not apply (founder, 2026-10-18, on Codex's P2 on #634: "do it"): the only
-# account whose review is inspect's human review, ship's human pass, plan --approve, and a Decision's authority for an
-# unpaired seat. Its review is still a comment, which an agent with this account's token could write (#634's P2).
-[autonomy]
-approver = "rahulnakmol"
-
 # The merge gate's reviewer: CodeRabbit, a review service that counts as a different-family review (rung A) whatever
 # the builder's family. Founder, 2026-10-18, after Codex reached its usage limits on #617: "Let's switch over to code
 # rabbit then", and "Will turn off code code review if you can make it work with code rabbit"; this supersedes "Use
@@ -56,6 +50,10 @@ paid_effort = "high"
 # change merged into dev reaches main with no human step: who may approve or bypass, the gate's own code, and releases.
 # A workflow that holds a credential (a secret, the token, an environment, a write permission) is in it too, by rule.
 [autonomy]
+# The person who approves when autonomy does not apply (founder, 2026-10-18, on Codex's P2 on #634: "do it"): the only
+# account whose review is inspect's human review, ship's human pass, plan --approve, and a Decision's authority for an
+# unpaired seat. Its review is still a comment, which an agent with this account's token could write (#634's P2).
+approver = "rahulnakmol"
 proof = true
 proof_rungs = ["A", "B", "C"]
 always_person = [
