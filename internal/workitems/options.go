@@ -31,6 +31,9 @@ var (
 	optionLine  = regexp.MustCompile(`^([0-9]+)[.)]\s+(.*)$`)
 	optionBold  = regexp.MustCompile(`^\*\*(.+?)\*\*[.:,]?(?:\s+(.*))?$`) // a ** inside a code span, as in ops/**, does not end it
 	optionPlain = regexp.MustCompile(`^(.+?)(?:: |\. | — | - )(.*)$`)
+	// OptionRef finds an option named by its number in a Recommendation:
+	// "Option 2", or a leading "2." or "2".
+	OptionRef   = regexp.MustCompile(`(?i)^\s*([0-9]+)(?:[.):,]|\s*$)|\boption\s+([0-9]+)\b`)
 	fenceRun    = regexp.MustCompile("^(?:`{3,}|~{3,})")
 	recommended = regexp.MustCompile(`(?i)\s*\(recommended\b[^)]*\)`) // "(recommended)" or "(recommended, because …)"
 )
@@ -75,6 +78,10 @@ func ParseOptions(s string) ([]Option, []Problem) {
 	for _, o := range os {
 		if o.Recommended {
 			marked++
+		}
+		if strings.TrimSpace(o.Name) == "" {
+			ps = append(ps, Problem{"options", fmt.Sprintf("option %d has no name; start it with its name, \"%d. **Name.** what it does\"", o.N, o.N)})
+			continue
 		}
 		if k := strings.ToLower(o.Name); seen[k] != 0 {
 			ps = append(ps, Problem{"options", fmt.Sprintf("options %d and %d are both named %q; give each its own name, so accepting it by name is unambiguous", seen[k], o.N, o.Name)})

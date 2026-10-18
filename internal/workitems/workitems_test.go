@@ -121,12 +121,19 @@ func TestReadyFailures(t *testing.T) {
 		{"decision with options numbered out of order", with(decision, func(c *Item) { c.Fields["options"] = "1. **A.** a\n3. **B.** b" }), StageReady,
 			[]string{"options: option 3 is numbered out of order; want 2, so each option keeps the number the person picks it by"}},
 		{"decision with two recommendations", with(decision, func(c *Item) { c.Fields["options"] = "1. **A.** a (recommended)\n2. **B.** b (recommended)" }), StageReady,
-			[]string{"options: 2 options are marked \"(recommended)\"; mark one, the one the Recommendation names"}},
+			[]string{"options: 2 options are marked \"(recommended)\"; mark one, the one the Recommendation names",
+				"options: option 2 is marked \"(recommended)\" but the Recommendation names option 1; make them agree"}},
 		{"decision with ten options", with(decision, func(c *Item) {
 			c.Fields["options"] = "1. a\n2. b\n3. c\n4. d\n5. e\n6. f\n7. g\n8. h\n9. i\n10. j"
 		}), StageReady, []string{"options: 10 options; offer at most 9, so the person picks each with one key"}},
 		{"decision with two options of one name", with(decision, func(c *Item) { c.Fields["options"] = "1. **Roll out.** to 5%.\n2. **Roll out.** to 50%." }), StageReady,
 			[]string{"options: options 1 and 2 are both named \"Roll out\"; give each its own name, so accepting it by name is unambiguous"}},
+		{"decision with a nameless option", with(decision, func(c *Item) { c.Fields["options"] = "1. (recommended)\n2. **Use a vendor.** b" }), StageReady,
+			[]string{"options: option 1 has no name; start it with its name, \"1. **Name.** what it does\""}},
+		{"decision whose marker and Recommendation disagree", with(decision, func(c *Item) {
+			c.Fields["options"] = "1. **A.** a (recommended)\n2. **B.** b"
+			c.Fields["recommendation"] = "Option 2, because it is faster."
+		}), StageReady, []string{"options: option 1 is marked \"(recommended)\" but the Recommendation names option 2; make them agree"}},
 		{"decision with one option still passes Create", with(decision, func(c *Item) { c.Fields["options"] = "1. **Waive.** Ship." }), StageCreate, nil},
 		{"decision without reversible still passes Create", with(decision, func(c *Item) { delete(c.Fields, FieldReversible) }), StageCreate, nil},
 		{"story under an initiative", with(story, func(c *Item) { c.Parent = &Ref{2, "initiative"} }), StageReady,

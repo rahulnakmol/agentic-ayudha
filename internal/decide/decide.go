@@ -298,8 +298,6 @@ func MatchOption(options, option string) bool {
 	return err == nil && re.MatchString(options)
 }
 
-var optionRef = regexp.MustCompile(`(?i)^\s*([0-9]+)(?:[.):,]|\s*$)|\boption\s+([0-9]+)\b`)
-
 // Options are a Decision's numbered options, each under the Decision's own
 // number, and the index of the recommended one (-1 when none is): the option
 // marked "(recommended)", else the one its Recommendation names by number
@@ -310,7 +308,7 @@ func Options(it workitems.Item) ([]workitems.Option, int) {
 	os, _ := workitems.ParseOptions(it.Fields["options"])
 	rec := slices.IndexFunc(os, func(o workitems.Option) bool { return o.Recommended })
 	r := strings.TrimSpace(it.Fields["recommendation"])
-	if m := optionRef.FindStringSubmatch(r); rec < 0 && m != nil {
+	if m := workitems.OptionRef.FindStringSubmatch(r); rec < 0 && m != nil {
 		if i, _ := strconv.Atoi(m[1] + m[2]); i >= 1 && i <= len(os) {
 			rec = i - 1
 		}
