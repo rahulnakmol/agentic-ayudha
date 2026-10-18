@@ -101,11 +101,13 @@ func runCounsel(ctx context.Context, e *Env, in Values) error {
 			return Errorf(ExitUsage, "#%d is a pull request: run `aayu counsel --pr %d` so counsel reads its changed files, proof pack, and builder", rep.Issue, rep.Issue)
 		}
 		rep.Facts = append(rep.Facts, facts...)
+		// The title is the author's text: it names the topic only as untrusted data, never in the trusted heading.
+		rep.Untrusted = append(rep.Untrusted, chartUntrusted{"issue-title", is.GetTitle()})
 		if b := strings.TrimSpace(is.GetBody()); b != "" {
 			rep.Untrusted = append(rep.Untrusted, chartUntrusted{"issue-body", b})
 		}
 		if topic == "" || issueArg.MatchString(topic) {
-			rep.Topic = is.GetTitle()
+			rep.Topic = fmt.Sprintf("#%d", rep.Issue)
 		}
 	}
 	if rep.PR > 0 {
@@ -266,9 +268,11 @@ func (e *Env) counselPR(ctx context.Context, c *github.Client, owner, name strin
 		state = "merged"
 	}
 	cite := fmt.Sprintf("#%d", n)
-	rep.Facts = append(rep.Facts, packFact{Text: fmt.Sprintf("PR #%d %q: %s, head %.7s into %s", n, pr.GetTitle(), state, head, pr.GetBase().GetRef()), Cite: cite})
+	// The title is the author's text, so it stays out of the facts and the heading, as untrusted data.
+	rep.Facts = append(rep.Facts, packFact{Text: fmt.Sprintf("PR #%d: %s, head %.7s into %s", n, state, head, pr.GetBase().GetRef()), Cite: cite})
+	rep.Untrusted = append(rep.Untrusted, chartUntrusted{"pr-title", pr.GetTitle()})
 	if rep.Topic == "" {
-		rep.Topic = pr.GetTitle()
+		rep.Topic = "PR " + cite
 	}
 	if b := strings.TrimSpace(pr.GetBody()); b != "" {
 		rep.Untrusted = append(rep.Untrusted, chartUntrusted{"pr-body", b})

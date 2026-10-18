@@ -78,7 +78,7 @@ func TestCounsel(t *testing.T) {
 	onPR := counselRun(env, 0, "--pr", pr)
 	facts := factText(onPR)
 	for _, want := range []string{
-		fmt.Sprintf(`PR #%d "Add Percent for the status table (see #999)": open`, n),
+		fmt.Sprintf("PR #%d: open, head ccccccc into dev", n),
 		"Changed in L04: internal/verify/floors.go", "internal/report/percent.go", "and 3 more", "Story: #2", "Proof pack for #2 at ccccccc", "coverage pass (100, floor 90)",
 		"sast pass waived by #9", "Builder: builder family anthropic",
 		"Builder:", "Open Decision: #5", "CONSTRAINTS.md", "L03 ",
@@ -88,17 +88,18 @@ func TestCounsel(t *testing.T) {
 		}
 	}
 	if onPR.Twin == "" || !strings.Contains(onPR.Twin, "Atri") || onPR.Artefact == "" || onPR.Builder == nil ||
-		len(onPR.Untrusted) != 1 || onPR.Untrusted[0].Source != "pr-body" {
+		len(onPR.Untrusted) != 2 || onPR.Untrusted[0].Source != "pr-title" || onPR.Untrusted[1].Source != "pr-body" ||
+		strings.Contains(factText(onPR), "Add Percent") || onPR.Topic != "PR #"+pr {
 		t.Errorf("--pr grounding: twin %q, artefact %q, builder %v, untrusted %v", onPR.Twin, onPR.Artefact, onPR.Builder, onPR.Untrusted)
 	}
 	if q := counselRun(env, 0, "should we split the survey into sections?"); q.Issue != 0 || q.PR != 0 || q.Path != "" ||
 		!strings.Contains(factText(q), "Open Decision: #5") || q.Topic != "should we split the survey into sections?" {
 		t.Errorf("free question: %+v", q)
 	}
-	if is := counselRun(env, 0, "#2"); is.Issue != 2 || is.Topic != "Show empty list" || !strings.Contains(factText(is), "#1") {
+	if is := counselRun(env, 0, "#2"); is.Issue != 2 || is.Topic != "#2" || is.Untrusted[0] != (chartUntrusted{"issue-title", "Show empty list"}) || !strings.Contains(factText(is), "#1") {
 		t.Errorf("issue topic: issue %d, topic %q, facts %s", is.Issue, is.Topic, factText(is))
 	}
-	if d := counselRun(env, 0, "--issue", "5"); d.Issue != 5 || d.Topic != "Engine" || strings.Contains(factText(d), "Open Decision: #5") {
+	if d := counselRun(env, 0, "--issue", "5"); d.Issue != 5 || d.Topic != "#5" || strings.Contains(factText(d), "Open Decision: #5") {
 		t.Errorf("Decision topic: issue %d, topic %q, facts %s", d.Issue, d.Topic, factText(d))
 	}
 	if p := counselRun(env, 0, "internal/cli"); p.Path != "internal/cli" ||
@@ -106,7 +107,8 @@ func TestCounsel(t *testing.T) {
 		t.Errorf("path topic: %q %s", p.Path, factText(p))
 	}
 	if code, out, errOut := run(t, env, opts, "counsel", "--repo", "o/r", "--pr", pr); code != 0 ||
-		!strings.Contains(out, "# Counsel grounding: Add Percent for the status table (see #999)") || !strings.Contains(out, "<untrusted source=\"pr-body\">") ||
+		!strings.Contains(out, "# Counsel grounding: PR #"+pr) || !strings.Contains(out, "<untrusted source=\"pr-body\">") ||
+		!strings.Contains(out, "<untrusted source=\"pr-title\">\nAdd Percent for the status table (see #999)\n</untrusted>") || strings.Contains(out, "# Counsel grounding: Add") ||
 		!strings.Contains(out, "## The call") || !strings.Contains(out, "Speak and work as Atri") {
 		t.Errorf("text grounding: exit %d: %s%s", code, out, errOut)
 	}
