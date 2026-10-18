@@ -248,7 +248,11 @@ func review(ctx context.Context, r Reviewer, in Input) (Reply, float64, error) {
 // Run inspects in, given the state of earlier runs on this PR, with the
 // review lane's model (reviewer "model").
 func (r Runner) Run(ctx context.Context, in Input, prev State) (Result, State, error) {
-	res, st, err := r.begin(ctx, &in, prev, "")
+	// The model reads the PR's title and body too, so an edit of either is a
+	// new input: it salts the cache key, and the edited PR is reviewed again.
+	// The Aayudha-Host and Aayudha-Model lines are aayu's own metadata: a
+	// changed declaration relabels the cached review's rung instead.
+	res, st, err := r.begin(ctx, &in, prev, "pr\x00"+in.Title+"\x00"+strings.Join(strings.Fields(declLine.ReplaceAllString(in.Body, "")), " "))
 	if err != nil || res.Disposition == Skipped || res.Cached {
 		return res, st, err
 	}
@@ -526,14 +530,20 @@ func Prompt(in Input) string {
 
 func reviewMaterial(in Input) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Repository %s, pull request #%d, story #%d.\n\n", in.Repo, in.PR, in.Story)
-	b.WriteString("## Completion Goal at Ready (criteria to judge)\n\n")
-	var cg strings.Builder
-	for _, c := range in.Criteria {
-		fmt.Fprintf(&cg, "%d. [%s] state: %s; expected: %s\n", c.N, c.Evidence, c.State, c.Expected)
+	if in.Story == 0 {
+		// A paid reviewer (rung B) reviews a PR that serves no story, as an
+		// app does: against its title, description, and diff.
+		fmt.Fprintf(&b, "Repository %s, pull request #%d. It serves no story and has no Completion Goal: judge the diff against its title and description, and return no criteria.\n\n", in.Repo, in.PR)
+	} else {
+		fmt.Fprintf(&b, "Repository %s, pull request #%d, story #%d.\n\n", in.Repo, in.PR, in.Story)
+		b.WriteString("## Completion Goal at Ready (criteria to judge)\n\n")
+		var cg strings.Builder
+		for _, c := range in.Criteria {
+			fmt.Fprintf(&cg, "%d. [%s] state: %s; expected: %s\n", c.N, c.Evidence, c.State, c.Expected)
+		}
+		b.WriteString(triage.Untrusted("ready-snapshot", cg.String()) + "\n\n")
+		b.WriteString("## Story\n\n" + triage.Untrusted("issue", "Title: "+in.StoryTitle+"\n\n"+in.StoryBody) + "\n\n")
 	}
-	b.WriteString(triage.Untrusted("ready-snapshot", cg.String()) + "\n\n")
-	b.WriteString("## Story\n\n" + triage.Untrusted("issue", "Title: "+in.StoryTitle+"\n\n"+in.StoryBody) + "\n\n")
 	if in.Pack != nil {
 		b.WriteString("## Floors (deterministic results; facts)\n\n")
 		for _, c := range in.Pack.Checks {
@@ -661,6 +671,11 @@ func capText(s string, n int) string {
 	}
 	return s[:n] + fmt.Sprintf("\n… (%d more bytes not shown)", len(s)-n)
 }
+
+// declLine is a PR body's builder declaration, exactly as aayu reads one
+// (internal/cli/verify.go modelTrailer and hostTrailer); any other line,
+// one that only looks like a declaration included, salts the cache key.
+var declLine = regexp.MustCompile(`(?m)^Aayudha-(?:Host|Model):\s*\S+\s*$`)
 
 // Marker is the replace-in-place comment inspect keeps on the PR.
 const Marker = "<!-- aayudha:inspect -->"

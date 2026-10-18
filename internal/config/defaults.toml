@@ -94,6 +94,10 @@ generated = ["LAYERS.md", "CONSTRAINTS.md", "docs/RACI.md", "internal/config/sch
 # (founder decision 2026-10-15). auto: the first of apps whose family differs from the builder's, else a human.
 reviewer = "auto"
 apps = []                 # claude, codex, cursor: what `aayu doctor` and `aayu install` detect, confirmed here
+# Rung B, opt-in (founder, 2026-10-18): a model ID the merge gate calls with a pay-as-you-go key when no app is of a
+# family the builder cannot be. Off unless set here and the repository adds the secret AAYU_SECRET_<FAMILY>; capped by
+# [budget] per_pr_inspect_max and labelled (B, paid). The one, opt-in exception to "no AI keys in a product repo's CI".
+paid_reviewer = ""
 
 [inspect.app_families]
 claude = "anthropic"

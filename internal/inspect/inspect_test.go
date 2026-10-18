@@ -117,6 +117,31 @@ func TestGeneralModeFilters(t *testing.T) {
 	}
 }
 
+// The model reads the PR's title and body, so an edit of either reaches it
+// again; a changed Aayudha-Model declaration does not (the rung is relabelled).
+func TestRunCacheKeyCoversPRText(t *testing.T) {
+	a, calls := scripted("grok-4.7", reply("merge"), reply("merge"), reply("merge"))
+	r := Runner{Reviewers: []Reviewer{a}}
+	in := testInput("")
+	in.Title, in.Body = "Add Percent", "Adds Percent.\n\nAayudha-Host: amp"
+	_, st, err := r.Run(context.Background(), in, State{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.Body += "\nAayudha-Model: gpt-6.1-sol\n"
+	if res, _, _ := r.Run(context.Background(), in, st); !res.Cached || *calls != 1 {
+		t.Fatalf("a changed declaration: cached %v, %d calls", res.Cached, *calls)
+	}
+	in.Body += "Aayudha-Model: rounds half up now\n" // not a declaration aayu reads: it is description
+	if res, _, _ := r.Run(context.Background(), in, st); res.Cached || *calls != 2 {
+		t.Fatalf("an edited description: cached %v, %d calls", res.Cached, *calls)
+	}
+	in.Title = "Add Percent; it now also rounds"
+	if res, _, _ := r.Run(context.Background(), in, st); res.Cached || *calls != 3 {
+		t.Fatalf("an edited title: cached %v, %d calls", res.Cached, *calls)
+	}
+}
+
 // Peer mode: two reviewers of different families. A finding both raise is
 // confirmed (A+B, highest severity); one only A raises and B refutes is
 // dropped; a P0 security finding only B raises and A refutes is kept as

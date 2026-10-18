@@ -275,8 +275,23 @@ func TestShipAutonomousFootprint(t *testing.T) {
 	g.JobLogs[7701] = "2026-10-17T23:00:00.0000000Z inspect #" + strconv.Itoa(prN+1) + " at abc: merge (reviewed by claude)\n" + allowed
 	g.Mu.Unlock()
 	blocked("with a different-family log for another PR at the same head")
+	// A cached judgement rests on a PR comment's state, which a branch's
+	// workflow can write as the gate's account: it proves no review.
+	g.Mu.Lock()
+	g.JobLogs[7701] = "2026-10-17T23:00:00.0000000Z inspect #" + strconv.Itoa(prN) + " at abc: merge (cached) (reviewed by claude)\n" + allowed
+	g.Mu.Unlock()
+	blocked("with a cached different-family judgement")
+	// A cached relabel to C (the PR body now declares the reviewer's family)
+	// stands over an older fresh A: it only lowers the rung.
 	g.Mu.Lock()
 	g.JobLogs[7701] = "2026-10-17T23:00:00.0000000Z inspect #" + strconv.Itoa(prN) + " at abc: merge (reviewed by claude)\n" + allowed
+	g.Runs = append(g.Runs, fake.WorkflowRun{ID: g.Runs[gate].ID + 100000, Path: ".github/workflows/" + MergeGateWorkflow, HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "success"})
+	g.RunJobs[g.Runs[gate].ID+100000] = []fake.CheckRun{{ID: 7703, Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}}
+	g.JobLogs[7703] = "2026-10-17T23:00:00.0000000Z inspect #" + strconv.Itoa(prN) + " at abc: merge (cached) (reviewed by claude)\n  review: same-family review (C): claude (anthropic), builder anthropic\n"
+	g.Mu.Unlock()
+	blocked("with a cached relabel to C after a fresh different-family review")
+	g.Mu.Lock()
+	g.Runs = g.Runs[:len(g.Runs)-1]
 	g.Mu.Unlock()
 	if code, out := shipCmd(t, env, opts, prN, append(autonomous, "--dry-run")...); code != 0 || !strings.Contains(out, "ship #"+strconv.Itoa(prN)+": --dry-run: merge, Complete section, status:merged, and cleanup planned") {
 		t.Fatalf("ship --dry-run: %d %s", code, out)

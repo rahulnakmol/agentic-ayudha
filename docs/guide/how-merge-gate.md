@@ -128,6 +128,7 @@ The review the gate records, and shows as the first line of the inspect comment,
 | Review | When | Counts toward autonomy |
 |---|---|---|
 | Different-family | The reviewer's model is of a family outside every family the builder may be | yes |
+| Different-family, paid (rung B) | No listed app reaches a different family, and the repository opted into a paid reviewer of one | yes |
 | Same-family | The reviewer is of the builder's family, or the builder's family is unknown | never; never layers and protected paths still need a person |
 | Human | A person reviewed | a person's review |
 
@@ -135,8 +136,26 @@ The reviewer's family is the app's family. Only an app whose family is host-mana
 optional `model` field of its reply; an app of one family that reports another family's model gives a same-family
 review. A reply that reports a model of the builder's family is a same-family review, whatever was planned. `aayu ship` refuses an
 autonomous pass unless the inspect job of the base branch's `pull_request_target` merge gate run on the head printed a
-different-family review in its log, so after a same-family review, or with no such record, a person passes it. A
+different-family review in its log, so after a same-family review, or with no such record, a person passes it. A run whose judgement was cached from the state comment does not count; ship reads the newest fresh judgement of the head. A
 comment, or a run of the branch's own workflow, never counts. `reviewer = "model"` keeps the 0.1 model lane for a repository that accepts a key in CI.
+
+**Rung B, a paid reviewer (opt-in).** The founder's one deliberate exception to "no AI keys in a product repository's
+CI" (2026-10-18), off by default. It needs both steps:
+
+1. `[inspect] paid_reviewer` in `.aayudha/config.toml` names a model of a family the builder cannot be, for example
+   `gemini-3.8-flash` for Amp, Claude Code, or Codex builds.
+2. The repository adds that provider's pay-as-you-go key as an Actions secret named `AAYU_SECRET_<FAMILY>`:
+   `AAYU_SECRET_GOOGLE` for Gemini, `AAYU_SECRET_XAI` for Grok, `AAYU_SECRET_OPENAI`, or `AAYU_SECRET_ANTHROPIC`.
+
+The gate tries the ladder in order: an app of another family first (free), then the paid reviewer, then a same-family
+app. When it uses the paid reviewer, the inspect job calls the model with the key and does not @-mention an app. It
+reviews a PR that serves no story against its title, description, and diff. `[budget] per_pr_inspect_max` (5 USD by
+default) caps one PR's spend across its cycles, and a cap of 0 turns rung B off. The review is labelled
+`different-family review (B, paid)` everywhere and counts toward autonomy as rung A does. If the secret is missing, the
+model is of a family the builder may be, or the cap is 0, the gate logs why and the app reviews. `aayu doctor`'s
+`review-rung` row shows B when it is configured. Doctor cannot read repository secrets, so it names the secret the gate
+needs. The inspect job checks out the base branch and runs no PR code. The diff reaches the model only as delimited
+untrusted data.
 
 1. **Family check.** The builder's family comes from what aayu recorded on the ledger, outside the pull request: the
    delegation record (`aayu delegate`), or the model `aayu build` wrote for each checkpoint commit
