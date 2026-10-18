@@ -73,14 +73,14 @@ func runStreak(ctx context.Context, e *Env, apply bool) error {
 	rep.GitHub = c.Stats()
 	return e.Emit(rep, func(w io.Writer) error {
 		fmt.Fprintf(w, "Autonomy streaks for %s (threshold %d; %d merged PRs scanned)\n\n", repo, rep.Threshold, rep.Scanned)
-		fmt.Fprintln(w, "| Layer | Streak | Agent merges | Never-layer | Autonomous | Last correction |")
-		fmt.Fprintln(w, "|---|---|---|---|---|---|")
+		fmt.Fprintln(w, "| Layer | Streak | Agent merges | Not counted (review not different-family) | Never-layer | Autonomous | Last correction |")
+		fmt.Fprintln(w, "|---|---|---|---|---|---|---|")
 		for _, s := range rep.Layers {
 			last := "—"
 			if s.LastBreak != 0 {
 				last = fmt.Sprintf("#%d", s.LastBreak)
 			}
-			fmt.Fprintf(w, "| %s | %d | %d | %t | %t | %s |\n", s.Layer, s.Streak, s.Merges, s.Never, s.Autonomous, last)
+			fmt.Fprintf(w, "| %s | %d | %d | %d | %t | %t | %s |\n", s.Layer, s.Streak, s.Merges, s.Skipped, s.Never, s.Autonomous, last)
 		}
 		fmt.Fprintf(w, "\n%d correction(s) in the scanned history", len(rep.Corrections))
 		if apply {
