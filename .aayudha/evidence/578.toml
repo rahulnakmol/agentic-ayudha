@@ -1,0 +1,15 @@
+[[criterion]]
+id = 1
+tests = ["./internal/cli:TestInitIdentityFromAPhone", "./internal/tell:TestAppManifestPage"]
+
+[[criterion]]
+id = 2
+tests = ["./internal/cli:TestInitIdentityFromAPhone"]
+
+[[criterion]]
+id = 3
+tests = ["./internal/cli:TestInitIdentityFromAPhone"]
+
+[[criterion]]
+id = 4
+tests = ["./internal/cli:TestInitIdentityFromAPhone"]

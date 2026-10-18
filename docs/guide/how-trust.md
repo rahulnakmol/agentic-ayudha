@@ -247,7 +247,11 @@ it cannot ask for a device code, which proves the person's own account, so a one
 **Setup for replies, once per repository (about 20 minutes):**
 
 1. Create and install the aayudha GitHub App: `aayu init --identity` (10 minutes). It sets the variable
-   `AAYUDHA_APP_CLIENT_ID` and the secret `AAYUDHA_APP_PRIVATE_KEY`.
+   `AAYUDHA_APP_CLIENT_ID` and the secret `AAYUDHA_APP_PRIVATE_KEY`. From an orb's Terminal tab, a cloud agent's
+   terminal, or SSH, it prints a link that works on any device, your phone too. GitHub then shows a page on
+   github.com whose address you paste back, and aayu converts only that run's code. It prints the Install link only
+   after GitHub has turned the code into the key. If GitHub refuses, delete the App instead of installing it
+   (`AAYU_REMOTE_BROWSER=1` asks for the link on a desktop too).
 2. Add `approvers = ["<your-login>"]` under `[approvals]` in `.aayudha/config.toml`, through a reviewed PR
    (2 minutes).
 3. Install the workflow: `aayu init --gates` writes `.github/workflows/aayudha-approve.yml` (2 minutes).

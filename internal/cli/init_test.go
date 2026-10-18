@@ -1,19 +1,28 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"maps"
+	"net/http"
+	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"golang.org/x/crypto/nacl/box"
 
@@ -365,7 +374,7 @@ func TestInitExtras(t *testing.T) {
 	g := fake.New(t, "o/r", "User")
 	pub, _, _ := box.GenerateKey(rand.Reader)
 	g.PublicKey = base64.StdEncoding.EncodeToString(pub[:])
-	g.App = map[string]any{"id": 4242, "slug": "aayudha-r", "client_id": "Iv1.abc", "pem": "-----BEGIN RSA PRIVATE KEY-----\nMIIEsecret\n-----END RSA PRIVATE KEY-----\n"}
+	g.App = map[string]any{"id": 4242, "slug": "aayudha-r", "client_id": "Iv1.abc", "owner": map[string]any{"login": "o"}, "permissions": map[string]any{"contents": "write", "metadata": "read"}, "pem": "-----BEGIN RSA PRIVATE KEY-----\nMIIEsecret\n-----END RSA PRIVATE KEY-----\n"}
 	dir := checkout(t)
 	_ = os.MkdirAll(filepath.Join(dir, "loops"), 0o755)
 	_ = os.WriteFile(filepath.Join(dir, "loops", "digest.toml"), []byte("description = \"Digest.\"\ncommand = [\"status\", \"--digest\"]\ncron = \"5 9 * * 1-5\"\nagent = false\n"), 0o644)
@@ -649,4 +658,163 @@ func TestInitVerifySkillMaintainer(t *testing.T) {
 			t.Errorf("%q: config:\n%s", answer, cfg)
 		}
 	}
+}
+
+// pasteTerminal is a person at a terminal for init --identity's paste flow
+// (#578): when aayu asks for the address, answer reads what aayu printed and
+// returns the next line to paste ("" closes the terminal).
+type pasteTerminal struct {
+	mu     sync.Mutex
+	buf    strings.Builder
+	in     *io.PipeWriter
+	answer func(printed string) string
+}
+
+func (p *pasteTerminal) Write(b []byte) (int, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.buf.Write(b)
+	if strings.HasSuffix(p.buf.String(), "Address: ") {
+		line := p.answer(p.buf.String())
+		go func() {
+			if line == "" {
+				_ = p.in.Close()
+				return
+			}
+			_, _ = io.WriteString(p.in, line+"\n")
+		}()
+	}
+	return len(b), nil
+}
+
+// runPaste runs `aayu init --yes --identity` in a remote shell (no desktop,
+// no loopback browser) against api, answering the address prompts.
+func runPaste(t *testing.T, api string, answer func(printed string) string) (int, string) {
+	t.Helper()
+	pr, pw := io.Pipe()
+	term := &pasteTerminal{in: pw, answer: answer}
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "HOME": t.TempDir()}
+	var out bytes.Buffer
+	opts := Options{GitHubAPI: api, GitHubGap: -1, Dir: checkout(t), Build: BuildInfo{Version: "0.4.0"},
+		IsTerminal: func(s any) bool { _, ok := s.(*io.PipeReader); return ok },
+		Getenv:     func(k string) string { return env[k] },
+		GHToken:    func(context.Context) (string, error) { return "", errors.New("gh disabled in tests") },
+		GHAccounts: func(context.Context) (map[string]string, error) { return nil, nil },
+		GitCredential: func(context.Context, string) (string, error) {
+			return "", errors.New("git credentials disabled in tests")
+		}}
+	code := Run(context.Background(), []string{"init", "--yes", "--identity"}, IO{In: pr, Out: &out, Err: term}, opts)
+	term.mu.Lock()
+	defer term.mu.Unlock()
+	return code, out.String() + term.buf.String()
+}
+
+// startLink is the HTTPS start link aayu printed, with its fragment parsed.
+func startLink(t *testing.T, printed string) url.Values {
+	t.Helper()
+	for _, f := range strings.Fields(printed) {
+		if strings.HasPrefix(f, AppManifestStart+"#") {
+			v, err := url.ParseQuery(strings.TrimPrefix(f, AppManifestStart+"#"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			return v
+		}
+	}
+	t.Fatalf("no %s link in:\n%s", AppManifestStart, printed)
+	return nil
+}
+
+// #578: init --identity completes from a shell whose browser is on another
+// device (an orb's Terminal tab from a phone), converts only the pasted code of
+// this run, installs only after a successful conversion, and a wait with no
+// code exits 4 with a next step, never as an internal error.
+func TestInitIdentityFromAPhone(t *testing.T) {
+	newGitHub := func() *fake.GitHub {
+		g := fake.New(t, "o/r", "User")
+		pub, _, _ := box.GenerateKey(rand.Reader)
+		g.PublicKey = base64.StdEncoding.EncodeToString(pub[:])
+		g.App = map[string]any{"id": 4242, "slug": "aayudha-r", "client_id": "Iv1.abc", "owner": map[string]any{"login": "o"},
+			"permissions": map[string]any{"contents": "write", "metadata": "read"}, "pem": "pem-never-printed"}
+		return g
+	}
+	conversions := func(g *fake.GitHub) []string {
+		var out []string
+		for _, r := range g.Requests {
+			if strings.HasPrefix(r.Path, "/app-manifests/") {
+				out = append(out, r.Method+" "+r.Path)
+			}
+		}
+		return out
+	}
+
+	t.Run("criteria 1 and 2: the pasted address of this run is converted once; another run's is not", func(t *testing.T) {
+		g := newGitHub()
+		var state string
+		prompts := 0
+		code, printed := runPaste(t, g.URL(), func(p string) string {
+			prompts++
+			v := startLink(t, p)
+			state = v.Get("state")
+			var m struct {
+				RedirectURL string `json:"redirect_url"`
+			}
+			if err := json.Unmarshal([]byte(v.Get("manifest")), &m); err != nil || m.RedirectURL != initrepo.AppCodePage || v.Get("to") != "settings/apps/new" || len(state) != 32 {
+				t.Errorf("start link fragment: to=%q state=%q manifest=%s", v.Get("to"), state, v.Get("manifest"))
+			}
+			if prompts == 1 {
+				return initrepo.AppCodePage + "?code=0ther0ther0ther&state=" + strings.Repeat("0", 32)
+			}
+			return initrepo.AppCodePage + "?code=c0de1234c0de5678&state=" + state
+		})
+		if code != 0 || prompts != 2 {
+			t.Fatalf("exit %d after %d prompts:\n%s", code, prompts, printed)
+		}
+		if !strings.Contains(printed, "That address belongs to another run of init --identity (its state is not this run's), so it was not used.") {
+			t.Errorf("the other run's address was not refused by name:\n%s", printed)
+		}
+		if got := conversions(g); !slices.Equal(got, []string{"POST /app-manifests/c0de1234c0de5678/conversions"}) {
+			t.Errorf("conversions = %v", got)
+		}
+		if g.Secrets["AAYUDHA_APP_PRIVATE_KEY"] == "" || g.Variables["AAYUDHA_APP_CLIENT_ID"] != "Iv1.abc" || !strings.Contains(printed, "https://github.com/apps/aayudha-r/installations/new") || strings.Contains(printed, "pem-never-printed") {
+			t.Errorf("secret %v, variables %v, output:\n%s", g.Secrets, g.Variables, printed)
+		}
+		if strings.Contains(printed, "127.0.0.1") {
+			t.Errorf("a remote shell was given a loopback link:\n%s", printed)
+		}
+	})
+
+	t.Run("criterion 3: a code GitHub will not convert writes no secret and says delete, not install", func(t *testing.T) {
+		g := newGitHub()
+		target, _ := url.Parse(g.URL())
+		proxy := httputil.NewSingleHostReverseProxy(target)
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasPrefix(r.URL.Path, "/app-manifests/") {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusUnprocessableEntity)
+				_, _ = io.WriteString(w, `{"message":"Validation Failed"}`)
+				return
+			}
+			proxy.ServeHTTP(w, r)
+		}))
+		t.Cleanup(srv.Close)
+		code, printed := runPaste(t, srv.URL, func(p string) string {
+			return initrepo.AppCodePage + "?code=c0de1234c0de5678&state=" + startLink(t, p).Get("state")
+		})
+		if code != ExitBlocked || len(g.Secrets) != 0 || strings.Contains(printed, "installations/new") ||
+			!strings.Contains(printed, "do not install the App: delete it at https://github.com/settings/apps") || !strings.Contains(printed, "aayu init --identity") {
+			t.Fatalf("exit %d, secrets %v:\n%s", code, g.Secrets, printed)
+		}
+	})
+
+	t.Run("criterion 4: no address before the wait ends exits 4 with a next step", func(t *testing.T) {
+		defer func(w time.Duration) { codeWait = w }(codeWait)
+		codeWait = 50 * time.Millisecond
+		g := newGitHub()
+		code, printed := runPaste(t, g.URL(), func(string) string { return "  " })
+		if code != ExitBlocked || !strings.Contains(printed, "no address was pasted within an hour") || !strings.Contains(printed, "aayu init --identity") ||
+			strings.Contains(printed, "internal error") || len(conversions(g)) != 0 {
+			t.Fatalf("exit %d:\n%s", code, printed)
+		}
+	})
 }

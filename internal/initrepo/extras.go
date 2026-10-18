@@ -20,6 +20,7 @@ import (
 	"strings"
 	"text/template"
 
+	gh "github.com/google/go-github/v90/github"
 	"github.com/shurcooL/githubv4"
 	"golang.org/x/crypto/nacl/box"
 
@@ -290,6 +291,21 @@ func (in *Init) projects(ctx context.Context, x Extras) error {
 	return nil
 }
 
+// AppPermissions are the permissions agent lanes and CI need: what the
+// manifest asks for, and what the created App must hold before its key is
+// stored.
+var AppPermissions = map[string]string{"contents": "write", "issues": "write", "pull_requests": "write", "actions": "read", "checks": "read", "metadata": "read"}
+
+// AppCodePage is the manifest's redirect_url when the browser is on another
+// device (#578): a page on github.com, so GitHub's ?code=…&state=… reaches
+// only GitHub, which issued the code. The person pastes its address back.
+const AppCodePage = "https://github.com/rahulnakmol/agentic-ayudha/blob/dev/docs/app-code.md"
+
+// ErrAppNotConverted is a manifest code GitHub would not convert (404 or 422):
+// someone else may have converted it first and holds the key, so the App must
+// be deleted, never installed.
+var ErrAppNotConverted = errors.New("GitHub did not turn the code into the App's key")
+
 // AppManifest is the GitHub App manifest init --identity registers: the
 // permissions agent lanes and CI need, no webhook.
 func AppManifest(r Repo, redirect string) string {
@@ -297,9 +313,18 @@ func AppManifest(r Repo, redirect string) string {
 	if len(name) > 34 {
 		name = name[:34]
 	}
+	perms, _ := json.Marshal(AppPermissions)
 	return fmt.Sprintf(`{"name":%q,"url":"https://github.com/rahulnakmol/agentic-ayudha","redirect_url":%q,"public":false,`+
 		`"hook_attributes":{"url":"https://example.invalid/aayudha-no-webhook","active":false},`+
-		`"default_permissions":{"contents":"write","issues":"write","pull_requests":"write","actions":"read","checks":"read","metadata":"read"}}`, name, redirect)
+		`"default_permissions":%s}`, name, redirect, perms)
+}
+
+// appSettings is where the person deletes an App on r's owner.
+func appSettings(r Repo) string {
+	if r.Org {
+		return "https://github.com/organizations/" + r.Owner + "/settings/apps"
+	}
+	return "https://github.com/settings/apps"
 }
 
 func (in *Init) app(ctx context.Context, x Extras) error {
@@ -335,6 +360,10 @@ func (in *Init) app(ctx context.Context, x Extras) error {
 		ClientID string `json:"client_id"`
 		PEM      string `json:"pem"`
 		HTMLURL  string `json:"html_url"`
+		Owner    struct {
+			Login string `json:"login"`
+		} `json:"owner"`
+		Permissions map[string]string `json:"permissions"`
 	}
 	_, err = in.GH.Write(ctx, actions.Action{Kind: "github.app.create", Target: r.Owner, IdempotencyKey: in.key("app"),
 		Request: &actions.Request{Method: http.MethodPost, Path: "/app-manifests/" + code + "/conversions"}},
@@ -342,8 +371,25 @@ func (in *Init) app(ctx context.Context, x Extras) error {
 			err := in.rest(ctx, http.MethodPost, "/app-manifests/"+code+"/conversions", nil, &conv)
 			return map[string]any{"id": conv.ID, "slug": conv.Slug}, err // the PEM is never logged
 		})
+	var er *gh.ErrorResponse
+	if errors.As(err, &er) && er.Response != nil && (er.Response.StatusCode == http.StatusNotFound || er.Response.StatusCode == http.StatusUnprocessableEntity) {
+		in.note("identity", "app", "*", "not converted", fmt.Sprintf("GitHub answered %d: the code may already have been used by someone else, who would then hold the App's key. Do not install the App: delete it at %s, then run aayu init --identity again", er.Response.StatusCode, appSettings(r)))
+		return fmt.Errorf("%w (GitHub answered %d); do not install the App: delete it at %s", ErrAppNotConverted, er.Response.StatusCode, appSettings(r))
+	}
 	if err != nil {
 		return err
+	}
+	// The start page that posted the manifest is a static page anyone with
+	// write access to the site could change: store the key only for the App
+	// aayu asked for.
+	wider := false
+	for k, v := range conv.Permissions {
+		wider = wider || AppPermissions[k] != v
+	}
+	if !strings.EqualFold(conv.Owner.Login, r.Owner) || wider {
+		conv.PEM = ""
+		in.note("identity", "app", conv.Slug, "not converted", "the created App is not the one aayu asked for (owner "+conv.Owner.Login+", or permissions aayu did not ask for). Do not install it: delete it at "+appSettings(r)+", then run aayu init --identity again")
+		return fmt.Errorf("%w: the created App %s is not the one aayu asked for; do not install it: delete it at %s", ErrAppNotConverted, conv.Slug, appSettings(r))
 	}
 	in.State.Put(Object{Kind: "app", Name: "bot", ID: strconv.FormatInt(conv.ID, 10), External: true})
 	in.State.Identity = identity.KindApp
