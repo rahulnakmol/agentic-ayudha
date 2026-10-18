@@ -12,5 +12,5 @@
 # Given -base, the same command checks that the change lowers no skill-eval bar (evals/eval.toml says which changes
 # do; Story #400). Lowering one needs an accepted `eval-bar` floor waiver, named in evals/eval.toml as `bar_waiver`.
 [coverage]
-floor = 68.0
+floor = 68.5
 margin = 0.5
