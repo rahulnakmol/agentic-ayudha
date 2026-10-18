@@ -114,8 +114,9 @@ Gather pinned design references (URLs and IDs only) and user research for a Feat
    - **A startup's one page fits by design**: the Job story with its quote, one line per finding with its source,
      one line per state, and at most three open questions; a reference's reason stays in its one line. Count before
      you reply: the whole notes file is at most 400 words.
-   - **Tasks as the person's goal** ("You want your parcel on a day you are home"), never as steps that name the
-     interface ("Pick a slot and press Save").
+   - **Tasks as the person's goal**, written as plain text with no quotation marks, because quotation marks mark
+     people's words only: Task 1: You want your parcel on a day you are home. Never steps that name the interface
+     (pick a slot and press Save).
 3. Put both in a directory with a `stage.json`:
 
    ```json
