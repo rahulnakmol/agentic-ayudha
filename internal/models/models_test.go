@@ -734,3 +734,15 @@ func TestUIReviewLaneEffort(t *testing.T) {
 		}
 	}
 }
+
+// On Copilot, [models.<lane>.copilot] may name Auto, an Auto tier, or
+// HydraFusion, which resolve as host-managed; a misspelt one is an error.
+func TestCopilotSelectors(t *testing.T) {
+	for model, ok := range map[string]bool{"auto": true, "auto:balance": true, "hydrafusion": true, "auto:balanced": false, "hydrafusion-extra": false} {
+		r := Resolver{Models: config.Models{Lanes: map[string]map[string]config.ModelChoice{"review": {"copilot": {Model: model}}}}}
+		res, err := r.Resolve(verbs.LaneReview, verbs.HostCopilot)
+		if ok != (err == nil) || ok && res.Family != verbs.FamilyHostManaged {
+			t.Errorf("%s: %+v %v", model, res, err)
+		}
+	}
+}

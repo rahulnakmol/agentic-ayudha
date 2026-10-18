@@ -113,6 +113,9 @@ func FamilyOf(modelID string) Family {
 // or HydraFusion) rather than a model: the family is whichever model Copilot
 // reports for the response.
 func CopilotSelector(id string) bool {
-	id = strings.ToLower(id)
-	return id == "auto" || strings.HasPrefix(id, "auto:") || strings.HasPrefix(id, CopilotHydraFusion)
+	switch strings.ToLower(id) {
+	case "auto", CopilotAutoEfficiency, CopilotAutoBalance, CopilotAutoIntelligence, CopilotHydraFusion:
+		return true
+	}
+	return false
 }
