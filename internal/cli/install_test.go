@@ -445,14 +445,17 @@ func TestHookLogsProviderCalls(t *testing.T) {
 	for _, c := range []string{
 		`{"sessionId":"cp-1","timestamp":1792293989252,"cwd":"/r","toolName":"sentry-find_releases","toolArgs":{"statsPeriod":"7d","limit":5},"toolResult":{"resultType":"success","textResultForLlm":"[{\"version\":\"1\"}]"}}`,
 		`{"sessionId":"cp-1","timestamp":1792293990785,"cwd":"/r","toolName":"sentry-find_releases","toolArgs":{"statsPeriod":"7d","limit":5},"error":"MCP server 'sentry': exit 2"}`,
+		// A shell command that exits non-zero is still resultType success; only the exit marker says it failed.
+		`{"sessionId":"cp-1","timestamp":1792293991000,"cwd":"/r","toolName":"bash","toolArgs":{"command":"posthog-cli exp query run \"SELECT count() FROM events WHERE timestamp > now() - INTERVAL 1 DAY LIMIT 1\""},"toolResult":{"resultType":"success","textResultForLlm":"error: no project\n<shellId: 1 completed with exit code 2>"}}`,
 	} {
 		if code, out, errs := runIn(t, env, opts, c, "hook", "post-tool", "--host", "copilot"); code != 0 || out != "" || errs != "" {
 			t.Fatalf("copilot post-tool: exit %d %q %q", code, out, errs)
 		}
 	}
 	b, err = os.ReadFile(filepath.Join(repo, ".aayudha", "state", "calls", "cp-1.jsonl"))
-	if lines := strings.Split(strings.TrimSpace(string(b)), "\n"); err != nil || len(lines) != 2 || !strings.Contains(lines[0], `"rows":1`) || !strings.Contains(lines[0], `"citable":true`) ||
-		!strings.Contains(lines[1], `"failed":true`) || !strings.Contains(lines[1], `"citable":false`) {
+	if lines := strings.Split(strings.TrimSpace(string(b)), "\n"); err != nil || len(lines) != 3 || !strings.Contains(lines[0], `"rows":1`) || !strings.Contains(lines[0], `"citable":true`) ||
+		!strings.Contains(lines[1], `"failed":true`) || !strings.Contains(lines[1], `"citable":false`) ||
+		!strings.Contains(lines[2], `"channel":"cli"`) || !strings.Contains(lines[2], `"failed":true`) || !strings.Contains(lines[2], `"citable":false`) {
 		t.Fatalf("copilot call log: %v\n%s", err, b)
 	}
 	// A log that cannot be written never fails the host: the call has run.
