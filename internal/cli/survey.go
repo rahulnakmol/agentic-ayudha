@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -63,12 +64,48 @@ func surveyDirs(e *Env, in Values) (root, out string) {
 	return root, out
 }
 
+// surveyOutSafe refuses an output directory a symbolic link could redirect:
+// the default one sits in the surveyed checkout, which the survey does not
+// trust, so a link committed at .aayudha/survey/index.json or under
+// manuals/ would make a write land on any file the user can write. Every
+// directory from the checkout down to out, and everything already under out,
+// must be a real file or directory.
+func surveyOutSafe(root, out string) error {
+	refuse := func(p string) error {
+		return fmt.Errorf("survey: %s is a symbolic link; the survey writes only real files under its output directory %s (remove the link, or give --out a real directory)", p, out)
+	}
+	if rel, err := filepath.Rel(absPath(root), absPath(out)); err == nil && rel != "." && !strings.HasPrefix(rel, "..") {
+		p := absPath(root)
+		for _, part := range strings.Split(rel, string(filepath.Separator)) {
+			p = filepath.Join(p, part)
+			if fi, err := os.Lstat(p); err == nil && fi.Mode()&fs.ModeSymlink != 0 {
+				return refuse(p)
+			}
+		}
+	}
+	if fi, err := os.Lstat(out); err != nil || !fi.IsDir() {
+		if err == nil && fi.Mode()&fs.ModeSymlink != 0 {
+			return refuse(out)
+		}
+		return nil
+	}
+	return filepath.WalkDir(out, func(p string, d fs.DirEntry, err error) error {
+		if err == nil && d.Type()&fs.ModeSymlink != 0 {
+			return refuse(p)
+		}
+		return err
+	})
+}
+
 // runSurvey (WP5.9, Decision #287): with no mode flag it indexes the checkout
 // deterministically and writes index.json; --module prints one module's fact
 // pack from that index. The host's model reads the packs and the code and
 // writes the survey draft; the binary never calls a model.
 func runSurvey(ctx context.Context, e *Env, in Values) error {
 	root, out := surveyDirs(e, in)
+	if err := surveyOutSafe(root, out); err != nil {
+		return Wrap(ExitUsage, err)
+	}
 	indexFile := filepath.Join(out, "index.json")
 	if in.Has("golden") || in.Has("parity") || in.Has("compat") {
 		return e.surveyGolden(ctx, in, root, out, indexFile)
