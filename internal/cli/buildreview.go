@@ -252,6 +252,10 @@ func (e *Env) reviewSession(ctx context.Context, s *sessionReview, a sessionRevi
 	r := inspect.Runner{MaxUSD: cfg.Budget.PerPRInspectMax,
 		Filter:    inspect.Filter{MinConfidence: cfg.Inspect.MinConfidence, SuppressAfter: cfg.Inspect.SuppressAfter, Generated: cfg.Inspect.Generated},
 		Reviewers: []inspect.Reviewer{{Model: m.Model, Complete: e.reviewCall(gw, &cfg, m.Model, story, &served)}}}
+	// The spend outlives the worktree: a resumed build on another machine
+	// starts from what the PR body says was spent, so per_pr_inspect_max
+	// still caps the PR.
+	s.State.SpentUSD = max(s.State.SpentUSD, sessionSpent(a.pr.GetBody()))
 	p := e.progress(fmt.Sprintf("Session review by %s (%s)", m.Model, m.Family))
 	res, st, err := r.Run(ctx, in, s.State)
 	s.State = st
@@ -485,8 +489,32 @@ func (s *sessionReview) summary() string {
 	if s.Skipped != "" {
 		b.WriteString("The last push went out without a session review: " + sessionCell(s.Skipped) + ".\n\n")
 	}
+	if s.State.SpentUSD > 0 {
+		fmt.Fprintf(&b, "Spent on the session review: %.4f USD.\n\n", s.State.SpentUSD)
+	}
 	b.WriteString(sessionReviewEnd)
 	return b.String()
+}
+
+// spentLine is the summary's spend line; rows, bullets, and the other lines
+// start otherwise, so builder- and model-written text cannot forge one.
+var spentLine = regexp.MustCompile(`(?m)^Spent on the session review: ([0-9]+(?:\.[0-9]+)?) USD\.$`)
+
+// sessionSpent is the session review's spend that a PR body's section records.
+func sessionSpent(body string) float64 {
+	i := strings.Index(body, sessionReviewStart)
+	if i < 0 {
+		return 0
+	}
+	sec, _, _ := strings.Cut(body[i:], sessionReviewEnd)
+	var usd float64
+	for _, m := range spentLine.FindAllStringSubmatch(sec, -1) {
+		var v float64
+		if _, err := fmt.Sscan(m[1], &v); err == nil {
+			usd = max(usd, v)
+		}
+	}
+	return usd
 }
 
 // withSessionSummary replaces the session review section of a PR body, or

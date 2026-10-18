@@ -1070,6 +1070,33 @@ func TestBuildSessionReviewLoop(t *testing.T) {
 	}
 	model.Err = nil
 
+	// The spend the PR body records still caps the PR when the worktree's
+	// own state is gone, as on a resume elsewhere: no new review call.
+	stateFile := filepath.Join(git(t, wt, "rev-parse", "--absolute-git-dir"), sessionReviewFile)
+	_ = os.Remove(stateFile)
+	paid := sessionReply("")
+	paid.TokensIn = 100_000
+	model.Replies = []models.Response{paid}
+	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("paid\n"), 0o644)
+	if code, res, errOut := build(); code != 0 || len(res.Review.Open) != 0 {
+		t.Fatalf("a paid round that merges: %d %+v %s", code, res.Review, errOut)
+	}
+	spent := sessionSpent(body())
+	if spent <= 0 || !strings.Contains(body(), "Spent on the session review: ") {
+		t.Fatalf("the PR body records no session review spend:\n%s", body())
+	}
+	if err := os.Remove(stateFile); err != nil {
+		t.Fatal(err)
+	}
+	env["AAYU_BUDGET__PER_PR_INSPECT_MAX"] = strconv.FormatFloat(spent, 'f', -1, 64)
+	calls := len(model.Requests)
+	model.Replies = []models.Response{sessionReply("")}
+	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("resumed\n"), 0o644)
+	if code, res, errOut := build(); code != 0 || len(model.Requests) != calls || !strings.Contains(res.Review.Skipped, "per_pr_inspect_max") {
+		t.Fatalf("a resume past the PR's review budget: %d %+v %s, %d calls", code, res.Review, errOut, len(model.Requests)-calls)
+	}
+	delete(env, "AAYU_BUDGET__PER_PR_INSPECT_MAX")
+
 	// A review that trips the budget breaker stops the build: nothing is pushed.
 	costly := sessionReply("")
 	costly.TokensIn = 50_000_000
@@ -1091,7 +1118,7 @@ func TestBuildSessionReviewLoop(t *testing.T) {
 
 	// A review endpoint that is not https is refused before any call.
 	env[inspect.ReviewModelURLVar] = "http://review.example/v1"
-	calls := len(model.Requests)
+	calls = len(model.Requests)
 	_ = os.WriteFile(filepath.Join(wt, "b.txt"), []byte("again\n"), 0o644)
 	if code, _, errOut := build(); code != ExitUsage || !strings.Contains(errOut, inspect.ReviewModelURLVar) || len(model.Requests) != calls {
 		t.Fatalf("an http endpoint: %d %s", code, errOut)
