@@ -656,13 +656,16 @@ func (p *planner) commands(hostList []string, src map[string][]skillFile, lock *
 			id := ServerName + "-" + c.Name
 			desc, _ := json.Marshal(c.Description)
 			want[id] = []skillFile{{rel: "SKILL.md", data: fmt.Appendf(nil,
-				"---\nname: %s\ndescription: %s\n---\n\n<!-- The aayudha command `%s`, written by `aayu install`. Use this skill when the person runs it. -->\n\n%s\n",
-				id, desc, c.Name, c.Body)}}
+				"---\nname: %s\ndescription: %s\n---\n\n<!-- The aayudha command `%s`, %s. Use this skill when the person runs it. -->\n\n%s\n",
+				id, desc, c.Name, copilotCommandMark, c.Body)}}
 		}
+		// A command aayu no longer ships is removed only when its SKILL.md
+		// carries the line install writes; a person's own skill is left alone.
 		previous := map[string]LockSkill{}
 		entries, _ := os.ReadDir(p.abs(CopilotSkills, false))
 		for _, e := range entries {
-			if strings.HasPrefix(e.Name(), ServerName+"-") {
+			b, err := os.ReadFile(filepath.Join(p.abs(CopilotSkills, false), e.Name(), "SKILL.md"))
+			if strings.HasPrefix(e.Name(), ServerName+"-") && err == nil && strings.Contains(string(b), copilotCommandMark) {
 				previous[e.Name()] = LockSkill{}
 			}
 		}
@@ -1003,6 +1006,9 @@ func addString(v any, s string) []any {
 // PluginID is the aayudha plugin's ID in Claude Code and Codex: the plugin
 // from this repository's marketplace, which is also named aayudha.
 const PluginID = ServerName + "@" + ServerName
+
+// copilotCommandMark is in every command skill install writes for Copilot.
+const copilotCommandMark = "written by `aayu install`"
 
 // copilotTrust is the install note for Copilot, which reads a project's
 // .mcp.json and .github/hooks only once its person trusts the folder.
