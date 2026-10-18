@@ -346,6 +346,12 @@ func TestSurveyDocs(t *testing.T) {
 	if code, _, stderr := run(t, nil, opts, "survey", dir, "--out", dir); code != ExitUsage || !strings.Contains(stderr, "is the checkout itself") {
 		t.Fatalf("--out the checkout root: %d %s", code, stderr)
 	}
+	// The same, with the checkout reached through a link and --out naming it directly.
+	if link := filepath.Join(t.TempDir(), "repo-link"); os.Symlink(dir, link) == nil {
+		if code, _, stderr := run(t, nil, opts, "survey", link, "--out", dir); code != ExitUsage || !strings.Contains(stderr, "is the checkout itself") {
+			t.Fatalf("--out the checkout root, through a link: %d %s", code, stderr)
+		}
+	}
 	// A link the surveyed checkout commits under the default output directory
 	// never redirects a write: the survey refuses before writing anything.
 	victim := filepath.Join(t.TempDir(), "config")

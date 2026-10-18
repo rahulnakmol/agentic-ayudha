@@ -67,13 +67,26 @@ func surveyDirs(e *Env, in Values) (root, out string) {
 }
 
 // under reports whether p lies below dir, and its path relative to dir: a
-// first component of .. leaves it, ..cache does not.
+// first component of .. leaves it, ..cache does not. dir counts as written
+// and as its links resolve (a checkout reached through a link); p is never
+// resolved, so a link on its way stays visible to surveyOutSafe.
 func under(dir, p string) (string, bool) {
-	rel, err := filepath.Rel(absPath(dir), absPath(p))
-	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", false
+	for _, d := range dirForms(dir) {
+		rel, err := filepath.Rel(d, absPath(p))
+		if err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return rel, true
+		}
 	}
-	return rel, true
+	return "", false
+}
+
+// dirForms is dir as written and with its links resolved.
+func dirForms(dir string) []string {
+	forms := []string{absPath(dir)}
+	if r, err := filepath.EvalSymlinks(forms[0]); err == nil && r != forms[0] {
+		forms = append(forms, r)
+	}
+	return forms
 }
 
 // surveyKey is the user's key for signing saved survey sections, created on
@@ -113,7 +126,7 @@ func (e *Env) surveyKey() ([]byte, error) {
 // directory from the checkout down to out, and everything already under out,
 // must be a real file or directory.
 func surveyOutSafe(root, out string) error {
-	if absPath(root) == absPath(out) { // the next index would read the survey's own files
+	if slices.Contains(dirForms(root), absPath(out)) { // the next index would read the survey's own files
 		return fmt.Errorf("survey: --out %s is the checkout itself; give it a directory inside or outside the checkout", out)
 	}
 	refuse := func(p string) error {
