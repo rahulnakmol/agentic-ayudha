@@ -80,6 +80,17 @@ func under(dir, p string) (string, bool) {
 	return "", false
 }
 
+// sameDir reports whether a and b name one existing directory, however they
+// spell it (a link, or a case-only difference on a case-insensitive disk).
+func sameDir(a, b string) bool {
+	fa, err := os.Stat(a)
+	if err != nil {
+		return false
+	}
+	fb, err := os.Stat(b)
+	return err == nil && os.SameFile(fa, fb)
+}
+
 // dirForms is dir as written and with its links resolved.
 func dirForms(dir string) []string {
 	forms := []string{absPath(dir)}
@@ -126,7 +137,7 @@ func (e *Env) surveyKey() ([]byte, error) {
 // directory from the checkout down to out, and everything already under out,
 // must be a real file or directory.
 func surveyOutSafe(root, out string) error {
-	if slices.Contains(dirForms(root), absPath(out)) { // the next index would read the survey's own files
+	if slices.Contains(dirForms(root), absPath(out)) || sameDir(root, out) { // the next index would read the survey's own files
 		return fmt.Errorf("survey: --out %s is the checkout itself; give it a directory inside or outside the checkout", out)
 	}
 	refuse := func(p string) error {
