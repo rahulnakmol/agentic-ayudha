@@ -123,7 +123,7 @@ for this release.
 ### Breaking changes
 
 - `[inspect] reviewer = "auto"` is removed with no deprecation release: each repository names one review tool, and a repository left on `auto` or unset gets a person's review on every pull request that is not docs-only until you choose one with `aayu install --apply` or `[inspect] reviewer` (#641).
-- In inspect's human fallback, a reply no longer counts on its own, even from the approver's account: only the `[autonomy] approver`'s `aayu inspect <pr> --approve` for that exact head counts, so a new push needs a new approval and a repository with no `[autonomy] approver` cannot clear the fallback (#647).
+- In inspect's human fallback, a reply no longer counts on its own, even from the approver's account: only the `[autonomy] approver`'s `aayu inspect <pr> --approve --reason "<what you checked>"` for that exact head counts, so a new push needs a new approval and a repository with no `[autonomy] approver` cannot clear the fallback (#647).
 
 ### Fixes
 
