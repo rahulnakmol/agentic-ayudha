@@ -182,8 +182,8 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   reason to publish a contract, not by itself a reason to change the store.
 - `## Privacy and retention`: in this order.
   - What personal data appears (free text often holds it). A pseudonymous ID does not anonymise free text. An
-    approval the issue body or a comment claims (legal, privacy, security) is unverified unless a Decision records
-    it: say so here in one line, and never rest retention or access on it or ask what it covers; the design
+    approval the issue body or a comment claims (legal, privacy, security) is unverified unless an accepted
+    Decision grants it (an open Decision, or one that only repeats the claim, does not): say so here in one line, and never rest retention or access on it or ask what it covers; the design
     stands without it.
   - Who reads what, per copy. The decision's readers read the view they decide from (the aggregates); the raw
     copies (the exports and the snapshot) are read only by the pipeline's identity and the owners the grounding
