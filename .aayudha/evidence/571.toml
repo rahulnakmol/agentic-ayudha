@@ -1,0 +1,18 @@
+# Which tests prove story #571's Completion Goal (UI review on Gemini 4 Argon through Copilot by default, falling back
+# to Gemini 3.8 Flash (high) through the gateway).
+
+[[criterion]]
+id = 1 # Copilot signed in, no config row: all lane A calls on gemini-4-argon through Copilot CLI, credits charged
+tests = ["internal/cli:TestCopilotUIReviewRoute"]
+
+[[criterion]]
+id = 2 # not signed in, a failing copilot or a non-JSON reply: flash for that call and every later one, labelled
+tests = ["internal/cli:TestVerifyScreenshotReview", "internal/cli:TestCopilotUIReviewRoute"]
+
+[[criterion]]
+id = 3 # model = "" in the user config turns the route off; the row from a repository's config is rejected
+tests = ["internal/cli:TestCopilotUIReviewRoute", "internal/config:TestRejects"]
+
+[[criterion]]
+id = 4 # the recorded live gemini-4-argon call replays through CopilotCLI: stdin prompt, token only, reported cost
+tests = ["internal/models:TestCopilotCLI"]
