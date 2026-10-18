@@ -84,6 +84,7 @@ for this release.
 
 ### Identity and trust
 
+- `aayu inbox` shows a "Needs your review" card for each pull request the merge gate holds for a person; the card asks what you checked and writes the same record as `aayu inspect --approve`, so one session's device code approves several pull requests, and nothing is recorded if the head moved since you read the card (#678).
 - A human-only command in a shell an agent started, or with no terminal, runs only after you approve it from any device through GitHub's device flow, so it works from a remote shell such as an orb or a runner (#192, #467).
 - `aayu decide a,b --accept x,y` puts up to 10 human-only steps into one batch that a recorded approver accepts with a reply, when the repository has the aayudha App, with one device code as the fallback and for one-way doors (#501).
 - `aayu init --gates` protects every host's executable config with CODEOWNERS, and `aayu doctor` fails when it drifts (#538).
