@@ -357,7 +357,7 @@ func TestShipOnProof(t *testing.T) {
 		"always_person = [\".github/CODEOWNERS\", \"internal/identity/\"]\nalways_person_config = [\".aayudha/config.toml\"]\n"
 	g.RefFiles = map[string]map[string]string{
 		base: {".github/CODEOWNERS": "/skills/ @founder\n", ".github/workflows/ci.yml": secrets, ".aayudha/config.toml": conf},
-		head: {".github/workflows/ci.yml": secrets, ".aayudha/config.toml": strings.Replace(conf, `approver = ""`, `approver = "mallory"`, 1)},
+		head: {".github/workflows/ci.yml": secrets, ".aayudha/config.toml": strings.Replace(conf, "version = 1\n", "version = 1\napprovals.approvers = [\"mallory\"]\n", 1)}, // a dotted key, no [table]
 	}
 	g.Pulls[prN].Files = []string{"empty.txt"}
 	g.Mu.Unlock()
@@ -385,7 +385,7 @@ func TestShipOnProof(t *testing.T) {
 	g.Mu.Lock()
 	g.Pulls[prN].Files = []string{"empty.txt", ".aayudha/config.toml"}
 	g.Mu.Unlock()
-	refused("no merge on proof: it changes [autonomy] in .aayudha/config.toml, which decides who may approve or bypass")
+	refused("no merge on proof: it changes [approvals] in .aayudha/config.toml, which decides who may approve or bypass")
 	g.Mu.Lock()
 	g.RefFiles[base][".aayudha/config.toml"] = strings.Replace(conf, `"C"]`, `]`, 1)
 	g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(g.RefFiles[base][".aayudha/config.toml"], `"file"`, `"slack"`, 1) // another table: no person needed

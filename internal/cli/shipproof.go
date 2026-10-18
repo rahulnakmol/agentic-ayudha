@@ -6,11 +6,13 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
 
 	gh "github.com/google/go-github/v90/github"
+	"github.com/pelletier/go-toml/v2"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
@@ -187,38 +189,17 @@ var secretRef = regexp.MustCompile(`\bsecrets\b|\benvironment\s*:`)
 // environment (an environment holds secrets and deployment rights).
 func holdsSecrets(workflow string) bool { return secretRef.MatchString(workflow) }
 
-// changedSections lists the TOML tables, by their first key segment in
-// names, whose text differs between two versions of a file.
+// changedSections lists the TOML tables in names whose parsed values differ
+// between two versions of a file, however they are written (a [table], a
+// dotted key, or an inline table). A version that does not parse counts as
+// changing every one of them.
 func changedSections(before, after string, names []string) []string {
-	b, a := tomlSections(before, names), tomlSections(after, names)
+	var b, a map[string]any
+	errB, errA := toml.Unmarshal([]byte(before), &b), toml.Unmarshal([]byte(after), &a)
 	var out []string
 	for _, n := range names {
-		if b[n] != a[n] {
+		if errB != nil || errA != nil || !reflect.DeepEqual(b[n], a[n]) {
 			out = append(out, n)
-		}
-	}
-	return out
-}
-
-// tomlSections is the text of each table whose first key segment is in
-// names, keyed by that segment, comments and blank lines dropped.
-func tomlSections(text string, names []string) map[string]string {
-	out := map[string]string{}
-	cur := ""
-	for _, line := range strings.Split(text, "\n") {
-		t := strings.TrimSpace(line)
-		if t == "" || strings.HasPrefix(t, "#") {
-			continue
-		}
-		if strings.HasPrefix(t, "[") {
-			h := strings.Trim(strings.SplitN(t, "]", 2)[0], "[ \"")
-			cur = strings.Trim(strings.SplitN(h, ".", 2)[0], " \"")
-			if !slices.Contains(names, cur) {
-				cur = ""
-			}
-		}
-		if cur != "" {
-			out[cur] += t + "\n"
 		}
 	}
 	return out
