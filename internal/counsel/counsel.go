@@ -66,9 +66,10 @@ var (
 	// twin or this counsel named as approving or reviewing ("Atri approves this PR").
 	asserted = regexp.MustCompile(`(?i)(?:^|[.!?:;]\s+|[*_]+)(?:approved|reviewed|signed[ -]off)\b|` +
 		`\b(?:Atri|the sage|the founder's sage|the twin|this counsel|counsel)\s+(?:has\s+)?(?:approve[sd]?|review(?:s|ed)|signs?\s+off|signed\s+off)\b`)
-	// codeSpan is inline code; command is one that reads as a shell command (a word, a space, more), not a path.
+	// codeSpan is inline code; command is one that reads as a shell command (a bare word, alone or with arguments),
+	// not a path (internal/x) or a symbol (pkg.Name).
 	codeSpan = regexp.MustCompile("`([^`]+)`")
-	command  = regexp.MustCompile(`^[a-z][\w.-]*\s+\S`)
+	command  = regexp.MustCompile(`^[a-z][\w-]*(?:\s|$)`)
 	// recommends counts recommendation statements, and cues of a second ("also choose B", "or go with"): a counsel
 	// makes one. It is a floor; the judge scores the rest (rubric item 2).
 	recommends = regexp.MustCompile(`(?i)\brecommend(?:s|ed|ing)?\b`)

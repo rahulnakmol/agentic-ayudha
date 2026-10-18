@@ -633,16 +633,7 @@ func declares(root, pkg, name, member string) bool {
 			case *ast.FuncDecl:
 				recv := ""
 				if dl.Recv != nil && len(dl.Recv.List) > 0 {
-					t := dl.Recv.List[0].Type
-					if st, ok := t.(*ast.StarExpr); ok {
-						t = st.X
-					}
-					if ix, ok := t.(*ast.IndexExpr); ok {
-						t = ix.X
-					}
-					if id, ok := t.(*ast.Ident); ok {
-						recv = id.Name
-					}
+					recv = embeddedName(dl.Recv.List[0].Type) // T, *T, T[X], T[A, B]
 				}
 				found = found || member == "" && recv == "" && dl.Name.Name == name || member != "" && recv == name && dl.Name.Name == member
 			case *ast.GenDecl:

@@ -85,6 +85,7 @@ func TestCheckStructure(t *testing.T) {
 		"two questions":            {strings.Replace(good, "Is this the call?", "Ship now? Or wait?", 1), "not one question on one line"},
 		"another command":          {strings.Replace(good, "Run `aayu decide 5`:", "Run `aayu decide 5`, then `gh pr merge 5`:", 1), "`gh pr merge 5` is not an aayu command"},
 		"fenced parts":             {strings.Replace(good, "## The call", "```\n## The call", 1) + "```\n", "has a code block"},
+		"zero-argument command":    {strings.Replace(good, "Run `aayu decide 5`:", "Run `aayu decide 5`, then `make`:", 1), "`make` is not an aayu command"},
 		"two commands":             {strings.Replace(good, "Run `aayu decide 5`:", "Run `aayu inspect 2`, then `aayu ship 2`:", 1), "gives 2 commands"},
 		"indented list":            {strings.Replace(good, "One recommendation and why", "Choose A (#2).\n  - Choose B (#2).\n  - why", 1), "make one recommendation"},
 		"also choose":              {strings.Replace(good, "One recommendation and why", "Choose A (#2). Also choose B (#2); why", 1), "make one recommendation"},
