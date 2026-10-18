@@ -14,9 +14,9 @@ its value, and WP0.5 chose it.
 
 | Key | Default | Meaning | Source |
 |---|---|---|---|
-| `verify.dast` | `true` | Run the ZAP DAST floor against the running app when `[verify] platforms` has web or api. Its active cross-site scripting and injection rules run only against an app `[verify] seed` started on a loopback host; any other URL gets a passive scan unless its environment sets `active_scan = true` (read only from `.aayudha/config.toml`). ZAP runs under Docker or Podman; with neither, a local run skips and a CI run is blocked. | Decision #485 |
+| `verify.dast` | `true` | Run the ZAP DAST floor against the running app when `[verify] platforms` has web or api. Its active cross-site scripting and injection rules run only against an app `[verify] seed` started on a loopback host; any other URL gets a passive scan unless its environment sets `active_scan = true` (read only from `.aayudha/config.toml`). ZAP runs under Docker or Podman; with neither, a local run skips and a CI run is blocked. | founder decision 2026-10-17 (DAST) |
 | `verify.red_on_base_blocking_from` | `"2026-11-13"` | Date (UTC) from which a Bug story whose mapped proving test passes on the base commit fails the merge gate (red-on-base, P5). Before it the check is advisory: four weeks after the founder decision of 2026-10-15. | 0.2 (P5) |
-| `verify.new_floors_blocking_from` | `"2026-11-14"` | Date (UTC) from which the floors and defaults Decision #480 added fail the merge gate; before it a miss is advisory: four weeks after the decision of 2026-10-17. | Decision #480 |
+| `verify.new_floors_blocking_from` | `"2026-11-14"` | Date (UTC) from which the floors and defaults of the founder decision of 2026-10-17 on proof floors fail the merge gate; before it a miss is advisory: four weeks after that decision. | founder decision 2026-10-17 (floors) |
 | `verify.drift_blocking_from` | `"2026-11-13"` | Date (UTC) from which feature-map drift (`aayu verify --map`) fails the merge gate's feature-map floor. Before it drift is a warning: four weeks after the founder decision of 2026-10-16. | 0.2 (WP4.5b) |
 | `verify.floors.coverage.min_diff_percent` | `90.0` | Minimum coverage of changed lines (lcov, cobertura, or Go coverprofile). 89.9 fails, 90.0 passes. | WP4.3 |
 | `verify.floors.sast.max_critical` | `0` | Critical semgrep findings allowed. | WP4.4 |
@@ -34,7 +34,7 @@ its value, and WP0.5 chose it.
 | `verify.floors.screen_reader.layers` | `["L01"]` | Story footprints that run the VoiceOver and NVDA floor (on label or nightly). | WP4.7 |
 | `verify.floors.screen_reader.max_missing_phrases` | `0` | Expected phrases from the Ready snapshot that may be missing from the transcript. | WP4.7 |
 | `verify.floors.dast.max_high` | `0` | High-risk ZAP alerts allowed when DAST runs (passive baseline plus the active cross-site scripting and injection rules). | proposed (WP0.5) |
-| `verify.floors.dast.skipped_blocks_ship` | `true` | A web or api story with no runnable target (no `[verify.environments.<env>] url`, or `dast = false`) records `skipped: dast`, which blocks `ship` unless a floor-waiver Decision exists. | Decision #485 |
+| `verify.floors.dast.skipped_blocks_ship` | `true` | A web or api story with no runnable target (no `[verify.environments.<env>] url`, or `dast = false`) records `skipped: dast`, which blocks `ship` unless a floor-waiver Decision exists. | founder decision 2026-10-17 (DAST) |
 | `verify.floors.mobile.skipped_blocks_ship` | `true` | A `skipped: mobile` floor blocks `ship` unless a floor-waiver Decision exists. | WP4.9 |
 
 Performance (Lighthouse CI) and API (k6) budgets are product-specific and have no default (WP4.5, WP4.6). Every floor miss blocks; no model disposition can override it (ground rule 7). A waiver is a recorded Decision (`decide --waiver <floor>`, WP5.6) that `audit` counts.
