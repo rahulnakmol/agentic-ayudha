@@ -5,18 +5,16 @@
 | | |
 |---|---|
 | Schema | work items v1, bug |
-| Body hash | `e982d0280b45a5a376e884ca33690797bc55428afc20da74caf3c8eda787d184` |
-| Completion Goal hash | `fcaae84d043f401c97ae9b089e51a1fd27398961070edcecab492ce7a8ade58c` |
+| Body hash | `719723f0e900203e4464c27123b6fea79647964869318081b5194278e8b9fc4e` |
+| Completion Goal hash | `8716f03b30967eafdc4f0ae0c52a543682db2cfff3787cd92fc10c8cea137342` |
 | Technical Owner | the Code Architect twin |
 | Written by | rahulnakmol (`identity:human-fallback`) |
 | Ledger | `specs/578/ready.md` |
 
 Completion Goal at Ready:
 
-1. [api-trace] state: `aayu init --identity` with the manifest flow driven by a fake browser that cannot reach loopback; the fake GitHub redirects to the github.com `redirect_url` with `?code=…&state=…`, and that whole address is pasted at aayu's prompt; expected: the manifest's `redirect_url` is a `https://github.com/` URL; aayu converts that code once through `POST /app-manifests/{code}/conversions`, writes `AAYUDHA_APP_PRIVATE_KEY` and `AAYUDHA_APP_CLIENT_ID`, and only then prints the Install link; the printed start link is HTTPS, not loopback
-2. [api-trace] state: the same run, with a pasted address whose state does not match; expected: no conversion call; aayu refuses with the reason and asks again
-3. [api-trace] state: the same run, with the fake GitHub answering the conversion with 422 (the code was already converted); expected: no secret written, no Install link printed, exit 4, and a next step that says not to install the App, to delete it at its settings page, and to rerun
-4. [api-trace] state: `aayu init --identity` where no code arrives before the wait ends; expected: exit 4 with "blocked or needs a human" and a next step naming how to rerun; no "internal error"
+1. [api-trace] state: `aayu init --identity` with the fake GitHub answering the conversion with 422 (the code was already converted); expected: no secret written, no Install link printed, exit 4, and a next step that says not to install the App, to delete it at its settings page, and to rerun
+2. [api-trace] state: `aayu init --identity` where no code arrives before the wait ends; expected: exit 4 with "blocked or needs a human" and a next step naming how to rerun; no "internal error"
 
 Editing the body after Ready removes `status:ready` (Ready guard); run `aayu ready` again to re-snapshot.
 
@@ -26,6 +24,8 @@ Editing the body after Ready removes `status:ready` (Ready guard); run `aayu rea
 ### Summary
 
 `aayu init --identity` cannot complete from a remote shell: an Amp orb's Terminal tab, Claude Code or Codex on the web, SSH, or a phone. The manifest flow (internal/cli/manifest.go `manifestCode`) listens on `127.0.0.1:<random port>`. It tells the person to open `http://127.0.0.1:<port>/` and sets the manifest's `redirect_url` to `http://127.0.0.1:<port>/callback`. A browser on another device can reach neither the start page nor the callback. The command then waits 10 minutes and fails with "timed out waiting for GitHub to redirect back with the App code", a bare error. aayu reports it as exit 1, "internal error (a bug; please report it)", although nothing in aayu broke: the person could not reach the page. The founder hit this on 2026-10-18, running `aayu init --identity` in this repository's orb Terminal tab from a phone. No App was created, because the flow failed before the code conversion.
+
+Deviation from the plan: this Bug's original criteria 1 and 2 (the cross-device flow: an HTTPS start link, a github.com `redirect_url`, and a pasted address checked against the state) are covered by #594's criteria 4 and 2, after Codex's security review r4307058604 on #603 showed that a pasted-code flow through a page aayu does not control cannot be made safe. The Completion Goal keeps the original criteria 3 and 4, renumbered 1 and 2; the "Expected behaviour" item 1 below is delivered by #594. Founder's authorisation, 2026-10-18 (relayed by the orchestrator thread): "Yes", to edit this Bug's body directly, making the Completion Goal criteria 3 and 4 with this note.
 
 ### Steps to reproduce
 
@@ -53,10 +53,8 @@ Editing the body after Ready removes `status:ready` (Ready guard); run `aayu rea
 
 ### Completion Goal
 
-1. [api-trace] state: `aayu init --identity` with the manifest flow driven by a fake browser that cannot reach loopback; the fake GitHub redirects to the github.com `redirect_url` with `?code=…&state=…`, and that whole address is pasted at aayu's prompt; expected: the manifest's `redirect_url` is a `https://github.com/` URL; aayu converts that code once through `POST /app-manifests/{code}/conversions`, writes `AAYUDHA_APP_PRIVATE_KEY` and `AAYUDHA_APP_CLIENT_ID`, and only then prints the Install link; the printed start link is HTTPS, not loopback
-2. [api-trace] state: the same run, with a pasted address whose state does not match; expected: no conversion call; aayu refuses with the reason and asks again
-3. [api-trace] state: the same run, with the fake GitHub answering the conversion with 422 (the code was already converted); expected: no secret written, no Install link printed, exit 4, and a next step that says not to install the App, to delete it at its settings page, and to rerun
-4. [api-trace] state: `aayu init --identity` where no code arrives before the wait ends; expected: exit 4 with "blocked or needs a human" and a next step naming how to rerun; no "internal error"
+1. [api-trace] state: `aayu init --identity` with the fake GitHub answering the conversion with 422 (the code was already converted); expected: no secret written, no Install link printed, exit 4, and a next step that says not to install the App, to delete it at its settings page, and to rerun
+2. [api-trace] state: `aayu init --identity` where no code arrives before the wait ends; expected: exit 4 with "blocked or needs a human" and a next step naming how to rerun; no "internal error"
 
 ### Measure
 
@@ -64,7 +62,7 @@ Completion Goal criteria observed
 
 ### Threshold
 
-all 4 criteria
+all 2 criteria
 
 ### Scenario
 
@@ -76,9 +74,8 @@ aayu built from dev at 8cbfe15 (internal/cli/manifest.go `manifestCode`, interna
 
 ### Checkpoints
 
-1. The manifest flow works across devices: an HTTPS start link, a github.com `redirect_url`, and a pasted address whose code is checked against the state (criteria 1, 2)
-2. Install only after a successful conversion, and a failed conversion is treated as a possible theft of the code (criterion 3)
-3. A wait that ends without a code exits 4 with a next step (criterion 4)
+1. Install only after a successful conversion, and a failed conversion is treated as a possible theft of the code (criterion 1)
+2. A wait that ends without a code exits 4 with a next step (criterion 2)
 
 ### Assumptions
 
@@ -96,9 +93,7 @@ aayu built from dev at 8cbfe15 (internal/cli/manifest.go `manifestCode`, interna
 ### Provenance
 
 Request: "file a Bug through aayu: init --identity can't complete from a remote shell, and a timeout is reported as an internal error"
-1. stated (correctness/remote shell): "init --identity can't complete from a remote shell"
-2. stated (correctness/remote shell): "the one-time setup must work from a phone and a cloud agent's terminal"
-3. stated (correctness/exit code): "a timeout is reported as an internal error"
-4. stated (security/manifest code): "If any of that can't hold, prefer a design where the code never reaches a page aayu doesn't control."
+1. stated (security/manifest code): "If any of that can't hold, prefer a design where the code never reaches a page aayu doesn't control."
+2. stated (correctness/exit code): "a timeout is reported as an internal error"
 Term: "remote shell" → any shell whose browser is on another device: an orb's Terminal tab, Claude Code or Codex on the web, SSH; "can't complete from a remote shell"
 ````
