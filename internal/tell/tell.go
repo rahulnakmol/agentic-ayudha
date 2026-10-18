@@ -240,7 +240,7 @@ func CheckDraft(md, repo, kind string, proven map[int]Feature, unproven []Featur
 	}
 	named := map[int]int{} // proven Feature -> first line naming it
 	for i, line := range proseLines(md) {
-		text := linkURL.ReplaceAllString(line, " ")
+		text := linkURL.ReplaceAllString(alertRE.ReplaceAllString(line, ""), " ")
 		for _, w := range word.FindAllString(text, -1) {
 			if sup[strings.ToLower(w)] {
 				probs = append(probs, Problem{Line: i + 1, Reason: fmt.Sprintf("%q is a superlative: it claims a comparison no pack proves; say what the Feature does instead", w)})
@@ -278,6 +278,11 @@ func CheckDraft(md, repo, kind string, proven map[int]Feature, unproven []Featur
 }
 
 var sentenceRE = regexp.MustCompile(`[.!?;:]\s+`)
+
+// alertRE is a GitHub alert marker (`> [!NOTE]`), alone on the first line of
+// a top-level blockquote as GitHub renders it: its "!" is syntax, not an
+// exclamation mark. A nested or indented marker renders as text.
+var alertRE = regexp.MustCompile(`^ {0,3}>\s*\[!(?i:note|tip|important|warning|caution)\]\s*$`)
 
 // stop words carry no Feature name.
 var stop = map[string]bool{"the": true, "and": true, "for": true, "with": true, "from": true, "your": true, "our": true,
