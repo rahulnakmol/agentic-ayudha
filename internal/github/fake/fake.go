@@ -144,6 +144,12 @@ type CheckRun struct {
 	App        *App   `json:"app,omitempty"` // the GitHub App that made it
 }
 
+// Status is a legacy commit status.
+type Status struct {
+	Context string `json:"context"`
+	State   string `json:"state"`
+}
+
 // App is the GitHub App of a check run.
 type App struct {
 	ID int64 `json:"id"`
@@ -211,6 +217,7 @@ type GitHub struct {
 	Issues      map[int]*Issue
 	Pulls       map[int]*PR
 	CheckRuns   map[string][]CheckRun   // commit SHA -> check runs, newest first
+	Statuses    map[string][]Status     // commit SHA -> legacy commit statuses, newest first
 	JobLogs     map[int64]string        // Actions job (check run) ID -> its log, behind a redirect like GitHub's
 	RunJobs     map[int64][]CheckRun    // run ID -> its jobs (latest attempt)
 	Runs        []WorkflowRun           // Actions workflow runs
@@ -374,6 +381,7 @@ func (g *GitHub) nextSHA(v any) string {
 
 var (
 	reCheckRuns = regexp.MustCompile(`^/repos/[^/]+/[^/]+/commits/([^/]+)/check-runs$`)
+	reStatuses  = regexp.MustCompile(`^/repos/[^/]+/[^/]+/commits/([^/]+)/statuses$`)
 	reWfRuns    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/workflows/([^/]+)/runs$`)
 	reRun       = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/runs/([0-9]+)(/rerun-failed-jobs)?$`)
 	reRelTag    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/releases/tags/(.+)$`)
@@ -776,6 +784,12 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			runs = []CheckRun{}
 		}
 		reply(200, map[string]any{"total_count": len(runs), "check_runs": runs})
+	case m == "GET" && reStatuses.MatchString(p):
+		out := g.Statuses[reStatuses.FindStringSubmatch(p)[1]]
+		if out == nil {
+			out = []Status{}
+		}
+		reply(200, out)
 	case m == "GET" && reWfRuns.MatchString(p):
 		file, q := reWfRuns.FindStringSubmatch(p)[1], r.URL.Query()
 		out := []WorkflowRun{}

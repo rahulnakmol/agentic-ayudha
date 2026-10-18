@@ -37,21 +37,29 @@ type ProofPass struct {
 
 // requiredChecks checks that every required status check of the base
 // branch's rules (every page of them), other than the CODEOWNERS check
-// (seats.GateCheck), is green on the head, from the app the rule names if it
-// names one. It returns the checks it read, and the CODEOWNERS check's state
-// ("" when it is not required), which only proofPass may accept red.
+// (seats.GateCheck), is green on the head: its check run, from the app the
+// rule names if it names one, and a commit status of the same name, as GitHub
+// requires both. A rule it cannot read stops ship. It returns the checks it
+// read, and the CODEOWNERS check's state ("" when it is not required), which
+// only proofPass may accept red.
 func requiredChecks(ctx context.Context, c *github.Client, owner, name string, n int, base, head string, runs []*gh.CheckRun) (want []string, gate string, err error) {
 	var checks []*gh.RuleStatusCheck
 	for rule, err := range c.REST.Repositories.ListRulesForBranchIter(ctx, owner, name, base, &gh.ListOptions{PerPage: 100}) {
-		if err != nil && !github.NotFound(err) {
+		if err != nil {
 			return nil, "", Wrap(ExitExternal, err)
 		}
 		if r, ok := rule.(*gh.RequiredStatusChecksBranchRule); ok {
 			checks = append(checks, r.Parameters.RequiredStatusChecks...)
 		}
 	}
+	statuses, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.RepoStatus, *gh.Response, error) {
+		return c.REST.Repositories.ListStatuses(ctx, owner, name, head, &o)
+	})
+	if err != nil {
+		return nil, "", Wrap(ExitExternal, err)
+	}
 	for _, sc := range checks {
-		state := checkState(runs, sc)
+		state := checkState(runs, statuses, sc)
 		switch {
 		case sc.Context == seats.GateCheck:
 			gate = state
@@ -64,24 +72,39 @@ func requiredChecks(ctx context.Context, c *github.Client, owner, name string, n
 	return want, gate, nil
 }
 
-// checkState is the state of the newest run of a required check from its app
-// (any app when the rule names none), "missing" when there is none, with
-// skipped counted as success, as GitHub counts it for a required check.
-func checkState(runs []*gh.CheckRun, sc *gh.RuleStatusCheck) string {
+// checkState is the state of a required check: its newest check run from
+// its app (any app when the rule names none), with skipped counted as
+// success as GitHub counts it, and, for a rule that names no app, the newest
+// commit status of the same name, which must pass too; "missing" when there
+// is neither.
+func checkState(runs []*gh.CheckRun, statuses []*gh.RepoStatus, sc *gh.RuleStatusCheck) string {
+	state := "missing"
 	for _, r := range runs { // the API lists the newest run of a name first; a rerun's success replaces a failure
 		if r.GetName() != sc.Context || sc.IntegrationID != nil && r.GetApp().GetID() != *sc.IntegrationID {
 			continue
 		}
 		switch {
 		case r.GetStatus() != "completed":
-			return r.GetStatus()
+			state = r.GetStatus()
 		case r.GetConclusion() == "skipped":
-			return "success"
+			state = "success"
 		default:
-			return r.GetConclusion()
+			state = r.GetConclusion()
+		}
+		break
+	}
+	if sc.IntegrationID != nil {
+		return state
+	}
+	for _, st := range statuses { // newest first
+		if st.GetContext() == sc.Context {
+			if st.GetState() != "success" || state == "missing" {
+				return st.GetState()
+			}
+			break
 		}
 	}
-	return "missing"
+	return state
 }
 
 // proofPass says whether PR pr may merge on proof at rung, or why not ("" when

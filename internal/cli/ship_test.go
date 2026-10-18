@@ -389,6 +389,17 @@ func TestShipOnProof(t *testing.T) {
 	refused("required check lint is failure on " + short(head) + "; never merge with a red required check")
 	g.Mu.Lock()
 	g.CheckRuns[head][len(g.CheckRuns[head])-2].Conclusion = "success" // lint
+	// A legacy commit status of the same name must pass too; a status alone
+	// can satisfy a required check.
+	g.Statuses = map[string][]fake.Status{head: {{Context: "lint", State: "failure"}, {Context: "lint", State: "success"}}}
+	g.Mu.Unlock()
+	refused("required check lint is failure on " + short(head))
+	g.Mu.Lock()
+	g.Statuses[head] = []fake.Status{{Context: "lint", State: "success"}, {Context: "security", State: "pending"}}
+	g.Mu.Unlock()
+	refused("required check security is pending on " + short(head))
+	g.Mu.Lock()
+	g.Statuses[head] = []fake.Status{{Context: "lint", State: "success"}, {Context: "gone", State: "failure"}}
 	g.Mu.Unlock()
 	refused("required check security is missing on " + short(head))
 	g.Mu.Lock()
@@ -396,7 +407,8 @@ func TestShipOnProof(t *testing.T) {
 	g.Mu.Unlock()
 	refused("required check security is in_progress on " + short(head))
 	g.Mu.Lock()
-	g.RequiredChecks = []string{"build", "lint", "docs", "protected-paths"}
+	g.CheckRuns[head] = g.CheckRuns[head][1:]
+	g.Statuses[head] = []fake.Status{{Context: "lint", State: "success"}, {Context: "security", State: "success"}} // security by a status alone
 	g.Pulls[prN].Files = []string{"empty.txt", "internal/identity/review.go"}
 	g.Mu.Unlock()
 	refused("no merge on proof: it touches internal/identity/review.go, in the narrow set that always needs a person ([autonomy] always_person: internal/identity/)")
@@ -428,10 +440,14 @@ func TestShipOnProof(t *testing.T) {
 	g.Mu.Lock()
 	g.RefFiles[base][".aayudha/config.toml"] = conf
 	g.RefFiles[head][".github/workflows/broken.yml"] = "on: [push\njobs: {\n"
-	g.Fail = "GET /repos/o/r/contents/.aayudha/config.toml"
 	g.Mu.Unlock()
-	if code, out := shipCmd(t, env, opts, prN); code != ExitExternal || slices.Contains(g.LabelNames(2), "status:merged") {
-		t.Fatalf("ship when the base config cannot be read: %d %s", code, out)
+	for _, fail := range []string{"GET /repos/o/r/contents/.aayudha/config.toml", "GET /repos/o/r/rules/branches/dev"} {
+		g.Mu.Lock()
+		g.Fail = fail
+		g.Mu.Unlock()
+		if code, out := shipCmd(t, env, opts, prN); code != ExitExternal || slices.Contains(g.LabelNames(2), "status:merged") {
+			t.Fatalf("ship when %s fails: %d %s", fail, code, out)
+		}
 	}
 	for _, wf := range []string{".github/workflows/deploy.yml", ".github/workflows/pages.yml", ".github/workflows/broken.yml"} {
 		g.Mu.Lock()
@@ -476,14 +492,14 @@ func TestShipOnProof(t *testing.T) {
 	}
 	var sr ShipRecord
 	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:proof/2/"+head+"/authoritative/ship.json")), &sr)
-	if sr.HumanPass.Kind != "proof" || sr.Proof == nil || sr.Proof.Rung != inspect.RungC || !slices.Equal(sr.Proof.Checks, []string{"build", "lint", "docs"}) ||
+	if sr.HumanPass.Kind != "proof" || sr.Proof == nil || sr.Proof.Rung != inspect.RungC || !slices.Equal(sr.Proof.Checks, []string{"build", "lint", "docs", "security"}) ||
 		!slices.Equal(sr.Proof.Protected, []string{"skills/build/SKILL.md"}) || sr.PlanReview != nil || !slices.Equal(sr.Footprint, []string{"L07"}) {
 		t.Fatalf("ship record: %+v %+v", sr.HumanPass, sr.Proof)
 	}
 	g.Mu.Lock()
 	body, merged := g.Issues[2].Body, g.Pulls[prN].Merged
 	g.Mu.Unlock()
-	if !merged || !strings.Contains(body, "- Human pass: not needed, merged on proof (Decision #593): required checks build, lint, docs green") ||
+	if !merged || !strings.Contains(body, "- Human pass: not needed, merged on proof (Decision #593): required checks build, lint, docs, security green") ||
 		!strings.Contains(body, "CODEOWNERS paths skills/build/SKILL.md merged with no code owner's review") {
 		t.Fatalf("Complete section (merged %t):\n%s", merged, body)
 	}
