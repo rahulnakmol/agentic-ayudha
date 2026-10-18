@@ -1,11 +1,14 @@
 package aayudha
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -301,5 +304,150 @@ func TestModelChecksNeverGateAndNeverShip(t *testing.T) {
 				t.Errorf("ci.yml names %q of %s: a model check must not be part of a gate", n, f)
 			}
 		}
+	}
+}
+
+// Story #487 criterion 6 (Decision #480): every run step of the security workflow `init --gates` installs runs with
+// stand-in tools. The downloads must match their pinned SHA-256 (wrong bytes fail the step), semgrep is pinned to its
+// version, and the floors step calls `aayudha verify --security` on the pushed range, then writes the job summary.
+func TestSecurityWorkflowSteps(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash steps")
+	}
+	if _, err := exec.LookPath("jq"); err != nil {
+		t.Skip("no jq")
+	}
+	raw := initrepo.GateWorkflows("dev")[initrepo.SecurityWorkflow]
+	var wf struct {
+		On struct {
+			Push struct {
+				Branches []string `yaml:"branches"`
+			} `yaml:"push"`
+		} `yaml:"on"`
+		Jobs map[string]struct {
+			Env   map[string]string `yaml:"env"`
+			Steps []struct {
+				Name string            `yaml:"name"`
+				If   string            `yaml:"if"`
+				Uses string            `yaml:"uses"`
+				Run  string            `yaml:"run"`
+				Env  map[string]string `yaml:"env"`
+				Dir  string            `yaml:"working-directory"`
+			} `yaml:"steps"`
+		} `yaml:"jobs"`
+	}
+	if err := yaml.Unmarshal(raw, &wf); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(wf.On.Push.Branches, ","); got != "dev,rolling,main" {
+		t.Fatalf("push branches %q", got)
+	}
+	job := wf.Jobs["security"]
+	// The real downloads' bytes are replaced by fixtures: a gitleaks tarball and an osv-scanner binary.
+	fixtures := t.TempDir()
+	if err := os.WriteFile(filepath.Join(fixtures, "gitleaks"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	tgz := "gitleaks_" + job.Env["GITLEAKS_VERSION"] + "_linux_x64.tar.gz"
+	if out, err := exec.Command("tar", "-czf", filepath.Join(fixtures, tgz), "-C", fixtures, "gitleaks").CombinedOutput(); err != nil {
+		t.Fatalf("tar: %v %s", err, out)
+	}
+	_ = os.WriteFile(filepath.Join(fixtures, "osv-scanner_linux_amd64"), []byte("#!/bin/sh\n"), 0o755)
+	sum := func(name string) string {
+		b, _ := os.ReadFile(filepath.Join(fixtures, name))
+		return fmt.Sprintf("%x", sha256.Sum256(b))
+	}
+	stand := map[string]string{
+		// curl -fsSLo <out> <url>: copies the fixture named by the URL's last segment, and logs the URL.
+		"curl": "#!/bin/sh\nout=$2; url=$3\necho \"$url\" >> \"$LOG/curl\"\ncp \"$FIXTURES/${url##*/}\" \"$out\"\n",
+		// python3 -m venv <dir>: a venv whose pip logs its arguments and keeps the requirements file it read.
+		"python3": "#!/bin/sh\nmkdir -p \"$3/bin\"\nprintf '#!/bin/sh\\necho \"$*\" >> \"$LOG/pip\"\\nwhile [ $# -gt 0 ]; do [ \"$1\" = -r ] && cp \"$2\" \"$LOG/lock\"; shift; done\\n' > \"$3/bin/pip\"\nchmod +x \"$3/bin/pip\"\n",
+		"sudo":    "#!/bin/sh\nexit 0\n",
+		"go":      "#!/bin/sh\necho \"$@\" >> \"$LOG/go\"\n",
+		"aayudha": "#!/bin/sh\necho \"$@\" > \"$LOG/aayudha\"\necho '{\"branch\":\"dev\",\"head\":\"0123456789\",\"checks\":[{\"floor\":\"sast\",\"result\":\"fail\",\"detail\":\"1 high\"}],\"bugs\":[{\"number\":12,\"action\":\"filed\",\"fingerprint\":\"sast r main.go\"}]}'\nexit 3\n",
+	}
+	run := func(t *testing.T, before string, pins map[string]string) (map[string]string, error) {
+		t.Helper()
+		bin, logs, tmp := t.TempDir(), t.TempDir(), t.TempDir()
+		for name, script := range stand {
+			if err := os.WriteFile(filepath.Join(bin, name), []byte(script), 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}
+		work := t.TempDir()
+		head := filepath.Join(work, "head")
+		_ = os.MkdirAll(head, 0o755)
+		if out, err := exec.Command("git", "-C", head, "init", "-q").CombinedOutput(); err != nil {
+			t.Fatalf("git init: %v %s", err, out)
+		}
+		summary, ghPath := filepath.Join(tmp, "summary.md"), filepath.Join(tmp, "path")
+		env := append(os.Environ(), "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"), "LOG="+logs, "FIXTURES="+fixtures,
+			"RUNNER_TEMP="+tmp, "GITHUB_STEP_SUMMARY="+summary, "GITHUB_PATH="+ghPath, "AAYU_VERSION=dev", "REPO=o/r", "BEFORE="+before)
+		for k, v := range job.Env {
+			if strings.Contains(v, "${{") { // an expression the runner evaluates: BEFORE, set above
+				continue
+			}
+			if p, ok := pins[k]; ok {
+				v = p
+			}
+			env = append(env, k+"="+v)
+		}
+		var stepErr error
+		for _, s := range job.Steps {
+			if s.Run == "" || s.If != "" { // actions, and the halt check (it runs only while halted)
+				continue
+			}
+			cmd := exec.Command("bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", s.Run)
+			cmd.Dir = filepath.Join(work, s.Dir)
+			cmd.Env = append(slices.Clone(env), "BRANCH=dev", "GITHUB_TOKEN=t")
+			if out, err := cmd.CombinedOutput(); err != nil {
+				stepErr = fmt.Errorf("step %q: %w\n%s", s.Name, err, out)
+				break
+			}
+		}
+		got := map[string]string{}
+		for _, f := range []string{"curl", "pip", "lock", "go", "aayudha"} {
+			b, _ := os.ReadFile(filepath.Join(logs, f))
+			got[f] = string(b)
+		}
+		b, _ := os.ReadFile(summary)
+		got["summary"] = string(b)
+		return got, stepErr
+	}
+	pins := map[string]string{"GITLEAKS_SHA256": sum(tgz), "OSV_SCANNER_SHA256": sum("osv-scanner_linux_amd64")}
+
+	// A push: every step runs; verify --security scans the pushed range and its floor miss fails the job.
+	before := strings.Repeat("a", 40)
+	got, err := run(t, before, pins)
+	if err == nil || !strings.Contains(err.Error(), `step "Security floors on the commit"`) || !strings.Contains(err.Error(), "exit status 3") {
+		t.Fatalf("the floors step's floor miss should fail the job, and only that step: %v", err)
+	}
+	if !strings.Contains(got["curl"], "/gitleaks/releases/download/v"+job.Env["GITLEAKS_VERSION"]+"/") || !strings.Contains(got["curl"], "/osv-scanner/releases/download/v"+job.Env["OSV_SCANNER_VERSION"]+"/") {
+		t.Errorf("downloads: %q", got["curl"])
+	}
+	// semgrep comes only from the hashed lock, the one aayudha embeds, with pip refusing unlisted bytes.
+	if !strings.Contains(got["pip"], "install --quiet --require-hashes --only-binary :all: --no-deps -r ") || !strings.Contains(got["go"], "install github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@dev") {
+		t.Errorf("installs: pip %q, go %q", got["pip"], got["go"])
+	}
+	if !strings.Contains(got["lock"], "semgrep==1.180.0 --hash=sha256:16db2e2706ab814a975eeec25debfad49abba846b7c513d88e041447152f8447\n") || strings.Count(got["lock"], "==") < 60 ||
+		strings.Count(got["lock"], "==") != strings.Count(got["lock"], "--hash=sha256:") {
+		t.Errorf("the requirements pip read are not the hashed lock: %q", got["lock"])
+	}
+	if want := "verify --security --ci --repo o/r --json --since " + before + "\n"; got["aayudha"] != want {
+		t.Errorf("aayudha %q, want %q", got["aayudha"], want)
+	}
+	if !strings.Contains(got["summary"], "| sast | fail | 1 high |") || !strings.Contains(got["summary"], "- Bug #12 filed: sast r main.go") {
+		t.Errorf("job summary: %q", got["summary"])
+	}
+	// The nightly run (no before): the whole history, so no --since.
+	if got, _ := run(t, "", pins); got["aayudha"] != "verify --security --ci --repo o/r --json\n" {
+		t.Errorf("nightly aayudha %q", got["aayudha"])
+	}
+	// The pinned SHA-256s of the real releases do not match the stand-in bytes: the tools step must refuse them.
+	if _, err := run(t, before, nil); err == nil || !strings.Contains(err.Error(), `step "Floor tools (pinned, SHA-256 checked)"`) {
+		t.Fatalf("downloads that do not match their SHA-256 were accepted: %v", err)
+	}
+	if _, err := run(t, before, map[string]string{"GITLEAKS_SHA256": sum(tgz)}); err == nil || !strings.Contains(err.Error(), "osv-scanner") {
+		t.Fatalf("an osv-scanner download that does not match its SHA-256 was accepted: %v", err)
 	}
 }

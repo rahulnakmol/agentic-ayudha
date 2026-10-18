@@ -153,6 +153,14 @@ PASS  retired-workflows  no retired aayudha workflow in .github/workflows
 ## retired-workflows fail
 WARN  retired-workflows  1 retired aayudha workflow(s): run `aayu init` and confirm to remove, or delete by hand
                            .github/workflows/aayudha-triage.yml classifies intake issues with a model in CI, and product CI never calls a model; triage runs from your own agent (`aayu triage <issue> --as …`) or an agent app you @-mention
+## security-workflow pass
+PASS  security-workflow  installed; every scanned tip is green
+                           dev: success at 0123456
+                           rolling: success at 0123456
+                           main: success at 0123456
+                           nightly: success, 2026-10-18T03:23:00Z
+## security-workflow fail
+FAIL  security-workflow  not installed: no scan of pushes to dev, rolling, and main, and none nightly; run `aayu init --gates` and commit .github/workflows/aayudha-security.yml through a pull request
 ## loops pass
 PASS  loops  no loops/*.toml
 ## loops fail
@@ -174,7 +182,8 @@ WARN  feedback-layers  2 open Feedback issue(s) without a fix layer; evolve refu
                          #6 Feedback: b
                          #8 Feedback: c
 ## coexistence pass
-PASS  coexistence  coexistence report: nothing to coexist with
+PASS  coexistence  coexistence report: init adds alongside the existing setup
+                     existing workflow aayudha-security.yml (checks: ): init leaves it byte-identical and adds aayudha/* checks alongside
 ## coexistence fail
 WARN  coexistence  coexistence report: 2 name collision(s) init must resolve
                      existing workflow aayudha-token.yml (checks: mint): init leaves it byte-identical and adds aayudha/* checks alongside

@@ -386,10 +386,10 @@ func TestInitExtras(t *testing.T) {
 		}
 	}
 	slices.Sort(workflows)
-	if !slices.Equal(workflows, []string{"aayudha-loops.yml", "aayudha-merge-gate.yml", "aayudha-ops.yml", "aayudha-ready-guard.yml", "aayudha-streak.yml", "aayudha-token.yml", "ci.yml"}) || files[".github/workflows/ci.yml"] != ciYML {
+	if !slices.Equal(workflows, []string{"aayudha-loops.yml", "aayudha-merge-gate.yml", "aayudha-ops.yml", "aayudha-ready-guard.yml", "aayudha-security.yml", "aayudha-streak.yml", "aayudha-token.yml", "ci.yml"}) || files[".github/workflows/ci.yml"] != ciYML {
 		t.Fatalf("workflows after --gates: %v", workflows)
 	}
-	for _, wf := range []string{"aayudha-merge-gate.yml", "aayudha-ops.yml", "aayudha-ready-guard.yml", "aayudha-streak.yml", "aayudha-token.yml"} {
+	for _, wf := range []string{"aayudha-merge-gate.yml", "aayudha-ops.yml", "aayudha-ready-guard.yml", "aayudha-security.yml", "aayudha-streak.yml", "aayudha-token.yml"} {
 		golden := filepath.Join("testdata", "gates", wf)
 		if *updateGolden {
 			_ = os.MkdirAll(filepath.Dir(golden), 0o755)
@@ -403,6 +403,10 @@ func TestInitExtras(t *testing.T) {
 	// aayudha runs its own streak workflow: the template as a development build installs it.
 	if own, err := os.ReadFile(filepath.Join("..", "..", ".github", "workflows", "aayudha-streak.yml")); err != nil || string(own) != string(initrepo.GateWorkflows("dev")[initrepo.StreakWorkflow]) {
 		t.Errorf(".github/workflows/aayudha-streak.yml is not the WP5.7 template rendered for dev")
+	}
+	// It runs its own security workflow too (Decision #480), on dev, rolling, and main.
+	if own, err := os.ReadFile(filepath.Join("..", "..", ".github", "workflows", initrepo.SecurityWorkflow)); err != nil || string(own) != string(initrepo.GateWorkflows("dev")[initrepo.SecurityWorkflow]) {
+		t.Errorf(".github/workflows/%s is not the template rendered for dev", initrepo.SecurityWorkflow)
 	}
 	// D-7.1f: the no-agent digest renders only for Actions, the triage agent loop only for the agent tools.
 	if wf := files[".github/workflows/aayudha-loops.yml"]; !strings.Contains(wf, "aayudha@v0.4.0") || !strings.Contains(wf, "loop:digest") || strings.Contains(wf, "triage") ||

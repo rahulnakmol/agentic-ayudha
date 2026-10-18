@@ -51,6 +51,8 @@ aayu verify [<pr>]
 | `--map` | no | Only the feature-map drift check: compare every .agents/skills/verify-*/ map with the source, run nothing, and exit 3 on drift. |
 | `--check` | no | Only the behaviour floor, on these feature-map checks: \<feature>, \<feature>.\<check>, or all (the sweep); a run outside the merge gate is a preview. |
 | `--maintain` | no | With --map or --check: post the maintain brief on the tracking issue for the agent app [verify] maintainer names, when the map drifted or a check failed (drift), or every time (always). One of: `drift`, `always`. |
+| `--security` | no | Only the security floors (sast, secrets, deps) on the checked-out commit, with no PR or story: what aayudha-security.yml runs on every push and nightly. With --ci, each failing finding files or updates one aayudha:security Bug. |
+| `--since` | no | With --security: scan secrets only in the commits after this revision (a push's before); without it, or with all zeros or an unknown revision, the whole history of HEAD. |
 
 <!-- END GENERATED: skill-usage -->
 
