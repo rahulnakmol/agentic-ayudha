@@ -53,9 +53,10 @@ evidence".
 
 > **Needs setup:** the review model's key, as the secret `AAYU_REVIEW_MODEL_KEY` in **Settings → Environments →
 > code-review**, which `aayu init --gates` creates ([code review in the merge gate](how-review.md)). Or a review app
-> installed on your account, named in `[inspect] reviewer` and `[inspect] apps`. Proof needs no bot App, bucket, or
-> secret: the pack waits as a file on the CI run with a comment on the pull request, and
-> `ship` checks it came from that run and records it under your name.
+> installed on your account, named in `[inspect] reviewer` and `[inspect] apps`. A private repository on GitHub Free
+> has no environments, so there init cannot create `code-review`: choose a review app, or make the repository public
+> or upgrade. Proof needs no bot App, bucket, or secret: the pack waits as a file on the CI run with a comment on the
+> pull request, and `ship` checks it came from that run and records it under your name.
 
 **Good for:** teams that let agents write real code and need to know it is safe to merge.
 

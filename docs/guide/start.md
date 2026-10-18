@@ -129,7 +129,8 @@ install the integration build with `go install github.com/rahulnakmol/agentic-ay
    in `[inspect] apps`.
 
    > **Needs setup:** a private repository on GitHub Free has no environments. There, `aayu init --gates` says it could
-   > not create `code-review`. Choose a review app as above, or `human`, or make the repository public or upgrade.
+   > not create `code-review`. Choose a review app as above, or `human` with `[autonomy] approver` set to the person
+   > who reviews, or make the repository public or upgrade.
 
 3. Ask your agent to build the story (`aayu build <issue>`), or hand it to another agent's cloud
    ([hand work to an agent](guide-build.md)).
