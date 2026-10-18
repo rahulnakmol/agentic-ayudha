@@ -443,12 +443,12 @@ func TestCopilotUIReviewRoute(t *testing.T) {
 	arts := []verify.Evidence{{Path: "screens/1.png", Kind: "screenshot", Data: png, OCRScanned: true}}
 	argon := laneAReply("contrast")
 	argon.CostUSD = 0.043
-	setup := func(copilot models.Client) (*Env, *models.Fake, string) {
+	setup := func(model string, copilot models.Client) (*Env, *models.Fake, string) {
 		dir := t.TempDir()
 		if err := os.MkdirAll(filepath.Join(dir, ".config", "aayudha"), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(dir, ".config", "aayudha", "config.toml"), []byte("version = 1\n[models.ui-review.copilot]\nmodel = \"gemini-4-argon\"\n"), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, ".config", "aayudha", "config.toml"), []byte("version = 1\n[models.ui-review.copilot]\nmodel = \""+model+"\"\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		gateway := &models.Fake{Replies: []models.Response{laneAReply("contrast"), laneAReply("contrast"), laneAReply()}}
@@ -474,7 +474,7 @@ func TestCopilotUIReviewRoute(t *testing.T) {
 	}
 
 	cp := &models.Fake{Replies: []models.Response{argon}}
-	e, gateway, logPath := setup(cp)
+	e, gateway, logPath := setup("gemini-4-argon", cp)
 	sr := e.screenshotReview(context.Background(), arts, 0, "")
 	if sr == nil || sr.Skipped != "" || sr.Model != "gemini-4-argon via Copilot" || len(sr.Findings) != 1 || sr.Findings[0].Source != sr.Model || len(cp.Requests) != uireview.K || len(gateway.Requests) != 0 {
 		t.Fatalf("Copilot route: %+v, %d Copilot and %d gateway calls", sr, len(cp.Requests), len(gateway.Requests))
@@ -490,7 +490,7 @@ func TestCopilotUIReviewRoute(t *testing.T) {
 		"copilot missing":   {Err: fmt.Errorf("%w: copilot (GitHub Copilot CLI) is not installed", models.ErrCopilot)},
 		"reply is not JSON": {Replies: []models.Response{{Text: "Sure! Here is my review."}}},
 	} {
-		e, gateway, _ := setup(copilot)
+		e, gateway, _ := setup("gemini-4-argon", copilot)
 		sr := e.screenshotReview(context.Background(), arts, 0, "")
 		if sr == nil || sr.Skipped != "" || len(sr.Findings) != 1 || sr.Findings[0].Source != sr.Model || len(copilot.Requests) != 1 || len(gateway.Requests) != uireview.K ||
 			!strings.HasPrefix(sr.Model, verbs.ModelGemini+" (the Copilot route failed: ") {
@@ -499,5 +499,13 @@ func TestCopilotUIReviewRoute(t *testing.T) {
 		if !strings.Contains(e.IO.Err.(*strings.Builder).String(), "lane A falls back to "+verbs.ModelGemini+" (high)") {
 			t.Errorf("%s: the fallback is not reported: %q", name, e.IO.Err.(*strings.Builder).String())
 		}
+	}
+
+	// A mistyped opt-in model is a configuration error to fix, not a silent
+	// switch to the paid default route.
+	typo := &models.Fake{Replies: []models.Response{argon}}
+	e, gateway, _ = setup("argon-4", typo)
+	if sr := e.screenshotReview(context.Background(), arts, 0, ""); sr == nil || !strings.Contains(sr.Skipped, "argon-4") || len(typo.Requests)+len(gateway.Requests) != 0 {
+		t.Errorf("mistyped opt-in: %+v, %d Copilot and %d gateway calls", sr, len(typo.Requests), len(gateway.Requests))
 	}
 }

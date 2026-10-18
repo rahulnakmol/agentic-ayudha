@@ -183,11 +183,14 @@ func (e *Env) reviewer(ctx context.Context, b *uireview.Browser, story int, deep
 		return call(ctx, verbs.DirectHost, req)
 	}
 	// The opt-in Copilot route: a [models.ui-review.copilot] row naming a
-	// concrete Copilot model sends lane A through copilot -p. It fails closed:
+	// concrete Copilot model sends lane A through Copilot CLI. It fails closed:
 	// a call it cannot make or read goes to the lane's normal route, which every
 	// later call then uses, and the label says so. It never skips the review.
 	cp, err := gw.Resolver.ResolveDirect(verbs.LaneUIReview, verbs.HostCopilot, false)
-	if err != nil || !models.CopilotOptIn(cp) {
+	if err != nil {
+		return nil, Wrap(ExitUsage, err)
+	}
+	if !models.CopilotOptIn(cp) {
 		return r, nil
 	}
 	if err := models.CheckFamilies(key, builder, cp.Family); err != nil {

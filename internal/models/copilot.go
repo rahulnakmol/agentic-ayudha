@@ -28,8 +28,9 @@ var CopilotRoute = Route{Via: "copilot", Style: "copilot-cli", Secret: "copilot"
 // the lane's normal route.
 var ErrCopilot = errors.New("copilot route")
 
-// CopilotCLI calls a model with Copilot CLI in non-interactive mode
-// (copilot -p): no tools, no questions, no custom instructions, in an empty
+// CopilotCLI calls a model with Copilot CLI in non-interactive mode, the
+// prompt on stdin (a page's markup and accessibility tree can outgrow one
+// command-line argument, about 32K characters on Windows): no tools, no questions, no custom instructions, in an empty
 // working directory and a fresh COPILOT_HOME, so no repository hooks, MCP
 // configuration, or person's settings load. The reply and its usage come from
 // the JSONL output and the usage file; the AI credits Copilot reports are the
@@ -72,7 +73,7 @@ func (c CopilotCLI) Complete(ctx context.Context, r Request) (Response, error) {
 			return Response{}, err
 		}
 	}
-	args := []string{"-p", copilotPrompt(r), "-s", "--model", r.Model, "--available-tools=", "--no-ask-user",
+	args := []string{"-s", "--model", r.Model, "--available-tools=", "--no-ask-user",
 		"--no-custom-instructions", "--no-auto-update", "--output-format", "json", "--usage-output-file", usage}
 	if r.Effort != "" {
 		args = append(args, "--reasoning-effort", r.Effort)
@@ -91,6 +92,7 @@ func (c CopilotCLI) Complete(ctx context.Context, r Request) (Response, error) {
 	}
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Dir = work
+	cmd.Stdin = strings.NewReader(copilotPrompt(r))
 	cmd.Env = []string{"PATH=" + c.Path, "HOME=" + home, "COPILOT_HOME=" + home, "TERM=dumb",
 		"COPILOT_AUTO_UPDATE=false", "DBUS_SESSION_BUS_ADDRESS=disabled:", "COPILOT_GITHUB_TOKEN=" + c.Token}
 	var stdout, stderr bytes.Buffer
@@ -103,19 +105,19 @@ func (c CopilotCLI) Complete(ctx context.Context, r Request) (Response, error) {
 		// bound so the breaker still sees the spend, and fail so the caller
 		// falls back rather than trusting a route it cannot meter.
 		resp.CostUSD = copilotUpperBound(r, n)
-		err = fmt.Errorf("%w: copilot -p returned no usage report; charged an upper bound of %.4f USD", ErrCopilot, resp.CostUSD)
+		err = fmt.Errorf("%w: copilot returned no usage report; charged an upper bound of %.4f USD", ErrCopilot, resp.CostUSD)
 	}
 	if runErr != nil {
 		msg := strings.TrimSpace(stderr.String())
 		if len(msg) > 300 {
 			msg = msg[len(msg)-300:]
 		}
-		return resp, fmt.Errorf("%w: copilot -p: %w: %s", ErrCopilot, runErr, msg)
+		return resp, fmt.Errorf("%w: copilot: %w: %s", ErrCopilot, runErr, msg)
 	}
 	return resp, err
 }
 
-// copilotPrompt is the request as one prompt: copilot -p has no system or
+// copilotPrompt is the request as one prompt: Copilot CLI has no system or
 // assistant turns, so they are labelled in the text.
 func copilotPrompt(r Request) string {
 	var b strings.Builder
@@ -176,28 +178,29 @@ func parseCopilot(jsonl, usage []byte) (Response, error) {
 		resp.CostUSD = u.TotalNanoAiu / 1e9 * 0.01
 	}
 	if !found {
-		return resp, fmt.Errorf("%w: copilot -p returned no reply", ErrCopilot)
+		return resp, fmt.Errorf("%w: copilot returned no reply", ErrCopilot)
 	}
 	return resp, nil
 }
 
 // copilotUpperBound is the most a call can have cost when Copilot reports no
 // usage: the prompt at one token per two characters, Copilot's own prompt
-// (about 15k tokens in the probes) rounded up to 25k, 2k per image, and the
-// whole output cap (32k when the request sets none), at the model's price or
-// the fallback rate.
+// (about 15k tokens in the probes) rounded up to 25k, 2k per image, and
+// copilotMaxOutput output tokens, at the model's price or the fallback rate.
+// The request's MaxTokens does not bound it: Copilot CLI takes no output cap.
 func copilotUpperBound(r Request, images int) float64 {
 	p, _, ok := PriceOf(nil, r.Model)
 	if !ok {
 		p = ListPrice{Short: Rates{Input: FallbackInputPerMTok, Output: FallbackOutputPerMTok}}
 	}
-	out := r.MaxTokens
-	if out == 0 {
-		out = 32000
-	}
 	in := len(copilotPrompt(r))/2 + 25000 + 2000*images
-	return (float64(in)*p.Short.Input + float64(out)*p.Short.Output) / 1e6
+	return (float64(in)*p.Short.Input + float64(copilotMaxOutput)*p.Short.Output) / 1e6
 }
+
+// copilotMaxOutput is the output ceiling the upper bound charges: 128k
+// tokens, at or above the output limit of the Gemini, Claude and GPT models
+// Copilot lists.
+const copilotMaxOutput = 128000
 
 // RouteOf is the route a resolved model's direct call takes: the opt-in
 // Copilot route for a copilot row that names a concrete model, else RouteFor.

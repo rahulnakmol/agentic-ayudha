@@ -26,6 +26,7 @@ func fakeCopilot(t *testing.T, exit int, usage bool) (dir, record string) {
 	script := `#!/bin/sh
 rec='` + record + `'
 env > "$rec.env"
+cat > "$rec.stdin"
 : > "$rec.args"
 usage=
 while [ $# -gt 0 ]; do
@@ -48,8 +49,8 @@ exit ` + map[bool]string{true: "0", false: "1"}[exit == 0] + `
 	return dir + string(os.PathListSeparator) + "/usr/bin" + string(os.PathListSeparator) + "/bin", record
 }
 
-// TestCopilotCLI: the opt-in Copilot route runs copilot -p with the request's
-// model and effort, the image as an attachment, no tools, in an empty
+// TestCopilotCLI: the opt-in Copilot route runs Copilot CLI with the prompt
+// on stdin, the request's model and effort, the image as an attachment, no tools, in an empty
 // directory with a fresh COPILOT_HOME and only COPILOT_GITHUB_TOKEN of the
 // caller's credentials; it reads the reply and charges the AI credits Copilot
 // reports. It fails with ErrCopilot when copilot is missing, not signed in, or
@@ -74,7 +75,13 @@ func TestCopilotCLI(t *testing.T) {
 		t.Fatalf("cost %v from %s, want the reported credits", usd, src)
 	}
 	args, _ := os.ReadFile(rec + ".args")
-	for _, want := range []string{"-p\nYou are lane A.\n\nState \"s\".\n", "--model\ngemini-4-argon\n", "--reasoning-effort\nhigh\n", "--available-tools=\n", "--no-ask-user\n", "--no-custom-instructions\n", "--output-format\njson\n"} {
+	if in, _ := os.ReadFile(rec + ".stdin"); string(in) != "You are lane A.\n\nState \"s\"." {
+		t.Errorf("stdin %q, want the prompt", in)
+	}
+	if strings.Contains(string(args), "lane A") || strings.Contains(string(args), "-p\n") {
+		t.Errorf("the prompt is on the command line:\n%s", args)
+	}
+	for _, want := range []string{"-s\n", "--model\ngemini-4-argon\n", "--reasoning-effort\nhigh\n", "--available-tools=\n", "--no-ask-user\n", "--no-custom-instructions\n", "--output-format\njson\n"} {
 		if !strings.Contains(string(args), want) {
 			t.Errorf("args lack %q:\n%s", want, args)
 		}
@@ -96,7 +103,7 @@ func TestCopilotCLI(t *testing.T) {
 	if _, err := (CopilotCLI{Token: "t", Path: dir}).Complete(context.Background(), req); err != nil {
 		t.Fatal(err)
 	}
-	if args, _ := os.ReadFile(rec + ".args"); !strings.Contains(string(args), "User:\nState \"s\".\n\nAssistant:\nnope\n\nUser:\nAgain.") {
+	if args, _ := os.ReadFile(rec + ".stdin"); !strings.Contains(string(args), "User:\nState \"s\".\n\nAssistant:\nnope\n\nUser:\nAgain.") {
 		t.Errorf("retry prompt:\n%s", args)
 	}
 
@@ -115,9 +122,11 @@ func TestCopilotCLI(t *testing.T) {
 			t.Errorf("want ErrCopilot mentioning %q, got %v", tc.want, err)
 		}
 	}
-	// A reply with no usage report is charged an upper bound, not nothing:
-	// more than the recorded call's 0.043 USD, so the breaker sees the spend.
-	if resp, _ := (CopilotCLI{Token: "t", Path: unmetered}).Complete(context.Background(), req); resp.CostUSD < 0.1 {
+	// A reply with no usage report is charged an upper bound, not nothing. The
+	// request's 8k output cap does not bound it, since copilot never receives
+	// it: 128k output tokens at Argon's 10 USD per million is 1.28 USD alone.
+	req.MaxTokens = 8000
+	if resp, _ := (CopilotCLI{Token: "t", Path: unmetered}).Complete(context.Background(), req); resp.CostUSD < 1.28 {
 		t.Errorf("unmetered reply charged %v USD", resp.CostUSD)
 	}
 }
