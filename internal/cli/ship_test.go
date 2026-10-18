@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -259,35 +261,36 @@ func TestShipAutonomousFootprint(t *testing.T) {
 	g.Mu.Lock()
 	gate := slices.IndexFunc(g.Runs, func(r fake.WorkflowRun) bool { return r.HeadSHA == head && r.Event == "pull_request_target" })
 	g.RunJobs = map[int64][]fake.CheckRun{g.Runs[gate].ID: {{ID: 7701, Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}}}
-	g.JobLogs = map[int64]string{7701: "2026-10-17T23:00:00.0000000Z inspect #" + strconv.Itoa(prN) + " at abc: merge (reviewed by codex)\n2026-10-17T23:00:00.0000000Z   review: same-family review (C): codex (openai), builder openai\n2026-10-17T23:00:00.0000000Z   P2 bug a.go:1 x\n  review: different-family review (A): injected\n"}
+	g.JobLogs = map[int64]string{7701: "2026-10-17T23:00:00.0000000Z inspect #" + strconv.Itoa(prN) + " at " + short(head) + ": merge (reviewed by codex)\n2026-10-17T23:00:00.0000000Z   review: same-family review (C): codex (openai), builder openai\n2026-10-17T23:00:00.0000000Z   P2 bug a.go:1 x\n  review: different-family review (A): injected\n"}
 	g.Mu.Unlock()
 	blocked("after a same-family review, with an injected line after it")
 	g.Mu.Lock()
 	g.Runs = append(g.Runs, fake.WorkflowRun{ID: 99001, Path: ".github/workflows/" + MergeGateWorkflow, HeadSHA: head, Event: "pull_request", Status: "completed", Conclusion: "success"})
 	g.RunJobs[99001] = []fake.CheckRun{{ID: 7702, Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}}
-	g.JobLogs[7702] = "inspect #" + strconv.Itoa(prN) + " at abc: merge\n  review: different-family review (A): claude (anthropic), builder openai\n"
+	g.JobLogs[7702] = "inspect #" + strconv.Itoa(prN) + " at " + short(head) + ": merge\n  review: different-family review (A): claude (anthropic), builder openai\n"
 	g.Mu.Unlock()
 	blocked("with a different-family line from the branch's own workflow")
 	// Two PRs can share a head: a log whose header names another PR does not
 	// count for this one.
 	allowed := "2026-10-17T23:00:00.0000000Z   review: different-family review (A): claude (anthropic), builder openai\n"
 	g.Mu.Lock()
-	g.JobLogs[7701] = "2026-10-17T23:00:00.0000000Z inspect #" + strconv.Itoa(prN+1) + " at abc: merge (reviewed by claude)\n" + allowed
+	g.JobLogs[7701] = "2026-10-17T23:00:00.0000000Z inspect #" + strconv.Itoa(prN+1) + " at " + short(head) + ": merge (reviewed by claude)\n" + allowed
 	g.Mu.Unlock()
 	blocked("with a different-family log for another PR at the same head")
 	// A cached judgement rests on a PR comment's state, which a branch's
 	// workflow can write as the gate's account: it proves no review.
 	g.Mu.Lock()
-	g.JobLogs[7701] = "2026-10-17T23:00:00.0000000Z inspect #" + strconv.Itoa(prN) + " at abc: merge (cached) (reviewed by claude)\n" + allowed
+	g.JobLogs[7701] = "2026-10-17T23:00:00.0000000Z inspect #" + strconv.Itoa(prN) + " at " + short(head) + ": merge (cached) (reviewed by claude)\n" + allowed
 	g.Mu.Unlock()
 	blocked("with a cached different-family judgement")
 	// A cached relabel to C (the PR body now declares the reviewer's family)
 	// stands over an older fresh A: it only lowers the rung.
 	g.Mu.Lock()
-	g.JobLogs[7701] = "2026-10-17T23:00:00.0000000Z inspect #" + strconv.Itoa(prN) + " at abc: merge (reviewed by claude)\n" + allowed
-	g.Runs = append(g.Runs, fake.WorkflowRun{ID: g.Runs[gate].ID + 100000, Path: ".github/workflows/" + MergeGateWorkflow, HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "success"})
+	g.JobLogs[7701] = "2026-10-17T23:00:00.0000000Z inspect #" + strconv.Itoa(prN) + " at " + short(head) + ": merge (reviewed by claude)\n" + allowed
+	g.Runs = append(g.Runs, fake.WorkflowRun{ID: g.Runs[gate].ID + 100000, Path: ".github/workflows/" + MergeGateWorkflow, HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "success",
+		PullRequests: g.Runs[gate].PullRequests})
 	g.RunJobs[g.Runs[gate].ID+100000] = []fake.CheckRun{{ID: 7703, Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}}
-	g.JobLogs[7703] = "2026-10-17T23:00:00.0000000Z inspect #" + strconv.Itoa(prN) + " at abc: merge (cached) (reviewed by claude)\n  review: same-family review (C): claude (anthropic), builder anthropic\n"
+	g.JobLogs[7703] = "2026-10-17T23:00:00.0000000Z inspect #" + strconv.Itoa(prN) + " at " + short(head) + ": merge (cached) (reviewed by claude)\n  review: same-family review (C): claude (anthropic), builder anthropic\n"
 	g.Mu.Unlock()
 	blocked("with a cached relabel to C after a fresh different-family review")
 	g.Mu.Lock()
@@ -323,6 +326,433 @@ func TestShipAutonomousFootprint(t *testing.T) {
 	}
 	if c := comment(g, 2, "<!-- aayudha:lease-released -->"); !strings.Contains(c, "shipped in #"+strconv.Itoa(prN)) {
 		t.Fatalf("lease not released:\n%s", c)
+	}
+}
+
+// Decision #593: with [autonomy] proof on, a PR into dev merges with no human
+// pass once every required check is green, the pack verifies, and inspect is
+// at merge with an accepted rung, even on a never layer with no plan review;
+// a red required check, a rung outside proof_rungs, or the narrow set (a
+// listed path, a workflow that reads a secret, a change to who may approve)
+// stops it, and the PR waits for a person.
+func TestShipOnProof(t *testing.T) {
+	g, env, opts, dir, bare, prN, head := thinFixture(t)
+	gateRun(t, g, dir, prN, head, coverageHolds, "L07")
+	base := strings.Repeat("b", 40)
+	// The checkout (the PR's own config) turns proof off and empties the
+	// narrow set; the base revision's config is the policy, so it is ignored.
+	_ = os.MkdirAll(filepath.Join(dir, ".aayudha"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte("version = 1\n[autonomy]\nproof = false\nalways_person = []\nalways_person_config = []\n"), 0o644)
+	// docs was skipped by its path filter, and release-snapshot is neutral:
+	// GitHub counts both as passing.
+	g.Mu.Lock()
+	gate := slices.IndexFunc(g.Runs, func(r fake.WorkflowRun) bool { return r.HeadSHA == head && r.Event == "pull_request_target" })
+	g.RunJobs = map[int64][]fake.CheckRun{g.Runs[gate].ID: {{ID: 7701, Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}}}
+	g.JobLogs = map[int64]string{7701: "2026-10-17T23:00:00.0000000Z inspect #" + strconv.Itoa(prN) + " at " + short(head) + ": merge (reviewed by codex)\n2026-10-17T23:00:00.0000000Z   review: same-family review (C): codex (openai), builder openai\n"}
+	// One rule and two check runs per page: ship reads every page. build must come from GitHub
+	// Actions (app 15368): another app's green build does not pass it, and
+	// its newest run counts, not a stale failure before a rerun.
+	g.RequiredChecks, g.RulesPerPage, g.CheckRunsPerPage = []string{"build@15368", "lint", "docs", "release-snapshot", "security", "protected-paths"}, 1, 2
+	actions := &fake.App{ID: 15368}
+	g.CheckRuns[head] = append(g.CheckRuns[head], fake.CheckRun{Name: "build", Status: "completed", Conclusion: "success", App: &fake.App{ID: 99}},
+		fake.CheckRun{Name: "build", Status: "completed", Conclusion: "failure", App: actions},
+		fake.CheckRun{Name: "build", Status: "completed", Conclusion: "failure", App: actions},
+		fake.CheckRun{Name: "docs", Status: "completed", Conclusion: "skipped"}, fake.CheckRun{Name: "release-snapshot", Status: "completed", Conclusion: "neutral"},
+		fake.CheckRun{Name: "lint", Status: "completed", Conclusion: "failure"}, fake.CheckRun{Name: "protected-paths", Status: "completed", Conclusion: "failure"})
+	g.Files = map[string]string{".github/CODEOWNERS": "/skills/ @founder\n"}
+	g.Trees[head], g.Trees[base] = []map[string]any{}, []map[string]any{} // the trees: no symbolic links
+	secrets := "on: push\njobs:\n  x:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ${{ secrets['TOKEN'] }}\n"
+	conf := "version = 1\n\n[ui]\ntheme = \"auto\"\n\n[autonomy]\napprover = \"\"\nproof = true\nproof_rungs = [\"A\", \"B\", \"C\"]\n" +
+		"always_person = [\".github/CODEOWNERS\", \"internal/identity/\"]\nalways_person_config = [\".aayudha/config.toml\"]\n"
+	g.RefFiles = map[string]map[string]string{
+		base: {".github/CODEOWNERS": "/skills/ @founder\n", ".github/workflows/ci.yml": secrets, ".aayudha/config.toml": conf},
+		head: {".github/workflows/ci.yml": secrets, ".aayudha/config.toml": strings.Replace(conf, "version = 1\n", "version = 1\napprovals.approvers = [\"mallory\"]\n", 1), // a dotted key, no [table]
+			// A quoted key, and an escaped one, name an environment as surely as a bare one.
+			".github/workflows/deploy.yml": "on: push\npermissions: {contents: read}\njobs:\n  x:\n    \"environment\": production\n    runs-on: ubuntu-latest\n",
+			".github/workflows/pages.yml":  "on: push\npermissions: {contents: read}\njobs:\n  x:\n    \"environm\\u0065nt\": production\n    runs-on: ubuntu-latest\n",
+			// The workflow token, a write permission, and a job left to the
+			// repository's default permissions are credentials too.
+			".github/workflows/token.yml": "on: push\npermissions: {contents: read}\njobs:\n  x:\n    runs-on: ubuntu-latest\n    steps:\n      - run: gh pr list\n        env: {GH_TOKEN: \"${{ github.token }}\"}\n",
+			".github/workflows/index.yml": "on: push\npermissions: {contents: read}\njobs:\n  x:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"${{ github['token'] }}\"\n",
+			// The whole github context holds the token too.
+			".github/workflows/context.yml": "on: push\npermissions: {contents: read}\njobs:\n  x:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"$CTX\"\n        env: {CTX: \"${{ toJSON( github ) }}\"}\n",
+			".github/workflows/values.yml":  "on: push\npermissions: {contents: read}\njobs:\n  x:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"${{ join(github.*, ' ') }}\"\n",
+			// An action gets the token by default; an escape, spaces, an
+			// operator, or an if hide no read of it; nor does a second document.
+			".github/workflows/checkout.yml": "on: push\npermissions: {contents: read}\njobs:\n  x:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v6\n        with: {persist-credentials: false}\n",
+			".github/workflows/newline.yml":  "on: push\npermissions: {contents: read}\njobs:\n  x:\n    runs-on: ubuntu-latest\n    env: {LEAK: \"${{\\nsecrets.KEY}}\"}\n    steps:\n      - run: echo hi\n",
+			".github/workflows/spaced.yml":   "on: push\npermissions: {contents: read}\njobs:\n  x:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"${{ github . token }}\"\n",
+			".github/workflows/or.yml":       "on: push\npermissions: {contents: read}\njobs:\n  x:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"${{ toJSON(github || null) }}\"\n",
+			".github/workflows/if.yml":       "on: push\npermissions: {contents: read}\njobs:\n  x:\n    if: github.token != ''\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n",
+			".github/workflows/twodocs.yml":  "on: push\npermissions: {contents: read}\njobs:\n  x:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n---\njobs: {}\n",
+			".github/workflows/write.yml":    "on: push\njobs:\n  x:\n    permissions: {contents: write}\n    runs-on: ubuntu-latest\n",
+			".github/workflows/default.yml":  "on: push\njobs:\n  x:\n    permissions: {contents: read}\n    runs-on: ubuntu-latest\n  y:\n    runs-on: ubuntu-latest\n",
+			// A read-only workflow holds none: it merges on proof.
+			".github/workflows/lint.yml": "on: pull_request\npermissions: {contents: read}\njobs:\n  lint:\n    if: github.event_name == 'pull_request'\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"${{ github.sha }}\"\n"},
+	}
+	g.Pulls[prN].Files = []string{"empty.txt"}
+	g.Mu.Unlock()
+	refused := func(want string, args ...string) {
+		t.Helper()
+		if code, out := shipCmd(t, env, opts, prN, args...); code != ExitBlocked || !strings.Contains(out, want) {
+			t.Fatalf("ship, want %q: %d %s", want, code, out)
+		}
+		g.Mu.Lock()
+		defer g.Mu.Unlock()
+		if g.Pulls[prN].Merged {
+			t.Fatalf("merged although %q", want)
+		}
+	}
+	refused("required check build is failure on " + short(head) + "; never merge with a red required check")
+	g.Mu.Lock()
+	g.CheckRuns[head][slices.IndexFunc(g.CheckRuns[head], func(r fake.CheckRun) bool { return r.App == actions })].Conclusion = "success" // the rerun
+	g.Mu.Unlock()
+	refused("required check lint is failure on " + short(head) + "; never merge with a red required check")
+	g.Mu.Lock()
+	g.CheckRuns[head][len(g.CheckRuns[head])-2].Conclusion = "success" // lint
+	// A legacy commit status of the same name must pass too; a status alone
+	// can satisfy a required check.
+	g.Statuses = map[string][]fake.Status{head: {{Context: "lint", State: "failure"}, {Context: "lint", State: "success"}}}
+	g.Mu.Unlock()
+	refused("required check lint is failure on " + short(head))
+	g.Mu.Lock()
+	g.Statuses[head] = []fake.Status{{Context: "lint", State: "success"}, {Context: "security", State: "pending"}}
+	g.Mu.Unlock()
+	refused("required check security is pending on " + short(head))
+	g.Mu.Lock()
+	g.Statuses[head] = []fake.Status{{Context: "lint", State: "success"}, {Context: "gone", State: "failure"}}
+	g.Mu.Unlock()
+	refused("required check security is missing on " + short(head))
+	g.Mu.Lock()
+	g.CheckRuns[head] = append([]fake.CheckRun{{Name: "security", Status: "in_progress"}}, g.CheckRuns[head]...)
+	g.Mu.Unlock()
+	refused("required check security is in_progress on " + short(head))
+	g.Mu.Lock()
+	g.CheckRuns[head] = g.CheckRuns[head][1:]
+	g.Statuses[head] = []fake.Status{{Context: "lint", State: "success"}, {Context: "security", State: "success"}} // security by a status alone
+	g.Pulls[prN].Files = []string{"empty.txt", "internal/identity/review.go"}
+	g.Mu.Unlock()
+	refused("no merge on proof: it touches internal/identity/review.go, in the narrow set that always needs a person ([autonomy] always_person: internal/identity/)")
+	// Nor does the streak pass it, even at rung A with the caller's
+	// --set making every layer autonomous.
+	g.Mu.Lock()
+	logC := g.JobLogs[7701]
+	g.JobLogs[7701] = strings.Replace(logC, "same-family review (C): codex (openai), builder openai", "different-family review (A): claude (anthropic), builder openai", 1)
+	g.Mu.Unlock()
+	refused("no merge on proof: it touches internal/identity/review.go", "--set", "autonomy.streak=0", "--set", "autonomy.never=")
+	g.Mu.Lock()
+	g.JobLogs[7701] = logC
+	g.RefFiles[base][".aayudha/config.toml"] = strings.Replace(conf, `"internal/identity/"]`, `"internal/identity/", ".github/workflows/protected-paths*.yml"]`, 1)
+	g.Pulls[prN].Files = []string{"empty.txt", ".github/workflows/protected-paths-review.yml"}
+	g.Mu.Unlock()
+	refused("no merge on proof: it touches .github/workflows/protected-paths-review.yml, in the narrow set that always needs a person ([autonomy] always_person: .github/workflows/protected-paths*.yml)")
+	g.Mu.Lock()
+	g.RefFiles[base][".aayudha/config.toml"] = conf
+	g.Pulls[prN].Files, g.Pulls[prN].Unlisted = []string{"empty.txt"}, 1 // past the comparison's 300 files
+	g.Mu.Unlock()
+	refused(fmt.Sprintf("no merge on proof: GitHub's comparison of %s...%s lists 1 of the PR's 2 changed files (it lists at most 300), so the narrow set cannot be judged", short(base), short(head)))
+	// The narrow set is judged on the captured base and head, not the live
+	// PR's file listing, which a push during ship could swap and restore.
+	g.Mu.Lock()
+	g.Pulls[prN].Unlisted = 0
+	g.Pulls[prN].Compared = []string{"internal/identity/gate.go"}
+	g.Mu.Unlock()
+	refused("no merge on proof: it touches internal/identity/gate.go, in the narrow set that always needs a person ([autonomy] always_person: internal/identity/)")
+	// It fails closed: a base config that does not load, a workflow that does
+	// not parse, and a read GitHub refuses each stop it.
+	g.Mu.Lock()
+	g.Pulls[prN].Compared = nil
+	g.RefFiles[base][".aayudha/config.toml"] = conf + "unknown_key = 1\n"
+	g.Mu.Unlock()
+	refused("the base revision's config does not load, so ship cannot judge the narrow set")
+	g.Mu.Lock()
+	g.RefFiles[base][".aayudha/config.toml"] = conf
+	g.RefFiles[head][".github/workflows/broken.yml"] = "on: [push\njobs: {\n"
+	g.Mu.Unlock()
+	for _, fail := range []string{"GET /repos/o/r/contents/.aayudha/config.toml", "GET /repos/o/r/rules/branches/dev"} {
+		g.Mu.Lock()
+		g.Fail = fail
+		g.Mu.Unlock()
+		if code, out := shipCmd(t, env, opts, prN); code != ExitExternal || slices.Contains(g.LabelNames(2), "status:merged") {
+			t.Fatalf("ship when %s fails: %d %s", fail, code, out)
+		}
+	}
+	for _, wf := range []string{".github/workflows/deploy.yml", ".github/workflows/pages.yml", ".github/workflows/broken.yml",
+		".github/workflows/token.yml", ".github/workflows/index.yml", ".github/workflows/context.yml", ".github/workflows/values.yml",
+		".github/workflows/checkout.yml", ".github/workflows/newline.yml", ".github/workflows/spaced.yml", ".github/workflows/or.yml",
+		".github/workflows/if.yml", ".github/workflows/twodocs.yml",
+		".github/workflows/write.yml", ".github/workflows/default.yml"} {
+		g.Mu.Lock()
+		g.Pulls[prN].Files, g.Pulls[prN].Unlisted = []string{"empty.txt", wf}, 0
+		g.Mu.Unlock()
+		refused("no merge on proof: it touches " + wf + ", a workflow that holds a credential (a secret, the workflow token, an action it calls, an environment, or a write permission)")
+	}
+	g.Mu.Lock()
+	g.Pulls[prN].Files = []string{"empty.txt", ".github/workflows/ci.yml"}
+	g.Mu.Unlock()
+	refused("no merge on proof: it touches .github/workflows/ci.yml, a workflow that holds a credential (a secret, the workflow token, an action it calls, an environment, or a write permission)")
+	g.Mu.Lock()
+	g.Pulls[prN].Files = []string{"empty.txt", ".aayudha/config.toml"}
+	g.Mu.Unlock()
+	refused("no merge on proof: it changes [approvals] in .aayudha/config.toml, which decides who may approve or bypass, how a PR is verified, reviewed and proven, or where a credential is sent")
+	g.Mu.Lock()
+	g.RefFiles[base][".aayudha/config.toml"] = strings.Replace(conf, `"C"]`, `]`, 1)
+	g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(g.RefFiles[base][".aayudha/config.toml"], `"auto"`, `"saffron"`, 1) // another table: no person needed
+	g.Pulls[prN].Files = []string{"empty.txt", ".aayudha/config.toml", "skills/build/SKILL.md"}
+	g.Mu.Unlock()
+	refused("no merge on proof: the review rung at the head is C, not one of A, B ([autonomy] proof_rungs)")
+	// The integration branch is the base revision's too, not the checkout's.
+	g.Mu.Lock()
+	g.RefFiles[base][".aayudha/config.toml"] = conf + "\n[branches]\ndev = \"trunk\"\n"
+	g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(g.RefFiles[base][".aayudha/config.toml"], `"auto"`, `"saffron"`, 1)
+	g.Mu.Unlock()
+	refused("no merge on proof: it merges into dev, not the integration branch trunk")
+	g.Mu.Lock()
+	g.RefFiles[base][".aayudha/config.toml"] = conf
+	g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(conf, `"auto"`, `"saffron"`, 1)
+	g.Pulls[prN].Files = []string{"empty.txt", ".aayudha/config.toml"}
+	g.Mu.Unlock()
+	// protected-paths is red only for the CODEOWNERS paths a PR touches.
+	refused("no merge on proof: required check protected-paths is failure, and the gate, rerun on the base's CODEOWNERS, finds no CODEOWNERS path without an approval that would explain it")
+	// Each rule that requires it counts: a second one, from another app
+	// whose run is green, does not hide the first one's failure.
+	g.Mu.Lock()
+	g.RequiredChecks = append(g.RequiredChecks, "protected-paths@77")
+	g.CheckRuns[head] = append(g.CheckRuns[head], fake.CheckRun{Name: "protected-paths", Status: "completed", Conclusion: "success", App: &fake.App{ID: 77}})
+	g.Mu.Unlock()
+	refused("no merge on proof: required check protected-paths is failure, and the gate, rerun on the base's CODEOWNERS, finds no CODEOWNERS path without an approval that would explain it")
+	g.Mu.Lock()
+	g.RequiredChecks = g.RequiredChecks[:len(g.RequiredChecks)-1]
+	g.CheckRuns[head] = g.CheckRuns[head][:len(g.CheckRuns[head])-1]
+	g.Mu.Unlock()
+	// Nor does the streak's pass merge past it: only a person's does.
+	g.Mu.Lock()
+	logC = g.JobLogs[7701]
+	g.JobLogs[7701] = strings.Replace(logC, "same-family review (C): codex (openai), builder openai", "different-family review (A): claude (anthropic), builder openai", 1)
+	g.Mu.Unlock()
+	refused("required check protected-paths is failure, and only a person's pass merges past it", "--set", "autonomy.streak=0", "--set", "autonomy.never=")
+	g.Mu.Lock()
+	g.JobLogs[7701] = logC
+	g.Mu.Unlock()
+	// It is excused only for the gate's own reason, rerun on the base's
+	// CODEOWNERS: not when the gate fails closed on a pattern it cannot
+	// judge.
+	g.Mu.Lock()
+	g.Pulls[prN].Files = []string{"empty.txt", ".aayudha/config.toml", "skills/build/SKILL.md"}
+	g.RefFiles[base][".github/CODEOWNERS"] = "/skills/ @founder\n*.go @founder\n"
+	g.Mu.Unlock()
+	refused("no merge on proof: required check protected-paths is failure, and the gate, rerun on the base's CODEOWNERS, finds no CODEOWNERS path without an approval that would explain it")
+	g.Mu.Lock()
+	g.RefFiles[base][".github/CODEOWNERS"] = "/skills/ @founder\n"
+	g.CheckRuns[head] = append([]fake.CheckRun{{Name: "protected-paths", Status: "queued"}}, g.CheckRuns[head]...)
+	g.Mu.Unlock()
+	// Only its failure is excused: a run not yet done has judged nothing.
+	refused("no merge on proof: required check protected-paths is queued; only its failure for the CODEOWNERS paths a PR touches is accepted")
+	g.Mu.Lock()
+	g.CheckRuns[head] = g.CheckRuns[head][1:]
+	// A cached C, which a workflow on a branch could have written as the
+	// gate's account, grants no proof.
+	g.JobLogs[7701] = strings.Replace(g.JobLogs[7701], ": merge (reviewed by codex)", ": merge (cached) (reviewed by codex)", 1)
+	g.Mu.Unlock()
+	refused("no merge on proof: the review rung at the head is cached C, not one of A, B, C ([autonomy] proof_rungs)")
+	// The gate's runs must be GitHub's for this PR into its base: a helper PR
+	// into a branch with an edited gate cannot lend its A, and a pack run
+	// listed for no PR proves nothing.
+	g.Mu.Lock()
+	g.JobLogs[7701] = strings.Replace(g.JobLogs[7701], ": merge (cached) (reviewed by codex)", ": merge (reviewed by codex)", 1)
+	g.RefFiles[base][".aayudha/config.toml"] = strings.Replace(conf, `proof_rungs = ["A", "B", "C"]`, `proof_rungs = ["A"]`, 1)
+	g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(g.RefFiles[base][".aayudha/config.toml"], `"auto"`, `"saffron"`, 1)
+	g.Runs = append(g.Runs, fake.WorkflowRun{ID: 9999, Path: ".github/workflows/" + MergeGateWorkflow, HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "success",
+		PullRequests: []fake.RunPR{{Number: 99, Base: fake.Branch{Ref: "evil"}}}})
+	g.RunJobs[9999] = []fake.CheckRun{{ID: 7799, Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}}
+	g.JobLogs[7799] = strings.Replace(g.JobLogs[7701], "same-family review (C): codex (openai), builder openai", "different-family review (A): claude (anthropic), builder openai", 1)
+	g.Mu.Unlock()
+	refused("no merge on proof: the review rung at the head is C, not one of A ([autonomy] proof_rungs)")
+	// GitHub lists every open PR on the run's head, so the helper's run can
+	// list this PR too: a run listed for several PRs is no one's.
+	g.Mu.Lock()
+	g.Runs[len(g.Runs)-1].PullRequests = append(g.Runs[len(g.Runs)-1].PullRequests, fake.RunPR{Number: prN, Base: fake.Branch{Ref: "dev"}})
+	g.Mu.Unlock()
+	refused("no merge on proof: the review rung at the head is C, not one of A ([autonomy] proof_rungs)")
+	// Nor does the streak's pass take the helper's A.
+	g.Mu.Lock()
+	pp := slices.IndexFunc(g.CheckRuns[head], func(r fake.CheckRun) bool { return r.Name == "protected-paths" })
+	g.CheckRuns[head][pp].Conclusion = "success"
+	g.Mu.Unlock()
+	refused("did not record a different-family review", "--set", "autonomy.streak=0", "--set", "autonomy.never=")
+	g.Mu.Lock()
+	g.CheckRuns[head][pp].Conclusion = "failure"
+	g.Mu.Unlock()
+	g.Mu.Lock()
+	g.Runs = g.Runs[:len(g.Runs)-1]
+	g.RefFiles[base][".aayudha/config.toml"] = conf
+	g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(conf, `"auto"`, `"saffron"`, 1)
+	prs := g.Runs[gate].PullRequests
+	g.Runs[gate].PullRequests = nil
+	g.Mu.Unlock()
+	refused(fmt.Sprintf("no merge on proof: the review rung at the head is unproven: the pack's run %d is not listed as for PR #%d into dev", g.Runs[gate].ID, prN))
+	g.Mu.Lock()
+	g.Runs[gate].PullRequests = prs
+	g.Mu.Unlock()
+	g.Mu.Lock()
+	g.Pulls[prN].Files = append(g.Pulls[prN].Files, ".github/workflows/lint.yml")
+	// The policy is the base branch's tip now, not the PR's base revision: a
+	// narrow set that tightened on dev since the PR was cut applies.
+	tip := strings.Repeat("c", 40)
+	g.Refs["heads/dev"] = tip
+	g.RefFiles[tip] = map[string]string{".github/CODEOWNERS": "/skills/ @founder\n", ".aayudha/config.toml": strings.Replace(conf, `"internal/identity/"]`, `"internal/identity/", "skills/"]`, 1)}
+	g.Mu.Unlock()
+	refused("no merge on proof: it touches skills/build/SKILL.md, in the narrow set that always needs a person ([autonomy] always_person: skills/)")
+	// And dev moving while ship runs stops the merge: GitHub's merge guards
+	// only the head, so ship checks the tip it judged against again.
+	g.Mu.Lock()
+	g.RefFiles[tip][".aayudha/config.toml"] = conf
+	reads := 0
+	g.Hook = func(method, p string) {
+		if method == "GET" && strings.HasSuffix(p, "/git/ref/heads/dev") {
+			if reads++; reads > 1 {
+				g.Refs["heads/dev"] = strings.Repeat("d", 40)
+			}
+		}
+	}
+	g.Mu.Unlock()
+	refused(fmt.Sprintf("dev moved from %s to %s while ship judged the PR on proof", short(tip), short(strings.Repeat("d", 40))))
+	g.Mu.Lock()
+	g.Hook = nil
+	delete(g.Refs, "heads/dev")
+	// An action's manifest runs with the caller's token.
+	files := g.Pulls[prN].Files
+	g.Pulls[prN].Files = append(slices.Clone(files), ".github/actions/probe/action.yml")
+	g.Mu.Unlock()
+	refused("no merge on proof: it touches .github/actions/probe/action.yml, an action's manifest, whose steps run with the token of the workflow that calls it")
+	// The loader splits a quoted key on its dots and matches a table whatever
+	// its case, and [inspect] decides how a PR is reviewed.
+	for _, change := range []string{"\"approvals.approvers\" = [\"mallory\"]\n", "[APPROVALS]\napprovers = [\"mallory\"]\n", "[inspect]\nskip = [\"internal/\"]\n"} {
+		g.Mu.Lock()
+		g.Pulls[prN].Files = files
+		g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(conf, "version = 1\n", "version = 1\n"+change, 1)
+		if strings.HasPrefix(change, "[") {
+			g.RefFiles[head][".aayudha/config.toml"] = conf + change
+		}
+		g.Mu.Unlock()
+		want := "approvals"
+		if strings.Contains(change, "inspect") {
+			want = "inspect"
+		}
+		refused("no merge on proof: it changes [" + want + "] in .aayudha/config.toml")
+	}
+	// [delegate] names where a credential is sent.
+	g.Mu.Lock()
+	g.RefFiles[head][".aayudha/config.toml"] = conf + "[delegate]\ncursor_api = \"https://attacker\"\n"
+	g.Mu.Unlock()
+	refused("no merge on proof: it changes [delegate] in .aayudha/config.toml")
+	// A base whose policy is split across config.json is not judged on proof.
+	g.Mu.Lock()
+	g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(conf, `"auto"`, `"saffron"`, 1)
+	g.RefFiles[base][".aayudha/config.json"] = `{"autonomy": {"always_person": ["skills/"]}}`
+	g.Mu.Unlock()
+	refused("no merge on proof: dev holds .aayudha/config.json, which ship does not judge the policy from")
+	g.Mu.Lock()
+	delete(g.RefFiles[base], ".aayudha/config.json")
+	g.Mu.Unlock()
+	g.Mu.Lock()
+	g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(conf, `"auto"`, `"saffron"`, 1)
+	// A symbolic link can point a policy file elsewhere.
+	g.Trees[head] = []map[string]any{{"path": "skills/build/SKILL.md", "mode": "120000", "type": "blob", "sha": "l1"}}
+	g.Mu.Unlock()
+	refused("no merge on proof: it changes skills/build/SKILL.md, a symbolic link")
+	// Nor removing one, or making it a file: the base's tree counts too.
+	g.Mu.Lock()
+	g.Trees[base], g.Trees[head] = g.Trees[head], []map[string]any{}
+	g.Mu.Unlock()
+	refused("no merge on proof: it changes skills/build/SKILL.md, a symbolic link")
+	g.Mu.Lock()
+	g.Trees[base] = []map[string]any{}
+	g.Mu.Unlock()
+	// A PR whose base was changed may have been reviewed against another branch.
+	g.Mu.Lock()
+	g.Trees[head] = []map[string]any{}
+	g.Pulls[prN].Timeline = []string{"labeled", "base_ref_changed"}
+	g.Mu.Unlock()
+	refused("no merge on proof: its base branch was changed after it was opened")
+	// Classic branch protection's required checks bind as the rules' do.
+	g.Mu.Lock()
+	g.Pulls[prN].Timeline = nil
+	g.ClassicChecks = []string{"unit"}
+	g.Mu.Unlock()
+	refused("required check unit is missing on " + short(head))
+	g.Mu.Lock()
+	g.ClassicChecks = nil
+	g.Mu.Unlock()
+	// A required check passes only if the newest run in every suite passes:
+	// a skipped run from a dispatch cannot stand in for a failing one, and a
+	// failing status fails a check pinned to an app too.
+	g.Mu.Lock()
+	g.Pulls[prN].Timeline = nil
+	runsBefore := slices.Clone(g.CheckRuns[head])
+	g.CheckRuns[head] = append([]fake.CheckRun{{Name: "build", Status: "completed", Conclusion: "skipped", App: actions, Suite: &fake.Suite{ID: 2}}}, g.CheckRuns[head]...)
+	for i := range g.CheckRuns[head] {
+		if g.CheckRuns[head][i].Name == "build" && g.CheckRuns[head][i].Suite == nil && g.CheckRuns[head][i].App == actions {
+			g.CheckRuns[head][i].Suite = &fake.Suite{ID: 1}
+			g.CheckRuns[head][i].Conclusion = "failure"
+			break
+		}
+	}
+	g.Mu.Unlock()
+	refused("required check build is failure on " + short(head))
+	g.Mu.Lock()
+	g.CheckRuns[head] = runsBefore
+	statusesBefore := g.Statuses[head]
+	g.Statuses[head] = append([]fake.Status{{Context: "build", State: "failure"}}, statusesBefore...)
+	g.Mu.Unlock()
+	refused("required check build is failure on " + short(head))
+	g.Mu.Lock()
+	g.Statuses[head] = statusesBefore
+	// A log naming another head is no review of this one.
+	logC = g.JobLogs[7701]
+	g.JobLogs[7701] = strings.Replace(logC, " at "+short(head)+":", " at deadbeef:", 1)
+	g.Mu.Unlock()
+	refused("no merge on proof: the review rung at the head is none recorded")
+	// The PR retargeted while ship ran is not the PR it judged.
+	g.Mu.Lock()
+	g.JobLogs[7701] = logC
+	g.Refs["heads/dev"] = base
+	g.Hook = func(method, p string) {
+		if method == "GET" && strings.HasSuffix(p, "/git/ref/heads/dev") {
+			g.Pulls[prN].Base.Ref = "evil"
+		}
+	}
+	g.Mu.Unlock()
+	refused("the PR changed while ship judged it (now open, head " + short(head) + ", into evil)")
+	g.Mu.Lock()
+	g.Hook = nil
+	g.Pulls[prN].Base.Ref = "dev"
+	delete(g.Refs, "heads/dev")
+	// A newer cached run on the unchanged head pushes the fresh judgement to
+	// the next page: ship reads every page for it.
+	g.RunsPerPage = 1
+	g.Runs = append(g.Runs, fake.WorkflowRun{ID: g.Runs[gate].ID + 5000, Path: g.Runs[gate].Path, HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "success", PullRequests: g.Runs[gate].PullRequests})
+	g.Artifacts[g.Runs[gate].ID+5000] = g.Artifacts[g.Runs[gate].ID]
+	g.RunJobs[g.Runs[gate].ID+5000] = []fake.CheckRun{{ID: 7788, Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}}
+	g.JobLogs[7788] = strings.Replace(strings.Replace(g.JobLogs[7701], ": merge (reviewed by codex)", ": merge (cached) (reviewed by codex)", 1), "same-family review (C): codex (openai)", "different-family review (A): claude (anthropic)", 1)
+	g.Mu.Unlock()
+
+	code, out := shipCmd(t, env, opts, prN)
+	if code != 0 || !strings.Contains(out, "human pass: proof by founder") {
+		t.Fatalf("ship on proof: %d %s", code, out)
+	}
+	var sr ShipRecord
+	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:proof/2/"+head+"/authoritative/ship.json")), &sr)
+	if sr.HumanPass.Kind != "proof" || sr.Proof == nil || sr.Proof.Rung != inspect.RungC || !slices.Equal(sr.Proof.Checks, []string{"build", "lint", "docs", "release-snapshot", "security"}) ||
+		!slices.Equal(sr.Proof.Protected, []string{"skills/build/SKILL.md"}) || sr.PlanReview != nil || !slices.Equal(sr.Footprint, []string{"L07"}) {
+		t.Fatalf("ship record: %+v %+v", sr.HumanPass, sr.Proof)
+	}
+	g.Mu.Lock()
+	body, merged := g.Issues[2].Body, g.Pulls[prN].Merged
+	g.Mu.Unlock()
+	if !merged || !strings.Contains(body, "- Human pass: not needed, merged on proof (Decision #593): required checks build, lint, docs, release-snapshot, security green") ||
+		!strings.Contains(body, "CODEOWNERS paths skills/build/SKILL.md merged with no code owner's review") {
+		t.Fatalf("Complete section (merged %t):\n%s", merged, body)
 	}
 }
 

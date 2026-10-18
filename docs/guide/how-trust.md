@@ -97,6 +97,19 @@ default L04, L07, and L09) also needs a CODEOWNER of every changed path in that 
 footprint whose layers all have a long enough correction-free streak needs no review; `ship` records it as
 `autonomous`.
 
+With `[autonomy] proof` on, `ship` merges a pull request into the integration branch on proof, with no review. Every
+required check of the base branch must be green, the pack must verify with its floors holding, and inspect must be at
+`merge` with a fresh judgement at a rung in `proof_rungs`, and both from merge gate runs GitHub lists as for this
+pull request into its base; a cached rung, or a run for another pull request, grants nothing. A skipped or neutral required check counts as green, as GitHub counts it, and the CODEOWNERS check may
+be red only by failing on a CODEOWNERS path the pull request touches; the streak's pass never merges past it. The `[autonomy]` table and the integration
+branch that decide this are read from the base branch, never from the pull request, so a change cannot loosen the
+rules it is judged by. A change to the narrow set still needs a person per pull request, and the streak cannot pass it
+either: the paths in `always_person`, the approval tables of the config files, and any workflow that holds a
+credential (it reads a secret or the workflow token, names an environment, grants a write permission, or leaves a
+job to the default permissions). Ship fails closed: a workflow it cannot parse counts as one that holds a credential,
+and a pull request with more files than GitHub lists needs a person. `ship` records the merge as `proof`, with the
+checks, the rung, and any CODEOWNERS paths it merged.
+
 ## Solo mode
 
 GitHub refuses self-approval. With one human and no bot App, nobody can give a human pass. aayudha does not fake one.
@@ -403,7 +416,7 @@ The real ship record for story 131, from
 }
 ```
 
-`human_pass.kind` is one of `review`, `autonomous`, or `solo-bypass`. A bypass record always names the human, the
+`human_pass.kind` is one of `review`, `autonomous`, `proof`, or `solo-bypass`. A bypass record always names the human, the
 comment, the commit, and a note saying that no review happened.
 
 > **In the story:** story 131 in the benefits-qa example touched the policy layer, L04, a never layer. Its plan and

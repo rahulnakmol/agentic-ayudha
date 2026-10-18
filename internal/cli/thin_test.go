@@ -129,7 +129,8 @@ func gateRunFor(t *testing.T, g *fake.GitHub, dir string, story, prN int, head s
 	g.Mu.Lock()
 	defer g.Mu.Unlock()
 	id := int64(9000 + len(g.Runs))
-	g.Runs = append(g.Runs, fake.WorkflowRun{ID: id, Path: ".github/workflows/aayudha-merge-gate.yml", HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "success"})
+	g.Runs = append(g.Runs, fake.WorkflowRun{ID: id, Path: ".github/workflows/aayudha-merge-gate.yml", HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "success",
+		PullRequests: []fake.RunPR{{Number: prN, Base: fake.Branch{Ref: "dev"}}}})
 	g.Artifacts[id] = []fake.ArtifactZip{{ID: id + 1, Name: "aayudha-pack", Zip: zb.Bytes()}}
 	g.CheckRuns[head] = []fake.CheckRun{{Name: "aayudha/merge-gate", Status: "completed", Conclusion: "success"}, {Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}, {Name: "aayudha/pack", Status: "completed", Conclusion: "success"}}
 }

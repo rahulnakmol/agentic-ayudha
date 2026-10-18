@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -384,5 +385,50 @@ func TestBranchNames(t *testing.T) {
 		if got := tc.b.Names(); got != tc.want {
 			t.Errorf("%+v: %q, want %q", tc.b, got, tc.want)
 		}
+	}
+}
+
+// A repository config read from elsewhere (a base revision's text) is the
+// repo layer: its values hold, and a key the schema does not know, or text
+// that is not TOML, fails naming where it came from.
+func TestLoadRepoTOML(t *testing.T) {
+	l, err := Load(Sources{RepoTOML: []byte("version = 1\n[autonomy]\nproof = true\n"), RepoSource: "base config"})
+	if err != nil || !l.Config.Autonomy.Proof {
+		t.Fatalf("load: %v %+v", err, l)
+	}
+	for _, text := range []string{"version = 1\n[autonomy]\nprooof = true\n", "version = 1\n[autonomy\n"} {
+		if _, err := Load(Sources{RepoTOML: []byte(text), RepoSource: "base config"}); err == nil || !strings.Contains(err.Error(), "base config") {
+			t.Errorf("load %q: %v", text, err)
+		}
+	}
+}
+
+// TestRepositoryMergesOnProof keeps Decision #593 (option 1, accepted 2026-10-18) for this repository: ship merges
+// into dev on proof, rung C counts until rung B is live, and the narrow set of the Decision always needs a person.
+// The built-in defaults leave proof off, so a repository opts in.
+func TestRepositoryMergesOnProof(t *testing.T) {
+	def, err := Load(Sources{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	l, err := Load(Sources{RepoDir: "../.."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := l.Config.Autonomy
+	narrow := []string{".github/CODEOWNERS", "internal/cli/ship.go", "internal/cli/shippass.go", "internal/cli/shipproof.go",
+		"internal/cli/presence.go", "internal/identity/", "internal/autonomy/", "internal/config/", ".github/workflows/aayudha-merge-gate.yml",
+		".github/workflows/protected-paths*.yml", ".github/workflows/release.yml", ".github/workflows/aayudha-approve.yml",
+		".github/workflows/aayudha-token.yml", ".goreleaser.yaml", "install.sh",
+		// The config's other files load into the same layers, so they can change the policy too.
+		".aayudha/config.json", ".aayudha/config.local.toml", ".aayudha/config.local.json"}
+	if !slices.Equal(def.Config.Autonomy.AlwaysPerson, []string{".github/CODEOWNERS", ".aayudha/config.json", ".aayudha/config.local.toml", ".aayudha/config.local.json"}) {
+		t.Fatalf("default narrow set: %v", def.Config.Autonomy.AlwaysPerson)
+	}
+	if def.Config.Autonomy.Proof || !a.Proof || !slices.Equal(a.ProofRungs, []string{"A", "B", "C"}) || !slices.Equal(a.AlwaysPerson, narrow) ||
+		!slices.Equal(a.AlwaysPersonConfig, []string{".aayudha/config.toml", "internal/config/defaults.toml"}) ||
+		!slices.Equal(a.AlwaysPersonSections, []string{"identity", "approvals", "autonomy", "seats", "verify", "inspect", "review", "models", "branches", "decisions", "proof",
+			"delegate", "notify", "integrations", "telemetry", "mcp", "hosts", "lfs", "measure", "budget"}) {
+		t.Fatalf("defaults proof=%v; repository [autonomy]: %+v", def.Config.Autonomy.Proof, a)
 	}
 }

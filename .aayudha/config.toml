@@ -42,3 +42,32 @@ apps = ["codex"]
 # Rung B through the AI gateway (founder, 2026-10-18): no installed app is of a family the builder cannot be.
 paid_reviewer = "grok-4.7"
 paid_effort = "high"
+
+# Merge on proof into dev (Decision #593, option 1, accepted 2026-10-18). Rung C stays accepted, and recorded, until
+# rung B is live in the merge gate (founder, 2026-10-18). The narrow set always needs a person per PR, because a
+# change merged into dev reaches main with no human step: who may approve or bypass, the gate's own code, and releases.
+# A workflow that holds a credential (a secret, the token, an environment, a write permission) is in it too, by rule.
+[autonomy]
+proof = true
+proof_rungs = ["A", "B", "C"]
+always_person = [
+  ".github/CODEOWNERS",
+  "internal/cli/ship.go",
+  "internal/cli/shippass.go",
+  "internal/cli/shipproof.go",
+  "internal/cli/presence.go",
+  "internal/identity/",
+  "internal/autonomy/",
+  "internal/config/",
+  ".github/workflows/aayudha-merge-gate.yml",
+  ".github/workflows/protected-paths*.yml",
+  ".github/workflows/release.yml",
+  ".github/workflows/aayudha-approve.yml",
+  ".github/workflows/aayudha-token.yml",
+  ".goreleaser.yaml",
+  "install.sh",
+  ".aayudha/config.json",
+  ".aayudha/config.local.toml",
+  ".aayudha/config.local.json",
+]
+always_person_config = [".aayudha/config.toml", "internal/config/defaults.toml"]

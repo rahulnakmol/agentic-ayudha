@@ -76,6 +76,12 @@ It checks these before it acts, and stops when one fails:
 When the change touches a risky layer (domain policy, stored data, or the platform), a CODEOWNER of those paths must
 approve too, whatever the streak, and the plan's review must be on the ledger.
 
+With `[autonomy] proof` on, a pull request into your integration branch merges on proof alone: every required check
+green, the proof pack verified with its floors holding, and the review at `merge`. A short list of paths still needs
+you per pull request, because a change there decides who may approve, changes the gate, or reaches a release or a
+secret. That list is `[autonomy] always_person`, plus any workflow that reads a secret. Ship marks those **Ready to
+ship**, and they wait in your inbox.
+
 ## What only a person does
 
 <!-- BEGIN GENERATED: skill-human -->

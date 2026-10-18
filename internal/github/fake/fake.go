@@ -98,7 +98,17 @@ type PR struct {
 	CreatedAt      time.Time `json:"created_at,omitzero"`
 	Reviews        []Review  `json:"-"`
 	Files          []string  `json:"-"`
-	Diff           string    `json:"-"`
+	// Compared, when set, is what the comparison of its base and head SHAs
+	// lists instead of Files (GET /compare/{base}...{head}): the live PR's
+	// files can differ from the revisions a caller captured.
+	Compared []string `json:"-"`
+	// Timeline is its timeline's event names (GET /issues/{n}/timeline), oldest first.
+	Timeline []string `json:"-"`
+	// ChangedFiles is served as len(Files) plus Unlisted, the files GitHub's
+	// file listing leaves out (it lists at most 3,000).
+	ChangedFiles int    `json:"changed_files"`
+	Unlisted     int    `json:"-"`
+	Diff         string `json:"-"`
 }
 
 // Account is a user or bot.
@@ -137,6 +147,24 @@ type CheckRun struct {
 	Name       string `json:"name"`
 	Status     string `json:"status"`
 	Conclusion string `json:"conclusion"`
+	App        *App   `json:"app,omitempty"` // the GitHub App that made it
+	Suite      *Suite `json:"check_suite,omitempty"`
+}
+
+// Suite is a check suite: one workflow run's checks, reruns included.
+type Suite struct {
+	ID int64 `json:"id"`
+}
+
+// Status is a legacy commit status.
+type Status struct {
+	Context string `json:"context"`
+	State   string `json:"state"`
+}
+
+// App is the GitHub App of a check run.
+type App struct {
+	ID int64 `json:"id"`
 }
 
 // WorkflowRun is an Actions run.
@@ -150,6 +178,15 @@ type WorkflowRun struct {
 	Conclusion string `json:"conclusion"`
 	Attempt    int    `json:"run_attempt,omitempty"`
 	HTMLURL    string `json:"html_url,omitempty"`
+	// PullRequests are the pull requests the run is for, with their bases,
+	// as GitHub lists them for a same-repository pull request.
+	PullRequests []RunPR `json:"pull_requests,omitempty"`
+}
+
+// RunPR is a pull request a workflow run is for.
+type RunPR struct {
+	Number int    `json:"number"`
+	Base   Branch `json:"base"`
 }
 
 // Release is a GitHub Release, keyed by its tag.
@@ -200,7 +237,8 @@ type GitHub struct {
 	Commits     map[string]map[string]any   // sha -> commit
 	Issues      map[int]*Issue
 	Pulls       map[int]*PR
-	CheckRuns   map[string][]CheckRun   // commit SHA -> check runs, newest first
+	CheckRuns   map[string][]CheckRun   // commit SHA -> check runs, newest first, CheckRunsPerPage a page (0: all)
+	Statuses    map[string][]Status     // commit SHA -> legacy commit statuses, newest first
 	JobLogs     map[int64]string        // Actions job (check run) ID -> its log, behind a redirect like GitHub's
 	RunJobs     map[int64][]CheckRun    // run ID -> its jobs (latest attempt)
 	Runs        []WorkflowRun           // Actions workflow runs
@@ -235,6 +273,15 @@ type GitHub struct {
 	// RulesetsUnavailable answers every rulesets request as GitHub does for a
 	// private repository on GitHub Free.
 	RulesetsUnavailable bool
+	// RequiredChecks are the required status checks the rules for every
+	// branch name (GET /rules/branches/{branch}), one rule each, served a page
+	// of RulesPerPage at a time (0: all). "name@id" pins a check to the app
+	// (integration_id) it must come from.
+	RequiredChecks   []string
+	ClassicChecks    []string // classic branch protection's required checks (GET /branches/{b}), "name@id" pinned
+	RulesPerPage     int
+	CheckRunsPerPage int
+	RunsPerPage      int // workflow runs a page, whatever per_page asks (0: per_page)
 	// Fail makes the request with this "METHOD /path" fail with a 500 once
 	// it has succeeded After times.
 	Fail string
@@ -357,6 +404,7 @@ func (g *GitHub) nextSHA(v any) string {
 
 var (
 	reCheckRuns = regexp.MustCompile(`^/repos/[^/]+/[^/]+/commits/([^/]+)/check-runs$`)
+	reStatuses  = regexp.MustCompile(`^/repos/[^/]+/[^/]+/commits/([^/]+)/statuses$`)
 	reWfRuns    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/workflows/([^/]+)/runs$`)
 	reRun       = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/runs/([0-9]+)(/rerun-failed-jobs)?$`)
 	reRelTag    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/releases/tags/(.+)$`)
@@ -454,6 +502,55 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		reply(200, map[string]any{"name": g.Repo, "full_name": g.Owner + "/" + g.Repo, "private": g.Private, "visibility": vis,
 			"default_branch": g.Default, "owner": map[string]any{"login": g.Owner, "type": g.OwnerType}})
 
+	case m == "GET" && strings.HasPrefix(p, repo+"/issues/") && strings.HasSuffix(p, "/timeline"):
+		out := []map[string]any{}
+		if pr := g.Pulls[atoi(strings.TrimSuffix(strings.TrimPrefix(p, repo+"/issues/"), "/timeline"))]; pr != nil {
+			for _, ev := range pr.Timeline {
+				out = append(out, map[string]any{"event": ev})
+			}
+		}
+		reply(200, out)
+	case m == "GET" && strings.HasPrefix(p, repo+"/compare/"):
+		basehead := strings.TrimPrefix(p, repo+"/compare/")
+		for _, pr := range g.Pulls {
+			if pr.Base.SHA+"..."+pr.Head.SHA != basehead {
+				continue
+			}
+			list := pr.Files
+			if pr.Compared != nil {
+				list = pr.Compared
+			}
+			files := []map[string]any{}
+			for _, f := range list {
+				files = append(files, map[string]any{"filename": f, "status": "modified"})
+			}
+			reply(200, map[string]any{"status": "ahead", "files": files})
+			return
+		}
+		reply(404, map[string]any{"message": "Not Found"})
+	case m == "GET" && strings.HasPrefix(p, repo+"/branches/") && !strings.Contains(strings.TrimPrefix(p, repo+"/branches/"), "/"):
+		b := strings.TrimPrefix(p, repo+"/branches/")
+		sha, ok := g.Refs["heads/"+b]
+		for _, pr := range g.Pulls {
+			if !ok && pr.Base.Ref == b && pr.Base.SHA != "" {
+				sha, ok = pr.Base.SHA, true
+			}
+		}
+		if !ok && b != g.Default {
+			notFound()
+			return
+		}
+		checks := []map[string]any{}
+		for _, c := range g.ClassicChecks {
+			name, app, pinned := strings.Cut(c, "@")
+			ck := map[string]any{"context": name}
+			if pinned {
+				ck["app_id"] = atoi(app)
+			}
+			checks = append(checks, ck)
+		}
+		reply(200, map[string]any{"name": b, "commit": map[string]any{"sha": sha}, "protected": len(checks) > 0,
+			"protection": map[string]any{"enabled": len(checks) > 0, "required_status_checks": map[string]any{"checks": checks}}})
 	case m == "GET" && p == repo+"/branches":
 		names := []string{g.Default}
 		for ref := range g.Refs {
@@ -529,6 +626,26 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 	case m == "DELETE" && strings.HasPrefix(p, repo+"/actions/variables/"):
 		delete(g.Variables, strings.TrimPrefix(p, repo+"/actions/variables/"))
 		w.WriteHeader(204)
+	case m == "GET" && strings.HasPrefix(p, repo+"/rules/branches/"):
+		out := []any{}
+		for i, c := range g.RequiredChecks {
+			name, app, pinned := strings.Cut(c, "@")
+			sc := map[string]any{"context": name}
+			if pinned {
+				sc["integration_id"] = atoi(app)
+			}
+			out = append(out, map[string]any{"type": "required_status_checks", "ruleset_source_type": "Repository", "ruleset_source": g.Owner + "/" + g.Repo, "ruleset_id": i + 1,
+				"parameters": map[string]any{"required_status_checks": []any{sc}, "strict_required_status_checks_policy": false}})
+		}
+		if per := g.RulesPerPage; per > 0 {
+			page := max(atoi(r.URL.Query().Get("page")), 1)
+			lo, hi := min((page-1)*per, len(out)), min(page*per, len(out))
+			if hi < len(out) {
+				w.Header().Set("Link", fmt.Sprintf(`<%s%s?page=%d&per_page=%d>; rel="next"`, g.Server.URL, p, page+1, per))
+			}
+			out = out[lo:hi]
+		}
+		reply(200, out)
 	case m == "PUT" && strings.HasPrefix(p, repo+"/rulesets/"):
 		for _, rs := range g.Rulesets {
 			if fmt.Sprint(rs["id"]) == strings.TrimPrefix(p, repo+"/rulesets/") {
@@ -656,6 +773,11 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 	case m == "GET" && strings.HasPrefix(p, repo+"/git/ref/"):
 		ref := strings.TrimPrefix(p, repo+"/git/ref/")
 		sha, ok := g.Refs[ref]
+		for _, pr := range g.Pulls { // a branch no test set is a PR's base, at its base SHA
+			if !ok && "heads/"+pr.Base.Ref == ref && pr.Base.SHA != "" {
+				sha, ok = pr.Base.SHA, true
+			}
+		}
 		if !ok {
 			notFound()
 			return
@@ -739,7 +861,22 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		if runs == nil {
 			runs = []CheckRun{}
 		}
-		reply(200, map[string]any{"total_count": len(runs), "check_runs": runs})
+		total := len(runs)
+		if per := g.CheckRunsPerPage; per > 0 {
+			page := max(atoi(r.URL.Query().Get("page")), 1)
+			lo, hi := min((page-1)*per, total), min(page*per, total)
+			if hi < total {
+				w.Header().Set("Link", fmt.Sprintf(`<%s%s?page=%d&per_page=%d>; rel="next"`, g.Server.URL, p, page+1, per))
+			}
+			runs = runs[lo:hi]
+		}
+		reply(200, map[string]any{"total_count": total, "check_runs": runs})
+	case m == "GET" && reStatuses.MatchString(p):
+		out := g.Statuses[reStatuses.FindStringSubmatch(p)[1]]
+		if out == nil {
+			out = []Status{}
+		}
+		reply(200, out)
 	case m == "GET" && reWfRuns.MatchString(p):
 		file, q := reWfRuns.FindStringSubmatch(p)[1], r.URL.Query()
 		out := []WorkflowRun{}
@@ -749,9 +886,18 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		slices.SortStableFunc(out, func(a, b WorkflowRun) int { return cmp.Compare(b.ID, a.ID) }) // newest first, as GitHub lists them
-		total := len(out)
-		if per := atoi(q.Get("per_page")); per > 0 && len(out) > per { // one page, as GitHub serves it
-			out = out[:per]
+		total, per := len(out), atoi(q.Get("per_page"))
+		if g.RunsPerPage > 0 {
+			per = g.RunsPerPage
+		}
+		if per > 0 { // a page at a time, as GitHub serves them
+			page := max(atoi(q.Get("page")), 1)
+			lo, hi := min((page-1)*per, len(out)), min(page*per, len(out))
+			if hi < len(out) {
+				q.Set("page", strconv.Itoa(page+1))
+				w.Header().Set("Link", fmt.Sprintf(`<%s%s?%s>; rel="next"`, g.Server.URL, p, q.Encode()))
+			}
+			out = out[lo:hi]
 		}
 		reply(200, map[string]any{"total_count": total, "workflow_runs": out})
 	case m == "GET" && strings.HasPrefix(p, repo+"/actions/workflows/") && !strings.Contains(strings.TrimPrefix(p, repo+"/actions/workflows/"), "/"):
@@ -863,6 +1009,7 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 				_, _ = w.Write([]byte(pr.Diff))
 				return
 			}
+			pr.ChangedFiles = len(pr.Files) + pr.Unlisted
 			reply(200, pr)
 		case sm[2] == "/reviews" && m == "POST":
 			g.seq++

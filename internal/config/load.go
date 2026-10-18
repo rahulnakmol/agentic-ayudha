@@ -29,10 +29,14 @@ const (
 
 // Sources says where each layer comes from.
 type Sources struct {
-	UserDir string   // directory of the user config, e.g. ~/.config/aayudha; "" skips the layer
-	RepoDir string   // repository root; "" skips the repo and local layers
-	Environ []string // KEY=value pairs; AAYU_<SECTION>__<KEY> entries form the env layer
-	Sets    []string // --set key=value flags, in order
+	UserDir string // directory of the user config, e.g. ~/.config/aayudha; "" skips the layer
+	RepoDir string // repository root; "" skips the repo and local layers
+	// RepoTOML is a repository config's text read from elsewhere (a base
+	// revision), loaded as the repo layer under the name RepoSource.
+	RepoTOML   []byte
+	RepoSource string
+	Environ    []string // KEY=value pairs; AAYU_<SECTION>__<KEY> entries form the env layer
+	Sets       []string // --set key=value flags, in order
 }
 
 // DefaultSources resolves the user config directory from the environment
@@ -185,6 +189,13 @@ func Load(src Sources) (*Loaded, error) {
 		}
 		for _, f := range readDir(dir, "config.local", &errs) {
 			add(LayerLocal, f.path, f.m)
+		}
+	}
+	if src.RepoTOML != nil {
+		if m, err := toml.Parser().Unmarshal(src.RepoTOML); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", src.RepoSource, err))
+		} else {
+			add(LayerRepo, src.RepoSource, m)
 		}
 	}
 	if m, names := envMap(src.Environ); len(m) > 0 {
