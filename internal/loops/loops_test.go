@@ -108,9 +108,15 @@ func TestParseRefuses(t *testing.T) {
 		"an unpinned setup":   `command = ["status"]` + "\ncron = \"0 9 * * *\"\nsetup = [\"python\"]",
 		"no cron":             `command = ["status"]`,
 		"a scheduled subject": `command = ["triage", "{number}"]` + "\ncron = \"0 9 * * *\"",
-		"an event loop":       `command = ["triage"]` + "\non = \"issues.opened\"",
-		"cron and an event":   `command = ["status"]` + "\ncron = \"0 9 * * *\"\non = \"issues.opened\"",
-		"an event filter":     `command = ["status"]` + "\ncron = \"0 9 * * *\"\nfilter = { label = \"x\" }",
+		// WP7.1b: an event loop names a known event and the label, has no cron, and runs only where a trigger exists.
+		"an event, no label":      `command = ["triage"]` + "\non = \"issues.opened\"",
+		"cron and an event":       `command = ["triage"]` + "\ncron = \"0 9 * * *\"\non = \"issues.opened\"\nfilter = { label = \"intake\" }",
+		"a filter, no event":      `command = ["status"]` + "\ncron = \"0 9 * * *\"\nfilter = { label = \"x\" }",
+		"an unknown event":        `command = ["triage"]` + "\non = \"issues.labeled\"\nfilter = { label = \"intake\" }",
+		"an unknown filter key":   `command = ["triage"]` + "\non = \"issues.opened\"\nfilter = { label = \"intake\", author = \"x\" }",
+		"an event in Claude Code": `command = ["triage"]` + "\non = \"issues.opened\"\nfilter = { label = \"intake\" }\nhosts = [\"amp\", \"claude\"]",
+		"an event in Actions":     `command = ["status"]` + "\non = \"issues.opened\"\nfilter = { label = \"intake\" }\nagent = false",
+		"an event subject":        `command = ["triage", "{number}"]` + "\non = \"issues.opened\"\nfilter = { label = \"intake\" }",
 		// D-7.1f: the Actions fallback runs only loops that need no agent, and those need neither a tool nor the bot.
 		"an agent loop in Actions":    `command = ["triage"]` + "\ncron = \"0 9 * * *\"\nhosts = [\"amp\", \"actions\"]",
 		"Actions setup, agent loop":   `command = ["triage"]` + "\ncron = \"0 9 * * *\"\nsetup = [\"node\"]",
@@ -122,9 +128,59 @@ func TestParseRefuses(t *testing.T) {
 			t.Errorf("%s: parsed", name)
 		}
 	}
-	// Event loops are deferred (Appendix B S-7.1e): the error says so, rather than "unknown key".
-	if _, err := Parse("x", []byte("description = \"x\"\ncommand = [\"triage\"]\non = \"issues.opened\"\n")); err == nil || !strings.Contains(err.Error(), "deferred") {
-		t.Errorf("an event loop: %v", err)
+	// A tool with no trigger for the event is named, with what covers it.
+	if _, err := Parse("x", []byte("description = \"x\"\ncommand = [\"triage\"]\non = \"issues.opened\"\nfilter = { label = \"intake\" }\nhosts = [\"codex\"]\n")); err == nil || !strings.Contains(err.Error(), "codex has no issues.opened trigger") {
+		t.Errorf("an event loop in Codex: %v", err)
+	}
+}
+
+// WP7.1b: an event loop runs where a trigger for its event exists (Amp and
+// Cursor for issues.opened); a tool without one shows it as covered by the
+// scheduled loop with the same command, not as missing; a changed filter
+// turns its record stale.
+func TestEventLoop(t *testing.T) {
+	parse := func(name, body string) Loop {
+		t.Helper()
+		l, err := Parse(name, []byte(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return l
+	}
+	ev := parse("arrival", "description = \"x\"\ncommand = [\"triage\"]\non = \"issues.opened\"\nfilter = { label = \"intake\" }\n")
+	if !slices.Equal(ev.Hosts, []string{HostAmp, HostCursor}) || !ev.IsEvent() {
+		t.Errorf("hosts %v, event %v", ev.Hosts, ev.IsEvent())
+	}
+	other := parse("arrival", "description = \"x\"\ncommand = [\"triage\"]\non = \"issues.opened\"\nfilter = { label = \"feedback\" }\n")
+	if ev.Digest("o/r", "dev", "UTC") == other.Digest("o/r", "dev", "UTC") {
+		t.Error("a changed filter label keeps the same digest")
+	}
+	ls := []Loop{parse("daily", "description = \"x\"\ncommand = [\"triage\"]\ncron = \"0 9 * * 1-5\"\n"),
+		parse("status", "description = \"x\"\ncommand = [\"status\"]\ncron = \"0 8 * * 1-5\"\n"), ev}
+	e := Entry{Digest: ev.Digest("o/r", "dev", "UTC"), ID: "subscription s-1", At: "2026-10-18"}
+	for _, tt := range []struct {
+		name          string
+		rec           Record
+		status, owner string
+		detail        string
+	}{
+		{"no tool recorded", Record{}, Missing, "", ""},
+		{"Claude Code runs the loops", Record{HostClaude: {"daily": e}}, Fallback, HostClaude, "the scheduled loop daily covers it"},
+		{"Claude Code runs the others, not the daily loop", Record{HostClaude: {"status": e}}, Missing, "", "no scheduled loop"},
+		{"Amp runs the others", Record{HostAmp: {"daily": e}}, Missing, "", ""},
+		{"Amp holds the subscription", Record{HostAmp: {"daily": e, "arrival": e}}, Active, HostAmp, "subscription s-1"},
+	} {
+		s := States(ls, tt.rec, "o/r", "dev", "UTC")[2]
+		if s.Status != tt.status || s.Owner != tt.owner || !strings.Contains(s.Detail, tt.detail) {
+			t.Errorf("%s: %+v, want %s in %q (%q)", tt.name, s, tt.status, tt.owner, tt.detail)
+		}
+	}
+	// With no scheduled loop of the same command, nothing covers it: missing, not fallback.
+	if s := States([]Loop{ls[1], ev}, Record{HostClaude: {"status": e}}, "o/r", "dev", "UTC")[1]; s.Status != Missing {
+		t.Errorf("no cover: %+v", s)
+	}
+	if c, ok := Covers(ls, ev, HostCodex); !ok || c.Name != "daily" {
+		t.Errorf("covers in codex: %v %v", c.Name, ok)
 	}
 }
 

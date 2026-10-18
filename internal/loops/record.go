@@ -97,7 +97,32 @@ const (
 	Stale   = "stale"
 	Missing = "missing"
 	Double  = "double"
+	// Fallback is an event loop whose event the repository's tool has no
+	// trigger for: a scheduled loop covers it there.
+	Fallback = "fallback"
 )
+
+// noTrigger is the agent tool that runs this repository's loops when it has
+// no trigger for event loop l's event, or "".
+func (r Record) noTrigger(l Loop) string {
+	out := ""
+	for _, h := range AgentHosts {
+		switch {
+		case len(r[h]) == 0:
+		case l.Runs(h):
+			return "" // a recorded tool can run it: missing until it is set up there
+		case out == "":
+			out = h
+		}
+	}
+	return out
+}
+
+// has reports whether loop is recorded as set up on host.
+func (r Record) has(host, loop string) bool {
+	_, ok := r[host][loop]
+	return ok
+}
 
 // State is one loop and the tool that owns it.
 type State struct {
@@ -110,7 +135,8 @@ type State struct {
 // States reports each loop with what runs it: active (set up as it is now in
 // its agent tool, or a loop with agent = false, which the Actions fallback
 // runs), stale (set up, but the loop changed since), missing (an agent loop
-// no tool runs), or double (it runs twice: recorded in two tools, or a loop
+// no tool runs), fallback (an event loop the recorded tool has no trigger
+// for, which a scheduled loop covers), or double (it runs twice: recorded in two tools, or a loop
 // the Actions fallback runs recorded in a tool as well).
 func States(ls []Loop, rec Record, repo, branch, tz string) []State {
 	var out []State
@@ -124,6 +150,13 @@ func States(ls []Loop, rec Record, repo, branch, tz string) []State {
 		case !l.NeedsAgent():
 			s.Owner = HostActions + "," + s.Owner
 			s.Status, s.Detail = Double, "needs no agent and runs in the Actions fallback, but is recorded in "+strings.Join(owners, " and ")+" as well; delete it there, then forget it with `aayu install --loops --host "+owners[0]+" --record "+l.Name+"=`"
+		case len(owners) == 0 && l.IsEvent() && rec.noTrigger(l) != "":
+			h := rec.noTrigger(l)
+			if c, ok := Covers(ls, l, h); ok && rec.has(h, c.Name) {
+				s.Owner, s.Status, s.Detail = h, Fallback, fmt.Sprintf("%s has no %s trigger; the scheduled loop %s covers it", h, l.On, c.Name)
+			} else {
+				s.Status, s.Detail = Missing, fmt.Sprintf("%s has no %s trigger, and no scheduled loop with the same command is set up there", h, l.On)
+			}
 		case len(owners) == 0:
 			s.Status = Missing
 		case len(owners) > 1:

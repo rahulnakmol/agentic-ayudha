@@ -139,6 +139,15 @@ func runInstallLoops(ctx context.Context, e *Env, in Values) error {
 	case loops.HostCodex:
 		rep.Steps = []string{fmt.Sprintf("In the ChatGPT desktop app, open a Codex or ChatGPT chat in this repository's local project and paste each prompt in %s/codex/scheduled-tasks.md (%d loops). Each creates a scheduled task that runs as you while the app is open.", loops.Dir, len(mine))}
 	}
+	for _, l := range ls {
+		if l.IsEvent() && !l.Runs(tool) {
+			s := fmt.Sprintf("%s starts %s; %s has no %s trigger, so there is nothing to set up for it", l.Name, strings.ToLower(l.Label(tz)[:1])+l.Label(tz)[1:], tool, l.On)
+			if c, ok := loops.Covers(ls, l, tool); ok {
+				s += ": " + c.Name + " covers it on its schedule"
+			}
+			rep.Steps = append(rep.Steps, s+".")
+		}
+	}
 	if len(rep.Applied) == 0 && len(mine) > 0 {
 		rep.Steps = append(rep.Steps, fmt.Sprintf("Then record them: `aayu install --loops --host %s --record all=<what %s calls them>` (or <loop>=<ID>,…), and commit %s.", tool, tool, loops.RecordFile))
 	}
@@ -300,25 +309,30 @@ func (e *Env) runLoopNow(ctx context.Context, root string, a agentenv.Agent, too
 	return nil
 }
 
+// subscriptionID is the reply of a thread that created an event loop's Amp
+// GitHub subscription: `subscription <ID>`.
+var subscriptionID = regexp.MustCompile(`^subscription [0-9A-Za-z][0-9A-Za-z-]{7,}$`)
+
 // threadID finds an Amp thread ID in a CLI's output.
 var threadID = regexp.MustCompile(`T-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
 
 // ampLoops sets each loop's Amp schedule with --apply: Amp schedules are an
 // agent tool (set_schedule) and one thread holds one schedule, so it starts
 // one headless Amp thread per loop in an orb of the project (`amp -ox`),
-// which calls set_schedule with the rendered input and keeps the schedule,
-// and records the loop. Without --apply it returns the steps.
+// which calls set_schedule with the rendered input and keeps the schedule
+// (for an event loop, create_github_subscription: an orb spawner), and
+// records the loop. Without --apply it returns the steps.
 func (e *Env) ampLoops(ctx context.Context, root, bin string, apply bool, rec loops.Record, ls []loops.Loop, repo, branch, tz string) ([]string, []string) {
 	if !apply {
 		return nil, []string{
-			fmt.Sprintf("Run `aayu install --loops --host amp --apply`: for each of the %d loops it starts one headless Amp thread in an orb of the project (`amp -ox`), which calls set_schedule with %s/amp/<loop>.json and keeps that schedule (one schedule per thread), and it records each loop.", len(ls), loops.Dir),
-			fmt.Sprintf("Or by hand: in a new Amp thread of the project for each loop, ask \"Call set_schedule with the input in %s/amp/<loop>.json, exactly as written.\"", loops.Dir),
+			fmt.Sprintf("Run `aayu install --loops --host amp --apply`: for each of the %d loops it starts one headless Amp thread in an orb of the project (`amp -ox`), which calls set_schedule with %s/amp/<loop>.json and keeps that schedule (one schedule per thread), or, for an event loop, create_github_subscription with it, and it records each loop.", len(ls), loops.Dir),
+			fmt.Sprintf("Or by hand: in a new Amp thread of the project for each loop, ask \"Call set_schedule with the input in %s/amp/<loop>.json, exactly as written.\" For an event loop, ask for create_github_subscription with that input and this project's project_id instead.", loops.Dir),
 		}
 	}
 	if bin == "" {
 		bin = "amp"
 	}
-	var applied, steps []string
+	var applied, steps, pending []string
 	async := false
 	today := e.Now().UTC().Format(time.DateOnly)
 	for _, l := range ls {
@@ -328,16 +342,25 @@ func (e *Env) ampLoops(ctx context.Context, root, bin string, apply bool, rec lo
 			continue
 		}
 		prompt := "Call Amp's set_schedule on this thread with exactly this input, and do nothing else. Then reply with one line: `schedule <its ID> on <this thread's ID>`.\n\n" + string(in)
+		if l.IsEvent() {
+			prompt = "Call Amp's create_github_subscription with exactly this input, adding project_id: the ID of this thread's Amp project, for " + repo + ". Do nothing else. Then reply with one line: `subscription <its ID>`.\n\n" + string(in)
+		}
 		out, err := e.run(ctx, root, bin, "-ox", "--project", repo, "--no-archive-after-execute", "--title", "aayudha loop: "+l.Name, "-x", prompt)
 		if err != nil {
 			steps = append(steps, fmt.Sprintf("%s: amp failed: %v: %s", l.Name, err, lastLine(out)))
 			continue
 		}
 		id := lastLine(out)
-		if t := threadID.FindString(out); t != "" && !strings.Contains(id, t) {
+		if l.IsEvent() && !subscriptionID.MatchString(id) {
+			// No subscription ID yet: the spawner is not ready until the thread has set it up, so nothing is recorded.
+			pending = append(pending, l.Name)
+			applied = append(applied, l.Name+": pending on "+threadID.FindString(out))
+			continue
+		}
+		if t := threadID.FindString(out); t != "" && !strings.Contains(id, t) && !l.IsEvent() {
 			id = "schedule on " + t
 		}
-		async = async || !strings.HasPrefix(id, "schedule ")
+		async = async || !strings.HasPrefix(id, "schedule ") && !l.IsEvent()
 		rec.Set(loops.HostAmp, l.Name, loops.Entry{Digest: l.Digest(repo, branch, tz), ID: id, At: today})
 		applied = append(applied, l.Name+": "+id)
 	}
@@ -348,6 +371,9 @@ func (e *Env) ampLoops(ctx context.Context, root, bin string, apply bool, rec lo
 		if async {
 			// amp -ox returns the thread before its agent runs (Appendix B D-7.1f).
 			steps = append(steps, "Each Amp thread sets its schedule a few seconds after it starts: open each one to check it holds the schedule, then record the schedule ID with `aayu install --loops --host amp --record <loop>=schedule <ID> on <thread>`.")
+		}
+		for _, n := range pending {
+			steps = append(steps, fmt.Sprintf("%s is not recorded: its thread had not replied with a subscription ID. Open the thread, check that Amp shows the GitHub subscription, then record it with `aayu install --loops --host amp --record %s=subscription <ID>`.", n, n))
 		}
 		steps = append(steps, "Commit "+loops.RecordFile+".")
 	}

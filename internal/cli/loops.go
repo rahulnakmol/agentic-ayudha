@@ -84,6 +84,8 @@ func runLoopGuard(ctx context.Context, e *Env, name string) error {
 		}
 	}
 	switch {
+	case l.IsEvent():
+		g.Due, g.Reason = true, "event: "+l.Label("")
 	case event == "workflow_dispatch":
 		g.Due, g.Reason = true, "dispatched by hand"
 	case l.Due(clock.Loc, e.Now(), fired):

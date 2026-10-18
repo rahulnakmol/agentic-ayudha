@@ -29,6 +29,11 @@ func TestLoopDigestOnSchedule(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = os.WriteFile(filepath.Join(dir, "loops", "digest.toml"), digest, 0o644)
+	opened, err := os.ReadFile(filepath.Join("..", "..", "loops", "triage-opened.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(dir, "loops", "triage-opened.toml"), opened, 0o644)
 	cfg, err := os.ReadFile(filepath.Join("..", "..", ".aayudha", "config.toml")) // aayudha's own: [notify] channel = "file"
 	if err != nil {
 		t.Fatal(err)
@@ -49,6 +54,15 @@ func TestLoopDigestOnSchedule(t *testing.T) {
 		code, _, errOut := run(t, env(halt), opts, append([]string{"hook", "loop:digest", "--ci", "--repo", "o/r"}, extra...)...)
 		out, _ := os.ReadFile(output)
 		return code, string(out) + errOut
+	}
+	// An event loop is due whenever its tool's trigger starts it, at any time, but halt and the breaker still stop it.
+	eventGuard := func(halt string) (int, string) {
+		t.Helper()
+		code, out, errOut := run(t, map[string]string{"GITHUB_TOKEN": "workflow-token", "AAYUDHA_HALT": halt, "AAYU_AGENT": "1"}, opts, "hook", "loop:triage-opened", "--repo", "o/r")
+		return code, out + errOut
+	}
+	if code, out := eventGuard(""); code != 0 || !strings.Contains(out, "event: When an issue opens with the label intake") {
+		t.Errorf("event loop at 09:05 on a Monday: exit %d, %q", code, out)
 	}
 	outbox := filepath.Join(dir, filepath.FromSlash(loops.OutboxPath))
 	pages := func() int {
@@ -78,6 +92,9 @@ func TestLoopDigestOnSchedule(t *testing.T) {
 	if code, _, _ := run(t, env("founder at 2026-10-12: test"), opts, "status", "--digest", "--ci", "--repo", "o/r"); code != ExitBlocked {
 		t.Errorf("halted status --digest: exit %d, want %d", code, ExitBlocked)
 	}
+	if code, _ := eventGuard("founder at 2026-10-12: test"); code != ExitBlocked {
+		t.Errorf("halted event loop: exit %d, want %d", code, ExitBlocked)
+	}
 	if w := g.Writes(); len(w) != 0 || pages() != 1 {
 		t.Errorf("halted run wrote %v; %d pages", w, pages())
 	}
@@ -100,6 +117,44 @@ func TestLoopDigestOnSchedule(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "state", "paused"), []byte("per_day_usd"), 0o644)
 	if code, _ := guard("5 8 * * 1-5", ""); code != ExitBudget {
 		t.Errorf("paused: exit %d, want %d", code, ExitBudget)
+	}
+	if code, _ := eventGuard(""); code != ExitBudget {
+		t.Errorf("paused event loop: exit %d, want %d", code, ExitBudget)
+	}
+}
+
+// WP7.1b: Amp's --apply records an event loop only once its thread replies
+// with a subscription ID; a thread ID alone leaves it unrecorded, with the
+// step that records it.
+func TestInstallLoopsEventSubscription(t *testing.T) {
+	dir := checkout(t)
+	_ = os.MkdirAll(filepath.Join(dir, "loops", "amp"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "loops", "triage-opened.toml"), []byte("description = \"Triage.\"\ncommand = [\"triage\"]\non = \"issues.opened\"\nfilter = { label = \"intake\" }\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "loops", "amp", "triage-opened.json"), []byte("{}\n"), 0o644)
+	reply := "Started T-01a14215-c759-72bf-9a65-d2317a72a878"
+	var prompt string
+	opts := Options{Dir: dir,
+		LookPath: func(b string) (string, error) { return "/usr/bin/" + b, nil },
+		Exec: func(_ context.Context, _, name string, args ...string) (string, error) {
+			prompt = args[len(args)-1]
+			return reply, nil
+		}}
+	report := func() loopsReport {
+		t.Helper()
+		code, out, errOut := runIn(t, map[string]string{"AAYU_GITHUB_TOKEN": "t"}, opts, "", "install", "--loops", "--repo", "o/r", "--json", "--host", "amp", "--apply")
+		var r loopsReport
+		if err := json.Unmarshal([]byte(out), &r); err != nil || code != 0 {
+			t.Fatalf("exit %d: %v: %s", code, err, errOut)
+		}
+		return r
+	}
+	r := report()
+	if !strings.Contains(prompt, "create_github_subscription") || r.States[0].Status != loops.Missing || !strings.Contains(strings.Join(r.Steps, "\n"), "--record triage-opened=subscription <ID>") {
+		t.Errorf("thread ID only: %+v, steps %q", r.States, r.Steps)
+	}
+	reply = "Done.\nsubscription 395a6071-c14a-4fae-87bf-2d18da7f5bad"
+	if r = report(); r.States[0].Status != loops.Active || !strings.Contains(r.States[0].Detail, "subscription 395a6071") {
+		t.Errorf("subscription ID: %+v", r.States)
 	}
 }
 
