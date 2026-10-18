@@ -80,6 +80,17 @@ func TestCheckSections(t *testing.T) {
 		t.Errorf("engineering alone: %+v", r)
 	}
 
+	// A reference that only a missing section can supply waits for it (Q7, before
+	// the questions section); one no section can supply is reported at once.
+	for q, want := range map[string]bool{"Q7": false, "ZZ1": true} {
+		eng := only(parts, "engineering")
+		edit(t, eng, "engineering", func(d *Draft) { d.Engineering[0].Basis, d.Engineering[0].Question = "unknown", q })
+		_, r, err := CheckSections(ix, eng)
+		if got := slices.ContainsFunc(r.Sections["engineering"], func(p string) bool { return strings.Contains(p, q) }); err != nil || got != want {
+			t.Errorf("engineering claim asking %s: reported %v, want %v: %v", q, got, want, r.Sections["engineering"])
+		}
+	}
+
 	// A product claim left pending ("?") passes before the questions section.
 	edit(t, parts, "product", func(d *Draft) { d.ProductClaims[0].Question = Pending })
 	if _, r, _ := CheckSections(ix, only(parts, "engineering", "capabilities", "product")); len(r.Problems) != 0 {
@@ -143,20 +154,42 @@ func TestSectionOf(t *testing.T) {
 	}
 }
 
-// Each section is saved atomically with its findings; one saved against
-// another index commit is stale and not resumed.
+// Each section is saved atomically with its findings and signed with the
+// user's key; one saved against another index commit, or signed with another
+// key (a section file the surveyed checkout ships), is stale and not resumed.
 func TestSaveSections(t *testing.T) {
 	dir := t.TempDir()
 	parts := fixtureSections(t)
-	if err := SaveSection(dir, SavedSection{Section: "engineering", Commit: "abc", Pass: true, Content: parts["engineering"]}); err != nil {
+	key, other := []byte("0123456789abcdef0123456789abcdef"), []byte("another user's key, 32 bytes...")
+	if err := SaveSection(dir, key, SavedSection{Section: "engineering", Commit: "abc", Pass: true, Content: parts["engineering"]}); err != nil {
 		t.Fatal(err)
 	}
-	if err := SaveSection(dir, SavedSection{Section: "product", Commit: "old", Problems: []string{"claim P1: …"}, Content: parts["product"]}); err != nil {
+	if err := SaveSection(dir, key, SavedSection{Section: "product", Commit: "old", Problems: []string{"claim P1: …"}, Content: parts["product"]}); err != nil {
 		t.Fatal(err)
 	}
-	saved, stale, err := LoadSections(dir, "abc", "")
-	if err != nil || len(saved) != 1 || !slices.Equal(stale, []string{"product"}) || compact(saved["engineering"].Content) != compact(parts["engineering"]) {
+	if err := SaveSection(dir, other, SavedSection{Section: "capabilities", Commit: "abc", Pass: true, Content: parts["capabilities"]}); err != nil {
+		t.Fatal(err)
+	}
+	saved, stale, err := LoadSections(dir, key, "abc", "")
+	if err != nil || len(saved) != 1 || !slices.Equal(stale, []string{"capabilities", "product"}) || compact(saved["engineering"].Content) != compact(parts["engineering"]) {
 		t.Errorf("saved %v, stale %v, err %v", saved, stale, err)
+	}
+	// A signed section whose content is edited no longer verifies.
+	b, err := os.ReadFile(filepath.Join(dir, "engineering.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var s SavedSection
+	if err := json.Unmarshal(b, &s); err != nil {
+		t.Fatal(err)
+	}
+	s.Content = parts["product"]
+	b, _ = json.Marshal(s)
+	if err := os.WriteFile(filepath.Join(dir, "engineering.json"), b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if saved, _, _ := LoadSections(dir, key, "abc", ""); len(saved) != 0 {
+		t.Errorf("an edited section was resumed: %v", saved)
 	}
 	if left, _ := filepath.Glob(filepath.Join(dir, ".*.tmp")); len(left) != 0 {
 		t.Errorf("temporary files left: %v", left)

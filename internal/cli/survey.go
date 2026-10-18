@@ -3,7 +3,9 @@ package cli
 import (
 	"cmp"
 	"context"
+	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -72,6 +74,36 @@ func under(dir, p string) (string, bool) {
 		return "", false
 	}
 	return rel, true
+}
+
+// surveyKey is the user's key for signing saved survey sections, created on
+// first use under the user's state directory (XDG_STATE_HOME, or
+// ~/.local/state), never under a checkout: only this user's aayu can write a
+// section the survey resumes.
+func (e *Env) surveyKey() ([]byte, error) {
+	dir := e.Getenv("XDG_STATE_HOME")
+	if dir == "" {
+		home := cmp.Or(e.Getenv("HOME"), e.Getenv("USERPROFILE"))
+		if home == "" {
+			return nil, errors.New("survey: no HOME for the key that signs saved sections")
+		}
+		dir = filepath.Join(home, ".local", "state")
+	}
+	p := filepath.Join(dir, "aayudha", "survey.key")
+	if b, err := os.ReadFile(p); err == nil && len(b) == 32 {
+		return b, nil
+	}
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+		return nil, err
+	}
+	if err := os.WriteFile(p, key, 0o600); err != nil {
+		return nil, err
+	}
+	return key, nil
 }
 
 // surveyOutSafe refuses an output directory a symbolic link could redirect:
@@ -361,7 +393,11 @@ func (e *Env) surveyDraft(indexFile, out, file string) error {
 	if pd != "" {
 		digest += "+probes:" + pd
 	}
-	saved, stale, err := survey.LoadSections(res.Dir, ix.Commit, digest)
+	key, err := e.surveyKey()
+	if err != nil {
+		return Wrap(ExitInternal, err)
+	}
+	saved, stale, err := survey.LoadSections(res.Dir, key, ix.Commit, digest)
 	if err != nil {
 		return Wrap(ExitUsage, err)
 	}
@@ -393,7 +429,7 @@ func (e *Env) surveyDraft(indexFile, out, file string) error {
 				continue
 			}
 			ps := rep.Sections[name]
-			if err := survey.SaveSection(res.Dir, survey.SavedSection{Section: name, Commit: ix.Commit, Digest: digest, Pass: len(ps) == 0, Problems: ps, Content: b}); err != nil {
+			if err := survey.SaveSection(res.Dir, key, survey.SavedSection{Section: name, Commit: ix.Commit, Digest: digest, Pass: len(ps) == 0, Problems: ps, Content: b}); err != nil {
 				return Wrap(ExitInternal, err)
 			}
 			res.Saved = append(res.Saved, name)

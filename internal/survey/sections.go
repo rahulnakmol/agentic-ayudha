@@ -3,6 +3,9 @@ package survey
 import (
 	"bytes"
 	"cmp"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -258,7 +261,7 @@ func CheckSections(ix *Index, parts map[string]json.RawMessage) (Draft, SectionR
 	var kept []string
 	for _, p := range r.Problems {
 		s := SectionOf(d, p)
-		if slices.Contains(missing, s) || len(missing) > 0 && dangling(p, ids) {
+		if slices.Contains(missing, s) || dangling(p, ids, missing) {
 			continue
 		}
 		kept = append(kept, p)
@@ -320,16 +323,31 @@ func withPendingQuestions(d Draft) Draft {
 	return d
 }
 
-// dangling reports whether a problem names an item no present section
-// defines: while sections are missing, it may be defined in one of them, so
-// the reference waits for the check of the whole survey.
-func dangling(problem string, ids map[string]bool) bool {
+// dangling reports whether a problem waits for a missing section: every item
+// it names that the draft lacks has the ID of an item only a missing section
+// writes (Q7 before the questions section). A reference no missing section
+// can supply (ZZ1, or E9 once engineering is in) is reported at once.
+func dangling(problem string, ids map[string]bool, missing []string) bool {
+	absent := 0
 	for _, m := range itemRef.FindAllString(problem, -1) {
-		if !ids[m] {
-			return true
+		if ids[m] {
+			continue
 		}
+		s, ok := idSections[strings.TrimRight(m, "0123456789")]
+		if !ok || !slices.Contains(missing, s) {
+			return false
+		}
+		absent++
 	}
-	return false
+	return absent > 0
+}
+
+// idSections maps an item ID's prefix (references/formats.md) to the section
+// that writes it.
+var idSections = map[string]string{
+	"E": "engineering", "T": "engineering", "C": "capabilities", "P": "product", "Q": "questions",
+	"N": "modernisation", "K": "modernisation", "M": "modernisation", "G": "modernisation", "R": "modernisation",
+	"S": "modernisation", "MG": "modernisation", "SH": "modernisation",
 }
 
 var (
@@ -392,11 +410,25 @@ type SavedSection struct {
 	Pass     bool            `json:"pass"`
 	Problems []string        `json:"problems"`
 	Content  json.RawMessage `json:"content"`
+	// MAC signs the rest with the user's survey key, kept outside every
+	// checkout: a section file the surveyed checkout ships (a source archive
+	// can hold .aayudha/survey/sections) is never resumed as earlier work.
+	MAC string `json:"mac,omitempty"`
 }
 
-// SaveSection writes one section to dir/<section>.json, replacing a file
-// atomically so an interrupted write never leaves half a section.
-func SaveSection(dir string, s SavedSection) error {
+// mac is s's signature under key: HMAC-SHA256 of s without its MAC.
+func (s SavedSection) mac(key []byte) string {
+	s.MAC = ""
+	b, _ := json.Marshal(s)
+	h := hmac.New(sha256.New, key)
+	h.Write(b)
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// SaveSection writes one section to dir/<section>.json, signed with key,
+// replacing a file atomically so an interrupted write never leaves half a
+// section.
+func SaveSection(dir string, key []byte, s SavedSection) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
@@ -406,6 +438,7 @@ func SaveSection(dir string, s SavedSection) error {
 	if s.Problems == nil {
 		s.Problems = []string{}
 	}
+	s.MAC = s.mac(key)
 	b, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		return err
@@ -418,9 +451,9 @@ func SaveSection(dir string, s SavedSection) error {
 }
 
 // LoadSections reads the saved sections of dir. A section saved against
-// another index (its commit or its content digest differs) is stale: it is
-// returned in stale, not in saved.
-func LoadSections(dir, commit, digest string) (saved map[string]SavedSection, stale []string, err error) {
+// another index (its commit or its content digest differs), or not signed
+// with key, is stale: it is returned in stale, not in saved.
+func LoadSections(dir string, key []byte, commit, digest string) (saved map[string]SavedSection, stale []string, err error) {
 	saved = map[string]SavedSection{}
 	for _, name := range SectionNames() {
 		b, err := os.ReadFile(filepath.Join(dir, name+".json"))
@@ -434,7 +467,7 @@ func LoadSections(dir, commit, digest string) (saved map[string]SavedSection, st
 		if err := json.Unmarshal(b, &s); err != nil {
 			return nil, nil, fmt.Errorf("%s: %w", filepath.Join(dir, name+".json"), err)
 		}
-		if s.Commit != commit || s.Digest != digest {
+		if s.Commit != commit || s.Digest != digest || !hmac.Equal([]byte(s.MAC), []byte(s.mac(key))) {
 			stale = append(stale, name)
 			continue
 		}
