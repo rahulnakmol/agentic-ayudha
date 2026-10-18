@@ -882,7 +882,7 @@ func TestStreamPastAProxyIdleLimit(t *testing.T) {
 		via := HTTPClient{BaseURL: proxy.URL, Style: style, Key: "k"}
 		_, err = via.Complete(ctx, req)
 		var se *StatusError
-		if !errors.As(err, &se) || se.Code != 524 || !strings.Contains(err.Error(), "timed out waiting for the reply") {
+		if !errors.As(err, &se) || se.Code != 524 || !strings.Contains(err.Error(), "a timeout waiting for the reply") {
 			t.Errorf("%s: an unstreamed slow reply: %v, want a 524 that says it timed out", style, err)
 		}
 		req.Stream = true
@@ -907,7 +907,36 @@ func TestStreamPastAProxyIdleLimit(t *testing.T) {
 	if _, err := decodeResponsesStream(strings.NewReader("data: " + events[StyleResponses][1] + "\n\n")); !errors.Is(err, io.ErrUnexpectedEOF) {
 		t.Errorf("a cut responses stream: %v", err)
 	}
-	if _, err := decodeChatStream(strings.NewReader(`data: {"error":{"type":"overloaded","message":"busy"}}` + "\n\n")); err == nil || !strings.Contains(err.Error(), "overloaded") {
-		t.Errorf("a chat stream error: %v", err)
+	// Cut between the finish reason and the usage chunk: the paid call's
+	// usage never arrived, so it is not a reply.
+	sse := func(evs ...string) io.Reader {
+		var b strings.Builder
+		for _, e := range evs {
+			b.WriteString("data: " + e + "\n\n")
+		}
+		return strings.NewReader(b.String())
+	}
+	if _, err := decodeChatStream(sse(events[StyleChat][:3]...)); !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Errorf("a chat stream cut before its usage: %v", err)
+	}
+	// Cut inside an event: a dropped connection, so it stays retryable.
+	if _, err := decodeChatStream(strings.NewReader("data: " + events[StyleChat][1] + "\n\ndata: {\"model\":\"gro")); !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Errorf("a chat stream cut inside an event: %v", err)
+	}
+	if _, err := decodeResponsesStream(strings.NewReader("data: {\"type\":\"response.out")); !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Errorf("a responses stream cut inside an event: %v", err)
+	}
+	// A malformed event with more after it is a bad reply, not a lost delta.
+	if _, err := decodeChatStream(sse(events[StyleChat][1], `{bad`, events[StyleChat][3], "[DONE]")); err == nil || !strings.Contains(err.Error(), "decode chat stream") {
+		t.Errorf("a malformed chat event: %v", err)
+	}
+	// An error after usage arrived comes back with that usage: the attempt may be billed.
+	r, err := decodeChatStream(sse(events[StyleChat][3], `{"error":{"type":"overloaded","message":"busy"}}`))
+	if err == nil || !strings.Contains(err.Error(), "stream error: overloaded") || r.TokensIn != 11 || r.TokensOut != 19 || r.Model != "grok-4.7" {
+		t.Errorf("a chat stream error: %+v %v", r, err)
+	}
+	r, err = decodeResponsesStream(sse(`{"type":"response.failed","response":{"model":"gpt-5.6","status":"failed","error":{"code":"server_error","message":"boom"},"usage":{"input_tokens":11,"output_tokens":3}}}`))
+	if err == nil || !strings.Contains(err.Error(), "server_error") || r.TokensIn != 11 || r.TokensOut != 3 {
+		t.Errorf("a failed responses stream: %+v %v", r, err)
 	}
 }
