@@ -173,6 +173,38 @@
           "type": "integer",
           "minimum": 0,
           "description": "Days after a merge in which a linked Bug or Incident counts as a correction of the PR."
+        },
+        "proof": {
+          "type": "boolean",
+          "description": "Merge a PR into the integration branch on proof alone: required checks green, the pack verified with its floors holding, inspect at merge with a proof_rungs rung, and nothing in the narrow set."
+        },
+        "proof_rungs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Review rungs at the head (A, B, C) that let ship merge on proof."
+        },
+        "always_person": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "The narrow set: paths (a trailing / for a directory, else a glob) whose change always needs a person per PR."
+        },
+        "always_person_config": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "TOML config files whose always_person_sections need a person when they change."
+        },
+        "always_person_sections": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Config tables (by first key) that decide who may approve or bypass."
         }
       },
       "additionalProperties": false,

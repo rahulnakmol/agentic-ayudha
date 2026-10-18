@@ -240,6 +240,13 @@ type Autonomy struct {
 	// CorrectionDays is how long after a merge a linked Bug or Incident still
 	// counts as a correction of that PR (WP5.7).
 	CorrectionDays int `koanf:"correction_days" jsonschema:"minimum=0" jsonschema_description:"Days after a merge in which a linked Bug or Incident counts as a correction of the PR."`
+	// Merge on proof (Decision #593): ship merges a PR into the integration
+	// branch with no human pass outside the narrow set.
+	Proof                bool     `koanf:"proof" jsonschema_description:"Merge a PR into the integration branch on proof alone: required checks green, the pack verified with its floors holding, inspect at merge with a proof_rungs rung, and nothing in the narrow set."`
+	ProofRungs           []string `koanf:"proof_rungs" jsonschema_description:"Review rungs at the head (A, B, C) that let ship merge on proof."`
+	AlwaysPerson         []string `koanf:"always_person" jsonschema_description:"The narrow set: paths (a trailing / for a directory, else a glob) whose change always needs a person per PR."`
+	AlwaysPersonConfig   []string `koanf:"always_person_config" jsonschema_description:"TOML config files whose always_person_sections need a person when they change."`
+	AlwaysPersonSections []string `koanf:"always_person_sections" jsonschema_description:"Config tables (by first key) that decide who may approve or bypass."`
 }
 
 // AutonomyBudget is [autonomy.budget], the per-story build budget (WP5.5).
