@@ -1365,6 +1365,47 @@ func TestInspectReviewerFallback(t *testing.T) {
 		t.Fatalf("the human's review: exit %d %s rung %q, %d model calls %s", code, res.Disposition, res.Rung, len(model.Requests), errOut)
 	}
 
+	// A fallback app that reviews only when asked (Claude): outside CI,
+	// inspect asks it under the person's account, beside Codex's request, and
+	// the gate waits 30 minutes from Claude's own request before it moves on.
+	g, env, opts, prN, model = setup()
+	_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\nreviewer = \"codex\"\napps = [\"codex\", \"claude\"]\npaid_reviewer = \"grok-4.7\"\npaid_effort = \"high\"\n"), 0o644)
+	request(g, prN, opts.Now().Add(-time.Hour))
+	addComment(g, prN, "chatgpt-codex-connector[bot]", "Bot", limit)
+	postedAt(g, prN, opts.Now().Add(-50*time.Minute))
+	if code, _, errOut = inspectApp(t, env, opts, prN); code != ExitBlocked {
+		t.Fatalf("the local run after Codex's limit: exit %d %s", code, errOut)
+	}
+	g.Mu.Lock()
+	var asked []string
+	var claudeAsked *fake.Comment
+	for _, c := range g.Issues[prN].Comments {
+		if first, _, _ := strings.Cut(c.Body, "\n"); strings.Contains(c.Body, inspect.RequestMarker) {
+			asked = append(asked, first)
+			if first == "@claude review" {
+				claudeAsked = c
+			}
+		}
+	}
+	g.Mu.Unlock()
+	if !slices.Equal(asked, []string{"@codex review", "@claude review"}) {
+		t.Fatalf("review requests after Codex's limit: %q", asked)
+	}
+	askedAt := func(at time.Time) {
+		g.Mu.Lock()
+		claudeAsked.CreatedAt, claudeAsked.UpdatedAt = at, at
+		g.Mu.Unlock()
+	}
+	askedAt(opts.Now().Add(-10 * time.Minute))
+	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || res.Disposition != NoReply || len(model.Requests) != 0 || !strings.Contains(res.Review, "claude") {
+		t.Fatalf("10 minutes after Claude's request: exit %d %s %q, %d model calls %s", code, res.Disposition, res.Review, len(model.Requests), errOut)
+	}
+	askedAt(opts.Now().Add(-31 * time.Minute))
+	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Rung != inspect.RungB || len(model.Requests) != 1 ||
+		!strings.Contains(lastInspect(t, g, prN), "claude has not replied in the 30 minutes since the review request") {
+		t.Fatalf("31 minutes after Claude's request: exit %d rung %q, %d model calls %s\n%s", code, res.Rung, len(model.Requests), errOut, lastInspect(t, g, prN))
+	}
+
 	// No reply: within inspect.ReplyWait of the request the gate waits for
 	// Codex; past it, rung B reviews.
 	now := opts.Now()

@@ -464,16 +464,27 @@ var ReviewTools = []string{inspect.AppCodex, inspect.AppCodeRabbit, inspect.AppG
 // answer to .aayudha/config.toml; with no terminal or no valid answer, install
 // stops and says how to choose.
 func (e *Env) chooseReviewTool(ctx context.Context) error {
-	l, err := e.Config()
-	if err != nil {
-		return err
-	}
-	if r := l.Config.Inspect.Reviewer; r != "" && r != "auto" {
-		return nil
-	}
 	root := config.RepoRoot(e.Dir)
 	stop := WithNext(Errorf(ExitUsage, `install: choose the merge gate's review tool: set [inspect] reviewer = "<tool>" (%s) in .aayudha/config.toml, or answer on a terminal`, strings.Join(ReviewTools, ", ")), "aayu install --apply")
-	if root == "" || !e.isTerminal(e.In) {
+	if root == "" {
+		return stop
+	}
+	// The repository's own file decides, as the merge gate reads it: a
+	// reviewer set only in a personal layer does not count.
+	path := filepath.Join(root, ".aayudha", "config.toml")
+	b, err := os.ReadFile(path)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	var v struct {
+		Inspect struct {
+			Reviewer string `toml:"reviewer"`
+		} `toml:"inspect"`
+	}
+	if toml.Unmarshal(b, &v) == nil && v.Inspect.Reviewer != "" && v.Inspect.Reviewer != "auto" {
+		return nil
+	}
+	if !e.isTerminal(e.In) {
 		return stop
 	}
 	var found []string
@@ -490,22 +501,13 @@ func (e *Env) chooseReviewTool(ctx context.Context) error {
 	if !slices.Contains(ReviewTools, ans) {
 		return stop
 	}
-	path := filepath.Join(root, ".aayudha", "config.toml")
-	b, err := os.ReadFile(path)
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return err
-	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
 	// Write only a file that still parses and names the tool: a dotted
 	// inspect.reviewer key or an unusual layout stops install instead.
 	out := setInspectReviewer(string(b), ans)
-	var v struct {
-		Inspect struct {
-			Reviewer string `toml:"reviewer"`
-		} `toml:"inspect"`
-	}
+	v.Inspect.Reviewer = ""
 	if toml.Unmarshal([]byte(out), &v) != nil || v.Inspect.Reviewer != ans {
 		return stop
 	}

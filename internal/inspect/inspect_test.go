@@ -909,6 +909,19 @@ func TestReadServiceReply(t *testing.T) {
 	if _, err := ReadReply(choice(AppCodeRabbit), skipped, head, time.Time{}, nil, criteria, nil); !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("a rate-limited review of the head: %v", err)
 	}
+	// CodeRabbit's findings outside the diff are in its review's body; a review
+	// that discusses quotas is still a review, and a Codex comment that does is
+	// malformed, never a limit notice.
+	outside := "**Actionable comments posted: 0**\n\nThis PR changes quota handling.\n\n> [!CAUTION]\n> **⚠️ Outside diff range comments (1)**\n> \n> <details>\n> <summary><strong>🟠 Major</strong> · Preserve the response service tier when calculating cost. · <code>gateway.go:50</code></summary><blockquote>\n> \n> `internal/models/gateway.go:50`\n> **🗄️ Data Integrity** | **🟠 Major**\n> \n> **Preserve the response service tier when calculating cost.**\n> </blockquote></details>\n"
+	r, err = ReadReply(choice(AppCodeRabbit), []Post{{Kind: "review", ID: 12, Login: rabbit, Commit: head, Body: outside, Updated: at}}, head, time.Time{}, nil, criteria, nil)
+	if err != nil || r.Disposition != Fix || len(r.Findings) != 1 || r.Findings[0].Severity != "P1" || r.Findings[0].File != "internal/models/gateway.go" || r.Findings[0].Line != 50 ||
+		r.Findings[0].Title != "Preserve the response service tier when calculating cost." {
+		t.Fatalf("coderabbit's outside-diff finding: %v %+v", err, r)
+	}
+	prose := []Post{{Kind: "comment", ID: 13, Login: "chatgpt-codex-connector[bot]", Body: "This review checks quota handling and usage limits in the fallback.", Updated: at}}
+	if _, err := ReadReply(choice(AppCodex), prose, head, at.Add(-time.Minute), nil, criteria, nil); !errors.Is(err, ErrMalformed) {
+		t.Fatalf("a codex comment about quotas: %v", err)
+	}
 	// Greptile: its summary names the head; a P2 does not block.
 	greptilePosts := []Post{
 		{Kind: "comment", ID: 8, Login: greptile, Body: "<!-- greptile_summary -->\n\n<sub>Last reviewed commit: [\"feat\"](https://github.com/o/r/commit/" + head + ")</sub>", Updated: at},

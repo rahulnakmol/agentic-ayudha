@@ -272,24 +272,20 @@ var (
 // request before it treats the app as unavailable.
 const ReplyWait = 30 * time.Minute
 
-// usageLimit is a reviewer app's reply that it cannot review now: Codex's "You
-// have reached your Codex usage limits for code reviews", or a quota message.
-var usageLimit = regexp.MustCompile(`(?i)\busage limits?\b|\bquota\b|\brate limit exceeded\b|\btrial has ended\b`)
+// limitNotice is a reviewer app's notice that it cannot review now, as its
+// post begins: Codex's "You have reached your Codex usage limits for code
+// reviews", CodeRabbit's "Rate limit exceeded", or a quota or trial notice.
+var limitNotice = regexp.MustCompile(`(?i)^(?:you(?:'ve| have) (?:reached|exceeded|hit) (?:your |the )?[\w ]{0,40}?(?:usage limits?|quota|rate limit)|(?:usage limits?|quota|rate limit) (?:reached|exceeded)|(?:your )?(?:free )?trial has (?:ended|expired))`)
 
-// serviceSummary marks CodeRabbit's walkthrough and Greptile's summary: they
-// describe the PR, so their words are never the app's own limit notice.
-var serviceSummary = regexp.MustCompile(`summarize by coderabbit\.ai|<!-- greptile_summary -->`)
+// noticeLead strips what comes before a notice's words: HTML comments, and
+// markdown quote, heading, emphasis, and alert markers.
+var noticeLead = regexp.MustCompile(`(?s)^(?:\s+|<!--.*?-->|[>#*_]+|\[![A-Z]+\])+`)
 
-// limited reports whether a post is the app's own notice that it cannot review:
-// a limit phrase at its start (a notice leads with it), never in a summary.
+// limited reports whether a post is the app's own notice that it cannot
+// review: it must begin with one, so a review that discusses quotas, or text
+// a reviewer quotes from the PR, is never a limit notice.
 func limited(body string) bool {
-	if serviceSummary.MatchString(body) {
-		return false
-	}
-	if len(body) > 400 {
-		body = body[:400]
-	}
-	return usageLimit.MatchString(body)
+	return strings.Contains(body, "rate limited by coderabbit.ai") || limitNotice.MatchString(noticeLead.ReplaceAllString(body, ""))
 }
 
 // AppReply is a reviewer's reply turned into what the gate needs.
@@ -513,6 +509,14 @@ var (
 )
 
 // coderabbitSeverity maps CodeRabbit's severity levels to inspect's.
+// coderabbitBodyFinding is one finding in a CodeRabbit review's body:
+// severity, title, the file and line its summary names, and the block's text.
+var coderabbitBodyFinding = regexp.MustCompile(`(?s)<summary><strong>(🔴 Critical|🟠 Major|🟡 Minor|🔵 Trivial|⚪ Info)</strong> · (.+?) · <code>([^<:]+):(\d+)[^<]*</code></summary>(.*?)</details>`)
+
+// backtickPath is a `path:line` reference: the full path a body finding's
+// block gives for the file its summary names by base name.
+var backtickPath = regexp.MustCompile("`([^`\\s]+):(\\d+)(?:-\\d+)?`")
+
 var coderabbitSeverity = map[string]string{"🔴 Critical": "P0", "🟠 Major": "P1", "🟡 Minor": "P2", "🔵 Trivial": "P3", "⚪ Info": "P3"}
 
 // serviceNative reads CodeRabbit's or Greptile's own review of head, as
@@ -546,6 +550,28 @@ func serviceNative(c Choice, posts []Post, head string, criteria []workitems.Cri
 		Source: fmt.Sprintf("%s %d by %s (%s's own review of %s)", receipt.Kind, receipt.ID, receipt.Login, c.App, short(head))}
 	r.Disposition, r.Findings = Merge, []Finding{}
 	verdicts := map[int]Verdict{}
+	add := func(sev, path string, line int, body string) {
+		category := "bug"
+		if strings.Contains(body, "🔒 Security") {
+			category = "security"
+		}
+		title := c.App + " finding"
+		if m := serviceTitle.FindStringSubmatch(body); m != nil {
+			title = strings.TrimSpace(m[1])
+		}
+		detail := strings.TrimSpace(serviceNoise.ReplaceAllString(body, ""))
+		f := Finding{Severity: sev, Category: category, File: path, Line: line, Title: oneLine(title, 200), Detail: oneLine(detail, 1200), Confidence: 1}
+		if m := criterionHint.FindStringSubmatch(title + " " + detail); m != nil {
+			f.Criterion, _ = strconv.Atoi(m[1])
+			if sev == "P0" || sev == "P1" {
+				verdicts[f.Criterion] = Verdict{ID: f.Criterion, Verdict: "unmet", Evidence: c.App + ": " + oneLine(title, 200)}
+			}
+		}
+		if sev == "P0" || sev == "P1" {
+			r.Disposition = Fix
+		}
+		r.Findings = append(r.Findings, f)
+	}
 	for _, p := range posts {
 		if p.Kind != "inline" || !strings.EqualFold(p.Login, c.Login) || p.Commit != head {
 			continue
@@ -559,26 +585,23 @@ func serviceNative(c Choice, posts []Post, head string, criteria []workitems.Cri
 		if sev == "" {
 			continue // a reply in a thread, not a finding
 		}
-		category := "bug"
-		if strings.Contains(p.Body, "🔒 Security") {
-			category = "security"
-		}
-		title := c.App + " finding"
-		if m := serviceTitle.FindStringSubmatch(p.Body); m != nil {
-			title = strings.TrimSpace(m[1])
-		}
-		detail := strings.TrimSpace(serviceNoise.ReplaceAllString(p.Body, ""))
-		f := Finding{Severity: sev, Category: category, File: p.Path, Line: p.Line, Title: oneLine(title, 200), Detail: oneLine(detail, 1200), Confidence: 1}
-		if m := criterionHint.FindStringSubmatch(title + " " + detail); m != nil {
-			f.Criterion, _ = strconv.Atoi(m[1])
-			if sev == "P0" || sev == "P1" {
-				verdicts[f.Criterion] = Verdict{ID: f.Criterion, Verdict: "unmet", Evidence: c.App + ": " + oneLine(title, 200)}
+		add(sev, p.Path, p.Line, p.Body)
+	}
+	// CodeRabbit puts the findings it cannot post on a diff line (outside the
+	// diff range, duplicates, nitpicks) in its review's body, one <details>
+	// block each, its summary naming the severity, the title, and the file.
+	if receipt.Kind == "review" {
+		for _, m := range coderabbitBodyFinding.FindAllStringSubmatch(receipt.Body, -1) {
+			path, line := m[3], m[4]
+			for _, q := range backtickPath.FindAllStringSubmatch(m[5], -1) {
+				if strings.HasSuffix(q[1], "/"+m[3]) || q[1] == m[3] {
+					path, line = q[1], q[2]
+					break
+				}
 			}
+			n, _ := strconv.Atoi(line)
+			add(coderabbitSeverity[m[1]], path, n, "**"+strings.TrimSpace(m[2])+"**\n\n"+m[5])
 		}
-		if sev == "P0" || sev == "P1" {
-			r.Disposition = Fix
-		}
-		r.Findings = append(r.Findings, f)
 	}
 	r.Criteria = unjudged(criteria, c.App+"'s review judges no criterion and named no defect against this one; the pack's evidence is the proof")
 	for i, v := range r.Criteria {

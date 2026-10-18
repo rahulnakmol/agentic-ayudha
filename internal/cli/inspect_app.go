@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -113,24 +114,56 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 	if !a.in.Reopened.IsZero() && a.prev.Judged(head, time.Time{}) && !a.prev.Judged(head, a.in.Reopened) {
 		floor = a.in.Reopened
 	}
-	var since time.Time
-	for _, p := range posts {
-		if rs, ok := inspect.ParseRequest(p.Body); ok && p.Kind == "comment" && rs.Head == head && p.Updated.After(floor) && (since.IsZero() || p.Updated.Before(since)) {
-			since = p.Updated
+	// Each reviewer's wait starts from its own review request for the head;
+	// one with none of its own (a fallback the gate could not ask, since the
+	// apps answer only the people who connected them) starts from the head's
+	// first request.
+	requested := func(c inspect.Choice) (own, first time.Time) {
+		for _, p := range posts {
+			rs, ok := inspect.ParseRequest(p.Body)
+			if !ok || p.Kind != "comment" || rs.Head != head || !p.Updated.After(floor) {
+				continue
+			}
+			if first.IsZero() || p.Updated.Before(first) {
+				first = p.Updated
+			}
+			if rs.Reviewer == c.Kind() && (own.IsZero() || p.Updated.Before(own)) {
+				own = p.Updated
+			}
 		}
+		return own, first
 	}
-	if !e.CI && since.IsZero() {
+	var since time.Time
+	// switchTo makes c the reviewer: outside CI it posts c's own request under
+	// the person's account when there is none, and its wait starts now.
+	switchTo := func(c inspect.Choice) error {
+		choice = c
+		own, first := requested(c)
+		since = cmp.Or(own, first)
+		if !own.IsZero() {
+			return nil
+		}
+		if e.CI {
+			if !first.IsZero() {
+				notes = append(notes, fmt.Sprintf("%s has no review request of its own for this head; `aayu inspect %d` outside CI asks it", c.Kind(), n))
+			}
+			return nil
+		}
 		hc, _, err := e.HumanGitHub(ctx)
 		if err != nil {
 			return err
 		}
-		marker := fmt.Sprintf(`%s{"head":%q`, inspect.RequestMarker, head)
-		if _, err := hc.UpsertComment(ctx, a.repo, n, marker, inspect.Request(choice, a.in, head, a.prev), actions.Action{Kind: "github.comment.review-request",
-			Payload: map[string]any{"head": head, "reviewer": choice.Kind()}}); err != nil {
+		marker := fmt.Sprintf(`%s{"head":%q,"reviewer":%q}`, inspect.RequestMarker, head, c.Kind())
+		if _, err := hc.UpsertComment(ctx, a.repo, n, marker, inspect.Request(c, a.in, head, a.prev), actions.Action{Kind: "github.comment.review-request",
+			Payload: map[string]any{"head": head, "reviewer": c.Kind()}}); err != nil {
 			return Wrap(ExitExternal, err)
 		}
-		notes = append(notes, "review requested from "+choice.Kind()+" under your account")
+		notes = append(notes, "review requested from "+c.Kind()+" under your account")
 		since = e.Now()
+		return nil
+	}
+	if err := switchTo(choice); err != nil {
+		return err
 	}
 	if !e.CI {
 		if note, err := e.preExistingBug(ctx, a.repo, n, head, a.prev.Result); err != nil {
@@ -165,7 +198,9 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 			break
 		}
 		notes = append(notes, fmt.Sprintf("fallback to %s: %s cannot review this head (%s)", next.App, choice.App, oneLineErr(rerr)))
-		choice = next
+		if err := switchTo(next); err != nil {
+			return err
+		}
 		rep, rerr = read(choice)
 	}
 	if replyEvent {
@@ -177,7 +212,9 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		}
 		h := inspect.ChooseReviewer(inspect.ReviewerHuman, nil, nil, a.builder, a.cfg.Autonomy.Approver)
 		notes = append(notes, fmt.Sprintf("fallback to %s: %s cannot review this head (%s), and rung B ([inspect] paid_reviewer) cannot review it either", h.Kind(), choice.Kind(), oneLineErr(rerr)))
-		choice = h
+		if err := switchTo(h); err != nil {
+			return err
+		}
 		rep, rerr = read(choice)
 	}
 	pager, err := e.Notifier(ctx)
