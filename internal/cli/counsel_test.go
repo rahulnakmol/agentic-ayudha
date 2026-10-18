@@ -112,6 +112,9 @@ func TestCounsel(t *testing.T) {
 		!strings.Contains(out, "<untrusted source=\"question\">\na question") {
 		t.Errorf("a free question shaped as Markdown: exit %d: %s", code, out)
 	}
+	if q := counselRun(env, 0, "should this ship now?", "--pr", pr); q.PR == 0 || len(q.Untrusted) == 0 || q.Untrusted[0] != (chartUntrusted{"question", "should this ship now?"}) {
+		t.Errorf("a question with a PR: %+v", q.Untrusted)
+	}
 	if q := counselRun(env, 0, "should we split the survey into sections?"); q.Issue != 0 || q.PR != 0 || q.Path != "" ||
 		!strings.Contains(factText(q), "Open Decision: #5") || q.Topic != "should we split the survey into sections?" {
 		t.Errorf("free question: %+v", q)

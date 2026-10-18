@@ -172,8 +172,9 @@ func runCounsel(ctx context.Context, e *Env, in Values) error {
 		}
 	}
 
-	if rep.PR == 0 && rep.Issue == 0 && rep.Path == "" {
-		rep.Untrusted = append([]chartUntrusted{{"question", rep.Topic}}, rep.Untrusted...)
+	// A question in the person's words is data, with a target or without one.
+	if topic != "" && !issueArg.MatchString(topic) && rep.Path == "" {
+		rep.Untrusted = append([]chartUntrusted{{"question", topic}}, rep.Untrusted...)
 	}
 	rep.Facts, rep.Untrusted = untrustTitles(rep.Facts, rep.Untrusted)
 	personas, err := seats.LoadPersonas(e.Assets)
