@@ -1,15 +1,7 @@
 [[criterion]]
-id = 1
-tests = ["./internal/cli:TestInitIdentityFromAPhone", "./internal/tell:TestAppManifestPage"]
-
-[[criterion]]
-id = 2
-tests = ["./internal/cli:TestInitIdentityFromAPhone", "./internal/cli:TestManifestFlowChoiceAndPastedCode"]
-
-[[criterion]]
 id = 3
-tests = ["./internal/cli:TestInitIdentityFromAPhone", "./internal/cli:TestInitIdentityFromAPhoneEnds"]
+tests = ["./internal/cli:TestInitIdentityRefusesTheApp"]
 
 [[criterion]]
 id = 4
-tests = ["./internal/cli:TestInitIdentityFromAPhone", "./internal/cli:TestInitIdentityFromAPhoneEnds"]
+tests = ["./internal/cli:TestInitIdentityRemoteShell"]

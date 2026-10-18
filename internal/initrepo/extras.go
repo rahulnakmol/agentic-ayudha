@@ -303,11 +303,6 @@ func (in *Init) projects(ctx context.Context, x Extras) error {
 // stored.
 var AppPermissions = map[string]string{"contents": "write", "issues": "write", "pull_requests": "write", "actions": "read", "checks": "read", "metadata": "read"}
 
-// AppCodePage is the manifest's redirect_url when the browser is on another
-// device (#578): a page on github.com, so GitHub's ?code=…&state=… reaches
-// only GitHub, which issued the code. The person pastes its address back.
-const AppCodePage = "https://github.com/rahulnakmol/agentic-ayudha/blob/dev/docs/app-code.md"
-
 // ErrAppNotConverted is a manifest code GitHub would not convert (404 or 422):
 // someone else may have converted it first and holds the key, so the App must
 // be deleted, never installed.
@@ -331,9 +326,9 @@ func AppManifest(r Repo, redirect string) string {
 const noWebhook = "https://example.invalid/aayudha-no-webhook"
 
 // appHookURL asks GitHub, as the new App (a JWT signed with its key), where
-// its webhook points. The start page posted the manifest and could have been
-// changed to add a webhook and events, so the key is stored only for an App
-// that sends nothing (Codex security review of #603).
+// its webhook points. Whatever page posted the manifest could have changed it
+// to add a webhook and events, so the key is stored only for an App that
+// sends nothing (Codex security review of #603).
 func appHookURL(ctx context.Context, base string, appID int64, pemKey string) (string, error) {
 	blk, _ := pem.Decode([]byte(pemKey))
 	if blk == nil {
@@ -441,9 +436,8 @@ func (in *Init) app(ctx context.Context, x Extras) error {
 	if err != nil {
 		return err
 	}
-	// The start page that posted the manifest is a static page anyone with
-	// write access to the site could change: store the key only for the App
-	// aayu asked for.
+	// Store the key only for the App aayu asked for: the browser that posted
+	// the manifest is outside aayu's control.
 	wider := false
 	for k, v := range conv.Permissions {
 		wider = wider || AppPermissions[k] != v

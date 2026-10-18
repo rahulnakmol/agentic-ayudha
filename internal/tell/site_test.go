@@ -1,8 +1,6 @@
 package tell
 
 import (
-	"crypto/sha256"
-	"encoding/base64"
 	"strings"
 	"testing"
 )
@@ -62,7 +60,7 @@ func TestSiteBuild(t *testing.T) {
 			t.Errorf("%s lacks %s:\n%s", tt.file, tt.want, files[tt.file])
 		}
 	}
-	if len(files["style.css"]) == 0 || string(files["docs/guide/img/journey.svg"]) != "<svg/>" || len(files) != 10 {
+	if len(files["style.css"]) == 0 || string(files["docs/guide/img/journey.svg"]) != "<svg/>" || len(files) != 9 {
 		t.Fatalf("files: %v", SiteFiles(files))
 	}
 
@@ -78,29 +76,5 @@ func TestSiteBuild(t *testing.T) {
 	files, _, probs, err = s.Build()
 	if err != nil || files != nil || len(probs) != 1 || probs[0].String() != "SECURITY.md line 3: #8 is not a Feature with authoritative packs; copy links only proven Features" {
 		t.Fatalf("an unproven claim on one page: %v %v %+v", err, files != nil, probs)
-	}
-}
-
-// #578: the start page of init --identity from any device loads nothing from
-// elsewhere, sends no referrer, runs only its own script, posts only to
-// github.com, and accepts only the github.com redirect page.
-func TestAppManifestPage(t *testing.T) {
-	page := string(appManifestPage)
-	script := page[strings.Index(page, "<script>")+len("<script>") : strings.Index(page, "</script>")]
-	sum := sha256.Sum256([]byte(script))
-	for _, want := range []string{
-		`<meta name="referrer" content="no-referrer">`,
-		"script-src 'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'",
-		"default-src 'none'", "form-action https://github.com;", "base-uri 'none'",
-		`m.redirect_url !== "` + AppCodePage + `"`,
-		`f.action = "https://github.com/" + to`,
-		"history.replaceState(null, \"\", location.pathname)",
-	} {
-		if !strings.Contains(page, want) {
-			t.Errorf("app-manifest.html lacks %s", want)
-		}
-	}
-	if strings.Count(page, "<script") != 1 || strings.Contains(page, " src=") || strings.Contains(page, "<link") || strings.Contains(page, "@import") {
-		t.Errorf("app-manifest.html loads something besides its inline script:\n%s", page)
 	}
 }

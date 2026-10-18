@@ -447,8 +447,7 @@ type navGroup struct {
 
 // Build checks every page with Check and renders the site: one HTML file per
 // page, its Markdown twin (page.md beside page.html, for agents), llms.txt (an
-// index of every page with one line each), style.css, and app-manifest.html
-// (the start of init --identity from any device, #578). Any page that claims an unproven Feature or uses an
+// index of every page with one line each), and style.css. Any page that claims an unproven Feature or uses an
 // avoided word refuses the whole site; the problems name the page.
 func (s Site) Build() (map[string][]byte, []int, []Problem, error) {
 	var probs []Problem
@@ -488,7 +487,7 @@ func (s Site) Build() (map[string][]byte, []int, []Problem, error) {
 	if len(short) > 7 {
 		short = short[:7]
 	}
-	files := map[string][]byte{"style.css": siteCSS, "app-manifest.html": appManifestPage}
+	files := map[string][]byte{"style.css": siteCSS}
 	var index []llmsEntry
 	var about string
 	for p, b := range s.Media {

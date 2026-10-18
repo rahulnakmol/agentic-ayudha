@@ -677,175 +677,77 @@ var appKey = sync.OnceValue(func() string {
 // noHook is GitHub's webhook config of an App created from aayu's manifest.
 var noHook = map[string]any{"url": "https://example.invalid/aayudha-no-webhook", "content_type": "form"}
 
-// pasteTerminal is a person at a terminal for init --identity's paste flow
-// (#578): when aayu asks for the address, answer reads what aayu printed and
-// returns the next line to paste ("" closes the terminal).
-type pasteTerminal struct {
-	mu     sync.Mutex
-	buf    strings.Builder
-	in     *io.PipeWriter
-	answer func(printed string) string
-}
-
-func (p *pasteTerminal) Write(b []byte) (int, error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.buf.Write(b)
-	if strings.HasSuffix(p.buf.String(), "Address: ") {
-		line := p.answer(p.buf.String())
-		go func() {
-			if line == "" {
-				_ = p.in.Close()
-				return
-			}
-			_, _ = io.WriteString(p.in, line+"\n")
-		}()
-	}
-	return len(b), nil
-}
-
-// runPaste runs `aayu init --yes --identity` in a remote shell (no desktop,
-// no loopback browser) against api, answering the address prompts.
-func runPaste(t *testing.T, api string, answer func(printed string) string, extra ...string) (int, string) {
+// runIdentity runs `aayu init --yes --identity` against api in a shell whose
+// environment is env. With code set, the manifest flow is the test's browser,
+// which returns that one-time code; without it the real flow runs.
+func runIdentity(t *testing.T, api, code string, env map[string]string) (int, string) {
 	t.Helper()
-	pr, pw := io.Pipe()
-	term := &pasteTerminal{in: pw, answer: answer}
-	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "HOME": t.TempDir()}
-	for i := 0; i+1 < len(extra); i += 2 {
-		env[extra[i]] = extra[i+1]
-	}
-	var out bytes.Buffer
+	e := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "HOME": t.TempDir()}
+	maps.Copy(e, env)
+	var out, errOut bytes.Buffer
 	opts := Options{GitHubAPI: api, GitHubGap: -1, Dir: checkout(t), Build: BuildInfo{Version: "0.4.0"}, DevicePoll: time.Millisecond,
-		IsTerminal: func(s any) bool { _, ok := s.(*io.PipeReader); return ok },
-		Getenv:     func(k string) string { return env[k] },
+		IsTerminal: func(any) bool { return true },
+		Getenv:     func(k string) string { return e[k] },
 		GHToken:    func(context.Context) (string, error) { return "", errors.New("gh disabled in tests") },
 		GHAccounts: func(context.Context) (map[string]string, error) { return nil, nil },
 		GitCredential: func(context.Context, string) (string, error) {
 			return "", errors.New("git credentials disabled in tests")
 		}}
-	var in io.Reader = pr
-	if env["NO_TERMINAL"] != "" {
-		in = strings.NewReader("")
+	if code != "" {
+		opts.AppManifestCode = func(context.Context, string, func(string) string) (string, error) { return code, nil }
 	}
-	code := Run(context.Background(), []string{"init", "--yes", "--identity"}, IO{In: in, Out: &out, Err: term}, opts)
-	term.mu.Lock()
-	defer term.mu.Unlock()
-	return code, out.String() + term.buf.String()
+	rc := Run(context.Background(), []string{"init", "--yes", "--identity"}, IO{In: strings.NewReader(""), Out: &out, Err: &errOut}, opts)
+	return rc, out.String() + errOut.String()
 }
 
-// startLink is the HTTPS start link aayu printed, with its fragment parsed.
-func startLink(t *testing.T, printed string) url.Values {
-	t.Helper()
-	for _, f := range strings.Fields(printed) {
-		if strings.HasPrefix(f, AppManifestStart+"#") {
-			v, err := url.ParseQuery(strings.TrimPrefix(f, AppManifestStart+"#"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			return v
+// identityGitHub is a fake GitHub whose manifest conversion gives an App
+// owned by owner ("org" for an organization's) with perms.
+func identityGitHub(t *testing.T, owner string, perms map[string]any) *fake.GitHub {
+	kind := "User"
+	if owner == "org" {
+		kind, owner = "Organization", "o"
+	}
+	g := fake.New(t, "o/r", kind)
+	pub, _, _ := box.GenerateKey(rand.Reader)
+	g.PublicKey = base64.StdEncoding.EncodeToString(pub[:])
+	g.App = map[string]any{"id": 4242, "slug": "aayudha-r", "client_id": "Iv1.abc", "owner": map[string]any{"login": owner}, "permissions": perms, "pem": appKey()}
+	g.Static = map[string]any{"/app/hook/config": noHook}
+	return g
+}
+
+// #578: from a shell whose browser is on another device, init --identity
+// refuses at once with exit 4 and a next step, starts no manifest flow, and
+// sends the code to no page; a desktop browser that never redirects back
+// exits 4 too, never as an internal error. The phone setup itself moved to
+// the owner's token exchange (#594), after Codex's security review of #603.
+func TestInitIdentityRemoteShell(t *testing.T) {
+	for _, env := range []map[string]string{
+		{"AMP_ORB": "1", "DISPLAY": ":0"}, // an orb's Terminal tab
+		{"SSH_CONNECTION": "1.2.3.4 5 6.7.8.9 22", "DISPLAY": ":0"},
+		{"CLAUDE_CODE_REMOTE": "true"},
+		{}, // a Linux server or container: no desktop
+	} {
+		g := identityGitHub(t, "o", nil)
+		code, printed := runIdentity(t, g.URL(), "", env)
+		if code != ExitBlocked || !strings.Contains(printed, "init --identity needs a browser on this machine") || !strings.Contains(printed, "no App was created") ||
+			!strings.Contains(printed, "run `aayu init --identity` in a terminal on the computer whose browser you use") ||
+			strings.Contains(printed, "http://127.0.0.1") || strings.Contains(printed, "https://") && strings.Contains(printed, "manifest") || strings.Contains(printed, "internal error") || len(g.Secrets) != 0 {
+			t.Errorf("%v: exit %d, secrets %v:\n%s", env, code, g.Secrets, printed)
 		}
-	}
-	t.Fatalf("no %s link in:\n%s", AppManifestStart, printed)
-	return nil
-}
-
-// #578: init --identity completes from a shell whose browser is on another
-// device (an orb's Terminal tab from a phone), converts only the pasted code of
-// this run, installs only after a successful conversion, and a wait with no
-// code exits 4 with a next step, never as an internal error.
-func TestInitIdentityFromAPhone(t *testing.T) {
-	newGitHub := func() *fake.GitHub {
-		g := fake.New(t, "o/r", "User")
-		pub, _, _ := box.GenerateKey(rand.Reader)
-		g.PublicKey = base64.StdEncoding.EncodeToString(pub[:])
-		g.App = map[string]any{"id": 4242, "slug": "aayudha-r", "client_id": "Iv1.abc", "owner": map[string]any{"login": "o"},
-			"permissions": map[string]any{"contents": "write", "metadata": "read"}, "pem": appKey()}
-		g.Static = map[string]any{"/app/hook/config": noHook}
-		return g
-	}
-	conversions := func(g *fake.GitHub) []string {
-		var out []string
 		for _, r := range g.Requests {
 			if strings.HasPrefix(r.Path, "/app-manifests/") {
-				out = append(out, r.Method+" "+r.Path)
+				t.Errorf("%v: a conversion was attempted: %s", env, r.Path)
 			}
 		}
-		return out
 	}
-
-	t.Run("criteria 1 and 2: the pasted address of this run is converted once; another run's is not", func(t *testing.T) {
-		g := newGitHub()
-		var state string
-		prompts := 0
-		code, printed := runPaste(t, g.URL(), func(p string) string {
-			prompts++
-			v := startLink(t, p)
-			state = v.Get("state")
-			var m struct {
-				RedirectURL string `json:"redirect_url"`
-			}
-			if err := json.Unmarshal([]byte(v.Get("manifest")), &m); err != nil || m.RedirectURL != initrepo.AppCodePage || v.Get("to") != "settings/apps/new" || len(state) != 32 {
-				t.Errorf("start link fragment: to=%q state=%q manifest=%s", v.Get("to"), state, v.Get("manifest"))
-			}
-			if prompts == 1 {
-				return initrepo.AppCodePage + "?code=0ther0ther0ther&state=" + strings.Repeat("0", 32)
-			}
-			return initrepo.AppCodePage + "?code=c0de1234c0de5678&state=" + state
-		})
-		if code != 0 || prompts != 2 {
-			t.Fatalf("exit %d after %d prompts:\n%s", code, prompts, printed)
-		}
-		if !strings.Contains(printed, "That address belongs to another run of init --identity (its state is not this run's), so it was not used.") {
-			t.Errorf("the other run's address was not refused by name:\n%s", printed)
-		}
-		if got := conversions(g); !slices.Equal(got, []string{"POST /app-manifests/c0de1234c0de5678/conversions"}) {
-			t.Errorf("conversions = %v", got)
-		}
-		if g.Secrets["AAYUDHA_APP_PRIVATE_KEY"] == "" || g.Variables["AAYUDHA_APP_CLIENT_ID"] != "Iv1.abc" || !strings.Contains(printed, "https://github.com/apps/aayudha-r/installations/new") || strings.Contains(printed, "PRIVATE KEY") {
-			t.Errorf("secret %v, variables %v, output:\n%s", g.Secrets, g.Variables, printed)
-		}
-		if strings.Contains(printed, "127.0.0.1") {
-			t.Errorf("a remote shell was given a loopback link:\n%s", printed)
-		}
-	})
-
-	t.Run("criterion 3: a code GitHub will not convert writes no secret and says delete, not install", func(t *testing.T) {
-		g := newGitHub()
-		target, _ := url.Parse(g.URL())
-		proxy := httputil.NewSingleHostReverseProxy(target)
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if strings.HasPrefix(r.URL.Path, "/app-manifests/") {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusUnprocessableEntity)
-				_, _ = io.WriteString(w, `{"message":"Validation Failed"}`)
-				return
-			}
-			proxy.ServeHTTP(w, r)
-		}))
-		t.Cleanup(srv.Close)
-		code, printed := runPaste(t, srv.URL, func(p string) string {
-			return initrepo.AppCodePage + "?code=c0de1234c0de5678&state=" + startLink(t, p).Get("state")
-		})
-		if code != ExitBlocked || len(g.Secrets) != 0 || strings.Contains(printed, "installations/new") ||
-			!strings.Contains(printed, "do not install the App: delete it at https://github.com/settings/apps") || !strings.Contains(printed, "aayu init --identity") {
-			t.Fatalf("exit %d, secrets %v:\n%s", code, g.Secrets, printed)
-		}
-	})
-
-	t.Run("criterion 4: no address before the wait ends exits 4 with a next step", func(t *testing.T) {
-		defer func(w time.Duration) { codeWait = w }(codeWait)
-		codeWait = 50 * time.Millisecond
-		g := newGitHub()
-		code, printed := runPaste(t, g.URL(), func(string) string { return "  " })
-		if code != ExitBlocked || !strings.Contains(printed, "no address was pasted within an hour") || !strings.Contains(printed, "aayu init --identity") ||
-			strings.Contains(printed, "internal error") || len(conversions(g)) != 0 {
-			t.Fatalf("exit %d:\n%s", code, printed)
-		}
-	})
-}
-
-// #578: which flow init --identity picks, and which pasted addresses it uses.
-func TestManifestFlowChoiceAndPastedCode(t *testing.T) {
+	defer func(w time.Duration) { loopbackWait = w }(loopbackWait)
+	loopbackWait = 50 * time.Millisecond
+	g := identityGitHub(t, "o", nil)
+	code, printed := runIdentity(t, g.URL(), "", map[string]string{"DISPLAY": ":0"})
+	if code != ExitBlocked || !strings.Contains(printed, "http://127.0.0.1:") || !strings.Contains(printed, "within 10 minutes, so no App was created") ||
+		!strings.Contains(printed, "aayu init --identity") || strings.Contains(printed, "internal error") {
+		t.Fatalf("a desktop browser that never redirects back: exit %d:\n%s", code, printed)
+	}
 	for _, tt := range []struct {
 		env  map[string]string
 		goos string
@@ -854,10 +756,8 @@ func TestManifestFlowChoiceAndPastedCode(t *testing.T) {
 		{map[string]string{}, "darwin", true},
 		{map[string]string{}, "windows", true},
 		{map[string]string{"DISPLAY": ":0"}, "linux", true},
-		{map[string]string{}, "linux", false}, // a server or container: no desktop
-		{map[string]string{"SSH_CONNECTION": "1.2.3.4 5 6.7.8.9 22"}, "darwin", false},
-		{map[string]string{"AMP_ORB": "1", "DISPLAY": ":0"}, "linux", false}, // an orb's Terminal tab
-		{map[string]string{"CLAUDE_CODE_REMOTE": "true"}, "darwin", false},
+		{map[string]string{}, "linux", false},
+		{map[string]string{"SSH_TTY": "/dev/pts/0"}, "darwin", false},
 		{map[string]string{"AMP_THREAD_ID": "T-1"}, "darwin", false}, // an agent's shell
 		{map[string]string{"AAYU_REMOTE_BROWSER": "1"}, "darwin", false},
 	} {
@@ -865,87 +765,66 @@ func TestManifestFlowChoiceAndPastedCode(t *testing.T) {
 			t.Errorf("localBrowser(%v, %s) = %v, want %v", tt.env, tt.goos, got, tt.want)
 		}
 	}
-	state := strings.Repeat("ab", 16)
-	for _, tt := range []struct{ line, code, why string }{
-		{initrepo.AppCodePage + "?code=c0de1234c0de5678&state=" + state + "\n", "c0de1234c0de5678", ""},
-		{"  " + initrepo.AppCodePage + "?state=" + state + "&code=c0de1234c0de5678  ", "c0de1234c0de5678", ""},
-		{"c0de1234c0de5678", "", "That is not the address of the page GitHub showed: it carries no code."},
-		{"%zz", "", "That is not the address of the page GitHub showed: it carries no code."},
-		{initrepo.AppCodePage + "?code=c0de1234c0de5678&state=" + strings.Repeat("cd", 16), "", "That address belongs to another run of init --identity (its state is not this run's), so it was not used."},
-		{initrepo.AppCodePage + "?code=..%2F..%2Fapp&state=" + state, "", "That address's code is not one GitHub writes, so it was not used."},
-	} {
-		if code, why := pastedCode(tt.line, state); code != tt.code || why != tt.why {
-			t.Errorf("pastedCode(%q) = %q, %q; want %q, %q", tt.line, code, why, tt.code, tt.why)
-		}
-	}
 }
 
-// #578: the paste flow's other ways to end, and an App other than the one
-// aayu asked for.
-func TestInitIdentityFromAPhoneEnds(t *testing.T) {
-	app := func(owner string, perms map[string]any) *fake.GitHub {
-		kind := "User"
-		if owner == "org" {
-			kind, owner = "Organization", "o"
+// #578: a code GitHub will not convert, or an App other than the one aayu
+// asked for, writes no secret, prints no Install link, and exits 4 saying to
+// delete the App rather than install it.
+func TestInitIdentityRefusesTheApp(t *testing.T) {
+	g := identityGitHub(t, "o", nil)
+	target, _ := url.Parse(g.URL())
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/app-manifests/") {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnprocessableEntity)
+			_, _ = io.WriteString(w, `{"message":"Validation Failed"}`)
+			return
 		}
-		g := fake.New(t, "o/r", kind)
-		pub, _, _ := box.GenerateKey(rand.Reader)
-		g.PublicKey = base64.StdEncoding.EncodeToString(pub[:])
-		g.App = map[string]any{"id": 4242, "slug": "aayudha-r", "client_id": "Iv1.abc", "owner": map[string]any{"login": owner}, "permissions": perms, "pem": appKey()}
-		g.Static = map[string]any{"/app/hook/config": noHook}
-		return g
+		proxy.ServeHTTP(w, r)
+	}))
+	t.Cleanup(srv.Close)
+	code, printed := runIdentity(t, srv.URL, "c0de1234c0de5678", nil)
+	if code != ExitBlocked || len(g.Secrets) != 0 || strings.Contains(printed, "installations/new") ||
+		!strings.Contains(printed, "do not install the App: delete it at https://github.com/settings/apps") || !strings.Contains(printed, "aayu init --identity") {
+		t.Fatalf("a 422 conversion: exit %d, secrets %v:\n%s", code, g.Secrets, printed)
 	}
-	paste := func(p string) string {
-		return initrepo.AppCodePage + "?code=c0de1234c0de5678&state=" + startLink(t, p).Get("state")
-	}
+
 	for _, tt := range []struct {
-		name  string
-		g     *fake.GitHub
-		ans   func(string) string
-		extra []string
-		want  string
+		name string
+		g    *fake.GitHub
+		want string
 	}{
-		{"another owner's App", app("mallory", map[string]any{"contents": "write"}), paste, nil, "the created App aayudha-r is not the one aayu asked for; do not install it"},
-		{"wider permissions", app("o", map[string]any{"contents": "write", "administration": "write"}), paste, nil, "the created App aayudha-r is not the one aayu asked for; do not install it"},
+		{"another owner's App", identityGitHub(t, "mallory", map[string]any{"contents": "write"}), "the created App aayudha-r is not the one aayu asked for; do not install it"},
+		{"wider permissions", identityGitHub(t, "o", map[string]any{"contents": "write", "administration": "write"}), "the created App aayudha-r is not the one aayu asked for; do not install it"},
 		{"an App with events", func() *fake.GitHub {
-			g := app("o", nil)
+			g := identityGitHub(t, "o", nil)
 			g.App["events"] = []string{"push", "issues"}
 			return g
-		}(), paste, nil, "permissions or events aayu did not ask for"},
+		}(), "permissions or events aayu did not ask for"},
 		{"an App with a webhook", func() *fake.GitHub {
-			g := app("o", nil)
+			g := identityGitHub(t, "o", nil)
 			g.Static["/app/hook/config"] = map[string]any{"url": "https://attacker.example/hook"}
 			return g
-		}(), paste, nil, "webhook https://attacker.example/hook"},
+		}(), "webhook https://attacker.example/hook"},
 		{"an App whose webhook GitHub will not show", func() *fake.GitHub {
-			g := app("o", nil)
+			g := identityGitHub(t, "o", nil)
 			g.Static = nil
 			return g
-		}(), paste, nil, "webhook unknown ("},
-		{"an organization's App with wider permissions", app("org", map[string]any{"workflows": "write"}), paste, nil, "delete it at https://github.com/organizations/o/settings/apps"},
-		{"the terminal closes", app("o", nil), func(string) string { return "" }, nil, "no address was pasted, so no App was created"},
-		{"no terminal", app("o", nil), paste, []string{"NO_TERMINAL", "1"}, "init --identity asks you to paste an address from your browser, so it needs a terminal"},
+		}(), "webhook unknown ("},
+		{"an organization's App with wider permissions", identityGitHub(t, "org", map[string]any{"workflows": "write"}), "delete it at https://github.com/organizations/o/settings/apps"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if len(tt.extra) > 0 { // off a terminal, the person approves init through the device flow first
-				tt.g.Viewer = "founder"
-				tt.g.Permissions = map[string]string{"founder": "admin"}
-				tt.g.Variables = map[string]string{"AAYUDHA_DEVICE_CLIENT_ID": "c"}
-				tt.g.Device = &fake.DeviceFlow{ClientID: "c", Approver: "founder", Outcome: "approve"}
-			}
-			code, printed := runPaste(t, tt.g.URL(), tt.ans, tt.extra...)
+			code, printed := runIdentity(t, tt.g.URL(), "c0de1234c0de5678", nil)
 			if code != ExitBlocked || !strings.Contains(printed, tt.want) || len(tt.g.Secrets) != 0 || strings.Contains(printed, "installations/new") {
 				t.Fatalf("exit %d, secrets %v:\n%s", code, tt.g.Secrets, printed)
 			}
 		})
 	}
-	t.Run("a desktop browser that never redirects back", func(t *testing.T) {
-		defer func(w time.Duration) { loopbackWait = w }(loopbackWait)
-		loopbackWait = 50 * time.Millisecond
-		g := app("o", nil)
-		code, printed := runPaste(t, g.URL(), paste, "DISPLAY", ":0")
-		if code != ExitBlocked || !strings.Contains(printed, "AAYU_REMOTE_BROWSER=1") || !strings.Contains(printed, "http://127.0.0.1:") || strings.Contains(printed, "internal error") {
-			t.Fatalf("exit %d:\n%s", code, printed)
-		}
-	})
+	// The App aayu asked for is stored, and only then is the Install link printed.
+	g = identityGitHub(t, "o", nil)
+	code, printed = runIdentity(t, g.URL(), "c0de1234c0de5678", nil)
+	if code != 0 || g.Secrets["AAYUDHA_APP_PRIVATE_KEY"] == "" || !strings.Contains(printed, "https://github.com/apps/aayudha-r/installations/new") || strings.Contains(printed, "PRIVATE KEY") {
+		t.Fatalf("the App aayu asked for: exit %d, secrets %v:\n%s", code, g.Secrets, printed)
+	}
 }

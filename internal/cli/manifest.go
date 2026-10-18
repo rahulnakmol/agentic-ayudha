@@ -9,30 +9,16 @@ import (
 	"html/template"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
-	"regexp"
 	"runtime"
 	"strings"
 	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
-	"github.com/rahulnakmol/agentic-ayudha/internal/initrepo"
 )
-
-// AppManifestStart is the page that posts the manifest to GitHub when the
-// browser is on another device (#578). It reads everything from the link's
-// fragment, which no server receives, and posts only to github.com.
-const AppManifestStart = "https://rahulnakmol.github.io/agentic-ayudha/app-manifest.html"
-
-// codeWait is how long a pasted address can take: GitHub's limit for the
-// whole manifest flow.
-var codeWait = time.Hour
 
 // loopbackWait is how long the local redirect can take.
 var loopbackWait = 10 * time.Minute
-
-var manifestCodeRE = regexp.MustCompile(`^[A-Za-z0-9_-]{8,128}$`)
 
 // askLine reads one line from a human at a terminal; without one it returns "".
 func (e *Env) askLine(prompt string) string {
@@ -53,17 +39,20 @@ var manifestPage = template.Must(template.New("m").Parse(`<!doctype html><html l
 <p>Creating the aayudha bot GitHub App. If nothing happens, <button type="submit">continue to GitHub</button>.</p></form>
 <script>document.getElementById("f").submit()</script></body></html>`))
 
-// manifestCode runs the GitHub App manifest flow (init --identity). Where the
-// browser is on this machine, a local page posts the manifest and GitHub
-// redirects back to a local server with the one-time code. Anywhere else (an
-// orb's Terminal tab, a cloud agent's terminal, SSH, a phone), the person opens
-// an HTTPS link on any device, GitHub redirects to a github.com page, and the
-// person pastes that page's address here (#578).
+// manifestCode runs the GitHub App manifest flow (init --identity): a local
+// page posts the manifest to GitHub, the person confirms there, and GitHub
+// redirects back to a local server with the one-time code. A browser on
+// another device (an orb's Terminal tab, a cloud agent's terminal, SSH, a
+// phone) cannot reach that server, so init refuses at once instead of waiting
+// (#578). Whoever converts the code first holds the App's key, so the code
+// never goes to a page aayu does not serve itself: setup from a phone or a
+// cloud agent goes through the owner's token exchange (Decision #576, #594).
 func (e *Env) manifestCode(ctx context.Context, postURL string, manifest func(redirect string) string) (string, error) {
-	if localBrowser(e.Getenv, runtime.GOOS) {
-		return e.manifestLoopback(ctx, postURL, manifest)
+	if !localBrowser(e.Getenv, runtime.GOOS) {
+		return "", WithNext(Errorf(ExitBlocked, "init --identity needs a browser on this machine: GitHub hands the App's one-time code to a local page, which a browser on another device (a phone, an orb's Terminal tab, a cloud agent, SSH) cannot reach; no App was created"),
+			"run `aayu init --identity` in a terminal on the computer whose browser you use; setup from a phone or a cloud agent comes with the owner's token exchange (#594)")
 	}
-	return e.manifestPaste(ctx, postURL, manifest)
+	return e.manifestLoopback(ctx, postURL, manifest)
 }
 
 // localBrowser reports whether a browser on this machine can reach a loopback
@@ -79,71 +68,6 @@ func localBrowser(getenv func(string) string, goos string) bool {
 		return false
 	}
 	return goos == "darwin" || goos == "windows" || getenv("DISPLAY") != "" || getenv("WAYLAND_DISPLAY") != ""
-}
-
-// manifestPaste is the flow for a browser on another device. The link's
-// fragment carries the manifest; GitHub's redirect lands on github.com
-// (initrepo.AppCodePage), so the code reaches no page aayu does not control.
-func (e *Env) manifestPaste(ctx context.Context, postURL string, manifest func(redirect string) string) (string, error) {
-	if !e.isTerminal(e.In) {
-		return "", WithNext(Errorf(ExitBlocked, "init --identity asks you to paste an address from your browser, so it needs a terminal"), "aayu init --identity")
-	}
-	b := make([]byte, 16)
-	_, _ = rand.Read(b)
-	state := hex.EncodeToString(b)
-	frag := url.Values{"to": {strings.TrimPrefix(postURL, "https://github.com/")}, "state": {state}, "manifest": {manifest(initrepo.AppCodePage)}}.Encode()
-	fmt.Fprintf(e.Err, "Open this link on any device, your phone too, to create the App on GitHub:\n\n  %s#%s\n\n"+
-		"GitHub then shows an aayudha page. Copy that page's whole address and paste it here (waiting up to an hour).\nAddress: ", AppManifestStart, frag)
-	lines := make(chan string)
-	go func() {
-		defer close(lines)
-		r := bufio.NewReader(e.In)
-		for {
-			l, err := r.ReadString('\n')
-			if strings.TrimSpace(l) != "" {
-				lines <- l
-			}
-			if err != nil {
-				return
-			}
-		}
-	}()
-	ctx, cancel := context.WithTimeout(ctx, codeWait)
-	defer cancel()
-	for {
-		select {
-		case l, ok := <-lines:
-			if !ok {
-				return "", WithNext(Errorf(ExitBlocked, "init --identity: no address was pasted, so no App was created"), "aayu init --identity")
-			}
-			code, why := pastedCode(l, state)
-			if why == "" {
-				return code, nil
-			}
-			fmt.Fprintf(e.Err, "%s\nAddress: ", why)
-		case <-ctx.Done():
-			return "", WithNext(Errorf(ExitBlocked, "init --identity: no address was pasted within an hour, GitHub's limit for creating the App"), "aayu init --identity")
-		}
-	}
-}
-
-// pastedCode reads GitHub's one-time code from the address the person
-// pasted, or says why it cannot be used. Only an address carrying this run's
-// state counts: another run's code, or a code from a link someone else sent,
-// is never converted.
-func pastedCode(line, state string) (code, why string) {
-	u, err := url.Parse(strings.TrimSpace(line))
-	if err != nil || u.Query().Get("code") == "" {
-		return "", "That is not the address of the page GitHub showed: it carries no code."
-	}
-	q := u.Query()
-	if q.Get("state") != state {
-		return "", "That address belongs to another run of init --identity (its state is not this run's), so it was not used."
-	}
-	if !manifestCodeRE.MatchString(q.Get("code")) {
-		return "", "That address's code is not one GitHub writes, so it was not used."
-	}
-	return q.Get("code"), ""
 }
 
 // manifestLoopback is the flow for a browser on this machine.
@@ -183,6 +107,6 @@ func (e *Env) manifestLoopback(ctx context.Context, postURL string, manifest fun
 	case c := <-codes:
 		return c, nil
 	case <-ctx.Done():
-		return "", WithNext(Errorf(ExitBlocked, "init --identity: GitHub did not redirect back with the App code within 10 minutes; if your browser is on another device, run it again with AAYU_REMOTE_BROWSER=1 for a link that works on any device"), "aayu init --identity")
+		return "", WithNext(Errorf(ExitBlocked, "init --identity: GitHub did not redirect back with the App code within 10 minutes, so no App was created"), "aayu init --identity")
 	}
 }
