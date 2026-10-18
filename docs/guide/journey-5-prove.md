@@ -81,9 +81,10 @@ page-speed score of 100 against a budget of 90. Both records are on the ledger b
 and the
 [pack for story 134](https://github.com/rahulnakmol/agentic-ayudha/blob/ledger/proof/134/8e01a42142d028066c3026ca9201bb640b0e6914/authoritative/pack.json).
 
-> **Since then:** on 12 October the reviewer was a model the merge gate called with a key held in CI. Now your CI
-> holds no AI key at all: the reviewer is an agent app from another vendor that you install on your account, such as
-> Claude or Codex, and aayu reads its reply. The gate can also run behaviour checks from a feature map, which drive
+> **Since then:** on 12 October the reviewer was a model the merge gate called with a key held in CI. Now the gate
+> calls a review model of another vendor itself, with one key held in the `code-review` environment, which only the
+> base branches and the default branch reach ([code review in the gate](how-review.md)). An agent app from another
+> vendor, such as Claude or Codex, can review instead, and aayu reads its reply. The gate can also run behaviour checks from a feature map, which drive
 > your product the way a person would, and for a Bug it shows the proving tests failing on the base commit first.
 > See [a pull request is ready](guide-review.md) and [prove a behaviour change](guide-prove-behaviour.md).
 
@@ -100,8 +101,10 @@ capped pull request is rebuilt.
 Two reviewers that disagree, one building and one checking, find more than one reviewer that agrees with itself. And
 when a model and a measurement disagree, believe the measurement.
 
-> **Needs setup:** the merge gate comes with `aayu init --gates`, and the review needs a reviewer app installed on
-> your account and named in `[inspect] apps`. The proof needs nothing else: no bot App, bucket, or secret. The pack waits as a file on the CI
+> **Needs setup:** the merge gate comes with `aayu init --gates`, which also creates the `code-review` environment.
+> The review needs your model endpoint's key there, as the secret `AAYU_REVIEW_MODEL_KEY`
+> ([code review in the gate](how-review.md)); a reviewer app named in `[inspect] reviewer` is the alternative. The
+> proof needs nothing else: no bot App or bucket. The pack waits as a file on the CI
 > run for `[proof] retention_days` (90 by default), and `ship` checks it came from that run and records it under your
 > name. An agent's own preview, even with screenshots and video in your thread, never counts. See
 > [Adopt at your own pace](adopt.md).
@@ -113,7 +116,7 @@ when a model and a measurement disagree, believe the measurement.
 | Verb | What it does |
 |---|---|
 | [`verify`](skills/verify.md) | Runs the fixed checks (tests, security, secrets, dependencies, accessibility, speed) and records the results. |
-| [`inspect`](skills/inspect.md) | An agent app from another vendor, installed on your account, reviews the pull request against every promise; aayu reads its reply as merge, fix, or rebuild. |
+| [`inspect`](skills/inspect.md) | A model from another vendor, or an agent app you choose, reviews the pull request against every promise; aayu reads its reply as merge, fix, or rebuild. |
 | [`proof`](skills/proof.md) | Stores, fetches, and checks the proof packs that hold the evidence for each change. |
 
 <!-- END GENERATED: stage-verbs -->

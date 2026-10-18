@@ -186,7 +186,7 @@ are not verbs; the verbs reference lists them.
 |  | [`baseline`](skills/baseline.md) | Captures reference screenshots of a commit to compare later changes against. |
 | [Build it](journey-4-build.md) | [`build`](skills/build.md) | Writes the code for a Ready story in small checked steps, one layer at a time, and opens a pull request. |
 | [Prove it](journey-5-prove.md) | [`verify`](skills/verify.md) | Runs the fixed checks (tests, security, secrets, dependencies, accessibility, speed) and records the results. |
-|  | [`inspect`](skills/inspect.md) | An agent app from another vendor, installed on your account, reviews the pull request against every promise; aayu reads its reply as merge, fix, or rebuild. |
+|  | [`inspect`](skills/inspect.md) | A model from another vendor, or an agent app you choose, reviews the pull request against every promise; aayu reads its reply as merge, fix, or rebuild. |
 |  | [`proof`](skills/proof.md) | Stores, fetches, and checks the proof packs that hold the evidence for each change. |
 | [Ship it](journey-6-ship.md) | [`ship`](skills/ship.md) | Merges a proven pull request after your yes, and writes down who approved what, on which evidence. |
 | [Release it](journey-7-release.md) | [`release`](skills/release.md) | Moves shipped work up to a snapshot or stable release, after a full gate, and schedules the measurement. |

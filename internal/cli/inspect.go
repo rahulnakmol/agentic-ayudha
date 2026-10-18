@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -389,6 +390,8 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	ins.Head, ins.At = pr.GetHead().GetSHA(), e.Now()
 	ins.Reopened = reopenedAt(posts, mayReopen(ctx, c, repo, bots), prev)
 
+	// A bad review setting is reported after the docs-only exit, which needs no review.
+	reviewErr := e.useReviewModel(&l.Config)
 	gw, err := e.Gateway()
 	if err != nil {
 		return err
@@ -466,12 +469,23 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		return e.emitInspect(inspect.Result{PR: n, Head: pr.GetHead().GetSHA(), Findings: []inspect.Finding{}, Criteria: []inspect.Verdict{}, Builder: builder,
 			Disposition: inspect.Skipped, Summary: "the PR changes only documentation, which merges without a review"}, []string{builder.Note()})
 	}
+	if reviewErr != nil {
+		return Wrap(ExitUsage, reviewErr)
+	}
 	perm := func() string {
 		p, _, err := c.REST.Repositories.GetPermissionLevel(ctx, owner, name, pr.GetUser().GetLogin())
 		if err != nil {
 			return ""
 		}
 		return permissionOf(p)
+	}
+	// The CI review fails closed, naming the fix, when the code-review
+	// environment lacks what it calls (a reply event's job holds none).
+	if e.CI && !e.replyEvent() && cfg.Reviewer == inspect.ReviewerCI {
+		if miss := missingReviewModel(gw, &l.Config); len(miss) > 0 {
+			return Errorf(ExitBlocked, "inspect #%d: [inspect] reviewer = \"ci\" calls the model the %s environment names, and %s is not set: add it in Settings → Environments → %s (docs/guide/how-review.md)",
+				n, inspect.ReviewEnvironment, strings.Join(miss, " and "), inspect.ReviewEnvironment)
+		}
 	}
 	paid := paidReviewer(gw, &l.Config, builder, "", perm, e.Logf)
 	switch {
@@ -488,11 +502,11 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	// The chosen tool is the only reviewer while it answers. When an app
 	// cannot review this head (a usage-limit or quota reply, or no reply
 	// within inspect.ReplyWait), the next installed app does, then rung B,
-	// then a human; when grok (rung B) cannot, the apps do, then a human.
+	// then a human; when the CI review (rung B) cannot, the apps do, then a human.
 	unavailable := ""
 	if cfg.Reviewer != inspect.ReviewerModel && paid == nil {
 		a := appInspect{c: c, repo: repo, pr: pr, in: ins, prev: prev, builder: builder, cfg: l.Config,
-			paidTried: e.replyEvent() || prev.PaidFailed == pr.GetHead().GetSHA() || cfg.Reviewer == inspect.ReviewerGrok}
+			paidTried: e.replyEvent() || prev.PaidFailed == pr.GetHead().GetSHA() || cfg.Reviewer == inspect.ReviewerCI}
 		err := e.inspectThroughApp(ctx, a)
 		if a.paidTried || !errors.Is(err, inspect.ErrUnavailable) {
 			return err
@@ -513,11 +527,11 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	picked, notes, err := reviewerModels(gw, builder.Candidates, ins.Mode == inspect.ModePeer, cfg.PeerModel, story)
 	if paid != nil {
 		picked, err = []models.Resolved{*paid}, nil
-		why := `[inspect] reviewer = "grok"`
+		why := `[inspect] reviewer = "ci"`
 		if unavailable != "" {
 			why = "fallback: no installed reviewer app can review this head (" + unavailable + ")"
 		}
-		notes = []string{fmt.Sprintf("paid reviewer (rung B, opt-in): %s, so [inspect] paid_reviewer %s (%s) reviews with the repository's key, within %.2f USD for this PR", why, paid.Model, paid.Family, l.Config.Budget.PerPRInspectMax)}
+		notes = []string{fmt.Sprintf("paid reviewer (rung B): %s, so [inspect] paid_reviewer %s (%s) reviews with its endpoint's key, within %.2f USD for this PR", why, paid.Model, paid.Family, l.Config.Budget.PerPRInspectMax)}
 	}
 	if err != nil {
 		return err
@@ -533,32 +547,9 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 			_, err := pager.Page(ctx, notify.Page{Key: fmt.Sprintf("inspect:%s#%d", repo, n), Subject: subject, Body: body})
 			return err
 		}}
-	var served []string // the service tier of each paid call's reply ("" when it states none)
+	var served []string // the service tier of each reply ("" when it states none)
 	for _, m := range picked {
-		g := gw.WithModel(verbs.LaneReview, verbs.DirectHost, m.Model)
-		r.Reviewers = append(r.Reviewers, inspect.Reviewer{Model: m.Model,
-			Complete: func(ctx context.Context, req models.Request) (models.Response, float64, error) {
-				if paid != nil {
-					if req.Effort == "" {
-						req.Effort = paid.Effort // [inspect] paid_effort
-					}
-					// Every paid review asks for fast serving (founder, 2026-10-18)
-					// and is charged at its rate, so per_pr_inspect_max holds.
-					req.ServiceTier = models.TierPriority
-				}
-				resp, rm, err := g.Do(ctx, models.Call{Story: story, Seat: string(verbs.EngineeringManager), Lane: verbs.LaneReview, Host: verbs.DirectHost, Req: req})
-				usd, _ := models.Cost(l.Config.Models.Prices, rm.Model, models.Billed(req, resp))
-				if paid != nil && err == nil {
-					served = append(served, resp.ServiceTier)
-				}
-				if err == nil {
-					// The gate run's log shows what the review was served at and
-					// used; a subscription credential makes the USD an estimate.
-					fmt.Fprintf(e.Err, "inspect: %s replied (service tier %s): %d tokens in, %d out, %.4f USD at list price\n",
-						cmp.Or(resp.Model, rm.Model), cmp.Or(resp.ServiceTier, "not stated"), resp.TokensIn, resp.TokensOut, usd)
-				}
-				return resp, usd, err
-			}})
+		r.Reviewers = append(r.Reviewers, inspect.Reviewer{Model: m.Model, Complete: e.reviewCall(gw, &l.Config, m.Model, story, &served)})
 	}
 	res, st, err := r.Run(ctx, ins, prev)
 	res.Head, res.Builder = pr.GetHead().GetSHA(), builder
@@ -843,11 +834,10 @@ func (e *Env) inspectApprove(ctx context.Context, in Values) error {
 }
 
 // paidReviewer is rung B of the review ladder (Decision #469; founder,
-// 2026-10-18), the deliberate, opt-in exception to "no AI keys in a product
-// repo's CI": [inspect] paid_reviewer, called with the repository's own key
-// (this repository: grok-4.7 through the AI gateway), only when [inspect]
-// reviewer is grok or, as the fallback, when no installed app can review the
-// head (unavailable says why: a usage-limit reply, or none in time); the
+// 2026-10-18): [inspect] paid_reviewer, called with its endpoint's key (in
+// the merge gate, the model and key the code-review environment names; see
+// useReviewModel), only when [inspect] reviewer is ci or, as the fallback,
+// when no installed app can review the head (unavailable says why: a usage-limit reply, or none in time); the
 // model's family is one the builder cannot be, the key is present, and
 // [budget] per_pr_inspect_max caps the spend. Only a PR whose author has write
 // access to the repository (perm, the author's effective permission, is admin
@@ -862,7 +852,7 @@ func paidReviewer(gw *models.Gateway, cfg *config.Config, b inspect.Builder, una
 	if m == "" || ic.Reviewer == inspect.ReviewerHuman || ic.Reviewer == inspect.ReviewerModel {
 		return nil
 	}
-	if unavailable == "" && ic.Reviewer != inspect.ReviewerGrok {
+	if unavailable == "" && ic.Reviewer != inspect.ReviewerCI {
 		return nil // the chosen app reviews while it answers
 	}
 	f := verbs.FamilyOf(m)
@@ -886,7 +876,120 @@ func paidReviewer(gw *models.Gateway, cfg *config.Config, b inspect.Builder, una
 		logf("inspect: [inspect] paid_reviewer %s is not used: %s; a reviewer app or a human reviews", m, why)
 		return nil
 	}
-	return &models.Resolved{Lane: verbs.LaneReview, Host: verbs.DirectHost, Model: m, Display: m, Family: f, Effort: ic.PaidEffort, Source: models.SourceConfig}
+	return &models.Resolved{Lane: verbs.LaneReview, Host: verbs.DirectHost, Model: m, Display: m, Family: f, Effort: reviewEffort(m, ic), Source: models.SourceConfig}
+}
+
+// reviewEffort is the reasoning effort a review model is called at
+// (founder, 2026-10-18): high, and medium for Claude Opus, Claude Fable, and
+// GPT-6 Astra. [inspect] paid_effort, when set, overrides it.
+func reviewEffort(model string, ic config.Inspect) string {
+	if ic.PaidEffort != "" {
+		return ic.PaidEffort
+	}
+	m := strings.ToLower(model)
+	for _, heavy := range []string{"opus", "fable", "astra"} {
+		if strings.Contains(m, heavy) {
+			return "medium"
+		}
+	}
+	return "high"
+}
+
+// reviewCall is the one way a review model is called: the CI review, its
+// fallback for an app that cannot review, the review lane's model, and
+// build's session review. It asks for fast (priority) serving at
+// reviewEffort; an endpoint without tiers ignores the ask. The call is
+// charged at the priority rate whatever tier the reply states, so
+// per_pr_inspect_max holds. Each reply's tier is appended to *served, which
+// the caller turns into a note with tierNote.
+func (e *Env) reviewCall(gw *models.Gateway, cfg *config.Config, model, story string, served *[]string) func(context.Context, models.Request) (models.Response, float64, error) {
+	g := gw.WithModel(verbs.LaneReview, verbs.DirectHost, model)
+	return func(ctx context.Context, req models.Request) (models.Response, float64, error) {
+		req.Effort = cmp.Or(req.Effort, reviewEffort(model, cfg.Inspect))
+		req.ServiceTier = models.TierPriority
+		resp, rm, err := g.Do(ctx, models.Call{Story: story, Seat: string(verbs.EngineeringManager), Lane: verbs.LaneReview, Host: verbs.DirectHost, Req: req})
+		usd, _ := models.Cost(cfg.Models.Prices, rm.Model, models.Billed(req, resp))
+		if err == nil {
+			*served = append(*served, resp.ServiceTier)
+			// The run's log shows what the review was served at and used; a
+			// subscription credential makes the USD an estimate.
+			fmt.Fprintf(e.Err, "inspect: %s replied (service tier %s): %d tokens in, %d out, %.4f USD at list price\n",
+				cmp.Or(resp.Model, rm.Model), cmp.Or(resp.ServiceTier, "not stated"), resp.TokensIn, resp.TokensOut, usd)
+		}
+		return resp, usd, err
+	}
+}
+
+// useReviewModel points the CI review at the model the code-review
+// environment names (inspect.ReviewModelURLVar, inspect.ReviewModelVar):
+// the gateway route, with inspect.ReviewModelSecret as its key, and
+// [inspect] paid_reviewer. A URL with credentials or a query is refused, and
+// never echoed, so no log or comment shows a secret; only its host is named.
+// inspect.ReviewModelStyleVar sets the endpoint's wire format. A bad setting
+// fails inspect only under reviewer = "ci"; when an app reviews, it leaves
+// the CI fallback unavailable, so the app's review is still read.
+func (e *Env) useReviewModel(c *config.Config) error {
+	if r := c.Inspect.Reviewer; r == inspect.ReviewerModel || r == inspect.ReviewerHuman {
+		return nil // the review lane's configured gateway, or no model at all
+	}
+	if raw := e.Getenv(inspect.ReviewModelURLVar); raw != "" {
+		style := e.Getenv(inspect.ReviewModelStyleVar)
+		var bad error
+		if u, err := url.Parse(raw); err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || operationPath(u.Path) {
+			bad = fmt.Errorf("%s must be the model endpoint's https base URL (such as %s), ending before /chat/completions, /responses, or /messages, with no credentials or query in it; the key goes in %s",
+				inspect.ReviewModelURLVar, inspect.RecommendedReviewURL, inspect.ReviewModelKeyVar)
+		} else if !slices.Contains([]string{"", models.StyleMessages, models.StyleResponses, models.StyleChat}, style) {
+			bad = fmt.Errorf("%s = %q: want messages, responses, or chat", inspect.ReviewModelStyleVar, style)
+		}
+		if bad != nil {
+			if c.Inspect.Reviewer != inspect.ReviewerCI {
+				e.Logf("inspect: the CI review fallback is unavailable: %v", bad)
+				return nil
+			}
+			return bad
+		}
+		// A different endpoint: no wire-format override of the old gateway carries over; the same one keeps them.
+		g := config.Gateway{BaseURL: raw, Secret: inspect.ReviewModelSecret}
+		if raw == c.Models.Gateway.BaseURL {
+			g.APIStyle, g.Styles = c.Models.Gateway.APIStyle, c.Models.Gateway.Styles
+		}
+		if style != "" {
+			g.APIStyle, g.Styles = style, nil
+		}
+		c.Models.Gateway = g
+	}
+	if m := e.Getenv(inspect.ReviewModelVar); m != "" {
+		c.Inspect.PaidReviewer = m
+	}
+	return nil
+}
+
+// operationPath reports whether p ends in a model API operation, which the
+// client appends itself, so a URL ending in one would be called twice over.
+func operationPath(p string) bool {
+	p = strings.TrimSuffix(p, "/")
+	for _, op := range []string{"/chat/completions", "/responses", "/messages"} {
+		if strings.HasSuffix(p, op) {
+			return true
+		}
+	}
+	return false
+}
+
+// missingReviewModel names what the CI review lacks: the endpoint, the
+// model, or the key.
+func missingReviewModel(gw *models.Gateway, c *config.Config) []string {
+	var miss []string
+	if c.Models.Gateway.Secret != inspect.ReviewModelSecret {
+		miss = append(miss, "the variable "+inspect.ReviewModelURLVar)
+	}
+	if c.Inspect.PaidReviewer == "" {
+		miss = append(miss, "the variable "+inspect.ReviewModelVar)
+	}
+	if k, err := gw.Key(inspect.ReviewModelSecret); err != nil || k == "" {
+		miss = append(miss, "the secret "+inspect.ReviewModelKeyVar)
+	}
+	return miss
 }
 
 // tierNote records the service tier the paid review was served at, and flags
@@ -899,7 +1002,7 @@ func tierNote(served []string) string {
 		}
 	}
 	if len(slow) > 0 {
-		return fmt.Sprintf("**not fast:** the paid review asked for service tier %s (fast) but was served at %s; it is charged at the %s rate", models.TierPriority, strings.Join(slow, ", "), models.TierPriority)
+		return fmt.Sprintf("**not fast:** the review asked for service tier %s (fast) but was served at %s; it is charged at the %s rate", models.TierPriority, strings.Join(slow, ", "), models.TierPriority)
 	}
 	return fmt.Sprintf("served at service tier %s (fast), as asked", served[len(served)-1])
 }

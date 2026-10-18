@@ -307,9 +307,9 @@ func failing(t *testing.T) map[string]func(*Probe) {
 				"/repos/o/r/commits/abc/check-runs?per_page=100": map[string]any{"check_runs": []any{map[string]any{"name": "Cursor Bugbot", "app": map[string]any{"slug": "cursor"}}}},
 			})
 		},
-		// No review tool chosen: a person reviews every PR, and doctor fails.
+		// No review tool chosen (the default ci emptied): a person reviews every PR, and doctor fails.
 		"review-rung": func(p *Probe) {
-			p.Config = load(t)
+			p.Config = load(t, "inspect.reviewer=")
 		},
 		// A 0.1 triage workflow, still installed; a product's own file of the same name would not count.
 		"retired-workflows": func(p *Probe) {
@@ -563,12 +563,17 @@ func TestCheckStates(t *testing.T) {
 			p.Getenv = func(string) string { return "" }
 			p.Config = load(t, "inspect.apps=codex", "inspect.reviewer=codex")
 		}, Pass, "move up: no reviewer can be shown to differ from an unknown builder"},
+		{"an unknown builder with merge on proof merges on rung C", checkReviewRung, func(p *Probe) {
+			p.Getenv = func(string) string { return "" }
+			p.Config = load(t, "inspect.apps=codex", "inspect.reviewer=codex", "autonomy.proof=true")
+		}, Pass, "proof is on and proof_rungs lists C, so a PR merges on proof after it (remove C to require A or B)"},
 		{"a person reviews by configuration", checkReviewRung, func(p *Probe) { p.Config = load(t, "inspect.reviewer=human") }, Pass, `human  a person reviews every PR ([inspect] reviewer = "human")`},
-		{"grok with no paid reviewer", checkReviewRung, func(p *Probe) { p.Config = load(t, "inspect.reviewer=grok") }, Fail, `[inspect] reviewer = "grok" needs [inspect] paid_reviewer`},
+		{"the default: the CI review", checkReviewRung, func(p *Probe) { p.Config = load(t) }, Pass, `ci  the merge gate calls the model the code-review environment names`},
 		{"a same-family app with a paid reviewer of another family", checkReviewRung, func(p *Probe) {
 			p.Host = "claude"
 			p.Config = load(t, "inspect.apps=claude", "inspect.reviewer=claude", "inspect.paid_reviewer=grok-4.7")
-		}, Pass, `move up (paid, opt-in): set [inspect] reviewer = "grok" to have grok-4.7 (xai) review`},
+		}, Pass, `move up (paid): set [inspect] reviewer = "ci", the default, to have grok-4.7 (xai) review every PR`},
+		{"the CI review, with the detected app as its fallback", checkReviewerApps, func(p *Probe) { p.Config = load(t, "inspect.apps=codex") }, Pass, "merge-gate reviewer: ci, the model the code-review environment names"},
 		{"the review lane's model", checkReviewerApps, func(p *Probe) { p.Config = load(t, "inspect.reviewer=model") }, Warn, `[inspect] reviewer = "model": the merge gate calls the review lane's model`},
 		{"rung C for a Claude Code build", checkReviewRung, func(p *Probe) {
 			p.Host = "claude"
@@ -585,13 +590,13 @@ func TestCheckStates(t *testing.T) {
 		}, Pass, "C  same-family review: claude (anthropic)"},
 		// Rung B, opt-in: a paid Gemini reviewer for an Amp build (anthropic or openai).
 		{"a paid reviewer of another family", checkReviewRung, func(p *Probe) {
-			p.Config = load(t, "inspect.apps=codex", "inspect.paid_reviewer=gemini-3.8-flash-high", "inspect.reviewer=grok")
-		}, Pass, "B  different-family review, paid: gemini-3.8-flash-high (google) when the merge gate holds the repository secret AAYU_SECRET_GOOGLE"},
+			p.Config = load(t, "inspect.apps=codex", "inspect.paid_reviewer=gemini-3.8-flash-high", "inspect.reviewer=ci")
+		}, Pass, "B  different-family review in CI: gemini-3.8-flash-high (google) unless AAYU_REVIEW_MODEL names another"},
 		{"a paid reviewer of the builder's family", checkReviewRung, func(p *Probe) {
-			p.Config = load(t, "inspect.apps=codex", "inspect.paid_reviewer=gpt-6.1-sol", "inspect.reviewer=grok")
-		}, Warn, "paid_reviewer gpt-6.1-sol (openai) cannot be shown to differ from the builder"},
-		// No auto (founder, 2026-10-18): unset, or a leftover "auto", fails with the next step.
-		{"no review tool chosen", checkReviewRung, func(p *Probe) { p.Config = load(t, "inspect.apps=codex") }, Fail, `set [inspect] reviewer = "<tool>"`},
+			p.Config = load(t, "inspect.apps=codex", "inspect.paid_reviewer=gpt-6.1-sol", "inspect.reviewer=ci")
+		}, Warn, "gpt-6.1-sol (openai) cannot be shown to differ from the builder, so the gate never uses it: set AAYU_REVIEW_MODEL"},
+		// No auto (founder, 2026-10-18): emptied, or a leftover "auto", fails with the next step.
+		{"no review tool chosen", checkReviewRung, func(p *Probe) { p.Config = load(t, "inspect.apps=codex", "inspect.reviewer=") }, Fail, `set [inspect] reviewer = "<tool>"`},
 		{"a leftover auto", checkReviewerApps, func(p *Probe) { p.Config = load(t, "inspect.apps=codex", "inspect.reviewer=auto") }, Fail, "no review tool chosen"},
 		{"a review service is A for any builder", checkReviewRung, func(p *Probe) {
 			p.Config = load(t, "inspect.apps=coderabbit", "inspect.reviewer=coderabbit")

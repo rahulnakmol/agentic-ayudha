@@ -1,28 +1,29 @@
 # The merge gate
 
 The merge gate is one GitHub Actions workflow, `aayudha-merge-gate.yml`, that runs on every non-draft pull request.
-It runs `verify` again on the pull request's head commit, reads the review of an agent app from a different family,
-and makes the result available to `ship`. It exists because the builder's own word is not evidence:
+It runs `verify` again on the pull request's head commit, has a model from a different family review it (by default
+the code-review environment's model, or an agent app you choose), and makes the result available to `ship`. It exists because the builder's own word is not evidence:
 the checks that decide a merge must run somewhere the pull request cannot change.
 
-![A pull request update starts the gate workflow taken from the base branch; the merge-gate job verifies the head in a sandbox and keeps the pack as a run artifact, the inspect job reviews it, the pack job checks it and comments, and ship needs all three checks green and the artifact from this run.](img/how-merge-gate.svg)
+![A pull request update starts the gate workflow taken from the default branch; the merge-gate job verifies the head in a sandbox and keeps the pack as a run artifact, the inspect job reviews it, the pack job checks it and comments, and ship needs all three checks green and the artifact from this run.](img/how-merge-gate.svg)
 
-*Three jobs on each update: one runs the pull request's code with no secrets, one reads the reviewer app's reply and
-never runs that code, one checks the pack and comments. A fourth re-runs inspect when the reviewer replies. No job
-holds an AI key, and none writes the ledger.*
+*Three jobs on each update: one runs the pull request's code with no secrets, one reviews it and never runs that code,
+one checks the pack and comments. A fourth re-runs inspect when an app reviewer replies. Only the review job holds an
+AI key, the code-review environment's, and no job writes the ledger.*
 
 ## How it works
 
 ### Why pull_request_target
 
-The workflow triggers on `pull_request_target`. GitHub then runs the workflow file as it is on the base branch,
-not the copy in the pull request. A pull request that edits the gate, lowers a threshold in the workflow, or swaps
+The workflow triggers on `pull_request_target`. GitHub then runs the workflow file as it is on the repository's
+default branch, not the copy in the pull request (since 2025-12-08; before that, the base branch's). A pull request that edits the gate, lowers a threshold in the workflow, or swaps
 a tool version has no effect on its own run. Its changes apply only after they merge. In this repository,
 `.github/` is also a protected path in `.github/CODEOWNERS`, so a change to the gate needs a CODEOWNER review.
 
 That trigger has a known risk: the job runs in the base repository's context, and checking out untrusted code there
-can leak secrets. The gate splits the work so that the job running pull request code holds nothing worth stealing, and since 0.2 no
-job holds an AI key at all.
+can leak secrets. The gate splits the work so that the job running pull request code holds nothing worth stealing. The
+one AI key, the code-review environment's `AAYU_REVIEW_MODEL_KEY`, reaches only the inspect job, which checks out the
+base branch and runs no pull request code.
 
 `aayu init --gates` installs the template from
 [internal/initrepo/aayudha-merge-gate.yml](../../internal/initrepo/aayudha-merge-gate.yml) into a product
@@ -55,8 +56,9 @@ shows the fix; one that passes there does not. The check is advisory until the d
 test that is green on the base is reported and skipped; from it, the check fails. Only Go modules are run today.
 
 **`aayudha/inspect`** runs after the gate job succeeds, on every pull request that is ready for review, whether or not
-it serves a story. It holds no AI key (founder decision of 2026-10-15): it reads the reviewer app's reply on the pull
-request and has `pull-requests: write` to post its comment. It checks out the base branch only, downloads the
+it serves a story. It runs under the `code-review` environment, whose key only the base branches and the default branch reach: with
+`reviewer = "ci"` it calls that environment's model, and with an app it reads the app's reply on the pull request. It
+has `pull-requests: write` to post its comment. It checks out the base branch only, downloads the
 `aayudha-pack` artifact when the pull request serves a story, and reads the diff through the GitHub API. It never runs
 pull request code. A pull request without a story is judged on the reviewer's disposition and the coverage manifest,
 with no criteria. One that changes only documentation passes without a review: files under `docs/`, Markdown at the
@@ -103,9 +105,10 @@ Every floor tool runs as a child process through `verify.Sandbox`:
 
 ### How inspect works
 
-A product repository's CI holds no AI key (founder decision of 2026-10-15). inspect's reviewer is an agent app
-installed on the organisation or account, from a family other than the builder's when one is installed. aayu asks it
-with an @-mention and reads its reply deterministically:
+By default, inspect calls the code-review environment's model ([Code review in the gate](how-review.md)), the one AI
+key in a product repository's CI. When `[inspect] reviewer` names an agent app instead, installed on the organisation
+or account and of a family other than the builder's when one is installed, aayu asks it with an @-mention and reads
+its reply deterministically:
 
 | App | Request | Replies as | Family |
 |---|---|---|---|
@@ -118,10 +121,11 @@ with an @-mention and reads its reply deterministically:
 
 `[inspect] apps` lists the apps installed (`aayu doctor`'s `reviewer-apps` row and `aayu install` detect them from
 the account's installations, and from the comments, reviews, and checks on the last ten pull requests).
-`[inspect] reviewer` names the one review tool: `codex`, `coderabbit`, `greptile`, `claude`, `cursor`, `grok` (the
-paid reviewer through the AI gateway, called directly), or `human`. There is no automatic choice (founder,
-2026-10-18). `aayu install --apply` asks for it and writes it. Unset, a person reviews every pull request, the inspect
-comment says how to choose, and `aayu doctor` fails with the same step. The chosen tool is the only reviewer while it
+`[inspect] reviewer` names the one review tool: `ci` (the default: the model the repository's code-review environment
+names, called directly; [Code review in the gate](how-review.md) sets it up), `codex`, `coderabbit`, `greptile`,
+`claude`, `cursor`, or `human`. There is no automatic choice (founder, 2026-10-18). `aayu install --apply` asks for it
+and writes it; Enter picks `ci`. Emptied, a person reviews every pull request, the inspect comment says how to choose,
+and `aayu doctor` fails with the same step. The chosen tool is the only reviewer while it
 answers; a same-family app gives a labelled same-family review.
 
 CodeRabbit and Greptile are dedicated review services. Their review counts as different-family whatever the builder's
@@ -134,12 +138,16 @@ apps, and names the apps that would move it up; it calls no model.
 
 The review the gate records, and shows as the first line of the inspect comment, is one of three:
 
-| Review | When | Counts toward autonomy |
-|---|---|---|
-| Different-family | The reviewer's model is of a family outside every family the builder may be | yes |
-| Different-family, paid (rung B) | `reviewer = "grok"`, or no installed app can review the head, and the repository opted into a paid reviewer of another family | yes |
-| Same-family | The reviewer is of the builder's family, or the builder's family is unknown | never; never layers and protected paths still need a person |
-| Human | A person reviewed | a person's review |
+| Review | When | Counts toward the streak | Counts for merge on proof |
+|---|---|---|---|
+| Different-family (rung A) | The reviewer's model is of a family outside every family the builder may be | yes | where `proof_rungs` lists A (the default) |
+| Different-family, paid (rung B) | `reviewer = "ci"`, or no installed app can review the head, and the code-review environment names a model of another family | yes | where `proof_rungs` lists B (the default) |
+| Same-family (rung C) | The reviewer is of the builder's family, or the builder's family is unknown | never | where `proof_rungs` lists C (the default); otherwise never layers and protected paths still need a person |
+| Human | A person reviewed | a person's review | a person's review |
+
+Merge on proof is off until a repository sets `[autonomy] proof = true`. Then, with the default `proof_rungs`, a
+same-family review is enough: that includes a pull request whose builder's family is unknown. Set
+`proof_rungs = ["A", "B"]` to require a different-family review (@rahulnakmol, 2026-10-18).
 
 The reviewer's family is the app's family. Only an app whose family is host-managed (Cursor) takes it from the
 optional `model` field of its reply; an app of one family that reports another family's model gives a same-family
@@ -148,16 +156,14 @@ autonomous pass unless the inspect job of the base branch's `pull_request_target
 different-family review in its log, so after a same-family review, or with no such record, a person passes it. A run whose judgement was cached from the state comment does not count; ship reads the newest fresh judgement of the head. A
 comment, or a run of the branch's own workflow, never counts. `reviewer = "model"` keeps the 0.1 model lane for a repository that accepts a key in CI.
 
-**Rung B, a paid reviewer (opt-in).** The founder's one deliberate exception to "no AI keys in a product repository's
-CI" (2026-10-18), off by default. It needs both steps:
+**Rung B, the CI review.** The default review (founder, 2026-10-18), and the fallback when an app cannot review. The
+inspect job runs under the `code-review` environment, which only the base branches and the default branch can deploy
+to, and calls the model it names: the variables `AAYU_REVIEW_MODEL_URL` (the model endpoint's base URL) and `AAYU_REVIEW_MODEL` (the model ID,
+of a family the builder cannot be, such as `grok-4.7`), with the secret `AAYU_REVIEW_MODEL_KEY`. `[inspect]
+paid_reviewer` names the model when the environment names none. [Code review in the gate](how-review.md) sets it up.
 
-1. `[inspect] paid_reviewer` in `.aayudha/config.toml` names a model of a family the builder cannot be, for example
-   `gemini-3.8-flash` for Amp, Claude Code, or Codex builds.
-2. The repository adds that provider's pay-as-you-go key as an Actions secret named `AAYU_SECRET_<FAMILY>`:
-   `AAYU_SECRET_GOOGLE` for Gemini, `AAYU_SECRET_XAI` for Grok, `AAYU_SECRET_OPENAI`, or `AAYU_SECRET_ANTHROPIC`.
-
-`[inspect] paid_effort` (`low`, `medium`, `high`, or `xhigh`) sets the reasoning effort the paid reviewer is called at;
-empty leaves the provider's default.
+Every review is called at effort `high`, or `medium` for Claude Opus, Claude Fable, and GPT-6 Astra; `[inspect]
+paid_effort` (`low`, `medium`, `high`, or `xhigh`) overrides it.
 Every paid review asks for fast serving (`service_tier` `priority`) and is charged at the model's priority rate, 2x the
 standard rate for Grok 4.7, so the cap holds. The inspect comment records the tier the reply was served at, and flags
 one that is not fast.
@@ -165,8 +171,8 @@ one that is not fast.
 **When the chosen tool cannot review.** An app cannot review a head when it replies that it reached a usage limit,
 quota, or rate limit (Codex: "You have reached your Codex usage limits for code reviews"), or has not replied 30
 minutes after the review request. Then the next installed app reviews, in a fixed order: codex, coderabbit, greptile,
-claude, cursor. After the apps comes the paid reviewer, with the same key, cap, and checks, then a person
-(`[autonomy] approver`). When `grok` is chosen and cannot review, the apps review in that order, then a person. The
+claude, cursor. After the apps comes the CI review, with the same key, cap, and checks, then a person
+(`[autonomy] approver`). When `ci` is chosen and cannot review, the apps review in that order, then a person. The
 inspect comment's note names each step and why. A same-family app is labelled so at any step, and the paid reviewer
 is never of a family the builder may be. The gate notices the 30 minutes only when its inspect job runs again: a push,
 a re-run of the failed job, or a bot's comment or a review on the pull request. The 30 minutes run from that app's own
@@ -178,14 +184,13 @@ reviews a PR that serves no story against its title, description, and diff. `[bu
 default) caps one PR's spend across its cycles, and a cap of 0 turns rung B off. Only a PR whose author has write access
 to the repository (GitHub's permission level, not the author association) gets a paid review, so a person who can
 only read cannot open PRs to spend the key. The review is labelled
-`different-family review (B, paid)` everywhere and counts toward autonomy as rung A does. If the secret is missing, the
-model is of a family the builder may be, the cap is 0, the paid call fails (a gateway timeout on a large diff), or the PR
+`different-family review (B, paid)` everywhere and counts toward autonomy as rung A does. With `reviewer = "ci"`, a
+missing variable or secret fails the gate closed, naming it and where to set it. If the model is of a family the builder may be, the cap is 0, the paid call fails (a gateway timeout on a large diff), or the PR
 has spent its cap, the gate logs why and the apps review. A failed call's cost still counts toward the cap. A failed paid
 call is recorded against the head: later runs on that head, such as the one a reply triggers, go straight to the app, and
 the next push tries the paid reviewer again. A run triggered by a reply makes no paid call itself. It only re-runs the
 head's inspect job. `aayu doctor`'s
-`review-rung` row shows B when it is configured. Doctor cannot read repository secrets, so it names the secret the gate
-needs. The inspect job checks out the base branch and runs no PR code. The diff reaches the model only as delimited
+`review-rung` row shows B when it is configured. Doctor cannot read the environment, so it names what the gate needs. The inspect job checks out the base branch and runs no PR code. The diff reaches the model only as delimited
 untrusted data.
 
 1. **Family check.** The builder's family comes from what aayu recorded on the ledger, outside the pull request: the
@@ -413,7 +418,7 @@ fixed head, returned `merge`, and the spend covers both calls.
 
 ## Invariants
 
-1. The gate runs the base branch's workflow, so a pull request cannot weaken its own checks. Enforced by the
+1. The gate runs the default branch's workflow, so a pull request cannot weaken its own checks. Enforced by the
    `pull_request_target` trigger in
    [internal/initrepo/aayudha-merge-gate.yml](../../internal/initrepo/aayudha-merge-gate.yml).
 2. Pull request code runs only in a job without secrets, and only inside the sandbox: scrubbed environment, no
@@ -424,8 +429,8 @@ fixed head, returned `merge`, and the spend covers both calls.
    Enforced by `gateProblems` in [internal/cli/verify.go](../../internal/cli/verify.go); `TestVerifyGateCI` covers
    missing evidence, Completion Goal drift, and a pull request with no story.
 4. A review is different-family only when the reviewer's reported family is outside every family the builder may
-   be; otherwise it is labelled same-family, and with no app a person reviews. A same-family review never gives an
-   autonomous pass. Only the reviewer's own login counts, and a missing or malformed reply fails closed. Enforced by
+   be; otherwise it is labelled same-family, and with no app a person reviews. A same-family review never gives the
+   streak's autonomous pass; it merges on proof only where `[autonomy] proof_rungs` lists C. Only the reviewer's own login counts, and a missing or malformed reply fails closed. Enforced by
    `inspect.ChooseReviewer`, `Builder.Rung`, and `inspect.ReadReply` in
    [internal/inspect/apps.go](../../internal/inspect/apps.go) and `inspect.BuilderOf` (`TestReviewLadder`,
    `TestInspectThroughApp`, `TestBuilderOf`, `TestShipAutonomousFootprint`).
@@ -441,7 +446,8 @@ fixed head, returned `merge`, and the spend covers both calls.
 8. The pack job uses only the workflow token, writes nothing to the ledger, and fails on a pack that does not verify
    or a floor that does not hold. Enforced by `proofComment` in [internal/cli/proof.go](../../internal/cli/proof.go),
    `TestProofCommentInMergeGate`.
-9. No workflow `init --gates` installs holds a model key or the AI-gateway environment. Enforced by
+9. The one model key a workflow `init --gates` installs holds is the merge gate's `AAYU_REVIEW_MODEL_KEY`, passed once,
+   to the inspect job under the `code-review` environment, which checks out only the base branch. Enforced by
    `TestModelChecksNeverGateAndNeverShip` in [workflows_test.go](../../workflows_test.go).
 10. The proof comment's risk line and weakened-check list come from the diff alone and approve nothing. Enforced by
     `inspect.RiskOf` in [internal/inspect/risk.go](../../internal/inspect/risk.go) and `inspect.Weakened` in

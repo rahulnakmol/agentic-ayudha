@@ -225,8 +225,9 @@ type Result struct {
 	Next        string    `json:"next,omitempty"` // the re-entry step
 	Builder     Builder   `json:"builder"`        // the builder's family and where it came from (Bug #171)
 	// Rung is the review ladder's rung the review reached (Decision #469):
-	// A or B count; C, a same-family review, never counts toward autonomy;
-	// human is a person's review. Review is its label, shown on the PR.
+	// A or B count; C, a same-family review, never counts toward the streak
+	// and counts for merge on proof only where [autonomy] proof_rungs lists
+	// it; human is a person's review. Review is its label, shown on the PR.
 	Rung           string       `json:"rung,omitempty"`
 	ReviewerFamily verbs.Family `json:"reviewer_family,omitempty"`
 	Review         string       `json:"review,omitempty"`

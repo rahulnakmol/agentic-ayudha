@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"maps"
@@ -1012,7 +1013,7 @@ func TestInspectThroughApp(t *testing.T) {
 	writeInspectPackAs(t, opts.Dir, prN, head, nil, "codex", "gpt-6.1-sol")
 	addComment(g, prN, "chatgpt-codex-connector[bot]", "Bot", statedReply(head, "merge", "internal/report/percent.go"))
 	if code, res, _ = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Disposition != inspect.Merge || res.Rung != inspect.RungC ||
-		!strings.Contains(lastInspect(t, g, prN), "**Review:** same-family review (C): codex (openai), builder openai (declared, not recorded); it never counts toward autonomy") {
+		!strings.Contains(lastInspect(t, g, prN), "**Review:** same-family review (C): codex (openai), builder openai (declared, not recorded); it never counts toward the streak") {
 		t.Fatalf("a same-family app's reply: %d %s rung %q\n%s", code, res.Disposition, res.Rung, lastInspect(t, g, prN))
 	}
 	if st := inspect.ParseState(lastInspect(t, g, prN)); st.Result == nil || st.Result.Rung != inspect.RungC || st.Result.Head != head {
@@ -1240,6 +1241,12 @@ func TestInspectWithoutStory(t *testing.T) {
 	if code, res, errOut = inspectApp(t, env, opts, docs.Number, "--ci"); code != 0 || res.Disposition != inspect.Skipped || !strings.Contains(res.Summary, "only documentation") {
 		t.Fatalf("docs-only PR: exit %d %+v %s", code, res, errOut)
 	}
+	// It needs no review, so a broken CI review setting does not fail it (Codex's P2 on #657).
+	bad := maps.Clone(env)
+	bad["AAYU_INSPECT__REVIEWER"], bad[inspect.ReviewModelURLVar] = "ci", "http://gw.example/v1"
+	if code, res, errOut = inspectApp(t, bad, opts, docs.Number, "--ci"); code != 0 || res.Disposition != inspect.Skipped {
+		t.Fatalf("docs-only PR, bad %s: exit %d %+v %s", inspect.ReviewModelURLVar, code, res, errOut)
+	}
 
 	// A PR that names its story in the head commit's Aayudha-Story trailer is
 	// that story's PR, as verify finds it (the trailer before a story-shaped
@@ -1312,12 +1319,12 @@ func TestInspectPaidReviewer(t *testing.T) {
 	setup := func(apps, key string) (*fake.GitHub, map[string]string, Options, int, *models.Fake) {
 		g, env, opts, prN := inspectFixture(t, cleanDiff, "Refs #2")
 		_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
-		cfg := "version = 1\n\n[inspect]\nreviewer = \"grok\"\napps = [" + apps + "]\npaid_reviewer = \"gemini-3.8-flash\"\npaid_effort = \"high\"\n"
+		cfg := "version = 1\n\n[inspect]\nreviewer = \"ci\"\napps = [" + apps + "]\npaid_reviewer = \"gemini-3.8-flash\"\npaid_effort = \"high\"\n"
 		if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte(cfg), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		env = maps.Clone(env)
-		env["AAYU_SECRET_GOOGLE"] = key
+		env[inspect.ReviewModelURLVar], env[inspect.ReviewModelKeyVar] = "https://gw.example/v1", key
 		reply := inspectReply("merge", "")
 		reply.ServiceTier, reply.TokensIn, reply.TokensOut = "priority", 1200, 300
 		model := &models.Fake{Replies: []models.Response{reply}}
@@ -1412,16 +1419,22 @@ func TestInspectReviewerFallback(t *testing.T) {
 	setup := func() (*fake.GitHub, map[string]string, Options, int, *models.Fake) {
 		g, env, opts, prN := inspectFixture(t, cleanDiff, "Refs #2") // built by claude-opus-5-5: Codex is of another family (A)
 		_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
-		cfg := "version = 1\n\n[autonomy]\napprover = \"founder\"\n\n[inspect]\nreviewer = \"codex\"\napps = [\"codex\"]\npaid_reviewer = \"grok-4.7\"\npaid_effort = \"high\"\n"
+		// No paid_reviewer: the code-review environment names the model, its endpoint, and its key.
+		cfg := "version = 1\n\n[autonomy]\napprover = \"founder\"\n\n[inspect]\nreviewer = \"codex\"\napps = [\"codex\"]\npaid_effort = \"high\"\n"
 		if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte(cfg), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		env = maps.Clone(env)
-		env["AAYU_SECRET_XAI"] = "xai-key"
+		env[inspect.ReviewModelURLVar], env[inspect.ReviewModelVar], env[inspect.ReviewModelKeyVar] = "https://review.example/v1", "grok-4.7", "review-key"
 		reply := inspectReply("merge", "")
 		reply.Model, reply.ServiceTier, reply.TokensIn, reply.TokensOut = "grok-4.7", "default", 1200, 300
 		model := &models.Fake{Replies: []models.Response{reply}}
-		opts.ModelClient = func(models.Route, string) models.Client { return model }
+		opts.ModelClient = func(r models.Route, key string) models.Client {
+			if r.BaseURL != "https://review.example/v1" || key != "review-key" {
+				t.Errorf("the fallback review calls %s with key %q, not the code-review environment's endpoint and key", r.BaseURL, key)
+			}
+			return model
+		}
 		return g, env, opts, prN, model
 	}
 	postedAt := func(g *fake.GitHub, prN int, at time.Time) { // the newest comment's time
@@ -1435,8 +1448,8 @@ func TestInspectReviewerFallback(t *testing.T) {
 		postedAt(g, prN, at)
 	}
 
-	// Codex's usage-limit reply: Grok 4.7 reviews at high effort and fast
-	// serving, labelled (B, paid) with why. The reply was served at the default
+	// Codex's usage-limit reply: Grok 4.7, the code-review environment's
+	// model, reviews at high effort and fast serving, labelled (B, paid) with why. The reply was served at the default
 	// tier, which the comment flags; it is charged at the priority rate (2x).
 	g, env, opts, prN, model := setup()
 	addComment(g, prN, "chatgpt-codex-connector[bot]", "Bot", limit)
@@ -1449,7 +1462,7 @@ func TestInspectReviewerFallback(t *testing.T) {
 	}
 	body := lastInspect(t, g, prN)
 	if !strings.Contains(body, "fallback: no installed reviewer app can review this head") || !strings.Contains(body, "usage limits for code reviews") ||
-		!strings.Contains(body, "**not fast:** the paid review asked for service tier priority (fast) but was served at default") {
+		!strings.Contains(body, "**not fast:** the review asked for service tier priority (fast) but was served at default") {
 		t.Errorf("the inspect comment does not say which rung, why, or the tier:\n%s", body)
 	}
 	if want := (1200*2.0 + 300*6.0) * 2 / 1e6; math.Abs(res.CostUSD-want) > 1e-12 {
@@ -1566,7 +1579,7 @@ func TestInspectReviewTools(t *testing.T) {
 			t.Fatal(err)
 		}
 		env = maps.Clone(env)
-		env["AAYU_SECRET_XAI"] = "xai-key"
+		env[inspect.ReviewModelURLVar], env[inspect.ReviewModelKeyVar] = "https://gw.example/v1", "review-key"
 		reply := inspectReply("merge", "")
 		reply.Model, reply.ServiceTier = "grok-4.7", "priority"
 		model := &models.Fake{Replies: []models.Response{reply}}
@@ -1592,13 +1605,94 @@ func TestInspectReviewTools(t *testing.T) {
 			t.Errorf("reviewer %s: exit %d, %d model calls, comments %+v %s", tool, code, len(model.Requests), cs, errOut)
 		}
 	}
-	// grok: the gateway model reviews, called directly, at fast serving.
-	_, env, opts, prN, model := setup("grok")
-	if code, res, errOut := inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Rung != inspect.RungB || len(model.Requests) != 1 || model.Requests[0].ServiceTier != models.TierPriority {
-		t.Fatalf("reviewer grok: exit %d rung %q, %d model calls %s", code, res.Rung, len(model.Requests), errOut)
+	// ci, the default: the code-review environment's model reviews, called directly, at fast serving, in its own
+	// family's wire format: a wire-format override of another gateway does not carry over.
+	_, env, opts, prN, model := setup("")
+	env["AAYU_MODELS__GATEWAY__API_STYLE"] = "responses"
+	var route models.Route
+	opts.ModelClient = func(r models.Route, _ string) models.Client { route = r; return model }
+	if code, res, errOut := inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Rung != inspect.RungB || len(model.Requests) != 1 || model.Requests[0].ServiceTier != models.TierPriority || route.Style != models.StyleChat {
+		t.Fatalf("reviewer ci: exit %d rung %q, %d model calls, style %q %s", code, res.Rung, len(model.Requests), route.Style, errOut)
 	}
-	// Unset: a person reviews, and the PR says how to choose.
-	g, env, opts, prN, model := setup("")
+	// The environment names the endpoint's wire format when it is not the family's own (Codex's P2 on #657).
+	_, env, opts, prN, model = setup("")
+	env[inspect.ReviewModelStyleVar] = "responses"
+	opts.ModelClient = func(r models.Route, _ string) models.Client { route = r; return model }
+	if code, _, errOut := inspectApp(t, env, opts, prN, "--ci"); code != 0 || route.Style != models.StyleResponses {
+		t.Fatalf("%s = responses: exit %d, style %q %s", inspect.ReviewModelStyleVar, code, route.Style, errOut)
+	}
+	env[inspect.ReviewModelStyleVar] = "graphql"
+	if code, _, errOut := inspectApp(t, env, opts, prN, "--ci"); code != ExitUsage || !strings.Contains(errOut, "AAYU_REVIEW_MODEL_API_STYLE = \"graphql\": want messages, responses, or chat") {
+		t.Fatalf("a bad wire format under reviewer ci: exit %d %s", code, errOut)
+	}
+	// With an app as the reviewer, a broken CI fallback does not stop the app's review (Codex's P2 on #657).
+	g, env, opts, prN, model := setup("codex")
+	env[inspect.ReviewModelURLVar] = "http://gw.example/v1"
+	env["AAYU_AUTONOMY__APPROVER"] = "founder"
+	code, _, errOut := inspectApp(t, env, opts, prN, "--verbose")
+	g.Mu.Lock()
+	cs := slices.Clone(g.Issues[prN].Comments)
+	g.Mu.Unlock()
+	if code != ExitBlocked || len(model.Requests) != 0 || len(cs) != 1 || !strings.HasPrefix(cs[0].Body, "@codex review\n") || !strings.Contains(errOut, "the CI review fallback is unavailable") {
+		t.Fatalf("reviewer codex, bad %s: exit %d, %d model calls, %d comments %s", inspect.ReviewModelURLVar, code, len(model.Requests), len(cs), errOut)
+	}
+	// Every review asks for fast serving (founder, 2026-10-18), at effort high by default, and medium for Claude Opus,
+	// Claude Fable, and GPT-6 Astra; [inspect] paid_effort, set to high in this fixture, overrides both.
+	for _, c := range []struct{ model, builder, effort string }{
+		{"grok-4.7", "claude", "high"},
+		{"x-ai/grok-4.7", "claude", "high"}, // a gateway-qualified ID (OpenRouter's) keeps its family
+		{"claude-opus-5-5", "codex", "medium"},
+		{"claude-fable-5-1", "codex", "medium"},
+		{"gpt-6-astra", "claude", "medium"},
+		{"claude-opus-5-5 with paid_effort", "codex", "high"},
+	} {
+		g, env, opts, prN, model := setup("")
+		m, override := strings.CutSuffix(c.model, " with paid_effort")
+		env[inspect.ReviewModelVar] = m
+		if !override {
+			env["AAYU_INSPECT__PAID_EFFORT"] = ""
+		}
+		if c.builder == "codex" {
+			writeInspectPackAs(t, opts.Dir, prN, g.Pulls[prN].Head.SHA, nil, "codex", "gpt-6.1-sol")
+		}
+		code, res, errOut := inspectApp(t, env, opts, prN, "--ci")
+		if code != 0 || res.Rung != inspect.RungB || len(model.Requests) != 1 || model.Requests[0].Model != m ||
+			model.Requests[0].ServiceTier != models.TierPriority || model.Requests[0].Effort != c.effort {
+			t.Errorf("review by %s: exit %d rung %q, requests %+v %s", c.model, code, res.Rung, model.Requests, errOut)
+		}
+	}
+	// Each piece the code-review environment lacks fails the gate closed, by name and where to set it; a URL that
+	// carries a credential is refused without being echoed.
+	for _, c := range []struct{ drop, set, want string }{
+		{inspect.ReviewModelURLVar, "", "the variable AAYU_REVIEW_MODEL_URL is not set: add it in Settings → Environments → code-review"},
+		{inspect.ReviewModelKeyVar, "", "the secret AAYU_REVIEW_MODEL_KEY is not set: add it in Settings → Environments → code-review"},
+		{"", "https://user:hunter2@gw.example/v1?api-key=hunter2", "AAYU_REVIEW_MODEL_URL must be the model endpoint's https base URL"},
+		{"", "https://gw.example/v1/chat/completions", "ending before /chat/completions, /responses, or /messages"}, // the client appends it
+	} {
+		_, env, opts, prN, model := setup("ci")
+		delete(env, c.drop)
+		if c.set != "" {
+			env[inspect.ReviewModelURLVar] = c.set
+		}
+		code, _, errOut := inspectApp(t, env, opts, prN, "--ci")
+		if code == 0 || len(model.Requests) != 0 || !strings.Contains(errOut, c.want) || strings.Contains(errOut, "hunter2") {
+			t.Errorf("code-review without %s: exit %d, %d model calls %s", cmp.Or(c.drop, c.set), code, len(model.Requests), errOut)
+		}
+	}
+	// reviewer = "model" keeps the review lane's configured gateway: the code-review environment does not replace it.
+	{
+		_, env, opts, prN, model := setup("model")
+		env["AAYU_MODELS__GATEWAY__BASE_URL"], env["AAYU_MODELS__GATEWAY__SECRET"], env["AAYU_SECRET_LANE"] = "https://lane.example/v1", "lane", "lane-key"
+		var bases []string
+		opts.ModelClient = func(r models.Route, _ string) models.Client { bases = append(bases, r.BaseURL); return model }
+		_, _, errOut := inspectApp(t, env, opts, prN, "--ci")
+		if len(bases) == 0 || slices.ContainsFunc(bases, func(b string) bool { return b != "https://lane.example/v1" }) {
+			t.Errorf("reviewer model called %v, want the configured gateway only: %s", bases, errOut)
+		}
+	}
+	// Emptied: a person reviews, and the PR says how to choose.
+	g, env, opts, prN, model = setup("")
+	env["AAYU_INSPECT__REVIEWER"] = ""
 	if code, res, _ := inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || res.Rung != inspect.RungHuman || len(model.Requests) != 0 ||
 		!strings.Contains(lastInspect(t, g, prN), `set [inspect] reviewer = "<tool>"`) {
 		t.Fatalf("reviewer unset: exit %d rung %q\n%s", code, res.Rung, lastInspect(t, g, prN))

@@ -254,8 +254,10 @@ type GitHub struct {
 	Projects   []map[string]any  // Projects v2: id, title
 	Secrets    map[string]string // Actions secret name -> encrypted value
 	Variables  map[string]string
-	PublicKey  string         // base64 Curve25519 key for Actions secrets
-	App        map[string]any // what /app-manifests/{code}/conversions returns
+	// Environments are the repository's deployment environments by name.
+	Environments map[string]*Environment
+	PublicKey    string         // base64 Curve25519 key for Actions secrets
+	App          map[string]any // what /app-manifests/{code}/conversions returns
 	// Device is GitHub's OAuth device flow (/login/device/code and
 	// /login/oauth/access_token, both form-encoded): nil serves no device flow.
 	Device *DeviceFlow
@@ -646,6 +648,63 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			out = out[lo:hi]
 		}
 		reply(200, out)
+	case g.RulesetsUnavailable && strings.HasPrefix(p, repo+"/environments/"): // GitHub Free has neither for a private repository
+		reply(403, map[string]any{"message": "Upgrade to GitHub Pro or make this repository public to enable this feature.", "status": "403"})
+	case strings.HasPrefix(p, repo+"/environments/"):
+		name, rest, _ := strings.Cut(strings.TrimPrefix(p, repo+"/environments/"), "/")
+		if g.Environments == nil {
+			g.Environments = map[string]*Environment{}
+		}
+		env := g.Environments[name]
+		switch {
+		case m == "PUT" && rest == "":
+			if env == nil {
+				env = &Environment{Variables: map[string]string{}}
+				g.Environments[name] = env
+			}
+			env.Policy, _ = body["deployment_branch_policy"].(map[string]any)
+			reply(200, map[string]any{"name": name})
+		case env == nil:
+			notFound()
+		case m == "GET" && rest == "":
+			reply(200, map[string]any{"name": name, "deployment_branch_policy": env.Policy})
+		case m == "GET" && rest == "deployment-branch-policies":
+			ps := []any{}
+			for i, b := range env.Branches {
+				if b != "" {
+					ps = append(ps, map[string]any{"id": i + 1, "name": b, "type": "branch"})
+				}
+			}
+			// GitHub pages this list: per_page (default 30) from page (default 1).
+			per, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
+			pg, _ := strconv.Atoi(r.URL.Query().Get("page"))
+			per, pg = cmp.Or(per, 30), cmp.Or(pg, 1)
+			ps = ps[min((pg-1)*per, len(ps)):min(pg*per, len(ps))]
+			reply(200, map[string]any{"total_count": len(ps), "branch_policies": ps})
+		case m == "DELETE" && strings.HasPrefix(rest, "deployment-branch-policies/"):
+			i, err := strconv.Atoi(strings.TrimPrefix(rest, "deployment-branch-policies/"))
+			if err != nil || i < 1 || i > len(env.Branches) || env.Branches[i-1] == "" {
+				notFound()
+				return
+			}
+			env.Branches[i-1] = "" // keeps the other IDs stable
+			w.WriteHeader(204)
+		case m == "POST" && rest == "deployment-branch-policies":
+			env.Branches = append(env.Branches, str("name"))
+			reply(200, map[string]any{"name": str("name")})
+		case m == "POST" && rest == "variables":
+			env.Variables[str("name")] = str("value")
+			w.WriteHeader(201)
+		case m == "GET" && strings.HasPrefix(rest, "variables/"):
+			v, ok := env.Variables[strings.TrimPrefix(rest, "variables/")]
+			if !ok {
+				notFound()
+				return
+			}
+			reply(200, map[string]any{"name": strings.TrimPrefix(rest, "variables/"), "value": v})
+		default:
+			notFound()
+		}
 	case m == "PUT" && strings.HasPrefix(p, repo+"/rulesets/"):
 		for _, rs := range g.Rulesets {
 			if fmt.Sprint(rs["id"]) == strings.TrimPrefix(p, repo+"/rulesets/") {
@@ -1235,6 +1294,14 @@ func atoi(s string) int { n, _ := strconv.Atoi(s); return n }
 
 // DeviceToken is the access token the fake device flow issues on approval.
 const DeviceToken = "device-flow-token"
+
+// Environment is a deployment environment: its branch policy (as PUT sent
+// it), the branches it admits, and its variables.
+type Environment struct {
+	Policy    map[string]any
+	Branches  []string
+	Variables map[string]string
+}
 
 // DeviceFlow scripts GitHub's OAuth device flow.
 type DeviceFlow struct {

@@ -36,7 +36,7 @@ agent runs the verb as a skill, and the same rules apply either way.
 |  | [`baseline`](baseline.md) | Captures reference screenshots of a commit to compare later changes against. | UX Researcher & Evolutionist (Hanu) |
 | [Build it](../journey-4-build.md) | [`build`](build.md) | Writes the code for a Ready story in small checked steps, one layer at a time, and opens a pull request. | AI Native Engineer (Nakul) |
 | [Prove it](../journey-5-prove.md) | [`verify`](verify.md) | Runs the fixed checks (tests, security, secrets, dependencies, accessibility, speed) and records the results. | AI Native Engineer (Nakul) |
-|  | [`inspect`](inspect.md) | An agent app from another vendor, installed on your account, reviews the pull request against every promise; aayu reads its reply as merge, fix, or rebuild. | Engineering Manager (Drona) |
+|  | [`inspect`](inspect.md) | A model from another vendor, or an agent app you choose, reviews the pull request against every promise; aayu reads its reply as merge, fix, or rebuild. | Engineering Manager (Drona) |
 |  | [`proof`](proof.md) | Stores, fetches, and checks the proof packs that hold the evidence for each change. | Quality Architect (Yama) |
 | [Ship it](../journey-6-ship.md) | [`ship`](ship.md) | Merges a proven pull request after your yes, and writes down who approved what, on which evidence. | Engineering Manager (Drona) |
 | [Release it](../journey-7-release.md) | [`release`](release.md) | Moves shipped work up to a snapshot or stable release, after a full gate, and schedules the measurement. | DevOps & DevEx Tinkerer (Nala) |

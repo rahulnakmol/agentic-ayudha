@@ -2,6 +2,7 @@ package initrepo
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto"
 	"crypto/rand"
@@ -34,8 +35,10 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
+	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
+	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/posthog"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/sentry"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
@@ -203,7 +206,7 @@ func (in *Init) retired(x Extras) error {
 	return nil
 }
 
-func (in *Init) gates(_ context.Context, x Extras) error {
+func (in *Init) gates(ctx context.Context, x Extras) error {
 	wfs := GateWorkflows(x.Version, x.Branches...)
 	for _, name := range slices.Sorted(func(y func(string) bool) {
 		for k := range wfs {
@@ -224,8 +227,118 @@ func (in *Init) gates(_ context.Context, x Extras) error {
 	if err := in.hostConfigOwners(); err != nil {
 		return err
 	}
+	// A plan without environments (a private repository on GitHub Free) leaves the CI review unavailable, as the
+	// ledger rulesets are; any other failure stops init, so the key is never left reachable by another branch.
+	if err := in.reviewEnvironment(ctx, x.Branches); err != nil {
+		var er *gh.ErrorResponse
+		if !errors.As(err, &er) || er.Response == nil || er.Response.StatusCode != http.StatusForbidden || !strings.Contains(er.Message, "Upgrade to GitHub") {
+			return fmt.Errorf("the %s environment: %w", inspect.ReviewEnvironment, err)
+		}
+		in.note("gates", "environment", inspect.ReviewEnvironment, "not created", "this repository's GitHub plan has no environments ("+er.Message+"), so the CI review cannot run: set [inspect] reviewer to a review app or human, or make the repository public or upgrade, then run aayu init --gates again")
+	}
 	in.note("gates", "secrets", "AAYUDHA_APP_CLIENT_ID, AAYUDHA_APP_PRIVATE_KEY", "unchanged",
 		"the broker needs the bot App's client ID (repository variable) and private key (repository secret); init --identity sets both. Model keys for CI lanes go in repository or environment secrets")
+	return nil
+}
+
+type branchPolicy struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+// reviewEnvironment creates the code-review environment the merge gate's
+// inspect job runs under (docs/guide/how-review.md): deployment limited to
+// the base branches and the default branch, so no PR branch reaches its key.
+// A pull_request_target run takes its workflow from the default branch, and
+// GitHub checks environment rules against that branch (since 2025-12-08), so
+// the default branch must be listed. The review model's endpoint and ID are
+// variables, pre-filled with the recommended model, and a note says to set
+// the key. A second run keeps the values a person changed.
+func (in *Init) reviewEnvironment(ctx context.Context, branches []string) error {
+	r, name := in.Repo, inspect.ReviewEnvironment
+	base := "/repos/" + r.FullName + "/environments/" + name
+	if d := cmp.Or(r.Default, "main"); !slices.Contains(branches, d) {
+		branches = append(slices.Clone(branches), d)
+	}
+	if in.dry() {
+		in.note("gates", "environment", name, "planned", "deployment branches "+strings.Join(branches, ", ")+"; variables "+inspect.ReviewModelURLVar+", "+inspect.ReviewModelVar)
+		return nil
+	}
+	// An environment that admits any branch (or none exists) gets the custom policy.
+	var cur struct {
+		Policy *struct {
+			Custom bool `json:"custom_branch_policies"`
+		} `json:"deployment_branch_policy"`
+	}
+	if err := in.rest(ctx, http.MethodGet, base, nil, &cur); err != nil && !github.NotFound(err) {
+		return err
+	}
+	if cur.Policy == nil || !cur.Policy.Custom {
+		policy := map[string]any{"deployment_branch_policy": map[string]any{"protected_branches": false, "custom_branch_policies": true}}
+		if _, err := in.GH.Write(ctx, actions.Action{Kind: "github.environment.put", Target: r.FullName, Request: &actions.Request{Method: http.MethodPut, Path: base}, Payload: map[string]any{"name": name}},
+			func(ctx context.Context) (any, error) { return nil, in.rest(ctx, http.MethodPut, base, policy, nil) }); err != nil {
+			return err
+		}
+	}
+	// Every page: a rule left on a later one would still admit its ref.
+	var have struct {
+		Policies []branchPolicy `json:"branch_policies"`
+	}
+	for page := 1; ; page++ {
+		var got struct {
+			Policies []branchPolicy `json:"branch_policies"`
+		}
+		if err := in.rest(ctx, http.MethodGet, fmt.Sprintf("%s/deployment-branch-policies?per_page=100&page=%d", base, page), nil, &got); err != nil {
+			return err
+		}
+		have.Policies = append(have.Policies, got.Policies...)
+		if len(got.Policies) < 100 {
+			break
+		}
+	}
+	// Any other rule (a wildcard, a tag, an old branch) would let that ref reach the key, so it goes.
+	for _, p := range have.Policies {
+		if p.Type != "tag" && slices.Contains(branches, p.Name) {
+			continue
+		}
+		path := fmt.Sprintf("%s/deployment-branch-policies/%d", base, p.ID)
+		if _, err := in.GH.Write(ctx, actions.Action{Kind: "github.environment.branch.delete", Target: r.FullName, Request: &actions.Request{Method: http.MethodDelete, Path: path}, Payload: map[string]any{"name": p.Name, "type": p.Type}},
+			func(ctx context.Context) (any, error) { return nil, in.rest(ctx, http.MethodDelete, path, nil, nil) }); err != nil {
+			return err
+		}
+		in.note("gates", "environment", name, "changed", fmt.Sprintf("removed the deployment rule %s (%s): only the base branches and the default branch may reach the review model's key", p.Name, cmp.Or(p.Type, "branch")))
+	}
+	for _, b := range branches {
+		if b == "" || slices.ContainsFunc(have.Policies, func(p branchPolicy) bool { return p.Name == b && p.Type != "tag" }) {
+			continue
+		}
+		body := map[string]any{"name": b, "type": "branch"}
+		if _, err := in.GH.Write(ctx, actions.Action{Kind: "github.environment.branch", Target: r.FullName, Request: &actions.Request{Method: http.MethodPost, Path: base + "/deployment-branch-policies"}, Payload: body},
+			func(ctx context.Context) (any, error) {
+				return nil, in.rest(ctx, http.MethodPost, base+"/deployment-branch-policies", body, nil)
+			}); err != nil {
+			return err
+		}
+	}
+	for _, v := range [][2]string{{inspect.ReviewModelURLVar, inspect.RecommendedReviewURL}, {inspect.ReviewModelVar, inspect.RecommendedReviewModel}} {
+		err := in.rest(ctx, http.MethodGet, base+"/variables/"+v[0], nil, nil)
+		if !github.NotFound(err) {
+			if err != nil {
+				return err
+			}
+			continue // a person's value stays
+		}
+		body := map[string]any{"name": v[0], "value": v[1]}
+		if _, err := in.GH.Write(ctx, actions.Action{Kind: "github.variable.create", Target: r.FullName, Request: &actions.Request{Method: http.MethodPost, Path: base + "/variables"}, Payload: body},
+			func(ctx context.Context) (any, error) {
+				return nil, in.rest(ctx, http.MethodPost, base+"/variables", body, nil)
+			}); err != nil {
+			return err
+		}
+	}
+	in.note("gates", "environment", name, "written", fmt.Sprintf("deployment branches %s; %s = %s and %s = %s (change either for another endpoint or model); set the secret %s, the endpoint's key, in Settings → Environments → %s",
+		strings.Join(branches, ", "), inspect.ReviewModelURLVar, inspect.RecommendedReviewURL, inspect.ReviewModelVar, inspect.RecommendedReviewModel, inspect.ReviewModelKeyVar, name))
 	return nil
 }
 

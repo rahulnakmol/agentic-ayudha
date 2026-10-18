@@ -33,6 +33,7 @@ import (
 	aayudha "github.com/rahulnakmol/agentic-ayudha"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/initrepo"
+	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -274,6 +275,17 @@ func TestInitWithoutRulesets(t *testing.T) {
 	if !strings.Contains(files[initrepo.StatePath], `"rulesets_unapplied": "GitHub answered 403: Upgrade to GitHub Pro`) {
 		t.Fatalf("state.json does not record why:\n%s", files[initrepo.StatePath])
 	}
+	// The same plan has no environments: --gates still completes and says the CI review cannot run here.
+	code, rep, errOut = runInitCmd(t, g, dir, "init", "--yes", "--gates")
+	said = ""
+	for _, c := range rep.Changes {
+		if c.Kind == "environment" {
+			said = c.Result + ": " + c.Detail
+		}
+	}
+	if code != 0 || !strings.HasPrefix(said, "not created: ") || !strings.Contains(said, "[inspect] reviewer to a review app or human") {
+		t.Fatalf("init --gates without environments: exit %d, said %q: %s", code, said, errOut)
+	}
 	g.Mu.Lock()
 	g.RulesetsUnavailable = false
 	g.Mu.Unlock()
@@ -391,6 +403,13 @@ func TestInitExtras(t *testing.T) {
 			return "code-1", nil
 		}}
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}
+	// A code-review environment someone made earlier, which also admits feature branches.
+	// Its 101st rule sits on the second page of GitHub's list.
+	old := []string{"feature/*"}
+	for i := range 100 {
+		old = append(old, fmt.Sprintf("old/%d", i))
+	}
+	g.Environments = map[string]*fake.Environment{inspect.ReviewEnvironment: {Policy: map[string]any{"protected_branches": false, "custom_branch_policies": true}, Branches: old, Variables: map[string]string{}}}
 	args := []string{"init", "--yes", "--json", "--gates", "--projects", "--identity", "--integrations"}
 	code, out, errOut := run(t, env, opts, args...)
 	if code != 0 {
@@ -497,6 +516,22 @@ func TestInitExtras(t *testing.T) {
 		}
 	}
 
+	// The code-review environment: only the base branches deploy to it (the feature-branch rule is removed), so no PR
+	// branch reaches the review model's key; its two variables carry the recommended endpoint and model, and the key is
+	// left to the person.
+	g.Mu.Lock()
+	ce := g.Environments[inspect.ReviewEnvironment]
+	if ce == nil || ce.Policy["custom_branch_policies"] != true || ce.Policy["protected_branches"] != false ||
+		!slices.Equal(slices.DeleteFunc(slices.Clone(ce.Branches), func(b string) bool { return b == "" }), []string{"dev", "rolling", "main"}) ||
+		ce.Variables[inspect.ReviewModelURLVar] != inspect.RecommendedReviewURL || ce.Variables[inspect.ReviewModelVar] != inspect.RecommendedReviewModel || len(ce.Variables) != 2 {
+		t.Errorf("the code-review environment after --gates: %+v", ce)
+	}
+	ce.Variables[inspect.ReviewModelVar] = "gemini-3.8-flash" // a person's choice survives the next run
+	g.Mu.Unlock()
+	if !strings.Contains(errOut, "set the secret AAYU_REVIEW_MODEL_KEY, the endpoint's key, in Settings → Environments → code-review") && !strings.Contains(out, "set the secret AAYU_REVIEW_MODEL_KEY") {
+		t.Errorf("init does not say to set the review model's key:\n%s\n%s", out, errOut)
+	}
+
 	// Idempotent: the same flags again write nothing.
 	g.Reset()
 	if code, _, errOut := run(t, env, opts, args...); code != 0 || len(g.Writes()) != 0 {
@@ -510,6 +545,18 @@ func TestInitExtras(t *testing.T) {
 		}
 		t.Fatal("second run with extras changed files")
 	}
+
+	// A default branch outside [branches]: pull_request_target checks the environment against it, so init adds it.
+	g.Default = "trunk"
+	if code, _, errOut := run(t, env, opts, args...); code != 0 {
+		t.Fatalf("run with default branch trunk: exit %d: %s", code, errOut)
+	}
+	g.Mu.Lock()
+	if got := slices.DeleteFunc(slices.Clone(ce.Branches), func(b string) bool { return b == "" }); !slices.Equal(got, []string{"dev", "rolling", "main", "trunk"}) {
+		t.Errorf("code-review deployment branches with default branch trunk: %v", got)
+	}
+	g.Mu.Unlock()
+	g.Default = "dev"
 
 	// uninit removes what lives in the repository and lists the rest.
 	if code, _, errOut := run(t, env, opts, "uninit", "--yes"); code != 0 {

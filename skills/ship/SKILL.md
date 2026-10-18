@@ -83,7 +83,8 @@ over MCP, `--solo-bypass` is a person's, and as the host's model you prepare and
    Engineering Manager's plan-time review (`aayu plan <story> --approve`) must be on the ledger.
    With `[autonomy] proof` on, a PR into the integration branch needs none of that: it merges on proof when every
    required check of the base branch is green, the pack verifies with its floors holding, and inspect is at `merge`
-   with a review rung in `[autonomy] proof_rungs`, all read from the base branch's `.aayudha/config.toml` at its tip,
+   with a review rung in `[autonomy] proof_rungs` (default A, B, and C: a same-family review, or one of a builder of
+   unknown family, is enough; set `["A", "B"]` to require another family), all read from the base branch's `.aayudha/config.toml` at its tip,
    never the PR's own. If that tip moves before the merge, ship stops and you run it again. A PR that touches the narrow set needs the human pass as above:
    `[autonomy] always_person`, a change to `always_person_sections` in an `always_person_config` file, or a workflow
    that holds a credential (a secret, the workflow token, an environment, or a write permission). The ship record

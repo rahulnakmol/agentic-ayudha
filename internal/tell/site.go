@@ -93,6 +93,7 @@ var sitePages = []SitePage{
 	{Out: "how-ledger.html", Nav: "The ledger branch", Group: "How it works", Source: "docs/guide/how-ledger.md"},
 	{Out: "how-proof-packs.html", Nav: "Proof packs", Group: "How it works", Source: "docs/guide/how-proof-packs.md"},
 	{Out: "how-merge-gate.html", Nav: "The merge gate", Group: "How it works", Source: "docs/guide/how-merge-gate.md"},
+	{Out: "how-review.html", Nav: "Code review in the gate", Group: "How it works", Source: "docs/guide/how-review.md"},
 	{Out: "how-floors.html", Nav: "Floors in detail", Group: "How it works", Source: "docs/guide/how-floors.md"},
 	{Out: "how-verify-maps.html", Nav: "Feature maps and behaviour checks", Group: "How it works", Source: "docs/guide/how-verify-maps.md"},
 	{Out: "how-models.html", Nav: "Model gateway and lanes", Group: "How it works", Source: "docs/guide/how-models.md"},

@@ -3,21 +3,21 @@
 #
 # pull_request_target runs this file as it is on the base branch, so a PR cannot weaken its own gate. The PR's
 # code is checked out and run only in the `gate` job, which holds no secrets (a read-only workflow token), and
-# only inside `aayu verify`'s sandbox (scrubbed environment, no network for the test run). No job holds an AI key
-# (founder decision 2026-10-15): the `inspect` job reads an installed agent app's review, never runs PR code, and
-# reads the diff through the API and the pack the gate produced.
+# only inside `aayu verify`'s sandbox (scrubbed environment, no network for the test run). The one AI key is the
+# code-review environment's (founder, 2026-10-18), and only the `inspect` job holds it: that job never runs PR code,
+# and reads the diff through the API and the pack the gate produced.
 #
 #   gate     re-runs `verify` on the PR head and fails when a floor misses, the pack does not prove the head,
 #            the story's Completion Goal drifted from its Ready snapshot, or a criterion has no evidence. It keeps
 #            the pack (pack.json and every artifact, media included) as the aayudha-pack run artifact for
 #            [proof] retention_days, at most the repository's artifact retention limit.
-#   inspect  on every PR that is ready for review, story or not, reads the review of the PR head by the agent app
-#            [inspect] reviewer picks (an app installed on the org or account, @claude, @codex, or @cursor, of a family
-#            other than the builder's, else a human): a reply in the stated format, or Codex's own review of the exact
-#            head (its automatic review counts). `aayu inspect <pr>`, run by the builder or a person under their own
-#            account (`aayu build` does it after each push), posts the request; the apps answer people, never a
-#            workflow token. aayu turns the reply into the disposition, criterion verdicts (a story PR's), and a sealed
-#            coverage manifest; a missing or malformed reply, fix, rebuild, or an unreviewed file fails it. A PR that
+#   inspect  on every PR that is ready for review, story or not, reviews the PR head with the tool [inspect] reviewer
+#            names. ci (the default): it calls the model the code-review environment names, of a family other than
+#            the builder's. An app (installed on the org or account): it reads the app's reply in the stated format, or
+#            Codex's own review of the exact head; `aayu inspect <pr>`, run by the builder or a person under their own
+#            account (`aayu build` does it after each push), posts the request, since the apps answer people, never a
+#            workflow token. aayu turns the review into the disposition, criterion verdicts (a story PR's), and a sealed
+#            coverage manifest; a missing or malformed review, fix, rebuild, or an unreviewed file fails it. A PR that
 #            changes only docs passes without a review.
 #   reply    on a comment or review on the PR (issue_comment and pull_request_review), re-runs the failed jobs of
 #            the head's pull_request_target run once its reviewer has replied, so the inspect check on the head
@@ -28,8 +28,10 @@
 #            `aayu ship`, run by a human, checks that the artifact came from this workflow's run on the exact head
 #            and lands pack.json (no media) on the ledger under the human's identity.
 #
-# Setup: install a reviewer app (Claude, Codex, or Cursor) on the org or account and name it in [inspect] apps
-# (`aayu doctor` detects it). No model key, bot App, bucket, or secret.
+# Setup (docs/guide/how-review.md): in Settings → Environments → code-review (`aayu init --gates` creates it, its
+# deployment branches limited to the base branches), set the variables AAYU_REVIEW_MODEL_URL (the model endpoint's base
+# URL) and AAYU_REVIEW_MODEL (the model ID), and the secret AAYU_REVIEW_MODEL_KEY. Or install a reviewer app and name it
+# in [inspect] reviewer and [inspect] apps (`aayu doctor` detects it). No bot App or bucket.
 name: aayudha-merge-gate
 
 on:
@@ -179,10 +181,10 @@ jobs:
     needs: gate
     if: github.event_name == 'pull_request_target'
     runs-on: ubuntu-latest
-    # This repository's rung B goes through the AI gateway (founder, 2026-10-18: grok-4.7 at high effort). The
-    # environment admits only dev, rolling, and main, which a pull_request_target run on dev is; the job checks out the
-    # base branch and runs no PR code.
-    environment: ai-gateway
+    # The code-review environment holds the review model's endpoint, ID, and key. Restrict its deployment branches to the
+    # base branches and the default branch (aayu init --gates does). GitHub checks a pull_request_target run against the
+    # default branch, so it must be listed; no PR branch reaches the key.
+    environment: code-review
     timeout-minutes: 15
     permissions:
       contents: read
@@ -220,22 +222,19 @@ jobs:
         with:
           name: aayudha-pack
           path: .aayudha/proof/
-      # No AI key by default: the reviewer app's reply on the PR is the review; a missing or malformed one fails
-      # closed. Rung B (founder, 2026-10-18) is the one opt-in exception: when [inspect] paid_reviewer names a model
-      # and the repository adds its provider's key as the secret named below for its family (docs/guide/
-      # how-merge-gate.md), a PR no installed app can review from another family is reviewed with it, within
-      # [budget] per_pr_inspect_max, labelled (B, paid). An unset secret is empty, and the app reviews. This job checks out
-      # the base branch and runs no PR code; the diff reaches the model only as delimited untrusted data.
-      - name: Inspect (read the reviewer app's reply, or the opt-in paid reviewer)
+      # [inspect] reviewer = "ci" (the default; docs/guide/how-review.md): this job calls the model the code-review
+      # environment names, within [budget] per_pr_inspect_max, at fast serving, labelled (B, paid), and fails closed,
+      # naming what is missing, until its two variables and its secret are set. With an app as the reviewer, the app's
+      # reply on the PR is the review, and the CI review is its fallback. This job checks out the base branch and runs no
+      # PR code; the diff reaches the model only as delimited untrusted data. Logs and comments name the model, never the
+      # key or the endpoint's URL.
+      - name: Inspect (call the review model, or read the reviewer app's reply)
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          AAYU_SECRET_ANTHROPIC: ${{ secrets.AAYU_SECRET_ANTHROPIC }}
-          AAYU_SECRET_OPENAI: ${{ secrets.AAYU_SECRET_OPENAI }}
-          AAYU_SECRET_GOOGLE: ${{ secrets.AAYU_SECRET_GOOGLE }}
-          AAYU_SECRET_XAI: ${{ secrets.AAYU_SECRET_XAI }}
-          AAYU_MODELS__GATEWAY__BASE_URL: ${{ vars.AAYU_AI_GATEWAY_URL }}
-          AAYU_MODELS__GATEWAY__SECRET: ai-gateway
-          AAYU_SECRET_AI_GATEWAY: ${{ secrets.AAYU_SECRET_AI_GATEWAY }}
+          AAYU_REVIEW_MODEL_URL: ${{ vars.AAYU_REVIEW_MODEL_URL }}
+          AAYU_REVIEW_MODEL: ${{ vars.AAYU_REVIEW_MODEL }}
+          AAYU_REVIEW_MODEL_API_STYLE: ${{ vars.AAYU_REVIEW_MODEL_API_STYLE }}
+          AAYU_REVIEW_MODEL_KEY: ${{ secrets.AAYU_REVIEW_MODEL_KEY }}
         run: aayudha inspect "$PR" --ci --repo "$REPO"
 
   pack:

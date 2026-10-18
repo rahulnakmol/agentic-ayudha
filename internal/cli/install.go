@@ -456,7 +456,7 @@ func (e *Env) reviewerAppsNote(ctx context.Context) []string {
 // ReviewTools are the values of [inspect] reviewer a person picks from
 // (founder, 2026-10-18: "People need to choose one code review tool"; "auto
 // cannot be an option").
-var ReviewTools = []string{inspect.AppCodex, inspect.AppCodeRabbit, inspect.AppGreptile, inspect.AppClaude, inspect.AppCursor, inspect.ReviewerGrok, inspect.ReviewerHuman}
+var ReviewTools = []string{inspect.ReviewerCI, inspect.AppCodex, inspect.AppCodeRabbit, inspect.AppGreptile, inspect.AppClaude, inspect.AppCursor, inspect.ReviewerHuman}
 
 // chooseReviewTool makes install --apply require the merge gate's one review
 // tool: when [inspect] reviewer is unset (or a leftover "auto"), it asks on a
@@ -481,7 +481,9 @@ func (e *Env) chooseReviewTool(ctx context.Context) error {
 			Reviewer string `toml:"reviewer"`
 		} `toml:"inspect"`
 	}
-	if toml.Unmarshal(b, &v) == nil && v.Inspect.Reviewer != "" && v.Inspect.Reviewer != "auto" {
+	// Only a tool the gate can use counts as chosen ("model" is aayudha's own
+	// evals); a leftover value such as "amp", or a typo, asks again.
+	if toml.Unmarshal(b, &v) == nil && (slices.Contains(ReviewTools, v.Inspect.Reviewer) || v.Inspect.Reviewer == inspect.ReviewerModel) {
 		return nil
 	}
 	if !e.isTerminal(e.In) {
@@ -495,9 +497,12 @@ func (e *Env) chooseReviewTool(ctx context.Context) error {
 			}
 		}
 	}
-	fmt.Fprintf(e.Err, "Which tool reviews this repository's pull requests? Detected: %s. [%s]: ", cmp.Or(strings.Join(found, ", "), "none"), strings.Join(ReviewTools, "/"))
-	line, _ := bufio.NewReader(e.In).ReadString('\n')
-	ans := strings.ToLower(strings.TrimSpace(line))
+	fmt.Fprintf(e.Err, "Which tool reviews this repository's pull requests? Detected: %s. [%s] (Enter: ci, the model the code-review environment names): ", cmp.Or(strings.Join(found, ", "), "none"), strings.Join(ReviewTools, "/"))
+	line, err := bufio.NewReader(e.In).ReadString('\n')
+	if err != nil && line == "" {
+		return stop // no answer at all; Enter picks ci
+	}
+	ans := cmp.Or(strings.ToLower(strings.TrimSpace(line)), inspect.ReviewerCI)
 	if !slices.Contains(ReviewTools, ans) {
 		return stop
 	}

@@ -747,8 +747,8 @@ func TestReviewLadder(t *testing.T) {
 		{"codex cannot review: the next installed app in the fixed order", anthropic, "codex", all, nil, []string{"codex"}, "coderabbit", RungA},
 		{"codex and coderabbit cannot: greptile", anthropic, "codex", all, nil, []string{"codex", "coderabbit"}, "greptile", RungA},
 		{"claude cannot: codex comes first in the order", anthropic, "claude", all, nil, []string{"claude"}, "codex", RungA},
-		{"no installed app left: a person (grok is the caller's step)", anthropic, "codex", []string{"codex"}, nil, []string{"codex"}, "", RungHuman},
-		{"grok's own fallback: the first installed app in the order", anthropic, "grok", []string{"claude", "greptile"}, nil, nil, "greptile", RungA},
+		{"no installed app left: a person (the CI review is the caller's step)", anthropic, "codex", []string{"codex"}, nil, []string{"codex"}, "", RungHuman},
+		{"the CI review's own fallback: the first installed app in the order", anthropic, "ci", []string{"claude", "greptile"}, nil, nil, "greptile", RungA},
 		{"human", anthropic, "human", all, nil, nil, "", RungHuman},
 		{"unset: a person", anthropic, "", all, nil, nil, "", RungHuman},
 		{"a leftover auto: a person", anthropic, "auto", all, nil, nil, "", RungHuman},
@@ -766,7 +766,7 @@ func TestReviewLadder(t *testing.T) {
 	if anthropic.Rung(verbs.FamilyOf("gpt-6.1-sol")) != RungA || anthropic.Rung(verbs.FamilyOf("claude-sonnet-5-5")) != RungC || anthropic.Rung(verbs.FamilyOf("composer-2.5")) != RungC {
 		t.Error("the reported model's family does not settle the rung")
 	}
-	if l := anthropic.RungLabel(RungC, "claude", verbs.FamilyAnthropic); !strings.Contains(l, "same-family review (C)") || !strings.Contains(l, "never counts toward autonomy") {
+	if l := anthropic.RungLabel(RungC, "claude", verbs.FamilyAnthropic); !strings.Contains(l, "same-family review (C)") || !strings.Contains(l, "never counts toward the streak, and counts for merge on proof only where [autonomy] proof_rungs lists C") {
 		t.Errorf("C label: %q", l)
 	}
 	if l := unknown.RungLabel(RungC, "codex", verbs.FamilyOpenAI); !strings.Contains(l, "builder family unknown") {
