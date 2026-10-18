@@ -41,8 +41,9 @@ skip the local file in CI too. Outside CI the local file applies as before.
 ### What protects the policy keys
 
 The keys that decide what agents may do, such as floors, `[autonomy]`, and `[models]`, are protected by protecting the
-files that hold them. `internal/config/defaults.toml` and `.aayudha/config.toml` are both in `.github/CODEOWNERS`, so a
-change needs a human CODEOWNER's approval (see [trust model and identities](how-trust.md)). `CONSTRAINTS.md` is
+files that hold them. `internal/config/defaults.toml` and `.aayudha/config.toml` are in `.github/CODEOWNERS`, and so
+are `.aayudha/config.json` and `.aayudha/config.local.{toml,json}`, which a pull request could otherwise add
+unreviewed. A change to any of them needs a human CODEOWNER's approval (see [trust model and identities](how-trust.md)). `CONSTRAINTS.md` is
 generated from `defaults.toml`, and the `generate-drift` check fails when the two disagree, so a default cannot be
 loosened quietly. The `local`, `env`, and `flag` layers can still change these keys on one machine; that changes what
 an agent on that machine does, but not what the protected files or CI's gate workflows say, because CI skips the
