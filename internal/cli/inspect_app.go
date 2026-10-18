@@ -544,8 +544,8 @@ func (e *Env) rerunInspect(ctx context.Context, c *github.Client, owner, name st
 			return Wrap(ExitExternal, err)
 		}
 		state := map[string]string{}
-		for _, r := range checks.CheckRuns {
-			if _, seen := state[r.GetName()]; !seen { // newest first
+		for _, r := range gateCheckRuns(checks.CheckRuns) {
+			if _, seen := state[r.GetName()]; !seen { // newest first, reply runs dropped
 				state[r.GetName()] = r.GetConclusion()
 			}
 		}

@@ -1,0 +1,7 @@
+[[criterion]]
+id = 1
+tests = ["./internal/cli:TestShipRefusals"]
+
+[[criterion]]
+id = 2
+tests = ["./internal/cli:TestShipRefusals"]

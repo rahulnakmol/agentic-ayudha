@@ -173,6 +173,31 @@ func TestShipRefusals(t *testing.T) {
 			t.Fatalf("ship with %s %s/%s: %d %s", gate.Name, gate.Status, gate.Conclusion, code, out)
 		}
 	}
+	// A review on the PR runs the merge gate for its reply job only (#690, #643):
+	// that run's skipped gate checks, newer than the gate's own, hide nothing,
+	// and ship goes on to the human pass. A newer gate run's red check still refuses.
+	gateRun(t, g, dir, prN, head, coverageHolds)
+	suite := func(id int64, runs ...fake.CheckRun) []fake.CheckRun {
+		for i := range runs {
+			runs[i].Status, runs[i].Suite = "completed", &fake.Suite{ID: id}
+		}
+		return runs
+	}
+	g.Mu.Lock()
+	gate := suite(1, append(g.CheckRuns[head], fake.CheckRun{Name: "aayudha/inspect-reply", Conclusion: "skipped"})...)
+	reply := suite(2, fake.CheckRun{Name: "aayudha/inspect-reply", Conclusion: "failure"}, fake.CheckRun{Name: "aayudha/merge-gate", Conclusion: "skipped"},
+		fake.CheckRun{Name: "aayudha/inspect", Conclusion: "skipped"}, fake.CheckRun{Name: "aayudha/pack", Conclusion: "skipped"})
+	g.CheckRuns[head] = append(slices.Clone(reply), gate...)
+	g.Mu.Unlock()
+	if code, out := ship(prN); code != ExitBlocked || strings.Contains(out, "the merge gate must be green") || !strings.Contains(out, "no human pass") {
+		t.Fatalf("ship with a reply run's skipped checks newer than the gate's green ones: %d %s", code, out)
+	}
+	g.Mu.Lock()
+	g.CheckRuns[head] = append(suite(3, fake.CheckRun{Name: "aayudha/merge-gate", Conclusion: "failure"}, fake.CheckRun{Name: "aayudha/inspect-reply", Conclusion: "skipped"}), append(reply, gate...)...)
+	g.Mu.Unlock()
+	if code, out := ship(prN); code != ExitBlocked || !strings.Contains(out, "aayudha/merge-gate is failure on "+short(head)) {
+		t.Fatalf("ship with a newer red gate run behind a reply run: %d %s", code, out)
+	}
 	if got := git(t, bare, "ls-tree", "-r", "--name-only", "ledger", "proof/"); got != "" {
 		t.Fatalf("a refused ship landed a pack:\n%s", got)
 	}

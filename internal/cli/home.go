@@ -177,11 +177,33 @@ func (e *Env) githubHome(ctx context.Context, repo string, s *journey.State) str
 	return journey.GitHubOK
 }
 
+// gateCheckRuns drops, from a head's check runs (newest first), those of the
+// merge gate's reply runs (#690, #643). A comment or review on the PR runs the
+// workflow with only aayudha/inspect-reply, and its skipped merge-gate,
+// inspect, and pack checks must not hide the gate's own: a check suite is a
+// reply run when its aayudha/inspect-reply check was not skipped, which the
+// gate's pull_request_target run always skips.
+func gateCheckRuns(runs []*gh.CheckRun) []*gh.CheckRun {
+	reply := map[int64]bool{}
+	for _, r := range runs {
+		if r.GetName() == "aayudha/inspect-reply" && r.GetConclusion() != "skipped" {
+			reply[r.GetCheckSuite().GetID()] = true
+		}
+	}
+	var kept []*gh.CheckRun
+	for _, r := range runs {
+		if !reply[r.GetCheckSuite().GetID()] {
+			kept = append(kept, r)
+		}
+	}
+	return kept
+}
+
 // gateState is the merge gate as ship reads it (gateChecks, the newest run of
-// each name first): passed when every gate check succeeded, failed when one
-// finished otherwise, else pending.
+// each name first, reply runs dropped): passed when every gate check succeeded,
+// failed when one finished otherwise, else pending.
 func gateState(runs []*gh.CheckRun) string {
-	state := "passed"
+	state, runs := "passed", gateCheckRuns(runs)
 	for _, want := range gateChecks {
 		concl := "pending"
 		for _, r := range runs {
