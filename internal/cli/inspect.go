@@ -800,11 +800,20 @@ func (e *Env) approveHead(ctx context.Context, cfg *config.Config, repo string, 
 		return headApproval{}, Errorf(ExitBlocked, "inspect --approve: the [autonomy] approver is %s, not %s", approver, cmp.Or(login, "an unknown account"))
 	}
 	owner, name, _ := github.SplitRepo(repo)
+	// headOf is the PR's head while it is open and ready for review, else
+	// none: a closed or draft PR gets no approval (CodeRabbit on #678).
 	headOf := func() (string, error) {
 		pr, _, err := c.REST.PullRequests.Get(ctx, owner, name, n)
+		if err == nil && (pr.GetState() != "open" || pr.GetDraft()) {
+			return "", Errorf(ExitBlocked, "inspect --approve: PR #%d is closed or a draft, so nothing was recorded", n)
+		}
 		return pr.GetHead().GetSHA(), err
 	}
 	head, err := headOf()
+	var ae *Error
+	if errors.As(err, &ae) {
+		return headApproval{}, err
+	}
 	if err != nil {
 		return headApproval{}, Wrap(ExitExternal, err)
 	}

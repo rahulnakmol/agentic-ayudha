@@ -1102,6 +1102,15 @@ func TestInspectThroughApp(t *testing.T) {
 	if code, _, errOut := run(t, env, person, "inspect", strconv.Itoa(prN), "--approve", "--reason", " ", "--repo", "o/r"); code != ExitUsage || !strings.Contains(errOut, "--reason") {
 		t.Fatalf("approve without a reason: %d %s", code, errOut)
 	}
+	g.Mu.Lock()
+	g.Pulls[prN].Draft = true
+	g.Mu.Unlock()
+	if code, errOut := approve(env, person, "lead"); code != ExitBlocked || !strings.Contains(errOut, "is closed or a draft") {
+		t.Fatalf("approve a draft: %d %s", code, errOut)
+	}
+	g.Mu.Lock()
+	g.Pulls[prN].Draft = false
+	g.Mu.Unlock()
 	if code, errOut := approve(map[string]string{"PATH": env["PATH"]}, person, "lead"); code == 0 {
 		t.Fatalf("approve without the person's GitHub login: %d %s", code, errOut)
 	}
