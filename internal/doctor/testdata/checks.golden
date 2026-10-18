@@ -162,11 +162,11 @@ WARN  reviewer-apps  reviewer apps detected but not configured: codex, cursor; a
 ## review-rung pass
 PASS  review-rung  C  same-family review: codex (openai), no other family reachable; it never counts toward autonomy, so a person passes every PR
                      builder any of [anthropic openai] (amp picks the model for its modes)
-                     move up (free): install a reviewer app of another family and add it to [inspect] apps: cursor (set [inspect] app_families.cursor to the family it runs, outside the builder's)
+                     move up (free): cursor: install it and add it to [inspect] apps, then set [inspect] app_families.cursor to the family it runs, outside the builder's
 ## review-rung fail
 WARN  review-rung  no reviewer app can review: a person reviews every PR
                      builder any of [anthropic openai] (amp picks the model for its modes)
-                     move up (free): install a reviewer app of another family and add it to [inspect] apps: cursor (set [inspect] app_families.cursor to the family it runs, outside the builder's)
+                     move up (free): cursor: install it and add it to [inspect] apps, then set [inspect] app_families.cursor to the family it runs, outside the builder's
 ## retired-workflows pass
 PASS  retired-workflows  no retired aayudha workflow in .github/workflows
 ## retired-workflows fail

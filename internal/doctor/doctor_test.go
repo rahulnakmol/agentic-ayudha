@@ -497,6 +497,13 @@ func TestCheckStates(t *testing.T) {
 		// (Claude Opus) from another family; Claude reviewing it is only C.
 		{"rung A for an Amp build", checkReviewRung, func(p *Probe) { p.Config = load(t, "inspect.apps=codex,cursor", "inspect.app_families.cursor=xai") }, Pass, "A  different-family review: cursor (xai)"},
 		{"rung A for a Claude Code build", checkReviewRung, func(p *Probe) { p.Host = "claude"; p.Config = load(t, "inspect.apps=claude,codex") }, Pass, "A  different-family review: codex (openai)"},
+		{"rung C with Cursor of no family", checkReviewRung, func(p *Probe) { p.Config = load(t, "inspect.apps=cursor") }, Pass, "move up (free): cursor: set [inspect] app_families.cursor"},
+		{"a fixed same-family reviewer beside a listed other family", checkReviewRung, func(p *Probe) {
+			p.Host = "claude"
+			p.Config = load(t, "inspect.apps=claude,codex", "inspect.reviewer=claude")
+		}, Pass, `codex (openai): already listed; set [inspect] reviewer = "auto" or "codex"`},
+		{"an unknown builder cannot move up", checkReviewRung, func(p *Probe) { p.Getenv = func(string) string { return "" }; p.Config = load(t, "inspect.apps=codex") }, Pass, "move up: no reviewer can be shown to differ from an unknown builder"},
+		{"a person reviews by configuration", checkReviewRung, func(p *Probe) { p.Config = load(t, "inspect.reviewer=human") }, Pass, `human  a person reviews every PR ([inspect] reviewer = "human")`},
 		{"rung C for a Claude Code build", checkReviewRung, func(p *Probe) { p.Host = "claude"; p.Config = load(t, "inspect.apps=claude") }, Pass, "C  same-family review: claude (anthropic)"},
 		{"OTLP opted in", checkTelemetry, func(p *Probe) { p.Config = load(t, "telemetry.otlp_endpoint=https://otel.example.com") }, Pass, "and, opted in, OTLP https://otel.example.com"},
 		{"ledger without LFS", checkLedgerMedia, func(p *Probe) { overlay(p, map[string]string{"git ls-tree --name-only origin/ledger": "README.md\n"}) }, Pass, "ledger stores no proof media in Git LFS"},
@@ -547,8 +554,9 @@ func TestCheckStates(t *testing.T) {
 	for _, tt := range tests {
 		p := healthy(t)
 		tt.change(p)
-		if r := tt.check(context.Background(), p); r.Status != tt.status || !strings.Contains(r.Detail, tt.detail) {
-			t.Errorf("%s: %s %q, want %s %q", tt.name, r.Status, r.Detail, tt.status, tt.detail)
+		// The detail, or a line under it, says it.
+		if r := tt.check(context.Background(), p); r.Status != tt.status || !strings.Contains(strings.Join(append([]string{r.Detail}, r.Lines...), "\n"), tt.detail) {
+			t.Errorf("%s: %s %q %q, want %s %q", tt.name, r.Status, r.Detail, r.Lines, tt.status, tt.detail)
 		}
 	}
 

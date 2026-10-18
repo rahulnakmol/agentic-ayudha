@@ -101,23 +101,40 @@ func checkReviewRung(_ context.Context, p *Probe) Result {
 		builder = fmt.Sprintf("builder family unknown (%s declares no model aayu can place)", host)
 	}
 	c := inspect.ChooseReviewer(cfg.Inspect.Reviewer, cfg.Inspect.Apps, cfg.Inspect.AppFamilies, b, cfg.Autonomy.Approver)
+	lines := []string{builder}
+	if cfg.Inspect.Reviewer == inspect.ReviewerHuman {
+		return Result{Status: Pass, Detail: `human  a person reviews every PR ([inspect] reviewer = "human"); it counts toward autonomy`, Lines: lines}
+	}
+	// How to reach A: an app of a family the builder cannot be, added to
+	// [inspect] apps, and picked (auto picks it; a fixed reviewer does not).
 	var up []string
 	for _, a := range inspect.Apps {
 		f := a.Family
 		if v := verbs.Family(cfg.Inspect.AppFamilies[a.Name]); v != "" {
 			f = v
 		}
+		listed := slices.Contains(cfg.Inspect.Apps, a.Name)
+		add := ""
+		if !listed {
+			add = "install it and add it to [inspect] apps, then "
+		}
 		switch {
-		case a.Login == "" || slices.Contains(cfg.Inspect.Apps, a.Name) && c.App == a.Name:
+		case a.Login == "" || b.Unknown():
 		case f == verbs.FamilyHostManaged:
-			up = append(up, fmt.Sprintf("%s (set [inspect] app_families.%s to the family it runs, outside the builder's)", a.Name, a.Name))
-		case b.Rung(f) == inspect.RungA:
-			up = append(up, fmt.Sprintf("%s (%s)", a.Name, f))
+			up = append(up, fmt.Sprintf("%s: %sset [inspect] app_families.%s to the family it runs, outside the builder's", a.Name, add, a.Name))
+		case b.Rung(f) != inspect.RungA:
+		case !listed:
+			up = append(up, fmt.Sprintf("%s (%s): install it and add it to [inspect] apps", a.Name, f))
+		case cfg.Inspect.Reviewer != "" && cfg.Inspect.Reviewer != inspect.ReviewerAuto:
+			up = append(up, fmt.Sprintf(`%s (%s): already listed; set [inspect] reviewer = "auto" or %q`, a.Name, f, a.Name))
 		}
 	}
-	lines := []string{builder}
-	if c.Rung != inspect.RungA && len(up) > 0 {
-		lines = append(lines, "move up (free): install a reviewer app of another family and add it to [inspect] apps: "+strings.Join(up, "; "))
+	switch {
+	case c.Rung == inspect.RungA:
+	case b.Unknown():
+		lines = append(lines, "move up: no reviewer can be shown to differ from an unknown builder; run doctor in the agent host (or pass --host), and declare Aayudha-Host and Aayudha-Model lines on PRs built outside aayu build")
+	case len(up) > 0:
+		lines = append(lines, "move up (free): "+strings.Join(up, "; "))
 	}
 	switch c.Rung {
 	case inspect.RungA:
