@@ -9,8 +9,8 @@ It works inside the agent you already use (Claude Code, Codex, Cursor, or Amp), 
   It needs no AI keys in your CI.
 - **A person decides.** An agent's change merges without a person only in two cases. Merge on proof, which is off
   by default, merges a story's pull request once its checks, proof, and review pass. A long correction-free streak on
-  every layer it touches also lets it merge. Risky files and layers always wait for a person, and every bypass is
-  recorded.
+  every layer it touches also lets it merge. The narrow set of files and settings always waits for a person, and every
+  bypass is recorded.
 
 **New in v0.3.0:** a story's pull request can merge on its own once its checks, proof, and review pass, and each project
 names one review tool. Read [what's new](docs/releases/v0.3.0.md#whats-new) and [how to upgrade](docs/releases/v0.3.0.md#upgrade).
