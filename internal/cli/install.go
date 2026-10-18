@@ -281,7 +281,7 @@ func runHook(ctx context.Context, e *Env, in Values) error {
 	// #449): a write is a catalog action a person approves.
 	if name == "pre-tool" && !standAside && r.Code == 0 {
 		if ev, ok := hostcall.FromHook(event); ok {
-			if v := hostcall.Decide(ev, e.hostcallOptions()); !v.Allow {
+			if v := hostcall.Decide(ev, e.hostcallOptions(ev)); !v.Allow {
 				r = hosts.Deny(verbs.HostID(e.Host), v.Reason)
 				r.Next = "read instead, or propose the write with the verb that owns it"
 			}
@@ -303,9 +303,16 @@ func runHook(ctx context.Context, e *Env, in Values) error {
 }
 
 // hostcallOptions are the repository's choices for host PostHog and Sentry
-// calls. Without a readable config every opt-in stays off.
-func (e *Env) hostcallOptions() hostcall.Options {
-	o := hostcall.Options{AllowPII: map[string]bool{}}
+// calls, and the PostHog and Sentry MCP servers the hosts registered under
+// any name. Without a readable config every opt-in stays off.
+func (e *Env) hostcallOptions(ev hostcall.Event) hostcall.Options {
+	o := hostcall.Options{AllowPII: map[string]bool{}, Servers: map[string]string{}}
+	if strings.HasPrefix(ev.Tool, "mcp__") { // the host configs are read only for an MCP call
+		root, home := config.RepoRoot(e.Dir), e.homeDir()
+		for _, s := range hosts.ProviderServers(root, home, hosts.CodexHome(home, e.Getenv)) {
+			o.Servers[s.Name] = hostcall.ProviderOf(strings.Join(append([]string{s.Name, s.URL, s.Command}, s.Args...), " "))
+		}
+	}
 	if l, err := e.Config(); err == nil {
 		for _, p := range []string{hostcall.PostHog, hostcall.Sentry} {
 			o.AllowPII[p] = l.Config.Integrations[p].AllowPII
@@ -322,7 +329,7 @@ func (e *Env) logHostCall(event []byte) {
 	if !ok {
 		return
 	}
-	v := hostcall.Decide(ev, e.hostcallOptions())
+	v := hostcall.Decide(ev, e.hostcallOptions(ev))
 	if v.Provider == "" || !v.Allow {
 		return
 	}
