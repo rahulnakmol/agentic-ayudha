@@ -29,6 +29,9 @@ const AppManifestStart = "https://rahulnakmol.github.io/agentic-ayudha/app-manif
 // whole manifest flow.
 var codeWait = time.Hour
 
+// loopbackWait is how long the local redirect can take.
+var loopbackWait = 10 * time.Minute
+
 var manifestCodeRE = regexp.MustCompile(`^[A-Za-z0-9_-]{8,128}$`)
 
 // askLine reads one line from a human at a terminal; without one it returns "".
@@ -174,7 +177,7 @@ func (e *Env) manifestLoopback(ctx context.Context, postURL string, manifest fun
 	go func() { _ = srv.Serve(ln) }()
 	defer func() { _ = srv.Close() }()
 	fmt.Fprintf(e.Err, "Open %s/ in your browser to create the App on GitHub (waiting up to 10 minutes).\n", base)
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, loopbackWait)
 	defer cancel()
 	select {
 	case c := <-codes:

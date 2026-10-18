@@ -689,13 +689,16 @@ func (p *pasteTerminal) Write(b []byte) (int, error) {
 
 // runPaste runs `aayu init --yes --identity` in a remote shell (no desktop,
 // no loopback browser) against api, answering the address prompts.
-func runPaste(t *testing.T, api string, answer func(printed string) string) (int, string) {
+func runPaste(t *testing.T, api string, answer func(printed string) string, extra ...string) (int, string) {
 	t.Helper()
 	pr, pw := io.Pipe()
 	term := &pasteTerminal{in: pw, answer: answer}
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "HOME": t.TempDir()}
+	for i := 0; i+1 < len(extra); i += 2 {
+		env[extra[i]] = extra[i+1]
+	}
 	var out bytes.Buffer
-	opts := Options{GitHubAPI: api, GitHubGap: -1, Dir: checkout(t), Build: BuildInfo{Version: "0.4.0"},
+	opts := Options{GitHubAPI: api, GitHubGap: -1, Dir: checkout(t), Build: BuildInfo{Version: "0.4.0"}, DevicePoll: time.Millisecond,
 		IsTerminal: func(s any) bool { _, ok := s.(*io.PipeReader); return ok },
 		Getenv:     func(k string) string { return env[k] },
 		GHToken:    func(context.Context) (string, error) { return "", errors.New("gh disabled in tests") },
@@ -703,7 +706,11 @@ func runPaste(t *testing.T, api string, answer func(printed string) string) (int
 		GitCredential: func(context.Context, string) (string, error) {
 			return "", errors.New("git credentials disabled in tests")
 		}}
-	code := Run(context.Background(), []string{"init", "--yes", "--identity"}, IO{In: pr, Out: &out, Err: term}, opts)
+	var in io.Reader = pr
+	if env["NO_TERMINAL"] != "" {
+		in = strings.NewReader("")
+	}
+	code := Run(context.Background(), []string{"init", "--yes", "--identity"}, IO{In: in, Out: &out, Err: term}, opts)
 	term.mu.Lock()
 	defer term.mu.Unlock()
 	return code, out.String() + term.buf.String()
@@ -814,6 +821,96 @@ func TestInitIdentityFromAPhone(t *testing.T) {
 		code, printed := runPaste(t, g.URL(), func(string) string { return "  " })
 		if code != ExitBlocked || !strings.Contains(printed, "no address was pasted within an hour") || !strings.Contains(printed, "aayu init --identity") ||
 			strings.Contains(printed, "internal error") || len(conversions(g)) != 0 {
+			t.Fatalf("exit %d:\n%s", code, printed)
+		}
+	})
+}
+
+// #578: which flow init --identity picks, and which pasted addresses it uses.
+func TestManifestFlowChoiceAndPastedCode(t *testing.T) {
+	for _, tt := range []struct {
+		env  map[string]string
+		goos string
+		want bool
+	}{
+		{map[string]string{}, "darwin", true},
+		{map[string]string{}, "windows", true},
+		{map[string]string{"DISPLAY": ":0"}, "linux", true},
+		{map[string]string{}, "linux", false}, // a server or container: no desktop
+		{map[string]string{"SSH_CONNECTION": "1.2.3.4 5 6.7.8.9 22"}, "darwin", false},
+		{map[string]string{"AMP_ORB": "1", "DISPLAY": ":0"}, "linux", false}, // an orb's Terminal tab
+		{map[string]string{"CLAUDE_CODE_REMOTE": "true"}, "darwin", false},
+		{map[string]string{"AMP_THREAD_ID": "T-1"}, "darwin", false}, // an agent's shell
+		{map[string]string{"AAYU_REMOTE_BROWSER": "1"}, "darwin", false},
+	} {
+		if got := localBrowser(func(k string) string { return tt.env[k] }, tt.goos); got != tt.want {
+			t.Errorf("localBrowser(%v, %s) = %v, want %v", tt.env, tt.goos, got, tt.want)
+		}
+	}
+	state := strings.Repeat("ab", 16)
+	for _, tt := range []struct{ line, code, why string }{
+		{initrepo.AppCodePage + "?code=c0de1234c0de5678&state=" + state + "\n", "c0de1234c0de5678", ""},
+		{"  " + initrepo.AppCodePage + "?state=" + state + "&code=c0de1234c0de5678  ", "c0de1234c0de5678", ""},
+		{"c0de1234c0de5678", "", "That is not the address of the page GitHub showed: it carries no code."},
+		{"%zz", "", "That is not the address of the page GitHub showed: it carries no code."},
+		{initrepo.AppCodePage + "?code=c0de1234c0de5678&state=" + strings.Repeat("cd", 16), "", "That address belongs to another run of init --identity (its state is not this run's), so it was not used."},
+		{initrepo.AppCodePage + "?code=..%2F..%2Fapp&state=" + state, "", "That address's code is not one GitHub writes, so it was not used."},
+	} {
+		if code, why := pastedCode(tt.line, state); code != tt.code || why != tt.why {
+			t.Errorf("pastedCode(%q) = %q, %q; want %q, %q", tt.line, code, why, tt.code, tt.why)
+		}
+	}
+}
+
+// #578: the paste flow's other ways to end, and an App other than the one
+// aayu asked for.
+func TestInitIdentityFromAPhoneEnds(t *testing.T) {
+	app := func(owner string, perms map[string]any) *fake.GitHub {
+		kind := "User"
+		if owner == "org" {
+			kind, owner = "Organization", "o"
+		}
+		g := fake.New(t, "o/r", kind)
+		pub, _, _ := box.GenerateKey(rand.Reader)
+		g.PublicKey = base64.StdEncoding.EncodeToString(pub[:])
+		g.App = map[string]any{"id": 4242, "slug": "aayudha-r", "client_id": "Iv1.abc", "owner": map[string]any{"login": owner}, "permissions": perms, "pem": "pem"}
+		return g
+	}
+	paste := func(p string) string {
+		return initrepo.AppCodePage + "?code=c0de1234c0de5678&state=" + startLink(t, p).Get("state")
+	}
+	for _, tt := range []struct {
+		name  string
+		g     *fake.GitHub
+		ans   func(string) string
+		extra []string
+		want  string
+	}{
+		{"another owner's App", app("mallory", map[string]any{"contents": "write"}), paste, nil, "the created App aayudha-r is not the one aayu asked for; do not install it"},
+		{"wider permissions", app("o", map[string]any{"contents": "write", "administration": "write"}), paste, nil, "the created App aayudha-r is not the one aayu asked for; do not install it"},
+		{"an organization's App with wider permissions", app("org", map[string]any{"workflows": "write"}), paste, nil, "delete it at https://github.com/organizations/o/settings/apps"},
+		{"the terminal closes", app("o", nil), func(string) string { return "" }, nil, "no address was pasted, so no App was created"},
+		{"no terminal", app("o", nil), paste, []string{"NO_TERMINAL", "1"}, "init --identity asks you to paste an address from your browser, so it needs a terminal"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if len(tt.extra) > 0 { // off a terminal, the person approves init through the device flow first
+				tt.g.Viewer = "founder"
+				tt.g.Permissions = map[string]string{"founder": "admin"}
+				tt.g.Variables = map[string]string{"AAYUDHA_DEVICE_CLIENT_ID": "c"}
+				tt.g.Device = &fake.DeviceFlow{ClientID: "c", Approver: "founder", Outcome: "approve"}
+			}
+			code, printed := runPaste(t, tt.g.URL(), tt.ans, tt.extra...)
+			if code != ExitBlocked || !strings.Contains(printed, tt.want) || len(tt.g.Secrets) != 0 || strings.Contains(printed, "installations/new") {
+				t.Fatalf("exit %d, secrets %v:\n%s", code, tt.g.Secrets, printed)
+			}
+		})
+	}
+	t.Run("a desktop browser that never redirects back", func(t *testing.T) {
+		defer func(w time.Duration) { loopbackWait = w }(loopbackWait)
+		loopbackWait = 50 * time.Millisecond
+		g := app("o", nil)
+		code, printed := runPaste(t, g.URL(), paste, "DISPLAY", ":0")
+		if code != ExitBlocked || !strings.Contains(printed, "AAYU_REMOTE_BROWSER=1") || !strings.Contains(printed, "http://127.0.0.1:") || strings.Contains(printed, "internal error") {
 			t.Fatalf("exit %d:\n%s", code, printed)
 		}
 	})
