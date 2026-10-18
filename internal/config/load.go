@@ -169,7 +169,8 @@ func Load(src Sources) (*Loaded, error) {
 		// checkout or given as a base revision's text (Sources.RepoTOML), is.
 		if name != LayerDefault && (name != LayerRepo || filepath.Ext(source) == ".json") {
 			for _, key := range k.Keys() {
-				if strings.HasPrefix(key, "verify.environments.") && strings.HasSuffix(key, ".active_scan") {
+				// The decoder matches a field whatever its case, so Active_Scan sets it too.
+				if lk := strings.ToLower(key); strings.HasPrefix(lk, "verify.environments.") && strings.HasSuffix(lk, ".active_scan") {
 					errs = append(errs, fmt.Errorf("%s: %s is read only from .aayudha/config.toml, a protected path", source, key))
 					return
 				}

@@ -449,10 +449,15 @@ func TestActiveScanKey(t *testing.T) {
 		{"repo JSON config", map[string]string{"repo/.aayudha/config.json": `{"version": 1, "verify": {"environments": {"staging": {"url": "https://staging.example.test", "active_scan": true}}}}`}, nil, nil},
 		{"environment", nil, []string{"AAYU_VERIFY__ENVIRONMENTS__STAGING__ACTIVE_SCAN=true"}, nil},
 		{"--set", nil, nil, []string{"verify.environments.staging.active_scan=true"}},
+		// CodeRabbit on #509: the decoder matches a key whatever its case, so a case variant is refused too.
+		// The repository names the url but does not opt in; the local file must not opt it in.
+		{"local config, another case", map[string]string{
+			"repo/.aayudha/config.toml":       "version = 1\n[verify.environments.staging]\nurl = \"https://staging.example.test\"\n",
+			"repo/.aayudha/config.local.toml": "version = 1\n[verify.environments.staging]\nActive_Scan = true\n"}, nil, nil},
 	} {
 		src := fixture(t, tt.files)
 		src.Environ, src.Sets = tt.env, tt.set
-		if _, err := Load(src); err == nil || !strings.Contains(err.Error(), "verify.environments.staging.active_scan is read only from .aayudha/config.toml") {
+		if _, err := Load(src); err == nil || !strings.Contains(strings.ToLower(err.Error()), "verify.environments.staging.active_scan is read only from .aayudha/config.toml") {
 			t.Errorf("%s: err = %v", tt.name, err)
 		}
 	}
