@@ -768,15 +768,17 @@ func TestReleasePicksAnEvaluatedCommit(t *testing.T) {
 	f.noEvals = true
 	newest := f.commit(t, "feat: not evaluated yet (#35)", 35, "Refs #2", "story/2-newest")
 
-	code, _, errOut := f.run(t, day, f.env, rel, "--to", "rolling", "--yes")
-	for _, want := range []string{
-		"dev's newest commit " + newest[:7] + " has no completed evals.yml run with results for every gating group (missing: no completed run)",
-		"Either promote " + older[:7] + ", the newest dev commit that has them",
-		"`aayu release " + rel + " --to rolling --at " + older[:7] + "`",
-		"or dispatch once on dev's newest commit: `gh workflow run evals.yml --ref dev`",
-	} {
-		if code != ExitBlocked || !strings.Contains(errOut, want) {
-			t.Errorf("newest commit unevaluated: exit %d, want %q in:\n%s", code, want, errOut)
+	for _, mode := range []string{"--dry-run", "--yes"} { // a dry run refuses as the promotion would
+		code, _, errOut := f.run(t, day, f.env, rel, "--to", "rolling", mode)
+		for _, want := range []string{
+			"dev's newest commit " + newest[:7] + " has no completed evals.yml run with results for every gating group (missing: no completed run)",
+			"Either promote " + older[:7] + ", the newest dev commit that has them",
+			"`aayu release " + rel + " --to rolling --at " + older[:7] + "`",
+			"or dispatch once on dev's newest commit: `gh workflow run evals.yml --ref dev`",
+		} {
+			if code != ExitBlocked || !strings.Contains(errOut, want) {
+				t.Errorf("%s, newest commit unevaluated: exit %d, want %q in:\n%s", mode, code, want, errOut)
+			}
 		}
 	}
 	if len(f.dispatched) != 0 || git(t, f.bare, "branch", "--list", "promote/*") != "" {
@@ -785,6 +787,13 @@ func TestReleasePicksAnEvaluatedCommit(t *testing.T) {
 	if code, _, errOut := f.run(t, day, f.env, rel, "--to", "rolling", "--yes", "--at", partial); code != ExitBlocked || !strings.Contains(errOut, "(missing: survey)") {
 		t.Fatalf("--at a commit without every gating group's results: %d %s", code, errOut)
 	}
+
+	// dev gains SLOs after the chosen commit; with no error budget recorded they would block, but the release gates
+	// read the commit being promoted, which has none.
+	_ = os.MkdirAll(filepath.Join(f.dir, "ops"), 0o755)
+	_ = os.WriteFile(filepath.Join(f.dir, "ops", "slos.toml"), []byte("version = 1\n[[slo]]\nname = \"ask-availability\"\nservice = \"app\"\njourney = \"Ask a question\"\nsli = \"availability\"\nobjective = 99.5\nwindow = \"28d\"\n"), 0o644)
+	git(t, f.dir, "add", "ops")
+	f.commit(t, "feat(ops): SLOs", 0, "", "")
 
 	code, p, errOut := f.run(t, day, f.env, rel, "--to", "rolling", "--yes", "--at", older[:7])
 	tip := git(t, f.bare, "rev-parse", "refs/heads/rolling")

@@ -331,16 +331,12 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 			p.NotListed = append(p.NotListed, s)
 		}
 	}
-	if err := e.productionGate(ctx, c, tok, gitOut, root, repo, src, p.Stories, kind); err != nil {
+	if err := e.productionGate(ctx, c, tok, gitOut, root, repo, srcRef, p.Stories, kind); err != nil {
 		return err
 	}
 	notes, utm, err := e.releaseNotes(ctx, c, repo, &p, shipped)
 	if err != nil {
 		return err
-	}
-	if c.DryRun() {
-		p.DryRun = true
-		return e.Emit(p, func(out io.Writer) error { return promotionText(out, p) })
 	}
 	wfs, _, err := c.REST.Actions.ListWorkflows(ctx, owner, name, &gh.ListOptions{PerPage: 100})
 	if err != nil {
@@ -350,16 +346,21 @@ func runRelease(ctx context.Context, e *Env, in Values) (err error) {
 	for _, w := range wfs.Workflows {
 		has[path.Base(w.GetPath())] = true
 	}
-	if !has[gateWorkflow] {
-		return Errorf(ExitBlocked, "release: no %s workflow to gate the candidate (dispatch input gate=%s)", gateWorkflow, gateFor(to))
-	}
-	// The rolling gate's evals-gate needs tier-2 results for the commit it promotes; release never dispatches them.
+	// The rolling gate's evals-gate needs tier-2 results for the commit it promotes; release never dispatches them,
+	// and a dry run refuses what the promotion would.
 	if to == "rolling" && has[evalsWorkflow] {
 		if p.Evals, err = e.evaluated(ctx, c, gitOut, root, repo, n, src, dst, srcSHA, at != ""); err != nil {
 			return err
 		}
 	} else if to == "rolling" {
 		p.Notices = append(p.Notices, "no "+evalsWorkflow+": tier-2 evals not run")
+	}
+	if c.DryRun() {
+		p.DryRun = true
+		return e.Emit(p, func(out io.Writer) error { return promotionText(out, p) })
+	}
+	if !has[gateWorkflow] {
+		return Errorf(ExitBlocked, "release: no %s workflow to gate the candidate (dispatch input gate=%s)", gateWorkflow, gateFor(to))
 	}
 	// The TTY gate is gone for release (Story #430): a person at a terminal is still
 	// asked (or says --yes), and an agent, or a run without a terminal, goes on
@@ -510,14 +511,14 @@ func (e *Env) bookkeep(ctx context.Context, c *github.Client, tok identity.Token
 }
 
 // productionGate is the Production Engineer's release gate (Decision #324),
-// read from the source branch being promoted. When it defines SLOs, the error
+// read from ref, the exact source commit being promoted. When it defines SLOs, the error
 // budget recorded on the ledger must be fresh (production.StaleAfter), and
 // while any budget is spent only Bugs ship: a Story ships only with an
 // accepted error-budget waiver. When its ops catalog names rollback actions,
 // each must have run successfully through aayudha-ops at least once, so no
 // release depends on a rollback nobody has tried.
-func (e *Env) productionGate(ctx context.Context, c *github.Client, tok identity.Token, gitOut func(string, ...string) (string, error), root, repo, src string, shipping []int, kind map[int]string) error {
-	if b, err := gitOut(root, "show", "origin/"+src+":"+production.SLOPath); err == nil && strings.TrimSpace(b) != "" {
+func (e *Env) productionGate(ctx context.Context, c *github.Client, tok identity.Token, gitOut func(string, ...string) (string, error), root, repo, ref string, shipping []int, kind map[int]string) error {
+	if b, err := gitOut(root, "show", ref+":"+production.SLOPath); err == nil && strings.TrimSpace(b) != "" {
 		defs, err := production.ParseSLOs([]byte(b))
 		if err != nil {
 			return Errorf(ExitBlocked, "release: %v", err)
@@ -552,7 +553,7 @@ func (e *Env) productionGate(ctx context.Context, c *github.Client, tok identity
 			}
 		}
 	}
-	b, err := gitOut(root, "show", "origin/"+src+":"+ops.Path)
+	b, err := gitOut(root, "show", ref+":"+ops.Path)
 	if err != nil || strings.TrimSpace(b) == "" {
 		return nil
 	}
