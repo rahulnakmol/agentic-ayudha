@@ -934,8 +934,12 @@ func (e *Env) useReviewModel(c *config.Config) error {
 			return fmt.Errorf("%s must be the model endpoint's https base URL (such as %s), with no credentials or query in it; the key goes in %s",
 				inspect.ReviewModelURLVar, inspect.RecommendedReviewURL, inspect.ReviewModelKeyVar)
 		}
-		// A different endpoint: no wire-format override of the old gateway carries over.
-		c.Models.Gateway = config.Gateway{BaseURL: raw, Secret: inspect.ReviewModelSecret}
+		// A different endpoint: no wire-format override of the old gateway carries over; the same one keeps them.
+		g := config.Gateway{BaseURL: raw, Secret: inspect.ReviewModelSecret}
+		if raw == c.Models.Gateway.BaseURL {
+			g.APIStyle, g.Styles = c.Models.Gateway.APIStyle, c.Models.Gateway.Styles
+		}
+		c.Models.Gateway = g
 	}
 	if m := e.Getenv(inspect.ReviewModelVar); m != "" {
 		c.Inspect.PaidReviewer = m

@@ -275,6 +275,17 @@ func TestInitWithoutRulesets(t *testing.T) {
 	if !strings.Contains(files[initrepo.StatePath], `"rulesets_unapplied": "GitHub answered 403: Upgrade to GitHub Pro`) {
 		t.Fatalf("state.json does not record why:\n%s", files[initrepo.StatePath])
 	}
+	// The same plan has no environments: --gates still completes and says the CI review cannot run here.
+	code, rep, errOut = runInitCmd(t, g, dir, "init", "--yes", "--gates")
+	said = ""
+	for _, c := range rep.Changes {
+		if c.Kind == "environment" {
+			said = c.Result + ": " + c.Detail
+		}
+	}
+	if code != 0 || !strings.HasPrefix(said, "not created: ") || !strings.Contains(said, "[inspect] reviewer to a review app or human") {
+		t.Fatalf("init --gates without environments: exit %d, said %q: %s", code, said, errOut)
+	}
 	g.Mu.Lock()
 	g.RulesetsUnavailable = false
 	g.Mu.Unlock()

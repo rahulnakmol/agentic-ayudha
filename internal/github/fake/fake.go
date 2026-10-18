@@ -648,6 +648,8 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			out = out[lo:hi]
 		}
 		reply(200, out)
+	case g.RulesetsUnavailable && strings.HasPrefix(p, repo+"/environments/"): // GitHub Free has neither for a private repository
+		reply(403, map[string]any{"message": "Upgrade to GitHub Pro or make this repository public to enable this feature.", "status": "403"})
 	case strings.HasPrefix(p, repo+"/environments/"):
 		name, rest, _ := strings.Cut(strings.TrimPrefix(p, repo+"/environments/"), "/")
 		if g.Environments == nil {

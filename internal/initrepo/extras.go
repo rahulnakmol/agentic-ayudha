@@ -227,8 +227,14 @@ func (in *Init) gates(ctx context.Context, x Extras) error {
 	if err := in.hostConfigOwners(); err != nil {
 		return err
 	}
+	// A plan without environments (a private repository on GitHub Free) leaves the CI review unavailable, as the
+	// ledger rulesets are; any other failure stops init, so the key is never left reachable by another branch.
 	if err := in.reviewEnvironment(ctx, x.Branches); err != nil {
-		return fmt.Errorf("the %s environment: %w", inspect.ReviewEnvironment, err)
+		var er *gh.ErrorResponse
+		if !errors.As(err, &er) || er.Response == nil || er.Response.StatusCode != http.StatusForbidden || !strings.Contains(er.Message, "Upgrade to GitHub") {
+			return fmt.Errorf("the %s environment: %w", inspect.ReviewEnvironment, err)
+		}
+		in.note("gates", "environment", inspect.ReviewEnvironment, "not created", "this repository's GitHub plan has no environments ("+er.Message+"), so the CI review cannot run: set [inspect] reviewer to a review app or human, or make the repository public or upgrade, then run aayu init --gates again")
 	}
 	in.note("gates", "secrets", "AAYUDHA_APP_CLIENT_ID, AAYUDHA_APP_PRIVATE_KEY", "unchanged",
 		"the broker needs the bot App's client ID (repository variable) and private key (repository secret); init --identity sets both. Model keys for CI lanes go in repository or environment secrets")

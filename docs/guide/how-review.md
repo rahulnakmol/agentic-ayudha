@@ -37,6 +37,9 @@ pull request code, so no pull request can reach the key.
 4. Open a pull request. You should see the inspect comment's first line,
    `different-family review (B, paid): grok-4.7 (xai)`, and the inspect check pass or fail with the review's findings.
 
+> **Needs setup:** GitHub has no environments for a private repository on GitHub Free. There, `aayu init --gates`
+> says it could not create `code-review`; choose a review app (below), or make the repository public or upgrade.
+
 `[inspect] reviewer = "ci"` in `.aayudha/config.toml` selects this review. It is the default, so a repository that
 names no reviewer uses it.
 
