@@ -35,16 +35,18 @@ func init() { register("counsel", runCounsel) }
 // counselReport is `aayu counsel`: the grounding Atri, the Founder's Sage, counsels from, or the findings on a
 // draft counsel (Story #478). It is advice: nothing here approves, accepts, merges, or reviews.
 type counselReport struct {
-	Repo      string            `json:"repo"`
-	Topic     string            `json:"topic"`
-	Issue     int               `json:"issue,omitempty"`
-	PR        int               `json:"pr,omitempty"`
-	Path      string            `json:"path,omitempty"`
-	Twin      string            `json:"twin"`
-	Stage     string            `json:"stage"`
-	StageWhy  string            `json:"stage_why"`
-	Artefact  string            `json:"artefact"`
-	Builder   *inspect.Builder  `json:"builder,omitempty"` // the PR's builder family, with --pr
+	Repo     string `json:"repo"`
+	Topic    string `json:"topic"`
+	Issue    int    `json:"issue,omitempty"`
+	PR       int    `json:"pr,omitempty"`
+	Path     string `json:"path,omitempty"`
+	Twin     string `json:"twin"`
+	Stage    string `json:"stage"`
+	StageWhy string `json:"stage_why"`
+	Artefact string `json:"artefact"`
+	// Builder is the PR's builder family and the families its evidence names, with --pr; the evidence itself
+	// quotes the PR's own trailers, so it is untrusted data (builder-evidence), not part of this report.
+	Builder   *counselBuilder   `json:"builder,omitempty"`
 	Facts     []packFact        `json:"facts"`
 	Untrusted []chartUntrusted  `json:"untrusted,omitempty"`
 	Sections  []counsel.Section `json:"sections"`
@@ -373,13 +375,44 @@ func (e *Env) counselPR(ctx context.Context, c *github.Client, owner, name strin
 	if err != nil {
 		return err
 	}
-	rep.Builder = &b
-	note := "Builder: " + b.Note()
+	rep.Builder = &counselBuilder{Family: b.Family}
+	for _, f := range b.Candidates {
+		if familyName.MatchString(string(f)) {
+			rep.Builder.Candidates = append(rep.Builder.Candidates, f)
+		}
+	}
+	fam := "unknown"
+	if b.Family != "" && familyName.MatchString(string(b.Family)) {
+		fam = string(b.Family)
+	}
+	note := fmt.Sprintf("Builder family: %s; families the evidence names: %s; the evidence is listed as untrusted data", fam, familyList(rep.Builder.Candidates))
 	if credErr != nil {
 		note += "; the ledger was not read (no human credential), so build's records are unknown, not absent"
 	}
 	rep.Facts = append(rep.Facts, packFact{Text: note, Cite: cite})
+	// The note quotes the PR's own Aayudha-Model and Aayudha-Host values, which anyone who can push may write.
+	rep.Untrusted = append(rep.Untrusted, chartUntrusted{"builder-evidence", b.Note()})
 	return nil
+}
+
+// counselBuilder is the builder's family and its candidates, without the evidence that quotes the PR's trailers.
+type counselBuilder struct {
+	Family     verbs.Family   `json:"family,omitempty"`
+	Candidates []verbs.Family `json:"candidates,omitempty"`
+}
+
+// familyName is a model family as aayu names one (anthropic, openai, host-managed).
+var familyName = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+
+func familyList(fs []verbs.Family) string {
+	if len(fs) == 0 {
+		return "none"
+	}
+	out := make([]string, len(fs))
+	for i, f := range fs {
+		out[i] = string(f)
+	}
+	return strings.Join(out, ", ")
 }
 
 // prBuilder is the PR's builder family from what aayu recorded outside the PR (the delegation record and build's
