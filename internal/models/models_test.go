@@ -806,3 +806,108 @@ func TestCopilotSelectors(t *testing.T) {
 		}
 	}
 }
+
+// TestStreamPastAProxyIdleLimit (Bug #608): behind a proxy that answers 524
+// when no byte arrives within its limit, a slow reply over Chat Completions
+// or Responses gets through when it streams, decodes to what the plain JSON
+// reply decodes to, and a plain JSON answer to a streamed request still
+// decodes; the 524 itself says the reply timed out.
+func TestStreamPastAProxyIdleLimit(t *testing.T) {
+	const reply = `{"findings":[{"id":"a","severity":"P1"}]}`
+	chatJSON := `{"model":"grok-4.7","choices":[{"message":{"content":` + strconv.Quote(reply) + `},"finish_reason":"stop"}],"usage":{"prompt_tokens":11,"completion_tokens":7,"total_tokens":30}}`
+	respJSON := `{"model":"gpt-5.6","status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":` + strconv.Quote(reply) + `}]}],"usage":{"input_tokens":11,"output_tokens":7}}`
+	half := len(reply) / 2
+	events := map[string][]string{
+		StyleChat: {
+			`{"model":"grok-4.7","choices":[{"delta":{"role":"assistant","content":""}}]}`,
+			`{"model":"grok-4.7","choices":[{"delta":{"content":` + strconv.Quote(reply[:half]) + `}}]}`,
+			`{"model":"grok-4.7","choices":[{"delta":{"content":` + strconv.Quote(reply[half:]) + `},"finish_reason":"stop"}]}`,
+			`{"model":"grok-4.7","choices":[],"usage":{"prompt_tokens":11,"completion_tokens":7,"total_tokens":30}}`,
+			`[DONE]`},
+		StyleResponses: {
+			`{"type":"response.created","response":{"status":"in_progress"}}`,
+			`{"type":"response.output_text.delta","delta":` + strconv.Quote(reply[:half]) + `}`,
+			`{"type":"response.output_text.delta","delta":` + strconv.Quote(reply[half:]) + `}`,
+			`{"type":"response.completed","response":` + respJSON + `}`},
+	}
+	plain := map[string]string{StyleChat: chatJSON, StyleResponses: respJSON}
+	const slow, limit = 400 * time.Millisecond, 150 * time.Millisecond
+	for _, style := range []string{StyleChat, StyleResponses} {
+		var asked map[string]any
+		jsonOnly := false
+		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_ = json.NewDecoder(r.Body).Decode(&asked)
+			if asked["stream"] != true || jsonOnly {
+				time.Sleep(slow) // a long generation, silent until done
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, plain[style])
+				return
+			}
+			w.Header().Set("Content-Type", "text/event-stream")
+			for _, ev := range events[style] {
+				_, _ = io.WriteString(w, "data: "+ev+"\n\n")
+				w.(http.Flusher).Flush()
+				time.Sleep(slow / time.Duration(len(events[style])))
+			}
+		}))
+		// The proxy gives up when the upstream sends nothing within its limit.
+		proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			req, _ := http.NewRequestWithContext(r.Context(), r.Method, upstream.URL+r.URL.Path, r.Body)
+			req.Header = r.Header.Clone()
+			resp, err := (&http.Transport{ResponseHeaderTimeout: limit}).RoundTrip(req)
+			if err != nil {
+				w.WriteHeader(524)
+				_, _ = io.WriteString(w, "error code: 524")
+				return
+			}
+			defer func() { _ = resp.Body.Close() }()
+			w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
+			buf := make([]byte, 256)
+			for {
+				n, err := resp.Body.Read(buf)
+				_, _ = w.Write(buf[:n])
+				w.(http.Flusher).Flush()
+				if err != nil {
+					return
+				}
+			}
+		}))
+		ctx := context.Background()
+		req := Request{Model: "m", MaxTokens: 100, Messages: []Message{{Role: "user", Content: "review"}}}
+		direct := HTTPClient{BaseURL: upstream.URL, Style: style, Key: "k"}
+		want, err := direct.Complete(ctx, req)
+		if err != nil {
+			t.Fatalf("%s: the plain reply: %v", style, err)
+		}
+		via := HTTPClient{BaseURL: proxy.URL, Style: style, Key: "k"}
+		_, err = via.Complete(ctx, req)
+		var se *StatusError
+		if !errors.As(err, &se) || se.Code != 524 || !strings.Contains(err.Error(), "timed out waiting for the reply") {
+			t.Errorf("%s: an unstreamed slow reply: %v, want a 524 that says it timed out", style, err)
+		}
+		req.Stream = true
+		got, err := via.Complete(ctx, req)
+		if err != nil || got.Text != want.Text || got.Text != reply || got.TokensIn != want.TokensIn || got.TokensOut != want.TokensOut || got.Model != want.Model || got.StopReason != want.StopReason {
+			t.Errorf("%s: streamed %+v %v, want %+v", style, got, err, want)
+		}
+		if style == StyleChat && asked["stream_options"] == nil {
+			t.Errorf("chat: the request did not ask for the usage chunk: %v", asked)
+		}
+		jsonOnly = true // an endpoint that ignores stream: the JSON still decodes
+		if got, err := direct.Complete(ctx, req); err != nil || got.Text != reply {
+			t.Errorf("%s: a JSON answer to a streamed request: %+v %v", style, got, err)
+		}
+		proxy.Close()
+		upstream.Close()
+	}
+	// A stream cut off before its end is a dropped connection, not a reply.
+	if _, err := decodeChatStream(strings.NewReader("data: " + events[StyleChat][1] + "\n\n")); !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Errorf("a cut chat stream: %v", err)
+	}
+	if _, err := decodeResponsesStream(strings.NewReader("data: " + events[StyleResponses][1] + "\n\n")); !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Errorf("a cut responses stream: %v", err)
+	}
+	if _, err := decodeChatStream(strings.NewReader(`data: {"error":{"type":"overloaded","message":"busy"}}` + "\n\n")); err == nil || !strings.Contains(err.Error(), "overloaded") {
+		t.Errorf("a chat stream error: %v", err)
+	}
+}

@@ -234,7 +234,7 @@ func review(ctx context.Context, r Reviewer, in Input) (Reply, float64, error) {
 	if in.Voice != "" {
 		sys += "\n\n" + in.Voice
 	}
-	req := models.Request{System: sys, MaxTokens: 6000, Messages: []models.Message{{Role: "user", Content: Prompt(in)}}}
+	req := models.Request{System: sys, MaxTokens: 6000, Messages: []models.Message{{Role: "user", Content: Prompt(in)}}, Stream: true}
 	var reply Reply
 	var spent float64
 	err := models.Structured(ctx, func(ctx context.Context, q models.Request) (models.Response, error) {
