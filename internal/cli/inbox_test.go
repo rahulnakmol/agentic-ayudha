@@ -3,9 +3,12 @@ package cli
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +18,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/decide"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
+	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -290,5 +294,115 @@ func TestInboxMarkedTerminalAppliesThePick(t *testing.T) {
 	g.Mu.Unlock()
 	if code != 0 || state != "closed" || !strings.Contains(out, "#2 accepted: A, by @o") || strings.Contains(out+errOut, "posted batch") {
 		t.Fatalf("exit %d, #2 %s:\n%s\n%s", code, state, out, errOut)
+	}
+}
+
+// Story PRs merge only through ship: an agent's `aayu ship` that stops only
+// for the human pass comments Ready to ship, and the person ships both such
+// PRs in one inbox session under one device code. In solo mode their pick is
+// their solo-mode bypass, which the inbox records in the PR before it ships.
+func TestInboxShipsReadyPRs(t *testing.T) {
+	g, env, opts, dir, bare, prA, headA := thinFixture(t)
+	if code, _, errOut := run(t, env, opts, "ready", "6", "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready 6: %s", errOut)
+	}
+	_, _, _ = run(t, env, opts, "build", "6", "--repo", "o/r")
+	_ = os.WriteFile(filepath.Join(BuildWorktree(dir, 6), "orphan.txt"), []byte("orphan\n"), 0o644)
+	code, out, errOut := run(t, env, opts, "build", "6", "--repo", "o/r", "--json")
+	var res BuildResult
+	_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)
+	if code != 0 || res.PR == 0 {
+		t.Fatalf("build 6: %d %+v %s", code, res, errOut)
+	}
+	prB, headB := res.PR, git(t, res.Worktree, "rev-parse", "HEAD")
+	g.Mu.Lock()
+	g.Pulls[prB].Head.SHA = headB
+	g.Mu.Unlock()
+	floors := []proof.Check{{Floor: "coverage", Result: proof.Pass, Value: 100, Threshold: 90, Tool: "aayudha", Version: "1"}}
+	gateRunFor(t, g, dir, 2, prA, headA, floors)
+	gateRunFor(t, g, dir, 6, prB, headB, floors)
+
+	// Anyone may comment: a Ready to ship marker from an account without write
+	// access is not ship's word, so the inbox does not list the PR, and ship
+	// never edits that look-alike.
+	g.Mu.Lock()
+	forged := &fake.Comment{ID: 501, Body: ReadyToShipMarker + " head=" + headA + " -->\n**Ready to ship.**"}
+	forged.User.Login, forged.User.Type = "mallory", "User"
+	g.Issues[prA].Comments = append(g.Issues[prA].Comments, forged)
+	g.Mu.Unlock()
+	if _, out, _ := runIn(t, env, opts, "s s s", "inbox", "--repo", "o/r"); !strings.Contains(out, "1 human-only step(s)") || strings.Contains(out, "ready to ship") {
+		t.Fatalf("a forged marker listed the PR:\n%s", out)
+	}
+
+	// The agent ships from its own shell: the hook lets it, and ship's gates
+	// hold. The author is the founder, so no review can pass it: Ready to ship.
+	agent := maps.Clone(env)
+	maps.Copy(agent, hostShells["amp"])
+	for _, pr := range []int{prA, prB} {
+		code, _, errOut := run(t, agent, opts, "ship", strconv.Itoa(pr), "--repo", "o/r")
+		if code != ExitBlocked || !strings.Contains(errOut, "no human pass") || !strings.Contains(errOut, "commented Ready to ship") {
+			t.Fatalf("agent ship #%d: %d %s", pr, code, errOut)
+		}
+	}
+	g.Mu.Lock()
+	// PR B had hit inspect's cycle cap before its gate went green: ship's
+	// Ready to ship on the current head stands over the cap.
+	capped, _ := json.Marshal(inspect.State{Cycles: inspect.MaxCycles, Result: &inspect.Result{Disposition: "fix"}})
+	g.Issues[prB].Comments = append(g.Issues[prB].Comments, &fake.Comment{ID: 502, Body: inspect.Marker + "\n### inspect: fix\n\n<!-- aayudha:inspect-state " + string(capped) + " -->\n"})
+	if forged.Body != ReadyToShipMarker+" head="+headA+" -->\n**Ready to ship.**" {
+		t.Errorf("ship edited someone else's marker: %q", forged.Body)
+	}
+	// A push to PR A after the inbox listed it: the pick was for the head
+	// the person saw, so nothing merges or is commented.
+	g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "approve"}
+	g.Hook = func(method, path string) {
+		if method == "GET" && path == "/repos/o/r/pulls/"+strconv.Itoa(prA) {
+			g.Pulls[prA].Head.SHA = strings.Repeat("e", 40)
+		}
+	}
+	g.Mu.Unlock()
+	opts.DevicePoll = time.Millisecond
+	opts.IsTerminal = func(any) bool { return true }
+	_, out, _ = runIn(t, agent, opts, "s a q", "inbox", "--repo", "o/r")
+	g.Mu.Lock()
+	moved := !g.Pulls[prA].Merged && !slices.ContainsFunc(g.Issues[prA].Comments, func(c *fake.Comment) bool { return strings.HasPrefix(c.Body, SoloBypassPrefix) })
+	g.Pulls[prA].Head.SHA, g.Hook = headA, nil
+	g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "approve"}
+	g.Mu.Unlock()
+	if !moved || !strings.Contains(out, "the head moved to eeeeeee after you chose to ship "+short(headA)+"; nothing was merged") {
+		t.Fatalf("ship after a push to the chosen PR:\n%s", out)
+	}
+	code, out, errOut = runIn(t, agent, opts, "s a a", "inbox", "--repo", "o/r")
+	if code != 0 {
+		t.Fatalf("inbox: exit %d: %s\n%s", code, errOut, out)
+	}
+	for _, pr := range []int{prA, prB} {
+		want := fmt.Sprintf("Story PR ready to ship #%d", pr)
+		if !strings.Contains(out, want) || !strings.Contains(out, fmt.Sprintf("1. ship PR #%d (ship's gates still apply: in solo mode under your solo-mode bypass, otherwise once you have approved its head on GitHub) (recommended)\n  2. open it and review it\n", pr)) {
+			t.Errorf("inbox lacks %q with its choices:\n%s", want, out)
+		}
+	}
+	if !strings.Contains(out, "inbox: 2 done, 1 skipped, 0 left") {
+		t.Errorf("inbox summary:\n%s", out)
+	}
+	g.Mu.Lock()
+	started := g.Device.Started
+	merged := g.Pulls[prA].Merged && g.Pulls[prB].Merged
+	var bypasses int
+	for _, pr := range []int{prA, prB} {
+		for _, c := range g.Issues[pr].Comments {
+			if strings.HasPrefix(c.Body, SoloBypassPrefix+" @founder ships this from `aayu inbox`") {
+				bypasses++
+			}
+		}
+	}
+	g.Mu.Unlock()
+	if started != 1 || !merged || bypasses != 2 {
+		t.Fatalf("device codes %d (want 1), both merged %v, bypass comments %d (want 2):\n%s\n%s", started, merged, bypasses, out, errOut)
+	}
+	for story, head := range map[int]string{2: headA, 6: headB} {
+		if rec := git(t, bare, "show", fmt.Sprintf("ledger:proof/%d/%s/authoritative/ship.json", story, head)); !strings.Contains(rec, `"kind": "solo-bypass"`) {
+			t.Errorf("ship record for #%d: %s", story, rec)
+		}
 	}
 }

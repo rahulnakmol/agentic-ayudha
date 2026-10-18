@@ -24,7 +24,6 @@ func TestHumanOnlyCommand(t *testing.T) {
 	tests := []struct {
 		shell, cmd string
 	}{
-		{"aayu ship 4", "aayu ship 4"},
 		{"cd repo && /usr/local/bin/aayu ship 7 --solo-bypass", "aayu ship 7 --solo-bypass"},
 		{`"C:\Program Files\aayudha\aayudha.exe" decide 9 --accept B`, "aayu decide 9 --accept B"},
 		{"aayu install --host claude --apply", "aayu install --host claude --apply"},
@@ -33,6 +32,7 @@ func TestHumanOnlyCommand(t *testing.T) {
 		{"aayu resume", "aayu resume"},
 		{"aayu init --gates", "aayu init --gates"},
 		// Agents may do these.
+		{"aayu ship 4", ""}, // ship's gates hold whoever runs it; --solo-bypass is a person's
 		{"aayu install --host claude", ""},
 		{"aayu build 12", ""},
 		{"aayu tell release --from notes.md", ""},
@@ -40,7 +40,7 @@ func TestHumanOnlyCommand(t *testing.T) {
 		{"aayu release 7 --to main", ""}, // an agent promotes behind the gate (Story #430)
 		{"echo aayushipment ship", ""},
 		{"git commit -m 'aayu ship later'", ""},
-		{"aayu status; aayu ship 4", "aayu ship 4"},
+		{"aayu status; aayu ship 4 --solo-bypass", "aayu ship 4 --solo-bypass"},
 	}
 	for _, tt := range tests {
 		got, why := HumanOnlyCommand(tt.shell)
@@ -51,10 +51,10 @@ func TestHumanOnlyCommand(t *testing.T) {
 }
 
 func TestPreToolBlocksHumanOnlyShell(t *testing.T) {
-	ship := []byte(`{"tool_name":"Bash","tool_input":{"command":"aayu ship 4"}}`)
+	ship := []byte(`{"tool_name":"Bash","tool_input":{"command":"aayu ship 4 --solo-bypass"}}`)
 	for _, h := range []verbs.HostID{verbs.HostClaude, verbs.HostCodex, verbs.HostAmp} {
 		r, _ := RunHook("pre-tool", h, "", filepath.Join(t.TempDir(), "none"), ship)
-		if r.Code != 2 || !strings.Contains(r.Stderr, "run `aayu ship 4` in their own terminal") {
+		if r.Code != 2 || !strings.Contains(r.Stderr, "run `aayu ship 4 --solo-bypass` in their own terminal") {
 			t.Errorf("%s: %+v", h, r)
 		}
 	}
@@ -69,11 +69,11 @@ func TestPreToolBlocksHumanOnlyShell(t *testing.T) {
 	// is exit 2 with Copilot's permissionDecision JSON. A shell command that
 	// runs aayu build records its session, so build can read the models
 	// Copilot reported; any other command records nothing.
-	for _, args := range []string{`{"command":"aayu ship 4"}`, `"{\"command\":\"aayu ship 4\"}"`} {
+	for _, args := range []string{`{"command":"aayu ship 4 --solo-bypass"}`, `"{\"command\":\"aayu ship 4 --solo-bypass\"}"`} {
 		ev := []byte(`{"sessionId":"s-1","cwd":"/r","toolName":"bash","toolArgs":` + args + `}`)
 		r, _ := RunHook("pre-tool", verbs.HostCopilot, "", filepath.Join(t.TempDir(), "none"), ev)
 		var out struct{ PermissionDecision, PermissionDecisionReason string }
-		if r.Code != 2 || json.Unmarshal([]byte(r.Stdout), &out) != nil || out.PermissionDecision != "deny" || !strings.Contains(out.PermissionDecisionReason, "run `aayu ship 4` in their own terminal") {
+		if r.Code != 2 || json.Unmarshal([]byte(r.Stdout), &out) != nil || out.PermissionDecision != "deny" || !strings.Contains(out.PermissionDecisionReason, "run `aayu ship 4 --solo-bypass` in their own terminal") {
 			t.Errorf("copilot, toolArgs %s: %+v", args, r)
 		}
 	}
@@ -263,12 +263,19 @@ func TestPluginManifests(t *testing.T) {
 	for _, c := range cmds {
 		f, _ := filepath.Glob("../../hosts/commands/*/" + c.Name + ".md")
 		b, _ := os.ReadFile(f[0])
+		granted := ""
 		for _, m := range tools.FindAllStringSubmatch(string(b), -1) {
+			granted += m[1]
 			for _, call := range regexp.MustCompile(`Bash\(([^)]*)\)`).FindAllStringSubmatch(m[1], -1) {
 				if cmd, _ := HumanOnlyCommand(strings.TrimSuffix(call[1], ":*")); cmd != "" {
 					t.Errorf("%s grants %s, a human-only command", c.Name, call[1])
 				}
 			}
+		}
+		// A delegated workflow that tells the agent to ship must let it,
+		// or Claude Code prompts (or refuses) at merge-ready.
+		if strings.Contains(c.Body, "`aayu ship <pr>`") && granted != "" && !strings.Contains(granted, "Bash(aayu ship:*)") {
+			t.Errorf("%s tells the agent to run aayu ship but does not grant it", c.Name)
 		}
 	}
 	amp, _ := os.ReadFile("../../hosts/amp/aayudha.ts")

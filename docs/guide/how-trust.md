@@ -286,6 +286,7 @@ A step that is not a Decision shows its action and "skip for now", so no step is
 | Step | What the record shows | The recommendation | What accepting does |
 |---|---|---|---|
 | Decision | an open Decision, a floor waiver, or a provisional one (V8) | the Decision's own Recommendation (ratify, for a provisional one) | `aayu decide <n> --accept <number>` |
+| Story PR ready to ship | `aayu ship` stopped on an open Story PR only for the human pass and commented "Ready to ship", and the merge gate is still green on that head | ship it (another: open it and review it) | `aayu ship <pr>`; in solo mode it first posts your `Solo-mode bypass:` comment and ships with `--solo-bypass` |
 | PR at the cycle cap | inspect ran its 2 fix/rebuild cycles on an open PR and stopped | open it and review it (another: `aayu ship <pr>`, with every gate of ship) | opens the PR |
 | Story merged without ship | a PR merged into dev that links the Story, which is still before `status:merged` | mark it merged without proof (it stays uncovered) | `status:merged`, the merged-without-proof comment, the lease removed |
 | Bug with its fix merged | a PR merged into dev that links the open Bug | close it as completed | `status:done`, a "Fixed in #PR" comment, closed |
@@ -297,6 +298,9 @@ agent's shell. Every write is the person's own, under their token, logged in the
 rules of the verb that owns it: a Decision still needs its authority, and ship still needs its gates and a human pass.
 `--dry-run` shows what each keypress would write without writing. The home screen shows "Waiting in your inbox" with
 the count, and `aayu next` names `aayu inbox`, whenever it has steps (`gatherInbox` in `internal/cli/inbox.go`).
+
+Shipping several Story PRs takes one device code per inbox session: the session's approval covers each ship that
+follows, and `--solo-bypass` too when you have admin access. Each ship still checks its own gates on its own head.
 
 ## Protected paths and CODEOWNERS
 

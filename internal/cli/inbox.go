@@ -36,13 +36,14 @@ func init() { register("inbox", runInbox) }
 // Inbox kinds, in the order the inbox shows them.
 const (
 	InboxDecision  = "decision"  // an open Decision waiting for acceptance (a provisional one to ratify or revert)
+	InboxReady     = "ready"     // an open Story PR that ship refused only for the human pass, its gate green
 	InboxCapped    = "capped"    // a PR at inspect's cycle cap, waiting for a person
 	InboxUnshipped = "unshipped" // a Story whose PR merged into dev without a ship record
 	InboxFixed     = "fixed"     // an open Bug whose fix merged into dev
 	InboxReplaced  = "replaced"  // an open Story or Bug that another issue replaces
 )
 
-var inboxOrder = []string{InboxDecision, InboxCapped, InboxUnshipped, InboxFixed, InboxReplaced}
+var inboxOrder = []string{InboxDecision, InboxReady, InboxCapped, InboxUnshipped, InboxFixed, InboxReplaced}
 
 // InboxMarker marks the comment inbox leaves when it closes an issue.
 const InboxMarker = "<!-- aayudha:inbox -->"
@@ -73,6 +74,7 @@ type InboxItem struct {
 	ReplacedBy  int           `json:"replaced_by,omitempty"` // the replacing issue
 	labels      []string
 	mergeSHA    string
+	head        string // a ready PR's head as the inbox showed it
 }
 
 var replacesRE = regexp.MustCompile(`(?i)\breplaces #([0-9]+)\b`)
@@ -198,9 +200,25 @@ func gatherInbox(ctx context.Context, c *github.Client, repo, dev string) ([]Inb
 			return nil, err
 		}
 		var st inspect.State
+		var marked []string // who left Ready to ship for the current head
 		for _, cm := range comments {
 			if strings.Contains(cm.GetBody(), inspect.Marker) {
 				st = inspect.ParseState(cm.GetBody())
+			}
+			if m := readyHead.FindStringSubmatch(cm.GetBody()); m != nil && m[1] == p.GetHead().GetSHA() && !slices.Contains(marked, cm.GetUser().GetLogin()) {
+				marked = append(marked, cm.GetUser().GetLogin())
+			}
+		}
+		// A Ready to ship marker on the current head stands over the cycle
+		// cap: ship found everything but the human pass.
+		if len(marked) > 0 && p.GetBase().GetRef() == dev {
+			it, err := readyItem(ctx, c, owner, name, p, marked)
+			if err != nil {
+				return nil, err
+			}
+			if it != nil {
+				out = append(out, *it)
+				continue
 			}
 		}
 		if st.Cycles < inspect.MaxCycles {
@@ -222,6 +240,45 @@ func gatherInbox(ctx context.Context, c *github.Client, repo, dev string) ([]Inb
 		return a.Number - b.Number
 	})
 	return out, nil
+}
+
+// readyItem is an open Story PR that ship left Ready to ship on its head, as
+// an inbox step when the merge gate's checks are still green there: ship it,
+// which keeps every gate of ship. It is nil when a check is not green, or
+// when no one in by, who wrote a marker for the head, has the write access
+// ship needs: anyone may comment, so a marker from any other account is text,
+// not ship's word.
+func readyItem(ctx context.Context, c *github.Client, owner, name string, p *gh.PullRequest, by []string) (*InboxItem, error) {
+	trusted := false
+	for _, login := range by {
+		perm, _, err := c.REST.Repositories.GetPermissionLevel(ctx, owner, name, login)
+		if err != nil {
+			return nil, err
+		}
+		if q := permissionOf(perm); q == "write" || q == "admin" {
+			trusted = true
+			break
+		}
+	}
+	if !trusted {
+		return nil, nil
+	}
+	head := p.GetHead().GetSHA()
+	runs, _, err := c.REST.Checks.ListCheckRunsForRef(ctx, owner, name, head, &gh.ListCheckRunsOptions{ListOptions: gh.ListOptions{PerPage: 100}})
+	if err != nil {
+		return nil, err
+	}
+	for _, want := range gateChecks {
+		i := slices.IndexFunc(runs.CheckRuns, func(r *gh.CheckRun) bool { return r.GetName() == want }) // the newest run of a name first
+		if i < 0 || runs.CheckRuns[i].GetConclusion() != "success" {
+			return nil, nil
+		}
+	}
+	story := StoryOf(p.GetBody(), "", p.GetHead().GetRef())
+	return &InboxItem{Kind: InboxReady, Number: p.GetNumber(), Title: p.GetTitle(), URL: p.GetHTMLURL(), Seat: verbs.EngineeringManager, PR: p.GetNumber(), head: p.GetHead().GetSHA(),
+		Why: fmt.Sprintf("its merge gate is green on `%s` and `aayu ship` stopped only for a person's pass; Story #%d merges only through ship.", short(head), story),
+		Options: []InboxAction{{N: 1, Recommended: true, Label: fmt.Sprintf("ship PR #%d (ship's gates still apply: in solo mode under your solo-mode bypass, otherwise once you have approved its head on GitHub)", p.GetNumber()), Command: fmt.Sprintf("aayu ship %d", p.GetNumber())},
+			{N: 2, Label: "open it and review it", Command: "open"}}}, nil
 }
 
 // decisionItem is an open Decision as an inbox step: accept one of its
@@ -442,6 +499,8 @@ func inboxNoun(it InboxItem) string {
 			return "Provisional Decision"
 		}
 		return "Decision"
+	case InboxReady:
+		return "Story PR ready to ship"
 	case InboxCapped:
 		return "PR at inspect's cycle cap"
 	case InboxUnshipped:
@@ -470,6 +529,8 @@ func (e *Env) inboxAct(ctx context.Context, cfg *config.Config, c *github.Client
 		return decideAccept(ctx, e, cfg, repo, []int{it.Number}, []string{strconv.Itoa(a.N)})
 	case InboxCapped:
 		return handlers["ship"](ctx, e, Values{"pr": strconv.Itoa(it.Number)})
+	case InboxReady:
+		return e.shipReady(ctx, cfg, c, repo, login, it)
 	}
 	var note, status, reason string
 	switch it.Kind {
@@ -506,6 +567,40 @@ func (e *Env) inboxAct(ctx context.Context, cfg *config.Config, c *github.Client
 	}
 	fmt.Fprintf(e.Out, "  done: %s\n", a.Label)
 	return nil
+}
+
+// shipReady ships a ready-to-ship PR through ship. In solo mode no second
+// person can review, so the person's pick is their solo-mode bypass: the
+// inbox posts their "Solo-mode bypass:" comment (once) and ships with
+// --solo-bypass; otherwise ship needs a person's approving review of the head.
+func (e *Env) shipReady(ctx context.Context, cfg *config.Config, c *github.Client, repo, login string, it InboxItem) error {
+	// The person chose the head the inbox showed: ship only that one.
+	v := Values{"pr": strconv.Itoa(it.Number), shipExpectHead: it.head}
+	owner, name, _ := github.SplitRepo(repo)
+	p, _, err := c.REST.PullRequests.Get(ctx, owner, name, it.Number)
+	if err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	if p.GetHead().GetSHA() != it.head {
+		return headMoved(it.Number, it.head, p.GetHead().GetSHA())
+	}
+	if soloMode(cfg, login, "inbox") == nil {
+		if _, err := soloModeComment(ctx, c, owner, name, it.Number, login, cfg, "inbox", "a PR comment"); err != nil {
+			note := fmt.Sprintf("%s @%s ships this from `aayu inbox`: one human and no bot App, so no second person can review it; the merge gate is green on the head `%s`.", SoloBypassPrefix, login, short(it.head))
+			if err := postComment(ctx, c, repo, it.Number, "github.comment.solo-bypass", note); err != nil {
+				return Wrap(ExitExternal, err)
+			}
+		}
+		v["solo-bypass"] = true
+	}
+	err = handlers["ship"](ctx, e, v)
+	if err != nil && v["solo-bypass"] == nil {
+		// Not solo: ship needs a person's approving review of the head,
+		// which only GitHub records.
+		fmt.Fprintf(e.Out, "  approve the head on GitHub, then pick ship again: %s\n", it.URL)
+		e.openURL(it.URL)
+	}
+	return err
 }
 
 // readKey reads one keypress: raw from a real terminal, else the next

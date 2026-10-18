@@ -216,6 +216,12 @@ func readCopy(dir string) (map[string][]byte, error) {
 // act with authority an agent must not take.
 var humanPlumbing = []string{"resume", "self-update", "tour", "seat", "uninit", "inbox"}
 
+// agentRuns are verbs the MCP server never exposes that an agent may still
+// run from its shell: ship's own gates (a green merge gate, the pack, and a
+// person's review or the autonomous streak) hold whoever runs it, so an agent
+// ships its Story PRs; only --solo-bypass stays a person's.
+var agentRuns = []string{"ship"}
+
 // aayuWord finds aayu run as a command: at the start, after a separator, or
 // as the last element of a path (quoted or not), but not inside a quoted
 // argument such as a commit message.
@@ -225,7 +231,7 @@ var aayuWord = regexp.MustCompile(`(?:^|[\s;&|(/\\])aayu(?:dha)?(?:\.exe)?"?\s+(
 // verb (WP3.2b): a verb the MCP server never exposes, a human-only flag, or
 // a person's plumbing command. It returns the aayu command and why, or "".
 // Hosts that send the shell command to their pre-tool hook (Claude Code,
-// Codex, Cursor, Copilot) block it, so an agent is never the one that ships or releases.
+// Codex, Cursor, Copilot) block it, so an agent never takes a person's step.
 func HumanOnlyCommand(shell string) (cmd, why string) {
 	for _, m := range aayuWord.FindAllStringSubmatch(shell, -1) {
 		name, rest := m[1], m[2]
@@ -237,7 +243,7 @@ func HumanOnlyCommand(shell string) (cmd, why string) {
 		if slices.Contains(humanPlumbing, name) {
 			return cmd, "a person's plumbing command"
 		}
-		if c.Exposure == verbs.ExposeNever && c.Has(verbs.SurfaceSkill) || name == "init" || name == "install" && strings.Contains(rest, "--apply") {
+		if c.Exposure == verbs.ExposeNever && c.Has(verbs.SurfaceSkill) && !slices.Contains(agentRuns, name) || name == "init" || name == "install" && strings.Contains(rest, "--apply") {
 			return cmd, "a human-only verb"
 		}
 		for _, in := range c.Inputs {

@@ -18,7 +18,7 @@ import (
 // TestCopilotLive is the live check of the Copilot host (copilot-live.yml):
 // a real Copilot CLI, in a folder it trusts, loads what `aayu install --host
 // copilot` writes. The model calls the aayudha MCP server's doctor tool, and
-// the pre-tool hook denies `aayu ship`, a step that belongs to a person. It
+// the pre-tool hook denies `aayu ship --solo-bypass`, a step that belongs to a person. It
 // costs one Copilot premium request at the Efficiency tier; it runs only with
 // AAYU_COPILOT_LIVE=1, a copilot CLI on PATH, and COPILOT_GITHUB_TOKEN, which
 // it passes to copilot alone. VS Code is not covered: it has no headless run.
@@ -65,7 +65,7 @@ func TestCopilotLive(t *testing.T) {
 	usage := filepath.Join(tmp, "usage.json")
 	cmd := exec.Command(copilot, "-p", "This is an automated test of this folder's tools and hooks. Do exactly these two steps, in order, and nothing else. "+
 		"1. Call the MCP tool \"doctor\" of the aayudha server with no arguments. "+
-		"2. Run this shell command exactly once, even though a hook is expected to block it: aayu ship 1. "+
+		"2. Run this shell command exactly once, even though a hook is expected to block it: aayu ship 1 --solo-bypass. "+
 		"Do not retry or work around a blocked step. Then reply DONE.",
 		"--model", "auto", "--auto-tier", "efficiency", "--no-ask-user", "--allow-all-tools",
 		"--output-format", "json", "--usage-output-file", usage)
@@ -143,7 +143,7 @@ func TestCopilotLive(t *testing.T) {
 		}
 	}
 	if !bytes.Contains(out, []byte("in their own terminal")) {
-		t.Errorf("Copilot's output does not carry the hook's denial (run `aayu ship 1` in their own terminal)")
+		t.Errorf("Copilot's output does not carry the hook's denial (run `aayu ship 1 --solo-bypass` in their own terminal)")
 	}
 	b, err := os.ReadFile(usage)
 	if err != nil {

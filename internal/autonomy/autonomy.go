@@ -33,6 +33,11 @@ const (
 	LabelAgentAuthored = "agent-authored"
 	LabelHumanFallback = "identity:human-fallback"
 	CheckpointTrailer  = "Aayudha-Checkpoint:"
+	// HostTrailer and ModelTrailer mark a commit an agent made outside aayu
+	// build, as build's checkpoints carry them too: the host and the model that
+	// wrote it, self-reported like the agent-authored label.
+	HostTrailer  = "Aayudha-Host:"
+	ModelTrailer = "Aayudha-Model:"
 )
 
 // Review is a PR review.
@@ -137,7 +142,7 @@ func (r Rules) Detect(prs []PR, issues []Issue) []Correction {
 			}
 		}
 		for _, c := range p.Commits {
-			if c.Parents <= 1 && !r.bot(c.Login, c.Bot) && !strings.Contains(c.Message, CheckpointTrailer) {
+			if c.Parents <= 1 && !r.bot(c.Login, c.Bot) && !agentCommit(c.Message) {
 				who := c.Login
 				if who == "" {
 					who = "an unlinked author"
@@ -165,6 +170,69 @@ func (r Rules) Detect(prs []PR, issues []Issue) []Correction {
 		}
 	}
 	return out
+}
+
+var (
+	hostTrailerLine  = regexp.MustCompile(`(?m)^` + HostTrailer + `(.*)$`)
+	modelTrailerLine = regexp.MustCompile(`(?m)^` + ModelTrailer + `(.*)$`)
+	// Amp writes this trailer on the commits of a thread.
+	ampThreadLine = regexp.MustCompile(`(?m)^Amp-Thread-ID: https://ampcode\.com/threads/T-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}[ \t]*$`)
+	trailerLine   = regexp.MustCompile(`^[A-Za-z0-9-]+:( |$)`)
+)
+
+// trailers is a commit message's trailer block: its last paragraph, when
+// every line of it is a "Key: value" trailer; otherwise nothing, so a line
+// quoted in the body is never read as a trailer.
+func trailers(msg string) string {
+	paras := strings.Split(strings.TrimSpace(strings.ReplaceAll(msg, "\r\n", "\n")), "\n\n")
+	last := paras[len(paras)-1]
+	if len(paras) < 2 {
+		return ""
+	}
+	for _, l := range strings.Split(last, "\n") {
+		if !trailerLine.MatchString(l) {
+			return ""
+		}
+	}
+	return last
+}
+
+// agentCommit reports whether a commit message says an agent made it: a build
+// checkpoint; or one Aayudha-Host trailer naming a known host, or an Amp
+// thread's Amp-Thread-ID trailer, with every Aayudha-Model trailer, if any,
+// naming a model of a known family. A person's follow-up commit carries none
+// of these, and a stray, empty, or unknown line counts as a person's, so it
+// stays a correction. Only the trailer block counts. Detect asks only of
+// commits on agent PRs.
+func agentCommit(msg string) bool {
+	msg = trailers(msg)
+	if strings.Contains(msg, CheckpointTrailer) {
+		return true
+	}
+	switch h := hostTrailerLine.FindAllStringSubmatch(msg, -1); {
+	case len(h) > 1:
+		return false
+	case len(h) == 1:
+		if _, ok := verbs.FindHost(verbs.HostID(oneToken(h[0][1]))); !ok {
+			return false
+		}
+	case !ampThreadLine.MatchString(msg):
+		return false
+	}
+	for _, m := range modelTrailerLine.FindAllStringSubmatch(msg, -1) {
+		if id := oneToken(m[1]); id == "" || verbs.FamilyOf(id) == "" {
+			return false
+		}
+	}
+	return true
+}
+
+// oneToken is a trailer's value when it is a single word, else "".
+func oneToken(v string) string {
+	if f := strings.Fields(v); len(f) == 1 {
+		return f[0]
+	}
+	return ""
 }
 
 func short(sha string) string {
