@@ -170,7 +170,7 @@ func checkDAST(ctx context.Context, p *Probe) Result {
 		status = Fail
 		lines = append(lines, "target: "+target+" is a production environment ([verify.environments] production = true for its host), so verify refuses it and blocks the dast floor: set AAYU_ENV to a non-production environment")
 	case v.Environments[env].ActiveScan:
-		lines = append(lines, "target: "+target+", active scan ([verify.environments."+env+"] active_scan = true)")
+		lines = append(lines, "target: "+target+", active scan ([verify.environments."+env+"] active_scan = true); a pull request that adds this opt-in, or changes its url, gets the passive scan until it merges")
 	case len(v.Seed) > 0 && verify.IsLoopback(hostname(target)):
 		lines = append(lines, "target: "+target+", active scan if [verify] seed starts it (an app already answering there gets the passive scan only)")
 	default:

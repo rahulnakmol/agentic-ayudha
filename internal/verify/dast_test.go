@@ -348,6 +348,30 @@ func TestDASTGuardrails(t *testing.T) {
 				t.Fatalf("the detail does not say why: %q", c.Detail)
 			}
 		}
+		// CodeRabbit on 314fd4e: only the approval is compared. An unrelated
+		// edit keeps a merged opt-in active; a new url for it waits for the merge.
+		const moved = "https://staging2.example.test"
+		for _, tc := range []struct {
+			name, conf, url string
+			wantActive      bool
+		}{
+			{"an unrelated edit", "version = 1\n[ui]\ntheme = \"dark\"\n[verify.environments.local]\nurl = \"" + shared + "\"\nactive_scan = true\n", shared, true},
+			{"a new url", "version = 1\n[verify.environments.local]\nurl = \"" + moved + "\"\nactive_scan = true\n", moved, false},
+		} {
+			_ = os.WriteFile(cfg, []byte(tc.conf), 0o644)
+			g("commit", "-q", "-am", tc.name)
+			next := g("rev-parse", "HEAD")
+			bin := t.TempDir()
+			standInRuntime(t, bin, "docker", zapClean)
+			r := dastRun(t, bin, tc.url, "web")
+			r.Root, r.Base, r.Head, r.CI = root, head, next, true
+			r.Verify.Environments["local"] = config.Environment{URL: tc.url, ActiveScan: true}
+			c, _ := dastCheck(t, r)
+			if got := strings.Contains(read(t, filepath.Join(bin, "docker.plan")), "type: activeScan"); c.Result != proof.Pass || got != tc.wantActive {
+				t.Fatalf("%s: active = %v, want %v: %+v", tc.name, got, tc.wantActive, c)
+			}
+			g("reset", "-q", "--hard", head)
+		}
 	})
 
 	t.Run("with no blocking date a high alert stays advisory", func(t *testing.T) {

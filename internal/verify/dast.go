@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 )
 
@@ -188,10 +189,10 @@ func (DAST) Run(ctx context.Context, r *Run) (Result, error) {
 	// started itself, or a URL the protected repository config opts in.
 	started := r.seeded && !r.upBeforeSeed && loopback
 	// An opt-in the change itself adds is not yet reviewed: the merge gate runs
-	// the PR's own config, so it honours active_scan only when the change leaves
-	// .aayudha/config.toml as its base has it.
+	// the PR's own config, so it honours active_scan only when the base's
+	// .aayudha/config.toml already opts the same environment and url in.
 	optIn := r.Verify.Environments[t.Env].ActiveScan
-	pending := optIn && !started && !configUnchanged(ctx, r)
+	pending := optIn && !started && !approvedAtBase(ctx, r, t.Env, t.URL)
 	active := started || optIn && !pending
 	args := []string{"run", "--rm"}
 	if goos == "linux" {
@@ -304,18 +305,24 @@ func (DAST) Run(ctx context.Context, r *Run) (Result, error) {
 	return res, nil
 }
 
-// configUnchanged reports whether .aayudha/config.toml at the run's head is
-// the file its base has. With no base, only a local run counts it unchanged.
-func configUnchanged(ctx context.Context, r *Run) bool {
+// approvedAtBase reports whether .aayudha/config.toml at the run's base
+// already opts env into active_scan for url. Only the approval is compared, so
+// an unrelated edit to the file keeps it, and a new url or a new opt-in waits
+// for the merge. With no base, only a local run counts it approved.
+func approvedAtBase(ctx context.Context, r *Run, env, url string) bool {
 	if r.Base == "" {
 		return !r.CI
 	}
-	head := r.Head
-	if head == "" {
-		head = "HEAD"
+	b, err := gitOut(ctx, r.Root, "show", r.Base+":.aayudha/config.toml")
+	if err != nil {
+		return false
 	}
-	_, err := gitOut(ctx, r.Root, "diff", "--quiet", r.Base, head, "--", ".aayudha/config.toml")
-	return err == nil
+	l, err := config.Load(config.Sources{RepoTOML: b, RepoSource: ".aayudha/config.toml at " + r.Base})
+	if err != nil {
+		return false
+	}
+	e := l.Config.Verify.Environments[env]
+	return e.ActiveScan && strings.TrimRight(e.URL, "/") == url
 }
 
 // newFloorAdvisory reports whether a miss of a floor Decision #480 added is
