@@ -11,6 +11,7 @@ import (
 
 	aayudha "github.com/rahulnakmol/agentic-ayudha"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
+	"github.com/rahulnakmol/agentic-ayudha/internal/survey"
 )
 
 func surveyCase(t *testing.T, id string) (Case, string) {
@@ -112,6 +113,7 @@ func selfCheckReply(t *testing.T, draft string, but map[string]string) string {
 // 39070364531 lost all of it to a gateway 502 at the judge).
 func TestTier2SurveyErroredRunKeepsItsWork(t *testing.T) {
 	c, good := surveyCase(t, "survey/tinyjs-rust")
+	c.Survey.Rubrics = "" // the single-call path, which the other draft cases take
 	fake := &models.Fake{Replies: []models.Response{
 		{Text: good, CostUSD: 0.25}, {Text: `{"score": 3, "reason": "first"}`}, {Text: selfCheckReply(t, good, nil)},
 		{Text: "the judge is not answering in JSON"}, // the final judgement, twice: the run errors
@@ -141,6 +143,7 @@ func TestTier2SurveyErroredRunKeepsItsWork(t *testing.T) {
 // a result that fails them), and only the corrected draft is scored.
 func TestTier2SurveyRevisesOnceThenJudges(t *testing.T) {
 	c, good := surveyCase(t, "survey/tinyjs-rust")
+	c.Survey.Rubrics = "" // the single-call path, which the other draft cases take
 	bad := strings.Replace(good, `"target": "Rust"`, `"target": "Go"`, 1)
 	root, err := decodeOrdered([]byte(good))
 	if err != nil {
@@ -238,5 +241,132 @@ func TestTier2SurveyRevisesOnceThenJudges(t *testing.T) {
 	}
 	if !strings.Contains(judged.Messages[0].Content, "entry point is the class CTinyJS") || strings.Contains(judgedFirst.Messages[0].Content, "entry point is the class CTinyJS") {
 		t.Error("the judge did not score the first draft, then the corrected one")
+	}
+}
+
+// Each criterion of a sectioned case's rubric.md moves whole to a section
+// rubric, so splitting the judgement never drops a bar; and every section
+// rubric keeps the fabrication rule.
+func TestSurveySectionRubricsKeepEveryCriterion(t *testing.T) {
+	c, _ := surveyCase(t, "survey/tinyjs-rust")
+	if c.Survey.Rubrics == "" {
+		t.Fatal("survey/tinyjs-rust is not judged by section")
+	}
+	whole, err := os.ReadFile(filepath.Join(c.Dir, c.Tier2.Rubric))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var parts []rubricItem
+	for _, name := range survey.SectionNames() {
+		b, err := os.ReadFile(filepath.Join(c.Dir, c.Survey.Rubrics, name+".md"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(strings.Join(strings.Fields(string(b)), " "), "1 when it contains a fabrication (a claim the cited code does not support, a user or customer the repository never names, or a number nothing measures)") {
+			t.Errorf("%s.md lacks the fabrication rule", name)
+		}
+		parts = append(parts, rubricItems(string(b))...)
+	}
+	n := 0
+	for _, it := range rubricItems(string(whole)) {
+		if len(it.words) == 0 || it.words[0] < "1" || it.words[0] > "9" {
+			continue // the heading and the shared paragraphs: each section rubric words its own scale
+		}
+		n++
+		it.words = it.words[1:] // the criterion, not its number
+		if !keptItem(it, parts) {
+			t.Errorf("criterion not kept by any section rubric: %.80s", it.text)
+		}
+	}
+	if n != 5 {
+		t.Errorf("%d criteria in rubric.md, want 5", n)
+	}
+}
+
+// A sectioned survey run writes each section in its own call, at its own cap
+// and effort, judged against its own rubric; a section that stops at its cap
+// reruns alone at twice it; the score loses a point per point a section
+// loses; and a rerun with the saved steps resumes every finished section
+// without a call.
+func TestTier2SurveySections(t *testing.T) {
+	c, good := surveyCase(t, "survey/tinyjs-rust")
+	parts, err := survey.SplitDraft([]byte(good))
+	if err != nil {
+		t.Fatal(err)
+	}
+	judge := func(n int) models.Response {
+		return models.Response{Text: fmt.Sprintf(`{"score": %d, "reason": "r%d"}`, n, n)}
+	}
+	final := map[string]int{"engineering": 5, "capabilities": 4, "product": 4, "modernisation": 5, "questions": 5}
+	var replies []models.Response
+	for _, name := range survey.SectionNames() {
+		if name == "engineering" {
+			replies = append(replies, models.Response{Text: string(parts[name][:200]), Truncated: true, StopReason: "max_tokens"})
+		}
+		replies = append(replies, models.Response{Text: string(parts[name])}, judge(3), models.Response{Text: selfCheckReply(t, string(parts[name]), nil)}, judge(final[name]))
+	}
+	fake := &models.Fake{Replies: replies}
+	h := harness(t, fake, "gpt-6.1-sol")
+	h.Config.K, h.Steps = 1, t.TempDir()
+	res, err := h.Tier2(context.Background(), []Case{c}, "abc", "dev", time.Unix(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := res.Cases[0].Runs[0]
+	if len(fake.Requests) != len(replies) {
+		t.Fatalf("%d calls, want %d: %+v", len(fake.Requests), len(replies), r)
+	}
+	if r.Status != RunFail || r.Score != 3 || len(r.Sections) != 5 || r.Answer == "" {
+		t.Fatalf("run: status %s, score %d (want 3: two sections at 4), %d sections, floor %q, error %q", r.Status, r.Score, len(r.Sections), r.Floor, r.Error)
+	}
+	eng := r.Sections[0]
+	if eng.Name != "engineering" || eng.Truncations != 1 || eng.MaxTokens != 32000 || eng.FirstScore != 3 || eng.Score != 5 {
+		t.Errorf("engineering: %+v; want one truncation, rerun at 32000, first 3, scored 5", eng)
+	}
+	if got := fake.Requests[0]; got.MaxTokens != 16000 || got.Effort != "high" || !got.Messages[0].CacheBreak || !strings.Contains(got.Messages[1].Content, "Write the engineering section") {
+		t.Errorf("first engineering call: cap %d, effort %q", got.MaxTokens, got.Effort)
+	}
+	if got := fake.Requests[1]; got.MaxTokens != 32000 {
+		t.Errorf("the truncated section reran at %d, want 32000", got.MaxTokens)
+	}
+	capCall, capJudge := fake.Requests[5], fake.Requests[6]
+	if capCall.MaxTokens != 8000 || capCall.Effort != "medium" || !strings.Contains(capCall.Messages[1].Content, `"engineering"`) ||
+		capCall.Messages[0].Content != fake.Requests[0].Messages[0].Content {
+		t.Errorf("capabilities call: cap %d, effort %q; it must share the prefix and see the engineering section", capCall.MaxTokens, capCall.Effort)
+	}
+	if !strings.Contains(capJudge.System, "the capabilities section") || !strings.Contains(capJudge.Messages[0].Content, "The sections it rests on") {
+		t.Errorf("capabilities judge: %.200s", capJudge.System)
+	}
+	for _, s := range r.Sections {
+		if s.TokensOut == 0 && s.CostUSD == 0 && len(r.Calls) == 0 {
+			t.Errorf("section %s logged nothing", s.Name)
+		}
+	}
+	// Resume: every section was saved done, so a rerun makes no call.
+	again := &models.Fake{}
+	h2 := harness(t, again, "gpt-6.1-sol")
+	h2.Config.K, h2.Steps = 1, h.Steps
+	res, err = h2.Tier2(context.Background(), []Case{c}, "abc", "dev", time.Unix(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r2 := res.Cases[0].Runs[0]; len(again.Requests) != 0 || r2.Score != 3 || !r2.Sections[4].Resumed || len(r2.Calls) != 0 {
+		t.Errorf("resume: %d calls, score %d, sections %+v", len(again.Requests), r2.Score, r2.Sections)
+	}
+	// ProviderRetries is the sample's, not each section's: two 429s spent in
+	// engineering leave none for capabilities, whose next fault errors the run.
+	noPause(t)
+	limited := &models.StatusError{Code: 429, Body: "rate limited"}
+	client := &resetting{Fake: &models.Fake{Replies: replies}, fail: map[int]error{1: limited, 2: limited, 8: limited, 9: limited, 10: limited}}
+	h3 := harness(t, nil, "gpt-6.1-sol")
+	h3.Config.K = 1
+	h3.Gateway.Client = func(models.Route, string) models.Client { return client }
+	res, err = h3.Tier2(context.Background(), []Case{c}, "abc", "dev", time.Unix(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r3 := res.Cases[0].Runs[0]
+	if r3.Status != RunError || runRetries(r3.Calls) != ProviderRetries {
+		t.Errorf("retries across sections: status %s, %d retries (want %d for the whole sample), error %q", r3.Status, runRetries(r3.Calls), ProviderRetries, r3.Error)
 	}
 }

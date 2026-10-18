@@ -61,6 +61,9 @@ type Run struct {
 	// SelfCheck is a survey run's self-verification turn: the first draft's
 	// score, recorded only, and what the turn changed (D-5.9l).
 	SelfCheck *SelfCheck `json:"self_check,omitempty"`
+	// Sections is a survey run written in sections: each section's score,
+	// floors, self-check, tokens, and cost (runSurveySections).
+	Sections []SectionRun `json:"sections,omitempty"`
 	// Session is a session case's turns and what each command answered (D-3.4f).
 	Session []SessionStep `json:"session,omitempty"`
 	// A review case's run (WP4.8b): its variant and what it would post against

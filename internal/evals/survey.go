@@ -38,6 +38,10 @@ type SurveySpec struct {
 	// --probe` on the fixture's legacy build: the runtime evidence the host
 	// saw, printed as the CLI prints it, and citable as probe: facts.
 	Probes []string `toml:"probes"`
+	// Rubrics is a directory holding a rubric per survey section
+	// (<section>.md): a draft case with it runs section by section
+	// (runSurveySections) and is judged per section.
+	Rubrics string `toml:"rubrics"`
 }
 
 func (s *SurveySpec) check() error {
@@ -50,6 +54,8 @@ func (s *SurveySpec) check() error {
 		return errors.New("[survey] kind backlog needs survey, the checked survey draft")
 	case s.Kind == "draft" && len(s.Read) == 0:
 		return errors.New("[survey] kind draft needs read, the files the host read")
+	case s.Kind == "backlog" && s.Rubrics != "":
+		return errors.New("[survey] rubrics: a backlog is written in one call and judged whole")
 	}
 	return nil
 }
@@ -212,16 +218,7 @@ func checkSurvey(c Case, w surveyWorld, reply string) []string {
 			return []string{"survey.json does not parse (unknown keys are refused): " + err.Error()}
 		}
 		out = append(out, survey.Check(w.ix, d).Problems...)
-		for _, q := range d.Questions {
-			if q.Status == "answered" {
-				out = append(out, fmt.Sprintf("question %s is answered, but no person was asked in this session: leave it open", q.ID))
-			}
-		}
-		for id, cl := range d.Claims() {
-			if cl.Basis == survey.BasisConfirmed {
-				out = append(out, fmt.Sprintf("claim %s is confirmed, but no person was asked in this session: mark it unknown with a question", id))
-			}
-		}
+		out = append(out, noPersonProblems(d)...)
 	case "backlog":
 		bl, err := survey.ParseBacklog([]byte(reply))
 		if err != nil {
@@ -239,6 +236,29 @@ func checkSurvey(c Case, w surveyWorld, reply string) []string {
 	if c.Survey.Kind == "backlog" {
 		text = withoutDecisionOptions(reply)
 	}
+	return append(out, scopeProblems(c, text)...)
+}
+
+// noPersonProblems finds what a draft written with no person in the session
+// cannot hold: an answered question or a confirmed claim.
+func noPersonProblems(d survey.Draft) []string {
+	var out []string
+	for _, q := range d.Questions {
+		if q.Status == "answered" {
+			out = append(out, fmt.Sprintf("question %s is answered, but no person was asked in this session: leave it open", q.ID))
+		}
+	}
+	for id, cl := range d.Claims() {
+		if cl.Basis == survey.BasisConfirmed {
+			out = append(out, fmt.Sprintf("claim %s is confirmed, but no person was asked in this session: mark it unknown with a question", id))
+		}
+	}
+	return out
+}
+
+// scopeProblems applies the case's scope rules to a reply.
+func scopeProblems(c Case, text string) []string {
+	var out []string
 	for _, r := range c.Scope {
 		if m, clause := r.find(text); m != "" {
 			out = append(out, fmt.Sprintf("scope: adds %s (%q in %q)", r.Why, m, clause))
@@ -289,6 +309,9 @@ func tier1Survey(ctx context.Context, c Case, assets fs.FS) []string {
 // host does after `aayu survey --draft` or `--backlog`. A reply that still
 // fails scores 1 without the judge (rule 7); one that passes is judged.
 func (h *Harness) runSurvey(ctx context.Context, c Case, lane verbs.LaneID, body, input, rubric string) (run Run, err error) {
+	if c.Survey.Kind == "draft" && c.Survey.Rubrics != "" {
+		return h.runSurveySections(ctx, c, lane, body, input)
+	}
 	var calls []CallLog
 	defer func() { run.Calls = calls }()
 	w, err := surveySetup(ctx, c, h.Assets)
