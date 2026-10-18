@@ -152,7 +152,7 @@ func TestInvestigateLive(t *testing.T) {
 		"### query q4: `exceptions by version",
 		"### query q5: `logs where level=ERROR",
 		"Source: sentry project 4507 (sha256 ",
-		"from GET https://sentry.io/api/0/organizations/acme/releases/?per_page=10&project=4507",
+		"from GET https://sentry.io/api/0/organizations/acme/releases/?per_page=100&project=4507",
 		"src/answer.go:6",             // the top frame, mapped into the repository
 		">    6  \tif r[1] == best {", // the code at the deployed revision
 		"Newest deploy in the window: `" + bad + "` to production at 2026-10-17T08:35:30Z; previous `" + good + "` (query q1)",
@@ -216,6 +216,16 @@ func TestInvestigateLive(t *testing.T) {
 	_, out, sent := inv(0, sentry, append([]string{"--source", "sentry", "--service", "web", "--query", "logs where level=ERROR limit 5"}, sentryFlags...)...)
 	if !strings.Contains(out, "q1") || !strings.Contains(out, "logs where level=ERROR") || slices.ContainsFunc(sent, func(s string) bool { return strings.Contains(s, "/releases/") }) {
 		t.Errorf("one-off sentry query: requests %v\n%s", sent, out)
+	}
+	_ = os.RemoveAll(filepath.Join(repo, ".aayudha", "state", "investigate"))
+
+	// A --to before the incident started: the default start counts back 24
+	// hours from --to, not from now.
+	_, out, sent = inv(0, sentry, append([]string{"--source", "sentry", "--service", "web", "--to", "2026-10-10T00:00:00Z", "--query", "logs where level=ERROR"}, sentryFlags...)...)
+	if !slices.ContainsFunc(sent, func(s string) bool {
+		return strings.Contains(s, "start=2026-10-09T00%3A00%3A00Z") && strings.Contains(s, "end=2026-10-10T00%3A00%3A00Z")
+	}) {
+		t.Errorf("an old --to: requests %v\n%s", sent, out)
 	}
 	_ = os.RemoveAll(filepath.Join(repo, ".aayudha", "state", "investigate"))
 	_, out, _ = inv(ExitUsage, posthog, append([]string{"--source", "posthog", "--service", "web", "--query", "requests by version"}, posthogFlags...)...)

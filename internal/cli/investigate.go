@@ -185,13 +185,16 @@ func runInvestigate(ctx context.Context, e *Env, in Values) error {
 	first, last := exp.Span()
 	if live != nil {
 		last = e.Now().UTC().Truncate(time.Second)
+		if t, err := time.Parse(time.RFC3339, in.String("to")); in.Has("to") && err == nil {
+			last = t.UTC() // the defaults count back from --to
+		}
 		first = last.Add(-24 * time.Hour)
 		if started, ok := parseStarted(it.Fields["started"]); ok && started.Before(last) {
 			first = started.Add(-time.Hour)
 		}
 	}
 	rep.From, rep.To = first, last.Add(time.Second)
-	if started, ok := parseStarted(it.Fields["started"]); ok && started.Add(-time.Hour).After(first) {
+	if started, ok := parseStarted(it.Fields["started"]); ok && started.Before(last) && started.Add(-time.Hour).After(first) {
 		rep.From = started.Add(-time.Hour)
 	}
 	for _, f := range []struct {

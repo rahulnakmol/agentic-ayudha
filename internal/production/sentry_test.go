@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -126,6 +127,27 @@ func TestSentrySource(t *testing.T) {
 		q, _ := ParseQuery("requests where service=web", from, from.Add(8*24*time.Hour))
 		if _, _, err := (Sentry{API: noCalls{t}}).Run(context.Background(), q, nil); err == nil {
 			t.Error("an 8-day window ran; want the 7-day bound to refuse it")
+		}
+	})
+	t.Run("rollback to an old release", func(t *testing.T) {
+		// Twelve releases, newest created first; the oldest was redeployed
+		// in the window (a rollback). Its deploy is the newest, the release
+		// live when the window opened is the previous, and no other release's
+		// deploys are read.
+		var list []string
+		for i := range 11 {
+			list = append(list, fmt.Sprintf(`{"version":"web@3.%d","lastDeploy":{"environment":"production","dateFinished":"2026-10-16T%02d:00:00Z"}}`, 10-i, 20-i))
+		}
+		list = append(list, `{"version":"web@1.0","lastDeploy":{"environment":"production","dateFinished":"2026-10-17T08:30:00Z"}}`)
+		api := scripted{project: "4507", answers: map[string][]byte{
+			"/releases/":                  []byte("[" + strings.Join(list, ",") + "]"),
+			"/releases/web@1.0/deploys/":  []byte(`[{"environment":"production","dateFinished":"2026-10-17T08:30:00Z"},{"environment":"production","dateFinished":"2026-10-01T09:00:00Z"}]`),
+			"/releases/web@3.10/deploys/": []byte(`[{"environment":"production","dateFinished":"2026-10-16T20:00:00Z"}]`),
+		}}
+		q, _ := ParseQuery("deploys where service=web", from, to)
+		r, pv, err := (Sentry{API: &api}).Run(context.Background(), q, nil)
+		if err != nil || len(pv.Requests) != 3 || len(r.Rows) != 1 || r.Rows[0][3] != "web@1.0" || r.Rows[0][4] != "web@3.10" {
+			t.Errorf("rows %v, requests %v, err %v; want web@1.0 after web@3.10 from three reads", r.Rows, pv.Requests, err)
 		}
 	})
 	t.Run("failed lookup before a good one", func(t *testing.T) {
