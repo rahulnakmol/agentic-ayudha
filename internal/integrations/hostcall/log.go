@@ -76,9 +76,10 @@ func NewEntry(e Event, v Verdict, r Result, host, session string, at time.Time) 
 	if v.Channel == "cli" {
 		args = map[string]any{"command": e.Shell}
 	}
-	if b, err := json.Marshal(args); err == nil && len(args) > 0 {
-		en.Args = json.RawMessage(actions.RedactString(string(b)))
+	if b, err := json.Marshal(actions.Redact(args, nil)); err == nil && len(args) > 0 {
+		en.Args = b
 	}
+	en.Call = actions.RedactString(en.Call)
 	en.Window, en.Limit = bounds(e, v)
 	tool := v.Call
 	if i := strings.LastIndex(tool, " "); i >= 0 {

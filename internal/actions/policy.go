@@ -79,7 +79,14 @@ func (g guard) RoundTrip(r *http.Request) (*http.Response, error) {
 // "token" matches as a suffix only, so access_token is redacted and max_tokens is not.
 var redactKeys = []string{"secret", "password", "passwd", "authorization", "api_key", "apikey", "private_key", "cookie", "credential"}
 
-var credential = regexp.MustCompile(`(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|xox[abpr]-[A-Za-z0-9-]{10,}|-----BEGIN [A-Z ]*PRIVATE KEY-----[^-]*)`)
+// PostHog personal (phx_) and secure flag (phs_) keys and Sentry organization
+// (sntrys_) and user (sntryu_) tokens, and a bearer token, are credentials too.
+var credential = regexp.MustCompile(`(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|xox[abpr]-[A-Za-z0-9-]{10,}|-----BEGIN [A-Z ]*PRIVATE KEY-----[^-]*|ph[xs]_[A-Za-z0-9]{20,}|sntry[su]_[A-Za-z0-9+/=_-]{20,}|(?i:bearer\s+[A-Za-z0-9._~+/-]{20,}=*))`)
+
+// inline is a secret given in context rather than by its shape, as a command
+// line or a header carries it: SENTRY_AUTH_TOKEN=…, --auth-token …,
+// Authorization: Bearer …. Only the value is replaced.
+var inline = regexp.MustCompile(`(?i)(\b[a-z0-9_]*(?:token|secret|password|api_?key)=|--(?:auth-token|api-key|token|personal-api-key|password)[= ]|\bauthorization:\s*(?:bearer|basic|token)\s+)("[^"]*"|'[^']*'|[^\s"']+)`)
 
 const redacted = "[REDACTED]"
 
@@ -130,7 +137,9 @@ func secretKey(k string, extra []string) bool {
 	return false
 }
 
-func redactString(s string) string { return credential.ReplaceAllString(s, redacted) }
+func redactString(s string) string {
+	return credential.ReplaceAllString(inline.ReplaceAllString(s, "${1}"+redacted), redacted)
+}
 
 // RedactString replaces credential-shaped substrings, as payload redaction
 // does; the eval harness uses it on reply excerpts it records.
