@@ -113,7 +113,7 @@ func TestFloorCapabilityMapNamespaces(t *testing.T) {
 func TestFloorCapabilityMapFunctions(t *testing.T) {
 	dir := t.TempDir()
 	for name, body := range map[string]string{
-		"parse/parse.go":   "package parse\n\nfunc Parse(s string) int { return len(s) }\n\nfunc helper() {}\n",
+		"parse/parse.go":   "package parse\n\nfunc Parse(s string) int { return len(s) }\n\nfunc helper() {}\n\ntype Status string\n\ntype state int\n",
 		"cmd/tool/main.go": "package main\n\nfunc main() {}\n\nfunc Run() {}\n",
 		"fmtlib.py":        "def render(x):\n    return x\n\n\ndef _private(x):\n    return x\n",
 		"tool.py":          "#!/usr/bin/env python3\ndef run():\n    pass\n",
@@ -131,7 +131,7 @@ func TestFloorCapabilityMapFunctions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	all := []string{"sym:parse/parse.go#Parse", "sym:fmtlib.py#render", "cmd/tool/main.go:3", "tool.py:1", "guard.py:5", "sym:util.hxx#LineA", "sym:util.hxx#LineB"}
+	all := []string{"sym:parse/parse.go#Parse", "sym:parse/parse.go#Status", "sym:fmtlib.py#render", "cmd/tool/main.go:3", "tool.py:1", "guard.py:5", "sym:util.hxx#LineA", "sym:util.hxx#LineB"}
 	base := func() Draft {
 		return Draft{Capabilities: []Claim{{ID: "C1", Name: "Parse", Text: "Parses.", Basis: "observed", Cites: slices.Clone(all)}}}
 	}
@@ -143,6 +143,7 @@ func TestFloorCapabilityMapFunctions(t *testing.T) {
 	runFloorCases(t, ix, base, []floorCase{
 		{"negated", "each library function, program, and class cited; no helper, private name, or script function asked for", func(*Draft) {}, "no capability covers", false},
 		{"match", "a Go package's exported function left out", without("sym:parse/parse.go#Parse"), "parse/parse.go:3 (function Parse)", true},
+		{"match", "a Go package's exported named type left out", without("sym:parse/parse.go#Status"), "parse/parse.go:7 (type Status)", true},
 		{"match", "a Python module's public function left out", without("sym:fmtlib.py#render"), "fmtlib.py:1 (function render)", true},
 		{"match", "the second class on a line, its neighbour's symbol cited", without("sym:util.hxx#LineB"), "util.hxx:1 (class LineB)", true},
 		{"near miss", "the first class on that line, its neighbour's symbol cited", without("sym:util.hxx#LineA"), "util.hxx:1 (class LineA)", true},
@@ -286,7 +287,7 @@ func TestFloorRunnerPrograms(t *testing.T) {
 		}
 	}
 	write("tool.py", "#!/usr/bin/env python3\nimport lib\nimport plugins\nlib.early(lib.Env())\n\ndef run(env):\n    lib.setup(env)\n    print(lib.render(1))\n\n\nif __name__ == \"__main__\":\n    run(lib.Env())\n\n\ndef hum(x):\n    return x\n\n\ndef unused(env):\n    env.register('hum', hum)\n")
-	write("lib.py", "def render(x):\n    return str(x)\n\n\ndef shout(x):\n    return str(x).upper()\n\n\ndef dotf(x):\n    return x\n\n\ndef early(env):\n    env.register('early', shout)\n\n\ndef setup(env):\n    env.register('shout', shout)\n    env.register('dot', lib.dotf)\n")
+	write("lib.py", "def render(x):\n    return str(x)\n\n\ndef shout(x):\n    return str(x).upper()\n\n\ndef dotf(x):\n    return x\n\n\ndef early(env):\n    env.register('early', shout)\n\n\ndef setup(env):\n    env.register('shout', shout)\n    env.register('dot', lib.dotf)\n    env.register('loud-x', shout)\n    env.register('::ns::yo', shout)\n")
 	write("cases/dot.js", "dot(1);\n")
 	write("cases/early.js", "early(1);\n")
 	write("cases/probe.js", "probe(1);\n")
@@ -345,6 +346,7 @@ func TestFloorRunnerPrograms(t *testing.T) {
 	write("cases/lazy.js", "lazyb(1);\n")
 	write("cases/run.tcl", "set n 1\nshout hi\n")
 	write("cases/quiet.tcl", "puts shout\n")
+	write("cases/hy.tcl", "loud-x hi\n::ns::yo 1\n")
 	runFloorCases(t, build(), base, []floorCase{
 		{"negated", "a call whose name has more definitions than its edge lists", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:nine.py:1"}, []string{"cases/zed.js"} }), "case set G1", false},
 		{"match", "the ninth definition's registration, from a program that never calls go", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/zed.js"} }),
@@ -354,6 +356,11 @@ func TestFloorRunnerPrograms(t *testing.T) {
 			"cases/lazy.js:1 calls lazyb, which runner entry:other.py:1 does not register", true},
 		{"match", "a Tcl input that runs a builtin as a command", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/run.tcl"} }),
 			"cases/run.tcl:2 calls shout, which runner entry:other.py:1 does not register", true},
+		{"match", "a Tcl command with a hyphen in its name", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/hy.tcl"} }),
+			"cases/hy.tcl:1 calls loud-x, which runner entry:other.py:1 does not register", true},
+		{"match", "a namespace-qualified Tcl command", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/hy.tcl"} }),
+			"cases/hy.tcl:2 calls ::ns::yo, which runner entry:other.py:1 does not register", true},
+		{"negated", "those commands, from the runner that registers them", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:tool.py:11"}, []string{"cases/hy.tcl"} }), "case set G1", false},
 		{"near miss", "a Tcl input that names the builtin as an argument", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/quiet.tcl"} }), "case set G1", false},
 		{"negated", "the main guard's runner, whose guard calls the function that registers it", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:tool.py:11"}, []string{"cases/loud.js"} }), "case set G1", false},
 		{"match", "a program that never calls that function", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/loud.js"} }),

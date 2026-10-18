@@ -14,7 +14,9 @@ var (
 	// register("f", function(…) {…}), register("f", lambda x: …), register("f", (x) => …)),
 	// Tcl_CreateObjCommand(interp, "cmd", Cmd, …), register('name', fn)).
 	registerCall = regexp.MustCompile(`\b[A-Za-z_]\w*\s*\(\s*(?:[^()"';{}]*?,\s*)?(?:"([^"\\\n]{1,200})"|'([^'\\\n]{1,200})')\s*,\s*(?:&?\s*([A-Za-z_][\w:.]*)\s*[,)]|(\[[^\]\n]*\]\s*\(|\bfunction\b|\blambda\b|\([^()\n]*\)\s*=>))`)
-	builtinName  = regexp.MustCompile(`^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$`)
+	// A name: a dotted one (Math.abs), or a command language's (Tcl's
+	// foo-bar, ::ns::cmd).
+	builtinName = regexp.MustCompile(`^(?:::)?[A-Za-z_$][\w$-]*(?:(?:\.|::)[A-Za-z_$][\w$-]*)*$`)
 )
 
 // registeredName is the name a registration string gives its builtin: the
