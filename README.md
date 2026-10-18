@@ -7,7 +7,11 @@ It works inside the agent you already use (Claude Code, Codex, Cursor, or Amp), 
 - **Clear work.** An interview turns "make it faster" into a Goal with a baseline, and stories with numbered promises.
 - **Proof before merge.** A merge gate runs fixed checks in your CI and asks a reviewer agent from another vendor.
   It needs no AI keys in your CI.
-- **A person decides.** Nothing merges or releases without a person's yes, and every bypass is recorded.
+- **A person decides.** By default, nothing merges without a person's yes. With merge on proof on, a routine change
+  merges once its checks, proof, and review pass; risky files still wait for a person. Every bypass is recorded.
+
+**New in v0.3.0:** a routine change can merge on its own once its checks and proof pass, and each project names one
+review tool. Read [what's new](docs/releases/v0.3.0.md#whats-new) and [how to upgrade](docs/releases/v0.3.0.md#upgrade).
 
 It is not a coding agent and it does not run your production. It organises, checks, and records the work your agent
 does.
@@ -20,7 +24,7 @@ does.
 curl -fsSL https://raw.githubusercontent.com/rahulnakmol/agentic-ayudha/main/install.sh | sh
 ```
 
-The script installs the latest signed release, aayudha v0.1.0, as `aayudha` with the short name `aayu`. It checks
+The script installs the latest signed release as `aayudha`, with the short name `aayu`. It checks
 the release's signature and checksum before it copies anything. It needs `git` 2.40 or newer and `git-lfs`. Other
 ways to install are in [Install and connect](docs/getting-started.md).
 
