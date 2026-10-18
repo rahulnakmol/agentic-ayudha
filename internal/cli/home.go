@@ -137,7 +137,11 @@ func (e *Env) githubHome(ctx context.Context, repo string, s *journey.State) str
 		}
 	}
 	// The inbox (Story #431) is best effort: the home screen stands without it.
-	if items, err := gatherInbox(ctx, c, repo, e.devBranch()); err == nil {
+	var id config.Identity
+	if l, err := e.Config(); err == nil {
+		id = l.Config.Identity
+	}
+	if items, err := gatherInbox(ctx, c, repo, e.devBranch(), id); err == nil {
 		for _, it := range items {
 			s.Inbox = append(s.Inbox, journey.Item{Number: it.Number, Title: it.Title, Detail: it.Kind})
 		}

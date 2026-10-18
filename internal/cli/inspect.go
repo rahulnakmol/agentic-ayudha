@@ -332,24 +332,9 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return Wrap(ExitExternal, err)
 	}
-	// In the merge gate, the state (and the cached result it carries) is read
-	// only from a comment the gate itself writes: anyone can post the marker,
-	// and a forged cached merge would otherwise pass as this head's review.
-	// The account this run writes as, when the token can say (a workflow's
-	// GITHUB_TOKEN cannot; gateWriter names it).
-	self := ""
-	if e.CI {
-		if u, _, err := c.REST.Users.Get(ctx, ""); err == nil {
-			self = u.GetLogin()
-		}
-	}
-	var prev inspect.State
-	for _, cm := range comments {
-		by := cm.GetUser().GetLogin()
-		if strings.Contains(cm.GetBody(), inspect.Marker) && (!e.CI || (self != "" && strings.EqualFold(by, self)) || gateWriter(by, l.Config.Identity)) {
-			prev = inspect.ParseState(cm.GetBody())
-		}
-	}
+	// The state (and the cached result it carries) is read only from a comment
+	// the merge gate or this run's own account wrote, in the gate and outside it.
+	prev := inspectState(comments, viewer(ctx, c), l.Config.Identity)
 
 	gw, err := e.Gateway()
 	if err != nil {
@@ -641,12 +626,12 @@ func (e *Env) inspectDismiss(ctx context.Context, in Values) error {
 	if err != nil {
 		return Wrap(ExitExternal, err)
 	}
-	var st inspect.State
-	for _, cm := range comments {
-		if strings.Contains(cm.GetBody(), inspect.Marker) {
-			st = inspect.ParseState(cm.GetBody())
-		}
+	var ident config.Identity
+	if l, err := e.Config(); err == nil {
+		ident = l.Config.Identity
 	}
+	login := viewer(ctx, c)
+	st := inspectState(comments, login, ident)
 	var f *inspect.Finding
 	if st.Result != nil {
 		for i := range st.Result.Findings {
@@ -657,10 +642,6 @@ func (e *Env) inspectDismiss(ctx context.Context, in Values) error {
 	}
 	if f == nil {
 		return Errorf(ExitUsage, "inspect --dismiss: PR #%d's latest inspection has no finding %s", n, id)
-	}
-	login := ""
-	if u, _, err := c.REST.Users.Get(ctx, ""); err == nil {
-		login = u.GetLogin()
 	}
 	d := inspect.Dismissal{ID: f.ID, PR: n, File: f.File, Category: f.Category, Title: f.Title, Reason: reason, By: login, At: e.Now().UTC().Format(time.RFC3339)}
 	w, err := e.Ledger(ctx, tok, "human", "")
@@ -722,6 +703,36 @@ func paidReviewer(gw *models.Gateway, cfg *config.Config, b inspect.Builder, per
 		return nil
 	}
 	return &models.Resolved{Lane: verbs.LaneReview, Host: verbs.DirectHost, Model: m, Display: m, Family: f, Effort: ic.PaidEffort, Source: models.SourceConfig}
+}
+
+// viewer is the account c writes as, or "" when the token cannot say (a
+// workflow's GITHUB_TOKEN; gateWriter names that one).
+func viewer(ctx context.Context, c *github.Client) string {
+	if u, _, err := c.REST.Users.Get(ctx, ""); err == nil {
+		return u.GetLogin()
+	}
+	return ""
+}
+
+// inspectWriter reports whether a comment by login can carry inspect's state:
+// the merge gate's identity (gateWriter) or self, the account this run writes
+// as. Anyone can post the marker, so a forged state would otherwise lift the
+// cycle cap, pass a cached merge as this head's review, or feed findings to
+// --dismiss, the inbox, a delegated agent's follow-up, or a brief (Bug #601).
+func inspectWriter(login, self string, id config.Identity) bool {
+	return (self != "" && strings.EqualFold(login, self)) || gateWriter(login, id)
+}
+
+// inspectState is the state in the last inspect comment a trusted writer
+// posted on a PR (inspectWriter); a zero state when there is none.
+func inspectState(comments []*gh.IssueComment, self string, id config.Identity) inspect.State {
+	var st inspect.State
+	for _, cm := range comments {
+		if strings.Contains(cm.GetBody(), inspect.Marker) && inspectWriter(cm.GetUser().GetLogin(), self, id) {
+			st = inspect.ParseState(cm.GetBody())
+		}
+	}
+	return st
 }
 
 // gateWriter reports whether login is an account the merge gate writes its
