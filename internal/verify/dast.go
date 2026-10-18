@@ -128,6 +128,12 @@ func (DAST) Run(ctx context.Context, r *Run) (Result, error) {
 		if !r.Floors.DAST.SkippedBlocksShip {
 			return skip("skipped: dast, nothing to scan (not blocking: [verify.floors.dast] skipped_blocks_ship = false)")
 		}
+		// The skip blocks only where a floor waiver can release it: a story's
+		// or a Bug's verify. A run with neither, such as aayudha-security.yml,
+		// records it without blocking.
+		if r.Story == 0 {
+			return skip("skipped: dast, nothing to scan:" + strings.TrimPrefix(why, proof.SkippedDAST) + " (not blocking: no story or Bug to waive it on). " + DASTFix)
+		}
 		// A new blocking skip is advisory until the date, too (Decision #485, Rollout).
 		if adv, advisory := newFloorAdvisory(r); advisory {
 			return skip("skipped: " + adv + ": dast:" + strings.TrimPrefix(why, proof.SkippedDAST) + ". " + DASTFix)
@@ -151,7 +157,8 @@ func (DAST) Run(ctx context.Context, r *Run) (Result, error) {
 	loopback := IsLoopback(u.Hostname())
 	// G1: the active rules attack the app; run them only against one verify
 	// started itself, or a URL the protected repository config opts in.
-	active := (r.seeded && loopback) || r.Verify.Environments[t.Env].ActiveScan
+	started := r.seeded && !r.upBeforeSeed && loopback
+	active := started || r.Verify.Environments[t.Env].ActiveScan
 	args := []string{"run", "--rm"}
 	if goos == "linux" {
 		args = append(args, "--network", "host")
@@ -230,7 +237,10 @@ func (DAST) Run(ctx context.Context, r *Run) (Result, error) {
 	mode := "active scan (rules " + strings.Join(DASTRules, ", ") + ") of the app verify started"
 	if !active {
 		mode = "passive scan only (verify did not start the app on a loopback host; a passive scan cannot see a reflected XSS)"
-	} else if !r.seeded || !loopback {
+		if r.seeded && r.upBeforeSeed && loopback {
+			mode = "passive scan only (the app answered before [verify] seed ran, so verify did not start it; a passive scan cannot see a reflected XSS)"
+		}
+	} else if !started {
 		mode = "active scan (rules " + strings.Join(DASTRules, ", ") + ", [verify.environments." + t.Env + "] active_scan = true)"
 	}
 	c.Detail = mode + " under " + rt + ": " + c.Detail

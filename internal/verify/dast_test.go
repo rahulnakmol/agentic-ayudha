@@ -2,6 +2,9 @@ package verify
 
 import (
 	"context"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -43,7 +46,7 @@ JSON
 // on the day after the advisory period.
 func dastRun(t *testing.T, bin, url string, platforms ...string) *Run {
 	t.Helper()
-	r := &Run{Root: t.TempDir(), Work: t.TempDir(), Env: func(string) string { return "" },
+	r := &Run{Root: t.TempDir(), Work: t.TempDir(), Env: func(string) string { return "" }, Story: 7,
 		Now: func() time.Time { return time.Date(2026, 11, 14, 0, 0, 0, 0, time.UTC) }}
 	r.Verify.DAST, r.Verify.Platforms, r.Verify.NewFloorsBlockingFrom = true, platforms, "2026-11-14"
 	r.Floors.DAST.SkippedBlocksShip = true
@@ -64,6 +67,18 @@ func withSeed(t *testing.T, r *Run, bin string) {
 		t.Fatal(err)
 	}
 	r.Verify.Seed = []string{p}
+}
+
+// freePort is a loopback port nothing listens on: reserved, then released.
+func freePort(t *testing.T) string {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = l.Close() }()
+	_, port, _ := net.SplitHostPort(l.Addr().String())
+	return port
 }
 
 func read(t *testing.T, path string) string {
@@ -107,14 +122,25 @@ func TestDASTGuardrails(t *testing.T) {
 			seed, opt  bool
 			wantActive bool
 		}{
-			{"seeded loopback", "http://127.0.0.1:8080", true, false, true},
-			{"seeded localhost", "http://localhost:8080", true, false, true},
+			{"seeded loopback", "http://127.0.0.1:FREE", true, false, true},
+			{"seeded localhost", "http://localhost:FREE", true, false, true},
+			// Codex review of #509: a seed that only loads fixtures into an app
+			// the person already runs did not start it.
+			{"seeded, but the app was already up", "UP", true, false, false},
 			{"loopback the person started", "http://127.0.0.1:8080", false, false, false},
 			{"seeded, but a shared URL", "https://staging.example.test", true, false, false},
 			{"a shared URL", "https://staging.example.test", false, false, false},
 			{"a shared URL the repo config opts in", "https://staging.example.test", false, true, true},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
+				switch {
+				case tc.url == "UP":
+					up := httptest.NewServer(http.NotFoundHandler())
+					defer up.Close()
+					tc.url = up.URL
+				case strings.HasSuffix(tc.url, ":FREE"):
+					tc.url = strings.TrimSuffix(tc.url, "FREE") + freePort(t)
+				}
 				bin := t.TempDir()
 				standInRuntime(t, bin, "docker", zapClean)
 				r := dastRun(t, bin, tc.url, "web")
@@ -176,6 +202,14 @@ func TestDASTGuardrails(t *testing.T) {
 		r.Floors.DAST.SkippedBlocksShip = false
 		if c, rep := dastCheck(t, r); c.Result != proof.Skipped || !rep.Hold {
 			t.Fatalf("skipped_blocks_ship = false: %+v", c)
+		}
+		// Codex review of #509: a run with no story, such as the security
+		// workflow's, has nothing a waiver could release, so it records the
+		// skip and its fix without blocking.
+		r = dastRun(t, bin, "", "web")
+		r.Story = 0
+		if c, rep := dastCheck(t, r); c.Result != proof.Skipped || !rep.Hold || proof.BlocksShip(c) || !strings.Contains(c.Detail, "no story or Bug to waive it on") || !strings.Contains(c.Detail, "[verify] seed") {
+			t.Fatalf("no story: %+v hold=%v", c, rep.Hold)
 		}
 	})
 

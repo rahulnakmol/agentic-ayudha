@@ -64,11 +64,13 @@ A few details matter in practice:
   `AAYU_ENV` (default `local`). `verify` refuses a production target before it seeds or captures anything.
 - **Redaction** runs first. If a capture holds personal data, the pack is blocked and no capture is kept.
 - **DAST** runs a spider and the passive rules, plus the active cross-site scripting and injection
-  rules only against an app `[verify] seed` started in this run on a loopback host. Any other URL gets a passive
+  rules only against an app `[verify] seed` started in this run on a loopback host; an app that already answered
+  before the seed ran is not one verify started. Any other URL gets a passive
   scan, which cannot see a reflected XSS, unless its `[verify.environments.<env>]` sets `active_scan = true`; only
   `.aayudha/config.toml` can set that. A CLI or library is `n/a`. A web or api story with no target records a
   `skipped: dast: no runnable target` that blocks `ship` like the mobile skip, and names the fix: a `[verify] seed`
-  and a `[verify.environments.local] url`, or a waiver. ZAP runs under Docker, or Podman (rootless too) when there is
+  and a `[verify.environments.local] url`, or a waiver. A run with no story or Bug, such as the security workflow's,
+  records the skip without blocking, since no waiver could release it. ZAP runs under Docker, or Podman (rootless too) when there is
   no Docker. With neither, a local run skips and leaves the scan to CI; in CI it is `blocked`. A high-risk alert and the
   no-target skip are advisory until `[verify] new_floors_blocking_from` (2026-11-14), then they fail and block. `aayu doctor` shows the target,
   the scan mode, and the runtime.

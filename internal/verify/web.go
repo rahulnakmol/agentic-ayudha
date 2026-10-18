@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"os/exec"
@@ -13,6 +14,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 )
@@ -205,6 +207,13 @@ func seed(ctx context.Context, r *Run) error {
 	if len(r.Verify.Seed) == 0 || r.seeded {
 		return nil
 	}
+	// A seed may only load fixtures into an app the person already runs:
+	// an app that answers before the seed is not one verify started (G1).
+	if t, err := ResolveTarget(r); err != nil || t.URL == "" {
+		r.upBeforeSeed = true
+	} else {
+		r.upBeforeSeed = answers(t.URL)
+	}
 	o, err := r.Sandbox.Run(ctx, Cmd{Dir: r.Root, Name: r.Verify.Seed[0], Args: r.Verify.Seed[1:], Network: true})
 	if err != nil {
 		return err
@@ -214,6 +223,28 @@ func seed(ctx context.Context, r *Run) error {
 	}
 	r.seeded = true
 	return nil
+}
+
+// answers reports whether something accepts a TCP connection at the URL's
+// host and port; an unparseable URL counts as answering, so it fails closed.
+func answers(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || u.Hostname() == "" {
+		return true
+	}
+	port := u.Port()
+	if port == "" {
+		port = map[string]string{"https": "443"}[u.Scheme]
+		if port == "" {
+			port = "80"
+		}
+	}
+	c, err := net.DialTimeout("tcp", net.JoinHostPort(u.Hostname(), port), time.Second)
+	if err != nil {
+		return false
+	}
+	_ = c.Close()
+	return true
 }
 
 // A11y is the web accessibility floor (WP4.5): axe at WCAG 2.2 AA on every

@@ -47,6 +47,9 @@ type Run struct {
 	Nightly bool // a scheduled run
 
 	seeded bool // [verify] seed ran in this run
+	// upBeforeSeed: the target URL already answered before [verify] seed ran,
+	// so verify did not start the app there (G1: passive scan only).
+	upBeforeSeed bool
 
 	// Footprint is the set of layers the changed paths fall in.
 	Footprint []string
