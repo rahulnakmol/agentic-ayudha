@@ -8,6 +8,7 @@ import (
 	pngenc "image/png"
 	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -140,8 +141,13 @@ func TestCopilotCLI(t *testing.T) {
 	if usd, src := Cost([]config.Price{{Model: req.Model, InputPerMTok: 100, OutputPerMTok: 100}}, req.Model, resp); usd < 12.8 || src != CostPriceTable {
 		t.Errorf("unmetered reply with a configured price charged %v USD from %s", usd, src)
 	}
-	// A copilot that dies with no reply and no usage is charged the same.
-	resp, err = (CopilotCLI{Token: "t", Bin: "/bin/false", Path: unmetered}).Complete(context.Background(), req)
+	// A copilot that dies with no reply and no usage is charged the same. false is
+	// /bin/false on Linux and /usr/bin/false on macOS.
+	falseBin, err := exec.LookPath("false")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err = (CopilotCLI{Token: "t", Bin: falseBin, Path: unmetered}).Complete(context.Background(), req)
 	if usd, _ := Cost(nil, req.Model, resp); !errors.Is(err, ErrCopilot) || usd < 1.28 {
 		t.Errorf("a copilot that died charged %v USD (%v)", usd, err)
 	}
