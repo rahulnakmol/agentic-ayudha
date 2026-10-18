@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -182,3 +183,41 @@ func (r recorder) Get(_ context.Context, _ string, v url.Values) ([]byte, string
 	return []byte(`{"data":[]}`), "GET", nil
 }
 func (recorder) Project() string { return "4507" }
+
+// TestSentryTopFrameFallback: with no frame inside the repository, the top
+// frame is the innermost in-app frame of the latest event's exception, never
+// a library frame, and an event with no stack trace leaves it empty.
+func TestSentryTopFrameFallback(t *testing.T) {
+	from := time.Date(2026, 10, 17, 8, 0, 0, 0, time.UTC)
+	q, _ := ParseQuery("exceptions where service=web", from, from.Add(time.Hour))
+	api := routes{
+		"/events/": `{"data":[{"release":"1.2.3","error.type":"TypeError","title":"x is undefined","issue.id":"7","count()":4},` +
+			`{"release":"1.2.3","error.type":"Error","title":"boom","issue.id":"8","count()":1}]}`,
+		"/issues/7/events/latest/": `{"entries":[{"type":"breadcrumbs","data":{"values":[]}},{"type":"exception","data":{"values":[{"stacktrace":null},` +
+			`{"stacktrace":{"frames":[{"filename":"app/cart.js","lineNo":12,"inApp":true},{"filename":"app/total.js","lineNo":40,"inApp":true},{"filename":"node_modules/lib.js","lineNo":3,"inApp":false}]}}]}}]}`,
+		"/issues/8/events/latest/": `"not an event"`,
+	}
+	r, _, err := Sentry{API: api}.Run(context.Background(), q, func(string) (string, bool) { return "", false })
+	if err != nil || len(r.Rows) != 2 {
+		t.Fatalf("rows %v, err %v; want two rows", r.Rows, err)
+	}
+	frame := slices.Index(r.Columns, "top_frame")
+	if got := r.Rows[0][frame]; got != "app/total.js:40" {
+		t.Errorf("top frame %q; want the innermost in-app frame app/total.js:40", got)
+	}
+	if got := r.Rows[1][frame]; got != "" {
+		t.Errorf("top frame %q from an undecodable event; want it empty", got)
+	}
+}
+
+// routes answers each path with its body.
+type routes map[string]string
+
+func (r routes) Get(_ context.Context, path string, _ url.Values) ([]byte, string, error) {
+	b, ok := r[path]
+	if !ok {
+		return nil, "GET " + path, errors.New("no route")
+	}
+	return []byte(b), "GET " + path, nil
+}
+func (routes) Project() string { return "4507" }
