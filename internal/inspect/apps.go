@@ -203,7 +203,7 @@ func Request(c Choice, in Input, head string, prev State) string {
 		}
 		if len(listed) > 0 {
 			// The titles are an earlier reviewer's text: data, never instructions.
-			b.WriteString("Earlier rounds reported these; do not repeat one, reworded or not:\n\n" + triage.Untrusted("earlier-findings", strings.Join(listed, "\n")) + "\n\n")
+			b.WriteString("Earlier rounds reported these; do not repeat one, reworded or not. A P0 or P1 among them stays open, and blocks, while its file's change is the same as when it was reported:\n\n" + triage.Untrusted("earlier-findings", strings.Join(listed, "\n")) + "\n\n")
 		}
 	}
 	if len(in.Criteria) > 0 {

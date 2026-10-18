@@ -500,10 +500,40 @@ func (r Runner) begin(ctx context.Context, in *Input, prev State, salt string) (
 	return res, st, nil
 }
 
+// carryForward adds back each P0 or P1 the last round on another head kept
+// whose file's patch is byte for byte what that round reviewed, when the new
+// reply does not raise it again: no reviewer text removes a P0 or P1 (rule 7),
+// and an unchanged patch cannot have fixed it. Each carries its round, so it
+// blocks without being posted inline again.
+func carryForward(fs []Finding, rounds []Round, head string, hashes map[string]string) []Finding {
+	for i := len(rounds) - 1; i >= 0; i-- {
+		rd := rounds[i]
+		if rd.Head == head {
+			continue
+		}
+		for _, e := range rd.Findings {
+			if e.Severity != "P0" && e.Severity != "P1" || rd.Covered[e.File] == "" || rd.Covered[e.File] != hashes[e.File] ||
+				slices.ContainsFunc(fs, func(f Finding) bool { return repeats(f, e) }) {
+				continue
+			}
+			fs = append(fs, Finding{ID: e.ID, Severity: e.Severity, Category: e.Category, File: e.File, Line: e.Line, Title: e.Title, Class: e.Class,
+				Detail: fmt.Sprintf("raised in round %d and still open: the file's patch is unchanged since that round", i+1), Repeat: i + 1, Sources: []string{}})
+		}
+		break
+	}
+	return fs
+}
+
 // finish applies what every review gets after its reply: learned
 // suppression, test-gap verdicts, the sealed coverage manifest, the fix lift,
 // rule 7, and the cycle count.
 func (r Runner) finish(in Input, prev, st State, res Result, covered func(string) bool) (Result, State, error) {
+	hashes, before := map[string]string{}, map[string]string{}
+	for _, f := range in.Files {
+		hashes[f.Path] = FileHash(f)
+	}
+	// Carried before suppression, so a finding a person dismissed stays dismissed.
+	res.Findings = carryForward(res.Findings, prev.Rounds, in.Head, hashes)
 	var sup, rep []Dropped
 	res.Findings, sup = r.Filter.Suppress(res.Findings, in.Dismissed)
 	res.Findings, rep = Repeats(res.Findings, prev.Rounds, in.Head, in.Reopened)
@@ -513,10 +543,6 @@ func (r Runner) finish(in Input, prev, st State, res Result, covered func(string
 	// so a file an earlier round reviewed stays reviewed while its patch in
 	// the PR diff is byte for byte the same; any change to it, a rebase
 	// included, needs a review again.
-	hashes, before := map[string]string{}, map[string]string{}
-	for _, f := range in.Files {
-		hashes[f.Path] = FileHash(f)
-	}
 	for _, rd := range prev.Rounds {
 		if rd.Head != in.Head {
 			maps.Copy(before, rd.Covered)

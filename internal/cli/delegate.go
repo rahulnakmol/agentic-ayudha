@@ -673,7 +673,15 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 		return nil, true, e.saveDelegation(ctx, d)
 	}
 	switch {
-	case (r == nil || r.Head != head) && (st.Cycles >= inspect.MaxCycles || st.Stopped != "" && st.Stopped == head):
+	case st.Stopped != "" && st.Stopped == head || r != nil && r.Head == head && r.Disposition == inspect.StepBack:
+		// The review stopped at its round cap on this head: no fix prompt
+		// goes to the receiver; a person reviews it or reopens review.
+		d.event(now, dlgCapped, fmt.Sprintf("the review stopped after %d rounds at %s (step-back)", inspect.MaxRounds, short(head)))
+		page(fmt.Sprintf("the review stopped after %d rounds (step-back)", inspect.MaxRounds))
+		report()
+		_ = e.saveDelegation(ctx, d)
+		return nil, true, Errorf(ExitBlocked, "build #%d: PR #%d's review stopped after %d rounds; a person reviews it or comments `%s` (paged)", d.story, d.state.PR, inspect.MaxRounds, inspect.ReopenCommand)
+	case (r == nil || r.Head != head) && st.Cycles >= inspect.MaxCycles:
 		// inspect stops at its cap and will not review this head: a human takes over.
 		d.event(now, dlgCapped, fmt.Sprintf("%d fix cycles; inspect will not review %s", st.Cycles, short(head)))
 		page(fmt.Sprintf("%d fix cycles reached the cap", st.Cycles))

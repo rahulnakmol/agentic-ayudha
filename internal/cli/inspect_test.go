@@ -666,9 +666,17 @@ func TestInspectConverges(t *testing.T) {
 	if inspectApp(t, env, opts, prN); !strings.Contains(requests()[len(requests())-1], "`git diff "+h1+".."+h3+"`") {
 		t.Fatalf("round 3 request:\n%s", requests()[len(requests())-1])
 	}
+	// A merge reply leaves an earlier P1 open while percent.go's patch is
+	// unchanged; once the patch changes, the same reply merges.
 	comment(codex, "Bot", replyWith(h3, "merge"))
+	if code, res, _ = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || res.Disposition != inspect.Fix || len(res.Findings) != 1 || res.Findings[0].Repeat == 0 || !strings.Contains(res.Findings[0].Detail, "still open") {
+		t.Fatalf("round 3, patch unchanged: exit %d %s findings %+v", code, res.Disposition, res.Findings)
+	}
+	g.Mu.Lock()
+	g.Pulls[prN].Diff = cleanDiff
+	g.Mu.Unlock()
 	if code, res, _ = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Round != 3 {
-		t.Fatalf("round 3: exit %d round %d", code, res.Round)
+		t.Fatalf("round 3: exit %d round %d %+v", code, res.Round, res.Findings)
 	}
 	h4 := at("f")
 	n := len(requests())
