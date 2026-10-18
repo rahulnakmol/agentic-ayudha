@@ -100,10 +100,13 @@ func TestCorrectionKinds(t *testing.T) {
 			func(p *PR, _ *[]PR, _ *[]Issue) {
 				p.Commits = append(p.Commits, Commit{SHA: "h1", Login: "founder", Message: "fix: typo", Parents: 1})
 			},
-			// a merge of the base branch and a commit by a configured machine user are not corrections
+			// a merge of the base branch, a commit by a configured machine user, and an agent's commit
+			// under a person's account that declares its model are not corrections
 			func(p *PR, _ *[]PR, _ *[]Issue) {
 				p.Commits = append(p.Commits, Commit{SHA: "m1", Login: "founder", Message: "Merge branch 'dev'", Parents: 2},
-					Commit{SHA: "b1", Login: "aayu-machine", Message: "chore: regenerate", Parents: 1})
+					Commit{SHA: "b1", Login: "aayu-machine", Message: "chore: regenerate", Parents: 1},
+					Commit{SHA: "a1", Login: "founder", Message: "fix: x\n\nAayudha-Host: amp\nAayudha-Model: claude-opus-5-5", Parents: 1},
+					Commit{SHA: "a2", Login: "founder", Message: "fix: y\n\nAayudha-Host: amp", Parents: 1})
 			}},
 		{KindPostPass,
 			func(p *PR, _ *[]PR, _ *[]Issue) {

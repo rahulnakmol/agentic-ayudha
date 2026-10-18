@@ -88,10 +88,16 @@ func holds(context.Context, string) (bool, string, error) { return true, "floors
 // aayudha-pack artifact (no bot App: CI could not write the ledger).
 func gateRun(t *testing.T, g *fake.GitHub, dir string, prN int, head string, checks []proof.Check, footprint ...string) {
 	t.Helper()
-	b := git(t, dir, "show", "origin/ledger:"+ready.LedgerPath(2))
+	gateRunFor(t, g, dir, 2, prN, head, checks, footprint...)
+}
+
+// gateRunFor is gateRun for any story.
+func gateRunFor(t *testing.T, g *fake.GitHub, dir string, story, prN int, head string, checks []proof.Check, footprint ...string) {
+	t.Helper()
+	b := git(t, dir, "show", "origin/ledger:"+ready.LedgerPath(story))
 	snap, _ := ready.ParseSnapshot(b)
 	files := map[string][]byte{}
-	p := &proof.Pack{Repo: "o/r", Story: 2, PR: prN, PRHeadSHA: head, Seat: "ai-native-engineer", Host: "cli", Identity: "ci",
+	p := &proof.Pack{Repo: "o/r", Story: story, PR: prN, PRHeadSHA: head, Seat: "ai-native-engineer", Host: "cli", Identity: "ci",
 		CompletionGoalHash: snap.CompletionGoalHash, CreatedAt: "2026-10-12T10:00:00Z", Checks: checks, Footprint: footprint}
 	for _, c := range snap.Criteria {
 		rel := "evidence/criterion-" + strconv.Itoa(c.N) + ".jsonl"
@@ -104,7 +110,7 @@ func gateRun(t *testing.T, g *fake.GitHub, dir string, prN int, head string, che
 	p.Artifacts = append(p.Artifacts, proof.NewArtifact("media/criterion-1.png", "screenshot", files["media/criterion-1.png"]))
 	p.Criteria[0].Evidence = append(p.Criteria[0].Evidence, "media/criterion-1.png")
 	tmp := t.TempDir()
-	if err := proof.WriteLocal(filepath.Join(tmp, "2"), p, files); err != nil {
+	if err := proof.WriteLocal(filepath.Join(tmp, strconv.Itoa(story)), p, files); err != nil {
 		t.Fatal(err)
 	}
 	var zb bytes.Buffer

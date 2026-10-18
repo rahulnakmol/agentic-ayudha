@@ -65,6 +65,16 @@ the end is generated (WP5.1); the full table is [docs/RACI.md](docs/RACI.md).
 - Required checks on `dev`: `build`, `generate-drift`, `lint`, `commits`, `security`, `docs`,
   `release-snapshot`, and `protected-paths`. Squash-merge when all are green, then delete the branch and the
   worktree.
+- **Story PRs merge only through `aayu ship <pr>`, run by the agent, never `gh pr merge`.** A PR whose body
+  says `Refs #n` for a Story is a Story PR. When the required checks and `aayudha/merge-gate` are green, run
+  `aayu ship <pr>`. If ship stops only for the human pass, it comments **Ready to ship** on the PR, and the PR
+  waits in a person's `aayu inbox`. Stop there and never fall back to `gh`. Bugs, chores, docs, ci, and eval PRs
+  keep merging on green as above.
+- **Every agent PR declares itself**, so `aayu status --streak` counts it: open it with the label
+  `agent-authored` (`gh pr create --label agent-authored`), and put `Aayudha-Host: <host>` in its body, plus one
+  `Aayudha-Model: <model>` line per model you know you used (none when the host picks the model and does not say).
+  Each commit carries the same lines as trailers, so the streak does not count the agent's own commits as a
+  person's corrections.
 - **Protected paths** (`.github/CODEOWNERS`) fail `protected-paths` by design. Solo mode: only the founder's
   recorded admin bypass merges them. Use the bypass only when the founder has authorised it for the task, and
   only when every other check is green: first post a PR comment starting `Solo-mode bypass:` naming the

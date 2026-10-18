@@ -69,7 +69,8 @@ You speak as Drona.
 
 Squash-merge a PR after a green merge gate and a human pass, write the Complete section, and clean up.
 
-Only a human ships: the verb is never exposed to agents. As the host's model, prepare and explain; never approve.
+An agent may run `aayu ship <pr>` for its own Story PR; its gates hold whoever runs it. The verb is never exposed
+over MCP, `--solo-bypass` is a person's, and as the host's model you prepare and explain but never approve.
 
 1. The merge gate (`aayudha/merge-gate`, `aayudha/inspect`) must be green on the PR head, and the authoritative pack
    for that head must verify against the Ready snapshot with its floors holding.
@@ -77,9 +78,12 @@ Only a human ships: the verb is never exposed to agents. As the host's model, pr
    the `[autonomy] approver`; a bot's review or the author's own never counts. When the footprint touches an
    `[autonomy] never` layer, a CODEOWNER of the changed paths there must approve whatever the streak, and the
    Engineering Manager's plan-time review (`aayu plan <story> --approve`) must be on the ledger.
-3. The human runs `aayu ship <pr>`. It squash-merges, writes the story's Outcome (Complete) section, moves it to
+3. The agent or a person runs `aayu ship <pr>`. It squash-merges, writes the story's Outcome (Complete) section, moves it to
    `status:merged`, records the approval, the pass rule, and the streak in `ship.json` beside the pack, releases the
    build lease, and removes the branch and the worktree.
 4. Solo mode only (one human, no bot App): GitHub refuses self-approval, so the human may post a PR comment starting
    `Solo-mode bypass:` that says why, then run `aayu ship <pr> --solo-bypass`; it is recorded for `audit`.
-5. Afterwards `aayu gc` reclaims expired leases and removes the worktrees of closed stories.
+5. When ship stops only for the human pass, it comments **Ready to ship** on the PR. Stop there: never merge a
+   Story PR with `gh`. The PR waits in a person's `aayu inbox`, which ships it (in solo mode, under their
+   solo-mode bypass) with every gate above.
+6. Afterwards `aayu gc` reclaims expired leases and removes the worktrees of closed stories.

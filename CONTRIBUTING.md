@@ -39,7 +39,12 @@ Never open a PR against `rolling` or `main`. Promotions are done by the maintain
    `commits`, `security`, `docs`, `release-snapshot` ([.github/workflows/ci.yml](.github/workflows/ci.yml)) and
    `protected-paths`. Jobs that a PR's paths cannot affect report "skipped", which counts as passing. `build`
    also runs the coverage ratchet: [ratchets.toml](ratchets.toml) says what it checks and how to tighten the floor.
-5. The PR is squash-merged. Then delete the branch and the worktree:
+5. The PR is squash-merged. A Story PR (its body says `Refs #n` for a Story) merges only through `aayu ship <pr>`,
+   never `gh pr merge`, whether a person or an agent runs it. When ship stops only for the human pass, it
+   comments **Ready to ship**, and the PR waits in a person's `aayu inbox`, which ships it with ship's gates.
+   Other PRs (Bugs, chores, docs, CI, evals) are squash-merged on green. An agent's PR carries the
+   `agent-authored` label and an `Aayudha-Host:` line (and an `Aayudha-Model:` line per known model) in its body
+   and in each commit's trailers, so the autonomy streak counts it. Then delete the branch and the worktree:
 
    ```sh
    git worktree remove ../wt-<branch> && git branch -D <branch>

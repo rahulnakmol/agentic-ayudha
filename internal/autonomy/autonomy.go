@@ -33,6 +33,11 @@ const (
 	LabelAgentAuthored = "agent-authored"
 	LabelHumanFallback = "identity:human-fallback"
 	CheckpointTrailer  = "Aayudha-Checkpoint:"
+	// HostTrailer and ModelTrailer mark a commit an agent made outside aayu
+	// build, as build's checkpoints carry them too: the host and the model that
+	// wrote it, self-reported like the agent-authored label.
+	HostTrailer  = "Aayudha-Host:"
+	ModelTrailer = "Aayudha-Model:"
 )
 
 // Review is a PR review.
@@ -137,7 +142,7 @@ func (r Rules) Detect(prs []PR, issues []Issue) []Correction {
 			}
 		}
 		for _, c := range p.Commits {
-			if c.Parents <= 1 && !r.bot(c.Login, c.Bot) && !strings.Contains(c.Message, CheckpointTrailer) {
+			if c.Parents <= 1 && !r.bot(c.Login, c.Bot) && !agentCommit(c.Message) {
 				who := c.Login
 				if who == "" {
 					who = "an unlinked author"
@@ -165,6 +170,15 @@ func (r Rules) Detect(prs []PR, issues []Issue) []Correction {
 		}
 	}
 	return out
+}
+
+var agentTrailer = regexp.MustCompile(`(?m)^(?:` + HostTrailer + `|` + ModelTrailer + `)`)
+
+// agentCommit reports whether a commit message carries a trailer only an
+// agent's commit has: a build checkpoint, or an Aayudha-Host or Aayudha-Model
+// line.
+func agentCommit(msg string) bool {
+	return strings.Contains(msg, CheckpointTrailer) || agentTrailer.MatchString(msg)
 }
 
 func short(sha string) string {

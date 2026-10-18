@@ -53,13 +53,13 @@ func TestPluginHooksAndStatusLine(t *testing.T) {
 	}
 	_ = os.Remove(cache)
 	// pre-tool from the shared plugin names no host: it is detected, and a
-	// human-only verb in a shell command is blocked (exit 2) with the command to hand over.
-	code, _, errs := hook(`{"tool_name":"Bash","tool_input":{"command":"aayu ship 4"}}`, map[string]string{"CODEX_THREAD_ID": "t1"}, "pre-tool", "--skills", "0.0.0")
-	if code != 2 || !strings.Contains(errs, "run `aayu ship 4` in their own terminal") {
+	// human-only flag in a shell command is blocked (exit 2) with the command to hand over.
+	code, _, errs := hook(`{"tool_name":"Bash","tool_input":{"command":"aayu ship 4 --solo-bypass"}}`, map[string]string{"CODEX_THREAD_ID": "t1"}, "pre-tool", "--skills", "0.0.0")
+	if code != 2 || !strings.Contains(errs, "run `aayu ship 4 --solo-bypass` in their own terminal") {
 		t.Errorf("pre-tool: exit %d %s", code, errs)
 	}
 	// The refusal's next step is the person's, never the breaker's `aayu resume` (D-3.2b.e).
-	if !strings.Contains(errs, "next: a person runs `aayu ship 4` in their own terminal") || strings.Contains(errs, "resume") {
+	if !strings.Contains(errs, "next: a person runs `aayu ship 4 --solo-bypass` in their own terminal") || strings.Contains(errs, "resume") {
 		t.Errorf("pre-tool next step: %s", errs)
 	}
 	// Codex's session starts with the request routing: the grill gate first (D-3.2b.b).
@@ -74,7 +74,7 @@ func TestPluginHooksAndStatusLine(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(repo, ".codex", "hooks.json"), []byte(`{"hooks": {"PreToolUse": [{"hooks": [{"type": "command", "command": "\"/usr/bin/aayu\" hook pre-tool --host codex"}]}]}}`), 0o644)
 	codexHome := t.TempDir()
 	codex := map[string]string{"CODEX_HOME": codexHome}
-	ship := `{"tool_name":"Bash","tool_input":{"command":"aayu ship 4"}}`
+	ship := `{"tool_name":"Bash","tool_input":{"command":"aayu ship 4 --solo-bypass"}}`
 	if code, _, _ := hook(ship, codex, "pre-tool", "--host", "codex", "--skills", "0.0.0"); code != 2 {
 		t.Errorf("the plugin's pre-tool stood aside in an untrusted Codex project, leaving no guard: exit %d", code)
 	}
@@ -93,7 +93,7 @@ func TestPluginHooksAndStatusLine(t *testing.T) {
 	// Exactly one refuses it, in Cursor's format (D-3.2b.j).
 	_ = os.MkdirAll(filepath.Join(repo, ".claude"), 0o755)
 	_ = os.WriteFile(filepath.Join(repo, ".claude", "settings.json"), []byte(`{"hooks": {"PreToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": "\"/usr/bin/aayu\" hook pre-tool --host claude"}]}]}}`), 0o644)
-	cursorShip := `{"tool_name":"Shell","tool_input":{"command":"aayu ship 4"},"cursor_version":"2.4.1","hook_event_name":"preToolUse"}`
+	cursorShip := `{"tool_name":"Shell","tool_input":{"command":"aayu ship 4 --solo-bypass"},"cursor_version":"2.4.1","hook_event_name":"preToolUse"}`
 	cursorHooks := filepath.Join(repo, ".cursor", "hooks.json")
 	_ = os.MkdirAll(filepath.Dir(cursorHooks), 0o755)
 	_ = os.WriteFile(cursorHooks, []byte(`{"version": 1, "hooks": {"beforeShellExecution": [{"command": "\"/usr/bin/aayu\" hook pre-tool --host cursor"}]}}`), 0o644)
@@ -101,7 +101,7 @@ func TestPluginHooksAndStatusLine(t *testing.T) {
 	for _, h := range []struct{ event, host, skills string }{
 		{cursorShip, "claude", ""}, // Claude Code's repository hook, imported
 		{cursorShip, "", "0.0.0"},  // Claude Code's plugin hook, imported
-		{`{"command":"aayu ship 4","cursor_version":"2.4.1","hook_event_name":"beforeShellExecution"}`, "cursor", ""},
+		{`{"command":"aayu ship 4 --solo-bypass","cursor_version":"2.4.1","hook_event_name":"beforeShellExecution"}`, "cursor", ""},
 	} {
 		args := []string{"pre-tool"}
 		if h.host != "" {

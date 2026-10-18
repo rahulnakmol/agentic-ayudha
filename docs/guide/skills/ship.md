@@ -31,8 +31,10 @@ Not yet green? Let the builder fix the findings first ([`inspect`](inspect.md)).
 
 ## Run it
 
-Approve the pull request on GitHub, then run the command in your own terminal. Your agent can prepare and explain,
-but it cannot ship: this verb is never offered to agents. To have it walk you through, ask:
+Your agent runs `aayu ship <pr>` on its own story pull requests once the merge gate is green, and never merges one with
+`gh`. When everything but a person's approval holds, ship comments **Ready to ship** on the pull request, and it waits
+in your [`aayu inbox`](../how-trust.md), which ships it with every gate below. Only `--solo-bypass` is yours alone.
+To have your agent walk you through one, ask:
 
 ```text
 Use the ship skill to tell me whether pull request 148 is ready to ship, and what I still need to do.
