@@ -1,7 +1,7 @@
 [[criterion]]
-id = 3
+id = 1
 tests = ["./internal/cli:TestInitIdentityRefusesTheApp", "./internal/initrepo:TestAppHookURL"]
 
 [[criterion]]
-id = 4
+id = 2
 tests = ["./internal/cli:TestInitIdentityRemoteShell"]
