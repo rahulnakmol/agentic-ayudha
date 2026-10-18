@@ -7,7 +7,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	gh "github.com/google/go-github/v90/github"
@@ -166,6 +168,7 @@ func runCounsel(ctx context.Context, e *Env, in Values) error {
 		}
 	}
 
+	rep.Facts, rep.Untrusted = untrustTitles(rep.Facts, rep.Untrusted)
 	personas, err := seats.LoadPersonas(e.Assets)
 	if err != nil {
 		return err
@@ -462,4 +465,29 @@ func hasCite(text, cite string) bool {
 		}
 		i = j + 1
 	}
+}
+
+// titledFact is a fact issueFact wrote: an optional lead-in ("Parent: "), the issue number, and its quoted title.
+var titledFact = regexp.MustCompile(`^((?:[A-Z][A-Za-z ]*: )*)#(\d+) ("(?:[^"\\]|\\.)*"): `)
+
+// untrustTitles moves every issue title out of the facts into one untrusted block: a title is its author's text, so
+// the twin reads it as data, never as a trusted fact (counsel's facts are what aayu itself established).
+func untrustTitles(facts []packFact, untrusted []chartUntrusted) ([]packFact, []chartUntrusted) {
+	var titles []string
+	for i, f := range facts {
+		m := titledFact.FindStringSubmatchIndex(f.Text)
+		if m == nil {
+			continue
+		}
+		title, err := strconv.Unquote(f.Text[m[6]:m[7]])
+		if err != nil {
+			continue
+		}
+		titles = append(titles, "#"+f.Text[m[4]:m[5]]+": "+title)
+		facts[i].Text = f.Text[:m[5]] + f.Text[m[7]:]
+	}
+	if len(titles) > 0 {
+		untrusted = append(untrusted, chartUntrusted{"issue-titles", strings.Join(titles, "\n")})
+	}
+	return facts, untrusted
 }

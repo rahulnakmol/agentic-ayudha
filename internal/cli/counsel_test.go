@@ -88,13 +88,19 @@ func TestCounsel(t *testing.T) {
 		}
 	}
 	if onPR.Twin == "" || !strings.Contains(onPR.Twin, "Atri") || onPR.Artefact == "" || onPR.Builder == nil ||
-		len(onPR.Untrusted) != 2 || onPR.Untrusted[0].Source != "pr-title" || onPR.Untrusted[1].Source != "pr-body" ||
+		len(onPR.Untrusted) != 3 || onPR.Untrusted[0].Source != "pr-title" || onPR.Untrusted[1].Source != "pr-body" ||
+		onPR.Untrusted[2] != (chartUntrusted{"issue-titles", "#2: Show empty list\n#5: Engine"}) ||
 		strings.Contains(factText(onPR), "Add Percent") || onPR.Topic != "PR #"+pr {
 		t.Errorf("--pr grounding: twin %q, artefact %q, builder %v, untrusted %v", onPR.Twin, onPR.Artefact, onPR.Builder, onPR.Untrusted)
 	}
 	if q := counselRun(env, 0, "should we split the survey into sections?"); q.Issue != 0 || q.PR != 0 || q.Path != "" ||
 		!strings.Contains(factText(q), "Open Decision: #5") || q.Topic != "should we split the survey into sections?" {
 		t.Errorf("free question: %+v", q)
+	}
+	// Every issue title (the target, its parent, the story, the Decisions) is untrusted data, never a fact.
+	if f := factText(counselRun(env, 0, "#2")); strings.Contains(f, "Show empty list") || strings.Contains(f, "Eligibility questionnaire") ||
+		!strings.Contains(f, "Parent: #1: feature, open") {
+		t.Errorf("issue titles in the facts: %s", f)
 	}
 	if is := counselRun(env, 0, "#2"); is.Issue != 2 || is.Topic != "#2" || is.Untrusted[0] != (chartUntrusted{"issue-title", "Show empty list"}) || !strings.Contains(factText(is), "#1") {
 		t.Errorf("issue topic: issue %d, topic %q, facts %s", is.Issue, is.Topic, factText(is))
