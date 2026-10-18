@@ -442,12 +442,12 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 		ix.Files = append(ix.Files, File{Path: p, Role: "doc", Lines: lines, Bytes: len(text)})
 		ix.Docs = append(ix.Docs, Fact{ID: "doc:" + p, Kind: "manual", At: p + ":1", Detail: firstHeading(text)})
 	}
-	if err := ix.digest(root, files, opt.Manuals); err != nil {
-		return nil, err
-	}
 	ix.history(ctx, root, opt.Git)
 	ix.counts()
 	ix.modules(opt.Budget)
+	if err := ix.digest(root, files, opt.Manuals); err != nil {
+		return nil, err
+	}
 	ix.finish()
 	return ix, nil
 }
@@ -541,7 +541,8 @@ func callEdge(from, name string, to []string, at string) Edge {
 
 // digest sets Index.Digest from the files in path order: each path with its
 // size and its content, the files the scanner skipped (too large, binary)
-// included, so any edit makes the saved survey sections stale.
+// included, then each module's files, so any edit, or a module budget that
+// moves a file to another mod: ID, makes the saved survey sections stale.
 func (ix *Index) digest(root string, files map[string]*scanned, manuals map[string]string) error {
 	h := sha256.New()
 	for _, f := range ix.Files {
@@ -554,6 +555,9 @@ func (ix *Index) digest(root string, files map[string]*scanned, manuals map[stri
 			return err
 		}
 		h.Write([]byte{0})
+	}
+	for _, m := range ix.Modules {
+		fmt.Fprintf(h, "%s\x00%s\x00", m.ID, strings.Join(m.Files, "\x01"))
 	}
 	ix.Digest = hex.EncodeToString(h.Sum(nil))
 	return nil

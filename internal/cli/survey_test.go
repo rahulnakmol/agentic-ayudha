@@ -197,6 +197,21 @@ func TestSurveyDraftSections(t *testing.T) {
 	if code, r = draft("--sections"); code != 0 || !slices.Equal(r.Stale, []string{"product"}) || !slices.Equal(r.Missing, []string{"product"}) || r.Merged != "" {
 		t.Fatalf("stale: %d %+v", code, r)
 	}
+	// Writing the stale section again saves it fresh and takes it off the stale list.
+	again := filepath.Join(t.TempDir(), "product.json")
+	if err := os.WriteFile(again, p.Content, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, r = draft("--draft", again); code != 0 || len(r.Stale) != 0 || !slices.Equal(r.Saved, []string{"product"}) || r.Merged == "" {
+		t.Fatalf("rewritten stale section: %d %+v", code, r)
+	}
+	p.Commit = "0123456789abcdef" // stale again, for the checks that follow
+	if err := survey.SaveSection(filepath.Join(out, "sections"), key, p); err != nil {
+		t.Fatal(err)
+	}
+	if code, r = draft("--sections"); code != 0 || !slices.Equal(r.Stale, []string{"product"}) {
+		t.Fatalf("stale again: %d %+v", code, r)
+	}
 	// The merged survey of the earlier run is removed: a backlog is never
 	// drafted from sections that no longer hold.
 	for _, f := range []string{"survey.json", "SURVEY.md"} {
@@ -328,6 +343,9 @@ func TestSurveyDocs(t *testing.T) {
 	if code, stdout, _ = run(t, nil, opts, "survey", dir, "--out", out, "--draft", cite("manual:operator-notes.md:9"), "--plain"); code != ExitBlocked || !strings.Contains(stdout, "manual:operator-notes.md:9") {
 		t.Fatalf("cite past the end: %d %s", code, stdout)
 	}
+	if code, stdout, _ = run(t, nil, opts, "survey", dir, "--out", out, "--draft", cite("manual:operator-notes.md"), "--plain"); code != ExitBlocked || !strings.Contains(stdout, "manual:operator-notes.md: manual is not a file of the checkout") {
+		t.Fatalf("a bare manual cite: %d %s", code, stdout)
+	}
 	for _, whole := range []string{"doc:manual:operator-notes.md", "file:manual:operator-notes.md"} {
 		if code, stdout, _ = run(t, nil, opts, "survey", dir, "--out", out, "--draft", cite(whole), "--plain"); code != ExitBlocked || !strings.Contains(stdout, "cite the lines of manual operator-notes.md") {
 			t.Fatalf("the whole manual cited as %s: %d %s", whole, code, stdout)
@@ -342,6 +360,14 @@ func TestSurveyDocs(t *testing.T) {
 	}
 	if code, _, stderr := run(t, nil, opts, "survey", dir, "--out", out, "--docs", clash); code != ExitUsage || !strings.Contains(stderr, "would both be manual:guide.pdf.txt") {
 		t.Fatalf("colliding manual names: %d %s", code, stderr)
+	}
+	// A checkout path that does not exist is reported before anything is written beneath it.
+	missing := filepath.Join(dir, "no-such-checkout")
+	if code, _, stderr := run(t, nil, opts, "survey", missing, "--docs", docs); code != ExitUsage || !strings.Contains(stderr, "is not a directory") {
+		t.Fatalf("a missing checkout: %d %s", code, stderr)
+	}
+	if _, err := os.Stat(missing); !os.IsNotExist(err) {
+		t.Fatalf("the missing checkout was created: %v", err)
 	}
 	if code, _, stderr := run(t, nil, opts, "survey", dir, "--out", dir); code != ExitUsage || !strings.Contains(stderr, "is the checkout itself") {
 		t.Fatalf("--out the checkout root: %d %s", code, stderr)

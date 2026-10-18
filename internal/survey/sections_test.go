@@ -233,3 +233,15 @@ func TestDigestSkippedFiles(t *testing.T) {
 		t.Fatal("a same-size edit to a binary file left the digest unchanged")
 	}
 }
+
+// A module budget that moves a file to another mod: ID makes the saved
+// sections stale (a claim about mod:src#2 meant other files); one that keeps
+// every module's files does not.
+func TestDigestModules(t *testing.T) {
+	if buildFixture(t, 100).Digest == buildFixture(t, 200).Digest {
+		t.Error("budgets 100 and 200 split src differently, but the digest is the same")
+	}
+	if buildFixture(t, 50).Digest != buildFixture(t, 100).Digest {
+		t.Error("budgets 50 and 100 give the same modules, but the digest differs")
+	}
+}

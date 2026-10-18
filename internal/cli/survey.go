@@ -194,6 +194,9 @@ func runSurvey(ctx context.Context, e *Env, in Values) error {
 		}
 		return e.Emit(p, func(w io.Writer) error { return writePack(w, p) })
 	}
+	if fi, err := os.Stat(root); err != nil || !fi.IsDir() { // before anything is written beneath it
+		return Errorf(ExitUsage, "survey: %s is not a directory to survey", root)
+	}
 	manuals, err := surveyManuals(ctx, in.String("docs"), filepath.Join(out, "manuals"))
 	if err != nil {
 		return Wrap(ExitUsage, err)
@@ -446,6 +449,7 @@ func (e *Env) surveyDraft(indexFile, out, file string) error {
 				return Wrap(ExitInternal, err)
 			}
 			res.Saved = append(res.Saved, name)
+			res.Stale = slices.DeleteFunc(res.Stale, func(s string) bool { return s == name }) // rewritten in this run
 		}
 		return nil
 	}
