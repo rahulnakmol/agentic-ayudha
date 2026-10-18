@@ -55,7 +55,9 @@ The reviewer is the one the merge gate uses when it can be called from your mach
 - else `[inspect] paid_reviewer` through `[models.gateway]` or its provider's key;
 - else the review lane's model, when its key is here.
 
-It must be of a family the builder cannot be (`AAYU_MODEL`, or the host's build lane). When none can be called, the
+It must be of a family the builder cannot be (`AAYU_MODEL`, or the host's build lane). `aayu build` writes the builder's
+`Aayudha-Host`, `Aayudha-Model`, and `Aayudha-Effort` (from `AAYU_EFFORT`) lines into each commit and the PR description,
+and keeps any a person adds there; the reviewer is of none of the families they name. When none can be called, the
 push goes out without a session review, and the section says why. A build delegated to another agent is reviewed by
 the merge gate only. Each round is metered spend, within `[budget] per_pr_inspect_max`.
 

@@ -449,6 +449,10 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			}
 		case model != "":
 			msg += "\nAayudha-Model: " + model
+			// The effort the host runs the model at, one token (AAYU_EFFORT).
+			if ef := strings.Fields(e.Getenv("AAYU_EFFORT")); len(ef) == 1 {
+				msg += "\nAayudha-Effort: " + ef[0]
+			}
 		}
 		// The host that built the checkpoint, so inspect can place a builder
 		// whose host picks the model (Decision #469); a delegated build names

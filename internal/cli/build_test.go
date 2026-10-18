@@ -1018,6 +1018,7 @@ func TestBuildSessionReviewReadsDeclarations(t *testing.T) {
 	env[inspect.ReviewModelURLVar] = "https://review.example/v1"
 	env[inspect.ReviewModelKeyVar] = "review-key"
 	env[inspect.ReviewModelVar] = "claude-sonnet-5-5" // the builder's family: refused
+	env["AAYU_EFFORT"] = "medium"
 	body := func() string { g.Mu.Lock(); defer g.Mu.Unlock(); return g.Pulls[prN].Body }
 	if b := body(); !strings.Contains(b, "\nAayudha-Model: claude-opus-5-5\n") {
 		t.Fatalf("the PR body does not declare the builder's model:\n%s", b)
@@ -1043,7 +1044,7 @@ func TestBuildSessionReviewReadsDeclarations(t *testing.T) {
 		t.Fatalf("Claude and GPT declared: %d %s %s, reviewer %v", code, out, errOut, family())
 	}
 	b := body()
-	for _, want := range []string{"A person's note.", "\nAayudha-Model: gpt-6.1-sol\n", "\nAayudha-Model: claude-opus-5-5\n", "the reviewers are of none of [anthropic openai]"} {
+	for _, want := range []string{"A person's note.", "\nAayudha-Model: gpt-6.1-sol\n", "\nAayudha-Model: claude-opus-5-5\n", "\nAayudha-Effort: medium\n", "the reviewers are of none of [anthropic openai]"} {
 		if !strings.Contains(b, want) {
 			t.Fatalf("PR body lacks %q:\n%s", want, b)
 		}

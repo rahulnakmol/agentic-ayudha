@@ -345,10 +345,6 @@ func declarationLines(ctx context.Context, wt, dev string) []string {
 	return out
 }
 
-// effortTrailer is the builder's reasoning effort, one token, next to its
-// Aayudha-Model trailer.
-var effortTrailer = regexp.MustCompile(`(?m)^Aayudha-Effort:\s*(\S+)\s*$`)
-
 // withDeclarations adds each declaration line the body lacks, before the
 // session review section (or at the end), and keeps every other line,
 // declarations a person added included.
@@ -375,10 +371,10 @@ func withDeclarations(body string, lines []string) string {
 }
 
 // declarations collects a PR's builder declarations (Decision #469), for
-// runInspect and the session review alike: every model an Aayudha-Model line or trailer names,
-// and the host of a declaration that names no concrete model, which picked
-// the model itself.
-type declarations struct{ claims, hosts []string }
+// runInspect and the session review alike: every model an Aayudha-Model line
+// or trailer names, the host of a declaration that names no concrete model,
+// which picked the model itself, and every Aayudha-Effort level.
+type declarations struct{ claims, hosts, efforts []string }
 
 func (d *declarations) declare(models []string, host string, named bool) {
 	concrete := false
@@ -398,6 +394,11 @@ func (d *declarations) trailers(text string) {
 	var models []string
 	for _, m := range modelTrailer.FindAllStringSubmatch(text, -1) {
 		models = append(models, m[1])
+	}
+	for _, m := range effortTrailer.FindAllStringSubmatch(text, -1) {
+		if e := strings.ToLower(m[1]); !slices.Contains(d.efforts, e) {
+			d.efforts = append(d.efforts, e)
+		}
 	}
 	if h := hostTrailer.FindStringSubmatch(text); h != nil {
 		d.declare(models, h[1], true)

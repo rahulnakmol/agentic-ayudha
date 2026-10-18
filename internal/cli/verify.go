@@ -36,7 +36,10 @@ var (
 	checkpoint   = regexp.MustCompile(`(?m)^Aayudha-Checkpoint:\s*([0-9]+/[0-9]+)\s*$`)
 	modelTrailer = regexp.MustCompile(`(?m)^Aayudha-Model:\s*(\S+)\s*$`)
 	hostTrailer  = regexp.MustCompile(`(?m)^Aayudha-Host:\s*(\S+)\s*$`)
-	storyBranch  = regexp.MustCompile(`^(?:story|bug)/([0-9]+)(?:-|$)`)
+	// effortTrailer is the builder's reasoning effort, one token, written on
+	// the line after Aayudha-Model (AAYU_EFFORT).
+	effortTrailer = regexp.MustCompile(`(?m)^Aayudha-Effort:\s*(\S+)\s*$`)
+	storyBranch   = regexp.MustCompile(`^(?:story|bug)/([0-9]+)(?:-|$)`)
 )
 
 // VerifyResult is what verify reports.
