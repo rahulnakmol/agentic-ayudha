@@ -282,7 +282,7 @@
       "basis": "observed",
       "cites": [
         "TinyJS.h:179-194",
-        "TinyJS.h:198-266"
+        "TinyJS.h:100", "TinyJS.h:198-266"
       ]
     },
     {
@@ -291,7 +291,7 @@
       "claim": "The public header also exposes the lexer (CScriptLex: match a token, take a sub-lexer, report a position as line and column), the exception scripts' errors are thrown as (CScriptException, with its text), and getJSString, which quotes a C++ string for script.",
       "basis": "observed",
       "cites": [
-        "TinyJS.h:129-160"
+        "TinyJS.h:52", "TinyJS.h:129-160"
       ]
     },
     {

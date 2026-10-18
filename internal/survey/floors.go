@@ -1,6 +1,7 @@
 package survey
 
 import (
+	"cmp"
 	"fmt"
 	"path"
 	"regexp"
@@ -65,6 +66,28 @@ func checkCapabilityMap(ix *Index, d Draft, cov *Coverage, add func(string, ...a
 	for _, f := range sortedKeys(missing) {
 		add("capabilities: no capability covers the entry point(s) %s:%s; cite each from the capability it serves (its entry, its line or a range that holds it, or its symbol), or add the capability", f, strings.Join(missing[f], ", "))
 	}
+}
+
+// citedLines resolves a citation of a checkout file (file:p, p, p:N, or
+// p:N-M) to its path and lines (0, 0 for the whole file); "" for any other
+// citation.
+func citedLines(ix *Index, c string) (file string, first, last int) {
+	c = strings.TrimPrefix(c, "file:")
+	isFile := func(p string) bool { return slices.ContainsFunc(ix.Files, func(f File) bool { return f.Path == p }) }
+	if isFile(c) {
+		return c, 0, 0
+	}
+	j := strings.LastIndex(c, ":")
+	if j < 0 || !isFile(c[:j]) {
+		return "", 0, 0
+	}
+	a, b, _ := strings.Cut(c[j+1:], "-")
+	first, err1 := strconv.Atoi(a)
+	last, err2 := strconv.Atoi(cmp.Or(b, a))
+	if err1 != nil || err2 != nil || first < 1 || last < first {
+		return "", 0, 0
+	}
+	return c[:j], first, last
 }
 
 // coversEntry reports whether one citation of a capability claim covers an
@@ -164,11 +187,28 @@ func checkRunners(ix *Index, m *Modernisation, add func(string, ...any)) {
 		}
 		files := map[string]bool{}
 		inputs := g.Inputs
-		if len(inputs) == 0 { // the checkout's test files the case set draws on are its inputs
+		lines := map[string][][2]int{} // a file the cases are drawn from by line: those lines only
+		if len(inputs) == 0 {          // the checkout files the case set draws on are its inputs: test files, and files or lines it cites
+			whole := map[string]bool{}
 			for _, from := range g.From {
-				if slices.ContainsFunc(ix.Tests, func(e Fact) bool { return e.ID == from }) && !slices.ContainsFunc(g.Runners, func(r string) bool { return r == from }) {
-					inputs = append(inputs, strings.TrimPrefix(from, "test:"))
+				if slices.ContainsFunc(g.Runners, func(r string) bool { return r == from }) {
+					continue
 				}
+				if slices.ContainsFunc(ix.Tests, func(e Fact) bool { return e.ID == from }) {
+					inputs = append(inputs, strings.TrimPrefix(from, "test:"))
+					continue
+				}
+				f, a, b := citedLines(ix, from)
+				switch {
+				case f == "":
+				case a == 0:
+					inputs, whole[f] = append(inputs, f), true
+				default:
+					inputs, lines[f] = append(inputs, f), append(lines[f], [2]int{a, b})
+				}
+			}
+			for f := range whole {
+				delete(lines, f)
 			}
 		}
 		for _, in := range inputs {
@@ -193,7 +233,7 @@ func checkRunners(ix *Index, m *Modernisation, add func(string, ...any)) {
 		}
 		used := map[string]string{} // builtin → where the case set calls it
 		for _, u := range ix.Uses {
-			if f, _ := splitAt(u.At); files[f] {
+			if f, l := splitAt(u.At); files[f] && (lines[f] == nil || slices.ContainsFunc(lines[f], func(r [2]int) bool { return r[0] <= l && l <= r[1] })) {
 				if _, ok := used[u.Detail]; !ok || lessAt(u.At, used[u.Detail]) {
 					used[u.Detail] = u.At
 				}

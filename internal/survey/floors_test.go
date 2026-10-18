@@ -118,7 +118,7 @@ func TestFloorCapabilityMapFunctions(t *testing.T) {
 		"fmtlib.py":        "def render(x):\n    return x\n\n\ndef _private(x):\n    return x\n",
 		"tool.py":          "#!/usr/bin/env python3\ndef run():\n    pass\n",
 		"guard.py":         "def go():\n    pass\n\n\nif __name__ == \"__main__\":\n    go()\n",
-		"util.hxx":         "class LineA {}; class LineB {};\n",
+		"util.hxx":         "class LineA {}; class LineB {};\nenum class Status { Ready };\n",
 	} {
 		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0o755); err != nil {
 			t.Fatal(err)
@@ -131,7 +131,7 @@ func TestFloorCapabilityMapFunctions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	all := []string{"sym:parse/parse.go#Parse", "sym:parse/parse.go#Status", "sym:fmtlib.py#render", "cmd/tool/main.go:3", "tool.py:1", "guard.py:5", "sym:util.hxx#LineA", "sym:util.hxx#LineB"}
+	all := []string{"sym:parse/parse.go#Parse", "sym:parse/parse.go#Status", "sym:fmtlib.py#render", "cmd/tool/main.go:3", "tool.py:1", "guard.py:5", "sym:util.hxx#LineA", "sym:util.hxx#LineB", "util.hxx:2"}
 	base := func() Draft {
 		return Draft{Capabilities: []Claim{{ID: "C1", Name: "Parse", Text: "Parses.", Basis: "observed", Cites: slices.Clone(all)}}}
 	}
@@ -144,6 +144,7 @@ func TestFloorCapabilityMapFunctions(t *testing.T) {
 		{"negated", "each library function, program, and class cited; no helper, private name, or script function asked for", func(*Draft) {}, "no capability covers", false},
 		{"match", "a Go package's exported function left out", without("sym:parse/parse.go#Parse"), "parse/parse.go:3 (function Parse)", true},
 		{"match", "a Go package's exported named type left out", without("sym:parse/parse.go#Status"), "parse/parse.go:7 (type Status)", true},
+		{"match", "a header's public enum left out", without("util.hxx:2"), "util.hxx:2 (enum Status)", true},
 		{"match", "a Python module's public function left out", without("sym:fmtlib.py#render"), "fmtlib.py:1 (function render)", true},
 		{"match", "the second class on a line, its neighbour's symbol cited", without("sym:util.hxx#LineB"), "util.hxx:1 (class LineB)", true},
 		{"near miss", "the first class on that line, its neighbour's symbol cited", without("sym:util.hxx#LineA"), "util.hxx:1 (class LineA)", true},
@@ -361,6 +362,12 @@ func TestFloorRunnerPrograms(t *testing.T) {
 		{"match", "a namespace-qualified Tcl command", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/hy.tcl"} }),
 			"cases/hy.tcl:2 calls ::ns::yo, which runner entry:other.py:1 does not register", true},
 		{"negated", "those commands, from the runner that registers them", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:tool.py:11"}, []string{"cases/hy.tcl"} }), "case set G1", false},
+		{"match", "no inputs, the cases drawn from a checkout file's line", set(func(g *CaseSet) { g.Runners, g.From = []string{"entry:other.py:1"}, []string{"cases/loud.js:1"} }),
+			"cases/loud.js:1 calls shout, which runner entry:other.py:1 does not register", true},
+		{"match", "no inputs, the cases drawn from a whole file", set(func(g *CaseSet) { g.Runners, g.From = []string{"entry:other.py:1"}, []string{"file:cases/hy.tcl"} }),
+			"cases/hy.tcl:1 calls loud-x", true},
+		{"near miss", "no inputs, the cases drawn from another line of that file", set(func(g *CaseSet) { g.Runners, g.From = []string{"entry:other.py:1"}, []string{"cases/hy.tcl:2"} }),
+			"calls loud-x", false},
 		{"near miss", "a Tcl input that names the builtin as an argument", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/quiet.tcl"} }), "case set G1", false},
 		{"negated", "the main guard's runner, whose guard calls the function that registers it", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:tool.py:11"}, []string{"cases/loud.js"} }), "case set G1", false},
 		{"match", "a program that never calls that function", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/loud.js"} }),
