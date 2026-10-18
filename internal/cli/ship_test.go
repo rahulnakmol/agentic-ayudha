@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -323,6 +325,91 @@ func TestShipAutonomousFootprint(t *testing.T) {
 	}
 	if c := comment(g, 2, "<!-- aayudha:lease-released -->"); !strings.Contains(c, "shipped in #"+strconv.Itoa(prN)) {
 		t.Fatalf("lease not released:\n%s", c)
+	}
+}
+
+// Decision #593: with [autonomy] proof on, a PR into dev merges with no human
+// pass once every required check is green, the pack verifies, and inspect is
+// at merge with an accepted rung, even on a never layer with no plan review;
+// a red required check, a rung outside proof_rungs, or the narrow set (a
+// listed path, a workflow that reads a secret, a change to who may approve)
+// stops it, and the PR waits for a person.
+func TestShipOnProof(t *testing.T) {
+	g, env, opts, dir, bare, prN, head := thinFixture(t)
+	gateRun(t, g, dir, prN, head, coverageHolds, "L07")
+	base := strings.Repeat("b", 40)
+	cfg := func(rungs string) {
+		t.Helper()
+		_ = os.MkdirAll(filepath.Join(dir, ".aayudha"), 0o755)
+		_ = os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte("version = 1\n[autonomy]\nproof = true\nproof_rungs = "+rungs+
+			"\nalways_person = [\".github/CODEOWNERS\", \"internal/identity/\"]\nalways_person_config = [\".aayudha/config.toml\"]\n"), 0o644)
+	}
+	cfg(`["A", "B", "C"]`)
+	g.Mu.Lock()
+	gate := slices.IndexFunc(g.Runs, func(r fake.WorkflowRun) bool { return r.HeadSHA == head && r.Event == "pull_request_target" })
+	g.RunJobs = map[int64][]fake.CheckRun{g.Runs[gate].ID: {{ID: 7701, Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}}}
+	g.JobLogs = map[int64]string{7701: "2026-10-17T23:00:00.0000000Z inspect #" + strconv.Itoa(prN) + " at abc: merge (reviewed by codex)\n2026-10-17T23:00:00.0000000Z   review: same-family review (C): codex (openai), builder openai\n"}
+	g.RequiredChecks = []string{"build", "lint", "protected-paths"}
+	g.CheckRuns[head] = append(g.CheckRuns[head], fake.CheckRun{Name: "build", Status: "completed", Conclusion: "success"},
+		fake.CheckRun{Name: "lint", Status: "completed", Conclusion: "failure"}, fake.CheckRun{Name: "protected-paths", Status: "completed", Conclusion: "failure"})
+	g.Files = map[string]string{".github/CODEOWNERS": "/skills/ @founder\n"}
+	secrets := "on: push\njobs:\n  x:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ${{ secrets.TOKEN }}\n"
+	conf := "version = 1\n\n[notify]\nchannel = \"file\"\n\n[autonomy]\napprover = \"\"\n"
+	g.RefFiles = map[string]map[string]string{
+		base: {".github/CODEOWNERS": "/skills/ @founder\n", ".github/workflows/ci.yml": secrets, ".aayudha/config.toml": conf},
+		head: {".github/workflows/ci.yml": secrets, ".aayudha/config.toml": strings.Replace(conf, `approver = ""`, `approver = "mallory"`, 1)},
+	}
+	g.Pulls[prN].Files = []string{"empty.txt"}
+	g.Mu.Unlock()
+	refused := func(want string) {
+		t.Helper()
+		if code, out := shipCmd(t, env, opts, prN); code != ExitBlocked || !strings.Contains(out, want) {
+			t.Fatalf("ship, want %q: %d %s", want, code, out)
+		}
+		g.Mu.Lock()
+		defer g.Mu.Unlock()
+		if g.Pulls[prN].Merged {
+			t.Fatalf("merged although %q", want)
+		}
+	}
+	refused("required check lint is failure on " + short(head) + "; never merge with a red required check")
+	g.Mu.Lock()
+	g.CheckRuns[head][len(g.CheckRuns[head])-2].Conclusion = "success"
+	g.Pulls[prN].Files = []string{"empty.txt", "internal/identity/review.go"}
+	g.Mu.Unlock()
+	refused("no merge on proof: it touches internal/identity/review.go, in the narrow set that always needs a person ([autonomy] always_person: internal/identity/)")
+	g.Mu.Lock()
+	g.Pulls[prN].Files = []string{"empty.txt", ".github/workflows/ci.yml"}
+	g.Mu.Unlock()
+	refused("no merge on proof: it touches .github/workflows/ci.yml, a workflow that reads a secret or names an environment")
+	g.Mu.Lock()
+	g.Pulls[prN].Files = []string{"empty.txt", ".aayudha/config.toml"}
+	g.Mu.Unlock()
+	refused("no merge on proof: it changes [autonomy] in .aayudha/config.toml, which decides who may approve or bypass")
+	cfg(`["A", "B"]`)
+	g.Mu.Lock()
+	g.RefFiles[head][".aayudha/config.toml"] = strings.Replace(conf, `"file"`, `"slack"`, 1) // another table: no person needed
+	g.Pulls[prN].Files = []string{"empty.txt", ".aayudha/config.toml", "skills/build/SKILL.md"}
+	g.Mu.Unlock()
+	refused("no merge on proof: the review rung at the head is C, not one of A, B ([autonomy] proof_rungs)")
+	cfg(`["A", "B", "C"]`)
+
+	code, out := shipCmd(t, env, opts, prN)
+	if code != 0 || !strings.Contains(out, "human pass: proof by founder") {
+		t.Fatalf("ship on proof: %d %s", code, out)
+	}
+	var sr ShipRecord
+	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:proof/2/"+head+"/authoritative/ship.json")), &sr)
+	if sr.HumanPass.Kind != "proof" || sr.Proof == nil || sr.Proof.Rung != inspect.RungC || !slices.Equal(sr.Proof.Checks, []string{"build", "lint"}) ||
+		!slices.Equal(sr.Proof.Protected, []string{"skills/build/SKILL.md"}) || sr.PlanReview != nil || !slices.Equal(sr.Footprint, []string{"L07"}) {
+		t.Fatalf("ship record: %+v %+v", sr.HumanPass, sr.Proof)
+	}
+	g.Mu.Lock()
+	body, merged := g.Issues[2].Body, g.Pulls[prN].Merged
+	g.Mu.Unlock()
+	if !merged || !strings.Contains(body, "- Human pass: not needed, merged on proof (Decision #593): required checks build, lint green") ||
+		!strings.Contains(body, "CODEOWNERS paths skills/build/SKILL.md merged with no code owner's review") {
+		t.Fatalf("Complete section (merged %t):\n%s", merged, body)
 	}
 }
 

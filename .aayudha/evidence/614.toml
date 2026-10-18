@@ -1,0 +1,21 @@
+# Which tests prove story #614's Completion Goal (Decision #593: ship merges on proof into dev, outside the narrow set).
+
+[[criterion]]
+id = 1 # no review, a never layer with no plan review, rung C accepted: merged on proof, recorded
+tests = ["internal/cli:TestShipOnProof"]
+
+[[criterion]]
+id = 2 # a red required check: never merged
+tests = ["internal/cli:TestShipOnProof"]
+
+[[criterion]]
+id = 3 # the narrow set: a listed path, a workflow with a secret, the [autonomy] table of a config file
+tests = ["internal/cli:TestShipOnProof"]
+
+[[criterion]]
+id = 4 # a rung outside proof_rungs
+tests = ["internal/cli:TestShipOnProof"]
+
+[[criterion]]
+id = 5 # this repository's [autonomy]: proof on, rung C until B, the narrow set
+tests = ["internal/config:TestRepositoryMergesOnProof"]

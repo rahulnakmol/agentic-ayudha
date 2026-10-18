@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -384,5 +385,29 @@ func TestBranchNames(t *testing.T) {
 		if got := tc.b.Names(); got != tc.want {
 			t.Errorf("%+v: %q, want %q", tc.b, got, tc.want)
 		}
+	}
+}
+
+// TestRepositoryMergesOnProof keeps Decision #593 (option 1, accepted 2026-10-18) for this repository: ship merges
+// into dev on proof, rung C counts until rung B is live, and the narrow set of the Decision always needs a person.
+// The built-in defaults leave proof off, so a repository opts in.
+func TestRepositoryMergesOnProof(t *testing.T) {
+	def, err := Load(Sources{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	l, err := Load(Sources{RepoDir: "../.."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := l.Config.Autonomy
+	narrow := []string{".github/CODEOWNERS", "internal/cli/ship.go", "internal/cli/shippass.go", "internal/cli/shipproof.go",
+		"internal/cli/presence.go", "internal/identity/", "internal/autonomy/", ".github/workflows/aayudha-merge-gate.yml",
+		".github/workflows/protected-paths*.yml", ".github/workflows/release.yml", ".github/workflows/aayudha-approve.yml",
+		".github/workflows/aayudha-token.yml", ".goreleaser.yaml", "install.sh"}
+	if def.Config.Autonomy.Proof || !a.Proof || !slices.Equal(a.ProofRungs, []string{"A", "B", "C"}) || !slices.Equal(a.AlwaysPerson, narrow) ||
+		!slices.Equal(a.AlwaysPersonConfig, []string{".aayudha/config.toml", "internal/config/defaults.toml"}) ||
+		!slices.Equal(a.AlwaysPersonSections, []string{"identity", "approvals", "autonomy", "seats"}) {
+		t.Fatalf("defaults proof=%v; repository [autonomy]: %+v", def.Config.Autonomy.Proof, a)
 	}
 }

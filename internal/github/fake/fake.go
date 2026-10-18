@@ -235,6 +235,9 @@ type GitHub struct {
 	// RulesetsUnavailable answers every rulesets request as GitHub does for a
 	// private repository on GitHub Free.
 	RulesetsUnavailable bool
+	// RequiredChecks are the required status checks the rules for every
+	// branch name (GET /rules/branches/{branch}).
+	RequiredChecks []string
 	// Fail makes the request with this "METHOD /path" fail with a 500 once
 	// it has succeeded After times.
 	Fail string
@@ -529,6 +532,17 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 	case m == "DELETE" && strings.HasPrefix(p, repo+"/actions/variables/"):
 		delete(g.Variables, strings.TrimPrefix(p, repo+"/actions/variables/"))
 		w.WriteHeader(204)
+	case m == "GET" && strings.HasPrefix(p, repo+"/rules/branches/"):
+		out := []any{}
+		if len(g.RequiredChecks) > 0 {
+			var cs []any
+			for _, c := range g.RequiredChecks {
+				cs = append(cs, map[string]any{"context": c})
+			}
+			out = append(out, map[string]any{"type": "required_status_checks", "ruleset_source_type": "Repository", "ruleset_source": g.Owner + "/" + g.Repo, "ruleset_id": 1,
+				"parameters": map[string]any{"required_status_checks": cs, "strict_required_status_checks_policy": false}})
+		}
+		reply(200, out)
 	case m == "PUT" && strings.HasPrefix(p, repo+"/rulesets/"):
 		for _, rs := range g.Rulesets {
 			if fmt.Sprint(rs["id"]) == strings.TrimPrefix(p, repo+"/rulesets/") {
