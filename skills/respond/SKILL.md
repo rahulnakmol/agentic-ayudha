@@ -118,7 +118,9 @@ timestamped lines, one decision at a time, and every change to production is a p
    evidence, the timeline, the queries); when it shows none, write "No contributing condition is established" with
    the citation, and turn open questions into actions rather than causes. Never infer why a change reached
    production (a missing test, review, or load check) unless the record says so; that is an open question and an
-   action. Keep the
+   action. The trigger or input condition the evidence names (a request shape, an input, a load, a dependency's state
+   that exposes the fault) is a contributing condition, and an action phrases an open question without presuming its
+   answer ("check whether a test covers that input", never "find out how it reached production untested"). Keep the
    investigation's confidence: a hypothesis the note weighed against stays "unlikely", never "ruled out", unless
    the note rules it out. Say how the incident was detected only as the grounding shows it (people
    reporting it, an alert firing); never assert that an alert did or did not fire when the record does not say. When the record
