@@ -754,6 +754,10 @@ func TestApprovals(t *testing.T) {
 		{"agent acts as another person", []string{"identity.app_id=42", "identity.app_slug=aayudha-bot", "approvals.approvers=rahulnakmol"},
 			[]identity.Reach{{Source: "GH_PAT", Login: "machine-user"}},
 			"pass approvals: a reply from rahulnakmol approves a batch; one-way doors need the device code | GH_PAT -> @machine-user | this agent session can act as @machine-user, which is not a bot identity"},
+		// GitHub could not say whose a token is just now (a timeout, a rate limit): it may be an approver's.
+		{"unconfirmed account", []string{"identity.app_id=42", "identity.app_slug=aayudha-bot", "approvals.approvers=rahulnakmol"},
+			[]identity.Reach{{Source: "FLAKY_TOKEN"}},
+			"fail approvals: this agent session (AMP_THREAD_ID) can reach an approver's GitHub credential: an unconfirmed account (FLAKY_TOKEN). An agent here could write an `/aayu approve` reply in their name, so batches from here need the device code. Remove it from every agent's environment (docs/guide/how-trust.md, Approving by reply) | FLAKY_TOKEN -> an account GitHub could not confirm just now"},
 	} {
 		p := healthy(t)
 		p.Config = load(t, tt.sets...)
