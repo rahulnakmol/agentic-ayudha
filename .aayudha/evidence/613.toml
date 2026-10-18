@@ -1,0 +1,7 @@
+[[criterion]]
+id = 1
+tests = [".:TestSkillLint"]
+
+[[criterion]]
+id = 2
+tests = ["./internal/evals:TestTier1"]
