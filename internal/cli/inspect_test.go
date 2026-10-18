@@ -429,6 +429,47 @@ func statedReply(head, disp string, reviewed ...string) string {
 	return "Review done.\n\n```" + inspect.ReplyFence + "\n" + string(b) + "\n```\n"
 }
 
+// Bug #562: Codex's security review of the head counts. Its inline finding,
+// recorded from #550 (r4305772538), is a security finding with its badge's
+// severity, so a P1 fails the gate even when the code review found nothing;
+// while Codex's summary records a security review of the head still running,
+// the head has no reply yet.
+func TestInspectCodexSecurityReview(t *testing.T) {
+	const codex = "chatgpt-codex-connector[bot]"
+	security := "<!-- codex-security-review-finding:v1 -->\n\n### 🛡️ Codex Security Review · _Automatically triggered_\n\n**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub> Security: Authenticate cached state before enabling paid reviews**\n\nWhen rung B is configured, its key is present, and no free app reaches rung A, this branch passes `prev` from the last PR comment containing the inspect marker into `Runner.Run` without authenticating the comment. PR comments are explicitly untrusted.\n\nSECURITY.md reference: [SECURITY.md:L158-L163](https://github.com/rahulnakmol/agentic-ayudha/blob/3acc84139f48dd6175e3ac9b73ae2f5fcb02d258/SECURITY.md#L158-L163)\n\nUseful? React with 👍 / 👎."
+	for _, sev := range []string{"P1", "P2"} {
+		g, env, opts, prN := inspectFixture(t, defectDiff, "Refs #2")
+		head := strings.Repeat("c", 40)
+		_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
+		if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\napps = [\"codex\"]\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		addComment(g, prN, codex, "Bot", "<!-- codex-review-receipt:v1 -->\n\nCodex Review: Didn't find any major issues. Another round soon, please!\n\n**Reviewed commit:** `"+head[:10]+"`\n")
+		addComment(g, prN, codex, "Bot", "<!-- codex-pull-request-review-summary -->\n<!-- codex-review-state:v1 {\"code_review\":{\"commit_sha\":\""+head+"\",\"has_any_findings\":null,\"has_unresolved_findings\":null,\"status\":\"completed\"},\"security_review\":{\"commit_sha\":\""+head+"\",\"has_any_findings\":null,\"has_unresolved_findings\":null,\"status\":\"in_progress\"}} -->\n## Codex Review Summary\n")
+		if code, res, errOut := inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || res.Disposition != NoReply {
+			t.Fatalf("a running security review: exit %d %s %s", code, res.Disposition, errOut)
+		}
+		g.Mu.Lock()
+		summary := g.Issues[prN].Comments[1]
+		summary.Body = strings.Replace(summary.Body, `"status":"in_progress"`, `"status":"completed"`, 1)
+		g.Pulls[prN].Reviews = append(g.Pulls[prN].Reviews, fake.Review{ID: 78, User: fake.Account{Login: codex, Type: "Bot"}, State: "COMMENTED", CommitID: head,
+			Body:     "<!-- codex-review-receipt:v1 -->\n\n\n### 🛡️ Codex Security Review · _Automatically triggered_\n\nHere are some automated security review suggestions for this pull request.\n\n**Reviewed commit:** `" + head[:10] + "`\n",
+			Comments: []fake.ReviewComment{{Path: "internal/report/percent.go", Line: 5, Body: strings.ReplaceAll(security, "P1", sev)}}})
+		g.Mu.Unlock()
+		code, res, errOut := inspectApp(t, env, opts, prN, "--ci")
+		want, wantCode := inspect.Fix, ExitBlocked
+		if sev == "P2" {
+			want, wantCode = inspect.Merge, 0
+		}
+		if code != wantCode || res.Disposition != want || len(res.Findings) != 1 {
+			t.Fatalf("a security %s: exit %d %s %+v %s", sev, code, res.Disposition, res.Findings, errOut)
+		}
+		if f := res.Findings[0]; f.Severity != sev || f.Category != "security" || f.Title != "Security: Authenticate cached state before enabling paid reviews" || strings.Contains(f.Detail, "Codex Security Review") {
+			t.Fatalf("the security finding: %+v", f)
+		}
+	}
+}
+
 // The merge gate without an AI key (founder decision 2026-10-15): outside CI
 // inspect posts the review request under the person's account, mentioning
 // the installed app of another family than the builder's; in the gate a

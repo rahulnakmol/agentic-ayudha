@@ -187,8 +187,11 @@ State drives two limits:
 inspect exits 0 on `merge` and 4 on anything else, so its check stays red until the reviewer says `merge`.
 
 > **Honest status:** Codex's own review judges no criterion, so each is `unclear` unless a P0 or P1 finding names it;
-> the pack's evidence proves the criteria. Claude and Cursor were not shown answering in the stated format: Claude did
-> not answer on the test repository (not installed there) and Cursor's Bugbot was disabled for it. In solo mode the
+> the pack's evidence proves the criteria. Codex's security review counts as part of it: its inline findings on the
+> head are `security` findings with their badge's severity, and while Codex's summary records a security review of the
+> head that has not completed, the head has no reply yet (Bug 562). Claude and Cursor were not shown answering in the
+> stated format: Claude did not answer on the test repository (not installed there) and Cursor's Bugbot was disabled
+> for it. In solo mode the
 > person who approves under the human fallback holds the same account the agents use, so that approval is attributed,
 > not verified. Live, on `rahulnakmol/aayu-scratch-1792115145474361918` (kept, `TestLiveInspectApp`): PR 4's
 > inspect check failed with `no-reply`, `aayu inspect 4` posted `@codex review`, Codex answered with a receipt within
