@@ -98,13 +98,14 @@ min_confidence = 0.5    # P2 and P3 findings below it are not posted
 suppress_after = 2      # distinct human dismissals a finding must resemble to be suppressed
 peer_model = ""         # empty: the first registry review candidate of another family
 generated = ["LAYERS.md", "CONSTRAINTS.md", "docs/RACI.md", "internal/config/schema.json", "internal/mcp/schemas/*.json", "go.sum", "pnpm-lock.yaml"]
-# The merge gate holds no AI key: it @-mentions an agent app installed on the org or account and reads its reply
-# (founder decision 2026-10-15). auto: the first of apps whose family differs from the builder's, else a human.
-reviewer = "auto"
-apps = []                 # claude, codex, cursor: what `aayu doctor` and `aayu install` detect, confirmed here
-# Rung B, opt-in (founder, 2026-10-18): a model ID the merge gate calls with a pay-as-you-go key when no app is of a
-# family the builder cannot be. Off unless set here and the repository adds the secret AAYU_SECRET_<FAMILY>; capped by
-# [budget] per_pr_inspect_max and labelled (B, paid). The one, opt-in exception to "no AI keys in a product repo's CI".
+# The merge gate holds no AI key: it reads the review of the one tool [inspect] reviewer names (founder, 2026-10-18: no
+# auto). Unset, a person reviews every PR; `aayu install` asks for the tool: codex, coderabbit, greptile, claude, cursor,
+# grok (paid_reviewer through the gateway), or human. When it cannot review (a usage-limit or quota reply, or no reply
+# within 30 minutes), the next installed app in that order reviews, then grok, then a person.
+apps = []                 # codex, coderabbit, greptile, claude, cursor: what `aayu doctor` and `aayu install` detect
+# Rung B, opt-in (founder, 2026-10-18): a model ID the merge gate calls with a pay-as-you-go key when reviewer = "grok",
+# or when no installed app can review the head. Off unless set here and the repository adds the secret
+# AAYU_SECRET_<FAMILY>; capped by [budget] per_pr_inspect_max and labelled (B, paid). The one, opt-in exception to "no AI keys in a product repo's CI".
 paid_reviewer = ""
 paid_effort = ""          # the paid reviewer's reasoning effort: low, medium, high, xhigh; empty: the provider default
 

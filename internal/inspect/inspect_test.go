@@ -724,24 +724,40 @@ func TestReviewLadder(t *testing.T) {
 	amp := BuilderOf(Records{}, []string{"a"}, nil, []string{"amp"}, "")
 	unknown := BuilderOf(Records{}, []string{"a"}, nil, []string{"copilot"}, "")
 	xaiCursor := map[string]string{"cursor": "xai"}
+	all := []string{"claude", "cursor", "greptile", "coderabbit", "codex"} // config order does not matter
 	for _, tt := range []struct {
 		name      string
 		b         Builder
+		reviewer  string
 		installed []string
 		families  map[string]string
+		skip      []string
 		app, rung string
 	}{
-		{"another family installed: A, even listed second", anthropic, []string{"claude", "codex"}, nil, "codex", RungA},
-		{"only the builder's family: C, not a person", anthropic, []string{"claude"}, nil, "claude", RungC},
-		{"unknown builder: C with any app", unknown, []string{"codex"}, nil, "codex", RungC},
-		{"amp may be anthropic or openai: both apps are C", amp, []string{"claude", "codex"}, nil, "claude", RungC},
-		{"amp builder, Cursor on Grok: A", amp, []string{"claude", "codex", "cursor"}, xaiCursor, "cursor", RungA},
-		{"Cursor of unknown family is only C", anthropic, []string{"cursor"}, nil, "cursor", RungC},
-		{"no app: a person", anthropic, nil, nil, "", RungHuman},
+		{"codex chosen, another family: A", anthropic, "codex", all, nil, nil, "codex", RungA},
+		{"claude chosen, the builder's family: a labelled C, not replaced", anthropic, "claude", all, nil, nil, "claude", RungC},
+		{"coderabbit is A for an anthropic builder", anthropic, "coderabbit", all, nil, nil, "coderabbit", RungA},
+		{"greptile is A even for an unknown builder", unknown, "greptile", all, nil, nil, "greptile", RungA},
+		{"coderabbit is A for amp (anthropic or openai)", amp, "coderabbit", all, nil, nil, "coderabbit", RungA},
+		{"unknown builder: codex is C", unknown, "codex", all, nil, nil, "codex", RungC},
+		{"amp builder, Cursor on Grok: A", amp, "cursor", all, xaiCursor, nil, "cursor", RungA},
+		{"Cursor of unknown family is only C", anthropic, "cursor", all, nil, nil, "cursor", RungC},
+		{"a chosen app that is not installed is still asked", anthropic, "codex", nil, nil, nil, "codex", RungA},
+		{"codex cannot review: the next installed app in the fixed order", anthropic, "codex", all, nil, []string{"codex"}, "coderabbit", RungA},
+		{"codex and coderabbit cannot: greptile", anthropic, "codex", all, nil, []string{"codex", "coderabbit"}, "greptile", RungA},
+		{"claude cannot: codex comes first in the order", anthropic, "claude", all, nil, []string{"claude"}, "codex", RungA},
+		{"no installed app left: a person (grok is the caller's step)", anthropic, "codex", []string{"codex"}, nil, []string{"codex"}, "", RungHuman},
+		{"grok's own fallback: the first installed app in the order", anthropic, "grok", []string{"claude", "greptile"}, nil, nil, "greptile", RungA},
+		{"human", anthropic, "human", all, nil, nil, "", RungHuman},
+		{"unset: a person", anthropic, "", all, nil, nil, "", RungHuman},
+		{"a leftover auto: a person", anthropic, "auto", all, nil, nil, "", RungHuman},
 	} {
-		c := ChooseReviewer(ReviewerAuto, tt.installed, tt.families, tt.b, "founder")
+		c := ChooseReviewer(tt.reviewer, tt.installed, tt.families, tt.b, "founder", tt.skip...)
 		if c.App != tt.app || c.Rung != tt.rung {
 			t.Errorf("%s: chose %q at rung %q; want %q at %q (%v)", tt.name, c.App, c.Rung, tt.app, tt.rung, c.Notes)
+		}
+		if (tt.reviewer == "" || tt.reviewer == "auto") && !strings.Contains(strings.Join(c.Notes, " "), `set [inspect] reviewer = "<tool>"`) {
+			t.Errorf("%s: the notes do not say how to choose: %v", tt.name, c.Notes)
 		}
 	}
 	// The reported model settles the rung: a reply by an openai model on an

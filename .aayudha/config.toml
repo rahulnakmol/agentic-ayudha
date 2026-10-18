@@ -38,8 +38,9 @@ activation_days = 7
 # live (founder decision 2026-10-15: no AI key in the merge gate). Cursor is installed too, but its family is the
 # model its user picks, so it reviews only once [inspect.app_families] names one.
 [inspect]
+reviewer = "codex"        # the one review tool (founder, 2026-10-18: "Use codex for now")
 apps = ["codex"]
-# Rung B through the AI gateway (founder, 2026-10-18): no installed app is of a family the builder cannot be.
+# Rung B through the AI gateway (founder, 2026-10-18): the fallback when Codex cannot review a head.
 paid_reviewer = "grok-4.7"
 paid_effort = "high"
 

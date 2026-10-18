@@ -163,32 +163,31 @@ PASS  agents  local CLIs signed in: codex, cursor, claude, amp; cloud agents con
                 claude: /usr/bin/x 1.0.0, signed in; cloud: claude --cloud with a claude.ai account
                 amp: /usr/bin/x 1.0.0, signed in; cloud: no Amp project recorded for this repository: `aayu install --env --host amp --cloud` finds it and proves the orb environment
 ## reviewer-apps pass
-PASS  reviewer-apps  merge-gate reviewer: codex (openai); its review counts as different-family only for a builder of another family, and is labelled same-family otherwise
-                       claude (@claude review, family anthropic): not detected
+PASS  reviewer-apps  merge-gate reviewer: codex (openai); its review counts as different-family only for a builder of another family (a review service always does), and is labelled same-family otherwise
                        codex (@codex review, family openai): configured in [inspect] apps; detected: installed on the organisation o
+                       coderabbit (@coderabbitai review, family review-service): not detected
+                       greptile (@greptileai, family review-service): not detected
+                       claude (@claude review, family anthropic): not detected
                        cursor (@cursor, family host-managed): not detected
                        amp (no mention, family host-managed): not detected
                          Amp has no @amp mention and replies as the person who connected it, so aayu cannot tell its reply from the builder's
-                       no installed reviewer app is of a family the builder cannot be, so codex gives a labelled same-family review (rung C); install an app of another family to move up
 ## reviewer-apps fail
 WARN  reviewer-apps  reviewer apps detected but not configured: codex, cursor; add them to [inspect] apps (the gate reads config only)
-                       claude (@claude review, family anthropic): not detected
                        codex (@codex review, family openai): detected: chatgpt-codex-connector[bot] replied on #3
+                       coderabbit (@coderabbitai review, family review-service): not detected
+                       greptile (@greptileai, family review-service): not detected
+                       claude (@claude review, family anthropic): not detected
                        cursor (@cursor, family host-managed): detected: check run "Cursor Bugbot" on #3
                        amp (no mention, family host-managed): not detected
                          Amp has no @amp mention and replies as the person who connected it, so aayu cannot tell its reply from the builder's
-                       no reviewer app in [inspect] apps (`aayu doctor` detects installed ones)
-                       falling back to a human review
 ## review-rung pass
 PASS  review-rung  C  same-family review: codex (openai), no other family reachable; it never counts toward autonomy, so a person passes every PR
                      builder any of [anthropic openai] (amp picks the model for its modes)
-                     move up (free): cursor: install it and add it to [inspect] apps, then set [inspect] app_families.cursor to the family it runs, outside the builder's
-                     move up (paid, opt-in): set [inspect] paid_reviewer to a model of a family the builder cannot be, and add its provider key as the repository secret AAYU_SECRET_<FAMILY>; [budget] per_pr_inspect_max caps each PR
+                     move up (free): coderabbit (review-service): install it and add it to [inspect] apps, and set [inspect] reviewer = "coderabbit"; greptile (review-service): install it and add it to [inspect] apps, and set [inspect] reviewer = "greptile"; cursor: install it and add it to [inspect] apps, then set [inspect] app_families.cursor to the family it runs, outside the builder's, and set [inspect] reviewer = "cursor"
+                     move up (paid, opt-in): set [inspect] reviewer = "grok" and [inspect] paid_reviewer to a model of a family the builder cannot be, and add its provider key as the repository secret AAYU_SECRET_<FAMILY>; [budget] per_pr_inspect_max caps each PR
 ## review-rung fail
-WARN  review-rung  no reviewer app can review: a person reviews every PR
+FAIL  review-rung  no review tool chosen: the merge gate asks a person to review every PR; set [inspect] reviewer = "<tool>" (codex, coderabbit, greptile, claude, cursor, grok, or human) in .aayudha/config.toml, or run aayu install
                      builder any of [anthropic openai] (amp picks the model for its modes)
-                     move up (free): cursor: install it and add it to [inspect] apps, then set [inspect] app_families.cursor to the family it runs, outside the builder's
-                     move up (paid, opt-in): set [inspect] paid_reviewer to a model of a family the builder cannot be, and add its provider key as the repository secret AAYU_SECRET_<FAMILY>; [budget] per_pr_inspect_max caps each PR
 ## retired-workflows pass
 PASS  retired-workflows  no retired aayudha workflow in .github/workflows
 ## retired-workflows fail

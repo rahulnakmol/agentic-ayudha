@@ -439,14 +439,14 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		e.Logf("inspect: [inspect] paid_reviewer %s already failed on %s; the reviewer app reviews, and the next push tries it again", paid.Model, short(prev.PaidFailed))
 		paid = nil
 	}
-	// The reviewer app (Codex here) always reviews first. When it cannot
-	// review this head (a usage-limit or quota reply, or no reply within
-	// inspect.ReplyWait), rung B steps in for it, and when rung B cannot, a
-	// human reviews.
+	// The chosen tool is the only reviewer while it answers. When an app
+	// cannot review this head (a usage-limit or quota reply, or no reply
+	// within inspect.ReplyWait), the next installed app does, then rung B,
+	// then a human; when grok (rung B) cannot, the apps do, then a human.
 	unavailable := ""
 	if cfg.Reviewer != inspect.ReviewerModel && paid == nil {
 		a := appInspect{c: c, repo: repo, pr: pr, in: ins, prev: prev, builder: builder, cfg: l.Config,
-			paidTried: e.replyEvent() || prev.PaidFailed == pr.GetHead().GetSHA()}
+			paidTried: e.replyEvent() || prev.PaidFailed == pr.GetHead().GetSHA() || cfg.Reviewer == inspect.ReviewerGrok}
 		err := e.inspectThroughApp(ctx, a)
 		if a.paidTried || !errors.Is(err, inspect.ErrUnavailable) {
 			return err
@@ -467,9 +467,9 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	picked, notes, err := reviewerModels(gw, builder.Candidates, ins.Mode == inspect.ModePeer, cfg.PeerModel, story)
 	if paid != nil {
 		picked, err = []models.Resolved{*paid}, nil
-		why := "no installed app is of a family the builder cannot be"
+		why := `[inspect] reviewer = "grok"`
 		if unavailable != "" {
-			why = "fallback: the reviewer app cannot review this head (" + unavailable + ")"
+			why = "fallback: no installed reviewer app can review this head (" + unavailable + ")"
 		}
 		notes = []string{fmt.Sprintf("paid reviewer (rung B, opt-in): %s, so [inspect] paid_reviewer %s (%s) reviews with the repository's key, within %.2f USD for this PR", why, paid.Model, paid.Family, l.Config.Budget.PerPRInspectMax)}
 	}
@@ -712,28 +712,26 @@ func (e *Env) inspectDismiss(ctx context.Context, in Values) error {
 
 // paidReviewer is rung B of the review ladder (Decision #469; founder,
 // 2026-10-18), the deliberate, opt-in exception to "no AI keys in a product
-// repo's CI": [inspect] paid_reviewer, called with the repository's own key,
-// only when no installed app reaches rung A, the model's family is one the
-// builder cannot be, the key is present, and [budget] per_pr_inspect_max caps
-// the spend. Only a PR whose author has write access to the repository
-// (perm, the author's effective permission, is admin or write; "" when it
-// cannot be read) gets a paid review, so a person who can only read cannot
-// open PRs to spend the key. An author association of MEMBER or COLLABORATOR
-// is no proof: an organization member may have read access only. perm is
-// called only when everything else allows a paid review. nil leaves the
-// review to the reviewer app.
-//
-// unavailable, when set, is why the reviewer app cannot review this head (a
-// usage-limit reply, or none in time): rung B then steps in for an app at
-// rung A too, as its fallback, and nil leaves the review to a human.
+// repo's CI": [inspect] paid_reviewer, called with the repository's own key
+// (this repository: grok-4.7 through the AI gateway), only when [inspect]
+// reviewer is grok or, as the fallback, when no installed app can review the
+// head (unavailable says why: a usage-limit reply, or none in time); the
+// model's family is one the builder cannot be, the key is present, and
+// [budget] per_pr_inspect_max caps the spend. Only a PR whose author has write
+// access to the repository (perm, the author's effective permission, is admin
+// or write; "" when it cannot be read) gets a paid review, so a person who can
+// only read cannot open PRs to spend the key. An author association of MEMBER
+// or COLLABORATOR is no proof: an organization member may have read access
+// only. perm is called only when everything else allows a paid review. nil
+// leaves the review to the reviewer apps, or a human.
 func paidReviewer(gw *models.Gateway, cfg *config.Config, b inspect.Builder, unavailable string, perm func() string, logf func(string, ...any)) *models.Resolved {
 	ic := cfg.Inspect
 	m := ic.PaidReviewer
 	if m == "" || ic.Reviewer == inspect.ReviewerHuman || ic.Reviewer == inspect.ReviewerModel {
 		return nil
 	}
-	if unavailable == "" && inspect.ChooseReviewer(ic.Reviewer, ic.Apps, ic.AppFamilies, b, cfg.Autonomy.Approver).Rung == inspect.RungA {
-		return nil // A costs nothing, so it comes first
+	if unavailable == "" && ic.Reviewer != inspect.ReviewerGrok {
+		return nil // the chosen app reviews while it answers
 	}
 	f := verbs.FamilyOf(m)
 	why := ""
@@ -753,11 +751,7 @@ func paidReviewer(gw *models.Gateway, cfg *config.Config, b inspect.Builder, una
 		}
 	}
 	if why != "" {
-		next := "the reviewer app reviews"
-		if unavailable != "" {
-			next = "a human reviews"
-		}
-		logf("inspect: [inspect] paid_reviewer %s is not used: %s; %s", m, why, next)
+		logf("inspect: [inspect] paid_reviewer %s is not used: %s; a reviewer app or a human reviews", m, why)
 		return nil
 	}
 	return &models.Resolved{Lane: verbs.LaneReview, Host: verbs.DirectHost, Model: m, Display: m, Family: f, Effort: ic.PaidEffort, Source: models.SourceConfig}

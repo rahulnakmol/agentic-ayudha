@@ -153,7 +153,7 @@ func healthy(t *testing.T) *Probe {
 			"git for-each-ref --format=%(refname:short) refs/heads refs/remotes/origin": "dev\nmain\norigin/HEAD\norigin/dev\n",
 			"git symbolic-ref --short refs/remotes/origin/HEAD":                         "origin/dev\n",
 		}),
-		Config: load(t, "identity.app_id=42", "identity.app_slug=aayudha-bot", "integrations.posthog.secret=posthog", "integrations.posthog.scope=read", "integrations.posthog.project=12345", "inspect.apps=codex", "approvals.approvers=rahulnakmol"),
+		Config: load(t, "identity.app_id=42", "identity.app_slug=aayudha-bot", "integrations.posthog.secret=posthog", "integrations.posthog.scope=read", "integrations.posthog.project=12345", "inspect.apps=codex", "inspect.reviewer=codex", "approvals.approvers=rahulnakmol"),
 		// Decision #488: this agent session reaches only the bot's token.
 		Reachable: func(context.Context) []identity.Reach {
 			return []identity.Reach{{Source: "GH_TOKEN", Login: "aayudha-bot[bot]"}}
@@ -299,7 +299,7 @@ func failing(t *testing.T) map[string]func(*Probe) {
 		},
 		// Codex replied on a PR, but config does not name it; Cursor's family is unknown.
 		"reviewer-apps": func(p *Probe) {
-			p.Config = load(t)
+			p.Config = load(t, "inspect.reviewer=codex")
 			p.API = fakeAPI(map[string]any{
 				"/repos/o/r/pulls?state=all&per_page=10":         []any{map[string]any{"number": 3, "head": map[string]any{"sha": "abc"}}},
 				"/repos/o/r/issues/3/comments?per_page=100":      []any{map[string]any{"user": map[string]any{"login": "chatgpt-codex-connector[bot]"}}},
@@ -307,7 +307,7 @@ func failing(t *testing.T) map[string]func(*Probe) {
 				"/repos/o/r/commits/abc/check-runs?per_page=100": map[string]any{"check_runs": []any{map[string]any{"name": "Cursor Bugbot", "app": map[string]any{"slug": "cursor"}}}},
 			})
 		},
-		// No reviewer app configured: a person reviews every PR.
+		// No review tool chosen: a person reviews every PR, and doctor fails.
 		"review-rung": func(p *Probe) {
 			p.Config = load(t)
 		},
@@ -543,33 +543,53 @@ func TestCheckStates(t *testing.T) {
 		// Decision #469: Cursor on Grok reviews an Amp build (anthropic or
 		// openai) from another family; Codex reviews a Claude Code build
 		// (Claude Opus) from another family; Claude reviewing it is only C.
-		{"rung A for an Amp build", checkReviewRung, func(p *Probe) { p.Config = load(t, "inspect.apps=codex,cursor", "inspect.app_families.cursor=xai") }, Pass, "A  different-family review: cursor (xai)"},
-		{"rung A for a Claude Code build", checkReviewRung, func(p *Probe) { p.Host = "claude"; p.Config = load(t, "inspect.apps=claude,codex") }, Pass, "A  different-family review: codex (openai)"},
-		{"rung C with Cursor of no family", checkReviewRung, func(p *Probe) { p.Config = load(t, "inspect.apps=cursor") }, Pass, "move up (free): cursor: set [inspect] app_families.cursor"},
+		{"rung A for an Amp build", checkReviewRung, func(p *Probe) {
+			p.Config = load(t, "inspect.apps=codex,cursor", "inspect.app_families.cursor=xai", "inspect.reviewer=cursor")
+		}, Pass, "A  different-family review: cursor (xai)"},
+		{"rung A for a Claude Code build", checkReviewRung, func(p *Probe) {
+			p.Host = "claude"
+			p.Config = load(t, "inspect.apps=claude,codex", "inspect.reviewer=codex")
+		}, Pass, "A  different-family review: codex (openai)"},
+		{"rung C with Cursor of no family", checkReviewRung, func(p *Probe) { p.Config = load(t, "inspect.apps=cursor", "inspect.reviewer=cursor") }, Pass, "cursor: set [inspect] app_families.cursor"},
 		{"a fixed same-family reviewer beside a listed other family", checkReviewRung, func(p *Probe) {
 			p.Host = "claude"
 			p.Config = load(t, "inspect.apps=claude,codex", "inspect.reviewer=claude")
-		}, Pass, `codex (openai): already listed; set [inspect] reviewer = "auto" or "codex"`},
+		}, Pass, `codex (openai): already listed; set [inspect] reviewer = "codex"`},
 		{"a fixed same-family reviewer, the other family not listed", checkReviewRung, func(p *Probe) {
 			p.Host = "claude"
 			p.Config = load(t, "inspect.apps=claude", "inspect.reviewer=claude")
-		}, Pass, `codex (openai): install it and add it to [inspect] apps, and set [inspect] reviewer = "auto" or "codex"`},
-		{"an unknown builder cannot move up", checkReviewRung, func(p *Probe) { p.Getenv = func(string) string { return "" }; p.Config = load(t, "inspect.apps=codex") }, Pass, "move up: no reviewer can be shown to differ from an unknown builder"},
+		}, Pass, `codex (openai): install it and add it to [inspect] apps, and set [inspect] reviewer = "codex"`},
+		{"an unknown builder cannot move up", checkReviewRung, func(p *Probe) {
+			p.Getenv = func(string) string { return "" }
+			p.Config = load(t, "inspect.apps=codex", "inspect.reviewer=codex")
+		}, Pass, "move up: no reviewer can be shown to differ from an unknown builder"},
 		{"a person reviews by configuration", checkReviewRung, func(p *Probe) { p.Config = load(t, "inspect.reviewer=human") }, Pass, `human  a person reviews every PR ([inspect] reviewer = "human")`},
-		{"rung C for a Claude Code build", checkReviewRung, func(p *Probe) { p.Host = "claude"; p.Config = load(t, "inspect.apps=claude") }, Pass, "C  same-family review: claude (anthropic)"},
+		{"rung C for a Claude Code build", checkReviewRung, func(p *Probe) {
+			p.Host = "claude"
+			p.Config = load(t, "inspect.apps=claude", "inspect.reviewer=claude")
+		}, Pass, "C  same-family review: claude (anthropic)"},
 		// The Cursor plan picks the build model: Grok on x, Claude on legacy.
-		{"Claude reviews a Cursor x-plan build", checkReviewRung, func(p *Probe) { p.Host = "cursor"; p.Config = load(t, "inspect.apps=claude") }, Pass, "builder xai (grok-4.7 on cursor)"},
+		{"Claude reviews a Cursor x-plan build", checkReviewRung, func(p *Probe) {
+			p.Host = "cursor"
+			p.Config = load(t, "inspect.apps=claude", "inspect.reviewer=claude")
+		}, Pass, "builder xai (grok-4.7 on cursor)"},
 		{"Claude reviews a Cursor legacy-plan build", checkReviewRung, func(p *Probe) {
 			p.Host = "cursor"
-			p.Config = load(t, "inspect.apps=claude", "hosts.cursor.plan=legacy")
+			p.Config = load(t, "inspect.apps=claude", "hosts.cursor.plan=legacy", "inspect.reviewer=claude")
 		}, Pass, "C  same-family review: claude (anthropic)"},
 		// Rung B, opt-in: a paid Gemini reviewer for an Amp build (anthropic or openai).
 		{"a paid reviewer of another family", checkReviewRung, func(p *Probe) {
-			p.Config = load(t, "inspect.apps=codex", "inspect.paid_reviewer=gemini-3.8-flash-high")
-		}, Pass, "B  different-family review, paid (opt-in): gemini-3.8-flash-high (google) when the merge gate holds the repository secret AAYU_SECRET_GOOGLE"},
+			p.Config = load(t, "inspect.apps=codex", "inspect.paid_reviewer=gemini-3.8-flash-high", "inspect.reviewer=grok")
+		}, Pass, "B  different-family review, paid: gemini-3.8-flash-high (google) when the merge gate holds the repository secret AAYU_SECRET_GOOGLE"},
 		{"a paid reviewer of the builder's family", checkReviewRung, func(p *Probe) {
-			p.Config = load(t, "inspect.apps=codex", "inspect.paid_reviewer=gpt-6.1-sol")
-		}, Pass, "paid_reviewer gpt-6.1-sol (openai) cannot be shown to differ from the builder"},
+			p.Config = load(t, "inspect.apps=codex", "inspect.paid_reviewer=gpt-6.1-sol", "inspect.reviewer=grok")
+		}, Warn, "paid_reviewer gpt-6.1-sol (openai) cannot be shown to differ from the builder"},
+		// No auto (founder, 2026-10-18): unset, or a leftover "auto", fails with the next step.
+		{"no review tool chosen", checkReviewRung, func(p *Probe) { p.Config = load(t, "inspect.apps=codex") }, Fail, `set [inspect] reviewer = "<tool>"`},
+		{"a leftover auto", checkReviewerApps, func(p *Probe) { p.Config = load(t, "inspect.apps=codex", "inspect.reviewer=auto") }, Fail, "no review tool chosen"},
+		{"a review service is A for any builder", checkReviewRung, func(p *Probe) {
+			p.Config = load(t, "inspect.apps=coderabbit", "inspect.reviewer=coderabbit")
+		}, Pass, "A  different-family review: coderabbit (review-service)"},
 		// reviewer "model" calls the review lane, not an app: Amp may be
 		// anthropic or openai, so inspect passes over both to Grok.
 		{"a model reviewer for an Amp build", checkReviewRung, func(p *Probe) { p.Config = load(t, "inspect.reviewer=model") }, Pass, "A  different-family review: the review lane's grok-"},

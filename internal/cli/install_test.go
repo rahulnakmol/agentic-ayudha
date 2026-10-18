@@ -22,7 +22,7 @@ import (
 // at an absolute path that reports this build's version.
 func installEnv(t *testing.T) (repo, home string, opts Options) {
 	t.Helper()
-	repo = gitInit(t, "dev", map[string]string{"README.md": "x\n"})
+	repo = gitInit(t, "dev", map[string]string{"README.md": "x\n", ".aayudha/config.toml": "version = 1\n\n[inspect]\nreviewer = \"codex\"\n"})
 	home = t.TempDir()
 	bin, _ := filepath.Abs(filepath.FromSlash("/opt/aayudha/bin/aayu")) // binaryPath makes it absolute: D:\opt\… on Windows
 	opts = Options{IsTerminal: stdinTTY, Dir: repo, Assets: aayudha.Assets, Build: BuildInfo{Version: "1.0.0"}, LookPath: noTools,
@@ -61,8 +61,18 @@ func TestInstall(t *testing.T) {
 		t.Fatalf("agent install --apply: exit %d %s", code, errs)
 	}
 
+	// --apply requires the merge gate's one review tool (founder, 2026-10-18:
+	// no auto): with none chosen it stops, and an answer is written to config.
+	cfgPath := filepath.Join(repo, ".aayudha", "config.toml")
+	_ = os.WriteFile(cfgPath, []byte("version = 1\n\n[inspect] # how PRs are reviewed\nmode = \"general\"\nreviewer = \"auto\"\n\n[budget]\nper_pr_inspect_max = 5.0\n"), 0o644)
+	if code, _, errs := run(t, env, opts, "install", "--apply"); code != ExitUsage || !strings.Contains(errs, `choose the merge gate's review tool: set [inspect] reviewer = "<tool>"`) {
+		t.Fatalf("install --apply with no review tool: exit %d %s", code, errs)
+	}
 	// --apply without confirmation writes the repository but not the home directory, and says so.
-	code, _, errs = run(t, env, opts, "install", "--apply")
+	code, _, errs = runIn(t, env, opts, "coderabbit\n", "install", "--apply")
+	if b, _ := os.ReadFile(cfgPath); string(b) != "version = 1\n\n[inspect] # how PRs are reviewed\nmode = \"general\"\nreviewer = \"coderabbit\"\n\n[budget]\nper_pr_inspect_max = 5.0\n" {
+		t.Fatalf("the chosen tool is not in [inspect]:\n%s", b)
+	}
 	if code != ExitBlocked || !strings.Contains(errs, "1 home-directory edit(s) not applied") {
 		t.Fatalf("install --apply without confirmation: exit %d %s", code, errs)
 	}

@@ -44,8 +44,8 @@ type appInspect struct {
 	// carries something new the gate must keep (a failed paid call's head).
 	record bool
 	// paidTried: rung B already reviewed and failed on this head, or cannot
-	// step in, so an app that cannot review (inspect.ErrUnavailable) falls to
-	// a human. Without it that error is returned for rung B to step in.
+	// step in, so when no installed app can review (inspect.ErrUnavailable)
+	// a human does. Without it that error is returned for rung B to step in.
 	paidTried bool
 }
 
@@ -148,9 +148,25 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 	if !floor.IsZero() {
 		replies = slices.DeleteFunc(slices.Clone(posts), func(p inspect.Post) bool { return !p.Updated.After(floor) })
 	}
-	rep, rerr := inspect.ReadReply(choice, replies, head, since, human, a.in.Criteria, changed)
-	if errors.Is(rerr, inspect.ErrNoReply) && choice.App != "" && !since.IsZero() && e.Now().Sub(since) > inspect.ReplyWait {
-		rerr = fmt.Errorf("%w: %s has not replied in the %.0f minutes since the review request", inspect.ErrUnavailable, choice.App, inspect.ReplyWait.Minutes())
+	read := func(c inspect.Choice) (inspect.AppReply, error) {
+		rep, err := inspect.ReadReply(c, replies, head, since, human, a.in.Criteria, changed)
+		if errors.Is(err, inspect.ErrNoReply) && c.App != "" && !since.IsZero() && e.Now().Sub(since) > inspect.ReplyWait {
+			err = fmt.Errorf("%w: %s has not replied in the %.0f minutes since the review request", inspect.ErrUnavailable, c.App, inspect.ReplyWait.Minutes())
+		}
+		return rep, err
+	}
+	rep, rerr := read(choice)
+	// The chosen app cannot review this head: the next installed app in the
+	// fixed order (inspect.Apps) reviews in its place, then rung B, then a person.
+	for skip := []string{}; errors.Is(rerr, inspect.ErrUnavailable) && choice.App != ""; {
+		skip = append(skip, choice.App)
+		next := inspect.ChooseReviewer(a.cfg.Inspect.Reviewer, a.cfg.Inspect.Apps, a.cfg.Inspect.AppFamilies, a.builder, a.cfg.Autonomy.Approver, skip...)
+		if next.App == "" {
+			break
+		}
+		notes = append(notes, fmt.Sprintf("fallback to %s: %s cannot review this head (%s)", next.App, choice.App, oneLineErr(rerr)))
+		choice = next
+		rep, rerr = read(choice)
 	}
 	if replyEvent {
 		return e.rerunInspect(ctx, a.c, owner, name, n, head, choice, rerr)
@@ -162,7 +178,7 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		h := inspect.ChooseReviewer(inspect.ReviewerHuman, nil, nil, a.builder, a.cfg.Autonomy.Approver)
 		notes = append(notes, fmt.Sprintf("fallback to %s: %s cannot review this head (%s), and rung B ([inspect] paid_reviewer) cannot review it either", h.Kind(), choice.Kind(), oneLineErr(rerr)))
 		choice = h
-		rep, rerr = inspect.ReadReply(choice, replies, head, since, human, a.in.Criteria, changed)
+		rep, rerr = read(choice)
 	}
 	pager, err := e.Notifier(ctx)
 	if err != nil {

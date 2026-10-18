@@ -88,7 +88,7 @@ func TestLiveInspectApp(t *testing.T) {
 	write(".github/workflows/"+initrepo.MergeGateWorkflow, gate)
 	write("go.mod", "module example.com/sum\n\ngo 1.25\n")
 	write("README.md", "Scratch product for aayudha's live reviewer-app test.\n")
-	write(".aayudha/config.toml", "version = 1\n\n[inspect]\napps = [\"claude\", \"codex\"]\n")
+	write(".aayudha/config.toml", "version = 1\n\n[inspect]\nreviewer = \"codex\"\napps = [\"claude\", \"codex\"]\n")
 	gitDo("add", ".")
 	gitDo("commit", "--quiet", "-m", "ci: merge gate from aayu init --gates")
 	gitDo("push", "--quiet", "origin", "HEAD:refs/heads/dev")

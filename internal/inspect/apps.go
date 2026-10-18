@@ -22,16 +22,30 @@ import (
 // turns it into the disposition and criterion verdicts. A missing or
 // malformed reply fails closed. "model" keeps the review lane's direct model
 // (aayudha's evals, or a person who holds a key).
+//
+// Every repository names its one review tool in [inspect] reviewer (founder,
+// 2026-10-18: "auto cannot be an option"): an app, grok (the gateway model,
+// [inspect] paid_reviewer), or human. Unset, or a leftover "auto", a person
+// reviews and the gate says how to choose.
 const (
-	ReviewerAuto  = "auto"
 	ReviewerHuman = "human"
 	ReviewerModel = "model"
+	ReviewerGrok  = "grok" // [inspect] paid_reviewer through the AI gateway (rung B), called directly
 
-	AppClaude = "claude"
-	AppCodex  = "codex"
-	AppCursor = "cursor"
-	AppAmp    = "amp"
+	AppClaude     = "claude"
+	AppCodex      = "codex"
+	AppCodeRabbit = "coderabbit"
+	AppGreptile   = "greptile"
+	AppCursor     = "cursor"
+	AppAmp        = "amp"
 )
+
+// FamilyService is the family of a dedicated review service (CodeRabbit,
+// Greptile). Founder, 2026-10-18: "When CodeRabbit or Greptile is used for
+// code review we don't need to worry about model family, as they are more
+// robust." A deliberate exception to Decision #469's family rule: their
+// review is rung A whatever the builder's family (Builder.Rung).
+const FamilyService verbs.Family = "review-service"
 
 // App is an agent app that reviews pull requests when mentioned.
 type App struct {
@@ -43,15 +57,21 @@ type App struct {
 	Note    string
 }
 
-// Apps are the reviewer apps aayu knows, in the order auto tries them. Their
-// families are the defaults of [inspect] app_families; host-managed means aayu
-// cannot tell which models answer, so the app reviews only once config names
-// its family (the different-family rule needs a concrete one).
+// Apps are the reviewer apps aayu knows, in the fixed order the fallback
+// tries them when the chosen tool cannot review: codex, coderabbit, greptile,
+// claude, cursor (then grok, then a person). Their families are the defaults
+// of [inspect] app_families; host-managed means aayu cannot tell which models
+// answer, so the app reviews only once config names its family (the
+// different-family rule needs a concrete one).
 var Apps = []App{
-	{Name: AppClaude, Login: "claude[bot]", Mention: "@claude review", Slug: "claude", Family: verbs.FamilyAnthropic,
-		Note: "the Claude GitHub App (Code Review, or claude-code-action's @claude)"},
 	{Name: AppCodex, Login: "chatgpt-codex-connector[bot]", Mention: "@codex review", Slug: "chatgpt-codex-connector", Family: verbs.FamilyOpenAI,
 		Note: "the ChatGPT Codex Connector; its native review is read when it does not use the stated format"},
+	{Name: AppCodeRabbit, Login: "coderabbitai[bot]", Mention: "@coderabbitai review", Slug: "coderabbitai", Family: FamilyService,
+		Note: "CodeRabbit, a dedicated review service: rung A whatever the builder's family; its own review of the head is read"},
+	{Name: AppGreptile, Login: "greptile-apps[bot]", Mention: "@greptileai", Slug: "greptile-apps", Family: FamilyService,
+		Note: "Greptile, a dedicated review service: rung A whatever the builder's family; its own review of the head is read"},
+	{Name: AppClaude, Login: "claude[bot]", Mention: "@claude review", Slug: "claude", Family: verbs.FamilyAnthropic,
+		Note: "the Claude GitHub App (Code Review, or claude-code-action's @claude)"},
 	{Name: AppCursor, Login: "cursor[bot]", Mention: "@cursor", Slug: "cursor", Family: verbs.FamilyHostManaged,
 		Note: "Cursor (Bugbot or the cloud agent); its models are the user's choice, so set [inspect] app_families.cursor"},
 	{Name: AppAmp, Mention: "", Family: verbs.FamilyHostManaged,
@@ -88,13 +108,15 @@ func (c Choice) Kind() string {
 	return "a human review"
 }
 
-// ChooseReviewer picks the reviewer for a PR built by b, on the review ladder
-// (Decision #469): the configured app, or with auto the first installed app
-// of a family outside every family the builder may be (rung A); else the
-// first installed app that can review at all, as a labelled same-family
-// review (rung C, the default for a single-family user); else a human. An
-// app whose family is unknown reviews only at rung C.
-func ChooseReviewer(reviewer string, installed []string, families map[string]string, b Builder, human string) Choice {
+// ChooseReviewer picks the reviewer for a PR built by b (Decision #469):
+// the app [inspect] reviewer names, at the rung its family gives (a
+// same-family app is a labelled rung-C review). grok's own fallback, when the
+// gateway model cannot review, is the first installed app in Apps' order.
+// Unset or "auto", or an app that cannot review, is a human review whose
+// notes say how to choose. skip names apps that cannot review this head (a
+// usage-limit reply, or none in time): the next installed app in Apps' order
+// reviews in their place.
+func ChooseReviewer(reviewer string, installed []string, families map[string]string, b Builder, human string, skip ...string) Choice {
 	var notes []string
 	try := func(name string) (Choice, bool) {
 		a, ok := AppByName(name)
@@ -112,30 +134,22 @@ func ChooseReviewer(reviewer string, installed []string, families map[string]str
 		}
 		return Choice{App: name, Login: a.Login, Family: f, Rung: b.Rung(f)}, true
 	}
-	switch reviewer {
-	case ReviewerHuman:
-	case "", ReviewerAuto:
-		var same *Choice
+	next := func() (Choice, bool) {
 		for _, a := range Apps {
-			if !slices.Contains(installed, a.Name) {
-				continue
-			}
-			c, ok := try(a.Name)
-			switch {
-			case !ok:
-			case c.Rung == RungA:
-				c.Notes = notes
-				return c
-			case same == nil:
-				same = &c
+			if slices.Contains(installed, a.Name) && !slices.Contains(skip, a.Name) && a.Login != "" {
+				return try(a.Name)
 			}
 		}
-		if same != nil {
-			same.Notes = append(notes, fmt.Sprintf("no installed reviewer app is of a family the builder cannot be, so %s gives a labelled same-family review (rung C); install an app of another family to move up", same.App))
-			return *same
-		}
-		if len(installed) == 0 {
-			notes = append(notes, "no reviewer app in [inspect] apps (`aayu doctor` detects installed ones)")
+		return Choice{}, false
+	}
+	switch {
+	case reviewer == ReviewerHuman:
+	case reviewer == "" || reviewer == "auto":
+		notes = append(notes, `no review tool chosen: set [inspect] reviewer = "<tool>" (codex, coderabbit, greptile, claude, cursor, grok, or human) in .aayudha/config.toml, or run aayu install`)
+	case reviewer == ReviewerGrok || slices.Contains(skip, reviewer):
+		if c, ok := next(); ok {
+			c.Notes = notes
+			return c
 		}
 	default:
 		if c, ok := try(reviewer); ok {
@@ -260,7 +274,7 @@ const ReplyWait = 30 * time.Minute
 
 // usageLimit is a reviewer app's reply that it cannot review now: Codex's "You
 // have reached your Codex usage limits for code reviews", or a quota message.
-var usageLimit = regexp.MustCompile(`(?i)\busage limits?\b|\bquota\b`)
+var usageLimit = regexp.MustCompile(`(?i)\busage limits?\b|\bquota\b|\brate limit exceeded\b|\btrial has ended\b`)
 
 // AppReply is a reviewer's reply turned into what the gate needs.
 type AppReply struct {
@@ -347,6 +361,12 @@ func ReadReply(c Choice, posts []Post, head string, since time.Time, human func(
 			return r, nil
 		}
 	}
+	service := c.App == AppCodeRabbit || c.App == AppGreptile
+	if service {
+		if r, ok := serviceNative(c, posts, head, criteria, changed); ok {
+			return r, nil
+		}
+	}
 	if c.App == "" {
 		for _, p := range mine {
 			if p.Kind == "review" && p.Approved && p.Commit == head {
@@ -364,6 +384,9 @@ func ReadReply(c Choice, posts []Post, head string, since time.Time, human func(
 		}
 		if c.App != "" && usageLimit.MatchString(p.Body) {
 			return AppReply{}, fmt.Errorf("%w: %s %d by %s: %q", ErrUnavailable, p.Kind, p.ID, p.Login, oneLine(p.Body, 160))
+		}
+		if service {
+			continue // a walkthrough, a status, or a review of another head: not a reply
 		}
 		return AppReply{}, fmt.Errorf("%w: %s %d by %s has no `%s` block for %s: %q", ErrMalformed, p.Kind, p.ID, p.Login, ReplyFence, short(head), oneLine(p.Body, 160))
 	}
@@ -462,5 +485,88 @@ func codexNative(c Choice, posts []Post, head string, criteria []workitems.Crite
 		}
 	}
 	r.Summary = fmt.Sprintf("Codex reviewed %s: %d finding(s) on that commit.", short(head), len(r.Findings))
+	return r, true
+}
+
+var (
+	greptileReceipt = regexp.MustCompile(`(?s)<!-- greptile_summary -->.*Last reviewed commit:.*?/commit/([0-9a-f]{7,40})`)
+	greptileBadge   = regexp.MustCompile(`<img alt="(P[0-3])"`)
+	coderabbitBadge = regexp.MustCompile(`(🔴 Critical|🟠 Major|🟡 Minor|🔵 Trivial|⚪ Info)`)
+	serviceTitle    = regexp.MustCompile(`(?m)^(?:<a href="#"><img[^>]*></a>\s*)?\*\*([^*\n]+)\*\*\s*$`)
+	serviceNoise    = regexp.MustCompile(`(?s)<details>.*|<!--.*?-->|<[^>]+>`)
+)
+
+// coderabbitSeverity maps CodeRabbit's severity levels to inspect's.
+var coderabbitSeverity = map[string]string{"🔴 Critical": "P0", "🟠 Major": "P1", "🟡 Minor": "P2", "🔵 Trivial": "P3", "⚪ Info": "P3"}
+
+// serviceNative reads CodeRabbit's or Greptile's own review of head, as
+// codexNative reads Codex's: a receipt proves the review ran on this exact
+// head (a review the service submitted on the head commit, or Greptile's
+// summary naming it as the last reviewed commit), and its inline comments on
+// that commit, each with its severity badge, are the findings (CodeRabbit:
+// Critical P0, Major P1, Minor P2, Trivial and Info P3; Greptile: its P0–P2
+// badge). Neither gives per-criterion verdicts. Disposition: fix with a P0 or
+// P1, else merge.
+func serviceNative(c Choice, posts []Post, head string, criteria []workitems.Criterion, changed []string) (AppReply, bool) {
+	var receipt *Post
+	for i, p := range posts {
+		if !strings.EqualFold(p.Login, c.Login) || p.Kind == "inline" {
+			continue
+		}
+		m := greptileReceipt.FindStringSubmatch(p.Body)
+		if (p.Kind == "review" && p.Commit == head) || (m != nil && sameHead(m[1], head)) {
+			if receipt == nil || p.Updated.After(receipt.Updated) {
+				receipt = &posts[i]
+			}
+		}
+	}
+	if receipt == nil {
+		return AppReply{}, false
+	}
+	r := AppReply{Head: head, Reviewed: changed, Login: receipt.Login, Native: true,
+		Source: fmt.Sprintf("%s %d by %s (%s's own review of %s)", receipt.Kind, receipt.ID, receipt.Login, c.App, short(head))}
+	r.Disposition, r.Findings = Merge, []Finding{}
+	verdicts := map[int]Verdict{}
+	for _, p := range posts {
+		if p.Kind != "inline" || !strings.EqualFold(p.Login, c.Login) || p.Commit != head {
+			continue
+		}
+		sev := ""
+		if m := greptileBadge.FindStringSubmatch(p.Body); m != nil {
+			sev = m[1]
+		} else if m := coderabbitBadge.FindStringSubmatch(p.Body); m != nil {
+			sev = coderabbitSeverity[m[1]]
+		}
+		if sev == "" {
+			continue // a reply in a thread, not a finding
+		}
+		category := "bug"
+		if strings.Contains(p.Body, "🔒 Security") {
+			category = "security"
+		}
+		title := c.App + " finding"
+		if m := serviceTitle.FindStringSubmatch(p.Body); m != nil {
+			title = strings.TrimSpace(m[1])
+		}
+		detail := strings.TrimSpace(serviceNoise.ReplaceAllString(p.Body, ""))
+		f := Finding{Severity: sev, Category: category, File: p.Path, Line: p.Line, Title: oneLine(title, 200), Detail: oneLine(detail, 1200), Confidence: 1}
+		if m := criterionHint.FindStringSubmatch(title + " " + detail); m != nil {
+			f.Criterion, _ = strconv.Atoi(m[1])
+			if sev == "P0" || sev == "P1" {
+				verdicts[f.Criterion] = Verdict{ID: f.Criterion, Verdict: "unmet", Evidence: c.App + ": " + oneLine(title, 200)}
+			}
+		}
+		if sev == "P0" || sev == "P1" {
+			r.Disposition = Fix
+		}
+		r.Findings = append(r.Findings, f)
+	}
+	r.Criteria = unjudged(criteria, c.App+"'s review judges no criterion and named no defect against this one; the pack's evidence is the proof")
+	for i, v := range r.Criteria {
+		if u, ok := verdicts[v.ID]; ok {
+			r.Criteria[i] = u
+		}
+	}
+	r.Summary = fmt.Sprintf("%s reviewed %s: %d finding(s) on that commit.", c.App, short(head), len(r.Findings))
 	return r, true
 }

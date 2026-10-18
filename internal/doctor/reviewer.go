@@ -24,7 +24,7 @@ func checkReviewerApps(ctx context.Context, p *Probe) Result {
 	}
 	cfg := p.Config.Config.Inspect
 	if cfg.Reviewer == inspect.ReviewerModel {
-		return Result{Status: Warn, Detail: `[inspect] reviewer = "model": the merge gate calls the review lane's model, which needs an AI key in CI; product repositories mention an installed agent app instead (reviewer = "auto")`}
+		return Result{Status: Warn, Detail: `[inspect] reviewer = "model": the merge gate calls the review lane's model, which needs an AI key in CI; product repositories name an installed agent app instead (reviewer = "codex", ...)`}
 	}
 	var found []inspect.Detected
 	if p.API != nil && p.Repo != "" {
@@ -54,13 +54,19 @@ func checkReviewerApps(ctx context.Context, p *Probe) Result {
 	c := inspect.ChooseReviewer(cfg.Reviewer, cfg.Apps, cfg.AppFamilies, inspect.Builder{}, p.Config.Config.Autonomy.Approver)
 	lines = append(lines, c.Notes...)
 	switch {
+	case cfg.Reviewer == "" || cfg.Reviewer == "auto":
+		return Result{Status: Fail, Detail: noReviewerChosen, Lines: lines}
 	case len(missing) > 0:
 		return Result{Status: Warn, Detail: fmt.Sprintf("reviewer apps detected but not configured: %s; add them to [inspect] apps (the gate reads config only)", strings.Join(missing, ", ")), Lines: lines}
 	case c.App == "":
 		return Result{Status: Warn, Detail: "no reviewer app configured: the merge gate falls back to a human review (install the Claude, Codex, or Cursor app on the org or account and add it to [inspect] apps)", Lines: lines}
 	}
-	return Result{Status: Pass, Detail: fmt.Sprintf("merge-gate reviewer: %s (%s); its review counts as different-family only for a builder of another family, and is labelled same-family otherwise", c.App, c.Family), Lines: lines}
+	return Result{Status: Pass, Detail: fmt.Sprintf("merge-gate reviewer: %s (%s); its review counts as different-family only for a builder of another family (a review service always does), and is labelled same-family otherwise", c.App, c.Family), Lines: lines}
 }
+
+// noReviewerChosen is doctor's failure, and its next step, when [inspect]
+// reviewer names no tool (founder, 2026-10-18: "auto cannot be an option").
+const noReviewerChosen = `no review tool chosen: the merge gate asks a person to review every PR; set [inspect] reviewer = "<tool>" (codex, coderabbit, greptile, claude, cursor, grok, or human) in .aayudha/config.toml, or run aayu install`
 
 func orNone(s string) string {
 	if s == "" {
@@ -106,14 +112,26 @@ func checkReviewRung(_ context.Context, p *Probe) Result {
 	}
 	lines := []string{builder}
 	switch cfg.Inspect.Reviewer {
+	case "", "auto":
+		return Result{Status: Fail, Detail: noReviewerChosen, Lines: lines}
 	case inspect.ReviewerHuman:
 		return Result{Status: Pass, Detail: `human  a person reviews every PR ([inspect] reviewer = "human"); it counts toward autonomy`, Lines: lines}
 	case inspect.ReviewerModel:
 		return reviewModelRung(cfg.Models, b, lines)
+	case inspect.ReviewerGrok:
+		pr := cfg.Inspect.PaidReviewer
+		f := verbs.FamilyOf(pr)
+		if pr == "" {
+			return Result{Status: Fail, Detail: `[inspect] reviewer = "grok" needs [inspect] paid_reviewer (grok-4.7) and the gateway or provider key; until then the installed apps, then a person, review`, Lines: lines}
+		}
+		if b.Rung(f) == inspect.RungA {
+			return Result{Status: Pass, Detail: fmt.Sprintf("B  different-family review, paid: %s (%s) when the merge gate holds the repository secret %s, within %.2f USD a PR; it counts toward autonomy", pr, f, secrets.EnvVar(string(f)), cfg.Budget.PerPRInspectMax), Lines: lines}
+		}
+		return Result{Status: Warn, Detail: fmt.Sprintf("[inspect] paid_reviewer %s (%s) cannot be shown to differ from the builder, so the gate never uses it; the installed apps, then a person, review", pr, f), Lines: lines}
 	}
 	c := inspect.ChooseReviewer(cfg.Inspect.Reviewer, cfg.Inspect.Apps, cfg.Inspect.AppFamilies, b, cfg.Autonomy.Approver)
 	// How to reach A: an app of a family the builder cannot be, added to
-	// [inspect] apps, and picked (auto picks it; a fixed reviewer does not).
+	// [inspect] apps, and chosen in [inspect] reviewer.
 	var up []string
 	for _, a := range inspect.Apps {
 		f := a.Family
@@ -125,11 +143,10 @@ func checkReviewRung(_ context.Context, p *Probe) Result {
 		if !listed {
 			add = "install it and add it to [inspect] apps, then "
 		}
-		// A fixed reviewer keeps picking itself, so the move names the switch.
+		// The chosen reviewer keeps reviewing, so the move names the switch.
 		pick := ""
-		fixed := cfg.Inspect.Reviewer != "" && cfg.Inspect.Reviewer != inspect.ReviewerAuto
-		if fixed && cfg.Inspect.Reviewer != a.Name {
-			pick = fmt.Sprintf(`, and set [inspect] reviewer = "auto" or %q`, a.Name)
+		if cfg.Inspect.Reviewer != a.Name {
+			pick = fmt.Sprintf(`, and set [inspect] reviewer = %q`, a.Name)
 		}
 		switch {
 		case a.Login == "" || b.Unknown():
@@ -138,8 +155,8 @@ func checkReviewRung(_ context.Context, p *Probe) Result {
 		case b.Rung(f) != inspect.RungA:
 		case !listed:
 			up = append(up, fmt.Sprintf("%s (%s): install it and add it to [inspect] apps%s", a.Name, f, pick))
-		case fixed:
-			up = append(up, fmt.Sprintf(`%s (%s): already listed; set [inspect] reviewer = "auto" or %q`, a.Name, f, a.Name))
+		case pick != "":
+			up = append(up, fmt.Sprintf(`%s (%s): already listed; set [inspect] reviewer = %q`, a.Name, f, a.Name))
 		}
 	}
 	switch {
@@ -155,9 +172,9 @@ func checkReviewRung(_ context.Context, p *Probe) Result {
 		f := verbs.FamilyOf(pr)
 		switch {
 		case pr == "":
-			lines = append(lines, "move up (paid, opt-in): set [inspect] paid_reviewer to a model of a family the builder cannot be, and add its provider key as the repository secret AAYU_SECRET_<FAMILY>; [budget] per_pr_inspect_max caps each PR")
+			lines = append(lines, `move up (paid, opt-in): set [inspect] reviewer = "grok" and [inspect] paid_reviewer to a model of a family the builder cannot be, and add its provider key as the repository secret AAYU_SECRET_<FAMILY>; [budget] per_pr_inspect_max caps each PR`)
 		case b.Rung(f) == inspect.RungA:
-			return Result{Status: Pass, Detail: fmt.Sprintf("B  different-family review, paid (opt-in): %s (%s) when the merge gate holds the repository secret %s, within %.2f USD a PR; it counts toward autonomy", pr, f, secrets.EnvVar(string(f)), cfg.Budget.PerPRInspectMax), Lines: lines}
+			lines = append(lines, fmt.Sprintf(`move up (paid, opt-in): set [inspect] reviewer = "grok" to have %s (%s) review; today it reviews only when no installed app can`, pr, f))
 		default:
 			lines = append(lines, fmt.Sprintf("[inspect] paid_reviewer %s (%s) cannot be shown to differ from the builder, so the gate never uses it; pick a model of another family", pr, f))
 		}
