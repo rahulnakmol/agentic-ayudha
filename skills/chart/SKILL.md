@@ -307,9 +307,9 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   in it is proposed, and let its Source column cite only the facts in each row.
 - At a startup, count your prose before you finish: at most 400 words outside tables and headings; aim for 300.
   Every paragraph and list item counts, the lines under the title included. Give each part a budget and count it
-  as you finish that part: the line under the title 25 words, `## Decision` 50, the prose of `## Metrics` (its
-  `Assumption:` lines and the finalisation rule) 60, `## Design` 80, `## Privacy and retention` 70, `## Checks` a
-  table only, `## Open questions` 70. A part over its budget says something twice or restates a table: a figure that a table
+  as you finish that part: the line under the title 25 words, `## Decision` 40, the prose of `## Metrics` (its
+  `Assumption:` lines and the finalisation rule) 50, `## Design` 60, `## Privacy and retention` 120, `## Checks` a
+  table only, `## Open questions` 60 (25 + 40 + 50 + 60 + 120 + 60 = 355). A part over its budget says something twice or restates a table: a figure that a table
   already shows (a count, a row total, a share) is not repeated in prose, an open question is one line of at most
   25 words (the question, why it matters in a clause, its default, its source), and a point the note already
   decides (when a week becomes final) is not asked again. When the check reports too many words,
@@ -318,8 +318,9 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   Tables do not count as prose, but they count as the page: a startup data sketch is the persona's half page, so
   it has two tables, the metrics (with their edge-case rules) and the checks (reconciliation with the skipped-row,
   duplicate, and null thresholds; completeness; a hand-counted fixture; the proposed Completion Goal criterion),
-  and one trigger in `## Design`. Its privacy part is the five points above, about one line each, with the retention
-  and deletion path stated once for the copies the design controls.
+  and one trigger in `## Design`. Its privacy part is the five points above in at most 20 words each, with the retention
+  and deletion path stated once for the copies the design controls; the claimed approval and the source's
+  unverified delete may share one `Unverified:` line.
   `## Decision` adds only what the line under the title does not say. More tables, rows, and thresholds are a
   scaleup's data design, not a better sketch; an evidence sketch's evaluation table keeps every case its set needs.
 - Each part must use its key words, or the check refuses it: `## Metrics` says "grain" and "window"; `## Design`
