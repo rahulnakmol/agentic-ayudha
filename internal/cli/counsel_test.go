@@ -42,6 +42,9 @@ func TestCounsel(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(filepath.Dir(opts.Dir), "claims.md"), []byte("outside"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.Symlink(filepath.Join("..", "claims.md"), filepath.Join(opts.Dir, "claims.md")); err != nil {
+		t.Fatal(err)
+	}
 	for _, d := range []string{"internal/cli", "notes"} {
 		if err := os.MkdirAll(filepath.Join(opts.Dir, d), 0o755); err != nil {
 			t.Fatal(err)
@@ -190,6 +193,7 @@ Is the zero case the behaviour you want?
 		"cited from a title":   {"(LAYERS.md)", "(#999)", "cites #999"},
 		"path with a suffix":   {"(LAYERS.md)", "(internal/report/old.go)", "cites internal/report/old.go,"},
 		"outside the checkout": {"(LAYERS.md)", "(../claims.md)", "cites ../claims.md,"},
+		"symlink out":          {"(LAYERS.md)", "(claims.md)", "cites claims.md,"},
 		"part of a path":       {"(LAYERS.md)", "(percent.go)", "cites percent.go,"},
 	} {
 		want := tt.want

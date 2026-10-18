@@ -210,8 +210,17 @@ func runCounsel(ctx context.Context, e *Env, in Values) error {
 		if root == "" || strings.HasPrefix(cite, "#") || filepath.IsAbs(rel) || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 			return false
 		}
-		_, err := os.Stat(filepath.Join(root, rel))
-		return err == nil
+		// A symlink may point out of the checkout: the resolved target must stay under the resolved root.
+		real, err := filepath.EvalSymlinks(filepath.Join(root, rel))
+		if err != nil {
+			return false
+		}
+		base, err := filepath.EvalSymlinks(root)
+		if err != nil {
+			return false
+		}
+		inside, err := filepath.Rel(base, real)
+		return err == nil && inside != ".." && !strings.HasPrefix(inside, ".."+string(filepath.Separator))
 	}
 	rep.Draft, rep.Findings = draft, counsel.Check(string(b), rep.Stage, pr, known)
 	if len(rep.Findings) == 0 && in.Bool("post") {
