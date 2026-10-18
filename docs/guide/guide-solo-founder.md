@@ -127,11 +127,11 @@ instead.
 
 `aayu seat remove <seat>` returns a seat to solo and hands its person's open stories back to the twin.
 
-> **Needs setup:** the switch to one CODEOWNER approval works on the `protected-paths-codeowner-review` ruleset, which
-> `aayu init` does not create. Without it, `seat add` reports `policy: n/a`. `ship` still refuses the solo-mode bypass
-> once a second person is paired and still needs their approving review, but GitHub itself does not block a merge
-> made outside aayu. To have GitHub require it, turn on "Require review from Code Owners" in your branch protection or
-> a ruleset.
+> **Honest status:** a repository adopted with `aayu init` has no `protected-paths-codeowner-review` ruleset and no
+> solo-mode gate, so with one human GitHub itself enforces no review on protected paths (`ship` still does), and
+> `seat add` reports `policy: n/a`. Once the second person's CODEOWNERS change has merged, the second `seat add`
+> creates the ruleset: one CODEOWNER approval on your dev branch, with no bypass. It needs a token with
+> Administration: write, and a private repository needs a GitHub plan with rulesets. `seat remove` deletes it again.
 
 ## What can go wrong
 

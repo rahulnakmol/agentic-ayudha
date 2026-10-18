@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -34,6 +35,12 @@ func seatFixture(t *testing.T) (dir, bare string, g *fake.GitHub, files map[stri
 		if err := os.WriteFile(filepath.Join(dir, dst), b, 0o644); err != nil {
 			t.Fatal(err)
 		}
+	}
+	// aayudha's own solo-mode gate, which posts the protected-paths check.
+	gate := filepath.Join(dir, ".github", "workflows", "protected-paths.yml")
+	_ = os.MkdirAll(filepath.Dir(gate), 0o755)
+	if err := os.WriteFile(gate, []byte("name: protected-paths\n"), 0o644); err != nil {
+		t.Fatal(err)
 	}
 	g = fake.New(t, "o/r", "User")
 	g.Viewer = "rahulnakmol"
@@ -170,6 +177,32 @@ func TestSeatAddRemove(t *testing.T) {
 	if log := git(t, bare, "show", "ledger:"+seats.LedgerLog); strings.Count(log, "\n") != 1 ||
 		!strings.Contains(log, `"action":"add"`) || !strings.Contains(log, `"action":"remove"`) || !strings.Contains(log, `"reassigned":[1]`) {
 		t.Errorf("ledger %s:\n%s", seats.LedgerLog, log)
+	}
+
+	// A repository adopted with aayu init has neither the solo-mode gate nor its
+	// ruleset. With one human, seat add says so; once the second human's
+	// CODEOWNERS change merged, it creates the ruleset in its two-human form;
+	// seat remove deletes it again, since its solo form would require a check
+	// nothing posts.
+	dir2, _, g2, _ := seatFixture(t)
+	_ = os.Remove(filepath.Join(dir2, ".github", "workflows", "protected-paths.yml"))
+	g2.Rulesets = nil
+	if code, res, errOut := seatRun(t, dir2, g2, "add", "ux-researcher-evolutionist", "--human", "alice"); code != 0 || res.Policy != seats.PolicyPending ||
+		res.Ruleset != "absent" || !strings.Contains(res.PolicyNote, "then rerun this command: it creates the "+seats.GateRuleset+" ruleset") || len(g2.Rulesets) != 0 {
+		t.Fatalf("add without the ruleset: exit %d %+v: %s", code, res, errOut)
+	}
+	g2.Files[".github/CODEOWNERS"] = readRepo(t, dir2, ".github/CODEOWNERS")
+	if code, res, errOut := seatRun(t, dir2, g2, "add", "ux-researcher-evolutionist", "--human", "alice"); code != 0 || res.Policy != seats.PolicyTwoHuman || res.Ruleset != "created" || len(g2.Rulesets) != 1 {
+		t.Fatalf("second add without the ruleset: exit %d %+v: %s", code, res, errOut)
+	}
+	created := g2.Rulesets[0]
+	cpr := created["rules"].([]any)[0].(map[string]any)["parameters"].(map[string]any)
+	if created["name"] != seats.GateRuleset || fmt.Sprint(created["conditions"]) != "map[ref_name:map[exclude:[] include:[refs/heads/dev]]]" ||
+		fmt.Sprint(cpr["required_approving_review_count"]) != "1" || cpr["require_code_owner_review"] != true || len(created["rules"].([]any)) != 1 || len(created["bypass_actors"].([]any)) != 0 {
+		t.Fatalf("created ruleset: %v", created)
+	}
+	if code, res, errOut := seatRun(t, dir2, g2, "remove", "ux-researcher-evolutionist"); code != 0 || res.Ruleset != "deleted" || len(g2.Rulesets) != 0 {
+		t.Fatalf("remove without the gate: exit %d %+v: %s", code, res, errOut)
 	}
 
 	// seat list shows the seats from config; agents may list but never change seats.
