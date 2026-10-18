@@ -241,7 +241,13 @@ func repeats(f Finding, e Earlier) bool {
 func earlier(fs []Finding, hashes map[string]string) []Earlier {
 	var out []Earlier
 	for _, f := range fs {
-		out = append(out, Earlier{ID: f.ID, Severity: f.Severity, Category: f.Category, File: f.File, Line: f.Line, Title: oneLine(f.Title, 200), Class: oneLine(f.Class, 200), Hash: hashes[f.File]})
+		e := Earlier{ID: f.ID, Severity: f.Severity, Category: f.Category, File: f.File, Line: f.Line, Title: oneLine(f.Title, 200), Class: oneLine(f.Class, 200), Hashes: map[string]string{}}
+		for _, in := range append([]Instance{{File: f.File}}, f.Instances...) {
+			if hashes[in.File] != "" {
+				e.Hashes[in.File] = hashes[in.File]
+			}
+		}
+		out = append(out, e)
 	}
 	return out
 }

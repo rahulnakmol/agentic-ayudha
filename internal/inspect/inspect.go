@@ -273,9 +273,10 @@ type Earlier struct {
 	Line     int    `json:"line,omitempty"`
 	Title    string `json:"title"`
 	Class    string `json:"class,omitempty"`
-	// Hash is the file's patch hash (FileHash) when the round kept it, a
-	// skipped file's included: a P0 or P1 stays open while it is unchanged.
-	Hash string `json:"hash,omitempty"`
+	// Hashes is the patch hash (FileHash) of its file and of each of its
+	// instances' files when the round kept it, skipped files included: a P0
+	// or P1 stays open while any of them is unchanged.
+	Hashes map[string]string `json:"hashes,omitempty"`
 }
 
 // Since is how many rounds ran after the person's reopen at t (all of them
@@ -515,7 +516,11 @@ func carryForward(fs []Finding, rounds []Round, head string, reopened time.Time,
 			continue // this head's round in this window: the new reply replaces it
 		}
 		for _, e := range rounds[i].Findings {
-			if e.Severity != "P0" && e.Severity != "P1" || e.Hash == "" || e.Hash != hashes[e.File] ||
+			unchanged := false
+			for p, h := range e.Hashes {
+				unchanged = unchanged || h == hashes[p]
+			}
+			if e.Severity != "P0" && e.Severity != "P1" || !unchanged ||
 				slices.ContainsFunc(fs, func(f Finding) bool { return f.Severity <= e.Severity && repeats(f, e) }) {
 				continue
 			}

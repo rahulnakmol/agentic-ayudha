@@ -819,3 +819,23 @@ func TestRunCarriesAcrossReopen(t *testing.T) {
 		t.Fatalf("back to H1's patch after a reopen: %s %+v", res.Disposition, res.Findings)
 	}
 }
+
+// Story #568: a class finding stays open while any instance's file is
+// unchanged, even when the head changes the file it was reported on.
+func TestJudgeCarriesClassInstances(t *testing.T) {
+	cls := Finding{Severity: "P1", Category: "bug", File: "internal/report/percent.go", Line: 8, Quote: "return float64(covered) / float64(total) * 100",
+		Title: "Percent divides by zero when total is zero", Detail: "d", Fix: "f", Confidence: 0.9, Class: "unguarded division",
+		Instances: []Instance{{File: "internal/report/percent.go", Line: 8}, {File: "LAYERS.md", Line: 1}}}
+	both := []string{"internal/report/percent.go", "LAYERS.md"}
+	in := testInput("")
+	in.Head = strings.Repeat("a", 40)
+	_, st, err := Runner{}.Judge(context.Background(), in, State{}, AppReply{Reply: Reply{Disposition: Fix, Summary: "s", Findings: []Finding{cls}}, Head: in.Head, Reviewed: both})
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.Head, in.Diff = strings.Repeat("b", 40), strings.Replace(in.Diff, "return 0", "return -1", 1) // percent.go changes, LAYERS.md does not
+	res, _, _ := Runner{}.Judge(context.Background(), in, st, AppReply{Reply: Reply{Disposition: Merge, Summary: "s", Findings: []Finding{}}, Head: in.Head, Reviewed: both})
+	if res.Disposition != Fix || len(res.Findings) != 1 || res.Findings[0].Repeat != 1 {
+		t.Fatalf("one instance's file fixed, the other unchanged: %s %+v", res.Disposition, res.Findings)
+	}
+}
