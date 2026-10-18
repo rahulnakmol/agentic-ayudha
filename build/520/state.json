@@ -3,5 +3,19 @@
   "branch": "story/520-host-hook-guard-misses-provider-clis-in",
   "started_at": "2026-10-18T02:04:36Z",
   "failed_attempts": 0,
-  "checkpoints": null
+  "checkpoints": [
+    {
+      "k": 1,
+      "n": 2,
+      "attempt": 1,
+      "commit": "946e85e5a0de390918d8e1f5a89c5b1ea1cc25fd",
+      "layers": [
+        "L02",
+        "L06"
+      ],
+      "verify": "hold",
+      "detail": "floors hold; not run here (tool not installed; the merge gate runs them): sast, secrets, deps",
+      "at": "2026-10-18T02:06:08Z"
+    }
+  ]
 }
