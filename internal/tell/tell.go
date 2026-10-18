@@ -240,10 +240,13 @@ func CheckDraft(md, repo, kind string, proven map[int]Feature, unproven []Featur
 	}
 	named := map[int]int{} // proven Feature -> first line naming it
 	raw := strings.Split(strings.ReplaceAll(md, "\r\n", "\n"), "\n")
+	quoted := false // the previous line is inside a top-level blockquote, a lazy continuation line included
 	for i, line := range proseLines(md) {
-		if i == 0 || strings.TrimSpace(raw[i-1]) == "" { // a marker counts only where it opens the blockquote
+		opens := quoteRE.MatchString(raw[i])
+		if opens && !quoted { // a marker counts only on the blockquote's first line
 			line = alertRE.ReplaceAllString(line, "")
 		}
+		quoted = opens || (quoted && strings.TrimSpace(raw[i]) != "")
 		text := linkURL.ReplaceAllString(line, " ")
 		for _, w := range word.FindAllString(text, -1) {
 			if sup[strings.ToLower(w)] {
@@ -284,10 +287,15 @@ func CheckDraft(md, repo, kind string, proven map[int]Feature, unproven []Featur
 var sentenceRE = regexp.MustCompile(`[.!?;:]\s+`)
 
 // alertRE is a GitHub alert marker (`> [!NOTE]`), alone on its line. GitHub
-// renders it as syntax only on the first line of a top-level blockquote, so
-// CheckDraft skips it only after a blank line or at the start; a nested,
-// indented, or later marker renders as text and its "!" is still refused.
-var alertRE = regexp.MustCompile(`^ {0,3}>\s*\[!(?i:note|tip|important|warning|caution)\]\s*$`)
+// renders it as syntax only on the first line of a top-level blockquote (one
+// may follow a paragraph directly), so CheckDraft skips it only there; a
+// nested, indented, or later marker renders as text and its "!" is refused.
+// An indented one may sit in a list item, where GitHub renders no alert, so
+// only a marker at the start of its line counts.
+var alertRE = regexp.MustCompile(`^>\s*\[!(?i:note|tip|important|warning|caution)\]\s*$`)
+
+// quoteRE is a line of a top-level blockquote.
+var quoteRE = regexp.MustCompile(`^ {0,3}>`)
 
 // stop words carry no Feature name.
 var stop = map[string]bool{"the": true, "and": true, "for": true, "with": true, "from": true, "your": true, "our": true,

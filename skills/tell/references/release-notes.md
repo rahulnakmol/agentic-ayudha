@@ -155,16 +155,19 @@ It has no reader block: a changelog reader scans by version, not by role.
 
 ## Check before you hand over
 
-Run `aayu tell release --from notes.md --tag <tag>` until it passes. Then read the draft once more as a judge would,
+Run `aayu tell release --from notes.md --tag <tag>` until it passes; for a changelog, run
+`aayu tell changelog --from changelog.md --tag <tag>`, so its links and its ledger path carry the right kind. Then read the draft once more as a judge would,
 because the binary does not check these:
 
 1. Every claim, including the title, the summary, each step, each table row, each code block, and each diagram label,
    restates a criterion, an inspect judgement, a Feature field, or a Result. Nothing from an earlier release is new
    here.
-2. In the first ten lines, the reader knows what they get, sees each step or break a source names, and, when readers
-   need different sections, knows which ones to read.
-3. Every step comes before the changes, with its check and who can do it. Every break is in the table (in a
-   changelog, a "Breaking:" bullet), with what replaces it.
+2. On the first screen (the title, the summary, and the reader block), the reader knows what they get, sees that a
+   step or a break follows when a source names one, and, when readers need different sections, knows which ones to
+   read.
+3. Every step comes before the changes, with its check, and with who can do it where a source names who (else your
+   reply tells the human it is missing). Every break is in the table (in a changelog, a "Breaking:" bullet), with
+   what replaces it.
 4. Each Feature section has what changed, then who it helps, what it means on your own and in a team, how to
    start, and a limit, in the skeleton's order, each only where a source gives it.
 5. The sections are in the skeleton's order, and none is empty.
