@@ -1163,6 +1163,7 @@ func Registrations(root, home string, lockHosts []string) []Registration {
 			var raw map[string]json.RawMessage
 			var servers map[string]struct {
 				Command string            `json:"command"`
+				Args    []string          `json:"args"`
 				Env     map[string]string `json:"env"`
 				Tools   []string          `json:"tools"`
 			}
@@ -1174,7 +1175,12 @@ func Registrations(root, home string, lockHosts []string) []Registration {
 				}
 				srv := servers[ServerName]
 				r.Command = srv.Command
-				if h == string(verbs.HostCopilot) && srv.Command != "" && r.Err == nil {
+				switch {
+				case srv.Command == "" || r.Err != nil:
+				case !slices.Equal(srv.Args, []string{"mcp"}):
+					// Other arguments start the CLI, not the server.
+					r.Err = fmt.Errorf("the %q server runs %s with args %q, not [\"mcp\"]; run `aayu install --host %s --apply`", ServerName, srv.Command, srv.Args, h)
+				case h == string(verbs.HostCopilot):
 					r.Err = copilotServerGaps(srv.Env, srv.Tools)
 				}
 			}

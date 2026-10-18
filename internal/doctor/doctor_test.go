@@ -648,12 +648,19 @@ func TestMCPDoesNotRunARepositoryCommand(t *testing.T) {
 
 // Copilot starts the aayudha server with only PATH and the entry's env, and
 // offers only the tools it lists, so an entry with the right command but not
-// install's env and tools fails the mcp row.
+// install's env and tools fails the mcp row; so does any host's entry whose
+// args do not start the server.
 func TestMCPChecksCopilotEntry(t *testing.T) {
 	p := healthy(t)
 	p.Root = repoWith(t, map[string]string{".aayudha/lock.toml": "version = 1\nskills_version = \"0.0.0\"\nhosts = [\"copilot\"]\n[skills]\n",
 		".mcp.json": `{"mcpServers": {"aayudha": {"command": "/usr/bin/aayu", "args": ["mcp"]}}}`})
 	if r := checkMCP(context.Background(), p); r.Status != Fail || !strings.Contains(strings.Join(r.Lines, " "), "COPILOT_HOME") {
 		t.Errorf("stale Copilot entry: %s %s %v", r.Status, r.Detail, r.Lines)
+	}
+	// Any host: without args ["mcp"] the host starts the CLI, not the server.
+	p = healthy(t)
+	_ = os.WriteFile(filepath.Join(p.Root, ".mcp.json"), []byte(`{"mcpServers": {"aayudha": {"command": "/usr/bin/aayu", "args": ["status"]}}}`), 0o644)
+	if r := checkMCP(context.Background(), p); r.Status != Fail {
+		t.Errorf("an entry that does not start the server: %s %s", r.Status, r.Detail)
 	}
 }
