@@ -719,6 +719,7 @@ var Verbs = []Command{
 		Inputs: []Input{
 			pos("release", TypeIssue, "Release issue."),
 			enumIn("to", true, false, "Branch to promote to.", "rolling", "main"),
+			flag("at", TypeString, "With --to rolling: promote this dev commit instead of dev's newest, such as the newest one with tier-2 eval results for every gating group."),
 		},
 		Outputs:  []string{"tag", "released-stories", "release-notes"},
 		Gates:    []GateID{GateHumanIdentity, GateStableRequest, GateHalt},

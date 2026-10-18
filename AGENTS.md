@@ -79,7 +79,10 @@ are never skipped. The full procedure, with commands, is in
 [CONTRIBUTING.md](CONTRIBUTING.md#promotion-agent-run-no-human-approval). In short:
 
 1. Build the candidate: a `promote/…` branch holding the exact non-fast-forward merge commit that will land
-   (`Rolling snapshot: <timestamp>` or `Release: vX.Y.Z`, signed off).
+   (`Rolling snapshot: <timestamp>` or `Release: vX.Y.Z`, signed off). For `rolling`, merge the newest `dev`
+   commit that already has `evals.yml` results for every gating group; if dev's newest has none, promote that older
+   commit or dispatch evals once on dev and wait. `aayu release <n> --to rolling` checks this, never dispatches,
+   and takes `--at <sha>` for the older commit.
 2. Gate it: `gh workflow run ci.yml --ref <candidate> -f gate=rolling` (unit, integration, benchmarks,
    production validation, and `evals-gate`, which needs `evals.yml` results for the promoted commit) or
    `-f gate=stable` (all of that plus extended integration, security scans, and cross-OS smoke tests). Wait with

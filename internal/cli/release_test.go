@@ -26,17 +26,18 @@ type ladderFixture struct {
 	opts       Options
 	dir, bare  string
 	goal       int
-	other      int  // the story under the unproven Feature, status:ready like a WP story merged by hand
-	pending    int  // a story that never merged
-	release    int  // includes #2 and #other
-	wide       int  // includes Feature #1, whose other stories never merged
-	unready    int  // no Version: fails Ready
-	snapshot   int  // Version is a snapshot, not vX.Y.Z
-	again      int  // a second Release of v0.1.0
-	gateFails  int  // ci.yml attempts that fail
-	tagRed     bool // release.yml stays red after its re-run
-	wrongSHA   bool // the dispatched gate runs on another commit
-	evalsRed   bool // evals.yml fails
+	other      int      // the story under the unproven Feature, status:ready like a WP story merged by hand
+	pending    int      // a story that never merged
+	release    int      // includes #2 and #other
+	wide       int      // includes Feature #1, whose other stories never merged
+	unready    int      // no Version: fails Ready
+	snapshot   int      // Version is a snapshot, not vX.Y.Z
+	again      int      // a second Release of v0.1.0
+	gateFails  int      // ci.yml attempts that fail
+	tagRed     bool     // release.yml stays red after its re-run
+	wrongSHA   bool     // the dispatched gate runs on another commit
+	noEvals    bool     // a new dev commit gets no evals.yml run
+	groups     []string // the eval-results artifacts each evals.yml run uploads
 	dispatched []string
 }
 
@@ -80,9 +81,6 @@ func newLadderFixture(t *testing.T) *ladderFixture {
 			sha = strings.Repeat("d", 40)
 		}
 		run := fake.WorkflowRun{HeadSHA: sha, HeadBranch: ref, Status: "completed", Conclusion: "success", Attempt: 1}
-		if wf == "evals.yml" && f.evalsRed {
-			run.Conclusion = "failure"
-		}
 		if wf == "ci.yml" && f.gateFails > 0 {
 			f.gateFails--
 			run.Conclusion = "failure"
@@ -133,6 +131,14 @@ func (f *ladderFixture) commit(t *testing.T, msg string, pr int, body, head stri
 		f.g.Static = map[string]any{}
 	}
 	f.g.Static["/repos/o/r/commits/"+sha+"/pulls"] = pulls
+	if !f.noEvals { // its push run of evals.yml, with a results artifact per group
+		id := int64(8000 + len(f.g.Runs))
+		f.g.Runs = append(f.g.Runs, fake.WorkflowRun{ID: id, Path: ".github/workflows/evals.yml", HeadSHA: sha, HeadBranch: "dev", Event: "push",
+			Status: "completed", Conclusion: "success", Attempt: 1, HTMLURL: fmt.Sprintf("https://github.com/o/r/actions/runs/%d", id)})
+		for i, g := range f.groups {
+			f.g.Artifacts[id] = append(f.g.Artifacts[id], fake.ArtifactZip{ID: id*10 + int64(i), Name: "eval-results-" + sha + "-" + g})
+		}
+	}
 	f.g.Mu.Unlock()
 	return sha
 }
@@ -271,7 +277,7 @@ func TestReleaseLadder(t *testing.T) {
 	if out := git(t, f.bare, "branch", "--list", "promote/*"); out != "" {
 		t.Fatalf("candidate branch left on the remote: %s", out)
 	}
-	if fmt.Sprint(f.dispatched) != "[evals.yml@dev map[] ci.yml@promote/rolling map[gate:rolling]]" || p.Gate.Attempts != 2 || p.Gate.Conclusion != "success" ||
+	if fmt.Sprint(f.dispatched) != "[ci.yml@promote/rolling map[gate:rolling]]" || p.Gate.Attempts != 2 || p.Gate.Conclusion != "success" ||
 		fmt.Sprint(p.Artifacts) != "[{binaries  0}]" {
 		t.Fatalf("dispatches %v, gate %+v, artifacts %+v", f.dispatched, p.Gate, p.Artifacts)
 	}
@@ -462,15 +468,14 @@ func TestReleaseFailsClosed(t *testing.T) {
 		landed bool
 		after  int // successes before the failure (the same request made before landing)
 	}{
-		{"GET /repos/o/r/issues/{release}", false, 0},       // the Release
-		{"GET /repos/o/r/issues/2", false, 0},               // a listed story
-		{"GET /repos/o/r/commits/{commit}/pulls", false, 0}, // what the range ships
-		{"GET /repos/o/r/actions/workflows", false, 0},      // which workflows exist
-		{"POST /repos/o/r/actions/workflows/evals.yml/dispatches", false, 0},
-		{"GET /repos/o/r/actions/runs/901", false, 0}, // waiting for the evals
+		{"GET /repos/o/r/issues/{release}", false, 0},                 // the Release
+		{"GET /repos/o/r/issues/2", false, 0},                         // a listed story
+		{"GET /repos/o/r/commits/{commit}/pulls", false, 0},           // what the range ships
+		{"GET /repos/o/r/actions/workflows", false, 0},                // which workflows exist
+		{"GET /repos/o/r/actions/workflows/evals.yml/runs", false, 0}, // the source commit's evals
 		{"POST /repos/o/r/actions/workflows/ci.yml/dispatches", false, 0},
-		{"GET /repos/o/r/actions/runs/902", false, 0},
-		{"POST /repos/o/r/actions/runs/902/rerun-failed-jobs", false, 0}, // re-running a failed gate        // waiting for the gate
+		{"GET /repos/o/r/actions/runs/901", false, 0},                    // waiting for the gate
+		{"POST /repos/o/r/actions/runs/901/rerun-failed-jobs", false, 0}, // re-running a failed gate
 		{"POST /repos/o/r/issues/2/labels", true, 0},                     // stamping
 		{"GET /repos/o/r/issues", false, 0},                              // the Features, for the notes
 		{"GET /repos/o/r/issues/2/parent", false, 0},                     // a story's Feature, for the notes
@@ -484,7 +489,7 @@ func TestReleaseFailsClosed(t *testing.T) {
 		{"GET /repos/o/r/issues/2/parent", true, 1},                      // the measure schedule walks up
 		{"GET /repos/o/r/issues/1/parent", true, 1},                      // to the Goal
 		{"GET /repos/o/r/issues/1/sub_issues", false, 0},                 // the proven Features, for the notes
-		{"GET /repos/o/r/actions/runs/902/artifacts", false, 0},
+		{"GET /repos/o/r/actions/runs/901/artifacts", false, 0},
 	} {
 		f := newLadderFixture(t)
 		rolling0 := git(t, f.bare, "rev-parse", "refs/heads/rolling")
@@ -577,17 +582,9 @@ func TestReleaseRefusesBeforeLanding(t *testing.T) {
 	}
 	_ = os.Remove(filepath.Join(f.dir, "design", "brand.yaml"))
 
-	// Red evals stop the promotion before the gate.
-	f.evalsRed = true
-	if code, _, errOut := f.run(t, at, f.env, rel, "--to", "rolling", "--yes"); code != ExitBlocked || !strings.Contains(errOut, "evals.yml ended failure") ||
-		strings.Contains(fmt.Sprint(f.dispatched), "ci.yml") {
-		t.Fatalf("red evals: %d %s %v", code, errOut, f.dispatched)
-	}
-	f.evalsRed = false
-
 	// The gate must have run on the candidate itself.
 	f.wrongSHA = true
-	if code, _, errOut := f.run(t, at, f.env, rel, "--to", "rolling", "--yes"); code != ExitExternal || !strings.Contains(errOut, "evals.yml run 90") || !strings.Contains(errOut, "is on ddddddd") {
+	if code, _, errOut := f.run(t, at, f.env, rel, "--to", "rolling", "--yes"); code != ExitExternal || !strings.Contains(errOut, "ci.yml run 901") || !strings.Contains(errOut, "is on ddddddd") {
 		t.Fatalf("a run on another commit: %d %s", code, errOut)
 	}
 	if git(t, f.bare, "rev-parse", "refs/heads/rolling") != rolling0 || git(t, f.bare, "tag", "--list") != "" {
@@ -745,5 +742,74 @@ blast_radius = "service"
 	f.g.Mu.Unlock()
 	if code, errOut := dry(); code != 0 {
 		t.Fatalf("fresh budget and a tried rollback: %d %s", code, errOut)
+	}
+}
+
+// A rolling promotion merges a dev commit with tier-2 results for every gating group (an eval-results artifact per
+// group on a completed evals.yml run of that commit, as the rolling gate's evals-gate needs) and never dispatches
+// evals.yml. When dev's newest commit has none, release names the newest one that has them and both ways on, and
+// --at promotes that one.
+func TestReleasePicksAnEvaluatedCommit(t *testing.T) {
+	f := newLadderFixture(t)
+	day := time.Date(2026, 10, 12, 9, 41, 0, 0, time.UTC)
+	rel := strconv.Itoa(f.release)
+	_ = os.MkdirAll(filepath.Join(f.dir, "evals"), 0o755)
+	_ = os.WriteFile(filepath.Join(f.dir, "evals", "eval.toml"), []byte("[[groups]]\nname = \"skills\"\n\n[[groups]]\nname = \"survey\"\n\n[[groups]]\nname = \"brief-plain\"\ngate = \"advisory\"\n"), 0o644)
+	git(t, f.dir, "add", "evals")
+	f.groups = []string{"skills"} // survey's results are missing: not every gating group
+	partial := f.commit(t, "chore: eval groups", 0, "", "")
+	f.groups = []string{"skills", "survey"} // the advisory group's are not needed
+	f.g.Mu.Lock()
+	for i := 0; i < 120; i++ { // a busy week of runs ahead of it: the commit's own run is not on dev's first page
+		f.g.Runs = append(f.g.Runs, fake.WorkflowRun{ID: int64(9000 + i), Path: ".github/workflows/evals.yml", HeadSHA: fmt.Sprintf("%040x", i), HeadBranch: "dev", Event: "push", Status: "completed", Conclusion: "success"})
+	}
+	f.g.Mu.Unlock()
+	older := f.commit(t, "feat: evaluated (#34)", 34, "Refs #2", "story/2-evaluated")
+	buried := f.commit(t, "chore: re-dispatched", 0, "", "")
+	f.g.Mu.Lock()
+	for i := 0; i < 20; i++ { // its results are on a run older than its newest 20, which is all the gate looks at
+		f.g.Runs = append(f.g.Runs, fake.WorkflowRun{ID: int64(9500 + i), Path: ".github/workflows/evals.yml", HeadSHA: buried, HeadBranch: "dev", Event: "workflow_dispatch", Status: "completed", Conclusion: "cancelled"})
+	}
+	f.g.Mu.Unlock()
+	f.noEvals = true
+	// The newest commit adds a gating group; the older commit is judged by its own groups, as the gate would judge it.
+	_ = os.WriteFile(filepath.Join(f.dir, "evals", "eval.toml"), []byte("[[groups]]\nname = \"skills\"\n\n[[groups]]\nname = \"survey\"\n\n[[groups]]\nname = \"ux\"\n"), 0o644)
+	git(t, f.dir, "add", "evals")
+	newest := f.commit(t, "feat: not evaluated yet (#35)", 35, "Refs #2", "story/2-newest")
+
+	for _, mode := range []string{"--dry-run", "--yes"} { // a dry run refuses as the promotion would
+		code, _, errOut := f.run(t, day, f.env, rel, "--to", "rolling", mode)
+		for _, want := range []string{
+			"dev's newest commit " + newest[:7] + " has no completed evals.yml run with results for every gating group (missing: no completed run)",
+			"Either promote " + older[:7] + ", the newest dev commit that has them",
+			"`aayu release " + rel + " --to rolling --at " + older[:7] + "`",
+			"or dispatch once on dev's newest commit: `gh workflow run evals.yml --ref dev`",
+		} {
+			if code != ExitBlocked || !strings.Contains(errOut, want) {
+				t.Errorf("%s, newest commit unevaluated: exit %d, want %q in:\n%s", mode, code, want, errOut)
+			}
+		}
+	}
+	if len(f.dispatched) != 0 || git(t, f.bare, "branch", "--list", "promote/*") != "" {
+		t.Fatalf("release dispatched %v or pushed a candidate", f.dispatched)
+	}
+	if code, _, errOut := f.run(t, day, f.env, rel, "--to", "rolling", "--yes", "--at", partial); code != ExitBlocked || !strings.Contains(errOut, "(missing: survey)") {
+		t.Fatalf("--at a commit without every gating group's results: %d %s", code, errOut)
+	}
+
+	// dev gains SLOs after the chosen commit; with no error budget recorded they would block, but the release gates
+	// read the commit being promoted, which has none.
+	_ = os.MkdirAll(filepath.Join(f.dir, "ops"), 0o755)
+	_ = os.WriteFile(filepath.Join(f.dir, "ops", "slos.toml"), []byte("version = 1\n[[slo]]\nname = \"ask-availability\"\nservice = \"app\"\njourney = \"Ask a question\"\nsli = \"availability\"\nobjective = 99.5\nwindow = \"28d\"\n"), 0o644)
+	git(t, f.dir, "add", "ops")
+	f.commit(t, "feat(ops): SLOs", 0, "", "")
+
+	code, p, errOut := f.run(t, day, f.env, rel, "--to", "rolling", "--yes", "--at", older[:7])
+	tip := git(t, f.bare, "rev-parse", "refs/heads/rolling")
+	if code != 0 || p.SourceSHA != older || p.Evals == nil || !strings.HasPrefix(p.Evals.URL, "https://github.com/o/r/actions/runs/8") || git(t, f.bare, "rev-parse", tip+"^2") != older {
+		t.Fatalf("--at %s: %d %+v %s", older[:7], code, p, errOut)
+	}
+	if fmt.Sprint(f.dispatched) != "[ci.yml@promote/rolling map[gate:rolling]]" {
+		t.Fatalf("dispatches %v: only the gate", f.dispatched)
 	}
 }

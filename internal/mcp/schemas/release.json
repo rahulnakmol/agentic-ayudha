@@ -4,6 +4,11 @@
   "additionalProperties": false,
   "description": "Promote a Release along dev, rolling, main; stamp included stories released and trigger measurement.",
   "properties": {
+    "at": {
+      "description": "With --to rolling: promote this dev commit instead of dev's newest, such as the newest one with tier-2 eval results for every gating group.",
+      "type": "string",
+      "x-aayu-type": "string"
+    },
     "release": {
       "description": "Release issue.",
       "pattern": "^(#?[1-9][0-9]*|https://github\\.com/[^/]+/[^/]+/issues/[1-9][0-9]*)$",

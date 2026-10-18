@@ -5,6 +5,7 @@
 package fake
 
 import (
+	"cmp"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -693,7 +694,12 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 				out = append(out, run)
 			}
 		}
-		reply(200, map[string]any{"total_count": len(out), "workflow_runs": out})
+		slices.SortStableFunc(out, func(a, b WorkflowRun) int { return cmp.Compare(b.ID, a.ID) }) // newest first, as GitHub lists them
+		total := len(out)
+		if per := atoi(q.Get("per_page")); per > 0 && len(out) > per { // one page, as GitHub serves it
+			out = out[:per]
+		}
+		reply(200, map[string]any{"total_count": total, "workflow_runs": out})
 	case m == "GET" && p == repo+"/actions/workflows":
 		out := []map[string]any{}
 		for _, f := range g.Workflows {

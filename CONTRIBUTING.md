@@ -79,14 +79,25 @@ for `measure`. `--dry-run` shows what would ship. The commands below are the sam
 
 ### `dev` → `rolling`
 
+The source is the newest `dev` commit that already has tier-2 results for every gating group: an
+`eval-results-<sha>-<group>` artifact on a completed `evals.yml` run of that commit, for each group
+`go run ./internal/evals/cmd/eval -groups -gating` prints. That is what the gate's `evals-gate` downloads. Pushes to
+`dev` and the nightly run share one concurrency group, so in a busy merge window the intermediate commits get no run
+and only the newest does. If dev's newest commit has no results yet, either promote the newest older commit that has
+them, or dispatch once on the newest (`gh workflow run evals.yml --ref dev`), wait for it, and check again. Never
+dispatch again to get a better result. `aayu release <n> --to rolling` does this check, never dispatches, and names
+both choices; `--at <sha>` promotes the older commit.
+
 ```sh
 git fetch origin
+src="$(git rev-parse origin/dev)"                 # or the newest older dev commit with results
+for id in $(gh run list --workflow evals.yml --commit "$src" --status completed --json databaseId --jq '.[].databaseId'); do
+  gh api "repos/{owner}/{repo}/actions/runs/$id/artifacts" --jq '.artifacts[].name'
+done                                              # every gating group's eval-results-$src-<group> must be listed
 ts="$(date -u +%Y%m%dT%H%MZ)"; cand="promote/rolling-$ts"; wt="../wt-promote-rolling-$ts"
 git worktree add "$wt" -b "$cand" origin/rolling && cd "$wt"
-git merge --no-ff --signoff origin/dev -m "Rolling snapshot: $ts"
+git merge --no-ff --signoff "$src" -m "Rolling snapshot: $ts"
 git push origin "$cand"
-gh workflow run evals.yml --ref dev && sleep 15          # tier-2 skill evals of the dev tip, which evals-gate reads
-gh run watch "$(gh run list --workflow evals.yml --branch dev --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId')"
 gh workflow run ci.yml --ref "$cand" -f gate=rolling && sleep 15
 gh run watch "$(gh run list --workflow ci.yml --branch "$cand" --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId')" --exit-status
 git push origin HEAD:rolling                      # fast-forward to the gated commit
