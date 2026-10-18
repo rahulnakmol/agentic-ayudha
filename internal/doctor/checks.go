@@ -684,6 +684,8 @@ func checkCopilot(ctx context.Context, p *Probe) Result {
 	if path, err := p.LookPath("copilot"); err == nil {
 		if out, err := p.Exec(ctx, "", path, "--version"); err == nil {
 			lines = append(lines, strings.TrimSpace(strings.SplitN(out, "\n", 2)[0]))
+		} else {
+			steps = append(steps, fmt.Sprintf("%s --version fails (%v): reinstall Copilot CLI or fix PATH", path, err))
 		}
 		if !hosts.CopilotTrusted(p.Root, hosts.CopilotHome(home, p.Getenv)) {
 			steps = append(steps, "trust this folder in Copilot CLI: start `copilot` here once and answer yes; until then it loads neither the aayudha MCP server nor the hooks")
