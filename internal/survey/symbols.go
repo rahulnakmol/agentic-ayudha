@@ -38,7 +38,9 @@ var (
 	// ctorUse is a C++ construction that names its type without a call: a
 	// local or static object (Engine e; Engine e{…}; Engine e(…)), new Engine
 	// with no parentheses, or make_unique<Engine>. Each calls Engine::Engine.
-	ctorUse   = regexp.MustCompile(`(?:(?:^|[;{}])\s*(?:(?:static|const|thread_local)\s+)*([A-Za-z_]\w*(?:::[A-Za-z_]\w*)*)(?:\s*<[^;{}()]*>)?\s+[A-Za-z_]\w*\s*[;({=\[]|\bnew\s+([A-Za-z_]\w*(?:::[A-Za-z_]\w*)*)|\bmake_(?:unique|shared)\s*<\s*([A-Za-z_]\w*(?:::[A-Za-z_]\w*)*))`)
+	// Engine e(); declares a function (the most vexing parse) and constructs
+	// nothing.
+	ctorUse   = regexp.MustCompile(`(?:(?:^|[;{}])\s*(?:(?:static|const|thread_local)\s+)*([A-Za-z_]\w*(?:::[A-Za-z_]\w*)*)(?:\s*<[^;{}()]*>)?\s+[A-Za-z_]\w*\s*(?:[;{=\[]|\(\s*[^)\s])|\bnew\s+([A-Za-z_]\w*(?:::[A-Za-z_]\w*)*)|\bmake_(?:unique|shared)\s*<\s*([A-Za-z_]\w*(?:::[A-Za-z_]\w*)*))`)
 	cKeywords = map[string]bool{"if": true, "for": true, "while": true, "switch": true, "catch": true, "return": true, "sizeof": true, "foreach": true,
 		"elseif": true, "else": true, "do": true, "try": true, "function": true, "fn": true, "func": true, "fun": true, "new": true, "delete": true, "throw": true,
 		"typeof": true, "instanceof": true, "using": true, "lock": true, "synchronized": true, "defined": true, "decltype": true, "alignof": true, "static_assert": true,
