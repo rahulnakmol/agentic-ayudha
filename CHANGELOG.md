@@ -72,7 +72,7 @@ for this release.
 - With `[autonomy] proof` on, `aayu ship` merges a pull request into dev with no person's pass when every required check passes (ship counts a skipped or neutral check as passing) except the CODEOWNERS check `protected-paths`, which the ship record lists instead, the proof pack verifies with its floors holding, inspect is at merge with a review rung listed in `[autonomy] proof_rungs`, and the pull request touches nothing in the narrow set (#617, #621).
 - The narrow set is the `always_person` paths, a change to an `always_person_sections` table of an `always_person_config` file (by default 20 tables, from `[identity]` and `[autonomy]` to `[budget]`, listed in [CONSTRAINTS.md](CONSTRAINTS.md)), any workflow that holds a credential, any action manifest (`action.yml` or `action.yaml`), and any changed symbolic link; a pull request in it waits for a person (#617).
 - Merging on proof is off by default, and `proof_rungs` defaults to rungs A and B (#617).
-- `aayu ship` never merges while a required check other than `protected-paths` is red, whoever passes it (#617).
+- `aayu ship` refuses to merge while a required check other than `protected-paths` is red, whoever passes it; it reads the checks once, so a check that turns red later can still pass under a bypass identity (#617, #632).
 - `aayu init --gates` installs a security workflow that scans every push to dev, rolling, and main, and each tip nightly, with verify's security floors (#500).
 - verify takes an advisory UI review of its own screenshots (#479).
 - A floor waiver counts only when the floor-waiver authority accepted it (#624).
