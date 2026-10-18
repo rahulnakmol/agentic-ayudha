@@ -386,11 +386,11 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 	}
 	rep.Hold = (&proof.Pack{Checks: rep.Checks}).FloorsHold()
 	if res.Story > 0 && !rep.Hold {
-		ws, ignored, err := e.waivers(ctx, repo, res.Story)
+		ws, err := e.waivers(ctx, repo, res.Story, &res.IgnoredWaivers)
 		if err != nil {
 			return Wrap(ExitExternal, err)
 		}
-		res.Waivers, res.IgnoredWaivers = verify.ApplyWaivers(rep.Checks, res.Story, ws), ignored
+		res.Waivers = verify.ApplyWaivers(rep.Checks, res.Story, ws)
 		rep.Hold = (&proof.Pack{Checks: rep.Checks}).FloorsHold()
 	}
 	ev, problems, err := verify.TestEvidence(r)
@@ -563,27 +563,28 @@ func (e *Env) gateProblems(ctx context.Context, repo string, res VerifyResult, s
 // (WP5.6), so they are closed as completed, by someone who is not a bot, with
 // "waive, accepted by @<login>" in their Decision section. A filed but
 // unaccepted waiver waives nothing (rule 7), and neither does one the
-// floor-waiver authority did not accept (decide.WaiverAcceptedBy): ignored
-// names each of those (Bug #599).
-func (e *Env) waivers(ctx context.Context, repo string, story int) (out []verify.Waiver, ignored []string, err error) {
+// floor-waiver authority did not accept (decide.WaiverAcceptedBy): it
+// adds each of those to ignored when it is not nil (Bug #599).
+func (e *Env) waivers(ctx context.Context, repo string, story int, ignored *[]string) ([]verify.Waiver, error) {
 	c, _, err := e.readClient(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	l, err := e.Config()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	owner, name, _ := github.SplitRepo(repo)
 	subs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.SubIssue, *gh.Response, error) {
 		return c.REST.SubIssue.ListByIssue(ctx, owner, name, int64(story), &o)
 	})
 	if err != nil || len(subs) == 0 {
-		return nil, nil, err
+		return nil, err
 	}
+	var out []verify.Waiver
 	parent, _, err := c.REST.Issues.Get(ctx, owner, name, story)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	parentType, _ := workitems.TypeOf(parent.GetType().GetName(), github.IssueLabels(parent))
 	for _, s := range subs {
@@ -597,19 +598,19 @@ func (e *Env) waivers(ctx context.Context, repo string, story int) (out []verify
 		}
 		full, _, err := c.REST.Issues.Get(ctx, owner, name, is.GetNumber())
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
-		by := full.GetClosedBy()
-		if by == nil || identity.IsBot(identity.Account{Login: by.GetLogin(), Type: by.GetType()}, l.Config.Identity.BotLogins) {
+		if by := full.GetClosedBy(); by == nil || identity.IsBot(identity.Account{Login: by.GetLogin(), Type: by.GetType()}, l.Config.Identity.BotLogins) {
 			continue
-		}
-		if err := decide.WaiverAcceptedBy(&l.Config, parentType, by.GetLogin(), v["Decision"]); err != nil {
-			ignored = append(ignored, fmt.Sprintf("#%d: %v", is.GetNumber(), err))
+		} else if err := decide.WaiverAcceptedBy(&l.Config, parentType, by.GetLogin(), v["Decision"]); err != nil {
+			if ignored != nil {
+				*ignored = append(*ignored, fmt.Sprintf("#%d: %v", is.GetNumber(), err))
+			}
 			continue
 		}
 		out = append(out, verify.Waiver{Decision: is.GetNumber(), Title: is.GetTitle(), Body: is.GetBody(), Links: v["Links"]})
 	}
-	return out, ignored, nil
+	return out, nil
 }
 
 func failing(cs []proof.Check) string {

@@ -115,16 +115,17 @@ func baseRatchet(sha string) (*ratchet.Ratchet, error) {
 	return &r.Coverage, nil
 }
 
-// checkWaiver reads a floor-waiver Decision for floor from GitHub with the
-// job's token, and the waived item's type, so the checkout's config resolves
-// the floor-waiver authority.
+// checkWaiver reads a floor-waiver Decision for floor from GitHub (the job's
+// API URL, so GitHub Enterprise works too) with the job's token, and the
+// waived item's type, so the checkout's config resolves the floor-waiver
+// authority.
 func checkWaiver(n int, floor string) error {
 	repo := os.Getenv("GITHUB_REPOSITORY")
 	owner, name, err := github.SplitRepo(repo)
 	if err != nil {
 		return fmt.Errorf("GITHUB_REPOSITORY %q: %w", repo, err)
 	}
-	c, err := github.New(github.Options{Token: os.Getenv("GH_TOKEN")})
+	c, err := github.New(github.Options{Token: os.Getenv("GH_TOKEN"), BaseURL: os.Getenv("GITHUB_API_URL")})
 	if err != nil {
 		return err
 	}

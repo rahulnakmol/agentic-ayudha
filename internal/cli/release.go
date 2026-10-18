@@ -549,7 +549,7 @@ func (e *Env) productionGate(ctx context.Context, c *github.Client, tok identity
 				if kind[s] == "bug" {
 					continue
 				}
-				ws, _, err := e.waivers(ctx, repo, s)
+				ws, err := e.waivers(ctx, repo, s, nil)
 				if err != nil {
 					return err
 				}

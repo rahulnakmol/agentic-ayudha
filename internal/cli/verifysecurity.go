@@ -151,7 +151,7 @@ func (e *Env) waiveSecurity(ctx context.Context, repo string, res *SecurityResul
 			}
 			w, seen := verdicts[key{c.Floor, n}]
 			if !seen {
-				ws, _, err := e.waivers(ctx, repo, n)
+				ws, err := e.waivers(ctx, repo, n, nil)
 				if err != nil {
 					return err
 				}
@@ -422,7 +422,7 @@ func (e *Env) securityGate(ctx context.Context, c *github.Client, repo string, g
 		if s.Last[src] == [2]string{"gone", srcSHA} {
 			continue
 		}
-		ws, _, err := e.waivers(ctx, repo, s.Number)
+		ws, err := e.waivers(ctx, repo, s.Number, nil)
 		if err != nil {
 			return err
 		}

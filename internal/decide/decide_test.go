@@ -212,3 +212,37 @@ func TestProvisionalNever(t *testing.T) {
 		t.Errorf("seat-change escalation:\n%s", c)
 	}
 }
+
+// A closed floor waiver counts only when the resolved floor-waiver authority
+// both closed it and is the login its Decision section names; with no login
+// resolved (the day-one path) any person counts (Bug #599).
+func TestWaiverAcceptedBy(t *testing.T) {
+	c := &config.Config{
+		Decisions: config.Decisions{Authority: map[string]string{"bug": "@triager", FloorsLayer: "quality-architect"}},
+		Seats:     map[string]config.Seat{"quality-architect": {Mode: "paired", Human: "qa"}},
+		Autonomy:  config.Autonomy{Approver: "founder"},
+	}
+	accepted := func(login string) string {
+		return Accepted("waive", login, time.Date(2026, 10, 18, 0, 0, 0, 0, time.UTC), false)
+	}
+	for _, tc := range []struct {
+		name                     string
+		cfg                      *config.Config
+		parent, closer, decision string
+		want                     string // "" accepts; else a substring of the refusal
+	}{
+		{"the floors seat's paired human", c, "story", "qa", accepted("qa"), ""},
+		{"logins compare without case", c, "story", "QA", accepted("Qa"), ""},
+		{"the approver is not the floors authority", c, "story", "founder", accepted("founder"), "closed by @founder, not the floor-waiver authority @qa (L04 = quality-architect)"},
+		{"a Bug's own authority comes first", c, "bug", "triager", accepted("triager"), ""},
+		{"the floors seat is not a Bug's authority", c, "bug", "qa", accepted("qa"), "not the floor-waiver authority @triager (bug = @triager)"},
+		{"the authority closed one naming another", c, "story", "qa", accepted("qa2"), "does not name the floor-waiver authority @qa"},
+		{"a section naming nobody", c, "story", "qa", "waive.", "does not name the floor-waiver authority @qa"},
+		{"day one: anyone", &config.Config{}, "story", "mallory", accepted("someone-else"), ""},
+	} {
+		err := WaiverAcceptedBy(tc.cfg, tc.parent, tc.closer, tc.decision)
+		if tc.want == "" && err != nil || tc.want != "" && (err == nil || !strings.Contains(err.Error(), tc.want)) {
+			t.Errorf("%s: %v, want %q", tc.name, err, tc.want)
+		}
+	}
+}
