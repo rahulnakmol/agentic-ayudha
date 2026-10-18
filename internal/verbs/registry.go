@@ -1181,7 +1181,7 @@ var Verbs = []Command{
 		Inputs: []Input{
 			pos("incident", TypeIssue, "Incident issue."),
 			flag("telemetry", TypePath, "Sanitised OpenTelemetry export directory: traces.jsonl (OTLP JSON), logs.jsonl (JSON lines with trace_id), deploys.jsonl (deploy markers); read with no network. Give it or --source."),
-			enumIn("source", false, false, "Query the configured Sentry or PostHog project instead of an export, with a read-only key; needs --service. PostHog answers logs and exceptions only.", "sentry", "posthog"),
+			enumIn("source", false, false, "Query the configured Sentry or PostHog project instead of an export, with a read-only key; needs --service. PostHog answers logs and exceptions only, and its exceptions are project-wide (error tracking has no service filter).", "sentry", "posthog"),
 			flag("service", TypeString, "Service to scope every query to; default the only service in the export."),
 			flag("environment", TypeString, "Deployment environment to scope to; default the deploy marker's."),
 			flag("revision", TypeString, "Deployed revision; default the deploy marker serving the window, else service.version on the spans."),

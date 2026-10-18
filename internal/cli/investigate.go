@@ -232,8 +232,10 @@ func runInvestigate(ctx context.Context, e *Env, in Values) error {
 		}
 		rep.Facts = append(rep.Facts, packFact{Text: fmt.Sprintf("Deploy marker: %s of `%s` to %s at %s by %s; previous `%s`", d.Service, d.Revision, d.Environment, d.Time.Format(time.RFC3339), noneIf(d.Actor), noneIf(d.Previous)), Cite: production.DeploysFile})
 	}
-	if live != nil && answers(source, "deploys") {
-		// A live source's deployed revision is its newest deploy in the window.
+	oneQuery := in.Has("query") && !in.Has("draft")
+	if live != nil && answers(source, "deploys") && !oneQuery {
+		// A live source's deployed revision is its newest deploy in the window;
+		// a one-off --query runs only the query it names.
 		lq, err := ql.run("deploys")
 		if err != nil {
 			return err
@@ -304,7 +306,7 @@ func runInvestigate(ctx context.Context, e *Env, in Values) error {
 
 	ql.env, ql.resolve = rep.Env, resolve
 	run := ql.run
-	if in.Has("query") && !in.Has("draft") {
+	if oneQuery {
 		lq, err := run(in.String("query"))
 		if err != nil {
 			return err

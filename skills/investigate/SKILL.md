@@ -28,7 +28,7 @@ aayu:
       enum:
         - "sentry"
         - "posthog"
-      description: "Query the configured Sentry or PostHog project instead of an export, with a read-only key; needs --service. PostHog answers logs and exceptions only."
+      description: "Query the configured Sentry or PostHog project instead of an export, with a read-only key; needs --service. PostHog answers logs and exceptions only, and its exceptions are project-wide (error tracking has no service filter)."
     - name: service
       type: string
       required: false

@@ -59,7 +59,10 @@ func (p PostHog) Run(ctx context.Context, q Query) (Result, Provenance, error) {
 		if len(q.By) > 1 || (len(q.By) == 1 && q.By[0] != "version") || len(q.Where) > 1 {
 			return Result{}, pv, fmt.Errorf("%w: PostHog error tracking groups by issue, not by release or route; ask exceptions where service=<name> only", errSource)
 		}
-		pv.Source += " (error tracking: first and last are each issue's first and last seen, over its whole life)"
+		// PostHog error tracking has no service field to filter on, so the
+		// rows are the whole project's; the provenance says so rather than
+		// passing them off as the service's.
+		pv.Source += fmt.Sprintf(" (error tracking: project-wide, not scoped to service %s, since PostHog error tracking has no service filter; first and last are each issue's first and last seen, over its whole life)", q.Where["service"])
 		node = map[string]any{"kind": "ErrorTrackingQuery", "dateRange": dates, "orderBy": "occurrences", "orderDirection": "DESC",
 			"status": "active", "volumeResolution": 1, "withAggregations": true, "limit": q.Limit + 1}
 	default:

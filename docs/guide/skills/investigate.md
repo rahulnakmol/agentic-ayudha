@@ -52,7 +52,7 @@ aayu investigate <incident>
 |---|---|---|
 | `<incident>` | yes | Incident issue. |
 | `--telemetry` | no | Sanitised OpenTelemetry export directory: traces.jsonl (OTLP JSON), logs.jsonl (JSON lines with trace_id), deploys.jsonl (deploy markers); read with no network. Give it or --source. |
-| `--source` | no | Query the configured Sentry or PostHog project instead of an export, with a read-only key; needs --service. PostHog answers logs and exceptions only. One of: `sentry`, `posthog`. |
+| `--source` | no | Query the configured Sentry or PostHog project instead of an export, with a read-only key; needs --service. PostHog answers logs and exceptions only, and its exceptions are project-wide (error tracking has no service filter). One of: `sentry`, `posthog`. |
 | `--service` | no | Service to scope every query to; default the only service in the export. |
 | `--environment` | no | Deployment environment to scope to; default the deploy marker's. |
 | `--revision` | no | Deployed revision; default the deploy marker serving the window, else service.version on the spans. |

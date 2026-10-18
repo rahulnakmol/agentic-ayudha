@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -183,10 +184,19 @@ func TestInvestigateLive(t *testing.T) {
 	_, ground, _ = inv(0, posthog, append([]string{"--source", "posthog", "--service", "web"}, posthogFlags...)...)
 	if !strings.Contains(ground, "### query q1: `exceptions by version") || !strings.Contains(ground, "### query q2: `logs where level=ERROR") ||
 		strings.Contains(ground, "query q3") || !strings.Contains(ground, "Source: posthog project 12345 (sha256 ") ||
-		!strings.Contains(ground, "from POST https://eu.posthog.com/api/projects/12345/query/") {
+		!strings.Contains(ground, "from POST https://eu.posthog.com/api/projects/12345/query/") ||
+		!strings.Contains(ground, "project-wide, not scoped to service web") {
 		t.Errorf("posthog grounding:\n%s", ground)
 	}
-	_, out, _ := inv(ExitUsage, posthog, append([]string{"--source", "posthog", "--service", "web", "--query", "requests by version"}, posthogFlags...)...)
+	_ = os.RemoveAll(filepath.Join(repo, ".aayudha", "state", "investigate"))
+
+	// A one-off --query runs that query alone: no deploy discovery first.
+	_, out, sent := inv(0, sentry, append([]string{"--source", "sentry", "--service", "web", "--query", "logs where level=ERROR limit 5"}, sentryFlags...)...)
+	if !strings.Contains(out, "q1") || !strings.Contains(out, "logs where level=ERROR") || slices.ContainsFunc(sent, func(s string) bool { return strings.Contains(s, "/releases/") }) {
+		t.Errorf("one-off sentry query: requests %v\n%s", sent, out)
+	}
+	_ = os.RemoveAll(filepath.Join(repo, ".aayudha", "state", "investigate"))
+	_, out, _ = inv(ExitUsage, posthog, append([]string{"--source", "posthog", "--service", "web", "--query", "requests by version"}, posthogFlags...)...)
 	if !strings.Contains(out, "it answers logs and exceptions") {
 		t.Errorf("an unanswered kind: %s", out)
 	}
