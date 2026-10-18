@@ -77,7 +77,7 @@ In `loops/active.json` an event loop is recorded like any loop: Amp's ID is `sub
 it as `fallback`, not `missing`, when the tool that runs your loops has no trigger for its event and has the
 scheduled loop with the same command set up, and names that loop. With no such loop set up there, it is `missing`.
 
-`build-ready` (each weekday hour, 09:00 to 15:00) builds what is Ready, with no person to start each build. It is an
+`build-ready` (each weekday hour, 09:00 to 17:00) builds what is Ready, with no person to start each build. It is an
 agent loop, and the binary decides everything except the code:
 
 1. `aayu build --next ship` lists the loop's own open pull requests, oldest first, and changes nothing. The agent runs
