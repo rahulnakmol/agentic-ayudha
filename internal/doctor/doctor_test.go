@@ -423,7 +423,7 @@ func TestBlockingOnlyOnFloorFailures(t *testing.T) {
 	for id, f := range failing(t) {
 		p := healthy(t)
 		f(p)
-		want := id == "git" || id == "git-lfs" || id == "config" || id == "schema" || id == "ledger-media"
+		want := id == "git" || id == "git-lfs" || id == "config" || id == "schema" || id == "ledger-media" || id == "host-config"
 		if got := Blocking(Run(ctx, p)); got != want {
 			t.Errorf("%s failing: blocking = %v, want %v", id, got, want)
 		}

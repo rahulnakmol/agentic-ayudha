@@ -741,7 +741,7 @@ func checkHostConfig(ctx context.Context, p *Probe) Result {
 	case err != nil:
 		return Result{Status: Warn, Detail: "cannot compare the hosts' hooks and MCP entries with what aayu install writes: " + err.Error()}
 	case len(drift) > 0:
-		return Result{Status: Fail, Detail: "a hook or MCP entry differs from what aayu install writes, so a host may run a command aayu did not install: read the diff with `aayu install`, then run `aayu install --apply`",
+		return Result{Status: Fail, Blocking: true, Detail: "a hook or MCP entry differs from what aayu install writes, so a host may run a command aayu did not install: read the diff with `aayu install`, then run `aayu install --apply`",
 			Lines: drift}
 	}
 	return Result{Status: Pass, Detail: "the hosts' hooks and MCP entries are what aayu install writes"}

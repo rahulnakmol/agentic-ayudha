@@ -746,6 +746,14 @@ var importsAgents = regexp.MustCompile(`(?m)^@AGENTS\.md\s*$`)
 // ourHook matches the commands HookCommand writes, for any binary path.
 var ourHook = regexp.MustCompile(`^(& )?"[^"]+" hook [a-z][a-z0-9-]* --host (amp|cursor|claude|codex|copilot)$`)
 
+// aayuHookLike matches any command that runs an aayu binary's hook verb, such
+// as one of ours with something appended. Install replaces it like its own,
+// so an altered aayudha hook is drift that a repair removes, never a
+// product hook it keeps next to the real one.
+var aayuHookLike = regexp.MustCompile(`(^|[\s"'/\\&;|])aayu(\.exe)?"?\s+hook\b`)
+
+func aayuHook(c string) bool { return ourHook.MatchString(c) || aayuHookLike.MatchString(c) }
+
 func (p *planner) hostFiles(hosts map[verbs.HostID]bool, lock Lock) error {
 	existing, err := p.read(AgentsMD, false)
 	if err != nil {
@@ -790,7 +798,7 @@ func (p *planner) hostFiles(hosts map[verbs.HostID]bool, lock Lock) error {
 			// shared project setting overrides the user's (D-3.2b.h).
 			obj(m, "enabledPlugins")[PluginID] = false
 			// The status line shows journey state (WP3.2b); one the product set itself stays.
-			if sl, ok := m["statusLine"].(map[string]any); !ok || ourHook.MatchString(fmt.Sprint(sl["command"])) {
+			if sl, ok := m["statusLine"].(map[string]any); !ok || aayuHook(fmt.Sprint(sl["command"])) {
 				m["statusLine"] = map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "status-line", verbs.HostClaude)}
 			} else {
 				p.notes = append(p.notes, ClaudeSettings+" already has a statusLine, so install leaves it: add `"+HookCommand(p.o.Binary, "status-line", verbs.HostClaude)+"` to it for the aayudha journey state")
@@ -1086,7 +1094,7 @@ func isOurs(e any) bool {
 		return false
 	}
 	if c, ok := m["command"].(string); ok {
-		return ourHook.MatchString(c)
+		return aayuHook(c)
 	}
 	inner, ok := m["hooks"].([]any)
 	if !ok || len(inner) == 0 {
@@ -1095,7 +1103,7 @@ func isOurs(e any) bool {
 	for _, h := range inner {
 		hm, _ := h.(map[string]any)
 		c, _ := hm["command"].(string)
-		if !ourHook.MatchString(c) {
+		if !aayuHook(c) {
 			return false
 		}
 	}

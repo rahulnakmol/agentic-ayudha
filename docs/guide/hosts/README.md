@@ -21,8 +21,11 @@ because that is where each agent looks for them, so aayudha guards them two ways
 
 - `aayu init --gates` adds an `aayudha:host-config` block to `.github/CODEOWNERS`. A pull request that changes
   any of those files then needs a code owner's review before it merges.
-- `aayu doctor` fails its `host-config` row when an installed hook or MCP entry differs from what
-  `aayu install` would write, and names the file. `aayu install --host <host> --apply` puts it back.
+- `aayu doctor` fails, and exits nonzero, when an installed hook or MCP entry differs from what `aayu install`
+  would write. Its `host-config` row names the file, and `aayu install --host <host> --apply` puts it back. An
+  aayudha hook with something added to its command still counts as aayudha's, so the repair removes it. A new hook
+  under a command of its own looks like your team's hook, so doctor leaves it alone and the code owner's review
+  has to catch it.
 
 One risk remains. Review happens when a change merges, not when you check it out. If you check out someone
 else's branch in a folder your agent trusts, the agent runs that branch's hooks and MCP servers, with your

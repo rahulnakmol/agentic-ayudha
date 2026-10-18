@@ -82,7 +82,7 @@ FAIL  copilot  GitHub Copilot is not set up safely here; the lines say what to f
 ## host-config pass
 PASS  host-config  not installed for a host here
 ## host-config fail
-FAIL  host-config  a hook or MCP entry differs from what aayu install writes, so a host may run a command aayu did not install: read the diff with `aayu install`, then run `aayu install --apply`
+FAIL  host-config  a hook or MCP entry differs from what aayu install writes, so a host may run a command aayu did not install: read the diff with `aayu install`, then run `aayu install --apply` [blocking]
                      .github/hooks/aayudha.json
 ## lfs-quota pass
 N/A  lfs-quota  LFS quota: GitHub has no quota API for this account; watch Settings > Billing > Git LFS (warn at 80 %)
