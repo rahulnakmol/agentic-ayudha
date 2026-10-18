@@ -99,7 +99,7 @@ footprint whose layers all have a long enough correction-free streak needs no re
 
 With `[autonomy] proof` on, `ship` merges a pull request into the integration branch on proof, with no review. Every
 required check of the base branch must be green, the pack must verify with its floors holding, and inspect must be at
-`merge` with a rung in `proof_rungs`. A skipped required check counts as green, as GitHub counts it, and the
+`merge` with a rung in `proof_rungs`. A skipped or neutral required check counts as green, as GitHub counts it, and the
 CODEOWNERS check may be red only when the pull request touches a CODEOWNERS path. The `[autonomy]` table and the
 integration branch that decide this are read from the base branch, never from the pull request, so a change cannot
 loosen the rules it is judged by. A change to the narrow set still needs a person per pull request, and the streak

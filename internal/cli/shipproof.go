@@ -73,8 +73,8 @@ func requiredChecks(ctx context.Context, c *github.Client, owner, name string, n
 }
 
 // checkState is the state of a required check: its newest check run from
-// its app (any app when the rule names none), with skipped counted as
-// success as GitHub counts it, and, for a rule that names no app, the newest
+// its app (any app when the rule names none), with skipped and neutral
+// counted as success as GitHub counts them, and, for a rule that names no app, the newest
 // commit status of the same name, which must pass too; "missing" when there
 // is neither.
 func checkState(runs []*gh.CheckRun, statuses []*gh.RepoStatus, sc *gh.RuleStatusCheck) string {
@@ -86,7 +86,7 @@ func checkState(runs []*gh.CheckRun, statuses []*gh.RepoStatus, sc *gh.RuleStatu
 		switch {
 		case r.GetStatus() != "completed":
 			state = r.GetStatus()
-		case r.GetConclusion() == "skipped":
+		case r.GetConclusion() == "skipped" || r.GetConclusion() == "neutral":
 			state = "success"
 		default:
 			state = r.GetConclusion()

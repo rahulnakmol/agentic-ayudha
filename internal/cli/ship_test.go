@@ -342,7 +342,8 @@ func TestShipOnProof(t *testing.T) {
 	// narrow set; the base revision's config is the policy, so it is ignored.
 	_ = os.MkdirAll(filepath.Join(dir, ".aayudha"), 0o755)
 	_ = os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte("version = 1\n[autonomy]\nproof = false\nalways_person = []\nalways_person_config = []\n"), 0o644)
-	// docs was skipped by its path filter: GitHub counts that as passing.
+	// docs was skipped by its path filter, and release-snapshot is neutral:
+	// GitHub counts both as passing.
 	g.Mu.Lock()
 	gate := slices.IndexFunc(g.Runs, func(r fake.WorkflowRun) bool { return r.HeadSHA == head && r.Event == "pull_request_target" })
 	g.RunJobs = map[int64][]fake.CheckRun{g.Runs[gate].ID: {{ID: 7701, Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}}}
@@ -350,13 +351,13 @@ func TestShipOnProof(t *testing.T) {
 	// One rule per page: ship reads every page. build must come from GitHub
 	// Actions (app 15368): another app's green build does not pass it, and
 	// its newest run counts, not a stale failure before a rerun.
-	g.RequiredChecks, g.RulesPerPage = []string{"build", "lint", "docs", "security", "protected-paths"}, 1
+	g.RequiredChecks, g.RulesPerPage = []string{"build", "lint", "docs", "release-snapshot", "security", "protected-paths"}, 1
 	g.RequiredCheckApps = map[string]int64{"build": 15368}
 	actions := &fake.App{ID: 15368}
 	g.CheckRuns[head] = append(g.CheckRuns[head], fake.CheckRun{Name: "build", Status: "completed", Conclusion: "success", App: &fake.App{ID: 99}},
 		fake.CheckRun{Name: "build", Status: "completed", Conclusion: "failure", App: actions},
 		fake.CheckRun{Name: "build", Status: "completed", Conclusion: "failure", App: actions},
-		fake.CheckRun{Name: "docs", Status: "completed", Conclusion: "skipped"},
+		fake.CheckRun{Name: "docs", Status: "completed", Conclusion: "skipped"}, fake.CheckRun{Name: "release-snapshot", Status: "completed", Conclusion: "neutral"},
 		fake.CheckRun{Name: "lint", Status: "completed", Conclusion: "failure"}, fake.CheckRun{Name: "protected-paths", Status: "completed", Conclusion: "failure"})
 	g.Files = map[string]string{".github/CODEOWNERS": "/skills/ @founder\n"}
 	secrets := "on: push\njobs:\n  x:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ${{ secrets['TOKEN'] }}\n"
@@ -492,14 +493,14 @@ func TestShipOnProof(t *testing.T) {
 	}
 	var sr ShipRecord
 	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:proof/2/"+head+"/authoritative/ship.json")), &sr)
-	if sr.HumanPass.Kind != "proof" || sr.Proof == nil || sr.Proof.Rung != inspect.RungC || !slices.Equal(sr.Proof.Checks, []string{"build", "lint", "docs", "security"}) ||
+	if sr.HumanPass.Kind != "proof" || sr.Proof == nil || sr.Proof.Rung != inspect.RungC || !slices.Equal(sr.Proof.Checks, []string{"build", "lint", "docs", "release-snapshot", "security"}) ||
 		!slices.Equal(sr.Proof.Protected, []string{"skills/build/SKILL.md"}) || sr.PlanReview != nil || !slices.Equal(sr.Footprint, []string{"L07"}) {
 		t.Fatalf("ship record: %+v %+v", sr.HumanPass, sr.Proof)
 	}
 	g.Mu.Lock()
 	body, merged := g.Issues[2].Body, g.Pulls[prN].Merged
 	g.Mu.Unlock()
-	if !merged || !strings.Contains(body, "- Human pass: not needed, merged on proof (Decision #593): required checks build, lint, docs, security green") ||
+	if !merged || !strings.Contains(body, "- Human pass: not needed, merged on proof (Decision #593): required checks build, lint, docs, release-snapshot, security green") ||
 		!strings.Contains(body, "CODEOWNERS paths skills/build/SKILL.md merged with no code owner's review") {
 		t.Fatalf("Complete section (merged %t):\n%s", merged, body)
 	}
