@@ -185,6 +185,7 @@ type AgentPR struct {
 	MergedAt time.Time `json:"merged_at"`
 	Layers   []string  `json:"layers"`
 	Skills   []string  `json:"skills,omitempty"`
+	Rung     string    `json:"rung,omitempty"` // the review ladder's rung, from the merge gate's log (autonomy.GateRung)
 }
 
 // Licence is the licence scan input at Inputs.Code.
@@ -306,9 +307,14 @@ type Report struct {
 	Decisions   []Decision            `json:"decisions"`
 	Corrections []autonomy.Correction `json:"corrections"`
 	NeverMerges []NeverMerge          `json:"never_merges"`
-	Licence     []string              `json:"licence_findings"`
-	Security    []string              `json:"security_job"`
-	Modules     int                   `json:"modules_scanned"`
+	// Rungs counts the agent merges in the window by the review ladder's
+	// rung of their review (Decision #469): A, B, C, human, or "" unknown.
+	// It is empty until one of them has a rung on record, so a report
+	// replayed from a snapshot taken before the ladder is unchanged.
+	Rungs    map[string]int `json:"review_rungs,omitempty"`
+	Licence  []string       `json:"licence_findings"`
+	Security []string       `json:"security_job"`
+	Modules  int            `json:"modules_scanned"`
 }
 
 // Counts summarise a report.
@@ -440,6 +446,16 @@ func Build(in Inputs, d *Data) *Report {
 		if d.in(in, m.At) {
 			r.NeverMerges = append(r.NeverMerges, m)
 		}
+	}
+	rungs, recorded := map[string]int{}, false
+	for _, a := range d.AgentPRs {
+		if d.in(in, a.MergedAt) {
+			rungs[a.Rung]++
+			recorded = recorded || a.Rung != ""
+		}
+	}
+	if recorded {
+		r.Rungs = rungs
 	}
 	r.Licence, r.Modules = d.licence(), len(d.Licence.Modules)
 	r.Security = append(r.Security, d.Licence.Security...)

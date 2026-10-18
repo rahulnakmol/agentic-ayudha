@@ -83,6 +83,10 @@ func (r *Report) Markdown() []byte {
 	p("- Floor misses in authoritative packs: %d; waived floors: %d\n", c.FloorMisses, c.Waivers)
 	p("- Decisions over their SLA: %d\n", c.OverSLA)
 	p("- Autonomy exceptions: %d corrections; %d agent merges on never-layers\n", c.Corrections, c.NeverMerges)
+	if len(r.Rungs) > 0 {
+		p("- Review rungs of agent merges (Decision #469): different-family (A) %d; paid different-family (B) %d; a person's %d; same-family (C) %d; none recorded %d\n",
+			r.Rungs["A"], r.Rungs["B"], r.Rungs["human"], r.Rungs["C"], r.Rungs[""])
+	}
 	p("- Licence findings: %d (%d go.mod modules); CI `security` job on the code commit: %s\n\n", c.Licence, r.Modules, or(strings.Join(r.Security, ", "), "no completed run"))
 
 	p("## Rule-suite bypasses\n\n")

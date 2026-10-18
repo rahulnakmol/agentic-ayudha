@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
+	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
@@ -302,7 +303,7 @@ func TestShipAutonomousFootprint(t *testing.T) {
 	}
 	var sr ShipRecord
 	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:proof/2/"+head+"/authoritative/ship.json")), &sr)
-	if sr.HumanPass.Kind != "autonomous" || !sr.Streak.Autonomous || sr.Streak.Threshold != 0 || len(sr.Pass.Never) != 0 {
+	if sr.HumanPass.Kind != "autonomous" || !sr.Streak.Autonomous || sr.Streak.Threshold != 0 || len(sr.Pass.Never) != 0 || sr.Review != inspect.RungA {
 		t.Fatalf("ship record: %+v", sr)
 	}
 	if c := comment(g, 2, "<!-- aayudha:lease-released -->"); !strings.Contains(c, "shipped in #"+strconv.Itoa(prN)) {
