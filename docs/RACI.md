@@ -107,7 +107,7 @@ Model calling: `none` is deterministic; `host` means the host's model reasons in
 Settled defaults per host. Configuration (`[models.<lane>.<host>]`, WP1.2) overrides them; the model gateway
 resolves them (WP1.6). Model IDs are as the AI gateway lists them; the family belongs to the model, not the endpoint.
 Cursor cannot run the openai family, so a GPT model configured for Cursor falls back to the lane's Cursor default.
-Cursor's defaults follow `[hosts.cursor] plan` (Decision #469): `x`, the default, for a plan that includes only
+Cursor's defaults follow `[hosts.cursor] plan` (the review-ladder decision of 2026-10-17): `x`, the default, for a plan that includes only
 Cursor's own models, or `legacy` for one that still includes Claude and Gemini.
 When the binary calls a model itself and the host's default is a host-managed mode, it uses the Claude Code default.
 

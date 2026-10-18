@@ -25,7 +25,7 @@ included.
 | `ui-review` | Visual and interaction critique | Amp high | Grok 4.6 (legacy plan: Gemini 3.8 Flash) | Gemini 3.8 Flash |
 | `chore` | Cheap mechanical work | Amp low | Composer 2.5 (legacy plan: Haiku 5.5) | Haiku 5.5 |
 
-Cursor's column follows `[hosts.cursor] plan` (Decision #469). Cursor's plans from 12 October 2026, `x` and the
+Cursor's column follows `[hosts.cursor] plan` (the review-ladder decision of 2026-10-17). Cursor's plans from 12 October 2026, `x` and the
 default, include only Cursor's own models (Grok 4.7, 4.6, 4.5, and Composer 2.5); Claude, GPT, and Gemini are
 list-price pay-as-you-go there. aayu cannot tell the plans apart, so it defaults to the one that never spends
 list-price money by surprise. Set `plan = "legacy"` for a legacy Pro, Pro+, or Ultra plan, which still includes Claude
