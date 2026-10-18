@@ -923,20 +923,36 @@ func (e *Env) reviewCall(gw *models.Gateway, cfg *config.Config, model, story st
 // the gateway route, with inspect.ReviewModelSecret as its key, and
 // [inspect] paid_reviewer. A URL with credentials or a query is refused, and
 // never echoed, so no log or comment shows a secret; only its host is named.
+// inspect.ReviewModelStyleVar sets the endpoint's wire format. A bad setting
+// fails inspect only under reviewer = "ci"; when an app reviews, it leaves
+// the CI fallback unavailable, so the app's review is still read.
 func (e *Env) useReviewModel(c *config.Config) error {
 	if r := c.Inspect.Reviewer; r == inspect.ReviewerModel || r == inspect.ReviewerHuman {
 		return nil // the review lane's configured gateway, or no model at all
 	}
 	if raw := e.Getenv(inspect.ReviewModelURLVar); raw != "" {
-		u, err := url.Parse(raw)
-		if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
-			return fmt.Errorf("%s must be the model endpoint's https base URL (such as %s), with no credentials or query in it; the key goes in %s",
+		style := e.Getenv(inspect.ReviewModelStyleVar)
+		var bad error
+		if u, err := url.Parse(raw); err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+			bad = fmt.Errorf("%s must be the model endpoint's https base URL (such as %s), with no credentials or query in it; the key goes in %s",
 				inspect.ReviewModelURLVar, inspect.RecommendedReviewURL, inspect.ReviewModelKeyVar)
+		} else if !slices.Contains([]string{"", models.StyleMessages, models.StyleResponses, models.StyleChat}, style) {
+			bad = fmt.Errorf("%s = %q: want messages, responses, or chat", inspect.ReviewModelStyleVar, style)
+		}
+		if bad != nil {
+			if c.Inspect.Reviewer != inspect.ReviewerCI {
+				e.Logf("inspect: the CI review fallback is unavailable: %v", bad)
+				return nil
+			}
+			return bad
 		}
 		// A different endpoint: no wire-format override of the old gateway carries over; the same one keeps them.
 		g := config.Gateway{BaseURL: raw, Secret: inspect.ReviewModelSecret}
 		if raw == c.Models.Gateway.BaseURL {
 			g.APIStyle, g.Styles = c.Models.Gateway.APIStyle, c.Models.Gateway.Styles
+		}
+		if style != "" {
+			g.APIStyle, g.Styles = style, nil
 		}
 		c.Models.Gateway = g
 	}

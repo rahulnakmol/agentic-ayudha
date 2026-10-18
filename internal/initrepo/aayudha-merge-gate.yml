@@ -209,6 +209,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           AAYU_REVIEW_MODEL_URL: ${{ vars.AAYU_REVIEW_MODEL_URL }}
           AAYU_REVIEW_MODEL: ${{ vars.AAYU_REVIEW_MODEL }}
+          AAYU_REVIEW_MODEL_API_STYLE: ${{ vars.AAYU_REVIEW_MODEL_API_STYLE }}
           AAYU_REVIEW_MODEL_KEY: ${{ secrets.AAYU_REVIEW_MODEL_KEY }}
         run: aayudha inspect "$PR" --ci --repo "$REPO"
 

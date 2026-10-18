@@ -50,7 +50,10 @@ const (
 	ReviewModelURLVar = "AAYU_REVIEW_MODEL_URL" // the model endpoint's base URL (an OpenAI-compatible gateway, or a provider's API)
 	ReviewModelVar    = "AAYU_REVIEW_MODEL"     // the model ID
 	ReviewModelKeyVar = "AAYU_REVIEW_MODEL_KEY" // the endpoint's key (an environment secret)
-	ReviewModelSecret = "review-model-key"      // AAYU_SECRET_REVIEW_MODEL_KEY in the job
+	// ReviewModelStyleVar names the endpoint's wire format (messages, responses, or chat), for a gateway that does
+	// not take the model family's own; unset, the family's format is used.
+	ReviewModelStyleVar = "AAYU_REVIEW_MODEL_API_STYLE"
+	ReviewModelSecret   = "review-model-key" // AAYU_SECRET_REVIEW_MODEL_KEY in the job
 	// RecommendedReviewModel is what aayu init fills AAYU_REVIEW_MODEL with,
 	// at the endpoint RecommendedReviewURL.
 	RecommendedReviewModel = "grok-4.7"

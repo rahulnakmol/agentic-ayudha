@@ -1608,6 +1608,28 @@ func TestInspectReviewTools(t *testing.T) {
 	if code, res, errOut := inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Rung != inspect.RungB || len(model.Requests) != 1 || model.Requests[0].ServiceTier != models.TierPriority || route.Style != models.StyleChat {
 		t.Fatalf("reviewer ci: exit %d rung %q, %d model calls, style %q %s", code, res.Rung, len(model.Requests), route.Style, errOut)
 	}
+	// The environment names the endpoint's wire format when it is not the family's own (Codex's P2 on #657).
+	_, env, opts, prN, model = setup("")
+	env[inspect.ReviewModelStyleVar] = "responses"
+	opts.ModelClient = func(r models.Route, _ string) models.Client { route = r; return model }
+	if code, _, errOut := inspectApp(t, env, opts, prN, "--ci"); code != 0 || route.Style != models.StyleResponses {
+		t.Fatalf("%s = responses: exit %d, style %q %s", inspect.ReviewModelStyleVar, code, route.Style, errOut)
+	}
+	env[inspect.ReviewModelStyleVar] = "graphql"
+	if code, _, errOut := inspectApp(t, env, opts, prN, "--ci"); code != ExitUsage || !strings.Contains(errOut, "AAYU_REVIEW_MODEL_API_STYLE = \"graphql\": want messages, responses, or chat") {
+		t.Fatalf("a bad wire format under reviewer ci: exit %d %s", code, errOut)
+	}
+	// With an app as the reviewer, a broken CI fallback does not stop the app's review (Codex's P2 on #657).
+	g, env, opts, prN, model := setup("codex")
+	env[inspect.ReviewModelURLVar] = "http://gw.example/v1"
+	env["AAYU_AUTONOMY__APPROVER"] = "founder"
+	code, _, errOut := inspectApp(t, env, opts, prN, "--verbose")
+	g.Mu.Lock()
+	cs := slices.Clone(g.Issues[prN].Comments)
+	g.Mu.Unlock()
+	if code != ExitBlocked || len(model.Requests) != 0 || len(cs) != 1 || !strings.HasPrefix(cs[0].Body, "@codex review\n") || !strings.Contains(errOut, "the CI review fallback is unavailable") {
+		t.Fatalf("reviewer codex, bad %s: exit %d, %d model calls, %d comments %s", inspect.ReviewModelURLVar, code, len(model.Requests), len(cs), errOut)
+	}
 	// Every review asks for fast serving (founder, 2026-10-18), at effort high by default, and medium for Claude Opus,
 	// Claude Fable, and GPT-6 Astra; [inspect] paid_effort, set to high in this fixture, overrides both.
 	for _, c := range []struct{ model, builder, effort string }{
@@ -1662,7 +1684,7 @@ func TestInspectReviewTools(t *testing.T) {
 		}
 	}
 	// Emptied: a person reviews, and the PR says how to choose.
-	g, env, opts, prN, model := setup("")
+	g, env, opts, prN, model = setup("")
 	env["AAYU_INSPECT__REVIEWER"] = ""
 	if code, res, _ := inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || res.Rung != inspect.RungHuman || len(model.Requests) != 0 ||
 		!strings.Contains(lastInspect(t, g, prN), `set [inspect] reviewer = "<tool>"`) {

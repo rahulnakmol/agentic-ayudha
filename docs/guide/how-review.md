@@ -23,6 +23,7 @@ pull request can reach the key.
    | `AAYU_REVIEW_MODEL_URL` | variable | the model endpoint's base URL; it must take the key as a bearer token | `https://api.x.ai/v1` |
    | `AAYU_REVIEW_MODEL` | variable | the model ID | `grok-4.7` |
    | `AAYU_REVIEW_MODEL_KEY` | secret | the endpoint's key | nothing: you add it |
+   | `AAYU_REVIEW_MODEL_API_STYLE` | variable, optional | the endpoint's wire format: `chat`, `responses`, or `messages` | nothing: unset, aayu uses the model family's own format |
 
    You should see an `environment code-review` line in init's report that says to set the secret.
 
@@ -33,7 +34,8 @@ pull request can reach the key.
    several model families with one key. A provider's own API works when it takes a bearer key, as xAI's and OpenAI's
    do. Anthropic's API takes its key in another header, so reach Claude models through a gateway. The URL is a base
    URL ending before `/chat/completions`, `/responses`, or `/messages`, with no key or query in it: aayu refuses one
-   that has either.
+   that has either. A gateway that takes only one wire format, such as Chat Completions for every model, needs
+   `AAYU_REVIEW_MODEL_API_STYLE` set to it (`chat`).
 
 4. Open a pull request. You should see the inspect comment's first line,
    `different-family review (B, paid): grok-4.7 (xai)`, and the inspect check pass or fail with the review's findings.
@@ -89,8 +91,9 @@ installed app reviews, then the code-review environment's model, then a person. 
 2. Only the base branches and the default branch can deploy to `code-review`; init removes every other rule, on
    every page of the list. Enforced by `reviewEnvironment` in
    [internal/initrepo/extras.go](../../internal/initrepo/extras.go), `TestInitExtras`.
-3. A missing endpoint, model, or key fails the inspect check, and a URL with credentials or a query is refused and
-   never echoed. Enforced by `useReviewModel` and `missingReviewModel` in
+3. Under `reviewer = "ci"`, a missing endpoint, model, or key fails the inspect check, and a URL with credentials or a
+   query, or an unknown wire format, is refused and never echoed. With an app as the reviewer, a bad setting only
+   leaves the CI fallback unavailable. Enforced by `useReviewModel` and `missingReviewModel` in
    [internal/cli/inspect.go](../../internal/cli/inspect.go), `TestInspectReviewTools`.
 4. A model of the builder's family never reviews, a pull request from an author without write access spends nothing,
    and `[budget] per_pr_inspect_max` caps the spend. Enforced by `paidReviewer` in
