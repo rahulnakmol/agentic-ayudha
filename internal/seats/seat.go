@@ -259,8 +259,22 @@ func (s *Seat) policy(ctx context.Context, res *Result) error {
 		return err
 	}
 	if rs == nil {
-		res.Ruleset, res.Policy = "absent", PolicyNA
-		res.PolicyNote = "no " + GateRuleset + " ruleset: this repository has no WP0.1 solo-mode gate to switch"
+		// aayu init installs no solo-mode gate (the protected-paths check and
+		// this ruleset), so a repository adopted with init has none. Two humans
+		// need no gate: native CODEOWNER review does the job, so seat add
+		// creates the ruleset in that form once both are code owners on the
+		// default branch.
+		switch {
+		case want:
+			return s.createRuleset(ctx, res)
+		case len(local) >= 2:
+			res.Ruleset, res.Policy = "absent", PolicyPending
+			res.PolicyNote = fmt.Sprintf("merge the %s change to %s, then rerun this command: it creates the %s ruleset, which requires one approval with native CODEOWNER review on %s",
+				CodeownersPath(s.Root), s.Default, GateRuleset, s.Default)
+		default:
+			res.Ruleset, res.Policy = "absent", PolicyNA
+			res.PolicyNote = fmt.Sprintf("no %s ruleset: with one human, GitHub enforces no review on protected paths here (aayu ship still does); once a second human is paired and their CODEOWNERS change has merged, this command creates it", GateRuleset)
+		}
 		return nil
 	}
 	switch {
@@ -277,8 +291,18 @@ func (s *Seat) policy(ctx context.Context, res *Result) error {
 		res.Ruleset = "unchanged"
 		return nil
 	}
-	body := SwitchRuleset(rs, want)
 	id := int64(rs["id"].(float64))
+	gate, err := s.hasGate(ctx)
+	if err != nil {
+		return fmt.Errorf("reading the protected-paths workflow on %s: %w", s.Default, err)
+	}
+	if !want && !gate {
+		// Back to one human in a repository without the solo-mode gate (one
+		// seat add created): the solo form would require a check nothing
+		// posts and block every merge, so the ruleset goes, as init left it.
+		return s.deleteRuleset(ctx, res, id)
+	}
+	body := SwitchRuleset(rs, want)
 	path := fmt.Sprintf("/repos/%s/rulesets/%d", s.Repo, id)
 	rec, err := s.GH.Write(ctx, actions.Action{
 		Kind: "github.ruleset.update", Target: s.Repo, Seat: string(verbs.Founder),
@@ -305,6 +329,77 @@ func (s *Seat) policy(ctx context.Context, res *Result) error {
 	return nil
 }
 
+// hasGate reports whether the default branch has the solo-mode gate workflow
+// that posts the protected-paths check (this repository's own; aayu init does
+// not install it). The default branch's copy is the one that runs, whatever
+// the checkout holds.
+func (s *Seat) hasGate(ctx context.Context) (bool, error) {
+	owner, name, _ := github.SplitRepo(s.Repo)
+	_, _, _, err := s.GH.REST.Repositories.GetContents(ctx, owner, name, ".github/workflows/protected-paths.yml", &gh.RepositoryContentGetOptions{Ref: s.Default})
+	if github.NotFound(err) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+// deleteRuleset removes the protected-paths ruleset.
+func (s *Seat) deleteRuleset(ctx context.Context, res *Result, id int64) error {
+	path := fmt.Sprintf("/repos/%s/rulesets/%d", s.Repo, id)
+	rec, err := s.GH.Write(ctx, actions.Action{
+		Kind: "github.ruleset.delete", Target: s.Repo, Seat: string(verbs.Founder),
+		Request: &actions.Request{Method: http.MethodDelete, Path: path},
+		Payload: map[string]any{"ruleset": GateRuleset, "second_human_review": false},
+	}, func(ctx context.Context) (any, error) {
+		req, err := s.GH.REST.NewRequest(ctx, http.MethodDelete, strings.TrimPrefix(path, "/"), nil)
+		if err != nil {
+			return nil, err
+		}
+		_, err = s.GH.REST.Do(req, nil)
+		return id, err
+	})
+	if err != nil {
+		return err
+	}
+	res.Ruleset = "deleted"
+	if rec.Status == actions.StatusPlanned {
+		res.Ruleset = "planned"
+	}
+	res.PolicyNote = fmt.Sprintf("one human again: the %s ruleset is removed, since this repository has no solo-mode gate to require", GateRuleset)
+	return nil
+}
+
+// createRuleset creates the protected-paths ruleset in its two-human form on
+// the default branch: one approval with native CODEOWNER review, no gate
+// check, no bypass.
+func (s *Seat) createRuleset(ctx context.Context, res *Result) error {
+	body := SwitchRuleset(map[string]any{"name": GateRuleset, "target": "branch", "enforcement": "active",
+		"conditions": map[string]any{"ref_name": map[string]any{"include": []any{"refs/heads/" + s.Default}, "exclude": []any{}}}}, true)
+	path := "/repos/" + s.Repo + "/rulesets"
+	rec, err := s.GH.Write(ctx, actions.Action{
+		Kind: "github.ruleset.create", Target: s.Repo, Seat: string(verbs.Founder),
+		Request: &actions.Request{Method: http.MethodPost, Path: path},
+		Payload: map[string]any{"ruleset": GateRuleset, "second_human_review": true},
+	}, func(ctx context.Context) (any, error) {
+		req, err := s.GH.REST.NewRequest(ctx, http.MethodPost, strings.TrimPrefix(path, "/"), body)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := s.GH.REST.Do(req, nil)
+		if resp != nil && resp.StatusCode == http.StatusForbidden {
+			err = fmt.Errorf("%w (a classic token with repo scope from an admin, or a fine-grained token with Administration: write; a private repository needs GitHub Pro or a paid plan for rulesets): %w", ErrAdmin, err)
+		}
+		return nil, err
+	})
+	if err != nil {
+		return err
+	}
+	res.Policy, res.Ruleset = PolicyTwoHuman, "created"
+	if rec.Status == actions.StatusPlanned {
+		res.Ruleset = "planned"
+	}
+	return nil
+}
+
 func must(s string, _ error) string { return s }
 
 // gateRuleset returns the solo-mode ruleset with its rules, or nil.
@@ -317,9 +412,16 @@ func (s *Seat) gateRuleset(ctx context.Context) (map[string]any, error) {
 		_, err = s.GH.REST.Do(req, out)
 		return err
 	}
-	var list []map[string]any
-	if err := get("/repos/"+s.Repo+"/rulesets", &list); err != nil {
-		return nil, fmt.Errorf("listing rulesets: %w", err)
+	var list []map[string]any // every page: a false absence would create a second ruleset
+	for page := 1; ; page++ {
+		var batch []map[string]any
+		if err := get(fmt.Sprintf("/repos/%s/rulesets?per_page=100&page=%d", s.Repo, page), &batch); err != nil {
+			return nil, fmt.Errorf("listing rulesets: %w", err)
+		}
+		list = append(list, batch...)
+		if len(batch) < 100 {
+			break
+		}
 	}
 	for _, r := range list {
 		if r["name"] == GateRuleset {
