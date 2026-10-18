@@ -5,9 +5,9 @@ idea into clear promises, checks every change against them before it merges, and
 It works inside the agent you already use (Claude Code, Codex, Cursor, or Amp), on your GitHub repository.
 
 - **Clear work.** An interview turns "make it faster" into a Goal with a baseline, and stories with numbered promises.
-- **Proof before merge.** A merge gate runs fixed checks in your CI and sends each change to a review model from
-  another vendor. Its one key lives in your repository's `code-review` environment
-  ([code review in the merge gate](docs/guide/how-review.md)).
+- **Proof before merge.** A merge gate runs fixed checks in your CI and sends each change, other than a change to
+  documents only, to a review model from another vendor. Its one key lives in your repository's `code-review`
+  environment ([code review in the merge gate](docs/guide/how-review.md)).
 - **A person decides.** An agent's change merges without a person only in two cases. Merge on proof, which is off
   by default, merges a story's pull request once its checks, proof, and review pass. A long correction-free streak on
   every layer it touches also lets it merge, when none of those layers is in `[autonomy] never`. With merge on
@@ -68,7 +68,8 @@ What's new: the [v0.3.0 release notes](docs/releases/v0.3.0.md) say what the rel
 
 1. **Level 1, clear work items.** Free, no keys, no CI changes: what the tour sets up.
 2. **Level 2, proof on every pull request.** The merge gate and its fixed checks run in your CI. A review model
-   you choose reviews each change with one key, or a review app you install, such as CodeRabbit or Codex.
+   you choose reviews each change that is not docs-only, with one key, or a review app you install, such as
+   CodeRabbit or Codex.
 3. **Level 3, autonomy and loops.** Scheduled and event-driven work in your agent's own tools, and agents that
    earn more freedom as their record grows.
 
