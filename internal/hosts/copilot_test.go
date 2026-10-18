@@ -154,12 +154,15 @@ func TestCopilotFamilies(t *testing.T) {
 {"id":"gemini-4-argon","vendor":"Google","model_picker_enabled":true,"policy":{"state":"enabled"}},
 {"id":"grok-4.7","vendor":"xAI","model_picker_enabled":true},
 {"id":"gpt-5.3-codex","vendor":"OpenAI","model_picker_enabled":true},
+{"id":"claude-sonnet-5","vendor":"Anthropic","model_picker_enabled":true,"policy":{"state":"disabled"}},
 {"id":"mai-code-1.1-flash","vendor":"Microsoft","model_picker_enabled":true,"policy":{"state":"enabled"}}]}`
 	got, err := CopilotFamilies(strings.NewReader(reply))
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[verbs.Family][]string{verbs.FamilyAnthropic: {"claude-opus-5.5"}, verbs.FamilyOpenAI: {"gpt-6.1-sol"}, verbs.FamilyGoogle: {"gemini-4-argon"}}
+	// No policy of its own inherits the default (grok-4.7, gpt-5.3-codex); a
+	// disabled one or one outside the picker does not count.
+	want := map[verbs.Family][]string{verbs.FamilyAnthropic: {"claude-opus-5.5"}, verbs.FamilyOpenAI: {"gpt-6.1-sol", "gpt-5.3-codex"}, verbs.FamilyGoogle: {"gemini-4-argon"}, verbs.FamilyXAI: {"grok-4.7"}}
 	if len(got) != len(want) {
 		t.Fatalf("families %v, want %v", got, want)
 	}

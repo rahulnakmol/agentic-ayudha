@@ -343,8 +343,10 @@ func (m CopilotModels) Trailers() string {
 const CopilotModelsURL = "https://api.githubcopilot.com/models"
 
 // CopilotFamilies reads a CopilotModelsURL reply into the model IDs the
-// account may pick, by family: a model counts when its policy is enabled and
-// it is in the model picker. A model aayu cannot place in a family is left out.
+// account may pick, by family: a model counts when it is in the model picker
+// and its policy is enabled or absent (a generally available model with no
+// policy of its own inherits the organisation's default). A model aayu cannot
+// place in a family is left out.
 func CopilotFamilies(r io.Reader) (map[verbs.Family][]string, error) {
 	var list struct {
 		Data []struct {
@@ -361,7 +363,7 @@ func CopilotFamilies(r io.Reader) (map[verbs.Family][]string, error) {
 	out := map[verbs.Family][]string{}
 	for _, m := range list.Data {
 		f := verbs.FamilyOf(m.ID)
-		if f == "" || !m.Picker || m.Policy == nil || m.Policy.State != "enabled" || slices.Contains(out[f], m.ID) {
+		if f == "" || !m.Picker || (m.Policy != nil && m.Policy.State != "enabled") || slices.Contains(out[f], m.ID) {
 			continue
 		}
 		out[f] = append(out[f], m.ID)
