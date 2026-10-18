@@ -94,6 +94,7 @@ for this release.
 - `aayu init --identity` stops at once in a remote shell, such as an orb's Terminal tab or SSH, and creates no App; on this machine it exits 4 with a next step when no redirect arrives within 10 minutes (#603).
 - `aayu init --identity` prints no Install link and writes no secret when the App's conversion fails, and refuses an App with another owner, an unrequested permission or event, or another webhook (#603).
 - `aayu seat` creates the codeowner-review ruleset when a second person joins a repository that init adopted (#516).
+- `aayu inspect <pr> --approve --reason "<what you checked>"` records the `[autonomy] approver`'s review of the pull request's current head on the ledger, after GitHub's device flow every time, and posts it as the human review the merge gate reads (#647).
 
 ### Evals
 
@@ -122,6 +123,7 @@ for this release.
 ### Breaking changes
 
 - `[inspect] reviewer = "auto"` is removed with no deprecation release: each repository names one review tool, and a repository left on `auto` or unset gets a person's review on every pull request that is not docs-only until you choose one with `aayu install --apply` or `[inspect] reviewer` (#641).
+- In inspect's human fallback, a reply no longer counts on its own, even from the approver's account: only the `[autonomy] approver`'s `aayu inspect <pr> --approve` for that exact head counts, so a new push needs a new approval and a repository with no `[autonomy] approver` cannot clear the fallback (#647).
 
 ### Fixes
 
