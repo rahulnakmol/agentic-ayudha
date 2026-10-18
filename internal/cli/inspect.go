@@ -526,7 +526,7 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		e.Logf("inspect: [inspect] paid_reviewer %s not used (%s); the reviewer app reviews", paid.Model, oneLineErr(err))
 		fb := prev
 		fb.SpentUSD, fb.PaidFailed = max(prev.SpentUSD, st.SpentUSD), pr.GetHead().GetSHA()
-		return e.inspectThroughApp(ctx, appInspect{c: c, repo: repo, pr: pr, in: ins, prev: fb, builder: builder, cfg: l.Config})
+		return e.inspectThroughApp(ctx, appInspect{c: c, repo: repo, pr: pr, in: ins, prev: fb, builder: builder, cfg: l.Config, record: fb.PaidFailed != prev.PaidFailed})
 	case errors.Is(err, inspect.ErrBudget), errors.Is(err, models.ErrBudget):
 		return Errorf(ExitBudget, "inspect #%d: %v", n, err)
 	case err != nil:
