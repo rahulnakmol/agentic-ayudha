@@ -34,7 +34,7 @@ func TestRunUsesProcessEnvironment(t *testing.T) {
 	var out, errb bytes.Buffer
 	code := Run(context.Background(), []string{"models", "show", "--host", "cursor", "--verbose"}, IO{In: strings.NewReader(""), Out: &out, Err: &errb},
 		Options{GHToken: func(context.Context) (string, error) { return "", errors.New("gh disabled in tests") }})
-	if code != 0 || !regexp.MustCompile(`review\s+cursor\s+grok-4\.7\s+xai\s+fallback`).MatchString(out.String()) {
+	if code != 0 || !regexp.MustCompile(`review\s+cursor\s+grok-4\.6\s+xai\s+fallback`).MatchString(out.String()) {
 		t.Fatalf("exit %d\n%s%s", code, out.String(), errb.String())
 	}
 	if !strings.Contains(errb.String(), "models: review lane on cursor: gpt-6.1-sol (openai) is not available on Cursor") {

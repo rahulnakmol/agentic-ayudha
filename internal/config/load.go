@@ -119,6 +119,12 @@ func Load(src Sources) (*Loaded, error) {
 			errs = append(errs, fmt.Errorf("%s: [models.gateway] base_url and secret are read only from the user config, AAYU_MODELS__GATEWAY__* variables, or --set, never from the checkout", source))
 			return
 		}
+		// The Cursor plan is the person's subscription, and "legacy" picks
+		// models a new plan charges at list price, so no checkout sets it.
+		if (name == LayerRepo || name == LayerLocal) && k.Exists("hosts.cursor.plan") {
+			errs = append(errs, fmt.Errorf("%s: [hosts.cursor] plan is read only from the user config, AAYU_HOSTS__CURSOR__PLAN, or --set, never from the checkout", source))
+			return
+		}
 		// Like [autonomy], the solo window is the protected repository
 		// config's alone (Story #432): no person's or agent's own layer sets it.
 		if name != LayerDefault && name != LayerRepo && k.Exists("decisions.solo_provisional_after_hours") {

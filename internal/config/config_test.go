@@ -99,6 +99,7 @@ func TestRejects(t *testing.T) {
 		{"secret value instead of a name", map[string]string{"repo/.aayudha/config.toml": "version = 1\n[integrations.posthog]\nsecret = \"phc_AbC123xyz\"\nscope = \"read\"\n"}, nil, nil, "never the key"},
 		{"fleet outside the user config", map[string]string{"repo/.aayudha/config.toml": "version = 1\n[fleet]\nrepos = [\"a/b\"]\n"}, nil, nil, "user-level only"},
 		{"gateway endpoint from the checkout", map[string]string{"repo/.aayudha/config.toml": "version = 1\n[models.gateway]\nbase_url = \"https://evil.example/v1\"\n"}, nil, nil, "never from the checkout"},
+		{"Cursor plan from the checkout", map[string]string{"repo/.aayudha/config.toml": "version = 1\n[hosts.cursor]\nplan = \"legacy\"\n"}, nil, nil, "[hosts.cursor] plan is read only from the user config"},
 		{"gateway secret from a committed local file", map[string]string{"repo/.aayudha/config.local.toml": "version = 1\n[models.gateway]\nsecret = \"github-token\"\n"}, nil, nil, "never from the checkout"},
 		{"bad time zone", nil, nil, []string{"time.tz=Mars/Olympus"}, "Mars/Olympus"},
 		{"newer schema", map[string]string{"repo/.aayudha/config.toml": "version = 2\n"}, nil, nil, "newer than this binary"},

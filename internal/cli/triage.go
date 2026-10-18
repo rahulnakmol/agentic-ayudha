@@ -45,7 +45,7 @@ func (e *Env) Gateway() (*models.Gateway, error) {
 	m := l.Config.Models
 	return &models.Gateway{
 		Models: m, Actions: log, HTTP: e.HTTP, Client: e.ModelClient,
-		Resolver: models.Resolver{Models: m, Log: func(s string) { e.Logf("%s", s) }},
+		Resolver: models.Resolver{Models: m, Hosts: l.Config.Hosts, Log: func(s string) { e.Logf("%s", s) }},
 		Breaker:  br,
 		Key: func(name string) (string, error) {
 			v, _, err := e.SecretStore().Get(name)
