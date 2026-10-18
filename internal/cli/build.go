@@ -1007,6 +1007,16 @@ func (e *Env) stopBuild(ctx context.Context, c *github.Client, bot identity.Bot,
 	if !contains(labels, labelInProgress) {
 		return Errorf(ExitBlocked, "build #%d --stop: it is not being built (no status:in-progress)", n)
 	}
+	// Only the builder stops its own build: another holder's live lease is
+	// another build still at work.
+	owner, name, _ := github.SplitRepo(repo)
+	cur, err := readLease(ctx, c, owner, name, n)
+	if err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	if me := leaseHolder(bot.Login); cur != nil && cur.Holder != me && cur.Expires.After(e.Now()) {
+		return Errorf(ExitBlocked, "build #%d --stop: %s holds a live lease on it until %s, not %s; only its builder stops it", n, cur.Holder, cur.Expires.UTC().Format(time.RFC3339), me)
+	}
 	w, err := e.Ledger(ctx, bot.Token, c.Identity(), bot.Tag)
 	if err != nil {
 		return err

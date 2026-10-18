@@ -161,6 +161,12 @@ func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
 		t.Fatalf("the stale claim's reason is not on the story:\n%s", p)
 	}
 
+	// Another builder's live lease is a build at work: --stop leaves it alone.
+	setLease(g, low.Number, "other@laptop", time.Now().Add(time.Hour))
+	if code, _, _, out := next(nil, "7", "--stop", "not mine"); code != ExitBlocked || !strings.Contains(out, "other@laptop holds a live lease") || contains(g.LabelNames(low.Number), "status:blocked") {
+		t.Fatalf("--stop over another's live lease: %d %s", code, out)
+	}
+	setLease(g, low.Number, "other@laptop", time.Now().Add(-time.Minute))
 	// The builder gives up on #7: --stop blocks it with the reason, and it leaves the in-flight count.
 	if code, _, _, out := next(nil, "7", "--stop", "the tests need a database this machine lacks"); code != ExitBlocked || !strings.Contains(out, "stopped by its builder: the tests need a database") {
 		t.Fatalf("--stop: %d %s", code, out)
