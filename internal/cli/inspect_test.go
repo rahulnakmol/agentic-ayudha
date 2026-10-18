@@ -809,8 +809,19 @@ func TestInspectPaidReviewer(t *testing.T) {
 	}
 	head := g.Pulls[prN].Head.SHA
 	addComment(g, prN, "claude[bot]", "Bot", statedReply(head, "merge", "internal/report/percent.go"))
-	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Disposition != inspect.Merge || res.Rung == inspect.RungB {
-		t.Fatalf("a failed paid review, the app's reply: exit %d %s rung %q %s", code, res.Disposition, res.Rung, errOut)
+	// The failure is on the gate's record for this head, so the run that
+	// reads the reply starts no second paid run (the gateway saw 7 today).
+	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Disposition != inspect.Merge || res.Rung == inspect.RungB || len(model.Requests) != 1 {
+		t.Fatalf("a failed paid review, the app's reply: exit %d %s rung %q, %d model calls %s", code, res.Disposition, res.Rung, len(model.Requests), errOut)
+	}
+
+	// A reply event's run only re-runs the head's inspect job, which makes
+	// the paid call: it makes none itself.
+	g, env, opts, prN, model = setup(`"claude"`, "google-key")
+	env["GITHUB_EVENT_NAME"] = "issue_comment"
+	addComment(g, prN, "claude[bot]", "Bot", statedReply(g.Pulls[prN].Head.SHA, "merge", "internal/report/percent.go"))
+	if code, _, errOut = inspectApp(t, env, opts, prN, "--ci"); len(model.Requests) != 0 {
+		t.Fatalf("a reply event: exit %d, %d model calls %s", code, len(model.Requests), errOut)
 	}
 
 	// A PR that spent its per-PR cap gets no further paid call, and the app

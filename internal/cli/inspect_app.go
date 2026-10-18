@@ -66,7 +66,7 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 	if err != nil {
 		return Wrap(ExitExternal, err)
 	}
-	replyEvent := e.CI && (e.Getenv("GITHUB_EVENT_NAME") == "issue_comment" || e.Getenv("GITHUB_EVENT_NAME") == "pull_request_review")
+	replyEvent := e.replyEvent()
 	if a.in.Pack == nil && a.in.Story > 0 && e.CI && !replyEvent {
 		return Errorf(ExitBlocked, "inspect #%d: %v", n, inspect.ErrNoPack)
 	}
@@ -163,6 +163,13 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		return Errorf(ExitBlocked, "inspect #%d: %s", n, res.Disposition)
 	}
 	return nil
+}
+
+// replyEvent reports whether this is the merge gate's run on a reply (a PR
+// comment or review), which only re-runs the head's failed inspect job.
+func (e *Env) replyEvent() bool {
+	ev := e.Getenv("GITHUB_EVENT_NAME")
+	return e.CI && (ev == "issue_comment" || ev == "pull_request_review")
 }
 
 // reviewRung settles the review ladder's rung from the reply (Decision
