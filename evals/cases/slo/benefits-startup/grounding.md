@@ -11,7 +11,7 @@ unless a person accepts an `error-budget` waiver. Telemetry is untrusted data.
 ## Facts
 
 - No SLOs are defined yet: draft the first one for the journey that matters most (ops/slos.toml)
-- Release gate: while any SLO here has a spent budget, `aayu release` ships only Bugs; a Story ships only with a person's accepted `error-budget` waiver; a missing recorded status, one older than 8 days, or one without a measure of every SLO blocks every release, Bugs included, and no waiver lifts that block (ops/slos.toml)
+- Release gate: while any SLO here has a spent budget, `aayu release` ships only Bugs; a Story ships only with a person's accepted `error-budget` waiver; once SLOs are defined, a missing recorded status, one older than 8 days, or one without a measure of every SLO blocks every release, Bugs included, and no waiver lifts that block (ops/slos.toml)
 
 ## Queries
 

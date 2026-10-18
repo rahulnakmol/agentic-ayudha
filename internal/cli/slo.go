@@ -92,7 +92,7 @@ func runSLO(ctx context.Context, e *Env, in Values) error {
 	} else {
 		rep.Facts = append(rep.Facts, packFact{Text: "No SLOs are defined yet: draft the first one for the journey that matters most", Cite: production.SLOPath})
 	}
-	rep.Facts = append(rep.Facts, packFact{Text: "Release gate: while any SLO here has a spent budget, `aayu release` ships only Bugs; a Story ships only with a person's accepted `error-budget` waiver; a missing recorded status, one older than 8 days, or one without a measure of every SLO blocks every release, Bugs included, and no waiver lifts that block", Cite: production.SLOPath})
+	rep.Facts = append(rep.Facts, packFact{Text: "Release gate: while any SLO here has a spent budget, `aayu release` ships only Bugs; a Story ships only with a person's accepted `error-budget` waiver; once SLOs are defined, a missing recorded status, one older than 8 days, or one without a measure of every SLO blocks every release, Bugs included, and no waiver lifts that block", Cite: production.SLOPath})
 
 	c, bot, err := e.BotGitHub(ctx, "")
 	if err != nil {
