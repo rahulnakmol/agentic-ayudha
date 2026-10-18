@@ -75,7 +75,14 @@ func coversEntry(ix *Index, syms map[string]Symbol, c string, e Fact) bool {
 	}
 	file, line := splitAt(e.At)
 	if s, ok := syms[c]; ok {
-		return s.At == e.At // a definition elsewhere covers by name (checkCapabilityMap)
+		// The symbol of the entry's own definition; one elsewhere covers by name
+		// (checkCapabilityMap). Its name, not only its line, tells same-line
+		// entries apart.
+		name := e.Detail
+		if e.Kind == "api" {
+			_, name, _ = strings.Cut(e.Detail, " ")
+		}
+		return s.At == e.At && s.Name == name
 	}
 	j := strings.LastIndex(c, ":")
 	if j < 0 || c[:j] != file {
@@ -359,6 +366,9 @@ func runnerReach(ix *Index) (reach func(Fact, []Fact) bool, drives func(Fact) bo
 		seen := map[string]bool{f: true}
 		for queue := []string{f}; len(queue) > 0; queue = queue[1:] {
 			for _, l := range loaded[queue[0]] {
+				if l.in != "" && !reached(r)[l.in] {
+					continue // an import inside a function the harness never runs
+				}
 				if _, ok := test[l.file]; ok && !test[l.file] {
 					return true
 				}
