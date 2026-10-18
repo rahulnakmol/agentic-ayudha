@@ -34,3 +34,15 @@ The Ready guard notices when a Ready body drifts.
 It serves anyone who files or picks up work, from Level 1 of adoption.
 Level 1 needs no keys and no CI changes.
 See [[Ready (term)]] and [[Completion Goal (term)]].
+
+## Record
+
+<!-- BEGIN aayudha:brain:record -->
+- Recorded in #31 Feature: M2 Work items.
+<!-- END aayudha:brain:record -->
+
+## Implementation history
+
+<!-- BEGIN aayudha:brain:history -->
+
+<!-- END aayudha:brain:history -->

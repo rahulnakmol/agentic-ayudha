@@ -32,3 +32,15 @@ See [[Small, reversible steps]].
 
 It serves people who install aayu, and the DevOps & DevEx Tinkerer seat that owns release.
 See [[v0.1.0]] and [[v0.2.0]].
+
+## Record
+
+<!-- BEGIN aayudha:brain:record -->
+- Recorded in #35 Feature: M7 Loops and explain.
+<!-- END aayudha:brain:record -->
+
+## Implementation history
+
+<!-- BEGIN aayudha:brain:history -->
+- Delivered in [[v0.1.0]] by #62, #63, #64, #65, #66, #67, #68, #69.
+<!-- END aayudha:brain:history -->

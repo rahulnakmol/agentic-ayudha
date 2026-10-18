@@ -32,3 +32,15 @@ See [[Every write is attributable]].
 
 It serves auditors and anyone who must trace a merge to its evidence.
 See [[Ledger (term)]].
+
+## Record
+
+<!-- BEGIN aayudha:brain:record -->
+- Recorded in #32 Feature: M4 Proof.
+<!-- END aayudha:brain:record -->
+
+## Implementation history
+
+<!-- BEGIN aayudha:brain:history -->
+- Delivered in [[v0.1.0]] by #41, #42, #43, #44, #45, #46, #47, #48, #49, #50.
+<!-- END aayudha:brain:history -->

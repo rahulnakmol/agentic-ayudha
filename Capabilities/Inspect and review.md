@@ -32,3 +32,16 @@ A disposition can downgrade a result, but it never overrides a floor.
 
 It serves the person who owns the merge, and the builder agent that must fix findings.
 See [[The review ladder]] and [[Inspect's review converges]].
+
+## Record
+
+<!-- BEGIN aayudha:brain:record -->
+- Recorded in #32 Feature: M4 Proof.
+- Recorded in #34 Feature: M6 UX.
+<!-- END aayudha:brain:record -->
+
+## Implementation history
+
+<!-- BEGIN aayudha:brain:history -->
+- Delivered in [[v0.1.0]] by #41, #42, #43, #44, #45, #46, #47, #48, #49, #50, #59, #60, #61.
+<!-- END aayudha:brain:history -->

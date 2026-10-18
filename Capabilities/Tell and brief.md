@@ -31,3 +31,15 @@ A claim without a pack behind it does not ship.
 ## Who it serves
 
 It serves readers outside the pod, and the Mentalist and Marketer & Documenter seats.
+
+## Record
+
+<!-- BEGIN aayudha:brain:record -->
+- Recorded in #35 Feature: M7 Loops and explain.
+<!-- END aayudha:brain:record -->
+
+## Implementation history
+
+<!-- BEGIN aayudha:brain:history -->
+- Delivered in [[v0.1.0]] by #62, #63, #64, #65, #66, #67, #68, #69.
+<!-- END aayudha:brain:history -->

@@ -32,3 +32,16 @@ Feature #37 tracks the first run of the whole loop on one real Story.
 
 It serves teams that run many agent pull requests a day.
 See [[Merge on proof into dev]].
+
+## Record
+
+<!-- BEGIN aayudha:brain:record -->
+- Recorded in #32 Feature: M4 Proof.
+- Recorded in #37 Feature: M4.5 Thin slice run.
+<!-- END aayudha:brain:record -->
+
+## Implementation history
+
+<!-- BEGIN aayudha:brain:history -->
+- Delivered in [[v0.1.0]] by #41, #42, #43, #44, #45, #46, #47, #48, #49, #50, #91.
+<!-- END aayudha:brain:history -->

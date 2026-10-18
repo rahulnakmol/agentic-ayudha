@@ -36,3 +36,16 @@ The target of Initiative #126 is at least 0.60.
 benefits-qa is the nine-layer example that the pod built from grill goal to release.
 It shows the whole loop on one product.
 See [[Grounded benefits answers]].
+
+## Record
+
+<!-- BEGIN aayudha:brain:record -->
+- Recorded in #125 Goal: Example Co employees get benefits answers within a week (benefits-qa example).
+- Recorded in #126 Initiative: Self-serve benefits answers quoted from the plan documents.
+<!-- END aayudha:brain:record -->
+
+## Implementation history
+
+<!-- BEGIN aayudha:brain:history -->
+- Delivered in rolling-2026-10-12.4 by #130, #131, #132, #133, #134.
+<!-- END aayudha:brain:history -->
