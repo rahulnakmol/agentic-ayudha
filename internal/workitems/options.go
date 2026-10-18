@@ -32,6 +32,7 @@ var (
 	optionLine  = regexp.MustCompile(`^([0-9]+)[.)]\s+(.*)$`)
 	optionBold  = regexp.MustCompile(`^\*\*(.+?)\*\*[.:,]?(?:\s+(.*))?$`) // a ** inside a code span, as in ops/**, does not end it
 	optionPlain = regexp.MustCompile(`^(.+?)(?:: |\. | — | - )(.*)$`)
+	fenceRun    = regexp.MustCompile("^(?:`{3,}|~{3,})")
 	recommended = regexp.MustCompile(`(?i)\s*\(recommended\b[^)]*\)`) // "(recommended)" or "(recommended, because …)"
 )
 
@@ -42,12 +43,19 @@ var (
 func ParseOptions(s string) ([]Option, []Problem) {
 	var os []Option
 	var ps []Problem
-	fence := false
+	fence := "" // the open fence's delimiter run; only a run of the same character at least as long closes it
 	for _, line := range strings.Split(strings.ReplaceAll(s, "\r\n", "\n"), "\n") {
-		if t := strings.TrimSpace(line); strings.HasPrefix(t, "```") || strings.HasPrefix(t, "~~~") {
-			fence = !fence
+		if f := fenceRun.FindString(strings.TrimSpace(line)); f != "" {
+			switch {
+			case fence == "":
+				fence = f
+				continue
+			case f[0] == fence[0] && len(f) >= len(fence):
+				fence = ""
+				continue
+			}
 		}
-		if fence {
+		if fence != "" {
 			continue
 		}
 		for _, line := range inlineOptions(line) {
@@ -82,7 +90,8 @@ func ParseOptions(s string) ([]Option, []Problem) {
 }
 
 // inlineOptions splits a line that numbers its options inline, "1. Keep it.
-// 2. Drop it.", at each next number in sequence; any other line is itself.
+// 2. Drop it.", at each next number in sequence where a sentence ends before
+// it ("phase 2. before launch" is prose); any other line is itself.
 func inlineOptions(line string) []string {
 	if !strings.HasPrefix(line, "1. ") && !strings.HasPrefix(line, "1) ") {
 		return []string{line}
@@ -90,7 +99,7 @@ func inlineOptions(line string) []string {
 	var out []string
 	for k := 2; ; k++ {
 		i := strings.Index(line, fmt.Sprintf(" %d%c ", k, line[1]))
-		if i < 0 {
+		if i < 1 || !strings.ContainsRune(".;", rune(line[i-1])) {
 			return append(out, line)
 		}
 		out, line = append(out, line[:i]), line[i+1:]

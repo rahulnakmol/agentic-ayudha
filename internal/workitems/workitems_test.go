@@ -325,7 +325,7 @@ func TestParseOptions(t *testing.T) {
 		"   - Trade-off: gains a; costs b.\n" +
 		"   1. not an option\n" +
 		"```\n2. not an option either\n```\n" +
-		"~~~\n2. nor this\n~~~\n" +
+		"~~~\n2. nor this\n```\n2. nor this, inside the tilde fence\n~~~\n" +
 		"2. **Keep the hat** (L07 stays put).\n" +
 		"3. Do nothing: nothing changes.")
 	want := []Option{
@@ -335,6 +335,10 @@ func TestParseOptions(t *testing.T) {
 	}
 	if len(ps) != 0 || !slices.Equal(os, want) {
 		t.Errorf("ParseOptions = %+v %v\nwant %+v", os, ps, want)
+	}
+	// Prose that names a number is not a second option.
+	if os, ps := ParseOptions("1. **Keep.** Complete phase 2. before launch."); len(os) != 1 || len(ps) != 1 {
+		t.Errorf("prose with a number = %+v %v", os, ps)
 	}
 	// Options numbered inline on one line count, in sequence only.
 	os, ps = ParseOptions("1. Keep CALC_DEBUG. 2. Replace it with a --debug flag, as step 4. says.")
