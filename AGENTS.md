@@ -164,7 +164,7 @@ seat's twin, consult the Consulted seats before acting, and leave paired humans'
 
 | Seat | Twin | Layers owned | Accountable for |
 |---|---|---|---|
-| Product Strategist (`product-strategist`) | Arjun | — | `grill`, `slice`, `triage`, `ready` |
+| Product Strategist (`product-strategist`) | Arjun | — | `grill`, `slice`, `triage`, `ready`, `scope` |
 | Code Architect (`code-architect`) | Vishwa | L02, L06 | `plan`, `survey` |
 | Data & AI Architect (`data-ai-architect`) | Shuka | L05, L08 | `measure`, `chart` |
 | Engineering Manager (`engineering-manager`) | Drona | L03 | `inspect`, `ship`, `status`, `retro`, `next` |

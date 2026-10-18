@@ -43,6 +43,7 @@ func init() { register("inbox", runInbox) }
 // Inbox kinds, in the order the inbox shows them.
 const (
 	InboxDecision    = "decision"     // an open Decision waiting for acceptance (a provisional one to ratify or revert)
+	InboxScope       = "scope"        // a Release whose scope request waits for a person: a drafted baseline, or a change over budget
 	InboxReady       = "ready"        // an open Story PR that ship refused only for the human pass, its gate green
 	InboxHumanReview = "human-review" // a PR whose merge gate waits at the human rung for its head (Story #675)
 	InboxCapped      = "capped"       // a PR whose review stopped at the round cap (step-back), waiting for a person
@@ -52,7 +53,7 @@ const (
 	InboxAudit       = "audit"        // a PR ship merged with no person's pass, sampled for a person's look after merge
 )
 
-var inboxOrder = []string{InboxDecision, InboxReady, InboxHumanReview, InboxCapped, InboxUnshipped, InboxFixed, InboxReplaced, InboxAudit}
+var inboxOrder = []string{InboxDecision, InboxScope, InboxReady, InboxHumanReview, InboxCapped, InboxUnshipped, InboxFixed, InboxReplaced, InboxAudit}
 
 // InboxMarker marks the comment inbox leaves when it closes an issue.
 const InboxMarker = "<!-- aayudha:inbox -->"
@@ -81,6 +82,13 @@ var inboxKinds = map[string]inboxKind{
 			"Accepting the recommended option records your answer on the issue and closes it, and the work that waits on it can go ahead. " +
 			"If you leave it, the question stays open and that work stays parked.",
 		Terms: []string{"Decision", "Waiver"}},
+	InboxScope: {Icon: "📋", Word: "Release scope", Seat: verbs.ProductStrategist,
+		Line: "A release plan to freeze, or a change past its budget; only a person accepts either.",
+		Explain: "aayu scope plans what a release contains in the GitHub milestone named by its version. An agent drafts the plan, but the plan " +
+			"counts as the baseline only when a person accepts it. After that, every item added, removed, or resized is drift, weighted by effort. " +
+			"Within the budget in [scope] budget_percent, changes go ahead; past it, a change waits for a person, against a Decision someone accepted. " +
+			"Accepting writes the baseline or applies the change and records it on the ledger. If you leave it, nothing changes.",
+		Terms: []string{"Release", "Decision"}},
 	InboxReady: {Icon: "🚢", Word: "Ready to ship", Seat: verbs.EngineeringManager,
 		Line: "Finished work with every check green; it touches a sensitive area, so it merges when you say so.",
 		Explain: "Most agent pull requests merge into dev on their own once every check is green and the proof shows they do what they say. " +
@@ -558,6 +566,12 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 					return nil, err
 				}
 			}
+		case typ == "release":
+			if ok, err := s.scopeItem(ctx, &it); err != nil {
+				return nil, err
+			} else if !ok {
+				continue
+			}
 		case (typ == "story" || typ == "bug") && replacedBy[n] != 0:
 			m := replacedBy[n]
 			it.Kind, it.Seat, it.ReplacedBy, it.Evidence = InboxReplaced, verbs.ProductStrategist, m, s.issues[m].GetHTMLURL()
@@ -853,6 +867,10 @@ func inboxCounsel(it InboxItem) string {
 		return fmt.Sprintf("What this is really about: keeping the board honest about what is already fixed. The evidence: PR #%d, the fix for "+
 			"Bug #%d, merged into %s as commit %s, and the Bug is still open. I recommend closing it as completed, with a note that links the fix. "+
 			"Leave it and the Bug keeps counting as open in every list and report, though no code changes either way.", it.PR, n, f.devBr, short(it.mergeSHA))
+	case InboxScope:
+		return fmt.Sprintf("Release #%d: %s. A baseline is the plan we measure every later change against, so accept only the plan you see on "+
+			"the Release. Past the budget, accept only if the Decision says why this change beats moving it to the next release. Slipping "+
+			"an item is normal; letting drift grow without a recorded call is what to stop. You decide.", n, f.problem)
 	case InboxReplaced:
 		return fmt.Sprintf("Issue #%d says it replaces #%d, and both are still open. Two open issues for one problem split attention and count "+
 			"the same work twice. I recommend closing #%d as not planned, with a note that points to #%d, so the work lives in one place. Keep #%d "+
@@ -1461,6 +1479,8 @@ func (e *Env) inboxAct(ctx context.Context, cfg *config.Config, c *github.Client
 		return decideAccept(ctx, e, cfg, repo, []int{it.Number}, []string{strconv.Itoa(a.N)})
 	case InboxCapped:
 		return handlers["ship"](ctx, e, Values{"pr": strconv.Itoa(it.Number)})
+	case InboxScope: // scope reads it all again and asks for the device code unless this session already gave one
+		return handlers["scope"](ctx, e, Values{"release": strconv.Itoa(it.Number), "accept": true})
 	case InboxReady:
 		return e.shipReady(ctx, cfg, c, repo, login, it)
 	case InboxHumanReview:

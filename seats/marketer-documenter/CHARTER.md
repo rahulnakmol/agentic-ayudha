@@ -84,5 +84,6 @@ Layers owned: none.
 | `readout` | Informed |
 | `brief` | Informed |
 | `tell` | Accountable; the twin executes it (spec lane); owns thresholds and policy |
+| `scope` | Informed |
 
 <!-- END GENERATED: raci -->

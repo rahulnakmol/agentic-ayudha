@@ -54,6 +54,7 @@ Charters: `seats/<seat>/CHARTER.md`.
 | `investigate` | Production Engineer | Production Engineer twin, spec lane | Production Engineer | AI Native Engineer | Engineering Manager | all | bot | host | read |
 | `slo` | Production Engineer | Production Engineer twin, spec lane | Production Engineer | Product Strategist, Quality Architect | Engineering Manager, DevOps & DevEx Tinkerer | all | bot | host | read |
 | `runbook` | Production Engineer | Production Engineer twin, spec lane | Production Engineer | AI Native Engineer, DevOps & DevEx Tinkerer | Engineering Manager | all | bot | host | read |
+| `scope` | Product Strategist | Product Strategist twin, plan lane | Product Strategist | Engineering Manager, Founder | DevOps & DevEx Tinkerer, Marketer & Documenter | all | bot | host | write |
 
 Model calling: `none` is deterministic; `host` means the host's model reasons inside the skill;
 `direct` means the binary calls a model itself; `hybrid` is host reasoning plus a direct pass

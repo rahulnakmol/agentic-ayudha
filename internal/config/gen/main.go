@@ -98,6 +98,15 @@ var sections = []section{
 		note: "When a budget trips, the breaker pauses agent lanes and pages through `[notify]` once per day (WP1.6).",
 	},
 	{
+		heading: "Release scope",
+		roots:   []string{"scope"},
+		rows: []row{
+			{"scope.budget_percent", "Drift a release may take after a person accepts its baseline, in percent of the baseline's effort points: items added, removed, or resized. Beyond it, `aayu scope` refuses the change until a person accepts it, through GitHub's device flow, against an accepted Decision.", "0.3 (@rahulnakmol: 15 to 20 %)"},
+			{"scope.effort_points", "Effort points of XS, S, M, L, and XL: the weight of each Story and Bug in a plan and in its drift. Initiatives and Features weigh nothing themselves; they count through their Stories and Bugs.", "0.3"},
+		},
+		note: "`aayu scope` stores each accepted baseline and its drift on the `ledger` branch under `releases/<version>/`. Accepting a baseline, and any change over budget, is a person's call.",
+	},
+	{
 		heading: "Design review",
 		roots:   []string{"review"},
 		rows: []row{

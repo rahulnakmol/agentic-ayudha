@@ -81,6 +81,7 @@ every input of every verb.
 | `investigate` | Investigate an incident from bounded telemetry queries to the deployed revision and the implicated code, and check the note; it proposes a mitigation, never runs one. | Production Engineer | spec | all | bot | cli, skill, mcp |
 | `slo` | Define SLOs and error budgets from the user's side, measure them from a sanitised export, and record the budget that gates release. | Production Engineer | spec | all | bot | cli, skill, mcp |
 | `runbook` | Write and check runbooks: confirm a known failure with a bounded query, mitigate it only through the ops catalog, verify it, and roll it back. | Production Engineer | spec | all | bot | cli, skill, mcp |
+| `scope` | Plan a release's scope in its version milestone, draft it, have a person baseline it, hand it off, assign Feedback, and hold drift to the change budget. | Product Strategist | plan | all | bot | cli, skill, mcp |
 
 <!-- END GENERATED: verbs -->
 

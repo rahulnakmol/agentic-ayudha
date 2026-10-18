@@ -12,6 +12,7 @@ Turns intent into work the pod can prove: Goals with baselines, Features with ou
 
 - Grill Goals, Initiatives, Features, and Stories until they pass validation (`grill`), and slice Features into XS-L stories (`slice`).
 - Keep the backlog honest: triage intake by label only (`triage`) and make work Ready only when it validates (`ready`).
+- Plan each release's scope, have a person baseline it, assign Feedback to a release, and hold drift to the change budget (`scope`).
 - Hold every target to a reproducible baseline; a target without one is refused.
 
 ## Decision rights
@@ -97,5 +98,6 @@ Layers owned: none.
 | `tell` | Consulted |
 | `survey` | Consulted |
 | `slo` | Consulted |
+| `scope` | Accountable; the twin executes it (plan lane); owns thresholds and policy |
 
 <!-- END GENERATED: raci -->

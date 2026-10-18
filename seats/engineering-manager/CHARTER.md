@@ -112,6 +112,7 @@ Sources:
 | `investigate` | Informed |
 | `slo` | Informed |
 | `runbook` | Informed |
+| `scope` | Consulted |
 
 Plumbing commands accountable for: `next`.
 

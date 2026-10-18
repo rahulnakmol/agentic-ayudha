@@ -176,6 +176,7 @@ are not verbs; the verbs reference lists them.
 |  | [`plan`](skills/plan.md) | Plans a story one layer at a time: what changes, how it is tested, and how to roll it back. |
 |  | [`decide`](skills/decide.md) | Records a real choice with its options and a recommendation; only a person with the authority accepts it. |
 |  | [`chart`](skills/chart.md) | Before a data or AI change is planned, works out with you which decisions it serves, which data or evidence answers them, and how to prove it right. |
+|  | [`scope`](skills/scope.md) | Plans what a release contains, freezes it once a person accepts it, and stops later changes beyond the budget unless a person decides. |
 | [Get a story Ready](journey-3-ready.md) | [`ready`](skills/ready.md) | Checks that a work item is complete and freezes exactly what was agreed, so later edits are visible. |
 | [Design the screens](journey-4-build.md#if-your-story-has-a-screen) | [`research`](skills/research.md) | Collects design references and user research for a Feature. |
 |  | [`wireframe`](skills/wireframe.md) | Sketches the screens a Feature needs, from its research and promises. |

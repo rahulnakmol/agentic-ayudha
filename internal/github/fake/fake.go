@@ -31,6 +31,14 @@ type Label struct {
 	Description string `json:"description"`
 }
 
+// Milestone is a repository milestone.
+type Milestone struct {
+	Number      int    `json:"number"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	State       string `json:"state"`
+}
+
 // IssueType is an organization issue type.
 type IssueType struct {
 	ID          int64  `json:"id"`
@@ -63,6 +71,7 @@ type Issue struct {
 	StateReason string     `json:"state_reason,omitempty"`
 	ClosedBy    *Account   `json:"closed_by,omitempty"`
 	Labels      []Label    `json:"labels"`
+	Milestone   *Milestone `json:"milestone"`
 	Type        *IssueType `json:"type,omitempty"`
 	CreatedAt   string     `json:"created_at"`
 	// UpdatedAt is advanced by every write to the issue, or to the pull
@@ -243,6 +252,7 @@ type GitHub struct {
 	Trees       map[string][]map[string]any // sha -> entries
 	Commits     map[string]map[string]any   // sha -> commit
 	Issues      map[int]*Issue
+	Milestones  []*Milestone
 	Pulls       map[int]*PR
 	CheckRuns   map[string][]CheckRun   // commit SHA -> check runs, newest first, CheckRunsPerPage a page (0: all)
 	Statuses    map[string][]Status     // commit SHA -> legacy commit statuses, newest first
@@ -792,6 +802,24 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		reply(200, map[string]any{"workflow_run_id": id, "run_url": fmt.Sprintf("%s%s/actions/runs/%d", g.Server.URL, repo, id),
 			"html_url": fmt.Sprintf("https://github.com/%s/%s/actions/runs/%d", g.Owner, g.Repo, id)})
 
+	// Milestones.
+	case m == "GET" && p == repo+"/milestones":
+		out := []*Milestone{}
+		for _, ms := range g.Milestones {
+			if q := r.URL.Query().Get("state"); q == "all" || ms.State == q || q == "" && ms.State == "open" {
+				out = append(out, ms)
+			}
+		}
+		reply(200, out)
+	case m == "POST" && p == repo+"/milestones":
+		if slices.ContainsFunc(g.Milestones, func(ms *Milestone) bool { return ms.Title == str("title") }) {
+			reply(422, map[string]any{"message": "Validation Failed", "errors": []any{map[string]any{"code": "already_exists"}}})
+			return
+		}
+		ms := &Milestone{Number: len(g.Milestones) + 1, Title: str("title"), Description: str("description"), State: "open"}
+		g.Milestones = append(g.Milestones, ms)
+		reply(201, ms)
+
 	// Labels.
 	case m == "GET" && p == repo+"/labels":
 		out := []Label{}
@@ -928,9 +956,10 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		out := []*Issue{}
 		since := r.URL.Query().Get("since")
 		for n := 1; n <= len(g.Issues); n++ {
-			want := r.URL.Query().Get("labels")
+			want, ms := r.URL.Query().Get("labels"), r.URL.Query().Get("milestone")
 			if is := g.Issues[n]; is != nil && (r.URL.Query().Get("state") == "all" || is.State == "open") && is.UpdatedAt >= since &&
-				(want == "" || slices.ContainsFunc(is.Labels, func(l Label) bool { return l.Name == want })) {
+				(want == "" || slices.ContainsFunc(is.Labels, func(l Label) bool { return l.Name == want })) &&
+				(ms == "" || is.Milestone != nil && strconv.Itoa(is.Milestone.Number) == ms) {
 				out = append(out, is)
 			}
 		}
@@ -1178,6 +1207,14 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			}
 			if v, ok := body["title"].(string); ok {
 				is.Title = v
+			}
+			if v, ok := body["milestone"]; ok {
+				is.Milestone = nil
+				for _, ms := range g.Milestones {
+					if f, _ := v.(float64); int(f) == ms.Number {
+						is.Milestone = ms
+					}
+				}
 			}
 			if v, ok := body["state"].(string); ok {
 				is.State = v
