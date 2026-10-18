@@ -89,6 +89,11 @@ type Inspect struct {
 	Reviewer    string            `koanf:"reviewer" jsonschema:"enum=auto,enum=claude,enum=codex,enum=cursor,enum=amp,enum=human,enum=model" jsonschema_description:"Who reviews in the merge gate. auto: the first installed agent app (apps) of a family other than the builder's, else a human; claude, codex, cursor: that app (a same-family app falls back); human: a human review; model: the review lane's model, called with a key (aayudha's evals, or a person who holds one)."`
 	Apps        []string          `koanf:"apps" jsonschema_description:"Agent apps installed on the repository's org or account that answer an @-mention with a review: claude, codex, cursor. aayu doctor and aayu install detect them."`
 	AppFamilies map[string]string `koanf:"app_families" jsonschema_description:"Model family of each reviewer app (anthropic, openai, google, xai). An app without one cannot review, since the different-family rule needs it; Cursor runs the model its user picks."`
+
+	// PaidReviewer is rung B of the review ladder (Decision #469; founder,
+	// 2026-10-18): the founder's deliberate, opt-in exception to "no AI keys
+	// in a product repo's CI".
+	PaidReviewer string `koanf:"paid_reviewer" jsonschema_description:"Rung B, opt-in: a model ID (gemini-3.8-flash, grok-4.7, ...) the merge gate calls with a pay-as-you-go key when no installed app is of a family the builder cannot be. Off unless this names a model and the repository adds its provider key as the secret AAYU_SECRET_<FAMILY> (AAYU_SECRET_GOOGLE for Gemini); each PR's spend is capped by [budget] per_pr_inspect_max, and the review is labelled (B, paid)."`
 }
 
 // Team stages (WP5.1b): how much ceremony the seat twins' practice carries.
@@ -508,6 +513,11 @@ func (c *Config) Validate() error {
 		}
 		if _, isSeat := verbs.FindSeat(verbs.SeatID(v)); !isSeat && !loginName.MatchString(v) {
 			bad("[decisions.authority] %s = %q: want a seat slug or a GitHub login", k, v)
+		}
+	}
+	if m := c.Inspect.PaidReviewer; m != "" {
+		if f := verbs.FamilyOf(m); f == "" || f == verbs.FamilyHostManaged {
+			bad("[inspect] paid_reviewer = %q: want a model ID of a known family (anthropic, openai, google, xai)", m)
 		}
 	}
 	if pl := c.Hosts.Cursor.Plan; pl != "" && pl != verbs.PlanX && pl != verbs.PlanLegacy {

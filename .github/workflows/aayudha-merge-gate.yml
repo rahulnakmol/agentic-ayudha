@@ -216,10 +216,19 @@ jobs:
         with:
           name: aayudha-pack
           path: .aayudha/proof/
-      # No AI key: the reviewer app's reply on the PR is the review; a missing or malformed one fails closed.
-      - name: Inspect (read the reviewer app's reply)
+      # No AI key by default: the reviewer app's reply on the PR is the review; a missing or malformed one fails
+      # closed. Rung B (founder, 2026-10-18) is the one opt-in exception: when [inspect] paid_reviewer names a model
+      # and the repository adds its provider's key as the secret named below for its family (docs/guide/
+      # how-merge-gate.md), a PR no installed app can review from another family is reviewed with it, within
+      # [budget] per_pr_inspect_max, labelled (B, paid). An unset secret is empty, and the app reviews. This job checks out
+      # the base branch and runs no PR code; the diff reaches the model only as delimited untrusted data.
+      - name: Inspect (read the reviewer app's reply, or the opt-in paid reviewer)
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          AAYU_SECRET_ANTHROPIC: ${{ secrets.AAYU_SECRET_ANTHROPIC }}
+          AAYU_SECRET_OPENAI: ${{ secrets.AAYU_SECRET_OPENAI }}
+          AAYU_SECRET_GOOGLE: ${{ secrets.AAYU_SECRET_GOOGLE }}
+          AAYU_SECRET_XAI: ${{ secrets.AAYU_SECRET_XAI }}
         run: aayudha inspect "$PR" --ci --repo "$REPO"
 
   pack:

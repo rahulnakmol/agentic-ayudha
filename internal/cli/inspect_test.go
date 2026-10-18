@@ -732,3 +732,47 @@ func TestInspectWithoutStory(t *testing.T) {
 		t.Fatalf("docs-only PR with a model reviewer: exit %d %+v %s", code, res, errOut)
 	}
 }
+
+// Rung B (Decision #469; founder, 2026-10-18): with only a same-family app for
+// a Claude build, the opt-in paid reviewer of another family reviews in the
+// gate with the repository's key, labelled (B, paid); without the key the app
+// reviews; and an app of another family (A, free) always comes first.
+func TestInspectPaidReviewer(t *testing.T) {
+	setup := func(apps, key string) (*fake.GitHub, map[string]string, Options, int, *models.Fake) {
+		g, env, opts, prN := inspectFixture(t, cleanDiff, "Refs #2")
+		_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
+		cfg := "version = 1\n\n[inspect]\napps = [" + apps + "]\npaid_reviewer = \"gemini-3.8-flash\"\n"
+		if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte(cfg), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		env = maps.Clone(env)
+		env["AAYU_SECRET_GOOGLE"] = key
+		model := &models.Fake{Replies: []models.Response{inspectReply("merge", "")}}
+		opts.ModelClient = func(models.Route, string) models.Client { return model }
+		return g, env, opts, prN, model
+	}
+
+	_, env, opts, prN, model := setup(`"claude"`, "google-key")
+	code, res, errOut := inspectApp(t, env, opts, prN, "--ci")
+	if code != 0 || res.Rung != inspect.RungB || !strings.Contains(res.Review, "(B, paid): gemini-3.8-flash (google)") || len(model.Requests) != 1 || model.Requests[0].Model != "gemini-3.8-flash" {
+		t.Fatalf("paid reviewer: exit %d rung %q %q, %d model calls %s", code, res.Rung, res.Review, len(model.Requests), errOut)
+	}
+
+	g, env, opts, prN, model := setup(`"claude"`, "")
+	code, res, _ = inspectApp(t, env, opts, prN)
+	g.Mu.Lock()
+	cs := slices.Clone(g.Issues[prN].Comments)
+	g.Mu.Unlock()
+	if code != ExitBlocked || res.Disposition != NoReply || len(model.Requests) != 0 || len(cs) != 1 || !strings.HasPrefix(cs[0].Body, "@claude review\n") {
+		t.Fatalf("no key: exit %d %s, %d model calls, comments %+v", code, res.Disposition, len(model.Requests), cs)
+	}
+
+	g, env, opts, prN, model = setup(`"claude", "codex"`, "google-key")
+	code, _, _ = inspectApp(t, env, opts, prN)
+	g.Mu.Lock()
+	cs = slices.Clone(g.Issues[prN].Comments)
+	g.Mu.Unlock()
+	if code != ExitBlocked || len(model.Requests) != 0 || len(cs) != 1 || !strings.HasPrefix(cs[0].Body, "@codex review\n") {
+		t.Fatalf("an app of another family must come before the paid reviewer: exit %d, %d model calls, comments %+v", code, len(model.Requests), cs)
+	}
+}

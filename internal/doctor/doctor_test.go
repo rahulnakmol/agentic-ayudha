@@ -537,6 +537,13 @@ func TestCheckStates(t *testing.T) {
 			p.Host = "cursor"
 			p.Config = load(t, "inspect.apps=claude", "hosts.cursor.plan=legacy")
 		}, Pass, "C  same-family review: claude (anthropic)"},
+		// Rung B, opt-in: a paid Gemini reviewer for an Amp build (anthropic or openai).
+		{"a paid reviewer of another family", checkReviewRung, func(p *Probe) {
+			p.Config = load(t, "inspect.apps=codex", "inspect.paid_reviewer=gemini-3.8-flash-high")
+		}, Pass, "B  different-family review, paid (opt-in): gemini-3.8-flash-high (google) when the merge gate holds the repository secret AAYU_SECRET_GOOGLE"},
+		{"a paid reviewer of the builder's family", checkReviewRung, func(p *Probe) {
+			p.Config = load(t, "inspect.apps=codex", "inspect.paid_reviewer=gpt-6.1-sol")
+		}, Pass, "paid_reviewer gpt-6.1-sol (openai) cannot be shown to differ from the builder"},
 		// reviewer "model" calls the review lane, not an app: Amp may be
 		// anthropic or openai, so inspect passes over both to Grok.
 		{"a model reviewer for an Amp build", checkReviewRung, func(p *Probe) { p.Config = load(t, "inspect.reviewer=model") }, Pass, "A  different-family review: the review lane's grok-"},

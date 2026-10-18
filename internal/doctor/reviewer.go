@@ -9,6 +9,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
+	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
@@ -147,6 +148,19 @@ func checkReviewRung(_ context.Context, p *Probe) Result {
 		lines = append(lines, "move up: no reviewer can be shown to differ from an unknown builder; run doctor in the agent host (or pass --host), and declare Aayudha-Host and Aayudha-Model lines on PRs built outside aayu build")
 	case len(up) > 0:
 		lines = append(lines, "move up (free): "+strings.Join(up, "; "))
+	}
+	// Rung B (Decision #469; founder, 2026-10-18): opt-in, with a key the
+	// repository adds; doctor cannot read repository secrets, so it names one.
+	if pr := cfg.Inspect.PaidReviewer; c.Rung != inspect.RungA && !b.Unknown() {
+		f := verbs.FamilyOf(pr)
+		switch {
+		case pr == "":
+			lines = append(lines, "move up (paid, opt-in): set [inspect] paid_reviewer to a model of a family the builder cannot be, and add its provider key as the repository secret AAYU_SECRET_<FAMILY>; [budget] per_pr_inspect_max caps each PR")
+		case b.Rung(f) == inspect.RungA:
+			return Result{Status: Pass, Detail: fmt.Sprintf("B  different-family review, paid (opt-in): %s (%s) when the merge gate holds the repository secret %s, within %.2f USD a PR; it counts toward autonomy", pr, f, secrets.EnvVar(string(f)), cfg.Budget.PerPRInspectMax), Lines: lines}
+		default:
+			lines = append(lines, fmt.Sprintf("[inspect] paid_reviewer %s (%s) cannot be shown to differ from the builder, so the gate never uses it; pick a model of another family", pr, f))
+		}
 	}
 	switch c.Rung {
 	case inspect.RungA:

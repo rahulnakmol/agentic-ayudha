@@ -853,6 +853,10 @@
           },
           "type": "object",
           "description": "Model family of each reviewer app (anthropic, openai, google, xai). An app without one cannot review, since the different-family rule needs it; Cursor runs the model its user picks."
+        },
+        "paid_reviewer": {
+          "type": "string",
+          "description": "Rung B, opt-in: a model ID (gemini-3.8-flash, grok-4.7, ...) the merge gate calls with a pay-as-you-go key when no installed app is of a family the builder cannot be. Off unless this names a model and the repository adds its provider key as the secret AAYU_SECRET_\u003cFAMILY\u003e (AAYU_SECRET_GOOGLE for Gemini); each PR's spend is capped by [budget] per_pr_inspect_max, and the review is labelled (B, paid)."
         }
       },
       "additionalProperties": false,

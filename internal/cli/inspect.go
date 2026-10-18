@@ -28,6 +28,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/seats"
+	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
@@ -414,16 +415,22 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		return e.emitInspect(inspect.Result{PR: n, Head: pr.GetHead().GetSHA(), Findings: []inspect.Finding{}, Criteria: []inspect.Verdict{}, Builder: builder,
 			Disposition: inspect.Skipped, Summary: "the PR changes only documentation, which merges without a review"}, []string{builder.Note()})
 	}
-	if cfg.Reviewer != inspect.ReviewerModel {
+	paid := paidReviewer(gw, &l.Config, builder, e.Logf)
+	if cfg.Reviewer != inspect.ReviewerModel && paid == nil {
 		return e.inspectThroughApp(ctx, appInspect{c: c, repo: repo, pr: pr, in: ins, prev: prev, builder: builder, cfg: l.Config})
 	}
 	// The review lane's model judges a PR against its story's pack; a PR
-	// without a story goes to a reviewer app (the merge gate's default).
-	if ins.Story == 0 && !ins.Draft {
+	// without a story goes to a reviewer app (the merge gate's default), or
+	// to the paid reviewer, which judges its diff and description as an app does.
+	if ins.Story == 0 && !ins.Draft && paid == nil {
 		return Errorf(ExitBlocked, "inspect #%d: no story (Refs #n in the PR body or a story/<n>- branch); a model reviewer judges a PR against its story, so a PR without one needs a reviewer app ([inspect] reviewer)", n)
 	}
 	story := fmt.Sprintf("#%d", ins.Story)
 	picked, notes, err := reviewerModels(gw, builder.Candidates, ins.Mode == inspect.ModePeer, cfg.PeerModel, story)
+	if paid != nil {
+		picked, err = []models.Resolved{*paid}, nil
+		notes = []string{fmt.Sprintf("paid reviewer (rung B, opt-in): no installed app is of a family the builder cannot be, so [inspect] paid_reviewer %s (%s) reviews with the repository's key, within %.2f USD for this PR", paid.Model, paid.Family, l.Config.Budget.PerPRInspectMax)}
+	}
 	if err != nil {
 		return err
 	}
@@ -456,6 +463,9 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		// model counts only when it is one the review lane picks now.
 		if !slices.ContainsFunc(picked, func(m models.Resolved) bool { return m.Model == res.Model }) {
 			res.Rung = inspect.RungC
+		}
+		if paid != nil && res.Rung == inspect.RungA {
+			res.Rung = inspect.RungB
 		}
 		res.Review = builder.RungLabel(res.Rung, res.Model, res.ReviewerFamily)
 	}
@@ -623,4 +633,41 @@ func (e *Env) inspectDismiss(ctx context.Context, in Values) error {
 		_, err := fmt.Fprintf(w, "dismissed %s (%s %s:%d %s): %s\n", d.ID, f.Severity, d.File, f.Line, d.Title, d.Reason)
 		return err
 	})
+}
+
+// paidReviewer is rung B of the review ladder (Decision #469; founder,
+// 2026-10-18), the deliberate, opt-in exception to "no AI keys in a product
+// repo's CI": [inspect] paid_reviewer, called with the repository's own key,
+// only when no installed app reaches rung A, the model's family is one the
+// builder cannot be, the key is present, and [budget] per_pr_inspect_max caps
+// the spend. nil leaves the review to the reviewer app.
+func paidReviewer(gw *models.Gateway, cfg *config.Config, b inspect.Builder, logf func(string, ...any)) *models.Resolved {
+	ic := cfg.Inspect
+	m := ic.PaidReviewer
+	if m == "" || ic.Reviewer == inspect.ReviewerHuman || ic.Reviewer == inspect.ReviewerModel {
+		return nil
+	}
+	if inspect.ChooseReviewer(ic.Reviewer, ic.Apps, ic.AppFamilies, b, cfg.Autonomy.Approver).Rung == inspect.RungA {
+		return nil // A costs nothing, so it comes first
+	}
+	f := verbs.FamilyOf(m)
+	why := ""
+	route, err := models.RouteFor(cfg.Models, m, f)
+	switch {
+	case b.Rung(f) != inspect.RungA:
+		why = fmt.Sprintf("its family (%s) cannot be shown to differ from the builder's", f)
+	case cfg.Budget.PerPRInspectMax <= 0:
+		why = "[budget] per_pr_inspect_max is 0, so nothing caps its spend"
+	case err != nil:
+		why = err.Error()
+	default:
+		if k, err := gw.Key(route.Secret); err != nil || k == "" {
+			why = fmt.Sprintf("the merge gate holds no %s key (the repository secret %s)", route.Secret, secrets.EnvVar(route.Secret))
+		}
+	}
+	if why != "" {
+		logf("inspect: [inspect] paid_reviewer %s is not used: %s; the reviewer app reviews", m, why)
+		return nil
+	}
+	return &models.Resolved{Lane: verbs.LaneReview, Host: verbs.DirectHost, Model: m, Display: m, Family: f, Source: models.SourceConfig}
 }

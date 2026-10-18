@@ -526,14 +526,20 @@ func Prompt(in Input) string {
 
 func reviewMaterial(in Input) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Repository %s, pull request #%d, story #%d.\n\n", in.Repo, in.PR, in.Story)
-	b.WriteString("## Completion Goal at Ready (criteria to judge)\n\n")
-	var cg strings.Builder
-	for _, c := range in.Criteria {
-		fmt.Fprintf(&cg, "%d. [%s] state: %s; expected: %s\n", c.N, c.Evidence, c.State, c.Expected)
+	if in.Story == 0 {
+		// A paid reviewer (rung B) reviews a PR that serves no story, as an
+		// app does: against its title, description, and diff.
+		fmt.Fprintf(&b, "Repository %s, pull request #%d. It serves no story and has no Completion Goal: judge the diff against its title and description, and return no criteria.\n\n", in.Repo, in.PR)
+	} else {
+		fmt.Fprintf(&b, "Repository %s, pull request #%d, story #%d.\n\n", in.Repo, in.PR, in.Story)
+		b.WriteString("## Completion Goal at Ready (criteria to judge)\n\n")
+		var cg strings.Builder
+		for _, c := range in.Criteria {
+			fmt.Fprintf(&cg, "%d. [%s] state: %s; expected: %s\n", c.N, c.Evidence, c.State, c.Expected)
+		}
+		b.WriteString(triage.Untrusted("ready-snapshot", cg.String()) + "\n\n")
+		b.WriteString("## Story\n\n" + triage.Untrusted("issue", "Title: "+in.StoryTitle+"\n\n"+in.StoryBody) + "\n\n")
 	}
-	b.WriteString(triage.Untrusted("ready-snapshot", cg.String()) + "\n\n")
-	b.WriteString("## Story\n\n" + triage.Untrusted("issue", "Title: "+in.StoryTitle+"\n\n"+in.StoryBody) + "\n\n")
 	if in.Pack != nil {
 		b.WriteString("## Floors (deterministic results; facts)\n\n")
 		for _, c := range in.Pack.Checks {
