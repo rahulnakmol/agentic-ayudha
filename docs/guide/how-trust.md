@@ -250,7 +250,7 @@ it cannot ask for a device code, which proves the person's own account, so a one
    `AAYUDHA_APP_CLIENT_ID` and the secret `AAYUDHA_APP_PRIVATE_KEY`. It needs a browser on the same computer. From
    an orb's Terminal tab, a cloud agent's terminal, or SSH, it stops at once and creates nothing. Whoever converts
    GitHub's one-time code first holds the App's key, so aayu never sends that code to a page it does not serve. Setup
-   from a phone or a cloud agent comes with the owner's token exchange (#594). aayu prints the Install link only after
+   from a phone or a cloud agent comes with the owner's token exchange, which is planned. aayu prints the Install link only after
    it has checked that the App is the one it asked for: same owner, same permissions, no events, no webhook. If that
    check or GitHub's conversion fails, delete the App instead of installing it.
 2. Add `approvers = ["<your-login>"]` under `[approvals]` in `.aayudha/config.toml`, through a reviewed PR
