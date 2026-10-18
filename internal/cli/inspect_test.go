@@ -1438,6 +1438,24 @@ func TestInspectPaidReviewer(t *testing.T) {
 	if code, res, errOut = inspectApp(t, env, opts, prN); code != 0 || res.Disposition != inspect.Merge || !res.Cached || len(model.Requests) != 0 {
 		t.Fatalf("no key, outside CI, the gate's merge: exit %d %s cached %v %s", code, res.Disposition, res.Cached, errOut)
 	}
+	// An edited title or body re-runs the gate on the same head: while its inspect check runs, the old verdict does not count.
+	g.Mu.Lock()
+	g.CheckRuns[head] = []fake.CheckRun{{ID: 1, Name: "aayudha/inspect", Status: "in_progress"}}
+	g.Mu.Unlock()
+	if code, res, errOut = inspectApp(t, env, opts, prN); code != ExitBlocked || res.Disposition != NoReply {
+		t.Fatalf("no key, outside CI, the gate re-running: exit %d %s %s", code, res.Disposition, errOut)
+	}
+	// Once the gate records that the CI review failed on this head, the local run asks the app, as the gate's fallback needs.
+	g, env, opts, prN, model = setup(`"claude"`, "")
+	head = g.Pulls[prN].Head.SHA
+	addComment(g, prN, "github-actions[bot]", "Bot", inspect.Marker+"\n<!-- aayudha:inspect-state {\"diff_hash\":\"x\",\"cycles\":0,\"hashes\":[],\"paid_failed\":\""+head+"\"} -->\n")
+	code, _, errOut = inspectApp(t, env, opts, prN)
+	g.Mu.Lock()
+	asked := slices.ContainsFunc(g.Issues[prN].Comments, func(c *fake.Comment) bool { return strings.HasPrefix(c.Body, "@claude review\n") })
+	g.Mu.Unlock()
+	if code != ExitBlocked || !asked || len(model.Requests) != 0 {
+		t.Fatalf("no key, outside CI, the CI review failed: exit %d, asked claude %v %s", code, asked, errOut)
+	}
 
 	// A chosen app is the only reviewer while it answers: no paid call.
 	g, env, opts, prN, model = setup(`"claude", "codex"`, "google-key")

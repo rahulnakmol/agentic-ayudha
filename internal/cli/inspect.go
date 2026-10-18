@@ -489,15 +489,23 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		}
 	}
 	// Outside CI the CI review's key is out of reach: the run reports the
-	// gate's judgement of this head and asks no app and no person, since the
-	// gate's own fallback asks them when the CI review cannot review.
-	if !e.CI && cfg.Reviewer == inspect.ReviewerCI && len(missingReviewModel(gw, &l.Config)) > 0 {
-		head := pr.GetHead().GetSHA()
+	// gate's judgement of this head and asks no app and no person. Once the
+	// gate records that the CI review failed on this head, the run asks the
+	// reviewer app (then a person) as the gate's fallback needs.
+	gate := inspectState(comments, "", l.Config.Identity) // the gate's comment only
+	if head := pr.GetHead().GetSHA(); !e.CI && !ins.Draft && cfg.Reviewer == inspect.ReviewerCI && gate.PaidFailed != head && len(missingReviewModel(gw, &l.Config)) > 0 {
 		res := inspect.Result{PR: n, Head: head, Findings: []inspect.Finding{}, Criteria: []inspect.Verdict{}, Builder: builder, Disposition: NoReply,
 			Summary: fmt.Sprintf("[inspect] reviewer = \"ci\": the merge gate's inspect job reviews `%s` with the model the %s environment names; this run cannot reach its key, so it asks no one", short(head), inspect.ReviewEnvironment),
 			Next:    "the merge gate's inspect check reviews this head; run `aayu inspect` again after it finishes"}
-		if prev.Result != nil && prev.Result.Head == head {
-			res = *prev.Result
+		// An edited title or body re-runs the gate on the same head: its
+		// earlier verdict counts only when no inspect check is still running.
+		checks, _, err := c.REST.Checks.ListCheckRunsForRef(ctx, owner, name, head, &gh.ListCheckRunsOptions{CheckName: gh.Ptr("aayudha/inspect"), ListOptions: gh.ListOptions{PerPage: 100}})
+		if err != nil {
+			return Wrap(ExitExternal, err)
+		}
+		running := slices.ContainsFunc(checks.CheckRuns, func(r *gh.CheckRun) bool { return r.GetName() == "aayudha/inspect" && r.GetStatus() != "completed" })
+		if gate.Result != nil && gate.Result.Head == head && !running {
+			res = *gate.Result
 			res.Cached = true
 		}
 		if err := e.emitInspect(res, nil); err != nil {
