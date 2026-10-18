@@ -4,10 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"slices"
 	"strings"
 	"time"
@@ -123,23 +121,15 @@ func (e *Env) auditAct(ctx context.Context, c *github.Client, repo, login string
 	return nil
 }
 
-// ledgerSampled reports whether SamplesLedgerPath holds a sample of PR n.
+// ledgerSampled reports whether SamplesLedgerPath holds a sample of PR n. A
+// samples file it cannot read holds none, so the look stays.
 func ledgerSampled(ctx context.Context, w *ledger.Writer, n int) (bool, error) {
 	t, err := w.Read(ctx)
-	if errors.Is(err, ledger.ErrNoLedger) {
-		return false, nil
-	}
 	if err != nil {
 		return false, err
 	}
 	defer t.Close()
-	b, err := t.File(ctx, SamplesLedgerPath)
-	if errors.Is(err, os.ErrNotExist) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
+	b, _ := t.File(ctx, SamplesLedgerPath)
 	for _, l := range bytes.Split(b, []byte("\n")) {
 		var s Sample
 		if json.Unmarshal(l, &s) == nil && s.PR == n {

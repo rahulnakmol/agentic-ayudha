@@ -146,7 +146,7 @@ func loosens(run *config.Loaded, base *config.Config) []string {
 	if m := missing(r.Identity.BotLogins, base.Identity.BotLogins); len(m) > 0 && set("identity.bot_logins") {
 		out = append(out, "[identity] bot_logins drops "+strings.Join(m, ", "))
 	}
-	if identity.Configured(base.Identity) != "" && identity.Configured(r.Identity) == "" && set("identity") {
+	if identity.Configured(base.Identity) != "" && identity.Configured(r.Identity) == "" && set("identity.app_id", "identity.machine_user") {
 		out = append(out, "[identity] has no bot identity")
 	}
 	if a := base.Autonomy.Approver; a != "" && !strings.EqualFold(r.Autonomy.Approver, a) && set("autonomy.approver") {
@@ -162,8 +162,8 @@ func loosens(run *config.Loaded, base *config.Config) []string {
 		out = append(out, fmt.Sprintf("[autonomy] correction_days is %d, below %d", x, b))
 	}
 	for _, slug := range slices.Sorted(maps.Keys(base.Seats)) {
-		if b, x := base.Seats[slug], r.Seats[slug]; b.Mode == "paired" && b.Human != "" && (x.Mode != "paired" || !strings.EqualFold(x.Human, b.Human)) &&
-			set("seats."+slug+".mode", "seats."+slug+".human") {
+		if b, x := base.Seats[slug], r.Seats[slug]; b.Mode == "paired" && b.Human != "" &&
+			(x.Mode != "paired" && set("seats."+slug+".mode") || !strings.EqualFold(x.Human, b.Human) && set("seats."+slug+".human")) {
 			out = append(out, fmt.Sprintf("[seats.%s] is not paired with %s", slug, b.Human))
 		}
 	}

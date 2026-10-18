@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/autonomy"
+	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
@@ -905,6 +906,12 @@ func TestShipOnProof(t *testing.T) {
 	if out := inbox(env, "a"); !strings.Contains(out, "done: sample of #"+strconv.Itoa(prN)) && !slices.Contains(g.LabelNames(prN), AuditLabel) {
 		t.Fatalf("looks right, label removal failing:\n%s", out)
 	}
+	g.Mu.Lock()
+	g.Fail, g.FailAfter = fmt.Sprintf("DELETE /repos/o/r/issues/%d/labels/%s", prN, AuditLabel), 0
+	g.Mu.Unlock()
+	if out := inbox(env, "a"); strings.Contains(out, "was already in") || !slices.Contains(g.LabelNames(prN), AuditLabel) {
+		t.Fatalf("looks right again, label removal failing:\n%s", out)
+	}
 	if out := inbox(env, "a"); !strings.Contains(out, "done: the sample of #"+strconv.Itoa(prN)+" was already in "+SamplesLedgerPath) {
 		t.Fatalf("looks right, again:\n%s", out)
 	}
@@ -934,7 +941,11 @@ func TestShipOnProof(t *testing.T) {
 	g.Mu.Lock()
 	g.Issues[prN].Labels = append(g.Issues[prN].Labels, fake.Label{Name: AuditLabel})
 	before := len(g.Pulls)
+	g.Fail, g.FailAfter = fmt.Sprintf("POST /repos/o/r/issues/%d/labels", prN), 0 // the correction label fails first
 	g.Mu.Unlock()
+	if failed := inbox(env, "2 y"); strings.Contains(failed, "done: sample") {
+		t.Fatalf("a correction whose label failed was recorded:\n%s", failed)
+	}
 	again := inbox(env, "2 y")
 	g.Mu.Lock()
 	defer g.Mu.Unlock()
@@ -1018,14 +1029,32 @@ func TestShipEMSeatApprover(t *testing.T) {
 
 	g.Mu.Lock()
 	g.Pulls[prN].Reviews = append(g.Pulls[prN].Reviews, review("em-lead", "User", "APPROVED", head))
-	g.Fail = "PUT /repos/o/r/pulls/" + strconv.Itoa(prN) + "/merge"
+	g.Mu.Unlock()
+	// A base policy that cannot be read stops ship, before and just before
+	// the merge alike.
+	for _, f := range []struct {
+		req   string
+		after int
+	}{{"GET /repos/o/r/git/ref/heads/dev", 0}, {"GET /repos/o/r/git/ref/heads/dev", 1}, {"GET /repos/o/r/contents/.aayudha/config.json", 0}, {"GET /repos/o/r/contents/LAYERS.md", 0}} {
+		g.Mu.Lock()
+		g.Fail, g.FailAfter = f.req, f.after
+		g.Mu.Unlock()
+		if code, out := shipCmd(t, env, opts, prN, seat...); code != ExitExternal || contains(g.LabelNames(2), "status:merged") {
+			t.Fatalf("ship when %s (after %d) fails: %d %s", f.req, f.after, code, out)
+		}
+	}
+	g.Mu.Lock()
+	g.Fail, g.FailAfter = "PUT /repos/o/r/pulls/"+strconv.Itoa(prN)+"/merge", 0
 	g.Mu.Unlock()
 	if code, out := shipCmd(t, env, opts, prN, seat...); code != ExitExternal || contains(g.LabelNames(2), "status:merged") {
 		t.Fatalf("ship when the merge fails: %d %s %v", code, out, g.LabelNames(2))
 	}
 
+	// An earlier ship labelled the PR for the audit and then did not merge
+	// it; a person's pass merges it, and the label goes.
 	g.Mu.Lock()
 	g.Fail, g.FailAfter = "GET /repos/o/r/issues/2/comments", 0
+	g.Issues[prN].Labels = append(g.Issues[prN].Labels, fake.Label{Name: AuditLabel})
 	g.Mu.Unlock()
 	code, out := shipCmd(t, env, opts, prN, seat...)
 	if code != 0 || !strings.Contains(out, "human pass: review by em-lead") || !strings.Contains(out, "warning: the build lease on #2 was not released") {
@@ -1042,5 +1071,38 @@ func TestShipEMSeatApprover(t *testing.T) {
 	}
 	if !contains(g.LabelNames(2), LeaseLabel) {
 		t.Fatalf("the unread lease was released: %v", g.LabelNames(2))
+	}
+}
+
+// #645: a run's own config that loosens the base branch's pass policy is
+// named, and only what a layer above the defaults set counts.
+func TestShipLoosens(t *testing.T) {
+	load := func(t *testing.T, src config.Sources) *config.Loaded {
+		t.Helper()
+		l, err := config.Load(src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return l
+	}
+	base := load(t, config.Sources{RepoTOML: []byte("version = 1\n[identity]\nbot_logins = [\"Agent-Alt\"]\napp_id = 42\napp_slug = \"aayudha-bot\"\n" +
+		"[autonomy]\napprover = \"Lead\"\nnever = [\"L04\", \"L07\"]\nstreak = 20\ncorrection_days = 14\n" +
+		"[seats.engineering-manager]\nmode = \"paired\"\nhuman = \"em-lead\"\n"), RepoSource: "base"}).Config
+	for _, c := range []struct {
+		why  string
+		sets []string
+		want []string
+	}{
+		{"nothing set: the defaults are looser, but no one chose them", nil, nil},
+		{"the same values, in another case", []string{"identity.bot_logins=agent-alt", "autonomy.approver=lead", "seats.engineering-manager.human=EM-Lead"}, nil},
+		{"tighter values", []string{"autonomy.streak=40", "autonomy.correction_days=30", "autonomy.never=L04,L07,L09"}, nil},
+		{"every loosening", []string{"identity.bot_logins=", "identity.app_id=0", "identity.app_slug=", "autonomy.approver=agent-alt", "autonomy.never=L04",
+			"autonomy.streak=0", "autonomy.correction_days=1", "seats.engineering-manager.mode=solo"},
+			[]string{"[identity] bot_logins drops Agent-Alt", "[identity] has no bot identity", `[autonomy] approver is "agent-alt", not "Lead"`, "[autonomy] never drops L07",
+				"[autonomy] streak is 0, below 20", "[autonomy] correction_days is 1, below 14", "[seats.engineering-manager] is not paired with em-lead"}},
+	} {
+		if got := loosens(load(t, config.Sources{Sets: c.sets}), &base); !slices.Equal(got, c.want) {
+			t.Errorf("%s: loosens = %q, want %q", c.why, got, c.want)
+		}
 	}
 }
