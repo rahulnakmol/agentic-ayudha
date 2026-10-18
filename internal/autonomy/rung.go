@@ -94,9 +94,16 @@ func GateRungFresh(ctx context.Context, c *github.Client, owner, name string, n 
 	return "", false
 }
 
-// RunFor reports whether GitHub lists workflow run r as for PR n into base.
+// RunFor reports whether GitHub lists workflow run r as for PR n into base,
+// and for no other PR. GitHub lists every open PR whose head matches the
+// run's, so a helper PR's run into a branch with an edited gate can also list
+// PR n: a run listed for several is not trusted as n's.
 func RunFor(r *gh.WorkflowRun, n int, base string) bool {
-	return slices.ContainsFunc(r.PullRequests, func(p *gh.PullRequest) bool { return p.GetNumber() == n && p.GetBase().GetRef() == base })
+	if len(r.PullRequests) != 1 {
+		return false
+	}
+	p := r.PullRequests[0]
+	return p.GetNumber() == n && p.GetBase().GetRef() == base
 }
 
 // Proven reports whether a review at rung counts toward the streak and the

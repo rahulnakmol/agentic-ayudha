@@ -568,6 +568,12 @@ func TestShipOnProof(t *testing.T) {
 	g.JobLogs[7799] = strings.Replace(g.JobLogs[7701], "same-family review (C): codex (openai), builder openai", "different-family review (A): claude (anthropic), builder openai", 1)
 	g.Mu.Unlock()
 	refused("no merge on proof: the review rung at the head is C, not one of A ([autonomy] proof_rungs)")
+	// GitHub lists every open PR on the run's head, so the helper's run can
+	// list this PR too: a run listed for several PRs is no one's.
+	g.Mu.Lock()
+	g.Runs[len(g.Runs)-1].PullRequests = append(g.Runs[len(g.Runs)-1].PullRequests, fake.RunPR{Number: prN, Base: fake.Branch{Ref: "dev"}})
+	g.Mu.Unlock()
+	refused("no merge on proof: the review rung at the head is C, not one of A ([autonomy] proof_rungs)")
 	// Nor does the streak's pass take the helper's A.
 	g.Mu.Lock()
 	pp := slices.IndexFunc(g.CheckRuns[head], func(r fake.CheckRun) bool { return r.Name == "protected-paths" })
