@@ -400,10 +400,15 @@ func securityBugs(ctx context.Context, c *github.Client, repo string, res Securi
 
 // securityGate holds a promotion (Decision #480) while an open aayudha:security
 // Bug was last seen on a guarded branch (rolling or main) and no accepted
-// floor waiver on it names its floor; and, into main, while the rolling tip
+// floor waiver on it names its floor; and while the source tip being promoted
 // has no green push run of the security workflow, when it is installed. A
 // Bug seen only on dev holds nothing.
-func (e *Env) securityGate(ctx context.Context, c *github.Client, repo string, guarded []string, src, srcSHA string, toMain bool) error {
+//
+// Any workflow's token comments as github-actions[bot], so a write
+// collaborator can forge a Bug's events; the run list cannot be forged (a run
+// on the source branch at its tip runs that tip's own workflow file). The
+// green run on the tip is what lets a promotion through, never an event alone.
+func (e *Env) securityGate(ctx context.Context, c *github.Client, repo string, guarded []string, src, srcSHA string) error {
 	open, err := openSecurityBugs(ctx, c, repo)
 	if err != nil {
 		return Wrap(ExitExternal, err)
@@ -430,9 +435,6 @@ func (e *Env) securityGate(ctx context.Context, c *github.Client, repo string, g
 	if len(held) > 0 {
 		return Errorf(ExitBlocked, "release: open security Bug(s) %s; nothing was promoted. Fix each on %s and let %s scan its tip (a Bug marked gone at the tip being promoted no longer holds), or a person accepts a floor waiver on it (`aayu decide <bug> --waiver <floor>`)",
 			strings.Join(held, ", "), src, SecurityWorkflow)
-	}
-	if !toMain {
-		return nil
 	}
 	owner, name, _ := github.SplitRepo(repo)
 	// By its file name, not a page of the workflow list: a repository can have more than 100 workflows.

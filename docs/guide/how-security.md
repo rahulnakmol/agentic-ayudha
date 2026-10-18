@@ -92,7 +92,7 @@ Only Bugs and comments written by the workflow token (`github-actions[bot]`) cou
 from anyone else neither holds nor releases a promotion. A finding is marked gone only after a complete scan: when
 semgrep reports analysis errors, its sast findings stay as last seen.
 An open one last seen on rolling or main holds `aayu release` until it is gone there, the source tip being promoted
-was scanned without it (so a fix travels dev to rolling to main as usual), or a person accepts a floor waiver on it (`aayu decide <bug> --waiver <floor>`), and main takes only a rolling tip the workflow scanned green.
+was scanned without it (so a fix travels dev to rolling to main as usual), or a person accepts a floor waiver on it (`aayu decide <bug> --waiver <floor>`), and each promotion takes only a source tip (dev for rolling, rolling for main) that the workflow scanned green.
 A floor whose every finding sits on a Bug with an accepted waiver naming it is `waived` in the scan, so a waived tip
 can still be scanned green. `aayu doctor` reports the workflow and each tip's last scan, and warns when a tip moved
 on with no scan of its own.

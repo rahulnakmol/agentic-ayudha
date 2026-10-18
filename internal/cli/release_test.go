@@ -985,4 +985,19 @@ func TestReleaseSecurityBugsHold(t *testing.T) {
 	if code, errOut := dry(); code != 0 {
 		t.Fatalf("a fix scanned clean at the dev tip still held the promotion: %d %s", code, errOut)
 	}
+	// Codex review of #500: any workflow's token comments as github-actions[bot], so an event alone never lets a
+	// promotion through. With the security workflow installed, rolling too takes only a dev tip it scanned green.
+	f.g.Mu.Lock()
+	f.g.Workflows = append(f.g.Workflows, SecurityWorkflow)
+	f.g.Runs = append(f.g.Runs, WorkflowRunFor(SecurityWorkflow, 301, strings.Repeat("cd", 20), "success")) // another commit's run
+	f.g.Mu.Unlock()
+	if code, errOut := dry(); code != ExitBlocked || !strings.Contains(errOut, "push run on the dev tip "+short(tip)) {
+		t.Fatalf("rolling took a dev tip the workflow never scanned: %d %s", code, errOut)
+	}
+	f.g.Mu.Lock()
+	f.g.Runs = append(f.g.Runs, WorkflowRunFor(SecurityWorkflow, 302, tip, "success"))
+	f.g.Mu.Unlock()
+	if code, errOut := dry(); code != 0 {
+		t.Fatalf("a dev tip scanned green still held the promotion: %d %s", code, errOut)
+	}
 }
