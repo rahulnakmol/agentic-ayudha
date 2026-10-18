@@ -167,8 +167,9 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   timing. A week is final only when the cutoff has passed and a completeness check passes: the exports cover the
   whole cutoff period, on the export's own schedule (a daily export of the previous day means a cutoff that crosses
   midnight is covered only after the next day's export); until then it is marked provisional, and a later change is
-  restated with a note, never hidden. Quote a figure from the grounding as the grounding states it, and say nothing
-  about how it was counted beyond that; the baseline of a definition of your own (a cutoff, deduplication) is "to be
+  restated with a note, never hidden. Quote a figure from the grounding as the grounding states it, with its population
+  ("41 % of referred and refused questions", never "41 % of questions"), and say nothing about how it was
+  counted beyond that; the baseline of a definition of your own (a cutoff, deduplication) is "to be
   computed on the exports", never the grounding's figure.
 - `## Design`: the smallest model, store, and pipeline that serve today's decision, and the option it beat. Keep the
   system of record (L07) apart from the analytical copy (L08). Prefer, in order: the exports and snapshot that
@@ -184,7 +185,8 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   total, or a difference beside it; until a human confirms wider access, the default is the restrictive one:
   aggregates only, no free text, the shortest retention the decision needs; when that default leaves the decision
   unable to act, as when a large share of items has no category, the design proposes the smallest remedy that keeps
-  the default, such as better classification, and may name a wider-access exception (a named reviewer reading
+  the default, such as better classification, written as a requirement whose effect the next week measures (the
+  unclassified share after the change), never as a claim that it removes the gap, and may name a wider-access exception (a named reviewer reading
   redacted text in a restricted view) as an open question that stays off until a human accepts it), who may read each copy (the export,
   the snapshot, the view) and what enforces it (an access rule the grounding shows; else a proposed restriction,
   such as only the pipeline's identity and the named owners, written as a requirement with its check, and nothing
