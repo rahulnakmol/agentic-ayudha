@@ -1452,6 +1452,13 @@ func TestInspectPaidReviewer(t *testing.T) {
 	if code, res, errOut = inspectApp(t, env, opts, prN); code != ExitBlocked || res.Disposition != NoReply {
 		t.Fatalf("no key, outside CI, the gate's check failed after its merge: exit %d %s %s", code, res.Disposition, errOut)
 	}
+	// A queued re-run (no start time yet) after a passing run: the merge does not count until it finishes.
+	g.Mu.Lock()
+	g.CheckRuns[head] = []fake.CheckRun{{ID: 3, Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}, {ID: 4, Name: "aayudha/inspect", Status: "queued"}}
+	g.Mu.Unlock()
+	if code, res, errOut = inspectApp(t, env, opts, prN); code != ExitBlocked || res.Disposition != NoReply {
+		t.Fatalf("no key, outside CI, a queued re-run: exit %d %s %s", code, res.Disposition, errOut)
+	}
 	// Once the gate records that the CI review failed on this head, the local run asks the app, as the gate's fallback needs.
 	g, env, opts, prN, model = setup(`"claude"`, "")
 	head = g.Pulls[prN].Head.SHA

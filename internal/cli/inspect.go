@@ -506,7 +506,8 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		}
 		var latest *gh.CheckRun
 		for _, r := range checks.CheckRuns {
-			if r.GetName() == "aayudha/inspect" && (latest == nil || r.GetStartedAt().After(latest.GetStartedAt().Time)) {
+			// The newest run by ID: a queued run has no start time yet.
+			if r.GetName() == "aayudha/inspect" && (latest == nil || r.GetID() > latest.GetID()) {
 				latest = r
 			}
 		}
