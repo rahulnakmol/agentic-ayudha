@@ -3,5 +3,19 @@
   "branch": "story/598-a-checkout-s-config-can-send-a-stored-in",
   "started_at": "2026-10-18T07:29:16Z",
   "failed_attempts": 0,
-  "checkpoints": null
+  "checkpoints": [
+    {
+      "k": 1,
+      "n": 2,
+      "attempt": 1,
+      "commit": "9cc7a0d977f468b87b69930e805b8a5657658aaa",
+      "layers": [
+        "L02",
+        "L07"
+      ],
+      "verify": "hold",
+      "detail": "floors hold; not run here (tool not installed; the merge gate runs them): sast, secrets, deps",
+      "at": "2026-10-18T07:45:50Z"
+    }
+  ]
 }
