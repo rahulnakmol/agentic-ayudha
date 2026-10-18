@@ -90,31 +90,47 @@
     {
       "id": "C1",
       "name": "Render Markdown to HTML",
-      "claim": "Turn Markdown with PHP Markdown Extra additions (tables, footnotes, abbreviations, definition lists) into an HTML fragment or a full XHTML document.",
+      "claim": "Turn Markdown with PHP Markdown Extra additions (tables, footnotes, abbreviations, definition lists) into an HTML fragment or a full XHTML document, with a table of contents built from its headers.",
       "basis": "observed",
       "cites": [
         "lib/maruku/output/to_html.rb:68-94",
-        "README.md:5-9"
+        "README.md:5-9",
+        "lib/maruku/output/to_html.rb:9-912",
+        "lib/maruku/output/entity_table.rb:7",
+        "lib/maruku/output/to_s.rb:3",
+        "lib/maruku/toc.rb:3-178"
       ]
     },
     {
       "id": "C2",
       "name": "Use Maruku's own extensions",
-      "claim": "Attach attributes to elements with attribute lists, add document meta-data, wrap content in divs, and write inline and display math.",
+      "claim": "Attach attributes to elements with attribute lists, add document meta-data, wrap content in divs, and write inline and display math, rendered to MathML or PNG by an external engine (blahtex, itex2mml, ritex) or by none.",
       "basis": "observed",
       "cites": [
         "lib/maruku/ext/div.rb:11-15",
         "lib/maruku/input/parse_doc.rb:98-106",
-        "README.md:9-11"
+        "README.md:9-11",
+        "lib/maruku/ext/div.rb:90",
+        "lib/maruku/ext/math/elements.rb:2",
+        "lib/maruku/ext/math/parsing.rb:2",
+        "lib/maruku/ext/math/mathml_engines/blahtex.rb:8-82",
+        "lib/maruku/ext/math/mathml_engines/itex2mml.rb:2",
+        "lib/maruku/ext/math/mathml_engines/none.rb:2-8",
+        "lib/maruku/ext/math/mathml_engines/ritex.rb:2"
       ]
     },
     {
       "id": "C3",
       "name": "Export to other formats",
-      "claim": "Render the same document as LaTeX (and PDF), Markdown, or an S5 slideshow.",
+      "claim": "Render the same document as LaTeX (and PDF, which the marutex command asks for), Markdown, or an S5 slideshow.",
       "basis": "observed",
       "cites": [
-        "bin/maruku:120-143"
+        "bin/maruku:120-143",
+        "entry:bin/marutex:1",
+        "bin/marutex:3-4",
+        "lib/maruku/output/to_latex.rb:29-595",
+        "lib/maruku/output/to_markdown.rb:5-202",
+        "lib/maruku/output/s5/to_s5.rb:4"
       ]
     },
     {
@@ -126,6 +142,43 @@
         "entry:bin/maruku:1",
         "bin/maruku:99-113"
       ]
+    },
+    {
+      "id": "C5",
+      "name": "Parse Markdown into a document tree",
+      "claim": "Maruku.new(text, meta) parses Markdown into a tree of elements under a document, reading blocks, then the spans inside them, then document-wide passes (abbreviations, Markdown inside raw HTML); raw HTML is read into HTML fragments, and Maruku adds replace_each_string to Ruby's Array (N1).",
+      "basis": "observed",
+      "cites": [
+        "lib/maruku.rb:44-61",
+        "lib/maruku/maruku.rb:1-16",
+        "lib/maruku/document.rb:3",
+        "lib/maruku/element.rb:6-131",
+        "lib/maruku/attributes.rb:6",
+        "lib/maruku/defaults.rb:38",
+        "lib/maruku/errors.rb:2",
+        "lib/maruku/inspect_element.rb:2",
+        "lib/maruku/version.rb:22-32",
+        "lib/maruku/input/parse_doc.rb:6-154",
+        "lib/maruku/input/parse_block.rb:7-694",
+        "lib/maruku/input/parse_span.rb:11-681",
+        "lib/maruku/input/charsource.rb:6-234",
+        "lib/maruku/input/linesource.rb:8",
+        "lib/maruku/input/mdline.rb:6",
+        "lib/maruku/input/html_helper.rb:4",
+        "lib/maruku/input/extensions.rb:6-60",
+        "lib/maruku/html.rb:48-149"
+      ]
+    },
+    {
+      "id": "C6",
+      "name": "Parse Textile, on request",
+      "claim": "MaRuKu.textile2(source, params) parses Textile into a Maruku document; only lib/maruku/textile2.rb loads the parser, so a caller gets it by requiring maruku/textile2.",
+      "basis": "inferred",
+      "cites": [
+        "lib/maruku/input_textile2/t2_parser.rb:1-94",
+        "lib/maruku/textile2.rb:1"
+      ],
+      "reasoning": "t2_parser.rb:88-91 defines MaRuKu.textile2 over t2_parse, and textile2.rb:1 is the only require of the parser in lib and bin."
     }
   ],
   "product_claims": [
@@ -189,21 +242,12 @@
     },
     {
       "id": "Q3",
-      "question": "Which options do your sites set, and where: per document (Maruku.new(text, options)) or process-wide in MaRuKu::Globals?",
-      "why": "Options decide the output (E2) and process-wide settings are on the do-not-carry list (N3).",
-      "default": "Carry the options you set as per-document options of the adapter.",
+      "question": "How do your sites call Maruku: through Maruku.new with which options, set per document or process-wide in MaRuKu::Globals, or by running the maruku command with which flags?",
+      "why": "Options decide the output (E2), process-wide settings are on the do-not-carry list (N3), and the command and its flags are an interface only if a build or a person uses them (K4).",
+      "default": "Carry the options you set as per-document options of the adapter, and treat the command as unused unless a build script names it.",
       "affects": [
         "K3",
-        "N3"
-      ],
-      "status": "open"
-    },
-    {
-      "id": "Q4",
-      "question": "Does anything run the maruku command, and with which options?",
-      "why": "The command and its flags are an interface only if a build or a person uses them (K4).",
-      "default": "Treat the command as unused unless a build script names it.",
-      "affects": [
+        "N3",
         "K4"
       ],
       "status": "open"
@@ -431,9 +475,9 @@
       "cites": [
         "bin/maruku:27-87"
       ],
-      "consumers": "unknown (Q4)",
+      "consumers": "unknown (Q3)",
       "level": "undecided",
-      "decided_by": "Q4"
+      "decided_by": "Q3"
     }
   ],
   "modernisation": {
@@ -511,7 +555,14 @@
           "spec/block_docs/tables.md:1-5",
           "spec/block_docs/attributes/attributes.md:1-5"
         ],
-        "compare": "equivalent HTML as block_spec.rb compares it (whitespace-only text nodes ignored) and exit code, until Q1 decides"
+        "compare": "equivalent HTML as block_spec.rb compares it (whitespace-only text nodes ignored) and exit code, until Q1 decides",
+        "runners": [
+          "test:spec/block_spec.rb"
+        ],
+        "inputs": [
+          "spec/block_docs/*.md",
+          "spec/block_docs/*/*.md"
+        ]
       }
     ],
     "risks": [

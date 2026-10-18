@@ -35,7 +35,13 @@ var (
 	typeHeader = regexp.MustCompile(`\b(class|struct|union|interface|trait|enum|namespace|impl|object|record)\b\s+(?:class\s+|struct\s+)?([A-Za-z_][\w]*(?:::[A-Za-z_][\w]*)*)`)
 	funcName   = regexp.MustCompile(`(operator\s*(?:\(\)|[^\s(\w]+)|~?[A-Za-z_$][\w$]*(?:(?:::|\.)~?[A-Za-z_$][\w$]*)*)\s*(?:<[^(){};]*>)?\s*\(`)
 	callName   = regexp.MustCompile(`([A-Za-z_$][\w$]*)\s*\(`)
-	cKeywords  = map[string]bool{"if": true, "for": true, "while": true, "switch": true, "catch": true, "return": true, "sizeof": true, "foreach": true,
+	// ctorUse is a C++ construction that names its type without a call: a
+	// local or static object (Engine e; Engine e{…}; Engine e(…)), new Engine
+	// with no parentheses, or make_unique<Engine>. Each calls Engine::Engine.
+	// Engine e(); declares a function (the most vexing parse) and constructs
+	// nothing.
+	ctorUse   = regexp.MustCompile(`(?:(?:^|[;{}])\s*(?:(?:static|const|thread_local)\s+)*([A-Za-z_]\w*(?:::[A-Za-z_]\w*)*)(?:\s*<[^;{}()]*>)?\s+[A-Za-z_]\w*\s*(?:[;{=\[]|\(\s*[^)\s])|\bnew\s+([A-Za-z_]\w*(?:::[A-Za-z_]\w*)*)|\bmake_(?:unique|shared)\s*<\s*([A-Za-z_]\w*(?:::[A-Za-z_]\w*)*))`)
+	cKeywords = map[string]bool{"if": true, "for": true, "while": true, "switch": true, "catch": true, "return": true, "sizeof": true, "foreach": true,
 		"elseif": true, "else": true, "do": true, "try": true, "function": true, "fn": true, "func": true, "fun": true, "new": true, "delete": true, "throw": true,
 		"typeof": true, "instanceof": true, "using": true, "lock": true, "synchronized": true, "defined": true, "decltype": true, "alignof": true, "static_assert": true,
 		"assert": true, "array": true, "list": true, "isset": true, "unset": true, "empty": true, "echo": true, "print": true, "match": false, "with": true, "when": true,
@@ -55,6 +61,12 @@ type scope struct {
 	kind string // the symbol kind, "block" for any other brace
 	name string
 	sym  int // index into the symbols of this file, -1 for a block
+	// public is a C or C++ class's current access section (a struct's
+	// members are public until a label says otherwise), and false when the
+	// class itself is not public.
+	public bool
+	// hidden is an anonymous namespace: nothing inside is visible to callers.
+	hidden bool
 }
 
 // braceSymbols finds definitions in a C-family file from its stripped code: at
@@ -84,6 +96,21 @@ func braceSymbols(file, code, lang string) ([]Symbol, []call) {
 		}
 		return strings.Join(names, "::")
 	}
+	cfam := lang == "c" || lang == "cpp"
+	classTop := func() *scope {
+		if n := len(stack); cfam && n > 0 && (stack[n-1].kind == "class" || stack[n-1].kind == "struct" || stack[n-1].kind == "union") {
+			return &stack[n-1]
+		}
+		return nil
+	}
+	// labels applies the access labels in a chunk of the innermost class.
+	labels := func(chunk string) {
+		if t := classTop(); t != nil {
+			for _, m := range accessLabel.FindAllStringSubmatch(chunk, -1) {
+				t.public = m[1] == "public" && syms[t.sym].Public
+			}
+		}
+	}
 	for i := 0; i < len(code); i++ {
 		c := code[i]
 		switch c {
@@ -97,11 +124,21 @@ func braceSymbols(file, code, lang string) ([]Symbol, []call) {
 			}
 		case ';':
 			if parens == 0 {
+				labels(code[hdrStart:i])
 				hdrStart, hdrLine = i+1, line
 			}
 		case '{':
 			header := code[hdrStart:i]
+			if parens == 0 {
+				labels(header)
+			}
 			kind, name, public := classifyHeader(header, lang, parens, inFunc() >= 0)
+			if classTop() != nil && kind == "function" && staticKw.MatchString(header) {
+				public = true // a static member function is the class's API, not internal linkage
+			}
+			if t := classTop(); t != nil && !t.public || slices.ContainsFunc(stack, func(s scope) bool { return s.hidden }) {
+				public = false // a member of a private section, of a class no caller sees, or of an anonymous namespace
+			}
 			startLine := hdrLine + leadingNewlines(header)
 			if name != "" {
 				// The definition's line is its name's line, not the header's first
@@ -113,7 +150,7 @@ func braceSymbols(file, code, lang string) ([]Symbol, []call) {
 					}
 				}
 			}
-			sc := scope{kind: kind, name: name, sym: -1}
+			sc := scope{kind: kind, name: name, sym: -1, hidden: cfam && strings.Join(strings.Fields(header), " ") == "namespace"}
 			if kind != "block" {
 				q := name
 				if o := owner(); o != "" && !strings.Contains(name, "::") && (kind == "function" || kind == "method" || kind != "namespace") {
@@ -131,6 +168,7 @@ func braceSymbols(file, code, lang string) ([]Symbol, []call) {
 				}
 				syms = append(syms, Symbol{Kind: kind, Name: q, At: file + ":" + itoa(startLine), file: file, line: startLine, Public: public})
 				sc.sym = len(syms) - 1
+				sc.public = public && (kind == "struct" || kind == "union")
 			}
 			stack = append(stack, sc)
 			hdrStart, hdrLine, parens = i+1, line, 0
@@ -164,6 +202,17 @@ func braceSymbols(file, code, lang string) ([]Symbol, []call) {
 			}
 			for _, m := range callName.FindAllStringSubmatch(text, -1) {
 				n := m[1]
+				if cKeywords[n] || seen[n] {
+					continue
+				}
+				seen[n] = true
+				calls = append(calls, call{from: k, name: n, line: ln})
+			}
+			if lang != "cpp" {
+				continue
+			}
+			for _, m := range ctorUse.FindAllStringSubmatch(text, -1) {
+				n := lastName(m[1] + m[2] + m[3])
 				if cKeywords[n] || seen[n] {
 					continue
 				}
@@ -230,7 +279,10 @@ func classifyHeader(header, lang string, parens int, insideFunc bool) (kind, nam
 		if !strings.Contains(h[m[3]:], ")") {
 			return "block", "", false
 		}
-		pub := !insideFunc && !staticKw.MatchString(before) && !protected.MatchString(before)
+		// static hides a function only in C and C++ (internal linkage); a
+		// Java, C#, JavaScript, or TypeScript static method is public API.
+		hidden := staticKw.MatchString(before) && (lang == "c" || lang == "cpp")
+		pub := !insideFunc && !hidden && !protected.MatchString(before)
 		if lang == "go" {
 			pub = nm != "" && nm[0] >= 'A' && nm[0] <= 'Z'
 		}

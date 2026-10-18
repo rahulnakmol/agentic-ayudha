@@ -901,6 +901,28 @@
       "additionalProperties": false,
       "type": "object",
       "description": "How build --delegate reaches other agents (WP5.5b). Values name secrets; they never hold them."
+    },
+    "hosts": {
+      "properties": {
+        "cursor": {
+          "properties": {
+            "plan": {
+              "type": "string",
+              "enum": [
+                "",
+                "x",
+                "legacy"
+              ],
+              "description": "x (default): a Cursor plan from 12 October 2026 on, which includes only Cursor's own models, so the lanes default to Grok and Composer; legacy: a legacy Pro, Pro+, or Ultra plan, which includes Claude and Gemini. Read only from the user config, AAYU_HOSTS__CURSOR__PLAN, or --set, never from the checkout."
+            }
+          },
+          "additionalProperties": false,
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "What the agent hosts include on the user's plan, which picks each lane's default model there (Decision #469)."
     }
   },
   "additionalProperties": false,

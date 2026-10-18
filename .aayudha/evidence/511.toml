@@ -1,0 +1,11 @@
+[[criterion]]
+id = 1
+tests = ["./internal/production:TestPostHogSource"]
+
+[[criterion]]
+id = 2
+tests = ["./internal/production:TestPostHogSource", "./internal/integrations/posthog:TestQuery"]
+
+[[criterion]]
+id = 3
+tests = ["./internal/production:TestPostHogSource", "./internal/production:TestPostHogSourceUntrusted"]

@@ -51,6 +51,12 @@ func TestDecide(t *testing.T) {
 		// A server registered under another name is known by its URL, command, or package.
 		{"renamed sentry server", Event{Tool: "mcp__errors__update_issue"}, Options{Servers: map[string]string{"errors": Sentry}}, Sentry, false, "`update_issue`"},
 		{"renamed posthog server read", Event{Tool: "mcp__analytics__feature-flag-get-all"}, Options{Servers: map[string]string{"analytics": PostHog}}, PostHog, true, ""},
+		// GitHub Copilot names an MCP tool <server>-<tool>; the tool part may hold hyphens.
+		{"copilot posthog read", Event{Tool: "posthog-feature-flag-get-all", Dashed: true}, Options{}, PostHog, true, ""},
+		{"copilot posthog write", Event{Tool: "posthog-delete-feature-flag", Dashed: true}, Options{}, PostHog, false, "`delete-feature-flag`"},
+		{"copilot hyphenated server", Event{Tool: "sentry-prod-update_issue", Dashed: true}, Options{Servers: map[string]string{"sentry-prod": Sentry}}, Sentry, false, "`update_issue`"},
+		{"copilot renamed server", Event{Tool: "errors-update_issue", Dashed: true}, Options{Servers: map[string]string{"errors": Sentry}}, Sentry, false, "`update_issue`"},
+		{"copilot other server", Event{Tool: "aayudha-status", Dashed: true}, Options{Servers: map[string]string{"errors": Sentry}}, "", true, ""},
 		// Other servers and tools are not decided here.
 		{"other server", Event{Tool: "mcp__github__create_issue"}, Options{}, "", true, ""},
 		{"built-in tool", Event{Tool: "edit_file"}, Options{}, "", true, ""},
@@ -112,10 +118,14 @@ func TestFromHook(t *testing.T) {
 			Event{Tool: "search_issues", Server: "npx @sentry/mcp-server"}},
 		{"cursor shell", `{"hook_event_name":"beforeShellExecution","command":"posthog-cli sourcemap upload"}`,
 			Event{Shell: "posthog-cli sourcemap upload"}},
+		{"copilot mcp", `{"sessionId":"05b234bf-9c41-41f2-8604-0ff1d8dc3011","cwd":"/r","timestamp":1792286000000,"toolName":"sentry-find_dropped_events","toolArgs":{"statsPeriod":"7d"}}`,
+			Event{Tool: "sentry-find_dropped_events", Dashed: true}},
+		{"copilot bash", `{"sessionId":"05b234bf-9c41-41f2-8604-0ff1d8dc3011","cwd":"/r","timestamp":1792286000000,"toolName":"bash","toolArgs":"{\"command\":\"posthog-cli exp query run \\\"SELECT 1 LIMIT 1\\\"\"}"}`,
+			Event{Tool: "bash", Shell: `posthog-cli exp query run "SELECT 1 LIMIT 1"`}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			e, ok := FromHook([]byte(tt.event))
-			if !ok || e.Tool != tt.want.Tool || e.Shell != tt.want.Shell || e.Server != tt.want.Server {
+			if !ok || e.Tool != tt.want.Tool || e.Shell != tt.want.Shell || e.Server != tt.want.Server || e.Dashed != tt.want.Dashed {
 				t.Fatalf("FromHook = %+v, %v; want %+v", e, ok, tt.want)
 			}
 		})

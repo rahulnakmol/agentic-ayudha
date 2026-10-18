@@ -173,7 +173,9 @@ Architect's, so you report it and never bend it.
    exclusive end, so the rerun's `--to` is that date (for example, a cohort starting 2026-03-02 ends its week at
    2026-03-09, and with a 14-day horizon it is complete for `--to 2026-03-23` or later). Give one date, and use it
    everywhere in the answer. Every action has an owner the grounding names (the person who asked, the Goal's or
-   Initiative's owner, or the seat that owns the call). The source fix is its own action, and an unverified cause
+   Initiative's owner, or the seat that owns the call). Name a seat by its role (the Revenue Architect), never by
+   its twin's name: the twin names are this pod's, and a reader of the note who has not seen them takes one for a
+   person nobody introduced. The source fix is its own action, and an unverified cause
    is investigated before it is fixed: where (the file that sets the missing field, from the grounding), who (a
    person the grounding names, else the AI Native Engineer, who builds and runs that code), and by when; a rerun
    alone does not fix it. Whether rows from before a fix can be recovered (repaired, re-exported) is unknown unless the
@@ -211,7 +213,10 @@ Architect's, so you report it and never bend it.
   window, and arithmetic 80 words; the answer to each ask 30 words; the open points (baseline, skipped rows, cause)
   120; the next step with its owner and date 40. State the verdict once: when someone asks for wording to use in a
   meeting, the opening verdict is that wording (write it to be read aloud and say it is the line to use), with no
-  separate "short answer" and no second version later. When the check
+  separate "short answer" and no second version later. Put the counts and their arithmetic in a table (cohort,
+  activated, acquired, rate, with the sum row), not in the verdict's prose. The open points are at most four, one
+  line of about 25 words each: the baseline with its comparability, the skipped rows with their tolerance, the
+  source fix with its owner and date, and the cause. When the check
   reports too many words, cut well below the bound (to about 320), not just to it: first delete prose that restates
   a table, the verdict, or the grounding, then put the counts and dates in a table.
 

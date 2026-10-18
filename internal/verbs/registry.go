@@ -99,7 +99,20 @@ type ModelDefault struct {
 	AlternativeID    string // model ID of the alternative, used as a fallback when the default cannot be called
 	ContextTokens    int    // context window cap; 0 means the model default
 	Note             string // e.g. a substitution the gateway forces
+	// Plan is the host plan the default applies to ([hosts.cursor] plan,
+	// Decision #469); empty for every plan.
+	Plan string
 }
+
+// Cursor's plans (Decision #469): since 12 October 2026 a new plan ("x")
+// includes only Cursor's own models (Grok, Composer), and Claude, GPT, and
+// Gemini are list-price pay-as-you-go; a legacy Pro, Pro+, or Ultra plan
+// keeps them included. aayu cannot tell the plans apart, so "x", which never
+// spends list-price money by surprise, is the default.
+const (
+	PlanX      = "x"
+	PlanLegacy = "legacy"
+)
 
 // LaneID identifies a model lane.
 type LaneID string
@@ -390,6 +403,11 @@ const (
 	ModelGPTSol       = "gpt-6.1-sol"
 	ModelGPTAstra     = "gpt-6-astra"
 	ModelGrok         = "grok-4.7"
+	ModelGrokPrior    = "grok-4.6"
+	// ModelComposer is Cursor's own model. Cursor does not publish its base
+	// model, so its family is unknown (Decision #469, detail 10): a review
+	// between it and any other build is same-family (rung C).
+	ModelComposer = "composer-2.5"
 	// ModelGemini is the ui-review lane's model, called at high reasoning
 	// effort (founder: "aayu to default to 3.8-flash-high gemini model for all
 	// UI/UX review"; the gateway has no gemini-3.8-flash-high ID, so "-high" is
@@ -406,7 +424,8 @@ var PeerReviewCandidates = []string{ModelGPTSol, ModelGrok, ModelGemini, ModelCl
 func builderDefaults() []ModelDefault {
 	return []ModelDefault{
 		{Host: HostAmp, Model: "Amp medium", Family: FamilyHostManaged, Escalation: "Amp high"},
-		{Host: HostCursor, Model: "Claude Opus 5.5", ID: ModelClaudeOpus, Family: FamilyAnthropic, Alternative: "Claude Sonnet 5.5 (" + ModelClaudeSonnet + ")", AlternativeID: ModelClaudeSonnet},
+		{Host: HostCursor, Model: "Grok 4.7", ID: ModelGrok, Family: FamilyXAI, Plan: PlanX},
+		{Host: HostCursor, Model: "Claude Opus 5.5", ID: ModelClaudeOpus, Family: FamilyAnthropic, Alternative: "Claude Sonnet 5.5 (" + ModelClaudeSonnet + ")", AlternativeID: ModelClaudeSonnet, Plan: PlanLegacy},
 		{Host: HostClaude, Model: "Claude Opus 5.5", ID: ModelClaudeOpus, Family: FamilyAnthropic, Alternative: "Claude Sonnet 5.5 (" + ModelClaudeSonnet + ")", AlternativeID: ModelClaudeSonnet},
 		{Host: HostCodex, Model: "GPT-6.1 Sol", ID: ModelGPTSol, Family: FamilyOpenAI, Escalation: "GPT-6 Astra at high reasoning effort", EscalationID: ModelGPTAstra, EscalationEffort: "high"},
 		copilotAuto(CopilotBalance, CopilotIntelligence),
@@ -446,6 +465,11 @@ func reviewDefault(h HostID) ModelDefault {
 		Escalation: "GPT-6 Astra at high reasoning effort for heavy reviews", EscalationID: ModelGPTAstra, EscalationEffort: "high"}
 }
 
+func withPlan(d ModelDefault, plan string) ModelDefault {
+	d.Plan = plan
+	return d
+}
+
 func geminiDefault(h HostID) ModelDefault {
 	return ModelDefault{Host: h, Model: "Gemini 3.8 Flash (high)", ID: ModelGemini, Family: FamilyGoogle, Effort: "high",
 		Alternative: "Fable 5.1 (" + ModelClaudeFable + "; anthropic family, so only when the builder is not anthropic)"}
@@ -458,7 +482,11 @@ var Lanes = []Lane{
 	{ID: LanePlan, Summary: "Slices and plans work.", Defaults: builderDefaults()},
 	{ID: LaneReview, Summary: "Adversarial code and spec review.", Adversarial: true, Defaults: []ModelDefault{
 		reviewDefault(HostAmp),
-		{Host: HostCursor, Model: "Grok 4.7", ID: ModelGrok, Family: FamilyXAI},
+		// On a new plan the builder is Grok 4.7, and no other family is
+		// included: another tier of the family reviews, labelled same-family
+		// (Decision #469, detail 7).
+		{Host: HostCursor, Model: "Grok 4.6", ID: ModelGrokPrior, Family: FamilyXAI, Plan: PlanX},
+		{Host: HostCursor, Model: "Grok 4.7", ID: ModelGrok, Family: FamilyXAI, Plan: PlanLegacy},
 		reviewDefault(HostClaude),
 		// Codex builds with OpenAI, so its reviewer is another family.
 		{Host: HostCodex, Model: "Claude Opus 5.5", ID: ModelClaudeOpus, Family: FamilyAnthropic, Alternative: "Grok 4.7 (" + ModelGrok + ")", AlternativeID: ModelGrok},
@@ -472,14 +500,16 @@ var Lanes = []Lane{
 	// gateway routes it (ModelGemini, D-6.6b).
 	{ID: LaneUIReview, Summary: "Visual and interaction critique of UI.", Adversarial: true, Defaults: []ModelDefault{
 		{Host: HostAmp, Model: "Amp high", Family: FamilyHostManaged},
-		geminiDefault(HostCursor),
+		{Host: HostCursor, Model: "Grok 4.6", ID: ModelGrokPrior, Family: FamilyXAI, Plan: PlanX},
+		withPlan(geminiDefault(HostCursor), PlanLegacy),
 		geminiDefault(HostClaude),
 		geminiDefault(HostCodex),
 		copilotAuto(CopilotIntelligence, ""),
 	}},
 	{ID: LaneChore, Summary: "Cheap mechanical work: triage, status, checks.", Defaults: []ModelDefault{
 		{Host: HostAmp, Model: "Amp low", Family: FamilyHostManaged},
-		{Host: HostCursor, Model: "Haiku 5.5", ID: ModelClaudeHaiku, Family: FamilyAnthropic, ContextTokens: 100000},
+		{Host: HostCursor, Model: "Composer 2.5", ID: ModelComposer, Note: "family unknown: Cursor does not publish Composer's base model", Plan: PlanX},
+		{Host: HostCursor, Model: "Haiku 5.5", ID: ModelClaudeHaiku, Family: FamilyAnthropic, ContextTokens: 100000, Plan: PlanLegacy},
 		{Host: HostClaude, Model: "Haiku 5.5", ID: ModelClaudeHaiku, Family: FamilyAnthropic, ContextTokens: 100000},
 		{Host: HostCodex, Model: "Haiku 5.5", ID: ModelClaudeHaiku, Family: FamilyAnthropic, ContextTokens: 100000},
 		copilotAuto(CopilotEfficiency, ""),

@@ -18,13 +18,14 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 )
 
 // Version is the index schema version.
-const Version = 2
+const Version = 3
 
 // DefaultBudget is a module's default size in tokens (about four bytes each).
 const DefaultBudget = 20000
@@ -58,10 +59,11 @@ type Fact struct {
 // is set; the index never picks one.
 type Edge struct {
 	Kind      string   `json:"kind"` // include, import, call
-	From      string   `json:"from"` // file:<path> or a symbol ID
+	From      string   `json:"from"` // file:<path>, a symbol ID, or a script's or Python main guard's entry ID
 	To        []string `json:"to"`
 	At        string   `json:"at"`
 	Ambiguous bool     `json:"ambiguous,omitempty"`
+	Name      string   `json:"name,omitempty"` // the called name, when To lists only the first eight definitions
 }
 
 // Module is a group of files read together: a directory, split to the token
@@ -99,15 +101,21 @@ type Index struct {
 	Targets    []Target `json:"targets"`
 	Deps       []Dep    `json:"deps"`
 	Entries    []Fact   `json:"entries"`
-	Surfaces   []Fact   `json:"surfaces"`
-	Traps      []Fact   `json:"traps"` // trap rules that match (traps.go): where to check a semantic the port could get wrong
-	Tests      []Fact   `json:"tests"`
-	Docs       []Fact   `json:"docs"`
-	Markers    []Marker `json:"markers"`
-	Modules    []Module `json:"modules"`
-	Symbols    []Symbol `json:"symbols"`
-	Edges      []Edge   `json:"edges"`
-	Files      []File   `json:"files"`
+	// Builtins are the names source files register for the programs they
+	// embed (an interpreter's natives, a shell's commands), and Uses where an
+	// input file calls one: a case set's runner must register what its inputs
+	// call.
+	Builtins []Fact   `json:"builtins,omitempty"`
+	Uses     []Fact   `json:"uses,omitempty"`
+	Surfaces []Fact   `json:"surfaces"`
+	Traps    []Fact   `json:"traps"` // trap rules that match (traps.go): where to check a semantic the port could get wrong
+	Tests    []Fact   `json:"tests"`
+	Docs     []Fact   `json:"docs"`
+	Markers  []Marker `json:"markers"`
+	Modules  []Module `json:"modules"`
+	Symbols  []Symbol `json:"symbols"`
+	Edges    []Edge   `json:"edges"`
+	Files    []File   `json:"files"`
 
 	byPath map[string]int
 	ids    map[string]bool
@@ -143,6 +151,7 @@ var (
 	csUsing    = regexp.MustCompile(`(?m)^[ \t]*using[ \t]+([\w.]+)[ \t]*;`)
 	pyMain     = regexp.MustCompile(`(?m)^if[ \t]+__name__[ \t]*==[ \t]*['"]__main__['"]`)
 	shebang    = regexp.MustCompile(`^#!`)
+	goMainPkg  = regexp.MustCompile(`(?m)^package[ \t]+main\b`)
 )
 
 // surfaceRules find a file's I/O surfaces in its stripped code (string
@@ -233,12 +242,6 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 	ix := &Index{Version: Version, byPath: map[string]int{}}
 	ix.Commit = strings.TrimSpace(opt.Git(ctx, root, "rev-parse", "HEAD"))
 	exists := func(p string) bool { _, ok := ix.byPath[p]; return ok }
-	type scanned struct {
-		code  string
-		raw   string
-		calls []call
-		syms  []Symbol
-	}
 	files := map[string]*scanned{}
 	present := map[string]bool{}
 	for _, p := range paths {
@@ -310,7 +313,7 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 				}
 			}
 		}
-		s := &scanned{raw: string(raw)}
+		s := &scanned{raw: string(raw), lang: lang.Name}
 		files[f.Path] = s
 		if f.Role != "build" && lang.Syntax == syntaxBuild {
 			ix.buildTraps(f.Path, s.raw) // an included build file: cmake/UserOverride.cmake, rules.mk
@@ -354,11 +357,7 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 				s.syms, s.calls = lineSymbols(f.Path, code, lang.Name)
 			default:
 				s.syms, s.calls = braceSymbols(f.Path, code, lang.Name)
-				if strings.HasSuffix(f.Path, ".h") || strings.HasSuffix(f.Path, ".hpp") || strings.HasSuffix(f.Path, ".hh") {
-					for k := range s.syms {
-						s.syms[k].Public = s.syms[k].Public && !isDefKind(s.syms[k].Kind) || s.syms[k].Public && strings.Contains(s.syms[k].Name, "::")
-					}
-				} else if lang.Name == "c" || lang.Name == "cpp" {
+				if !isHeader(f.Path) && (lang.Name == "c" || lang.Name == "cpp") {
 					for k := range s.syms {
 						s.syms[k].Public = false // a .cpp file's definitions implement the headers' API
 					}
@@ -369,6 +368,9 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 			ix.surfaces(f.Path, lang.Name, code)
 			ix.traps(f.Path, lang.Name, code, s.raw)
 			ix.entries(f.Path, f.Role, lang.Name, s.raw, s.syms)
+			if f.Role == "source" && (lang.Name == "c" || lang.Name == "cpp") && isHeader(f.Path) {
+				ix.headerEntries(f.Path, s.code)
+			}
 		}
 		if f.Role == "test" {
 			ix.Tests = append(ix.Tests, Fact{ID: "test:" + f.Path, Kind: "test", At: f.Path + ":1"})
@@ -384,6 +386,7 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 	for _, p := range keywordFiles {
 		ix.keywordImports(p, langs[strings.ToLower(path.Ext(p))].Syntax, files[p].raw, exists)
 	}
+	ix.opaqueEntries()
 	// The call graph, resolved by the called name's last component.
 	byName := map[string][]string{}
 	for _, s := range ix.Symbols {
@@ -404,17 +407,113 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 			if len(to) == 0 {
 				continue
 			}
-			if len(to) > 8 {
-				to = to[:8]
-			}
-			ix.Edges = append(ix.Edges, Edge{Kind: "call", From: from, To: to, At: p + ":" + itoa(c.line), Ambiguous: len(to) > 1})
+			ix.Edges = append(ix.Edges, callEdge(from, c.name, to, p+":"+itoa(c.line)))
 		}
+		ix.guardCalls(p, s, byName)
+		ix.scriptCalls(p, s, byName)
 	}
+	ix.builtins(files, byName)
 	ix.history(ctx, root, opt.Git)
 	ix.counts()
 	ix.modules(opt.Budget)
 	ix.finish()
 	return ix, nil
+}
+
+// guardCalls records the calls a Python program makes at module scope (the
+// main guard's block, and the setup before it) as edges from the guard's
+// entry: no function holds those calls, so a runner chosen by its guard
+// reaches what module scope calls and no other function of its file.
+func (ix *Index) guardCalls(p string, s *scanned, byName map[string][]string) {
+	k, ok := ix.byPath[p]
+	if !ok || ix.Files[k].Lang != "python" {
+		return
+	}
+	m := pyMain.FindStringIndex(s.raw)
+	if m == nil {
+		return
+	}
+	guard := strings.Count(s.raw[:m[0]], "\n") + 1
+	from := "entry:" + p + ":" + itoa(guard)
+	lines := strings.Split(s.code, "\n")
+	inDef := func(ln int) bool {
+		return slices.ContainsFunc(s.syms, func(d Symbol) bool { return isDefKind(d.Kind) && d.line <= ln && ln <= d.End })
+	}
+	seen := map[string]bool{}
+	other := false // in the guard's else or elif branch, which runs only on import
+	for ln := 1; ln <= len(lines); ln++ {
+		text := lines[ln-1]
+		if ln > guard && text != "" && text[0] != ' ' && text[0] != '\t' {
+			t := strings.TrimSpace(text)
+			other = strings.HasPrefix(t, "elif ") || strings.HasPrefix(t, "else") && (len(t) == 4 || t[4] == ':' || t[4] == ' ')
+		}
+		if other || inDef(ln) {
+			continue // a function's body runs only when it is called
+		}
+		if ln == guard {
+			text = text[strings.Index(text, ":")+1:]
+		}
+		for _, c := range callName.FindAllStringSubmatch(text, -1) {
+			if to := byName[c[1]]; len(to) > 0 && !cKeywords[c[1]] && !seen[c[1]] {
+				seen[c[1]] = true
+				ix.Edges = append(ix.Edges, callEdge(from, c[1], to, p+":"+itoa(ln)))
+			}
+		}
+	}
+}
+
+// scriptCalls records what a script's file-scope code names as edges from
+// its script entry: a script runs its top-level lines, which no function
+// holds, so it reaches the functions they name and no others. In shell,
+// Perl, and Ruby a name counts with or without parentheses, as they call
+// without them; in Python and PHP only a call does (callback = install runs
+// nothing).
+func (ix *Index) scriptCalls(p string, s *scanned, byName map[string][]string) {
+	from := "entry:" + p + ":1"
+	if !slices.ContainsFunc(ix.Entries, func(e Fact) bool { return e.ID == from && e.Kind == "script" }) {
+		return
+	}
+	inDef := func(ln int) bool {
+		return slices.ContainsFunc(s.syms, func(d Symbol) bool { return isDefKind(d.Kind) && d.line <= ln && ln <= d.End })
+	}
+	seen := map[string]bool{}
+	for k, text := range strings.Split(s.code, "\n") {
+		if inDef(k + 1) {
+			continue
+		}
+		for _, loc := range wordRe.FindAllStringIndex(text, -1) {
+			w := text[loc[0]:loc[1]]
+			if (s.lang == "python" || s.lang == "php") && !strings.HasPrefix(strings.TrimLeft(text[loc[1]:], " \t"), "(") {
+				continue
+			}
+			if to := byName[w]; len(to) > 0 && !cKeywords[w] && !seen[w] {
+				seen[w] = true
+				ix.Edges = append(ix.Edges, callEdge(from, w, to, p+":"+itoa(k+1)))
+			}
+		}
+	}
+}
+
+var wordRe = regexp.MustCompile(`[A-Za-z_][\w]*`)
+
+// callEdge is a call resolved by name. An edge lists at most eight of the
+// definitions the name could mean; when it lists fewer than there are, Name
+// keeps the called name, so a reader can resolve the rest (runnerReach).
+func callEdge(from, name string, to []string, at string) Edge {
+	e := Edge{Kind: "call", From: from, To: to, At: at, Ambiguous: len(to) > 1}
+	if len(to) > 8 {
+		e.To, e.Name = to[:8], name
+	}
+	return e
+}
+
+// scanned is one file read while building the index.
+type scanned struct {
+	code  string // comments, literals, and (C family) directives blanked
+	raw   string
+	lang  string
+	calls []call
+	syms  []Symbol
 }
 
 // listFiles lists the checkout's files: git's tracked files when root is a
@@ -486,18 +585,36 @@ func (ix *Index) surfaces(file, lang, code string) {
 }
 
 func (ix *Index) entries(file, role, lang, raw string, syms []Symbol) {
+	have := map[string]bool{}
 	add := func(kind string, line int, detail string) {
-		ix.Entries = append(ix.Entries, Fact{ID: "entry:" + file + ":" + itoa(line), Kind: kind, At: file + ":" + itoa(line), Detail: detail})
+		at := file + ":" + itoa(line)
+		id := "entry:" + at
+		if have[id] { // two entries on one line (class A {}; class B {};): the name tells them apart
+			name := detail
+			if _, n, ok := strings.Cut(detail, " "); ok {
+				name = n
+			}
+			id += "#" + name
+			for n := 2; have[id]; n++ {
+				id = "entry:" + at + "#" + name + "~" + itoa(n)
+			}
+		}
+		have[id] = true
+		ix.Entries = append(ix.Entries, Fact{ID: id, Kind: kind, At: at, Detail: detail})
 	}
 	for _, s := range syms {
 		n := lastName(s.Name)
 		switch {
 		case s.Kind == "program":
 			add("main", s.line, s.Name)
-		case isDefKind(s.Kind) && (n == "main" || n == "WinMain" || n == "wmain") && !strings.Contains(s.Name, "::"):
+		case isDefKind(s.Kind) && (n == "main" || n == "WinMain" || n == "wmain") && !strings.Contains(s.Name, "::"),
+			lang == "java" && s.Kind == "method" && n == "main" && !declares(raw, s.line, "private"), // App::main
+			lang == "csharp" && s.Kind == "method" && n == "Main" && declares(raw, s.line, "static"): // Program::Main
 			add("main", s.line, s.Name)
 		case s.Public && role == "source" && (lang == "php" || lang == "python" || lang == "ruby" || lang == "javascript" || lang == "typescript" || lang == "java" || lang == "csharp" || lang == "go" || lang == "cpp" || lang == "c" || lang == "rust"):
-			if isDefKind(s.Kind) && strings.Contains(s.Name, "::") || !isDefKind(s.Kind) && (s.Kind == "class" || s.Kind == "struct" || s.Kind == "interface" || s.Kind == "trait") {
+			// A function defined in a C or C++ header (inline int parse(…) {…}) is
+			// part of the API every includer calls, as a method is.
+			if isDefKind(s.Kind) && (strings.Contains(s.Name, "::") || (lang == "c" || lang == "cpp") && isHeader(file) || exportsFuncs(lang, raw) || exported(lang, raw, s)) || !isDefKind(s.Kind) && (s.Kind == "class" || s.Kind == "struct" || s.Kind == "interface" || s.Kind == "trait" || s.Kind == "type" || s.Kind == "enum" || s.Kind == "union") {
 				add("api", s.line, s.Kind+" "+s.Name)
 			}
 		}
@@ -510,6 +627,94 @@ func (ix *Index) entries(file, role, lang, raw string, syms []Symbol) {
 	if shebang.MatchString(raw) && (lang == "shell" || lang == "perl" || lang == "python" || lang == "ruby" || lang == "php") {
 		add("script", 1, strings.SplitN(raw, "\n", 2)[0])
 	}
+}
+
+// declares reports whether line ln of raw has the modifier word.
+func declares(raw string, ln int, word string) bool {
+	lines := strings.Split(raw, "\n")
+	return ln >= 1 && ln <= len(lines) && regexp.MustCompile(`\b`+word+`\b`).MatchString(lines[ln-1])
+}
+
+// exported reports whether a top-level function is declared exported where
+// the language marks it: Rust pub (not pub(crate)), or a JavaScript or
+// TypeScript export. A library's callers reach it.
+func exported(lang, raw string, s Symbol) bool {
+	var pat string
+	switch lang {
+	case "rust":
+		pat = `\bpub\s+(?:(?:const|async|unsafe|extern\s*(?:"[^"]*")?)\s+)*fn\s+`
+	case "javascript", "typescript":
+		pat = `\bexport\s+(?:default\s+)?(?:async\s+)?function\s*\*?\s*`
+	default:
+		return false
+	}
+	lines := strings.Split(raw, "\n")
+	return s.line >= 1 && s.line <= len(lines) && regexp.MustCompile(pat+regexp.QuoteMeta(s.Name)+`\b`).MatchString(lines[s.line-1])
+}
+
+// exportsFuncs reports whether a file's public top-level functions are an API
+// its importers call: a Go package other than main (exported names), or a
+// Python module that is not a script (no shebang, no main guard; names without
+// a leading underscore). Elsewhere a top-level function's Public means only
+// that it is not static, and a script's functions are its own helpers.
+func exportsFuncs(lang, raw string) bool {
+	switch lang {
+	case "go":
+		return !goMainPkg.MatchString(raw)
+	case "python":
+		return !shebang.MatchString(raw) && !pyMain.MatchString(raw)
+	}
+	return false
+}
+
+// headerEntries adds the functions a header declares without a body
+// (headerAPI) as api entry points, once per line.
+func (ix *Index) headerEntries(file, code string) {
+	have, seen := map[string]bool{}, map[string]bool{}
+	for _, e := range ix.Entries {
+		have[e.ID], seen[e.At+" "+e.Detail] = true, true
+	}
+	for _, d := range headerAPI(code) {
+		at, detail := file+":"+itoa(d.line), d.Kind+" "+d.Name
+		if seen[at+" "+detail] { // the symbol path already listed it
+			continue
+		}
+		id := "entry:" + at
+		if have[id] { // another declaration on the same line: its name tells them apart
+			id += "#" + d.Name
+		}
+		for n := 2; have[id]; n++ { // and an ordinal tells same-line overloads apart
+			id = "entry:" + at + "#" + d.Name + "~" + itoa(n)
+		}
+		have[id] = true
+		ix.Entries = append(ix.Entries, Fact{ID: id, Kind: "api", At: at, Detail: detail})
+	}
+}
+
+// opaqueEntries drops a forward-declared type (class CScriptVar;) from the
+// entry points when a header defines it: callers reach the definition, which
+// is an entry of its own. A type no header defines stays, as the opaque handle
+// callers name, even when a .c or .cpp file defines it privately.
+func (ix *Index) opaqueEntries() {
+	defined := map[string]bool{}
+	for _, s := range ix.Symbols {
+		switch f, _ := splitAt(s.At); s.Kind {
+		case "class", "struct", "union", "enum":
+			defined[s.Name] = defined[s.Name] || isHeader(f)
+		}
+	}
+	ix.Entries = slices.DeleteFunc(ix.Entries, func(e Fact) bool {
+		name, ok := strings.CutPrefix(e.Detail, "opaque ")
+		return ok && defined[name]
+	})
+}
+
+func isHeader(p string) bool {
+	switch strings.ToLower(path.Ext(p)) { // API.HPP is a header too
+	case ".h", ".hh", ".hpp", ".hxx", ".inl", ".ipp":
+		return true
+	}
+	return false
 }
 
 // imports records include and import edges: to a file of the checkout when the
@@ -842,6 +1047,9 @@ func fileOf(id string) string {
 		return id[5:]
 	case strings.HasPrefix(id, "sym:"):
 		return strings.SplitN(id[4:], "#", 2)[0]
+	case strings.HasPrefix(id, "entry:"): // a script's or main guard's calls
+		f, _ := splitAt(id[6:])
+		return f
 	}
 	return ""
 }
@@ -856,7 +1064,7 @@ func (ix *Index) finish() {
 	sort.SliceStable(ix.Targets, byID(len(ix.Targets), func(i int) string { return ix.Targets[i].ID }))
 	sort.SliceStable(ix.Deps, byID(len(ix.Deps), func(i int) string { return ix.Deps[i].ID }))
 	ix.Deps = dedupeDeps(ix.Deps)
-	for _, l := range []*[]Fact{&ix.Entries, &ix.Surfaces, &ix.Traps, &ix.Tests, &ix.Docs} {
+	for _, l := range []*[]Fact{&ix.Entries, &ix.Surfaces, &ix.Traps, &ix.Tests, &ix.Docs, &ix.Builtins, &ix.Uses} {
 		fs := *l
 		sort.SliceStable(fs, func(i, j int) bool { return fs[i].ID < fs[j].ID })
 	}
@@ -899,7 +1107,7 @@ func (ix *Index) index() {
 	for _, d := range ix.Deps {
 		ix.ids[d.ID] = true
 	}
-	for _, l := range [][]Fact{ix.Entries, ix.Surfaces, ix.Traps, ix.Tests, ix.Docs} {
+	for _, l := range [][]Fact{ix.Entries, ix.Surfaces, ix.Traps, ix.Tests, ix.Docs, ix.Builtins} {
 		for _, f := range l {
 			ix.ids[f.ID] = true
 		}
@@ -944,14 +1152,14 @@ func splitAt(at string) (string, int) {
 }
 
 // Resolve checks one citation against the index: a fact ID (file:, sym:,
-// build:, dep:, entry:, io:, test:, doc:, marker:, mod:), or a location
+// build:, dep:, entry:, io:, test:, doc:, marker:, mod:, builtin:), or a location
 // path:line or path:first-last whose lines exist in the file.
 func (ix *Index) Resolve(cite string) error {
 	cite = strings.TrimSpace(cite)
 	if ix.ids[cite] {
 		return nil
 	}
-	for _, pre := range []string{"file:", "sym:", "build:", "dep:", "entry:", "io:", "trap:", "test:", "doc:", "marker:", "mod:", "probe:"} {
+	for _, pre := range []string{"file:", "sym:", "build:", "dep:", "entry:", "io:", "trap:", "test:", "doc:", "marker:", "mod:", "builtin:", "probe:"} {
 		if strings.HasPrefix(cite, pre) {
 			if pre == "probe:" {
 				return fmt.Errorf("%s: no such probe fact (run `aayu survey --golden <cases> --bin <legacy> --run --probe` first)", cite)

@@ -238,26 +238,38 @@ func TestRegistry(t *testing.T) {
 			}
 			return nil
 		}},
-		{"every lane has a default per host and adversarial lanes differ from the builder family", func() error {
+		{"every lane has a default per host and plan, and adversarial lanes differ from the builder family", func() error {
 			build, _ := FindLane(LaneBuild)
 			for _, l := range Lanes {
 				for _, h := range Hosts {
-					d, ok := defaultFor(l, h.ID)
-					if !ok || d.Model == "" || d.Family == "" {
-						return fmt.Errorf("lane %s has no default for host %s", l.ID, h.ID)
+					plans := []string{""}
+					if h.ID == HostCursor {
+						plans = []string{PlanX, PlanLegacy}
 					}
-					if d.Family != FamilyHostManaged && (d.ID == "" || FamilyOf(d.ID) != d.Family) {
-						return fmt.Errorf("lane %s on %s: model ID %q does not belong to family %s", l.ID, h.ID, d.ID, d.Family)
-					}
-					if d.EscalationID != "" && FamilyOf(d.EscalationID) != d.Family {
-						return fmt.Errorf("lane %s on %s: escalation %q changes family", l.ID, h.ID, d.EscalationID)
-					}
-					if slices.Contains(h.Excludes, d.Family) {
-						return fmt.Errorf("lane %s on %s: default family %s is excluded on that host", l.ID, h.ID, d.Family)
-					}
-					b, _ := defaultFor(build, h.ID)
-					if l.Adversarial && d.Family != FamilyHostManaged && d.Family == b.Family {
-						return fmt.Errorf("lane %s on %s uses builder family %s", l.ID, h.ID, d.Family)
+					for _, plan := range plans {
+						d, ok := defaultFor(l, h.ID, plan)
+						// Composer's lineage is unpublished (Decision #469,
+						// detail 10): its family is unknown, and a note says so.
+						unknown := d.Family == "" && FamilyOf(d.ID) == "" && d.Note != ""
+						if !ok || d.Model == "" || d.Family == "" && !unknown {
+							return fmt.Errorf("lane %s has no default for host %s (plan %q)", l.ID, h.ID, plan)
+						}
+						if d.Family != FamilyHostManaged && !unknown && (d.ID == "" || FamilyOf(d.ID) != d.Family) {
+							return fmt.Errorf("lane %s on %s: model ID %q does not belong to family %s", l.ID, h.ID, d.ID, d.Family)
+						}
+						if d.EscalationID != "" && FamilyOf(d.EscalationID) != d.Family {
+							return fmt.Errorf("lane %s on %s: escalation %q changes family", l.ID, h.ID, d.EscalationID)
+						}
+						if slices.Contains(h.Excludes, d.Family) {
+							return fmt.Errorf("lane %s on %s: default family %s is excluded on that host", l.ID, h.ID, d.Family)
+						}
+						// A plan that includes one family reviews within it,
+						// with another model of the family, labelled same-family
+						// (Decision #469, detail 7): only Cursor's x plan.
+						b, _ := defaultFor(build, h.ID, plan)
+						if l.Adversarial && d.Family != FamilyHostManaged && d.Family == b.Family && (plan != PlanX || d.ID == b.ID) {
+							return fmt.Errorf("lane %s on %s uses builder family %s", l.ID, h.ID, d.Family)
+						}
 					}
 				}
 			}
@@ -273,9 +285,9 @@ func TestRegistry(t *testing.T) {
 	}
 }
 
-func defaultFor(l Lane, h HostID) (ModelDefault, bool) {
+func defaultFor(l Lane, h HostID, plan string) (ModelDefault, bool) {
 	for _, d := range l.Defaults {
-		if d.Host == h {
+		if d.Host == h && (d.Plan == "" || d.Plan == plan) {
 			return d, true
 		}
 	}

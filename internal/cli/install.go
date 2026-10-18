@@ -311,14 +311,15 @@ func runHook(ctx context.Context, e *Env, in Values) error {
 
 // hostcallDecide decides a host's PostHog or Sentry call (Decision #449).
 // The hosts' MCP configs name the servers registered under any name; they are
-// read only for an MCP call. allow_pii is read only when the call would be
+// read only for an MCP call (mcp__<server>__<tool>, or Copilot's
+// <server>-<tool>). allow_pii is read only when the call would be
 // refused without it.
 func (e *Env) hostcallDecide(ctx context.Context, ev hostcall.Event) hostcall.Verdict {
 	var o hostcall.Options
-	if strings.HasPrefix(ev.Tool, "mcp__") {
+	if strings.HasPrefix(ev.Tool, "mcp__") || ev.Dashed {
 		o.Servers = map[string]string{}
 		root, home := config.RepoRoot(e.Dir), e.homeDir()
-		for _, s := range hosts.ProviderServers(root, home, hosts.CodexHome(home, e.Getenv)) {
+		for _, s := range hosts.ProviderServers(root, home, hosts.CodexHome(home, e.Getenv), hosts.CopilotHome(home, e.Getenv)) {
 			o.Servers[s.Name] = hostcall.ProviderOf(strings.Join(append([]string{s.Name, s.URL, s.Command}, s.Args...), " "))
 		}
 	}

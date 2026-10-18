@@ -289,6 +289,14 @@ func TestHookProviderCalls(t *testing.T) {
 			[]string{"--host", "cursor"}, 2, `"permission":"deny"`, "experiment-launch"},
 		{"amp event flag", "", []string{"--host", "amp", "--event", `{"tool_name":"mcp__sentry__execute_sentry_tool","tool_input":{"name":"update_issue"}}`}, 2, "", "`update_issue`"},
 		{"other MCP server", `{"tool_name":"mcp__github__create_issue","tool_input":{}}`, []string{"--host", "claude"}, 0, "", ""},
+		{"copilot sentry read", `{"sessionId":"05b234bf-9c41-41f2-8604-0ff1d8dc3011","cwd":"/r","timestamp":1792286000000,"toolName":"sentry-find_dropped_events","toolArgs":{"statsPeriod":"7d"}}`,
+			[]string{"--host", "copilot"}, 0, "", ""},
+		{"copilot posthog write", `{"sessionId":"s","toolName":"posthog-update-feature-flag","toolArgs":"{\"id\":3}"}`,
+			[]string{"--host", "copilot"}, 2, `"permissionDecision":"deny"`, "`update-feature-flag`"},
+		{"copilot bash read", `{"sessionId":"s","toolName":"bash","toolArgs":"{\"command\":\"posthog-cli exp query run \\\"SELECT 1 LIMIT 1\\\"\"}"}`,
+			[]string{"--host", "copilot"}, 0, "", ""},
+		{"copilot bash release", `{"sessionId":"s","toolName":"bash","toolArgs":{"command":"bash -c 'sentry-cli releases new 1.2.3'"}}`,
+			[]string{"--host", "copilot"}, 2, `"permissionDecision":"deny"`, "product's CI"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			code, out, errs := runIn(t, env, opts, tt.stdin, append([]string{"hook", "pre-tool"}, tt.args...)...)
@@ -305,6 +313,16 @@ func TestHookProviderCalls(t *testing.T) {
 	if code, _, errs := runIn(t, env, opts, `{"tool_name":"mcp__errors__update_issue","tool_input":{}}`, "hook", "pre-tool", "--host", "claude"); code != 2 || !strings.Contains(errs, "`update_issue`") {
 		t.Fatalf("a renamed Sentry server's write: exit %d %s; want it refused", code, errs)
 	}
+	// Under Copilot, a server registered in $COPILOT_HOME/mcp-config.json
+	// under another name is known by its package too.
+	copilotHome := filepath.Join(t.TempDir(), "copilot")
+	_ = os.MkdirAll(copilotHome, 0o755)
+	_ = os.WriteFile(filepath.Join(copilotHome, "mcp-config.json"), []byte(`{"mcpServers":{"monitoring":{"type":"local","command":"npx","args":["-y","@sentry/mcp-server"],"tools":["*"]}}}`), 0o644)
+	env["COPILOT_HOME"] = copilotHome
+	if code, out, errs := runIn(t, env, opts, `{"sessionId":"s","toolName":"monitoring-update_issue","toolArgs":{}}`, "hook", "pre-tool", "--host", "copilot"); code != 2 || !strings.Contains(out, `"permissionDecision":"deny"`) || !strings.Contains(errs, "`update_issue`") {
+		t.Fatalf("a Sentry server in COPILOT_HOME under another name: exit %d %s %s; want it refused", code, out, errs)
+	}
+	delete(env, "COPILOT_HOME")
 	// The repository's protected config opts in to personal data, and only
 	// as committed on the dev branch counts: an agent cannot opt itself in by
 	// editing the file, or by committing it on its own branch.
@@ -363,6 +381,20 @@ func TestHookLogsProviderCalls(t *testing.T) {
 		!strings.Contains(lines[0], `"why_not_citable":"it names no row limit"`) ||
 		!strings.Contains(lines[1], `"id":"c2"`) || !strings.Contains(lines[1], `"channel":"cli"`) || !strings.Contains(lines[1], `"citable":true`) {
 		t.Fatalf("call log:\n%s", b)
+	}
+	// Copilot's postToolUse and postToolUseFailure (Copilot CLI 1.0.98, live 2026-10-18).
+	for _, c := range []string{
+		`{"sessionId":"cp-1","timestamp":1792293989252,"cwd":"/r","toolName":"sentry-find_releases","toolArgs":{"statsPeriod":"7d","limit":5},"toolResult":{"resultType":"success","textResultForLlm":"[{\"version\":\"1\"}]"}}`,
+		`{"sessionId":"cp-1","timestamp":1792293990785,"cwd":"/r","toolName":"sentry-find_releases","toolArgs":{"statsPeriod":"7d","limit":5},"error":"MCP server 'sentry': exit 2"}`,
+	} {
+		if code, out, errs := runIn(t, env, opts, c, "hook", "post-tool", "--host", "copilot"); code != 0 || out != "" || errs != "" {
+			t.Fatalf("copilot post-tool: exit %d %q %q", code, out, errs)
+		}
+	}
+	b, err = os.ReadFile(filepath.Join(repo, ".aayudha", "state", "calls", "cp-1.jsonl"))
+	if lines := strings.Split(strings.TrimSpace(string(b)), "\n"); err != nil || len(lines) != 2 || !strings.Contains(lines[0], `"rows":1`) || !strings.Contains(lines[0], `"citable":true`) ||
+		!strings.Contains(lines[1], `"failed":true`) || !strings.Contains(lines[1], `"citable":false`) {
+		t.Fatalf("copilot call log: %v\n%s", err, b)
 	}
 	// A log that cannot be written never fails the host: the call has run.
 	broken := filepath.Join(repo, ".aayudha", "state", "calls", "s-43.jsonl")

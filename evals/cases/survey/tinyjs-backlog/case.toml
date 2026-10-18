@@ -4,6 +4,8 @@
 # deferred the Math.rand question (Q5). The skill writes backlog.json. Floors: `aayu survey --backlog` (work-item
 # schema, every item on what the survey knows, parity case sets on modernisation Stories) and the scope rules: no item
 # fixes a quirk the person kept, and no sandbox or limit for scripts the person called trusted.
+# survey.json is amended for the capability-map and runner floors: its capabilities cite every entry point, and its
+# case sets name their runners.
 skill = "survey"
 description = "Draft the Goal, Initiatives, Features, Stories, and Bugs from a checked survey and its interview."
 input = "request.txt"

@@ -110,6 +110,13 @@ claude_trigger = "@claude"
 checks = []               # empty: the brief points at the checks AGENTS.md lists
 local_timeout_minutes = 60
 
+# What the agent hosts include on the user's plan (Decision #469). Cursor's plans from 12 October 2026 ("x") include
+# only Cursor's own models, so its lanes default to Grok and Composer; "legacy" (Pro, Pro+, Ultra before that date)
+# keeps Claude and Gemini. aayu cannot tell them apart, and "x" never spends list-price money by surprise. The plan is
+# the person's: set it in the user config or AAYU_HOSTS__CURSOR__PLAN; a checkout's config cannot.
+[hosts.cursor]
+plan = "x"
+
 # Design tokens and OpenFeature flag definitions the design verbs check against (WP6.5).
 [design]
 tokens = "packages/design-system/tokens/tokens.json"

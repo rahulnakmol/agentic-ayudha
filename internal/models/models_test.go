@@ -41,15 +41,18 @@ func TestLaneResolution(t *testing.T) {
 	}{
 		// Registry defaults, one row per host.
 		{verbs.LaneBuild, verbs.HostAmp, false, false, "", verbs.FamilyHostManaged, SourceDefault, ""},
-		{verbs.LaneBuild, verbs.HostCursor, false, false, verbs.ModelClaudeOpus, verbs.FamilyAnthropic, SourceDefault, ""},
+		// Cursor's x plan, the default, includes only Cursor's own models
+		// (Decision #469).
+		{verbs.LaneBuild, verbs.HostCursor, false, false, verbs.ModelGrok, verbs.FamilyXAI, SourceDefault, ""},
+		{verbs.LaneChore, verbs.HostCursor, false, false, verbs.ModelComposer, "", SourceDefault, ""},
 		{verbs.LaneReview, verbs.HostAmp, false, false, verbs.ModelGPTSol, verbs.FamilyOpenAI, SourceDefault, ""},
-		{verbs.LaneUIReview, verbs.HostCursor, false, false, verbs.ModelGemini, verbs.FamilyGoogle, SourceDefault, "high"},
+		{verbs.LaneUIReview, verbs.HostCursor, false, false, verbs.ModelGrokPrior, verbs.FamilyXAI, SourceDefault, ""},
 		{verbs.LaneChore, verbs.HostClaude, false, false, verbs.ModelClaudeHaiku, verbs.FamilyAnthropic, SourceDefault, ""},
 		// Config overrides.
 		{verbs.LaneBuild, verbs.HostClaude, false, false, verbs.ModelClaudeSonnet, verbs.FamilyAnthropic, SourceConfig, ""},
 		{verbs.LaneReview, verbs.HostClaude, false, false, "my-model", verbs.FamilyXAI, SourceConfig, ""},
 		// Cursor cannot run GPT: the configured GPT lane resolves to the Grok default.
-		{verbs.LaneReview, verbs.HostCursor, false, false, verbs.ModelGrok, verbs.FamilyXAI, SourceFallback, ""},
+		{verbs.LaneReview, verbs.HostCursor, false, false, verbs.ModelGrokPrior, verbs.FamilyXAI, SourceFallback, ""},
 		// The binary's own calls cannot use a host-managed mode.
 		{verbs.LaneChore, verbs.HostAmp, true, false, verbs.ModelClaudeHaiku, verbs.FamilyAnthropic, SourceDirect, ""},
 		{verbs.LaneUIReview, verbs.HostAmp, true, false, verbs.ModelGemini, verbs.FamilyGoogle, SourceDirect, "high"},
@@ -70,8 +73,16 @@ func TestLaneResolution(t *testing.T) {
 		}
 	}
 	joined := strings.Join(logged, "\n")
-	if !strings.Contains(joined, "gpt-6.1-sol (openai) is not available on Cursor; using the lane's Cursor default grok-4.7") {
+	if !strings.Contains(joined, "gpt-6.1-sol (openai) is not available on Cursor; using the lane's Cursor default grok-4.6") {
 		t.Errorf("substitution not logged; log:\n%s", joined)
+	}
+	// A legacy Cursor plan keeps the defaults it includes: Claude, Grok 4.7,
+	// Gemini, and Haiku.
+	legacy := Resolver{Hosts: config.Hosts{Cursor: config.CursorHost{Plan: verbs.PlanLegacy}}}
+	for lane, want := range map[verbs.LaneID]string{verbs.LaneBuild: verbs.ModelClaudeOpus, verbs.LaneReview: verbs.ModelGrok, verbs.LaneUIReview: verbs.ModelGemini, verbs.LaneChore: verbs.ModelClaudeHaiku} {
+		if got, err := legacy.Resolve(lane, verbs.HostCursor); err != nil || got.Model != want {
+			t.Errorf("%s on a legacy Cursor plan = %+v, %v; want %s", lane, got, err, want)
+		}
 	}
 }
 

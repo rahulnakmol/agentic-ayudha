@@ -20,7 +20,6 @@ Host hooks run `aayu hook <name>` only: `session-start` reports skill copies out
 `pre-tool` blocks agent tool calls while the `[budget]` breaker has paused agent lanes, shell commands that run a
 human-only verb, and any PostHog or Sentry call through a host's MCP server or CLI that is not on aayudha's read
 allowlist, and `status-line` shows where the work stands.
-Under GitHub Copilot, `pre-tool` does not check PostHog or Sentry calls yet: call them only to read.
 
 Before you change anything for a request, run `aayu grill story --assess --idea "<the person's words>" --json` (the
 grill skill). On `unpack`, ask the person its questions, riskiest first, and wait for their answers before you file,

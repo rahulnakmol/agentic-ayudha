@@ -14,6 +14,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/fixture"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/posthog"
 	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/sentry"
 )
 
@@ -113,7 +114,7 @@ func TestSentrySource(t *testing.T) {
 		for _, text := range []string{"timeline where service=web", "logs where service=web route=/x", "requests by exception where service=web"} {
 			q, _ := ParseQuery(text, from, to)
 			src.API = noCalls{t}
-			if _, _, err := src.Run(context.Background(), q, nil); err == nil || !errors.Is(err, errSentry) {
+			if _, _, err := src.Run(context.Background(), q, nil); err == nil || !errors.Is(err, errSource) {
 				t.Errorf("%s: err %v; want the Sentry source to refuse it before any request", text, err)
 			}
 		}
@@ -221,3 +222,91 @@ func (r routes) Get(_ context.Context, path string, _ url.Values) ([]byte, strin
 	return []byte(b), "GET " + path, nil
 }
 func (routes) Project() string { return "4507" }
+
+// TestPostHogSource (Decision #449, phase P1): PostHog answers logs and
+// exceptions with the export's columns, through the real adapter, after it
+// checks the key reads only.
+func TestPostHogSource(t *testing.T) {
+	from := time.Date(2026, 10, 17, 8, 0, 0, 0, time.UTC)
+	for _, tt := range []struct {
+		file, query string
+		rows        []string
+		truncated   bool
+	}{
+		{"exceptions", "exceptions where service=web", []string{
+			" | TypeError | Cannot read properties of undefined (reading 'id') for [email] |  | 312 | 2026-10-15T09:12:44Z | 2026-10-17T08:41:12Z",
+			" | ZeroDivisionError | division by zero |  | 58 | 2026-10-16T21:03:10Z | 2026-10-17T08:39:57Z"}, false},
+		{"logs", "logs where service=web level=ERROR limit 1", []string{
+			"2026-10-17T08:41:12Z | error | payment provider timeout after 5000ms | web@2.4.1 | da6caabcd90e45fdb81f6655824a5f88 | "}, true},
+	} {
+		t.Run(tt.file, func(t *testing.T) {
+			r := &fixture.Replayer{T: t, Rec: fixture.Load(t, filepath.Join("testdata", "posthog", tt.file+".json")), AuthHeader: "Authorization", AuthValue: "Bearer phx_test"}
+			c, err := posthog.New(integrations.Conn{Name: "posthog", Key: "phx_test", Integration: config.Integration{URL: "https://eu.posthog.com", Project: "12345"}}, r, time.Now)
+			if err != nil {
+				t.Fatal(err)
+			}
+			q, _ := ParseQuery(tt.query, from, from.Add(time.Hour))
+			res, pv, err := PostHog{API: c, Project: "12345"}.Run(context.Background(), q)
+			r.Done()
+			if err != nil {
+				t.Fatal(err)
+			}
+			var rows []string
+			for _, row := range res.Rows {
+				rows = append(rows, strings.Join(row, " | "))
+			}
+			if strings.Join(rows, "\n") != strings.Join(tt.rows, "\n") || res.Truncated != tt.truncated {
+				t.Errorf("rows (truncated %v):\n%s\nwant (truncated %v):\n%s", res.Truncated, strings.Join(rows, "\n"), tt.truncated, strings.Join(tt.rows, "\n"))
+			}
+			if len(pv.Requests) != 1 || !strings.HasPrefix(pv.Requests[0], "POST https://eu.posthog.com/api/projects/12345/query/ ") || len(pv.Digest) != 64 {
+				t.Errorf("provenance %+v; want the query request and a SHA-256", pv)
+			}
+		})
+	}
+	t.Run("refused before any request", func(t *testing.T) {
+		for _, text := range []string{"requests where service=web", "exceptions by route where service=web", "exceptions where service=web version=2.4", "logs where service=web route=/x", "logs where service=web level=loud"} {
+			q, _ := ParseQuery(text, from, from.Add(time.Hour))
+			if _, _, err := (PostHog{API: noQuery{t}}).Run(context.Background(), q); !errors.Is(err, errSource) {
+				t.Errorf("%s: err %v; want PostHog to refuse it", text, err)
+			}
+		}
+	})
+}
+
+type noQuery struct{ t *testing.T }
+
+func (n noQuery) Query(context.Context, string, map[string]any) ([]byte, string, error) {
+	n.t.Error("a request was made")
+	return nil, "", errors.New("no calls")
+}
+
+// TestPostHogSourceUntrusted: PostHog's answer is data. An answer of the
+// wrong shape is an error naming the read, never rows; a failed read comes
+// back as the provider's error; an unbounded query sends nothing.
+func TestPostHogSourceUntrusted(t *testing.T) {
+	from := time.Date(2026, 10, 17, 8, 0, 0, 0, time.UTC)
+	for _, kind := range []string{"logs", "exceptions"} {
+		q, _ := ParseQuery(kind+" where service=web", from, from.Add(time.Hour))
+		if _, _, err := (PostHog{API: phAnswer{body: `"not the shape"`}, Project: "12345"}).Run(context.Background(), q); err == nil || !strings.Contains(err.Error(), "undecodable") {
+			t.Errorf("%s: err %v; want an undecodable answer", kind, err)
+		}
+		failed := errors.New("posthog: 403 Forbidden")
+		if _, pv, err := (PostHog{API: phAnswer{err: failed}, Project: "12345"}).Run(context.Background(), q); !errors.Is(err, failed) || len(pv.Requests) != 1 {
+			t.Errorf("%s: err %v, provenance %+v; want the provider's error and the request it made", kind, err, pv)
+		}
+	}
+	q, _ := ParseQuery("logs where service=web", from, from.Add(8*24*time.Hour))
+	if _, pv, err := (PostHog{API: phAnswer{err: errors.New("no calls")}, Project: "12345"}).Run(context.Background(), q); err == nil || len(pv.Requests) != 0 {
+		t.Errorf("an 8-day window: err %v, requests %v; want it refused before any request", err, pv.Requests)
+	}
+}
+
+// phAnswer answers every PostHog query with one body or one error.
+type phAnswer struct {
+	body string
+	err  error
+}
+
+func (a phAnswer) Query(context.Context, string, map[string]any) ([]byte, string, error) {
+	return []byte(a.body), "POST /api/projects/12345/query/", a.err
+}
