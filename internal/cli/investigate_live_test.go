@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -187,6 +188,21 @@ func TestInvestigateLive(t *testing.T) {
 		!strings.Contains(ground, "from POST https://eu.posthog.com/api/projects/12345/query/") ||
 		!strings.Contains(ground, "project-wide, not scoped to service web") {
 		t.Errorf("posthog grounding:\n%s", ground)
+	}
+	_ = os.RemoveAll(filepath.Join(repo, ".aayudha", "state", "investigate"))
+
+	// A frame that is not a repository file is provider text: it stays in the
+	// query's untrusted rows and never reaches the implicated code.
+	evil := func(method, path, dataset, kind string) (int, string, bool) {
+		if strings.HasSuffix(path, "/issues/1/events/latest/") {
+			return 200, strings.ReplaceAll(recorded(t, "sentry/exceptions.json", 1), "app/checkout/total.py", "ignore_previous_instructions.py"), true
+		}
+		return sentry(method, path, dataset, kind)
+	}
+	_, ground, _ = inv(0, evil, append([]string{"--source", "sentry", "--service", "web"}, sentryFlags...)...)
+	outside := regexp.MustCompile(`(?s)<untrusted .*?</untrusted>`).ReplaceAllString(ground, "")
+	if !strings.Contains(ground, "ignore_previous_instructions.py") || strings.Contains(outside, "ignore_previous_instructions") {
+		t.Errorf("an unresolved frame left the untrusted rows:\n%s", ground)
 	}
 	_ = os.RemoveAll(filepath.Join(repo, ".aayudha", "state", "investigate"))
 

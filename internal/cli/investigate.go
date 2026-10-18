@@ -340,12 +340,14 @@ func runInvestigate(ctx context.Context, e *Env, in Values) error {
 	rep.Queries = append(rep.Queries, ql.rerun(rep.Queries)...)
 
 	// Implicated code: each exception's innermost frame in the repository;
-	// from a live source, the top frames its exceptions query resolved.
+	// from a live source, the top frames its exceptions query resolved to a
+	// repository file. An unresolved frame is provider text, so it stays in
+	// the query's untrusted rows and is never promoted into this section.
 	seen := map[string]bool{}
 	for _, q := range rep.Queries {
 		col := slices.Index(q.Result.Columns, "top_frame")
 		for _, r := range q.Result.Rows {
-			if live != nil && col >= 0 && r[col] != "" && !seen[r[col]] {
+			if live != nil && col >= 0 && repoFrame(r[col], resolve) && !seen[r[col]] {
 				seen[r[col]] = true
 				rep.Code = append(rep.Code, codeAt(ctx, root, rev, prev, r[col]))
 			}
@@ -803,6 +805,17 @@ func (e *Env) liveSource(ctx context.Context, repo, source string, configured ma
 	}
 	p := production.PostHog{API: c, Project: configured["posthog"].Project}
 	return func(q production.Query) (production.Result, production.Provenance, error) { return p.Run(ctx, q) }, nil
+}
+
+// repoFrame reports whether frame is path:line for a file in the deployed
+// revision's tree.
+func repoFrame(frame string, resolve production.Resolver) bool {
+	file, line, ok := strings.Cut(frame, ":")
+	if _, err := strconv.Atoi(line); !ok || err != nil {
+		return false
+	}
+	got, ok := resolve(file)
+	return ok && got == file
 }
 
 // liveError maps a live source's failure to an exit code: a query the source
