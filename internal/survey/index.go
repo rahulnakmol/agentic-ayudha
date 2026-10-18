@@ -711,7 +711,7 @@ func (ix *Index) opaqueEntries() {
 
 func isHeader(p string) bool {
 	switch strings.ToLower(path.Ext(p)) { // API.HPP is a header too
-	case ".h", ".hh", ".hpp", ".hxx":
+	case ".h", ".hh", ".hpp", ".hxx", ".inl", ".ipp":
 		return true
 	}
 	return false
