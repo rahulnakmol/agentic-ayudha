@@ -498,13 +498,21 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 			Summary: fmt.Sprintf("[inspect] reviewer = \"ci\": the merge gate's inspect job reviews `%s` with the model the %s environment names; this run cannot reach its key, so it asks no one", short(head), inspect.ReviewEnvironment),
 			Next:    "the merge gate's inspect check reviews this head; run `aayu inspect` again after it finishes"}
 		// An edited title or body re-runs the gate on the same head: its
-		// earlier verdict counts only when no inspect check is still running.
+		// earlier verdict counts only when the newest inspect check has
+		// finished, and a merge only when that check passed.
 		checks, _, err := c.REST.Checks.ListCheckRunsForRef(ctx, owner, name, head, &gh.ListCheckRunsOptions{CheckName: gh.Ptr("aayudha/inspect"), ListOptions: gh.ListOptions{PerPage: 100}})
 		if err != nil {
 			return Wrap(ExitExternal, err)
 		}
-		running := slices.ContainsFunc(checks.CheckRuns, func(r *gh.CheckRun) bool { return r.GetName() == "aayudha/inspect" && r.GetStatus() != "completed" })
-		if gate.Result != nil && gate.Result.Head == head && !running {
+		var latest *gh.CheckRun
+		for _, r := range checks.CheckRuns {
+			if r.GetName() == "aayudha/inspect" && (latest == nil || r.GetStartedAt().After(latest.GetStartedAt().Time)) {
+				latest = r
+			}
+		}
+		stale := latest != nil && gate.Result != nil &&
+			(latest.GetStatus() != "completed" || (gate.Result.Disposition == inspect.Merge && latest.GetConclusion() != "success"))
+		if gate.Result != nil && gate.Result.Head == head && !stale {
 			res = *gate.Result
 			res.Cached = true
 		}
