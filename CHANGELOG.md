@@ -4,7 +4,7 @@
 What changed in aayu (the `aayu` CLI, its skills, and the workflows it installs), newest version first.
 
 Each item cites the merged pull request it comes from as (#n): pull request n in
-`github.com/rahulnakmol/agentic-ayudha`. An item says what merged. It does not say the work is proven. A Feature is
+`github.com/rahulnakmol/agentic-ayudha`. A Feature is written as Feature #n: issue n, not a pull request. An item says what merged. It does not say the work is proven. A Feature is
 proven only when every shipped story under it has an authoritative proof pack (the record the merge gate checks
 against the story's criteria), and each version below says which Features that is. Words such as Ready, proof pack,
 ledger, and floor are explained in [GLOSSARY.md](GLOSSARY.md).
@@ -84,6 +84,8 @@ for this release.
 - `aayu doctor` tries each PostHog and Sentry capability with one cheap read and names the exact fix (#499).
 - A checkout's config can no longer send a stored integration key to another host (#602).
 - inspect reads its own state only from a comment its trusted writer posted, in every reader (#605).
+- `aayu init --identity` stops at once in a remote shell, such as an orb's Terminal tab or SSH, and creates no App; on this machine it exits 4 with a next step when no redirect arrives within 10 minutes (#603).
+- `aayu init --identity` prints no Install link and writes no secret when the App's conversion fails, and refuses an App with another owner, an unrequested permission or event, or another webhook (#603).
 - `aayu seat` creates the codeowner-review ruleset when a second person joins a repository that init adopted (#516).
 
 ### Evals
@@ -209,10 +211,10 @@ work, and each verb has one accountable seat.
 Four Features have an authoritative proof pack for every shipped story. Three of them belong to `benefits-qa`, the
 example product the thin-slice run built:
 
-- Thin slice run (#37): `aayu doctor` names the floor each missing tool serves (#92).
-- Grounded answers API (#127): the plan documents store loads the synthetic Example Co seed (#142); answers quote the top-ranked plan passage, and policy refuses or refers the rest (#148); `POST /api/ask` answers within its JSON Schema contract and records events (#155).
-- Answer analytics (#128): product events export to Application Insights, and the synthetic exports reproduce (#158).
-- Ask page (#129): the Ask page shows answers with their sources, served on seeded data (#160).
+- Feature #37, Thin slice run: `aayu doctor` names the floor each missing tool serves (#92).
+- Feature #127, Grounded answers API: the plan documents store loads the synthetic Example Co seed (#142); answers quote the top-ranked plan passage, and policy refuses or refers the rest (#148); `POST /api/ask` answers within its JSON Schema contract and records events (#155).
+- Feature #128, Answer analytics: product events export to Application Insights, and the synthetic exports reproduce (#158).
+- Feature #129, Ask page: the Ask page shows answers with their sources, served on seeded data (#160).
 
 ### New verbs and skills
 
