@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	gh "github.com/google/go-github/v90/github"
@@ -73,9 +75,43 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 	if a.in.Pack == nil && a.in.Story > 0 && e.CI && !replyEvent {
 		return Errorf(ExitBlocked, "inspect #%d: %v", n, inspect.ErrNoPack)
 	}
+	bots := a.cfg.Identity.BotLogins
+	human := func(login, typ string) bool { return !identity.IsBot(identity.Account{Login: login, Type: typ}, bots) }
+	// The round cap (Decision #544): past MaxRounds rounds on distinct heads
+	// inspect requests no review and reads no reply until a person reopens it.
+	a.in.Head, a.in.At, a.in.Reopened = head, e.Now(), reopenedAt(posts, mayReopen(ctx, a.c, a.repo, bots), a.prev)
+	if a.prev.Capped(head, a.in.Reopened) && !replyEvent {
+		res = inspect.StepBackResult(n, head, a.prev)
+		res.Builder = a.builder
+		if e.CI {
+			st := a.prev
+			cp := res
+			st.Stopped, st.Result = head, &cp
+			if _, err := a.c.UpsertComment(ctx, a.repo, n, inspect.Marker, inspect.Comment(res, st, 0), actions.Action{Kind: "github.comment.inspect",
+				Payload: map[string]any{"disposition": res.Disposition, "reviewer": choice.Kind()}}); err != nil {
+				return err
+			}
+		}
+		// The same page the review lane's model path sends (Runner.begin): a
+		// person decides whether to reopen.
+		if pager, err := e.Notifier(ctx); err == nil {
+			_, _ = pager.Page(ctx, notify.Page{Key: fmt.Sprintf("inspect-cap:%s#%d", a.repo, n), Subject: fmt.Sprintf("inspect: PR #%d stopped after %d review rounds", n, inspect.MaxRounds),
+				Body: fmt.Sprintf("%s#%d ran %d review rounds without converging; inspect asks the builder to step back. Reopen with a `%s` comment.", a.repo, n, inspect.MaxRounds, inspect.ReopenCommand)})
+		}
+		if err := e.emitInspect(res, append(notes, "no review requested: the review stopped at the round cap")); err != nil {
+			return err
+		}
+		return Errorf(ExitBlocked, "inspect #%d: %s", n, res.Disposition)
+	}
+	// After a reopen, a head judged before it and not since needs a new
+	// request and reply: the earlier ones were the old window's round.
+	var floor time.Time
+	if !a.in.Reopened.IsZero() && a.prev.Judged(head, time.Time{}) && !a.prev.Judged(head, a.in.Reopened) {
+		floor = a.in.Reopened
+	}
 	var since time.Time
 	for _, p := range posts {
-		if rs, ok := inspect.ParseRequest(p.Body); ok && p.Kind == "comment" && rs.Head == head && (since.IsZero() || p.Updated.Before(since)) {
+		if rs, ok := inspect.ParseRequest(p.Body); ok && p.Kind == "comment" && rs.Head == head && p.Updated.After(floor) && (since.IsZero() || p.Updated.Before(since)) {
 			since = p.Updated
 		}
 	}
@@ -85,21 +121,30 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 			return err
 		}
 		marker := fmt.Sprintf(`%s{"head":%q`, inspect.RequestMarker, head)
-		if _, err := hc.UpsertComment(ctx, a.repo, n, marker, inspect.Request(choice, a.in, head), actions.Action{Kind: "github.comment.review-request",
+		if _, err := hc.UpsertComment(ctx, a.repo, n, marker, inspect.Request(choice, a.in, head, a.prev), actions.Action{Kind: "github.comment.review-request",
 			Payload: map[string]any{"head": head, "reviewer": choice.Kind()}}); err != nil {
 			return Wrap(ExitExternal, err)
 		}
 		notes = append(notes, "review requested from "+choice.Kind()+" under your account")
 		since = e.Now()
 	}
+	if !e.CI {
+		if note, err := e.preExistingBug(ctx, a.repo, n, head, a.prev.Result); err != nil {
+			notes = append(notes, "pre-existing findings not filed: "+oneLineErr(err))
+		} else if note != "" {
+			notes = append(notes, note)
+		}
+	}
 	files := inspect.ParseDiff(a.in.Diff)
 	var changed []string // every changed path, deletions included: a review of the diff covers them
 	for _, f := range files {
 		changed = append(changed, f.Path)
 	}
-	bots := a.cfg.Identity.BotLogins
-	human := func(login, typ string) bool { return !identity.IsBot(identity.Account{Login: login, Type: typ}, bots) }
-	rep, rerr := inspect.ReadReply(choice, posts, head, since, human, a.in.Criteria, changed)
+	replies := posts
+	if !floor.IsZero() {
+		replies = slices.DeleteFunc(slices.Clone(posts), func(p inspect.Post) bool { return !p.Updated.After(floor) })
+	}
+	rep, rerr := inspect.ReadReply(choice, replies, head, since, human, a.in.Criteria, changed)
 	if replyEvent {
 		return e.rerunInspect(ctx, a.c, owner, name, n, head, choice, rerr)
 	}
@@ -136,10 +181,7 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		res, st, err = r.Judge(ctx, a.in, a.prev, rep)
 		res.Head, res.Builder = head, a.builder
 		res.Rung, res.ReviewerFamily, res.Review = reviewRung(a.builder, choice, rep)
-		switch {
-		case errors.Is(err, inspect.ErrCycles):
-			return Errorf(ExitBlocked, "inspect #%d: %v (paged)", n, err)
-		case err != nil:
+		if err != nil {
 			return Wrap(ExitExternal, err)
 		}
 	}
@@ -173,6 +215,54 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 func (e *Env) replyEvent() bool {
 	ev := e.Getenv("GITHUB_EVENT_NAME")
 	return e.CI && (ev == "issue_comment" || ev == "pull_request_review")
+}
+
+// preExistingBug files the pre-existing findings of res, the review of head,
+// as one Bug under the person's account (filePreExisting). Every backend
+// calls it outside CI: the reviewer apps with the gate's result, the review
+// lane's model with its own.
+func (e *Env) preExistingBug(ctx context.Context, repo string, n int, head string, res *inspect.Result) (string, error) {
+	hc, _, err := e.HumanGitHub(ctx)
+	if err != nil {
+		return "", err
+	}
+	return e.filePreExisting(ctx, hc, repo, n, head, res)
+}
+
+// reopenedAt is when a person last reopened a stopped review (State.Reopen):
+// of the PR comments whose first line is inspect.ReopenCommand, by an
+// account may allows, the newest that found the review stopped; zero when
+// none did.
+func reopenedAt(posts []inspect.Post, may func(login, typ string) bool, st inspect.State) time.Time {
+	var cmds []time.Time
+	for _, p := range posts {
+		first, _, _ := strings.Cut(strings.TrimSpace(p.Body), "\n")
+		if p.Kind == "comment" && strings.TrimSpace(first) == inspect.ReopenCommand && may(p.Login, p.Type) {
+			cmds = append(cmds, p.Updated)
+		}
+	}
+	return st.Reopen(cmds)
+}
+
+// mayReopen allows a stopped review's reopen only from a person (never a
+// bot) with write or admin access to the repository: comments are untrusted,
+// and anyone who can comment could otherwise lift the step-back. It reads
+// each commenter's permission once, and only for a reopen comment.
+func mayReopen(ctx context.Context, c *github.Client, repo string, bots []string) func(login, typ string) bool {
+	owner, name, _ := github.SplitRepo(repo)
+	seen := map[string]bool{}
+	return func(login, typ string) bool {
+		if identity.IsBot(identity.Account{Login: login, Type: typ}, bots) {
+			return false
+		}
+		if ok, done := seen[login]; done {
+			return ok
+		}
+		p, _, err := c.REST.Repositories.GetPermissionLevel(ctx, owner, name, login)
+		ok := err == nil && (permissionOf(p) == "admin" || permissionOf(p) == "write")
+		seen[login] = ok
+		return ok
+	}
 }
 
 // reviewRung settles the review ladder's rung from the reply (Decision

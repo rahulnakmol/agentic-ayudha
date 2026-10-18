@@ -59,8 +59,13 @@ type Commit struct {
 
 // Comment is a PR conversation comment.
 type Comment struct {
-	Body string    `json:"body"`
-	At   time.Time `json:"at"`
+	Body  string    `json:"body"`
+	At    time.Time `json:"at"`
+	Login string    `json:"login,omitempty"` // the author; empty in a snapshot taken before it was recorded
+	// Updated is the comment's last edit; zero in a snapshot taken before
+	// it was recorded. A comment edited in place (inspect's) holds the
+	// state as of then.
+	Updated time.Time `json:"updated,omitzero"`
 }
 
 // PR is a merged pull request with what the corrections need.

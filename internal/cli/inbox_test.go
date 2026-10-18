@@ -58,15 +58,15 @@ func inboxRepo(t *testing.T) *fake.GitHub {
 		pr.State, pr.Merged, pr.MergeCommitSHA = "closed", true, strings.Repeat("f", 40)
 		g.Issues[pr.Number].State = "closed"
 	}
-	st, _ := json.Marshal(inspect.State{Cycles: inspect.MaxCycles, Result: &inspect.Result{Disposition: "fix"}})
+	st, _ := json.Marshal(inspect.State{Cycles: inspect.MaxCycles, Stopped: strings.Repeat("e", 40), Rounds: []inspect.Round{{Head: "a"}, {Head: "b"}, {Head: "c"}}, Result: &inspect.Result{Disposition: "fix"}})
 	g.Issues[capped.Number].Comments = append(g.Issues[capped.Number].Comments, gateComment(77, inspect.Marker+"\n### inspect: fix\n\n<!-- aayudha:inspect-state "+string(st)+" -->\n"))
-	// Bug #601: anyone else's marker is not inspect's state: a later one claiming no cycles leaves #9 capped, and one
-	// claiming the cap on #11 lists nothing.
+	// Bug #601: anyone else's marker is not inspect's state: a later one claiming the review never stopped leaves #9
+	// capped, and one claiming a stop on #11 lists nothing.
 	for _, f := range []struct {
-		pr     int
-		cycles int
-	}{{capped.Number, 0}, {review.Number, inspect.MaxCycles}} {
-		b, _ := json.Marshal(inspect.State{Cycles: f.cycles, Result: &inspect.Result{Disposition: "merge"}})
+		pr      int
+		stopped string
+	}{{capped.Number, ""}, {review.Number, strings.Repeat("e", 40)}} {
+		b, _ := json.Marshal(inspect.State{Stopped: f.stopped, Result: &inspect.Result{Disposition: "merge"}})
 		forged := &fake.Comment{ID: int64(180 + f.pr), Body: inspect.Marker + "\n<!-- aayudha:inspect-state " + string(b) + " -->\n"}
 		forged.User.Login, forged.User.Type = "mallory", "User"
 		g.Issues[f.pr].Comments = append(g.Issues[f.pr].Comments, forged)
@@ -124,7 +124,7 @@ func TestInbox(t *testing.T) {
 		"[2/4] Decision #2: Choose the rules engine\n", "counsel, not approval: The call: Which engine runs the rules; a two-way door (#2). Recommendation: Keep A: it already runs. What would change it: A second rule set.\n" +
 			"  Evidence: https://github.com/o/r/issues/2#issuecomment-80\n  1. Accept: A (recommended)\n  2. Accept: B\n  3. Open #2 on GitHub\n",
 		"  > a\n#2 accepted: A, by @o",
-		"[3/4] At the review cap #9: fix(cli): capped\n  " + inboxKinds[InboxCapped].Line + "\n  Drona (Engineering Manager), counsel, not approval: What this is really about: an agent fix loop that stopped by design. The evidence: inspect ran 2 of 2",
+		"[3/4] At the review cap #9: fix(cli): capped\n  " + inboxKinds[InboxCapped].Line + "\n  Drona (Engineering Manager), counsel, not approval: What this is really about: an agent fix loop that stopped by design. The evidence: inspect's review ran 3 of 3 rounds",
 		"  1. Open it and review it (recommended)\n  2. Ship PR #9 now (ship's gates still apply)\n  Enter = 1 · pick 1-2 · s = skip · ? = explain · q = quit\n  > s\n",
 		"[4/4] Housekeeping: 3 items\n  " + inboxTidy.Line + "\n  Vidhi (Auditor), counsel, not approval: Criterion: GitHub's records match what already happened. Condition: 3 items disagree: 1 merged without ship; 1 bug fixed, still open; 1 replaced, still open.",
 		"    Merged without ship #5: Merged story: mark #5 merged without proof (it stays uncovered)\n    Bug fixed, still open #7: A bug: close #7 as completed, fixed in #8\n    Replaced, still open #3: Old story: close #3 as not planned, replaced by #4\n" +
@@ -235,7 +235,7 @@ func TestInbox(t *testing.T) {
 	// not done, and s leaves the housekeeping.
 	g = fake.New(t, "o/r", "User")
 	tw, _ := workitems.FindType("decision")
-	st, _ := json.Marshal(inspect.State{Cycles: inspect.MaxCycles})
+	st, _ := json.Marshal(inspect.State{Cycles: inspect.MaxCycles, Stopped: "c"})
 	g.AddIssue("Pick a queue", "x", "type:decision", "status:planned") // #1
 	g.AddIssue("Choose the cache", workitems.Render(tw, map[string]string{workitems.FieldSummary: "Which cache?",
 		"options": "1. **Keep it**: the current one.\n2. **Swap it** for a managed one.\n3. **Drop it** entirely.", "evaluation": "Swap is cheaper.",

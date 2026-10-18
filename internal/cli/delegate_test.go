@@ -248,6 +248,36 @@ func TestDelegateCycleCapPages(t *testing.T) {
 		slices.ContainsFunc(cur.reqs[n:], func(r map[string]any) bool { return r["method"] == "POST" }) {
 		t.Fatalf("cap: %d %+v %s, pages %d", code, res, errOut, len(sink.Pages))
 	}
+
+	// The review stopped at its round cap on the head (Story #568): the
+	// stored result is this head's step-back, and sync stops the same way,
+	// without sending the receiver a fix prompt.
+	g, env, opts, _, _ = delegateFixture(t)
+	cur = &fakeCursor{}
+	srv2 := httptest.NewServer(cur)
+	defer srv2.Close()
+	env["AAYU_SECRET_CURSOR_API_KEY"] = "k"
+	set = []string{"--delegate", "cursor", "--set", "delegate.cursor_api=" + srv2.URL}
+	if code, _, errOut := delegateRun(t, env, opts, set...); code != 0 {
+		t.Fatal(errOut)
+	}
+	head := strings.Repeat("e", 40)
+	pr = g.AddPR("feat: show empty list", "Refs #2", "founder", "cursor/x", head, "dev")
+	cur.finished = pr.Number
+	sb := inspect.StepBackResult(pr.Number, head, inspect.State{})
+	j, _ = json.Marshal(inspect.State{Stopped: head, Result: &sb})
+	g.Mu.Lock()
+	gate = &fake.Comment{ID: 99, Body: inspect.Marker + "\n<!-- aayudha:inspect-state " + string(j) + " -->"}
+	gate.User.Login, gate.User.Type = "github-actions[bot]", "Bot"
+	g.Issues[pr.Number].Comments = append(g.Issues[pr.Number].Comments, gate)
+	g.Mu.Unlock()
+	n = len(cur.reqs)
+	code, res, errOut = delegateRun(t, env, opts, set...)
+	sink = opts.NotifySink.(*notify.Fake)
+	if code != ExitBlocked || !strings.Contains(errOut, "review stopped after 3 rounds") || len(sink.Pages) != 1 || res.Delegation.Status != dlgCapped ||
+		slices.ContainsFunc(cur.reqs[n:], func(r map[string]any) bool { return r["method"] == "POST" }) {
+		t.Fatalf("step-back: %d %+v %s, pages %d", code, res, errOut, len(sink.Pages))
+	}
 }
 
 // P3: a failed required check goes back to the receiver with its log tail,

@@ -1,6 +1,7 @@
 package inspect
 
 import (
+	"cmp"
 	"path"
 	"regexp"
 	"strconv"
@@ -114,10 +115,23 @@ func (f DiffFile) Has(n int) bool {
 	return false
 }
 
+// AddedAt reports whether line n is an added line of the file's hunks.
+func (f DiffFile) AddedAt(n int) bool {
+	for _, h := range f.Hunks {
+		for _, l := range h.Lines {
+			if l.N == n {
+				return l.Added
+			}
+		}
+	}
+	return false
+}
+
 // Find returns the new-side line where quote starts: its first non-empty line
-// matched against the hunks' lines, ignoring surrounding space, preferring an
-// added line; 0 when the quote is not in the diff.
-func (f DiffFile) Find(quote string) int {
+// matched against the hunks' lines, ignoring surrounding space. The line at,
+// the reviewer's own anchor, wins when the quote is there; otherwise an added
+// line is preferred. 0 when the quote is not in the diff.
+func (f DiffFile) Find(quote string, at int) int {
 	first := ""
 	for _, l := range strings.Split(quote, "\n") {
 		if l = strings.TrimSpace(strings.TrimPrefix(l, "+")); l != "" {
@@ -128,21 +142,21 @@ func (f DiffFile) Find(quote string) int {
 	if first == "" {
 		return 0
 	}
-	found := 0
+	added, context := 0, 0
 	for _, h := range f.Hunks {
 		for _, l := range h.Lines {
-			if strings.TrimSpace(l.Text) != first {
-				continue
-			}
-			if l.Added {
-				return l.N
-			}
-			if found == 0 {
-				found = l.N
+			switch {
+			case strings.TrimSpace(l.Text) != first:
+			case l.N == at:
+				return at
+			case l.Added && added == 0:
+				added = l.N
+			case !l.Added && context == 0:
+				context = l.N
 			}
 		}
 	}
-	return found
+	return cmp.Or(added, context)
 }
 
 // gitPath decodes a path git quoted because it holds non-ASCII or control

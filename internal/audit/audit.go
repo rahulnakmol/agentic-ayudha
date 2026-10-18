@@ -186,6 +186,9 @@ type AgentPR struct {
 	Layers   []string  `json:"layers"`
 	Skills   []string  `json:"skills,omitempty"`
 	Rung     string    `json:"rung,omitempty"` // the review ladder's rung, from the merge gate's log (autonomy.GateRung)
+	// Rounds is how many judged review rounds the PR's inspect state records
+	// at merge (Story #568): the rounds its review took to pass. 0 is none recorded.
+	Rounds int `json:"rounds,omitempty"`
 }
 
 // Licence is the licence scan input at Inputs.Code.
@@ -311,10 +314,13 @@ type Report struct {
 	// rung of their review (Decision #469): A, B, C, human, or "" unknown.
 	// It is empty until one of them has a rung on record, so a report
 	// replayed from a snapshot taken before the ladder is unchanged.
-	Rungs    map[string]int `json:"review_rungs,omitempty"`
-	Licence  []string       `json:"licence_findings"`
-	Security []string       `json:"security_job"`
-	Modules  int            `json:"modules_scanned"`
+	Rungs map[string]int `json:"review_rungs,omitempty"`
+	// Rounds is the review rounds each agent merge in the window took to
+	// pass, by PR number (Story #568); empty until one has rounds on record.
+	Rounds   map[int]int `json:"review_rounds,omitempty"`
+	Licence  []string    `json:"licence_findings"`
+	Security []string    `json:"security_job"`
+	Modules  int         `json:"modules_scanned"`
 }
 
 // Counts summarise a report.
@@ -452,6 +458,12 @@ func Build(in Inputs, d *Data) *Report {
 		if d.in(in, a.MergedAt) {
 			rungs[a.Rung]++
 			recorded = recorded || a.Rung != ""
+			if a.Rounds > 0 {
+				if r.Rounds == nil {
+					r.Rounds = map[int]int{}
+				}
+				r.Rounds[a.Number] = a.Rounds
+			}
 		}
 	}
 	if recorded {

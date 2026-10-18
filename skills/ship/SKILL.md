@@ -73,7 +73,9 @@ An agent may run `aayu ship <pr>` for its own Story PR; its gates hold whoever r
 over MCP, `--solo-bypass` is a person's, and as the host's model you prepare and explain but never approve.
 
 1. The merge gate (`aayudha/merge-gate`, `aayudha/inspect`) must be green on the PR head, and the authoritative pack
-   for that head must verify against the Ready snapshot with its floors holding.
+   for that head must verify against the Ready snapshot with its floors holding. Read the review from aayu's inspect
+   result, not from a reviewer app's own comments: aayu drops repeats and lists pre-existing findings apart, and a
+   `step-back` disposition is not ready to ship.
 2. The human pass is an approving review of the head by the Engineering Manager seat's human, or in solo mode by
    the `[autonomy] approver`; a bot's review or the author's own never counts. When the footprint touches an
    `[autonomy] never` layer, a CODEOWNER of the changed paths there must approve whatever the streak, and the

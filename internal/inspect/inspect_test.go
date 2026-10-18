@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
@@ -24,7 +25,8 @@ const pkgDiff = `diff --git a/internal/report/percent.go b/internal/report/perce
 +	if total < 0 {
 +		return 0
 +	}
- 	return float64(covered) / float64(total) * 100
+-	return float64(covered) / float64(total) * 100
++	return float64(covered) / float64(total) * 100
  }
 diff --git a/LAYERS.md b/LAYERS.md
 --- a/LAYERS.md
@@ -115,6 +117,14 @@ func TestGeneralModeFilters(t *testing.T) {
 	if len(InlineComments(res, []string{res.Findings[0].ID})) != 0 {
 		t.Fatal("a finding already posted is posted again")
 	}
+	// A reviewer's line where its quote is stands, even when the same text
+	// is also on an added line: the P1 on the unchanged closing brace (line
+	// 5) is pre-existing, not moved to the added one (line 4).
+	diff := ParseDiff("diff --git a/a.go b/a.go\n--- a/a.go\n+++ b/a.go\n@@ -1,4 +1,6 @@\n func f() {\n \tif x {\n+\t\ty()\n+\t}\n }\n")
+	brace := Finding{Severity: "P1", Category: "bug", File: "a.go", Line: 5, Quote: "}", Title: "f never returns", Confidence: 0.9}
+	if keep, drop := (Filter{}).Clean([]Finding{brace}, diff, nil, ""); len(keep) != 0 || len(drop) != 1 || drop[0].Why != DropPreExisting || drop[0].Line != 5 {
+		t.Fatalf("an anchored context-line quote: kept %+v, dropped %+v", keep, drop)
+	}
 }
 
 // The model reads the PR's title and body, so an edit of either reaches it
@@ -139,6 +149,56 @@ func TestRunCacheKeyCoversPRText(t *testing.T) {
 	in.Title = "Add Percent; it now also rounds"
 	if res, _, _ := r.Run(context.Background(), in, st); res.Cached || *calls != 3 {
 		t.Fatalf("an edited title: cached %v, %d calls", res.Cached, *calls)
+	}
+}
+
+// Story #568: a new head past the round cap steps back even when its inputs
+// match the last review's, so an empty commit cannot reuse a cached merge.
+func TestRunCapBeforeCache(t *testing.T) {
+	a, calls := scripted("grok-4.7", reply("merge"), reply("merge"), reply("merge"), reply("merge"))
+	r := Runner{Reviewers: []Reviewer{a}}
+	in, st := testInput(""), State{}
+	for _, h := range []string{"a", "b", "c"} {
+		in.Body += h // a new input each round
+		in.Head = strings.Repeat(h, 40)
+		var err error
+		if _, st, err = r.Run(context.Background(), in, st); err != nil {
+			t.Fatal(err)
+		}
+	}
+	in.Head = strings.Repeat("d", 40) // the same inputs as round 3, a new head
+	res, capped, _ := r.Run(context.Background(), in, st)
+	if res.Disposition != StepBack || res.Cached || *calls != 3 {
+		t.Fatalf("a fourth head with round 3's inputs: %s cached %v, %d calls", res.Disposition, res.Cached, *calls)
+	}
+	// The state records the step-back, not round 3's merge: delegate and
+	// brief read it as this head's result.
+	if capped.Result == nil || capped.Result.Disposition != StepBack || capped.Result.Head != in.Head {
+		t.Fatalf("the capped state's result: %+v", capped.Result)
+	}
+	// A repeated finding is hidden, not resolved: a reviewer's fix with a
+	// repeated P2 behind it stays fix, even beside a liftable drop.
+	rep := Result{Disposition: Fix, Dropped: []Dropped{{Finding{Severity: "P2", Category: "bug", Title: "old typo"}, DropPreExisting},
+		{Finding{Severity: "P2", Category: "security", Title: "token logged"}, DropRepeat}}}
+	if liftFix(&rep); rep.Disposition != Fix {
+		t.Fatalf("a repeat lifted the fix: %s", rep.Disposition)
+	}
+	// After a reopen and three more rounds, a head judged only before the
+	// reopen is a fourth round in the new window, not a re-review.
+	reopen := time.Date(2026, 10, 12, 12, 0, 0, 0, time.UTC)
+	var w State
+	for i, h := range []string{"1", "2", "3", "4", "5", "6"} {
+		w.Rounds = append(w.Rounds, Round{Head: h, At: reopen.Add(time.Duration(i-3)*time.Hour + time.Minute).Format(time.RFC3339)})
+	}
+	if !w.Capped("1", reopen) || w.Capped("6", reopen) {
+		t.Fatalf("the reopened window: head 1 capped %v, head 6 capped %v", w.Capped("1", reopen), w.Capped("6", reopen))
+	}
+	// Back on head 1 after the reopen, a finding its old-window round kept is
+	// a repeat: only head 1's rounds in this window are its own.
+	w.Rounds[0].Findings = []Earlier{{ID: "x", Severity: "P2", Category: "bug", File: "a.go", Line: 3, Title: "the cache key leaks the token"}}
+	again := Finding{Severity: "P2", Category: "bug", File: "a.go", Line: 3, Title: "the cache key leaks the token"}
+	if keep, drop := Repeats([]Finding{again}, w.Rounds, "1", reopen); len(keep) != 0 || len(drop) != 1 || drop[0].Why != DropRepeat {
+		t.Fatalf("a repeat of head 1's old-window finding: kept %+v, dropped %+v", keep, drop)
 	}
 }
 
@@ -694,5 +754,96 @@ func TestReviewLadder(t *testing.T) {
 	}
 	if l := unknown.RungLabel(RungC, "codex", verbs.FamilyOpenAI); !strings.Contains(l, "builder family unknown") {
 		t.Errorf("unknown builder's label: %q", l)
+	}
+}
+
+// Story #568: a P0 or P1 stays open while its file's patch is unchanged,
+// on a file the manifest skips (a deletion) too, and a later reply that
+// repeats it at a lower severity, P1 or P2, neither clears nor downgrades it.
+func TestRunCarriesOpenBlockers(t *testing.T) {
+	const gone = `diff --git a/internal/auth/check.go b/internal/auth/check.go
+deleted file mode 100644
+--- a/internal/auth/check.go
++++ /dev/null
+@@ -1,3 +0,0 @@
+-package auth
+-
+-func Check(token string) bool { return token != "" }
+`
+	zero := "return float64(covered) / float64(total) * 100"
+	a, _ := scripted("grok-4.7",
+		reply("fix", finding("P0", "security", "internal/auth/check.go", "func Check(token string) bool { return token != \"\" }", "Deleting Check removes the only token check", 0.9),
+			finding("P1", "bug", "internal/report/percent.go", zero, "Percent divides by zero when total is zero", 0.9)),
+		reply("merge", finding("P2", "bug", "internal/report/percent.go", zero, "Percent divides by zero when total is zero", 0.9),
+			finding("P1", "security", "internal/auth/check.go", "func Check(token string) bool { return token != \"\" }", "Deleting Check removes the only token check", 0.9)))
+	r := Runner{Reviewers: []Reviewer{a}}
+	in := testInput("")
+	in.Diff, in.Head = pkgDiff+gone, strings.Repeat("a", 40)
+	in.Pack.Criteria = []proof.Criterion{{ID: 1}} // with criteria, the manifest skips the deletion
+	res, st, err := r.Run(context.Background(), in, State{})
+	if err != nil || len(res.Findings) != 2 {
+		t.Fatalf("round 1: %v %+v", err, res.Findings)
+	}
+	in.Head, in.Body = strings.Repeat("b", 40), "round 2"
+	res, _, _ = r.Run(context.Background(), in, st)
+	var open []string
+	for _, f := range res.Findings {
+		if f.Repeat == 1 {
+			open = append(open, f.Severity+" "+f.File)
+		}
+	}
+	slices.Sort(open)
+	if res.Disposition != Fix || !slices.Contains(open, "P0 internal/auth/check.go") || !slices.Contains(open, "P1 internal/report/percent.go") {
+		t.Fatalf("round 2: %s, open %v, findings %+v", res.Disposition, open, res.Findings)
+	}
+}
+
+// Story #568: a blocker found on a head before a reopen still carries when
+// the branch returns to that head and patch after the reopen; only this
+// head's round in the current window is replaced by the new reply.
+func TestRunCarriesAcrossReopen(t *testing.T) {
+	zero := "return float64(covered) / float64(total) * 100"
+	a, _ := scripted("grok-4.7", reply("fix", finding("P1", "bug", "internal/report/percent.go", zero, "Percent divides by zero when total is zero", 0.9)),
+		reply("merge"), reply("merge"))
+	r := Runner{Reviewers: []Reviewer{a}}
+	at := time.Date(2026, 10, 12, 10, 0, 0, 0, time.UTC)
+	in := testInput("")
+	x := in.Diff
+	in.Head, in.At = strings.Repeat("a", 40), at
+	_, st, _ := r.Run(context.Background(), in, State{})
+	in.Head, in.At, in.Diff = strings.Repeat("b", 40), at.Add(time.Hour), strings.Replace(x, "return 0", "return -1", 1)
+	_, st, _ = r.Run(context.Background(), in, st)
+	in.Head, in.At, in.Diff, in.Reopened = strings.Repeat("a", 40), at.Add(3*time.Hour), x, at.Add(2*time.Hour)
+	res, _, _ := r.Run(context.Background(), in, st)
+	if res.Disposition != Fix || len(res.Findings) != 1 || res.Findings[0].Repeat != 1 {
+		t.Fatalf("back to H1's patch after a reopen: %s %+v", res.Disposition, res.Findings)
+	}
+}
+
+// Story #568: a class finding stays open while any instance's file is
+// unchanged since it was raised, even when the head changes the file it was
+// reported on, and closes once every one has changed.
+func TestJudgeCarriesClassInstances(t *testing.T) {
+	cls := Finding{Severity: "P1", Category: "bug", File: "internal/report/percent.go", Line: 8, Quote: "return float64(covered) / float64(total) * 100",
+		Title: "Percent divides by zero when total is zero", Detail: "d", Fix: "f", Confidence: 0.9, Class: "unguarded division",
+		Instances: []Instance{{File: "internal/report/percent.go", Line: 8}, {File: "LAYERS.md", Line: 1}}}
+	both := []string{"internal/report/percent.go", "LAYERS.md"}
+	in := testInput("")
+	in.Head = strings.Repeat("a", 40)
+	_, st, err := Runner{}.Judge(context.Background(), in, State{}, AppReply{Reply: Reply{Disposition: Fix, Summary: "s", Findings: []Finding{cls}}, Head: in.Head, Reviewed: both})
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.Head, in.Diff = strings.Repeat("b", 40), strings.Replace(in.Diff, "return 0", "return -1", 1) // percent.go changes, LAYERS.md does not
+	res, st, _ := Runner{}.Judge(context.Background(), in, st, AppReply{Reply: Reply{Disposition: Merge, Summary: "s", Findings: []Finding{}}, Head: in.Head, Reviewed: both})
+	if res.Disposition != Fix || len(res.Findings) != 1 || res.Findings[0].Repeat != 1 {
+		t.Fatalf("one instance's file fixed, the other unchanged: %s %+v", res.Disposition, res.Findings)
+	}
+	// Round 3 changes LAYERS.md too, percent.go staying as in round 2: every
+	// instance's file has now changed since the finding, so it closes.
+	in.Head, in.Diff = strings.Repeat("c", 40), strings.Replace(in.Diff, "+new", "+newer", 1)
+	res, _, _ = Runner{}.Judge(context.Background(), in, st, AppReply{Reply: Reply{Disposition: Merge, Summary: "s", Findings: []Finding{}}, Head: in.Head, Reviewed: both})
+	if res.Disposition != Merge || len(res.Findings) != 0 {
+		t.Fatalf("every instance's file changed: %s %+v", res.Disposition, res.Findings)
 	}
 }

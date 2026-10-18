@@ -335,6 +335,13 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	// The state (and the cached result it carries) is read only from a comment
 	// the merge gate or this run's own account wrote, in the gate and outside it.
 	prev := inspectState(comments, viewer(ctx, c), l.Config.Identity)
+	var posts []inspect.Post
+	for _, cm := range comments {
+		posts = append(posts, inspect.Post{Kind: "comment", ID: cm.GetID(), Login: cm.GetUser().GetLogin(), Type: cm.GetUser().GetType(), Body: cm.GetBody(), Updated: cm.GetUpdatedAt().Time})
+	}
+	bots := l.Config.Identity.BotLogins
+	ins.Head, ins.At = pr.GetHead().GetSHA(), e.Now()
+	ins.Reopened = reopenedAt(posts, mayReopen(ctx, c, repo, bots), prev)
 
 	gw, err := e.Gateway()
 	if err != nil {
@@ -494,6 +501,13 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		res.Review = builder.RungLabel(res.Rung, res.Model, res.ReviewerFamily)
 	}
 	res.Notes = append(notes, res.Notes...)
+	if !e.CI && err == nil {
+		if note, err := e.preExistingBug(ctx, repo, n, res.Head, &res); err != nil {
+			res.Notes = append(res.Notes, "pre-existing findings not filed: "+oneLineErr(err))
+		} else if note != "" {
+			res.Notes = append(res.Notes, note)
+		}
+	}
 	// As in the app path, a cached review's rung follows the builder as
 	// declared now, and a changed label rewrites the record ship reads.
 	relabel := false
@@ -505,8 +519,6 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	switch {
 	case errors.Is(err, inspect.ErrNoPack):
 		return Errorf(ExitBlocked, "inspect #%d: %v", n, err)
-	case errors.Is(err, inspect.ErrCycles):
-		return Errorf(ExitBlocked, "inspect #%d: %v (paged)", n, err)
 	case err != nil && paid != nil && cfg.Reviewer != inspect.ReviewerModel:
 		// A paid review that fails (the gateway timed out on a large diff, the
 		// provider is down) or whose PR spent its [budget] per_pr_inspect_max
@@ -572,7 +584,7 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	}); err != nil {
 		return err
 	}
-	if res.Disposition == inspect.Fix || res.Disposition == inspect.Rebuild {
+	if res.Disposition == inspect.Fix || res.Disposition == inspect.Rebuild || res.Disposition == inspect.StepBack {
 		return Errorf(ExitBlocked, "inspect #%d: %s", n, res.Disposition)
 	}
 	return nil
