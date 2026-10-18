@@ -728,6 +728,14 @@ func TestInspectConverges(t *testing.T) {
 	if code, res, _ = inspectApp(t, env, opts, prN, "--ci"); code != 0 || len(inspect.ParseState(lastInspect(t, g, prN)).Rounds) != 5 {
 		t.Fatalf("back to H1 after the reopen: exit %d %s, rounds %+v", code, res.Disposition, inspect.ParseState(lastInspect(t, g, prN)).Rounds)
 	}
+	// percent.go back to round 2's patch, after rounds on another patch: the
+	// P0 round 2 kept is open again, and the same merge reply blocks.
+	g.Mu.Lock()
+	g.Pulls[prN].Diff = defectDiff
+	g.Mu.Unlock()
+	if code, res, _ = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || len(res.Findings) != 1 || res.Findings[0].Severity != "P0" || !strings.Contains(res.Findings[0].Detail, "still open") {
+		t.Fatalf("the patch restored: exit %d %s findings %+v", code, res.Disposition, res.Findings)
+	}
 	at("a")
 	if code, res, _ = inspectApp(t, env, opts, prN); res.Disposition == inspect.StepBack {
 		t.Fatalf("a new head after the reopen and H1: exit %d %s", code, res.Disposition)

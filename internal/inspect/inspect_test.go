@@ -756,3 +756,43 @@ func TestReviewLadder(t *testing.T) {
 		t.Errorf("unknown builder's label: %q", l)
 	}
 }
+
+// Story #568: a P0 or P1 stays open while its file's patch is unchanged,
+// on a file the manifest skips (a deletion) too, and a later reply that
+// repeats it at a lower severity neither clears nor downgrades it.
+func TestRunCarriesOpenBlockers(t *testing.T) {
+	const gone = `diff --git a/internal/auth/check.go b/internal/auth/check.go
+deleted file mode 100644
+--- a/internal/auth/check.go
++++ /dev/null
+@@ -1,3 +0,0 @@
+-package auth
+-
+-func Check(token string) bool { return token != "" }
+`
+	zero := "return float64(covered) / float64(total) * 100"
+	a, _ := scripted("grok-4.7",
+		reply("fix", finding("P1", "security", "internal/auth/check.go", "func Check(token string) bool { return token != \"\" }", "Deleting Check removes the only token check", 0.9),
+			finding("P1", "bug", "internal/report/percent.go", zero, "Percent divides by zero when total is zero", 0.9)),
+		reply("merge", finding("P2", "bug", "internal/report/percent.go", zero, "Percent divides by zero when total is zero", 0.9)))
+	r := Runner{Reviewers: []Reviewer{a}}
+	in := testInput("")
+	in.Diff, in.Head = pkgDiff+gone, strings.Repeat("a", 40)
+	in.Pack.Criteria = []proof.Criterion{{ID: 1}} // with criteria, the manifest skips the deletion
+	res, st, err := r.Run(context.Background(), in, State{})
+	if err != nil || len(res.Findings) != 2 {
+		t.Fatalf("round 1: %v %+v", err, res.Findings)
+	}
+	in.Head, in.Body = strings.Repeat("b", 40), "round 2"
+	res, _, _ = r.Run(context.Background(), in, st)
+	var open []string
+	for _, f := range res.Findings {
+		if f.Repeat == 1 {
+			open = append(open, f.Severity+" "+f.File)
+		}
+	}
+	slices.Sort(open)
+	if res.Disposition != Fix || !slices.Equal(open, []string{"P1 internal/auth/check.go", "P1 internal/report/percent.go"}) {
+		t.Fatalf("round 2: %s, open %v, findings %+v", res.Disposition, open, res.Findings)
+	}
+}

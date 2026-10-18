@@ -238,10 +238,10 @@ func repeats(f Finding, e Earlier) bool {
 }
 
 // earlier is what a round keeps of its findings for later rounds.
-func earlier(fs []Finding) []Earlier {
+func earlier(fs []Finding, hashes map[string]string) []Earlier {
 	var out []Earlier
 	for _, f := range fs {
-		out = append(out, Earlier{ID: f.ID, Severity: f.Severity, Category: f.Category, File: f.File, Line: f.Line, Title: oneLine(f.Title, 200), Class: oneLine(f.Class, 200)})
+		out = append(out, Earlier{ID: f.ID, Severity: f.Severity, Category: f.Category, File: f.File, Line: f.Line, Title: oneLine(f.Title, 200), Class: oneLine(f.Class, 200), Hash: hashes[f.File]})
 	}
 	return out
 }

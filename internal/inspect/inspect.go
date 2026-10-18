@@ -273,6 +273,9 @@ type Earlier struct {
 	Line     int    `json:"line,omitempty"`
 	Title    string `json:"title"`
 	Class    string `json:"class,omitempty"`
+	// Hash is the file's patch hash (FileHash) when the round kept it, a
+	// skipped file's included: a P0 or P1 stays open while it is unchanged.
+	Hash string `json:"hash,omitempty"`
 }
 
 // Since is how many rounds ran after the person's reopen at t (all of them
@@ -500,9 +503,10 @@ func (r Runner) begin(ctx context.Context, in *Input, prev State, salt string) (
 	return res, st, nil
 }
 
-// carryForward adds back each P0 or P1 the last round on another head kept
-// whose file's patch is byte for byte what that round reviewed, when the new
-// reply does not raise it again: no reviewer text removes a P0 or P1 (rule 7),
+// carryForward adds back each P0 or P1 a round on another head kept whose
+// file's patch is byte for byte what it was then, newest round first and a
+// patch restored after a change included, when no P0 or P1 in the new
+// reply raises it again: no reviewer text removes or downgrades a P0 or P1 (rule 7),
 // and an unchanged patch cannot have fixed it. Each carries its round, so it
 // blocks without being posted inline again.
 func carryForward(fs []Finding, rounds []Round, head string, hashes map[string]string) []Finding {
@@ -512,14 +516,13 @@ func carryForward(fs []Finding, rounds []Round, head string, hashes map[string]s
 			continue
 		}
 		for _, e := range rd.Findings {
-			if e.Severity != "P0" && e.Severity != "P1" || rd.Covered[e.File] == "" || rd.Covered[e.File] != hashes[e.File] ||
-				slices.ContainsFunc(fs, func(f Finding) bool { return repeats(f, e) }) {
+			if e.Severity != "P0" && e.Severity != "P1" || e.Hash == "" || e.Hash != hashes[e.File] ||
+				slices.ContainsFunc(fs, func(f Finding) bool { return (f.Severity == "P0" || f.Severity == "P1") && repeats(f, e) }) {
 				continue
 			}
 			fs = append(fs, Finding{ID: e.ID, Severity: e.Severity, Category: e.Category, File: e.File, Line: e.Line, Title: e.Title, Class: e.Class,
 				Detail: fmt.Sprintf("raised in round %d and still open: the file's patch is unchanged since that round", i+1), Repeat: i + 1, Sources: []string{}})
 		}
-		break
 	}
 	return fs
 }
@@ -578,7 +581,7 @@ func (r Runner) finish(in Input, prev, st State, res Result, covered func(string
 		st.Reopened = in.Reopened.UTC().Format(time.RFC3339)
 	}
 	if in.Head != "" {
-		rd := Round{Head: in.Head, Disposition: res.Disposition, Findings: earlier(res.Findings), Covered: reviewed}
+		rd := Round{Head: in.Head, Disposition: res.Disposition, Findings: earlier(res.Findings, hashes), Covered: reviewed}
 		if !in.At.IsZero() {
 			rd.At = in.At.UTC().Format(time.RFC3339)
 		}
