@@ -30,8 +30,9 @@ type Records struct {
 // every model the PR declares: the Aayudha-Model trailers of all its commits,
 // its body's Aayudha-Model lines, and the pack's model, all self-reported. A
 // session that changed model declares each one, so every claim is a
-// candidate. host is the declared host (an Aayudha-Host trailer or body line,
-// or the pack's host); lane is the build lane's family on the pack's host.
+// candidate. hosts are the declared hosts (an Aayudha-Host trailer or body
+// line, or the pack's host) of every declaration that named no model, so the
+// host picked it; lane is the build lane's family on the pack's host.
 //
 // The family is known only when a record covers the PR (a delegation, or a
 // checkpoint naming a model family for every commit), the records name one
@@ -40,12 +41,13 @@ type Records struct {
 // is of a different family only when it is none of them.
 //
 // A claim aayu cannot place in a family (an unknown model prefix) makes the
-// builder unknown. So does a declared host that picks the model itself with
-// no model named, unless aayu knows the families that host's modes may use
-// (managedFamilies). An unknown builder is never blocked: its review is a
+// builder unknown. So does any declared host that picks the model itself
+// with no model named, unless aayu knows the families that host's modes may
+// use (managedFamilies), which are then candidates too, whatever the other
+// declarations name. An unknown builder is never blocked: its review is a
 // labelled same-family review (rung C), because no reviewer can be shown to
 // differ from it (Decision #469).
-func BuilderOf(rec Records, commits, claims []string, host string, lane verbs.Family) Builder {
+func BuilderOf(rec Records, commits, claims, hosts []string, lane verbs.Family) Builder {
 	var fams []verbs.Family
 	add := func(f verbs.Family) {
 		if f != "" && f != verbs.FamilyHostManaged && !slices.Contains(fams, f) {
@@ -108,16 +110,29 @@ func BuilderOf(rec Records, commits, claims []string, host string, lane verbs.Fa
 		add(lane)
 		why = append(why, fmt.Sprintf("the build lane's family on the pack's host is %s", lane))
 	}
-	if len(fams) == 0 && (managed || host != "" || lane == verbs.FamilyHostManaged) {
-		on := "the build host"
-		if host != "" {
-			on = host
+	// A host-managed declaration naming no host, or a host-managed lane with
+	// nothing else declared, is a host aayu cannot name.
+	if len(hosts) == 0 && (managed || len(fams) == 0 && lane == verbs.FamilyHostManaged) {
+		hosts = []string{""}
+	}
+	declared := len(fams)
+	for _, h := range hosts {
+		on := h
+		if on == "" {
+			on = "the build host"
 		}
-		if mf, ok := managedFamilies[host]; ok {
-			why = append(why, fmt.Sprintf("%s picks the model for its modes, which may be any of %v", on, mf))
-			return Builder{Family: verbs.FamilyHostManaged, Candidates: slices.Clone(mf), Source: "host-managed: " + strings.Join(why, "; ")}
+		mf, ok := managedFamilies[h]
+		if !ok {
+			why = append(why, fmt.Sprintf("%s declares no model", on))
+			return Builder{Source: "unknown: " + strings.Join(why, "; ")}
 		}
-		why = append(why, fmt.Sprintf("%s declares no model", on))
+		why = append(why, fmt.Sprintf("%s picks the model for its modes, which may be any of %v", on, mf))
+		for _, f := range mf {
+			add(f)
+		}
+	}
+	if declared == 0 && len(hosts) > 0 {
+		return Builder{Family: verbs.FamilyHostManaged, Candidates: fams, Source: "host-managed: " + strings.Join(why, "; ")}
 	}
 	return Builder{Candidates: fams, Source: "unknown: " + strings.Join(why, "; ")}
 }

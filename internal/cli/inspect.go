@@ -346,52 +346,65 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	// commit trailer, is only a claim. When they are missing or disagree the
 	// family is unknown, and every reviewer differs from every candidate
 	// (Bug #171).
+	//
 	// Every model the PR declares is a claim (Decision #469): the
 	// Aayudha-Model trailers of all its commits (a session that changed model
 	// writes one per model), the body's Aayudha-Model lines for a PR built
-	// outside aayu build, and the pack's model. The host comes from an
-	// Aayudha-Host trailer or body line, else a pack host aayu knows.
-	var commits, claims []string
-	host, lane := "", verbs.Family("")
-	claim := func(m string) {
-		if m = strings.ToLower(m); !slices.Contains(claims, m) {
-			claims = append(claims, m)
+	// outside aayu build, and the pack's model. A declaration (a commit, the
+	// body, the pack) that names a host but no model, or only host-managed,
+	// adds its host: that host picked the model, so every family its modes
+	// may use is a candidate, and a host aayu cannot place makes the builder
+	// unknown.
+	var commits, claims, hosts []string
+	lane := verbs.Family("")
+	declare := func(models []string, host string, named bool) {
+		concrete := false
+		for _, m := range models {
+			if m = strings.ToLower(m); !slices.Contains(claims, m) {
+				claims = append(claims, m)
+			}
+			concrete = concrete || verbs.Family(m) != verbs.FamilyHostManaged
+		}
+		if host = strings.ToLower(host); !concrete && (named || len(models) > 0) && !slices.Contains(hosts, host) {
+			hosts = append(hosts, host)
 		}
 	}
-	for _, m := range modelTrailer.FindAllStringSubmatch(pr.GetBody(), -1) {
-		claim(m[1])
+	trailers := func(text string) {
+		var models []string
+		for _, m := range modelTrailer.FindAllStringSubmatch(text, -1) {
+			models = append(models, m[1])
+		}
+		h := hostTrailer.FindStringSubmatch(text)
+		if h == nil {
+			declare(models, "", false)
+		} else {
+			declare(models, h[1], true)
+		}
 	}
-	if m := hostTrailer.FindStringSubmatch(pr.GetBody()); m != nil {
-		host = strings.ToLower(m[1])
-	}
+	trailers(pr.GetBody())
 	if cs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.RepositoryCommit, *gh.Response, error) {
 		return c.REST.PullRequests.ListCommits(ctx, owner, name, n, &o)
 	}); err == nil {
 		for _, x := range cs {
 			commits = append(commits, x.GetSHA())
-			msg := x.GetCommit().GetMessage()
-			for _, m := range modelTrailer.FindAllStringSubmatch(msg, -1) {
-				claim(m[1])
-			}
-			if m := hostTrailer.FindStringSubmatch(msg); m != nil && host == "" {
-				host = strings.ToLower(m[1])
-			}
+			trailers(x.GetCommit().GetMessage())
 		}
 	}
 	if ins.Pack != nil {
+		_, known := verbs.FindHost(verbs.HostID(ins.Pack.Host))
+		var models []string
 		if ins.Pack.Model != "" {
-			claim(ins.Pack.Model)
+			models = []string{ins.Pack.Model}
 		}
-		if _, ok := verbs.FindHost(verbs.HostID(ins.Pack.Host)); ok {
-			if host == "" {
-				host = ins.Pack.Host
-			}
+		if known {
 			if b, err := gw.Resolver.Resolve(verbs.LaneBuild, verbs.HostID(ins.Pack.Host)); err == nil {
 				lane = b.Family
 			}
 		}
+		// A build lane that names a family is the model the pack's host ran.
+		declare(models, ins.Pack.Host, known && (lane == "" || lane == verbs.FamilyHostManaged))
 	}
-	builder := inspect.BuilderOf(inspect.Records{Receiver: deleg.Receiver, Delegated: deleg.Family, Checkpoints: checkpoints}, commits, claims, host, lane)
+	builder := inspect.BuilderOf(inspect.Records{Receiver: deleg.Receiver, Delegated: deleg.Family, Checkpoints: checkpoints}, commits, claims, hosts, lane)
 	// A docs-only PR merges without a review, whichever backend reviews.
 	if !ins.Draft && inspect.DocsOnly(inspect.ParseDiff(ins.Diff)) {
 		return e.emitInspect(inspect.Result{PR: n, Head: pr.GetHead().GetSHA(), Findings: []inspect.Finding{}, Criteria: []inspect.Verdict{}, Builder: builder,
@@ -438,7 +451,11 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		res.Review = builder.RungLabel(res.Rung, res.Model, res.ReviewerFamily)
 	}
 	res.Notes = append(notes, res.Notes...)
+	// As in the app path, a cached review's rung follows the builder as
+	// declared now, and a changed label rewrites the record ship reads.
+	relabel := false
 	if st.Result != nil {
+		relabel = st.Result.Review != res.Review
 		st.Result.Notes, st.Result.Head, st.Result.Builder = res.Notes, res.Head, res.Builder
 		st.Result.Rung, st.Result.ReviewerFamily, st.Result.Review = res.Rung, res.ReviewerFamily, res.Review
 	}
@@ -452,8 +469,8 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	case err != nil:
 		return Wrap(ExitExternal, err)
 	}
-	if res.Disposition != inspect.Skipped && !res.Cached {
-		if lines := inspect.InlineComments(res, st.Posted); len(lines) > 0 {
+	if res.Disposition != inspect.Skipped && (!res.Cached || relabel) {
+		if lines := inspect.InlineComments(res, st.Posted); len(lines) > 0 && !res.Cached {
 			if err := e.postInline(ctx, c, repo, n, res, lines); err != nil {
 				res.Notes = append(res.Notes, "inline review comments not posted: "+oneLineErr(err))
 			} else {

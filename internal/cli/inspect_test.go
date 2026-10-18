@@ -374,6 +374,26 @@ func TestInspectBuilderFamily(t *testing.T) {
 					t.Errorf("the verdict lacks %q:\n%s", want, comment)
 				}
 			}
+			if tc.wantFamily == "" {
+				return
+			}
+			// Declaring a model of the reviewer's family afterwards turns the
+			// cached review into a same-family one, in the record ship reads.
+			if st := inspect.ParseState(comment); st.Result == nil || st.Result.Rung != inspect.RungA {
+				t.Fatalf("the first review's record: %+v", st.Result)
+			}
+			g.Mu.Lock()
+			g.Pulls[prN].Body += "\n\nAayudha-Model: gpt-6.1-sol\n"
+			g.Mu.Unlock()
+			if code, res, errOut = inspectRun(t, env, opts, model, prN); code != 0 || !res.Cached || res.Rung != inspect.RungC {
+				t.Fatalf("a cached review after the builder changed: %d cached %v rung %q: %s", code, res.Cached, res.Rung, errOut)
+			}
+			g.Mu.Lock()
+			comment = g.Issues[prN].Comments[0].Body
+			g.Mu.Unlock()
+			if st := inspect.ParseState(comment); st.Result == nil || st.Result.Rung != inspect.RungC || !strings.Contains(comment, "same-family review (C)") {
+				t.Fatalf("the comment keeps the stale rung: %+v\n%s", st.Result, comment)
+			}
 		})
 	}
 }

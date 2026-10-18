@@ -142,8 +142,9 @@ comment, or a run of the branch's own workflow, never counts. `reviewer = "model
    `Aayudha-Model` trailer on the pull request's commits (`aayu build` writes one, with `Aayudha-Host`), and the
    same lines in the body of a pull request `aayu build` did not open; a session that changed model declares each
    one. Otherwise every family the records, the declarations, or the build lane names is a candidate, and a
-   different-family reviewer is of none of them. A host that picks the model itself with no model declared counts
-   as the families its modes may run: Amp's are Anthropic and OpenAI. Any other such host, a model aayu cannot place
+   different-family reviewer is of none of them. Each commit, body, or pack that names a host but no model adds that
+   host, whatever the others declare: the host picked the model, so the families its modes may run are candidates
+   too (Amp's are Anthropic and OpenAI). Any other such host, a model aayu cannot place
    in a family, or nothing declared at all makes the builder's family unknown: the pull request still gets a
    review, a labelled same-family one, and is never blocked for it. So an OpenAI or Amp builder never gets a
    different-family review from Codex, and Codex's automatic review counts only when the gate chose Codex. The

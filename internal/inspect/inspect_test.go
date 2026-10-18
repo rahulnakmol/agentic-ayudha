@@ -269,42 +269,46 @@ func TestBuilderOf(t *testing.T) {
 		rec     Records
 		commits []string
 		claims  []string
-		host    string
+		hosts   []string
 		lane    verbs.Family
 		family  verbs.Family
 		cands   []verbs.Family
 		source  string
 	}{
-		{"record covers every commit", cp(map[string]string{"a": "claude-opus-5-5", "b": "claude-sonnet-5-5"}), []string{"a", "b"}, nil, "", verbs.FamilyOpenAI,
+		{"record covers every commit", cp(map[string]string{"a": "claude-opus-5-5", "b": "claude-sonnet-5-5"}), []string{"a", "b"}, nil, nil, verbs.FamilyOpenAI,
 			verbs.FamilyAnthropic, []verbs.Family{verbs.FamilyAnthropic}, "attributed, not verified"},
-		{"a hand-made commit the record lacks", cp(map[string]string{"a": "claude-opus-5-5"}), []string{"a", "b"}, nil, "", verbs.FamilyOpenAI,
+		{"a hand-made commit the record lacks", cp(map[string]string{"a": "claude-opus-5-5"}), []string{"a", "b"}, nil, nil, verbs.FamilyOpenAI,
 			"", []verbs.Family{verbs.FamilyAnthropic}, "names a model family for 1 of 2 commits"},
-		{"a checkpoint without a model does not cover its commit", cp(map[string]string{"a": "claude-opus-5-5", "b": ""}), []string{"a", "b"}, nil, "", "",
+		{"a checkpoint without a model does not cover its commit", cp(map[string]string{"a": "claude-opus-5-5", "b": ""}), []string{"a", "b"}, nil, nil, "",
 			"", []verbs.Family{verbs.FamilyAnthropic}, "for 1 of 2 commits"},
-		{"two families in the record", cp(map[string]string{"a": "claude-opus-5-5", "b": "gpt-6.1-sol"}), []string{"a", "b"}, nil, "", "",
+		{"two families in the record", cp(map[string]string{"a": "claude-opus-5-5", "b": "gpt-6.1-sol"}), []string{"a", "b"}, nil, nil, "",
 			"", []verbs.Family{verbs.FamilyAnthropic, verbs.FamilyOpenAI}, "name 2 families"},
-		{"a host-managed build records no model", cp(map[string]string{"a": ""}), []string{"a"}, nil, "", verbs.FamilyHostManaged,
+		{"a host-managed build records no model", cp(map[string]string{"a": ""}), []string{"a"}, nil, nil, verbs.FamilyHostManaged,
 			"", nil, "no build or delegation record"},
-		{"no record: the claim and the lane are candidates", Records{}, []string{"a"}, []string{"grok-4.7"}, "", verbs.FamilyAnthropic,
+		{"no record: the claim and the lane are candidates", Records{}, []string{"a"}, []string{"grok-4.7"}, nil, verbs.FamilyAnthropic,
 			"", []verbs.Family{verbs.FamilyXAI, verbs.FamilyAnthropic}, "declarations claim [xai] (self-reported, unverified)"},
-		{"a delegation covers the PR", Records{Receiver: "codex", Delegated: verbs.FamilyOpenAI}, []string{"a", "b"}, nil, "", verbs.FamilyAnthropic,
+		{"a delegation covers the PR", Records{Receiver: "codex", Delegated: verbs.FamilyOpenAI}, []string{"a", "b"}, nil, nil, verbs.FamilyAnthropic,
 			verbs.FamilyOpenAI, []verbs.Family{verbs.FamilyOpenAI}, "handed the story to codex"},
-		{"a trailer contradicting the delegation", Records{Receiver: "codex", Delegated: verbs.FamilyOpenAI}, []string{"a"}, []string{"claude-opus-5-5"}, "", "",
+		{"a trailer contradicting the delegation", Records{Receiver: "codex", Delegated: verbs.FamilyOpenAI}, []string{"a"}, []string{"claude-opus-5-5"}, nil, "",
 			"", []verbs.Family{verbs.FamilyOpenAI, verbs.FamilyAnthropic}, "the records say openai"},
-		{"amp declared, no model: its modes' families", Records{}, []string{"a"}, nil, "amp", "",
+		{"amp declared, no model: its modes' families", Records{}, []string{"a"}, nil, []string{"amp"}, "",
 			verbs.FamilyHostManaged, []verbs.Family{verbs.FamilyAnthropic, verbs.FamilyOpenAI}, "may be any of [anthropic openai]"},
-		{"amp declares host-managed", Records{}, []string{"a"}, []string{"host-managed"}, "amp", "",
+		{"amp declares host-managed", Records{}, []string{"a"}, []string{"host-managed"}, []string{"amp"}, "",
 			verbs.FamilyHostManaged, []verbs.Family{verbs.FamilyAnthropic, verbs.FamilyOpenAI}, "host-managed"},
-		{"copilot declared, no model: unknown", Records{}, []string{"a"}, nil, "copilot", "",
+		{"copilot declared, no model: unknown", Records{}, []string{"a"}, nil, []string{"copilot"}, "",
 			"", nil, "copilot declares no model"},
-		{"a model aayu cannot place: unknown", Records{}, []string{"a"}, []string{"claude-sonnet-4.5", "composer-2.5"}, "copilot", "",
+		{"a model aayu cannot place: unknown", Records{}, []string{"a"}, []string{"claude-sonnet-4.5", "composer-2.5"}, nil, "",
 			"", nil, "cannot place in a model family"},
-		{"a session that changed model: every family", Records{}, []string{"a"}, []string{"claude-sonnet-4.5", "gpt-5.4"}, "copilot", "",
+		{"a session that changed model: every family", Records{}, []string{"a"}, []string{"claude-sonnet-4.5", "gpt-5.4"}, nil, "",
 			"", []verbs.Family{verbs.FamilyAnthropic, verbs.FamilyOpenAI}, "claim [anthropic openai]"},
-		{"nothing declared at all: unknown", Records{}, []string{"a"}, nil, "", "",
+		{"amp and cursor, neither naming a model: cursor's modes are unknown", Records{}, []string{"a", "b"}, nil, []string{"amp", "cursor"}, "",
+			"", nil, "cursor declares no model"},
+		{"amp naming no model beside a gpt commit: amp's families stay candidates", Records{}, []string{"a", "b"}, []string{"gpt-5.4"}, []string{"amp"}, "",
+			"", []verbs.Family{verbs.FamilyOpenAI, verbs.FamilyAnthropic}, "amp picks the model"},
+		{"nothing declared at all: unknown", Records{}, []string{"a"}, nil, nil, "",
 			"", nil, "every review is a labelled same-family review"},
 	} {
-		got := BuilderOf(tt.rec, tt.commits, tt.claims, tt.host, tt.lane)
+		got := BuilderOf(tt.rec, tt.commits, tt.claims, tt.hosts, tt.lane)
 		if got.Family != tt.family || !slices.Equal(got.Candidates, tt.cands) || !strings.Contains(got.Note(), tt.source) {
 			t.Errorf("%s: %+v; want family %q, candidates %v, a note with %q", tt.name, got, tt.family, tt.cands, tt.source)
 		}
@@ -630,8 +634,8 @@ func TestDocsOnly(t *testing.T) {
 // with no app, a person reviews.
 func TestReviewLadder(t *testing.T) {
 	anthropic := Builder{Family: verbs.FamilyAnthropic, Candidates: []verbs.Family{verbs.FamilyAnthropic}}
-	amp := BuilderOf(Records{}, []string{"a"}, nil, "amp", "")
-	unknown := BuilderOf(Records{}, []string{"a"}, nil, "copilot", "")
+	amp := BuilderOf(Records{}, []string{"a"}, nil, []string{"amp"}, "")
+	unknown := BuilderOf(Records{}, []string{"a"}, nil, []string{"copilot"}, "")
 	xaiCursor := map[string]string{"cursor": "xai"}
 	for _, tt := range []struct {
 		name      string
