@@ -136,7 +136,7 @@ The reviewer's family is the app's family. Only an app whose family is host-mana
 optional `model` field of its reply; an app of one family that reports another family's model gives a same-family
 review. A reply that reports a model of the builder's family is a same-family review, whatever was planned. `aayu ship` refuses an
 autonomous pass unless the inspect job of the base branch's `pull_request_target` merge gate run on the head printed a
-different-family review in its log, so after a same-family review, or with no such record, a person passes it. A
+different-family review in its log, so after a same-family review, or with no such record, a person passes it. A run whose judgement was cached from the state comment does not count; ship reads the newest fresh judgement of the head. A
 comment, or a run of the branch's own workflow, never counts. `reviewer = "model"` keeps the 0.1 model lane for a repository that accepts a key in CI.
 
 **Rung B, a paid reviewer (opt-in).** The founder's one deliberate exception to "no AI keys in a product repository's

@@ -28,7 +28,8 @@ const MergeGateWorkflow = "aayudha-merge-gate.yml"
 // neither the pull request nor a workflow on its branch can write it, as a
 // comment could be. No such run or job, a job that did not succeed, a log
 // whose header names another PR (two PRs can share a head), or a log without
-// the review line are all unknown.
+// the review line are all unknown. A run whose judgement was cached is
+// skipped for the newest fresh one.
 func GateRung(ctx context.Context, c *github.Client, owner, name string, n int, head string) string {
 	path := ".github/workflows/" + MergeGateWorkflow
 	runs, _, err := c.REST.Actions.ListWorkflowRunsByFileName(ctx, owner, name, MergeGateWorkflow, &gh.ListWorkflowRunsOptions{HeadSHA: head, Event: "pull_request_target", ListOptions: gh.ListOptions{PerPage: 20}})
@@ -36,6 +37,7 @@ func GateRung(ctx context.Context, c *github.Client, owner, name string, n int, 
 		return ""
 	}
 	slices.SortFunc(runs.WorkflowRuns, func(a, b *gh.WorkflowRun) int { return cmp.Compare(b.GetID(), a.GetID()) })
+	cached := false
 	for _, r := range runs.WorkflowRuns {
 		if r.GetPath() != path || r.GetEvent() != "pull_request_target" || r.GetHeadSHA() != head || r.GetStatus() != "completed" {
 			continue
@@ -53,8 +55,20 @@ func GateRung(ctx context.Context, c *github.Client, owner, name string, n int, 
 				if h == nil || h[1] != strconv.Itoa(n) || m == nil {
 					return ""
 				}
+				// A cached judgement comes from the state in a PR comment,
+				// which a workflow on a branch can also write as the gate's
+				// account: it proves nothing, so the review is the newest
+				// fresh judgement of this head, in an older run.
+				if h[2] != "" {
+					cached = true
+					break
+				}
 				return m[1] + m[2] + m[3]
 			}
+		}
+		if cached {
+			cached = false
+			continue
 		}
 		return ""
 	}
@@ -72,7 +86,7 @@ func Proven(rung string) bool {
 // reviewLine its review label, in the merge gate's log (an Actions log line
 // starts with its timestamp).
 var (
-	inspectHeader = regexp.MustCompile(`(?m)^(?:\S+Z )?inspect #([0-9]+) at [0-9a-f]+: `)
+	inspectHeader = regexp.MustCompile(`(?m)^(?:\S+Z )?inspect #([0-9]+) at [0-9a-f]+: \S+( \(cached\))?`)
 	reviewLine    = regexp.MustCompile(`(?m)^(?:\S+Z )?\s*review: (?:different-family review \((A|B)[,)]|same-family review \((C)\)|(human) review)`)
 )
 

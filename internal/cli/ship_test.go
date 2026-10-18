@@ -275,6 +275,12 @@ func TestShipAutonomousFootprint(t *testing.T) {
 	g.JobLogs[7701] = "2026-10-17T23:00:00.0000000Z inspect #" + strconv.Itoa(prN+1) + " at abc: merge (reviewed by claude)\n" + allowed
 	g.Mu.Unlock()
 	blocked("with a different-family log for another PR at the same head")
+	// A cached judgement rests on a PR comment's state, which a branch's
+	// workflow can write as the gate's account: it proves no review.
+	g.Mu.Lock()
+	g.JobLogs[7701] = "2026-10-17T23:00:00.0000000Z inspect #" + strconv.Itoa(prN) + " at abc: merge (cached) (reviewed by claude)\n" + allowed
+	g.Mu.Unlock()
+	blocked("with a cached different-family judgement")
 	g.Mu.Lock()
 	g.JobLogs[7701] = "2026-10-17T23:00:00.0000000Z inspect #" + strconv.Itoa(prN) + " at abc: merge (reviewed by claude)\n" + allowed
 	g.Mu.Unlock()
