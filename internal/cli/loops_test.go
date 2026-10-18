@@ -123,6 +123,41 @@ func TestLoopDigestOnSchedule(t *testing.T) {
 	}
 }
 
+// WP7.1b: Amp's --apply records an event loop only once its thread replies
+// with a subscription ID; a thread ID alone leaves it unrecorded, with the
+// step that records it.
+func TestInstallLoopsEventSubscription(t *testing.T) {
+	dir := checkout(t)
+	_ = os.MkdirAll(filepath.Join(dir, "loops", "amp"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "loops", "triage-opened.toml"), []byte("description = \"Triage.\"\ncommand = [\"triage\"]\non = \"issues.opened\"\nfilter = { label = \"intake\" }\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "loops", "amp", "triage-opened.json"), []byte("{}\n"), 0o644)
+	reply := "Started T-01a14215-c759-72bf-9a65-d2317a72a878"
+	var prompt string
+	opts := Options{Dir: dir,
+		LookPath: func(b string) (string, error) { return "/usr/bin/" + b, nil },
+		Exec: func(_ context.Context, _, name string, args ...string) (string, error) {
+			prompt = args[len(args)-1]
+			return reply, nil
+		}}
+	report := func() loopsReport {
+		t.Helper()
+		code, out, errOut := runIn(t, map[string]string{"AAYU_GITHUB_TOKEN": "t"}, opts, "", "install", "--loops", "--repo", "o/r", "--json", "--host", "amp", "--apply")
+		var r loopsReport
+		if err := json.Unmarshal([]byte(out), &r); err != nil || code != 0 {
+			t.Fatalf("exit %d: %v: %s", code, err, errOut)
+		}
+		return r
+	}
+	r := report()
+	if !strings.Contains(prompt, "create_github_subscription") || r.States[0].Status != loops.Missing || !strings.Contains(strings.Join(r.Steps, "\n"), "--record triage-opened=subscription <ID>") {
+		t.Errorf("thread ID only: %+v, steps %q", r.States, r.Steps)
+	}
+	reply = "Done.\nsubscription 395a6071-c14a-4fae-87bf-2d18da7f5bad"
+	if r = report(); r.States[0].Status != loops.Active || !strings.Contains(r.States[0].Detail, "subscription 395a6071") {
+		t.Errorf("subscription ID: %+v", r.States)
+	}
+}
+
 // S-7.1e: install --loops sets every loop up in the one tool the user picks
 // from those detected; Amp's --apply starts one headless Amp thread per loop
 // and records it; recording a loop in a second tool warns that it runs twice,

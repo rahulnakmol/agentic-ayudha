@@ -174,6 +174,10 @@ func TestEventLoop(t *testing.T) {
 			t.Errorf("%s: %+v, want %s in %q (%q)", tt.name, s, tt.status, tt.owner, tt.detail)
 		}
 	}
+	// With no scheduled loop of the same command, nothing covers it: missing, not fallback.
+	if s := States([]Loop{ls[1], ev}, Record{HostClaude: {"status": e}}, "o/r", "dev", "UTC")[1]; s.Status != Missing {
+		t.Errorf("no cover: %+v", s)
+	}
 	if c, ok := Covers(ls, ev, HostCodex); !ok || c.Name != "daily" {
 		t.Errorf("covers in codex: %v %v", c.Name, ok)
 	}

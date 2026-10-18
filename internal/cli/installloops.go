@@ -309,6 +309,10 @@ func (e *Env) runLoopNow(ctx context.Context, root string, a agentenv.Agent, too
 	return nil
 }
 
+// subscriptionID is the reply of a thread that created an event loop's Amp
+// GitHub subscription: `subscription <ID>`.
+var subscriptionID = regexp.MustCompile(`^subscription [0-9A-Za-z][0-9A-Za-z-]{7,}$`)
+
 // threadID finds an Amp thread ID in a CLI's output.
 var threadID = regexp.MustCompile(`T-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
 
@@ -328,7 +332,7 @@ func (e *Env) ampLoops(ctx context.Context, root, bin string, apply bool, rec lo
 	if bin == "" {
 		bin = "amp"
 	}
-	var applied, steps []string
+	var applied, steps, pending []string
 	async := false
 	today := e.Now().UTC().Format(time.DateOnly)
 	for _, l := range ls {
@@ -347,10 +351,16 @@ func (e *Env) ampLoops(ctx context.Context, root, bin string, apply bool, rec lo
 			continue
 		}
 		id := lastLine(out)
-		if t := threadID.FindString(out); t != "" && !strings.Contains(id, t) {
+		if l.IsEvent() && !subscriptionID.MatchString(id) {
+			// No subscription ID yet: the spawner is not ready until the thread has set it up, so nothing is recorded.
+			pending = append(pending, l.Name)
+			applied = append(applied, l.Name+": pending on "+threadID.FindString(out))
+			continue
+		}
+		if t := threadID.FindString(out); t != "" && !strings.Contains(id, t) && !l.IsEvent() {
 			id = "schedule on " + t
 		}
-		async = async || !strings.HasPrefix(id, "schedule ") && !strings.HasPrefix(id, "subscription ")
+		async = async || !strings.HasPrefix(id, "schedule ") && !l.IsEvent()
 		rec.Set(loops.HostAmp, l.Name, loops.Entry{Digest: l.Digest(repo, branch, tz), ID: id, At: today})
 		applied = append(applied, l.Name+": "+id)
 	}
@@ -360,7 +370,10 @@ func (e *Env) ampLoops(ctx context.Context, root, bin string, apply bool, rec lo
 		}
 		if async {
 			// amp -ox returns the thread before its agent runs (Appendix B D-7.1f).
-			steps = append(steps, "Each Amp thread sets its schedule (or, for an event loop, its GitHub subscription) a few seconds after it starts: open each one to check it holds it, then record the ID with `aayu install --loops --host amp --record <loop>=schedule <ID> on <thread>` (or `<loop>=subscription <ID>`).")
+			steps = append(steps, "Each Amp thread sets its schedule a few seconds after it starts: open each one to check it holds the schedule, then record the schedule ID with `aayu install --loops --host amp --record <loop>=schedule <ID> on <thread>`.")
+		}
+		for _, n := range pending {
+			steps = append(steps, fmt.Sprintf("%s is not recorded: its thread had not replied with a subscription ID. Open the thread, check that Amp shows the GitHub subscription, then record it with `aayu install --loops --host amp --record %s=subscription <ID>`.", n, n))
 		}
 		steps = append(steps, "Commit "+loops.RecordFile+".")
 	}
