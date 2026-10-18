@@ -1162,7 +1162,9 @@ func Registrations(root, home string, lockHosts []string) []Registration {
 		} else if err == nil {
 			var raw map[string]json.RawMessage
 			var servers map[string]struct {
-				Command string `json:"command"`
+				Command string            `json:"command"`
+				Env     map[string]string `json:"env"`
+				Tools   []string          `json:"tools"`
 			}
 			if err := json.Unmarshal(b, &raw); err != nil {
 				r.Err = err
@@ -1170,12 +1172,35 @@ func Registrations(root, home string, lockHosts []string) []Registration {
 				if err := json.Unmarshal(v, &servers); err != nil {
 					r.Err = err
 				}
-				r.Command = servers[ServerName].Command
+				srv := servers[ServerName]
+				r.Command = srv.Command
+				if h == string(verbs.HostCopilot) && srv.Command != "" && r.Err == nil {
+					r.Err = copilotServerGaps(srv.Env, srv.Tools)
+				}
 			}
 		}
 		out = append(out, r)
 	}
 	return out
+}
+
+// copilotServerGaps names what the aayudha server entry lacks for Copilot,
+// which starts a stdio server with only PATH and offers no tool the entry does
+// not list: each CopilotMCPEnv variable, and "tools": ["*"].
+func copilotServerGaps(env map[string]string, tools []string) error {
+	var gaps []string
+	for _, k := range CopilotMCPEnv {
+		if env[k] != "${"+k+":-}" {
+			gaps = append(gaps, "env "+k)
+		}
+	}
+	if !slices.Contains(tools, "*") {
+		gaps = append(gaps, `"tools": ["*"]`)
+	}
+	if len(gaps) > 0 {
+		return fmt.Errorf("the %q server lacks what Copilot needs (%s); run `aayu install --host copilot --apply`", ServerName, strings.Join(gaps, ", "))
+	}
+	return nil
 }
 
 // codexRegistration reads aayudha's server from the project's .codex/config.toml.
