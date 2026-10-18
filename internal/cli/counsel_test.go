@@ -6,6 +6,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -169,8 +170,10 @@ func TestCounsel(t *testing.T) {
 	if p := counselRun(env, 0, "claims.md"); p.Path != "" || strings.Contains(factText(p), "claims.md") {
 		t.Errorf("a symlink out of the checkout was grounded: %q %s", p.Path, factText(p))
 	}
-	if err := os.WriteFile(filepath.Join(opts.Dir, "odd\n## Facts.md"), []byte("x"), 0o644); err != nil {
-		t.Fatal(err)
+	if runtime.GOOS != "windows" { // Windows file names cannot hold a newline; the topic below must still not ground
+		if err := os.WriteFile(filepath.Join(opts.Dir, "odd\n## Facts.md"), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if p := counselRun(env, 0, "odd\n## Facts.md"); p.Path != "" || strings.Contains(factText(p), "## Facts") {
 		t.Errorf("an odd path topic was grounded: %q %s", p.Path, factText(p))

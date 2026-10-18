@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -47,6 +48,11 @@ func load(t *testing.T, sets ...string) *config.Loaded {
 }
 
 // repoWith creates a repository root holding the given files.
+// fakeAayu is the aayu binary install would register: absolute and outside any
+// test checkout on every OS (an absolute Windows path needs a drive). The golden
+// file shows it as /usr/bin/aayu.
+var fakeAayu = map[bool]string{true: `C:\usr\bin\aayu`, false: "/usr/bin/aayu"}[runtime.GOOS == "windows"]
+
 func repoWith(t *testing.T, files map[string]string) string {
 	t.Helper()
 	root := t.TempDir()
@@ -136,12 +142,12 @@ func healthy(t *testing.T) *Probe {
 		Root: repoWith(t, map[string]string{".aayudha/config.toml": "version = 1\n",
 			".github/workflows/" + SecurityWorkflow: "name: aayudha-security\n",
 			".aayudha/lock.toml":                    "version = 1\nskills_version = \"0.0.0\"\nhosts = [\"claude\"]\n[skills]\n",
-			".mcp.json":                             `{"mcpServers": {"aayudha": {"command": "/usr/bin/aayu", "args": ["mcp"]}}}`}),
+			".mcp.json":                             `{"mcpServers": {"aayudha": {"command": ` + strconv.Quote(fakeAayu) + `, "args": ["mcp"]}}}`}),
 		Getenv:   getenv,
 		LookPath: func(string) (string, error) { return "/usr/bin/x", nil },
 		Exec: fakeExec(map[string]string{
 			"git --version":                 "git version 2.45.1\n",
-			"/usr/bin/aayu version":         "aayu 1.2.0\n",
+			fakeAayu + " version":           "aayu 1.2.0\n",
 			"git lfs version":               "git-lfs/3.5.1 (GitHub; linux amd64; go 1.22)\n",
 			"git worktree list --porcelain": "worktree /repo\nHEAD abc\nbranch refs/heads/dev\n",
 			"git for-each-ref --format=%(refname:short) refs/heads refs/remotes/origin": "dev\nmain\norigin/HEAD\norigin/dev\n",
@@ -370,7 +376,7 @@ func failing(t *testing.T) map[string]func(*Probe) {
 			p.HostConfig = func(context.Context) ([]string, error) { return []string{".github/hooks/aayudha.json"}, nil }
 		},
 		"mcp": func(p *Probe) {
-			overlay(p, map[string]string{"/usr/bin/aayu version": "aayu 1.1.0\n"})
+			overlay(p, map[string]string{fakeAayu + " version": "aayu 1.1.0\n"})
 		},
 		// Decision #449: a PostHog server with its key written into the shared
 		// .mcp.json and no read-only switch, a hosted Sentry server on OAuth with
@@ -427,7 +433,7 @@ func TestChecksGolden(t *testing.T) {
 			// Machine-specific paths are replaced so the golden file is portable.
 			var buf bytes.Buffer
 			_ = Render(&buf, []Result{r})
-			got.WriteString(strings.ReplaceAll(buf.String(), p.Root, "<root>"))
+			got.WriteString(strings.ReplaceAll(strings.ReplaceAll(buf.String(), p.Root, "<root>"), fakeAayu, "/usr/bin/aayu"))
 		}
 	}
 	golden := filepath.Join("testdata", "checks.golden")
@@ -674,7 +680,7 @@ func TestCopilotTrustRow(t *testing.T) {
 	profile := t.TempDir()
 	p := healthy(t)
 	p.Root = repoWith(t, map[string]string{".aayudha/lock.toml": "version = 1\nskills_version = \"0.0.0\"\nhosts = [\"copilot\"]\n[skills]\n",
-		".github/hooks/aayudha.json": `{"version":1,"hooks":{"preToolUse":[{"type":"command","bash":"\"/usr/bin/aayu\" hook pre-tool --host copilot"}]}}`})
+		".github/hooks/aayudha.json": `{"version":1,"hooks":{"preToolUse":[{"type":"command","bash":` + strconv.Quote(`"`+fakeAayu+`" hook pre-tool --host copilot`) + `}]}}`})
 	_ = os.MkdirAll(filepath.Join(profile, ".copilot"), 0o755)
 	_ = os.WriteFile(filepath.Join(profile, ".copilot", "config.json"), []byte("// managed\n"+`{"trustedFolders":[`+strconv.Quote(p.Root)+`]}`), 0o644)
 	env := map[string]string{"USERPROFILE": profile}
@@ -726,7 +732,7 @@ func TestMCPDoesNotRunARepositoryCommand(t *testing.T) {
 		ran := false
 		exec := p.Exec
 		p.Exec = func(ctx context.Context, dir, name string, args ...string) (string, error) {
-			ran = ran || strings.Contains(name, "bin/aayu") && name != "/usr/bin/aayu"
+			ran = ran || strings.Contains(name, "bin/aayu") && name != fakeAayu
 			return exec(ctx, dir, name, args...)
 		}
 		c := strings.ReplaceAll(cmd, "<root>", p.Root)
