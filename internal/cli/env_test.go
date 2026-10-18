@@ -8,8 +8,10 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
 	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
@@ -52,22 +54,27 @@ func TestValues(t *testing.T) {
 }
 
 // Bug #170: human-only verbs run from a skill's shell call in each host, with the founder's token and without
-// AAYU_AGENT, are refused as an agent lane before any GitHub call, even when the host gives the command a terminal.
-// This holds below the pre-tool hook (#169): the hook blocks a shell command it can read, and the binary still
+// AAYU_AGENT, never complete as the agent, even when the host gives the command a terminal. Since Story #481 the
+// agent may start one: aayu asks a person for the device code (the default client ID needs no setup), and when no
+// person approves, nothing is done. The only writes are the notice that carries the code (a batch comment). This
+// holds below the pre-tool hook (#169): the hook blocks a shell command it can read, and the binary still
 // refuses one the hook cannot see, such as a script that runs aayu.
 func TestHumanOnlyRefusedInHostShells(t *testing.T) {
 	g := fake.New(t, "o/r", "User")
+	g.Viewer = "founder"
+	g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "deny"}
+	d := g.AddIssue("Choose the rules engine", decisionBody("true", ""), "type:decision", "status:ready")
 	commands := [][]string{
 		{"plan", "2", "--solo-bypass"},
-		{"decide", "5", "--accept", "B"},
+		{"decide", strconv.Itoa(d.Number), "--accept", "B"},
 		{"resume"},
 	}
 	for host, marker := range hostShells {
 		env := maps.Clone(marker)
 		env["AAYU_GITHUB_TOKEN"] = "founder-token"
 		for _, args := range commands {
-			code, _, errOut := run(t, env, Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1}, append(args, "--repo", "o/r")...)
-			if code != ExitBlocked || !strings.Contains(errOut, "refused for an agent lane") {
+			code, _, errOut := run(t, env, Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, DevicePoll: time.Millisecond}, append(args, "--repo", "o/r")...)
+			if code != ExitBlocked || !strings.Contains(errOut, "was not approved: the request was denied; nothing was done") {
 				t.Errorf("%s shell: aayu %s: exit %d: %s", host, strings.Join(args, " "), code, errOut)
 			}
 		}
@@ -81,15 +88,20 @@ func TestHumanOnlyRefusedInHostShells(t *testing.T) {
 			t.Errorf("the hook was expected not to see inside a script: %q", cmd)
 		}
 	}
-	if w := g.Writes(); len(w) != 0 {
-		t.Errorf("refused commands wrote to GitHub: %v", w)
-	}
-	// No marker and no terminal (a host that sets nothing, a script): human-only actions fail closed.
+	// No marker and no terminal (a host that sets nothing, a script): the same, a person's code or nothing.
 	for _, args := range commands {
-		code, _, errOut := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "founder-token"}, Options{GitHubAPI: g.URL(), GitHubGap: -1}, append(args, "--repo", "o/r")...)
-		if code != ExitBlocked || !strings.Contains(errOut, "needs an interactive terminal") {
+		code, _, errOut := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "founder-token"}, Options{GitHubAPI: g.URL(), GitHubGap: -1, DevicePoll: time.Millisecond}, append(args, "--repo", "o/r")...)
+		if code != ExitBlocked || !strings.Contains(errOut, "was not approved") {
 			t.Errorf("no marker, no terminal: aayu %s: exit %d: %s", strings.Join(args, " "), code, errOut)
 		}
+	}
+	for _, w := range g.Writes() {
+		if !strings.HasPrefix(w.Path, "/login/") && !strings.Contains(w.Path, "/comments") {
+			t.Errorf("an unapproved command wrote to GitHub: %v", w)
+		}
+	}
+	if is := g.Issues[d.Number]; is.State != "open" || strings.Contains(is.Body, "accepted by") {
+		t.Errorf("an unapproved decide changed #%d: %s %s", d.Number, is.State, is.Body)
 	}
 }
 

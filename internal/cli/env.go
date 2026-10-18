@@ -59,6 +59,8 @@ type Options struct {
 	AppManifestCode func(ctx context.Context, postURL string, manifest func(redirect string) string) (string, error)
 	GitHubGap       time.Duration                                                               // gap between GitHub writes; 0 is the client default (1s), negative none (tests)
 	GHToken         func(ctx context.Context) (string, error)                                   // `gh auth token`; nil runs gh
+	GitCredential   func(ctx context.Context, repo string) (string, error)                      // the git credential helper's token for github.com (approvals, doctor); nil runs git credential fill
+	GHAccounts      func(ctx context.Context) (map[string]string, error)                        // every account gh stores for github.com, active or not, login to token (approvals, doctor); nil runs gh
 	Secrets         *secrets.Store                                                              // nil uses keychain, env, then the age file
 	LookPath        func(string) (string, error)                                                // nil uses exec.LookPath (doctor)
 	Exec            func(ctx context.Context, dir, name string, args ...string) (string, error) // nil runs the command (doctor, install)
@@ -123,6 +125,7 @@ type Env struct {
 	actions *actions.Log   // opened on first use by Actions
 
 	approval *Approval // a person's device-flow approval for this command (presence.go)
+	args     []string  // the command line after the binary's name, for the person approving it (presence.go)
 
 	haltWatch bool // checkHalt read the halt variable through the API, so a running verb re-reads it (WP5.7)
 

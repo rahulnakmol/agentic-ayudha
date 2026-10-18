@@ -25,6 +25,13 @@ WARN  token  token from AAYU_GITHUB_TOKEN -> rahulnakmol (scopes: admin:org, del
 PASS  bot-identity  bot identity: GitHub App aayudha-bot[bot] (laptops mint tokens through the aayudha-token.yml broker)
 ## bot-identity fail
 WARN  bot-identity  bot identity: not configured; agent writes run under the human identity, tagged identity:human-fallback
+## approvals pass
+PASS  approvals  approvals: a reply from rahulnakmol approves a batch; one-way doors need the device code
+                   GH_TOKEN -> @aayudha-bot[bot]
+## approvals fail
+FAIL  approvals  approvals: this agent session (AMP_THREAD_ID) can reach an approver's GitHub credential: @rahulnakmol (git credential helper). An agent here could write an `/aayu approve` reply in their name, so batches from here need the device code. Remove it from every agent's environment (docs/guide/how-trust.md, Approving by reply)
+                   GH_TOKEN -> @aayudha-bot[bot]
+                   git credential helper -> @rahulnakmol
 ## config pass
 PASS  config  config is valid
 ## config fail

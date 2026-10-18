@@ -561,16 +561,17 @@ func TestBuildWithoutLedger(t *testing.T) {
 
 // WP5.5 build under a bot App: the lease holder is the App's [bot] login,
 // which GitHub cannot assign, so the story gets the lock comment and label but
-// no assignee. Without the human's token the App's token broker cannot be
-// reached, and build exits 4.
+// no assignee. With neither the bot's token nor the human's (which the App's
+// token broker needs), build exits 4. A bot-only session (AAYU_BOT_TOKEN and
+// no human token, Decision #488) needs no broker.
 func TestBuildUnderBotApp(t *testing.T) {
 	g, env, opts, _, _ := buildSetup(t)
 	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready: %s", errOut)
 	}
 	app := []string{"build", "2", "--repo", "o/r", "--json", "--set", "identity.app_id=42", "--set", "identity.app_slug=aayudha-bot"}
-	if code, _, errOut := run(t, map[string]string{"AAYU_BOT_TOKEN": "bot-token", "PATH": os.Getenv("PATH")}, opts, app...); code != ExitBlocked {
-		t.Fatalf("build under the App without a human token: %d %s", code, errOut)
+	if code, _, errOut := run(t, map[string]string{"PATH": os.Getenv("PATH")}, opts, app...); code != ExitBlocked || !strings.Contains(errOut, "no GitHub token found") {
+		t.Fatalf("build under the App without any token: %d %s", code, errOut)
 	}
 	env["AAYU_BOT_TOKEN"] = "bot-token"
 	code, out, errOut := run(t, env, opts, app...)

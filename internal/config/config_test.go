@@ -108,6 +108,8 @@ func TestRejects(t *testing.T) {
 		{"escalation login", nil, nil, []string{"decisions.escalate_to=founder b"}, "escalate_to"},
 		{"team stage", nil, nil, []string{"team.stage=unicorn"}, `[team] stage = "unicorn"`},
 		{"auth on a non-cloud integration", nil, nil, []string{"integrations.posthog.secret=posthog", "integrations.posthog.scope=read", "integrations.posthog.auth=oidc"}, "only [integrations.azure]"},
+		{"approvals door", nil, nil, []string{"approvals.device_for=two-way"}, `[approvals] device_for "two-way": want one-way or all`},
+		{"approvals login", nil, nil, []string{"approvals.approvers=founder b"}, `[approvals] approvers "founder b": want a GitHub login`},
 		{"cloud key auth without a secret", nil, nil, []string{"integrations.aws.scope=read", "integrations.aws.region=eu-west-1"}, `[integrations.aws] secret = ""`},
 	}
 	for _, tt := range tests {

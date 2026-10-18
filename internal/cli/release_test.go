@@ -407,6 +407,7 @@ func TestReleaseLadder(t *testing.T) {
 	f.opts.DevicePoll = time.Millisecond
 	if code, _, errOut := f.run(t, day.Add(2*time.Hour), marked, rel, "--to", "main"); code != ExitBlocked || f.g.Device.Started != 1 ||
 		!strings.Contains(errOut, fmt.Sprintf("release #%s --to main (v0.1.0) on o/r was not approved: the request was denied", rel)) ||
+		!strings.Contains(errOut, "  Approving: Promotes rolling to main as v0.1.0 and tags it: the stable release of Release #"+rel+". One-way door") ||
 		git(t, f.bare, "rev-parse", "refs/heads/main") != mainTip0 {
 		t.Fatalf("main with a denied device-flow approval: %d %s", code, errOut)
 	}
@@ -826,5 +827,35 @@ func TestReleasePicksAnEvaluatedCommit(t *testing.T) {
 	}
 	if fmt.Sprint(f.dispatched) != "[ci.yml@promote/rolling map[gate:rolling]]" {
 		t.Fatalf("dispatches %v: only the gate", f.dispatched)
+	}
+}
+
+// Story #481: an agent runs the stable release with no "Stable release:"
+// comment, and the person approves it through the device code: the promotion
+// record and the Release's shipping evidence name the approving person and the
+// device flow next to the agent marker the command ran under.
+func TestReleaseMainApprovedThroughDeviceCode(t *testing.T) {
+	f := newLadderFixture(t)
+	day := time.Date(2026, 10, 12, 9, 41, 0, 0, time.UTC)
+	rel := strconv.Itoa(f.release)
+	if code, _, errOut := f.run(t, day, f.env, rel, "--to", "rolling", "--yes"); code != 0 {
+		t.Fatalf("rolling: %d %s", code, errOut)
+	}
+	f.g.Mu.Lock()
+	f.g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: f.g.Viewer, Outcome: "approve"}
+	who := f.g.Viewer
+	f.g.Mu.Unlock()
+	marked := maps.Clone(f.env)
+	marked["AMP_THREAD_ID"] = "T-0000"
+	f.opts.DevicePoll = time.Millisecond
+	code, p, errOut := f.run(t, day.Add(2*time.Hour), marked, rel, "--to", "main")
+	if code != 0 || p.Approval == nil || p.Approval.Login != who || p.Approval.Via != "device-flow" || p.Agent == "" || p.Request == nil || p.Request.Via != "device-flow" {
+		t.Fatalf("main approved through the device code: %d %+v %s", code, p, errOut)
+	}
+	f.g.Mu.Lock()
+	body := f.g.Issues[f.release].Body
+	f.g.Mu.Unlock()
+	if want := fmt.Sprintf("with @%s's account, approved by @%s through the device code (device-flow)", who, who); !strings.Contains(body, want) {
+		t.Fatalf("shipping evidence does not name the approver (%q):\n%s", want, body)
 	}
 }

@@ -923,6 +923,31 @@
       "additionalProperties": false,
       "type": "object",
       "description": "What the agent hosts include on the user's plan, which picks each lane's default model there (Decision #469)."
+    },
+    "approvals": {
+      "properties": {
+        "approvers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "GitHub logins of the people whose /aayu approve reply on a batch counts as their approval. Their GitHub credentials must be in no agent's reach (aayu doctor checks); with none, every batch needs the device code."
+        },
+        "device_for": {
+          "items": {
+            "type": "string",
+            "enum": [
+              "one-way",
+              "all"
+            ]
+          },
+          "type": "array",
+          "description": "Batches that always need the device code, even when comment approvals are on: one-way (any irreversible item: an irreversible Decision, a floor waiver) or all."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Who approves agents' human-only steps by a comment, and which steps always need GitHub's device code (Decision #488)."
     }
   },
   "additionalProperties": false,

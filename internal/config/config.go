@@ -45,6 +45,7 @@ type Config struct {
 	Inspect       Inspect                `koanf:"inspect" jsonschema_description:"How inspect reviews a PR (WP4.8b): its mode, noise filters, and peer reviewer."`
 	Delegate      Delegate               `koanf:"delegate" jsonschema_description:"How build --delegate reaches other agents (WP5.5b). Values name secrets; they never hold them."`
 	Hosts         Hosts                  `koanf:"hosts" jsonschema_description:"What the agent hosts include on the user's plan, which picks each lane's default model there (Decision #469)."`
+	Approvals     Approvals              `koanf:"approvals" jsonschema_description:"Who approves agents' human-only steps by a comment, and which steps always need GitHub's device code (Decision #488)."`
 }
 
 // Hosts is [hosts] (Decision #469).
@@ -55,6 +56,12 @@ type Hosts struct {
 // CursorHost is [hosts.cursor].
 type CursorHost struct {
 	Plan string `koanf:"plan" jsonschema:"enum=,enum=x,enum=legacy" jsonschema_description:"x (default): a Cursor plan from 12 October 2026 on, which includes only Cursor's own models, so the lanes default to Grok and Composer; legacy: a legacy Pro, Pro+, or Ultra plan, which includes Claude and Gemini. Read only from the user config, AAYU_HOSTS__CURSOR__PLAN, or --set, never from the checkout."`
+}
+
+// Approvals is [approvals] (Decision #488, Story #481).
+type Approvals struct {
+	Approvers []string `koanf:"approvers" jsonschema_description:"GitHub logins of the people whose /aayu approve reply on a batch counts as their approval. Their GitHub credentials must be in no agent's reach (aayu doctor checks); with none, every batch needs the device code."`
+	DeviceFor []string `koanf:"device_for" jsonschema:"enum=one-way,enum=all" jsonschema_description:"Batches that always need the device code, even when comment approvals are on: one-way (any irreversible item: an irreversible Decision, a floor waiver) or all."`
 }
 
 // Delegate is [delegate] (WP5.5b).
@@ -464,6 +471,16 @@ func (c *Config) Validate() error {
 			if _, ok := verbs.FindLayer(verbs.LayerID(l)); !ok {
 				bad("%s: unknown layer %q", key, l)
 			}
+		}
+	}
+	for _, d := range c.Approvals.DeviceFor {
+		if d != "one-way" && d != "all" {
+			bad("[approvals] device_for %q: want one-way or all", d)
+		}
+	}
+	for _, a := range c.Approvals.Approvers {
+		if !loginName.MatchString(strings.TrimPrefix(a, "@")) {
+			bad("[approvals] approvers %q: want a GitHub login", a)
 		}
 	}
 	switch n := c.Notify; n.Channel {
