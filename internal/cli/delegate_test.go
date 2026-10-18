@@ -590,7 +590,7 @@ func TestDelegateLocalUsageLimitPause(t *testing.T) {
 			}
 		}
 	}
-	if leasedUntil.Before(resets) {
+	if leasedUntil.Before(resets) || res.Lease.Expires.Before(resets) {
 		t.Fatalf("the lease ran out at %s, before the limit reset at %s", leasedUntil, resets)
 	}
 	var st BuildState

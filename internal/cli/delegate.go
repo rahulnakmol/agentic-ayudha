@@ -67,6 +67,7 @@ type delegation struct {
 	body     string // the story's body (untrusted; quoted in the brief as data)
 	bot      identity.Bot
 	wallEnd  time.Time // when the build's wall-time budget ends; zero without one
+	lease    *Lease    // the story's lease as last renewed during a usage-limit wait
 }
 
 // Delegation statuses (delegate.State.Status).
@@ -794,10 +795,12 @@ func (e *Env) localWriter(d *delegation, prompt string) func(context.Context, st
 			// never lapses to another builder while this one is paused.
 			for wait := resets.Sub(e.Now()) + time.Minute; wait > 0; {
 				step := min(wait, LeaseTTL/2)
-				if _, err := e.takeLease(ctx, d.c, d.repo, d.story, leaseHolder(d.bot.Login), nil); err != nil {
+				l, err := e.takeLease(ctx, d.c, d.repo, d.story, leaseHolder(d.bot.Login), nil)
+				if err != nil {
 					pp.Done(ui.StatusFail, "could not renew the story's lease while paused")
 					return err
 				}
+				d.lease = &l
 				if err := e.pauseFor(ctx, step); err != nil {
 					pp.Done(ui.StatusFail, "stopped while paused")
 					return err

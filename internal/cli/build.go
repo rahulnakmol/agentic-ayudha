@@ -333,6 +333,9 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 
 	if write != nil {
 		err := write(ctx, res.Worktree)
+		if dlg != nil && dlg.lease != nil { // renewed while the receiver waited out a usage limit
+			res.Lease = *dlg.lease
+		}
 		// The wall clock ran on while the receiver worked, or waited out a usage limit.
 		if started, perr := time.Parse(time.RFC3339, st.StartedAt); perr == nil {
 			res.Budget.WallHours = e.Now().Sub(started).Hours()
