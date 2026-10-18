@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/decide"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
+	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -532,6 +534,31 @@ func TestBatchFallsBackWhenApproverCredentialIsReachable(t *testing.T) {
 	if code != ExitBlocked || !strings.Contains(body, "this session can reach @founder's GitHub credential (aayu secrets store") {
 		t.Fatalf("stored token: exit %d %s\n%s", code, errOut, body)
 	}
+	// A locked macOS or Windows keychain may hold the founder's token once unlocked: it counts.
+	lockableKeychain = true
+	t.Cleanup(func() { lockableKeychain = runtime.GOOS == "darwin" || runtime.GOOS == "windows" })
+	d9 := g.AddIssue("Choose the queue store", decisionBody("true", ""), "type:decision", "status:ready")
+	code, _, errOut = run(t, map[string]string{"AAYU_GITHUB_TOKEN": "founder-token", "AAYU_BOT_TOKEN": "bot-token", "AMP_THREAD_ID": "T-1"},
+		Options{GitHubAPI: g.URL(), GitHubGap: -1, DevicePoll: time.Millisecond, Secrets: secrets.New(lockedKeychain{})},
+		"decide", strconv.Itoa(d9.Number), "--accept", "A", "--repo", "o/r", "--set", "identity.app_id=42", "--set", "identity.app_slug=aayudha-bot", "--set", "approvals.approvers=someone")
+	g.Mu.Lock()
+	body = g.Issues[d9.Number].Comments[len(g.Issues[d9.Number].Comments)-1].Body
+	g.Mu.Unlock()
+	if code != ExitBlocked || !strings.Contains(body, "aayu secrets store (unreadable now)") {
+		t.Fatalf("locked keychain: exit %d %s\n%s", code, errOut, body)
+	}
+	lockableKeychain = false // Linux without a Secret Service: nothing to hold
+	if code, _, errOut = run(t, map[string]string{"AAYU_GITHUB_TOKEN": "founder-token", "AAYU_BOT_TOKEN": "bot-token", "AMP_THREAD_ID": "T-1"},
+		Options{GitHubAPI: g.URL(), GitHubGap: -1, DevicePoll: time.Millisecond, Secrets: secrets.New(lockedKeychain{})},
+		"decide", strconv.Itoa(d9.Number), "--accept", "A", "--repo", "o/r", "--set", "identity.app_id=42", "--set", "identity.app_slug=aayudha-bot", "--set", "approvals.approvers=someone"); code != ExitBlocked {
+		t.Fatalf("no keychain on Linux: exit %d %s", code, errOut)
+	}
+	g.Mu.Lock()
+	body = g.Issues[d9.Number].Comments[len(g.Issues[d9.Number].Comments)-1].Body
+	g.Mu.Unlock()
+	if !strings.Contains(body, "/aayu approve all") {
+		t.Fatalf("no keychain on Linux: a reply should approve:\n%s", body)
+	}
 	// A machine-user bot cannot run the approval workflow (it mints only the
 	// App's token), so its batches stay on the device code.
 	d4 := g.AddIssue("Choose the CDN", decisionBody("true", ""), "type:decision", "status:ready")
@@ -765,3 +792,13 @@ func TestDecideBatchDeviceCode(t *testing.T) {
 		t.Fatalf("presence.approve records: %v", approvals)
 	}
 }
+
+// lockedKeychain is an OS keychain backend that is unavailable now.
+type lockedKeychain struct{}
+
+func (lockedKeychain) Name() string               { return "keychain" }
+func (lockedKeychain) Available() error           { return errors.New("keychain locked") }
+func (lockedKeychain) Get(string) (string, error) { return "", secrets.ErrNotFound }
+func (lockedKeychain) Set(string, string) error   { return errors.New("locked") }
+func (lockedKeychain) Delete(string) error        { return errors.New("locked") }
+func (lockedKeychain) Names() ([]string, error)   { return nil, nil }

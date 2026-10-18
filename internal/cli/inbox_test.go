@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	aayudha "github.com/rahulnakmol/agentic-ayudha"
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
@@ -269,5 +270,25 @@ func TestInboxOnHome(t *testing.T) {
 	}
 	if _, out, _ := run(t, env, opts, "next", "--repo", "o/r"); !strings.Contains(out, "aayu inbox") || !strings.Contains(out, "for a person to run") {
 		t.Errorf("next with an inbox step:\n%s", out)
+	}
+}
+
+// Story #481: at a terminal under an agent marker, inbox asks for the device
+// code once; the person's pick is then applied, not turned into a batch for a
+// reply, even where reply approval is on.
+func TestInboxMarkedTerminalAppliesThePick(t *testing.T) {
+	g := inboxRepo(t)
+	g.Mu.Lock()
+	g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "o", Outcome: "approve"}
+	g.TokenLogins = map[string]fake.Account{"bot-token": {Login: "aayudha-bot[bot]", Type: "Bot"}}
+	g.Mu.Unlock()
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "AAYU_BOT_TOKEN": "bot-token", "AMP_THREAD_ID": "T-1", "XDG_STATE_HOME": t.TempDir()}
+	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, IsTerminal: func(any) bool { return true }, Assets: aayudha.Assets, DevicePoll: time.Millisecond}
+	code, out, errOut := runIn(t, env, opts, "saq", "inbox", "--repo", "o/r", "--set", "identity.app_id=42", "--set", "identity.app_slug=aayudha-bot", "--set", "approvals.approvers=someone")
+	g.Mu.Lock()
+	state := g.Issues[2].State
+	g.Mu.Unlock()
+	if code != 0 || state != "closed" || !strings.Contains(out, "#2 accepted: A, by @o") || strings.Contains(out+errOut, "posted batch") {
+		t.Fatalf("exit %d, #2 %s:\n%s\n%s", code, state, out, errOut)
 	}
 }

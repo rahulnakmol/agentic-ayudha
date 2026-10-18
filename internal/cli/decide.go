@@ -447,7 +447,9 @@ func decideAccept(ctx context.Context, e *Env, cfg *config.Config, repo string, 
 	// The person's account, when this session has it. An agent that writes
 	// only as the bot (the setup comment approval needs) has none: it reads and
 	// posts the batch as the bot, and the reply carries the person's authority.
-	agentRun := e.agentSignal() != "" || !e.isTerminal(e.In)
+	// A person who already passed the presence check in this invocation
+	// (inbox at a marked terminal) is not an agent run.
+	agentRun := (e.agentSignal() != "" || !e.isTerminal(e.In)) && e.approval == nil
 	c, login, herr := e.humanLogin(ctx, cfg)
 	if herr != nil && !agentRun {
 		return herr

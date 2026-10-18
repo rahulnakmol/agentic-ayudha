@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -359,6 +360,17 @@ func (e *Env) reachable(ctx context.Context, repo string) []identity.Reach {
 			if err != nil && !errors.Is(err, secrets.ErrNotFound) {
 				return "", fmt.Errorf("%w: %w", identity.ErrUnreadable, err)
 			}
+			if err != nil && lockableKeychain {
+				// Store.Get skips a backend that is unavailable now. A macOS or
+				// Windows keychain is unavailable only while locked, and may
+				// hold a token once unlocked; Linux without a Secret Service
+				// has none to hold.
+				for _, b := range st.Status() {
+					if b.Backend == "keychain" && !b.Available {
+						return "", fmt.Errorf("%w: the OS keychain is unavailable now: %s", identity.ErrUnreadable, b.Reason)
+					}
+				}
+			}
 			return v, err
 		},
 		"git credential helper": func(ctx context.Context) (string, error) {
@@ -387,6 +399,11 @@ func (e *Env) reachable(ctx context.Context, repo string) []identity.Reach {
 		return identity.WhoAmI(ctx, e.HTTP, e.githubAPI(), t)
 	}), unread...)
 }
+
+// lockableKeychain is whether this OS's keychain is unavailable only while
+// locked (macOS, Windows), not because there is none (Linux without a
+// Secret Service). A variable so tests can take either side.
+var lockableKeychain = runtime.GOOS == "darwin" || runtime.GOOS == "windows"
 
 // ghAccounts is every account gh stores for github.com, login to token ("" when unreadable).
 func (e *Env) ghAccounts(ctx context.Context) (map[string]string, error) {
