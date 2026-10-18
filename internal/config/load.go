@@ -165,8 +165,9 @@ func Load(src Sources) (*Loaded, error) {
 			}
 		}
 		// An active scan of a URL verify did not start is the protected repository config's call (Decision #485):
-		// .aayudha/config.json loads as the repo layer too, but only the TOML is a protected path.
-		if name != LayerDefault && (name != LayerRepo || filepath.Ext(source) != ".toml") {
+		// .aayudha/config.json loads as the repo layer too but is not code-owned; config.toml, read from the
+		// checkout or given as a base revision's text (Sources.RepoTOML), is.
+		if name != LayerDefault && (name != LayerRepo || filepath.Ext(source) == ".json") {
 			for _, key := range k.Keys() {
 				if strings.HasPrefix(key, "verify.environments.") && strings.HasSuffix(key, ".active_scan") {
 					errs = append(errs, fmt.Errorf("%s: %s is read only from .aayudha/config.toml, a protected path", source, key))
@@ -233,7 +234,7 @@ func Load(src Sources) (*Loaded, error) {
 		}
 		approved := ""
 		for _, ly := range l.layers {
-			if ly.name == LayerRepo && filepath.Ext(ly.source) == ".toml" {
+			if ly.name == LayerRepo && filepath.Ext(ly.source) != ".json" {
 				approved = ly.k.String("verify.environments." + name + ".url")
 			}
 		}

@@ -488,6 +488,10 @@ func TestActiveScanKey(t *testing.T) {
 		"home/.config/aayudha/config.toml": "version = 1\n[verify.environments.staging]\nurl = \"https://victim.example.test\"\n"})); err == nil || !strings.Contains(err.Error(), "approves only the url") {
 		t.Errorf("url from the user config: err = %v", err)
 	}
+	// A base revision's config.toml, given as text the way ship reads it, may opt in too.
+	if b, err := Load(Sources{RepoTOML: []byte("version = 1\n" + key), RepoSource: ".aayudha/config.toml at 18aca3b"}); err != nil || !b.Config.Verify.Environments["staging"].ActiveScan {
+		t.Fatalf("base config.toml: %v", err)
+	}
 	if l.Config.Verify.DAST != true || l.Config.Verify.NewFloorsBlockingFrom != "2026-11-14" || !l.Config.Verify.Floors.DAST.SkippedBlocksShip {
 		t.Fatalf("defaults: %+v", l.Config.Verify)
 	}
