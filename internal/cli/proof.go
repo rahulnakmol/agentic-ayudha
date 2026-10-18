@@ -66,7 +66,8 @@ func (e *Env) private(ctx context.Context, c *github.Client, repo string) bool {
 }
 
 // proofStore builds the repository's proof store: its ledger under tok, and
-// the [proof] media bucket with credentials from the secrets store.
+// the [proof] media bucket with credentials from the secrets store. The
+// bucket and the name of its secret come only from trustedProof (#667).
 func (e *Env) proofStore(ctx context.Context, c *github.Client, tok identity.Token, ident, tag string) (*proof.Store, error) {
 	l, err := e.Config()
 	if err != nil {
@@ -76,13 +77,17 @@ func (e *Env) proofStore(ctx context.Context, c *github.Client, tok identity.Tok
 	if err != nil {
 		return nil, err
 	}
+	pc, err := e.trustedProof(ctx, c, repo, l)
+	if err != nil {
+		return nil, err
+	}
 	w, err := e.Ledger(ctx, tok, ident, tag)
 	if err != nil {
 		return nil, err
 	}
 	s := &proof.Store{Repo: repo, Ledger: w, Private: e.private(ctx, c, repo), RetentionDays: l.Config.Proof.RetentionDays}
-	if m := l.Config.Proof.Media; m != "" {
-		name := l.Config.Proof.MediaSecret
+	if m := pc.Media; m != "" {
+		name := pc.MediaSecret
 		if name == "" {
 			name = DefaultMediaSecret
 		}
@@ -98,6 +103,48 @@ func (e *Env) proofStore(ctx context.Context, c *github.Client, tok identity.Tok
 		}
 	}
 	return s, nil
+}
+
+// trustedProof is the [proof] media bucket and the name of its secret from
+// sources the person controls (#667): the defaults, the user config, and the
+// integration branch's committed .aayudha/config.toml at its tip (only the
+// defaults and the user config when that branch or file cannot be found).
+// The checkout, config.local, AAYU_* variables and --set may belong to an
+// agent whose branch the person has checked out, and naming a bucket there
+// would send the person's local secret to it, so a run whose values differ
+// is refused before any secret is read.
+func (e *Env) trustedProof(ctx context.Context, c *github.Client, repo string, run *config.Loaded) (config.Proof, error) {
+	src := config.DefaultSources(e.Getenv, e.Dir, nil, nil)
+	user, err := config.Load(config.Sources{UserDir: src.UserDir})
+	if err != nil {
+		return config.Proof{}, Wrap(ExitUsage, fmt.Errorf("config: %w", err))
+	}
+	branch := or(user.Config.Branches.Dev, "dev")
+	owner, name, _ := github.SplitRepo(repo)
+	var text []byte
+	if ref, _, err := c.REST.Git.GetRef(ctx, owner, name, "heads/"+branch); err == nil {
+		fc, _, _, err := c.REST.Repositories.GetContents(ctx, owner, name, ".aayudha/config.toml", &gh.RepositoryContentGetOptions{Ref: ref.GetObject().GetSHA()})
+		if err != nil && !github.NotFound(err) {
+			return config.Proof{}, Wrap(ExitExternal, err)
+		}
+		if err == nil {
+			t, _ := fc.GetContent()
+			text = []byte(t)
+		}
+	} else if !github.NotFound(err) {
+		return config.Proof{}, Wrap(ExitExternal, err)
+	}
+	trusted, err := config.Load(config.Sources{UserDir: src.UserDir, RepoTOML: text, RepoSource: ".aayudha/config.toml on " + branch})
+	if err != nil {
+		return config.Proof{}, Errorf(ExitBlocked, "%s's .aayudha/config.toml does not load, so the proof media bucket cannot be trusted: %v", branch, err)
+	}
+	t, r := trusted.Config.Proof, run.Config.Proof
+	if r.Media != t.Media || t.Media != "" && r.MediaSecret != t.MediaSecret {
+		return config.Proof{}, Errorf(ExitBlocked, "the proof media bucket and its secret are read only from the user config and %s's committed .aayudha/config.toml; "+
+			"this run's config (the checkout, config.local, AAYU_* variables, or --set) sets [proof] media %q and media_secret %q, not %q and %q; "+
+			"remove those settings, or change %s through a reviewed PR", branch, r.Media, r.MediaSecret, t.Media, t.MediaSecret, branch)
+	}
+	return t, nil
 }
 
 // inMergeGate reports whether this process is the base-branch merge gate in

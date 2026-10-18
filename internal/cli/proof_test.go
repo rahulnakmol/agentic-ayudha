@@ -85,6 +85,28 @@ func TestProofPushVerifyCLI(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte(cfg), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// #667: the bucket and its secret come only from the user config and
+	// dev's committed config. A person who runs proof push in a checkout of
+	// an agent's branch sends nothing to the bucket that checkout names.
+	evil := fakes3.New(t, "sk")
+	env["AAYU_SECRET_OTHER"] = "ak:sk"
+	if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "the proof media bucket and its secret are read only from") {
+		t.Fatalf("push with a bucket only the checkout names: %d %s", code, errOut)
+	}
+	fgh.Mu.Lock()
+	if fgh.Files == nil {
+		fgh.Files = map[string]string{}
+	}
+	fgh.Files[".aayudha/config.toml"] = cfg
+	fgh.Mu.Unlock()
+	for _, args := range [][]string{{"--set", "proof.media=s3://evil/x?endpoint=" + evil.Server.URL, "--set", "proof.media_secret=other"}, {"--set", "proof.media_secret=other"}} {
+		if code, _, errOut := run(t, env, opts, append([]string{"proof", "push", "2", "--media", "--repo", "o/r"}, args...)...); code != ExitBlocked || !strings.Contains(errOut, "the proof media bucket and its secret are read only from") {
+			t.Fatalf("push with %v: %d %s", args, code, errOut)
+		}
+	}
+	if len(evil.Objects) != 0 || len(s3.Objects) != 0 {
+		t.Fatalf("a refused push uploaded: %d to the checkout's bucket, %d to dev's", len(evil.Objects), len(s3.Objects))
+	}
 	if code, _, errOut := run(t, env, opts, "proof", "push", "2", "--media", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "aayu auth set-secret proof-media") {
 		t.Fatalf("push without bucket keys: %d %s", code, errOut)
 	}
