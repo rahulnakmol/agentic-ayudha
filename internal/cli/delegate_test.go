@@ -643,22 +643,37 @@ func TestDelegateLocalUsageLimitPause(t *testing.T) {
 	}
 
 	// A reset two days out is after the 8-hour wall budget, and one less than a
-	// minute before it leaves no time to run again: no wait, a pause.
+	// minute before it leaves no time to run again: the budget ends during the
+	// wait, so the story is blocked for wall time with no attempt counted, and
+	// ready gives it a fresh budget.
 	for _, after := range []time.Duration{48 * time.Hour, 8*time.Hour - 30*time.Second} {
-		_, env, opts, _, bare = delegateFixture(t)
+		g, env, opts, _, bare = delegateFixture(t)
 		opts.LookPath = func(name string) (string, error) { return "/usr/local/bin/" + name, nil }
 		opts.Sleep = func(context.Context, time.Duration) error { t.Fatal("waited past the wall budget"); return nil }
 		opts.DelegateExec = func(context.Context, string, []string, string, string, ...string) (string, error) {
 			return limit(opts.Now().Add(after)), errors.New("codex: exit status 1")
 		}
 		code, res, errOut = delegateRun(t, env, opts, "--delegate", "codex", "--local")
-		if code != ExitBlocked || !strings.Contains(errOut, "paused") || !strings.Contains(errOut, "after the build's wall-time budget ends") || res.Budget.Attempts != 0 || res.Delegation.Status != dlgPaused ||
-			!strings.Contains(res.Next, "a person runs `aayu ready 2` for a fresh budget") {
+		if code != ExitBlocked || !strings.Contains(errOut, "wall-time budget: Codex's subscription usage limit resets at") || res.Budget.Attempts != 0 || !slices.Contains(g.LabelNames(2), "status:blocked") {
 			t.Fatalf("reset %s out: %d %+v %s", after, code, res, errOut)
 		}
 		st = BuildState{}
-		if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &st); err != nil || st.Attempts != 0 || st.Blocked != "" {
-			t.Fatalf("build state after a pause past the wall budget: %v %+v", err, st)
+		if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &st); err != nil || st.Attempts != 0 || !strings.HasPrefix(st.Blocked, "wall-time budget: ") {
+			t.Fatalf("build state after a reset past the wall budget: %v %+v", err, st)
 		}
+	}
+
+	// With no reset time printed, the build pauses without blocking the story.
+	g, env, opts, _, bare = delegateFixture(t)
+	opts.LookPath = func(name string) (string, error) { return "/usr/local/bin/" + name, nil }
+	opts.DelegateExec = func(context.Context, string, []string, string, string, ...string) (string, error) {
+		return "ERROR: You’ve hit your usage limit. Try again later.", errors.New("codex: exit status 1")
+	}
+	code, res, errOut = delegateRun(t, env, opts, "--delegate", "codex", "--local")
+	st = BuildState{}
+	_ = json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &st)
+	if code != ExitBlocked || !strings.Contains(errOut, "paused") || res.Delegation.Status != dlgPaused || st.Attempts != 0 || st.Blocked != "" ||
+		slices.Contains(g.LabelNames(2), "status:blocked") || !strings.Contains(res.Next, "again once the limit resets") {
+		t.Fatalf("no reset time: %d %+v %+v %s", code, res, st, errOut)
 	}
 }

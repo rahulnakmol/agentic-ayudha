@@ -348,10 +348,13 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 				dlg.event(e.Now(), dlgPaused, pause.why)
 				dlg.fill(res.Delegation)
 				_ = e.saveDelegation(ctx, dlg)
-				res.Next = fmt.Sprintf("run `aayu build %d --delegate %s --local` again once the limit resets; a pause is no failed attempt", n, dlg.receiver)
+				// The wall clock would run out during the wait: that is the budget
+				// ending, so the story is blocked (no attempt counted), and
+				// `aayu ready` gives the build a fresh budget once the limit resets.
 				if pause.afterWall {
-					res.Next = fmt.Sprintf("the wall-time budget ends before the limit resets: once it has reset, a person runs `aayu ready %d` for a fresh budget, then `aayu build %d --delegate %s --local`", n, n, dlg.receiver)
+					return block("wall-time budget: " + pause.why)
 				}
+				res.Next = fmt.Sprintf("run `aayu build %d --delegate %s --local` again once the limit resets; a pause is no failed attempt", n, dlg.receiver)
 				if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
 					return err
 				}

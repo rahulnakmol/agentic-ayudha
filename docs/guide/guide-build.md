@@ -24,8 +24,9 @@ a person. A pause at a subscription usage limit is not a failed attempt, and the
 building on your machine (`--delegate <agent> --local`) hits its limit and says when it resets, the build waits and
 then continues by itself. When it gives no reset time, the build stops as paused: run
 `aayu build <story> --delegate <agent> --local` again once the limit resets. When the reset comes after the 8 hours
-end, the build stops as paused too, and a rerun needs a fresh budget: once the limit resets, a person runs
-`aayu ready <story>`, then the same `aayu build` command.
+end, the budget runs out during the wait, so the story is blocked as for any wall-time breach, with no attempt
+counted: once the limit resets, a person runs `aayu ready <story>` for a fresh budget, then the same `aayu build`
+command.
 
 **You should see** a pull request, and a comment on the story that reads like a flight log: checkpoint, layer, result,
 and budget used.
