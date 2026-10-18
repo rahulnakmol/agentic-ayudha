@@ -287,7 +287,8 @@ func TestShipAutonomousFootprint(t *testing.T) {
 	// stands over an older fresh A: it only lowers the rung.
 	g.Mu.Lock()
 	g.JobLogs[7701] = "2026-10-17T23:00:00.0000000Z inspect #" + strconv.Itoa(prN) + " at abc: merge (reviewed by claude)\n" + allowed
-	g.Runs = append(g.Runs, fake.WorkflowRun{ID: g.Runs[gate].ID + 100000, Path: ".github/workflows/" + MergeGateWorkflow, HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "success"})
+	g.Runs = append(g.Runs, fake.WorkflowRun{ID: g.Runs[gate].ID + 100000, Path: ".github/workflows/" + MergeGateWorkflow, HeadSHA: head, Event: "pull_request_target", Status: "completed", Conclusion: "success",
+		PullRequests: g.Runs[gate].PullRequests})
 	g.RunJobs[g.Runs[gate].ID+100000] = []fake.CheckRun{{ID: 7703, Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}}
 	g.JobLogs[7703] = "2026-10-17T23:00:00.0000000Z inspect #" + strconv.Itoa(prN) + " at abc: merge (cached) (reviewed by claude)\n  review: same-family review (C): claude (anthropic), builder anthropic\n"
 	g.Mu.Unlock()
@@ -527,6 +528,15 @@ func TestShipOnProof(t *testing.T) {
 	g.JobLogs[7799] = strings.Replace(g.JobLogs[7701], "same-family review (C): codex (openai), builder openai", "different-family review (A): claude (anthropic), builder openai", 1)
 	g.Mu.Unlock()
 	refused("no merge on proof: the review rung at the head is C, not one of A ([autonomy] proof_rungs)")
+	// Nor does the streak's pass take the helper's A.
+	g.Mu.Lock()
+	pp := slices.IndexFunc(g.CheckRuns[head], func(r fake.CheckRun) bool { return r.Name == "protected-paths" })
+	g.CheckRuns[head][pp].Conclusion = "success"
+	g.Mu.Unlock()
+	refused("did not record a different-family review", "--set", "autonomy.streak=0", "--set", "autonomy.never=")
+	g.Mu.Lock()
+	g.CheckRuns[head][pp].Conclusion = "failure"
+	g.Mu.Unlock()
 	g.Mu.Lock()
 	g.Runs = g.Runs[:len(g.Runs)-1]
 	g.RefFiles[base][".aayudha/config.toml"] = conf

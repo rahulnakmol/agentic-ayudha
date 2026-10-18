@@ -237,11 +237,13 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		return err
 	}
 	// The review ladder's rung at the head, from the merge gate's own inspect log.
-	rec.Review = autonomy.GateRung(ctx, c, owner, name, n, head)
-	// For proof, the rung must be a fresh judgement from a run GitHub lists as
-	// for this PR into its base, and so must the pack's run: a cached rung, or
-	// a helper PR into a branch with an edited gate, proves nothing.
-	proofRung, fresh := autonomy.GateRungFresh(ctx, c, owner, name, n, head, pr.GetBase().GetRef())
+	// The rung comes only from a run GitHub lists as for this PR into its
+	// base: a helper PR into a branch with an edited gate cannot lend its rung
+	// to the record, the streak's pass, or proof. For proof it must also be a
+	// fresh judgement, and the pack's run bound the same way.
+	var fresh bool
+	rec.Review, fresh = autonomy.GateRungFresh(ctx, c, owner, name, n, head, pr.GetBase().GetRef())
+	proofRung := rec.Review
 	switch {
 	case !autonomy.RunFor(gp.run, n, pr.GetBase().GetRef()):
 		proofRung = fmt.Sprintf("unproven: the pack's run %d is not listed as for PR #%d into %s", gp.run.GetID(), n, pr.GetBase().GetRef())
