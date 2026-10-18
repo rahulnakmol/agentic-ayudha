@@ -615,12 +615,12 @@ func (e *Env) inspectDismiss(ctx context.Context, in Values) error {
 	if err != nil {
 		return Wrap(ExitExternal, err)
 	}
-	l, err := e.Config()
-	if err != nil {
-		return err
+	var ident config.Identity
+	if l, err := e.Config(); err == nil {
+		ident = l.Config.Identity
 	}
 	login := viewer(ctx, c)
-	st := inspectState(comments, login, l.Config.Identity)
+	st := inspectState(comments, login, ident)
 	var f *inspect.Finding
 	if st.Result != nil {
 		for i := range st.Result.Findings {

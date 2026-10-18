@@ -368,13 +368,13 @@ func (e *Env) inspection(ctx context.Context, c *github.Client, repo string, pk 
 	if err != nil {
 		return Wrap(ExitExternal, err)
 	}
-	l, err := e.Config()
-	if err != nil {
-		return err
+	var id config.Identity // zero when config fails to load: only the gate's default writer and self
+	if l, err := e.Config(); err == nil {
+		id = l.Config.Identity
 	}
 	self := viewer(ctx, c)
 	for _, cm := range comments {
-		if !strings.Contains(cm.GetBody(), inspect.Marker) || !inspectWriter(cm.GetUser().GetLogin(), self, l.Config.Identity) {
+		if !strings.Contains(cm.GetBody(), inspect.Marker) || !inspectWriter(cm.GetUser().GetLogin(), self, id) {
 			continue
 		}
 		st := inspect.ParseState(cm.GetBody())
