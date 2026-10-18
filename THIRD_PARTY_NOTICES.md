@@ -65,6 +65,7 @@ plan lists in §2; the rest are pulled in by them.
 | `github.com/remyoudompheng/bigfft` | v0.0.0-20230129092748-24d4a6f8daec | BSD-3-Clause | Via mathutil | <https://github.com/remyoudompheng/bigfft> |
 | `charm.land/bubbletea/v2` | v2.0.9 | MIT | `grill` TUI on a terminal (WP5.3), direct; v2.0.10 needs Go 1.26 | <https://github.com/charmbracelet/bubbletea> |
 | `charm.land/bubbles/v2` | v2.2.1 | MIT | `inbox` on a terminal: the spinner (WP5.6c), direct | <https://github.com/charmbracelet/bubbles> |
+| `github.com/charmbracelet/harmonica` | v0.2.0 | MIT | `inbox` on a terminal: the spring that glides the list's highlight, direct | <https://github.com/charmbracelet/harmonica> |
 | `github.com/sahilm/fuzzy` | v0.1.3 | MIT | `inbox` on a terminal: the finder's fzf-style fuzzy match, direct | <https://github.com/sahilm/fuzzy> |
 | `charm.land/lipgloss/v2` | v2.0.6 | MIT | Colour, themes, and tables on a person's terminal (WP1.1b), direct | <https://github.com/charmbracelet/lipgloss> |
 | `github.com/charmbracelet/ultraviolet` | v0.0.0-20260811164956-006e29f97886 | MIT | Terminal input and rendering, via bubbletea and lipgloss | <https://github.com/charmbracelet/ultraviolet> |
@@ -82,6 +83,20 @@ plan lists in §2; the rest are pulled in by them.
 | `github.com/xo/terminfo` | v0.0.0-20220910002029-abceb7e1c41e | MIT | Terminal capabilities, via colorprofile | <https://github.com/xo/terminfo> |
 | `github.com/mattn/go-isatty` | v0.0.24 | MIT | Terminal detection, via libc (found missing here by `aayu audit`'s licence scan, WP7.6) | <https://github.com/mattn/go-isatty> |
 | `github.com/ncruces/go-strftime` | v1.0.0 | MIT | Time formatting, via libc (found missing here by `aayu audit`'s licence scan, WP7.6) | <https://github.com/ncruces/go-strftime> |
+
+### Colour palettes (`[ui] theme`, in `internal/ui/ui.go`)
+
+The named themes use colour values from each project's published palette. Each project is MIT-licensed; the
+values are recorded here with their source.
+
+| Theme | Palette | Licence | Source |
+|---|---|---|---|
+| `nord` | Nord, by Arctic Ice Studio and Sven Greb | MIT | <https://www.nordtheme.com/docs/colors-and-palettes>, <https://github.com/nordtheme/nord> |
+| `catppuccin-mocha`, `catppuccin-latte` | Catppuccin Mocha and Latte | MIT | <https://catppuccin.com/palette>, <https://github.com/catppuccin/palette> |
+| `gruvbox-dark`, `gruvbox-light` | Gruvbox, by Pavel Pertsev | MIT/X11 (stated in its README; no licence file) | <https://github.com/morhetz/gruvbox> |
+| `dracula` | Dracula, by Zeno Rocha | MIT | <https://draculatheme.com/spec>, <https://github.com/dracula/dracula-theme> |
+| `tokyonight` | Tokyo Night (Night), by enkia | MIT | <https://github.com/enkia/tokyo-night-vscode-theme> |
+| `solarized` | Solarized, by Ethan Schoonover | MIT | <https://ethanschoonover.com/solarized/>, <https://github.com/altercation/solarized> |
 
 ### Shelled out by `self-update` (not bundled)
 

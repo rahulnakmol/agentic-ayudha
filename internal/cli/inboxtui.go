@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"slices"
 	"strconv"
@@ -15,6 +16,7 @@ import (
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/harmonica"
 	"github.com/charmbracelet/x/ansi"
 	gh "github.com/google/go-github/v90/github"
 	"github.com/sahilm/fuzzy"
@@ -34,9 +36,23 @@ import (
 // gather and refreshes behind the card; nothing in Update or View reads the
 // network or a file, so a frame stays far inside 120 fps. --plain,
 // TERM=dumb, and [ui] plain keep the line-by-line inbox (plainInbox).
+//
+// Motion is short and only visual: the next card slides in, the list's
+// highlight glides (a harmonica spring), a done item shows ✓ before it
+// leaves the list, and a refused action shakes the card. A key acts on the
+// state at once, whatever is still moving. NO_COLOR and [ui] motion = false
+// keep it still; colours come from the [ui] theme's roles only.
 
 // inboxRefreshEvery is how often the open inbox asks GitHub what changed.
 const inboxRefreshEvery = 45 * time.Second
+
+// Motion timings: one frame at 120 fps, and how long each movement lasts.
+const (
+	inboxFrame = time.Second / 120
+	inboxSlide = 180 * time.Millisecond // the next card
+	inboxFlash = 250 * time.Millisecond // ✓ on a done item, before it leaves
+	inboxShake = 250 * time.Millisecond // a refused action
+)
 
 // inboxTUI reports whether `aayu inbox` runs the full-screen inbox.
 func (e *Env) inboxTUI(cfg *config.Config) bool {
@@ -70,6 +86,15 @@ func (e *Env) runInboxTUI(ctx context.Context, cfg *config.Config, src *inboxSou
 		}
 	}}
 	m := newInboxModel(repo, login, cfg.UI.Theme, e.Getenv("NO_COLOR") != "")
+	src.progress = func(what string, done, total int) {
+		mu.Lock()
+		f := send
+		mu.Unlock()
+		if f != nil {
+			f(inboxProgressMsg{what, done, total})
+		}
+	}
+	defer func() { src.progress = nil }()
 	if c := e.readInboxCache(repo, login); c != nil {
 		m.merge(c.Items)
 		m.loading, m.fresh = false, c.At
@@ -101,6 +126,7 @@ func (e *Env) runInboxTUI(ctx context.Context, cfg *config.Config, src *inboxSou
 	run := e.TUI
 	if run == nil {
 		m.timer = true
+		m.motion = (cfg.UI.Motion == nil || *cfg.UI.Motion) && e.Getenv("NO_COLOR") == ""
 		run = func(tm tea.Model) error {
 			p := tea.NewProgram(tm, tea.WithInput(e.In), tea.WithOutput(out), tea.WithContext(ctx), tea.WithFPS(120))
 			mu.Lock()
@@ -190,8 +216,13 @@ type (
 		out   string
 		err   error
 	}
-	inboxLogMsg  string
-	inboxTickMsg struct{}
+	inboxLogMsg      string
+	inboxTickMsg     struct{}
+	inboxFrameMsg    time.Time
+	inboxProgressMsg struct {
+		what        string
+		done, total int
+	}
 )
 
 // inboxJob is one write the person asked for.
@@ -267,21 +298,56 @@ type inboxModel struct {
 	w, h    int
 	wrapped map[inboxWrapKey][]string
 	p       *ui.Printer
+	theme   string // [ui] theme, chosen again once the terminal says dark or light
+	bgKnown bool   // the terminal answered the background query
 	spin    spinner.Model
 	zones   []inboxZone
 	frame   string
 	dirty   bool
+
+	load inboxProgressMsg // how far the first read has got
+
+	// Motion: what moves and since when. Only View reads it; keys act on
+	// the state at once.
+	motion    bool
+	ticking   bool
+	cardKey   string
+	cardIn    time.Time
+	refusal   string    // the status a refused action set, shown in the Fail role while it stands
+	refusedAt time.Time // the card shakes for inboxShake after it
+	flash     map[string]time.Time
+	glide     float64 // the list highlight's row, springing to cur
+	glideV    float64
+	spring    harmonica.Spring
 }
 
 func newInboxModel(repo, login, theme string, noColor bool) *inboxModel {
 	p := ui.New(nil, ui.Signals{TTY: true, NoColor: noColor, Theme: theme})
+	p.Theme = ui.ThemeFor(theme, true)
 	return &inboxModel{repo: repo, login: login, state: map[string]string{}, loading: true, w: 80, h: 24, every: inboxRefreshEvery,
-		spin: spinner.New(spinner.WithSpinner(spinner.Dot)), p: p, dirty: true, now: time.Now}
+		spin: spinner.New(spinner.WithSpinner(spinner.Dot)), p: p, theme: theme, dirty: true, now: time.Now,
+		flash: map[string]time.Time{}, spring: harmonica.NewSpring(harmonica.FPS(120), 30, 1)}
 }
 
 func (m *inboxModel) Init() tea.Cmd {
 	m.refreshing = true
-	return tea.Batch(m.spin.Tick, m.gatherCmd())
+	return tea.Batch(m.spinTick(), m.gatherCmd(), tea.RequestBackgroundColor)
+}
+
+// spinTick starts the spinner; still, there is none.
+func (m *inboxModel) spinTick() tea.Cmd {
+	if !m.motion {
+		return nil
+	}
+	return m.spin.Tick
+}
+
+// spinner is the spinner's frame and a space, or nothing when still.
+func (m *inboxModel) spinner() string {
+	if !m.motion {
+		return ""
+	}
+	return m.spin.View() + " "
 }
 
 func (m *inboxModel) gatherCmd() tea.Cmd {
@@ -302,6 +368,12 @@ func (m *inboxModel) tick() tea.Cmd {
 // a done item stays (marked done), one that no longer waits leaves, and a
 // new one joins its part of the list. The cursor stays on its item.
 func (m *inboxModel) merge(fresh []InboxItem) {
+	was := m.cur
+	defer func() {
+		if m.item() >= 0 || was == m.cur {
+			m.glide += float64(m.cur - was)
+		}
+	}()
 	selected := ""
 	if i := m.item(); i >= 0 {
 		selected = m.items[i].key()
@@ -342,19 +414,23 @@ func (m *inboxModel) merge(fresh []InboxItem) {
 
 // layoutRows lists the needs-you items, the housekeeping one by one when
 // expanded, and the housekeeping line.
+// A done item leaves the list, after its ✓ when there is motion.
 func (m *inboxModel) layoutRows() {
 	m.rows = m.rows[:0]
 	house := 0
+	shown := func(it InboxItem) bool { return m.state[it.key()] != "done" || m.flashing(it.key()) }
 	for i, it := range m.items {
-		if !it.kind().Housekeeping {
+		switch {
+		case !shown(it):
+		case !it.kind().Housekeeping:
 			m.rows = append(m.rows, i)
-		} else {
+		default:
 			house++
 		}
 	}
 	if m.expanded {
 		for i, it := range m.items {
-			if it.kind().Housekeeping {
+			if it.kind().Housekeeping && shown(it) {
 				m.rows = append(m.rows, i)
 			}
 		}
@@ -362,6 +438,35 @@ func (m *inboxModel) layoutRows() {
 	if house > 0 {
 		m.rows = append(m.rows, -1)
 	}
+}
+
+// relayout lays the list out again with the cursor on the same item.
+func (m *inboxModel) relayout() {
+	was, key, onHouse := m.cur, "", m.item() < 0
+	if i := m.item(); i >= 0 {
+		key = m.items[i].key()
+	}
+	m.layoutRows()
+	for r, i := range m.rows {
+		if (i >= 0 && m.items[i].key() == key) || (i < 0 && onHouse) {
+			m.cur = r
+			m.glide += float64(r - was)
+			return
+		}
+	}
+	m.cur = min(m.cur, max(len(m.rows)-1, 0))
+	m.sel, m.armed = 0, false
+}
+
+func (m *inboxModel) flashing(key string) bool {
+	t, ok := m.flash[key]
+	return ok && m.now().Sub(t) < inboxFlash
+}
+
+// refuse says why an action did not happen, in the Fail role, and shakes
+// the card.
+func (m *inboxModel) refuse(s string) {
+	m.status, m.refusal, m.refusedAt = s, s, m.now()
 }
 
 // item is the item under the cursor, or -1 (the housekeeping line, or none).
@@ -415,42 +520,107 @@ func (m *inboxModel) choices() []InboxAction {
 }
 
 func (m *inboxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	cmd := m.update(msg)
+	return m, tea.Batch(cmd, m.animate())
+}
+
+// animate notes a new card and asks for the next frame while anything
+// moves; still, it does nothing.
+func (m *inboxModel) animate() tea.Cmd {
+	if !m.motion {
+		m.glide, m.glideV = float64(m.cur), 0
+		return nil
+	}
+	now := m.now()
+	key := ""
+	switch i := m.item(); {
+	case len(m.rows) == 0:
+	case i >= 0:
+		key = m.items[i].key()
+	default:
+		key = "housekeeping"
+	}
+	if key != m.cardKey {
+		m.cardKey, m.cardIn = key, now
+	}
+	if m.ticking || !m.moving(now) {
+		return nil
+	}
+	m.ticking = true
+	return tea.Tick(inboxFrame, func(t time.Time) tea.Msg { return inboxFrameMsg(t) })
+}
+
+func (m *inboxModel) moving(now time.Time) bool {
+	return now.Sub(m.cardIn) < inboxSlide || now.Sub(m.refusedAt) < inboxShake || len(m.flash) > 0 ||
+		math.Abs(m.glide-float64(m.cur)) > 0.01 || math.Abs(m.glideV) > 0.01
+}
+
+// step advances the motion one frame: the highlight's spring, and the ✓ of
+// done items, which leave the list when it lapses.
+func (m *inboxModel) step() {
+	m.glide, m.glideV = m.spring.Update(m.glide, m.glideV, float64(m.cur))
+	if math.Abs(m.glide-float64(m.cur)) < 0.01 && math.Abs(m.glideV) < 0.01 {
+		m.glide, m.glideV = float64(m.cur), 0
+	}
+	gone := false
+	for k := range m.flash {
+		if !m.flashing(k) {
+			delete(m.flash, k)
+			gone = true
+		}
+	}
+	if gone {
+		m.relayout()
+	}
+}
+
+func (m *inboxModel) update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
+	case inboxFrameMsg:
+		m.ticking, m.dirty = false, true
+		m.step()
+	case tea.BackgroundColorMsg:
+		m.bgKnown, m.dirty = true, true
+		m.p.Theme = ui.ThemeFor(m.theme, msg.IsDark())
+	case inboxProgressMsg:
+		if m.loading {
+			m.load, m.dirty = msg, true
+		}
 	case tea.WindowSizeMsg:
 		m.w, m.h, m.dirty = msg.Width, msg.Height, true
 		if m.finding {
 			m.find()
 		}
 	case spinner.TickMsg:
-		if !m.loading && !m.refreshing && len(m.queue) == 0 {
-			return m, nil
+		if !m.motion || !m.loading && !m.refreshing && len(m.queue) == 0 {
+			return nil
 		}
 		var cmd tea.Cmd
 		m.spin, cmd = m.spin.Update(msg)
 		m.dirty = true
-		return m, cmd
+		return cmd
 	case inboxGatheredMsg:
 		m.dirty = true
-		return m, m.gathered(msg)
+		return m.gathered(msg)
 	case inboxTickMsg:
 		if m.refreshing || len(m.queue) > 0 {
-			return m, m.tick()
+			return m.tick()
 		}
 		m.refreshing, m.dirty = true, true
-		return m, tea.Batch(m.spin.Tick, m.gatherCmd())
+		return tea.Batch(m.spinTick(), m.gatherCmd())
 	case inboxLogMsg:
 		if s := strings.TrimSpace(string(msg)); s != "" {
 			m.status, m.dirty = s, true
 		}
 	case inboxDoneMsg:
 		m.dirty = true
-		return m, m.finished(msg)
+		return m.finished(msg)
 	case tea.KeyPressMsg:
 		m.dirty = true
-		return m, m.key(msg)
+		return m.key(msg)
 	case tea.MouseClickMsg:
 		m.dirty = true
-		return m, m.click(msg.Mouse())
+		return m.click(msg.Mouse())
 	case tea.MouseWheelMsg:
 		m.dirty = true
 		switch msg.Mouse().Button {
@@ -460,7 +630,7 @@ func (m *inboxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.move(-1)
 		}
 	}
-	return m, nil
+	return nil
 }
 
 // gathered takes a read of GitHub; a failed refresh keeps the cards and
@@ -531,19 +701,23 @@ func (m *inboxModel) finished(msg inboxDoneMsg) tea.Cmd {
 			}
 		}
 		m.sel, m.armed = 0, false
-		m.status = fmt.Sprintf("#%d: %v.", num, msg.err)
+		m.refuse(fmt.Sprintf("#%d: %v.", num, msg.err))
 		m.queue = nil // the rest were asked for against what the person read
 	case msg.err != nil:
 		m.state[msg.key] = "not done"
 		m.failed++
-		m.status = fmt.Sprintf("#%d not done: %v", num, msg.err)
+		m.refuse(fmt.Sprintf("#%d not done: %v", num, msg.err))
 		m.log = append(m.log, "  not done: #"+strconv.Itoa(num)+": "+msg.err.Error())
 	default:
 		m.state[msg.key] = "done"
+		if m.motion {
+			m.flash[msg.key] = m.now()
+		}
 		m.status = fmt.Sprintf("Done: #%d, %s. It is written to GitHub.", num, job.a.Label)
 		if i := m.item(); i >= 0 && m.items[i].key() == msg.key && len(m.queue) == 0 {
 			m.next()
 		}
+		m.relayout()
 	}
 	if m.quitting {
 		m.queue = nil
@@ -582,7 +756,7 @@ func (m *inboxModel) run() tea.Cmd {
 	if m.total > 1 {
 		m.status = fmt.Sprintf("Applying %d of %d: #%d…", m.total-len(m.queue)+1, m.total, j.it.Number)
 	}
-	return tea.Batch(m.spin.Tick, func() tea.Msg {
+	return tea.Batch(m.spinTick(), func() tea.Msg {
 		fresh, out, err := act(j.it, j.a)
 		return inboxDoneMsg{j.it.key(), fresh, out, err}
 	})
@@ -625,7 +799,7 @@ func (m *inboxModel) key(msg tea.KeyPressMsg) tea.Cmd {
 	case m.finding:
 		return m.findKey(msg)
 	}
-	if len(m.items) == 0 {
+	if len(m.rows) == 0 {
 		if k == "q" || k == "esc" {
 			return tea.Quit
 		}
@@ -665,7 +839,7 @@ func (m *inboxModel) key(msg tea.KeyPressMsg) tea.Cmd {
 	case "R":
 		if !m.refreshing {
 			m.refreshing, m.status = true, "Reading what changed on GitHub…"
-			return tea.Batch(m.spin.Tick, m.gatherCmd())
+			return tea.Batch(m.spinTick(), m.gatherCmd())
 		}
 	default:
 		if len(k) == 1 && k[0] >= '1' && k[0] <= '9' {
@@ -692,7 +866,7 @@ func (m *inboxModel) pick(n int) {
 			return
 		}
 	}
-	m.status = fmt.Sprintf("This card has no choice %d.", n)
+	m.refuse(fmt.Sprintf("This card has no choice %d.", n))
 }
 
 // enter does the selected choice: at once when it is the recommendation of
@@ -720,7 +894,7 @@ func (m *inboxModel) enter() tea.Cmd {
 	it := m.items[i]
 	switch {
 	case m.state[it.key()] == "done":
-		m.status = fmt.Sprintf("#%d is done; it is written to GitHub and not undone here.", it.Number)
+		m.refuse(fmt.Sprintf("#%d is done; it is written to GitHub and not undone here.", it.Number))
 	case c.Command == "open":
 		m.open(it.URL)
 		m.status = "Opened " + it.URL
@@ -745,7 +919,7 @@ func (m *inboxModel) askTidy() {
 		}
 	}
 	if len(jobs) == 0 {
-		m.status = "No housekeeping is left to tidy."
+		m.refuse("No housekeeping is left to tidy.")
 		return
 	}
 	m.ask = &inboxAsk{title: fmt.Sprintf("Tidy all %d housekeeping %s?", len(jobs), plural(len(jobs), "item", "items")),
@@ -915,6 +1089,12 @@ func (m *inboxModel) View() tea.View {
 		m.frame, m.dirty = m.render(), false
 	}
 	v := tea.NewView(m.frame)
+	// A named palette paints its own background and text colour, so it reads
+	// as published on a terminal that is not themed. solarized waits for the
+	// terminal's answer, which picks its dark or light half.
+	if th := m.p.Theme; th.Bg != "" && m.p.Color && (th.Name != "solarized" || m.bgKnown) {
+		v.BackgroundColor, v.ForegroundColor = lipgloss.Color(th.Bg), lipgloss.Color(th.Fg)
+	}
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
 	v.WindowTitle = "aayu inbox: " + m.repo
@@ -972,10 +1152,12 @@ func (m *inboxModel) render() string {
 	}
 	body := h - 3
 	var lines []string
+	sh := m.cardShift()
+	shift := strings.Repeat(" ", sh)
 	switch {
 	case m.loading && len(m.items) == 0:
-		lines = []string{"", m.spin.View() + " Reading the issues and pull requests of " + m.repo + "…"}
-	case len(m.items) == 0:
+		lines = m.skeleton(w, body)
+	case len(m.rows) == 0:
 		lines = []string{"", m.style(ui.Title, "Nothing waits for you."), "", "Every human-only step is done. q quits."}
 	case m.ask != nil:
 		lines = m.askView(w, body)
@@ -993,7 +1175,7 @@ func (m *inboxModel) render() string {
 				l = list[r]
 			}
 			if r < len(card) {
-				c = card[r]
+				c = shift + ansi.Truncate(card[r], w-lw-3-sh, "")
 			}
 			lines = append(lines, l+strings.Repeat(" ", max(lw-ansi.StringWidth(l), 0))+" "+m.style(ui.Muted, "│")+" "+c)
 		}
@@ -1001,7 +1183,9 @@ func (m *inboxModel) render() string {
 		n := min(len(m.rows), 5, max(body/4, 2))
 		lines = m.listView(w, n, 0, 1)
 		lines = append(lines, m.style(ui.Muted, strings.Repeat("─", w)))
-		lines = append(lines, m.cardView(w, body-n-1, 0, n+2)...)
+		for _, l := range m.cardView(w, body-n-1, 0, n+2) {
+			lines = append(lines, shift+ansi.Truncate(l, w-sh, ""))
+		}
 	}
 	if len(lines) > body {
 		lines = lines[:body]
@@ -1023,6 +1207,60 @@ func (m *inboxModel) render() string {
 	return b.String()
 }
 
+// skeleton is the first read's screen: the shape of the list and the card
+// in muted blocks, and how far the read has got.
+func (m *inboxModel) skeleton(w, h int) []string {
+	block := func(n int) string { return m.style(ui.Muted, strings.Repeat("░", max(n, 1))) }
+	say := []string{"", m.spinner() + "Reading the issues and pull requests of " + m.repo + "…"}
+	switch l := m.load; {
+	case l.total > 0:
+		say = append(say, fmt.Sprintf("%s %d of %d items checked", m.bar(l.done, l.total, 16), l.done, l.total))
+	case l.what != "":
+		say = append(say, l.what+"…")
+	}
+	list := []string{"  " + block(2) + " " + block(22) + "  " + block(4), "  " + block(2) + " " + block(17), "  " + block(2) + " " + block(25), "  " + block(2) + " " + block(13)}
+	card := []string{block(18), block(34), block(44), "", block(30), block(40), block(36), "", "  " + block(26), "  " + block(18)}
+	var out []string
+	if w >= 100 {
+		lw := min(max(w/3, 30), 44)
+		right := append(slices.Clone(card), say...)
+		for r := range min(len(right), h) {
+			l := ""
+			if r < len(list) {
+				l = list[r]
+			}
+			out = append(out, l+strings.Repeat(" ", max(lw-ansi.StringWidth(l), 0))+" "+m.style(ui.Muted, "│")+" "+right[r])
+		}
+		return out
+	}
+	out = append(append(out, list[:3]...), m.style(ui.Muted, strings.Repeat("─", w)))
+	return append(append(out, card...), say...)
+}
+
+// cardShift is how far right the card sits this frame: a short slide as a
+// new card comes in, a small shake after a refused action, else none.
+func (m *inboxModel) cardShift() int {
+	if !m.motion {
+		return 0
+	}
+	now := m.now()
+	if d := now.Sub(m.refusedAt); d < inboxShake {
+		return [...]int{0, 2, 0, 2, 0, 1, 0}[int(d*7/inboxShake)]
+	}
+	if d := now.Sub(m.cardIn); d < inboxSlide {
+		p := 1 - float64(d)/float64(inboxSlide)
+		return int(math.Round(4 * p * p))
+	}
+	return 0
+}
+
+// bar is a progress bar of width cells; the counts beside it say the same
+// in words.
+func (m *inboxModel) bar(done, total, width int) string {
+	full := min(done*width/max(total, 1), width)
+	return m.style(ui.OK, strings.Repeat("█", full)) + m.style(ui.Muted, strings.Repeat("░", width-full))
+}
+
 // listView is the list: one row per card, the cursor row reversed (and
 // marked › for a screen reader), the housekeeping folded into one row.
 // x and y place it on the screen, for the mouse.
@@ -1037,31 +1275,41 @@ func (m *inboxModel) listView(w, h, x, y int) []string {
 			numW = max(numW, len(strconv.Itoa(m.items[i].Number))+1)
 		}
 	}
+	hi := m.cur // the highlight: on the cursor, or gliding to it
+	if m.motion {
+		hi = min(max(int(math.Round(m.glide)), 0), max(len(m.rows)-1, 0))
+	}
 	var out []string
 	for r := off; r < len(m.rows) && r < off+h; r++ {
 		i := m.rows[r]
 		var icon, text, num string
-		muted := false
+		muted, done := false, false
 		if i < 0 {
 			icon = inboxTidy.Icon
 			if n := m.houseLeft(); n > 0 {
 				text = fmt.Sprintf("%d housekeeping · A tidies all", n)
 			} else {
-				text, muted = "housekeeping done", true
+				text, done = "✓ housekeeping done", true
 			}
 		} else {
 			it := m.items[i]
 			icon, text, num = it.kind().Icon, it.Title, "#"+strconv.Itoa(it.Number)
-			if st := m.state[it.key()]; st != "" {
-				text, muted = st+" · "+text, st == "done"
+			switch st := m.state[it.key()]; st {
+			case "done":
+				text, done = "✓ done · "+text, true
+			case "":
+			default:
+				text, muted = st+" · "+text, true
 			}
 		}
 		room := max(w-2-3-numW-1, 4)
 		text = ansi.Truncate(text, room, "…")
 		row := icon + " " + text + strings.Repeat(" ", max(room-ansi.StringWidth(text), 0)) + " " + fmt.Sprintf("%*s", numW, num)
 		switch {
-		case r == m.cur:
+		case r == hi:
 			row = reverse("› " + row)
+		case done:
+			row = "  " + m.style(ui.OK, row)
 		case muted:
 			row = "  " + m.style(ui.Muted, row)
 		default:
@@ -1112,9 +1360,7 @@ func (m *inboxModel) cardView(w, h, x, y int) []string {
 	for _, l := range wrapTo(title, w) {
 		top = append(top, inboxBold.Render(l))
 	}
-	for _, l := range wrapTo(kind.Line, w) {
-		top = append(top, m.style(ui.Muted, l))
-	}
+	top = append(top, wrapTo(kind.Line, w)...) // what it means, in the text colour: it is read, not skimmed
 	var counselLines []string
 	if counselText != "" {
 		who := seatIcons[seat] + " " + m.twinName(seat) + ", counsel, not approval"
@@ -1258,13 +1504,19 @@ func (m *inboxModel) findView(w, h int) []string {
 // the right when it fits.
 func (m *inboxModel) statusLine(w int) string {
 	left := m.status
-	if len(m.queue) > 0 || m.loading {
-		left = m.spin.View() + " " + left
+	if m.refusal != "" && left == m.refusal {
+		left = m.style(ui.Fail, left)
+	}
+	if len(m.queue) > 0 || m.loading && len(m.items) > 0 {
+		left = m.spinner() + left
 	}
 	right := ""
 	switch {
+	case m.total > 1 && len(m.queue) > 0:
+		done := m.total - len(m.queue)
+		right = fmt.Sprintf("%s %d/%d", m.bar(done, m.total, min(12, max(w/8, 4))), done, m.total)
 	case m.refreshing && !m.loading:
-		right = m.spin.View() + " refreshing"
+		right = m.spinner() + "refreshing"
 	case !m.fresh.IsZero():
 		right = "updated " + ago(m.now(), m.fresh)
 	}
@@ -1283,7 +1535,7 @@ func (m *inboxModel) keysLine(w int) string {
 	}
 	var keys []kb
 	switch {
-	case len(m.items) == 0:
+	case len(m.rows) == 0:
 		keys = []kb{{"q", "quit", 0}}
 	case m.ask != nil:
 		keys = []kb{{"Enter", "apply all", 0}, {"Esc", "cancel", 0}}

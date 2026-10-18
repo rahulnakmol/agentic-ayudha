@@ -141,7 +141,9 @@ func (c *Config) TeamStage() (stage, why string) {
 // UI is [ui] (WP1.1b).
 type UI struct {
 	Plain bool   `koanf:"plain" jsonschema_description:"Words only on a terminal: no colour, motion, emoji, or box drawing (screen-reader friendly); the same as --plain."`
-	Theme string `koanf:"theme" jsonschema:"enum=auto,enum=saffron,enum=contrast,enum=mono" jsonschema_description:"Colour theme: auto (the terminal's own 16 colours, default), saffron (warm true colour for dark terminals), contrast (bright and bold), or mono (no hue)."`
+	Theme string `koanf:"theme" jsonschema:"enum=auto,enum=saffron,enum=contrast,enum=mono,enum=nord,enum=catppuccin-mocha,enum=catppuccin-latte,enum=gruvbox-dark,enum=gruvbox-light,enum=dracula,enum=tokyonight,enum=solarized" jsonschema_description:"Colour theme: auto (the terminal's own 16 colours, so a themed terminal's palette and its light or dark background apply; default), saffron (warm true colour for dark terminals), contrast (bright and bold), mono (no hue), or a named palette for a terminal that is not themed: nord, catppuccin-mocha, catppuccin-latte, gruvbox-dark, gruvbox-light, dracula, tokyonight, or solarized (dark or light by the terminal's background)."`
+	// Motion is nil (on) unless set; false keeps the inbox still.
+	Motion *bool `koanf:"motion" jsonschema_description:"Animate the full-screen inbox (loading, the next card, the selection, results); default true. false keeps it still. --plain, AAYU_PLAIN=1, [ui] plain, TERM=dumb, and NO_COLOR are always still."`
 }
 
 // Design is [design] (WP6.5). Paths are relative to the repository root.
