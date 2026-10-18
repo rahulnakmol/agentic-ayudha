@@ -180,29 +180,27 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   it measures, and the next stage is the smallest change that removes that limit: a freshness need is met by a more
   frequent export or load, not a read replica; slow queries by an index or a larger engine; another consumer is a
   reason to publish a contract, not by itself a reason to change the store.
-- `## Privacy and retention`: what personal data appears (free text often holds it), who sees per-person rows and who
-  only aggregates (suppress small groups, and every value that would reveal a suppressed count with it: a share, a
-  total, or a difference beside it; until a human confirms wider access, the default is the restrictive one:
-  aggregates only, no free text, the shortest retention the decision needs; when that default leaves the decision
-  unable to act, as when a large share of items has no category, the design proposes the smallest remedy that keeps
-  the default, such as better classification, written as a requirement whose effect the next week measures (the
-  unclassified share after the change), never as a claim that it removes the gap, and may name a wider-access exception (a named reviewer reading
-  redacted text in a restricted view) as an open question that stays off until a human accepts it), who may read each copy (the export,
-  the snapshot, the view) and what enforces it (an access rule the grounding shows; else a proposed restriction,
-  such as only the pipeline's identity and the named owners, written as a requirement with its check, and nothing
-  is built on that copy until the check passes), how long each copy is kept (export, snapshot, aggregate), and how a deletion
-  reaches every copy: the person's rows are removed from the source system (the telemetry store or database the
-  events come from), from each export and snapshot, and aggregates are rebuilt from them within a stated time
-  (an `Assumption:` that fits the pipeline's own schedule). Whether the source can delete one person's rows is a fact only
-  when the grounding says so: a retention setting shows how long data is kept, not that nothing can be deleted
-  sooner. Otherwise write it as `Unverified:`, with the retention as the worst case, and ask it in `## Open questions`. A
-  deletion deadline you propose covers only the copies the design controls (the exports, the snapshot, the
-  aggregates); the source whose delete is unverified is named as the exception, with its worst case, never folded
-  into the same deadline. Keep every copy derived from personal data no longer than the copy
-  it is rebuilt from, aggregates included, so a deletion can always reach it by a rebuild. If the decision needs a
-  longer history, that is an open question for the human (and a privacy review), never solved by calling counts
-  anonymous: suppressing small groups lowers the risk of re-identification, it does not prove anonymity. If the grounding shows that a source cannot delete one person's rows, a deletion request is not met until its
-  retention ages them out: that is the open risk. A pseudonymous ID does not anonymise free text: say who may read the text itself and what is redacted.
+- `## Privacy and retention`: in this order.
+  - What personal data appears (free text often holds it). A pseudonymous ID does not anonymise free text.
+  - Who reads what, per copy. The decision's readers read the view they decide from (the aggregates); the raw
+    copies (the exports and the snapshot) are read only by the pipeline's identity and the owners the grounding
+    names, by an access rule the grounding shows, else as a requirement with its check. Suppress small groups, and
+    every value that would reveal a suppressed count (a share, a total, or a difference beside it). Until a human
+    confirms wider access the readers get aggregates only, no free text.
+  - What the default cannot do. When it leaves the decision unable to act (a large share of items has no
+    category), say so with the cited figure, and name the smallest wider access that would let it act (a named
+    reader the grounding gives, redacted text, a restricted view) as an open question with its default "no"; do
+    not assert a fix, such as better classification, that nothing in the grounding has measured.
+  - How long each copy is kept, and how a deletion reaches it: removed from each export and snapshot, aggregates
+    rebuilt from them within a stated time (an `Assumption:` that fits the pipeline's schedule). Keep every derived
+    copy no longer than the copy it is rebuilt from. A longer history is an open question for the human (and a
+    privacy review), never solved by calling counts anonymous: suppression lowers the risk of re-identification,
+    it does not prove anonymity.
+  - The source. Whether it can delete one person's rows is a fact only when the grounding says so (a retention
+    setting shows how long data is kept, not that nothing can be deleted sooner); otherwise it is `Unverified:`
+    with the retention as the worst case and a question in `## Open questions`. A deletion deadline you propose
+    covers only the copies the design controls; the source is named as the exception, with its worst case, and
+    the open risk is that a deletion request is not met there until its retention ages the rows out.
 - `## Checks`: how we will know the numbers are right: a reconciliation against the source that compares like
   with like (the same event type, filters, and deduplication on both sides, never the metric against all rows), a
   completeness check over the same span the metric reads (its window, plus the outcome cutoff when it has one: for
@@ -317,9 +315,8 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   Tables do not count as prose, but they count as the page: a startup data sketch is the persona's half page, so
   it has two tables, the metrics (with their edge-case rules) and the checks (reconciliation with the skipped-row,
   duplicate, and null thresholds; completeness; a hand-counted fixture; the proposed Completion Goal criterion),
-  and one trigger in `## Design`. Its privacy part is about four lines of prose: what personal data appears and who
-  may read what; one retention and one deletion path stated for every copy derived from personal data at once
-  (the exports, the snapshot, the aggregates); and the source whose delete is unverified as the exception.
+  and one trigger in `## Design`. Its privacy part is the five points above, about one line each, with the retention
+  and deletion path stated once for the copies the design controls.
   `## Decision` adds only what the line under the title does not say. More tables, rows, and thresholds are a
   scaleup's data design, not a better sketch; an evidence sketch's evaluation table keeps every case its set needs.
 - Each part must use its key words, or the check refuses it: `## Metrics` says "grain" and "window"; `## Design`
