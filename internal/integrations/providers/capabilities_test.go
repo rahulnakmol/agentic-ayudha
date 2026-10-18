@@ -22,13 +22,13 @@ func TestCapabilities(t *testing.T) {
 		file, source, auth string
 		want               []want
 	}{
-		{"posthog-works", "posthog", "Bearer phx_test", []want{{true, "project 12345 answered SELECT 1", ""}}},
-		{"posthog-missing-scope", "posthog", "Bearer phx_test", []want{{false, "the key lacks query:read", "https://us.posthog.com/settings/user-api-keys and add the scope query:read"}}},
-		{"posthog-scope-refused", "posthog", "Bearer phx_test", []want{{false, "the key lacks the scope query:read", "add the scope query:read"}}},
-		{"posthog-project-access", "posthog", "Bearer phx_test", []want{{false, "the key cannot read project 12345", "allow project 12345 on the key"}}},
-		{"posthog-wrong-region", "posthog", "Bearer phx_test", []want{{false, "does not accept the key", `set url = "https://eu.posthog.com"`}}},
-		{"posthog-unknown-project", "posthog", "Bearer phx_test", []want{{false, "has no project 12345", "Project settings → Project ID"}}},
-		{"posthog-budget", "posthog", "Bearer phx_test", []want{{false, "hourly query budget is spent", "refills hourly"}}},
+		{"posthog-works", "posthog", "Bearer phx_test", []want{{true, "project 12345 answered SELECT 1", ""}, {true, "project 12345 listed its insight alerts", ""}}},
+		{"posthog-missing-scope", "posthog", "Bearer phx_test", []want{{false, "the key lacks query:read", "https://us.posthog.com/settings/user-api-keys and add the scope query:read"}, {false, "the key lacks alert:read", "add the scope alert:read"}}},
+		{"posthog-scope-refused", "posthog", "Bearer phx_test", []want{{false, "the key lacks the scope query:read", "add the scope query:read"}, {false, "the key lacks alert:read", "add the scope alert:read"}}},
+		{"posthog-project-access", "posthog", "Bearer phx_test", []want{{false, "the key cannot read project 12345", "allow project 12345 on the key"}, {false, "the key lacks alert:read", "add the scope alert:read"}}},
+		{"posthog-wrong-region", "posthog", "Bearer phx_test", []want{{false, "does not accept the key", `set url = "https://eu.posthog.com"`}, {false, "does not accept the key", `set url = "https://eu.posthog.com"`}}},
+		{"posthog-unknown-project", "posthog", "Bearer phx_test", []want{{false, "has no project 12345", "Project settings → Project ID"}, {false, "the key lacks alert:read", "add the scope alert:read"}}},
+		{"posthog-budget", "posthog", "Bearer phx_test", []want{{false, "hourly query budget is spent", "refills hourly"}, {false, "the key lacks alert:read", "add the scope alert:read"}}},
 		{"sentry-works", "sentry", "Bearer sntrys_test", []want{
 			{true, "organization acme (https://us.sentry.io) has project web (4507)", ""},
 			{true, "last hour of sessions for project 4507", ""},

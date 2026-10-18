@@ -62,9 +62,9 @@ then re-syncs the skill copies and `.aayudha/lock.toml`.
 
 **PostHog and Sentry.** When `[integrations.posthog]` or `[integrations.sentry]` is set, the `integrations` row
 first checks that the key reads only, then tries each thing aayudha reads from the provider with one cheap read
-(PostHog: a `SELECT 1` query; Sentry: the organization, its region, and the project, then one hour of sessions,
+(PostHog: a `SELECT 1` query and one alert; Sentry: the organization, its region, and the project, then one hour of sessions,
 error counts, and issues, and one release and one alert). A Sentry token needs `org:read`, `event:read`,
-`project:read`, and `alerts:read`; a PostHog personal API key needs `query:read`. Each line says `works`, or `does not work` with the exact fix: the scope to add to the key, the other
+`project:read`, and `alerts:read`; a PostHog personal API key needs `query:read` and `alert:read`. Each line says `works`, or `does not work` with the exact fix: the scope to add to the key, the other
 region's URL, or the project or organization ID to set. The `provider-mcp` row reads every PostHog or Sentry MCP
 server your hosts have registered and says how to make it read-only and pinned to one project. It fails when a
 committed file holds a key.

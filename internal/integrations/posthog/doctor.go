@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"regexp"
 	"slices"
 	"strings"
@@ -27,6 +28,8 @@ type capability struct {
 var capabilities = []capability{
 	{"HogQL queries", []string{"query:read"}, []string{"measure", "grill", "experiment", "readout"},
 		func(ctx context.Context, c *Client) (string, string, error) { return c.probeQuery(ctx) }},
+	{"insight alerts", []string{"alert:read"}, []string{"runbook"},
+		func(ctx context.Context, c *Client) (string, string, error) { return c.probeAlerts(ctx) }},
 }
 
 // Scopes are the read scopes a PostHog personal API key needs for every
@@ -64,6 +67,22 @@ func (c *Client) probeQuery(ctx context.Context) (string, string, error) {
 		return "", src, fmt.Errorf("%w: SELECT 1 returned %d rows", integrations.ErrProvider, len(res.Results))
 	}
 	return fmt.Sprintf("project %s answered SELECT 1", c.project), src, nil
+}
+
+// probeAlerts lists at most one of the project's insight alerts: it proves
+// the key may read alerts, which runbook checks a runbook's alerts against.
+func (c *Client) probeAlerts(ctx context.Context) (string, string, error) {
+	b, src, err := c.Get(ctx, "alerts", url.Values{"limit": {"1"}})
+	if err != nil {
+		return "", src, err
+	}
+	var res struct {
+		Results []json.RawMessage `json:"results"`
+	}
+	if err := json.Unmarshal(b, &res); err != nil {
+		return "", src, fmt.Errorf("%w: undecodable alerts answer: %w", integrations.ErrProvider, err)
+	}
+	return fmt.Sprintf("project %s listed its insight alerts", c.project), src, nil
 }
 
 // Capabilities checks each capability for doctor: the key's scopes first (a
