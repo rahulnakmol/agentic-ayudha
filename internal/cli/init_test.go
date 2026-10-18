@@ -486,7 +486,7 @@ func TestInitExtras(t *testing.T) {
 	if !strings.Contains(manifest, `"contents":"write"`) || !strings.Contains(manifest, "127.0.0.1:1/callback") {
 		t.Errorf("manifest: %s", manifest)
 	}
-	for _, leak := range []string{"MIIEsecret"} {
+	for _, leak := range []string{"PRIVATE KEY", strings.Split(appKey(), "\n")[1]} {
 		for p, body := range snapshot(t, dir) {
 			if strings.Contains(body, leak) {
 				t.Errorf("private key in %s", p)
@@ -800,6 +800,9 @@ func TestInitIdentityRefusesTheApp(t *testing.T) {
 		if code != ExitBlocked || len(g.Secrets) != 0 || strings.Contains(printed, "installations/new") ||
 			!strings.Contains(printed, "do not install the App: delete it at https://github.com/settings/apps") || !strings.Contains(printed, "aayu init --identity") {
 			t.Fatalf("a %d conversion: exit %d, secrets %v:\n%s", status, code, g.Secrets, printed)
+		}
+		if strings.Contains(printed, "c0de1234c0de5678") {
+			t.Fatalf("a %d conversion printed the one-time code:\n%s", status, printed)
 		}
 	}
 

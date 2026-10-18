@@ -437,8 +437,14 @@ func (in *Init) app(ctx context.Context, x Extras) error {
 		// A 5xx or a lost connection: GitHub created the App when it
 		// redirected, and may have converted the code, so the App is not
 		// one aayu holds the key of.
-		in.note("identity", "app", "*", "not converted", fmt.Sprintf("the conversion failed (%v). Do not install the App: delete it at %s, then run aayu init --identity again", err, appSettings(r)))
-		return fmt.Errorf("%w (%w); do not install the App: delete it at %s", ErrAppNotConverted, err, appSettings(r))
+		// The error names the conversion URL, which carries the one-time
+		// code: report only GitHub's status, never the error itself.
+		why := "the request did not complete"
+		if errors.As(err, &er) && er.Response != nil {
+			why = fmt.Sprintf("GitHub answered %d", er.Response.StatusCode)
+		}
+		in.note("identity", "app", "*", "not converted", fmt.Sprintf("the conversion failed (%s). Do not install the App: delete it at %s, then run aayu init --identity again", why, appSettings(r)))
+		return fmt.Errorf("%w (%s); do not install the App: delete it at %s", ErrAppNotConverted, why, appSettings(r))
 	}
 	// Store the key only for the App aayu asked for, with exactly the
 	// permissions asked for: the browser that posted the manifest is outside
