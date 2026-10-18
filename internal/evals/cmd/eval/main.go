@@ -149,6 +149,13 @@ func run(ctx context.Context) error {
 			return err
 		}
 		res.Group = *group
+		if !res.Scored() {
+			for _, c := range res.Cases {
+				fmt.Printf("  %s: not run: %s\n", c.Case, c.NotRun)
+			}
+			fmt.Printf("::notice::No case of group %s ran, so no results file is written: the group has no results for %s.\n", *group, *sha)
+			return nil
+		}
 		res.Verdict, res.Reasons = evals.Compare(res, base, cfg)
 		if base != nil {
 			res.Baseline = base.SHA

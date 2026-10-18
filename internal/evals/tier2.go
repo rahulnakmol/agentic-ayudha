@@ -779,6 +779,14 @@ func Advisories(cur, base *Results, cfg Config) []string {
 	return notes
 }
 
+// Scored reports whether any case ran. A run in which none did (every case
+// not run) is no evidence for its group: eval writes no results file for it,
+// so a release or the evals gate finds the group's results missing rather
+// than passing, and an earlier run's results for the commit stay the newest.
+func (r *Results) Scored() bool {
+	return len(r.Cases) == 0 || len(ranCases(r.Cases)) > 0
+}
+
 // ranCases drops the cases that did not run (CaseResult.NotRun).
 func ranCases(cs []CaseResult) []CaseResult {
 	var out []CaseResult
@@ -820,8 +828,26 @@ func compare(cur, base *Results, cfg Config) (reasons, advisory []string) {
 		reasons = append(reasons, fmt.Sprintf("mean rubric score %.2f is below %.2f", cur.Mean, cfg.MinMean))
 	}
 	if base != nil {
-		if drop := base.Mean - cur.Mean; drop > cfg.MaxDrop+1e-9 {
-			reasons = append(reasons, fmt.Sprintf("mean rubric score %.2f is %.2f below the baseline %.2f (%s); at most %.2f allowed", cur.Mean, drop, base.Mean, short(base.SHA), cfg.MaxDrop))
+		baseMean := base.Mean
+		if len(ran) < len(cur.Cases) {
+			// A case that did not run is out of the current mean, so the
+			// baseline's is taken over the same cases.
+			ids := map[string]bool{}
+			for _, c := range ran {
+				ids[c.Case] = true
+			}
+			var s []int
+			for _, c := range base.Cases {
+				for _, r := range c.Runs {
+					if ids[c.Case] && r.Status != RunError {
+						s = append(s, r.Score)
+					}
+				}
+			}
+			baseMean = mean(s)
+		}
+		if drop := baseMean - cur.Mean; drop > cfg.MaxDrop+1e-9 {
+			reasons = append(reasons, fmt.Sprintf("mean rubric score %.2f is %.2f below the baseline %.2f (%s); at most %.2f allowed", cur.Mean, drop, baseMean, short(base.SHA), cfg.MaxDrop))
 		}
 		baseCase := map[string]CaseResult{}
 		for _, c := range base.Cases {

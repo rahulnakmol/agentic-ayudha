@@ -426,14 +426,25 @@ func TestSurveyDocsNotRun(t *testing.T) {
 		if !strings.Contains(cr.NotRun, tc.want) || len(cr.Runs) != 0 || len(fake.Requests) != 0 || res.CostUSD != 0 {
 			t.Errorf("%s: not run %q (want %q), %d runs, %d model calls, %.2f USD", tc.path, cr.NotRun, tc.want, len(cr.Runs), len(fake.Requests), res.CostUSD)
 		}
-		if v, reasons := Compare(res, nil, h.Config); v != Pass {
-			t.Errorf("%s: a group with only a case that did not run fails: %v", tc.path, reasons)
+		if v, reasons := Compare(res, nil, h.Config); v != Pass || res.Scored() {
+			t.Errorf("%s: a group with only a case that did not run: verdict %s %v, scored %v; want pass, unscored (no results file)", tc.path, v, reasons, res.Scored())
 		}
 		// Beside a case that ran, the one that did not is not scored.
 		res.Cases = append(res.Cases, CaseResult{Case: "survey/other", PassK: 1, Mean: 5, Runs: []Run{{Status: RunPass, Score: 5, Pass: true}}})
 		res.PassK, res.Mean = 1, 5
-		if v, reasons := Compare(res, nil, h.Config); v != Pass {
-			t.Errorf("%s: a case that did not run counts against the group: %v", tc.path, reasons)
+		if v, reasons := Compare(res, nil, h.Config); v != Pass || !res.Scored() {
+			t.Errorf("%s: a case that did not run counts against the group: %v, scored %v", tc.path, reasons, res.Scored())
+		}
+		// Against a baseline, the drop is measured over the cases that ran: the
+		// other case fell from 5 to 4 while the one that did not run scored 1
+		// there, so the whole baseline's mean (3) would hide the drop.
+		base := &Results{SHA: "base", Mean: 3, Cases: []CaseResult{
+			{Case: "survey/other", PassK: 1, Mean: 5, Runs: []Run{{Status: RunPass, Score: 5, Pass: true}}},
+			{Case: c.ID, PassK: 0, Mean: 1, Runs: []Run{{Status: RunFail, Score: 1}}},
+		}}
+		res.Cases[1].Runs[0].Score, res.Cases[1].Mean, res.Mean = 4, 4, 4
+		if v, reasons := Compare(res, base, h.Config); v != Fail || !strings.Contains(strings.Join(reasons, "; "), "below the baseline 5.00") {
+			t.Errorf("%s: a drop from 5 to 4 on the cases that ran: %s %v", tc.path, v, reasons)
 		}
 	}
 	matching := with(srv.URL+"/guide.pdf", sumHex(pdf)).Survey.Docs
