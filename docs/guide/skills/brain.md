@@ -31,7 +31,8 @@ seat.
   and a template for each note type. `--workstream <name>` adds a workstream with its own index and map.
 - `aayu brain open` to see how to open it in Obsidian (a `git worktree add` of the branch).
 - `aayu brain check` before you push a note: links resolve, frontmatter is valid, every note cites its sources,
-  sentences stay short, and no note copies an issue.
+  sentences stay short, and no note holds a pasted Completion Goal line or issue label. The rest of the no-copy rule
+  is yours to keep.
 - `aayu brain checkpoint` after each release (`aayu release` runs it) and on demand. It refreshes only the marked
   generated blocks and lists the notes a person should review.
 
@@ -47,7 +48,7 @@ aayu brain <action>
 
 | Input | Required | What it does |
 |---|---|---|
-| `<action>` | yes | init: create the brain branch and the vault; checkpoint: refresh the generated blocks from the repository's records and keep every word a person wrote; check: links, frontmatter, sources, STE sentence length, and no copied issue text; open: print how to open the vault in Obsidian. One of: `init`, `checkpoint`, `check`, `open`. |
+| `<action>` | yes | init: create the brain branch and the vault; checkpoint: refresh the generated blocks from the repository's records and keep every word a person wrote; check: links, frontmatter, sources, STE sentence length, and no pasted Completion Goal line or issue label; open: print how to open the vault in Obsidian. One of: `init`, `checkpoint`, `check`, `open`. |
 | `--workstream` | no | With init: add a workstream folder with its own index and map of content, linked up into the root vault. |
 | `--dir` | no | With check: check a local folder (a worktree of the brain branch) instead of the branch's tip on the remote. |
 

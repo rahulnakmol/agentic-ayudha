@@ -121,7 +121,9 @@ func Run(files map[string][]byte, r Records, today string, public bool) (Checkpo
 	out := maps.Clone(files)
 	if _, ok := out[HomePath]; !ok {
 		for p, b := range Skeleton(r.Repo, today, public) {
-			out[p] = b
+			if _, ok := out[p]; !ok { // a vault without Home keeps every file it has
+				out[p] = b
+			}
 		}
 	}
 	c := &cp{files: out, r: r, today: today, v: Load(out)}
@@ -152,6 +154,23 @@ type cp struct {
 	today string
 	v     *Vault
 	err   error
+}
+
+// Index refreshes only the maps of content and Home from the vault's own
+// notes, with no records: init runs it so a new workstream appears in the
+// root graph at once. It returns the files that changed.
+func Index(files map[string][]byte, today string) map[string][]byte {
+	c := &cp{files: maps.Clone(files), today: today, v: Load(files)}
+	c.mocs()
+	c.v = Load(c.files)
+	c.home()
+	out := map[string][]byte{}
+	for p, b := range c.files {
+		if old, ok := files[p]; !ok || string(old) != string(b) {
+			out[p] = b
+		}
+	}
+	return out
 }
 
 // upsert creates the note at p (from create) when it is absent, then sets the

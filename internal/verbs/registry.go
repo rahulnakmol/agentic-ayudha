@@ -726,7 +726,7 @@ var Verbs = []Command{
 		Reader:  "Keeps the product's lasting knowledge as linked notes that link to issues and outlive any one person.",
 		Seat:    ProductStrategist, Lane: LaneChore, Layers: NoLayers(),
 		Inputs: []Input{
-			readOnlyWith(enumIn("action", true, true, "init: create the brain branch and the vault; checkpoint: refresh the generated blocks from the repository's records and keep every word a person wrote; check: links, frontmatter, sources, STE sentence length, and no copied issue text; open: print how to open the vault in Obsidian.", "init", "checkpoint", "check", "open"), "check", "open"),
+			readOnlyWith(enumIn("action", true, true, "init: create the brain branch and the vault; checkpoint: refresh the generated blocks from the repository's records and keep every word a person wrote; check: links, frontmatter, sources, STE sentence length, and no pasted Completion Goal line or issue label; open: print how to open the vault in Obsidian.", "init", "checkpoint", "check", "open"), "check", "open"),
 			flag("workstream", TypeString, "With init: add a workstream folder with its own index and map of content, linked up into the root vault."),
 			flag("dir", TypeString, "With check: check a local folder (a worktree of the brain branch) instead of the branch's tip on the remote."),
 		},

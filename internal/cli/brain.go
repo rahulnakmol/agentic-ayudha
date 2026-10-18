@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -127,6 +128,9 @@ func (e *Env) brainInit(ctx context.Context, ws string) error {
 		for p, b := range brain.Workstream(repo, ws, today) {
 			files[p] = b
 		}
+		for p, b := range brain.Index(files, today) {
+			files[p] = b
+		}
 	}
 	sha, err := w.Create(ctx, ledger.Commit{Message: "brain: create the product brain (aayu brain init)", Files: files})
 	outcome := "created"
@@ -143,6 +147,11 @@ func (e *Env) brainInit(ctx context.Context, ws string) error {
 				if _, ok := existing[p]; !ok {
 					add[p] = b
 				}
+			}
+			if len(add) > 0 { // the root Workstreams map and Home list it in the same commit
+				merged := maps.Clone(existing)
+				maps.Copy(merged, add)
+				maps.Copy(add, brain.Index(merged, today))
 			}
 			outcome = "workstream added"
 			if len(add) == 0 {

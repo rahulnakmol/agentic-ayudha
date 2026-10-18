@@ -127,6 +127,23 @@ func TestCheckpointKeepsHumanTextAndRefreshesGeneratedBlocks(t *testing.T) {
 	}
 }
 
+func TestCheckpointWithoutHomeKeepsTheVault(t *testing.T) {
+	files := skeleton(t)
+	delete(files, HomePath)
+	mine := []byte(strings.Replace(string(files["Decisions/Decisions.md"]), "The durable reasons", "Our own words on the durable reasons", 1))
+	files["Decisions/Decisions.md"] = mine
+	cp, err := Run(files, Records{Repo: "o/r"}, today, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := cp.Files[HomePath]; !ok {
+		t.Error("the checkpoint did not restore Home")
+	}
+	if b, ok := cp.Files["Decisions/Decisions.md"]; ok && !strings.Contains(string(b), "Our own words") {
+		t.Errorf("restoring Home replaced a map a person wrote:\n%s", b)
+	}
+}
+
 func TestCheckpointRendersThePlanAndItsDrift(t *testing.T) {
 	files := skeleton(t)
 	files["Capabilities/Proof.md"] = note(capFM, "# Proof\n")

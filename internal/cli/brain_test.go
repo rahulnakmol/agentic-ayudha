@@ -53,6 +53,9 @@ func TestBrainInitCheckpointCheck(t *testing.T) {
 	vault := filepath.Join(t.TempDir(), "vault")
 	git(t, dir, "fetch", "--quiet", "origin", "brain")
 	git(t, dir, "worktree", "add", "--quiet", vault, "FETCH_HEAD")
+	if b, _ := os.ReadFile(filepath.Join(vault, "Workstreams", "Workstreams.md")); !strings.Contains(string(b), "- [[payments Index]]") {
+		t.Errorf("a workstream added to an existing brain is not on the root Workstreams map:\n%s", b)
+	}
 	human := "# Proof packs\n\n## What it does\n\nIt keeps the evidence for each change.\n"
 	capNote := "---\nid: capability-proof\ntype: capability\ntitle: Proof packs\nowner: product-strategist\nstatus: live\nupdated: 2026-10-01\nreviewed: 2026-10-01\nsources: [\"issue #1\"]\nup: \"[[Capabilities]]\"\nissues: [1]\ntags: [type/capability]\n---\n\n" + human
 	_ = os.WriteFile(filepath.Join(vault, "Capabilities", "Proof packs.md"), []byte(capNote), 0o644)

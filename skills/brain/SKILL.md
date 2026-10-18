@@ -20,7 +20,7 @@ aayu:
         - "checkpoint"
         - "check"
         - "open"
-      description: "init: create the brain branch and the vault; checkpoint: refresh the generated blocks from the repository's records and keep every word a person wrote; check: links, frontmatter, sources, STE sentence length, and no copied issue text; open: print how to open the vault in Obsidian."
+      description: "init: create the brain branch and the vault; checkpoint: refresh the generated blocks from the repository's records and keep every word a person wrote; check: links, frontmatter, sources, STE sentence length, and no pasted Completion Goal line or issue label; open: print how to open the vault in Obsidian."
     - name: workstream
       type: string
       required: false
