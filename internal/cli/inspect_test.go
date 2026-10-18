@@ -1667,6 +1667,7 @@ func TestInspectReviewTools(t *testing.T) {
 		{inspect.ReviewModelURLVar, "", "the variable AAYU_REVIEW_MODEL_URL is not set: add it in Settings → Environments → code-review"},
 		{inspect.ReviewModelKeyVar, "", "the secret AAYU_REVIEW_MODEL_KEY is not set: add it in Settings → Environments → code-review"},
 		{"", "https://user:hunter2@gw.example/v1?api-key=hunter2", "AAYU_REVIEW_MODEL_URL must be the model endpoint's https base URL"},
+		{"", "https://gw.example/v1/chat/completions", "ending before /chat/completions, /responses, or /messages"}, // the client appends it
 	} {
 		_, env, opts, prN, model := setup("ci")
 		delete(env, c.drop)

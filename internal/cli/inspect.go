@@ -935,8 +935,8 @@ func (e *Env) useReviewModel(c *config.Config) error {
 	if raw := e.Getenv(inspect.ReviewModelURLVar); raw != "" {
 		style := e.Getenv(inspect.ReviewModelStyleVar)
 		var bad error
-		if u, err := url.Parse(raw); err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
-			bad = fmt.Errorf("%s must be the model endpoint's https base URL (such as %s), with no credentials or query in it; the key goes in %s",
+		if u, err := url.Parse(raw); err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || operationPath(u.Path) {
+			bad = fmt.Errorf("%s must be the model endpoint's https base URL (such as %s), ending before /chat/completions, /responses, or /messages, with no credentials or query in it; the key goes in %s",
 				inspect.ReviewModelURLVar, inspect.RecommendedReviewURL, inspect.ReviewModelKeyVar)
 		} else if !slices.Contains([]string{"", models.StyleMessages, models.StyleResponses, models.StyleChat}, style) {
 			bad = fmt.Errorf("%s = %q: want messages, responses, or chat", inspect.ReviewModelStyleVar, style)
@@ -962,6 +962,18 @@ func (e *Env) useReviewModel(c *config.Config) error {
 		c.Inspect.PaidReviewer = m
 	}
 	return nil
+}
+
+// operationPath reports whether p ends in a model API operation, which the
+// client appends itself, so a URL ending in one would be called twice over.
+func operationPath(p string) bool {
+	p = strings.TrimSuffix(p, "/")
+	for _, op := range []string{"/chat/completions", "/responses", "/messages"} {
+		if strings.HasSuffix(p, op) {
+			return true
+		}
+	}
+	return false
 }
 
 // missingReviewModel names what the CI review lacks: the endpoint, the
