@@ -119,6 +119,9 @@ func TestFloorCapabilityMapFunctions(t *testing.T) {
 		"tool.py":          "#!/usr/bin/env python3\ndef run():\n    pass\n",
 		"guard.py":         "def go():\n    pass\n\n\nif __name__ == \"__main__\":\n    go()\n",
 		"util.hxx":         "class LineA {}; class LineB {};\nenum class Status { Ready };\nunion Value { int i; double d; };\n",
+		"rlib/src/lib.rs":  "pub fn parse(s: &str) -> usize {\n    s.len()\n}\n\nfn helper() {}\n\npub(crate) fn inner() {}\n",
+		"App.java":         "public class App {\n    public static void main(String[] args) {}\n}\n",
+		"Program.cs":       "class Program {\n    static void Main(string[] args) {}\n}\n",
 		"c.h":              "typedef struct ctx ctx_t;\ntypedef unsigned status;\ntypedef int (*cb_t)(int, char);\ntypedef struct { int x; } point;\nvoid start(), stop();\ntypedef struct node { int v; } node;\ntypedef struct Context Context;\nusing Callback = void (*)(int);\ntemplate <class T> using List = T*;\nstruct Opaque;\nenum class Mode : int;\nstruct Opaque *open_it(void);\nstruct node;\n",
 	} {
 		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0o755); err != nil {
@@ -132,7 +135,7 @@ func TestFloorCapabilityMapFunctions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	all := []string{"sym:parse/parse.go#Parse", "sym:parse/parse.go#Status", "sym:fmtlib.py#render", "cmd/tool/main.go:3", "tool.py:1", "guard.py:5", "sym:util.hxx#LineA", "sym:util.hxx#LineB", "util.hxx:2", "util.hxx:3", "c.h:1-12"}
+	all := []string{"sym:parse/parse.go#Parse", "sym:parse/parse.go#Status", "sym:fmtlib.py#render", "cmd/tool/main.go:3", "tool.py:1", "guard.py:5", "sym:util.hxx#LineA", "sym:util.hxx#LineB", "util.hxx:2", "util.hxx:3", "c.h:1-12", "sym:rlib/src/lib.rs#parse", "App.java:1-2", "Program.cs:1-2"}
 	base := func() Draft {
 		return Draft{Capabilities: []Claim{{ID: "C1", Name: "Parse", Text: "Parses.", Basis: "observed", Cites: slices.Clone(all)}}}
 	}
@@ -149,6 +152,9 @@ func TestFloorCapabilityMapFunctions(t *testing.T) {
 		{"match", "a header's public union left out", without("util.hxx:3"), "util.hxx:3 (union Value)", true},
 		{"match", "a C header's typedefs and declarators left out", without("c.h:1-12"),
 			"c.h:1 (type ctx_t), 10 (opaque Opaque), 11 (opaque Mode), 12 (function open_it), 2 (type status), 3 (type cb_t), 4 (type point), 5 (function start), 5 (function stop), 6 (struct node), 7 (type Context), 8 (type Callback), 9 (type List)", true},
+		{"match", "a Rust library's pub function left out", without("sym:rlib/src/lib.rs#parse"), "rlib/src/lib.rs:1 (function parse)", true},
+		{"match", "a Java program's main left out", without("App.java:1-2"), "App.java:1 (class App), 2 (App::main)", true},
+		{"match", "a C# program's Main left out", without("Program.cs:1-2"), "Program.cs:1 (class Program), 2 (Program::Main)", true},
 		{"match", "a Python module's public function left out", without("sym:fmtlib.py#render"), "fmtlib.py:1 (function render)", true},
 		{"match", "the second class on a line, its neighbour's symbol cited", without("sym:util.hxx#LineB"), "util.hxx:1 (class LineB)", true},
 		{"near miss", "the first class on that line, its neighbour's symbol cited", without("sym:util.hxx#LineA"), "util.hxx:1 (class LineA)", true},
@@ -342,7 +348,7 @@ func TestFloorRunnerPrograms(t *testing.T) {
 		{"near miss", "a test that drives the program through a helper", set(func(g *CaseSet) { g.Runners = []string{"test:tests/test_render.py"} }), "case set G1", false},
 		{"near miss", "a spec that calls the program only at file scope, after importing it", set(func(g *CaseSet) { g.Runners = []string{"test:spec/render_spec.py"} }), "case set G1", false},
 	})
-	write("other.py", "#!/usr/bin/env python3\nimport lib\n\n\ndef never():\n    import lazy\n\n\ndef hush(x):\n    return x\n\n\ndef mute(env):\n    env.register('hush', hush)\n\n\ndef loud(env):\n    env.register('boom', hush)\n\n\nloud(lib.Env())\nprint(lib.render(2))\n")
+	write("other.py", "#!/usr/bin/env python3\nimport lib\n\n\ndef never():\n    import lazy\n\n\ndef hush(x):\n    return x\n\n\ndef mute(env):\n    env.register('hush', hush)\n\n\ndef loud(env):\n    env.register('boom', hush)\n\n\ncallback = mute\nloud(lib.Env())\nprint(lib.render(2))\n")
 	write("cases/hush.js", "hush(1);\n")
 	write("cases/boom.js", "boom(1);\n")
 	// Nine functions named go: a call edge lists eight, and its name resolves the
@@ -399,7 +405,7 @@ func TestFloorRunnerPrograms(t *testing.T) {
 		{"match", "the harness's registration, from a program that never makes it", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/probe.js"} }),
 			"cases/probe.js:1 calls probe, which runner entry:other.py:1 does not register", true},
 		{"negated", "a script whose top-level code calls the function that registers it", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/boom.js"} }), "case set G1", false},
-		{"match", "a function of the script its top-level code never calls", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/hush.js"} }),
+		{"match", "a function of the script its top-level code only names (callback = mute), never calls", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/hush.js"} }),
 			"cases/hush.js:1 calls hush, which runner entry:other.py:1 does not register", true},
 		{"match", "a function of the guard's file the guard never calls", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:tool.py:11"}, []string{"cases/hum.js"} }),
 			"cases/hum.js:1 calls hum, which runner entry:tool.py:11 does not register", true},

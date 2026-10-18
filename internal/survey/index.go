@@ -313,7 +313,7 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 				}
 			}
 		}
-		s := &scanned{raw: string(raw)}
+		s := &scanned{raw: string(raw), lang: lang.Name}
 		files[f.Path] = s
 		if f.Role != "build" && lang.Syntax == syntaxBuild {
 			ix.buildTraps(f.Path, s.raw) // an included build file: cmake/UserOverride.cmake, rules.mk
@@ -459,8 +459,10 @@ func (ix *Index) guardCalls(p string, s *scanned, byName map[string][]string) {
 
 // scriptCalls records what a script's file-scope code names as edges from
 // its script entry: a script runs its top-level lines, which no function
-// holds, so it reaches the functions they name and no others. A name counts
-// with or without parentheses, as shell, Perl, and Ruby call without them.
+// holds, so it reaches the functions they name and no others. In shell,
+// Perl, and Ruby a name counts with or without parentheses, as they call
+// without them; in Python and PHP only a call does (callback = install runs
+// nothing).
 func (ix *Index) scriptCalls(p string, s *scanned, byName map[string][]string) {
 	from := "entry:" + p + ":1"
 	if !slices.ContainsFunc(ix.Entries, func(e Fact) bool { return e.ID == from && e.Kind == "script" }) {
@@ -474,7 +476,11 @@ func (ix *Index) scriptCalls(p string, s *scanned, byName map[string][]string) {
 		if inDef(k + 1) {
 			continue
 		}
-		for _, w := range wordRe.FindAllString(text, -1) {
+		for _, loc := range wordRe.FindAllStringIndex(text, -1) {
+			w := text[loc[0]:loc[1]]
+			if (s.lang == "python" || s.lang == "php") && !strings.HasPrefix(strings.TrimLeft(text[loc[1]:], " \t"), "(") {
+				continue
+			}
 			if to := byName[w]; len(to) > 0 && !cKeywords[w] && !seen[w] {
 				seen[w] = true
 				ix.Edges = append(ix.Edges, callEdge(from, w, to, p+":"+itoa(k+1)))
@@ -500,6 +506,7 @@ func callEdge(from, name string, to []string, at string) Edge {
 type scanned struct {
 	code  string // comments, literals, and (C family) directives blanked
 	raw   string
+	lang  string
 	calls []call
 	syms  []Symbol
 }
@@ -595,12 +602,13 @@ func (ix *Index) entries(file, role, lang, raw string, syms []Symbol) {
 		switch {
 		case s.Kind == "program":
 			add("main", s.line, s.Name)
-		case isDefKind(s.Kind) && (n == "main" || n == "WinMain" || n == "wmain") && !strings.Contains(s.Name, "::"):
+		case isDefKind(s.Kind) && (n == "main" || n == "WinMain" || n == "wmain") && !strings.Contains(s.Name, "::"),
+			lang == "java" && s.Kind == "method" && n == "main", lang == "csharp" && s.Kind == "method" && n == "Main": // App::main, Program::Main
 			add("main", s.line, s.Name)
 		case s.Public && role == "source" && (lang == "php" || lang == "python" || lang == "ruby" || lang == "javascript" || lang == "typescript" || lang == "java" || lang == "csharp" || lang == "go" || lang == "cpp" || lang == "c" || lang == "rust"):
 			// A function defined in a C or C++ header (inline int parse(…) {…}) is
 			// part of the API every includer calls, as a method is.
-			if isDefKind(s.Kind) && (strings.Contains(s.Name, "::") || (lang == "c" || lang == "cpp") && isHeader(file) || exportsFuncs(lang, raw)) || !isDefKind(s.Kind) && (s.Kind == "class" || s.Kind == "struct" || s.Kind == "interface" || s.Kind == "trait" || s.Kind == "type" || s.Kind == "enum" || s.Kind == "union") {
+			if isDefKind(s.Kind) && (strings.Contains(s.Name, "::") || (lang == "c" || lang == "cpp") && isHeader(file) || exportsFuncs(lang, raw) || lang == "rust" && rustPub(raw, s)) || !isDefKind(s.Kind) && (s.Kind == "class" || s.Kind == "struct" || s.Kind == "interface" || s.Kind == "trait" || s.Kind == "type" || s.Kind == "enum" || s.Kind == "union") {
 				add("api", s.line, s.Kind+" "+s.Name)
 			}
 		}
@@ -613,6 +621,16 @@ func (ix *Index) entries(file, role, lang, raw string, syms []Symbol) {
 	if shebang.MatchString(raw) && (lang == "shell" || lang == "perl" || lang == "python" || lang == "ruby" || lang == "php") {
 		add("script", 1, strings.SplitN(raw, "\n", 2)[0])
 	}
+}
+
+// rustPub reports whether a Rust function is declared pub (not pub(crate)):
+// a library's callers reach it.
+func rustPub(raw string, s Symbol) bool {
+	lines := strings.Split(raw, "\n")
+	if s.line < 1 || s.line > len(lines) {
+		return false
+	}
+	return regexp.MustCompile(`\bpub\s+(?:(?:const|async|unsafe|extern\s*(?:"[^"]*")?)\s+)*fn\s+` + regexp.QuoteMeta(s.Name) + `\b`).MatchString(lines[s.line-1])
 }
 
 // exportsFuncs reports whether a file's public top-level functions are an API
