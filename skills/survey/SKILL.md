@@ -197,6 +197,14 @@ an impossibility ("cannot be reproduced in Rust"), or a consequence of a change 
 links changes when userdata is dropped") needs its own evidence: trace every path the count covers, probe it, or
 write it as a risk to check or a question. A modernisation risk says what to check and why, not what will happen.
 
+**A fact needs its path or its run.** Every statement of fact about behaviour, output, a number, or a default (what
+the program prints, returns, or accepts; a count, a length, a digit, a computed value; what a mode, a build, or a
+host does; what a default is today) cites the code path that produces it (`path:line` or a symbol, for that mode and
+that build) or a run this survey actually did (its probe and the result it recorded). Anything else is not a fact:
+write it as `inferred` with the unverified step named, as a risk to check, or as a question. Without that citation,
+never write "confirmed" (it means a person answered), "verified", "always", "never", or "in every mode", and never
+report a probe, a build, or an output you did not run: name it as a probe to run.
+
 Code shows what software does. It never shows who uses it, for what, or why: a product claim is `stated`,
 `inferred` with reasoning, `confirmed`, or `unknown`, never `observed`. Never fill a gap with a plausible guess; a
 gap is an `unknown` with a question, and a backlog item never rests on one.
@@ -347,6 +355,11 @@ for the history, which branch holds a file) is a guess, so state only what the l
 each public interface the draft names belongs to some capability. Correct, narrow, or remove what they do not
 support, or turn it into a risk or a question, using the checks in the list above. Then run `aayu survey --draft` again, and tell the
 person which items the self-check changed and why. The draft you show is the corrected one.
+
+Last, read the corrected draft once more for facts alone. Mark every sentence that states behaviour, output, a
+number, or a default, in every section and field (claims, traps, interfaces, risks, steps, question defaults). For
+each, point to the code path or the recorded run that shows it. A sentence with neither becomes `inferred` with its
+unverified step named, a risk, or a question, and loses any "confirmed", "verified", "always", "never", or "every".
 
 ## 3. Interview the person for the gaps
 
