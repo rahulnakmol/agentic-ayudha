@@ -56,6 +56,7 @@ type Event struct {
 	Input  map[string]any // the tool's arguments
 	Server string         // Cursor: the MCP server's URL or command
 	Shell  string         // the shell command, for a shell tool
+	Dashed bool           // GitHub Copilot: Tool is <server>-<tool>, with the server's registered name
 }
 
 // Verdict is what Decide says about one call. Provider is "" when the call
@@ -140,6 +141,9 @@ func mcpTool(e Event, servers map[string]string) (provider, tool string) {
 			server, tool = rest[:i], rest[i+2:]
 		}
 	}
+	if server == "" && e.Dashed {
+		return dashedTool(e.Tool, servers)
+	}
 	if server == "" {
 		server = e.Server
 	}
@@ -150,6 +154,27 @@ func mcpTool(e Event, servers map[string]string) (provider, tool string) {
 		return p, tool
 	}
 	return servers[server], tool
+}
+
+// dashedTool splits Copilot's <server>-<tool> at the longest registered
+// server name it starts with (a tool name may hold hyphens too), else at the
+// first hyphen when the part before it names a provider.
+func dashedTool(name string, servers map[string]string) (provider, tool string) {
+	best := ""
+	for s := range servers {
+		if strings.HasPrefix(name, s+"-") && len(s) > len(best) {
+			best = s
+		}
+	}
+	if best != "" {
+		return servers[best], name[len(best)+1:]
+	}
+	if i := strings.Index(name, "-"); i > 0 {
+		if p := ProviderOf(name[:i]); p != "" {
+			return p, name[i+1:]
+		}
+	}
+	return "", ""
 }
 
 // ProviderOf names the provider a server name, URL, command, or package
@@ -389,18 +414,25 @@ func decideCLI(cli string, args []string, o Options) Verdict {
 // tool_name and tool_input (an object); Cursor's beforeMCPExecution sends
 // tool_name, tool_input (a JSON string), and the server's url or command, and
 // beforeShellExecution sends command; the Amp plugin sends what Claude Code
-// does.
+// does; GitHub Copilot's preToolUse sends toolName (<server>-<tool> for an MCP
+// tool, bash for its shell) and toolArgs (an object or a JSON string).
 func FromHook(event []byte) (Event, bool) {
 	var raw struct {
 		ToolName  string          `json:"tool_name"`
 		ToolInput json.RawMessage `json:"tool_input"`
 		URL       string          `json:"url"`
 		Command   string          `json:"command"`
+		Copilot   string          `json:"toolName"`
+		Args      json.RawMessage `json:"toolArgs"`
 	}
 	if json.Unmarshal(event, &raw) != nil {
 		return Event{}, false
 	}
-	e := Event{Tool: raw.ToolName, Server: raw.URL}
+	dashed := false
+	if raw.ToolName == "" && raw.Copilot != "" {
+		raw.ToolName, raw.ToolInput, dashed = raw.Copilot, raw.Args, !isShellTool(raw.Copilot)
+	}
+	e := Event{Tool: raw.ToolName, Server: raw.URL, Dashed: dashed}
 	in := map[string]any{}
 	if len(raw.ToolInput) > 0 {
 		if json.Unmarshal(raw.ToolInput, &in) != nil {
@@ -426,7 +458,7 @@ func FromHook(event []byte) (Event, bool) {
 // isShellTool reports a host's shell tool, whose command input is a shell command.
 func isShellTool(name string) bool {
 	switch strings.ToLower(name) {
-	case "bash", "shell", "shell_command", "local_shell", "exec_command":
+	case "bash", "powershell", "shell", "shell_command", "local_shell", "exec_command":
 		return true
 	}
 	return false

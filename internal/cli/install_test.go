@@ -289,6 +289,14 @@ func TestHookProviderCalls(t *testing.T) {
 			[]string{"--host", "cursor"}, 2, `"permission":"deny"`, "experiment-launch"},
 		{"amp event flag", "", []string{"--host", "amp", "--event", `{"tool_name":"mcp__sentry__execute_sentry_tool","tool_input":{"name":"update_issue"}}`}, 2, "", "`update_issue`"},
 		{"other MCP server", `{"tool_name":"mcp__github__create_issue","tool_input":{}}`, []string{"--host", "claude"}, 0, "", ""},
+		{"copilot sentry read", `{"sessionId":"05b234bf-9c41-41f2-8604-0ff1d8dc3011","cwd":"/r","timestamp":1792286000000,"toolName":"sentry-find_dropped_events","toolArgs":{"statsPeriod":"7d"}}`,
+			[]string{"--host", "copilot"}, 0, "", ""},
+		{"copilot posthog write", `{"sessionId":"s","toolName":"posthog-update-feature-flag","toolArgs":"{\"id\":3}"}`,
+			[]string{"--host", "copilot"}, 2, `"permissionDecision":"deny"`, "`update-feature-flag`"},
+		{"copilot bash read", `{"sessionId":"s","toolName":"bash","toolArgs":"{\"command\":\"posthog-cli exp query run \\\"SELECT 1 LIMIT 1\\\"\"}"}`,
+			[]string{"--host", "copilot"}, 0, "", ""},
+		{"copilot bash release", `{"sessionId":"s","toolName":"bash","toolArgs":{"command":"bash -c 'sentry-cli releases new 1.2.3'"}}`,
+			[]string{"--host", "copilot"}, 2, `"permissionDecision":"deny"`, "product's CI"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			code, out, errs := runIn(t, env, opts, tt.stdin, append([]string{"hook", "pre-tool"}, tt.args...)...)

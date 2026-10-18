@@ -14,7 +14,7 @@ import (
 // (Decision #449): where it is registered and how it is reached, so doctor
 // can say whether it is set up to read only.
 type ProviderServer struct {
-	Host      string // claude, cursor, codex, amp
+	Host      string // claude, cursor, codex, amp, copilot
 	File      string // as shown to a person: .mcp.json, ~/.cursor/mcp.json
 	Committed bool   // the file is in the repository, so whatever it holds is shared
 	Name      string
@@ -39,7 +39,9 @@ type mcpServer struct {
 // ProviderServers lists the PostHog and Sentry MCP servers in every host
 // config aayudha knows: the repository's .mcp.json, .cursor/mcp.json, and
 // .codex/config.toml, and the person's ~/.claude.json (this project's and
-// global servers), ~/.cursor/mcp.json, Amp settings, and Codex config.
+// global servers), ~/.cursor/mcp.json, Amp settings, Copilot CLI's
+// ~/.copilot/mcp-config.json, and Codex config. Copilot also reads the
+// repository's .mcp.json.
 func ProviderServers(root, home, codexHome string) []ProviderServer {
 	var out []ProviderServer
 	add := func(host, file string, committed bool, servers map[string]mcpServer) {
@@ -107,6 +109,7 @@ func ProviderServers(root, home, codexHome string) []ProviderServer {
 		}
 		add("cursor", "~/.cursor/mcp.json", false, readJSON(filepath.Join(home, ".cursor", "mcp.json"), "mcpServers"))
 		add("amp", "~/"+AmpSettings, false, readJSON(filepath.Join(home, filepath.FromSlash(AmpSettings)), "amp.mcpServers"))
+		add("copilot", "~/.copilot/mcp-config.json", false, readJSON(filepath.Join(home, ".copilot", "mcp-config.json"), "mcpServers"))
 	}
 	if codexHome != "" {
 		add("codex", filepath.Join(codexHome, "config.toml"), false, readTOML(filepath.Join(codexHome, "config.toml")))

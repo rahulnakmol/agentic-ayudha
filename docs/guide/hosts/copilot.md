@@ -169,8 +169,10 @@ Two parts of Copilot are not wired to aayudha yet:
 - **Copilot code review.** Requesting `copilot-pull-request-reviewer[bot]` on a pull request would make it a reviewer,
   once `inspect` can record which model family it used.
 
-aayudha's guard that lets a host's own PostHog or Sentry MCP server or CLI only read does not cover Copilot yet:
-it reads the hook format of Claude Code, Codex, and Cursor, and Copilot sends `toolName` and `toolArgs` instead.
+aayudha's guard that lets a host's own PostHog or Sentry MCP server or CLI only read covers Copilot: the `preToolUse`
+hook reads Copilot's `toolName` and `toolArgs`, splits an MCP tool's `<server>-<tool>` name at the server's name in
+`.mcp.json` or `~/.copilot/mcp-config.json`, and checks `bash` commands as it does on the other hosts. The calls it
+lets through are not logged under Copilot yet, because aayu does not install Copilot's `postToolUse` hook.
 
 Copilot does not run aayudha's loops either: `aayu install --loops` covers Amp, Cursor, Claude Code, Codex, and GitHub
 Actions.

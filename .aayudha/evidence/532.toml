@@ -1,0 +1,11 @@
+[[criterion]]
+id = 1
+tests = ["./internal/cli:TestHookProviderCalls", "./internal/integrations/hostcall:TestFromHook"]
+
+[[criterion]]
+id = 2
+tests = ["./internal/integrations/hostcall:TestDecide"]
+
+[[criterion]]
+id = 3
+tests = ["./internal/hosts:TestGoldenTrees"]
