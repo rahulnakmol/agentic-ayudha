@@ -8,4 +8,4 @@ tests = ["./internal/production:TestPostHogSource", "./internal/integrations/pos
 
 [[criterion]]
 id = 3
-tests = ["./internal/production:TestPostHogSource"]
+tests = ["./internal/production:TestPostHogSource", "./internal/production:TestPostHogSourceUntrusted"]

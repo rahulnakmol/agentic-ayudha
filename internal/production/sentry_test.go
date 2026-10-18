@@ -279,3 +279,34 @@ func (n noQuery) Query(context.Context, string, map[string]any) ([]byte, string,
 	n.t.Error("a request was made")
 	return nil, "", errors.New("no calls")
 }
+
+// TestPostHogSourceUntrusted: PostHog's answer is data. An answer of the
+// wrong shape is an error naming the read, never rows; a failed read comes
+// back as the provider's error; an unbounded query sends nothing.
+func TestPostHogSourceUntrusted(t *testing.T) {
+	from := time.Date(2026, 10, 17, 8, 0, 0, 0, time.UTC)
+	for _, kind := range []string{"logs", "exceptions"} {
+		q, _ := ParseQuery(kind+" where service=web", from, from.Add(time.Hour))
+		if _, _, err := (PostHog{API: phAnswer{body: `"not the shape"`}, Project: "12345"}).Run(context.Background(), q); err == nil || !strings.Contains(err.Error(), "undecodable") {
+			t.Errorf("%s: err %v; want an undecodable answer", kind, err)
+		}
+		failed := errors.New("posthog: 403 Forbidden")
+		if _, pv, err := (PostHog{API: phAnswer{err: failed}, Project: "12345"}).Run(context.Background(), q); !errors.Is(err, failed) || len(pv.Requests) != 1 {
+			t.Errorf("%s: err %v, provenance %+v; want the provider's error and the request it made", kind, err, pv)
+		}
+	}
+	q, _ := ParseQuery("logs where service=web", from, from.Add(8*24*time.Hour))
+	if _, pv, err := (PostHog{API: phAnswer{err: errors.New("no calls")}, Project: "12345"}).Run(context.Background(), q); err == nil || len(pv.Requests) != 0 {
+		t.Errorf("an 8-day window: err %v, requests %v; want it refused before any request", err, pv.Requests)
+	}
+}
+
+// phAnswer answers every PostHog query with one body or one error.
+type phAnswer struct {
+	body string
+	err  error
+}
+
+func (a phAnswer) Query(context.Context, string, map[string]any) ([]byte, string, error) {
+	return []byte(a.body), "POST /api/projects/12345/query/", a.err
+}

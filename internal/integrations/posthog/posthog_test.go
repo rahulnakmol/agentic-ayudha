@@ -41,6 +41,19 @@ func TestQuery(t *testing.T) {
 		t.Fatalf("Query = %s, %q, %v; want the answer and the POST it sent", got, req, err)
 	}
 
+	c, r = client(fixture.Interaction{Method: "GET", URL: "https://us.posthog.com/api/personal_api_keys/@current/", Status: 401, Response: []byte(`{"detail":"Invalid token"}`)})
+	if _, _, err = c.Query(context.Background(), "aayudha logs", node); err == nil {
+		t.Error("a rejected key: no error; want the scope read's failure")
+	}
+	r.Done()
+
+	c, r = client(scope(`["query:read"]`), fixture.Interaction{Method: "POST", URL: "https://us.posthog.com/api/projects/12345/query/", Body: body, Status: 500,
+		Response: []byte(`{"detail":"server error"}`)})
+	if _, req, err := c.Query(context.Background(), "aayudha logs", node); err == nil || !strings.HasPrefix(req, "POST ") {
+		t.Errorf("a failed query: %q, %v; want the error with the request it sent", req, err)
+	}
+	r.Done()
+
 	c, r = client(scope(`["query:read","feature_flag:write"]`))
 	_, _, err = c.Query(context.Background(), "aayudha logs", node)
 	r.Done()
