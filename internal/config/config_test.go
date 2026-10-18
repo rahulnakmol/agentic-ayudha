@@ -139,6 +139,40 @@ func TestRejects(t *testing.T) {
 	}
 }
 
+// TestIdentityExchange: the exchange is an https origin, and an uncommitted
+// config.local.toml never names it, since it receives the host's identity token
+// and serves the page where the owner's App is created (Story #594).
+func TestIdentityExchange(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		files map[string]string
+		set   []string
+		want  string
+	}{
+		{"exchange from config.local.toml", map[string]string{"repo/.aayudha/config.local.toml": "version = 1\n[identity]\nexchange = \"https://sts.example.com\"\n"}, nil, "[identity] exchange is read only from .aayudha/config.toml"},
+		{"exchange over http", nil, []string{"identity.exchange=http://sts.example.com"}, `[identity] exchange = "http://sts.example.com"`},
+		{"exchange with a path", nil, []string{"identity.exchange=https://sts.example.com/v1"}, "want an https origin"},
+		{"exchange with user info", nil, []string{"identity.exchange=https://a:b@sts.example.com"}, "want an https origin"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			src := fixture(t, tt.files)
+			src.Sets = tt.set
+			if _, err := Load(src); err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("err = %v, want it to mention %q", err, tt.want)
+			}
+		})
+	}
+	src := fixture(t, map[string]string{"repo/.aayudha/config.toml": "version = 1\n[identity]\nexchange = \"https://sts.example.com/\"\n"})
+	if l, err := Load(src); err != nil || l.Config.Identity.Exchange != "https://sts.example.com/" {
+		t.Fatalf("exchange from the repository config: %v", err)
+	}
+	src = fixture(t, nil)
+	src.Environ = []string{"AAYU_IDENTITY__EXCHANGE=https://sts.example.com"}
+	if l, err := Load(src); err != nil || l.Config.Identity.Exchange != "https://sts.example.com" {
+		t.Fatalf("exchange from the environment: %v", err)
+	}
+}
+
 // TestTeamStage: a set stage wins; else the size decides at the 15/16 and
 // 150/151 edges; else the pod's paired humans plus the founder, so a solo pod
 // is a startup (WP5.1b).

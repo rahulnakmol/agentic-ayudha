@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"regexp"
 	"slices"
 	"strings"
@@ -391,6 +392,7 @@ type Identity struct {
 	AppID             int64    `koanf:"app_id" jsonschema_description:"GitHub App ID of the bot identity (created by init --identity)."`
 	AppSlug           string   `koanf:"app_slug" jsonschema_description:"GitHub App slug; the App's login is <slug>[bot]."`
 	Broker            string   `koanf:"broker" jsonschema_description:"Token broker workflow file in this repo that mints App installation tokens for laptops."`
+	Exchange          string   `koanf:"exchange" jsonschema_description:"HTTPS origin of the owner's keyless token exchange (Decision #576), e.g. https://sts.example.com; set, init --identity creates or reuses the owner's one App through it and no repository holds an App key. Never from config.local.toml."`
 	MachineUser       string   `koanf:"machine_user" jsonschema_description:"Machine-user login, the fallback bot identity."`
 	MachineUserSecret string   `koanf:"machine_user_secret" jsonschema_description:"Name of the secret holding the machine user's token."`
 	BotLogins         []string `koanf:"bot_logins" jsonschema_description:"Logins whose reviews never count as a human pass (machine users and other bots)."`
@@ -567,6 +569,11 @@ func (c *Config) Validate() error {
 	}
 	if id := c.Identity; id.AppID != 0 && id.AppSlug == "" {
 		bad("[identity] app_id needs app_slug")
+	}
+	if x := c.Identity.Exchange; x != "" {
+		if u, err := url.Parse(x); err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || strings.Trim(u.Path, "/") != "" || u.RawQuery != "" || u.Fragment != "" {
+			bad("[identity] exchange = %q: want an https origin such as https://sts.example.com, with no path, query, or user info", x)
+		}
 	}
 	for _, r := range c.Fleet.Repos {
 		if !repoName.MatchString(r) {
