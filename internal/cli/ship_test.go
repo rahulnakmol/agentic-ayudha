@@ -352,8 +352,7 @@ func TestShipOnProof(t *testing.T) {
 	// One rule and two check runs per page: ship reads every page. build must come from GitHub
 	// Actions (app 15368): another app's green build does not pass it, and
 	// its newest run counts, not a stale failure before a rerun.
-	g.RequiredChecks, g.RulesPerPage, g.CheckRunsPerPage = []string{"build", "lint", "docs", "release-snapshot", "security", "protected-paths"}, 1, 2
-	g.RequiredCheckApps = map[string]int64{"build": 15368}
+	g.RequiredChecks, g.RulesPerPage, g.CheckRunsPerPage = []string{"build@15368", "lint", "docs", "release-snapshot", "security", "protected-paths"}, 1, 2
 	actions := &fake.App{ID: 15368}
 	g.CheckRuns[head] = append(g.CheckRuns[head], fake.CheckRun{Name: "build", Status: "completed", Conclusion: "success", App: &fake.App{ID: 99}},
 		fake.CheckRun{Name: "build", Status: "completed", Conclusion: "failure", App: actions},
@@ -493,6 +492,17 @@ func TestShipOnProof(t *testing.T) {
 	g.Mu.Unlock()
 	// protected-paths is red only for the CODEOWNERS paths a PR touches.
 	refused("no merge on proof: required check protected-paths is failure, and the PR touches no CODEOWNERS path that would explain it")
+	// Each rule that requires it counts: a second one, from another app
+	// whose run is green, does not hide the first one's failure.
+	g.Mu.Lock()
+	g.RequiredChecks = append(g.RequiredChecks, "protected-paths@77")
+	g.CheckRuns[head] = append(g.CheckRuns[head], fake.CheckRun{Name: "protected-paths", Status: "completed", Conclusion: "success", App: &fake.App{ID: 77}})
+	g.Mu.Unlock()
+	refused("no merge on proof: required check protected-paths is failure, and the PR touches no CODEOWNERS path that would explain it")
+	g.Mu.Lock()
+	g.RequiredChecks = g.RequiredChecks[:len(g.RequiredChecks)-1]
+	g.CheckRuns[head] = g.CheckRuns[head][:len(g.CheckRuns[head])-1]
+	g.Mu.Unlock()
 	// Nor does the streak's pass merge past it: only a person's does.
 	g.Mu.Lock()
 	logC = g.JobLogs[7701]

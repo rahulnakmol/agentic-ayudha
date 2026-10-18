@@ -263,12 +263,11 @@ type GitHub struct {
 	RulesetsUnavailable bool
 	// RequiredChecks are the required status checks the rules for every
 	// branch name (GET /rules/branches/{branch}), one rule each, served a page
-	// of RulesPerPage at a time (0: all). RequiredCheckApps pins a check to
-	// the app (integration_id) it must come from.
-	RequiredChecks    []string
-	RequiredCheckApps map[string]int64
-	RulesPerPage      int
-	CheckRunsPerPage  int
+	// of RulesPerPage at a time (0: all). "name@id" pins a check to the app
+	// (integration_id) it must come from.
+	RequiredChecks   []string
+	RulesPerPage     int
+	CheckRunsPerPage int
 	// Fail makes the request with this "METHOD /path" fail with a 500 once
 	// it has succeeded After times.
 	Fail string
@@ -567,9 +566,10 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 	case m == "GET" && strings.HasPrefix(p, repo+"/rules/branches/"):
 		out := []any{}
 		for i, c := range g.RequiredChecks {
-			sc := map[string]any{"context": c}
-			if id, ok := g.RequiredCheckApps[c]; ok {
-				sc["integration_id"] = id
+			name, app, pinned := strings.Cut(c, "@")
+			sc := map[string]any{"context": name}
+			if pinned {
+				sc["integration_id"] = atoi(app)
 			}
 			out = append(out, map[string]any{"type": "required_status_checks", "ruleset_source_type": "Repository", "ruleset_source": g.Owner + "/" + g.Repo, "ruleset_id": i + 1,
 				"parameters": map[string]any{"required_status_checks": []any{sc}, "strict_required_status_checks_policy": false}})

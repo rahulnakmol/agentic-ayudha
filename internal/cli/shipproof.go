@@ -40,8 +40,9 @@ type ProofPass struct {
 // (seats.GateCheck), is green on the head: its check run, from the app the
 // rule names if it names one, and a commit status of the same name, as GitHub
 // requires both. A rule it cannot read stops ship. It returns the checks it
-// read, and the CODEOWNERS check's state ("" when it is not required), which
-// only proofPass may accept red.
+// read, and the CODEOWNERS check's state ("" when it is not required; the
+// worst of its states when several rules require it), which only proofPass
+// may accept red.
 func requiredChecks(ctx context.Context, c *github.Client, owner, name string, n int, base, head string, runs []*gh.CheckRun) (want []string, gate string, err error) {
 	var checks []*gh.RuleStatusCheck
 	for rule, err := range c.REST.Repositories.ListRulesForBranchIter(ctx, owner, name, base, &gh.ListOptions{PerPage: 100}) {
@@ -61,8 +62,10 @@ func requiredChecks(ctx context.Context, c *github.Client, owner, name string, n
 	for _, sc := range checks {
 		state := checkState(runs, statuses, sc)
 		switch {
-		case sc.Context == seats.GateCheck:
-			gate = state
+		case sc.Context == seats.GateCheck: // every rule that requires it counts: the worst state wins
+			if gate == "" || gate == "success" || state != "success" && state != "failure" {
+				gate = state
+			}
 		case state != "success":
 			return nil, "", Errorf(ExitBlocked, "ship #%d: required check %s is %s on %s; never merge with a red required check", n, sc.Context, state, short(head))
 		case !slices.Contains(want, sc.Context):
