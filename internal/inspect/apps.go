@@ -345,7 +345,8 @@ var (
 	codexReceipt  = regexp.MustCompile("codex-review-receipt:v1[\\s\\S]*?\\*\\*Reviewed commit:\\*\\*\\s*`([0-9a-f]{7,40})`")
 	codexBadge    = regexp.MustCompile(`!\[(P[0-3]) Badge\]`)
 	codexTitle    = regexp.MustCompile(`(?m)^\*\*.*?</sub></sub>\s*(.+?)\*\*\s*$`)
-	codexNoise    = regexp.MustCompile(`(?m)^\*\*.*Badge.*$|^Useful\? React with.*$|<!--.*?-->`)
+	codexNoise    = regexp.MustCompile(`(?m)^\*\*.*Badge.*$|^Useful\? React with.*$|^### .*Codex Security Review.*$|<!--.*?-->`)
+	codexState    = regexp.MustCompile(`<!-- codex-review-state:v1 (\{.*?\}) -->`)
 	criterionHint = regexp.MustCompile(`(?i)\bcriterion\s+(\d+)\b`)
 )
 
@@ -354,12 +355,26 @@ var (
 // exact head and covered its diff; the inline comments it made on that commit,
 // each with a P0–P3 badge, are the findings. Codex gives no per-criterion
 // verdicts, so each criterion is unclear unless a finding names it (then unmet
-// at P0/P1). Disposition: fix with a P0 or P1, else merge.
+// at P0/P1). Its security review's inline findings count too, as security
+// findings, and while Codex's summary records a security review of head that
+// has not completed, head has no reply yet. Disposition: fix with a P0 or P1,
+// else merge.
 func codexNative(c Choice, posts []Post, head string, criteria []workitems.Criterion, changed []string) (AppReply, bool) {
 	var receipt *Post
 	for i, p := range posts {
 		if !strings.EqualFold(p.Login, c.Login) || p.Kind == "inline" {
 			continue
+		}
+		if m := codexState.FindStringSubmatch(p.Body); m != nil {
+			var st struct {
+				Security struct {
+					Commit string `json:"commit_sha"`
+					Status string `json:"status"`
+				} `json:"security_review"`
+			}
+			if json.Unmarshal([]byte(m[1]), &st) == nil && sameHead(st.Security.Commit, head) && st.Security.Status != "completed" {
+				return AppReply{}, false
+			}
 		}
 		if m := codexReceipt.FindStringSubmatch(p.Body); m != nil && sameHead(m[1], head) {
 			if receipt == nil || p.Updated.After(receipt.Updated) {
@@ -375,7 +390,11 @@ func codexNative(c Choice, posts []Post, head string, criteria []workitems.Crite
 	r.Disposition, r.Findings = Merge, []Finding{}
 	verdicts := map[int]Verdict{}
 	for _, p := range posts {
-		if p.Kind != "inline" || !strings.EqualFold(p.Login, c.Login) || p.Commit != head || !strings.Contains(p.Body, "codex-code-review-finding") {
+		category := "bug"
+		if strings.Contains(p.Body, "codex-security-review-finding") {
+			category = "security"
+		}
+		if p.Kind != "inline" || !strings.EqualFold(p.Login, c.Login) || p.Commit != head || category == "bug" && !strings.Contains(p.Body, "codex-code-review-finding") {
 			continue
 		}
 		sev := "P2"
@@ -387,7 +406,7 @@ func codexNative(c Choice, posts []Post, head string, criteria []workitems.Crite
 			title = strings.TrimSpace(m[1])
 		}
 		detail := strings.TrimSpace(codexNoise.ReplaceAllString(p.Body, ""))
-		f := Finding{Severity: sev, Category: "bug", File: p.Path, Line: p.Line, Title: oneLine(title, 200), Detail: oneLine(detail, 1200), Confidence: 1}
+		f := Finding{Severity: sev, Category: category, File: p.Path, Line: p.Line, Title: oneLine(title, 200), Detail: oneLine(detail, 1200), Confidence: 1}
 		if m := criterionHint.FindStringSubmatch(title + " " + detail); m != nil {
 			f.Criterion, _ = strconv.Atoi(m[1])
 			if sev == "P0" || sev == "P1" {
