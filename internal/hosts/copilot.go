@@ -43,10 +43,11 @@ const CopilotProven = "live-proven with Copilot CLI 1.0.98 on 2026-10-17 (skills
 
 // CopilotMCPEnv are the variables the aayudha MCP server needs under Copilot,
 // which passes a stdio server only PATH: the home and config folders aayu and
-// gh read on Unix and Windows, and the places aayu finds a GitHub token. Each
+// gh read on Unix and Windows, the places aayu finds a GitHub token, and
+// COPILOT_HOME, where the MCP build tool finds the session's log. Each
 // is written as ${NAME:-}, so an unset one is empty, which aayu and gh treat as
 // unset.
-var CopilotMCPEnv = []string{"HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "SystemRoot", "XDG_CONFIG_HOME", "AAYU_GITHUB_TOKEN", "GH_TOKEN", "GH_CONFIG_DIR"}
+var CopilotMCPEnv = []string{"HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "SystemRoot", "XDG_CONFIG_HOME", "AAYU_GITHUB_TOKEN", "GH_TOKEN", "GH_CONFIG_DIR", "COPILOT_HOME"}
 
 func copilotMCPEnv() map[string]any {
 	env := map[string]any{}
