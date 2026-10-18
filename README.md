@@ -50,10 +50,11 @@ freezes what was agreed. Lost at any point? `aayu next` prints the one next step
 - [The story](docs/guide/journey.md): one real day, from a goal to a measured release, setbacks included.
 - [When to use what](docs/guide/when-to-use-what.md): start from your situation and find the command.
 - [How it works](docs/guide/how-it-works.md): the architecture, file formats, and guarantees, for engineers.
-- [What's new in v0.3.0](docs/releases/v0.3.0.md): what the release does for you, and how to upgrade.
 
 All of it is on [the docs site](https://rahulnakmol.github.io/agentic-ayudha/). Agents can read the same docs as
 Markdown, starting from [llms.txt](https://rahulnakmol.github.io/agentic-ayudha/llms.txt).
+
+What's new: the [v0.3.0 release notes](docs/releases/v0.3.0.md) say what the release does for you, and how to upgrade.
 
 ## Adopt at your own pace
 
