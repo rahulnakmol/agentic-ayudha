@@ -16,7 +16,7 @@ Unreleased: these changes are on `dev` and in the v0.3.0 freeze. The list is fin
 With v0.3.0, aayu builds its own repository, agentic-ayudha, with one person, @rahulnakmol. With `[autonomy] proof` on,
 `aayu ship` merges an agent's pull request into dev on proof alone, and only a narrow set of paths and settings always
 waits for a person (#617). Two new seats, the Production Engineer and the Data & AI Architect, bring
-skills for incidents, SLOs, runbooks, data designs, and legacy-code surveys. Every pull request that is not docs-only
+skills for incidents, SLOs, runbooks, and data designs, and `aayu survey` maps legacy code. Every pull request that is not docs-only
 now gets a review, and the merge gate records how independent that review was. You approve the human-only steps
 agents queue for you from any device, one at a time in `aayu inbox` or as one batch. No Feature is claimed as proven
 for this release.
