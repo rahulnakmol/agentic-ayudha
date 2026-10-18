@@ -34,10 +34,9 @@ acquisition = "benefits_visit"
 activation = "answer_grounded"
 activation_days = 7
 
-# The merge gate's reviewer: CodeRabbit, a review service that counts as a different-family review (rung A) whatever
-# the builder's family. Founder, 2026-10-18, after Codex reached its usage limits on #617: "Let's switch over to code
-# rabbit then", and "Will turn off code code review if you can make it work with code rabbit"; this supersedes "Use
-# codex for now". No AI key in the merge gate (founder decision 2026-10-15).
+# CodeRabbit (rung A whatever the builder's family) stays installed as the fallback app (founder, 2026-10-18, after Codex
+# reached its usage limits on #617). The CI review below supersedes "no AI key in the merge gate" (2026-10-15): the
+# inspect job holds the code-review environment's key, which only the base branches reach.
 [inspect]
 # The CI review (founder, 2026-10-18: "Let's dog food this"): the merge gate calls the model the code-review environment
 # names (AAYU_REVIEW_MODEL_URL, AAYU_REVIEW_MODEL, secret AAYU_REVIEW_MODEL_KEY; docs/guide/how-review.md).

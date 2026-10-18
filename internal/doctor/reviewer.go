@@ -55,6 +55,8 @@ func checkReviewerApps(ctx context.Context, p *Probe) Result {
 	switch {
 	case cfg.Reviewer == "" || cfg.Reviewer == "auto":
 		return Result{Status: Fail, Detail: noReviewerChosen, Lines: lines}
+	case cfg.Reviewer == inspect.ReviewerCI && len(missing) == 0:
+		return Result{Status: Pass, Detail: fmt.Sprintf("merge-gate reviewer: ci, the model the %s environment names; the installed apps in [inspect] apps are its fallback", inspect.ReviewEnvironment), Lines: append(lines, reviewEnvSetup)}
 	case len(missing) > 0:
 		return Result{Status: Warn, Detail: fmt.Sprintf("reviewer apps detected but not configured: %s; add them to [inspect] apps (the gate reads config only)", strings.Join(missing, ", ")), Lines: lines}
 	case c.App == "":

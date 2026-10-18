@@ -55,8 +55,9 @@ shows the fix; one that passes there does not. The check is advisory until the d
 test that is green on the base is reported and skipped; from it, the check fails. Only Go modules are run today.
 
 **`aayudha/inspect`** runs after the gate job succeeds, on every pull request that is ready for review, whether or not
-it serves a story. It holds no AI key (founder decision of 2026-10-15): it reads the reviewer app's reply on the pull
-request and has `pull-requests: write` to post its comment. It checks out the base branch only, downloads the
+it serves a story. It runs under the `code-review` environment, whose key only the base branches reach: with
+`reviewer = "ci"` it calls that environment's model, and with an app it reads the app's reply on the pull request. It
+has `pull-requests: write` to post its comment. It checks out the base branch only, downloads the
 `aayudha-pack` artifact when the pull request serves a story, and reads the diff through the GitHub API. It never runs
 pull request code. A pull request without a story is judged on the reviewer's disposition and the coverage manifest,
 with no criteria. One that changes only documentation passes without a review: files under `docs/`, Markdown at the
@@ -103,9 +104,10 @@ Every floor tool runs as a child process through `verify.Sandbox`:
 
 ### How inspect works
 
-A product repository's CI holds no AI key (founder decision of 2026-10-15). inspect's reviewer is an agent app
-installed on the organisation or account, from a family other than the builder's when one is installed. aayu asks it
-with an @-mention and reads its reply deterministically:
+By default, inspect calls the code-review environment's model ([Code review in the gate](how-review.md)), the one AI
+key in a product repository's CI. When `[inspect] reviewer` names an agent app instead, installed on the organisation
+or account and of a family other than the builder's when one is installed, aayu asks it with an @-mention and reads
+its reply deterministically:
 
 | App | Request | Replies as | Family |
 |---|---|---|---|
@@ -155,8 +157,8 @@ it names: the variables `AAYU_REVIEW_MODEL_URL` (the model endpoint's base URL) 
 of a family the builder cannot be, such as `grok-4.7`), with the secret `AAYU_REVIEW_MODEL_KEY`. `[inspect]
 paid_reviewer` names the model when the environment names none. [Code review in the gate](how-review.md) sets it up.
 
-`[inspect] paid_effort` (`low`, `medium`, `high`, or `xhigh`) sets the reasoning effort the paid reviewer is called at;
-empty leaves the provider's default.
+Every review is called at effort `high`, or `medium` for Claude Opus, Claude Fable, and GPT-6 Astra; `[inspect]
+paid_effort` (`low`, `medium`, `high`, or `xhigh`) overrides it.
 Every paid review asks for fast serving (`service_tier` `priority`) and is charged at the model's priority rate, 2x the
 standard rate for Grok 4.7, so the cap holds. The inspect comment records the tier the reply was served at, and flags
 one that is not fast.
@@ -439,7 +441,8 @@ fixed head, returned `merge`, and the spend covers both calls.
 8. The pack job uses only the workflow token, writes nothing to the ledger, and fails on a pack that does not verify
    or a floor that does not hold. Enforced by `proofComment` in [internal/cli/proof.go](../../internal/cli/proof.go),
    `TestProofCommentInMergeGate`.
-9. No workflow `init --gates` installs holds a model key or the AI-gateway environment. Enforced by
+9. The one model key a workflow `init --gates` installs holds is the merge gate's `AAYU_REVIEW_MODEL_KEY`, passed once,
+   to the inspect job under the `code-review` environment, which checks out only the base branch. Enforced by
    `TestModelChecksNeverGateAndNeverShip` in [workflows_test.go](../../workflows_test.go).
 10. The proof comment's risk line and weakened-check list come from the diff alone and approve nothing. Enforced by
     `inspect.RiskOf` in [internal/inspect/risk.go](../../internal/inspect/risk.go) and `inspect.Weakened` in

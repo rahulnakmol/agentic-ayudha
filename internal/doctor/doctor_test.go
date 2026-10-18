@@ -569,6 +569,7 @@ func TestCheckStates(t *testing.T) {
 			p.Host = "claude"
 			p.Config = load(t, "inspect.apps=claude", "inspect.reviewer=claude", "inspect.paid_reviewer=grok-4.7")
 		}, Pass, `move up (paid): set [inspect] reviewer = "ci", the default, to have grok-4.7 (xai) review every PR`},
+		{"the CI review, with the detected app as its fallback", checkReviewerApps, func(p *Probe) { p.Config = load(t, "inspect.apps=codex") }, Pass, "merge-gate reviewer: ci, the model the code-review environment names"},
 		{"the review lane's model", checkReviewerApps, func(p *Probe) { p.Config = load(t, "inspect.reviewer=model") }, Warn, `[inspect] reviewer = "model": the merge gate calls the review lane's model`},
 		{"rung C for a Claude Code build", checkReviewRung, func(p *Probe) {
 			p.Host = "claude"
