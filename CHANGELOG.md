@@ -67,10 +67,10 @@ for this release.
 - inspect's review settles within three rounds, and findings in code the pull request did not change are tagged as pre-existing (#583).
 - Agents run `aayu ship` on their Story pull requests; when only your approval is missing, the pull request waits in your inbox as Ready to ship (#577).
 - Agent pull requests count toward the autonomy streak (#577).
-- With `[autonomy] proof` on, `aayu ship` merges a pull request into dev with no person's pass when every required check is green, the proof pack verifies with its floors holding, inspect is at merge with a review rung listed in `[autonomy] proof_rungs`, and the pull request touches nothing in the narrow set (#617, #621).
-- The narrow set is the `always_person` paths, a change to an `always_person_sections` table of an `always_person_config` file (by default 20 tables, from `[identity]` and `[autonomy]` to `[budget]`, listed in [CONSTRAINTS.md](CONSTRAINTS.md)), and any workflow that holds a credential; a pull request in it waits for a person (#617).
+- With `[autonomy] proof` on, `aayu ship` merges a pull request into dev with no person's pass when every required check is green except the CODEOWNERS check `protected-paths`, which the ship record lists instead, the proof pack verifies with its floors holding, inspect is at merge with a review rung listed in `[autonomy] proof_rungs`, and the pull request touches nothing in the narrow set (#617, #621).
+- The narrow set is the `always_person` paths, a change to an `always_person_sections` table of an `always_person_config` file (by default 20 tables, from `[identity]` and `[autonomy]` to `[budget]`, listed in [CONSTRAINTS.md](CONSTRAINTS.md)), any workflow that holds a credential, any action manifest (`action.yml`), and any changed symbolic link; a pull request in it waits for a person (#617).
 - Merging on proof is off by default, and `proof_rungs` defaults to rungs A and B (#617).
-- `aayu ship` never merges with a red required check, whoever passes it (#617).
+- `aayu ship` never merges while a required check other than `protected-paths` is red, whoever passes it (#617).
 - `aayu init --gates` installs a security workflow that scans every push to dev, rolling, and main, and each tip nightly, with verify's security floors (#500).
 - verify takes an advisory UI review of its own screenshots (#479).
 - A floor waiver counts only when the floor-waiver authority accepted it (#624).
@@ -208,7 +208,7 @@ Released 2026-10-15.
 
 v0.1.0 is the first release of aayu. It runs a product's work on GitHub with coding agents: work items as issues,
 checkable criteria frozen as Ready, a build by an agent in its own worktree, a merge gate that checks the proof against
-the criteria, a person's approval to ship, and promotion through rolling to main. Seats with agent twins share the
+the criteria, a person's approval or an earned autonomy streak to ship, and promotion through rolling to main. Seats with agent twins share the
 work, and each verb has one accountable seat.
 
 ### Proven Features
@@ -232,7 +232,7 @@ example product the thin-slice run built:
 - `aayu status` rolls work up and writes a digest, and triage only labels (#75).
 - `aayu grill` is a conversation that turns a vague idea into a concrete spec, and covers all ten work-item types, baselines, and the brand (#101, #166).
 - `aayu slice` and `aayu plan` break work down with layer footprints, dependencies, and the Engineering Manager's plan review (#107).
-- `aayu build` builds a Ready story in its own worktree with leases, verified checkpoints, a budget, and resume, and `aayu ship` merges it after a person's approval (#89, #109).
+- `aayu build` builds a Ready story in its own worktree with leases, verified checkpoints, a budget, and resume, and `aayu ship` merges it after a person's approval, or on its own once the autonomy streak allows and no never-layer is touched (#89, #109).
 - `aayu build --delegate` hands a Ready story to Codex, Cursor, Claude Code, or Amp, and closes the review loop (#187).
 - `aayu gc` reclaims expired leases and says how to free a build worktree it keeps (#109, #113).
 - `aayu verify` runs floors: diff coverage, SAST, secrets, dependencies, web accessibility, performance, DAST, API, and a screen reader (#81, #84, #85).
@@ -262,7 +262,7 @@ example product the thin-slice run built:
 
 ### Identity and trust
 
-- Secrets live in the OS keychain or an encrypted file, and a token broker keeps a person's identity apart from the bot's; ship needs a person's pass (#12).
+- Secrets live in the OS keychain or an encrypted file, and a token broker keeps a person's identity apart from the bot's; only a person, never a bot, gives ship its human pass (#12).
 - Every write goes through an actions log, and model calls go through one gateway with a budget breaker (#14).
 - The autonomy streak, corrections, and `aayu halt` and `aayu resume` decide when agents may merge on their own (#88).
 - Releases are signed, and a CI suite checks every pull request (#8).
