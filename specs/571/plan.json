@@ -1,0 +1,80 @@
+{
+  "story": 571,
+  "body_hash": "b3afb3093aaa24a0110ee9ae1b98ad9f231228d6ec7f4ebf2dd036208a630d60",
+  "footprint": [
+    "L02",
+    "L05",
+    "L07"
+  ],
+  "checkpoints": [
+    {
+      "layer": "L05",
+      "title": "Copilot route in the model layer: CopilotCLI runs gemini-4-argon at high effort, CopilotRouted picks it for the ui-review lane's copilot row, CopilotReady checks copilot is installed and signed in, and the reported AI credits are the call's cost",
+      "contracts": [
+        "models.CopilotRoute and models.CopilotCLI (prompt on stdin, minimal environment, COPILOT_GITHUB_TOKEN only)",
+        "models.CopilotRouted and Gateway.CopilotReady",
+        "Gateway.Do resolves the copilot ui-review row with Resolve; every other call keeps ResolveDirect",
+        "registry: the copilot ui-review row is Gemini 4 Argon (high), Alternative gemini-3.8-flash (high)",
+        "an unmetered call is charged upper-bound tokens priced by Cost"
+      ],
+      "tests": [
+        "internal/models:TestCopilotCLI",
+        "internal/models:TestLaneResolution",
+        "internal/models:TestStructured"
+      ],
+      "instrumentation": [
+        "each call is a model.call action with via copilot, cost_usd and cost_source reported, and the breaker counts it"
+      ],
+      "rollback": "revert the PR; or a person sets [models.ui-review.copilot] model = \"\" in their user config to use gemini-3.8-flash through the gateway",
+      "criteria": [
+        1,
+        4
+      ]
+    },
+    {
+      "layer": "L02",
+      "title": "The reviewer behind review lane A, polish and verify's look tries the Copilot route first and falls back to gemini-3.8-flash (high), saying so on stderr and in the label; it never skips the review",
+      "contracts": [
+        "Env.reviewer: CheckFamilies on the Copilot model, CopilotReady before any call, ValidReply on each reply, fallback for that call and every later one, ErrBudget still stops"
+      ],
+      "tests": [
+        "internal/cli:TestCopilotUIReviewRoute",
+        "internal/cli:TestVerifyScreenshotReview"
+      ],
+      "instrumentation": [
+        "stderr line and lane label naming why Argon did not run"
+      ],
+      "rollback": "revert the PR",
+      "criteria": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "layer": "L07",
+      "title": "Config: [models.ui-review.copilot] is read only from the user config or --set, and model = \"\" on that row turns the route off",
+      "contracts": [
+        "config.Load rejects models.ui-review.copilot from the repo and local layers (never from the checkout)",
+        "config validation allows an empty model on the ui-review lane's copilot row only",
+        "Resolve returns SourceOff for it"
+      ],
+      "tests": [
+        "internal/config:TestRejects",
+        "internal/cli:TestCopilotUIReviewRoute"
+      ],
+      "rollback": "revert the PR",
+      "criteria": [
+        3
+      ]
+    }
+  ],
+  "em_review": {
+    "required": true,
+    "layers": [
+      "L07"
+    ]
+  },
+  "planned_at": "2026-10-18T07:14:10Z",
+  "planned_by": "human-fallback"
+}
