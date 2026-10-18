@@ -1,15 +1,15 @@
 # The merge gate
 
 The merge gate is one GitHub Actions workflow, `aayudha-merge-gate.yml`, that runs on every non-draft pull request.
-It runs `verify` again on the pull request's head commit, reads the review of an agent app from a different family,
-and makes the result available to `ship`. It exists because the builder's own word is not evidence:
+It runs `verify` again on the pull request's head commit, has a model from a different family review it (by default
+the code-review environment's model, or an agent app you choose), and makes the result available to `ship`. It exists because the builder's own word is not evidence:
 the checks that decide a merge must run somewhere the pull request cannot change.
 
 ![A pull request update starts the gate workflow taken from the base branch; the merge-gate job verifies the head in a sandbox and keeps the pack as a run artifact, the inspect job reviews it, the pack job checks it and comments, and ship needs all three checks green and the artifact from this run.](img/how-merge-gate.svg)
 
-*Three jobs on each update: one runs the pull request's code with no secrets, one reads the reviewer app's reply and
-never runs that code, one checks the pack and comments. A fourth re-runs inspect when the reviewer replies. No job
-holds an AI key, and none writes the ledger.*
+*Three jobs on each update: one runs the pull request's code with no secrets, one reviews it and never runs that code,
+one checks the pack and comments. A fourth re-runs inspect when an app reviewer replies. Only the review job holds an
+AI key, the code-review environment's, and no job writes the ledger.*
 
 ## How it works
 

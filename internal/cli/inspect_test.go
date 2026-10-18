@@ -1599,10 +1599,14 @@ func TestInspectReviewTools(t *testing.T) {
 			t.Errorf("reviewer %s: exit %d, %d model calls, comments %+v %s", tool, code, len(model.Requests), cs, errOut)
 		}
 	}
-	// ci, the default: the code-review environment's model reviews, called directly, at fast serving.
+	// ci, the default: the code-review environment's model reviews, called directly, at fast serving, in its own
+	// family's wire format: a wire-format override of another gateway does not carry over.
 	_, env, opts, prN, model := setup("")
-	if code, res, errOut := inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Rung != inspect.RungB || len(model.Requests) != 1 || model.Requests[0].ServiceTier != models.TierPriority {
-		t.Fatalf("reviewer ci: exit %d rung %q, %d model calls %s", code, res.Rung, len(model.Requests), errOut)
+	env["AAYU_MODELS__GATEWAY__API_STYLE"] = "responses"
+	var route models.Route
+	opts.ModelClient = func(r models.Route, _ string) models.Client { route = r; return model }
+	if code, res, errOut := inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Rung != inspect.RungB || len(model.Requests) != 1 || model.Requests[0].ServiceTier != models.TierPriority || route.Style != models.StyleChat {
+		t.Fatalf("reviewer ci: exit %d rung %q, %d model calls, style %q %s", code, res.Rung, len(model.Requests), route.Style, errOut)
 	}
 	// Every review asks for fast serving (founder, 2026-10-18), at effort high by default, and medium for Claude Opus,
 	// Claude Fable, and GPT-6 Astra; [inspect] paid_effort, set to high in this fixture, overrides both.
