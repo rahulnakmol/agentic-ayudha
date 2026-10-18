@@ -81,9 +81,10 @@ page-speed score of 100 against a budget of 90. Both records are on the ledger b
 and the
 [pack for story 134](https://github.com/rahulnakmol/agentic-ayudha/blob/ledger/proof/134/8e01a42142d028066c3026ca9201bb640b0e6914/authoritative/pack.json).
 
-> **Since then:** on 12 October the reviewer was a model the merge gate called with a key held in CI. Now your CI
-> holds no AI key at all: the reviewer is an agent app from another vendor that you install on your account, such as
-> Claude or Codex, and aayu reads its reply. The gate can also run behaviour checks from a feature map, which drive
+> **Since then:** on 12 October the reviewer was a model the merge gate called with a key held in CI. Now the gate
+> calls a review model of another vendor itself, with one key held in the `code-review` environment, which only the
+> base branches and the default branch reach ([code review in the gate](how-review.md)). An agent app from another
+> vendor, such as Claude or Codex, can review instead, and aayu reads its reply. The gate can also run behaviour checks from a feature map, which drive
 > your product the way a person would, and for a Bug it shows the proving tests failing on the base commit first.
 > See [a pull request is ready](guide-review.md) and [prove a behaviour change](guide-prove-behaviour.md).
 

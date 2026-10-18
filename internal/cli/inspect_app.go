@@ -63,7 +63,7 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 	n, head := a.pr.GetNumber(), a.pr.GetHead().GetSHA()
 	owner, name, _ := github.SplitRepo(a.repo)
 	choice := inspect.ChooseReviewer(a.cfg.Inspect.Reviewer, a.cfg.Inspect.Apps, a.cfg.Inspect.AppFamilies, a.builder, a.cfg.Autonomy.Approver)
-	notes := append([]string{a.builder.Note(), "reviewer: " + choice.Kind() + "; the merge gate holds no AI key and reads its reply"}, choice.Notes...)
+	notes := append([]string{a.builder.Note(), "reviewer: " + choice.Kind() + "; the gate reads its reply and calls no model for it"}, choice.Notes...)
 	if a.in.Mode == inspect.ModePeer {
 		notes = append(notes, "peer mode needs two model reviewers; a reviewer app reviews alone, high-risk PRs included")
 	}
