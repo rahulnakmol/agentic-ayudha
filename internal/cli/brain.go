@@ -538,8 +538,9 @@ func ledgerReleases(ctx context.Context, w *ledger.Writer, r *brain.Records) err
 				Removed   []planItem `json:"removed"`
 				Resized   []struct {
 					planItem
-					From string `json:"from"`
-					To   string `json:"to"`
+					From     string `json:"from"`
+					To       string `json:"to"`
+					FromType string `json:"from_type"` // only when the type changed since the baseline
 				} `json:"resized"`
 			}
 			if err := read(&d); err != nil {
@@ -548,7 +549,7 @@ func ledgerReleases(ctx context.Context, w *ledger.Writer, r *brain.Records) err
 			dr := brain.Drift{Path: p, Version: driftRE.FindStringSubmatch(p)[1], Baseline: d.Baseline, BudgetPct: d.BudgetPct, DriftPct: d.DriftPct,
 				Decision: d.Decision, Added: items(d.Added), Removed: items(d.Removed)}
 			for _, rz := range d.Resized {
-				dr.Resized = append(dr.Resized, brain.Resize{PlanItem: rz.item(), From: rz.From, To: rz.To})
+				dr.Resized = append(dr.Resized, brain.Resize{PlanItem: rz.item(), From: rz.From, To: rz.To, FromType: rz.FromType})
 			}
 			r.Drift = append(r.Drift, dr)
 		}

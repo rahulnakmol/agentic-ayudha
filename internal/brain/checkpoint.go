@@ -87,10 +87,11 @@ type Drift struct {
 	Resized   []Resize
 }
 
-// Resize is a planned item whose effort changed.
+// Resize is a planned item whose effort changed. FromType is its type at the
+// baseline when the type changed too (story to initiative); Type is the current one.
 type Resize struct {
 	PlanItem
-	From, To string
+	From, To, FromType string
 }
 
 // Seat is one seat of the pod.
@@ -512,7 +513,11 @@ func (c *cp) changes(d Drift) string {
 	if len(d.Resized) > 0 {
 		b.WriteString("\nResized:\n\n")
 		for _, rz := range d.Resized {
-			fmt.Fprintf(&b, "- %s: effort %s to %s\n", c.issueLine(rz.Number), Fact(rz.From), Fact(rz.To))
+			fmt.Fprintf(&b, "- %s: effort %s to %s", c.issueLine(rz.Number), Fact(rz.From), Fact(rz.To))
+			if rz.FromType != "" {
+				fmt.Fprintf(&b, "; type %s to %s", typeLabel(Fact(rz.FromType)), typeLabel(Fact(rz.Type)))
+			}
+			b.WriteString("\n")
 		}
 	}
 	return b.String()
