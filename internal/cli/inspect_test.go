@@ -1065,8 +1065,10 @@ func TestInspectThroughApp(t *testing.T) {
 	}
 	// --approve is a person's step: the approver enters GitHub's device code,
 	// even on a terminal with no agent marker (CodeRabbit's Major on #647). It
-	// is refused in an agent lane, for any account but the approver's, and
-	// when the person denies the code.
+	// is refused in aayu's own agent lane (AAYU_AGENT=1), for any account but
+	// the approver's, and when the person denies the code. A host's agent
+	// marker (an orb's Terminal tab) is no refusal: the code proves the person
+	// (Story #675).
 	outcome := "approve"
 	approve := func(env map[string]string, opts Options, viewer string) (int, string) {
 		g.Mu.Lock()
@@ -1083,7 +1085,7 @@ func TestInspectThroughApp(t *testing.T) {
 	person := opts
 	person.IsTerminal = stdinTTY
 	person.DevicePoll = time.Millisecond
-	if code, errOut := approve(agent, person, "lead"); code != ExitBlocked || !strings.Contains(errOut, "refused for an agent lane") {
+	if code, errOut := approve(agent, person, "lead"); code != ExitBlocked || !strings.Contains(errOut, "refused for an agent lane (AAYU_AGENT=1)") {
 		t.Fatalf("approve without presence: %d %s", code, errOut)
 	}
 	outcome = "deny"
@@ -1130,8 +1132,10 @@ func TestInspectThroughApp(t *testing.T) {
 			t.Fatalf("approve with pull read %d failing (moved %v): %d %s", tc.read, tc.move, code, errOut)
 		}
 	}
-	if code, errOut := approve(env, person, "lead"); code != 0 {
-		t.Fatalf("approve: %d %s", code, errOut)
+	marked := maps.Clone(env)
+	marked["AMP_THREAD_ID"] = "T-1"
+	if code, errOut := approve(marked, person, "lead"); code != 0 || !strings.Contains(errOut, "Approved by @lead (device-flow") {
+		t.Fatalf("approve under a host agent marker: %d %s", code, errOut)
 	}
 	if got := strings.TrimSpace(git(t, opts.Dir, "show", "origin/ledger:"+ApprovedPath)); strings.Count(got, "\n") != 0 || !strings.Contains(got, `"head":"`+head+`"`) || !strings.Contains(got, `"by":"lead"`) {
 		t.Fatalf("one approval on the ledger, for the head: %s", got)

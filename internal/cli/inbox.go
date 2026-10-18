@@ -41,15 +41,16 @@ func init() { register("inbox", runInbox) }
 
 // Inbox kinds, in the order the inbox shows them.
 const (
-	InboxDecision  = "decision"  // an open Decision waiting for acceptance (a provisional one to ratify or revert)
-	InboxReady     = "ready"     // an open Story PR that ship refused only for the human pass, its gate green
-	InboxCapped    = "capped"    // a PR whose review stopped at the round cap (step-back), waiting for a person
-	InboxUnshipped = "unshipped" // a Story whose PR merged into dev without a ship record
-	InboxFixed     = "fixed"     // an open Bug whose fix merged into dev
-	InboxReplaced  = "replaced"  // an open Story or Bug that another issue replaces
+	InboxDecision    = "decision"     // an open Decision waiting for acceptance (a provisional one to ratify or revert)
+	InboxReady       = "ready"        // an open Story PR that ship refused only for the human pass, its gate green
+	InboxHumanReview = "human-review" // a PR whose merge gate waits at the human rung for its head (Story #675)
+	InboxCapped      = "capped"       // a PR whose review stopped at the round cap (step-back), waiting for a person
+	InboxUnshipped   = "unshipped"    // a Story whose PR merged into dev without a ship record
+	InboxFixed       = "fixed"        // an open Bug whose fix merged into dev
+	InboxReplaced    = "replaced"     // an open Story or Bug that another issue replaces
 )
 
-var inboxOrder = []string{InboxDecision, InboxReady, InboxCapped, InboxUnshipped, InboxFixed, InboxReplaced}
+var inboxOrder = []string{InboxDecision, InboxReady, InboxHumanReview, InboxCapped, InboxUnshipped, InboxFixed, InboxReplaced}
 
 // InboxMarker marks the comment inbox leaves when it closes an issue.
 const InboxMarker = "<!-- aayudha:inbox -->"
@@ -86,6 +87,13 @@ var inboxKinds = map[string]inboxKind{
 			"Shipping it runs `aayu ship`, which checks everything again, saves the proof, and merges it into dev. " +
 			"If you leave it, nothing merges and the work waits; its checks may need to run again once dev moves on.",
 		Terms: []string{"Merge gate", "Human pass", "Solo-mode bypass"}},
+	InboxHumanReview: {Icon: "🔍", Word: "Needs your review", Seat: verbs.EngineeringManager,
+		Line: "No reviewer app or paid model could review this pull request, so its merge gate waits for your review.",
+		Explain: "Every agent pull request gets a review before it merges. When no installed reviewer app and no paid model can review one, " +
+			"the merge gate asks the [autonomy] approver instead, and only a review recorded through `aayu inspect <pr> --approve` counts. " +
+			"Approving here records the same thing: your review of the commit on the card, with what you checked, on the ledger and on the pull request. " +
+			"If you leave it, the pull request does not merge; a new push needs a new review.",
+		Terms: []string{"Merge gate", "Disposition"}},
 	InboxCapped: {Icon: "✋", Word: "At the review cap", Seat: verbs.EngineeringManager,
 		Line: "Agents tried to fix this pull request as often as allowed; a person looks next.",
 		Explain: "aayu reviews every agent pull request and lets the agents fix what the review finds, a fixed number of times. " +
@@ -144,6 +152,10 @@ type InboxAction struct {
 	Label       string `json:"label"`            // a Decision option's bold title, or the step's action
 	Command     string `json:"command"`          // what it does, as the verb or inbox step that does it
 	Recommended bool   `json:"recommended,omitempty"`
+	// Ask is the question the person answers in one line before the action
+	// runs (an empty answer runs nothing); Answer is their line.
+	Ask    string `json:"ask,omitempty"`
+	Answer string `json:"-"`
 }
 
 // InboxItem is one human-only step. Every text in it that comes from GitHub
@@ -537,6 +549,14 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 				continue
 			}
 		}
+		if head := p.GetHead().GetSHA(); st.Human != "" && st.Human == head && p.GetBase().GetRef() == dev {
+			out = append(out, InboxItem{Kind: InboxHumanReview, Number: p.GetNumber(), Title: termText(p.GetTitle()), URL: p.GetHTMLURL(), Seat: verbs.EngineeringManager,
+				Evidence: p.GetHTMLURL(), f: inboxFacts{head: head},
+				Why: fmt.Sprintf("inspect's merge gate waits at the human rung for `%s`: no reviewer app or paid model could review it, so only the [autonomy] approver's recorded review clears it.", short(head)),
+				Options: []InboxAction{{N: 1, Recommended: true, Label: "open it and review it", Command: "open"},
+					{N: 2, Label: fmt.Sprintf("approve commit %s as your review", short(head)), Command: fmt.Sprintf("aayu inspect %d --approve", p.GetNumber()), Ask: "What did you check?"}}})
+			continue
+		}
 		if st.Stopped == "" {
 			continue
 		}
@@ -744,6 +764,10 @@ func inboxCounsel(it InboxItem) string {
 			"green on commit %s of PR #%d, and aayu ship stopped only because no person had said yes. I recommend shipping it now; ship checks "+
 			"every gate again before it merges, so nothing is skipped. Otherwise the PR waits unmerged, and its checks may need to run again.",
 			f.story, short(f.head), n)
+	case InboxHumanReview:
+		return fmt.Sprintf("What this is really about: a pull request no reviewer could take, so your review is the gate. The evidence: the merge gate "+
+			"waits at the human rung for commit %s of PR #%d. I recommend reading the diff first, then approving with one line on what you checked. "+
+			"That records your review of this commit on the ledger, and the gate runs again. A later push needs a new review.", short(f.head), n)
 	case InboxCapped:
 		return fmt.Sprintf("What this is really about: an agent fix loop that stopped by design. The evidence: inspect's review ran %d of %d rounds "+
 			"on PR #%d without converging, and its last disposition was %q. I recommend opening it and reading the review yourself, because more agent rounds "+
@@ -1073,7 +1097,21 @@ func (e *Env) plainInbox(ctx context.Context, cfg *config.Config, src *inboxSour
 					say("  ", hint)
 					continue
 				}
-				if pick.Command != "open" && (!pick.Recommended || it.OneWay) {
+				if pick.Ask != "" {
+					say("  ", inboxEffect(it, *pick)+" "+pick.Ask+" One line; an empty line goes back.")
+					fmt.Fprint(w, "  > ")
+					line, err := e.readLine()
+					if err != nil {
+						return true, nil
+					}
+					if line == "" {
+						say("  ", "not applied. "+hint)
+						continue
+					}
+					answered := *pick
+					answered.Answer = line
+					pick = &answered
+				} else if pick.Command != "open" && (!pick.Recommended || it.OneWay) {
 					ok, err := yes(inboxEffect(it, *pick) + " Apply it?")
 					if err != nil {
 						return true, nil
@@ -1325,6 +1363,16 @@ func (e *Env) inboxAct(ctx context.Context, cfg *config.Config, c *github.Client
 		return handlers["ship"](ctx, e, Values{"pr": strconv.Itoa(it.Number)})
 	case InboxReady:
 		return e.shipReady(ctx, cfg, c, repo, login, it)
+	case InboxHumanReview:
+		reason := strings.TrimSpace(a.Answer)
+		if reason == "" {
+			return Errorf(ExitUsage, "say what you checked; nothing was recorded")
+		}
+		ap, err := e.approveHead(ctx, cfg, repo, it.Number, it.f.head, reason)
+		if err == nil {
+			fmt.Fprintf(e.Out, "  done: approved #%d at %s as %s, recorded on the ledger; the merge gate runs again\n", ap.PR, short(ap.Head), ap.By)
+		}
+		return err
 	}
 	var note, status, reason string
 	switch it.Kind {
@@ -1443,6 +1491,32 @@ func (e *Env) writeInboxCache(c inboxCache) {
 	}
 	if b, err := json.Marshal(c); err == nil {
 		_ = os.WriteFile(p, b, 0o600)
+	}
+}
+
+// readLine reads one line of the person's words, trimmed: the terminal echoes
+// and edits it (readKey leaves it in its normal mode between keys); other
+// input skips the blanks before it, as readKey does.
+func (e *Env) readLine() (string, error) {
+	f, ok := e.In.(*os.File)
+	tty := ok && term.IsTerminal(f.Fd())
+	var line []byte
+	var b [1]byte
+	for {
+		if _, err := io.ReadFull(e.In, b[:]); err != nil {
+			if len(line) > 0 {
+				return strings.TrimSpace(string(line)), nil
+			}
+			return "", err
+		}
+		switch {
+		case b[0] == '\n' || b[0] == '\r':
+			if tty || len(line) > 0 {
+				return strings.TrimSpace(string(line)), nil
+			}
+		case len(line) > 0 || tty || (b[0] != ' ' && b[0] != '\t'):
+			line = append(line, b[0])
+		}
 	}
 }
 

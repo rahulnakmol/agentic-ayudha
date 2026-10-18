@@ -65,11 +65,12 @@ the twin's recommendation:
 aayu inbox
 ```
 
-It lists open Decisions (floor waivers and provisional ones included), pull requests where the review stopped after
-its two fix rounds, stories whose pull request merged without a ship record, Bugs whose fix merged, and stories that
-another story replaced. It does not list a pull request waiting for your approval or a plan waiting for
-`plan --approve`; with a bot App installed, find those in GitHub's review requests. Every write is yours, under your
-own token, and logged.
+It lists open Decisions (floor waivers and provisional ones included), pull requests whose merge gate waits for your
+review (one device code approves several, each as `aayu inspect <pr> --approve` does), pull requests where the review
+stopped after its two fix rounds, stories whose pull request merged without a ship record, Bugs whose fix merged, and
+stories that another story replaced. It does not list a pull request waiting for your approval on GitHub or a plan
+waiting for `plan --approve`; with a bot App installed, find those in GitHub's review requests. Every write is yours,
+under your own token, and logged.
 
 **You should see** one card at a time with a slim list beside it (above it on a phone-width terminal). The list has
 one line per item, its icon, title, and number, with what needs you first and the housekeeping folded into one line.

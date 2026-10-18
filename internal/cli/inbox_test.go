@@ -316,7 +316,7 @@ func TestInboxWords(t *testing.T) {
 		t.Fatal(err)
 	}
 	sentence := regexp.MustCompile(`[.!?](\s|$)`)
-	for name, k := range map[string]inboxKind{"needs": inboxNeedsYou, "tidy": inboxTidy, InboxDecision: inboxKinds[InboxDecision], InboxReady: inboxKinds[InboxReady],
+	for name, k := range map[string]inboxKind{"needs": inboxNeedsYou, "tidy": inboxTidy, InboxDecision: inboxKinds[InboxDecision], InboxReady: inboxKinds[InboxReady], InboxHumanReview: inboxKinds[InboxHumanReview],
 		InboxCapped: inboxKinds[InboxCapped], InboxUnshipped: inboxKinds[InboxUnshipped], InboxFixed: inboxKinds[InboxFixed], InboxReplaced: inboxKinds[InboxReplaced]} {
 		if n := len(sentence.FindAllString(k.Explain, -1)); k.Word == "" || k.Line == "" || n < 2 || n > 4 {
 			t.Errorf("%s: word %q, line %q, explainer of %d sentences", name, k.Word, k.Line, n)
@@ -345,7 +345,8 @@ func TestInboxWords(t *testing.T) {
 	}
 	_, house := splitInbox(items)
 	ready := InboxItem{Kind: InboxReady, Number: 590, PR: 590, f: inboxFacts{story: 586, head: strings.Repeat("3", 40)}}
-	for _, text := range append([]string{tidyCounsel(house), inboxCounsel(ready)}, func() (out []string) {
+	human := InboxItem{Kind: InboxHumanReview, Number: 591, f: inboxFacts{head: strings.Repeat("4", 40)}}
+	for _, text := range append([]string{tidyCounsel(house), inboxCounsel(ready), inboxCounsel(human)}, func() (out []string) {
 		for _, it := range items {
 			if it.CounselFrom == "facts" {
 				out = append(out, it.Counsel)
@@ -962,4 +963,122 @@ func gateComment(id int64, body string) *fake.Comment {
 	c := &fake.Comment{ID: id, Body: body}
 	c.User.Login, c.User.Type = "github-actions[bot]", "Bot"
 	return c
+}
+
+// Story #675: a PR whose merge gate waits at the human rung is an inbox card,
+// and one session approves two of them and accepts a Decision under one
+// device code, in a shell with a host agent marker. Each approval is the
+// record `aayu inspect --approve` writes, which the merge gate then reads; an
+// empty answer, or a head that moved since the card was read, records nothing.
+func TestInboxApprovesHumanReviews(t *testing.T) {
+	g, env, opts, prA := inspectFixture(t, defectDiff, "Refs #2")
+	headA, headB := strings.Repeat("c", 40), strings.Repeat("b", 40)
+	setConfig := func(reviewer string) {
+		_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
+		body := "version = 1\n\n[autonomy]\napprover = \"lead\"\n\n[inspect]\nreviewer = \"" + reviewer + "\"\napps = [\"codex\"]\n"
+		if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	prB := g.AddPR("fix: guard an empty total", "Guards Percent against an empty total.", "founder", "fix/percent-empty", headB, "dev")
+	prC := g.AddPR("fix: name the total", "Names the total.", "founder", "fix/percent-name", strings.Repeat("a", 40), "dev")
+	decision := g.AddIssue("Choose the rules engine", decisionBody("true", ""), "type:decision", "status:validation")
+	g.Mu.Lock()
+	prB.Diff, prC.Diff, g.Viewer = cleanDiff, cleanDiff, "lead"
+	g.Mu.Unlock()
+	// The gate: #C waits for Codex, #A and #B for a person.
+	setConfig("codex")
+	if code, res, errOut := inspectApp(t, env, opts, prC.Number, "--ci"); code != ExitBlocked || res.Disposition != NoReply {
+		t.Fatalf("gate on #%d: %d %+v %s", prC.Number, code, res, errOut)
+	}
+	setConfig("human")
+	for _, n := range []int{prA, prB.Number} {
+		if code, res, errOut := inspectApp(t, env, opts, n, "--ci"); code != ExitBlocked || res.Rung != inspect.RungHuman {
+			t.Fatalf("gate on #%d: %d %+v %s", n, code, res, errOut)
+		}
+	}
+	_, out, _ := run(t, env, opts, "inbox", "--list", "--json", "--repo", "o/r")
+	var list inboxList
+	_ = json.Unmarshal([]byte(out), &list)
+	var listed []int
+	for _, it := range list.Items {
+		if it.Kind == InboxHumanReview {
+			listed = append(listed, it.Number)
+		}
+	}
+	if !slices.Equal(listed, []int{prA, prB.Number}) {
+		t.Fatalf("human-review items %v, want #%d and #%d:\n%s", listed, prA, prB.Number, out)
+	}
+
+	marked := maps.Clone(env)
+	marked["AMP_THREAD_ID"] = "T-1"
+	marked["XDG_STATE_HOME"] = t.TempDir()
+	person := opts
+	person.IsTerminal = func(any) bool { return true }
+	person.DevicePoll = time.Millisecond
+	device := func() {
+		g.Mu.Lock()
+		g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "lead", Outcome: "approve"}
+		g.Mu.Unlock()
+	}
+	approvals := func() string {
+		if !strings.Contains(git(t, opts.Dir, "ls-tree", "-r", "--name-only", "origin/ledger"), ApprovedPath) {
+			return ""
+		}
+		return git(t, opts.Dir, "show", "origin/ledger:"+ApprovedPath) + "\n"
+	}
+	// The full-screen inbox: Enter with nothing typed, and an approval after
+	// a push to #A, both write nothing.
+	device()
+	var refused, moved string
+	person.TUI = func(tm tea.Model) error {
+		m := tm.(*inboxModel)
+		teaDrive(m, m.Init())
+		m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+		for m.item() < 0 || m.items[m.item()].Number != prA {
+			teaKeys(m, "j")
+		}
+		teaKeys(m, "2", "enter", "enter")
+		refused = ansi.Strip(m.View().Content)
+		g.Mu.Lock()
+		g.Pulls[prA].Head.SHA = strings.Repeat("e", 40)
+		g.Mu.Unlock()
+		teaKeys(m, "read the diff", "enter")
+		moved = m.status
+		g.Mu.Lock()
+		g.Pulls[prA].Head.SHA = headA
+		g.Mu.Unlock()
+		teaKeys(m, "q")
+		return nil
+	}
+	if code, out, errOut := runIn(t, marked, person, "", "inbox", "--repo", "o/r"); code != 0 || !strings.Contains(refused, "Say what you checked first; nothing was written.") ||
+		!strings.Contains(refused, "What did you check?") || !strings.Contains(moved, "moved from ccccccc to eeeeeee since you read it, so nothing was recorded") || approvals() != "" {
+		t.Fatalf("empty answer or moved head: exit %d\n%s\nstatus %q\nledger %q\n%s\n%s", code, refused, moved, approvals(), out, errOut)
+	}
+
+	// One plain session: past a Decision that is not ready, then the Decision, #A and #B, each with what was checked.
+	device()
+	person.TUI = nil
+	code, out, errOut := runIn(t, marked, person, "s a 2 read the diff and the pack\n2 ran go test ./internal/report\nq", "inbox", "--plain", "--repo", "o/r")
+	g.Mu.Lock()
+	started, closed := g.Device.Started, g.Issues[decision.Number].State == "closed"
+	replies := 0
+	for _, n := range []int{prA, prB.Number} {
+		for _, c := range g.Issues[n].Comments {
+			if strings.Contains(c.Body, "Human review of `") && strings.Contains(c.Body, "by @lead through `aayu inspect "+strconv.Itoa(n)+" --approve`") {
+				replies++
+			}
+		}
+	}
+	g.Mu.Unlock()
+	got := approvals()
+	if code != 0 || started != 1 || !closed || replies != 2 || strings.Count(got, "\n") != 2 ||
+		!strings.Contains(got, `{"pr":`+strconv.Itoa(prA)+`,"head":"`+headA+`","by":"lead"`) || !strings.Contains(got, `"reason":"read the diff and the pack"`) ||
+		!strings.Contains(got, `{"pr":`+strconv.Itoa(prB.Number)+`,"head":"`+headB+`","by":"lead"`) || !strings.Contains(got, `"reason":"ran go test ./internal/report"`) {
+		t.Fatalf("exit %d, device codes %d (want 1), decision closed %v, replies %d (want 2), ledger:\n%s\n%s\n%s", code, started, closed, replies, got, out, errOut)
+	}
+	if code, res, errOut := inspectApp(t, env, opts, prA, "--ci"); code != 0 || res.Disposition != inspect.Merge || res.Rung != inspect.RungHuman ||
+		!strings.Contains(lastInspect(t, g, prA), "recorded on the ledger (`inspect/approved.jsonl`)") {
+		t.Fatalf("the gate after the inbox approval: %d %+v %s", code, res, errOut)
+	}
 }

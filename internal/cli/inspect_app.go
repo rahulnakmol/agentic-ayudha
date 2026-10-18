@@ -272,7 +272,7 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		res.Review = "requested: " + a.builder.RungLabel(choice.Rung, choice.Kind(), choice.Family)
 		res.Next = fmt.Sprintf("the reviewer replies on this PR in the stated format (a review request: `aayu inspect %d`, run by the builder or a person under their own account); the reply re-runs this check", n)
 		if choice.App == "" {
-			res.Next = fmt.Sprintf("the [autonomy] approver reviews the PR and runs `aayu inspect %d --approve --reason \"<what you checked>\"` in their own terminal (a person-verified step that records the head on the ledger; a comment alone does not count); its reply re-runs this check", n)
+			res.Next = fmt.Sprintf("the [autonomy] approver reviews the PR and runs `aayu inspect %d --approve --reason \"<what you checked>\"` in their own terminal, or approves it in `aayu inbox` with one device code for several (a person-verified step that records the head on the ledger; a comment alone does not count); its reply re-runs this check", n)
 			if approver == "" {
 				res.Next = "set [autonomy] approver in .aayudha/config.toml; then " + res.Next
 			}
@@ -292,6 +292,10 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		}
 	}
 	res.Notes = append(notes, res.Notes...)
+	st.Human = ""
+	if rerr != nil && choice.App == "" { // no usable review from a person yet
+		st.Human = head
+	}
 	// A cached judgement keeps its reply, but the rung follows the builder as
 	// declared now: a changed label rewrites the record ship reads.
 	relabel := false
