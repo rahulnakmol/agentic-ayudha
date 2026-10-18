@@ -546,6 +546,18 @@ func TestInitExtras(t *testing.T) {
 		t.Fatal("second run with extras changed files")
 	}
 
+	// A default branch outside [branches]: pull_request_target checks the environment against it, so init adds it.
+	g.Default = "trunk"
+	if code, _, errOut := run(t, env, opts, args...); code != 0 {
+		t.Fatalf("run with default branch trunk: exit %d: %s", code, errOut)
+	}
+	g.Mu.Lock()
+	if got := slices.DeleteFunc(slices.Clone(ce.Branches), func(b string) bool { return b == "" }); !slices.Equal(got, []string{"dev", "rolling", "main", "trunk"}) {
+		t.Errorf("code-review deployment branches with default branch trunk: %v", got)
+	}
+	g.Mu.Unlock()
+	g.Default = "dev"
+
 	// uninit removes what lives in the repository and lists the rest.
 	if code, _, errOut := run(t, env, opts, "uninit", "--yes"); code != 0 {
 		t.Fatalf("uninit: %d %s", code, errOut)

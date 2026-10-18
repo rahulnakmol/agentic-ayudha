@@ -249,15 +249,17 @@ type branchPolicy struct {
 
 // reviewEnvironment creates the code-review environment the merge gate's
 // inspect job runs under (docs/guide/how-review.md): deployment limited to
-// the base branches, which a pull_request_target run is on, so no PR branch
-// reaches its key; the review model's endpoint and ID as variables,
-// pre-filled with the recommended model; and a note to set the key. A second
-// run keeps the values a person changed.
+// the base branches and the default branch, so no PR branch reaches its key.
+// A pull_request_target run takes its workflow from the default branch, and
+// GitHub checks environment rules against that branch (since 2025-12-08), so
+// the default branch must be listed. The review model's endpoint and ID are
+// variables, pre-filled with the recommended model, and a note says to set
+// the key. A second run keeps the values a person changed.
 func (in *Init) reviewEnvironment(ctx context.Context, branches []string) error {
 	r, name := in.Repo, inspect.ReviewEnvironment
 	base := "/repos/" + r.FullName + "/environments/" + name
-	if len(branches) == 0 {
-		branches = []string{cmp.Or(r.Default, "main")}
+	if d := cmp.Or(r.Default, "main"); !slices.Contains(branches, d) {
+		branches = append(slices.Clone(branches), d)
 	}
 	if in.dry() {
 		in.note("gates", "environment", name, "planned", "deployment branches "+strings.Join(branches, ", ")+"; variables "+inspect.ReviewModelURLVar+", "+inspect.ReviewModelVar)
@@ -305,7 +307,7 @@ func (in *Init) reviewEnvironment(ctx context.Context, branches []string) error 
 			func(ctx context.Context) (any, error) { return nil, in.rest(ctx, http.MethodDelete, path, nil, nil) }); err != nil {
 			return err
 		}
-		in.note("gates", "environment", name, "changed", fmt.Sprintf("removed the deployment rule %s (%s): only the base branches may reach the review model's key", p.Name, cmp.Or(p.Type, "branch")))
+		in.note("gates", "environment", name, "changed", fmt.Sprintf("removed the deployment rule %s (%s): only the base branches and the default branch may reach the review model's key", p.Name, cmp.Or(p.Type, "branch")))
 	}
 	for _, b := range branches {
 		if b == "" || slices.ContainsFunc(have.Policies, func(p branchPolicy) bool { return p.Name == b && p.Type != "tag" }) {

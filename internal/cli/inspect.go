@@ -529,7 +529,7 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		if unavailable != "" {
 			why = "fallback: no installed reviewer app can review this head (" + unavailable + ")"
 		}
-		notes = []string{fmt.Sprintf("paid reviewer (rung B, opt-in): %s, so [inspect] paid_reviewer %s (%s) reviews with the repository's key, within %.2f USD for this PR", why, paid.Model, paid.Family, l.Config.Budget.PerPRInspectMax)}
+		notes = []string{fmt.Sprintf("paid reviewer (rung B): %s, so [inspect] paid_reviewer %s (%s) reviews with its endpoint's key, within %.2f USD for this PR", why, paid.Model, paid.Family, l.Config.Budget.PerPRInspectMax)}
 	}
 	if err != nil {
 		return err
@@ -832,11 +832,10 @@ func (e *Env) inspectApprove(ctx context.Context, in Values) error {
 }
 
 // paidReviewer is rung B of the review ladder (Decision #469; founder,
-// 2026-10-18), the deliberate, opt-in exception to "no AI keys in a product
-// repo's CI": [inspect] paid_reviewer, called with the repository's own key
-// (this repository: grok-4.7 through the AI gateway), only when [inspect]
-// reviewer is grok or, as the fallback, when no installed app can review the
-// head (unavailable says why: a usage-limit reply, or none in time); the
+// 2026-10-18): [inspect] paid_reviewer, called with its endpoint's key (in
+// the merge gate, the model and key the code-review environment names; see
+// useReviewModel), only when [inspect] reviewer is ci or, as the fallback,
+// when no installed app can review the head (unavailable says why: a usage-limit reply, or none in time); the
 // model's family is one the builder cannot be, the key is present, and
 // [budget] per_pr_inspect_max caps the spend. Only a PR whose author has write
 // access to the repository (perm, the author's effective permission, is admin

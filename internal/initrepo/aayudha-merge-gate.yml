@@ -158,7 +158,8 @@ jobs:
     if: github.event_name == 'pull_request_target'
     runs-on: ubuntu-latest
     # The code-review environment holds the review model's endpoint, ID, and key. Restrict its deployment branches to the
-    # base branches (aayu init --gates does), which a pull_request_target run is on, so no PR branch reaches the key.
+    # base branches and the default branch (aayu init --gates does). GitHub checks a pull_request_target run against the
+    # default branch, so it must be listed; no PR branch reaches the key.
     environment: code-review
     timeout-minutes: 15
     permissions:

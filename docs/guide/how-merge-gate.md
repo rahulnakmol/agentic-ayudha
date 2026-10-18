@@ -5,7 +5,7 @@ It runs `verify` again on the pull request's head commit, has a model from a dif
 the code-review environment's model, or an agent app you choose), and makes the result available to `ship`. It exists because the builder's own word is not evidence:
 the checks that decide a merge must run somewhere the pull request cannot change.
 
-![A pull request update starts the gate workflow taken from the base branch; the merge-gate job verifies the head in a sandbox and keeps the pack as a run artifact, the inspect job reviews it, the pack job checks it and comments, and ship needs all three checks green and the artifact from this run.](img/how-merge-gate.svg)
+![A pull request update starts the gate workflow taken from the default branch; the merge-gate job verifies the head in a sandbox and keeps the pack as a run artifact, the inspect job reviews it, the pack job checks it and comments, and ship needs all three checks green and the artifact from this run.](img/how-merge-gate.svg)
 
 *Three jobs on each update: one runs the pull request's code with no secrets, one reviews it and never runs that code,
 one checks the pack and comments. A fourth re-runs inspect when an app reviewer replies. Only the review job holds an
@@ -15,8 +15,8 @@ AI key, the code-review environment's, and no job writes the ledger.*
 
 ### Why pull_request_target
 
-The workflow triggers on `pull_request_target`. GitHub then runs the workflow file as it is on the base branch,
-not the copy in the pull request. A pull request that edits the gate, lowers a threshold in the workflow, or swaps
+The workflow triggers on `pull_request_target`. GitHub then runs the workflow file as it is on the repository's
+default branch, not the copy in the pull request (since 2025-12-08; before that, the base branch's). A pull request that edits the gate, lowers a threshold in the workflow, or swaps
 a tool version has no effect on its own run. Its changes apply only after they merge. In this repository,
 `.github/` is also a protected path in `.github/CODEOWNERS`, so a change to the gate needs a CODEOWNER review.
 
@@ -56,7 +56,7 @@ shows the fix; one that passes there does not. The check is advisory until the d
 test that is green on the base is reported and skipped; from it, the check fails. Only Go modules are run today.
 
 **`aayudha/inspect`** runs after the gate job succeeds, on every pull request that is ready for review, whether or not
-it serves a story. It runs under the `code-review` environment, whose key only the base branches reach: with
+it serves a story. It runs under the `code-review` environment, whose key only the base branches and the default branch reach: with
 `reviewer = "ci"` it calls that environment's model, and with an app it reads the app's reply on the pull request. It
 has `pull-requests: write` to post its comment. It checks out the base branch only, downloads the
 `aayudha-pack` artifact when the pull request serves a story, and reads the diff through the GitHub API. It never runs
@@ -153,8 +153,8 @@ different-family review in its log, so after a same-family review, or with no su
 comment, or a run of the branch's own workflow, never counts. `reviewer = "model"` keeps the 0.1 model lane for a repository that accepts a key in CI.
 
 **Rung B, the CI review.** The default review (founder, 2026-10-18), and the fallback when an app cannot review. The
-inspect job runs under the `code-review` environment, which only the base branches can deploy to, and calls the model
-it names: the variables `AAYU_REVIEW_MODEL_URL` (the model endpoint's base URL) and `AAYU_REVIEW_MODEL` (the model ID,
+inspect job runs under the `code-review` environment, which only the base branches and the default branch can deploy
+to, and calls the model it names: the variables `AAYU_REVIEW_MODEL_URL` (the model endpoint's base URL) and `AAYU_REVIEW_MODEL` (the model ID,
 of a family the builder cannot be, such as `grok-4.7`), with the secret `AAYU_REVIEW_MODEL_KEY`. `[inspect]
 paid_reviewer` names the model when the environment names none. [Code review in the gate](how-review.md) sets it up.
 
@@ -414,7 +414,7 @@ fixed head, returned `merge`, and the spend covers both calls.
 
 ## Invariants
 
-1. The gate runs the base branch's workflow, so a pull request cannot weaken its own checks. Enforced by the
+1. The gate runs the default branch's workflow, so a pull request cannot weaken its own checks. Enforced by the
    `pull_request_target` trigger in
    [internal/initrepo/aayudha-merge-gate.yml](../../internal/initrepo/aayudha-merge-gate.yml).
 2. Pull request code runs only in a job without secrets, and only inside the sandbox: scrubbed environment, no

@@ -11,11 +11,12 @@ decides with the review.
 ## Set up the code-review environment
 
 The review model's endpoint, ID, and key live in a GitHub environment named `code-review`. Only the base branches
-(`dev`, `rolling`, `main`) can deploy to it, and the gate's inspect job checks out the base branch and never runs
-pull request code, so no pull request can reach the key.
+(`dev`, `rolling`, `main`) and the repository's default branch can deploy to it. GitHub checks a `pull_request_target`
+run against the default branch, so init always lists it. The gate's inspect job never runs pull request code, so no
+pull request can reach the key.
 
 1. Run `aayu init --gates`. It installs the merge gate and creates the `code-review` environment, with its
-   deployment branches limited to the base branches and two variables filled in:
+   deployment branches limited to the base branches and the default branch, and two variables filled in:
 
    | Name | Kind | What it holds | Filled in with |
    |---|---|---|---|
@@ -79,3 +80,34 @@ the repository, then set `[inspect] reviewer` to its name and add it to `[inspec
 app's review of the head. When the app cannot review a head (a usage limit, or no reply within 30 minutes), the next
 installed app reviews, then the code-review environment's model, then a person. See
 [the merge gate](how-merge-gate.md) for how each app's review is read.
+
+## Invariants
+
+1. The review model's key reaches only the merge gate's inspect job, under the `code-review` environment, and that
+   job never runs pull request code. Enforced by `TestModelChecksNeverGateAndNeverShip` in
+   [workflows_test.go](../../workflows_test.go).
+2. Only the base branches and the default branch can deploy to `code-review`; init removes every other rule, on
+   every page of the list. Enforced by `reviewEnvironment` in
+   [internal/initrepo/extras.go](../../internal/initrepo/extras.go), `TestInitExtras`.
+3. A missing endpoint, model, or key fails the inspect check, and a URL with credentials or a query is refused and
+   never echoed. Enforced by `useReviewModel` and `missingReviewModel` in
+   [internal/cli/inspect.go](../../internal/cli/inspect.go), `TestInspectReviewTools`.
+4. A model of the builder's family never reviews, a pull request from an author without write access spends nothing,
+   and `[budget] per_pr_inspect_max` caps the spend. Enforced by `paidReviewer` in
+   [internal/cli/inspect.go](../../internal/cli/inspect.go), `TestInspectPaidReviewer`.
+5. When the CI review cannot run, the installed apps review, then a person. Enforced by `inspect.ChooseReviewer` in
+   [internal/inspect/apps.go](../../internal/inspect/apps.go), `TestInspectReviewerFallback`.
+
+## Where it lives in the code
+
+- [internal/cli/inspect.go](../../internal/cli/inspect.go): `useReviewModel`, `missingReviewModel`, `paidReviewer`,
+  and `reviewEffort`.
+- [internal/initrepo/extras.go](../../internal/initrepo/extras.go): `reviewEnvironment`, which init runs.
+- [internal/initrepo/aayudha-merge-gate.yml](../../internal/initrepo/aayudha-merge-gate.yml): the inspect job and its
+  environment.
+- [internal/doctor/reviewer.go](../../internal/doctor/reviewer.go): doctor's reviewer and review-rung rows.
+
+## Read next
+
+- [The merge gate](how-merge-gate.md): the jobs, the review ladder, and what the inspect check decides.
+- [Trust model and identities](how-trust.md): who may merge what, and when a person must.
