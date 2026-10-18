@@ -94,14 +94,14 @@ func (ix *Index) builtins(files map[string]*scanned, defs map[string][]string) {
 		if text == "" {
 			text = s.raw
 		}
-		seen := map[string]bool{}
+		seen := map[string]bool{} // each name once a line: a case set drawn from a later line sees its own use
 		for _, m := range re.FindAllStringSubmatchIndex(text, -1) {
 			n := text[m[2]:m[3]]
-			if seen[n] {
+			at := p + ":" + itoa(strings.Count(text[:m[2]], "\n")+1)
+			if seen[n+" "+at] {
 				continue
 			}
-			seen[n] = true
-			at := p + ":" + itoa(strings.Count(text[:m[2]], "\n")+1)
+			seen[n+" "+at] = true
 			ix.Uses = append(ix.Uses, Fact{ID: "use:" + n + ":" + at, Kind: "use", At: at, Detail: n})
 		}
 	}

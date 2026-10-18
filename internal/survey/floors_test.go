@@ -351,6 +351,7 @@ func TestFloorRunnerPrograms(t *testing.T) {
 	write("cases/run.tcl", "set n 1\nshout hi\n")
 	write("cases/quiet.tcl", "puts shout\n")
 	write("cases/hy.tcl", "loud-x hi\n::ns::yo 1\n")
+	write("cases/twice.js", "shout(1);\nshout(2);\n")
 	runFloorCases(t, build(), base, []floorCase{
 		{"negated", "a call whose name has more definitions than its edge lists", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:nine.py:1"}, []string{"cases/zed.js"} }), "case set G1", false},
 		{"match", "the ninth definition's registration, from a program that never calls go", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/zed.js"} }),
@@ -369,6 +370,8 @@ func TestFloorRunnerPrograms(t *testing.T) {
 			"cases/loud.js:1 calls shout, which runner entry:other.py:1 does not register", true},
 		{"match", "no inputs, the cases drawn from a whole file", set(func(g *CaseSet) { g.Runners, g.From = []string{"entry:other.py:1"}, []string{"file:cases/hy.tcl"} }),
 			"cases/hy.tcl:1 calls loud-x", true},
+		{"match", "no inputs, the cases drawn from the second of two lines calling the same builtin", set(func(g *CaseSet) { g.Runners, g.From = []string{"entry:other.py:1"}, []string{"cases/twice.js:2"} }),
+			"cases/twice.js:2 calls shout, which runner entry:other.py:1 does not register", true},
 		{"near miss", "no inputs, the cases drawn from another line of that file", set(func(g *CaseSet) { g.Runners, g.From = []string{"entry:other.py:1"}, []string{"cases/hy.tcl:2"} }),
 			"calls loud-x", false},
 		{"near miss", "a Tcl input that names the builtin as an argument", set(func(g *CaseSet) { g.Runners, g.Inputs = []string{"entry:other.py:1"}, []string{"cases/quiet.tcl"} }), "case set G1", false},
