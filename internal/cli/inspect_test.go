@@ -1003,6 +1003,17 @@ func TestInspectThroughApp(t *testing.T) {
 	if code, _, errOut := inspectApp(t, ev, opts, prN, "--ci"); code != 0 || reruns != 1 {
 		t.Fatalf("rerun on a reply: exit %d, %d reruns %s", code, reruns, errOut)
 	}
+	// A newer reply run's skipped merge-gate check (here a cancelled reply run) hides nothing (#643).
+	g.Mu.Lock()
+	for i := range g.CheckRuns[head] {
+		g.CheckRuns[head][i].Suite = &fake.Suite{ID: 1}
+	}
+	g.CheckRuns[head] = append([]fake.CheckRun{{Name: "aayudha/inspect-reply", Status: "completed", Conclusion: "cancelled", Suite: &fake.Suite{ID: 2}},
+		{Name: "aayudha/merge-gate", Status: "completed", Conclusion: "skipped", Suite: &fake.Suite{ID: 2}}}, g.CheckRuns[head]...)
+	g.Mu.Unlock()
+	if code, _, errOut := inspectApp(t, ev, opts, prN, "--ci"); code != 0 || reruns != 2 {
+		t.Fatalf("rerun on a reply behind a reply run's skipped check: exit %d, %d reruns %s", code, reruns, errOut)
+	}
 
 	// A builder of the app's family (OpenAI) with only Codex installed: Codex
 	// reviews on the ladder's default rung, a labelled same-family review (C),

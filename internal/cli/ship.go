@@ -183,7 +183,7 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	}
 	for _, want := range gateChecks {
 		concl := "missing"
-		for _, r := range runs {
+		for _, r := range gateCheckRuns(runs) {
 			if r.GetName() == want {
 				concl = r.GetStatus()
 				if r.GetStatus() == "completed" {

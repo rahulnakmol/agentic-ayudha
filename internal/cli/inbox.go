@@ -621,9 +621,10 @@ func (s *inboxSource) readyItem(ctx context.Context, p *gh.PullRequest, by []str
 		if err != nil {
 			return nil, err
 		}
+		checks := gateCheckRuns(runs.CheckRuns)
 		for _, want := range gateChecks {
-			i := slices.IndexFunc(runs.CheckRuns, func(r *gh.CheckRun) bool { return r.GetName() == want }) // the newest run of a name first
-			if i < 0 || runs.CheckRuns[i].GetConclusion() != "success" {
+			i := slices.IndexFunc(checks, func(r *gh.CheckRun) bool { return r.GetName() == want }) // the newest run of a name first
+			if i < 0 || checks[i].GetConclusion() != "success" {
 				return nil, nil
 			}
 		}
