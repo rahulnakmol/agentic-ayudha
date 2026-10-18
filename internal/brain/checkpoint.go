@@ -256,7 +256,7 @@ func (c *cp) notesFor(n int) []string {
 	var out []string
 	for _, p := range slices.Sorted(mapKeys(c.v.Notes)) {
 		for _, s := range c.v.Notes[p].List("issues") {
-			if num, err := strconv.Atoi(strings.TrimPrefix(strings.TrimSpace(s), "#")); err == nil && num == n {
+			if num, ok := issueNum(s); ok && num == n {
 				out = append(out, p)
 			}
 		}
@@ -535,9 +535,12 @@ func (c *cp) issueBlocks() {
 		n := c.v.Notes[p]
 		var nums []int
 		for _, s := range n.List("issues") {
-			if num, err := strconv.Atoi(strings.TrimPrefix(strings.TrimSpace(s), "#")); err == nil {
-				nums = append(nums, num)
+			num, ok := issueNum(s)
+			if !ok {
+				c.err = fmt.Errorf("%s: issues: %q is not an issue number; fix it and run the checkpoint again", p, s)
+				continue
 			}
+			nums = append(nums, num)
 		}
 		if len(nums) == 0 {
 			continue
@@ -607,14 +610,25 @@ func (c *cp) seats() {
 			map[string]string{"facts": strings.Join(facts, "\n")})
 	}
 	// A person who no longer holds a role keeps their note; its generated
-	// roles say so, rather than a role they lost.
+	// roles say so, rather than a role they lost. A login matches its note
+	// whatever the case of either (People/Alice.md is alice's note).
+	notes := map[string]string{}
 	for _, p := range slices.Sorted(mapKeys(c.v.Notes)) {
-		if n := c.v.Notes[p]; n.Str("type") == "person" && people[strings.TrimSuffix(strings.TrimPrefix(p, "People/"), ".md")] == nil && Blocks(n.Body)["roles"] != "" {
+		n := c.v.Notes[p]
+		if n.Str("type") != "person" {
+			continue
+		}
+		login := strings.ToLower(Base(p))
+		notes[login] = p
+		if people[login] == nil && Blocks(n.Body)["roles"] != "" {
 			c.upsert(p, nil, nil, map[string]string{"roles": "- No role in the current records."})
 		}
 	}
 	for _, login := range slices.Sorted(maps.Keys(people)) {
-		p := "People/" + strings.ToLower(login) + ".md"
+		p := notes[login]
+		if p == "" {
+			p = "People/" + login + ".md"
+		}
 		c.upsert(p, func() *Note {
 			n := newNote(pt, "person-"+login, login, c.today, nil, "[[People]]")
 			n.Set("people", []string{login})
@@ -660,8 +674,8 @@ func (c *cp) timeline() {
 			continue
 		}
 		for _, s := range n.List("issues") {
-			num, err := strconv.Atoi(strings.TrimPrefix(strings.TrimSpace(s), "#"))
-			if err != nil || c.r.Issues[num].Closed == "" {
+			num, ok := issueNum(s)
+			if !ok || c.r.Issues[num].Closed == "" {
 				continue
 			}
 			evs = append(evs, ev{c.r.Issues[num].Closed, Link(p) + " is decided in #" + strconv.Itoa(num) + "."})

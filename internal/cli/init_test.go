@@ -425,7 +425,7 @@ func TestInitAdoptsLedgerAndUninit(t *testing.T) {
 		t.Errorf("notes with an exclusion that matches brain: %q, want %q", notes, exclusion)
 	}
 	g.Mu.Lock()
-	g.Rulesets[0]["conditions"] = map[string]any{"ref_name": map[string]any{"include": []any{"refs/heads/ledger", "refs/heads/brain"}}}
+	g.Rulesets[0]["conditions"] = map[string]any{"ref_name": map[string]any{"include": []any{"refs/heads/ledger", "refs/heads/b*"}}} // a pattern covers brain
 	g.Mu.Unlock()
 	if code, rep, errOut = runInitCmd(t, g, dir, "init", "--yes"); code != 0 {
 		t.Fatalf("rerun after the team added brain: exit %d: %s", code, errOut)

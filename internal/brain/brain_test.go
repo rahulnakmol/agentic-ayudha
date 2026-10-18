@@ -60,7 +60,7 @@ tags: [type/capability]
 
 func TestCheckpointKeepsHumanTextAndRefreshesGeneratedBlocks(t *testing.T) {
 	files := skeleton(t)
-	human := "# Proof\n\n## What it does\n\nIt keeps the evidence for each change.\n\n```text\n<!-- BEGIN aayudha:brain:history -->\n```\n\n````md\n```\n<!-- BEGIN aayudha:brain:record -->\n````\n\n```text\n    ```\n<!-- BEGIN aayudha:brain:history -->\nan example\n<!-- END aayudha:brain:history -->\n```\n\n## Why it exists\n\nA claim without evidence does not count.\n"
+	human := "# Proof\n\n## What it does\n\nIt keeps the evidence for each change.\n\n```text\n<!-- BEGIN aayudha:brain:history -->\n```\n\n````md\n```\n<!-- BEGIN aayudha:brain:record -->\n````\n\n```text\n    ```\n<!-- BEGIN aayudha:brain:history -->\nan example\n<!-- END aayudha:brain:history -->\n```\n\n```text\n\t```\n<!-- BEGIN aayudha:brain:history -->\na tab example\n<!-- END aayudha:brain:history -->\n```\n\n## Why it exists\n\nA claim without evidence does not count.\n"
 	files["Capabilities/Proof.md"] = note(capFM, human+"\n"+Block("history", "- stale line")+"\n\nA closing line a person wrote.\n")
 	files["Decisions/Decisions.md"] = []byte("---\n# A person's comment: keep this map.\n" + strings.TrimPrefix(string(files["Decisions/Decisions.md"]), "---\n"))
 	r := Records{
@@ -117,6 +117,9 @@ func TestCheckpointKeepsHumanTextAndRefreshesGeneratedBlocks(t *testing.T) {
 	// A main rung releases a version that has no GitHub Release; a person who
 	// lost every role keeps a note that no longer claims one.
 	r.Rungs = append(r.Rungs, Rung{Path: "releases/300/main.json", Release: 300, Version: "v0.3.0", Target: "main", Tag: "v0.3.0", Date: "2026-10-20"})
+	r.Approver = "alice" // her note is People/Alice.md: a login ignores case
+	merged["People/Alice.md"] = note("id: person-alice\ntype: person\ntitle: Alice\nowner: founder\nstatus: current\nupdated: 2026-10-01\nsources: [\"file .aayudha/config.toml\"]\nup: \"[[People]]\"\ntags: [type/person]\n",
+		"# Alice\n\n## Roles\n\n"+Block("roles", "")+"\n")
 	merged["People/olduser.md"] = note("id: person-olduser\ntype: person\ntitle: olduser\nowner: founder\nstatus: alumni\nupdated: 2026-10-01\nsources: [\"file .aayudha/config.toml\"]\nup: \"[[People]]\"\ntags: [type/person]\n",
 		"# olduser\n\n## Roles\n\n"+Block("roles", "- [[Founder]]")+"\n")
 	third, err := Run(merged, r, today, true)
@@ -131,6 +134,13 @@ func TestCheckpointKeepsHumanTextAndRefreshesGeneratedBlocks(t *testing.T) {
 	}
 	if got := string(third.Files["People/olduser.md"]); !strings.Contains(got, "- No role in the current records.") || strings.Contains(got, "[[Founder]]") {
 		t.Errorf("a person who lost every role still claims one:\n%s", got)
+	}
+	if _, dup := third.Files["People/alice.md"]; dup || !strings.Contains(string(third.Files["People/Alice.md"]), "the approver") {
+		t.Errorf("the checkpoint did not reuse People/Alice.md for alice: wrote %v", third.Paths)
+	}
+	merged["Capabilities/Proof.md"] = []byte(strings.Replace(string(merged["Capabilities/Proof.md"]), "issues: [32]", "issues: [32, not-an-issue]", 1))
+	if _, err := Run(merged, r, today, true); err == nil || !strings.Contains(err.Error(), `"not-an-issue" is not an issue number`) {
+		t.Errorf("a checkpoint over a malformed issues entry: err %v", err)
 	}
 }
 
@@ -221,6 +231,8 @@ tags: [type/principle]
 		{"long sentence", good, long + "\n", "ste a sentence has 26 words"},
 		{"long sentence in a generated block is not prose", good, Block("record", "- "+long) + "\n", ""},
 		{"orphan", strings.Replace(good, "up: \"[[Principles]]\"\n", "", 1), "Short.\n", "orphan no up link"},
+		{"up is a same-note anchor", strings.Replace(good, "[[Principles]]", "[[#Context]]", 1), "Short.\n", "orphan up link [[#Context]] does not resolve to another note"},
+		{"issues: not a number", strings.Replace(good, "owner: founder", "owner: founder\nissues: [not-an-issue]", 1), "Short.\n", `issues: "not-an-issue" is not an issue number`},
 		{"people: not a login", strings.Replace(good, "owner: founder", "owner: founder\npeople: [alice-]", 1), "Short.\n", `people: "alice-" is not a GitHub login`},
 		{"owner is a person", strings.Replace(good, "owner: founder", "owner: rahulnakmol", 1), "Short.\n", `owner "rahulnakmol" is not a seat slug`},
 		{"bad status", strings.Replace(good, "status: current", "status: done", 1), "Short.\n", `status "done" is not one of`},

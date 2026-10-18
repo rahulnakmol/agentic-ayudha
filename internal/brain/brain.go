@@ -137,8 +137,7 @@ func maskFences(body string) string {
 			if m := fenceOpenRE.FindStringSubmatch(line); m != nil {
 				start, open = i, m[1]
 			}
-		} else if t := strings.TrimSpace(line); len(line)-len(strings.TrimLeft(line, " ")) <= 3 &&
-			len(t) >= len(open) && strings.Trim(t, open[:1]) == "" {
+		} else if t := strings.TrimSpace(line); indent(line) <= 3 && len(t) >= len(open) && strings.Trim(t, open[:1]) == "" {
 			blank(masked, start, end)
 			start, open = -1, ""
 		}
@@ -148,6 +147,23 @@ func maskFences(body string) string {
 		blank(masked, start, len(body))
 	}
 	return string(masked)
+}
+
+// indent is the width of a line's leading blanks in columns; a tab runs to the
+// next multiple of four (CommonMark).
+func indent(line string) int {
+	col := 0
+	for _, r := range line {
+		switch r {
+		case ' ':
+			col++
+		case '\t':
+			col += 4 - col%4
+		default:
+			return col
+		}
+	}
+	return col
 }
 
 func blank(b []byte, from, to int) {

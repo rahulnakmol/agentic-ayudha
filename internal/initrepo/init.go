@@ -428,15 +428,18 @@ func (d rulesetDetail) protectsLedger() bool {
 
 // brainAdvice tells the person how to protect the brain branch with an
 // adopted ruleset that does not cover it yet; aayudha never edits the team's
-// own ruleset. It is empty when the ruleset includes the branch and no
-// exclusion (which beats an inclusion) exempts it.
+// own ruleset. It is empty when the ruleset includes the branch (by name, by
+// pattern, or with ~ALL) and no exclusion (which beats an inclusion) exempts it.
 func (d rulesetDetail) brainAdvice() string {
 	var advice []string
-	if !slices.Contains(d.Conditions.RefName.Include, brainRef) {
+	if !slices.ContainsFunc(d.Conditions.RefName.Include, func(x string) bool {
+		ok, _ := pathpkg.Match(x, brainRef)
+		return ok || x == "~ALL"
+	}) {
 		advice = append(advice, fmt.Sprintf("add %q to ruleset %q (id %d) conditions.ref_name.include", brainRef, d.Name, d.ID))
 	}
 	for _, x := range d.Conditions.RefName.Exclude {
-		if ok, _ := pathpkg.Match(x, brainRef); ok || x == brainRef {
+		if ok, _ := pathpkg.Match(x, brainRef); ok {
 			advice = append(advice, fmt.Sprintf("remove the exclusion %q from ruleset %q (id %d) conditions.ref_name.exclude", x, d.Name, d.ID))
 		}
 	}

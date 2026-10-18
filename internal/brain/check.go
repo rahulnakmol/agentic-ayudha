@@ -5,6 +5,7 @@ import (
 	"path"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -117,6 +118,12 @@ func links(text string) []string {
 	return out
 }
 
+// issueNum reads an issues entry: a positive number, with or without #.
+func issueNum(s string) (int, bool) {
+	n, err := strconv.Atoi(strings.TrimPrefix(strings.TrimSpace(s), "#"))
+	return n, err == nil && n > 0
+}
+
 func isLogin(s string) bool { return loginRE.MatchString(s) && len(strings.TrimPrefix(s, "@")) <= 39 }
 
 // IsVault reports whether files are an aayudha brain: the aayudha marker, or
@@ -215,6 +222,11 @@ func Check(files map[string][]byte) Report {
 		} else if _, ok := verbs.FindSeat(verbs.SeatID(o)); !ok {
 			fail(p, "frontmatter", "owner %q is not a seat slug (a seat outlives a person; name people under people)", o)
 		}
+		for _, s := range n.List("issues") {
+			if _, ok := issueNum(s); !ok {
+				fail(p, "frontmatter", "issues: %q is not an issue number", s)
+			}
+		}
 		for _, l := range n.List("people") {
 			if !isLogin(l) {
 				fail(p, "frontmatter", "people: %q is not a GitHub login", l)
@@ -247,16 +259,16 @@ func Check(files map[string][]byte) Report {
 			switch {
 			case up == "":
 				fail(p, "orphan", "no up link: link the note up to its map of content")
-			case v.Resolve(up) == "":
-				fail(p, "orphan", "up link [[%s]] does not resolve", up)
+			case v.Resolve(up) == "" || v.Resolve(up) == ".":
+				fail(p, "orphan", "up link [[%s]] does not resolve to another note", up)
 			}
 		}
 		for _, k := range linkKeys {
 			for _, val := range n.List(k) {
 				if lt := linkTarget(val); lt == "" {
 					fail(p, "link", "%s: %q is not a [[wikilink]]", k, val)
-				} else if v.Resolve(lt) == "" {
-					fail(p, "link", "%s: [[%s]] does not resolve", k, lt)
+				} else if q := v.Resolve(lt); q == "" || q == "." { // a same-note anchor links no note
+					fail(p, "link", "%s: [[%s]] does not resolve to another note", k, lt)
 				}
 			}
 		}
