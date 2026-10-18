@@ -31,7 +31,7 @@
 <rect x="12" y="498" width="436" height="230" rx="10" fill="#f5f6f8" stroke="#d9dde4" stroke-width="1.5"/>
 <text x="26" y="519" font-size="14.5" fill="#1f5bd1" font-weight="bold" text-anchor="start">Every weekday</text>
 <text x="26" y="544" font-size="13.5" fill="#1d2330" font-weight="bold" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">triage-daily</text>
-<text x="434" y="544" font-size="12.5" fill="#535b6b" font-weight="normal" text-anchor="end">09:00</text>
+<text x="434" y="544" font-size="12.5" fill="#535b6b" font-weight="normal" text-anchor="end">09:00, 13:00, 17:00, 21:00</text>
 <text x="26" y="561" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">Arjun labels new reports</text>
 <text x="26" y="584" font-size="13.5" fill="#1d2330" font-weight="bold" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">digest</text>
 <text x="434" y="584" font-size="12.5" fill="#535b6b" font-weight="normal" text-anchor="end">09:05</text>

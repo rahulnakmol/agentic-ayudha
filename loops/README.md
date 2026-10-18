@@ -27,7 +27,7 @@ This repository's loops are also the defaults a product gets: `aayu install --lo
 `setup_run` are replaced by the product's, from its lockfile (D-7.1h): `pnpm-lock.yaml` sets up node and pnpm, `bun.lock`
 or `bun.lockb` sets up Bun, both set up all three and install with pnpm, and `package-lock.json` sets up node and runs
 `npm ci`. Each then installs the Playwright browser through the same package manager; with no lockfile there is no
-setup. `triage-daily` (each weekday morning) replaces the
+setup. `triage-daily` (09:00, 13:00, 17:00 and 21:00 each weekday) replaces the
 retired aayudha-triage workflow and the weekly `triage` loop: `aayu triage` lists every open intake issue with no
 model, and the agent in your own session classifies each one with `--as`. `housekeeping` (weekly) runs `aayu gc`, then reports doctor drift,
 feature-map drift, and stale Ready issues. `ci-failed` (each weekday morning) sends a delegated story's failed
