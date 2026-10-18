@@ -80,6 +80,7 @@ type batch struct {
 	Mode    string      `json:"mode"`
 	Items   []batchItem `json:"items"`
 	Why     string      `json:"-"` // why the device code, in device mode
+	comment int64       // the batch comment aayu posted, once it has (device mode updates exactly that one)
 	Mention []string    `json:"-"` // who is asked
 }
 
@@ -249,11 +250,16 @@ func parseBatch(body string) (*batch, string, bool) {
 		return nil, "", false
 	}
 	shown := strings.TrimSuffix(strings.TrimPrefix(first, batchMarker), " -->")
-	i := strings.Index(body, batchDataMarker)
+	// The record is the footer render writes last; untrusted text above it
+	// may contain the marker too.
+	i := strings.LastIndex(body, batchDataMarker)
 	if i < 0 {
 		return nil, shown, false
 	}
-	enc, _, _ := strings.Cut(body[i+len(batchDataMarker):], " -->")
+	enc, rest, ok := strings.Cut(body[i+len(batchDataMarker):], " -->")
+	if !ok || strings.TrimSpace(rest) != "" {
+		return nil, shown, false
+	}
 	raw, err := base64.StdEncoding.DecodeString(enc)
 	if err != nil {
 		return nil, shown, false
@@ -750,12 +756,38 @@ func (e *Env) batchResult(ctx context.Context, c *github.Client, repo string, n 
 // always new comments, never edits of one found by its marker: anyone can
 // copy a marker into their own comment, and a new comment notifies.
 func postComment(ctx context.Context, c *github.Client, repo string, n int, kind, body string) error {
+	_, err := createComment(ctx, c, repo, n, kind, body)
+	return err
+}
+
+// createComment posts body on issue n and returns the new comment's ID (0 in a dry run).
+func createComment(ctx context.Context, c *github.Client, repo string, n int, kind, body string) (int64, error) {
 	owner, name, _ := github.SplitRepo(repo)
+	var id int64
 	_, err := c.Write(ctx, actions.Action{Kind: kind, Target: fmt.Sprintf("%s#%d", repo, n),
 		Request: &actions.Request{Method: http.MethodPost, Path: fmt.Sprintf("/repos/%s/issues/%d/comments", repo, n)}},
 		func(ctx context.Context) (any, error) {
 			cm, _, err := c.REST.Issues.CreateComment(ctx, owner, name, n, &gh.IssueComment{Body: gh.Ptr(body)})
-			return cm.GetID(), err
+			id = cm.GetID()
+			return id, err
+		})
+	return id, err
+}
+
+// show posts the device batch's comment the first time and then edits that
+// exact comment: a marker copied into another comment never redirects it.
+func (b *batch) show(ctx context.Context, c *github.Client, body string) error {
+	if b.comment == 0 {
+		id, err := createComment(ctx, c, b.Repo, b.Issue, "github.comment.batch", body)
+		b.comment = id
+		return err
+	}
+	owner, name, _ := github.SplitRepo(b.Repo)
+	_, err := c.Write(ctx, actions.Action{Kind: "github.comment.batch", Target: fmt.Sprintf("%s#%d", b.Repo, b.Issue),
+		Request: &actions.Request{Method: http.MethodPatch, Path: fmt.Sprintf("/repos/%s/issues/comments/%d", b.Repo, b.comment)}},
+		func(ctx context.Context) (any, error) {
+			_, _, err := c.REST.Issues.EditComment(ctx, owner, name, b.comment, &gh.IssueComment{Body: gh.Ptr(body)})
+			return b.comment, err
 		})
 	return err
 }

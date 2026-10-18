@@ -540,7 +540,7 @@ func decideAccept(ctx context.Context, e *Env, cfg *config.Config, repo string, 
 			if why != "" {
 				done := refsOf(nums[:i])
 				msg := fmt.Sprintf("Accepted %s; #%d was not accepted: %s while the batch was applied; the rest was not applied.", done, nums[i], why)
-				_, _ = writer.UpsertComment(ctx, repo, b.Issue, b.marker(), b.render(batchStatus{Done: msg, Next: "ask for the remaining Decisions again: it posts a new batch"}), actions.Action{Kind: "github.comment.batch"})
+				_ = b.show(ctx, writer, b.render(batchStatus{Done: msg, Next: "ask for the remaining Decisions again: it posts a new batch"}))
 				return Errorf(ExitBlocked, "decide --accept: %s", msg)
 			}
 			d = fresh
@@ -611,14 +611,14 @@ func (e *Env) deviceBatch(ctx context.Context, c *github.Client, b *batch, login
 	p := Pending{What: "decide --accept", Effect: effects,
 		Code: func(ctx context.Context, code deviceCodeReply, expires time.Time) error {
 			shown = b.render(batchStatus{Code: &code, Expires: expires})
-			if _, err := c.UpsertComment(ctx, b.Repo, b.Issue, b.marker(), shown, actions.Action{Kind: "github.comment.batch"}); err != nil {
+			if err := b.show(ctx, c, shown); err != nil {
 				return Wrap(ExitExternal, fmt.Errorf("posting the batch on #%d: %w", b.Issue, err))
 			}
 			fmt.Fprintf(e.Err, "Posted batch %s on #%d with the code.\n", b.hash(), b.Issue)
 			return nil
 		},
 		Failed: func(ctx context.Context, what, next string) {
-			_, _ = c.UpsertComment(ctx, b.Repo, b.Issue, b.marker(), b.render(batchStatus{Done: what, Next: next}), actions.Action{Kind: "github.comment.batch"})
+			_ = b.show(ctx, c, b.render(batchStatus{Done: what, Next: next}))
 		},
 	}
 	if err := e.requireApproval(ctx, p, AccessWrite); err != nil {
@@ -627,17 +627,18 @@ func (e *Env) deviceBatch(ctx context.Context, c *github.Client, b *batch, login
 	if e.approval != nil && shown != "" {
 		// Anyone with the bot's token could have edited the batch while the
 		// code was waiting: the approval covers only what the person saw.
-		cm, err := findMarked(ctx, c, b.Repo, b.Issue, b.marker())
+		owner, name, _ := github.SplitRepo(b.Repo)
+		cm, _, err := c.REST.Issues.GetComment(ctx, owner, name, b.comment)
 		if err != nil {
 			return Wrap(ExitExternal, err)
 		}
-		if cm == nil || cm.GetBody() != shown {
+		if cm.GetBody() != shown {
 			return e.batchVoid(ctx, c, b, "the batch comment changed while the code was waiting")
 		}
 	}
 	if e.approval != nil {
 		done := fmt.Sprintf("Approved by @%s through the device code at %s.", e.approval.Login, e.Now().UTC().Format("15:04 UTC"))
-		if _, err := c.UpsertComment(ctx, b.Repo, b.Issue, b.marker(), b.render(batchStatus{Done: done}), actions.Action{Kind: "github.comment.batch"}); err != nil {
+		if err := b.show(ctx, c, b.render(batchStatus{Done: done})); err != nil {
 			return Wrap(ExitExternal, err)
 		}
 	}
@@ -648,25 +649,8 @@ func (e *Env) deviceBatch(ctx context.Context, c *github.Client, b *batch, login
 // done, and the comment says why and the next step.
 func (e *Env) batchVoid(ctx context.Context, c *github.Client, b *batch, why string) error {
 	next := "ask for the command again; it posts a new batch with a new code: " + b.Command
-	_, _ = c.UpsertComment(ctx, b.Repo, b.Issue, b.marker(), b.render(batchStatus{Done: "Not applied: " + why + "; nothing was done.", Next: next}), actions.Action{Kind: "github.comment.batch"})
+	_ = b.show(ctx, c, b.render(batchStatus{Done: "Not applied: " + why + "; nothing was done.", Next: next}))
 	return WithNext(Errorf(ExitBlocked, "decide --accept: %s; nothing was done", why), next)
-}
-
-// findMarked is the comment on issue n that carries marker, or nil.
-func findMarked(ctx context.Context, c *github.Client, repo string, n int, marker string) (*gh.IssueComment, error) {
-	owner, name, _ := github.SplitRepo(repo)
-	cs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.IssueComment, *gh.Response, error) {
-		return c.REST.Issues.ListComments(ctx, owner, name, n, &gh.IssueListCommentsOptions{ListOptions: o})
-	})
-	if err != nil {
-		return nil, err
-	}
-	for _, cm := range cs {
-		if strings.Contains(cm.GetBody(), marker) {
-			return cm, nil
-		}
-	}
-	return nil, nil
 }
 
 // acceptDecision writes the acceptance of option on Decision d, by login:

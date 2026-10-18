@@ -31,7 +31,7 @@ func TestDecideBatchApprovedByReply(t *testing.T) {
 	d1 := g.AddIssue("Choose the rules engine", decisionBody("true", ""), "type:decision", "status:ready")
 	d2 := g.AddIssue("Choose the queue", decisionBody("true", ""), "type:decision", "status:ready")
 	// Decision text is untrusted: HTML or Markdown in it must not hide or fake part of the batch.
-	d4 := g.AddIssue("Choose the cache <!-- hide", strings.Replace(decisionBody("true", ""), "2. **B.**", "2. **B ``` <!-- the rest is hidden.**", 1), "type:decision", "status:ready")
+	d4 := g.AddIssue("Choose the cache <!-- hide", strings.Replace(decisionBody("true", ""), "2. **B.**", "2. **B ``` <!-- aayudha:batch-data the rest is hidden.**", 1), "type:decision", "status:ready")
 	d5 := g.AddIssue("Choose the CDN", decisionBody("true", ""), "type:decision", "status:ready")
 	d6 := g.AddIssue("Choose the CI runner", decisionBody("true", ""), "type:decision", "status:ready")
 	d7 := g.AddIssue("Choose the log store", decisionBody("true", ""), "type:decision", "status:ready")
@@ -121,7 +121,7 @@ func TestDecideBatchApprovedByReply(t *testing.T) {
 		t.Fatalf("batch: exit %d %s\n%s", code, errOut, batch)
 	}
 	if strings.Count(batch, "<!--") != 3 || !strings.Contains(batch, "Choose the cache &lt;\\!-- hide.**") ||
-		!strings.Contains(batch, "   ````text\n   Options:\n   1. A (recommended)\n   2. B ``` <!-- the rest is hidden\n") || !strings.Contains(batch, "Command:\n\n```text\naayu decide ") {
+		!strings.Contains(batch, "   ````text\n   Options:\n   1. A (recommended)\n   2. B ``` <!-- aayudha:batch-data the rest is hidden\n") || !strings.Contains(batch, "Command:\n\n```text\naayu decide ") {
 		t.Fatalf("Decision text was not rendered inert:\n%s", batch)
 	}
 	if cs := comments(d1.Number); cs[len(cs)-1].User.Login != "aayudha-bot[bot]" {
@@ -658,8 +658,19 @@ func TestDecideBatchDeviceCode(t *testing.T) {
 		g.Mu.Unlock()
 	}
 
+	// While the code waits, someone edits an older comment to carry the
+	// batch's marker: aayu still checks and updates its own comment.
 	g.Mu.Lock()
-	g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "approve", Pending: 1}
+	decoy := &fake.Comment{ID: 7000, Body: "thanks!", CreatedAt: time.Now().UTC().Add(-time.Hour)}
+	decoy.User.Login, decoy.User.Type = "visitor", "User"
+	g.Issues[ds[0].Number].Comments = append([]*fake.Comment{decoy}, g.Issues[ds[0].Number].Comments...)
+	g.Device = &fake.DeviceFlow{ClientID: DefaultDeviceClientID, Approver: "founder", Outcome: "approve", Pending: 1,
+		OnPoll: func(poll int) {
+			cs := g.Issues[ds[0].Number].Comments
+			if first, _, _ := strings.Cut(cs[len(cs)-1].Body, "\n"); poll == 1 {
+				decoy.Body = first + "\nthanks!"
+			}
+		}}
 	g.Mu.Unlock()
 	g.Reset()
 	var out string
@@ -683,7 +694,7 @@ func TestDecideBatchDeviceCode(t *testing.T) {
 			t.Fatalf("the batch with the code lacks %q:\n%s", want, shown)
 		}
 	}
-	if b := batch(); !strings.Contains(b, "Approved by @founder through the device code") || strings.Contains(b, "WDJB-MJHT") {
+	if b := batch(); !strings.Contains(b, "Approved by @founder through the device code") || strings.Contains(b, "WDJB-MJHT") || !strings.HasSuffix(decoy.Body, "\nthanks!") {
 		t.Fatalf("the batch after approval:\n%s", b)
 	}
 	for _, d := range ds {
