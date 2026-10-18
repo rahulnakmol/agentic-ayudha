@@ -12,8 +12,15 @@ on:
 permissions:
   actions: write
 
+# Re-runs for one head commit collapse: the newest does all an older one would. A signal that skipped (a review the
+# gate cannot count) gets its own group, so its no-op run never cancels a real re-run.
+concurrency:
+  group: protected-paths-rerun-${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_sha || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   rerun:
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Halt check (aayu halt, WP5.7)
