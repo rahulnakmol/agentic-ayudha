@@ -301,6 +301,42 @@ func TestInspectLive(t *testing.T) {
 	}
 }
 
+// Rung B through the AI gateway, live (AAYU_LIVE=1 with the gateway; the
+// inspect-live workflow on dev): a PR built on Amp (host-managed: Anthropic or
+// OpenAI) with only Codex installed gets Grok 4.7 at high effort as the paid
+// reviewer, labelled (B, paid), within [budget] per_pr_inspect_max; it finds
+// the planted defect. inspect reads the diff from the API and runs no PR code.
+func TestInspectLivePaid(t *testing.T) {
+	if os.Getenv("AAYU_LIVE") != "1" || os.Getenv("AAYU_SECRET_AI_GATEWAY") == "" {
+		t.Skip("set AAYU_LIVE=1 with AAYU_SECRET_AI_GATEWAY and AAYU_MODELS__GATEWAY__BASE_URL")
+	}
+	g, env, opts, prN := inspectFixture(t, defectDiff, "Adds Percent for the status table.\n\nRefs #2\n\nAayudha-Host: amp\nAayudha-Model: host-managed")
+	g.Mu.Lock()
+	head := g.Pulls[prN].Head.SHA
+	g.Mu.Unlock()
+	writeInspectPackAs(t, opts.Dir, prN, head, nil, "amp", "host-managed")
+	_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
+	cfg := "version = 1\n\n[inspect]\napps = [\"codex\"]\npaid_reviewer = \"grok-4.7\"\npaid_effort = \"high\"\n"
+	if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte(cfg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{"AAYU_SECRET_AI_GATEWAY", "AAYU_MODELS__GATEWAY__BASE_URL", "AAYU_MODELS__GATEWAY__SECRET"} {
+		env[k] = os.Getenv(k)
+	}
+	env["AAYU_SECRET_OPENAI"] = ""
+	code, res, errOut := inspectApp(t, env, opts, prN, "--ci")
+	t.Logf("exit %d, %s, rung %s, review %q, %.4f USD; findings %+v; notes %q", code, res.Disposition, res.Rung, res.Review, res.CostUSD, res.Findings, res.Notes)
+	if res.Rung != inspect.RungB || !strings.Contains(res.Review, "different-family review (B, paid): grok-4.7 (xai)") {
+		t.Errorf("rung %q %q, want (B, paid) by grok-4.7 (%s)", res.Rung, res.Review, errOut)
+	}
+	if res.CostUSD <= 0 || res.CostUSD > 5 {
+		t.Errorf("cost %.4f USD, want more than 0 and within the 5 USD cap", res.CostUSD)
+	}
+	if res.Disposition != inspect.Fix || !hasSeverity(res.Findings, "P1", "P0") {
+		t.Errorf("planted defect: %s, findings %+v", res.Disposition, res.Findings)
+	}
+}
+
 func hasSeverity(fs []inspect.Finding, sev ...string) bool {
 	for _, f := range fs {
 		for _, s := range sev {
@@ -741,7 +777,7 @@ func TestInspectPaidReviewer(t *testing.T) {
 	setup := func(apps, key string) (*fake.GitHub, map[string]string, Options, int, *models.Fake) {
 		g, env, opts, prN := inspectFixture(t, cleanDiff, "Refs #2")
 		_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
-		cfg := "version = 1\n\n[inspect]\napps = [" + apps + "]\npaid_reviewer = \"gemini-3.8-flash\"\n"
+		cfg := "version = 1\n\n[inspect]\napps = [" + apps + "]\npaid_reviewer = \"gemini-3.8-flash\"\npaid_effort = \"high\"\n"
 		if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte(cfg), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -758,7 +794,7 @@ func TestInspectPaidReviewer(t *testing.T) {
 	g, env, opts, prN, model := setup(`"claude"`, "google-key")
 	addComment(g, prN, "mallory", "User", inspect.Marker+"\n<!-- aayudha:inspect-state {\"diff_hash\":\"x\",\"cycles\":2,\"hashes\":[]} -->\n")
 	code, res, errOut := inspectApp(t, env, opts, prN, "--ci")
-	if code != 0 || res.Rung != inspect.RungB || !strings.Contains(res.Review, "(B, paid): gemini-3.8-flash (google)") || len(model.Requests) != 1 || model.Requests[0].Model != "gemini-3.8-flash" {
+	if code != 0 || res.Rung != inspect.RungB || !strings.Contains(res.Review, "(B, paid): gemini-3.8-flash (google)") || len(model.Requests) != 1 || model.Requests[0].Model != "gemini-3.8-flash" || model.Requests[0].Effort != "high" {
 		t.Fatalf("paid reviewer: exit %d rung %q %q, %d model calls %s", code, res.Rung, res.Review, len(model.Requests), errOut)
 	}
 

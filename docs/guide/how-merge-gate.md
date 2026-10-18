@@ -147,6 +147,9 @@ CI" (2026-10-18), off by default. It needs both steps:
 2. The repository adds that provider's pay-as-you-go key as an Actions secret named `AAYU_SECRET_<FAMILY>`:
    `AAYU_SECRET_GOOGLE` for Gemini, `AAYU_SECRET_XAI` for Grok, `AAYU_SECRET_OPENAI`, or `AAYU_SECRET_ANTHROPIC`.
 
+`[inspect] paid_effort` (`low`, `medium`, `high`, or `xhigh`) sets the reasoning effort the paid reviewer is called at;
+empty leaves the provider's default.
+
 The gate tries the ladder in order: an app of another family first (free), then the paid reviewer, then a same-family
 app. When it uses the paid reviewer, the inspect job calls the model with the key and does not @-mention an app. It
 reviews a PR that serves no story against its title, description, and diff. `[budget] per_pr_inspect_max` (5 USD by

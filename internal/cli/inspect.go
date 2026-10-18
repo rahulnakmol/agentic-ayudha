@@ -461,6 +461,9 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		g := gw.WithModel(verbs.LaneReview, verbs.DirectHost, m.Model)
 		r.Reviewers = append(r.Reviewers, inspect.Reviewer{Model: m.Model,
 			Complete: func(ctx context.Context, req models.Request) (models.Response, float64, error) {
+				if paid != nil && req.Effort == "" {
+					req.Effort = paid.Effort // [inspect] paid_effort
+				}
 				resp, rm, err := g.Do(ctx, models.Call{Story: story, Seat: string(verbs.EngineeringManager), Lane: verbs.LaneReview, Host: verbs.DirectHost, Req: req})
 				usd, _ := models.Cost(l.Config.Models.Prices, rm.Model, resp)
 				return resp, usd, err
@@ -681,7 +684,7 @@ func paidReviewer(gw *models.Gateway, cfg *config.Config, b inspect.Builder, log
 		logf("inspect: [inspect] paid_reviewer %s is not used: %s; the reviewer app reviews", m, why)
 		return nil
 	}
-	return &models.Resolved{Lane: verbs.LaneReview, Host: verbs.DirectHost, Model: m, Display: m, Family: f, Source: models.SourceConfig}
+	return &models.Resolved{Lane: verbs.LaneReview, Host: verbs.DirectHost, Model: m, Display: m, Family: f, Effort: ic.PaidEffort, Source: models.SourceConfig}
 }
 
 // gateWriter reports whether login is an account the merge gate writes its

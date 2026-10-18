@@ -857,6 +857,17 @@
         "paid_reviewer": {
           "type": "string",
           "description": "Rung B, opt-in: a model ID (gemini-3.8-flash, grok-4.7, ...) the merge gate calls with a pay-as-you-go key when no installed app is of a family the builder cannot be. Off unless this names a model and the repository adds its provider key as the secret AAYU_SECRET_\u003cFAMILY\u003e (AAYU_SECRET_GOOGLE for Gemini); each PR's spend is capped by [budget] per_pr_inspect_max, and the review is labelled (B, paid)."
+        },
+        "paid_effort": {
+          "type": "string",
+          "enum": [
+            "",
+            "low",
+            "medium",
+            "high",
+            "xhigh"
+          ],
+          "description": "Reasoning effort the paid reviewer is called at (low, medium, high, xhigh); empty: the provider's default."
         }
       },
       "additionalProperties": false,
