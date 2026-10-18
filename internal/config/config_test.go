@@ -512,7 +512,7 @@ func TestActiveScanKey(t *testing.T) {
 }
 
 // TestProtectedOnlyKeysFromTOML (Bug #640, criterion 1): .aayudha/config.json
-// loads as the repository layer but is not code-owned, so a protected-only
+// loads as the repository layer but need not be code-owned, so a protected-only
 // key set there is refused, naming the file; .aayudha/config.toml still sets it.
 func TestProtectedOnlyKeysFromTOML(t *testing.T) {
 	for key, body := range map[string]string{

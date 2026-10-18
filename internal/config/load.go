@@ -268,8 +268,9 @@ func Load(src Sources) (*Loaded, error) {
 // protectedSource reports whether a layer may set a protected-only key: the
 // embedded defaults, or the repository layer read from .aayudha/config.toml,
 // the code-owned file, or given as its text (Sources.RepoTOML, a base
-// revision's config.toml). .aayudha/config.json is also the repository layer but
-// is not code-owned, so a PR could set the key there (Bug #640).
+// revision's config.toml). .aayudha/config.json is also the repository layer,
+// but a product repository need not code-own it, so a PR could set the key
+// there (Bug #640).
 func protectedSource(name, source string) bool {
 	return name == LayerDefault || (name == LayerRepo && filepath.Ext(source) != ".json")
 }

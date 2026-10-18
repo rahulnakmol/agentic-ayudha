@@ -204,7 +204,8 @@ func (c Case) Assess(assets fs.FS, typ, idea string) (grill.Assessment, grill.Ca
 		return grill.Assessment{}, cat, err
 	}
 	root := c.CaseRepo()
-	l, err := config.Load(config.Sources{RepoDir: root})
+	// In CI the local layer is never read (Bug #640), as for every command.
+	l, err := config.Load(config.Sources{RepoDir: root, CI: config.InCI(os.Getenv)})
 	if err != nil {
 		return grill.Assessment{}, cat, err
 	}

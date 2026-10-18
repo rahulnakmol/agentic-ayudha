@@ -50,7 +50,7 @@ an agent on that machine does, but not what the protected files or CI's gate wor
 
 One key is stricter. `[decisions] solo_provisional_after_hours` (default 24) is read only from
 `.aayudha/config.toml` and the embedded defaults: a value in `.aayudha/config.json` (the `repo` layer, but not
-code-owned), or in the user, `local`, `env`, or `flag` layer, fails the load, naming the file, and so does a value
+an accepted source for this key), or in the user, `local`, `env`, or `flag` layer, fails the load, naming the file, and so does a value
 under 12, the hard minimum in code (`config.MinSoloProvisionalHours`). With at most one human configured (paired seats' humans and `[autonomy] approver`), a reversible, Decision-ready Decision's recommendation
 then applies provisionally after the shorter of it and `provisional_after_hours` (rule V8); `provisional_after_hours = 0`
 still turns provisional application off. No mode ever applies a waiver of any kind (by label, a `waives #N` link, or a
