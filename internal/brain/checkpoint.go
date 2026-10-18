@@ -542,6 +542,19 @@ func (c *cp) issueBlocks() {
 			}
 			nums = append(nums, num)
 		}
+		if t, _ := FindType(n.Str("type")); len(nums) == 0 && slices.Contains(t.Keys, "issues") {
+			// the last issue was removed: its generated facts go too
+			clear := map[string]string{}
+			for k, b := range Blocks(n.Body) {
+				if (k == "record" || k == "history") && b != "" {
+					clear[k] = ""
+				}
+			}
+			if len(clear) > 0 {
+				c.upsert(p, nil, nil, clear)
+			}
+			continue
+		}
 		if len(nums) == 0 {
 			continue
 		}

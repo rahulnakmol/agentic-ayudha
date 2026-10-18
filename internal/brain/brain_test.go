@@ -138,6 +138,16 @@ func TestCheckpointKeepsHumanTextAndRefreshesGeneratedBlocks(t *testing.T) {
 	if _, dup := third.Files["People/alice.md"]; dup || !strings.Contains(string(third.Files["People/Alice.md"]), "the approver") {
 		t.Errorf("the checkpoint did not reuse People/Alice.md for alice: wrote %v", third.Paths)
 	}
+	gone := maps.Clone(merged) // a person removes the last issue: its generated facts go too
+	gone["Capabilities/Proof.md"] = []byte(strings.Replace(string(merged["Capabilities/Proof.md"]), "issues: [32]", "issues: []", 1))
+	fourth, err := Run(gone, r, today, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	maps.Copy(gone, fourth.Files)
+	if n, _ := Parse("", gone["Capabilities/Proof.md"]); strings.TrimSpace(Blocks(n.Body)["record"]+Blocks(n.Body)["history"]) != "" {
+		t.Errorf("a capability with no issues keeps the removed issue's facts:\n%s", gone["Capabilities/Proof.md"])
+	}
 	merged["Capabilities/Proof.md"] = []byte(strings.Replace(string(merged["Capabilities/Proof.md"]), "issues: [32]", "issues: [32, not-an-issue]", 1))
 	if _, err := Run(merged, r, today, true); err == nil || !strings.Contains(err.Error(), `"not-an-issue" is not an issue number`) {
 		t.Errorf("a checkpoint over a malformed issues entry: err %v", err)
@@ -231,6 +241,8 @@ tags: [type/principle]
 		{"long sentence", good, long + "\n", "ste a sentence has 26 words"},
 		{"long sentence in a generated block is not prose", good, Block("record", "- "+long) + "\n", ""},
 		{"orphan", strings.Replace(good, "up: \"[[Principles]]\"\n", "", 1), "Short.\n", "orphan no up link"},
+		{"up is a template", strings.Replace(good, "[[Principles]]", "[[Principle template]]", 1), "Short.\n", "orphan up link [[Principle template]] does not resolve to another note"},
+		{"a link in double-backtick code is text", good, "Write ``[[No such note]]`` to link a note.\n", ""},
 		{"up is the note itself", strings.Replace(good, "[[Principles]]", "[[Evidence first#Context]]", 1), "Short.\n", "orphan up link [[Evidence first#Context]] does not resolve to another note"},
 		{"up is a same-note anchor", strings.Replace(good, "[[Principles]]", "[[#Context]]", 1), "Short.\n", "orphan up link [[#Context]] does not resolve to another note"},
 		{"issues: not a number", strings.Replace(good, "owner: founder", "owner: founder\nissues: [not-an-issue]", 1), "Short.\n", `issues: "not-an-issue" is not an issue number`},

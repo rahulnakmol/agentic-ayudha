@@ -95,7 +95,6 @@ func (v *Vault) Resolve(target string) string {
 
 var (
 	wikilinkRE = regexp.MustCompile(`!?\[\[([^\[\]]+)\]\]`)
-	codeRE     = regexp.MustCompile("`[^`\n]*`")
 	commentRE  = regexp.MustCompile(`(?s)<!--.*?-->`)
 	dateRE     = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 	// loginRE is a GitHub login: letters, digits, and single hyphens between them, at most 39 characters.
@@ -110,7 +109,7 @@ var (
 
 // links returns the wikilink targets of text outside code.
 func links(text string) []string {
-	text = codeRE.ReplaceAllString(maskFences(commentRE.ReplaceAllString(text, "")), "")
+	text = stripCode(maskFences(commentRE.ReplaceAllString(text, "")))
 	var out []string
 	for _, m := range wikilinkRE.FindAllStringSubmatch(text, -1) {
 		out = append(out, strings.ReplaceAll(m[1], `\|`, "|")) // a pipe escaped inside a table
@@ -135,6 +134,51 @@ func IsVault(files map[string][]byte) bool {
 	}
 	n, err := Parse(HomePath, files[HomePath])
 	return err == nil && n.Str("type") == "home"
+}
+
+// isNote reports whether a resolved path is a note of the vault, not "",
+// a same-note anchor ("."), a template, or an attachment.
+func (v *Vault) isNote(p string) bool { return v.Notes[p] != nil }
+
+// stripCode removes inline code spans (CommonMark): a run of backticks opens
+// a span that the next run of the same length closes.
+func stripCode(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); {
+		if s[i] != '`' {
+			b.WriteByte(s[i])
+			i++
+			continue
+		}
+		n := i
+		for n < len(s) && s[n] == '`' {
+			n++
+		}
+		run := n - i
+		closeAt := -1
+		for j := n; j < len(s); {
+			if s[j] != '`' {
+				j++
+				continue
+			}
+			k := j
+			for k < len(s) && s[k] == '`' {
+				k++
+			}
+			if k-j == run {
+				closeAt = k
+				break
+			}
+			j = k
+		}
+		if closeAt < 0 { // no closing run: the backticks are text
+			b.WriteString(s[i:n])
+			i = n
+			continue
+		}
+		i = closeAt
+	}
+	return b.String()
 }
 
 // linkTarget strips the [[ ]] of a frontmatter link value; "" if it is not one.
@@ -259,7 +303,7 @@ func Check(files map[string][]byte) Report {
 			switch {
 			case up == "":
 				fail(p, "orphan", "no up link: link the note up to its map of content")
-			case v.Resolve(up) == "" || v.Resolve(up) == "." || v.Resolve(up) == p:
+			case !v.isNote(v.Resolve(up)) || v.Resolve(up) == p:
 				fail(p, "orphan", "up link [[%s]] does not resolve to another note", up)
 			}
 		}
@@ -267,7 +311,7 @@ func Check(files map[string][]byte) Report {
 			for _, val := range n.List(k) {
 				if lt := linkTarget(val); lt == "" {
 					fail(p, "link", "%s: %q is not a [[wikilink]]", k, val)
-				} else if q := v.Resolve(lt); q == "" || q == "." { // a same-note anchor links no note
+				} else if !v.isNote(v.Resolve(lt)) { // a same-note anchor, a template, or an attachment links no note
 					fail(p, "link", "%s: [[%s]] does not resolve to another note", k, lt)
 				}
 			}
@@ -287,7 +331,7 @@ func Check(files map[string][]byte) Report {
 		if m := criterionRE.FindString(human); m != "" {
 			fail(p, "copy", "a Completion Goal criterion is pasted from an issue (%q): link the issue instead", strings.TrimSpace(m))
 		}
-		if m := labelRE.FindString(urlRE.ReplaceAllString(codeRE.ReplaceAllString(human, ""), "")); m != "" {
+		if m := labelRE.FindString(urlRE.ReplaceAllString(stripCode(human), "")); m != "" {
 			fail(p, "copy", "an issue label (%s) is copied into the note: the issue holds status and labels; link it instead", m)
 		}
 		if rv := n.Str("reviewed"); rv != "" && n.Str("updated") > rv {
