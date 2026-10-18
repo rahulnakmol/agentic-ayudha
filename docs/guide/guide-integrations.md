@@ -141,8 +141,9 @@ it after:
 - **Personal data is opt-in.** PostHog's person, session-recording, support-ticket, and raw LLM conversation tools,
   Sentry's replay, attachment, and AI conversation tools, and the `sentry` CLI's `replay` and `feedback` reads stay
   refused until `.aayudha/config.toml` sets `allow_pii = true` under `[integrations.posthog]` or
-  `[integrations.sentry]`. aayu reads that setting only from the repository's config file, not from your user config
-  or the environment.
+  `[integrations.sentry]`. aayu reads that setting only from the repository's config file as committed on the dev
+  branch (at HEAD when there is no `origin/<dev>` to compare with), not from your working tree, your user config, or
+  the environment, so it takes effect once the reviewed change is merged.
 - **Reads are logged.** The post-tool hook appends each read it let through to
   `.aayudha/state/calls/<session>.jsonl`: the tool, its arguments, the window and row limit it
   asked for, the rows returned, and a SHA-256 of the result, never the result itself. A call that names a window and
@@ -161,8 +162,6 @@ In Codex, trust the three aayudha hooks in `/hooks` first, or none of this runs.
 > - `allow_pii` gates only the tools on the lists' `[pii]` sections and the `sentry` CLI's `replay` and `feedback`
 >   reads. A general query, such as HogQL through `execute-sql` or `posthog-cli exp query run`, can still select
 >   person properties.
-> - `allow_pii` is read from the working tree, so an uncommitted edit takes effect at once. CODEOWNERS review applies
->   only when the change is merged.
 > - The call log redacts a token by its shape (GitHub, OpenAI, Slack, PostHog `phx_` and `phs_`, Sentry `sntrys_` and
 >   `sntryu_`) or by where it is typed (`SENTRY_AUTH_TOKEN=…`, `--auth-token …`, `Authorization: Bearer …`). A token
 >   typed any other way may be logged, so keep provider tokens in the CLI's config or your environment.

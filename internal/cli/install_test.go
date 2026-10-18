@@ -305,14 +305,34 @@ func TestHookProviderCalls(t *testing.T) {
 	if code, _, errs := runIn(t, env, opts, `{"tool_name":"mcp__errors__update_issue","tool_input":{}}`, "hook", "pre-tool", "--host", "claude"); code != 2 || !strings.Contains(errs, "`update_issue`") {
 		t.Fatalf("a renamed Sentry server's write: exit %d %s; want it refused", code, errs)
 	}
-	// The repository's protected config opts in to personal data.
+	// The repository's protected config opts in to personal data, and only
+	// as committed on the dev branch counts: an agent cannot opt itself in by
+	// editing the file, or by committing it on its own branch.
+	replay := func() int {
+		code, _, _ := runIn(t, env, opts, `{"tool_name":"mcp__sentry__get_replay_details","tool_input":{}}`, "hook", "pre-tool", "--host", "claude")
+		return code
+	}
+	base := git(t, repo, "rev-parse", "HEAD")
 	cfg := filepath.Join(repo, ".aayudha", "config.toml")
 	_ = os.MkdirAll(filepath.Dir(cfg), 0o755)
 	if err := os.WriteFile(cfg, []byte("version = 1\n[integrations.sentry]\nsecret = \"sentry\"\nscope = \"read\"\norg = \"acme\"\nproject = \"1\"\nallow_pii = true\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if code, _, errs := runIn(t, env, opts, `{"tool_name":"mcp__sentry__get_replay_details","tool_input":{}}`, "hook", "pre-tool", "--host", "claude"); code != 0 {
-		t.Fatalf("allow_pii = true: exit %d %s", code, errs)
+	if code := replay(); code != 2 {
+		t.Fatalf("allow_pii = true in the working tree only: exit %d; want the read refused", code)
+	}
+	git(t, repo, "add", cfg)
+	git(t, repo, "commit", "-q", "-m", "allow personal data")
+	if code := replay(); code != 0 {
+		t.Fatalf("allow_pii = true committed, no dev branch to compare with: exit %d; want the read allowed", code)
+	}
+	git(t, repo, "update-ref", "refs/remotes/origin/dev", base)
+	if code := replay(); code != 2 {
+		t.Fatalf("allow_pii = true committed past origin/dev: exit %d; want the read refused", code)
+	}
+	git(t, repo, "update-ref", "refs/remotes/origin/dev", "HEAD")
+	if code := replay(); code != 0 {
+		t.Fatalf("allow_pii = true on origin/dev: exit %d; want the read allowed", code)
 	}
 }
 
