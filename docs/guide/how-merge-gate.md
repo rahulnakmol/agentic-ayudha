@@ -147,10 +147,15 @@ CI" (2026-10-18), off by default. It needs both steps:
 2. The repository adds that provider's pay-as-you-go key as an Actions secret named `AAYU_SECRET_<FAMILY>`:
    `AAYU_SECRET_GOOGLE` for Gemini, `AAYU_SECRET_XAI` for Grok, `AAYU_SECRET_OPENAI`, or `AAYU_SECRET_ANTHROPIC`.
 
+`[inspect] paid_effort` (`low`, `medium`, `high`, or `xhigh`) sets the reasoning effort the paid reviewer is called at;
+empty leaves the provider's default.
+
 The gate tries the ladder in order: an app of another family first (free), then the paid reviewer, then a same-family
 app. When it uses the paid reviewer, the inspect job calls the model with the key and does not @-mention an app. It
 reviews a PR that serves no story against its title, description, and diff. `[budget] per_pr_inspect_max` (5 USD by
-default) caps one PR's spend across its cycles, and a cap of 0 turns rung B off. The review is labelled
+default) caps one PR's spend across its cycles, and a cap of 0 turns rung B off. Only a PR whose author has write access
+to the repository (GitHub's permission level, not the author association) gets a paid review, so a person who can
+only read cannot open PRs to spend the key. The review is labelled
 `different-family review (B, paid)` everywhere and counts toward autonomy as rung A does. If the secret is missing, the
 model is of a family the builder may be, or the cap is 0, the gate logs why and the app reviews. `aayu doctor`'s
 `review-rung` row shows B when it is configured. Doctor cannot read repository secrets, so it names the secret the gate

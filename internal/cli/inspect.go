@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -427,7 +428,13 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		return e.emitInspect(inspect.Result{PR: n, Head: pr.GetHead().GetSHA(), Findings: []inspect.Finding{}, Criteria: []inspect.Verdict{}, Builder: builder,
 			Disposition: inspect.Skipped, Summary: "the PR changes only documentation, which merges without a review"}, []string{builder.Note()})
 	}
-	paid := paidReviewer(gw, &l.Config, builder, e.Logf)
+	paid := paidReviewer(gw, &l.Config, builder, func() string {
+		p, _, err := c.REST.Repositories.GetPermissionLevel(ctx, owner, name, pr.GetUser().GetLogin())
+		if err != nil {
+			return ""
+		}
+		return permissionOf(p)
+	}, e.Logf)
 	if cfg.Reviewer != inspect.ReviewerModel && paid == nil {
 		return e.inspectThroughApp(ctx, appInspect{c: c, repo: repo, pr: pr, in: ins, prev: prev, builder: builder, cfg: l.Config})
 	}
@@ -461,6 +468,9 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		g := gw.WithModel(verbs.LaneReview, verbs.DirectHost, m.Model)
 		r.Reviewers = append(r.Reviewers, inspect.Reviewer{Model: m.Model,
 			Complete: func(ctx context.Context, req models.Request) (models.Response, float64, error) {
+				if paid != nil && req.Effort == "" {
+					req.Effort = paid.Effort // [inspect] paid_effort
+				}
 				resp, rm, err := g.Do(ctx, models.Call{Story: story, Seat: string(verbs.EngineeringManager), Lane: verbs.LaneReview, Host: verbs.DirectHost, Req: req})
 				usd, _ := models.Cost(l.Config.Models.Prices, rm.Model, resp)
 				return resp, usd, err
@@ -652,8 +662,14 @@ func (e *Env) inspectDismiss(ctx context.Context, in Values) error {
 // repo's CI": [inspect] paid_reviewer, called with the repository's own key,
 // only when no installed app reaches rung A, the model's family is one the
 // builder cannot be, the key is present, and [budget] per_pr_inspect_max caps
-// the spend. nil leaves the review to the reviewer app.
-func paidReviewer(gw *models.Gateway, cfg *config.Config, b inspect.Builder, logf func(string, ...any)) *models.Resolved {
+// the spend. Only a PR whose author has write access to the repository
+// (perm, the author's effective permission, is admin or write; "" when it
+// cannot be read) gets a paid review, so a person who can only read cannot
+// open PRs to spend the key. An author association of MEMBER or COLLABORATOR
+// is no proof: an organization member may have read access only. perm is
+// called only when everything else allows a paid review. nil leaves the
+// review to the reviewer app.
+func paidReviewer(gw *models.Gateway, cfg *config.Config, b inspect.Builder, perm func() string, logf func(string, ...any)) *models.Resolved {
 	ic := cfg.Inspect
 	m := ic.PaidReviewer
 	if m == "" || ic.Reviewer == inspect.ReviewerHuman || ic.Reviewer == inspect.ReviewerModel {
@@ -675,13 +691,15 @@ func paidReviewer(gw *models.Gateway, cfg *config.Config, b inspect.Builder, log
 	default:
 		if k, err := gw.Key(route.Secret); err != nil || k == "" {
 			why = fmt.Sprintf("the merge gate holds no %s key (the repository secret %s)", route.Secret, secrets.EnvVar(route.Secret))
+		} else if p := perm(); p != "admin" && p != "write" {
+			why = fmt.Sprintf("the PR's author has %s access to the repository, not write, so no paid review is spent on it", cmp.Or(p, "unknown"))
 		}
 	}
 	if why != "" {
 		logf("inspect: [inspect] paid_reviewer %s is not used: %s; the reviewer app reviews", m, why)
 		return nil
 	}
-	return &models.Resolved{Lane: verbs.LaneReview, Host: verbs.DirectHost, Model: m, Display: m, Family: f, Source: models.SourceConfig}
+	return &models.Resolved{Lane: verbs.LaneReview, Host: verbs.DirectHost, Model: m, Display: m, Family: f, Effort: ic.PaidEffort, Source: models.SourceConfig}
 }
 
 // gateWriter reports whether login is an account the merge gate writes its

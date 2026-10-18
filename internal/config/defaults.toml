@@ -98,6 +98,7 @@ apps = []                 # claude, codex, cursor: what `aayu doctor` and `aayu 
 # family the builder cannot be. Off unless set here and the repository adds the secret AAYU_SECRET_<FAMILY>; capped by
 # [budget] per_pr_inspect_max and labelled (B, paid). The one, opt-in exception to "no AI keys in a product repo's CI".
 paid_reviewer = ""
+paid_effort = ""          # the paid reviewer's reasoning effort: low, medium, high, xhigh; empty: the provider default
 
 [inspect.app_families]
 claude = "anthropic"

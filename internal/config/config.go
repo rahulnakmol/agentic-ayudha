@@ -94,6 +94,7 @@ type Inspect struct {
 	// 2026-10-18): the founder's deliberate, opt-in exception to "no AI keys
 	// in a product repo's CI".
 	PaidReviewer string `koanf:"paid_reviewer" jsonschema_description:"Rung B, opt-in: a model ID (gemini-3.8-flash, grok-4.7, ...) the merge gate calls with a pay-as-you-go key when no installed app is of a family the builder cannot be. Off unless this names a model and the repository adds its provider key as the secret AAYU_SECRET_<FAMILY> (AAYU_SECRET_GOOGLE for Gemini); each PR's spend is capped by [budget] per_pr_inspect_max, and the review is labelled (B, paid)."`
+	PaidEffort   string `koanf:"paid_effort" jsonschema:"enum=,enum=low,enum=medium,enum=high,enum=xhigh" jsonschema_description:"Reasoning effort the paid reviewer is called at (low, medium, high, xhigh); empty: the provider's default."`
 }
 
 // Team stages (WP5.1b): how much ceremony the seat twins' practice carries.
@@ -519,6 +520,9 @@ func (c *Config) Validate() error {
 		if f := verbs.FamilyOf(m); f == "" || f == verbs.FamilyHostManaged {
 			bad("[inspect] paid_reviewer = %q: want a model ID of a known family (anthropic, openai, google, xai)", m)
 		}
+	}
+	if e := c.Inspect.PaidEffort; e != "" && !slices.Contains([]string{"low", "medium", "high", "xhigh"}, e) {
+		bad("[inspect] paid_effort = %q: want low, medium, high, or xhigh", e)
 	}
 	if pl := c.Hosts.Cursor.Plan; pl != "" && pl != verbs.PlanX && pl != verbs.PlanLegacy {
 		bad("[hosts.cursor] plan = %q: want %s or %s", pl, verbs.PlanX, verbs.PlanLegacy)
