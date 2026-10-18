@@ -243,6 +243,8 @@ tags: [type/principle]
 		{"orphan", strings.Replace(good, "up: \"[[Principles]]\"\n", "", 1), "Short.\n", "orphan no up link"},
 		{"a relationship to the note itself", strings.Replace(good, "owner: founder", "owner: founder\nobjectives: [\"[[Evidence first]]\"]", 1), "Short.\n", "link objectives: [[Evidence first]] does not resolve to another note"},
 		{"an impossible date", strings.Replace(good, "updated: 2026-10-18", "updated: 2026-99-42", 1), "Short.\n", `updated "2026-99-42" is not a YYYY-MM-DD date`},
+		{"a link in an indented code block is text", good, "Short.\n\n    See [[No such note]].\n", ""},
+		{"a link in a fence inside a quote is text", good, "> ~~~text\n> See [[No such note]].\n> ~~~\n", ""},
 		{"a backtick in a fence's info string opens no fence", good, "````md`example`\nSee [[No such note]].\n", "link [[No such note]] does not resolve"},
 		{"up is a template", strings.Replace(good, "[[Principles]]", "[[Principle template]]", 1), "Short.\n", "orphan up link [[Principle template]] does not resolve to another note"},
 		{"a link in double-backtick code is text", good, "Write ``[[No such note]]`` to link a note.\n", ""},

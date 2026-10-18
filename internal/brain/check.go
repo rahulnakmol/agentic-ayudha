@@ -108,7 +108,7 @@ var (
 
 // links returns the wikilink targets of text outside code.
 func links(text string) []string {
-	text = stripCode(maskFences(commentRE.ReplaceAllString(text, "")))
+	text = maskCode(commentRE.ReplaceAllString(text, ""))
 	var out []string
 	for _, m := range wikilinkRE.FindAllStringSubmatch(text, -1) {
 		out = append(out, strings.ReplaceAll(m[1], `\|`, "|")) // a pipe escaped inside a table
@@ -145,47 +145,6 @@ func isDate(s string) bool {
 // a same-note anchor ("."), a template, or an attachment.
 func (v *Vault) isNote(p string) bool { return v.Notes[p] != nil }
 
-// stripCode removes inline code spans (CommonMark): a run of backticks opens
-// a span that the next run of the same length closes.
-func stripCode(s string) string {
-	var b strings.Builder
-	for i := 0; i < len(s); {
-		if s[i] != '`' {
-			b.WriteByte(s[i])
-			i++
-			continue
-		}
-		n := i
-		for n < len(s) && s[n] == '`' {
-			n++
-		}
-		run := n - i
-		closeAt := -1
-		for j := n; j < len(s); {
-			if s[j] != '`' {
-				j++
-				continue
-			}
-			k := j
-			for k < len(s) && s[k] == '`' {
-				k++
-			}
-			if k-j == run {
-				closeAt = k
-				break
-			}
-			j = k
-		}
-		if closeAt < 0 { // no closing run: the backticks are text
-			b.WriteString(s[i:n])
-			i = n
-			continue
-		}
-		i = closeAt
-	}
-	return b.String()
-}
-
 // linkTarget strips the [[ ]] of a frontmatter link value; "" if it is not one.
 func linkTarget(s string) string {
 	s = strings.TrimSpace(s)
@@ -202,11 +161,11 @@ var linkKeys = []string{"up", "direction", "objectives", "objections", "supersed
 // repository's shared rule (internal/brief, ASD-STE100 rule 5.1).
 const MaxSentenceWords = brief.MaxSTEWords
 
-// prose is what a person wrote: the body without generated blocks, comments,
-// and code, with wikilinks replaced by the text they show.
+// prose is what a person wrote: the body without generated blocks and
+// comments, with wikilinks replaced by the text they show. brief.Parse skips
+// its code; the copy checks mask it (maskCode).
 func prose(body string) string {
 	s := commentRE.ReplaceAllString(StripBlocks(body), "")
-	s = maskFences(s)
 	return wikilinkRE.ReplaceAllStringFunc(s, func(m string) string {
 		t := wikilinkRE.FindStringSubmatch(m)[1]
 		if _, alias, ok := strings.Cut(t, "|"); ok {
@@ -333,10 +292,11 @@ func Check(files map[string][]byte) Report {
 				fail(p, "ste", "a sentence has %d words (at most %d): %q", len(s.Words), MaxSentenceWords, clip(s.Text))
 			}
 		}
-		if m := criterionRE.FindString(human); m != "" {
+		masked := maskCode(human)
+		if m := criterionRE.FindString(masked); m != "" {
 			fail(p, "copy", "a Completion Goal criterion is pasted from an issue (%q): link the issue instead", strings.TrimSpace(m))
 		}
-		if m := labelRE.FindString(urlRE.ReplaceAllString(stripCode(human), "")); m != "" {
+		if m := labelRE.FindString(urlRE.ReplaceAllString(masked, "")); m != "" {
 			fail(p, "copy", "an issue label (%s) is copied into the note: the issue holds status and labels; link it instead", m)
 		}
 		if rv := n.Str("reviewed"); rv != "" && n.Str("updated") > rv {

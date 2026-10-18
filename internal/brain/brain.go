@@ -16,6 +16,9 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/text"
 	"go.yaml.in/yaml/v4"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
@@ -115,56 +118,47 @@ func Block(name, body string) string {
 // blockRE matches a generated block: markers on lines of their own.
 var blockRE = regexp.MustCompile(`(?ms)^<!-- BEGIN aayudha:brain:([a-z0-9-]+) -->\n(.*?)^<!-- END aayudha:brain:([a-z0-9-]+) -->$`)
 
-// fenceOpenRE matches a line that opens a fenced code block (CommonMark: at
-// most three spaces, then three or more backticks or tildes; a backtick fence's
-// info string holds no backtick).
-var fenceOpenRE = regexp.MustCompile("^ {0,3}(?:(`{3,})[^`]*$|(~{3,}))")
-
-// maskFences blanks out fenced code (same length, newlines kept, so indexes
-// hold): markers and links inside a fence are text. A fence closes on a line
-// of the same character at least as long as the one that opened it, indented
-// at most three spaces (CommonMark).
-func maskFences(body string) string {
+// maskCode blanks the code of a Markdown body as CommonMark parses it
+// (goldmark): fenced and indented code blocks with a fence's info string, and
+// inline code spans. Lengths and newlines hold, so indexes into body stay
+// valid; generated-block markers and wikilinks inside code are text.
+func maskCode(body string) string {
+	src := []byte(body)
 	masked := []byte(body)
-	start, open := -1, ""
-	for i := 0; i < len(body); {
-		j := strings.IndexByte(body[i:], '\n')
-		end := len(body)
-		if j >= 0 {
-			end = i + j
+	_ = ast.Walk(mdParser.Parse(text.NewReader(src)), func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
 		}
-		line := body[i:end]
-		if open == "" {
-			if m := fenceOpenRE.FindStringSubmatch(line); m != nil {
-				start, open = i, m[1]+m[2]
+		switch c := n.(type) {
+		case *ast.FencedCodeBlock:
+			if c.Info != nil {
+				blank(masked, c.Info.Segment.Start, c.Info.Segment.Stop)
 			}
-		} else if t := strings.TrimSpace(line); indent(line) <= 3 && len(t) >= len(open) && strings.Trim(t, open[:1]) == "" {
-			blank(masked, start, end)
-			start, open = -1, ""
+			blankLines(masked, c.Lines())
+			return ast.WalkSkipChildren, nil
+		case *ast.CodeBlock:
+			blankLines(masked, c.Lines())
+			return ast.WalkSkipChildren, nil
+		case *ast.CodeSpan:
+			for t := c.FirstChild(); t != nil; t = t.NextSibling() {
+				if t, ok := t.(*ast.Text); ok {
+					blank(masked, t.Segment.Start, t.Segment.Stop)
+				}
+			}
+			return ast.WalkSkipChildren, nil
 		}
-		i = end + 1
-	}
-	if open != "" { // an unclosed fence runs to the end
-		blank(masked, start, len(body))
-	}
+		return ast.WalkContinue, nil
+	})
 	return string(masked)
 }
 
-// indent is the width of a line's leading blanks in columns; a tab runs to the
-// next multiple of four (CommonMark).
-func indent(line string) int {
-	col := 0
-	for _, r := range line {
-		switch r {
-		case ' ':
-			col++
-		case '\t':
-			col += 4 - col%4
-		default:
-			return col
-		}
+var mdParser = goldmark.DefaultParser()
+
+func blankLines(b []byte, lines *text.Segments) {
+	for i := 0; i < lines.Len(); i++ {
+		s := lines.At(i)
+		blank(b, s.Start, s.Stop)
 	}
-	return col
 }
 
 func blank(b []byte, from, to int) {
@@ -176,9 +170,9 @@ func blank(b []byte, from, to int) {
 }
 
 // blockSpans returns the generated blocks of body as [start, end, nameStart,
-// nameEnd, ...] submatch indexes, skipping marker text inside code fences.
+// nameEnd, ...] submatch indexes, skipping marker text inside code.
 func blockSpans(body string) [][]int {
-	masked := maskFences(body)
+	masked := maskCode(body)
 	var out [][]int
 	for _, m := range blockRE.FindAllStringSubmatchIndex(masked, -1) {
 		if body[m[2]:m[3]] == body[m[6]:m[7]] {
