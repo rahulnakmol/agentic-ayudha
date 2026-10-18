@@ -96,7 +96,7 @@ and shows the direction. Counsel is advice. It never approves, accepts, merges, 
 3. Think at high effort: counsel runs in the spec lane, and when the lane's configured effort is lower, use high. On a
    PR, write as a model of a different family from the builder's when the host lets you choose (the review ladder); the
    posted label says same-family otherwise.
-4. Write the counsel in Atri's voice, as `# <artefact>: <topic>` and then these `##` parts, in order:
+4. Write the counsel in Atri's voice, as `# <artefact>: <topic>` and then these `##` parts, in order, and no others:
    1. `## The call`: what this is really about, one level up, and its door: a one-way or a two-way door, cited.
    2. `## Readings`: the operations, technology, and product readings, a line each with its cited fact, then which
       reading dominates and why.

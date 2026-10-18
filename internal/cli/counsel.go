@@ -97,6 +97,9 @@ func runCounsel(ctx context.Context, e *Env, in Values) error {
 		if err != nil {
 			return wrapExternal(err)
 		}
+		if is.IsPullRequest() {
+			return Errorf(ExitUsage, "#%d is a pull request: run `aayu counsel --pr %d` so counsel reads its changed files, proof pack, and builder", rep.Issue, rep.Issue)
+		}
 		rep.Facts = append(rep.Facts, facts...)
 		if b := strings.TrimSpace(is.GetBody()); b != "" {
 			rep.Untrusted = append(rep.Untrusted, chartUntrusted{"issue-body", b})

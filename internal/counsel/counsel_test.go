@@ -70,6 +70,7 @@ func TestCheckStructure(t *testing.T) {
 		"two-line question":        {strings.Replace(good, "Is this the call?", "Is this the call?\nOr that?", 1), "not one line ending in a question mark"},
 		"too long":                 {good + strings.Repeat("word ", MaxWords), "words: counsel is read in a few minutes"},
 		"two recommendation parts": {strings.Replace(good, "## What not to do", "## Recommendation\n\nAlso B.\n\n## What not to do", 1), `part "Recommendation" appears 2 times`},
+		"extra part":               {strings.Replace(good, "## What not to do", "## Alternative\n\nChoose B (#2).\n\n## What not to do", 1), `part "Alternative" is not a part of a counsel`},
 		"two in a paragraph":       {strings.Replace(good, "One recommendation and why", "I recommend A. I also recommend B; why", 1), "make one recommendation"},
 	} {
 		if f := strings.Join(CheckStructure(tt.md), "\n"); !strings.Contains(f, tt.want) {

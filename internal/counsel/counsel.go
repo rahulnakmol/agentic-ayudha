@@ -97,6 +97,11 @@ func CheckStructure(md string) []string {
 		return -1, ""
 	}
 	var out []string
+	for _, p := range parts {
+		if !slices.ContainsFunc(Sections, func(s Section) bool { return matches(p.title, s.Title) }) {
+			out = append(out, fmt.Sprintf("part %q is not a part of a counsel; the parts are only the seven, so advice cannot hide in another", p.title))
+		}
+	}
 	for _, s := range Sections {
 		n := 0
 		for _, p := range parts {
