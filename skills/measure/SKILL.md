@@ -207,7 +207,12 @@ Architect's, so you report it and never bend it.
 - Write `Assumption:` or `Unverified:` at the start of its own line or list item, in plain text, never inside a
   table cell: that is how the check knows the point is not claimed as fact.
 - At a startup, count your prose before you finish: at most 400 words outside tables and headings; aim for 300.
-  When the check reports too many words, cut well below the bound (to about 320), not just to it: first delete prose
-  that restates a table or the grounding, then put the counts and dates in a table.
+  Give each part a budget and count it as you finish that part: the opening verdict with its number, population,
+  window, and arithmetic 80 words; the answer to each ask 30 words; the open points (baseline, skipped rows, cause)
+  120; the next step with its owner and date 40. State the verdict once: when someone asks for wording to use in a
+  meeting, the opening verdict is that wording (write it to be read aloud and say it is the line to use), with no
+  separate "short answer" and no second version later. When the check
+  reports too many words, cut well below the bound (to about 320), not just to it: first delete prose that restates
+  a table, the verdict, or the grounding, then put the counts and dates in a table.
 
 Format and lint: skills/README.md.
