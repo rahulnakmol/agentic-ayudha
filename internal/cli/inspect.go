@@ -331,9 +331,21 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return Wrap(ExitExternal, err)
 	}
+	// In the merge gate, the state (and the cached result it carries) is read
+	// only from a comment the gate itself writes: anyone can post the marker,
+	// and a forged cached merge would otherwise pass as this head's review.
+	// The account this run writes as, when the token can say (a workflow's
+	// GITHUB_TOKEN cannot; gateWriter names it).
+	self := ""
+	if e.CI {
+		if u, _, err := c.REST.Users.Get(ctx, ""); err == nil {
+			self = u.GetLogin()
+		}
+	}
 	var prev inspect.State
 	for _, cm := range comments {
-		if strings.Contains(cm.GetBody(), inspect.Marker) {
+		by := cm.GetUser().GetLogin()
+		if strings.Contains(cm.GetBody(), inspect.Marker) && (!e.CI || (self != "" && strings.EqualFold(by, self)) || gateWriter(by, l.Config.Identity)) {
 			prev = inspect.ParseState(cm.GetBody())
 		}
 	}
@@ -670,4 +682,12 @@ func paidReviewer(gw *models.Gateway, cfg *config.Config, b inspect.Builder, log
 		return nil
 	}
 	return &models.Resolved{Lane: verbs.LaneReview, Host: verbs.DirectHost, Model: m, Display: m, Family: f, Source: models.SourceConfig}
+}
+
+// gateWriter reports whether login is an account the merge gate writes its
+// inspect comment as: the workflow's token, the bot App, or the machine user.
+func gateWriter(login string, id config.Identity) bool {
+	return strings.EqualFold(login, "github-actions[bot]") ||
+		(id.AppSlug != "" && strings.EqualFold(login, id.AppSlug+"[bot]")) ||
+		(id.MachineUser != "" && strings.EqualFold(login, id.MachineUser))
 }
