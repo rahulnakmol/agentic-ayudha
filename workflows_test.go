@@ -303,3 +303,84 @@ func TestModelChecksNeverGateAndNeverShip(t *testing.T) {
 		}
 	}
 }
+
+// TestEvalStepsAreSavedAndResumed: tier 2 saves each run's steps under evals/results/steps/<group>, uploads them
+// even when the job fails, and a dispatch with resume_run downloads exactly that artifact of the earlier run into the
+// same directory. The resume script is run with a stand-in gh that answers for run 4242 at commit abc123.
+func TestEvalStepsAreSavedAndResumed(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash steps")
+	}
+	b, err := os.ReadFile(".github/workflows/evals.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	type step struct {
+		Name string            `yaml:"name"`
+		Uses string            `yaml:"uses"`
+		If   string            `yaml:"if"`
+		Run  string            `yaml:"run"`
+		With map[string]string `yaml:"with"`
+	}
+	var wf struct {
+		On struct {
+			Dispatch struct {
+				Inputs map[string]any `yaml:"inputs"`
+			} `yaml:"workflow_dispatch"`
+		} `yaml:"on"`
+		Jobs map[string]struct {
+			Steps []step `yaml:"steps"`
+		} `yaml:"jobs"`
+	}
+	if err := yaml.Unmarshal(b, &wf); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := wf.On.Dispatch.Inputs["resume_run"]; !ok {
+		t.Error("evals.yml has no resume_run dispatch input")
+	}
+	var resume, upload string
+	saves := false
+	for _, s := range wf.Jobs["tier2"].Steps {
+		switch {
+		case strings.Contains(s.Run, "go run ./internal/evals/cmd/eval -tier 2"):
+			saves = strings.Contains(s.Run, `-steps "evals/results/steps/$GROUP"`)
+		case strings.Contains(s.Run, "eval-steps-"):
+			resume = s.Run
+		case strings.HasPrefix(s.Uses, "actions/upload-artifact@") && s.With["path"] == "evals/results/steps/${{ matrix.group }}":
+			if s.If != "always()" {
+				t.Errorf("the steps upload runs only %q; a failed job must still upload what it saved", s.If)
+			}
+			upload = s.With["name"]
+		}
+	}
+	if !saves || upload != "eval-steps-${{ github.sha }}-${{ matrix.group }}" || resume == "" {
+		t.Fatalf("tier 2 saves steps %v, uploads %q, resume step %v", saves, upload, resume != "")
+	}
+	bin, work := t.TempDir(), t.TempDir()
+	gh := "#!/bin/sh\ncase \"$1 $2\" in\n\"run view\") echo abc123 ;;\n\"run download\") echo \"$@\" >> \"$GH_LOG\" ;;\nesac\n"
+	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte(gh), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	logf := filepath.Join(work, "gh.log")
+	run := func(id string) (string, error) {
+		cmd := exec.Command("bash", "-c", resume)
+		cmd.Dir = work
+		cmd.Env = append(os.Environ(), "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"), "GH_LOG="+logf, "RESUME="+id, "GROUP=survey")
+		out, err := cmd.CombinedOutput()
+		return string(out), err
+	}
+	if out, err := run("4242"); err != nil {
+		t.Fatalf("resume from run 4242: %v: %s", err, out)
+	}
+	got, _ := os.ReadFile(logf)
+	if want := "run download 4242 --name eval-steps-abc123-survey --dir evals/results/steps/survey"; strings.TrimSpace(string(got)) != want {
+		t.Errorf("downloaded %q, want %q (the name the upload gives run 4242's survey steps)", strings.TrimSpace(string(got)), want)
+	}
+	_ = os.Remove(logf)
+	if out, err := run("4242 --repo other/repo"); err == nil {
+		t.Errorf("a resume_run that is not a run ID was accepted: %s", out)
+	}
+	if _, err := os.Stat(logf); err == nil {
+		t.Error("a resume_run that is not a run ID still downloaded")
+	}
+}

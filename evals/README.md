@@ -109,6 +109,14 @@ its first draft was revised for, and a survey's first-draft score and self-check
 and what it cost. When the group's `max_usd` is reached, the remaining runs are recorded as errors and the results
 file is still written.
 
+A runner can split its work into steps (a survey's sections, for example). Each step is saved as soon as it returns,
+done or not, at `results/steps/<group>/<case>/<sample>/<step>.json` (`-steps`), with its output, floor findings, calls,
+and cost; each of its calls names it (`step`). The workflow uploads the directory as `eval-steps-<sha>-<group>` even
+when the job fails. A dispatch with `resume_run` set to that run's ID downloads it, and the new run reuses each step
+whose status is `done` under the same key (the case, the sample, the skill model and its fallback, and the step's
+request: prompt, token cap, reasoning effort, schema, rubric), so a step whose cap was raised reruns. Every other step
+runs again and is shown its last saved attempt. A resumed step's calls were paid for by the earlier run.
+
 A brief case's skill replies with its Markdown draft. Its grounding gives each pack's criterion → evidence map (and
 inspect's verdicts when the pack's head has them), and a draft cites evidence only through it (`[P1.c3]`); a case
 whose map lacks an entry (`brief/unmapped-criterion`, tier 1 only) checks that no proof is claimed for it. The checks
