@@ -140,6 +140,20 @@ func TestMockupLiteralsAndFigmaVariables(t *testing.T) {
 	if got := tok.CheckLiterals("Page.tsx", []byte(`<p>Stories #571, #572</p>`)); len(got) != 1 {
 		t.Fatalf("code is read whole: %v", got)
 	}
+	// Comments in code are prose too: a story reference in one is not a
+	// colour, but an off-token colour in the code, a string with "//" in it,
+	// or after a comment on the same line still fails, at its line.
+	tsx := []byte("// slot-full: #572, see #573\n/* states: #571,\n   #574 */\nconst u = \"https://x.example/a\", c = \"#ff00aa\";\n" +
+		"const d = { color: \"#575\" }; // was: #576\n")
+	got = tok.CheckLiterals("src/Page.tsx", tsx)
+	if len(got) != 2 || got[0].Value != "#ff00aa" || got[0].Where != "src/Page.tsx:4" || got[1].Value != "#557755" || got[1].Where != "src/Page.tsx:5" ||
+		!strings.Contains(got[1].String(), `color: \"#575\"`) {
+		t.Fatalf("tsx literals: %v", got)
+	}
+	css := []byte("/* brand was #572 */\n.a { background: url(https://x.example/i.png); color: #ff00aa; }\n")
+	if got := tok.CheckLiterals("a.css", css); len(got) != 1 || got[0].Value != "#ff00aa" || got[0].Where != "a.css:2" {
+		t.Fatalf("css literals: %v", got)
+	}
 	colour, typo := tok.CheckVariables([]Variable{
 		{Name: "color/brand/default", Type: "COLOR", Value: "#1f5bd1"},
 		{Name: "color/text/default", Type: "COLOR", Value: "#000000"},
