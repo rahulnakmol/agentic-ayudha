@@ -196,9 +196,9 @@ func (e *Env) presenceCheck(ctx context.Context, p Pending, need Access, refusal
 			return nil, err
 		}
 	}
-	fmt.Fprintf(e.Err, "%s%s needs a person's approval.\n  Command: %s\n", what, on, e.commandLine())
+	fmt.Fprintf(e.Err, "%s%s needs a person's approval.\n  Command: %s\n", what, on, termText(e.commandLine()))
 	for _, line := range p.Effect {
-		fmt.Fprintf(e.Err, "  Approving: %s\n", line)
+		fmt.Fprintf(e.Err, "  Approving: %s\n", termText(line))
 	}
 	fmt.Fprintf(e.Err, "  On any device, open %s and enter %s (expires in %d minutes, at %s).\n  Approve only if you asked for this command. Waiting...\n",
 		code.VerificationURI, code.UserCode, max(code.ExpiresIn/60, 1), expires.UTC().Format("15:04 UTC"))

@@ -134,7 +134,11 @@ func checkApprovals(ctx context.Context, p *Probe) Result {
 	}
 	var lines []string
 	for _, r := range reach {
-		lines = append(lines, fmt.Sprintf("%s -> @%s", r.Source, r.Login))
+		who := "@" + r.Login
+		if r.Login == "" {
+			who = "an account GitHub could not confirm just now"
+		}
+		lines = append(lines, fmt.Sprintf("%s -> %s", r.Source, who))
 	}
 	device := "every batch needs the device code"
 	if slices.Contains(ap.DeviceFor, "all") { // no reply approves anything, so a reachable credential cannot forge one
@@ -143,6 +147,10 @@ func checkApprovals(ctx context.Context, p *Probe) Result {
 	if ex := identity.Exposed(reach, ap.Approvers); len(ex) > 0 {
 		var who []string
 		for _, r := range ex {
+			if r.Login == "" {
+				who = append(who, fmt.Sprintf("an unconfirmed account (%s)", r.Source))
+				continue
+			}
 			who = append(who, fmt.Sprintf("@%s (%s)", r.Login, r.Source))
 		}
 		where := "this process"
@@ -153,7 +161,7 @@ func checkApprovals(ctx context.Context, p *Probe) Result {
 	}
 	if p.Agent != "" {
 		for _, r := range reach {
-			if !identity.IsBot(identity.Account{Login: r.Login}, cfg.Identity.BotLogins) {
+			if r.Login != "" && !identity.IsBot(identity.Account{Login: r.Login}, cfg.Identity.BotLogins) {
 				lines = append(lines, fmt.Sprintf("this agent session can act as @%s, which is not a bot identity", r.Login))
 			}
 		}

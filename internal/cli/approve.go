@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	gh "github.com/google/go-github/v90/github"
 
@@ -109,7 +110,7 @@ func (b *batch) marker() string { return batchMarker + b.hash() + " -->" }
 func batchDecision(d decide.Decision, o workitems.Option) batchItem {
 	title := strings.TrimSuffix(strings.TrimSpace(strings.TrimPrefix(d.Title, "Decision:")), ".")
 	it := batchItem{Kind: "decision", Issue: d.Number, N: o.N, Option: o.Name, OneWay: !d.Reversible() || d.Waiver(), Other: !o.Recommended, BodyHash: decisionHash(d),
-		Effect: fmt.Sprintf("Accepts option %d (%s) of Decision #%d: %s.", o.N, o.Name, d.Number, title)}
+		Effect: fmt.Sprintf("Accepts option %d (%s) of Decision #%d: %s.", o.N, termText(o.Name), d.Number, termText(title))}
 	it.Heading = fmt.Sprintf("Accepts option %d (%s) of Decision #%d: %s.", o.N, mdText(o.Name), d.Number, mdText(title))
 	if it.Other {
 		it.Effect += " This is not the recommendation."
@@ -174,6 +175,18 @@ var mdEscape = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", "\\",
 	"[", "\\[", "]", "\\]", "#", "\\#", "|", "\\|", "~", "\\~", "!", "\\!", "@", "@\u200b")
 
 func mdText(s string) string { return mdEscape.Replace(s) }
+
+// termText makes untrusted text safe to print on a terminal: control
+// characters (escape sequences, carriage returns) show as U+FFFD instead of
+// moving the cursor or rewriting what the person reads.
+func termText(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return '\uFFFD'
+		}
+		return r
+	}, s)
+}
 
 // batchStatus is what the batch comment says under its items: how to
 // approve it, or what happened.
@@ -296,6 +309,9 @@ func (e *Env) commentApprovalsOff(ctx context.Context, cfg *config.Config, bot i
 	}
 	repo, _ := e.RepoName(ctx)
 	if ex := identity.Exposed(e.reachable(ctx, repo), ap.Approvers); len(ex) > 0 {
+		if ex[0].Login == "" {
+			return fmt.Sprintf("this session can reach a GitHub credential (%s) whose account GitHub could not confirm just now, so it may be an approver's; `aayu doctor` shows it.", ex[0].Source)
+		}
 		return fmt.Sprintf("this session can reach @%s's GitHub credential (%s), so an agent here could write the reply; `aayu doctor` shows it.", ex[0].Login, ex[0].Source)
 	}
 	return ""

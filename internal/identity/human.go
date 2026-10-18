@@ -88,6 +88,14 @@ type User struct {
 }
 
 // WhoAmI calls GET /user with the token.
+// StatusError is GitHub's answer to GET /user when it is not 200 OK.
+type StatusError struct {
+	Code int
+	msg  string
+}
+
+func (e *StatusError) Error() string { return e.msg }
+
 func WhoAmI(ctx context.Context, c *http.Client, api string, t Token) (User, error) {
 	var u User
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, api+"/user", nil)
@@ -102,7 +110,7 @@ func WhoAmI(ctx context.Context, c *http.Client, api string, t Token) (User, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return u, fmt.Errorf("GET /user with %s: %s", t, resp.Status)
+		return u, &StatusError{Code: resp.StatusCode, msg: fmt.Sprintf("GET /user with %s: %s", t, resp.Status)}
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&u); err != nil {
 		return u, err

@@ -236,7 +236,8 @@ your own device. A reply works only when agents never hold your GitHub credentia
 with that reason, whenever a session can reach it. `aayu doctor`'s approvals row lists every GitHub credential the
 session can reach (a token-shaped environment variable, every account `gh` stores, active or not, the git
 credential helper, and the token aayu itself would use, including one in its secrets store) by source and account,
-never by value, and fails when one belongs to an approver. An agent with only the bot's token (`AAYU_BOT_TOKEN`) reads and posts the batch as the bot;
+never by value, and fails when one belongs to an approver or when GitHub cannot say whose it is just then (a
+timeout or a rate limit counts as exposed). A legacy 40-character token counts too, in a variable named for GitHub. An agent with only the bot's token (`AAYU_BOT_TOKEN`) reads and posts the batch as the bot;
 it cannot ask for a device code, which proves the person's own account, so a one-way door waits for the person.
 
 **Setup for replies, once per repository (about 20 minutes):**

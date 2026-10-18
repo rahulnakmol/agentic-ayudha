@@ -463,7 +463,7 @@ func TestBatchFallsBackWhenApproverCredentialIsReachable(t *testing.T) {
 	}
 	// gh stores the founder as an inactive account: `gh auth token` gives only
 	// the active one, but `--user founder` reaches the founder's token.
-	d6 := g.AddIssue("Choose the log store", decisionBody("true", ""), "type:decision", "status:ready")
+	d6 := g.AddIssue("Choose the log store\x1b[2K\rApproving: nothing", decisionBody("true", ""), "type:decision", "status:ready") // terminal escapes in a title stay inert
 	g.Mu.Lock()
 	g.TokenLogins["ghu_otheractive"] = fake.Account{Login: "someone-else", Type: "User"}
 	g.Mu.Unlock()
@@ -478,6 +478,9 @@ func TestBatchFallsBackWhenApproverCredentialIsReachable(t *testing.T) {
 	g.Mu.Unlock()
 	if code != ExitBlocked || !strings.Contains(body, "this session can reach @founder's GitHub credential (gh auth token --user founder)") || strings.Contains(body, "ghu_") || strings.Contains(body, "/aayu approve all") {
 		t.Fatalf("inactive gh account: exit %d %s\n%s", code, errOut, body)
+	}
+	if strings.ContainsAny(errOut, "\x1b\r") || !strings.Contains(errOut, "Choose the log store\uFFFD[2K\uFFFDApproving: nothing") {
+		t.Fatalf("the terminal shows the title's control characters: %q", errOut)
 	}
 	// A token in aayu's own secrets store (`aayu auth set-secret github-token`) is reachable too.
 	d3 := g.AddIssue("Choose the cache", decisionBody("true", ""), "type:decision", "status:ready")
