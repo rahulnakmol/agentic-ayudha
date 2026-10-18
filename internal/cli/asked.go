@@ -35,7 +35,7 @@ func (e *Env) askedPath() string { return filepath.Join(e.stateDir(), "state", "
 
 // session is the host's ID for the agent session, when it exports one.
 func (e *Env) session() string {
-	for _, k := range []string{"AMP_THREAD_ID", "CODEX_THREAD_ID", "CLAUDE_CODE_SESSION_ID"} {
+	for _, k := range []string{"AMP_THREAD_ID", "CODEX_THREAD_ID", "CLAUDE_CODE_SESSION_ID", "COPILOT_AGENT_SESSION_ID"} {
 		if v := e.Getenv(k); v != "" {
 			return v
 		}

@@ -924,6 +924,12 @@ func (p *planner) agentsSections(lock Lock) []AgentsSection {
 		dirs = append(dirs, "`"+d+"/`")
 	}
 	where := "The skill copies in " + strings.Join(dirs, " and ")
+	copilotGap := ""
+	if slices.Contains(lock.Hosts, string(verbs.HostCopilot)) {
+		// hostcall reads the snake_case event of Claude Code, Codex, and
+		// Cursor, not Copilot's toolName and toolArgs.
+		copilotGap = "\nUnder GitHub Copilot, `pre-tool` does not check PostHog or Sentry calls yet: call them only to read."
+	}
 	var names []string
 	for _, h := range lock.Hosts {
 		if hh, ok := verbs.FindHost(verbs.HostID(h)); ok {
@@ -945,9 +951,9 @@ Installed for: %s. The %s MCP server serves the verbs as tools (write verbs only
 Host hooks run `+"`aayu hook <name>`"+` only: `+"`session-start`"+` reports skill copies out of sync with the lock,
 `+"`pre-tool`"+` blocks agent tool calls while the `+"`[budget]`"+` breaker has paused agent lanes, shell commands that run a
 human-only verb, and any PostHog or Sentry call through a host's MCP server or CLI that is not on aayudha's read
-allowlist, and `+"`status-line`"+` shows where the work stands.
+allowlist, and `+"`status-line`"+` shows where the work stands.%s
 
-%s`, strings.Join(names, ", "), "`"+ServerName+"`", wrapText("B"+strings.TrimPrefix(Routing, "aayudha: b"), 118))
+%s`, strings.Join(names, ", "), "`"+ServerName+"`", copilotGap, wrapText("B"+strings.TrimPrefix(Routing, "aayudha: b"), 118))
 	return []AgentsSection{{ID: "skills", Body: skills}, {ID: "hosts", Body: hostsSec}}
 }
 

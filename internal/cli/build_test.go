@@ -748,6 +748,22 @@ func TestBuildHoldsAStoryThePersonDidNotAskFor(t *testing.T) {
 	if code, _, errOut := run(t, agent("s1"), opts, "build", n, "--repo", "o/r"); code != 0 {
 		t.Fatalf("own grilled story: %d %s", code, errOut)
 	}
+	// The same holds across two Copilot sessions.
+	copilot := func(session string) map[string]string {
+		return map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH"), "COPILOT_AGENT_SESSION_ID": session}
+	}
+	code, out, errOut = run(t, copilot("c1"), opts, "grill", "story", "--repo", "o/r", "--json", "--title", "Show averages", "--body", body, "--labels", "effort:S", "--create")
+	res = GrillResult{}
+	_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)
+	if code != 0 || res.Issue == 0 {
+		t.Fatalf("grill in Copilot: %d %s", code, errOut)
+	}
+	if code, _, errOut := run(t, person, opts, "ready", strconv.Itoa(res.Issue), "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready %d: %s", res.Issue, errOut)
+	}
+	if code, _, errOut := run(t, copilot("c2"), opts, "build", strconv.Itoa(res.Issue), "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "has not asked") {
+		t.Fatalf("another Copilot session's grilled story: %d %s", code, errOut)
+	}
 	if code, _, errOut := run(t, person, opts, "ready", "6", "--repo", "o/r"); code != 0 {
 		t.Fatalf("ready 6: %s", errOut)
 	}
