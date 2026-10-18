@@ -277,6 +277,25 @@ func TestDASTGuardrails(t *testing.T) {
 		}
 	})
 
+	// Codex on 314fd4e: ZAP exits 1 on a plan error and 2 on a plan warning,
+	// and its report job can still write a clean report; that never passes.
+	t.Run("a nonzero ZAP exit is blocked, even with a clean report", func(t *testing.T) {
+		for _, code := range []string{"1", "2"} {
+			bin := t.TempDir()
+			standInRuntime(t, bin, "docker", zapClean)
+			f, err := os.OpenFile(filepath.Join(bin, "docker"), os.O_APPEND|os.O_WRONLY, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, _ = f.WriteString("echo 'Job activeScan warning' >&2\nexit " + code + "\n")
+			_ = f.Close()
+			r := dastRun(t, bin, "http://127.0.0.1:8080", "web")
+			if c, rep := dastCheck(t, r); c.Result != proof.Blocked || rep.Hold || !strings.Contains(c.Detail, "zap exited "+code) || !strings.Contains(c.Detail, "Job activeScan warning") {
+				t.Fatalf("exit %s: %+v", code, c)
+			}
+		}
+	})
+
 	// The adversarial review of #509: the merge gate runs the PR's own config,
 	// so an active_scan opt-in the PR adds waits until it is merged.
 	t.Run("an opt-in the change adds is passive until merged", func(t *testing.T) {

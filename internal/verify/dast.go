@@ -242,6 +242,12 @@ func (DAST) Run(ctx context.Context, r *Run) (Result, error) {
 	if err != nil {
 		return res, err
 	}
+	// The Automation Framework exits 1 on a plan error and 2 on a plan
+	// warning (a job that did not finish, a rule it could not load), even
+	// when its report job still wrote a report: never a pass.
+	if o.Code != 0 {
+		return res, fmt.Errorf("zap exited %d (1: plan error, 2: plan warning), so the scan is incomplete: %s", o.Code, tail(append(o.Stdout, o.Stderr...)))
+	}
 	b := readFile(filepath.Join(wrk, "zap.json"))
 	var rep struct {
 		Version string `json:"@version"`

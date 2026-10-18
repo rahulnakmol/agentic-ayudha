@@ -155,7 +155,7 @@ func checkDAST(ctx context.Context, p *Probe) Result {
 	if p.Getenv != nil && p.Getenv("AAYU_ENV") != "" {
 		env = p.Getenv("AAYU_ENV")
 	}
-	target := strings.TrimSpace(v.Environments[env].URL)
+	target := strings.TrimRight(v.Environments[env].URL, "/") // as verify.ResolveTarget reads it
 	switch {
 	case !v.DAST:
 		status = Warn

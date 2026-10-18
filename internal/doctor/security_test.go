@@ -178,7 +178,8 @@ func TestContainerRuntimeRow(t *testing.T) {
 		}
 	}
 	// A host and port with no scheme is not a URL verify can scan: it blocks the floor, so doctor must not pass it.
-	for _, bad := range []string{"127.0.0.1:8080", "localhost:8080", "//127.0.0.1:8080"} {
+	// Nor is one with surrounding space, which verify does not trim.
+	for _, bad := range []string{"127.0.0.1:8080", "localhost:8080", "//127.0.0.1:8080", " http://127.0.0.1:8080 ", "\thttp://127.0.0.1:8080"} {
 		// With or without a container runtime: a missing runtime must not soften the failure.
 		for _, found := range [][]string{{"docker"}, nil} {
 			p = probe(found...)
