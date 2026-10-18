@@ -1380,7 +1380,7 @@ func TestInspectPaidReviewer(t *testing.T) {
 	// live on #583) leaves the PR to the reviewer app: its reply is judged,
 	// and without one the gate fails closed with no-reply, not an error.
 	g, env, opts, prN, model = setup(`"claude"`, "google-key")
-	model.Err = errors.New(`Post "https://gw.example/v1/chat/completions": dial tcp: lookup gw.example on 10.1.0.4:53: i/o timeout`)
+	model.Err = errors.New(`Post "https://gw.example/v1/chat/completions": dial tcp: lookup gw.example on 10.1.0.4:53: i/o timeout, then [2001:db8::1]:443 refused`)
 	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || res.Disposition != NoReply || len(model.Requests) != 1 {
 		t.Fatalf("a failed paid review, no reply: exit %d %s, %d model calls %s", code, res.Disposition, len(model.Requests), errOut)
 	}
@@ -1397,7 +1397,7 @@ func TestInspectPaidReviewer(t *testing.T) {
 		t.Fatalf("a failed paid review, the app's reply: exit %d %s rung %q, %d model calls %s", code, res.Disposition, res.Rung, len(model.Requests), errOut)
 	}
 	// The final comment, the record people read, still says why rung B failed.
-	if body := lastInspect(t, g, prN); !strings.Contains(body, "lookup <endpoint host> on <address>: i/o timeout") || strings.Contains(body, "gw.example") || strings.Contains(body, "10.1.0.4") {
+	if body := lastInspect(t, g, prN); !strings.Contains(body, "lookup <endpoint host> on <address>: i/o timeout") || strings.Contains(body, "gw.example") || strings.Contains(body, "10.1.0.4") || strings.Contains(body, "2001:db8") || strings.Contains(body, ":443") {
 		t.Errorf("the app's judgement lost why rung B failed:\n%s", body)
 	}
 
@@ -1582,6 +1582,19 @@ func TestInspectReviewerFallback(t *testing.T) {
 			t.Fatalf("rung B after %v: exit %d rung %q, %d calls, pauses %v %s", c.err, code, res.Rung, flaky.calls, paused, errOut)
 		}
 	}
+
+	// Each call gets its own CallTimeout: a schema retry after a slow first
+	// reply is not cut by the first call's deadline (CodeRabbit's minor on #697).
+	defer func(d time.Duration) { models.CallTimeout = d }(models.CallTimeout)
+	models.CallTimeout = 300 * time.Millisecond
+	g, env, opts, prN, model = setup()
+	addComment(g, prN, "chatgpt-codex-connector[bot]", "Bot", limit)
+	slow := &slowClient{wait: 200 * time.Millisecond, replies: []models.Response{{Model: "grok-4.7", Text: "not JSON"}, model.Replies[0]}}
+	opts.ModelClient = func(models.Route, string) models.Client { return slow }
+	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Rung != inspect.RungB || slow.calls != 2 {
+		t.Fatalf("a schema retry after a slow reply: exit %d rung %q, %d calls %s", code, res.Rung, slow.calls, errOut)
+	}
+	models.CallTimeout = 12 * time.Minute
 
 	// Rung B fails too (the gateway's 524): a human reviews, and the gate
 	// fails closed until one replies; the next run makes no second paid call.
@@ -1868,4 +1881,21 @@ func (f *flakyClient) Complete(ctx context.Context, r models.Request) (models.Re
 		return models.Response{}, f.err
 	}
 	return f.next.Complete(ctx, r)
+}
+
+// slowClient takes wait to answer each call, or ends with the call's context.
+type slowClient struct {
+	wait    time.Duration
+	replies []models.Response
+	calls   int
+}
+
+func (c *slowClient) Complete(ctx context.Context, _ models.Request) (models.Response, error) {
+	c.calls++
+	select {
+	case <-time.After(c.wait):
+		return c.replies[min(c.calls, len(c.replies))-1], nil
+	case <-ctx.Done():
+		return models.Response{}, ctx.Err()
+	}
 }

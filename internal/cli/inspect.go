@@ -1013,10 +1013,11 @@ func reviewEffort(model string, ic config.Inspect) string {
 // the caller turns into a note with tierNote.
 func (e *Env) reviewCall(gw *models.Gateway, cfg *config.Config, model, story string, left float64, served *[]string) func(context.Context, models.Request) (models.Response, float64, error) {
 	g := gw.WithModel(verbs.LaneReview, verbs.DirectHost, model)
-	// Every attempt of every call in this review shares one CallTimeout,
-	// so a retry never outlasts the merge gate's inspect step.
-	deadline := time.Now().Add(models.CallTimeout)
 	return func(ctx context.Context, req models.Request) (models.Response, float64, error) {
+		// A call and its retry share one CallTimeout, so the retry never
+		// makes the call longer; each call (a schema retry, a peer
+		// cross-check) gets its own.
+		deadline := time.Now().Add(models.CallTimeout)
 		req.Effort = cmp.Or(req.Effort, reviewEffort(model, cfg.Inspect))
 		req.ServiceTier = models.TierPriority
 		ctx, cancel := context.WithDeadline(ctx, deadline)
@@ -1142,7 +1143,7 @@ func missingReviewModel(gw *models.Gateway, c *config.Config) []string {
 }
 
 // addrRe is an IPv4 or bracketed IPv6 address, with an optional port.
-var addrRe = regexp.MustCompile(`\b\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?\b|\[[0-9A-Fa-f:.]+\](?::\d+)?`)
+var addrRe = regexp.MustCompile(`(?:\b\d{1,3}(?:\.\d{1,3}){3}\b|\[[0-9A-Fa-f:.]+\])(?::\d+)?`)
 
 // tierNote records the service tier the paid review was served at, and flags
 // one that is not fast: the review asked for priority (fast) serving.
