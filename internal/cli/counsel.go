@@ -571,6 +571,24 @@ func inRoot(root, rel string) bool {
 	return err == nil && inside != ".." && !strings.HasPrefix(inside, ".."+string(filepath.Separator))
 }
 
+// embeddedName is the field name Go gives an embedded type: its type name without pointer, package, or type
+// arguments.
+func embeddedName(t ast.Expr) string {
+	switch t := t.(type) {
+	case *ast.Ident:
+		return t.Name
+	case *ast.StarExpr:
+		return embeddedName(t.X)
+	case *ast.SelectorExpr:
+		return t.Sel.Name
+	case *ast.IndexExpr:
+		return embeddedName(t.X)
+	case *ast.IndexListExpr:
+		return embeddedName(t.X)
+	}
+	return ""
+}
+
 // counselRunCite is a cited CI run ("run 39091188074"), which the evidence rule's parser gives as the bare ID: all
 // digits, eight or more. A hash of only digits that long is checked as a run first, then as a commit.
 var counselRunCite = regexp.MustCompile(`^[0-9]{8,}$`)
@@ -648,6 +666,10 @@ func declares(root, pkg, name, member string) bool {
 								for _, fl := range fields.List {
 									for _, n := range fl.Names {
 										found = found || n.Name == member
+									}
+									if len(fl.Names) == 0 {
+										// An embedded field is named by its type: T, *T, pkg.T, T[X].
+										found = found || embeddedName(fl.Type) == member
 									}
 								}
 							}

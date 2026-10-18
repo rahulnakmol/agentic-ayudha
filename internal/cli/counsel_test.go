@@ -49,7 +49,7 @@ func TestCounsel(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(opts.Dir, "internal", "report"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(opts.Dir, "internal", "report", "percent.go"), []byte("package report\n\ntype Source interface {\n\tRows() int\n}\n\ntype Table struct {\n\tRows int\n}\n\nfunc (t *Table) Total() int { return t.Rows }\n\nfunc Percent(c, t int) float64 {\n\tMissing := 0\n\treturn float64(Missing)\n}\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(opts.Dir, "internal", "report", "percent.go"), []byte("package report\n\ntype Source interface {\n\tRows() int\n}\n\ntype Table struct {\n\tRows int\n\t*Source\n\tfmt.Stringer\n}\n\nfunc (t *Table) Total() int { return t.Rows }\n\nfunc Percent(c, t int) float64 {\n\tMissing := 0\n\treturn float64(Missing)\n}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(opts.Dir, "embed.go"), []byte("package aayudha\n\nvar Assets = 1\n"), 0o644); err != nil {
@@ -219,7 +219,7 @@ Is the zero case the behaviour you want?
 	if r := counselRun(env, 0, "--pr", pr, "--draft", write("run.md", strings.Replace(good, "(LAYERS.md)", "(run 39091188074)", 1))); len(r.Findings) != 0 {
 		t.Errorf("a real run citation: %v", r.Findings)
 	}
-	for _, sym := range []string{headSHA, "report.Percent", "report.Table", "report.Table.Total", "report.Table.Rows", "report.Source.Rows", "aayudha.Assets"} {
+	for _, sym := range []string{headSHA, "report.Percent", "report.Table", "report.Table.Total", "report.Table.Rows", "report.Source.Rows", "aayudha.Assets", "report.Table.Source", "report.Table.Stringer"} {
 		if r := counselRun(env, 0, "--pr", pr, "--draft", write("symbol.md", strings.Replace(good, "(LAYERS.md)", "(`"+sym+"`)", 1))); len(r.Findings) != 0 {
 			t.Errorf("a real symbol citation %s: %v", sym, r.Findings)
 		}
