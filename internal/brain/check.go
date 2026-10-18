@@ -94,11 +94,11 @@ func (v *Vault) Resolve(target string) string {
 
 var (
 	wikilinkRE = regexp.MustCompile(`!?\[\[([^\[\]]+)\]\]`)
-	fenceRE    = regexp.MustCompile("(?s)```.*?```|~~~.*?~~~")
 	codeRE     = regexp.MustCompile("`[^`\n]*`")
 	commentRE  = regexp.MustCompile(`(?s)<!--.*?-->`)
 	dateRE     = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
-	loginRE    = regexp.MustCompile(`^@?[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$`)
+	// loginRE is a GitHub login: letters, digits, and single hyphens between them, at most 39 characters.
+	loginRE = regexp.MustCompile(`^@?[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$`)
 	// sourceRE is the evidence rule's citation forms.
 	sourceRE = regexp.MustCompile(`^(?:(?:issue|PR|Decision|Goal|Initiative|Feature|Story|Bug|Release|Feedback|Experiment|Incident) #\d+|tag \S+|ledger \S+|file \S+|commit [0-9a-f]{7,40}|https://\S+)$`)
 	// Copy rule: a pasted Completion Goal criterion, or an issue label.
@@ -109,12 +109,25 @@ var (
 
 // links returns the wikilink targets of text outside code.
 func links(text string) []string {
-	text = codeRE.ReplaceAllString(fenceRE.ReplaceAllString(commentRE.ReplaceAllString(text, ""), ""), "")
+	text = codeRE.ReplaceAllString(maskFences(commentRE.ReplaceAllString(text, "")), "")
 	var out []string
 	for _, m := range wikilinkRE.FindAllStringSubmatch(text, -1) {
 		out = append(out, strings.ReplaceAll(m[1], `\|`, "|")) // a pipe escaped inside a table
 	}
 	return out
+}
+
+func isLogin(s string) bool { return loginRE.MatchString(s) && len(strings.TrimPrefix(s, "@")) <= 39 }
+
+// IsVault reports whether files are an aayudha brain: a Home note of type
+// home, or the CLI-owned Obsidian property types. A branch named brain that
+// is neither is someone else's, and aayu writes nothing to it.
+func IsVault(files map[string][]byte) bool {
+	if _, ok := files[".obsidian/types.json"]; ok {
+		return true
+	}
+	n, err := Parse(HomePath, files[HomePath])
+	return err == nil && n.Str("type") == "home"
 }
 
 // linkTarget strips the [[ ]] of a frontmatter link value; "" if it is not one.
@@ -137,7 +150,7 @@ const MaxSentenceWords = brief.MaxSTEWords
 // and code, with wikilinks replaced by the text they show.
 func prose(body string) string {
 	s := commentRE.ReplaceAllString(StripBlocks(body), "")
-	s = fenceRE.ReplaceAllString(s, "")
+	s = maskFences(s)
 	return wikilinkRE.ReplaceAllStringFunc(s, func(m string) string {
 		t := wikilinkRE.FindStringSubmatch(m)[1]
 		if _, alias, ok := strings.Cut(t, "|"); ok {
@@ -203,7 +216,7 @@ func Check(files map[string][]byte) Report {
 			fail(p, "frontmatter", "owner %q is not a seat slug (a seat outlives a person; name people under people)", o)
 		}
 		for _, l := range n.List("people") {
-			if !loginRE.MatchString(l) {
+			if !isLogin(l) {
 				fail(p, "frontmatter", "people: %q is not a GitHub login", l)
 			}
 		}
@@ -274,7 +287,7 @@ func Check(files map[string][]byte) Report {
 			}
 			if rb := n.Str("raised_by"); rb == "" {
 				fail(p, "objection", "no raised_by: name who raised it, by GitHub login or seat slug")
-			} else if _, seat := verbs.FindSeat(verbs.SeatID(rb)); !seat && !loginRE.MatchString(rb) {
+			} else if _, seat := verbs.FindSeat(verbs.SeatID(rb)); !seat && !isLogin(rb) {
 				fail(p, "objection", "raised_by %q is neither a seat slug nor a GitHub login", rb)
 			}
 			if lt := linkTarget(n.Str("objects_to")); lt == "" {

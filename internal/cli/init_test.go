@@ -202,10 +202,11 @@ func TestInitTwiceDryRunPublicCoexistence(t *testing.T) {
 	}
 
 	// Rulesets an init before the brain branch created (rules and actors right, include only the ledger):
-	// a rerun adds refs/heads/brain to both, keeping any other ref they include, and says so.
+	// a rerun adds refs/heads/brain to both, keeping any other ref they include, and drops an exclusion of
+	// refs/heads/brain itself, which would beat the inclusion; a wider exclusion stays.
 	g.Mu.Lock()
 	for _, rs := range g.Rulesets {
-		rs["conditions"] = map[string]any{"ref_name": map[string]any{"include": []any{"refs/heads/ledger", "refs/heads/archive"}, "exclude": []any{}}}
+		rs["conditions"] = map[string]any{"ref_name": map[string]any{"include": []any{"refs/heads/ledger", "refs/heads/archive"}, "exclude": []any{"refs/heads/brain", "refs/heads/tmp-*"}}}
 	}
 	g.Mu.Unlock()
 	g.Reset()
@@ -218,6 +219,13 @@ func TestInitTwiceDryRunPublicCoexistence(t *testing.T) {
 	if got := ledgerRulesets(g); got != "aayudha-ledger-history: [deletion non_fast_forward] bypass [] on [refs/heads/ledger refs/heads/archive refs/heads/brain]; aayudha-ledger: [update] bypass [4 RepositoryRole 5 RepositoryRole] on [refs/heads/ledger refs/heads/archive refs/heads/brain]" {
 		t.Fatalf("ledger rulesets after the brain upgrade: %s", got)
 	}
+	g.Mu.Lock()
+	for _, rs := range g.Rulesets {
+		if x := fmt.Sprint(rs["conditions"].(map[string]any)["ref_name"].(map[string]any)["exclude"]); x != "[refs/heads/tmp-*]" {
+			t.Errorf("exclusions after the brain upgrade: %s, want only refs/heads/tmp-*", x)
+		}
+	}
+	g.Mu.Unlock()
 
 	if code, _, errOut := run(t, nil, Options{IsTerminal: stdinTTY, Dir: dir}, "proof", "push", "--media"); code != ExitBlocked || !strings.Contains(errOut, "aayudha-pack run artifact") {
 		t.Errorf("proof push --media on a public repo: exit %d %s", code, errOut)

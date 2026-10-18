@@ -87,3 +87,28 @@ func TestBrainInitCheckpointCheck(t *testing.T) {
 		t.Errorf("open: %s", out)
 	}
 }
+
+// TestBrainRefusesAnUnrelatedBranch: a branch named brain that is not a vault
+// is someone else's, and neither init nor checkpoint writes to it.
+func TestBrainRefusesAnUnrelatedBranch(t *testing.T) {
+	g := fake.New(t, "o/r", "User")
+	dir, bare := ledgerCheckout(t)
+	other := filepath.Join(t.TempDir(), "other")
+	git(t, filepath.Dir(other), "clone", "--quiet", bare, other)
+	git(t, other, "checkout", "--quiet", "--orphan", "brain")
+	_ = os.WriteFile(filepath.Join(other, "README.md"), []byte("my notes\n"), 0o644)
+	git(t, other, "add", ".")
+	git(t, other, "commit", "--quiet", "-m", "mine")
+	git(t, other, "push", "--quiet", "origin", "brain")
+	tip := git(t, other, "rev-parse", "HEAD")
+	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, Assets: aayudha.Assets}
+	for _, args := range [][]string{{"brain", "init", "--workstream", "x"}, {"brain", "checkpoint"}} {
+		code, out, errOut := run(t, map[string]string{"AAYU_GITHUB_TOKEN": "t"}, opts, append(args, "--repo", "o/r")...)
+		if code != ExitBlocked || !strings.Contains(errOut, "not an aayudha vault") {
+			t.Errorf("%v on an unrelated brain branch: exit %d: %s%s", args, code, out, errOut)
+		}
+	}
+	if got := git(t, bare, "rev-parse", "refs/heads/brain"); got != tip {
+		t.Errorf("the unrelated brain branch moved to %s", got)
+	}
+}

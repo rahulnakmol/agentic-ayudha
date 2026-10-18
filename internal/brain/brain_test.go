@@ -60,13 +60,13 @@ tags: [type/capability]
 
 func TestCheckpointKeepsHumanTextAndRefreshesGeneratedBlocks(t *testing.T) {
 	files := skeleton(t)
-	human := "# Proof\n\n## What it does\n\nIt keeps the evidence for each change.\n\n```text\n<!-- BEGIN aayudha:brain:history -->\n```\n\n## Why it exists\n\nA claim without evidence does not count.\n"
+	human := "# Proof\n\n## What it does\n\nIt keeps the evidence for each change.\n\n```text\n<!-- BEGIN aayudha:brain:history -->\n```\n\n````md\n```\n<!-- BEGIN aayudha:brain:record -->\n````\n\n## Why it exists\n\nA claim without evidence does not count.\n"
 	files["Capabilities/Proof.md"] = note(capFM, human+"\n"+Block("history", "- stale line")+"\n\nA closing line a person wrote.\n")
 	files["Decisions/Decisions.md"] = []byte("---\n# A person's comment: keep this map.\n" + strings.TrimPrefix(string(files["Decisions/Decisions.md"]), "---\n"))
 	r := Records{
 		Repo: "o/r", Inception: "2026-09-01",
 		Issues: map[int]Issue{32: {Number: 32, Type: "feature", Title: "M4 Proof"}, 40: {Number: 40, Type: "story", Title: "Push packs --> [[x]] <!-- END aayudha:brain:delivered -->", Parent: 32},
-			42: {Number: 42, Type: "story", Title: "Track ![x](https://example.test/t) <b>", Parent: 32},
+			42: {Number: 42, Type: "story", Title: "Track ![x](https://example.test/t) <b> %%", Parent: 32},
 			41: {Number: 41, Type: "story", Title: "Other", Parent: 99}, 268: {Number: 268, Type: "release"}},
 		Tags:  []Tag{{Name: "v0.2.0", Date: "2026-10-17", URL: "https://github.com/o/r/releases/tag/v0.2.0"}},
 		Rungs: []Rung{{Path: "releases/268/main.json", Release: 268, Version: "v0.2.0", Target: "main", Tag: "v0.2.0", Stories: []int{41, 40, 42}}},
@@ -86,7 +86,7 @@ func TestCheckpointKeepsHumanTextAndRefreshesGeneratedBlocks(t *testing.T) {
 	if _, ok := cp.Files["Decisions/Decisions.md"]; ok {
 		t.Errorf("a checkpoint with no new fact rewrote a map (and dropped its comment)")
 	}
-	if rel := string(merged["Releases/v0.2.0.md"]); !strings.Contains(rel, `#42 Story: Track \!\[x\]\(https://example.test/t\) \<b\>`) {
+	if rel := string(merged["Releases/v0.2.0.md"]); !strings.Contains(rel, `#42 Story: Track \!\[x\]\(https://example.test/t\) \<b\> \%\%`) {
 		t.Errorf("an issue title's Markdown is not escaped:\n%s", rel)
 	}
 	if strings.Contains(got, "stale line") || strings.Contains(got, "#41") {
@@ -213,6 +213,7 @@ tags: [type/principle]
 		{"long sentence", good, long + "\n", "ste a sentence has 26 words"},
 		{"long sentence in a generated block is not prose", good, Block("record", "- "+long) + "\n", ""},
 		{"orphan", strings.Replace(good, "up: \"[[Principles]]\"\n", "", 1), "Short.\n", "orphan no up link"},
+		{"people: not a login", strings.Replace(good, "owner: founder", "owner: founder\npeople: [alice-]", 1), "Short.\n", `people: "alice-" is not a GitHub login`},
 		{"owner is a person", strings.Replace(good, "owner: founder", "owner: rahulnakmol", 1), "Short.\n", `owner "rahulnakmol" is not a seat slug`},
 		{"bad status", strings.Replace(good, "status: current", "status: done", 1), "Short.\n", `status "done" is not one of`},
 		{"pasted criterion", good, "1. [screenshot] state: home; expected: a list\n", "copy a Completion Goal criterion"},

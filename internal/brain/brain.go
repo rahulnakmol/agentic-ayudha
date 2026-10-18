@@ -115,23 +115,53 @@ func Block(name, body string) string {
 // blockRE matches a generated block: markers on lines of their own.
 var blockRE = regexp.MustCompile(`(?ms)^<!-- BEGIN aayudha:brain:([a-z0-9-]+) -->\n(.*?)^<!-- END aayudha:brain:([a-z0-9-]+) -->$`)
 
-// fenceSpanRE matches a fenced code block, where markers are text, not markers.
-var fenceSpanRE = regexp.MustCompile("(?ms)^(```|~~~).*?^(```|~~~)[ \t]*$")
+// fenceOpenRE matches a line that opens a fenced code block (CommonMark: at
+// most three spaces, then three or more backticks or tildes).
+var fenceOpenRE = regexp.MustCompile("^ {0,3}(`{3,}|~{3,})")
+
+// maskFences blanks out fenced code (same length, newlines kept, so indexes
+// hold): markers and links inside a fence are text. A fence closes on a line
+// of the same character at least as long as the one that opened it.
+func maskFences(body string) string {
+	masked := []byte(body)
+	start, open := -1, ""
+	for i := 0; i < len(body); {
+		j := strings.IndexByte(body[i:], '\n')
+		end := len(body)
+		if j >= 0 {
+			end = i + j
+		}
+		line := body[i:end]
+		if open == "" {
+			if m := fenceOpenRE.FindStringSubmatch(line); m != nil {
+				start, open = i, m[1]
+			}
+		} else if t := strings.TrimSpace(line); len(t) >= len(open) && strings.Trim(t, open[:1]) == "" {
+			blank(masked, start, end)
+			start, open = -1, ""
+		}
+		i = end + 1
+	}
+	if open != "" { // an unclosed fence runs to the end
+		blank(masked, start, len(body))
+	}
+	return string(masked)
+}
+
+func blank(b []byte, from, to int) {
+	for k := from; k < to; k++ {
+		if b[k] != '\n' {
+			b[k] = ' '
+		}
+	}
+}
 
 // blockSpans returns the generated blocks of body as [start, end, nameStart,
 // nameEnd, ...] submatch indexes, skipping marker text inside code fences.
 func blockSpans(body string) [][]int {
-	// Blank out fenced code (same length, so indexes hold) before matching.
-	masked := []byte(body)
-	for _, f := range fenceSpanRE.FindAllStringIndex(body, -1) {
-		for i := f[0]; i < f[1]; i++ {
-			if masked[i] != '\n' {
-				masked[i] = ' '
-			}
-		}
-	}
+	masked := maskFences(body)
 	var out [][]int
-	for _, m := range blockRE.FindAllSubmatchIndex(masked, -1) {
+	for _, m := range blockRE.FindAllStringSubmatchIndex(masked, -1) {
 		if body[m[2]:m[3]] == body[m[6]:m[7]] {
 			out = append(out, m)
 		}
@@ -197,8 +227,9 @@ func Fact(s string) string {
 }
 
 // factEscapes are the Markdown and HTML metacharacters Fact escapes, so an
-// issue title renders as text: no link, image, HTML, emphasis, code, or table cell.
-const factEscapes = "\\`*_[]()!<>|#~&"
+// issue title renders as text: no link, image, HTML, emphasis, code, table
+// cell, or Obsidian comment (%%), highlight (==), or math ($).
+const factEscapes = "\\`*_[]()!<>|#~&%=$"
 
 // Note is one parsed Markdown note: ordered frontmatter and the body.
 type Note struct {

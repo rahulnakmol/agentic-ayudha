@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	pathpkg "path"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -547,18 +548,40 @@ func (in *Init) ensureRuleset(ctx context.Context, listed func(string) bool, nam
 				include = append(include, ref)
 			}
 		}
-		exclude := append([]string{}, d.Conditions.RefName.Exclude...)
+		// An exclusion beats an inclusion (GitHub ref-name conditions), so an
+		// exclusion of a protected ref itself is dropped; a pattern that also
+		// matches other refs is kept, and the note says what it still lets through.
+		var exclude, shadow []string
+		for _, x := range d.Conditions.RefName.Exclude {
+			if slices.Contains(protectedRefs, x) {
+				continue
+			}
+			exclude = append(exclude, x)
+			for _, ref := range protectedRefs {
+				if ok, _ := pathpkg.Match(x, ref); ok {
+					shadow = append(shadow, fmt.Sprintf("exclusion %q still exempts %s; remove it from ruleset %q to protect that branch", x, ref, name))
+				}
+			}
+		}
+		if exclude == nil {
+			exclude = []string{}
+		}
 		body["conditions"] = map[string]any{"ref_name": map[string]any{"include": include, "exclude": exclude}}
-		if has && slices.Equal(d.ruleTypes(), rules) && len(include) == len(d.Conditions.RefName.Include) {
-			in.note("ruleset", "ruleset", name, "unchanged", "")
+		warn := strings.Join(shadow, "; ")
+		if has && slices.Equal(d.ruleTypes(), rules) && len(include) == len(d.Conditions.RefName.Include) && len(exclude) == len(d.Conditions.RefName.Exclude) {
+			in.note("ruleset", "ruleset", name, "unchanged", warn)
 			return nil
 		}
-		if _, err := in.GH.Write(ctx, actions.Action{Kind: "github.ruleset.update", Target: r.FullName, IdempotencyKey: in.key("ruleset-update", name, strings.Join(include, ",")),
+		if _, err := in.GH.Write(ctx, actions.Action{Kind: "github.ruleset.update", Target: r.FullName, IdempotencyKey: in.key("ruleset-update", name, strings.Join(include, ",")+"!"+strings.Join(exclude, ",")),
 			Request: &actions.Request{Method: http.MethodPut, Path: path}, Payload: body},
 			func(ctx context.Context) (any, error) { return nil, in.rest(ctx, http.MethodPut, path, body, nil) }); err != nil {
 			return err
 		}
-		in.note("ruleset", "ruleset", name, "updated", "write-access humans write the ledger and brain branches; force pushes and deletion stay blocked")
+		msg := "write-access humans write the ledger and brain branches; force pushes and deletion stay blocked"
+		if warn != "" {
+			msg = warn
+		}
+		in.note("ruleset", "ruleset", name, "updated", msg)
 		return nil
 	}
 	var created rulesetDetail

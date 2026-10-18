@@ -88,6 +88,15 @@ func (e *Env) brainWriter(ctx context.Context) (*ledger.Writer, *github.Client, 
 	return w, c, nil
 }
 
+// notVault refuses a brain branch that is not an aayudha vault: a branch of
+// that name someone else made, which aayu must not write to.
+func notVault(files map[string][]byte) error {
+	if brain.IsVault(files) {
+		return nil
+	}
+	return Errorf(ExitBlocked, "the %s branch on the remote is not an aayudha vault (no Home.md of type home, no .obsidian/types.json): aayu writes nothing to it; rename that branch, then run `aayu brain init`", brain.Branch)
+}
+
 // brainFiles reads every file at the tip of the brain branch.
 func brainFiles(ctx context.Context, w *ledger.Writer) (map[string][]byte, string, error) {
 	t, err := w.Read(ctx)
@@ -137,11 +146,14 @@ func (e *Env) brainInit(ctx context.Context, ws string) error {
 	if errors.Is(err, ledger.ErrExists) {
 		outcome = "exists"
 		err = nil
+		existing, _, rerr := brainFiles(ctx, w)
+		if rerr != nil {
+			return rerr
+		}
+		if err := notVault(existing); err != nil {
+			return err
+		}
 		if ws != "" {
-			existing, _, rerr := brainFiles(ctx, w)
-			if rerr != nil {
-				return rerr
-			}
 			add := map[string][]byte{}
 			for p, b := range brain.Workstream(repo, ws, today) {
 				if _, ok := existing[p]; !ok {
@@ -187,7 +199,7 @@ func (e *Env) brainCheck(ctx context.Context, dir string) error {
 		if err != nil {
 			return err
 		}
-		tok := ""
+		tok := e.Getenv("AAYU_BOT_TOKEN") // a bot-only session reads a private repository's branch with the bot's token
 		if _, t, err := e.HumanGitHub(ctx); err == nil {
 			tok = t.Value
 		}
@@ -266,6 +278,9 @@ func (e *Env) brainCheckpoint(ctx context.Context) error {
 func (e *Env) checkpointBrain(ctx context.Context, c *github.Client, w *ledger.Writer) (brain.Checkpoint, string, error) {
 	files, tip, err := brainFiles(ctx, w) // first: without a brain branch there is nothing to read records for
 	if err != nil {
+		return brain.Checkpoint{}, "", err
+	}
+	if err := notVault(files); err != nil {
 		return brain.Checkpoint{}, "", err
 	}
 	r, err := e.brainRecords(ctx, c, w)
