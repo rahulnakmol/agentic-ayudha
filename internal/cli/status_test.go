@@ -68,7 +68,7 @@ func TestStatusRollupsAndDigest(t *testing.T) {
 	// Spend recorded against stories: #8 is over the 25 USD per-story budget.
 	logPath := filepath.Join(dir, "state", "aayudha", "telemetry", "actions.jsonl")
 	_ = os.MkdirAll(filepath.Dir(logPath), 0o755)
-	_ = os.WriteFile(logPath, []byte(`{"seq":1,"kind":"model.call","story":"#8","status":"done","cost_usd":30}`+"\n"+`{"seq":2,"kind":"model.call","story":"o/r#6","status":"done","cost_usd":1.5}`+"\n"), 0o644)
+	_ = os.WriteFile(logPath, []byte(`{"seq":1,"kind":"model.call","story":"#8","status":"done","cost_usd":61}`+"\n"+`{"seq":2,"kind":"model.call","story":"o/r#6","status":"done","cost_usd":1.5}`+"\n"), 0o644)
 	sink := &notify.Fake{}
 	now := time.Date(2026, 10, 15, 12, 0, 0, 0, time.UTC) // Thursday 13:00 London: business hours
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "t", "XDG_STATE_HOME": filepath.Join(dir, "state")}
@@ -108,14 +108,14 @@ func TestStatusRollupsAndDigest(t *testing.T) {
 	check("goal provisional", goal.Provisional, []int{118})
 	// Thursday 13:00 to Friday 13:00 London: 5 business hours Thursday, 4 Friday.
 	check("goal provisional hours", goal.ProvisionalHours, "#118 9 h")
-	check("goal cost", goal.CostUSD, 31.5)
+	check("goal cost", goal.CostUSD, 62.5)
 	check("goal proof coverage", goal.ProofCoverage, status.ProofNA)
 	check("goal decisions near SLA", len(goal.DecisionsNearSLA), 1)
 	if d := goal.DecisionsNearSLA[0]; d.Number != 117 || !d.Overdue || d.Deadline.UTC().Format(time.RFC3339) != "2026-10-14T15:00:00Z" {
 		t.Errorf("decision near SLA: %+v, want #117 overdue since Wednesday 16:00 London", d)
 	}
 	check("initiative 1 items", i1.Items, 7)
-	check("initiative 1 cost", i1.CostUSD, 31.5)
+	check("initiative 1 cost", i1.CostUSD, 62.5)
 	check("initiative 2 items", i2.Items, 108)
 	check("initiative 2 shipped", i2.ShippedUnmeasured, []int{})
 	check("feature 11 items (paginated sub-issues)", f3.Items, 107)

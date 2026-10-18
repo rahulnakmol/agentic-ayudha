@@ -84,7 +84,7 @@ event loops, and `init --integrations` for PostHog, Sentry, and your cloud.
 | Keys | The GitHub App is free; `init` creates it and stores its key as a secret. Read-only tokens for PostHog and Sentry. Read-only cloud access, with no stored key when it runs in GitHub Actions |
 | CI changes | Optional: a loops workflow that only records events, with no model |
 | CI minutes | Little: loops run in your agent's scheduler, and the Actions fallback is capped at 2,000 minutes a month by default |
-| Model spend | Loops and autonomous merges use your agent more often, billed by your agent's plan as usual. Default caps: 25 USD per story and 100 USD per day per repository. When a cap trips, agents pause and a person is paged |
+| Model spend | Loops and autonomous merges use your agent more often, billed by your agent's plan as usual. Default caps on metered (pay-as-you-go) spend: 60 USD per story and 100 USD per day per repository; subscription use is not counted. When a cap trips, agents pause and a person is paged |
 | Other | PostHog bills by usage on its side; Sentry adds no cost |
 
 > **Honest status:** this repository runs at Level 2, with some loops. It has no bot App installed yet, so its agents

@@ -26,6 +26,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
+	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
@@ -64,6 +65,24 @@ type Usage struct {
 	MaxCost     float64 `json:"max_cost_usd"`
 	Attempts    int     `json:"failed_attempts"`
 	MaxAttempts int     `json:"max_attempts"`
+	// MeteredBy names what makes aayu's own model calls pay-as-you-go (the
+	// [models.gateway] endpoint or a direct provider's key). The cost limit
+	// applies only then; "" means it is off.
+	MeteredBy string `json:"metered_by,omitempty"`
+}
+
+// Line is the budget as a person reads it. Spend is what aayu meters (its
+// gateway calls and AAYU_COST_USD); a subscription host session reports no
+// cost, so 0.00 USD is not the real cost of a build done there.
+func (u Usage) Line() string {
+	spend := fmt.Sprintf("metered spend %.2f USD of %g (subscription use not counted)", u.CostUSD, u.MaxCost)
+	switch {
+	case u.MeteredBy == "":
+		spend = fmt.Sprintf("metered spend %.2f USD, no cost limit: no pay-as-you-go model key or endpoint is configured (subscription use not counted)", u.CostUSD)
+	case u.MaxCost <= 0:
+		spend = fmt.Sprintf("metered spend %.2f USD, no cost limit: autonomy.budget.cost_usd is 0 (subscription use not counted)", u.CostUSD)
+	}
+	return fmt.Sprintf("%.1f of %g h, %s, %d of %d failed attempts", u.WallHours, u.MaxWall, spend, u.Attempts, u.MaxAttempts)
 }
 
 // BuildState is build/<story>/state.json on the ledger: when the build
@@ -225,7 +244,14 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		labels = append(slices.DeleteFunc(labels, func(l string) bool { return strings.HasPrefix(l, "status:") }), labelInProgress)
 	}
 	b := l.Config.Autonomy.Budget
-	res.Budget = Usage{MaxWall: b.WallHours, MaxCost: b.CostUSD, MaxAttempts: b.Attempts, Attempts: st.Attempts, CostUSD: e.buildCost(repo, n)}
+	// A story's spend is capped by the lower of the build budget and the
+	// breaker's per-story limit, so a config that keeps a lower per_story_usd
+	// is reported, and blocks, at the limit that actually stops it. A cap of 0
+	// is off on purpose and stays off.
+	if p := l.Config.Budget.PerStoryUSD; p > 0 && b.CostUSD > 0 && p < b.CostUSD && e.meteredBy(&l.Config) != "" {
+		b.CostUSD = p
+	}
+	res.Budget = Usage{MaxWall: b.WallHours, MaxCost: b.CostUSD, MaxAttempts: b.Attempts, Attempts: st.Attempts, CostUSD: e.buildCost(repo, n), MeteredBy: e.meteredBy(&l.Config)}
 	if started, err := time.Parse(time.RFC3339, st.StartedAt); err == nil {
 		res.Budget.WallHours = now.Sub(started).Hours()
 	}
@@ -233,8 +259,8 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	switch {
 	case b.WallHours > 0 && res.Budget.WallHours > b.WallHours:
 		return block(fmt.Sprintf("wall-time budget breached: %.1f h since the build started, budget %.1f h", res.Budget.WallHours, b.WallHours))
-	case b.CostUSD > 0 && res.Budget.CostUSD > b.CostUSD:
-		return block(fmt.Sprintf("cost budget breached: %.2f USD spent, budget %.2f USD", res.Budget.CostUSD, b.CostUSD))
+	case b.CostUSD > 0 && res.Budget.MeteredBy != "" && res.Budget.CostUSD > b.CostUSD:
+		return block(fmt.Sprintf("cost budget breached: metered spend %.2f USD of %g (subscription use not counted)", res.Budget.CostUSD, b.CostUSD))
 	}
 
 	// Delegation (WP5.5b): another agent writes the change. A cloud receiver
@@ -260,6 +286,9 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		}
 		res.Worktree, res.Branch = delegate.Worktree(root, n, dlg.receiver, dlg.handoff), dlg.branch
 		st.Branch = res.Branch
+		if started, err := time.Parse(time.RFC3339, st.StartedAt); err == nil && b.WallHours > 0 {
+			dlg.wallEnd = started.Add(time.Duration(b.WallHours * float64(time.Hour)))
+		}
 	}
 
 	// The worktree: cut from origin/dev, or resumed from the story branch.
@@ -303,9 +332,45 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	}
 
 	if write != nil {
-		if err := write(ctx, res.Worktree); err != nil {
+		err := write(ctx, res.Worktree)
+		if dlg != nil && dlg.lease != nil { // renewed while the receiver waited out a usage limit
+			res.Lease = *dlg.lease
+		}
+		// The wall clock ran on while the receiver worked, or waited out a usage limit.
+		if started, perr := time.Parse(time.RFC3339, st.StartedAt); perr == nil {
+			res.Budget.WallHours = e.Now().Sub(started).Hours()
+		}
+		if err != nil {
+			// A usage limit build cannot wait out here is a pause, not a
+			// failure: no attempt is counted, and the wall clock runs on.
+			var pause *usagePause
+			if errors.As(err, &pause) {
+				dlg.event(e.Now(), dlgPaused, pause.why)
+				dlg.fill(res.Delegation)
+				_ = e.saveDelegation(ctx, dlg)
+				// The wall clock would run out during the wait: that is the budget
+				// ending, so the story is blocked (no attempt counted), and
+				// `aayu ready` gives the build a fresh budget once the limit resets.
+				if pause.afterWall {
+					return block("wall-time budget: " + pause.why)
+				}
+				res.Next = fmt.Sprintf("run `aayu build %d --delegate %s --local` again once the limit resets; a pause is no failed attempt", n, dlg.receiver)
+				if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
+					return err
+				}
+				_ = e.Emit(res, func(w io.Writer) error {
+					_, err := fmt.Fprintf(w, "#%d: paused, not failed: %s\n  budget: %s\n  next: %s\n", n, pause.why, res.Budget.Line(), res.Next)
+					return err
+				})
+				return WithNext(Errorf(ExitBlocked, "build #%d paused: %s", n, pause.why), res.Next)
+			}
 			dlg.event(e.Now(), dlgFailed, clipText(err.Error(), 200))
 			_ = e.saveDelegation(ctx, dlg)
+			// A receiver stopped at the wall-time deadline is the budget running
+			// out, so the story is blocked and its owner paged, as at a checkpoint.
+			if !dlg.wallEnd.IsZero() && !e.Now().Before(dlg.wallEnd) {
+				return block(fmt.Sprintf("wall-time budget breached: %s was still running when the %g h budget ended", delegate.Names[dlg.receiver], b.WallHours))
+			}
 			return Errorf(ExitExternal, "build #%d --delegate %s: %v", n, dlg.receiver, err)
 		}
 		dlg.fill(res.Delegation) // what the receiver says it proved, for the PR body
@@ -406,7 +471,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			}
 			res.Next = fmt.Sprintf("fix the floor miss in %s and run `aayu build %d` again (failed attempts %d of %d)", res.Worktree, n, st.Attempts, b.Attempts)
 			_ = e.Emit(res, func(w io.Writer) error {
-				_, err := fmt.Fprintf(w, "#%d: checkpoint %s (attempt %d) committed (%s); verify: floor miss: %s\n  next: %s\n", n, res.Checkpoint, attempt, short(res.Commit), detail, res.Next)
+				_, err := fmt.Fprintf(w, "#%d: checkpoint %s (attempt %d) committed (%s); verify: floor miss: %s\n  budget: %s\n  next: %s\n", n, res.Checkpoint, attempt, short(res.Commit), detail, res.Budget.Line(), res.Next)
 				return err
 			})
 			return WithNext(Errorf(ExitFloor, "checkpoint %s: floor miss: %s", res.Checkpoint, detail), fmt.Sprintf("aayu build %d", n))
@@ -473,7 +538,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	res.Next = fmt.Sprintf("the merge gate re-runs verify and inspect on PR #%d (the reviewer app was asked to review this head); `aayu ship %d` after a human pass", res.PR, res.PR)
 	return e.Emit(res, func(w io.Writer) error {
 		if res.Commit != "" {
-			fmt.Fprintf(w, "#%d: checkpoint %s committed (%s); verify: %s\n", n, res.Checkpoint, short(res.Commit), res.Verify)
+			fmt.Fprintf(w, "#%d: checkpoint %s committed (%s); verify: %s\n  budget: %s\n", n, res.Checkpoint, short(res.Commit), res.Verify, res.Budget.Line())
 		}
 		for _, x := range res.Notes {
 			fmt.Fprintf(w, "  note: %s\n", x)
@@ -557,6 +622,26 @@ func nextCheckpoint(ctx context.Context, st BuildState, wt, dev string) (k, atte
 		return k + 1, 1
 	}
 	return 1, 1
+}
+
+// meteredBy names what lets aayu's own model calls incur pay-as-you-go spend:
+// the [models.gateway] endpoint, or a direct provider's key in the secret
+// store. With neither, the cost limit is off: work in a subscription host
+// session reports no cost, so a limit on metered spend would mean nothing.
+func (e *Env) meteredBy(c *config.Config) string {
+	if c.Models.Gateway.BaseURL != "" {
+		return "[models.gateway] base_url"
+	}
+	for _, name := range models.DirectSecrets() {
+		if v, _, err := e.SecretStore().Get(name); err == nil && v != "" {
+			return "the " + name + " key"
+		}
+	}
+	// A host or wrapper that reports its pay-as-you-go spend is metered too.
+	if v, err := strconv.ParseFloat(e.Getenv("AAYU_COST_USD"), 64); err == nil && v > 0 {
+		return "AAYU_COST_USD"
+	}
+	return ""
 }
 
 // buildCost is the story's model spend: the gateway's calls in the actions
@@ -652,7 +737,7 @@ func (e *Env) saveBuild(ctx context.Context, c *github.Client, w *ledger.Writer,
 		fmt.Fprintf(&body, "| %d/%d | %d | %s | `%s` | %s: %s |\n", cp.K, cp.N, cp.Attempt, listOrNone(cp.Layers), short(cp.Commit), cp.Verify, cp.Detail)
 	}
 	u := res.Budget
-	fmt.Fprintf(&body, "\nBudget: %.1f of %.1f h, %.2f of %.2f USD, %d of %d failed attempts.", u.WallHours, u.MaxWall, u.CostUSD, u.MaxCost, u.Attempts, u.MaxAttempts)
+	fmt.Fprintf(&body, "\nBudget: %s.", u.Line())
 	if st.Blocked != "" {
 		fmt.Fprintf(&body, "\n\n**Blocked:** %s", st.Blocked)
 	}

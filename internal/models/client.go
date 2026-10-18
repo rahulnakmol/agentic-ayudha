@@ -504,6 +504,17 @@ var directProviders = map[verbs.Family]struct {
 	verbs.FamilyXAI:       {"https://api.x.ai/v1", StyleChat, "bearer"},
 }
 
+// DirectSecrets are the secret names of the direct providers' keys, sorted.
+// Each is a pay-as-you-go key: a call made with it is metered spend.
+func DirectSecrets() []string {
+	var out []string
+	for f := range directProviders {
+		out = append(out, string(f))
+	}
+	slices.Sort(out)
+	return out
+}
+
 // Route says how a model is reached.
 type Route struct {
 	Via     string `json:"via"` // "gateway" or "direct"

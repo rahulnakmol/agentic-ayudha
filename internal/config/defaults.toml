@@ -55,14 +55,17 @@ never = ["L04", "L07", "L09"]
 approver = ""
 correction_days = 14
 
+# A build's budget. cost_usd applies only when aayu's own model calls are pay-as-you-go (a [models.gateway] endpoint or a
+# direct provider's key is configured, or a host reports spend in AAYU_COST_USD); otherwise there is no cost limit,
+# since subscription use reports no cost.
 [autonomy.budget]
 wall_hours = 8
-cost_usd = 25.0
+cost_usd = 60.0
 attempts = 3
 
 # Spend limits enforced by the model gateway's circuit breaker (WP1.6).
 [budget]
-per_story_usd = 25.0
+per_story_usd = 60.0 # at least autonomy.budget.cost_usd, so the breaker never stops a story before its build budget
 per_day_usd = 100.0
 per_pr_inspect_max = 5.0
 ci_minutes_month = 2000

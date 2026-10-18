@@ -64,8 +64,8 @@ func Cost(prices []config.Price, model string, r Response) (usd float64, source 
 var ErrBudget = errors.New("budget limit reached; agent lanes are paused")
 
 // Breaker is the [budget] circuit breaker. It trips when spend for a story
-// reaches per_story_usd or spend for the local day reaches per_day_usd (the
-// boundary itself trips), pauses agent lanes by writing PauseFile, and pages
+// goes over per_story_usd (the boundary build's cost_usd uses) or spend for
+// the local day reaches per_day_usd (that boundary itself trips), pauses agent lanes by writing PauseFile, and pages
 // once per scope per day through Notify.
 type Breaker struct {
 	Budget    config.Budget
@@ -145,7 +145,9 @@ func (b *Breaker) Check(story string) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.init()
-	if lim := b.Budget.PerStoryUSD; lim > 0 && story != "" && b.perStory[story] >= lim {
+	// A story trips the breaker only over its limit, the same boundary build's
+	// cost_usd uses, so the breaker never stops a story its build budget allows.
+	if lim := b.Budget.PerStoryUSD; lim > 0 && story != "" && b.perStory[story] > lim {
 		return fmt.Errorf("%w: story %s spent %.2f of %.2f USD", ErrBudget, story, b.perStory[story], lim)
 	}
 	if lim := b.Budget.PerDayUSD; lim > 0 && b.perDay[b.day(b.Now())] >= lim {
@@ -163,8 +165,8 @@ func (b *Breaker) Add(ctx context.Context, story string, usd float64) error {
 	var scope, msg string
 	if story != "" {
 		b.perStory[story] += usd
-		if lim := b.Budget.PerStoryUSD; lim > 0 && b.perStory[story] >= lim {
-			scope, msg = "per_story:"+story, fmt.Sprintf("story %s spent %.2f USD, reaching [budget] per_story_usd = %.2f", story, b.perStory[story], lim)
+		if lim := b.Budget.PerStoryUSD; lim > 0 && b.perStory[story] > lim {
+			scope, msg = "per_story:"+story, fmt.Sprintf("story %s spent %.2f USD, over [budget] per_story_usd = %.2f", story, b.perStory[story], lim)
 		}
 	}
 	if lim := b.Budget.PerDayUSD; scope == "" && lim > 0 && b.perDay[day] >= lim {
