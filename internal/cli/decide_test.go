@@ -459,6 +459,11 @@ func TestLetteredDecision(t *testing.T) {
 			t.Errorf("Pick(%q) = %+v %v, want %q", typed, o, ok, want)
 		}
 	}
+	// A letter wins over another option's name, as the Recommendation reads it.
+	collide := workitems.Item{Type: "decision", Fields: map[string]string{"options": "A: B\nB: C"}}
+	if o, ok := decide.Pick(collide, "B"); !ok || o.N != 2 {
+		t.Errorf("Pick(B) with option 1 named B = %+v %v, want 2 (B)", o, ok)
+	}
 	if code, out, errOut := run(t, env, opts, "decide", "1", "--repo", "o/r", "--accept", "A"); code != 0 || !strings.Contains(out, "#1 accepted: waive, by @o") {
 		t.Fatalf("accept A: exit %d: %s %s", code, out, errOut)
 	}
