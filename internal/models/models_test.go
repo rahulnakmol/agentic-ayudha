@@ -172,7 +172,10 @@ func TestWireFormats(t *testing.T) {
 		cost        float64
 		check       func(map[string]any) bool
 	}{
-		{StyleMessages, "/v1/messages", 11, 3, 0, func(b map[string]any) bool { return b["system"] == "be brief" && b["max_tokens"] == 50.0 }},
+		{StyleMessages, "/v1/messages", 11, 3, 0, func(b map[string]any) bool {
+			oc, _ := b["output_config"].(map[string]any)
+			return b["system"] == "be brief" && b["max_tokens"] == 50.0 && oc["effort"] == "high"
+		}},
 		{StyleResponses, "/v1/responses", 12, 4, 0, func(b map[string]any) bool {
 			return b["instructions"] == "be brief" && b["reasoning"].(map[string]any)["effort"] == "high"
 		}},

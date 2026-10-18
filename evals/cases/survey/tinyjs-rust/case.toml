@@ -15,6 +15,9 @@ artifacts = ["output/survey.json"]
 [survey]
 kind = "draft"
 draft = "output/survey.json"
+# Written and judged section by section (survey-sections-2026-10.md): rubric/<section>.md each holds one of
+# rubric.md's criteria whole; rubric.md stays the bar the eval-bar ratchet tracks.
+rubrics = "rubric"
 read = [
   "README.md", "Makefile", "CMakeLists.txt", "Script.cpp", "TinyJS.h",
   "TinyJS.cpp:1-200", "TinyJS.cpp:640-650", "TinyJS.cpp:955-970", "TinyJS.cpp:1220-1420", "TinyJS.cpp:1725-1800",

@@ -175,6 +175,9 @@ func (c HTTPClient) Complete(ctx context.Context, r Request) (Response, error) {
 		if r.Stream {
 			b["stream"] = true
 		}
+		if r.Effort != "" {
+			b["output_config"] = map[string]string{"effort": r.Effort}
+		}
 		body = b
 	case StyleResponses:
 		path = "/responses"
