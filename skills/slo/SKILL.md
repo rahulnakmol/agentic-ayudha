@@ -116,7 +116,8 @@ Start from the journey that matters most to the people who use the product, not 
   state the allowance (100 % minus the objective, of the window's events), what the span showed for itself, and the
   last recorded value if there is one. Never extrapolate a short span to the window, and never record (`--record`) a
   partial export that holds an incident as the window's budget; the weekly record needs an export that covers the
-  window.
+  window, and that export includes every incident in the window: the budget measures them, so never ask for one
+  without an incident.
 - **Release risk.** Which SLO is most at risk follows from the numbers you give: name the one whose projection
   spends its budget first, and rank nothing the numbers do not support. A projection of when a budget runs out shows
   its arithmetic from cited numbers (budget left divided by what the burn rate spends per day); when the numbers do
