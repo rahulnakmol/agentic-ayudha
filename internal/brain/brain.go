@@ -181,11 +181,24 @@ func StripBlocks(body string) string {
 	return body
 }
 
-// Fact makes untrusted text (an issue title) safe in a generated block: it
-// can neither end the block nor add a wikilink to the graph.
+// Fact makes untrusted text (an issue title) inert in a generated block: it
+// can neither end the block, add a wikilink to the graph, nor render as
+// Markdown or HTML (an image that fetches a URL, a link, a tag).
 func Fact(s string) string {
-	return strings.NewReplacer("\n", " ", "\r", " ", "<!--", "&lt;!--", "-->", "--&gt;", "[[", "[ [", "]]", "] ]").Replace(s)
+	s = strings.NewReplacer("\n", " ", "\r", " ").Replace(s)
+	var b strings.Builder
+	for _, r := range s {
+		if strings.ContainsRune(factEscapes, r) {
+			b.WriteByte('\\') // a backslash-escaped character is literal text in Markdown
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
+
+// factEscapes are the Markdown and HTML metacharacters Fact escapes, so an
+// issue title renders as text: no link, image, HTML, emphasis, code, or table cell.
+const factEscapes = "\\`*_[]()!<>|#~&"
 
 // Note is one parsed Markdown note: ordered frontmatter and the body.
 type Note struct {

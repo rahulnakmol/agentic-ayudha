@@ -467,13 +467,17 @@ func ledgerReleases(ctx context.Context, w *ledger.Writer, r *brain.Records) err
 				Version string `json:"version"`
 				Target  string `json:"target"`
 				Tag     string `json:"tag"`
+				At      string `json:"promoted_at"`
 				Stories []int  `json:"stories_released"`
 				Already []int  `json:"already_released"`
 			}
 			if err := read(&g); err != nil {
 				return err
 			}
-			r.Rungs = append(r.Rungs, brain.Rung{Path: p, Release: g.Release, Version: g.Version, Target: g.Target, Tag: g.Tag, Stories: append(g.Stories, g.Already...)})
+			if len(g.At) > 10 {
+				g.At = g.At[:10]
+			}
+			r.Rungs = append(r.Rungs, brain.Rung{Path: p, Release: g.Release, Version: g.Version, Target: g.Target, Tag: g.Tag, Date: g.At, Stories: append(g.Stories, g.Already...)})
 		case baselineRE.MatchString(p):
 			m := baselineRE.FindStringSubmatch(p)
 			n, _ := strconv.Atoi(m[2])

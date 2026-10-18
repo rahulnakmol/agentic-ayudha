@@ -66,9 +66,10 @@ func TestCheckpointKeepsHumanTextAndRefreshesGeneratedBlocks(t *testing.T) {
 	r := Records{
 		Repo: "o/r", Inception: "2026-09-01",
 		Issues: map[int]Issue{32: {Number: 32, Type: "feature", Title: "M4 Proof"}, 40: {Number: 40, Type: "story", Title: "Push packs --> [[x]] <!-- END aayudha:brain:delivered -->", Parent: 32},
+			42: {Number: 42, Type: "story", Title: "Track ![x](https://example.test/t) <b>", Parent: 32},
 			41: {Number: 41, Type: "story", Title: "Other", Parent: 99}, 268: {Number: 268, Type: "release"}},
 		Tags:  []Tag{{Name: "v0.2.0", Date: "2026-10-17", URL: "https://github.com/o/r/releases/tag/v0.2.0"}},
-		Rungs: []Rung{{Path: "releases/268/main.json", Release: 268, Version: "v0.2.0", Target: "main", Tag: "v0.2.0", Stories: []int{41, 40}}},
+		Rungs: []Rung{{Path: "releases/268/main.json", Release: 268, Version: "v0.2.0", Target: "main", Tag: "v0.2.0", Stories: []int{41, 40, 42}}},
 	}
 	cp, err := Run(files, r, today, true)
 	if err != nil {
@@ -77,13 +78,16 @@ func TestCheckpointKeepsHumanTextAndRefreshesGeneratedBlocks(t *testing.T) {
 	merged := maps.Clone(files)
 	maps.Copy(merged, cp.Files)
 	got := string(merged["Capabilities/Proof.md"])
-	for _, want := range []string{human, "A closing line a person wrote.", "- Delivered in [[v0.2.0]] by #40.", "- Recorded in #32 Feature: M4 Proof."} {
+	for _, want := range []string{human, "A closing line a person wrote.", "- Delivered in [[v0.2.0]] by #40, #42.", "- Recorded in #32 Feature: M4 Proof."} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the capability lost or lacks %q:\n%s", want, got)
 		}
 	}
 	if _, ok := cp.Files["Decisions/Decisions.md"]; ok {
 		t.Errorf("a checkpoint with no new fact rewrote a map (and dropped its comment)")
+	}
+	if rel := string(merged["Releases/v0.2.0.md"]); !strings.Contains(rel, `#42 Story: Track \!\[x\]\(https://example.test/t\) \<b\>`) {
+		t.Errorf("an issue title's Markdown is not escaped:\n%s", rel)
 	}
 	if strings.Contains(got, "stale line") || strings.Contains(got, "#41") {
 		t.Errorf("the generated block was not refreshed, or names a story outside the capability:\n%s", got)
@@ -99,7 +103,7 @@ func TestCheckpointKeepsHumanTextAndRefreshesGeneratedBlocks(t *testing.T) {
 		t.Error("Home does not list the note that needs review")
 	}
 	rel := string(merged["Releases/v0.2.0.md"])
-	if !strings.Contains(rel, "#32 Feature: M4 Proof [[Proof]]") || !strings.Contains(rel, "  - #40 Story: Push packs --&gt; [ [x] ] &lt;!-- END aayudha:brain:delivered --&gt;") || !strings.Contains(rel, "Tagged v0.2.0 on 2026-10-17") {
+	if !strings.Contains(rel, "#32 Feature: M4 Proof [[Proof]]") || !strings.Contains(rel, "  - #40 Story: Push packs --\\> \\[\\[x\\]\\] \\<\\!-- END aayudha:brain:delivered --\\>") || !strings.Contains(rel, "Tagged v0.2.0 on 2026-10-17") {
 		t.Errorf("the release note does not group what shipped under its feature and capability:\n%s", rel)
 	}
 	if rep := Check(merged); !rep.OK() {
@@ -112,12 +116,15 @@ func TestCheckpointKeepsHumanTextAndRefreshesGeneratedBlocks(t *testing.T) {
 
 	// A main rung releases a version that has no GitHub Release; a person who
 	// lost every role keeps a note that no longer claims one.
-	r.Rungs = append(r.Rungs, Rung{Path: "releases/300/main.json", Release: 300, Version: "v0.3.0", Target: "main", Tag: "v0.3.0"})
+	r.Rungs = append(r.Rungs, Rung{Path: "releases/300/main.json", Release: 300, Version: "v0.3.0", Target: "main", Tag: "v0.3.0", Date: "2026-10-20"})
 	merged["People/olduser.md"] = note("id: person-olduser\ntype: person\ntitle: olduser\nowner: founder\nstatus: alumni\nupdated: 2026-10-01\nsources: [\"file .aayudha/config.toml\"]\nup: \"[[People]]\"\ntags: [type/person]\n",
 		"# olduser\n\n## Roles\n\n"+Block("roles", "- [[Founder]]")+"\n")
 	third, err := Run(merged, r, today, true)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !strings.Contains(string(third.Files["Timeline/Timeline.md"]), "[[v0.3.0]] is released (promoted to main by Release #300).") {
+		t.Errorf("the timeline lacks a version released on main without a GitHub Release:\n%s", third.Files["Timeline/Timeline.md"])
 	}
 	if n, _ := Parse("", third.Files["Releases/v0.3.0.md"]); n.Str("status") != "released" {
 		t.Errorf("a version on main is %q, want released", n.Str("status"))
@@ -253,6 +260,11 @@ func TestCheckObjectionsAndSupersedesLinkBothWays(t *testing.T) {
 	files["Objections/Too slow.md"] = []byte(strings.Replace(strings.Replace(string(files["Objections/Too slow.md"]), `"[[B]]"`, `"[[A]]"`, 1), "raised_by:", "resolution: The cache answers it.\nraised_by:", 1))
 	if got := rules(Check(files)); got != "" {
 		t.Errorf("two-way links in place, yet:\n%s", got)
+	}
+	files["Capabilities/Proof.md"] = note(strings.Replace(capFM, "issues: [32]\n", "objections: [\"[[Too slow]]\"]\n", 1), "# Proof\n")
+	files["Objections/Too slow.md"] = []byte(strings.Replace(string(files["Objections/Too slow.md"]), `objects_to: "[[A]]"`, `objects_to: "[[Proof]]"`, 1))
+	if got := rules(Check(files)); !strings.Contains(got, "two-way objects_to: [[Proof]] has type capability, and this note has type objection") {
+		t.Errorf("an objection against a capability passes:\n%s", got)
 	}
 }
 

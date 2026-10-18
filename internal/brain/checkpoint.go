@@ -49,6 +49,7 @@ type Rung struct {
 	Version string // vX.Y.Z when the promotion belongs to one
 	Target  string // rolling or main
 	Tag     string
+	Date    string // the promotion date, YYYY-MM-DD
 	Stories []int
 }
 
@@ -639,9 +640,17 @@ func (c *cp) timeline() {
 	if c.r.Inception != "" {
 		evs = append(evs, ev{c.r.Inception, "Inception: the repository " + c.r.Repo + " is created."})
 	}
+	tagged := map[string]bool{}
 	for _, t := range c.r.Tags {
 		if versionRE.MatchString(t.Name) {
+			tagged[t.Name] = true
 			evs = append(evs, ev{t.Date, "[[" + t.Name + "]] is released (tag " + t.Name + ")."})
+		}
+	}
+	for _, g := range c.r.Rungs { // a version on main without a GitHub Release
+		if g.Target == "main" && versionRE.MatchString(g.Version) && !tagged[g.Version] && g.Date != "" {
+			tagged[g.Version] = true
+			evs = append(evs, ev{g.Date, fmt.Sprintf("[[%s]] is released (promoted to main by Release #%d).", g.Version, g.Release)})
 		}
 	}
 	for _, p := range slices.Sorted(mapKeys(c.v.Notes)) {

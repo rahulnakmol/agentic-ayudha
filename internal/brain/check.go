@@ -330,6 +330,11 @@ func (v *Vault) twoWay() []Finding {
 				if q == "" || q == "." {
 					continue // reported as a broken link
 				}
+				from, to := n.Str("type"), v.Notes[q].typ()
+				if want := relation[kp[0]]; !slices.Contains(want[0], from) || !slices.Contains(want[1], to) {
+					out = append(out, Finding{Path: p, Rule: "two-way", Message: fmt.Sprintf("%s: [[%s]] has type %s, and this note has type %s; %s runs from type %s to type %s", kp[0], Base(q), to, from, kp[0], strings.Join(want[0], " or "), strings.Join(want[1], " or "))})
+					continue
+				}
 				if !has(q, kp[1], p) {
 					out = append(out, Finding{Path: p, Rule: "two-way", Message: fmt.Sprintf("%s: [[%s]] does not link back under %s", kp[0], Base(q), kp[1])})
 				}
@@ -337,6 +342,24 @@ func (v *Vault) twoWay() []Finding {
 		}
 	}
 	return out
+}
+
+// objectable are the note types an objection may be against.
+var objectable = []string{"direction", "principle", "objective", "decision"}
+
+// relation holds, for each two-way key, the note types it may run from and to.
+var relation = map[string][2][]string{
+	"supersedes":    {{"decision"}, {"decision"}},
+	"superseded_by": {{"decision"}, {"decision"}},
+	"objects_to":    {{"objection"}, objectable},
+	"objections":    {objectable, {"objection"}},
+}
+
+func (n *Note) typ() string {
+	if n == nil {
+		return ""
+	}
+	return n.Str("type")
 }
 
 // workstreams checks that each workstream folder has its index, and that the
