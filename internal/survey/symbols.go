@@ -133,6 +133,9 @@ func braceSymbols(file, code, lang string) ([]Symbol, []call) {
 				labels(header)
 			}
 			kind, name, public := classifyHeader(header, lang, parens, inFunc() >= 0)
+			if classTop() != nil && kind == "function" && staticKw.MatchString(header) {
+				public = true // a static member function is the class's API, not internal linkage
+			}
 			if t := classTop(); t != nil && !t.public || slices.ContainsFunc(stack, func(s scope) bool { return s.hidden }) {
 				public = false // a member of a private section, of a class no caller sees, or of an anonymous namespace
 			}
@@ -276,7 +279,10 @@ func classifyHeader(header, lang string, parens int, insideFunc bool) (kind, nam
 		if !strings.Contains(h[m[3]:], ")") {
 			return "block", "", false
 		}
-		pub := !insideFunc && !staticKw.MatchString(before) && !protected.MatchString(before)
+		// static hides a function only in C and C++ (internal linkage); a
+		// Java, C#, JavaScript, or TypeScript static method is public API.
+		hidden := staticKw.MatchString(before) && (lang == "c" || lang == "cpp")
+		pub := !insideFunc && !hidden && !protected.MatchString(before)
 		if lang == "go" {
 			pub = nm != "" && nm[0] >= 'A' && nm[0] <= 'Z'
 		}

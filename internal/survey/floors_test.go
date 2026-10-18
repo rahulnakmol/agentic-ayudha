@@ -120,9 +120,11 @@ func TestFloorCapabilityMapFunctions(t *testing.T) {
 		"guard.py":         "def go():\n    pass\n\n\nif __name__ == \"__main__\":\n    go()\n",
 		"util.hxx":         "class LineA {}; class LineB {};\nenum class Status { Ready };\nunion Value { int i; double d; };\n",
 		"rlib/src/lib.rs":  "pub fn parse(s: &str) -> usize {\n    s.len()\n}\n\nfn helper() {}\n\npub(crate) fn inner() {}\n",
+		"shape.hpp":        "class Shape {\npublic:\n    static Shape make() { return Shape(); }\n};\nstatic int helper() { return 1; }\n",
 		"detail/api.inl":   "inline int twice(int x) { return 2 * x; }\n",
 		"web/lib.js":       "export function parse(s) {\n  return s.length;\n}\n\nfunction helper() {}\n",
 		"web/api.ts":       "export async function load(id: string) {\n  return id;\n}\n",
+		"Util.java":        "public class Util {\n    public static int parse(String s) { return 0; }\n}\n",
 		"App.java":         "public class App {\n    public static void main(String[] args) {}\n}\n",
 		"Program.cs":       "class Program {\n    static void Main(string[] args) {}\n}\n",
 		"ctximpl.c":        "struct Opaque { int x; };\n",
@@ -141,7 +143,7 @@ func TestFloorCapabilityMapFunctions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	all := []string{"sym:parse/parse.go#Parse", "sym:parse/parse.go#Status", "sym:fmtlib.py#render", "cmd/tool/main.go:3", "tool.py:1", "guard.py:5", "sym:util.hxx#LineA", "sym:util.hxx#LineB", "util.hxx:2", "util.hxx:3", "c.h:1-12", "sym:rlib/src/lib.rs#parse", "App.java:1-2", "Program.cs:1-2", "Hidden.java:1", "Inst.cs:1-2", "sym:web/lib.js#parse", "sym:web/api.ts#load", "detail/api.inl:1"}
+	all := []string{"sym:parse/parse.go#Parse", "sym:parse/parse.go#Status", "sym:fmtlib.py#render", "cmd/tool/main.go:3", "tool.py:1", "guard.py:5", "sym:util.hxx#LineA", "sym:util.hxx#LineB", "util.hxx:2", "util.hxx:3", "c.h:1-12", "sym:rlib/src/lib.rs#parse", "App.java:1-2", "Program.cs:1-2", "Hidden.java:1", "Inst.cs:1-2", "sym:web/lib.js#parse", "sym:web/api.ts#load", "detail/api.inl:1", "Util.java:1-2", "shape.hpp:1-3"}
 	base := func() Draft {
 		return Draft{Capabilities: []Claim{{ID: "C1", Name: "Parse", Text: "Parses.", Basis: "observed", Cites: slices.Clone(all)}}}
 	}
@@ -166,6 +168,8 @@ func TestFloorCapabilityMapFunctions(t *testing.T) {
 		{"match", "an inline function in a .inl header left out", without("detail/api.inl:1"), "detail/api.inl:1 (function twice)", true},
 		{"match", "a JavaScript module's export left out", without("sym:web/lib.js#parse"), "web/lib.js:1 (function parse)", true},
 		{"match", "a TypeScript module's async export left out", without("sym:web/api.ts#load"), "web/api.ts:1 (function load)", true},
+		{"match", "a C++ class's static member function left out", without("shape.hpp:1-3"), "shape.hpp:1 (class Shape), 3 (method Shape::make)", true},
+		{"match", "a Java class's public static method left out", without("Util.java:1-2"), "Util.java:1 (class Util), 2 (method Util::parse)", true},
 		{"match", "a Java program's main left out", without("App.java:1-2"), "App.java:1 (class App), 2 (App::main)", true},
 		{"match", "a C# program's Main left out", without("Program.cs:1-2"), "Program.cs:1 (class Program), 2 (Program::Main)", true},
 		{"match", "a Python module's public function left out", without("sym:fmtlib.py#render"), "fmtlib.py:1 (function render)", true},
