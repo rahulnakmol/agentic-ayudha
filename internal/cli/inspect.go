@@ -435,6 +435,17 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		}
 		return permissionOf(p)
 	}, e.Logf)
+	switch {
+	case paid == nil:
+	case e.replyEvent():
+		// A reply only re-runs the head's failed inspect job, which makes
+		// the paid call itself if one is due: one here would be a second run.
+		e.Logf("inspect: [inspect] paid_reviewer %s is not called on a reply event; the head's inspect job reviews", paid.Model)
+		paid = nil
+	case prev.PaidFailed != "" && prev.PaidFailed == pr.GetHead().GetSHA():
+		e.Logf("inspect: [inspect] paid_reviewer %s already failed on %s; the reviewer app reviews, and the next push tries it again", paid.Model, short(prev.PaidFailed))
+		paid = nil
+	}
 	if cfg.Reviewer != inspect.ReviewerModel && paid == nil {
 		return e.inspectThroughApp(ctx, appInspect{c: c, repo: repo, pr: pr, in: ins, prev: prev, builder: builder, cfg: l.Config})
 	}
@@ -514,8 +525,8 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		// spend past the cap.
 		e.Logf("inspect: [inspect] paid_reviewer %s not used (%s); the reviewer app reviews", paid.Model, oneLineErr(err))
 		fb := prev
-		fb.SpentUSD = max(prev.SpentUSD, st.SpentUSD)
-		return e.inspectThroughApp(ctx, appInspect{c: c, repo: repo, pr: pr, in: ins, prev: fb, builder: builder, cfg: l.Config})
+		fb.SpentUSD, fb.PaidFailed = max(prev.SpentUSD, st.SpentUSD), pr.GetHead().GetSHA()
+		return e.inspectThroughApp(ctx, appInspect{c: c, repo: repo, pr: pr, in: ins, prev: fb, builder: builder, cfg: l.Config, record: fb.PaidFailed != prev.PaidFailed})
 	case errors.Is(err, inspect.ErrBudget), errors.Is(err, models.ErrBudget):
 		return Errorf(ExitBudget, "inspect #%d: %v", n, err)
 	case err != nil:

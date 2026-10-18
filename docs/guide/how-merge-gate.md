@@ -158,7 +158,10 @@ to the repository (GitHub's permission level, not the author association) gets a
 only read cannot open PRs to spend the key. The review is labelled
 `different-family review (B, paid)` everywhere and counts toward autonomy as rung A does. If the secret is missing, the
 model is of a family the builder may be, the cap is 0, the paid call fails (a gateway timeout on a large diff), or the PR
-has spent its cap, the gate logs why and the app reviews. A failed call's cost still counts toward the cap. `aayu doctor`'s
+has spent its cap, the gate logs why and the app reviews. A failed call's cost still counts toward the cap. A failed paid
+call is recorded against the head: later runs on that head, such as the one a reply triggers, go straight to the app, and
+the next push tries the paid reviewer again. A run triggered by a reply makes no paid call itself. It only re-runs the
+head's inspect job. `aayu doctor`'s
 `review-rung` row shows B when it is configured. Doctor cannot read repository secrets, so it names the secret the gate
 needs. The inspect job checks out the base branch and runs no PR code. The diff reaches the model only as delimited
 untrusted data.

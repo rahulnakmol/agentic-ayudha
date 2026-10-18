@@ -204,6 +204,10 @@ type State struct {
 	SpentUSD float64  `json:"spent_usd"` // model spend on this PR across cycles ([budget] per_pr_inspect_max)
 	Hashes   []string `json:"hashes"`
 	Posted   []string `json:"posted,omitempty"` // finding IDs already posted as inline review comments
+	// PaidFailed is the head whose paid review ([inspect] paid_reviewer)
+	// failed: later runs on that head leave it to the reviewer app rather
+	// than start another full paid run. A new head tries again.
+	PaidFailed string `json:"paid_failed,omitempty"`
 }
 
 // Errors.

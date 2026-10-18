@@ -38,6 +38,9 @@ type appInspect struct {
 	prev    inspect.State
 	builder inspect.Builder
 	cfg     config.Config
+	// record rewrites the state comment even for a cached judgement: prev
+	// carries something new the gate must keep (a failed paid call's head).
+	record bool
 }
 
 // inspectThroughApp is inspect without a model key (founder decision
@@ -66,7 +69,7 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 	if err != nil {
 		return Wrap(ExitExternal, err)
 	}
-	replyEvent := e.CI && (e.Getenv("GITHUB_EVENT_NAME") == "issue_comment" || e.Getenv("GITHUB_EVENT_NAME") == "pull_request_review")
+	replyEvent := e.replyEvent()
 	if a.in.Pack == nil && a.in.Story > 0 && e.CI && !replyEvent {
 		return Errorf(ExitBlocked, "inspect #%d: %v", n, inspect.ErrNoPack)
 	}
@@ -150,7 +153,7 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		st.Result.Notes, st.Result.Head, st.Result.Builder = res.Notes, res.Head, res.Builder
 		st.Result.Rung, st.Result.ReviewerFamily, st.Result.Review = res.Rung, res.ReviewerFamily, res.Review
 	}
-	if e.CI && res.Disposition != inspect.Skipped && (!res.Cached || relabel) {
+	if e.CI && res.Disposition != inspect.Skipped && (!res.Cached || relabel || a.record) {
 		if _, err := a.c.UpsertComment(ctx, a.repo, n, inspect.Marker, inspect.Comment(res, st, 0), actions.Action{Kind: "github.comment.inspect",
 			Payload: map[string]any{"disposition": res.Disposition, "diff_hash": res.DiffHash, "reviewer": choice.Kind(), "rung": res.Rung}}); err != nil {
 			return err
@@ -163,6 +166,13 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		return Errorf(ExitBlocked, "inspect #%d: %s", n, res.Disposition)
 	}
 	return nil
+}
+
+// replyEvent reports whether this is the merge gate's run on a reply (a PR
+// comment or review), which only re-runs the head's failed inspect job.
+func (e *Env) replyEvent() bool {
+	ev := e.Getenv("GITHUB_EVENT_NAME")
+	return e.CI && (ev == "issue_comment" || ev == "pull_request_review")
 }
 
 // reviewRung settles the review ladder's rung from the reply (Decision
