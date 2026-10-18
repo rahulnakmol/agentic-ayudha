@@ -137,6 +137,11 @@ func TestCopilotCLI(t *testing.T) {
 	if usd, src := Cost([]config.Price{{Model: req.Model, InputPerMTok: 100, OutputPerMTok: 100}}, req.Model, resp); usd < 12.8 || src != CostPriceTable {
 		t.Errorf("unmetered reply with a configured price charged %v USD from %s", usd, src)
 	}
+	// A copilot that dies with no reply and no usage is charged the same.
+	resp, err = (CopilotCLI{Token: "t", Bin: "/bin/false", Path: unmetered}).Complete(context.Background(), req)
+	if usd, _ := Cost(nil, req.Model, resp); !errors.Is(err, ErrCopilot) || usd < 1.28 {
+		t.Errorf("a copilot that died charged %v USD (%v)", usd, err)
+	}
 	// So does a long-context rate: a 200k-character prompt is 100k + 25k = 125k
 	// input tokens, over Haiku 5.5's 100k, so 125k × 0.50 + 128k × 2.50 per
 	// million = 0.3825 USD (the short rate gives 0.0765).

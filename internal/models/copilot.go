@@ -100,14 +100,17 @@ func (c CopilotCLI) Complete(ctx context.Context, r Request) (Response, error) {
 	runErr := cmd.Run()
 	u, _ := os.ReadFile(usage)
 	resp, err := parseCopilot(stdout.Bytes(), u)
-	if err == nil && resp.TokensIn == 0 {
-		// A reply with no usable usage report is not accounted: report upper-bound
-		// token counts, which the gateway prices as any other call (configured
-		// prices, long-context rates), so the breaker still sees the spend; and
-		// fail so the caller falls back rather than trusting a route it cannot
-		// meter.
+	if resp.TokensIn == 0 {
+		// Once copilot has run, a call with no usable usage report (a reply
+		// without one, or a crash or kill after the request went out) is not
+		// accounted: report upper-bound token counts, which the gateway prices
+		// as any other call (configured prices, long-context rates), so the
+		// breaker still sees the spend; and fail so the caller falls back
+		// rather than trusting a route it cannot meter.
 		resp.TokensIn, resp.TokensOut, resp.CachedIn = copilotMaxInput(r, n), copilotMaxOutput, 0
-		err = fmt.Errorf("%w: copilot returned no usage report; charged as %d input and %d output tokens", ErrCopilot, resp.TokensIn, resp.TokensOut)
+		if err == nil {
+			err = fmt.Errorf("%w: copilot returned no usage report; charged as %d input and %d output tokens", ErrCopilot, resp.TokensIn, resp.TokensOut)
+		}
 	}
 	if runErr != nil {
 		msg := strings.TrimSpace(stderr.String())
