@@ -184,6 +184,12 @@ func Render(ix *Index, d Draft, r Report) string {
 		p("\n### Parity case sets\n\n")
 		for _, g := range m.CaseSets {
 			p("- **%s** %s. Inputs from %s; compared %s.", g.ID, strings.TrimSuffix(oneLine(g.Title), "."), citeText(g.From), oneLine(g.Compare))
+			if len(g.Runners) > 0 {
+				p(" Run by %s.", citeText(g.Runners))
+			}
+			if len(g.Inputs) > 0 {
+				p(" On %s.", citeText(g.Inputs))
+			}
 			if g.Cases != "" {
 				p(" Cases: `%s`.", g.Cases)
 			}
