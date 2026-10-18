@@ -15,9 +15,9 @@
     "title": "Choose the questionnaire engine",
     "fields": {
       "summary": "Which engine renders the questionnaire?",
-      "options": "A: in-house. B: SurveyJS.",
+      "options": "1. **In-house.** We build the engine.\n2. **SurveyJS.** We adopt SurveyJS.",
       "evaluation": "A is cheaper to run; B is faster to build.",
-      "recommendation": "A",
+      "recommendation": "Option 1, in-house",
       "reversible": "true",
       "links": "constrains #3"
     },
@@ -31,12 +31,12 @@
     "title": "Choose the questionnaire engine",
     "fields": {
       "summary": "Which engine renders the questionnaire?",
-      "options": "A: in-house. B: SurveyJS.",
+      "options": "1. **In-house.** We build the engine.\n2. **SurveyJS.** We adopt SurveyJS.",
       "evaluation": "A is cheaper to run; B is faster to build.",
-      "recommendation": "A",
+      "recommendation": "Option 1, in-house",
       "reversible": "true",
       "links": "constrains #3",
-      "decision": "A, accepted by @founder on 2026-10-20."
+      "decision": "In-house, accepted by @founder on 2026-10-20."
     },
     "labels": [
       "type:decision",

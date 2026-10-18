@@ -25,15 +25,16 @@ func init() { register("decide", runDecide) }
 // decisionStep is one Decision's SLA state and what the sweep did about it.
 type decisionStep struct {
 	decide.Step
-	Title       string   `json:"title"`
-	Authority   string   `json:"authority"`
-	Login       string   `json:"authority_login,omitempty"`
-	Reversible  bool     `json:"reversible"`
-	Waiver      bool     `json:"waiver,omitempty"`
-	Provisional bool     `json:"provisional"`
-	RatifyBy    string   `json:"ratify_by,omitempty"`
-	Constrains  []int    `json:"constrains,omitempty"` // items shown blocked while it is open
-	Did         []string `json:"did"`
+	Title       string             `json:"title"`
+	Authority   string             `json:"authority"`
+	Login       string             `json:"authority_login,omitempty"`
+	Reversible  bool               `json:"reversible"`
+	Waiver      bool               `json:"waiver,omitempty"`
+	Provisional bool               `json:"provisional"`
+	RatifyBy    string             `json:"ratify_by,omitempty"`
+	Constrains  []int              `json:"constrains,omitempty"` // items shown blocked while it is open
+	Options     []workitems.Option `json:"options,omitempty"`    // by the Decision's own numbers (decide.Options)
+	Did         []string           `json:"did"`
 }
 
 type decideReport struct {
@@ -178,6 +179,7 @@ func decideSweep(ctx context.Context, e *Env, cfg *config.Config, pol decide.Pol
 		key, value := decide.Authority(cfg, d)
 		st := decisionStep{Step: pol.Evaluate(d, now), Title: d.Title, Authority: key + " = " + value, Login: decide.Login(cfg, value),
 			Reversible: d.Reversible(), Waiver: d.Waiver(), Provisional: slices.Contains(d.Labels, workitems.LabelProvisional), Constrains: constrains(d), Did: []string{}}
+		st.Options, _ = decide.Options(d.Item)
 		if t, ok := decide.RatifyBy(d.Body); ok {
 			st.RatifyBy = t.UTC().Format(time.RFC3339)
 		}
@@ -246,9 +248,37 @@ func decideSweep(ctx context.Context, e *Env, cfg *config.Config, pol decide.Pol
 				fmt.Fprintf(w, "; did: %s", strings.Join(s.Did, ", "))
 			}
 			fmt.Fprintln(w)
+			for _, o := range s.Options {
+				fmt.Fprintf(w, "  %s\n", optionLine(o))
+			}
+			if len(s.Options) > 0 {
+				fmt.Fprintf(w, "  accept one with `aayu decide %d --accept <number>`\n", s.Number)
+			}
 		}
 		return nil
 	})
+}
+
+// optionLine is one option as every surface shows it: "2. Name (recommended)".
+func optionLine(o workitems.Option) string {
+	s := fmt.Sprintf("%d. %s", o.N, o.Name)
+	if o.Recommended {
+		s += " (recommended)"
+	}
+	return s
+}
+
+// optionList is a Decision's options on one line, for messages.
+func optionList(it workitems.Item) string {
+	os, _ := decide.Options(it)
+	if len(os) == 0 {
+		return "it has no numbered options"
+	}
+	out := make([]string, len(os))
+	for i, o := range os {
+		out[i] = optionLine(o)
+	}
+	return strings.Join(out, "; ")
 }
 
 func refsOf(ns []int) string {
@@ -371,9 +401,11 @@ func decideAccept(ctx context.Context, e *Env, cfg *config.Config, repo string, 
 	if want := decide.Login(cfg, value); want != "" && !strings.EqualFold(want, login) {
 		return Errorf(ExitBlocked, "decide: the authority for #%d is %s (%s = %s); %s cannot accept it", n, want, key, value, login)
 	}
-	if !decide.MatchOption(d.Item.Fields["options"], option) {
-		return Errorf(ExitUsage, "decide: %q is not one of the options of #%d", option, n)
+	o, ok := decide.Pick(d.Item, option)
+	if !ok {
+		return Errorf(ExitUsage, "decide: %q is not one of the options of #%d; accept one by its number or its name: %s", option, n, optionList(d.Item))
 	}
+	option = o.Name // recorded by its name, whether typed as its number or its name
 	provisional := slices.Contains(d.Labels, workitems.LabelProvisional)
 	if err := setStatus(ctx, c, repo, n, d.Labels, "done"); err != nil {
 		return err
@@ -508,7 +540,7 @@ func emitWaiver(e *Env, rep decideReport) error {
 		case rep.Waiver.Existing:
 			fmt.Fprintf(w, "floor waiver #%d for %s on #%d is already open\n", rep.Waiver.Decision, rep.Waiver.Floor, rep.Waiver.Item)
 		default:
-			fmt.Fprintf(w, "floor waiver #%d for %s on #%d filed; a human accepts it with `aayu decide %d --accept waive`\n", rep.Waiver.Decision, rep.Waiver.Floor, rep.Waiver.Item, rep.Waiver.Decision)
+			fmt.Fprintf(w, "floor waiver #%d for %s on #%d filed with two options, 1. Waive and 2. Don't waive (recommended); a human accepts one with `aayu decide %d --accept <number>`\n", rep.Waiver.Decision, rep.Waiver.Floor, rep.Waiver.Item, rep.Waiver.Decision)
 		}
 		return nil
 	})

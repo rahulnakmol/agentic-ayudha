@@ -20,7 +20,7 @@ aayu:
       type: string
       required: false
       positional: false
-      description: "Option to accept (human identity only)."
+      description: "Option to accept, by its number or its name (human identity only)."
     - name: waiver
       type: string
       required: false
