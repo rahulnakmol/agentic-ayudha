@@ -158,8 +158,10 @@ func TestDecideSLA(t *testing.T) {
 	if code, _, _ := run(t, env, opts, "decide", "2", "--repo", "o/r", "--accept", "A", "--set", "autonomy.approver=someone-else"); code != ExitBlocked {
 		t.Errorf("accept by a human who is not the authority: exit %d, want %d", code, ExitBlocked)
 	}
-	if code, _, _ := run(t, env, opts, "decide", "2", "--repo", "o/r", "--accept", "C"); code != ExitUsage {
-		t.Errorf("accept of an option the Decision does not list: exit %d, want %d", code, ExitUsage)
+	for _, typed := range []string{"C", "3", "in-house"} { // "in-house" is only prose under option A
+		if code, _, _ := run(t, env, opts, "decide", "2", "--repo", "o/r", "--accept", typed); code != ExitUsage {
+			t.Errorf("accept of %q, which is not an option of the Decision: exit %d, want %d", typed, code, ExitUsage)
+		}
 	}
 	if code, out, errOut := run(t, env, opts, "decide", "2", "--repo", "o/r", "--accept", "A"); code != 0 || !strings.Contains(out, "#2 accepted: A, by @o") {
 		t.Fatalf("accept: exit %d: %s %s", code, out, errOut)

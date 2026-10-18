@@ -401,11 +401,11 @@ func decideAccept(ctx context.Context, e *Env, cfg *config.Config, repo string, 
 	if want := decide.Login(cfg, value); want != "" && !strings.EqualFold(want, login) {
 		return Errorf(ExitBlocked, "decide: the authority for #%d is %s (%s = %s); %s cannot accept it", n, want, key, value, login)
 	}
-	if o, ok := decide.Pick(d.Item, option); ok {
-		option = o.Name // recorded by its name, whether typed as its number or its name
-	} else if !decide.MatchOption(d.Item.Fields["options"], option) {
+	o, ok := decide.Pick(d.Item, option)
+	if !ok {
 		return Errorf(ExitUsage, "decide: %q is not one of the options of #%d; accept one by its number or its name: %s", option, n, optionList(d.Item))
 	}
+	option = o.Name // recorded by its name, whether typed as its number or its name
 	provisional := slices.Contains(d.Labels, workitems.LabelProvisional)
 	if err := setStatus(ctx, c, repo, n, d.Labels, "done"); err != nil {
 		return err
