@@ -498,13 +498,24 @@ func (e *Env) chooseReviewTool(ctx context.Context) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(path, []byte(setInspectReviewer(string(b), ans)), 0o644)
+	// Write only a file that still parses and names the tool: a dotted
+	// inspect.reviewer key or an unusual layout stops install instead.
+	out := setInspectReviewer(string(b), ans)
+	var v struct {
+		Inspect struct {
+			Reviewer string `toml:"reviewer"`
+		} `toml:"inspect"`
+	}
+	if toml.Unmarshal([]byte(out), &v) != nil || v.Inspect.Reviewer != ans {
+		return stop
+	}
+	return os.WriteFile(path, []byte(out), 0o644)
 }
 
 var (
-	inspectHeader   = regexp.MustCompile(`(?m)^\[inspect\][ \t]*(#.*)?$`)
-	sectionHeader   = regexp.MustCompile(`(?m)^\[`)
-	reviewerSetting = regexp.MustCompile(`(?m)^reviewer[ \t]*=.*$`)
+	inspectHeader   = regexp.MustCompile(`(?m)^[ \t]*\[inspect\][ \t]*(#.*)?$`)
+	sectionHeader   = regexp.MustCompile(`(?m)^[ \t]*\[`)
+	reviewerSetting = regexp.MustCompile(`(?m)^[ \t]*reviewer[ \t]*=.*$`)
 )
 
 // setInspectReviewer sets reviewer in the [inspect] section of a config

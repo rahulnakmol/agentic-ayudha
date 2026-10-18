@@ -899,6 +899,16 @@ func TestReadServiceReply(t *testing.T) {
 	if _, err := ReadReply(choice(AppCodeRabbit), limited, head, at.Add(-time.Minute), nil, criteria, nil); !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("coderabbit at its rate limit: %v", err)
 	}
+	// A walkthrough about quota code is not a limit notice: still no reply. A
+	// review of the head that says it hit a limit is never a clean review.
+	walk := []Post{{Kind: "comment", ID: 10, Login: rabbit, Body: "<!-- This is an auto-generated comment: summarize by coderabbit.ai -->\n## Walkthrough\nFalls back when Codex reaches its usage limits or quota.", Updated: at}}
+	if _, err := ReadReply(choice(AppCodeRabbit), walk, head, at.Add(-time.Minute), nil, criteria, nil); !errors.Is(err, ErrNoReply) {
+		t.Fatalf("a walkthrough about quotas: %v", err)
+	}
+	skipped := []Post{{Kind: "review", ID: 11, Login: rabbit, Commit: head, Body: "> [!WARNING]\n> ## Rate limit exceeded\n> Review skipped.", Updated: at}}
+	if _, err := ReadReply(choice(AppCodeRabbit), skipped, head, time.Time{}, nil, criteria, nil); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("a rate-limited review of the head: %v", err)
+	}
 	// Greptile: its summary names the head; a P2 does not block.
 	greptilePosts := []Post{
 		{Kind: "comment", ID: 8, Login: greptile, Body: "<!-- greptile_summary -->\n\n<sub>Last reviewed commit: [\"feat\"](https://github.com/o/r/commit/" + head + ")</sub>", Updated: at},

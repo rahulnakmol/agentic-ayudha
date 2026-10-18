@@ -276,6 +276,22 @@ const ReplyWait = 30 * time.Minute
 // have reached your Codex usage limits for code reviews", or a quota message.
 var usageLimit = regexp.MustCompile(`(?i)\busage limits?\b|\bquota\b|\brate limit exceeded\b|\btrial has ended\b`)
 
+// serviceSummary marks CodeRabbit's walkthrough and Greptile's summary: they
+// describe the PR, so their words are never the app's own limit notice.
+var serviceSummary = regexp.MustCompile(`summarize by coderabbit\.ai|<!-- greptile_summary -->`)
+
+// limited reports whether a post is the app's own notice that it cannot review:
+// a limit phrase at its start (a notice leads with it), never in a summary.
+func limited(body string) bool {
+	if serviceSummary.MatchString(body) {
+		return false
+	}
+	if len(body) > 400 {
+		body = body[:400]
+	}
+	return usageLimit.MatchString(body)
+}
+
 // AppReply is a reviewer's reply turned into what the gate needs.
 type AppReply struct {
 	Reply
@@ -363,8 +379,8 @@ func ReadReply(c Choice, posts []Post, head string, since time.Time, human func(
 	}
 	service := c.App == AppCodeRabbit || c.App == AppGreptile
 	if service {
-		if r, ok := serviceNative(c, posts, head, criteria, changed); ok {
-			return r, nil
+		if r, ok, err := serviceNative(c, posts, head, criteria, changed); ok || err != nil {
+			return r, err
 		}
 	}
 	if c.App == "" {
@@ -382,7 +398,7 @@ func ReadReply(c Choice, posts []Post, head string, since time.Time, human func(
 		if c.App == AppCodex && (strings.Contains(p.Body, "codex-pull-request-review-summary") || codexReceipt.MatchString(p.Body)) {
 			continue // Codex's summary, or its receipt for another commit
 		}
-		if c.App != "" && usageLimit.MatchString(p.Body) {
+		if c.App != "" && limited(p.Body) {
 			return AppReply{}, fmt.Errorf("%w: %s %d by %s: %q", ErrUnavailable, p.Kind, p.ID, p.Login, oneLine(p.Body, 160))
 		}
 		if service {
@@ -507,7 +523,7 @@ var coderabbitSeverity = map[string]string{"🔴 Critical": "P0", "🟠 Major": 
 // Critical P0, Major P1, Minor P2, Trivial and Info P3; Greptile: its P0–P2
 // badge). Neither gives per-criterion verdicts. Disposition: fix with a P0 or
 // P1, else merge.
-func serviceNative(c Choice, posts []Post, head string, criteria []workitems.Criterion, changed []string) (AppReply, bool) {
+func serviceNative(c Choice, posts []Post, head string, criteria []workitems.Criterion, changed []string) (AppReply, bool, error) {
 	var receipt *Post
 	for i, p := range posts {
 		if !strings.EqualFold(p.Login, c.Login) || p.Kind == "inline" {
@@ -521,7 +537,10 @@ func serviceNative(c Choice, posts []Post, head string, criteria []workitems.Cri
 		}
 	}
 	if receipt == nil {
-		return AppReply{}, false
+		return AppReply{}, false, nil
+	}
+	if limited(receipt.Body) { // a review of the head that says it could not review: never a clean review
+		return AppReply{}, false, fmt.Errorf("%w: %s %d by %s: %q", ErrUnavailable, receipt.Kind, receipt.ID, receipt.Login, oneLine(receipt.Body, 160))
 	}
 	r := AppReply{Head: head, Reviewed: changed, Login: receipt.Login, Native: true,
 		Source: fmt.Sprintf("%s %d by %s (%s's own review of %s)", receipt.Kind, receipt.ID, receipt.Login, c.App, short(head))}
@@ -568,5 +587,5 @@ func serviceNative(c Choice, posts []Post, head string, criteria []workitems.Cri
 		}
 	}
 	r.Summary = fmt.Sprintf("%s reviewed %s: %d finding(s) on that commit.", c.App, short(head), len(r.Findings))
-	return r, true
+	return r, true, nil
 }

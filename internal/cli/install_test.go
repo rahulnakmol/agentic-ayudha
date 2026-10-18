@@ -68,6 +68,16 @@ func TestInstall(t *testing.T) {
 	if code, _, errs := run(t, env, opts, "install", "--apply"); code != ExitUsage || !strings.Contains(errs, `choose the merge gate's review tool: set [inspect] reviewer = "<tool>"`) {
 		t.Fatalf("install --apply with no review tool: exit %d %s", code, errs)
 	}
+	// A dotted inspect.reviewer key it cannot rewrite safely: install stops and writes nothing.
+	dotted := "version = 1\ninspect.reviewer = \"auto\"\n"
+	_ = os.WriteFile(cfgPath, []byte(dotted), 0o644)
+	if code, _, errs := runIn(t, env, opts, "codex\n", "install", "--apply"); code != ExitUsage || !strings.Contains(errs, "choose the merge gate's review tool") {
+		t.Fatalf("install --apply on a dotted key: exit %d %s", code, errs)
+	}
+	if b, _ := os.ReadFile(cfgPath); string(b) != dotted {
+		t.Fatalf("install rewrote a dotted key:\n%s", b)
+	}
+	_ = os.WriteFile(cfgPath, []byte("version = 1\n\n[inspect] # how PRs are reviewed\nmode = \"general\"\nreviewer = \"auto\"\n\n[budget]\nper_pr_inspect_max = 5.0\n"), 0o644)
 	// --apply without confirmation writes the repository but not the home directory, and says so.
 	code, _, errs = runIn(t, env, opts, "coderabbit\n", "install", "--apply")
 	if b, _ := os.ReadFile(cfgPath); string(b) != "version = 1\n\n[inspect] # how PRs are reviewed\nmode = \"general\"\nreviewer = \"coderabbit\"\n\n[budget]\nper_pr_inspect_max = 5.0\n" {
@@ -502,6 +512,7 @@ func TestSetInspectReviewer(t *testing.T) {
 		{"version = 1", "version = 1\n\n[inspect]\nreviewer = \"codex\"\n"},
 		{"version = 1\n\n[inspect]\nmode = \"general\"\n\n[budget]\nreviewer = \"x\"\n", "version = 1\n\n[inspect]\nreviewer = \"codex\"\nmode = \"general\"\n\n[budget]\nreviewer = \"x\"\n"},
 		{"[inspect]\nreviewer = \"auto\"\n", "[inspect]\nreviewer = \"codex\"\n"},
+		{"  [inspect]\n  reviewer = \"auto\"\n", "  [inspect]\nreviewer = \"codex\"\n"},
 	} {
 		if got := setInspectReviewer(c.in, "codex"); got != c.want {
 			t.Errorf("setInspectReviewer(%q) = %q, want %q", c.in, got, c.want)
