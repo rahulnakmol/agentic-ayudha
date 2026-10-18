@@ -145,14 +145,17 @@ func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name strin
 	if !a.Proof {
 		return nil, "", false, nil
 	}
-	files, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.CommitFile, *gh.Response, error) {
-		return c.REST.PullRequests.ListFiles(ctx, owner, name, pr.GetNumber(), &o)
-	})
+	// The files are the comparison of the captured base and head, never the
+	// live PR's listing, which a push or a base change during ship could
+	// swap for another diff and back. Its first page lists every file, up
+	// to 300.
+	cmp, _, err := c.REST.Repositories.CompareCommits(ctx, owner, name, base, head, &gh.ListOptions{PerPage: 1})
 	if err != nil {
 		return nil, "", false, Wrap(ExitExternal, err)
 	}
+	files := cmp.Files
 	if len(files) != pr.GetChangedFiles() {
-		return nil, fmt.Sprintf("GitHub listed %d of its %d changed files (it lists at most 3,000), so the narrow set cannot be judged", len(files), pr.GetChangedFiles()), true, nil
+		return nil, fmt.Sprintf("GitHub's comparison of %s...%s lists %d of the PR's %d changed files (it lists at most 300), so the narrow set cannot be judged", short(base), short(head), len(files), pr.GetChangedFiles()), true, nil
 	}
 	pp = &ProofPass{Rung: rung}
 	var changed []string

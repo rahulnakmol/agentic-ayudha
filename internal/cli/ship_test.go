@@ -436,13 +436,20 @@ func TestShipOnProof(t *testing.T) {
 	refused("no merge on proof: it touches .github/workflows/protected-paths-review.yml, in the narrow set that always needs a person ([autonomy] always_person: .github/workflows/protected-paths*.yml)")
 	g.Mu.Lock()
 	g.RefFiles[base][".aayudha/config.toml"] = conf
-	g.Pulls[prN].Files, g.Pulls[prN].Unlisted = []string{"empty.txt"}, 1 // past GitHub's 3,000-file listing
+	g.Pulls[prN].Files, g.Pulls[prN].Unlisted = []string{"empty.txt"}, 1 // past the comparison's 300 files
 	g.Mu.Unlock()
-	refused("no merge on proof: GitHub listed 1 of its 2 changed files (it lists at most 3,000), so the narrow set cannot be judged")
+	refused(fmt.Sprintf("no merge on proof: GitHub's comparison of %s...%s lists 1 of the PR's 2 changed files (it lists at most 300), so the narrow set cannot be judged", short(base), short(head)))
+	// The narrow set is judged on the captured base and head, not the live
+	// PR's file listing, which a push during ship could swap and restore.
+	g.Mu.Lock()
+	g.Pulls[prN].Unlisted = 0
+	g.Pulls[prN].Compared = []string{"internal/identity/gate.go"}
+	g.Mu.Unlock()
+	refused("no merge on proof: it touches internal/identity/gate.go, in the narrow set that always needs a person ([autonomy] always_person: internal/identity/)")
 	// It fails closed: a base config that does not load, a workflow that does
 	// not parse, and a read GitHub refuses each stop it.
 	g.Mu.Lock()
-	g.Pulls[prN].Unlisted = 0
+	g.Pulls[prN].Compared = nil
 	g.RefFiles[base][".aayudha/config.toml"] = conf + "unknown_key = 1\n"
 	g.Mu.Unlock()
 	refused("the base revision's config does not load, so ship cannot judge the narrow set")

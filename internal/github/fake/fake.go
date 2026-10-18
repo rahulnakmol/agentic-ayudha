@@ -98,6 +98,10 @@ type PR struct {
 	CreatedAt      time.Time `json:"created_at,omitzero"`
 	Reviews        []Review  `json:"-"`
 	Files          []string  `json:"-"`
+	// Compared, when set, is what the comparison of its base and head SHAs
+	// lists instead of Files (GET /compare/{base}...{head}): the live PR's
+	// files can differ from the revisions a caller captured.
+	Compared []string `json:"-"`
 	// ChangedFiles is served as len(Files) plus Unlisted, the files GitHub's
 	// file listing leaves out (it lists at most 3,000).
 	ChangedFiles int    `json:"changed_files"`
@@ -488,6 +492,24 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		reply(200, map[string]any{"name": g.Repo, "full_name": g.Owner + "/" + g.Repo, "private": g.Private, "visibility": vis,
 			"default_branch": g.Default, "owner": map[string]any{"login": g.Owner, "type": g.OwnerType}})
 
+	case m == "GET" && strings.HasPrefix(p, repo+"/compare/"):
+		basehead := strings.TrimPrefix(p, repo+"/compare/")
+		for _, pr := range g.Pulls {
+			if pr.Base.SHA+"..."+pr.Head.SHA != basehead {
+				continue
+			}
+			list := pr.Files
+			if pr.Compared != nil {
+				list = pr.Compared
+			}
+			files := []map[string]any{}
+			for _, f := range list {
+				files = append(files, map[string]any{"filename": f, "status": "modified"})
+			}
+			reply(200, map[string]any{"status": "ahead", "files": files})
+			return
+		}
+		reply(404, map[string]any{"message": "Not Found"})
 	case m == "GET" && p == repo+"/branches":
 		names := []string{g.Default}
 		for ref := range g.Refs {
