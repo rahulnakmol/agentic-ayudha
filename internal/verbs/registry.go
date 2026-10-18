@@ -419,9 +419,10 @@ const (
 // Model IDs as GitHub Copilot lists them (GET https://api.githubcopilot.com/models,
 // read 2026-10-18): Copilot names Claude models with a dot, the gateway with a dash.
 const (
-	CopilotClaudeOpus  = "claude-opus-5.5"
-	CopilotGPTSol      = "gpt-6.1-sol"
-	CopilotGeminiArgon = "gemini-4-argon"
+	CopilotClaudeOpus   = "claude-opus-5.5"
+	CopilotClaudeSonnet = "claude-sonnet-5.5"
+	CopilotGPTSol       = "gpt-6.1-sol"
+	CopilotGeminiArgon  = "gemini-4-argon"
 )
 
 // PeerReviewCandidates are the review-lane models inspect's peer mode picks
@@ -436,7 +437,11 @@ func builderDefaults() []ModelDefault {
 		{Host: HostCursor, Model: "Claude Opus 5.5", ID: ModelClaudeOpus, Family: FamilyAnthropic, Alternative: "Claude Sonnet 5.5 (" + ModelClaudeSonnet + ")", AlternativeID: ModelClaudeSonnet, Plan: PlanLegacy},
 		{Host: HostClaude, Model: "Claude Opus 5.5", ID: ModelClaudeOpus, Family: FamilyAnthropic, Alternative: "Claude Sonnet 5.5 (" + ModelClaudeSonnet + ")", AlternativeID: ModelClaudeSonnet},
 		{Host: HostCodex, Model: "GPT-6.1 Sol", ID: ModelGPTSol, Family: FamilyOpenAI, Escalation: "GPT-6 Astra at high reasoning effort", EscalationID: ModelGPTAstra, EscalationEffort: "high"},
-		copilotAuto(CopilotBalance, CopilotIntelligence),
+		// Copilot builds with a named model, never an Auto tier: Balance and
+		// Intelligence picked claude-opus-5.5 for a hard prompt, at twice
+		// Sonnet's per-token price, without saying so beforehand.
+		{Host: HostCopilot, Model: "Claude Sonnet 5.5", ID: CopilotClaudeSonnet, Family: FamilyAnthropic,
+			Escalation: "Claude Opus 5.5", EscalationID: CopilotClaudeOpus},
 	}
 }
 
@@ -499,13 +504,13 @@ var Lanes = []Lane{
 		// Codex builds with OpenAI, so its reviewer is another family.
 		{Host: HostCodex, Model: "Claude Opus 5.5", ID: ModelClaudeOpus, Family: FamilyAnthropic, Alternative: "Grok 4.7 (" + ModelGrok + ")", AlternativeID: ModelGrok},
 		// Copilot reviews with a concrete model (--model) from a family the
-		// builder was not: Claude Opus 5.5 on a build with no Anthropic
-		// response, GPT-6.1 Sol on one with Anthropic but no OpenAI, Gemini 4
-		// Argon on one that used both, read from its Aayudha-Model lines (Auto
-		// picks per response). A build that used all three is reviewed
-		// same-family. HydraFusion Critique stays opt-in ([models.review.copilot]).
-		{Host: HostCopilot, Model: "Claude Opus 5.5", ID: CopilotClaudeOpus, Family: FamilyAnthropic,
-			Alternative: "GPT-6.1 Sol (" + CopilotGPTSol + ") when the builder is anthropic, Gemini 4 Argon (" + CopilotGeminiArgon + ") when it used both anthropic and openai", AlternativeID: CopilotGPTSol},
+		// builder was not, read from its Aayudha-Model lines: GPT-6.1 Sol on
+		// the default Anthropic build, Claude Opus 5.5 on one with no Anthropic
+		// response, Gemini 4 Argon on one that used both. A build that used all
+		// three is reviewed same-family. HydraFusion Critique stays opt-in
+		// ([models.review.copilot]).
+		{Host: HostCopilot, Model: "GPT-6.1 Sol", ID: CopilotGPTSol, Family: FamilyOpenAI,
+			Alternative: "Claude Opus 5.5 (" + CopilotClaudeOpus + ") when the build has no anthropic response, Gemini 4 Argon (" + CopilotGeminiArgon + ") when it used both anthropic and openai", AlternativeID: CopilotClaudeOpus},
 	}},
 	// Interim model gemini-3.8-flash; the target is gemini-4-argon-high once the
 	// gateway routes it (ModelGemini, D-6.6b).

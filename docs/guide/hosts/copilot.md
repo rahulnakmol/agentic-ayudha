@@ -83,27 +83,27 @@ exports `GH_TOKEN`, Copilot uses it ahead of your `copilot login`.
 row name the account aayu writes with, and the `copilot` row say
 `Copilot signs in with COPILOT_GITHUB_TOKEN; aayu's GitHub writes never use it`.
 
-## Lanes and Auto tiers
+## Lanes and models
 
-Copilot's own sessions choose the model per request. The build, spec, plan, and chore lanes map to an Auto tier, and
-the two review lanes name a model, so a review is from a family you can prove. Select a tier with `/model` in Copilot
-CLI (choose `auto`), start it with `copilot --model auto --auto-tier <tier>`, or pick Auto in VS Code's model picker.
-Start a review with `copilot --model <id>`:
+The build, spec, plan, and review lanes name a model, so you know what a call costs before you make it, and a review
+is from a family you can prove. Only the chore lane uses an Auto tier. Start a session with `copilot --model <id>`, or
+pick the model with `/model` in Copilot CLI or in VS Code's model picker:
 
 | Lane | On Copilot | Why |
 |---|---|---|
 | chore (triage, status, checks) | Auto, Efficiency | Cost first |
-| build, spec, plan | Auto, Balance, then Intelligence when a step needs more | Cost, quality, and speed together |
-| review | `claude-opus-5.5` on an OpenAI build, `gpt-6.1-sol` on an Anthropic one, `gemini-4-argon` on a build that used both | A different family from the builder's |
+| build, spec, plan | `claude-sonnet-5.5`, then `claude-opus-5.5` when a step needs more | A named model; Opus costs twice Sonnet per token |
+| review | `gpt-6.1-sol` on an Anthropic build, `claude-opus-5.5` on one with no Anthropic response, `gemini-4-argon` on one that used both | A different family from the builder's |
 | ui-review | `gemini-3.8-flash` at high effort, the same as every host | The founder's default for all UI review |
 
 `aayu models show --host copilot` lists them. Copilot's paid plans take 10 % off a request answered through Auto.
 
-Auto picks a model for each prompt from the models your organisation enables. On 18 October 2026, with a hard
-reasoning-and-code prompt, Efficiency chose `gpt-6-luna` (1 premium request, 0.21 AI credits). Balance and Intelligence
-both chose `claude-opus-5.5` (15 premium requests and about 20 AI credits, about 0.20 USD, each). An earlier, simpler
-prompt ran on `gpt-6-luna` at every tier: that was Auto's choice for the prompt, not a limit of the account. Each figure
-is from Copilot CLI's own usage report for that run.
+Auto picks a model for each prompt from the models your organisation enables, so its cost is known only afterwards.
+On 18 October 2026, with a hard reasoning-and-code prompt, Efficiency chose `gpt-6-luna` (1 premium request, 0.21 AI
+credits). Balance and Intelligence both chose `claude-opus-5.5` (15 premium requests and about 20 AI credits, about
+0.20 USD, each). That is why the build lane names `claude-sonnet-5.5` instead. An earlier, simpler prompt ran on
+`gpt-6-luna` at every tier: that was Auto's choice for the prompt, not a limit of the account. Each figure is from
+Copilot CLI's own usage report for that run.
 
 **Gemini 4 Argon for UI review, opt-in.** Copilot lists `gemini-4-argon`, so the UI-review lane can use it without a
 Google plan. It stays opt-in until a gating run on it passes and the founder agrees:
