@@ -516,6 +516,13 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		if gate.Result != nil && gate.Result.Head == head && !stale {
 			res = *gate.Result
 			res.Cached = true
+			// The gate's findings on lines the PR leaves unchanged are filed
+			// here, under the person's account, as every local run does.
+			if note, err := e.preExistingBug(ctx, repo, n, head, &res); err != nil {
+				res.Notes = append(res.Notes, "pre-existing findings not filed: "+oneLineErr(err))
+			} else if note != "" {
+				res.Notes = append(res.Notes, note)
+			}
 		}
 		if err := e.emitInspect(res, nil); err != nil {
 			return err

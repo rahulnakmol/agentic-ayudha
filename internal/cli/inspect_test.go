@@ -1433,10 +1433,12 @@ func TestInspectPaidReviewer(t *testing.T) {
 			t.Fatalf("no key, outside CI: exit %d %s, %d model calls, %d comments %s", code, res.Disposition, len(model.Requests), len(cs), errOut)
 		}
 	}
-	// It reports the gate's judgement of the head once the gate has one.
-	addComment(g, prN, "github-actions[bot]", "Bot", inspect.Marker+"\n<!-- aayudha:inspect-state {\"diff_hash\":\"x\",\"cycles\":0,\"hashes\":[],\"result\":{\"pr\":"+strconv.Itoa(prN)+",\"head\":\""+head+"\",\"disposition\":\"merge\",\"summary\":\"the CI review\",\"findings\":[],\"criteria\":[]}} -->\n")
-	if code, res, errOut = inspectApp(t, env, opts, prN); code != 0 || res.Disposition != inspect.Merge || !res.Cached || len(model.Requests) != 0 {
-		t.Fatalf("no key, outside CI, the gate's merge: exit %d %s cached %v %s", code, res.Disposition, res.Cached, errOut)
+	// It reports the gate's judgement of the head once the gate has one, and files the gate's pre-existing findings (Codex's P2 on #691).
+	addComment(g, prN, "github-actions[bot]", "Bot", inspect.Marker+"\n<!-- aayudha:inspect-state {\"diff_hash\":\"x\",\"cycles\":0,\"hashes\":[],\"result\":{\"pr\":"+strconv.Itoa(prN)+",\"head\":\""+head+"\",\"disposition\":\"merge\",\"summary\":\"the CI review\",\"findings\":[],\"criteria\":[],"+
+		"\"dropped\":[{\"id\":\"pe1\",\"severity\":\"P1\",\"category\":\"bug\",\"file\":\"internal/report/percent.go\",\"line\":1,\"title\":\"Old division\",\"why\":\"pre-existing\"}]}} -->\n")
+	if code, res, errOut = inspectApp(t, env, opts, prN); code != 0 || res.Disposition != inspect.Merge || !res.Cached || len(model.Requests) != 0 ||
+		!slices.ContainsFunc(res.Notes, func(n string) bool { return strings.Contains(n, "pre-existing findings") }) {
+		t.Fatalf("no key, outside CI, the gate's merge: exit %d %s cached %v, notes %q %s", code, res.Disposition, res.Cached, res.Notes, errOut)
 	}
 	// An edited title or body re-runs the gate on the same head: while its inspect check runs, the old verdict does not count.
 	g.Mu.Lock()
