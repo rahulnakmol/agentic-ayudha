@@ -137,6 +137,9 @@ func checkApprovals(ctx context.Context, p *Probe) Result {
 		lines = append(lines, fmt.Sprintf("%s -> @%s", r.Source, r.Login))
 	}
 	device := "every batch needs the device code"
+	if slices.Contains(ap.DeviceFor, "all") { // no reply approves anything, so a reachable credential cannot forge one
+		return Result{Status: Pass, Lines: lines, Detail: "approvals: replies are off (`[approvals] device_for = [\"all\"]`), so " + device}
+	}
 	if ex := identity.Exposed(reach, ap.Approvers); len(ex) > 0 {
 		var who []string
 		for _, r := range ex {
@@ -164,10 +167,7 @@ func checkApprovals(ctx context.Context, p *Probe) Result {
 		return Result{Status: Warn, Lines: lines, Detail: "approvals: the bot is a machine user, and the aayudha-approve workflow acts only as the aayudha GitHub App, so " + device}
 	}
 	keep := "one-way doors need the device code"
-	switch {
-	case slices.Contains(ap.DeviceFor, "all"):
-		keep = device
-	case !slices.Contains(ap.DeviceFor, "one-way"):
+	if !slices.Contains(ap.DeviceFor, "one-way") {
 		keep = "no door needs the device code"
 	}
 	return Result{Status: Pass, Lines: lines, Detail: fmt.Sprintf("approvals: a reply from %s approves a batch; %s", strings.Join(ap.Approvers, ", "), keep)}

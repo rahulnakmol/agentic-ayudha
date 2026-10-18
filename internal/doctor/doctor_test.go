@@ -743,8 +743,10 @@ func TestApprovals(t *testing.T) {
 	}{
 		{"no approvers", []string{"identity.app_id=42", "identity.app_slug=aayudha-bot"}, nil, "warn approvals: no `[approvals] approvers`, so every batch needs the device code"},
 		{"no bot", []string{"approvals.approvers=rahulnakmol"}, nil, "warn approvals: no bot identity, so agents write as a person and every batch needs the device code"},
-		{"every batch on the code", []string{"identity.app_id=42", "identity.app_slug=aayudha-bot", "approvals.approvers=rahulnakmol", "approvals.device_for=all"}, nil,
-			"pass approvals: a reply from rahulnakmol approves a batch; every batch needs the device code"},
+		// Replies are off, so an approver's reachable credential forges nothing.
+		{"every batch on the code", []string{"identity.app_id=42", "identity.app_slug=aayudha-bot", "approvals.approvers=rahulnakmol", "approvals.device_for=all"},
+			[]identity.Reach{{Source: "GH_TOKEN", Login: "rahulnakmol"}},
+			"pass approvals: replies are off (`[approvals] device_for = [\"all\"]`), so every batch needs the device code | GH_TOKEN -> @rahulnakmol"},
 		{"machine user", []string{"identity.machine_user=aayu-machine", "identity.machine_user_secret=mu-token", "approvals.approvers=rahulnakmol"}, nil,
 			"warn approvals: the bot is a machine user, and the aayudha-approve workflow acts only as the aayudha GitHub App, so every batch needs the device code"},
 		{"no door on the code", []string{"identity.app_id=42", "identity.app_slug=aayudha-bot", "approvals.approvers=rahulnakmol"}, nil,

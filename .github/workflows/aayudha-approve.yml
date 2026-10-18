@@ -29,12 +29,17 @@ permissions:
 jobs:
   approve:
     name: aayudha/approve
-    if: startsWith(github.event.comment.body, '/aayu approve') || startsWith(github.event.comment.body, '/aayu skip')
+    # Only people with a role in the repository can queue a run: an outsider's comments cannot crowd out a reply.
+    if: >-
+      (startsWith(github.event.comment.body, '/aayu approve') || startsWith(github.event.comment.body, '/aayu skip')) &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
     # One approval at a time in the whole repository: batches on different issues can share a Decision, and
-    # each approval checks a Decision and then writes it. At the job, so other comments never join the queue.
+    # each approval checks a Decision and then writes it. At the job, so other comments never join the queue;
+    # queue: max keeps up to 100 replies waiting in order instead of cancelling all but the newest.
     concurrency:
       group: aayudha-approve
       cancel-in-progress: false
+      queue: max
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

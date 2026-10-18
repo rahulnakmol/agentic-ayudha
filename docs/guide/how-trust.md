@@ -210,7 +210,8 @@ prove:
   `/aayu approve 1 3 3f9c0a1b2d4e`, or `/aayu skip 2 3f9c0a1b2d4e`: the line ends in the batch's hash, copied from
   the batch, so the reply approves the batch you read and never a newer one posted meanwhile. The
   `aayudha-approve` workflow checks the reply and applies the steps as the bot, recording "approved in" the reply's
-  URL, and runs one approval at a time across the repository. A pick that is not the recommendation, or a one-way
+  URL, and runs one approval at a time across the repository, keeping up to 100 replies in order (`queue: max`);
+  only comments from the repository's owners, members, and collaborators start a run. A pick that is not the recommendation, or a one-way
   door, is approved only when you name its item number; `all` and `skip` leave it out and say so.
 
 The workflow (`approveFromComment` in `internal/cli/approve.go`) applies nothing unless every check passes, and it
