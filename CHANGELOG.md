@@ -17,7 +17,7 @@ With v0.3.0, aayu builds its own repository, agentic-ayudha, with one person, @r
 `aayu ship` merges an agent's Story pull request into dev on proof alone, and on that path a narrow set of paths and settings always
 waits for a person (#617). Two new seats, the Production Engineer and the Data & AI Architect, bring
 skills for incidents, SLOs, runbooks, and data designs, and `aayu survey` maps legacy code. Every pull request that is not docs-only
-now gets a review, and the merge gate records how independent that review was. You approve the human-only steps
+now gets a review, by default from a model you choose in your own CI, and the merge gate records how independent that review was. You approve the human-only steps
 agents queue for you from any device, one at a time in `aayu inbox` or as one batch. No Feature is claimed as proven
 for this release.
 
@@ -58,20 +58,23 @@ for this release.
 - The merge gate records which model family built a pull request and which rung of the review ladder reviewed it: A for a reviewer app of another family, B for a paid reviewer of another family, C for a labelled same-family review (#483).
 - `aayu doctor` shows the rung your builds get and how to move up a rung (#522).
 - The ship record, `aayu audit`, and `aayu status --streak` record each merge's review rung (#518).
-- The autonomy streak counts only merges whose review was of another family or a person's (#510).
-- Rung B is an opt-in paid reviewer in the merge gate: it runs only when you name a model in `[inspect] paid_reviewer` and add that provider's key (#550).
-- `[inspect] paid_effort` sets the paid reviewer's reasoning effort, and a paid review runs only for pull requests whose author has write or admin access to the repository (#579).
-- `[inspect] reviewer` names the one review tool: `codex`, `coderabbit`, `greptile`, `claude`, `cursor`, `grok` (the rung B paid reviewer), or `human` (`model` stays for aayu's own evals); unset, a person reviews every pull request that is not docs-only, `aayu install --apply` asks you to choose, and `aayu doctor` fails `reviewer-apps` and `review-rung` until you do (#641).
+- The autonomy streak counts only merges whose review was of another family or a person's; a review of a builder whose family is unknown is rung C (#510, #657).
+- `[inspect] reviewer = "ci"`, the default, has the merge gate call the model that the repository's `code-review` environment names: the variables `AAYU_REVIEW_MODEL_URL` and `AAYU_REVIEW_MODEL`, the secret `AAYU_REVIEW_MODEL_KEY`, and the optional `AAYU_REVIEW_MODEL_API_STYLE` (`chat`, `responses`, or `messages`); review apps are optional (#657).
+- `aayu init --gates` creates the `code-review` environment with Grok 4.7 at `https://api.x.ai/v1` filled in, lets only the base branches and the default branch deploy to it, and removes every other deployment rule; on a plan with no environments it says so and continues (#657).
+- The CI review fails closed and names the missing setting, refuses a URL with a key, a query, or an operation path such as `/chat/completions`, and skips a docs-only pull request before it reads the settings (#657).
+- Rung B is a paid review model of another family: the CI review, or `[inspect] paid_reviewer`, which names the model when `AAYU_REVIEW_MODEL` names none and serves as the fallback (#550, #657).
+- `[inspect] paid_effort` sets every review call's reasoning effort (empty: high, or medium for Claude Opus, Claude Fable, and GPT-6 Astra), and a paid review runs only for pull requests whose author has write or admin access to the repository (#579, #657).
+- `[inspect] reviewer` names the one review tool: `ci` (the default), `codex`, `coderabbit`, `greptile`, `claude`, `cursor`, or `human` (`model` stays for aayu's own evals); `aayu install --apply` asks for a value the gate cannot use, and Enter picks `ci` (#641, #657).
 - A review from CodeRabbit or Greptile counts as rung A whatever the builder's model family (#641).
-- When the chosen tool answers with a usage-limit or quota message, or still has not replied when inspect runs again at least 30 minutes after the request (on a push, a rerun, or a new comment or review), the next installed app in a fixed order reviews (Codex, CodeRabbit, Greptile, Claude, Cursor), then the rung B reviewer, then a person; when `grok` is the chosen tool, the apps review in that order, then a person, with no second paid attempt; the comment names the tool that took over and why (#634, #641).
-- A paid review asks for priority serving where the provider offers it (xAI and OpenAI, not Anthropic), and the review budget charges the priority rate for xAI models (#634).
+- When the chosen tool answers with a usage-limit or quota message, or still has not replied when inspect runs again at least 30 minutes after the request (on a push, a rerun, or a new comment or review), the next installed app in a fixed order reviews (Codex, CodeRabbit, Greptile, Claude, Cursor), then the CI review, then a person; when the CI review is the chosen tool and cannot review, the apps review in that order, then a person; the comment names the tool that took over and why (#634, #641, #657).
+- Every review call asks for fast (priority) serving where the endpoint offers it, and the review budget charges the priority rate for xAI models (#634, #657).
 - inspect makes one paid review call per head commit, and none on a reply event (#623).
 - inspect reviews a pull request for at most three rounds, then stops until a person reopens the review, and findings in code the pull request did not change are tagged as pre-existing (#583).
 - Agents run `aayu ship` on their Story pull requests; when only your approval is missing, the pull request waits in your inbox as Ready to ship (#577).
 - Agent pull requests count toward the autonomy streak (#577).
 - With `[autonomy] proof` on, `aayu ship` merges a pull request into dev with no person's pass when every required check passes (ship counts a skipped or neutral check as passing) except the CODEOWNERS check `protected-paths`, which the ship record lists instead, the proof pack verifies with its floors holding, inspect is at merge with a review rung listed in `[autonomy] proof_rungs`, and the pull request touches nothing in the narrow set (#617, #621).
 - The narrow set is the `always_person` paths, a change to an `always_person_sections` table of an `always_person_config` file (by default 20 tables, from `[identity]` and `[autonomy]` to `[budget]`, listed in [CONSTRAINTS.md](CONSTRAINTS.md)), any workflow that holds a credential, any action manifest (`action.yml` or `action.yaml`), and any changed symbolic link; with merge on proof on, a pull request in it waits for a person, and with it off, ship does not read the narrow set, so a layer's correction-free streak can merge one (#617, #89).
-- Merging on proof is off by default, and `proof_rungs` defaults to rungs A and B (#617).
+- Merging on proof is off by default, and `proof_rungs` defaults to rungs A, B, and C, so a same-family review counts for merge on proof but never toward the streak (#617, #657).
 - `aayu ship` refuses to merge while a required check other than `protected-paths` is red, whoever passes it; it reads the checks once, so a check that turns red later can still pass under a bypass identity (#617, #632).
 - `aayu init --gates` installs a security workflow that scans every push to dev, rolling, and main, and each tip nightly, with verify's security floors (#500).
 - verify takes an advisory UI review of its own screenshots (#479).
@@ -122,7 +125,8 @@ for this release.
 
 ### Breaking changes
 
-- `[inspect] reviewer = "auto"` and `"amp"` are removed with no deprecation release: each repository names one review tool, and a repository left on `auto`, on `amp` (which `aayu install --apply` does not ask about), or unset gets a person's review on every pull request that is not docs-only until you choose one with `aayu install --apply` or `[inspect] reviewer` (#641).
+- `[inspect] reviewer = "auto"` and `"amp"` are removed with no deprecation release: a repository left on either gets a person's review on every pull request that is not docs-only, and `aayu install --apply` asks for a tool again (#641, #657).
+- A repository that names no review tool now uses the CI review: its merge gate fails, naming the missing setting, until a person runs `aayu init --gates` and adds `AAYU_REVIEW_MODEL_KEY`, or names a review app (#657).
 - In inspect's human fallback, a reply no longer counts on its own, even from the approver's account: only the `[autonomy] approver`'s `aayu inspect <pr> --approve --reason "<what you checked>"` for that exact head counts, so a new push needs a new approval and a repository with no `[autonomy] approver` cannot clear the fallback (#647).
 
 ### Fixes

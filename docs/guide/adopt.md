@@ -45,7 +45,7 @@ evidence".
 
 | Cost | At Level 2 |
 |---|---|
-| Keys | None in CI: product CI never calls a model. `inspect` reads the review of an agent app you install on your account (Claude, Codex, or Cursor), and triage runs from your own agent |
+| Keys | One in CI: the review model's key, as the secret `AAYU_REVIEW_MODEL_KEY` in the repository's `code-review` environment, which only the base branches and the default branch can reach. A review app can review instead, with no key in CI. Triage runs from your own agent |
 | CI changes | New workflows: the merge gate, a guard that removes Ready when a story is edited, and an incident runner you trigger by hand |
 | CI minutes | About 10 minutes per push to a story's pull request in this repository (8 for the floors, 2 for the review); yours depend on your tests |
 | Model spend | None in CI. The reviewer app bills through your own subscription to it |
