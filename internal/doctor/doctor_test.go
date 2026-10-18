@@ -518,6 +518,12 @@ func TestCheckStates(t *testing.T) {
 		{"an unknown builder cannot move up", checkReviewRung, func(p *Probe) { p.Getenv = func(string) string { return "" }; p.Config = load(t, "inspect.apps=codex") }, Pass, "move up: no reviewer can be shown to differ from an unknown builder"},
 		{"a person reviews by configuration", checkReviewRung, func(p *Probe) { p.Config = load(t, "inspect.reviewer=human") }, Pass, `human  a person reviews every PR ([inspect] reviewer = "human")`},
 		{"rung C for a Claude Code build", checkReviewRung, func(p *Probe) { p.Host = "claude"; p.Config = load(t, "inspect.apps=claude") }, Pass, "C  same-family review: claude (anthropic)"},
+		// The Cursor plan picks the build model: Grok on x, Claude on legacy.
+		{"Claude reviews a Cursor x-plan build", checkReviewRung, func(p *Probe) { p.Host = "cursor"; p.Config = load(t, "inspect.apps=claude") }, Pass, "builder xai (grok-4.7 on cursor)"},
+		{"Claude reviews a Cursor legacy-plan build", checkReviewRung, func(p *Probe) {
+			p.Host = "cursor"
+			p.Config = load(t, "inspect.apps=claude", "hosts.cursor.plan=legacy")
+		}, Pass, "C  same-family review: claude (anthropic)"},
 		// reviewer "model" calls the review lane, not an app: Amp may be
 		// anthropic or openai, so inspect passes over both to Grok.
 		{"a model reviewer for an Amp build", checkReviewRung, func(p *Probe) { p.Config = load(t, "inspect.reviewer=model") }, Pass, "A  different-family review: the review lane's grok-"},

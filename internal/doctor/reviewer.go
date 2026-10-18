@@ -82,7 +82,7 @@ func checkReviewRung(_ context.Context, p *Probe) Result {
 	var claims, hosts []string
 	lane, model := verbs.Family(""), ""
 	if host != "" {
-		if r, err := (models.Resolver{Models: cfg.Models}).Resolve(verbs.LaneBuild, verbs.HostID(host)); err == nil {
+		if r, err := (models.Resolver{Models: cfg.Models, Hosts: cfg.Hosts}).Resolve(verbs.LaneBuild, verbs.HostID(host)); err == nil {
 			lane, model = r.Family, r.Model
 			if model != "" {
 				claims = []string{model}
@@ -96,6 +96,8 @@ func checkReviewRung(_ context.Context, p *Probe) Result {
 	switch {
 	case b.Family != "" && b.Family != verbs.FamilyHostManaged:
 		builder = fmt.Sprintf("builder %s (%s on %s)", b.Family, model, host)
+	case model != "" && len(b.Candidates) == 1:
+		builder = fmt.Sprintf("builder %s (%s on %s)", b.Candidates[0], model, host)
 	case len(b.Candidates) > 0:
 		builder = fmt.Sprintf("builder any of %v (%s picks the model for its modes)", b.Candidates, host)
 	case host != "":
