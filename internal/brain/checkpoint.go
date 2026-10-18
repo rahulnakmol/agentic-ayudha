@@ -127,6 +127,7 @@ func Run(files map[string][]byte, r Records, today string, public bool) (Checkpo
 			}
 		}
 	}
+	out[MarkerPath] = []byte(Marker) // a vault from before the marker gets it
 	c := &cp{files: out, r: r, today: today, v: Load(out)}
 	c.releases()
 	c.seats()

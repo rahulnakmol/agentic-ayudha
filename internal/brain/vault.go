@@ -11,6 +11,13 @@ import (
 // HomePath is the vault's front door.
 const HomePath = "Home.md"
 
+// MarkerPath marks a branch as an aayudha brain (Obsidian hides dot files).
+// .obsidian/types.json cannot: Obsidian writes it in any vault with properties.
+const MarkerPath = ".aayudha-brain"
+
+// Marker is the marker's exact content.
+const Marker = "aayudha brain: aayu brain checkpoint refreshes the generated blocks of these notes.\n"
+
 // TimelinePath is the dated record from inception to now.
 const TimelinePath = "Timeline/Timeline.md"
 
@@ -85,7 +92,7 @@ func slug(s string) string {
 // content per folder, the Timeline, the templates, and the Obsidian config.
 // public says whether the repository is public (the Revenue rule).
 func Skeleton(repo, today string, public bool) map[string][]byte {
-	files := map[string][]byte{}
+	files := map[string][]byte{MarkerPath: []byte(Marker)}
 	home, _ := FindType("home")
 	h := newNote(home, "home", "Start here", today, nil, "")
 	h.Body = homeBody(repo)

@@ -97,6 +97,8 @@ func TestBrainRefusesAnUnrelatedBranch(t *testing.T) {
 	git(t, filepath.Dir(other), "clone", "--quiet", bare, other)
 	git(t, other, "checkout", "--quiet", "--orphan", "brain")
 	_ = os.WriteFile(filepath.Join(other, "README.md"), []byte("my notes\n"), 0o644)
+	_ = os.MkdirAll(filepath.Join(other, ".obsidian"), 0o755) // Obsidian writes types.json in any vault with properties
+	_ = os.WriteFile(filepath.Join(other, ".obsidian", "types.json"), []byte(`{"types":{"owner":"text"}}`+"\n"), 0o644)
 	git(t, other, "add", ".")
 	git(t, other, "commit", "--quiet", "-m", "mine")
 	git(t, other, "push", "--quiet", "origin", "brain")

@@ -94,7 +94,7 @@ func notVault(files map[string][]byte) error {
 	if brain.IsVault(files) {
 		return nil
 	}
-	return Errorf(ExitBlocked, "the %s branch on the remote is not an aayudha vault (no Home.md of type home, no .obsidian/types.json): aayu writes nothing to it; rename that branch, then run `aayu brain init`", brain.Branch)
+	return Errorf(ExitBlocked, "the %s branch on the remote is not an aayudha vault (no .aayudha-brain marker, no Home.md of type home): aayu writes nothing to it; rename that branch, then run `aayu brain init`", brain.Branch)
 }
 
 // brainFiles reads every file at the tip of the brain branch.

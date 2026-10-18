@@ -119,11 +119,11 @@ func links(text string) []string {
 
 func isLogin(s string) bool { return loginRE.MatchString(s) && len(strings.TrimPrefix(s, "@")) <= 39 }
 
-// IsVault reports whether files are an aayudha brain: a Home note of type
-// home, or the CLI-owned Obsidian property types. A branch named brain that
-// is neither is someone else's, and aayu writes nothing to it.
+// IsVault reports whether files are an aayudha brain: the aayudha marker, or
+// a Home note of type home. A branch named brain that has neither is someone
+// else's, and aayu writes nothing to it.
 func IsVault(files map[string][]byte) bool {
-	if _, ok := files[".obsidian/types.json"]; ok {
+	if string(files[MarkerPath]) == Marker {
 		return true
 	}
 	n, err := Parse(HomePath, files[HomePath])

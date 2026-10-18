@@ -137,6 +137,14 @@ func TestCheckpointKeepsHumanTextAndRefreshesGeneratedBlocks(t *testing.T) {
 func TestCheckpointWithoutHomeKeepsTheVault(t *testing.T) {
 	files := skeleton(t)
 	delete(files, HomePath)
+	if !IsVault(files) {
+		t.Fatal("a vault without Home but with the aayudha marker is not a vault")
+	}
+	other := maps.Clone(files)
+	delete(other, MarkerPath)
+	if IsVault(other) {
+		t.Fatal("a vault with only .obsidian/types.json counts as an aayudha brain")
+	}
 	mine := []byte(strings.Replace(string(files["Decisions/Decisions.md"]), "The durable reasons", "Our own words on the durable reasons", 1))
 	files["Decisions/Decisions.md"] = mine
 	cp, err := Run(files, Records{Repo: "o/r"}, today, true)
