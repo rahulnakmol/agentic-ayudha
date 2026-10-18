@@ -19,7 +19,7 @@ pull request code, so no pull request can reach the key.
 
    | Name | Kind | What it holds | Filled in with |
    |---|---|---|---|
-   | `AAYU_REVIEW_MODEL_URL` | variable | the model endpoint's base URL: an OpenAI-compatible gateway, or a provider's API | `https://api.x.ai/v1` |
+   | `AAYU_REVIEW_MODEL_URL` | variable | the model endpoint's base URL; it must take the key as a bearer token | `https://api.x.ai/v1` |
    | `AAYU_REVIEW_MODEL` | variable | the model ID | `grok-4.7` |
    | `AAYU_REVIEW_MODEL_KEY` | secret | the endpoint's key | nothing: you add it |
 
@@ -29,8 +29,10 @@ pull request code, so no pull request can reach the key.
    key for the endpoint in `AAYU_REVIEW_MODEL_URL`.
 
 3. To use another model, change the two variables. A gateway such as OpenRouter or your own AI gateway reaches
-   several model families with one key; a provider's API reaches its own. The URL is a base URL ending before
-   `/chat/completions`, `/responses`, or `/messages`, with no key or query in it: aayu refuses one that has either.
+   several model families with one key. A provider's own API works when it takes a bearer key, as xAI's and OpenAI's
+   do. Anthropic's API takes its key in another header, so reach Claude models through a gateway. The URL is a base
+   URL ending before `/chat/completions`, `/responses`, or `/messages`, with no key or query in it: aayu refuses one
+   that has either.
 
 4. Open a pull request. You should see the inspect comment's first line,
    `different-family review (B, paid): grok-4.7 (xai)`, and the inspect check pass or fail with the review's findings.

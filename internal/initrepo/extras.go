@@ -236,7 +236,9 @@ func (in *Init) gates(ctx context.Context, x Extras) error {
 }
 
 type branchPolicy struct {
+	ID   int64  `json:"id"`
 	Name string `json:"name"`
+	Type string `json:"type"`
 }
 
 // reviewEnvironment creates the code-review environment the merge gate's
@@ -277,8 +279,20 @@ func (in *Init) reviewEnvironment(ctx context.Context, branches []string) error 
 	if err := in.rest(ctx, http.MethodGet, base+"/deployment-branch-policies?per_page=100", nil, &have); err != nil {
 		return err
 	}
+	// Any other rule (a wildcard, a tag, an old branch) would let that ref reach the key, so it goes.
+	for _, p := range have.Policies {
+		if p.Type != "tag" && slices.Contains(branches, p.Name) {
+			continue
+		}
+		path := fmt.Sprintf("%s/deployment-branch-policies/%d", base, p.ID)
+		if _, err := in.GH.Write(ctx, actions.Action{Kind: "github.environment.branch.delete", Target: r.FullName, Request: &actions.Request{Method: http.MethodDelete, Path: path}, Payload: map[string]any{"name": p.Name, "type": p.Type}},
+			func(ctx context.Context) (any, error) { return nil, in.rest(ctx, http.MethodDelete, path, nil, nil) }); err != nil {
+			return err
+		}
+		in.note("gates", "environment", name, "changed", fmt.Sprintf("removed the deployment rule %s (%s): only the base branches may reach the review model's key", p.Name, cmp.Or(p.Type, "branch")))
+	}
 	for _, b := range branches {
-		if b == "" || slices.ContainsFunc(have.Policies, func(p branchPolicy) bool { return p.Name == b }) {
+		if b == "" || slices.ContainsFunc(have.Policies, func(p branchPolicy) bool { return p.Name == b && p.Type != "tag" }) {
 			continue
 		}
 		body := map[string]any{"name": b, "type": "branch"}

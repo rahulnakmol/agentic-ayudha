@@ -392,6 +392,8 @@ func TestInitExtras(t *testing.T) {
 			return "code-1", nil
 		}}
 	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token"}
+	// A code-review environment someone made earlier, which also admits feature branches.
+	g.Environments = map[string]*fake.Environment{inspect.ReviewEnvironment: {Policy: map[string]any{"protected_branches": false, "custom_branch_policies": true}, Branches: []string{"feature/*"}, Variables: map[string]string{}}}
 	args := []string{"init", "--yes", "--json", "--gates", "--projects", "--identity", "--integrations"}
 	code, out, errOut := run(t, env, opts, args...)
 	if code != 0 {
@@ -498,11 +500,13 @@ func TestInitExtras(t *testing.T) {
 		}
 	}
 
-	// The code-review environment: only the base branches deploy to it, so no PR branch reaches the review model's
-	// key; its two variables carry the recommended endpoint and model, and the key is left to the person.
+	// The code-review environment: only the base branches deploy to it (the feature-branch rule is removed), so no PR
+	// branch reaches the review model's key; its two variables carry the recommended endpoint and model, and the key is
+	// left to the person.
 	g.Mu.Lock()
 	ce := g.Environments[inspect.ReviewEnvironment]
-	if ce == nil || ce.Policy["custom_branch_policies"] != true || ce.Policy["protected_branches"] != false || !slices.Equal(ce.Branches, []string{"dev", "rolling", "main"}) ||
+	if ce == nil || ce.Policy["custom_branch_policies"] != true || ce.Policy["protected_branches"] != false ||
+		!slices.Equal(slices.DeleteFunc(slices.Clone(ce.Branches), func(b string) bool { return b == "" }), []string{"dev", "rolling", "main"}) ||
 		ce.Variables[inspect.ReviewModelURLVar] != inspect.RecommendedReviewURL || ce.Variables[inspect.ReviewModelVar] != inspect.RecommendedReviewModel || len(ce.Variables) != 2 {
 		t.Errorf("the code-review environment after --gates: %+v", ce)
 	}

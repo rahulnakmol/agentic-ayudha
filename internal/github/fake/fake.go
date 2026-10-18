@@ -668,10 +668,20 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			reply(200, map[string]any{"name": name, "deployment_branch_policy": env.Policy})
 		case m == "GET" && rest == "deployment-branch-policies":
 			ps := []any{}
-			for _, b := range env.Branches {
-				ps = append(ps, map[string]any{"name": b, "type": "branch"})
+			for i, b := range env.Branches {
+				if b != "" {
+					ps = append(ps, map[string]any{"id": i + 1, "name": b, "type": "branch"})
+				}
 			}
 			reply(200, map[string]any{"total_count": len(ps), "branch_policies": ps})
+		case m == "DELETE" && strings.HasPrefix(rest, "deployment-branch-policies/"):
+			i, err := strconv.Atoi(strings.TrimPrefix(rest, "deployment-branch-policies/"))
+			if err != nil || i < 1 || i > len(env.Branches) || env.Branches[i-1] == "" {
+				notFound()
+				return
+			}
+			env.Branches[i-1] = "" // keeps the other IDs stable
+			w.WriteHeader(204)
 		case m == "POST" && rest == "deployment-branch-policies":
 			env.Branches = append(env.Branches, str("name"))
 			reply(200, map[string]any{"name": str("name")})
