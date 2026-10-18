@@ -74,7 +74,9 @@ always_person = [
   ".github/workflows/aayudha-token.yml",
   ".goreleaser.yaml",
   "install.sh",
-  # A dependency change can alter any code above, the config loader included (founder, 2026-10-18).
+  # go.mod and go.sum pin the modules the code above builds with: config.Load parses with
+  # github.com/knadh/koanf/v2 (go.mod, internal/config/load.go). So a dependency change needs a
+  # person too (@rahulnakmol, 2026-10-18; TestShipOnProof covers it).
   "go.mod",
   "go.sum",
   ".aayudha/config.json",
