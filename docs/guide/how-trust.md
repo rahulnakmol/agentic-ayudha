@@ -273,15 +273,28 @@ then `gh pr merge --squash --admin`, and `aayu audit` reports one whose comment 
 
 A solo founder should not be the bottleneck on human-only steps, but no switch turns those gates off: in solo mode an
 agent could flip such a switch through the admin bypass. Instead `aayu inbox` lists every human-only step that waits
-for you, each with the twin's recommendation, and you act on each with one keypress. Under every step a line says in
-words what each key does, for example "a or Enter = accept the recommendation (option 2) · 1-3 = accept that option ·
-s = skip for now · o = open on GitHub · q = quit".
+for you as a short queue of cards, each with its twin's counsel, and you act on each with one keypress. The cards
+that need a person come first; the housekeeping (merged without ship, a bug whose fix merged, a replaced issue) is
+folded into one card. On a person's terminal it is full screen, one card with a slim list beside it; with `--plain`,
+`TERM=dumb`, or `[ui] plain` the same cards come line by line, and once at the top a line says in words what every key
+does. Status is always words (done, skipped, not done), never colour or a symbol alone, and every icon has its word.
+
+`A` tidies all the housekeeping after one confirmation that lists each item and says it is written as you and not
+undone later. Each item is still one `inboxAct` call, under the one approval the session started with. Before every
+write the inbox reads that item again (`inboxSource.reread`): if anything it showed changed, it writes nothing and
+shows the card as it is now. A refresh asks GitHub only what changed since the last read (one issues query with
+`since`, then each changed pull request) through the client's ETag cache, so a refresh with nothing changed is one
+call. The last read is kept per user outside the repository, and nothing is ever done from it.
+
+The counsel on a card is advice, never an approval: a Decision's is the newest `aayu counsel --post` comment from an
+account with write access, cut to 75 words; every other kind's is written from the facts the inbox read
+(`inboxCounsel`), with no model call.
 
 A Decision lists every option under its own number, the recommended one marked "(recommended)", so pressing 3 accepts
 the Decision's option 3. A pick that is not the recommendation, or that is a one-way door, first shows one line saying
-exactly what it will do, and applies only on `y`.
+exactly what it will do, and applies only on a second Enter (`y` line by line).
 
-A step that is not a Decision shows its action and "skip for now", so no step is a forced choice. The inbox lists:
+Every card offers its choices and `s` to skip, so no card is a forced choice. The inbox lists:
 
 | Step | What the record shows | The recommendation | What accepting does |
 |---|---|---|---|
@@ -294,7 +307,8 @@ A step that is not a Decision shows its action and "skip for now", so no step is
 
 A PR links an item as `ship` and `audit` read it: a `story/<n>-` branch, or `Refs`, `Closes`, `Fixes`, or `Resolves #n`
 in its body. `inbox` refuses agents (`AAYU_AGENT=1`) and needs a terminal, and the host hooks block `aayu inbox` in an
-agent's shell. Every write is the person's own, under their token, logged in the actions log, and each step keeps the
+agent's shell. `aayu inbox --list` is the exception: it reads the same steps and writes nothing, so an agent may run it
+and show the same cards, the counsel, and the command a person runs (`/aayudha:inbox`). Every write is the person's own, under their token, logged in the actions log, and each step keeps the
 rules of the verb that owns it: a Decision still needs its authority, and ship still needs its gates and a human pass.
 `--dry-run` shows what each keypress would write without writing. The home screen shows "Waiting in your inbox" with
 the count, and `aayu next` names `aayu inbox`, whenever it has steps (`gatherInbox` in `internal/cli/inbox.go`).

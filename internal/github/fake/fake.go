@@ -65,10 +65,15 @@ type Issue struct {
 	Labels      []Label    `json:"labels"`
 	Type        *IssueType `json:"type,omitempty"`
 	CreatedAt   string     `json:"created_at"`
-	Comments    []*Comment `json:"-"`
-	Subs        []int      `json:"-"`
-	Parent      int        `json:"-"`
-	Assignees   []Account  `json:"assignees"`
+	// UpdatedAt is advanced by every write to the issue, or to the pull
+	// request that shares its number, through the fake; the issue list
+	// filters on it with since, as GitHub does.
+	UpdatedAt string     `json:"updated_at"`
+	URL       string     `json:"html_url"`
+	Comments  []*Comment `json:"-"`
+	Subs      []int      `json:"-"`
+	Parent    int        `json:"-"`
+	Assignees []Account  `json:"assignees"`
 	// PullRequest is set on the issue that a pull request shares its number with, as GitHub's Issues API does.
 	PullRequest *struct {
 		URL string `json:"url"`
@@ -83,6 +88,7 @@ type PR struct {
 	State  string  `json:"state"`
 	Draft  bool    `json:"draft"`
 	Merged bool    `json:"merged"`
+	URL    string  `json:"html_url"`
 	User   Account `json:"user"`
 	Head   Branch  `json:"head"`
 	Base   Branch  `json:"base"`
@@ -236,6 +242,7 @@ type GitHub struct {
 	Hook      func(method, path string)
 	FailAfter int
 	seq       int64
+	updates   int // writes so far: each advances an issue's UpdatedAt by a second
 	failSeen  int
 	Server    *httptest.Server
 }
@@ -280,12 +287,28 @@ func (g *GitHub) AddIssue(title, body string, labels ...string) *Issue {
 func (g *GitHub) addIssue(title, body string, labels []string) *Issue {
 	g.seq++
 	n := len(g.Issues) + 1
-	is := &Issue{ID: g.seq, Number: n, Title: title, Body: body, State: "open", CreatedAt: "2026-10-12T09:00:00Z"}
+	is := &Issue{ID: g.seq, Number: n, Title: title, Body: body, State: "open", CreatedAt: "2026-10-12T09:00:00Z", UpdatedAt: "2026-10-12T09:00:00Z",
+		URL: fmt.Sprintf("https://github.com/%s/%s/issues/%d", g.Owner, g.Repo, n)}
 	for _, l := range labels {
 		is.Labels = append(is.Labels, g.label(l))
 	}
 	g.Issues[n] = is
 	return is
+}
+
+var touched = regexp.MustCompile(`^/repos/[^/]+/[^/]+/(?:issues|pulls)/([0-9]+)(?:/|$)`)
+
+// touch advances the UpdatedAt of the issue a write to path changed.
+func (g *GitHub) touch(path string) {
+	m := touched.FindStringSubmatch(path)
+	if m == nil {
+		return
+	}
+	n, _ := strconv.Atoi(m[1])
+	if is := g.Issues[n]; is != nil {
+		g.updates++
+		is.UpdatedAt = time.Date(2026, 10, 12, 9, 0, g.updates, 0, time.UTC).Format(time.RFC3339)
+	}
 }
 
 func (g *GitHub) label(name string) Label {
@@ -306,7 +329,8 @@ func (g *GitHub) AddPR(title, body, author, head, headSHA, base string) *PR {
 	is.PullRequest = &struct {
 		URL string `json:"url"`
 	}{URL: fmt.Sprintf("https://api.github.com/repos/%s/pulls/%d", g.Repo, is.Number)}
-	pr := &PR{Number: is.Number, Title: title, Body: body, State: "open", User: Account{Login: author, Type: "User"},
+	is.URL = fmt.Sprintf("https://github.com/%s/%s/pull/%d", g.Owner, g.Repo, is.Number)
+	pr := &PR{Number: is.Number, Title: title, Body: body, State: "open", URL: is.URL, User: Account{Login: author, Type: "User"},
 		Head: Branch{Ref: head, SHA: headSHA}, Base: Branch{Ref: base, SHA: strings.Repeat("b", 40)}}
 	g.Pulls[is.Number] = pr
 	return pr
@@ -375,6 +399,9 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	path, _ := url.PathUnescape(r.URL.EscapedPath())
 	g.Requests = append(g.Requests, Request{r.Method, path, body})
+	if r.Method != "GET" {
+		defer g.touch(path)
+	}
 	if g.Fail == r.Method+" "+path {
 		if g.failSeen >= g.FailAfter {
 			g.Fail = ""
@@ -686,9 +713,10 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 	// Issues.
 	case m == "GET" && p == repo+"/issues":
 		out := []*Issue{}
+		since := r.URL.Query().Get("since")
 		for n := 1; n <= len(g.Issues); n++ {
 			want := r.URL.Query().Get("labels")
-			if is := g.Issues[n]; is != nil && (r.URL.Query().Get("state") == "all" || is.State == "open") &&
+			if is := g.Issues[n]; is != nil && (r.URL.Query().Get("state") == "all" || is.State == "open") && is.UpdatedAt >= since &&
 				(want == "" || slices.ContainsFunc(is.Labels, func(l Label) bool { return l.Name == want })) {
 				out = append(out, is)
 			}

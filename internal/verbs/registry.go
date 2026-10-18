@@ -1273,7 +1273,8 @@ var Plumbing = []Command{
 	plumb("next", "WP1.1b", EngineeringManager, IdentityHuman, "Print the single best next step for this repository: the exact command to run and why."),
 	plumb("tour", "WP1.1b", Founder, IdentityHuman, "Guided first run: check this machine, then set the repository up at Level 1 in a few prompts; refused for agents."),
 	// Story #431 (founder request): the founder's inbox.
-	plumb("inbox", "WP5.6c", Founder, IdentityHuman, "List every human-only step waiting for you, with the twin's recommendation, and act on each with one keypress; refused for agents, needs a terminal."),
+	plumb("inbox", "WP5.6c", Founder, IdentityHuman, "Every human-only step waiting for you, one card at a time with the twin's counsel; Enter takes the recommendation and A tidies the housekeeping. Refused for agents and needs a terminal, except --list.",
+		flag("list", TypeBool, "Read-only: print what waits as the same cards, with the counsel and how a person acts on them, as Markdown (or JSON with --json); writes nothing, needs no terminal, and an agent may run it.")),
 	plumb("completion", "WP1.1b", DevOps, IdentityHuman, "Print the shell completion script, generated from the registry, for bash, zsh, fish, or PowerShell.",
 		enumIn("shell", true, true, "Shell to complete for.", "bash", "zsh", "fish", "powershell")),
 }

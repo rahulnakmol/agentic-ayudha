@@ -64,17 +64,19 @@ plan lists in §2; the rest are pulled in by them.
 | `github.com/dustin/go-humanize` | v1.0.1 | MIT | Via libc | <https://github.com/dustin/go-humanize> |
 | `github.com/remyoudompheng/bigfft` | v0.0.0-20230129092748-24d4a6f8daec | BSD-3-Clause | Via mathutil | <https://github.com/remyoudompheng/bigfft> |
 | `charm.land/bubbletea/v2` | v2.0.9 | MIT | `grill` TUI on a terminal (WP5.3), direct; v2.0.10 needs Go 1.26 | <https://github.com/charmbracelet/bubbletea> |
+| `charm.land/bubbles/v2` | v2.2.1 | MIT | `inbox` on a terminal: the spinner (WP5.6c), direct | <https://github.com/charmbracelet/bubbles> |
+| `github.com/sahilm/fuzzy` | v0.1.3 | MIT | `inbox` on a terminal: the finder's fzf-style fuzzy match, direct | <https://github.com/sahilm/fuzzy> |
 | `charm.land/lipgloss/v2` | v2.0.6 | MIT | Colour, themes, and tables on a person's terminal (WP1.1b), direct | <https://github.com/charmbracelet/lipgloss> |
 | `github.com/charmbracelet/ultraviolet` | v0.0.0-20260811164956-006e29f97886 | MIT | Terminal input and rendering, via bubbletea and lipgloss | <https://github.com/charmbracelet/ultraviolet> |
 | `github.com/charmbracelet/colorprofile` | v0.4.3 | MIT | Terminal colour detection, via bubbletea | <https://github.com/charmbracelet/colorprofile> |
-| `github.com/charmbracelet/x/ansi` | v0.11.8 | MIT | ANSI sequences, via bubbletea and lipgloss | <https://github.com/charmbracelet/x> |
+| `github.com/charmbracelet/x/ansi` | v0.11.8 | MIT | ANSI sequences, via bubbletea and lipgloss; direct for the inbox's widths | <https://github.com/charmbracelet/x> |
 | `github.com/charmbracelet/x/term` | v0.2.2 | MIT | Terminal detection and width for the CLI experience (WP1.1b), direct; also via bubbletea | <https://github.com/charmbracelet/x> |
 | `github.com/charmbracelet/x/termios` | v0.1.1 | MIT | Terminal modes, via bubbletea | <https://github.com/charmbracelet/x> |
 | `github.com/charmbracelet/x/windows` | v0.2.2 | MIT | Windows console, via bubbletea | <https://github.com/charmbracelet/x> |
 | `github.com/clipperhouse/displaywidth` | v0.11.0 | MIT | Text width, via ultraviolet | <https://github.com/clipperhouse/displaywidth> |
 | `github.com/clipperhouse/uax29/v2` | v2.7.0 | MIT | Text segmentation, via displaywidth | <https://github.com/clipperhouse/uax29> |
 | `github.com/lucasb-eyer/go-colorful` | v1.4.1 | MIT | Colour conversion, via bubbletea and lipgloss | <https://github.com/lucasb-eyer/go-colorful> |
-| `github.com/mattn/go-runewidth` | v0.0.24 | MIT | Text width, via ultraviolet | <https://github.com/mattn/go-runewidth> |
+| `github.com/mattn/go-runewidth` | v0.0.27 | MIT | Text width, via ultraviolet | <https://github.com/mattn/go-runewidth> |
 | `github.com/muesli/cancelreader` | v0.2.2 | MIT | Cancellable input, via bubbletea | <https://github.com/muesli/cancelreader> |
 | `github.com/rivo/uniseg` | v0.4.7 | MIT | Grapheme clusters, via ultraviolet | <https://github.com/rivo/uniseg> |
 | `github.com/xo/terminfo` | v0.0.0-20220910002029-abceb7e1c41e | MIT | Terminal capabilities, via colorprofile | <https://github.com/xo/terminfo> |

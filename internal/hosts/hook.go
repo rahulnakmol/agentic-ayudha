@@ -222,6 +222,10 @@ var humanPlumbing = []string{"resume", "self-update", "tour", "seat", "uninit", 
 // ships its Story PRs; only --solo-bypass stays a person's.
 var agentRuns = []string{"ship"}
 
+// inboxList is `aayu inbox --list`: the inbox read-only, which acts on
+// nothing (it is checked before --ci), so an agent may show it.
+var inboxList = regexp.MustCompile(`(?:^|\s)--list(?:=true)?(?:\s|$)`)
+
 // aayuWord finds aayu run as a command: at the start, after a separator, or
 // as the last element of a path (quoted or not), but not inside a quoted
 // argument such as a commit message.
@@ -240,6 +244,9 @@ func HumanOnlyCommand(shell string) (cmd, why string) {
 			continue
 		}
 		cmd = strings.TrimSpace("aayu " + name + rest)
+		if name == "inbox" && inboxList.MatchString(rest) {
+			continue
+		}
 		if slices.Contains(humanPlumbing, name) {
 			return cmd, "a person's plumbing command"
 		}
