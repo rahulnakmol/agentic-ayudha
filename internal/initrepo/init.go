@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	pathpkg "path"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -433,13 +433,12 @@ func (d rulesetDetail) protectsLedger() bool {
 func (d rulesetDetail) brainAdvice() string {
 	var advice []string
 	if !slices.ContainsFunc(d.Conditions.RefName.Include, func(x string) bool {
-		ok, _ := pathpkg.Match(x, brainRef)
-		return ok || x == "~ALL"
+		return refMatch(x, brainRef)
 	}) {
 		advice = append(advice, fmt.Sprintf("add %q to ruleset %q (id %d) conditions.ref_name.include", brainRef, d.Name, d.ID))
 	}
 	for _, x := range d.Conditions.RefName.Exclude {
-		if ok, _ := pathpkg.Match(x, brainRef); ok {
+		if refMatch(x, brainRef) {
 			advice = append(advice, fmt.Sprintf("remove the exclusion %q from ruleset %q (id %d) conditions.ref_name.exclude", x, d.Name, d.ID))
 		}
 	}
@@ -447,6 +446,42 @@ func (d rulesetDetail) brainAdvice() string {
 		return ""
 	}
 	return fmt.Sprintf("; it does not protect %s: %s so the brain branch cannot be force-pushed or deleted either", brainRef, strings.Join(advice, ", and "))
+}
+
+// refMatch reports whether a ruleset ref-name pattern matches ref as GitHub
+// does: ~ALL matches every ref, ** crosses slashes, * and ? stay within one
+// path segment, and [...] is a character class.
+func refMatch(pattern, ref string) bool {
+	if pattern == "~ALL" {
+		return true
+	}
+	var b strings.Builder
+	b.WriteString("^")
+	for i := 0; i < len(pattern); i++ {
+		switch c := pattern[i]; c {
+		case '*':
+			if i+1 < len(pattern) && pattern[i+1] == '*' {
+				b.WriteString(".*")
+				i++
+			} else {
+				b.WriteString("[^/]*")
+			}
+		case '?':
+			b.WriteString("[^/]")
+		case '[':
+			if j := strings.IndexByte(pattern[i+1:], ']'); j >= 0 {
+				b.WriteString(pattern[i : i+j+2])
+				i += j + 1
+			} else {
+				b.WriteString(`\[`)
+			}
+		default:
+			b.WriteString(regexp.QuoteMeta(string(c)))
+		}
+	}
+	b.WriteString("$")
+	re, err := regexp.Compile(b.String())
+	return err == nil && re.MatchString(ref)
 }
 
 func (in *Init) rest(ctx context.Context, method, path string, body, out any) error {
@@ -571,7 +606,7 @@ func (in *Init) ensureRuleset(ctx context.Context, listed func(string) bool, nam
 			}
 			exclude = append(exclude, x)
 			for _, ref := range protectedRefs {
-				if ok, _ := pathpkg.Match(x, ref); ok {
+				if refMatch(x, ref) {
 					shadow = append(shadow, fmt.Sprintf("exclusion %q still exempts %s; remove it from ruleset %q to protect that branch", x, ref, name))
 				}
 			}

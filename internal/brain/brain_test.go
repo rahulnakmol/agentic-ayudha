@@ -231,6 +231,7 @@ tags: [type/principle]
 		{"long sentence", good, long + "\n", "ste a sentence has 26 words"},
 		{"long sentence in a generated block is not prose", good, Block("record", "- "+long) + "\n", ""},
 		{"orphan", strings.Replace(good, "up: \"[[Principles]]\"\n", "", 1), "Short.\n", "orphan no up link"},
+		{"up is the note itself", strings.Replace(good, "[[Principles]]", "[[Evidence first#Context]]", 1), "Short.\n", "orphan up link [[Evidence first#Context]] does not resolve to another note"},
 		{"up is a same-note anchor", strings.Replace(good, "[[Principles]]", "[[#Context]]", 1), "Short.\n", "orphan up link [[#Context]] does not resolve to another note"},
 		{"issues: not a number", strings.Replace(good, "owner: founder", "owner: founder\nissues: [not-an-issue]", 1), "Short.\n", `issues: "not-an-issue" is not an issue number`},
 		{"people: not a login", strings.Replace(good, "owner: founder", "owner: founder\npeople: [alice-]", 1), "Short.\n", `people: "alice-" is not a GitHub login`},

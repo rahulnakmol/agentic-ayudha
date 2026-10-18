@@ -259,7 +259,7 @@ func Check(files map[string][]byte) Report {
 			switch {
 			case up == "":
 				fail(p, "orphan", "no up link: link the note up to its map of content")
-			case v.Resolve(up) == "" || v.Resolve(up) == ".":
+			case v.Resolve(up) == "" || v.Resolve(up) == "." || v.Resolve(up) == p:
 				fail(p, "orphan", "up link [[%s]] does not resolve to another note", up)
 			}
 		}
