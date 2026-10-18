@@ -43,6 +43,10 @@ type appInspect struct {
 	// record rewrites the state comment even for a cached judgement: prev
 	// carries something new the gate must keep (a failed paid call's head).
 	record bool
+	// paidTried: rung B already reviewed and failed on this head, or cannot
+	// step in, so an app that cannot review (inspect.ErrUnavailable) falls to
+	// a human. Without it that error is returned for rung B to step in.
+	paidTried bool
 }
 
 // inspectThroughApp is inspect without a model key (founder decision
@@ -145,8 +149,20 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		replies = slices.DeleteFunc(slices.Clone(posts), func(p inspect.Post) bool { return !p.Updated.After(floor) })
 	}
 	rep, rerr := inspect.ReadReply(choice, replies, head, since, human, a.in.Criteria, changed)
+	if errors.Is(rerr, inspect.ErrNoReply) && choice.App != "" && !since.IsZero() && e.Now().Sub(since) > inspect.ReplyWait {
+		rerr = fmt.Errorf("%w: %s has not replied in the %.0f minutes since the review request", inspect.ErrUnavailable, choice.App, inspect.ReplyWait.Minutes())
+	}
 	if replyEvent {
 		return e.rerunInspect(ctx, a.c, owner, name, n, head, choice, rerr)
+	}
+	if errors.Is(rerr, inspect.ErrUnavailable) {
+		if !a.paidTried {
+			return rerr // rung B steps in (runInspect)
+		}
+		h := inspect.ChooseReviewer(inspect.ReviewerHuman, nil, nil, a.builder, a.cfg.Autonomy.Approver)
+		notes = append(notes, fmt.Sprintf("fallback to %s: %s cannot review this head (%s), and rung B ([inspect] paid_reviewer) cannot review it either", h.Kind(), choice.Kind(), oneLineErr(rerr)))
+		choice = h
+		rep, rerr = inspect.ReadReply(choice, replies, head, since, human, a.in.Criteria, changed)
 	}
 	pager, err := e.Notifier(ctx)
 	if err != nil {
