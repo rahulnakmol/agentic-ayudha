@@ -65,6 +65,15 @@ func requiredChecks(ctx context.Context, c *github.Client, owner, name string, n
 			checks = append(checks, r.Parameters.RequiredStatusChecks...)
 		}
 	}
+	// Classic branch protection's required checks bind too, and the rules
+	// endpoint does not list them; the branch read needs no admin right.
+	br, _, err := c.REST.Repositories.GetBranch(ctx, owner, name, base, 1)
+	if err != nil {
+		return nil, "", Wrap(ExitExternal, err)
+	}
+	for _, rc := range br.GetProtection().GetRequiredStatusChecks().GetChecks() {
+		checks = append(checks, &gh.RuleStatusCheck{Context: rc.Context, IntegrationID: rc.AppID})
+	}
 	statuses, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.RepoStatus, *gh.Response, error) {
 		return c.REST.Repositories.ListStatuses(ctx, owner, name, head, &o)
 	})
@@ -201,17 +210,20 @@ func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name strin
 		}
 	}
 	// A symbolic link can point a policy file at a path the narrow set does
-	// not judge, so a PR that adds or changes one needs a person.
-	tree, _, err := c.REST.Git.GetTree(ctx, owner, name, head, true)
-	if err != nil {
-		return nil, "", false, Wrap(ExitExternal, err)
-	}
-	if tree.GetTruncated() {
-		return nil, fmt.Sprintf("GitHub truncated the tree of %s, so its symbolic links cannot be judged", short(head)), true, nil
-	}
-	for _, en := range tree.Entries {
-		if en.GetMode() == "120000" && slices.Contains(changed, en.GetPath()) {
-			return nil, fmt.Sprintf("it changes %s, a symbolic link, which can point a policy file at a path the narrow set does not judge", en.GetPath()), true, nil
+	// not judge, so a PR that adds, changes, removes, or retypes one needs a
+	// person: the link is looked for in both trees.
+	for _, rev := range []string{base, head} {
+		tree, _, err := c.REST.Git.GetTree(ctx, owner, name, rev, true)
+		if err != nil {
+			return nil, "", false, Wrap(ExitExternal, err)
+		}
+		if tree.GetTruncated() {
+			return nil, fmt.Sprintf("GitHub truncated the tree of %s, so its symbolic links cannot be judged", short(rev)), true, nil
+		}
+		for _, en := range tree.Entries {
+			if en.GetMode() == "120000" && slices.Contains(changed, en.GetPath()) {
+				return nil, fmt.Sprintf("it changes %s, a symbolic link, which can point a policy file at a path the narrow set does not judge", en.GetPath()), true, nil
+			}
 		}
 	}
 	// The merge gate judged the diff against the base the PR had when it ran;

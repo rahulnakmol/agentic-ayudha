@@ -360,7 +360,7 @@ func TestShipOnProof(t *testing.T) {
 		fake.CheckRun{Name: "docs", Status: "completed", Conclusion: "skipped"}, fake.CheckRun{Name: "release-snapshot", Status: "completed", Conclusion: "neutral"},
 		fake.CheckRun{Name: "lint", Status: "completed", Conclusion: "failure"}, fake.CheckRun{Name: "protected-paths", Status: "completed", Conclusion: "failure"})
 	g.Files = map[string]string{".github/CODEOWNERS": "/skills/ @founder\n"}
-	g.Trees[head] = []map[string]any{} // the head's tree: no symbolic links
+	g.Trees[head], g.Trees[base] = []map[string]any{}, []map[string]any{} // the trees: no symbolic links
 	secrets := "on: push\njobs:\n  x:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ${{ secrets['TOKEN'] }}\n"
 	conf := "version = 1\n\n[notify]\nchannel = \"file\"\n\n[autonomy]\napprover = \"\"\nproof = true\nproof_rungs = [\"A\", \"B\", \"C\"]\n" +
 		"always_person = [\".github/CODEOWNERS\", \"internal/identity/\"]\nalways_person_config = [\".aayudha/config.toml\"]\n"
@@ -641,12 +641,29 @@ func TestShipOnProof(t *testing.T) {
 	g.Trees[head] = []map[string]any{{"path": "skills/build/SKILL.md", "mode": "120000", "type": "blob", "sha": "l1"}}
 	g.Mu.Unlock()
 	refused("no merge on proof: it changes skills/build/SKILL.md, a symbolic link")
+	// Nor removing one, or making it a file: the base's tree counts too.
+	g.Mu.Lock()
+	g.Trees[base], g.Trees[head] = g.Trees[head], []map[string]any{}
+	g.Mu.Unlock()
+	refused("no merge on proof: it changes skills/build/SKILL.md, a symbolic link")
+	g.Mu.Lock()
+	g.Trees[base] = []map[string]any{}
+	g.Mu.Unlock()
 	// A PR whose base was changed may have been reviewed against another branch.
 	g.Mu.Lock()
 	g.Trees[head] = []map[string]any{}
 	g.Pulls[prN].Timeline = []string{"labeled", "base_ref_changed"}
 	g.Mu.Unlock()
 	refused("no merge on proof: its base branch was changed after it was opened")
+	// Classic branch protection's required checks bind as the rules' do.
+	g.Mu.Lock()
+	g.Pulls[prN].Timeline = nil
+	g.ClassicChecks = []string{"unit"}
+	g.Mu.Unlock()
+	refused("required check unit is missing on " + short(head))
+	g.Mu.Lock()
+	g.ClassicChecks = nil
+	g.Mu.Unlock()
 	// A required check passes only if the newest run in every suite passes:
 	// a skipped run from a dispatch cannot stand in for a failing one, and a
 	// failing status fails a check pinned to an app too.

@@ -278,6 +278,7 @@ type GitHub struct {
 	// of RulesPerPage at a time (0: all). "name@id" pins a check to the app
 	// (integration_id) it must come from.
 	RequiredChecks   []string
+	ClassicChecks    []string // classic branch protection's required checks (GET /branches/{b}), "name@id" pinned
 	RulesPerPage     int
 	CheckRunsPerPage int
 	RunsPerPage      int // workflow runs a page, whatever per_page asks (0: per_page)
@@ -527,6 +528,29 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		reply(404, map[string]any{"message": "Not Found"})
+	case m == "GET" && strings.HasPrefix(p, repo+"/branches/") && !strings.Contains(strings.TrimPrefix(p, repo+"/branches/"), "/"):
+		b := strings.TrimPrefix(p, repo+"/branches/")
+		sha, ok := g.Refs["heads/"+b]
+		for _, pr := range g.Pulls {
+			if !ok && pr.Base.Ref == b && pr.Base.SHA != "" {
+				sha, ok = pr.Base.SHA, true
+			}
+		}
+		if !ok && b != g.Default {
+			notFound()
+			return
+		}
+		checks := []map[string]any{}
+		for _, c := range g.ClassicChecks {
+			name, app, pinned := strings.Cut(c, "@")
+			ck := map[string]any{"context": name}
+			if pinned {
+				ck["app_id"] = atoi(app)
+			}
+			checks = append(checks, ck)
+		}
+		reply(200, map[string]any{"name": b, "commit": map[string]any{"sha": sha}, "protected": len(checks) > 0,
+			"protection": map[string]any{"enabled": len(checks) > 0, "required_status_checks": map[string]any{"checks": checks}}})
 	case m == "GET" && p == repo+"/branches":
 		names := []string{g.Default}
 		for ref := range g.Refs {
