@@ -14,14 +14,15 @@ var (
 	rules  = Rules{Bots: []string{"aayu-machine"}, Days: 14, Layers: layers}
 )
 
-// history returns n correction-free bot PRs on files, numbered from first and
-// merged a day apart starting at start, newest last.
+// history returns n correction-free bot PRs on files, each reviewed by a
+// different family (rung A), numbered from first and merged a day apart
+// starting at start, newest last.
 func history(first, n int, start time.Time, files ...string) []PR {
 	var out []PR
 	for i := 0; i < n; i++ {
 		at := start.Add(time.Duration(i) * 24 * time.Hour)
 		out = append(out, PR{Number: first + i, Title: fmt.Sprintf("feat: change %d", first+i), Author: "aayudha[bot]", AuthorBot: true,
-			MergedAt: at, MergeSHA: fmt.Sprintf("%040d", first+i), Files: files,
+			MergedAt: at, MergeSHA: fmt.Sprintf("%040d", first+i), Files: files, Rung: "A",
 			Reviews: []Review{{Login: "founder", State: "APPROVED", At: at.Add(-time.Hour)}},
 			Commits: []Commit{{SHA: fmt.Sprintf("c%039d", first+i), Login: "aayudha[bot]", Bot: true, Message: "feat: x\n\nAayudha-Checkpoint: 1/1", Parents: 1}}})
 	}
@@ -60,6 +61,21 @@ func TestStreakAtThreshold(t *testing.T) {
 	s, _ := streakOf(t, history(1, 25, t0, "api/x.go"), nil, "L02")
 	if s.Streak != 25 || s.Autonomous {
 		t.Errorf("never-layer: %+v", s)
+	}
+}
+
+// Decision #469, detail 8: only a proven review (different-family, or a
+// person's) counts. A same-family (C) or unknown-rung merge neither counts
+// nor breaks the streak, but a correction on one still breaks it.
+func TestStreakSkipsUnprovenReviews(t *testing.T) {
+	prs := history(1, 6, t0, "ui/a.tsx")
+	prs[1].Rung, prs[2].Rung, prs[3].Rung, prs[4].Rung = "C", "", "human", "B"
+	if s, _ := streakOf(t, prs, nil, "L01"); s.Streak != 4 || s.Skipped != 2 || s.Merges != 6 || s.LastBreak != 0 {
+		t.Errorf("A, C, unknown, human, B, A: %+v; want a streak of 4 with 2 skipped", s)
+	}
+	prs[1].Labels = []string{LabelCorrection}
+	if s, _ := streakOf(t, prs, nil, "L01"); s.Streak != 3 || s.Skipped != 1 || s.LastBreak != 2 {
+		t.Errorf("a correction on the same-family merge: %+v; want a streak of 3 broken at #2", s)
 	}
 }
 

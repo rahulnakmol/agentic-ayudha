@@ -66,6 +66,8 @@ type PR struct {
 	Author    string    `json:"author"`
 	AuthorBot bool      `json:"author_bot"`
 	Labels    []string  `json:"labels"`
+	Head      string    `json:"head,omitempty"`
+	Rung      string    `json:"rung,omitempty"` // the review ladder's rung at head (GateRung), "" when unknown
 	MergedAt  time.Time `json:"merged_at"`
 	MergeSHA  string    `json:"merge_sha"`
 	Files     []string  `json:"files"`
@@ -198,14 +200,19 @@ func refers(text string, n int) bool {
 type LayerStreak struct {
 	Layer      string `json:"layer"`
 	Streak     int    `json:"streak"`
-	Merges     int    `json:"agent_merges"` // agent PRs on this layer in the scanned history
-	Never      bool   `json:"never"`        // [autonomy] never: always needs a human pass
-	Autonomous bool   `json:"autonomous"`   // streak >= threshold and not a never-layer
+	Merges     int    `json:"agent_merges"`      // agent PRs on this layer in the scanned history
+	Skipped    int    `json:"skipped,omitempty"` // agent merges since the last correction whose review was not proven (rung C or unknown), not counted
+	Never      bool   `json:"never"`             // [autonomy] never: always needs a human pass
+	Autonomous bool   `json:"autonomous"`        // streak >= threshold and not a never-layer
 	LastBreak  int    `json:"last_correction_pr,omitempty"`
 }
 
 // Streaks counts, per layer, the agent PRs on that layer merged after its
-// newest corrected agent PR. threshold is [autonomy] streak.
+// newest corrected agent PR whose review was proven (Proven: a
+// different-family or a person's review). An agent PR reviewed same-family
+// (rung C), or with no rung on record, is skipped: it neither counts nor
+// breaks the streak, though a correction on it still breaks it (Decision
+// #469, detail 8). threshold is [autonomy] streak.
 func (r Rules) Streaks(prs []PR, corrections []Correction, threshold int, never []string) []LayerStreak {
 	corrected := map[int]bool{}
 	for _, c := range corrections {
@@ -227,6 +234,10 @@ func (r Rules) Streaks(prs []PR, corrections []Correction, threshold int, never 
 			}
 			if corrected[p.Number] {
 				broken, s.LastBreak = true, p.Number
+				continue
+			}
+			if !Proven(p.Rung) {
+				s.Skipped++
 				continue
 			}
 			s.Streak++
