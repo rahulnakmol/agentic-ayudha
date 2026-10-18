@@ -362,7 +362,7 @@ func TestInboxShipsReadyPRs(t *testing.T) {
 	}
 	for _, pr := range []int{prA, prB} {
 		want := fmt.Sprintf("Story PR ready to ship #%d", pr)
-		if !strings.Contains(out, want) || !strings.Contains(out, fmt.Sprintf("1. ship PR #%d (ship's gates still apply; in solo mode, under your solo-mode bypass) (recommended)\n  2. open it and review it\n", pr)) {
+		if !strings.Contains(out, want) || !strings.Contains(out, fmt.Sprintf("1. ship PR #%d (ship's gates still apply: in solo mode under your solo-mode bypass, otherwise once you have approved its head on GitHub) (recommended)\n  2. open it and review it\n", pr)) {
 			t.Errorf("inbox lacks %q with its choices:\n%s", want, out)
 		}
 	}

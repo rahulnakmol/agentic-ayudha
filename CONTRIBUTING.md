@@ -43,7 +43,7 @@ Never open a PR against `rolling` or `main`. Promotions are done by the maintain
    is `merge`, never with a red required check or an open fix finding. A Story PR (its body says `Refs #n` for
    a Story) goes through `aayu ship <pr>` first; when ship merges it, its proof lands. If ship refuses only for a
    human pass, a plan review, or a solo-mode bypass comment, it is squash-merged on green, with no ship record
-   until ship merges on proof by itself (Decision #593); if ship refuses for anything else, it is not merged. A person can also ship a PR that ship marked **Ready to ship** from `aayu inbox`. An agent's PR carries the
+   until ship merges on proof by itself; if ship refuses for anything else, it is not merged. A person can also ship a PR that ship marked **Ready to ship** from `aayu inbox`. An agent's PR carries the
    `agent-authored` label and an `Aayudha-Host:` line (and an `Aayudha-Model:` line per known model) in its body
    and in each commit's trailers, so the autonomy streak counts it. Then delete the branch and the worktree:
 

@@ -406,7 +406,7 @@ func (e *Env) saveDelegation(ctx context.Context, d *delegation) error {
 	for _, ev := range d.state.Events {
 		fmt.Fprintf(&body, "| %s | %s | %s |\n", ev.At, ev.Status, strings.ReplaceAll(ev.Detail, "|", `\|`))
 	}
-	fmt.Fprintf(&body, "\nBrief SHA-256 `%s`. The receiver has no merge rights: the merge gate and inspect review its PR, and a human ships it with `aayu ship`.", short(d.state.BriefHash))
+	fmt.Fprintf(&body, "\nBrief SHA-256 `%s`. The receiver has no merge rights: the merge gate and inspect review its PR, and `aayu ship` merges it with every gate (or it waits in a person's `aayu inbox`).", short(d.state.BriefHash))
 	return e.replaceComment(ctx, d.c, d.repo, d.story, delegateMarker, body.String())
 }
 
@@ -567,7 +567,7 @@ func (e *Env) findDelegatedPR(ctx context.Context, d *delegation, task delegate.
 		return 0, nil
 	}
 	title := "feat: " + strings.ToLower(d.title[:1]) + d.title[1:]
-	body := fmt.Sprintf("Refs #%d\n\nBuilt by %s (`aayu build --delegate %s`) from the delegation brief (SHA-256 `%s`); aayu opened this PR from the branch it pushed. The merge gate and inspect review it; a human ships it with `aayu ship`.\n", d.story, d.receiver, d.receiver, short(d.state.BriefHash))
+	body := fmt.Sprintf("Refs #%d\n\nBuilt by %s (`aayu build --delegate %s`) from the delegation brief (SHA-256 `%s`); aayu opened this PR from the branch it pushed. The merge gate and inspect review it; `aayu ship` merges it with every gate (or it waits in a person's `aayu inbox`).\n", d.story, d.receiver, d.receiver, short(d.state.BriefHash))
 	var pr *gh.PullRequest
 	if _, err := d.c.Write(ctx, actions.Action{Kind: "github.pull.create", Target: d.repo, Story: fmt.Sprintf("#%d", d.story),
 		Request: &actions.Request{Method: http.MethodPost, Path: "/repos/" + d.repo + "/pulls"}, Payload: map[string]any{"head": task.Branch, "base": d.dev, "title": title, "delegate": d.receiver}},
@@ -692,7 +692,7 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 	case r.Disposition == inspect.Merge:
 		d.event(now, dlgReady, fmt.Sprintf("inspect merge on %s", short(head)))
 		report()
-		res.Next = fmt.Sprintf("PR #%d is ready for a human pass: `aayu ship %d`", d.state.PR, d.state.PR)
+		res.Next = fmt.Sprintf("PR #%d is merge-ready: `aayu ship %d`", d.state.PR, d.state.PR)
 		return nil, true, e.saveDelegation(ctx, d)
 	case r.Disposition == inspect.Rebuild:
 		d.event(now, dlgCapped, "inspect asked for a rebuild: the story or plan needs rework")

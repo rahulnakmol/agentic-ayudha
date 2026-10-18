@@ -276,7 +276,7 @@ func readyItem(ctx context.Context, c *github.Client, owner, name string, p *gh.
 	story := StoryOf(p.GetBody(), "", p.GetHead().GetRef())
 	return &InboxItem{Kind: InboxReady, Number: p.GetNumber(), Title: p.GetTitle(), URL: p.GetHTMLURL(), Seat: verbs.EngineeringManager, PR: p.GetNumber(),
 		Why: fmt.Sprintf("its merge gate is green on `%s` and `aayu ship` stopped only for a person's pass; Story #%d merges only through ship.", short(head), story),
-		Options: []InboxAction{{N: 1, Recommended: true, Label: fmt.Sprintf("ship PR #%d (ship's gates still apply; in solo mode, under your solo-mode bypass)", p.GetNumber()), Command: fmt.Sprintf("aayu ship %d", p.GetNumber())},
+		Options: []InboxAction{{N: 1, Recommended: true, Label: fmt.Sprintf("ship PR #%d (ship's gates still apply: in solo mode under your solo-mode bypass, otherwise once you have approved its head on GitHub)", p.GetNumber()), Command: fmt.Sprintf("aayu ship %d", p.GetNumber())},
 			{N: 2, Label: "open it and review it", Command: "open"}}}, nil
 }
 
@@ -584,7 +584,14 @@ func (e *Env) shipReady(ctx context.Context, cfg *config.Config, c *github.Clien
 		}
 		v["solo-bypass"] = true
 	}
-	return handlers["ship"](ctx, e, v)
+	err := handlers["ship"](ctx, e, v)
+	if err != nil && v["solo-bypass"] == nil {
+		// Not solo: ship needs a person's approving review of the head,
+		// which only GitHub records.
+		fmt.Fprintf(e.Out, "  approve the head on GitHub, then pick ship again: %s\n", it.URL)
+		e.openURL(it.URL)
+	}
+	return err
 }
 
 // readKey reads one keypress: raw from a real terminal, else the next
