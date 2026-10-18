@@ -16,6 +16,7 @@ import (
 	gh "github.com/google/go-github/v90/github"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/decide"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
@@ -52,7 +53,10 @@ type VerifyResult struct {
 	Problems   []string      `json:"problems,omitempty"`
 	NoSnapshot bool          `json:"no_ready_snapshot,omitempty"`
 	Waivers    []string      `json:"waivers,omitempty"`
-	Gate       []string      `json:"gate_problems,omitempty"` // --ci with a PR: why the merge gate fails besides the floors
+	// IgnoredWaivers are closed waiver Decisions that do not count: the
+	// floor-waiver authority neither closed them nor is named (Bug #599).
+	IgnoredWaivers []string `json:"ignored_waivers,omitempty"`
+	Gate           []string `json:"gate_problems,omitempty"` // --ci with a PR: why the merge gate fails besides the floors
 	// RetentionDays is how long the merge gate keeps the pack as its
 	// aayudha-pack run artifact (--ci with a pack; S-4.2b).
 	RetentionDays int `json:"retention_days,omitempty"`
@@ -382,7 +386,7 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 	}
 	rep.Hold = (&proof.Pack{Checks: rep.Checks}).FloorsHold()
 	if res.Story > 0 && !rep.Hold {
-		ws, err := e.waivers(ctx, repo, res.Story)
+		ws, err := e.waivers(ctx, repo, res.Story, &res.IgnoredWaivers)
 		if err != nil {
 			return Wrap(ExitExternal, err)
 		}
@@ -558,8 +562,10 @@ func (e *Env) gateProblems(ctx context.Context, repo string, res VerifyResult, s
 // of type decision that a human accepted with `decide --accept waive`
 // (WP5.6), so they are closed as completed, by someone who is not a bot, with
 // "waive, accepted by @<login>" in their Decision section. A filed but
-// unaccepted waiver waives nothing (rule 7).
-func (e *Env) waivers(ctx context.Context, repo string, story int) ([]verify.Waiver, error) {
+// unaccepted waiver waives nothing (rule 7), and neither does one the
+// floor-waiver authority did not accept (decide.WaiverAcceptedBy): it
+// adds each of those to ignored when it is not nil (Bug #599).
+func (e *Env) waivers(ctx context.Context, repo string, story int, ignored *[]string) ([]verify.Waiver, error) {
 	c, _, err := e.readClient(ctx)
 	if err != nil {
 		return nil, err
@@ -572,10 +578,15 @@ func (e *Env) waivers(ctx context.Context, repo string, story int) ([]verify.Wai
 	subs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.SubIssue, *gh.Response, error) {
 		return c.REST.SubIssue.ListByIssue(ctx, owner, name, int64(story), &o)
 	})
-	if err != nil {
+	if err != nil || len(subs) == 0 {
 		return nil, err
 	}
 	var out []verify.Waiver
+	parent, _, err := c.REST.Issues.Get(ctx, owner, name, story)
+	if err != nil {
+		return nil, err
+	}
+	parentType, _ := workitems.TypeOf(parent.GetType().GetName(), github.IssueLabels(parent))
 	for _, s := range subs {
 		is := (*gh.Issue)(s)
 		if t, _ := workitems.TypeOf(is.GetType().GetName(), github.IssueLabels(is)); t != "decision" {
@@ -590,6 +601,11 @@ func (e *Env) waivers(ctx context.Context, repo string, story int) ([]verify.Wai
 			return nil, err
 		}
 		if by := full.GetClosedBy(); by == nil || identity.IsBot(identity.Account{Login: by.GetLogin(), Type: by.GetType()}, l.Config.Identity.BotLogins) {
+			continue
+		} else if err := decide.WaiverAcceptedBy(&l.Config, parentType, by.GetLogin(), v["Decision"]); err != nil {
+			if ignored != nil {
+				*ignored = append(*ignored, fmt.Sprintf("#%d: %v", is.GetNumber(), err))
+			}
 			continue
 		}
 		out = append(out, verify.Waiver{Decision: is.GetNumber(), Title: is.GetTitle(), Body: is.GetBody(), Links: v["Links"]})
@@ -624,6 +640,9 @@ func renderVerify(w io.Writer, res VerifyResult) error {
 	}
 	for _, x := range res.Waivers {
 		fmt.Fprintf(w, "  waived: %s\n", x)
+	}
+	for _, x := range res.IgnoredWaivers {
+		fmt.Fprintf(w, "  waiver ignored: %s\n", x)
 	}
 	for _, g := range res.Gate {
 		fmt.Fprintf(w, "  merge gate: %s\n", g)

@@ -9,6 +9,7 @@ import (
 
 	gh "github.com/google/go-github/v90/github"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/evals"
 	"github.com/rahulnakmol/agentic-ayudha/internal/gittest"
 )
@@ -69,11 +70,11 @@ func TestEvalBars(t *testing.T) {
 		Labels:   []*gh.Label{{Name: "type:decision"}, {Name: "decision:waiver"}},
 		Body:     gh.Ptr("### Decision\n\nwaive, accepted by @founder on 2026-10-17.\n"),
 		ClosedBy: &gh.User{Login: gh.Ptr("founder"), Type: gh.Ptr("User")}}
-	if err := AcceptedWaiver(is, evals.BarFloor, nil); err != nil {
+	if err := AcceptedWaiver(is, evals.BarFloor, &config.Config{}, "story"); err != nil {
 		t.Errorf("an accepted eval-bar waiver was refused: %v", err)
 	}
 	is.Title = gh.Ptr("Waive the coverage floor on #400")
-	if err := AcceptedWaiver(is, evals.BarFloor, nil); err == nil {
+	if err := AcceptedWaiver(is, evals.BarFloor, &config.Config{}, "story"); err == nil {
 		t.Error("a coverage waiver was taken for an eval-bar waiver")
 	}
 }

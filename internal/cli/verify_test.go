@@ -544,3 +544,66 @@ func TestCopilotUIReviewRoute(t *testing.T) {
 		t.Errorf("mistyped opt-in: %+v, %d Copilot and %d gateway calls", sr, len(typo.Requests), len(gateway.Requests))
 	}
 }
+
+// Bug #599: a closed waiver counts only when the floor-waiver authority
+// closed it and its Decision section names that login; with no authority
+// login configured (the day-one path), any person's acceptance counts.
+func TestWaiverAuthority(t *testing.T) {
+	g := readyTree(t)
+	dir, _ := ledgerCheckout(t)
+	env := map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH")}
+	opts := Options{IsTerminal: stdinTTY, GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
+	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready: %s", errOut)
+	}
+	git(t, dir, "checkout", "--quiet", "-b", "story/2-mobile")
+	_ = os.WriteFile(filepath.Join(dir, "cov.info"), []byte("SF:x\nend_of_record\n"), 0o644)
+	git(t, dir, "add", "cov.info")
+	git(t, dir, "commit", "--quiet", "-m", "feat: mobile")
+	cfg := "version = 1\n[verify]\nplatforms = [\"web\", \"ios\"]\n[verify.floors.coverage]\ncommand = [\"true\"]\nreport = \"cov.info\"\n"
+	configure := func(approver string) {
+		_ = os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte(cfg+"[autonomy]\napprover = \""+approver+"\"\n"), 0o644)
+	}
+	verifyMobile := func() (int, string) {
+		code, out, errOut := run(t, env, opts, "verify", "--floor", "mobile", "--repo", "o/r")
+		return code, out + errOut
+	}
+	// accepted files a mobile waiver and has the founder accept it.
+	accepted := func() *fake.Issue {
+		code, out, errOut := run(t, env, opts, "decide", "2", "--waiver", "mobile", "--repo", "o/r", "--json")
+		var filed decideReport
+		if err := json.Unmarshal([]byte(out), &filed); code != 0 || err != nil {
+			t.Fatalf("decide --waiver: %d %s %s", code, out, errOut)
+		}
+		if code, out, errOut := run(t, env, opts, "decide", strconv.Itoa(filed.Waiver.Decision), "--accept", "waive", "--repo", "o/r"); code != 0 {
+			t.Fatalf("accept the waiver: %d %s %s", code, out, errOut)
+		}
+		return g.Issues[filed.Waiver.Decision]
+	}
+	configure("founder")
+	// Closed by another person with write access, and closed by the founder
+	// with another login in its section: neither waives the floor.
+	other := accepted()
+	misnamed := accepted()
+	g.Mu.Lock()
+	other.ClosedBy = &fake.Account{Login: "mallory", Type: "User"}
+	misnamed.Body = strings.Replace(misnamed.Body, "accepted by @founder", "accepted by @mallory", 1)
+	g.Mu.Unlock()
+	code, out := verifyMobile()
+	if code != ExitFloor || strings.Contains(out, "waived: mobile") ||
+		!strings.Contains(out, fmt.Sprintf("waiver ignored: #%d: closed by @mallory, not the floor-waiver authority @founder", other.Number)) ||
+		!strings.Contains(out, fmt.Sprintf("waiver ignored: #%d: its Decision section does not name the floor-waiver authority @founder", misnamed.Number)) {
+		t.Fatalf("waivers the authority neither closed nor is named in: %d\n%s", code, out)
+	}
+	// The day-one path: no authority login, so another person's waiver counts.
+	configure("")
+	if code, out = verifyMobile(); code != 0 || !strings.Contains(out, fmt.Sprintf("waived: mobile by #%d", other.Number)) || strings.Contains(out, "waiver ignored") {
+		t.Fatalf("no authority configured: %d\n%s", code, out)
+	}
+	// The authority's own waiver counts; the other two stay ignored.
+	configure("founder")
+	own := accepted()
+	if code, out = verifyMobile(); code != 0 || !strings.Contains(out, fmt.Sprintf("waived: mobile by #%d", own.Number)) || strings.Count(out, "waiver ignored") != 2 {
+		t.Fatalf("the authority's waiver: %d\n%s", code, out)
+	}
+}
