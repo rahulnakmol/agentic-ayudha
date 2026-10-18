@@ -1,0 +1,13 @@
+{
+  "covered": 18,
+  "executable": 19,
+  "percent": 94.73684210526316,
+  "threshold": 90,
+  "pass": true,
+  "uncovered": {
+    "internal/cli/home.go": [
+      206
+    ]
+  },
+  "format": "go coverprofile"
+}
