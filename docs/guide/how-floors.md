@@ -67,7 +67,9 @@ A few details matter in practice:
   rules only against an app `[verify] seed` started in this run on a loopback host; an app that already answered
   before the seed ran is not one verify started. Any other URL gets a passive
   scan, which cannot see a reflected XSS, unless its `[verify.environments.<env>]` sets `active_scan = true`; only
-  `.aayudha/config.toml` can set that. A CLI or library is `n/a`. A web or api story with no target records a
+  `.aayudha/config.toml` can set that, for the url it names, and a change that adds it gets the passive scan until it
+  merges. The url is an absolute http or https URL with no userinfo, query, or fragment, and a ZAP report that
+  reached no site is `blocked`. A CLI or library is `n/a`. A web or api story with no target records a
   `skipped: dast: no runnable target` that blocks `ship` like the mobile skip, and names the fix: a `[verify] seed`
   and a `[verify.environments.local] url`, or a waiver. A run with no story or Bug, such as the security workflow's,
   records the skip without blocking, since no waiver could release it. ZAP runs under Docker, or Podman (rootless too) when there is

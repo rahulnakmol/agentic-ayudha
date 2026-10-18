@@ -108,9 +108,20 @@ func IsLoopback(host string) bool {
 
 // HTTPURL parses an absolute http or https URL with a host, the only kind of
 // target the dast floor scans; anything else blocks it.
+// It takes no userinfo, query, or fragment, and only URL-safe characters, so
+// the url cannot carry another host or a pattern into the ZAP plan, which
+// quotes it as written.
 func HTTPURL(raw string) (*url.URL, bool) {
+	urlSafe := func(c rune) bool {
+		return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || strings.ContainsRune(".:/_~%-[]", c)
+	}
+	for _, c := range raw {
+		if !urlSafe(c) {
+			return nil, false
+		}
+	}
 	u, err := url.Parse(raw)
-	if err != nil || !u.IsAbs() || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
+	if err != nil || !u.IsAbs() || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || u.User != nil {
 		return nil, false
 	}
 	return u, true
@@ -154,7 +165,7 @@ func (DAST) Run(ctx context.Context, r *Run) (Result, error) {
 	// anything else: no runtime lookup or seed can turn it into a skip.
 	u, ok := HTTPURL(t.URL)
 	if !ok {
-		return res, fmt.Errorf("[verify.environments.%s] url %q is not an absolute http or https URL", t.Env, t.URL)
+		return res, fmt.Errorf("[verify.environments.%s] url %q is not an absolute http or https URL without userinfo, query, or fragment", t.Env, t.URL)
 	}
 	loopback := IsLoopback(u.Hostname())
 	// Without the seed nothing starts a loopback app, so only a deployed
@@ -175,7 +186,12 @@ func (DAST) Run(ctx context.Context, r *Run) (Result, error) {
 	// G1: the active rules attack the app; run them only against one verify
 	// started itself, or a URL the protected repository config opts in.
 	started := r.seeded && !r.upBeforeSeed && loopback
-	active := started || r.Verify.Environments[t.Env].ActiveScan
+	// An opt-in the change itself adds is not yet reviewed: the merge gate runs
+	// the PR's own config, so it honours active_scan only when the change leaves
+	// .aayudha/config.toml as its base has it.
+	optIn := r.Verify.Environments[t.Env].ActiveScan
+	pending := optIn && !started && !configUnchanged(ctx, r)
+	active := started || optIn && !pending
 	args := []string{"run", "--rm"}
 	if goos == "linux" {
 		args = append(args, "--network", "host")
@@ -243,6 +259,10 @@ func (DAST) Run(ctx context.Context, r *Run) (Result, error) {
 	if rep.Version != "" {
 		res.Check.Version = rep.Version
 	}
+	// No site means ZAP reached nothing, which proves nothing: never a pass.
+	if len(rep.Site) == 0 {
+		return res, fmt.Errorf("zap exited %d and scanned no site at %s: check that the app answers there", o.Code, target)
+	}
 	var s Severity
 	for _, site := range rep.Site {
 		for _, a := range site.Alerts {
@@ -256,6 +276,9 @@ func (DAST) Run(ctx context.Context, r *Run) (Result, error) {
 		mode = "passive scan only (verify did not start the app on a loopback host; a passive scan cannot see a reflected XSS)"
 		if r.seeded && r.upBeforeSeed && loopback {
 			mode = "passive scan only (the app answered before [verify] seed ran, so verify did not start it; a passive scan cannot see a reflected XSS)"
+		}
+		if pending {
+			mode = "passive scan only ([verify.environments." + t.Env + "] active_scan = true is honoured once this change to .aayudha/config.toml is merged; a passive scan cannot see a reflected XSS)"
 		}
 	} else if !started {
 		mode = "active scan (rules " + strings.Join(DASTRules, ", ") + ", [verify.environments." + t.Env + "] active_scan = true)"
@@ -272,6 +295,20 @@ func (DAST) Run(ctx context.Context, r *Run) (Result, error) {
 	res.Check = c
 	res.Artifacts = append(res.Artifacts, Evidence{Path: "reports/zap.json", Kind: "report", Data: b})
 	return res, nil
+}
+
+// configUnchanged reports whether .aayudha/config.toml at the run's head is
+// the file its base has. With no base, only a local run counts it unchanged.
+func configUnchanged(ctx context.Context, r *Run) bool {
+	if r.Base == "" {
+		return !r.CI
+	}
+	head := r.Head
+	if head == "" {
+		head = "HEAD"
+	}
+	_, err := gitOut(ctx, r.Root, "diff", "--quiet", r.Base, head, "--", ".aayudha/config.toml")
+	return err == nil
 }
 
 // newFloorAdvisory reports whether a miss of a floor Decision #480 added is

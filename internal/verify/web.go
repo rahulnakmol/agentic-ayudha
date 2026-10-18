@@ -67,7 +67,9 @@ func hostOf(u string) string {
 	if err != nil {
 		return ""
 	}
-	return strings.ToLower(p.Host)
+	// The host alone, so a port or a trailing dot cannot make a production
+	// host look like another one.
+	return strings.TrimSuffix(strings.ToLower(p.Hostname()), ".")
 }
 
 // State is one Completion Goal state the web floors capture.

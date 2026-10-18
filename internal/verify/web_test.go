@@ -39,11 +39,14 @@ func TestResolveTargetRefusesProduction(t *testing.T) {
 		"local":   {URL: "http://localhost:3000/"},
 		"staging": {URL: "https://app.example.com"},
 		"prod":    {URL: "https://app.example.com/", Production: true},
+		// The same host by another spelling: a port, a trailing dot, or case.
+		"port": {URL: "https://app.example.com:443"},
+		"dot":  {URL: "https://APP.example.com./"},
 	}
 	if tg, err := ResolveTarget(envRun("", envs)); err != nil || tg.URL != "http://localhost:3000" || tg.Env != "local" {
 		t.Fatalf("default env: %+v %v", tg, err)
 	}
-	for _, env := range []string{"prod", "staging"} { // staging shares the production host
+	for _, env := range []string{"prod", "staging", "port", "dot"} { // each shares the production host
 		if _, err := ResolveTarget(envRun(env, envs)); !errors.Is(err, ErrProduction) {
 			t.Errorf("AAYU_ENV=%s: %v", env, err)
 		}

@@ -244,7 +244,10 @@ func TestDASTGuardrails(t *testing.T) {
 	t.Run("a target that is not an absolute URL is blocked", func(t *testing.T) {
 		// Codex review of #509: a scheme-relative or non-HTTP url is not a target
 		// either, and with no container runtime the url still blocks, never skips.
-		for _, target := range []string{"127.0.0.1:8080", "//127.0.0.1:8080", "ftp://127.0.0.1:8080"} {
+		// The adversarial review of #509: a quote, userinfo, query, or fragment
+		// could carry another host into the ZAP plan, whose urls it quotes as written.
+		for _, target := range []string{"127.0.0.1:8080", "//127.0.0.1:8080", "ftp://127.0.0.1:8080",
+			`http://127.0.0.1:8787/?x", "https://prod.example.com/x`, "http://user@127.0.0.1:8080", "http://127.0.0.1:8080/?q=1", "http://127.0.0.1:8080/#f"} {
 			for _, runtime := range []bool{true, false} {
 				bin := t.TempDir()
 				if runtime {
@@ -254,6 +257,70 @@ func TestDASTGuardrails(t *testing.T) {
 				if c, rep := dastCheck(t, r); c.Result != proof.Blocked || rep.Hold || !strings.Contains(c.Detail, "not an absolute http or https URL") || read(t, filepath.Join(bin, "docker.argv")) != "" {
 					t.Fatalf("%s (runtime %v): %+v", target, runtime, c)
 				}
+			}
+		}
+	})
+
+	// The adversarial review of #509: a report with no site means ZAP reached
+	// nothing (a dead target, or a redirect off it), which never passes.
+	t.Run("a report with no site is blocked", func(t *testing.T) {
+		for _, report := range []string{`{"@version":"2.17.0","site":[]}`, `null`} {
+			bin := t.TempDir()
+			standInRuntime(t, bin, "docker", report)
+			r := dastRun(t, bin, "http://127.0.0.1:8080", "web")
+			if c, rep := dastCheck(t, r); c.Result != proof.Blocked || rep.Hold || !strings.Contains(c.Detail, "scanned no site") {
+				t.Fatalf("%s: %+v", report, c)
+			}
+		}
+	})
+
+	// The adversarial review of #509: the merge gate runs the PR's own config,
+	// so an active_scan opt-in the PR adds waits until it is merged.
+	t.Run("an opt-in the change adds is passive until merged", func(t *testing.T) {
+		const shared = "https://staging.example.test"
+		root := t.TempDir()
+		g := func(args ...string) string {
+			out, err := gitOut(context.Background(), root, args...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return strings.TrimSpace(string(out))
+		}
+		g("init", "-q")
+		g("config", "user.email", "t@example.test")
+		g("config", "user.name", "t")
+		cfg := filepath.Join(root, ".aayudha", "config.toml")
+		_ = os.MkdirAll(filepath.Dir(cfg), 0o755)
+		_ = os.WriteFile(cfg, []byte("version = 1\n"), 0o644)
+		g("add", ".")
+		g("commit", "-q", "-m", "base")
+		base := g("rev-parse", "HEAD")
+		_ = os.WriteFile(cfg, []byte("version = 1\n[verify.environments.local]\nurl = \""+shared+"\"\nactive_scan = true\n"), 0o644)
+		g("commit", "-q", "-am", "opt in")
+		head := g("rev-parse", "HEAD")
+		for _, tc := range []struct {
+			base       string
+			ci         bool
+			wantActive bool
+		}{
+			{base, true, false},  // the PR adds the opt-in
+			{base, false, false}, // the same branch run locally
+			{head, true, true},   // merged: the base already has it
+			{"", true, false},    // CI with no base cannot tell
+			{"", false, true},    // a local run with no base: the person's own config
+		} {
+			bin := t.TempDir()
+			standInRuntime(t, bin, "docker", zapClean)
+			r := dastRun(t, bin, shared, "web")
+			r.Root, r.Base, r.Head, r.CI = root, tc.base, head, tc.ci
+			r.Verify.Environments["local"] = config.Environment{URL: shared, ActiveScan: true}
+			c, _ := dastCheck(t, r)
+			plan := read(t, filepath.Join(bin, "docker.plan"))
+			if c.Result != proof.Pass || strings.Contains(plan, "type: activeScan") != tc.wantActive {
+				t.Fatalf("base %.7s ci %v: active = %v, want %v: %+v", tc.base, tc.ci, strings.Contains(plan, "type: activeScan"), tc.wantActive, c)
+			}
+			if !tc.wantActive && tc.base != "" && !strings.Contains(c.Detail, "honoured once this change") {
+				t.Fatalf("the detail does not say why: %q", c.Detail)
 			}
 		}
 	})
