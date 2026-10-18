@@ -337,6 +337,9 @@ type inboxSource struct {
 	comments    map[int]inboxComments
 	green       map[string]bool // head SHAs whose gate checks were all green
 	perms       map[string]string
+	// pendingAudits, when set, lists the PRs whose audit entry still waits
+	// on the ledger: a card for each, also when its label is gone (#664).
+	pendingAudits func(ctx context.Context) ([]int, error)
 	// progress, when set, hears how far a read has got: what it reads, and
 	// how many of how many items it has checked (0 of 0 while listing).
 	progress func(what string, done, total int)
@@ -483,6 +486,17 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 				ap := audit.PR{Number: p.GetNumber(), Base: dev, Head: p.GetHead().GetRef(), Body: p.GetBody(), MergeSHA: p.GetMergeCommitSHA(), MergedAt: p.GetMergedAt().Time}
 				ap.LinkStories()
 				merged = append(merged, ap)
+			}
+		}
+	}
+	if s.pendingAudits != nil {
+		ns, err := s.pendingAudits(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, n := range ns {
+			if p := s.pulls[n]; p != nil && (p.MergedAt != nil || p.GetMerged()) && !prLabelled(p, AuditLabel) {
+				audits = append(audits, auditItem(p))
 			}
 		}
 	}
@@ -789,6 +803,10 @@ func clipWords(s string, n int) string {
 func inboxCounsel(it InboxItem) string {
 	f, n := it.f, it.Number
 	switch it.Kind {
+	case InboxAudit:
+		return fmt.Sprintf("The call: PR #%d merged as %s with no person's review. Read its diff now. If it is right, record a clean sample. "+
+			"If it is wrong, record a correction: the streak of each layer it touched resets, and a PR that reverts it opens. "+
+			"If you leave it, the merge stays and the look keeps waiting here.", n, short(it.mergeSHA))
 	case InboxDecision:
 		if len(it.Options) == 0 {
 			return fmt.Sprintf("The call: Decision #%d cannot be accepted yet, because %s. Open it on GitHub and complete that part first; until then "+
@@ -975,7 +993,9 @@ func runInbox(ctx context.Context, e *Env, in Values) error {
 			if err != nil {
 				return nil, "", err
 			}
-			return newInboxSource(c, repo, e.devBranch(), l.Config.Identity), login, nil
+			src := newInboxSource(c, repo, e.devBranch(), l.Config.Identity)
+			src.pendingAudits = e.pendingAudits
+			return src, login, nil
 		})
 	}
 	c, login, err := humanCaller(ctx, e, &l.Config, "inbox")
@@ -983,6 +1003,7 @@ func runInbox(ctx context.Context, e *Env, in Values) error {
 		return err
 	}
 	src := newInboxSource(c, repo, e.devBranch(), l.Config.Identity)
+	src.pendingAudits = e.pendingAudits
 	items, err := src.gather(ctx)
 	if err != nil {
 		return Wrap(ExitExternal, err)
@@ -1339,7 +1360,9 @@ func (e *Env) listInbox(ctx context.Context) error {
 	if l, err := e.Config(); err == nil {
 		id = l.Config.Identity
 	}
-	items, err := newInboxSource(c, repo, e.devBranch(), id).gather(ctx)
+	src := newInboxSource(c, repo, e.devBranch(), id)
+	src.pendingAudits = e.pendingAudits
+	items, err := src.gather(ctx)
 	if err != nil {
 		return Wrap(ExitExternal, err)
 	}

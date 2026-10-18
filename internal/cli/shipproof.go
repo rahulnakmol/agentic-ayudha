@@ -116,6 +116,11 @@ func shipFiles(ctx context.Context, c *github.Client, owner, name string, pr *gh
 		}); err != nil {
 			return nil, Wrap(ExitExternal, err)
 		}
+		// GitHub lists at most 3,000 of a PR's files: a list still short
+		// could hide a never-layer path, so ship does not judge it.
+		if len(files) != pr.GetChangedFiles() {
+			return nil, Errorf(ExitBlocked, "ship #%d: GitHub lists %d of the PR's %d changed files, so ship cannot judge its footprint; split the PR", pr.GetNumber(), len(files), pr.GetChangedFiles())
+		}
 	}
 	var out []string
 	for _, f := range files {

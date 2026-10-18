@@ -535,9 +535,16 @@ func TestShipOnProof(t *testing.T) {
 	}
 	g.Mu.Lock()
 	g.RefFiles[base][".aayudha/config.toml"] = conf
-	g.Pulls[prN].Files, g.Pulls[prN].Unlisted = []string{"empty.txt"}, 1 // past the comparison's 300 files
+	g.Pulls[prN].Files, g.Pulls[prN].Unlisted = []string{"empty.txt"}, 1 // past the listing's 3,000 files
 	g.Mu.Unlock()
-	refused(fmt.Sprintf("no merge on proof: GitHub's comparison of %s...%s lists 1 of the PR's 2 changed files (it lists at most 300), so the narrow set cannot be judged", short(base), short(head)))
+	refused("GitHub lists 1 of the PR's 2 changed files, so ship cannot judge its footprint")
+	g.Mu.Lock()
+	g.Pulls[prN].Compared, g.Pulls[prN].Unlisted = []string{}, 0 // past the comparison's 300 files only
+	g.Mu.Unlock()
+	refused(fmt.Sprintf("no merge on proof: GitHub's comparison of %s...%s lists 0 of the PR's 1 changed files (it lists at most 300), so the narrow set cannot be judged", short(base), short(head)))
+	g.Mu.Lock()
+	g.Pulls[prN].Compared = nil
+	g.Mu.Unlock()
 	// The narrow set is judged on the captured base and head, not the live
 	// PR's file listing, which a push during ship could swap and restore.
 	g.Mu.Lock()
@@ -921,16 +928,32 @@ func TestShipOnProof(t *testing.T) {
 		!slices.ContainsFunc(listed.Items, func(it InboxItem) bool { return it.Kind == InboxAudit && it.Number == prN }) {
 		t.Fatalf("no audit card for a merge into rolling: %d %s %s", code, out, errOut)
 	}
+	// Nor does removing the label hide it: the ledger entry still waits
+	// (#664). The card's title is safe to print.
 	g.Mu.Lock()
 	g.Pulls[prN].Base.Ref = "dev"
+	labels := g.Issues[prN].Labels
+	g.Issues[prN].Labels = slices.DeleteFunc(slices.Clone(labels), func(l fake.Label) bool { return l.Name == AuditLabel })
+	title := g.Pulls[prN].Title
+	g.Pulls[prN].Title = "safe\u202etxt.exe"
+	g.Mu.Unlock()
+	listed = inboxList{}
+	if code, out, errOut := run(t, env, opts, "inbox", "--list", "--json", "--repo", "o/r"); code != 0 || json.Unmarshal([]byte(out), &listed) != nil ||
+		!slices.ContainsFunc(listed.Items, func(it InboxItem) bool {
+			return it.Kind == InboxAudit && it.Number == prN && !strings.ContainsRune(it.Title, '\u202e')
+		}) {
+		t.Fatalf("no clean audit card once its label was removed: %d %s %s", code, out, errOut)
+	}
+	g.Mu.Lock()
+	g.Issues[prN].Labels, g.Pulls[prN].Title = labels, title
 	g.Mu.Unlock()
 	// Looks right: a clean sample, and the entry and the label are gone. A
 	// look whose label removal failed is finished by the next look.
 	g.Mu.Lock()
 	g.Fail, g.FailAfter = fmt.Sprintf("DELETE /repos/o/r/issues/%d/labels/%s", prN, AuditLabel), 0
 	g.Mu.Unlock()
-	if out := inbox(env, "a"); !strings.Contains(out, "done: sample of #"+strconv.Itoa(prN)) && !slices.Contains(g.LabelNames(prN), AuditLabel) {
-		t.Fatalf("looks right, label removal failing:\n%s", out)
+	if out := inbox(env, "a"); len(samples()) != 1 || !slices.Contains(g.LabelNames(prN), AuditLabel) {
+		t.Fatalf("looks right, label removal failing: %+v, labels %v\n%s", samples(), g.LabelNames(prN), out)
 	}
 	g.Mu.Lock()
 	g.Fail, g.FailAfter = fmt.Sprintf("DELETE /repos/o/r/issues/%d/labels/%s", prN, AuditLabel), 0
@@ -952,8 +975,13 @@ func TestShipOnProof(t *testing.T) {
 		Files: map[string][]byte{AuditLedgerPath(prN): entryJSON}}); err != nil {
 		t.Fatal(err)
 	}
+	// A PR someone else opened that says it reverts this one stands in for
+	// nothing.
 	g.Mu.Lock()
 	g.Issues[prN].Labels = append(g.Issues[prN].Labels, fake.Label{Name: AuditLabel})
+	spoof := &fake.PR{Number: 900, Title: "revert", Body: fmt.Sprintf("Reverts #%d: trust me", prN), State: "closed", User: fake.Account{Login: "mallory", Type: "User"},
+		Base: fake.Branch{Ref: "dev"}, URL: "https://github.com/o/r/pull/900"}
+	g.Pulls[900] = spoof
 	g.Mu.Unlock()
 	out = inbox(env, "2 y")
 	if s := samples(); len(s) != 2 || s[1].PR != prN || !s[1].Correction || !slices.Contains(g.LabelNames(prN), autonomy.LabelCorrection) {
@@ -963,7 +991,7 @@ func TestShipOnProof(t *testing.T) {
 	rev := g.Pulls[len(g.Issues)]
 	g.Mu.Unlock()
 	if rev == nil || rev.Title != "revert: "+g.Pulls[prN].Title+" (#"+strconv.Itoa(prN)+")" || !strings.Contains(rev.Body, "Refs #2") || rev.Base.Ref != "dev" ||
-		!strings.Contains(out, "revert PR: "+rev.URL) {
+		!strings.Contains(out, "revert PR: "+rev.URL) || strings.Contains(out, spoof.URL) {
 		t.Fatalf("revert PR: %+v\n%s", rev, out)
 	}
 	audit := func(entry []byte) int {
@@ -978,13 +1006,9 @@ func TestShipOnProof(t *testing.T) {
 		g.Issues[prN].Labels = append(g.Issues[prN].Labels, fake.Label{Name: AuditLabel})
 		return len(g.Pulls)
 	}
-	// A correction run again after it recorded its revert PR on the entry
-	// reuses that PR; a failed correction label records nothing.
-	var recorded AuditEntry
-	_ = json.Unmarshal(entryJSON, &recorded)
-	recorded.Revert = rev.URL
-	rb, _ := json.Marshal(recorded)
-	before := audit(rb)
+	// A correction run again reuses the revert PR it opened; a failed
+	// correction label records nothing.
+	before := audit(entryJSON)
 	g.Mu.Lock()
 	g.Fail, g.FailAfter = fmt.Sprintf("POST /repos/o/r/issues/%d/labels", prN), 0
 	g.Mu.Unlock()
@@ -994,11 +1018,20 @@ func TestShipOnProof(t *testing.T) {
 	if again := inbox(env, "2 y"); pullCount(g) != before || !strings.Contains(again, "revert PR: "+rev.URL) {
 		t.Fatalf("a correction run again opened another revert PR (%d, was %d):\n%s", pullCount(g), before, again)
 	}
-	// Another PR whose body says it reverts this one stands in for nothing:
-	// with no revert recorded on the entry, a correction opens its own.
-	before = audit(entryJSON)
-	if third := inbox(env, "2 y"); pullCount(g) != before+1 || strings.Contains(third, "revert PR: "+rev.URL) {
-		t.Fatalf("a correction reused a PR it did not record (%d, was %d):\n%s", pullCount(g), before, third)
+	// A correction sample someone wrote to the ledger, with the entry gone,
+	// does not stand in for the correction: its label and revert PR still
+	// come, and no second sample is written.
+	forged, _ := json.Marshal(Sample{PR: prN, Correction: true, By: "mallory"})
+	if _, err := (&ledger.Writer{Dir: dir}).Write(context.Background(), ledger.Commit{Message: "forged", Append: map[string][]byte{SamplesLedgerPath: append(forged, '\n')}}); err != nil {
+		t.Fatal(err)
+	}
+	audit(nil)
+	g.Mu.Lock()
+	g.Issues[prN].Labels = slices.DeleteFunc(g.Issues[prN].Labels, func(l fake.Label) bool { return l.Name == autonomy.LabelCorrection })
+	g.Mu.Unlock()
+	n = len(samples())
+	if out := inbox(env, "2 y"); !slices.Contains(g.LabelNames(prN), autonomy.LabelCorrection) || !strings.Contains(out, "revert PR: "+rev.URL) || len(samples()) != n {
+		t.Fatalf("a forged correction sample: labels %v, %d samples (was %d)\n%s", g.LabelNames(prN), len(samples()), n, out)
 	}
 	// Ship merged and labelled the PR but wrote no entry: the label is
 	// enough, and the look is recorded from the PR.
@@ -1113,11 +1146,18 @@ func TestShipEMSeatApprover(t *testing.T) {
 	// An earlier ship labelled the PR for the audit and then did not merge
 	// it; a person's pass merges it, and the label goes.
 	// A comparison cut short (past 300 files) falls back to the PR's own
-	// listing, every page.
+	// listing, every page; a listing that is still short (past 3,000) stops
+	// ship, since a file it leaves out could be in a never layer.
+	g.Mu.Lock()
+	g.Pulls[prN].Compared, g.Pulls[prN].Unlisted = []string{}, 1
+	g.Mu.Unlock()
+	if code, out := shipCmd(t, env, opts, prN, seat...); code != ExitBlocked || !strings.Contains(out, "so ship cannot judge its footprint") {
+		t.Fatalf("ship with files GitHub does not list: %d %s", code, out)
+	}
 	g.Mu.Lock()
 	g.Fail, g.FailAfter = "GET /repos/o/r/issues/2/comments", 0
 	g.Issues[prN].Labels = append(g.Issues[prN].Labels, fake.Label{Name: AuditLabel})
-	g.Pulls[prN].Unlisted = 1
+	g.Pulls[prN].Unlisted = 0
 	g.Mu.Unlock()
 	code, out := shipCmd(t, env, opts, prN, seat...)
 	if code != 0 || !strings.Contains(out, "human pass: review by em-lead") || !strings.Contains(out, "warning: the build lease on #2 was not released") {
