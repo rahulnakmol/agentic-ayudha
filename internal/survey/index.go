@@ -420,9 +420,10 @@ func Build(ctx context.Context, root string, opt Options) (*Index, error) {
 	return ix, nil
 }
 
-// guardCalls records the calls a Python main guard makes as edges from its
-// entry: the guard runs at file scope, where no function holds the calls, so
-// a runner chosen by its guard reaches only what the guard calls.
+// guardCalls records the calls a Python program makes at module scope (the
+// main guard's block, and the setup before it) as edges from the guard's
+// entry: no function holds those calls, so a runner chosen by its guard
+// reaches what module scope calls and no other function of its file.
 func (ix *Index) guardCalls(p string, s *scanned, byName map[string][]string) {
 	k, ok := ix.byPath[p]
 	if !ok || ix.Files[k].Lang != "python" {
@@ -435,11 +436,14 @@ func (ix *Index) guardCalls(p string, s *scanned, byName map[string][]string) {
 	guard := strings.Count(s.raw[:m[0]], "\n") + 1
 	from := "entry:" + p + ":" + itoa(guard)
 	lines := strings.Split(s.code, "\n")
+	inDef := func(ln int) bool {
+		return slices.ContainsFunc(s.syms, func(d Symbol) bool { return isDefKind(d.Kind) && d.line <= ln && ln <= d.End })
+	}
 	seen := map[string]bool{}
-	for ln := guard; ln <= len(lines); ln++ {
+	for ln := 1; ln <= len(lines); ln++ {
 		text := lines[ln-1]
-		if ln > guard && strings.TrimSpace(text) != "" && text[0] != ' ' && text[0] != '\t' {
-			break // the guard's block ends at the next line at file scope
+		if inDef(ln) {
+			continue // a function's body runs only when it is called
 		}
 		if ln == guard {
 			text = text[strings.Index(text, ":")+1:]
@@ -558,8 +562,22 @@ func (ix *Index) surfaces(file, lang, code string) {
 }
 
 func (ix *Index) entries(file, role, lang, raw string, syms []Symbol) {
+	have := map[string]bool{}
 	add := func(kind string, line int, detail string) {
-		ix.Entries = append(ix.Entries, Fact{ID: "entry:" + file + ":" + itoa(line), Kind: kind, At: file + ":" + itoa(line), Detail: detail})
+		at := file + ":" + itoa(line)
+		id := "entry:" + at
+		if have[id] { // two entries on one line (class A {}; class B {};): the name tells them apart
+			name := detail
+			if _, n, ok := strings.Cut(detail, " "); ok {
+				name = n
+			}
+			id += "#" + name
+			for n := 2; have[id]; n++ {
+				id = "entry:" + at + "#" + name + "~" + itoa(n)
+			}
+		}
+		have[id] = true
+		ix.Entries = append(ix.Entries, Fact{ID: id, Kind: kind, At: at, Detail: detail})
 	}
 	for _, s := range syms {
 		n := lastName(s.Name)
