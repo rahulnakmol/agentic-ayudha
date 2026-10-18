@@ -69,6 +69,7 @@ type Result struct {
 	More      []proof.Check // further checks one tool run produces (e.g. the a11y sub-floors)
 	Artifacts []Evidence
 	Findings  []Finding // what a failing security floor found (sast, secrets, deps)
+	Partial   bool      // the tool reported analysis errors: a finding it did not report may still be there
 }
 
 // Floor is one deterministic floor.
@@ -85,6 +86,7 @@ type Report struct {
 	Checks    []proof.Check
 	Artifacts []Evidence
 	Findings  []Finding // the findings of the floors that failed
+	Partial   []string  // the floors whose tool reported an incomplete scan
 	Hold      bool      // every floor passed, was waived, or was skipped without blocking
 }
 
@@ -114,6 +116,9 @@ func Execute(ctx context.Context, r *Run, floors []Floor) Report {
 		rep.Artifacts = append(rep.Artifacts, res.Artifacts...)
 		if res.Check.Result == proof.Fail {
 			rep.Findings = append(rep.Findings, res.Findings...)
+		}
+		if res.Partial {
+			rep.Partial = append(rep.Partial, f.Name())
 		}
 	}
 	p := proof.Pack{Checks: rep.Checks}

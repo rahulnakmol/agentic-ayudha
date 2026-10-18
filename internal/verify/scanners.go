@@ -195,6 +195,12 @@ func (SAST) Run(ctx context.Context, r *Run) (Result, error) {
 	c := severityCheck(s, r.Floors.SAST.MaxCritical, r.Floors.SAST.MaxHigh)
 	c.Tool, c.Version, c.Network = res.Check.Tool, res.Check.Version, o.Network
 	c.Detail = strings.Join(packs, " ") + ": " + c.Detail
+	// A parse error, timeout, or out-of-memory leaves part of the tree unanalysed (semgrep's errors, or an exit of 2 or
+	// more): the findings are what it saw, and a finding it did not report is not shown to be gone.
+	if len(doc.Errors) > 0 || o.Code >= 2 {
+		res.Partial = true
+		c.Detail += fmt.Sprintf("; incomplete: semgrep exited %d with %d analysis errors (reports/semgrep.json)", o.Code, len(doc.Errors))
+	}
 	res.Check, res.Findings = c, s.over(r.Floors.SAST.MaxCritical, r.Floors.SAST.MaxHigh)
 	res.Artifacts = append(res.Artifacts, Evidence{Path: "reports/semgrep.json", Kind: "report", Data: b})
 	return res, nil

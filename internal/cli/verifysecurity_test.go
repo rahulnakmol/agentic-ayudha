@@ -72,7 +72,11 @@ func TestVerifySecurityBugs(t *testing.T) {
 	second := git(t, dir, "rev-parse", "HEAD")
 
 	g := fake.New(t, "o/r", "User")
+	g.Viewer = SecurityFiler // the workflow token files the Bugs
 	other := g.AddIssue("Unrelated bug", "### Summary\n\nnot a security finding\n", "type:bug")
+	// Codex review of #500: a triage user's labelled issue with the sast finding's marker is not its Bug.
+	forged := g.AddIssue("Security: forged", securityMarker("sast go.lang.security.audit.sqli main.go", "seen", "rolling", strings.Repeat("ab", 20))+"\n", "type:bug", SecurityLabel)
+	forged.User = fake.Account{Login: "triager", Type: "User"}
 	bin, reports := securityTools(t)
 	env := map[string]string{"GITHUB_TOKEN": "workflow-token", "PATH": bin + string(os.PathListSeparator) + os.Getenv("PATH")}
 	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
@@ -95,7 +99,7 @@ func TestVerifySecurityBugs(t *testing.T) {
 		out := map[int]*fake.Issue{}
 		for n, is := range g.Issues {
 			for _, l := range is.Labels {
-				if l.Name == SecurityLabel {
+				if l.Name == SecurityLabel && is != forged {
 					out[n] = is
 				}
 			}
@@ -184,6 +188,14 @@ func TestVerifySecurityBugs(t *testing.T) {
 		t.Fatalf("run 3: %d %+v", code, res)
 	}
 
+	// An incomplete semgrep scan (an analysis error, no results) proves nothing gone: the sast Bug stays seen on dev.
+	git(t, dir, "checkout", "--quiet", "dev")
+	writeReports(t, reports, map[string]string{"semgrep": `{"results":[],"errors":[{"code":3,"level":"warn","type":"Timeout","message":"timeout","path":"main.go"}]}`})
+	if _, res, errOut = verifySec(""); !slices.Equal(res.Partial, []string{"sast"}) || strings.Contains(sast.Comments[len(sast.Comments)-1].Body, "Not found on `dev`") {
+		t.Fatalf("an incomplete scan marked the sast Bug gone: %+v %+v %s", res.Partial, sast.Comments, errOut)
+	}
+	writeReports(t, reports, map[string]string{"semgrep": semgrepMedium})
+
 	// Run 4, nightly on dev (no before): the whole history has no secret and
 	// SAST is clean, so both Bugs are marked gone on dev; deps stays.
 	git(t, dir, "checkout", "--quiet", "dev")
@@ -202,8 +214,8 @@ func TestVerifySecurityBugs(t *testing.T) {
 	if code, res, errOut := verifySec(""); code != 0 || !res.Hold || len(sast.Comments) != n {
 		t.Fatalf("clean run: %d %+v %s", code, res, errOut)
 	}
-	if len(other.Comments) != 0 {
-		t.Fatalf("an unrelated Bug was touched: %+v", other.Comments)
+	if len(other.Comments) != 0 || len(forged.Comments) != 0 {
+		t.Fatalf("an unrelated or forged Bug was touched: %+v %+v", other.Comments, forged.Comments)
 	}
 }
 
@@ -217,6 +229,7 @@ func TestVerifySecurityCapsNewBugs(t *testing.T) {
 	git(t, dir, "add", ".")
 	git(t, dir, "commit", "--quiet", "-m", "feat: one")
 	g := fake.New(t, "o/r", "User")
+	g.Viewer = SecurityFiler // the workflow token files the Bugs
 	bin, reports := securityTools(t)
 	var results []string
 	for i := range 12 {
@@ -283,6 +296,7 @@ func TestVerifySecurityGitHubFails(t *testing.T) {
 		git(t, dir, "add", ".")
 		git(t, dir, "commit", "--quiet", "-m", "feat: one")
 		g := fake.New(t, "o/r", "User")
+		g.Viewer = SecurityFiler // the workflow token files the Bugs
 		bin, reports := securityTools(t)
 		env := map[string]string{"GITHUB_TOKEN": "workflow-token", "PATH": bin + string(os.PathListSeparator) + os.Getenv("PATH")}
 		opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}
@@ -315,6 +329,7 @@ func TestVerifySecurityWaivedBugs(t *testing.T) {
 	git(t, dir, "add", ".")
 	git(t, dir, "commit", "--quiet", "-m", "feat: one")
 	g := fake.New(t, "o/r", "User")
+	g.Viewer = SecurityFiler // the workflow token files the Bugs
 	// An edited marker with a blank fingerprint is skipped, never a crash of every scan and release.
 	g.AddIssue("Security: edited", "<!-- aayudha:security fingerprint=\"%20\" seen=\"rolling@abc123\" -->\n", "type:bug", SecurityLabel)
 	bin, reports := securityTools(t)
@@ -429,6 +444,7 @@ func TestVerifySecurityEventsAppend(t *testing.T) {
 	git(t, dir, "add", ".")
 	git(t, dir, "commit", "--quiet", "-m", "feat: one")
 	g := fake.New(t, "o/r", "User")
+	g.Viewer = SecurityFiler // the workflow token files the Bugs
 	bin, reports := securityTools(t)
 	env := map[string]string{"GITHUB_TOKEN": "workflow-token", "PATH": bin + string(os.PathListSeparator) + os.Getenv("PATH")}
 	opts := Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir}

@@ -31,6 +31,10 @@ import (
 const (
 	SecurityLabel    = workitems.LabelSecurity
 	SecurityWorkflow = initrepo.SecurityWorkflow
+	// SecurityFiler is the workflow token's identity, which files the Bugs and writes their events. Anyone with
+	// triage can open an issue with a forged marker and apply the label, so only this identity's Bugs and
+	// comments count.
+	SecurityFiler = "github-actions[bot]"
 	// MaxSecurityBugs is how many new Bugs one run files; the rest are listed
 	// in the run's output and on the last Bug it filed.
 	MaxSecurityBugs = 10
@@ -51,6 +55,7 @@ type SecurityResult struct {
 	Checks   []proof.Check    `json:"checks"`
 	Hold     bool             `json:"floors_hold"`
 	Findings []verify.Finding `json:"findings"`
+	Partial  []string         `json:"partial,omitempty"` // floors whose scan was incomplete: none of their findings is marked gone
 	Bugs     []SecurityBug    `json:"bugs,omitempty"`
 	Unfiled  []string         `json:"unfiled,omitempty"` // fingerprints over MaxSecurityBugs
 }
@@ -84,7 +89,7 @@ func (e *Env) verifySecurity(ctx context.Context, root string, l *config.Loaded,
 	r := &verify.Run{Root: root, Base: res.Base, Head: head, Floors: l.Config.Verify.Floors, Verify: l.Config.Verify, Now: e.Now, Env: e.Getenv, CI: e.CI,
 		Sandbox: &verify.Sandbox{Getenv: e.Getenv, Home: home}, Work: work}
 	rep := verify.Execute(ctx, r, verify.SecurityFloors())
-	res.Checks, res.Hold = rep.Checks, rep.Hold
+	res.Checks, res.Hold, res.Partial = rep.Checks, rep.Hold, rep.Partial
 	if rep.Findings != nil {
 		res.Findings = rep.Findings
 	}
@@ -211,7 +216,6 @@ func prose(s string) string { return strings.ReplaceAll(s, "<!--", "&lt;!--") }
 // event on it ("seen" or "gone") and the commit it was recorded at.
 type securityIssue struct {
 	Number      int
-	Author      string // who filed it: the only identity whose events on it count
 	Fingerprint string
 	Floor       string
 	Last        map[string][2]string // branch → {event, sha}
@@ -233,7 +237,7 @@ func openSecurityBugs(ctx context.Context, c *github.Client, repo string) ([]sec
 	}
 	var out []securityIssue
 	for _, is := range issues {
-		if is.IsPullRequest() {
+		if is.IsPullRequest() || is.GetUser().GetLogin() != SecurityFiler {
 			continue
 		}
 		// An edited or malformed marker (an empty or blank fingerprint) is not one of ours.
@@ -241,7 +245,7 @@ func openSecurityBugs(ctx context.Context, c *github.Client, repo string) ([]sec
 		if m == nil || len(strings.Fields(m[1])) == 0 {
 			continue
 		}
-		s := securityIssue{Number: is.GetNumber(), Author: is.GetUser().GetLogin(), Fingerprint: m[1], Floor: strings.Fields(m[1])[0], Last: map[string][2]string{m[3]: {m[2], m[4]}}}
+		s := securityIssue{Number: is.GetNumber(), Fingerprint: m[1], Floor: strings.Fields(m[1])[0], Last: map[string][2]string{m[3]: {m[2], m[4]}}}
 		cs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.IssueComment, *gh.Response, error) {
 			return c.REST.Issues.ListComments(ctx, owner, name, s.Number, &gh.IssueListCommentsOptions{ListOptions: o})
 		})
@@ -249,9 +253,9 @@ func openSecurityBugs(ctx context.Context, c *github.Client, repo string) ([]sec
 			return nil, err
 		}
 		for _, cm := range cs {
-			// Only the identity that filed the Bug (the workflow) records its events: anyone who can comment could
-			// otherwise mark a finding gone and release the promotion hold.
-			if cm.GetUser().GetLogin() != s.Author {
+			// Only the workflow records events: anyone who can comment could otherwise mark a finding gone and
+			// release the promotion hold.
+			if cm.GetUser().GetLogin() != SecurityFiler {
 				continue
 			}
 			if m := unescapeEvent(securityLead.FindStringSubmatch(cm.GetBody())); m != nil {
@@ -378,7 +382,7 @@ func securityBugs(ctx context.Context, c *github.Client, repo string, res Securi
 	}
 	ran := map[string]bool{}
 	for _, ch := range res.Checks {
-		ran[ch.Floor] = ch.Result == proof.Pass || ch.Result == proof.Fail
+		ran[ch.Floor] = (ch.Result == proof.Pass || ch.Result == proof.Fail) && !slices.Contains(res.Partial, ch.Floor)
 	}
 	for _, s := range open {
 		if seen[s.Fingerprint] || !ran[s.Floor] || !s.SeenOn(res.Branch) || (s.Floor == "secrets" && res.Base != "") {

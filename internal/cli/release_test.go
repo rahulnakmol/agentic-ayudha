@@ -896,7 +896,11 @@ func TestReleaseSecurityBugsHold(t *testing.T) {
 	rel := strconv.Itoa(f.release)
 	sha := strings.Repeat("ab", 20)
 	bug := func(fp, branch string) *fake.Issue {
-		return f.g.AddIssue("Security: "+fp, "### Summary\n\nfound\n\n"+securityMarker(fp, "seen", branch, sha)+"\n", "type:bug", "status:backlog", SecurityLabel)
+		is := f.g.AddIssue("Security: "+fp, "### Summary\n\nfound\n\n"+securityMarker(fp, "seen", branch, sha)+"\n", "type:bug", "status:backlog", SecurityLabel)
+		f.g.Mu.Lock()
+		defer f.g.Mu.Unlock()
+		is.User = fake.Account{Login: SecurityFiler, Type: "Bot"}
+		return is
 	}
 	onDev := bug("deps GO-1 x go.mod", "dev")
 	dry := func() (int, string) {
@@ -905,6 +909,11 @@ func TestReleaseSecurityBugsHold(t *testing.T) {
 	}
 	if code, errOut := dry(); code != 0 {
 		t.Fatalf("a Bug seen only on dev held the promotion: %d %s", code, errOut)
+	}
+	// Codex review of #500: a triage user's issue with a forged marker and the label is not a security Bug.
+	f.g.AddIssue("Security: forged", "### Summary\n\nfound\n\n"+securityMarker("sast forged x.go", "seen", "rolling", sha)+"\n", "type:bug", SecurityLabel)
+	if code, errOut := dry(); code != 0 {
+		t.Fatalf("a forged Bug held the promotion: %d %s", code, errOut)
 	}
 	// A path with a quote and a > in it, which a raw marker attribute would end early.
 	onRolling := bug(`sast rule-1 cmd/"odd">.go`, "rolling")
