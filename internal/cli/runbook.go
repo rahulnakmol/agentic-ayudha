@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -12,6 +13,8 @@ import (
 	"strings"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations"
+	"github.com/rahulnakmol/agentic-ayudha/internal/integrations/providers"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ops"
 	"github.com/rahulnakmol/agentic-ayudha/internal/production"
 	"github.com/rahulnakmol/agentic-ayudha/internal/seats"
@@ -37,6 +40,8 @@ type runbookReport struct {
 	Draft     string               `json:"draft,omitempty"`
 	Findings  map[string][]string  `json:"findings,omitempty"`
 	Wrote     string               `json:"wrote,omitempty"`
+	// Alerts is each checked runbook's alerts and where they were found.
+	Alerts map[string][]production.AlertStatus `json:"alerts,omitempty"`
 }
 
 // runRunbook is `aayu runbook`. With no flags it checks every runbook in
@@ -108,6 +113,8 @@ func runRunbook(ctx context.Context, e *Env, in Values) error {
 	if defs != nil {
 		rep.Uncovered = defs.Uncovered(rep.Runbooks)
 	}
+	found, facts := e.providerAlerts(ctx, repo, l.Config.Integrations)
+	rep.Facts = append(rep.Facts, facts...)
 	grounding := rep.markdown()
 
 	known := func(cite string) bool { return strings.Contains(grounding, cite) || fileIn(root, cite) }
@@ -137,8 +144,19 @@ func runRunbook(ctx context.Context, e *Env, in Values) error {
 		}
 		return ""
 	}
-	checkOne := func(md string) []string {
-		return production.CheckRunbook(md, rep.Stage, pr, known, check, rollback, defs)
+	rep.Alerts = map[string][]production.AlertStatus{}
+	checkOne := func(file, md string) []string {
+		fs := production.CheckRunbook(md, rep.Stage, pr, known, check, rollback, defs)
+		alerts := production.RunbookAlerts(md, defs, found)
+		for _, a := range alerts {
+			if a.State == production.AlertMissing {
+				fs = append(fs, fmt.Sprintf("the Symptom names alert `%s`, which is not an alert or monitor in %s", a.Name, strings.Join(slices.Sorted(maps.Keys(found)), " or ")))
+			}
+		}
+		if len(alerts) > 0 {
+			rep.Alerts[file] = alerts
+		}
+		return fs
 	}
 
 	rep.Findings = map[string][]string{}
@@ -149,7 +167,7 @@ func runRunbook(ctx context.Context, e *Env, in Values) error {
 			return Wrap(ExitUsage, err)
 		}
 		rep.Draft = draft
-		if fs := checkOne(string(b)); len(fs) > 0 {
+		if fs := checkOne(draft, string(b)); len(fs) > 0 {
 			rep.Findings[draft] = fs
 		} else if in.Bool("create") {
 			name := production.RunbookName(string(b))
@@ -168,7 +186,7 @@ func runRunbook(ctx context.Context, e *Env, in Values) error {
 			if err != nil {
 				return err
 			}
-			if fs := checkOne(string(b)); len(fs) > 0 {
+			if fs := checkOne(rel, string(b)); len(fs) > 0 {
 				rep.Findings[rel] = fs
 			}
 		}
@@ -181,6 +199,13 @@ func runRunbook(ctx context.Context, e *Env, in Values) error {
 			if _, err := io.WriteString(w, grounding); err != nil {
 				return err
 			}
+		}
+		for _, k := range slices.Sorted(maps.Keys(rep.Alerts)) {
+			var parts []string
+			for _, a := range rep.Alerts[k] {
+				parts = append(parts, "`"+a.Name+"` "+string(a.State)+strings.TrimSuffix(" in "+a.Where, " in "))
+			}
+			fmt.Fprintf(w, "\n%s alerts: %s.\n", k, strings.Join(parts, "; "))
 		}
 		keys := make([]string, 0, len(rep.Findings))
 		for k := range rep.Findings {
@@ -234,4 +259,58 @@ func (r runbookReport) markdown() string {
 	b.WriteString(production.Runbook.Template(r.Artefact, "<the failure>"))
 	b.WriteString("## Persona\n\n" + r.Persona)
 	return b.String()
+}
+
+// providerAlerts lists the alerts and monitors of each configured Sentry and
+// PostHog project, for the check of the alerts a runbook names (Decision
+// #449, phase P1). A provider that is not configured, or cannot be read with
+// a read-only key, is left out, so its alerts are not checked rather than
+// missing; the facts say why, and where each list came from.
+func (e *Env) providerAlerts(ctx context.Context, repo string, configured map[string]config.Integration) (map[string][]string, []packFact) {
+	found := map[string][]string{}
+	var facts []packFact
+	d := e.integrationDeps(repo)
+	for _, name := range []string{"sentry", "posthog"} {
+		if _, ok := configured[name]; !ok {
+			facts = append(facts, packFact{Text: fmt.Sprintf("[integrations.%s] is not set: the alerts runbooks name are not checked in %s", name, name), Cite: production.RunbookDir})
+			continue
+		}
+		names, pv, err := listAlerts(ctx, d, name, configured[name].Project)
+		if err != nil {
+			facts = append(facts, packFact{Text: fmt.Sprintf("The alerts runbooks name are not checked in %s: %v", name, err), Cite: production.RunbookDir})
+			continue
+		}
+		found[name] = names
+		facts = append(facts, packFact{Text: fmt.Sprintf("%d alerts and monitors in %s (%s; sha256 %s)", len(names), pv.Source, strings.Join(pv.Requests, ", "), pv.Digest), Cite: pv.Source})
+	}
+	return found, facts
+}
+
+// listAlerts reads one provider's alert list after checking its key reads
+// only: a key the provider reports as able to write is refused before the list.
+func listAlerts(ctx context.Context, d providers.Deps, name, project string) ([]string, production.Provenance, error) {
+	refuse := func(sc integrations.Scope, err error) error {
+		if err == nil && len(sc.Write) > 0 {
+			err = fmt.Errorf("the key can write (%s); aayudha reads with read-only keys only", strings.Join(sc.Write, ", "))
+		}
+		return err
+	}
+	if name == "sentry" {
+		c, err := providers.Sentry(d)
+		if err == nil {
+			err = refuse(c.Scope(ctx))
+		}
+		if err != nil {
+			return nil, production.Provenance{}, err
+		}
+		return production.Sentry{API: c}.Alerts(ctx)
+	}
+	c, err := providers.PostHog(d)
+	if err == nil {
+		err = refuse(c.Scope(ctx))
+	}
+	if err != nil {
+		return nil, production.Provenance{}, err
+	}
+	return production.PostHogAlerts(ctx, c, project)
 }

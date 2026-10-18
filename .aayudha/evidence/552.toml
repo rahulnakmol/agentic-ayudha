@@ -1,0 +1,11 @@
+[[criterion]]
+id = 1
+tests = ["./internal/cli:TestRunbookAlertsLive"]
+
+[[criterion]]
+id = 2
+tests = ["./internal/cli:TestRunbookAlertsLive", "./internal/cli:TestSLOAndRunbook"]
+
+[[criterion]]
+id = 3
+tests = ["./internal/cli:TestRunbookAlertsLive"]
