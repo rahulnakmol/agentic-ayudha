@@ -467,7 +467,7 @@ func decideAccept(ctx context.Context, e *Env, cfg *config.Config, repo string, 
 	}
 	owner, name, _ := github.SplitRepo(repo)
 	ds := make([]decide.Decision, len(nums))
-	b := &batch{Repo: repo, Issue: nums[0], Command: e.commandLine(), Posted: e.Now().UTC().Format(time.RFC3339Nano)}
+	b := &batch{Repo: repo, Issue: nums[0], Command: termText(e.commandLine()), Posted: e.Now().UTC().Format(time.RFC3339Nano)}
 	for i, n := range nums {
 		if slices.Contains(nums[:i], n) {
 			return Errorf(ExitUsage, "decide --accept: #%d is in the batch twice", n)

@@ -24,6 +24,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/decide"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
+	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
@@ -138,11 +139,11 @@ func batchDecision(d decide.Decision, o workitems.Option) batchItem {
 	if os, _ := decide.Options(d.Item); len(os) > 0 {
 		b.WriteString("Options:\n")
 		for _, o := range os {
-			b.WriteString(clip(optionLine(o), 300) + "\n")
+			b.WriteString(clip(termText(optionLine(o)), 300) + "\n")
 		}
 	}
 	if rec := clip(strings.TrimSpace(d.Item.Fields["recommendation"]), 500); rec != "" {
-		b.WriteString("Recommendation: " + strings.ReplaceAll(rec, "\n", " ") + "\n")
+		b.WriteString("Recommendation: " + termText(strings.ReplaceAll(rec, "\n", " ")) + "\n")
 	}
 	it.Detail = b.String() // untrusted issue text: render shows it only inside a code fence
 	return it
@@ -355,6 +356,9 @@ func (e *Env) reachable(ctx context.Context, repo string) []identity.Reach {
 				return "", errors.New("no secrets store")
 			}
 			v, _, err := st.Get(identity.HumanTokenSecret)
+			if err != nil && !errors.Is(err, secrets.ErrNotFound) {
+				return "", fmt.Errorf("%w: %w", identity.ErrUnreadable, err)
+			}
 			return v, err
 		},
 		"git credential helper": func(ctx context.Context) (string, error) {

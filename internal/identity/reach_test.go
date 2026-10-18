@@ -21,6 +21,7 @@ func TestReachable(t *testing.T) {
 		"gh auth token":         func(context.Context) (string, error) { return "ghu_same\n", nil },
 		"git credential helper": func(context.Context) (string, error) { return "", errors.New("no helper") },
 		"keychain":              func(context.Context) (string, error) { return "  \n", nil },
+		"secrets store":         func(context.Context) (string, error) { return "", fmt.Errorf("%w: keychain locked", ErrUnreadable) },
 	}
 	logins := map[string]string{"ghu_same": "founder", "ghp_other": "machine", legacy: "founder2"}
 	asked := map[string]int{}
@@ -35,11 +36,11 @@ func TestReachable(t *testing.T) {
 		return User{}, &StatusError{Code: 401, msg: "401 Unauthorized"}
 	})
 	// A rejected token is left out; one GitHub could not identify just now stays, with no login.
-	want := "[{GH_TOKEN, gh auth token founder} {GH_PAT machine} {FLAKY } {MY_GITHUB_TOKEN founder2}]"
+	want := "[{secrets store (unreadable now) } {GH_TOKEN, gh auth token founder} {GH_PAT machine} {FLAKY } {MY_GITHUB_TOKEN founder2}]"
 	if fmt.Sprint(got) != want || asked["ghu_same"] != 1 || asked["ghs_install"] != 0 || asked[other] != 0 {
 		t.Fatalf("Reachable = %v (asked %v), want %s", got, asked, want)
 	}
-	if ex := Exposed(got, []string{"@Founder"}); len(ex) != 2 || ex[0].Login != "founder" || ex[1].Source != "FLAKY" {
+	if ex := Exposed(got, []string{"@Founder"}); len(ex) != 3 || ex[0].Source != "secrets store (unreadable now)" || ex[1].Login != "founder" || ex[2].Source != "FLAKY" {
 		t.Fatalf("Exposed = %v", ex)
 	}
 }

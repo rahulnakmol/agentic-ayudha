@@ -21,6 +21,11 @@ type Reach struct {
 // tokens. Installation tokens (ghs_) act as an App and cannot read /user.
 var tokenPrefixes = []string{"ghp_", "github_pat_", "gho_", "ghu_"}
 
+// ErrUnreadable is a source's answer when it holds credentials but cannot be
+// read just now (a locked keychain, an unreadable store), as opposed to
+// holding none. Reachable counts it as an unknown credential.
+var ErrUnreadable = errors.New("credential source unreadable")
+
 // legacyToken is the old 40-character hex token format, recognised only in a
 // variable named for GitHub so another service's secret is never sent to it.
 var legacyToken = regexp.MustCompile(`^[0-9a-f]{40}$`)
@@ -69,12 +74,16 @@ func Reachable(ctx context.Context, environ []string, sources map[string]func(co
 		names = append(names, name)
 	}
 	slices.Sort(names)
+	var out []Reach
 	for _, name := range names {
-		if v, err := sources[name](ctx); err == nil {
+		v, err := sources[name](ctx)
+		switch {
+		case err == nil:
 			add(name, v)
+		case errors.Is(err, ErrUnreadable): // it may hold anyone's token: it counts, with no login
+			out = append(out, Reach{Source: name + " (unreadable now)"})
 		}
 	}
-	var out []Reach
 	for _, c := range cands {
 		u, err := whoami(ctx, Token{Value: c.value, Source: c.names[0]})
 		var se *StatusError

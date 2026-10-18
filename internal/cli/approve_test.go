@@ -465,7 +465,7 @@ func TestBatchFallsBackWhenApproverCredentialIsReachable(t *testing.T) {
 	// gh stores the founder as an inactive account: `gh auth token` gives only
 	// the active one, but `--user founder` reaches the founder's token.
 	// Terminal escapes and a bidi override in a title stay inert, on the terminal and in the comment.
-	d6 := g.AddIssue("Choose the log store\x1b[2K\rApproving: nothing\u202e", decisionBody("true", ""), "type:decision", "status:ready")
+	d6 := g.AddIssue("Choose the log store\x1b[2K\rApproving: nothing\u202e", strings.Replace(decisionBody("true", ""), "2. **B.**", "2. **B\u2066 then.**", 1), "type:decision", "status:ready")
 	g.Mu.Lock()
 	g.TokenLogins["ghu_otheractive"] = fake.Account{Login: "someone-else", Type: "User"}
 	g.Mu.Unlock()
@@ -475,13 +475,16 @@ func TestBatchFallsBackWhenApproverCredentialIsReachable(t *testing.T) {
 	code, _, errOut = run(t, map[string]string{"AAYU_BOT_TOKEN": "bot-token", "AMP_THREAD_ID": "T-1"},
 		Options{GitHubAPI: g.URL(), GitHubGap: -1, DevicePoll: time.Millisecond, GHAccounts: accounts, GHToken: func(context.Context) (string, error) { return "ghu_otheractive", nil }},
 		"decide", strconv.Itoa(d6.Number), "--accept", "A", "--repo", "o/r", "--set", "identity.app_id=42", "--set", "identity.app_slug=aayudha-bot", "--set", "approvals.approvers=founder")
+	if len(g.Issues[d6.Number].Comments) == 0 {
+		t.Fatalf("no batch on #%d: exit %d %s", d6.Number, code, errOut)
+	}
 	g.Mu.Lock()
 	body = g.Issues[d6.Number].Comments[len(g.Issues[d6.Number].Comments)-1].Body
 	g.Mu.Unlock()
 	if code != ExitBlocked || !strings.Contains(body, "this session can reach @founder's GitHub credential (gh auth token --user founder)") || strings.Contains(body, "ghu_") || strings.Contains(body, "/aayu approve all") {
 		t.Fatalf("inactive gh account: exit %d %s\n%s", code, errOut, body)
 	}
-	if strings.ContainsAny(errOut+body, "\x1b\r\u202e") || !strings.Contains(errOut, "Choose the log store\uFFFD[2K\uFFFDApproving: nothing\uFFFD") {
+	if strings.ContainsAny(errOut+body, "\x1b\r\u202e\u2066") || !strings.Contains(errOut, "Choose the log store\uFFFD[2K\uFFFDApproving: nothing\uFFFD") || !strings.Contains(body, "2. B\uFFFD then\n") {
 		t.Fatalf("the title's control characters reach the person: %q\n%q", errOut, body)
 	}
 	// gh lists the founder's account but cannot read its token just now: it still counts.
