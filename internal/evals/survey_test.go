@@ -103,6 +103,33 @@ func selfCheckReply(t *testing.T, draft string, but map[string]string) string {
 	return `{"verdicts": [` + strings.Join(vs, ", ") + `]}`
 }
 
+// A run whose last judgement errors keeps what it produced: the first draft and
+// its score, the self-check, the answer, and each call's cost (survey run
+// 39070364531 lost all of it to a gateway 502 at the judge).
+func TestTier2SurveyErroredRunKeepsItsWork(t *testing.T) {
+	c, good := surveyCase(t, "survey/tinyjs-rust")
+	fake := &models.Fake{Replies: []models.Response{
+		{Text: good, CostUSD: 0.25}, {Text: `{"score": 3, "reason": "first"}`}, {Text: selfCheckReply(t, good, nil)},
+		{Text: "the judge is not answering in JSON"}, // the final judgement, twice: the run errors
+	}}
+	h := harness(t, fake, "gpt-6.1-sol")
+	h.Config.K = 1
+	res, err := h.Tier2(context.Background(), []Case{c}, "abc", "dev", time.Unix(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := res.Cases[0].Runs[0]
+	if r.Status != RunError || r.Score != 0 || r.Error == "" {
+		t.Fatalf("not an errored run: %+v", r)
+	}
+	if r.SelfCheck == nil || r.SelfCheck.FirstScore != 3 || r.SelfCheck.FirstDraft != good || r.Answer == "" {
+		t.Errorf("the errored run lost its work: self-check %+v, answer %.40q", r.SelfCheck, r.Answer)
+	}
+	if len(r.Calls) != 5 || r.Calls[0].CostUSD != 0.25 {
+		t.Errorf("calls %+v: want all five, the first costing 0.25 USD", r.Calls)
+	}
+}
+
 // D-5.9l, D-5.9n: a survey reply that fails the floors is revised once; the
 // draft that passes is judged for the record, then the skill's self-check
 // replies with corrections, which apply to that draft all or nothing; the

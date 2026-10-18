@@ -127,10 +127,13 @@ func (h *Harness) runPersona(ctx context.Context, c Case, lane verbs.LaneID, bod
 			"Reply with your Markdown answer only, nothing before or after it.",
 		Messages:  []models.Message{{Role: "user", Content: untrusted("grounding", input) + "\n\n" + c.Persona.Task}},
 		MaxTokens: h.Config.MaxTokens.Skill,
+		// A long note (the data-ai chart cases write 9k-13k tokens) runs for minutes; unstreamed, the gateway closes
+		// the idle connection with a 524 on every attempt (run 39066544341, chart/ai-scaleup), as for sessions.
+		Stream: true,
 	}
 	answer, problems, first, err := reviseOnce(ctx, h.complete(lane, "skill", &calls), req, func(a string) []string { return checkPersona(c, pr, input, a) })
 	if err != nil {
-		return Run{}, err
+		return Run{Revised: len(first) > 0, RevisedFor: revisedFor(first), Answer: answerOf(answer)}, err
 	}
 	run.Revised, run.RevisedFor = len(first) > 0, revisedFor(first)
 	if len(problems) > 0 {
@@ -160,7 +163,7 @@ func (h *Harness) runPersona(ctx context.Context, c Case, lane verbs.LaneID, bod
 		"\n\n## Persona the skill speaks in\n\n"+persona.Prompt(c.Persona.Stage, "set by the case")+
 		"\n\n## Grounding (the only source)\n\n"+input+"\n\n## Checks\n\n"+checks+".", rubric, answer, nil, &calls)
 	if err != nil {
-		return Run{}, err
+		return Run{Revised: run.Revised, RevisedFor: run.RevisedFor, Answer: answerOf(answer)}, err
 	}
 	judged.Revised, judged.RevisedFor = run.Revised, run.RevisedFor
 	judged.Answer = answerOf(answer)
@@ -170,7 +173,8 @@ func (h *Harness) runPersona(ctx context.Context, c Case, lane verbs.LaneID, bod
 // reviseOnce asks the skill for its Markdown answer and, when check finds
 // problems, gives it the findings once to revise, as a host would. It returns
 // the last answer, its remaining problems, and the first draft's findings
-// (none when the first draft passed).
+// (none when the first draft passed). When the revision errors, it returns
+// the first draft and its findings with the error, so the run keeps them.
 func reviseOnce(ctx context.Context, complete func(context.Context, models.Request) (models.Response, error), req models.Request,
 	check func(string) []string) (answer string, problems, first []string, err error) {
 	return reviseOnceAsking(ctx, complete, req, check, "Fix every finding and reply with the whole revised answer only.")
@@ -182,10 +186,10 @@ func reviseOnceAsking(ctx context.Context, complete func(context.Context, models
 	for attempt := 0; attempt < 2; attempt++ {
 		resp, err := complete(ctx, req)
 		if err != nil {
-			return "", nil, nil, err
+			return answer, problems, first, err
 		}
 		if resp.Truncated {
-			return "", nil, nil, &models.ReplyError{Err: fmt.Errorf("the answer stopped at the %d-token cap", req.MaxTokens), Reply: resp.Text, Truncated: true}
+			return answer, problems, first, &models.ReplyError{Err: fmt.Errorf("the answer stopped at the %d-token cap", req.MaxTokens), Reply: resp.Text, Truncated: true}
 		}
 		answer = draftOnly(resp.Text)
 		if problems = check(answer); len(problems) == 0 {
@@ -278,10 +282,11 @@ func (h *Harness) runPack(ctx context.Context, c Case, lane verbs.LaneID, body, 
 			fmt.Sprintf("Reply with the decision pack in Markdown only, at most %d words, nothing before or after it.", decide.PackMaxWords),
 		Messages:  []models.Message{{Role: "user", Content: untrusted("grounding", input) + "\n\nThe human is stuck and asks: " + c.Pack.Question}},
 		MaxTokens: h.Config.MaxTokens.Skill,
+		Stream:    true, // as the persona call
 	}
 	pack, problems, first, err := reviseOnce(ctx, h.complete(lane, "skill", &calls), req, func(a string) []string { return decide.CheckPack(a, input) })
 	if err != nil {
-		return Run{}, err
+		return Run{Revised: len(first) > 0, RevisedFor: revisedFor(first), Answer: answerOf(pack)}, err
 	}
 	if len(problems) > 0 {
 		return Run{Status: RunFail, Score: 1, Revised: true, RevisedFor: revisedFor(first), Floor: "pack checks: " + clip(strings.Join(problems, "; "), 600), Answer: answerOf(pack)}, nil
@@ -292,7 +297,7 @@ func (h *Harness) runPack(ctx context.Context, c Case, lane verbs.LaneID, body, 
 		", at the "+c.Pack.Stage+" stage\n\n## Grounding (the only source)\n\n"+input+"\n\n## Checks\n\n"+checks,
 		rubric, pack, nil, &calls)
 	if err != nil {
-		return Run{}, err
+		return Run{Revised: len(first) > 0, RevisedFor: revisedFor(first), Answer: answerOf(pack)}, err
 	}
 	judged.Revised, judged.RevisedFor = len(first) > 0, revisedFor(first)
 	judged.Answer = answerOf(pack)

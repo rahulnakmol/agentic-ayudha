@@ -11,8 +11,11 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
@@ -429,6 +432,33 @@ func TestFormatFallback(t *testing.T) {
 	}
 }
 
+// A 503 or a 429 carries its Retry-After, in seconds or as an HTTP date, so a
+// caller can wait as long as the endpoint asked; a 502 without one has none.
+func TestStatusErrorRetryAfter(t *testing.T) {
+	for _, tc := range []struct {
+		code     int
+		header   string
+		min, max time.Duration
+	}{
+		{503, "7", 7 * time.Second, 7 * time.Second},
+		{429, time.Now().Add(90 * time.Second).UTC().Format(http.TimeFormat), 85 * time.Second, 90 * time.Second},
+		{502, "", 0, 0},
+	} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			if tc.header != "" {
+				w.Header().Set("Retry-After", tc.header)
+			}
+			http.Error(w, "error code: "+strconv.Itoa(tc.code), tc.code)
+		}))
+		_, err := HTTPClient{BaseURL: srv.URL, Style: StyleMessages, Key: "k", HTTP: srv.Client()}.Complete(context.Background(), Request{})
+		srv.Close()
+		var se *StatusError
+		if !errors.As(err, &se) || se.Code != tc.code || se.RetryAfter < tc.min || se.RetryAfter > tc.max {
+			t.Errorf("%d with Retry-After %q: %v (%+v), want %v-%v", tc.code, tc.header, err, se, tc.min, tc.max)
+		}
+	}
+}
+
 // Stop reasons per wire format; a reply that stopped at the token cap is
 // Truncated, and Structured reports it without retrying under the same cap.
 func TestStopReasons(t *testing.T) {
@@ -460,7 +490,8 @@ func TestStopReasons(t *testing.T) {
 // A streamed Messages reply decodes to the same Response as the plain JSON
 // one: text deltas in order, cached input counted, the final output tokens
 // and stop reason from message_delta. A gateway that ignores "stream" and
-// answers JSON still decodes; an error event is an error.
+// answers JSON still decodes; an error event is an error, returned with the
+// usage so far.
 func TestMessagesStream(t *testing.T) {
 	sse := "event: message_start\n" +
 		`data: {"type":"message_start","message":{"model":"claude-opus-5-5","usage":{"input_tokens":5,"cache_read_input_tokens":100,"cache_creation_input_tokens":300,"cache_creation":{"ephemeral_5m_input_tokens":100,"ephemeral_1h_input_tokens":200},"output_tokens":1}}}` + "\n\n" +
@@ -477,7 +508,8 @@ func TestMessagesStream(t *testing.T) {
 	}{
 		{"stream", "text/event-stream; charset=utf-8", sse, `{"a": 1}`, 405, 42, true, false},
 		{"json", "application/json", `{"model":"m","content":[{"type":"text","text":"{}"}],"stop_reason":"end_turn","usage":{"input_tokens":3,"output_tokens":4}}`, "{}", 3, 4, false, false},
-		{"error", "text/event-stream", `data: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}` + "\n\n", "", 0, 0, false, true},
+		// An error after message_start keeps the usage so far: the attempt may be billed.
+		{"error", "text/event-stream", sse[:strings.Index(sse, "event: ping")] + `data: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}` + "\n\n", "", 405, 1, false, true},
 	} {
 		var sent map[string]any
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -492,8 +524,8 @@ func TestMessagesStream(t *testing.T) {
 			t.Errorf("%s: request did not ask to stream: %v", tc.name, sent)
 		}
 		if tc.wantErr {
-			if err == nil || !strings.Contains(err.Error(), "overloaded_error") {
-				t.Errorf("%s: want the stream's error, got %+v %v", tc.name, r, err)
+			if err == nil || !strings.Contains(err.Error(), "overloaded_error") || r.TokensIn != tc.in || r.TokensOut != tc.out || r.CachedIn != 100 {
+				t.Errorf("%s: want the stream's error with its usage so far, got %+v %v", tc.name, r, err)
 			}
 			continue
 		}
@@ -508,6 +540,31 @@ func TestMessagesStream(t *testing.T) {
 				t.Errorf("stream cost %.6f, want %.6f", usd, want)
 			}
 		}
+	}
+}
+
+// A stream cut off inside a data line, or before message_stop, is a dropped
+// connection, not a reply: the read error (or an unexpected EOF when the
+// stream just ends) comes back, with the usage so far, so the caller retries it.
+func TestMessagesStreamCutInsideAnEvent(t *testing.T) {
+	start := `data: {"type":"message_start","message":{"model":"m","usage":{"input_tokens":7}}}` + "\n\n"
+	partial := start + `data: {"type":"content_block_delta","index":0,"delta":{"type":"text_d`
+	for name, tc := range map[string]struct {
+		body io.Reader
+		want error
+	}{
+		"reset": {io.MultiReader(strings.NewReader(partial), iotest.ErrReader(syscall.ECONNRESET)), syscall.ECONNRESET},
+		"ended": {strings.NewReader(partial), io.ErrUnexpectedEOF},
+		// A prefix that ends between events, before message_stop, even one that is valid JSON so far.
+		"no stop": {strings.NewReader(start + `data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"{}"}}` + "\n\n"), io.ErrUnexpectedEOF},
+	} {
+		r, err := decodeMessagesStream(tc.body)
+		if !errors.Is(err, tc.want) || r.TokensIn != 7 {
+			t.Errorf("%s: %+v %v, want %v with the usage so far", name, r, err, tc.want)
+		}
+	}
+	if r, err := decodeMessagesStream(strings.NewReader(start + "data: {not json}\n\ndata: {\"type\":\"message_stop\"}\n\n")); err == nil || !strings.Contains(err.Error(), "decode messages stream") || r.TokensIn != 7 {
+		t.Errorf("a malformed event mid-stream is still a decode error, with the usage so far: %+v %v", r, err)
 	}
 }
 
@@ -543,6 +600,42 @@ func TestCacheTokensCount(t *testing.T) {
 		t.Fatalf("breaker did not trip on 0.0417 USD against 0.04: %v", err)
 	}
 }
+
+// A call that fails after using tokens (a stream that errored after
+// message_start) is charged too: the action ledger records its cost and the
+// breaker counts it, and the error stays the provider's.
+func TestGatewayChargesAFailedCall(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "actions.jsonl")
+	log, _ := actions.Open(path, actions.Options{})
+	clock, _ := config.NewClock("Europe/London", "Mon-Fri 09:00-18:00")
+	br := &Breaker{Budget: config.Budget{PerStoryUSD: 0.01}, Clock: clock, Now: time.Now, PauseFile: filepath.Join(dir, "paused")}
+	gw := &Gateway{Resolver: Resolver{}, Actions: log, Breaker: br, Key: func(string) (string, error) { return "k", nil },
+		Client: func(Route, string) Client {
+			return failing{Response{Model: "claude-opus-5-5", TokensIn: 5000}, &StreamError{Type: "overloaded_error", Message: "Overloaded"}}
+		}}
+	_, _, err := gw.Do(context.Background(), Call{Story: "#9", Lane: verbs.LaneSpec, Host: verbs.HostClaude, Req: Request{Messages: []Message{{Role: "user", Content: "draft"}}}})
+	var st *StreamError
+	if !errors.As(err, &st) || !errors.Is(err, ErrBudget) || !br.Paused() {
+		t.Fatalf("5000 input tokens at 4 USD per million (0.02) against 0.01: %v, paused %v", err, br.Paused())
+	}
+	b, _ := os.ReadFile(path)
+	var rec struct {
+		Status  string  `json:"status"`
+		CostUSD float64 `json:"cost_usd"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(string(b))), &rec); err != nil || rec.Status != actions.StatusFailed || math.Abs(rec.CostUSD-0.02) > 1e-9 {
+		t.Fatalf("ledger record %s: %+v %v", b, rec, err)
+	}
+}
+
+// failing returns its partial response with its error.
+type failing struct {
+	resp Response
+	err  error
+}
+
+func (f failing) Complete(context.Context, Request) (Response, error) { return f.resp, f.err }
 
 // Each provider's usage block is priced at that model's list rates: OpenAI's
 // implicit cache writes at 1.25x input and reads at its cached rate, xAI's
