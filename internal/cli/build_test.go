@@ -948,7 +948,14 @@ func TestBuildSessionReviewLoop(t *testing.T) {
 		_ = os.WriteFile(filepath.Join(wt, "a.go"), []byte("package a\n\nvar "+word+" = 1\n"), 0o644)
 	}
 	pushed := func() string { return git(t, bare, "rev-parse", "refs/heads/story/2-show-empty-list") }
-	body := func() string { g.Mu.Lock(); defer g.Mu.Unlock(); return g.Pulls[prN].Body }
+	body := func() string {
+		g.Mu.Lock()
+		defer g.Mu.Unlock()
+		if g.Issues[prN].Body != g.Pulls[prN].Body {
+			t.Fatalf("the PR's issue body differs from its pull request body:\n%s", g.Issues[prN].Body)
+		}
+		return g.Pulls[prN].Body
+	}
 
 	// Round 1 finds a P1: the checkpoint is committed but not pushed, and the
 	// builder reads what to fix.

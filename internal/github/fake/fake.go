@@ -1072,7 +1072,10 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			reply(200, pr)
 		case sm[2] == "" && m == "PATCH":
 			if b, ok := body["body"].(string); ok {
-				pr.Body = b
+				pr.Body = b // a pull request is an issue: both reads return the new body
+				if is := g.Issues[pr.Number]; is != nil {
+					is.Body = b
+				}
 			}
 			reply(200, pr)
 		case sm[2] == "/reviews" && m == "POST":
