@@ -132,12 +132,13 @@ PASS  agents  local CLIs signed in: codex, cursor, claude, amp; cloud agents con
                 claude: /usr/bin/x 1.0.0, signed in; cloud: claude --cloud with a claude.ai account
                 amp: /usr/bin/x 1.0.0, signed in; cloud: no Amp project recorded for this repository: `aayu install --env --host amp --cloud` finds it and proves the orb environment
 ## reviewer-apps pass
-PASS  reviewer-apps  merge-gate reviewer: codex (openai), unless it is of the builder's family; then the next app, else a human
+PASS  reviewer-apps  merge-gate reviewer: codex (openai); its review counts as different-family only for a builder of another family, and is labelled same-family otherwise
                        claude (@claude review, family anthropic): not detected
                        codex (@codex review, family openai): configured in [inspect] apps; detected: installed on the organisation o
                        cursor (@cursor, family host-managed): not detected
                        amp (no mention, family host-managed): not detected
                          Amp has no @amp mention and replies as the person who connected it, so aayu cannot tell its reply from the builder's
+                       no installed reviewer app is of a family the builder cannot be, so codex gives a labelled same-family review (rung C); install an app of another family to move up
 ## reviewer-apps fail
 WARN  reviewer-apps  reviewer apps detected but not configured: codex, cursor; add them to [inspect] apps (the gate reads config only)
                        claude (@claude review, family anthropic): not detected

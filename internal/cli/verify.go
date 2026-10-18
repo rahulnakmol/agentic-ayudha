@@ -32,6 +32,7 @@ var (
 	storyTrailer = regexp.MustCompile(`(?m)^Aayudha-Story:\s*#?([0-9]+)\s*$`)
 	checkpoint   = regexp.MustCompile(`(?m)^Aayudha-Checkpoint:\s*([0-9]+/[0-9]+)\s*$`)
 	modelTrailer = regexp.MustCompile(`(?m)^Aayudha-Model:\s*(\S+)\s*$`)
+	hostTrailer  = regexp.MustCompile(`(?m)^Aayudha-Host:\s*(\S+)\s*$`)
 	storyBranch  = regexp.MustCompile(`^(?:story|bug)/([0-9]+)(?:-|$)`)
 )
 

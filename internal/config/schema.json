@@ -305,6 +305,10 @@
             "type": "string",
             "description": "Provider project: the PostHog project ID, the Sentry project ID, the owner/name GitHub baselines read (default: the current repository), the Azure resource ID of the Log Analytics workspace or Application Insights component (azure), the CloudWatch RUM app monitor name (aws), or \u003cproject\u003e.\u003cdataset\u003e of the GA4 BigQuery export (gcp)."
           },
+          "allow_pii": {
+            "type": "boolean",
+            "description": "posthog, sentry: let an agent call the host MCP tools that return personal data (person records, replay content, raw LLM prompts, support tickets). Off by default (Decision #449)."
+          },
           "transport": {
             "type": "string",
             "enum": [

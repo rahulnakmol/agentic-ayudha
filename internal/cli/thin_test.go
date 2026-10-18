@@ -11,11 +11,13 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
+	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
 	"github.com/rahulnakmol/agentic-ayudha/internal/planning"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
@@ -67,6 +69,13 @@ func thinFixture(t *testing.T) (g *fake.GitHub, env map[string]string, opts Opti
 	g.Mu.Unlock()
 	if !strings.Contains(pr.Body, "Refs #2") || pr.Base.Ref != "dev" {
 		t.Fatalf("PR: %+v", pr)
+	}
+	// The push asked for a review of the head (a human one: no reviewer app is configured).
+	g.Mu.Lock()
+	asked := slices.ContainsFunc(g.Issues[res.PR].Comments, func(c *fake.Comment) bool { return strings.Contains(c.Body, inspect.RequestMarker) })
+	g.Mu.Unlock()
+	if !asked || !slices.ContainsFunc(res.Notes, func(n string) bool { return strings.Contains(n, "requested") }) {
+		t.Fatalf("build did not ask for a review after the push: notes %v", res.Notes)
 	}
 	return g, env, opts, dir, bare, res.PR, head
 }
@@ -252,8 +261,9 @@ func TestShipMobileWaiverAndSoloBypass(t *testing.T) {
 		t.Fatalf("solo bypass by an agent: %d %s", code, errOut)
 	}
 	g.Mu.Lock()
-	g.Issues[prN].Comments = append(g.Issues[prN].Comments, &fake.Comment{ID: 77, Body: "Solo-mode bypass: one human, no bot App; shipping the thin-slice story."})
-	g.Issues[prN].Comments[0].User.Login, g.Issues[prN].Comments[0].User.Type = "founder", "User"
+	bypass := &fake.Comment{ID: 77, Body: "Solo-mode bypass: one human, no bot App; shipping the thin-slice story."}
+	bypass.User.Login, bypass.User.Type = "founder", "User"
+	g.Issues[prN].Comments = append(g.Issues[prN].Comments, bypass)
 	g.Mu.Unlock()
 	// Bug #170: with every solo-mode condition met, an agent running ship --solo-bypass through its host's shell
 	// with the founder's token (no AAYU_AGENT) is refused, even on a terminal, and nothing is merged; with no

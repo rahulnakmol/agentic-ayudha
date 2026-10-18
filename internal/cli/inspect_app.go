@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
 // Dispositions of a review that has no usable reply yet: both fail the gate
@@ -50,7 +52,7 @@ type appInspect struct {
 func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 	n, head := a.pr.GetNumber(), a.pr.GetHead().GetSHA()
 	owner, name, _ := github.SplitRepo(a.repo)
-	choice := inspect.ChooseReviewer(a.cfg.Inspect.Reviewer, a.cfg.Inspect.Apps, a.cfg.Inspect.AppFamilies, a.builder.Candidates, a.cfg.Autonomy.Approver)
+	choice := inspect.ChooseReviewer(a.cfg.Inspect.Reviewer, a.cfg.Inspect.Apps, a.cfg.Inspect.AppFamilies, a.builder, a.cfg.Autonomy.Approver)
 	notes := append([]string{a.builder.Note(), "reviewer: " + choice.Kind() + "; the merge gate holds no AI key and reads its reply"}, choice.Notes...)
 	if a.in.Mode == inspect.ModePeer {
 		notes = append(notes, "peer mode needs two model reviewers; a reviewer app reviews alone, high-risk PRs included")
@@ -65,7 +67,7 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		return Wrap(ExitExternal, err)
 	}
 	replyEvent := e.CI && (e.Getenv("GITHUB_EVENT_NAME") == "issue_comment" || e.Getenv("GITHUB_EVENT_NAME") == "pull_request_review")
-	if a.in.Pack == nil && e.CI && !replyEvent {
+	if a.in.Pack == nil && a.in.Story > 0 && e.CI && !replyEvent {
 		return Errorf(ExitBlocked, "inspect #%d: %v", n, inspect.ErrNoPack)
 	}
 	var since time.Time
@@ -88,11 +90,9 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		since = e.Now()
 	}
 	files := inspect.ParseDiff(a.in.Diff)
-	var changed []string
+	var changed []string // every changed path, deletions included: a review of the diff covers them
 	for _, f := range files {
-		if !f.Deleted {
-			changed = append(changed, f.Path)
-		}
+		changed = append(changed, f.Path)
 	}
 	bots := a.cfg.Identity.BotLogins
 	human := func(login, typ string) bool { return !identity.IsBot(identity.Account{Login: login, Type: typ}, bots) }
@@ -111,7 +111,7 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		}}
 	st := a.prev
 	switch {
-	case rerr == nil && a.in.Pack == nil:
+	case rerr == nil && a.in.Pack == nil && a.in.Story > 0:
 		res.Disposition, res.Summary = NoReply, fmt.Sprintf("%s replied (%s); the merge gate judges the reply against its pack for `%s`", choice.Kind(), rep.Source, short(head))
 		res.Next = "the merge gate's inspect check reads it"
 	case errors.Is(rerr, inspect.ErrNoReply), errors.Is(rerr, inspect.ErrMalformed):
@@ -120,6 +120,8 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 			res.Disposition = Malformed
 		}
 		res.Summary = fmt.Sprintf("No usable review of `%s` from %s yet, so the gate fails closed: %v.", short(head), choice.Kind(), rerr)
+		res.Rung, res.ReviewerFamily = choice.Rung, choice.Family
+		res.Review = "requested: " + a.builder.RungLabel(choice.Rung, choice.Kind(), choice.Family)
 		res.Next = fmt.Sprintf("the reviewer replies on this PR in the stated format (a review request: `aayu inspect %d`, run by the builder or a person under their own account); the reply re-runs this check", n)
 		if since.IsZero() {
 			notes = append(notes, "no review request for this head on the PR yet")
@@ -130,6 +132,7 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		var err error
 		res, st, err = r.Judge(ctx, a.in, a.prev, rep)
 		res.Head, res.Builder = head, a.builder
+		res.Rung, res.ReviewerFamily, res.Review = reviewRung(a.builder, choice, rep)
 		switch {
 		case errors.Is(err, inspect.ErrCycles):
 			return Errorf(ExitBlocked, "inspect #%d: %v (paged)", n, err)
@@ -138,12 +141,18 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		}
 	}
 	res.Notes = append(notes, res.Notes...)
+	// A cached judgement keeps its reply, but the rung follows the builder as
+	// declared now: a changed label rewrites the record ship reads.
+	relabel := false
 	if st.Result != nil && st.Result.DiffHash == res.DiffHash {
-		st.Result.Notes = res.Notes
+		relabel = st.Result.Review != res.Review
+		// The state the comment records is what ship and audit read later.
+		st.Result.Notes, st.Result.Head, st.Result.Builder = res.Notes, res.Head, res.Builder
+		st.Result.Rung, st.Result.ReviewerFamily, st.Result.Review = res.Rung, res.ReviewerFamily, res.Review
 	}
-	if e.CI && res.Disposition != inspect.Skipped && !res.Cached {
+	if e.CI && res.Disposition != inspect.Skipped && (!res.Cached || relabel) {
 		if _, err := a.c.UpsertComment(ctx, a.repo, n, inspect.Marker, inspect.Comment(res, st, 0), actions.Action{Kind: "github.comment.inspect",
-			Payload: map[string]any{"disposition": res.Disposition, "diff_hash": res.DiffHash, "reviewer": choice.Kind()}}); err != nil {
+			Payload: map[string]any{"disposition": res.Disposition, "diff_hash": res.DiffHash, "reviewer": choice.Kind(), "rung": res.Rung}}); err != nil {
 			return err
 		}
 	}
@@ -156,6 +165,35 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 	return nil
 }
 
+// reviewRung settles the review ladder's rung from the reply (Decision
+// #469): the family of the model the reviewer reports, else the app's
+// configured family. Only an app whose family is host-managed settles it
+// from the reported model; a fixed-family app reporting another family's
+// model, a reported model aayu cannot place, or one of the builder's
+// candidate families, is a same-family review (C) whatever was planned; a
+// person's review is human.
+func reviewRung(b inspect.Builder, c inspect.Choice, rep inspect.AppReply) (string, verbs.Family, string) {
+	if c.App == "" {
+		return inspect.RungHuman, "", b.RungLabel(inspect.RungHuman, rep.Login, "")
+	}
+	f, who := c.Family, c.App
+	switch {
+	case rep.Model != "" && !modelID.MatchString(rep.Model):
+		f, who = "", c.App+" with a model ID aayu does not accept" // reviewer text never reaches the label
+	case rep.Model != "" && c.Family != "" && c.Family != verbs.FamilyHostManaged && verbs.FamilyOf(rep.Model) != c.Family:
+		// An app of one family cannot run another's model: the claim is
+		// reviewer text (a hallucination or injected PR content), not a fact.
+		f, who = "", fmt.Sprintf("%s (%s) reporting %s, not of its family", c.App, c.Family, rep.Model)
+	case rep.Model != "":
+		f, who = verbs.FamilyOf(rep.Model), c.App+" with "+rep.Model
+	}
+	rung := b.Rung(f)
+	return rung, f, b.RungLabel(rung, who, f)
+}
+
+// modelID is what a reported model may look like to be named in a label.
+var modelID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/-]{0,63}$`)
+
 func (e *Env) emitInspect(res inspect.Result, notes []string) error {
 	res.Notes = append(notes, res.Notes...)
 	return e.Emit(res, func(w io.Writer) error {
@@ -167,6 +205,9 @@ func (e *Env) emitInspect(res inspect.Result, notes []string) error {
 			fmt.Fprintf(w, " (reviewed by %s)", res.Model)
 		}
 		fmt.Fprintln(w)
+		if res.Review != "" {
+			fmt.Fprintf(w, "  review: %s\n", res.Review)
+		}
 		if res.Overridden != "" {
 			fmt.Fprintf(w, "  %s\n", res.Overridden)
 		}

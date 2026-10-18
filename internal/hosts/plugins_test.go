@@ -444,7 +444,7 @@ func TestCodexHookTrust(t *testing.T) {
 
 	config("[plugins.\"aayudha@aayudha\"]\nenabled = true\n")
 	found, problems, err := CodexHookTrust(root, codexHome)
-	if err != nil || found != 4 || len(problems) != 5 || !strings.Contains(problems[0], "does not trust this project") {
+	if err != nil || found != 5 || len(problems) != 6 || !strings.Contains(problems[0], "does not trust this project") {
 		t.Fatalf("nothing trusted: %d %q %v", found, problems, err)
 	}
 	// The repository's PreToolUse and the plugin's PreToolUse are trusted; the
@@ -463,6 +463,7 @@ trusted_hash = "sha256:0000"
 	_, problems, _ = CodexHookTrust(root, codexHome)
 	want := []string{
 		".codex/hooks.json: the SessionStart hook is not trusted yet; trust it in Codex's /hooks",
+		"plugin aayudha@aayudha: the PostToolUse hook is not trusted yet; trust it in Codex's /hooks",
 		"plugin aayudha@aayudha: the SessionStart hook changed since it was trusted (an update); trust it again in Codex's /hooks",
 	}
 	if !slices.Equal(problems, want) {

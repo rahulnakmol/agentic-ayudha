@@ -11,12 +11,14 @@
 #            the story's Completion Goal drifted from its Ready snapshot, or a criterion has no evidence. It keeps
 #            the pack (pack.json and every artifact, media included) as the aayudha-pack run artifact for
 #            [proof] retention_days, at most the repository's artifact retention limit.
-#   inspect  reads the review of the PR head by the agent app [inspect] reviewer picks (an app installed on the org
-#            or account, @claude, @codex, or @cursor, of a family other than the builder's, else a human): a reply
-#            in the stated format, or Codex's own review of the exact head. `aayu inspect <pr>`, run by the builder
-#            or a person under their own account, posts the request; the apps answer people, never a workflow token.
-#            aayu turns the reply into the disposition, criterion verdicts, and a sealed coverage manifest; a missing
-#            or malformed reply, fix, rebuild, or an unreviewed file fails it.
+#   inspect  on every PR that is ready for review, story or not, reads the review of the PR head by the agent app
+#            [inspect] reviewer picks (an app installed on the org or account, @claude, @codex, or @cursor, of a family
+#            other than the builder's, else a human): a reply in the stated format, or Codex's own review of the exact
+#            head (its automatic review counts). `aayu inspect <pr>`, run by the builder or a person under their own
+#            account (`aayu build` does it after each push), posts the request; the apps answer people, never a
+#            workflow token. aayu turns the reply into the disposition, criterion verdicts (a story PR's), and a sealed
+#            coverage manifest; a missing or malformed reply, fix, rebuild, or an unreviewed file fails it. A PR that
+#            changes only docs passes without a review.
 #   reply    on a comment or review on the PR (issue_comment and pull_request_review), re-runs the failed jobs of
 #            the head's pull_request_target run once its reviewer has replied, so the inspect check on the head
 #            carries the verdict. It runs no PR code, holds no secret, and re-runs nothing for other comments.
@@ -175,7 +177,7 @@ jobs:
   inspect:
     name: aayudha/inspect
     needs: gate
-    if: github.event_name == 'pull_request_target' && needs.gate.outputs.story != '0'
+    if: github.event_name == 'pull_request_target'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -208,7 +210,9 @@ jobs:
             export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=maintenance.auto GIT_CONFIG_VALUE_0=false
           fi
           go install "github.com/rahulnakmol/agentic-ayudha/cmd/aayudha@$AAYU_VERSION"
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      # A story PR's pack; a PR that serves no story has none and is judged on its disposition and coverage.
+      - if: needs.gate.outputs.story != '0' && needs.gate.outputs.story != ''
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: aayudha-pack
           path: .aayudha/proof/

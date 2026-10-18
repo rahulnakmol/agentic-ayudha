@@ -341,7 +341,10 @@ func (e *Env) counselPR(ctx context.Context, c *github.Client, owner, name strin
 		rep.Facts = append(rep.Facts, packFact{Text: fmt.Sprintf("Proof pack for #%d at %.7s (%s): %s", story, head, pack.Authority.Kind, strings.Join(floors, "; ")),
 			Cite: "`ledger/" + proof.Dir(story, head, pack.Authority.Kind) + "/`"})
 	}
-	b := e.prBuilder(ctx, c, owner, name, pr, story, pack)
+	b, err := e.prBuilder(ctx, c, owner, name, pr, story, pack)
+	if err != nil {
+		return err
+	}
 	rep.Builder = &b
 	note := "Builder: " + b.Note()
 	if credErr != nil {
@@ -352,9 +355,9 @@ func (e *Env) counselPR(ctx context.Context, c *github.Client, owner, name strin
 }
 
 // prBuilder is the PR's builder family from what aayu recorded outside the PR (the delegation record and build's
-// checkpoint models on the ledger) and the head's Aayudha-Model trailer or the pack's model as a claim, with
-// inspect's rule (inspect.BuilderOf). When the records are missing the family is unknown.
-func (e *Env) prBuilder(ctx context.Context, c *github.Client, owner, name string, pr *gh.PullRequest, story int, pack *proof.Pack) inspect.Builder {
+// checkpoint models on the ledger) and every declared model and host (the body's and every commit's trailers, the
+// pack) as claims, with inspect's rule (inspect.BuilderOf). When the records are missing the family is unknown.
+func (e *Env) prBuilder(ctx context.Context, c *github.Client, owner, name string, pr *gh.PullRequest, story int, pack *proof.Pack) (inspect.Builder, error) {
 	var deleg delegate.State
 	checkpoints := map[string]string{}
 	if story > 0 {
@@ -375,22 +378,62 @@ func (e *Env) prBuilder(ctx context.Context, c *github.Client, owner, name strin
 			}
 		}
 	}
-	var commits []string
-	claim := ""
-	if cs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.RepositoryCommit, *gh.Response, error) {
-		return c.REST.PullRequests.ListCommits(ctx, owner, name, pr.GetNumber(), &o)
-	}); err == nil {
-		for _, x := range cs {
-			commits = append(commits, x.GetSHA())
-			if m := modelTrailer.FindStringSubmatch(x.GetCommit().GetMessage()); m != nil && x.GetSHA() == pr.GetHead().GetSHA() {
-				claim = m[1]
+	// Every model the PR declares is a claim, and a declaration that names a host but no concrete model adds its
+	// host, collected as inspect does (Decision #469).
+	var commits, claims, hosts []string
+	lane := verbs.Family("")
+	declare := func(models []string, host string, named bool) {
+		concrete := false
+		for _, m := range models {
+			if m = strings.ToLower(m); !slices.Contains(claims, m) {
+				claims = append(claims, m)
 			}
+			concrete = concrete || verbs.Family(m) != verbs.FamilyHostManaged
+		}
+		if host = strings.ToLower(host); !concrete && (named || len(models) > 0) && !slices.Contains(hosts, host) {
+			hosts = append(hosts, host)
 		}
 	}
-	if pack != nil && pack.Model != "" {
-		claim = pack.Model
+	trailers := func(text string) {
+		var models []string
+		for _, m := range modelTrailer.FindAllStringSubmatch(text, -1) {
+			models = append(models, m[1])
+		}
+		if h := hostTrailer.FindStringSubmatch(text); h == nil {
+			declare(models, "", false)
+		} else {
+			declare(models, h[1], true)
+		}
 	}
-	return inspect.BuilderOf(inspect.Records{Receiver: deleg.Receiver, Delegated: deleg.Family, Checkpoints: checkpoints}, commits, claim, "")
+	trailers(pr.GetBody())
+	// Without the commits' declarations a family could be missing, so a failed listing fails counsel.
+	cs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.RepositoryCommit, *gh.Response, error) {
+		return c.REST.PullRequests.ListCommits(ctx, owner, name, pr.GetNumber(), &o)
+	})
+	if err != nil {
+		return inspect.Builder{}, wrapExternal(err)
+	}
+	for _, x := range cs {
+		commits = append(commits, x.GetSHA())
+		trailers(x.GetCommit().GetMessage())
+	}
+	if pack != nil {
+		_, known := verbs.FindHost(verbs.HostID(pack.Host))
+		var models []string
+		if pack.Model != "" {
+			models = []string{pack.Model}
+		}
+		if known {
+			if gw, err := e.Gateway(); err == nil {
+				if b, err := gw.Resolver.Resolve(verbs.LaneBuild, verbs.HostID(pack.Host)); err == nil {
+					lane = b.Family
+				}
+			}
+		}
+		// A build lane that names a family is the model the pack's host ran.
+		declare(models, pack.Host, known && (lane == "" || lane == verbs.FamilyHostManaged))
+	}
+	return inspect.BuilderOf(inspect.Records{Receiver: deleg.Receiver, Delegated: deleg.Family, Checkpoints: checkpoints}, commits, claims, hosts, lane), nil
 }
 
 // counselModel is the model that wrote the counsel, as reported: AAYU_MODEL, else the spec lane's model for the

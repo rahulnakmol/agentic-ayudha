@@ -189,6 +189,7 @@ type GitHub struct {
 	Pulls       map[int]*PR
 	CheckRuns   map[string][]CheckRun   // commit SHA -> check runs, newest first
 	JobLogs     map[int64]string        // Actions job (check run) ID -> its log, behind a redirect like GitHub's
+	RunJobs     map[int64][]CheckRun    // run ID -> its jobs (latest attempt)
 	Runs        []WorkflowRun           // Actions workflow runs
 	Artifacts   map[int64][]ArtifactZip // run ID -> artifacts
 	Releases    map[string]*Release     // tag -> GitHub Release
@@ -328,8 +329,9 @@ var (
 	reRelease   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/releases/([0-9]+)$`)
 	reRunArts   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/runs/([0-9]+)/artifacts$`)
 	reJobLogs   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/jobs/([0-9]+)/logs$`)
+	reRunJobs   = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/runs/([0-9]+)/jobs$`)
 	reArtZip    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/actions/artifacts/([0-9]+)/zip$`)
-	rePull      = regexp.MustCompile(`^/repos/[^/]+/[^/]+/pulls/([0-9]+)(/reviews|/files|/merge|/comments)?$`)
+	rePull      = regexp.MustCompile(`^/repos/[^/]+/[^/]+/pulls/([0-9]+)(/reviews|/files|/merge|/comments|/commits)?$`)
 	reIssue     = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)$`)
 	reLabels    = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/labels$`)
 	reLabel     = regexp.MustCompile(`^/repos/[^/]+/[^/]+/issues/([0-9]+)/labels/(.+)$`)
@@ -735,6 +737,9 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		notFound()
+	case m == "GET" && reRunJobs.MatchString(p):
+		jobs := g.RunJobs[int64(atoi(reRunJobs.FindStringSubmatch(p)[1]))]
+		reply(200, map[string]any{"total_count": len(jobs), "jobs": jobs})
 	case m == "GET" && reRunArts.MatchString(p):
 		out := []map[string]any{}
 		for _, a := range g.Artifacts[int64(atoi(reRunArts.FindStringSubmatch(p)[1]))] {
@@ -825,6 +830,8 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			reply(200, out)
+		case sm[2] == "/commits" && m == "GET": // the head commit alone; Static gives a PR more
+			reply(200, []map[string]any{{"sha": pr.Head.SHA, "commit": map[string]any{"message": ""}}})
 		case sm[2] == "/files" && m == "GET":
 			out := []map[string]any{}
 			for _, f := range pr.Files {

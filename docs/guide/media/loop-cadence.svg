@@ -1,0 +1,83 @@
+<!-- Hand-made for docs/guide/concepts-loop.md; edit by hand. Facts: loops/*.toml, internal/inspect (MaxCycles), internal/verbs/registry.go. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 1258" width="460" height="1258" role="img" aria-labelledby="cadence-title cadence-desc" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+<title id="cadence-title">Four loops inside each other, and the scheduled loops that keep them moving</title>
+<desc id="cadence-desc">The checkpoint loop builds and checks one layer at a time. The review loop sends a pull request back to its builder at most twice before a person decides. The story loop takes a Ready story to a merge. The goal loop releases the stories, measures the Goal, and starts the next one. Below, scheduled loops run each weekday, each night, each week, and each month, each run by a seat's twin, or by GitHub Actions when no model is needed; a person approves anything they cannot.</desc>
+<defs><marker id="arrow-cadence" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1f5bd1"/></marker></defs>
+<rect width="460" height="1258" fill="#ffffff"/>
+<rect x="12" y="12" width="436" height="398" rx="12" fill="#eef3fd" stroke="#1f5bd1" stroke-width="2"/>
+<text x="26" y="36" font-size="16" fill="#1d2330" font-weight="bold" text-anchor="start">Goal loop</text>
+<text x="434" y="36" font-size="13" fill="#535b6b" font-weight="normal" text-anchor="end" font-style="italic">weeks</text>
+<text x="26" y="58" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">Shape a Goal, release its stories, measure it</text>
+<text x="26" y="76" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">against the baseline, start the next.</text>
+<rect x="26" y="92" width="408" height="300" rx="12" fill="#f3f0fa" stroke="#6941c6" stroke-width="2"/>
+<text x="40" y="116" font-size="16" fill="#1d2330" font-weight="bold" text-anchor="start">Story loop</text>
+<text x="420" y="116" font-size="13" fill="#535b6b" font-weight="normal" text-anchor="end" font-style="italic">a story you can build in a day</text>
+<text x="40" y="138" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">Ready, build, prove, then a person's yes</text>
+<text x="40" y="156" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">and ship.</text>
+<rect x="40" y="172" width="380" height="202" rx="12" fill="#fdf0ec" stroke="#b4441d" stroke-width="2"/>
+<text x="54" y="196" font-size="16" fill="#1d2330" font-weight="bold" text-anchor="start">Review loop</text>
+<text x="406" y="196" font-size="13" fill="#535b6b" font-weight="normal" text-anchor="end" font-style="italic">each push</text>
+<text x="54" y="218" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">The merge gate runs; inspect says fix;</text>
+<text x="54" y="236" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">the builder fixes. After 2 rounds, a</text>
+<text x="54" y="254" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">person decides.</text>
+<rect x="54" y="270" width="352" height="86" rx="12" fill="#edf7ee" stroke="#2e7d32" stroke-width="2"/>
+<text x="68" y="294" font-size="16" fill="#1d2330" font-weight="bold" text-anchor="start">Checkpoint loop</text>
+<text x="392" y="294" font-size="13" fill="#535b6b" font-weight="normal" text-anchor="end" font-style="italic">each layer</text>
+<text x="68" y="316" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">Build one layer, run verify, commit</text>
+<text x="68" y="334" font-size="14" fill="#1d2330" font-weight="normal" text-anchor="start">the checkpoint, go on.</text>
+<text x="12" y="436" font-size="17" fill="#1d2330" font-weight="bold" text-anchor="start">Scheduled loops</text>
+<text x="12" y="456" font-size="13.5" fill="#535b6b" font-weight="normal" text-anchor="start">Agent loops run in your agent's own scheduler, as you.</text>
+<text x="12" y="474" font-size="13.5" fill="#535b6b" font-weight="normal" text-anchor="start">Loops that need no model run in GitHub Actions.</text>
+<rect x="12" y="498" width="436" height="230" rx="10" fill="#f5f6f8" stroke="#d9dde4" stroke-width="1.5"/>
+<text x="26" y="519" font-size="14.5" fill="#1f5bd1" font-weight="bold" text-anchor="start">Every weekday</text>
+<text x="26" y="544" font-size="13.5" fill="#1d2330" font-weight="bold" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">triage-daily</text>
+<text x="434" y="544" font-size="12.5" fill="#535b6b" font-weight="normal" text-anchor="end">09:00</text>
+<text x="26" y="561" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">Arjun labels new reports</text>
+<text x="26" y="584" font-size="13.5" fill="#1d2330" font-weight="bold" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">digest</text>
+<text x="434" y="584" font-size="12.5" fill="#535b6b" font-weight="normal" text-anchor="end">09:05</text>
+<text x="26" y="601" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">the founder digest (Actions)</text>
+<text x="26" y="624" font-size="13.5" fill="#1d2330" font-weight="bold" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">decisions</text>
+<text x="434" y="624" font-size="12.5" fill="#535b6b" font-weight="normal" text-anchor="end">09:15</text>
+<text x="26" y="641" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">Decisions past their SLA</text>
+<text x="26" y="664" font-size="13.5" fill="#1d2330" font-weight="bold" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">ci-failed</text>
+<text x="434" y="664" font-size="12.5" fill="#535b6b" font-weight="normal" text-anchor="end">09:45</text>
+<text x="26" y="681" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">a failed check goes back</text>
+<text x="26" y="704" font-size="13.5" fill="#1d2330" font-weight="bold" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">alert-triage</text>
+<text x="434" y="704" font-size="12.5" fill="#535b6b" font-weight="normal" text-anchor="end">09:00, 14:00</text>
+<text x="26" y="721" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">Shesha: burning SLOs</text>
+<rect x="12" y="738" width="436" height="70" rx="10" fill="#f5f6f8" stroke="#d9dde4" stroke-width="1.5"/>
+<text x="26" y="759" font-size="14.5" fill="#1f5bd1" font-weight="bold" text-anchor="start">Every night</text>
+<text x="26" y="784" font-size="13.5" fill="#1d2330" font-weight="bold" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">verify-sweep</text>
+<text x="434" y="784" font-size="12.5" fill="#535b6b" font-weight="normal" text-anchor="end">02:30</text>
+<text x="26" y="801" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">behaviour checks (Actions)</text>
+<rect x="12" y="818" width="436" height="270" rx="10" fill="#f5f6f8" stroke="#d9dde4" stroke-width="1.5"/>
+<text x="26" y="839" font-size="14.5" fill="#1f5bd1" font-weight="bold" text-anchor="start">Every week</text>
+<text x="26" y="864" font-size="13.5" fill="#1d2330" font-weight="bold" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">retro</text>
+<text x="434" y="864" font-size="12.5" fill="#535b6b" font-weight="normal" text-anchor="end">Mon</text>
+<text x="26" y="881" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">Drona: plan against reality</text>
+<text x="26" y="904" font-size="13.5" fill="#1d2330" font-weight="bold" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">release-measure</text>
+<text x="434" y="904" font-size="12.5" fill="#535b6b" font-weight="normal" text-anchor="end">Mon</text>
+<text x="26" y="921" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">Shuka: measure a release</text>
+<text x="26" y="944" font-size="13.5" fill="#1d2330" font-weight="bold" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">error-budget-review</text>
+<text x="434" y="944" font-size="12.5" fill="#535b6b" font-weight="normal" text-anchor="end">Mon</text>
+<text x="26" y="961" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">Shesha: record the budget</text>
+<text x="26" y="984" font-size="13.5" fill="#1d2330" font-weight="bold" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">verify-maintain</text>
+<text x="434" y="984" font-size="12.5" fill="#535b6b" font-weight="normal" text-anchor="end">Mon</text>
+<text x="26" y="1001" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">keep feature maps current</text>
+<text x="26" y="1024" font-size="13.5" fill="#1d2330" font-weight="bold" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">patch-sweep</text>
+<text x="434" y="1024" font-size="12.5" fill="#535b6b" font-weight="normal" text-anchor="end">Wed</text>
+<text x="26" y="1041" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">a Bug per fixable advisory</text>
+<text x="26" y="1064" font-size="13.5" fill="#1d2330" font-weight="bold" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">housekeeping</text>
+<text x="434" y="1064" font-size="12.5" fill="#535b6b" font-weight="normal" text-anchor="end">Fri</text>
+<text x="26" y="1081" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">Nala: tidy, report drift</text>
+<rect x="12" y="1098" width="436" height="110" rx="10" fill="#f5f6f8" stroke="#d9dde4" stroke-width="1.5"/>
+<text x="26" y="1119" font-size="14.5" fill="#1f5bd1" font-weight="bold" text-anchor="start">Every month</text>
+<text x="26" y="1144" font-size="13.5" fill="#1d2330" font-weight="bold" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">seat-review</text>
+<text x="434" y="1144" font-size="12.5" fill="#535b6b" font-weight="normal" text-anchor="end">1st</text>
+<text x="26" y="1161" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">every seat checks its charter</text>
+<text x="26" y="1184" font-size="13.5" fill="#1d2330" font-weight="bold" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">evolve</text>
+<text x="434" y="1184" font-size="12.5" fill="#535b6b" font-weight="normal" text-anchor="end">2nd</text>
+<text x="26" y="1201" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">Nakul: skills from Feedback</text>
+<text x="230.0" y="1226" font-size="12.5" fill="#535b6b" font-weight="normal" text-anchor="middle" font-style="italic">Times are in your [time] zone.</text>
+<text x="230.0" y="1244" font-size="12.5" fill="#535b6b" font-weight="normal" text-anchor="middle" font-style="italic">A halted repository or a spent budget stops every run.</text>
+</svg>

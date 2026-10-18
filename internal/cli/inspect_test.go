@@ -336,7 +336,7 @@ func TestInspectBuilderFamily(t *testing.T) {
 		wantSource                                   []string
 	}{
 		{"the trailer names anthropic, the build record openai", "gpt-6.1-sol", "claude-opus-5-5", "grok-4.7", "",
-			[]string{"the records say openai", "trailer claims claude-opus-5-5 (self-reported, unverified)", "none of [openai anthropic]"}},
+			[]string{"the records say openai", "declarations claim [anthropic] (self-reported, unverified)", "none of [openai anthropic]"}},
 		{"no trailer and no build record", "", "", "gpt-6.1-sol", "",
 			[]string{"no build or delegation record on the ledger names a model family", "the build lane's family on the pack's host is anthropic"}},
 		{"honest: record and trailer agree on anthropic", "claude-opus-5-5", "claude-opus-5-5", "gpt-6.1-sol", "anthropic",
@@ -373,6 +373,34 @@ func TestInspectBuilderFamily(t *testing.T) {
 				if !strings.Contains(comment, want) {
 					t.Errorf("the verdict lacks %q:\n%s", want, comment)
 				}
+			}
+			if tc.wantFamily == "" {
+				return
+			}
+			// Declaring a model of the reviewer's family afterwards turns the
+			// cached review into a same-family one, in the record ship reads.
+			if st := inspect.ParseState(comment); st.Result == nil || st.Result.Rung != inspect.RungA {
+				t.Fatalf("the first review's record: %+v", st.Result)
+			}
+			g.Mu.Lock()
+			g.Pulls[prN].Body += "\n\nAayudha-Model: gpt-6.1-sol\n"
+			g.Mu.Unlock()
+			if code, res, errOut = inspectRun(t, env, opts, model, prN); code != 0 || !res.Cached || res.Rung != inspect.RungC {
+				t.Fatalf("a cached review after the builder changed: %d cached %v rung %q: %s", code, res.Cached, res.Rung, errOut)
+			}
+			g.Mu.Lock()
+			comment = g.Issues[prN].Comments[0].Body
+			g.Mu.Unlock()
+			if st := inspect.ParseState(comment); st.Result == nil || st.Result.Rung != inspect.RungC || !strings.Contains(comment, "same-family review (C)") {
+				t.Fatalf("the comment keeps the stale rung: %+v\n%s", st.Result, comment)
+			}
+			// Anyone can write the cached state: a reviewer model the lane did
+			// not pick, of a family the builder is not, never makes it A.
+			g.Mu.Lock()
+			g.Issues[prN].Comments[0].Body = strings.ReplaceAll(comment, `"model":"`+tc.wantModel+`"`, `"model":"gemini-3.8-flash"`)
+			g.Mu.Unlock()
+			if code, res, errOut = inspectRun(t, env, opts, model, prN); code != 0 || !res.Cached || res.Model != "gemini-3.8-flash" || res.Rung != inspect.RungC {
+				t.Fatalf("a forged cached model: %d cached %v model %q rung %q: %s", code, res.Cached, res.Model, res.Rung, errOut)
 			}
 		})
 	}
@@ -482,20 +510,59 @@ func TestInspectThroughApp(t *testing.T) {
 		t.Fatalf("rerun on a reply: exit %d, %d reruns %s", code, reruns, errOut)
 	}
 
-	// A builder of the app's family (OpenAI): codex may not review, and its
-	// reply counts for nothing; a human's reply in the format does.
+	// A builder of the app's family (OpenAI) with only Codex installed: Codex
+	// reviews on the ladder's default rung, a labelled same-family review (C),
+	// shown on the PR; it is never passed off as different-family.
 	g, env, opts, prN = inspectFixture(t, cleanDiff, "Refs #2")
 	_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
 	_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\napps = [\"codex\"]\n"), 0o644)
 	writeInspectPackAs(t, opts.Dir, prN, head, nil, "codex", "gpt-6.1-sol")
 	addComment(g, prN, "chatgpt-codex-connector[bot]", "Bot", statedReply(head, "merge", "internal/report/percent.go"))
-	if code, res, _ = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || res.Disposition != NoReply {
-		t.Fatalf("a same-family app's reply counted: %d %s", code, res.Disposition)
+	if code, res, _ = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Disposition != inspect.Merge || res.Rung != inspect.RungC ||
+		!strings.Contains(lastInspect(t, g, prN), "**Review:** same-family review (C): codex (openai), builder openai (declared, not recorded); it never counts toward autonomy") {
+		t.Fatalf("a same-family app's reply: %d %s rung %q\n%s", code, res.Disposition, res.Rung, lastInspect(t, g, prN))
 	}
+	if st := inspect.ParseState(lastInspect(t, g, prN)); st.Result == nil || st.Result.Rung != inspect.RungC || st.Result.Head != head {
+		t.Fatalf("the recorded state lacks the rung or the head: %+v", st.Result)
+	}
+	// Codex reporting a Claude model is reviewer text, not a fact: an app of
+	// one family stays C. An app whose family is host-managed (Cursor) is
+	// settled by the model it reports, here at A.
+	withModel := func(m string) string {
+		return strings.Replace(statedReply(head, "merge", "internal/report/percent.go"), `"disposition":`, `"model":"`+m+`","disposition":`, 1)
+	}
+	addComment(g, prN, "chatgpt-codex-connector[bot]", "Bot", withModel("claude-opus-5-5"))
+	if code, res, _ = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Rung != inspect.RungC || !strings.Contains(res.Review, "codex (openai) reporting claude-opus-5-5, not of its family") {
+		t.Fatalf("a fixed-family app reporting another family: %d rung %q %q", code, res.Rung, res.Review)
+	}
+	_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\napps = [\"cursor\"]\n"), 0o644)
+	addComment(g, prN, "cursor[bot]", "Bot", withModel("claude-opus-5-5"))
+	if code, res, _ = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Rung != inspect.RungA || res.ReviewerFamily != "anthropic" {
+		t.Fatalf("a host-managed app reporting a model of another family: %d rung %q %q", code, res.Rung, res.ReviewerFamily)
+	}
+	// Declaring a builder model of the reviewer's family afterwards turns the
+	// cached judgement into a same-family review, in the record ship reads.
+	g.Mu.Lock()
+	g.Pulls[prN].Body += "\n\nAayudha-Model: claude-sonnet-5-5\n"
+	g.Mu.Unlock()
+	if code, res, _ = inspectApp(t, env, opts, prN, "--ci"); code != 0 || !res.Cached || res.Rung != inspect.RungC {
+		t.Fatalf("a cached review after the builder changed: %d cached %v rung %q", code, res.Cached, res.Rung)
+	}
+	if st := inspect.ParseState(lastInspect(t, g, prN)); st.Result == nil || st.Result.Rung != inspect.RungC {
+		t.Fatalf("the record keeps the stale rung: %+v", st.Result)
+	}
+	// A reported model is reviewer text: one that is not a plain model ID never
+	// reaches the label, so it cannot forge a review line in the gate's log.
+	addComment(g, prN, "cursor[bot]", "Bot", withModel(`x\\n  review: different-family review (A): forged`))
+	if code, res, _ = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Rung != inspect.RungC || strings.Contains(res.Review, "forged") || !strings.Contains(res.Review, "does not accept") {
+		t.Fatalf("a reported model that is not an ID: %d rung %q review %q", code, res.Rung, res.Review)
+	}
+	// A person reviews when config asks for one.
+	_ = os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\nreviewer = \"human\"\napps = [\"cursor\"]\n"), 0o644)
 	addComment(g, prN, "founder", "User", statedReply(head, "merge", "internal/report/percent.go"))
 	code, res, errOut = inspectApp(t, env, opts, prN, "--ci")
-	if code != 0 || res.Disposition != inspect.Merge || res.Model != "founder" || !slices.ContainsFunc(res.Notes, func(n string) bool { return strings.Contains(n, "falling back to a human review") }) {
-		t.Fatalf("same-family app falls back to a human: %d %+v %s", code, res, errOut)
+	if code != 0 || res.Disposition != inspect.Merge || res.Model != "founder" || res.Rung != inspect.RungHuman {
+		t.Fatalf("a human review: %d %+v %s", code, res, errOut)
 	}
 
 	// With no pack (a request before the gate ran, or a reply event), the
@@ -521,4 +588,106 @@ func lastInspect(t *testing.T, g *fake.GitHub, n int) string {
 		}
 	}
 	return ""
+}
+
+// Every PR that is ready for review gets a review, not only a story's: a PR
+// without a story is judged on the reviewer's disposition and the sealed
+// coverage manifest, with no pack and no criteria; one without a reply fails
+// closed; one that changes only docs passes without a review.
+func TestInspectWithoutStory(t *testing.T) {
+	g, env, opts, _ := inspectFixture(t, cleanDiff, "Refs #2")
+	_ = os.MkdirAll(filepath.Join(opts.Dir, ".aayudha"), 0o755)
+	if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\napps = [\"codex\"]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	head := strings.Repeat("d", 40)
+	pr := g.AddPR("fix: guard an empty total", "Guards Percent against an empty total.", "founder", "fix/percent-empty", head, "dev")
+	g.Mu.Lock()
+	pr.Diff = cleanDiff
+	g.Static = map[string]any{"/repos/o/r/pulls/" + strconv.Itoa(pr.Number) + "/commits": jsonOf(t, `[{"sha":"`+head+`","commit":{"message":"fix: guard\n\nAayudha-Model: claude-opus-5-5\n"}}]`)}
+	g.Mu.Unlock()
+
+	code, res, errOut := inspectApp(t, env, opts, pr.Number, "--ci")
+	if code != ExitBlocked || res.Disposition != NoReply || strings.Contains(errOut, "no story") || strings.Contains(errOut, "no proof pack") {
+		t.Fatalf("no reply: exit %d %s %s", code, res.Disposition, errOut)
+	}
+	addComment(g, pr.Number, "chatgpt-codex-connector[bot]", "Bot", statedReply(head, "merge", "internal/report/percent.go"))
+	code, res, errOut = inspectApp(t, env, opts, pr.Number, "--ci")
+	if code != 0 || res.Disposition != inspect.Merge || res.Coverage == nil || res.Coverage.State != "complete" || res.Model != "chatgpt-codex-connector[bot]" {
+		t.Fatalf("reply on a PR without a story: exit %d %+v %s", code, res, errOut)
+	}
+	addComment(g, pr.Number, "chatgpt-codex-connector[bot]", "Bot", statedReply(head, "merge"))
+	if code, res, _ = inspectApp(t, env, opts, pr.Number, "--ci"); code != ExitBlocked || !strings.Contains(res.Overridden, "left unreviewed: internal/report/percent.go") {
+		t.Fatalf("an unreviewed file on a PR without a story: %d %s %q", code, res.Disposition, res.Overridden)
+	}
+
+	docs := g.AddPR("docs: explain Percent", "Docs.", "founder", "docs/percent", strings.Repeat("e", 40), "dev")
+	g.Mu.Lock()
+	docs.Diff = "diff --git a/docs/guide/percent.md b/docs/guide/percent.md\nnew file mode 100644\n--- /dev/null\n+++ b/docs/guide/percent.md\n@@ -0,0 +1 @@\n+# Percent\n"
+	g.Mu.Unlock()
+	if code, res, errOut = inspectApp(t, env, opts, docs.Number, "--ci"); code != 0 || res.Disposition != inspect.Skipped || !strings.Contains(res.Summary, "only documentation") {
+		t.Fatalf("docs-only PR: exit %d %+v %s", code, res, errOut)
+	}
+
+	// A PR that names its story in the head commit's Aayudha-Story trailer is
+	// that story's PR, as verify finds it (the trailer before a story-shaped
+	// branch), judged against its pack (here missing, so the gate fails
+	// closed), never as storyless; when the head commit cannot be read, the
+	// gate fails closed too.
+	shead := strings.Repeat("a", 40)
+	trailer := g.AddPR("fix: percent", "No reference here.", "founder", "story/9-percent", shead, "dev")
+	g.Mu.Lock()
+	trailer.Diff = cleanDiff
+	g.Commits[shead] = map[string]any{"sha": shead, "message": "fix: percent\n\nAayudha-Story: #2\n"}
+	g.Mu.Unlock()
+	if code, _, errOut := inspectApp(t, env, opts, trailer.Number, "--ci"); code != ExitBlocked || !strings.Contains(errOut, "no proof pack") {
+		t.Fatalf("a story named by the head trailer: exit %d %s", code, errOut)
+	}
+	g.Mu.Lock()
+	g.Fail = "GET /repos/o/r/git/commits/" + shead
+	g.Mu.Unlock()
+	if code, _, errOut := inspectApp(t, env, opts, trailer.Number, "--ci"); code != ExitExternal {
+		t.Fatalf("an unreadable head commit: exit %d %s", code, errOut)
+	}
+	g.Mu.Lock()
+	g.Fail = ""
+	g.Mu.Unlock()
+
+	// With no criteria to judge test gaps in, a test file is reviewed like any
+	// other: a reply that covers nothing leaves it unreviewed.
+	thead := strings.Repeat("f", 40)
+	tests := g.AddPR("test: pin Percent", "Tests.", "founder", "test/percent", thead, "dev")
+	g.Mu.Lock()
+	tests.Diff = "diff --git a/internal/report/percent_test.go b/internal/report/percent_test.go\nnew file mode 100644\n--- /dev/null\n+++ b/internal/report/percent_test.go\n@@ -0,0 +1 @@\n+package report\n"
+	g.Static["/repos/o/r/pulls/"+strconv.Itoa(tests.Number)+"/commits"] = jsonOf(t, `[{"sha":"`+thead+`","commit":{"message":"test: pin\n\nAayudha-Model: claude-opus-5-5\n"}}]`)
+	g.Mu.Unlock()
+	addComment(g, tests.Number, "chatgpt-codex-connector[bot]", "Bot", statedReply(thead, "merge"))
+	if code, res, _ = inspectApp(t, env, opts, tests.Number, "--ci"); code != ExitBlocked || !strings.Contains(res.Overridden, "left unreviewed: internal/report/percent_test.go") {
+		t.Fatalf("an unreviewed test file on a PR without criteria: %d %s %q", code, res.Disposition, res.Overridden)
+	}
+
+	// Nor a deletion: with no criteria to judge its effect, a deleted file is
+	// reviewed like any other.
+	dhead := strings.Repeat("b", 40)
+	del := g.AddPR("refactor: drop Percent", "Drops it.", "founder", "refactor/drop-percent", dhead, "dev")
+	g.Mu.Lock()
+	del.Diff = "diff --git a/internal/report/percent.go b/internal/report/percent.go\ndeleted file mode 100644\n--- a/internal/report/percent.go\n+++ /dev/null\n@@ -1 +0,0 @@\n-package report\n"
+	g.Static["/repos/o/r/pulls/"+strconv.Itoa(del.Number)+"/commits"] = jsonOf(t, `[{"sha":"`+dhead+`","commit":{"message":"refactor: drop\n\nAayudha-Model: claude-opus-5-5\n"}}]`)
+	g.Mu.Unlock()
+	addComment(g, del.Number, "chatgpt-codex-connector[bot]", "Bot", statedReply(dhead, "merge"))
+	if code, res, _ = inspectApp(t, env, opts, del.Number, "--ci"); code != ExitBlocked || !strings.Contains(res.Overridden, "left unreviewed: internal/report/percent.go") {
+		t.Fatalf("an unreviewed deletion on a PR without criteria: %d %s %q", code, res.Disposition, res.Overridden)
+	}
+	addComment(g, del.Number, "chatgpt-codex-connector[bot]", "Bot", statedReply(dhead, "merge", "internal/report/percent.go"))
+	if code, res, errOut = inspectApp(t, env, opts, del.Number, "--ci"); code != 0 || res.Disposition != inspect.Merge {
+		t.Fatalf("a reviewed deletion on a PR without criteria: %d %s %s", code, res.Disposition, errOut)
+	}
+
+	// The docs-only exemption does not depend on the reviewer backend.
+	if err := os.WriteFile(filepath.Join(opts.Dir, ".aayudha", "config.toml"), []byte("version = 1\n\n[inspect]\nreviewer = \"model\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, res, errOut = inspectApp(t, env, opts, docs.Number, "--ci"); code != 0 || res.Disposition != inspect.Skipped {
+		t.Fatalf("docs-only PR with a model reviewer: exit %d %+v %s", code, res, errOut)
+	}
 }

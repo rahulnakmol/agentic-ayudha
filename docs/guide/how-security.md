@@ -85,6 +85,20 @@ attested; see [releases and the supply chain](how-releases.md).
 `per_story_usd` or spend for the day reaches `per_day_usd`. It pauses agent lanes (exit code 6) until a human runs
 `aayu resume`, and pages once per scope per day.
 
+**A host's own PostHog or Sentry tools.** When your host also has a PostHog or Sentry MCP server or CLI connected,
+the pre-tool hook lets an agent read through it and refuses every write: changing a flag, launching an experiment,
+resolving an issue, or creating an alert or a release. A write to a provider is a catalog action that a person
+approves. The hook allows only the read tools on lists that aayudha pins to each provider's published tool
+definitions (`internal/integrations/hostcall`), and it refuses any tool it does not know, so a new write tool stays
+refused until the lists are regenerated. Tools that return personal data (persons, session replays, support
+tickets, raw LLM conversations) stay refused until the repository's `.aayudha/config.toml` sets
+`allow_pii = true` under `[integrations.posthog]` or `[integrations.sentry]`. aayudha reads that setting only from
+the committed repository config, where it is reviewed. Tools that spend paid AI credits, such as Sentry's Seer
+analysis, stay refused. The post-tool hook logs each read it let through to
+`.aayudha/state/calls/<session>.jsonl`: the tool, its arguments with secrets redacted, the time window and row limit it
+asked for, the rows it returned, and a SHA-256 of the result, never the result itself. A call that names a window and a
+row limit is citable as evidence, the same way aayudha's own queries are; the log says why any other call is not.
+
 ## The kill switch
 
 `aayu halt --reason "<why>"` sets the repository variable `AAYUDHA_HALT`. While it is set, every verb refuses to

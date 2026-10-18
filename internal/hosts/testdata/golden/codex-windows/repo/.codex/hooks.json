@@ -1,5 +1,16 @@
 {
   "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "\"C:\\Program Files\\aayudha\\aayu.exe\" hook post-tool --host codex",
+            "type": "command"
+          }
+        ],
+        "matcher": "mcp__.*|Bash"
+      }
+    ],
     "PreToolUse": [
       {
         "hooks": [

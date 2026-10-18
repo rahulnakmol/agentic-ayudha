@@ -722,6 +722,8 @@ func (p *planner) hostFiles(hosts map[verbs.HostID]bool, lock Lock) error {
 				"SessionStart": map[string]any{"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "session-start", verbs.HostClaude)}}},
 				"PreToolUse": map[string]any{"matcher": "*",
 					"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "pre-tool", verbs.HostClaude)}}},
+				"PostToolUse": map[string]any{"matcher": PostToolMatcher,
+					"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "post-tool", verbs.HostClaude)}}},
 			})
 		}); err != nil {
 			return err
@@ -736,9 +738,11 @@ func (p *planner) hostFiles(hosts map[verbs.HostID]bool, lock Lock) error {
 		if err := p.mergeJSON(CursorHooks, false, func(m map[string]any) {
 			m["version"] = json.Number("1")
 			pre := map[string]any{"command": HookCommand(p.o.Binary, "pre-tool", verbs.HostCursor)}
+			post := map[string]any{"command": HookCommand(p.o.Binary, "post-tool", verbs.HostCursor)}
 			setHooks(m, map[string]any{
 				"sessionStart":         map[string]any{"command": HookCommand(p.o.Binary, "session-start", verbs.HostCursor)},
 				"beforeShellExecution": pre, "beforeMCPExecution": pre,
+				"afterShellExecution": post, "afterMCPExecution": post,
 			})
 		}); err != nil {
 			return err
@@ -766,6 +770,8 @@ func (p *planner) hostFiles(hosts map[verbs.HostID]bool, lock Lock) error {
 			setHooks(m, map[string]any{
 				"SessionStart": map[string]any{"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "session-start", verbs.HostCodex)}}},
 				"PreToolUse":   map[string]any{"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "pre-tool", verbs.HostCodex)}}},
+				"PostToolUse": map[string]any{"matcher": PostToolMatcher,
+					"hooks": []any{map[string]any{"type": "command", "command": HookCommand(p.o.Binary, "post-tool", verbs.HostCodex)}}},
 			})
 		}); err != nil {
 			return err
@@ -873,8 +879,9 @@ This repository runs the aayudha verbs as host skills, installed by `+"`aayu ins
 
 Installed for: %s. The %s MCP server serves the verbs as tools (write verbs only with `+"`[mcp] expose_writes = true`"+`).
 Host hooks run `+"`aayu hook <name>`"+` only: `+"`session-start`"+` reports skill copies out of sync with the lock,
-`+"`pre-tool`"+` blocks agent tool calls while the `+"`[budget]`"+` breaker has paused agent lanes and blocks shell commands that
-run a human-only verb, and `+"`status-line`"+` shows where the work stands.
+`+"`pre-tool`"+` blocks agent tool calls while the `+"`[budget]`"+` breaker has paused agent lanes, shell commands that run a
+human-only verb, and any PostHog or Sentry call through a host's MCP server or CLI that is not on aayudha's read
+allowlist, and `+"`status-line`"+` shows where the work stands.
 
 %s`, strings.Join(names, ", "), "`"+ServerName+"`", wrapText("B"+strings.TrimPrefix(Routing, "aayudha: b"), 118))
 	return []AgentsSection{{ID: "skills", Body: skills}, {ID: "hosts", Body: hostsSec}}

@@ -37,11 +37,12 @@ type Manifest struct {
 	SHA256 string     `json:"sha256"`
 }
 
-// Seal builds the manifest from the diff: deleted and generated files are
-// skipped with their reason; a file the reviewer covered is reviewed; a test
-// file it did not cover is skipped (test gaps are judged in the criteria's
-// verdicts); any other file is unreviewed.
-func Seal(files []DiffFile, areas []Area, fl Filter, covered func(path string) bool) Manifest {
+// Seal builds the manifest from the diff: generated files are skipped with
+// their reason; a file the reviewer covered is reviewed; when the story has
+// criteria, a deleted file or a test file it did not cover is skipped (the
+// criteria's verdicts judge deletions and test gaps); any other file is
+// unreviewed, deletions and test files of a PR without criteria included.
+func Seal(files []DiffFile, areas []Area, fl Filter, criteria bool, covered func(path string) bool) Manifest {
 	generated := map[string]bool{}
 	for _, a := range areas {
 		for _, g := range a.Generated {
@@ -52,13 +53,13 @@ func Seal(files []DiffFile, areas []Area, fl Filter, covered func(path string) b
 	for _, f := range files {
 		c := Coverage{Path: f.Path}
 		switch {
-		case f.Deleted:
-			c.Status, c.Why = SkippedCov, "deleted"
+		case f.Deleted && criteria:
+			c.Status, c.Why = SkippedCov, "deleted: the criteria's verdicts judge its effect"
 		case generated[f.Path] || fl.isGenerated(f.Path):
 			c.Status, c.Why = SkippedCov, "generated: the drift check owns it"
 		case covered(f.Path):
 			c.Status = Reviewed
-		case isTestPath(f.Path):
+		case criteria && isTestPath(f.Path):
 			c.Status, c.Why = SkippedCov, "test file: test gaps are judged in the criteria's verdicts"
 		default:
 			c.Status, c.Why = Unreviewed, "the review did not cover it"

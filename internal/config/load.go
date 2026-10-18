@@ -117,6 +117,16 @@ func Load(src Sources) (*Loaded, error) {
 			errs = append(errs, fmt.Errorf("%s: [decisions] solo_provisional_after_hours is read only from .aayudha/config.toml, a protected path", source))
 			return
 		}
+		// Personal data from a host's PostHog or Sentry MCP is opt-in for the
+		// repository (Decision #449), so only its protected config turns it on.
+		if name != LayerDefault && name != LayerRepo {
+			for _, p := range []string{"posthog", "sentry"} {
+				if k.Exists("integrations." + p + ".allow_pii") {
+					errs = append(errs, fmt.Errorf("%s: [integrations.%s] allow_pii is read only from .aayudha/config.toml, a protected path", source, p))
+					return
+				}
+			}
+		}
 		l.layers = append(l.layers, layer{name, source, k})
 		if err := l.merged.Merge(k); err != nil {
 			errs = append(errs, err)

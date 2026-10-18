@@ -1,0 +1,46 @@
+<!-- Hand-made for docs/guide/growth.md; an illustrative scenario, not a customer. Facts: internal/config/config.go (Fleet, Team), internal/verbs/registry.go (the status and doctor all flag). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 580" width="460" height="580" role="img" aria-labelledby="pods-title pods-desc" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+<title id="pods-title">Two founders grow one pod into several product streams, each its own repository with its own fourteen seats</title>
+<desc id="pods-desc">An illustrative scenario. Two founders start one pod: one repository, fourteen seats with twins, the founders paired. As the product grows, a second and third product stream each get their own repository and pod, with their own paired people and the same fourteen twins. The founders list every repository under [fleet] repos and see them all with aayu status --all and aayu doctor --all. Every pod keeps the same floors.</desc>
+<defs><marker id="arrow-pods" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1f5bd1"/></marker></defs>
+<rect width="460" height="580" fill="#ffffff"/>
+<rect x="12" y="12" width="436" height="60" rx="12" fill="#fdf6e3" stroke="#9a6700" stroke-width="2"/>
+<text x="26" y="37" font-size="16" fill="#1d2330" font-weight="bold" text-anchor="start">Two founders</text>
+<text x="26" y="59" font-size="12.5" fill="#1d2330" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">[fleet] repos: aayu status --all</text>
+<line x1="230.0" y1="72" x2="230.0" y2="98" stroke="#1f5bd1" stroke-width="2" marker-end="url(#arrow-pods)"/>
+<rect x="12" y="102" width="436" height="132" rx="12" fill="#f5f6f8" stroke="#d9dde4" stroke-width="1.5"/>
+<text x="24" y="126" font-size="15" fill="#1d2330" font-weight="bold" text-anchor="start">Stage 1: one pod</text>
+<text x="24" y="146" font-size="12" fill="#535b6b" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">your-org/product-a</text>
+<rect x="22" y="156" width="416" height="30" rx="6" fill="#f3f0fa" stroke="#6941c6" stroke-width="1"/>
+<text x="32" y="176" font-size="13" fill="#1d2330" font-weight="normal" text-anchor="start">14 seats, 14 twins</text>
+<rect x="22" y="192" width="416" height="32" rx="6" fill="#fdf6e3" stroke="#9a6700" stroke-width="1"/>
+<text x="32" y="213" font-size="13" fill="#1d2330" font-weight="normal" text-anchor="start">the two founders, paired</text>
+<text x="230.0" y="256" font-size="12.5" fill="#535b6b" font-weight="normal" text-anchor="middle" font-style="italic">the product grows a second and third stream</text>
+<line x1="230.0" y1="262" x2="230.0" y2="288" stroke="#1f5bd1" stroke-width="2" marker-end="url(#arrow-pods)"/>
+<rect x="12" y="292" width="212.0" height="132" rx="12" fill="#f5f6f8" stroke="#d9dde4" stroke-width="1.5"/>
+<text x="24" y="316" font-size="15" fill="#1d2330" font-weight="bold" text-anchor="start">Pod A</text>
+<text x="24" y="336" font-size="12" fill="#535b6b" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">your-org/product-a</text>
+<rect x="22" y="346" width="192.0" height="30" rx="6" fill="#f3f0fa" stroke="#6941c6" stroke-width="1"/>
+<text x="32" y="366" font-size="13" fill="#1d2330" font-weight="normal" text-anchor="start">14 seats, 14 twins</text>
+<rect x="22" y="382" width="192.0" height="32" rx="6" fill="#fdf6e3" stroke="#9a6700" stroke-width="1"/>
+<text x="32" y="403" font-size="13" fill="#1d2330" font-weight="normal" text-anchor="start">its own people</text>
+<rect x="236.0" y="292" width="212.0" height="132" rx="12" fill="#f5f6f8" stroke="#d9dde4" stroke-width="1.5"/>
+<text x="248.0" y="316" font-size="15" fill="#1d2330" font-weight="bold" text-anchor="start">Pod B</text>
+<text x="248.0" y="336" font-size="12" fill="#535b6b" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">your-org/product-b</text>
+<rect x="246.0" y="346" width="192.0" height="30" rx="6" fill="#f3f0fa" stroke="#6941c6" stroke-width="1"/>
+<text x="256.0" y="366" font-size="13" fill="#1d2330" font-weight="normal" text-anchor="start">14 seats, 14 twins</text>
+<rect x="246.0" y="382" width="192.0" height="32" rx="6" fill="#fdf6e3" stroke="#9a6700" stroke-width="1"/>
+<text x="256.0" y="403" font-size="13" fill="#1d2330" font-weight="normal" text-anchor="start">its own people</text>
+<rect x="12" y="436" width="212.0" height="132" rx="12" fill="#f5f6f8" stroke="#d9dde4" stroke-width="1.5"/>
+<text x="24" y="460" font-size="15" fill="#1d2330" font-weight="bold" text-anchor="start">Pod C</text>
+<text x="24" y="480" font-size="12" fill="#535b6b" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">your-org/product-c</text>
+<rect x="22" y="490" width="192.0" height="30" rx="6" fill="#f3f0fa" stroke="#6941c6" stroke-width="1"/>
+<text x="32" y="510" font-size="13" fill="#1d2330" font-weight="normal" text-anchor="start">14 seats, 14 twins</text>
+<rect x="22" y="526" width="192.0" height="32" rx="6" fill="#fdf6e3" stroke="#9a6700" stroke-width="1"/>
+<text x="32" y="547" font-size="13" fill="#1d2330" font-weight="normal" text-anchor="start">its own people</text>
+<rect x="236.0" y="436" width="212.0" height="132" rx="12" fill="#eef1f6" stroke="#535b6b" stroke-width="2"/>
+<text x="248.0" y="464" font-size="13.5" fill="#1d2330" font-weight="bold" text-anchor="start">Same in every pod:</text>
+<text x="248.0" y="486" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">the floors, the</text>
+<text x="248.0" y="508" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">evidence rule, the</text>
+<text x="248.0" y="530" font-size="13.5" fill="#1d2330" font-weight="normal" text-anchor="start">human-only steps</text>
+</svg>

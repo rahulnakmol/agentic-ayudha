@@ -10,6 +10,7 @@ import (
 // DiffFile is one file of a unified diff, with the new side of its hunks.
 type DiffFile struct {
 	Path    string // the new path; the old path when the file was deleted
+	From    string // the old path of a renamed file
 	Deleted bool
 	New     bool // the PR adds the file
 	Hunks   []Hunk
@@ -49,11 +50,18 @@ func ParseDiff(diff string) []DiffFile {
 				f.Path = b
 			}
 		case f == nil:
+		case h == nil && strings.HasPrefix(line, "rename from "):
+			f.From = gitPath(strings.TrimPrefix(line, "rename from "))
+		case h == nil && strings.HasPrefix(line, "rename to "):
+			f.Path = gitPath(strings.TrimPrefix(line, "rename to "))
 		case h == nil && strings.HasPrefix(line, "--- "):
-			oldPath = strings.TrimPrefix(strings.TrimPrefix(line, "--- "), "a/")
+			oldPath = strings.TrimPrefix(gitPath(strings.TrimPrefix(line, "--- ")), "a/")
 			f.New = oldPath == "/dev/null"
+			if !f.New && oldPath != f.Path {
+				f.From = oldPath
+			}
 		case h == nil && strings.HasPrefix(line, "+++ "):
-			p := strings.TrimPrefix(line, "+++ ")
+			p := gitPath(strings.TrimPrefix(line, "+++ "))
 			if p == "/dev/null" {
 				f.Deleted, f.Path = true, oldPath
 			} else {
@@ -137,9 +145,59 @@ func (f DiffFile) Find(quote string) int {
 	return found
 }
 
+// gitPath decodes a path git quoted because it holds non-ASCII or control
+// characters ("b/docs/\303\251.md").
+func gitPath(p string) string {
+	if strings.HasPrefix(p, `"`) {
+		if u, err := strconv.Unquote(p); err == nil {
+			return u
+		}
+	}
+	return p
+}
+
 // isTestPath reports whether p is a test file in a common convention.
 func isTestPath(p string) bool {
 	b := path.Base(p)
 	return strings.HasSuffix(b, "_test.go") || strings.Contains(b, ".test.") || strings.Contains(b, ".spec.") ||
 		strings.HasPrefix(b, "test_") || strings.HasSuffix(strings.TrimSuffix(b, path.Ext(b)), "_test")
+}
+
+// DocsOnly reports whether every file a diff touches is documentation: a
+// file under docs/, a Markdown file at the repository root, or a README.md.
+// A steering document (an AGENTS.md or CLAUDE.md, and the sources of truth:
+// the build plan, the constraints, the contributing guide, the ethos, the
+// glossary, the threat model, the security policy) is never documentation,
+// nor is anything under a test fixture directory, or under a root directory
+// whose files steer the product or its agents (skills, seats, hosts, work
+// items, evals, agent and workflow config); other Markdown, such as a fixture a test loads,
+// is not either. A renamed file is documentation only when both its old and
+// new paths are. Such a PR merges without a review; any other file needs one.
+// An empty diff is not docs-only.
+func DocsOnly(files []DiffFile) bool {
+	for _, f := range files {
+		if !docsPath(f.Path) || (f.From != "" && !docsPath(f.From)) {
+			return false
+		}
+	}
+	return len(files) > 0
+}
+
+func docsPath(p string) bool {
+	switch path.Base(p) {
+	case "AGENTS.md", "CLAUDE.md", "BUILD-PLAN.md", "CONSTRAINTS.md", "CONTRIBUTING.md", "ETHOS.md", "GLOSSARY.md", "threat-model.md", "SECURITY.md":
+		return false
+	}
+	for _, d := range []string{"testdata/", "fixtures/"} {
+		if strings.HasPrefix(p, d) || strings.Contains(p, "/"+d) {
+			return false
+		}
+	}
+	for _, d := range []string{"skills/", "seats/", "hosts/", "work-items/", "evals/", ".agents/", ".claude/", ".github/", ".cursor/"} {
+		if strings.HasPrefix(p, d) {
+			return false
+		}
+	}
+	md := strings.HasSuffix(strings.ToLower(p), ".md")
+	return strings.HasPrefix(p, "docs/") || md && !strings.Contains(p, "/") || path.Base(p) == "README.md"
 }
