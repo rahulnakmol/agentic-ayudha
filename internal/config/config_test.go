@@ -444,6 +444,8 @@ func TestActiveScanKey(t *testing.T) {
 	}{
 		{"user config", map[string]string{"home/.config/aayudha/config.toml": "version = 1\n" + key}, nil, nil},
 		{"local config", map[string]string{"repo/.aayudha/config.local.toml": "version = 1\n" + key}, nil, nil},
+		// The repository's JSON config loads as the repo layer too, but CODEOWNERS protects only the TOML.
+		{"repo JSON config", map[string]string{"repo/.aayudha/config.json": `{"version": 1, "verify": {"environments": {"staging": {"url": "https://staging.example.test", "active_scan": true}}}}`}, nil, nil},
 		{"environment", nil, []string{"AAYU_VERIFY__ENVIRONMENTS__STAGING__ACTIVE_SCAN=true"}, nil},
 		{"--set", nil, nil, []string{"verify.environments.staging.active_scan=true"}},
 	} {
