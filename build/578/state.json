@@ -2,6 +2,22 @@
   "story": 578,
   "branch": "story/578-init-identity-cannot-complete-from-a-rem",
   "started_at": "2026-10-18T07:32:26Z",
-  "failed_attempts": 0,
-  "checkpoints": null
+  "failed_attempts": 1,
+  "failures_by_layer": {
+    "L02": 1
+  },
+  "checkpoints": [
+    {
+      "k": 1,
+      "n": 1,
+      "attempt": 1,
+      "commit": "38728855badcf19be27b3c6c4643a0440b78c9c3",
+      "layers": [
+        "L02"
+      ],
+      "verify": "miss",
+      "detail": "coverage fail",
+      "at": "2026-10-18T07:44:32Z"
+    }
+  ]
 }
