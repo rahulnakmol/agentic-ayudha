@@ -124,7 +124,19 @@ type Response struct {
 	// finish_reason. Truncated is set when it stopped at the token cap.
 	StopReason string
 	Truncated  bool
+	// ServiceTier is the tier the endpoint served the reply at (Responses and
+	// Chat service_tier, e.g. "priority"), when it says.
+	ServiceTier string
 }
+
+// CallTimeout bounds one call, a stream included, when the client has no
+// HTTP client of its own. A streamed high-effort review keeps delivering
+// events for many minutes (a gateway measured 10 minutes of grok-4.7
+// reasoning, Bug #608), so it is well above a proxy's cut of an unstreamed
+// reply (about 125 seconds) and under the merge gate's 15-minute inspect job,
+// leaving that job time to fall back to the reviewer app. Nothing retries a
+// call that timed out.
+var CallTimeout = 12 * time.Minute
 
 // Client is one way of calling a model.
 type Client interface {
@@ -238,7 +250,7 @@ func (c HTTPClient) Complete(ctx context.Context, r Request) (Response, error) {
 	}
 	hc := c.HTTP
 	if hc == nil {
-		hc = &http.Client{Timeout: 10 * time.Minute}
+		hc = &http.Client{Timeout: CallTimeout}
 	}
 	resp, err := hc.Do(req)
 	if err != nil {
@@ -449,8 +461,9 @@ func decodeChatStream(body io.Reader) (Response, error) {
 			return true, nil
 		}
 		var ch struct {
-			Model   string          `json:"model"`
-			Usage   json.RawMessage `json:"usage"`
+			Model       string          `json:"model"`
+			ServiceTier string          `json:"service_tier"`
+			Usage       json.RawMessage `json:"usage"`
 			Choices []struct {
 				Delta struct {
 					Content string `json:"content"`
@@ -463,7 +476,7 @@ func decodeChatStream(body io.Reader) (Response, error) {
 			} `json:"error"`
 		}
 		_ = json.Unmarshal([]byte(data), &ch)
-		r.Model = cmp.Or(ch.Model, r.Model)
+		r.Model, r.ServiceTier = cmp.Or(ch.Model, r.Model), cmp.Or(ch.ServiceTier, r.ServiceTier)
 		if len(ch.Usage) > 0 && string(ch.Usage) != "null" {
 			var uu usage
 			_ = json.Unmarshal(ch.Usage, &uu)
@@ -493,10 +506,11 @@ func decodeChatStream(body io.Reader) (Response, error) {
 		FinishReason string `json:"finish_reason"`
 	}
 	raw, _ := json.Marshal(struct {
-		Model   string          `json:"model"`
-		Usage   json.RawMessage `json:"usage,omitempty"`
-		Choices []choice        `json:"choices"`
-	}{r.Model, u, []choice{{msg{sb.String()}, finish}}})
+		Model       string          `json:"model"`
+		ServiceTier string          `json:"service_tier,omitempty"`
+		Usage       json.RawMessage `json:"usage,omitempty"`
+		Choices     []choice        `json:"choices"`
+	}{r.Model, r.ServiceTier, u, []choice{{msg{sb.String()}, finish}}})
 	return decode(StyleChat, raw)
 }
 
@@ -609,7 +623,8 @@ func decode(style string, raw []byte) (Response, error) {
 				Text string `json:"text"`
 			} `json:"content"`
 		} `json:"output"` // responses
-		OutputText string `json:"output_text"`
+		OutputText  string `json:"output_text"`
+		ServiceTier string `json:"service_tier"` // responses, chat
 		Choices    []struct {
 			Message struct {
 				Content string `json:"content"`
@@ -620,7 +635,7 @@ func decode(style string, raw []byte) (Response, error) {
 	if err := json.Unmarshal(raw, &v); err != nil {
 		return Response{}, fmt.Errorf("decode %s reply: %w", style, err)
 	}
-	r := Response{Model: v.Model}
+	r := Response{Model: v.Model, ServiceTier: v.ServiceTier}
 	r.setUsage(v.Usage)
 	var sb strings.Builder
 	switch style {

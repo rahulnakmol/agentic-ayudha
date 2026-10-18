@@ -473,6 +473,12 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 				}
 				resp, rm, err := g.Do(ctx, models.Call{Story: story, Seat: string(verbs.EngineeringManager), Lane: verbs.LaneReview, Host: verbs.DirectHost, Req: req})
 				usd, _ := models.Cost(l.Config.Models.Prices, rm.Model, resp)
+				if err == nil {
+					// The gate run's log shows what the review was served at and
+					// used; a subscription credential makes the USD an estimate.
+					fmt.Fprintf(e.Err, "inspect: %s replied (service tier %s): %d tokens in, %d out, %.4f USD at list price\n",
+						cmp.Or(resp.Model, rm.Model), cmp.Or(resp.ServiceTier, "not stated"), resp.TokensIn, resp.TokensOut, usd)
+				}
 				return resp, usd, err
 			}})
 	}
