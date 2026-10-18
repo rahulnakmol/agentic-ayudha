@@ -43,6 +43,8 @@ func TestUTCCrons(t *testing.T) {
 		{"Asia/Kolkata", "15 * * * *", []string{"45 * * * *"}},                   // hourly: only the minute moves
 		{"Europe/London", "15 9,13,17 * * 1-5", []string{"15 8,12,16 * * 1-5", "15 9,13,17 * * 1-5"}},
 		{"Europe/London", "0 10 2 1,4,7,10 *", []string{"0 9 2 1,4,7,10 *", "0 10 2 1,4,7,10 *"}},
+		// 21:00 in New York is 01:00 (EDT −4) or 02:00 (EST −5) UTC on the next day: its own cron, Tuesday–Saturday.
+		{"America/New_York", "0 9,13,17,21 * * 1-5", []string{"0 13,17,21 * * 1-5", "0 1 * * 2-6", "0 14,18,22 * * 1-5", "0 2 * * 2-6"}},
 	}
 	for _, tt := range tests {
 		got, err := loop(t, tt.cron).UTCCrons(zone(t, tt.tz))
@@ -82,6 +84,12 @@ func TestDue(t *testing.T) {
 		if got := l.Due(london, now, tt.fired); got != tt.want {
 			t.Errorf("%s: due %v, want %v", tt.name, got, tt.want)
 		}
+	}
+	// 21:00 on Monday in New York (EDT) is 01:00 UTC on Tuesday, started by the next-day cron.
+	ny, late := zone(t, "America/New_York"), loop(t, "0 9,21 * * 1-5")
+	tue, _ := time.Parse(time.RFC3339, "2026-10-13T01:00:00Z")
+	if !late.Due(ny, tue, "0 1 * * 2-6") || late.Due(ny, tue, "0 2 * * 2-6") {
+		t.Error("New York 21:00: the EDT next-day cron must be due, and only it")
 	}
 }
 

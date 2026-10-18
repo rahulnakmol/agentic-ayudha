@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -420,17 +421,19 @@ func Offsets(loc *time.Location) []int {
 	return slices.Compact(out)
 }
 
-// UTCCron renders the loop's cron in UTC for a zone at offset off (seconds).
-func (l Loop) UTCCron(off int) (string, error) {
+// UTCCron renders the loop's cron in UTC for a zone at offset off (seconds):
+// one cron for each UTC day its local hours fall on, so 21:00 in New York
+// (01:00 UTC the next day) gets its own cron with the days moved on by one.
+func (l Loop) UTCCron(off int) ([]string, error) {
 	sc := l.sched
 	offMin := off / 60
 	if sc.hours == nil {
 		m := ((sc.minute-offMin)%60 + 60) % 60
-		return fmt.Sprintf("%d * * * *", m), nil
+		return []string{fmt.Sprintf("%d * * * *", m)}, nil
 	}
-	var hours []int
-	minute, shift := -1, 0
-	for i, h := range sc.hours {
+	minute := 0
+	byShift := map[int][]int{}
+	for _, h := range sc.hours {
 		t, sh := h*60+sc.minute-offMin, 0
 		for t < 0 {
 			t += 1440
@@ -440,38 +443,43 @@ func (l Loop) UTCCron(off int) (string, error) {
 			t -= 1440
 			sh++
 		}
-		if i > 0 && sh != shift {
-			return "", fmt.Errorf("loops/%s.toml: its hours fall on two different days in UTC; split it into two loops", l.Name)
+		minute = t % 60
+		byShift[sh] = append(byShift[sh], t/60)
+	}
+	shifts := slices.Sorted(maps.Keys(byShift))
+	var out []string
+	for _, shift := range shifts {
+		dow := "*"
+		if sc.dow != nil {
+			var ds []int
+			for _, d := range sc.dow {
+				ds = append(ds, ((d+shift)%7+7)%7)
+			}
+			slices.Sort(ds)
+			dow = ranges(ds)
 		}
-		minute, shift = t%60, sh
-		hours = append(hours, t/60)
-	}
-	dow := "*"
-	if sc.dow != nil {
-		var ds []int
-		for _, d := range sc.dow {
-			ds = append(ds, ((d+shift)%7+7)%7)
+		if shift != 0 && sc.dom != nil {
+			return nil, fmt.Errorf("loops/%s.toml: its local time is on another day in UTC, which a day-of-month cron cannot follow; pick a time that is the same day in UTC", l.Name)
 		}
-		slices.Sort(ds)
-		dow = ranges(ds)
+		hours := byShift[shift]
+		slices.Sort(hours)
+		out = append(out, fmt.Sprintf("%d %s %s %s %s", minute, ranges(hours), sc.domRaw, sc.monthRaw, dow))
 	}
-	if shift != 0 && sc.dom != nil {
-		return "", fmt.Errorf("loops/%s.toml: its local time is on another day in UTC, which a day-of-month cron cannot follow; pick a time that is the same day in UTC", l.Name)
-	}
-	slices.Sort(hours)
-	return fmt.Sprintf("%d %s %s %s %s", minute, ranges(hours), sc.domRaw, sc.monthRaw, dow), nil
+	return out, nil
 }
 
 // UTCCrons are the loop's UTC crons, one per offset of loc (deduplicated).
 func (l Loop) UTCCrons(loc *time.Location) ([]string, error) {
 	var out []string
 	for _, off := range Offsets(loc) {
-		c, err := l.UTCCron(off)
+		cs, err := l.UTCCron(off)
 		if err != nil {
 			return nil, err
 		}
-		if !slices.Contains(out, c) {
-			out = append(out, c)
+		for _, c := range cs {
+			if !slices.Contains(out, c) {
+				out = append(out, c)
+			}
 		}
 	}
 	return out, nil
@@ -513,7 +521,7 @@ func (l Loop) Due(loc *time.Location, now time.Time, fired string) bool {
 	if fired != "" {
 		_, off := now.In(loc).Zone()
 		want, err := l.UTCCron(off)
-		return err == nil && fired == want
+		return err == nil && slices.Contains(want, fired)
 	}
 	lt := now.In(loc)
 	sc := l.sched
@@ -747,13 +755,15 @@ func ActionsWorkflow(ls []Loop, tz string, loc *time.Location, version string, i
 		}
 		j := job{l: l}
 		for _, off := range Offsets(loc) {
-			c, err := l.UTCCron(off)
+			cs, err := l.UTCCron(off)
 			if err != nil {
 				return nil, err
 			}
-			if !slices.Contains(j.crons, c) {
-				j.crons = append(j.crons, c)
-				j.notes = append(j.notes, utcOffset(off))
+			for _, c := range cs {
+				if !slices.Contains(j.crons, c) {
+					j.crons = append(j.crons, c)
+					j.notes = append(j.notes, utcOffset(off))
+				}
 			}
 		}
 		jobs = append(jobs, j)

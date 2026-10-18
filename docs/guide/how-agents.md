@@ -188,7 +188,7 @@ deferred event loops did now runs on a schedule:
 
 | Loop | Starts | Runs |
 |---|---|---|
-| `triage-daily` | Weekdays 09:00 | `aayu triage` lists every open intake issue with no model; the agent classifies each one with `--as` |
+| `triage-daily` | Weekdays 09:00, 13:00, 17:00, 21:00 | `aayu triage` lists every open intake issue with no model; the agent classifies each one with `--as` |
 | `ci-failed` | Weekdays 09:45 | `aayu status --work`; for each delegated story with a failed required check, one `build --delegate` sync that sends it back |
 | `release-measure` | Mondays 10:30 | `aayu measure`, reported when a release was published in the last seven days |
 | `housekeeping` | Fridays 16:00 | `aayu gc`, then reports doctor drift, feature-map drift, and stale Ready issues |
