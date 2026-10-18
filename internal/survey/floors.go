@@ -220,10 +220,19 @@ func checkRunners(ix *Index, m *Modernisation, add func(string, ...any)) {
 // the program: it reaches a function defined outside the test files, or
 // imports or includes such a file.
 func runnerReach(ix *Index) (reach func(Fact, []Fact) bool, drives func(Fact) bool) {
+	defs := map[string][]string{}
+	for _, s := range ix.Symbols {
+		if isDefKind(s.Kind) {
+			defs[lastName(s.Name)] = append(defs[lastName(s.Name)], s.ID)
+		}
+	}
 	next := map[string][]string{}
 	for _, e := range ix.Edges {
 		if e.Kind == "call" {
 			next[e.From] = append(next[e.From], e.To...)
+			if e.Name != "" { // an edge that lists only some of the name's definitions: all of them
+				next[e.From] = append(next[e.From], defs[e.Name]...)
+			}
 		}
 	}
 	byFile := map[string][]Symbol{}
