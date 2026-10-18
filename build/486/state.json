@@ -3,5 +3,19 @@
   "branch": "story/486-aayu-doctor-tries-each-posthog-and-sentr",
   "started_at": "2026-10-17T23:47:34Z",
   "failed_attempts": 0,
-  "checkpoints": null
+  "checkpoints": [
+    {
+      "k": 1,
+      "n": 2,
+      "attempt": 1,
+      "commit": "fb59422a90a612e2691e8e1a3d867dab1f5feb44",
+      "layers": [
+        "L02",
+        "L06"
+      ],
+      "verify": "hold",
+      "detail": "floors hold; not run here (tool not installed; the merge gate runs them): sast, secrets, deps",
+      "at": "2026-10-17T23:58:03Z"
+    }
+  ]
 }
