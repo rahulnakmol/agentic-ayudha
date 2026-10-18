@@ -8,7 +8,7 @@ import (
 var (
 	accessLabel = regexp.MustCompile(`\b(public|private|protected)\s*:($|[^:])`)
 	typeOpen    = regexp.MustCompile(`^(?:template\s*<[^{}]*>\s*)?(class|struct|union)\s+(?:[A-Z_][A-Z0-9_]*\s+)?([A-Za-z_]\w*)\b[^(]*$`)
-	scopeOpen   = regexp.MustCompile(`^(?:namespace\b[\w\s:]*|extern\s*"[^"]*")$`)
+	scopeOpen   = regexp.MustCompile(`^(?:(?:inline\s+)?namespace\b[\w\s:]*|extern\s*"[^"]*")$`)
 	// annotation names the function-like attributes a declaration may start with.
 	annotation = map[string]bool{"__declspec": true, "__attribute__": true, "alignas": true, "_Alignas": true, "__pragma": true, "_Pragma": true}
 	notDecl    = regexp.MustCompile(`^(?:typedef|using|friend|return|static_assert|enum|template\s*<[^>]*>\s*(?:class|struct))\b`)
@@ -179,7 +179,7 @@ func headerAPI(code string) []Symbol {
 					o = open{class: true, name: m[2], reachable: r, public: r && m[1] != "class"}
 				} else if scopeOpen.MatchString(h) {
 					o = open{}
-					if f := strings.Fields(h); len(f) > 1 && f[0] == "namespace" {
+					if f := strings.Fields(strings.TrimPrefix(h, "inline ")); len(f) > 1 && f[0] == "namespace" {
 						o.name = strings.Join(f[1:], "")
 					}
 				}
