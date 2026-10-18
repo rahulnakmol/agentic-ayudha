@@ -98,14 +98,18 @@ min_confidence = 0.5    # P2 and P3 findings below it are not posted
 suppress_after = 2      # distinct human dismissals a finding must resemble to be suppressed
 peer_model = ""         # empty: the first registry review candidate of another family
 generated = ["LAYERS.md", "CONSTRAINTS.md", "docs/RACI.md", "internal/config/schema.json", "internal/mcp/schemas/*.json", "go.sum", "pnpm-lock.yaml"]
-# The merge gate holds no AI key: it reads the review of the one tool [inspect] reviewer names (founder, 2026-10-18: no
-# auto). Unset, a person reviews every PR; `aayu install` asks for the tool: codex, coderabbit, greptile, claude, cursor,
-# grok (paid_reviewer through the gateway), or human. When it cannot review (a usage-limit or quota reply, or no reply
-# within 30 minutes), the next installed app in that order reviews, then grok, then a person.
+# The merge gate's one review tool (founder, 2026-10-18: no auto). The default, ci: the merge gate calls the model the
+# repository's code-review environment names (variables AAYU_REVIEW_MODEL_URL and AAYU_REVIEW_MODEL, secret
+# AAYU_REVIEW_MODEL_KEY; `aayu init --gates` creates it, docs/guide/how-review.md), and fails closed, naming what is
+# missing, until it is set. Or an installed app (codex, coderabbit, greptile, claude, cursor), or human; `aayu install`
+# asks. When the tool cannot review (a usage-limit or quota reply, or no reply within 30 minutes), the next installed app
+# in that order reviews, then ci, then a person.
+reviewer = "ci"
 apps = []                 # codex, coderabbit, greptile, claude, cursor: what `aayu doctor` and `aayu install` detect
-# Rung B, opt-in (founder, 2026-10-18): a model ID the merge gate calls with a pay-as-you-go key when reviewer = "grok",
-# or when no installed app can review the head. Off unless set here and the repository adds the secret
-# AAYU_SECRET_<FAMILY>; capped by [budget] per_pr_inspect_max and labelled (B, paid). The one, opt-in exception to "no AI keys in a product repo's CI".
+# Rung B (founder, 2026-10-18): the model ID the CI review calls when the code-review environment's AAYU_REVIEW_MODEL
+# names none, and the fallback when no installed app can review the head. Capped by [budget] per_pr_inspect_max,
+# asked for fast (priority) serving, and labelled (B, paid). The code-review environment's key is the one AI key in a
+# product repository's CI, and only base branches reach it.
 paid_reviewer = ""
 paid_effort = ""          # the paid reviewer's reasoning effort: low, medium, high, xhigh; empty: the provider default
 

@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -389,6 +390,9 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	ins.Head, ins.At = pr.GetHead().GetSHA(), e.Now()
 	ins.Reopened = reopenedAt(posts, mayReopen(ctx, c, repo, bots), prev)
 
+	if err := e.useReviewModel(&l.Config); err != nil {
+		return Wrap(ExitUsage, err)
+	}
 	gw, err := e.Gateway()
 	if err != nil {
 		return err
@@ -473,6 +477,14 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		}
 		return permissionOf(p)
 	}
+	// The CI review fails closed, naming the fix, when the code-review
+	// environment lacks what it calls (a reply event's job holds none).
+	if e.CI && !e.replyEvent() && cfg.Reviewer == inspect.ReviewerCI {
+		if miss := missingReviewModel(gw, &l.Config); len(miss) > 0 {
+			return Errorf(ExitBlocked, "inspect #%d: [inspect] reviewer = \"ci\" calls the model the %s environment names, and %s is not set: add it in Settings → Environments → %s (docs/guide/how-review.md)",
+				n, inspect.ReviewEnvironment, strings.Join(miss, " and "), inspect.ReviewEnvironment)
+		}
+	}
 	paid := paidReviewer(gw, &l.Config, builder, "", perm, e.Logf)
 	switch {
 	case paid == nil:
@@ -488,11 +500,11 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	// The chosen tool is the only reviewer while it answers. When an app
 	// cannot review this head (a usage-limit or quota reply, or no reply
 	// within inspect.ReplyWait), the next installed app does, then rung B,
-	// then a human; when grok (rung B) cannot, the apps do, then a human.
+	// then a human; when the CI review (rung B) cannot, the apps do, then a human.
 	unavailable := ""
 	if cfg.Reviewer != inspect.ReviewerModel && paid == nil {
 		a := appInspect{c: c, repo: repo, pr: pr, in: ins, prev: prev, builder: builder, cfg: l.Config,
-			paidTried: e.replyEvent() || prev.PaidFailed == pr.GetHead().GetSHA() || cfg.Reviewer == inspect.ReviewerGrok}
+			paidTried: e.replyEvent() || prev.PaidFailed == pr.GetHead().GetSHA() || cfg.Reviewer == inspect.ReviewerCI}
 		err := e.inspectThroughApp(ctx, a)
 		if a.paidTried || !errors.Is(err, inspect.ErrUnavailable) {
 			return err
@@ -513,7 +525,7 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	picked, notes, err := reviewerModels(gw, builder.Candidates, ins.Mode == inspect.ModePeer, cfg.PeerModel, story)
 	if paid != nil {
 		picked, err = []models.Resolved{*paid}, nil
-		why := `[inspect] reviewer = "grok"`
+		why := `[inspect] reviewer = "ci"`
 		if unavailable != "" {
 			why = "fallback: no installed reviewer app can review this head (" + unavailable + ")"
 		}
@@ -862,7 +874,7 @@ func paidReviewer(gw *models.Gateway, cfg *config.Config, b inspect.Builder, una
 	if m == "" || ic.Reviewer == inspect.ReviewerHuman || ic.Reviewer == inspect.ReviewerModel {
 		return nil
 	}
-	if unavailable == "" && ic.Reviewer != inspect.ReviewerGrok {
+	if unavailable == "" && ic.Reviewer != inspect.ReviewerCI {
 		return nil // the chosen app reviews while it answers
 	}
 	f := verbs.FamilyOf(m)
@@ -887,6 +899,42 @@ func paidReviewer(gw *models.Gateway, cfg *config.Config, b inspect.Builder, una
 		return nil
 	}
 	return &models.Resolved{Lane: verbs.LaneReview, Host: verbs.DirectHost, Model: m, Display: m, Family: f, Effort: ic.PaidEffort, Source: models.SourceConfig}
+}
+
+// useReviewModel points the CI review at the model the code-review
+// environment names (inspect.ReviewModelURLVar, inspect.ReviewModelVar):
+// the gateway route, with inspect.ReviewModelSecret as its key, and
+// [inspect] paid_reviewer. A URL with credentials or a query is refused, and
+// never echoed, so no log or comment shows a secret; only its host is named.
+func (e *Env) useReviewModel(c *config.Config) error {
+	if raw := e.Getenv(inspect.ReviewModelURLVar); raw != "" {
+		u, err := url.Parse(raw)
+		if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+			return fmt.Errorf("%s must be the model endpoint's https base URL (such as %s), with no credentials or query in it; the key goes in %s",
+				inspect.ReviewModelURLVar, inspect.RecommendedReviewURL, inspect.ReviewModelKeyVar)
+		}
+		c.Models.Gateway.BaseURL, c.Models.Gateway.Secret = raw, inspect.ReviewModelSecret
+	}
+	if m := e.Getenv(inspect.ReviewModelVar); m != "" {
+		c.Inspect.PaidReviewer = m
+	}
+	return nil
+}
+
+// missingReviewModel names what the CI review lacks: the endpoint, the
+// model, or the key.
+func missingReviewModel(gw *models.Gateway, c *config.Config) []string {
+	var miss []string
+	if c.Models.Gateway.Secret != inspect.ReviewModelSecret {
+		miss = append(miss, "the variable "+inspect.ReviewModelURLVar)
+	}
+	if c.Inspect.PaidReviewer == "" {
+		miss = append(miss, "the variable "+inspect.ReviewModelVar)
+	}
+	if k, err := gw.Key(inspect.ReviewModelSecret); err != nil || k == "" {
+		miss = append(miss, "the secret "+inspect.ReviewModelKeyVar)
+	}
+	return miss
 }
 
 // tierNote records the service tier the paid review was served at, and flags

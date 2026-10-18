@@ -24,13 +24,13 @@ import (
 // (aayudha's evals, or a person who holds a key).
 //
 // Every repository names its one review tool in [inspect] reviewer (founder,
-// 2026-10-18: "auto cannot be an option"): an app, grok (the gateway model,
-// [inspect] paid_reviewer), or human. Unset, or a leftover "auto", a person
+// 2026-10-18: "auto cannot be an option"): ci (the default: the model the
+// code-review environment names), an app, or human. Unset, or a leftover "auto", a person
 // reviews and the gate says how to choose.
 const (
 	ReviewerHuman = "human"
 	ReviewerModel = "model"
-	ReviewerGrok  = "grok" // [inspect] paid_reviewer through the AI gateway (rung B), called directly
+	ReviewerCI    = "ci" // the merge gate calls the model the code-review environment names (rung B), the default
 
 	AppClaude     = "claude"
 	AppCodex      = "codex"
@@ -38,6 +38,23 @@ const (
 	AppGreptile   = "greptile"
 	AppCursor     = "cursor"
 	AppAmp        = "amp"
+)
+
+// The code-review GitHub environment (docs/guide/how-review.md) names the
+// model the CI review calls: two variables and a secret. The merge gate's
+// inspect job, which runs no PR code, passes them; only base branches can
+// deploy to the environment, so a PR branch never reaches the key. The job
+// passes the key as the secret store's ReviewModelSecret.
+const (
+	ReviewEnvironment = "code-review"
+	ReviewModelURLVar = "AAYU_REVIEW_MODEL_URL" // the model endpoint's base URL (an OpenAI-compatible gateway, or a provider's API)
+	ReviewModelVar    = "AAYU_REVIEW_MODEL"     // the model ID
+	ReviewModelKeyVar = "AAYU_REVIEW_MODEL_KEY" // the endpoint's key (an environment secret)
+	ReviewModelSecret = "review-model-key"      // AAYU_SECRET_REVIEW_MODEL_KEY in the job
+	// RecommendedReviewModel is what aayu init fills AAYU_REVIEW_MODEL with,
+	// at the endpoint RecommendedReviewURL.
+	RecommendedReviewModel = "grok-4.7"
+	RecommendedReviewURL   = "https://api.x.ai/v1"
 )
 
 // FamilyService is the family of a dedicated review service (CodeRabbit,
@@ -145,8 +162,8 @@ func ChooseReviewer(reviewer string, installed []string, families map[string]str
 	switch {
 	case reviewer == ReviewerHuman:
 	case reviewer == "" || reviewer == "auto":
-		notes = append(notes, `no review tool chosen: set [inspect] reviewer = "<tool>" (codex, coderabbit, greptile, claude, cursor, grok, or human) in .aayudha/config.toml, or run aayu install`)
-	case reviewer == ReviewerGrok || slices.Contains(skip, reviewer):
+		notes = append(notes, `no review tool chosen: set [inspect] reviewer = "<tool>" (ci, codex, coderabbit, greptile, claude, cursor, or human) in .aayudha/config.toml, or run aayu install`)
+	case reviewer == ReviewerCI || slices.Contains(skip, reviewer):
 		if c, ok := next(); ok {
 			c.Notes = notes
 			return c

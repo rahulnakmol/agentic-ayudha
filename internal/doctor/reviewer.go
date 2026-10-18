@@ -9,7 +9,6 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
-	"github.com/rahulnakmol/agentic-ayudha/internal/secrets"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
@@ -66,7 +65,7 @@ func checkReviewerApps(ctx context.Context, p *Probe) Result {
 
 // noReviewerChosen is doctor's failure, and its next step, when [inspect]
 // reviewer names no tool (founder, 2026-10-18: "auto cannot be an option").
-const noReviewerChosen = `no review tool chosen: the merge gate asks a person to review every PR; set [inspect] reviewer = "<tool>" (codex, coderabbit, greptile, claude, cursor, grok, or human) in .aayudha/config.toml, or run aayu install`
+const noReviewerChosen = `no review tool chosen: the merge gate asks a person to review every PR; set [inspect] reviewer = "<tool>" (ci, the default; codex, coderabbit, greptile, claude, cursor, or human) in .aayudha/config.toml, or run aayu install`
 
 func orNone(s string) string {
 	if s == "" {
@@ -118,16 +117,19 @@ func checkReviewRung(_ context.Context, p *Probe) Result {
 		return Result{Status: Pass, Detail: `human  a person reviews every PR ([inspect] reviewer = "human"); it counts toward autonomy`, Lines: lines}
 	case inspect.ReviewerModel:
 		return reviewModelRung(cfg.Models, b, lines)
-	case inspect.ReviewerGrok:
+	case inspect.ReviewerCI:
+		// The model lives in the code-review environment, which doctor cannot
+		// read; [inspect] paid_reviewer is the local stand-in.
+		lines = append(lines, reviewEnvSetup)
 		pr := cfg.Inspect.PaidReviewer
-		f := verbs.FamilyOf(pr)
 		if pr == "" {
-			return Result{Status: Fail, Detail: `[inspect] reviewer = "grok" needs [inspect] paid_reviewer (grok-4.7) and the gateway or provider key; until then the installed apps, then a person, review`, Lines: lines}
+			return Result{Status: Pass, Detail: fmt.Sprintf(`ci  the merge gate calls the model the %s environment names; doctor cannot read it, so the gate checks it on every PR and fails closed, naming what is missing`, inspect.ReviewEnvironment), Lines: lines}
 		}
+		f := verbs.FamilyOf(pr)
 		if b.Rung(f) == inspect.RungA {
-			return Result{Status: Pass, Detail: fmt.Sprintf("B  different-family review, paid: %s (%s) when the merge gate holds the repository secret %s, within %.2f USD a PR; it counts toward autonomy", pr, f, secrets.EnvVar(string(f)), cfg.Budget.PerPRInspectMax), Lines: lines}
+			return Result{Status: Pass, Detail: fmt.Sprintf("B  different-family review in CI: %s (%s) unless %s names another, within %.2f USD a PR; it counts toward autonomy", pr, f, inspect.ReviewModelVar, cfg.Budget.PerPRInspectMax), Lines: lines}
 		}
-		return Result{Status: Warn, Detail: fmt.Sprintf("[inspect] paid_reviewer %s (%s) cannot be shown to differ from the builder, so the gate never uses it; the installed apps, then a person, review", pr, f), Lines: lines}
+		return Result{Status: Warn, Detail: fmt.Sprintf("%s (%s) cannot be shown to differ from the builder, so the gate never uses it: set %s to a model of another family; until then the installed apps, then a person, review", pr, f, inspect.ReviewModelVar), Lines: lines}
 	}
 	c := inspect.ChooseReviewer(cfg.Inspect.Reviewer, cfg.Inspect.Apps, cfg.Inspect.AppFamilies, b, cfg.Autonomy.Approver)
 	// How to reach A: an app of a family the builder cannot be, added to
@@ -172,9 +174,9 @@ func checkReviewRung(_ context.Context, p *Probe) Result {
 		f := verbs.FamilyOf(pr)
 		switch {
 		case pr == "":
-			lines = append(lines, `move up (paid, opt-in): set [inspect] reviewer = "grok" and [inspect] paid_reviewer to a model of a family the builder cannot be, and add its provider key as the repository secret AAYU_SECRET_<FAMILY>; [budget] per_pr_inspect_max caps each PR`)
+			lines = append(lines, `move up (paid): set [inspect] reviewer = "ci", the default, and `+reviewEnvSetup)
 		case b.Rung(f) == inspect.RungA:
-			lines = append(lines, fmt.Sprintf(`move up (paid, opt-in): set [inspect] reviewer = "grok" to have %s (%s) review; today it reviews only when no installed app can`, pr, f))
+			lines = append(lines, fmt.Sprintf(`move up (paid): set [inspect] reviewer = "ci", the default, to have %s (%s) review every PR; today it reviews only when no installed app can`, pr, f))
 		default:
 			lines = append(lines, fmt.Sprintf("[inspect] paid_reviewer %s (%s) cannot be shown to differ from the builder, so the gate never uses it; pick a model of another family", pr, f))
 		}
@@ -213,3 +215,7 @@ func reviewModelRung(cfg config.Models, b inspect.Builder, lines []string) Resul
 	}
 	return Result{Status: Pass, Detail: fmt.Sprintf("C  same-family review: the review lane's %s (%s) cannot be shown to differ from the builder; it never counts toward autonomy, so a person passes every PR", m.Model, m.Family), Lines: lines}
 }
+
+// reviewEnvSetup says where the CI review's model is set.
+var reviewEnvSetup = fmt.Sprintf("set up the %s environment (Settings → Environments → %s, deployment branches: the base branches only): variables %s (the model endpoint's base URL, such as %s) and %s (the model ID, such as %s), secret %s (its key); `aayu init --gates` creates it",
+	inspect.ReviewEnvironment, inspect.ReviewEnvironment, inspect.ReviewModelURLVar, inspect.RecommendedReviewURL, inspect.ReviewModelVar, inspect.RecommendedReviewModel, inspect.ReviewModelKeyVar)

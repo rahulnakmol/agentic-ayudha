@@ -16,7 +16,6 @@ import (
 	"go.yaml.in/yaml/v4"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/initrepo"
-	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 )
 
 // TestEveryWorkflowJobStartsWithHaltCheck holds the WP5.7 rule that `aayu halt` stops every workflow (Bug #173):
@@ -269,41 +268,64 @@ func TestSnapshotNamesItselfFromTheNewestRelease(t *testing.T) {
 // calls Copilot, run on no pull request event (so none can be a required check of a PR), and ci.yml's gates (PR,
 // rolling, stable) never name them.
 //
-// The one exception is rung B (Decision #469; founder, 2026-10-18): the merge gate's inspect job, which checks out the
-// base branch and runs no PR code, passes the direct providers' keys as AAYU_SECRET_<FAMILY>, each from a repository
-// secret of the same name that is empty until the repository opts in with [inspect] paid_reviewer.
+// The one exception is the CI review (Decision #469; founder, 2026-10-18): the merge gate's inspect job, under the
+// code-review environment, passes that environment's AAYU_REVIEW_MODEL_KEY. It must check out only the base branch, so
+// no PR code runs beside the key, and it must be the only job that names the environment or the key.
 func TestModelChecksNeverGateAndNeverShip(t *testing.T) {
-	keys := regexp.MustCompile(`ai-gateway|AAYU_SECRET_|AAYU_MODELS__|AAYU_AI_GATEWAY`)
-	paid := regexp.MustCompile(`(?m)^ {10}AAYU_SECRET_(ANTHROPIC|GOOGLE|OPENAI|XAI): \$\{\{ secrets\.AAYU_SECRET_(ANTHROPIC|GOOGLE|OPENAI|XAI) \}\}\n`)
-	for name, b := range initrepo.GateWorkflows("dev") {
-		if name == "aayudha-merge-gate.yml" {
-			var wf struct {
-				Jobs map[string]struct {
-					Steps []struct {
-						Env map[string]string `yaml:"env"`
-					} `yaml:"steps"`
-				} `yaml:"jobs"`
+	keys := regexp.MustCompile(`ai-gateway|AAYU_SECRET_|AAYU_MODELS__|AAYU_AI_GATEWAY|AAYU_REVIEW_MODEL_KEY|code-review`)
+	reviewKey := regexp.MustCompile(`(?m)^ {10}AAYU_REVIEW_MODEL_KEY: \$\{\{ secrets\.AAYU_REVIEW_MODEL_KEY \}\}\n|^    environment: code-review\n`)
+	own, err := os.ReadFile(".github/workflows/aayudha-merge-gate.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, gate := range []struct {
+		name string
+		b    []byte
+	}{{"the template", initrepo.GateWorkflows("dev")["aayudha-merge-gate.yml"]}, {"this repository's", own}} {
+		var wf struct {
+			Jobs map[string]struct {
+				Environment any `yaml:"environment"`
+				Steps       []struct {
+					Uses string            `yaml:"uses"`
+					With map[string]string `yaml:"with"`
+					Env  map[string]string `yaml:"env"`
+				} `yaml:"steps"`
+			} `yaml:"jobs"`
+		}
+		if err := yaml.Unmarshal(gate.b, &wf); err != nil {
+			t.Fatal(err)
+		}
+		n := 0
+		for job, j := range wf.Jobs {
+			env := fmt.Sprint(j.Environment)
+			if (env == "code-review") != (job == "inspect") {
+				t.Errorf("%s merge gate: job %s has environment %q; only the inspect job runs under code-review", gate.name, job, env)
 			}
-			if err := yaml.Unmarshal(b, &wf); err != nil {
-				t.Fatal(err)
-			}
-			n := 0
-			for job, j := range wf.Jobs {
-				for _, st := range j.Steps {
-					for k, v := range st.Env {
-						if strings.HasPrefix(k, "AAYU_SECRET_") {
-							n++
-							if job != "inspect" || v != "${{ secrets."+k+" }}" || !slices.Contains(models.DirectSecrets(), strings.ToLower(strings.TrimPrefix(k, "AAYU_SECRET_"))) {
-								t.Errorf("%s: job %s passes %s = %s; only the inspect job may pass a direct provider's key, from the secret of the same name (rung B)", name, job, k, v)
-							}
+			for _, st := range j.Steps {
+				if env == "code-review" && strings.HasPrefix(st.Uses, "actions/checkout@") && st.With["ref"] != "" {
+					t.Errorf("%s merge gate: job %s checks out %s beside the code-review key; it may check out only the base branch", gate.name, job, st.With["ref"])
+				}
+				for k, v := range st.Env {
+					if strings.Contains(v, "secrets.") && v != "${{ secrets.AAYU_REVIEW_MODEL_KEY }}" || strings.HasPrefix(k, "AAYU_SECRET_") {
+						t.Errorf("%s merge gate: job %s passes %s; the one model key is the code-review environment's AAYU_REVIEW_MODEL_KEY", gate.name, job, k)
+					}
+					if v == "${{ secrets.AAYU_REVIEW_MODEL_KEY }}" {
+						n++
+						if job != "inspect" || k != "AAYU_REVIEW_MODEL_KEY" {
+							t.Errorf("%s merge gate: job %s passes the review model's key as %s", gate.name, job, k)
 						}
 					}
 				}
 			}
-			if n != len(models.DirectSecrets()) {
-				t.Errorf("%s: %d paid-reviewer keys, want the %d direct providers' (rung B)", name, n, len(models.DirectSecrets()))
-			}
-			b = paid.ReplaceAll(b, nil)
+		}
+		if n != 1 {
+			t.Errorf("%s merge gate passes the review model's key %d times, want once (the inspect job)", gate.name, n)
+		}
+	}
+	for name, b := range initrepo.GateWorkflows("dev") {
+		if name == "aayudha-merge-gate.yml" {
+			// Its comments say how to set the environment up; its code names it only in those two lines.
+			b = regexp.MustCompile(`(?m)^ *#.*\n`).ReplaceAll(reviewKey.ReplaceAll(b, nil), nil)
 		}
 		if m := keys.Find(b); m != nil {
 			t.Errorf("init --gates installs %s, which names %q: product CI never calls a model", name, m)

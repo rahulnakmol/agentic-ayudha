@@ -874,16 +874,16 @@
         "reviewer": {
           "type": "string",
           "enum": [
+            "ci",
             "codex",
             "coderabbit",
             "greptile",
             "claude",
             "cursor",
-            "grok",
             "human",
             "model"
           ],
-          "description": "The one review tool of the merge gate; every repository names it (aayu install asks). codex, coderabbit, greptile, claude, cursor: that installed app (a same-family app is a labelled rung-C review; CodeRabbit and Greptile count as rung A for any builder); grok: [inspect] paid_reviewer through the AI gateway; human: a person; model: the review lane's model (aayudha's evals). When the chosen tool cannot review (a usage-limit or quota reply, or no reply within 30 minutes), the next installed app in the order codex, coderabbit, greptile, claude, cursor reviews, then grok, then a person. Unset, a person reviews every PR."
+          "description": "The one review tool of the merge gate. ci (the default): the merge gate calls the model the code-review environment names (variables AAYU_REVIEW_MODEL_URL and AAYU_REVIEW_MODEL, secret AAYU_REVIEW_MODEL_KEY) and fails closed until they are set; codex, coderabbit, greptile, claude, cursor: that installed app (a same-family app is a labelled rung-C review; CodeRabbit and Greptile count as rung A for any builder); human: a person; model: the review lane's model (aayudha's evals). When the chosen tool cannot review (a usage-limit or quota reply, or no reply within 30 minutes), the next installed app in the order codex, coderabbit, greptile, claude, cursor reviews, then ci, then a person."
         },
         "apps": {
           "items": {
@@ -901,7 +901,7 @@
         },
         "paid_reviewer": {
           "type": "string",
-          "description": "Rung B, opt-in: a model ID (gemini-3.8-flash, grok-4.7, ...) the merge gate calls with a pay-as-you-go key when no installed app is of a family the builder cannot be. Off unless this names a model and the repository adds its provider key as the secret AAYU_SECRET_\u003cFAMILY\u003e (AAYU_SECRET_GOOGLE for Gemini); each PR's spend is capped by [budget] per_pr_inspect_max, and the review is labelled (B, paid)."
+          "description": "Rung B: the model ID (grok-4.7, gemini-3.8-flash, ...) the CI review calls when the code-review environment's AAYU_REVIEW_MODEL names none, and the fallback when no installed app can review the head. It must be of a family the builder cannot be; each PR's spend is capped by [budget] per_pr_inspect_max, and the review is labelled (B, paid)."
         },
         "paid_effort": {
           "type": "string",
