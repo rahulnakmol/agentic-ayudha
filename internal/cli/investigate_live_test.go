@@ -47,7 +47,7 @@ func (p *providerRoutes) RoundTrip(req *http.Request) (*http.Response, error) {
 	p.mu.Lock()
 	p.sent = append(p.sent, req.Method+" "+req.URL.String())
 	p.mu.Unlock()
-	if req.Method != http.MethodGet && !(req.Method == http.MethodPost && strings.HasSuffix(req.URL.Path, "/query/")) {
+	if req.Method != http.MethodGet && (req.Method != http.MethodPost || !strings.HasSuffix(req.URL.Path, "/query/")) {
 		p.t.Errorf("a write was sent: %s %s", req.Method, req.URL)
 	}
 	status, body, ok := p.answer(req.Method, req.URL.Path, req.URL.Query().Get("dataset"), kind)
