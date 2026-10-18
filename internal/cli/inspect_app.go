@@ -167,9 +167,11 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 
 // reviewRung settles the review ladder's rung from the reply (Decision
 // #469): the family of the model the reviewer reports, else the app's
-// configured family. A reported model aayu cannot place, or one of the
-// builder's candidate families, is a same-family review (C) whatever was
-// planned; a person's review is human.
+// configured family. Only an app whose family is host-managed settles it
+// from the reported model; a fixed-family app reporting another family's
+// model, a reported model aayu cannot place, or one of the builder's
+// candidate families, is a same-family review (C) whatever was planned; a
+// person's review is human.
 func reviewRung(b inspect.Builder, c inspect.Choice, rep inspect.AppReply) (string, verbs.Family, string) {
 	if c.App == "" {
 		return inspect.RungHuman, "", b.RungLabel(inspect.RungHuman, rep.Login, "")
@@ -178,6 +180,10 @@ func reviewRung(b inspect.Builder, c inspect.Choice, rep inspect.AppReply) (stri
 	switch {
 	case rep.Model != "" && !modelID.MatchString(rep.Model):
 		f, who = "", c.App+" with a model ID aayu does not accept" // reviewer text never reaches the label
+	case rep.Model != "" && c.Family != "" && c.Family != verbs.FamilyHostManaged && verbs.FamilyOf(rep.Model) != c.Family:
+		// An app of one family cannot run another's model: the claim is
+		// reviewer text (a hallucination or injected PR content), not a fact.
+		f, who = "", fmt.Sprintf("%s (%s) reporting %s, not of its family", c.App, c.Family, rep.Model)
 	case rep.Model != "":
 		f, who = verbs.FamilyOf(rep.Model), c.App+" with "+rep.Model
 	}
