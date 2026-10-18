@@ -485,6 +485,12 @@ func TestShipOnProof(t *testing.T) {
 	refused("no merge on proof: required check protected-paths is failure, and the PR touches no CODEOWNERS path that would explain it")
 	g.Mu.Lock()
 	g.Pulls[prN].Files = []string{"empty.txt", ".aayudha/config.toml", "skills/build/SKILL.md"}
+	g.CheckRuns[head] = append([]fake.CheckRun{{Name: "protected-paths", Status: "queued"}}, g.CheckRuns[head]...)
+	g.Mu.Unlock()
+	// Only its failure is excused: a run not yet done has judged nothing.
+	refused("no merge on proof: required check protected-paths is queued; only its failure for the CODEOWNERS paths a PR touches is accepted")
+	g.Mu.Lock()
+	g.CheckRuns[head] = g.CheckRuns[head][1:]
 	g.Mu.Unlock()
 
 	code, out := shipCmd(t, env, opts, prN)

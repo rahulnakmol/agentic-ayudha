@@ -179,8 +179,10 @@ func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name strin
 		return nil, fmt.Sprintf("it merges into %s, not the integration branch %s", pr.GetBase().GetRef(), dev), false, nil
 	case !slices.Contains(a.ProofRungs, rung):
 		return nil, fmt.Sprintf("the review rung at the head is %s, not one of %s ([autonomy] proof_rungs)", or(rung, "none recorded"), strings.Join(a.ProofRungs, ", ")), false, nil
-	case gate != "" && gate != "success" && len(pp.Protected) == 0:
-		return nil, fmt.Sprintf("required check %s is %s, and the PR touches no CODEOWNERS path that would explain it", seats.GateCheck, gate), false, nil
+	case gate != "" && gate != "success" && gate != "failure":
+		return nil, fmt.Sprintf("required check %s is %s; only its failure for the CODEOWNERS paths a PR touches is accepted", seats.GateCheck, gate), false, nil
+	case gate == "failure" && len(pp.Protected) == 0:
+		return nil, fmt.Sprintf("required check %s is failure, and the PR touches no CODEOWNERS path that would explain it", seats.GateCheck), false, nil
 	}
 	return pp, "", false, nil
 }
