@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -537,7 +538,7 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 	// reviewer comes first.
 	fallback := ""
 	if prev.PaidFailed != "" && prev.PaidFailed == pr.GetHead().GetSHA() {
-		fallback = fmt.Sprintf("fallback: rung B ([inspect] paid_reviewer %s) failed on %s (%s); the reviewer app reviews, and the next push tries it again", l.Config.Inspect.PaidReviewer, short(prev.PaidFailed), cmp.Or(prev.PaidFailedWhy, "reason not recorded"))
+		fallback = fmt.Sprintf("fallback: rung B ([inspect] paid_reviewer %s) failed on %s (%s); the reviewer app reviews, and the next push tries it again", cmp.Or(prev.PaidFailedModel, l.Config.Inspect.PaidReviewer), short(prev.PaidFailed), cmp.Or(prev.PaidFailedWhy, "reason not recorded"))
 	}
 	switch {
 	case paid == nil:
@@ -656,11 +657,12 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 				why = strings.ReplaceAll(why, u.Hostname(), "<endpoint host>")
 			}
 		}
-		why = oneLineErr(errors.New(why))
+		// A resolver's or proxy's address in a transport error is not shown either.
+		why = oneLineErr(errors.New(addrRe.ReplaceAllString(why, "<address>")))
 		fallback := fmt.Sprintf("fallback: rung B ([inspect] paid_reviewer %s) failed on this head (%s); the reviewer app reviews, and the next push tries it again", paid.Model, why)
 		e.Logf("inspect: %s", fallback)
 		fb := prev
-		fb.SpentUSD, fb.PaidFailed, fb.PaidFailedWhy = max(prev.SpentUSD, st.SpentUSD), pr.GetHead().GetSHA(), why
+		fb.SpentUSD, fb.PaidFailed, fb.PaidFailedWhy, fb.PaidFailedModel = max(prev.SpentUSD, st.SpentUSD), pr.GetHead().GetSHA(), why, paid.Model
 		return e.inspectThroughApp(ctx, appInspect{c: c, repo: repo, pr: pr, in: ins, prev: fb, builder: builder, cfg: l.Config, record: fb.PaidFailed != prev.PaidFailed, paidTried: true, fallback: fallback})
 	case errors.Is(err, inspect.ErrBudget), errors.Is(err, models.ErrBudget):
 		return Errorf(ExitBudget, "inspect #%d: %v", n, err)
@@ -1010,20 +1012,55 @@ func reviewEffort(model string, ic config.Inspect) string {
 // the caller turns into a note with tierNote.
 func (e *Env) reviewCall(gw *models.Gateway, cfg *config.Config, model, story string, served *[]string) func(context.Context, models.Request) (models.Response, float64, error) {
 	g := gw.WithModel(verbs.LaneReview, verbs.DirectHost, model)
+	// Every attempt of every call in this review shares one CallTimeout,
+	// so a retry never outlasts the merge gate's inspect step.
+	deadline := time.Now().Add(models.CallTimeout)
 	return func(ctx context.Context, req models.Request) (models.Response, float64, error) {
 		req.Effort = cmp.Or(req.Effort, reviewEffort(model, cfg.Inspect))
 		req.ServiceTier = models.TierPriority
-		resp, rm, err := g.Do(ctx, models.Call{Story: story, Seat: string(verbs.EngineeringManager), Lane: verbs.LaneReview, Host: verbs.DirectHost, Req: req})
-		usd, _ := models.Cost(cfg.Models.Prices, rm.Model, models.Billed(req, resp))
-		if err == nil {
-			*served = append(*served, resp.ServiceTier)
-			// The run's log shows what the review was served at and used; a
-			// subscription credential makes the USD an estimate.
-			fmt.Fprintf(e.Err, "inspect: %s replied (service tier %s): %d tokens in, %d out, %.4f USD at list price\n",
-				cmp.Or(resp.Model, rm.Model), cmp.Or(resp.ServiceTier, "not stated"), resp.TokensIn, resp.TokensOut, usd)
+		ctx, cancel := context.WithDeadline(ctx, deadline)
+		defer cancel()
+		var spent float64
+		for attempt := 1; ; attempt++ {
+			resp, rm, err := g.Do(ctx, models.Call{Story: story, Seat: string(verbs.EngineeringManager), Lane: verbs.LaneReview, Host: verbs.DirectHost, Req: req})
+			usd, _ := models.Cost(cfg.Models.Prices, rm.Model, models.Billed(req, resp))
+			spent += usd
+			if err == nil {
+				*served = append(*served, resp.ServiceTier)
+				// The run's log shows what the review was served at and used; a
+				// subscription credential makes the USD an estimate.
+				fmt.Fprintf(e.Err, "inspect: %s replied (service tier %s): %d tokens in, %d out, %.4f USD at list price\n",
+					cmp.Or(resp.Model, rm.Model), cmp.Or(resp.ServiceTier, "not stated"), resp.TokensIn, resp.TokensOut, usd)
+				return resp, spent, nil
+			}
+			// One retry for a transient failure, when time is left for a review.
+			wait, why := transient(err)
+			if attempt > 1 || why == "" || time.Until(deadline) < wait+retryFloor {
+				return resp, spent, err
+			}
+			fmt.Fprintf(e.Err, "inspect: %s failed (%s); retrying once in %s\n", model, why, wait)
+			if err := e.pauseFor(ctx, wait); err != nil {
+				return resp, spent, err
+			}
 		}
-		return resp, usd, err
 	}
+}
+
+// retryFloor is the least time a retried review call must have left.
+const retryFloor = 3 * time.Minute
+
+// transient says whether a failed model call is worth one retry: a 429 or
+// 5xx reply (a proxy's 524 included), after its Retry-After capped at 30
+// seconds, or a stream that ended early. why names it without the endpoint;
+// "" means no retry (a deadline cut would hit the same limit again).
+func transient(err error) (time.Duration, string) {
+	if se := (*models.StatusError)(nil); errors.As(err, &se) && (se.Code == http.StatusTooManyRequests || se.Code >= 500) {
+		return min(cmp.Or(se.RetryAfter, 10*time.Second), 30*time.Second), fmt.Sprintf("status %d", se.Code)
+	}
+	if errors.Is(err, io.ErrUnexpectedEOF) {
+		return 10 * time.Second, "the stream ended early"
+	}
+	return 0, ""
 }
 
 // useReviewModel points the CI review at the model the code-review
@@ -1097,6 +1134,9 @@ func missingReviewModel(gw *models.Gateway, c *config.Config) []string {
 	}
 	return miss
 }
+
+// addrRe is an IPv4 or bracketed IPv6 address, with an optional port.
+var addrRe = regexp.MustCompile(`\b\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?\b|\[[0-9A-Fa-f:.]+\](?::\d+)?`)
 
 // tierNote records the service tier the paid review was served at, and flags
 // one that is not fast: the review asked for priority (fast) serving.

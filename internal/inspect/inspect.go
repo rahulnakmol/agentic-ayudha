@@ -254,6 +254,8 @@ type State struct {
 	// PaidFailedWhy is why that paid review failed, with the endpoint's URL
 	// and host redacted, so every later comment on that head still says it.
 	PaidFailedWhy string `json:"paid_failed_why,omitempty"`
+	// PaidFailedModel is the paid reviewer that failed on that head.
+	PaidFailedModel string `json:"paid_failed_model,omitempty"`
 	// Reopened is the last reopen a judged round followed (RFC 3339): kept,
 	// so a later round that rewrites an older head's time cannot undo it.
 	Reopened string `json:"reopened,omitempty"`
