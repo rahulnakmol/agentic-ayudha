@@ -87,8 +87,16 @@ func Validate(it Item, stage Stage) []Problem {
 			ps = append(ps, cps...)
 		case KindOptions: // a draft Decision may still be collecting its options
 			if f.RequiredAt.index() <= stage.index() {
-				_, ops := ParseOptions(v)
+				os, ops := ParseOptions(v)
 				ps = append(ps, ops...)
+				// A marked option and a Recommendation that names another by number disagree.
+				if m := OptionRef.FindStringSubmatch(it.Fields["recommendation"]); m != nil {
+					for _, o := range os {
+						if n, _ := strconv.Atoi(m[1] + m[2]); o.Recommended && o.N != n {
+							add(f.ID, "option %d is marked \"(recommended)\" but the Recommendation names option %d; make them agree", o.N, n)
+						}
+					}
+				}
 			}
 		case KindLinks:
 			ps = append(ps, checkLinks(t, it, v)...)
