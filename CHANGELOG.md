@@ -117,6 +117,7 @@ for this release.
 
 - The chart and measure skills check each number against its own source, name its population and window, and keep a startup note to one page (#312, #315, #341, #348, #356, #369, #373, #377, #385, #386, #402, #411, #420, #423, #425, #429, #437, #456, #464, #472, #528, #534, #539, #559, #573, #581, #591, #600).
 - The investigate, slo, runbook, and respond skills keep causes, rule-outs, and figures to the record and cite exact signatures (#375, #380, #387, #389, #412, #424, #428, #438, #452, #461, #527, #543, #563).
+- respond names the trigger the evidence shows as a contributing condition, and phrases open questions without presuming their answer (#625).
 - decide packs and retro answers say only what their sources state and stay within their length (#281, #296, #303, #316, #345, #351, #357, #361, #365, #368, #372, #433, #440).
 - counsel says only what its source says, names a claimed approval without repeating it, and gives no assurance from floors alone (#558, #569, #612).
 - The research, wireframe, mockup, prototype, review, polish, and baseline skills keep one choice as one group, reuse the page's design values, and keep a mockup's saved state working (#311, #338, #347, #354, #383, #391, #410, #426, #439, #470, #506, #508, #597, #626).
