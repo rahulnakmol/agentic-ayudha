@@ -58,6 +58,7 @@ always_person = [
   "internal/cli/presence.go",
   "internal/identity/",
   "internal/autonomy/",
+  "internal/config/",
   ".github/workflows/aayudha-merge-gate.yml",
   ".github/workflows/protected-paths*.yml",
   ".github/workflows/release.yml",

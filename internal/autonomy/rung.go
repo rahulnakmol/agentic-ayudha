@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	gh "github.com/google/go-github/v90/github"
@@ -67,7 +68,7 @@ func GateRungFresh(ctx context.Context, c *github.Client, owner, name string, n 
 				// reviewer wrote (findings, notes), so none can stand in for it.
 				log := JobLog(ctx, c, owner, name, j.GetID())
 				h, m := inspectHeader.FindStringSubmatch(log), reviewLine.FindStringSubmatch(log)
-				if h == nil || h[1] != strconv.Itoa(n) || m == nil {
+				if h == nil || h[1] != strconv.Itoa(n) || !strings.HasPrefix(head, h[2]) || m == nil {
 					return "", false
 				}
 				// A cached judgement comes from the state in a PR comment,
@@ -77,11 +78,11 @@ func GateRungFresh(ctx context.Context, c *github.Client, owner, name string, n 
 				// A cached rung that does not count (a relabel to C after the
 				// builder's declaration changed) stands: it only lowers.
 				rung := m[1] + m[2] + m[3]
-				if h[2] != "" && Proven(rung) {
+				if h[3] != "" && Proven(rung) {
 					cached = true
 					break
 				}
-				return rung, h[2] == ""
+				return rung, h[3] == ""
 			}
 		}
 		if cached {
@@ -109,7 +110,7 @@ func Proven(rung string) bool {
 // reviewLine its review label, in the merge gate's log (an Actions log line
 // starts with its timestamp).
 var (
-	inspectHeader = regexp.MustCompile(`(?m)^(?:\S+Z )?inspect #([0-9]+) at [0-9a-f]+: \S+( \(cached\))?`)
+	inspectHeader = regexp.MustCompile(`(?m)^(?:\S+Z )?inspect #([0-9]+) at ([0-9a-f]+): \S+( \(cached\))?`)
 	reviewLine    = regexp.MustCompile(`(?m)^(?:\S+Z )?\s*review: (?:different-family review \((A|B)[,)]|same-family review \((C)\)|(human) review)`)
 )
 

@@ -417,7 +417,7 @@ func TestRepositoryMergesOnProof(t *testing.T) {
 	}
 	a := l.Config.Autonomy
 	narrow := []string{".github/CODEOWNERS", "internal/cli/ship.go", "internal/cli/shippass.go", "internal/cli/shipproof.go",
-		"internal/cli/presence.go", "internal/identity/", "internal/autonomy/", ".github/workflows/aayudha-merge-gate.yml",
+		"internal/cli/presence.go", "internal/identity/", "internal/autonomy/", "internal/config/", ".github/workflows/aayudha-merge-gate.yml",
 		".github/workflows/protected-paths*.yml", ".github/workflows/release.yml", ".github/workflows/aayudha-approve.yml",
 		".github/workflows/aayudha-token.yml", ".goreleaser.yaml", "install.sh",
 		// The config's other files load into the same layers, so they can change the policy too.
@@ -427,7 +427,7 @@ func TestRepositoryMergesOnProof(t *testing.T) {
 	}
 	if def.Config.Autonomy.Proof || !a.Proof || !slices.Equal(a.ProofRungs, []string{"A", "B", "C"}) || !slices.Equal(a.AlwaysPerson, narrow) ||
 		!slices.Equal(a.AlwaysPersonConfig, []string{".aayudha/config.toml", "internal/config/defaults.toml"}) ||
-		!slices.Equal(a.AlwaysPersonSections, []string{"identity", "approvals", "autonomy", "seats"}) {
+		!slices.Equal(a.AlwaysPersonSections, []string{"identity", "approvals", "autonomy", "seats", "verify", "inspect", "review", "models", "branches", "decisions", "proof"}) {
 		t.Fatalf("defaults proof=%v; repository [autonomy]: %+v", def.Config.Autonomy.Proof, a)
 	}
 }

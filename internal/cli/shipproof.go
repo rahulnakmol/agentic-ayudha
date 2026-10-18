@@ -2,13 +2,15 @@ package cli
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"path"
 	"reflect"
 	"regexp"
 	"slices"
 	"strings"
+	"unicode"
 
 	gh "github.com/google/go-github/v90/github"
 	"github.com/pelletier/go-toml/v2"
@@ -91,27 +93,31 @@ func requiredChecks(ctx context.Context, c *github.Client, owner, name string, n
 // commit status of the same name, which must pass too; "missing" when there
 // is neither.
 func checkState(runs []*gh.CheckRun, statuses []*gh.RepoStatus, sc *gh.RuleStatusCheck) string {
-	state := "missing"
-	for _, r := range runs { // the API lists the newest run of a name first; a rerun's success replaces a failure
-		if r.GetName() != sc.Context || sc.IntegrationID != nil && r.GetApp().GetID() != *sc.IntegrationID {
+	// The newest run of the name in each check suite counts (a rerun's
+	// success replaces a failure in its suite; the API lists the newest
+	// first), and every suite's must pass: a run of another workflow or
+	// event, a dispatch that skips the job say, cannot stand in for a
+	// failing one.
+	state, seen := "missing", map[int64]bool{}
+	for _, r := range runs {
+		if r.GetName() != sc.Context || sc.IntegrationID != nil && r.GetApp().GetID() != *sc.IntegrationID || seen[r.GetCheckSuite().GetID()] {
 			continue
 		}
+		seen[r.GetCheckSuite().GetID()] = true
+		st := r.GetConclusion()
 		switch {
 		case r.GetStatus() != "completed":
-			state = r.GetStatus()
-		case r.GetConclusion() == "skipped" || r.GetConclusion() == "neutral":
-			state = "success"
-		default:
-			state = r.GetConclusion()
+			st = r.GetStatus()
+		case st == "skipped" || st == "neutral":
+			st = "success"
 		}
-		break
+		if state == "missing" || state == "success" {
+			state = st
+		}
 	}
-	if sc.IntegrationID != nil {
-		return state
-	}
-	for _, st := range statuses { // newest first
+	for _, st := range statuses { // newest first; a failing one fails the check even beside a pinned run
 		if st.GetContext() == sc.Context {
-			if st.GetState() != "success" || state == "missing" {
+			if st.GetState() != "success" || state == "missing" && sc.IntegrationID == nil {
 				return st.GetState()
 			}
 			break
@@ -184,13 +190,41 @@ func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name strin
 				return nil, fmt.Sprintf("it touches %s, in the narrow set that always needs a person ([autonomy] always_person: %s)", p, alwaysPerson(a.AlwaysPerson, p)), true, nil
 			case slices.Contains(a.AlwaysPersonConfig, p):
 				if s := changedSections(read(p, base), read(p, head), a.AlwaysPersonSections); len(s) > 0 {
-					return nil, fmt.Sprintf("it changes [%s] in %s, which decides who may approve or bypass", strings.Join(s, "], ["), p), true, nil
+					return nil, fmt.Sprintf("it changes [%s] in %s, which decides who may approve or bypass, or how a PR is verified, reviewed and proven", strings.Join(s, "], ["), p), true, nil
 				}
 			case strings.HasPrefix(p, ".github/workflows/") && (holdsCredentials(read(p, base)) || holdsCredentials(read(p, head))):
-				return nil, fmt.Sprintf("it touches %s, a workflow that holds a credential (a secret, the workflow token, an environment, or a write permission)", p), true, nil
+				return nil, fmt.Sprintf("it touches %s, a workflow that holds a credential (a secret, the workflow token, an action it calls, an environment, or a write permission)", p), true, nil
+			case path.Base(p) == "action.yml" || path.Base(p) == "action.yaml":
+				return nil, fmt.Sprintf("it touches %s, an action's manifest, whose steps run with the token of the workflow that calls it", p), true, nil
 			}
 			changed = append(changed, p)
 		}
+	}
+	// A symbolic link can point a policy file at a path the narrow set does
+	// not judge, so a PR that adds or changes one needs a person.
+	tree, _, err := c.REST.Git.GetTree(ctx, owner, name, head, true)
+	if err != nil {
+		return nil, "", false, Wrap(ExitExternal, err)
+	}
+	if tree.GetTruncated() {
+		return nil, fmt.Sprintf("GitHub truncated the tree of %s, so its symbolic links cannot be judged", short(head)), true, nil
+	}
+	for _, en := range tree.Entries {
+		if en.GetMode() == "120000" && slices.Contains(changed, en.GetPath()) {
+			return nil, fmt.Sprintf("it changes %s, a symbolic link, which can point a policy file at a path the narrow set does not judge", en.GetPath()), true, nil
+		}
+	}
+	// The merge gate judged the diff against the base the PR had when it ran;
+	// a PR whose base was changed could have been judged against another
+	// branch and restored, so its review proves nothing about this diff.
+	events, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.Timeline, *gh.Response, error) {
+		return c.REST.Issues.ListIssueTimeline(ctx, owner, name, pr.GetNumber(), &o)
+	})
+	if err != nil {
+		return nil, "", false, Wrap(ExitExternal, err)
+	}
+	if slices.ContainsFunc(events, func(t *gh.Timeline) bool { return t.GetEvent() == "base_ref_changed" }) {
+		return nil, "its base branch was changed after it was opened, so the merge gate's review may have judged another diff", true, nil
 	}
 	// The CODEOWNERS check's failure is excused only for the reason the gate
 	// itself, rerun here on the base's CODEOWNERS, gives: protected paths
@@ -234,30 +268,96 @@ func alwaysPerson(patterns []string, p string) string {
 	return ""
 }
 
-// credentialRef is, in a workflow's canonical JSON, any mention of the
-// secrets context (secrets.X, secrets['X'], toJSON(secrets), secrets: inherit;
-// the expression language ignores case), the workflow token (github.token,
-// any github[...] index, GITHUB_TOKEN, and the whole github context, which
-// holds the token: toJSON(github), ${{ github }}, github.*, or github as a
-// function's argument), an environment key, or a write permission.
-var credentialRef = regexp.MustCompile(`(?i)\bsecrets\b|github\.token|\bgithub\s*(\[|\)|,|\}\})|\bgithub\.\*|\bgithub_token\b|"environment":|"write(-all)?"`)
+// credentialText is any mention, in a decoded string of a workflow, of the
+// secrets context (secrets.X, secrets['X'], toJSON(secrets), secrets:
+// inherit) or GITHUB_TOKEN; the expression language ignores case.
+var (
+	credentialText = regexp.MustCompile(`(?i)\bsecrets\b|\bgithub_token\b`)
+	expression     = regexp.MustCompile(`(?s)\$\{\{(.*?)\}\}`)
+	githubContext  = regexp.MustCompile(`(?i)\bgithub\b`)
+)
+
+// readsToken reports whether an expression reads the workflow token: any
+// use of the github context other than a named property that is not token
+// (github.token, github . token, github['token'], github.*, toJSON(github),
+// github || x, github as an argument all hold it).
+func readsToken(expr string) bool {
+	for _, m := range githubContext.FindAllStringIndex(expr, -1) {
+		rest := strings.TrimLeft(expr[m[1]:], " \t\r\n")
+		if !strings.HasPrefix(rest, ".") {
+			return true
+		}
+		rest = strings.TrimLeft(rest[1:], " \t\r\n")
+		n := strings.IndexFunc(rest, func(r rune) bool { return r != '_' && r != '-' && !unicode.IsLetter(r) && !unicode.IsDigit(r) })
+		if n < 0 {
+			n = len(rest)
+		}
+		if n == 0 || strings.EqualFold(rest[:n], "token") {
+			return true
+		}
+	}
+	return false
+}
 
 // holdsCredentials reports whether a workflow holds a credential: it reads a
-// secret or the workflow token, names an environment (which holds secrets
-// and deployment rights), grants a write permission, or leaves a job's
-// permissions to the repository's default, which may be write. It judges the
-// parsed YAML, so quoting, escapes, anchors and merge keys change nothing,
-// and a workflow it cannot parse counts as holding one. "" is no workflow.
+// secret or the workflow token, calls an action or a reusable workflow (an
+// action gets the token by default, as checkout and github-script do, and
+// its own steps are not judged here), names an environment (which holds
+// secrets and deployment rights), grants a write permission, or leaves a
+// job's permissions to the repository's default, which may be write. It
+// judges every decoded key and string of the parsed YAML, so quoting,
+// escapes, anchors and merge keys change nothing, and a workflow it cannot
+// parse, or one of more than one document, counts as holding one. "" is no
+// workflow.
 func holdsCredentials(workflow string) bool {
 	if workflow == "" {
 		return false
 	}
+	dec := yaml.NewDecoder(strings.NewReader(workflow))
 	var v map[string]any
-	if err := yaml.Unmarshal([]byte(workflow), &v); err != nil {
+	if err := dec.Decode(&v); err != nil {
 		return true
 	}
-	b, err := json.Marshal(v)
-	if err != nil || credentialRef.Match(b) {
+	var more any
+	if err := dec.Decode(&more); !errors.Is(err, io.EOF) {
+		return true
+	}
+	held := false
+	var walk func(key string, x any)
+	text := func(key, s string) {
+		if credentialText.MatchString(s) || strings.EqualFold(s, "write") || strings.EqualFold(s, "write-all") {
+			held = true
+		}
+		for _, m := range expression.FindAllStringSubmatch(s, -1) {
+			held = held || readsToken(m[1])
+		}
+		if key == "if" { // an if is an expression without ${{ }}
+			held = held || readsToken(s)
+		}
+	}
+	walk = func(key string, x any) {
+		switch x := x.(type) {
+		case map[string]any:
+			for k, e := range x {
+				if strings.EqualFold(k, "environment") || strings.EqualFold(k, "uses") {
+					held = true
+				}
+				text("", k)
+				walk(strings.ToLower(k), e)
+			}
+		case []any:
+			for _, e := range x {
+				walk(key, e)
+			}
+		case string:
+			text(key, x)
+		case nil, bool, int, int64, uint64, float64:
+		default:
+			held = true // a shape it cannot judge
+		}
+	}
+	walk("", v)
+	if held {
 		return true
 	}
 	if v["permissions"] != nil {
@@ -282,9 +382,21 @@ func holdsCredentials(workflow string) bool {
 func changedSections(before, after string, names []string) []string {
 	var b, a map[string]any
 	errB, errA := toml.Unmarshal([]byte(before), &b), toml.Unmarshal([]byte(after), &a)
+	// The loader splits a quoted key on its dots ("approvals.approvers" is
+	// approvals.approvers) and matches tables whatever their case, so a
+	// table is every top-level key whose first segment names it.
+	section := func(m map[string]any, n string) map[string]any {
+		out := map[string]any{}
+		for k, v := range m {
+			if seg, _, _ := strings.Cut(k, "."); strings.EqualFold(seg, n) {
+				out[k] = v
+			}
+		}
+		return out
+	}
 	var out []string
 	for _, n := range names {
-		if errB != nil || errA != nil || !reflect.DeepEqual(b[n], a[n]) {
+		if errB != nil || errA != nil || !reflect.DeepEqual(section(b, n), section(a, n)) {
 			out = append(out, n)
 		}
 	}

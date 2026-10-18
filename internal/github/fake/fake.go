@@ -102,6 +102,8 @@ type PR struct {
 	// lists instead of Files (GET /compare/{base}...{head}): the live PR's
 	// files can differ from the revisions a caller captured.
 	Compared []string `json:"-"`
+	// Timeline is its timeline's event names (GET /issues/{n}/timeline), oldest first.
+	Timeline []string `json:"-"`
 	// ChangedFiles is served as len(Files) plus Unlisted, the files GitHub's
 	// file listing leaves out (it lists at most 3,000).
 	ChangedFiles int    `json:"changed_files"`
@@ -146,6 +148,12 @@ type CheckRun struct {
 	Status     string `json:"status"`
 	Conclusion string `json:"conclusion"`
 	App        *App   `json:"app,omitempty"` // the GitHub App that made it
+	Suite      *Suite `json:"check_suite,omitempty"`
+}
+
+// Suite is a check suite: one workflow run's checks, reruns included.
+type Suite struct {
+	ID int64 `json:"id"`
 }
 
 // Status is a legacy commit status.
@@ -493,6 +501,14 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 		reply(200, map[string]any{"name": g.Repo, "full_name": g.Owner + "/" + g.Repo, "private": g.Private, "visibility": vis,
 			"default_branch": g.Default, "owner": map[string]any{"login": g.Owner, "type": g.OwnerType}})
 
+	case m == "GET" && strings.HasPrefix(p, repo+"/issues/") && strings.HasSuffix(p, "/timeline"):
+		out := []map[string]any{}
+		if pr := g.Pulls[atoi(strings.TrimSuffix(strings.TrimPrefix(p, repo+"/issues/"), "/timeline"))]; pr != nil {
+			for _, ev := range pr.Timeline {
+				out = append(out, map[string]any{"event": ev})
+			}
+		}
+		reply(200, out)
 	case m == "GET" && strings.HasPrefix(p, repo+"/compare/"):
 		basehead := strings.TrimPrefix(p, repo+"/compare/")
 		for _, pr := range g.Pulls {

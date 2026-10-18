@@ -375,6 +375,15 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	// A merge on proof was judged by the base branch's policy at its tip
 	// then; GitHub's merge guards only the head, so a base that moved since
 	// (a tightened narrow set, say) stops it.
+	// Nor may the PR itself have moved: a base retargeted, a head pushed, or
+	// a PR closed since ship read it is not the PR it judged.
+	now, _, err := c.REST.PullRequests.Get(ctx, owner, name, n)
+	if err != nil {
+		return Wrap(ExitExternal, err)
+	}
+	if now.GetState() != "open" || now.GetHead().GetSHA() != head || now.GetBase().GetRef() != pr.GetBase().GetRef() || now.GetBase().GetRepo().GetFullName() != pr.GetBase().GetRepo().GetFullName() {
+		return Errorf(ExitBlocked, "ship #%d: the PR changed while ship judged it (now %s, head %s, into %s); run ship again", n, now.GetState(), short(now.GetHead().GetSHA()), now.GetBase().GetRef())
+	}
 	if rec.Proof != nil {
 		tip, err := branchTip(ctx, c, owner, name, pr.GetBase().GetRef())
 		if err != nil {
