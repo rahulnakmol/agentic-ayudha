@@ -1,5 +1,19 @@
 {
   "hooks": {
+    "postToolUse": [
+      {
+        "bash": "\"C:\\Program Files\\aayudha\\aayu.exe\" hook post-tool --host copilot",
+        "powershell": "& \"C:\\Program Files\\aayudha\\aayu.exe\" hook post-tool --host copilot",
+        "type": "command"
+      }
+    ],
+    "postToolUseFailure": [
+      {
+        "bash": "\"C:\\Program Files\\aayudha\\aayu.exe\" hook post-tool --host copilot",
+        "powershell": "& \"C:\\Program Files\\aayudha\\aayu.exe\" hook post-tool --host copilot",
+        "type": "command"
+      }
+    ],
     "preToolUse": [
       {
         "bash": "\"C:\\Program Files\\aayudha\\aayu.exe\" hook pre-tool --host copilot",

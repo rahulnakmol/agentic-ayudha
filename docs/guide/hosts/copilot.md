@@ -174,8 +174,8 @@ Two parts of Copilot are not wired to aayudha yet:
 aayudha's guard that lets a host's own PostHog or Sentry MCP server or CLI only read covers Copilot: the `preToolUse`
 hook reads Copilot's `toolName` and `toolArgs`, splits an MCP tool's `<server>-<tool>` name at the server's name in
 `.mcp.json` or `mcp-config.json` in Copilot's home (`$COPILOT_HOME`, else `~/.copilot`), and checks `bash` commands as
-it does on the other hosts. The post-tool hook reads Copilot's `postToolUse` and `postToolUseFailure` events, but
-`aayu install` does not register them for Copilot yet, so the calls it lets through are not logged there yet.
+it does on the other hosts. `aayu install` also registers the post-tool hook for Copilot's `postToolUse` and
+`postToolUseFailure` events, so each call it lets through is logged as it is on the other hosts.
 
 Copilot does not run aayudha's loops either: `aayu install --loops` covers Amp, Cursor, Claude Code, Codex, and GitHub
 Actions.

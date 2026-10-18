@@ -891,6 +891,8 @@ func (p *planner) hostFiles(hosts map[verbs.HostID]bool, lock Lock) error {
 		}
 		hooks := map[string]any{"version": json.Number("1"), "hooks": map[string]any{
 			"sessionStart": entry("session-start"), "preToolUse": entry("pre-tool"),
+			// Copilot sends a failed call to postToolUseFailure, not postToolUse; the hook reads both.
+			"postToolUse": entry("post-tool"), "postToolUseFailure": entry("post-tool"),
 		}}
 		var buf bytes.Buffer
 		enc := json.NewEncoder(&buf)

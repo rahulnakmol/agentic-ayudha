@@ -1,5 +1,19 @@
 {
   "hooks": {
+    "postToolUse": [
+      {
+        "bash": "\"/opt/aayudha/bin/aayu\" hook post-tool --host copilot",
+        "powershell": "& \"/opt/aayudha/bin/aayu\" hook post-tool --host copilot",
+        "type": "command"
+      }
+    ],
+    "postToolUseFailure": [
+      {
+        "bash": "\"/opt/aayudha/bin/aayu\" hook post-tool --host copilot",
+        "powershell": "& \"/opt/aayudha/bin/aayu\" hook post-tool --host copilot",
+        "type": "command"
+      }
+    ],
     "preToolUse": [
       {
         "bash": "\"/opt/aayudha/bin/aayu\" hook pre-tool --host copilot",
