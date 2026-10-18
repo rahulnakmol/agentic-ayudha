@@ -135,6 +135,7 @@ for this release.
 ### Fixes
 
 - Every model gateway call gets the 12-minute `CallTimeout`, even when the caller passes the CLI's general 5-minute client, so a CI review that streams past 5 minutes is no longer cut off and left to a review app (#688).
+- When the CI review fails on a head, the inspect comment and the job log now say why, with the gateway's address shown as `<endpoint>` (#689).
 - The chart and measure skills check each number against its own source, name its population and window, and keep a startup note to one page (#312, #315, #341, #348, #356, #369, #373, #377, #385, #386, #402, #411, #420, #423, #425, #429, #437, #456, #464, #472, #528, #534, #539, #559, #573, #581, #591, #600).
 - The investigate, slo, runbook, and respond skills keep causes, rule-outs, and figures to the record and cite exact signatures (#375, #380, #387, #389, #412, #424, #428, #438, #452, #461, #527, #543, #563).
 - respond names the trigger the evidence shows as a contributing condition, and phrases open questions without presuming their answer (#625).
