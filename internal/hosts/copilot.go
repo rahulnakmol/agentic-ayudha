@@ -134,6 +134,41 @@ func CopilotGuarded(root string) bool {
 	return false
 }
 
+// CopilotOtherHooks lists, as "<file>: <event>: <command>", every hook command
+// in root's .github/hooks/*.json that is not one aayu install wrote. Copilot
+// runs them all, with the person's environment, in a trusted folder, and a
+// branch can change them, so doctor shows them for the person to check.
+func CopilotOtherHooks(root string) []string {
+	files, _ := filepath.Glob(filepath.Join(root, ".github", "hooks", "*.json"))
+	var out []string
+	for _, path := range files {
+		b, err := os.ReadFile(path)
+		var f struct {
+			Hooks map[string][]map[string]any `json:"hooks"`
+		}
+		name := ".github/hooks/" + filepath.Base(path)
+		if err != nil || json.Unmarshal(b, &f) != nil {
+			out = append(out, name+": not a hooks file aayu can read")
+			continue
+		}
+		events := make([]string, 0, len(f.Hooks))
+		for ev := range f.Hooks {
+			events = append(events, ev)
+		}
+		slices.Sort(events)
+		for _, ev := range events {
+			for _, h := range f.Hooks[ev] {
+				for _, k := range []string{"bash", "powershell", "command"} {
+					if c, _ := h[k].(string); c != "" && !ourHook.MatchString(c) {
+						out = append(out, name+": "+ev+": "+c)
+					}
+				}
+			}
+		}
+	}
+	return out
+}
+
 var sessionID = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 
 // RecordCopilotSession notes, in root's local state, the Copilot session whose

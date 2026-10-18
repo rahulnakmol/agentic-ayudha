@@ -677,6 +677,12 @@ func checkCopilot(ctx context.Context, p *Probe) Result {
 	if !hosts.CopilotGuarded(p.Root) {
 		problems = append(problems, "no aayudha hooks in "+hosts.CopilotHooks+", so nothing stops an agent in Copilot from running a human-only verb: run `aayu install --host copilot --apply`")
 	}
+	if other := hosts.CopilotOtherHooks(p.Root); len(other) > 0 {
+		// A trusted folder runs every hook file in it, from whatever branch is
+		// checked out, with the person's environment.
+		steps = append(steps, "Copilot runs these hook commands from this repository with your environment; check you expect each one, especially after checking out someone else's branch:")
+		steps = append(steps, other...)
+	}
 	home := p.Getenv("HOME")
 	if home == "" {
 		home = p.Getenv("USERPROFILE") // Windows
