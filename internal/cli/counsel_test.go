@@ -45,6 +45,12 @@ func TestCounsel(t *testing.T) {
 	if err := os.Symlink(filepath.Join("..", "claims.md"), filepath.Join(opts.Dir, "claims.md")); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.MkdirAll(filepath.Join(opts.Dir, "internal", "report"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(opts.Dir, "internal", "report", "percent.go"), []byte("package report\n\nfunc Percent(c, t int) float64 { return 0 }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	for _, d := range []string{"internal/cli", "notes"} {
 		if err := os.MkdirAll(filepath.Join(opts.Dir, d), 0o755); err != nil {
 			t.Fatal(err)
@@ -184,6 +190,9 @@ Is the zero case the behaviour you want?
 	if r := counselRun(env, 0, "--pr", pr, "--draft", write("good.md", good)); len(r.Findings) != 0 {
 		t.Fatalf("good counsel: %v", r.Findings)
 	}
+	if r := counselRun(env, 0, "--pr", pr, "--draft", write("symbol.md", strings.Replace(good, "(LAYERS.md)", "(`report.Percent`)", 1))); len(r.Findings) != 0 {
+		t.Errorf("a real symbol citation: %v", r.Findings)
+	}
 	for name, tt := range map[string]struct{ from, to, want string }{
 		"missing part":         {"## What not to do", "## Cautions", `missing part "## What not to do"`},
 		"no door":              {"a two-way door", "reversible", "one-way or a two-way door"},
@@ -198,6 +207,7 @@ Is the zero case the behaviour you want?
 		"cited from a title":   {"(LAYERS.md)", "(#999)", "cites #999"},
 		"path with a suffix":   {"(LAYERS.md)", "(internal/report/old.go)", "cites internal/report/old.go,"},
 		"outside the checkout": {"(LAYERS.md)", "(../claims.md)", "cites ../claims.md,"},
+		"unknown symbol":       {"(LAYERS.md)", "(`report.Missing`)", "cites report.Missing,"},
 		"symlink out":          {"(LAYERS.md)", "(claims.md)", "cites claims.md,"},
 		"part of a path":       {"(LAYERS.md)", "(percent.go)", "cites percent.go,"},
 	} {

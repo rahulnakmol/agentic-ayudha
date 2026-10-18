@@ -69,8 +69,10 @@ var (
 	// codeSpan is inline code; command is one that reads as a shell command (a word, a space, more), not a path.
 	codeSpan = regexp.MustCompile("`([^`]+)`")
 	command  = regexp.MustCompile(`^[a-z][\w.-]*\s+\S`)
-	// recommends counts recommendation statements: a counsel makes one.
-	recommends = regexp.MustCompile(`(?i)\brecommend(?:s|ed|ing)?\b|\balternatively\b`)
+	// recommends counts recommendation statements, and cues of a second ("also choose B", "or go with"): a counsel
+	// makes one. It is a floor; the judge scores the rest (rubric item 2).
+	recommends = regexp.MustCompile(`(?i)\brecommend(?:s|ed|ing)?\b`)
+	second     = regexp.MustCompile(`(?i)\balternatively\b|\b(?:also|or|additionally)\s+(?:choose|pick|go with|take|adopt|prefer|recommend)\b|\bsecond(?:ly)?,`)
 	// passive is the same claim in the passive ("the PR has been reviewed"), cited or not: a citation shows a source
 	// exists, not that it records a review, so counsel reports a review as what a record shows ("the record shows
 	// @lead's review (#12)").
@@ -146,7 +148,7 @@ func CheckStructure(md string) []string {
 			}
 		}
 	}
-	if _, r := find("Recommendation"); r != "" && (listItem.MatchString(r) || strings.Contains(r, "\n\n") || len(recommends.FindAllString(r, -1)) > 1) {
+	if _, r := find("Recommendation"); r != "" && (listItem.MatchString(r) || strings.Contains(r, "\n\n") || len(recommends.FindAllString(r, -1)) > 1 || second.MatchString(r)) {
 		out = append(out, "the recommendation is more than one paragraph or a list; make one recommendation")
 	}
 	if _, next := find("Next step"); next != "" {

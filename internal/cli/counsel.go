@@ -205,6 +205,9 @@ func runCounsel(ctx context.Context, e *Env, in Values) error {
 		if hasCite(facts.String(), cite) {
 			return true
 		}
+		if m := symbolCite.FindStringSubmatch(cite); m != nil {
+			return root != "" && declares(root, m[1], m[2])
+		}
 		// A path the twin read in this checkout is a fact too; a path that leaves the checkout is not.
 		rel := filepath.Clean(filepath.FromSlash(strings.TrimSuffix(cite, "/")))
 		if root == "" || strings.HasPrefix(cite, "#") || filepath.IsAbs(rel) || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
@@ -527,6 +530,35 @@ func hasCite(text, cite string) bool {
 		}
 		i = j + 1
 	}
+}
+
+// symbolCite is a cited Go symbol, pkg.Name or pkg.Type.Method: the package and its first exported name.
+var symbolCite = regexp.MustCompile(`^([a-z][A-Za-z0-9_]*)\.([A-Z][A-Za-z0-9_]*)(?:\.[A-Za-z0-9_]+)*$`)
+
+// declares reports whether a Go package named pkg in the checkout declares name (a func, method receiver type, type,
+// var, or const), so a symbol citation resolves to code that exists. Vendored and dependency trees are skipped.
+func declares(root, pkg, name string) bool {
+	decl := regexp.MustCompile(`(?m)^(?:func\s+(?:\([^)]*\)\s*)?|type\s+|var\s+|const\s+|\s+)` + name + `\b`)
+	found := false
+	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil || found {
+			return filepath.SkipDir
+		}
+		if d.IsDir() {
+			if n := d.Name(); path != root && (strings.HasPrefix(n, ".") || n == "node_modules" || n == "vendor" || n == "testdata") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if filepath.Base(filepath.Dir(path)) != pkg || !strings.HasSuffix(path, ".go") || d.Type()&os.ModeSymlink != 0 {
+			return nil
+		}
+		if b, err := os.ReadFile(path); err == nil && regexp.MustCompile(`(?m)^package `+pkg+`\b`).Match(b) && decl.Match(b) {
+			found = true
+		}
+		return nil
+	})
+	return found
 }
 
 // plainPath is a file name that can stand in the trusted facts: path characters only, no spaces or line breaks.
