@@ -21,7 +21,7 @@ const (
 	SourceDefault  = "default"  // the registry default for the lane and host
 	SourceConfig   = "config"   // [models.<lane>.<host>]
 	SourceFallback = "fallback" // configured family not available on the host; registry default used
-	SourceDirect   = "direct"   // host-managed on this host; the binary's direct call uses DirectHost's default
+	SourceDirect   = "direct"   // host-managed, or a Copilot catalog model, on this host; the binary's direct call uses DirectHost's default
 )
 
 // Resolved is the model a lane uses on a host.
@@ -117,13 +117,19 @@ func (r Resolver) ResolveDirect(lane verbs.LaneID, host verbs.HostID, heavy bool
 	if err != nil {
 		return res, err
 	}
-	if res.Family == verbs.FamilyHostManaged {
+	// Copilot's registry rows name models in Copilot's own catalog
+	// (claude-opus-5.5), which the gateway does not route.
+	copilotOnly := host == verbs.HostCopilot && res.Source != SourceConfig
+	if res.Family == verbs.FamilyHostManaged || copilotOnly {
 		alt, err := r.Resolve(lane, verbs.DirectHost)
 		if err != nil {
 			return alt, err
 		}
 		alt.Source = SourceDirect
 		alt.Note = fmt.Sprintf("%s is a host-managed mode on %s; the direct call uses the %s default %s", res.Display, host, verbs.DirectHost, alt.Model)
+		if copilotOnly && res.Family != verbs.FamilyHostManaged {
+			alt.Note = fmt.Sprintf("%s is a model in Copilot's catalog; the direct call uses the %s default %s", res.Display, verbs.DirectHost, alt.Model)
+		}
 		r.logf("models: %s lane: %s", lane, alt.Note)
 		res = alt
 	}

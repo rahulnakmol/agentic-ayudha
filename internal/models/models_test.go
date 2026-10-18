@@ -56,6 +56,9 @@ func TestLaneResolution(t *testing.T) {
 		// The binary's own calls cannot use a host-managed mode.
 		{verbs.LaneChore, verbs.HostAmp, true, false, verbs.ModelClaudeHaiku, verbs.FamilyAnthropic, SourceDirect, ""},
 		{verbs.LaneUIReview, verbs.HostAmp, true, false, verbs.ModelGemini, verbs.FamilyGoogle, SourceDirect, "high"},
+		// Copilot's review row names a model in Copilot's catalog, not one the gateway routes.
+		{verbs.LaneReview, verbs.HostCopilot, false, false, verbs.CopilotClaudeOpus, verbs.FamilyAnthropic, SourceDefault, ""},
+		{verbs.LaneReview, verbs.HostCopilot, true, false, "my-model", verbs.FamilyXAI, SourceDirect, ""},
 		// Heavy reviews escalate to GPT-6 Astra at high effort.
 		{verbs.LaneReview, verbs.HostAmp, true, true, verbs.ModelGPTAstra, verbs.FamilyOpenAI, SourceDefault, "high"},
 	}
