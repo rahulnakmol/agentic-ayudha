@@ -5,14 +5,15 @@ import (
 	"testing"
 )
 
-// The host-config block keeps every hand-written line, adds the owners a
-// hand line already gives a path (the block's line is the last match there),
-// sits before aayu seat's block, is stable on a re-run, and uninit removes
-// only it.
+// The host-config block keeps every hand-written line and never loosens one:
+// a path a hand line owns keeps exactly those owners, and a narrower hand line
+// under a block path is restated after it (the block's line is the later
+// match). It sits before aayu seat's block, is stable on a re-run, and
+// removing it leaves the rest.
 func TestRenderHostConfigOwners(t *testing.T) {
-	existing := "# owners\n/docs/  @writer\n/.claude/  @lead\n\n# BEGIN aayudha:seats (written by `aayu seat`)\n/internal/ui/  @ux\n# END aayudha:seats\n"
+	existing := "# owners\n/docs/  @writer\n/.claude/  @lead\n/.claude/settings.json  @security\n\n# BEGIN aayudha:seats (written by `aayu seat`)\n/internal/ui/  @ux\n# END aayudha:seats\n"
 	got := RenderHostConfigOwners(existing, "founder")
-	for _, want := range []string{"/docs/  @writer\n/.claude/  @lead\n", "/.mcp.json  @founder\n", "/.claude/  @founder @lead\n", "/.github/hooks/  @founder\n", "/.codex/  @founder\n"} {
+	for _, want := range []string{"/docs/  @writer\n/.claude/  @lead\n", "/.mcp.json  @founder\n", "\n/.claude/  @lead\n/.claude/settings.json  @security\n/.cursor/  @founder\n", "/.github/hooks/  @founder\n", "/.codex/  @founder\n"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("lacks %q:\n%s", want, got)
 		}

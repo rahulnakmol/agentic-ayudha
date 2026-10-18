@@ -602,7 +602,8 @@ func (in *Init) updateFile(step, path string, content []byte) error {
 }
 
 // The CODEOWNERS block init --gates owns: the files a host runs from the
-// checkout (hosts.HostConfigOwners). Lines outside it are never changed.
+// checkout (hosts.HostConfigOwners). Lines outside it are never changed, and
+// it never loosens one: each path keeps the owners a hand-written line gives it.
 const (
 	hostConfigSection = "host-config" // its File.Section, so uninit removes only the block
 	HostConfigBegin   = "# BEGIN aayudha:host-config (written by `aayu init --gates`: the hooks, MCP servers, and plugins a host runs from this repository)"
@@ -669,15 +670,27 @@ func RenderHostConfigOwners(existing, login string) string {
 	rules := identity.ParseCodeowners(strings.Join(hand, "\n"))
 	block := []string{HostConfigBegin}
 	for _, pat := range hosts.HostConfigOwners {
+		path := strings.TrimPrefix(pat, "/")
+		// A path a hand-written line already protects keeps exactly its
+		// owners: adding the login would let it alone approve.
 		owners := []string{login}
-		if o, _, ok := identity.Owners(rules, strings.TrimPrefix(pat, "/")); ok {
-			for _, x := range o {
-				if !slices.ContainsFunc(owners, func(y string) bool { return strings.EqualFold(x, y) }) {
-					owners = append(owners, x)
-				}
-			}
+		if o, _, ok := identity.Owners(rules, path); ok && len(o) > 0 {
+			owners = o
 		}
 		block = append(block, pat+"  @"+strings.Join(owners, " @"))
+		// A narrower hand-written line under pat would lose to the block's
+		// line, the later match: restate it after, with its owners.
+		var seen []string
+		for _, r := range rules {
+			sub := strings.TrimPrefix(r.Pattern, "/")
+			if !strings.HasSuffix(path, "/") || sub == path || !strings.HasPrefix(sub, path) || slices.Contains(seen, sub) {
+				continue
+			}
+			seen = append(seen, sub)
+			if o, _, ok := identity.Owners(rules, sub); ok && len(o) > 0 {
+				block = append(block, r.Pattern+"  @"+strings.Join(o, " @"))
+			}
+		}
 	}
 	block = append(block, HostConfigEnd)
 	text := strings.TrimRight(strings.Join(hand, "\n"), "\n")

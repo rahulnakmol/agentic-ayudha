@@ -348,9 +348,10 @@ func (o Options) text(b []byte) []byte {
 
 // planner accumulates edits, and notes for edits it could not plan.
 type planner struct {
-	o     Options
-	edits []Edit
-	notes []string
+	o         Options
+	edits     []Edit
+	notes     []string
+	unmanaged []string
 }
 
 func (p *planner) abs(rel string, home bool) string {
@@ -408,6 +409,10 @@ type Result struct {
 	Edits []Edit
 	Lock  Lock
 	Notes []string // edits install could not plan and a human must make
+	// Unmanaged are ExecutableConfig files holding an aayudha entry install
+	// leaves alone because it is outside aayudha's block: drift doctor cannot
+	// repair, since install will not rewrite it.
+	Unmanaged []string
 }
 
 // Plan computes every edit install would make. It reads the repository and the
@@ -520,7 +525,7 @@ func Plan(o Options) (*Result, error) {
 		}
 		return a.Path < b.Path
 	})
-	return &Result{Edits: p.edits, Lock: lock, Notes: p.notes}, nil
+	return &Result{Edits: p.edits, Lock: lock, Notes: p.notes, Unmanaged: p.unmanaged}, nil
 }
 
 // skillCopies plans real copies of every source skill under dir, removes files
@@ -966,6 +971,7 @@ func (p *planner) codexConfig() error {
 		text = codexBlock.ReplaceAllLiteralString(text, block)
 	case strings.Contains(text, "[mcp_servers."+ServerName+"]"):
 		p.notes = append(p.notes, CodexConfig+" already defines [mcp_servers."+ServerName+"] outside aayudha's block, so install leaves it: point its command at "+string(cmd)+" with args [\"mcp\"]")
+		p.unmanaged = append(p.unmanaged, CodexConfig)
 		return nil
 	case text == "":
 		text = block

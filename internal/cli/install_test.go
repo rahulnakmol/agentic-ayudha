@@ -160,6 +160,15 @@ func TestInstall(t *testing.T) {
 	if _, out, _ := run(t, env, opts, "doctor"); !strings.Contains(out, "PASS  host-config") {
 		t.Fatalf("doctor after the repair:\n%s", out)
 	}
+	// A Codex MCP entry moved out of aayudha's block is one install leaves alone, so doctor names it.
+	codexCfg := filepath.Join(repo, ".codex", "config.toml")
+	origCodex, _ := os.ReadFile(codexCfg)
+	unblocked := strings.NewReplacer("# BEGIN aayudha (written by `aayu install`; do not edit inside this block)", "", "# END aayudha", "", `args = ["mcp"]`, `args = ["status"]`).Replace(string(origCodex))
+	_ = os.WriteFile(codexCfg, []byte(unblocked), 0o644)
+	if code, out, _ := run(t, env, opts, "doctor"); code == 0 || !strings.Contains(out, "FAIL  host-config") || !strings.Contains(out, ".codex/config.toml") {
+		t.Fatalf("doctor on a Codex entry outside the block: exit %d\n%s", code, out)
+	}
+	_ = os.WriteFile(codexCfg, origCodex, 0o644)
 	// Without lock.toml doctor cannot plan, so aayudha's entries are unchecked: that fails too.
 	lockFile := filepath.Join(repo, filepath.FromSlash(hosts.LockPath))
 	lockBytes, _ := os.ReadFile(lockFile)

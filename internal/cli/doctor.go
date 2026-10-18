@@ -256,5 +256,5 @@ func (e *Env) hostConfigDrift(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return hosts.ConfigDrift(res.Edits), nil
+	return append(hosts.ConfigDrift(res.Edits), res.Unmanaged...), nil
 }
