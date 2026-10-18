@@ -141,10 +141,11 @@ type Response struct {
 // HTTP client of its own. A streamed high-effort review keeps delivering
 // events for many minutes (a gateway measured 10 minutes of grok-4.7
 // reasoning, Bug #608), so it is well above a proxy's cut of an unstreamed
-// reply (about 125 seconds) and under the merge gate's 15-minute inspect job,
-// leaving that job time to fall back to the reviewer app. Nothing retries a
-// call that timed out.
-var CallTimeout = 12 * time.Minute
+// reply (about 125 seconds) and under the merge gate's 30-minute inspect job,
+// leaving that job time to install aayudha and fall back to the reviewer app.
+// A 12-minute bound cut a live grok-4.7 stream on a 1.2k-line diff (#663).
+// Nothing retries a call that timed out.
+var CallTimeout = 25 * time.Minute
 
 // Client is one way of calling a model.
 type Client interface {

@@ -336,7 +336,7 @@ jobs:
     needs: gate
     if: github.event_name == 'pull_request_target' && needs.gate.outputs.story != '0'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     permissions:
       contents: read
       pull-requests: write
