@@ -15,6 +15,8 @@ channel = "file"
 # target; a story without screenshot or recording criteria never runs them. Budgets are the example's own.
 [verify]
 seed = ["examples/benefits-qa/deploy/serve.sh"]
+# aayudha is a CLI; benefits-qa is a web app with an API, so the dast floor scans it (Decision #485).
+platforms = ["cli", "web", "api"]
 # The feature maps' maintain pass (D-4.5b.8): a headless Amp run on the founder's side (`amp -x`, loops/README.md)
 # follows the brief; Amp has no @-mention.
 maintainer = "amp"

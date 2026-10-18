@@ -43,7 +43,7 @@ aayu:
       type: bool
       required: false
       positional: false
-      description: "Only the security floors (sast, secrets, deps) on the checked-out commit, with no PR or story: what aayudha-security.yml runs on every push and nightly. With --ci, each failing finding files or updates one aayudha:security Bug."
+      description: "Only the security floors (sast, secrets, deps, dast) on the checked-out commit, with no PR or story: what aayudha-security.yml runs on every push and nightly. With --ci, each failing finding files or updates one aayudha:security Bug."
     - name: since
       type: string
       required: false

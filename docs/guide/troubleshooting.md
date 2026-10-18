@@ -71,6 +71,12 @@ story again from the latest code ([a pull request is ready](guide-review.md#when
 **A floor fails with "tool not installed".** The merge gate installs every tool; on your own machine a floor whose tool
 is missing blocks, it never passes. `aayu doctor`'s `optional-tools` row lists what to install for local checks.
 
+**The pack says `skipped: dast: no runnable target`.** Your product is a web app or an API (`[verify] platforms`), but
+verify has nothing to scan, and that blocks `ship`. Give verify a command that starts the app (`[verify] seed`) and
+its URL (`[verify.environments.local] url`, for example `http://127.0.0.1:8080`), or ask a person to waive it with
+`aayu decide <story> --waiver dast`. With no Docker or Podman on your machine, verify leaves the scan to CI and does
+not block locally; `aayu doctor`'s `dast` row shows the target, the scan mode, and the runtime it found.
+
 **The proof comment flags "checks this PR weakens".** The pull request removes or loosens a check. That is allowed but
 never silent: a person decides whether it is right.
 

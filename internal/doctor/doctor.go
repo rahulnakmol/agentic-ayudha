@@ -101,6 +101,7 @@ var Checks = []Check{
 	{"reviewer-apps", checkReviewerApps},
 	{"retired-workflows", checkRetiredWorkflows},
 	{"security-workflow", checkSecurityWorkflow},
+	{"dast", checkDAST},
 	{"loops", checkLoops},
 	{"leases", checkLeases},
 	{"feedback-layers", checkFeedbackLayers},

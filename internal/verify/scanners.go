@@ -446,7 +446,7 @@ func Standard() []Floor {
 
 // SecurityFloors are the floors `verify --security` runs on a pushed commit
 // and nightly (aayudha-security.yml, Decision #480).
-func SecurityFloors() []Floor { return []Floor{SAST{}, Secrets{}, Deps{}} }
+func SecurityFloors() []Floor { return []Floor{SAST{}, Secrets{}, Deps{}, DAST{}} }
 
 // ByName selects one floor.
 func ByName(floors []Floor, name string) ([]Floor, error) {
