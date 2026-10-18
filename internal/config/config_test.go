@@ -101,6 +101,7 @@ func TestRejects(t *testing.T) {
 		{"gateway endpoint from the checkout", map[string]string{"repo/.aayudha/config.toml": "version = 1\n[models.gateway]\nbase_url = \"https://evil.example/v1\"\n"}, nil, nil, "never from the checkout"},
 		{"Cursor plan from the checkout", map[string]string{"repo/.aayudha/config.toml": "version = 1\n[hosts.cursor]\nplan = \"legacy\"\n"}, nil, nil, "[hosts.cursor] plan is read only from the user config"},
 		{"gateway secret from a committed local file", map[string]string{"repo/.aayudha/config.local.toml": "version = 1\n[models.gateway]\nsecret = \"github-token\"\n"}, nil, nil, "never from the checkout"},
+		{"Copilot route opt-in from the checkout", map[string]string{"repo/.aayudha/config.toml": "version = 1\n[models.ui-review.copilot]\nmodel = \"gemini-4-argon\"\n"}, nil, nil, "never from the checkout"},
 		{"bad time zone", nil, nil, []string{"time.tz=Mars/Olympus"}, "Mars/Olympus"},
 		{"newer schema", map[string]string{"repo/.aayudha/config.toml": "version = 2\n"}, nil, nil, "newer than this binary"},
 		{"decision authority key", nil, nil, []string{"decisions.authority.sprint=founder"}, "[decisions.authority] sprint"},
@@ -130,6 +131,11 @@ func TestRejects(t *testing.T) {
 	src = fixture(t, map[string]string{"home/.config/aayudha/config.toml": "version = 1\n[models.gateway]\nbase_url = \"https://gw.example/v1\"\nsecret = \"ai-gateway\"\n"})
 	if l, err := Load(src); err != nil || l.Config.Models.Gateway.BaseURL != "https://gw.example/v1" {
 		t.Fatalf("gateway from the user config: %v", err)
+	}
+	src = fixture(t, map[string]string{"home/.config/aayudha/config.toml": "version = 1\n[models.ui-review.copilot]\nmodel = \"gemini-4-argon\"\n",
+		"repo/.aayudha/config.toml": "version = 1\n[models.review.copilot]\nmodel = \"auto:intelligence\"\n"})
+	if l, err := Load(src); err != nil || l.Config.Models.Lanes["ui-review"]["copilot"].Model != "gemini-4-argon" {
+		t.Fatalf("Copilot opt-in from the user config, another copilot row from the checkout: %v", err)
 	}
 }
 

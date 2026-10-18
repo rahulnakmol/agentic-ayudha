@@ -62,7 +62,9 @@ func TestLaneResolution(t *testing.T) {
 		{verbs.LaneReview, verbs.HostCopilot, false, false, "claude-haiku-5.5", verbs.FamilyAnthropic, SourceConfig, ""},
 		{verbs.LaneReview, verbs.HostCopilot, true, false, "my-model", verbs.FamilyXAI, SourceDirect, ""},
 		{verbs.LaneChore, verbs.HostCopilot, true, false, verbs.ModelClaudeHaiku, verbs.FamilyAnthropic, SourceDirect, ""},
-		{verbs.LaneUIReview, verbs.HostCopilot, false, false, verbs.ModelGemini, verbs.FamilyGoogle, SourceDefault, "high"},
+		// UI review on Copilot defaults to Gemini 4 Argon, which the binary
+		// calls through Copilot CLI (CopilotRouted), never the gateway.
+		{verbs.LaneUIReview, verbs.HostCopilot, false, false, verbs.CopilotGeminiArgon, verbs.FamilyGoogle, SourceDefault, "high"},
 		// Heavy reviews escalate to GPT-6 Astra at high effort.
 		{verbs.LaneReview, verbs.HostAmp, true, true, verbs.ModelGPTAstra, verbs.FamilyOpenAI, SourceDefault, "high"},
 	}
@@ -426,6 +428,15 @@ func TestStructured(t *testing.T) {
 	}
 	if prose.Requests[1].Messages[0].Content != "(empty reply)" {
 		t.Errorf("empty reply echoed as %q", prose.Requests[1].Messages[0].Content)
+	}
+	// ValidReply makes Structured's check without a retry: nil without a
+	// format or for a valid fenced reply, else why the reply fails.
+	f := &Format{Schema: schema}
+	if ValidReply("anything", nil) != nil || ValidReply("```json\n{\"disposition\":\"fix\",\"findings\":[]}\n```", f) != nil {
+		t.Error("ValidReply rejected a valid reply")
+	}
+	if err := ValidReply(`{"disposition":"merge"}`, f); err == nil || !strings.Contains(err.Error(), "findings") {
+		t.Errorf("ValidReply on a reply without findings: %v", err)
 	}
 	junk := &Fake{Replies: []Response{{Text: "I cannot comply."}}}
 	if err := Structured(context.Background(), junk.Complete, Request{}, schema, &v); !errors.As(err, &re) || !re.Parse || re.Reply != "I cannot comply." {

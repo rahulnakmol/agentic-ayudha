@@ -1,6 +1,7 @@
 package models
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -217,7 +218,16 @@ type Call struct {
 // through the gateway or its direct provider, records tokens and cost in the
 // actions log, and trips the breaker when the call reaches a limit.
 func (g *Gateway) Do(ctx context.Context, c Call) (Response, Resolved, error) {
-	m, err := g.Resolver.ResolveDirect(c.Lane, c.Host, c.Heavy)
+	// The Copilot route keeps the ui-review lane's copilot row; every other
+	// call resolves its direct model.
+	var m Resolved
+	var err error
+	if c.Lane == verbs.LaneUIReview && c.Host == verbs.HostCopilot {
+		m, err = g.Resolver.Resolve(c.Lane, c.Host)
+	}
+	if err == nil && !CopilotRouted(m) {
+		m, err = g.Resolver.ResolveDirect(c.Lane, c.Host, c.Heavy)
+	}
 	if err != nil {
 		return Response{}, m, err
 	}
@@ -226,7 +236,7 @@ func (g *Gateway) Do(ctx context.Context, c Call) (Response, Resolved, error) {
 			return Response{}, m, err
 		}
 	}
-	route, err := RouteFor(g.Models, m.Model, m.Family)
+	route, err := RouteOf(g.Models, m)
 	if err != nil {
 		return Response{}, m, err
 	}
@@ -285,6 +295,9 @@ func (g *Gateway) WithModel(lane verbs.LaneID, host verbs.HostID, model string) 
 func (g *Gateway) client(route Route, key string) Client {
 	if g.Client != nil {
 		return g.Client(route, key)
+	}
+	if route.Via == CopilotRoute.Via {
+		return CopilotCLI{Token: key, Path: os.Getenv("PATH"), Host: cmp.Or(os.Getenv("COPILOT_GH_HOST"), os.Getenv("GH_HOST"))}
 	}
 	return HTTPClient{BaseURL: route.BaseURL, Style: route.Style, Key: key, KeyAuth: route.KeyAuth, HTTP: g.HTTP}
 }

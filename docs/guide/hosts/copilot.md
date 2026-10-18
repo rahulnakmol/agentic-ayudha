@@ -94,7 +94,7 @@ pick the model with `/model` in Copilot CLI or in VS Code's model picker:
 | chore (triage, status, checks) | Auto, Efficiency | Cost first |
 | build, spec, plan | `claude-sonnet-5.5`, then `claude-opus-5.5` when a step needs more | A named model; Opus costs twice Sonnet per token |
 | review | `gpt-6.1-sol` on an Anthropic build, `claude-opus-5.5` on one with no Anthropic response, `gemini-4-argon` on one that used both | A different family from the builder's |
-| ui-review | `gemini-3.8-flash` at high effort, the same as every host | The founder's default for all UI review |
+| ui-review | `gemini-4-argon` at high effort through Copilot CLI, else `gemini-3.8-flash` (high) through the gateway | The founder's default for UI review where Copilot is set up |
 
 `aayu models show --host copilot` lists them. Copilot's paid plans take 10 % off a request answered through Auto.
 
@@ -105,16 +105,20 @@ credits). Balance and Intelligence both chose `claude-opus-5.5` (15 premium requ
 `gpt-6-luna` at every tier: that was Auto's choice for the prompt, not a limit of the account. Each figure is from
 Copilot CLI's own usage report for that run.
 
-**Gemini 4 Argon for UI review, opt-in.** Copilot lists `gemini-4-argon`, so the UI-review lane can use it without a
-Google plan. It stays opt-in until a gating run on it passes and the founder agrees:
+**Gemini 4 Argon for UI review, by default.** Copilot lists `gemini-4-argon`, so aayu's own UI-review calls (review
+lane A, `aayu polish`, verify's screenshot review) run on it at high effort through Copilot CLI whenever `copilot` is
+installed and signed in, on any host and without a Google plan. When it is not, or a call fails or misses the schema,
+lane A uses `gemini-3.8-flash` at high effort through the AI gateway and says so on stderr and in its label; the review
+always runs. The ux evals measured flash only: CI has no Copilot credential, so it always takes the fallback, and a
+local run with Copilot reviews on Argon, which those runs did not measure. To always use flash, set this in your user
+config (a repository's config cannot set it):
 
 ```toml
 [models.ui-review.copilot]
-model = "gemini-4-argon"
+model = ""
 ```
 
-> **Honest status:** the setting is not wired yet. aayu's UI-review calls still run `gemini-3.8-flash` through the
-> AI gateway, whatever this row says, until the route that sends them through `copilot -p` ships.
+How it works: [The model gateway and lanes](../how-models.md).
 
 One UI-review call on it cost about 0.043 USD: Copilot charges AI credits for input at 2 USD per million tokens and
 visible output at 10 USD per million, and does not bill reasoning tokens. About 15,000 of a call's 19,000 input tokens

@@ -69,6 +69,12 @@ var ListPrices = []ListPrice{
 	// 2026-11-30 (from 2026-12-01: input 4, cached 0.20, output 20).
 	{Model: "gemini-4-argon-high", Short: Rates{Input: 2, CachedInput: 0.10, Output: 10},
 		Source: "https://ai.google.dev/gemini-api/docs/pricing", Read: "2026-10-17"},
+	// gemini-4-argon: Copilot's ID for Gemini 4 Argon, on the Copilot route
+	// (the ui-review lane's default where Copilot is set up), billed in AI
+	// credits at these per-token rates (promotional until 2026-12-01). The route charges the credits Copilot reports; this rate is
+	// for a call whose usage file is missing.
+	{Model: "gemini-4-argon", Short: Rates{Input: 2, CachedInput: 0.10, Output: 10},
+		Source: "https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing", Read: "2026-10-18"},
 }
 
 // PriceOf returns model's price: a [[models.prices]] entry in config first,

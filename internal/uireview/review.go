@@ -15,9 +15,12 @@ type Tools interface {
 
 // Reviewer runs both lanes on a set of states.
 type Reviewer struct {
-	Tools       Tools
-	Complete    func(context.Context, models.Request) (models.Response, error) // lane A's model call (the ui-review lane through the gateway)
-	Model       string
+	Tools    Tools
+	Complete func(context.Context, models.Request) (models.Response, error) // lane A's model call (the ui-review lane through the gateway)
+	Model    string
+	// Used, when set, names the model lane A's calls actually went to, for a
+	// route that can fall back mid-review (the opt-in Copilot route).
+	Used        func() string
 	Effort      string // the ui-review lane's effort; high with --deep
 	K           int
 	MinTargetPx int
@@ -48,7 +51,11 @@ func (r *Reviewer) Review(ctx context.Context, states []State) (*Critique, []Cap
 	if k == 0 {
 		k = K
 	}
-	if crit.LaneA, err = LaneA(ctx, r.Complete, caps, k, r.MinTargetPx, r.Effort, r.Model); err != nil {
+	crit.LaneA, err = LaneA(ctx, r.Complete, caps, k, r.MinTargetPx, r.Effort, r.Model)
+	if r.Used != nil {
+		crit.LaneA.Relabel(r.Model, r.Used())
+	}
+	if err != nil {
 		return crit, caps, err
 	}
 	crit.Combine()

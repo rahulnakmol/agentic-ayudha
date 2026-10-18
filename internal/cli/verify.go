@@ -126,6 +126,10 @@ func (e *Env) screenshotReview(ctx context.Context, arts []verify.Evidence, stor
 		caps = append(caps, uireview.Capture{ID: a.Path, URL: a.Path, Rest: f})
 	}
 	l, err := uireview.LaneA(ctx, rv.Complete, caps, rv.K, rv.MinTargetPx, rv.Effort, rv.Model)
+	if rv.Used != nil {
+		sr.Model = rv.Used()
+		l.Relabel(rv.Model, sr.Model)
+	}
 	if err != nil {
 		sr.Skipped = err.Error()
 		return sr

@@ -520,11 +520,12 @@ var Lanes = []Lane{
 		withPlan(geminiDefault(HostCursor), PlanLegacy),
 		geminiDefault(HostClaude),
 		geminiDefault(HostCodex),
-		// Copilot lists gemini-3.8-flash too, so the founder's default holds
-		// there. Gemini 4 Argon through Copilot is opt-in until an Argon gating
-		// pair passes and the founder agrees.
-		{Host: HostCopilot, Model: "Gemini 3.8 Flash (high)", ID: ModelGemini, Family: FamilyGoogle, Effort: "high",
-			Alternative: "Gemini 4 Argon (" + CopilotGeminiArgon + "), opt-in with [models.ui-review.copilot] model = \"" + CopilotGeminiArgon + "\": about 0.043 USD per lane A call (Copilot AI credits: input x 2 USD/M + visible output x 10 USD/M; reasoning not billed)", AlternativeID: CopilotGeminiArgon},
+		// The founder's default: Gemini 4 Argon through Copilot wherever it is
+		// available. The binary's lane A calls run it through Copilot CLI on
+		// any host when copilot is installed and signed in, else Gemini 3.8
+		// Flash (high) through the gateway, which the ux evals gate.
+		{Host: HostCopilot, Model: "Gemini 4 Argon (high)", ID: CopilotGeminiArgon, Family: FamilyGoogle, Effort: "high",
+			Alternative: "Gemini 3.8 Flash (high) (" + ModelGemini + ") through the AI gateway when copilot is not installed or signed in, a call fails, or [models.ui-review.copilot] model = \"\"; Argon costs about 0.043 USD per lane A call (Copilot AI credits: input x 2 USD/M + visible output x 10 USD/M; reasoning not billed)", AlternativeID: ModelGemini},
 	}},
 	{ID: LaneChore, Summary: "Cheap mechanical work: triage, status, checks.", Defaults: []ModelDefault{
 		{Host: HostAmp, Model: "Amp low", Family: FamilyHostManaged},

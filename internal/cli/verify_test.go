@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -363,8 +364,10 @@ func TestVerifyMaintainHandoff(t *testing.T) {
 
 // TestVerifyScreenshotReview: verify's screenshot judgement goes through the
 // ui-review lane at its high effort, through the same reviewer as `aayu
-// review`'s lane A, and is labelled advisory with the model and effort. A
-// gateway failure is recorded as skipped rather than stopping verify.
+// review`'s lane A, and is labelled advisory with the model and effort. With
+// Copilot not signed in, it runs on the gateway's flash and the label says why
+// Argon did not run. A gateway failure is recorded as skipped rather than
+// stopping verify.
 func TestVerifyScreenshotReview(t *testing.T) {
 	dir := t.TempDir()
 	fakeModel := &models.Fake{Replies: []models.Response{laneAReply("contrast"), laneAReply("contrast"), laneAReply()}}
@@ -383,7 +386,8 @@ func TestVerifyScreenshotReview(t *testing.T) {
 	png := []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR")
 	arts := []verify.Evidence{{Path: "screens/1.png", Kind: "screenshot", Data: png, OCRScanned: true}, {Path: "reports/a11y.json", Kind: "report", Data: []byte("{}")}}
 	sr := newE(fakeModel).screenshotReview(context.Background(), arts, 0, "")
-	if sr == nil || !sr.Advisory || sr.Skipped != "" || sr.Model != verbs.ModelGemini || sr.Effort != "high" || len(sr.Findings) != 1 || sr.Findings[0].Kind != "contrast" {
+	if sr == nil || !sr.Advisory || sr.Skipped != "" || sr.Model != verbs.ModelGemini+" (gemini-4-argon through Copilot is unavailable: not signed in: set the copilot secret or COPILOT_GITHUB_TOKEN)" ||
+		sr.Effort != "high" || len(sr.Findings) != 1 || sr.Findings[0].Kind != "contrast" {
 		t.Fatalf("screenshot review: %+v", sr)
 	}
 	if len(fakeModel.Requests) != uireview.K {
@@ -428,5 +432,115 @@ func TestVerifyScreenshotReview(t *testing.T) {
 	leaky := &models.Fake{Replies: []models.Response{leak, leak, leak}}
 	if sr := newE(leaky).screenshotReview(context.Background(), arts, 0, ""); sr == nil || len(sr.Findings) != 0 || !strings.Contains(sr.Skipped, "personal data") || strings.Contains(sr.Skipped, "jane.doe@acme.io") {
 		t.Fatalf("findings quoting personal data: %+v", sr)
+	}
+}
+
+// TestCopilotUIReviewRoute: with Copilot signed in, the binary's ui-review
+// calls run on Gemini 4 Argon through Copilot by default, at the lane's
+// effort, charged the credits Copilot reports. It fails closed: when copilot
+// cannot be run or its reply does not parse, that call and every later one go
+// to the gateway's flash-high route, the label says so, and the review still
+// happens. [models.ui-review.copilot] model = "" turns the route off.
+func TestCopilotUIReviewRoute(t *testing.T) {
+	png := []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR")
+	arts := []verify.Evidence{{Path: "screens/1.png", Kind: "screenshot", Data: png, OCRScanned: true}}
+	argon := laneAReply("contrast")
+	argon.CostUSD = 0.043
+	setup := func(model string, copilot models.Client) (*Env, *models.Fake, string) {
+		dir := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(dir, ".config", "aayudha"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		row := "[models.ui-review.copilot]\nmodel = \"" + model + "\"\n"
+		if model == "default" {
+			row = ""
+		}
+		if err := os.WriteFile(filepath.Join(dir, ".config", "aayudha", "config.toml"), []byte("version = 1\n"+row), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		gateway := &models.Fake{Replies: []models.Response{laneAReply("contrast"), laneAReply("contrast"), laneAReply()}}
+		var log strings.Builder
+		e, err := newEnv(IO{In: strings.NewReader(""), Out: io.Discard, Err: &log}, Options{Dir: dir,
+			Getenv: func(k string) string {
+				return map[string]string{"HOME": dir, "XDG_STATE_HOME": dir, "AAYU_SECRET_GOOGLE": "k", "COPILOT_GITHUB_TOKEN": "copilot-tok"}[k]
+			},
+			GHToken: func(context.Context) (string, error) { return "", os.ErrNotExist },
+			ModelClient: func(r models.Route, key string) models.Client {
+				if r.Via == models.CopilotRoute.Via {
+					if key != "copilot-tok" {
+						t.Errorf("the Copilot route got key %q, want COPILOT_GITHUB_TOKEN", key)
+					}
+					return copilot
+				}
+				return gateway
+			}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return e, gateway, e.ActionsPath()
+	}
+
+	cp := &models.Fake{Replies: []models.Response{argon}}
+	e, gateway, logPath := setup("default", cp)
+	sr := e.screenshotReview(context.Background(), arts, 0, "")
+	if sr == nil || sr.Skipped != "" || sr.Model != "gemini-4-argon via Copilot" || len(sr.Findings) != 1 || sr.Findings[0].Source != sr.Model || len(cp.Requests) != uireview.K || len(gateway.Requests) != 0 {
+		t.Fatalf("Copilot route: %+v, %d Copilot and %d gateway calls", sr, len(cp.Requests), len(gateway.Requests))
+	}
+	if r := cp.Requests[0]; r.Model != "gemini-4-argon" || r.Effort != "high" || len(r.Messages[0].Images) != 1 {
+		t.Fatalf("Copilot request: model %s, effort %q", r.Model, r.Effort)
+	}
+	if b, _ := os.ReadFile(logPath); !strings.Contains(string(b), `"via":"copilot"`) || !strings.Contains(string(b), `"cost_source":"reported"`) || !strings.Contains(string(b), `"cost_usd":0.043`) {
+		t.Fatalf("actions log does not charge the reported credits:\n%s", b)
+	}
+
+	for name, copilot := range map[string]*models.Fake{
+		"copilot missing":   {Err: fmt.Errorf("%w: copilot (GitHub Copilot CLI) is not installed", models.ErrCopilot)},
+		"reply is not JSON": {Replies: []models.Response{{Text: "Sure! Here is my review."}}},
+		"stderr is long":    {Err: fmt.Errorf("%w: copilot: exit status 1: %s", models.ErrCopilot, strings.Repeat("x", 300))},
+	} {
+		e, gateway, _ := setup("gemini-4-argon", copilot)
+		sr := e.screenshotReview(context.Background(), arts, 0, "")
+		if sr == nil || sr.Skipped != "" || len(sr.Findings) != 1 || sr.Findings[0].Source != sr.Model || len(copilot.Requests) != 1 || len(gateway.Requests) != uireview.K ||
+			!strings.HasPrefix(sr.Model, verbs.ModelGemini+" (the Copilot route failed: ") {
+			t.Errorf("%s: %+v, %d Copilot and %d gateway calls", name, sr, len(copilot.Requests), len(gateway.Requests))
+		}
+		if !strings.Contains(e.IO.Err.(*strings.Builder).String(), "lane A falls back to "+verbs.ModelGemini+" (high)") {
+			t.Errorf("%s: the fallback is not reported: %q", name, e.IO.Err.(*strings.Builder).String())
+		}
+		if strings.Count(sr.Model, "x") > 160 {
+			t.Errorf("%s: the label carries the whole failure: %q", name, sr.Model)
+		}
+	}
+
+	// A Copilot route that fails after a good reply says both in the label.
+	partial := &models.Fake{Replies: []models.Response{argon, {Text: "not JSON"}}}
+	e, gateway, _ = setup("gemini-4-argon", partial)
+	if sr := e.screenshotReview(context.Background(), arts, 0, ""); sr == nil || len(partial.Requests) != 2 || len(gateway.Requests) != uireview.K-1 ||
+		!strings.HasPrefix(sr.Model, "gemini-4-argon via Copilot, then "+verbs.ModelGemini+" (the Copilot route failed: ") {
+		t.Errorf("partial Copilot run: %+v, %d Copilot and %d gateway calls", sr, len(partial.Requests), len(gateway.Requests))
+	}
+
+	// The opt-in model is held to reviewer != builder too: Opus through
+	// Copilot cannot review an Anthropic builder's work.
+	opus := &models.Fake{Replies: []models.Response{argon}}
+	e, gateway, _ = setup("claude-opus-5.5", opus)
+	if sr := e.screenshotReview(context.Background(), arts, 0, "claude-opus-5-5"); sr == nil || !strings.Contains(sr.Skipped, "equals builder family") || len(opus.Requests)+len(gateway.Requests) != 0 {
+		t.Errorf("same-family opt-in: %+v, %d Copilot and %d gateway calls", sr, len(opus.Requests), len(gateway.Requests))
+	}
+
+	// model = "" turns the Copilot route off: lane A runs on the gateway's
+	// flash, labelled plainly, without trying Copilot.
+	off := &models.Fake{Replies: []models.Response{argon}}
+	e, gateway, _ = setup("", off)
+	if sr := e.screenshotReview(context.Background(), arts, 0, ""); sr == nil || sr.Model != verbs.ModelGemini || len(off.Requests) != 0 || len(gateway.Requests) != uireview.K {
+		t.Errorf("route off: %+v, %d Copilot and %d gateway calls", sr, len(off.Requests), len(gateway.Requests))
+	}
+
+	// A mistyped opt-in model is a configuration error to fix, not a silent
+	// switch to the paid default route.
+	typo := &models.Fake{Replies: []models.Response{argon}}
+	e, gateway, _ = setup("argon-4", typo)
+	if sr := e.screenshotReview(context.Background(), arts, 0, ""); sr == nil || !strings.Contains(sr.Skipped, "argon-4") || len(typo.Requests)+len(gateway.Requests) != 0 {
+		t.Errorf("mistyped opt-in: %+v, %d Copilot and %d gateway calls", sr, len(typo.Requests), len(gateway.Requests))
 	}
 }

@@ -114,6 +114,18 @@ func Prompt(c Capture, minTargetPx int, effort string) (models.Request, error) {
 		Messages: []models.Message{{Role: "user", Content: text, Images: imgs}}}, nil
 }
 
+// Relabel names to as the lane's model, in Tools and in every finding whose
+// source is from: a route that fell back mid-review (the opt-in Copilot route)
+// knows which model it used only after the lane has run.
+func (l *Lane) Relabel(from, to string) {
+	l.Tools = to
+	for i := range l.Findings {
+		if l.Findings[i].Source == from {
+			l.Findings[i].Source = to
+		}
+	}
+}
+
 // LaneA runs the model k times per state and keeps the kinds at least Agree
 // runs report at severity MinSeverity or more; rebuild needs Agree runs too.
 // A state where fewer than Agree runs answer makes the lane fail.

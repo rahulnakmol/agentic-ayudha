@@ -49,6 +49,11 @@ func (e *Env) Gateway() (*models.Gateway, error) {
 		Breaker:  br,
 		Key: func(name string) (string, error) {
 			v, _, err := e.SecretStore().Get(name)
+			// The Copilot route signs in as Copilot CLI does: the copilot
+			// secret, else COPILOT_GITHUB_TOKEN (never aayu's GitHub token).
+			if t := e.Getenv("COPILOT_GITHUB_TOKEN"); err != nil && name == models.CopilotRoute.Secret && t != "" {
+				return t, nil
+			}
 			return v, err
 		},
 	}, nil

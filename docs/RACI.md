@@ -145,7 +145,7 @@ The reviewer model family must differ from the builder model family on every sto
 | `ui-review` (adversarial) | Cursor (legacy plan) | Gemini 3.8 Flash (high) | `gemini-3.8-flash` | google | or Fable 5.1 (claude-fable-5-1; anthropic family, so only when the builder is not anthropic) |
 | `ui-review` (adversarial) | Claude Code | Gemini 3.8 Flash (high) | `gemini-3.8-flash` | google | or Fable 5.1 (claude-fable-5-1; anthropic family, so only when the builder is not anthropic) |
 | `ui-review` (adversarial) | OpenAI Codex | Gemini 3.8 Flash (high) | `gemini-3.8-flash` | google | or Fable 5.1 (claude-fable-5-1; anthropic family, so only when the builder is not anthropic) |
-| `ui-review` (adversarial) | GitHub Copilot | Gemini 3.8 Flash (high) | `gemini-3.8-flash` | google | or Gemini 4 Argon (gemini-4-argon), opt-in with [models.ui-review.copilot] model = "gemini-4-argon": about 0.043 USD per lane A call (Copilot AI credits: input x 2 USD/M + visible output x 10 USD/M; reasoning not billed) |
+| `ui-review` (adversarial) | GitHub Copilot | Gemini 4 Argon (high) | `gemini-4-argon` | google | or Gemini 3.8 Flash (high) (gemini-3.8-flash) through the AI gateway when copilot is not installed or signed in, a call fails, or [models.ui-review.copilot] model = ""; Argon costs about 0.043 USD per lane A call (Copilot AI credits: input x 2 USD/M + visible output x 10 USD/M; reasoning not billed) |
 | `chore` | Amp | Amp low | host-managed | host-managed | — |
 | `chore` | Cursor (x plan) | Composer 2.5 | `composer-2.5` | unknown | note: family unknown: Cursor does not publish Composer's base model |
 | `chore` | Cursor (legacy plan) | Haiku 5.5 (100k context) | `claude-haiku-5-5` | anthropic | — |

@@ -202,6 +202,11 @@ func TestModelsShowAndActionsChain(t *testing.T) {
 	if code != 0 || !regexp.MustCompile(`review\s+cursor\s+grok-4\.6\s+xai\s+fallback`).MatchString(out) || !strings.Contains(out, "gpt-6.1-sol (openai) is not available on Cursor") {
 		t.Fatalf("exit %d\n%s%s", code, out, errs)
 	}
+	// The opt-in Copilot route is shown as the route real calls take.
+	code, out, errs = run(t, nil, Options{Dir: repo}, "models", "show", "--host", "copilot", "--set", "models.ui-review.copilot.model=gemini-4-argon")
+	if code != 0 || !regexp.MustCompile(`ui-review\s+copilot\s+gemini-4-argon\s+google\s+config\s+copilot copilot-cli\s+\(key: copilot\)`).MatchString(out) {
+		t.Fatalf("Copilot route: exit %d\n%s%s", code, out, errs)
+	}
 
 	// The actions log written through Env.Actions verifies, and a tampered copy does not.
 	e, _ := newEnv(IO{}, Options{Dir: repo, Getenv: func(string) string { return "" }})
