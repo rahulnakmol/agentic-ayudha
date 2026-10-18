@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -172,6 +173,7 @@ type sessionReviewIn struct {
 	n       int
 	chk     ready.Result
 	body    string // the story's body
+	prBody  string // the open PR's body, "" before the first push
 	wt, dev string
 	head    string
 	st      BuildState
@@ -293,29 +295,21 @@ func (e *Env) reviewSession(ctx context.Context, s *sessionReview, a sessionRevi
 	return false, rep, nil
 }
 
-// sessionBuilder is the builder's family as inspect would place it from this
-// branch: the build record's model per checkpoint, the commits' trailers, and
-// the build lane on the host.
+// sessionBuilder is the builder's family as inspect places it: the build
+// record's model per checkpoint, every declaration on the branch's commits and
+// in the PR body (Aayudha-Model lines, and the host of one that names no
+// model), and the build lane on the host. Several families are all
+// candidates, and the reviewer must be none of them.
 func (e *Env) sessionBuilder(ctx context.Context, gw *models.Gateway, a sessionReviewIn) inspect.Builder {
 	recs := map[string]string{}
 	for _, c := range a.st.Checkpoints {
 		recs[c.Commit] = c.Model
 	}
-	out, _ := run2(ctx, a.wt, "git", "rev-list", "origin/"+a.dev+"..HEAD")
-	var commits, claims, hosts []string
-	for _, c := range strings.Fields(out) {
-		commits = append(commits, c)
-		msg, _ := run2(ctx, a.wt, "git", "log", "-1", "--format=%B", c)
-		named := false
-		for _, m := range modelTrailer.FindAllStringSubmatch(msg, -1) {
-			named = named || verbs.Family(m[1]) != verbs.FamilyHostManaged
-			if m := strings.ToLower(m[1]); !slices.Contains(claims, m) {
-				claims = append(claims, m)
-			}
-		}
-		if h := hostTrailer.FindStringSubmatch(msg); h != nil && !named && !slices.Contains(hosts, strings.ToLower(h[1])) {
-			hosts = append(hosts, strings.ToLower(h[1]))
-		}
+	var d declarations
+	d.trailers(a.prBody)
+	commits, msgs := branchCommits(ctx, a.wt, a.dev)
+	for _, m := range msgs {
+		d.trailers(m)
 	}
 	lane := verbs.Family("")
 	if host, _ := doctor.DetectHost(e.Host, e.Getenv); host != "" {
@@ -323,7 +317,92 @@ func (e *Env) sessionBuilder(ctx context.Context, gw *models.Gateway, a sessionR
 			lane = b.Family
 		}
 	}
-	return inspect.BuilderOf(inspect.Records{Checkpoints: recs}, commits, claims, hosts, lane)
+	return inspect.BuilderOf(inspect.Records{Checkpoints: recs}, commits, d.claims, d.hosts, lane)
+}
+
+// branchCommits are the branch's commits since dev, with their messages.
+func branchCommits(ctx context.Context, wt, dev string) (commits, msgs []string) {
+	out, _ := run2(ctx, wt, "git", "rev-list", "origin/"+dev+"..HEAD")
+	for _, c := range strings.Fields(out) {
+		msg, _ := run2(ctx, wt, "git", "log", "-1", "--format=%B", c)
+		commits, msgs = append(commits, c), append(msgs, msg)
+	}
+	return commits, msgs
+}
+
+// declarationLines are the Aayudha-Host and Aayudha-Model lines a story PR's
+// body carries (AGENTS.md): the ones its commits' trailers declare, in order.
+func declarationLines(ctx context.Context, wt, dev string) []string {
+	var out []string
+	_, msgs := branchCommits(ctx, wt, dev)
+	slices.Reverse(msgs) // oldest first
+	for _, m := range msgs {
+		for _, re := range []*regexp.Regexp{hostTrailer, modelTrailer} {
+			for _, x := range re.FindAllString(m, -1) {
+				if x = strings.TrimSpace(x); !slices.Contains(out, x) {
+					out = append(out, x)
+				}
+			}
+		}
+	}
+	return out
+}
+
+// withDeclarations adds each declaration line the body lacks, before the
+// session review section (or at the end), and keeps every other line,
+// declarations a person added included.
+func withDeclarations(body string, lines []string) string {
+	have := map[string]bool{}
+	for l := range strings.SplitSeq(body, "\n") {
+		have[strings.Join(strings.Fields(l), " ")] = true
+	}
+	var add []string
+	for _, l := range lines {
+		if !have[strings.Join(strings.Fields(l), " ")] {
+			add = append(add, l)
+		}
+	}
+	if len(add) == 0 {
+		return body
+	}
+	block := strings.Join(add, "\n")
+	if i := strings.Index(body, sessionReviewStart); i >= 0 {
+		head := strings.TrimRight(body[:i], "\n")
+		return head + "\n\n" + block + "\n\n" + body[i:]
+	}
+	return strings.TrimRight(body, "\n") + "\n\n" + block + "\n"
+}
+
+// declarations collects a PR's builder declarations (Decision #469), as
+// runInspect reads them: every model an Aayudha-Model line or trailer names,
+// and the host of a declaration that names no concrete model, which picked
+// the model itself.
+type declarations struct{ claims, hosts []string }
+
+func (d *declarations) declare(models []string, host string, named bool) {
+	concrete := false
+	for _, m := range models {
+		if m = strings.ToLower(m); !slices.Contains(d.claims, m) {
+			d.claims = append(d.claims, m)
+		}
+		concrete = concrete || verbs.Family(m) != verbs.FamilyHostManaged
+	}
+	if host = strings.ToLower(host); !concrete && (named || len(models) > 0) && !slices.Contains(d.hosts, host) {
+		d.hosts = append(d.hosts, host)
+	}
+}
+
+// trailers declares what one commit message or PR body says.
+func (d *declarations) trailers(text string) {
+	var models []string
+	for _, m := range modelTrailer.FindAllStringSubmatch(text, -1) {
+		models = append(models, m[1])
+	}
+	if h := hostTrailer.FindStringSubmatch(text); h != nil {
+		d.declare(models, h[1], true)
+	} else {
+		d.declare(models, "", false)
+	}
 }
 
 // sessionSummary is the PR body's section on the session review: rounds,
@@ -342,6 +421,7 @@ func (s *sessionReview) summary() string {
 		}
 		b.WriteString("\n")
 		last := s.Rounds[len(s.Rounds)-1]
+		fmt.Fprintf(&b, "Builder, as the reviewer was picked against it: %s.\n\n", sessionCell(last.Builder))
 		seen := map[string]bool{}
 		var fixed, declined, open []string
 		for _, r := range s.Rounds {

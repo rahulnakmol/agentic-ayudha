@@ -19,6 +19,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/planning"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
 func misses(context.Context, string) (bool, string, error) { return false, "coverage fail", nil }
@@ -1002,5 +1003,48 @@ func TestBuildSessionReviewRefusesSameFamily(t *testing.T) {
 	if code != 0 || len(model.Requests) != 0 || res.Review == nil || !strings.Contains(res.Review.Skipped, "no reviewer model of a family other than the builder's") ||
 		!strings.Contains(b, "The last push went out without a session review: no reviewer model of a family other than the builder's") {
 		t.Fatalf("same family: %d %+v %s\n%s", code, res.Review, errOut, b)
+	}
+}
+
+// The PR body declares the builder (AGENTS.md) and the session review picks a
+// reviewer of none of the declared families: build's own Claude line keeps a
+// Claude reviewer out, and a person's added GPT line keeps OpenAI out too. The
+// person's text and line survive the next push, and build's lines come back.
+func TestBuildSessionReviewReadsDeclarations(t *testing.T) {
+	g, env, opts, _, _, prN, _ := thinFixture(t)
+	model := &models.Fake{Replies: []models.Response{sessionReply("")}}
+	opts.ModelClient = func(models.Route, string) models.Client { return model }
+	env[inspect.ReviewModelURLVar] = "https://review.example/v1"
+	env[inspect.ReviewModelKeyVar] = "review-key"
+	env[inspect.ReviewModelVar] = "claude-sonnet-5-5" // the builder's family: refused
+	body := func() string { g.Mu.Lock(); defer g.Mu.Unlock(); return g.Pulls[prN].Body }
+	if b := body(); !strings.Contains(b, "\nAayudha-Model: claude-opus-5-5\n") {
+		t.Fatalf("the PR body does not declare the builder's model:\n%s", b)
+	}
+	wt := BuildWorktree(opts.Dir, 2)
+	family := func() verbs.Family {
+		t.Helper()
+		if len(model.Requests) == 0 {
+			t.Fatal("no reviewer was called")
+		}
+		return verbs.FamilyOf(model.Requests[len(model.Requests)-1].Model)
+	}
+	_ = os.WriteFile(filepath.Join(wt, "a.txt"), []byte("one\n"), 0o644)
+	if code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != 0 || family() == verbs.FamilyAnthropic {
+		t.Fatalf("a Claude-built PR: %d %s %s, reviewer %v", code, out, errOut, family())
+	}
+	// A person rewrites the body and declares GPT as well.
+	g.Mu.Lock()
+	g.Pulls[prN].Body = "Refs #2\n\nA person's note.\n\nAayudha-Model: gpt-6.1-sol\n"
+	g.Mu.Unlock()
+	_ = os.WriteFile(filepath.Join(wt, "a.txt"), []byte("two\n"), 0o644)
+	if code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != 0 || family() == verbs.FamilyAnthropic || family() == verbs.FamilyOpenAI {
+		t.Fatalf("Claude and GPT declared: %d %s %s, reviewer %v", code, out, errOut, family())
+	}
+	b := body()
+	for _, want := range []string{"A person's note.", "\nAayudha-Model: gpt-6.1-sol\n", "\nAayudha-Model: claude-opus-5-5\n", "the reviewers are of none of [anthropic openai]"} {
+		if !strings.Contains(b, want) {
+			t.Fatalf("PR body lacks %q:\n%s", want, b)
+		}
 	}
 }

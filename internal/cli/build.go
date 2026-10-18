@@ -548,7 +548,11 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		if err != nil {
 			return Wrap(ExitExternal, err)
 		}
-		wait, rep, err := e.reviewSession(ctx, &sr, sessionReviewIn{cfg: &l.Config, w: w, repo: repo, n: n, chk: chk, body: is.GetBody(), wt: res.Worktree, dev: dev, head: head, st: st})
+		pr, err := storyPR(ctx, c, repo, res.Branch)
+		if err != nil {
+			return err
+		}
+		wait, rep, err := e.reviewSession(ctx, &sr, sessionReviewIn{cfg: &l.Config, w: w, repo: repo, n: n, chk: chk, body: is.GetBody(), prBody: pr.GetBody(), wt: res.Worktree, dev: dev, head: head, st: st})
 		if serr := sr.save(ctx, res.Worktree); serr != nil && err == nil {
 			err = Wrap(ExitInternal, serr)
 		}
@@ -651,16 +655,26 @@ func (e *Env) publishBuild(ctx context.Context, c *github.Client, token, root, r
 		}
 	}
 	owner, name, _ := github.SplitRepo(repo)
-	open, _, err := c.REST.PullRequests.List(ctx, owner, name, &gh.PullRequestListOptions{State: "open", Head: owner + ":" + res.Branch})
+	open, err := storyPR(ctx, c, repo, res.Branch)
 	if err != nil {
-		return Wrap(ExitExternal, err)
+		return err
 	}
-	if len(open) > 0 {
-		res.PR, res.PRURL = open[0].GetNumber(), open[0].GetHTMLURL()
-		// The session review's section is replaced in place; the rest of the
-		// body, a person's edits included, is kept.
-		if body := open[0].GetBody(); review != "" && withSessionSummary(body, review) != body {
-			nb := withSessionSummary(body, review)
+	// The body declares the builder's host and models (AGENTS.md), as its
+	// commits do, and carries the session review's section, replaced in
+	// place; the rest of it, a person's edits and declarations included, is
+	// kept.
+	decl := declarationLines(ctx, res.Worktree, dev)
+	update := func(body string) string {
+		body = withDeclarations(body, decl)
+		if review != "" {
+			body = withSessionSummary(body, review)
+		}
+		return body
+	}
+	if open != nil {
+		res.PR, res.PRURL = open.GetNumber(), open.GetHTMLURL()
+		if body := open.GetBody(); update(body) != body {
+			nb := update(body)
 			if _, err := c.Write(ctx, actions.Action{Kind: "github.pull.update", Target: fmt.Sprintf("%s#%d", repo, res.PR), Story: fmt.Sprintf("#%d", n),
 				Request: &actions.Request{Method: http.MethodPatch, Path: fmt.Sprintf("/repos/%s/pulls/%d", repo, res.PR)}, Payload: map[string]any{"section": "session-review"}},
 				func(ctx context.Context) (any, error) {
@@ -679,9 +693,7 @@ func (e *Env) publishBuild(ctx context.Context, c *github.Client, token, root, r
 				body += fmt.Sprintf("\n%s\n\n%s's own check, quoted as it reported it (a preview; the merge gate's proof decides):\n\n%s\n", delegate.ProvedHeading, d.Receiver, quoteLines(d.Proved))
 			}
 		}
-		if review != "" {
-			body = withSessionSummary(body, review)
-		}
+		body = update(body)
 		var pr *gh.PullRequest
 		if _, err := c.Write(ctx, actions.Action{Kind: "github.pull.create", Target: repo, Story: fmt.Sprintf("#%d", n),
 			Request: &actions.Request{Method: http.MethodPost, Path: "/repos/" + repo + "/pulls"}, Payload: map[string]any{"head": res.Branch, "base": dev, "title": title}},
@@ -697,6 +709,19 @@ func (e *Env) publishBuild(ctx context.Context, c *github.Client, token, root, r
 		}
 	}
 	return nil
+}
+
+// storyPR is the story branch's open pull request, or nil.
+func storyPR(ctx context.Context, c *github.Client, repo, branch string) (*gh.PullRequest, error) {
+	owner, name, _ := github.SplitRepo(repo)
+	open, _, err := c.REST.PullRequests.List(ctx, owner, name, &gh.PullRequestListOptions{State: "open", Head: owner + ":" + branch})
+	if err != nil {
+		return nil, Wrap(ExitExternal, err)
+	}
+	if len(open) == 0 {
+		return nil, nil
+	}
+	return open[0], nil
 }
 
 // changedSince lists the paths the branch changes against origin/dev plus the
