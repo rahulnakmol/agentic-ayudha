@@ -1070,6 +1070,11 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			}
 			pr.ChangedFiles = len(pr.Files) + pr.Unlisted
 			reply(200, pr)
+		case sm[2] == "" && m == "PATCH":
+			if b, ok := body["body"].(string); ok {
+				pr.Body = b
+			}
+			reply(200, pr)
 		case sm[2] == "/reviews" && m == "POST":
 			g.seq++
 			rv := Review{ID: g.seq, User: Account{Login: g.Viewer, Type: "User"}, State: "COMMENTED", CommitID: str("commit_id"), Body: str("body")}

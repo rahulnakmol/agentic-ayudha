@@ -9,6 +9,11 @@
       "type": "string",
       "x-aayu-type": "string"
     },
+    "decline": {
+      "description": "Decline open items of the last session review, one \"<id>: <why>\" a line; the reason goes into the PR's session review summary, and the merge gate's inspect still judges them.",
+      "type": "string",
+      "x-aayu-type": "string"
+    },
     "delegate": {
       "description": "Hand the story to another agent's cloud agent with the delegation brief, or sync it: its PR, inspect's findings, and follow-ups (auto picks the cheapest adequate connected one).",
       "enum": [

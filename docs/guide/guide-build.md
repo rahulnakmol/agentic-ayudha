@@ -31,6 +31,34 @@ command.
 **You should see** a pull request, and a comment on the story that reads like a flight log: checkpoint, layer, result,
 and budget used.
 
+### The session review loop
+
+Before each push, `build` has a reviewer model of a different family from the builder review the branch's change
+(Decision #656). It uses inspect's own review: the same prompt, schema, and rules as the merge gate's model review.
+When the reviewer says `fix`, the checkpoint is committed but not pushed. `build` lists each open item: a P0 to P2
+finding with its file, line, and fix, or an unmet criterion (`C<n>`). The agent then does one of two things for each:
+
+- fixes it, and runs `aayu build <story>` again: the fix is the same checkpoint's next attempt, not a failed one;
+- declines it with a reason: `aayu build <story> --decline "<id>: <why>"`, one item a line.
+
+The loop ends when nothing is left open, or after 3 rounds since the last push. Then `build` pushes. The pull
+request's description gets a **Session review (self-attested)** section, replaced in place on each push. It lists the
+rounds, the reviewer, and which items were fixed, declined (with the reason), or left open at the cap. This is the
+builder's own record, not a review that counts: in solo mode a review written in the build session cannot be told
+from the builder's word. The merge gate's inspect reviews the pull request again and decides.
+
+The reviewer is the one the merge gate uses when it can be called from your machine:
+
+- `AAYU_REVIEW_MODEL`, `AAYU_REVIEW_MODEL_URL`, and `AAYU_REVIEW_MODEL_KEY`, the same names as the `code-review`
+  environment's settings in CI, so you set one thing in both places (or store the key with
+  `aayu auth set-secret review-model-key`);
+- else `[inspect] paid_reviewer` through `[models.gateway]` or its provider's key;
+- else the review lane's model, when its key is here.
+
+It must be of a family the builder cannot be (`AAYU_MODEL`, or the host's build lane). When none can be called, the
+push goes out without a session review, and the section says why. A build delegated to another agent is reviewed by
+the merge gate only. Each round is metered spend, within `[budget] per_pr_inspect_max`.
+
 ## Hand it to another agent
 
 From inside your agent, type the short form, `/codex`, `/cursor`, `/claude`, or `/amp`, with the story number. Or run:

@@ -42,6 +42,11 @@ aayu:
       required: false
       positional: false
       description: "The person's own words asking for this story. An agent needs them to pick up a Ready story that did not come out of grill in this session; without them build stops with a warning before taking the story."
+    - name: decline
+      type: string
+      required: false
+      positional: false
+      description: "Decline open items of the last session review, one \"<id>: <why>\" a line; the reason goes into the PR's session review summary, and the merge gate's inspect still judges them."
   outputs:
     - "pr"
     - "checkpoint-commits"
@@ -140,7 +145,11 @@ You (the host's model) write the code; the binary owns the worktree, the lease, 
 
 4. Commit the checkpoint: `aayu build <story>`. The binary commits it with the `Aayudha-Checkpoint: k/N` trailer and
    runs `verify` on it. A floor miss is a failed attempt: fix it and run `aayu build <story>` again (the same
-   checkpoint, `Aayudha-Attempt: 2`). When the checkpoint holds, the branch is pushed and the PR opened or updated.
+   checkpoint, `Aayudha-Attempt: 2`). When the checkpoint holds, a reviewer model of another family reviews the
+   branch before the push (the session review). When it lists open items and stops before the push, fix each one and
+   run `aayu build <story>` again, or decline one you can show is wrong:
+   `aayu build <story> --decline "<id>: <why>"`. When nothing is left open, or after 3 rounds, the branch is pushed
+   and the PR opened or updated.
    When it reaches one of the story's `Checkpoints` (what the human said they want to see), tell the human which
    one, in its own words, and how to see it.
 5. Budget: `[autonomy.budget]` limits wall time, spend, and failed attempts; a breach, or a second miss on an

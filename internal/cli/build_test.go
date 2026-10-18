@@ -14,7 +14,9 @@ import (
 	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
+	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
+	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/planning"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 )
@@ -896,5 +898,109 @@ func TestBuilderModelRecordsThePlanDefault(t *testing.T) {
 		if got := e.builderModel(); got != c.want {
 			t.Errorf("%s %q: builder model %q, want %q", c.host, c.set, got, c.want)
 		}
+	}
+}
+
+// sessionReply is a reviewer's reply to a session review: fix with one P1 on
+// a.txt quoting line, or merge when line is empty.
+func sessionReply(line string) models.Response {
+	findings, disp := "[]", "merge"
+	if line != "" {
+		disp = "fix"
+		findings = `[{"severity":"P1","category":"bug","file":"a.txt","line":1,"quote":"` + line + `","title":"` + line + ` is wrong","detail":"d","fix":"f","confidence":0.9,"criterion":0}]`
+	}
+	return models.Response{Model: "grok-4.7", Text: `{"disposition":"` + disp + `","summary":"s","findings":` + findings + `,"criteria":[{"id":1,"verdict":"met","evidence":"e"},{"id":2,"verdict":"met","evidence":"e"}]}`}
+}
+
+// Decision #656, the session half: before each push build has a reviewer of
+// another family review the branch. A fix holds the push; a decline with a
+// reason releases it and goes into the PR body's self-attested summary; after
+// inspect.MaxRounds rounds a push goes out with what is left open.
+func TestBuildSessionReviewLoop(t *testing.T) {
+	g, env, opts, _, bare, prN, _ := thinFixture(t)
+	model := &models.Fake{}
+	var routes []string
+	opts.ModelClient = func(r models.Route, key string) models.Client {
+		routes = append(routes, r.BaseURL+" "+key)
+		return model
+	}
+	// The same three names as the merge gate's code-review environment.
+	env[inspect.ReviewModelURLVar] = "https://review.example/v1"
+	env[inspect.ReviewModelVar] = "grok-4.7"
+	env[inspect.ReviewModelKeyVar] = "review-key"
+	wt := BuildWorktree(opts.Dir, 2)
+	build := func(args ...string) (int, BuildResult, string) {
+		code, out, errOut := run(t, env, opts, append([]string{"build", "2", "--repo", "o/r", "--json"}, args...)...)
+		var res BuildResult
+		_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)
+		return code, res, errOut
+	}
+	pushed := func() string { return git(t, bare, "rev-parse", "refs/heads/story/2-show-empty-list") }
+	body := func() string { g.Mu.Lock(); defer g.Mu.Unlock(); return g.Pulls[prN].Body }
+
+	// Round 1 finds a P1: the checkpoint is committed but not pushed.
+	model.Replies = []models.Response{sessionReply("first")}
+	before := pushed()
+	_ = os.WriteFile(filepath.Join(wt, "a.txt"), []byte("first\n"), 0o644)
+	code, res, errOut := build()
+	if code != ExitBlocked || res.Review == nil || res.Review.Disposition != "fix" || len(res.Review.Open) != 1 || pushed() != before ||
+		len(model.Requests) != 1 || model.Requests[0].Model != "grok-4.7" || !slices.Equal(routes, []string{"https://review.example/v1 review-key"}) {
+		t.Fatalf("round 1: %d %+v %s", code, res.Review, errOut)
+	}
+	id := res.Review.Open[0].ID
+	if code, _, errOut := build("--decline", "nope: why"); code != ExitUsage || !strings.Contains(errOut, "nope is not an open item") {
+		t.Fatalf("decline of an unknown item: %d %s", code, errOut)
+	}
+	// The decline releases the push without calling the reviewer again.
+	code, res, errOut = build("--decline", id+": the quoted line is the story's own example")
+	if code != 0 || len(model.Requests) != 1 || pushed() == before {
+		t.Fatalf("after the decline: %d %+v %s", code, res.Review, errOut)
+	}
+	b := body()
+	for _, want := range []string{"Session review (self-attested)", "not a review that counts", "| 1 | `", "grok-4.7 (xai)", "**Declined by the builder, with its reason:**", "`" + id + "` P1 first is wrong (a.txt:1): the quoted line is the story's own example", "Refs #2"} {
+		if !strings.Contains(b, want) {
+			t.Fatalf("PR body lacks %q:\n%s", want, b)
+		}
+	}
+
+	// Three more rounds after that push: two hold it, the third pushes at the cap.
+	for i, line := range []string{"second", "third", "fourth"} {
+		model.Replies = []models.Response{sessionReply(line)}
+		before = pushed()
+		_ = os.WriteFile(filepath.Join(wt, "a.txt"), []byte(line+"\n"), 0o644)
+		code, res, errOut = build()
+		if i < 2 && (code != ExitBlocked || pushed() != before) || i == 2 && (code != 0 || pushed() == before) {
+			t.Fatalf("round %d (%s): %d %+v %s", i+2, line, code, res.Review, errOut)
+		}
+	}
+	if msg := git(t, wt, "log", "-1", "--format=%B"); !strings.Contains(msg, "Aayudha-Checkpoint: 3/3") || !strings.Contains(msg, "Aayudha-Attempt: 3") {
+		t.Fatalf("a review fix is the same checkpoint's next attempt:\n%s", msg)
+	}
+	b = body()
+	if !strings.Contains(b, "| 4 | `") || !strings.Contains(b, "**Left open when it pushed (the reviewer said merge, or the round cap was reached):**\n\n- `"+inspect.FindingID("a.txt", "bug", "fourth is wrong")+"` P1 fourth is wrong") ||
+		!strings.Contains(b, "**Fixed (not raised by a later round):**") || strings.Count(b, sessionReviewStart) != 1 {
+		t.Fatalf("PR body after the cap:\n%s", b)
+	}
+}
+
+// A reviewer of the builder's family never reviews in the session: the push
+// goes out unreviewed, and the PR body says so.
+func TestBuildSessionReviewRefusesSameFamily(t *testing.T) {
+	g, env, opts, _, _, prN, _ := thinFixture(t)
+	model := &models.Fake{Replies: []models.Response{sessionReply("")}}
+	opts.ModelClient = func(models.Route, string) models.Client { return model }
+	env["AAYU_MODEL"] = "grok-4.7"
+	env["AAYU_INSPECT__PAID_REVIEWER"] = "grok-4.7"
+	env["AAYU_SECRET_XAI"] = "xai-key"
+	_ = os.WriteFile(filepath.Join(BuildWorktree(opts.Dir, 2), "a.txt"), []byte("x\n"), 0o644)
+	code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r", "--json")
+	var res BuildResult
+	_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)
+	g.Mu.Lock()
+	b := g.Pulls[prN].Body
+	g.Mu.Unlock()
+	if code != 0 || len(model.Requests) != 0 || res.Review == nil || !strings.Contains(res.Review.Skipped, "no reviewer model of a family other than the builder's") ||
+		!strings.Contains(b, "The last push went out without a session review: no reviewer model of a family other than the builder's") {
+		t.Fatalf("same family: %d %+v %s\n%s", code, res.Review, errOut, b)
 	}
 }
