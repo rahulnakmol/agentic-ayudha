@@ -116,6 +116,25 @@ runs it) and is still recorded in a tool. Delete it in the tool, then forget it 
 **A loop run stops with exit 4 or 6.** The repository is halted, or a budget paused the agents. A person reads why,
 then runs `aayu resume`.
 
+## Integrations
+
+**`aayu doctor` says `the posthog key is write-capable` or `the sentry key is write-capable`.** The key has a scope
+that does not end in `:read`. Create a new key with only the scopes in
+[bring in analytics and errors](guide-integrations.md), then store it with `aayu auth set-secret posthog` or
+`aayu auth set-secret sentry` in your own terminal.
+
+**`[integrations.posthog] project is not set`, or a Sentry `org` or `project` error.** Add the field by hand to
+`.aayudha/config.toml`. PostHog and Sentry want the numeric project ID; Sentry also wants the organization slug.
+
+**`secret "posthog" has no value`, or the same for `sentry`.** The key was never stored on this machine. Run
+`aayu auth set-secret posthog` or `aayu auth set-secret sentry` in your own terminal.
+
+**A 403 from Sentry's sessions or events.** The token lacks `org:read`. Create a token with `org:read`, `event:read`,
+and `project:read`, and store it again.
+
+**A 401, or no data, from a key that works in the provider's own UI.** Your account is in another region or is
+self-hosted. Set `url` in the section, for example `url = "https://eu.posthog.com"`.
+
 ## Everything else
 
 Run `aayu doctor`. Every row that is not `PASS` says what is wrong and how to fix it. `aayu doctor --fix` re-syncs your
