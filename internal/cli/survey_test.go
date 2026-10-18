@@ -402,6 +402,18 @@ func TestSurveyDocs(t *testing.T) {
 	if code, _, stderr := run(t, nil, opts, "survey", dir, "--out", filepath.Join(t.TempDir(), "s"), "--docs", vcs); code != 0 {
 		t.Fatalf("a manuals repository with .git: %d %s", code, stderr)
 	}
+	// A linked directory the user names is read through the link.
+	docsLink := filepath.Join(t.TempDir(), "docs-link")
+	if err := os.Symlink(docs, docsLink); err != nil {
+		t.Fatal(err)
+	}
+	lout := filepath.Join(t.TempDir(), "s")
+	if code, _, stderr := run(t, nil, opts, "survey", dir, "--out", lout, "--docs", docsLink); code != 0 {
+		t.Fatalf("a linked manuals directory: %d %s", code, stderr)
+	}
+	if _, err := os.Stat(filepath.Join(lout, "manuals", "operator-notes.md")); err != nil {
+		t.Fatalf("the linked directory's manual was not read: %v", err)
+	}
 	// A checkout file named like a manual would shadow the manual's evidence and freshness.
 	shadow := t.TempDir()
 	if err := os.CopyFS(shadow, os.DirFS(dir)); err != nil {

@@ -48,12 +48,15 @@ func surveyManuals(ctx context.Context, path, dir string) (map[string]string, er
 	var files []string
 	base := filepath.Dir(path)
 	if info.IsDir() {
-		base = path
-		err = filepath.WalkDir(path, func(p string, d fs.DirEntry, err error) error {
+		// WalkDir does not follow a linked root: walk the directory it names.
+		if base, err = filepath.EvalSymlinks(path); err != nil {
+			return nil, fmt.Errorf("survey --docs: %w", err)
+		}
+		err = filepath.WalkDir(base, func(p string, d fs.DirEntry, err error) error {
 			switch {
 			case err != nil:
 				return err
-			case p == path:
+			case p == base:
 				return nil
 			case strings.HasPrefix(d.Name(), "."):
 				if d.IsDir() {
