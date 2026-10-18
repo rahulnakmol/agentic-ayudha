@@ -281,11 +281,11 @@ func checkRecommendation(os []Option, rec string) []Problem {
 	marked := slices.IndexFunc(os, func(o Option) bool { return o.Recommended })
 	n := RecommendedOption(os, rec)
 	switch {
-	case n > len(os):
+	case n == 0 || n > len(os):
 		return []Problem{{"recommendation", fmt.Sprintf("opens with option %d, but the Decision has options 1-%d", n, len(os))}}
 	case n > 0 && marked >= 0 && os[marked].N != n:
 		return []Problem{{"options", fmt.Sprintf("option %d is marked \"(recommended)\" but the Recommendation opens with option %d; make them agree", os[marked].N, n)}}
-	case n == 0 && marked < 0:
+	case n < 0 && marked < 0:
 		return []Problem{{"recommendation", "opens with none of the options: open it with the one it recommends, \"Option 2, because ...\" or the option's name"}}
 	}
 	return nil

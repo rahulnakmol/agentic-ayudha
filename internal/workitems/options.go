@@ -135,8 +135,8 @@ func optionOf(n int, rest string) Option {
 }
 
 // RecommendedOption is the number of the option a Recommendation opens with,
-// "Option 2, because …", "2.", or the option's name, or 0 when it opens with
-// none. Only the opening counts, since a Recommendation often goes on to name
+// "Option 2, because …", "2.", or the option's name, or -1 when it opens with
+// none. A number is returned as written, even 0 or one the Decision lacks. Only the opening counts, since a Recommendation often goes on to name
 // the options it rejects.
 func RecommendedOption(os []Option, rec string) int {
 	r := strings.TrimLeft(strings.TrimSpace(rec), "*_ ")
@@ -144,7 +144,7 @@ func RecommendedOption(os []Option, rec string) int {
 		n, _ := strconv.Atoi(m[1] + m[2])
 		return n
 	}
-	best, rr := Option{}, []rune(r)
+	best, rr := Option{N: -1}, []rune(r)
 	for _, o := range os {
 		on := []rune(o.Name)
 		if len(on) == 0 || len(on) > len(rr) || len(on) <= len([]rune(best.Name)) || !strings.EqualFold(string(rr[:len(on)]), o.Name) {

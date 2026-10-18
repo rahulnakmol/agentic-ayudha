@@ -135,6 +135,10 @@ func TestReadyFailures(t *testing.T) {
 		}), StageReady, []string{"options: option 1 is marked \"(recommended)\" but the Recommendation opens with option 2; make them agree"}},
 		{"decision recommending an option it lacks", with(decision, func(c *Item) { c.Fields["recommendation"] = "Option 3, the cheapest." }), StageReady,
 			[]string{"recommendation: opens with option 3, but the Decision has options 1-2"}},
+		{"decision recommending option 0", with(decision, func(c *Item) {
+			c.Fields["options"] = "1. **A.** a (recommended)\n2. **B.** b"
+			c.Fields["recommendation"] = "Option 0."
+		}), StageReady, []string{"recommendation: opens with option 0, but the Decision has options 1-2"}},
 		{"decision recommending nothing it offers", with(decision, func(c *Item) { c.Fields["recommendation"] = "Something else entirely." }), StageReady,
 			[]string{"recommendation: opens with none of the options: open it with the one it recommends, \"Option 2, because ...\" or the option's name"}},
 		{"decision whose Recommendation compares before it recommends", with(decision, func(c *Item) {
@@ -357,7 +361,7 @@ func TestParseOptions(t *testing.T) {
 	waiver, _ := ParseOptions("1. **Waive.** a\n2. **Don't waive.** b")
 	for rec, want := range map[string]int{
 		"Option 2, because Option 1 costs more.": 2, "**Option 2: keep it.**": 2, "2. Keep it.": 2,
-		"Waive, rather than Don't waive.": 1, "Don't waive, until the evidence is in.": 2, "Waiver policy says no.": 0,
+		"Waive, rather than Don't waive.": 1, "Don't waive, until the evidence is in.": 2, "Waiver policy says no.": -1, "Option 0.": 0,
 	} {
 		if got := RecommendedOption(waiver, rec); got != want {
 			t.Errorf("RecommendedOption(%q) = %d, want %d", rec, got, want)
