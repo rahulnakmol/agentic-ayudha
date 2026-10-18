@@ -369,6 +369,39 @@ func TestSurveyDocs(t *testing.T) {
 	if _, err := os.Stat(missing); !os.IsNotExist(err) {
 		t.Fatalf("the missing checkout was created: %v", err)
 	}
+	// A link in the manuals tree, or named directly, is refused: it could copy
+	// any file the user can read into model input. A hidden directory (.git)
+	// is skipped, not read.
+	secret := filepath.Join(t.TempDir(), "secret.txt")
+	if err := os.WriteFile(secret, []byte("TOKEN=x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	linked := t.TempDir()
+	if err := os.Symlink(secret, filepath.Join(linked, "notes.md")); err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range []string{linked, filepath.Join(linked, "notes.md")} {
+		lout := filepath.Join(t.TempDir(), "s")
+		if code, _, stderr := run(t, nil, opts, "survey", dir, "--out", lout, "--docs", d); code != ExitUsage || !strings.Contains(stderr, "link") {
+			t.Fatalf("a linked manual %s: %d %s", d, code, stderr)
+		}
+		if _, err := os.Stat(filepath.Join(lout, "manuals", "notes.md")); !os.IsNotExist(err) {
+			t.Fatalf("the linked manual was copied: %v", err)
+		}
+	}
+	vcs := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(vcs, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(vcs, ".git", "HEAD"), []byte("ref: refs/heads/main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(vcs, "guide.md"), []byte("# Guide\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, stderr := run(t, nil, opts, "survey", dir, "--out", filepath.Join(t.TempDir(), "s"), "--docs", vcs); code != 0 {
+		t.Fatalf("a manuals repository with .git: %d %s", code, stderr)
+	}
 	// A checkout file named like a manual would shadow the manual's evidence and freshness.
 	shadow := t.TempDir()
 	if err := os.CopyFS(shadow, os.DirFS(dir)); err != nil {

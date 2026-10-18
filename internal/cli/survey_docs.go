@@ -35,7 +35,13 @@ func surveyManuals(ctx context.Context, path, dir string) (map[string]string, er
 	if path == "" {
 		return nil, nil
 	}
-	info, err := os.Stat(path)
+	info, err := os.Lstat(path)
+	if err == nil && info.Mode()&fs.ModeSymlink != 0 {
+		info, err = os.Stat(path) // a linked directory the user named is read; a linked file is refused below
+		if err == nil && !info.IsDir() {
+			return nil, fmt.Errorf("survey --docs: %s is a symbolic link; name the file it points to", path)
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("survey --docs: %w", err)
 	}
@@ -44,14 +50,31 @@ func surveyManuals(ctx context.Context, path, dir string) (map[string]string, er
 	if info.IsDir() {
 		base = path
 		err = filepath.WalkDir(path, func(p string, d fs.DirEntry, err error) error {
-			if err == nil && !d.IsDir() && !strings.HasPrefix(d.Name(), ".") {
-				files = append(files, p)
+			switch {
+			case err != nil:
+				return err
+			case p == path:
+				return nil
+			case strings.HasPrefix(d.Name(), "."):
+				if d.IsDir() {
+					return filepath.SkipDir // .git and the like
+				}
+				return nil
+			case d.IsDir():
+				return nil
+			case !d.Type().IsRegular():
+				// A link (or device, or pipe) in the manuals tree could
+				// copy any file the user can read into model input.
+				return fmt.Errorf("survey --docs: %s is not a regular file (a link or special file); the survey reads only real files", p)
 			}
-			return err
+			files = append(files, p)
+			return nil
 		})
 		if err != nil {
 			return nil, err
 		}
+	} else if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("survey --docs: %s is not a regular file", path)
 	} else {
 		files = []string{path}
 	}
