@@ -5,7 +5,7 @@ interviewing, planning, building, checking, and reporting happen without you. Wh
 a person may take, and GitHub will not even let you approve your own pull request. This page shows what you still do
 by hand, how to keep most of it in one list, and how the agents earn the right to need you less.
 
-![The twins fill every seat. You keep nine kinds of step: answer the interview, accept Decisions, record a risky plan's review or bypass, post a solo-mode bypass and ship, ask for a stable release, approve production actions, accept Feedback and review skill changes, publish, and halt or resume. aayu inbox gathers most of what waits for you into one list.](media/solo-founder.svg)
+![The twins fill every seat. You keep nine kinds of step: answer the interview, accept Decisions, comment a solo-mode bypass on a risky plan's Story and record it, post a solo-mode bypass and ship, ask for a stable release, approve production actions, accept Feedback and review skill changes, publish, and halt or resume. aayu inbox gathers most of what waits for you into one list.](media/solo-founder.svg)
 
 *The agents do the work. You keep the decisions, and one inbox holds most of them.*
 
@@ -17,7 +17,7 @@ Each step below is one that only a person may take: a choice, a yes, or a brake.
 |---|---|
 | Answer the interview and confirm what done looks like | In your agent: [`grill`](skills/grill.md) |
 | Accept a Decision or a floor waiver | `aayu decide <n> --accept <option>` ([`decide`](skills/decide.md)) |
-| Review a plan that touches a risky layer | `aayu plan <story> --solo-bypass`, recorded as no review ([`plan`](skills/plan.md)) |
+| Review a plan that touches a risky layer | A comment on the Story starting `Solo-mode bypass:`, then `aayu plan <story> --solo-bypass`, recorded as no review ([`plan`](skills/plan.md)) |
 | Merge a proven pull request | A comment starting `Solo-mode bypass:`, then `aayu ship <pr> --solo-bypass` ([`ship`](skills/ship.md)) |
 | Ask for a stable release | `aayu release <n> --to main` in your terminal, or a comment on the Release issue: `Stable release: v1.2.0` ([`release`](skills/release.md)) |
 | Approve a production action | Approve the waiting run's GitHub Environment ([`respond`](skills/respond.md)) |
@@ -79,9 +79,11 @@ would write. The inbox runs only in your own terminal; agents are refused.
 
 A Decision records a real choice with options and a recommendation, and only you accept it. When you are busy, the
 `decisions` loop counts business hours in your `[time]` zone and pages you after 24. Working alone, a reversible
-Decision's recommendation also applies **provisionally** at that point (after 48 once a second person is in the
-pod): labelled `decision:provisional`, with a date by which you ratify or revert it. The inbox lists provisional
-Decisions with "ratify" as the recommendation.
+Decision's recommendation also applies **provisionally** at that point: labelled `decision:provisional`, with a date
+by which you ratify or revert it. The inbox lists provisional Decisions with "ratify" as the recommendation.
+
+The window grows to 48 hours once aayu counts two people: the people in paired seats plus `[autonomy] approver`. When
+you pair your first teammate, set the approver to your own login, or the pod still counts as one person.
 
 Some Decisions always wait for you, however long it takes: a one-way door, a waiver of any kind, a seat change, and
 anything only a person may do, such as a change to the floors, the skills, or the protected config. The solo window
