@@ -262,6 +262,12 @@ const EvidenceRule = "**Evidence rule (every seat).** Every claim about the code
 	"approving a catalog action) stay human; and a twin never fakes, implies, or pre-announces a review or approval " +
 	"that did not happen."
 
+// WritingRule points every twin at the one writing rule: Simplified Technical
+// English in the seat's voice for what a person reads. It stays one sentence;
+// the rule itself lives once, in skills/brief/references/writing.md.
+const WritingRule = "**Writing rule.** Write what a person reads in Simplified Technical English, in this seat's voice, " +
+	"unless the task sets another register: see `skills/brief/references/writing.md`."
+
 // StageRule says how a twin finds its team stage and what adapting may change.
 const StageRule = "**Team stage.** Read `[team] stage` (`aayu config show`): `startup`, `scaleup`, or `enterprise`. " +
 	"Unset, it follows `[team] size` (15 people or fewer: startup; up to 150: scaleup; more: enterprise), and with " +
@@ -357,7 +363,7 @@ func (p Persona) CharterSection() string {
 		}
 		fmt.Fprintf(&b, "- %s: %s.\n", pr.Name, strings.TrimSuffix(strings.Join(cites, "; "), "."))
 	}
-	b.WriteString("\n" + StageRule + "\n\n" + EvidenceRule + "\n")
+	b.WriteString("\n" + StageRule + "\n\n" + EvidenceRule + "\n\n" + WritingRule + "\n")
 	return b.String()
 }
 
@@ -381,7 +387,7 @@ func (p Persona) SkillBlock(c verbs.Command, owner Persona) string {
 	}
 	b.WriteString("\n" + StageRule + "\n\n")
 	b.WriteString(p.playbook())
-	b.WriteString("\n" + EvidenceRule + "\n")
+	b.WriteString("\n" + EvidenceRule + "\n\n" + WritingRule + "\n")
 	return b.String()
 }
 
@@ -396,7 +402,7 @@ func (p Persona) Prompt(stage, why string) string {
 		d := pr.At(stage)
 		fmt.Fprintf(&b, "- %s: **%s**: %s\n", pr.Name, d.Artefact, d.Shape)
 	}
-	b.WriteString("\n" + StageRule + "\n\n" + EvidenceRule + "\n")
+	b.WriteString("\n" + StageRule + "\n\n" + EvidenceRule + "\n\n" + WritingRule + "\n")
 	return b.String()
 }
 
@@ -412,6 +418,6 @@ func agentsVoices(personas map[verbs.SeatID]Persona) string {
 		}
 		fmt.Fprintf(&b, "- **%s**, %s: %s %s\n", p.Name, p.Role(), p.Purpose, p.Voice)
 	}
-	b.WriteString("\n" + StageRule + "\n\n" + EvidenceRule + "\n")
+	b.WriteString("\n" + StageRule + "\n\n" + EvidenceRule + "\n\n" + WritingRule + "\n")
 	return b.String()
 }

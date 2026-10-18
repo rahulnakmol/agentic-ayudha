@@ -49,6 +49,15 @@ func passRule(cfg *config.Config) PassRule {
 	return PassRule{As: "any-human"}
 }
 
+// who names the people whose pass counts, by login: "@a or @b", else a
+// person who is not the author. Text that asks for the pass names them.
+func (p PassRule) who() string {
+	if len(p.Approvers) == 0 {
+		return "a person other than the author"
+	}
+	return "@" + strings.Join(p.Approvers, " or @")
+}
+
 // allows checks a review that is already a human pass (identity.HumanPass)
 // against the rule.
 func (p PassRule) allows(login string) error {

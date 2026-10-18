@@ -21,6 +21,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/doctor"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/hosts"
+	"github.com/rahulnakmol/agentic-ayudha/internal/prbody"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
@@ -302,13 +303,17 @@ func (in *Init) ownsUnchanged(path string, current []byte) bool {
 // FormPath is where init installs a type's issue form.
 func FormPath(t workitems.Type) string { return ".github/ISSUE_TEMPLATE/" + workitems.FormFile(t) }
 
+// PRTemplatePath is where init installs the pull request template, whose
+// sections `aayu inspect` checks (prbody.Check).
+const PRTemplatePath = ".github/pull_request_template.md"
+
 func (in *Init) forms(context.Context) error {
 	for _, t := range workitems.Types {
 		if err := in.writeFile("forms", FormPath(t), workitems.Form(t, workitems.FormOptions{IssueTypes: in.Repo.Org})); err != nil {
 			return err
 		}
 	}
-	return nil
+	return in.writeFile("forms", PRTemplatePath, prbody.Template())
 }
 
 func (in *Init) ledger(ctx context.Context) error {
@@ -741,10 +746,11 @@ func AgentsSection(r Repo) hosts.AgentsSection {
 	b.WriteString("  default the merge gate's CI review (the `code-review` environment's model, rung B), or the agent app that\n")
 	b.WriteString("  `[inspect] reviewer` names (rung A). When no other family can be shown, the review is a labelled same-family\n")
 	b.WriteString("  review (rung C). Rung C never counts toward the streak; it counts for merge on proof only where\n")
-	b.WriteString("  `[autonomy] proof_rungs` lists C. `aayu build` asks for the review after each push and writes `Aayudha-Host`\n")
-	b.WriteString("  and `Aayudha-Model` trailers. For a pull request `aayu build` did\n")
-	b.WriteString("  not open, put `Aayudha-Host: <host>` and `Aayudha-Model: <model>` lines in its body, one per model used, and\n")
-	b.WriteString("  run `aayu inspect <pr>` after the last push.")
+	b.WriteString("  `[autonomy] proof_rungs` lists C. `aayu build` asks for the review after each push and writes `Aayudha-Host`,\n")
+	b.WriteString("  `Aayudha-Model`, and `Aayudha-Effort` trailers. For a pull request `aayu build` did not open, put\n")
+	b.WriteString("  `Aayudha-Host: <host>` and `Aayudha-Model: <model>` lines in its body, one per model used, then an\n")
+	b.WriteString("  `Aayudha-Effort: <level>` line when you know it, and run `aayu inspect <pr>` after the last push.\n")
+	b.WriteString("- Write every pull request body to `.github/pull_request_template.md`; `aayu inspect` checks its sections.")
 	return hosts.AgentsSection{ID: AgentsSectionID, Body: b.String()}
 }
 

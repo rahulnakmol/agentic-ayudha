@@ -691,7 +691,7 @@ func TestInspectConverges(t *testing.T) {
 	n := len(requests())
 	code, res, _ = inspectApp(t, env, opts, prN)
 	sink := opts.NotifySink.(*notify.Fake)
-	if code != ExitBlocked || res.Disposition != inspect.StepBack || len(requests()) != n || !strings.Contains(res.Next, "reconsider the approach") || !strings.Contains(res.Next, inspect.ReopenCommand) ||
+	if code != ExitBlocked || res.Disposition != inspect.StepBack || len(requests()) != n || !strings.Contains(res.Next, "Change the approach") || !strings.Contains(res.Next, inspect.ReopenCommand) ||
 		!slices.ContainsFunc(sink.Pages, func(p notify.Page) bool { return strings.Contains(p.Subject, "stopped after 3 review rounds") }) {
 		t.Fatalf("past the cap, outside CI: exit %d %s, %d new requests, next %q, pages %+v", code, res.Disposition, len(requests())-n, res.Next, sink.Pages)
 	}

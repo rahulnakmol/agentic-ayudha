@@ -26,14 +26,14 @@ type PackSection struct {
 // PackSections are the parts of a decision pack, in order; the last one ends
 // the pack.
 var PackSections = []PackSection{
-	{"Question", "The question in one sentence, and whether it is the right question."},
-	{"Facts", "The grounded facts first: code, LAYERS.md, packs, metrics, open issues, each cited."},
-	{"Options", "Two or three numbered top-level options, each `N. **Name.** what it does` with its trade-offs: a Decision offers at least two, and the person picks one by its number."},
-	{"Recommendation", "Opens with the recommended option (`Option N, because …`), then why, and its door: one-way (irreversible) or two-way (reversible)."},
-	{"Cost of waiting", "What waiting a day or a week costs, cited where it can be."},
-	{"Pre-mortem", "The Mentalist twin's pressure test: assume the recommendation failed; the likeliest reasons and the check that warns early."},
-	{"Questions that would change the answer", "The few questions whose answers would flip the recommendation."},
-	{"Your decision", "The one thing the human decides, answerable in a word or a line."},
+	{"Question", "Write the question in one sentence. Say if it is the right question."},
+	{"Facts", "Put the grounded facts first: code, LAYERS.md, packs, metrics, and open issues. Cite each one."},
+	{"Options", "Give two or three numbered top-level options, each `N. **Name.** what it does`, with its trade-offs. A Decision offers at least two. The person picks one by its number."},
+	{"Recommendation", "Start with the recommended option (`Option N, because …`), then say why. Name its door: one-way (irreversible) or two-way (reversible)."},
+	{"Cost of waiting", "Say what a wait of a day or a week costs. Cite it where you can."},
+	{"Pre-mortem", "The Mentalist twin tests the recommendation: assume that it failed. Give the likeliest reasons and the check that warns early."},
+	{"Questions that would change the answer", "List the few questions whose answers would change the recommendation."},
+	{"Your decision", "Name the one thing the human decides. A word or a line must answer it."},
 }
 
 // route maps topic words to the seat that owns the topic. The first rule with

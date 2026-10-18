@@ -407,12 +407,13 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 				return Errorf(ExitBlocked, "%s", refusal)
 			}
 			// Everything else holds, so the PR waits for a person in the inbox.
-			body := fmt.Sprintf("%s head=%s -->\n**Ready to ship.** The merge gate is green and its pack verifies on `%s`; `aayu ship` stopped only for the human pass: %s. "+
-				"A person ships it from `aayu inbox`, or with `aayu ship %d` once a person other than the author approves the head.\n", ReadyToShipMarker, head, short(head), strings.Join(why, "; "), n)
+			who := rec.Pass.who()
+			body := fmt.Sprintf("%s head=%s -->\n**Ready to ship.** The merge gate is green, and its pack verifies on `%s`. `aayu ship` stopped only for the human pass: %s. "+
+				"%s ships it from `aayu inbox`, or approves the head and runs `aayu ship %d`.\n", ReadyToShipMarker, head, short(head), strings.Join(why, "; "), upperFirst(who), n)
 			if err := upsertOwnComment(ctx, c, repo, n, me.Login, ReadyToShipMarker, body, actions.Action{Kind: "github.comment.ready-to-ship", Story: fmt.Sprintf("#%d", story)}); err != nil {
 				return Errorf(ExitBlocked, "%s; the Ready to ship comment was not posted: %v", refusal, err)
 			}
-			return WithNext(Errorf(ExitBlocked, "%s; commented Ready to ship, so the PR waits in a person's `aayu inbox`", refusal), "aayu inbox (a person)")
+			return WithNext(Errorf(ExitBlocked, "%s; commented Ready to ship, so the PR waits in the `aayu inbox` of %s", refusal, who), "aayu inbox ("+who+")")
 		}
 		hp, err := e.soloBypass(ctx, c, owner, name, n, head, me.Login, pol.Config)
 		if err != nil {

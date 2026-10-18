@@ -419,8 +419,8 @@ func TestDelegateLocalFallback(t *testing.T) {
 	g.Mu.Lock()
 	p := g.Pulls[res.PR]
 	g.Mu.Unlock()
-	if !strings.Contains(msg, "Aayudha-Delegate: codex") || !strings.Contains(msg, "Signed-off-by:") || !strings.Contains(p.Body, "Refs #2") || !strings.Contains(p.Body, "Built by codex (local") ||
-		!strings.Contains(p.Body, "## What I proved") || !strings.Contains(p.Body, "> 1. proved: TestEmptyList passes") || res.Delegation.Proved != "1. proved: TestEmptyList passes (go test ./...)" {
+	if !strings.Contains(msg, "Aayudha-Delegate: codex") || !strings.Contains(msg, "Signed-off-by:") || !strings.Contains(p.Body, "Refs #2") || !strings.Contains(p.Body, "codex (local, `aayu build --delegate`) built this") ||
+		!strings.Contains(p.Body, "codex's own check, quoted") || !strings.Contains(p.Body, "> 1. proved: TestEmptyList passes") || res.Delegation.Proved != "1. proved: TestEmptyList passes (go test ./...)" {
 		t.Fatalf("commit:\n%s\nPR body:\n%s\nproved: %q", msg, p.Body, res.Delegation.Proved)
 	}
 	if pushed := git(t, bare, "rev-parse", "refs/heads/story/2-show-empty-list-2"); pushed != git(t, wt, "rev-parse", "HEAD") {

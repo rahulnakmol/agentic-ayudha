@@ -22,7 +22,9 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
 	"github.com/rahulnakmol/agentic-ayudha/internal/notify"
+	"github.com/rahulnakmol/agentic-ayudha/internal/prbody"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
+	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
 )
 
 // Dispositions of a review that has no usable reply yet: both fail the gate
@@ -330,7 +332,7 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 	switch {
 	case rerr == nil && a.in.Pack == nil && a.in.Story > 0:
 		res.Disposition, res.Summary = NoReply, fmt.Sprintf("%s replied (%s); the merge gate judges the reply against its pack for `%s`", choice.Kind(), rep.Source, short(head))
-		res.Next = "the merge gate's inspect check reads it"
+		res.Next = "the merge gate's inspect check reads this result"
 	case errors.Is(rerr, inspect.ErrNoReply), errors.Is(rerr, inspect.ErrMalformed):
 		res.Disposition = NoReply
 		if errors.Is(rerr, inspect.ErrMalformed) {
@@ -339,11 +341,17 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		res.Summary = fmt.Sprintf("No usable review of `%s` from %s yet, so the gate fails closed: %v.", short(head), choice.Kind(), rerr)
 		res.Rung, res.ReviewerFamily = choice.Rung, choice.Family
 		res.Review = "requested: " + a.builder.RungLabel(choice.Rung, choice.Kind(), choice.Family)
-		res.Next = fmt.Sprintf("the reviewer replies on this PR in the stated format (a review request: `aayu inspect %d`, run by the builder or a person under their own account); the reply re-runs this check", n)
+		res.Next = fmt.Sprintf("the reviewer replies on this PR in the stated format. The reply runs this check again. To request a review, the builder or a person runs `aayu inspect %d` under their own account", n)
 		if choice.App == "" {
-			res.Next = fmt.Sprintf("the [autonomy] approver reviews the PR and runs `aayu inspect %d --approve --reason \"<what you checked>\"` in their own terminal, or approves it in `aayu inbox` with one device code for several (a person-verified step that records the head on the ledger; a comment alone does not count); its reply re-runs this check", n)
+			who := "the [autonomy] approver"
+			if approver != "" {
+				who = "@" + approver
+			}
+			res.Next = fmt.Sprintf("%s reviews the PR, then runs `aayu inspect %d --approve --reason \"<what you checked>\"` in their own terminal, "+
+				"or approves it in `aayu inbox` with one device code for several. That person-verified step records the head on the ledger, "+
+				"and a comment alone does not count. Its reply runs this check again", who, n)
 			if approver == "" {
-				res.Next = "set [autonomy] approver in .aayudha/config.toml; then " + res.Next
+				res.Next = "set [autonomy] approver in .aayudha/config.toml. Then " + res.Next
 			}
 		}
 		if since.IsZero() {
@@ -366,13 +374,15 @@ func (e *Env) inspectThroughApp(ctx context.Context, a appInspect) error {
 		st.Human = head
 	}
 	// A cached judgement keeps its reply, but the rung follows the builder as
-	// declared now: a changed label rewrites the record ship reads.
-	relabel := false
+	// declared now: a changed label rewrites the record ship reads, as does a
+	// change in what the PR description check blocks.
+	relabel := e.prBodyFloor(&res, a.pr, a.prev.Result)
 	if st.Result != nil && st.Result.DiffHash == res.DiffHash {
-		relabel = st.Result.Review != res.Review
+		relabel = relabel || st.Result.Review != res.Review
 		// The state the comment records is what ship and audit read later.
 		st.Result.Notes, st.Result.Head, st.Result.Builder = res.Notes, res.Head, res.Builder
 		st.Result.Rung, st.Result.ReviewerFamily, st.Result.Review = res.Rung, res.ReviewerFamily, res.Review
+		keepFloor(&st, res)
 	}
 	if e.CI && res.Disposition != inspect.Skipped && (!res.Cached || relabel || a.record) {
 		if _, err := a.c.UpsertComment(ctx, a.repo, n, inspect.Marker, inspect.Comment(res, st, a.cfg.Budget.PerPRInspectMax), actions.Action{Kind: "github.comment.inspect",
@@ -499,6 +509,61 @@ func reviewRung(b inspect.Builder, c inspect.Choice, rep inspect.AppReply) (stri
 
 // modelID is what a reported model may look like to be named in a label.
 var modelID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/-]{0,63}$`)
+
+// Notes the PR description check adds start with these.
+const (
+	prBodyBlocks = "PR description blocks: "
+	prBodyWarns  = "PR description warns: "
+)
+
+// prBodyFloor applies the PR description check (prbody.Check) to
+// res on every path that emits a result. A blocking problem on an agent PR
+// (labelled agent-authored, or opened by a bot) turns merge, or a docs-only
+// skip, into fix, as a floor does (rule 7); a warning is a note. The check is
+// deterministic and runs on the body as it is now: a cached result first gets
+// back the review's own disposition (Reviewed), so an edited body needs no
+// new review. It reports whether the check's notes differ from the ones prev
+// recorded, so the comment is written again. A draft is not checked.
+func (e *Env) prBodyFloor(res *inspect.Result, pr *gh.PullRequest, prev *inspect.Result) bool {
+	ours := func(s string) bool { return strings.HasPrefix(s, prBodyBlocks) || strings.HasPrefix(s, prBodyWarns) }
+	res.Notes = slices.DeleteFunc(res.Notes, ours) // a cached result carries the last run's
+	if res.Reviewed != "" {
+		res.Disposition, res.Reviewed, res.Overridden = res.Reviewed, "", ""
+	}
+	if !pr.GetDraft() {
+		u := pr.GetUser()
+		agent := u.GetType() == "Bot" || strings.HasSuffix(u.GetLogin(), "[bot]") ||
+			slices.ContainsFunc(pr.Labels, func(l *gh.Label) bool { return l.GetName() == workitems.LabelAgentAuthored })
+		words, _ := e.steWords() // without the list, sentence length is still checked
+		block, warn := prbody.Check(pr.GetBody(), words, agent)
+		var why []string
+		for _, p := range block {
+			res.Notes = append(res.Notes, prBodyBlocks+"\""+p.Field+"\": "+p.Message)
+			why = append(why, "\""+p.Field+"\"")
+		}
+		for _, p := range warn {
+			res.Notes = append(res.Notes, prBodyWarns+"\""+p.Field+"\": "+p.Message)
+		}
+		if len(block) > 0 && (res.Disposition == inspect.Merge || res.Disposition == inspect.Skipped) {
+			res.Overridden = fmt.Sprintf("%s downgraded to fix: the PR description is not complete in %s (the notes say why)", res.Disposition, strings.Join(slices.Compact(why), ", "))
+			res.Reviewed, res.Disposition = res.Disposition, inspect.Fix
+		}
+	}
+	var was []string
+	if prev != nil {
+		was = slices.DeleteFunc(slices.Clone(prev.Notes), func(s string) bool { return !ours(s) })
+	}
+	return !slices.Equal(was, slices.DeleteFunc(slices.Clone(res.Notes), func(s string) bool { return !ours(s) }))
+}
+
+// keepFloor records in the stored state what the PR description check
+// decided, so everything that reads the state (ship, the inbox, a
+// delegation) sees the same disposition as the gate.
+func keepFloor(st *inspect.State, res inspect.Result) {
+	if st.Result != nil {
+		st.Result.Disposition, st.Result.Overridden, st.Result.Reviewed = res.Disposition, res.Overridden, res.Reviewed
+	}
+}
 
 func (e *Env) emitInspect(res inspect.Result, notes []string) error {
 	res.Notes = append(notes, res.Notes...)

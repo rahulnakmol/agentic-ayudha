@@ -467,17 +467,7 @@ func (e *Env) prBuilder(ctx context.Context, c *github.Client, owner, name strin
 			hosts = append(hosts, host)
 		}
 	}
-	trailers := func(text string) {
-		var models []string
-		for _, m := range modelTrailer.FindAllStringSubmatch(text, -1) {
-			models = append(models, m[1])
-		}
-		if h := hostTrailer.FindStringSubmatch(text); h == nil {
-			declare(models, "", false)
-		} else {
-			declare(models, h[1], true)
-		}
-	}
+	trailers := func(text string) { declare(declared(text)) }
 	trailers(pr.GetBody())
 	// Without the commits' declarations a family could be missing, so a failed listing fails counsel.
 	cs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.RepositoryCommit, *gh.Response, error) {

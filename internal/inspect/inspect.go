@@ -226,6 +226,7 @@ type Result struct {
 	Dropped     []Dropped `json:"dropped,omitempty"` // findings not posted, with why
 	Notes       []string  `json:"notes,omitempty"`
 	Overridden  string    `json:"overridden,omitempty"` // why the floors changed the model's disposition
+	Reviewed    string    `json:"reviewed,omitempty"`   // the review's own disposition, when the PR description check overrode it
 	DiffHash    string    `json:"diff_hash"`
 	Cached      bool      `json:"cached,omitempty"`
 	Cycle       int       `json:"cycle"`
@@ -377,7 +378,7 @@ func (st State) LastHead(head string) string {
 func StepBackResult(pr int, head string, st State) Result {
 	return Result{PR: pr, Head: head, Disposition: StepBack, Findings: []Finding{}, Criteria: []Verdict{}, Round: len(st.Rounds),
 		Summary: fmt.Sprintf("The review ran %d rounds on distinct heads without converging, so inspect requests no further review of `%s`.", MaxRounds, short(head)),
-		Next:    fmt.Sprintf("step back: reconsider the approach rather than fixing the next finding (fix every instance of each finding's class, or rebuild); a person's `%s` comment reopens review for %d more rounds", ReopenCommand, MaxRounds)}
+		Next:    fmt.Sprintf("step back. Change the approach, and do not fix only the next finding. Fix every instance of each finding's class, or rebuild. A person's `%s` comment opens review again for %d more rounds", ReopenCommand, MaxRounds)}
 }
 
 // Errors.
@@ -835,9 +836,9 @@ func (r Runner) finish(in Input, prev, st State, res Result, covered func(string
 	}
 	switch res.Disposition {
 	case Fix:
-		res.Next = "fix in this PR (the builder, or the delegated agent through `build --delegate`); the merge gate re-runs inspect on the new head"
+		res.Next = "fix this PR (the builder, or the delegated agent through `build --delegate`). Then the merge gate runs inspect again on the new head"
 	case Rebuild:
-		res.Next = "back to Ready review: the story or its plan needs rework before another build"
+		res.Next = "go back to Ready review. The story or its plan needs more work before another build"
 	}
 	cp := res
 	st.Result = &cp
@@ -1154,9 +1155,10 @@ func capText(s string, n int) string {
 var botSummary = regexp.MustCompile(`(?s)<!-- This is an auto-generated comment: release notes by coderabbit\.ai -->.*?<!-- end of auto-generated comment: release notes by coderabbit\.ai -->`)
 
 // declLine is a PR body's builder declaration, exactly as aayu reads one
-// (internal/cli/verify.go modelTrailer and hostTrailer); any other line,
+// (internal/cli/verify.go modelTrailer and hostTrailer, and the effort line
+// that goes with them); any other line,
 // one that only looks like a declaration included, salts the cache key.
-var declLine = regexp.MustCompile(`(?m)^Aayudha-(?:Host|Model):\s*\S+\s*$`)
+var declLine = regexp.MustCompile(`(?m)^Aayudha-(?:Host|Model|Effort):\s*\S+\s*$`)
 
 // Marker is the replace-in-place comment inspect keeps on the PR.
 const Marker = "<!-- aayudha:inspect -->"
@@ -1181,10 +1183,10 @@ func Comment(res Result, st State, maxUSD float64) string {
 		fmt.Fprintf(&b, "**Review:** %s.\n\n", res.Review)
 	}
 	if res.Cached {
-		b.WriteString("Unchanged inputs since the last inspection (cached; no model call).\n\n")
+		b.WriteString("The inputs did not change since the last inspection, so inspect used the cached result and called no model.\n\n")
 	}
 	if res.Overridden != "" {
-		fmt.Fprintf(&b, "**%s** (rule 7: floors and P0/P1 findings are never overridden).\n\n", res.Overridden)
+		fmt.Fprintf(&b, "**%s**. Rule 7: no model overrides a floor or a P0 or P1 finding.\n\n", res.Overridden)
 	}
 	if res.Summary != "" {
 		b.WriteString(res.Summary + "\n\n")
@@ -1224,7 +1226,7 @@ func Comment(res Result, st State, maxUSD float64) string {
 		b.WriteString("\n")
 	}
 	if pre := PreExisting(res); len(pre) > 0 {
-		b.WriteString("**Pre-existing** (on lines this PR does not change; they never block it, and `aayu inspect` files them as one Bug):\n\n| ID | Severity | Where | Finding |\n|---|---|---|---|\n")
+		b.WriteString("**Pre-existing** findings are on lines this PR does not change. They never block this PR. `aayu inspect` files them as one Bug.\n\n| ID | Severity | Where | Finding |\n|---|---|---|---|\n")
 		for _, f := range pre {
 			fmt.Fprintf(&b, "| `%s` | %s %s | `%s:%d` | %s |\n", f.ID, f.Severity, f.Category, f.File, f.Line, cell(f.Title)+": "+cell(f.Detail))
 		}
@@ -1244,13 +1246,13 @@ func Comment(res Result, st State, maxUSD float64) string {
 		for _, k := range keys {
 			parts = append(parts, fmt.Sprintf("%d %s", why[k], k))
 		}
-		fmt.Fprintf(&b, "Not posted: %s.\n\n", strings.Join(parts, ", "))
+		fmt.Fprintf(&b, "Inspect did not post these findings: %s.\n\n", strings.Join(parts, ", "))
 	}
 	for _, x := range res.Notes {
 		b.WriteString("Note: " + x + ".\n\n")
 	}
 	if len(res.Weakened) > 0 {
-		b.WriteString("**Checks this PR weakens** (a PR may edit its own checks; each is flagged for the human pass):\n\n")
+		b.WriteString("**Checks this PR weakens**. A PR may change its own checks. Inspect flags each one for the human pass.\n\n")
 		for _, w := range res.Weakened {
 			fmt.Fprintf(&b, "- `%s`: %s\n", w.File, w.What)
 		}

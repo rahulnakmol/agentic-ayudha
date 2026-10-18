@@ -1,0 +1,27 @@
+# Thread Usage
+
+## v0.3.0: PR descriptions a person can read, and readable model + effort lines
+
+Scope: Entire lifetime of this thread, including 0 subagent threads.
+
+Cost: $0
+Requests: 55
+
+## Models
+
+| Model | Requests | Input | Output | Amp cost | Est. list price |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Opus 5.5 | 54 | 3,390,515 | 38,409 | $0 | $3.26 |
+| GPT-5.6 Terra | 1 | 97,867 | 2,859 | $0 | $0.23 |
+
+## Model Routing
+
+| Model ID | Purpose | Routing | Requests | Cost |
+| --- | --- | --- | ---: | ---: |
+| anthropic/claude-opus-5-5 | Agent | Via [Akmol’s AI gateway (Claude)](https://ampcode.com/workspaces/tqnonline/model-routing#07a8a459) | 28 | $0 |
+| openai/gpt-5.6-terra | Read Thread | Via [Akmol’s AI gateway](https://ampcode.com/workspaces/tqnonline/model-routing#fca20aeb) | 1 | $0 |
+| anthropic/claude-opus-5-5 | Task | Via [Akmol’s AI gateway (Claude)](https://ampcode.com/workspaces/tqnonline/model-routing#07a8a459) | 26 | $0 |
+
+## Orb System Metrics
+
+Samples: 123

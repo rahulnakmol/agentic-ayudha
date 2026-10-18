@@ -914,7 +914,7 @@ func TestBuilderModelRecordsThePlanDefault(t *testing.T) {
 			e.Set = []string{c.set}
 		}
 		e.Host = c.host
-		if got := e.builderModel(); got != c.want {
+		if got, _ := e.builderModel(); got != c.want {
 			t.Errorf("%s %q: builder model %q, want %q", c.host, c.set, got, c.want)
 		}
 	}
@@ -1374,5 +1374,80 @@ func TestGitSourceReadsOnlyCommittedFiles(t *testing.T) {
 	}
 	if _, err := src.Dir(ctx, ".."); err == nil {
 		t.Fatal("a directory outside the repository was listed")
+	}
+}
+
+// The effort is written only from a source that knows it: AAYU_EFFORT, or
+// the lane that named the model; a host-managed lane names neither.
+func TestBuilderModelEffort(t *testing.T) {
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct{ host, set, env, model, effort string }{
+		{"codex", "", "", "gpt-6.1-sol", ""}, // no build lane names an effort today
+		{"codex", "", "high", "gpt-6.1-sol", "high"},
+		{"amp", "", "", "", ""},
+		{"amp", "", "low", "", "low"},
+	} {
+		e, err := newEnv(IO{}, Options{Dir: repo, Getenv: func(k string) string {
+			if k == "AAYU_EFFORT" {
+				return c.env
+			}
+			return ""
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.set != "" {
+			e.Set = []string{c.set}
+		}
+		e.Host = c.host
+		if m, eff := e.builderModel(); m != c.model || eff != c.effort {
+			t.Errorf("%s %q AAYU_EFFORT=%q: %q, %q; want %q, %q", c.host, c.set, c.env, m, eff, c.model, c.effort)
+		}
+	}
+}
+
+// In an Amp thread, the checkpoint names the thread's Agent model as Amp's
+// CLI reports it, without the provider prefix, and its agent mode as the
+// effort; never a model Amp did not name, such as claude-amp-medium.
+func TestBuildRecordsAmpModel(t *testing.T) {
+	_, env, opts, _, bare := buildSetup(t)
+	env["AMP_THREAD_ID"] = "T-01a14ffc-40d7-77f3-af07-12103e2b5846"
+	usage, _ := os.ReadFile(filepath.Join("..", "hosts", "testdata", "amp-usage.txt"))
+	thread, _ := os.ReadFile(filepath.Join("..", "hosts", "testdata", "amp-thread.txt"))
+	var calls []string
+	opts.Exec = func(_ context.Context, _, name string, args ...string) (string, error) {
+		call := name + " " + strings.Join(args, " ")
+		calls = append(calls, call)
+		switch call {
+		case "amp threads usage T-01a14ffc-40d7-77f3-af07-12103e2b5846 --details":
+			return string(usage), nil
+		case "amp threads markdown T-01a14ffc-40d7-77f3-af07-12103e2b5846":
+			return string(thread), nil
+		}
+		return "", errors.New("unexpected command: " + call)
+	}
+	if code, _, errOut := run(t, env, opts, "ready", "2", "--repo", "o/r"); code != 0 {
+		t.Fatalf("ready: %s", errOut)
+	}
+	code, out, errOut := run(t, env, opts, "build", "2", "--repo", "o/r", "--json", "--asked", "yes, build #2")
+	var res BuildResult
+	_ = json.NewDecoder(strings.NewReader(out)).Decode(&res)
+	if code != 0 {
+		t.Fatalf("build: %d %s", code, errOut)
+	}
+	_ = os.WriteFile(filepath.Join(res.Worktree, "empty.txt"), []byte("Your cart is empty\n"), 0o644)
+	if code, _, errOut := run(t, env, opts, "build", "2", "--repo", "o/r", "--json", "--asked", "yes, build #2"); code != 0 {
+		t.Fatalf("build (checkpoint): %d %s %q", code, errOut, calls)
+	}
+	msg := git(t, res.Worktree, "log", "-1", "--format=%B")
+	if want := "Aayudha-Model: claude-opus-5-5\nAayudha-Effort: medium\nAayudha-Host: amp"; !strings.Contains(msg, want) || strings.Count(msg, "Aayudha-Model:") != 1 {
+		t.Fatalf("checkpoint commit lacks the Amp declaration %q:\n%s", want, msg)
+	}
+	var st BuildState
+	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(2))), &st); err != nil || len(st.Checkpoints) != 1 || st.Checkpoints[0].Model != "claude-opus-5-5" {
+		t.Fatalf("build record: %v %+v", err, st.Checkpoints)
 	}
 }

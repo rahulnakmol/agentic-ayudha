@@ -156,10 +156,43 @@ func TestSkillBlockVoiceAndStandard(t *testing.T) {
 	if !strings.Contains(b, "`inspect` runs in the review lane; Drona owns both the voice and the standard.") {
 		t.Errorf("inspect block:\n%s", b)
 	}
-	for _, must := range []string{EvidenceRule, StageRule, "**When paired with a human:**", "| Practice | Startup | Scaleup | Enterprise |"} {
+	for _, must := range []string{EvidenceRule, WritingRule, StageRule, "**When paired with a human:**", "| Practice | Startup | Scaleup | Enterprise |"} {
 		if !strings.Contains(b, must) {
 			t.Errorf("inspect block lacks %q", must)
 		}
+	}
+}
+
+// TestWritingRule: the one-sentence writing rule renders wherever the evidence
+// rule does (skill block, charter, MCP prompt, AGENTS.md), reaches a generated
+// skill, and points at a reference doc that exists.
+func TestWritingRule(t *testing.T) {
+	if s, ok := strings.CutPrefix(WritingRule, "**Writing rule.** "); !ok || strings.Count(s, ". ") != 0 || !strings.HasSuffix(s, ".") {
+		t.Errorf("WritingRule is not one labelled sentence: %q", WritingRule)
+	}
+	ps := repoPersonas(t)
+	p := ps[verbs.AINativeEngineer]
+	b, _ := verbs.Find("build")
+	for name, got := range map[string]string{
+		"SkillBlock":     p.SkillBlock(b, p),
+		"CharterSection": p.CharterSection(),
+		"Prompt":         p.Prompt(config.StageStartup, "test"),
+		"agentsVoices":   agentsVoices(ps),
+	} {
+		if !strings.Contains(got, EvidenceRule+"\n\n"+WritingRule+"\n") {
+			t.Errorf("%s lacks the writing rule after the evidence rule", name)
+		}
+	}
+	root := filepath.Join("..", "..")
+	skill, err := os.ReadFile(filepath.Join(root, "skills", "build", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(skill), WritingRule) {
+		t.Error("skills/build/SKILL.md lacks the writing rule: run go generate ./...")
+	}
+	if _, err := os.Stat(filepath.Join(root, "skills", "brief", "references", "writing.md")); err != nil {
+		t.Errorf("the writing rule points at a missing doc: %v", err)
 	}
 }
 

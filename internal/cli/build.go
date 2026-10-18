@@ -535,7 +535,9 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		if attempt > 1 {
 			msg += fmt.Sprintf("\nAayudha-Attempt: %d", attempt)
 		}
-		model := e.builderModel()
+		host, _ := doctor.DetectHost(e.Host, e.Getenv)
+		model, effort := e.builderModel()
+		var ms []string
 		cm, copilot := hosts.CopilotModels{}, false
 		if dlg == nil && e.Getenv("AAYU_MODEL") == "" {
 			cm, copilot = e.copilotModels(root)
@@ -553,22 +555,38 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			// otherwise it names none, and inspect sees an unknown builder
 			// rather than a single family that hides the others.
 			msg += "\n" + cm.Trailers()
-			model = ""
-			if len(cm.Models) > 0 && !slices.ContainsFunc(cm.Models, func(m string) bool { return verbs.FamilyOf(m) != verbs.FamilyOf(cm.Models[0]) }) {
-				model = cm.Models[0]
+			model = oneFamily(cm.Models)
+		case host == string(verbs.HostAmp) && e.Getenv("AAYU_MODEL") == "" && e.Getenv("AMP_THREAD_ID") != "":
+			// Amp picks the model and says which only through its CLI: one
+			// line per Agent model of the thread (else the lane's, as before),
+			// and its agent mode as the effort unless AAYU_EFFORT names one.
+			// The record holds one model by the Copilot rule.
+			var mode string
+			ms, mode = e.ampBuilder(ctx, res.Worktree)
+			if len(ms) == 0 && model != "" {
+				ms = []string{model}
 			}
-		case model != "":
-			msg += "\nAayudha-Model: " + model
+			if mode != "" && e.Getenv("AAYU_EFFORT") == "" {
+				effort = mode
+			}
+			msg += modelTrailers(ms)
+			model = oneFamily(ms)
+		default:
+			if model != "" {
+				ms = []string{model}
+			}
+			msg += modelTrailers(ms)
 		}
-		// The effort the host runs its model at, one token (AAYU_EFFORT), once
-		// after the last model line.
-		if ef := strings.Fields(e.Getenv("AAYU_EFFORT")); dlg == nil && len(ef) == 1 && strings.Contains(msg, "\nAayudha-Model: ") {
+		// The effort the host runs its model at, one token, once after the last
+		// model line: AAYU_EFFORT, else what the host or the lane says (Amp's
+		// agent mode, a lane's effort).
+		if ef := strings.Fields(effort); dlg == nil && len(ef) == 1 && strings.Contains(msg, "\nAayudha-Model: ") {
 			msg += "\nAayudha-Effort: " + ef[0]
 		}
 		// The host that built the checkpoint, so inspect can place a builder
 		// whose host picks the model (Decision #469); a delegated build names
-		// its receiver instead.
-		if host, _ := doctor.DetectHost(e.Host, e.Getenv); host != "" && dlg == nil {
+		// its receiver instead, and Copilot's trailers name it already.
+		if host != "" && dlg == nil && !copilot {
 			msg += "\nAayudha-Host: " + host
 		}
 		if _, err := run2(ctx, res.Worktree, "git", "commit", "--quiet", "--signoff", "-m", msg); err != nil {
@@ -753,7 +771,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		}
 	}
 	pp := e.progress(fmt.Sprintf("Pushing %s and opening the pull request", res.Branch))
-	perr := e.publishBuild(ctx, c, bot.Token.Value, root, repo, dev, n, chk, &res, sr.summary())
+	perr := e.publishBuild(ctx, c, bot.Token.Value, root, repo, dev, n, chk, is, st.Checkpoints, &res, sr.summary())
 	if perr != nil {
 		pp.Done(ui.StatusFail, perr.Error())
 	} else {
@@ -817,7 +835,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 func heldRef(branch string) string { return "refs/aayudha/held/" + branch }
 
 // publishBuild pushes the story branch and finds or opens its PR.
-func (e *Env) publishBuild(ctx context.Context, c *github.Client, token, root, repo, dev string, n int, chk ready.Result, res *BuildResult, review string) error {
+func (e *Env) publishBuild(ctx context.Context, c *github.Client, token, root, repo, dev string, n int, chk ready.Result, is *gh.Issue, cps []CheckpointRecord, res *BuildResult, review string) error {
 	gw := &ledger.Writer{Dir: root, Token: token}
 	if !c.DryRun() {
 		if _, err := c.Write(ctx, actions.Action{Kind: "git.push", Target: repo + "@" + res.Branch, Payload: map[string]any{"branch": res.Branch, "commit": res.Commit}},
@@ -843,7 +861,24 @@ func (e *Env) publishBuild(ctx context.Context, c *github.Client, token, root, r
 	// place; the rest of it, a person's edits and declarations included, is
 	// kept.
 	decl := declarationLines(ctx, res.Worktree, dev)
+	// The body aayu writes from the Story and the checkpoints; a refresh
+	// rewrites only its marked sections, so the RAID rows (written once, at
+	// creation) need no lookup then.
+	head, _ := run2(ctx, res.Worktree, "git", "log", "-1", "--format=%B")
+	story := func(deps []prDependency) string {
+		body := storyBody(chk, is.GetBody(), storyRisk(is), deps, cps, builtBy(head))
+		if d := res.Delegation; d != nil {
+			// The receiver's report goes in the technical detail, quoted.
+			note := fmt.Sprintf("%s (%s, `aayu build --delegate`) built this from the delegation brief. It has no merge rights.\n", d.Receiver, d.Mode)
+			if d.Proved != "" {
+				note += fmt.Sprintf("\n%s's own check, quoted as it reported it. The merge gate's proof decides.\n\n%s\n", d.Receiver, quoteLines(d.Proved))
+			}
+			body = strings.Replace(body, "\n</details>", "\n"+note+"\n</details>", 1)
+		}
+		return body
+	}
 	update := func(body string) string {
+		body = refreshSections(body, story(nil))
 		body = withDeclarations(body, decl)
 		if review != "" {
 			body = withSessionSummary(body, review)
@@ -865,13 +900,7 @@ func (e *Env) publishBuild(ctx context.Context, c *github.Client, token, root, r
 		}
 	} else {
 		title := "feat: " + strings.ToLower(chk.Title[:1]) + chk.Title[1:]
-		body := fmt.Sprintf("Refs #%d\n\nBuilt with `aayu build` (WP5.5) from the Ready snapshot of #%d (body hash `%s`), one verified checkpoint commit per layer. The merge gate verifies it on the base branch's definition; `aayu ship` merges it after a human pass.\n", n, n, chk.BodyHash[:12])
-		if d := res.Delegation; d != nil {
-			body = fmt.Sprintf("Refs #%d\n\nBuilt by %s (%s, `aayu build --delegate`, WP5.5b) from the delegation brief of #%d's Ready snapshot (body hash `%s`). aayu committed, verified, and pushed the change; the receiver has no merge rights. The merge gate and inspect review it; `aayu ship` merges it after a human pass.\n", n, d.Receiver, d.Mode, n, chk.BodyHash[:12])
-			if d.Proved != "" {
-				body += fmt.Sprintf("\n%s\n\n%s's own check, quoted as it reported it (a preview; the merge gate's proof decides):\n\n%s\n", delegate.ProvedHeading, d.Receiver, quoteLines(d.Proved))
-			}
-		}
+		body := story(e.storyDependencies(ctx, c, owner, name, is.GetBody()))
 		body = update(body)
 		var pr *gh.PullRequest
 		if _, err := c.Write(ctx, actions.Action{Kind: "github.pull.create", Target: repo, Story: fmt.Sprintf("#%d", n),
@@ -885,6 +914,17 @@ func (e *Env) publishBuild(ctx context.Context, c *github.Client, token, root, r
 		}
 		if pr != nil {
 			res.PR, res.PRURL = pr.GetNumber(), pr.GetHTMLURL()
+			// An agent opened it, so the agent PR rules apply: the streak counts
+			// it, and inspect holds its description to the format.
+			labels := []string{workitems.LabelAgentAuthored}
+			if _, err := c.Write(ctx, actions.Action{Kind: "github.issue.labels.add", Target: fmt.Sprintf("%s#%d", repo, res.PR),
+				Request: &actions.Request{Method: http.MethodPost, Path: fmt.Sprintf("/repos/%s/issues/%d/labels", repo, res.PR)}, Payload: map[string]any{"labels": labels}},
+				func(ctx context.Context) (any, error) {
+					_, _, err := c.REST.Issues.AddLabelsToIssue(ctx, owner, name, res.PR, labels)
+					return nil, err
+				}); err != nil {
+				return Wrap(ExitExternal, err)
+			}
 		}
 	}
 	return nil
@@ -901,6 +941,61 @@ func storyPR(ctx context.Context, c *github.Client, repo, branch string) (*gh.Pu
 		return nil, nil
 	}
 	return open[0], nil
+}
+
+// builtBy is the "Built by" line of a checkpoint commit's builder trailers:
+// the models by name with the effort, and the host or the delegate. What the
+// trailers do not say, it does not say.
+func builtBy(msg string) string {
+	var ms []string
+	for _, m := range modelTrailer.FindAllStringSubmatch(msg, -1) {
+		ms = append(ms, m[1])
+	}
+	effort := ""
+	if m := effortTrailer.FindStringSubmatch(msg); m != nil {
+		effort = m[1]
+	}
+	s := verbs.BuilderName(ms, effort)
+	if m := delegateTrailer.FindStringSubmatch(msg); m != nil {
+		return s + ", delegated to " + m[1]
+	}
+	if m := hostTrailer.FindStringSubmatch(msg); m != nil {
+		return s + ", on " + m[1]
+	}
+	return s
+}
+
+// storyRisk is the value of the issue's risk label, or "".
+func storyRisk(is *gh.Issue) string {
+	for _, l := range github.IssueLabels(is) {
+		if r, ok := strings.CutPrefix(l, "risk:"); ok {
+			return r
+		}
+	}
+	return ""
+}
+
+// storyDependencies are the Story's depends-on links, each with the linked
+// issue's first assignee as its owner and its state. A link aayu cannot read
+// keeps an unknown owner and state rather than a guess.
+func (e *Env) storyDependencies(ctx context.Context, c *github.Client, owner, name, body string) []prDependency {
+	_, fields := workitems.Sections(body)
+	links, _ := workitems.ParseLinks(fields["Links"])
+	var deps []prDependency
+	for _, l := range links {
+		if l.Kind != "depends-on" {
+			continue
+		}
+		d := prDependency{N: l.Number}
+		if dep, _, err := c.REST.Issues.Get(ctx, owner, name, l.Number); err == nil {
+			d.Status = dep.GetState()
+			if as := dep.Assignees; len(as) > 0 {
+				d.Owner = "@" + as[0].GetLogin()
+			}
+		}
+		deps = append(deps, d)
+	}
+	return deps
 }
 
 // changedSince lists the paths the branch changes against origin/dev plus the
@@ -1202,16 +1297,62 @@ func (e *Env) copilotModels(root string) (hosts.CopilotModels, bool) {
 // AAYU_MODEL variable a host sets, else the host's build lane as resolved now
 // ([models.build.<host>], else the default for the host's plan), so a later
 // plan change cannot rewrite who built the commits. A host-managed lane names
-// no model.
-func (e *Env) builderModel() string {
+// no model. The effort is AAYU_EFFORT, else the lane's when the lane named the
+// model: only a source that knows it says it.
+func (e *Env) builderModel() (model, effort string) {
+	effort = e.Getenv("AAYU_EFFORT")
 	if m := e.Getenv("AAYU_MODEL"); m != "" {
-		return m
+		return m, effort
 	}
 	if l, err := e.Config(); err == nil && e.Host != "" {
 		r, err := (models.Resolver{Models: l.Config.Models, Hosts: l.Config.Hosts}).Resolve(verbs.LaneBuild, verbs.HostID(e.Host))
 		if err == nil && r.Family != verbs.FamilyHostManaged {
-			return r.Model
+			if effort == "" {
+				effort = r.Effort
+			}
+			return r.Model, effort
 		}
+	}
+	return "", effort
+}
+
+// ampBuilder is what Amp says of the thread running this build
+// (AMP_THREAD_ID): its Agent models and its agent mode, each empty when Amp
+// does not say. The amp CLI gets a short timeout, so a slow one never holds a
+// checkpoint.
+func (e *Env) ampBuilder(ctx context.Context, dir string) (ms []string, mode string) {
+	id := e.Getenv("AMP_THREAD_ID")
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	x := e.exec()
+	if out, err := x(ctx, dir, "amp", "threads", "usage", id, "--details"); err == nil {
+		ms = hosts.AmpAgentModels(out)
+	}
+	if out, err := x(ctx, dir, "amp", "threads", "markdown", id); err == nil {
+		mode = hosts.AmpAgentMode(out)
+	}
+	return ms, mode
+}
+
+// modelTrailers are a checkpoint's model trailers: one Aayudha-Model line per
+// model. Every reader takes a trailer's value as one token, so a value that
+// is not one is left out.
+func modelTrailers(models []string) string {
+	var b strings.Builder
+	for _, m := range models {
+		if len(strings.Fields(m)) == 1 {
+			b.WriteString("\nAayudha-Model: " + m)
+		}
+	}
+	return b.String()
+}
+
+// oneFamily is the model a build record names for models: the first, when
+// every one is of its family; else none, so a single family never hides the
+// others.
+func oneFamily(models []string) string {
+	if len(models) > 0 && !slices.ContainsFunc(models, func(m string) bool { return verbs.FamilyOf(m) != verbs.FamilyOf(models[0]) }) {
+		return models[0]
 	}
 	return ""
 }
