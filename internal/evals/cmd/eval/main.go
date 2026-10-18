@@ -58,6 +58,7 @@ func run(ctx context.Context) error {
 	groups := flag.Bool("groups", false, "print the tier-2 group names as a JSON array and exit")
 	gating := flag.Bool("gating", false, "with -groups: only the groups whose results gate a promotion (gate is not advisory, D-7.3h)")
 	only := flag.String("cases", "", "tier 2: run only the cases whose ID (<skill>/<name>) matches this regular expression")
+	steps := flag.String("steps", "", "tier 2: save each run's steps here as they return, and resume the finished ones found here")
 	gate := flag.Bool("evolve-gate", false, "eval-first gate (WP7.7): fail an evolve PR (evolve/ branch or Aayudha-Evolve commit) that adds no reproducing eval case")
 	baseRef := flag.String("base", "", "base commit of the PR (-evolve-gate)")
 	headRef := flag.String("head", "HEAD", "head commit of the PR (-evolve-gate); fetched from origin by SHA when missing")
@@ -135,6 +136,7 @@ func run(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		h.Steps = *steps
 		if *only != "" {
 			re, err := regexp.Compile(*only)
 			if err != nil {

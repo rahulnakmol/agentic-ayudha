@@ -13,6 +13,9 @@ name: evals
 # and personas groups run only on dispatch and after merges to dev that change their own files (D-5.3b.h). Each group's results file
 # evals/results/<sha>-<group>.json is uploaded as the artifact eval-results-<sha>-<group>; its baseline is main's
 # artifact for the same group. The promotion gate (ci.yml, job evals-gate) needs every group to pass.
+# Each run's steps (a survey's sections, for example) are saved as they return and uploaded, even when the job
+# fails, as eval-steps-<sha>-<group>; a dispatch with resume_run set to an earlier run's ID reloads that run's
+# finished steps and redoes only the rest.
 # Skips cleanly (green) while the environment's secret is not set.
 on:
   schedule:
@@ -27,6 +30,10 @@ on:
         default: ""
       cases:
         description: "Run only the tier-2 cases whose ID (<skill>/<name>) matches this regular expression; empty runs every case"
+        required: false
+        default: ""
+      resume_run:
+        description: "Resume from this earlier evals run's saved steps (its run ID): finished steps are reused, the rest rerun"
         required: false
         default: ""
 
@@ -174,6 +181,24 @@ jobs:
             fi
           done
           echo "::notice::No tier-2 results for main ($main_sha, group $GROUP) yet; only the absolute bar applies."
+      - name: Saved steps to resume (dispatch input resume_run)
+        if: steps.scope.outputs.run == 'true' && inputs.resume_run != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESUME: ${{ inputs.resume_run }}
+          GROUP: ${{ matrix.group }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$RESUME" =~ ^[0-9]+$ ]]; then
+            echo "::error::resume_run is a run ID (digits only), not '$RESUME'."
+            exit 1
+          fi
+          sha="$(gh run view "$RESUME" --json headSha --jq .headSha)"
+          if gh run download "$RESUME" --name "eval-steps-$sha-$GROUP" --dir "evals/results/steps/$GROUP"; then
+            echo "Resuming $GROUP from the steps run $RESUME saved."
+          else
+            echo "::notice::Run $RESUME saved no steps for $GROUP; every step runs."
+          fi
       - name: Tier 2 (skips while the secret is absent)
         if: steps.scope.outputs.run == 'true'
         env:
@@ -189,7 +214,7 @@ jobs:
             echo "::notice::The ai-gateway environment has no secret or URL; skipping tier 2."
             exit 0
           fi
-          go run ./internal/evals/cmd/eval -tier 2 -group "$GROUP" -sha "$SHA" -ref "$REF" -out "evals/results/$SHA-$GROUP.json" -baseline "$BASELINE" -cases "$CASES"
+          go run ./internal/evals/cmd/eval -tier 2 -group "$GROUP" -sha "$SHA" -ref "$REF" -out "evals/results/$SHA-$GROUP.json" -baseline "$BASELINE" -cases "$CASES" -steps "evals/results/steps/$GROUP"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
@@ -197,3 +222,11 @@ jobs:
           path: evals/results/${{ github.sha }}-${{ matrix.group }}.json
           if-no-files-found: ignore
           retention-days: 90
+      # Every step saved so far, even when a call or the job failed, so a dispatch with resume_run can pick up from it.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: eval-steps-${{ github.sha }}-${{ matrix.group }}
+          path: evals/results/steps/${{ matrix.group }}
+          if-no-files-found: ignore
+          retention-days: 30
