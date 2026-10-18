@@ -224,10 +224,10 @@ Positioning line; keep it to one page. Never write the artefact's name into the 
   4. `## Breaking changes`, only when a criterion or the Feature's scope names a change to what the reader already
      uses: for each, what changed, what replaces it, who it affects, and what they do, each cell from a source.
   5. For each proven Feature that shipped, a `##` heading with its link, then, in this order: what changed (one short
-     sentence or bullet per criterion, verb first), who it helps (as a need), what it means on your own and in a team
-     when a source shows they differ (a criterion with a second person, a setting a person must approve), how to
-     start (the control or command the criterion names), and a limit from the scope when the reader would expect
-     more.
+     sentence or bullet per criterion, verb first; a criterion in the breaking-changes table gets no bullet here), who
+     it helps (as a need), what it means on your own and in a team when a source shows they differ (a criterion with
+     a second person, a setting a person must approve), how to start (the control or command the criterion names),
+     and a limit from the scope when the reader would expect more.
   6. The count of the changes you cannot describe, when there are any, as the last line of the changes.
   7. Thanks, only when a source names a person: by GitHub login, next to their work.
 
