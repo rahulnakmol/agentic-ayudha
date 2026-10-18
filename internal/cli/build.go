@@ -308,6 +308,21 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			return Wrap(ExitExternal, err)
 		}
 		remote, _ := run2(ctx, root, "git", "ls-remote", "--heads", "origin", res.Branch)
+		// A checkpoint the session review held is on its own ref: it carries
+		// on from there when the story branch does not hold it yet.
+		from := "origin/" + res.Branch
+		if held, _ := run2(ctx, root, "git", "ls-remote", "origin", heldRef(res.Branch)); held != "" {
+			if _, err := run2(ctx, root, "git", "fetch", "--quiet", "origin", "+"+heldRef(res.Branch)+":"+heldRef(res.Branch)); err != nil {
+				return Wrap(ExitExternal, err)
+			}
+			if remote == "" {
+				from, remote = heldRef(res.Branch), held
+			} else if _, err := run2(ctx, root, "git", "fetch", "--quiet", "origin", "+refs/heads/"+res.Branch+":refs/remotes/origin/"+res.Branch); err == nil {
+				if _, err := run2(ctx, root, "git", "merge-base", "--is-ancestor", heldRef(res.Branch), "origin/"+res.Branch); err != nil {
+					from = heldRef(res.Branch)
+				}
+			}
+		}
 		switch {
 		case remote != "" && !in.Bool("resume") && dlg == nil:
 			return Errorf(ExitBlocked, "build #%d: %s already exists on origin; `aayu build %d --resume` continues from its last checkpoint", n, res.Branch, n)
@@ -315,7 +330,7 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			if _, err := run2(ctx, root, "git", "fetch", "--quiet", "origin", "+refs/heads/"+res.Branch+":refs/remotes/origin/"+res.Branch); err != nil {
 				return Wrap(ExitExternal, err)
 			}
-			if _, err := run2(ctx, root, "git", "worktree", "add", "--quiet", "-B", res.Branch, res.Worktree, "origin/"+res.Branch); err != nil {
+			if _, err := run2(ctx, root, "git", "worktree", "add", "--quiet", "-B", res.Branch, res.Worktree, from); err != nil {
 				return Wrap(ExitExternal, err)
 			}
 			res.Resumed = lastTrailer(ctx, res.Worktree, dev)
@@ -602,6 +617,17 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 			if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
 				return err
 			}
+			// The held checkpoint goes to a ref of its own, never the PR
+			// branch, so --resume elsewhere continues from it.
+			if !c.DryRun() {
+				gw := &ledger.Writer{Dir: root, Token: bot.Token.Value}
+				if _, err := c.Write(ctx, actions.Action{Kind: "git.push", Target: repo + "@" + heldRef(res.Branch), Payload: map[string]any{"ref": heldRef(res.Branch), "commit": head}},
+					func(ctx context.Context) (any, error) {
+						return nil, gw.Exec(ctx, res.Worktree, "push", "--quiet", "--force", "origin", "HEAD:"+heldRef(res.Branch))
+					}); err != nil {
+					return Wrap(ExitExternal, err)
+				}
+			}
 			res.Next = fmt.Sprintf("fix each open item in %s and run `aayu build %d` again, or decline one you judge wrong with `aayu build %d --decline \"<id>: <why>\"`; round %d of at most %d before the push", res.Worktree, n, n, rep.Round, inspect.MaxRounds)
 			_ = e.Emit(res, func(w io.Writer) error {
 				if res.Commit != "" {
@@ -691,6 +717,10 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 		return err
 	})
 }
+
+// heldRef keeps the head a session review held back from the story branch:
+// not a branch, so no workflow runs and the PR does not change.
+func heldRef(branch string) string { return "refs/aayudha/held/" + branch }
 
 // publishBuild pushes the story branch and finds or opens its PR.
 func (e *Env) publishBuild(ctx context.Context, c *github.Client, token, root, repo, dev string, n int, chk ready.Result, res *BuildResult, review string) error {

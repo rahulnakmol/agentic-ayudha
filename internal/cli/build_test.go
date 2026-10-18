@@ -1153,6 +1153,33 @@ func TestBuildSessionReviewLoop(t *testing.T) {
 	}
 }
 
+// A checkpoint the session review holds is kept on its own ref, never the PR
+// branch, and --resume on another machine continues from it.
+func TestBuildSessionReviewHeldCheckpointResumes(t *testing.T) {
+	_, env, opts, dir, bare, _, _ := thinFixture(t)
+	model := &models.Fake{Replies: []models.Response{sessionReply("held")}}
+	opts.ModelClient = func(models.Route, string) models.Client { return model }
+	env[inspect.ReviewModelURLVar] = "https://review.example/v1"
+	env[inspect.ReviewModelVar] = "grok-4.7"
+	env[inspect.ReviewModelKeyVar] = "review-key"
+	wt := BuildWorktree(opts.Dir, 2)
+	branch := "story/2-show-empty-list"
+	before := git(t, bare, "rev-parse", "refs/heads/"+branch)
+	_ = os.WriteFile(filepath.Join(wt, "a.go"), []byte("package a\n\nvar held = 1\n"), 0o644)
+	if code, _, errOut := run(t, env, opts, "build", "2", "--repo", "o/r"); code != ExitBlocked {
+		t.Fatalf("a held round: %d %s", code, errOut)
+	}
+	head := git(t, wt, "rev-parse", "HEAD")
+	if got := git(t, bare, "rev-parse", heldRef(branch)); got != head || git(t, bare, "rev-parse", "refs/heads/"+branch) != before {
+		t.Fatalf("held ref %s, branch moved: want %s on the held ref only", got, head)
+	}
+	git(t, dir, "worktree", "remove", "--force", wt)
+	git(t, dir, "branch", "-D", branch)
+	if code, _, errOut := run(t, env, opts, "build", "2", "--resume", "--repo", "o/r"); code != 0 || git(t, wt, "rev-parse", "HEAD") != head {
+		t.Fatalf("resume from the held checkpoint: %d %s, head %s", code, errOut, git(t, wt, "rev-parse", "HEAD"))
+	}
+}
+
 // A reviewer of the builder's family never reviews in the session: the push
 // goes out unreviewed, and the PR body says so.
 func TestBuildSessionReviewRefusesSameFamily(t *testing.T) {
