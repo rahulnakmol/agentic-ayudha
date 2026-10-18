@@ -226,10 +226,7 @@ func (g *Gateway) Do(ctx context.Context, c Call) (Response, Resolved, error) {
 			return Response{}, m, err
 		}
 	}
-	route, err := RouteFor(g.Models, m.Model, m.Family)
-	if CopilotOptIn(m) {
-		route, err = CopilotRoute, nil
-	}
+	route, err := RouteOf(g.Models, m)
 	if err != nil {
 		return Response{}, m, err
 	}

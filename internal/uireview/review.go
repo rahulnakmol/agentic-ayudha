@@ -53,7 +53,7 @@ func (r *Reviewer) Review(ctx context.Context, states []State) (*Critique, []Cap
 	}
 	crit.LaneA, err = LaneA(ctx, r.Complete, caps, k, r.MinTargetPx, r.Effort, r.Model)
 	if r.Used != nil {
-		crit.LaneA.Tools = r.Used()
+		crit.LaneA.Relabel(r.Model, r.Used())
 	}
 	if err != nil {
 		return crit, caps, err

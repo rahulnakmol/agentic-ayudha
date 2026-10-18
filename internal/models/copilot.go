@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
@@ -97,6 +98,13 @@ func (c CopilotCLI) Complete(ctx context.Context, r Request) (Response, error) {
 	runErr := cmd.Run()
 	u, _ := os.ReadFile(usage)
 	resp, err := parseCopilot(stdout.Bytes(), u)
+	if err == nil && resp.TokensIn == 0 {
+		// A reply with no usable usage report is not accounted: charge an upper
+		// bound so the breaker still sees the spend, and fail so the caller
+		// falls back rather than trusting a route it cannot meter.
+		resp.CostUSD = copilotUpperBound(r, n)
+		err = fmt.Errorf("%w: copilot -p returned no usage report; charged an upper bound of %.4f USD", ErrCopilot, resp.CostUSD)
+	}
 	if runErr != nil {
 		msg := strings.TrimSpace(stderr.String())
 		if len(msg) > 300 {
@@ -171,6 +179,34 @@ func parseCopilot(jsonl, usage []byte) (Response, error) {
 		return resp, fmt.Errorf("%w: copilot -p returned no reply", ErrCopilot)
 	}
 	return resp, nil
+}
+
+// copilotUpperBound is the most a call can have cost when Copilot reports no
+// usage: the prompt at one token per two characters, Copilot's own prompt
+// (about 15k tokens in the probes) rounded up to 25k, 2k per image, and the
+// whole output cap (32k when the request sets none), at the model's price or
+// the fallback rate.
+func copilotUpperBound(r Request, images int) float64 {
+	p, _, ok := PriceOf(nil, r.Model)
+	if !ok {
+		p = ListPrice{Short: Rates{Input: FallbackInputPerMTok, Output: FallbackOutputPerMTok}}
+	}
+	out := r.MaxTokens
+	if out == 0 {
+		out = 32000
+	}
+	in := len(copilotPrompt(r))/2 + 25000 + 2000*images
+	return (float64(in)*p.Short.Input + float64(out)*p.Short.Output) / 1e6
+}
+
+// RouteOf is the route a resolved model's direct call takes: the opt-in
+// Copilot route for a copilot row that names a concrete model, else RouteFor.
+// Gateway.Do and `aayu models` both use it.
+func RouteOf(m config.Models, res Resolved) (Route, error) {
+	if CopilotOptIn(res) {
+		return CopilotRoute, nil
+	}
+	return RouteFor(m, res.Model, res.Family)
 }
 
 // CopilotOptIn reports whether host's row for lane routes direct calls

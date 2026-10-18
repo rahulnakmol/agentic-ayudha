@@ -476,7 +476,7 @@ func TestCopilotUIReviewRoute(t *testing.T) {
 	cp := &models.Fake{Replies: []models.Response{argon}}
 	e, gateway, logPath := setup(cp)
 	sr := e.screenshotReview(context.Background(), arts, 0, "")
-	if sr == nil || sr.Skipped != "" || sr.Model != "gemini-4-argon via Copilot" || len(sr.Findings) != 1 || len(cp.Requests) != uireview.K || len(gateway.Requests) != 0 {
+	if sr == nil || sr.Skipped != "" || sr.Model != "gemini-4-argon via Copilot" || len(sr.Findings) != 1 || sr.Findings[0].Source != sr.Model || len(cp.Requests) != uireview.K || len(gateway.Requests) != 0 {
 		t.Fatalf("Copilot route: %+v, %d Copilot and %d gateway calls", sr, len(cp.Requests), len(gateway.Requests))
 	}
 	if r := cp.Requests[0]; r.Model != "gemini-4-argon" || r.Effort != "high" || len(r.Messages[0].Images) != 1 {
@@ -492,7 +492,7 @@ func TestCopilotUIReviewRoute(t *testing.T) {
 	} {
 		e, gateway, _ := setup(copilot)
 		sr := e.screenshotReview(context.Background(), arts, 0, "")
-		if sr == nil || sr.Skipped != "" || len(sr.Findings) != 1 || len(copilot.Requests) != 1 || len(gateway.Requests) != uireview.K ||
+		if sr == nil || sr.Skipped != "" || len(sr.Findings) != 1 || sr.Findings[0].Source != sr.Model || len(copilot.Requests) != 1 || len(gateway.Requests) != uireview.K ||
 			!strings.HasPrefix(sr.Model, verbs.ModelGemini+" (the Copilot route failed: ") {
 			t.Errorf("%s: %+v, %d Copilot and %d gateway calls", name, sr, len(copilot.Requests), len(gateway.Requests))
 		}

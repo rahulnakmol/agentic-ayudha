@@ -16,7 +16,7 @@ import (
 // the recorded probe's usage file where --usage-output-file says, and prints
 // the recorded JSONL (testdata/copilot, from a gemini-4-argon probe of lane
 // A's rest-only prompt on 2026-10-18). exit is its exit status.
-func fakeCopilot(t *testing.T, exit int) (dir, record string) {
+func fakeCopilot(t *testing.T, exit int, usage bool) (dir, record string) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
 		t.Skip("the fake copilot is a shell script")
@@ -37,7 +37,7 @@ while [ $# -gt 0 ]; do
   shift
 done
 pwd > "$rec.pwd"
-cp '` + data + `/usage.json' "$usage"
+` + map[bool]string{true: "cp '" + data + "/usage.json' \"$usage\"", false: ": no usage file"}[usage] + `
 cat '` + data + `/out.jsonl'
 echo "auth failed for this account" >&2
 exit ` + map[bool]string{true: "0", false: "1"}[exit == 0] + `
@@ -55,7 +55,7 @@ exit ` + map[bool]string{true: "0", false: "1"}[exit == 0] + `
 // reports. It fails with ErrCopilot when copilot is missing, not signed in, or
 // exits non-zero.
 func TestCopilotCLI(t *testing.T) {
-	dir, rec := fakeCopilot(t, 0)
+	dir, rec := fakeCopilot(t, 0, true)
 	t.Setenv("GH_TOKEN", "must-not-leak")
 	png := []byte("\x89PNG\r\n\x1a\nrest")
 	req := Request{Model: "gemini-4-argon", Effort: "high", System: "You are lane A.",
@@ -100,7 +100,8 @@ func TestCopilotCLI(t *testing.T) {
 		t.Errorf("retry prompt:\n%s", args)
 	}
 
-	failing, _ := fakeCopilot(t, 1)
+	failing, _ := fakeCopilot(t, 1, true)
+	unmetered, _ := fakeCopilot(t, 0, false)
 	for _, tc := range []struct {
 		c    CopilotCLI
 		want string
@@ -108,9 +109,15 @@ func TestCopilotCLI(t *testing.T) {
 		{CopilotCLI{Token: "t", Path: t.TempDir()}, "not installed"},
 		{CopilotCLI{Path: dir}, "not signed in"},
 		{CopilotCLI{Token: "t", Path: failing}, "auth failed for this account"},
+		{CopilotCLI{Token: "t", Path: unmetered}, "no usage report"},
 	} {
 		if _, err := tc.c.Complete(context.Background(), req); !errors.Is(err, ErrCopilot) || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("want ErrCopilot mentioning %q, got %v", tc.want, err)
 		}
+	}
+	// A reply with no usage report is charged an upper bound, not nothing:
+	// more than the recorded call's 0.043 USD, so the breaker sees the spend.
+	if resp, _ := (CopilotCLI{Token: "t", Path: unmetered}).Complete(context.Background(), req); resp.CostUSD < 0.1 {
+		t.Errorf("unmetered reply charged %v USD", resp.CostUSD)
 	}
 }
