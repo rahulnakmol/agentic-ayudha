@@ -233,7 +233,13 @@ func TestDelegateCycleCapPages(t *testing.T) {
 	st := inspect.State{Cycles: inspect.MaxCycles, Result: &inspect.Result{Head: strings.Repeat("0", 40), Disposition: inspect.Fix}}
 	j, _ := json.Marshal(st)
 	g.Mu.Lock()
-	g.Issues[pr.Number].Comments = append(g.Issues[pr.Number].Comments, &fake.Comment{ID: 99, Body: inspect.Marker + "\n<!-- aayudha:inspect-state " + string(j) + " -->"})
+	gate := &fake.Comment{ID: 99, Body: inspect.Marker + "\n<!-- aayudha:inspect-state " + string(j) + " -->"}
+	gate.User.Login, gate.User.Type = "github-actions[bot]", "Bot"
+	// Bug #601: a later marker from anyone else (a merge, no cycles) is not the state; the cap holds.
+	fj, _ := json.Marshal(inspect.State{Result: &inspect.Result{Head: strings.Repeat("e", 40), Disposition: inspect.Merge}})
+	forged := &fake.Comment{ID: 100, Body: inspect.Marker + "\n<!-- aayudha:inspect-state " + string(fj) + " -->"}
+	forged.User.Login, forged.User.Type = "mallory", "User"
+	g.Issues[pr.Number].Comments = append(g.Issues[pr.Number].Comments, gate, forged)
 	g.Mu.Unlock()
 	n := len(cur.reqs)
 	code, res, errOut := delegateRun(t, env, opts, set...)

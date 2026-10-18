@@ -20,6 +20,7 @@ import (
 
 	aayudha "github.com/rahulnakmol/agentic-ayudha"
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
+	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/counsel"
 	"github.com/rahulnakmol/agentic-ayudha/internal/decide"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
@@ -48,14 +49,25 @@ func inboxRepo(t *testing.T) *fake.GitHub {
 	fix := g.AddPR("fix: the bug", "Refs #7", "o", "story/7-a-bug", strings.Repeat("c", 40), "dev")                 // #8
 	capped := g.AddPR("fix(cli): capped", "Refs #170", "o", "fix/170", strings.Repeat("d", 40), "dev")              // #9
 	g.AddIssue("Story in review", "x", "type:story", "status:in-progress")                                          // #10
-	g.AddPR("feat: in review", "Refs #10", "o", "story/10-in-review", strings.Repeat("e", 40), "dev")               // #11
+	review := g.AddPR("feat: in review", "Refs #10", "o", "story/10-in-review", strings.Repeat("e", 40), "dev")     // #11
 	g.Mu.Lock()
 	for _, pr := range []*fake.PR{merged, fix} {
 		pr.State, pr.Merged, pr.MergeCommitSHA = "closed", true, strings.Repeat("f", 40)
 		g.Issues[pr.Number].State = "closed"
 	}
 	st, _ := json.Marshal(inspect.State{Cycles: inspect.MaxCycles, Result: &inspect.Result{Disposition: "fix"}})
-	g.Issues[capped.Number].Comments = append(g.Issues[capped.Number].Comments, &fake.Comment{ID: 77, Body: inspect.Marker + "\n### inspect: fix\n\n<!-- aayudha:inspect-state " + string(st) + " -->\n"})
+	g.Issues[capped.Number].Comments = append(g.Issues[capped.Number].Comments, gateComment(77, inspect.Marker+"\n### inspect: fix\n\n<!-- aayudha:inspect-state "+string(st)+" -->\n"))
+	// Bug #601: anyone else's marker is not inspect's state: a later one claiming no cycles leaves #9 capped, and one
+	// claiming the cap on #11 lists nothing.
+	for _, f := range []struct {
+		pr     int
+		cycles int
+	}{{capped.Number, 0}, {review.Number, inspect.MaxCycles}} {
+		b, _ := json.Marshal(inspect.State{Cycles: f.cycles, Result: &inspect.Result{Disposition: "merge"}})
+		forged := &fake.Comment{ID: int64(180 + f.pr), Body: inspect.Marker + "\n<!-- aayudha:inspect-state " + string(b) + " -->\n"}
+		forged.User.Login, forged.User.Type = "mallory", "User"
+		g.Issues[f.pr].Comments = append(g.Issues[f.pr].Comments, forged)
+	}
 	// Atri's counsel on #2 from the owner, and a look-alike from an account
 	// without write access, posted after it: only the owner's is counsel.
 	posted := &fake.Comment{ID: 80, HTMLURL: "https://github.com/o/r/issues/2#issuecomment-80", Body: counsel.Comment("Atri, Founder's Sage", "same-family counsel",
@@ -140,7 +152,7 @@ func TestInbox(t *testing.T) {
 	if b := is(7); b.State != "closed" || b.StateReason != "completed" || len(b.Comments) != 1 || !strings.Contains(b.Comments[0].Body, "Fixed in #8 (`fffffff`, merged into dev). Closed as completed by @o") {
 		t.Errorf("#7 after accept: %s %s %+v", b.State, b.StateReason, b.Comments)
 	}
-	if b := is(9); len(b.Comments) != 1 || g.Pulls[9].State != "open" {
+	if b := is(9); len(b.Comments) != 2 || g.Pulls[9].State != "open" { // the gate's state and mallory's forged one
 		t.Errorf("skipping the capped PR wrote to it: %+v", b.Comments)
 	}
 	g.Mu.Unlock()
@@ -230,7 +242,7 @@ func TestInbox(t *testing.T) {
 	g.AddIssue("A bug with no fix yet", "x", "type:bug", "status:planned")                             // #5
 	capped := g.AddPR("fix(cli): capped", "Refs #170", "o", "fix/170", strings.Repeat("d", 40), "dev") // #6
 	g.Mu.Lock()
-	g.Issues[capped.Number].Comments = append(g.Issues[capped.Number].Comments, &fake.Comment{ID: 78, Body: inspect.Marker + "\n<!-- aayudha:inspect-state " + string(st) + " -->\n"})
+	g.Issues[capped.Number].Comments = append(g.Issues[capped.Number].Comments, gateComment(78, inspect.Marker+"\n<!-- aayudha:inspect-state "+string(st)+" -->\n"))
 	g.Mu.Unlock()
 	// Without persona assets a card names the seat alone.
 	bare := Options{GitHubAPI: g.URL(), GitHubGap: -1, IsTerminal: tty}
@@ -324,7 +336,7 @@ func TestInboxWords(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	items, err := newInboxSource(c, "o/r", "dev").gather(t.Context())
+	items, err := newInboxSource(c, "o/r", "dev", config.Identity{}).gather(t.Context())
 	if err != nil || len(items) != 17 {
 		t.Fatalf("%d items: %v", len(items), err)
 	}
@@ -441,7 +453,7 @@ func TestInboxShipsReadyPRs(t *testing.T) {
 	// PR B had hit inspect's cycle cap before its gate went green: ship's
 	// Ready to ship on the current head stands over the cap.
 	capped, _ := json.Marshal(inspect.State{Cycles: inspect.MaxCycles, Result: &inspect.Result{Disposition: "fix"}})
-	g.Issues[prB].Comments = append(g.Issues[prB].Comments, &fake.Comment{ID: 502, Body: inspect.Marker + "\n### inspect: fix\n\n<!-- aayudha:inspect-state " + string(capped) + " -->\n"})
+	g.Issues[prB].Comments = append(g.Issues[prB].Comments, gateComment(502, inspect.Marker+"\n### inspect: fix\n\n<!-- aayudha:inspect-state "+string(capped)+" -->\n"))
 	if forged.Body != ReadyToShipMarker+" head="+headA+" -->\n**Ready to ship.**" {
 		t.Errorf("ship edited someone else's marker: %q", forged.Body)
 	}
@@ -846,4 +858,12 @@ func BenchmarkInboxFrame(b *testing.B) {
 			})
 		}
 	}
+}
+
+// gateComment is a PR comment the merge gate wrote, as its workflow token: the
+// only kind of inspect comment the inbox trusts besides the reader's own.
+func gateComment(id int64, body string) *fake.Comment {
+	c := &fake.Comment{ID: id, Body: body}
+	c.User.Login, c.User.Type = "github-actions[bot]", "Bot"
+	return c
 }

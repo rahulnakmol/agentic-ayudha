@@ -619,12 +619,11 @@ func (e *Env) reviewLoop(ctx context.Context, d *delegation, res *BuildResult) (
 	if err != nil {
 		return nil, true, Wrap(ExitExternal, err)
 	}
-	var st inspect.State
-	for _, cm := range comments {
-		if strings.Contains(cm.GetBody(), inspect.Marker) {
-			st = inspect.ParseState(cm.GetBody())
-		}
+	l, err := e.Config()
+	if err != nil {
+		return nil, true, err
 	}
+	st := inspectState(comments, viewer(ctx, d.c), l.Config.Identity)
 	r := st.Result
 	page := func(why string) {
 		sent := e.page(ctx, notify.Page{Key: fmt.Sprintf("delegate:%s#%d", d.repo, d.story), Subject: fmt.Sprintf("aayu: delegated #%d needs a human", d.story),

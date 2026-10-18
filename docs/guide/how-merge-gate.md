@@ -199,6 +199,9 @@ untrusted data.
    the schema, is `malformed-reply`. Both exit 4, so the check stays red; neither counts as a fix cycle.
 6. **Comment.** inspect keeps one comment on the pull request, marked `<!-- aayudha:inspect -->`, and replaces it in
    place. A hidden `aayudha:inspect-state` JSON holds the input hash, the cycle count, and the coverage manifest.
+   Anyone can post the marker, so the state counts only from a comment by the merge gate's identity (the workflow
+   token, the bot App, or the machine user) or by the account the run writes as. That holds for inspect in and out
+   of the gate, `inspect --dismiss`, the inbox, a delegated build's follow-up, and `brief`.
 
 State drives two limits:
 

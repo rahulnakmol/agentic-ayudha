@@ -255,8 +255,8 @@ func (it InboxItem) tidy() bool {
 // gatherInbox lists the human-only steps in repo, read with c. dev is the
 // integration branch delivery PRs merge into. It reads no counsel comments
 // (the home screen counts the steps); the inbox reads them through its source.
-func gatherInbox(ctx context.Context, c *github.Client, repo, dev string) ([]InboxItem, error) {
-	s := newInboxSource(c, repo, dev)
+func gatherInbox(ctx context.Context, c *github.Client, repo, dev string, id config.Identity) ([]InboxItem, error) {
+	s := newInboxSource(c, repo, dev, id)
 	s.noCounsel = true
 	return s.gather(ctx)
 }
@@ -272,6 +272,8 @@ type inboxSource struct {
 	repo, owner string
 	name, dev   string
 	noCounsel   bool
+	id          config.Identity // whose inspect state counts (inspectWriter), with self
+	self        string          // the account c writes as, read on the first load
 	mu          sync.Mutex
 	loaded      bool
 	newest      time.Time
@@ -287,9 +289,9 @@ type inboxComments struct {
 	list []*gh.IssueComment
 }
 
-func newInboxSource(c *github.Client, repo, dev string) *inboxSource {
+func newInboxSource(c *github.Client, repo, dev string, id config.Identity) *inboxSource {
 	owner, name, _ := github.SplitRepo(repo)
-	return &inboxSource{c: c, repo: repo, owner: owner, name: name, dev: dev, issues: map[int]*gh.Issue{}, pulls: map[int]*gh.PullRequest{},
+	return &inboxSource{c: c, repo: repo, owner: owner, name: name, dev: dev, id: id, issues: map[int]*gh.Issue{}, pulls: map[int]*gh.PullRequest{},
 		comments: map[int]inboxComments{}, green: map[string]bool{}, perms: map[string]string{}}
 }
 
@@ -324,6 +326,7 @@ func (s *inboxSource) refresh(ctx context.Context) (bool, error) {
 		for _, p := range prs {
 			s.pulls[p.GetNumber()] = p
 		}
+		s.self = viewer(ctx, s.c)
 		s.loaded = true
 		return true, nil
 	}
@@ -492,7 +495,7 @@ func (s *inboxSource) items(ctx context.Context) ([]InboxItem, error) {
 		var st inspect.State
 		var marked []string // who left Ready to ship for the current head
 		for _, cm := range comments {
-			if strings.Contains(cm.GetBody(), inspect.Marker) {
+			if strings.Contains(cm.GetBody(), inspect.Marker) && inspectWriter(cm.GetUser().GetLogin(), s.self, s.id) {
 				st = inspect.ParseState(cm.GetBody())
 			}
 			if m := readyHead.FindStringSubmatch(cm.GetBody()); m != nil && m[1] == p.GetHead().GetSHA() && !slices.Contains(marked, cm.GetUser().GetLogin()) {
@@ -854,7 +857,7 @@ func runInbox(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return err
 	}
-	src := newInboxSource(c, repo, e.devBranch())
+	src := newInboxSource(c, repo, e.devBranch(), l.Config.Identity)
 	if e.inboxTUI(&l.Config) {
 		return e.runInboxTUI(ctx, &l.Config, src, login)
 	}
@@ -1196,7 +1199,11 @@ func (e *Env) listInbox(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	items, err := newInboxSource(c, repo, e.devBranch()).gather(ctx)
+	var id config.Identity
+	if l, err := e.Config(); err == nil {
+		id = l.Config.Identity
+	}
+	items, err := newInboxSource(c, repo, e.devBranch(), id).gather(ctx)
 	if err != nil {
 		return Wrap(ExitExternal, err)
 	}

@@ -302,7 +302,7 @@ func (e *Env) briefGrounding(ctx context.Context, c *github.Client, repo string,
 		if p.Criteria, err = packCriteria(ctx, t, story, x.Pack); err != nil {
 			return err
 		}
-		if err := inspection(ctx, c, repo, x.Pack, &p); err != nil {
+		if err := e.inspection(ctx, c, repo, x.Pack, &p); err != nil {
 			return err
 		}
 		g.Packs = append(g.Packs, p)
@@ -355,8 +355,9 @@ func packCriteria(ctx context.Context, t *ledger.Tree, story int, pk *proof.Pack
 // inspection adds the inspect result (WP4.8) for the pack's head: the
 // disposition and its per-criterion verdicts, from inspect's replace-in-place
 // comment on the pack's pull request. A result for another head is not this
-// pack's and is left out.
-func inspection(ctx context.Context, c *github.Client, repo string, pk *proof.Pack, p *brief.Pack) error {
+// pack's and is left out, and so is a comment no trusted writer posted
+// (inspectWriter).
+func (e *Env) inspection(ctx context.Context, c *github.Client, repo string, pk *proof.Pack, p *brief.Pack) error {
 	if pk.PR <= 0 {
 		return nil
 	}
@@ -367,8 +368,13 @@ func inspection(ctx context.Context, c *github.Client, repo string, pk *proof.Pa
 	if err != nil {
 		return Wrap(ExitExternal, err)
 	}
+	l, err := e.Config()
+	if err != nil {
+		return err
+	}
+	self := viewer(ctx, c)
 	for _, cm := range comments {
-		if !strings.Contains(cm.GetBody(), inspect.Marker) {
+		if !strings.Contains(cm.GetBody(), inspect.Marker) || !inspectWriter(cm.GetUser().GetLogin(), self, l.Config.Identity) {
 			continue
 		}
 		st := inspect.ParseState(cm.GetBody())
