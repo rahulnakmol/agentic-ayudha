@@ -388,6 +388,21 @@ func TestBranchNames(t *testing.T) {
 	}
 }
 
+// A repository config read from elsewhere (a base revision's text) is the
+// repo layer: its values hold, and a key the schema does not know, or text
+// that is not TOML, fails naming where it came from.
+func TestLoadRepoTOML(t *testing.T) {
+	l, err := Load(Sources{RepoTOML: []byte("version = 1\n[autonomy]\nproof = true\n"), RepoSource: "base config"})
+	if err != nil || !l.Config.Autonomy.Proof {
+		t.Fatalf("load: %v %+v", err, l)
+	}
+	for _, text := range []string{"version = 1\n[autonomy]\nprooof = true\n", "version = 1\n[autonomy\n"} {
+		if _, err := Load(Sources{RepoTOML: []byte(text), RepoSource: "base config"}); err == nil || !strings.Contains(err.Error(), "base config") {
+			t.Errorf("load %q: %v", text, err)
+		}
+	}
+}
+
 // TestRepositoryMergesOnProof keeps Decision #593 (option 1, accepted 2026-10-18) for this repository: ship merges
 // into dev on proof, rung C counts until rung B is live, and the narrow set of the Decision always needs a person.
 // The built-in defaults leave proof off, so a repository opts in.

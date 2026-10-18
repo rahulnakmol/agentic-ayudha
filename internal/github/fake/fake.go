@@ -98,7 +98,11 @@ type PR struct {
 	CreatedAt      time.Time `json:"created_at,omitzero"`
 	Reviews        []Review  `json:"-"`
 	Files          []string  `json:"-"`
-	Diff           string    `json:"-"`
+	// ChangedFiles is served as len(Files) plus Unlisted, the files GitHub's
+	// file listing leaves out (it lists at most 3,000).
+	ChangedFiles int    `json:"changed_files"`
+	Unlisted     int    `json:"-"`
+	Diff         string `json:"-"`
 }
 
 // Account is a user or bot.
@@ -877,6 +881,7 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 				_, _ = w.Write([]byte(pr.Diff))
 				return
 			}
+			pr.ChangedFiles = len(pr.Files) + pr.Unlisted
 			reply(200, pr)
 		case sm[2] == "/reviews" && m == "POST":
 			g.seq++

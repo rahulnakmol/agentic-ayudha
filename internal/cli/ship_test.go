@@ -347,7 +347,7 @@ func TestShipOnProof(t *testing.T) {
 	gate := slices.IndexFunc(g.Runs, func(r fake.WorkflowRun) bool { return r.HeadSHA == head && r.Event == "pull_request_target" })
 	g.RunJobs = map[int64][]fake.CheckRun{g.Runs[gate].ID: {{ID: 7701, Name: "aayudha/inspect", Status: "completed", Conclusion: "success"}}}
 	g.JobLogs = map[int64]string{7701: "2026-10-17T23:00:00.0000000Z inspect #" + strconv.Itoa(prN) + " at abc: merge (reviewed by codex)\n2026-10-17T23:00:00.0000000Z   review: same-family review (C): codex (openai), builder openai\n"}
-	g.RequiredChecks = []string{"build", "lint", "docs", "protected-paths"}
+	g.RequiredChecks = []string{"build", "lint", "docs", "security", "protected-paths"}
 	// build was rerun green: its newest run counts, not the stale failure.
 	g.CheckRuns[head] = append(g.CheckRuns[head], fake.CheckRun{Name: "build", Status: "completed", Conclusion: "success"},
 		fake.CheckRun{Name: "build", Status: "completed", Conclusion: "failure"},
@@ -359,13 +359,16 @@ func TestShipOnProof(t *testing.T) {
 		"always_person = [\".github/CODEOWNERS\", \"internal/identity/\"]\nalways_person_config = [\".aayudha/config.toml\"]\n"
 	g.RefFiles = map[string]map[string]string{
 		base: {".github/CODEOWNERS": "/skills/ @founder\n", ".github/workflows/ci.yml": secrets, ".aayudha/config.toml": conf},
-		head: {".github/workflows/ci.yml": secrets, ".aayudha/config.toml": strings.Replace(conf, "version = 1\n", "version = 1\napprovals.approvers = [\"mallory\"]\n", 1)}, // a dotted key, no [table]
+		head: {".github/workflows/ci.yml": secrets, ".aayudha/config.toml": strings.Replace(conf, "version = 1\n", "version = 1\napprovals.approvers = [\"mallory\"]\n", 1), // a dotted key, no [table]
+			// A quoted key, and an escaped one, name an environment as surely as a bare one.
+			".github/workflows/deploy.yml": "on: push\njobs:\n  x:\n    \"environment\": production\n    runs-on: ubuntu-latest\n",
+			".github/workflows/pages.yml":  "on: push\njobs:\n  x:\n    \"environm\\u0065nt\": production\n    runs-on: ubuntu-latest\n"},
 	}
 	g.Pulls[prN].Files = []string{"empty.txt"}
 	g.Mu.Unlock()
-	refused := func(want string) {
+	refused := func(want string, args ...string) {
 		t.Helper()
-		if code, out := shipCmd(t, env, opts, prN); code != ExitBlocked || !strings.Contains(out, want) {
+		if code, out := shipCmd(t, env, opts, prN, args...); code != ExitBlocked || !strings.Contains(out, want) {
 			t.Fatalf("ship, want %q: %d %s", want, code, out)
 		}
 		g.Mu.Lock()
@@ -377,9 +380,56 @@ func TestShipOnProof(t *testing.T) {
 	refused("required check lint is failure on " + short(head) + "; never merge with a red required check")
 	g.Mu.Lock()
 	g.CheckRuns[head][len(g.CheckRuns[head])-2].Conclusion = "success" // lint
+	g.Mu.Unlock()
+	refused("required check security is missing on " + short(head))
+	g.Mu.Lock()
+	g.CheckRuns[head] = append([]fake.CheckRun{{Name: "security", Status: "in_progress"}}, g.CheckRuns[head]...)
+	g.Mu.Unlock()
+	refused("required check security is in_progress on " + short(head))
+	g.Mu.Lock()
+	g.RequiredChecks = []string{"build", "lint", "docs", "protected-paths"}
 	g.Pulls[prN].Files = []string{"empty.txt", "internal/identity/review.go"}
 	g.Mu.Unlock()
 	refused("no merge on proof: it touches internal/identity/review.go, in the narrow set that always needs a person ([autonomy] always_person: internal/identity/)")
+	// Nor does the streak pass it, even at rung A with the caller's
+	// --set making every layer autonomous.
+	g.Mu.Lock()
+	logC := g.JobLogs[7701]
+	g.JobLogs[7701] = strings.Replace(logC, "same-family review (C): codex (openai), builder openai", "different-family review (A): claude (anthropic), builder openai", 1)
+	g.Mu.Unlock()
+	refused("no merge on proof: it touches internal/identity/review.go", "--set", "autonomy.streak=0", "--set", "autonomy.never=")
+	g.Mu.Lock()
+	g.JobLogs[7701] = logC
+	g.RefFiles[base][".aayudha/config.toml"] = strings.Replace(conf, `"internal/identity/"]`, `"internal/identity/", ".github/workflows/protected-paths*.yml"]`, 1)
+	g.Pulls[prN].Files = []string{"empty.txt", ".github/workflows/protected-paths-review.yml"}
+	g.Mu.Unlock()
+	refused("no merge on proof: it touches .github/workflows/protected-paths-review.yml, in the narrow set that always needs a person ([autonomy] always_person: .github/workflows/protected-paths*.yml)")
+	g.Mu.Lock()
+	g.RefFiles[base][".aayudha/config.toml"] = conf
+	g.Pulls[prN].Files, g.Pulls[prN].Unlisted = []string{"empty.txt"}, 1 // past GitHub's 3,000-file listing
+	g.Mu.Unlock()
+	refused("no merge on proof: GitHub listed 1 of its 2 changed files (it lists at most 3,000), so the narrow set cannot be judged")
+	// It fails closed: a base config that does not load, a workflow that does
+	// not parse, and a read GitHub refuses each stop it.
+	g.Mu.Lock()
+	g.Pulls[prN].Unlisted = 0
+	g.RefFiles[base][".aayudha/config.toml"] = conf + "unknown_key = 1\n"
+	g.Mu.Unlock()
+	refused("the base revision's config does not load, so ship cannot judge the narrow set")
+	g.Mu.Lock()
+	g.RefFiles[base][".aayudha/config.toml"] = conf
+	g.RefFiles[head][".github/workflows/broken.yml"] = "on: [push\njobs: {\n"
+	g.Fail = "GET /repos/o/r/contents/.aayudha/config.toml"
+	g.Mu.Unlock()
+	if code, out := shipCmd(t, env, opts, prN); code != ExitExternal || slices.Contains(g.LabelNames(2), "status:merged") {
+		t.Fatalf("ship when the base config cannot be read: %d %s", code, out)
+	}
+	for _, wf := range []string{".github/workflows/deploy.yml", ".github/workflows/pages.yml", ".github/workflows/broken.yml"} {
+		g.Mu.Lock()
+		g.Pulls[prN].Files, g.Pulls[prN].Unlisted = []string{"empty.txt", wf}, 0
+		g.Mu.Unlock()
+		refused("no merge on proof: it touches " + wf + ", a workflow that reads a secret or names an environment")
+	}
 	g.Mu.Lock()
 	g.Pulls[prN].Files = []string{"empty.txt", ".github/workflows/ci.yml"}
 	g.Mu.Unlock()

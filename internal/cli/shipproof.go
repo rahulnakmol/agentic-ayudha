@@ -2,10 +2,9 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"os"
 	"path"
-	"path/filepath"
 	"reflect"
 	"regexp"
 	"slices"
@@ -13,6 +12,7 @@ import (
 
 	gh "github.com/google/go-github/v90/github"
 	"github.com/pelletier/go-toml/v2"
+	"go.yaml.in/yaml/v4"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
@@ -82,14 +82,16 @@ func checkState(runs []*gh.CheckRun, name string) string {
 }
 
 // proofPass says whether PR pr may merge on proof at rung, or why not ("" when
-// proof is off). The gate, the pack, and the required checks are checked
-// before it; gate is the CODEOWNERS check's state, which may be red only for
-// the CODEOWNERS paths the PR touches (Decision #593: those merge under the
-// founder's recorded bypass). The policy and the integration branch are the
-// base revision's config, never the PR's own or the checkout's: a PR could
-// otherwise empty the narrow set it is judged by, or call main the
-// integration branch.
-func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name string, pr *gh.PullRequest, rung, gate string) (*ProofPass, string, error) {
+// proof is off). person reports a PR that needs a person per PR whatever else
+// would pass it (the narrow set, or a file list GitHub truncated), so ship
+// gives it no autonomous pass either. The gate, the pack, and the required
+// checks are checked before it; gate is the CODEOWNERS check's state, which
+// may be red only for the CODEOWNERS paths the PR touches (Decision #593:
+// those merge under the founder's recorded bypass). The policy and the
+// integration branch are the base revision's config, never the PR's own or
+// the checkout's: a PR could otherwise empty the narrow set it is judged by,
+// or call main the integration branch.
+func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name string, pr *gh.PullRequest, rung, gate string) (pp *ProofPass, why string, person bool, err error) {
 	base, head := pr.GetBase().GetSHA(), pr.GetHead().GetSHA()
 	var readErr error
 	read := func(p, ref string) string { // "" when absent at ref
@@ -103,106 +105,91 @@ func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name strin
 		s, _ := fc.GetContent()
 		return s
 	}
-	baseConfig := read(".aayudha/config.toml", base)
-	if readErr != nil {
-		return nil, "", Wrap(ExitExternal, readErr)
-	}
-	cfg, err := protectedConfig(baseConfig)
-	if err != nil {
-		return nil, "", err
-	}
-	a, dev := cfg.Autonomy, or(cfg.Branches.Dev, "dev")
+	l, err := config.Load(config.Sources{RepoTOML: []byte(read(".aayudha/config.toml", base)), RepoSource: ".aayudha/config.toml at " + short(base)})
 	switch {
-	case !a.Proof:
-		return nil, "", nil
-	case pr.GetBase().GetRef() != dev:
-		return nil, fmt.Sprintf("it merges into %s, not the integration branch %s", pr.GetBase().GetRef(), dev), nil
-	case !slices.Contains(a.ProofRungs, rung):
-		return nil, fmt.Sprintf("the review rung at the head is %s, not one of %s ([autonomy] proof_rungs)", or(rung, "none recorded"), strings.Join(a.ProofRungs, ", ")), nil
+	case readErr != nil:
+		return nil, "", false, Wrap(ExitExternal, readErr)
+	case err != nil:
+		return nil, "", false, Errorf(ExitBlocked, "the base revision's config does not load, so ship cannot judge the narrow set: %v", err)
+	}
+	a, dev := l.Config.Autonomy, or(l.Config.Branches.Dev, "dev")
+	if !a.Proof {
+		return nil, "", false, nil
 	}
 	files, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.CommitFile, *gh.Response, error) {
 		return c.REST.PullRequests.ListFiles(ctx, owner, name, pr.GetNumber(), &o)
 	})
 	if err != nil {
-		return nil, "", Wrap(ExitExternal, err)
+		return nil, "", false, Wrap(ExitExternal, err)
+	}
+	if len(files) != pr.GetChangedFiles() {
+		return nil, fmt.Sprintf("GitHub listed %d of its %d changed files (it lists at most 3,000), so the narrow set cannot be judged", len(files), pr.GetChangedFiles()), true, nil
 	}
 	codeowners := identity.ParseCodeowners(read(".github/CODEOWNERS", base))
-	pp := &ProofPass{Rung: rung}
+	pp = &ProofPass{Rung: rung}
 	for _, f := range files {
 		for _, p := range []string{f.GetFilename(), f.GetPreviousFilename()} {
-			if p == "" {
+			switch {
+			case p == "":
 				continue
-			}
-			if pat, ok := alwaysPerson(a.AlwaysPerson, p); ok {
-				return nil, fmt.Sprintf("it touches %s, in the narrow set that always needs a person ([autonomy] always_person: %s)", p, pat), nil
-			}
-			if slices.Contains(a.AlwaysPersonConfig, p) {
+			case alwaysPerson(a.AlwaysPerson, p) != "":
+				return nil, fmt.Sprintf("it touches %s, in the narrow set that always needs a person ([autonomy] always_person: %s)", p, alwaysPerson(a.AlwaysPerson, p)), true, nil
+			case slices.Contains(a.AlwaysPersonConfig, p):
 				if s := changedSections(read(p, base), read(p, head), a.AlwaysPersonSections); len(s) > 0 {
-					return nil, fmt.Sprintf("it changes [%s] in %s, which decides who may approve or bypass", strings.Join(s, "], ["), p), nil
+					return nil, fmt.Sprintf("it changes [%s] in %s, which decides who may approve or bypass", strings.Join(s, "], ["), p), true, nil
 				}
-			}
-			if strings.HasPrefix(p, ".github/workflows/") && (holdsSecrets(read(p, base)) || holdsSecrets(read(p, head))) {
-				return nil, fmt.Sprintf("it touches %s, a workflow that reads a secret or names an environment", p), nil
+			case strings.HasPrefix(p, ".github/workflows/") && (holdsSecrets(read(p, base)) || holdsSecrets(read(p, head))):
+				return nil, fmt.Sprintf("it touches %s, a workflow that reads a secret or names an environment", p), true, nil
 			}
 			if owners, _, _ := identity.Owners(codeowners, p); len(owners) > 0 && !slices.Contains(pp.Protected, p) {
 				pp.Protected = append(pp.Protected, p)
 			}
 		}
 	}
-	if readErr != nil { // a file the narrow set judges could not be read
-		return nil, "", Wrap(ExitExternal, readErr)
+	switch {
+	case readErr != nil: // a file the narrow set judges could not be read
+		return nil, "", false, Wrap(ExitExternal, readErr)
+	case pr.GetBase().GetRef() != dev:
+		return nil, fmt.Sprintf("it merges into %s, not the integration branch %s", pr.GetBase().GetRef(), dev), false, nil
+	case !slices.Contains(a.ProofRungs, rung):
+		return nil, fmt.Sprintf("the review rung at the head is %s, not one of %s ([autonomy] proof_rungs)", or(rung, "none recorded"), strings.Join(a.ProofRungs, ", ")), false, nil
+	case gate != "" && gate != "success" && len(pp.Protected) == 0:
+		return nil, fmt.Sprintf("required check %s is %s, and the PR touches no CODEOWNERS path that would explain it", seats.GateCheck, gate), false, nil
 	}
-	if gate != "" && gate != "success" && len(pp.Protected) == 0 {
-		return nil, fmt.Sprintf("required check %s is %s, and the PR touches no CODEOWNERS path that would explain it", seats.GateCheck, gate), nil
-	}
-	return pp, "", nil
+	return pp, "", false, nil
 }
 
-// protectedConfig is the config a revision's .aayudha/config.toml (text, ""
-// when absent) sets over the defaults, with no user, local, env, or flag layer.
-func protectedConfig(text string) (*config.Config, error) {
-	dir, err := os.MkdirTemp("", "aayu-base-config-")
-	if err != nil {
-		return nil, Wrap(ExitExternal, err)
-	}
-	defer func() { _ = os.RemoveAll(dir) }()
-	if text != "" {
-		if err := os.MkdirAll(filepath.Join(dir, ".aayudha"), 0o755); err != nil {
-			return nil, Wrap(ExitExternal, err)
-		}
-		if err := os.WriteFile(filepath.Join(dir, ".aayudha", "config.toml"), []byte(text), 0o644); err != nil {
-			return nil, Wrap(ExitExternal, err)
-		}
-	}
-	l, err := config.Load(config.Sources{RepoDir: dir})
-	if err != nil {
-		return nil, Errorf(ExitBlocked, "the base revision's .aayudha/config.toml does not load, so no merge on proof: %v", err)
-	}
-	return &l.Config, nil
-}
-
-// alwaysPerson matches p against the narrow set: a pattern ending in "/"
-// covers a directory, any other is a path.Match glob.
-func alwaysPerson(patterns []string, p string) (string, bool) {
+// alwaysPerson is the narrow-set pattern p matches ("" for none): a pattern
+// ending in "/" covers a directory, any other is a path.Match glob.
+func alwaysPerson(patterns []string, p string) string {
 	for _, pat := range patterns {
-		if strings.HasSuffix(pat, "/") && strings.HasPrefix(p, pat) {
-			return pat, true
-		}
-		if ok, _ := path.Match(pat, p); ok {
-			return pat, true
+		if ok, _ := path.Match(pat, p); ok || strings.HasSuffix(pat, "/") && strings.HasPrefix(p, pat) {
+			return pat
 		}
 	}
-	return "", false
+	return ""
 }
 
-// secretRef is any mention of the secrets context (secrets.X, secrets['X'],
-// toJSON(secrets), secrets: inherit) or an environment key. It errs towards a
-// person: a comment that says "secrets" counts too.
-var secretRef = regexp.MustCompile(`\bsecrets\b|\benvironment\s*:`)
+// secretRef is, in a workflow's canonical JSON, any mention of the secrets
+// context (secrets.X, secrets['X'], toJSON(secrets), secrets: inherit; the
+// expression language ignores case) or an environment key.
+var secretRef = regexp.MustCompile(`(?i)\bsecrets\b|"environment":`)
 
 // holdsSecrets reports whether a workflow reads a secret or names an
-// environment (an environment holds secrets and deployment rights).
-func holdsSecrets(workflow string) bool { return secretRef.MatchString(workflow) }
+// environment (an environment holds secrets and deployment rights). It judges
+// the parsed YAML, so quoting, escapes, anchors and merge keys change nothing,
+// and a workflow it cannot parse counts as holding them. "" is no workflow.
+func holdsSecrets(workflow string) bool {
+	if workflow == "" {
+		return false
+	}
+	var v any
+	if err := yaml.Unmarshal([]byte(workflow), &v); err != nil {
+		return true
+	}
+	b, err := json.Marshal(v)
+	return err != nil || secretRef.Match(b)
+}
 
 // changedSections lists the TOML tables in names whose parsed values differ
 // between two versions of a file, however they are written (a [table], a

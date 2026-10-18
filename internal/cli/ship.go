@@ -235,7 +235,7 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	// The review ladder's rung at the head, from the merge gate's own inspect log.
 	rec.Review = autonomy.GateRung(ctx, c, owner, name, n, head)
 	// Merge on proof (Decision #593): with it, no human pass is needed.
-	proofOK, proofWhy, err := e.proofPass(ctx, c, owner, name, pr, rec.Review, gateState)
+	proofOK, proofWhy, needsPerson, err := e.proofPass(ctx, c, owner, name, pr, rec.Review, gateState)
 	if err != nil {
 		return err
 	}
@@ -314,7 +314,7 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 	// agent merge without a person; a same-family review or none refuses.
 	if rec.HumanPass.Kind == "" && rec.Streak.Autonomous && !in.Bool("solo-bypass") && rec.Review != inspect.RungA && rec.Review != inspect.RungB {
 		why = append(why, "the merge gate's inspect job at this head did not record a different-family review (a same-family review, or none), which never lets an agent merge without a person")
-	} else if rec.HumanPass.Kind == "" && rec.Streak.Autonomous && !in.Bool("solo-bypass") {
+	} else if rec.HumanPass.Kind == "" && rec.Streak.Autonomous && !in.Bool("solo-bypass") && !needsPerson { // the narrow set: a person, whatever the streak
 		rec.HumanPass = HumanPass{Kind: "autonomous", Login: me.Login, Commit: head,
 			Note: fmt.Sprintf("every layer of footprint %s has a streak of at least %d correction-free agent merges and none is a never layer (WP5.7)", strings.Join(rec.Footprint, ", "), rec.Streak.Threshold)}
 	}
