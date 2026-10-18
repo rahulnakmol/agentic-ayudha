@@ -33,6 +33,16 @@ type ProofPass struct {
 	Rung      string   `json:"rung"`                // the review rung at the head (inspect.Rung*)
 	Checks    []string `json:"required_checks"`     // the base branch's required checks, all green
 	Protected []string `json:"protected,omitempty"` // CODEOWNERS paths it merged with no code owner's approval
+	Policy    string   `json:"policy"`              // the base branch's tip whose config and CODEOWNERS judged it
+}
+
+// branchTip is the commit a branch points at now.
+func branchTip(ctx context.Context, c *github.Client, owner, name, branch string) (string, error) {
+	ref, _, err := c.REST.Git.GetRef(ctx, owner, name, "heads/"+branch)
+	if err != nil {
+		return "", Wrap(ExitExternal, err)
+	}
+	return ref.GetObject().GetSHA(), nil
 }
 
 // requiredChecks checks that every required status check of the base
@@ -117,9 +127,11 @@ func checkState(runs []*gh.CheckRun, statuses []*gh.RepoStatus, sc *gh.RuleStatu
 // checks are checked before it; gate is the CODEOWNERS check's state, which
 // may be red only for the CODEOWNERS paths the PR touches (Decision #593:
 // those merge under the founder's recorded bypass). The policy and the
-// integration branch are the base revision's config, never the PR's own or
-// the checkout's: a PR could otherwise empty the narrow set it is judged by,
-// or call main the integration branch.
+// integration branch are the config, and CODEOWNERS, at the base branch's
+// tip now (pp.Policy, which ship checks again just before it merges), never
+// the PR's own or the checkout's: a PR could otherwise empty the narrow set
+// it is judged by, or call main the integration branch, and a policy that
+// tightened on the base while ship ran still applies.
 func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name string, pr *gh.PullRequest, rung, gate string) (pp *ProofPass, why string, person bool, err error) {
 	base, head := pr.GetBase().GetSHA(), pr.GetHead().GetSHA()
 	var readErr error
@@ -134,7 +146,11 @@ func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name strin
 		s, _ := fc.GetContent()
 		return s
 	}
-	l, err := config.Load(config.Sources{RepoTOML: []byte(read(".aayudha/config.toml", base)), RepoSource: ".aayudha/config.toml at " + short(base)})
+	policy, err := branchTip(ctx, c, owner, name, pr.GetBase().GetRef())
+	if err != nil {
+		return nil, "", false, err
+	}
+	l, err := config.Load(config.Sources{RepoTOML: []byte(read(".aayudha/config.toml", policy)), RepoSource: ".aayudha/config.toml at " + short(policy)})
 	switch {
 	case readErr != nil:
 		return nil, "", false, Wrap(ExitExternal, readErr)
@@ -157,7 +173,7 @@ func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name strin
 	if len(files) != pr.GetChangedFiles() {
 		return nil, fmt.Sprintf("GitHub's comparison of %s...%s lists %d of the PR's %d changed files (it lists at most 300), so the narrow set cannot be judged", short(base), short(head), len(files), pr.GetChangedFiles()), true, nil
 	}
-	pp = &ProofPass{Rung: rung}
+	pp = &ProofPass{Rung: rung, Policy: policy}
 	var changed []string
 	for _, f := range files {
 		for _, p := range []string{f.GetFilename(), f.GetPreviousFilename()} {
@@ -190,7 +206,7 @@ func (e *Env) proofPass(ctx context.Context, c *github.Client, owner, name strin
 	for _, r := range reviews {
 		rv = append(rv, identity.Review{User: identity.Account{Login: r.GetUser().GetLogin(), Type: r.GetUser().GetType()}, State: r.GetState(), CommitID: r.GetCommitID()})
 	}
-	pp.Protected = identity.ProtectedPathsGate(identity.GateInput{Codeowners: read(".github/CODEOWNERS", base), Changed: changed,
+	pp.Protected = identity.ProtectedPathsGate(identity.GateInput{Codeowners: read(".github/CODEOWNERS", policy), Changed: changed,
 		Author: pr.GetUser().GetLogin(), HeadSHA: head, Reviews: rv, BotLogins: l.Config.Identity.BotLogins}).Unapproved
 	switch {
 	case readErr != nil: // a file the narrow set judges could not be read

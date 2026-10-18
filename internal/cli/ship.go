@@ -372,6 +372,18 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 		rec.Pack = landed.Path
 		rec.PackLanded = fmt.Sprintf("artifact %d of run %d of the base branch's %s (%s), checked and landed by %s through aayu ship", gp.artifact, gp.run.GetID(), MergeGateWorkflow, gp.run.GetHTMLURL(), me.Login)
 	}
+	// A merge on proof was judged by the base branch's policy at its tip
+	// then; GitHub's merge guards only the head, so a base that moved since
+	// (a tightened narrow set, say) stops it.
+	if rec.Proof != nil {
+		tip, err := branchTip(ctx, c, owner, name, pr.GetBase().GetRef())
+		if err != nil {
+			return err
+		}
+		if tip != rec.Proof.Policy {
+			return Errorf(ExitBlocked, "ship #%d: %s moved from %s to %s while ship judged the PR on proof; run ship again so its current policy judges it", n, pr.GetBase().GetRef(), short(rec.Proof.Policy), short(tip))
+		}
+	}
 	var merged *gh.PullRequestMergeResult
 	if _, err := c.Write(ctx, actions.Action{Kind: "github.pull.merge", Target: fmt.Sprintf("%s#%d", repo, n), Story: fmt.Sprintf("#%d", story),
 		Request: &actions.Request{Method: http.MethodPut, Path: fmt.Sprintf("/repos/%s/pulls/%d/merge", repo, n)},

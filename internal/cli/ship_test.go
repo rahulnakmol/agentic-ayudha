@@ -579,6 +579,30 @@ func TestShipOnProof(t *testing.T) {
 	g.Mu.Unlock()
 	g.Mu.Lock()
 	g.Pulls[prN].Files = append(g.Pulls[prN].Files, ".github/workflows/lint.yml")
+	// The policy is the base branch's tip now, not the PR's base revision: a
+	// narrow set that tightened on dev since the PR was cut applies.
+	tip := strings.Repeat("c", 40)
+	g.Refs["heads/dev"] = tip
+	g.RefFiles[tip] = map[string]string{".github/CODEOWNERS": "/skills/ @founder\n", ".aayudha/config.toml": strings.Replace(conf, `"internal/identity/"]`, `"internal/identity/", "skills/"]`, 1)}
+	g.Mu.Unlock()
+	refused("no merge on proof: it touches skills/build/SKILL.md, in the narrow set that always needs a person ([autonomy] always_person: skills/)")
+	// And dev moving while ship runs stops the merge: GitHub's merge guards
+	// only the head, so ship checks the tip it judged against again.
+	g.Mu.Lock()
+	g.RefFiles[tip][".aayudha/config.toml"] = conf
+	reads := 0
+	g.Hook = func(method, p string) {
+		if method == "GET" && strings.HasSuffix(p, "/git/ref/heads/dev") {
+			if reads++; reads > 1 {
+				g.Refs["heads/dev"] = strings.Repeat("d", 40)
+			}
+		}
+	}
+	g.Mu.Unlock()
+	refused(fmt.Sprintf("dev moved from %s to %s while ship judged the PR on proof", short(tip), short(strings.Repeat("d", 40))))
+	g.Mu.Lock()
+	g.Hook = nil
+	delete(g.Refs, "heads/dev")
 	g.Mu.Unlock()
 
 	code, out := shipCmd(t, env, opts, prN)

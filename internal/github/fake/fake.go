@@ -732,6 +732,11 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 	case m == "GET" && strings.HasPrefix(p, repo+"/git/ref/"):
 		ref := strings.TrimPrefix(p, repo+"/git/ref/")
 		sha, ok := g.Refs[ref]
+		for _, pr := range g.Pulls { // a branch no test set is a PR's base, at its base SHA
+			if !ok && "heads/"+pr.Base.Ref == ref && pr.Base.SHA != "" {
+				sha, ok = pr.Base.SHA, true
+			}
+		}
 		if !ok {
 			notFound()
 			return
