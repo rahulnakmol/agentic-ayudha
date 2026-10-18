@@ -89,16 +89,25 @@ func CheckStructure(md string) []string {
 		parts = append(parts, part{strings.TrimSpace(md[l[2]:l[3]]), strings.TrimSpace(md[l[1]:end])})
 	}
 	find := func(title string) (int, string) {
-		t := strings.ToLower(title)
 		for i, p := range parts {
-			h := strings.ToLower(strings.NewReplacer("*", "", "`", "").Replace(p.title))
-			if rest, ok := strings.CutPrefix(h, t); ok && (rest == "" || strings.IndexAny(rest[:1], " :(-—,") == 0) {
+			if matches(p.title, title) {
 				return i, p.body
 			}
 		}
 		return -1, ""
 	}
 	var out []string
+	for _, s := range Sections {
+		n := 0
+		for _, p := range parts {
+			if matches(p.title, s.Title) {
+				n++
+			}
+		}
+		if n > 1 {
+			out = append(out, fmt.Sprintf("part %q appears %d times; each part appears once", s.Title, n))
+		}
+	}
 	last := -1
 	for _, s := range Sections {
 		i, body := find(s.Title)
@@ -141,6 +150,13 @@ func CheckStructure(md string) []string {
 		out = append(out, fmt.Sprintf("%d words: counsel is read in a few minutes, so at most %d; cite detail instead of pasting it", n, MaxWords))
 	}
 	return out
+}
+
+// matches reports whether a "## " heading names the part title: the title, then nothing or a separator.
+func matches(heading, title string) bool {
+	h := strings.ToLower(strings.NewReplacer("*", "", "`", "").Replace(heading))
+	rest, ok := strings.CutPrefix(h, strings.ToLower(title))
+	return ok && (rest == "" || strings.IndexAny(rest[:1], " :(-—,") == 0)
 }
 
 // Check is every deterministic check on a counsel: its parts (CheckStructure), the stage's artefact of the

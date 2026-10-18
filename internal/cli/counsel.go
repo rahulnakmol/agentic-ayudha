@@ -197,9 +197,13 @@ func runCounsel(ctx context.Context, e *Env, in Values) error {
 		if hasCite(facts.String(), cite) {
 			return true
 		}
-		// A path the twin read in this checkout is a fact too.
-		_, err := os.Stat(filepath.Join(root, filepath.FromSlash(strings.TrimSuffix(cite, "/"))))
-		return root != "" && !strings.HasPrefix(cite, "#") && err == nil
+		// A path the twin read in this checkout is a fact too; a path that leaves the checkout is not.
+		rel := filepath.Clean(filepath.FromSlash(strings.TrimSuffix(cite, "/")))
+		if root == "" || strings.HasPrefix(cite, "#") || filepath.IsAbs(rel) || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return false
+		}
+		_, err := os.Stat(filepath.Join(root, rel))
+		return err == nil
 	}
 	rep.Draft, rep.Findings = draft, counsel.Check(string(b), rep.Stage, pr, known)
 	if len(rep.Findings) == 0 && in.Bool("post") {
@@ -428,7 +432,8 @@ func (r counselReport) markdown() string {
 	return b.String()
 }
 
-// hasCite reports whether text cites cite as a whole token: #12 is not in #123, nor percent.go in report/percent.go;
+// hasCite reports whether text cites cite as a whole token: #12 is not in #123, nor percent.go in report/percent.go
+// or percent.go.bak;
 // a directory (ledger/) is a prefix of the paths under it.
 func hasCite(text, cite string) bool {
 	word := func(b byte) bool {
@@ -442,7 +447,9 @@ func hasCite(text, cite string) bool {
 		j += i
 		end := j + len(cite)
 		left := j == 0 || !word(text[j-1]) && !strings.ContainsRune("/.-#", rune(text[j-1]))
-		right := strings.HasSuffix(cite, "/") || end == len(text) || !word(text[end])
+		// foo.go is not in foo.go.bak or foo.go-old: a path character on the right continues the token.
+		right := strings.HasSuffix(cite, "/") || end == len(text) ||
+			!word(text[end]) && (!strings.ContainsRune("/.-", rune(text[end])) || end+1 == len(text) || !word(text[end+1]))
 		if left && right {
 			return true
 		}
