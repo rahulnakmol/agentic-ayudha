@@ -173,7 +173,9 @@ Architect's, so you report it and never bend it.
    exclusive end, so the rerun's `--to` is that date (for example, a cohort starting 2026-03-02 ends its week at
    2026-03-09, and with a 14-day horizon it is complete for `--to 2026-03-23` or later). Give one date, and use it
    everywhere in the answer. Every action has an owner the grounding names (the person who asked, the Goal's or
-   Initiative's owner, or the seat that owns the call). The source fix is its own action, and an unverified cause
+   Initiative's owner, or the seat that owns the call). Name a seat by its role (the Revenue Architect), never by
+   its twin's name: the twin names are this pod's, and a reader of the note who has not seen them takes one for a
+   person nobody introduced. The source fix is its own action, and an unverified cause
    is investigated before it is fixed: where (the file that sets the missing field, from the grounding), who (a
    person the grounding names, else the AI Native Engineer, who builds and runs that code), and by when; a rerun
    alone does not fix it. Whether rows from before a fix can be recovered (repaired, re-exported) is unknown unless the
