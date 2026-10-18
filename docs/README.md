@@ -47,6 +47,7 @@ every input of every verb.
 | `slice` | Split a Feature into XS-L stories with observable criteria, dependencies, and a layer footprint; close XL items as split. | Product Strategist | plan | all | bot | cli, skill, mcp |
 | `plan` | Plan a story: one checkpoint per layer, contracts, tests, instrumentation, and rollback. | Code Architect | plan | all | bot | cli, skill, mcp |
 | `decide` | Record a Decision with options, evaluation, and recommendation; accept it, supersede it, or file a floor waiver. | Founder | spec | all | human | cli, skill, mcp |
+| `counsel` | Consult the Founder's Sage on any topic, issue, Decision, path, or PR: the call and its door, three readings, one recommendation, cited proof, and the next aayu step; advice only, never a review. | Founder | spec | all | bot | cli, skill, mcp |
 | `triage` | Classify intake issues as Feedback, Bug, or Incident by label only; never edits bodies or touches non-intake issues. | Product Strategist | chore | none | bot | cli, skill, mcp |
 | `build` | Build a Ready story or bug in a worktree with checkpoint commits per layer, verify each checkpoint, and open a PR. | AI Native Engineer | build | all | bot | cli, skill, mcp |
 | `verify` | Run the deterministic floors (coverage, SAST, secrets, deps, a11y, perf) and record results in a proof pack. | AI Native Engineer | chore | all | bot | cli, skill, mcp |

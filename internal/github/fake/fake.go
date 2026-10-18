@@ -67,6 +67,10 @@ type Issue struct {
 	Subs        []int      `json:"-"`
 	Parent      int        `json:"-"`
 	Assignees   []Account  `json:"assignees"`
+	// PullRequest is set on the issue that a pull request shares its number with, as GitHub's Issues API does.
+	PullRequest *struct {
+		URL string `json:"url"`
+	} `json:"pull_request,omitempty"`
 }
 
 // PR is a pull request; it shares its number with an Issue, as on GitHub.
@@ -290,6 +294,9 @@ func (g *GitHub) AddPR(title, body, author, head, headSHA, base string) *PR {
 	g.Mu.Lock()
 	defer g.Mu.Unlock()
 	is := g.addIssue(title, body, nil)
+	is.PullRequest = &struct {
+		URL string `json:"url"`
+	}{URL: fmt.Sprintf("https://api.github.com/repos/%s/pulls/%d", g.Repo, is.Number)}
 	pr := &PR{Number: is.Number, Title: title, Body: body, State: "open", User: Account{Login: author, Type: "User"},
 		Head: Branch{Ref: head, SHA: headSHA}, Base: Branch{Ref: base, SHA: strings.Repeat("b", 40)}}
 	g.Pulls[is.Number] = pr

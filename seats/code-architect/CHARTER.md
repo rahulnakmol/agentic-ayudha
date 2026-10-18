@@ -87,6 +87,7 @@ Sources:
 | `slice` | Consulted |
 | `plan` | Accountable; the twin executes it (plan lane); owns thresholds and policy |
 | `decide` | Consulted |
+| `counsel` | Consulted |
 | `build` | Consulted |
 | `inspect` | Consulted |
 | `ready` | Consulted |

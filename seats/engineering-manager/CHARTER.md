@@ -87,6 +87,7 @@ Sources:
 | `slice` | Consulted |
 | `plan` | Consulted |
 | `decide` | Informed |
+| `counsel` | Consulted |
 | `triage` | Informed |
 | `build` | Informed |
 | `verify` | Informed |
