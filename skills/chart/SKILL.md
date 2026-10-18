@@ -130,8 +130,9 @@ prose, so put metrics and evaluation cases in tables); a scaleup note reads in
 ten minutes, about two pages: at most about 1 200 words of prose, and its evaluation table has one row per kind of
 case (with its count and expected behaviour), not one per case; an enterprise note is the full record. Every
 sentence you add is one more claim to keep consistent: say each thing once, in the part it belongs to. Do not restate the grounding: cite it, and spend the words on the design. The
-first sentence under the title names who acts and on what; no preamble about the request, no note about who is
-writing, and no inventory of facts. The shared brief lives in the conversation, not in the note: in the note, each
+first sentence under the title names who acts and on what (the person or team the decision or answer serves);
+no preamble about the request, no note about who is writing, no inventory of facts, and no line about who approves
+the note: a person accepts a design, never a seat or its twin. The shared brief lives in the conversation, not in the note: in the note, each
 confirmed fact appears once, cited, in the part whose design rests on it.
 
 **Evidence.** Every statement of fact cites its source in the same sentence or table row: the issue (`#128`),
@@ -181,7 +182,10 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
 - `## Privacy and retention`: what personal data appears (free text often holds it), who sees per-person rows and who
   only aggregates (suppress small groups, and every value that would reveal a suppressed count with it: a share, a
   total, or a difference beside it; until a human confirms wider access, the default is the restrictive one:
-  aggregates only, no free text, the shortest retention the decision needs), who may read each copy (the export,
+  aggregates only, no free text, the shortest retention the decision needs; when that default leaves the decision
+  unable to act, as when a large share of items has no category, the design proposes the smallest remedy that keeps
+  the default, such as better classification, and may name a wider-access exception (a named reviewer reading
+  redacted text in a restricted view) as an open question that stays off until a human accepts it), who may read each copy (the export,
   the snapshot, the view) and what enforces it (an access rule the grounding shows; else a proposed restriction,
   such as only the pipeline's identity and the named owners, written as a requirement with its check, and nothing
   is built on that copy until the check passes), how long each copy is kept (export, snapshot, aggregate), and how a deletion
@@ -197,7 +201,10 @@ describes it; a capability it does not show (a store, a schedule, a measurement)
   longer history, that is an open question for the human (and a privacy review), never solved by calling counts
   anonymous: suppressing small groups lowers the risk of re-identification, it does not prove anonymity. If the grounding shows that a source cannot delete one person's rows, a deletion request is not met until its
   retention ages them out: that is the open risk. A pseudonymous ID does not anonymise free text: say who may read the text itself and what is redacted.
-- `## Checks`: how we will know the numbers are right: a reconciliation against the source, quality checks with
+- `## Checks`: how we will know the numbers are right: a reconciliation against the source that compares like
+  with like (the same event type, filters, and deduplication on both sides, never the metric against all rows), a
+  completeness check over the same span the metric reads (its window, plus the outcome cutoff when it has one: for
+  example, a week and 24 hours), quality checks with
   thresholds (skipped rows, duplicates, nulls), the metric computed by hand on a synthetic fixture, and the
   Completion Goal criteria (`metric` evidence) that `plan` turns into checkpoints. When a week can be provisional,
   the completeness check and the Completion Goal criteria hold the final week; the provisional view only carries
