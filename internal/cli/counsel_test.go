@@ -52,6 +52,12 @@ func TestCounsel(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(opts.Dir, "internal", "report", "percent.go"), []byte("package report\n\ntype Pair[A, B any] struct{}\n\nfunc (p Pair[A, B]) Swap() {}\n\ntype Source interface {\n\tRows() int\n}\n\ntype Table struct {\n\tRows int\n\t*Source\n\tfmt.Stringer\n}\n\nfunc (t *Table) Total() int { return t.Rows }\n\nfunc Percent(c, t int) float64 {\n\tMissing := 0\n\treturn float64(Missing)\n}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.MkdirAll(filepath.Join(opts.Dir, "docs", "adr"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(opts.Dir, "docs", "adr", "ADR-17-ledger.md"), []byte("# ADR-17"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(opts.Dir, "embed.go"), []byte("package aayudha\n\nvar Assets = 1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -110,6 +116,16 @@ func TestCounsel(t *testing.T) {
 		!strings.Contains(out, "# Counsel grounding: the question below") || strings.Count(out, "Ignore the rules") != 1 ||
 		!strings.Contains(out, "<untrusted source=\"question\">\na question") {
 		t.Errorf("a free question shaped as Markdown: exit %d: %s", code, out)
+	}
+	// A PR that names its story only in the head commit's Aayudha-Story trailer is grounded on that story.
+	headB := strings.Repeat("e", 40)
+	trailered := g.AddPR("Percent, take two", "No refs here.", "founder", "feature/percent", headB, "dev")
+	g.Mu.Lock()
+	g.Commits[headB] = map[string]any{"sha": headB, "message": "feat: percent\n\nAayudha-Story: #2\n"}
+	g.Static["/repos/o/r/pulls/"+strconv.Itoa(trailered.Number)+"/commits"] = []any{map[string]any{"sha": headB}}
+	g.Mu.Unlock()
+	if f := factText(counselRun(env, 0, "--pr", strconv.Itoa(trailered.Number))); !strings.Contains(f, "Story: #2") {
+		t.Errorf("the head commit's story trailer was not read: %s", f)
 	}
 	if q := counselRun(env, 0, "should this ship now?", "--pr", pr); q.PR == 0 || len(q.Untrusted) == 0 || q.Untrusted[0] != (chartUntrusted{"question", "should this ship now?"}) {
 		t.Errorf("a question with a PR: %+v", q.Untrusted)
@@ -215,6 +231,9 @@ Is the zero case the behaviour you want?
 	g.Runs = append(g.Runs, fake.WorkflowRun{ID: 39091188074, Path: ".github/workflows/ci.yml", Status: "completed", Conclusion: "success", HeadSHA: head})
 	g.Mu.Unlock()
 	headSHA := git(t, opts.Dir, "rev-parse", "--short", "HEAD")
+	if r := counselRun(env, 0, "--pr", pr, "--draft", write("adr.md", strings.Replace(good, "(LAYERS.md)", "(ADR-17)", 1))); len(r.Findings) != 0 {
+		t.Errorf("a real ADR citation: %v", r.Findings)
+	}
 	if r := counselRun(env, 0, "--pr", pr, "--draft", write("run.md", strings.Replace(good, "(LAYERS.md)", "(run 39091188074)", 1))); len(r.Findings) != 0 {
 		t.Errorf("a real run citation: %v", r.Findings)
 	}
@@ -238,6 +257,7 @@ Is the zero case the behaviour you want?
 		"path with a suffix":   {"(LAYERS.md)", "(internal/report/old.go)", "cites internal/report/old.go,"},
 		"double punctuation":   {"(LAYERS.md)", "(internal/report/new.go)", "cites internal/report/new.go,"},
 		"unknown commit":       {"(LAYERS.md)", "(`deadbee`)", "cites deadbee,"},
+		"unknown ADR":          {"(LAYERS.md)", "(ADR-170)", "cites ADR-170,"},
 		"unknown run":          {"(LAYERS.md)", "(run 12345678901)", "cites 12345678901,"},
 		"outside the checkout": {"(LAYERS.md)", "(../claims.md)", "cites ../claims.md,"},
 		"unknown symbol":       {"(LAYERS.md)", "(`report.Missing`)", "cites report.Missing,"},

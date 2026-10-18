@@ -8,6 +8,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -215,6 +216,9 @@ func runCounsel(ctx context.Context, e *Env, in Values) error {
 		if hasCite(facts.String(), cite) {
 			return true
 		}
+		if adrCite.MatchString(cite) {
+			return root != "" && hasADR(root, cite)
+		}
 		if counselRunCite.MatchString(cite) {
 			// A CI run (cited "run N") is evidence when this repository's Actions has it.
 			id, _ := strconv.ParseInt(cite, 10, 64)
@@ -337,7 +341,13 @@ func (e *Env) counselPR(ctx context.Context, c *github.Client, owner, name strin
 		rep.Facts = append(rep.Facts, packFact{Text: fmt.Sprintf("Changed: %d file(s) whose names are not plain paths, listed as untrusted data", len(odd)), Cite: cite})
 		rep.Untrusted = append(rep.Untrusted, chartUntrusted{"changed-file-names", strings.Join(odd, "\n")})
 	}
-	story := StoryOf(pr.GetBody(), "", pr.GetHead().GetRef())
+	// The story is the body's Refs #N, the head commit's Aayudha-Story trailer, then the branch, as inspect reads it;
+	// a failed read of the head commit fails counsel rather than grounding a story PR as storyless.
+	hc, hr, err := c.REST.Git.GetCommit(ctx, owner, name, head)
+	if err != nil && (hr == nil || hr.StatusCode != http.StatusNotFound) {
+		return wrapExternal(err)
+	}
+	story := StoryOf(pr.GetBody(), hc.GetMessage(), pr.GetHead().GetRef())
 	if story > 0 {
 		if is, _, err := c.REST.Issues.Get(ctx, owner, name, story); err == nil {
 			f := issueFact(is, "story")
@@ -351,6 +361,8 @@ func (e *Env) counselPR(ctx context.Context, c *github.Client, owner, name strin
 	}
 	_, credErr := e.Resolver().Human(ctx)
 	switch {
+	case story == 0:
+		rep.Facts = append(rep.Facts, packFact{Text: "No story found for the PR (no Refs #N, Aayudha-Story trailer, or story/N- branch), so no proof pack was read", Cite: cite})
 	case pack == nil && credErr != nil:
 		// Without the human credential the ledger is not read: the pack and build's records are unknown, not absent.
 		rep.Facts = append(rep.Facts, packFact{Text: fmt.Sprintf("Unverified: the ledger was not read (no human credential), so the proof pack for the PR head %.7s and build's records are unknown, not absent", head), Cite: cite})
@@ -620,6 +632,34 @@ func embeddedName(t ast.Expr) string {
 		return embeddedName(t.X)
 	}
 	return ""
+}
+
+// adrCite is a cited architecture decision record ("ADR-17").
+var adrCite = regexp.MustCompile(`^ADR-\d+$`)
+
+// hasADR reports whether the checkout holds a Markdown document for the ADR: a file whose name starts with its ID,
+// such as docs/adr/ADR-17.md or ADR-17-ledger.md (ADR-170 is not ADR-17). Hidden and dependency trees are skipped.
+func hasADR(root, id string) bool {
+	want := strings.ToLower(id)
+	found := false
+	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil || found {
+			return filepath.SkipDir
+		}
+		n := strings.ToLower(d.Name())
+		if d.IsDir() {
+			if path != root && (strings.HasPrefix(n, ".") || n == "node_modules" || n == "vendor") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if rest, ok := strings.CutPrefix(n, want); ok && strings.HasSuffix(n, ".md") && d.Type()&os.ModeSymlink == 0 &&
+			(rest == "" || rest[0] < '0' || rest[0] > '9') {
+			found = true
+		}
+		return nil
+	})
+	return found
 }
 
 // counselRunCite is a cited CI run ("run 39091188074"), which the evidence rule's parser gives as the bare ID: all
