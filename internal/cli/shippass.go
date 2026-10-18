@@ -49,13 +49,26 @@ func passRule(cfg *config.Config) PassRule {
 	return PassRule{As: "any-human"}
 }
 
-// who names the people whose pass counts, by login: "@a or @b", else a
-// person who is not the author. Text that asks for the pass names them.
+// who names the people whose pass counts, by login, as allows decides it:
+// the approvers, and, when the footprint touches a never layer, only those
+// who are also a CODEOWNER of it. Text that asks for the pass names them.
 func (p PassRule) who() string {
-	if len(p.Approvers) == 0 {
+	people := p.Approvers
+	if len(p.Never) > 0 {
+		people = p.Owners
+		if len(p.Approvers) > 0 {
+			people = slices.DeleteFunc(slices.Clone(p.Owners), func(o string) bool {
+				return !slices.ContainsFunc(p.Approvers, func(a string) bool { return strings.EqualFold(a, o) })
+			})
+		}
+		if len(people) == 0 {
+			return "nobody configured (no approver is a CODEOWNER of " + strings.Join(p.NeverPath, ", ") + ")"
+		}
+	}
+	if len(people) == 0 {
 		return "a person other than the author"
 	}
-	return "@" + strings.Join(p.Approvers, " or @")
+	return "@" + strings.Join(people, " or @")
 }
 
 // allows checks a review that is already a human pass (identity.HumanPass)

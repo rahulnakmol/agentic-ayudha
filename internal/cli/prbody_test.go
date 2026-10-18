@@ -121,3 +121,36 @@ func TestBuiltBy(t *testing.T) {
 		}
 	}
 }
+
+// TestPassRuleWho: the people ship's Ready to ship text names are the ones
+// whose pass allows accepts: on a never layer, only an approver who is also a
+// CODEOWNER, and nobody when none is.
+func TestPassRuleWho(t *testing.T) {
+	never := PassRule{Never: []string{"L03"}, NeverPath: []string{"internal/autonomy/"}, Owners: []string{"Alice", "bob"}}
+	withApprover := never
+	withApprover.Approvers = []string{"alice"}
+	outsider := never
+	outsider.Approvers = []string{"carol"}
+	for _, tc := range []struct {
+		rule PassRule
+		want string
+	}{
+		{PassRule{}, "a person other than the author"},
+		{PassRule{Approvers: []string{"rahulnakmol"}}, "@rahulnakmol"},
+		{never, "@Alice or @bob"},
+		{withApprover, "@Alice"},
+		{outsider, "nobody configured (no approver is a CODEOWNER of internal/autonomy/)"},
+	} {
+		if got := tc.rule.who(); got != tc.want {
+			t.Errorf("%+v: who() = %q, want %q", tc.rule, got, tc.want)
+		}
+		// Every person named passes allows.
+		for _, f := range strings.Fields(strings.ReplaceAll(tc.want, " or ", " ")) {
+			if login, ok := strings.CutPrefix(f, "@"); ok {
+				if err := tc.rule.allows(login); err != nil {
+					t.Errorf("%+v names @%s, whom allows refuses: %v", tc.rule, login, err)
+				}
+			}
+		}
+	}
+}

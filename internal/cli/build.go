@@ -885,8 +885,10 @@ func (e *Env) publishBuild(ctx context.Context, c *github.Client, token, root, r
 		}
 		return body
 	}
+	labelled := false
 	if open != nil {
 		res.PR, res.PRURL = open.GetNumber(), open.GetHTMLURL()
+		labelled = slices.ContainsFunc(open.Labels, func(l *gh.Label) bool { return l.GetName() == workitems.LabelAgentAuthored })
 		if body := open.GetBody(); update(body) != body {
 			nb := update(body)
 			if _, err := c.Write(ctx, actions.Action{Kind: "github.pull.update", Target: fmt.Sprintf("%s#%d", repo, res.PR), Story: fmt.Sprintf("#%d", n),
@@ -914,17 +916,20 @@ func (e *Env) publishBuild(ctx context.Context, c *github.Client, token, root, r
 		}
 		if pr != nil {
 			res.PR, res.PRURL = pr.GetNumber(), pr.GetHTMLURL()
-			// An agent opened it, so the agent PR rules apply: the streak counts
-			// it, and inspect holds its description to the format.
-			labels := []string{workitems.LabelAgentAuthored}
-			if _, err := c.Write(ctx, actions.Action{Kind: "github.issue.labels.add", Target: fmt.Sprintf("%s#%d", repo, res.PR),
-				Request: &actions.Request{Method: http.MethodPost, Path: fmt.Sprintf("/repos/%s/issues/%d/labels", repo, res.PR)}, Payload: map[string]any{"labels": labels}},
-				func(ctx context.Context) (any, error) {
-					_, _, err := c.REST.Issues.AddLabelsToIssue(ctx, owner, name, res.PR, labels)
-					return nil, err
-				}); err != nil {
-				return Wrap(ExitExternal, err)
-			}
+		}
+	}
+	// An agent opened it, so the agent PR rules apply: the streak counts it,
+	// and inspect holds its description to the format. An open PR gets the
+	// label too, so a run that failed after creating the PR is mended.
+	if res.PR != 0 && !labelled {
+		labels := []string{workitems.LabelAgentAuthored}
+		if _, err := c.Write(ctx, actions.Action{Kind: "github.issue.labels.add", Target: fmt.Sprintf("%s#%d", repo, res.PR),
+			Request: &actions.Request{Method: http.MethodPost, Path: fmt.Sprintf("/repos/%s/issues/%d/labels", repo, res.PR)}, Payload: map[string]any{"labels": labels}},
+			func(ctx context.Context) (any, error) {
+				_, _, err := c.REST.Issues.AddLabelsToIssue(ctx, owner, name, res.PR, labels)
+				return nil, err
+			}); err != nil {
+			return Wrap(ExitExternal, err)
 		}
 	}
 	return nil
