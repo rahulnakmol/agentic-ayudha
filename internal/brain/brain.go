@@ -99,9 +99,6 @@ func FindType(name string) (Type, bool) {
 	return Types[i], true
 }
 
-// commonKeys are the frontmatter keys of every note, in the order they are written.
-var commonKeys = []string{"id", "type", "title", "owner", "people", "status", "workstream", "updated", "reviewed", "sources", "up"}
-
 // Marker comments delimit a generated block. Checkpoint rewrites what is
 // between them and nothing else.
 const (

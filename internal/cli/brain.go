@@ -255,6 +255,10 @@ func (e *Env) brainCheckpoint(ctx context.Context) error {
 // checkpointBrain refreshes the brain branch from the repository's records
 // and writes one commit when anything changed.
 func (e *Env) checkpointBrain(ctx context.Context, c *github.Client, w *ledger.Writer) (brain.Checkpoint, string, error) {
+	files, tip, err := brainFiles(ctx, w) // first: without a brain branch there is nothing to read records for
+	if err != nil {
+		return brain.Checkpoint{}, "", err
+	}
 	r, err := e.brainRecords(ctx, c, w)
 	if err != nil {
 		return brain.Checkpoint{}, "", err
@@ -264,9 +268,10 @@ func (e *Env) checkpointBrain(ctx context.Context, c *github.Client, w *ledger.W
 	// A checkpoint rewrites whole notes, so it lands only on the tip it read:
 	// when a person pushes in between, it reads their change and runs again.
 	for attempt := 0; ; attempt++ {
-		files, tip, err := brainFiles(ctx, w)
-		if err != nil {
-			return brain.Checkpoint{}, "", err
+		if attempt > 0 {
+			if files, tip, err = brainFiles(ctx, w); err != nil {
+				return brain.Checkpoint{}, "", err
+			}
 		}
 		cp, err := brain.Run(files, r, today, public)
 		if err != nil {
@@ -395,9 +400,11 @@ func (e *Env) brainRecords(ctx context.Context, c *github.Client, w *ledger.Writ
 		return r, err
 	}
 	r.Approver = l.Config.Autonomy.Approver
-	personas, err := seats.LoadPersonas(e.Assets)
-	if err != nil {
-		return r, err
+	personas := map[verbs.SeatID]seats.Persona{}
+	if e.Assets != nil {
+		if personas, err = seats.LoadPersonas(e.Assets); err != nil {
+			return r, err
+		}
 	}
 	for _, s := range verbs.Seats {
 		p := personas[s.ID]
