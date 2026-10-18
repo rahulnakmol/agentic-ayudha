@@ -1088,6 +1088,9 @@ func TestInspectThroughApp(t *testing.T) {
 	if code, errOut := approve(agent, person, "lead"); code != ExitBlocked || !strings.Contains(errOut, "refused for an agent lane (AAYU_AGENT=1)") {
 		t.Fatalf("approve without presence: %d %s", code, errOut)
 	}
+	if code, _, errOut := run(t, env, person, "inspect", strconv.Itoa(prN), "--approve", "--reason", "r", "--ci", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "refused for an agent lane (--ci)") {
+		t.Fatalf("approve in CI: %d %s", code, errOut)
+	}
 	outcome = "deny"
 	if code, errOut := approve(env, person, "lead"); code != ExitBlocked || !strings.Contains(errOut, "the request was denied") {
 		t.Fatalf("approve on a terminal with the device code denied: %d %s", code, errOut)

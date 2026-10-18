@@ -759,10 +759,6 @@ func (e *Env) inspectDismiss(ctx context.Context, in Values) error {
 // such a record names its exact head, because a comment alone may be an agent
 // holding the person's token (Codex's P2 on #634).
 func (e *Env) inspectApprove(ctx context.Context, in Values) error {
-	reason := strings.TrimSpace(in.String("reason"))
-	if reason == "" {
-		return Errorf(ExitUsage, "inspect --approve: say what you reviewed with --reason")
-	}
 	repo, err := e.RepoName(ctx)
 	if err != nil {
 		return err
@@ -771,7 +767,7 @@ func (e *Env) inspectApprove(ctx context.Context, in Values) error {
 	if err != nil {
 		return err
 	}
-	a, err := e.approveHead(ctx, &l.Config, repo, issueNumber(in.String("pr")), "", reason)
+	a, err := e.approveHead(ctx, &l.Config, repo, issueNumber(in.String("pr")), "", in.String("reason"))
 	if err != nil {
 		return err
 	}
@@ -789,6 +785,9 @@ func (e *Env) inspectApprove(ctx context.Context, in Values) error {
 // session's earlier approval covers the presence check (presence.go), so one
 // inbox session approves several PRs with one device code.
 func (e *Env) approveHead(ctx context.Context, cfg *config.Config, repo string, n int, want, reason string) (headApproval, error) {
+	if reason = strings.TrimSpace(reason); reason == "" {
+		return headApproval{}, Errorf(ExitUsage, "inspect --approve: say what you reviewed with --reason; nothing was recorded")
+	}
 	approver := strings.TrimPrefix(strings.TrimSpace(cfg.Autonomy.Approver), "@")
 	if approver == "" {
 		return headApproval{}, Errorf(ExitBlocked, "inspect --approve: no [autonomy] approver is set; name the person who approves in .aayudha/config.toml")

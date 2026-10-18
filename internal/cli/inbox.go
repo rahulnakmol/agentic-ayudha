@@ -1364,11 +1364,7 @@ func (e *Env) inboxAct(ctx context.Context, cfg *config.Config, c *github.Client
 	case InboxReady:
 		return e.shipReady(ctx, cfg, c, repo, login, it)
 	case InboxHumanReview:
-		reason := strings.TrimSpace(a.Answer)
-		if reason == "" {
-			return Errorf(ExitUsage, "say what you checked; nothing was recorded")
-		}
-		ap, err := e.approveHead(ctx, cfg, repo, it.Number, it.f.head, reason)
+		ap, err := e.approveHead(ctx, cfg, repo, it.Number, it.f.head, a.Answer)
 		if err == nil {
 			fmt.Fprintf(e.Out, "  done: approved #%d at %s as %s, recorded on the ledger; the merge gate runs again\n", ap.PR, short(ap.Head), ap.By)
 		}
@@ -1495,28 +1491,19 @@ func (e *Env) writeInboxCache(c inboxCache) {
 }
 
 // readLine reads one line of the person's words, trimmed: the terminal echoes
-// and edits it (readKey leaves it in its normal mode between keys); other
-// input skips the blanks before it, as readKey does.
+// and edits it (readKey leaves it in its normal mode between keys). Input that
+// ends before the line does gives an error, so nothing half-typed is used.
 func (e *Env) readLine() (string, error) {
-	f, ok := e.In.(*os.File)
-	tty := ok && term.IsTerminal(f.Fd())
 	var line []byte
 	var b [1]byte
 	for {
 		if _, err := io.ReadFull(e.In, b[:]); err != nil {
-			if len(line) > 0 {
-				return strings.TrimSpace(string(line)), nil
-			}
 			return "", err
 		}
-		switch {
-		case b[0] == '\n' || b[0] == '\r':
-			if tty || len(line) > 0 {
-				return strings.TrimSpace(string(line)), nil
-			}
-		case len(line) > 0 || tty || (b[0] != ' ' && b[0] != '\t'):
-			line = append(line, b[0])
+		if b[0] == '\n' || b[0] == '\r' {
+			return strings.TrimSpace(string(line)), nil
 		}
+		line = append(line, b[0])
 	}
 }
 

@@ -1049,6 +1049,16 @@ func TestInboxApprovesHumanReviews(t *testing.T) {
 		for m.item() < 0 || m.items[m.item()].Number != prA {
 			teaKeys(m, "j")
 		}
+		// Typing edits the line, Esc writes nothing, and Enter with no line is refused.
+		teaKeys(m, "2", "enter", "xy")
+		m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+		if m.ask == nil || m.ask.text != "x" {
+			t.Errorf("the answer after a backspace: %+v", m.ask)
+		}
+		teaKeys(m, "esc")
+		if m.ask != nil || m.status != "Not applied; nothing was written." {
+			t.Errorf("Esc on the answer: %+v %q", m.ask, m.status)
+		}
 		teaKeys(m, "2", "enter", "enter")
 		refused = ansi.Strip(m.View().Content)
 		g.Mu.Lock()
@@ -1067,10 +1077,15 @@ func TestInboxApprovesHumanReviews(t *testing.T) {
 		t.Fatalf("empty answer or moved head: exit %d\n%s\nstatus %q\nledger %q\n%s\n%s", code, refused, moved, approvals(), out, errOut)
 	}
 
-	// One plain session: past a Decision that is not ready, then the Decision, #A and #B, each with what was checked.
+	// Line by line, input that ends before the answer writes nothing.
 	device()
 	person.TUI = nil
-	code, out, errOut := runIn(t, marked, person, "s a 2 read the diff and the pack\n2 ran go test ./internal/report\nq", "inbox", "--plain", "--repo", "o/r")
+	if code, out, errOut := runIn(t, marked, person, "s s 2", "inbox", "--plain", "--repo", "o/r"); code != 0 || approvals() != "" || !strings.Contains(out, "What did you check?") {
+		t.Fatalf("an unanswered card: exit %d ledger %q\n%s\n%s", code, approvals(), out, errOut)
+	}
+	// One plain session: past a Decision that is not ready, then the Decision, #A (an empty answer first) and #B, each with what was checked.
+	device()
+	code, out, errOut := runIn(t, marked, person, "s a 2\n2 read the diff and the pack\n2 ran go test ./internal/report\nq", "inbox", "--plain", "--repo", "o/r")
 	g.Mu.Lock()
 	started, closed := g.Device.Started, g.Issues[decision.Number].State == "closed"
 	replies := 0
@@ -1083,7 +1098,7 @@ func TestInboxApprovesHumanReviews(t *testing.T) {
 	}
 	g.Mu.Unlock()
 	got := approvals()
-	if code != 0 || started != 1 || !closed || replies != 2 || strings.Count(got, "\n") != 2 ||
+	if code != 0 || started != 1 || !closed || replies != 2 || !strings.Contains(out, "not applied.") || strings.Count(got, "\n") != 2 ||
 		!strings.Contains(got, `{"pr":`+strconv.Itoa(prA)+`,"head":"`+headA+`","by":"lead"`) || !strings.Contains(got, `"reason":"read the diff and the pack"`) ||
 		!strings.Contains(got, `{"pr":`+strconv.Itoa(prB.Number)+`,"head":"`+headB+`","by":"lead"`) || !strings.Contains(got, `"reason":"ran go test ./internal/report"`) {
 		t.Fatalf("exit %d, device codes %d (want 1), decision closed %v, replies %d (want 2), ledger:\n%s\n%s\n%s", code, started, closed, replies, got, out, errOut)
