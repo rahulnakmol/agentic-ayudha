@@ -16,6 +16,7 @@ import (
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/actions"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/decide"
 	"github.com/rahulnakmol/agentic-ayudha/internal/github"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
@@ -782,19 +783,39 @@ func (r *scopeRun) acceptedDecision(ctx context.Context, d int) error {
 	if err != nil {
 		return Wrap(ExitExternal, err)
 	}
-	it, _ := workitems.Parse(d, is.GetTitle(), is.GetBody(), is.GetType().GetName(), github.IssueLabels(is))
-	accepted := strings.Contains(it.Fields["decision"], "accepted by @")
+	labels := github.IssueLabels(is)
+	it, _ := workitems.Parse(d, is.GetTitle(), is.GetBody(), is.GetType().GetName(), labels)
+	// The text is editable, so it is checked against who closed the issue,
+	// as decide --accept writes both (decide.Accepted, closeIssue).
+	m := acceptedByRE.FindStringSubmatch(it.Fields["decision"])
+	closer := is.GetClosedBy()
+	notAccepted := WithNext(Errorf(ExitBlocked, "scope: Decision #%d is not accepted by a person yet; a change over budget rests on a person's accepted Decision", d),
+		fmt.Sprintf("a person accepts it: aayu decide %d --accept <option>", d))
 	switch {
 	case it.Type != "decision":
 		return Errorf(ExitUsage, "scope: #%d is a %s, not a Decision", d, or(it.Type, "issue"))
-	case is.GetState() != "closed" || is.GetStateReason() != "completed" || !accepted:
-		return WithNext(Errorf(ExitBlocked, "scope: Decision #%d is not accepted yet; a change over budget rests on a person's accepted Decision", d),
-			fmt.Sprintf("a person accepts it: aayu decide %d --accept <option>", d))
+	case is.GetState() != "closed" || is.GetStateReason() != "completed" || m == nil:
+		return notAccepted
+	case closer == nil || !strings.EqualFold(closer.GetLogin(), m[1]) ||
+		identity.IsBot(identity.Account{Login: closer.GetLogin(), Type: closer.GetType()}, r.cfg.Identity.BotLogins):
+		return notAccepted
 	case !regexp.MustCompile(`#` + strconv.Itoa(r.n) + `\b`).MatchString(is.GetBody()):
 		return Errorf(ExitBlocked, "scope: Decision #%d does not name Release #%d; it must be about this release's scope", d, r.n)
 	}
+	parentType := ""
+	if p, _, err := r.c.REST.SubIssue.GetParentIssue(ctx, owner, name, int64(d)); err == nil {
+		parentType, _ = workitems.TypeOf(p.GetType().GetName(), github.IssueLabels(p))
+	} else if !github.NotFound(err) {
+		return Wrap(ExitExternal, err)
+	}
+	key, value := decide.Authority(r.cfg, decide.Decision{Labels: labels, ParentType: parentType})
+	if want := decide.Login(r.cfg, value); want != "" && !strings.EqualFold(closer.GetLogin(), want) {
+		return Errorf(ExitBlocked, "scope: Decision #%d was accepted by @%s, not its authority @%s (%s = %s)", d, closer.GetLogin(), want, key, value)
+	}
 	return nil
 }
+
+var acceptedByRE = regexp.MustCompile(`accepted by @([A-Za-z0-9-]+(?:\[bot\])?)`)
 
 // accept applies the waiting request as the person, after GitHub's device
 // flow, every time: never on a terminal's word alone (31278ca, #647). In
@@ -819,6 +840,7 @@ func (r *scopeRun) accept(ctx context.Context) error {
 	case "baseline":
 		hash := scope.Hash(r.intent, r.items)
 		if r.base != nil && r.base.Hash == q.Hash { // applied before; only its comment was not updated
+			effect = fmt.Sprintf("Closes the request on Release #%d: baseline %d of %s already holds the drafted plan; nothing else changes.", r.n, r.base.Baseline, r.version)
 			commit = func(string) (string, error) {
 				return fmt.Sprintf("baseline %d already holds this draft; request closed", r.base.Baseline), nil
 			}
@@ -865,26 +887,33 @@ func (r *scopeRun) accept(ctx context.Context) error {
 			return err
 		}
 		in := slices.ContainsFunc(r.items, func(x scope.Item) bool { return x.Number == q.Item })
-		if (q.Kind == "add") == in && r.drift != nil && r.drift.OverBudgetDecision == q.Decision { // applied before
-			effect = fmt.Sprintf("Closes the request to %s #%d on Release #%d, which was already applied on Decision #%d.", q.Kind, q.Item, r.n, q.Decision)
-			commit = func(string) (string, error) {
-				return fmt.Sprintf("%s #%d was already applied; request closed", q.Kind, q.Item), nil
+		// Applied before (a retry after a failed write): record it, never apply it twice.
+		applied := (q.Kind == "add") == in
+		switch {
+		case r.base == nil:
+			return Errorf(ExitBlocked, "scope: %s has no baseline; the request no longer applies", r.version)
+		case q.Kind == "add" && !applied && !slices.Contains(scope.Types, it.Type):
+			return Errorf(ExitBlocked, "scope: #%d is a %s now; a plan holds Initiatives, Features, Stories, and Bugs", q.Item, or(it.Type, "issue"))
+		case q.Kind == "add" && !applied && is.GetState() != "open":
+			return Errorf(ExitBlocked, "scope: #%d was closed while the request waited", q.Item)
+		case q.Kind == "add" && !applied && is.GetMilestone() != nil:
+			return Errorf(ExitBlocked, "scope: #%d was planned for %s while the request waited", q.Item, is.GetMilestone().GetTitle())
+		}
+		next := r.items
+		if !applied {
+			next = slices.DeleteFunc(slices.Clone(r.items), func(x scope.Item) bool { return x.Number == q.Item })
+			if q.Kind == "add" {
+				next = append(next, it)
 			}
-			break
-		}
-		if (q.Kind == "add") == in || r.base == nil {
-			return Errorf(ExitBlocked, "scope: the request to %s #%d no longer applies; the plan changed", q.Kind, q.Item)
-		}
-		next := slices.DeleteFunc(slices.Clone(r.items), func(x scope.Item) bool { return x.Number == q.Item })
-		if q.Kind == "add" {
-			next = append(next, it)
 		}
 		d := r.measure(next)
 		effect = fmt.Sprintf("Lets %s #%d %s %s, taking drift from baseline %d to %.1f%% against a %.1f%% budget, on Decision #%d.",
 			q.Kind, q.Item, map[string]string{"add": "into", "drop": "out of"}[q.Kind], r.version, d.Baseline, d.DriftPct, d.BudgetPct, q.Decision)
 		commit = func(login string) (string, error) {
-			if err := r.apply(ctx, q.Kind, it); err != nil {
-				return "", err
+			if !applied {
+				if err := r.apply(ctx, q.Kind, it); err != nil {
+					return "", err
+				}
 			}
 			if d.Over() {
 				d.OverBudgetDecision = q.Decision

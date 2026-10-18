@@ -171,8 +171,8 @@ func Problems(intent string, items []Item) []string {
 	if strings.TrimSpace(intent) == "" {
 		out = append(out, "the Release has no Summary: write the release's intent there first")
 	}
-	if len(items) == 0 {
-		out = append(out, "the plan is empty: add Features, Stories, and Bugs with --add")
+	if !slices.ContainsFunc(items, func(it Item) bool { return it.Type == "story" || it.Type == "bug" }) {
+		out = append(out, "the plan has no Story or Bug: add the work itself with --add, not only its Initiatives and Features")
 	}
 	children := map[int]bool{}
 	for _, it := range items {

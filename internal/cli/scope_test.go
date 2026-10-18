@@ -127,9 +127,17 @@ func TestScope(t *testing.T) {
 	if code, _, out := scopeRun(agent, "--drop", "3", "--decision", "7"); code != ExitBlocked || !strings.Contains(out, "Decision #7 is not accepted") {
 		t.Fatalf("--decision not accepted: exit %d: %s", code, out)
 	}
+	// The Decision's text is editable: a bot that closes it and writes "accepted by" accepts nothing.
 	g.Mu.Lock()
 	decision.State, decision.StateReason = "closed", "completed"
 	decision.Body = workitems.SetSection(decision.Body, "Decision", "Option 1, accepted by @founder on 2026-10-18.")
+	decision.ClosedBy = &fake.Account{Login: "aayudha-r[bot]", Type: "Bot"}
+	g.Mu.Unlock()
+	if code, _, out := scopeRun(agent, "--drop", "3", "--decision", "7"); code != ExitBlocked || !strings.Contains(out, "not accepted by a person") {
+		t.Fatalf("--decision closed by a bot: exit %d: %s", code, out)
+	}
+	g.Mu.Lock()
+	decision.ClosedBy = &fake.Account{Login: "founder", Type: "User"}
 	g.Mu.Unlock()
 	if code, rep, out := scopeRun(agent, "--drop", "3", "--decision", "7"); code != 0 || rep.Request == nil || rep.Request.Kind != "drop" || milestone(3) != "v0.3.0" {
 		t.Fatalf("--drop asks a person: exit %d: %s", code, out)
