@@ -95,6 +95,7 @@ func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
 	g.Mu.Lock()
 	drifted.Body += "\nOne more line after Ready."
 	claimed.Comments = append(claimed.Comments, &fake.Comment{ID: 901, Body: leaseBody("other@laptop", time.Now().Add(time.Hour))})
+	claimed.Labels = append(claimed.Labels, fake.Label{Name: LeaseLabel})
 	g.Mu.Unlock()
 	g.AddPR("Their PR", "Refs #11\n", "someone", "feat/x", strings.Repeat("a", 40), "dev")
 
@@ -108,17 +109,27 @@ func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
 	}
 	old := time.Now().Add(-time.Hour)
 	_ = os.Chtimes(lock, old, old)
-	code, res, pick, out := next(nil, "--next", "pick")
+	// #12 is Ready with a live lease: a claim another pick is still setting up.
+	// It holds the one slot, so this pick claims nothing.
+	if code, res, pick, out := next(nil, "--next", "pick"); code != 0 || res.Issue != 0 || len(pick.InFlight) != 1 || pick.InFlight[0].Story != claimed.Number ||
+		!strings.Contains(pick.Reason, "counting fresh claims") {
+		t.Fatalf("a fresh claim does not hold a slot: %d %s", code, out)
+	}
 	if _, err := os.Stat(lock); !os.IsNotExist(err) {
 		t.Fatalf("the pick kept its lock: %v", err)
 	}
+	g.Mu.Lock()
+	claimed.Labels = slices.DeleteFunc(claimed.Labels, func(l fake.Label) bool { return l.Name == "status:ready" })
+	claimed.Labels = append(claimed.Labels, fake.Label{Name: labelInProgress}) // its builder took it
+	g.Mu.Unlock()
+	code, res, pick, out := next(nil, "--next", "pick")
 	if code != 0 || res.Issue != older.Number || pick.Picked != older.Number || !res.Created {
 		t.Fatalf("first pick: want #%d, got %d %+v %s", older.Number, code, pick, out)
 	}
 	for _, want := range []struct {
 		n   int
 		why string
-	}{{drifted.Number, "body changed after Ready"}, {withPR.Number, "open pull request"}, {claimed.Number, "claimed by other@laptop"}} {
+	}{{drifted.Number, "body changed after Ready"}, {withPR.Number, "open pull request"}} {
 		if !hasLine(pick.Skipped, "#"+strconv.Itoa(want.n)+":", want.why) {
 			t.Fatalf("skipped %v lacks #%d (%s)", pick.Skipped, want.n, want.why)
 		}

@@ -85,7 +85,8 @@ agent loop, and the binary decides everything except the code:
    as **Ready to ship** in `aayu inbox`. The loop never passes `--solo-bypass` or `--admin` and never merges another way.
 2. `aayu build --next pick` first blocks each of the loop's claims whose lease ran out with no pull request
    (`status:blocked`, owner paged; it is not picked again until a person runs `aayu ready`). Then it counts what the
-   loop has in flight: its open pull requests and its live claims with no pull request yet. Under `[build] in_flight`
+   loop has in flight: its open pull requests, its live claims with no pull request yet, and any Ready item with a
+   live lease (a claim another pick is still setting up). Under `[build] in_flight`
    (default 1, so one item from claim to merge; 0 stops the picks) it claims the first item of the queue that is an
    open Story or Bug, `status:ready`, passes Ready with an undrifted snapshot, and has no open pull request and no
    live lease. The claim is build's own lease (the lock comment, `aayudha:leased`, the assignee) and

@@ -285,27 +285,6 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	if pick != nil {
 		st.Loop = BuildLoop
 	}
-	if res.Lease, err = e.takeLease(ctx, c, repo, n, leaseHolder(bot.Login), labels); err != nil {
-		return err
-	}
-	if pick != nil {
-		// Two runs that picked the same story both wrote a lock comment; the
-		// lease is the first one, so the run that does not hold it stops.
-		owner, name, _ := github.SplitRepo(repo)
-		if cur, err := readLease(ctx, c, owner, name, n); err != nil {
-			return Wrap(ExitExternal, err)
-		} else if cur != nil && cur.CommentID != res.Lease.CommentID {
-			return Errorf(ExitBlocked, "build --next: another run claimed #%d first (%s)", n, cur.Holder)
-		}
-	}
-	// A story being built is in progress (D-5.5c.17): build is the verb that
-	// moves it there from status:ready, and later runs accept either label.
-	if !contains(labels, labelInProgress) {
-		if err := setStatus(ctx, c, repo, n, labels, "in-progress"); err != nil {
-			return Wrap(ExitExternal, err)
-		}
-		labels = append(slices.DeleteFunc(labels, func(l string) bool { return strings.HasPrefix(l, "status:") }), labelInProgress)
-	}
 	b := l.Config.Autonomy.Budget
 	// A story's spend is capped by the lower of the build budget and the
 	// breaker's per-story limit, so a config that keeps a lower per_story_usd
@@ -318,12 +297,32 @@ func runBuild(ctx context.Context, e *Env, in Values) error {
 	if started, err := time.Parse(time.RFC3339, st.StartedAt); err == nil {
 		res.Budget.WallHours = now.Sub(started).Hours()
 	}
+	if res.Lease, err = e.takeLease(ctx, c, repo, n, leaseHolder(bot.Login), labels); err != nil {
+		return err
+	}
 	if pick != nil {
-		// The loop's claim is on the ledger before anything below can fail,
-		// so in_flight and the stale-claim sweep see it.
+		// Two runs that picked the same story both wrote a lock comment; the
+		// lease is the first one, so the run that does not hold it stops.
+		owner, name, _ := github.SplitRepo(repo)
+		if cur, err := readLease(ctx, c, owner, name, n); err != nil {
+			return Wrap(ExitExternal, err)
+		} else if cur != nil && cur.CommentID != res.Lease.CommentID {
+			return Errorf(ExitBlocked, "build --next: another run claimed #%d first (%s)", n, cur.Holder)
+		}
+		// The loop's claim reaches the ledger before its status changes or its
+		// worktree is cut: a later failure leaves a claim in_flight counts and,
+		// once its lease runs out, a Ready item the queue picks again.
 		if err := e.saveBuild(ctx, c, w, repo, n, &st, &res); err != nil {
 			return err
 		}
+	}
+	// A story being built is in progress (D-5.5c.17): build is the verb that
+	// moves it there from status:ready, and later runs accept either label.
+	if !contains(labels, labelInProgress) {
+		if err := setStatus(ctx, c, repo, n, labels, "in-progress"); err != nil {
+			return Wrap(ExitExternal, err)
+		}
+		labels = append(slices.DeleteFunc(labels, func(l string) bool { return strings.HasPrefix(l, "status:") }), labelInProgress)
 	}
 	block := func(why string) error { return e.blockBuild(ctx, c, w, repo, n, labels, &st, &res, why) }
 	switch {

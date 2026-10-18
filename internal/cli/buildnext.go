@@ -304,9 +304,6 @@ func (e *Env) pickNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 			continue
 		}
 		labels := github.IssueLabels(is)
-		if !contains(labels, labelInProgress) {
-			continue
-		}
 		lease, err := readLease(ctx, c, owner, name, st.Story)
 		if err != nil {
 			return nil, 0, Wrap(ExitExternal, err)
@@ -315,7 +312,7 @@ func (e *Env) pickNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 			p.InFlight = append(p.InFlight, LoopItem{Story: st.Story, Claim: lease.Holder + " until " + lease.Expires.UTC().Format(time.RFC3339)})
 			continue
 		}
-		if mode != "pick" {
+		if mode != "pick" || !contains(labels, labelInProgress) {
 			continue
 		}
 		// A stale claim: the loop's build went away before a pull request.
@@ -385,6 +382,27 @@ func (e *Env) pickNext(ctx context.Context, c *github.Client, w *ledger.Writer, 
 			}
 			return a.GetNumber() - b.GetNumber()
 		})
+	}
+	// A Ready item with a live lease is a claim another pick is still setting
+	// up (its state may not be on the ledger yet), or a person's build about
+	// to start: it holds a slot, so two picks never fill one.
+	for _, is := range queue {
+		n, labels := is.GetNumber(), github.IssueLabels(is)
+		if is.GetState() != "open" || !contains(labels, ready.LabelReady) || !contains(labels, LeaseLabel) ||
+			slices.ContainsFunc(p.InFlight, func(it LoopItem) bool { return it.Story == n }) {
+			continue
+		}
+		lease, err := readLease(ctx, c, owner, name, n)
+		if err != nil {
+			return nil, 0, Wrap(ExitExternal, err)
+		}
+		if lease != nil && lease.Expires.After(now) {
+			p.InFlight = append(p.InFlight, LoopItem{Story: n, Claim: lease.Holder + " until " + lease.Expires.UTC().Format(time.RFC3339)})
+		}
+	}
+	if len(p.InFlight) >= p.Limit {
+		p.Reason = fmt.Sprintf("%d of %d in flight, counting fresh claims on Ready items: nothing new until one merges or stops", len(p.InFlight), p.Limit)
+		return p, 0, nil
 	}
 	rd := &ready.Ready{GH: c, Repo: repo, TechnicalOwner: e.technicalOwner()}
 	skip := func(n int, why string) { p.Skipped = append(p.Skipped, fmt.Sprintf("#%d: %s", n, why)) }
