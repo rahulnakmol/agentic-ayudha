@@ -57,13 +57,16 @@ func GateRung(ctx context.Context, c *github.Client, owner, name string, n int, 
 				}
 				// A cached judgement comes from the state in a PR comment,
 				// which a workflow on a branch can also write as the gate's
-				// account: it proves nothing, so the review is the newest
-				// fresh judgement of this head, in an older run.
-				if h[2] != "" {
+				// account: a cached A or B proves nothing, so the review is
+				// the newest fresh judgement of this head, in an older run.
+				// A cached rung that does not count (a relabel to C after the
+				// builder's declaration changed) stands: it only lowers.
+				rung := m[1] + m[2] + m[3]
+				if h[2] != "" && Proven(rung) {
 					cached = true
 					break
 				}
-				return m[1] + m[2] + m[3]
+				return rung
 			}
 		}
 		if cached {

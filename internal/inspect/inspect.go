@@ -248,7 +248,11 @@ func review(ctx context.Context, r Reviewer, in Input) (Reply, float64, error) {
 // Run inspects in, given the state of earlier runs on this PR, with the
 // review lane's model (reviewer "model").
 func (r Runner) Run(ctx context.Context, in Input, prev State) (Result, State, error) {
-	res, st, err := r.begin(ctx, &in, prev, "")
+	// The model reads the PR's title and body too, so an edit of either is a
+	// new input: it salts the cache key, and the edited PR is reviewed again.
+	// The Aayudha-Host and Aayudha-Model lines are aayu's own metadata: a
+	// changed declaration relabels the cached review's rung instead.
+	res, st, err := r.begin(ctx, &in, prev, "pr\x00"+in.Title+"\x00"+strings.Join(strings.Fields(declLine.ReplaceAllString(in.Body, "")), " "))
 	if err != nil || res.Disposition == Skipped || res.Cached {
 		return res, st, err
 	}
@@ -667,6 +671,9 @@ func capText(s string, n int) string {
 	}
 	return s[:n] + fmt.Sprintf("\n… (%d more bytes not shown)", len(s)-n)
 }
+
+// declLine is a PR body's builder declaration line.
+var declLine = regexp.MustCompile(`(?mi)^\s*Aayudha-(Host|Model):.*$`)
 
 // Marker is the replace-in-place comment inspect keeps on the PR.
 const Marker = "<!-- aayudha:inspect -->"
