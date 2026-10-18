@@ -13,6 +13,8 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"testing/iotest"
@@ -851,11 +853,18 @@ func TestStreamPastAProxyIdleLimit(t *testing.T) {
 	plain := map[string]string{StyleChat: chatJSON, StyleResponses: respJSON}
 	const slow, limit = 400 * time.Millisecond, 150 * time.Millisecond
 	for _, style := range []string{StyleChat, StyleResponses} {
+		// Each request runs in its own server goroutine (and a 524'd one keeps sleeping),
+		// so what the handler shares with the test is guarded.
+		var mu sync.Mutex
 		var asked map[string]any
-		jsonOnly := false
+		var jsonOnly atomic.Bool
 		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			_ = json.NewDecoder(r.Body).Decode(&asked)
-			if asked["stream"] != true || jsonOnly {
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			mu.Lock()
+			asked = body
+			mu.Unlock()
+			if body["stream"] != true || jsonOnly.Load() {
 				time.Sleep(slow) // a long generation, silent until done
 				w.Header().Set("Content-Type", "application/json")
 				_, _ = io.WriteString(w, plain[style])
@@ -912,10 +921,13 @@ func TestStreamPastAProxyIdleLimit(t *testing.T) {
 		if err != nil || got.Text != want.Text || got.Text != reply || got.TokensIn != want.TokensIn || got.TokensOut != want.TokensOut || got.Model != want.Model || got.StopReason != want.StopReason || got.ServiceTier != "priority" || want.ServiceTier != "priority" {
 			t.Errorf("%s: streamed %+v %v, want %+v", style, got, err, want)
 		}
-		if style == StyleChat && asked["stream_options"] == nil {
-			t.Errorf("chat: the request did not ask for the usage chunk: %v", asked)
+		mu.Lock()
+		last := asked
+		mu.Unlock()
+		if style == StyleChat && last["stream_options"] == nil {
+			t.Errorf("chat: the request did not ask for the usage chunk: %v", last)
 		}
-		jsonOnly = true // an endpoint that ignores stream: the JSON still decodes
+		jsonOnly.Store(true) // an endpoint that ignores stream: the JSON still decodes
 		if got, err := direct.Complete(ctx, req); err != nil || got.Text != reply {
 			t.Errorf("%s: a JSON answer to a streamed request: %+v %v", style, got, err)
 		}
