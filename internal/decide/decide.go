@@ -309,11 +309,7 @@ func Options(it workitems.Item) ([]workitems.Option, int) {
 		}
 	}
 	if rec < 0 {
-		for i, o := range os {
-			if MatchOption(r, o.Name) && (rec < 0 || len(o.Name) > len(os[rec].Name)) {
-				rec = i
-			}
-		}
+		rec = workitems.NamedOption(os, r) // -1 when it names none, or more than one
 	}
 	for i := range os { // one recommendation, even where a draft marks two
 		os[i].Recommended = i == rec
