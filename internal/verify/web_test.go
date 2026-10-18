@@ -160,6 +160,14 @@ func TestWebFloorsWithBrowser(t *testing.T) {
 	if !rep.Hold || !slices.ContainsFunc(rep.Artifacts, func(e Evidence) bool { return e.Path == "screens/1.png" && slices.Equal(e.Criteria, []int{1}) }) {
 		t.Fatalf("clean page: hold %t, artifacts %v", rep.Hold, paths(rep.Artifacts))
 	}
+	// A capture is marked OCR-scanned (and so may leave the run) only when
+	// tesseract read it.
+	_, lookErr := exec.LookPath("tesseract")
+	for _, e := range rep.Artifacts {
+		if e.Kind == "screenshot" && e.OCRScanned != (lookErr == nil) {
+			t.Errorf("%s: OCRScanned %t with tesseract installed %t", e.Path, e.OCRScanned, lookErr == nil)
+		}
+	}
 
 	// A page whose own Content Security Policy forbids injected scripts is still checked by axe.
 	if c := checkOf(Execute(ctx, browserRun(t, app, "/strict-csp"), []Floor{A11y{}}), "a11y"); c.Result != proof.Pass {

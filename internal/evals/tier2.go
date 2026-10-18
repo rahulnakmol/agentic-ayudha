@@ -2,12 +2,14 @@ package evals
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"maps"
+	"math/big"
 	"net"
 	"os"
 	"path"
@@ -89,10 +91,11 @@ type CallLog struct {
 	TokensOut  int    `json:"tokens_out"`
 	// CachedIn and CacheWriteIn are the parts of TokensIn read from and
 	// written to the provider's prompt cache.
-	CachedIn     int    `json:"cached_in,omitempty"`
-	CacheWriteIn int    `json:"cache_write_in,omitempty"`
-	MaxTokens    int    `json:"max_tokens"`
-	Error        string `json:"error,omitempty"`
+	CachedIn     int     `json:"cached_in,omitempty"`
+	CacheWriteIn int     `json:"cache_write_in,omitempty"`
+	MaxTokens    int     `json:"max_tokens"`
+	Error        string  `json:"error,omitempty"`
+	CostUSD      float64 `json:"cost_usd"` // this attempt; each retry's cost is on the retry
 	// Retries are the provider faults the call was retried after (WP5.8,
 	// D-3.4o, D-3.4r, D-3.4y), each with what it cost: the provider's error,
 	// never the skill's, so it does not cost the run its one allowed error.
@@ -252,8 +255,10 @@ func (h *Harness) complete(lane verbs.LaneID, role string, log *[]CallLog) func(
 	return func(ctx context.Context, req models.Request) (models.Response, error) {
 		resp, err := h.call(ctx, h.Gateway, lane, role, req, log)
 		var se *models.StatusError
-		if role == "skill" && h.fallback != "" && errors.As(err, &se) {
-			// The lane's default model could not be called: use its registry alternative.
+		var st *models.StreamError
+		if role == "skill" && h.fallback != "" && (errors.As(err, &se) || errors.As(err, &st) && (st.Type == "api_error" || st.Type == "overloaded_error")) {
+			// The lane's default model could not be called, or its stream kept
+			// failing on the provider's side: use its registry alternative.
 			resp, err = h.call(ctx, h.withModel(lane, h.fallback), lane, role, req, log)
 		}
 		return resp, err
@@ -285,10 +290,11 @@ func (h *Harness) call(ctx context.Context, gw *models.Gateway, lane verbs.LaneI
 		h.charge(usd)
 		retries = append(retries, Retry{Fault: fault, Model: m.Model, TokensIn: resp.TokensIn, TokensOut: resp.TokensOut, CostUSD: usd})
 		if wait := providerWait(err, len(retries)); wait > 0 {
-			select {
-			case <-ctx.Done():
-				return models.Response{}, ctx.Err()
-			case <-time.After(wait):
+			if perr := pause(ctx, wait); perr != nil {
+				// Cancelled while backing off: the attempts so far are charged,
+				// so the call is still logged with them.
+				resp, err = models.Response{}, perr
+				break
 			}
 		}
 		resp, m, err = gw.Do(ctx, c)
@@ -304,7 +310,7 @@ func (h *Harness) call(ctx context.Context, gw *models.Gateway, lane verbs.LaneI
 		h.mu.Unlock()
 	}
 	l := CallLog{Role: role, Model: m.Model, StopReason: resp.StopReason, Truncated: resp.Truncated,
-		TokensIn: resp.TokensIn, TokensOut: resp.TokensOut, CachedIn: resp.CachedIn, CacheWriteIn: resp.CacheWriteIn, MaxTokens: req.MaxTokens, Retries: retries}
+		TokensIn: resp.TokensIn, TokensOut: resp.TokensOut, CachedIn: resp.CachedIn, CacheWriteIn: resp.CacheWriteIn, MaxTokens: req.MaxTokens, CostUSD: usd, Retries: retries}
 	if err != nil {
 		l.Error = clip(actions.RedactString(err.Error()), 200)
 	}
@@ -323,8 +329,31 @@ func (h *Harness) charge(usd float64) {
 // before, so an outage cannot spend a group's budget (D-3.4y).
 const ProviderRetries = 2
 
-// rateLimitWait is the pause before retrying a 429, times the retry's number.
-var rateLimitWait = 10 * time.Second
+// retryWait is the pause before the nth retry of a 429 or a server error:
+// n times its base, plus up to half again at random, so the retries of
+// parallel runs spread over a gateway outage instead of failing together.
+func retryWait(n int, base time.Duration) time.Duration {
+	d := time.Duration(n) * base
+	j, err := rand.Int(rand.Reader, big.NewInt(int64(d/2)+1))
+	if err != nil {
+		return d
+	}
+	return d + time.Duration(j.Int64())
+}
+
+// maxRetryWait caps one retry's pause, Retry-After included: the gateway's
+// outages while it swaps its binary lasted 40 s to 2 minutes.
+const maxRetryWait = 2 * time.Minute
+
+// pause waits d, or until ctx is done.
+var pause = func(ctx context.Context, d time.Duration) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(d):
+		return nil
+	}
+}
 
 func runRetries(log []CallLog) int {
 	n := 0
@@ -341,8 +370,8 @@ func runRetries(log []CallLog) int {
 // fault of the request or of the reply itself (another 4xx, a long reply at the
 // cap, malformed JSON), which stay the run's.
 func providerFault(ctx context.Context, resp models.Response, err error) string {
-	if ctx.Err() != nil {
-		return ""
+	if ctx.Err() != nil || errors.Is(err, models.ErrBudget) {
+		return "" // a tripped breaker refuses every retry
 	}
 	var se *models.StatusError
 	var st *models.StreamError
@@ -362,12 +391,27 @@ func providerFault(ctx context.Context, resp models.Response, err error) string 
 	return ""
 }
 
+// providerWait is the pause before the nth retry: a 429 waits about 10 s a
+// retry, a 5xx or a stream server error about 30 s (so the two retries span
+// 90-135 s of a gateway outage), with jitter (retryWait), or the reply's
+// Retry-After when that is longer, up to maxRetryWait. A drop, a stall
+// (already minutes long), and a looping reply retry at once.
 func providerWait(err error, n int) time.Duration {
 	var se *models.StatusError
-	if errors.As(err, &se) && se.Code == 429 {
-		return time.Duration(n) * rateLimitWait
+	var st *models.StreamError
+	var d time.Duration
+	switch {
+	case errors.As(err, &se) && se.Code == 429:
+		d = retryWait(n, 10*time.Second)
+	case errors.As(err, &se) && se.Code >= 500, errors.As(err, &st):
+		d = retryWait(n, 30*time.Second)
+	default:
+		return 0
 	}
-	return 0
+	if se != nil {
+		d = max(d, se.RetryAfter)
+	}
+	return min(d, maxRetryWait)
 }
 
 // repeating returns the unit a reply ends on when its last 2000 characters
@@ -523,9 +567,10 @@ func (h *Harness) Tier2(ctx context.Context, cases []Case, sha, ref string, now 
 				budgetErr = err
 			}
 			if err != nil {
-				calls := run.Calls
-				run = errorRun(err)
-				run.Calls = calls
+				// An error in a later call (a judge, a revision) keeps what the run already produced, its
+				// draft, floor findings, and first-draft scores, and every call it paid for.
+				e := errorRun(err)
+				run.Status, run.Score, run.Pass, run.Error, run.Excerpt = e.Status, 0, false, e.Error, e.Excerpt
 			}
 			cr.Runs = append(cr.Runs, run)
 		}
@@ -585,6 +630,9 @@ func (h *Harness) run(ctx context.Context, c Case, lane verbs.LaneID, body, inpu
 		System:    body + "\n\nReply with the work item you produce as JSON: {type, title, fields, labels, parent, open_questions}.",
 		Messages:  []models.Message{{Role: "user", Content: untrusted("eval-input", input)}},
 		MaxTokens: h.Config.MaxTokens.Skill,
+		// Every skill call streams: a long reply sends no bytes for minutes
+		// unstreamed, and the gateway's proxy closes it with a 524 at 100 s.
+		Stream: true,
 	}
 	if err := models.Structured(ctx, h.complete(lane, "skill", &calls), req, itemSchema, &d); err != nil {
 		var re *models.ReplyError
@@ -606,7 +654,11 @@ func (h *Harness) run(ctx context.Context, c Case, lane verbs.LaneID, body, inpu
 		return Run{Status: RunFail, Score: 1, Floor: "out of scope: " + strings.Join(bad, "; ")}, nil
 	}
 	out, _ := json.MarshalIndent(it, "", "  ")
-	return h.judge(ctx, input, rubric, string(out), d.OpenQuestions, &calls)
+	judged, err := h.judge(ctx, input, rubric, string(out), d.OpenQuestions, &calls)
+	if err != nil {
+		return Run{Answer: answerOf(string(out))}, err // the work item outlives a failed judge
+	}
+	return judged, nil
 }
 
 // judge has the pinned judge score a skill's output against the rubric.
@@ -791,7 +843,7 @@ func (h *Harness) runConversation(ctx context.Context, c Case, lane verbs.LaneID
 	var last Turn
 	for round := 1; ; round++ {
 		var t Turn
-		req := models.Request{System: body + "\n\n" + conversationProtocol, Messages: msgs, MaxTokens: h.Config.MaxTokens.Skill}
+		req := models.Request{System: body + "\n\n" + conversationProtocol, Messages: msgs, MaxTokens: h.Config.MaxTokens.Skill, Stream: true}
 		if err := models.Structured(ctx, h.complete(lane, "skill", &calls), req, schema, &t); err != nil {
 			var re *models.ReplyError
 			if errors.As(err, &re) && !re.Parse && !re.Truncated {

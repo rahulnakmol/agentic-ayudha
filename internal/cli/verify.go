@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -20,6 +21,7 @@ import (
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
 	"github.com/rahulnakmol/agentic-ayudha/internal/ui"
+	"github.com/rahulnakmol/agentic-ayudha/internal/uireview"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verify"
 	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
@@ -56,6 +58,85 @@ type VerifyResult struct {
 	RetentionDays int `json:"retention_days,omitempty"`
 	// Artifacts is where a preview without a pack keeps the floors' artifacts.
 	Artifacts string `json:"artifacts_dir,omitempty"`
+	// ScreenshotReview is the advisory model look at the run's screenshots.
+	// It is never a floor: Hold and the merge gate ignore it.
+	ScreenshotReview *ScreenshotReview `json:"screenshot_review,omitempty"`
+}
+
+// ScreenshotReview is verify's advisory judgement of its screenshots by the
+// ui-review lane, through the same reviewer as `aayu review`'s lane A (k
+// runs, findings that Agree runs report). It goes into the pack as
+// reports/screenshot-review.json, labelled with the model and effort.
+type ScreenshotReview struct {
+	Advisory    bool               `json:"advisory"` // always true: never a floor (ground rule 7)
+	Model       string             `json:"model,omitempty"`
+	Effort      string             `json:"effort,omitempty"`
+	Disposition string             `json:"disposition,omitempty"`
+	Findings    []uireview.Finding `json:"findings,omitempty"`
+	Skipped     string             `json:"skipped,omitempty"` // why no judgement was made
+}
+
+// screenshotReview runs the ui-review lane on the web floor's screenshots
+// (screens/N.png) whose pixels its redaction pass read with OCR and found
+// free of personal data (OCRScanned); no other screenshot is sent to a model.
+// The findings go on the ledger as a report, so they get the same PII scan:
+// if it matches, none is kept.
+// builderModel is the head's Aayudha-Model trailer, for the family check. Any
+// failure (no model key, a family clash, a gateway error) is recorded as
+// skipped: the judgement is advisory and never stops verify.
+func (e *Env) screenshotReview(ctx context.Context, arts []verify.Evidence, story int, builderModel string) *ScreenshotReview {
+	var shots []verify.Evidence
+	unscanned := 0
+	for _, a := range arts {
+		switch {
+		case a.Kind != "screenshot" || !strings.HasPrefix(a.Path, "screens/"): // a behaviour control's are never eligible
+		case a.OCRScanned:
+			shots = append(shots, a)
+		default:
+			unscanned++
+		}
+	}
+	if len(shots)+unscanned == 0 {
+		return nil
+	}
+	sr := &ScreenshotReview{Advisory: true}
+	if len(shots) == 0 {
+		sr.Skipped = fmt.Sprintf("no screenshot passed the OCR redaction scan (%d not scanned; is tesseract installed?)", unscanned)
+		return sr
+	}
+	rv, err := e.reviewer(ctx, nil, story, false, builderModel)
+	if err != nil {
+		sr.Skipped = err.Error()
+		return sr
+	}
+	sr.Model, sr.Effort = rv.Model, rv.Effort
+	dir, err := os.MkdirTemp("", "aayudha-verify-shots-")
+	if err != nil {
+		sr.Skipped = err.Error()
+		return sr
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+	var caps []uireview.Capture
+	for i, a := range shots {
+		f := filepath.Join(dir, fmt.Sprintf("%d.png", i))
+		if err := os.WriteFile(f, a.Data, 0o600); err != nil {
+			sr.Skipped = err.Error()
+			return sr
+		}
+		caps = append(caps, uireview.Capture{ID: a.Path, URL: a.Path, Rest: f})
+	}
+	l, err := uireview.LaneA(ctx, rv.Complete, caps, rv.K, rv.MinTargetPx, rv.Effort, rv.Model)
+	if err != nil {
+		sr.Skipped = err.Error()
+		return sr
+	}
+	b, _ := json.Marshal(l.Findings)
+	if pii := verify.ScanPII(string(b)); len(pii) > 0 {
+		sr.Skipped = "the model's findings quoted personal data, so none is kept: " + strings.Join(pii, "; ")
+		return sr
+	}
+	sr.Disposition, sr.Findings = l.Disposition, l.Findings
+	return sr
 }
 
 // writeArtifacts replaces dir with the artifacts, by their pack paths.
@@ -304,6 +385,17 @@ func runVerify(ctx context.Context, e *Env, in Values) error {
 	}
 	rep.Artifacts = append(rep.Artifacts, ev...)
 	res.Checks, res.Hold, res.Problems = rep.Checks, rep.Hold, problems
+	// The advisory screenshot judgement, after Hold is settled: it is
+	// recorded in the pack and never changes the verdict (ground rule 7).
+	builderModel := ""
+	if m := modelTrailer.FindStringSubmatch(msg); m != nil {
+		builderModel = m[1]
+	}
+	if sr := e.screenshotReview(ctx, rep.Artifacts, res.Story, builderModel); sr != nil {
+		res.ScreenshotReview = sr
+		b, _ := json.MarshalIndent(sr, "", "  ")
+		rep.Artifacts = append(rep.Artifacts, verify.Evidence{Path: "reports/screenshot-review.json", Kind: "report", Data: b})
+	}
 
 	if res.Story > 0 && !res.NoSnapshot {
 		ident := identity.KindHumanFallback
@@ -525,6 +617,16 @@ func renderVerify(w io.Writer, res VerifyResult) error {
 	}
 	for _, g := range res.Gate {
 		fmt.Fprintf(w, "  merge gate: %s\n", g)
+	}
+	if sr := res.ScreenshotReview; sr != nil {
+		if sr.Skipped != "" {
+			fmt.Fprintf(w, "  screenshot review (advisory): skipped: %s\n", sr.Skipped)
+		} else {
+			fmt.Fprintf(w, "  screenshot review (advisory, %s at %s effort, not a floor): %s, %d finding(s)\n", sr.Model, sr.Effort, sr.Disposition, len(sr.Findings))
+			for _, f := range sr.Findings {
+				fmt.Fprintf(w, "    %s %s (severity %d): %s\n", f.State, f.Kind, f.Severity, f.Summary)
+			}
+		}
 	}
 	switch {
 	case res.Pack != "":

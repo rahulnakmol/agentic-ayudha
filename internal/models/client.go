@@ -3,6 +3,7 @@ package models
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -11,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -247,17 +249,19 @@ func (c HTTPClient) Complete(ctx context.Context, r Request) (Response, error) {
 		return c.Complete(ctx, r)
 	}
 	if resp.StatusCode/100 != 2 {
-		return Response{}, &StatusError{Code: resp.StatusCode, Body: truncate(string(raw), 300)}
+		return Response{}, &StatusError{Code: resp.StatusCode, Body: truncate(string(raw), 300), RetryAfter: retryAfter(resp.Header.Get("Retry-After"), time.Now())}
 	}
 	return decode(c.Style, raw)
 }
 
 // decodeMessagesStream reads an Anthropic Messages event stream: the text
 // deltas in order, the stop reason, and the usage from message_start and
-// message_delta. An error event is an error.
+// message_delta. An error event is an error, and so is a stream cut off
+// before message_stop; both come back with the usage so far.
 func decodeMessagesStream(body io.Reader) (Response, error) {
 	var r Response
 	var sb strings.Builder
+	var stopped bool
 	sc := bufio.NewScanner(body)
 	sc.Buffer(make([]byte, 64<<10), 8<<20)
 	for sc.Scan() {
@@ -283,7 +287,12 @@ func decodeMessagesStream(body io.Reader) (Response, error) {
 			} `json:"error"`
 		}
 		if err := json.Unmarshal([]byte(strings.TrimSpace(data)), &ev); err != nil {
-			return Response{}, fmt.Errorf("decode messages stream: %w", err)
+			if !sc.Scan() {
+				// The stream was cut inside this event: report the read
+				// error (a dropped connection), not the partial line.
+				return r, fmt.Errorf("read messages stream: %w", cmp.Or(sc.Err(), io.ErrUnexpectedEOF))
+			}
+			return r, fmt.Errorf("decode messages stream: %w", err)
 		}
 		switch ev.Type {
 		case "message_start":
@@ -306,12 +315,21 @@ func decodeMessagesStream(body io.Reader) (Response, error) {
 			if ev.Usage.Cost != nil {
 				r.CostUSD = *ev.Usage.Cost
 			}
+		case "message_stop":
+			stopped = true
 		case "error":
-			return Response{}, &StreamError{Type: ev.Error.Type, Message: truncate(ev.Error.Message, 300)}
+			// The usage so far comes back with the error: the attempt may be
+			// billed, so a caller charges and records it.
+			return r, &StreamError{Type: ev.Error.Type, Message: truncate(ev.Error.Message, 300)}
 		}
 	}
 	if err := sc.Err(); err != nil {
-		return Response{}, fmt.Errorf("read messages stream: %w", err)
+		return r, fmt.Errorf("read messages stream: %w", err)
+	}
+	if !stopped {
+		// The stream ended between events, before message_stop: what arrived
+		// is a prefix of the reply, not the reply.
+		return r, fmt.Errorf("read messages stream: no message_stop: %w", io.ErrUnexpectedEOF)
 	}
 	r.Text = sb.String()
 	if r.Text == "" {
@@ -320,7 +338,6 @@ func decodeMessagesStream(body io.Reader) (Response, error) {
 	return r, nil
 }
 
-// StatusError is a non-2xx reply.
 // StreamError is an error event inside a streamed Messages reply, after the
 // endpoint answered 200: its Type is the provider's (api_error, overloaded_error,
 // invalid_request_error, ...).
@@ -333,9 +350,27 @@ func (e *StreamError) Error() string {
 	return fmt.Sprintf("messages stream error: %s: %s", e.Type, e.Message)
 }
 
+// StatusError is a non-2xx reply.
 type StatusError struct {
 	Code int
 	Body string
+	// RetryAfter is the reply's Retry-After header (seconds or an HTTP date),
+	// 0 when it has none.
+	RetryAfter time.Duration
+}
+
+// retryAfter parses a Retry-After header value at now.
+func retryAfter(v string, now time.Time) time.Duration {
+	if v == "" {
+		return 0
+	}
+	if s, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
+		return max(time.Duration(s)*time.Second, 0)
+	}
+	if t, err := http.ParseTime(v); err == nil {
+		return max(t.Sub(now), 0)
+	}
+	return 0
 }
 
 func (e *StatusError) Error() string {

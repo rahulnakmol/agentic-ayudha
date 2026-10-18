@@ -125,10 +125,11 @@ func (h *Harness) runTell(ctx context.Context, c Case, lane verbs.LaneID, body, 
 		Messages: []models.Message{{Role: "user", Content: untrusted("aayu tell "+c.Tell.Kind, brief) + "\n\n" + untrusted(design.BrandPath, string(brand)) +
 			"\n\n" + untrusted("grounding", input) + "\n\n" + task}},
 		MaxTokens: h.Config.MaxTokens.Skill,
+		Stream:    true,
 	}
 	draft, problems, first, err := reviseOnce(ctx, h.complete(lane, "skill", &calls), req, func(d string) []string { return checkTell(c, g, b, u, d) })
 	if err != nil {
-		return Run{}, err
+		return Run{Revised: len(first) > 0, RevisedFor: revisedFor(first), Answer: answerOf(draft)}, err
 	}
 	run.Revised, run.RevisedFor = len(first) > 0, revisedFor(first)
 	if len(problems) > 0 {
@@ -139,7 +140,7 @@ func (h *Harness) runTell(ctx context.Context, c Case, lane verbs.LaneID, body, 
 	judged, err := h.judge(ctx, "## Task\n\nWrite `"+c.Tell.Kind+"` copy. "+task+"\n\n## `aayu tell "+c.Tell.Kind+"` (the brief)\n\n"+brief+
 		"\n\n## "+design.BrandPath+"\n\n"+string(brand)+"\n\n## Grounding (the only source)\n\n"+input+"\n\n## Checks\n\n"+checks+".", rubric, draft, nil, &calls)
 	if err != nil {
-		return Run{}, err
+		return Run{Revised: run.Revised, RevisedFor: run.RevisedFor, Answer: answerOf(draft)}, err
 	}
 	judged.Revised, judged.RevisedFor = run.Revised, run.RevisedFor
 	judged.Answer = answerOf(draft)

@@ -243,24 +243,20 @@ func (g *Gateway) Do(ctx context.Context, c Call) (Response, Resolved, error) {
 			return actions.Outcome{}, fmt.Errorf("model key %q: %w", route.Secret, err)
 		}
 		client := g.client(route, key)
+		// A failed call can still have used tokens (a stream that errored after
+		// message_start returns its usage so far): record and charge them.
 		resp, err = client.Complete(ctx, req)
-		if err != nil {
-			return actions.Outcome{}, err
-		}
 		var source string
 		usd, source = Cost(g.Models.Prices, m.Model, resp)
 		return actions.Outcome{TokensIn: resp.TokensIn, TokensOut: resp.TokensOut, CostUSD: usd, Attempts: 1,
-			Result: map[string]any{"cost_source": source, "model": resp.Model}}, nil
+			Result: map[string]any{"cost_source": source, "model": resp.Model}}, err
 	})
-	if err != nil {
-		return resp, m, err
-	}
-	if g.Breaker != nil && !g.Actions.DryRun() {
-		if err := g.Breaker.Add(ctx, c.Story, usd); err != nil {
-			return resp, m, err
+	if g.Breaker != nil && !g.Actions.DryRun() && (err == nil || usd > 0) {
+		if berr := g.Breaker.Add(ctx, c.Story, usd); berr != nil {
+			return resp, m, errors.Join(err, berr)
 		}
 	}
-	return resp, m, nil
+	return resp, m, err
 }
 
 // WithModel is the gateway with lane on host pinned to model, for a call the

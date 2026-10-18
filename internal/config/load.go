@@ -111,6 +111,14 @@ func Load(src Sources) (*Loaded, error) {
 			errs = append(errs, fmt.Errorf("%s: [fleet] is user-level only; move it to the user config", source))
 			return
 		}
+		// Where model keys are sent is the person's choice, never the
+		// checkout's: a PR's .aayudha/config.toml (or a committed
+		// config.local.toml) could otherwise point the gateway at its own
+		// server and name any local secret as the Bearer key.
+		if (name == LayerRepo || name == LayerLocal) && (k.Exists("models.gateway.base_url") || k.Exists("models.gateway.secret")) {
+			errs = append(errs, fmt.Errorf("%s: [models.gateway] base_url and secret are read only from the user config, AAYU_MODELS__GATEWAY__* variables, or --set, never from the checkout", source))
+			return
+		}
 		// Like [autonomy], the solo window is the protected repository
 		// config's alone (Story #432): no person's or agent's own layer sets it.
 		if name != LayerDefault && name != LayerRepo && k.Exists("decisions.solo_provisional_after_hours") {

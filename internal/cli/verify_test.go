@@ -1,7 +1,10 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -9,7 +12,10 @@ import (
 	"testing"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
+	"github.com/rahulnakmol/agentic-ayudha/internal/models"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
+	"github.com/rahulnakmol/agentic-ayudha/internal/uireview"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 	"github.com/rahulnakmol/agentic-ayudha/internal/verify"
 )
 
@@ -352,5 +358,75 @@ func TestVerifyMaintainHandoff(t *testing.T) {
 	}
 	if n != 1 {
 		t.Errorf("%d tracking issues, want 1", n)
+	}
+}
+
+// TestVerifyScreenshotReview: verify's screenshot judgement goes through the
+// ui-review lane at its high effort, through the same reviewer as `aayu
+// review`'s lane A, and is labelled advisory with the model and effort. A
+// gateway failure is recorded as skipped rather than stopping verify.
+func TestVerifyScreenshotReview(t *testing.T) {
+	dir := t.TempDir()
+	fakeModel := &models.Fake{Replies: []models.Response{laneAReply("contrast"), laneAReply("contrast"), laneAReply()}}
+	newE := func(client models.Client) *Env {
+		e, err := newEnv(IO{In: strings.NewReader(""), Out: io.Discard, Err: io.Discard}, Options{Dir: dir,
+			Getenv: func(k string) string {
+				return map[string]string{"HOME": dir, "XDG_STATE_HOME": dir, "AAYU_SECRET_GOOGLE": "k"}[k]
+			},
+			GHToken:     func(context.Context) (string, error) { return "", os.ErrNotExist },
+			ModelClient: func(models.Route, string) models.Client { return client }})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return e
+	}
+	png := []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR")
+	arts := []verify.Evidence{{Path: "screens/1.png", Kind: "screenshot", Data: png, OCRScanned: true}, {Path: "reports/a11y.json", Kind: "report", Data: []byte("{}")}}
+	sr := newE(fakeModel).screenshotReview(context.Background(), arts, 0, "")
+	if sr == nil || !sr.Advisory || sr.Skipped != "" || sr.Model != verbs.ModelGemini || sr.Effort != "high" || len(sr.Findings) != 1 || sr.Findings[0].Kind != "contrast" {
+		t.Fatalf("screenshot review: %+v", sr)
+	}
+	if len(fakeModel.Requests) != uireview.K {
+		t.Fatalf("%d lane A calls, want %d", len(fakeModel.Requests), uireview.K)
+	}
+	// One image, and a prompt that says it is the only input (no focused
+	// screenshot, markup, or tree to judge focus or labels from).
+	if r := fakeModel.Requests[0]; r.Effort != "high" || r.Model != verbs.ModelGemini || len(r.Messages[0].Images) != 1 ||
+		!strings.Contains(r.System, "no markup") || strings.Contains(r.Messages[0].Content, "<untrusted") {
+		t.Fatalf("lane A request: model %s, effort %q, %d images, system %q", r.Model, r.Effort, len(r.Messages[0].Images), r.System)
+	}
+	broken := &models.Fake{Err: errors.New("gateway down")}
+	if sr := newE(broken).screenshotReview(context.Background(), arts, 0, ""); sr == nil || !sr.Advisory || sr.Skipped == "" {
+		t.Fatalf("a failing gateway: %+v", sr)
+	}
+	if sr := newE(fakeModel).screenshotReview(context.Background(), arts[1:], 0, ""); sr != nil {
+		t.Fatalf("no screenshots: %+v", sr)
+	}
+	// A storyless run is charged to the day, not to a synthetic story #0.
+	e := newE(fakeModel)
+	log, err := os.ReadFile(e.ActionsPath())
+	if err != nil || !strings.Contains(string(log), `"kind":"model.call"`) || strings.Contains(string(log), `"story":`) {
+		t.Fatalf("storyless model calls carry a story key (%v):\n%s", err, log)
+	}
+	// A Google-built head gets no Google review (reviewer ≠ builder), and a
+	// screenshot the redaction pass did not read with OCR (a behaviour
+	// control's, or any when tesseract is missing) is never sent to the model.
+	calls := len(fakeModel.Requests)
+	if sr := e.screenshotReview(context.Background(), arts, 0, verbs.ModelGemini); sr == nil || !strings.Contains(sr.Skipped, "google") {
+		t.Fatalf("Google builder: %+v", sr)
+	}
+	unscanned := []verify.Evidence{{Path: "screens/2.png", Kind: "screenshot", Data: png}, {Path: "behaviour/f/c/shot.png", Kind: "screenshot", Data: png}}
+	if sr := e.screenshotReview(context.Background(), unscanned, 0, ""); sr == nil || !strings.Contains(sr.Skipped, "OCR") || len(fakeModel.Requests) != calls {
+		t.Fatalf("unscanned screenshots: %+v, %d calls", sr, len(fakeModel.Requests)-calls)
+	}
+	if sr := e.screenshotReview(context.Background(), unscanned[1:], 0, ""); sr != nil {
+		t.Fatalf("a behaviour control's screenshot alone: %+v", sr)
+	}
+	// Findings that quote personal data from the page are not kept: the
+	// report goes on the ledger.
+	leak := models.Response{Text: `{"findings":[{"kind":"contrast","heuristic":4,"severity":3,"element":"jane.doe@acme.io","summary":"low contrast","fix":"darken"}],"nielsen":[0,0,0,0,0,0,0,0,0,0],"personas":[],"rebuild":false}`}
+	leaky := &models.Fake{Replies: []models.Response{leak, leak, leak}}
+	if sr := newE(leaky).screenshotReview(context.Background(), arts, 0, ""); sr == nil || len(sr.Findings) != 0 || !strings.Contains(sr.Skipped, "personal data") || strings.Contains(sr.Skipped, "jane.doe@acme.io") {
+		t.Fatalf("findings quoting personal data: %+v", sr)
 	}
 }
