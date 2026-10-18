@@ -77,7 +77,9 @@ func BuilderOf(rec Records, commits, claims, hosts []string, lane verbs.Family) 
 		}
 	}
 	covered := rec.Receiver != "" && rec.Delegated != "" || len(commits) > 0 && named == len(commits)
-	agrees := !managed && len(unplaced) == 0 && len(recorded) == 1 && !slices.ContainsFunc(claimed, func(f verbs.Family) bool { return f != recorded[0] })
+	// A host that picked a model no declaration names may be any family its
+	// modes run, so it contradicts every record.
+	agrees := !managed && len(hosts) == 0 && len(unplaced) == 0 && len(recorded) == 1 && !slices.ContainsFunc(claimed, func(f verbs.Family) bool { return f != recorded[0] })
 	if covered && len(recorded) == 1 && agrees {
 		src := fmt.Sprintf("the build record on the ledger names it for all %d commit(s); aayu build took it from AAYU_MODEL or the host's build lane, which the builder's environment sets, so it is attributed, not verified", len(commits))
 		if rec.Receiver != "" {

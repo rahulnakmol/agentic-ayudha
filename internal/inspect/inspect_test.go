@@ -305,6 +305,8 @@ func TestBuilderOf(t *testing.T) {
 			"", nil, "cursor declares no model"},
 		{"amp naming no model beside a gpt commit: amp's families stay candidates", Records{}, []string{"a", "b"}, []string{"gpt-5.4"}, []string{"amp"}, "",
 			"", []verbs.Family{verbs.FamilyOpenAI, verbs.FamilyAnthropic}, "amp picks the model"},
+		{"a record covering every commit beside a host naming no model", cp(map[string]string{"a": "gpt-6.1-sol"}), []string{"a"}, nil, []string{"amp"}, "",
+			"", []verbs.Family{verbs.FamilyOpenAI, verbs.FamilyAnthropic}, "amp picks the model"},
 		{"nothing declared at all: unknown", Records{}, []string{"a"}, nil, nil, "",
 			"", nil, "every review is a labelled same-family review"},
 	} {
