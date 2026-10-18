@@ -119,7 +119,7 @@ func TestFloorCapabilityMapFunctions(t *testing.T) {
 		"tool.py":          "#!/usr/bin/env python3\ndef run():\n    pass\n",
 		"guard.py":         "def go():\n    pass\n\n\nif __name__ == \"__main__\":\n    go()\n",
 		"util.hxx":         "class LineA {}; class LineB {};\nenum class Status { Ready };\n",
-		"c.h":              "typedef struct ctx ctx_t;\ntypedef unsigned status;\ntypedef int (*cb_t)(int, char);\ntypedef struct { int x; } point;\nvoid start(), stop();\ntypedef struct node { int v; } node;\ntypedef struct Context Context;\n",
+		"c.h":              "typedef struct ctx ctx_t;\ntypedef unsigned status;\ntypedef int (*cb_t)(int, char);\ntypedef struct { int x; } point;\nvoid start(), stop();\ntypedef struct node { int v; } node;\ntypedef struct Context Context;\nusing Callback = void (*)(int);\ntemplate <class T> using List = T*;\n",
 	} {
 		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0o755); err != nil {
 			t.Fatal(err)
@@ -132,7 +132,7 @@ func TestFloorCapabilityMapFunctions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	all := []string{"sym:parse/parse.go#Parse", "sym:parse/parse.go#Status", "sym:fmtlib.py#render", "cmd/tool/main.go:3", "tool.py:1", "guard.py:5", "sym:util.hxx#LineA", "sym:util.hxx#LineB", "util.hxx:2", "c.h:1-7"}
+	all := []string{"sym:parse/parse.go#Parse", "sym:parse/parse.go#Status", "sym:fmtlib.py#render", "cmd/tool/main.go:3", "tool.py:1", "guard.py:5", "sym:util.hxx#LineA", "sym:util.hxx#LineB", "util.hxx:2", "c.h:1-9"}
 	base := func() Draft {
 		return Draft{Capabilities: []Claim{{ID: "C1", Name: "Parse", Text: "Parses.", Basis: "observed", Cites: slices.Clone(all)}}}
 	}
@@ -146,8 +146,8 @@ func TestFloorCapabilityMapFunctions(t *testing.T) {
 		{"match", "a Go package's exported function left out", without("sym:parse/parse.go#Parse"), "parse/parse.go:3 (function Parse)", true},
 		{"match", "a Go package's exported named type left out", without("sym:parse/parse.go#Status"), "parse/parse.go:7 (type Status)", true},
 		{"match", "a header's public enum left out", without("util.hxx:2"), "util.hxx:2 (enum Status)", true},
-		{"match", "a C header's typedefs and declarators left out", without("c.h:1-7"),
-			"c.h:1 (type ctx_t), 2 (type status), 3 (type cb_t), 4 (type point), 5 (function start), 5 (function stop), 6 (struct node), 7 (type Context)", true},
+		{"match", "a C header's typedefs and declarators left out", without("c.h:1-9"),
+			"c.h:1 (type ctx_t), 2 (type status), 3 (type cb_t), 4 (type point), 5 (function start), 5 (function stop), 6 (struct node), 7 (type Context), 8 (type Callback), 9 (type List)", true},
 		{"match", "a Python module's public function left out", without("sym:fmtlib.py#render"), "fmtlib.py:1 (function render)", true},
 		{"match", "the second class on a line, its neighbour's symbol cited", without("sym:util.hxx#LineB"), "util.hxx:1 (class LineB)", true},
 		{"near miss", "the first class on that line, its neighbour's symbol cited", without("sym:util.hxx#LineA"), "util.hxx:1 (class LineA)", true},

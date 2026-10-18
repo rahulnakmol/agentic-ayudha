@@ -11,6 +11,7 @@ var (
 	scopeOpen   = regexp.MustCompile(`^(?:(?:inline\s+)?namespace\b[\w\s:]*|extern\s*"[^"]*")$`)
 	// annotation names the function-like attributes a declaration may start with.
 	annotation  = map[string]bool{"__declspec": true, "__attribute__": true, "alignas": true, "_Alignas": true, "__pragma": true, "_Pragma": true}
+	usingAlias  = regexp.MustCompile(`^(?:template\s*<[^;]*>\s*)?using\s+([A-Za-z_]\w*)\s*=`)
 	typedefTag  = regexp.MustCompile(`^typedef\s+(?:struct|union|enum)\s+(?:class\s+)?([A-Za-z_]\w*)`)
 	typedefFunc = regexp.MustCompile(`\(\s*\*\s*([A-Za-z_]\w*)\s*\)\s*\(`)
 	typedefName = regexp.MustCompile(`([A-Za-z_]\w*)\s*(?:\[[^\]]*\]\s*)*$`)
@@ -113,6 +114,24 @@ func headerAPI(code string) []Symbol {
 		}
 		return chunk[off:], off
 	}
+	// addType lists a type a declaration names (its first or last mention of
+	// name), qualified by every named scope.
+	addType := func(name, chunk string, line int, last bool) {
+		q := name
+		for k := len(stack) - 1; k >= 0; k-- {
+			if stack[k].name != "" {
+				q = stack[k].name + "::" + q
+			}
+		}
+		if loc := regexp.MustCompile(`\b`+name+`\b`).FindAllStringIndex(chunk, -1); loc != nil {
+			at := loc[0][0]
+			if last {
+				at = loc[len(loc)-1][0]
+			}
+			line += strings.Count(chunk[:at], "\n")
+		}
+		out = append(out, Symbol{Kind: "type", Name: q, line: line})
+	}
 	decl := func(chunk string, line int) {
 		if n := len(stack); n > 0 && stack[n-1].other {
 			return
@@ -124,6 +143,10 @@ func headerAPI(code string) []Symbol {
 		h := blankAnnotations(strings.TrimSpace(text)) // __declspec(dllexport) int f(); declares f
 		td, after := tail, strings.HasPrefix(h, "typedef") && (len(h) == 7 || !isWord(h[7]))
 		tail = nil
+		if m := usingAlias.FindStringSubmatch(h); m != nil { // using Status = int;
+			addType(m[1], chunk, line, false)
+			return
+		}
 		if td != nil || after {
 			// A type callers name: typedef struct ctx ctx_t;, typedef unsigned status;,
 			// typedef int (*cb)(int);, or the names after typedef struct {…}.
@@ -139,17 +162,7 @@ func headerAPI(code string) []Symbol {
 				if m == nil || cKeywords[m[1]] || m[1] == "typedef" || td != nil && m[1] == tag {
 					continue
 				}
-				q := m[1]
-				for k := len(stack) - 1; k >= 0; k-- {
-					if stack[k].name != "" {
-						q = stack[k].name + "::" + q
-					}
-				}
-				ln := line
-				if loc := regexp.MustCompile(`\b`+m[1]+`\b`).FindAllStringIndex(chunk, -1); loc != nil {
-					ln += strings.Count(chunk[:loc[len(loc)-1][0]], "\n")
-				}
-				out = append(out, Symbol{Kind: "type", Name: q, line: ln})
+				addType(m[1], chunk, line, true)
 			}
 			return
 		}
