@@ -327,14 +327,14 @@ func branchCommits(ctx context.Context, wt, dev string) (commits, msgs []string)
 	return commits, msgs
 }
 
-// declarationLines are the Aayudha-Host and Aayudha-Model lines a story PR's
+// declarationLines are the Aayudha-Host, Aayudha-Model, and Aayudha-Effort lines a story PR's
 // body carries (AGENTS.md): the ones its commits' trailers declare, in order.
 func declarationLines(ctx context.Context, wt, dev string) []string {
 	var out []string
 	_, msgs := branchCommits(ctx, wt, dev)
 	slices.Reverse(msgs) // oldest first
 	for _, m := range msgs {
-		for _, re := range []*regexp.Regexp{hostTrailer, modelTrailer} {
+		for _, re := range []*regexp.Regexp{hostTrailer, modelTrailer, effortTrailer} {
 			for _, x := range re.FindAllString(m, -1) {
 				if x = strings.TrimSpace(x); !slices.Contains(out, x) {
 					out = append(out, x)
@@ -344,6 +344,10 @@ func declarationLines(ctx context.Context, wt, dev string) []string {
 	}
 	return out
 }
+
+// effortTrailer is the builder's reasoning effort, one token, next to its
+// Aayudha-Model trailer.
+var effortTrailer = regexp.MustCompile(`(?m)^Aayudha-Effort:\s*(\S+)\s*$`)
 
 // withDeclarations adds each declaration line the body lacks, before the
 // session review section (or at the end), and keeps every other line,
