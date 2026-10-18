@@ -73,8 +73,8 @@ instructions load. It signs in with the `copilot` secret, else `COPILOT_GITHUB_T
 only, with `COPILOT_GH_HOST` (else `GH_HOST`) for a GitHub Enterprise host. Each call is charged the AI credits Copilot reports: input at 2 USD and visible output at 10 USD per million
 tokens, with reasoning not billed, about 0.043 USD for a lane A call (two probes, 2026-10-18). The route fails closed: when `copilot` is not installed or
 not signed in, or a reply does not parse, that call and every later one go to the default route. `aayu` says so on
-stderr and in the label (`gemini-3.8-flash (the Copilot route failed: …)`), and the review still runs. It is opt-in
-until the ux evals pass on it; the defaults stay Gemini 3.8 Flash. `CopilotCLI` in `internal/models/copilot.go`,
+stderr and in the label (`gemini-3.8-flash (the Copilot route failed: …)`), and the review still runs. It stays a local
+opt-in: the ux evals gate Gemini 3.8 Flash, which stays the default on every host, and never run through Copilot. `CopilotCLI` in `internal/models/copilot.go`,
 `TestCopilotCLI` and `TestCopilotUIReviewRoute`.
 
 ## How `aayu models` resolves a lane
