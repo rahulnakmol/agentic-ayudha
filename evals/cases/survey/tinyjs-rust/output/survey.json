@@ -207,7 +207,8 @@
         "doc:README.md",
         "README.md:19-25",
         "TinyJS.cpp:69-98",
-        "sym:TinyJS.cpp#CTinyJS::execute"
+        "sym:TinyJS.cpp#CTinyJS::execute",
+        "TinyJS.h:288-293"
       ]
     },
     {
@@ -234,10 +235,10 @@
     {
       "id": "C4",
       "name": "Read and set script variables from C++",
-      "claim": "The host reads or sets a variable by dotted path.",
+      "claim": "The host reads or sets a variable by dotted path, or prints every variable to stdout (trace).",
       "basis": "observed",
       "cites": [
-        "TinyJS.h:320-325"
+        "TinyJS.h:320-328"
       ]
     },
     {
@@ -258,7 +259,9 @@
       "basis": "observed",
       "cites": [
         "TinyJS_Functions.cpp:232-253",
-        "TinyJS_MathFunctions.cpp:262-293"
+        "TinyJS_MathFunctions.cpp:262-293",
+        "TinyJS_Functions.h:35",
+        "TinyJS_MathFunctions.h:7"
       ]
     },
     {
@@ -270,6 +273,36 @@
         "entry:Script.cpp:74",
         "Script.cpp:45-52",
         "Script.cpp:80-82"
+      ]
+    },
+    {
+      "id": "C8",
+      "name": "Work with script values from C++",
+      "claim": "The public header exposes the script value type to the host: typed get, set, and type tests (getInt, setString, isArray), children and array elements by name or index, reference counting (ref, unref), a native callback per function value, and the links that name a value (CScriptVarLink).",
+      "basis": "observed",
+      "cites": [
+        "TinyJS.h:179-194",
+        "TinyJS.h:100", "TinyJS.h:198-266"
+      ]
+    },
+    {
+      "id": "C9",
+      "name": "Tokenise script text and quote strings",
+      "claim": "The public header also exposes the lexer (CScriptLex: match a token, take a sub-lexer, report a position as line and column), the exception scripts' errors are thrown as (CScriptException, with its text), and getJSString, which quotes a C++ string for script.",
+      "basis": "observed",
+      "cites": [
+        "TinyJS.h:52", "TinyJS.h:129-160"
+      ]
+    },
+    {
+      "id": "C10",
+      "name": "Run the bundled test scripts",
+      "claim": "run_tests runs the one script named on its command line, or each tests/testNNN.js from 001 until a number is missing, with the built-in and Math functions registered; a script passes when it leaves result true, and a failing script's symbols are written to <file>.fail.js.",
+      "basis": "observed",
+      "cites": [
+        "entry:run_tests.cpp:245",
+        "run_tests.cpp:213-240",
+        "run_tests.cpp:256-276"
       ]
     }
   ],
@@ -509,7 +542,13 @@
           "test:run_tests.cpp",
           "run_tests.cpp:257-259"
         ],
-        "compare": "exit code only (run_tests file.js exits 0 on pass); its stdout prints the runner's banner, which a Rust runner need not copy"
+        "compare": "exit code only (run_tests file.js exits 0 on pass); its stdout prints the runner's banner, which a Rust runner need not copy",
+        "runners": [
+          "entry:run_tests.cpp:245"
+        ],
+        "inputs": [
+          "tests/test[0-9][0-9][0-9].js"
+        ]
       },
       {
         "id": "G2",
@@ -522,7 +561,13 @@
         "exclude": [
           "Math.rand and Math.randInt sequences (E16; Q5 asks whether they matter)"
         ],
-        "reference": "tiny-js at commit 8214477, built by its Makefile with g++ 12.2.0 and CFLAGS -c -g -Wall -rdynamic -D_DEBUG (Makefile:1-3)"
+        "reference": "tiny-js at commit 8214477, built by its Makefile with g++ 12.2.0 and CFLAGS -c -g -Wall -rdynamic -D_DEBUG (Makefile:1-3)",
+        "runners": [
+          "entry:Script.cpp:74"
+        ],
+        "inputs": [
+          "tests/test[0-9][0-9][0-9].js"
+        ]
       },
       {
         "id": "G3",
@@ -532,7 +577,10 @@
           "TinyJS.cpp:1333-1344"
         ],
         "compare": "exact stdout (the ERROR line with its position) and exit code",
-        "reference": "tiny-js at commit 8214477, built by its Makefile with g++ 12.2.0 and CFLAGS -c -g -Wall -rdynamic -D_DEBUG (Makefile:1-3)"
+        "reference": "tiny-js at commit 8214477, built by its Makefile with g++ 12.2.0 and CFLAGS -c -g -Wall -rdynamic -D_DEBUG (Makefile:1-3)",
+        "runners": [
+          "entry:Script.cpp:74"
+        ]
       }
     ],
     "risks": [

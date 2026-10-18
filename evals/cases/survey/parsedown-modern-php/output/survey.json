@@ -183,12 +183,14 @@
     {
       "id": "C1",
       "name": "Render Markdown to HTML",
-      "claim": "Converts a Markdown document to an HTML fragment, normalising line endings first.",
+      "claim": "Converts a Markdown document to an HTML fragment, normalising line endings first; parse() is a deprecated alias of text().",
       "basis": "observed",
       "cites": [
         "sym:Parsedown.php#Parsedown::text",
         "Parsedown.php:37-53",
-        "readme.md:34-38"
+        "readme.md:34-38",
+        "Parsedown.php:16-24",
+        "Parsedown.php:1851-1858"
       ]
     },
     {
@@ -211,7 +213,8 @@
         "Parsedown.php:147-149",
         "Parsedown.php:1118",
         "sym:Parsedown.php#Parsedown::inlineUrl",
-        "Parsedown.php:1532"
+        "Parsedown.php:1532",
+        "entry:Parsedown.php:77"
       ]
     },
     {
@@ -249,6 +252,16 @@
         "io:dynamic-dispatch:Parsedown.php:209"
       ],
       "reasoning": "Methods are found by name on $this, so an override in a subclass is the method that runs (E3, E8)."
+    },
+    {
+      "id": "C7",
+      "name": "Shared named instances",
+      "claim": "Parsedown::instance(name) returns one shared parser per name, created on first use.",
+      "basis": "observed",
+      "cites": [
+        "entry:Parsedown.php:1939",
+        "Parsedown.php:1939-1952"
+      ]
     }
   ],
   "product_claims": [

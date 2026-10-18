@@ -3,7 +3,9 @@
 # person asks for the analysis and a Rust rebuild with the same behaviour. The host has run `aayu survey`, every
 # `--module`, and read the files below; no person is in the session, so every question stays open. Floors: `aayu
 # survey --draft` (every citation resolves, bases, no observed product claim, target from the request), no answered
-# question, and the scope rule. output/survey.json is the pilot's draft (private research note survey-pilots-2026-10.md).
+# question, and the scope rule. output/survey.json is the pilot's draft (private research note survey-pilots-2026-10.md),
+# amended for the capability-map and runner floors: the header's value and lexer API, run_tests, and each case set's
+# runners.
 skill = "survey"
 description = "Survey a legacy C++ interpreter at three levels and plan a Rust rebuild with parity case sets."
 input = "request.txt"
