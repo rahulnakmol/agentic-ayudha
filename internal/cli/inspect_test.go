@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"maps"
 	"os"
 	"path/filepath"
@@ -796,6 +797,20 @@ func TestInspectPaidReviewer(t *testing.T) {
 	code, res, errOut := inspectApp(t, env, opts, prN, "--ci")
 	if code != 0 || res.Rung != inspect.RungB || !strings.Contains(res.Review, "(B, paid): gemini-3.8-flash (google)") || len(model.Requests) != 1 || model.Requests[0].Model != "gemini-3.8-flash" || model.Requests[0].Effort != "high" {
 		t.Fatalf("paid reviewer: exit %d rung %q %q, %d model calls %s", code, res.Rung, res.Review, len(model.Requests), errOut)
+	}
+
+	// A paid review that fails (here the gateway's 524, as a large diff gave
+	// live on #583) leaves the PR to the reviewer app: its reply is judged,
+	// and without one the gate fails closed with no-reply, not an error.
+	g, env, opts, prN, model = setup(`"claude"`, "google-key")
+	model.Err = errors.New("model endpoint returned 524: error code: 524")
+	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != ExitBlocked || res.Disposition != NoReply || len(model.Requests) != 1 {
+		t.Fatalf("a failed paid review, no reply: exit %d %s, %d model calls %s", code, res.Disposition, len(model.Requests), errOut)
+	}
+	head := g.Pulls[prN].Head.SHA
+	addComment(g, prN, "claude[bot]", "Bot", statedReply(head, "merge", "internal/report/percent.go"))
+	if code, res, errOut = inspectApp(t, env, opts, prN, "--ci"); code != 0 || res.Disposition != inspect.Merge || res.Rung == inspect.RungB {
+		t.Fatalf("a failed paid review, the app's reply: exit %d %s rung %q %s", code, res.Disposition, res.Rung, errOut)
 	}
 
 	// An author without write access gets no paid review, whatever GitHub's

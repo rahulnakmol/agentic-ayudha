@@ -507,6 +507,13 @@ func runInspect(ctx context.Context, e *Env, in Values) error {
 		return Errorf(ExitBlocked, "inspect #%d: %v (paged)", n, err)
 	case errors.Is(err, inspect.ErrBudget), errors.Is(err, models.ErrBudget):
 		return Errorf(ExitBudget, "inspect #%d: %v", n, err)
+	case err != nil && paid != nil && cfg.Reviewer != inspect.ReviewerModel:
+		// A paid review that fails (the gateway timed out on a large diff, the
+		// provider is down) leaves the PR to the reviewer app, as an unset key
+		// does: the gate still needs that app's reply, so it fails closed
+		// without one.
+		e.Logf("inspect: [inspect] paid_reviewer %s failed (%s); the reviewer app reviews", paid.Model, oneLineErr(err))
+		return e.inspectThroughApp(ctx, appInspect{c: c, repo: repo, pr: pr, in: ins, prev: prev, builder: builder, cfg: l.Config})
 	case err != nil:
 		return Wrap(ExitExternal, err)
 	}

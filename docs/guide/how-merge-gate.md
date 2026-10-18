@@ -157,7 +157,8 @@ default) caps one PR's spend across its cycles, and a cap of 0 turns rung B off.
 to the repository (GitHub's permission level, not the author association) gets a paid review, so a person who can
 only read cannot open PRs to spend the key. The review is labelled
 `different-family review (B, paid)` everywhere and counts toward autonomy as rung A does. If the secret is missing, the
-model is of a family the builder may be, or the cap is 0, the gate logs why and the app reviews. `aayu doctor`'s
+model is of a family the builder may be, the cap is 0, or the paid call fails (a gateway timeout on a large diff), the
+gate logs why and the app reviews. `aayu doctor`'s
 `review-rung` row shows B when it is configured. Doctor cannot read repository secrets, so it names the secret the gate
 needs. The inspect job checks out the base branch and runs no PR code. The diff reaches the model only as delimited
 untrusted data.
