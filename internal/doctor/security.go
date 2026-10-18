@@ -161,9 +161,9 @@ func checkDAST(ctx context.Context, p *Probe) Result {
 	case target == "":
 		status = Warn
 		lines = append(lines, "target: none ([verify.environments."+env+"] url is unset), so a web or api story records skipped: dast, which blocks its ship from [verify] new_floors_blocking_from unless waived. "+verify.DASTFix)
-	case hostname(target) == "":
+	case !httpURL(target):
 		status = Fail
-		lines = append(lines, "target: "+target+" is not an absolute URL ([verify.environments."+env+"] url), so verify blocks the dast floor: write it as http://host:port")
+		lines = append(lines, "target: "+target+" is not an absolute http or https URL ([verify.environments."+env+"] url), so verify blocks the dast floor: write it as http://host:port")
 	case v.Environments[env].ActiveScan:
 		lines = append(lines, "target: "+target+", active scan ([verify.environments."+env+"] active_scan = true)")
 	case len(v.Seed) > 0 && verify.IsLoopback(hostname(target)):
@@ -179,7 +179,9 @@ func checkDAST(ctx context.Context, p *Probe) Result {
 		}
 	}
 	if rt == "" {
-		status = Warn
+		if status != Fail {
+			status = Warn
+		}
 		lines = append(lines, "container runtime: none; install Docker or Podman to scan locally (the merge gate and "+SecurityWorkflow+" run it in CI)")
 	} else {
 		ver, _ := p.Exec(ctx, p.Root, rt, "--version")
@@ -195,10 +197,18 @@ func checkDAST(ctx context.Context, p *Probe) Result {
 		lines = append(lines, "container runtime: "+desc)
 	}
 	detail := "the dast floor runs here"
-	if status == Warn {
+	switch status {
+	case Warn:
 		detail = "the dast floor cannot run here as configured"
+	case Fail:
+		detail = "the dast floor is blocked here: its target is not a URL it can scan"
 	}
 	return Result{Status: status, Detail: detail, Lines: lines}
+}
+
+func httpURL(raw string) bool {
+	_, ok := verify.HTTPURL(raw)
+	return ok
 }
 
 func hostname(raw string) string {

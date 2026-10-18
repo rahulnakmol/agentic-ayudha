@@ -167,11 +167,14 @@ func TestContainerRuntimeRow(t *testing.T) {
 		t.Errorf("a URL verify does not start: %+v", r)
 	}
 	// A host and port with no scheme is not a URL verify can scan: it blocks the floor, so doctor must not pass it.
-	for _, bad := range []string{"127.0.0.1:8080", "localhost:8080"} {
-		p = probe("docker")
-		p.Config.Config.Verify.Environments = map[string]config.Environment{"local": {URL: bad}}
-		if r := checkDAST(ctx, p); r.Status != Fail || !strings.Contains(strings.Join(r.Lines, "\n"), "is not an absolute URL") {
-			t.Errorf("%s: %+v", bad, r)
+	for _, bad := range []string{"127.0.0.1:8080", "localhost:8080", "//127.0.0.1:8080"} {
+		// With or without a container runtime: a missing runtime must not soften the failure.
+		for _, found := range [][]string{{"docker"}, nil} {
+			p = probe(found...)
+			p.Config.Config.Verify.Environments = map[string]config.Environment{"local": {URL: bad}}
+			if r := checkDAST(ctx, p); r.Status != Fail || !strings.Contains(r.Detail, "blocked") || !strings.Contains(strings.Join(r.Lines, "\n"), "is not an absolute http or https URL") {
+				t.Errorf("%s %v: %+v", bad, found, r)
+			}
 		}
 	}
 }

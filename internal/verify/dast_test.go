@@ -242,11 +242,19 @@ func TestDASTGuardrails(t *testing.T) {
 	})
 
 	t.Run("a target that is not an absolute URL is blocked", func(t *testing.T) {
-		bin := t.TempDir()
-		standInRuntime(t, bin, "docker", zapClean)
-		r := dastRun(t, bin, "127.0.0.1:8080", "web")
-		if c, rep := dastCheck(t, r); c.Result != proof.Blocked || rep.Hold || !strings.Contains(c.Detail, "not an absolute URL") {
-			t.Fatalf("%+v", c)
+		// Codex review of #509: a scheme-relative or non-HTTP url is not a target
+		// either, and with no container runtime the url still blocks, never skips.
+		for _, target := range []string{"127.0.0.1:8080", "//127.0.0.1:8080", "ftp://127.0.0.1:8080"} {
+			for _, runtime := range []bool{true, false} {
+				bin := t.TempDir()
+				if runtime {
+					standInRuntime(t, bin, "docker", zapClean)
+				}
+				r := dastRun(t, bin, target, "web")
+				if c, rep := dastCheck(t, r); c.Result != proof.Blocked || rep.Hold || !strings.Contains(c.Detail, "not an absolute http or https URL") || read(t, filepath.Join(bin, "docker.argv")) != "" {
+					t.Fatalf("%s (runtime %v): %+v", target, runtime, c)
+				}
+			}
 		}
 	})
 

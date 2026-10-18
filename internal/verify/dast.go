@@ -106,6 +106,16 @@ func IsLoopback(host string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
+// HTTPURL parses an absolute http or https URL with a host, the only kind of
+// target the dast floor scans; anything else blocks it.
+func HTTPURL(raw string) (*url.URL, bool) {
+	u, err := url.Parse(raw)
+	if err != nil || !u.IsAbs() || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
+		return nil, false
+	}
+	return u, true
+}
+
 // Run implements Floor.
 func (DAST) Run(ctx context.Context, r *Run) (Result, error) {
 	res := Result{Check: proof.Check{Tool: "zap", Version: ZAPImage[strings.Index(ZAPImage, "@")+1:][:19], Threshold: float64(r.Floors.DAST.MaxHigh), Network: NetAllowed}}
@@ -140,9 +150,16 @@ func (DAST) Run(ctx context.Context, r *Run) (Result, error) {
 		}
 		return skip(why + ". " + DASTFix)
 	}
+	// A target that is not an absolute http(s) URL blocks the floor before
+	// anything else: no runtime lookup or seed can turn it into a skip.
+	u, ok := HTTPURL(t.URL)
+	if !ok {
+		return res, fmt.Errorf("[verify.environments.%s] url %q is not an absolute http or https URL", t.Env, t.URL)
+	}
+	loopback := IsLoopback(u.Hostname())
 	// Without the seed nothing starts a loopback app, so only a deployed
 	// environment's URL is scanned; a story's verify scans the app the seed starts.
-	if u, err := url.Parse(t.URL); r.NoSeed && err == nil && IsLoopback(u.Hostname()) {
+	if r.NoSeed && loopback {
 		return skip("skipped: dast, nothing to scan: this run never runs [verify] seed, which is repository code, beside its Bug-writing token, so it scans only a deployed environment (set AAYU_ENV to one with a non-loopback url); a story's verify scans the app the seed starts")
 	}
 	rt := ContainerRuntime(r.Sandbox.Env(Cmd{}, NetAllowed))
@@ -155,11 +172,6 @@ func (DAST) Run(ctx context.Context, r *Run) (Result, error) {
 	if err := seed(ctx, r); err != nil {
 		return res, err
 	}
-	u, err := url.Parse(t.URL)
-	if err != nil || u.Host == "" {
-		return res, fmt.Errorf("[verify.environments.%s] url %q is not an absolute URL", t.Env, t.URL)
-	}
-	loopback := IsLoopback(u.Hostname())
 	// G1: the active rules attack the app; run them only against one verify
 	// started itself, or a URL the protected repository config opts in.
 	started := r.seeded && !r.upBeforeSeed && loopback
