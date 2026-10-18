@@ -32,8 +32,11 @@ const (
 // and writes, which TokensIn includes, are charged at their own rates (a
 // 1-hour cache write at CacheWrite1h), and a
 // prompt past the long-context threshold at the long-context rates.
+//
+// A priority call (Billed) is charged at least at the priority rate, even when
+// the endpoint reports a lower figure of its own, so a spend cap holds.
 func Cost(prices []config.Price, model string, r Response) (usd float64, source string) {
-	if r.CostUSD > 0 {
+	if r.CostUSD > 0 && r.ServiceTier != TierPriority {
 		return r.CostUSD, CostReported
 	}
 	p, source, ok := PriceOf(prices, model)
@@ -60,8 +63,12 @@ func Cost(prices []config.Price, model string, r Response) (usd float64, source 
 	}
 	plain := max(r.TokensIn-r.CachedIn-r.CacheWriteIn, 0)
 	w1h := min(r.CacheWrite1hIn, r.CacheWriteIn)
-	return (float64(plain)*rt.Input + float64(r.CachedIn)*or(rt.CachedInput) + float64(r.CacheWriteIn-w1h)*or(rt.CacheWrite) +
-		float64(w1h)*write1h + float64(r.TokensOut)*rt.Output) / 1e6, source
+	usd = (float64(plain)*rt.Input + float64(r.CachedIn)*or(rt.CachedInput) + float64(r.CacheWriteIn-w1h)*or(rt.CacheWrite) +
+		float64(w1h)*write1h + float64(r.TokensOut)*rt.Output) / 1e6
+	if r.CostUSD > usd {
+		return r.CostUSD, CostReported
+	}
+	return usd, source
 }
 
 // Billed is resp as Cost prices it for req: a call that asked for priority
