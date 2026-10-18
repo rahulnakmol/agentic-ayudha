@@ -3,5 +3,16 @@
   "branch": "story/530-investigate-shows-seer-s-existing-analys",
   "started_at": "2026-10-18T03:54:09Z",
   "failed_attempts": 0,
-  "checkpoints": null
+  "checkpoints": [
+    {
+      "k": 1,
+      "n": 1,
+      "attempt": 1,
+      "commit": "d9431c09400ca4659ec54667d49ebab029664cc0",
+      "layers": [],
+      "verify": "hold",
+      "detail": "floors hold; not run here (tool not installed; the merge gate runs them): sast, secrets, deps",
+      "at": "2026-10-18T03:56:22Z"
+    }
+  ]
 }
