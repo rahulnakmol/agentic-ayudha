@@ -25,6 +25,7 @@ func TestCounsel(t *testing.T) {
 		files = append(files, fmt.Sprintf("docs/guide/page%02d.md", i))
 	}
 	g.Mu.Lock()
+	g.Pulls[n].Title += " (see #999)" // untrusted title text, never a source
 	g.Pulls[n].Files = files
 	g.Mu.Unlock()
 	writeInspectPack(t, opts.Dir, n, head, []proof.Check{
@@ -74,7 +75,7 @@ func TestCounsel(t *testing.T) {
 	onPR := counselRun(env, 0, "--pr", pr)
 	facts := factText(onPR)
 	for _, want := range []string{
-		fmt.Sprintf(`PR #%d "Add Percent for the status table": open`, n),
+		fmt.Sprintf(`PR #%d "Add Percent for the status table (see #999)": open`, n),
 		"Changed in L04: internal/verify/floors.go", "internal/report/percent.go", "and 2 more", "Story: #2", "Proof pack for #2 at ccccccc", "coverage pass (100, floor 90)",
 		"sast pass waived by #9", "Builder: builder family anthropic",
 		"Builder:", "Open Decision: #5", "CONSTRAINTS.md", "L03 ",
@@ -102,7 +103,7 @@ func TestCounsel(t *testing.T) {
 		t.Errorf("path topic: %q %s", p.Path, factText(p))
 	}
 	if code, out, errOut := run(t, env, opts, "counsel", "--repo", "o/r", "--pr", pr); code != 0 ||
-		!strings.Contains(out, "# Counsel grounding: Add Percent for the status table") || !strings.Contains(out, "<untrusted source=\"pr-body\">") ||
+		!strings.Contains(out, "# Counsel grounding: Add Percent for the status table (see #999)") || !strings.Contains(out, "<untrusted source=\"pr-body\">") ||
 		!strings.Contains(out, "## The call") || !strings.Contains(out, "Speak and work as Atri") {
 		t.Errorf("text grounding: exit %d: %s%s", code, out, errOut)
 	}
@@ -172,6 +173,7 @@ Is the zero case the behaviour you want?
 		"invented citation":    {"(LAYERS.md)", "(#99)", "cites #99"},
 		"cited from the body":  {"(LAYERS.md)", "(#2, internal/safe.go)", "cites internal/safe.go"},
 		"persona's example":    {"(LAYERS.md)", "(#41)", "cites #41"},
+		"cited from a title":   {"(LAYERS.md)", "(#999)", "cites #999"},
 		"part of a path":       {"(LAYERS.md)", "(percent.go)", "cites percent.go,"},
 	} {
 		want := tt.want

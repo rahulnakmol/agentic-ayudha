@@ -48,6 +48,9 @@ type counselReport struct {
 	Findings  []string          `json:"findings,omitempty"`
 	Label     string            `json:"label,omitempty"`
 	Posted    bool              `json:"posted,omitempty"`
+	// sources are the citations aayu itself resolved: each fact's Cite and the PR's changed files as the API lists
+	// them. Titles, labels, and bodies are not sources, so a citation found only there does not resolve.
+	sources []string
 }
 
 // runCounsel is `aayu counsel ["question" | #N | path] [--pr N | --issue N]`: it prints the grounding and the
@@ -181,11 +184,14 @@ func runCounsel(ctx context.Context, e *Env, in Values) error {
 	if err != nil {
 		return Wrap(ExitUsage, err)
 	}
-	// A citation resolves against the facts aayu gathered, never against the untrusted bodies or the persona's
-	// examples that the printed grounding also carries.
+	// A citation resolves against the sources aayu resolved (rep.sources and each fact's Cite), never against
+	// titles, labels, the untrusted bodies, or the persona's examples that the printed grounding also carries.
 	var facts strings.Builder
 	for _, f := range rep.Facts {
-		facts.WriteString(f.Text + " (" + f.Cite + ")\n")
+		facts.WriteString(f.Cite + "\n")
+	}
+	for _, src := range rep.sources {
+		facts.WriteString(src + "\n")
 	}
 	known := func(cite string) bool {
 		if hasCite(facts.String(), cite) {
@@ -269,6 +275,7 @@ func (e *Env) counselPR(ctx context.Context, c *github.Client, owner, name strin
 	byLayer := map[string][]string{}
 	var order []string
 	for _, f := range files {
+		rep.sources = append(rep.sources, f.GetFilename())
 		ly := strings.Join(globs.Footprint([]string{f.GetFilename()}), ", ")
 		if ly == "" {
 			ly = "no layer"
