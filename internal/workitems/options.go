@@ -3,6 +3,7 @@ package workitems
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -73,7 +74,7 @@ func ParseOptions(s string) ([]Option, []Problem) {
 		}
 	}
 	marked := 0
-	seen := map[string]int{}
+	var named []Option
 	for _, o := range os {
 		if o.Recommended {
 			marked++
@@ -82,10 +83,11 @@ func ParseOptions(s string) ([]Option, []Problem) {
 			ps = append(ps, Problem{"options", fmt.Sprintf("option %d has no name; start it with its name, \"%d. **Name.** what it does\"", o.N, o.N)})
 			continue
 		}
-		if k := strings.ToLower(o.Name); seen[k] != 0 {
-			ps = append(ps, Problem{"options", fmt.Sprintf("options %d and %d are both named %q; give each its own name, so accepting it by name is unambiguous", seen[k], o.N, o.Name)})
+		// The same comparison decide.Pick accepts a typed name with.
+		if i := slices.IndexFunc(named, func(p Option) bool { return strings.EqualFold(p.Name, o.Name) }); i >= 0 {
+			ps = append(ps, Problem{"options", fmt.Sprintf("options %d and %d are both named %q; give each its own name, so accepting it by name is unambiguous", named[i].N, o.N, o.Name)})
 		} else {
-			seen[k] = o.N
+			named = append(named, o)
 		}
 	}
 	switch {
@@ -142,13 +144,13 @@ func RecommendedOption(os []Option, rec string) int {
 		n, _ := strconv.Atoi(m[1] + m[2])
 		return n
 	}
-	best := Option{}
+	best, rr := Option{}, []rune(r)
 	for _, o := range os {
-		name := strings.ToLower(o.Name)
-		if name == "" || !strings.HasPrefix(strings.ToLower(r), name) || len(o.Name) <= len(best.Name) {
+		on := []rune(o.Name)
+		if len(on) == 0 || len(on) > len(rr) || len(on) <= len([]rune(best.Name)) || !strings.EqualFold(string(rr[:len(on)]), o.Name) {
 			continue
 		}
-		if rest := r[len(o.Name):]; rest == "" || !unicode.IsLetter(rune(rest[0])) && !unicode.IsDigit(rune(rest[0])) {
+		if rest := rr[len(on):]; len(rest) == 0 || !unicode.IsLetter(rest[0]) && !unicode.IsDigit(rest[0]) {
 			best = o
 		}
 	}

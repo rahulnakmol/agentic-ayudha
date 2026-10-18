@@ -363,6 +363,13 @@ func TestParseOptions(t *testing.T) {
 			t.Errorf("RecommendedOption(%q) = %d, want %d", rec, got, want)
 		}
 	}
+	kelvin, _ := ParseOptions("1. **\u212a.** a\n2. **Other.** b")
+	if got := RecommendedOption(kelvin, "k, because it is cold."); got != 1 {
+		t.Errorf("RecommendedOption with a name that folds across byte lengths = %d, want 1", got)
+	}
+	if _, ps := ParseOptions("1. **\u03a3.** a\n2. **\u03c2.** b"); len(ps) != 1 {
+		t.Errorf("names equal under EqualFold: %v, want one duplicate problem", ps)
+	}
 	// A plain option's name is kept whole, however long.
 	long := "Keep the current engine and revisit it next quarter once the volumes are known"
 	if os, _ := ParseOptions("1. " + long + "\n2. Swap it"); len(os) != 2 || os[0].Name != long {
