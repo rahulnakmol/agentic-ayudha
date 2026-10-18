@@ -140,16 +140,20 @@ func TestMockupLiteralsAndFigmaVariables(t *testing.T) {
 	if got := tok.CheckLiterals("Page.tsx", []byte(`<p>Stories #571, #572</p>`)); len(got) != 1 {
 		t.Fatalf("code is read whole: %v", got)
 	}
-	// Comments in code are prose too: a story reference in one is not a
-	// colour, but an off-token colour in the code, after a string with "//"
-	// in it, before a comment on the same line, after a URL in JSX text, or
-	// after an unclosed "/*" in JSX text still fails, at its line.
+	// A story reference in a comment is not a colour, wherever the comment
+	// starts; an off-token colour in the code still fails at its line,
+	// including a quoted one after a URL in JSX text ("https://", "//cdn"),
+	// which reads like a comment, and one after an unclosed "/*".
 	tsx := []byte("// slot-full: #572, see #573\n/* states: #571,\n   #574 */\nconst u = \"https://x.example/a\", c = \"#ff00aa\";\n" +
 		"const d = { color: \"#575\" }; // was: #576\n" +
-		"<p>https://x.example <span style={{color:\"#577\"}} /></p>\n<p>a /* b <span style={{color:\"#578\"}} /></p>\n")
+		"<p>https://x.example <span style={{color:\"#577\"}} /></p>\n<p>a /* b <span style={{color:\"#578\"}} /></p>\n" +
+		"const v = items[i]// prior story: #572\n<p>Image: //cdn.example/x <span style={{color:\"#579\"}} /></p>\n")
 	got = tok.CheckLiterals("src/Page.tsx", tsx)
-	if len(got) != 4 || got[0].Value != "#ff00aa" || got[0].Where != "src/Page.tsx:4" || got[1].Value != "#557755" || got[1].Where != "src/Page.tsx:5" ||
-		!strings.Contains(got[1].String(), `color: \"#575\"`) || got[2].Where != "src/Page.tsx:6" || got[3].Where != "src/Page.tsx:7" {
+	var at []string
+	for _, m := range got {
+		at = append(at, m.Value+"@"+strings.TrimPrefix(m.Where, "src/Page.tsx:"))
+	}
+	if strings.Join(at, " ") != "#ff00aa@4 #557755@5 #557777@6 #557788@7 #557799@9" || !strings.Contains(got[1].String(), `color: \"#575\"`) {
 		t.Fatalf("tsx literals: %v", got)
 	}
 	css := []byte("/* brand was #572 */\n.a { background: url(https://x.example/i.png); color: #ff00aa; }\n")
