@@ -120,6 +120,8 @@ func TestFloorCapabilityMapFunctions(t *testing.T) {
 		"guard.py":         "def go():\n    pass\n\n\nif __name__ == \"__main__\":\n    go()\n",
 		"util.hxx":         "class LineA {}; class LineB {};\nenum class Status { Ready };\nunion Value { int i; double d; };\n",
 		"rlib/src/lib.rs":  "pub fn parse(s: &str) -> usize {\n    s.len()\n}\n\nfn helper() {}\n\npub(crate) fn inner() {}\n",
+		"web/lib.js":       "export function parse(s) {\n  return s.length;\n}\n\nfunction helper() {}\n",
+		"web/api.ts":       "export async function load(id: string) {\n  return id;\n}\n",
 		"App.java":         "public class App {\n    public static void main(String[] args) {}\n}\n",
 		"Program.cs":       "class Program {\n    static void Main(string[] args) {}\n}\n",
 		"ctximpl.c":        "struct Opaque { int x; };\n",
@@ -138,7 +140,7 @@ func TestFloorCapabilityMapFunctions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	all := []string{"sym:parse/parse.go#Parse", "sym:parse/parse.go#Status", "sym:fmtlib.py#render", "cmd/tool/main.go:3", "tool.py:1", "guard.py:5", "sym:util.hxx#LineA", "sym:util.hxx#LineB", "util.hxx:2", "util.hxx:3", "c.h:1-12", "sym:rlib/src/lib.rs#parse", "App.java:1-2", "Program.cs:1-2", "Hidden.java:1", "Inst.cs:1-2"}
+	all := []string{"sym:parse/parse.go#Parse", "sym:parse/parse.go#Status", "sym:fmtlib.py#render", "cmd/tool/main.go:3", "tool.py:1", "guard.py:5", "sym:util.hxx#LineA", "sym:util.hxx#LineB", "util.hxx:2", "util.hxx:3", "c.h:1-12", "sym:rlib/src/lib.rs#parse", "App.java:1-2", "Program.cs:1-2", "Hidden.java:1", "Inst.cs:1-2", "sym:web/lib.js#parse", "sym:web/api.ts#load"}
 	base := func() Draft {
 		return Draft{Capabilities: []Claim{{ID: "C1", Name: "Parse", Text: "Parses.", Basis: "observed", Cites: slices.Clone(all)}}}
 	}
@@ -160,6 +162,8 @@ func TestFloorCapabilityMapFunctions(t *testing.T) {
 		{"match", "a C header's typedefs and declarators left out", without("c.h:1-12"),
 			"c.h:1 (type ctx_t), 10 (opaque Opaque), 11 (opaque Mode), 12 (function open_it), 2 (type status), 3 (type cb_t), 4 (type point), 5 (function start), 5 (function stop), 6 (struct node), 7 (type Context), 8 (type Callback), 9 (type List)", true},
 		{"match", "a Rust library's pub function left out", without("sym:rlib/src/lib.rs#parse"), "rlib/src/lib.rs:1 (function parse)", true},
+		{"match", "a JavaScript module's export left out", without("sym:web/lib.js#parse"), "web/lib.js:1 (function parse)", true},
+		{"match", "a TypeScript module's async export left out", without("sym:web/api.ts#load"), "web/api.ts:1 (function load)", true},
 		{"match", "a Java program's main left out", without("App.java:1-2"), "App.java:1 (class App), 2 (App::main)", true},
 		{"match", "a C# program's Main left out", without("Program.cs:1-2"), "Program.cs:1 (class Program), 2 (Program::Main)", true},
 		{"match", "a Python module's public function left out", without("sym:fmtlib.py#render"), "fmtlib.py:1 (function render)", true},

@@ -33,13 +33,15 @@ func checkCapabilityMap(ix *Index, d Draft, cov *Coverage, add func(string, ...a
 	for _, c := range d.Capabilities {
 		cites = append(cites, c.Cites...)
 	}
-	// A definition's symbol covers the declaration of its name: each cited
-	// definition covers one declaration of the name in each header, so every
-	// overload a header declares needs its own cite, and a function declared
-	// in two headers is covered by citing its one definition.
+	// A C or C++ definition's symbol covers the declaration of its name: each
+	// cited definition covers one declaration of the name in each header, so
+	// every overload a header declares needs its own cite, and a function
+	// declared in two headers is covered by citing its one definition. No
+	// other entry is covered by a name it shares (parse in lib.js is not
+	// parse in lib.rs).
 	cited := map[string]map[string]bool{}
 	for _, c := range cites {
-		if sy, ok := syms[strings.TrimSpace(c)]; ok && isDefKind(sy.Kind) {
+		if sy, ok := syms[strings.TrimSpace(c)]; ok && isDefKind(sy.Kind) && cFamily(sy.At) {
 			if cited[sy.Name] == nil {
 				cited[sy.Name] = map[string]bool{}
 			}
@@ -51,7 +53,7 @@ func checkCapabilityMap(ix *Index, d Draft, cov *Coverage, add func(string, ...a
 	for _, e := range ix.Entries {
 		direct := slices.ContainsFunc(cites, func(c string) bool { return coversEntry(ix, syms, strings.TrimSpace(c), e) })
 		f, _ := splitAt(e.At)
-		if n := entryName(ix, e); !direct && n != "" && used[f+" "+n] < len(cited[n]) {
+		if n := entryName(ix, e); !direct && n != "" && isHeader(f) && used[f+" "+n] < len(cited[n]) {
 			used[f+" "+n]++
 			direct = true
 		}
@@ -66,6 +68,16 @@ func checkCapabilityMap(ix *Index, d Draft, cov *Coverage, add func(string, ...a
 	for _, f := range sortedKeys(missing) {
 		add("capabilities: no capability covers the entry point(s) %s:%s; cite each from the capability it serves (its entry, its line or a range that holds it, or its symbol), or add the capability", f, strings.Join(missing[f], ", "))
 	}
+}
+
+// cFamily reports whether a symbol's file (path:line) is C or C++.
+func cFamily(at string) bool {
+	f, _ := splitAt(at)
+	switch strings.ToLower(path.Ext(f)) {
+	case ".c", ".cc", ".cpp", ".cxx", ".c++", ".h", ".hh", ".hpp", ".hxx", ".inl", ".ipp":
+		return true
+	}
+	return false
 }
 
 // citedLines resolves a citation of a checkout file (file:p, p, p:N, or

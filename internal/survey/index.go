@@ -614,7 +614,7 @@ func (ix *Index) entries(file, role, lang, raw string, syms []Symbol) {
 		case s.Public && role == "source" && (lang == "php" || lang == "python" || lang == "ruby" || lang == "javascript" || lang == "typescript" || lang == "java" || lang == "csharp" || lang == "go" || lang == "cpp" || lang == "c" || lang == "rust"):
 			// A function defined in a C or C++ header (inline int parse(…) {…}) is
 			// part of the API every includer calls, as a method is.
-			if isDefKind(s.Kind) && (strings.Contains(s.Name, "::") || (lang == "c" || lang == "cpp") && isHeader(file) || exportsFuncs(lang, raw) || lang == "rust" && rustPub(raw, s)) || !isDefKind(s.Kind) && (s.Kind == "class" || s.Kind == "struct" || s.Kind == "interface" || s.Kind == "trait" || s.Kind == "type" || s.Kind == "enum" || s.Kind == "union") {
+			if isDefKind(s.Kind) && (strings.Contains(s.Name, "::") || (lang == "c" || lang == "cpp") && isHeader(file) || exportsFuncs(lang, raw) || exported(lang, raw, s)) || !isDefKind(s.Kind) && (s.Kind == "class" || s.Kind == "struct" || s.Kind == "interface" || s.Kind == "trait" || s.Kind == "type" || s.Kind == "enum" || s.Kind == "union") {
 				add("api", s.line, s.Kind+" "+s.Name)
 			}
 		}
@@ -635,14 +635,21 @@ func declares(raw string, ln int, word string) bool {
 	return ln >= 1 && ln <= len(lines) && regexp.MustCompile(`\b`+word+`\b`).MatchString(lines[ln-1])
 }
 
-// rustPub reports whether a Rust function is declared pub (not pub(crate)):
-// a library's callers reach it.
-func rustPub(raw string, s Symbol) bool {
-	lines := strings.Split(raw, "\n")
-	if s.line < 1 || s.line > len(lines) {
+// exported reports whether a top-level function is declared exported where
+// the language marks it: Rust pub (not pub(crate)), or a JavaScript or
+// TypeScript export. A library's callers reach it.
+func exported(lang, raw string, s Symbol) bool {
+	var pat string
+	switch lang {
+	case "rust":
+		pat = `\bpub\s+(?:(?:const|async|unsafe|extern\s*(?:"[^"]*")?)\s+)*fn\s+`
+	case "javascript", "typescript":
+		pat = `\bexport\s+(?:default\s+)?(?:async\s+)?function\s*\*?\s*`
+	default:
 		return false
 	}
-	return regexp.MustCompile(`\bpub\s+(?:(?:const|async|unsafe|extern\s*(?:"[^"]*")?)\s+)*fn\s+` + regexp.QuoteMeta(s.Name) + `\b`).MatchString(lines[s.line-1])
+	lines := strings.Split(raw, "\n")
+	return s.line >= 1 && s.line <= len(lines) && regexp.MustCompile(pat+regexp.QuoteMeta(s.Name)+`\b`).MatchString(lines[s.line-1])
 }
 
 // exportsFuncs reports whether a file's public top-level functions are an API
