@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/inspect"
+	"github.com/rahulnakmol/agentic-ayudha/internal/models"
+	"github.com/rahulnakmol/agentic-ayudha/internal/verbs"
 )
 
 // checkReviewerApps reports which agent apps can review this repository's
@@ -63,4 +65,65 @@ func orNone(s string) string {
 		return "no mention"
 	}
 	return ""
+}
+
+// checkReviewRung is the review ladder's rung the PRs built here get
+// (Decision #469), and how to move up. The builder is this host's build
+// lane: its model's family, or every family a host-managed mode may run.
+// Nothing is called (detail 11): an installed app's family is the configured
+// one, confirmed only by the model its reply reports.
+func checkReviewRung(_ context.Context, p *Probe) Result {
+	if p.Config == nil {
+		return Result{Status: NA, Detail: "no configuration loaded"}
+	}
+	cfg := p.Config.Config
+	host, _ := DetectHost(p.Host, p.Getenv)
+	var claims, hosts []string
+	lane, model := verbs.Family(""), ""
+	if host != "" {
+		if r, err := (models.Resolver{Models: cfg.Models}).Resolve(verbs.LaneBuild, verbs.HostID(host)); err == nil {
+			lane, model = r.Family, r.Model
+			if model != "" {
+				claims = []string{model}
+			} else {
+				hosts = []string{host}
+			}
+		}
+	}
+	b := inspect.BuilderOf(inspect.Records{}, nil, claims, hosts, lane)
+	builder := "builder family unknown (no agent host detected; pass --host)"
+	switch {
+	case b.Family != "" && b.Family != verbs.FamilyHostManaged:
+		builder = fmt.Sprintf("builder %s (%s on %s)", b.Family, model, host)
+	case len(b.Candidates) > 0:
+		builder = fmt.Sprintf("builder any of %v (%s picks the model for its modes)", b.Candidates, host)
+	case host != "":
+		builder = fmt.Sprintf("builder family unknown (%s declares no model aayu can place)", host)
+	}
+	c := inspect.ChooseReviewer(cfg.Inspect.Reviewer, cfg.Inspect.Apps, cfg.Inspect.AppFamilies, b, cfg.Autonomy.Approver)
+	var up []string
+	for _, a := range inspect.Apps {
+		f := a.Family
+		if v := verbs.Family(cfg.Inspect.AppFamilies[a.Name]); v != "" {
+			f = v
+		}
+		switch {
+		case a.Login == "" || slices.Contains(cfg.Inspect.Apps, a.Name) && c.App == a.Name:
+		case f == verbs.FamilyHostManaged:
+			up = append(up, fmt.Sprintf("%s (set [inspect] app_families.%s to the family it runs, outside the builder's)", a.Name, a.Name))
+		case b.Rung(f) == inspect.RungA:
+			up = append(up, fmt.Sprintf("%s (%s)", a.Name, f))
+		}
+	}
+	lines := []string{builder}
+	if c.Rung != inspect.RungA && len(up) > 0 {
+		lines = append(lines, "move up (free): install a reviewer app of another family and add it to [inspect] apps: "+strings.Join(up, "; "))
+	}
+	switch c.Rung {
+	case inspect.RungA:
+		return Result{Status: Pass, Detail: fmt.Sprintf("A  different-family review: %s (%s); it counts toward autonomy", c.App, c.Family), Lines: lines}
+	case inspect.RungC:
+		return Result{Status: Pass, Detail: fmt.Sprintf("C  same-family review: %s (%s), no other family reachable; it never counts toward autonomy, so a person passes every PR", c.App, c.Family), Lines: lines}
+	}
+	return Result{Status: Warn, Detail: "no reviewer app can review: a person reviews every PR", Lines: lines}
 }
