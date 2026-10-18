@@ -68,12 +68,29 @@ aayu inbox
 It lists open Decisions (floor waivers and provisional ones included), pull requests where the review stopped after
 its two fix rounds, stories whose pull request merged without a ship record, Bugs whose fix merged, and stories that
 another story replaced. It does not list a pull request waiting for your approval or a plan waiting for
-`plan --approve`; with a bot App installed, find those in GitHub's review requests. Press `a` to accept the recommendation, `c` to choose another option, `s` to skip, `o` to
-open it, or `q` to quit. Every write is yours, under your own token, and logged.
+`plan --approve`; with a bot App installed, find those in GitHub's review requests. Every write is yours, under your
+own token, and logged.
 
-**You should see** the steps one at a time, each with its recommendation. When it has steps, `aayu` with no command
-shows "Waiting in your inbox" with the count, and `aayu next` names `aayu inbox`. Add `--dry-run` to see what each key
-would write. The inbox runs only in your own terminal; agents are refused.
+**You should see** one card at a time with a slim list beside it (above it on a phone-width terminal). The list has
+one line per item, its icon, title, and number, with what needs you first and the housekeeping folded into one line.
+The card says what the item is in one plain line, then the counsel of the seat's twin (Atri for a Decision, Drona for
+a pull request, Vidhi for the housekeeping): what it is, the one link it rests on, what it recommends and why, labelled
+counsel, not approval. Atri's counsel is the one posted on the Decision with `aayu counsel --post`; every other counsel
+is written from the facts the inbox read, never by a model, so the inbox opens at once. Below it are numbered choices,
+the recommendation first and selected: Enter does it, and the next card appears. A digit selects another choice and
+Enter does it after saying what it writes; a one-way door also asks for Enter again. `s` skips to the next card, `j`
+and `k` move, `/` (or Ctrl+K) finds any item or choice by typing, `A` tidies all the housekeeping after one
+confirmation, `?` explains the card in plain words, and `q` quits; the mouse clicks rows and choices. The inbox opens
+from your last read (kept in your user state directory, never in the repository) and refreshes behind the card every
+45 seconds or on `R`; before any write it reads that item again, and if it changed it shows the new card and writes
+nothing. With `--plain`, `TERM=dumb`, or `[ui] plain = true` the same cards come line by line, fitted to the
+terminal's width.
+
+When it has steps, `aayu` with no command shows "Waiting in your inbox" with the count, and `aayu next` names
+`aayu inbox`. Add `--dry-run` to see what each key would write. The inbox runs only in your own terminal; agents are
+refused. An agent may show you `aayu inbox --list`, the same cards read-only (Markdown, or JSON
+with `--json`); `/aayudha:inbox` in Claude Code, Codex, and Cursor runs it. In Claude Code or Codex, open a terminal
+for `aayu inbox` itself: their `!` shell mode gives it no keyboard. Away from a terminal, act on each item on GitHub.
 
 ## Decisions that do not wait forever
 

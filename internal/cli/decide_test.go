@@ -449,8 +449,8 @@ func TestLetteredDecision(t *testing.T) {
 	if code, out, _ := run(t, env, opts, "decide", "--repo", "o/r"); code != 0 || !strings.Contains(out, "\n  1 (A). waive\n  2 (B). fix (recommended)\n") {
 		t.Errorf("decide: exit %d:\n%s", code, out)
 	}
-	if code, out, _ := runIn(t, env, opts, "q", "inbox", "--repo", "o/r"); code != 0 || !strings.Contains(out, "\n  1 (A). waive\n  2 (B). fix (recommended)\n"+
-		"  a or Enter = accept the recommendation (option 2 (B)) · 1-2 = accept that option") {
+	if code, out, _ := runIn(t, env, opts, "q", "inbox", "--repo", "o/r"); code != 0 || !strings.Contains(out, "\n  2 (B). Accept: fix (recommended)\n  1 (A). Accept: waive\n"+
+		"  3. Open #1 on GitHub\n  Enter = 2 (B) · pick 1-3") {
 		t.Errorf("inbox: exit %d:\n%s", code, out)
 	}
 	it, _ := workitems.Parse(1, "Waive the eval-bar floor on #401", legacyWaiverBody, "", []string{"type:decision"})

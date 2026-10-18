@@ -107,7 +107,7 @@ every input of every verb.
 | `lfs-agent` | git-lfs custom transfer agent for S3/R2 storage. | DevOps & DevEx Tinkerer |
 | `next` | Print the single best next step for this repository: the exact command to run and why. | Engineering Manager |
 | `tour` | Guided first run: check this machine, then set the repository up at Level 1 in a few prompts; refused for agents. | Founder |
-| `inbox` | List every human-only step waiting for you, with the twin's recommendation, and act on each with one keypress; refused for agents, needs a terminal. | Founder |
+| `inbox` | Every human-only step waiting for you, one card at a time with the twin's counsel; Enter takes the recommendation and A tidies the housekeeping. Refused for agents and needs a terminal, except --list. | Founder |
 | `completion` | Print the shell completion script, generated from the registry, for bash, zsh, fish, or PowerShell. | DevOps & DevEx Tinkerer |
 
 <!-- END GENERATED: plumbing -->
