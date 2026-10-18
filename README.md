@@ -7,10 +7,10 @@ It works inside the agent you already use (Claude Code, Codex, Cursor, or Amp), 
 - **Clear work.** An interview turns "make it faster" into a Goal with a baseline, and stories with numbered promises.
 - **Proof before merge.** A merge gate runs fixed checks in your CI and asks a reviewer agent from another vendor.
   It needs no AI keys in your CI.
-- **A person decides.** By default, nothing merges without a person's yes. With merge on proof on, a routine change
+- **A person decides.** By default, nothing merges without a person's yes. With merge on proof on, a story's pull request
   merges once its checks, proof, and review pass; risky files still wait for a person. Every bypass is recorded.
 
-**New in v0.3.0:** a routine change can merge on its own once its checks, proof, and review pass, and each project
+**New in v0.3.0:** a story's pull request can merge on its own once its checks, proof, and review pass, and each project
 names one review tool. Read [what's new](docs/releases/v0.3.0.md#whats-new) and [how to upgrade](docs/releases/v0.3.0.md#upgrade).
 
 It is not a coding agent and it does not run your production. It organises, checks, and records the work your agent
