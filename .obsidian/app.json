@@ -1,0 +1,9 @@
+{
+  "alwaysUpdateLinks": true,
+  "newLinkFormat": "shortest",
+  "showFrontmatter": true,
+  "useMarkdownLinks": false,
+  "userIgnoreFilters": [
+    "Templates/"
+  ]
+}

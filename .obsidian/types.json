@@ -1,0 +1,28 @@
+{
+  "types": {
+    "aliases": "aliases",
+    "direction": "text",
+    "id": "text",
+    "issues": "multitext",
+    "objections": "multitext",
+    "objectives": "multitext",
+    "objects_to": "text",
+    "owner": "text",
+    "people": "multitext",
+    "raised_by": "text",
+    "release_issue": "number",
+    "resolution": "text",
+    "reviewed": "date",
+    "sources": "multitext",
+    "status": "text",
+    "superseded_by": "multitext",
+    "supersedes": "multitext",
+    "tags": "tags",
+    "title": "text",
+    "type": "text",
+    "up": "text",
+    "updated": "date",
+    "version": "text",
+    "workstream": "text"
+  }
+}

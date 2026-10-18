@@ -1,0 +1,149 @@
+{
+  "colorGroups": [
+    {
+      "query": "tag:#type/home",
+      "color": {
+        "a": 1,
+        "rgb": 16777215
+      }
+    },
+    {
+      "query": "tag:#type/moc",
+      "color": {
+        "a": 1,
+        "rgb": 10526880
+      }
+    },
+    {
+      "query": "tag:#type/vision",
+      "color": {
+        "a": 1,
+        "rgb": 14701138
+      }
+    },
+    {
+      "query": "tag:#type/mission",
+      "color": {
+        "a": 1,
+        "rgb": 14711378
+      }
+    },
+    {
+      "query": "tag:#type/principle",
+      "color": {
+        "a": 1,
+        "rgb": 14723154
+      }
+    },
+    {
+      "query": "tag:#type/guidance",
+      "color": {
+        "a": 1,
+        "rgb": 13224271
+      }
+    },
+    {
+      "query": "tag:#type/direction",
+      "color": {
+        "a": 1,
+        "rgb": 9425231
+      }
+    },
+    {
+      "query": "tag:#type/objective",
+      "color": {
+        "a": 1,
+        "rgb": 5228922
+      }
+    },
+    {
+      "query": "tag:#type/objection",
+      "color": {
+        "a": 1,
+        "rgb": 13717416
+      }
+    },
+    {
+      "query": "tag:#type/decision",
+      "color": {
+        "a": 1,
+        "rgb": 5220561
+      }
+    },
+    {
+      "query": "tag:#type/capability",
+      "color": {
+        "a": 1,
+        "rgb": 5204945
+      }
+    },
+    {
+      "query": "tag:#type/persona",
+      "color": {
+        "a": 1,
+        "rgb": 9392081
+      }
+    },
+    {
+      "query": "tag:#type/problem",
+      "color": {
+        "a": 1,
+        "rgb": 11751377
+      }
+    },
+    {
+      "query": "tag:#type/term",
+      "color": {
+        "a": 1,
+        "rgb": 10263659
+      }
+    },
+    {
+      "query": "tag:#type/seat",
+      "color": {
+        "a": 1,
+        "rgb": 7058355
+      }
+    },
+    {
+      "query": "tag:#type/person",
+      "color": {
+        "a": 1,
+        "rgb": 7049139
+      }
+    },
+    {
+      "query": "tag:#type/workstream",
+      "color": {
+        "a": 1,
+        "rgb": 13742927
+      }
+    },
+    {
+      "query": "tag:#type/release",
+      "color": {
+        "a": 1,
+        "rgb": 13728335
+      }
+    },
+    {
+      "query": "tag:#type/revenue",
+      "color": {
+        "a": 1,
+        "rgb": 13750607
+      }
+    },
+    {
+      "query": "tag:#type/timeline",
+      "color": {
+        "a": 1,
+        "rgb": 11776947
+      }
+    }
+  ],
+  "hideUnresolved": false,
+  "search": "-path:Templates",
+  "showAttachments": false,
+  "showOrphans": true,
+  "showTags": false
+}

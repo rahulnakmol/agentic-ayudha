@@ -1,0 +1,10 @@
+# Per-person Obsidian state: never shared.
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/workspaces.json
+.obsidian/hotkeys.json
+.obsidian/appearance.json
+.obsidian/community-plugins.json
+.obsidian/plugins/
+.obsidian/cache/
+.trash/
