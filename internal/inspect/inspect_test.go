@@ -120,7 +120,7 @@ func TestGeneralModeFilters(t *testing.T) {
 // The model reads the PR's title and body, so an edit of either reaches it
 // again; a changed Aayudha-Model declaration does not (the rung is relabelled).
 func TestRunCacheKeyCoversPRText(t *testing.T) {
-	a, calls := scripted("grok-4.7", reply("merge"), reply("merge"))
+	a, calls := scripted("grok-4.7", reply("merge"), reply("merge"), reply("merge"))
 	r := Runner{Reviewers: []Reviewer{a}}
 	in := testInput("")
 	in.Title, in.Body = "Add Percent", "Adds Percent.\n\nAayudha-Host: amp"
@@ -132,8 +132,12 @@ func TestRunCacheKeyCoversPRText(t *testing.T) {
 	if res, _, _ := r.Run(context.Background(), in, st); !res.Cached || *calls != 1 {
 		t.Fatalf("a changed declaration: cached %v, %d calls", res.Cached, *calls)
 	}
-	in.Title = "Add Percent; it now also rounds"
+	in.Body += "Aayudha-Model: rounds half up now\n" // not a declaration aayu reads: it is description
 	if res, _, _ := r.Run(context.Background(), in, st); res.Cached || *calls != 2 {
+		t.Fatalf("an edited description: cached %v, %d calls", res.Cached, *calls)
+	}
+	in.Title = "Add Percent; it now also rounds"
+	if res, _, _ := r.Run(context.Background(), in, st); res.Cached || *calls != 3 {
 		t.Fatalf("an edited title: cached %v, %d calls", res.Cached, *calls)
 	}
 }

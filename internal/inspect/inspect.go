@@ -672,8 +672,10 @@ func capText(s string, n int) string {
 	return s[:n] + fmt.Sprintf("\n… (%d more bytes not shown)", len(s)-n)
 }
 
-// declLine is a PR body's builder declaration line.
-var declLine = regexp.MustCompile(`(?mi)^\s*Aayudha-(Host|Model):.*$`)
+// declLine is a PR body's builder declaration, exactly as aayu reads one
+// (internal/cli/verify.go modelTrailer and hostTrailer); any other line,
+// one that only looks like a declaration included, salts the cache key.
+var declLine = regexp.MustCompile(`(?m)^Aayudha-(?:Host|Model):\s*\S+\s*$`)
 
 // Marker is the replace-in-place comment inspect keeps on the PR.
 const Marker = "<!-- aayudha:inspect -->"
