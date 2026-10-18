@@ -1,7 +1,8 @@
 # `inspect`: get a second opinion from another vendor
 
-An agent should never grade its own work. `inspect` asks a reviewer app from a different vendor than the builder to
-read the pull request against every promise, then reads its reply as `merge`, `fix`, or `rebuild`.
+An agent should never grade its own work. `inspect` has a model from a different vendor than the builder read the
+pull request against every promise: by default the code-review environment's model, or a reviewer app you choose. It
+reads the review as `merge`, `fix`, or `rebuild`.
 
 <!-- BEGIN GENERATED: skill-card -->
 
@@ -54,9 +55,10 @@ aayu inspect <pr>
 
 <!-- END GENERATED: skill-usage -->
 
-> **Needs setup:** a reviewer app (Claude, Codex, or Cursor) installed on the account that owns the repository, from
-> a different vendor than the builder, and named in `[inspect] apps`. `aayu doctor`'s `reviewer-apps` row shows what
-> it found. See [pick a reviewer](../guide-review.md#before-your-first-pull-request-pick-a-reviewer).
+> **Needs setup:** the repository's `code-review` environment with its review model and key (`aayu init --gates`
+> creates it; you add the key), or a reviewer app you choose in `[inspect] reviewer`. `aayu doctor`'s `review-rung` row
+> shows the setup. See [set up the reviewer](../guide-review.md#before-your-first-pull-request-set-up-the-reviewer) and
+> [code review in the gate](../how-review.md).
 
 ## What you get back
 
