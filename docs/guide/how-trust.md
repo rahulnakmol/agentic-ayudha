@@ -235,7 +235,8 @@ reaction, a `workflow_dispatch`, an environment approval, or a Slack message mad
 not proof of a person: the agent could have made it. The device code works because it mints a fresh credential on
 your own device. A reply works only when agents never hold your GitHub credential, which is why aayu refuses replies,
 with that reason, whenever a session can reach it. `aayu doctor`'s approvals row lists every GitHub credential the
-session can reach (a token-shaped environment variable, every account `gh` stores, active or not and in its default profile too when `GH_CONFIG_DIR` points elsewhere, the git
+session can reach (a token-shaped environment variable other than one named `WTW_*` or `GH_WTW_*`, which aayu
+never reads, every account `gh` stores, active or not and in its default profile too when `GH_CONFIG_DIR` points elsewhere, the git
 credential helper, and the token aayu itself would use, including one in its secrets store) by source and account,
 never by value, and fails when one belongs to an approver or when GitHub cannot say whose it is just then (a
 timeout or a rate limit counts as exposed). A legacy 40-character token counts too, in a variable named for GitHub,
