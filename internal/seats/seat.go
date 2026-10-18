@@ -412,9 +412,16 @@ func (s *Seat) gateRuleset(ctx context.Context) (map[string]any, error) {
 		_, err = s.GH.REST.Do(req, out)
 		return err
 	}
-	var list []map[string]any
-	if err := get("/repos/"+s.Repo+"/rulesets", &list); err != nil {
-		return nil, fmt.Errorf("listing rulesets: %w", err)
+	var list []map[string]any // every page: a false absence would create a second ruleset
+	for page := 1; ; page++ {
+		var batch []map[string]any
+		if err := get(fmt.Sprintf("/repos/%s/rulesets?per_page=100&page=%d", s.Repo, page), &batch); err != nil {
+			return nil, fmt.Errorf("listing rulesets: %w", err)
+		}
+		list = append(list, batch...)
+		if len(batch) < 100 {
+			break
+		}
 	}
 	for _, r := range list {
 		if r["name"] == GateRuleset {

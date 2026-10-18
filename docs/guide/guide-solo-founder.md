@@ -128,10 +128,12 @@ instead.
 `aayu seat remove <seat>` returns a seat to solo and hands its person's open stories back to the twin.
 
 > **Honest status:** a repository adopted with `aayu init` has no `protected-paths-codeowner-review` ruleset and no
-> solo-mode gate, so with one human GitHub itself enforces no review on protected paths (`ship` still does), and
-> `seat add` reports `policy: n/a`. Once the second person's CODEOWNERS change has merged, the second `seat add`
-> creates the ruleset: one CODEOWNER approval on your dev branch, with no bypass. It needs a token with
-> Administration: write, and a private repository needs a GitHub plan with rulesets. `seat remove` deletes it again.
+> solo-mode gate. With one human, GitHub itself enforces no review on protected paths (`ship` still does), and
+> `seat add` reports `policy: n/a`.
+>
+> Once the second person's CODEOWNERS change has merged, the second `seat add` creates the ruleset: one CODEOWNER
+> approval on your dev branch, with no bypass. It needs a token with Administration: write, and a private repository
+> needs a GitHub plan with rulesets; `seat remove` deletes it again.
 
 ## What can go wrong
 
