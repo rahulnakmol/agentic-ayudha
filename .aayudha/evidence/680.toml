@@ -1,0 +1,17 @@
+# Which tests prove Bug #680's Completion Goal (the narrow set holds the streak back with merge on proof off).
+
+[[criterion]]
+id = 1 # proof off, a qualifying streak, and .aayudha/config.local.json: exit 4, the path named, no autonomous pass, the PR open
+tests = ["internal/cli:TestShipAutonomousFootprint"]
+
+[[criterion]]
+id = 2 # proof off, the same streak, and an [autonomy] edit in .aayudha/config.toml: exit 4, the table named, the PR open
+tests = ["internal/cli:TestShipAutonomousFootprint"]
+
+[[criterion]]
+id = 3 # proof off, no narrow-set path: the autonomous pass and the merge, as before
+tests = ["internal/cli:TestShipAutonomousFootprint"]
+
+[[criterion]]
+id = 4 # proof on: config.local.json gets the same reason as on dev 70299db, and a clean PR merges on proof
+tests = ["internal/cli:TestShipAutonomousFootprint", "internal/cli:TestShipOnProof"]

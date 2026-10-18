@@ -884,6 +884,11 @@ func (g *GitHub) serve(w http.ResponseWriter, r *http.Request) {
 			sha, _ = c["tree"].(string)
 		}
 		tree, ok := g.Trees[sha]
+		for _, pr := range g.Pulls { // a PR's head or base commit no test gave a tree has an empty one
+			if !ok && sha != "" && (pr.Head.SHA == sha || pr.Base.SHA == sha) {
+				tree, ok = []map[string]any{}, true
+			}
+		}
 		if !ok {
 			notFound()
 			return

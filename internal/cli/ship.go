@@ -340,8 +340,10 @@ func runShip(ctx context.Context, e *Env, in Values) error {
 			note += fmt.Sprintf("; CODEOWNERS paths %s merged with no code owner's review", strings.Join(proofOK.Protected, ", "))
 		}
 		rec.HumanPass = HumanPass{Kind: "proof", Login: me.Login, Commit: head, Note: note}
-	} else if rec.HumanPass.Kind == "" && proofWhy != "" {
+	} else if rec.HumanPass.Kind == "" && proofWhy != "" && pol.Config.Autonomy.Proof {
 		why = append(why, "no merge on proof: "+proofWhy)
+	} else if rec.HumanPass.Kind == "" && proofWhy != "" { // proof off: the narrow set still holds the streak back (#680)
+		why = append(why, "no merge on the streak: "+proofWhy)
 	}
 	// The streak can only give an autonomous pass, so it is read (about two
 	// minutes of GitHub history) only when no human pass is settled (#701).
