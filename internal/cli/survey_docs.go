@@ -45,7 +45,9 @@ func surveyManuals(ctx context.Context, path, dir string) (map[string]string, er
 	} else {
 		files = []string{path}
 	}
-	out := map[string]string{}
+	// Each manual's name, checked for every file before any is read or
+	// converted: guide.pdf becomes guide.pdf.txt, which another file may be.
+	names, from := map[string]string{}, map[string]string{}
 	for _, f := range files {
 		ext := strings.ToLower(filepath.Ext(f))
 		if !manualExts[ext] {
@@ -53,6 +55,17 @@ func surveyManuals(ctx context.Context, path, dir string) (map[string]string, er
 		}
 		rel, _ := filepath.Rel(base, f)
 		name := filepath.ToSlash(rel)
+		if ext == ".pdf" {
+			name += ".txt"
+		}
+		if prev, dup := from[name]; dup {
+			return nil, fmt.Errorf("survey --docs: %s and %s would both be manual:%s; rename one", prev, f, name)
+		}
+		from[name], names[f] = f, name
+	}
+	out := map[string]string{}
+	for _, f := range files {
+		ext, name := strings.ToLower(filepath.Ext(f)), names[f]
 		var text []byte
 		if ext == ".pdf" {
 			if _, err := exec.LookPath("pdftotext"); err != nil {
@@ -61,7 +74,6 @@ func surveyManuals(ctx context.Context, path, dir string) (map[string]string, er
 			if text, err = exec.CommandContext(ctx, "pdftotext", "-layout", f, "-").Output(); err != nil {
 				return nil, fmt.Errorf("survey --docs: pdftotext %s: %w", f, err)
 			}
-			name += ".txt"
 		} else if text, err = os.ReadFile(f); err != nil {
 			return nil, err
 		}

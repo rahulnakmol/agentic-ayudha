@@ -280,6 +280,42 @@ func TestSurveyDocs(t *testing.T) {
 			t.Fatalf("the whole manual cited as %s: %d %s", whole, code, stdout)
 		}
 	}
+	// guide.pdf would become manual:guide.pdf.txt, which guide.pdf.txt already is.
+	clash := t.TempDir()
+	for _, f := range []string{"guide.pdf", "guide.pdf.txt"} {
+		if err := os.WriteFile(filepath.Join(clash, f), []byte("Guide.\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if code, _, stderr := run(t, nil, opts, "survey", dir, "--out", out, "--docs", clash); code != ExitUsage || !strings.Contains(stderr, "would both be manual:guide.pdf.txt") {
+		t.Fatalf("colliding manual names: %d %s", code, stderr)
+	}
+	// A link the surveyed checkout commits under the default output directory
+	// never redirects a write: the survey refuses before writing anything.
+	victim := filepath.Join(t.TempDir(), "config")
+	if err := os.WriteFile(victim, []byte("safe\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	links := filepath.Join(dir, ".aayudha", "survey", "manuals")
+	if err := os.MkdirAll(links, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(victim, filepath.Join(links, "operator-notes.md")); err != nil {
+		t.Skipf("symlinks: %v", err)
+	}
+	code, _, stderr = run(t, nil, opts, "survey", dir, "--docs", docs)
+	if b, _ := os.ReadFile(victim); code != ExitUsage || !strings.Contains(stderr, "is a symbolic link") || string(b) != "safe\n" {
+		t.Fatalf("a linked manual destination: %d %s; target now %q", code, stderr, b)
+	}
+	if err := os.RemoveAll(filepath.Join(dir, ".aayudha")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(t.TempDir(), filepath.Join(dir, ".aayudha")); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, stderr = run(t, nil, opts, "survey", dir); code != ExitUsage || !strings.Contains(stderr, ".aayudha is a symbolic link") {
+		t.Fatalf("a linked .aayudha: %d %s", code, stderr)
+	}
 }
 
 // WP5.9: `survey --backlog` renders backlog.md and its digest and files
