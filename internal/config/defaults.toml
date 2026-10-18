@@ -77,6 +77,11 @@ wall_hours = 8
 cost_usd = 60.0
 attempts = 3
 
+# The build-ready loop (loops/build-ready.toml, `aayu build --next`): how many items it has in progress at once, from
+# claim to merge. Its open pull requests count as well as its claims that have no pull request yet; 0 stops its picks.
+[build]
+in_flight = 1
+
 # Spend limits enforced by the model gateway's circuit breaker (WP1.6).
 [budget]
 per_story_usd = 60.0 # at least autonomy.budget.cost_usd, so the breaker never stops a story before its build budget

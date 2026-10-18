@@ -27,7 +27,7 @@
       "x-aayu-type": "enum"
     },
     "issue": {
-      "description": "Ready story or bug to build.",
+      "description": "Ready story or bug to build; required unless --next.",
       "pattern": "^(#?[1-9][0-9]*|https://github\\.com/[^/]+/[^/]+/issues/[1-9][0-9]*)$",
       "type": "string",
       "x-aayu-type": "issue"
@@ -37,15 +37,27 @@
       "type": "boolean",
       "x-aayu-type": "bool"
     },
+    "next": {
+      "description": "The build-ready loop, with no model: ship lists the loop's own open PRs, oldest first, and changes nothing; pick blocks the loop's stale claims, then, under [build] in_flight, claims the first Ready story or bug (the current release's accepted baseline in its order, else priority, then age) and cuts its worktree.",
+      "enum": [
+        "ship",
+        "pick"
+      ],
+      "type": "string",
+      "x-aayu-type": "enum"
+    },
     "resume": {
       "description": "Resume from the last Aayudha-Checkpoint trailer.",
       "type": "boolean",
       "x-aayu-type": "bool"
+    },
+    "stop": {
+      "description": "Stop this build for good: move the story to status:blocked with this reason and page its owner; the lease stays until it expires.",
+      "type": "string",
+      "x-aayu-type": "string"
     }
   },
-  "required": [
-    "issue"
-  ],
+  "required": [],
   "title": "build",
   "type": "object",
   "x-aayu-exposure": "write",

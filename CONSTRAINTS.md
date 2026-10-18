@@ -60,6 +60,7 @@ Performance (Lighthouse CI) and API (k6) budgets are product-specific and have n
 
 | Key | Default | Meaning | Source |
 |---|---|---|---|
+| `build.in_flight` | `1` | Items the build-ready loop (`aayu build --next`) has in progress at once, from claim to merge: its open pull requests and its claims with no pull request yet. 0 stops its picks. | proposed (build loop) |
 | `budget.per_story_usd` | `60.0` | Model spend per story, in USD, before the circuit breaker pauses agent lanes (exit 6). At least `autonomy.budget.cost_usd`, so the breaker never stops a story before its build budget does. | proposed (WP0.5) |
 | `budget.per_day_usd` | `100.0` | Model spend per repository per day, in USD, before the breaker trips. | proposed (WP0.5) |
 | `budget.per_pr_inspect_max` | `5.0` | Model spend, in USD, for `inspect` on one PR across all its cycles. | proposed (WP0.5) |

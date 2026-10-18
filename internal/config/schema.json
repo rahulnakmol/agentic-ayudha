@@ -995,6 +995,18 @@
       "type": "object",
       "description": "How build --delegate reaches other agents (WP5.5b). Values name secrets; they never hold them."
     },
+    "build": {
+      "properties": {
+        "in_flight": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Items the build-ready loop has in progress at once, from claim to merge: its open pull requests and its claims with no pull request yet. 0 stops its picks."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "The build-ready loop (aayu build --next): how many items it has in progress at once."
+    },
     "hosts": {
       "properties": {
         "cursor": {

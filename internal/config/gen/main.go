@@ -88,8 +88,9 @@ var sections = []section{
 	},
 	{
 		heading: "Budgets",
-		roots:   []string{"budget"},
+		roots:   []string{"budget", "build"},
 		rows: []row{
+			{"build.in_flight", "Items the build-ready loop (`aayu build --next`) has in progress at once, from claim to merge: its open pull requests and its claims with no pull request yet. 0 stops its picks.", "proposed (build loop)"},
 			{"budget.per_story_usd", "Model spend per story, in USD, before the circuit breaker pauses agent lanes (exit 6). At least `autonomy.budget.cost_usd`, so the breaker never stops a story before its build budget does.", proposed},
 			{"budget.per_day_usd", "Model spend per repository per day, in USD, before the breaker trips.", proposed},
 			{"budget.per_pr_inspect_max", "Model spend, in USD, for `inspect` on one PR across all its cycles.", proposed},

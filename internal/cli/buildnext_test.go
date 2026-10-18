@@ -1,0 +1,220 @@
+package cli
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"slices"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/rahulnakmol/agentic-ayudha/internal/github/fake"
+)
+
+// buildLoopFixture is a checkout with the build-ready loop defined and an
+// agent session, whose build --next runs return what they decided.
+func buildLoopFixture(t *testing.T, g *fake.GitHub) (next func(extra map[string]string, args ...string) (int, BuildResult, BuildPick, string), env map[string]string, opts Options, dir, bare string) {
+	t.Helper()
+	dir, bare = ledgerCheckout(t)
+	b, err := os.ReadFile(filepath.Join("..", "..", "loops", BuildLoop+".toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = os.MkdirAll(filepath.Join(dir, "loops"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "loops", BuildLoop+".toml"), b, 0o644)
+	// An agent session: the asked gate holds every story the person did not name.
+	env = map[string]string{"AAYU_GITHUB_TOKEN": "human-token", "PATH": os.Getenv("PATH"), "CODEX_THREAD_ID": "loop-run"}
+	opts = Options{GitHubAPI: g.URL(), GitHubGap: -1, Dir: dir, CheckpointVerify: holds}
+	next = func(extra map[string]string, args ...string) (int, BuildResult, BuildPick, string) {
+		t.Helper()
+		e := map[string]string{}
+		for k, v := range env {
+			e[k] = v
+		}
+		for k, v := range extra {
+			e[k] = v
+		}
+		code, out, errOut := run(t, e, opts, append([]string{"build", "--repo", "o/r", "--json"}, args...)...)
+		var res BuildResult
+		var pick BuildPick
+		_ = json.Unmarshal([]byte(out), &res)
+		_ = json.Unmarshal([]byte(out), &pick)
+		if res.Pick != nil {
+			pick = *res.Pick
+		}
+		return code, res, pick, out + errOut
+	}
+	return next, env, opts, dir, bare
+}
+
+func readyAll(t *testing.T, env map[string]string, opts Options, ns ...int) {
+	t.Helper()
+	person := map[string]string{"AAYU_GITHUB_TOKEN": env["AAYU_GITHUB_TOKEN"], "PATH": env["PATH"]}
+	for _, n := range ns {
+		if code, _, errOut := run(t, person, opts, "ready", strconv.Itoa(n), "--repo", "o/r"); code != 0 {
+			t.Fatalf("ready %d: %s", n, errOut)
+		}
+	}
+}
+
+func hasLine(xs []string, prefix, part string) bool {
+	return slices.ContainsFunc(xs, func(x string) bool { return strings.HasPrefix(x, prefix) && strings.Contains(x, part) })
+}
+
+// The build-ready loop with no accepted baseline: build --next pick claims the
+// first free Ready item by priority, then age, never one that drifted, has an
+// open PR, or another's live claim; the asked gate lets the loop's own pick
+// through; in_flight counts the loop's open PRs as well as its claims; a claim
+// whose lease ran out with no PR is blocked, never picked again; --stop blocks
+// a build with its reason; ship lists the loop's open PRs and changes nothing.
+func TestBuildNextPicksClaimsAndLimits(t *testing.T) {
+	g := readyTree(t)
+	body := fixtureBody(t, "story", nil)
+	low := g.AddIssue("No priority", body, "type:story", "effort:S")                    // #7: lowest number, no priority
+	newer := g.AddIssue("P1 newer", body, "type:story", "effort:S", "priority:P1")      // #8
+	older := g.AddIssue("P1 older", body, "type:story", "effort:S", "priority:P1")      // #9: higher number, created first
+	drifted := g.AddIssue("P0 drifted", body, "type:story", "effort:S", "priority:P0")  // #10
+	withPR := g.AddIssue("P0 with a PR", body, "type:story", "effort:S", "priority:P0") // #11
+	claimed := g.AddIssue("P0 claimed", body, "type:story", "effort:S", "priority:P0")  // #12
+	g.Mu.Lock()
+	older.CreatedAt = "2026-10-01T09:00:00Z"
+	g.Mu.Unlock()
+	next, env, opts, dir, bare := buildLoopFixture(t, g)
+
+	// Without the loop's definition there is no standing ask: --next refuses.
+	_ = os.Remove(filepath.Join(dir, "loops", BuildLoop+".toml"))
+	if code, _, _, out := next(nil, "--next", "pick"); code != ExitUsage || !strings.Contains(out, "no loops/build-ready.toml") {
+		t.Fatalf("--next without the loop: %d %s", code, out)
+	}
+	b, _ := os.ReadFile(filepath.Join("..", "..", "loops", BuildLoop+".toml"))
+	_ = os.WriteFile(filepath.Join(dir, "loops", BuildLoop+".toml"), b, 0o644)
+
+	readyAll(t, env, opts, low.Number, newer.Number, older.Number, drifted.Number, withPR.Number, claimed.Number)
+	g.Mu.Lock()
+	drifted.Body += "\nOne more line after Ready."
+	claimed.Comments = append(claimed.Comments, &fake.Comment{ID: 901, Body: leaseBody("other@laptop", time.Now().Add(time.Hour))})
+	g.Mu.Unlock()
+	g.AddPR("Their PR", "Refs #11\n", "someone", "feat/x", strings.Repeat("a", 40), "dev")
+
+	code, res, pick, out := next(nil, "--next", "pick")
+	if code != 0 || res.Issue != older.Number || pick.Picked != older.Number || !res.Created {
+		t.Fatalf("first pick: want #%d, got %d %+v %s", older.Number, code, pick, out)
+	}
+	for _, want := range []struct {
+		n   int
+		why string
+	}{{drifted.Number, "body changed after Ready"}, {withPR.Number, "open pull request"}, {claimed.Number, "claimed by other@laptop"}} {
+		if !hasLine(pick.Skipped, "#"+strconv.Itoa(want.n)+":", want.why) {
+			t.Fatalf("skipped %v lacks #%d (%s)", pick.Skipped, want.n, want.why)
+		}
+	}
+	if labels := g.LabelNames(older.Number); !contains(labels, LeaseLabel) || !contains(labels, labelInProgress) {
+		t.Fatalf("the pick is not claimed: %v", labels)
+	}
+	var st BuildState
+	if err := json.Unmarshal([]byte(git(t, bare, "show", "ledger:"+BuildLedgerPath(older.Number))), &st); err != nil || st.Loop != BuildLoop {
+		t.Fatalf("ledger state of the pick: %v %+v", err, st)
+	}
+	if log, _ := os.ReadFile(filepath.Join(dir, ".aayudha", "telemetry", "actions.jsonl")); !strings.Contains(string(log), "the build-ready loop picked #9") {
+		t.Fatalf("the loop's ask is not in the actions log:\n%s", log)
+	}
+
+	// One in flight, the default limit: nothing new, and the queue is untouched.
+	if code, res, pick, out := next(nil, "--next", "pick"); code != 0 || res.Issue != 0 || pick.Reason != "1 of 1 in flight: nothing new until one merges or stops" {
+		t.Fatalf("second pick at the limit: %d %s", code, out)
+	}
+	if contains(g.LabelNames(newer.Number), LeaseLabel) {
+		t.Fatal("a pick at the limit claimed another item")
+	}
+	// ship lists the loop's open PRs only, and its PR still counts in flight.
+	if code, _, pick, out := next(nil, "--next", "ship"); code != 0 || len(pick.Ship) != 0 {
+		t.Fatalf("ship with no PR: %d %s", code, out)
+	}
+	pr := g.AddPR("P1 older", "Refs #9\n", "founder", "story/9-p1-older", strings.Repeat("b", 40), "dev")
+	if code, _, pick, out := next(nil, "--next", "ship"); code != 0 || len(pick.Ship) != 1 || pick.Ship[0].PR != pr.Number || pick.Ship[0].Story != older.Number {
+		t.Fatalf("ship lists the loop's PR: %d %s", code, out)
+	}
+	if code, _, pick, out := next(nil, "--next", "pick"); code != 0 || pick.Picked != 0 || len(pick.InFlight) != 1 || pick.InFlight[0].PR != pr.Number {
+		t.Fatalf("the loop's open PR counts in flight: %d %s", code, out)
+	}
+	// [build] in_flight 0 stops the picks.
+	if code, _, pick, _ := next(map[string]string{"AAYU_BUILD__IN_FLIGHT": "0"}, "--next", "pick"); code != 0 || pick.Picked != 0 || !strings.Contains(pick.Reason, "in_flight is 0") {
+		t.Fatalf("in_flight 0: %d %+v", code, pick)
+	}
+
+	two := map[string]string{"AAYU_BUILD__IN_FLIGHT": "2"}
+	if code, res, _, out := next(two, "--next", "pick"); code != 0 || res.Issue != newer.Number {
+		t.Fatalf("pick under in_flight 2: want #%d: %d %s", newer.Number, code, out)
+	}
+	// The claim on #8 runs out with no PR: the next pick blocks it, reports it, and takes the next item.
+	setLease(g, newer.Number, "founder@gone", time.Now().Add(-time.Minute))
+	code, res, pick, out = next(two, "--next", "pick")
+	if code != 0 || res.Issue != low.Number || !hasLine(pick.Stale, "#8:", "claim ran out with no pull request") {
+		t.Fatalf("stale claim: want #8 blocked and #%d picked: %d %s", low.Number, code, out)
+	}
+	if labels := g.LabelNames(newer.Number); !contains(labels, "status:blocked") || contains(labels, "status:ready") {
+		t.Fatalf("the stale claim is not blocked: %v", labels)
+	}
+	if p := comment(g, newer.Number, progressMarker); !strings.Contains(p, "**Blocked:** the build-ready loop's claim ran out") {
+		t.Fatalf("the stale claim's reason is not on the story:\n%s", p)
+	}
+
+	// The builder gives up on #7: --stop blocks it with the reason, and it leaves the in-flight count.
+	if code, _, _, out := next(nil, "7", "--stop", "the tests need a database this machine lacks"); code != ExitBlocked || !strings.Contains(out, "stopped by its builder: the tests need a database") {
+		t.Fatalf("--stop: %d %s", code, out)
+	}
+	if labels := g.LabelNames(low.Number); !contains(labels, "status:blocked") {
+		t.Fatalf("--stop did not block: %v", labels)
+	}
+	if code, res, pick, out := next(two, "--next", "pick"); code != 0 || res.Issue != 0 || len(pick.InFlight) != 1 || !strings.HasPrefix(pick.Reason, "nothing to build") {
+		t.Fatalf("after the stop, nothing free is left: %d %s", code, out)
+	}
+	if code, _, _, out := next(nil, "--next", "pick", "7"); code != ExitUsage {
+		t.Fatalf("--next with an issue: %d %s", code, out)
+	}
+}
+
+// With an accepted baseline for the open Release of the lowest version, the
+// loop builds only that baseline's Stories and Bugs, in the baseline's order,
+// whatever their priority; a Ready item outside it is never picked; an older
+// baseline of the same version and a closed Release's baseline are ignored.
+func TestBuildNextFollowsTheCurrentBaseline(t *testing.T) {
+	g := readyTree(t)
+	body := fixtureBody(t, "story", nil)
+	first := g.AddIssue("P0 second in the baseline", body, "type:story", "effort:S", "priority:P0") // #7
+	second := g.AddIssue("P3 first in the baseline", body, "type:story", "effort:S", "priority:P3") // #8
+	outside := g.AddIssue("P0 outside", body, "type:story", "effort:S", "priority:P0")              // #9
+	rel := g.AddIssue("Release v0.3.0", "x", "type:release")                                        // #10
+	old := g.AddIssue("Release v0.2.0", "x", "type:release")                                        // #11
+	g.Mu.Lock()
+	old.State = "closed"
+	g.Mu.Unlock()
+	next, env, opts, _, bare := buildLoopFixture(t, g)
+	readyAll(t, env, opts, first.Number, second.Number, outside.Number)
+	baseline := func(version string, release, n int, items ...int) string {
+		var its []map[string]any
+		for _, i := range items {
+			its = append(its, map[string]any{"number": i, "type": "story"})
+		}
+		its = append(its, map[string]any{"number": 1, "type": "feature"})
+		b, _ := json.Marshal(map[string]any{"schema": "aayudha.scope.baseline/v1", "version": version, "release_issue": release, "baseline": n, "items": its})
+		return string(b)
+	}
+	putLedger(t, bare, "releases/v0.2.0/baseline-1.json", baseline("v0.2.0", old.Number, 1, outside.Number))
+	putLedger(t, bare, "releases/v0.3.0/baseline-1.json", baseline("v0.3.0", rel.Number, 1, outside.Number))
+	putLedger(t, bare, "releases/v0.3.0/baseline-2.json", baseline("v0.3.0", rel.Number, 2, second.Number, first.Number))
+
+	three := map[string]string{"AAYU_BUILD__IN_FLIGHT": "3"}
+	for _, want := range []int{second.Number, first.Number} {
+		code, res, pick, out := next(three, "--next", "pick")
+		if code != 0 || res.Issue != want || pick.Release == nil || pick.Release.Version != "v0.3.0" || pick.Release.Baseline != 2 {
+			t.Fatalf("baseline pick: want #%d: %d %s", want, code, out)
+		}
+	}
+	code, res, pick, out := next(three, "--next", "pick")
+	if code != 0 || res.Issue != 0 || !strings.HasPrefix(pick.Reason, "nothing to build") || contains(g.LabelNames(outside.Number), LeaseLabel) {
+		t.Fatalf("an item outside the baseline was picked, or the queue did not end: %d %s", code, out)
+	}
+}

@@ -1,0 +1,438 @@
+package cli
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"regexp"
+	"slices"
+	"strconv"
+	"strings"
+	"time"
+
+	gh "github.com/google/go-github/v90/github"
+
+	"github.com/rahulnakmol/agentic-ayudha/internal/config"
+	"github.com/rahulnakmol/agentic-ayudha/internal/github"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ledger"
+	"github.com/rahulnakmol/agentic-ayudha/internal/loops"
+	"github.com/rahulnakmol/agentic-ayudha/internal/ready"
+	"github.com/rahulnakmol/agentic-ayudha/internal/workitems"
+)
+
+// BuildLoop is the loop that builds Ready items on its own
+// (loops/build-ready.toml). Its definition in the repository is the person's
+// standing ask: `aayu build --next` runs only where it exists.
+const BuildLoop = "build-ready"
+
+// BuildPick is what `aayu build --next` decided, with no model: the loop's
+// open pull requests to ship, what it has in flight against [build]
+// in_flight, the stale claims it blocked, and the queue it picked from.
+type BuildPick struct {
+	Mode     string         `json:"mode"` // ship or pick
+	Limit    int            `json:"in_flight_limit"`
+	InFlight []LoopItem     `json:"in_flight"`
+	Ship     []LoopItem     `json:"ship"`              // the loop's open PRs, oldest first
+	Order    string         `json:"order,omitempty"`   // what ordered the queue
+	Release  *PickedRelease `json:"release,omitempty"` // the current release's baseline, when one is accepted
+	Stale    []string       `json:"stale,omitempty"`   // claims blocked because their lease ran out with no PR
+	Skipped  []string       `json:"skipped,omitempty"` // queue items passed over, each with why
+	Picked   int            `json:"picked,omitempty"`
+	Reason   string         `json:"reason"`
+}
+
+// LoopItem is a story or bug the loop claimed: its PR, or its live claim.
+type LoopItem struct {
+	Story int    `json:"story"`
+	PR    int    `json:"pr,omitempty"`
+	URL   string `json:"url,omitempty"`
+	Claim string `json:"claim,omitempty"` // holder until expiry, while there is no PR yet
+}
+
+// PickedRelease is the accepted baseline the queue follows.
+type PickedRelease struct {
+	Version  string `json:"version"`
+	Issue    int    `json:"release_issue"`
+	Baseline int    `json:"baseline"`
+}
+
+// The ledger shapes of `aayu scope` (#676) that the pick reads, by path:
+// releases/<vX.Y.Z>/baseline-<n>.json. Like `aayu brain checkpoint`, build
+// reads the file contract and does not import the scope package.
+const scopeBaselineSchema = "aayudha.scope.baseline/v1"
+
+var baselinePathRE = regexp.MustCompile(`^releases/(v([0-9]+)\.([0-9]+)\.([0-9]+))/baseline-([1-9][0-9]*)\.json$`)
+
+type scopeBaseline struct {
+	Schema       string `json:"schema"`
+	Version      string `json:"version"`
+	ReleaseIssue int    `json:"release_issue"`
+	Baseline     int    `json:"baseline"`
+	Items        []struct {
+		Number int    `json:"number"`
+		Type   string `json:"type"`
+	} `json:"items"`
+}
+
+var (
+	refsRE      = regexp.MustCompile(`(?m)\bRefs #([0-9]+)\b`)
+	storyHeadRE = regexp.MustCompile(`^story/([0-9]+)-`)
+)
+
+// openStoryPRs maps each story to its oldest open pull request: one whose
+// body says Refs #n, or whose head is build's story/<n>- branch.
+func openStoryPRs(ctx context.Context, c *github.Client, owner, name string) (map[int]*gh.PullRequest, error) {
+	prs, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.PullRequest, *gh.Response, error) {
+		return c.REST.PullRequests.List(ctx, owner, name, &gh.PullRequestListOptions{State: "open", ListOptions: o})
+	})
+	if err != nil {
+		return nil, err
+	}
+	slices.SortFunc(prs, func(a, b *gh.PullRequest) int { return a.GetNumber() - b.GetNumber() })
+	out := map[int]*gh.PullRequest{}
+	for _, pr := range prs {
+		var stories []int
+		for _, m := range refsRE.FindAllStringSubmatch(pr.GetBody(), -1) {
+			n, _ := strconv.Atoi(m[1])
+			stories = append(stories, n)
+		}
+		if m := storyHeadRE.FindStringSubmatch(pr.GetHead().GetRef()); m != nil {
+			n, _ := strconv.Atoi(m[1])
+			stories = append(stories, n)
+		}
+		for _, n := range stories {
+			if _, ok := out[n]; !ok {
+				out[n] = pr
+			}
+		}
+	}
+	return out, nil
+}
+
+// loopStates are the build states on the ledger that the loop claimed.
+func loopStates(ctx context.Context, w *ledger.Writer) ([]BuildState, error) {
+	t, err := w.Read(ctx)
+	if errors.Is(err, ledger.ErrNoLedger) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer t.Close()
+	paths, err := t.List(ctx, "build")
+	if err != nil {
+		return nil, err
+	}
+	var out []BuildState
+	for _, p := range paths {
+		if !strings.HasSuffix(p, "/state.json") {
+			continue
+		}
+		b, err := t.File(ctx, p)
+		if err != nil {
+			return nil, err
+		}
+		var st BuildState
+		if json.Unmarshal(b, &st) == nil && st.Loop != "" && st.Story > 0 {
+			out = append(out, st)
+		}
+	}
+	slices.SortFunc(out, func(a, b BuildState) int { return a.Story - b.Story })
+	return out, nil
+}
+
+// currentBaseline is the newest accepted baseline of the open Release with
+// the lowest version; nil when no open Release has one.
+func currentBaseline(ctx context.Context, c *github.Client, w *ledger.Writer, owner, name string) (*scopeBaseline, error) {
+	t, err := w.Read(ctx)
+	if errors.Is(err, ledger.ErrNoLedger) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer t.Close()
+	paths, err := t.List(ctx, "releases")
+	if err != nil {
+		return nil, err
+	}
+	type ver struct {
+		v    string
+		key  []int
+		n    int
+		path string
+	}
+	newest := map[string]*ver{}
+	for _, p := range paths {
+		m := baselinePathRE.FindStringSubmatch(p)
+		if m == nil {
+			continue
+		}
+		key := make([]int, 3)
+		for i := range key {
+			key[i], _ = strconv.Atoi(m[i+2])
+		}
+		n, _ := strconv.Atoi(m[5])
+		if cur := newest[m[1]]; cur == nil || n > cur.n {
+			newest[m[1]] = &ver{v: m[1], key: key, n: n, path: p}
+		}
+	}
+	vs := make([]*ver, 0, len(newest))
+	for _, v := range newest {
+		vs = append(vs, v)
+	}
+	slices.SortFunc(vs, func(a, b *ver) int { return slices.Compare(a.key, b.key) })
+	for _, v := range vs {
+		raw, err := t.File(ctx, v.path)
+		if err != nil {
+			return nil, err
+		}
+		var b scopeBaseline
+		if err := json.Unmarshal(raw, &b); err != nil || b.Schema != scopeBaselineSchema || b.ReleaseIssue == 0 {
+			return nil, fmt.Errorf("ledger %s: not an accepted scope baseline (%s)", v.path, scopeBaselineSchema)
+		}
+		is, _, err := c.REST.Issues.Get(ctx, owner, name, b.ReleaseIssue)
+		if err != nil {
+			return nil, err
+		}
+		if is.GetState() == "open" {
+			if b.Version == "" {
+				b.Version = v.v
+			}
+			return &b, nil
+		}
+	}
+	return nil, nil
+}
+
+// priorityRank orders P0 first and an item with no priority last.
+func priorityRank(labels []string) int {
+	for _, l := range labels {
+		if p, ok := strings.CutPrefix(l, "priority:"); ok {
+			if i := slices.Index(workitems.Priorities, p); i >= 0 {
+				return i
+			}
+		}
+	}
+	return len(workitems.Priorities)
+}
+
+// buildable is the type check of the queue: only Stories and Bugs are built.
+func buildable(is *gh.Issue) bool {
+	t, _ := workitems.TypeOf(is.GetType().GetName(), github.IssueLabels(is))
+	return t == "story" || t == "bug"
+}
+
+// pickNext is `aayu build --next` (the build-ready loop). Mode ship lists the
+// loop's open pull requests and writes nothing. Mode pick first blocks every
+// loop claim whose lease ran out with no pull request (it is never retried
+// until a person makes it Ready again), then, while the loop's open pull
+// requests and live claims are fewer than [build] in_flight, returns the
+// first item of the queue that is open, status:ready, passes Ready with an
+// undrifted snapshot, and has no open pull request and no live lease. The
+// queue is the current release's accepted baseline in its order when there is
+// one, and nothing outside it; otherwise every status:ready Story and Bug by
+// priority, then age. It returns 0 when it picked nothing; runBuild then
+// claims the pick with the lease, as for any build.
+func (e *Env) pickNext(ctx context.Context, c *github.Client, w *ledger.Writer, l *config.Loaded, repo, root, mode string) (*BuildPick, int, error) {
+	if ls, err := loops.Load(root); err != nil {
+		return nil, 0, Wrap(ExitUsage, err)
+	} else if _, ok := loops.Find(ls, BuildLoop); !ok {
+		return nil, 0, Errorf(ExitUsage, "build --next runs only for the %s loop: this repository has no loops/%s.toml (`aayu install --loops` writes it)", BuildLoop, BuildLoop)
+	}
+	owner, name, _ := github.SplitRepo(repo)
+	p := &BuildPick{Mode: mode, Limit: l.Config.Build.InFlight, InFlight: []LoopItem{}, Ship: []LoopItem{}}
+	prs, err := openStoryPRs(ctx, c, owner, name)
+	if err != nil {
+		return nil, 0, Wrap(ExitExternal, err)
+	}
+	states, err := loopStates(ctx, w)
+	if err != nil {
+		return nil, 0, Wrap(ExitExternal, err)
+	}
+	now := e.Now()
+	for _, st := range states {
+		if st.Blocked != "" {
+			continue
+		}
+		is, _, err := c.REST.Issues.Get(ctx, owner, name, st.Story)
+		if err != nil {
+			return nil, 0, Wrap(ExitExternal, err)
+		}
+		if is.GetState() != "open" {
+			continue
+		}
+		if pr := prs[st.Story]; pr != nil {
+			it := LoopItem{Story: st.Story, PR: pr.GetNumber(), URL: pr.GetHTMLURL()}
+			p.InFlight, p.Ship = append(p.InFlight, it), append(p.Ship, it)
+			continue
+		}
+		labels := github.IssueLabels(is)
+		if !contains(labels, labelInProgress) {
+			continue
+		}
+		lease, err := readLease(ctx, c, owner, name, st.Story)
+		if err != nil {
+			return nil, 0, Wrap(ExitExternal, err)
+		}
+		if lease != nil && lease.Expires.After(now) {
+			p.InFlight = append(p.InFlight, LoopItem{Story: st.Story, Claim: lease.Holder + " until " + lease.Expires.UTC().Format(time.RFC3339)})
+			continue
+		}
+		if mode != "pick" {
+			continue
+		}
+		// A stale claim: the loop's build went away before a pull request.
+		why := "the build-ready loop's claim ran out with no pull request"
+		if lease != nil {
+			why += fmt.Sprintf(" (lease of %s expired %s)", lease.Holder, lease.Expires.UTC().Format(time.RFC3339))
+		}
+		st := st
+		res := BuildResult{Issue: st.Story, Branch: st.Branch, Budget: e.buildUsage(l, repo, st, now)}
+		if _, err := e.markBlocked(ctx, c, w, repo, st.Story, labels, &st, &res, why); err != nil {
+			return nil, 0, err
+		}
+		p.Stale = append(p.Stale, fmt.Sprintf("#%d: %s; status:blocked, owner paged", st.Story, why))
+	}
+	slices.SortFunc(p.Ship, func(a, b LoopItem) int { return a.PR - b.PR })
+	if mode == "ship" {
+		p.Reason = fmt.Sprintf("%d of %d in flight; %d open pull request(s) of the loop to ship", len(p.InFlight), p.Limit, len(p.Ship))
+		return p, 0, nil
+	}
+	if p.Limit <= 0 {
+		p.Reason = "[build] in_flight is 0: the loop picks nothing"
+		return p, 0, nil
+	}
+	if len(p.InFlight) >= p.Limit {
+		p.Reason = fmt.Sprintf("%d of %d in flight: nothing new until one merges or stops", len(p.InFlight), p.Limit)
+		return p, 0, nil
+	}
+
+	// The queue.
+	base, err := currentBaseline(ctx, c, w, owner, name)
+	if err != nil {
+		return nil, 0, Wrap(ExitExternal, err)
+	}
+	var queue []*gh.Issue
+	if base != nil {
+		p.Release = &PickedRelease{Version: base.Version, Issue: base.ReleaseIssue, Baseline: base.Baseline}
+		p.Order = fmt.Sprintf("baseline %d of %s (Release #%d), in its order", base.Baseline, base.Version, base.ReleaseIssue)
+		for _, it := range base.Items {
+			if it.Type != "story" && it.Type != "bug" {
+				continue
+			}
+			is, _, err := c.REST.Issues.Get(ctx, owner, name, it.Number)
+			if err != nil {
+				return nil, 0, Wrap(ExitExternal, err)
+			}
+			queue = append(queue, is)
+		}
+	} else {
+		p.Order = "no accepted baseline for an open Release: priority, then age"
+		all, err := github.All(ctx, func(ctx context.Context, o gh.ListOptions) ([]*gh.Issue, *gh.Response, error) {
+			return c.REST.Issues.ListByRepo(ctx, owner, name, &gh.IssueListByRepoOptions{State: "open", Labels: []string{ready.LabelReady}, ListOptions: o})
+		})
+		if err != nil {
+			return nil, 0, Wrap(ExitExternal, err)
+		}
+		for _, is := range all {
+			if !is.IsPullRequest() {
+				queue = append(queue, is)
+			}
+		}
+		slices.SortStableFunc(queue, func(a, b *gh.Issue) int {
+			if d := priorityRank(github.IssueLabels(a)) - priorityRank(github.IssueLabels(b)); d != 0 {
+				return d
+			}
+			if d := a.GetCreatedAt().Compare(b.GetCreatedAt().Time); d != 0 {
+				return d
+			}
+			return a.GetNumber() - b.GetNumber()
+		})
+	}
+	rd := &ready.Ready{GH: c, Repo: repo, TechnicalOwner: e.technicalOwner()}
+	skip := func(n int, why string) { p.Skipped = append(p.Skipped, fmt.Sprintf("#%d: %s", n, why)) }
+	for _, is := range queue {
+		n, labels := is.GetNumber(), github.IssueLabels(is)
+		switch {
+		case is.GetState() != "open":
+			continue // done, or dropped: not a skip
+		case !buildable(is):
+			skip(n, "not a Story or Bug")
+			continue
+		case !contains(labels, ready.LabelReady):
+			if base != nil && !contains(labels, labelInProgress) {
+				skip(n, "not labelled status:ready")
+			}
+			continue
+		}
+		if pr := prs[n]; pr != nil {
+			skip(n, fmt.Sprintf("open pull request #%d", pr.GetNumber()))
+			continue
+		}
+		lease, err := readLease(ctx, c, owner, name, n)
+		if err != nil {
+			return nil, 0, Wrap(ExitExternal, err)
+		}
+		if lease != nil && lease.Expires.After(now) {
+			skip(n, fmt.Sprintf("claimed by %s until %s", lease.Holder, lease.Expires.UTC().Format(time.RFC3339)))
+			continue
+		}
+		chk, cis, err := rd.Check(ctx, n)
+		if err != nil {
+			return nil, 0, Wrap(ExitExternal, err)
+		}
+		why, err := e.notReady(ctx, c, repo, n, chk, github.IssueLabels(cis))
+		if err != nil {
+			return nil, 0, Wrap(ExitExternal, err)
+		}
+		if why != "" {
+			skip(n, why)
+			continue
+		}
+		p.Picked = n
+		p.Reason = fmt.Sprintf("picked #%d: %s", n, p.Order)
+		return p, n, nil
+	}
+	p.Reason = "nothing to build: no item in the queue is Ready and free (" + p.Order + ")"
+	return p, 0, nil
+}
+
+// buildUsage is a story's budget use, for a progress comment written outside
+// a build run (a stop, a stale claim).
+func (e *Env) buildUsage(l *config.Loaded, repo string, st BuildState, now time.Time) Usage {
+	b := l.Config.Autonomy.Budget
+	u := Usage{MaxWall: b.WallHours, MaxCost: b.CostUSD, MaxAttempts: b.Attempts, Attempts: st.Attempts, CostUSD: e.buildCost(repo, st.Story), MeteredBy: e.meteredBy(&l.Config)}
+	if started, err := time.Parse(time.RFC3339, st.StartedAt); err == nil {
+		u.WallHours = now.Sub(started).Hours()
+	}
+	return u
+}
+
+// emitPick reports a --next run that claimed nothing.
+func (e *Env) emitPick(p *BuildPick) error {
+	return e.Emit(p, func(w io.Writer) error {
+		writePick(w, p)
+		return nil
+	})
+}
+
+func writePick(w io.Writer, p *BuildPick) {
+	for _, s := range p.Stale {
+		fmt.Fprintf(w, "stale claim blocked: %s\n", s)
+	}
+	if p.Mode == "ship" {
+		if len(p.Ship) == 0 {
+			fmt.Fprintln(w, "the build-ready loop has no open pull request to ship")
+		}
+		for _, it := range p.Ship {
+			fmt.Fprintf(w, "ship #%d (story #%d): aayu ship %d\n", it.PR, it.Story, it.PR)
+		}
+	}
+	for _, s := range p.Skipped {
+		fmt.Fprintf(w, "skipped %s\n", s)
+	}
+	fmt.Fprintf(w, "build-ready: %s\n", p.Reason)
+}

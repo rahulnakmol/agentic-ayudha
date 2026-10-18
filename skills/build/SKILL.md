@@ -13,9 +13,22 @@ aayu:
   inputs:
     - name: issue
       type: issue
-      required: true
+      required: false
       positional: true
-      description: "Ready story or bug to build."
+      description: "Ready story or bug to build; required unless --next."
+    - name: next
+      type: enum
+      required: false
+      positional: false
+      enum:
+        - "ship"
+        - "pick"
+      description: "The build-ready loop, with no model: ship lists the loop's own open PRs, oldest first, and changes nothing; pick blocks the loop's stale claims, then, under [build] in_flight, claims the first Ready story or bug (the current release's accepted baseline in its order, else priority, then age) and cuts its worktree."
+    - name: stop
+      type: string
+      required: false
+      positional: false
+      description: "Stop this build for good: move the story to status:blocked with this reason and page its owner; the lease stays until it expires."
     - name: resume
       type: bool
       required: false
@@ -159,6 +172,21 @@ You (the host's model) write the code; the binary owns the worktree, the lease, 
    story branch and continues after its last checkpoint trailer.
 7. Hand over: the merge gate verifies the PR. Once it is green and inspect says `merge`, run `aayu ship <pr>`; it
    merges with every gate, or comments **Ready to ship** and the PR waits in a person's `aayu inbox`.
+
+## The build-ready loop (`--next`)
+
+The `build-ready` loop (`loops/build-ready.toml`) builds Ready work on a schedule. Its definition in the repository is
+the person's standing ask, so its pick passes the asked gate of step 1. The binary picks; you never choose the story.
+
+1. `aayu build --next ship` lists the loop's open pull requests, oldest first, and changes nothing. Run
+   `aayu ship <pr>` once on each and report what ship did. Never pass `--solo-bypass` or `--admin`, and never merge
+   another way: a pull request that needs a person waits in `aayu inbox`.
+2. `aayu build --next pick` blocks the loop's stale claims, then claims at most one item under `[build] in_flight`:
+   the current release's accepted baseline in its order, else priority, then age. When it claims nothing, stop.
+3. When it claims an item, it cuts the worktree. Continue from step 2 above for that issue only, until
+   `aayu build <n>` opens or updates the pull request. Pick no second item in the same run.
+4. When the build cannot reach a pull request, run `aayu build <n> --stop "<why>"`. The item goes to
+   `status:blocked` with your reason and its owner is paged; the loop does not pick it again.
 
 ## Delegating to another agent (`--delegate`, WP5.5b)
 
