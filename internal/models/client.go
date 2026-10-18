@@ -336,9 +336,19 @@ func decodeMessagesStream(body io.Reader) (Response, error) {
 	}
 	r.Text = sb.String()
 	if r.Text == "" {
-		return r, fmt.Errorf("messages stream has no text (stop reason %q)", r.StopReason)
+		return r, noText(r, fmt.Errorf("messages stream has no text (stop reason %q)", r.StopReason))
 	}
 	return r, nil
+}
+
+// noText is the error for a reply without text. One that stopped at its token
+// cap spent the cap before writing (on thinking): it is a truncated reply, so a
+// caller that reruns those at a larger cap reruns this one too.
+func noText(r Response, err error) error {
+	if r.Truncated {
+		return &ReplyError{Truncated: true, Err: err}
+	}
+	return err
 }
 
 // StreamError is an error event inside a streamed Messages reply, after the
@@ -491,7 +501,7 @@ func decode(style string, raw []byte) (Response, error) {
 	}
 	r.Text = sb.String()
 	if r.Text == "" {
-		return r, fmt.Errorf("%s reply has no text: %s", style, truncate(string(raw), 300))
+		return r, noText(r, fmt.Errorf("%s reply has no text: %s", style, truncate(string(raw), 300)))
 	}
 	return r, nil
 }
