@@ -102,6 +102,7 @@ over MCP, `--solo-bypass` is a person's, and as the host's model you prepare and
 6. Afterwards `aayu gc` reclaims expired leases and removes the worktrees of closed stories.
 
 **PR body.** Every agent PR body follows `.github/pull_request_template.md`, and `aayu inspect` checks it: a
-missing or empty section, or a sentence over 20 words, blocks an agent-authored PR. Write its plain sections to the
+missing or empty section, a section that still holds build's placeholder, or a sentence over 20 words blocks an
+agent-authored PR. Write its plain sections to the
 writing rule (`skills/brief/references/writing.md`). Put one `Aayudha-Effort: <level>` line after the
 `Aayudha-Model:` lines when you know the effort, one token each, and never invent a model ID.

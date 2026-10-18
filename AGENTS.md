@@ -83,10 +83,10 @@ the end is generated (WP5.1); the full table is [docs/RACI.md](docs/RACI.md).
   Each commit carries the same lines as trailers (one `Aayudha-Host:` naming a known host, or Amp's own
   `Amp-Thread-ID:` trailer), so the streak does not count the agent's own commits as a person's corrections.
   Never add them to a commit a person wrote: a person's follow-up commit is a correction.
-- **Every agent PR body follows `.github/pull_request_template.md`**: its seven sections, the At a glance table, the
+- **Every agent PR body follows `.github/pull_request_template.md`**: its six sections, the At a glance table, the
   How we know it works table, the `<details>` For reviewers block, and a RAID table when the PR has risks or
-  dependencies. `aayu inspect` checks it: it blocks an agent-authored PR when a section is missing or empty, or a
-  sentence has more than 20 words; unapproved words only warn. Name people by their GitHub login. Write the plain
+  dependencies. `aayu inspect` checks it: it blocks an agent-authored PR when a section is missing, empty, or still a
+  placeholder, or a sentence has more than 20 words; unapproved words only warn. Name people by their GitHub login. Write the plain
   sections in Simplified Technical English, as `skills/brief/references/writing.md` says.
 - **Protected paths** (`.github/CODEOWNERS`) fail `protected-paths` by design. Solo mode: only the founder's
   recorded admin bypass merges them. Use the bypass only when the founder has authorised it for the task, and

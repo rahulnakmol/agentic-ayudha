@@ -176,7 +176,8 @@ You (the host's model) write the code; the binary owns the worktree, the lease, 
    merges with every gate, or comments **Ready to ship** and the PR waits in a person's `aayu inbox`.
 
 **PR body.** Every agent PR body follows `.github/pull_request_template.md`, and `aayu inspect` checks it: a
-missing or empty section, or a sentence over 20 words, blocks an agent-authored PR. Write its plain sections to the
+missing or empty section, a section that still holds build's placeholder, or a sentence over 20 words blocks an
+agent-authored PR. Write its plain sections to the
 writing rule (`skills/brief/references/writing.md`). Put one `Aayudha-Effort: <level>` line after the
 `Aayudha-Model:` lines when you know the effort, one token each, and never invent a model ID.
 

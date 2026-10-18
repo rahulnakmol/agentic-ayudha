@@ -14,8 +14,9 @@ Write the plain sentences in the manner of Simplified Technical English (ASD-STE
   backticks, numbers, acronyms, and names.
 - Follow the brand tone in `design/brand.yaml`: plain, direct, and no superlatives.
 
-`aayu brief` checks the `ste` register against this list (`brief.LintSTE`). A task that sets another register (eli5,
-engineer, regulatory) keeps that register.
+`brief.LintSTE` checks only three things: sentence length, approved words, and one instruction per sentence. The other
+items are writing guidance that no check reads. A task that sets another register (eli5, engineer, regulatory) keeps
+that register.
 
 ## Voice
 
@@ -25,8 +26,8 @@ Decision pack. No check reads personality. The voice changes the tone, never the
 
 ## Structure carries facts
 
-Tables, lists, code, diagrams, and callouts carry the facts. The 20-word limit does not apply to them. Keep a long fact
-in a table cell or a list item, not in a long sentence.
+Tables, code, and diagrams carry the facts. The 20-word limit does not apply to them. List items and callouts are
+sentences, so the limit applies to them. Keep a long fact in a table cell, not in a long sentence.
 
 ## Name the person
 
