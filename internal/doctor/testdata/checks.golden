@@ -109,7 +109,7 @@ FAIL  integrations  0 of 4 configured integration(s) reachable with a read-only 
 ## optional-tools pass
 PASS  optional-tools  all optional tools found
 ## optional-tools fail
-WARN  optional-tools  8 optional tool(s) missing: gitleaks (secrets floor), osv-scanner (deps floor), docker (dast floor: ZAP), k6 (api floor), lighthouse (perf floor), tesseract (OCR in the redaction pass; without it the pass scans the DOM only), impeccable (review lane B), duckdb (measure, optional); a floor whose tool is missing blocks verify, it never passes
+WARN  optional-tools  7 optional tool(s) missing: gitleaks (secrets floor), osv-scanner (deps floor), k6 (api floor), lighthouse (perf floor), tesseract (OCR in the redaction pass; without it the pass scans the DOM only), impeccable (review lane B), duckdb (measure, optional); a floor whose tool is missing blocks verify, it never passes
 ## worktrees pass
 PASS  worktrees  no leaked worktrees
 ## worktrees fail
@@ -152,6 +152,22 @@ PASS  retired-workflows  no retired aayudha workflow in .github/workflows
 ## retired-workflows fail
 WARN  retired-workflows  1 retired aayudha workflow(s): run `aayu init` and confirm to remove, or delete by hand
                            .github/workflows/aayudha-triage.yml classifies intake issues with a model in CI, and product CI never calls a model; triage runs from your own agent (`aayu triage <issue> --as …`) or an agent app you @-mention
+## security-workflow pass
+PASS  security-workflow  installed; every scanned tip is green
+                           dev: success at 0123456
+                           rolling: success at 0123456
+                           main: success at 0123456
+                           nightly: success, 2026-10-18T03:23:00Z
+## security-workflow fail
+FAIL  security-workflow  not installed: no scan of pushes to dev, rolling, and main, and none nightly; run `aayu init --gates` and commit .github/workflows/aayudha-security.yml through a pull request
+## dast pass
+PASS  dast  the dast floor runs here
+              target: http://127.0.0.1:8080, started by [verify] seed: active scan
+              container runtime: docker 29.9.0
+## dast fail
+WARN  dast  the dast floor cannot run here as configured
+              target: none ([verify.environments.local] url is unset), so a web or api story records a blocking skipped: dast. Give verify a start command ([verify] seed, e.g. ["./scripts/serve.sh"]) and its URL ([verify.environments.local] url = "http://127.0.0.1:8080"), or waive: aayu decide <story> --waiver dast
+              container runtime: none; install Docker or Podman to scan locally (the merge gate and aayudha-security.yml run it in CI)
 ## loops pass
 PASS  loops  no loops/*.toml
 ## loops fail
@@ -173,7 +189,8 @@ WARN  feedback-layers  2 open Feedback issue(s) without a fix layer; evolve refu
                          #6 Feedback: b
                          #8 Feedback: c
 ## coexistence pass
-PASS  coexistence  coexistence report: nothing to coexist with
+PASS  coexistence  coexistence report: init adds alongside the existing setup
+                     existing workflow aayudha-security.yml (checks: ): init leaves it byte-identical and adds aayudha/* checks alongside
 ## coexistence fail
 WARN  coexistence  coexistence report: 2 name collision(s) init must resolve
                      existing workflow aayudha-token.yml (checks: mint): init leaves it byte-identical and adds aayudha/* checks alongside

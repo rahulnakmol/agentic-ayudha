@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/proof"
@@ -228,7 +229,11 @@ func TestDASTAndAPIFloors(t *testing.T) {
 	}
 	run := func(url string) *Run {
 		r := browserRun(t, url)
-		r.Verify.DAST = true
+		// verify "starts" the app (a seed that succeeds) on loopback, so the active rules run (Decision #485, G1).
+		r.Verify.DAST, r.Verify.Platforms, r.Verify.Seed = true, []string{"web"}, []string{"true"}
+		r.Floors.DAST.SkippedBlocksShip = true
+		r.Now = func() time.Time { return time.Date(2026, 11, 14, 0, 0, 0, 0, time.UTC) }
+		r.Verify.NewFloorsBlockingFrom = "2026-11-14"
 		return r
 	}
 	rep := Execute(ctx, run(app(false)), []Floor{DAST{}})

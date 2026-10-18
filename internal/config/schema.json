@@ -349,7 +349,7 @@
       "properties": {
         "dast": {
           "type": "boolean",
-          "description": "Run the ZAP baseline floor (WP4.6)."
+          "description": "Run the ZAP floor for web and api platforms (Decision #485)."
         },
         "platforms": {
           "items": {
@@ -382,6 +382,10 @@
               "production": {
                 "type": "boolean",
                 "description": "A production environment: verify refuses to capture it (exit 4), and any target on its host."
+              },
+              "active_scan": {
+                "type": "boolean",
+                "description": "Let the DAST floor run its active rules against this URL although verify did not start the app on a loopback host (Decision #485); read only from .aayudha/config.toml."
               }
             },
             "additionalProperties": false,
@@ -528,6 +532,9 @@
                 "max_high": {
                   "type": "integer",
                   "minimum": 0
+                },
+                "skipped_blocks_ship": {
+                  "type": "boolean"
                 }
               },
               "additionalProperties": false,
@@ -556,6 +563,10 @@
           "additionalProperties": false,
           "type": "object",
           "description": "Floor thresholds; CONSTRAINTS.md documents each one."
+        },
+        "new_floors_blocking_from": {
+          "type": "string",
+          "description": "Date (UTC, YYYY-MM-DD) from which the floors Decision #480 added fail; before it, or empty, their misses are advisory."
         },
         "drift_blocking_from": {
           "type": "string",

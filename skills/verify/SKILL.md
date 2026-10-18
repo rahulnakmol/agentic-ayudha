@@ -39,10 +39,21 @@ aayu:
         - "drift"
         - "always"
       description: "With --map or --check: post the maintain brief on the tracking issue for the agent app [verify] maintainer names, when the map drifted or a check failed (drift), or every time (always)."
+    - name: security
+      type: bool
+      required: false
+      positional: false
+      description: "Only the security floors (sast, secrets, deps, dast) on the checked-out commit, with no PR or story: what aayudha-security.yml runs on every push and nightly. With --ci, each failing finding files or updates one aayudha:security Bug."
+    - name: since
+      type: string
+      required: false
+      positional: false
+      description: "With --security: scan secrets only in the commits after this revision (a push's before); without it, or with all zeros or an unknown revision, the whole history of HEAD."
   outputs:
     - "floor-results"
     - "pack"
     - "map-drift"
+    - "security-bugs"
   gates:
     - "halt"
   identity: bot

@@ -414,6 +414,24 @@ func TestReleaseLadder(t *testing.T) {
 	comment("maintainer", "User", "Stable release: v0.1.0\n\nShip it.", rollingAt.Add(30*time.Minute))
 	later := f.opts
 	later.Now = func() time.Time { return day.Add(2 * time.Hour) }
+	// Decision #480: with the security workflow installed, main takes only a rolling tip it scanned green.
+	rollingNow := git(t, f.bare, "rev-parse", "refs/heads/rolling")
+	f.g.Mu.Lock()
+	f.g.Workflows = append(f.g.Workflows, SecurityWorkflow)
+	f.g.Runs = append(f.g.Runs, WorkflowRunFor(SecurityWorkflow, 8001, git(t, f.bare, "rev-parse", "refs/heads/dev"), "success")) // another commit's run
+	f.g.Mu.Unlock()
+	if code, _, errOut := run(t, agent, later, "release", rel, "--to", "main", "--dry-run", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "so it was never scanned") {
+		t.Fatalf("main with an unscanned rolling tip: %d %s", code, errOut)
+	}
+	f.g.Mu.Lock()
+	f.g.Runs = append(f.g.Runs, WorkflowRunFor(SecurityWorkflow, 8002, rollingNow, "failure"))
+	f.g.Mu.Unlock()
+	if code, _, errOut := run(t, agent, later, "release", rel, "--to", "main", "--dry-run", "--repo", "o/r"); code != ExitBlocked || !strings.Contains(errOut, "ended failure on the rolling tip") {
+		t.Fatalf("main with a red rolling scan: %d %s", code, errOut)
+	}
+	f.g.Mu.Lock()
+	f.g.Runs = append(f.g.Runs[:len(f.g.Runs)-1], WorkflowRunFor(SecurityWorkflow, 8003, rollingNow, "success"))
+	f.g.Mu.Unlock()
 	if code, out, errOut := run(t, agent, later, "release", rel, "--to", "main", "--dry-run", "--repo", "o/r"); code != 0 ||
 		!strings.Contains(out, "  stable release requested by @maintainer (comment) https://github.com/o/r/issues/") {
 		t.Fatalf("main dry run with the request: %d %s %s", code, out, errOut)
@@ -745,5 +763,72 @@ blast_radius = "service"
 	f.g.Mu.Unlock()
 	if code, errOut := dry(); code != 0 {
 		t.Fatalf("fresh budget and a tried rollback: %d %s", code, errOut)
+	}
+}
+
+// WorkflowRunFor is a completed push run of a workflow on a commit.
+func WorkflowRunFor(file string, id int64, sha, conclusion string) fake.WorkflowRun {
+	return fake.WorkflowRun{ID: id, Path: ".github/workflows/" + file, HeadSHA: sha, Event: "push", Status: "completed", Conclusion: conclusion, Attempt: 1}
+}
+
+// Story #487 criterion 4: an open aayudha:security Bug last seen on rolling or
+// main holds the promotion until it is gone there or a person accepts a floor
+// waiver on it that names its floor; one seen only on dev, or gone from
+// rolling, holds nothing.
+func TestReleaseSecurityBugsHold(t *testing.T) {
+	f := newLadderFixture(t)
+	day := time.Date(2026, 10, 12, 9, 41, 0, 0, time.UTC)
+	rel := strconv.Itoa(f.release)
+	sha := strings.Repeat("ab", 20)
+	bug := func(fp, branch string) *fake.Issue {
+		return f.g.AddIssue("Security: "+fp, fmt.Sprintf("### Summary\n\nfound\n\n<!-- aayudha:security fingerprint=%q seen=\"%s@%s\" -->\n", fp, branch, sha), "type:bug", "status:backlog", SecurityLabel)
+	}
+	onDev := bug("deps GO-1 x go.mod", "dev")
+	dry := func() (int, string) {
+		code, _, errOut := f.run(t, day, f.env, rel, "--to", "rolling", "--dry-run")
+		return code, errOut
+	}
+	if code, errOut := dry(); code != 0 {
+		t.Fatalf("a Bug seen only on dev held the promotion: %d %s", code, errOut)
+	}
+	onRolling := bug("sast rule-1 main.go", "rolling")
+	if code, errOut := dry(); code != ExitBlocked || !strings.Contains(errOut, fmt.Sprintf("#%d (sast rule-1 main.go, last seen on rolling at ababab", onRolling.Number)) ||
+		strings.Contains(errOut, fmt.Sprintf("#%d ", onDev.Number)) {
+		t.Fatalf("a Bug seen on rolling did not hold, or the dev one did: %d %s", code, errOut)
+	}
+	// A waiver that names another floor, or one nobody accepted, waives nothing.
+	waiver := func(title string, accepted bool) {
+		body := decisionBody("false", fmt.Sprintf("waives #%d", onRolling.Number))
+		if accepted {
+			body += "\n### Decision\n\nwaive, accepted by @founder on 2026-10-12.\n"
+		}
+		d := f.g.AddIssue(title, body, "type:decision")
+		f.g.Mu.Lock()
+		defer f.g.Mu.Unlock()
+		d.Parent = onRolling.Number
+		onRolling.Subs = append(onRolling.Subs, d.Number)
+		if accepted {
+			d.State, d.StateReason, d.ClosedBy = "closed", "completed", &fake.Account{Login: "founder", Type: "User"}
+		}
+	}
+	waiver("Waive the deps floor on #"+strconv.Itoa(onRolling.Number), true)
+	waiver("Waive the sast floor on #"+strconv.Itoa(onRolling.Number), false)
+	if code, errOut := dry(); code != ExitBlocked {
+		t.Fatalf("a waiver of another floor, or an unaccepted one, released the hold: %d %s", code, errOut)
+	}
+	waiver("Waive the sast floor on #"+strconv.Itoa(onRolling.Number), true)
+	if code, errOut := dry(); code != 0 {
+		t.Fatalf("an accepted sast waiver did not release the hold: %d %s", code, errOut)
+	}
+	// Gone from main after being seen there: no hold.
+	onMain := bug("secrets github-pat config.txt", "main")
+	if code, _ := dry(); code != ExitBlocked {
+		t.Fatalf("a Bug seen on main did not hold")
+	}
+	f.g.Mu.Lock()
+	onMain.Comments = append(onMain.Comments, &fake.Comment{ID: 99, Body: fmt.Sprintf("<!-- aayudha:security gone=\"main@%s\" -->\nNot found.", sha)})
+	f.g.Mu.Unlock()
+	if code, errOut := dry(); code != 0 {
+		t.Fatalf("a Bug gone from main still held: %d %s", code, errOut)
 	}
 }

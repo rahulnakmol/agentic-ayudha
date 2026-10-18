@@ -283,3 +283,34 @@ func TestAllowPIIRepoOnly(t *testing.T) {
 		t.Errorf("repository config: %v; want posthog allow_pii on and sentry off", err)
 	}
 }
+
+// Decision #485 G1: an active DAST scan of a URL verify did not start is the
+// protected repository config's call alone; every other layer is refused.
+func TestActiveScanKey(t *testing.T) {
+	key := "[verify.environments.staging]\nurl = \"https://staging.example.test\"\nactive_scan = true\n"
+	for _, tt := range []struct {
+		name     string
+		files    map[string]string
+		env, set []string
+	}{
+		{"user config", map[string]string{"home/.config/aayudha/config.toml": "version = 1\n" + key}, nil, nil},
+		{"local config", map[string]string{"repo/.aayudha/config.local.toml": "version = 1\n" + key}, nil, nil},
+		{"environment", nil, []string{"AAYU_VERIFY__ENVIRONMENTS__STAGING__ACTIVE_SCAN=true"}, nil},
+		{"--set", nil, nil, []string{"verify.environments.staging.active_scan=true"}},
+	} {
+		src := fixture(t, tt.files)
+		src.Environ, src.Sets = tt.env, tt.set
+		if _, err := Load(src); err == nil || !strings.Contains(err.Error(), "verify.environments.staging.active_scan is read only from .aayudha/config.toml") {
+			t.Errorf("%s: err = %v", tt.name, err)
+		}
+	}
+	// The local layer may still set an environment's URL; the repository config may opt it in.
+	l, err := Load(fixture(t, map[string]string{"repo/.aayudha/config.toml": "version = 1\n" + key,
+		"repo/.aayudha/config.local.toml": "version = 1\n[verify.environments.local]\nurl = \"http://127.0.0.1:9000\"\n"}))
+	if err != nil || !l.Config.Verify.Environments["staging"].ActiveScan || l.Config.Verify.Environments["local"].URL != "http://127.0.0.1:9000" {
+		t.Fatalf("repository config: %v %+v", err, l.Config.Verify.Environments)
+	}
+	if l.Config.Verify.DAST != true || l.Config.Verify.NewFloorsBlockingFrom != "2026-11-14" || !l.Config.Verify.Floors.DAST.SkippedBlocksShip {
+		t.Fatalf("defaults: %+v", l.Config.Verify)
+	}
+}

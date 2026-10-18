@@ -81,6 +81,18 @@ ledger.
 SHA-256, workflows default to `contents: read`, and checkout never persists credentials. Releases are signed and
 attested; see [releases and the supply chain](how-releases.md).
 
+**A vulnerability that arrives without a pull request.** The merge gate scans pull requests only. A promotion
+merge, a direct or admin push, or a new advisory against a dependency that did not change reaches dev, rolling, or
+main without one. `aayu init --gates` therefore also installs `aayudha-security.yml` (Decision #480). It runs
+`aayudha verify --security --ci` on every push to those branches, as `[branches]` maps them, and nightly on each
+tip. That covers verify's sast, secrets, deps, and dast floors with the merge gate's pinned tools; a push scans
+secrets in the pushed commits, the nightly run in the whole history. For a web or api product, dast runs the pinned
+ZAP image against the app `[verify] seed` starts; with no runnable target the job summary shows `skipped: dast`. Each failing finding files one Bug labelled
+`aayudha:security`, keyed by floor, rule or advisory ID, and path; later runs comment on it instead of filing again.
+An open one last seen on rolling or main holds `aayu release` until it is gone there or a person accepts a floor
+waiver on it (`aayu decide <bug> --waiver <floor>`), and main takes only a rolling tip the workflow scanned green.
+`aayu doctor` reports the workflow and each tip's last scan.
+
 **Runaway cost.** The `[budget]` breaker in `internal/models/gateway.go` trips when spend for one story reaches
 `per_story_usd` or spend for the day reaches `per_day_usd`. It pauses agent lanes (exit code 6) until a human runs
 `aayu resume`, and pages once per scope per day.

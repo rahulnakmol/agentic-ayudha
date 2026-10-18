@@ -65,6 +65,7 @@ type Result struct {
 	Check     proof.Check
 	More      []proof.Check // further checks one tool run produces (e.g. the a11y sub-floors)
 	Artifacts []Evidence
+	Findings  []Finding // what a failing security floor found (sast, secrets, deps)
 }
 
 // Floor is one deterministic floor.
@@ -80,7 +81,8 @@ type Floor interface {
 type Report struct {
 	Checks    []proof.Check
 	Artifacts []Evidence
-	Hold      bool // every floor passed, was waived, or was skipped without blocking
+	Findings  []Finding // the findings of the floors that failed
+	Hold      bool      // every floor passed, was waived, or was skipped without blocking
 }
 
 // Execute runs every floor in order. A floor whose tool is missing or errors
@@ -107,6 +109,9 @@ func Execute(ctx context.Context, r *Run, floors []Floor) Report {
 		rep.Checks = append(rep.Checks, res.Check)
 		rep.Checks = append(rep.Checks, res.More...)
 		rep.Artifacts = append(rep.Artifacts, res.Artifacts...)
+		if res.Check.Result == proof.Fail {
+			rep.Findings = append(rep.Findings, res.Findings...)
+		}
 	}
 	p := proof.Pack{Checks: rep.Checks}
 	rep.Hold = p.FloorsHold()

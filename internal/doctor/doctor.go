@@ -10,6 +10,7 @@ import (
 	"io"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
 	"github.com/rahulnakmol/agentic-ayudha/internal/identity"
@@ -63,6 +64,7 @@ type Probe struct {
 	// the key's account and scope (providers.Check); nil when unavailable.
 	Integration func(ctx context.Context, name string) (integrations.Scope, error)
 	TracePath   string
+	Now         func() time.Time // nil: time.Now
 }
 
 // Check is one named check.
@@ -98,6 +100,8 @@ var Checks = []Check{
 	{"agents", checkAgents},
 	{"reviewer-apps", checkReviewerApps},
 	{"retired-workflows", checkRetiredWorkflows},
+	{"security-workflow", checkSecurityWorkflow},
+	{"dast", checkDAST},
 	{"loops", checkLoops},
 	{"leases", checkLeases},
 	{"feedback-layers", checkFeedbackLayers},

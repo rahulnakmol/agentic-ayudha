@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rahulnakmol/agentic-ayudha/internal/agentenv"
 	"github.com/rahulnakmol/agentic-ayudha/internal/config"
@@ -119,14 +120,21 @@ func fakeAPI(responses map[string]any) func(context.Context, string, any) error 
 	}
 }
 
+const securityRuns = "/repos/o/r/actions/workflows/" + SecurityWorkflow + "/runs?per_page=1"
+
+func securityRun(conclusion, at string) map[string]any {
+	return map[string]any{"workflow_runs": []any{map[string]any{"head_sha": "0123456789abcdef", "status": "completed", "conclusion": conclusion, "created_at": at}}}
+}
+
 // healthy is a probe on which every check passes.
 func healthy(t *testing.T) *Probe {
 	env := map[string]string{"AMP_THREAD_ID": "T-1", "AAYU_SECRET_POSTHOG": "phc"}
 	getenv := func(k string) string { return env[k] }
 	p := &Probe{
 		Root: repoWith(t, map[string]string{".aayudha/config.toml": "version = 1\n",
-			".aayudha/lock.toml": "version = 1\nskills_version = \"0.0.0\"\nhosts = [\"claude\"]\n[skills]\n",
-			".mcp.json":          `{"mcpServers": {"aayudha": {"command": "/usr/bin/aayu", "args": ["mcp"]}}}`}),
+			".github/workflows/" + SecurityWorkflow: "name: aayudha-security\n",
+			".aayudha/lock.toml":                    "version = 1\nskills_version = \"0.0.0\"\nhosts = [\"claude\"]\n[skills]\n",
+			".mcp.json":                             `{"mcpServers": {"aayudha": {"command": "/usr/bin/aayu", "args": ["mcp"]}}}`}),
 		Getenv:   getenv,
 		LookPath: func(string) (string, error) { return "/usr/bin/x", nil },
 		Exec: fakeExec(map[string]string{
@@ -136,6 +144,7 @@ func healthy(t *testing.T) *Probe {
 			"git worktree list --porcelain": "worktree /repo\nHEAD abc\nbranch refs/heads/dev\n",
 			"git for-each-ref --format=%(refname:short) refs/heads refs/remotes/origin": "dev\nmain\norigin/HEAD\norigin/dev\n",
 			"git symbolic-ref --short refs/remotes/origin/HEAD":                         "origin/dev\n",
+			"docker --version": "Docker version 29.9.0, build 1a2b3c4\n",
 		}),
 		Config:  load(t, "identity.app_id=42", "identity.app_slug=aayudha-bot", "integrations.posthog.secret=posthog", "integrations.posthog.scope=read", "integrations.posthog.project=12345", "inspect.apps=codex"),
 		Secrets: secrets.New(down{}, secrets.Env{Getenv: getenv}, secrets.File{Path: "/tmp/s.age", IdentityPath: "/tmp/id"}),
@@ -152,8 +161,13 @@ func healthy(t *testing.T) *Probe {
 			"/repos/o/r/issues/9/comments?per_page=100":                       []any{map[string]any{"body": "<!-- aayudha:lease holder=bot@ci expires=2099-01-01T00:00:00Z -->"}},
 			"/repos/o/r/issues?state=open&labels=type:feedback&per_page=100": []any{map[string]any{"number": 5, "title": "Feedback: a",
 				"labels": []any{map[string]any{"name": "type:feedback"}, map[string]any{"name": "fix:check"}}}},
-			"/orgs/o/installations?per_page=100": map[string]any{"installations": []any{map[string]any{"app_slug": "chatgpt-codex-connector"}}},
+			"/orgs/o/installations?per_page=100":        map[string]any{"installations": []any{map[string]any{"app_slug": "chatgpt-codex-connector"}}},
+			securityRuns + "&event=push&branch=dev":     securityRun("success", "2026-10-18T09:00:00Z"),
+			securityRuns + "&event=push&branch=rolling": securityRun("success", "2026-10-17T09:00:00Z"),
+			securityRuns + "&event=push&branch=main":    securityRun("success", "2026-10-16T09:00:00Z"),
+			securityRuns + "&event=schedule":            securityRun("success", "2026-10-18T03:23:00Z"),
 		}),
+		Now:  func() time.Time { return time.Date(2026, 10, 18, 12, 0, 0, 0, time.UTC) },
 		Repo: "o/r",
 		Combined: fakeExec(map[string]string{
 			"/usr/bin/x --version":          "1.0.0\n",
@@ -166,6 +180,9 @@ func healthy(t *testing.T) *Probe {
 		Latest:    func(context.Context) (string, error) { return "v1.2.0", nil },
 		TracePath: ".aayudha/telemetry/traces.jsonl",
 	}
+	// A web app verify starts on a loopback host, so the dast floor runs its active rules.
+	p.Config.Config.Verify.Platforms, p.Config.Config.Verify.Seed = []string{"web"}, []string{"./serve.sh"}
+	p.Config.Config.Verify.Environments = map[string]config.Environment{"local": {URL: "http://127.0.0.1:8080"}}
 	p.Integration = realIntegrations(p, providerAPI{
 		"https://us.posthog.com/api/personal_api_keys/@current/": `{"label":"aayudha","scopes":["query:read"]}`,
 	})
@@ -308,6 +325,18 @@ func failing(t *testing.T) map[string]func(*Probe) {
 			p.API = fakeAPI(map[string]any{"/repos/o/r/rulesets": []any{map[string]any{"name": "protect-master"}}})
 		},
 		"telemetry": func(p *Probe) { p.Config = load(t, "telemetry.disabled=true") },
+		"dast": func(p *Probe) {
+			p.Config.Config.Verify.Environments = nil
+			p.LookPath = func(n string) (string, error) {
+				if n == "docker" || n == "podman" {
+					return "", errors.New("not found")
+				}
+				return "/usr/bin/" + n, nil
+			}
+		},
+		"security-workflow": func(p *Probe) {
+			p.Root = repoWith(t, map[string]string{".aayudha/config.toml": "version = 1\n"})
+		},
 		// D-3.2b.a: the enabled Codex plugin's hooks were never trusted in /hooks.
 		"codex-hooks": func(p *Probe) {
 			home := t.TempDir()
@@ -432,10 +461,10 @@ func TestOptionalToolsNamesFloors(t *testing.T) {
 		}
 		return p
 	}
-	r := checkOptionalTools(context.Background(), probe("semgrep", "docker"))
-	want := "2 optional tool(s) missing: semgrep (sast floor), docker (dast floor: ZAP); a floor whose tool is missing blocks verify, it never passes"
+	r := checkOptionalTools(context.Background(), probe("semgrep", "k6"))
+	want := "2 optional tool(s) missing: semgrep (sast floor), k6 (api floor); a floor whose tool is missing blocks verify, it never passes"
 	if r.Status != Warn || r.Detail != want {
-		t.Errorf("semgrep and docker missing: %s %q, want warn %q", r.Status, r.Detail, want)
+		t.Errorf("semgrep and k6 missing: %s %q, want warn %q", r.Status, r.Detail, want)
 	}
 	r = checkOptionalTools(context.Background(), probe("tesseract"))
 	if r.Status != Warn || strings.Contains(r.Detail, "blocks verify") || !strings.Contains(r.Detail, "tesseract (OCR in the redaction pass") {

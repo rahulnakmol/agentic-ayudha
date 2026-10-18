@@ -2,7 +2,7 @@
 
 Qualifiers: secure, securely, safe, safely, private, privacy, protected, hardened, trustworthy, compliant, locked down
 
-The SAST, secrets, dependency, and (when on) DAST floors apply to every story. "Secure" in a request means a
+The SAST, secrets, and dependency floors apply to every story, and DAST to every story of a web or api product. "Secure" in a request means a
 specific asset protected from a specific actor; ask which.
 
 ## Dimensions

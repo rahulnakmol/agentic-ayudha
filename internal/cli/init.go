@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"fmt"
 	"io"
@@ -164,6 +165,13 @@ func runInit(ctx context.Context, e *Env, in Values) error {
 		if x.Gates {
 			if x.Loops, err = e.loopFiles(it); err != nil {
 				return err
+			}
+			// The security workflow's push triggers follow [branches], which init has just written.
+			if l, err := config.Load(config.DefaultSources(e.Getenv, it.Root, nil, nil)); err == nil {
+				b := l.Config.Branches
+				if b.Dev != "" { // mapped: an empty rolling means the product has none
+					x.Branches = []string{b.Dev, b.Rolling, cmp.Or(b.Main, "main")}
+				}
 			}
 		}
 		if e.AppManifestCode != nil {
