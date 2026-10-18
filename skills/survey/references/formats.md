@@ -80,7 +80,12 @@ a misspelt field never silently drops a claim.
   operations. Product: users, jobs, outcomes, value, constraints, context, competition. Capabilities have a `name`
   instead.
 - Citations: a fact ID the index printed (`file:`, `sym:`, `build:`, `dep:`, `entry:`, `io:`, `trap:`, `test:`,
-  `doc:`, `marker:`, `mod:`, `builtin:`), or `path:line` / `path:start-end` inside the file.
+  `doc:`, `marker:`, `mod:`, `builtin:`), or `path:line` / `path:start-end` inside the file. A manual or note given
+  with `--docs` is cited the same way, by its name: `manual:operator-notes.md:12` or `manual:guide.pdf.txt:40-52`
+  (a PDF is cited by the lines of its text, written under `<out>/manuals`). A claim cites the lines that say it, never
+  the whole manual's `doc:manual:` fact.
+- `SURVEY.md` labels each claim a fact (`observed` in the code, `stated` by a cited document or manual, or
+  `confirmed` by the person), an inference (`inferred`, with its reasoning), or an unknown with its question.
 - Capabilities cover the index's entry points: each `entry:` the index lists (a program's main, a script, an
   exported function or type, a header's public declarations) is cited by a capability claim, by its entry ID, its
   `path:line`, a `path:start-end` range that holds it, or the `sym:` of its definition. A file cited whole covers none.
@@ -94,6 +99,24 @@ a misspelt field never silently drops a claim.
   `compare`): a case that needs a builtin only one runner registers belongs in that runner's case set, or in
   `exclude` with the file and the claim or question that decided it. Name the lines (`tests/math.js:12-20`) to leave
   out only those cases; a file named alone is left out whole, and the floor no longer checks any of its cases.
+- Sections. A survey can be checked in parts, one section per `--draft` file, each holding only its own keys:
+  `engineering` (product, request, commit, engineering, traps), `capabilities`, `product` (product_claims),
+  `modernisation` (do_not_carry, compatibility, modernisation), and `questions` (questions, summary, assign). Before
+  the questions section exists, an item whose question is not written yet uses `"?"` (`"question": "?"` on an
+  unknown claim, a risk, a trap finding, or a do-not-carry entry; `"decided_by": "?"` on an undecided interface); the
+  questions section then maps each to its question:
+
+  ```json
+  {"questions": [{"id": "Q1", "question": "…", "why": "…", "affects": ["P1", "K1"], "status": "open"}],
+   "summary": "…",
+   "assign": {"P1": "Q1", "K1": "Q1"}}
+  ```
+
+  An assignment to an item that is not waiting with `"?"`, or to a question that does not exist, is a problem of the
+  questions section. The merged `survey.json` carries the questions in place of `"?"` and no `assign`.
+  When the person asked only to describe the product, submit the modernisation section empty:
+  `{"modernisation": null}`. A saved section is stale, and written again, when the index changes: another commit, or
+  other content at the same commit (an uncommitted edit, a checkout with no git, a changed manual).
 - A question's `affects` lists the claims, do-not-carry entries, interfaces, and modernisation steps, case sets, suites,
   migrations, and shims its answer changes.
 - `target_source` is `"request"` only when the request names the target; otherwise ask, and use the answered

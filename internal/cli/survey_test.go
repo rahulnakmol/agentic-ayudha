@@ -71,6 +71,406 @@ func TestSurveyIndexAndPack(t *testing.T) {
 	}
 }
 
+// A survey written in sections: each section in a --draft file is checked and
+// saved under <out>/sections at once, a later run resumes the saved ones, a
+// failing later section never loses them, and with every section present the
+// merged survey.json and SURVEY.md are written. A section saved against
+// another index commit is stale and must be written again.
+func TestSurveyDraftSections(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.CopyFS(dir, os.DirFS(filepath.Join("..", "survey", "testdata", "legacy"))); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(t.TempDir(), "survey")
+	opts := Options{Dir: dir, GitHubGap: -1}
+	if code, _, stderr := run(t, nil, opts, "survey", dir, "--out", out); code != 0 {
+		t.Fatalf("index: %d %s", code, stderr)
+	}
+	b, err := os.ReadFile(filepath.Join("..", "survey", "testdata", "draft.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var whole map[string]json.RawMessage
+	if err := json.Unmarshal(b, &whole); err != nil {
+		t.Fatal(err)
+	}
+	first := []string{"product", "request", "engineering", "traps", "capabilities"}
+	write := func(name string, keep func(k string) bool, edit func(string) string) string {
+		part := map[string]json.RawMessage{}
+		for k, v := range whole {
+			if keep(k) {
+				part[k] = v
+			}
+		}
+		b, _ := json.Marshal(part)
+		f := filepath.Join(t.TempDir(), name)
+		if err := os.WriteFile(f, []byte(edit(string(b))), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return f
+	}
+	same := func(s string) string { return s }
+	a := write("a.json", func(k string) bool { return slices.Contains(first, k) }, same)
+	rest := func(k string) bool { return !slices.Contains(first, k) }
+	home := t.TempDir() // one user, whose key signs the saved sections
+	draft := func(args ...string) (int, SurveyDraftResult) {
+		t.Helper()
+		code, stdout, stderr := run(t, map[string]string{"HOME": home}, opts, append([]string{"survey", dir, "--out", out, "--json"}, args...)...)
+		var r SurveyDraftResult // the result, then the error when it blocks
+		if err := json.NewDecoder(strings.NewReader(stdout)).Decode(&r); err != nil {
+			t.Fatalf("%v: %d %v %s %s", args, code, err, stdout, stderr)
+		}
+		return code, r
+	}
+	saved := func(name string) survey.SavedSection {
+		t.Helper()
+		var s survey.SavedSection
+		b, err := os.ReadFile(filepath.Join(out, "sections", name+".json"))
+		if err != nil || json.Unmarshal(b, &s) != nil {
+			t.Fatalf("section %s: %v", name, err)
+		}
+		return s
+	}
+
+	// A section that does not parse is reported, and the section beside it in
+	// the same file is still checked and saved.
+	broken := write("broken.json", func(k string) bool { return slices.Contains(first, k) && k != "capabilities" }, func(s string) string {
+		return strings.TrimSuffix(s, "}") + `,"capabilities":"truncated"}`
+	})
+	if code, _, stderr := run(t, nil, opts, "survey", dir, "--out", out, "--draft", broken); code != ExitUsage || !strings.Contains(stderr, "section capabilities") || !strings.Contains(stderr, "saved engineering") {
+		t.Fatalf("a section that does not parse: %d %s", code, stderr)
+	}
+	if s := saved("engineering"); !s.Pass {
+		t.Fatalf("engineering beside a broken section: %+v", s)
+	}
+	if _, err := os.Stat(filepath.Join(out, "sections", "capabilities.json")); !os.IsNotExist(err) {
+		t.Fatalf("the broken section was saved: %v", err)
+	}
+	if err := os.RemoveAll(filepath.Join(out, "sections")); err != nil {
+		t.Fatal(err)
+	}
+
+	code, r := draft("--draft", a)
+	if code != 0 || !slices.Equal(r.Saved, []string{"engineering", "capabilities"}) || !slices.Equal(r.Missing, []string{"product", "modernisation", "questions"}) || r.Merged != "" {
+		t.Fatalf("first sections: %d %+v", code, r)
+	}
+	// A later section that fails blocks, is saved with its findings, and the
+	// earlier sections stay saved and resumed.
+	bad := write("bad.json", rest, func(s string) string {
+		return strings.Replace(s, `"basis":"stated","cites":["doc:README.md"]`, `"basis":"observed","cites":["doc:README.md"]`, 1)
+	})
+	code, r = draft("--draft", bad)
+	if p := saved("product"); code != ExitBlocked || !slices.Equal(r.Resumed, []string{"engineering", "capabilities"}) || p.Pass || len(p.Problems) == 0 || !strings.Contains(p.Problems[0], "cannot be observed") {
+		t.Fatalf("failing section: %d %+v %+v", code, r, p)
+	}
+	if e := saved("engineering"); !e.Pass || len(e.Content) == 0 {
+		t.Fatalf("engineering lost: %+v", e)
+	}
+	code, r = draft("--draft", write("b.json", rest, same))
+	if code != 0 || !r.Pass || len(r.Missing) != 0 || r.Merged == "" {
+		t.Fatalf("complete: %d %+v", code, r)
+	}
+	mb, err := os.ReadFile(r.Merged)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if merged, err := survey.ParseDraft(mb); err != nil || len(merged.Engineering) == 0 || len(merged.Capabilities) == 0 || merged.Modernisation == nil {
+		t.Fatalf("survey.json: %v %s", err, mb)
+	}
+	if md, err := os.ReadFile(r.Survey); err != nil || !strings.Contains(string(md), "## Capability map") {
+		t.Fatalf("SURVEY.md: %v", err)
+	}
+	// --sections alone resumes every saved section and passes again.
+	if code, r = draft("--sections"); code != 0 || !r.Pass || len(r.Resumed) != 5 || len(r.Saved) != 0 {
+		t.Fatalf("resume: %d %+v", code, r)
+	}
+	// A section saved against another index commit is stale, not resumed.
+	key, err := os.ReadFile(filepath.Join(home, ".local", "state", "aayudha", "survey.key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := saved("product")
+	p.Commit = "0123456789abcdef"
+	if err := survey.SaveSection(filepath.Join(out, "sections"), key, p); err != nil {
+		t.Fatal(err)
+	}
+	if code, r = draft("--sections"); code != 0 || !slices.Equal(r.Stale, []string{"product"}) || !slices.Equal(r.Missing, []string{"product"}) || r.Merged != "" {
+		t.Fatalf("stale: %d %+v", code, r)
+	}
+	// Writing the stale section again saves it fresh and takes it off the stale list.
+	again := filepath.Join(t.TempDir(), "product.json")
+	if err := os.WriteFile(again, p.Content, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, r = draft("--draft", again); code != 0 || len(r.Stale) != 0 || !slices.Equal(r.Saved, []string{"product"}) || r.Merged == "" {
+		t.Fatalf("rewritten stale section: %d %+v", code, r)
+	}
+	p.Commit = "0123456789abcdef" // stale again, for the checks that follow
+	if err := survey.SaveSection(filepath.Join(out, "sections"), key, p); err != nil {
+		t.Fatal(err)
+	}
+	if code, r = draft("--sections"); code != 0 || !slices.Equal(r.Stale, []string{"product"}) {
+		t.Fatalf("stale again: %d %+v", code, r)
+	}
+	// The merged survey of the earlier run is removed: a backlog is never
+	// drafted from sections that no longer hold.
+	for _, f := range []string{"survey.json", "SURVEY.md"} {
+		if _, err := os.Stat(filepath.Join(out, f)); !os.IsNotExist(err) {
+			t.Fatalf("%s kept after a section went stale: %v", f, err)
+		}
+	}
+	// So is every section once the checkout's content changes, at the same
+	// commit (this checkout has no git): the claims were checked against
+	// other code.
+	src := filepath.Join(dir, "src", "util.cpp")
+	b, err = os.ReadFile(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(src, append(b, []byte("// edited\n")...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, stderr := run(t, nil, opts, "survey", dir, "--out", out); code != 0 {
+		t.Fatalf("re-index: %d %s", code, stderr)
+	}
+	if code, r = draft("--sections"); code != 0 || len(r.Stale) != 5 || len(r.Resumed) != 0 {
+		t.Fatalf("content changed: %d %+v", code, r)
+	}
+
+	// An output directory inside the checkout is not indexed: re-indexing an
+	// unchanged checkout keeps every saved section.
+	in := filepath.Join(dir, "survey-out")
+	for k := 0; k < 2; k++ {
+		if code, _, stderr := run(t, map[string]string{"HOME": home}, opts, "survey", dir, "--out", in); code != 0 {
+			t.Fatalf("index into the checkout: %d %s", code, stderr)
+		}
+		if k == 0 {
+			if code, _, stderr := run(t, map[string]string{"HOME": home}, opts, "survey", dir, "--out", in, "--draft", a, "--json"); code != 0 {
+				t.Fatalf("draft into the checkout: %d %s", code, stderr)
+			}
+		}
+	}
+	code, stdout, _ := run(t, map[string]string{"HOME": home}, opts, "survey", dir, "--out", in, "--sections", "--json")
+	var kept SurveyDraftResult
+	if err := json.NewDecoder(strings.NewReader(stdout)).Decode(&kept); err != nil || code != 0 || !slices.Equal(kept.Resumed, []string{"engineering", "capabilities"}) || len(kept.Stale) != 0 {
+		t.Fatalf("output inside the checkout: %d %v %s", code, err, stdout)
+	}
+	// A golden probe rerun with new results makes every section stale too:
+	// a section may cite a probe fact whose result changed.
+	probes := filepath.Join(in, "golden", "calc", "probes.json")
+	for k, body := range []string{`{"bin": "calc", "facts": []}`, `{"bin": "calc", "facts": [], "ran": ["calc 1"]}`} {
+		if err := os.MkdirAll(filepath.Dir(probes), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(probes, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if k == 0 { // the sections saved before any probe ran are checked against them first
+			if code, _, stderr := run(t, map[string]string{"HOME": home}, opts, "survey", dir, "--out", in, "--draft", a, "--json"); code != 0 {
+				t.Fatalf("draft against the probes: %d %s", code, stderr)
+			}
+			continue
+		}
+		code, stdout, _ = run(t, map[string]string{"HOME": home}, opts, "survey", dir, "--out", in, "--sections", "--json")
+		var after SurveyDraftResult
+		if err := json.NewDecoder(strings.NewReader(stdout)).Decode(&after); err != nil || code != 0 || !slices.Equal(after.Stale, []string{"engineering", "capabilities"}) {
+			t.Fatalf("probes rerun: %d %v %s", code, err, stdout)
+		}
+	}
+
+	// A survey that describes the product without a modernisation plan
+	// submits the section empty, and completes.
+	out = filepath.Join(t.TempDir(), "survey")
+	if code, _, stderr := run(t, map[string]string{"HOME": home}, opts, "survey", dir, "--out", out); code != 0 {
+		t.Fatalf("index: %d %s", code, stderr)
+	}
+	describe := write("describe.json", func(k string) bool {
+		return k != "modernisation" && k != "compatibility" && k != "do_not_carry"
+	}, func(s string) string {
+		return strings.Replace(strings.Replace(s, "{", `{"modernisation":null,`, 1), `"affects":["N1","E4"]`, `"affects":["E4"]`, 1)
+	})
+	if code, r = draft("--draft", describe); code != 0 || len(r.Missing) != 0 || r.Merged == "" {
+		t.Fatalf("no modernisation: %d %+v", code, r)
+	}
+}
+
+// survey --docs indexes manuals and notes from outside the checkout: each is
+// copied under <out>/manuals and cited by line as manual:<name>:<line>, so a
+// claim a manual states is traced to it; a line past its end is not a cite.
+func TestSurveyDocs(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.CopyFS(dir, os.DirFS(filepath.Join("..", "survey", "testdata", "legacy"))); err != nil {
+		t.Fatal(err)
+	}
+	docs := t.TempDir()
+	if err := os.WriteFile(filepath.Join(docs, "operator-notes.md"), []byte("# Operator notes\n\nThe night shift runs calc on each batch total.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// A man page outside section 1 is read by its section suffix.
+	if err := os.WriteFile(filepath.Join(docs, "calc.3p"), []byte(".TH CALC 3P\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(t.TempDir(), "survey")
+	opts := Options{Dir: dir, GitHubGap: -1}
+	if code, _, stderr := run(t, nil, opts, "survey", dir, "--out", out, "--docs", docs); code != 0 {
+		t.Fatalf("index: %d %s", code, stderr)
+	}
+	if b, err := os.ReadFile(filepath.Join(out, "manuals", "operator-notes.md")); err != nil || !strings.Contains(string(b), "night shift") {
+		t.Fatalf("manual copy: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(out, "manuals", "calc.3p")); err != nil {
+		t.Fatalf("man page copy: %v", err)
+	}
+	b, err := os.ReadFile(filepath.Join("..", "survey", "testdata", "draft.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cite := func(at string) string {
+		f := filepath.Join(t.TempDir(), "draft.json")
+		claim := `"claim": "The operator notes say the night shift runs calc on each batch total.", "basis": "stated", "cites": ["` + at + `"]`
+		if err := os.WriteFile(f, []byte(strings.Replace(string(b), `"claim": "The README calls it a calculator.", "basis": "stated", "cites": ["doc:README.md"]`, claim, 1)), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return f
+	}
+	code, stdout, stderr := run(t, nil, opts, "survey", dir, "--out", out, "--draft", cite("manual:operator-notes.md:3"), "--plain")
+	if code != 0 {
+		t.Fatalf("manual cite: %d %s %s", code, stdout, stderr)
+	}
+	if md, err := os.ReadFile(filepath.Join(out, "SURVEY.md")); err != nil || !strings.Contains(string(md), "manual:operator-notes.md:3") || !strings.Contains(string(md), "fact, stated") {
+		t.Fatalf("SURVEY.md: %v\n%s", err, md)
+	}
+	if code, stdout, _ = run(t, nil, opts, "survey", dir, "--out", out, "--draft", cite("manual:operator-notes.md:9"), "--plain"); code != ExitBlocked || !strings.Contains(stdout, "manual:operator-notes.md:9") {
+		t.Fatalf("cite past the end: %d %s", code, stdout)
+	}
+	if code, stdout, _ = run(t, nil, opts, "survey", dir, "--out", out, "--draft", cite("manual:operator-notes.md"), "--plain"); code != ExitBlocked || !strings.Contains(stdout, "manual:operator-notes.md: manual is not a file of the checkout") {
+		t.Fatalf("a bare manual cite: %d %s", code, stdout)
+	}
+	for _, whole := range []string{"doc:manual:operator-notes.md", "file:manual:operator-notes.md"} {
+		if code, stdout, _ = run(t, nil, opts, "survey", dir, "--out", out, "--draft", cite(whole), "--plain"); code != ExitBlocked || !strings.Contains(stdout, "cite the lines of manual operator-notes.md") {
+			t.Fatalf("the whole manual cited as %s: %d %s", whole, code, stdout)
+		}
+	}
+	// guide.pdf would become manual:guide.pdf.txt, which guide.pdf.txt already is.
+	clash := t.TempDir()
+	for _, f := range []string{"guide.pdf", "guide.pdf.txt"} {
+		if err := os.WriteFile(filepath.Join(clash, f), []byte("Guide.\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if code, _, stderr := run(t, nil, opts, "survey", dir, "--out", out, "--docs", clash); code != ExitUsage || !strings.Contains(stderr, "would both be manual:guide.pdf.txt") {
+		t.Fatalf("colliding manual names: %d %s", code, stderr)
+	}
+	// A checkout path that does not exist is reported before anything is written beneath it.
+	missing := filepath.Join(dir, "no-such-checkout")
+	if code, _, stderr := run(t, nil, opts, "survey", missing, "--docs", docs); code != ExitUsage || !strings.Contains(stderr, "is not a directory") {
+		t.Fatalf("a missing checkout: %d %s", code, stderr)
+	}
+	if _, err := os.Stat(missing); !os.IsNotExist(err) {
+		t.Fatalf("the missing checkout was created: %v", err)
+	}
+	// A link in the manuals tree, or named directly, is refused: it could copy
+	// any file the user can read into model input. A hidden directory (.git)
+	// is skipped, not read.
+	secret := filepath.Join(t.TempDir(), "secret.txt")
+	if err := os.WriteFile(secret, []byte("TOKEN=x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	linked := t.TempDir()
+	if err := os.Symlink(secret, filepath.Join(linked, "notes.md")); err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range []string{linked, filepath.Join(linked, "notes.md")} {
+		lout := filepath.Join(t.TempDir(), "s")
+		if code, _, stderr := run(t, nil, opts, "survey", dir, "--out", lout, "--docs", d); code != ExitUsage || !strings.Contains(stderr, "link") {
+			t.Fatalf("a linked manual %s: %d %s", d, code, stderr)
+		}
+		if _, err := os.Stat(filepath.Join(lout, "manuals", "notes.md")); !os.IsNotExist(err) {
+			t.Fatalf("the linked manual was copied: %v", err)
+		}
+	}
+	vcs := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(vcs, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(vcs, ".git", "HEAD"), []byte("ref: refs/heads/main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(vcs, "guide.md"), []byte("# Guide\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, stderr := run(t, nil, opts, "survey", dir, "--out", filepath.Join(t.TempDir(), "s"), "--docs", vcs); code != 0 {
+		t.Fatalf("a manuals repository with .git: %d %s", code, stderr)
+	}
+	// A linked directory the user names is read through the link.
+	docsLink := filepath.Join(t.TempDir(), "docs-link")
+	if err := os.Symlink(docs, docsLink); err != nil {
+		t.Fatal(err)
+	}
+	lout := filepath.Join(t.TempDir(), "s")
+	if code, _, stderr := run(t, nil, opts, "survey", dir, "--out", lout, "--docs", docsLink); code != 0 {
+		t.Fatalf("a linked manuals directory: %d %s", code, stderr)
+	}
+	if _, err := os.Stat(filepath.Join(lout, "manuals", "operator-notes.md")); err != nil {
+		t.Fatalf("the linked directory's manual was not read: %v", err)
+	}
+	// A checkout file named like a manual would shadow the manual's evidence and freshness.
+	shadow := t.TempDir()
+	if err := os.CopyFS(shadow, os.DirFS(dir)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(shadow, "manual:operator-notes.md"), []byte("# Not the manual\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, stderr := run(t, nil, opts, "survey", shadow, "--out", filepath.Join(t.TempDir(), "s"), "--docs", docs); code != ExitUsage || !strings.Contains(stderr, "collides with the checkout file") {
+		t.Fatalf("a checkout file shadowing a manual: %d %s", code, stderr)
+	}
+	if code, _, stderr := run(t, nil, opts, "survey", dir, "--out", dir); code != ExitUsage || !strings.Contains(stderr, "is the checkout itself") {
+		t.Fatalf("--out the checkout root: %d %s", code, stderr)
+	}
+	// The same, with the checkout reached through a link and --out naming it directly.
+	if link := filepath.Join(t.TempDir(), "repo-link"); os.Symlink(dir, link) == nil {
+		if code, _, stderr := run(t, nil, opts, "survey", link, "--out", dir); code != ExitUsage || !strings.Contains(stderr, "is the checkout itself") {
+			t.Fatalf("--out the checkout root, through a link: %d %s", code, stderr)
+		}
+	}
+	// A link the surveyed checkout commits under the default output directory
+	// never redirects a write: the survey refuses before writing anything.
+	victim := filepath.Join(t.TempDir(), "config")
+	if err := os.WriteFile(victim, []byte("safe\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	links := filepath.Join(dir, ".aayudha", "survey", "manuals")
+	if err := os.MkdirAll(links, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(victim, filepath.Join(links, "operator-notes.md")); err != nil {
+		t.Skipf("symlinks: %v", err)
+	}
+	code, _, stderr = run(t, nil, opts, "survey", dir, "--docs", docs)
+	if b, _ := os.ReadFile(victim); code != ExitUsage || !strings.Contains(stderr, "is a symbolic link") || string(b) != "safe\n" {
+		t.Fatalf("a linked manual destination: %d %s; target now %q", code, stderr, b)
+	}
+	if err := os.RemoveAll(filepath.Join(dir, ".aayudha")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(t.TempDir(), filepath.Join(dir, ".aayudha")); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, stderr = run(t, nil, opts, "survey", dir); code != ExitUsage || !strings.Contains(stderr, ".aayudha is a symbolic link") {
+		t.Fatalf("a linked .aayudha: %d %s", code, stderr)
+	}
+	// A directory whose name only starts with .. is inside the checkout.
+	elsewhere := t.TempDir()
+	if err := os.Symlink(elsewhere, filepath.Join(dir, "..cache")); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr = run(t, nil, opts, "survey", dir, "--out", filepath.Join(dir, "..cache", "result"))
+	if left, _ := os.ReadDir(elsewhere); code != ExitUsage || !strings.Contains(stderr, "..cache is a symbolic link") || len(left) != 0 {
+		t.Fatalf("a linked ..cache: %d %s; wrote %v", code, stderr, left)
+	}
+}
+
 // WP5.9: `survey --backlog` renders backlog.md and its digest and files
 // nothing; --create files only the reviewed digest, at most --limit issues a
 // run, each with the survey marker and label under its parent; a re-run files

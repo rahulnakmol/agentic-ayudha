@@ -3,6 +3,8 @@ package survey
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -574,6 +576,28 @@ func unreached(ix *Index, root, tracefile string, add func(kind, key, detail str
 		}
 	}
 	return count, nil
+}
+
+// ProbesDigest is a digest of the golden probes under out, "" when there are
+// none: a saved survey section that may cite probe facts is fresh only while
+// the probes it was checked against are unchanged.
+func ProbesDigest(out string) (string, error) {
+	files, _ := filepath.Glob(filepath.Join(out, "golden", "*", "probes.json"))
+	if len(files) == 0 {
+		return "", nil
+	}
+	sort.Strings(files)
+	h := sha256.New()
+	for _, file := range files {
+		b, err := os.ReadFile(file)
+		if err != nil {
+			return "", err
+		}
+		rel, _ := filepath.Rel(out, file)
+		fmt.Fprintf(h, "%s\x00%d\x00", filepath.ToSlash(rel), len(b))
+		h.Write(b)
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // LoadProbes adds the probe facts written under out/golden/*/probes.json to

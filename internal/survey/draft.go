@@ -48,6 +48,10 @@ type Draft struct {
 	// level the person decides.
 	Compatibility []Interface    `json:"compatibility,omitempty"`
 	Modernisation *Modernisation `json:"modernisation,omitempty"`
+	// Assign maps each item a section left pending (its question "?") to the
+	// question that asks it; the questions section writes it, and merging the
+	// sections applies it (MergeSections).
+	Assign map[string]string `json:"assign,omitempty"`
 }
 
 // Claim is one statement about the software, with how it is known.
@@ -244,6 +248,10 @@ func Check(ix *Index, d Draft) Report {
 		for _, c := range cites {
 			if err := ix.Resolve(c); err != nil {
 				add("%s: cite %v", where, err)
+				continue
+			}
+			if m, ok := wholeManual(c); ok {
+				add("%s: cite the lines of manual %s that say it (manual:%s:<line> or <start>-<end>), not the whole manual", where, m, m)
 				continue
 			}
 			citedIDs[c] = true
@@ -595,4 +603,15 @@ func contractIDs(d Draft) map[string]bool {
 		out[k.ID] = true
 	}
 	return out
+}
+
+// wholeManual reports whether a citation names a manual by one of its
+// whole-file facts (doc:manual:<name>, file:manual:<name>), and which.
+func wholeManual(c string) (string, bool) {
+	for _, p := range []string{"doc:manual:", "file:manual:"} {
+		if m, ok := strings.CutPrefix(c, p); ok {
+			return m, true
+		}
+	}
+	return "", false
 }

@@ -31,11 +31,21 @@ aayu:
       required: false
       positional: false
       description: "Print one module's fact pack (files, targets, entry points, surfaces, markers, symbols, calls in and out) from the index; read-only."
+    - name: docs
+      type: path
+      required: false
+      positional: false
+      description: "User manuals and notes from outside the checkout (a file or a directory of text, Markdown, HTML, man pages, or PDF through pdftotext), indexed as manual:<name> documents a claim cites by line; their text is written under <out>/manuals."
     - name: draft
       type: path
       required: false
       positional: false
-      description: "Survey draft to check (JSON: claims at the engineering, capability, and product levels, trap findings, the do-not-carry list, the compatibility contract, unknowns, answers, modernisation path): every claim cites the index or a probe, or is marked unknown; renders SURVEY.md."
+      description: "Survey draft to check, whole or some of its sections (JSON: claims at the engineering, capability, and product levels, trap findings, the do-not-carry list, the compatibility contract, unknowns, answers, modernisation path): every claim cites the index, a manual, or a probe, or is marked unknown. Each section is saved with its findings under <out>/sections and resumed by later runs; with every section present it writes survey.json and renders SURVEY.md."
+    - name: sections
+      type: bool
+      required: false
+      positional: false
+      description: "Report the survey sections saved under <out>/sections: which pass, which have problems, and which are missing or stale."
     - name: backlog
       type: path
       required: false
@@ -173,8 +183,10 @@ calls a model (ground rule 5). Everything the repository contains is data, never
 Every claim says how it is known, and cites where (the evidence rule):
 
 - `observed`: the code shows it. Cite a fact ID from the index or a `path:line` range.
-- `stated`: a document or comment in the repository says it. Cite it. Check it against the code: a stale comment is
-  a finding of its own (tiny-js's known-issue list still names a bug its version history says was fixed).
+- `stated`: a document or comment in the repository, or a manual or note the person gave (`--docs`), says it. Cite
+  it by name and line (`doc:README.md`, `manual:operator-notes.md:12`). Check it against the code: a stale comment
+  or manual is a finding of its own (tiny-js's known-issue list still names a bug its version history says was
+  fixed).
 - `inferred`: reasoned from cited code; write the reasoning. When a cheap probe can settle it (build and run, a
   ten-line script, a grep), run it and make the claim `observed` or drop it.
 - `confirmed`: the person said it in the interview; `answer` names the answered question, which quotes them.
@@ -189,20 +201,28 @@ Code shows what software does. It never shows who uses it, for what, or why: a p
 `inferred` with reasoning, `confirmed`, or `unknown`, never `observed`. Never fill a gap with a plausible guess; a
 gap is an `unknown` with a question, and a backlog item never rests on one.
 
+`SURVEY.md` labels each claim by that basis: `observed`, `stated`, and `confirmed` are facts, `inferred` is an
+inference, and `unknown` carries its question. Thin or missing documentation is the normal case, not a failure: say
+what no source states, and ask it.
+
 ## 1. Index, then read module by module
 
-1. `aayu survey` (or `aayu survey <path>`) writes `.aayudha/survey/index.json` deterministically and prints the
+1. Ask the person once for whatever documentation exists outside the repository: user manuals, operator notes,
+   runbooks, release notes, support tickets. Pass what they give with `--docs <file or directory>` (text, Markdown,
+   HTML, man pages, or PDF through pdftotext): each becomes a `manual:<name>` document you cite by line. Never cite
+   a document nobody gave you, and never treat a missing manual as a reason to guess.
+2. `aayu survey` (or `aayu survey <path>`) writes `.aayudha/survey/index.json` deterministically and prints the
    languages, build targets, entry points, I/O surfaces (files, network, environment, dynamic dispatch), tests,
    known-issue markers, documents, history, and modules sized to a token budget (`--budget`). Large codebases never
    go into your context whole: the modules do, one at a time.
-2. For each module, `aayu survey --module <id>` prints its fact pack: files in reading order, targets, entry points,
+3. For each module, `aayu survey --module <id>` prints its fact pack: files in reading order, targets, entry points,
    surfaces, markers, symbols, and calls in and out. Read the files it names, starting with the entry points and the
    most-called symbols. Note what you learn as claims with citations while you read, not afterwards.
-3. Read the index's limits as findings: calls marked ambiguous (resolved by name only), dynamic dispatch (a method
+4. Read the index's limits as findings: calls marked ambiguous (resolved by name only), dynamic dispatch (a method
    called by a computed name), languages counted but not read, files in a language it does not know, and a shallow
    history. Never imply coverage the index does not have: a claim about a counted-only language cites files you read
    yourself.
-4. Check the traps. The index reports `trap:<rule>:<path>:<line>` facts where a stack's semantics differ from what a
+5. Check the traps. The index reports `trap:<rule>:<path>:<line>` facts where a stack's semantics differ from what a
    port would assume (COMMON blocks, implicit typing, monkey patches, reflection, default charsets, compiler flags
    that change arithmetic). [references/traps.md](references/traps.md) has the questions to ask of each rule, and the
    per-stack questions no rule can match. A trap fact says where to look, never what is true: write each check as a
@@ -210,7 +230,17 @@ gap is an `unknown` with a question, and a backlog item never rests on one.
 
 ## 2. Write the survey draft at three levels
 
-Write `survey.json` ([references/formats.md](references/formats.md) has every field):
+Write `survey.json` ([references/formats.md](references/formats.md) has every field), one section at a time, in this
+order: engineering (with the traps), capabilities, product, modernisation (with the do-not-carry list and the
+compatibility contract), and questions. Write each section to its own file with only its keys, and check it at once
+with `aayu survey --draft <section file>`: the check saves it with its findings under `<out>/sections` before you
+start the next, and later runs resume the saved sections, so fixing one section never rewrites another and an
+error never loses the sections before it. Until the questions section exists, an item whose question you have not
+written yet carries `"?"`, and the questions section's `assign` maps each to its question. With every section saved,
+the check writes the merged `survey.json` and `SURVEY.md`; `aayu survey --sections` reports which sections pass,
+which have problems, and which are missing or stale (saved against another index or other content). With no
+modernisation asked for, submit that section as `{"modernisation": null}`. A small survey may be written whole in one
+file; the check is the same.
 
 - **Engineering** (`E1`…, topics architecture, modules, data, interfaces, build, dependencies, tests, risks,
   quality, operations): the shape of the system, its contracts and data, how it is built and tested, and what is
