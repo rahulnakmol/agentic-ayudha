@@ -338,7 +338,17 @@ func (e *Env) surveyDraft(indexFile, out, file string) error {
 		return Wrap(ExitUsage, err)
 	}
 	res := SurveyDraftResult{Dir: filepath.Join(out, "sections")}
-	saved, stale, err := survey.LoadSections(res.Dir, ix.Commit, ix.Digest)
+	// A section is fresh while the index and the golden probes it may cite
+	// are unchanged.
+	pd, err := survey.ProbesDigest(out)
+	if err != nil {
+		return Wrap(ExitUsage, err)
+	}
+	digest := ix.Digest
+	if pd != "" {
+		digest += "+probes:" + pd
+	}
+	saved, stale, err := survey.LoadSections(res.Dir, ix.Commit, digest)
 	if err != nil {
 		return Wrap(ExitUsage, err)
 	}
@@ -370,7 +380,7 @@ func (e *Env) surveyDraft(indexFile, out, file string) error {
 				continue
 			}
 			ps := rep.Sections[name]
-			if err := survey.SaveSection(res.Dir, survey.SavedSection{Section: name, Commit: ix.Commit, Digest: ix.Digest, Pass: len(ps) == 0, Problems: ps, Content: b}); err != nil {
+			if err := survey.SaveSection(res.Dir, survey.SavedSection{Section: name, Commit: ix.Commit, Digest: digest, Pass: len(ps) == 0, Problems: ps, Content: b}); err != nil {
 				return Wrap(ExitInternal, err)
 			}
 			res.Saved = append(res.Saved, name)

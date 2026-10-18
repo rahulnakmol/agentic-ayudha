@@ -235,6 +235,28 @@ func TestSurveyDraftSections(t *testing.T) {
 	if err := json.NewDecoder(strings.NewReader(stdout)).Decode(&kept); err != nil || code != 0 || !slices.Equal(kept.Resumed, []string{"engineering", "capabilities"}) || len(kept.Stale) != 0 {
 		t.Fatalf("output inside the checkout: %d %v %s", code, err, stdout)
 	}
+	// A golden probe rerun with new results makes every section stale too:
+	// a section may cite a probe fact whose result changed.
+	probes := filepath.Join(in, "golden", "calc", "probes.json")
+	for k, body := range []string{`{"bin": "calc", "facts": []}`, `{"bin": "calc", "facts": [], "ran": ["calc 1"]}`} {
+		if err := os.MkdirAll(filepath.Dir(probes), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(probes, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if k == 0 { // the sections saved before any probe ran are checked against them first
+			if code, _, stderr := run(t, nil, opts, "survey", dir, "--out", in, "--draft", a, "--json"); code != 0 {
+				t.Fatalf("draft against the probes: %d %s", code, stderr)
+			}
+			continue
+		}
+		code, stdout, _ = run(t, nil, opts, "survey", dir, "--out", in, "--sections", "--json")
+		var after SurveyDraftResult
+		if err := json.NewDecoder(strings.NewReader(stdout)).Decode(&after); err != nil || code != 0 || !slices.Equal(after.Stale, []string{"engineering", "capabilities"}) {
+			t.Fatalf("probes rerun: %d %v %s", code, err, stdout)
+		}
+	}
 
 	// A survey that describes the product without a modernisation plan
 	// submits the section empty, and completes.
