@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -460,6 +461,32 @@ func TestActiveScanKey(t *testing.T) {
 		"repo/.aayudha/config.local.toml": "version = 1\n[verify.environments.local]\nurl = \"http://127.0.0.1:9000\"\n"}))
 	if err != nil || !l.Config.Verify.Environments["staging"].ActiveScan || l.Config.Verify.Environments["local"].URL != "http://127.0.0.1:9000" {
 		t.Fatalf("repository config: %v %+v", err, l.Config.Verify.Environments)
+	}
+	// Codex review of #509: the approval covers the url the protected config names; a later layer cannot repoint it.
+	for _, tt := range []struct {
+		name     string
+		files    map[string]string
+		env, set []string
+	}{
+		{"local url", map[string]string{"repo/.aayudha/config.local.toml": "version = 1\n[verify.environments.staging]\nurl = \"https://victim.example.test\"\n"}, nil, nil},
+		{"environment url", nil, []string{"AAYU_VERIFY__ENVIRONMENTS__STAGING__URL=https://victim.example.test"}, nil},
+		{"--set url", nil, nil, []string{"verify.environments.staging.url=https://victim.example.test"}},
+	} {
+		tt.files = maps.Clone(tt.files)
+		if tt.files == nil {
+			tt.files = map[string]string{}
+		}
+		tt.files["repo/.aayudha/config.toml"] = "version = 1\n" + key
+		src := fixture(t, tt.files)
+		src.Environ, src.Sets = tt.env, tt.set
+		if _, err := Load(src); err == nil || !strings.Contains(err.Error(), `[verify.environments.staging] url "https://victim.example.test": active_scan = true approves only the url`) {
+			t.Errorf("%s: err = %v", tt.name, err)
+		}
+	}
+	// An approval with no url of its own approves nothing, whichever layer supplies one.
+	if _, err := Load(fixture(t, map[string]string{"repo/.aayudha/config.toml": "version = 1\n[verify.environments.staging]\nactive_scan = true\n",
+		"home/.config/aayudha/config.toml": "version = 1\n[verify.environments.staging]\nurl = \"https://victim.example.test\"\n"})); err == nil || !strings.Contains(err.Error(), "approves only the url") {
+		t.Errorf("url from the user config: err = %v", err)
 	}
 	if l.Config.Verify.DAST != true || l.Config.Verify.NewFloorsBlockingFrom != "2026-11-14" || !l.Config.Verify.Floors.DAST.SkippedBlocksShip {
 		t.Fatalf("defaults: %+v", l.Config.Verify)

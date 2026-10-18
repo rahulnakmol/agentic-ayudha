@@ -225,6 +225,22 @@ func Load(src Sources) (*Loaded, error) {
 	if err := decode(l.merged, &l.Config); err != nil {
 		return nil, err
 	}
+	// The protected config's active_scan approves the url it names, so no other
+	// layer may point that environment somewhere else (Decision #485, G1).
+	for name, env := range l.Config.Verify.Environments {
+		if !env.ActiveScan {
+			continue
+		}
+		approved := ""
+		for _, ly := range l.layers {
+			if ly.name == LayerRepo && filepath.Ext(ly.source) == ".toml" {
+				approved = ly.k.String("verify.environments." + name + ".url")
+			}
+		}
+		if approved == "" || strings.TrimRight(env.URL, "/") != strings.TrimRight(approved, "/") {
+			return nil, fmt.Errorf("[verify.environments.%s] url %q: active_scan = true approves only the url .aayudha/config.toml, a protected path, names (%q); set the url there, or drop active_scan", name, env.URL, approved)
+		}
+	}
 	if err := l.Config.Validate(); err != nil {
 		return nil, err
 	}
